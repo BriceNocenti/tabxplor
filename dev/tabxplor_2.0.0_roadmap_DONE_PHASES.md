@@ -11216,3 +11216,86 @@ forward is unchanged.
 ---
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Phase 22a research — `tab_reg()` crude/adjusted comparison, family × effect × measure and display integration ?
+
+I have some hints about how we could improve the consistency of the whole regression framework, which is a potential further statistical and display integration step. I want you to study this thoroughly, assess possible improvements, and flag misunderstandings and ideas that won’t work. This is a research and design task: write a new detailed and structured .md file in `dev/`.
+
+1. regression model columns simplification ?
+
+```r
+gss_simple <- gss_cat_data_formatting()
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", measure = "ratio", empirical = TRUE
+)
+```
+
+- I think I’ve found a design flaw, please study this and correct me if I’m wrong. Having a different color measure for Obs_% (difference) and Obs_RR (ratio) is misleading (it’s also true with Obs_% and Obs_OR with `measure="odds_ratio"`), , but here they are colored with different measures. The Obs_% could color="ratio" to match the Obs_RR and the model one, but there’s a better solution. The right way to do it is to **only use one color measure for both empirical and modelised columns**: that way, there would be **only one legend block for everything**, which means everything is comparable and the field of comparison is homogeneous. Anything more is confusing.
+  + The way to be even more clear, symmetric, and reduce the discrepancy between Obs_% and Obs_RR, is to **only have one empirical column and one model column** : same measure, same display and the "display" argument works on both, one legend block/only one consistent CI type, etc. (So if he wants, the user can still since duplicate the same column with a different display.) It would be further integration and simplification for readability.
+  + after it’s done, we should review `tab_reg()` html tooltips, both in the empirical column and the model column. Which ones would be useful and are missing ? Which ones are useless (info already printed elsewhere on the table = noise, with some exceptions when it helps the user make the meaningful links in his mind) ?
+  + To merge the legend of both the empirical column and the model column would maybe mean to change the legend builder a bit, please study that too.
+
+2. family × effect × measure combinations
+- "AME" name is not very clear. Or maybe, with `effect = "marginal"`, am I not sure how to *name* `measure = "difference"` versus `measure = "ratio"`. On sign that the confusion is on the current vocabulary, is that RR is used for both "ratio" coefficient and "ratio" AME, while the "difference" path differenciate betwenn "RD" and "AME". Average marginal effects *of the* difference, or something else ? versus average marginal effect *of the* ratio, average marginal effect ratio ? What are the standard names ? If the standard names are a bit misleading, what would be the most readable and precise names ?
+- Adjusted percentages are currently treated as if they were outside of the whole `measure` thing: but statistically aren’t they the "base" "identity" `measure` (only working for "marginal" and "at_reference", not the model coefficients) ? Should we add them a proper `measure`, that would work for both proportions and means, or is it useless because it gives no confidence intervals and colors (useful to color the adjustement between observed proportion and adjusted proportion, or useless since this comparison would be done relative to each predictor’s reference level, so with the "difference" or "ratio" colors ?) ? If it’s a good idea, which I doubt a bit, would be the more readable and the best to teach the framework ( `measure = "value"`, `measure = "base"`, `measure = "identity"`, something else ? ; `measure = "pct"` and `measure = "mean"` would be too specific to the chosen family, so I’m looking for a readable generalisation) ? Is adjusted proportions or means only a display thing (that we them color with "difference" or "ratio" ?) ? Is it only available on the "marginal" or "at reference" paths, because "coefficient" doesn’t compute them at all ?
+- The family × effect × measure combinations messages are not very clear. 'ℹ A "binomial" outcome offers:\nℹ `effect = "marginal", measure = "difference"` -> "AME"\nℹ `effect = "marginal", measure = "ratio"` -> "RR"' The choice should be clearer : '-> "AME"' should also give the full expression, average marginal effect of the difference ; '-> "RR"' should make clear that this is an AME ratio
+
+3. `display` tokens and `display` presets
+We now use the same display argument in `tab_reg()` than in `tab()`, taken both `{}` display tokens, and build-in presets, so **we shall think about the best built-in presets for the regressions use cases**.
+- First, I want to be sure I understand well, correct me if I’m wrong. Let’s take binary binomial for example. With `effect = "coefficient"` and `display="ame"`, the SE and significance stars and colors are based on the OR, and the AME is just displayed to help interpretation ; but with `effect = "marginal"` (with a default `measure` to `"difference"`) the SE and significance stars and colors are recalculated for the AME itself in the `marginaleffects::` way (which is more robust if there AME are used to interpret the model).
+- When effect is "coefficient" and "ame" is chosen in the `display` (preset or display token), it should be pre-calculated and it’s vctrd field populated not to print voids/NA, but since it does not need it’s own SE/CI/stars it’s very cheap to compute, right ? So the same way tab always populate "diff" and "ratio", we could just cheaply always populate the "diff" AME, the "ratio" AME and the adjusted p"ct or adjusted "mean", and they would always be available for "display" argument, manual change in "display" without new calculations needed, etc. ? And we could always print them in the tooltips (both in the crude side and the model side in mirror) when they are meaningful for the family ? That way, `display = "ame"` won’t be adequate since the choice isn’t marginal or not, but {value}. Study that and correct me where I’m wrong.
+- `display = "value"` is the default, but is `display = "{value}"` working ? This display token would be important to do customisation but have a way to auto select the main modelised column, which can be diff, ratio, OR, or coeff (stored where ?), depending on the family and effect (and dependinng on the measure if the effect is "coefficient" ?) ?
+- The crude proportion (or mean) versus model proportion (or mean) comparison is a relevant display, that needs to be thought about. The current `display= "prob"` works for proportions but not for means, which should be corrected. The related `tab` display token is "{num}", which is not very clear, and "value" won’t be much clearer and is already the default for the plain estimate of the model (both are a bit confusing anyway). There should be both a built-in preset (to only get the crude versus models proportions or mean displayed, with the colors/CI/stars of the `effect` and `measure`) and a {} display token (to be able to easily compose it with other fields ; instead of "{or} ({pct})", something like "{value} ({num})" ?). Can you think about other more readable names for this (make me propositions) ?
+
+**STUDY DONE (design only, nothing implemented) → `dev/reg_crude_adjusted_and_display_integration.md`.** Every claim there is a capture from the running package, not a reconstruction. The finding that unifies the three questions: the observed column and the model column are the SAME estimand computed twice (one predictor vs all of them), so they must be one column *shape* built twice — same scale, same colour measure, same display template, same legend block — with the crude level (`%` / mean) folded into the crude cell exactly as the adjusted level already rides in the model cell. `display` then applies to both, every preset works on every family, and the crude/adjusted comparison is read ACROSS the table instead of needing a display of its own.
+
+Decided in that session: **D1** two columns by default + an opt-in in-cell fold (which generalises today's multinomial `visible = FALSE` rule and DELETES it); **D2** the header names the measure with the contrast as a marker ON the measure — unmarked = conditional, `m` prefix = marginal (`mRR`, `mRD`), `@ref` suffix = at the reference profile; **D3** `measure = "log"` names what it logs (`log(OR)` / `log(IRR)` / `log(RoM)` / `log(cumOR)`), ending the five-way `Model_β` collision; **D4** ordinal is `cumOR` on the model side too; **D5** the display tokens are `{est}` (the column's own estimate, via the existing `fmt_center_field()`) and `{base}` (the adjusted prediction / observed level, by `var_kind`) — `{base}`, NOT `{num}`, because `get_num()` is published on `master` with a different meaning ("the currently displayed field") and because `base` is already the code's word for this quantity (`REG_EMPIRICAL$*$base`, and `fmt_class.R:830` already spells the composite `"{base} {ci}"`); it must work identically in `tab()` and `tab_reg()`; **D7** two free renames follow, neither name published: `display = "num_ci"` → **`"base_ci"`** (28 sites in 9 files incl. the generated `jmvtab.h.R`, so one `jmvtools::prepare()`; verified the ONLY `num`-flavoured preset — the other literal `"num"` strings are `MEASURES$applies_to` values meaning "a numeric column", left alone), and `pct_base` → **`pct_type`** ("which type of percentage": row / col / all / all_tabs / none — the qualifier keeps it clear of 1.x's bare `type`, which conflated the kind of number with the percentage base and which 2.0.0 split into `scale` + this attribute; 205 sites + `get_pct_base()` / `set_pct_base()` / `PCT_BASES`; `pct_base` is absent from `master`). ⚠ One follow-through while renaming: the live `type` deprecation abort (`R/fmt_class.R:457`) reads "`type` is now `scale` + `pct_base`" and must be reworded to name the SPLIT rather than the tokens, or it becomes "`type` is now `scale` + `pct_type`" and reads as a no-op; same for its `NEWS.md` bullet; **D6** the vignette grid prints acronym + meaning without the `Model_` prefix, with a first column for the outcome kind. `measure` gains NOTHING for adjusted percentages — they are `display = "{num}"`, a level printed and graded by the effect, exactly as `tab()` already does; a `measure = "identity"` row could not colour, could not be tested and could not take the marginal marker. Six questions stay open (gaussian `diff`/`mdiff` vs 22b's `Model_coeff`; preset names; the prose legend's joined method list; automatic vs explicit fold; a `{gap}` token for print/Excel; the stale `needs = "marginaleffects"` abort) — §8 of the doc.
+
+The measured defects that phase must fix, with their causes: the two-ladder problem is exactly `binomial × {odds_ratio, ratio}` and `poisson × ratio` (a *coloured* base column on a different ladder from the effect column — `gaussian` / `grouped_binomial` / `binomial × difference` are already fine, so deleting the base column as a COLUMN fixes every family with no per-family branch); `display` is silently reset to `"value"` on the whole marginal path and the folds are binomial-only; `{value}` is not a token; ratio columns get NO interval and NO p-value in their tooltip (the one thing a hovering reader wants from an OR); the gap tooltip prints `-0.01` where the cell prints `-23.0%`; and the multiplicative inverse has three renderings (`1/x` for `or` only and only outside a composite, `÷x` for `ratio`, raw for `est_ci` and every composite) — which is why 22b's inverse-rendering rule should land BEFORE this phase's column merge. The legend needs almost nothing: the terse legend ALREADY merges `Obs_OR` with `Model_OR`, and deleting the base column is what produces the single block. ⚠ One claim in the study was corrected on the maintainer's challenge and re-measured: the crude closed forms ARE the univariable model's interval — Woolf vs `glm` Wald-on-log agree to 3e-13, Katz vs modified-Poisson HC0 to 8e-09, `student` vs `lm` to 6e-15 on a binary predictor — so the `katz` / `wald_log` split in the `prose` legend is a LABELLING defect (fix: label from the estimand, as `CI_METHOD_LABELS` already does for `woolf`), not honest divergence, and no grouping-key change is needed. The one genuine exception is `gaussian` / `poisson`, where the crude pools variance PAIRWISE while `lm` / quasi-Poisson pool globally — measured 8.9 % apart on a heteroscedastic 3-level predictor, which also makes the regression vignette's "to match those computed by linear regression" false for k > 2 levels. New open question Q7: switch those two crude effect columns to `from = "fit"` (parity by construction, one extra fit) or keep pairwise and correct the vignette.

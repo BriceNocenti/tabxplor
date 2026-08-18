@@ -416,36 +416,25 @@ reg_resolve_estimands <- function(data, outcome, family = "auto", effect = "coef
 # auto slot follows).
 #' @keywords internal
 #' @noRd
-reg_resolve_output <- function(display = "value", color = TRUE, color_signif = NULL,
+reg_resolve_output <- function(display = NULL, color = TRUE, color_signif = NULL,
                                empirical = FALSE, deps = NULL, tab_vars = NULL, stats = NULL,
                                na = "drop_by_outcome", na_explicit = FALSE, formula_mode = FALSE) {
   families <- deps$family
   ests     <- deps$est
 
-  # --- L: `display` (Phase 19e) -----------------------------------------------------------------
-  # The estimate-cell layout, mirroring tab()'s grammar. "value" (plain) / "ci" (a visible interval,
-  # any family) apply everywhere; a {} TEMPLATE naming `pct` / `diff` folds the model-adjusted
-  # predicted probability / the average marginal effect into the effect cell -- which is exactly what
-  # the retired `estimate_display = "prob" / "ame"` presets did, kept as documented shorthands.
+  # --- L: `display` ------------------------------------------------------------------------------
+  # The estimate-cell layout, in tab()'s own grammar and presets (R/tab-display.R). NULL leaves each
+  # cell the token the builder gave it; a template naming a LEVEL or a marginal effect folds that
+  # quantity in beside the estimate, on every family.
   #
-  # THE RULE (KEY 8's other half): a display template may ask for AUXILIARY quantities from the SAME
-  # fit; it may never change the fit or the estimand. `measure` is the only estimand argument.
+  # THE RULE: a display template may ask for AUXILIARY quantities from the SAME fit; it may never
+  # change the fit or the estimand. `measure` is the only estimand argument.
   display <- reg_resolve_display(display)
   # Marginal-effects output already IS a fold ("{diff} ({pct})") -> a second one is ignored.
-  if (!identical(display, "value") &&
+  if (!is.null(display) &&
       any(vapply(ests, function(e) !identical(e$builder, "coef"), logical(1)))) {
     cli::cli_inform(c("i" = "{.arg display} is ignored with marginal-effects output."))
-    display <- "value"
-  }
-  # Phase 15e: the folds are binomial-coefficient only; in a mixed table they apply to the binomial
-  # outcomes and each non-binomial column degrades to the CI bracket (guarded per column in
-  # reg_apply_display). Only degrade the whole call when NO outcome is a binomial coefficient.
-  if (reg_display_folds(display) && !(any(families == "binomial") && !formula_mode)) {
-    cli::cli_inform(c(
-      "!" = paste0("{.arg display} = {.val {display}} folds a model-adjusted quantity into the ",
-                   "effect cell, which needs a binomial coefficient model; showing the confidence ",
-                   "interval instead.")))
-    display <- "est_ci"
+    display <- NULL
   }
 
   # --- O: `color` -- normalise, then validate through the storage boundary -----------------------
@@ -550,7 +539,7 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
                                  outcome = character(0), tab_vars = NULL, wt = NULL,
                                  multiplier = "sd", reg_shapes = list(), na = "drop_by_outcome",
                                  formula_mode = FALSE, is_comparison = FALSE, compare = "none",
-                                 method = "wald", display = "value", color = NA_character_) {
+                                 method = "wald", display = NULL, color = NA_character_) {
   families <- deps$family
 
   # --- S: which rows every model is fitted on (Phase 18z13, D1) ---------------------------------
@@ -610,7 +599,7 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
   reref <- !is.null(.fit_cache) &&
     all(vapply(deps$est, function(e) identical(e$builder, "coef"), logical(1))) &&
     !any(vapply(deps$est, function(e) identical(e$builder, "vsrest"), logical(1))) &&
-    display %in% c("value", "est_ci") && method == "wald" &&
+    (is.null(display) || identical(display, "est_ci")) && method == "wald" &&
     all(reg_fam_glm(families)) &&
     !formula_mode && is.null(tab_vars) && all(is.na(deps$trials)) &&
     compare == "none" && !is_comparison && !("adjustment" %in% color) &&
@@ -784,7 +773,7 @@ new_reg_args <- function(data = NULL, specs = list(), shared = list(), reref = F
                          union_predictors = character(0), positive_levels = character(0),
                          families = character(0), ests = list(), est = NULL, eff_word = "",
                          is_comparison = FALSE, formula_mode = FALSE, empirical = FALSE,
-                         display = "value", multiplier = NULL, shape_terms = NULL,
+                         display = NULL, multiplier = NULL, shape_terms = NULL,
                          na_shared_vars = character(0), design_spec = list(),
                          wt_disp = NA_character_) {
   as.list(environment())
@@ -804,7 +793,7 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                              ref = NULL, outcome_level = NULL,
                              multiplier = "sd", shape = NULL, stats = NULL,
                              na = "drop_by_outcome", na_explicit = FALSE,
-                             display = "value", cleannames = TRUE, subtext = "",
+                             display = NULL, cleannames = TRUE, subtext = "",
                              .fit_cache = NULL, levels_collapse = NULL) {
   # S1 -- the pure checks.
   # ⚠ H0 (Phase 20c): the `stats` SPLIT runs FIRST, before the validation that reads its parts and

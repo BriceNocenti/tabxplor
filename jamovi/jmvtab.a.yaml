@@ -498,13 +498,17 @@ options:
       options:
         - title: "welch <i>(unequal variances, default)</i>"
           name:  welch
-        - title: "student <i>(pooled variance)</i>"
+        - title: "student <i>(pooled variance, the two groups)</i>"
           name:  student
+        - title: "ols <i>(pooled over all levels, as a linear model)</i>"
+          name:  ols
       default: welch
       description:
           R: >
            The confidence-interval method for the difference of numeric means
-           (means with \code{ci = "diff"}): Welch (default) or Student (pooled variance).
+           (means with \code{ci = "diff"}): Welch (default), Student (the two groups pooled) or
+           OLS (pooled over every level of the variable, i.e. the interval a linear model gives
+           that coefficient).
 
     - name: ci_method_mean_ratio
       title: "ci_method = c(mean_ratio = )"
@@ -581,7 +585,7 @@ options:
         - title: "pct <i>(percentages)</i>"
           name:  pct
         - title: "value with its confidence interval"
-          name:  num_ci
+          name:  base_ci
         - title: "ci <i>(the interval alone)</i>"
           name:  ci
         - title: "diff <i>(difference from the reference)</i>"
@@ -602,8 +606,8 @@ options:
       description:
           R: >
            What each cell shows. Every value here is a \code{tab(display =)} value: a bare field
-            name, the type-adaptive \code{"num_ci"} (a percentage or a mean, with its interval), or
-            a \code{\{\}} template combining fields. \code{"auto"} keeps whatever the table was
+            name, a named layout such as \code{"base_ci"} (each value with its interval), or a
+            \code{\{\}} template combining fields. \code{"auto"} keeps whatever the table was
             built with. A template naming a field the table does not carry renders empty and says
             which argument would fill it.
 

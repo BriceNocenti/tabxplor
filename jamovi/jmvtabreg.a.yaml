@@ -385,22 +385,26 @@ options:
       title: display
       type: List
       options:
-        - title: "value (plain estimate)"
-          name:  value
-        - title: "with confidence interval"
-          name:  ci
-        - title: "with predicted probability"
-          name:  prob
-        - title: "with marginal effect"
-          name:  ame
-      default: value
+        - title: "auto"
+          name:  auto
+        - title: "est <i>(the estimate)</i>"
+          name:  est
+        - title: "est_ci <i>(the estimate with its interval)</i>"
+          name:  est_ci
+        - title: "est_base <i>(the estimate, adjusted prediction in bracket)</i>"
+          name:  est_base
+        - title: "base_est <i>(the adjusted prediction, estimate in bracket)</i>"
+          name:  base_est
+        - title: "base <i>(adjusted predictions alone)</i>"
+          name:  base
+      default: auto
       description:
           R: >
            The estimate-cell LAYOUT (never the estimand: a display may fold in another quantity of
-           the SAME fit, it can never change the fit). "ci" shows a visible interval; "prob" / "ame"
-           fold the adjusted predicted probability / marginal effect into the OR cell
-           (binomial coefficient models only). These four are shorthands over \code{tab_reg()}'s
-           \code{\{\}} display grammar.
+           the SAME fit, it can never change the fit). The same named layouts \code{tab()} offers,
+           written in the same \code{\{\}} grammar: \code{est} is whatever the column estimates
+           and \code{base} the level it sits on (an adjusted probability, an adjusted mean).
+           \code{"auto"} keeps the built-in layout.
 
     - name: add_n
       title: add_n

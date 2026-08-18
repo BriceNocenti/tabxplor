@@ -204,11 +204,9 @@ ci_disable_signif <- function(ci, color_signif = "ignore", stars = FALSE) {
 #' @keywords internal
 #' @noRd
 display_comparison <- function(display) {
-  if (is.null(display) || length(display) == 0L) return(NA_character_)
-  d <- display[[1]]
-  if (is.na(d) || !nzchar(d) || d %in% c("no", "auto", "num_ci")) return(NA_character_)
-  tok <- tryCatch(parse_display_template(validate_display_template(d))$fields[1],
-                  error = function(e) NA_character_)
+  d <- tryCatch(display_resolve(display), error = function(e) NULL)
+  if (is.null(d)) return(NA_character_)
+  tok <- parse_display_template(d)$fields[1]
   if (length(tok) == 0L || is.na(tok)) return(NA_character_)
   unname(DISPLAY_COMPARISON[tok] %||% NA_character_)
 }

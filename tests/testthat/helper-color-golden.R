@@ -69,7 +69,7 @@ color_golden_syn_diff_fmt <- function() {
   # resolves to a real base without erroring.
   fmt(
     n         = c(n, 200L),
-    scale = "level_pct", pct_base = "row",
+    scale = "level_pct", pct_type = "row",
     pct       = c(pct, 0.40),
     diff      = c(diff, 0),
     mean      = c(ratio, 1),   # legacy x2 overload (current engine reads get_mean)

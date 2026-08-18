@@ -158,7 +158,9 @@ tabs |> set_display("{pct} ({diff})")
 
 Les règles :
 
-- Les **champs valides** sont `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`, `ctr`, `var`, `resid`, `obs`.
+- Les **champs valides** sont `pct`, `n`, `wn`, `mean`, `est`, `base`, `diff`, `ratio`, `ci`, `or`, `ctr`, `var`, `resid`, `obs`, `gap`.
+- Deux d'entre eux sont **relatifs à l'échelle**, ce qui permet à un même gabarit de fonctionner sur n'importe quel tableau : `{est}` est ce que la colonne estime (un pourcentage, une différence, un rapport de cotes) et `{base}` le niveau sur lequel il porte (un pourcentage, une moyenne, un effectif). `"{est} ({base})"` se lit de la même façon sur un tri croisé et sur une régression.
+- Les mises en page courantes ont un **nom** : `"est"`, `"est_ci"`, `"est_base"`, `"base_est"`, `"base"`, `"base_ci"`. Ce sont les mêmes noms dans `tab()`, dans `tab_reg()` et dans `set_display()`.
 - Le **premier** `{}` est le champ *primaire* : c'est ce que renvoie `get_num()`, la valeur que garde Excel (Excel n'affiche que le primaire), et le champ que lisent les couleurs.
 - Un **nom de champ simple** est un raccourci pour son propre gabarit, donc `set_display("ci")` est exactement `set_display("{ci}")`.
 - Il s’agit simplement d’un affichage pour les sorties (la console, `tab_html()`, `tab_md()`) : les champs stockés restent intacts, il est possible de revenir en arrière à tout moment.
@@ -174,6 +176,16 @@ tab(gss_simple, race, marital, pct = "row") |>
 ```
 
 `.names = "{.col}_diff"` conserve les colonnes de pourcentages originales et ajoute à côté de chacune un jumeau `<nom>_diff`.
+
+La même recette place une **prédiction ajustée** à côté d'un effet de régression. Deux appels supplémentaires rendent la copie purement *descriptive* : `set_color("")` lui retire sa couleur (l'échelle appartient à l'effet, et la même échelle deux fois n'est que du bruit), et `set_pvalue(NA_real_)` lui retire ses étoiles — la p-value stockée en est la seule source, donc l'effacer est la façon directe de dire « cette copie ne teste rien » :
+
+```{r, eval = FALSE}
+tab_reg(gss_simple, "married", c("race", "rincome"), family = "binomial",
+        display = "est_base") |>
+  mutate(Model_pct = Model_OR |> set_display("{base}") |> set_color("") |>
+                       set_pvalue(NA_real_),
+         .after = Model_OR)
+```
 
 ## Lignes de total, lignes et colonnes de référence
 
@@ -193,7 +205,7 @@ tab(gss_simple, race, marital, race, pct = "row") |>
 Outre les champs de chaque case, chaque colonne `fmt` porte quelques **attributs de niveau colonne**, lus et fixés avec `get_*` / `set_*` (ou `is_*` / `as_*` pour les attributs logiques) :
 
 - `scale` — `get_scale()` / `set_scale()` : **ce que la colonne estime**. Un niveau (`"level_n"`, `"level_pct"`, `"level_mean"`), une différence (`"points"` pour des points de pourcentage, `"mean_diff"`, `"raw_diff"` pour un coefficient de régression dans l’unité de la variable expliquée), un rapport (`"pct_ratio"`, `"mean_ratio"`, `"odds_ratio"`) ou un coefficient sur l’échelle du lien (`"log_coef"`). Il indique quel champ contient l’estimation, quelle est sa valeur nulle, et sur quelle échelle de couleurs elle se lit.
-- `pct_base` — `get_pct_base()` / `set_pct_base()` : pour un pourcentage, de quoi il est le pourcentage — `"row"`, `"col"`, `"all"`, `"all_tabs"`, ou `"none"` pour les effectifs, les moyennes et les coefficients.
+- `pct_type` — `get_pct_type()` / `set_pct_type()` : pour un pourcentage, de quoi il est le pourcentage — `"row"`, `"col"`, `"all"`, `"all_tabs"`, ou `"none"` pour les effectifs, les moyennes et les coefficients.
 - `ci_method` — `get_ci_method()` : quelle méthode a calculé les bornes de cette colonne (`"wilson"`, `"newcombe"`, `"welch"`, `"katz"`…; `""` si la colonne ne porte pas d’intervalle).
 - `color` — `get_color()` / `set_color()` : la mesure de couleur de la colonne — `""`, `"no"`, ou l'un des noms de mesure `"difference"`, `"ratio"`, `"odds_ratio"`, `"contrib"` (plus `"adjustment"` / `"between_groups"` sur un tableau `tab_reg()`). Les acronymes de la discipline (`"diff"`, `"OR"`, `"or"`, `"RR"`, `"RD"`) restent des raccourcis permanents que l'on peut *écrire*, mais un tableau construit stocke toujours — et sa légende nomme toujours — le mot complet.
 - `col_group` — `get_col_group()` : la sous-population à laquelle appartient le bloc de la colonne, après un pivot `spread_vars` / `tab_spread()` ou une partition `tab_reg(tab_vars =)` (`""` sinon). Avec `col_var`, il identifie un *bloc* de colonnes : deux blocs peuvent montrer la même variable pour deux sous-populations, et les exports les titrent sur deux lignes.

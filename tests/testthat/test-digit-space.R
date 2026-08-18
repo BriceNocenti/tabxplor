@@ -37,7 +37,7 @@ testthat::test_that("format(): the thousands mark is the pad glyph, per medium",
 testthat::test_that("format(): a composite's mark and its padding are the SAME glyph", {
   # the reported bug: "100% (n=  849)" was padded with figure spaces while "(n=1 811)" separated
   # with an ASCII space -- so the digits the padding had just aligned fell out of line again.
-  x <- fmt(n = c(849L, 3648L), pct = c(1, 1), scale = "level_pct", pct_base = "row", display = "{pct} (n={n})")
+  x <- fmt(n = c(849L, 3648L), pct = c(1, 1), scale = "level_pct", pct_type = "row", display = "{pct} (n={n})")
   h <- format(x, html = TRUE)
   # Phase g (A6): the html/nbsp medium joins the template literal " (n=" with a NON-BREAKING space so
   # the composite does not wrap; the inner digits keep the figure-space pad.
@@ -110,7 +110,7 @@ testthat::test_that("format(bold_split): only the MEAN of a mean (sd) cell is th
 testthat::test_that("format(): primary_nchar is attached only when something splits", {
   # the contract: off by default -> attribute-free output; and no bare all-NA attribute either
   testthat::expect_null(attr(format(mean_col(), special_formatting = TRUE), "primary_nchar"))
-  plain <- fmt(pct = c(0.4, 0.6), n = c(10L, 10L), scale = "level_pct", pct_base = "row")
+  plain <- fmt(pct = c(0.4, 0.6), n = c(10L, 10L), scale = "level_pct", pct_type = "row")
   testthat::expect_null(attr(format(plain, bold_split = TRUE), "primary_nchar"))
 })
 
@@ -139,7 +139,7 @@ testthat::test_that("tab_md() pads a composite's (n=...) with figure space, not 
 
 testthat::test_that("format()'s DEFAULT pad (the console) stays ASCII", {
   # the console must NOT move to figure space -- a monospace ASCII space is already one digit wide.
-  x <- fmt(n = c(849L, 3648L), pct = c(1, 1), scale = "level_pct", pct_base = "row", display = "{pct} (n={n})")
+  x <- fmt(n = c(849L, 3648L), pct = c(1, 1), scale = "level_pct", pct_type = "row", display = "{pct} (n={n})")
   testthat::expect_identical(format(x), c("100% (n=  849)", "100% (n=3 648)"))
 })
 
@@ -166,7 +166,7 @@ testthat::test_that("format(): a gof / pvalue footer cell reaches the column edg
 
 testthat::test_that("tab_xl(): the star literal is padded with figure spaces", {
   testthat::skip_if_not_installed("openxlsx2")
-  x <- fmt(n = rep(100L, 3), scale = "points", pct_base = "row", pct = c(0.4, 0.5, 0.6), diff = c(0.1, 0, -0.1),
+  x <- fmt(n = rep(100L, 3), scale = "points", pct_type = "row", pct = c(0.4, 0.5, 0.6), diff = c(0.1, 0, -0.1),
            ci_inf = c(0.05, -0.10, -0.20), ci_sup = c(0.15, 0.10, -0.05),
            pvalue = c(0.0005, 0.5, 0.07), display = "pct")
   st <- get_stars(x)

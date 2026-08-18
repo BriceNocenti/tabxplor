@@ -6,7 +6,7 @@ div_glyph  <- intToUtf8(0x00f7)  # divide sign
 
 testthat::test_that("composite {} tokens are padded to a uniform width per column", {
   x <- set_display(
-    fmt(n = c(17L, 5416L, 743L), scale = "level_pct", pct_base = "row", pct = c(1, 1, 1), display = "pct"),
+    fmt(n = c(17L, 5416L, 743L), scale = "level_pct", pct_type = "row", pct = c(1, 1, 1), display = "pct"),
     "{pct} (n={n})")
   f <- format(x)
   # the {n} field is right-aligned to the column-max width so numbers line up in a monospace font.
@@ -15,7 +15,7 @@ testthat::test_that("composite {} tokens are padded to a uniform width per colum
 })
 
 testthat::test_that("format() stays byte-identical (no primary_nchar attr) when bold_split is off", {
-  x <- set_display(fmt(n = c(10L, 20L), scale = "level_pct", pct_base = "row", pct = c(0.4, 0.6), display = "pct"),
+  x <- set_display(fmt(n = c(10L, 20L), scale = "level_pct", pct_type = "row", pct = c(0.4, 0.6), display = "pct"),
                    "{pct} (n={n})")
   testthat::expect_null(attr(format(x), "primary_nchar"))
   testthat::expect_identical(format(x), c("40% (n=10)", "60% (n=20)"))
@@ -23,27 +23,54 @@ testthat::test_that("format() stays byte-identical (no primary_nchar attr) when 
 
 testthat::test_that("ratio (rr) display shows the multiplicative x / div sign", {
   x <- set_display(
-    fmt(n = rep(1L, 4), scale = "level_pct", pct_base = "row", pct = rep(0.5, 4),
+    fmt(n = rep(1L, 4), scale = "level_pct", pct_type = "row", pct = rep(0.5, 4),
         ratio = c(2, 0.5, 1, 0.998), display = "pct"),
     "rr")
   f <- format(x)
-  # >= 1 -> "x<r>"; < 1 -> "/<1/r>"; a ratio rounding to 1 always shows "x1" (never "/1").
+  # >= 1 -> "x<r>"; < 1 -> "/<1/r>"; a value ROUNDING to the neutral takes the over glyph, never the
+  # confusing "/1.00". Only a REFERENCE cell loses the glyph (see the next test).
   testthat::expect_identical(
-    f, c(paste0(mult_glyph, "2"), paste0(div_glyph, "2"),
-         paste0(mult_glyph, "1"), paste0(mult_glyph, "1")))
+    f, c(paste0(mult_glyph, "2.00"), paste0(div_glyph, "2.00"),
+         paste0(mult_glyph, "1.00"), paste0(mult_glyph, "1.00")))
 })
 
-testthat::test_that("ratio display trims trailing zeros and pads for alignment", {
+testthat::test_that("a REFERENCE cell at the neutral prints a bare 1, a cell that merely equals it does not", {
+  t <- tab(forcats::gss_cat, race, marital, pct = "row", color = "ratio", display = "ratio")
+  col <- t[["Divorced"]]
+  f   <- format(col, special_formatting = TRUE)
+  # the Total row IS the reference: no glyph, no decimals, so its row stands out
+  testthat::expect_identical(f[is_totrow(col)], "1")
+  # a non-reference cell rounding to the neutral keeps the glyph and the decimals
+  testthat::expect_true(any(f[!is_totrow(col)] == paste0(mult_glyph, "1.00")))
+  # and a regression Constant IS a reference row, but its odds ratio is a real baseline value
+  skip_if_not_installed("broom")
+  reg <- suppressMessages(tab_reg(gss_cat_data_formatting(), "married", "race",
+                                  family = "binomial"))
+  cst <- format(reg[["Model_OR"]], special_formatting = TRUE)[as.character(reg$var) == "Constant"]
+  testthat::expect_false(cst == "1")
+})
+
+testthat::test_that("a multiplicative cell keeps the decimals it ASKS for, and 0 falls back to 2", {
+  # DISPLAY_TOKENS$min_digits overrides ONLY 0: a ratio read against the x1.2 / x1.5 thresholds is
+  # meaningless at "1", but a cell asking for 1 or 3 decimals gets exactly that.
   x <- set_display(
-    fmt(n = rep(1L, 3), scale = "level_pct", pct_base = "row", pct = rep(0.5, 3),
-        ratio = c(1.5, 0.25, 3.333), display = "pct"),
+    fmt(n = rep(1L, 3), scale = "level_pct", pct_type = "row", pct = rep(0.5, 3),
+        ratio = c(1.5, 0.25, 1.0624), display = "pct"),
     "rr")
-  f <- format(x)
-  # 1.5 -> "x1.5"; 0.25 -> 1/0.25 = 4 -> "/4"; 3.333 -> "x3.3"; all left-padded to the max width.
-  testthat::expect_identical(
-    f, c(paste0(mult_glyph, "1.5"),
-         paste0("  ", div_glyph, "4"),
-         paste0(mult_glyph, "3.3")))
+  m <- mult_glyph; d <- div_glyph
+  testthat::expect_identical(format(set_digits(x, 0L)),
+                             c(paste0(m, "1.50"), paste0(d, "4.00"), paste0(m, "1.06")))
+  testthat::expect_identical(format(set_digits(x, 1L)),
+                             c(paste0(m, "1.5"), paste0(d, "4.0"), paste0(m, "1.1")))
+  testthat::expect_identical(format(set_digits(x, 3L)),
+                             c(paste0(m, "1.500"), paste0(d, "4.000"), paste0(m, "1.062")))
+  # the same rule on the odds-ratio glyph, and the same floor
+  y <- fmt(n = rep(1L, 3), scale = "odds_ratio", pct_type = "row",
+           or = c(2, 0.5, 1.0624), display = "or")
+  testthat::expect_identical(format(set_digits(y, 0L), special_formatting = TRUE),
+                             c("2.00", "1/2.00", "1.06"))
+  testthat::expect_identical(format(set_digits(y, 1L), special_formatting = TRUE),
+                             c("2.0", "1/2.0", "1.1"))
 })
 
 # Phase 13c-ii: composite partial bold (first token bold, rest plain).

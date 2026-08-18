@@ -723,7 +723,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
           # WHICH engine built these bounds. All-NA bounds (a degenerate 2x2) name no method.
           ci_method = if (or_from_leaf) { if (!all(is.na(a[[11]]))) "woolf" else "" }
                       else ci_res$method,
-          pct_base  = base_1, col_var = colvar_1,
+          pct_type  = base_1, col_var = colvar_1,
           totcol    = a[[8]], refcol = a[[9]], color = color_1, color_signif = "ignore")
       )
     })
@@ -1279,7 +1279,7 @@ leaf_ci_plain <- function(P, tot_n, n_eff = NULL, ci, pct, ci_scale = "diff",
   none <- list(kind = "no", inf = NULL, sup = NULL, pvalue = NULL,
                scale = NA_character_, method = "", visible = FALSE)
 
-  # (a) THE DIRECTION. `pct_base` / `var_kind` being column-INVARIANT here, tab_ci()'s branches collapse.
+  # (a) THE DIRECTION. `pct_type` / `var_kind` being column-INVARIANT here, tab_ci()'s branches collapse.
   kind <- if (length(ci) == 0L || is.na(ci[1]) || identical(ci[1], "no") || identical(pct, "no")) "no"
           else if (identical(ci[1], "cell"))                                          "cell"
           else if (identical(pct, "row"))                                             "diff_row"
@@ -1743,6 +1743,23 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
         ), by = eval(comp_group)]
       }
 
+      # a MODEL-based method pools its dispersion over the variable's whole level set, which the
+      # elementwise engines cannot see -- so compute it here, where the level set is the rows.
+      # Grouped by the comparison scope (+ the total table, which is a table of its own), over the
+      # rows that ARE levels: a total row is a mixture of them, and would be counted twice.
+      pool_slot <- if (identical(ci_scale[1], "ratio")) "mean_ratio" else "mean_diff"
+      pool_of   <- function(v) {
+        if (ci != "diff" ||
+            !identical(inference$method[[pool_slot]], CI_POOLED[[pool_slot]])) return(NULL)
+        grp <- if (length(comp_group))
+                 do.call(paste, c(as.list(tabs[, comp_group, with = FALSE]),
+                                  list(tottab_vector), sep = "\r"))
+               else paste(tottab_vector)
+        ci_pool_disp(n = tabs[[paste0(v, "_en")]], mean = tabs[[paste0(v, "_mean")]],
+                     var = tabs[[paste0(v, "_var")]], by = grp, use = !totrow_vector,
+                     kind = pool_slot)
+      }
+
       for (v in cvs) {
         m  <- tabs[[paste0(v, "_mean")]]
         vv <- tabs[[paste0(v, "_var")]]
@@ -1755,7 +1772,8 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
           ref     = if (ci == "diff") tabs[[paste0(v, "_refm")]],
           ref_var = if (ci == "diff") tabs[[paste0(v, "_refv")]],
           ref_n   = if (ci == "diff") tabs[[paste0(v, "_refn")]],
-          conf_level = conf_level, want_p = want_p, method = inference$method, degf = degf)
+          conf_level = conf_level, want_p = want_p, method = inference$method, degf = degf,
+          pool = pool_of(v))
         # A reference row has no CI or test AGAINST ITSELF -- but a `ci = "cell"` interval is not a
         # comparison, so it keeps its own. ONE declared fact (CI_GEOMS$ref_cell), shared with
         # leaf_ci_plain(); only the MECHANISM is local (this leaf NAs the RESULTS, not the base).
@@ -1897,7 +1915,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
           # a ratio-scale mean interval lives on `mean_ratio` (neutral 1), so format() reads the
           # ratio bounds, not a difference mislabelled as one.
           scale     = scale_num, comp_all = comp_1, ref = ref_1,
-          pct_base  = "none", ci_method = method_num,
+          pct_type  = "none", ci_method = method_num,
           col_var   = a[[7]],
           totcol    = FALSE, refcol = FALSE, color = color, color_signif = "ignore")
       )

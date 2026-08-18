@@ -359,11 +359,11 @@ Print the confidence intervals of the **difference** with a reference, used to c
 gss_simple |>
   dplyr::filter(year == "2012") |> # n=1 974
   tab(race, party3, pct = "row", color = TRUE, color_signif = "guaranteed_effect",
-      display = "num_ci" # "{pct} {ci}"
+      display = "base_ci" # "{base} {ci}"
   )
 ```
 
-`display = "num_ci"` is a type-adaptive shorthand for this: it shows each value with whatever confidence interval the table computes — `{pct} {ci}` on percentage columns and `{mean} {ci}` on numeric columns, chosen per column — so it works for a mix of factors and numbers in one call:
+`display = "base_ci"` is the named layout for this: `{base}` is "the level this column shows" — a percentage on a factor column, a mean on a numeric one — so one call works for a mix of factors and numbers, and each column answers with its own quantity:
 
 
 Add significance stars with `stars = TRUE`. They tell the same story than confidence intervals of the difference with the reference, but for different confidence levels (99%, 95%, 90%) :
@@ -371,7 +371,7 @@ Add significance stars with `stars = TRUE`. They tell the same story than confid
 ```{r, echo = TRUE}
 gss_simple |>
   dplyr::filter(year == "2012") |> # n=1 974
-  tab(rincome, c(party3, tvhours), pct = "row", display = "num_ci", stars = TRUE)
+  tab(rincome, c(party3, tvhours), pct = "row", display = "base_ci", stars = TRUE)
 ```
 
 **Show two numbers in one cell.** `display` is not just for confidence intervals: it takes a **`{}` template** that combines any cell fields. For example `display = "{pct} ({diff})"` prints each percentage followed by its difference from the reference, and `"{pct} (n={n})"` follows it with the count:
@@ -587,8 +587,8 @@ Every colored table answers three questions:
 Alternative interval methods go in ONE argument, `ci_method` — a named vector, partial like `ref` or `pct`, so a kind you do not name keeps its default (see `?tab`): 
 
 - `ci_method = c(diff = "ac")` (Agresti-Caffo) or `"wald"` for a percentage difference; 
-- `ci_method = c(mean_diff = "student")` (pooled, the OLS two-group interval) for a mean difference; 
-- `ci_method = c(mean_ratio = "quasipoisson")` or `"poisson"` for a mean ratio. 
+- `ci_method = c(mean_diff = "student")` (the two groups pooled, a two-sample *t* test) or `"ols"` (pooled over **every** level of the variable — the interval a linear regression gives that coefficient) for a mean difference; 
+- `ci_method = c(mean_ratio = "quasipoisson")` (scaled by the dispersion a quasi-Poisson regression estimates over every level — that regression's own interval) or `"poisson"` for a mean ratio. 
 - Several at once: `ci_method = c(cell = "beta", diff = "ac")`.
 - The relative-risk (Katz) and odds-ratio (Woolf) intervals have no alternative, so they are not a choice.
 - A mean **difference** is colored **standardized** — Glass's Δ, the difference divided by the reference's standard deviation — so the `mean_diff` color breaks are read in SD units, unless the user provides a custom break scale.

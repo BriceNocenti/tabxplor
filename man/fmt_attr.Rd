@@ -12,7 +12,7 @@ fmt_attr(x, name) <- value
 \arguments{
 \item{x}{A \code{tabxplor_fmt} vector, or a data.frame (then every \code{fmt} column is read).}
 
-\item{name}{The attribute: one of \code{"scale"}, \code{"comp_all"}, \code{"ref"}, \code{"pct_base"}, \code{"col_var"},
+\item{name}{The attribute: one of \code{"scale"}, \code{"comp_all"}, \code{"ref"}, \code{"pct_type"}, \code{"col_var"},
 \code{"col_group"}, \code{"totcol"}, \code{"refcol"}, \code{"color"}, \code{"color_signif"}, \code{"model_family"}, \code{"role"},
 \code{"conf_level"}, \code{"degf"}, \code{"basis"}, \code{"ci_method"}. An unknown name is an error naming the set.}
 
@@ -32,7 +32,7 @@ The named accessors (\code{\link[=get_scale]{get_scale()}}, \code{\link[=get_col
 address one known attribute.
 }
 \examples{
-x <- fmt(n = c(10, 20), pct = c(0.3, 0.7), scale = "level_pct", pct_base = "row")
+x <- fmt(n = c(10, 20), pct = c(0.3, 0.7), scale = "level_pct", pct_type = "row")
 fmt_attr(x, "scale")
 fmt_attr(x, "col_var") <- "region"
 fmt_attr(x, "col_var")

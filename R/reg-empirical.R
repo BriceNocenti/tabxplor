@@ -550,7 +550,7 @@ reg_fit_overlay <- function(col, eff, est, shape) {
 }
 
 # The empirical (crude) companion FACT TABLE: per family (binomial / gaussian / poisson), the SHAPE of
-# the base descriptive column + the crude-effect column (fmt scale / pct_base / display / digits / ref /
+# the base descriptive column + the crude-effect column (fmt scale / pct_type / display / digits / ref /
 # colour measure + the visible name), plus the CI METHOD literal the crude interval uses. The per-family
 # CI MATH stays code below (ci_prop_diff / ci_or / ci_pivot / ci_mean_diff2 / ci_mean_ratio take
 # different arguments), but the near-identical fmt() calls collapse into ONE builder (emp_col), and the
@@ -576,39 +576,39 @@ reg_fit_overlay <- function(col, eff, est, shape) {
 REG_EMPIRICAL <- list(
   binomial = list(
     method_diff = "wald", coef = "or", coef_log = "or_log",
-    base   = list(nm = "Obs_%",       scale = "points", display = "pct", digits = 0L, ref = "tot", pct_base = "row",  ci_method = "wald", color = "diff", link = NA_character_),
-    ame    = list(nm = "Obs_diff",    scale = "points", display = "diff", digits = 0L, ref = "tot", pct_base = "row",  ci_method = "wald", color = "diff", link = "identity"),
-    or     = list(nm = "Obs_OR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",    ci_method = "woolf", color = "OR",   link = "logit"),
-    or_log = list(nm = "Obs_log(OR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_base = "none",  ci_method = "woolf", color = "diff", link = "logit")),
+    base   = list(nm = "Obs_%",       scale = "points", display = "pct", digits = 0L, ref = "tot", pct_type = "row",  ci_method = "wald", color = "diff", link = NA_character_),
+    ame    = list(nm = "Obs_diff",    scale = "points", display = "diff", digits = 0L, ref = "tot", pct_type = "row",  ci_method = "wald", color = "diff", link = "identity"),
+    or     = list(nm = "Obs_OR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",    ci_method = "woolf", color = "OR",   link = "logit"),
+    or_log = list(nm = "Obs_log(OR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_type = "none",  ci_method = "woolf", color = "diff", link = "logit")),
   # Phase 18z3 -- the modified-Poisson (binary outcome) crude companion. SAME base column as binomial
   # (a risk, `Obs_%`, with the Wald risk-difference CI), but the effect is a crude RISK ratio with the
   # KATZ log-RR interval (ci_katz_rr) -- not the Woolf log-OR the binomial arm uses. That is the point
   # of the whole feature: the observed companion must be on the same scale as the model column.
   rr = list(
     method_diff = "wald", coef = "rr", coef_log = "rr_log",
-    base   = list(nm = "Obs_%",       scale = "points", display = "pct", digits = 0L, ref = "tot", pct_base = "row",  ci_method = "wald", color = "diff", link = NA_character_),
-    ame    = list(nm = "Obs_diff",    scale = "points", display = "diff", digits = 0L, ref = "tot", pct_base = "row",  ci_method = "wald", color = "diff", link = "identity"),
-    rr     = list(nm = "Obs_RR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",    ci_method = "katz", color = "OR",   link = "log"),
-    rr_log = list(nm = "Obs_log(RR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_base = "none",  ci_method = "katz", color = "diff", link = "log")),
+    base   = list(nm = "Obs_%",       scale = "points", display = "pct", digits = 0L, ref = "tot", pct_type = "row",  ci_method = "wald", color = "diff", link = NA_character_),
+    ame    = list(nm = "Obs_diff",    scale = "points", display = "diff", digits = 0L, ref = "tot", pct_type = "row",  ci_method = "wald", color = "diff", link = "identity"),
+    rr     = list(nm = "Obs_RR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",    ci_method = "katz", color = "OR",   link = "log"),
+    rr_log = list(nm = "Obs_log(RR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_type = "none",  ci_method = "katz", color = "diff", link = "log")),
   # Phase 19e -- the crude companion of a RATIO OF MEANS (`measure = "ratio"` on a continuous
   # outcome, fitted by the "mr" log-link pseudo-likelihood). Its base is the group MEAN and its
   # effect the crude ratio of means, with the ci_mean_ratio engine tab() has used for years -- the
   # same "the observed companion must be on the same scale as the model column" rule that gave "rr"
   # its own block rather than borrowing binomial's.
   mr = list(
-    method_mean_ratio = "quasipoisson", coef = "mr", coef_log = "mr_log",
-    base   = list(nm = "Obs_mean",     scale = "level_mean", display = "mean", digits = 2L, ref = NA_character_, pct_base = "none", ci_method = "student",     color = "",      link = NA_character_),
-    mr     = list(nm = "Obs_RoM",      scale = "mean_ratio", display = "ratio", digits = 2L, ref = "1", pct_base = "none", ci_method = "quasipoisson", color = "ratio", link = "log"),
-    mr_log = list(nm = "Obs_log(RoM)", scale = "log_coef",   display = "coef", digits = 2L, ref = NA_character_, pct_base = "none", ci_method = "quasipoisson", color = "diff",  link = "log")),
+    coef = "mr", coef_log = "mr_log",
+    base   = list(nm = "Obs_mean",     scale = "level_mean", display = "mean", digits = 2L, ref = NA_character_, pct_type = "none", ci_method = "student",     color = "",      link = NA_character_),
+    mr     = list(nm = "Obs_RoM",      scale = "mean_ratio", display = "ratio", digits = 2L, ref = "1", pct_type = "none", ci_method = "quasipoisson", ci_method_design = "robust", color = "ratio", link = "log"),
+    mr_log = list(nm = "Obs_log(RoM)", scale = "log_coef",   display = "coef", digits = 2L, ref = NA_character_, pct_type = "none", ci_method = "quasipoisson", ci_method_design = "robust", color = "diff",  link = "log")),
   gaussian = list(
-    method_mean_diff = "student", coef = "diff", coef_log = "diff",
-    base = list(nm = "Obs_mean", scale = "level_mean", display = "mean", digits = 2L, ref = NA_character_, pct_base = "none",  ci_method = "student", color = "",     link = NA_character_),
-    diff = list(nm = "Obs_diff", scale = "raw_diff",  display = "coef", digits = 2L, ref = NA_character_, pct_base = "none",  ci_method = "student", color = "diff", link = "identity")),
+    coef = "diff", coef_log = "diff",
+    base = list(nm = "Obs_mean", scale = "level_mean", display = "mean", digits = 2L, ref = NA_character_, pct_type = "none",  ci_method = "student", color = "",     link = NA_character_),
+    diff = list(nm = "Obs_diff", scale = "raw_diff",  display = "coef", digits = 2L, ref = NA_character_, pct_type = "none",  ci_method = "ols", ci_method_design = "welch", color = "diff", link = "identity")),
   poisson = list(
-    method_mean_ratio = "quasipoisson", coef = "irr", coef_log = "irr_log",
-    base    = list(nm = "Obs_rate",     scale = "mean_ratio", display = "mean", digits = 2L, ref = "1", pct_base = "none", ci_method = "quasipoisson", color = "ratio", link = NA_character_),
-    irr     = list(nm = "Obs_IRR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",    ci_method = "katz", color = "OR",    link = "log"),
-    irr_log = list(nm = "Obs_log(IRR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_base = "none",  ci_method = "katz", color = "diff",  link = "log")),
+    coef = "irr", coef_log = "irr_log",
+    base    = list(nm = "Obs_rate",     scale = "mean_ratio", display = "mean", digits = 2L, ref = "1", pct_type = "none", ci_method = "quasipoisson", ci_method_design = "robust", color = "ratio", link = NA_character_),
+    irr     = list(nm = "Obs_IRR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",    ci_method = "quasipoisson", ci_method_design = "robust", color = "OR",    link = "log"),
+    irr_log = list(nm = "Obs_log(IRR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_type = "none",  ci_method = "quasipoisson", ci_method_design = "robust", color = "diff",  link = "log")),
   # Phase 18z10 -- the three families that had no crude twin at all.
   #
   # grouped_binomial (`trials =`): the univariable model is STILL saturated for a factor predictor, so
@@ -617,11 +617,11 @@ REG_EMPIRICAL <- list(
   # it takes the gaussian base shape and reads `emp_mean`, while the effect reads the summed 2x2. That
   # one family needing both grid parts at once is why `emp_base` had to split into emp_prop / emp_mean.
   grouped_binomial = list(
-    method_diff = "wald", method_mean_diff = "student", coef = "or", coef_log = "or_log",
-    base   = list(nm = "Obs_mean",     scale = "level_mean", display = "mean", digits = 2L, ref = NA_character_, pct_base = "none",  ci_method = "student", color = "",     link = NA_character_),
-    ame    = list(nm = "Obs_diff",     scale = "points", display = "diff", digits = 0L, ref = "tot", pct_base = "row",  ci_method = "wald", color = "diff", link = "identity"),
-    or     = list(nm = "Obs_OR",       scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",    ci_method = "woolf", color = "OR",   link = "logit"),
-    or_log = list(nm = "Obs_log(OR)",  scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_base = "none",  ci_method = "woolf", color = "diff", link = "logit")),
+    method_diff = "wald", coef = "or", coef_log = "or_log",
+    base   = list(nm = "Obs_mean",     scale = "level_mean", display = "mean", digits = 2L, ref = NA_character_, pct_type = "none",  ci_method = "student", color = "",     link = NA_character_),
+    ame    = list(nm = "Obs_diff",     scale = "points", display = "diff", digits = 0L, ref = "tot", pct_type = "row",  ci_method = "wald", color = "diff", link = "identity"),
+    or     = list(nm = "Obs_OR",       scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",    ci_method = "woolf", color = "OR",   link = "logit"),
+    or_log = list(nm = "Obs_log(OR)",  scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_type = "none",  ci_method = "woolf", color = "diff", link = "logit")),
   # multinomial: one crude column PER OUTCOME CATEGORY would double an already wide table, so these
   # shapes are `visible = FALSE` -- the crude number rides IN-CELL in the model column's `obs` field
   # (maintainer's ruling Q4, rendered as "{or} ({obs})" / "{diff} ({obs})"). `obs` is defined as "the
@@ -631,10 +631,10 @@ REG_EMPIRICAL <- list(
   # number tab(pct = "row", OR = "OR") prints.
   multinomial = list(
     method_diff = "wald", coef = "or", coef_log = "or_log",
-    or        = list(nm = NA_character_, scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",   ci_method = "woolf", color = "OR",   link = "logit", visible = FALSE, per_category = TRUE),
-    or_log    = list(nm = NA_character_, scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_base = "none", ci_method = "woolf", color = "diff", link = "logit", visible = FALSE, per_category = TRUE),
-    ame       = list(nm = NA_character_, scale = "points", display = "diff", digits = 0L, ref = "tot", pct_base = "row", ci_method = "wald", color = "diff", link = "identity", visible = FALSE, per_category = TRUE),
-    ame_ratio = list(nm = NA_character_, scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",   ci_method = "katz", color = "OR",   link = "log",   visible = FALSE, per_category = TRUE)),
+    or        = list(nm = NA_character_, scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",   ci_method = "woolf", color = "OR",   link = "logit", visible = FALSE, per_category = TRUE),
+    or_log    = list(nm = NA_character_, scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_type = "none", ci_method = "woolf", color = "diff", link = "logit", visible = FALSE, per_category = TRUE),
+    ame       = list(nm = NA_character_, scale = "points", display = "diff", digits = 0L, ref = "tot", pct_type = "row", ci_method = "wald", color = "diff", link = "identity", visible = FALSE, per_category = TRUE),
+    ame_ratio = list(nm = NA_character_, scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",   ci_method = "katz", color = "OR",   link = "log",   visible = FALSE, per_category = TRUE)),
   # ordinal: proportional odds is a CONSTRAINT, so the univariable model is NOT saturated and there is no
   # closed form (measured: the three closed-form substitutes drift by 2.4-5.4 %, of the same order as the
   # first colour break -- and the drift IS the PO violation, so it would inject a data-outcome offset
@@ -643,10 +643,10 @@ REG_EMPIRICAL <- list(
   # the same reason -- ruling Q6 (same estimand, link, CI rule, multiplier) holds by construction.
   ordinal = list(
     coef = "cumor", coef_log = "cumor_log",
-    cumor     = list(nm = "Obs_cumOR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",   ci_method = "wald_log", color = "OR",   link = "logit", from = "fit"),
-    cumor_log = list(nm = "Obs_log(cumOR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_base = "none", ci_method = "wald_log", color = "diff", link = "logit", from = "fit"),
-    ame       = list(nm = NA_character_, scale = "points", display = "diff", digits = 0L, ref = "tot", pct_base = "row", ci_method = "wald", color = "diff", link = "identity", visible = FALSE, per_category = TRUE, from = "fit"),
-    ame_ratio = list(nm = NA_character_, scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_base = "row",   ci_method = "wald_log", color = "OR",   link = "log",   visible = FALSE, per_category = TRUE, from = "fit"))
+    cumor     = list(nm = "Obs_cumOR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",   ci_method = "wald_log", color = "OR",   link = "logit", from = "fit"),
+    cumor_log = list(nm = "Obs_log(cumOR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_type = "none", ci_method = "wald_log", color = "diff", link = "logit", from = "fit"),
+    ame       = list(nm = NA_character_, scale = "points", display = "diff", digits = 0L, ref = "tot", pct_type = "row", ci_method = "wald", color = "diff", link = "identity", visible = FALSE, per_category = TRUE, from = "fit"),
+    ame_ratio = list(nm = NA_character_, scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",   ci_method = "wald_log", color = "OR",   link = "log",   visible = FALSE, per_category = TRUE, from = "fit"))
 )
 
 # The three optional SHAPE facts z10 added, with their defaults in one place (a shape row states only
@@ -751,11 +751,18 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   na_v   <- function() rep(NA_real_, n_rows)
   # one fmt column from a shape row + its varying fmt FIELD values. Uncoloured when the model is off or
   # the shape declares no measure (Obs_mean); `ref` is omitted when the shape has none.
+  # THE crude interval a shape asks for, under THIS table's inference basis. The crude column is the
+  # univariable model's column, so its interval must be that model's: unweighted the fit is lm / glm
+  # and its interval is MODEL-BASED (one dispersion pooled over the predictor's levels); weighted or
+  # design-based the fit is svyglm and its interval is the SANDWICH, which the per-group forms
+  # reproduce. A shape with no `ci_method_design` has the same interval either way.
+  emp_method <- function(shape)
+    (if (isTRUE(weighted)) shape$ci_method_design %||% shape$ci_method else shape$ci_method) %||% ""
   emp_col <- function(shape, fields, n_eff = NULL) {
     measure <- if (emp_off || !nzchar(shape$color)) "" else shape$color
     args <- c(fields, if (!is.null(n_eff)) list(n_eff = n_eff), list(
-      scale = shape$scale, pct_base = shape$pct_base, display = shape$display, digits = shape$digits,
-      ci_method = shape$ci_method %||% "",
+      scale = shape$scale, pct_type = shape$pct_type, display = shape$display, digits = shape$digits,
+      ci_method = emp_method(shape),
       color = measure, color_signif = if (nzchar(measure)) color_signif else "ignore",
       col_var = shape$nm, comp_all = FALSE, in_refrow = refrows, model_family = family, role = "emp"))
     if (!is.na(shape$ref)) args$ref <- shape$ref
@@ -855,6 +862,14 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   # the CI base of a PROPORTION is the number of Bernoulli DRAWS (n x trials for a grouped binomial,
   # n everywhere else -> byte-identical); the MEAN CIs keep the per-respondent n_ci.
   nv_dr <- g$emp_n_draw; rn_dr <- g$emp_ref_n_draw
+  # the model-based dispersion the two MOMENT families need, pooled over each predictor's own level
+  # set -- exactly the univariable lm / glm's scope. The engines are elementwise, so it is computed
+  # here, where the level set IS a group of skeleton rows. NULL where the chosen method is a
+  # per-group (sandwich) one, which needs no pooling.
+  emp_pool <- function(shape, kind) {
+    if (!identical(emp_method(shape), CI_POOLED[[kind]])) return(NULL)
+    ci_pool_disp(n = nv_ci, mean = meanv, var = varv, by = skeleton$var, use = is_fac, kind = kind)
+  }
 
   # binomial + "rr" (modified Poisson) share every BASE fact -- a crude risk and its Wald risk-difference
   # CI -- and differ only in the crude EFFECT, which must be the model's own estimand (Phase 18z3).
@@ -933,8 +948,10 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
     base_col <- emp_col(fam$base, list(mean = meanv, var = varv, n = nv, tot_n = nv,
                                        ci_inf = cell$inf, ci_sup = cell$sup),
                         n_eff = neff_of(nv_ci))
-    md <- na_ref(ci_mean_diff2(meanv, varv, nv_ci, rmean, rv, rn_ci, method = fam$method_mean_diff, # pooled t = OLS
-                               conf_level = conf_level, want_p = TRUE, df_design = degf))
+    md <- na_ref(ci_mean_diff2(meanv, varv, nv_ci, rmean, rv, rn_ci,
+                               method = emp_method(fam$diff), conf_level = conf_level,
+                               want_p = TRUE, df_design = degf,
+                               pool = emp_pool(fam$diff, "mean_diff")))
     eff_col <- emp_col(fam$diff, list(diff = diffv, var = rep(var_y, n_rows), n = nv,
                                       ci_inf = md$inf, ci_sup = md$sup, pvalue = md$pvalue),
                        n_eff = neff_of(nv_ci))
@@ -953,8 +970,10 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
     base_col <- emp_col(fam$base, list(mean = meanv, var = varv, n = nv, tot_n = nv,
                                        ci_inf = cell$inf, ci_sup = cell$sup),
                         n_eff = neff_of(nv_ci))
-    mr <- na_ref(ci_mean_ratio(meanv, varv, nv_ci, rmean, rv, rn_ci, method = fam$method_mean_ratio,
-                               conf_level = conf_level, want_p = TRUE, df_design = degf))
+    mr <- na_ref(ci_mean_ratio(meanv, varv, nv_ci, rmean, rv, rn_ci,
+                               method = emp_method(fam$mr), conf_level = conf_level,
+                               want_p = TRUE, df_design = degf,
+                               pool = emp_pool(fam$mr, "mean_ratio")))
     if (do_exp) {
       eff_col <- emp_col(fam$mr, list(ratio = ratio, n = nv, ci_inf = mr$inf,
                                       ci_sup = mr$sup, pvalue = mr$pvalue),
@@ -971,8 +990,10 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
 
   if (identical(crude_key, "poisson")) {
     # one crude rate-ratio CI (quasi-Poisson, = the phi-scaled model's method) drives BOTH columns.
-    rr <- na_ref(ci_mean_ratio(meanv, varv, nv_ci, rmean, rv, rn_ci, method = fam$method_mean_ratio,
-                               conf_level = conf_level, want_p = TRUE, df_design = degf))
+    rr <- na_ref(ci_mean_ratio(meanv, varv, nv_ci, rmean, rv, rn_ci,
+                               method = emp_method(fam$irr), conf_level = conf_level,
+                               want_p = TRUE, df_design = degf,
+                               pool = emp_pool(fam$irr, "mean_ratio")))
     base_col <- emp_col(fam$base, list(mean = meanv, ratio = ratio, n = nv, tot_n = nv,
                                        ci_inf = rr$inf, ci_sup = rr$sup, pvalue = rr$pvalue),
                         n_eff = neff_of(nv_ci))

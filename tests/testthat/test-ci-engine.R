@@ -182,6 +182,59 @@ testthat::test_that("want_p = FALSE and cell intervals carry no p-value", {
 # === SECTION: stars agree with the p-value threshold (universal inclusion) ============
 
 testthat::test_that("get_stars() maps p-values to the documented thresholds", {
-  x <- fmt(n = rep(30L, 5), scale = "points", pct_base = "row", pct = rep(0.5, 5), pvalue = c(0.20, 0.08, 0.03, 0.005, NA))
+  x <- fmt(n = rep(30L, 5), scale = "points", pct_type = "row", pct = rep(0.5, 5), pvalue = c(0.20, 0.08, 0.03, 0.005, NA))
   testthat::expect_identical(get_stars(x), c("", "*", "**", "***", ""))
+})
+
+# === SECTION: the MODEL-based methods (a dispersion pooled over the whole variable) ===
+#
+# `ols` and `quasipoisson` reproduce a MODEL's coefficient interval, not a two-sample test, so their
+# variance is pooled over every level of the predictor -- which the elementwise engines cannot see.
+# ci_pool_disp() computes it for them; with no `pool` they fall back to the pair, which IS the level
+# set when the variable has two levels.
+
+ci_pool_fixture <- function(y, g) {
+  s <- split(y, g)
+  list(n = vapply(s, length, 1L), m = vapply(s, mean, 1.0), v = vapply(s, stats::var, 1.0))
+}
+
+testthat::test_that("mean_diff = 'ols' IS the linear model's coefficient interval (k = 3)", {
+  d  <- tidyr::drop_na(forcats::gss_cat[, c("tvhours", "race")])
+  d$race <- forcats::fct_drop(d$race)
+  f  <- ci_pool_fixture(d$tvhours, d$race)
+  p  <- ci_pool_disp(n = f$n, mean = f$m, var = f$v, by = rep("a", length(f$n)),
+                     use = rep(TRUE, length(f$n)), kind = "mean_diff")
+  got <- ci_mean_diff2(f$m[-1], f$v[-1], f$n[-1], f$m[1], f$v[1], f$n[1], method = "ols",
+                       pool = list(disp = p$disp[-1], df = p$df[-1]))
+  ref <- stats::confint(stats::lm(tvhours ~ race, data = d))[-1, , drop = FALSE]
+  testthat::expect_equal(unname(got$inf), unname(ref[, 1]), tolerance = 1e-10)
+  testthat::expect_equal(unname(got$sup), unname(ref[, 2]), tolerance = 1e-10)
+  # the pooled dispersion IS the model's residual variance, and its df the model's
+  testthat::expect_equal(p$disp[[1]], stats::sigma(stats::lm(tvhours ~ race, data = d))^2,
+                         tolerance = 1e-10)
+  testthat::expect_equal(p$df[[1]], stats::df.residual(stats::lm(tvhours ~ race, data = d)))
+})
+
+testthat::test_that("mean_ratio = 'quasipoisson' IS the quasi-Poisson dispersion (k = 3)", {
+  d  <- tidyr::drop_na(forcats::gss_cat[, c("tvhours", "race")])
+  d  <- d[d$tvhours > 0, ]; d$race <- forcats::fct_drop(d$race)
+  f  <- ci_pool_fixture(d$tvhours, d$race)
+  p  <- ci_pool_disp(n = f$n, mean = f$m, var = f$v, by = rep("a", length(f$n)),
+                     use = rep(TRUE, length(f$n)), kind = "mean_ratio")
+  fit <- stats::glm(tvhours ~ race, data = d, family = stats::quasipoisson())
+  testthat::expect_equal(p$disp[[1]], summary(fit)$dispersion, tolerance = 1e-7)
+  got <- ci_mean_ratio(f$m[-1], f$v[-1], f$n[-1], f$m[1], f$v[1], f$n[1], method = "quasipoisson",
+                       pool = list(disp = p$disp[-1], df = p$df[-1]))
+  se  <- (log(got$sup) - log(got$inf)) / (2 * stats::qt(0.975, p$df[[1]]))
+  testthat::expect_equal(unname(se), unname(summary(fit)$coefficients[-1, 2]), tolerance = 1e-6)
+})
+
+testthat::test_that("with no `pool` the two model methods fall back to the pair", {
+  a <- ci_mean_diff2(3.5, 4, 100, 2.5, 3, 120, method = "ols")
+  testthat::expect_equal(a, ci_mean_diff2(3.5, 4, 100, 2.5, 3, 120, method = "student"))
+  # and ci_pool_disp() excludes the rows that are NOT levels (a total row is a mixture of them)
+  p <- ci_pool_disp(n = c(10, 10, 20), mean = c(1, 3, 2), var = c(2, 2, 3),
+                    by = rep("a", 3), use = c(TRUE, TRUE, FALSE), kind = "mean_diff")
+  testthat::expect_equal(p$disp[[1]], 2)          # only the two levels, not the total
+  testthat::expect_equal(p$df[[1]], 18)           # N - k = 20 - 2
 })

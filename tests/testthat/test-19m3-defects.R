@@ -34,12 +34,14 @@ testthat::test_that("the derived vocabularies reproduce what they replaced", {
   # "Valid fields" abort and ?tab's generated section).
   testthat::expect_identical(
     tabxplor:::DISPLAY_USER_FIELDS,
-    c("pct", "n", "wn", "mean", "diff", "ratio", "ci", "or", "ctr", "var", "resid", "obs"))
+    c("pct", "n", "wn", "mean", "est", "base", "diff", "ratio", "ci", "or", "ctr", "var",
+      "resid", "obs", "gap"))
   testthat::expect_identical(
     tabxplor:::DISPLAY_BARE_TOKENS,
-    c("pct", "n", "wn", "mean", "diff", "ratio", "ci", "or"))
+    c("pct", "n", "wn", "mean", "est", "base", "diff", "ratio", "ci", "or"))
   testthat::expect_identical(tabxplor:::DISPLAY_ALIASES, c(rr = "ratio"))
-  testthat::expect_setequal(tabxplor:::DISPLAY_VALUE_CELLS,   c("pct", "mean", "n", "wn"))
+  testthat::expect_setequal(tabxplor:::DISPLAY_VALUE_CELLS,   c("pct", "mean", "n", "wn",
+                                                              "est", "base"))
   testthat::expect_setequal(tabxplor:::DISPLAY_FOOTER_TOKENS, c("gof", "pvalue", "blank"))
   # `pvalue` is a footer token that IS coloured (a significance warning) -- the one disagreement
   # that makes these two facts two columns rather than one "numberless" flag.
@@ -48,7 +50,7 @@ testthat::test_that("the derived vocabularies reproduce what they replaced", {
   testthat::expect_false("pvalue" %in% tabxplor:::DISPLAY_NO_COLOR)
   testthat::expect_identical(
     tabxplor:::DISPLAY_TOKEN_GEOMETRY,
-    c(pct = "level", n = "level", wn = "level", mean = "level",
+    c(pct = "level", n = "level", wn = "level", mean = "level", base = "level",
       diff = "difference", ratio = "ratio", or = "ratio"))
   testthat::expect_identical(
     tabxplor:::DISPLAY_COMPARISON,
@@ -58,8 +60,11 @@ testthat::test_that("the derived vocabularies reproduce what they replaced", {
 testthat::test_that("the build-time guard ties get_num()/set_num() to the table, both ways", {
   d <- names(tabxplor:::DISPLAY_TOKENS)[is.na(vapply(
     tabxplor:::DISPLAY_TOKENS, function(r) r$alias %||% NA_character_, character(1)))]
-  read    <- tabxplor:::display_switch_tokens(tabxplor:::get_num)
-  written <- tabxplor:::display_switch_tokens(tabxplor:::set_num)
+  # the scale-relative `est` / `base` are handled by the ONE resolver both maps run first, so it
+  # counts as part of each -- exactly as the build-time guard in R/tab-display.R does.
+  resolver <- tabxplor:::display_switch_tokens(tabxplor:::fmt_resolve_scale_tokens)
+  read    <- c(tabxplor:::display_switch_tokens(tabxplor:::get_num), resolver)
+  written <- c(tabxplor:::display_switch_tokens(tabxplor:::set_num), resolver)
   testthat::expect_true(all(read %in% d))                       # no undeclared arm
   testthat::expect_true(all(setdiff(d, "n") %in% read))         # no unhandled row ("n" = default)
   testthat::expect_true(all(written %in% d))

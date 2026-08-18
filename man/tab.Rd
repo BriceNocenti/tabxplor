@@ -297,12 +297,13 @@ the effective base, referred to a survey design's own degrees of freedom).
 (default, the hybrid-score interval, dual of the two-proportion score test), \code{"ac"}
 (Agresti-Caffo) or \code{"wald"}.
 \item \code{mean_diff}: a numeric mean minus its reference -- \code{"welch"} (default, each
-group's own variance) or \code{"student"} (pooled variance = a linear-regression coefficient
-interval).
+group's own variance), \code{"student"} (the two groups pooled = a two-sample t test) or
+\code{"ols"} (pooled over EVERY level of the variable = the interval a linear regression
+gives that coefficient).
 \item \code{mean_ratio}: a numeric mean over its reference (\code{color = "ratio"}) --
 \code{"robust"} (default, each group's own variance = modified/robust Poisson),
-\code{"quasipoisson"} (dispersion-scaled = a quasi-Poisson regression) or \code{"poisson"}
-(naive).
+\code{"quasipoisson"} (scaled by the dispersion a quasi-Poisson regression estimates over
+every level of the variable = that regression's own interval) or \code{"poisson"} (naive).
 }
 Whatever the method, the significance stars come from that same interval, so bracket and stars
 always agree. A proportion \emph{ratio} has only one method (Katz's log risk-ratio), so it is not
@@ -363,26 +364,28 @@ last: it hides small-base cells without recomputing anything. A row is dropped o
 base is below \code{n_min} are blanked. Under \code{pct = "col"} the same rule drops weak
 columns. Total rows/columns, the added-\code{n} row/column and the p-value line are always kept.}
 
-\item{display}{A single optional \strong{composite display template} to show several fields in each
-value cell (text output only -- the console, \code{\link{tab_kable}} and \code{\link{tab_md}};
-Excel falls back to the primary field). A \code{\{\}} template listing the fields to combine, e.g.
-\code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
-\code{"\{pct\} \{ci\}"}. The valid fields are listed in \emph{Display fields} below.
-Two of them are worth a worked example. \code{display = "\{pct\} (\{resid\})"} prints each
-percentage with the adjusted standardized residual that says whether it departs from
-independence -- the SPSS cell layout. And on a regression table
-\code{\link{tab_reg}(..., display = "\{or\} (obs \{obs\})")} prints each adjusted odds ratio
-next to the unadjusted one it is compared to (see \code{color = "adjustment"} in
-\code{?tab_reg}). A bare field name is also accepted as a
-shorthand for its single-field template, so \code{display = "ci"} is the same as
-\code{display = "\{ci\}"} (it shows the confidence interval). The special value
-\code{display = "num_ci"} is a type-adaptive shorthand for \code{"\{pct\} \{ci\}"} on percentage
-columns and \code{"\{mean\} \{ci\}"} on numeric (mean) columns, chosen per column, so a mixed
-factor + numeric table shows each value with its confidence interval in one call. Like
-\code{"\{pct\} \{ci\}"} it displays the CI the table computes (the cell, difference or ratio CI
-set by \code{ci = } / \code{color}), so pair it with a \code{ci = } value or a \code{color} that
-needs one. \code{NULL} (default) keeps the plain single-field display. It is a display overlay
-only: colors, differences and the underlying fields are unchanged.}
+\item{display}{What each value cell shows (text output only -- the console, \code{\link{tab_kable}}
+and \code{\link{tab_md}}; Excel falls back to the primary field). \code{NULL} (default)
+keeps each cell's plain value. Three ways to ask, from the shortest:
+\itemize{
+\item a \strong{named layout}: \code{"est"} (the estimate), \code{"est_ci"} (with a
+visible interval), \code{"base_ci"} (each value with its interval), \code{"est_base"}
+/ \code{"base_est"} (the two together, in the order the words are written),
+\code{"base"} (the level alone). The same names work on \code{\link{tab_reg}}.
+\item a \strong{single field}, e.g. \code{display = "ci"} or \code{"diff"}. Valid
+fields are listed in \emph{Display fields} below.
+\item a \strong{\{\} template} combining several, e.g. \code{"\{pct\} (n=\{n\})"}
+(a percentage with its count) or \code{"\{pct\} (\{resid\})"} (each percentage with
+the standardized residual that says whether it departs from independence --- the
+SPSS cell layout).
+}
+Two fields are \strong{scale-relative}, and are what makes one layout work on every
+table: \code{\{est\}} is whatever the column estimates (a percentage, a difference, an
+odds ratio) and \code{\{base\}} the level it sits on (a percentage, a mean, a count).
+A layout showing an interval displays the CI the table computes (the cell, difference
+or ratio CI set by \code{ci = } / \code{color}), so pair it with a \code{ci = } value
+or a \code{color} that needs one. It is a display overlay only: colors, differences and
+the underlying fields are unchanged.}
 
 \item{color_breaks}{A per-table override of the colour thresholds, in the form
 \code{\link{set_color_breaks}} accepts; unset scales keep the global ones.}
@@ -514,6 +517,8 @@ it is what Excel shows and what the colours read.
 \item \code{n} --- the count.
 \item \code{wn} --- the weighted count.
 \item \code{mean} --- the mean. Needs a numeric col_var.
+\item \code{est} --- the estimate, whatever this column estimates --- an odds ratio, a risk difference, a coefficient, a percentage. The one token that means the same thing on every table.
+\item \code{base} --- the level the estimate sits on: the percentage, the mean or the count. On a plain percentage table it is the same number as \code{est}; beside a regression effect it is the adjusted prediction. Needs a column that has a level beside its estimate.
 \item \code{diff} --- the difference from the reference. Needs a \code{ref} to compare to, and pct = "row" / "col".
 \item \code{ratio} --- the ratio to the reference (relative risk, or a ratio of means). Needs a \code{ref} to compare to, and pct = "row" / "col".
 \item \code{ci} --- the confidence interval of whatever the column compares. Needs ci = "ref"  (or ci = "cell" for each cell's own interval).
@@ -522,6 +527,7 @@ it is what Excel shows and what the colours read.
 \item \code{var} --- the variance. Needs a numeric col_var.
 \item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only. Needs test = TRUE  (the residual comes from the chi-squared).
 \item \code{obs} --- the OBSERVED (crude) effect a modelled one is compared to. \code{tab_reg()} tables only. Needs tab_reg(empirical = TRUE)  (an observed effect to compare the model to).
+\item \code{gap} --- how far adjustment moved the effect: the gap between the modelled estimate and its observed counterpart, on the estimate's own scale. What \code{color = "adjustment"} grades --- readable in print and Excel, not only in an html tooltip. Needs tab_reg(empirical = TRUE)  (a model effect and its observed counterpart).
 }
 }
 

@@ -126,6 +126,13 @@ TAB_OPTIONS <- list(
     "ci", "display",
     "shows the `[inf; sup]` interval; `\"moe\"` shows the larger half-width (margin of error)."),
 
+  ratio_print = tx_opt(
+    "inverse", "display",
+    doc = c("prints a multiplicative value below its reference as the inverse --- an odds ratio of",
+            "0.37 as `1/2.67`, a mean ratio of 0.42 as `/2.4` --- so \"2.7 times less\" reads as",
+            "strongly as \"2.7 times more\", and the same in a bracket. `\"raw\"` prints the plain",
+            "number (`0.37`), the convention of most journals.")),
+
   var_names = tx_opt(
     "both", "display", arg = "var_names",
     doc = paste("which variable names the exporters annotate: `\"both\"`, `\"rows\"`, `\"cols\"`,",

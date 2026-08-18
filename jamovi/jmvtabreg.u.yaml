@@ -299,20 +299,25 @@ children:
                   - type: RadioButton
                     name: display_1
                     optionName: display
-                    optionPart: value
+                    optionPart: auto
                   - type: RadioButton
                     name: display_2
                     optionName: display
-                    optionPart: ci
+                    optionPart: est_ci
                   - type: RadioButton
                     name: display_3
                     optionName: display
-                    optionPart: prob
+                    optionPart: est_base
                     enable: (effect_1)
                   - type: RadioButton
                     name: display_4
                     optionName: display
-                    optionPart: ame
+                    optionPart: base_est
+                    enable: (effect_1)
+                  - type: RadioButton
+                    name: display_5
+                    optionName: display
+                    optionPart: base
                     enable: (effect_1)
           - type: LayoutBox
             cell: { column: 1, row: 0 }

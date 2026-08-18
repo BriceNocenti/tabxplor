@@ -1,7 +1,6 @@
-# Phase 12h: estimate-cell display layouts (the est_ci CI bracket + the OR+prob / OR+ame folds), the
-# Excel in-cell test label, and the split_var export footer. The est_ci bracket renders under
-# special_formatting = TRUE (the main display path: console / kable / md); the folds are {} composites
-# rendered on every backend.
+# The estimate-cell layouts: the est_ci bracket and the {} folds, in tab()'s own preset vocabulary
+# (R/tab-display.R, DISPLAY_PRESETS). The est_ci bracket renders under special_formatting = TRUE (the
+# main display path: console / kable / md); the folds are {} composites rendered on every backend.
 
 reg_data <- function() {
   forcats::gss_cat |>
@@ -10,60 +9,85 @@ reg_data <- function() {
 # Phase 18z13: skip the per-level `n` column (add_n = TRUE by default) -- see helper-reg.R.
 first_fmt <- function(t) reg_first_fmt(t)
 
-# ---- display = "ci" : visible confidence-interval bracket ---------------------------
+# ---- display = "est_ci" : visible confidence-interval bracket ---------------------------
 
-test_that("display='ci' shows a visible CI bracket for OR and beta", {
+test_that("display='est_ci' shows a visible CI bracket for OR and beta", {
   skip_if_not_installed("broom")
   d  <- reg_data()
-  oc <- first_fmt(tab_reg(d, "married", c("race", "age"), display = "ci"))
+  oc <- first_fmt(tab_reg(d, "married", c("race", "age"), display = "est_ci"))
   txt <- format(oc, special_formatting = TRUE)
   expect_true(any(grepl("\\[.*;.*\\]", txt)))            # "<or> [<lo>;<hi>]"
-  expect_equal(get_num(oc), get_or(oc))                  # primary value = the odds ratio (no reciprocal)
+  expect_equal(get_num(oc), get_or(oc))                  # primary value = the odds ratio
 
   bc <- first_fmt(tab_reg(d, "tvhours", c("race", "age"), family = "gaussian",
-                          display = "ci"))
+                          display = "est_ci"))
   expect_true(any(grepl("\\[.*;.*\\]", format(bc, special_formatting = TRUE))))
   expect_equal(get_num(bc), get_diff(bc))                # beta point estimate
 })
 
-test_that("est_ci bracket reads the stored asymmetric bounds", {
+test_that("est_ci bracket reads the stored asymmetric bounds, on the cell's own scale", {
   skip_if_not_installed("broom")
-  oc  <- first_fmt(tab_reg(reg_data(), "married", "age", display = "ci"))
+  oc  <- first_fmt(tab_reg(reg_data(), "married", "age", display = "est_ci"))
   txt <- format(oc, special_formatting = TRUE)
-  # a non-reference cell's bracket contains the rounded ci_inf / ci_sup
   i   <- which(!is.na(get_ci_inf(oc)))[1]
-  lo  <- formatC(get_ci_inf(oc)[i], format = "f", digits = 2)
-  expect_match(txt[i], lo, fixed = TRUE)
+  # a multiplicative bound below 1 prints as its inverse, exactly like the estimate it surrounds.
+  lo  <- get_ci_inf(oc)[i]
+  lo_s <- if (lo > 0 && lo < 1) paste0("1/", formatC(1 / lo, format = "f", digits = 2))
+          else formatC(lo, format = "f", digits = 2)
+  expect_match(txt[i], lo_s, fixed = TRUE)
 })
 
-# ---- display = "prob" / "ame" : OR + predicted probability / marginal effect ---------
+test_that("options(tabxplor.ratio_print = 'raw') restores the plain bracket", {
+  skip_if_not_installed("broom")
+  withr::local_options(tabxplor.ratio_print = "raw")
+  oc  <- first_fmt(tab_reg(reg_data(), "married", "age", display = "est_ci"))
+  txt <- format(oc, special_formatting = TRUE)
+  expect_false(any(grepl("1/", txt, fixed = TRUE)))
+})
 
-test_that("display='prob' folds the predicted probability into the OR cell", {
+# ---- the folds: the estimate beside the level it sits on -------------------------------
+
+test_that("display='est_base' folds the adjusted probability into the OR cell", {
   skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
-  oc  <- first_fmt(tab_reg(reg_data(), "married", "race", display = "prob"))
+  oc  <- first_fmt(tab_reg(reg_data(), "married", "race", display = "est_base"))
   txt <- format(oc)
   expect_true(any(grepl("\\([0-9]", txt)))               # "(16%)" prediction
   expect_equal(get_num(oc), get_or(oc))                  # OR is still the primary field
   expect_true(any(!is.na(get_pct(oc))))                  # the prediction is stored in `pct`
+  # the composite KEEPS the inverse form -- it is the one rule, in every rendering path
+  expect_true(any(grepl("1/", txt, fixed = TRUE)))
 })
 
-test_that("display='ame' folds the average marginal effect into the OR cell", {
+test_that("display='base_est' shows the adjusted probability, graded by the effect", {
   skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
-  oc  <- first_fmt(tab_reg(reg_data(), "married", "race", display = "ame"))
+  oc  <- first_fmt(tab_reg(reg_data(), "married", "race", display = "base_est"))
+  expect_true(any(grepl("%", format(oc), fixed = TRUE)))
+  # on the templated rows the LEVEL is now the primary field (the Constant keeps its own token)
+  tpl <- get_display(oc) == "{base} ({est})"
+  expect_equal(get_num(oc)[tpl], get_pct(oc)[tpl])
+})
+
+test_that("a {diff} fold puts the marginal effect beside the odds ratio", {
+  skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
+  oc  <- first_fmt(tab_reg(reg_data(), "married", "race", display = "{est} ({diff})"))
   expect_true(any(grepl("\\([-+][0-9]", format(oc))))    # "(-21%)" / "(+1%)" marginal effect
   expect_equal(get_num(oc), get_or(oc))
 })
 
-test_that("estimate_display prob/ame degrade to 'ci' for non-binomial (message)", {
-  skip_if_not_installed("broom")
-  d <- reg_data()
+test_that("the folds reach EVERY family: a gaussian cell folds an adjusted MEAN", {
+  skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
+  bc <- first_fmt(tab_reg(reg_data(), "tvhours", "race", family = "gaussian",
+                          display = "est_base"))
+  expect_true(any(grepl("\\([0-9]", format(bc))))        # "(2.37)" the adjusted mean
+  expect_true(any(!is.na(get_mean(bc))))                 # written into `mean`, not `pct`
+  expect_equal(get_num(bc), get_diff(bc))                # the coefficient stays primary
+})
+
+test_that("display is ignored (with a message) for marginal-effects output", {
+  skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
   expect_message(
-    tab_reg(d, "tvhours", "race", family = "gaussian", display = "prob"),
-    "binomial coefficient")
-  # and ignored (with a message) for marginal-effects output
-  skip_if_not_installed("marginaleffects")
-  expect_message(
-    tab_reg(d, "married", "race", family = "binomial", effect = "marginal", display = "ci"),
+    tab_reg(reg_data(), "married", "race", family = "binomial", effect = "marginal",
+            display = "est_ci"),
     "ignored")
 })
 

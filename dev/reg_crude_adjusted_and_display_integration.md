@@ -1,8 +1,13 @@
-# Phase 22a — the crude/adjusted comparison, `family × effect × measure`, and `display`
+# Phase 22a — one crude column, one model column, one display grammar
 
-Research and design study. Status: **design proposal, nothing implemented.** Read this before touching
-`R/reg-empirical.R`, `R/reg-estimand.R`, `R/tab_reg.R`'s display block, or the legend builder in
-`R/fmt_class.R`.
+Design study **and** implementation roadmap. Status: **22a-i is implemented** (D7-D9, D12-D14,
+D22-D23 -- see its DONE summary in `CLAUDE.md`); **22a-ii and 22a-iii are not.** Read this before
+touching `R/reg-empirical.R`, `R/reg-estimand.R`, `tab_reg()`'s display block, the display grammar in
+`R/tab-display.R`, or the legend builder in `R/fmt_class.R`.
+
+⚠ The captures below are from BEFORE 22a-i, so the display presets (`"value"` / `"prob"` / `"ame"` /
+`"ci"`), the raw `0.xx` ratios and `pct_base` no longer exist. What still holds is the DESIGN: §1.2's
+decisions, §5's target and §6's deletion inventory.
 
 Everything below was checked against the running package (`devtools::load_all()`, `forcats::gss_cat`
 through `gss_cat_data_formatting()`, 21 483 rows). Every number, string and legend line quoted is a
@@ -10,7 +15,9 @@ real capture, not a reconstruction. File:line references are HEAD at `544e926`.
 
 ---
 
-## 1. What this document is for
+## 1. Goals, decisions, roadmap
+
+### 1.1 What this phase is for
 
 The maintainer's Phase 22a review asks three questions that turn out to be **one** question:
 
@@ -25,8 +32,8 @@ The maintainer's Phase 22a review asks three questions that turn out to be **one
 They are one question because all three are symptoms of the same thing: **`tab_reg()` builds the
 observed column, the model column and the display as three separate systems that happen to sit next
 to each other.** `tab()` does not work that way — there, one column carries every geometry of the
-same comparison and `display` picks which one to print. This document works out what the regression
-side looks like when it obeys the same rule, and what breaks if it does.
+same comparison and `display` picks which one to print. This phase works out what the regression side
+looks like when it obeys the same rule.
 
 The conclusion in one paragraph:
 
@@ -38,6 +45,235 @@ The conclusion in one paragraph:
 > crude/adjusted comparison is read **across** the table rather than needing a display of its own.
 > Adjusted percentages are not a `measure` — they are the second slot of the display, which is
 > precisely how `tab()` already prints a percentage and colours it by its difference.
+
+**The three goals, in the order they matter to a reader of the table.**
+
+1. **One comparison, one ladder, one legend block.** A regression table today shows one association
+   through up to three columns graded by two ladders and explained by two legend blocks. After this
+   phase: one crude column, one model column, one ladder, one block — and the crude/adjusted
+   comparison is what the reader's eye does, left to right.
+2. **One display grammar, shared by `tab()` and `tab_reg()`.** The same `{}` tokens and the same
+   presets mean the same thing on a crosstab and on a regression, on every family and on both
+   columns, and choosing a display never triggers a computation or changes a number.
+3. **One name per quantity.** Each header word names the measure and marks its contrast, so no two
+   different estimands share a header and no estimand is named two ways.
+
+**How this fits the architecture.** Nothing here is a new mechanism. Every item is a row added to, or
+deleted from, a fact table that already exists (`REG_EMPIRICAL`, `REG_ESTIMANDS`, `DISPLAY_TOKENS`,
+`CI_METHODS` / `CI_GEOMS`), or a special case deleted in favour of one that is already declared.
+`MEASURES`, `EST_SCALES` and the colour engine are **not** touched: the two-ladder problem is fixed by
+removing a column, not by teaching the engine anything. The phase is a **net deletion** — §6 is the
+inventory to judge it by.
+
+**Non-goals — explicitly out of scope, and why.**
+
+- **No new `measure` for adjusted predictions** (`"value"` / `"base"` / `"identity"`) and no
+  `effect = "prediction"`. A prediction has no null, no reference and no ladder; the need is met by
+  `display = "{base}"`, which is strictly more capable. See §4.1 and §5.7.
+- **No third significance channel.** Under `color = "adjustment"` the stars keep testing the estimate
+  the cell prints while the colour grades the gap; this was already ruled on, and the redesign makes
+  it legible rather than re-litigating it (§5.5).
+- **Ruling Q1(b) of `dev/model_vs_observed_gap_test.md` stands**: no gap test on a non-collapsible
+  conditional odds ratio.
+- **The `color = "adjustment"` sign-flip score** (crude `1/1.06`, model `1.05`, scored as
+  "attenuated") is a question about the *score*, not the column layout — Phase 22b.
+- **Nothing on the rejected-alternatives lists** of `dev/model_vs_observed_effect_colour.md` and
+  `dev/model_vs_observed_gap_test.md`: no materialised gap column, no CI-overlap gap test, no Hausman
+  subtraction, no table-level colour hook, no reuse of an existing field for the gap SE.
+
+### 1.2 The decisions
+
+Settled with the maintainer. Each is stated here once; the section named beside it is the evidence.
+Implementation plans must respect these without re-deriving them, and must not silently widen them.
+
+**The column model**
+
+- **D1 — one crude column and one model column, built from one shape.** The crude column is the model
+  column's mirror: same stored `scale`, same colour measure, same display template, same digits, same
+  reference. §4.2, §5.1.
+- **D2 — `empirical` becomes `FALSE` | `TRUE` | `"cell"` | `"column"`.** `TRUE` gives a pair of columns
+  and folds the crude value into the model cell, **silently**, wherever a per-category column set would
+  otherwise multiply (multinomial, ordinal-marginal, several models or outcomes); `"cell"` forces the
+  fold, `"column"` is the expert exit door that forces the pair. This *deletes* the multinomial
+  `visible = FALSE` special case rather than adding a mode. The exit door is taught in the multinomial
+  part of the regression vignette (one sentence, one `eval = FALSE` chunk). §5.1.
+- **D3 — the crude column takes the model column's colour measure.** `REG_EMPIRICAL$*$color` is
+  deleted. This is what fixes the two-ladder problem for every family at once, with no per-family
+  branch. §3.1, §5.5.
+- **D4 — under a gap measure the crude column is the reference column.** Its `obs` is empty, so it is
+  uncoloured *by construction*; it is marked `refcol = TRUE` and bolded through a declared arm of
+  `get_reference()`, and the legend names it as the baseline the adjustment compares to. §4.6.
+- **D5 — one legend block, including the two-channel case.** With D1 + D3 the plain case merges with no
+  change at all (the grouping key is the rendered sentence). For `color = c(TRUE, "adjustment")` aim at
+  a single block whose background clause is scoped to the model column and names the baseline; fall
+  back to two blocks with the baseline note only if the shared form cannot be rendered honestly. §5.5.
+- **D6 — stars stay on the estimate the cell prints**, even when the colour grades the gap. The layout
+  (a bolded crude baseline beside a graded model column) and the legend carry the explanation. §5.5.
+
+**The display grammar**
+
+- **D7 — two new tokens, `{est}` and `{base}`.** `{est}` is the column's own estimate, read through the
+  existing `fmt_center_field()`; `{base}` is the adjusted prediction / observed level, dispatched on
+  `var_kind`. Both work identically in `tab()` and in `tab_reg()`, and `{est}` on a crude column means
+  the same field the model estimates, in its crude version. §4.3.
+- **D8 — a `{gap}` token**, so print, Excel and Markdown readers reach the model-vs-observed gap at
+  all; today it exists only in an HTML tooltip. §3.6.6, §5.6.
+- **D9 — the presets are `est` / `est_ci` / `est_base` / `base_est` / `base` / `base_ci`**, in one
+  shared alias table read by both producers. `"value"`, `"prob"` and `"ame"` are deleted (no
+  back-compatibility is owed on `tab_reg()`), and the `num_ci` special-casing goes with them. The word
+  order of a compound preset is the order in the cell. §5.3.
+- **D10 — an adjusted prediction is a display slot, not a measure.** `display = "{base}"` prints the
+  adjusted percentages or means, coloured and starred by the column's own effect — exactly as a `tab()`
+  percentage is graded by its difference. §4.1, §5.7.
+- **D11 — every field is populated on every model column, always.** The adjusted prediction (`pct` /
+  `mean`) and the additive marginal effect (`diff`) cost ~0.1 s and no dependency, so `display` becomes
+  a pure post-hoc property: it never triggers a computation and never changes a number. Requires the
+  `needs = "marginaleffects"` guard to move to the fallback that actually needs it. §4.4, §3.6.1.
+- **D12 — one multiplicative-inverse rule.** A cell whose scale declares `mult = TRUE` prints the
+  inverse form (`1/x.xx`) below the neutral in **every** path — bare token, composite and `est_ci` —
+  unless a global option asks for `0.xx`. Moved in from Phase 22b, because the compound presets are
+  unreadable without it. §3.3, §5.3.
+- **D13 — two renames, neither name published.** `display = "num_ci"` becomes `"base_ci"` (28 sites,
+  incl. the generated `jmvtab.h.R`), and the `pct_base` attribute becomes **`pct_type`** ("which type of
+  percentage": row / col / all / all_tabs / none), so it stops colliding with the `{base}` token (205
+  sites, plus `get_pct_base()` / `set_pct_base()` / `PCT_BASES`). While renaming, reword the live `type`
+  deprecation abort (`R/fmt_class.R:457`) and its `NEWS.md` bullet to name the *split* rather than the
+  tokens, or the message reads as a no-op. §4.3.
+- **D14 — removing the stars from a duplicated descriptive column is `set_pvalue(x, NA_real_)`**,
+  taught in the vignette recipe beside `set_color(x, "")`. No new attribute and no new setter: stars
+  are the stored p-value's only consumer, so erasing it is the direct expression of "this copy is
+  descriptive". It also empties that copy's tooltip p-value, which is the intended reading. §5.3.
+
+**The vocabulary**
+
+- **D15 — the header names the measure; the contrast is a marker on the measure.** Unmarked =
+  conditional, an `m` prefix = marginal, an `@ref` suffix = at the reference profile. The marker rides
+  the measure, so `Model_` stays a constant, ignorable prefix. §4.5, §5.4.
+- **D16 — `measure = "log"` names what it logs**: `log(OR)`, `log(IRR)`, `log(RoM)`, `log(cumOR)`,
+  mirroring the crude side and ending the five-way `Model_β` collision. §5.4.
+- **D17 — ordinal is `cumOR` on the model side too**, as the crude side has always said. §5.4.
+- **D18 — gaussian `difference` × `coefficient` is `diff` / `mdiff`.** This supersedes Phase 22b's
+  `Model_coeff` request, and the reason is structural rather than preference: the header word must be
+  able to take the marginal marker, and `mcoeff` is nonsense because a coefficient is an estimator, not
+  a measure. §5.4.
+- **D19 — one declared `long` expansion per `REG_ESTIMANDS` row**, read by `reg_measures()`, the
+  "what this outcome offers" abort, the footer note and the generated `?tab_reg` section. Today the
+  footer prose and the message carry two copies of the same fact. §5.4.
+- **D20 — on a per-category table the measure lives in the `col_var` span** (`"relig: mRR"`), uniformly
+  rather than as today's multinomial accident. It is also where an exporter can name the measure once
+  above an `Obs` / `Model` pair. §4.5, §5.4.
+- **D21 — the vignette grid prints the acronym with its meaning**, drops the constant `Model_` prefix
+  and gains a first column for the outcome kind — which is where the summed-score syntax (`trials =`)
+  finally appears in the documentation. §5.4.
+
+**The inference**
+
+- **D22 — the crude interval is the univariable model's interval under the table's own inference
+  basis.** Measured (§4.2, appendix F): unweighted, the model is `lm` / `glm` and its interval is the
+  **model-based** one — pooled over *all* the predictor's levels, df = N − k; weighted or design-based,
+  the model is `svyglm` and its interval is the **sandwich** — per-group variance on `n_eff`, which the
+  existing `welch` / `robust` forms already reproduce. Today's fixed pairwise `student` /
+  `quasipoisson` is the univariable model's interval in *neither* basis. So: `CI_METHODS$mean_diff`
+  gains **`"ols"`** (globally pooled t), `CI_METHODS$mean_ratio`'s **`"quasipoisson"` is redefined to
+  the global Pearson dispersion it is named after** (opt-in in `tab()`, so only its own goldens move),
+  `REG_EMPIRICAL` declares the pair and the column's existing `basis` attribute selects between them.
+  `tab()`'s own defaults (`welch` / `robust`) are unchanged.
+- **D23 — the crude CI method is labelled from the estimand, not from the engine key.** Katz *is* the
+  Wald interval on the log risk ratio of the saturated fit (agreement 8e-09), so it must render as
+  such, naming Katz's closed form parenthetically — exactly as `CI_METHOD_LABELS` already does for
+  Woolf. That is what makes the legend bodies coincide, with no change to `legend_group_by_body()`.
+  §4.2, §5.5.
+
+### 1.3 The roadmap
+
+Three sub-phases. The seam is *which subsystem holds the context*: shared foundations that also change
+`tab()` (i), the regression column and how it renders (ii), the regression vocabulary (iii). Each is
+"plan in plan mode, then implement", and the maintainer commits between them.
+
+The order is load-bearing: 22a-ii's presets cannot be read without 22a-i's inverse rule and tokens, and
+22a-iii renames the headers of columns that 22a-ii deletes — doing it the other way round means
+renaming columns twice and moving the goldens for nothing.
+
+#### Phase 22a-i — the shared display grammar and the crude-interval parity
+
+Everything that touches `tab()` as well as `tab_reg()`, and that the merge stands on. **D7, D8, D9,
+D12, D13, D14, D22, D23.**
+
+- the `{est}` / `{base}` / `{gap}` tokens, and the end of `"value"`'s non-token exemption in
+  `zzz-fact-keys.R`;
+- one declared preset/alias table shared by both producers, replacing `num_ci`'s special-casing and
+  `REG_DISPLAY_SHORTHANDS`;
+- the two renames (`num_ci` → `base_ci`, `pct_base` → `pct_type`), including the reworded `type`
+  deprecation abort and its `NEWS.md` bullet;
+- the one multiplicative-inverse rule and its opt-out option, including reconciling the `ratio` token's
+  `÷ ×` glyphs with the `or` token's `1/`;
+- the basis-aware crude interval: `mean_diff = "ols"`, `quasipoisson` redefined to the global
+  dispersion, the basis-driven selection in `REG_EMPIRICAL`, and the estimand-based CI label. Note the
+  one real implementation constraint: the engines are vectorised over cells and global pooling needs
+  the *level set* — either a grouping key or the pooled quantities precomputed by the caller;
+- the `set_pvalue(x, NA_real_)` recipe, documented where the "duplicate a column with another display"
+  recipe already lives.
+
+*Verification*: full suite; the expected golden movers are the inverse rendering, the two renames, and
+the crude gaussian / poisson intervals. The gaussian claim in the regression vignette ("to match those
+computed by linear regression") becomes true and can stay.
+
+#### Phase 22a-ii — the crude/adjusted column merge
+
+The regression column, its colour, its legend and its tooltips. **D1, D2, D3, D4, D5, D6, D10, D11.**
+
+- `REG_EMPIRICAL` restructured: the 8 `base` rows, the 14 `color` and the 14 `display` declarations
+  deleted; `base_field` / `base_ci_method` / `base_digits` added; `reg_empirical_columns()` emits one
+  column per effect (one `fmt()` call with the union of the fields it already computes);
+- `empirical`'s four values, the silent auto-fold, and the deletion of `shape_visible()`,
+  `visible = FALSE`, the multinomial in-cell exception and `emp_off`;
+- always-populated fields, the deletion of `reg_display_folds()`'s binomial guard and of the
+  marginal-path `display` reset, and the `needs = "marginaleffects"` fix;
+- the per-row-kind fold rule (constant / reference level / factor level / numeric predictor), stated
+  once instead of per builder;
+- colour and legend: the crude column's measure, `refcol` + the `get_reference()` gap arm, the
+  `legend_gap_baseline_word()` `role == "emp"` arm, and D5's shared block;
+- tooltips: one generic "estimate + interval + p" fragment driven by `fmt_center_field()`, replacing
+  the `out_diff` / `out_or` / `out_rr` / `out_ci` overlap — this is what finally gives a logistic
+  table's default column an interval on hover; the gap line in the scale's own units; the build-time
+  numeric-predictor and multinomial fragments kept.
+
+*Decided*: `empirical = "cell"` and an explicit `display` compose in that the fold sets the *default* template to `{est} ({obs})` and an explicit `display` wins outright — `{obs}` is already a token, so the fold needs no grammar of its own.
+
+*Verification*: full suite + goldens; check the legend collapse on the three measured broken cases
+(`binomial × odds_ratio`, `binomial × ratio`, `poisson × ratio`) and that the crude column still has no
+`gap_se` — the merge must not hand it one (ruling Q1(b), §1.1).
+
+#### Phase 22a-iii — the measure vocabulary
+
+The header words and every message that names an estimand. **D15, D16, D17, D18, D19, D20, D21.**
+
+- `REG_ESTIMANDS$word` rewritten to the measure + marker grid of §5.4, and the new `long` column;
+- the `reg_measures()` output, the "what this outcome offers" abort, the footer note and the generated
+  `?tab_reg` section all reading that one declared string;
+- the measure moved into the `col_var` span on per-category tables, and the `(adjusted %)` header
+  suffix deleted;
+- `@ref` verified through all four exporters and `make.names()` before the name is locked (§7.4);
+- the acronym × outcome-kind grid regenerated in `?tab_reg` and dropped into both regression vignettes
+  — the *grid* only; the surrounding prose rewrite belongs to Phase 22h.
+
+*Verification*: full suite + goldens — every regression column name moves in this phase, which is
+exactly why it is last.
+
+#### Deferred to other phases
+
+| item                                                | to        | why                                                |
+|-----------------------------------------------------|-----------|----------------------------------------------------|
+| the vignette prose for the new vocabulary           | 22h / 23a | 22a-iii ships the grid; the prose is a doc phase   |
+| `jmvtools::prepare()` for the renamed preset        | 22g       | one regeneration for all of Phase 22's jamovi work |
+| the `n` column's semantics (the tooltip `n` line)   | 22b-ii    | 22a's tooltip contract defers to what `n` becomes  |
+| `[outcome]` repeated in export headers              | 22b       | an exporter fix; the crude columns inherit it      |
+| the `color = "adjustment"` sign-flip score          | 22b       | a question about the score, not the layout         |
+| footer row order, tidyselect, the formulas accessor | 22b       | unrelated to the column model                      |
+
+⚠ Two Phase 22b bullets are **superseded** by decisions here and should not be implemented twice:
+`Model_β` → `Model_coeff` (D18 makes it `diff` / `mdiff`) and the multiplicative-inverse rule (D12,
+landing in 22a-i).
 
 ---
 
@@ -298,8 +534,8 @@ Reported, not fixed — each is a one-liner but each is a maintainer-facing deci
    confidence intervals with pooled variance, to match those computed by linear regression"* is true
    for a 2-level predictor (identical to 6e-15) and false for a k-level one (up to 8.9 % apart),
    because the closed form pools pairwise while `lm` pools globally. Measurements and both fixes in
-   §4.2 and Q7.
-6. **`{gap}` is not a token, and tooltips are HTML-only.** So a print, Excel or Markdown reader has no
+   §4.2 and D22 (§1.2).
+6. **`{gap}` is not a token, and tooltips are HTML-only** (decided: **D8** adds it). So a print, Excel or Markdown reader has no
    access to the gap interval or its p-value at all — the information exists only on hover. `dev/
    model_vs_observed_gap_test.md` ruling Q6 put the gap in the tooltip deliberately, and a `{gap_p}`
    token was refused; `dev/reg_comparison_framework_stress_test.md` then re-opened a narrow version
@@ -428,15 +664,33 @@ What that establishes:
   one family over — a per-pair Katz variance against one global dispersion — agreeing with
   quasi-Poisson to five significant digits rather than exactly.
 
-⚠ **A documentation defect falls out of this.** The regression vignette says of the gaussian crude
-column: *"student : confidence intervals with pooled variance, to match those computed by linear
-regression"*. True for a binary predictor, false for a k-level one by up to 8.9 % — the column pools
-pairwise, not globally. Either the claim or the engine has to change; see Q7 in §8.
+**And the moment families' gap is closable in a closed form — which is what D22 does.** The pairwise
+form was never the univariable model's interval, and pushing further showed the target is not one
+interval but two, chosen by the table's own **inference basis**. Measured (appendix F):
 
-So the shared/not-shared line moves: **the measure, the ladder, the digits, the display, the legend
-block and — on every family but the two moment ones — the interval arithmetic itself are all one.**
-What stays per-column is only the declared `ci_method` key, because it names the closed form actually
-evaluated, and the residual pooling-scope difference on `gaussian` / `poisson`.
+| basis                | fits         | its coefficient interval   | the closed form reproducing it      | agreement |
+|----------------------|--------------|----------------------------|-------------------------------------|-----------|
+| `n` (unweighted)     | `lm` / `glm` | model-based, pooled over k | pooled t, df = N − k; global disp.  | 4e-14 |
+| `weights` / `design` | `svyglm`     | the design-based sandwich  | per-group variance on `n_eff`       | 3e-03 |
+| today, both bases    | —            | —                          | pairwise pooled t; pairwise disp.   | 8.9e-02 |
+
+Both model-based forms are closed forms over the *same* sufficient statistics the leaf already holds —
+`s_p² = Σ(n_g − 1)v_g / (N − k)` for the mean difference, `φ = Σ(n_g − 1)v_g/m_g / (N − k)` for the rate
+ratio — needing only one extra sum **over the predictor's level set**. And the sandwich case needs
+nothing new at all: the per-group (`welch` / `robust`) forms tabxplor already computes reproduce
+`svyglm` to 0.3 %, the residue being a finite-sample df convention. So the fix is one new `mean_diff`
+value (`"ols"`), one redefinition (`quasipoisson` = the global dispersion it is named after), and a
+selection driven by the `basis` attribute that every column already carries.
+
+⚠ **A documentation defect falls out of this, and D22 repairs it.** The regression vignette says of the
+gaussian crude column: *"student : confidence intervals with pooled variance, to match those computed
+by linear regression"* — true for a binary predictor, false for a k-level one by up to 8.9 %. Under D22
+the sentence becomes true and can stay.
+
+So the shared/not-shared line moves almost all the way: **the measure, the ladder, the digits, the
+display, the legend block and the interval arithmetic itself are one.** What stays per column is only
+the declared `ci_method` key, because it names the closed form actually evaluated — and D23 makes even
+that render as one phrase, since the key names an engine while the reader needs the estimand.
 
 ### 4.3 K3 — `{est}` already exists internally; exposing it unlocks family-agnostic display
 
@@ -653,9 +907,10 @@ ordinal-marginal tables simply *default* to `"cell"` because they would otherwis
 column per outcome category. Same for `predictors = list(...)` with many models, where every model
 column shares one crude effect.
 
-So `empirical` becomes: `FALSE` (default) | `TRUE` (a crude column) | `"cell"` (folded in-cell), with
-`TRUE` silently resolving to `"cell"` where a per-category column set would otherwise multiply. One
-message says so.
+So `empirical` becomes (**D2**): `FALSE` (default) | `TRUE` (a crude column, silently folded in-cell
+where a per-category column set would otherwise multiply) | `"cell"` (force the fold) | `"column"`
+(force the pair — the expert exit door, taught in the multinomial part of the vignette). No message:
+what the cell holds is named in the legend, which is where a reader of that table already looks.
 
 ⚠ A redundancy to keep deliberately. In two-column mode the crude effect is stored **twice**: as the
 crude column's own estimate field, and as the model column's `obs`. That is not waste — the colour
@@ -735,7 +990,7 @@ being a magic non-token (and the `allow = "value"` exemption in `R/zzz-fact-keys
 | preset              | template         | reads as                                                 |
 |---------------------|------------------|----------------------------------------------------------|
 | `"est"` *(default)* | `{est}`          | the effect                                               |
-| `"est_ci"`          | `{est} ({ci})` ? | the effect with a visible interval (verify template)     |
+| `"est_ci"`          | the `est_ci` token | the effect with a visible interval (an existing token)  |
 | `"est_base"`        | `{est} ({base})` | the effect, with the adjusted / observed level beside it |
 | `"base_est"`        | `{base} ({est})` | the level, coloured and starred by the effect            |
 | `"base"`            | `{base}`         | adjusted percentages / adjusted means, tout court        |
@@ -752,7 +1007,14 @@ Teach it in regression vignette :
 t <- tab_reg(gss_simple, "married", c("race", "rincome", "age"), family = "binomial", empirical = TRUE)
 t |> dplyr::mutate(Model_pct = set_display(Model_OR, "{base}") |> set_color(""), .after = Model_OR)
 ```
-**Maintainer’s request: we removed the color, we should find a direct and clear way to remove the stars too.**
+The stars go the same way, and need no new machinery (**D14**): the stored `pvalue` is the only thing
+they read, so erasing it is the direct statement that this copy is descriptive. Teach the two calls
+together in the recipe.
+
+```r
+t |> dplyr::mutate(Model_pct = Model_OR |> set_display("{base}") |> set_color("") |>
+                     set_pvalue(NA_real_), .after = Model_OR)
+```
 
 Verified today with `"{pct}"` in place of the not-yet-existing `"{base}"` (the fold had to be requested
 at build time, which K4 removes):
@@ -769,10 +1031,9 @@ at build time, which K4 removes):
 This is the same recipe `?tabxplor-vctrs` already teaches for crosstabs, and it is the reason
 `display` must never be the thing that triggers a computation.
 
-Naming alternatives for the two compound presets, if `est_base` / `base_est` read too cryptically:
-`"effect"` / `"level"`; `"with_level"` / `"level_first"`; `"est+num"` / `"num+est"`. My preference is
-`est_base` / `base_est` because the order of the words *is* the order in the cell, which is the one
-thing a user needs to predict.
+`est_base` / `base_est` were chosen (D9) because the order of the words *is* the order in the cell,
+which is the one thing a user needs to be able to predict, and because they line up with `base_ci`
+into one `base` family of presets.
 
 **The per-row-kind fold stays**, and generalises. The stored `display` field is already per cell, and
 the marginal path already writes four variants (`blank`, `({pct})`, `{diff} ({pct})`, `diff`). The
@@ -919,14 +1180,14 @@ difference:
   risk-ratio"*, so the bodies differ and the block splits. But §4.2 shows the two intervals are the
   **same arithmetic to 8 decimal places**: Katz *is* the Wald interval on the log risk ratio of the
   saturated fit. `CI_METHOD_LABELS` already encodes this insight for `woolf` — which is why `Obs_OR`
-  and `Model_OR` merge even in prose. So the fix is the same one, one row over: **label the crude
+  and `Model_OR` merge even in prose. So the fix is the same one, one row over (**D23**): **label the crude
   effect column's interval from the estimand rather than from the internal engine key**, i.e. let
   `katz` render as *"Wald interval on the log risk-ratio"*. `"Katz"` must be retained parenthetically, with something like "(equal to Katz interval for the observed column)". The bodies then coincide and the block merges with **no change to
   `legend_group_by_body()` at all** — strictly smaller than the grouping-key change I first proposed.
 
   The exception is `gaussian` / `poisson`, where the arithmetic genuinely differs (pairwise pooling
-  versus global). There the two phrases are honest and the block should split — or Q7 removes the
-  difference at its source by switching those two crude effect columns to `from = "fit"`.
+  versus global) — but D22 removes that difference at its source, so after 22a-i the phrases coincide
+  here too and nothing is left to split.
 
 - **The two-channel case `color = c(TRUE, "adjustment")`.** The model column gains a background clause
   the crude column cannot have (it is the baseline), so the bodies differ. This one is not a labelling
@@ -941,8 +1202,7 @@ difference:
 
   — which does need the ladder-identity grouping key; or keep two blocks with the baseline note, which
   ruling D8 of `dev/reg_comparison_framework_stress_test.md` ("honest legend wording only") already
-  points at and which needs no code change. Worth deciding on real output rather than in the abstract
-  (Q3).
+  points at and which needs no code change. D5 asks for the shared block, decided on real output.
 
 
 One more wording fix falls out: `legend_gap_baseline_word()` needs a `role == "emp"` arm so the crude
@@ -1042,17 +1302,20 @@ The redesign is a net deletion. Inventory, so the implementation phase can be ju
 | the `(adjusted %)` header suffix                 | `reg_eff_word()`            | `{base}` in the display                                      |
 | 2 of 3 multiplicative renderings                 | `format.tabxplor_fmt()`     | one `mult`-driven rule + one option                         |
 | 4 overlapping tooltip fragments                  | `tab_kable_print_tooltip()` | one `fmt_center_field()`-driven fragment                    |
+| the fixed pairwise `student` / `quasipoisson`    | `REG_EMPIRICAL$*$method_*`  | a basis-selected pair, `"ols"` / global dispersion (D22)    |
+| the `katz` vs `wald_log` legend split            | `CI_METHOD_LABELS`          | one phrase named from the estimand (D23)                    |
 
-Two additions only: two `DISPLAY_TOKENS` rows, and one `long` column on `REG_ESTIMANDS`. Plus the
-`get_reference()` gap arm, and — only for the two-channel legend case (Q3) — the
+Additions, all of them rows in tables that already exist: three `DISPLAY_TOKENS` rows (`{est}`,
+`{base}`, `{gap}`), one `long` column on `REG_ESTIMANDS`, one `CI_METHODS$mean_diff` value (`"ols"`),
+the `get_reference()` gap arm, and — only for the two-channel legend case (D5) — the
 `legend_group_by_body()` grouping key.
 
-And two mechanical renames, both on unpublished names (D7):
+And two mechanical renames, both on unpublished names (D13):
 
-| renamed | sites | note |
-|---------|-------|------|
-| `display = "num_ci"` -> `"base_ci"` | 28, in 9 files | incl. the generated `jmvtab.h.R` (one `jmvtools::prepare()`) and 2 `man/*.Rd`; the only `num` preset |
-| `pct_base` -> `pct_type` | 205 | plus `get_pct_base()` / `set_pct_base()` / `PCT_BASES`; absent from `master`, which called it `type` |
+| renamed                             | sites          | note                                                     |
+|-------------------------------------|----------------|----------------------------------------------------------|
+| `display = "num_ci"` → `"base_ci"`  | 28, in 9 files | incl. the generated `jmvtab.h.R` and 2 `man/*.Rd`; the only `num` preset |
+| `pct_base` → `pct_type`             | 205            | plus `get_pct_base()` / `set_pct_base()` / `PCT_BASES`; absent from `master` |
 
 ---
 
@@ -1091,109 +1354,18 @@ Honest list. Some of these are arguments against parts of the proposal.
    non-collapsibility rather than confounding (measured at +7.9 % with zero confounding by
    construction — the size of the first colour break). Nothing in this proposal changes that, and the
    merge must not accidentally give the crude column a `gap_se`.
-8. **What I could not settle: whether the fold or the pair should be the default.** The decision taken
-   is "pair by default, fold on request, fold automatically where a per-category column set would
-   multiply". The automatic switch is a heuristic ("would this draw more than N crude columns?") and
-   heuristics age badly. An explicit `empirical = "cell"` with a message on the wide families may be
-   better than silence. Needs a look at real multinomial and multi-outcome tables.
-9. **Phase interaction.** §5.3's multiplicative-rendering rule and §5.6's `n` line both overlap Phase
-   22b / 22b-ii. The display grammar cannot be finished without the inverse-rendering fix, and the
-   tooltip contract cannot be finished without knowing what the `n` column becomes. Suggested order:
-   22b's rendering rule first (small, self-contained), then 22a's column merge, then 22b-ii's `n`.
+8. **The automatic fold is a heuristic, and heuristics age badly.** D2 switches to the in-cell fold
+   silently wherever a per-category column set would multiply — "would this draw more than N crude
+   columns?" is a rule that will meet a table it judges wrongly. Two things keep it honest: the legend
+   must say which number in the cell is the tested one, and `empirical = "column"` must be documented
+   where a reader meets the fold (the multinomial part of the vignette), not only in `?tab_reg`.
+9. **The `n` line of the tooltip contract cannot be finished here.** §5.6 defers it to Phase 22b-ii,
+   which decides what the `n` column becomes; until then the model column's `n` line just mirrors the
+   crude one.
 
 ---
 
-## 8. Part VI — decisions and open questions
-
-### Decided with the maintainer in this session
-
-- **D1 — two columns by default, plus an opt-in in-cell fold.** The fold generalises today's
-  multinomial rule and deletes it as a per-family special case.
-- **D2 — the header names the measure, with the contrast as a marker on the measure.** Unmarked =
-  conditional; an `m` prefix = marginal; an `@ref` suffix = at the reference profile. The marker rides
-  the measure, not the word `Model`.
-- **D3 — `measure = "log"` names what it logs**, mirroring the crude side: `log(OR)`, `log(IRR)`,
-  `log(RoM)`, `log(cumOR)`. The five-way `Model_β` collision disappears.
-- **D4 — ordinal is `cumOR`** on the model side as well as the crude one.
-- **D5 — the display tokens are `{est}` and `{base}`.** `{est}` works on the crude column too, where it
-  means the same field the model estimates, in its crude version. `{base}` was chosen over `{num}`
-  because `get_num()` is published with a different meaning, and because `base` is already the code's
-  word for this quantity — so it must work identically in `tab()` and in `tab_reg()`.
-- **D7 — two free renames follow from D5**, neither name being published: `display = "num_ci"` becomes
-  **`"base_ci"`** (28 sites, incl. the generated `jmvtab.h.R`; it is the only `num`-flavoured preset),
-  and the `pct_base` attribute is renamed so it stops colliding with the `{base}` token (205 sites,
-  plus `get_pct_base()` / `set_pct_base()` and `PCT_BASES`; `pct_base` is absent from `master`, which
-  called this attribute `type`).
-- **D8 — the new attribute name is `pct_type`** ("which type of percentage": row / col / all /
-  all_tabs / none). The qualifier is what keeps it clear of 1.x's bare `type`, which conflated the
-  kind of number with the percentage base and which 2.0.0 split into `scale` + this attribute. One
-  follow-through: reword the `type` deprecation abort (`R/fmt_class.R:457`) and its `NEWS.md` bullet to
-  name the split rather than the tokens, so the message does not read as a no-op after the rename.
-- **D6 — the vignette grid prints the acronym with its meaning and drops the `Model_` prefix**, and
-  gains a first column for the outcome kind — which is where the summed-score syntax finally appears.
-
-### Maintainer’s answers to open questions
-
-- **Q1 — gaussian × `difference` × `coefficient`:** `diff` / `mdiff`, or `MD` / `mMD`, or keep Phase
-  22b's `coeff`? *Recommendation:* `diff` / `mdiff`. `coeff` names an estimator, not a measure, and so
-  cannot take the marginal marker (`mcoeff` is nonsense). This supersedes 22b's `Model_coeff` request.
-  **Maintainer’s decision: `diff` / `mdiff`**
-- **Q2 — preset names:** `est_base` / `base_est`, or `effect` / `level`, or `with_level` /
-  `level_first`? *Recommendation:* `est_base` / `base_est`, because the word order is the cell order —
-  and they line up with `base_ci` (D7), giving one `base` family of presets.
-  **Maintainer’s decision: `est_base` / `base_est`**
-- **Q3 — the two-channel legend (`color = c(TRUE, "adjustment")`):** one shared block with the
-  background clause scoped to the model column, or two blocks with a baseline note? *Recommendation:*
-  decide on real output. Only this case needs the ladder-identity grouping key; the plain
-  `color = TRUE` case merges once the `base` column is gone, and the `katz`/`wald_log` split is fixed
-  by labelling from the estimand (§5.5) with no grouping change at all.
-  **Maintainer’s decision: decide on real output, but one shared block seems *a priori* preferable if it’s achievable.**
-- **Q7 — the gaussian and poisson crude intervals: pairwise closed form, or `from = "fit"`?** §4.2
-  measured that these are the only two families where the crude interval is *not* the univariable
-  model's — the closed form pools variance pairwise, `lm` / quasi-Poisson pool globally, and they
-  diverge by up to **8.9 %** on a heteroscedastic 3-level predictor. Two honest resolutions:
-  *(a)* switch those two crude **effect** columns to `from = "fit"` (a univariable `lm` / `glm`, which
-  the architecture already supports and already uses for ordinal and numeric predictors) — then the
-  ruling "the observed effect is the model's own effect fitted with one predictor" holds for the
-  interval as well as the estimate, every family reports one method name, and §5.5's remaining split
-  disappears; cost is one extra fit per predictor.
-  *(b)* keep the pairwise interval — it makes no homoscedasticity assumption across levels, which is
-  arguably the better descriptive choice, and the 8.9 % gap appeared precisely *because* that
-  assumption fails — and correct the vignette's claim of parity with `lm`.
-  *Recommendation:* **(a)**, because the crude column's whole promise is to be the model's own effect
-  with one predictor, and the measurement shows it currently breaks that promise on exactly the
-  families where a reader is most likely to compare the two numbers by eye. If the cost is unwelcome,
-  (b) is defensible — but then the vignette sentence must go.
-  **Maintainer’s decision: first try (c) find closed-forms matching the univariate model’s one on 3lv+ predictors too (make web searches, test things on temp scripts), and add them to the ci methods ; if it fails go (a)**
-- **Q4 — `empirical = "cell"` on wide families:** automatic, or explicit? *Recommendation:* automatic
-  with a message naming the switch, so a narrow multinomial can opt back to two columns.
-  **Maintainer’s decision: automatic with no message, but add an expert exit door, `empirical=TRUE` can’t do it, so something like `empirical="column"` would be needed, to document in the regression vignettes multinomial part (quick sentence and code only, echo=TRUE, eval=FALSE)**
-- **Q5 — add a `{gap}` token now** (§3.6.6), so print, Excel and Markdown readers can see the gap at
-  all? *Recommendation:* yes — the display grammar is being reworked anyway, and Phase 22d makes the
-  hole real.
-  **Maintainer’s decision: yes, good idea.**
-- **Q6 — fix `needs = "marginaleffects"`** (§3.6.1) in this phase or separately? *Recommendation:* in
-  this phase, because K4's "always populate" depends on it.
-  **Maintainer’s decision: fix it in this phase.**
-
-### Explicitly out of scope, and why
-
-- The `color = "adjustment"` sign convention on a **sign-flipping** effect (crude `1/1.06`, model
-  `1.05`, scored as "attenuated"). The away-from/toward-the-null rule is ruling Q4 of
-  `dev/model_vs_observed_effect_colour.md` and is correct for protective effects; the flip case is a
-  genuine edge the rule does not describe well, but it is a Phase 22b question about the *score*, not
-  about the column layout. Noted so it is not lost.
-- Ordering of the "Overall association" footer rows, the `[outcome]` repetition in exports, the `n`
-  column, `Model_β -> Model_coeff` as a pure rename, tidyselect in `tab_reg()`, the stored formulas
-  accessor: all Phase 22b.
-- Anything on the list of already-rejected alternatives in `dev/model_vs_observed_effect_colour.md`
-  and `dev/model_vs_observed_gap_test.md` — in particular a materialised gap column, CI-overlap as the
-  gap test, Hausman subtraction, a table-level colour hook, and reusing an existing field for the gap
-  SE. None of this proposal touches them.
-
----
-
-## 9. Appendix — captures
+## 8. Appendix — captures
 
 ### A. Field population, `empirical = TRUE`, binomial (17 rows)
 
@@ -1278,3 +1450,36 @@ empirical = FALSE, display = "ame"                      0.23 s
   at representative values), giving AME, MER, AAP, APM. `MER` is tabxplor's existing usage and it is
   correct; `AME` is correct for the additive path only; **AAP** ("average adjusted predictions") is
   the standard name for what `{base}` prints on a model column.
+
+### F. Crude-interval parity, measured (D22)
+
+`gss_cat`, `tvhours` on `race` (3 levels, strongly heteroscedastic: SD 2.32 / 3.51 / 2.41), complete
+cases; largest relative difference over the estimate and both bounds. The weighted rows use a random
+`runif(0.3, 3)` weight and `svydesign(ids = ~1, weights = ~w)` — which is what `tab_reg()` fits a
+weighted model through.
+
+```text
+UNWEIGHTED  (basis = "n"; the model is lm / glm)
+  pooled t over ALL k levels, df = N - k         vs lm() coefficient CI          3.7e-14
+  pairwise pooled t, df = n1 + n2 - 2  (today)   vs lm() coefficient CI          8.9e-02
+  global Pearson dispersion, df = N - k          vs glm(quasipoisson) dispersion  identical
+                                                 vs its SE(log) / CI            1.8e-08 / 9.9e-10
+  pairwise dispersion                  (today)   vs glm(quasipoisson) SE(log)    3.6e-02
+
+WEIGHTED  (basis = "weights"/"design"; the model is svyglm, so the target is the sandwich)
+  per-group variance on n_eff (Kish)             vs svyglm() SE                  3.4e-03
+  per-group variance on wn                       vs svyglm() SE                  2.9e-01
+  pooled t on Sum(w) - k                         vs svyglm() SE                  2.2e-01
+  (unweighted control) per-group variance on n   vs HC0 sandwich on lm           2.8e-04
+```
+
+Two readings worth keeping. First, `lm(weights =)` is **not** the weighted target: it treats weights as
+precision weights (df = n − k), so a frequency-weighted closed form differs from it by exactly
+`sqrt((Σw − k) / (n − k))` — measured 1.288, i.e. the whole 22 %. The design-based sandwich is the
+target, and the per-group form already reaches it. Second, the two model-based closed forms need only
+one extra sum over the predictor's level set, so neither costs a fit:
+
+```r
+s_p2 <- sum((n_g - 1) * v_g) / (N - k)          # mean difference: se = sqrt(s_p2 * (1/n_j + 1/n_ref))
+phi  <- sum((n_g - 1) * v_g / m_g) / (N - k)    # rate ratio:      se = sqrt(phi * (1/S_j + 1/S_ref))
+```

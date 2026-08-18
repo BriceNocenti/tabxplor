@@ -14,8 +14,13 @@
 # Drops the "(sd)" parenthetical of means, "%"/"±"/"*" markers, and thousands separators.
 parity_num_from_str <- function(s) {
   s <- sub("\\(.*$", "", s)          # drop " (sigma ...)" for means
+  # a multiplicative cell prints its DISTANCE from the neutral: below it, the inverse ("1/2.67",
+  # "\u00f72.67"). Excel keeps the raw number, so undo the inversion before comparing.
+  inv <- grepl("^\\s*(1/|\u00f7)", s)
+  s <- sub("^\\s*(1/|\u00f7)", "", s)   # drop the inverse marker BEFORE the digit scrub
   s <- gsub("[^0-9.+-]", "", s)      # keep digits, decimal point, sign; drop %, spaces, *, etc.
-  suppressWarnings(as.numeric(s))
+  v <- suppressWarnings(as.numeric(s))
+  if (isTRUE(inv) && !is.na(v) && v != 0) 1 / v else v
 }
 
 # For every fmt cell the Excel bypass renders as a real NUMBER, assert the format-path number
@@ -117,14 +122,14 @@ testthat::test_that("format(syntax = 'excel') emits the expected numFmt codes", 
   dcol <- tab(gss, marital, race, pct = "row", digits = 1L)[["Black"]]
   # Phase 13c-v: a pct diff gets an explicit +/- sign; contrib too; a ratio gets a leading x.
   testthat::expect_equal(format(set_display(dcol, "diff"), syntax = "excel")[[1]], "+0.0%;-0.0%")
-  ccol <- fmt(n = 1L, ctr = 0.05, scale = "level_pct", pct_base = "row", display = "ctr", digits = 1L)
+  ccol <- fmt(n = 1L, ctr = 0.05, scale = "level_pct", pct_type = "row", display = "ctr", digits = 1L)
   testthat::expect_equal(format(ccol, syntax = "excel")[[1]], "+0.0%;-0.0%")
-  rcol <- set_digits(set_ratio(set_display(dcol, "rr"), 1.5), 1L)
+  rcol <- set_digits(set_ratio(set_display(dcol, "rr"), 1.5), 2L)
   # Phase q: the leading multiply sign is BACKSLASH-escaped (\×#,##0.0), not double-quote-wrapped -- a raw
   # " in a formatCode crashes the older jamovi-bundled openxlsx2 ("xml import unsuccessful").
   rr <- format(rcol, syntax = "excel")[[1]]
   testthat::expect_false(grepl('"', rr, fixed = TRUE))
-  testthat::expect_match(rr, "^\\\\.#,##0\\.0$")
+  testthat::expect_match(rr, "^\\\\.#,##0\\.00$")
 
   # pct_ci (ci = "cell") -> TEXT (the value+CI string is pre-formatted; a documented limitation)
   ci <- tab(gss, marital, race, pct = "row", ci = "cell")

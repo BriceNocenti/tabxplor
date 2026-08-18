@@ -39,6 +39,6 @@
     Output
        [1] "basis"        "ci_method"    "col_group"    "col_var"      "color"       
        [6] "color_signif" "comp_all"     "conf_level"   "degf"         "model_family"
-      [11] "pct_base"     "ref"          "refcol"       "role"         "scale"       
+      [11] "pct_type"     "ref"          "refcol"       "role"         "scale"       
       [16] "totcol"      
 

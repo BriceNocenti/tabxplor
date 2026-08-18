@@ -83,14 +83,14 @@ test_that("the Constant row keeps its bold under empirical = TRUE", {
 })
 
 test_that("get_num()/set_num() handle the 'OR_pct' spelling like format() does", {
-  x <- fmt(n = 10L, or = 2.5, pct = 0.4, display = "OR_pct", digits = 2L, scale = "level_pct", pct_base = "row")
+  x <- fmt(n = 10L, or = 2.5, pct = 0.4, display = "OR_pct", digits = 2L, scale = "level_pct", pct_type = "row")
   expect_equal(get_num(x), 2.5)                       # was falling through to the raw count (10)
   y <- set_num(x, 3)
   expect_equal(get_or(y), 3)
 })
 
 test_that("set_num() writes back an 'OR'-displayed column (mask parity)", {
-  x <- fmt(n = 10L, or = 2.5, display = "OR", digits = 2L, scale = "level_pct", pct_base = "row")
+  x <- fmt(n = 10L, or = 2.5, display = "OR", digits = 2L, scale = "level_pct", pct_type = "row")
   expect_equal(get_or(set_num(x, 4)), 4)
 })
 

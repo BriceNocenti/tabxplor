@@ -147,3 +147,18 @@ test_that("item 5: an Obs_IRR / model IRR legend names the RATE-ratio, not the o
   expect_true(all(grepl("rate-ratio", irr)))
   expect_false(any(grepl("odds-ratio", irr)))
 })
+
+# Phase 22a-i: a crude column and the model column beside it share ONE prose legend block, because
+# both labels name the ESTIMAND. The block names the closed form the observed column ran, once.
+test_that("Obs_RR and Model_RR share one PROSE block, which names the closed form", {
+  skip_if_not_installed("broom")
+  leg <- tabxplor:::tab_color_legend(
+    suppressMessages(tab_reg(gss_cat_data_formatting(), "married", "race", family = "binomial",
+                             measure = "ratio", empirical = TRUE, cleannames = FALSE)),
+    medium = "md", style = "prose")
+  rr <- leg[grepl("RR", leg)]
+  expect_length(rr, 1L)                                   # ONE block, not one per column
+  expect_true(grepl("Obs_RR", rr, fixed = TRUE) && grepl("Model_RR", rr, fixed = TRUE))
+  expect_true(grepl("log risk-ratio", rr, fixed = TRUE))  # named from the estimand, not the engine
+  expect_true(grepl("Katz", rr, fixed = TRUE))            # and the closed form is still named
+})

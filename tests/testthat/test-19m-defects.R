@@ -224,8 +224,8 @@ test_that("19m-i G4: every family's rendered effect word is unchanged", {
 
 test_that("19m-i G4: the worded CI-method labels are one declared table", {
   nm <- function(method, word) legend_method_name(list(ci_method = method, eff_word = word))
-  expect_identical(nm("katz", "IRR"), "Katz interval on the log rate-ratio")
-  expect_identical(nm("katz", "RR"),  "Katz interval on the log risk-ratio")
+  expect_identical(nm("katz", "IRR"), "Wald interval on the log rate-ratio")
+  expect_identical(nm("katz", "RR"),  "Wald interval on the log risk-ratio")
   expect_identical(nm("wald_log", "IRR"), "Wald interval on the log rate-ratio")
   expect_identical(nm("wald_log", "OR"),  "Wald interval on the log odds-ratio")
   expect_identical(nm("wald_log", "RR"),  "Wald interval on the log risk-ratio")

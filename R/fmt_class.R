@@ -4,12 +4,18 @@
 # KEY CONSTRAINTS:
 #   - Fields are per-cell (vctrs::field); attributes are per-column (attr). Never confuse the two.
 #   - WHAT A COLUMN ESTIMATES is STORED, not derived: `scale` is one key into EST_SCALES (which field
-#     holds the estimate, its null, geometry, colour ladder, SD source); `pct_base` is which axis its
+#     holds the estimate, its null, geometry, colour ladder, SD source); `pct_type` is which axis its
 #     reference lies on; `ci_method` says which engine built the bounds. Read them through
-#     fmt_scale_row() / fmt_var_kind() / get_pct_base(); never re-derive a scale from a display, a
+#     fmt_scale_row() / fmt_var_kind() / get_pct_type(); never re-derive a scale from a display, a
 #     family, or from whether `var` is non-NA.
 #   - The record is DENSE: every column carries all fields, an inapplicable one stored as NA.
 #   - pct is stored 0-1 (x100 only in format()); `diff` is always a DIFFERENCE (the ratio is `ratio`).
+#   - `{est}` / `{base}` are SCALE-RELATIVE tokens: they name a role, and each column answers with the
+#     token it has always rendered (EST_SCALES' est_display / base_display, resolved once by
+#     fmt_resolve_scale_tokens()). That is why they need no arm of their own anywhere.
+#   - ONE multiplicative rendering, outside `special_formatting` so composites keep it: a value below
+#     its neutral prints as its inverse, with the MEASURE's own glyphs (MEASURES$break_over/under, the
+#     pair the legend ladder and the forest axis print). options(tabxplor.ratio_print = "raw") opts out.
 #   - Adding a FIELD touches ~9 sites here (follow the /vctrs-field skill); adding an ATTRIBUTE is a
 #     new_fmt() formal + one `fmt_attr_rules` row (a build-time stopifnot refuses a missing row).
 #   - Display glyph constants (mult_sign, div_sign, unbrk, sigma_sign, fig_space) live in utils.R.
@@ -75,7 +81,7 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 #' null value is, whether the scale is additive or multiplicative, and which colour ladder it reads.
 #' \itemize{
 #'   \item \code{"level_n"}: counts
-#'   \item \code{"level_pct"}: percentages (\code{pct_base} says of what)
+#'   \item \code{"level_pct"}: percentages (\code{pct_type} says of what)
 #'   \item \code{"level_mean"}: means (from numeric variables)
 #'   \item \code{"points"}: a difference between two percentages, in percentage points
 #'   \item \code{"mean_diff"}: a difference between two means, in the outcome's own units
@@ -85,7 +91,7 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 #'   \item \code{"log_coef"}: a link-scale coefficient (a log-odds, a log-rate)
 #'   \item \code{"mixed"}: what binding columns of unlike scales collapses to
 #' }
-#' @param pct_base For a percentage column, what the percentage is a percentage OF, and hence which
+#' @param pct_type For a percentage column, what the percentage is a percentage OF, and hence which
 #' axis its reference lies on (as a single string): \code{"row"}, \code{"col"}, \code{"all"}
 #' (frequencies by subtable / group, i.e. by \code{tab_vars}), \code{"all_tabs"} (frequencies for
 #' the whole table), or \code{"none"} (counts, means, coefficients).
@@ -205,8 +211,8 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 #' carry even after a pipeline drops the table's metadata; binding columns keeps the WEAKEST basis.
 #' @param ci_method Which interval ENGINE built this column's bounds --- \code{"wilson"},
 #' \code{"wald"}, \code{"beta"} (a cell proportion), \code{"newcombe"}, \code{"ac"} (a difference of
-#' proportions), \code{"katz"} (a ratio of proportions), \code{"welch"}, \code{"student"} (a
-#' difference of means), \code{"robust"}, \code{"quasipoisson"}, \code{"poisson"} (a ratio of
+#' proportions), \code{"katz"} (a ratio of proportions), \code{"welch"}, \code{"student"},
+#' \code{"ols"} (a difference of means), \code{"robust"}, \code{"quasipoisson"}, \code{"poisson"} (a ratio of
 #' means), \code{"woolf"}, \code{"wald_log"}, \code{"profile"}; \code{""} (default) when the column
 #' carries no interval. Read back by the colour legend, so it always names the method the bounds were
 #' built with.
@@ -220,7 +226,7 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 #' library(dplyr)
 #'
 #' f <- fmt(n = c(7, 19, 2), pct = c(0.25, 0.679, 0.07),
-#'          scale = "level_pct", pct_base = "row")
+#'          scale = "level_pct", pct_type = "row")
 #' f
 #'
 #' # To get the currently displayed field :
@@ -254,8 +260,8 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 #' # See all the attributes of a fmt vector :
 #' attributes(f)
 #'
-#' # To modify the "pct_base" attribute of a fmt vector (what the percentage is a percentage OF) :
-#' set_pct_base(f, "col")
+#' # To modify the "pct_type" attribute of a fmt vector (what the percentage is a percentage OF) :
+#' set_pct_type(f, "col")
 #'
 #' # To modify the "color" attribute of a fmt vector :
 #' set_color(f, "contrib")
@@ -337,7 +343,7 @@ fmt <- function(n         = integer(),
 
                 comp_all  = NA   ,
                 ref = ""   ,
-                pct_base  = "none",
+                pct_type  = "none",
                 col_var   = ""   ,
                 col_group = ""   ,   # the sub-population this column's block belongs to
                 totcol    = FALSE,
@@ -353,7 +359,7 @@ fmt <- function(n         = integer(),
                 ...) {
 
   # `...` exists only to catch the removed `type`/`ci_type` args and answer with their replacement
-  # (`scale` + `pct_base`) at the point of the mistake, instead of R's opaque "unused argument".
+  # (`scale` + `pct_type`) at the point of the mistake, instead of R's opaque "unused argument".
   fmt_abort_legacy_args(...)
   if (length(scale) != 1L || is.na(scale) || !scale %in% EST_SCALE_KEYS)
     cli::cli_abort(c("{.arg scale} must be one of {.val {EST_SCALE_KEYS}}.",
@@ -417,7 +423,7 @@ fmt <- function(n         = integer(),
   scale     <- vctrs::vec_recycle(vctrs::vec_cast(scale    , character()), size = 1)
   comp_all  <- vctrs::vec_recycle(vctrs::vec_cast(comp_all , logical()  ), size = 1)
   ref <- vctrs::vec_recycle(vctrs::vec_cast(ref, character()), size = 1)
-  pct_base  <- vctrs::vec_recycle(vctrs::vec_cast(pct_base , character()), size = 1)
+  pct_type  <- vctrs::vec_recycle(vctrs::vec_cast(pct_type , character()), size = 1)
   col_var   <- vctrs::vec_recycle(vctrs::vec_cast(col_var  , character()), size = 1)
   totcol    <- vctrs::vec_recycle(vctrs::vec_cast(totcol   , logical()  ), size = 1)
   refcol    <- vctrs::vec_recycle(vctrs::vec_cast(refcol   , logical()  ), size = 1)
@@ -439,7 +445,7 @@ fmt <- function(n         = integer(),
           n_eff = n_eff, obs = obs, gap_se = gap_se,
           row_kind = row_kind, in_tottab = in_tottab, in_refrow = in_refrow,
           scale = scale, comp_all = comp_all,  ref = ref,
-          pct_base = pct_base, col_var = col_var, col_group = col_group,
+          pct_type = pct_type, col_var = col_var, col_group = col_group,
           totcol = totcol, refcol = refcol,
           color = color, color_signif = color_signif, model_family = model_family,
           role = role, conf_level = conf_level, degf = degf, basis = basis,
@@ -454,9 +460,11 @@ fmt_abort_legacy_args <- function(...) {
   bad <- names(list(...))
   if (!length(bad)) return(invisible(NULL))
   hint <- c(
-    type    = "{.arg type} is now {.arg scale} + {.arg pct_base}: a row percentage is
-               {.code scale = \"level_pct\", pct_base = \"row\"}, a mean {.code scale = \"level_mean\"},
-               a count {.code scale = \"level_n\"}, a regression beta {.code scale = \"raw_diff\"}.",
+    type    = "{.arg type} conflated two facts and is SPLIT in two: {.arg scale} (what the column
+               estimates) and {.arg pct_type} (which kind of percentage: row / col / all). A row
+               percentage is {.code scale = \"level_pct\", pct_type = \"row\"}, a mean
+               {.code scale = \"level_mean\"}, a count {.code scale = \"level_n\"}, a regression
+               coefficient {.code scale = \"raw_diff\"}.",
     ci_type = "{.arg ci_type} is gone: the stored interval is always on the estimate's own
                {.arg scale}. A difference interval on a row percentage is
                {.code scale = \"points\"}, on a mean {.code scale = \"mean_diff\"}, an odds ratio
@@ -491,8 +499,9 @@ get_num <- function(x) {
   # ratio (rr aliased to it)->ratio, or/OR/or_pct/OR_pct->or, obs->obs. When adding a display value,
   # keep this map, set_num() and format() in sync (see the /vctrs-field skill).
   out     <- get_n(x)
-  # resolve composite templates ("{pct} (n={n})") to their PRIMARY field before the dispatch masks.
-  display <- display_primary(get_display(x))
+  # resolve composite templates ("{pct} (n={n})") to their PRIMARY field, then the scale-relative
+  # `est` / `base` tokens to the token this column renders them as, before the dispatch masks.
+  display <- fmt_resolve_scale_tokens(display_primary(get_display(x)), fmt_scale_row(x))
   nas     <- is.na(display)
   out[!nas & display == "wn"     ] <- get_wn  (x)[!nas & display == "wn"     ]
   out[!nas & display == "pct"    ] <- get_pct (x)[!nas & display == "pct"    ]
@@ -505,6 +514,10 @@ get_num <- function(x) {
   # DERIVED (no field of its own): the adjusted standardized residual behind color = "contrib"'s
   # significance. Read-only: set_num() has no matching arm.
   out[!nas & display == "resid"  ] <- fmt_resid(x)[!nas & display == "resid"  ]
+  # DERIVED too: the model-vs-observed gap, on the estimate's own scale (a ratio around 1, a
+  # difference around 0). It is the very number `color = "adjustment"` grades, so a printed gap and
+  # its shade cannot disagree. Read-only: there is nothing to write a gap back into.
+  out[!nas & display == "gap"    ] <- fmt_adjustment_score(x)[!nas & display == "gap"    ]
   out[!nas & display == "mean"   ] <- get_mean(x)[!nas & display == "mean"   ]
   out[!nas & display == "mean_ci"] <- get_mean(x)[!nas & display == "mean_ci"]
   out[!nas & display == "var"    ] <- get_var (x)[!nas & display == "var"    ]
@@ -534,8 +547,9 @@ get_num <- function(x) {
 set_num <- function(x, value) {
   value <- vctrs::vec_recycle(value, length(x))
   out     <- x
-  # a composite cell writes back to its PRIMARY field (the first {token}).
-  display <- display_primary(get_display(x))
+  # a composite cell writes back to its PRIMARY field (the first {token}); `est` / `base` write back
+  # to the field the column renders them as, so the read and the write map cannot drift.
+  display <- fmt_resolve_scale_tokens(display_primary(get_display(x)), fmt_scale_row(x))
   nas     <- is.na(display)
   out[!nas & display == "n"   ] <- set_n   (x[!nas & display == "n"   ], value[!nas & display == "n"   ])
   out[!nas & display == "wn"  ] <- set_wn  (x[!nas & display == "wn"  ], value[!nas & display == "wn"  ])
@@ -602,42 +616,42 @@ set_scale     <- function(x, scale) {
   `attr<-`(x, "scale", scale)
 }
 
-#' @describeIn fmt get the percentage base of fmt columns (at \code{fmt} level or \code{tab} level)
-#' @return A character vector with the vectors percentage base.
+#' @describeIn fmt get which kind of percentage fmt columns hold (at \code{fmt} level or \code{tab} level)
+#' @return A character vector with the vectors percentage type.
 #' @export
-get_pct_base <- function(x, ...) UseMethod("get_pct_base")
-#' @method get_pct_base default
+get_pct_type <- function(x, ...) UseMethod("get_pct_type")
+#' @method get_pct_type default
 #' @export
 #' @noRd
-get_pct_base.default     <- function(x, ...) {
-  ifelse(! is.null(purrr::attr_getter("pct_base")(x)),
-         yes = purrr::attr_getter("pct_base")(x),
+get_pct_type.default     <- function(x, ...) {
+  ifelse(! is.null(purrr::attr_getter("pct_type")(x)),
+         yes = purrr::attr_getter("pct_type")(x),
          no  = "none")
 }
-#' @method get_pct_base tabxplor_fmt
+#' @method get_pct_type tabxplor_fmt
 #' @export
 #' @noRd
-get_pct_base.tabxplor_fmt <- function(x, ...) attr(x, "pct_base", exact = TRUE)
-#' @method get_pct_base data.frame
+get_pct_type.tabxplor_fmt <- function(x, ...) attr(x, "pct_type", exact = TRUE)
+#' @method get_pct_type data.frame
 #' @export
 #' @noRd
-get_pct_base.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_pct_base(.))
+get_pct_type.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_pct_type(.))
 
 # A column REPURPOSED as a plain count (the no-col_var `n`/`wn` columns, the Excel `add_n` layout
 # column): it estimates a count, of nothing. Both halves in one call, because setting only the scale
-# would leave a stale `pct_base` claiming the counts are percentages of a row.
+# would leave a stale `pct_type` claiming the counts are percentages of a row.
 #' @keywords internal
 #' @noRd
-set_count_col <- function(x) set_pct_base(set_scale(x, "level_n"), "none")
+set_count_col <- function(x) set_pct_type(set_scale(x, "level_n"), "none")
 
-#' @describeIn fmt set the percentage base attribute of a \code{fmt} vector
+#' @describeIn fmt set the percentage-type attribute of a \code{fmt} vector
 #' @return A modified fmt vector.
 #' @export
-set_pct_base  <- function(x, pct_base) {
-  pct_base <- as.character(pct_base)[1]
-  if (is.na(pct_base) || pct_base %in% c("no", "", "n")) pct_base <- "none"
-  stopifnot(pct_base %in% PCT_BASES)
-  `attr<-`(x, "pct_base", pct_base)
+set_pct_type  <- function(x, pct_type) {
+  pct_type <- as.character(pct_type)[1]
+  if (is.na(pct_type) || pct_type %in% c("no", "", "n")) pct_type <- "none"
+  stopifnot(pct_type %in% PCT_TYPES)
+  `attr<-`(x, "pct_type", pct_type)
 }
 
 
@@ -827,13 +841,23 @@ return(x)
 #' @export
 #' @noRd
 set_display.tabxplor_fmt <- function(x, value) {
-  # "num_ci" is a type-adaptive alias for the "{base} {ci}" composite: show each value cell with the
-  # confidence interval the table already carries (the difference / ratio CI driven by ci = / color,
-  # not a forced cell CI). Resolve it per the column's own kind through THE shared display writer
-  # (display_write_col, R/tab.R) -- the same one tab(display =) runs, so a post-hoc set_display()
-  # and a build-time one cannot differ.
-  if (length(value) == 1L && identical(as.character(value), "num_ci"))
-    return(display_write_col(x, "num_ci")$col)
+  # A PRESET NAME naming a multi-field LAYOUT goes through THE shared display writer
+  # (display_write_col) -- the same one tab(display =) runs, so a post-hoc set_display() and a
+  # build-time one cannot differ, and the per-cell eligibility / void rules apply. A raw token or
+  # {} template is written verbatim: the producers set per-cell tokens that way and must keep doing so.
+  if (length(value) == 1L && !is.na(value) && as.character(value) %in% names(DISPLAY_PRESETS)) {
+    tmpl <- display_resolve(value)
+    if (grepl("{", tmpl, fixed = TRUE)) return(display_write_col(x, tmpl)$col)
+    value <- tmpl
+  }
+  fmt_set_display(x, value)
+}
+
+# The RAW display write, with no preset routing. `est` and `base` are both TOKENS and preset NAMES;
+# the pipeline's per-cell writers and display_write_col()'s own probes mean the token, so they must
+# not take the layout a user would mean by the same word.
+#' @keywords internal
+fmt_set_display <- function(x, value) {
   value <- vctrs::vec_cast(value, character()) |> vctrs::vec_recycle(size = length(x))
   vctrs::`field<-`(x, "display", value)
 }
@@ -1451,14 +1475,16 @@ display_primary <- function(display) {
 
 # fmt_display_shows() -- does a cell's display ALREADY show this field, ANYWHERE in its template?
 # (tests the whole composite, not just the primary token -- e.g. the html tooltip uses it to suppress
-# a line the cell already shows.)
+# a line the cell already shows.) `row` (optional, lazy) resolves the scale-relative `est` / `base`
+# tokens first, so a cell printing "{base}" counts as showing the percentage it prints.
 #' @keywords internal
-fmt_display_shows <- function(display, token) {
-  out  <- !is.na(display) & display == token
+fmt_display_shows <- function(display, token, row = NULL) {
+  resolve <- function(v) if (is.null(row)) v else fmt_resolve_scale_tokens(v, row)
+  out  <- !is.na(display) & resolve(display) == token
   comp <- !is.na(display) & grepl("{", display, fixed = TRUE)
   if (any(comp)) {
     for (tmpl in unique(display[comp]))
-      out[comp & display == tmpl] <- token %in% parse_display_template(tmpl)$fields
+      out[comp & display == tmpl] <- token %in% resolve(parse_display_template(tmpl)$fields)
   }
   out
 }
@@ -1577,7 +1603,7 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", ...) {  # ... 
 #              | "level" (a percentage / mean / count: no null). A level column's own one-proportion
 #              interval has no reference null, so the significance gate must not read it.
 #   geometry   the WORD the producers' arguments resolve into: "ratio" | "difference" | "log" | "level".
-#   var_kind   what the column summarises: "pct" | "mean" | "count" | "coef". With `pct_base` this is
+#   var_kind   what the column summarises: "pct" | "mean" | "count" | "coef". With `pct_type` this is
 #              the old `type` attribute, split into its two honest halves.
 #   ladder     which break scale a colour MEASURE reads on this column: "pct" | "std" | "log"
 #              (MEASURES$<m>$scale is a 3-entry map keyed by it).
@@ -1587,11 +1613,19 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", ...) {  # ... 
 #   mult       multiplicative fold (the fmt_color_slots center-1 rule).
 #   is_pct     the estimate renders x100.
 #   est_field  the fmt field the estimate lives in (fmt_center_field() reads this).
+#   est_display  the DISPLAY_TOKENS token `{est}` borrows on this scale, so "the estimate, whatever
+#              this column estimates" renders exactly as the column's own estimate always did. Its
+#              token's `field` IS est_field (checked at load).
+#   base_display  the token `{base}` borrows: the LEVEL beside the estimate (a percentage, a mean, a
+#              count). NA where the level is ambiguous -- on a link scale a coefficient may sit over a
+#              probability or over a mean, and guessing would be a lie; `{base}` renders void there.
 #   unit       the axis title, as a KEY (translated at render, never here).
 #   break_key  the ESTIMATE's ladder in color_scales(); NA = no ladder, use the device's own breaks.
 #   gap_key    the adj_* ladder its GAP reads (fmt_gap_scale_key() reads this).
-#   label_meas which MEASURES row supplies the break glyphs ("odds_ratio" -> "2" / "1/2"). WARNING: a
-#              MEASURES KEY -- a rename must reach here or the forest axis loses its glyphs.
+#   label_meas which MEASURES row supplies this scale's glyphs -- the forest axis's break labels AND
+#              the multiplicative cell rendering ("odds_ratio" -> "1/2" / "2", "ratio" -> "/2" / "x2").
+#              ONE declaration per measure, so a cell, its ladder and its axis cannot disagree.
+#              WARNING: a MEASURES KEY -- a rename must reach here or both lose their glyphs.
 #   sd_from    where the SD-standardized ladder's divisor comes from: a regression column's stored
 #              var(Y) ("var") or a crosstab cell's REFERENCE variance ("ref_var"). NULL = none.
 #   sec        NULL, or the secondary axis this scale needs to stay readable: when the colour ladder
@@ -1601,18 +1635,21 @@ EST_SCALES <- list(
   odds_ratio = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "or",    unit = "or",    default_display = "pct",
+                    est_display = "or", base_display = "pct",
                     break_key = "odds_ratio", gap_key = "adj_ratio",
                     label_meas = "odds_ratio", sec = NULL),
   pct_ratio  = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "ratio", unit = "ratio", default_display = "pct",
+                    est_display = "ratio", base_display = "pct",
                     break_key = "pct_ratio",  gap_key = "adj_ratio",
-                    label_meas = "odds_ratio", sec = NULL),
+                    label_meas = "ratio", sec = NULL),
   mean_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "std",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "ratio", unit = "rate_ratio", default_display = "mean",
+                    est_display = "ratio", base_display = "mean",
                     break_key = "mean_ratio", gap_key = "adj_ratio",
-                    label_meas = "odds_ratio", sec = NULL),
+                    label_meas = "ratio", sec = NULL),
   # a beta / a count AME: printed in the OUTCOME's units, coloured on the SD-standardized ladder.
   # WARNING: raw_diff and mean_diff are NOT one row with two `sd_from` values -- their `gap_key`
   # differs too (adj_diff_std vs adj_diff), and folding them would mean re-deriving both from
@@ -1621,6 +1658,7 @@ EST_SCALES <- list(
   raw_diff   = list(kind = "effect", geometry = "difference", var_kind = "coef", ladder = "std",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "diff",  unit = "units", default_display = "n",
+                    est_display = "coef", base_display = "mean",
                     break_key = "mean_diff",  gap_key = "adj_diff_std",
                     label_meas = "difference", sec = "sd", sd_from = "var"),
   # a crosstab MEAN difference: the same ladder, standardized by the REFERENCE cell's SD rather than
@@ -1628,6 +1666,7 @@ EST_SCALES <- list(
   mean_diff  = list(kind = "effect", geometry = "difference", var_kind = "mean", ladder = "std",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "diff",  unit = "units", default_display = "mean",
+                    est_display = "diff", base_display = "mean",
                     break_key = "mean_diff",  gap_key = "adj_diff",
                     label_meas = "difference", sec = "sd", sd_from = "ref_var"),
   # measure = "log": printed on the link scale, coloured on the logged odds_ratio ladder (what
@@ -1635,11 +1674,13 @@ EST_SCALES <- list(
   log_coef   = list(kind = "effect", geometry = "log", var_kind = "coef", ladder = "log",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "diff",  unit = "log",   default_display = "n",
+                    est_display = "coef", base_display = NA_character_,
                     break_key = "odds_ratio", gap_key = "adj_diff_log",
                     label_meas = "difference", sec = "exp"),
   points     = list(kind = "effect", geometry = "difference", var_kind = "pct", ladder = "pct",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = TRUE,
                     est_field = "diff",  unit = "points", default_display = "pct",
+                    est_display = "diff", base_display = "pct",
                     break_key = "pct_diff",   gap_key = "adj_diff",
                     label_meas = "difference", sec = NULL),
   # the three LEVEL scales: a cell percentage / a mean / a count. No null to draw (the reference is a
@@ -1649,16 +1690,19 @@ EST_SCALES <- list(
   level_pct  = list(kind = "level",  geometry = "level", var_kind = "pct",   ladder = "pct",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
                     est_field = "pct",   unit = "pct",   default_display = "pct",
+                    est_display = "pct", base_display = "pct",
                     break_key = NA_character_, gap_key = "adj_diff",
                     label_meas = "difference", sec = NULL),
   level_mean = list(kind = "level",  geometry = "level", var_kind = "mean",  ladder = "std",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "mean",  unit = "units", default_display = "mean",
+                    est_display = "mean", base_display = "mean",
                     break_key = NA_character_, gap_key = "adj_diff", sd_from = "ref_var",
                     label_meas = "difference", sec = NULL),
   level_n    = list(kind = "level",  geometry = "level", var_kind = "count", ladder = "std",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "n",     unit = "count", default_display = "n",
+                    est_display = "n", base_display = "n",
                     break_key = NA_character_, gap_key = "adj_diff", sd_from = "ref_var",
                     label_meas = "difference", sec = NULL),
   # THE NEUTRAL: what binding two columns of unlike scales collapses to (fmt_attr_rules). Its content
@@ -1666,6 +1710,7 @@ EST_SCALES <- list(
   mixed      = list(kind = "level",  geometry = "level", var_kind = "pct",   ladder = "pct",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
                     est_field = "pct",   unit = "pct",   default_display = "n",
+                    est_display = "pct", base_display = "pct",
                     break_key = NA_character_, gap_key = "adj_diff",
                     label_meas = "difference", sec = NULL)
 )
@@ -1680,7 +1725,7 @@ est_var_kind <- function(key) (EST_SCALES[[key]] %||% EST_SCALES[["mixed"]])$var
 #' @keywords internal
 est_default_display <- function(key) (EST_SCALES[[key]] %||% EST_SCALES[["mixed"]])$default_display
 #' @keywords internal
-PCT_BASES <- c("row", "col", "all", "all_tabs", "none")
+PCT_TYPES <- c("row", "col", "all", "all_tabs", "none")
 
 # `kind`: forest_plot(what =)'s override -- the level/effect twin of the column's scale (a column with
 # no stored contrast interval still HAS a difference, just no whisker).
@@ -1713,17 +1758,34 @@ fmt_var_kind <- function(x) {
 
 # The short human LABEL of a column -- "row%"/"col%"/"all%"/"all_tabs%"/"mean"/"n"/"coef"/"mixed".
 # A rendered string (pillar ptype abbreviation, arithmetic-warning wording), never a fact to branch
-# on: read `pct_base` / `var_kind` for that.
+# on: read `pct_type` / `var_kind` for that.
 #' @keywords internal
 fmt_kind_label <- function(x) {
   if (is.data.frame(x)) return(purrr::map_chr(x, fmt_kind_label))
-  base <- get_pct_base(x)
+  base <- get_pct_type(x)
   if (!identical(base, "none")) return(paste0(base, "%"))
   switch(fmt_var_kind(x), mean = "mean", count = "n", coef = "coef", "mixed")
 }
 
 #' @keywords internal
 fmt_center_field <- function(x) fmt_scale_row(x)$est_field
+
+# THE `{est}` / `{base}` resolution, in one place. Both tokens are scale-relative: they name a ROLE
+# ("the estimate", "the level beside it") and each column answers with the token it has always
+# rendered. Resolving here rather than giving them their own get_num()/format() arms is what makes
+# every existing mask, glyph, reference annotation and Excel code apply unchanged.
+# A scale declaring NO level (`base_display = NA`, the link scales) resolves to `blank`: "there is
+# nothing to print here". get_num() then returns NA, so display_note_empty() names what would fill it.
+# `row` is evaluated LAZILY (R promises), so the common path pays no fmt_scale_row() lookup.
+#' @keywords internal
+fmt_resolve_scale_tokens <- function(display, row) {
+  hit <- display %in% c("est", "base")
+  if (!any(hit)) return(display)
+  void <- function(tok) if (is.null(tok) || is.na(tok)) "blank" else tok
+  display[hit & display == "est" ] <- void(row$est_display)
+  display[hit & display == "base"] <- void(row$base_display)
+  display
+}
 
 # `breaks` are AXIS POSITIONS (both sides + the neutral), NOT the positive magnitudes the colour engine
 # folds; `break_dir` says which side each came from, so the label can pick its glyph.
@@ -1767,7 +1829,7 @@ fmt_scale_of <- function(x, kind = "auto") {
 
 
 
-# DESIGN: new_fmt() is the internal constructor. Attributes (scale, color, pct_base, ...) are SCALAR
+# DESIGN: new_fmt() is the internal constructor. Attributes (scale, color, pct_type, ...) are SCALAR
 #   per-column; fields (n, pct, diff, ...) are per-cell vectors. See vctrs::new_rcrd().
 # No validation, no recycling -- fmt() does both and calls this. Not exported and not its own topic
 # (roxygen would produce a page of undocumented formals); `?fmt` documents the whole type.
@@ -1802,7 +1864,7 @@ new_fmt <- function(n         = integer(),
 
                     comp_all  = NA   ,
                     ref = ""   ,
-                    pct_base  = "none",
+                    pct_type  = "none",
                     col_var   = ""   ,
                     # WHICH SUB-POPULATION this column's block belongs to -- a level of a `spread_vars`
                     # variable, or a `tab_reg(tab_vars =)` group; "" when never spread. Stored apart
@@ -1827,7 +1889,7 @@ new_fmt <- function(n         = integer(),
                     degf      = NA_real_,
                     basis     = "n"  ,
                     # WHICH interval engine built this column's bounds -- "wilson" / "wald" / "beta" /
-                    # "newcombe" / "ac" / "welch" / "student" / "katz" / "woolf" / "robust" /
+                    # "newcombe" / "ac" / "welch" / "student" / "ols" / "katz" / "woolf" / "robust" /
                     # "quasipoisson" / "poisson" / "wald_log" / "profile"; "" = no interval. Per-COLUMN
                     # so the legend names the method the bounds were actually built with.
                     ci_method = ""   ,
@@ -1872,7 +1934,7 @@ new_fmt <- function(n         = integer(),
          row_kind = row_kind, in_tottab = in_tottab,
          in_refrow = in_refrow),
     scale = scale, comp_all = comp_all, ref = ref,
-    pct_base = pct_base, col_var = col_var, col_group = col_group[1],
+    pct_type = pct_type, col_var = col_var, col_group = col_group[1],
     totcol = totcol, refcol = refcol,
     color = color, color_signif = color_signif[1], model_family = model_family[1],
     role = role[1], conf_level = conf_level[1],
@@ -2014,7 +2076,7 @@ fmt_attr_rules <- list(
   scale        = list(neutral = "mixed",        merge = "same",        arith = "merge",   scalar = TRUE , write = set_scale),
   comp_all     = list(neutral = FALSE,          merge = "comp3",       arith = "merge",   scalar = TRUE , write = set_comp_all),
   ref          = list(neutral = "",             merge = "same",        arith = "merge",   scalar = TRUE , write = set_ref_type),
-  pct_base     = list(neutral = "none",         merge = "same",        arith = "merge",   scalar = TRUE , write = set_pct_base),
+  pct_type     = list(neutral = "none",         merge = "same",        arith = "merge",   scalar = TRUE , write = set_pct_type),
   col_var      = list(neutral = "several_vars", merge = "same",        arith = "merge",   scalar = TRUE , write = set_col_var),
   # like `col_var` -- binding two sub-populations loses the distinction; the neutral is "no
   # sub-population", because an unspread and a spread column differ by PRESENCE, not by name.
@@ -2111,7 +2173,7 @@ fmt_attrs_of <- function(x) {
 #' address one known attribute.
 #'
 #' @param x A `tabxplor_fmt` vector, or a data.frame (then every `fmt` column is read).
-#' @param name The attribute: one of `"scale"`, `"comp_all"`, `"ref"`, `"pct_base"`, `"col_var"`,
+#' @param name The attribute: one of `"scale"`, `"comp_all"`, `"ref"`, `"pct_type"`, `"col_var"`,
 #'   `"col_group"`, `"totcol"`, `"refcol"`, `"color"`, `"color_signif"`, `"model_family"`, `"role"`,
 #'   `"conf_level"`, `"degf"`, `"basis"`, `"ci_method"`. An unknown name is an error naming the set.
 #' @param value The new value. Written through the attribute's own setter, so it is validated
@@ -2123,7 +2185,7 @@ fmt_attrs_of <- function(x) {
 #' @export
 #'
 #' @examples
-#' x <- fmt(n = c(10, 20), pct = c(0.3, 0.7), scale = "level_pct", pct_base = "row")
+#' x <- fmt(n = c(10, 20), pct = c(0.3, 0.7), scale = "level_pct", pct_type = "row")
 #' fmt_attr(x, "scale")
 #' fmt_attr(x, "col_var") <- "region"
 #' fmt_attr(x, "col_var")
@@ -2321,7 +2383,8 @@ fmt_stars_applicable <- function(x) {
   k <- measure_key(get_color(x))
   is.na(k) || !nzchar(k) || !identical(MEASURES[[k]]$sig_source, "pvalue")
 }
-#' @keywords internal
+#' @describeIn fmt get the per-cell p-value (what the significance stars read)
+#' @export
 get_pvalue <- fmt_field_factory("pvalue")
 #' @keywords internal
 get_or     <- fmt_field_factory("or")
@@ -2594,7 +2657,9 @@ set_ci      <- function(x, value) {
   x <- set_ci_inf(x, ctr - value)
   x
 }
-#' @keywords internal
+#' @describeIn fmt set the per-cell p-value. `set_pvalue(x, NA_real_)` is how a duplicated,
+#' purely descriptive copy of a column loses its stars: the stored p-value is their only source.
+#' @export
 set_pvalue  <- fmt_set_field_factory("pvalue" , cast = double()   )
 #' @keywords internal
 set_or      <- fmt_set_field_factory("or"     , cast = double()   )
@@ -2718,26 +2783,36 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
   # keep the RAW display for composite expansion at the end; the dispatch masks run on the PRIMARY.
   raw_display <- get_display(x)
-  display <- display_primary(raw_display)
+  scl      <- fmt_scale_row(x)
+  # `{est}` / `{base}` resolve HERE, once, to the token this column has always rendered them as, so
+  # every mask, glyph, annotation and Excel code below applies to them with no arm of their own.
+  display <- fmt_resolve_scale_tokens(display_primary(raw_display), scl)
   nas  <- is.na(display)
   digits <- get_digits(x)
   digits[!nas & display == "n"] <- 0
-  digits[!nas & display %in% c("or", "or_pct", "OR", "OR_pct", "est_ci") & # no "var" (used in chi2_table)
-           digits < 2L] <- 2L
-  # a resid on a pct column would inherit digits = 0; one decimal (SPSS convention) reads the +/-2/3 rule.
-  digits[!nas & display == "resid" & digits < 1L] <- 1L
+  # ONLY 0 is overridden, and only where the token declares a floor (DISPLAY_TOKENS$min_digits): a
+  # cell asking for 1 or 3 decimals gets them. `digits` is per-cell but ONE value serves every
+  # display of that cell -- a percentage wants 0 and its own ratio wants 2 -- so the floor cannot be
+  # stored on the cell; it belongs where what is being SHOWN is known, which is here.
+  md <- unname(DISPLAY_MIN_DIGITS[display])
+  digits[!nas & !is.na(md) & digits == 0L] <- md[!nas & !is.na(md) & digits == 0L]
 
 
   ok <- !na_out & !nas
 
 
-  scl      <- fmt_scale_row(x)
   is_mean  <- identical(scl$var_kind, "mean")
   is_coef  <- identical(scl$var_kind, "coef")
   # the stored interval's geometry: multiplicative, a real difference, or a ratio specifically.
   ci_mult  <- isTRUE(scl$mult)
   ci_ratio <- ci_mult && !identical(scl$est_field, "or")
   ci_diff  <- scl$geometry %in% c("difference", "log")
+
+  # the multiplicative rendering's column-level facts, resolved once (the block after print_num and
+  # the est_ci bracket both read them). `mult_under` is the MEASURE's own glyph -- see that block.
+  ratio_raw    <- identical(getOption("tabxplor.ratio_print", "inverse"), "raw")
+  mult_inverse <- ci_mult && !ratio_raw
+  mult_under   <- MEASURES[[scl$label_meas]]$break_under
 
   pm <- stringi::stri_unescape_unicode("\\u00b1")
 
@@ -2751,12 +2826,14 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # shape as a mean's absolute bounds -> `ci_bare`, which the branches below key on.
   ci_bare   <- is_mean | ci_mult
 
-  # `obs` prints exactly like the estimate it is compared to (per-COLUMN scale, one branch per column).
-  obs_m    <- ok & display == "obs"
+  # `obs` and `gap` print exactly like the estimate they are compared to / measured on (per-COLUMN
+  # scale, one branch per column). `gap` carries the ADJUSTMENT SCORE -- the very number the colour
+  # grades -- so a printed gap and its shade can never say different things.
+  obs_m    <- ok & (display %in% c("obs", "gap"))
   obs_mult <- ci_mult                          # OR / RR / IRR       -> like `or`  (bare, big.mark, 2 dg)
   obs_coef <- !ci_mult && is_coef              # beta / log(OR)      -> like `coef` (plain)
   obs_pct  <- !ci_mult && !is_coef             # AME / risk-diff     -> like `diff` (x100, signed, %)
-  if (obs_mult) digits[obs_m & digits < 2L] <- 2L
+  if (obs_mult) digits[obs_m & digits == 0L] <- 2L
   obs_as_pct <- obs_m & obs_pct
   disp_ci   <- display == "ci" & (ci_diff | ci_ratio) & !nas
   # a ratio bracket needs 2 decimals: at 1 dp the bounds routinely round equal and the block below
@@ -2867,6 +2944,8 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   }
   # }
 
+  # the numbers as such, kept for the multiplicative block below (from here `out` is character).
+  num_out <- out
   out[!na_out] <- print_num(out[!na_out], digits[!na_out])
   out[na_out] <- NA
   if (any(plus_ci | disp_ci)) {
@@ -2881,25 +2960,38 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   out[n_wn] <- out[n_wn] |> prettyNum(big.mark = pad, preserve.width = "individual")
   out[pct_no_ci] <- paste0(out[pct_no_ci], "%")
 
-  # ratio display shows the multiplicative sign: a cell >= its reference prints "x2", below prints
-  # "/2". Text syntax only (Excel keeps a real number).
-  disp_rr <- ok & display == "ratio"
-  if (any(disp_rr)) {
-    rv  <- get_ratio(x)[disp_rr]
-    inv <- !is.na(rv) & rv > 0 & rv < 1
-    mag <- ifelse(inv, 1 / rv, rv)
-    dg  <- pmax(1L, digits[disp_rr])
-    num <- sprintf(paste0("%.", dg, "f"), mag)      # dg >= 1 -> always a decimal point
-    num <- sub("\\.?0+$", "", num)                  # trim trailing zeros + a bare trailing dot
-    # a ratio rounding to 1 is "equal to the reference" -> always show "x1" (never the confusing "/1").
-    sym <- ifelse(inv & num != "1", div_sign, mult_sign)
-    val <- out[disp_rr]
-    nn  <- !is.na(rv)
-    val[nn] <- paste0(sym[nn], num[nn])
-    if (any(nn))
-      val[nn] <- stringi::stri_pad(val[nn], max(stringi::stri_length(val[nn])), side = "left",
-                                  pad = pad)
-    out[disp_rr] <- val
+  # === THE ONE MULTIPLICATIVE RENDERING ==========================================================
+  # A cell printing a multiplicative quantity shows its DISTANCE from the neutral, not its raw value:
+  # below the neutral it prints the inverse, so "half" reads as strongly as "double". The glyphs are
+  # the MEASURE's own -- MEASURES$<m>$break_over / break_under, the very pair the legend ladder and
+  # the forest axis print -- so a cell, its ladder and its axis cannot disagree. An odds ratio reads
+  # "1/2.67", a risk / rate / mean ratio "/2.67" and "x1.5".
+  # WARNING: this sits OUTSIDE special_formatting on purpose. It was the composite expander's
+  # recursion (special_formatting = FALSE) that dropped the inverse, so "{or} ({obs})" printed a raw
+  # "0.37" beside a "1/2.67" in the same table. Text syntax only (Excel keeps a real number).
+  # Opt out with options(tabxplor.ratio_print = "raw") for the journal convention.
+  mult_tok   <- c(ratio = "ratio", or = "odds_ratio", OR = "odds_ratio",
+                  or_pct = "odds_ratio", OR_pct = "odds_ratio")
+  # the scale-relative cells take the COLUMN's measure (EST_SCALES$label_meas): `{est}` on a
+  # mean-ratio column reads "/2", on an odds-ratio one "1/2".
+  mult_cells <- ok & (display %in% names(mult_tok) |
+                        (ci_mult & display %in% c("est_ci", "obs", "gap")))
+  if (any(mult_cells) && !ratio_raw) {
+    v    <- num_out[mult_cells]
+    dg   <- digits[mult_cells]
+    d    <- display[mult_cells]
+    meas <- unname(ifelse(d %in% names(mult_tok), mult_tok[d], scl$label_meas))
+    inv  <- !is.na(v) & v > 0 & v < 1
+    mag  <- ifelse(inv, 1 / v, v)
+    num  <- prettyNum(print_num(mag, dg), big.mark = pad, preserve.width = "individual")
+    # a value ROUNDING to the neutral takes the over glyph, never the confusing "/1.00" -- at that
+    # rounding the two say the same thing. Only a REFERENCE cell loses the glyph (below).
+    one  <- !is.na(mag) & round(mag, dg) == 1
+    glyph <- function(side)
+      vapply(meas, function(k) MEASURES[[k]][[side]], character(1), USE.NAMES = FALSE)
+    val  <- ifelse(inv & !one, paste0(glyph("break_under"), num), paste0(glyph("break_over"), num))
+    val[is.na(v)] <- out[mult_cells][is.na(v)]
+    out[mult_cells] <- val
   }
 
   if (any(pvalue)) {
@@ -3023,19 +3115,28 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
         stringi::stri_replace_first_regex("mean:Inf%|NA", "")
     }
 
+    # DESIGN: a REFERENCE cell of a multiplicative column prints a bare "1" -- no glyph, no decimals.
+    # "x" means "times the reference", which the reference itself is not, and the short bare number
+    # is what makes its row stand out. A cell that merely ROUNDS to the neutral keeps "x1.00": the
+    # reader must be able to tell "this is the baseline" from "this happens to equal it".
+    # `all_totals` is the mask the odds-ratio cell has always used -- the reference ROW and, under
+    # `ref2`, the reference COLUMN.
+    # WARNING: `& at the neutral` is load-bearing -- a regression's Constant row IS a reference row
+    # and its odds ratio is the baseline odds, a real value. Only a cell whose value rounds to the
+    # neutral loses its glyph.
+    if (any(mult_cells)) {
+      if (is.null(ref_alltot)) ref_alltot <- get_reference(x, "all_totals")
+      at_one <- !is.na(num_out) & round(num_out, digits) == 1
+      out[mult_cells & ref_alltot & at_one] <- "1"
+    }
+
     if (any(disp_or)) {
-      # OR display. (1) an OR < 1 prints as "1/x" so it compares symmetrically to an OR > 1. (2)
-      # reference rows (OR == 1) print a bare "1", annotated with the empirical reference % when present
-      # (an empirical-OR crosstab); a pure model-OR table has no pct, so the annotation drops.
+      # a reference row is annotated with the empirical reference % when present (an empirical-OR
+      # crosstab); a pure model-OR table has no pct, so the annotation drops.
       if (is.null(ref_alltot)) ref_alltot <- get_reference(x, "all_totals")
       refer  <- ref_alltot[disp_or]
       or_val <- get_or(x)[disp_or]
-      or_dig <- digits[disp_or]
       vals   <- out[disp_or]
-
-      recip       <- !is.na(or_val) & or_val > 0 & or_val < 1
-      vals[recip] <- paste0("1/", print_num(1 / or_val[recip], or_dig[recip]))
-      one         <- stringi::stri_replace_first_regex(vals, "1\\.0+", "1")
 
       if (any(!is.na(get_pct(x)[disp_or]))) {                # empirical-OR crosstab: annotate ref %
         reffmt <- set_display(x[disp_or], "pct") |> set_digits(0L) |> format()
@@ -3046,24 +3147,29 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
         # `!is.na(or_val)` -- a reference cell with NO odds ratio must not claim "1" (the cumulative
         # OR's degenerate last cut has a reference row and no ratio; it would print raw "NA").
         out[disp_or] <- ifelse(refer & !is.na(or_val) & !is.na(reffmt),
-                               paste0(one, " (", reffmt, ")"), vals)
-      } else {                                               # pure model-OR: bare "1" on ref rows
-        out[disp_or] <- ifelse(refer & !is.na(or_val), one, vals)
+                               paste0(vals, " (", reffmt, ")"), vals)
       }
     }
 
     if (any(disp_est_ci)) {
-      # OR / beta cell with a VISIBLE confidence interval: `out` holds the RAW point estimate (no x100,
-      # no 1/x -- forest-plot convention when a bracket is shown); append [ci_inf; ci_sup]. Reference
-      # rows have NA bounds -> no bracket.
+      # An estimate with a VISIBLE interval: append [ci_inf; ci_sup] to the point estimate.
+      # Reference rows have NA bounds -> no bracket.
+      # DESIGN: on a multiplicative scale the bracket follows the cell -- each bound below the
+      # neutral prints as its inverse, so the interval stays on the same scale as the estimate it
+      # surrounds. The bounds are NOT reordered: the glyph carries the direction, so "1/3.13" still
+      # sits left of "1/2.27" exactly as 0.32 sits left of 0.44.
+      # options(tabxplor.ratio_print = "raw") restores the journal convention on both at once.
       lo  <- get_ci_inf(x)[disp_est_ci]
       hi  <- get_ci_sup(x)[disp_est_ci]
       dg  <- digits[disp_est_ci]
-      brk <- ifelse(
-        is.na(lo) | is.na(hi), "",
-        paste0(" [", sprintf(paste0("%-0.", dg, "f"), lo), ";",
-               sprintf(paste0("%-0.", dg, "f"), hi), "]")
-      )
+      bnd <- function(b) {
+        s <- sprintf(paste0("%-0.", dg, "f"), b)
+        if (!mult_inverse) return(s)
+        i <- !is.na(b) & b > 0 & b < 1
+        s[i] <- paste0(mult_under, sprintf(paste0("%-0.", dg[i], "f"), 1 / b[i]))
+        s
+      }
+      brk <- ifelse(is.na(lo) | is.na(hi), "", paste0(" [", bnd(lo), ";", bnd(hi), "]"))
       out[disp_est_ci] <- paste0(out[disp_est_ci], brk)
     }
 
@@ -3113,7 +3219,8 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
         # Stars ride the primary token, so the others have their p-value blanked -- EXCEPT `resid`,
         # which is DERIVED from the p-value (blanking it would render NA and drop the composite).
         xi <- if (i == 1L || identical(seg$fields[i], "resid")) xc else set_pvalue(xc, NA_real_)
-        format(set_display(xi, seg$fields[i]), na = na, special_formatting = FALSE,
+        # fmt_set_display(): the RAW write. `est` / `base` are tokens here, never preset names.
+        format(fmt_set_display(xi, seg$fields[i]), na = na, special_formatting = FALSE,
                stars = isTRUE(stars) && i == 1L, pad = pad)   # the inner tokens pad too
       })
       toks <- lapply(toks, function(s) {
@@ -4139,6 +4246,14 @@ legend_break_label <- function(measure, brk, dir, is_pct, lang, policy = "ignore
   m <- measure_facts(measure, policy, scale_key)
   if (is.null(m)) return(as.character(brk))
   scale <- if (isTRUE(m$break_scale) && isTRUE(is_pct)) 100 else 1
+  # the ladder follows the CELLS: under `ratio_print = "raw"` a multiplicative threshold is written
+  # the way the cells write it -- the plain number, and the inverse below the neutral. Only where the
+  # two sides have DIFFERENT glyphs: a contribution is direction-free and reads "x2" on both sides.
+  if (isTRUE(m$threshold_mult) && !identical(m$break_under, m$break_over) &&
+      identical(getOption("tabxplor.ratio_print", "inverse"), "raw")) {
+    v <- abs(brk) * scale
+    return(legend_num(if (dir < 0L) 1 / v else v, lang))
+  }
   glyph <- if (dir < 0L) m$break_under else m$break_over
   paste0(glyph, legend_num(abs(brk) * scale, lang))
 }
@@ -4324,9 +4439,9 @@ CI_METHOD_LABELS <- list(
   ac           = function() gettext("Wald interval with Agresti-Caffo adjustment"),
   welch        = function() gettext("Welch t interval"),
   student      = function() gettext("Student t interval"),
+  ols          = function() gettext("Student t interval, pooled over the variable's levels"),
   woolf        = function() gettext("Wald interval on the log odds-ratio"),
   robust       = function() gettext("robust-Poisson (delta) interval"),
-  quasipoisson = function() gettext("quasi-Poisson interval"),
   poisson      = function() gettext("Poisson interval"),
   profile      = function() gettext("profile-likelihood interval")
   # `katz` and `wald_log` live in CI_METHOD_WORDED below: their label needs the effect word.
@@ -4335,15 +4450,31 @@ CI_METHOD_LABELS <- list(
 # CI_METHOD_WORDED -- the engines whose LABEL needs a second fact. An OR, an IRR and an RR are the same
 # interval on the same log scale, and only the effect WORD tells them apart. `woolf` needs none (a 2x2
 # log-OR is an odds ratio by construction), nor does any additive method.
+#
+# DESIGN: a label names the ESTIMAND, not the engine. Woolf's and Katz's closed forms ARE the
+# univariable model's Wald interval on the log odds- / risk-ratio -- verified to 3e-13 and 8e-09 --
+# so they must render as that, or a crude column and the model column beside it get two legend blocks
+# for one arithmetic. The closed form is named once on the merged block instead (see
+# CI_METHOD_CLOSED_FORM), which is where a reader can act on it.
 #' @keywords internal
 CI_METHOD_WORDED <- list(
-  katz = list(IRR      = function() gettext("Katz interval on the log rate-ratio"),
-              .default = function() gettext("Katz interval on the log risk-ratio")),
+  katz = list(IRR      = function() gettext("Wald interval on the log rate-ratio"),
+              .default = function() gettext("Wald interval on the log risk-ratio")),
+  # on a RATE RATIO the dispersion-scaled closed form IS the quasi-Poisson model's own Wald interval
+  # on the log rate-ratio (measured to 5e-09), so it must render as that beside the model column.
+  # Without an effect word -- a plain tab() ratio-of-means column -- it names the assumption instead.
+  quasipoisson = list(IRR      = function() gettext("Wald interval on the log rate-ratio"),
+                      .default = function() gettext("quasi-Poisson interval")),
   wald_log = list(IRR      = function() gettext("Wald interval on the log rate-ratio"),
                   OR       = function() gettext("Wald interval on the log odds-ratio"),
                   RR       = function() gettext("Wald interval on the log risk-ratio"),
                   .default = function() gettext("Wald interval on the log scale"))
 )
+
+# The engines that are a CLOSED FORM of the interval their label names. A crude column evaluates one
+# of these instead of fitting; the merged legend block says so once, so the name is not lost.
+#' @keywords internal
+CI_METHOD_CLOSED_FORM <- c(woolf = "Woolf", katz = "Katz", quasipoisson = "quasi-Poisson")
 # NOTE: potools extracts the closures above by static analysis (a gettext() literal inside a closure
 # body is statically visible), so no `if (FALSE)` anchor is needed here. Contrast REG_CHECKS
 # (R/reg-assumptions.R), whose nouns are BARE STRINGS gettext()ed dynamically -- its anchor is load-bearing.
@@ -4749,7 +4880,7 @@ legend_specs <- function(x, theme = "light") {
     policy   <- if (!is.null(plan_txt)) plan_txt$policy else plan_bg$policy
     m_txt    <- if (!is.null(plan_txt)) plan_txt$measure else NA_character_
     m_bg     <- if (!is.null(plan_bg))  plan_bg$measure  else NA_character_
-    orient   <- if (identical(get_pct_base(col), "col")) "col" else "row"
+    orient   <- if (identical(get_pct_type(col), "col")) "col" else "row"
     eff_word <- if (isTRUE(is_reg)) legend_reg_eff_word(col, meta) else NA_character_
     # the emp/model split reads the column's STORED `role` attr, not the "Emp." name prefix. Fall back
     # to "model" if an old/hand-built reg column lacks it.
@@ -4872,6 +5003,17 @@ legend_streams <- function(x, style, lang, theme = "light") {
       # reg groups so a level label ending in "[...]" is untouched.
       if (any(nzchar(purrr::map_chr(g, "role"))))
         spec$col_names <- tx_strip_outcome_suffix(spec$col_names)
+      # A crude column EVALUATES a closed form of the very interval the model column fits, which is
+      # why the two share one block (both labels name the estimand). The block names the closed form
+      # once, so the reader is told which arithmetic the observed column ran.
+      if (identical(style, "prose") && !is.na(spec$method_phrase)) {
+        cf <- unique(stats::na.omit(vapply(g, function(o)
+          unname(CI_METHOD_CLOSED_FORM[o$ci_method %||% ""]), character(1))))
+        if (length(cf) == 1L)
+          spec$method_phrase <- if (mixed)
+            gettextf("%s --- %s closed form on the observed column", spec$method_phrase, cf)
+          else gettextf("%s (%s closed form)", spec$method_phrase, cf)
+      }
       if (identical(style, "prose")) legend_tokens_prose(spec, lg, show_this)
       else                           legend_tokens_terse(spec, lg, show_this)
     })
@@ -5126,10 +5268,10 @@ tab_weight_line <- function(x, lang = NULL) {
 
 #' @keywords internal
 get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
-  # `pct_base` says which AXIS this column's reference lies on (a row percentage compares against a
+  # `pct_type` says which AXIS this column's reference lies on (a row percentage compares against a
   # reference ROW; a column percentage against a reference COLUMN), and `var_kind` says what the column
   # summarises. Together they are the two questions this function asks.
-  base        <- get_pct_base(x)
+  base        <- get_pct_type(x)
   vkind       <- fmt_var_kind(x)
   ref   <- get_ref_type(x)
   comp_all    <- get_comp_all(x)
@@ -5153,7 +5295,7 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
   comp_f <- isFALSE(comp_all)            #   then neither arm fires -> `none` (as the old case_when)
   m      <- mode[1]
 
-  # DESIGN: base boolean composition -- every branch selector (pct_base/var_kind/comp_all/ref/color/
+  # DESIGN: base boolean composition -- every branch selector (pct_type/var_kind/comp_all/ref/color/
   # totcol/refcol) is a SCALAR column attribute, so each really selects ONE arm; the arms are per-cell
   # boolean of the subsettable field masks. Subset-equivalence is relied on by format()'s .ref
   # memoization: get_reference(x[mask], mode) == get_reference(x, mode)[mask].
@@ -5232,7 +5374,7 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
 # "fmt-" for full) and by `pct_pvalue_collapse` (a pct/pvalue composite shows as "pct" in the abbr only).
 # A composite column shows its PRIMARY type.
 fmt_ptype_label <- function(x, prefix, pct_pvalue_collapse) {
-  display <- display_primary(get_display(x)) |> unique()
+  display <- fmt_resolve_scale_tokens(display_primary(get_display(x)), fmt_scale_row(x)) |> unique()
   if (pct_pvalue_collapse && identical(sort(display), c("pct", "pvalue"))) display <- "pct"
   display <- ifelse(length(display) > 1, "mixed", display)
   type    <- fmt_kind_label(x)
@@ -5487,7 +5629,7 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       wn      = vctrs::vec_arith_base(op, get_wn(x) , get_wn(y) ),
       # a sum of two ROW percentages is a percentage of the same base; a sum of two column / mean /
       # count columns is not.
-      pct     = if (same_type & ax[["pct_base"]] %in% c("row", "all", "all_tabs")) {
+      pct     = if (same_type & ax[["pct_type"]] %in% c("row", "all", "all_tabs")) {
         tidyr::replace_na(vctrs::vec_arith_base(op, get_pct(x), get_pct(y)), NA_real_)
       } else {
         rep_NA_real
@@ -5593,7 +5735,7 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
   # `.x`. The scale is read off the same list, not through a second getter call.
   am   <- fmt_attrs_of(.x)
   scl  <- am[["scale"]]
-  base <- am[["pct_base"]]
+  base <- am[["pct_type"]]
   if (!is.na(scl) && scl == "mixed") warning(
     "operation ", .fn,
     " within a variable mixing different types of percentages"

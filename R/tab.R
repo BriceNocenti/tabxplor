@@ -625,7 +625,7 @@ resolve_col_measures <- function(spec, numeric_col, pct_col, built) {
 finalize_one_col <- function(col, spec) {
   built <- get_color(col)
   if (built %in% c("", "no")) return(col)                  # the pipeline did not color this column
-  measures <- resolve_col_measures(spec, fmt_var_kind(col) != "pct", get_pct_base(col) != "none",
+  measures <- resolve_col_measures(spec, fmt_var_kind(col) != "pct", get_pct_type(col) != "none",
                                    built)
   if (is.null(measures)) return(col)
   if (length(measures) == 1L && measures %in% c("", "no")) return(col)
@@ -1944,7 +1944,7 @@ tab_transpose <- function(tabs, name = NULL) {
   rep_name <- if (length(rep_name) > 0) rep_name[[1]] else fmtc[[1]]
   rep_attrs <- purrr::set_names(
     lapply(fmt_col_attrs, function(a) attr(tabs[[rep_name]], a, exact = TRUE)), fmt_col_attrs)
-  old_base <- if (is.null(rep_attrs$pct_base)) "row" else rep_attrs$pct_base
+  old_base <- if (is.null(rep_attrs$pct_type)) "row" else rep_attrs$pct_type
   new_base <- switch(old_base, row = "col", col = "row", old_base)
 
   if (is.null(name)) name <- if (!is.na(old_col_var)) old_col_var else "variables"
@@ -1963,7 +1963,7 @@ tab_transpose <- function(tabs, name = NULL) {
   for (nm in new_fmtc) {
     col <- wide[[nm]]
     for (a in fmt_col_attrs) attr(col, a) <- rep_attrs[[a]]    # restore uniform col_var attributes
-    col <- set_pct_base(col, new_base)                        # row % <-> col %
+    col <- set_pct_type(col, new_base)                        # row % <-> col %
     col <- set_col_var(col, if (merged) unname(src_row_var[[nm]]) else row_var)
     col <- as_totcol(col, FALSE)
     col <- as_refcol(col, FALSE)

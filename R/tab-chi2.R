@@ -327,7 +327,7 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
         "all_pct" = c("all", "all_tabs"))
       want_counts <- color[1] %in% c("auto", "all")
       color_apply <- purrr::keep(fmt_nms, function(nm)
-        get_pct_base(tabs[[nm]]) %in% color_condition ||
+        get_pct_type(tabs[[nm]]) %in% color_condition ||
           (want_counts && fmt_var_kind(tabs[[nm]]) == "count"))
     }
   }

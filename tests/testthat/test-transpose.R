@@ -27,7 +27,7 @@ testthat::test_that("transpose of a row% table == a native col% table (structure
   # axis flags per fmt column
   for (nm in names(tr)[purrr::map_lgl(tr, is_fmt)]) {
     testthat::expect_identical(get_scale(tr[[nm]]),    get_scale(native[[nm]]))
-    testthat::expect_identical(get_pct_base(tr[[nm]]), get_pct_base(native[[nm]]))
+    testthat::expect_identical(get_pct_type(tr[[nm]]), get_pct_type(native[[nm]]))
     testthat::expect_identical(get_col_var(tr[[nm]]), get_col_var(native[[nm]]))
     testthat::expect_identical(is_totcol(tr[[nm]]),  is_totcol(native[[nm]]))
     testthat::expect_identical(is_refcol(tr[[nm]]),  is_refcol(native[[nm]]))

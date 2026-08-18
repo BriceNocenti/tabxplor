@@ -238,7 +238,7 @@ test_that("poisson empirical: Obs_rate (ratio colour) + Obs_IRR", {
                                 cleannames = FALSE))
   expect_true(all(c("Obs_rate", "Obs_IRR") %in% names(t)))
   expect_identical(get_color(t[["Obs_rate"]]), "ratio")
-  expect_identical(get_pct_base(t[["Obs_IRR"]]), "row")
+  expect_identical(get_pct_type(t[["Obs_IRR"]]), "row")
 })
 
 test_that("Phase h: quasipoisson empirical rides the poisson crude path (Obs_rate + Obs_IRR)", {
@@ -407,4 +407,48 @@ test_that("change A: adjusted % coheres with the AME; unadjusted prediction == O
   unadj <- ap$estimate; names(unadj) <- as.character(ap$race)
   emp   <- get_pct(t[["Obs_%"]])[race_rows]; names(emp) <- rl
   expect_equal(emp[names(unadj)], unadj, tolerance = 1e-6)
+})
+
+# === the crude interval IS the univariable model's, under the table's own basis =====================
+#
+# Unweighted that model is lm / glm and its interval is MODEL-BASED (one dispersion pooled over the
+# predictor's levels); weighted it is svyglm and its interval is the SANDWICH, which the per-group
+# forms reproduce. The pairwise forms this replaced were right in NEITHER basis on a k > 2 predictor.
+
+test_that("gaussian Obs_diff == the univariable lm coefficient CI on a 3-LEVEL predictor", {
+  skip_if_not_installed("broom")
+  d <- tidyr::drop_na(forcats::gss_cat[, c("tvhours", "race", "age")])
+  d$race <- forcats::fct_drop(d$race)
+  t  <- tab_reg(d, "tvhours", c("race", "age"), family = "gaussian", empirical = TRUE,
+                cleannames = FALSE)
+  oc <- t[["Obs_diff"]]
+  is_race <- as.character(t$var) == "race" & !is.na(get_ci_inf(oc))
+  ref <- stats::confint(stats::lm(tvhours ~ race, data = d))[-1, , drop = FALSE]
+  expect_equal(get_ci_inf(oc)[is_race], unname(ref[, 1]), tolerance = 1e-8)
+  expect_equal(get_ci_sup(oc)[is_race], unname(ref[, 2]), tolerance = 1e-8)
+  expect_identical(unique(get_ci_method(oc)), "ols")     # and it says which interval it ran
+})
+
+test_that("poisson Obs_IRR == the univariable quasi-Poisson CI on a 3-LEVEL predictor", {
+  skip_if_not_installed("broom")
+  d <- tidyr::drop_na(forcats::gss_cat[, c("tvhours", "race", "age")])
+  d <- d[d$tvhours > 0, ]; d$race <- forcats::fct_drop(d$race)
+  t  <- suppressWarnings(tab_reg(d, "tvhours", c("race", "age"), family = "poisson",
+                                 empirical = TRUE, cleannames = FALSE))
+  oc <- t[["Obs_IRR"]]
+  is_race <- as.character(t$var) == "race" & !is.na(get_ci_inf(oc))
+  fit <- stats::glm(tvhours ~ race, data = d, family = stats::quasipoisson())
+  ci  <- exp(stats::confint.default(fit))[-1, , drop = FALSE]
+  expect_equal(get_ci_inf(oc)[is_race], unname(ci[, 1]), tolerance = 5e-3)
+  expect_identical(unique(get_ci_method(oc)), "quasipoisson")
+})
+
+test_that("a WEIGHTED table takes the sandwich twin instead", {
+  skip_if_not_installed("broom")
+  d <- tidyr::drop_na(forcats::gss_cat[, c("tvhours", "race", "age")])
+  d$race <- forcats::fct_drop(d$race)
+  set.seed(1); d$w <- stats::runif(nrow(d), 0.3, 3)
+  t <- suppressWarnings(tab_reg(d, "tvhours", c("race", "age"), family = "gaussian",
+                                wt = "w", empirical = TRUE, cleannames = FALSE))
+  expect_identical(unique(get_ci_method(t[["Obs_diff"]])), "welch")
 })

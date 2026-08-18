@@ -347,18 +347,18 @@ Afficher les intervalles de confiance de la **différence** avec une référence
 gss_simple |>
   dplyr::filter(year == "2012") |> # n=1 974
   tab(race, party3, pct = "row", color = TRUE, color_signif = "guaranteed_effect",
-      display = "num_ci" # "{pct} {ci}"
+      display = "base_ci" # "{base} {ci}"
   )
 ```
 
-`display = "num_ci"` affiche la principale quantitée, pourcentage ou moyenne, suivie de son intervalle de confiance. 
+`display = "base_ci"` affiche la principale quantité, pourcentage ou moyenne, suivie de son intervalle de confiance : `{base}` désigne « le niveau qu'affiche cette colonne », si bien qu'un seul appel convient à un mélange de facteurs et de variables numériques. 
 
 Il est possible d’ajouter des étoiles de significativité avec `stars = TRUE`, soit en plus des couleurs, soit à leur place. Elles racontent la même histoire que les intervalles de confiance de la différence avec la référence (couleur), mais pour différents seuils de confiance (99 %, 95 %, 90 %) :
 
 ```{r, echo = TRUE}
 gss_simple |>
   dplyr::filter(year == "2012") |> # n=1 974
-  tab(rincome, c(party3, tvhours), pct = "row", display = "num_ci", stars = TRUE)
+  tab(rincome, c(party3, tvhours), pct = "row", display = "base_ci", stars = TRUE)
 ```
 
 **Afficher deux nombres dans une même case.** `display` ne sert pas qu'aux intervalles de confiance : il accepte un **gabarit `{}`** qui combine n'importe quels champs de la case. Par exemple, `display = "{pct} ({diff})"` imprime chaque pourcentage suivi de sa différence à la référence entre parenthèse, et `"{pct} (n={n})"` le fait suivre de l'effectif non pondéré :
@@ -579,8 +579,8 @@ Tout tableau coloré répond à trois questions :
 Les méthodes d'intervalle alternatives tiennent dans UN seul argument, `ci_method` — un vecteur nommé, partiel comme `ref` ou `pct` : un type d'intervalle que vous ne nommez pas garde sa méthode par défaut (voir `?tab`) :
 
 - `ci_method = c(diff = "ac")` (Agresti-Caffo) ou `"wald"` pour une différence de pourcentages ;
-- `ci_method = c(mean_diff = "student")` (à variance commune, l'intervalle à deux groupes d’une regression linéaire) pour une différence de moyennes ;
-- `ci_method = c(mean_ratio = "quasipoisson")` ou `"poisson"` pour un rapport de moyennes.
+- `ci_method = c(mean_diff = "student")` (les deux groupes comparés à variance commune, un test *t* à deux échantillons) ou `"ols"` (variance commune à **tous** les niveaux de la variable — l'intervalle qu'une régression linéaire donne à ce coefficient) pour une différence de moyennes ;
+- `ci_method = c(mean_ratio = "quasipoisson")` (mise à l'échelle par la dispersion qu'une régression quasi-Poisson estime sur tous les niveaux — l'intervalle de cette régression) ou `"poisson"` pour un rapport de moyennes.
 - Plusieurs à la fois : `ci_method = c(cell = "beta", diff = "ac")`.
 - Les intervalles du risque relatif (Katz) et du rapport de cotes (Woolf) n'ont pas d'alternative : ce n'est donc pas un choix.
 - Une **différence** de moyennes est, par défault, **standardisée** : les seuils de couleur `mean_diff` se lisent en unités d'écart-type (Δ de Glass, différence divisée par l'écart-type de la référence), sauf si l'utilisateur fournit une échelle de seuils personnalisée avec `set_color_breaks(mean_diff = c(100, 200, 500))`.

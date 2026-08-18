@@ -109,7 +109,7 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
                                   cleannames = FALSE))
   col <- t1[["Model_IRR"]]
 
-  expect_identical(get_pct_base(col), "row")
+  expect_identical(get_pct_type(col), "row")
   expect_identical(get_display(col)[1], "or")
   expect_identical(get_scale(col), "odds_ratio")
 
@@ -341,7 +341,7 @@ test_that("grouped binomial (trials=) matches glm(cbind(s, q-s)); OR fmt shape",
                                   cleannames = FALSE))
   col <- t1[["Model_OR"]]
 
-  expect_identical(get_pct_base(col), "row")
+  expect_identical(get_pct_type(col), "row")
   expect_identical(get_display(col)[1], "or")
   expect_identical(get_scale(col), "odds_ratio")
 
@@ -567,7 +567,7 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
   # one OR column per non-reference outcome category, "vs <ref>" in the label
   expect_true(all(c("Dem vs Ind", "Rep vs Ind") %in% names(t1)))
   col1 <- t1[["Dem vs Ind"]]
-  expect_identical(get_pct_base(col1), "row")
+  expect_identical(get_pct_type(col1), "row")
   expect_identical(get_display(col1)[1], "or")
   expect_identical(get_scale(col1), "odds_ratio")
 
@@ -614,7 +614,7 @@ test_that("tab_reg() ordinal cumulative OR / CI / p match MASS::polr; single col
   t1  <- suppressWarnings(tab_reg(d, "spectrum", c("race", "age"),
                                   family = "ordinal", cleannames = FALSE))
   col <- t1[["Model_OR"]]
-  expect_identical(get_pct_base(col), "row")
+  expect_identical(get_pct_type(col), "row")
   expect_identical(get_display(col)[1], "or")
   expect_identical(get_scale(col), "odds_ratio")
 
@@ -709,7 +709,7 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
                  cleannames = FALSE)
   col <- t1[["Model_AME"]]
 
-  expect_identical(get_pct_base(col), "row")
+  expect_identical(get_pct_type(col), "row")
   expect_identical(get_scale(col), "points")   # a binomial AME is a risk difference, in points
   expect_identical(get_color(col), "difference")
 
@@ -881,7 +881,7 @@ test_that("MER-at-reference (binomial): effect/prediction/CI match marginaleffec
   d   <- reg_data()
   t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "at_reference", multiplier = 1, cleannames = FALSE)
   col <- t1[["Model_MER"]]                           # the label switches AME -> MER at reference
-  expect_identical(get_pct_base(col), "row")
+  expect_identical(get_pct_type(col), "row")
 
   dm <- d |> dplyr::filter(!is.na(married), !is.na(race), !is.na(age))
   dm$race    <- forcats::fct_drop(dm$race)

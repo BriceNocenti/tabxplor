@@ -5,9 +5,11 @@
 #   changes a number.
 # KEY CONSTRAINTS:
 #   - display_write_col() is THE per-column template writer, shared by build-time `tab(display =)`
-#     and post-hoc `set_display(col, "num_ci")`. It refuses to print one geometry's estimate beside
+#     and post-hoc `set_display(col, "base_ci")`. It refuses to print one geometry's estimate beside
 #     another's bracket, but a LEVEL names no comparison and so constrains the bracket not at all --
 #     "48% [-3;+4]" is tabxplor's flagship cell, not a mismatch.
+#   - DISPLAY_PRESETS + display_resolve() are the ONE named-layout table, read by tab() and by
+#     tab_reg() alike, so a display learnt on a crosstab means the same on a regression.
 #   - A token whose field is empty renders VOID and the note names the argument that would fill it;
 #     it never silently substitutes the column's own primary field.
 #   - WARNING: display_write_col()'s across() callback must stay a NAMED function -- dplyr inlines
@@ -19,13 +21,8 @@
 #' @keywords internal
 #' @noRd
 tab_apply_display <- function(tabs, display) {
-  if (is.null(display) || length(display) == 0L) return(tabs)
-  ds <- display[[1]]
-  # "auto" is the jamovi ComboBox's idle value, and means what NULL / "" / "no" mean here.
-  if (is.na(ds) || ds %in% c("", "no", "auto")) return(tabs)
-  # A bare token is the same request as its one-field template, so accept both spellings.
-  if (ds %in% DISPLAY_BARE_TOKENS) ds <- paste0("{", ds, "}")
-  ds <- if (identical(ds, "num_ci")) ds else validate_display_template(ds)
+  ds <- display_resolve(display)
+  if (is.null(ds)) return(tabs)
   missing_tok <- character()
   write_col <- function(col) {
     r <- display_write_col(col, ds)
@@ -39,13 +36,12 @@ tab_apply_display <- function(tabs, display) {
 }
 
 # Returns the column, plus the fields empty in the WHOLE column (only the table-level caller can
-# note those once). `tmpl` is a validated {} template, or the type-adaptive alias "num_ci":
-# "{pct} {ci}" on a percentage column, "{mean} {ci}" on a mean one, resolved per column.
+# note those once). `tmpl` is a validated {} template (a preset is already resolved to one). Per-
+# column adaptation needs no branch here: "{base} {ci}" IS what "each value with its interval" means,
+# and each column answers `{base}` with its own level field.
 #' @keywords internal
 #' @noRd
 display_write_col <- function(col, tmpl) {
-  if (identical(tmpl, "num_ci"))
-    tmpl <- paste0("{", if (identical(fmt_var_kind(col), "mean")) "mean" else "pct", "} {ci}")
   fields <- parse_display_template(tmpl)$fields
   # DESIGN: a ONE-FIELD "composite" must render as the pipeline's own bare token -- the composite
   # renderer calls format(special_formatting = FALSE), dropping the odds ratio's 1/x form and its
@@ -63,12 +59,12 @@ display_write_col <- function(col, tmpl) {
   # leaves it a bare `pct`). The note fires only for a field empty in the whole column.
   missing <- character()
   for (f in fields) {
-    have <- !is.na(get_num(set_display(col, f)))
+    have <- !is.na(get_num(fmt_set_display(col, f)))
     if (all(!have[elig])) missing <- union(missing, f)
     elig <- elig & have
   }
   d[elig] <- bare
-  list(col = set_display(col, d), missing = missing)
+  list(col = fmt_set_display(col, d), missing = missing)
 }
 
 # fmt_blank_fields() -- the helper rows / columns copy a real column and re-display it, so every
@@ -85,9 +81,9 @@ fmt_blank_fields <- function(col, pct = FALSE) {
 # =====================================================================================================
 # DISPLAY_TOKENS -- THE per-token relation of the display grammar (a token names what a cell PRINTS).
 #
-# ⚠ ROW ORDER IS A CONTRACT. Rows 1-12 are the user-typeable fields in the order
-# validate_display_template()'s "Valid fields" message and ?tab print them; rows 1-8 are additionally
-# the bare tokens. Both derive by FILTERING, so the order is preserved by construction.
+# ⚠ ROW ORDER IS A CONTRACT. The `user` rows come first, in the order validate_display_template()'s
+# "Valid fields" message and ?tab print them; the `bare` ones are the head of that run. Both derive by
+# FILTERING, so the order is preserved by construction.
 #
 # ⚠ `OR` / `OR_pct` are ROWS, not aliases of `or` / `or_pct`: display_primary() returns a display
 # verbatim and fmt_display_shows() compares the RAW value, so aliasing changes what a template matches.
@@ -117,6 +113,11 @@ fmt_blank_fields <- function(col, pct = FALSE) {
 #   geometry   which effect geometry the token NAMES, for the mismatch refusal. NA = it names none:
 #              `ci` IS the bracket, and `ctr`/`var`/`resid`/`obs` are not estimates of a contrast.
 #   comparison the colour MEASURE the token names, for the `color` -> `display` -> difference chain.
+#   min_digits the fewest decimals this token is READABLE at, applied only when the cell asks for 0:
+#              a ratio read against x1.2 / x1.5 thresholds is meaningless at "1", a standardized
+#              residual against +/-2 / +/-3 unreadable as "-2". NA = the cell's own `digits` stands.
+#              WARNING: it CANNOT be stored on the cell instead -- one `digits` serves every display
+#              of that cell, and a percentage wanting 0 shares it with the ratio wanting 2.
 #   source     the argument that would fill an empty field, for the void note. NA where it always
 #              exists (pct / n / wn), which display_note_empty() drops.
 #   alias      this row is not a token but a legacy SPELLING of one, resolved by display_primary().
@@ -128,16 +129,16 @@ fmt_blank_fields <- function(col, pct = FALSE) {
 #' @noRd
 .dtok <- function(field = NA_character_, settable = TRUE, user = FALSE, bare = FALSE,
                   value_cell = FALSE, footer = FALSE, colour = TRUE, geometry = NA_character_,
-                  comparison = NA_character_, source = NA_character_, alias = NA_character_,
-                  doc = NA_character_)
+                  comparison = NA_character_, min_digits = NA_integer_, source = NA_character_,
+                  alias = NA_character_, doc = NA_character_)
   list(field = field, settable = settable, user = user, bare = bare, value_cell = value_cell,
        footer = footer, colour = colour, geometry = geometry, comparison = comparison,
-       source = source, alias = alias, doc = doc)
+       min_digits = min_digits, source = source, alias = alias, doc = doc)
 
 #' @keywords internal
 #' @noRd
 DISPLAY_TOKENS <- list(
-  # --- the twelve a user may type, IN THE ORDER THEY ARE LISTED TO THEM -------------------------
+  # --- the ones a user may type, IN THE ORDER THEY ARE LISTED TO THEM ---------------------------
   pct     = .dtok("pct" , user = TRUE, bare = TRUE, value_cell = TRUE, geometry = "level",
                   doc = 'the percentage'),
   n       = .dtok("n"   , user = TRUE, bare = TRUE, value_cell = TRUE, geometry = "level",
@@ -147,17 +148,31 @@ DISPLAY_TOKENS <- list(
   mean    = .dtok("mean", user = TRUE, bare = TRUE, value_cell = TRUE, geometry = "level",
                   source = 'a numeric col_var',
                   doc = 'the mean'),
+  # the two SCALE-RELATIVE tokens: they name a ROLE, and each column answers with the token it has
+  # always rendered (EST_SCALES' `est_display` / `base_display`, resolved by
+  # fmt_resolve_scale_tokens()). That is what makes one display template work on every family.
+  est     = .dtok(         user = TRUE, bare = TRUE, value_cell = TRUE,
+                  doc = paste('the estimate, whatever this column estimates --- an odds ratio, a',
+                              'risk difference, a coefficient, a percentage. The one token that',
+                              'means the same thing on every table')),
+  base    = .dtok(         user = TRUE, bare = TRUE, value_cell = TRUE, geometry = "level",
+                  source = 'a column that has a level beside its estimate',
+                  doc = paste('the level the estimate sits on: the percentage, the mean or the',
+                              'count. On a plain percentage table it is the same number as',
+                              '`est`; beside a regression effect it is the adjusted prediction')),
   diff    = .dtok("diff" , user = TRUE, bare = TRUE, geometry = "difference",
                   comparison = "difference",
                   source = 'a `ref` to compare to, and pct = "row" / "col"',
                   doc = 'the difference from the reference'),
   ratio   = .dtok("ratio", user = TRUE, bare = TRUE, geometry = "ratio", comparison = "ratio",
+                  min_digits = 2L,
                   source = 'a `ref` to compare to, and pct = "row" / "col"',
                   doc = 'the ratio to the reference (relative risk, or a ratio of means)'),
   ci      = .dtok("ci"   , user = TRUE, bare = TRUE,
                   source = 'ci = "ref"  (or ci = "cell" for each cell\'s own interval)',
                   doc = 'the confidence interval of whatever the column compares'),
   or      = .dtok("or"   , user = TRUE, bare = TRUE, geometry = "ratio", comparison = "odds_ratio",
+                  min_digits = 2L,
                   source = 'pct = "row" / "col"  (an odds ratio needs a percentage base)',
                   doc = 'the odds ratio'),
   ctr     = .dtok("ctr"  , user = TRUE,
@@ -165,7 +180,7 @@ DISPLAY_TOKENS <- list(
                   doc = "the cell's contribution to the chi-squared"),
   var     = .dtok("var"  , user = TRUE, source = 'a numeric col_var',
                   doc = 'the variance'),
-  resid   = .dtok(          user = TRUE, settable = FALSE,
+  resid   = .dtok(          user = TRUE, settable = FALSE, min_digits = 1L,
                   source = 'test = TRUE  (the residual comes from the chi-squared)',
                   doc = paste('the adjusted standardized residual -- whether the cell departs from',
                               'independence. Derived from the p-value and the sign of `ctr`, so it',
@@ -174,18 +189,27 @@ DISPLAY_TOKENS <- list(
                   source = 'tab_reg(empirical = TRUE)  (an observed effect to compare the model to)',
                   doc = paste('the OBSERVED (crude) effect a modelled one is compared to.',
                               '`tab_reg()` tables only')),
-  # --- the ten the PIPELINE writes; never user-typed ---------------------------------------------
+  # DERIVED, like `resid`: the gap IS fmt_adjustment_score(), the number color = "adjustment" grades,
+  # so a printed gap and its shade cannot disagree. Read-only -- nothing to write a gap back into.
+  gap     = .dtok(         user = TRUE, settable = FALSE,
+                  source = 'tab_reg(empirical = TRUE)  (a model effect and its observed counterpart)',
+                  doc = paste('how far adjustment moved the effect: the gap between the modelled',
+                              'estimate and its observed counterpart, on the estimate\'s own scale.',
+                              'What `color = "adjustment"` grades --- readable in print and Excel,',
+                              'not only in an html tooltip')),
+  # --- the ones the PIPELINE writes; never user-typed --------------------------------------------
   pct_ci  = .dtok("pct"   , doc = 'the percentage, with its interval printed beside it'),
   mean_ci = .dtok("mean"  , doc = 'the mean, with its interval printed beside it'),
-  or_pct  = .dtok("or"    , doc = 'the odds ratio, with its percentage'),
-  OR      = .dtok("or"    , doc = 'a legacy spelling of `or`, rendered identically'),
-  OR_pct  = .dtok("or"    , doc = 'a legacy spelling of `or_pct`, rendered identically'),
+  or_pct  = .dtok("or"    , min_digits = 2L, doc = 'the odds ratio, with its percentage'),
+  OR      = .dtok("or"    , min_digits = 2L, doc = 'a legacy spelling of `or`, rendered identically'),
+  OR_pct  = .dtok("or"    , min_digits = 2L, doc = 'a legacy spelling of `or_pct`, rendered identically'),
   pvalue  = .dtok("pvalue", footer = TRUE,           # footer, yet deliberately coloured
                   doc = "a test's p-value"),
   coef    = .dtok("diff"  , doc = 'a regression coefficient, on its own scale'),
   gof     = .dtok("diff"  , footer = TRUE, colour = FALSE,
                   doc = 'a model-fit statistic (N, R2, AIC, BIC, dispersion)'),
-  est_ci  = .dtok(          doc = paste('the estimate with a visible interval, reading whichever',
+  est_ci  = .dtok(          min_digits = 2L,
+                  doc = paste('the estimate with a visible interval, reading whichever',
                                         'field the column\'s scale centres on')),
   blank   = .dtok(          settable = FALSE, footer = TRUE, colour = FALSE,
                   doc = 'nothing: a cell masked by `n_min`'),
@@ -241,6 +265,50 @@ DISPLAY_COMPARISON     <- .dtok_map("comparison")
 #' @keywords internal
 #' @noRd
 DISPLAY_FIELD_SOURCE   <- .dtok_map("source")
+#' @keywords internal
+#' @noRd
+DISPLAY_MIN_DIGITS     <- {
+  m <- vapply(DISPLAY_TOKENS, function(r) as.integer(r$min_digits %||% NA_integer_), integer(1))
+  m[!is.na(m)]
+}
+
+
+# =====================================================================================================
+# DISPLAY_PRESETS -- the named cell LAYOUTS, one table read by BOTH producers.
+#
+# A preset is a name for a template, nothing more: `tab()` and `tab_reg()` resolve the same names to
+# the same layouts, so a display learnt on a crosstab means the same thing on a regression. They are
+# spelt with the scale-relative tokens, which is what makes them work on every family and on both a
+# crude and a modelled column -- there is no per-family preset left.
+#
+# The WORD ORDER is the order in the cell: `est_base` prints "1/1.63 (31.5%)", `base_est` the reverse.
+#
+# `est_ci` resolves to a TOKEN rather than a template: a visible interval is a rendering (inverted
+# bounds, the reference row's empty bracket), not two fields pasted together.
+#' @keywords internal
+#' @noRd
+DISPLAY_PRESETS <- c(
+  est      = "{est}",
+  est_ci   = "est_ci",
+  est_base = "{est} ({base})",
+  base_est = "{base} ({est})",
+  base     = "{base}",
+  base_ci  = "{base} {ci}"
+)
+
+# THE display boundary, shared by tab(display =), tab_reg(display =) and set_display().
+# Returns NULL for "leave every cell's own token alone" (the default, and the jamovi ComboBox's idle
+# value), a preset's template, "{tok}" for a bare token name, or the validated template as typed.
+#' @keywords internal
+#' @noRd
+display_resolve <- function(display) {
+  if (is.null(display) || length(display) == 0L) return(NULL)
+  d <- as.character(display)[[1]]
+  if (is.na(d) || d %in% c("", "no", "auto")) return(NULL)
+  if (d %in% names(DISPLAY_PRESETS)) return(unname(DISPLAY_PRESETS[[d]]))
+  if (d %in% DISPLAY_BARE_TOKENS) return(paste0("{", d, "}"))
+  validate_display_template(d)
+}
 
 
 # --- the GENERATED help section -----------------------------------------------------------------
@@ -305,7 +373,7 @@ display_refuse_mismatch <- function(col, fields, tmpl) {
   if (identical(have, want)) return(invisible(NULL))
   # WARNING: a LEVEL names no comparison, so it constrains the bracket not at all -- "48% [-3;+4]"
   # (a percentage beside the difference interval it was tested on) is tabxplor's flagship cell, and
-  # `display = "num_ci"` is exactly that template. The class this refusal closes is TWO EFFECT
+  # `display = "base_ci"` is exactly that template. The class this refusal closes is TWO EFFECT
   # geometries disagreeing, never a level.
   if ("level" %in% c(have, want)) return(invisible(NULL))
   cli::cli_abort(c(
@@ -361,7 +429,7 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
     # cols, with pct = "row"
     last_totcols_pct_rows <- tabs_text |>
       purrr::imap_chr(
-        ~ dplyr::last(names(.x)[is_totcol(.x) & get_pct_base(.x) == "row" &
+        ~ dplyr::last(names(.x)[is_totcol(.x) & get_pct_type(.x) == "row" &
                                   is_real_col_var(get_col_var(.x)) &
                                   !is_placeholder_var(tab_get_vars(.)$row_var)]) |>
           purrr::set_names(.y)
@@ -382,7 +450,7 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
                   dplyr::last(get_wn(!!rlang::sym(.y)),
                   )
               ) |>
-                set_scale("level_pct") |> set_pct_base("col") |>
+                set_scale("level_pct") |> set_pct_type("col") |>
                 as_totcol(FALSE) |> set_color("no") |>
                 # a whole-table helper: no col_var, and its `role` says what it is
                 set_col_var("") |> set_role("pct") |>
@@ -418,7 +486,7 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
 
 
       last_totrow_pct_cols <- tabs_text |>
-        purrr::map(~ names(.)[get_pct_base(.) == "col" & is_real_col_var(get_col_var(.)) &
+        purrr::map(~ names(.)[get_pct_type(.) == "col" & is_real_col_var(get_col_var(.)) &
                                  names(.) != "col_pct"] )
       last_totrow_pct_cols_no_empty <- purrr::map_lgl(last_totrow_pct_cols, ~ length(.) > 0)
 
@@ -522,7 +590,7 @@ tab_is_or_display <- function(tab) {
 # with differing bases) defeats that padding. On an OR/RRR table the "100%" goes, leaving `n={n}`.
 # WARNING: runs BEFORE tab_pvalue_lines(), so the Total column has only data/total cells.
 tab_fold_addn_incell <- function(tab) {
-  tot_nm <- dplyr::last(names(tab)[is_totcol(tab) & get_pct_base(tab) == "row" &
+  tot_nm <- dplyr::last(names(tab)[is_totcol(tab) & get_pct_type(tab) == "row" &
                                      is_real_col_var(get_col_var(tab))])
   if (length(tot_nm) != 1 || is.na(tot_nm)) return(dplyr::select(tab, -tidyselect::any_of("n")))
   is_or <- tab_is_or_display(tab)
@@ -544,7 +612,7 @@ tab_fold_addn_incell <- function(tab) {
 tab_or_total_col <- function(tab, backend, add_n_on) {
   if (!is.data.frame(tab) || !tab_is_or_display(tab)) return(tab)
   tot_nm <- names(tab)[purrr::map_lgl(tab, ~ is_fmt(.) && is_totcol(.) &&
-                                        get_pct_base(.) == "row" && is_real_col_var(get_col_var(.)))]
+                                        get_pct_type(.) == "row" && is_real_col_var(get_col_var(.)))]
   if (!length(tot_nm)) return(tab)
   if (identical(backend, "xl") || !isTRUE(add_n_on)) {
     tab <- dplyr::select(tab, -tidyselect::all_of(tot_nm))
@@ -569,7 +637,7 @@ tab_apply_n_min <- function(tab, n_min) {
   fmt_names <- names(tab)[purrr::map_lgl(tab, is_fmt)]
   if (length(fmt_names) == 0) return(tab)
 
-  base   <- purrr::map_chr(tab[fmt_names], get_pct_base)
+  base   <- purrr::map_chr(tab[fmt_names], get_pct_type)
   vkind  <- purrr::map_chr(tab[fmt_names], fmt_var_kind)
   row_like <- base %in% c("row", "all") | vkind == "mean"
   totcol <- purrr::map_lgl(tab[fmt_names], is_totcol)
@@ -652,8 +720,11 @@ display_switch_tokens <- function(fn) {
 
 local({
   declared <- names(DISPLAY_TOKENS)[.dtok_real]
-  read     <- display_switch_tokens(get_num)
-  written  <- display_switch_tokens(set_num)
+  # the scale-relative tokens are handled by the ONE resolver both maps run first, so it counts as
+  # part of each of them -- otherwise `est` / `base` would read as unhandled.
+  resolver <- display_switch_tokens(fmt_resolve_scale_tokens)
+  read     <- c(display_switch_tokens(get_num), resolver)
+  written  <- c(display_switch_tokens(set_num), resolver)
   # `n` is get_num()'s fall-through initialiser, so it never appears there as a literal.
   stopifnot(
     "every token get_num() reads must be declared in DISPLAY_TOKENS" =

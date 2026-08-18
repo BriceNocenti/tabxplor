@@ -91,7 +91,7 @@ testthat::test_that("validate_display_template() aborts on malformed / unknown {
 # === format() rendering of general + expert templates =============================
 
 testthat::test_that("an expert {diff} [{ci}] template renders both fields", {
-  x <- fmt(n = c(100L, 100L), scale = "points", pct_base = "row", pct = c(0.4, 0.6), diff = c(0.1, -0.1),
+  x <- fmt(n = c(100L, 100L), scale = "points", pct_type = "row", pct = c(0.4, 0.6), diff = c(0.1, -0.1),
            ci_inf = c(0.02, -0.2), ci_sup = c(0.18, -0.02), display = "diff")
   out <- format(set_display(x, "{diff} [{ci}]"))
   testthat::expect_true(all(grepl("\\[", out)))          # the [ci] literal + bracket present
@@ -99,7 +99,7 @@ testthat::test_that("an expert {diff} [{ci}] template renders both fields", {
 })
 
 testthat::test_that("stars ride the PRIMARY token, not the secondary (not doubled)", {
-  x <- fmt(n = c(100L, 100L), scale = "points", pct_base = "row", pct = c(0.4, 0.6),
+  x <- fmt(n = c(100L, 100L), scale = "points", pct_type = "row", pct = c(0.4, 0.6),
            diff = c(0.1, -0.1), ci_inf = c(0.02, -0.2), ci_sup = c(0.18, -0.02),
            pvalue = c(0.0005, 0.03), display = "pct")
   # stars are opt-in in format(): request them explicitly (they show at the main display).
@@ -111,7 +111,7 @@ testthat::test_that("stars ride the PRIMARY token, not the secondary (not double
 })
 
 testthat::test_that("a composite cell missing a field is left as the plain primary", {
-  x <- fmt(n = c(10L, NA_integer_), scale = "level_pct", pct_base = "row", pct = c(0.4, 0.6), display = "pct")
+  x <- fmt(n = c(10L, NA_integer_), scale = "level_pct", pct_type = "row", pct = c(0.4, 0.6), display = "pct")
   out <- format(set_display(x, "{pct} ({n})"))
   testthat::expect_identical(out[1], "40% (10)")
   testthat::expect_identical(out[2], "60%")        # n is NA -> plain primary kept, no "(NA)"
@@ -120,7 +120,7 @@ testthat::test_that("a composite cell missing a field is left as the plain prima
 # === consumer safety: a hand-injected bad template must not crash any consumer =====
 
 testthat::test_that("every display consumer survives a hand-injected malformed template", {
-  x <- set_display(fmt(n = c(10L, 20L), scale = "level_pct", pct_base = "row", pct = c(0.4, 0.6), display = "pct"), "{bad")
+  x <- set_display(fmt(n = c(10L, 20L), scale = "level_pct", pct_type = "row", pct = c(0.4, 0.6), display = "pct"), "{bad")
   testthat::expect_no_error(format(x))
   testthat::expect_no_error(get_num(x))
   testthat::expect_no_error(set_num(x, c(1, 2)))
@@ -171,16 +171,16 @@ testthat::test_that("every exporter renders a composite table without error", {
   }
 })
 
-# === display = "num_ci": the type-adaptive "{base} {ci}" alias =====================
+# === display = "base_ci": the type-adaptive "{base} {ci}" alias =====================
 
-testthat::test_that("tab(display = 'num_ci') == '{pct} {ci}' / '{mean} {ci}' per column type", {
+testthat::test_that("tab(display = 'base_ci') == '{pct} {ci}' / '{mean} {ci}' per column type", {
   gss <- forcats::gss_cat
 
   # factors, showing the DIFFERENCE CI a significance colour computes: byte-identical to the explicit
   # "{pct} {ci}" template, and every eligible value cell renders a [lo;hi] bracket.
   t_num <- gss |>
     tab(race, marital, pct = "row", color = TRUE, color_signif = "guaranteed_effect",
-        display = "num_ci")
+        display = "base_ci")
   t_tpl <- gss |>
     tab(race, marital, pct = "row", color = TRUE, color_signif = "guaranteed_effect",
         display = "{pct} {ci}")
@@ -190,12 +190,12 @@ testthat::test_that("tab(display = 'num_ci') == '{pct} {ci}' / '{mean} {ci}' per
 
   # numeric means: "{mean} {ci}", byte-identical to the explicit template
   testthat::expect_identical(
-    format(tab(gss, race, age, ci = "cell", display = "num_ci")),
+    format(tab(gss, race, age, ci = "cell", display = "base_ci")),
     format(tab(gss, race, age, ci = "cell", display = "{mean} {ci}"))
   )
 
   # mixed factor + numeric in ONE call: each column resolves by its own type
-  t_mix <- tab(gss, race, c(marital, age), pct = "row", ci = "cell", display = "num_ci")
+  t_mix <- tab(gss, race, c(marital, age), pct = "row", ci = "cell", display = "base_ci")
   testthat::expect_identical(
     format(t_mix),
     format(tab(gss, race, c(marital, age), pct = "row", ci = "cell", display = "{pct} {ci}"))
@@ -203,23 +203,23 @@ testthat::test_that("tab(display = 'num_ci') == '{pct} {ci}' / '{mean} {ci}' per
   testthat::expect_identical(tabxplor:::fmt_var_kind(t_mix[["age"]]), "mean")
 })
 
-testthat::test_that("set_display(x, 'num_ci') == tab(display = 'num_ci') (same overlay, post-hoc)", {
+testthat::test_that("set_display(x, 'base_ci') == tab(display = 'base_ci') (same overlay, post-hoc)", {
   gss <- forcats::gss_cat
   built <- gss |>
     tab(race, marital, pct = "row", color = TRUE, color_signif = "guaranteed_effect")
-  post  <- set_display(built, "num_ci")
+  post  <- set_display(built, "base_ci")
   live  <- gss |>
     tab(race, marital, pct = "row", color = TRUE, color_signif = "guaranteed_effect",
-        display = "num_ci")
+        display = "base_ci")
   testthat::expect_identical(format(post), format(live))
   # single fmt column resolves too
   col <- built[[which(purrr::map_lgl(built, is_fmt))[2]]]
-  testthat::expect_gt(sum(grepl("\\[.*;.*\\]", format(set_display(col, "num_ci")))), 0L)
+  testthat::expect_gt(sum(grepl("\\[.*;.*\\]", format(set_display(col, "base_ci")))), 0L)
 })
 
-testthat::test_that("tab_counts(display = 'num_ci') does not abort", {
+testthat::test_that("tab_counts(display = 'base_ci') does not abort", {
   tc <- tibble::tibble(r = c("a", "a", "b"), c = c("x", "y", "x"), n = c(3, 2, 5))
-  testthat::expect_no_error(tab_counts(tc, r, c, counts = n, display = "num_ci"))
+  testthat::expect_no_error(tab_counts(tc, r, c, counts = n, display = "base_ci"))
 })
 
 # === micro-benchmark: the no-composite gate must be cheap (informational) ==========
@@ -229,4 +229,64 @@ testthat::test_that("display_primary() no-composite gate is negligible (informat
   tt <- system.time(for (i in 1:20) display_primary(d))[["elapsed"]]
   message(sprintf("display_primary() x20 on 1e6 no-composite cells: %.3fs", tt))
   testthat::succeed()
+})
+
+# === the scale-relative tokens and the shared preset table ==========================
+
+testthat::test_that("{est} / {base} resolve to the token each COLUMN renders them as", {
+  gss <- forcats::gss_cat
+  # a plain percentage column estimates a percentage; asked for a difference CI it estimates the
+  # DIFFERENCE, and `{est}` follows -- that is what "whatever this column estimates" means.
+  lvl <- tab(gss, race, marital, pct = "row")
+  eff <- tab(gss, race, marital, pct = "row", ci = "ref")
+  lv  <- lvl[[which(purrr::map_lgl(lvl, is_fmt))[1]]]
+  ef  <- eff[[which(purrr::map_lgl(eff, is_fmt))[1]]]
+  testthat::expect_identical(get_num(set_display(lv, "est")),  get_pct(lv))
+  testthat::expect_identical(get_num(set_display(ef, "est")),  get_diff(ef))
+  testthat::expect_identical(get_num(set_display(ef, "base")), get_pct(ef))
+  # a numeric column answers `{base}` with its mean
+  num <- tab(gss, race, age)
+  nc  <- num[[which(purrr::map_lgl(num, is_fmt))[1]]]
+  testthat::expect_identical(get_num(set_display(nc, "base")), get_mean(nc))
+})
+
+testthat::test_that("the preset table is ONE table, resolved the same way by both producers", {
+  testthat::expect_identical(
+    names(tabxplor:::DISPLAY_PRESETS),
+    c("est", "est_ci", "est_base", "base_est", "base", "base_ci"))
+  # idle values leave every cell's own token alone
+  for (d in list(NULL, NA_character_, "", "no", "auto"))
+    testthat::expect_null(tabxplor:::display_resolve(d))
+  testthat::expect_identical(tabxplor:::display_resolve("base_ci"), "{base} {ci}")
+  testthat::expect_identical(tabxplor:::display_resolve("est_ci"),  "est_ci")   # a token, not a template
+  testthat::expect_identical(tabxplor:::display_resolve("diff"),    "{diff}")   # a bare token
+  testthat::expect_error(tabxplor:::display_resolve("wibble"), "Unknown|Invalid")
+  # post-hoc set_display() by preset NAME == the build-time request
+  gss <- forcats::gss_cat
+  t1  <- tab(gss, race, marital, pct = "row", ci = "ref", display = "base_ci")
+  t2  <- tab(gss, race, marital, pct = "row", ci = "ref")
+  t2  <- dplyr::mutate(t2, dplyr::across(dplyr::where(is_fmt), ~ set_display(., "base_ci")))
+  testthat::expect_identical(format(t1), format(t2))
+})
+
+# === the ONE multiplicative rendering ===============================================
+
+testthat::test_that("a multiplicative cell prints its inverse below the neutral, in EVERY path", {
+  gss <- forcats::gss_cat
+  t <- tab(gss, race, marital, pct = "row", color = "OR", ci = "ref", display = "{or}")
+  co <- t[[which(purrr::map_lgl(t, is_fmt))[3]]]
+  testthat::expect_true(any(grepl("1/", format(co, special_formatting = TRUE), fixed = TRUE)))
+  # the COMPOSITE keeps it -- the defect the one rule exists to close
+  testthat::expect_true(any(grepl("1/", format(set_display(co, "{or} ({pct})")), fixed = TRUE)))
+  # so does the est_ci bracket, bounds included, and the bounds are NOT reordered
+  ec <- set_display(co, "est_ci")
+  txt <- format(ec, special_formatting = TRUE)
+  i   <- which(!is.na(get_ci_inf(ec)) & get_or(ec) < 1)[1]
+  testthat::skip_if(is.na(i))
+  testthat::expect_match(txt[i], "^1/[0-9.]+ \\[1/[0-9.]+;", perl = TRUE)
+  # the option restores the journal convention everywhere at once, cell and ladder alike
+  withr::local_options(tabxplor.ratio_print = "raw")
+  testthat::expect_false(any(grepl("1/", format(co, special_formatting = TRUE), fixed = TRUE)))
+  testthat::expect_false(any(grepl("1/", tab_color_legend(t, medium = "plain", lang = "en"),
+                                   fixed = TRUE)))
 })

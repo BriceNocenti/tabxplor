@@ -971,13 +971,13 @@ xl_write_table <- function(wb, plan, o, reg) {
 # Which axis holds the DEPENDENT variable(s)? Under pct="row" a row is a GROUP and the column
 # distribution is what is being described ("race by marital" = the distribution of race, by marital
 # status); under pct="col" the two axes swap. `pct` is not an argument here, not in `vars`, and not in
-# the `vars` attribute -- its only surviving trace on a built table is the fmt columns' `pct_base`.
+# the `vars` attribute -- its only surviving trace on a built table is the fmt columns' `pct_type`.
 # DESIGN (Phase 14l): only an all-"col" table flips. A mean and a regression coefficient have no
 # percentage base at all (`none`), so neither is directional and neither may vote;
 # a genuinely mixed row+col table falls back to the outcome-first default rather than guessing.
 #' @keywords internal
 tab_title_rows_first <- function(tabs) {
-  types <- purrr::map_chr(tabs, ~ if (is_fmt(.)) get_pct_base(.) else NA_character_)
+  types <- purrr::map_chr(tabs, ~ if (is_fmt(.)) get_pct_type(.) else NA_character_)
   dir   <- types[!is.na(types) & types %in% c("row", "col")]
   length(dir) > 0 && all(dir == "col")
 }

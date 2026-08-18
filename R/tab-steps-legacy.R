@@ -440,7 +440,7 @@ tab_pct <- function(tabs, pct = "row",
 
     if (all(pct == "no")) {
       tabs <- tabs |> dplyr::mutate(dplyr::across(
-        where(~ get_pct_base(.) != "none"),
+        where(~ get_pct_type(.) != "none"),
         ~ set_pct(., NA_real_) |> set_count_col() |>
           set_display("wn")
       ))
@@ -502,7 +502,7 @@ tab_pct <- function(tabs, pct = "row",
               tot = rlang::eval_tidy(tot_cols[[dplyr::cur_column()]])
             )) |>
               set_display(ifelse(pct_nat[[dplyr::cur_column()]] != "no", "pct", "wn")) |>
-              set_pct_base(pct_nat[[dplyr::cur_column()]]) |>
+              set_pct_type(pct_nat[[dplyr::cur_column()]]) |>
                 set_scale("level_pct")
           ))
       }
@@ -518,7 +518,7 @@ tab_pct <- function(tabs, pct = "row",
                 pct = "all_tabs",
                 tot = rlang::eval_tidy(tot_cols[[dplyr::cur_column()]])
               )) |>
-                set_display("pct") |> set_scale("level_pct") |> set_pct_base("all_tabs")
+                set_display("pct") |> set_scale("level_pct") |> set_pct_type("all_tabs")
             ))
           )
       }
@@ -567,13 +567,13 @@ tab_pct <- function(tabs, pct = "row",
 
       tabs <-
         dplyr::mutate(tabs, dplyr::across(
-          where(~ get_pct_base(.) == "col") & tidyselect::all_of(reference_cols),
+          where(~ get_pct_type(.) == "col") & tidyselect::all_of(reference_cols),
           as_refcol
         ))
 
       tabs <-
         dplyr::mutate(tabs, dplyr::across(
-          where(~ get_pct_base(.) == "row" | fmt_var_kind(.) == "mean"),
+          where(~ get_pct_type(.) == "row" | fmt_var_kind(.) == "mean"),
           ~ as_refrow(., dplyr::row_number() == 1 &
                         (comp == "tab" | (comp == "all" & is_tottab(.)) ) )
         ))
@@ -584,7 +584,7 @@ tab_pct <- function(tabs, pct = "row",
         dplyr::with_groups(
           NULL,
           ~ dplyr::mutate(., dplyr::across(
-            where(~ get_pct_base(.) %in% c("row", "col") | fmt_var_kind(.) == "mean"),
+            where(~ get_pct_type(.) %in% c("row", "col") | fmt_var_kind(.) == "mean"),
             ~ set_diff(., diff_formula(
               .,
               type = type[[dplyr::cur_column()]],
@@ -597,7 +597,7 @@ tab_pct <- function(tabs, pct = "row",
     } else {
       tabs <- tabs |>
         dplyr::mutate(dplyr::across(
-          where(~ get_pct_base(.) %in% c("row", "col") | fmt_var_kind(.) == "mean") &
+          where(~ get_pct_type(.) %in% c("row", "col") | fmt_var_kind(.) == "mean") &
             !( where(is_totcol) &
                  tidyselect::any_of(names(reference)[reference == ""]) ),
           ~ set_diff(., diff_formula(
@@ -795,7 +795,7 @@ tab_ci <- function(tabs,
   comp <- tab_validate_comp(tabs, comp = ifelse(is.null(comp), "null", comp))
   tabs <- tabs |> tab_match_comp_and_tottab(comp)
 
-  base   <- get_pct_base(tabs)
+  base   <- get_pct_type(tabs)
   vkind  <- fmt_var_kind(tabs)
   is_rm  <- base == "row" | vkind == "mean"          # the reference is a ROW
   ci_able <- vkind == "mean" | base != "none"        # a count / a coefficient carries no cell CI
@@ -908,6 +908,13 @@ tab_ci <- function(tabs,
       #   base (x_n). The reference cell's x_n is NA, so it is never compared with itself.
       kind_1 <- if (identical(ci[[nm]], "cell")) "cell" else "diff"
       vk_1   <- if (identical(tp, "mean")) "mean" else "pct"
+      # a MODEL-based mean method pools one dispersion over the whole variable, which the elementwise
+      # engines cannot see: compute it per sub-table, over the rows that are levels (ci_pool_disp()).
+      pslot <- if (identical(ci_scale[1], "ratio")) "mean_ratio" else "mean_diff"
+      pool  <- if (identical(vk_1, "mean") && identical(kind_1, "diff") &&
+                   identical(ci_method[[pslot]], CI_POOLED[[pslot]]))
+                 ci_pool_disp(n = x_n[[nm]], mean = get_mean(col), var = get_var(col),
+                              by = gid, use = !is_totrow(col), kind = pslot)
       res <- ci_dispatch(
         kind = kind_1, var_kind = vk_1, ci_scale = ci_scale[1],
         est = if (vk_1 == "mean") get_mean(col) else get_pct(col),
@@ -915,7 +922,7 @@ tab_ci <- function(tabs,
         ref = ref[[nm]], ref_var = ref_var[[nm]], ref_n = ref_n[[nm]],
         n_raw = get_tot_n(col),
         conf_level = conf_level, want_p = isTRUE(stars),
-        method = ci_method, degf = degf)
+        method = ci_method, degf = degf, pool = pool)
       ci_inf[[nm]] <- res$inf; ci_sup[[nm]] <- res$sup; pvalue[[nm]] <- res$pvalue
 
     }

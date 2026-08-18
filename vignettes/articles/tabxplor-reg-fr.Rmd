@@ -556,11 +556,12 @@ Les âges moyens empiriques, et les différences d'âge moyen par rapport à la 
 
 ```{r}
 tab(gss_simple, "race", "age", pct = "row", digits = 2, na = "drop",
-    color = "difference", ref = 1, ci_method = c(mean_diff = "student")
+    color = "difference", ref = 1, ci_method = c(mean_diff = "ols")
 ) |>
   mutate(diff = set_display(age, "diff"))
-# student : intervalles de confiance a variance commune, 
-#   pour correspondre a ceux calcules par la regression lineaire
+# ols : variance commune a TOUS les niveaux de la variable, si bien que les intervalles sont
+#   exactement ceux que la regression lineaire donne a ses coefficients
+#   ("student" ne met en commun que les deux groupes compares).
 ```
 
 
@@ -592,7 +593,7 @@ tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
 # la methode par defaut pour les intervalles de confiance 
 #   est le rapport de moyennes robuste a variance inegale ;
 #  on utilise "quasipoisson" pour correspondre a ceux calcules 
-#   par la regression quasi-poisson
+#   par la regression quasi-poisson -- une dispersion estimee sur tous les niveaux
 #   (hypothese : la variance est proportionnelle a la moyenne).
 ```
 
@@ -840,13 +841,19 @@ de tableau teste les coefficients, deux questions proches mais distinctes, et la
 
 Plusieurs arguments changent *ce que chaque case affiche*, ou *comment un prédicteur est mis à l'échelle* sans changer le modèle lui-même.
 
-**`display`** ajoute une seconde quantité entre parenthèses dans chaque case. `"ci"` affiche l'intervalle de confiance à côté de chaque estimation :
+**`display`** choisit la mise en page de la case — les mêmes dispositions nommées que `tab()`, dans la même grammaire `{}`. `"est_ci"` affiche l'intervalle de confiance à côté de chaque estimation :
 
 ```{r}
-tab_reg(gss_simple, "married", c("race", "age"), display = "ci")
+tab_reg(gss_simple, "married", c("race", "age"), display = "est_ci")
 ```
 
-Pour un modèle logistique, il est possible d’ajouter la probabilité prédite ajustée par le modèle (`"prob"`) ou l'effet marginal moyen (`"ame"`) à la case du rapport de cotes. Une différence à noter : `display = "ame"` *conserve* la colonne du rapport de cotes et ajoute l'AME à côté, tandis que `effect = "marginal"` (vu plus haut) transforme la colonne **entière** en un AME.
+`"est_base"` ajoute la **prédiction ajustée par le modèle** dans la case de l'estimation — une probabilité ajustée pour un modèle logistique, une moyenne ajustée pour un modèle linéaire ou de comptage, chaque colonne répondant avec sa propre quantité. `"base_est"` inverse les deux, si bien que le tableau se lit comme des prédictions ajustées graduées par l'effet, et `"base"` n'affiche que les prédictions :
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age"), display = "est_base")
+```
+
+Une différence à noter : `display = "est_base"` *conserve* la colonne du rapport de cotes et ajoute la probabilité ajustée à côté, tandis que `effect = "marginal"` (vu plus haut) transforme la colonne **entière** en un effet marginal.
 
 **`multiplier`** choisit l'**unité** dans laquelle l'effet d'un prédicteur continu est rapporté. Une unité est rarement une quantité lisible : un changement d'un an de `age` déplace à peine les cotes, donc son rapport de cotes reste près de 1, ne franchit jamais un seuil de couleur, et la ligne se lit comme « aucun effet » — alors qu'un écart-type entier d'âge multiplie les cotes par environ 0,66. Par défaut, l'effet est donc rapporté **par écart-type**, et l'intitulé de la ligne indique laquelle :
 

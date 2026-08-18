@@ -1600,92 +1600,77 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, est,
                      else if (identical(effect_shape, "ratio")) "wald_log" else "wald",
          color = color, color_signif = color_signif, col_var = col_var,
          comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"))
-  if (identical(effect_shape, "ratio")) args <- c(args, list(ref = "1", pct_base = "row"))
+  if (identical(effect_shape, "ratio")) args <- c(args, list(ref = "1", pct_type = "row"))
   # var(Y) standardizes beta/SD(Y) for colour -- only the scales that declare `sd_from = "var"`
   if (identical(EST_SCALES[[scale_key]]$sd_from %||% "", "var"))
     args <- c(args, list(var = rep(fit_res$var_y, n_rows)))
   do.call(fmt, args)
 }
 
-# Phase 19e: `display` on a regression table, mirroring tab()'s grammar. The four values Phase 12h's
-# `estimate_display` offered are kept as documented SHORTHANDS over that grammar, which is what they
-# already were -- so this deletes a preset layer rather than adding machinery.
+# `display` on a regression table IS tab()'s display: one preset table, one resolver, one grammar
+# (R/tab-display.R). NULL means "each cell keeps the token the builder gave it", which is the default.
 #
-#   "value"          the plain estimate (unchanged)
-#   "ci"             the `est_ci` token: estimate + a VISIBLE [ci_inf; ci_sup] bracket, dispatching
-#                    OR vs beta on the stored scale
-#   "prob"           == "{or} ({pct})"   the model-adjusted predicted probability, folded in
-#   "ame"            == "{or} ({diff})"  the average marginal effect, folded in
-#   any {} template  written as asked
-#
-# THE RULE the templates obey (KEY 8): a template may ask for an AUXILIARY quantity of the SAME fit
-# (an adjusted prediction, an AME beside an odds ratio -- which is what reg_marginal() supplies
-# here); it must never change the fit or the estimand. That is what keeps `measure` the only
+# THE RULE the templates obey: a template may ask for an AUXILIARY quantity of the SAME fit -- an
+# adjusted prediction, a marginal effect beside an odds ratio, which is what reg_marginal() supplies
+# here -- but never for a different fit or a different estimand. That is what keeps `measure` the one
 # estimand argument while `display` stays free.
 #' @keywords internal
 #' @noRd
-REG_DISPLAY_SHORTHANDS <- c(value = "value", ci = "est_ci",
-                            prob = "{or} ({pct})", ame = "{or} ({diff})")
+reg_resolve_display <- function(display) display_resolve(display)
 
-#' @keywords internal
-#' @noRd
-reg_resolve_display <- function(display) {
-  if (is.null(display) || length(display) != 1L || is.na(display)) return("value")
-  d <- as.character(display)
-  if (d %in% names(REG_DISPLAY_SHORTHANDS)) return(unname(REG_DISPLAY_SHORTHANDS[[d]]))
-  if (d %in% c("value", "est_ci")) return(d)
-  # a real template: validated by tab()'s own grammar, so the two producers refuse the same things
-  validate_display_template(d)
-}
-
-# Does this display FOLD a marginal quantity into the effect cell (i.e. name a field the coefficient
-# path does not fill)? The one predicate behind the binomial-only guard and the reg_marginal() call.
+# Does this display FOLD a quantity the coefficient path does not fill (an adjusted prediction, a
+# marginal effect)? The one predicate behind the reg_marginal() call below.
 #' @keywords internal
 #' @noRd
 reg_display_folds <- function(display) {
-  if (display %in% c("value", "est_ci")) return(FALSE)
+  if (is.null(display) || identical(display, "est_ci")) return(FALSE)
   fl <- tryCatch(parse_display_template(display)$fields, error = function(e) character(0))
-  any(c("pct", "diff") %in% fl)
+  any(c("pct", "mean", "base", "diff") %in% fl)
 }
 
 # Apply the resolved `display` to ONE coefficient column. Stars ride the primary token and its CI
 # drives the colour; the (annotation) is a descriptive companion.
+# The fold works on EVERY family: reg_marginal(want_pred = TRUE) returns the adjusted prediction on
+# the response scale, so `{base}` is an adjusted probability on a logistic and an adjusted mean on a
+# linear or a count model -- each written into the field its own scale declares.
 reg_apply_display <- function(col, display, skeleton, f, sp, family, design_spec, conf_level,
                               model_predictors, multiplier = NULL) {
-  if (identical(display, "value")) return(col)
+  if (is.null(display)) return(col)
   if (identical(display, "est_ci")) return(set_display(col, "est_ci"))
   if (!reg_display_folds(display)) return(set_display(col, display))
-  # Phase 15e: the folds need a binomial coefficient model; a non-binomial column of a mixed table
-  # shows the CI bracket instead (the whole-call degrade only fires when NO outcome is binomial).
-  if (!identical(family, "binomial")) return(set_display(col, "est_ci"))
 
-  fields   <- parse_display_template(display)$fields
-  want_pct <- "pct" %in% fields
-  # `want_se = FALSE`: this fold pokes `pct` / `diff` into a column that keeps its OWN interval, so
-  # nothing here reads the marginal effect's.
+  fields    <- parse_display_template(display)$fields
+  # WARNING: a fold may never write into the column's OWN estimate field -- that would replace the
+  # number the interval, the stars and the colour belong to.
+  est_fld   <- fmt_center_field(col)
+  base_fld  <- fmt_scale_row(col)$base_display %||% NA_character_
+  want_base <- any(c("pct", "mean", "base") %in% fields) &&
+    !is.na(base_fld) && !identical(base_fld, est_fld)
+  # `want_se = FALSE`: this fold pokes a level / a marginal effect into a column that keeps its OWN
+  # interval, so nothing here reads the folded quantity's.
   marg     <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, design_spec$wt,
-                           at = "average", want_pred = want_pct, multiplier = multiplier,
+                           at = "average", want_pred = want_base, multiplier = multiplier,
                            engine = reg_marginal_engine(sp$est), want_se = FALSE)
   in_model <- skeleton$var %in% c("Constant", model_predictors)
   is_const <- skeleton$var == "Constant"
   is_ref   <- skeleton$is_ref & !is_const & in_model
   disp     <- get_display(col)
   ok       <- in_model & !is_const
-  if (want_pct) {
+  if (want_base) {
     prd    <- marg$pred
     pred_v <- if (nrow(prd)) prd$pred[reg_skel_match(skeleton, prd)] else rep(NA_real_, nrow(skeleton))
-    col    <- vctrs::`field<-`(col, "pct", pred_v)
+    col    <- vctrs::`field<-`(col, base_fld, pred_v)
     ok     <- ok & !is.na(pred_v)
   }
-  if ("diff" %in% fields) {
+  if ("diff" %in% fields && !identical(est_fld, "diff")) {
     amt    <- marg$ame
     ame_v  <- amt$ame[reg_skel_match(skeleton, amt)]
     ame_v[is_ref] <- NA_real_                                # reference level has no marginal effect
     col    <- vctrs::`field<-`(col, "diff", ame_v)
     ok     <- ok & !is_ref & !is.na(ame_v)
   }
-  # D22: a template is written only where every field it names exists -- elsewhere the cell keeps
-  # its plain estimate rather than silently printing a substitute quantity.
+  # a template is written only where every field it names exists -- elsewhere the cell keeps its
+  # plain estimate rather than silently printing a substitute quantity.
   disp[ok] <- display
   set_display(col, disp)
 }
@@ -1990,7 +1975,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
     fmt(
       n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
       pct = pred_v, diff = ame_v, or = or_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      scale = "points", pct_base = "row", display = display, digits = 1L, ci_method = "wald",
+      scale = "points", pct_type = "row", display = display, digits = 1L, ci_method = "wald",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
@@ -2011,7 +1996,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
     fmt(
       n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
       pct = pred_v, or = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      scale = "odds_ratio", pct_base = "row", display = display, digits = 1L, ref = "1",
+      scale = "odds_ratio", pct_type = "row", display = display, digits = 1L, ref = "1",
       ci_method = "wald_log",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
@@ -2039,7 +2024,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
     fmt(
       n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
       or = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      scale = "odds_ratio", pct_base = "row", display = display, digits = 2L, ref = "1",
+      scale = "odds_ratio", pct_type = "row", display = display, digits = 2L, ref = "1",
       ci_method = "wald_log",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
@@ -2956,7 +2941,7 @@ new_reg_shared <- function(union_predictors = character(0), design_spec = list()
                            stats = NULL, compare = "none", baseline = NULL,
                            multiplier = NULL, multiplier_label = NULL,
                            shape_terms = NULL, shape_labels = NULL,
-                           empirical = FALSE, display = "value",
+                           empirical = FALSE, display = NULL,
                            var_labels = character(0), na_shared_vars = character(0),
                            add_n = FALSE) {
   as.list(environment())
@@ -3549,9 +3534,9 @@ reg_cols_coef <- function(f, sp, ctx) {
     cols <- reg_columns_multinom(skeleton, f, sp, sp$est, sp_col, color_signif,
                                  cleannames, prefix_dep, model_family = sp_fam,
                                  method = method)
-    # Phase 12h: display = "ci" adds the visible interval to each category's OR column
-    # (the folds are degraded to "ci" for MNL in tab_reg()).
-    if (!identical(display, "value")) {
+    # a per-category table has one column per outcome level, and no room to fold a second quantity
+    # into each: any display asked for shows as the visible interval.
+    if (!is.null(display)) {
       cols <- purrr::map(cols, function(lc) { lc$col <- set_display(lc$col, "est_ci"); lc })
     }
     cols
@@ -4397,18 +4382,22 @@ reg_stage_finalize <- function(ctx) {
 #'
 #'   Weighted models show a reduced, survey-appropriate set of goodness-of-fit statistics
 #'   (design-based Wald test, Nagelkerke pseudo-R square, AIC).
-#' @param display What each effect cell shows, mirroring [tab()]'s display grammar. `"value"`
-#'   (default) the plain estimate (e.g. `2.34`); `"ci"` adds a visible confidence-interval bracket
-#'   (`2.34 [1.20; 4.50]`, any family); `"prob"` folds the model-adjusted predicted probability into
-#'   the cell (`2.34 (16%)`); `"ame"` folds the average marginal effect (`2.34 (+8%)`). The last two
-#'   are shorthands for the templates `"{or} ({pct})"` and `"{or} ({diff})"`, which you may write out
-#'   instead; they need the `marginaleffects` package and apply to binomial coefficient models only
-#'   (they degrade to `"ci"` otherwise, with a message).
+#' @param display What each effect cell shows --- [tab()]'s display grammar, same names, same
+#'   meaning. `NULL` (default) shows the plain estimate. The named layouts:
+#'   * `"est_ci"` adds a visible interval: `1/2.22 [1/2.47; 1/1.99]`, any family.
+#'   * `"est_base"` puts the model-adjusted prediction beside the effect: `1/2.22 (32.8%)` on a
+#'     logistic model, `-0.89 (2.25)` on a linear one --- a probability or a mean, per outcome.
+#'   * `"base_est"` swaps them, so the table reads as adjusted predictions graded by the effect.
+#'   * `"base"` shows the adjusted predictions alone, still coloured and starred by the effect.
 #'
-#'   A template may ask for an **auxiliary** quantity of the same fit; it never changes the fit or
-#'   the estimand --- that is `measure`'s job alone. Note `display = "ame"` *adds* an AME beside the
-#'   odds ratio, whereas `effect = "marginal"` makes the whole column an AME; when both are set the
-#'   column wins and `display` is ignored, with a message.
+#'   Or write a `{}` template: `"{est} (obs {obs})"` prints each adjusted effect next to the
+#'   unadjusted one it is compared to, `"{est} ({gap})"` next to how far adjustment moved it (see
+#'   `color = "adjustment"` below).
+#'
+#'   A display may ask for an **auxiliary** quantity of the same fit; it never changes the fit or
+#'   the estimand --- that is `measure`'s job alone. Note `display = "est_base"` *adds* the adjusted
+#'   prediction beside the odds ratio, whereas `effect = "marginal"` makes the whole column a
+#'   marginal effect; when both are set the column wins and `display` is ignored, with a message.
 #' @param color,color_signif Colouring of the effect cells. `color = TRUE` (default) grades each cell
 #'   on **its own scale** --- the ladder follows what the column estimates (`measure`), so it is never
 #'   asked for separately; `color = FALSE` turns colouring off for every column (model and empirical).
@@ -4630,7 +4619,7 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
                     outcome_level = NULL, ref = NULL,
                     multiplier = "sd", shape = NULL, stats = NULL,
                     na = c("drop_by_outcome", "drop_by_model", "drop_all"),
-                    display = "value", cleannames = NULL, subtext = "", parallel = NULL, ...) {
+                    display = NULL, cleannames = NULL, subtext = "", parallel = NULL, ...) {
   # `.fit_cache` (the jamovi live-UI cache env) and `.levels_collapse` (the level-merge spec, shared
   # with tab() -- R/row-model.R declares it, tab_collapse_levels() applies it in reg_prepare_data()'s
   # stage G beside `shape`) are jamovi-internal and ride `...`; neither is a user argument.

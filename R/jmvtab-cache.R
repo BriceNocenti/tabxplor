@@ -186,7 +186,7 @@ JMVTAB_CACHE_SCHEMA <- 19L   # bump on any store-shape change -> discard stale s
                             #     one `comparison` they both encoded. A stale tuple has the old keys,
                             #     so every comparison would read as a mismatch (or, worse, match).
                             # 13 = Phase 19b (KEY 2): a tier-3 carrier's per-column `meta` list carries
-                            #     `scale` + `pct_base` instead of `type` + `ci_type`, and gains
+                            #     `scale` + `pct_type` instead of `type` + `ci_type`, and gains
                             #     `ci_method`. A pre-13 carrier has the old names -> unusable.
                             # 12 = Phase 18z16-iiiii: the tier-3 tuple folds the five method_* keys
                             #     into one `ci_method` vector, and the columns carry degf/basis.
@@ -931,7 +931,7 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
 
   fmt_names <- names(carrier$fmt)
   pct_cols  <- fmt_names[vapply(fmt_names,
-                                function(nm) identical(carrier$fmt[[nm]]$meta$pct_base, "row"),
+                                function(nm) identical(carrier$fmt[[nm]]$meta$pct_type, "row"),
                                 logical(1))]
   n_field   <- carrier$fmt[[fmt_names[[1]]]]$frame$n
 
@@ -1021,7 +1021,7 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
       # change could take the re-ref path: a ratio interval on a column still saying `points` is
       # 19b's D8/D19 class, and it is what fmt_scale_of()/ci_center()/the legend read.
       # (A NA scale_key is a cell interval, where the LEVEL scale stands -- the same fallback the
-      # leaf applies. `pct_base` is "row" throughout here, so `level_pct` is that level.)
+      # leaf applies. `pct_type` is "row" throughout here, so `level_pct` is that level.)
       for (j in seq_along(grp)) {
         carrier$fmt[[grp[[j]]]]$frame$ci_inf <- ci_res$inf[, j]
         carrier$fmt[[grp[[j]]]]$frame$ci_sup <- ci_res$sup[, j]

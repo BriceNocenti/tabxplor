@@ -370,7 +370,7 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     # which is what the picker wants and what tab_reg() computes by default -- so an unset comparison
     # sends NULL exactly as before, and only a chosen one adds a key.
     stats        = jmvtab_reg_stats(opts$stats_compare, opts$stats_baseline, opts$stats_checks),
-    display      = opts$display %||% "value",
+    display      = opts$display %||% "auto",
     shape        = jmvtab_reg_shape_vector(opts$shape),
     color        = opts$color,
     color_signif = opts$color_signif,

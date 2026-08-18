@@ -27,7 +27,7 @@ tab_reg(
   shape = NULL,
   stats = NULL,
   na = c("drop_by_outcome", "drop_by_model", "drop_all"),
-  display = "value",
+  display = NULL,
   cleannames = NULL,
   subtext = "",
   parallel = NULL,
@@ -491,18 +491,24 @@ get no observed effect at all (no \code{obs}, no \code{color = "adjustment"}, no
 distance between two such estimates is listwise deletion rather than adjustment.
 \code{"drop_all"} shares one population across the whole call, all outcomes included.}
 
-\item{display}{What each effect cell shows, mirroring \code{\link[=tab]{tab()}}'s display grammar. \code{"value"}
-(default) the plain estimate (e.g. \code{2.34}); \code{"ci"} adds a visible confidence-interval bracket
-(\verb{2.34 [1.20; 4.50]}, any family); \code{"prob"} folds the model-adjusted predicted probability into
-the cell (\verb{2.34 (16\%)}); \code{"ame"} folds the average marginal effect (\verb{2.34 (+8\%)}). The last two
-are shorthands for the templates \code{"{or} ({pct})"} and \code{"{or} ({diff})"}, which you may write out
-instead; they need the \code{marginaleffects} package and apply to binomial coefficient models only
-(they degrade to \code{"ci"} otherwise, with a message).
+\item{display}{What each effect cell shows --- \code{\link[=tab]{tab()}}'s display grammar, same names, same
+meaning. \code{NULL} (default) shows the plain estimate. The named layouts:
+\itemize{
+\item \code{"est_ci"} adds a visible interval: \verb{1/2.22 [1/2.47; 1/1.99]}, any family.
+\item \code{"est_base"} puts the model-adjusted prediction beside the effect: \verb{1/2.22 (32.8\%)} on a
+logistic model, \code{-0.89 (2.25)} on a linear one --- a probability or a mean, per outcome.
+\item \code{"base_est"} swaps them, so the table reads as adjusted predictions graded by the effect.
+\item \code{"base"} shows the adjusted predictions alone, still coloured and starred by the effect.
+}
 
-A template may ask for an \strong{auxiliary} quantity of the same fit; it never changes the fit or
-the estimand --- that is \code{measure}'s job alone. Note \code{display = "ame"} \emph{adds} an AME beside the
-odds ratio, whereas \code{effect = "marginal"} makes the whole column an AME; when both are set the
-column wins and \code{display} is ignored, with a message.}
+Or write a \code{{}} template: \code{"{est} (obs {obs})"} prints each adjusted effect next to the
+unadjusted one it is compared to, \code{"{est} ({gap})"} next to how far adjustment moved it (see
+\code{color = "adjustment"} below).
+
+A display may ask for an \strong{auxiliary} quantity of the same fit; it never changes the fit or
+the estimand --- that is \code{measure}'s job alone. Note \code{display = "est_base"} \emph{adds} the adjusted
+prediction beside the odds ratio, whereas \code{effect = "marginal"} makes the whole column a
+marginal effect; when both are set the column wins and \code{display} is ignored, with a message.}
 
 \item{cleannames}{Logical. If \code{TRUE}, strips numeric prefixes from factor levels for display.
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}

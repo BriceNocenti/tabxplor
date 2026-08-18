@@ -535,10 +535,11 @@ The empirical mean ages, and differences of mean ages from reference, can be com
 
 ```{r}
 tab(gss_simple, "race", "age", pct = "row", digits = 2, na = "drop",
-    color = "difference", ref = 1,  ci_method = c(mean_diff = "student")
+    color = "difference", ref = 1,  ci_method = c(mean_diff = "ols")
 ) |> 
   mutate(diff = set_display(age, "diff"))
-# student : confidence intervals with pooled variance, to match those computed by linear regression
+# ols : the variance pooled over every level of the variable, so the intervals are exactly those a
+#  linear regression puts on its coefficients ("student" pools the two compared groups only).
 ```
 
 
@@ -563,9 +564,9 @@ tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
     color = "ratio", ref = 1,  ci_method = c(mean_ratio = "quasipoisson")
 ) |> 
   mutate(IRR = set_display(tvhours, "ratio"))
-# default method for confidence intervals is robust ratio of means with unequal variable ;
-#  we use "quasipoisson" to match those computed by quasi-poisson regression 
-#  (assumption : variance is proportional to mean). 
+# the default method is a robust ratio of means (each group's own variance) ;
+#  we use "quasipoisson" to match those computed by quasi-poisson regression -- one dispersion
+#  estimated over every level (assumption : variance is proportional to mean). 
 ```
 
 ## What a model column reports : `family` × `effect` × `measure`
@@ -807,13 +808,19 @@ while the footer tests the coefficients, two related but distinct questions, and
 
 A few arguments change *what each cell shows*, or *how a predictor is scaled* — without changing the model itself.
 
-**`display`** folds a second quantity into each estimate cell. `"ci"` shows the confidence interval beside every estimate (any family):
+**`display`** chooses the cell layout — the same named layouts `tab()` offers, in the same `{}` grammar. `"est_ci"` shows the confidence interval beside every estimate (any family):
 
 ```{r}
-tab_reg(gss_simple, "married", c("race", "age"), display = "ci")
+tab_reg(gss_simple, "married", c("race", "age"), display = "est_ci")
 ```
 
-For a logistic model you can instead fold the model-adjusted predicted probability (`"prob"`) or the average marginal effect (`"ame"`) into the odds-ratio cell (these two need the `marginaleffects` package). Note the difference: `display = "ame"` *keeps* the odds-ratio column and adds the AME beside it, whereas `effect = "marginal"` (seen above) turns the **whole** column into an AME.
+`"est_base"` folds the **model-adjusted prediction** into the estimate cell — an adjusted probability on a logistic model, an adjusted mean on a linear or a count one, each column answering with its own quantity. `"base_est"` swaps them, so the table reads as adjusted predictions graded by the effect, and `"base"` shows the predictions alone:
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age"), display = "est_base")
+```
+
+Note the difference: `display = "est_base"` *keeps* the odds-ratio column and adds the adjusted probability beside it, whereas `effect = "marginal"` (seen above) turns the **whole** column into a marginal effect.
 
 **`multiplier`** chooses the **unit** a continuous predictor's effect is reported per. One unit is rarely a readable amount: a one-year change in `age` barely moves the odds, so its odds ratio sits near 1, never crosses a colour threshold, and the row reads as "no effect" — while a whole standard deviation of age multiplies the odds by about 0.66. So the default is **per one standard deviation**, and the row label says which:
 

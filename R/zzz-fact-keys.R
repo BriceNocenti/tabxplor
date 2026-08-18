@@ -152,9 +152,22 @@ TAB_FOREIGN_KEYS <- list(
   # where the legend names them.
   tx_fk("REG_EMPIRICAL$*$ci_method", function() tx_fk_scalar(tx_fk_emp_shapes(), "ci_method"),
         function() unlist(CI_METHODS, use.names = FALSE), allow = c("woolf", "katz", "wald_log")),
+  # the twin a crude shape uses on a WEIGHTED / design basis, where the univariable model is svyglm
+  # and its interval is the sandwich rather than the model-based one.
+  tx_fk("REG_EMPIRICAL$*$ci_method_design",
+        function() tx_fk_scalar(tx_fk_emp_shapes(), "ci_method_design"),
+        function() unlist(CI_METHODS, use.names = FALSE)),
+  tx_fk("CI_POOLED",               function() unlist(CI_POOLED, use.names = FALSE),
+        function() unlist(CI_METHODS, use.names = FALSE)),
 
   # --- into DISPLAY_TOKENS (what a cell shows) -----------------------------------------------
   tx_fk("EST_SCALES$default_display", function() tx_fk_scalar(EST_SCALES, "default_display"),
+        function() names(DISPLAY_TOKENS)),
+  # what a column renders `{est}` / `{base}` as. `base_display` is NA on the link scales, where a
+  # coefficient has no unambiguous level -- fmt_resolve_scale_tokens() renders those void.
+  tx_fk("EST_SCALES$est_display",  function() tx_fk_scalar(EST_SCALES, "est_display"),
+        function() names(DISPLAY_TOKENS)),
+  tx_fk("EST_SCALES$base_display", function() tx_fk_scalar(EST_SCALES, "base_display"),
         function() names(DISPLAY_TOKENS)),
   tx_fk("REG_ESTIMANDS$rows$display", function() tx_fk_scalar(tx_fk_reg_rows(), "display"),
         function() names(DISPLAY_TOKENS)),
@@ -163,11 +176,11 @@ TAB_FOREIGN_KEYS <- list(
   # `rr` -> `ratio`: a token may name another token as its spelling.
   tx_fk("DISPLAY_TOKENS$alias",    function() tx_fk_scalar(DISPLAY_TOKENS, "alias"),
         function() names(DISPLAY_TOKENS)),
-  # the reg display shorthands resolve to a TOKEN or to a `{}` TEMPLATE; only the first kind is a
-  # key here (a template is validated field by field by display_write_col()).
-  tx_fk("REG_DISPLAY_SHORTHANDS",
-        function() { v <- as.character(REG_DISPLAY_SHORTHANDS); v[!grepl("{", v, fixed = TRUE)] },
-        function() names(DISPLAY_TOKENS), allow = "value"),
+  # a preset resolves to a TOKEN or to a `{}` TEMPLATE; only the first kind is a key here (a template
+  # is validated field by field by display_write_col()). No exemption: every preset names real tokens.
+  tx_fk("DISPLAY_PRESETS",
+        function() { v <- as.character(DISPLAY_PRESETS); v[!grepl("{", v, fixed = TRUE)] },
+        function() names(DISPLAY_TOKENS)),
 
   # --- into fmt_field_names (the record) -----------------------------------------------------
   # ⚠ `ci` is DERIVED (get_ci() is a shim over the ci_inf/ci_sup bounds), so the `ci` token names a
@@ -179,8 +192,8 @@ TAB_FOREIGN_KEYS <- list(
         function() fmt_field_names),
 
   # --- into the small declared enums ---------------------------------------------------------
-  tx_fk("REG_EMPIRICAL$*$pct_base", function() tx_fk_scalar(tx_fk_emp_shapes(), "pct_base"),
-        function() PCT_BASES),
+  tx_fk("REG_EMPIRICAL$*$pct_type", function() tx_fk_scalar(tx_fk_emp_shapes(), "pct_type"),
+        function() PCT_TYPES),
   tx_fk("COLOR_ALIASES$policy",    function() tx_fk_scalar(COLOR_ALIASES, "policy"),
         function() COLOR_SIGNIF_VALUES),
   tx_fk("MEASURES$applies_to",     function() tx_fk_all(MEASURES, "applies_to"),
@@ -268,7 +281,7 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("TAB_ARGS$doc_with",       function() tx_fk_all(TAB_ARGS, "doc_with"),
         function() names(TAB_ARGS)),
   tx_fk("TAB_ARGS$pct$stored",     function() TAB_ARGS[["pct"]][["stored"]],
-        function() PCT_BASES),
+        function() PCT_TYPES),
   # Phase 20h: the `allow` list is GONE. Every option's per-call twin now HAS a declared row --
   # the crosstab ones in TAB_ARGS since 20b, the eleven render ones in EXPORT_ARGS since 20h -- so
   # this edge is checked outright instead of carrying an eleven-name exception whose only reason was

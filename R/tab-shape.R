@@ -120,7 +120,7 @@ tab_shape <- function(x) {
 #'   \item{`column`}{the column name.}
 #'   \item{`col_var`, `col_group`}{the column variable, and the sub-population its block belongs to
 #'     (`""` when the table was never spread).}
-#'   \item{`scale`, `pct_base`}{what the column estimates, and on which percentage base.}
+#'   \item{`scale`, `pct_type`}{what the column estimates, and on which percentage base.}
 #'   \item{`display`}{the display template(s) its cells carry.}
 #'   \item{`ref`, `comp_all`, `totcol`, `refcol`}{the comparison model: which baseline, whether it
 #'     compares across sub-tables, and whether this column is a total or the reference.}
@@ -154,7 +154,7 @@ tab_columns <- function(x) {
       col_var      = a$col_var,
       col_group    = a$col_group,
       scale        = a$scale,
-      pct_base     = a$pct_base,
+      pct_type     = a$pct_type,
       # the display is a per-CELL field, so a column may legitimately carry more than one (a total
       # row often shows `n` where the body shows `pct`): report them all, in order of appearance.
       display      = paste(unique(as.character(get_display(col))), collapse = " / "),

@@ -147,7 +147,7 @@ test_that("the weighted basis reaches the cached FACTOR aggregate too (design_ef
   expect_equal(cold$tabs, jmv_oracle(o, gssw))    # the cache path IS the oracle, correction included
   expect_equal(warm$tabs, cold$tabs)
   t  <- cold$tabs
-  ne <- get_n_eff(t[[which(purrr::map_lgl(t, ~ is_fmt(.) && get_pct_base(.) == "row"))[[1]]]])
+  ne <- get_n_eff(t[[which(purrr::map_lgl(t, ~ is_fmt(.) && get_pct_type(.) == "row"))[[1]]]])
   expect_gt(sum(is.finite(ne)), 0L)               # non-vacuous: percentages ARE corrected now
   expect_identical(tabxplor:::tab_inference_basis(t), "weights")
   expect_true(all(c("chi2_design", "F_design") %in% get_test(t)$test))

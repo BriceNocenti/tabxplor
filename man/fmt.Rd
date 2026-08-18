@@ -7,8 +7,8 @@
 \alias{set_num}
 \alias{get_scale}
 \alias{set_scale}
-\alias{get_pct_base}
-\alias{set_pct_base}
+\alias{get_pct_type}
+\alias{set_pct_type}
 \alias{is_totrow}
 \alias{get_row_kind}
 \alias{set_row_kind}
@@ -39,7 +39,9 @@
 \alias{set_color}
 \alias{set_color_signif}
 \alias{get_digits}
+\alias{get_pvalue}
 \alias{set_digits}
+\alias{set_pvalue}
 \title{Create a vector of class formatted numbers}
 \usage{
 fmt(
@@ -69,7 +71,7 @@ fmt(
   in_totrow = NULL,
   comp_all = NA,
   ref = "",
-  pct_base = "none",
+  pct_type = "none",
   col_var = "",
   col_group = "",
   totcol = FALSE,
@@ -95,9 +97,9 @@ get_scale(x, ...)
 
 set_scale(x, scale)
 
-get_pct_base(x, ...)
+get_pct_type(x, ...)
 
-set_pct_base(x, pct_base)
+set_pct_type(x, pct_type)
 
 is_totrow(x, ...)
 
@@ -159,7 +161,11 @@ set_color_signif(x, color_signif)
 
 get_digits(x)
 
+get_pvalue(x)
+
 set_digits(x, value)
+
+set_pvalue(x, value)
 }
 \arguments{
 \item{n}{The underlying count, as an integer vector of length \code{n()}. It is used
@@ -170,7 +176,7 @@ into the declared library of estimate scales. It says which field holds the esti
 null value is, whether the scale is additive or multiplicative, and which colour ladder it reads.
 \itemize{
 \item \code{"level_n"}: counts
-\item \code{"level_pct"}: percentages (\code{pct_base} says of what)
+\item \code{"level_pct"}: percentages (\code{pct_type} says of what)
 \item \code{"level_mean"}: means (from numeric variables)
 \item \code{"points"}: a difference between two percentages, in percentage points
 \item \code{"mean_diff"}: a difference between two means, in the outcome's own units
@@ -267,7 +273,7 @@ estimate's own test scale. Written by \code{tab_reg} where the two estimates are
 
 \item{ref}{The type of difference of the vector. Cf. \code{\link{tab}}.}
 
-\item{pct_base}{For a percentage column, what the percentage is a percentage OF, and hence which
+\item{pct_type}{For a percentage column, what the percentage is a percentage OF, and hence which
 axis its reference lies on (as a single string): \code{"row"}, \code{"col"}, \code{"all"}
 (frequencies by subtable / group, i.e. by \code{tab_vars}), \code{"all_tabs"} (frequencies for
 the whole table), or \code{"none"} (counts, means, coefficients).}
@@ -329,8 +335,8 @@ carry even after a pipeline drops the table's metadata; binding columns keeps th
 
 \item{ci_method}{Which interval ENGINE built this column's bounds --- \code{"wilson"},
 \code{"wald"}, \code{"beta"} (a cell proportion), \code{"newcombe"}, \code{"ac"} (a difference of
-proportions), \code{"katz"} (a ratio of proportions), \code{"welch"}, \code{"student"} (a
-difference of means), \code{"robust"}, \code{"quasipoisson"}, \code{"poisson"} (a ratio of
+proportions), \code{"katz"} (a ratio of proportions), \code{"welch"}, \code{"student"},
+\code{"ols"} (a difference of means), \code{"robust"}, \code{"quasipoisson"}, \code{"poisson"} (a ratio of
 means), \code{"woolf"}, \code{"wald_log"}, \code{"profile"}; \code{""} (default) when the column
 carries no interval. Read back by the colour legend, so it always names the method the bounds were
 built with.}
@@ -361,7 +367,7 @@ A character vector with the vectors scale.
 
 A modified fmt vector.
 
-A character vector with the vectors percentage base.
+A character vector with the vectors percentage type.
 
 A modified fmt vector.
 
@@ -445,9 +451,9 @@ using \pkg{vctrs}.
 
 \item \code{set_scale()}: set the estimate scale attribute of a \code{fmt} vector
 
-\item \code{get_pct_base()}: get the percentage base of fmt columns (at \code{fmt} level or \code{tab} level)
+\item \code{get_pct_type()}: get which kind of percentage fmt columns hold (at \code{fmt} level or \code{tab} level)
 
-\item \code{set_pct_base()}: set the percentage base attribute of a \code{fmt} vector
+\item \code{set_pct_type()}: set the percentage-type attribute of a \code{fmt} vector
 
 \item \code{is_totrow()}: test function to detect cells in total rows
 (at \code{fmt} level or \code{tab} level)
@@ -519,7 +525,12 @@ regression family, "" on crosstabs)
 
 \item \code{get_digits()}: get the "digits" field
 
+\item \code{get_pvalue()}: get the per-cell p-value (what the significance stars read)
+
 \item \code{set_digits()}: set the "digits" field
+
+\item \code{set_pvalue()}: set the per-cell p-value. \code{set_pvalue(x, NA_real_)} is how a duplicated,
+purely descriptive copy of a column loses its stars: the stored p-value is their only source.
 
 }}
 \section{The fields of a cell}{
@@ -560,8 +571,11 @@ Generated from the package's own display table, so it cannot drift from what
 name, described above. The rest are composed or derived by the pipeline itself, and
 the last few are not meant to be typed:
 \itemize{
+\item \code{est} --- the estimate, whatever this column estimates --- an odds ratio, a risk difference, a coefficient, a percentage. The one token that means the same thing on every table.
+\item \code{base} --- the level the estimate sits on: the percentage, the mean or the count. On a plain percentage table it is the same number as \code{est}; beside a regression effect it is the adjusted prediction.
 \item \code{ci} --- the confidence interval of whatever the column compares.
 \item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only.
+\item \code{gap} --- how far adjustment moved the effect: the gap between the modelled estimate and its observed counterpart, on the estimate's own scale. What \code{color = "adjustment"} grades --- readable in print and Excel, not only in an html tooltip.
 \item \code{pct_ci} --- the percentage, with its interval printed beside it.
 \item \code{mean_ci} --- the mean, with its interval printed beside it.
 \item \code{or_pct} --- the odds ratio, with its percentage.
@@ -579,7 +593,7 @@ the last few are not meant to be typed:
 library(dplyr)
 
 f <- fmt(n = c(7, 19, 2), pct = c(0.25, 0.679, 0.07),
-         scale = "level_pct", pct_base = "row")
+         scale = "level_pct", pct_type = "row")
 f
 
 # To get the currently displayed field :
@@ -613,8 +627,8 @@ mutate(f, pct = c(1, 0, 0))
 # See all the attributes of a fmt vector :
 attributes(f)
 
-# To modify the "pct_base" attribute of a fmt vector (what the percentage is a percentage OF) :
-set_pct_base(f, "col")
+# To modify the "pct_type" attribute of a fmt vector (what the percentage is a percentage OF) :
+set_pct_type(f, "col")
 
 # To modify the "color" attribute of a fmt vector :
 set_color(f, "contrib")

@@ -1608,10 +1608,10 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   scl     <- fmt_scale_row(x)
   vkind   <- scl$var_kind
   digits  <- get_digits(x)
-  disp    <- display_primary(get_display(x))
-  # shows(field) = "the cell already prints this field" (over the whole template), so a composite does
-  # not repeat its own bracket on hover.
-  shows   <- function(field) fmt_display_shows(get_display(x), field)
+  disp    <- fmt_resolve_scale_tokens(display_primary(get_display(x)), scl)
+  # shows(field) = "the cell already prints this field" (over the whole template, and through the
+  # scale-relative tokens), so a composite does not repeat its own bracket or level on hover.
+  shows   <- function(field) fmt_display_shows(get_display(x), field, scl)
 
   # format() right-pads to align in the table; trim that pad for prose tooltips.
   tip_num <- function(v) stringi::stri_trim(format(v))
@@ -1621,7 +1621,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   comparable <- !((totcol | totrows) & !is.na(get_pct(x)) & get_pct(x) == 1)
   ok_diff    <- !is.na(get_diff(x))  & comparable
   ok_rr      <- !is.na(get_ratio(x)) & comparable & !disp %in% "ratio" &
-    (get_pct_base(x) %in% c("col", "row") | vkind == "mean")
+    (get_pct_type(x) %in% c("col", "row") | vkind == "mean")
   ref_grp    <- ref & (ok_diff | ok_rr)
   show_rr    <- ok_rr & !ref_grp
 
@@ -1667,7 +1667,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
                                           stringi::stri_replace_first_regex(out_ci, "%$", "")))
   if (!ci_cell) out_ci <- ""
 
-  cond_pct <- get_pct_base(x) != "none" &
+  cond_pct <- get_pct_type(x) != "none" &
     !is.na(get_pct(x)) & !shows("pct") & !disp %in% c("pct_ci")
   out_pct <- if (any(cond_pct)) {
     dplyr::if_else(cond_pct, tip_num(set_display(x, "pct")), "")

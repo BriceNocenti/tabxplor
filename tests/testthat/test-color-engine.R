@@ -33,11 +33,11 @@ testthat::test_that("engine: factor-diff ties (strict >) and the over-slot mappi
 })
 
 testthat::test_that("engine: all-NA and cell==reference give slot 0 (uncolored)", {
-  na_col <- fmt(n = c(1L, 1L, 1L), scale = "level_pct", pct_base = "row", diff = NA_real_, mean = NA_real_,
+  na_col <- fmt(n = c(1L, 1L, 1L), scale = "level_pct", pct_type = "row", diff = NA_real_, mean = NA_real_,
                 ratio = NA_real_, color = "diff")
   testthat::expect_equal(fmt_color_slots(na_col, fmt_color_plan(na_col, "text")), rep(0L, 3))
 
-  zero <- fmt(n = c(1L, 1L), scale = "level_pct", pct_base = "row", pct = c(0.4, 0.4), diff = c(0, 0.15),
+  zero <- fmt(n = c(1L, 1L), scale = "level_pct", pct_type = "row", pct = c(0.4, 0.4), diff = c(0, 0.15),
               mean = c(1, 1), ratio = c(1, 1), color = "diff",
               row_kind = c("data", "total"), ref = "tot", comp_all = FALSE)
   testthat::expect_equal(fmt_color_slots(zero, fmt_color_plan(zero, "text"))[1], 0L)  # diff == 0
@@ -57,14 +57,14 @@ testthat::test_that("engine: numeric diff = Glass's delta; sd_ref 0/NA -> uncolo
 })
 
 testthat::test_that("engine: ratio with ref 0 -> Inf/NaN -> uncolored (no crash)", {
-  col <- fmt(n = c(10L, 10L), scale = "level_pct", pct_base = "row", pct = c(0.5, 0), ratio = c(Inf, 1),
+  col <- fmt(n = c(10L, 10L), scale = "level_pct", pct_type = "row", pct = c(0.5, 0), ratio = c(Inf, 1),
              mean = c(Inf, 1), color = "ratio", row_kind = c("data", "total"),
              ref = "tot", comp_all = FALSE)
   testthat::expect_equal(fmt_color_slots(col, fmt_color_plan(col, "text"))[1], 0L)
 })
 
 testthat::test_that("engine: no color mode -> NULL plan -> all slot 0", {
-  col <- fmt(n = c(1L, 2L, 3L), scale = "level_pct", pct_base = "row", pct = c(0.1, 0.2, 0.7), color = "")
+  col <- fmt(n = c(1L, 2L, 3L), scale = "level_pct", pct_type = "row", pct = c(0.1, 0.2, 0.7), color = "")
   testthat::expect_null(fmt_color_plan(col, "text"))
   testthat::expect_equal(fmt_color_slots(col, NULL), rep(0L, 3))
 })
@@ -81,7 +81,7 @@ testthat::test_that("guaranteed_effect ratio channel colours the guaranteed RATI
   ratio  <- pct / p_ref
   ci_inf <- c(0.30, 0.01, -0.70, -0.05)   # cell1/2 sig over, cell3 sig under, cell4 spans 0
   ci_sup <- c(0.50, 0.11, -0.50,  0.09)
-  col <- fmt(n = rep(100L, 4), scale = "points", pct_base = "row", pct = pct, diff = diff, ratio = ratio,
+  col <- fmt(n = rep(100L, 4), scale = "points", pct_type = "row", pct = pct, diff = diff, ratio = ratio,
              ci_inf = ci_inf, ci_sup = ci_sup)
   col <- set_color(col, c("diff", "ratio"))
   col <- set_color_signif(col, "guaranteed_effect")
@@ -104,7 +104,7 @@ testthat::test_that("grey_non_signif ratio channel still colours the OBSERVED ra
   p_ref  <- c(0.2, 0.5); pct <- c(0.6, 0.52)
   diff   <- pct - p_ref; ratio <- pct / p_ref
   ci_inf <- c(0.30, -0.05); ci_sup <- c(0.50, 0.09)          # cell1 sig over, cell2 not sig
-  col <- fmt(n = rep(100L, 2), scale = "points", pct_base = "row", pct = pct, diff = diff, ratio = ratio,
+  col <- fmt(n = rep(100L, 2), scale = "points", pct_type = "row", pct = pct, diff = diff, ratio = ratio,
              ci_inf = ci_inf, ci_sup = ci_sup)
   col <- set_color(col, c("diff", "ratio"))
   col <- set_color_signif(col, "grey_non_signif")
@@ -141,7 +141,7 @@ testthat::test_that("offset_guaranteed_breaks shifts each scale onto its neutral
 
 testthat::test_that("guaranteed_effect offsets the plan's breaks; other policies do not", {
   mk <- function(policy) {
-    col <- fmt(n = rep(100L, 3), scale = "points", pct_base = "row", pct = c(.6, .4, .5), diff = c(.1, -.1, 0),
+    col <- fmt(n = rep(100L, 3), scale = "points", pct_type = "row", pct = c(.6, .4, .5), diff = c(.1, -.1, 0),
                ci_inf = c(.05, -.15, -.02), ci_sup = c(.15, -.05, .02))
     set_color_signif(set_color(col, "diff"), policy)
   }
@@ -161,7 +161,7 @@ testthat::test_that("guaranteed_effect offsets the plan's breaks; other policies
 testthat::test_that("guaranteed_effect: significant => coloured, in the right direction", {
   # the exact shape the maintainer reported: significant (0 outside the CI) but a floor far below
   # the first ordinary break (0.05) -- it MUST be coloured now.
-  col <- fmt(n = rep(500L, 4), scale = "points", pct_base = "row", pct = c(.27, .13, .2, .2),
+  col <- fmt(n = rep(500L, 4), scale = "points", pct_type = "row", pct = c(.27, .13, .2, .2),
              diff  = c( .07, -.07,  .004, 0),
              ci_inf = c(.004, -.166, -.02, NA),      # cell 1 sig over (floor 0.4% << 5%)
              ci_sup = c(.166, -.004,  .03, NA))      # cell 2 sig under; cell 3 not sig
@@ -182,7 +182,7 @@ testthat::test_that("guaranteed_effect: significant => coloured, in the right di
 testthat::test_that("guaranteed_effect: strict breaks keep an exactly-neutral floor uncoloured", {
   # findInterval(left.open = strict): a floor of exactly 0 is NOT beyond the 0 break -> slot 0.
   # Only a floor strictly beyond the neutral (i.e. a real guaranteed effect) colours.
-  col <- fmt(n = rep(500L, 2), scale = "points", pct_base = "row", pct = c(.3, .3), diff = c(.1, .1),
+  col <- fmt(n = rep(500L, 2), scale = "points", pct_type = "row", pct = c(.3, .3), diff = c(.1, .1),
              ci_inf = c(0, 1e-9), ci_sup = c(.2, .2))
   col  <- set_color_signif(set_color(col, "diff"), "guaranteed_effect")
   slot <- fmt_color_slots(col, fmt_color_plan(col, "text"))
@@ -194,7 +194,7 @@ testthat::test_that("guaranteed_effect offsets the RATIO (multiplicative) scale 
   set_color_breaks(pct_ratio = c(1.5, 2, 4))
   withr::defer(options("tabxplor.color_breaks" = default_color_scales()))
   p_ref <- 0.2; pct <- 0.24                               # ratio 1.2 -- below the 1.5 first break
-  col <- fmt(n = 500L, scale = "points", pct_base = "row", pct = pct, diff = pct - p_ref, ratio = pct / p_ref,
+  col <- fmt(n = 500L, scale = "points", pct_type = "row", pct = pct, diff = pct - p_ref, ratio = pct / p_ref,
              ci_inf = 0.01, ci_sup = 0.07)
   col  <- set_color_signif(set_color(col, c("diff", "ratio")), "guaranteed_effect")
   plan <- fmt_color_plan(col, "bg", color = "ratio")

@@ -128,7 +128,7 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # jmv_reg_estimand_opts() translator that mapped them) are gone.
         effect       = self$options$effect  %||% "coefficient",
         measure      = self$options$measure %||% "auto",
-        display      = self$options$display %||% "value",
+        display      = self$options$display %||% "auto",
         empirical    = self$options$empirical,
         # the reference-level picker (ref_levels) -> tab_reg's `ref` named vector (NULL = default)
         ref          = jmvtab_reg_ref_vector(self$options$ref_levels),

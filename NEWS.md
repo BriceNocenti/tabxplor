@@ -153,6 +153,24 @@
   soft-deprecated onto `"ref"`. `ci = "no"` and `ci = "cell"` leave nothing to test a comparison
   against, so they inform you and disable `stars` / `color_signif` instead of overruling what you
   typed. `display` also accepts a bare field name (`display = "n"`, the same as `"{n}"`).
+* **One display grammar for `tab()` and `tab_reg()`.** The same named layouts everywhere ---
+  `"est"`, `"est_ci"`, `"est_base"`, `"base_est"`, `"base"`, `"base_ci"` --- built on two new
+  scale-relative tokens: `{est}` is whatever the column estimates and `{base}` the level it sits on
+  (a percentage, a mean, a count), so one template works on every family. `{gap}` shows how far
+  adjustment moved a regression effect, in print and Excel as well as in a tooltip. On `tab_reg()`
+  the layouts now reach every family, not just binomial coefficient models.
+* **One rule for multiplicative cells.** A value below its reference prints as its inverse
+  (`1/2.67` for an odds ratio, `÷2.67` for a risk / rate / mean ratio, the measure's own glyph) in
+  *every* rendering --- a bare cell, a `{}` composite and the `est_ci` bracket alike. Composites
+  used to drop it, so a table could show `1/2.67` and `0.37` for the same quantity. A reference cell prints a bare
+  `1`, so its row stands out. Set
+  `options(tabxplor.ratio_print = "raw")` for the journal convention.
+* **`ci_method = c(mean_diff = "ols")`** pools the variance over *every* level of the variable, so
+  the interval is the one a linear regression gives that coefficient (`"student"` pools the two
+  compared groups only). `c(mean_ratio = "quasipoisson")` now likewise uses the single dispersion a
+  quasi-Poisson regression estimates. `tab_reg(empirical = TRUE)`'s observed columns use them
+  automatically on an unweighted table, and the design-based forms on a weighted one --- so an
+  observed effect and its interval are exactly the univariable model's.
 * **`ordered` factors now survive `tab()`.** They used to be silently stripped to plain factors. Note
   that the synthetic `Total` / `Ensemble` / `NA` levels are appended after the real ones, so on an
   ordered grouping column they compare as the greatest levels — they are labels, not scale points.
@@ -592,11 +610,12 @@ Removed / defunct (now error):
 * `ids` / `strata` / `fpc` / `nest` on `tab()`, `tab_reg()`, `tab_logit()` and `multi_logit()`, and
   `test = "survey"` (pass a `survey::svydesign()` as `data` — see above).
 * **The `fmt` column attributes `type` and `ci_type`, with `get_type()` / `set_type()` /
-  `get_ci_type()` / `set_ci_type()` and `fmt()`'s `type =` / `ci_type =` arguments.** A column now
-  states **what it estimates**: `scale =` (`"level_pct"`, `"level_mean"`, `"level_n"`, `"points"`,
-  `"mean_diff"`, `"raw_diff"`, `"pct_ratio"`, `"mean_ratio"`, `"odds_ratio"`, `"log_coef"`) plus
-  `pct_base =` (`"row"` / `"col"` / `"all"` / `"all_tabs"` / `"none"`), read with `get_scale()` /
-  `get_pct_base()`. `ci_type` is gone rather than renamed: the stored interval is always on the
+  `get_ci_type()` / `set_ci_type()` and `fmt()`'s `type =` / `ci_type =` arguments.** `type`
+  conflated two facts and is **split in two**: `scale =` says what the column estimates
+  (`"level_pct"`, `"level_mean"`, `"level_n"`, `"points"`, `"mean_diff"`, `"raw_diff"`,
+  `"pct_ratio"`, `"mean_ratio"`, `"odds_ratio"`, `"log_coef"`), and `pct_type =` which kind of
+  percentage it is (`"row"` / `"col"` / `"all"` / `"all_tabs"` / `"none"`), read with `get_scale()` /
+  `get_pct_type()`. `ci_type` is gone rather than renamed: the stored interval is always on the
   estimate's own scale, and whether a column *has* one is read from its bounds. `fmt()` answers a
   `type =` / `ci_type =` call with the mapping to the new arguments. This only concerns code that
   builds or inspects `fmt` vectors directly (see `vignette("tabxplor-programming")`); every `tab()`

@@ -42,11 +42,11 @@ fmt_contract_field_types <- c(
 # one table can mix several dependents of different families and each column keeps its effect wording.
 # Phase 17c ADDED `role` (10 -> 11): a reg column's role ("model"/"emp", "" on cross-tables), read by
 # the colour legend to name each column's effect without matching its rendered "Emp." label.
-# Phase 19b REPLACED `type` (8 values, two jobs) with `scale` + `pct_base`, and DELETED `ci_type`
+# Phase 19b REPLACED `type` (8 values, two jobs) with `scale` + `pct_type`, and DELETED `ci_type`
 # (the stored interval is always on the estimate's own scale, and "is there one" is a data fact).
 # Net 14 -> 15 attributes.
 fmt_contract_attr_defaults <- list(
-  scale = "level_n", comp_all = NA, ref = "", pct_base = "none",
+  scale = "level_n", comp_all = NA, ref = "", pct_type = "none",
   col_var = "", col_group = "", totcol = FALSE, refcol = FALSE, color = "", color_signif = "ignore",
   model_family = "", role = "",
   # Phase 18z13 (D3): the 12th. NA = "this column never recorded a level" -> every threshold in the
@@ -97,7 +97,7 @@ testthat::test_that("fmt carries exactly the contracted column attributes with r
 
 testthat::test_that("fmt survives saveRDS/readRDS round-trip with all fields and attributes", {
   x <- fmt(
-    n = c(10L, 20L), scale = "level_pct", pct_base = "row", digits = 1L, display = c("n", "pct"),
+    n = c(10L, 20L), scale = "level_pct", pct_type = "row", digits = 1L, display = c("n", "pct"),
     wn = c(9.5, 19.4), pct = c(NA, 0.5), mean = c(NA, NA), diff = c(NA, 0.1),
     ctr = c(NA, 0.3), var = c(NA, NA), ci = c(NA, 0.02),
     row_kind = c("data", "total"), in_refrow = c(TRUE, FALSE),
@@ -126,7 +126,7 @@ testthat::test_that("fmt survives saveRDS/readRDS round-trip with all fields and
 # ci_inf/ci_sup bounds around the estimate the interval is centred on (here the proportion
 # pct), and get_ci() / $ci read the half-width back as ci_sup - centre.
 testthat::test_that("fmt(ci=) stores absolute bounds and get_ci() reads the half-width back", {
-  x <- fmt(n = c(10L, 20L), scale = "level_pct", pct_base = "row", pct = c(0.4, 0.5), ci = c(NA, 0.02))
+  x <- fmt(n = c(10L, 20L), scale = "level_pct", pct_type = "row", pct = c(0.4, 0.5), ci = c(NA, 0.02))
   testthat::expect_identical(vctrs::field(x, "ci_sup"), c(NA_real_, 0.52))  # pct + ci
   testthat::expect_identical(vctrs::field(x, "ci_inf"), c(NA_real_, 0.48))  # pct - ci
   testthat::expect_equal(get_ci(x), c(NA_real_, 0.02))       # half-width read back

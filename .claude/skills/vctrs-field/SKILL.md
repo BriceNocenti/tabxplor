@@ -24,12 +24,12 @@ allowed-tools: Read, Grep, Edit
   - `rr` was renamed `ratio` (read-side alias only).
 - **ATTRIBUTES**: scalar per column, accessed via `attr()`. Currently **15**, and the list is
   **DERIVED**, never hand-written: `fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names,
-  "...", "class"))` = `scale, comp_all, ref, pct_base, col_var, totcol, refcol, color, color_signif,`
+  "...", "class"))` = `scale, comp_all, ref, pct_type, col_var, totcol, refcol, color, color_signif,`
   `model_family, role, conf_level, degf, basis, ci_method` (**15** since Phase 19b). Adding an attribute
   to `new_fmt()`'s signature therefore adds it to every rebuild site automatically — that is the point,
   do not reintroduce a literal list.
   - `scale` is the key into the declared library `EST_SCALES` — WHAT the column estimates. Read it
-    through `fmt_scale_row()` / `fmt_var_kind()` / `get_pct_base()`; **never** re-derive a scale from a
+    through `fmt_scale_row()` / `fmt_var_kind()` / `get_pct_type()`; **never** re-derive a scale from a
     display, a family, or whether `var` happens to be non-NA (that is exactly the dispatch 19b deleted).
 
 Re-grep exact line numbers before editing; the anchors below drift.

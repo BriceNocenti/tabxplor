@@ -7,6 +7,10 @@
 #   - TWO declared vocabularies, side by side: CI_METHODS says which METHOD a kind of interval may be
 #     built with, CI_GEOMS which INTERVAL a column's plan asks for. Read CI_GEOMS only through its
 #     accessors, so its three consumers cannot answer the reference-cell question differently.
+#   - The engines are ELEMENTWISE over cells and know nothing of a variable's level set, so a method
+#     whose variance is pooled over that set (CI_POOLED: "ols", "quasipoisson") takes it as `pool`,
+#     computed by the caller through ci_pool_disp(). Never give an engine a grouping key instead: the
+#     vectors it receives span total rows and sub-tables, which no key in its argument list separates.
 #   - SIGNIFICANCE IS CI-INVERSION. The stored per-cell `pvalue` inverts the SAME interval that drew
 #     the bracket, so stars and bounds can never contradict each other, whatever the method.
 #   - data.table NSE: keep aggregations GForce-friendly (bare per-column sums), and never re-scan N
@@ -206,10 +210,20 @@ zscore_formula <- function(conf_level) conf_level_to_crit(conf_level, Inf)
 CI_METHODS <- list(
   cell       = c("wilson", "wald", "beta"),
   diff       = c("newcombe", "ac", "wald"),
-  mean_diff  = c("welch", "student"),
+  mean_diff  = c("welch", "student", "ols"),
   mean_ratio = c("robust", "quasipoisson", "poisson"),
   model      = c("wald", "profile")
 )
+
+# The methods whose variance is POOLED OVER THE WHOLE VARIABLE, not over the two cells being
+# compared -- the two that reproduce a MODEL's interval rather than a two-sample test: `ols` is the
+# linear model's coefficient interval (one residual variance over all k levels, df = N - k) and
+# `quasipoisson` the quasi-Poisson's (one global Pearson dispersion). The engines are vectorised over
+# cells and know nothing of the level set, so the CALLER must supply `pool` -- see ci_pool_disp().
+# With no `pool` they fall back to the pair, which IS the level set when the variable has 2 levels.
+#' @keywords internal
+#' @noRd
+CI_POOLED <- list(mean_diff = "ols", mean_ratio = "quasipoisson")
 
 # A crosstab has no model interval and a regression no cell one, so a consumer that enumerates the slots
 # (the jamovi vocabulary gate) must be able to ask which producer offers each.
@@ -323,14 +337,14 @@ CI_GEOMS <- list(
     scale_key = "mean_diff", wants_ref = TRUE, wants_p = TRUE, ref_cell = "na",
     engine = function(a) ci_mean_diff2(a$est, a$var, a$base, a$ref, a$ref_var, a$ref_n,
                                        method = a$method, conf_level = a$conf_level,
-                                       want_p = a$want_p, df_design = a$degf)),
+                                       want_p = a$want_p, df_design = a$degf, pool = a$pool)),
   "diff.mean.ratio" = list(
     kind = "diff", var_kind = "mean", scale = "ratio",
     method_slot = "mean_ratio", method_fixed = NA_character_,
     scale_key = "mean_ratio", wants_ref = TRUE, wants_p = TRUE, ref_cell = "na",
     engine = function(a) ci_mean_ratio(a$est, a$var, a$base, a$ref, a$ref_var, a$ref_n,
                                        method = a$method, conf_level = a$conf_level,
-                                       want_p = a$want_p, df_design = a$degf))
+                                       want_p = a$want_p, df_design = a$degf, pool = a$pool))
 )
 
 stopifnot(all(vapply(CI_GEOMS, function(g) setequal(
@@ -386,13 +400,13 @@ ci_dispatch <- function(kind, var_kind, ci_scale = "diff",
                         est, base, var = NULL,
                         ref = NULL, ref_var = NULL, ref_n = NULL, n_raw = NULL,
                         conf_level = 0.95, want_p = FALSE,
-                        method = default_ci_method(), degf = Inf) {
+                        method = default_ci_method(), degf = Inf, pool = NULL) {
   g <- ci_geom(kind, var_kind, ci_scale)
   if (is.null(g)) cli::cli_abort(
     "No interval geometry for {.val {kind}} / {.val {var_kind}} / {.val {ci_scale}}.")
   g$engine(list(
     est = est, base = base, var = var, ref = ref, ref_var = ref_var, ref_n = ref_n, n_raw = n_raw,
-    conf_level = conf_level,
+    conf_level = conf_level, pool = pool,
     # a caller that forgets the kind test still gets FALSE where there is no null to test
     want_p = isTRUE(want_p) && isTRUE(g$wants_p),
     method = if (is.na(g$method_slot)) g$method_fixed else as.character(method[[g$method_slot]]),
@@ -560,11 +574,17 @@ ci_katz_rr <- function(p1, n1, p2, n2, conf_level = 0.95, want_p = TRUE, df = In
 }
 
 # A mean variance is always ESTIMATED, so this is a Student t at the METHOD's own df, never one flipped
-# by the stars toggle: "welch" (default) takes each group's own variance and the Welch-Satterthwaite df,
-# "student" the pooled variance and n1+n2-2 (= an OLS two-group coefficient CI).
+# by the stars toggle. Three variance assumptions, from the narrowest scope to the widest:
+#   welch   (default) each group's own variance, Welch-Satterthwaite df -- a two-sample test.
+#   student the two groups POOLED, df = n1 + n2 - 2 -- the two-sample pooled t.
+#   ols     the variance pooled over ALL the variable's levels, df = N - k -- the interval a LINEAR
+#           MODEL puts on that coefficient. Needs `pool` (see CI_POOLED); without it, the pair.
 ci_mean_diff2 <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TRUE,
-                          method = "welch", df_design = Inf) {
-  if (identical(method, "student")) {
+                          method = "welch", df_design = Inf, pool = NULL) {
+  if (identical(method, "ols") && !is.null(pool)) {
+    se <- sqrt(pool$disp * (1 / n1 + 1 / n2))
+    df <- pool$df
+  } else if (method %in% c("student", "ols")) {
     sp2 <- ((n1 - 1) * v1 + (n2 - 1) * v2) / (n1 + n2 - 2)
     se  <- sqrt(sp2 * (1 / n1 + 1 / n2))
     df  <- n1 + n2 - 2
@@ -573,6 +593,34 @@ ci_mean_diff2 <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TR
     df <- se^4 / ((v1 / n1)^2 / (n1 - 1) + (v2 / n2)^2 / (n2 - 1))
   }
   ci_pivot(m1 - m2, se, df = df_or_design(df, df_design), conf_level = conf_level, want_p = want_p)
+}
+
+# ci_pool_disp() -- the ONE dispersion a model estimates for a whole variable, which the elementwise
+# engines above cannot compute: they see a cell and its reference, never the level set.
+#   mean_diff   s_p2 = SUM (n_g - 1) v_g          / (N - k)   the OLS residual variance
+#   mean_ratio  phi  = SUM (n_g - 1) v_g / m_g    / (N - k)   the Pearson dispersion
+# `by` groups the cells (one variable, one sub-table); `use` marks the rows that ARE levels of it --
+# a total row is a mixture, not a level, and would be counted twice. Returns both quantities
+# broadcast to every cell of the group, so the engines stay elementwise.
+#' @keywords internal
+#' @noRd
+ci_pool_disp <- function(n, mean, var, by, use, kind) {
+  n_r  <- length(n)
+  disp <- rep(NA_real_, n_r); df <- rep(NA_real_, n_r)
+  use  <- use & is.finite(n) & n > 1 & is.finite(var) &
+    (if (identical(kind, "mean_ratio")) is.finite(mean) & mean > 0 else TRUE)
+  if (!any(use)) return(list(disp = disp, df = df))
+  num <- (n - 1) * var
+  if (identical(kind, "mean_ratio")) num <- num / mean
+  by  <- as.character(by)
+  for (g in unique(by[use])) {
+    i  <- use & by == g
+    N  <- sum(n[i]); k <- sum(i)
+    if (N - k <= 0) next
+    disp[by == g] <- sum(num[i]) / (N - k)
+    df[by == g]   <- N - k
+  }
+  list(disp = disp, df = df)
 }
 
 # A DESIGN's degrees of freedom REPLACE the sample-based ones: survey refers every interval, mean
@@ -587,22 +635,26 @@ df_or_design <- function(df, df_design) {
 # spanning the dispersion ladder a Poisson / quasi-Poisson regression walks and reproducing it:
 #   robust       each group's OWN empirical variance (delta method on log = robust Poisson / GEE): z.
 #   poisson      naive Var = mu, so se_logR = sqrt(1/S1 + 1/S2), S = m*n the group total count: z.
-#   quasipoisson the Poisson se * sqrt(phi), phi the pooled Pearson dispersion: Student t(n1+n2-2).
+#   quasipoisson the Poisson se * sqrt(phi), phi the Pearson dispersion the quasi-Poisson MODEL
+#                estimates -- ONE value for the whole variable, df = N - k. That is what `pool`
+#                carries (see CI_POOLED); without it, the pair, which is the same thing at k = 2.
 # WARNING: undefined at m <= 0 -> NA bounds and NA p (an empty group is left uncoloured, unstarred).
 ci_mean_ratio <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TRUE,
-                          method = "robust", df_design = Inf) {
-  lr <- log(m1 / m2)
+                          method = "robust", df_design = Inf, pool = NULL) {
+  lr    <- log(m1 / m2)
+  qpool <- identical(method, "quasipoisson") && !is.null(pool)
   se <- switch(
     method,
     "robust"       = sqrt((v1 / n1) / m1^2 + (v2 / n2) / m2^2),
     "poisson"      = sqrt(1 / (m1 * n1) + 1 / (m2 * n2)),
     "quasipoisson" = {
-      phi <- ((n1 - 1) * v1 / m1 + (n2 - 1) * v2 / m2) / (n1 + n2 - 2)
+      phi <- if (qpool) pool$disp
+             else ((n1 - 1) * v1 / m1 + (n2 - 1) * v2 / m2) / (n1 + n2 - 2)
       sqrt(1 / (m1 * n1) + 1 / (m2 * n2)) * sqrt(phi)
     },
     stop("unknown method_mean_ratio: ", method)
   )
-  df  <- if (identical(method, "quasipoisson")) n1 + n2 - 2 else Inf
+  df  <- if (qpool) pool$df else if (identical(method, "quasipoisson")) n1 + n2 - 2 else Inf
   res <- ci_pivot(lr, se, df = df_or_design(df, df_design), conf_level = conf_level,
                   want_p = want_p)
   inf <- exp(res$inf); sup <- exp(res$sup)

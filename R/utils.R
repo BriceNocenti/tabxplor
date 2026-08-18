@@ -1,9 +1,9 @@
 # PURPOSE: Package initialization (.onLoad), factor/list/string utilities (incl. stringi-based
 #          tx_str_wrap/tx_str_trunc, the two str_wrap/str_trunc replacements after stringr was dropped).
-# ROLE: Sets all tabxplor.* options defaults. Entry point for package configuration.
+# ROLE: Entry point for package configuration: .onLoad() seeds the options from their declared table.
 # KEY CONSTRAINTS:
-#   - .onLoad() is the single source of truth for all option defaults.
-#   - Changing a default here affects every user on package load.
+#   - TAB_OPTIONS (R/tab-options.R) is the single source of truth for option names and defaults;
+#     .onLoad() only SEEDS them, through tx_seed_options().
 #   - set_color_style() and set_color_breaks() are defined in tab_classes.R but called here.
 
 # Rlang .data to bind data masking variable in dplyr

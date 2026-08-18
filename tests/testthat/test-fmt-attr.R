@@ -9,12 +9,12 @@
 #   - `color` is the one non-scalar attribute (text + background channels).
 
 testthat::test_that("fmt_attr() reaches every declared attribute", {
-  x <- fmt(n = c(10, 20), pct = c(0.3, 0.7), scale = "level_pct", pct_base = "row")
+  x <- fmt(n = c(10, 20), pct = c(0.3, 0.7), scale = "level_pct", pct_type = "row")
   for (a in tabxplor:::fmt_col_attrs)
     testthat::expect_no_error(fmt_attr(x, a), message = paste("attribute", a))
   # ...and each one agrees with its own named accessor where there is one
   testthat::expect_identical(fmt_attr(x, "scale"),    get_scale(x))
-  testthat::expect_identical(fmt_attr(x, "pct_base"), get_pct_base(x))
+  testthat::expect_identical(fmt_attr(x, "pct_type"), get_pct_type(x))
   testthat::expect_identical(fmt_attr(x, "col_var"),  get_col_var(x))
   testthat::expect_identical(fmt_attr(x, "totcol"),   is_totcol(x))
 })

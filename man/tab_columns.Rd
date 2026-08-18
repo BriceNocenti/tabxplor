@@ -15,7 +15,7 @@ A tibble, one row per \code{fmt} column:
 \item{\code{column}}{the column name.}
 \item{\code{col_var}, \code{col_group}}{the column variable, and the sub-population its block belongs to
 (\code{""} when the table was never spread).}
-\item{\code{scale}, \code{pct_base}}{what the column estimates, and on which percentage base.}
+\item{\code{scale}, \code{pct_type}}{what the column estimates, and on which percentage base.}
 \item{\code{display}}{the display template(s) its cells carry.}
 \item{\code{ref}, \code{comp_all}, \code{totcol}, \code{refcol}}{the comparison model: which baseline, whether it
 compares across sub-tables, and whether this column is a total or the reference.}
