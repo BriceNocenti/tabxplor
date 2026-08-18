@@ -7,7 +7,7 @@
 #     `meta$spec$kind` (R/table-spec.R). Never a column NAME, never a heuristic.
 #   - Not every refusal is a shape fact: tab_transpose() also refuses duplicated row keys and multiple
 #     total rows/columns, which are properties of the CONTENT and stay local to that function.
-# See: dev/tabxplor_architecture.md (declarative architecture); TAB_OPS below.
+# See: CLAUDE.md § tabxplor architecture (declarative architecture); TAB_OPS below.
 #
 # THE MODEL -- one reader, one declared table:
 #   tab_shape(x)        the shape facts. Exported ("what have I got?" is a user question).

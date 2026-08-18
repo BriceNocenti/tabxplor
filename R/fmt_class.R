@@ -13,7 +13,7 @@
 #   - Adding a FIELD touches ~9 sites here (follow the /vctrs-field skill); adding an ATTRIBUTE is a
 #     new_fmt() formal + one `fmt_attr_rules` row (a build-time stopifnot refuses a missing row).
 #   - Display glyph constants (mult_sign, div_sign, unbrk, sigma_sign, fig_space) live in utils.R.
-# See: dev/tabxplor_architecture.md (type system + colour system); /vctrs-field + /color-mode skills.
+# See: CLAUDE.md § tabxplor architecture (type system + colour system); /vctrs-field + /color-mode skills.
 
 # Create formated numbers class
 #' Internal vctrs methods

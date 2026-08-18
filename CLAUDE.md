@@ -1,14 +1,31 @@
 # tabxplor — AI Assistant Guide
 
-## Package Purpose
+## What tabxplor is, and why
 
-`tabxplor` is a public CRAN R package (v1.3.1) maintained by me for creating, manipulating, and formatting color-coded cross-tabulations. It uses `data.table` for fast aggregation internally and exposes a `tidyverse`-compatible API via custom `tibble` subclasses. Tables can be exported to Excel (with colors), HTML, Markdown, and ggplot. All numeric cells are stored as `vctrs` record vectors (`tabxplor_fmt`) carrying full statistical metadata, enabling lossless display switching.
+`tabxplor` is a public CRAN R package (v2.0.0). it builds **colour-coded cross-tables and regression tables for data exploration** then a **publication-ready black and white version**. The one idea behind everything: colour or typography lets you *read a table at a glance*. Over-represented cells turn blue (or bold), under-represented ones red (or italics), deeper colour (or underlines) means a stronger deviation — and a cell is only coloured/typoed when the difference is statistically solid, so structure jumps out instead of being scanned number by number.
+
+It sits at the intersection of three things most tools keep separate, and its architecture exists to unify them:
+
+- a **display engine** — colour and typography that encode statistics (effect size *and* significance at once), the same visual language across console, HTML, Excel, Markdown/Quarto and plots;
+- a **rich cell data-model** — every cell is a `vctrs` record carrying all the numbers behind the one it shows, so tables stay ordinary `dplyr`-manipulable tibbles and the display can switch losslessly;
+- a **statistical-inference layer** — exact survey/design-effect variance (reproducing the `survey` package), named CI methods (Wilson, Newcombe, Katz, Woolf, Welch), Haberman adjusted residuals. **regression tables** get the same language plus the observed-vs-modelled comparison.
+
+The target users are : 1. a "literary" social sciences student, not good at math, learning to read equiped crosstables and regression models using colors ; 2. a serious quantitative analyst — survey researcher, sociologist — often working with **weighted or complex-survey data**. That is why the inference layer is unusually deep for an exploration tool, and why `tab_reg()` pairs a model's adjusted effect with its **observed (crude) counterpart**, so "what did controlling for the other variables actually change" is visible in one table.
+
+Two design principles underpin the whole package:
+
+1. **Every cell carries all its statistical data.** A numeric cell is a `tabxplor_fmt` record (count, weighted count, percentage, difference, ratio, contribution, CI bounds, odds ratio, p-value, …). Changing what is displayed never recomputes or loses anything.
+2. **Tables are tibbles.** Results inherit from `tibble` (`tabxplor_tab` / `tabxplor_grouped_tab`), so every `dplyr` verb works while table metadata and formatting survive.
+
+**Performance:** aggregation runs on `data.table` internally; the user only ever sees tibbles of `fmt` columns.
+
+**Dependencies are pay-as-you-go:** table building and core inference are always available (hard Imports include `data.table`, `broom`, and the stats engines `survey`/`nnet`/`MASS`); exporters, plotting, parallelism, jamovi and advanced regression backends are all Suggests, guarded at their entry points.
 
 ---
 
 ## Repository Map
 
-46 R files (`R/`) grouped into seven subsystems. Every file carries a header comment with fuller design detail (the two generated jmvtab `*.h.R` are the exception); the cross-subsystem big picture is `dev/tabxplor_architecture.md`. One role line per file — read the file header for the rest.
+R files (`R/`) are grouped into seven subsystems. Every file carries a header comment with fuller design detail: read it for more details.
 
 **Core type system** — the `fmt` record, the table classes, the row/table identity.
 
@@ -81,96 +98,191 @@
 
 ---
 
-## Global Architecture
+## tabxplor architecture
 
+### How a table is built
+
+Three kinds of input converge on one output through one pipeline:
+
+```text
+ data source           build                     result              render
+ ───────────           ─────                     ──────              ──────
+ microdata     ┐
+ aggregated    ┼──►  aggregate core  ──►  fmt cells  ──►  tabxplor_tab  ──►  colour engine  ──►  console
+ counts        │     (sufficient          (rich vctrs      (tibble +          (per cell)          html · xlsx
+ a fitted model┘      statistics)           records)         metadata)                             markdown · plot
 ```
-tab() [user-friendly wrapper]
-  └── tab_many() [full-featured, vectorised over row_vars and col_vars]
-        └── per row_var:
-              tab_prepare()  →  tab_plain() / tab_num()  →  tab_pct()
-                →  tab_ci()  →  tab_chi2()  →  tab_totaltab()
-                      →  tab_spread() / tab_compact()
 
-Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
+There are **two producers, one output type**. `tab()` builds crosstabs from microdata; `tab_reg()` builds regression tables from a model. Both emit a `tabxplor_tab` of `fmt` columns, so the colour engine, the accessors, the reshape operations and every exporter treat them identically — one visual language, one export path. `tab_counts()` is a third entry that starts "from the middle", building the same object from already-aggregated counts.
+
+### The declarative architecture
+
+The codebase is organised around **declared fact tables**. Instead of scattering literals and re-deriving `switch` statements, each fact — a colour measure, an option, an argument, an estimand, a display token, a kind of row — is stated **once, in one table**, and read through named accessors. The single rule a future change must respect: *every fact is stated once, in one declared table; a key one table reads out of another is a foreign key, checked at load* (`zzz-fact-keys.R` validates every edge when the namespace loads, so a rename that breaks a reference fails the install, not a user's table).
+
+The payoff to internalise: **adding a measure, an option, an argument, an estimand is one new row — not N scattered edits.** Do not re-introduce ad-hoc branches; extend the table. The main fact tables:
+
+| Fact table         | Home                 | Declares                                                                               |
+|--------------------|----------------------|----------------------------------------------------------------------------------------|
+| `MEASURES`         | `fmt_class.R`        | The colour measures (raw field, scale keys, significance source, legend, requirements) |
+| `EST_SCALES`       | `fmt_class.R`        | What a column estimates (field, null, geometry, colour ladder, SD source)              |
+| `DISPLAY_TOKENS`   | `tab-display.R`      | The `{}` display grammar (field source, geometry, aliases, placement)                  |
+| `CI_METHODS`       | `tab-agg.R`          | The confidence-interval methods and geometries (with `CI_GEOMS`)                       |
+| `COLOR_SCALES`     | `tab_classes.R`      | The break scales and palettes                                                          |
+| `TAB_ARGS`         | `tab-args.R`         | The argument surface (signatures, values, option twins, prose; + `EXPORT_ARGS`)        |
+| `TAB_OPTIONS`      | `tab-options.R`      | The package options and their defaults                                                 |
+| `ROW_KINDS`        | `row-model.R`        | The row-kind vocabulary                                                                |
+| `TEST_ROWS`        | `tab-test-display.R` | The footer / statistical-row catalogue                                                 |
+| `TAB_OPS`          | `tab-shape.R`        | Which reshape operations accept which table shape                                      |
+| `REG_ESTIMANDS`    | `reg-estimand.R`     | What a regression column estimates (family × effect × measure)                         |
+| `REG_EMPIRICAL`    | `reg-empirical.R`    | The crude-companion column shapes per family                                           |
+| `REG_CHECKS`       | `reg-assumptions.R`  | The model-check / assumption catalogue                                                 |
+| `TAB_FOREIGN_KEYS` | `zzz-fact-keys.R`    | The cross-table foreign-key edges, checked at load                                     |
+
+Three supporting mechanisms carry the same spirit: **typed contexts** (`new_ctx()`, `new_reg_ctx()`) declare every value a pipeline threads, so a stage cannot read an undeclared field; **single argument boundaries** (`tab_resolve_common_args()`, `reg_resolve_args()`) normalise every producer's arguments in one place; and **one table identity** — `meta$spec`, with three slots `kind` / `vars` / `call` — says what a table is, read through `tab_kind()` / `tab_is_reg()`.
+
+### The type system
+
+#### tabxplor_fmt — the rich cell
+
+`tabxplor_fmt` (`R/fmt_class.R`) is a `vctrs::new_rcrd()` record and the foundation of the package: every numeric column of a table is an `fmt` vector. It has **21 per-cell fields** and **16 per-column attributes**.
+
+**Fields** (per-cell, via `vctrs::field()`):
+
+| Field       | Type | Meaning                                                                             |
+|-------------|------|-------------------------------------------------------------------------------------|
+| `n`         | int  | Unweighted count                                                                    |
+| `wn`        | dbl  | Weighted count                                                                      |
+| `pct`       | dbl  | Percentage, stored 0–1 (×100 only in `format()`)                                    |
+| `mean`      | dbl  | Cell mean (numeric column variables; `NA` on pct columns)                           |
+| `tot_n`     | dbl  | The cell's own unweighted percentage base (row/col/grand total per `pct`)           |
+| `diff`      | dbl  | Difference from the reference                                                       |
+| `ratio`     | dbl  | Ratio to the reference (the "×2" reference-relative ratio the colour engine reads)  |
+| `or`        | dbl  | Odds ratio / relative-risk ratio                                                    |
+| `obs`       | dbl  | The observed/crude value a `tab_reg` estimate is compared to (`NA` elsewhere)       |
+| `gap_se`    | dbl  | SE of the gap between the estimate and `obs` (drives `color_signif` on adjustments) |
+| `ctr`       | dbl  | Contribution to chi-squared variance                                                |
+| `var`       | dbl  | Variance (CI / effect size)                                                         |
+| `ci_inf`    | dbl  | Lower confidence-interval bound                                                     |
+| `ci_sup`    | dbl  | Upper confidence-interval bound                                                     |
+| `pvalue`    | dbl  | Per-cell significance p-value (CI-inversion; drives stars)                          |
+| `n_eff`     | dbl  | Effective sample size for the CI (design-based; `NA` → raw base)                    |
+| `display`   | chr  | Which field(s) to show — a `{}` template resolves to this                           |
+| `digits`    | int  | Decimal places                                                                      |
+| `row_kind`  | chr  | Kind of row: data / total / n / pct / pvalue / gof / blank                          |
+| `in_tottab` | lgl  | Cell belongs to the total table                                                     |
+| `in_refrow` | lgl  | Cell belongs to the reference row                                                   |
+
+**Attributes** (per-column, via `attr()`):
+
+| Attribute      | Type | Meaning                                                                                        |
+|----------------|------|------------------------------------------------------------------------------------------------|
+| `scale`        | chr  | What the column estimates — a key into `EST_SCALES` (`level_pct`/`mean_diff`/`odds_ratio`/…)   |
+| `pct_base`     | chr  | What a percentage is OF (`row`/`col`/`all`/`all_tabs`/`none`) — the axis its reference lies on |
+| `ci_method`    | chr  | Which interval engine built the bounds (`wilson`, `newcombe`, `welch`, `katz`, …; `""` = none) |
+| `conf_level`   | dbl  | The confidence level the interval and thresholds were computed at                              |
+| `degf`         | dbl  | Degrees of freedom the interval refers to (`NA` → refer to z)                                  |
+| `basis`        | chr  | How the interval was computed: `n` / `weights` / `design` / `design_partial`                   |
+| `col_var`      | chr  | Name of the column variable                                                                    |
+| `col_group`    | chr  | Which sub-population the block belongs to (a spread level or `tab_vars` group; `""` otherwise) |
+| `ref`          | chr  | Reference type (`tot` / `first`)                                                               |
+| `comp_all`     | lgl  | Compare against the total table (TRUE) or the subtable (FALSE)                                 |
+| `totcol`       | lgl  | This column is a total column                                                                  |
+| `refcol`       | lgl  | This column is a reference column                                                              |
+| `color`        | chr  | Colour measure (length 1, or 2 for a text+background channel pair)                             |
+| `color_signif` | chr  | Significance policy: `ignore` / `grey_non_signif` / `guaranteed_effect`                        |
+| `model_family` | chr  | A regression column's own family (`""` on crosstabs)                                           |
+| `role`         | chr  | A regression column's role: `model` / `emp` / `n` (`""` on crosstabs)                          |
+
+**The critical distinction:** fields vary per cell; attributes are scalar over a whole column. Do not confuse them. The record is deliberately **dense** — every column carries all 21 fields, an inapplicable one stored as `NA`, never absent — so the colour engine and tooltip builder read any field on any column and simply find `NA` where it does not apply (sparse fields buy almost nothing and would add a second encoding of "not applicable", so the shape is fixed).
+
+The attribute list is **derived** from `new_fmt()`'s formals (attributes = formals that are not fields), and how each attribute is carried through casts, arithmetic and binds is itself a declared table (`fmt_attr_rules`: `neutral` / `merge` / `arith` / `scalar` / `write`). Adding an attribute is a `new_fmt()` formal plus one rule row; a build-time assertion refuses an attribute with no rule. Read/write any attribute by name with `fmt_attr()` / `` `fmt_attr<-` `` (the programmatic surface); the named `get_*`/`set_*` accessors are the taught surface. Constructor chain: `fmt()` (public, validates) → `new_fmt()` (internal).
+
+**Adding a field** touches ~9 sites in `fmt_class.R` (the field list, `fmt()`, `new_fmt()`, the getters/setters, the four reconstructors) plus, for a *displayed* field, `get_num()`/`set_num()`, `format()`, `tab_xl` and a `DISPLAY_TOKENS` row — follow the `/vctrs-field` skill, which encodes the checklist.
+
+#### tabxplor_tab — the table
+
+`tabxplor_tab` is a `tibble` subclass; `tabxplor_grouped_tab` extends `grouped_df` when `tab_vars` split the table into sub-tables. Class and metadata survive `dplyr` through ~30 S3 methods, anchored by the `dplyr_row_slice()` / `dplyr_col_modify()` / `dplyr_reconstruct()` trio (a missing method silently downgrades to a plain tibble). A table carries three **optional, NULL-safe** attributes: `subtext` (legend text), `test` (a tibble of chi²/ANOVA/model-footer rows), and `meta` (one list holding `spec`, the variable model, CI settings, render intent, and any regression/assumption records). Every getter tolerates absence: a table stripped of `test` still prints, dropping only the summary it powered — cell fields and column attributes stay required, a standalone extracted `fmt` column formats and colours on its own.
+
+#### The row model
+
+Rows describe themselves the way columns do. The `row_kind` field (from `ROW_KINDS`: `data`/`total`/`n`/`pct`/`pvalue`/`gof`/`blank`) says what kind of row a cell sits in; `is_totrow()` is the derived read. The index columns are a `tabxplor_lvl` factor subclass carrying each level's `role` (level / variable / tab-variable) and originating `var`, so variable detection and rendering read stored facts rather than guessing from labels.
+
+### The calculation pipeline
+
+Both crosstab entry points are thin wrappers over `tab_build()`, a staged pipeline over a typed `ctx`:
+
+```text
+tab() / tab_many()                          [public; differ only in default output shape]
+  └─ tab_build(ctx)
+       ├─ tab_setup           resolve arguments → the settings spine (rows / cols / pairs)
+       ├─ tab_prepare_pop     prepare the population once (filter, NA, lump, relabel, weights)
+       ├─ tab_aggregate       sufficient-statistic aggregation (data.table)
+       ├─ tab_build_tables    per row_var: tab_transform (cells + interval + test) → tab_assemble_tables
+       └─ tab_assemble_output output shape (merge / spread / compact / unwrap)
 ```
 
-> **This is the *current* pipeline. 2.0.0 rewrites it around a single aggregate-core** (see roadmap § Keystone + `dev/tabxplor_2.0.0_decisions.md`): the step chain `tab_pct → tab_ci → tab_chi2 → …` collapses into one core, and `tab_pct`/`tab_tot`/`tab_ci`/`tab_chi2` become superseded thin wrappers.
+**The settings spine** (`ctx$settings` = a `rows` / `cols` / `pairs` star schema) is where the row and column axes meet exactly once, so parallel argument vectors cannot recycle against each other. Each stage projects the spine into the bare names its resolution block reads, so a pre-resolution value can never leak into a computation.
 
-**Ordering invariant** (in `tab_many()`, `tab.R` ~L1146): `tab_chi2()` and `tab_ci()` are independent (either order), but non-first levels (`levels="first"`) must be dropped **after both**, so chi2/ci are computed on the full set of levels. Do not move the level-drop above chi2/ci.
+**The aggregate core** (`tab-leaf.R` + `tab-agg.R`) is the single place microdata becomes cells: the leaves `plain_core()` (factors) and `num_core()` (numeric column variables) turn sufficient statistics into `fmt` fields, their confidence interval and the whole-table test in one pass — there is no separate step chain. The superseded dplyr-era steps (`tab_pct` → `tab_ci` → `tab_chi2` → …) are quarantined in `tab-steps-legacy.R`: still exported for back-compatibility, they reconstruct a plan from `fmt` markers but share the *arithmetic* (`ci_dispatch()`, `chi2_compute_test()`) with the leaves, so a step and a build cannot compute two different answers.
 
-### Key Constraints
+**The reference system:** `ref` picks the comparison baseline (`tot` / `first` / an index / a regex), reinterpreted by `pct` (a reference *row* under row%/means, a reference *column* under col%); `ref2` names the second level for odds ratios; `comp = "tab"` compares within each sub-table, `comp = "all"` against the total table. **Significance:** a cell is significant when its confidence interval excludes the null; the displayed p-value (and its stars) come from inverting that interval, so one CI-inclusion rule governs colour, greying and stars alike. Interval geometry (proportion pivot, mean difference, multiplicative log) is declared in `CI_GEOMS`, its method in `CI_METHODS`.
 
-| Constraint               | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-|--------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| CRAN stability           | Public function arguments must NOT change without deprecation. Internals can change freely.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| vctrs record contract    | Adding a field to `tabxplor_fmt` requires updating `new_fmt()`, `fmt()`, `format.tabxplor_fmt()`, `pillar_shaft.tabxplor_fmt()`, `vec_arith` methods, and possibly `tab_pct()`/`tab_ci()`/`tab_chi2()`. ~8 functions across 3 files.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| NAMESPACE                | Auto-generated by roxygen2. Never edit `NAMESPACE` by hand. Run `devtools::document()` after changing `@export`/`@import`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| data.table internals     | `tab_plain()`/`tab_num()` rename `col_var` to internal names to avoid data.table conflicts. The user's column names are restored afterward.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| dplyr class preservation | 30+ S3 methods on `tabxplor_tab`/`tabxplor_grouped_tab` ensure class + attributes survive all dplyr verbs. Missing a method = silent class downgrade to `tbl_df`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Options as config        | All defaults set in `.onLoad()` in `utils.R`. Users override via `options()`. Functions read with `getOption()`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Suggests-only guards     | `openxlsx2`, `ggplot2`, `jmvcore`, `ggpubr`, `cowplot`, `mirai`, `kableExtra` are in Suggests. Every call must be guarded with `requireNamespace()` or equivalent (tab_xl's ONE guard is in `tab_xl()`; `R/tab-xl-backend.R` wrappers are unguarded; `kableExtra`'s two entry points — `render_kable_html()` engine dispatch + `kable_tabxplor_style()` — are guarded, the default `html` engine never touches it).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Color break mirroring    | `set_color_breaks()` takes positive-only thresholds. Negative breaks are auto-mirrored internally. Any `pct_breaks` value > 1 triggers ratio comparison instead of difference (the "*2 rule").                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Mean-diff asymmetry      | For `type="mean"` columns, the `diff` field stores a **ratio** (cell_mean / ref_mean), NOT a difference. Thresholds like 1.15 mean "+15% above reference". This asymmetry propagates into `color_formula()` and `format.tabxplor_fmt()`. **(2.0.0 §3: numeric `diff` becomes a real difference; the ratio moves to the `ratio` field — the never-used `rr` field renamed, placed after `diff`.)**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| tab_reg                  | Phase 12c–12g LIVE: unified regression tables (gaussian beta / binomial OR / poisson IRR / multinomial OR / ordinal cumulative OR) over lm/glm/svyglm/svyolr/svy_vglm/nnet::multinom/MASS::polr + broom (no parsnip). A binary outcome is `tab_reg(family = "binomial")` (20a deleted the tab_logit/multi_logit wrappers). **The estimand is `effect` x `measure`** (19e, R/reg-estimand.R): the row it resolves to declares the fit, the `exp` flag, the header word and the stored `scale` -- additive beta -> the `diff` field + scale "raw_diff"/"log_coef"; multiplicative OR/IRR/cumOR -> `or` + scale "odds_ratio"; a ratio of means -> `ratio` + "mean_ratio". `exponentiate` / `at` / `estimate_display` are DELETED (`measure = "log"`, `effect = "at_reference"`, a real `display =`); `type`/`ci_type` are gone (19b). The `var` field carries var(Y). 12d: MNL = one OR col per outcome category vs ref; ordinal polr + Brant PO diagnostic. 12f: model-summary footer + compare= in the `test` attr. 12g / z14-i: SURVEY designs — `wt=` (a flat ids=~1 design), or a prebuilt `survey::svydesign` as `data` for anything richer (clusters / strata / fpc / CALIBRATION); `ids=`/`strata=`/`fpc=`/`nest=` are REMOVED (they reached only the omnibus p) and a svrepdesign/twophase is refused. A design's own weights become `.svy_weights` at the shared boundary, so the crude `Obs_*` columns, the AME, the frozen SD, the gap-test influence weights and the footer are all design-weighted (they silently were not); reduced weighted glance (Wald/Nagelkerke/Cox-Snell/Rao-Scott-AIC) + weighted compare (anova.svyglm Wald); weighted 3+ level (svyolr / svyVGAM); `split_var` (tab_vars analogue, tab_spread-able); `multiplier` (the UNIT a continuous predictor's effect is reported per -- **default `"sd"`** since z9, so `Model_*` on a numeric row is per-1-SD, NOT `exp(coef(glm))`, unless `multiplier = 1`); `empirical_OR` (crude %/OR beside model OR, binary; z9: continuous predictors too, from their univariable fit). No new fmt fields; new Suggests svyVGAM. |
+### The inference layer
 
+**The survey-design boundary** (`survey-design.R`) is one unwrap point: a `survey` design passed as `data` becomes the microdata every engine already reads, plus its sampling weights and design metadata — so the crude columns, the AME, the tests and the footer are all design-weighted, and a `svyrepdesign`/`twophase` is refused rather than approximated.
 
----
+**The inference basis** is the layer's central idea: how the *estimate* is computed (`wt`) and how the *interval and test* are computed (the basis) are **orthogonal**. The basis is one of `n` / `weights` / `design` / `design_partial`, and — with `conf_level`, `degf` and `ci_method` — it is stored **on each column, not on the table**, because `dplyr` drops table attributes and a number must never depend on one. A bind reconciles these by the weakest-claim rule, so a merge can only claim the inference its weakest part carried.
 
-## Design Decisions
+**Design-based cell variance** (`survey-variance.R`) feeds the existing `n_eff` field (effective sample size), so the ordinary CI machinery becomes design-aware with no new field. A plain weight column is a survey design at `ids = ~1`, where the general formula collapses to a per-cell closed form computed from the aggregate alone (Kish is its degenerate limit); a real design uses `survey::svyrecvar`. survey owns the variance algebra throughout.
 
-### Type System
+### The colour system
 
-- **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with **21 per-cell fields** (was 15 before v2.0.0 Phase 1a, 18 through Phase 18s which added **`n_eff`** = the effective sample size used for a cell's CI, `p(1-p)/Var_design` (Korn-Graubard): the closed-form flat-design variance under `options(tabxplor.design_effect=TRUE)` on weighted data, `svyrecvar` under a real design, else NA → the CI falls back to the raw unweighted base; non-displayed, carried like `tot_n`, reset to NA on arithmetic; Phase 18z5 added the 20th, **`obs`** = the value a `tab_reg` cell's estimate is COMPARED TO on its own scale -- the observed/crude effect, or under `split_var` the reference group's -- NA everywhere else, so the measures reading it leave those cells uncoloured; displayable as `{obs}`; Phase 18z8 added the 21st, **`gap_se`** = the standard error of the GAP between the estimate and `obs`, on the estimate's own test scale -- written where the two are independent (`split_var` groups), which is what lets `color_signif` apply to `color = "between_groups"`; NA elsewhere, non-displayed) and **14 per-column attributes** (Phase 10i-A dropped `display_spec` → 9; Phase 15e added `model_family` → 10; Phase 17c added `role` → 11; Phase 18z13 added `conf_level` → 12; Phase 18z16-iiiii added **`degf`** + **`basis`** → 14 = "how was THIS column's interval computed", moved off the table because `meta` proved droppable). The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`). *(Phase 1a reshaped 15→18 in one combined pass — decisions doc §9; `ci` is now derived from the `ci_inf`/`ci_sup` bounds by `get_ci()`, a bounds-shim.)* The 10th attribute **`model_family`** (Phase 15e; `get/set_model_family`, `""` on cross-tables) is a regression column's own family. The 11th, **`role`** (Phase 17c; internal `get_role`, `"model"`/`"emp"`/`""`), is a reg column's role, read by the colour legend to name each column's effect (OR / IRR / β / AME) without matching its rendered `"Emp."` label. The 13th and 14th, **`degf`** (the design's #PSU-#strata, NA = refer to z) and **`basis`** (`"n"`/`"weights"`/`"design"`/`"design_partial"`), are the twins of `conf_level`: the level an interval was built AT, the df it is referred to, and HOW it was computed. All three are written by ONE sweep per build tail, `tab_stamp_inference()` (was `tab_stamp_conf_level`), and the ptype2 reconcile applies the weakest-claim rule (`basis_rank`/`basis_weakest`, min non-NA `degf`) so a bind cannot over-claim. All are picked up automatically by the DERIVED `fmt_col_attrs` (17a) and carried by every cast/ptype2/vec_math reconstructor.
-- **`mean` field is mean-only** (the old overload is GONE — Phase 5 landed): `mean` now carries an actual mean only on `type=="mean"` columns; for **pct-type** columns it is `NA` and the cell/reference **ratio** (the "*2 rule") lives in the dedicated **`ratio` field** (Phase 1a renamed the never-used `rr`→`ratio`). The build writes `mean = NA_reals, ratio = <ref-relative ratio>` for pct columns (`tab.R` ~L3608) and the colour engine reads `get_ratio(x)` (`fmt_class.R` ~L2688). *(c-iii audit 2026-07-19 confirmed no field/attribute consolidation is both safe and worthwhile — the fields are all user-contract and none vestigial; the column attributes — 9 then 10 with Phase 15e's `model_family`, now 11 with Phase 17c's `role` — are exported getters (except the internal `role`) AND required per-column so `format()`/colour work on a standalone extracted column.)*
-- **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with **3 top-level table attributes** (Phase 17b merged the six 2.0.0-new attrs into one `meta` list): `subtext` (legend text, CRAN-public), `test` (chi2/ANOVA-F results tibble; §16 hard-rename of the old `chi2` attribute; row-bound → `vec_rbind` on bind; Phase 20c renamed its declared `dep` column **`outcome`**, with the argument, and its 39 discriminators are declared in `TEST_ROWS`; Phase 18j added `effect_size`/`es_type`/`pvalue_exact` columns, Phase 18z16-i `deff` = the design effect this row's test corrected by, and the robust discriminators are `chi2_design`/`F_design` -- TWO, not four, because the flat and the full design run the same estimator; `n` is now ALWAYS the raw count), and **`meta`** — ONE named list holding `spec` (Phase 19g, KEY 6: the table IDENTITY —
-`list(kind, vars, call)`; it absorbed `vars` and `reg_meta`, see `R/table-spec.R`), `render_extras` (Phase 10i-B, the `list(add_n=, add_pct=)` display intent), `ci_settings` (Phase 13b, CI method/confidence level the colour legend names), `vars` (Phase 14d, variable roles + `wt` + the `caption` + Phase 17c's `row_roles` + Phase k's `var_labels` = the haven/labelled variable-label map for the opt-in `tabxplor.var_labels` export name-swap), `empirical_tips` (Phase 14v, multinomial crude-companion tooltips), `reg_meta` (Phase 14w, a reg table's model record driving its title/"Model:" legend/colour wording, + z15's `fit_spec` = the ~4 KB recipe `reg_check_plots()` refits from), `assumptions` (Phase 18z15, the observed curve of each continuous predictor: the sparkline's data + the linearity panel's), and `color_breaks` (Phase 13a per-table break override, now carried so it survives a pipeline). All three are carried through dplyr verbs by the S3 methods + vctrs reconcilers (`tab_attrs()` returns exactly these three; `tab_bind_attrs()` unions `subtext`, `vec_rbind`s `test`, and reconciles `meta` element-wise through the DECLARED `meta_bind_rules` table — default first-non-NULL, `color_breaks` per named scale). Phase 18z16-iiiii DELETED the `inference` sub-field: "how were these numbers computed" is a per-COLUMN fact now (`degf`/`basis`), read back through the DERIVED `tab_inference_basis()`/`tab_inference_degf()`, and its bind rule moved into the fmt ptype2 reconcile where it fires without being called. A table rebuilt from SEVERAL inputs (`tab_compact()`, `tab_transpose()`) goes through **`tab_meta_merge(metas, ...)`** — reduce, then overwrite only what it recomputes — NEVER a fresh `meta = list(...)` literal: that is how z16-iv found `tab_compact()` dropping `inference` on every ≥2-`row_var` table, and how z16-iiiii found **two more** such sites -- `tab_spread()` (which is also what `tab(spread_vars =)` calls) and `reg_build()`'s `split_var` branch, both losing the WHOLE of `meta`. Their numbers are safe now (the inference facts ride the columns), but `vars` / `ci_settings` / `render_extras` still needed the merge. Guarded by a field-AGNOSTIC probe in `test-meta-attr.R`. Every existing getter (`get_vars_attr`/`get_ci_settings`/`get_render_extras`/`get_empirical_tips`/`get_reg_meta`/`get_color_breaks_attr`) is a thin accessor into `meta`; `set_meta_field()` writes one sub-field (NULL removes it; an emptied `meta` drops the attribute → "absent when unset"). New exported `set_caption()`/`get_caption()` store a caption at `meta$vars$caption`, read by every exporter ahead of `reg_title`. `tab_plain()` now records `vars` at build. **Adding/removing a `meta` sub-field is one getter + one line — never a constructor formal.** **Phase k missing-metadata contract:** all three table-level attrs are OPTIONAL and NULL-safe (getters return `NULL`, consumers treat absent as absent) — a table that loses one, or is downgraded to a plain tibble in a pipeline (fmt columns intact), still prints/exports fully coloured, dropping only what that metadata powered (missing `test` → the summary; `subtext` → the note; reg `meta` → title/legend wording), never erroring. Cell FIELDS + column ATTRIBUTES stay required (a standalone extracted `tabxplor_fmt` column formats/colours on its own). The only loss on a *dropped class* is the console auto-print footer (a bare `print()` on a `tbl_df` runs dplyr's printer, not our S3). Locked by `test-degraded-attrs.R`; `tab_degrade_inform` was deliberately left per-render (not throttled once-per-session — conflicts with the `test-edge-cases.R` degrade-message loops).
-- **`tabxplor_grouped_tab`**: extends `grouped_df` for subtabled results (when `tab_vars` are present). Requires separate S3 method for every dplyr verb.
+Colour is decomposed into three orthogonal axes: a **measure** (what to compare — `diff` / `ratio` / `contrib` / `or`), a **channel** (text and/or background), and a **significance policy** (`color_signif`: `ignore` / `grey_non_signif` / `guaranteed_effect`). The engine has three layers:
 
-### Export Parity
+1. **Palettes** — OKLCH colour ramps, hand-tuned so intensity levels are distinguishable, in light, dark, and 8-bit (non-truecolor terminal) variants, set via `set_color_palette()`.
+2. **Breaks** — per-scale thresholds (`COLOR_SCALES`), mirrored for the under side; a break value above 1 means a *ratio* comparison (the "×2" rule), so the default pct breaks encode both additive and multiplicative thresholds.
+3. **Selection** — a vectorised `findInterval` engine (`fmt_color_plan` → `fmt_color_slots` → `fmt_color_channels`) that folds each cell per side and picks the strongest matching threshold.
 
-Cell display values reach exporters by two **non-unified** paths — keep them in sync:
+The measure's behaviour — its raw getter, scale keys, significance source and gating — lives in the `MEASURES` row, which drives both the plan and the legend (no per-measure branches). Every backend consumes the one artifact `fmt_color_channels` produces, which is why console, HTML, Excel, Markdown and plots colour identically.
 
-- **`format.tabxplor_fmt()`** (`fmt_class.R`) is the single source of truth for markdown (`tab_md()`), knitr/HTML (`tab_kable()`), and the console (`pillar_shaft`).
-- **`tab_xl()`** (Excel) writes the raw `get_num()` value and delegates numeric formatting to Excel's engine, but it now sources the per-cell Excel number-format codes from `format(x, syntax = "excel")` (Phase 10g) — the SAME `format()` masks the text backends use — so a display/digits change no longer needs manual mirroring in `tab_xl.R` (the old `numfmt()` desync is gone). Colours come from `fmt_color_channels()`; roles/refs/bold from `tab_export_prep()`.
-- Color is safe: all exporters call the same `fmt_color_channels()` / `fmt_channel_codes()`.
+### The regression subsystem
 
-When adding or changing a `tabxplor_fmt` field, follow the `/vctrs-field` skill — it encodes the full ~11-step checklist across `fmt_class.R`, `tab.R`, and the exporters.
+`tab_reg()` gives models the same visual language: it fits one model, renders per-family effect measures as `fmt` cells, and returns the same `tabxplor_tab` — same colours, same accessors, same exports. It reuses the 21 `fmt` fields unchanged; `obs` and `gap_se` carry the regression-specific facts, so there is no separate field set. The subsystem is seven files, each with a fuller header.
 
-### Reference System
+**The estimand — effect × measure** (`reg-estimand.R`, `REG_ESTIMANDS`). The user asks two questions: which **contrast** (`effect`: coefficient / marginal / at-reference) and which **measure** (odds ratio / ratio / difference / log). One declared row per `(family, effect, measure)` answers both: it names the internal fit/link, the exponentiate flag, the header word, and the stored `scale` the column carries. The **family is auto-detected** from the outcome — a 2-level factor → logistic/OR, numeric → linear/β, a count → Poisson/IRR, 3+ unordered → multinomial, ordered → cumulative-OR ordinal — but one table can mix families (each column stores its own `model_family`). `reg_measures(data, outcome)` lists what an outcome offers; a missing `(effect, measure)` combination aborts with the list of what it does offer.
 
-The `ref` argument controls which row serves as the comparison baseline for differences/colors:
-- `"auto"`: defaults to `"first"` when OR requested, `"tot"` otherwise
-- `"tot"`: total row is the reference
-- `"first"`: first non-total row
-- integer: specific row index
-- regex string: matched against row labels
-- `comp="tab"` compares within each subtable; `comp="all"` compares against the total table
+**The observed companion — the distinctive feature** (`reg-empirical.R` + `reg-influence.R`). With `empirical = TRUE`, each model effect is placed beside its **crude/observed counterpart** on the same scale — so "what did adjustment change" is read directly. `REG_EMPIRICAL` declares, per family, the shape of the crude column and its CI method; the crude value comes either from a closed form on a per-cell grid or from a univariable refit through the same fitter, so the two share estimand, link and CI rule by construction. `reg-influence.R` computes the **standard error of the gap** between the adjusted and crude estimates (their covariance, which no arithmetic on the two printed intervals could recover) via influence functions — the package's only `survey::svyrecvar` caller — and that gap SE is what lets `color_signif` colour the adjustment itself.
 
-Note: `ref` is **reinterpreted by `pct`** — a reference **row** under `pct="row"`/means, a reference **column** under `pct="col"`. 2.0.0 makes `ref` a per-row_var named vector (row%/means only) and stores each cell's own base as `tot_n` — see decisions doc §2, §4.
+**The argument boundary** (`reg-resolve.R`). `reg_resolve_args()` is the `tab_reg()` analogue of the crosstab boundary: six declared stages (validate → prepare data → resolve estimands → resolve output → resolve fit plan → resolve specs) that do every check and every rewrite of `data` in one ordered place, returning a typed record the builder reads.
 
-### Color System (3-layer)
+**The staged build** (`tab_reg.R` + `reg-spec-build.R`). `reg_build()` runs over a typed `new_reg_ctx`, one named stage per part of the table it produces; the per-model half is a declared product (`reg_spec_build()`), so "what is per-model vs between-models" has one answer. The three nesting axes — `tab_vars` groups × models × outcomes — dispatch through the shared parallel seam. The stage order is the source order and is load-bearing: every fit may emit a message, and the characterisation harness compares the message stream in order.
 
-1. **Palettes** (`tab_classes.R` ~L2892): 6 named color vectors (dark/light text, 24-bit blue-red/green-red, dark/light background), each with 11 hex codes: `pos1`-`pos5` (over-represented), `neg1`-`neg5` (under-represented), `ratio`. Hues are hand-tuned so intensity levels are eye-distinguishable on real tables; 8-bit variants target non-truecolor terminals; the 24-bit blue-red variant is more colorblind-friendly than green-red (fuller colorblind support is a future goal).
-2. **Breaks** (`set_color_breaks()` in `tab_classes.R`): stored in `options("tabxplor.color_breaks")`. Default pct: `c(0.05, 0.1, 0.2, 2, 0.3)` — the `2` means "twice the reference" (ratio mode). Mirrored for negative. Mean breaks: `c(1.15, 1.5, 2, 4)` — always ratios. *(2.0.0 §18 adds `mean_diff_breaks` `c(0.2, 0.5, 0.8, 1.2)` — sd-standardized differences for the numeric diff mode, Phase 5.)*
-3. **Selection** (the Phase-5 `findInterval` engine in `fmt_class.R`: `fmt_color_plan` → `fmt_color_slots` → `fmt_color_channels`/`fmt_channel_codes`, the shared artifact every backend consumes; the old `fmt_color_selection`/`keep_last_break` are gone): per-side fold + `findInterval` over the break scale picks the strongest matching threshold per cell. The 4 measures (`diff`/`ratio`/`or`/`contrib`) each carry their engine facts (raw getter, scale keys, `sig_source`, `gate_row`) in the ONE `MEASURES` fact table (Phase 17d — it now drives BOTH `fmt_color_plan` and the legend; the per-measure switch arms are gone, only the diff↔ratio bound rescale + guaranteed-effect offset stay as policy code). Phase 18z4: `MEASURES` is read ONLY through **`measure_facts(measure, policy)`** (1 plan + 5 legend sites), which folds in a row's optional **`guar`** override — `contrib` alone has one, being the one measure whose reading changes with the policy: the relative contribution under `ignore`/`grey_non_signif`, the ABSOLUTE adjusted standardized residual on the 7th break scale `residual` under `guaranteed_effect`. The legacy combined strings (`diff_ci`/`after_ci`/`ci`) are decoded ONCE at the boundary (`color_decode_legacy`) into a clean `(measure, color_signif)` pair — the stored `color` attribute is always a clean measure and the engine never re-parses; `color_measure_policy`/`single0` are deleted (`"ci"` == `after_ci` now).
+**Effects and model checks.** Marginal effects (AME, and MER at a reference profile) are computed by analytic g-computation (`reg-influence.R`) or `marginaleffects`, chosen per estimand. `REG_CHECKS` catalogues the model checks (linearity, dispersion, influence, proportionality, collinearity), each with the `shape =` cure that fixes what it flags — the check and its cure are one object — and each priced (`free` runs by default, `refit`-cost checks are opt-in).
 
-### dplyr Integration
+### Exports and rendering
 
-The `dplyr_row_slice()` / `dplyr_col_modify()` / `dplyr_reconstruct()` trio in `tab_classes.R` is the core mechanism preserving `tabxplor_grouped_tab` class through dplyr operations. When the table has only one grouping level left, `lv1_group_vars()` detects this and downgrades to plain `tabxplor_tab`. Every new dplyr verb needs a corresponding S3 method — check `NAMESPACE` for the full list.
+`tab_export(x, format =)` (`tab-export.R`) is the facade over four backends: HTML (the default), Markdown, Excel and plot. They share one preparation step, `tab_export_prep()` (`tab-export-prep.R`), which builds an ephemeral render model (roles, references, bold/italic, header spans, variable-name blocks) that every backend consumes.
 
-### Deprecation and retro-compatibility
+Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML; `tab_xl()` writes the raw value and takes its number-format codes from the *same* `format(syntax = "excel")`, so a display change never needs mirroring. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, with the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so `theme = "auto"` (light/dark) and `theme = "print"` (bold/italic, black-and-white) work by stylesheet. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's light/dark scheme — a subsystem that must never error, because a wrong guess only mis-tints, never breaks.
 
-#### For main user-facing functions and arguments
-- This package have a small but existing users base : **soft deprecate main user-facing functions and arguments carefully** to ensure retro-compatibility.
-- Some user code rely on `tabxplor_fmt` vctrs fields extracted with `$` or calculated with `mutate()` method for `tabxplor_fmt` (see readme), so **the vctrs fields should not break**.
+### jamovi
 
-#### For internal code and internal functions
-- **Do not hesitate to propose radical redesign of internal code and internal workflows** for quality, simplicity, structure, performance and future-proofing, specially when they are too convoluted or have grown organically.
-- **Always try to simplify, integrate and create smart shared subfunctions** instead of adding a new layer of confusion and ad-hoc solutions inside the code: your main aim is to simplify, to remove traces of old implementations altogether when they have become useless, to clarify, to help me make relevant architectural choices instead of piling up ad-hoc solutions, to integrate the new features in the current code seamlessly.
+Two point-and-click analyses mirror the two producers: `jmvtab` (Crosstables) and `jmvtabreg` (Regressions). Each is a thin `R6` backend (`*.b.R`) over an engine-free build core (`jmvtab_build()` / `jmvtab_reg_build()`) that drives `tab()` / `tab_reg()` through a content-addressed **live-UI cache** (`*-cache.R`), so a repeated interactive tweak re-paints instead of recomputing. Each option is named after the argument it drives, so the backend is a pass-through rather than a translation table. The generated `*.h.R` option headers are never hand-edited.
 
----
+### Cross-cutting invariants
 
-## Key Dependency APIs to read up on
+Rules that span subsystems — do not undo them without reading why:
+
+- **A number must not depend on a table attribute.** Inference facts (`conf_level`/`degf`/`basis`/`ci_method`) live on columns; `dplyr` drops table attributes.
+- **A merge claims only what its weakest part carried** — the `vec_ptype2` reconcile applies the weakest-claim rule to inference attributes so a bind cannot over-claim.
+- **Public API is stable; internals are free.** Soft-deprecate public arguments; the `fmt` fields users read with `$`/`mutate()` must not break.
+- **Facts live in one table.** Add a row to a fact table and read it through its accessor; a foreign key checked at load keeps cross-table references honest.
+- **The `fmt` record is dense.** Every column carries all fields; "not applicable" is `NA`, never an absent field.
+- **`format()` is the one display source of truth** — text backends and the Excel numFmt codes both come from it.
+- **Levels drop after the tests.** Non-first levels (`levels = "first"`) are removed only after chi²/CI, so tests see the full level set.
+- **Theme detection must never error** — it rests on no supported API; anything unknown resolves to "light".
+
+### Key Dependency APIs to read up on
 
 Before working on the `tabxplor_fmt` type system, arithmetic, or display, fetch the help pages for these via the `r-btw` MCP **docs** tools (or `?`) — the model's recall of their exact current contracts is the weakest link:
 
@@ -179,6 +291,35 @@ Before working on the `tabxplor_fmt` type system, arithmetic, or display, fetch 
 - `pillar::pillar_shaft` — console display method
 - `data.table` reference semantics (`:=`, `.SD`, `.N`) — internal aggregation
 - `DescTools::BinomCI`, `DescTools::BinomDiffCI` — **now Suggests-only** (test parity only). Since Phase 3a the CI math is the closed-form engine in `R/tab-agg.R` (`ci_pivot`/`ci_wilson`/`ci_newcombe`); read it, not DescTools, before touching CI.
+
+### Documentation ecosystem
+
+The docs form one hierarchy, general to specific. **Each fact is stated at exactly one layer, referenced (never duplicated) across the others, and always written present-tense** — the current design is the reference point, never how it got there. The one place dev history is allowed is the roadmap "DONE" summaries.
+
+- **`## tabxplor architecture`** (this file) — the cross-subsystem big picture: goals, data-flow, the declarative pattern, the type system, each subsystem's role and its meaningful "why". Rewritten only when the maintainer asks, never per session.
+- **`## Repository Map`** (this file) — the file index: one role line per R file.
+- **R file-header comments** — per-file subsystem design: current architecture, key constraints, a pointer up to this file.
+- **Inline `# DESIGN:` / `# WARNING:` tags** — the non-obvious "why" at the exact line.
+- **Vignettes** (`vignette("tabxplor")`, regression, programming) — usage and teaching, for users.
+- **Roxygen man pages** (`?tab`, `?tabxplor-vctrs`, `?tabxplor-options`, `?tabxplor-data.table`) — user-facing reference: usage and the main use cases, never build/internals/history.
+- **`dev/*.md`** (`.Rbuildignore`'d) — transversal or expert technical guides only.
+- **Roadmap "DONE" summaries → `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`** — the ONLY place dev history lives.
+
+Inspect a built table at runtime through the accessors: `tab_shape()`, `tab_columns()`, `reg_measures()`, `fmt_attr()`, and the `get_*` / `set_*` family.
+
+
+---
+
+## Deprecation and retro-compatibility
+
+### For main user-facing functions and arguments
+- This package have a small but existing users base : **soft deprecate main user-facing functions and arguments carefully** to ensure retro-compatibility.
+- **It’s always possible to modify the main API for user-friendliness and integration** by **routing old arguments to new ones** and do *ad hoc* back-compat *after* having found a new more user-friendly API.
+- Some user code rely on `tabxplor_fmt` vctrs fields extracted with `$` or calculated with `mutate()` method for `tabxplor_fmt` (see readme), so **the vctrs fields should not break**: even when the fields are changed internally, the old accessor and setter must still work.
+
+### For internal code and internal functions
+- **Do not hesitate to propose radical redesign of internal code and internal workflows** for quality, simplicity, structure, performance and future-proofing, specially when they are too convoluted or have grown organically.
+- **Always try to simplify, integrate and create smart shared subfunctions** instead of adding a new layer of confusion and ad-hoc solutions inside the code: your main aim is to simplify, to remove traces of old implementations altogether when they have become useless, to clarify, to help me make relevant architectural choices instead of piling up ad-hoc solutions, to integrate the new features in the current code seamlessly.
 
 ---
 
@@ -369,24 +510,6 @@ To **capture new html** in the dev console, **ask the maintainer whenever you ne
 
 Look at `dev/tabxplor_2.0.0_jamovi_dev.md` and `@dev/jamovi/` for detailed informations.
 
-
----
-
-## Common tabxplor package Development Issues
-
-| Issue                                   | Solution                                                                              |
-|-----------------------------------------|---------------------------------------------------------------------------------------|
-| R CMD check NOTE about global variables | Add to `globalVariables()` call in `fmt_class.R` (for data.table's `:=`, `.SD`, `.N`) |
-| magrittr `%>%` vs base R pipe           | Prefer base R pipe for new code, examples, etc. Package re-exports `%>%` for users.   |
-| New vctrs type combination doesn't work | Need both `vec_ptype2.*` and `vec_cast.*` S3 methods for every type pair              |
-| dplyr verb silently drops class         | Missing S3 method for `tabxplor_grouped_tab` — add one in `tab_classes.R`             |
-
----
-
-## Architecture Technical Guide
-
-For the full detailed technical reference, see `dev/tabxplor_architecture.md`, which documents every subsystem in depth. Read it whenever needed and keep it up-to-date.
-
 ---
 
 ## tabxplor github repo
@@ -415,31 +538,15 @@ Commits :
 
 Currently implementing tabxplor 2.0.0 (2.0.0 only if breaking changes land). **Update the sections below at the end of every work session.**
 
-Phases already implemented can be found in `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md` Only phases not yet finished appear below.
-
-### The aim of 2.0.0 — read first, it governs every decision
-
-This version exists to **refactor and simplify `tab()`/`tab_many()`** — the two functions that matter — by **stripping the white-elephant flexibility that real-world data analysis never uses**, and **redesigning the underlying `tabxplor_fmt` vctrs-field architecture** (one combined field pass) to fit the simpler, faster model. The governing rule, non-negotiable:
-
-- **Public API stays retro-compatible.** User-facing functions, their arguments (soft-deprecate, never hard-break), and the `tabxplor_fmt` fields users read with `$`/`mutate()` keep working.
-- **Internals are redesigned as radically as needed** for consistency, simplicity, and performance. Do **not** preserve internal structure, dead code, or the old step-by-step (`tab_pct`→`tab_ci`→…) paths for their own sake — remove them, fuse them, route everything through the one aggregate-core. Whenever a choice trades never-used internal flexibility for a single well-defined faster path, take it.
-
-Every phase and decision below serves that aim: fewer knobs, one computation core, a field set shaped to the real use cases.
-
-### Start here
-
 This roadmap is the **plan of plans**: the phased implementation order plus every open question. A fresh session asked for a *part* of the work should read, in order:
 
 1. **This roadmap** — the phase your task belongs to, its bullets, and its pointers
 2. **`dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`** – the detailed report of all the **already implemented phases of the roadmap**.  
-3. **`dev/tabxplor_architecture.md`** — architecture guide (type system, pipeline, compaction loss, exporters). It describes the **current** architecture. Read the section matching the file you touch.
-4. **Top of this CLAUDE.md** — Repository Map, Global Architecture, Key Constraints, Design Decisions.
+3. **Top of this CLAUDE.md** — Repository Map, Architecture.
 
-**Other long-form 2.0.0 docs live in `dev/` (all `.Rbuildignore`'d), never inline here — read the matching ones before you start:**
-- `dev/benchmarks/` — performance harness + saved results (documented under *Reference > Benchmarks*). Read/run when a phase touches perf (Phases 2, 3, 6, 8).
-- `dev/benchmarks/tab_many_performance_profile.md` — the full 2026-07 profile. Read before optimizing `tab_many` / `tab_chi2` / `tab_num`.
+The performance harness lives in `dev/benchmarks/` (`.Rbuildignore`'d). Per the scope decision, save every phase's before/after runs under `dev/benchmarks/results_2.0.0/`.
 
-
+Other long-form 2.0.0 docs live in `dev/` (all `.Rbuildignore`'d), never inline here — read the matching ones before you start.
 
 #### Verification (every phase)
 
@@ -450,18 +557,7 @@ This roadmap is the **plan of plans**: the phased implementation order plus ever
 
 ### Phase 21 — documentation integration and simplification 1
 
-After 2.0.0 dev, nearly every documentation have grown organically in a so-verbose-it’s-chaotic way. Most of them carry now useless dev history (references to phases of dev, etc.), too detailed summaries of certain parts that can/should be readable in R scripts comments rather than in an architecture document, and have completely lost their focus.
-
-In this phase, I want you to make a **drastic** removal of all of the archeological stuff, only keeping what is actually useful for **future** developement (tabxplor next versions). The key rule is that **the past must dissapear: the present ecosystem and usage must be the reference point of nearly all documentation**.
-
-We’ll go from the most general to the most specific, from the big picture to details, and **to make this hierarchy clear is the aim of all this phase** : goals and use cases, core architecture decisions, repository map ; subsystem overall descriptions (in the architecture document, as R comments at the top of the different subsystems, and sometimes as specific .md file in `dev/`, but with different focuses and levels of details) ; internal framework ; "why" of some importants details of implementation, code caveats to avoid in future dev, etc.
-
-You must think thoroughly about the specific focus and the specific level of detail needed for the documentation you’re currently writing, because the same thing would be stated with a very different focus on the other documents in the package documentation ecosystem. **Before writing anything, do a documentation planning work**, and always start by stating what this document is for, what is the specific focus among the package documentation ecosystem, what is it’s goal in terms of level of details, what should not be written here since it’s already somewhere else, what more global or more precise documentation it should absolutely refer, etc.
-
-**How to work and what to study** (for both architecture documents and R scripts inline comments)
-- Dive deep inside the current architecture and framework ;
-- Read dev history in `CLAUDE.md` and `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`, but only focus on the last phases, specially the ecosystem integration phases 17, 19 and 20 ; study relevant documentation in `dev/` (some may be out-of-date).
-- Study vignettes and recent dev history in details to understand the real-world use cases of the package, the how is it supposed to be used, and the "why" it’s different from other existing package.
+The package documentation had grown cluttered with dev history and lost focus. This phase enforces the **documentation ecosystem** hierarchy (top of this file) across every layer: present-tense, history-free, general to specific, each fact stated once, referencing more global or more precise docs rather than duplicating them. Before writing any document, state what it is for, its focus within the ecosystem, and what belongs elsewhere. 21a integrated the architecture + Repository Map at the top of this file; 21b rewrites the R comments + roxygen; Phase 23 does the vignettes, `NEWS.md` and the `dev/` folder.
 
 #### Phase 21a — `dev/tabxplor_architecture.md` and `CLAUDE.md` Repository Map drastic rewrite
 
@@ -479,12 +575,28 @@ It’s the same for `CLAUDE.md` "## Repository Map" : it’s currently around 18
 #### Phase 21b — R scripts comments drastic simplification/rewrite
 
 I want you to **drastically** rewrite and simplify R scripts comments (including key decisions, etc.) **based on the final design, architecture and real-world usage**, for future development to never lose focus on them. Your should **divide their global length by at least 5**: measure it, find a maximum ratio of comments/code, make web searches if needed.
-- In each phase, start by reading the full `dev/tabxplor_architecture.md` to get the big picture around which everything should revolve.
-- The *goal* is **not** to make a summary of current comments: your selection should be drastic (most of it is useless and should be removed anyway), what needs to be kept is a small subset of it, 
+- In each phase, start by reading the `## tabxplor architecture` section (top of this file) to get the big picture around which everything should revolve.
+- The *goal* is **not** to make a summary of current comments: your selection should be drastic (most of it is useless and should be removed anyway), what needs to be kept is a small subset of it,
 - Rewritten comments should focus on : what explains design decisions, architecture choices, caveats ; everything needed to explain all the subsystems of the package without losing focus on the overall goals and architecture ; the "why" of the code, the way it integrates in the global functions ecosystem of the package, the way to use this ecosystem to avoid re-adding evergrowing exceptions and white elephants in the future, the way to modify it in the future, etc.
 - Each subsystem must first come with a longer description of it’s currently implemented design choices and internal architecture, preferably at the beginning of the .R file: it should be more detailed than the subsystem description in the architecture document, but not too detailed as to take the place of proper before-functions or in-code comments. Do not hesisate to reorganise the .R files to make the subsystems clearer.
 - Comments must be clear, focused, understandable by both machine and **human**: avoid being over-technical as much as you can for this kind of documents.
 - The roxygen documentation part should also be reduced with the same logic (maybe not divided by 5, but divided as much as possible while staying clear and keeping enough explanation for beginners and literary students) : user-friendly = focused, hierarchy of documentation with references.
+
+
+**Method for every 21b-ii … -vii sub-phase** (do not repeat it per phase): re-read the `## tabxplor architecture` section (this file) for the big picture; then, per file — (1) rewrite the header into a clean current-state subsystem description (keep the `# PURPOSE / ROLE / KEY CONSTRAINTS` skeleton, history-free; a longer subsystem essay is fine where warranted); (2) cut inline comments **≥5×** — delete ALL dev-history (phase tags, "was/now", post-mortems, "measured …", `dev/*.md` pointers) AND compress the surviving design/"why" prose to one-liners; (3) tighten the **roxygen** — a user-facing function's man page is about **USAGE, written with the main real-world use cases in mind; it never speaks of the build, the internals, or dev history**. Dedupe across pages and vs the code, defer detail/pedagogy DOWN to the vignettes and reference SIDEWAYS to `?tabxplor-vctrs` / `?tabxplor-options` / `?tabxplor-data.table`, but keep it clear for beginners/non-technical users (not a 5× target; preserve the CRAN arg/return contract; reduce generated `@eval` blocks via their fact-table `doc` fields, never the output); (4) run `devtools::document()` **unsandboxed** and confirm `man/` + `NAMESPACE` build. ⚠ Do NOT hard-wire vignette anchors — the roxygen→vignette pointers are finalized in Phase 23b, after 23a reorganizes the vignettes. Every `R/*.R` is covered exactly once; the two generated `jmvtab*.h.R` are untouched.
+
+**How to hit the /5 cut on the FIRST pass (Phase 21b-ii lessons — read before starting any 21b sub-phase).** The failure mode is *summarising* (shortening each existing comment, which under-cuts and keeps the old focus); the target is *rewriting* (deleting most, keeping a small load-bearing subset written from the final design):
+
+1. **Rewrite, don't summarise.** For each comment ask: "if this file had none, would I add THIS one back, knowing only the current design + the header essay + the `## tabxplor architecture` section?" If no → **delete it**, don't shorten it.
+2. **The WHAT/WHY test decides every comment.** Delete any comment that says WHAT the code does (a competent R reader infers it from the name + body). Keep only (a) WHY — a non-obvious choice, caveat, gotcha, or WARNING that yields a wrong result/crash if ignored; (b) SCHEMA — a fact-table column dictionary (what each declared column/field means).
+3. **Write the header essay first.** It carries the file's design load, so most inline "why" then becomes redundant and deletable.
+4. **Mechanical regions → near-zero comments.** Accessor stubs, the `vec_ptype2`/`vec_cast`/`vec_arith`/`vec_math` and dplyr coercion walls: ONE orienting line for the whole wall; delete the per-item/per-method comments.
+5. **Delete ALL dev-history unconditionally:** phase tags / `KEY N` / `§N` / `D-`/`W-` items; "was / used to / no longer / replaced / renamed / deleted"; "measured …" + benchmark numbers; bug post-mortems; `dev/*.md` decision-log pointers; commented-out dead code and inert commented-out roxygen stubs.
+6. **/5 is a GLOBAL aggregate, not a per-file quota.** It is met by the archaeology-heavy and the mechanical files. A foundation/dictionary-heavy file (e.g. `fmt_class.R` — the type contract + 3 fact-table dictionaries + the colour engine + the vctrs/legend invariants) floors genuinely higher; do NOT gut its dictionaries or design rationale to reach a number — clarity/usefulness overrides the ratio. Measure each file's archaeology fraction first: a late-written file may already be near its floor (expect ~25–40 %); the history-heavy ones carry the ×5.
+7. **Roxygen is contract-bound — a separate rule, not a /5 target.** NEVER drop/rename/reorder `@param`/`@return`/`@export`/`@rdname`/`@describeIn`/`@eval`/`@method`/`\usage`; every argument stays documented. Reduce by de-archaeologising prose, compressing verbose params, MODERNISING wording (repoint superseded `tab_pct`/`tab_ci`/`tab_chi2` cross-refs to `tab()`/the accessor; foreground the current vocabulary), and deferring pedagogy to the vignettes / sideways to `?tabxplor-vctrs`.
+8. **Respect the hierarchy.** The header NAMES and POINTS (down to the arch doc / vignettes, sideways to reference pages); it never re-tabulates the field/attribute tables that already live in the arch doc + roxygen.
+9. **Delegation that works.** Hand-do the highest-judgment blocks yourself (a user-decision rewrite, the header essays, the fact-table dictionaries, the colour engine); delegate the mechanical bulk to ONE agent PER FILE (different files = no write conflict), giving it the WHAT/WHY test, explicit KEEP/DELETE lists, and a survey map. Agents anchor conservative — state the aggressive standard + a hard target number up front, and expect one re-engagement.
+10. **Verify cheaply — no full test suite needed for comment-only edits.** Prove code identity: parse each file at HEAD vs working, `deparse()`, compare (the parser drops comments) — TRUE means behaviour cannot change. Then `devtools::document()` **unsandboxed**; confirm NAMESPACE is unchanged and `man/` diffs are prose-only (no `\usage` / `\item{arg}` name changes). Run the suite only when explicitly asked.
 
 ##### Phase 21b-i — comments rewrite roadmap
 
@@ -497,21 +609,6 @@ Also plan for a reduction of the roxygen part, with the same logic : user-friend
 - state clearly that main user-facing functions speaks about usage, with the main uses cases in mind ; they do not speak about build, internals, dev history, etc., and must be understandable by a litetary sociology researcher knowing almost nothing about programming and about R.
 
 **DONE**. Cut the R-file documentation rewrite into **six** subsystem sub-phases (below), grouped by coherent context and balanced by measured load (internal comments ~15,420 lines = 32 % of the code, of which ~55–70 % is dev-history; roxygen ~5,040 lines). Roxygen is **folded into each sub-phase** (one documentation pass per file). The shared method is stated once here so the sub-phase entries stay short.
-
-**Method for every 21b-ii … -vii sub-phase** (do not repeat it per phase): re-read `dev/tabxplor_architecture.md` for the big picture; then, per file — (1) rewrite the header into a clean current-state subsystem description (keep the `# PURPOSE / ROLE / KEY CONSTRAINTS` skeleton, history-free; a longer subsystem essay is fine where warranted); (2) cut inline comments **≥5×** — delete ALL dev-history (phase tags, "was/now", post-mortems, "measured …", `dev/*.md` pointers) AND compress the surviving design/"why" prose to one-liners; (3) tighten the **roxygen** — a user-facing function's man page is about **USAGE, written with the main real-world use cases in mind; it never speaks of the build, the internals, or dev history**. Dedupe across pages and vs the code, defer detail/pedagogy DOWN to the vignettes and reference SIDEWAYS to `?tabxplor-vctrs` / `?tabxplor-options` / `?tabxplor-data.table`, but keep it clear for beginners/non-technical users (not a 5× target; preserve the CRAN arg/return contract; reduce generated `@eval` blocks via their fact-table `doc` fields, never the output); (4) run `devtools::document()` **unsandboxed** and confirm `man/` + `NAMESPACE` build. ⚠ Do NOT hard-wire vignette anchors — the roxygen→vignette pointers are finalized in Phase 23b, after 23a reorganizes the vignettes. Every `R/*.R` is covered exactly once; the two generated `jmvtab*.h.R` are untouched.
-
-**How to hit the /5 cut on the FIRST pass (Phase 21b-ii lessons — read before starting any 21b sub-phase).** The failure mode is *summarising* (shortening each existing comment, which under-cuts and keeps the old focus); the target is *rewriting* (deleting most, keeping a small load-bearing subset written from the final design):
-
-1. **Rewrite, don't summarise.** For each comment ask: "if this file had none, would I add THIS one back, knowing only the current design + the header essay + `tabxplor_architecture.md`?" If no → **delete it**, don't shorten it.
-2. **The WHAT/WHY test decides every comment.** Delete any comment that says WHAT the code does (a competent R reader infers it from the name + body). Keep only (a) WHY — a non-obvious choice, caveat, gotcha, or WARNING that yields a wrong result/crash if ignored; (b) SCHEMA — a fact-table column dictionary (what each declared column/field means).
-3. **Write the header essay first.** It carries the file's design load, so most inline "why" then becomes redundant and deletable.
-4. **Mechanical regions → near-zero comments.** Accessor stubs, the `vec_ptype2`/`vec_cast`/`vec_arith`/`vec_math` and dplyr coercion walls: ONE orienting line for the whole wall; delete the per-item/per-method comments.
-5. **Delete ALL dev-history unconditionally:** phase tags / `KEY N` / `§N` / `D-`/`W-` items; "was / used to / no longer / replaced / renamed / deleted"; "measured …" + benchmark numbers; bug post-mortems; `dev/*.md` decision-log pointers; commented-out dead code and inert commented-out roxygen stubs.
-6. **/5 is a GLOBAL aggregate, not a per-file quota.** It is met by the archaeology-heavy and the mechanical files. A foundation/dictionary-heavy file (e.g. `fmt_class.R` — the type contract + 3 fact-table dictionaries + the colour engine + the vctrs/legend invariants) floors genuinely higher; do NOT gut its dictionaries or design rationale to reach a number — clarity/usefulness overrides the ratio. Measure each file's archaeology fraction first: a late-written file may already be near its floor (expect ~25–40 %); the history-heavy ones carry the ×5.
-7. **Roxygen is contract-bound — a separate rule, not a /5 target.** NEVER drop/rename/reorder `@param`/`@return`/`@export`/`@rdname`/`@describeIn`/`@eval`/`@method`/`\usage`; every argument stays documented. Reduce by de-archaeologising prose, compressing verbose params, MODERNISING wording (repoint superseded `tab_pct`/`tab_ci`/`tab_chi2` cross-refs to `tab()`/the accessor; foreground the current vocabulary), and deferring pedagogy to the vignettes / sideways to `?tabxplor-vctrs`.
-8. **Respect the hierarchy.** The header NAMES and POINTS (down to the arch doc / vignettes, sideways to reference pages); it never re-tabulates the field/attribute tables that already live in the arch doc + roxygen.
-9. **Delegation that works.** Hand-do the highest-judgment blocks yourself (a user-decision rewrite, the header essays, the fact-table dictionaries, the colour engine); delegate the mechanical bulk to ONE agent PER FILE (different files = no write conflict), giving it the WHAT/WHY test, explicit KEEP/DELETE lists, and a survey map. Agents anchor conservative — state the aggressive standard + a hard target number up front, and expect one re-engagement.
-10. **Verify cheaply — no full test suite needed for comment-only edits.** Prove code identity: parse each file at HEAD vs working, `deparse()`, compare (the parser drops comments) — TRUE means behaviour cannot change. Then `devtools::document()` **unsandboxed**; confirm NAMESPACE is unchanged and `man/` diffs are prose-only (no `\usage` / `\item{arg}` name changes). Run the suite only when explicitly asked.
 
 
 ##### Phase 21b-ii — Core type system & colour engine
@@ -543,7 +640,178 @@ Also plan for a reduction of the roxygen part, with the same logic : user-friend
 
 ---
 
-### Phase 22 — manual API, jamovi UI and exports reviews
+
+### Phase 22 — manual reviews and last features before release
+
+Below are the results of the maintainer’s manual reviews of different features, stating the problems and what still needs to be changed before 2.0.0 release.
+- Avoid *ad hoc* solutions, think about how to integrate the requested changes in the package ecosystem cleanly in a future-proof way. When framework changes are needed, state it clearly and plan for them. If you think they are too big and better done in their own Claude Code session, state it clearly and write a new phase in the @CLAUDE.md roadmap ("Phase 22x-ii", "Phase 22x-iii", etc.), but avoid to create too many different phases and regroup what is better done together (same context needed, or not big enough to get it’s own session).
+
+#### Phase 22a — `tab_reg()` manual review
+
+Below are the maintainer’s manual reviews.
+
+```R
+gss_simple <- gss_cat_data_formatting()
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE
+)
+```
+- Having a different color measure for Obs_% (difference) and Obs_RR (ratio) is misleading, since they should really be the same column with a different display, but here they are colored with different measures.
+  The Obs_% could color="ratio" to match the Obs_RR and the model one, but there’s a better solution.
+  The right way to do it is to only use one color measure for both empirical and modelised columns: that way, there would be only one legend block for everything, which means everything is comparable and the field of comparison is homogeneous. Anything more is confusing.
+  + The way to be even more clear, symmetric, and reduce the discrepancy between Obs_% and Obs_RR, is to **only have one empirical column and one model column** : same measure, same display and the "display" argument works on both, one legend block/only one consistent CI type, etc. It would be further integration and simplification for readability.
+  + after it’s done, you should review `tab_reg()` html tooltips, both in the empirical column and the model column. Which ones would be useful and are missing ? Which ones are useless (info already printed elsewhere on the table = noise, generally, ) ? Is there a way to print tooltip regarding of what’s 
+- is’t actually good that "age", being one line, have it’s variable name written horizontally, but it should be in bold to match the vertical ones.
+- age numeric variable "levels" column is written in html "age(per 1 SD\n (13.5)) <curve>" : it shouldn’t wrap after SD if there are other "levels" with longer names, like in "Model fit" (here the would be space for it to fit on 1 line) ; I want a bit more concise display : "per SD/13.5" (age do not need to be repeated here, it’s already in the variable name column ; only print the number of SD when it’s not 1)
+- Would it be possible to put the numeric predictors linearity check sparklines in the `n` column, that is always empty for numeric variables by design ? On html, put the sparkline in a small frame (with a smaller linewidth than the sparkline itself) for readability (otherwise, to the uninformed user, it looks more like stray pixels noise than plot).
+
+```R
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", effect = "marginal", measure = "ratio" , empirical = TRUE
+)
+```
+- "Obs_RR" use the 1/x.xx display for < 1, but "Model_RR" does not and print raw "0.xx" : rule should be, always display the inverse for OR, RR, and more generally multiplicative scale ; add an opt-in global option to print "0.xx" instead for people who don’t love it `family = "binomial"` is ok, `family = "binomial", measure = "ratio"` is ok, but adding `effect = "marginal"` breaks it
+- even with only `family = "binomial"` the Model_OR "obs" field use "0.xx" : with multiplicative scale  and with option default it should print 1/x.xx instead for consistency (otherwise it’s confusing)
+- `family = "binomial"` have a "Reference population" OR, and so does the same with `measure = "ratio"`, but with `effect = "marginal"` it gets an empty field : is there a statistically sound way to compute something here, use by other common regression packages or apps ?  `effect = "at_reference"` also have empty Reference population.
+
+adjustment
+```R
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", effect = "marginal", measure = "ratio" , empirical = TRUE, color = "adjustment"
+)
+```
+- with color = "adjustment", the colors seem quite off. I’m not sure if it’s errors or bad design
+  + race "other" have Obs_RR 1/1.06* and Model_RR 1.05 but the color is orange :
+  + relig "Jewish" have Obs_RR 1.04 and Model_RR 0.89 but the color is blue :
+  + relig Buddhist/Hinduist have Obs_RR 1/1.04 and Model_RR 0.86 :
+- with color="adjustment", the color of the Obs_RR column (or the future unique empirical column) is misleading, since it’s the reference for comparison (for Model_RR) and should be all bold/no colors. Too much different colors with different color scales is confusing the user. Use the reference detection and reference management subsystem to make a clean framework (`or` display already implement a two references system, with one reference in cols and one reference in rows).
+- I’m also not sure about the stars, since it can have Obs_RR `1.18***` and Model_RR `1.18***`: clearly the cell is gray and the stars are not for the adjustment, so I’m not sure what to do. Keeping as is is a bit misleading if the colors ares for the adjustement ; but at the same time stars for the significance of the adjustement are non-standard and will mislead some users too. Please study the problem, and propose me a user-friendly solution. Should we accept this is the sole case where colors and stars are for two different things, and document it, or can you think about a better solution ?
+
+
+several outcomes
+```R
+tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
+        family = c("binomial", "poisson"), empirical = TRUE, 
+)
+```
+- in the html export, the outcomes names [married] and [tvhours] are repeated on each column : they should never appear here since the name of the col_var is already written above in the first headers rows of the exports (if it’s the same in tab(), it needs be corrected here too). They only stay in console because column names can’t be duplicated there.
+
+
+predictor’s list
+```R
+tab_reg(gss_simple, outcome = "married", 
+        predictors = list(race  = "race", 
+                          two   = c("race", "rincome"), 
+                          three = c("race", "rincome", "relig"), 
+                          full  = c("race", "rincome", "relig", "age") ),
+        family = "binomial", effect = "marginal", measure = "ratio" , empirical = TRUE, color = "adjustment"
+)
+```
+- the "overall association" lines do not follow the order of the predictors
+
+tab_vars
+```R
+tab_reg(gss_simple, outcome = "married", tab_vars = "race",
+        predictors = c("rincome", "relig", "age", "tvhours"),
+        family = "binomial", effect = "marginal", measure = "ratio" , color ="between_groups"
+)
+```
+- here, all the "n" actually being side-by-side is good/readable/necessary, since it’s the result of tab_spread.
+  Put them after the models column (at their right), it would be even greater.
+- The reference column for "between_groups" doesn’t follow tabxplor rule : in bold (refcol)
+- remove the useless verbose message : "ℹ `color = "between_groups"` also adds the aggregated interaction test to the footer (one extra model fit).\nAsk for it without the colours with `stats = c(..., "interaction")`."
+- when I add `empirical=TRUE` here, the stats footer appear in the Obs_%_* part rather than on the model columns.
+- here too, the "Overall association (LR)" lines are not in the order of the predictors, which is a bit confusing.
+
+`display` presets
+- We now use the same display argument in `tab_reg()` than in `tab()`, taken both `{}` display tokens, and build-in presets, we shall think about the best build-in presets for the regressions use cases.
+- Currently OR does’nt give. 
+- When effect is coefficient and "ame" is chosen in the display (preset or display token), it should be calculated to not print voids/NA (which is a volentary different behaviour than in `tab()` )
+- "ame" difference and "ame" ratio as calculated depending on the `measure` chosen : once the measure is chosen, 
+
+Additional features requests
+- handle the tidyselect in `tab_reg`, while preserving predictor’s list behaviour: otherwise the two main user-facing functions have different syntaxes for variables selection, which is confusing.
+- Add table metadata and accessor, teached in reg vignette and used by experts to check when they have a doubt, to get the different models formulas that were finally passed to the base model function (`glm()` etc.).
+
+Open-questions about possible additional features requests
+- Would there be a simple way to permit to add interactions in models ?
+- In predictor’s lists, how difficult would it be to add a comparison between quadratic and normal version for numeric predictors ? (I guess it would be quite difficult, so maybe not worthwhile).
+- Since numeric predictors are now standardised by default, can you confirm they are also **always centered by default** ? Is it documented ?
+
+Arguments reviews
+- in `tab_reg()` and in `tab()`, would it be possible to put the `parallel` argument in a `...` subfunction (if it’s needed at all and the option isn’t enough) ?
+
+
+### Phase 22b-i — write the phase roadmap
+
+### Phase 22b-ii — `tab_reg()` ant `tab()` `n` column (or `n` row for `tab()` with `pct = "col"`) reworking
+Looking at `tab_reg()` n columns, I think the right way is to finish the dormant feature to be able to keep a unique `n` column giving all the information at once. With several outcomes, having one n column per outcome is not concise enough and add clutter. With predictor’s list the current default is ok, there’s only one column since the population of each model is by default the same. For spread tab_vars the "one n column per tab_vars" is justifiable since it’s the result of tab_spread.
+- For tab() Total columns with add_n, I want a small change to avoid wasting horizontal space : instead of "100% (n= 9 838)", I just want "100% (9 838)" (with the 100% still in bold). In exports only (not console), I want the column header to state "Total (n=)" (only for this particular case, not with every "{pct} ({n})" display, and respecting the custom total name). Also do the equivalent for Total rows, keeping the two lines in one cell printing where it’s implemented (to avoid wasting horizontal space).
+- I want to keep the current display when the population of the different models or col_vars is the same, and with tab_spread. But with several outcomes or several col_vars with different populations due to NAs (or predictor’s lists with different populations), I want the default to be one unique column printing the range of `n`: something like "100% (6 712-9 838)". The html tooltip of the Total/n column should print the `n` of every model or col_var (at display/export time, without storing them). The html tooltip of the cell should print the `tot_n` after the cell own `n`.
+- Since it’s now a display time thing, I want to soft-deprecate add_n argument in `tab` (no error but inactive), and remove it altogether in `tab_reg` (never released), and I want to use a global option instead. Ensure the implementation is efficient and doesn’t noticeably slow display/export. It should have these possibilities : default to `"range"` ; `"n_min"`, only printing the mininum in the row (or col) while stating "Total (n_min =)" in the exports’s header ; `"each"` for exports only, using one Total/n column for each col_var or model by reading `tot_n`, with a display token etc. equal to the one of the column existing in the data (not in console) ; `"no"` for no n display at all (no n displayed in the total column or row in `tab`, no `n` column at all for `tab_reg`).
+- With `"each"`, the exports must not repeat the [married] [tvhours] variable tag in all n columns, but integrate each one inside it’s own col_var (where the col_var name appear as an additional merged column header).
+- In tab_reg(), remove the `N` line of the footer altogether, the information is already in the column "N", reference population ; if the dada is needed somewhere to gate something, use the `n` field of the constant / reference population row, and ensure it’s populated for all models.
+- The Total column of tab and the n column of tab_reg, which are structurally equivalent, have a different behaviour because Total is the last column and n is the first column: it’s a wanted behaviour (the 100% is after the columns because they sum-up, the n column without 100% of tab_reg is near the predictors levels names because it does not depend on the outcomes and is not part of the model). With `"each"`, it becomes part of each col_var block even in `tab_reg`, at display time : it means we should now store the `n` of each factor predictor level in the population in the `n` field (printing it in tooltips even with `"range"` or `"min_n"`).
+- In tab(), with `levels="first"` (or `levels="auto"` with all factors having 2 levels or less), the `100%` is misleading since it does not sum up to 100%, so in this case we only want the "(9 828)" or "(6 712-9 838)" but without the "100%". With `levels="first"` plus a `tab_vars` that is a `spread_vars`, we want to match the current `tab_reg` with tab_vars and spread behaviour : one `n` column for each level of the `spread_vars`.
+
+#### Phase 22b — tab manual review
+
+ is the `tot = c("row", "col")` argument still needed at all, if the totals are always printed ? If it’s only soft-deprecation, would it be possible to put it in `...` with the other soft-deprecated arguments ? Also, document in roxygen and link where to find the soft-deprecated arguments documentation.
+
+ Rewrite the short versions of legends ?
+
+##### Phase 22b-ii — tab_spread reworking
+
+There’s a bit work remaining for tab_spread to behave as a very compact yet readable table.
+
+```r
+tab(gss_simple, rincome, c(married, tvhours), tab_vars = race, spread_vars = race, 
+    pct = "row", na = "drop", totaltab = "table", 
+    color = TRUE, color_signif = "grey_non_signif", ref = "tot", comp = "all", levels = "first"
+) # main use case: very compact table (spreading a tab_vars with comp = "all")
+tab(gss_simple, rincome, c(married, tvhours), tab_vars = race, spread_vars = race, 
+    pct = "row", na = "drop",
+    color = TRUE, color_signif = "grey_non_signif", ref = "tot", comp = "all", levels = "first"
+) # not good (see below)!
+tab(gss_simple, rincome, c(married, tvhours), tab_vars = race, spread_vars = race, 
+    pct = "row", na = "drop", totaltab = "no", 
+    color = TRUE, color_signif = "grey_non_signif", ref = "tot", levels = "first"
+) # should be ok (no Ensemble columns), but "Error: ! Build failed on "rincome". Caused by error in `dplyr::full_join()` at tabxplor/R/tab.R:2236:5:! Can't join `x$rincome` with `y$rincome` due to incompatible types. ℹ `x$rincome` is a <ordered<b3d35>>. ℹ `y$rincome` is a <ordered<c817b>>"
+tab(gss_simple, rincome, party3, tab_vars = race, spread_vars = race, 
+    pct = "row", na = "drop", color = TRUE, color_signif = "grey_non_signif", ref = "tot"
+) # it should still be quite readable with 3+ levels factors, but anyway it won’t be the most readable one.
+```
+- totals are not well managed yet. without `totaltab = "table"` the near empty Ensemble column is not so bad, but a "Total Ensemble" row is created above the "TOTAL" row : the "49%" cell should be in the `TOTAL` row.
+- colors are ok with `totaltab = "table"` and `comp = "tab"`. But with `comp = "all"`, which is the real comparison interest here, it’s quite misleading, because the basis of comparison is Married_Ensemble for every cell (good behaviour), but it’s not readable: the non-colored cells of the "TOTAL" row are in bold as if they where the reference, but the reference is a cell and is Married_Ensemble "49%" (it should be the only one to be both not-colored and bold). If you can manage to use/extend the current reference management and detection system without adding to much ad hoc stuff and clutter in it, it’s even better (otherwise, you can maybe find a good workaround). Legends should also state clearly what is the reference in these different use cases.
+- The 4 totals columns are useless (four 100% columns) and misleading (it does sum up to 100% anymore). Here, I want near the same behaviour than the current `tab_reg` with `tab_vars` and spread behaviour: no total columns, but one `n` column per level of the `spread_vars` (all at the end / at the right, so that visual comparisons stay possible because they are regrouped together). Also ensure the same is working not too bad for `pct="col"`.
+- "TOTAL" is written instead of "Total" (please fallback to the base total name).
+- In html exports, and certainly other exports, the two headers rows repeat the same thing, which is not very useful. Here for `married` the normal header should print the tab_vars levels (White, Black, etc.), while the `col_var` is set to "married" for all four tab_vars levels and only one merged cells "married" appear in the first header row of exports.
+- `tab(gss_simple, rincome, party3, spread_vars = race, ...` should work (auto-adding race to `tab_vars` since it’s not passed anywhere before `spread_vars` ; with several `tab_vars` I’m not sure if it’s prepend or append to get the most useful totals calculated and the less voids in the table).
+- The main compact table use case should appear in the introduction vignette (binary factor + numeric col_var).
+
+
+
+
+#### Phase 22c — Black and white publication print manual review
+The grey fill carries no direction, and cannot. o1..o4 and u1..u4 are the same four greys; direction is only readable from the cell's own bold/italic. That's forced by the ruling and by Bertin, and it only bites for a table coloured on the background channel alone. The legend names it ("Grey fill" both sides).
+The legend now collapses repeated break-words — print shows +5 and +20, not +5 +10 +20 +30, because slots 1–2 render identically. That is honest, but it does mean the print legend lists fewer thresholds than the colour one.
+
+#### Phase 22d — assumptions plots manual review
+
+#### Phase 22e — `forest_plot` manual review
+D6 has a limit I could not design away. ggplot has one scale per aesthetic, so a key list describes one ladder. legend_guide_spec() returns NULL when the plotted columns form several legend_group_by_body() groups and the caption prints the prose legend instead — the same grouping the footer uses, so they can't disagree about how many ladders exist.
+theme = "print" forced the one deviation from the table palettes — its text slots are all black (the table separates directions by bold vs italic, which a point can't be), so a mark borrows the print palette's grey ramp. Nothing is lost: in a forest plot direction is the position relative to the null line.
+`or_plot()` was deleted with its inert `point_size`. Reimplement `point_size` in `forest_plot`, since the model columns now store the factor predictors levels `n` in `n` field.
+
+#### Phase 22f — Jamovi UIs manual reviews and final modifications
+
+#### Phase 22g — documentation reviews
+
+In the introduction vignette: teach levels = "first" and levels = "auto" with the FactoMineR:: tea dataset; also teach to use tab_vars + spread_vars to make a very condensed table of on the tea dataset.
+
+
+#### Phase 22x — very last features before release
+- direct Word export, or teach to go through Excel ?
 
 ---
 
@@ -558,17 +826,20 @@ Also plan for a reduction of the roxygen part, with the same logic : user-friend
 #### Phase 23b — roxygen2 documentation simplication
 - Point to the right vignette for more details and pedagogy. Point to the introduction vignette in `?tab` description and the regression vignette in `?tab_reg` description. Start the english vignettes with a link to the French vignette to say it exists, if not already done.
 
-#### Phase 23c — drastic `NEWS.md` simplification
+#### Phase 23c — user messages simplication and focus
+Many user messages print useless dev stuff (always remove) or internals (only accepted if the function is itself advanced programming) made for the maintainer: as a general case, messages should speak to the user, and they should speak about statistics, statistical soundness, real caveats, user-facing arguments and the like, in a simple and clear way that is really helpful to non-experts.
+
+#### Phase 23d — drastic `NEWS.md` simplification
 `NEWS.md` `# tabxplor 2.0.0 (in development)` was already drastically simplified in Phase 18y, but have since Phase z2 accumulated all dev history again. Most of it is really not user-facing and irrevelant here (and already in other dev documentation). A **drastic** reduction is needed here, no dev details **at all**, straight to the point, please **reduce around 400 lines to maximum 150 lines** :
 - "## New features" should only list the most important things. New exported functions, like tab_counts() and others, should be presented in one quick sentence. New arguments in one quick sentence, rarely more. Everything about `tab_reg()` should be near-zero-words : in spirit, "possibility to do regressions added, see the vignette".
 - Drastically reduce "## Changes that may affect existing code", only keep what is really important
 - Drastically reduce bug fixes (same thing really), to only speak about very very few bugs that could have been hit by real user. Remove everything about any new argument or implementation. Make it small.
 - Keep deprecation, reduce it’s size, list elements quickly, but keep differenciate what is soft deprecated and what is hard deprecated.
 
-#### Phase 23d — Tests simplification
+#### Phase 23e — Tests simplification
 - testthat tests have grown organically, it was right for development, but would slow future dev for no real benefits: I want you to select the tests that are really necessary , and to move the others to a unique script not run with `test`. **The full suite must go below 20 seconds** (parallelised, on this computer).
 
-#### Phase 23e — `dev/` folder
+#### Phase 23f — `dev/` folder
 Files inside the `dev/` folder have grown organically, with many now useless files and outdated ones, which is very messy for future development : I want you to clean and reorganise the folder and main files.
 - Put all files related to v 2.0.0 dev history and of no real use for future dev in an 2.0.0 archive subfolder. That should be most of them.
 - Only keep at `dev/` root level a few selected .md files that explain in detail the architecture or functioning or use cases of some subsystems, and will be really useful for future dev : clean these files, simplify them by removing useless dev history and focusing on current architecture and usage, ensure they are up-to-date compared to the current design and code ;  organise them internally in such a way that goals, design and architecture decisions, usage, and everything giving the big picture come first, and details come next ; reference them in the architecture document.
@@ -580,7 +851,6 @@ Files inside the `dev/` folder have grown organically, with many now useless fil
 ### Phase 24 — CRAN release
 
 
----
 
 
 
@@ -588,42 +858,16 @@ Files inside the `dev/` folder have grown organically, with many now useless fil
 
 
 
-### Reference — bugs, benchmarks, perf
 
-Fixed bugs recorded in `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`
-
-
-#### Benchmarks (`dev/benchmarks/`)
-
-The performance harness lives in `dev/benchmarks/` (`.Rbuildignore`'d). Per the scope decision, save every phase's before/after runs under `dev/benchmarks/results_2.0.0/`.
-
-⚠ **Every committed baseline below was measured on WINDOWS/NTFS. Dev is now WSL2 Ubuntu on ext4 — do NOT diff a WSL2 run against them.** Affected: `dev/benchmarks/baseline.csv`, `tests/testthat/benchmark_baseline.csv`, `jmvtab_benchmark_baseline.csv`, `jmvtab_big_benchmark_baseline.csv`, plus every absolute timing quoted in the roadmap phases above (`~46s` suite, `225s -> 56s` parallel, the §26 parallel PoC, the Phase 5/7f/9b/10 speedups). The *ratios* within a single run stay meaningful; the absolutes do not cross the platform boundary. Nothing fails — benchmarks are opt-in (`TABXPLOR_BENCH=true`) and `test-benchmark.R` never fails — so this is a **silently misleading comparison**, not a broken test. Re-baseline consciously on ext4 before drawing any conclusion, and note the platform in the file when you do.
-
-⚠ **The 8M fixtures are NOT in WSL2.** Migration Phase A1 ruled `big_df.rds` (161 MB) and `big_pc18_full_15M.rds` (572 MB) *reproducible* and deliberately did not copy them (`.gitignore`: *"Generated benchmark fixtures: large, regenerable, never commit"*; `gen_big_df.R` is tracked). The first `run_bench.R` therefore **regenerates the fixture first** — expect a long, one-off build, not a hang. The 13 loose `dev/benchmarks/results_*.csv` WERE copied; `results_2.0.0/` is tracked.
-
-- `run_bench.R` — heavy 8M-row `tab()` harness: `source("dev/benchmarks/run_bench.R")`. Compares to `dev/benchmarks/baseline.csv`; writes `results_<stamp>.csv` (git-ignored).
-- `run_fused_vs_bytable.R` — fused vs table-by-table arbiter on a 15M fixture (the `.by_table` flag). *(OBSOLETE since Phase 9c removed the tab()-level factor fusion — `.fine` now only reaches `tab_plain` via jmvtab / `tab_counts()`.)*
-- `gen_big_df.R` — deterministic 8M fixture builder (cached to `big_df.rds`, git-ignored).
-- `baseline.csv` — committed 8M baseline; reset consciously after a deliberate perf change.
-- `tab_many_performance_profile.md` — the full 2026-07 profile (read before optimizing).
-- In-suite counterpart: `tests/testthat/test-benchmark.R` (small `gss_cat`, informational, never fails, vs committed `tests/testthat/benchmark_baseline.csv`; regen via `dev/make_benchmark_baseline.R`). `bench` is Suggests-only (falls back to `system.time`).
-
-#### Perf findings (condensed — full profile in `dev/benchmarks/tab_many_performance_profile.md`)
-
-- **`tab_chi2` is the #1 cost** (84% of a small 9-tab call; N-independent, scales with *cells*) → the reason CI/chi2 move onto the aggregate in Phase 3.
-- Per-table fixed fmt/vctrs overhead (~0.19 s/table) dominates over the scan; `tab_num` double-scans N and weighted `tab_num` allocates ~7.8 GB (`weighted.var` recomputes the mean) → Phases 1-3.
-- Scan-fusion — the tab()-level opt-in (`options(tabxplor.fuse_min_rows=)` + the fused block in `tab_aggregate`) was **removed in Phase 9c** (§30): a NET NEGATIVE (+1–7 %) once the build is O(cells) / N-independent, so fusing the O(N) scan buys nothing at survey scale. The `.fine`/`.by_table`/`fine_for_pair()`/`use_raw` seam **remains** as the jmvtab-cache aggregate-injection seam (+ `tab_counts()` + numeric `fine_num`); `test-fuse-parity.R` now drives `tab_plain(.fine=)` directly.
 
 ---
 
-## The last step of every implementation, during the final test suite : Update instructions and relevant development files
+## The last step of every implementation: update the documentation
 
-The final test suite is now quite long, **so you must always start updating documentation and writing "DONE" summary while you wait for the final test suite to finish** (if some tests fails and you modify stuff, briefly correct the documentation that needs to be corrected after verification passes) :
+The final test suite is long, **so start updating docs and writing the "DONE" summary while it runs** (if a fix follows a failure, correct the affected docs once it passes). Keep everything present-tense and concise, respect the **documentation ecosystem** hierarchy (top of this file), and **edit the files yourself** — never hand the maintainer lines to paste. The ONLY place dev history is allowed is the "DONE" summary (step 4).
 
-1. Ensure the file-header docstring/comment of any modified module is still accurate. Update or add `# DESIGN:` / `# WARNING:` tags next to changed logic.
-2. Update `dev/tabxplor_architecture.md` whenever you modify the package structure *for real* (add modules, rename functions, change config fields). Do not add clutter and useless details. When there is nothing to change, skip it. Update other `dev/*md` file when relevant.
-3. **Edit `CLAUDE.md` yourself** — never hand the maintainer "update lines" to paste. Two things go in, both minimalistic, concise, no bullshit, nothing that would clutter the prompt (the details are already in the docstring/comments):
-   + the **Repository Map** / *Key Constraints* / *Design Decisions* entries of anything you really changed (a new module, a renamed function, a new config field). When there is nothing to change, *skip it*.
-   + the phase **"DONE" summary**, under its own `#### Phase <x> — <title>` header in the roadmap section. **CLAUDE.md is the ONLY place it goes**. The maintainer moves done phases to `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md` himself.
-4. (`NEWS.md`: user-facing and CRAN-facing, tracking new functions, new arguments and arguments changes, deprecations, and really important user-facing bugs fixes. Keep it *fully* minimalistic and *radically* no bullshit. Do not edit it when it’s not necessary. Most of the time, it’s not necessary.)
-5. (`README.Rmd` : user manual. Only update before release of new version to CRAN, never before.)
+1. **File-header + inline comments** of every module you touched — make them state the CURRENT design, caveats and "why", never how it got there; add or adjust `# DESIGN:` / `# WARNING:` tags next to changed logic. Cut, don't accrete.
+2. **Phase "DONE" summary** — under its own `#### Phase <x> — <title>` header in the roadmap. This is the ONE place dev-history detail belongs (what changed, why, measurements). CLAUDE.md is the ONLY place it goes; the maintainer moves finished phases to `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md` once the roadmap gets cluttered.
+3. (**Repository Map** in this file — refresh a file's role line only if you added, removed or repurposed a file; keep is absolutely brief, never add clutter here, cut instead of accreting; otherwise skip.)
+4. (**`NEWS.md`** — user-facing / CRAN-facing only (new or changed functions/arguments, deprecations, important user-facing fixes); radically minimal, usually skip.)
+5. (**`README.Rmd`** — only before a CRAN release.)

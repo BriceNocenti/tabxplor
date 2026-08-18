@@ -7,7 +7,7 @@
 #   - `spec` is OPTIONAL: a table that lost it (or a plain tibble mid-pipeline) still prints and
 #     exports. tab_kind() then DERIVES the kind from the `test` tibble's discriminators (TEST_REG_KEYS)
 #     -- the degraded fallback, never the normal path.
-# See: dev/tabxplor_architecture.md (declarative architecture); R/tab-shape.R.
+# See: CLAUDE.md § tabxplor architecture (declarative architecture); R/tab-shape.R.
 #
 # THE MODEL -- one `meta$spec`, three slots:
 #   kind   "crosstab" | "regression".

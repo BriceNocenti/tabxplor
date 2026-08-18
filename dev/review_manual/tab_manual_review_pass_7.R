@@ -15,71 +15,27 @@ gss_simple <- gss_cat_data_formatting() # gss_simple with merged levels, and fir
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", empirical = TRUE
 )
-# - remove the N line of the footer, the information is already in the column "N", reference population
-# - Having a different color measure for Obs_% (difference) and Obs_RR (ratio) is misleading, since they
-#   should really be the same column with a different display, but here they are colored with different measures.
-#   The Obs_% could color="ratio" to match the Obs_RR and the model one, but there’s a better solution.
-#   The right way to do it is to only use one color measure for both empirical and modelised columns: 
-#   that way, there would be only one legend block for everything, which means everything is comparable
-#   and the field of comparison is homogeneous. Anything more is confusing.
-# - The way to be even more clear, symmetric, and reduce the discrepancy between Obs_% and Obs_RR, 
-#   is to **only have one empirical column and one model column** : same measure, same display and the 
-#   "display" argument works on both, one legend block/only one consistent CI type, etc.
-# - is’t actually good that "age", being one line, have it’s variable name written horizontally, 
-#   but it should be in bold to match the vertical ones. 
-# - age numeric variable "levels" column is written in html "age(per 1 SD\n (13.5)) <curve>" : it shouldn’t wrap after SD
-#   if there are other "levels" with longer names, like in "Model fit" (here the would be space for it to fit on 1 line) ;
-#   I want a bit more concise display : "per SD/13.5" (age do not need to be repeated here, it’s already in the variable name column ;
-#   only print the number of SD when it’s not 1)
+
 
 
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", effect = "marginal", measure = "ratio" , empirical = TRUE
 )
-# - "Obs_RR" use the 1/x.xx display for < 1, but "Model_RR" does not and print raw "0.xx" : rule should be, 
-#   always display the inverse for OR, RR, and more generally multiplicative scale ;
-#   add an opt-in global option to print "0.xx" instead for people who don’t love it
-#   `family = "binomial"` is ok, `family = "binomial", measure = "ratio"` is ok, but adding `effect = "marginal"` breaks it
-# - even with only `family = "binomial"` the Model_OR "obs" field use "0.xx" : with multiplicative scale 
-#   and with option default it should print 1/x.xx instead for consistency (otherwise it’s confusing) 
-# - `family = "binomial"` have a "Reference population" OR, and so does the same with `measure = "ratio"`,
-#   but with `effect = "marginal"` it gets an empty field : is there a statistically sound way to 
-#   compute something here, use by other common regression packages or apps ?
-#  `effect = "at_reference"` also have empty Reference population.
+
 
 # adjustment
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", effect = "marginal", measure = "ratio" , empirical = TRUE, color = "adjustment"
 )
-# - with color = "adjustment", the colors seem very off. I’m not sure if it’s errors or bad design
-#   race "other" have Obs_RR 1/1.06* and Model_RR 1.05 but the color is orange : 
-#   relig "Jewish" have Obs_RR 1.04 and Model_RR 0.89 but the color is blue : 
-#   relig Buddhist/Hinduist have Obs_RR 1/1.04 and Model_RR 0.86, 
-# - with color="adjustment", the color of the Obs_RR column (or the future unique empirical column)
-#   is misleading, since it’s the reference for comparison (for Model_RR) and should be all bold/no colors.
-#   Too much different colors with different color scales is confusing the user.
-# - I’m also not sure about the stars, since I can have Obs_RR 1.18*** and Model_RR 1.18***, on another table : 
-#   clearly the cell is gray and the stars are not for the adjustment, so I’m not sure what to do. 
-#   Keeping as is is misleading if the colors ares for the adjustement, but at the same time stars for
-#   the significance of the adjustement are non-standard and will mislead some users too. Please study the 
-#   problem, and propose me a user-friendly solution.
 
 
-
-#### several outcomes
+# several outcomes
 tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
         family = c("binomial", "poisson"), empirical = TRUE, 
 )
-# - in the html export, the outcomes names [married] and [tvhours] are repeated on each column : 
-#   they should never appear here since the name of the col_var is already written above in the first headers rows
-#   (if it’s the same in tab(), it needs be corrected here too)
-# - with several outcomes, all the n columns appear at the beginning, and they also repeat
-#   the [married] [tvhours] in headers since they are not grouped with the col_vars. 
-#   for readability, I want two different displays : 
-#    - When the n is the same for all models, 
 
 
-#### predictor’s list
+# predictor’s list
 tab_reg(gss_simple, outcome = "married", 
         predictors = list(race  = "race", 
                           two   = c("race", "rincome"), 
@@ -87,19 +43,12 @@ tab_reg(gss_simple, outcome = "married",
                           full  = c("race", "rincome", "relig", "age") ),
         family = "binomial", effect = "marginal", measure = "ratio" , empirical = TRUE, color ="adjustment"
 )
-# - the "overall association" lines do not follow the order of the predictors
 
-#### tab_vars 
+# tab_vars 
 tab_reg(gss_simple, outcome = "married", tab_vars = "race",
         predictors = c("rincome", "relig", "age", "tvhours"),
         family = "binomial", effect = "marginal", measure = "ratio" , color ="between_groups"
 )
-# - here, all the "n" actually being side-by-side is good/readable.
-#   Put them after the models column (at their right), it would be even greater.
-# - The reference column for "between_groups" doesn’t follow tabxplor rule : in bold (refcol)
-# - remove the useless verbose message : "ℹ `color = "between_groups"` also adds the aggregated interaction test to the footer (one extra model fit).\nAsk for it without the colours with `stats = c(..., "interaction")`."
-# - when I add `empirical=TRUE` here, the stats footer appear in the Obs_%_* part rather than on the model columns.
-# - here too, the "Overall association (LR)" lines are not in the order of the predictors, which is a bit confusing.
 
 
 

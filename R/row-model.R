@@ -7,7 +7,7 @@
 #     `levels` column `var` is NA. Never infer either from a column NAME.
 #   - `row_kind` must live on the fmt FIELD, not the table: fmt_color_plan() calls is_totrow() on a
 #     lone extracted column with no table in scope (locked by test-degraded-attrs.R).
-# See: dev/tabxplor_architecture.md (row model); R/fmt_class.R (the row_kind field).
+# See: CLAUDE.md § tabxplor architecture (row model); R/fmt_class.R (the row_kind field).
 #
 # TWO facts, TWO carriers:
 #   1. WHAT KIND OF ROW  ->  the `row_kind` FIELD of tabxplor_fmt (ROW_KINDS below): data / total, and

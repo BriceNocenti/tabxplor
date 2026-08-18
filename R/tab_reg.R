@@ -4581,17 +4581,14 @@ reg_stage_finalize <- function(ctx) {
 #' @eval reg_measures_rd()
 #' @export
 tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL,
-                    family = "auto",
-                    effect = "coefficient", measure = "auto",
+                    family = "auto", effect = "coefficient", measure = "auto",
                     trials = NULL, empirical = FALSE, add_n = TRUE,
                     color = TRUE, color_signif = NULL, stars = TRUE,
                     conf_level = NULL, ci_method = NULL,
-                    ref = NULL, outcome_level = NULL, multiplier = "sd",
-                    shape = NULL,
-                    stats = NULL,
+                    outcome_level = NULL, ref = NULL,
+                    multiplier = "sd", shape = NULL, stats = NULL,
                     na = c("drop_by_outcome", "drop_by_model", "drop_all"),
-                    display = "value",
-                    cleannames = NULL, subtext = "", parallel = NULL, ...) {
+                    display = "value", cleannames = NULL, subtext = "", parallel = NULL, ...) {
   # `.fit_cache` (the jamovi live-UI cache env) and `.levels_collapse` (the level-merge spec, shared
   # with tab() -- R/row-model.R declares it, tab_collapse_levels() applies it in reg_prepare_data()'s
   # stage G beside `shape`) are jamovi-internal and ride `...`; neither is a user argument.
