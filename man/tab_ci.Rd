@@ -23,20 +23,18 @@ tab_ci(
 \item{tabs}{A \code{tibble} of class \code{tab} made with \code{\link{tab_plain}} or
 \code{\link{tab}}.}
 
-\item{ci}{What the interval is anchored on -- \code{"ref"} (the comparison with the reference
-cell), \code{"cell"} (the cell's own value), \code{"no"}, or \code{"auto"}. See
-\code{\link{tab}}, which is where this is normally set: \code{"auto"} gives a comparison
-interval for means and row/column percentages and a cell interval for plain frequencies.
-\code{"diff"} and \code{"ratio"} are the soft-deprecated spellings of \code{"ref"}.
-With \code{ci = "cell"} the result prints as \verb{[inf;sup]}; set
-\code{options("tabxplor.ci_print" = "moe")} for \code{pct +- moe}.}
+\item{ci}{What the interval is anchored on : \code{"ref"} (the comparison with the reference
+cell), \code{"cell"} (the cell's own value), \code{"no"}, or \code{"auto"} --- a comparison
+interval for means and row/column percentages, a cell interval for plain frequencies.
+\code{"diff"} and \code{"ratio"} are the older spellings of \code{"ref"}. With
+\code{ci = "cell"} the result prints as \verb{[inf;sup]}; set
+\code{options("tabxplor.ci_print" = "moe")} for \code{pct +- moe}. See \code{\link{tab}}, which is where
+this is normally set.}
 
-\item{comp}{Comparison level. When \code{tab_vars} are present, should the
-contributions to variance be calculated for each subtable/group (by default,
-\code{comp = "tab"}) ? Should they be calculated for the whole table
-(\code{comp = "all"}) ?
-\code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
-\code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.}
+\item{comp}{Comparison level, when \code{tab_vars} are present : the interval compares within
+each subtable/group (by default, \code{comp = "tab"}) or over the whole set of tables
+(\code{comp = "all"}). It must be set once and for all the first time you use
+\code{\link{tab_pct}} with rows, \code{\link{tab_ci}} or \code{\link{tab_chi2}}.}
 
 \item{conf_level}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}
@@ -44,45 +42,33 @@ Default to 0.95 (95\%).}
 \item{color}{The type of colors to print, as a single string: \code{"no"} (the default),
 \code{"diff_ci"} (colour percentages and means by their difference from the total or first cell,
 dropping the colour when the interval of that difference is wider than the difference itself) or
-\code{"after_ci"} (idem, but cutting the interval off the difference first). Those two combined
-strings are the 1.x spelling of \code{\link{tab}}'s \code{color = "difference"} plus
-\code{color_signif = "grey_non_signif"} / \code{"guaranteed_effect"}, which is what a table
-built by \code{tab()} stores and its legend names.}
+\code{"after_ci"} (idem, but cutting the interval off the difference first) --- the 1.x spelling
+of \code{\link{tab}}'s \code{color = "difference"} plus \code{color_signif} set to
+\code{"grey_non_signif"} / \code{"guaranteed_effect"}.}
 
 \item{visible}{By default confidence intervals are calculated and used to set colors,
 but not printed. Set to \code{TRUE} to print them in the result.}
 
 \item{stars}{Logical (opt-in; default \code{FALSE}, or \code{options("tabxplor.stars")} when \code{NULL}).
-With \code{ci = "diff"}, store and print per-cell significance stars for the difference from
-the reference, read from the same interval that is displayed (universal CI-inclusion), so the
-stars and the bracket never disagree. \code{FALSE} skips the significance computation.}
+Print per-cell significance stars for the difference from the reference, read from the same
+interval that is displayed, so the stars and the bracket never disagree.}
 
-\item{ci_method}{The confidence-interval method of each kind of interval, as ONE named vector
+\item{ci_method}{The method of each kind of interval, as ONE named vector
 (\code{c(cell = , diff = , mean_diff = , mean_ratio = )}, partial) -- see \code{\link{tab}}. The
-\code{cell} slot also takes \code{"beta"} (Korn-Graubard:
-\code{survey::svyciprop(method = "beta")}'s Clopper-Pearson interval on the effective sample size
--- the textbook design-based cell interval, conservative near 0 and 1. Beta quantiles have no
-degrees of freedom of their own, so under a \code{survey} design the effective base is first
-rescaled by \code{(qt(a, n - 1) / qt(a, degf))^2}, exactly as \code{survey} does, which refers the
-interval to the design's own df; \code{degf} is the whole design's, as it is for every other
-interval here).}
+\code{cell} slot also takes \code{"beta"} (Korn-Graubard), the textbook design-based cell
+interval, conservative near 0 and 1.}
 
 \item{method_cell, method_diff}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use
 \code{ci_method = c(cell = , diff = )} instead.}
 
-\item{ci_scale}{Character string, the scale the \code{ci = "diff"} interval is expressed on:
-\code{"diff"} (default) for a difference interval (neutral 0, one of the \code{ci_method["diff"]}
-methods), or \code{"ratio"} for a ratio interval (neutral 1), stored on the column's own
-\code{scale} attribute (\code{"pct_ratio"} / \code{"mean_ratio"}) and centred on the
-cell/reference ratio -- Katz's log-risk-ratio for proportions (the only proportion
-ratio method), or a ratio-of-means interval for numeric means (\code{ci_method["mean_ratio"]}).
-\code{tab()} sets it from
-the colour: the measure the reader sees owns the interval, so \code{color = "ratio"} (or
-\code{c("ratio", "diff")}) asks for the ratio one.}
+\item{ci_scale}{The scale a comparison interval is expressed on: \code{"diff"} (default, a
+difference interval, neutral 0) or \code{"ratio"} (a ratio interval, neutral 1 --- Katz's
+log-risk-ratio for proportions, a ratio of means for numeric variables). \code{tab()} sets it
+from the colour: the measure the reader sees owns the interval.}
 
 \item{degf}{The design's degrees of freedom, the reference distribution of every interval
-(\code{#PSU - #strata}). \code{NULL} (default) takes the value the table itself stores when it was
-built from a \code{survey::svydesign}; \code{Inf} is the large-sample normal pivot.}
+(\code{#PSU - #strata}). \code{NULL} (default) takes the value the table itself carries when it
+was built from a \code{survey::svydesign}; \code{Inf} is the large-sample normal pivot.}
 }
 \value{
 A \code{tibble} of class \code{tab}, colored based on differences (from
@@ -91,19 +77,17 @@ totals/first cells) and confidence intervals.
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
 
-Deprecated in 2.0.0, defunct in 2.1.0 -- confidence intervals are computed by the aggregate core, from the
-\code{ci} / \code{ci_method} / \code{conf_level} / \code{stars} arguments of \code{\link[=tab]{tab()}}, \code{\link[=tab_plain]{tab_plain()}} and
-\code{\link[=tab_num]{tab_num()}} --- where the plan that decides them already lives. \code{tab_ci()} still works on an
+Deprecated in 2.0.0, defunct in 2.1.0 -- confidence intervals are computed directly by \code{\link[=tab]{tab()}},
+through its \code{ci} / \code{ci_method} / \code{conf_level} / \code{stars} arguments. \code{tab_ci()} still works on an
 existing tab, reconstructing that plan from the table's own markers.
 }
 \section{Significance stars}{
 
 With \code{stars = TRUE} and an interval anchored on the comparison (see \code{ci}), each cell
-shows how sure we can be that its
-difference from the reference is real and not just sampling noise: \code{*} means significant at
-the 10\\% level (p < 0.10), \code{**} at 5\\% (p < 0.05), \code{***} at 1\\% (p < 0.01). The exact
-p-value is stored per cell in the \code{pvalue} field of the \code{fmt} vectors, readable with
-\code{$pvalue} or \code{get_pvalue()}.
+shows how sure we can be that its difference from the reference is real and not just sampling
+noise: \code{*} means significant at the 10\\% level (p < 0.10), \code{**} at 5\\% (p < 0.05),
+\code{***} at 1\\% (p < 0.01). The exact p-value is stored per cell in the \code{pvalue} field of
+the \code{fmt} vectors, readable with \code{$pvalue} or \code{get_pvalue()}.
 
 There is no separate statistical test run behind the scenes: the significance is read straight
 from the confidence interval that is displayed. A cell is significant at a given level exactly
@@ -111,11 +95,12 @@ when its interval at that confidence level no longer contains zero, so the stars
 \code{[inf; sup]} bracket can never contradict each other. Which test this amounts to depends on
 the interval:
 \itemize{
-\item \strong{percentage difference} (default, \code{method_diff = "newcombe"}): inverting the
-Newcombe hybrid-score interval. This is, to a very close approximation, the classical
-two-sample test of proportions (the score / "N-1" chi-squared test).
-\item \strong{percentage difference} with \code{method_diff = "ac"} or \code{"wald"}: inverting
-the Agresti-Caffo (adjusted Wald) or the Wald interval -- an (adjusted) two-proportion z-test.
+\item \strong{percentage difference} (the default, \code{ci_method = c(diff = "newcombe")}):
+inverting the Newcombe hybrid-score interval. This is, to a very close approximation, the
+classical two-sample test of proportions (the score / "N-1" chi-squared test).
+\item \strong{percentage difference} with \code{ci_method = c(diff = "ac")} or
+\code{c(diff = "wald")}: inverting the Agresti-Caffo (adjusted Wald) or the Wald interval ---
+an (adjusted) two-proportion z-test.
 \item \strong{mean difference}: the \strong{Welch two-sample t-test} (for groups with unequal
 variances); inverting the Welch t interval is exactly this well-known test.
 \item \code{ci = "cell"} (an absolute cell interval, not a difference) is purely descriptive,

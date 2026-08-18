@@ -1,54 +1,35 @@
-# PURPOSE: The whole-table chi2 / ANOVA test and the per-cell CONTRIBUTION to variance -- the two
-#   computations that read a built table\'s cells and write either a tidy `test` tibble or the
-#   `ctr` / `var` / `pvalue` fields.
-# ROLE: Carved out of R/tab.R by Phase 19l (whole functions, no behaviour change).
+# PURPOSE: The whole-table chi2 / ANOVA test and the per-cell CONTRIBUTION to variance.
+# ROLE: The two computations that read a BUILT table's cells and write either the tidy `test`
+#   tibble or the `ctr` / `var` / `pvalue` fields. Two callers, one implementation: the leaf
+#   (leaf_chi2 / leaf_chi2_num, R/tab-leaf.R) and the superseded tab_chi2() step
+#   (R/tab-steps-legacy.R), so a step and a build cannot compute two different answers.
 # KEY CONSTRAINTS:
-#   - TWO callers, ONE implementation: the leaf (leaf_chi2 / leaf_chi2_num, R/tab-leaf.R) and the
-#     superseded tab_chi2() step (R/tab-steps-legacy.R). 19j moved the QUESTION into the leaf and
-#     deliberately did NOT re-implement the arithmetic here, so a step and a build cannot compute two
-#     different answers.
-#   - chi2_compute_test() is READ-ONLY over the cells (it only builds the tibble); chi2_write_contrib()
-#     is the ONE mutate(across()) pass that writes them.
+#   - chi2_compute_test() is READ-ONLY over the cells (it only builds the tibble);
+#     chi2_write_contrib() is the ONE mutate(across()) pass that writes them.
+#   - The tests run on the ALREADY-AGGREGATED cell statistics, never a raw N-scan, so cost scales
+#     with cells and not observations. Every (subtable x col_var) is one `table_id`, and ALL tables
+#     are stacked and tested in ONE agg_chi2() / agg_anova() pass.
+#   - WEIGHTED whenever the table is weighted -- the weighted counts rescaled to sum to the raw n.
+#     That is the package's rule everywhere (weighted estimate, unweighted base), and it is a
+#     rescale rather than a branch: get_wn() falls back to get_n(), so on unweighted data the factor
+#     is exactly 1 and the output is byte-identical by construction. Cramer's V is scale-invariant,
+#     so it is the weighted V at any scale.
 #   - The contribution helpers (contrib_zero_inner / var_contrib_ctr_signed / contrib_adj_resid /
-#     contrib_pvalue) work on plain vectors, never on the record -- that is what makes the pass cheap.
-# See: CLAUDE.md Repository Map > R/tab-chi2.R; dev/chi2_cell_residuals_and_contributions.md.
+#     contrib_pvalue) work on plain vectors, never on the record -- that is what keeps the pass cheap.
+# See: CLAUDE.md § tabxplor architecture (the inference layer);
+#      dev/chi2_cell_residuals_and_contributions.md (the residual / contribution derivation).
 
 
-# chi2_compute_test() -- the whole-table chi2 (factor col_vars) + ANOVA (mean col_vars) tests for one
-# built factor table, returning the tidy `test` tibble (one row per subtable x col_var x test-type).
-# Phase 9b-5: extracted from tab_chi2() as a READ-ONLY marshalling step -- it reads the aggregated cell
-# statistics (get_n / get_mean / get_var) and the subtable grouping, feeds the plain-vector engines
-# agg_chi2()/agg_anova() (R/tab-agg.R), and NEVER modifies the cells (so cell byte-identity is a given;
-# only this plain tibble is recomputed). `tabs` is the prepped, post-tab_match_* record; the remaining
-# args are its already-computed metadata (from tab_chi2()'s head).
-# DESIGN: chi2/ANOVA run on the already-AGGREGATED cell statistics, never a raw N-scan -- cost scales
-# with cells, not observations. Every (subtable x col_var) is one "table_id"; ALL tables are stacked
-# and tested in ONE agg_chi2 / agg_anova pass (see the engine header).
-# DESIGN (Phase 18z14-i, ruling Q3): the chi2 and the effect size are computed on the WEIGHTED table
-#   whenever the table is weighted -- the weighted counts rescaled so they sum to the raw n. That is
-#   the convention every OTHER inference in the same table already follows: the CIs are
-#   Wilson(weighted p, unweighted n), and the ANOVA F has always taken §14's weighted group mean/var
-#   with the unweighted n. Only the factor chi2 was still fully unweighted, so a weighted table
-#   reported a p and a Cramer's V describing a population nobody had asked about.
-#   It is a rescale, not a branch: get_wn() falls back to get_n() when there are no weights, so the
-#   scale factor is exactly 1 and unweighted output is byte-identical BY CONSTRUCTION. Cramer's V is
-#   scale-invariant, so it is the weighted V at any scale.
-# WARNING: keep byte-identical to the pre-9b-5 inline block for UNWEIGHTED tables (locked by
-#   test-calculations.R: chi2 + Yates, Welch/classic F, add_n parity; test-golden.R: `test`).
+# === SECTION: the whole-table test =================================================
+
+# WARNING: byte-identity is locked by test-calculations.R (chi2 + Yates, Welch/classic F) and test-golden.R.
+#' @keywords internal
+#' @noRd
 chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
                               col_vars_levels_no_tot, is_a_mean, all_col_tot) {
-  # Phase 9b-5: the kept-rows MASK over `tabs` (replaces the tabs2 = tabs[!is_totrow,] record-slice,
-  # which reconstructed every fmt column just to read counts off it). Drops total rows (and total tabs
-  # under comp = "all"). is_totrow/is_tottab are the pass-2 fmt_row_flag fast path (plain logical, no
-  # reconstruction). Phase 10i-B: the former add_n/add_pct row exclusion ("n"/"row_pct") is gone --
-  # chi2 runs at build on the CORE table, which never carries those display-only rows.
   mask2 <- if (comp == "all") !is_totrow(tabs) & !is_tottab(tabs) else !is_totrow(tabs)
   n_rows2 <- sum(mask2)
 
-  # Subtable grouping over the kept rows. Byte-identical to group_indices()/group_keys() of the
-  # totrow-dropped grouped_df -- computed on a fmt-FREE view (fmt columns dropped first) so the row
-  # slice reconstructs NO fmt records; the same dplyr grouping machinery (incl. `.drop` and the
-  # lv1_group_vars downgrade) runs, and grouping depends only on the untouched grouping columns.
   tabs2_grp    <- dplyr::select(tabs, !where(is_fmt))[mask2, ]
   subtab_idx   <- dplyr::group_indices(tabs2_grp)
   subtab_keys  <- dplyr::group_keys(tabs2_grp)
@@ -57,7 +38,7 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
   factor_cvs <- names(col_vars_levels)[!is_a_mean & !all_col_tot]
   mean_cvs   <- names(col_vars_levels)[ is_a_mean & !all_col_tot]
 
-  # --- Chi2 for factor col_vars (WEIGHTED counts, rescaled to the raw n; see the DESIGN note) ---
+  # --- Chi2 for factor col_vars (weighted counts rescaled to the raw n) ---
   chi2_rows <- NULL
   if (length(factor_cvs) > 0 && n_rows2 > 0) {
     long <- dplyr::bind_rows(purrr::imap(
@@ -67,13 +48,7 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
         if (length(lv_cols) == 0) return(NULL)
         M  <- vapply(lv_cols, function(cc) as.double(get_wn(tabs[[cc]])[mask2]), double(n_rows2))
         Mn <- vapply(lv_cols, function(cc) as.double(get_n (tabs[[cc]])[mask2]), double(n_rows2))
-        # Phase 14a: `length(lv_cols)`, NOT `ncol(M)`. vapply() only returns a MATRIX when
-        # FUN.VALUE has length > 1, so a row_var with exactly ONE non-total row (n_rows2 == 1 --
-        # e.g. all but one level emptied by na = "drop") made M a plain vector, ncol(M) NULL, and
-        # every rep(times = ncM) below died with "invalid 'times' argument". It surfaced as a
-        # mirai error ("In index: 3 ... Caused by error in rep()"), but was never parallel-specific:
-        # the serial map hits the identical line. `length(lv_cols)` is the column count by
-        # construction and is shape-independent (as.vector(M) is column-major either way).
+        # WARNING: length(lv_cols), never ncol(M) -- vapply() returns a bare vector when there is one row.
         ncM <- length(lv_cols)
         tibble::tibble(
           col_var  = cv,
@@ -87,8 +62,6 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
       }
     ))
     if (nrow(long) > 0) {
-      # Rescale each table's weighted counts to sum to its raw n (the sample size the test is
-      # entitled to). Unweighted: o == o_raw, so the factor is exactly 1 and nothing moves.
       weighted_tbl <- !identical(long$o, long$o_raw)
       if (weighted_tbl) {
         gs <- rowsum(cbind(long$o, long$o_raw), long$table_id, na.rm = TRUE)
@@ -103,20 +76,10 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
           statistic = .data$statistic, df1 = as.double(.data$df), df2 = NA_real_,
           pvalue = .data$pvalue, n = as.double(.data$n), min_e = .data$min_e,
           effect_size = .data$effect_size, es_type = .data$es_type,
-          # Phase 18z16-i (W8): `deff` -- the design effect this test corrected by. NA on the
-          # classic basis (there is none), filled by tab_robust_overlay() on the others.
-          # Phase 19m-ii: `dep` is a REGRESSION key -- a crosstab row is about no outcome. NA, not
-          # "": `var = ""` already means "the whole table", so the empty string is a taken meaning.
           pvalue_exact = NA_real_, deff = NA_real_, outcome = NA_character_)
 
-      # Phase 18j: Fisher's exact on the SMALL weak tables (smallest expected count < test_weak_min_e
-      # AND a total feasible for an exact test), where the Pearson chi2 is unreliable -- stored as
-      # `pvalue_exact` ON the chi2 row (NOT a separate row, so the tidy shape / row count is unchanged).
-      # Only a NON-simulated (genuinely exact) p is kept: a large table drags min_e down via one rare
-      # category but its chi2 is fine, so agg_fisher simulates there and we keep the chi2 (weak "!" flag).
-      # The display prefers pvalue_exact when present.
-      # Phase 18z14-i: skipped on a WEIGHTED table -- an exact test enumerates integer tables, and
-      # weighted counts are not counts. The weak "!" flag still fires from min_e.
+      # DESIGN: Fisher's exact on the weak tables (min expected < test_weak_min_e), kept ON the chi2
+      #   row so the tidy shape is unchanged; only a genuinely exact p, and never on weighted counts.
       weak_ids <- if (weighted_tbl) character() else
         res$tables$table_id[!is.na(res$tables$min_e) & res$tables$min_e < test_weak_min_e]
       if (length(weak_ids) > 0) {
@@ -171,7 +134,6 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
     }
   }
 
-  # --- Assemble the tidy `test` attribute (one row per subtable x col_var x test-type) ---
   test_tbl <- dplyr::bind_rows(chi2_rows, anova_rows)
   if (nrow(test_tbl) == 0) {
     test_tbl <- new_test_tibble()
@@ -180,8 +142,6 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
     test_tbl <- test_tbl |>
       dplyr::arrange(.data$subtab, .data$col_var, .data$test) |>
       dplyr::left_join(subtab_keys2, by = "subtab") |>
-      # Phase 19g (KEY 6): the uniform key -- `var` (which variable this test is about), `col` (which
-      # column it keys under), and the tab_var columns naming the sub-population.
       dplyr::mutate(var = !!row_var) |>
       dplyr::rename(col = "col_var") |>
       dplyr::select(-"subtab") |>
@@ -192,11 +152,12 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
 }
 
 
-# contrib_zero_inner() -- the comp = "all" prologue shared by the two contribution helpers below:
-# zero the INTERMEDIATE total rows/tabs (all but the last element, which is the grand total) so a
-# comp = "all" pass decomposes the data cells only. A no-op under comp = "tab". Extracted
-# (Phase 18z4) so the contribution and its residual can never disagree about which cells are in
-# the table.
+# === SECTION: per-cell contributions and residuals =================================
+
+# DESIGN: zero the INTERMEDIATE totals (all but the last, the grand total) so a comp = "all" pass
+#   decomposes data cells only -- shared, so contribution and residual agree on which cells are in.
+#' @keywords internal
+#' @noRd
 contrib_zero_inner <- function(xwn, twn, in_totrow, in_tottab, comp) {
   if (comp == "all") {
     idx <- seq_len(length(xwn) - 1L)
@@ -207,13 +168,10 @@ contrib_zero_inner <- function(xwn, twn, in_totrow, in_tottab, comp) {
   list(xwn = xwn, twn = twn)
 }
 
-# var_contrib_ctr_signed() -- the signed absolute contribution of each cell to the (weighted) chi2,
-# from the column's weighted counts `xwn` (get_wn) and its total column's `twn`, using the LAST
-# element as the grand total. (The former fmt-vector helper var_contrib() with its "ctr_with_sign"
-# branch was removed in Phase 17a; this plain-vector form, used by chi2_write_contrib(), is the sole
-# live path.) DESIGN: the contribution stays WEIGHTED -- it is an ESTIMATE of the population table's
-# inertia decomposition, which is what a weighted correspondence analysis reads (Phase 18z4 §4.4).
-# Its significance is a separate quantity on the package's inference base: contrib_adj_resid().
+# DESIGN: the contribution stays WEIGHTED -- it ESTIMATES the population table's inertia decomposition,
+#   what a weighted correspondence analysis reads. Significance is separate: contrib_adj_resid().
+#' @keywords internal
+#' @noRd
 var_contrib_ctr_signed <- function(xwn, twn, in_totrow, in_tottab, comp) {
   z   <- contrib_zero_inner(xwn, twn, in_totrow, in_tottab, comp)
   xwn <- z$xwn; twn <- z$twn
@@ -224,28 +182,16 @@ var_contrib_ctr_signed <- function(xwn, twn, in_totrow, in_tottab, comp) {
   sign(spread) * spread^2 / expected_freq
 }
 
-# contrib_adj_resid() -- the ADJUSTED STANDARDISED (Haberman 1973) residual of each cell, the signed
-# quantity that both gates and (under `guaranteed_effect`) colours `color = "contrib"`. Same inputs as
-# var_contrib_ctr_signed() plus `n_base`, the INFERENCE base (see chi2_write_contrib):
-#
-#   p_i = twn/N (row marginal)   p_j = xwn[n]/N (column marginal)   e_f = p_i*p_j (expected frequency)
-#   z   = (xwn/N - e_f) * sqrt(n_base) / sqrt(e_f * (1 - p_i) * (1 - p_j))
-#
-# WARNING (Phase 18z4, the two defects this replaces):
-#  1. It is the ADJUSTED residual, not the Pearson one `(o-e)/sqrt(e)` the old gate used. Pearson's
-#     variance is (1-p_i)(1-p_j) < 1, so testing it at 1.96 under-rejects by up to 1/sqrt((1-p_i)(1-p_j))
-#     -- measured 1.10 to 3.09x too strict on one 3x4 table. Only the adjusted residual is ~N(0,1), so
-#     only for it is the +/-1.96 (or the textbook +/-2 / +/-3) rule correct.
-#  2. `n_base` is an UNWEIGHTED sample size -- the raw n, or the effective one the inference basis
-#     yields (see chi2_write_contrib) -- never the weighted total. The estimate is
-#     weighted, the base is not -- the same rule as every confidence interval in the package (?tab,
-#     Phase 18s). The old weighted base made every cell p-value 0 as soon as weights carried
-#     population scale.
-# On an unweighted table with n_base = N this reduces EXACTLY to (o-e)/sqrt(e(1-p_i)(1-p_j)), i.e.
-# stats::chisq.test()$stdres (pinned by test-calculations.R).
-# Sparse guard: a cell whose EXPECTED COUNT (e_f * n_base) is below 1 gets NA -- the normal
-# approximation does not hold there (a cell with expected 0.2 otherwise flags at |z| = 6). A 1-row or
-# 1-column table gives (1-p) = 0 -> non-finite -> NA, which is correct (no residual is defined).
+# The ADJUSTED STANDARDISED (Haberman) residual. With p_i = twn/N, p_j = xwn[n]/N and e_f = p_i*p_j:
+#   z = (xwn/N - e_f) * sqrt(n_base) / sqrt(e_f * (1 - p_i) * (1 - p_j))
+# DESIGN: adjusted, NOT Pearson's (o-e)/sqrt(e) -- Pearson's variance is (1-p_i)(1-p_j) < 1, so a 1.96
+#   test on it under-rejects; only the adjusted residual is ~N(0,1). At n_base = N it reduces EXACTLY to
+#   stats::chisq.test()$stdres (pinned by test-calculations.R).
+# WARNING: `n_base` is an UNWEIGHTED size -- the raw n, or the effective one the inference basis yields,
+#   never the weighted total (weighted estimate, unweighted base, the rule of every CI here). Sparse
+#   guard: expected count < 1 -> NA (0.2 would flag at |z| = 6); a 1-row/1-column table gives (1-p) = 0.
+#' @keywords internal
+#' @noRd
 contrib_adj_resid <- function(xwn, twn, n_base, in_totrow, in_tottab, comp) {
   z   <- contrib_zero_inner(xwn, twn, in_totrow, in_tottab, comp)
   xwn <- z$xwn; twn <- z$twn
@@ -253,18 +199,18 @@ contrib_adj_resid <- function(xwn, twn, n_base, in_totrow, in_tottab, comp) {
   N   <- twn[n]
   p_i <- twn / N
   p_j <- xwn[n] / N
-  e_f <- p_i * p_j                       # == xwn[n] * twn / N^2, var_contrib's expected_freq
+  e_f <- p_i * p_j
   out <- (xwn / N - e_f) * sqrt(n_base) / sqrt(e_f * (1 - p_i) * (1 - p_j))
-  out[e_f * n_base < 1]  <- NA_real_     # sparse: expected count < 1, asymptotics invalid
+  out[e_f * n_base < 1]  <- NA_real_
   out[!is.finite(out)]   <- NA_real_
   out
 }
 
-# contrib_pvalue() -- the two-sided p-value of contrib_adj_resid()'s standardized residual. Total
-# rows/tabs are margins, not cells -> NA. Written into the `pvalue` field by chi2_write_contrib() so
-# fmt_color_plan() can gate `color = "contrib"` under a significance policy (contrib has NO confidence
-# interval to gate on), and so the residual itself stays recoverable at render time WITHOUT a new fmt
-# field: |z| = -qnorm(p/2), sign from the signed contribution (fmt_resid(), R/fmt_class.R).
+# DESIGN: two-sided p of the adjusted residual; total rows/tabs are margins, not cells -> NA. Stored in
+#   `pvalue` so fmt_color_plan() can gate `color = "contrib"` (which has no CI to gate on), and so the
+#   residual stays recoverable at render time with NO new fmt field: |z| = -qnorm(p/2), sign from `var`.
+#' @keywords internal
+#' @noRd
 contrib_pvalue <- function(z, in_totrow, in_tottab, comp) {
   pv   <- 2 * stats::pnorm(-abs(z))
   prot <- if (comp == "all") in_totrow | in_tottab else in_totrow
@@ -273,70 +219,30 @@ contrib_pvalue <- function(z, in_totrow, in_tottab, comp) {
   pv
 }
 
-# chi2_write_contrib() -- Phase 9b-5: the per-cell contribution-to-variance WRITES (the `var` = signed
-# absolute contribution, and the `ctr` = relative contribution = |cell| / group-total) plus the
-# `comp_all` / contrib-`color` col-meta. The pre-9b-5 record path did this in ~6 successive
-# mutate(across(where(is_fmt), set_*)) passes -- EACH a full tabxplor_fmt reconstruction. Here every
-# value is PRECOMPUTED as a plain vector (plain field reads + the group sums run through the SAME dplyr
-# but on fmt-FREE tibbles, so no reconstruction), then applied in ONE mutate(across()) with the real
-# setters. `tabs` is the prepped, post-tab_match_* record; the remaining args are tab_chi2()'s already-
-# computed metadata (`tot_cols` = detect_totcols()'s per-column total-column syms). Returns the modified
-# `tabs`. `var` is written whenever calc has "var"/"ctr"; `ctr`/`comp_all`/`color` only under "ctr".
-# WARNING: byte-identical to the pre-9b-5 blocks (locked by test-calculations.R variance-contributions
-# + test-color-golden.R + test-golden.R). The dead `variances_by_group`/`cells_by_group` of the old
-# path (computed, never used) are dropped.
+# Writes `var` (signed absolute contribution) and, under calc "ctr", `ctr` (= |cell| / group total),
+# `pvalue`, `comp_all` and the contrib `color`. Locked by test-calculations.R + test-color-golden.R.
+#' @keywords internal
+#' @noRd
 chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
                                col_vars_levels_no_tot, is_a_mean, all_col_tot, tot_cols,
                                deff = NULL) {
   do_ctr  <- "ctr" %in% calc
   fmt_nms <- names(tabs)[purrr::map_lgl(tabs, is_fmt)]
-  # var_contrib_ctr_signed / the ctr seed are PER SUBTABLE: the pre-9b-5 writes were GROUPED mutates, so each
-  # subtable's contributions use its own last (total) row. gid = the (post-prep) subtable of each row
-  # (all 1s when ungrouped, e.g. comp = "all"). The row-wise ctr divide + colour don't depend on it.
+  # DESIGN: the signed contribution and the ctr seed are PER SUBTABLE -- `gid` is each row's subtable.
   gid <- dplyr::group_indices(tabs)
   gids <- unique(gid)
 
-  # --- 1a. absolute signed contribution -> `var` (eligible: non-mean cells of a real col_var) ---
-  # Phase 10i-B: the `all_col_vars` exclusion (add_n/add_pct helper columns) is gone -- contrib runs
-  # at build on the CORE table, which never carries them; only the total column (`no_col_var`) is out.
+
   var_after <- purrr::set_names(lapply(fmt_nms, function(nm) get_var(tabs[[nm]])), fmt_nms)
-  # Phase 18a bug-fix: the per-cell standardized-residual p-value, computed here (where N = twn[n],
-  # the subtable grand total, is in hand) and stored in `pvalue` so fmt_color_plan() can gate
-  # `color = "contrib"` under a significance policy. Only under `do_ctr` (contrib coloring is on); the
-  # pipeline computes contributions solely then (calc = c("ctr","p")), so plain tables are untouched.
   pval_after <- if (do_ctr) purrr::set_names(lapply(fmt_nms, function(nm) get_pvalue(tabs[[nm]])), fmt_nms)
   elig_col  <- purrr::keep(fmt_nms, function(nm) fmt_var_kind(tabs[[nm]]) != "mean" &&
                              is_real_col_var(get_col_var(tabs[[nm]])))
-  # Phase 18z4: the residual's INFERENCE BASE, read off the total column's grand-total cell (the
-  # LAST element of each subtable slice, exactly where var_contrib_ctr_signed reads the weighted N).
-  # The effective `n_eff` when the table carries one, else the raw unweighted `n`; the weighted total
-  # is used only as a last-resort fallback (it is what a table built without either would carry). This
-  # is the SAME ladder as every confidence interval in the package (?tab, Phase 18s), so "weighted
-  # estimate, unweighted or effective base" is one rule, not two.
-  # Phase 18z16-iii (W3, ruling Q3): ONE base for every table SHAPE -- always the total column's
-  # grand cell -- and the `type %in% c("n","all","all_tabs")` guess is GONE. That guess is what made
-  # the same data give two irreconcilable significance patterns: a counts table read the cell's own
-  # n_eff (whole-table base) while a row-percentage table read the total column's, which under a
-  # design was degenerate (p = 1) and fell all the way back to the raw n -- measured 1.6e-11 vs 0.052
-  # for the same cell (W3). The grand cell's own base is B^2/S at EVERY shape (its proportion is 1, so
-  # the degenerate fallback returns the whole subtable's effective n), which is exactly why a counts
-  # table and a percentage table of the same data now give identical residuals BY CONSTRUCTION -- the
-  # residual is a property of the joint distribution and must not depend on `pct`.
-  # It is the standard FIRST-ORDER correction, z_design = z_classic * sqrt(n_base / N).
-  # Phase 18z16-iv (W-B): but the grand cell's OWN effective n is the wrong quantity to correct an
-  # ASSOCIATION by. Its proportion is 1, so its design variance is 0 and it ALWAYS took the degenerate
-  # flat fallback B^2/S -- the weights-only number -- at EVERY basis, so a stratified + clustered table
-  # and a flat one gave residuals identical to the last digit while their CELL intervals differed.
-  # Measured on a cluster-level row_var (a geography / school / establishment -- the commonest reason
-  # to have clusters at all): |z| overstated x2.52, two of three cells reading p = 3.7e-04 and 2.7e-06
-  # whose design-honest values are 0.18 and 0.080, i.e. coloured where they should be greyed.
-  # The honest base is the raw n over Rao-Scott's mean generalized design effect of THIS test -- the
-  # same delta-bar the omnibus row reports, so the colours and the p in one table describe ONE design
-  # effect (they were also 2.5 % apart at basis "weights"). `deff` is the producer's grid, keyed here
-  # onto this table's own groups; it is NULL at basis "n", so the raw-n base a correspondence analysis
-  # reads stands BY CONSTRUCTION, not by a branch (maintainer's ruling). It is still the FIRST-ORDER
-  # correction: an exact per-cell design residual needs each cell's own influence function -- stated
-  # as the honest residue in ?tab.
+  # DESIGN: the residual's INFERENCE BASE is ALWAYS the total column's grand cell, at every table shape,
+  #   so counts and percentages of the same data give identical residuals -- the residual is a property
+  #   of the joint distribution and must not depend on `pct`. Design-honest: the raw n over Rao-Scott's
+  #   mean generalized design effect of THIS test -- the delta-bar the omnibus row reports, so colours
+  #   and p describe ONE design effect; `deff` is NULL at basis "n", so the raw-n base stands BY
+  #   CONSTRUCTION, not by a branch. A FIRST-ORDER correction only.
   dl   <- if (is.null(deff)) NULL else svy_deff_lookup(deff, dplyr::group_vars(tabs))
   gkey <- if (is.null(dl)) NULL else {
     gk <- dplyr::group_keys(tabs)
@@ -360,9 +266,7 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
         ne     <- tne[last]
         n_base <- ifelse(is.finite(ne) & ne > 0, ne, tn[last])
         n_base[!is.finite(n_base) | n_base <= 0] <- twn[last]
-        # a missing delta-bar (svychisq failed, a 1-level factor, under 3 obs) falls THROUGH to the
-        # ladder above: at basis "weights" B^2/S IS the flat design's own effective n, and under a
-        # design it is the weighting-only correction the package already declares elsewhere.
+        # A missing delta-bar falls through to the ladder above: effective n if any, else the raw n.
         if (!is.null(dl)) {
           dd <- unname(dl[paste(gkey[[min(g, length(gkey))]], cv, sep = "\r")])
           if (isTRUE(is.finite(dd) && dd > 0 && is.finite(tn[last]) && tn[last] > 0))
@@ -383,8 +287,6 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
     table_totrow <- is_totrow(tabs)
     elig_cv      <- names(col_vars_levels)[!is_a_mean & !all_col_tot]
 
-    # per eligible col_var: variances_by_row + cells_by_row -- plain grouped tibbles mirroring the old
-    # variances_calc / cells_calc, run through the EXACT original downstream dplyr (no fmt columns).
     ctr_after <- purrr::set_names(lapply(fmt_nms, function(nm) get_ctr(tabs[[nm]])), fmt_nms)
     for (cv in elig_cv) {
       lev_nt <- purrr::map_chr(col_vars_levels_no_tot[[cv]], rlang::as_name)
@@ -404,19 +306,14 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
         dplyr::mutate(cells = sum(!!!col_vars_levels_no_tot[[cv]]), .groups = "drop") |>
         dplyr::pull(.data$cells)
 
-      # relative-contribution seed on ALL of cv's level columns (incl. its total column):
-      # total rows -> 1/cells, others -> the group total variance (broadcast).
       for (L in purrr::map_chr(col_vars_levels[[cv]], rlang::as_name)) {
         ctr_after[[L]] <- dplyr::if_else(is_totrow(tabs[[L]]), 1 / cbr, vbr)
       }
     }
 
-    # divide by the seed to get the relative contribution (|cell| / group-total), keeping the protected
-    # total rows untouched (comp = "tab": total rows; comp = "all": total rows of the total table).
+    # DESIGN: protected totals KEEP the seed instead of the divide -- comp = "tab": is_totrow;
+    #   comp = "all": grand_totrow(), which degrades to the plain total row with no total table.
     ctr_final <- purrr::set_names(lapply(fmt_nms, function(nm) {
-      # comp = "all": protect the total table's total row (it holds the whole-table mean-contribution
-      # seed, read back by get_mean_contrib); grand_totrow() degrades to the plain total row when
-      # there is no total table (no tab_vars), so the seed is stored, not overwritten.
       prot <- if (comp == "tab") is_totrow(tabs[[nm]]) else grand_totrow(tabs[[nm]])
       dplyr::if_else(prot, ctr_after[[nm]], var_after[[nm]] / ctr_after[[nm]])
     }), fmt_nms)
@@ -424,8 +321,6 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
     comp_all_val <- comp[1] == "all"
 
     if (!is.na(color[1]) && color[1] != "no") {
-      # Phase 19b: which KINDS of column `color = "contrib"` may paint. A count column has no
-      # percentage base, so it is named by its var_kind; the rest by theirs.
       color_condition <- switch(color[1],
         "auto"    = c("all", "all_tabs"),
         "all"     = c("row", "col", "all", "all_tabs"),
@@ -437,10 +332,7 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
     }
   }
 
-  # single write pass over the UNGROUPED table (so each `col` is the full column that the full-length
-  # precomputed vectors match), then restore the original grouping: `var` (always) + `ctr`/`comp_all`/
-  # `color` (only under "ctr" calc). The values are group-correct already (var per subtable above; the
-  # ctr divide + colour are row-wise), so ungroup/rewrite/regroup is byte-identical.
+  # ONE write pass on the UNGROUPED table (the precomputed vectors are full-length), then regroup.
   grp <- dplyr::group_vars(tabs)
   drp <- dplyr::group_by_drop_default(tabs)
   res <- dplyr::mutate(dplyr::ungroup(tabs), dplyr::across(where(is_fmt), function(col) {
@@ -448,11 +340,8 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
     col <- set_var(col, var_after[[nm]])
     if (do_ctr) {
       col <- set_ctr(col, ctr_final[[nm]])
-      # The pre-9b-5 path's ctr writes combined fmt columns and so materialised `wn`; the plain
-      # set_ctr above does not. See fmt_materialize_wn() (R/fmt_class.R) for the rule.
+      # WARNING: set_ctr() alone does not materialise `wn`; see fmt_materialize_wn() (R/fmt_class.R).
       col <- fmt_materialize_wn(col)
-      # Phase 18a bug-fix: the standardized-residual p-value (contrib significance gate). A no-op on
-      # non-eligible columns (pval_after there is the original get_pvalue); the residual on contrib cells.
       col <- set_pvalue(col, pval_after[[nm]])
       col <- set_comp_all(col, comp_all_val)
       if (nm %in% color_apply) col <- set_color(col, "contrib")

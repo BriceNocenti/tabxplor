@@ -15,26 +15,24 @@ tab_totaltab(
 \item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
 \code{\link{tab}}.}
 
-\item{totaltab}{If there are subtables, corresponding to the levels of tab_vars,
-\code{totaltab = "table"} add a complete total table.
-\code{totaltab = "line"} add a total table of only one row with the general total.
-\code{totaltab = "no"} remove any existing total table.}
+\item{totaltab}{With subtables (the levels of \code{tab_vars}) : \code{"table"} adds a complete
+total table, \code{"line"} a total table of a single general-total row, \code{"no"} removes any
+existing total table.}
 
 \item{name}{The name of the total table, as a single string.}
 
-\item{data}{The original database used to calculate the \code{tab} : it is only useful
-for mean columns (of numeric variables), in order to calculate the variances
-necessary to calculate confidence intervals with \code{\link{tab_ci}}.}
+\item{data}{The original database : only useful for mean columns (numeric variables), whose
+variances --- needed by \code{\link{tab_ci}} --- can only be computed from the microdata.}
 }
 \value{
-A \code{tibble} of class \code{tab}. Rows belonging to the total table can then
-be detected using \code{\link{is_tottab}}.
+A \code{tibble} of class \code{tab}. Total-table rows are then detected with
+\code{\link{is_tottab}}.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
 
-Deprecated in 2.0.0, defunct in 2.1.0 -- the total table is built directly by the \code{totaltab} argument of
-\code{\link[=tab]{tab()}} / \code{\link[=tab_plain]{tab_plain()}} / \code{\link[=tab_num]{tab_num()}}. \code{tab_totaltab()} still works on an existing tab.
+Deprecated in 2.0.0, defunct in 2.1.0 -- the total table is built directly by the \code{totaltab}
+argument of \code{\link[=tab]{tab()}}. \code{tab_totaltab()} still works on an existing tab.
 }
 \examples{
 \donttest{ data <- dplyr::starwars |>

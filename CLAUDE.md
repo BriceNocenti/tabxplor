@@ -621,6 +621,19 @@ Also plan for a reduction of the roxygen part, with the same logic : user-friend
 
 `tab.R` · `tab-leaf.R` · `tab-agg.R` · `tab-chi2.R` · `tab-display.R` · `tab-resolve.R` · `tab-counts.R` · `tab-parallel.R` · `tab-deprecate.R` · `tab-steps-legacy.R`. How `tab()` builds a table end to end, plus the quarantined legacy step API; `?tab`.
 
+
+**DONE.** Rewrote comments + roxygen across the ten files, present-tense and history-free. Plain `#` comments **3930 -> 1173 (3.35x)**, comment/code ratio **0.68 -> 0.20**, code unchanged at 5744 lines; roxygen 989 -> 937. Per file (plain `#`): `tab` 1248->225 (5.5x) - `tab-leaf` 866->243 (3.6x) - `tab-agg` 366->141 - `tab-chi2` 181->57 - `tab-display` 270->139 - `tab-resolve` 340->95 - `tab-counts` 119->50 - `tab-parallel` 133->81 - `tab-deprecate` 91->43 - `tab-steps-legacy` 219->82.
+
+**Why the aggregate is 3.35x, not 5x, and where the /5 IS met.** The two are the same story from opposite ends. `tab.R` (5.5x) and `tab-leaf.R` (3.6x) - the archaeology-heavy files the ratio was designed for - meet or beat it. The small files cannot, because this phase also gave every file a 15-28 line header essay that the same grep counts: on `tab-counts.R` 22 of the surviving 50 lines are the header plus its three mandated banners, so its BODY went 92->28. Measured on bodies only (excluding the new headers) the files run 2.8-4.5x. `tab-parallel.R` (1.6x) is a deliberate floor - almost every `WARNING` there records a real parallel-execution failure (the stale-namespace trap under `load_all()`, the `do.call(design =)` boundary drag, the never-nest rule), and the brief was to budget the least deletion there. `tab-display.R` (1.9x) and `tab-agg.R` (2.6x) host the `DISPLAY_TOKENS` / `CI_METHODS` / `CI_GEOMS` dictionaries, kept near-verbatim as schema. Both were hand-reviewed: no slack left that is not a named KEEP.
+
+**Five documentation defects fixed, not just reworded.** (1) `tab-agg.R` asserted *"Chi2 is FULLY UNWEIGHTED (counts and n)"* - **false**: `chi2_compute_test()` feeds `agg_chi2()` the WEIGHTED counts rescaled to the raw n. The engines are agnostic and the caller decides; `tab-chi2.R` now owns the weighting rule. (2) `tab-leaf.R` pointed at `dev/tabxplor_architecture.md`, deleted in `d65eede`; all 28 `dev/*.md` + roadmap pointers replaced by the one `# See: CLAUDE.md § tabxplor architecture (...)` convention. (3) `CI_GEOMS`' column dictionary omitted `ref_cell` though the exhaustiveness `stopifnot` checks it - added. (4) `tab-leaf.R` had **three** stranded function headers (`leaf_inference()`'s prose and roxygen sat above `num_total_postprocess()`, which carried two blocks; same for `leaf_wide_pct` and `plain_resolve`) - each reattached. (5) `tab.R`'s render-time-detector comment described the wrong function.
+
+**Two roxygen decisions.** `?tab`'s ~48 lines of statistical `@details` (Kish, `svyrecvar`, Rao-Scott delta-bar, finite-sample factors) compressed to one usage paragraph per topic - what the default does, what `design_effect = TRUE` or a `svydesign` changes, the one caveat that matters - deferring the derivation to the vignettes, which already cover it. And `@section Significance stars:` MOVED to `?tab`, with `tab_ci()` now carrying `@inheritSection tab Significance stars`: the primary man page no longer inherits its core statistical explanation from a superseded, quarantined function. Verified rendering identically on both pages. Superseded cross-refs modernised throughout (`OR` -> `display`, `method_cell`/`method_diff` -> `ci_method`).
+
+**`tab.R` was NOT regrouped, deliberately.** The approved plan allowed moving functions; mapping all 57 definitions showed the file already ordered by pipeline stage (`tab()` -> colour spec -> ctx -> engine -> STAGE 1..5 -> spread/transpose -> variable readers -> labelled interop -> fmt carrier -> shared helpers -> `globalVariables()` last). The three regions flagged as problems were each already contiguous; they lacked BANNERS, not order. Thirteen `# === SECTION:` / `# === STAGE n/5:` banners now cover the file. Moving functions would have added diff noise and forfeited the cheap verification for no structural gain. The load-order constraints remain as documented: `CTX_SETTINGS_LOCALS` / `ctx_settings_locals()` / `SPINE_OWNED_INPUTS` before their `stopifnot`, and `utils::globalVariables()` last because `new_ctx()` calls `conf_level_default()`.
+
+**Verified.** All **198 top-level definitions across the ten files are byte-identical to HEAD** (parse -> per-name `deparse` comparison, which stays valid under reordering), so behaviour cannot have changed. Full suite: **FAIL 0 | WARN 1 | SKIP 4 | PASS 7284**. `devtools::document()` clean, **NAMESPACE unchanged**, all ten changed `man/*.Rd` keep identical `\item{}` argument-name sets. ⚠ `man/tab.Rd` and `man/tab_reg.Rd` show `\usage` REORDERINGS that are **pre-existing drift, not from this phase**: at HEAD `R/tab_reg.R` declares `outcome_level, ref` while the committed `man/tab_reg.Rd` documented `ref, outcome_level` - formals were reordered without re-running `document()`. Regenerating corrects it; `R/tab_reg.R` is untouched here.
+
 ##### Phase 21b-iv — Regression
 
 `tab_reg.R` · `reg-resolve.R` · `reg-estimand.R` · `reg-empirical.R` · `reg-influence.R` · `reg-assumptions.R` · `reg-spec-build.R`. `tab_reg()` + the estimand / empirical-companion / influence / model-check machinery; `?tab_reg`, `reg_measures`. (`reg-estimand`'s `measure` vocabulary IS `fmt_class`'s `EST_SCALES` — note the bridge.)
@@ -719,14 +732,18 @@ tab_reg(gss_simple, outcome = "married", tab_vars = "race",
 - here, all the "n" actually being side-by-side is good/readable/necessary, since it’s the result of tab_spread.
   Put them after the models column (at their right), it would be even greater.
 - The reference column for "between_groups" doesn’t follow tabxplor rule : in bold (refcol)
-- remove the useless verbose message : "ℹ `color = "between_groups"` also adds the aggregated interaction test to the footer (one extra model fit).\nAsk for it without the colours with `stats = c(..., "interaction")`."
+- remove the useless verbose message: "ℹ `color = "between_groups"` also adds the aggregated interaction test to the footer (one extra model fit).\nAsk for it without the colours with `stats = c(..., "interaction")`."
 - when I add `empirical=TRUE` here, the stats footer appear in the Obs_%_* part rather than on the model columns.
 - here too, the "Overall association (LR)" lines are not in the order of the predictors, which is a bit confusing.
+
+renames
+- "Model_β" is not easily understandable: change it do "Model_coeff" everywhere.
+
 
 `display` presets
 - We now use the same display argument in `tab_reg()` than in `tab()`, taken both `{}` display tokens, and build-in presets, we shall think about the best build-in presets for the regressions use cases.
 - Currently OR does’nt give. 
-- When effect is coefficient and "ame" is chosen in the display (preset or display token), it should be calculated to not print voids/NA (which is a volentary different behaviour than in `tab()` )
+- When effect is coefficient and "ame" is chosen in the display (preset or display token), it should be pre-calculated and vctrd field populto not print voids/NA (which is a volentary different behaviour than in `tab()` )
 - "ame" difference and "ame" ratio as calculated depending on the `measure` chosen : once the measure is chosen, 
 
 Additional features requests

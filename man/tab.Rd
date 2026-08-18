@@ -15,7 +15,6 @@ tab(
   color = "no",
   color_signif = "ignore",
   test = FALSE,
-  anova = NULL,
   na = "keep",
   levels = "all",
   cleannames = NULL,
@@ -27,12 +26,13 @@ tab(
   conf_level = NULL,
   stars = NULL,
   ci_method = NULL,
+  anova = NULL,
   design_effect = NULL,
   totaltab = "line",
+  common_totrow = FALSE,
   tot = c("row", "col"),
   add_n = TRUE,
   add_pct = FALSE,
-  common_totrow = FALSE,
   subtext = "",
   digits = 0,
   n_min = 0,
@@ -62,7 +62,7 @@ Leave empty to make a simple cross-table. All \code{tab_vars} are converted to f
 \item{...}{The arguments retired in 2.0.0, caught by name: the nine deprecated formals
 (\code{sup_cols}, \code{OR}, \code{chi2}, \code{method_cell}, \code{method_diff}, \code{names_prefix}, \code{names_sort},
 \code{row_var}, \code{col_var}), the three total-label ones now carried by
-\code{options(tabxplor.total_names)} (\code{total_names}, \code{totaltab_name}, \code{other_level}), and the four
+\code{options(tabxplor.total_names)} (\code{total_names}, \code{totaltab_name}, \code{other_level}), and the five
 jamovi-internal ones (\code{.cache}, \code{.defer_level_merge}, \code{.return_armed}, \code{.levels_order},
 \code{.levels_collapse}).
 Everything else is refused with a suggestion, and an UNNAMED argument here is refused outright
@@ -177,12 +177,6 @@ Turn the option on when you want a \code{tab()} percentage interval to be compar
 because its crude companions are \emph{always} on the weighted basis, beside a model column that
 always was. Replicate-weight (\code{svrepdesign}) and two-phase designs are not supported, and
 \code{wt} beside a design is an error (a design already carries its own weights).}
-
-\item{anova}{Which one-way ANOVA \strong{F} the p-value line shows for \emph{numeric}
-\code{col_vars}: \code{"welch"} (does not assume equal variances) or \code{"classic"} (the pooled
-F). \code{NULL} (default) reads \code{options(tabxplor.anova)}. Both statistics are always
-computed and stored in the table's \code{test} attribute, so this is a pure display choice ---
-it changes which row is shown, never a number.}
 
 \item{na}{The policy to adopt for missing values, as a single string :
 \itemize{
@@ -314,6 +308,12 @@ Whatever the method, the significance stars come from that same interval, so bra
 always agree. A proportion \emph{ratio} has only one method (Katz's log risk-ratio), so it is not
 a choice. Example: \code{ci_method = c(cell = "beta", diff = "ac")}.}
 
+\item{anova}{Which one-way ANOVA \strong{F} the p-value line shows for \emph{numeric}
+\code{col_vars}: \code{"welch"} (does not assume equal variances) or \code{"classic"} (the pooled
+F). \code{NULL} (default) reads \code{options(tabxplor.anova)}. Both statistics are always
+computed and stored in the table's \code{test} attribute, so this is a pure display choice ---
+it changes which row is shown, never a number.}
+
 \item{design_effect}{Logical or \code{NULL} (default). Whether the confidence intervals, stars and
 colour thresholds of a \strong{weighted} table account for the weighting's own design effect (the
 exact flat-design variance) instead of using the raw sample size. \code{NULL} takes
@@ -331,6 +331,11 @@ calculations with \code{comp = "all"})
 \item \code{"no"}: not to draw any total table.
 }}
 
+\item{common_totrow}{With several \code{row_vars}, \code{FALSE} (the default) shows one Total row per
+row variable. Set to \code{TRUE} to collapse the identical Total rows into a single shared Total,
+displayed in its own group after a blank-line separator (bold when the total is the reference for
+at least one row variable). Genuinely different totals (e.g. under \code{na = "drop"}) are never merged.}
+
 \item{tot}{The totals :
 \itemize{
 \item \code{c("col", "row")} or \code{"both"} : by default, both total rows and total
@@ -346,11 +351,6 @@ column or row with unweighted counts (\code{n}).}
 \item{add_pct}{Set to \code{TRUE} to add a column with the frequencies of the row
 variable (for \code{pct = "row"}) or a row with the frequencies of the column variable
 (for  \code{pct = "col"}).}
-
-\item{common_totrow}{With several \code{row_vars}, \code{FALSE} (the default) shows one Total row per
-row variable. Set to \code{TRUE} to collapse the identical Total rows into a single shared Total,
-displayed in its own group after a blank-line separator (bold when the total is the reference for
-at least one row variable). Genuinely different totals (e.g. under \code{na = "drop"}) are never merged.}
 
 \item{subtext}{A character vector to print rows of legend under the table.}
 
@@ -440,11 +440,10 @@ New to the package? Start with \code{vignette("tabxplor")} and with just four ar
 \item \strong{Colors (reading helpers)}: \code{color}, and \code{color_signif} (whether statistical
 significance gates the color). Thresholds and palettes are set once for the whole session
 with \code{\link[=set_color_breaks]{set_color_breaks()}} and \code{\link[=set_color_palette]{set_color_palette()}}; a color legend prints automatically.
-\item \strong{Comparisons}: \code{OR} (odds ratios), and \code{ref} / \code{ref2} / \code{comp} (which cell is the
-baseline for differences).
+\item \strong{Comparisons}: \code{ref} / \code{ref2} / \code{comp} (which cell is the baseline for differences),
+and \code{display} when you want odds ratios shown.
 \item \strong{Statistics}: \code{test} (chi-squared or Welch's F), and \code{ci} + \code{conf_level} + \code{stars}
-(confidence intervals). The fine interval methods (\code{method_cell}, \code{method_diff}, ...) are
-documented on \code{\link[=tab_ci]{tab_ci()}}.
+(confidence intervals). \code{ci_method} picks the engine for each kind of interval.
 \item \strong{Totals & missing values}: \code{tot}, \code{total_names}, \code{totaltab}, \code{na}, \code{levels}.
 \item \strong{Advanced / output}: \code{display}, \code{n_min}, \code{output_list}, \code{parallel}, \code{spread_vars},
 \code{filter}.
@@ -452,55 +451,60 @@ documented on \code{\link[=tab_ci]{tab_ci()}}.
 The package-wide display, color and statistics defaults are \code{options()}, listed at
 \link{tabxplor-options}.
 
-\strong{Ordered factors.} Since v2.0.0 the \code{ordered} class survives the whole pipeline (it
-used to be stripped at preparation), which is what lets \code{ref2 = "cumulative"} pick its col_vars by
-class. One consequence worth knowing: the synthetic \code{"Total"} / \code{"Ensemble"} / \code{"NA"}
-levels are appended \emph{after} the real ones, so on an ordered grouping column they compare as the
-greatest levels. They are labels, not points on the scale.
+\strong{Ordered factors.} An \code{ordered} factor stays ordered through the whole pipeline,
+which is what lets \code{ref2 = "cumulative"} pick its column variables by class. One
+consequence is worth knowing: the synthetic \code{"Total"} / \code{"Ensemble"} / \code{"NA"}
+levels are appended \emph{after} the real ones, so on an ordered grouping column they compare as
+the greatest levels. They are labels, not points on the scale.
 
-\strong{Weighted confidence intervals.} With a weight (\code{wt}), by default a cell confidence
-interval is exactly \code{Wilson(weighted p, unweighted n = tot_n)}: it treats the weighted
-proportion as if it came from \code{tot_n} independent Bernoulli trials (means use the unweighted n
-the same way). Under unequal weights this carries no design effect, so the default interval is
-\strong{usually too narrow} --- and the table's footer now says exactly that.
+\strong{Weighted data.} With a weight (\code{wt}), the default confidence interval treats the
+weighted percentage as if it came from the unweighted number of cases. That carries no design
+effect, so under unequal weights it is \strong{usually too narrow} --- and the table's footer
+says so. \code{design_effect = TRUE} (or \code{options(tabxplor.design_effect = TRUE)} for a
+whole session) corrects it exactly, in every descriptive interval and every colour threshold.
+Because it is the exact variance and not an upper bound, it can also make an interval
+\emph{narrower}: that is correct, not a bug.
 
-\code{design_effect = TRUE} (or \code{options(tabxplor.design_effect = TRUE)} for a whole session)
-corrects it, \strong{exactly}: a weight column is the
-flat survey design \code{ids = ~1}, whose variance has a closed form in the per-cell
-\code{sum(w^2)} the aggregate already computes, so the base becomes
-\code{n_eff = p(1-p) / Var_design(p)} (or \code{s^2 / Var_design(mean)}) in \strong{every}
-descriptive interval --- proportions and means alike (cell, difference, ratio, and the
-\code{color = "odds_ratio"} significance). Because it is the exact variance and not an upper bound, it can
-also make an interval \emph{narrower}: where the weights line up with what is being tabulated,
-\code{n_eff} comes out above the cell's own \code{n}, which is correct and not a bug. It reproduces
-\code{survey} to the last digit, including \code{survey}'s own finite-sample factor --- so a table
-weighted by a \emph{constant} gets an effective n a whisker \emph{below} the raw one
-(\code{n_base * (N-1)/N}, \code{N} being the number of respondents the table is built on), not
-exactly \code{n}. It needs the microdata weights, so
-\code{\link{tab_counts}} on pre-aggregated counts cannot apply it --- such a table says so in its
-footer instead of claiming a correction it does not have. Kish's \code{(sum w)^2 / sum(w^2)}, which
-earlier versions used here, is that same formula with each cell's own \code{sum(w^2)} discarded;
-it survives only as the limit for a cell that carries no information (a 0 \\% or 100 \\% cell).
+\strong{Survey designs.} Pass a \code{survey::svydesign} as \code{data} and strata, clusters,
+\code{fpc} \emph{and} calibration reach every interval, star and colour threshold, each referred
+to the design's own degrees of freedom. It is exact for a cell and mildly conservative for a
+cell-versus-reference difference, so it never produces a star the design does not support, and
+sometimes withholds one it would. A design-based table costs roughly three times a weighted one.
+Pre-aggregated counts (\code{\link{tab_counts}}) cannot carry either correction, and their
+footer says so rather than claiming one.
 
-\strong{Design-based confidence intervals.} Pass a \code{survey::svydesign} as \code{data} and the
-same base comes from \code{survey::svyrecvar} on each cell's influence function, so strata,
-clusters, \code{fpc} \emph{and} calibration reach every interval, star and colour threshold; a flat
-\code{svydesign(ids = ~1)} takes the closed form instead, which is its exact answer. Every interval
-is then referred to the design's own degrees of freedom (\code{#PSU - #strata}), which matters below
-about 30 PSUs. Two things to know. It is exact for a \emph{cell} and mildly conservative for a
-cell-vs-reference \emph{difference} (it cannot carry the design covariance between two rows), so it
-never produces a star the design does not support, and sometimes withholds one it would. And the
-\code{color = "contrib"} residual takes the \emph{whole table's} design effect (Rao-Scott's
-delta-bar, the one its omnibus test reports) rather than each cell's own --- the standard
-first-order correction, and what makes a counts table and a percentage table of the same data give
-identical residuals. An exact per-cell design residual would need each cell's own influence
-function, which the aggregate does not carry. If a table's design variance cannot be computed at
-all, it falls back to the weighting-only correction and its footer says so, rather than claiming a
-design its numbers do not carry. A design-based table costs roughly 3x a
-weighted one (6x if calibrated); the payoff needs real design information, so if your file ships one
-calibrated weight and no stratum or cluster variable, \code{tabxplor.design_effect} is already all
-the correction available to you.
+\code{vignette("tabxplor")} works through when each of these matters.
 }
+\section{Significance stars}{
+
+With \code{stars = TRUE} and an interval anchored on the comparison (see \code{ci}), each cell
+shows how sure we can be that its difference from the reference is real and not just sampling
+noise: \code{*} means significant at the 10\\% level (p < 0.10), \code{**} at 5\\% (p < 0.05),
+\code{***} at 1\\% (p < 0.01). The exact p-value is stored per cell in the \code{pvalue} field of
+the \code{fmt} vectors, readable with \code{$pvalue} or \code{get_pvalue()}.
+
+There is no separate statistical test run behind the scenes: the significance is read straight
+from the confidence interval that is displayed. A cell is significant at a given level exactly
+when its interval at that confidence level no longer contains zero, so the stars and the printed
+\code{[inf; sup]} bracket can never contradict each other. Which test this amounts to depends on
+the interval:
+\itemize{
+\item \strong{percentage difference} (the default, \code{ci_method = c(diff = "newcombe")}):
+inverting the Newcombe hybrid-score interval. This is, to a very close approximation, the
+classical two-sample test of proportions (the score / "N-1" chi-squared test).
+\item \strong{percentage difference} with \code{ci_method = c(diff = "ac")} or
+\code{c(diff = "wald")}: inverting the Agresti-Caffo (adjusted Wald) or the Wald interval ---
+an (adjusted) two-proportion z-test.
+\item \strong{mean difference}: the \strong{Welch two-sample t-test} (for groups with unequal
+variances); inverting the Welch t interval is exactly this well-known test.
+\item \code{ci = "cell"} (an absolute cell interval, not a difference) is purely descriptive,
+so it carries no stars and its \code{pvalue} is \code{NA}.
+}
+On weighted data the estimate is weighted but the sample size used is the real (unweighted)
+number of cases, unless you opt in to the weighting's own design effect with
+\code{options("tabxplor.design_effect" = TRUE)}.
+}
+
 \section{Display fields}{
 
 The fields a \code{\{\}} template may name. The first one is the \emph{primary}:
@@ -519,36 +523,6 @@ it is what Excel shows and what the colours read.
 \item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only. Needs test = TRUE  (the residual comes from the chi-squared).
 \item \code{obs} --- the OBSERVED (crude) effect a modelled one is compared to. \code{tab_reg()} tables only. Needs tab_reg(empirical = TRUE)  (an observed effect to compare the model to).
 }
-}
-
-\section{Significance stars}{
-
-With \code{stars = TRUE} and an interval anchored on the comparison (see \code{ci}), each cell
-shows how sure we can be that its
-difference from the reference is real and not just sampling noise: \code{*} means significant at
-the 10\\% level (p < 0.10), \code{**} at 5\\% (p < 0.05), \code{***} at 1\\% (p < 0.01). The exact
-p-value is stored per cell in the \code{pvalue} field of the \code{fmt} vectors, readable with
-\code{$pvalue} or \code{get_pvalue()}.
-
-There is no separate statistical test run behind the scenes: the significance is read straight
-from the confidence interval that is displayed. A cell is significant at a given level exactly
-when its interval at that confidence level no longer contains zero, so the stars and the printed
-\code{[inf; sup]} bracket can never contradict each other. Which test this amounts to depends on
-the interval:
-\itemize{
-\item \strong{percentage difference} (default, \code{method_diff = "newcombe"}): inverting the
-Newcombe hybrid-score interval. This is, to a very close approximation, the classical
-two-sample test of proportions (the score / "N-1" chi-squared test).
-\item \strong{percentage difference} with \code{method_diff = "ac"} or \code{"wald"}: inverting
-the Agresti-Caffo (adjusted Wald) or the Wald interval -- an (adjusted) two-proportion z-test.
-\item \strong{mean difference}: the \strong{Welch two-sample t-test} (for groups with unequal
-variances); inverting the Welch t interval is exactly this well-known test.
-\item \code{ci = "cell"} (an absolute cell interval, not a difference) is purely descriptive,
-so it carries no stars and its \code{pvalue} is \code{NA}.
-}
-On weighted data the estimate is weighted but the sample size used is the real (unweighted)
-number of cases, unless you opt in to the weighting's own design effect with
-\code{options("tabxplor.design_effect" = TRUE)}.
 }
 
 \examples{

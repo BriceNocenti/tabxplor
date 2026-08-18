@@ -21,8 +21,8 @@ tab_reg(
   stars = TRUE,
   conf_level = NULL,
   ci_method = NULL,
-  ref = NULL,
   outcome_level = NULL,
+  ref = NULL,
   multiplier = "sd",
   shape = NULL,
   stats = NULL,
@@ -377,14 +377,6 @@ profile-likelihood interval (\code{\link[stats:confint]{stats::confint()}}, need
 more accurate near separation, unweighted binomial/poisson models only (else it falls back to
 Wald with a message; gaussian always uses the exact-t interval).}
 
-\item{ref}{Optional named vector \code{c(var = "baseline level")} --- the same grammar as \code{\link[=tab]{tab()}}'s
-\code{ref} --- choosing the treatment-contrast reference level of one or more factor \strong{predictors}
-(the effect of every other level is measured against it), and of \code{tab_vars} (which group
-\code{color = "between_groups"} compares to). This is how factor contrasts are set; other contrast
-codings can be applied by passing a formula in \code{outcome} with the terms already coded.
-For the level of the \strong{outcome}, see \code{outcome_level}: \code{ref} names the level you compare
-AGAINST, \code{outcome_level} the level you MODEL.}
-
 \item{outcome_level}{Which level of the \strong{outcome} to single out, as a named vector keyed by
 outcome name --- \code{outcome_level = c(married = "Married")} --- so several outcomes each get their
 own. It is the twin of \code{reference}, and the pair asks opposite questions:
@@ -402,6 +394,14 @@ once, per family, in \code{REG_FAMILIES}.
 \item \strong{ordinal, and any numeric outcome}: refused, with the reason. An ordinal outcome must
 keep the order of its levels, so none of them can be singled out.
 }}
+
+\item{ref}{Optional named vector \code{c(var = "baseline level")} --- the same grammar as \code{\link[=tab]{tab()}}'s
+\code{ref} --- choosing the treatment-contrast reference level of one or more factor \strong{predictors}
+(the effect of every other level is measured against it), and of \code{tab_vars} (which group
+\code{color = "between_groups"} compares to). This is how factor contrasts are set; other contrast
+codings can be applied by passing a formula in \code{outcome} with the terms already coded.
+For the level of the \strong{outcome}, see \code{outcome_level}: \code{ref} names the level you compare
+AGAINST, \code{outcome_level} the level you MODEL.}
 
 \item{multiplier}{How a \strong{continuous} predictor's effect is scaled — the unit its row reports.
 One unit of a continuous variable is rarely a readable amount (a one-year change in \code{age} barely

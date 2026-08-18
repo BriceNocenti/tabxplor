@@ -1,36 +1,32 @@
-# PURPOSE: The row axis of tab_build() as ONE outer map, serial OR opt-in parallel (Phase 8: ~3x on the
-#   survey workflow; Phase 9a: made the SOLE dispatch, serial included).
-# ROLE: tab_build() prepares the population + tier-1 aggregates ONCE on main (tab_setup +
-#   tab_prepare_pop -- where the global na="drop_all"/"common_base" drop lives, so it CANNOT move to a
-#   worker -- then tab_aggregate: the numeric moment aggregates + the shared factor fine_fused). It then
-#   hands off to tab_build_tables() (R/tab.R), which resolves one lean ctx per row_var (tab_rowvar_ctxs)
-#   and maps the whole-per-row_var worker tab_build_one() -- transform |> assemble_tables -- over it via
-#   tab_pmap(). tab_pmap() IS purrr::map when serial (byte-identical, zero overhead) or a persistent
-#   mirai daemon pool when `parallel` is set. Main gathers the finished per-row_var tabs and runs the
-#   cross-row_var output shape (tab_assemble_output: merge/compact, p-value lines, unwrap). Byte-identical
-#   because a single-row_var build equals its slice of the integrated build (the tab_assemble total-col
-#   decoupling fix), verified for every na mode -- so per-row_var == all-at-once.
+# PURPOSE: The row axis of tab_build() as ONE outer map -- serial, or opt-in parallel.
+# ROLE: tab_build() prepares the population and the tier-1 aggregates ONCE on the main process,
+#   then hands off to tab_build_tables(), which maps the per-row_var worker tab_build_one()
+#   (transform |> assemble_tables) through tab_pmap(). tab_pmap() IS purrr::map when serial -- same
+#   result, zero overhead -- or a persistent mirai daemon pool when `parallel` is set. Main gathers
+#   the finished per-row_var tabs and runs the cross-row_var output shape. A single-row_var build
+#   equals its slice of the integrated build, which is what makes the two paths interchangeable.
 # KEY CONSTRAINTS:
-#   - mirai is Suggests-only: every use is guarded by requireNamespace(); absent -> serial fallback.
-#   - Uses a NAMED compute profile ("tabxplor") so it never clobbers a user's own daemons() pool.
-#   - Workers run the INSTALLED tabxplor (a fresh process); byte-identity requires main + workers to
-#     run the same source -- automatic once installed (R CMD check installs first). In dev (load_all)
-#     tab_pool_ensure() now auto-load_all's the current source on each freshly spawned daemon (via
-#     tab_dev_pkg_path()), so tab(parallel=) just works under load_all -- no manual pre-warm needed.
-#   - jmvtab (live cache) is ALWAYS serial: tab_parallel_workers() returns 0 when ctx$cache_env is set
-#     -> the serial map keeps its cache hooks (jmv_cache_aggregate in tab_aggregate; jmv_cache_store_tests
-#     in tab_build_tables).
-# See: CLAUDE.md 2.0.0 roadmap Phase 8/9a + dev/tabxplor_2.0.0_decisions.md 26, 29.
+#   - mirai is Suggests-only: every use is guarded by requireNamespace(), and its absence falls
+#     back to serial.
+#   - The pool uses a NAMED compute profile ("tabxplor") so it never clobbers a user's own daemons().
+#   - A daemon must NEVER spawn daemons. This file is the one place that rule is enforced.
+#   - Workers run the INSTALLED tabxplor (a fresh process), so identity requires main and workers to
+#     run the same source. Under load_all() the pool auto-load_all()s each freshly spawned daemon.
+#   - jmvtab's live cache is ALWAYS serial: its cache hooks live on the serial map.
+#   - Errors and messages are caught IN the worker and relayed, because a daemon's console is not
+#     the user's. The declared losses are stated at the relay: a relayed error has no backtrace, and
+#     the replay stops at the first failing unit.
+# See: CLAUDE.md § tabxplor architecture (the calculation pipeline).
 
-# The mirai compute profile name -- isolates tabxplor's daemons from the user's default pool.
+
+# === SECTION: the daemon pool =======================================
+
+# DESIGN: a NAMED mirai compute profile keeps tabxplor's daemons out of the user's default pool.
 tabxplor_compute <- "tabxplor"
 
 
-# tab_parallel_workers() -- resolve the worker count for one build.
-# Returns 0L for "run serially" (the default, jmvtab, opt-out, or mirai absent), else N daemons.
-# DESIGN: `parallel` (the tab() arg) wins over the option; TRUE = auto (physical cores - 1, capped at
-# 8, since the §26 survey sweet spot saturates by ~W=8); an integer is taken verbatim. The
-# _R_CHECK_LIMIT_CORES_ cap (2) keeps examples/tests within CRAN's 2-core rule.
+# DESIGN: the `parallel` argument beats the option; TRUE = auto (physical cores - 1, capped at 8), an
+# integer verbatim. The _R_CHECK_LIMIT_CORES_ cap of 2 keeps examples/tests inside CRAN's 2-core rule.
 #' @keywords internal
 #' @noRd
 tab_parallel_workers <- function(parallel = NULL, cache_env = NULL) {
@@ -59,12 +55,10 @@ tab_parallel_workers <- function(parallel = NULL, cache_env = NULL) {
 }
 
 
-# tab_dev_pkg_path() -- the dev SOURCE path when tabxplor is loaded via devtools/pkgload, else NULL.
-# WARNING: the daemons bind the INSTALLED tabxplor namespace (a fresh process). Under load_all that
-# namespace is the STALE installed build (no tab_build_one) -> mirai_map() errors. Detect dev via the
-# loaded namespace path (wd-independent) + an R/ source check that installed libs fail (they ship no R/
-# sources), so tab_pool_ensure() can load_all the current source on the daemons. NULL once installed /
-# when pkgload is absent -> zero cost, unchanged behaviour.
+# WARNING: the daemons bind the INSTALLED tabxplor namespace; under load_all() that is the STALE
+# installed build (no tab_build_one) and mirai_map() errors -- so detect the dev source here (loaded
+# namespace path, plus an R/ check installed libs fail) for tab_pool_ensure() to load_all on each fresh
+# daemon. NULL once installed -> zero cost.
 #' @keywords internal
 #' @noRd
 tab_dev_pkg_path <- function() {
@@ -75,11 +69,8 @@ tab_dev_pkg_path <- function() {
 }
 
 
-# tab_pool_ensure() -- lazily warm the named daemon pool once, reuse it across calls.
-# Only (re)spawns when the current daemon count differs from `workers`, so a pre-warmed pool (e.g. the
-# parity test's load_all'd daemons) is reused untouched. On a FRESH spawn in dev, it load_all's the dev
-# source on the daemons (once per pool, not per tab() call) so tab(parallel=) works under load_all; inert
-# once installed (tab_dev_pkg_path() -> NULL).
+# DESIGN: respawn only when the daemon count differs, so a pre-warmed pool is reused untouched; a
+# fresh spawn load_all's the dev source once per pool, not once per tab() call.
 #' @keywords internal
 #' @noRd
 tab_pool_ensure <- function(workers, compute = tabxplor_compute) {
@@ -107,7 +98,7 @@ tab_pool_ensure <- function(workers, compute = tabxplor_compute) {
 #'
 #' Shuts down the persistent \pkg{mirai} daemons tabxplor starts for
 #' \code{tab(..., parallel = )}. The pool is otherwise reused for the whole session and cleaned up
-#' automatically when the package is unloaded; call this to release the workers earlier.
+#' when the package is unloaded; call this to release the workers earlier.
 #'
 #' @return \code{invisible(NULL)}, called for its side effect.
 #' @export
@@ -124,24 +115,13 @@ tab_parallel_stop <- function() {
 }
 
 
-# tab_pmap_trampoline() -- the per-unit callback that runs INSIDE a daemon.
-# It is a top-level tabxplor function (serialized by reference, not by closure), so shipping it to a
-# worker carries NO user data. It reads the big shipped objects (data / fine_fused) from the daemon
-# global env (put there once by everywhere()), looks up the real worker by name in the tabxplor
-# namespace, and calls it with EXACTLY the same named arguments the serial branch uses.
-#
-# IT ALSO CATCHES THE UNIT'S CONDITIONS (Phase 20f). A daemon's console is not the user's, so a
-# cli_inform() or cli_warn() raised in a worker was simply LOST -- measured on tab_transform()'s
-# "several numeric col_vars with different references" notice, which prints under parallel = FALSE
-# and does not under parallel = TRUE. Conditions are collected here, muffled so the daemon's own
-# output stays clean, and returned with the value for tab_pmap() to replay in unit order.
-#
-# ...AND ITS ERROR (Phase 20f-iiii). Letting mirai's [.stop] re-throw was measured to lose two
-# things: the CONDITION (what surfaced was a miraiError carrying the rendered text, so a caller's
-# tryCatch(class = ) could not see the worker's own rlang classes) and, worse, every message the
-# SUCCESSFUL units had already produced -- [.stop] aborts collection before tab_pmap() replays them,
-# so a failure silently swallowed the diagnostics that explain it. Caught here and returned on the
-# payload, the real condition crosses back and the replay still runs.
+# === SECTION: the map ===============================================
+
+# WARNING: this per-unit daemon callback is top-level on purpose -- mirai serializes it BY REFERENCE,
+# not by closure, so shipping it to a worker carries NO user data. Conditions AND the error are caught
+# here because a daemon's console is not the user's: a worker's cli_inform() would simply be lost, and
+# letting mirai's `[.stop]` re-throw drops both the condition's own classes and every message the
+# SUCCESSFUL units had produced (it aborts collection before the replay). Both ride back on the payload.
 #' @keywords internal
 #' @noRd
 tab_pmap_trampoline <- function(row, .f_name, .const, .ship_names) {
@@ -160,19 +140,16 @@ tab_pmap_trampoline <- function(row, .f_name, .const, .ship_names) {
 }
 
 
-# tab_cnd_strip() -- make a condition safe to send back from a daemon: same classes, same message,
-# same cli bullets, same `parent` chain, referencing nothing large.
-# ⚠ NOT optional. An rlang error carries a `trace` of calls, and a call can hold VALUES rather than
-# symbols -- reg_fit() builds its survey model with do.call(survey::svyglm, list(fml, design = ...)),
-# so the error's own call would drag the whole design back across the process boundary. cli bullets
-# survive because cli_abort() renders them eagerly and tab_pmap() ships the cli/width options.
-# Declared loss: a relayed error has no backtrace. The unit's name takes its place.
+# WARNING: making a condition safe to send home is NOT optional. An rlang error carries a `trace` of
+# calls, and a call can hold VALUES rather than symbols -- reg_fit() builds its survey model with
+# do.call(..., design = ...), so the error's own call would drag the whole design back across the
+# process boundary. cli bullets survive (cli_abort() renders eagerly, tab_pmap() ships the cli/width
+# options). Declared loss: a relayed error has no backtrace; the unit's name takes its place.
 #' @keywords internal
 #' @noRd
 tab_cnd_strip <- function(cnd) {
   if (is.null(cnd)) return(NULL)
   cnd$trace <- NULL
-  # keep only a call whose arguments are all symbols or small atomics; else keep its head alone
   cl <- cnd$call
   if (is.call(cl)) {
     small <- vapply(as.list(cl)[-1L], function(a)
@@ -184,19 +161,15 @@ tab_cnd_strip <- function(cnd) {
 }
 
 
-# tab_pmap() -- map a namespaced worker over per-unit args, serial OR over a daemon pool.
-# BYTE-IDENTITY: both branches call `do.call(f, c(row, .const, .ship))` for each transposed row, in
-# input order. Serial passes the shipped objects as ordinary do.call args (copy-on-write, no copy);
-# parallel ships them ONCE via everywhere() and the trampoline re-reads them from the daemon global.
-# The worker body never branches on execution mode, and BOTH branches return the same plain list of
-# per-unit values -- the parallel one carries each unit's conditions alongside its value only between
-# the trampoline and the replay below.
-#   .l      : named list of per-unit vectors/lists (pmap-style; transposed to per-unit rows here).
-#   .f_name : name of the worker in the tabxplor namespace (looked up on both sides).
-#   .const  : small shared args, sent per task (parallel) / passed as constants (serial).
-#   .ship   : big shared objects (data, fine_fused), shipped ONCE (parallel) / passed as args (serial).
-#   .names  : what to CALL each unit when one of them fails (a row_var, a tab_vars level, a model
-#             label, an outcome). Display only; defaults to the unit's position.
+# Map a namespaced worker over per-unit args, serial OR over a daemon pool.
+# IDENTITY CONTRACT: the two branches call `do.call(f, c(row, .const, .ship))` per transposed row, in
+# input order, and return the same plain list of values; the worker never branches on execution mode.
+# Serial passes the shipped objects as ordinary args; parallel ships them ONCE via everywhere().
+#   .l      : per-unit vectors/lists (pmap-style; transposed to per-unit rows here).
+#   .f_name : the worker's name in the tabxplor namespace (looked up on both sides).
+#   .const  : small shared args -- sent per task (parallel) / passed as constants (serial).
+#   .ship   : big shared objects (data, fine_fused) -- shipped ONCE (parallel) / args (serial).
+#   .names  : what to CALL each unit when it fails (row_var, tab_vars level, model, outcome).
 #   workers : 0/1 -> serial; N -> N daemons. Also serial below tabxplor.parallel_min units.
 #' @keywords internal
 #' @noRd
@@ -212,9 +185,8 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(), .names = NULL
   nms <- if (is.null(.names)) as.character(seq_along(rows)) else as.character(.names)
 
   if (serial) {
-    # ⚠ named the same way the parallel branch names it, and NOT left to purrr's `i In index: 2.`:
-    # which unit failed is the first question either way, and the two branches must answer it with
-    # the same sentence (Phase 20f-iiii). A worker that already named itself is re-thrown untouched.
+    # WARNING: both branches must name the failing unit with the SAME sentence, never purrr's `i In
+    # index: 2.`; a worker that already named itself is re-thrown untouched.
     return(lapply(seq_along(rows), function(i)
       rlang::try_fetch(do.call(f, c(rows[[i]], .const, .ship)),
                        error = function(cnd) tab_unit_abort(cnd, nms[[i]]))))
@@ -222,23 +194,17 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(), .names = NULL
 
   tab_pool_ensure(workers, compute)
 
-  # Ship the big objects + an options snapshot + single-thread DT, ONCE. The snapshot keeps
-  # option-sensitive leaf math (e.g. the numeric-CI effective n) identical on daemons;
-  # setDTthreads(1L) avoids workers x DT-threads oversubscription (grouped keyby sums are
-  # thread-order-invariant, so this does NOT change results).
-  # `cli.*` / `crayon.*` / `width` ride along since Phase 20f, because a worker's message is now
-  # RELAYED to this session: cli renders its text at signal time, so without them a daemon would
-  # format with its own glyphs and its own wrap width and the relayed message would not match the
-  # one the serial branch prints.
+  # DESIGN: the options snapshot keeps option-sensitive leaf math identical on daemons; setDTthreads(1L)
+  # avoids workers x DT-threads oversubscription (grouped keyby sums are thread-order-invariant, so this
+  # does NOT change results). `cli.*` / `crayon.*` / `width` must ride along because a worker's message
+  # is RELAYED here and cli renders its text at signal time -- otherwise a daemon would format with its
+  # own glyphs and wrap width, and the relayed message would not match the serial one.
   keep <- "^tabxplor\\.|^datatable\\.|^cli\\.|^crayon\\.|^width$|^useFancyQuotes$"
   opts <- options()[grepl(keep, names(options()))]
-  # ⚠ THE NESTING RULE, and the ONE place it is enforced. The parallel axes NEST -- a crosstab's
-  # `row_var`s, and a regression's `tab_vars` groups x models x outcomes -- and only the OUTERMOST
-  # one dispatches: a daemon must never spawn daemons. The unit-construction sites each pass
-  # `parallel = FALSE` (R/tab.R tab_rowvar_ctxs, R/reg-spec-build.R reg_build_group, R/tab_reg.R's
-  # outcome recursion), but the option ships too -- `^tabxplor\.` matches `tabxplor.parallel` -- so
-  # a future site forwarding NULL would read the user's TRUE inside the worker. Forced off here, for
-  # every producer, whatever the units do.
+  # WARNING: THE NESTING RULE, enforced here and only here. The axes NEST (a crosstab's `row_var`s; a
+  # regression's `tab_vars` groups x models x outcomes) and only the OUTERMOST dispatches: a daemon must
+  # never spawn daemons. The unit-construction sites each pass `parallel = FALSE`, but the option ships
+  # too (`^tabxplor\.` matches `tabxplor.parallel`), so a site forwarding NULL would read a TRUE here.
   opts[["tabxplor.parallel"]] <- FALSE
   mirai::everywhere(
     {
@@ -251,45 +217,36 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(), .names = NULL
     .compute  = compute
   )
 
-  # ⚠ `[]`, NOT `[.stop]`: the trampoline catches its unit's error and returns it, so collection
-  # must complete for the replay below to run at all (Phase 20f-iiii).
+  # WARNING: `[]`, NOT `[.stop]` -- the trampoline catches its unit's error and returns it, so
+  # collection must complete for the replay below to run at all.
   got <- mirai::mirai_map(
     rows, tab_pmap_trampoline,
     .args    = list(.f_name = .f_name, .const = .const, .ship_names = names(.ship)),
     .compute = compute
   )[]
 
-  # Replay the workers' conditions on the main process, in UNIT order (Phase 20f). The serial branch
-  # signals them live and in that same order, so what a user sees is the same set of messages, in the
-  # same relative order, whichever branch ran.
-  # ⚠ Inherently NOT identical in one respect, and it cannot be: a worker's conditions can only be
-  # replayed once the map has collected, so they land AFTER anything the caller signalled around
-  # tab_pmap() rather than interleaved with it. That is the price of another process, not a defect.
-  # ⚠ AND WE STOP AT THE FIRST FAILING UNIT: serially the loop would have aborted there, so the
-  # units after it never ran. Replaying their messages would show output the serial branch cannot
-  # produce -- the opposite of the parity this relay exists for.
+  # Replay the workers' conditions on main, in UNIT order -- the same messages, in the same relative
+  # order, whichever branch ran. WARNING: two declared non-identities. They can only be replayed once
+  # the map has collected, so they land AFTER anything the caller signalled around tab_pmap() instead
+  # of interleaved with it -- the price of another process. And the replay STOPS at the first failing
+  # unit: serially the later units never ran, so replaying them would show output serial cannot produce.
   for (i in seq_along(got)) {
     g <- got[[i]]
-    # a value mirai itself failed on (a dead daemon, an unserialisable return): it never reached the
-    # trampoline, so there is no payload to read and nothing to say but what mirai says.
+    # mirai's own failure (dead daemon, unserialisable return): no payload, nothing to say but its text.
     if (mirai::is_error_value(g)) {
       cli::cli_abort(c("Parallel build failed on {.val {nms[[i]]}}.",
                        "x" = as.character(g)), call = NULL)
     }
     for (cnd in g$conditions) rlang::cnd_signal(cnd)
-    # a worker's own error, with its classes and bullets intact
     if (!is.null(g$error)) tab_unit_abort(g$error, nms[[i]])
   }
   purrr::map(got, "value")
 }
 
 
-# tab_unit_abort() -- "which unit failed", said the same way in both branches.
-# ⚠ the de-duplication is by NAME, not by class: the axes NEST (outcomes x models x tab_vars
-# groups), so an inner failure legitimately gains an outer name -- "the m1 model, of the `score`
-# outcome". Only a unit re-naming ITSELF is dropped, which is what happens when reg_spec_build()'s
-# own wrapper (the S axis, whose serial branch is a hand-written loop, not tab_pmap) is then seen
-# again by the parallel collector.
+# "Which unit failed", said the same way in both branches.
+# WARNING: it de-duplicates by NAME, not by class -- the axes NEST, so an inner failure rightly gains
+# an outer name ("the m1 model, of the `score` outcome"). Only a unit re-naming ITSELF is dropped.
 #' @keywords internal
 #' @noRd
 tab_unit_abort <- function(cnd, nm) {
@@ -299,28 +256,21 @@ tab_unit_abort <- function(cnd, nm) {
 }
 
 
-# tab_build_one() -- the per-row_var worker (Phase 9a): run the whole transform -> assemble_tables
-# pipeline for ONE lean ctx (from tab_rowvar_ctxs()) and return its single finished tab + whole-table
-# test. `data` and the shared aggregate `fine_fused` are the big objects shipped once by tab_pmap();
-# reattach them here (a bare do.call() arg cannot carry them into the lean unit). The per-row_var
-# numeric moment aggregate rides in ctx_i$fine_num; the tier-1 build (tab_aggregate) already ran once
-# on main. Top-level (namespaced) so mirai serializes it by reference, carrying no user data. The
-# cross-row_var output shape (merge/pvalue/unwrap) runs on main in tab_assemble_output().
+# === SECTION: the per-row_var worker ================================
+
+# Run transform -> assemble_tables for ONE lean ctx, returning its finished tab + whole-table test.
+# `data`, `fine_fused` and the survey `design` are the big objects tab_pmap() ships once per worker and
+# this reattaches. Top-level (namespaced), so mirai serializes it by reference, carrying no user data.
 #' @keywords internal
 #' @noRd
 tab_build_one <- function(ctx_i, data, fine_fused, design = NULL) {
-  # ctx_update() (single-bracket [<-) so fine_fused = NULL (the default, fuse off) is PRESERVED as a
-  # list element -- `ctx_i$fine_fused <- NULL` would DELETE the key and tab_transform's list2env() then
-  # can't find `fine_fused`. Phase 18z14-i: the survey DESIGN is shipped the same way (once per
-  # worker, not once per row_var -- a prebuilt design carries the whole dataset); z16-iiiii puts it
-  # back into the one `inference` object tab_rowvar_ctxs() emptied it out of.
+  # WARNING: ctx_update() assigns with single brackets, so `fine_fused = NULL` (fuse off) SURVIVES as a
+  # list element; `ctx_i$fine_fused <- NULL` would delete the key and tab_transform could not find it.
   ctx_i <- ctx_update(ctx_i, list(data = data, fine_fused = fine_fused))
   ctx_i$inference["design"] <- list(design)
   ctx_i <- tab_transform(ctx_i)
-  # Capture the PRE-merge test (the factor chi2 tibble, or the chi2 logical on a numeric-only table)
-  # for the jmvtab tier-2 store: assemble then bind_rows the numeric ANOVA into it, so returning the
-  # post-assemble test would double-merge the ANOVA on a later cache hit (the store feeds tab_apply_tests
-  # -> set_test, then assemble merges chi2_num again). jmv_cache_store_tests only keeps data.frames.
+  # DESIGN: capture the PRE-merge test for the jmvtab tier-2 store -- assemble bind_rows() the numeric
+  # ANOVA into it, so a post-assemble test would double-merge that ANOVA on a later cache hit.
   test  <- ctx_i$tests
   ctx_i <- tab_assemble_tables(ctx_i)
   list(tab = ctx_i$tabs, test = test)

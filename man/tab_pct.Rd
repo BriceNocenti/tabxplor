@@ -18,56 +18,39 @@ tab_pct(
 \item{tabs}{A \code{tibble} of class \code{tab} made with \code{\link{tab_plain}} or
 \code{\link{tab}}.}
 
-\item{pct}{The type of percentages to calculate. \code{"row"} draw row percentages.
-Set to \code{"col"} for column percentages. Set to \code{"all"} for frequencies
-(based on each subtable/group if \code{tab_vars} is provided).
-Set to \code{"all_tabs"} to calculate frequencies based on the whole (set of) table(s).}
+\item{pct}{The type of percentages : \code{"row"}, \code{"col"}, \code{"all"} (frequencies of
+each subtable/group when \code{tab_vars} are provided), or \code{"all_tabs"} (frequencies of
+the whole set of tables).}
 
 \item{digits}{The number of digits to print for percentages. As a single integer,
 or an integer vector the same length than \code{col_vars}.}
 
-\item{ref}{The reference cell to calculate differences and ratios
-(used to print \code{colors}) :
-\itemize{
-\item \code{"auto"}: by default, cell difference from the corresponding total
-(rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
-used for \code{diff} ; cell ratio from the first line (or col) is use for \code{OR}
-(odds ratio/relative risks ratio).
-\item \code{"tot"}: totals are always used.
-\item \code{"first"}: calculate cell difference or ratio from the first cell
-of the row or column (useful to color temporal developments).
-\item \code{n}: when \code{ref} is an integer, the nth row (or column) is used for comparison.
-\item \code{"regex"}: when \code{ref} is a string, it it used as a regular expression,
-to match with the names of the rows (or columns). Be precise enough to match only one
-column or row, otherwise you get a warning message.
-\item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
-}}
+\item{ref}{The reference cell differences and ratios --- and so \code{colors} --- are
+calculated from : \code{"tot"} (the corresponding total row or column), \code{"first"} (the
+first cell of the row or column, useful to color temporal developments), an integer (the nth
+row or column), a string (a regular expression matching one row or column name, precise enough
+to match only one), or \code{"no"} to skip differences entirely. See \code{\link{tab}} for the
+full vocabulary.}
 
-\item{comp}{Comparison level. When \code{tab_vars} are present, should the row
-differences be calculated for each subtable/group (by default \code{comp = "tab"} :
-comparison of each cell to the relative total row) ?
-Should they be calculated for the whole table (\code{comp = "all"} :
-comparison of each cell to the total row of the total table) ?
-When \code{comp = "all"} and \code{ref = "first"}, cells are compared to the first
-cell of the total table instead.
-This parameter doesn't affect column percentages.
-\code{comp} must be set once and for all the first time you use \code{\link{tab_chi2}},
-\code{\link{tab_pct}} with rows, or \code{\link{tab_ci}}.}
+\item{comp}{Comparison level, when \code{tab_vars} are present : \code{"tab"} (the default)
+compares each cell to the total row of its own subtable, \code{"all"} to the total row of the
+total table (and, with \code{ref = "first"}, to the first cell of the total table). It doesn't
+affect column percentages, and must be set once and for all the first time you use
+\code{\link{tab_pct}} with rows, \code{\link{tab_ci}} or \code{\link{tab_chi2}}.}
 
-\item{color}{Set to \code{TRUE} to color the resulting tab based on differences (from
-totals or from the first cell).}
+\item{color}{Set to \code{TRUE} to color the resulting tab based on those differences.}
 
-\item{just_diff}{If percentages are already calculated and you just want
+\item{just_diff}{Set to \code{TRUE} when percentages are already calculated and you only want
 to recalculate differences.}
 }
 \value{
-A \code{tibble} of class \code{tab}, with percentages displayed, possibly
-colored based on differences from totals or first cell.
+A \code{tibble} of class \code{tab}, with percentages displayed, possibly colored based
+on differences from totals or first cell.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
 
-Deprecated in 2.0.0, defunct in 2.1.0 -- percentages, differences and ratios are computed directly by
-\code{\link[=tab]{tab()}} / \code{\link[=tab_plain]{tab_plain()}} via the \code{pct} / \code{ref} arguments. \code{tab_pct()} still works on an
-existing tab.
+Deprecated in 2.0.0, defunct in 2.1.0 -- percentages, differences and ratios are computed
+directly by \code{\link[=tab]{tab()}}, through its \code{pct} / \code{ref} / \code{comp} arguments. \code{tab_pct()} still works on
+an existing tab.
 }

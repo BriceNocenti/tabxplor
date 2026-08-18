@@ -12,7 +12,7 @@ tab_parallel_stop()
 \description{
 Shuts down the persistent \pkg{mirai} daemons tabxplor starts for
 \code{tab(..., parallel = )}. The pool is otherwise reused for the whole session and cleaned up
-automatically when the package is unloaded; call this to release the workers earlier.
+when the package is unloaded; call this to release the workers earlier.
 }
 \examples{
 \donttest{

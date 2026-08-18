@@ -22,9 +22,9 @@ tab_many(
 \arguments{
 \item{data}{A data frame, or a \code{\link[survey:svydesign]{survey::svydesign}}.}
 
-\item{row_vars, col_vars, tab_vars, wt}{The variable roles — see \code{\link[=tab]{tab()}}. These four (and \code{data})
-are the only arguments that may be passed by position; everything else must be named, because
-\code{\link[=tab]{tab()}}'s argument order differs from the historical one.}
+\item{row_vars, col_vars, tab_vars, wt}{The variable roles — see \code{\link[=tab]{tab()}}. With \code{data}, the only
+arguments that may be passed by position: everything else must be named, because \code{\link[=tab]{tab()}}'s
+argument order differs.}
 
 \item{...}{Passed on to \code{\link[=tab]{tab()}}.}
 
@@ -50,11 +50,10 @@ What \code{\link[=tab]{tab()}} returns: a \code{tabxplor_tab} (a \code{tabxplor_
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
 
 Superseded (2.0.0) by \code{\link[=tab]{tab()}}, the unified entry point: it accepts several \code{row_vars} /
-\code{col_vars} and merges them into one table by default (\code{output_list = TRUE} gives the list
-\code{tab_many()} used to return).
+\code{col_vars} and merges them into one table by default (\code{output_list = TRUE} gives the list shape
+\code{tab_many()} returns).
 
-\code{tab_many()} now forwards everything to \code{\link[=tab]{tab()}}, translating the five arguments that were
-renamed:\tabular{ll}{
+\code{tab_many()} forwards everything to \code{\link[=tab]{tab()}}, translating the five renamed arguments:\tabular{ll}{
    \code{tab_many()} \tab \code{\link[=tab]{tab()}} \cr
    \code{chi2 = TRUE} \tab \code{test = TRUE} \cr
    \code{totrow = FALSE} \tab \code{tot = "col"} \cr
