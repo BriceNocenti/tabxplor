@@ -290,3 +290,74 @@ testthat::test_that("a multiplicative cell prints its inverse below the neutral,
   testthat::expect_false(any(grepl("1/", tab_color_legend(t, medium = "plain", lang = "en"),
                                    fixed = TRUE)))
 })
+
+
+# === the PRIMARY of a composite, and the paint split ===============================================
+
+testthat::test_that("the primary token is the first one outside brackets", {
+  prim <- function(tmpl) {
+    p <- tabxplor:::parse_display_template(tmpl)
+    p$fields[[p$primary]]
+  }
+  # every template the package writes keeps the token it has always centred on...
+  testthat::expect_identical(prim("{est} ({base})"), "est")
+  testthat::expect_identical(prim("{pct} (n={n})"),  "pct")
+  testthat::expect_identical(prim("{base} {ci}"),    "base")
+  testthat::expect_identical(prim("{or} ({obs})"),   "or")
+  # ...a bracketed token is an ASIDE, wherever it sits, which is what lets a crude column print its
+  # level first and keep the ESTIMATE as the number the cell is about
+  testthat::expect_identical(prim("({base}) {est}"), "est")
+  testthat::expect_identical(prim("[{n}] {pct}"),    "pct")
+  # all of them bracketed -> the first, so a template can still be all-aside
+  testthat::expect_identical(prim("({pct})"),        "pct")
+})
+
+testthat::test_that("stars, get_num() and Excel follow the primary, not the word order", {
+  x <- fmt(pct = c(.5, .3), n = c(10L, 20L), diff = c(0, -.2), pvalue = c(NA, 0.001),
+           scale = "level_pct", pct_type = "row", digits = 0L)
+  a <- set_display(x, "{diff} ({pct})")
+  b <- set_display(x, "({pct}) {diff}")
+  testthat::expect_equal(get_num(a), get_num(b))                    # the same primary field
+  testthat::expect_equal(get_num(b), get_diff(x))
+  # the stars ride the DIFFERENCE in both, though `b` prints the percentage first: they land at the
+  # end of the cell there, not after the percentage
+  txt <- format(b, stars = TRUE, special_formatting = TRUE)[2]
+  testthat::expect_match(txt, "\\*")
+  testthat::expect_match(txt, "%\\) *[-+][0-9.]+%\\*+ *$")
+})
+
+testthat::test_that("format(bold_split =) reports the primary's character RANGE", {
+  x <- fmt(pct = c(.5), n = c(10L), scale = "level_pct", pct_type = "row", digits = 0L)
+  rng <- function(tmpl) {
+    o <- format(set_display(x, tmpl), bold_split = TRUE, special_formatting = TRUE)
+    c(attr(o, "primary_from"), attr(o, "primary_nchar"), nchar(o))
+  }
+  testthat::expect_identical(rng("{pct} (n={n})"), c(1L, 3L, 10L))   # a prefix
+  testthat::expect_identical(rng("({n}) {pct}"),   c(6L, 3L,  8L))   # ...and a suffix
+})
+
+testthat::test_that("only the primary token is coloured, and the option says what the rest gets", {
+  gss <- forcats::gss_cat
+  t  <- tab(gss, marital, race, pct = "row", color = "diff")
+  co <- t[["White"]]
+  paint <- function(...) {
+    withr::local_options(...)
+    withr::local_options(cli.num_colors = 256)
+    as.character(format(pillar::pillar_shaft(t[["White"]]), width = 30))
+  }
+  d <- paint(tabxplor.color_secondary = "black")
+  s <- paint(tabxplor.color_secondary = "same")
+  g <- paint(tabxplor.color_secondary = "grey60")
+  # a simple cell has no aside, so every mode paints it identically
+  testthat::expect_identical(d, s)
+  testthat::expect_identical(d, g)
+  # a composite one does: the aside is unstyled by default, tinted on request, and inherits the
+  # cell's own colour under "same"
+  co2 <- set_display(co, "{pct} (n={n})")
+  hit <- function(opt) {
+    withr::local_options(tabxplor.color_secondary = opt, cli.num_colors = 256)
+    as.character(format(pillar::pillar_shaft(co2), width = 30))
+  }
+  testthat::expect_false(identical(hit("black"), hit("same")))
+  testthat::expect_false(identical(hit("black"), hit("grey60")))
+})

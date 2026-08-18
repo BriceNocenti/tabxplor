@@ -134,14 +134,15 @@ test_that("the crude fit uses the MODEL's complete-case population, not its own"
                                 unname(exp(stats::coef(gbig)["age"])), tolerance = 1e-6)))
 })
 
-test_that("the numeric BASE cell stays empty and uncoloured", {
+test_that("a numeric predictor's crude cell carries the effect and NO level", {
   d <- num_data()
   t <- tab_reg(d, "married", c("age", "race"), family = "binomial",
                empirical = TRUE, cleannames = FALSE)
   i <- which(as.character(t$var) == "age")
-  expect_true(is.na(get_pct(t[["Obs_%"]])[i]))
-  expect_true(is.na(get_diff(t[["Obs_%"]])[i]))        # the shared-field trap: must NOT hold the effect
-  expect_equal(fmt_color_channels(t[["Obs_%"]])$text_slot[i], 0L)
+  # a continuous predictor has no levels, so no share to print beside its effect -- `{base}` renders
+  # void there and the cell keeps its estimate alone.
+  expect_true(is.na(get_pct(t[["Obs_OR"]])[i]))
+  expect_false(is.na(get_or(t[["Obs_OR"]])[i]))
 })
 
 test_that("gaussian / poisson / rr numeric crude effects match their univariable fits", {
@@ -158,7 +159,7 @@ test_that("gaussian / poisson / rr numeric crude effects match their univariable
                                  empirical = TRUE, multiplier = 1, cleannames = FALSE))
   ip <- which(as.character(tp$var) == "age")
   gp <- stats::glm(tvhours ~ age, data = dm, family = stats::quasipoisson())
-  expect_equal(get_or(tp[["Obs_IRR"]])[ip], unname(exp(stats::coef(gp)["age"])), tolerance = 1e-10)
+  expect_equal(get_ratio(tp[["Obs_IRR"]])[ip], unname(exp(stats::coef(gp)["age"])), tolerance = 1e-10)
 
   tr <- tab_reg(d, "married", c("age", "race"), family = "poisson",   # binary -> modified Poisson
                 empirical = TRUE, cleannames = FALSE)
@@ -184,7 +185,7 @@ test_that("a model with ONLY numeric predictors builds its crude columns", {
   expect_no_error(
     t <- tab_reg(d, "married", c("age", "tvhours"), family = "binomial",
                  empirical = TRUE, cleannames = FALSE))
-  expect_true(all(c("Obs_%", "Obs_OR") %in% names(t)))
+  expect_true("Obs_OR" %in% names(t))
   expect_true(all(!is.na(get_or(t[["Obs_OR"]])[as.character(t$var) %in% c("age", "tvhours")])))
 })
 

@@ -133,20 +133,24 @@ test_that("the colour legend is the guide, and never printed twice", {
   expect_true(grepl("Newcombe", cap))
   expect_false(grepl("Shades of", cap))
 
-  # with several ladders no honest key list exists -> the prose legend comes back instead
+  # a crude column and its model twin are ONE ladder since the merge, so the guide can describe them
+  # both -- the case that used to need the prose fallback
   r <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE))
   p2 <- forest_plot(r, observed = "ci", lang = "en")
-  expect_true(is.null(tabxplor:::legend_guide_spec(
-    r, c("Obs_%", "Model_OR"), "text", "light", "en")) ||
-      grepl("Shades of|Bold", p2$labels$caption %||% ""))
+  expect_false(is.null(tabxplor:::legend_guide_spec(
+    r, c("Obs_OR", "Model_OR"), "text", "light", "en")))
+  expect_false(grepl("Shades of", p2$labels$caption %||% ""))
 })
 
-test_that("what = 'level' says which argument produces one", {
+test_that("what = 'level' draws the observed and adjusted levels, which every model column now has", {
   skip_if_not_installed("ggplot2")
   fp_dev()
   d <- fp_data()
   r <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE))
-  expect_error(forest_plot(r, what = "level"), "effect = \"ame\"|percentage or a mean")
+  expect_s3_class(forest_plot(r, what = "level"), "ggplot")
+  # a link-scale coefficient has no level to plot, and says so
+  rl <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", measure = "log"))
+  expect_error(forest_plot(rl, what = "level"), "percentage or a mean")
 })
 
 test_that("forest_plot maps a list of tables and returns its data", {

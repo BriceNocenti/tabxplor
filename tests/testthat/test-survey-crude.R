@@ -145,11 +145,11 @@ test_that("Obs_OR's bracket IS the design variance of the log odds-ratio, and be
   expect_true(all(abs(rw / fw - 1) < 0.10))
 })
 
-test_that("the crude % and mean columns follow the DESIGN, and the point estimates do not move", {
+test_that("the crude columns follow the DESIGN, and the point estimates do not move", {
   d <- svc_fixture(); des <- svc_des(d)
   wid <- function(t, nm) { cc <- t[[nm]]; get_ci_sup(cc) - get_ci_inf(cc) }
-  for (spec in list(list(dep = "y",   nm = "Obs_%",    fam = "binomial"),
-                    list(dep = "num", nm = "Obs_mean", fam = "gaussian"))) {
+  for (spec in list(list(dep = "y",   nm = "Obs_OR",   fam = "binomial"),
+                    list(dep = "num", nm = "Obs_diff", fam = "gaussian"))) {
     td <- suppressMessages(tab_reg(des, spec$dep, "x", family = spec$fam, empirical = TRUE))
     tr <- tab_reg(d, spec$dep, "x", family = spec$fam, empirical = TRUE, wt = "w")
     ok <- is.finite(wid(td, spec$nm)) & is.finite(wid(tr, spec$nm))
@@ -326,7 +326,7 @@ test_that("the crude bracket is referred to the SAME degrees of freedom as the m
     tibble::tibble(var = "x", level = levels(d$x), is_ref = c(TRUE, FALSE, FALSE)),
     g, "x", "binomial", "binomial", reg_estimand("binomial"), NA_real_, weighted = TRUE,
     degf = dg)
-  or_z <- cz$cols[[2]]; or_t <- ct$cols[[2]]
+  or_z <- cz$cols[[1]]; or_t <- ct$cols[[1]]
   w_z <- get_ci_sup(or_z) / get_ci_inf(or_z)
   w_t <- get_ci_sup(or_t) / get_ci_inf(or_t)
   expect_true(all(w_t[-1] > w_z[-1]))                         # t(8) is WIDER than z, everywhere
@@ -372,7 +372,7 @@ test_that("the crude columns STORE the effective base they used (W-D)", {
   expect_true(all(ne < as.double(get_n(wt[["Obs_OR"]])[is.finite(get_n_eff(wt[["Obs_OR"]]))])))
   # a MEAN column takes the mean's own base (n_ci), not the draw base -- each column stores ITS OWN
   gg <- suppressWarnings(tab_reg(d, "num", "x", family = "gaussian", empirical = TRUE, wt = "w"))
-  nm <- get_n_eff(gg[["Obs_mean"]]); expect_true(any(is.finite(nm)))
+  nm <- get_n_eff(gg[["Obs_diff"]]); expect_true(any(is.finite(nm)))
   # under a DESIGN the stored base is the design one (strictly different from the flat-weighted one)
   dsg <- suppressMessages(tab_reg(des, "y", "x", family = "binomial", empirical = TRUE))
   nd  <- get_n_eff(dsg[["Obs_OR"]]); nd <- nd[is.finite(nd)]

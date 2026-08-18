@@ -364,7 +364,10 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     ref          = opts$ref,
     outcome_level = lvl_arg,
     tab_vars     = nz(opts$tab_vars),
-    empirical    = isTRUE(opts$empirical),
+    # a pass-through: the option's values ARE the argument's ("no" / "column" / "cell"), and an older
+    # stored state may still carry the logical the checkbox used to send.
+    empirical    = if (is.logical(opts$empirical)) isTRUE(opts$empirical)
+                   else opts$empirical %||% "no",
     # Phase 20c: `stats` IS what the module sends now, because the model comparison is one of its
     # keys. NULL keeps its old meaning -- "the model-fit statistics that make sense for this family",
     # which is what the picker wants and what tab_reg() computes by default -- so an unset comparison

@@ -118,6 +118,19 @@ tx_chrome_hex <- function(theme = "light") {
 # tx_chrome_hex(), so the pane can never drift from the table sitting in it.
 #
 # WHY it needs no !important, though it fights two rules it does not own: htmltools' save_html()
+# An R colour name or a hex code -> a CSS hex. Anything unrecognised falls back to NULL (the caller
+# then uses the theme's own text colour), so a typo can never emit invalid CSS.
+#' @keywords internal
+#' @noRd
+tx_css_color <- function(x) {
+  if (is.null(x) || !nzchar(x)) return(NULL)
+  if (grepl("^#[0-9A-Fa-f]{3,8}$", x)) return(x)
+  tryCatch({
+    v <- grDevices::col2rgb(x)
+    sprintf("#%02X%02X%02X", v[1], v[2], v[3])
+  }, error = function(e) NULL)
+}
+
 # builds the page as <head> + `<style>body{background-color:white;}</style>` + the html dependencies
 # (bootstrap's own `body{}`) + </head><body> + OUR string. Ours is therefore LAST in document order at
 # equal specificity (0,0,1), which is all it takes.
@@ -237,6 +250,17 @@ tx_css_rules <- function(chrome = TRUE) {
     # the softened body grey. Theme-aware so a dark-mode page keeps it legible; jamovi results are light,
     # where it is the maintainer's requested pure black.
     add(".tabxplor-caption", "color", "#000000", "#FFFFFF", "#000000")
+    # THE SECONDARY TOKENS of a composite cell. The colour grades the cell's PRIMARY number, so the
+    # aside beside it keeps the ordinary text colour ("black", theme-aware) unless the reader asks for
+    # a tint. `"same"` emits no rule at all: the aside then inherits the cell's own shade, which is
+    # what the span's absence already gives -- but the span is still written, so a stylesheet can
+    # restyle it either way.
+    sec <- color_secondary_opt()
+    if (!identical(sec, "same")) {
+      hex <- if (identical(sec, "black")) NULL else tx_css_color(sec)
+      if (is.null(hex)) add(".tabxplor-tab .tx-sec", "color", cl$text, cd$text, cp$text)
+      else              add(".tabxplor-tab .tx-sec", "color", hex, hex, hex)
+    }
   }
 
   # Phase 14l: the text channel uses the text family and the bg channel the bg family -- the loop

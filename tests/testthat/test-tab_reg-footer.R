@@ -244,7 +244,7 @@ test_that("reg reference cells and GOF footer render black + bold, data cells st
   rd <- tabxplor:::tab_export_prep(t, backend = "kable", wrap = NULL)$tables[[1]]
   tabm <- rd$tab
 
-  emp   <- "Obs_%"
+  emp   <- "Obs_OR"
   ann_e <- rd$ann[[emp]]
   refr  <- tabxplor::is_refrow(tabm[[emp]])
   expect_true(any(refr))

@@ -111,19 +111,18 @@ testthat::test_that("tab_reg never reads the option: its crude CIs are ALWAYS co
             empirical = TRUE))
   off <- mk(FALSE); on <- mk(TRUE)
   cn <- names(on)
-  obspct <- grep("Obs_%",   cn, value = TRUE, fixed = TRUE)[1]
   obsor  <- grep("Obs_OR",  cn, value = TRUE, fixed = TRUE)[1]
   model  <- grep("Model_OR", cn, value = TRUE, fixed = TRUE)[1]
 
   # W1/W2: the tab()-scoped option cannot move a regression table at all -- crude and model columns
   # are on ONE basis, which is why they are comparable.
-  testthat::expect_equal(get_ci_inf(off[[obspct]]), get_ci_inf(on[[obspct]]))
+  testthat::expect_equal(get_ci_inf(off[[obsor]]), get_ci_inf(on[[obsor]]))
   testthat::expect_equal(get_ci_sup(off[[obsor]]),  get_ci_sup(on[[obsor]]))
   testthat::expect_equal(get_ci_inf(off[[model]]),  get_ci_inf(on[[model]]))
   # and the crude base IS corrected: n_eff < n wherever the weights are unequal
-  testthat::expect_true(any(ci_hw(off[[obspct]]) > 0, na.rm = TRUE))
+  testthat::expect_true(any(ci_hw(off[[obsor]]) > 0, na.rm = TRUE))
   # displayed count untouched
-  testthat::expect_identical(get_n(off[[obspct]]), get_n(on[[obspct]]))
+  testthat::expect_identical(get_n(off[[obsor]]), get_n(on[[obsor]]))
   # the footer names the weighted basis, whatever the option says
   testthat::expect_identical(tabxplor:::tab_inference_basis(off), "weights")
 })

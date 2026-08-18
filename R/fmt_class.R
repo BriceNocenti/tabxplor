@@ -1442,12 +1442,25 @@ set_color_signif <- function(x, color_signif) {
 # === SECTION: display {} grammar ======================================
 # The per-cell `display` field is EITHER a simple token ("pct"/"diff"/"n"/...) OR a glue-style
 # COMPOSITE template ("{pct} (n={n})") that renders several fields in ONE value cell (text backends
-# only -- get_num()/Excel fall back to the PRIMARY = the first {token}). These three shared helpers
-# are the single source of truth: one gated resolver, one parser, one write-time validator; every
-# consumer that dispatches on the display token routes through display_primary().
+# only -- get_num()/Excel fall back to the PRIMARY token). These three shared helpers are the single
+# source of truth: one gated resolver, one parser, one write-time validator; every consumer that
+# dispatches on the display token routes through display_primary().
+#
+# DESIGN: THE PRIMARY OF A COMPOSITE IS THE FIRST TOKEN OUTSIDE BRACKETS -- and, if every token is
+# bracketed, the first one. A bracket is already this package's notation for a subordinate number, so
+# the code reads what the reader reads, and a template may put the aside FIRST: "({base}) {est}"
+# prints the level then the estimate while the ESTIMATE stays primary -- which is what puts a crude
+# and a modelled effect side by side across a regression table. The primary is what carries the
+# stars, what get_num() and Excel return, and what the colour gates dispatch on.
+#' @keywords internal
+#' @noRd
+DISPLAY_ASIDE_OPEN  <- c("(", "[")
+#' @keywords internal
+#' @noRd
+DISPLAY_ASIDE_CLOSE <- c(")", "]")
 # WARNING: display_primary() is on the O(cells) hot path (get_num/set_num/format) -- keep the
-# no-composite fast path a single fixed grepl. The composite is per-CELL, not a column attribute
-# (add_n/add_pct are ROWS under pct="col").
+# no-composite fast path a single fixed grepl, and resolve per UNIQUE template, never per cell. The
+# composite is per-CELL, not a column attribute (add_n/add_pct are ROWS under pct="col").
 
 # The accepted {} field names and read-side aliases are the `user` / `alias` columns of DISPLAY_TOKENS
 # (R/tab-display.R, as DISPLAY_USER_FIELDS / DISPLAY_ALIASES). Facts worth stating here beside
@@ -1462,7 +1475,15 @@ set_color_signif <- function(x, color_signif) {
 # left as-is and falls through to get_num()'s default `n` -- never errors.
 display_primary <- function(display) {
   comp <- !is.na(display) & grepl("{", display, fixed = TRUE)
-  if (any(comp)) display[comp] <- sub("^[^{]*\\{\\s*([^{}]+?)\\s*\\}.*$", "\\1", display[comp])
+  if (any(comp)) {
+    # per UNIQUE template: a column holds a handful of them over thousands of cells
+    u <- unique(display[comp])
+    p <- vapply(u, function(tmpl) {
+      seg <- parse_display_template(tmpl)
+      if (!length(seg$fields)) tmpl else seg$fields[[seg$primary]]
+    }, character(1), USE.NAMES = FALSE)
+    display[comp] <- p[match(display[comp], u)]
+  }
   # Read-side alias: a legacy token (only `rr` today) -> its canonical internal token. The `%in%`
   # guard keeps the common canonical path off the match() pass.
   al <- DISPLAY_ALIASES
@@ -1491,19 +1512,36 @@ fmt_display_shows <- function(display, token, row = NULL) {
 
 # Split ONE template into ordered segments (called once per unique template in a column, which are
 # ~uniform). Returns pieces (literals + {token}s in order), is_tok (which pieces are field tokens),
-# and fields (the alias-resolved internal tokens, in order). A degenerate template with no {field}
-# (e.g. malformed) yields is_tok all FALSE -> the format() branch leaves those cells plain.
+# fields (the alias-resolved internal tokens, in order) and `primary` (the INDEX into `fields` of the
+# token the cell is really about -- see the DESIGN note above: the first one outside parentheses).
+# A degenerate template with no {field} (e.g. malformed) yields is_tok all FALSE -> the format()
+# branch leaves those cells plain.
 parse_display_template <- function(tmpl) {
   pieces <- regmatches(tmpl, gregexpr("\\{[^{}]+\\}|[^{}]+", tmpl))[[1]]
   is_tok <- startsWith(pieces, "{")
   fields <- character(0)
+  primary <- 1L
   if (any(is_tok)) {
     raw <- trimws(gsub("[{}]", "", pieces[is_tok]))
     hit <- raw %in% names(DISPLAY_ALIASES)
     raw[hit] <- unname(DISPLAY_ALIASES[raw[hit]])
     fields <- raw
+    # BRACKET DEPTH, carried by the literal pieces: a token is an ASIDE when it sits inside a pair of
+    # brackets -- "(", "[" or the typographic quotes a template might use. Depth is clamped at 0, so
+    # a stray closer can never promote a later token, and an opener never closed leaves everything
+    # after it an aside (which is what it looks like). Literal pieces cannot contain "{" or "}": the
+    # parser splits on those, so a token can never be nested inside another.
+    depth <- 0L; k <- 0L; free <- logical(length(fields))
+    for (j in seq_along(pieces)) {
+      if (is_tok[j]) { k <- k + 1L; free[k] <- depth <= 0L }
+      else {
+        ch    <- strsplit(pieces[j], "", fixed = TRUE)[[1]]
+        depth <- max(0L, depth + sum(ch %in% DISPLAY_ASIDE_OPEN) - sum(ch %in% DISPLAY_ASIDE_CLOSE))
+      }
+    }
+    if (any(free)) primary <- which(free)[[1]]
   }
-  list(pieces = pieces, is_tok = is_tok, fields = fields)
+  list(pieces = pieces, is_tok = is_tok, fields = fields, primary = primary)
 }
 
 # WRITE-time: VALIDATE a `display=` {} template and return it. Composites use the {} grammar ONLY
@@ -1638,6 +1676,20 @@ EST_SCALES <- list(
                     est_display = "or", base_display = "pct",
                     break_key = "odds_ratio", gap_key = "adj_ratio",
                     label_meas = "odds_ratio", sec = NULL),
+  # a SUMMED SCORE's multiplicative effect (`tab_reg(trials =)`): an odds ratio, or a risk ratio, of
+  # the PER-ITEM probability -- odds_ratio's geometry, ladder and glyphs exactly -- sitting on the
+  # mean SCORE, the average number of "yes" out of `trials`, which is the quantity a reader of a
+  # battery of items wants. ⚠ "score" names the LEVEL, not the ratio. It is the one place an
+  # estimate's geometry and its level live on different axes, which is why it cannot borrow
+  # odds_ratio's row: `{base}` would fold a score into `pct` (x100, "%") and the column would claim
+  # var_kind "pct" to every tooltip and plot. An incidence-rate ratio is NOT here -- a rate ratio is
+  # a ratio of means, so it is `mean_ratio`, whose `unit` already says so.
+  score_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "pct",
+                    neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
+                    est_field = "or",    unit = "or", default_display = "mean",
+                    est_display = "or", base_display = "mean",
+                    break_key = "odds_ratio", gap_key = "adj_ratio",
+                    label_meas = "odds_ratio", sec = NULL),
   pct_ratio  = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "ratio", unit = "ratio", default_display = "pct",
@@ -1749,6 +1801,15 @@ rm(.k)
 
 #' @keywords internal
 fmt_scale_row <- function(x) EST_SCALES[[fmt_scale_key(x)]] %||% EST_SCALES[["mixed"]]
+
+# THE LEVEL a column sits on: the field its scale names for `{base}`, or NA where the scale names
+# none. One read, shared by the display grammar and by the plot's `what = "level"`.
+#' @keywords internal
+est_level_of <- function(x) {
+  b <- fmt_scale_row(x)$base_display
+  if (is.null(b) || is.na(b)) return(rep(NA_real_, vctrs::vec_size(x)))
+  as.double(vctrs::field(x, b))
+}
 
 #' @keywords internal
 fmt_var_kind <- function(x) {
@@ -2536,6 +2597,22 @@ fmt_gap_bounds <- function(x) {
   list(lo = pmin(lo, hi), hi = pmax(lo, hi))
 }
 
+# fmt_gap_render() -- a gap VALUE as text, in the units the cell itself prints. The three-way rule is
+# format()'s own (the `obs` / `gap` mask): multiplicative -> "x1.23"; a link-scale coefficient ->
+# plain; anything else -> the probability scale, x100 and signed. Written once here because the gap's
+# interval bounds are not fields and so cannot go through format(); a printed gap and a hovered one
+# must not disagree about their unit -- which is exactly how a -23 % gap came to read "-0.01".
+#' @keywords internal
+fmt_gap_render <- function(x, v) {
+  scl <- fmt_scale_row(x)
+  if (isTRUE(scl$mult)) return(paste0("\u00d7", formatC(v, format = "f", digits = 2)))
+  if (identical(scl$var_kind, "coef")) return(sprintf("%+.2f", v))
+  sc  <- if (isTRUE(measure_facts("adjustment", "ignore", fmt_gap_scale_key(x))$break_scale)) 100 else 1
+  unit <- switch(measure_facts("adjustment", "ignore", fmt_gap_scale_key(x))$unit_kind %||% "none",
+                 points = " pts", std = " SD", "")
+  paste0(sprintf("%+.1f", v * sc), unit)
+}
+
 # fmt_gap_p() -- the two-sided p of the gap (z on the test scale). Display only: the colour reads the
 # interval above, so the two agree by construction. NA wherever `gap_se` is.
 #' @keywords internal
@@ -2833,7 +2910,9 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   obs_mult <- ci_mult                          # OR / RR / IRR       -> like `or`  (bare, big.mark, 2 dg)
   obs_coef <- !ci_mult && is_coef              # beta / log(OR)      -> like `coef` (plain)
   obs_pct  <- !ci_mult && !is_coef             # AME / risk-diff     -> like `diff` (x100, signed, %)
-  if (obs_mult) digits[obs_m & digits == 0L] <- 2L
+  # the precision follows the SCALE, not the cell's own value, so an empty cell keeps its column's
+  # Excel number format (`!nas` rather than `ok`).
+  if (obs_mult) digits[!nas & display %in% c("obs", "gap") & digits == 0L] <- 2L
   obs_as_pct <- obs_m & obs_pct
   disp_ci   <- display == "ci" & (ci_diff | ci_ratio) & !nas
   # a ratio bracket needs 2 decimals: at 1 dp the bounds routinely round equal and the block below
@@ -2994,6 +3073,23 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     out[mult_cells] <- val
   }
 
+  # DESIGN: a REFERENCE cell of a multiplicative column prints a bare "1" -- no glyph, no decimals.
+  # "x" means "times the reference", which the reference itself is not, and the short bare number is
+  # what makes its row stand out. A cell that merely ROUNDS to the neutral keeps "x1.00": the reader
+  # must be able to tell "this is the baseline" from "this happens to equal it". `all_totals` is the
+  # mask the odds-ratio cell has always used -- the reference ROW and, under `ref2`, the reference
+  # COLUMN. It is memoized here and re-read by the special_formatting block below.
+  # WARNING: part of the ONE multiplicative rendering, so it sits OUTSIDE special_formatting too --
+  # else the composite expander's recursion prints "x1.00 (51.3%)" where the bare token prints "1".
+  # WARNING: `& at the neutral` is load-bearing -- a regression's Constant row IS a reference row and
+  # its odds ratio is the baseline odds, a real value.
+  ref_alltot <- if (!is.null(.ref)) .ref$all_totals else NULL
+  if (any(mult_cells)) {
+    if (is.null(ref_alltot)) ref_alltot <- get_reference(x, "all_totals")
+    at_one <- !is.na(num_out) & round(num_out, digits) == 1
+    out[mult_cells & ref_alltot & at_one] <- "1"
+  }
+
   if (any(pvalue)) {
     p    <- get_pvalue(x[pvalue])
 
@@ -3030,12 +3126,13 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # per-cell bold-prefix widths, written by TWO branches (the mean/sd tail and the composite `{}`
   # templates), so allocated here ahead of both. Attached to the result only if one actually wrote.
   prim_nchar <- if (isTRUE(bold_split)) rep(NA_integer_, length(out)) else NULL
+  prim_from  <- if (isTRUE(bold_split)) rep(NA_integer_, length(out)) else NULL
 
   if (special_formatting) {
     # compute each reference mask ONCE per column; the exporter prep passes precomputed masks via
-    # `.ref`, else memoized lazily below. Keep `.ref = NULL` on the nested reffmt format() calls.
+    # `.ref`, else memoized lazily below (`ref_alltot` above). Keep `.ref = NULL` on the nested
+    # reffmt format() calls.
     ref_cells  <- if (!is.null(.ref)) .ref$cells      else NULL
-    ref_alltot <- if (!is.null(.ref)) .ref$all_totals else NULL
 
     disp_diff   <- display == "diff" & !nas
     disp_moe    <- disp_ci & ci_print_moe # no if `ci_print = "ci"`
@@ -3062,7 +3159,10 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
       # bold only the MEAN of a "mean (sigma sd)" cell in a bold row (bold glyphs are wider, so a fully
       # bold cell stops aligning). Recorded before the tail is pasted.
-      if (isTRUE(bold_split)) prim_nchar[disp_mean_sd] <- nchar(out[disp_mean_sd])
+      if (isTRUE(bold_split)) {
+        prim_from [disp_mean_sd] <- 1L
+        prim_nchar[disp_mean_sd] <- nchar(out[disp_mean_sd])
+      }
 
       # the mean <-> "(sigma sd)" joiner is the medium `pad` (ASCII in console/markdown, figure space
       # in html), so the tail keeps the same digit-grid gap as the rest of the row.
@@ -3072,7 +3172,10 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       # within ~one digit-width (an exact fix needs markup, which belongs to the html engine).
       if (any(disp_mean_nosd)) {
         tail_w <- nchar(pad) + nchar(sigma_sign) + 2L + max(stringi::stri_length(sd))
-        if (isTRUE(bold_split)) prim_nchar[disp_mean_nosd] <- nchar(out[disp_mean_nosd])
+        if (isTRUE(bold_split)) {
+          prim_from [disp_mean_nosd] <- 1L
+          prim_nchar[disp_mean_nosd] <- nchar(out[disp_mean_nosd])
+        }
         out[disp_mean_nosd] <- paste0(out[disp_mean_nosd], strrep(pad, tail_w))
       }
     }
@@ -3115,22 +3218,10 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
         stringi::stri_replace_first_regex("mean:Inf%|NA", "")
     }
 
-    # DESIGN: a REFERENCE cell of a multiplicative column prints a bare "1" -- no glyph, no decimals.
-    # "x" means "times the reference", which the reference itself is not, and the short bare number
-    # is what makes its row stand out. A cell that merely ROUNDS to the neutral keeps "x1.00": the
-    # reader must be able to tell "this is the baseline" from "this happens to equal it".
-    # `all_totals` is the mask the odds-ratio cell has always used -- the reference ROW and, under
-    # `ref2`, the reference COLUMN.
-    # WARNING: `& at the neutral` is load-bearing -- a regression's Constant row IS a reference row
-    # and its odds ratio is the baseline odds, a real value. Only a cell whose value rounds to the
-    # neutral loses its glyph.
-    if (any(mult_cells)) {
-      if (is.null(ref_alltot)) ref_alltot <- get_reference(x, "all_totals")
-      at_one <- !is.na(num_out) & round(num_out, digits) == 1
-      out[mult_cells & ref_alltot & at_one] <- "1"
-    }
-
-    if (any(disp_or)) {
+    # LEVEL scales only: on a crosstab the odds ratio rides on a percentage column, and its reference
+    # row is worth annotating with that percentage. An EFFECT column (every regression one) states
+    # its level through `{base}` instead, which the reader asked for or did not.
+    if (any(disp_or) && identical(scl$kind, "level")) {
       # a reference row is annotated with the empirical reference % when present (an empirical-OR
       # crosstab); a pure model-OR table has no pct, so the annotation drops.
       if (is.null(ref_alltot)) ref_alltot <- get_reference(x, "all_totals")
@@ -3216,12 +3307,14 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       cells <- which(composite & raw_display == tmpl)
       xc    <- x[cells]
       toks  <- lapply(seq_along(seg$fields), function(i) {
-        # Stars ride the primary token, so the others have their p-value blanked -- EXCEPT `resid`,
-        # which is DERIVED from the p-value (blanking it would render NA and drop the composite).
-        xi <- if (i == 1L || identical(seg$fields[i], "resid")) xc else set_pvalue(xc, NA_real_)
+        # Stars ride the PRIMARY token -- the first one outside parentheses, not the first one written
+        # -- so the others have their p-value blanked, EXCEPT `resid`, which is DERIVED from the
+        # p-value (blanking it would render NA and drop the composite).
+        xi <- if (i == seg$primary || identical(seg$fields[i], "resid")) xc
+              else set_pvalue(xc, NA_real_)
         # fmt_set_display(): the RAW write. `est` / `base` are tokens here, never preset names.
         format(fmt_set_display(xi, seg$fields[i]), na = na, special_formatting = FALSE,
-               stars = isTRUE(stars) && i == 1L, pad = pad)   # the inner tokens pad too
+               stars = isTRUE(stars) && i == seg$primary, pad = pad)  # the inner tokens pad too
       })
       toks <- lapply(toks, function(s) {
         keep <- !is.na(s)
@@ -3244,12 +3337,15 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       ok_c <- Reduce(`&`, lapply(toks, function(s) !is.na(s)))
       asm  <- do.call(paste0, strs)
       out[cells[ok_c]] <- asm[ok_c]
-      # OPT-IN (bold_split) record of the bold-prefix width (through the FIRST {token}) so exporters
-      # bold only the primary field of a composite cell. Off by default -> attribute-free output.
+      # OPT-IN (bold_split) record of the primary token's character RANGE, so a backend can bold --
+      # and colour -- only the field the cell is really about. A RANGE, not a prefix width: the
+      # primary is the first token OUTSIDE brackets, which "({base}) {est}" puts last.
+      # Off by default -> attribute-free output.
       if (bold_split) {
-        first_tok <- which(seg$is_tok)[1]
-        prefix    <- do.call(paste0, strs[seq_len(first_tok)])
-        prim_nchar[cells[ok_c]] <- nchar(prefix)[ok_c]
+        pj    <- which(seg$is_tok)[seg$primary]
+        head  <- if (pj > 1L) do.call(paste0, strs[seq_len(pj - 1L)]) else rep("", length(cells))
+        prim_from [cells[ok_c]] <- nchar(head)[ok_c] + 1L
+        prim_nchar[cells[ok_c]] <- nchar(strs[[pj]])[ok_c]
       }
     }
   }
@@ -3260,7 +3356,10 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
   # expose the per-cell bold-prefix width (NA elsewhere) so exporters bold only the primary field.
   # Dropped by any downstream string op, so consumers must read it right after format().
-  if (!is.null(prim_nchar) && any(!is.na(prim_nchar))) attr(out, "primary_nchar") <- prim_nchar
+  if (!is.null(prim_nchar) && any(!is.na(prim_nchar))) {
+    attr(out, "primary_nchar") <- prim_nchar
+    attr(out, "primary_from")  <- prim_from
+  }
 
   out
 }
@@ -3269,6 +3368,42 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
 
 
+
+# === SECTION: the primary/secondary paint split ======================================================
+#
+# A composite cell reads as ONE number with an aside -- "1/1.63*** (31%)" -- and the colour grades the
+# number, not the aside. So by default only the PRIMARY token is shaded and the rest keeps the table's
+# ordinary text colour; `options(tabxplor.color_secondary =)` tints the asides instead, or extends the
+# primary's colour over the whole cell (`"same"`, the pre-2.0.0 rendering). The split is possible at
+# all because format(bold_split = TRUE) hands back the primary's character RANGE -- the same fact the
+# exporters already use to bold only the primary field.
+#' @keywords internal
+#' @noRd
+color_secondary_opt <- function() {
+  v <- tx_option("color_secondary")
+  if (is.null(v) || !nzchar(v)) "black" else as.character(v)[[1]]
+}
+
+# The painter a backend applies to one cell: `style` over the primary range, `sec` over the rest.
+# A cell with no recorded range (a simple token, or an NA) is painted whole -- there is no aside.
+#' @keywords internal
+#' @noRd
+paint_split <- function(txt, style, from, n, sec = identity) {
+  if (!length(txt)) return(txt)
+  whole <- is.na(from) | is.na(n) | from <= 1L & n >= nchar(txt)
+  out <- txt
+  out[whole] <- style(txt[whole])
+  k <- !whole & !is.na(txt)
+  if (any(k)) {
+    to  <- from[k] + n[k] - 1L
+    pre <- substr(txt[k], 1L, from[k] - 1L)
+    mid <- substr(txt[k], from[k], to)
+    post <- substr(txt[k], to + 1L, nchar(txt[k]))
+    out[k] <- paste0(ifelse(nzchar(pre), sec(pre), pre), style(mid),
+                     ifelse(nzchar(post), sec(post), post))
+  }
+  out
+}
 
 #' Pillar_shaft method to print class fmt in a \code{\link[tibble:tibble]{tibble}} column
 #'
@@ -3286,7 +3421,20 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
   # `.ref` (precomputed reference masks) threads through to format() and the greying `totals` mask;
   # NULL on the console path.
-  out     <- format(x, special_formatting = TRUE, stars = TRUE, .ref = .ref)
+  # `bold_split`: the primary token's character range, so the colour lands on the number and not on
+  # the aside beside it (tabxplor.color_secondary).
+  out     <- format(x, special_formatting = TRUE, stars = TRUE, .ref = .ref, bold_split = TRUE)
+  sec_opt <- color_secondary_opt()
+  prim_f  <- if (identical(sec_opt, "same")) NULL else attr(out, "primary_from")
+  prim_n  <- attr(out, "primary_nchar")
+  # on a console the table's normal text colour IS the terminal's default foreground, so "black"
+  # means "leave it unstyled" -- which also keeps a light-on-dark terminal readable.
+  sec_sty <- if (is.null(prim_f) || identical(sec_opt, "black")) identity
+             else tryCatch(cli::make_ansi_style(sec_opt), error = function(e) identity)
+  paint   <- function(txt, style, cells)
+    if (is.null(prim_f)) style(txt)
+    else paint_split(txt, style, prim_f[cells], prim_n[cells], sec_sty)
+  out     <- as.character(out)
   display <- get_display(x)
   nas     <- is.na(display)
   color   <- get_color(x)
@@ -3320,7 +3468,7 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
 
     for (s in sort(unique(channels$text_slot[channels$text_slot > 0L & ok]))) {
       cells <- ok & channels$text_slot == s
-      out[cells] <- text_styles[[s]](out[cells])
+      out[cells] <- paint(out[cells], text_styles[[s]], cells)
     }
     for (s in sort(unique(channels$bg_slot[channels$bg_slot > 0L & ok]))) {
       cells <- ok & channels$bg_slot == s
@@ -4173,9 +4321,14 @@ legend_gap_baseline <- function(plan, no_obs)
   !is.null(plan) && isTRUE(no_obs) && measure_own_ref(plan$measure)
 
 #' @keywords internal
-legend_gap_baseline_word <- function(plan) {
-  if (identical(MEASURES[[plan$measure]]$ref_kind, "group")) gettext("reference group")
-  else                                                       gettext("no observed effect")
+# WHAT this column IS, said in the ladder's place. A crude companion is not "no observed effect" --
+# it IS the observed effect, the baseline the shades beside it are measured from, which is exactly
+# what a reader of a crude/adjusted pair needs told once.
+legend_gap_baseline_word <- function(plan, spec = NULL) {
+  if (identical(MEASURES[[plan$measure]]$ref_kind, "group"))  return(gettext("reference group"))
+  if (identical(spec$role, "emp"))
+    return(gettext("the observed effect (the reference for the adjustment)"))
+  gettext("no observed effect")
 }
 
 #' @keywords internal
@@ -4351,8 +4504,11 @@ legend_reg_eff_word <- function(col, meta) {
   # the word IS the estimand row's own `word` -- one lookup (a marginal RATIO is a RISK ratio whatever
   # family was fitted; the modified-Poisson `fit` is one too).
   est <- reg_meta_estimand(meta, family = fam)
-  if (identical(get_scale(col), "odds_ratio")) {
-    if (!identical(get_role(col), "emp") && !is.null(est$word) && est$word %in% c("RR", "IRR", "OR"))
+  # every MULTIPLICATIVE scale, read off the declared flag rather than a scale name: an odds ratio, a
+  # summed-score odds ratio, a risk ratio and a rate ratio are one branch, and a new one needs no arm.
+  if (isTRUE(fmt_scale_row(col)$mult)) {
+    if (!identical(get_role(col), "emp") && !is.null(est$word) &&
+        est$word %in% c("RR", "IRR", "OR", "RoM"))
       return(est$word)
     # A CRUDE companion is on the crude scale of the FIT, not always the estimand's: a Poisson model
     # asked for a marginal risk ratio still has a crude RATE ratio beside it. So the fit's own
@@ -4581,7 +4737,7 @@ legend_tokens_terse <- function(spec, lang, show_names) {
       return(list(.lg_tok(paste0(prefix,
                                  legend_measure_word(plan$measure, spec$is_std, spec$eff_word,
                                                      plan$policy),
-                                 colon, legend_gap_baseline_word(plan)))))
+                                 colon, legend_gap_baseline_word(plan, spec)))))
     mw <- legend_measure_word(plan$measure, spec$is_std, spec$eff_word, plan$policy)
     bt <- legend_break_tokens(plan, spec$is_pct, if (is_bg) "bg" else "text", lang,
                              spec$theme %||% "light")
@@ -4622,7 +4778,7 @@ legend_tokens_prose <- function(spec, lang, show_names) {
     # caller, so this states only WHAT the column is.
     if (legend_gap_baseline(plan, spec$no_obs)) {
       if (dir < 0) return(NULL)
-      return(list(.lg_tok(paste0(legend_ucfirst(legend_gap_baseline_word(plan)), "."))))
+      return(list(.lg_tok(paste0(legend_ucfirst(legend_gap_baseline_word(plan, spec)), "."))))
     }
     bt   <- legend_break_tokens(plan, spec$is_pct, if (is_bg) "bg" else "text", lang,
                                 spec$theme %||% "light")
@@ -5267,7 +5423,7 @@ tab_weight_line <- function(x, lang = NULL) {
 # over$slots / under$slots, R/tab_classes.R); fmt_color_plan() reads them, fmt_color_slots() folds.
 
 #' @keywords internal
-get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
+get_reference_base <- function(x, mode = c("cells", "lines", "all_totals")) {
   # `pct_type` says which AXIS this column's reference lies on (a row percentage compares against a
   # reference ROW; a column percentage against a reference COLUMN), and `var_kind` says what the column
   # summarises. Together they are the two questions this function asks.
@@ -5359,6 +5515,22 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
                           else                      none
     )
   }
+}
+
+# DESIGN: a GAP measure ("adjustment" / "between_groups") compares each cell to ANOTHER COLUMN, and
+# that column is marked `refcol`. It is uncoloured by construction (its own `obs` is empty), so the
+# reading anchor is what tells a reader which column the shades are measured from -- the same job
+# `refcol` already does under an odds ratio, one measure over. "cells" is left alone: this is a
+# whole-column baseline, not the cell a difference is taken against, so no "ref:" label appears.
+get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
+  m   <- match.arg(mode)
+  out <- get_reference_base(x, m)
+  if (m == "cells" || !isTRUE(is_refcol(x))) return(out)
+  gap <- any(vapply(c(get_color(x), get_color_bg(x)), function(k) {
+    mk <- measure_key(k)
+    !is.na(mk) && nzchar(mk) && identical(MEASURES[[mk]]$ref_kind, "observed")
+  }, logical(1)))
+  if (gap) out | TRUE else out
 }
 
 

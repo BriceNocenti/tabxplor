@@ -133,6 +133,17 @@ TAB_OPTIONS <- list(
             "strongly as \"2.7 times more\", and the same in a bracket. `\"raw\"` prints the plain",
             "number (`0.37`), the convention of most journals.")),
 
+  color_secondary = tx_opt(
+    "black", "display",
+    doc = c("in a cell that prints SEVERAL fields, which colour the ones beside the primary take.",
+            "A composite reads as one number with an aside --- `1/1.63*** (31%)` --- and the colour",
+            "grades the number, not the aside, so by default only the primary token is shaded and",
+            "the rest is plain text (`\"black\"`, i.e. the table's normal text colour, whatever the",
+            "theme). Give any colour --- a name like `\"grey60\"` or a hex code like `\"#767676\"` ---",
+            "to tint the asides instead, which keeps the eye on the primary while still separating",
+            "them from the labels. `\"same\"` extends the primary's own colour over the whole cell.",
+            "Console and html; Markdown and Excel colour a cell as a whole.")),
+
   var_names = tx_opt(
     "both", "display", arg = "var_names",
     doc = paste("which variable names the exporters annotate: `\"both\"`, `\"rows\"`, `\"cols\"`,",

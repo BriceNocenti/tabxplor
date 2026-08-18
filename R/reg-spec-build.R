@@ -152,9 +152,12 @@ reg_spec_build_one <- function(i, ctx) {
     # `data_canon`. Fit the digest once on THAT (cached, reference-independent) and reparametrize.
     # sp_fam in the digest key so a binomial vs gaussian outcome never share a digest (Phase 15e).
     digest <- jmvreg_cached(
-      fit_cache, "digest", jmvreg_fit_key(sp, data_canon, sp_fam, design_spec),
+      fit_cache, "digest",
+      # `multiplier` is in the KEY: the digest's adjusted-prediction sweep is not a linear rescaling
+      # of the coefficients it also carries (see reg_build_digest).
+      jmvreg_fit_key(sp, data_canon, sp_fam, design_spec, extra = list(multiplier)),
       function() reg_build_digest(data_canon, sp, sp_fam, design_spec, sp_dox,
-                                  inv_sp, conf_level, weighted))
+                                  inv_sp, conf_level, weighted, multiplier = multiplier))
     f <- reg_reref_fit_res(digest, skeleton, conf_level, multiplier = multiplier)
   } else {
     thunk <- function() reg_fit(data, sp$outcome, sp$predictors, sp_fam, design_spec, sp_dox,
@@ -257,9 +260,25 @@ reg_spec_build_one <- function(i, ctx) {
   # model of a comparison contributes one. The NUMERIC fragment is the BLOCK's -- it keys the crude
   # effect column, which the models of a one-outcome table share -- and is built with the block.
   tips <- list(mnl = NULL, num = own$tips_num)
-  if (isTRUE(empirical)) {
+  if (emp_on(empirical)) {
     tips$mnl <- reg_spec_tips_mnl(sp, e, cols, ctx)
     degraded <- degraded || isTRUE(attr(tips$mnl, "degrade"))
+  }
+
+  # --- 7b. THE PER-CATEGORY CRUDE COLUMNS --------------------------------------------------------
+  # A 3+ level outcome has one crude effect per outcome CATEGORY, so `empirical = "column"` draws one
+  # crude column per model column. It is spliced HERE, after `obs` and the tooltips: a crude column
+  # is not a model column, so it must not be handed its own `obs` nor key the multinomial fragment.
+  # Its name and col_var come from the model column it mirrors, which is the only place the two are
+  # both in hand -- so the pair sits under one span, in order.
+  if (length(e$cat_cols)) {
+    cols <- purrr::flatten(purrr::map(cols, function(bi) {
+      cc <- cat_get(e$cat_cols, bi$emp_key)
+      if (is.null(cc)) return(list(bi))
+      list(list(label = paste0("Obs_", bi$label), emp_key = bi$emp_key,
+                col = set_col_var(cc, get_col_var(bi$col))),
+           bi)
+    }))
   }
 
   new_reg_spec_product(
@@ -342,12 +361,13 @@ reg_spec_tips_mnl <- function(sp, e, cols, ctx) {
 reg_spec_tips_num <- function(sp, positive_level, own, ctx) {
   list2env(reg_ctx_locals(ctx), environment())
   if (length(numeric_preds) == 0L) return(NULL)
-  if (is.null(own) || is.null(own$shape) || !shape_visible(own$shape)) return(NULL)
+  if (is.null(own) || is.null(own$shape)) return(NULL)
   nm <- own$shape$nm                                   # the crude effect column's name
   if (is.na(nm)) return(NULL)
   # ⚠ this was `nm %in% names(tab)` -- "did the crude effect column reach the table?". The table does
   # not exist yet, and the question is local anyway: reg_stage_assemble() splices EVERY entry of
-  # `own$cols`, under this same name plus the multi-outcome bracket.
+  # `own$cols`, under this same name plus the multi-outcome bracket. When the crude value rides in
+  # the model cell instead, there is no such column and the fragment has nowhere to hang.
   if (!nm %in% names(own$cols)) return(NULL)
   if (n_outcomes > 1L) nm <- paste0(nm, " [", sp$outcome, "]")
   vars <- intersect(intersect(own$fit_preds, numeric_preds), as.character(skeleton$var))

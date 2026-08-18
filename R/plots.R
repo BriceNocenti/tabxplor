@@ -120,7 +120,7 @@ est_plot_columns <- function(x, columns = NULL, totals = FALSE, observed = "auto
   if (!any(role == "model")) return(nm)                # a crosstab: every value column is plotted
   # a regression table: the models are the subject. The crude block joins ONE column at a time and
   # always by a stored fact -- never "every Obs_* column", which would draw the same crude effect
-  # twice (Obs_% and Obs_diff are field-identical) and pair an odds ratio with a percentage.
+  # twice and pair an odds ratio with a percentage.
   out <- nm[role == "model"]
   # `observed = "ci"` is the only mode that needs the crude column ITSELF (it draws its own interval);
   # "band" / "point" read the `obs` field, which already rides on the model column.
@@ -129,19 +129,12 @@ est_plot_columns <- function(x, columns = NULL, totals = FALSE, observed = "auto
                                                function(n) est_crude_of(x, n), character(1)))))
   }
   if (identical(what, "level")) {
-    # the observed-vs-adjusted percentages (SS11): the crude column that SHOWS a level. Obs_% and
-    # Obs_diff are field-identical -- both carry the proportion AND the difference -- so the only
-    # thing that tells them apart is `display`, which is a stored FIELD, not a rendered string (the
-    # colour engine reads display_primary() for its own gates). Taking both would draw one series
-    # twice and split the panel the pairing exists to make.
+    # the observed-vs-adjusted levels: the crude column beside each model one. There is exactly one
+    # per model column now, and it carries its level in the field its scale names -- so the test is
+    # simply "does it hold a level", never a guess from what the cell happens to display.
     lv <- nm[role == "emp"]
-    lv <- lv[vapply(lv, function(n) {
-      col <- x[[n]]
-      d   <- display_primary(get_display(col))
-      f   <- if (identical(fmt_var_kind(col), "mean")) get_mean(col) else get_pct(col)
-      any(d %in% c("pct", "mean")) && any(is.finite(f))
-    }, logical(1))]
-    out <- unique(c(out, lv))
+    out <- unique(c(out, lv[vapply(lv, function(n) any(is.finite(est_level_of(x[[n]]))),
+                                   logical(1))]))
   }
   nm[nm %in% out]                                      # table order, not selection order
 }
@@ -347,14 +340,14 @@ tab_estimates <- function(x, columns = NULL, what = c("auto", "effect", "level")
     out[[nm]] <- d
   }
   res <- vctrs::vec_rbind(!!!out)
-  # `what = "level"` needs a stored level. A regression COEFFICIENT column has none -- only the
-  # marginal path writes the adjusted probability into `pct` -- so say which argument produces it
-  # rather than drawing an empty panel (SS11's honest scope).
+  # `what = "level"` needs a stored level. Every model column now carries its adjusted prediction, so
+  # the only tables left without one are those whose scale names no level at all (a link-scale
+  # coefficient, a cumulative odds ratio).
   if (identical(what, "level") &&
       !any(is.finite(res$estimate[res$role %in% c("model", "")])))
     cli::cli_abort(c("{.code what = \"level\"} needs a percentage or a mean, and this table has none.",
-                     "i" = paste("A regression stores an adjusted percentage only on the marginal",
-                                 "path: build it with {.code effect = \"ame\"}.")))
+                     "i" = paste("These estimates sit on no single level --- a log-scale coefficient,",
+                                 "or a cumulative odds ratio, has none to plot.")))
   res$var    <- factor(res$var,   levels = unique(res$var))
   res$level  <- factor(res$level, levels = unique(res$level))
   res$facet  <- factor(res$facet, levels = unique(res$facet))

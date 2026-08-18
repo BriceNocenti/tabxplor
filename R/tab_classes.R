@@ -1659,12 +1659,29 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     )
   } else blank
 
-  # difference / ratio scales fold their CI bracket into the diff line; the odds-ratio one does not (its
-  # bracket rides the `or` display), and a level scale keeps its own "ci:" line. str_trim drops the
-  # trailing space left when a reference cell has "ref" diff and empty ci.
-  if (scl$geometry %in% c("difference", "ratio") && !identical(scl$est_field, "or"))
-    out_diff <- stringi::stri_trim(paste0(out_diff, " ",
-                                          stringi::stri_replace_first_regex(out_ci, "%$", "")))
+  # THE INTERVAL BELONGS TO THE ESTIMATE. Where the estimate lives in `diff` it folds into the diff
+  # line (a crosstab difference of means, a risk difference, a coefficient); where it lives in `or` or
+  # `ratio` -- every regression ratio column -- that line does not exist, so the bracket and the exact
+  # p-value get one of their own. Before this, an odds-ratio column had NEITHER: the single largest
+  # hole in the hover, on the default column of every logistic table.
+  # A level scale keeps its own "ci:" line. str_trim drops the trailing space left when a reference
+  # cell has "ref" diff and empty ci.
+  fold_ci <- identical(scl$kind, "effect") && identical(scl$est_field, "diff")
+  ci_txt  <- stringi::stri_replace_first_regex(out_ci, "%$", "")
+  if (fold_ci) out_diff <- stringi::stri_trim(paste0(out_diff, " ", ci_txt))
+  cond_est <- identical(scl$kind, "effect") && !fold_ci & has_ci
+  out_est  <- if (any(cond_est)) {
+    # the `est_ci` TOKEN, which is exactly "the estimate with a visible interval" on whatever field
+    # the column centres on -- inverted bounds included, so a hovered odds ratio reads like a printed
+    # one. The exact p-value joins it: the cell shows only stars.
+    pv <- test_fmt_pvalue(get_pvalue(x))
+    # `special_formatting = TRUE`: the visible bracket IS a special rendering (inverted bounds, the
+    # reference row's bare "1"), so the plain pass would print the point estimate alone.
+    est <- stringi::stri_trim(format(set_display(x, "est_ci"), special_formatting = TRUE))
+    dplyr::if_else(cond_est,
+                   paste0(est, dplyr::if_else(is.na(pv), "", paste0(", p = ", pv))),
+                   "")
+  } else blank
   if (!ci_cell) out_ci <- ""
 
   cond_pct <- get_pct_type(x) != "none" &
@@ -1739,9 +1756,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     sc   <- fmt_adjustment_score(x)
     bd   <- fmt_gap_bounds(x)
     pv   <- test_fmt_pvalue(fmt_gap_p(x))
-    mult <- isTRUE(fmt_scale_row(x)$mult)
-    num  <- function(v) if (mult) paste0("\u00d7", formatC(v, format = "f", digits = 2))
-            else sprintf("%+.2f", v)
+    num  <- function(v) fmt_gap_render(x, v)          # the cell's own units, one rule (fmt_class.R)
     dplyr::if_else(cond_gap & is.finite(sc) & is.finite(bd$lo) & !is.na(pv),
                    paste0(gettext("gap"), ": ", num(sc), " [", num(bd$lo), "; ", num(bd$hi),
                           "], p = ", pv),
@@ -1753,7 +1768,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     dplyr::if_else(cond_n, paste0("n: ", tip_num(set_display(x, "n")) ), "")
   } else blank
 
-  frags <- list(out_pct, out_mean, out_sd, out_diff, out_std, out_rr, out_or,
+  frags <- list(out_pct, out_mean, out_sd, out_est, out_diff, out_std, out_rr, out_or,
                 out_ci, out_ctr, out_resid, out_obs, out_gap, out_n)
   out <- rep("", n)
   for (f in frags) {

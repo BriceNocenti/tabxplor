@@ -42,8 +42,10 @@ test_that("D1 the crude Obs_* columns under a design are weighted, not unweighte
   t_un  <- tab_reg(b, outcome = "y", predictors = c("x", "z"), family = "binomial",
                    empirical = TRUE)
 
-  for (col in c("^Obs_%", "^Obs_OR")) {
-    get <- if (col == "^Obs_%") get_pct else get_or
+  # the crude column carries BOTH the observed level and the crude effect, in one cell
+  for (col in c("pct", "or")) {
+    get <- if (col == "pct") get_pct else get_or
+    col <- "^Obs_OR"
     expect_equal(mid_cell(t_des, col, get), mid_cell(t_wt, col, get), tolerance = 1e-10)
     # not vacuous: the weighted and unweighted values really do differ here
     expect_false(isTRUE(all.equal(mid_cell(t_des, col, get), mid_cell(t_un, col, get),
@@ -52,7 +54,7 @@ test_that("D1 the crude Obs_* columns under a design are weighted, not unweighte
   # and the crude % really is the design-weighted proportion
   lev <- reg_call(t_des)$positive_level
   oracle <- with(b[b$x == "mid", ], sum(w * (y == lev)) / sum(w))
-  expect_equal(mid_cell(t_des, "^Obs_%", get_pct), oracle, tolerance = 1e-8)
+  expect_equal(mid_cell(t_des, "^Obs_OR", get_pct), oracle, tolerance = 1e-8)
 })
 
 test_that("D2 effect = 'ame' under a design is the POPULATION-average marginal effect", {

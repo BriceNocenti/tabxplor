@@ -215,7 +215,7 @@ test_that("19m-i G4: every family's rendered effect word is unchanged", {
     t <- suppressWarnings(suppressMessages(do.call(
       tab_reg, c(list(data = d, predictors = "race"), cs$a, list(empirical = TRUE)))))
     m    <- reg_call(t)
-    cols <- names(t)[purrr::map_lgl(t, ~ is_fmt(.) && get_scale(.) == "odds_ratio")]
+    cols <- names(t)[purrr::map_lgl(t, ~ is_fmt(.) && isTRUE(tabxplor:::fmt_scale_row(.)$mult))]
     expect_gt(length(cols), 0L)
     for (cn in cols)
       expect_identical(legend_reg_eff_word(t[[cn]], m), cs$w, info = paste(cs$w, cn))

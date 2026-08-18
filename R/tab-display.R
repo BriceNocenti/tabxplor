@@ -8,6 +8,10 @@
 #     and post-hoc `set_display(col, "base_ci")`. It refuses to print one geometry's estimate beside
 #     another's bracket, but a LEVEL names no comparison and so constrains the bracket not at all --
 #     "48% [-3;+4]" is tabxplor's flagship cell, not a mismatch.
+#   - A composite has a PRIMARY token -- the first one outside brackets, so an aside may be written
+#     FIRST ("({base}) {est}") without ceasing to be an aside. It is what carries the stars, what
+#     get_num() and Excel return, and the only part the colour paints by default. The rule lives in
+#     parse_display_template() (R/fmt_class.R); the presets below are spelt to obey it.
 #   - DISPLAY_PRESETS + display_resolve() are the ONE named-layout table, read by tab() and by
 #     tab_reg() alike, so a display learnt on a crosstab means the same on a regression.
 #   - A token whose field is empty renders VOID and the note names the argument that would fill it;
@@ -49,9 +53,11 @@ display_write_col <- function(col, tmpl) {
   bare <- if (length(fields) == 1L && identical(tmpl, paste0("{", fields, "}")) &&
               fields %in% DISPLAY_BARE_TOKENS) fields else tmpl
   d    <- get_display(col)
-  # Only genuine value cells; p-value / blank / total-marker cells keep their own token. Reads the
-  # RAW display, not display_primary(): a cell already carrying a composite is not re-templatable.
-  elig <- d %in% DISPLAY_VALUE_CELLS
+  # Only genuine value cells; p-value / blank / total-marker cells keep their own token. Read through
+  # display_primary(), so a cell ALREADY carrying a composite is re-templatable: since regression
+  # columns default to a two-token layout, "not re-templatable" would silently no-op the post-hoc
+  # `set_display()` recipe on exactly the tables that need it most.
+  elig <- display_primary(d) %in% DISPLAY_VALUE_CELLS
   if (!any(elig)) return(list(col = col, missing = character()))
   display_refuse_mismatch(col, fields, tmpl)
   # DESIGN: the void rule is PER-CELL -- the template is written on the cells carrying EVERY one of
@@ -282,6 +288,11 @@ DISPLAY_MIN_DIGITS     <- {
 # crude and a modelled column -- there is no per-family preset left.
 #
 # The WORD ORDER is the order in the cell: `est_base` prints "1/1.63 (31.5%)", `base_est` the reverse.
+# They are MIRRORS of one reading -- the estimate is the subject, the level its aside -- because the
+# ESTIMATE stays the primary token in both (the parenthesis says which is the aside; see
+# parse_display_template() in R/fmt_class.R). That is what lets a crude column print "(31%) 1/1.69"
+# beside a model column's "1/1.63 (31.5%)", with the two estimates adjacent and the stars on both.
+# The other reading -- the LEVEL as the subject, graded by the effect -- is `base` / `base_ci`.
 #
 # `est_ci` resolves to a TOKEN rather than a template: a visible interval is a rendering (inverted
 # bounds, the reference row's empty bracket), not two fields pasted together.
@@ -291,7 +302,7 @@ DISPLAY_PRESETS <- c(
   est      = "{est}",
   est_ci   = "est_ci",
   est_base = "{est} ({base})",
-  base_est = "{base} ({est})",
+  base_est = "({base}) {est}",
   base     = "{base}",
   base_ci  = "{base} {ci}"
 )

@@ -171,7 +171,7 @@ test_that("columns are chosen by ROLE, never by name", {
   expect_setequal(unique(est(r, observed = "ci")$column), c("Obs_OR", "Model_OR"))
   expect_setequal(unique(est(r, observed = "ci")$series), c("observed", "modelled"))
   # `columns =` is honoured verbatim, and a typo is named
-  expect_identical(unique(est(r, columns = "Obs_%")$column), "Obs_%")
+  expect_identical(unique(est(r, columns = "Obs_OR")$column), "Obs_OR")
   expect_error(est(r, columns = "Model_HR"), "no such column")
 })
 

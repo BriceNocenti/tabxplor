@@ -88,7 +88,7 @@ test_that("binomial: model + empirical columns share ONE outcome col_var; model 
   # test is about the OUTCOME span shared by the model and its crude companions, and `n` is a row
   # descriptor that deliberately carries its own col_var so a border separates it.
   fmt <- reg_fmt_cols(t)
-  expect_setequal(fmt, c("Obs_%", "Obs_OR", "Model_OR"))
+  expect_setequal(fmt, c("Obs_OR", "Model_OR"))
   cvs <- purrr::map_chr(t[fmt], ~ tabxplor:::get_col_var(.x)[1])
   expect_equal(length(unique(cvs)), 1L)                       # one span, no border between them
   expect_identical(unname(cvs[["Model_OR"]]), "married: Married")

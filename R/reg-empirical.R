@@ -1,40 +1,42 @@
-# R/reg-empirical.R -- THE OBSERVED (crude) COMPANION of a model effect, and the standard error of
-# the gap between the two.
+# PURPOSE: THE OBSERVED (crude) COMPANION of a model effect, and the standard error of the gap
+#   between the two.
+# ROLE: `tab_reg(empirical =)`'s producer. Beside every modelled effect it puts the SAME estimand
+#   computed with one predictor instead of all of them, so "what did adjustment change" is read
+#   across the table. The gap is what `color = "adjustment"` grades and what `{obs}` / `{gap}` print.
+# KEY CONSTRAINTS:
+#   - ONE COLUMN SHAPE, BUILT TWICE. The crude and the modelled effect are the same estimand, so the
+#     crude column is the model column's mirror: same stored scale, same colour measure (both
+#     channels), same display, same digits, same reference. Only the estimation differs. It carries
+#     exactly one interval -- its effect's -- and the level it sits on rides in the same cell, in the
+#     field its scale names (`{base}`). It must never carry `obs` or `gap_se`: it IS the observed
+#     value, and a column cannot be its own baseline.
+#   - SAME ESTIMAND, SAME PEOPLE, or nothing. reg_same_estimand() / reg_same_frame() withhold the
+#     crude value rather than let a "gap" mean listwise deletion instead of confounding.
+#   - TWO SOURCES, ONE SHAPE. A CLOSED FORM off reg_empirical()'s per-(var, level, category) grid
+#     wherever the univariable model is saturated (every factor predictor except under ordinal) --
+#     there the crude odds ratio IS the Woolf 2x2 ratio. Otherwise a univariable reg_fit() through
+#     the very fitter the table came from (ordinal, every numeric predictor, every marginal shape),
+#     so "same estimand, link, CI rule, multiplier" holds by construction.
+#   - The crude interval is the univariable MODEL's, under the table's own inference basis: pooled /
+#     model-based unweighted, the sandwich weighted. See REG_EMPIRICAL's `ci_method_design`.
 #
-# WHY THIS EXISTS. `tab_reg(empirical = TRUE)` prints, beside every modelled effect, the same
-# quantity computed WITHOUT adjustment -- a base descriptive column (`Obs_%` / `Obs_mean` /
-# `Obs_rate`) and a crude effect column on the model column's own scale and colour ladder. The gap
-# between the two IS the answer to "what did adjustment do", which is what `color = "adjustment"`
-# scores and what the `{obs}` display token prints. So the two must be the SAME estimand on the SAME
-# rows, or the difference means listwise deletion rather than confounding.
-#
-# THE ONE FACT TABLE. `REG_EMPIRICAL` -- per family, the SHAPE of each crude column (name, stored
-# scale, display, digits, reference, pct base, CI method, colour measure, link) plus which of them is
-# the effect twin of the model's coefficient. A family is added as one row, never as a switch arm,
-# and its rows are foreign-key checked against COLOR_SCALES / CI_METHODS / DISPLAY_TOKENS in
-# R/zzz-fact-keys.R.
-#
-# TWO SOURCES, ONE SHAPE. `from = "grid"` (the default) is a CLOSED FORM off reg_empirical()'s
-# per-(var, level, category) grid -- the univariable model being saturated for a factor predictor,
-# the crude OR is exactly the Woolf 2x2 ratio. `from = "fit"` is a univariable reg_fit() through the
-# very fitter the table came from (ordinal, every numeric predictor, and any marginal shape), taken
-# where proportional odds or a continuous predictor leaves no closed form; ruling Q6 -- same
-# estimand, link, CI rule and multiplier -- then holds by construction rather than by care.
+# THE FACT TABLE: `REG_EMPIRICAL` -- per family, the shape of each crude effect column. A family is a
+# row, never a switch arm; its keys are foreign-key checked in R/zzz-fact-keys.R.
 #
 # WHAT IS HERE
 #   reg_crude_y / reg_crude_yw    the outcome on the scale the crude estimator averages
 #   reg_level_counts              the N behind each predictor level (`add_n`'s column)
 #   reg_empirical                 THE grid: emp_prop / emp_mean / emp_diff / emp_ratio / emp_n (+CIs)
-#   reg_empirical_fit             the univariable fits the `from = "fit"` shapes need
+#   reg_empirical_fit             the univariable fits the non-saturated shapes need
 #   reg_fit_overlay               splicing those fitted rows into a grid-built column
-#   REG_EMPIRICAL + reg_crude_shape / shape_visible / ...   the shape vocabulary
-#   reg_empirical_columns         THE builder: one fmt column per declared shape
+#   REG_EMPIRICAL + reg_crude_shape / shape_per_category   the shape vocabulary
+#   reg_empirical_columns         THE builder: one fmt column per crude effect
 #   reg_same_estimand / _frame    the two predicates that withhold `obs` rather than lie
 #   reg_gap_se_columns            the gap SE (R/reg-influence.R's math, orchestrated per column)
 #
-# Phase 19l carved four subsystems out of tab.R for exactly this reason; Phase 20e does the same for
-# tab_reg.R's largest one. The STAGE that drives these producers is reg_stage_empirical() in
-# R/tab_reg.R -- the tab-leaf.R / tab.R relationship.
+# The STAGE driving these producers is reg_stage_crude() in R/tab_reg.R (and reg_spec_build()'s
+# per-spec step for a several-outcome table) -- the tab-leaf.R / tab.R relationship.
+# See: CLAUDE.md section "tabxplor architecture" (the regression subsystem).
 #
 # WARNING: this file sorts BEFORE R/tab_reg.R, so its top-level code (the REG_EMPIRICAL literal) may
 # not read anything defined there. Every cross-file call below is made at RUN time, which is why the
@@ -186,7 +188,7 @@ reg_empirical_empty <- function()
 #     difference from the predictor's reference LEVEL (+ Newcombe), the two 2x2 legs `emp_wpos` /
 #     `emp_wneg` (the category vs the reference CATEGORY), and the two ratios built from them --
 #     `emp_ratio` = the Woolf ODDS ratio, `emp_ratio_prop` = the risk ratio.
-#   NUMERIC, per (var, level): the weighted mean and variance (tab()'s own formula, so an Obs_mean sd
+#   NUMERIC, per (var, level): the weighted mean and variance (tab()'s own formula, so a crude mean's sd
 #     matches tab() exactly).
 #
 # WARNING: `emp_ratio` is built from emp_wpos/emp_wneg, i.e. the odds of the category against the
@@ -256,7 +258,7 @@ reg_empirical <- function(data, fac_preds, outcome, crude_key, positive_level, w
   # `n_draw`, and on an effective base the Woolf and Katz brackets ARE Var_design(logit p) and
   # Var_design(log p) by construction.
   # Phase 18z16-iiiii: a LOCAL latch, and the reason travels OUT on the returned grid
-  # (attr "degrade"), which reg_stage_empirical() harvests into the basis reg_stage_finalize() stamps -- the process-global
+  # (attr "degrade"), which reg_stage_crude() harvests into the basis reg_stage_finalize() stamps -- the process-global
   # degrade environment is gone, so one degraded table can no longer mislabel every later one.
   said <- FALSE
   degrade <- function(reason = NULL) {
@@ -384,11 +386,10 @@ reg_empirical <- function(data, fac_preds, outcome, crude_key, positive_level, w
     } else meanv / rmean
     pw <- if (has_cat) ci_wilson(prop, n_draw, conf_level = conf_level, df = degf) else
       list(inf = rep(NA_real_, nl * nc), sup = rep(NA_real_, nl * nc))
-    # Phase 18z16-iv (W-E): the family's DECLARED difference method, not a second hard-coded one.
-    # This interval's only consumer is the multinomial html tooltip, which was Newcombe while the
-    # Obs_% column of the same table was Wald -- one quantity, two methods, inside one table. The
-    # cross-table difference from tab(ci = "diff")'s Newcombe is deliberate (Phase 16d: the crude
-    # companion matches the model AME's Wald so the merged legend can name ONE method).
+    # the family's DECLARED difference method, not a second hard-coded one: this interval's only
+    # consumer is the multinomial html tooltip, and one quantity may not carry two methods inside one
+    # table. The difference from tab(ci = "diff")'s Newcombe is deliberate -- the crude companion
+    # matches the model AME's Wald, so the merged legend can name ONE method.
     dd <- if (has_cat) ci_prop_diff(prop, n_draw, rprop, r_n_draw, conf_level = conf_level,
                                     method = emp_method_diff, want_p = FALSE, df = degf) else pw
     tibble::tibble(
@@ -405,7 +406,7 @@ reg_empirical <- function(data, fac_preds, outcome, crude_key, positive_level, w
       emp_ref_n    = as.integer(rep(ref$n, nl * nc)), emp_ref_n_ci = r_n_ci
     )
   })
-  # z16-iiiii: the degrade travels OUT with the grid it describes. reg_stage_empirical() harvests it into the
+  # z16-iiiii: the degrade travels OUT with the grid it describes. reg_stage_crude() harvests it into the
   # basis it stamps on the columns ("design_partial"), so the fact reaches the footer without any
   # process-global state -- and a grid computed for one table cannot label another.
   structure(out, degrade = said)
@@ -515,19 +516,13 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
 }
 
 
-# reg_fit_overlay() -- Phase 18z9 (as reg_num_overlay) / z10: write fit-derived crude rows into a
+# reg_fit_overlay() -- write fit-derived crude rows into a
 # finished crude EFFECT column and into the crude effect VECTOR, at the ONE point both are in hand.
 #
-# DESIGN -- why here and not before emp_col(). On the binomial `ame` branch the base column and the
-# effect column are built from the SAME `rd_fields` list, and REG_EMPIRICAL$binomial$base declares
-# `color = "diff"` -- so overlaying the estimate into those shared locals would have written the AME into
-# `Obs_%`'s `diff` field and COLOURED a cell that displays nothing. emit() is the one place the effect
-# shape is known and only the effect column is touched.
-#
-# The estimate lands in the field its `scale` declares (fmt_center_field()'s rule), exp()d exactly when
-# that scale is `odds_ratio` -- which is also what tells this function whether the shape is an
-# exponentiated effect or its log twin. `n` is deliberately left NA: like the model column's, a fit-derived row's base is the
-# whole model N, which belongs in the footer, not in a per-cell "n:".
+# The estimate lands in the field its `scale` declares (fmt_center_field()'s rule), exp()d exactly
+# when that scale is multiplicative -- which is also what tells this function whether the shape is an
+# exponentiated effect or its log twin. `n` is deliberately left NA: like the model column's, a
+# fit-derived row's base is the whole model N, which belongs in the footer, not in a per-cell "n:".
 #' @keywords internal
 reg_fit_overlay <- function(col, eff, est, shape) {
   if (is.null(est) || !nrow(est)) return(list(col = col, eff = eff))
@@ -549,117 +544,95 @@ reg_fit_overlay <- function(col, eff, est, shape) {
   list(col = col, eff = eff)
 }
 
-# The empirical (crude) companion FACT TABLE: per family (binomial / gaussian / poisson), the SHAPE of
-# the base descriptive column + the crude-effect column (fmt scale / pct_type / display / digits / ref /
-# colour measure + the visible name), plus the CI METHOD literal the crude interval uses. The per-family
-# CI MATH stays code below (ci_prop_diff / ci_or / ci_pivot / ci_mean_diff2 / ci_mean_ratio take
-# different arguments), but the near-identical fmt() calls collapse into ONE builder (emp_col), and the
-# `method_*` literals are the SAME the colour legend names -- each shape row also declares the engine
-# its own column's bounds were built with (`ci_method`, Phase 19b), stamped by emp_col()
-# (reg_build), so "the empirical CI matches the model CI" is data, not a hand-synced pair (Phase 17h).
-#   binomial : Obs_% (risk-diff colour, WALD) + Obs_OR (ratio, Woolf log-OR) | ame: + Obs_diff (WALD).
-#   gaussian : Obs_mean (mean+sd, UNCOLOURED, one-sample t) + Obs_diff (Student t = OLS, diff/SD(Y)).
-#   poisson  : Obs_rate (rate-ratio colour) + Obs_IRR, one quasi-Poisson CI (the phi-scaled model's).
-# Phase g: the crude columns are named "Obs_" (snake-case, "observed"; was "Emp." for "empirical"), on
-# BOTH the exponentiate=TRUE and FALSE paths -- W6 adds the logged Obs_log(OR) / Obs_log(IRR) shapes.
-# Phase g: each multiplicative effect shape (binomial `or`, poisson `irr`) has a LOGGED twin
-# (`or_log` / `irr_log`) used when the model is NOT exponentiated -- a coef-shaped column carrying
-# log(OR) / log(IRR) with a logged CI, so the crude companion matches the raw model coefficient (same
-# link scale, same log_odds_scale colour). reg_empirical_columns picks the twin by `do_exp`.
-# Phase 18z8-B: each EFFECT row also carries the `link` of the crude estimator it describes -- the
-# one fact reg_crude_if_maker() needs to write its closed-form influence function (g'(mu) = 1/(mu(1-mu))
-# logit | 1/mu log | 1 identity). It sits on the SHAPE row, not on the family, because the crude link
-# follows the chosen ESTIMAND: a binomial model shows a logit-scale OR by default, an IDENTITY-link risk
-# difference under effect = "ame", and a LOG-link risk ratio under "ame_ratio" (which reuses
-# REG_EMPIRICAL$rr$rr verbatim -- the very reuse that makes a per-family link impossible). A `base` row
-# is descriptive, never an effect, so its link is NA.
+# REG_EMPIRICAL -- THE CRUDE COMPANION FACT TABLE: per family, the SHAPE of the crude effect column
+# that mirrors each model estimand.
+#
+# ONE COLUMN, BUILT TWICE. The crude and the modelled effect are the same estimand computed with one
+# predictor and with all of them, so they are one column SHAPE: same stored scale, same colour
+# measure, same display, same digits, same reference. Only the ESTIMATION differs. That is why this
+# table declares neither a colour (the crude column takes the model column's, both channels) nor a
+# display (the table's resolved one) nor a second "base" row for the level: the level a cell prints
+# beside its estimate is `EST_SCALES$<scale>$base_display`, declared once on the scale, and it rides
+# in the crude cell exactly as the adjusted prediction rides in the model cell.
+#
+# COLUMNS
+#   nm          the column's name. Per-category shapes disambiguate it by outcome category at
+#               assembly, where the model column's own label is in hand.
+#   scale       the EST_SCALES row, hence the estimate's field, ladder, glyphs and level token.
+#   ref         the reference marker ("1" multiplicative, "tot" additive, NA none).
+#   ci_method   the interval engine, under the table's `n` basis...
+#   ci_method_design  ...and under a weights / design basis. The crude column is the univariable
+#               model's column, so its interval must be that model's: unweighted the fit is lm / glm
+#               and the interval is MODEL-BASED (one dispersion pooled over the predictor's levels);
+#               weighted it is svyglm and the interval is the SANDWICH, which the per-group forms
+#               reproduce. Absent = the same interval either way.
+#   link        the crude estimator's link, for the gap SE's influence function (g'(mu)). NA where
+#               the shape is not an effect.
+#   per_category  one crude effect per OUTCOME category (multinomial, ordinal-marginal): the crude
+#               value rides in the model cell unless `empirical = "column"` asks for the columns.
+#
+# A family's own scalars: `coef` / `coef_log` name its coefficient-scale shape and the logged twin
+# used when the model is not exponentiated, and `method_diff` the risk-difference engine.
 REG_EMPIRICAL <- list(
   binomial = list(
     method_diff = "wald", coef = "or", coef_log = "or_log",
-    base   = list(nm = "Obs_%",       scale = "points", display = "pct", digits = 0L, ref = "tot", pct_type = "row",  ci_method = "wald", color = "diff", link = NA_character_),
-    ame    = list(nm = "Obs_diff",    scale = "points", display = "diff", digits = 0L, ref = "tot", pct_type = "row",  ci_method = "wald", color = "diff", link = "identity"),
-    or     = list(nm = "Obs_OR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",    ci_method = "woolf", color = "OR",   link = "logit"),
-    or_log = list(nm = "Obs_log(OR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_type = "none",  ci_method = "woolf", color = "diff", link = "logit")),
-  # Phase 18z3 -- the modified-Poisson (binary outcome) crude companion. SAME base column as binomial
-  # (a risk, `Obs_%`, with the Wald risk-difference CI), but the effect is a crude RISK ratio with the
-  # KATZ log-RR interval (ci_katz_rr) -- not the Woolf log-OR the binomial arm uses. That is the point
-  # of the whole feature: the observed companion must be on the same scale as the model column.
+    ame    = list(nm = "Obs_diff",    scale = "points",     ref = "tot",          ci_method = "wald",  link = "identity"),
+    or     = list(nm = "Obs_OR",      scale = "odds_ratio", ref = "1",            ci_method = "woolf", link = "logit"),
+    or_log = list(nm = "Obs_log(OR)", scale = "log_coef",   ref = NA_character_, ci_method = "woolf", link = "logit")),
+  # the modified-Poisson (binary outcome) companion: the crude RISK ratio with the KATZ log-RR
+  # interval, not the Woolf log-OR the binomial arm uses -- the observed companion must be on the
+  # same scale as the model column.
   rr = list(
     method_diff = "wald", coef = "rr", coef_log = "rr_log",
-    base   = list(nm = "Obs_%",       scale = "points", display = "pct", digits = 0L, ref = "tot", pct_type = "row",  ci_method = "wald", color = "diff", link = NA_character_),
-    ame    = list(nm = "Obs_diff",    scale = "points", display = "diff", digits = 0L, ref = "tot", pct_type = "row",  ci_method = "wald", color = "diff", link = "identity"),
-    rr     = list(nm = "Obs_RR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",    ci_method = "katz", color = "OR",   link = "log"),
-    rr_log = list(nm = "Obs_log(RR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_type = "none",  ci_method = "katz", color = "diff", link = "log")),
-  # Phase 19e -- the crude companion of a RATIO OF MEANS (`measure = "ratio"` on a continuous
-  # outcome, fitted by the "mr" log-link pseudo-likelihood). Its base is the group MEAN and its
-  # effect the crude ratio of means, with the ci_mean_ratio engine tab() has used for years -- the
-  # same "the observed companion must be on the same scale as the model column" rule that gave "rr"
-  # its own block rather than borrowing binomial's.
+    ame    = list(nm = "Obs_diff",    scale = "points",     ref = "tot",          ci_method = "wald", link = "identity"),
+    rr     = list(nm = "Obs_RR",      scale = "odds_ratio", ref = "1",            ci_method = "katz", link = "log"),
+    rr_log = list(nm = "Obs_log(RR)", scale = "log_coef",   ref = NA_character_, ci_method = "katz", link = "log")),
+  # a RATIO OF MEANS (`measure = "ratio"` on a continuous outcome, the "mr" log-link pseudo-ML fit).
   mr = list(
     coef = "mr", coef_log = "mr_log",
-    base   = list(nm = "Obs_mean",     scale = "level_mean", display = "mean", digits = 2L, ref = NA_character_, pct_type = "none", ci_method = "student",     color = "",      link = NA_character_),
-    mr     = list(nm = "Obs_RoM",      scale = "mean_ratio", display = "ratio", digits = 2L, ref = "1", pct_type = "none", ci_method = "quasipoisson", ci_method_design = "robust", color = "ratio", link = "log"),
-    mr_log = list(nm = "Obs_log(RoM)", scale = "log_coef",   display = "coef", digits = 2L, ref = NA_character_, pct_type = "none", ci_method = "quasipoisson", ci_method_design = "robust", color = "diff",  link = "log")),
+    mr     = list(nm = "Obs_RoM",      scale = "mean_ratio", ref = "1",           ci_method = "quasipoisson", ci_method_design = "robust", link = "log"),
+    mr_log = list(nm = "Obs_log(RoM)", scale = "log_coef",   ref = NA_character_, ci_method = "quasipoisson", ci_method_design = "robust", link = "log")),
   gaussian = list(
     coef = "diff", coef_log = "diff",
-    base = list(nm = "Obs_mean", scale = "level_mean", display = "mean", digits = 2L, ref = NA_character_, pct_type = "none",  ci_method = "student", color = "",     link = NA_character_),
-    diff = list(nm = "Obs_diff", scale = "raw_diff",  display = "coef", digits = 2L, ref = NA_character_, pct_type = "none",  ci_method = "ols", ci_method_design = "welch", color = "diff", link = "identity")),
+    diff = list(nm = "Obs_diff", scale = "raw_diff", ref = NA_character_, ci_method = "ols", ci_method_design = "welch", link = "identity")),
   poisson = list(
     coef = "irr", coef_log = "irr_log",
-    base    = list(nm = "Obs_rate",     scale = "mean_ratio", display = "mean", digits = 2L, ref = "1", pct_type = "none", ci_method = "quasipoisson", ci_method_design = "robust", color = "ratio", link = NA_character_),
-    irr     = list(nm = "Obs_IRR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",    ci_method = "quasipoisson", ci_method_design = "robust", color = "OR",    link = "log"),
-    irr_log = list(nm = "Obs_log(IRR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_type = "none",  ci_method = "quasipoisson", ci_method_design = "robust", color = "diff",  link = "log")),
-  # Phase 18z10 -- the three families that had no crude twin at all.
-  #
-  # grouped_binomial (`trials =`): the univariable model is STILL saturated for a factor predictor, so
-  # the crude OR is the existing Woolf 2x2 on the SUMMED counts (measured identical to a univariable glm
-  # to 1.1e-8). Its BASE column is the mean SCORE (maintainer's ruling) -- a per-RESPONDENT quantity, so
-  # it takes the gaussian base shape and reads `emp_mean`, while the effect reads the summed 2x2. That
-  # one family needing both grid parts at once is why `emp_base` had to split into emp_prop / emp_mean.
+    irr     = list(nm = "Obs_IRR",      scale = "mean_ratio", ref = "1",           ci_method = "quasipoisson", ci_method_design = "robust", link = "log"),
+    irr_log = list(nm = "Obs_log(IRR)", scale = "log_coef",   ref = NA_character_, ci_method = "quasipoisson", ci_method_design = "robust", link = "log")),
+  # grouped_binomial (`trials =`): the univariable model is still saturated for a factor predictor,
+  # so the crude OR is the Woolf 2x2 on the SUMMED counts. Its level is the share of "yes" among the
+  # draws. Its LEVEL is the mean SCORE -- the average number of "yes" out of `trials`, which is the
+  # quantity a reader of a battery of items wants -- so its odds ratio takes `score_ratio`, the
+  # one scale whose estimate is an odds ratio and whose level is a mean.
   grouped_binomial = list(
     method_diff = "wald", coef = "or", coef_log = "or_log",
-    base   = list(nm = "Obs_mean",     scale = "level_mean", display = "mean", digits = 2L, ref = NA_character_, pct_type = "none",  ci_method = "student", color = "",     link = NA_character_),
-    ame    = list(nm = "Obs_diff",     scale = "points", display = "diff", digits = 0L, ref = "tot", pct_type = "row",  ci_method = "wald", color = "diff", link = "identity"),
-    or     = list(nm = "Obs_OR",       scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",    ci_method = "woolf", color = "OR",   link = "logit"),
-    or_log = list(nm = "Obs_log(OR)",  scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_type = "none",  ci_method = "woolf", color = "diff", link = "logit")),
-  # multinomial: one crude column PER OUTCOME CATEGORY would double an already wide table, so these
-  # shapes are `visible = FALSE` -- the crude number rides IN-CELL in the model column's `obs` field
-  # (maintainer's ruling Q4, rendered as "{or} ({obs})" / "{diff} ({obs})"). `obs` is defined as "the
-  # value this cell is compared to, ON THE CELL'S OWN SCALE", so an invisible shape still has to declare
-  # its scale and link exactly like a visible one. The crude effect is closed-form: the univariable
-  # multinomial is saturated, and its OR is the {j, ref} x {level, ref level} Woolf ratio -- the very
-  # number tab(pct = "row", OR = "OR") prints.
+    ame    = list(nm = "Obs_diff",    scale = "points",           ref = "tot",         ci_method = "wald",  link = "identity"),
+    or     = list(nm = "Obs_OR",      scale = "score_ratio", ref = "1",           ci_method = "woolf", link = "logit"),
+    or_log = list(nm = "Obs_log(OR)", scale = "log_coef",         ref = NA_character_, ci_method = "woolf", link = "logit")),
+  # multinomial: one crude effect PER OUTCOME CATEGORY. The univariable multinomial is saturated, so
+  # its OR is the {j, ref} x {level, ref level} Woolf ratio -- the number tab(pct = "row") prints.
   multinomial = list(
     method_diff = "wald", coef = "or", coef_log = "or_log",
-    or        = list(nm = NA_character_, scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",   ci_method = "woolf", color = "OR",   link = "logit", visible = FALSE, per_category = TRUE),
-    or_log    = list(nm = NA_character_, scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_type = "none", ci_method = "woolf", color = "diff", link = "logit", visible = FALSE, per_category = TRUE),
-    ame       = list(nm = NA_character_, scale = "points", display = "diff", digits = 0L, ref = "tot", pct_type = "row", ci_method = "wald", color = "diff", link = "identity", visible = FALSE, per_category = TRUE),
-    ame_ratio = list(nm = NA_character_, scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",   ci_method = "katz", color = "OR",   link = "log",   visible = FALSE, per_category = TRUE)),
-  # ordinal: proportional odds is a CONSTRAINT, so the univariable model is NOT saturated and there is no
-  # closed form (measured: the three closed-form substitutes drift by 2.4-5.4 %, of the same order as the
-  # first colour break -- and the drift IS the PO violation, so it would inject a data-outcome offset
-  # into a measure whose whole job is to say how far the model moved the effect). Hence `from = "fit"`:
-  # a univariable polr / svyolr through reg_fit(), the same escape z9 took for numeric predictors and for
-  # the same reason -- ruling Q6 (same estimand, link, CI rule, multiplier) holds by construction.
+    or        = list(nm = "Obs_OR",      scale = "odds_ratio", ref = "1",            ci_method = "woolf", link = "logit", per_category = TRUE),
+    or_log    = list(nm = "Obs_log(OR)", scale = "log_coef",   ref = NA_character_, ci_method = "woolf", link = "logit", per_category = TRUE),
+    ame       = list(nm = "Obs_diff",    scale = "points",     ref = "tot",          ci_method = "wald",  link = "identity", per_category = TRUE),
+    ame_ratio = list(nm = "Obs_RR",      scale = "odds_ratio", ref = "1",            ci_method = "katz",  link = "log",   per_category = TRUE)),
+  # ordinal: proportional odds is a CONSTRAINT, so the univariable model is NOT saturated and there
+  # is no closed form -- the drift of the substitutes IS the PO violation, which would land in a
+  # measure whose whole job is to say how far the model moved the effect. Hence a univariable
+  # polr / svyolr through reg_fit(), where "same estimand, link, CI rule, multiplier" holds by
+  # construction. A cumulative odds ratio has no single share to print beside it: the level field
+  # stays empty and `{base}` renders void.
   ordinal = list(
     coef = "cumor", coef_log = "cumor_log",
-    cumor     = list(nm = "Obs_cumOR",      scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",   ci_method = "wald_log", color = "OR",   link = "logit", from = "fit"),
-    cumor_log = list(nm = "Obs_log(cumOR)", scale = "log_coef", display = "coef", digits = 2L, ref = NA_character_, pct_type = "none", ci_method = "wald_log", color = "diff", link = "logit", from = "fit"),
-    ame       = list(nm = NA_character_, scale = "points", display = "diff", digits = 0L, ref = "tot", pct_type = "row", ci_method = "wald", color = "diff", link = "identity", visible = FALSE, per_category = TRUE, from = "fit"),
-    ame_ratio = list(nm = NA_character_, scale = "odds_ratio", display = "or", digits = 2L, ref = "1", pct_type = "row",   ci_method = "wald_log", color = "OR",   link = "log",   visible = FALSE, per_category = TRUE, from = "fit"))
+    cumor     = list(nm = "Obs_cumOR",      scale = "odds_ratio", ref = "1",            ci_method = "wald_log", link = "logit"),
+    cumor_log = list(nm = "Obs_log(cumOR)", scale = "log_coef",   ref = NA_character_, ci_method = "wald_log", link = "logit"),
+    ame       = list(nm = "Obs_diff",       scale = "points",     ref = "tot",          ci_method = "wald",     link = "identity", per_category = TRUE),
+    ame_ratio = list(nm = "Obs_RR",         scale = "odds_ratio", ref = "1",            ci_method = "wald_log", link = "log",   per_category = TRUE))
 )
 
-# The three optional SHAPE facts z10 added, with their defaults in one place (a shape row states only
-# what makes it unusual, so the 14 pre-existing rows stay untouched):
-#   visible      does this shape draw an Obs_* COLUMN, or does its number ride in-cell via `obs`?
-#   per_category is there one crude effect per OUTCOME category (multinomial / ordinal marginal)?
-#   from         "grid" = a closed form from reg_empirical(); "fit" = a univariable reg_fit().
-#' @keywords internal
-shape_visible      <- function(shape) !isFALSE(shape$visible)
 #' @keywords internal
 shape_per_category <- function(shape) isTRUE(shape$per_category)
-# (no shape_from_fit(): `from` is read where the numeric overlay is spliced in, and the accessor
-# never acquired a caller -- deleted in 19l.)
 
 # reg_crude_shape() -- WHICH REG_EMPIRICAL row describes the crude EFFECT of this estimand? Read by
 # reg_empirical_columns()'s arms (which build the column) and by the footer wording -- two consumers,
@@ -685,13 +658,6 @@ reg_crude_shape <- function(crude_key, est = NULL) {
   fam[[sh]]
 }
 
-# Does the crude effect ride IN-CELL (as `obs`) instead of drawing its own Obs_* column? One stored
-# consequence of the shape, read by the footer wording and by set_obs_if()'s display fold.
-#' @keywords internal
-reg_crude_in_cell <- function(crude_key, est = NULL) {
-  sh <- reg_crude_shape(crude_key, est)
-  !is.null(sh) && !shape_visible(sh)
-}
 # WARNING: `l[[""]]` is a subscript-out-of-bounds ERROR in R, not a miss -- and "" is exactly the key a
 # single-column fit uses. Every lookup into a category-keyed list goes through this.
 #' @keywords internal
@@ -701,25 +667,31 @@ cat_get <- function(l, key) {
   if (is.na(i)) NULL else l[[i]]
 }
 
-# The base+effect fmt columns aligned to the skeleton, for reg_stage_assemble() to prepend before the model column.
-# The Constant -> empty cells; reference levels -> neutral + in_refrow, no CI. want_p is TRUE (the pvalue
-# is stored; stars are stripped post-build when stars = FALSE, like the model columns).
+# THE CRUDE COLUMN: one fmt column per effect, aligned to the skeleton, for reg_stage_assemble() to
+# splice ahead of the model columns it serves. The Constant -> empty cells; reference levels ->
+# neutral + in_refrow, no CI. The p-value is always stored (stars are stripped post-build when
+# `stars = FALSE`, like the model columns).
 #
-# Phase 18z10 -- three structural changes, all driven by shape FACTS rather than by family names:
-#   * emit() replaces two(): a shape set may draw TWO columns (base + effect, every pre-z10 family), ONE
-#     (ordinal: a cumulative OR has no base -- there is no single share to show beside it), or ZERO
-#     (multinomial: the crude number rides in-cell via `obs`). The old two() could only ever do two.
-#   * the crude EFFECT is returned as a list keyed by OUTCOME CATEGORY ("" when the outcome has none),
-#     because a multinomial / ordinal-marginal model has one column per category and each needs its own
-#     `obs`. reg_set_obs() looks the column's stored `emp_key` up in it.
-#   * `fit_est` (reg_empirical_fit()'s per-category estimates) fills the rows no closed form covers --
-#     numeric predictors in any family (z9), and EVERY predictor under an ordinal outcome (z10).
+# ONE COLUMN, NOT TWO. The crude column carries the crude EFFECT and, in the same cell, the level it
+# sits on -- the observed % or mean, in the field its own scale names (`{base}`). It is the model
+# column's mirror, so it takes that column's colour measure and the table's display, and it carries
+# exactly ONE interval: the effect's. What it must never carry is `obs` or `gap_se`: it IS the
+# observed value, and a column cannot be its own baseline.
+#
+# The crude effect also travels back as a VECTOR keyed by OUTCOME CATEGORY ("" where the outcome has
+# none), because a multinomial / ordinal-marginal model has one column per category and each needs
+# its own `obs`; reg_set_obs() looks the column's stored `emp_key` up in it. `emp_mode` decides
+# whether those per-category effects also draw columns of their own ("column") or ride in the model
+# cell ("cell").
+#
+# `fit_est` (reg_empirical_fit()'s per-category estimates) fills the rows no closed form covers --
+# numeric predictors in any family, and EVERY predictor under an ordinal outcome.
 reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, est, var_y,
                                   conf_level = 0.95, color_signif = "grey_non_signif",
                                   color = NULL, fit_est = NULL, weighted = FALSE,
-                                  degf = Inf) {
+                                  degf = Inf, emp_mode = "column") {
   fam <- REG_EMPIRICAL[[crude_key]]
-  if (is.null(fam)) return(list(cols = list(), effect = NULL, shape = NULL))
+  if (is.null(fam)) return(list(cols = list(), cat_cols = list(), effect = NULL, shape = NULL))
   # Phase 19e: the three facts the arms below branch on, read off the ESTIMAND row rather than from
   # the (effect, do_exp) pair -- so the crude companion cannot describe a different estimand from
   # the model column it sits beside.
@@ -731,12 +703,21 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   # the identity-link "rd" fit) take the same crude risk-difference column as the marginal one.
   shape_key  <- est$crude_shape %||% fam$coef
   if (is.null(shape_key) || is.na(shape_key)) shape_key <- fam$coef
-  # Phase 15d: when the model is uncoloured (`color = FALSE` -> "no"), the crude companions must be
-  # uncoloured too (else the table shows coloured empirical columns beside plain model columns).
-  # `color[1]`: the measure may be a length-2 (text, background) vector since Phase 18z5's
-  # `color = c("OR", "adjustment")` -- `color %in% ...` would then return length 2 and the `if` below
-  # would error. Only the text channel decides whether the crude companions are drawn at all.
-  emp_off <- !is.null(color) && color[1] %in% c("no", "")
+  # THE COLOUR IS THE MODEL COLUMN'S, both channels. One comparison, one ladder, one legend block:
+  # the crude column grades the same quantity, so it cannot be graded on another scale. `color = FALSE`
+  # then turns both off with no special case. Under a GAP measure the crude column is the baseline --
+  # its `obs` is empty, so the engine leaves it uncoloured by construction -- and it is marked
+  # `refcol` so the reference subsystem bolds it and the legend names it as what the shades compare to.
+  emp_color <- if (is.null(color)) "" else color
+  # ⚠ only an "observed" baseline makes THIS column the reference: `adjustment` compares each model
+  # cell to the crude one beside it, so the crude column is what the shades are measured from.
+  # `between_groups` compares a cell to the same cell in another GROUP, where the crude column has a
+  # real counterpart of its own and is graded like any other.
+  gap_base  <- any(vapply(emp_color, function(k) {
+    m <- measure_key(k)
+    !is.na(m) && nzchar(m) && identical(MEASURES[[m]]$ref_kind, "observed")
+  }, logical(1)))
+  emp_signif <- if (any(nzchar(emp_color) & !is.na(emp_color))) color_signif else "ignore"
   n_rows  <- nrow(skeleton)
   is_fac  <- skeleton$var %in% fac_preds
   # Phase 18z9 (dev/numeric_predictors_crude_counterparts.md SS11.1): the Constant is a reference row
@@ -749,63 +730,50 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   na_ref <- function(ci) { ci$inf[refrows] <- NA_real_; ci$sup[refrows] <- NA_real_
                            ci$pvalue[refrows] <- NA_real_; ci }
   na_v   <- function() rep(NA_real_, n_rows)
-  # one fmt column from a shape row + its varying fmt FIELD values. Uncoloured when the model is off or
-  # the shape declares no measure (Obs_mean); `ref` is omitted when the shape has none.
-  # THE crude interval a shape asks for, under THIS table's inference basis. The crude column is the
-  # univariable model's column, so its interval must be that model's: unweighted the fit is lm / glm
-  # and its interval is MODEL-BASED (one dispersion pooled over the predictor's levels); weighted or
-  # design-based the fit is svyglm and its interval is the SANDWICH, which the per-group forms
-  # reproduce. A shape with no `ci_method_design` has the same interval either way.
+  # THE crude interval a shape asks for, under THIS table's inference basis (see REG_EMPIRICAL).
   emp_method <- function(shape)
     (if (isTRUE(weighted)) shape$ci_method_design %||% shape$ci_method else shape$ci_method) %||% ""
+  # one fmt column from a shape row + its varying fmt FIELD values. `display` is left to the table's
+  # own resolution (reg_apply_display), `ref` omitted when the shape has none.
   emp_col <- function(shape, fields, n_eff = NULL) {
-    measure <- if (emp_off || !nzchar(shape$color)) "" else shape$color
     args <- c(fields, if (!is.null(n_eff)) list(n_eff = n_eff), list(
-      scale = shape$scale, pct_type = shape$pct_type, display = shape$display, digits = shape$digits,
+      scale = shape$scale, pct_type = reg_pct_type(shape$scale),
+      digits = reg_cell_digits(shape$scale),
+      display = "est",
       ci_method = emp_method(shape),
-      color = measure, color_signif = if (nzchar(measure)) color_signif else "ignore",
+      color = emp_color, color_signif = emp_signif, refcol = gap_base,
       col_var = shape$nm, comp_all = FALSE, in_refrow = refrows, model_family = family, role = "emp"))
     if (!is.na(shape$ref)) args$ref <- shape$ref
     do.call(fmt, args)
   }
-  # Phase 18z16-iv (W-D): the effective base a crude interval was ACTUALLY computed on, stored in
-  # the `n_eff` field. reg_empirical() computes it (identically to tab()'s own cell base, to 9 s.f.),
-  # feeds it to ci_wilson / ci_prop_diff / ci_or / ci_pivot / ci_mean_diff2 / ci_mean_ratio -- and then
-  # threw it away, so ?fmt's "the effective sample size used for this cell's CI" was false on every
-  # regression column and `$n_eff` returned NA where the correction demonstrably happened. NA when
-  # nothing corrected it, exactly as an unweighted tab() cell carries NA. Which of the two bases a
-  # column used is a property of ITS OWN interval, so each arm passes its own (`nv_dr` for a
-  # proportion / odds / risk ratio, `nv_ci` for a mean, a rate and their ratios) -- it cannot be read
-  # off `shape$type` (a poisson IRR is type "row" and takes `nv_ci`).
+  # the effective base the interval was ACTUALLY computed on, stored in the `n_eff` field: the exact
+  # flat closed form on the weights, or the design variance. NA when nothing corrected it, exactly as
+  # an unweighted tab() cell carries NA. Each arm passes its OWN base -- the number of Bernoulli
+  # DRAWS for a proportion / odds / risk ratio, the per-respondent n for a mean and its ratios.
   neff_of <- function(v) if (isTRUE(weighted)) as.double(v) else rep(NA_real_, n_rows)
-  # Phase 18z5: besides the columns, return the crude EFFECT vector -- the very value the effect
-  # column stores in its own estimate field, so it is already on the model column's scale (an OR beside
-  # an OR, log(OR) beside a raw coefficient, a risk difference beside an AME). reg_set_obs() writes it into
-  # the model columns' `obs` field, which backs `color = "adjustment"` and the `{obs}` display token.
-  # Taken from the local the shape was built from -- never re-read out of the fmt column by name.
-  # Phase 18z8-B: the effect SHAPE ROW travels with it, giving the gap test both facts it needs --
-  # `link` (the crude estimator's link) and `scale` (proof that the crude and model columns are the
-  # SAME estimand) -- and any future shape fact for free, with no new element to thread.
-  # Phase 18z9/z10: the fit-derived rows are spliced HERE -- the one place the effect shape is known,
-  # so no return arm changes and the base column (which on the binomial `ame` branch shares its field
-  # list with the effect column) cannot be touched. See reg_fit_overlay().
-  # `cat` = which outcome category's grid rows / fit estimates feed this call. The returned effect list
-  # is keyed by the MODEL COLUMN's own category (`emp_key`), which is "" for every family that produces
-  # one column -- including the binary ones, whose grid slice is the positive category "1".
-  emit <- function(base, eff, cat = "") {
-    if (is.null(eff)) return(list(cols = if (is.null(base)) list() else
-                                    stats::setNames(list(base$col), base$shape$nm),
-                                  effect = NULL, shape = NULL))
-    # `key` addresses BOTH the returned effect list and the fit estimates: reg_empirical_fit() keys its
-    # coefficient rows "" and its marginal rows by outcome group, i.e. exactly the column's own category.
-    key <- if (shape_per_category(eff$shape)) cat else ""
-    o   <- reg_fit_overlay(eff$col, eff$vec, cat_get(fit_est$est, key), eff$shape)
-    cols <- list()
-    if (!is.null(base) && shape_visible(base$shape))
-      cols <- c(cols, stats::setNames(list(base$col), base$shape$nm))
-    if (shape_visible(eff$shape))
-      cols <- c(cols, stats::setNames(list(o$col), eff$shape$nm))
-    list(cols = cols, effect = stats::setNames(list(o$eff), key), shape = eff$shape)
+  # emit() -- the finished column, plus the crude EFFECT VECTOR that travels back to reg_set_obs()
+  # to become the model column's `obs` (what `color = "adjustment"` grades and `{obs}` prints). The
+  # vector is taken from the local the column was built from, never re-read out of the fmt column,
+  # and the effect SHAPE ROW travels with it so the gap test has both facts it needs: `link` (the
+  # crude estimator's) and `scale` (proof the two columns are the same estimand).
+  #
+  # The fit-derived rows are spliced here, the one place the effect shape is known (reg_fit_overlay).
+  # `cat` is the outcome category feeding this call; the returned lists are keyed by the MODEL
+  # COLUMN's own category (`emp_key`), which is "" for every family producing one column -- including
+  # the binary ones, whose grid slice is category "1".
+  #
+  # A per-category shape returns its column under `cat_cols` instead of `cols`: there is one per
+  # outcome category, so the assembler names each from the model column it mirrors. Under
+  # `emp_mode = "cell"` no column is drawn at all and only the effect travels.
+  emit <- function(eff, cat = "") {
+    if (is.null(eff)) return(list(cols = list(), cat_cols = list(), effect = NULL, shape = NULL))
+    per_cat <- shape_per_category(eff$shape)
+    key  <- if (per_cat) cat else ""
+    o    <- reg_fit_overlay(eff$col, eff$vec, cat_get(fit_est$est, key), eff$shape)
+    draw <- !identical(emp_mode, "cell")
+    list(cols     = if (draw && !per_cat) stats::setNames(list(o$col), eff$shape$nm) else list(),
+         cat_cols = if (draw &&  per_cat) stats::setNames(list(o$col), key) else list(),
+         effect   = stats::setNames(list(o$eff), key), shape = eff$shape)
   }
   # per-category slice of the grid, aligned to the skeleton
   cat_of <- function(cat) {
@@ -816,52 +784,114 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
            function(nm) g[[nm]][mi])
   }
 
-  # ---- ordinal: no closed form, so both columns come from the univariable fits (see REG_EMPIRICAL) ----
+  # THE LEVEL a crude cell prints beside its estimate: the field the column's own scale names
+  # (EST_SCALES$base_display), declared once there rather than per family. NA on a link scale and on
+  # a cumulative odds ratio, where no single level belongs beside the estimate -- `{base}` then
+  # renders void.
+  with_base <- function(sh, fields, level) {
+    b <- EST_SCALES[[sh$scale]]$base_display
+    if (is.na(b)) return(fields)
+    c(fields, stats::setNames(list(level), b))
+  }
+  # the SD-standardized ladder's divisor, on the one scale that declares it (raw_diff): the model
+  # column carries var(Y) there and so must its mirror, which is also why a crude column cannot carry
+  # the LEVEL's own variance in the same field.
+  with_var <- function(sh, fields)
+    if (identical(EST_SCALES[[sh$scale]]$sd_from %||% "", "var"))
+      c(fields, list(var = rep(var_y, n_rows))) else fields
+
+  # ---- ordinal: proportional odds has no closed form, so every row comes from a univariable fit ----
   if (identical(crude_key, "ordinal")) {
+    empty <- function(sh) emp_col(sh, list(diff = na_v(), n = rep(NA_integer_, n_rows)))
     if (marginal) {
       sh   <- reg_crude_shape(crude_key, est)
       cats <- names(fit_est$est)
-      if (!length(cats)) return(list(cols = list(), effect = NULL, shape = sh))
+      if (!length(cats)) return(list(cols = list(), cat_cols = list(), effect = NULL, shape = sh))
       out  <- purrr::map(stats::setNames(nm = cats), function(k)
-        emit(NULL, list(col = emp_col(sh, list(diff = na_v(), n = rep(NA_integer_, n_rows))),
-                        vec = na_v(), shape = sh), k))
-      return(list(cols = list(), shape = sh,
-                  effect = purrr::flatten(purrr::map(out, "effect"))))
+        emit(list(col = empty(sh), vec = na_v(), shape = sh), k))
+      return(list(cols = list(), cat_cols = purrr::flatten(purrr::map(out, "cat_cols")),
+                  shape = sh, effect = purrr::flatten(purrr::map(out, "effect"))))
     }
     sh  <- fam[[if (do_exp) fam$coef else fam$coef_log]]
     fld <- if (do_exp) list(or = na_v()) else list(diff = na_v())
-    return(emit(NULL, list(col = emp_col(sh, c(fld, list(n = rep(NA_integer_, n_rows)))),
-                           vec = na_v(), shape = sh)))
+    return(emit(list(col = emp_col(sh, c(fld, list(n = rep(NA_integer_, n_rows)))),
+                     vec = na_v(), shape = sh)))
   }
 
-  # ---- multinomial: closed form, one crude effect per outcome category, no visible column ------------
+  # ---- the probability families: one closed form, evaluated per OUTCOME CATEGORY ------------------
+  #
+  # binomial / rr / grouped_binomial have one category (the positive one); multinomial has several,
+  # and its crude effect is the SAME arithmetic per category -- the {j, ref} x {level, ref level}
+  # 2x2. So the arm below serves both, keyed on the SHAPE (its scale and its declared CI engine)
+  # rather than on the family: a risk difference is a Wald difference of proportions, a Woolf odds
+  # ratio the 2x2 legs, a risk ratio Katz's, and a logged twin the log of whichever it twins.
+  #
+  # WARNING: `emp_ratio` is an ODDS ratio and `emp_prop / emp_ref_prop` a RISK ratio. Feeding one to
+  # the other's header is the whole point of dispatching on the shape.
+  prob_effect <- function(sh, g) {
+    prop <- g$emp_prop; rprop <- g$emp_ref_prop
+    # the LEVEL beside the estimate is the field the scale names, and the grid holds both halves: a
+    # share for a probability scale, the mean SCORE for a summed-score one.
+    level <- if (identical(EST_SCALES[[sh$scale]]$base_display, "mean")) g$emp_mean else prop
+    ndr  <- g$emp_n_draw; rndr <- g$emp_ref_n_draw
+    logged <- identical(sh$scale, "log_coef")
+    # the exponentiated twin a logged shape logs: same estimand, same interval, on the link scale.
+    base_sh <- if (logged) fam[[fam$coef]] else sh
+    if (identical(base_sh$scale, "points")) {
+      v  <- g$emp_diff
+      ci <- na_ref(ci_prop_diff(prop, ndr, rprop, rndr, conf_level = conf_level,
+                                method = fam$method_diff %||% "wald", want_p = TRUE, df = degf))
+    } else if (identical(emp_method(base_sh), "katz") ||
+               identical(base_sh$ci_method, "katz")) {
+      v  <- prop / rprop
+      ci <- na_ref(ci_katz_rr(prop, ndr, rprop, rndr, conf_level = conf_level,
+                              want_p = TRUE, df = degf))
+    } else {
+      # the SS14 rule: WEIGHTED proportion x UNWEIGHTED base, so the base cancels out of the log-OR.
+      # For a grouped binomial that base counts DRAWS (n x trials), which is what makes the crude OR
+      # equal a univariable glm(cbind(s, q - s) ~ x) rather than an OR on respondent counts.
+      v  <- g$emp_ratio
+      ci <- na_ref(ci_or(prop * ndr, (1 - prop) * ndr, rprop * rndr, (1 - rprop) * rndr,
+                         conf_level = conf_level, want_p = TRUE, df = degf))
+    }
+    if (logged) { ci$inf <- log(ci$inf); ci$sup <- log(ci$sup); v <- log(v) }
+    est_fld <- EST_SCALES[[sh$scale]]$est_field
+    fields  <- c(stats::setNames(list(v), est_fld),
+                 list(n = g$emp_n, tot_n = g$emp_n,
+                      ci_inf = ci$inf, ci_sup = ci$sup, pvalue = ci$pvalue))
+    list(fields = with_var(sh, with_base(sh, fields, level)), vec = v, n_eff = g$emp_n_draw)
+  }
+
   if (identical(crude_key, "multinomial")) {
     sh   <- reg_crude_shape(crude_key, est)
     cats <- unique(emp$category)
-    if (!length(cats)) return(list(cols = list(), effect = NULL, shape = sh))
+    if (!length(cats)) return(list(cols = list(), cat_cols = list(), effect = NULL, shape = sh))
     out <- purrr::map(stats::setNames(nm = cats), function(k) {
-      g <- cat_of(k)
-      v <- if (ratio_marg) g$emp_ratio_prop
-           else if (marginal) g$emp_diff
-           else if (do_exp)   g$emp_ratio else log(g$emp_ratio)
-      emit(NULL, list(col = emp_col(sh, list(n = rep(NA_integer_, n_rows))), vec = v, shape = sh), k)
+      pe <- prob_effect(sh, cat_of(k))
+      # a MARGINAL contrast is not the closed form's: the ratio one is a ratio of the two observed
+      # shares, the additive one their difference. Both are already in the grid.
+      if (marginal) {
+        g  <- cat_of(k)
+        v  <- if (ratio_marg) g$emp_ratio_prop else g$emp_diff
+        pe$fields[[EST_SCALES[[sh$scale]]$est_field]] <- v
+        pe$vec <- v
+      }
+      emit(list(col = emp_col(sh, pe$fields, n_eff = neff_of(pe$n_eff)), vec = pe$vec, shape = sh), k)
     })
-    return(list(cols = list(), shape = sh, effect = purrr::flatten(purrr::map(out, "effect"))))
+    return(list(cols = list(), cat_cols = purrr::flatten(purrr::map(out, "cat_cols")),
+                shape = sh, effect = purrr::flatten(purrr::map(out, "effect"))))
   }
 
   # ---- the closed-form families: one category ("1" binary/grouped, "" numeric outcomes) -------------
   cat1 <- if (identical(emp$category[1], "1") || "1" %in% emp$category) "1" else ""
   g    <- cat_of(cat1)
-  prop <- g$emp_prop; diffv <- g$emp_diff; ratio <- g$emp_ratio
+  ratio <- g$emp_ratio
   meanv <- g$emp_mean; varv <- g$emp_var; nv <- g$emp_n
-  rprop <- g$emp_ref_prop; rmean <- g$emp_ref_mean; rv <- g$emp_ref_var; rn <- g$emp_ref_n
+  rmean <- g$emp_ref_mean; rv <- g$emp_ref_var; rn <- g$emp_ref_n
   # Phase 18s: the CI base is the effective n -- the exact flat closed form on the weights, or the
   # design variance; unweighted it equals the raw count, so those intervals are byte-identical. The
   # displayed n/tot_n fields always keep the raw count `nv`.
   nv_ci <- g$emp_n_ci; rn_ci <- g$emp_ref_n_ci
-  # the CI base of a PROPORTION is the number of Bernoulli DRAWS (n x trials for a grouped binomial,
-  # n everywhere else -> byte-identical); the MEAN CIs keep the per-respondent n_ci.
-  nv_dr <- g$emp_n_draw; rn_dr <- g$emp_ref_n_draw
   # the model-based dispersion the two MOMENT families need, pooled over each predictor's own level
   # set -- exactly the univariable lm / glm's scope. The engines are elementwise, so it is computed
   # here, where the level set IS a group of skeleton rows. NULL where the chosen method is a
@@ -871,149 +901,47 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
     ci_pool_disp(n = nv_ci, mean = meanv, var = varv, by = skeleton$var, use = is_fac, kind = kind)
   }
 
-  # binomial + "rr" (modified Poisson) share every BASE fact -- a crude risk and its Wald risk-difference
-  # CI -- and differ only in the crude EFFECT, which must be the model's own estimand (Phase 18z3).
-  # Phase 18z10: grouped_binomial shares the EFFECT facts (a Woolf OR on the summed 2x2 legs) but not
-  # the base -- its base column is the mean SCORE, built below like the gaussian one.
   binary_like <- reg_fam_binary(crude_key) || identical(crude_key, "grouped_binomial")
   if (binary_like) {
-    grouped <- identical(crude_key, "grouped_binomial")
-    rd <- na_ref(ci_prop_diff(prop, nv_dr, rprop, rn_dr, conf_level = conf_level, # crude risk-difference
-                              method = fam$method_diff, want_p = TRUE, df = degf))
-    rd_fields <- list(pct = prop, diff = diffv, n = nv, tot_n = nv,
-                      ci_inf = rd$inf, ci_sup = rd$sup, pvalue = rd$pvalue)
-    base <- if (grouped) {
-      # the mean SCORE and its one-sample t interval (the gaussian base shape, on the numeric part)
-      cell <- ci_pivot(meanv, sqrt(varv / nv_ci), df = df_or_design(nv_ci - 1, degf),
-                       conf_level = conf_level, want_p = FALSE)
-      list(col = emp_col(fam$base, list(mean = meanv, var = varv, n = nv, tot_n = nv,
-                                        ci_inf = cell$inf, ci_sup = cell$sup),
-                         n_eff = neff_of(nv_ci)), shape = fam$base)
-    } else list(col = emp_col(fam$base, rd_fields, n_eff = neff_of(nv_dr)), shape = fam$base)
+    sh <- if (identical(shape_key, "ame") || ratio_marg) reg_crude_shape(crude_key, est)
+          else fam[[if (do_exp) fam$coef else fam$coef_log]]
+    pe <- prob_effect(sh, g)
+    return(emit(list(col = emp_col(sh, pe$fields, n_eff = neff_of(pe$n_eff)),
+                     vec = pe$vec, shape = sh), cat1))
+  }
 
-    if (identical(shape_key, "ame")) { # a DIFFERENCE of risks (marginal AME or conditional "rd")
-      sh <- reg_crude_shape(crude_key, est)
-      return(emit(base, list(col = emp_col(sh, rd_fields, n_eff = neff_of(nv_dr)),
-                             vec = diffv, shape = sh), cat1))
-    }
-    # Phase 18z3: a marginal RATIO's crude twin is the crude RISK ratio with the Katz log-RR interval
-    # -- on the binomial model path as well as the "rr" one, since the estimand is what must match, not
-    # the fitted family. Always exponentiated: `exponentiate` is ignored for marginal effects. The Obs_RR
-    # shape is defined once, in REG_EMPIRICAL$rr, and reused here rather than duplicated per family.
-    if (ratio_marg && !identical(crude_key, "rr")) {
-      rr_ci <- na_ref(ci_katz_rr(prop, nv_dr, rprop, rn_dr, conf_level = conf_level,
-                                 want_p = TRUE, df = degf))
-      sh    <- reg_crude_shape(crude_key, est)
-      return(emit(base, list(col = emp_col(sh, list(or = prop / rprop, n = nv, ci_inf = rr_ci$inf,
-                                                    ci_sup = rr_ci$sup, pvalue = rr_ci$pvalue),
-                                    n_eff = neff_of(nv_dr)),
-                             vec = prop / rprop, shape = sh), cat1))
-    }
-    # binomial / grouped -> the crude ODDS ratio (the 2x2 legs vs the reference level's) with the Woolf
-    # log-OR interval. "rr" -> the crude RISK ratio (prop/rprop) with the Katz log-RR interval. WARNING:
-    # `ratio` (emp_ratio) is an ODDS ratio -- feeding it to an Obs_RR column would print an OR under an
-    # RR header. Phase 18z10: the 2x2 legs come from the grid (emp_wpos / emp_wneg) instead of being
-    # rebuilt as prop * n -- for a grouped binomial the base is Sum(w * trials), not the respondent
-    # count, and only the legs know that.
-    is_rr  <- identical(crude_key, "rr")
-    eff_v  <- if (is_rr) prop / rprop else ratio
-    eff_ci <- na_ref(if (is_rr)
-      ci_katz_rr(prop, nv_dr, rprop, rn_dr, conf_level = conf_level, want_p = TRUE, df = degf)
-    else
-      # the SS14 rule, unchanged: WEIGHTED proportion x UNWEIGHTED base, so the base cancels out of the
-      # log-OR. For a grouped binomial that base counts DRAWS (n x trials), which is what makes the crude
-      # OR equal a univariable glm(cbind(s, q - s) ~ x) rather than an OR on respondent counts.
-      ci_or(prop * nv_dr, (1 - prop) * nv_dr,
-            rprop * rn_dr, (1 - rprop) * rn_dr, conf_level = conf_level, want_p = TRUE, df = degf))
-    sh_exp <- fam[[fam$coef]]
-    sh_log <- fam[[fam$coef_log]]
-    if (do_exp) {
-      eff_col <- emp_col(sh_exp, list(or = eff_v, n = nv, ci_inf = eff_ci$inf,
-                                      ci_sup = eff_ci$sup, pvalue = eff_ci$pvalue),
-                         n_eff = neff_of(nv_dr))
-      return(emit(base, list(col = eff_col, vec = eff_v, shape = sh_exp), cat1))
-    }
-    # Phase g: exponentiate = FALSE -> the crude companion is the LOGGED effect (Obs_log(OR) /
-    # Obs_log(RR)): the log ratio in the `diff` field with the logged CI, i.e. the exact Wald interval
-    # on the log scale -- the same link scale as the raw model coefficient.
-    eff_col <- emp_col(sh_log, list(diff = log(eff_v), n = nv, ci_inf = log(eff_ci$inf),
-                                    ci_sup = log(eff_ci$sup), pvalue = eff_ci$pvalue),
-                       n_eff = neff_of(nv_dr))
-    return(emit(base, list(col = eff_col, vec = log(eff_v), shape = sh_log), cat1))
+  # ---- the moment families: a mean difference / a ratio of means / a rate ratio -------------------
+  moment <- function(sh, v, ci) {
+    fields <- c(stats::setNames(list(v), EST_SCALES[[sh$scale]]$est_field),
+                list(n = nv, tot_n = nv, ci_inf = ci$inf, ci_sup = ci$sup, pvalue = ci$pvalue))
+    emit(list(col = emp_col(sh, with_var(sh, with_base(sh, fields, meanv)),
+                            n_eff = neff_of(nv_ci)),
+              vec = v, shape = sh), cat1)
   }
 
   if (identical(crude_key, "gaussian")) {
-    cell <- ci_pivot(meanv, sqrt(varv / nv_ci), df = df_or_design(nv_ci - 1, degf),
-                     conf_level = conf_level, want_p = FALSE)
-    base_col <- emp_col(fam$base, list(mean = meanv, var = varv, n = nv, tot_n = nv,
-                                       ci_inf = cell$inf, ci_sup = cell$sup),
-                        n_eff = neff_of(nv_ci))
     md <- na_ref(ci_mean_diff2(meanv, varv, nv_ci, rmean, rv, rn_ci,
                                method = emp_method(fam$diff), conf_level = conf_level,
                                want_p = TRUE, df_design = degf,
                                pool = emp_pool(fam$diff, "mean_diff")))
-    eff_col <- emp_col(fam$diff, list(diff = diffv, var = rep(var_y, n_rows), n = nv,
-                                      ci_inf = md$inf, ci_sup = md$sup, pvalue = md$pvalue),
-                       n_eff = neff_of(nv_ci))
-    return(emit(list(col = base_col, shape = fam$base),
-                list(col = eff_col, vec = diffv,
-                     shape = reg_crude_shape(crude_key, est)), cat1))
+    return(moment(fam$diff, g$emp_diff, md))
   }
 
-  # Phase 19e -- the RATIO OF MEANS crude twin ("mr"): the gaussian base column (a group mean and its
-  # one-sample t interval) beside the crude ratio of means, with the SAME ci_mean_ratio engine the
-  # poisson arm uses -- which is what makes "the observed companion is on the model's scale" true
-  # for this estimand too. The `ratio` field, never `or`: mean_ratio's declared est_field.
-  if (identical(crude_key, "mr")) {
-    cell <- ci_pivot(meanv, sqrt(varv / nv_ci), df = df_or_design(nv_ci - 1, degf),
-                     conf_level = conf_level, want_p = FALSE)
-    base_col <- emp_col(fam$base, list(mean = meanv, var = varv, n = nv, tot_n = nv,
-                                       ci_inf = cell$inf, ci_sup = cell$sup),
-                        n_eff = neff_of(nv_ci))
-    mr <- na_ref(ci_mean_ratio(meanv, varv, nv_ci, rmean, rv, rn_ci,
-                               method = emp_method(fam$mr), conf_level = conf_level,
-                               want_p = TRUE, df_design = degf,
-                               pool = emp_pool(fam$mr, "mean_ratio")))
-    if (do_exp) {
-      eff_col <- emp_col(fam$mr, list(ratio = ratio, n = nv, ci_inf = mr$inf,
-                                      ci_sup = mr$sup, pvalue = mr$pvalue),
-                         n_eff = neff_of(nv_ci))
-      return(emit(list(col = base_col, shape = fam$base),
-                  list(col = eff_col, vec = ratio, shape = fam$mr), cat1))
-    }
-    eff_col <- emp_col(fam$mr_log, list(diff = log(ratio), n = nv, ci_inf = log(mr$inf),
-                                        ci_sup = log(mr$sup), pvalue = mr$pvalue),
-                       n_eff = neff_of(nv_ci))
-    return(emit(list(col = base_col, shape = fam$base),
-                list(col = eff_col, vec = log(ratio), shape = fam$mr_log), cat1))
+  # the RATIO OF MEANS ("mr", the log-link pseudo-likelihood fit) and the RATE RATIO (poisson) share
+  # one engine -- ci_mean_ratio, the quasi-Poisson interval tab() has used for years -- and differ
+  # only in which field their scale centres on.
+  if (crude_key %in% c("mr", "poisson")) {
+    sh0 <- fam[[fam$coef]]
+    rr  <- na_ref(ci_mean_ratio(meanv, varv, nv_ci, rmean, rv, rn_ci,
+                                method = emp_method(sh0), conf_level = conf_level,
+                                want_p = TRUE, df_design = degf,
+                                pool = emp_pool(sh0, "mean_ratio")))
+    if (do_exp) return(moment(sh0, ratio, rr))
+    return(moment(fam[[fam$coef_log]], log(ratio),
+                  list(inf = log(rr$inf), sup = log(rr$sup), pvalue = rr$pvalue)))
   }
 
-  if (identical(crude_key, "poisson")) {
-    # one crude rate-ratio CI (quasi-Poisson, = the phi-scaled model's method) drives BOTH columns.
-    rr <- na_ref(ci_mean_ratio(meanv, varv, nv_ci, rmean, rv, rn_ci,
-                               method = emp_method(fam$irr), conf_level = conf_level,
-                               want_p = TRUE, df_design = degf,
-                               pool = emp_pool(fam$irr, "mean_ratio")))
-    base_col <- emp_col(fam$base, list(mean = meanv, ratio = ratio, n = nv, tot_n = nv,
-                                       ci_inf = rr$inf, ci_sup = rr$sup, pvalue = rr$pvalue),
-                        n_eff = neff_of(nv_ci))
-    if (do_exp) {
-      eff_col <- emp_col(fam$irr, list(or = ratio, n = nv, ci_inf = rr$inf,
-                                       ci_sup = rr$sup, pvalue = rr$pvalue),
-                          n_eff = neff_of(nv_ci))
-      return(emit(list(col = base_col, shape = fam$base),
-                  list(col = eff_col, vec = ratio, shape = fam$irr), cat1))
-    }
-    # Phase g: exponentiate = FALSE -> the crude companion is Obs_log(IRR): log(rate-ratio) in `diff`
-    # with the logged rate-ratio CI (the same link scale as the raw Poisson coefficient).
-    eff_col <- emp_col(fam$irr_log, list(diff = log(ratio), n = nv, ci_inf = log(rr$inf),
-                                         ci_sup = log(rr$sup), pvalue = rr$pvalue),
-                        n_eff = neff_of(nv_ci))
-    return(emit(list(col = base_col, shape = fam$base),
-                list(col = eff_col, vec = log(ratio), shape = fam$irr_log), cat1))
-  }
-
-  list(cols = list(), effect = NULL, shape = NULL)
+  list(cols = list(), cat_cols = list(), effect = NULL, shape = NULL)
 }
 
 # === the model-vs-observed GAP standard error (Phase 18z8-B) =====================================

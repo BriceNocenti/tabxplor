@@ -463,10 +463,14 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   # (ci = "cell" brackets, or OR) is written as the format() display STRING (special_formatting = TRUE,
   # so the 1/x + stars appear) under Excel's "@" text format -- it keeps the exact console display at
   # the cost of a raw editable number (the accepted trade-off; pct/diff/mean/n stay real numbers).
+  # WARNING: resolve the scale-relative tokens first -- a regression cell displays `{est}`, which IS
+  # the odds ratio on an odds-ratio column, and matching the raw token would silently export the
+  # numbers where the console prints "1/2.67".
   or_family <- c("or", "OR", "or_pct", "OR_pct", "est_ci")
   xl_code   <- function(col) {
     code <- format(col, syntax = "excel")
-    if (!isTRUE(o$or_numeric)) code[get_display(col) %in% or_family] <- "TEXT"
+    disp <- fmt_resolve_scale_tokens(display_primary(get_display(col)), fmt_scale_row(col))
+    if (!isTRUE(o$or_numeric)) code[disp %in% or_family] <- "TEXT"
     code
   }
   # Phase 14o: a transposed column is heterogeneous character (pre-formatted display strings, editable

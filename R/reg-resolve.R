@@ -88,13 +88,24 @@ reg_validate_args <- function(conf_level = NULL, stats = NULL, color_signif = NU
   # can act on it: reg_resolve_stats() rewrites, reg_compare_rows() matches the model labels.
 
   # 5. the scalar logicals. NULL passes (several of them mean "read the option" upstream).
-  for (nm in c("empirical", "add_n", "stars")) {
+  for (nm in c("add_n", "stars")) {
     v <- get(nm)
     if (is.null(v)) next
     if (length(v) != 1L || !is.logical(v) || is.na(v))
       cli::cli_abort(c("{.arg {nm}} must be a single {.code TRUE} or {.code FALSE}.",
                        "x" = "Got {.val {v}}."), call = NULL)
   }
+  # `empirical` is logical-primary with two expert spellings that say WHERE the crude effect goes.
+  if (!is.null(empirical) &&
+      (length(empirical) != 1L || is.na(empirical) ||
+       !(isTRUE(empirical) || isFALSE(empirical) ||
+         (is.character(empirical) && empirical %in% c("cell", "column")))))
+    cli::cli_abort(c(
+      "{.arg empirical} must be {.code TRUE}, {.code FALSE}, {.val cell} or {.val column}.",
+      "x" = "Got {.val {empirical}}.",
+      "i" = paste("{.code TRUE} draws a crude column, except where one model column would need",
+                  "several of them (a 3+ level outcome) -- there the crude value rides inside the",
+                  "model cell. {.val cell} and {.val column} force one or the other.")), call = NULL)
   invisible(TRUE)
 }
 
@@ -430,12 +441,6 @@ reg_resolve_output <- function(display = NULL, color = TRUE, color_signif = NULL
   # THE RULE: a display template may ask for AUXILIARY quantities from the SAME fit; it may never
   # change the fit or the estimand. `measure` is the only estimand argument.
   display <- reg_resolve_display(display)
-  # Marginal-effects output already IS a fold ("{diff} ({pct})") -> a second one is ignored.
-  if (!is.null(display) &&
-      any(vapply(ests, function(e) !identical(e$builder, "coef"), logical(1)))) {
-    cli::cli_inform(c("i" = "{.arg display} is ignored with marginal-effects output."))
-    display <- NULL
-  }
 
   # --- O: `color` -- normalise, then validate through the storage boundary -----------------------
   # It is logical-primary: TRUE (default) auto-picks the per-column measure; FALSE turns every column
@@ -459,7 +464,7 @@ reg_resolve_output <- function(display = NULL, color = TRUE, color_signif = NULL
   # `empirical`. Same shape as color = "contrib" forcing chi2 + totrow in the crosstab resolve
   # cascade: the user states an intent, the pipeline computes what it needs. Phase 19c: the forcing
   # is the measure's own declared `requires["empirical"]`, from the same table.
-  if (any(vapply(color_arg, measure_forces, logical(1), "empirical")) && !isTRUE(empirical)) {
+  if (any(vapply(color_arg, measure_forces, logical(1), "empirical")) && !emp_on(empirical)) {
     cli::cli_inform(c("i" = paste0("{.code color = \"adjustment\"} compares each model effect to its ",
                                    "observed one, so {.code empirical = TRUE} is turned on.")))
     empirical <- TRUE
@@ -484,7 +489,7 @@ reg_resolve_output <- function(display = NULL, color = TRUE, color_signif = NULL
   # Phase 19m-ii: it asks the SPEC's own stored answer (`deps$crude_key`, the z10 fact) instead of
   # re-deriving the key from the OUTCOME family -- a third encoding, and one that read a different
   # family from the one the spec pairs its crude block with.
-  if (isTRUE(empirical) && all(is.na(deps$crude_key))) {
+  if (emp_on(empirical) && all(is.na(deps$crude_key))) {
     # Phase 18z15 (SS12.6 defect 1): name the REAL cause. A compound formula has no predictor
     # structure to be crude about, whatever the family -- the old message blamed the outcome family
     # and so told a binomial user their binomial outcome was unsupported.
@@ -511,7 +516,37 @@ reg_resolve_output <- function(display = NULL, color = TRUE, color_signif = NULL
     cli::cli_inform(c("i" = "{note}"))
   }
 
-  list(display = display, color_arg = color_arg, color_signif = color_signif, empirical = empirical)
+  # `empirical` leaves the boundary RESOLVED to its mode -- "no" / "cell" / "column" -- so no consumer
+  # re-derives where the crude effect goes, and none has to know the argument's spellings.
+  list(display = display, color_arg = color_arg, color_signif = color_signif,
+       empirical = reg_emp_mode(empirical, deps$crude_key, ests))
+}
+
+
+# emp_on() / reg_emp_mode() -- `empirical` asked, and WHERE the crude effect goes.
+#
+# The auto rule (`TRUE`): a crude COLUMN, except where one model column would need SEVERAL of them --
+# a 3+ level outcome, whose crude effect is per outcome CATEGORY. There the value rides inside the
+# model cell instead, because a column set that multiplies with the outcome is not readable. `"cell"`
+# and `"column"` force one or the other; `"column"` is the exit door that draws the per-category
+# columns anyway.
+#' @keywords internal
+#' @noRd
+emp_on <- function(empirical)
+  !(is.null(empirical) || isFALSE(empirical) || identical(empirical, "no"))
+
+#' @keywords internal
+#' @noRd
+reg_emp_mode <- function(empirical, crude_key, ests) {
+  if (!emp_on(empirical)) return("no")
+  if (is.character(empirical)) return(empirical)
+  per_cat <- any(purrr::map_lgl(seq_along(ests), function(i) {
+    k <- crude_key[[i]]
+    if (is.null(k) || is.na(k)) return(FALSE)
+    sh <- reg_crude_shape(k, ests[[i]])
+    !is.null(sh) && shape_per_category(sh)
+  }))
+  if (per_cat) "cell" else "column"
 }
 
 
@@ -873,10 +908,14 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   design_spec <- list(design = plan$design_obj, wt = prep$wt, degf = prep$degf)
   # Phase 15e: check the Suggests deps of EVERY family present (nnet for multinomial, MASS for
   # ordinal...).
+  # `marginaleffects` is required exactly where an estimand's ENGINE resolves to it -- one fact, read
+  # from reg_marginal_engine() rather than declared a second time per row. `display` is not part of
+  # this: it never triggers a computation.
   for (fm in unique(deps$family))
     reg_check_deps(fm, prep$weighted,
-                   needs_marginaleffects = any(vapply(deps$est, function(e) nzchar(e$needs),
-                                                      logical(1))) || reg_display_folds(out$display))
+                   needs_marginaleffects = any(vapply(
+                     deps$est, function(e) identical(reg_marginal_engine(e), "marginaleffects"),
+                     logical(1))))
   # Phase 17h: every per-call setting reg_build's leaves + assembler read, bundled once (the specs
   # carry the per-outcome family / estimand / colour, so those scalars are not threaded).
   shared <- new_reg_shared(

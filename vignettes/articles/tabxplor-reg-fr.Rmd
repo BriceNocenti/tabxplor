@@ -70,7 +70,7 @@ Pour les variables catégorielles, `tab_reg()` détecte automatiquement la famil
 
 Cette dernière colonne n'est que le **défaut** : chaque famille peut rapporter plusieurs mesures, et sur plusieurs contrastes. La grille complète, et comment en demander une autre, sont dans [Ce que rapporte une colonne de modèle](#ce-que-rapporte-une-colonne-de-modèle-family-effect-measure) plus bas.
 
-Avec `empirical = TRUE`, chaque colonne de modèle est accompagnée d'une colonne brute/observée montrant l'effet *observé, non ajusté (à un seul prédicteur)* — l'effet que l’on verrait sans aucun contrôle, « toutes choses étant inégales par ailleurs », pour ce prédicteur (cette variable explicative).
+Avec `empirical = TRUE`, chaque colonne de modèle est accompagnée d'une colonne brute/observée montrant l'effet *observé, non ajusté (à un seul prédicteur)* — l'effet que l’on verrait sans aucun contrôle, « toutes choses étant inégales par ailleurs », pour ce prédicteur (cette variable explicative). Les deux colonnes sont la même colonne deux fois, une même quantité estimée avec un seul prédicteur puis avec tous : même échelle de couleurs, même mise en forme, une seule légende. Chaque cellule imprime l'effet avec, à côté, le niveau sur lequel il porte — le pourcentage ou la moyenne observés du côté brut, la prédiction **ajustée** du côté du modèle —, si bien que les deux effets se retrouvent côte à côte au milieu et que la comparaison se lit d'un trait.
 
 Une seule règle couvre tous les cas : **l'effet observé est l'effet de ce prédicteur seul**. Pour un prédicteur catégoriel, c'est exactement le contraste observé entre modalités (une différence de pourcentages, un rapport de cotes calculé à partir des pourcentages bruts). Pour un prédicteur *continu*, il n'existe pas de tel raccourci : c'est la pente du modèle à un seul prédicteur — ce qui suppose que l'effet est linéaire sur l'échelle du modèle, hypothèse qu'il vaut mieux vérifier (avec `cut()`, ou des splines) avant de s'y fier.
 
@@ -79,7 +79,7 @@ Une seule règle couvre tous les cas : **l'effet observé est l'effet de ce pré
 - `gaussian` (linéaire) → moyennes de groupe et leur différence
 - `poisson` (comptage) → taux observé et rapport de taux observé
 
-Un prédicteur continu n'a pas de modalités : seule sa colonne d'**effet** est remplie ; la colonne de base (`Obs_%`, `Obs_mean`, `Obs_rate`) reste vide, et sa distribution — moyenne, écart-type, et moyenne dans chaque groupe de la variable expliquée — est affichée en infobulle html à la place.
+Un prédicteur continu n'a pas de modalités : sa cellule ne montre que l'**effet** — il n'y a pas de pourcentage ni de moyenne observés à mettre à côté —, et sa distribution (moyenne, écart-type, et moyenne dans chaque groupe de la variable expliquée) est affichée en infobulle html à la place.
 
 Sur des données **pondérées**, une chose mérite d'être sue dès le départ : une colonne observée est toujours mesurée exactement comme la colonne de modèle placée à côté d'elle, si bien que son intervalle de confiance tient compte de la pondération (et, sous un plan `survey`, de tout le plan de sondage). Un tableau croisé de `tab()` ne le fait pas par défaut : ajoutez-y `design_effect = TRUE` si vous voulez que ses pourcentages soient directement comparables à ceux-ci. Voir [Données pondérées et *survey-design*](#données-pondérées-et-survey-design) plus bas.
 
@@ -101,7 +101,7 @@ Pour une régression logistique simple, `empirical = TRUE` ajoute les **pourcent
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), empirical = TRUE)
 ```
 
-Les pourcentages bruts `Obs_%` sont un résumé des résultats réellement observés dont tout, dans le modèle, est dérivé : « 28 % des Américains noirs sont mariés, contre 51 % pour les Américains blancs »
+Les pourcentages bruts, entre parenthèses dans la colonne `Obs_OR`, sont les résultats réellement observés dont tout, dans le modèle, est dérivé : « 28 % des Américains noirs sont mariés, contre 51 % pour les Américains blancs »
 
 - La simple différence à la catégorie de référence est colorée (28 % − 51 % = −23 %).
 - Les cases qui ne diffèrent pas significativement de la référence sont grisées (d'après un intervalle de confiance de Newcombe pour les différences de proportions).
@@ -140,7 +140,7 @@ On peut alors utiliser `empirical = TRUE` pour comparer cette nouvelle quantité
 - Dans l'échantillon (`Obs_diff`), on observe un taux de mariages inférieur de 23 points pour les Américains noirs comparés aux Américains blancs (`28% - 51% = -23%`).
 - La différence modélisée `Model_AME` est très proche, `-19,8 %`, donc très peu de cette différence entre noirs et blancs peut être expliquée par l'âge, le revenu ou la religion.
 
-On peut aussi comparer le pourcentage brut `Obs_%` avec la **probabilité ajustée par le modèle** — la valeur entre parenthèses dans la colonne `Model_AME (adjusted %)` :
+On peut aussi comparer le pourcentage brut — entre parenthèses dans la colonne observée — avec la **probabilité ajustée par le modèle**, entre parenthèses dans la colonne du modèle :
 
 - Le pourcentage ajusté, qui est un résultat dérivé du modèle, se lit ainsi : « si tout l'échantillon gardait sa distribution de revenu/âge/religion mais que tout le monde était noir, on estime que 31,5 % seraient mariés, contre 51,3 % si tout le monde était blanc ».
 - Les noirs se marient à 30,9 % dans cet échantillon (observé) ; standardiser leur revenu/âge/religion à la structure de la population totale ne déplace cela qu'à 31,5 % — donc presque rien de l'écart noir-blanc ne s'explique par des différences dans ces trois variables ; il persiste après ajustement.
@@ -254,7 +254,7 @@ affichage habituel :
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "rincome"), empirical = TRUE) |>
-  set_display("{or} (obs {obs})")
+  set_display("{est} (obs {obs})")
 ```
 
 ### Un avertissement sur les rapports de cotes
@@ -490,7 +490,7 @@ tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
 
 ### Un score sommé
 
-Avec `trials =`, les colonnes observées donnent la part moyenne de réponses « oui » de deux façons : `Obs_mean` est le **score moyen** brut — ici le nombre moyen de lieux sur six — et `Obs_OR` le rapport de cotes des items sommés.
+Avec `trials =`, la colonne observée donne le rapport de cotes des items sommés, `Obs_OR`, avec à côté le **score moyen** observé — le nombre moyen de lieux sur six. La colonne du modèle donne les deux mêmes quantités ajustées, si bien que la paire se lit d'un trait.
 
 ```{r}
 tab_reg(tea, "tea_where", c("sex", "SPC", "Sport"),
@@ -704,7 +704,7 @@ Cela dit, ce sont deux questions différentes, et non deux écritures d'une seul
 - **`measure = "log"` a besoin de quelque chose dont prendre le log.** Il logarithmise la mesure par défaut de la famille, donc il est refusé là où cette mesure est déjà additive (un coefficient linéaire, un effet marginal moyen). Écrivez `"log_odds"`, `"log_risk"` ou `"log_rate"` pour logarithmiser une mesure choisie.
 - **Les rapports de cotes ne sont pas collapsibles** : `color = "adjustment"` colore donc l'écart sur une colonne OR mais ne le teste jamais (voir *Comment le lire — et comment ne pas le lire*, plus haut). Demandez `measure = "ratio"` ou `effect = "marginal"` si vous voulez un écart que le test puisse lire.
 - **Deux combinaisons n'ont pas de contrepartie observée.** Avec `effect = "at_reference"`, le modèle est conditionnel à un profil alors que les colonnes observées restent marginales sur tout l'échantillon : les deux sont montrées mais pas comparées — `color = "adjustment"` et `{obs}` restent vides. Et un `effect = "marginal"` **de Poisson** est additif alors que sa contrepartie brute est un rapport de taux : les deux ne sont pas sur la même échelle, donc elles ne sont pas appariées. Utilisez `effect = "coefficient"` pour les comparer.
-- **Ce qui demande un paquet en plus, et ce qui n'a pas de méthode.** `effect = "at_reference"` passe par **marginaleffects** ; un modèle multinomial ou ordinal *pondéré* n'a aucune méthode d'effets marginaux, il faut donc y garder `effect = "coefficient"`. Et `display` est ignoré sur une colonne d'effets marginaux, qui replie déjà la prédiction ajustée dans la case.
+- **Ce qui demande un paquet en plus, et ce qui n'a pas de méthode.** `effect = "at_reference"` passe par **marginaleffects** ; un modèle multinomial ou ordinal *pondéré* n'a aucune méthode d'effets marginaux, il faut donc y garder `effect = "coefficient"`. (`display`, lui, s'applique à toutes les colonnes, marginales ou non.)
 
 ### Interroger votre propre variable expliquée
 
@@ -805,7 +805,7 @@ même sens, les groupes diffèrent probablement de niveau ou de variabilité —
 groupe, pas du prédicteur. Si **une seule ligne** ressort quand les autres restent sages, voilà à quoi
 ressemble une vraie interaction. Les couleurs sont utiles justement parce qu'elles rendent cette forme
 visible d'un coup d'œil. Ajouter `empirical = TRUE` affiche la fréquence de base de chaque groupe
-(`Obs_%`), ce qui tranche le plus souvent la question.
+(entre parenthèses dans la colonne observée), ce qui tranche le plus souvent la question.
 
 **Chaque case est testée pour elle-même, sans correction pour le nombre de tests.** Dans un tableau
 comptant sept comparaisons, environ un tableau sur cinq affichera une case colorée à tort. La ligne du

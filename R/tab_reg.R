@@ -12,11 +12,16 @@
 #     CI (coef +/- crit*se, exp()'d for ratio measures) + the model's own Wald p; crit is z for
 #     fixed-dispersion glm (binomial/poisson), t(df.residual) for lm / quasi* / weighted svyglm --
 #     matching broom's z/t p exactly. method="profile" (unweighted glm): confint + LR-test p.
-#   - Effect shape is driven by `exponentiate` (default "nongaussian"): MULTIPLICATIVE (OR/IRR) ->
-#     the `or` field, scale="odds_ratio", display="or", color="OR" (neutral 1, 1/x reciprocal);
-#     ADDITIVE (gaussian beta / log-odds) -> the `diff` field, type="coef", display="coef",
-#     scale="raw_diff", color="diff" (neutral 0), with `var`=var(Y) so the colour is the effect-size
-#     beta/SD(Y) against the mean_diff (Cohen) breaks -- the additive twin of OR-coloured-by-ratio.
+#   - Effect shape follows the ESTIMAND's declared `scale` (REG_ESTIMANDS -> EST_SCALES), which names
+#     the field the estimate lands in and the ladder it is graded on: MULTIPLICATIVE (odds_ratio /
+#     rate_ratio) -> the `or` field, neutral 1, the 1/x reciprocal rendering; ADDITIVE (raw_diff /
+#     points / log_coef) -> the `diff` field, neutral 0, with `var` = var(Y) where the scale declares
+#     it, so the colour is the effect size beta/SD(Y) against the Cohen breaks. Every column is built
+#     displaying `est`, the scale-relative token -- no builder names a family-specific one.
+#   - EVERY MODEL COLUMN CARRIES ITS ADJUSTED PREDICTION and its additive marginal effect, whether or
+#     not the cell prints them (reg_fill_base). That is what makes `display` a pure post-hoc
+#     property: choosing a layout never triggers a computation and never changes a number, so
+#     set_display() on a built table gives the same table as asking for it at build time.
 #   - 12c-ii: `trials` fits a summed-score outcome as GROUPED binomial (cbind(score, trials-score));
 #     a model FORMULA in `outcome` is the escape hatch -- a simple `y ~ a + b` reduces to the
 #     outcome+predictors path, a compound one (interactions / poly() / I()) is fit verbatim with a
@@ -32,9 +37,9 @@
 #     sample-average marginal effects + adjusted predictions on the RESPONSE scale. reg_marginal()
 #     wraps avg_comparisons()/avg_predictions() (newdata = the fitted frame is REQUIRED); a factor AME
 #     is keyed by (var, level) from the "Level - Reference" contrast label. reg_marginal_column()
-#     composes them AME-first via the {} display grammar: prob-scale families (binomial/MNL/ordinal)
-#     get type="row" + "{diff} ({pct})" (reference level -> "({pct})", numeric -> "diff"); gaussian/
-#     poisson get the raw type="coef". MNL/ordinal -> one AME column per outcome CATEGORY (all levels).
+#     builds them like any other column -- the estimate in the field its scale names, displaying
+#     `est` -- so the AME and the coefficient differ in what they ESTIMATE, never in how they print.
+#     MNL/ordinal -> one AME column per outcome CATEGORY (all levels).
 #     No new fmt fields/attributes/tokens; effect="coefficient" byte-identical.
 #   - 12e-ii: the `at` profile axis. at="reference" evaluates at the REFERENCE PROFILE (other predictors
 #     at their reference = factor first level / numeric mean) via marginaleffects::datagrid ->
@@ -81,16 +86,25 @@
 
 # broom is an Import (every fit is tidied with it), so it needs no guard here; survey only for the
 # weighted (wt) path; nnet / MASS for the nominal (multinomial) / ordinal (proportional-odds) families
-# (both R Recommended -> normally present); marginaleffects only for effect="ame" (the AME /
-# adjusted-prediction engine, Phase 12e).
+# (both R Recommended -> normally present); marginaleffects only where an estimand's engine resolves
+# to it -- `effect = "at_reference"`, whose one-row profile grid g-computation does not build.
+# The other marginal quantities run on the dependency-free gcomp engine, which is what lets every
+# model column populate them unconditionally.
+
+# THE ONE marginaleffects abort, so the upfront guard and reg_marginal()'s fallback say one thing.
+#' @keywords internal
+#' @noRd
+reg_abort_marginaleffects <- function(what) {
+  cli::cli_abort(c(
+    "{.pkg marginaleffects} is required for {.code {what}}.",
+    "i" = 'Install it with {.code install.packages("marginaleffects")}, or use
+           {.code effect = "coefficient"} / {.code effect = "marginal"}, which need no extra package.'
+  ))
+}
+
 reg_check_deps <- function(family, weighted, needs_marginaleffects = FALSE) {
-  if (needs_marginaleffects && !requireNamespace("marginaleffects", quietly = TRUE)) {
-    cli::cli_abort(c(
-      '{.pkg marginaleffects} is required for {.code effect = "ame"} and the {.code at = "reference"} ',
-      "i" = 'profile axis. Install it with {.code install.packages("marginaleffects")}, or use the ',
-      "i" = 'default {.code effect = "coefficient"}, {.code at = "average"}.'
-    ))
-  }
+  if (needs_marginaleffects && !requireNamespace("marginaleffects", quietly = TRUE))
+    reg_abort_marginaleffects('effect = "at_reference"')
   # Phase 19l: the unweighted 3+ level engines need NO guard -- `nnet` and `MASS` are in Imports (see
   # DESCRIPTION), so requireNamespace() could never be FALSE and the two aborts behind it were
   # unreachable. Only Suggests-level packages are guarded here.
@@ -237,7 +251,7 @@ reg_color_notes <- function(color, color_signif, ests, tab_vars, na, na_explicit
   # a `{.val {bare}}` resolved in its frame would be an error, not a message.
   add   <- function(...) notes <<- c(notes, cli::format_inline(paste0(...)))
   gap   <- intersect(c("adjustment", "between_groups"), color)
-  if (length(gap) == 0L && !isTRUE(empirical)) return(notes)
+  if (length(gap) == 0L && !emp_on(empirical)) return(notes)
 
   if ("between_groups" %in% gap && is.null(tab_vars)) {
     add("{.code color = \"between_groups\"} compares each effect to the first group's, so it needs ",
@@ -553,14 +567,16 @@ reg_detect_family <- function(data, outcome) {
 # table is not a regression (reg_call -> NULL).
 # Phase 18w: the prose is translatable (gettext); called only from reg_model_lines(), which sets the
 # LANGUAGE env via with_legend_lang(). enc2utf8 for the French accents (matches tab_weight_line et al.).
-# Does ANY of these outcomes fold its observed effect into the model cell? Reads the STORED crude keys.
+# Does the observed effect ride INSIDE the model cell? One stored fact, resolved at the argument
+# boundary (reg_emp_mode()); `deps` narrows to a group's outcomes, which only matters for the crude
+# keys that say whether there is an observed effect at all.
 #' @keywords internal
 reg_meta_obs_in_cell <- function(meta, deps = NULL) {
+  if (!identical(meta$emp_mode, "cell")) return(FALSE)
   ck <- meta$crude_keys
   if (is.null(ck)) return(FALSE)
   if (!is.null(deps)) ck <- ck[intersect(names(ck), deps)]
-  any(purrr::map_lgl(names(ck), function(d)
-    !is.na(ck[[d]]) && reg_crude_in_cell(ck[[d]], reg_meta_estimand(meta, d))))
+  any(!is.na(unlist(ck)))
 }
 
 # reg_meta_estimand() -- the stored ESTIMAND of one outcome, re-resolved from the recipe (Phase
@@ -1550,7 +1566,7 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
 # model get the neutral value (0 / 1, no CI/p); predictors ABSENT from this model stay NA (empty
 # cells); the Constant carries the intercept (baseline) estimate.
 reg_column <- function(skeleton, fit_res, model_predictors, col_var, est,
-                       color, color_signif, model_family = "", method = "wald") {
+                       color, color_signif, model_family = "", method = "wald", trials = NA) {
   # Phase 19e: the column's SHAPE is the estimand row's -- which fmt field the estimate goes in (the
   # scale's own `est_field`), which EST_SCALES key is stamped, which display token and how many
   # digits. `effect_shape` (a two-valued "ratio"/"additive" derived from `exponentiate`) could not
@@ -1561,10 +1577,12 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, est,
   # all 36 declared rows carry one and reg_estimand() aborts before returning anything else. The
   # family-sniffing fallback that stood here (reg_fam_logscale) was therefore unreachable, and it is
   # deleted with the predicate.
-  scale_key    <- est$scale
+  scale_key    <- reg_scale_of(est, trials)
   est_field    <- EST_SCALES[[scale_key]]$est_field
-  disp         <- est$display %||% (if (identical(effect_shape, "ratio")) "or" else "coef")
-  digits       <- if (identical(scale_key, "points")) 0L else 2L
+  # every value cell shows THE ESTIMATE: `est` is the scale-relative token, so the builder names no
+  # family-specific one and the table's `display` (or its default) decides what joins it.
+  disp         <- "est"
+  digits       <- reg_cell_digits(scale_key)
   td  <- fit_res$tidy
   m   <- match(skeleton$term, td$term)
   est_v <- td$estimate[m]
@@ -1600,7 +1618,8 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, est,
                      else if (identical(effect_shape, "ratio")) "wald_log" else "wald",
          color = color, color_signif = color_signif, col_var = col_var,
          comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"))
-  if (identical(effect_shape, "ratio")) args <- c(args, list(ref = "1", pct_type = "row"))
+  if (identical(effect_shape, "ratio")) args <- c(args, list(ref = "1"))
+  args <- c(args, list(pct_type = reg_pct_type(scale_key)))
   # var(Y) standardizes beta/SD(Y) for colour -- only the scales that declare `sd_from = "var"`
   if (identical(EST_SCALES[[scale_key]]$sd_from %||% "", "var"))
     args <- c(args, list(var = rep(fit_res$var_y, n_rows)))
@@ -1618,63 +1637,112 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, est,
 #' @noRd
 reg_resolve_display <- function(display) display_resolve(display)
 
-# Does this display FOLD a quantity the coefficient path does not fill (an adjusted prediction, a
-# marginal effect)? The one predicate behind the reg_marginal() call below.
+# reg_fill_base() -- THE ADJUSTED PREDICTION and the ADDITIVE MARGINAL EFFECT, on every model
+# column, whether or not the cell prints them.
+#
+# WHY ALWAYS. `display` is a post-hoc property: choosing what a cell shows may never trigger a
+# computation nor change a number, or `set_display()` on a built table would be a lie and jamovi's
+# repaint would need a refit. Both quantities come from ONE point-estimate g-computation sweep
+# (`want_se = FALSE`: no delta method, no jacobian, no dependency), measured at ~0.1 s -- inside the
+# noise of the fit itself. The marginal builder has usually run that sweep already and passes it in.
+#
+# WHERE THEY LAND. The prediction goes in the field the column's own scale names for a LEVEL
+# (`EST_SCALES$base_display`, what `{base}` renders); the marginal effect in `diff`.
+# WARNING: neither may write into the column's OWN estimate field -- that would replace the number
+# the interval, the stars and the colour belong to. A risk-difference column's estimate IS in `diff`,
+# a percentage-level scale's IS `pct`: those two arms simply do not fire.
 #' @keywords internal
 #' @noRd
-reg_display_folds <- function(display) {
-  if (is.null(display) || identical(display, "est_ci")) return(FALSE)
-  fl <- tryCatch(parse_display_template(display)$fields, error = function(e) character(0))
-  any(c("pct", "mean", "base", "diff") %in% fl)
-}
-
-# Apply the resolved `display` to ONE coefficient column. Stars ride the primary token and its CI
-# drives the colour; the (annotation) is a descriptive companion.
-# The fold works on EVERY family: reg_marginal(want_pred = TRUE) returns the adjusted prediction on
-# the response scale, so `{base}` is an adjusted probability on a logistic and an adjusted mean on a
-# linear or a count model -- each written into the field its own scale declares.
-reg_apply_display <- function(col, display, skeleton, f, sp, family, design_spec, conf_level,
-                              model_predictors, multiplier = NULL) {
-  if (is.null(display)) return(col)
-  if (identical(display, "est_ci")) return(set_display(col, "est_ci"))
-  if (!reg_display_folds(display)) return(set_display(col, display))
-
-  fields    <- parse_display_template(display)$fields
-  # WARNING: a fold may never write into the column's OWN estimate field -- that would replace the
-  # number the interval, the stars and the colour belong to.
-  est_fld   <- fmt_center_field(col)
-  base_fld  <- fmt_scale_row(col)$base_display %||% NA_character_
-  want_base <- any(c("pct", "mean", "base") %in% fields) &&
-    !is.na(base_fld) && !identical(base_fld, est_fld)
-  # `want_se = FALSE`: this fold pokes a level / a marginal effect into a column that keeps its OWN
-  # interval, so nothing here reads the folded quantity's.
-  marg     <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, design_spec$wt,
-                           at = "average", want_pred = want_base, multiplier = multiplier,
-                           engine = reg_marginal_engine(sp$est), want_se = FALSE)
+reg_fill_base <- function(col, marg, skeleton, model_predictors, group = NULL) {
+  if (is.null(marg)) return(col)
+  n_rows   <- nrow(skeleton)
+  est_fld  <- fmt_center_field(col)
+  base_fld <- fmt_scale_row(col)$base_display %||% NA_character_
   in_model <- skeleton$var %in% c("Constant", model_predictors)
-  is_const <- skeleton$var == "Constant"
-  is_ref   <- skeleton$is_ref & !is_const & in_model
-  disp     <- get_display(col)
-  ok       <- in_model & !is_const
-  if (want_base) {
-    prd    <- marg$pred
-    pred_v <- if (nrow(prd)) prd$pred[reg_skel_match(skeleton, prd)] else rep(NA_real_, nrow(skeleton))
-    col    <- vctrs::`field<-`(col, base_fld, pred_v)
-    ok     <- ok & !is.na(pred_v)
+  is_ref   <- skeleton$is_ref & skeleton$var != "Constant" & in_model
+  # one outcome category's rows, for a per-category (multinomial / ordinal-marginal) column.
+  # WARNING: where the sweep returns one value per outcome CATEGORY and the column belongs to none of
+  # them -- an ordinal cumulative odds ratio, which spans every cut -- there is no single level to
+  # print, so the fill is refused rather than picking a category at random.
+  slice <- function(d) {
+    if (!"group" %in% names(d)) return(d)
+    if (all(is.na(d$group)))    return(d)
+    if (!is.null(group))  return(d[!is.na(d$group) & d$group == group, , drop = FALSE])
+    if (length(unique(stats::na.omit(d$group))) > 1L) return(d[0, , drop = FALSE])
+    d
   }
-  if ("diff" %in% fields && !identical(est_fld, "diff")) {
-    amt    <- marg$ame
-    ame_v  <- amt$ame[reg_skel_match(skeleton, amt)]
-    ame_v[is_ref] <- NA_real_                                # reference level has no marginal effect
-    col    <- vctrs::`field<-`(col, "diff", ame_v)
-    ok     <- ok & !is_ref & !is.na(ame_v)
+  take  <- function(d, col_nm) {
+    d <- slice(d)
+    if (is.null(d) || !nrow(d)) return(rep(NA_real_, n_rows))
+    d[[col_nm]][reg_skel_match(skeleton, d)]
   }
-  # a template is written only where every field it names exists -- elsewhere the cell keeps its
-  # plain estimate rather than silently printing a substitute quantity.
-  disp[ok] <- display
-  set_display(col, disp)
+  pred_v <- if (is.null(marg$pred)) rep(NA_real_, n_rows) else take(marg$pred, "pred")
+  if (!is.na(base_fld) && !identical(base_fld, est_fld))
+    col <- vctrs::`field<-`(col, base_fld, pred_v)
+  if (!identical(est_fld, "diff")) {
+    # DESIGN: a factor level's ADDITIVE marginal effect is derived from the two adjusted predictions
+    # rather than taken from the sweep's own contrast. The two are the same number -- averaging
+    # commutes with an additive contrast, so the average marginal effect IS the difference of the
+    # standardised means -- but the derived form is reference-INVARIANT, which is what lets jamovi's
+    # digest path re-reference a cached fit without refitting it. A numeric predictor has no
+    # prediction to difference, so its slope comes from the sweep.
+    v <- if (is.null(marg$ame)) rep(NA_real_, n_rows) else take(marg$ame, "ame")
+    refi   <- which(skeleton$is_ref & in_model)
+    ref_of <- pred_v[refi][match(as.character(skeleton$var),
+                                 as.character(skeleton$var)[refi])]
+    v <- ifelse(is.na(pred_v) | is.na(ref_of), v, pred_v - ref_of)
+    v[is_ref] <- NA_real_                                # a reference level has no marginal effect
+    col <- vctrs::`field<-`(col, "diff", v)
+  }
+  col
 }
 
+# reg_fill_sweep() -- the point-estimate g-computation sweep reg_fill_base() reads.
+#
+# WARNING: it calls the ANALYTIC engine directly, never reg_marginal(). These quantities are
+# AUXILIARY -- what a cell may show beside its estimate -- so they are computed where they are free
+# and simply absent where they are not. Going through reg_marginal() would fall back to
+# `marginaleffects` when g-computation refuses (a survey multinomial, a compound formula), turning an
+# optional annotation into a hard dependency and, worse, an abort on a model that package refuses.
+#' @keywords internal
+#' @noRd
+reg_fill_sweep <- function(fit, data, predictors, conf_level, wt = NULL, multiplier = NULL)
+  tryCatch(reg_marginal_gcomp(fit, data, predictors, conf_level, wt, want_pred = TRUE,
+                              want_se = FALSE, multiplier = multiplier),
+           error = function(e) NULL)
+
+# reg_apply_display() -- write the table's resolved `display` template into ONE model column.
+#
+# A pure template writer: every field it can name is already stored (reg_fill_base), so this never
+# computes and never changes a number. The per-cell rule is the crosstab's own (display_write_col):
+# a cell takes the template only where every field it names exists, so the Constant row, an
+# out-of-model predictor and a numeric predictor with no adjusted prediction keep their plain
+# estimate instead of printing a void.
+#' @keywords internal
+#' @noRd
+reg_apply_display <- function(col, display) {
+  if (is.null(display)) return(col)
+  display_write_col(col, display)$col
+}
+
+# reg_default_display() -- the cell layout a regression column takes when the user named none.
+#
+# With a crude COLUMN the two mirror each other -- the crude cell prints "({base}) {est}", the model
+# cell "{est} ({base})" -- so the two ESTIMATES end up side by side, adjacent across the table, with
+# the level each sits on on the outside. That order also mirrors the modelling itself: the observed
+# level is what everything starts from, a crude measure is computed on it, the model re-estimates
+# that measure all things being equal, and the adjusted level is inferred back from the model.
+#
+# Where the crude effect rides IN the model cell there is no column to mirror, so the cell keeps its
+# bare estimate here and reg_set_obs() folds "{est} ({obs})" once `obs` exists. Without a companion
+# at all there is nothing to compare across, and a column prints its estimate alone.
+#' @keywords internal
+#' @noRd
+reg_default_display <- function(col, empirical) {
+  if (!emp_on(empirical) || identical(empirical, "cell")) return(col)
+  display_write_col(col, DISPLAY_PRESETS[[if (identical(get_role(col), "emp")) "base_est"
+                                          else "est_base"]])$col
+}
 
 # === effect = "ame" + the `at` profile axis: marginal effects + adjusted predictions (Phase 12e) ==
 
@@ -1755,9 +1823,15 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
   if (identical(engine, "gcomp") && identical(at, "average") && !identical(comparison, "lnor"))
     out <- reg_marginal_gcomp(fit, data, predictors, conf_level, wt, ratio = do_exp,
                               want_pred = want_pred, want_se = want_se, multiplier = multiplier)
-  if (is.null(out))
+  # THE fallback, and the only place `marginaleffects` is genuinely required: either the estimand's
+  # engine named it (at_reference -- the upfront guard already checked), or gcomp refused this
+  # particular fit. The second case is not knowable at the argument boundary, so it is checked here.
+  if (is.null(out)) {
+    if (!requireNamespace("marginaleffects", quietly = TRUE))
+      reg_abort_marginaleffects("this contrast, which has no closed form on this model")
     out <- reg_marginal_me(fit, data, predictors, conf_level, wt, at = at, comparison = comparison,
                            want_pred = want_pred, multiplier = multiplier, want_se = want_se)
+  }
   if (identical(at, "average")) reg_marginal_basis_warn(fit, data, predictors, multiplier,
                                                         out$ame, do_exp)
   out
@@ -1937,7 +2011,7 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
 # level -> "({pct})", numeric -> "diff"); "raw" (gaussian/poisson) a plain "coef"; "or" (MNL j-vs-rest
 # OR at the profile) the multiplicative "or" shape (reference -> 1, no prediction). Reference levels +
 # the Constant carry no effect; predictors ABSENT from this model stay NA (empty cells).
-reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds, shape, var_y,
+reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
                                 group, color, color_signif, col_var, or_tip = NULL,
                                 model_family = "") {
   amt <- marg$ame; prd <- marg$pred
@@ -1954,19 +2028,19 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
   in_model <- skeleton$var %in% c("Constant", model_predictors)
   is_const <- skeleton$var == "Constant"
   is_ref   <- skeleton$is_ref & !is_const & in_model
-  is_num   <- skeleton$var %in% numeric_preds & in_model
   # in_refrow: the UNION-skeleton row fact (see reg_column) so an absent predictor keeps its bold in a
   # comparison; is_ref above stays in_model-gated for the value/display blanking below.
   refrows  <- (skeleton$is_ref & !is_const) | is_const
 
   # "blank" (not NA) for the Constant / out-of-model cells: an NA display falls back to get_n() in
   # get_num(), so it must be an explicit blank-token (renders "") rather than left unset.
+  # every value cell shows THE ESTIMATE; `est` is the scale-relative token, so one line serves every
+  # shape and the table's `display` (or its default) then decides what joins it. "blank" -- not NA --
+  # for the Constant / out-of-model cells: an NA display falls back to get_n() in get_num().
   display <- rep("blank", n_rows)
+  show    <- in_model & (!is.na(ame_v) | is_ref)
   if (shape == "prob") {
-    compos <- in_model & !is_const & !is_ref & !is_num & !is.na(ame_v) & !is.na(pred_v)
-    display[compos]                    <- "{diff} ({pct})"     # non-ref factor level: AME (prediction)
-    display[in_model & is_ref & !is.na(pred_v)] <- "({pct})"   # reference level: prediction only
-    display[in_model & is_num & !is.na(ame_v)]  <- "diff"      # numeric predictor: bare AME
+    display[show] <- "est"
     ame_v[is_ref] <- NA_real_                                  # reference has no marginal effect
     # Phase 14r (E): carry the model OR (coefficient path) in the `or` field so cond_or surfaces it on
     # hover though the cell DISPLAYS the AME. Read-only: the AME display / colour never read `or`, so it
@@ -1975,7 +2049,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
     fmt(
       n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
       pct = pred_v, diff = ame_v, or = or_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      scale = "points", pct_type = "row", display = display, digits = 1L, ci_method = "wald",
+      scale = "points", pct_type = reg_pct_type("points"), display = display, digits = reg_cell_digits("points"), ci_method = "wald",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
@@ -1988,15 +2062,12 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
     # gate (fmt_display_shows, tab_classes.R) free to attach a stray "OR: 1.00" hover to a risk-ratio
     # column. Still load-bearing after z10 replaced display_primary() there: the gate now reads the
     # WHOLE template instead of its first token, which is a different bug, not this one.
-    compos <- in_model & !is_const & !is_ref & !is.na(ame_v) & !is.na(pred_v)
-    display[compos]                            <- "{or} ({pct})"
-    display[in_model & is_ref & !is.na(pred_v)] <- "{or} ({pct})"
-    display[in_model & is_num & !is.na(ame_v)]  <- "or"        # numeric predictor: bare RR
+    display[show] <- "est"
     ame_v[is_ref] <- 1                                         # multiplicative neutral at the reference
     fmt(
       n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
       pct = pred_v, or = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      scale = "odds_ratio", pct_type = "row", display = display, digits = 1L, ref = "1",
+      scale = "odds_ratio", pct_type = reg_pct_type("odds_ratio"), display = display, digits = reg_cell_digits("odds_ratio"), ref = "1",
       ci_method = "wald_log",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
@@ -2007,32 +2078,29 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
     # tab() has given a ratio of means for years and tabxplor already owned the `mean_ratio` scale,
     # its ladder and three ci_mean_ratio engines. No adjusted PROBABILITY exists here, so there is no
     # parenthetical: the cell is the ratio alone.
-    display[in_model & !is_const & !is.na(ame_v)] <- "ratio"
+    display[show] <- "est"
     ame_v[is_ref] <- 1                                         # multiplicative neutral at the reference
-    display[in_model & is_ref] <- "ratio"
     fmt(
       n = rep(NA_integer_, n_rows),
       ratio = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      scale = "mean_ratio", display = display, digits = 2L, ref = "1", ci_method = "wald_log",
+      scale = "mean_ratio", display = display, digits = reg_cell_digits("mean_ratio"), ref = "1", ci_method = "wald_log",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
   } else if (shape == "or") {                                  # MNL "j vs rest" OR at the profile
-    display[in_model & !is_const & !is.na(ame_v)] <- "or"
+    display[show] <- "est"
     ame_v[is_ref] <- 1                                         # multiplicative neutral at the reference
-    display[in_model & is_ref] <- "or"
     fmt(
       n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
       or = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      scale = "odds_ratio", pct_type = "row", display = display, digits = 2L, ref = "1",
+      scale = "odds_ratio", pct_type = reg_pct_type("odds_ratio"), display = display, digits = reg_cell_digits("odds_ratio"), ref = "1",
       ci_method = "wald_log",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
   } else {                                                     # "raw" (gaussian / poisson)
-    display[in_model & !is_const & !is.na(ame_v)] <- "coef"    # raw AME (gaussian == coef; poisson count)
+    display[show] <- "est"
     ame_v[is_ref] <- 0                                         # additive neutral at the reference
-    display[in_model & is_ref]      <- "coef"
     fmt(
       n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
       diff = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
@@ -2040,7 +2108,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
       # a marginal effect on the OUTCOME's scale (a gaussian AME, a poisson COUNT AME) -- never a
       # link-scale coefficient, whatever the family, which is exactly what used to make this column
       # and the raw coefficient beside it indistinguishable except through the `var` field.
-      scale = "raw_diff", display = display, digits = 2L, ci_method = "wald",
+      scale = "raw_diff", display = display, digits = reg_cell_digits("raw_diff"), ci_method = "wald",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
@@ -2727,7 +2795,7 @@ reg_wald_crit <- function(disp_known, df_residual, conf_level) {
 # canonical coefficient basis does not depend on `reference`. The raw fit is DISCARDED (only coef /
 # vcov / scalars / glance are kept -- kilobytes, not the megabyte model object).
 reg_build_digest <- function(data, sp, family, design_spec, do_exp, outcome_level,
-                             conf_level, weighted) {
+                             conf_level, weighted, multiplier = NULL) {
   f   <- reg_fit(data, sp$outcome, sp$predictors, family, design_spec, do_exp,
                  outcome_level, conf_level, method = "wald",
                  trials = sp$trials, formula = sp$formula, multiplier = NULL)
@@ -2742,9 +2810,20 @@ reg_build_digest <- function(data, sp, family, design_spec, do_exp, outcome_leve
   phi        <- if (over_disp) reg_dispersion(fit) else NA_real_
   scaled     <- over_disp && !is.na(phi) && phi > 0
   disp_known <- !weighted && reg_fam_disp_known(family) && !scaled
+  # DESIGN: the adjusted predictions and the numeric slopes travel WITH the digest, computed here
+  # while the fitted object exists. They are a counterfactual sweep over the model, not a
+  # reparametrization of its coefficients, so they cannot be recovered from `coef` later -- and the
+  # fit itself is far too big to cache. They ARE reference-invariant (relevelling a factor leaves
+  # every fitted value identical to machine precision, measured), which is what keeps a reference
+  # change a cache HIT.
+  # WARNING: they are NOT multiplier-invariant -- a k-unit contrast on a non-identity link is not k
+  # times the one-unit one -- so `multiplier` is part of the digest KEY (unlike the coefficients,
+  # which reg_reref_fit_res() rescales exactly). A scaling edit therefore refits; a reference or
+  # display toggle, the live-UI cases this path exists for, does not.
+  marg <- reg_fill_sweep(fit, f$data, sp$predictors, conf_level, design_spec$wt, multiplier)
   list(coef = coef_v, vcov = V, df_residual = stats::df.residual(fit),
        phi = phi, scaled = scaled, disp_known = disp_known, do_exp = do_exp,
-       var_y = f$var_y, positive_level = f$positive_level, nobs = f$nobs,
+       var_y = f$var_y, positive_level = f$positive_level, nobs = f$nobs, marg = marg,
        glance = reg_glance(fit, family, grouped, weighted, f$nobs), family = family)
 }
 
@@ -2802,6 +2881,7 @@ reg_reref_fit_res <- function(digest, skeleton, conf_level, multiplier = NULL) {
     est <- est * mult_vec
     se  <- se  * abs(mult_vec)
   }
+
   if (isTRUE(digest$scaled)) se <- se * sqrt(digest$phi)                 # caller pre-scales the SE
   crit <- reg_wald_crit(digest$disp_known, digest$df_residual, conf_level)
   res  <- reg_wald_finalize(est, isTRUE(digest$do_exp), se = se, crit = crit,
@@ -2809,7 +2889,8 @@ reg_reref_fit_res <- function(digest, skeleton, conf_level, multiplier = NULL) {
   list(tidy = tibble::tibble(term = rows$term, estimate = res$estimate,
                              conf.low = res$conf.low, conf.high = res$conf.high, p.value = res$p.value),
        nobs = digest$nobs, var_y = digest$var_y, positive_level = digest$positive_level,
-       glance = digest$glance, fit = NULL, data = NULL)
+       # the adjusted-prediction sweep travels on; the fitted object itself does not exist here
+       glance = digest$glance, fit = NULL, data = NULL, marg = digest$marg)
 }
 
 
@@ -2862,7 +2943,7 @@ reg_write_group_gap <- function(parts, color, conf_level = 0.95, method = "wald"
   fmt_nm <- names(ref_d)[purrr::map_lgl(ref_d, is_fmt)]
   crit   <- if (identical(method, "profile")) NA_real_ else zscore_formula(conf_level)
   # the estimate a column stores, dispatched on its stored scale -- fmt_est_of() is the ONE such rule,
-  # shared with fmt_gap_parts() and the crude numeric overlay (an `Obs_rate` column is `mean_ratio` and keeps
+  # shared with fmt_gap_parts() and the crude numeric overlay (a rate-ratio column keeps
   # its estimate in `ratio`, not `diff`).
   est_of <- fmt_est_of
   for (i in seq_along(parts)) {
@@ -3278,8 +3359,8 @@ reg_stage_setup <- function(ctx) {
   num_e    <- if (any(compound)) character(0) else numeric_preds
   has_pred <- length(factor_preds) > 0L || length(num_e) > 0L
   crude_ok <- !is.na(purrr::map_chr(specs, ~ .$crude_key %||% NA_character_))
-  want_emp   <- isTRUE(empirical) & has_pred & (n_outcomes > 1L) & crude_ok
-  want_crude <- isTRUE(empirical) && has_pred && n_outcomes <= 1L && crude_ok[[1L]] &&
+  want_emp   <- emp_on(empirical) & has_pred & (n_outcomes > 1L) & crude_ok
+  want_crude <- emp_on(empirical) && has_pred && n_outcomes <= 1L && crude_ok[[1L]] &&
     # a deferred skeleton is read back off the FIRST fit, so a stage that runs BEFORE the fits has
     # nothing to align the crude columns to. Unreachable (the assert below says why), kept as the
     # statement of what the stage needs.
@@ -3298,7 +3379,7 @@ reg_stage_setup <- function(ctx) {
     stopifnot(one("outcome"), one("fit_family"), one("trials"), one("crude_key"),
               one(~ .$est$effect), one(~ .$est$measure), one("color"))
   }
-  stopifnot(!skeleton_deferred || !isTRUE(empirical))
+  stopifnot(!skeleton_deferred || !emp_on(empirical))
 
   ctx_update(ctx, list(data = data, data_canon = data_canon, skeleton = skeleton,
                         skeleton_deferred = skeleton_deferred,
@@ -3412,7 +3493,14 @@ reg_crude_block <- function(sp, sp_fam, inv_sp, key, mdata, pos, y_ref, var_y, c
                                weighted = svy_weighted(design_spec, design_spec$wt),
                                # z16-iiiii (D4): the design df the MODEL columns are already
                                # referred to, so the crude bracket beside them matches
-                               degf = design_spec$degf %||% Inf)
+                               degf = design_spec$degf %||% Inf,
+                               emp_mode = empirical)
+  # the crude columns take the table's own display, exactly like the model columns: one grammar, and
+  # by default the MIRROR layout, so the two estimates end up side by side (reg_default_display).
+  dress <- function(cl) purrr::map(cl, function(col)
+    if (is.null(display)) reg_default_display(col, empirical) else reg_apply_display(col, display))
+  out$cols     <- dress(out$cols)
+  out$cat_cols <- dress(out$cat_cols)
   # Phase 18z8-B: the block also carries what the GAP TEST needs -- the frame it was computed on,
   # the factor predictors it covers and the fitted crude legs. None of them leaves reg_build():
   # reg_emp_slim() drops everything but `$cols` on the way out of reg_spec_build().
@@ -3452,9 +3540,20 @@ reg_cols_ame <- function(f, sp, ctx) {
                   else if (ratio_ame) "prob_ratio" else "prob"
   marg  <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, design_spec$wt,
                         at = if (identical(sp_est$effect, "at_reference")) "reference" else "average",
-                        want_pred = prob_scale,
+                        want_pred = TRUE,
                         comparison = if (ratio_ame) "lnratioavg" else NULL,
                         multiplier = multiplier, engine = reg_marginal_engine(sp_est))
+  # the ADDITIVE twin reg_fill_base() stores beside a multiplicative estimate. A ratio contrast is
+  # not an average of differences, so it cannot be re-derived from `marg`; a second point-estimate
+  # sweep is the honest way to get it, and it costs no fit. The additive paths reuse `marg` itself.
+  marg_add <- if (!ratio_ame) marg
+    else if (is.null(f$fit)) NULL
+    else reg_fill_sweep(f$fit, f$data, sp$predictors, conf_level, design_spec$wt, multiplier)
+  dress <- function(col, group = NULL) {
+    col <- reg_fill_base(col, marg_add, skeleton, sp$predictors, group = group)
+    if (is.null(display)) reg_default_display(col, empirical)
+    else reg_apply_display(col, display)
+  }
   var_y <- if (!prob_scale) suppressWarnings(stats::var(as.numeric(f$data[[sp$outcome]])))
            else NA_real_
   if (per_category) {                            # one AME column per OUTCOME category (all levels)
@@ -3466,9 +3565,9 @@ reg_cols_ame <- function(f, sp, ctx) {
       # once); the visible NAME is just the category (the repeated ": AME" is stripped).
       lab <- paste0(if (prefix_dep) paste0(sp$outcome, " - ") else "", jc)
       list(label = lab, emp_key = g,   # emp_key: raw category, for the empirical tooltip (Phase 14v)
-           col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, shape,
-                                       var_y, g, sp_col, color_signif, sp$label,
-                                       model_family = sp_fam))
+           col   = dress(reg_marginal_column(skeleton, marg, sp$predictors, shape,
+                                             var_y, g, sp_col, color_signif, sp$label,
+                                             model_family = sp_fam), g))
     })
   } else {
     # Phase 14r (E): the model OR (exp of the fit's coefficient, aligned to the skeleton by term)
@@ -3485,9 +3584,9 @@ reg_cols_ame <- function(f, sp, ctx) {
           else reg_shared_col_var(sp_fam, sp$outcome, f$positive_level, cleannames)
     list(list(
       label = reg_model_col_name(sp_eff, sp$outcome, is_comparison, sp$label, n_outcomes),
-      col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, shape,
-                                  var_y, NA_character_, sp_col, color_signif,
-                                  cv, or_tip = or_tip, model_family = sp_fam)))
+      col   = dress(reg_marginal_column(skeleton, marg, sp$predictors, shape,
+                                        var_y, NA_character_, sp_col, color_signif,
+                                        cv, or_tip = or_tip, model_family = sp_fam))))
   }
 }
 
@@ -3506,16 +3605,23 @@ reg_cols_vsrest <- function(f, sp, ctx) {
   marg   <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, design_spec$wt,
                          at = "reference", comparison = "lnor", want_pred = FALSE,
                          engine = reg_marginal_engine(sp$est))
+  # the adjusted predictions of the same fit, sample-averaged: the "vs rest" contrast is evaluated at
+  # a profile, but the LEVEL a reader compares it to is the population's.
+  marg_add <- if (is.null(f$fit)) NULL else
+    reg_fill_sweep(f$fit, f$data, sp$predictors, conf_level, design_spec$wt)
   groups <- levels(as.factor(f$data[[sp$outcome]]))
   purrr::map(groups, function(g) {
     jc  <- reg_cleanup(g, cleannames)
     # Phase 14s (G) + 14w (item 3): shared col_var (`sp$label`) across the "vs rest" category columns
     # of one model; the repeated ": OR" is stripped from the visible NAME (the span carries it).
     lab <- paste0(if (prefix_dep) paste0(sp$outcome, " - ") else "", jc, " vs rest")
+    col <- reg_marginal_column(skeleton, marg, sp$predictors, "or",
+                               NA_real_, g, sp_col, color_signif, sp$label,
+                               model_family = sp_fam)
+    col <- reg_fill_base(col, marg_add, skeleton, sp$predictors, group = g)
     list(label = lab,
-         col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, "or",
-                                     NA_real_, g, sp_col, color_signif, sp$label,
-                                     model_family = sp_fam))
+         col   = if (is.null(display)) reg_default_display(col, empirical)
+                 else reg_apply_display(col, display))
   })
 }
 
@@ -3530,30 +3636,37 @@ reg_cols_coef <- function(f, sp, ctx) {
   sp_fam   <- sp$fit_family
   sp_eff   <- reg_eff_word(sp$est, empirical)   # 19m-ii: derived, see cols_ame above
   sp_col   <- sp$color
+  # the coefficient path never runs a marginal sweep of its own, so it runs the one reg_fill_base()
+  # needs: point estimates only, on the dependency-free engine.
+  # WARNING: a cached fit may have been dropped (`want_fit = FALSE`, jamovi's repaint path). Without
+  # the model there is no adjusted prediction to compute, and no reason to reach for an engine.
+  model_predictors <- if (isTRUE(sp$compound)) unique(skeleton$var) else sp$predictors
+  marg <- if (!is.null(f$marg)) f$marg               # the digest path already ran the sweep
+          else if (is.null(f$fit)) NULL
+          else reg_fill_sweep(f$fit, f$data, sp$predictors, conf_level, design_spec$wt, multiplier)
+  # A SUMMED-SCORE outcome's level is the mean SCORE, not the share it is built from -- that is the
+  # quantity a reader of a battery of items wants, and it is what the crude column beside it shows.
+  # The fit predicts the share, so the adjusted score is that share times the number of items.
+  if (!is.null(marg$pred) && nrow(marg$pred) && !is.na(sp$trials %||% NA))
+    marg$pred$pred <- marg$pred$pred * as.numeric(sp$trials)
+  dress <- function(col, group = NULL) {
+    col <- reg_fill_base(col, marg, skeleton, model_predictors, group = group)
+    if (is.null(display)) reg_default_display(col, empirical)
+    else reg_apply_display(col, display)
+  }
   if (sp_fam == "multinomial") {
     cols <- reg_columns_multinom(skeleton, f, sp, sp$est, sp_col, color_signif,
                                  cleannames, prefix_dep, model_family = sp_fam,
                                  method = method)
-    # a per-category table has one column per outcome level, and no room to fold a second quantity
-    # into each: any display asked for shows as the visible interval.
-    if (!is.null(display)) {
-      cols <- purrr::map(cols, function(lc) { lc$col <- set_display(lc$col, "est_ci"); lc })
-    }
-    cols
-  } else {
-    # a compound formula is one model: every skeleton row belongs to it (else compound rows go NA)
-    model_predictors <- if (isTRUE(sp$compound)) unique(skeleton$var) else sp$predictors
-    # Phase 14w (item 3): outcome col_var + "Model <effect>" name (comparison keeps the model name).
-    cv  <- if (is_comparison) sp$label
-           else reg_shared_col_var(sp_fam, sp$outcome, f$positive_level, cleannames)
-    col <- reg_column(skeleton, f, model_predictors, cv, sp$est, sp_col, color_signif,
-                      model_family = sp_fam, method = method)
-    col <- reg_apply_display(col, display, skeleton, f, sp, sp_fam,
-                             design_spec, conf_level, model_predictors,
-                             multiplier = multiplier)
-    list(list(label = reg_model_col_name(sp_eff, sp$outcome, is_comparison, sp$label, n_outcomes),
-              col = col))
+    return(purrr::map(cols, function(lc) { lc$col <- dress(lc$col, lc$emp_key); lc }))
   }
+  # Phase 14w (item 3): outcome col_var + "Model <effect>" name (comparison keeps the model name).
+  cv  <- if (is_comparison) sp$label
+         else reg_shared_col_var(sp_fam, sp$outcome, f$positive_level, cleannames)
+  col <- reg_column(skeleton, f, model_predictors, cv, sp$est, sp_col, color_signif,
+                    model_family = sp_fam, method = method, trials = sp$trials)
+  list(list(label = reg_model_col_name(sp_eff, sp$outcome, is_comparison, sp$label, n_outcomes),
+            col = dress(col)))
 }
 
 
@@ -3797,18 +3910,15 @@ reg_set_obs <- function(bi, e, f, sp, ctx) {
   ev  <- cat_get(e$effect, key)
   if (is.null(ev)) return(col)
   col <- set_obs(col, ev)
-  # Phase 18z10 (maintainer's ruling Q4): when the crude effect draws NO column of its own, fold it
-  # into the model cell -- "{or} ({obs})" / "{diff} ({obs})" -- so it is visible at all. Driven by the
-  # shape's `visible` fact, never by `family == "multinomial"`. Three reasons this is the right shape:
-  # `obs` is defined ON THE CELL'S OWN SCALE, so the bracket is the same kind of quantity as the
-  # estimate; the printed bracket then IS what `color = "adjustment"` scores, so the number and the
-  # colour can never tell different stories; and the crude PERCENTAGE is not lost -- it stays in the
-  # `empirical_tips` tooltip, which already fires for exactly these columns.
-  if (!shape_visible(e$shape)) {
-    d    <- get_display(col)
-    prim <- display_primary(d)
-    hit  <- is.finite(ev) & prim %in% c("or", "diff")
-    if (any(hit)) col <- set_display(col, dplyr::if_else(hit, paste0("{", prim, "} ({obs})"), d))
+  # When the crude effect draws NO column of its own it is folded into the model cell instead, as
+  # "{est} ({obs})", so it is visible at all. One template for every family: `obs` is defined ON THE
+  # CELL'S OWN SCALE, so the bracket is the same kind of quantity as the estimate, and the printed
+  # bracket IS what `color = "adjustment"` scores -- number and colour cannot tell different stories.
+  # An explicit `display` wins outright (it was already written, and is not a value cell's default).
+  if (identical(empirical, "cell") && is.null(display)) {
+    d   <- get_display(col)
+    hit <- is.finite(ev) & d %in% DISPLAY_VALUE_CELLS
+    if (any(hit)) col <- set_display(col, dplyr::if_else(hit, "{est} ({obs})", d))
   }
   g <- reg_gap_se_columns(f, sp, col, skeleton, e$shape, e$frame,
                           e$fac_preds, sp$est, design_spec$wt,
@@ -4214,50 +4324,46 @@ reg_stage_finalize <- function(ctx) {
 #'   model-versus-observed colour and test compare like with like, and `multiplier` still names the
 #'   unit. A `poly()` / `ns()` basis is deliberately never emitted — the marginal-effects engine
 #'   silently returns zero for those (a warning fires if you reach one through a `formula`).
-#' @param empirical Logical. If `TRUE`, adds the **observed, unadjusted (univariable)** companion of
-#'   each model effect: with a categorical predictor that is exactly the observed contrast between
-#'   levels; with a continuous predictor it is the univariable slope, which assumes the effect is
-#'   linear on the model's scale — check that (`cut()`, splines) before trusting it. It IS the
-#'   modelised quantity when there is a single predictor, so a large crude-versus-adjusted gap signals
-#'   confounding.
+#' @param empirical Show the **observed, unadjusted (crude)** effect beside each modelled one ---
+#'   the same quantity fitted with a single predictor. It IS the modelised quantity when there is
+#'   only one predictor, so the distance between the two is exactly what adjustment changed, read
+#'   left to right. `FALSE` (default) or `TRUE`; the two expert spellings say *where* the crude
+#'   effect goes:
+#'   \itemize{
+#'     \item `TRUE` --- a crude **column** beside the model one, except on a 3+ level outcome
+#'       (multinomial, or an ordinal marginal effect), where one model column would need one crude
+#'       column per outcome category: there the crude value rides **inside** the model cell instead,
+#'       as `1/1.63*** (1/1.69)`.
+#'     \item `"column"` --- always the column, per outcome category if that is what it takes.
+#'     \item `"cell"` --- always in the cell, however few columns it would have taken.
+#'   }
+#'   The two columns are the same column twice: same estimand, same colour ladder, same layout, one
+#'   legend block. Each cell prints the effect with the level it sits on beside it --- the observed
+#'   percentage or mean on the crude side, the **adjusted** prediction on the model side --- and the
+#'   two effects end up adjacent, in the middle. Ask for a different layout with `display`.
 #'
-#'   Per family: **binomial** adds `Obs_%` + `Obs_OR` (coefficient) or `Obs_%` + `Obs_diff` (AME);
-#'   **gaussian** adds `Obs_mean` + `Obs_diff`; **poisson** adds `Obs_rate` + `Obs_IRR`; a
-#'   **grouped binomial** (`trials =`) adds `Obs_mean` — the mean *score* — plus `Obs_OR`, the odds
-#'   ratio of the summed counts; an **ordinal** outcome adds a single `Obs_cumOR`, the cumulative odds
-#'   ratio of a univariable proportional-odds fit. A **multinomial** outcome would need one crude
-#'   column per outcome category, so its crude effect is folded into the model cell instead —
-#'   `2.31 (obs 2.05)` — with the crude % + difference per category in the HTML tooltip. A continuous
-#'   predictor fills the **effect** column only: it has no levels, so its base cell stays empty and its
-#'   distribution — mean, standard deviation, and the mean in each outcome group — goes to the tooltip.
+#'   The rule behind it is one sentence: *the observed effect is the model's own effect, fitted with
+#'   a single predictor*. Where that univariable model is **saturated** (a categorical predictor
+#'   under every family except ordinal) it has a closed form and is computed directly; otherwise it
+#'   is a real fit, so the crude column shares the model's family, link, confidence-interval method
+#'   and `multiplier` by construction. A **continuous** predictor has no levels, so its cell shows
+#'   the effect alone --- the univariable slope, which assumes linearity on the model's scale (check
+#'   that with `shape =` before trusting it) --- and its distribution goes to the html tooltip.
+#'   The only outcomes with no crude counterpart at all are the compound-`formula` escape hatch
+#'   (there is no predictor structure to be crude about) and, for a marginal contrast, a *weighted*
+#'   3+ level outcome (no `marginaleffects` method).
 #'
-#'   The rule behind all of that is one sentence: *the observed effect is the model's own effect,
-#'   fitted with a single predictor*. Where that univariable model happens to be **saturated** (a
-#'   categorical predictor under every family except ordinal) it has a closed form and is computed
-#'   directly; otherwise it is a real fit, so the crude column shares the model's family, link,
-#'   confidence-interval method and `multiplier` by construction. The only outcomes left with no
-#'   observed counterpart at all are the compound-`formula` escape hatch (there is no predictor
-#'   structure to be crude about) and, for a marginal contrast, a *weighted* 3+ level outcome (no
-#'   `marginaleffects` method).
+#'   Every crude quantity is computed on **exactly the same complete-case population as the model**
+#'   (listwise-complete on the outcome, all predictors and any design variable), so crude and
+#'   adjusted are comparable and not confounded by differing missingness --- reproduce it with
+#'   [dplyr::filter()] + [tab()] on the same rows. Under `na = "drop_by_model"` a model fitted on
+#'   rows the observed block does not cover gets **no** observed value at all, because the distance
+#'   between two such estimates would be listwise deletion rather than adjustment.
 #'
-#'   By design every crude quantity is computed on **exactly the same complete-case population as the
-#'   model** (listwise-complete on the outcome, all predictors and any design variable), so crude and
-#'   adjusted are directly comparable and not confounded by differing missingness (reproduce it with
-#'   [dplyr::filter()] + [tab()] on the same rows). That is what the default `na = "drop_by_outcome"`
-#'   guarantees, including when several models are compared. Under `na = "drop_by_model"` a model
-#'   fitted on rows the observed block does not cover gets **no** observed value at all --- no `obs`,
-#'   no `color = "adjustment"`, no gap test --- because the distance between two such estimates would
-#'   be listwise deletion rather than adjustment. Also works with a vector of outcomes. Ordinal has
-#'   no clean crude analogue and is ignored (with a message).
-#'
-#'   The crude companions are **always** on the same inference basis as the `Model_*` column beside
-#'   them, which is the whole point of putting them side by side: when the data is weighted, their
-#'   intervals account for the weighting exactly (the flat survey design), and under a
-#'   `survey::svydesign` for the full design. Each column stores the base its own interval used, in
-#'   the `n_eff` [fmt()] field, while the displayed `n` stays the raw count.
-#'   A **continuous** predictor's companion comes from a univariable fit; a categorical one
-#'   from the closed-form cell sums, which for a saturated model is the same estimator. Default
-#'   `FALSE`.
+#'   Both columns are always on the **same inference basis**, which is the whole point of putting
+#'   them side by side: weighted data gives both intervals that account for the weighting, and a
+#'   `survey::svydesign` gives both the full design. Each column stores the base its own interval
+#'   used in the `n_eff` [fmt()] field, while the displayed `n` stays the raw count.
 #'
 #'   **Two consequences worth knowing**, both deliberate. First, a weighted `tab_reg()` is *always*
 #'   design-corrected while a weighted [tab()] is *not* unless you ask (`design_effect = TRUE`).
@@ -4383,21 +4489,28 @@ reg_stage_finalize <- function(ctx) {
 #'   Weighted models show a reduced, survey-appropriate set of goodness-of-fit statistics
 #'   (design-based Wald test, Nagelkerke pseudo-R square, AIC).
 #' @param display What each effect cell shows --- [tab()]'s display grammar, same names, same
-#'   meaning. `NULL` (default) shows the plain estimate. The named layouts:
-#'   * `"est_ci"` adds a visible interval: `1/2.22 [1/2.47; 1/1.99]`, any family.
-#'   * `"est_base"` puts the model-adjusted prediction beside the effect: `1/2.22 (32.8%)` on a
-#'     logistic model, `-0.89 (2.25)` on a linear one --- a probability or a mean, per outcome.
-#'   * `"base_est"` swaps them, so the table reads as adjusted predictions graded by the effect.
-#'   * `"base"` shows the adjusted predictions alone, still coloured and starred by the effect.
+#'   meaning, on every family and on the crude column as well as the model one. `NULL` (default)
+#'   shows the plain estimate, or, with `empirical`, the estimate with the level it sits on beside
+#'   it. The named layouts:
+#'   * `"est"` --- the effect alone.
+#'   * `"est_ci"` --- with a visible interval: `1/2.22 [1/2.47; 1/1.99]`.
+#'   * `"est_base"` --- the effect, with the level beside it: `1/2.22 (32.8%)` on a logistic model,
+#'     `-0.89 (2.25)` on a linear one. On a model column that level is the **adjusted** prediction;
+#'     on a crude column it is the observed percentage or mean.
+#'   * `"base_est"` --- the mirror, level first: `(32.8%) 1/2.22`. The effect stays the number the
+#'     cell is about (it carries the stars and the colour); the bracket is the aside.
+#'   * `"base"` --- the levels alone, still coloured and starred by the effect.
 #'
 #'   Or write a `{}` template: `"{est} (obs {obs})"` prints each adjusted effect next to the
 #'   unadjusted one it is compared to, `"{est} ({gap})"` next to how far adjustment moved it (see
 #'   `color = "adjustment"` below).
 #'
-#'   A display may ask for an **auxiliary** quantity of the same fit; it never changes the fit or
-#'   the estimand --- that is `measure`'s job alone. Note `display = "est_base"` *adds* the adjusted
-#'   prediction beside the odds ratio, whereas `effect = "marginal"` makes the whole column a
-#'   marginal effect; when both are set the column wins and `display` is ignored, with a message.
+#'   `display` is a **post-hoc** property: every quantity it can name is already stored, so choosing
+#'   a layout never triggers a computation and never changes a number --- and [set_display()] on a
+#'   built table gives the same result as asking for it here. It may show an **auxiliary** quantity
+#'   of the same fit; it never changes the fit or the estimand, which is `measure`'s job alone.
+#'   So `display = "est_base"` *adds* the adjusted prediction beside the odds ratio, while
+#'   `effect = "marginal"` makes the whole column a marginal effect.
 #' @param color,color_signif Colouring of the effect cells. `color = TRUE` (default) grades each cell
 #'   on **its own scale** --- the ladder follows what the column estimates (`measure`), so it is never
 #'   asked for separately; `color = FALSE` turns colouring off for every column (model and empirical).
@@ -4764,9 +4877,10 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
                     na_shared_vars = a$na_shared_vars, shape_terms = a$shape_terms,
                     multiplier = a$multiplier, effect = a$est$effect, measure = a$est$measure,
                     wt = a$wt_disp, design_vars = reg_design_vars(a$design_spec)),
-    # Phase 18z10: which observed counterpart each outcome has (NA = none). Stored, so the footer can
-    # word the in-cell "{or} ({obs})" bracket and ?tab_reg can state the scope honestly.
-    crude_keys = if (isTRUE(a$empirical))
+    # which observed counterpart each outcome has (NA = none), and WHERE it went. Stored, so the
+    # footer can word the in-cell bracket and ?tab_reg can state the scope honestly.
+    emp_mode = a$empirical,
+    crude_keys = if (emp_on(a$empirical))
       stats::setNames(purrr::map_chr(a$specs, ~ .$crude_key), purrr::map_chr(a$specs, "outcome"))
       else stats::setNames(rep(NA_character_, length(a$specs)),
                            purrr::map_chr(a$specs, "outcome")),

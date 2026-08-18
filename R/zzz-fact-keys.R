@@ -102,10 +102,6 @@ TAB_FOREIGN_KEYS <- list(
         function() names(MEASURES)),
   tx_fk("COLOR_ALIASES$measure",   function() tx_fk_scalar(COLOR_ALIASES, "measure"),
         function() names(MEASURES)),
-  # a crude column's colour is written in the user's spelling, so an ALIAS is legal there too.
-  tx_fk("REG_EMPIRICAL$*$color",   function() tx_fk_scalar(tx_fk_emp_shapes(), "color"),
-        function() c(names(MEASURES), names(COLOR_ALIASES)), allow = ""),
-
   # --- into COLOR_SCALES (the break ladders) -------------------------------------------------
   tx_fk("EST_SCALES$break_key",    function() tx_fk_scalar(EST_SCALES, "break_key"),
         function() names(COLOR_SCALES), orphan = TRUE),
@@ -169,10 +165,9 @@ TAB_FOREIGN_KEYS <- list(
         function() names(DISPLAY_TOKENS)),
   tx_fk("EST_SCALES$base_display", function() tx_fk_scalar(EST_SCALES, "base_display"),
         function() names(DISPLAY_TOKENS)),
-  tx_fk("REG_ESTIMANDS$rows$display", function() tx_fk_scalar(tx_fk_reg_rows(), "display"),
-        function() names(DISPLAY_TOKENS)),
-  tx_fk("REG_EMPIRICAL$*$display", function() tx_fk_scalar(tx_fk_emp_shapes(), "display"),
-        function() names(DISPLAY_TOKENS)),
+  # every EFFECT scale states the precision its regression cells print at (the level scales are the
+  # crosstab's, whose digits are the user's own argument).
+  tx_fk("REG_CELL_DIGITS", function() names(REG_CELL_DIGITS), function() names(EST_SCALES)),
   # `rr` -> `ratio`: a token may name another token as its spelling.
   tx_fk("DISPLAY_TOKENS$alias",    function() tx_fk_scalar(DISPLAY_TOKENS, "alias"),
         function() names(DISPLAY_TOKENS)),
@@ -192,8 +187,6 @@ TAB_FOREIGN_KEYS <- list(
         function() fmt_field_names),
 
   # --- into the small declared enums ---------------------------------------------------------
-  tx_fk("REG_EMPIRICAL$*$pct_type", function() tx_fk_scalar(tx_fk_emp_shapes(), "pct_type"),
-        function() PCT_TYPES),
   tx_fk("COLOR_ALIASES$policy",    function() tx_fk_scalar(COLOR_ALIASES, "policy"),
         function() COLOR_SIGNIF_VALUES),
   tx_fk("MEASURES$applies_to",     function() tx_fk_all(MEASURES, "applies_to"),

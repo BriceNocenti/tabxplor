@@ -50,7 +50,7 @@ test_that("obs == the Obs_* effect column, for every family / effect shape", {
                                family = "poisson", empirical = TRUE)), "Model_RR", "Obs_RR", get_or)
   chk(suppressWarnings(tab_reg(d, outcome = "tvhours", predictors = c("race", "party3"),
                                family = "poisson", empirical = TRUE)),   # tvhours is over-dispersed
-      "Model_IRR", "Obs_IRR", get_or)
+      "Model_IRR", "Obs_IRR", get_ratio)
   chk(tab_reg(d, outcome = "age", predictors = c("race", "party3"),
               family = "gaussian", empirical = TRUE), "Model_\u03b2", "Obs_diff", get_diff)
   chk(tab_reg(d, outcome = "married", predictors = c("race", "party3"), family = "binomial",

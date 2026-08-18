@@ -58,7 +58,7 @@ test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the addit
   col <- t1[["Model_\u03b2"]]
 
   expect_identical(tabxplor:::fmt_var_kind(col), "coef")
-  expect_identical(get_display(col)[1], "coef")
+  expect_identical(get_display(col)[1], "est")
   expect_identical(get_scale(col), "raw_diff")
   expect_identical(get_color(col), "difference")
   expect_identical(get_color_signif(col), "grey_non_signif")
@@ -109,9 +109,10 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
                                   cleannames = FALSE))
   col <- t1[["Model_IRR"]]
 
-  expect_identical(get_pct_type(col), "row")
-  expect_identical(get_display(col)[1], "or")
-  expect_identical(get_scale(col), "odds_ratio")
+  # a rate ratio's own scale: odds_ratio's ladder and glyphs, a MEAN as the level it sits on
+  expect_identical(get_pct_type(col), "none")
+  expect_identical(get_display(col)[1], "est")
+  expect_identical(get_scale(col), "mean_ratio")
 
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
   # 14v-ii: an unweighted over-dispersed Poisson is fit by MLE (so the IRR = exp(coef) is the Poisson
@@ -127,7 +128,7 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
   pm  <- coq[, 4]
 
   keep <- !is.na(get_pvalue(col))
-  expect_equal(sort(get_or(col)[keep]),     sort(unname(irr)), tolerance = 1e-6)
+  expect_equal(sort(get_ratio(col)[keep]),  sort(unname(irr)), tolerance = 1e-6)
   expect_equal(sort(get_ci_inf(col)[keep]), sort(unname(lo)),  tolerance = 1e-6)
   expect_equal(sort(get_ci_sup(col)[keep]), sort(unname(hi)),  tolerance = 1e-6)
   expect_equal(sort(get_pvalue(col)[keep]), sort(unname(pm)),  tolerance = 1e-6)
@@ -341,9 +342,10 @@ test_that("grouped binomial (trials=) matches glm(cbind(s, q-s)); OR fmt shape",
                                   cleannames = FALSE))
   col <- t1[["Model_OR"]]
 
-  expect_identical(get_pct_type(col), "row")
-  expect_identical(get_display(col)[1], "or")
-  expect_identical(get_scale(col), "odds_ratio")
+  # a summed score's odds ratio sits on the mean SCORE, which is a mean and not a percentage
+  expect_identical(get_pct_type(col), "none")
+  expect_identical(get_display(col)[1], "est")
+  expect_identical(get_scale(col), "score_ratio")
 
   dm <- d |> dplyr::filter(!is.na(score), !is.na(race))
   dm$race <- forcats::fct_drop(factor(dm$race))
@@ -404,7 +406,7 @@ test_that("trials= reaches the rr / rd links too (measure = ratio / difference)"
   # the Constant row is kept in the comparison: exp(intercept) is the per-item risk at the reference
   # profile, and it is the value that proves the offset was applied (without it the intercept would
   # be an expected count out of 10).
-  expect_identical(get_scale(rr), "odds_ratio")
+  expect_identical(get_scale(rr), "score_ratio")
   expect_equal(sort(get_or(rr)[!is.na(get_pvalue(rr))]),
                sort(exp(unname(stats::coef(g_rr)))), tolerance = 1e-6)
 
@@ -568,7 +570,7 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
   expect_true(all(c("Dem vs Ind", "Rep vs Ind") %in% names(t1)))
   col1 <- t1[["Dem vs Ind"]]
   expect_identical(get_pct_type(col1), "row")
-  expect_identical(get_display(col1)[1], "or")
+  expect_identical(get_display(col1)[1], "est")
   expect_identical(get_scale(col1), "odds_ratio")
 
   dm <- d |> dplyr::filter(!is.na(party3), !is.na(race), !is.na(age))
@@ -615,7 +617,7 @@ test_that("tab_reg() ordinal cumulative OR / CI / p match MASS::polr; single col
                                   family = "ordinal", cleannames = FALSE))
   col <- t1[["Model_OR"]]
   expect_identical(get_pct_type(col), "row")
-  expect_identical(get_display(col)[1], "or")
+  expect_identical(get_display(col)[1], "est")
   expect_identical(get_scale(col), "odds_ratio")
 
   dm <- d |> dplyr::filter(!is.na(spectrum), !is.na(race), !is.na(age))
@@ -730,22 +732,20 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
   expect_equal(sort(get_pvalue(col)[keep]), sort(c(acr$p.value, aca$p.value)),     tolerance = 1e-6)
   expect_equal(sort(get_pct(col)[!is.na(get_pct(col))]), sort(ap$estimate),        tolerance = 1e-6)
 
-  # displays: reference level -> prediction only; non-ref factor -> composite AME-first; numeric -> AME
+  # every value cell shows THE ESTIMATE; the layout beside it is the table's `display` (here none)
   disp   <- get_display(col)
   ref    <- which(as.character(t1$levels) == "Other" & as.character(t1$var) == "race")
   blk    <- which(as.character(t1$var) == "race" & as.character(t1$levels) == "Black")
   agerow <- which(as.character(t1$var) == "age")
-  expect_identical(disp[ref],    "({pct})")
-  expect_identical(disp[blk],    "{diff} ({pct})")
-  expect_identical(disp[agerow], "diff")
+  expect_identical(disp[c(ref, blk, agerow)], rep("est", 3L))
   expect_true(is.na(get_diff(col)[ref]))                # the reference level has no marginal effect
   expect_true(is.na(get_pvalue(col)[ref]))
 
-  # rendered cell: AME first (a "-" here), stars on the AME, adjusted prediction in parentheses.
-  # stars are opt-in in format() (they show at the MAIN display; tab_reg stores the pvalue by default).
+  # rendered cell: the AME, with its stars. `display = "est_base"` adds the adjusted prediction.
   txt <- format(col, special_formatting = TRUE, stars = TRUE)
-  expect_match(trimws(txt[blk]), "^-[0-9.]+%\\*+ \\([0-9.]+%\\)$")
-  expect_match(trimws(txt[ref]), "^\\([0-9.]+%\\)$")
+  expect_match(trimws(txt[blk]), "^-[0-9.]+%\\*+$")
+  bs  <- format(set_display(col, "est_base"), special_formatting = TRUE, stars = TRUE)
+  expect_match(trimws(bs[blk]), "^-[0-9.]+%\\*+ \\([0-9.]+%\\)$")
 })
 
 test_that("gaussian AME uses the coef shape and matches marginaleffects", {

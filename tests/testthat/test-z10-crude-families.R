@@ -57,7 +57,7 @@ test_that("a grouped binomial's crude OR is the univariable glm(cbind(s, q - s))
   t <- suppressWarnings(suppressMessages(
     tab_reg(d, "score", c("race", "mar3"), family = "binomial", trials = 10, empirical = TRUE,
             cleannames = FALSE)))
-  expect_true(all(c("Obs_mean", "Obs_OR") %in% names(t)))
+  expect_true("Obs_OR" %in% names(t))
 
   uni <- stats::glm(cbind(score, 10L - score) ~ race, data = d, family = stats::binomial())
   lv  <- levels(d$race)[-1]
@@ -66,18 +66,25 @@ test_that("a grouped binomial's crude OR is the univariable glm(cbind(s, q - s))
   expect_equal(unname(got), unname(exp(stats::coef(uni))[-1]), tolerance = 1e-6)
 })
 
-test_that("the grouped binomial's BASE column is the mean SCORE, not a share of respondents", {
+test_that("the grouped binomial's LEVEL is the mean SCORE, not a share of respondents", {
   d <- z10_data()
   t <- suppressWarnings(suppressMessages(
     tab_reg(d, "score", "race", family = "binomial", trials = 10, empirical = TRUE,
             cleannames = FALSE)))
+  # a summed score's odds ratio sits on the mean SCORE -- the average number of "yes" out of
+  # `trials`, which is what a reader of a battery of items wants. That is `score_ratio`, the one
+  # scale whose estimate is an odds ratio and whose level is a mean.
+  expect_identical(get_scale(t[["Obs_OR"]]), "score_ratio")
+  expect_identical(tabxplor:::fmt_var_kind(t[["Obs_OR"]]), "mean")
   want <- as.vector(tapply(d$score, d$race, mean))
   names(want) <- levels(d$race)
   k    <- as.character(t$var) == "race"
-  got  <- get_mean(t[["Obs_mean"]])[k]
+  got  <- get_mean(t[["Obs_OR"]])[k]
   expect_equal(unname(got), unname(want[as.character(t$levels)[k]]), tolerance = 1e-8)
   expect_gt(max(want), 1)                       # a SCORE out of 10, not a proportion in [0, 1]
-  expect_identical(tabxplor:::fmt_var_kind(t[["Obs_mean"]]), "mean")
+  # and the MODEL column matches it: a single predictor is saturated, so its adjusted score is the
+  # observed one -- which is the whole point of putting the two side by side.
+  expect_equal(get_mean(t[["Model_OR"]])[k], got, tolerance = 1e-6)
 })
 
 

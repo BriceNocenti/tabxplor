@@ -149,14 +149,27 @@ tx_spark_svg <- function(x, h = 12L, dx = 3L) {
 # `esc`: the HTML-escape fn -- identity for the engine, which places cells raw and has already
 # escaped them; a caller that has not may pass htmltools::htmlEscape.
 #' @keywords internal
-html_cell_text <- function(raw, pn, bold, esc = htmltools::htmlEscape) {
+# A composite cell in THREE pieces -- the aside before the primary, the primary, the aside after --
+# so a backend can bold and colour the number without touching what sits beside it. The asides carry
+# a CLASS, never an inline colour (the "no inline colour" invariant): the stylesheet decides, from
+# `tabxplor.color_secondary`. A cell with no recorded range is one piece and gets no markup at all.
+#' @keywords internal
+html_cell_text <- function(raw, from, pn, bold, esc = htmltools::htmlEscape) {
   out <- esc(raw)
   if (is.null(pn)) return(out)
-  hit <- bold & !is.na(pn) & pn >= 1L & pn < nchar(raw)
+  from <- if (is.null(from)) rep(1L, length(raw)) else from
+  hit  <- !is.na(pn) & !is.na(from) & pn >= 1L & (from > 1L | pn < nchar(raw))
   if (any(hit)) {
-    out[hit] <- paste0(esc(substr(raw[hit], 1L, pn[hit])),
-                       "<span style=\"font-weight:normal;\">",
-                       esc(substr(raw[hit], pn[hit] + 1L, nchar(raw[hit]))), "</span>")
+    to  <- from[hit] + pn[hit] - 1L
+    # the primary keeps the cell's own weight; an aside is never bold (bold glyphs are wider, and
+    # emphasising an aside defeats the split). That one stays an INLINE style, like html_face_wrap()'s
+    # markup, so it survives a stylesheet-less destination -- the colour never does.
+    wt  <- ifelse(bold[hit], " style=\"font-weight:normal;\"", "")
+    wrap <- function(s) ifelse(nzchar(s),
+                               paste0("<span class=\"tx-sec\"", wt, ">", esc(s), "</span>"), "")
+    out[hit] <- paste0(wrap(substr(raw[hit], 1L, from[hit] - 1L)),
+                       esc(substr(raw[hit], from[hit], to)),
+                       wrap(substr(raw[hit], to + 1L, nchar(raw[hit]))))
   }
   out
 }
@@ -308,7 +321,8 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     # cell (the "(n=...)" stays plain). Cells are placed raw here, so esc = identity (byte-identical).
     bold_cell <- seq_len(n_row) %in% rd$bold_rows
     if (!is.null(a)) bold_cell <- bold_cell | a$bold
-    cell_html <- html_cell_text(cell, attr(cell, "primary_nchar"), bold_cell, esc = identity)
+    cell_html <- html_cell_text(cell, attr(cell, "primary_from"), attr(cell, "primary_nchar"),
+                                bold_cell, esc = identity)
     # Phase 18z15: THE one place a row sparkline becomes an inline <svg>. It sits here, at the
     # emission of an ordinary text cell, because that is the only kind of cell a glyph run can be in
     # (a reg table's `levels` column) -- an fmt cell never carries one, and a rowspanned label cell

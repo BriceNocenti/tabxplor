@@ -114,9 +114,9 @@ children:
                         name: measure_5
                         optionName: measure
                         optionPart: log
-          - type: CheckBox
+          - type: ComboBox
             name: empirical
-            label: empirical = <i>(compare model estimates with observed values)</i>
+            label: empirical = <i>(show the observed effect beside the modelled one)</i>
 
   - type: CollapseBox
     label: <b>Model comparison (+ predictor subsets)</b>

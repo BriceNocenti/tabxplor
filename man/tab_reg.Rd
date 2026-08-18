@@ -181,50 +181,46 @@ automatic counts can be mixed, and an outcome with no score to take a maximum of
 count per \emph{outcome}, never a column name --- a per-row item count is not supported; write the
 model with \code{cbind()} in a compound \code{formula} instead.}
 
-\item{empirical}{Logical. If \code{TRUE}, adds the \strong{observed, unadjusted (univariable)} companion of
-each model effect: with a categorical predictor that is exactly the observed contrast between
-levels; with a continuous predictor it is the univariable slope, which assumes the effect is
-linear on the model's scale — check that (\code{cut()}, splines) before trusting it. It IS the
-modelised quantity when there is a single predictor, so a large crude-versus-adjusted gap signals
-confounding.
+\item{empirical}{Show the \strong{observed, unadjusted (crude)} effect beside each modelled one ---
+the same quantity fitted with a single predictor. It IS the modelised quantity when there is
+only one predictor, so the distance between the two is exactly what adjustment changed, read
+left to right. \code{FALSE} (default) or \code{TRUE}; the two expert spellings say \emph{where} the crude
+effect goes:
+\itemize{
+\item \code{TRUE} --- a crude \strong{column} beside the model one, except on a 3+ level outcome
+(multinomial, or an ordinal marginal effect), where one model column would need one crude
+column per outcome category: there the crude value rides \strong{inside} the model cell instead,
+as \verb{1/1.63*** (1/1.69)}.
+\item \code{"column"} --- always the column, per outcome category if that is what it takes.
+\item \code{"cell"} --- always in the cell, however few columns it would have taken.
+}
+The two columns are the same column twice: same estimand, same colour ladder, same layout, one
+legend block. Each cell prints the effect with the level it sits on beside it --- the observed
+percentage or mean on the crude side, the \strong{adjusted} prediction on the model side --- and the
+two effects end up adjacent, in the middle. Ask for a different layout with \code{display}.
 
-Per family: \strong{binomial} adds \verb{Obs_\%} + \code{Obs_OR} (coefficient) or \verb{Obs_\%} + \code{Obs_diff} (AME);
-\strong{gaussian} adds \code{Obs_mean} + \code{Obs_diff}; \strong{poisson} adds \code{Obs_rate} + \code{Obs_IRR}; a
-\strong{grouped binomial} (\verb{trials =}) adds \code{Obs_mean} — the mean \emph{score} — plus \code{Obs_OR}, the odds
-ratio of the summed counts; an \strong{ordinal} outcome adds a single \code{Obs_cumOR}, the cumulative odds
-ratio of a univariable proportional-odds fit. A \strong{multinomial} outcome would need one crude
-column per outcome category, so its crude effect is folded into the model cell instead —
-\verb{2.31 (obs 2.05)} — with the crude \% + difference per category in the HTML tooltip. A continuous
-predictor fills the \strong{effect} column only: it has no levels, so its base cell stays empty and its
-distribution — mean, standard deviation, and the mean in each outcome group — goes to the tooltip.
+The rule behind it is one sentence: \emph{the observed effect is the model's own effect, fitted with
+a single predictor}. Where that univariable model is \strong{saturated} (a categorical predictor
+under every family except ordinal) it has a closed form and is computed directly; otherwise it
+is a real fit, so the crude column shares the model's family, link, confidence-interval method
+and \code{multiplier} by construction. A \strong{continuous} predictor has no levels, so its cell shows
+the effect alone --- the univariable slope, which assumes linearity on the model's scale (check
+that with \verb{shape =} before trusting it) --- and its distribution goes to the html tooltip.
+The only outcomes with no crude counterpart at all are the compound-\code{formula} escape hatch
+(there is no predictor structure to be crude about) and, for a marginal contrast, a \emph{weighted}
+3+ level outcome (no \code{marginaleffects} method).
 
-The rule behind all of that is one sentence: \emph{the observed effect is the model's own effect,
-fitted with a single predictor}. Where that univariable model happens to be \strong{saturated} (a
-categorical predictor under every family except ordinal) it has a closed form and is computed
-directly; otherwise it is a real fit, so the crude column shares the model's family, link,
-confidence-interval method and \code{multiplier} by construction. The only outcomes left with no
-observed counterpart at all are the compound-\code{formula} escape hatch (there is no predictor
-structure to be crude about) and, for a marginal contrast, a \emph{weighted} 3+ level outcome (no
-\code{marginaleffects} method).
+Every crude quantity is computed on \strong{exactly the same complete-case population as the model}
+(listwise-complete on the outcome, all predictors and any design variable), so crude and
+adjusted are comparable and not confounded by differing missingness --- reproduce it with
+\code{\link[dplyr:filter]{dplyr::filter()}} + \code{\link[=tab]{tab()}} on the same rows. Under \code{na = "drop_by_model"} a model fitted on
+rows the observed block does not cover gets \strong{no} observed value at all, because the distance
+between two such estimates would be listwise deletion rather than adjustment.
 
-By design every crude quantity is computed on \strong{exactly the same complete-case population as the
-model} (listwise-complete on the outcome, all predictors and any design variable), so crude and
-adjusted are directly comparable and not confounded by differing missingness (reproduce it with
-\code{\link[dplyr:filter]{dplyr::filter()}} + \code{\link[=tab]{tab()}} on the same rows). That is what the default \code{na = "drop_by_outcome"}
-guarantees, including when several models are compared. Under \code{na = "drop_by_model"} a model
-fitted on rows the observed block does not cover gets \strong{no} observed value at all --- no \code{obs},
-no \code{color = "adjustment"}, no gap test --- because the distance between two such estimates would
-be listwise deletion rather than adjustment. Also works with a vector of outcomes. Ordinal has
-no clean crude analogue and is ignored (with a message).
-
-The crude companions are \strong{always} on the same inference basis as the \verb{Model_*} column beside
-them, which is the whole point of putting them side by side: when the data is weighted, their
-intervals account for the weighting exactly (the flat survey design), and under a
-\code{survey::svydesign} for the full design. Each column stores the base its own interval used, in
-the \code{n_eff} \code{\link[=fmt]{fmt()}} field, while the displayed \code{n} stays the raw count.
-A \strong{continuous} predictor's companion comes from a univariable fit; a categorical one
-from the closed-form cell sums, which for a saturated model is the same estimator. Default
-\code{FALSE}.
+Both columns are always on the \strong{same inference basis}, which is the whole point of putting
+them side by side: weighted data gives both intervals that account for the weighting, and a
+\code{survey::svydesign} gives both the full design. Each column stores the base its own interval
+used in the \code{n_eff} \code{\link[=fmt]{fmt()}} field, while the displayed \code{n} stays the raw count.
 
 \strong{Two consequences worth knowing}, both deliberate. First, a weighted \code{tab_reg()} is \emph{always}
 design-corrected while a weighted \code{\link[=tab]{tab()}} is \emph{not} unless you ask (\code{design_effect = TRUE}).
@@ -492,23 +488,30 @@ distance between two such estimates is listwise deletion rather than adjustment.
 \code{"drop_all"} shares one population across the whole call, all outcomes included.}
 
 \item{display}{What each effect cell shows --- \code{\link[=tab]{tab()}}'s display grammar, same names, same
-meaning. \code{NULL} (default) shows the plain estimate. The named layouts:
+meaning, on every family and on the crude column as well as the model one. \code{NULL} (default)
+shows the plain estimate, or, with \code{empirical}, the estimate with the level it sits on beside
+it. The named layouts:
 \itemize{
-\item \code{"est_ci"} adds a visible interval: \verb{1/2.22 [1/2.47; 1/1.99]}, any family.
-\item \code{"est_base"} puts the model-adjusted prediction beside the effect: \verb{1/2.22 (32.8\%)} on a
-logistic model, \code{-0.89 (2.25)} on a linear one --- a probability or a mean, per outcome.
-\item \code{"base_est"} swaps them, so the table reads as adjusted predictions graded by the effect.
-\item \code{"base"} shows the adjusted predictions alone, still coloured and starred by the effect.
+\item \code{"est"} --- the effect alone.
+\item \code{"est_ci"} --- with a visible interval: \verb{1/2.22 [1/2.47; 1/1.99]}.
+\item \code{"est_base"} --- the effect, with the level beside it: \verb{1/2.22 (32.8\%)} on a logistic model,
+\code{-0.89 (2.25)} on a linear one. On a model column that level is the \strong{adjusted} prediction;
+on a crude column it is the observed percentage or mean.
+\item \code{"base_est"} --- the mirror, level first: \verb{(32.8\%) 1/2.22}. The effect stays the number the
+cell is about (it carries the stars and the colour); the bracket is the aside.
+\item \code{"base"} --- the levels alone, still coloured and starred by the effect.
 }
 
 Or write a \code{{}} template: \code{"{est} (obs {obs})"} prints each adjusted effect next to the
 unadjusted one it is compared to, \code{"{est} ({gap})"} next to how far adjustment moved it (see
 \code{color = "adjustment"} below).
 
-A display may ask for an \strong{auxiliary} quantity of the same fit; it never changes the fit or
-the estimand --- that is \code{measure}'s job alone. Note \code{display = "est_base"} \emph{adds} the adjusted
-prediction beside the odds ratio, whereas \code{effect = "marginal"} makes the whole column a
-marginal effect; when both are set the column wins and \code{display} is ignored, with a message.}
+\code{display} is a \strong{post-hoc} property: every quantity it can name is already stored, so choosing
+a layout never triggers a computation and never changes a number --- and \code{\link[=set_display]{set_display()}} on a
+built table gives the same result as asking for it here. It may show an \strong{auxiliary} quantity
+of the same fit; it never changes the fit or the estimand, which is \code{measure}'s job alone.
+So \code{display = "est_base"} \emph{adds} the adjusted prediction beside the odds ratio, while
+\code{effect = "marginal"} makes the whole column a marginal effect.}
 
 \item{cleannames}{Logical. If \code{TRUE}, strips numeric prefixes from factor levels for display.
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}

@@ -46,7 +46,6 @@ testthat::test_that("the edge inventory covers the tables a rename would break",
   froms <- vapply(tabxplor:::TAB_FOREIGN_KEYS, function(k) k$from, character(1))
   # the edge 19d actually broke, and the four that were never checked at all
   testthat::expect_true("EST_SCALES$label_meas" %in% froms)
-  testthat::expect_true("REG_ESTIMANDS$rows$display" %in% froms)
   testthat::expect_true("REG_ESTIMANDS$rows$crude_fam" %in% froms)
   testthat::expect_true("REG_ESTIMANDS$rows$crude_shape" %in% froms)
   testthat::expect_true("DISPLAY_TOKENS$field" %in% froms)

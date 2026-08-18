@@ -281,7 +281,7 @@ test_that("at = 'reference' writes no `obs`: the two columns are different estim
     "reference profile")
   mcol <- reg_fmt_cols(t)[[1]]
   testthat::expect_true(all(is.na(get_obs(t[[mcol]]))))
-  testthat::expect_true("Obs_%" %in% names(t))          # the crude columns are still shown
+  testthat::expect_true("Obs_diff" %in% names(t))       # the crude column is still shown
 })
 
 # --- Phase 18z13: D7 (the reference group is choosable) / D11 (no writes without a reader) --------
@@ -316,10 +316,12 @@ test_that("D11: obs / gap_se are written only where a gap measure reads them", {
   testthat::expect_gt(length(emp), 0L)
   # the model columns declare the measure, so they carry the comparison...
   testthat::expect_true(any(vapply(mdl, function(nm) any(!is.na(get_obs(sp[[reg_group_col(sp, nm)]]))), logical(1))))
-  # ... the Obs_* companions colour on their own diff / OR measure and never read `obs`: writing it
-  # there stored a value with no consumer, and put an "obs:" tooltip line on the observed column itself.
+  # ... and so do the crude companions, which take the model column's measure: `between_groups`
+  # compares a cell to the SAME cell in another group, and a crude effect has a crude counterpart
+  # there just as a modelled one does. (Contrast `adjustment`, whose baseline IS the crude column:
+  # there its own `obs` stays empty and it is marked `refcol` instead.)
   for (nm in emp) {
-    testthat::expect_true(all(is.na(get_obs(sp[[reg_group_col(sp, nm)]]))), info = nm)
-    testthat::expect_true(all(is.na(get_gap_se(sp[[reg_group_col(sp, nm)]]))), info = nm)
+    testthat::expect_true(any(!is.na(get_obs(sp[[reg_group_col(sp, nm)]]))), info = nm)
+    testthat::expect_false(isTRUE(is_refcol(sp[[reg_group_col(sp, nm)]])), info = nm)
   }
 })

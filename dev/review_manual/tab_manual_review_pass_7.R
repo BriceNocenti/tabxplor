@@ -25,17 +25,7 @@ tea <- tea |>
   score_from_lv1("tea_where", vars_list = tea_where_vars)
 
 
-data("tea", package = "FactoMineR")
-tea_when_vars  <- c("breakfast", "tea.time", "evening", "lunch", "dinner", "always")
 
-tea <- tea |> 
-  tibble::as_tibble() |> 
-  dplyr::mutate(across(
-    all_of(tea_when_vars), 
-    ~ (if (stringr::str_detect(levels(.)[1], "^Not")) {forcats::fct_rev(.)} else {.}) |> 
-      forcats::fct_relabel(~ stringr::str_replace_all(., "\\.", " "))
-  ))
-tea <- tea |> score_from_lv1("tea_when", vars_list = tea_when_vars)
 
 
 
@@ -143,7 +133,7 @@ tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "reli
 # summed-score binomial
 ## effect = "coeff"
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"),  empirical = TRUE,
+        predictors = c("sex", "SPC", "Sport"),  empirical = TRUE
 )
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
         predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "ratio"

@@ -122,20 +122,29 @@
 * **`reg_check_plots()`** draws those five checks — one panel each, faceted across every model in the
   table, in the light / dark / print themes. A teaching companion: every verdict it illustrates is
   already a footer row. It takes a `tab_reg()` table plus its data, or a fitted model directly.
+* **One observed column beside one model column.** `tab_reg(empirical = TRUE)` used to draw a
+  descriptive column *and* a crude-effect column on two different colour ladders. The two are one
+  estimand computed twice --- with a single predictor, and with all of them --- so they are now one
+  column shape built twice: same scale, same ladder, same layout, one legend block, with the level
+  each effect sits on (the observed percentage or mean, the adjusted prediction) printed in the same
+  cell. The two effects end up side by side, which is the comparison the argument is for. On a 3+
+  level outcome, where one model column would need one crude column per category, the crude value
+  rides inside the model cell instead; `empirical = "column"` and `"cell"` force either.
 * **Colour the gap between the modelled and the observed effect.** `tab_reg(empirical = TRUE)` already
   prints the crude effect beside the adjusted one; `color = c("OR", "adjustment")` now colours *how far
   apart they are*, so a whole table of "what did adjusting change?" reads at a glance. With
   `split_var`, `color = "between_groups"` does the same against the first group (effect modification,
   row by row). `color_signif` applies to both, so a gap can be greyed when it is no bigger than chance,
   and the html tooltip gives its confidence interval and p-value. The gap is also printable
-  (`display = "{or} (obs {obs})"`). Part of an **odds-ratio** gap is non-collapsibility rather than
+  (`display = "{est} (obs {obs})"`, or `"{est} ({gap})"`). Part of an **odds-ratio** gap is
+  non-collapsibility rather than
   confounding, so there the colours stay descriptive and `tab_reg()` says so once: use marginal effects
   (`effect = "marginal"`) or risk ratios (`measure = "ratio"`) for a comparison the test can read.
 * **Every outcome now has an observed counterpart.** `tab_reg(empirical = TRUE)` used to go quiet on
-  three families. A **summed score** (`trials =`) now shows its mean score plus the odds ratio of the
-  summed items; an **ordinal** outcome shows `Obs_cumOR`, the cumulative odds ratio of the same model
-  with one predictor; a **multinomial** outcome would need one crude column per category, so its
-  observed effect is folded into the model cell instead — `2.31 (obs 2.05)`. `color = "adjustment"`
+  three families. A **summed score** (`trials =`) now shows the odds ratio of the summed items; an
+  **ordinal** outcome shows `Obs_cumOR`, the cumulative odds ratio of the same model with one
+  predictor; a **multinomial** outcome would need one crude column per category, so its observed
+  effect is folded into the model cell instead — `2.31 (2.05)`. `color = "adjustment"`
   therefore works everywhere, and on the marginal paths (`effect = "marginal"`) of a 3+ level
   outcome the gap now carries a real significance test. One rule covers all of it: *the observed effect
   is the model's own effect, fitted with a single predictor*.
@@ -158,7 +167,15 @@
   scale-relative tokens: `{est}` is whatever the column estimates and `{base}` the level it sits on
   (a percentage, a mean, a count), so one template works on every family. `{gap}` shows how far
   adjustment moved a regression effect, in print and Excel as well as in a tooltip. On `tab_reg()`
-  the layouts now reach every family, not just binomial coefficient models.
+  the layouts now reach every family and every column, and `display` never triggers a computation:
+  every quantity a layout can name is already stored, so `set_display()` on a finished table gives
+  the same table as asking for it at build time.
+* **Only the primary field of a cell is coloured.** A cell printing several fields reads as one
+  number with an aside --- `1/1.63*** (31%)` --- so the shade now grades the number and the aside
+  keeps the ordinary text colour. `options(tabxplor.color_secondary = "grey60")` tints the asides
+  instead, and `"same"` restores the whole-cell colour. Which field is the primary --- the one that
+  also carries the stars and that `get_num()` returns --- is the first one written outside brackets,
+  so a layout may print the aside first (`"base_est"`) without demoting the number.
 * **One rule for multiplicative cells.** A value below its reference prints as its inverse
   (`1/2.67` for an odds ratio, `÷2.67` for a risk / rate / mean ratio, the measure's own glyph) in
   *every* rendering --- a bare cell, a `{}` composite and the `est_ci` bracket alike. Composites

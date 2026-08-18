@@ -70,7 +70,7 @@ You rarely set `family` by hand — `tab_reg()` mostly detects it:
 
 That last column is only the **default**: each family can report several measures, and on several contrasts. The full grid, and how to ask for another one, is in [What a model column reports](#what-a-model-column-reports-family-effect-measure) below.
 
-With `empirical = TRUE`, each model column is joined by a crude/observed companion column showing the *observed, unadjusted (univariable)* effect — the effect you would see with no controls at all, "all things being unequal", for that predictor.
+With `empirical = TRUE`, each model column is joined by a crude/observed companion column showing the *observed, unadjusted (univariable)* effect — the effect you would see with no controls at all, "all things being unequal", for that predictor. The two columns are the same column twice, one estimand computed with one predictor and with all of them: same colour ladder, same layout, one legend. Each cell prints the effect with the level it sits on beside it — the observed percentage or mean on the crude side, the model-**adjusted** prediction on the model side — so the two effects sit next to each other in the middle and the comparison is read straight across.
 
 One rule covers every case: **the observed effect is the effect of that predictor alone**. With a categorical predictor that is exactly the observed contrast between levels (a percentage difference, an odds ratio computed from the raw percentages). With a *continuous* predictor there is no such shortcut, so it is the univariable slope — which assumes the effect is linear on the model's scale, something worth checking (with `cut()`, or splines) before trusting it.
 
@@ -79,7 +79,7 @@ One rule covers every case: **the observed effect is the effect of that predicto
 - gaussian (linear) → group means and their difference
 - poisson (counts) → observed rate and observed rate ratio
 
-A continuous predictor has no levels, so only its **effect** column is filled; the base column (`Obs_%`, `Obs_mean`, `Obs_rate`) stays empty, and its distribution — mean, standard deviation, and the mean in each outcome group — is shown in the html tooltip instead.
+A continuous predictor has no levels, so its cell shows the effect alone — there is no observed percentage or mean to put beside it — and its distribution (mean, standard deviation, and the mean in each outcome group) is shown in the html tooltip instead.
 
 On **weighted** data, one thing is worth knowing from the start: an observed column is always measured exactly like the model column beside it, so its confidence interval accounts for the weighting (and, under a `survey` design, for the whole design). A `tab()` cross-table does not, by default — add `design_effect = TRUE` there if you want its percentages directly comparable with these. See [Weighted and survey data](#weighted-and-survey-data) below.
 
@@ -95,13 +95,13 @@ When the outcome is a two-level factor, here "married" versus "not married", `ta
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"))
 ```
 
-For a simple logistic regression, `empirical = TRUE` add **raw percentages** and **crude unmodelised odds-ratios** for each predictor.
+For a simple logistic regression, `empirical = TRUE` adds the **crude unmodelised odds ratios**, each with the **raw percentage** it is computed from.
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), empirical = TRUE)
 ```
 
-The raw percentages `Obs_%` are a summary of the base observed results everything in the model is derived from :"28% of black americans are married, compared to 51% for white americans"
+The raw percentages in `Obs_OR`'s brackets are the observed results everything in the model is derived from: "28% of black americans are married, compared to 51% for white americans"
 
 - The plain difference from reference is colored (28% - 51% = -23%).
 - Cells that are non-significantly different from the reference are greyed out (based on a Newcombe confidence interval for differences of proportions).
@@ -140,7 +140,7 @@ Then we can use `empirical = TRUE` to compare this new modelised quantity to the
 - In the sample (`Obs_diff`), we observe a rate of marriages 23 points lower for black americans compared to white american (`28% - 51% = -23%`).
 - The modelised difference `Model_AME` is very close, `-19.8%`, so very little of this difference between black and white can be explained by age, income or religion.
 
-We can also compare the raw percentage `Obs_%` with the **model-adjusted probability** — the value in parentheses in the `Model_AME (adjusted %)` column :
+We can also compare the raw percentage — in the crude column's brackets — with the **model-adjusted probability**, in the model column's :
 
 - Adjusted percentage, which is a result of the model, reads this way : "if the whole sample kept its income/age/religion distribution but everyone were Black, an estimated 31.5% would be married, vs 51.3% if everyone were White". 
 - Blacks marry at 30.9% in this sample (observed); standardizing their income/age/religion to the population mix moves that only to 31.5% — so almost none of the Black–White gap is accounted for by differences in those three variables; it persists after adjustment.
@@ -246,7 +246,7 @@ plain display:
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "rincome"), empirical = TRUE) |>
-  set_display("{or} (obs {obs})")
+  set_display("{est} (obs {obs})")
 ```
 
 ### One warning about odds ratios
@@ -432,7 +432,7 @@ Most of the time, average marginal effects (AME) are easier to interpret, becaus
 tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"), effect = "marginal", empirical = TRUE) # |> tab_export()
 ```
 
-With `empirical = TRUE`, the crude/observed/unajusted differences and raw percentages appear in html tooltips, available at mouse hover of a cell.
+A 3+ level outcome would need one crude column per outcome category, so `empirical = TRUE` folds the crude effect **into** the model cell instead — `2.31 (2.05)` — and the crude percentages and differences appear in html tooltips, at mouse hover of a cell. Ask for the columns anyway with `empirical = "column"`.
 
 
 ## Every outcome now has an observed counterpart
@@ -471,7 +471,7 @@ tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
 
 ### A summed score
 
-With `trials =`, the observed columns are the average share of "yes" answers expressed two ways: `Obs_mean` is the plain **mean score** — here the average number of places out of six — and `Obs_OR` the odds ratio of the summed items.
+With `trials =`, the crude column is the odds ratio of the summed items, `Obs_OR`, with the observed **mean score** beside it — the average number of places out of six. The model column shows the same two quantities adjusted, so the pair reads across.
 
 ```{r}
 tab_reg(tea, "tea_where", c("sex", "SPC", "Sport"),
@@ -676,7 +676,7 @@ That said, the two are different questions rather than two spellings of one. A c
 - **`measure = "log"` needs something to take the log of.** It logs the family's default measure, so it is refused where that default is already additive (a linear coefficient, an average marginal effect). Spell `"log_odds"`, `"log_risk"` or `"log_rate"` to log a chosen one instead.
 - **Odds ratios are non-collapsible**, so `color = "adjustment"` colours the gap on an OR column but never tests it (see *How to read it — and how not to*, above). Ask for `measure = "ratio"` or `effect = "marginal"` if you want a gap the test can read.
 - **Two combinations have no observed companion.** At `effect = "at_reference"` the model is conditional on one profile while the observed columns stay marginal over the whole sample, so the two are shown but not compared — `color = "adjustment"` and `{obs}` stay empty. And a **Poisson `effect = "marginal"`** is additive while its crude counterpart is a rate ratio: the two are not on the same scale, so they are not paired. Use `effect = "coefficient"` to compare them.
-- **What needs an extra package, and what has no method.** `effect = "at_reference"` goes through **marginaleffects**; a *survey-weighted* multinomial or ordinal model has no marginal-effects method at all, so use the default `effect = "coefficient"` there. And `display` is ignored on a marginal-effects column, which already folds the adjusted prediction into the cell.
+- **What needs an extra package, and what has no method.** `effect = "at_reference"` goes through **marginaleffects**; a *survey-weighted* multinomial or ordinal model has no marginal-effects method at all, so use the default `effect = "coefficient"` there. (`display` itself reaches every column, marginal or not.)
 
 ### Asking your own outcome
 
@@ -773,7 +773,7 @@ escapes this, so the reading has to be careful rather than clever.
 probably differ in level or in variability — that is a property of the group, not of the predictor. If
 **one row** stands out while the others sit still, that is what genuine effect modification looks like.
 The colours are useful precisely because they make that shape visible at a glance. Adding
-`empirical = TRUE` shows each group's base rate (`Obs_%`), which usually settles the question.
+`empirical = TRUE` shows each group's base rate, in the crude column's brackets, which usually settles the question.
 
 **Each cell is tested on its own, with no correction for the number of tests.** In a table with seven
 comparisons, about one table in five will show a spurious coloured cell. The footer line is free of

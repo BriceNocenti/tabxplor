@@ -129,8 +129,8 @@ test_that("quantile groups turn the predictor into a factor, with the whole fact
   labs <- lv(t, "age")
   expect_length(labs, 5L)                            # one row per group...
   expect_match(labs[[1]], "^\\[")                    # ...labelled by its own interval
-  # a factor's crude twin is SATURATED, so the base column is filled per group
-  expect_true(all(is.finite(get_pct(t[["Obs_%"]])[as.character(t$var) == "age"])))
+  # a factor's crude twin is SATURATED, so the observed level is filled per group
+  expect_true(all(is.finite(get_pct(t[["Obs_OR"]])[as.character(t$var) == "age"])))
   # and the predictor kind is STORED as what it now is
   expect_identical(reg_call(t)$predictor_types[["age"]], "factor")
   # an integer is the same request

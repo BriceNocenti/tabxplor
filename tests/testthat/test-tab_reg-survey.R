@@ -285,7 +285,7 @@ test_that("multiplier rejects non-numeric predictors / wrong families", {
 test_that("empirical crude OR matches the weighted 2x2 odds ratio", {
   d   <- reg_split_data()
   t   <- suppressWarnings(tab_reg(d, "y", "x1", empirical = TRUE))
-  expect_true(all(c("Obs_%", "Obs_OR") %in% names(t)))
+  expect_true("Obs_OR" %in% names(t))
   eo  <- vapply(dplyr::ungroup(t)[["Obs_OR"]], tabxplor::get_num, numeric(1))
   # hand crude OR of each x1 level vs the reference "a", positive outcome = first level of y
   pos <- levels(d$y)[1]; lv <- levels(d$x1); ref <- lv[1]
@@ -302,5 +302,6 @@ test_that("empirical: gaussian now produces crude columns (Phase 14v)", {
   d <- reg_split_data()
   # Phase 14v: gaussian empirical is now wired (crude mean + mean-difference), no longer ignored.
   tg <- tab_reg(d, "x2", "x1", family = "gaussian", empirical = TRUE)
-  expect_true(all(c("Obs_mean", "Obs_diff") %in% names(tg)))
+  expect_true("Obs_diff" %in% names(tg))
+  expect_true(any(is.finite(get_mean(tg[["Obs_diff"]]))))     # the crude mean rides in the same cell
 })

@@ -157,13 +157,20 @@ options:
 
     - name: empirical
       title: empirical
-      type: Bool
-      default: false
+      type: List
+      options:
+        - name: 'no'
+        - name: column
+        - name: cell
+      default: 'no'
       description:
           R: >
-           Add the crude, unadjusted, single-predictor companion columns beside the
-           model effect (the bivariate association that IS the modelised quantity with
-           a single predictor). Binomial / gaussian / poisson only.
+           Show the crude, unadjusted, single-predictor effect beside each model effect --- the
+           bivariate association that IS the modelised quantity when there is a single predictor, so
+           the gap between the two is what adjustment changed. \code{"column"} draws it as its own
+           column; \code{"cell"} folds it into the model cell instead, which is the default for a
+           3+ level outcome, where one model column would otherwise need one crude column per
+           category.
 
 # ================= Model comparison (+ predictor subsets) =================
     - name: models

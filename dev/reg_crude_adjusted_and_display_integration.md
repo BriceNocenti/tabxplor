@@ -1,8 +1,8 @@
 # Phase 22a — one crude column, one model column, one display grammar
 
-Design study **and** implementation roadmap. Status: **22a-i is implemented** (D7-D9, D12-D14,
-D22-D23 -- see its DONE summary in `CLAUDE.md`); **22a-ii and 22a-iii are not.** Read this before
-touching `R/reg-empirical.R`, `R/reg-estimand.R`, `tab_reg()`'s display block, the display grammar in
+Design study **and** implementation roadmap. Status: **22a-i and 22a-ii are implemented** (D1-D14,
+D22-D23 -- see their DONE summaries in `CLAUDE.md`); **22a-iii is not.** Read this before touching
+`R/reg-empirical.R`, `R/reg-estimand.R`, `tab_reg()`'s display block, the display grammar in
 `R/tab-display.R`, or the legend builder in `R/fmt_class.R`.
 
 ⚠ The captures below are from BEFORE 22a-i, so the display presets (`"value"` / `"prob"` / `"ame"` /
@@ -249,16 +249,13 @@ The regression column, its colour, its legend and its tooltips. **D1, D2, D3, D4
 The header words and every message that names an estimand. **D15, D16, D17, D18, D19, D20, D21.**
 
 - `REG_ESTIMANDS$word` rewritten to the measure + marker grid of §5.4, and the new `long` column;
-- the `reg_measures()` output, the "what this outcome offers" abort, the footer note and the generated
-  `?tab_reg` section all reading that one declared string;
-- the measure moved into the `col_var` span on per-category tables, and the `(adjusted %)` header
-  suffix deleted;
+- the `reg_measures()` output, the "what this outcome offers" abort, the footer note and the generated `?tab_reg` section all reading that one declared string;
+- the measure moved into the `col_var` span on per-category tables, and the `(adjusted %)` header suffix deleted;
 - `@ref` verified through all four exporters and `make.names()` before the name is locked (§7.4);
-- the acronym × outcome-kind grid regenerated in `?tab_reg` and dropped into both regression vignettes
-  — the *grid* only; the surrounding prose rewrite belongs to Phase 22h.
+- the acronym × outcome-kind grid regenerated in `?tab_reg` and dropped into both regression vignettes  — the *grid* only; the surrounding prose rewrite belongs to Phase 22h.
+- make targeted edits to `CLAUDE.md` "## tabxplor architecture" (and, if relevant, "## Repository Map") to *cleanly* and *concisely* integrate what have been made during Phase 22a, respecting the document style, level of details and focus (no dev history, but the current implementation and it’s most important rationales ; *cut and replace, don’t accrete*).
 
-*Verification*: full suite + goldens — every regression column name moves in this phase, which is
-exactly why it is last.
+*Verification*: full suite + goldens — every regression column name moves in this phase, which is exactly why it is last.
 
 #### Deferred to other phases
 
@@ -1034,6 +1031,38 @@ This is the same recipe `?tabxplor-vctrs` already teaches for crosstabs, and it 
 `est_base` / `base_est` were chosen (D9) because the order of the words *is* the order in the cell,
 which is the one thing a user needs to be able to predict, and because they line up with `base_ci`
 into one `base` family of presets.
+
+### 5.3.1 Why the two DEFAULTS are mirrored, and not the same
+
+The default layout is asymmetric: the crude column prints `({base}) {est}` and the model column
+`{est} ({base})`. It looks odd written down and is obvious on screen --- and it has two independent
+justifications, which is why it is the default rather than a recipe.
+
+**It puts the two estimates side by side.** The whole point of `empirical` is the distance between
+the crude effect and the adjusted one, so the two numbers being compared must be adjacent. Mirroring
+the layouts puts them in the middle, each with the level it sits on on the outside:
+
+```text
+ var   levels   Obs_RR            Model_RR
+ race  White    (52%) 1           1         (51.3%)
+ race  Black    (31%) 1/1.69***   1/1.63*** (31.5%)
+```
+
+**It reads as the modelling pipeline itself, left to right.** The base of everything is the observed
+percentage or mean; a measure is computed *on* it; that measure is then modelled "all things being
+equal"; and the adjusted percentage is finally inferred back *from* the model. The cell order is that
+order:
+
+```text
+      observed level  ->  observed measure  |  modelled measure  ->  adjusted level
+           (52%)              1/1.69        |       1/1.63              (31.5%)
+```
+
+**And the estimate stays the subject in both.** The bracket is the aside, wherever it is written:
+`{est}` remains the primary token, so it carries the stars, it is what `get_num()` and Excel return,
+it is the only part the colour shades (`tabxplor.color_secondary`), and it is what a bold reference
+row emphasises. That is what the "first token outside brackets" rule buys --- without it, printing
+the aside first would silently demote the number the cell is about.
 
 **The per-row-kind fold stays**, and generalises. The stored `display` field is already per cell, and
 the marginal path already writes four variants (`blank`, `({pct})`, `{diff} ({pct})`, `diff`). The

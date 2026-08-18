@@ -83,12 +83,13 @@ test_that("the folds reach EVERY family: a gaussian cell folds an adjusted MEAN"
   expect_equal(get_num(bc), get_diff(bc))                # the coefficient stays primary
 })
 
-test_that("display is ignored (with a message) for marginal-effects output", {
+test_that("display reaches the marginal path too -- one grammar, both builders", {
   skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
-  expect_message(
+  t <- suppressMessages(
     tab_reg(reg_data(), "married", "race", family = "binomial", effect = "marginal",
-            display = "est_ci"),
-    "ignored")
+            display = "est_ci"))
+  col <- t[[grep("^Model", names(t))[[1]]]]
+  expect_true(any(get_display(col) == "est_ci"))
 })
 
 # ---- Excel in-cell test label ----------------------------------------------------------------

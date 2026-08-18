@@ -98,6 +98,56 @@ reg_measure_key <- function(x) {
   list(measure = key, log_base = if (is.na(base)) "" else base)
 }
 
+# REG_CELL_DIGITS -- how many decimals a REGRESSION cell prints, per estimate scale.
+#
+# ONE declaration, read by every builder (the model column, its marginal twin and the crude
+# companion), because the two columns of one comparison must not print the same quantity to different
+# precisions -- a crude "31%" beside a modelled "31.5%" is the same number twice.
+#
+# It is the LEVEL's precision, not the estimate's: a cell prints both, and a token too coarse at 0
+# raises itself through DISPLAY_TOKENS$min_digits (a ratio to 2, a residual to 1). So a percentage
+# scale asks for 0 and reads "1/2.43 (31%)", while a scale whose level is a mean asks for 2.
+# WARNING: a crosstab's digits are its own (tab(digits =) / the column type); this is the regression
+# side only, where a cell's precision cannot be a user argument per column.
+#' @keywords internal
+#' @noRd
+REG_CELL_DIGITS <- c(odds_ratio = 0L, score_ratio = 2L, pct_ratio = 0L, mean_ratio = 2L,
+                     raw_diff = 2L, mean_diff = 2L, log_coef = 2L, points = 1L)
+
+#' @keywords internal
+#' @noRd
+reg_cell_digits <- function(scale) {
+  d <- REG_CELL_DIGITS[[scale[[1]]]]
+  if (is.null(d)) 2L else d
+}
+
+# THE SCALE A COLUMN IS STAMPED WITH, which is the estimand's own -- except for a SUMMED-SCORE
+# outcome (`tab_reg(trials =)`), whose multiplicative effect sits on a mean score rather than on a
+# probability, whether it is an odds ratio or a risk ratio.
+# Declared as one map so the model column and its crude twin cannot disagree about it (they must
+# not: reg_same_estimand() compares exactly this, and a mismatch withholds `obs`).
+#' @keywords internal
+#' @noRd
+REG_SCALE_GROUPED <- c(odds_ratio = "score_ratio")
+
+#' @keywords internal
+#' @noRd
+reg_scale_of <- function(est, trials = NA) {
+  sc <- est$scale
+  if (is.null(trials) || length(trials) != 1L || is.na(trials)) return(sc)
+  g <- unname(REG_SCALE_GROUPED[sc])
+  if (is.na(g)) sc else g
+}
+
+# WHICH KIND OF PERCENTAGE a regression cell holds -- derived, never declared: a column's `pct` field
+# is the share the estimate sits on, so it exists exactly where the scale names `pct` as its level,
+# and it is always a ROW percentage there (the outcome's share within a predictor level). A scale
+# whose level is a mean (a rate ratio, a coefficient) has no percentage at all.
+#' @keywords internal
+#' @noRd
+reg_pct_type <- function(scale)
+  if (identical(EST_SCALES[[scale[[1]]]]$base_display, "pct")) "row" else "none"
+
 #' @keywords internal
 #' @noRd
 REG_MEASURES_VALUES <- c("auto", "odds_ratio", "ratio", "difference", "log")
@@ -122,7 +172,6 @@ REG_EFFECTS_VALUES  <- c("coefficient", "marginal", "at_reference")
 #                "AME" / "MER". `reg_effect_word()`'s four-argument nested switch IS this column.
 #   scale        the EST_SCALES key stamped on the column (KEY 2). Its `est_field` says which fmt
 #                field the estimate is written into, so a scale change needs no builder change.
-#   display      the per-cell display token the column is built with.
 #   crude_fam    which REG_EMPIRICAL block the observed companion comes from; "auto" =
 #                reg_crude_key(fit, trials), which is what carries `trials` -> grouped_binomial.
 #   crude_shape  which shape row inside it. `reg_crude_shape()`'s dispatch -- including its
@@ -141,7 +190,10 @@ REG_EFFECTS_VALUES  <- c("coefficient", "marginal", "at_reference")
 #                costs 2.4 s, not 45). It is a PERMISSION, not a promise: the producer returns NULL
 #                rather than a wrong number, and reg_marginal() then falls back for the WHOLE call --
 #                never a per-contrast mix, so one column always carries one convention.
-#   needs        a Suggests package this cell requires ("" = none).
+#                It is ALSO the dependency rule: `marginaleffects` is a hard requirement exactly where
+#                this resolves to it, which is why no row declares that package separately. Every
+#                other row runs dependency-free, so a table may always populate its marginal
+#                quantities (the fallback checks for the package where it actually falls back).
 #   obs          may an `obs` (crude) value be attached cell by cell? FALSE at the reference profile,
 #                where the model is conditional and the observed columns stay marginal.
 #   status       "ok" | "impossible"; ABSENT from the table = "not offered".
@@ -170,12 +222,12 @@ REG_MARGINAL_ENGINES <- c("gcomp", "marginaleffects")
 # every one of the 36 call sites below, so a column inserted earlier shifts all of them in silence.
 #' @keywords internal
 #' @noRd
-est_row <- function(effect, measure, builder, fit, exp, word, scale, display,
+est_row <- function(effect, measure, builder, fit, exp, word, scale,
                     crude_fam = "auto", crude_shape = NA_character_, comparison = NA_character_,
-                    needs = "", obs = TRUE, engine = "auto", status = "ok", why = NULL, note = NULL) {
+                    obs = TRUE, engine = "auto", status = "ok", why = NULL, note = NULL) {
   list(effect = effect, measure = measure, builder = builder, fit = fit, exp = exp, word = word,
-       scale = scale, display = display, crude_fam = crude_fam, crude_shape = crude_shape,
-       comparison = comparison, needs = needs, obs = obs, engine = engine,
+       scale = scale, crude_fam = crude_fam, crude_shape = crude_shape,
+       comparison = comparison, obs = obs, engine = engine,
        status = status, why = why, note = note)
 }
 
@@ -220,7 +272,7 @@ REG_ESTIMANDS <- list(
   gaussian = list(
     default = c(coefficient = "difference", marginal = "difference", at_reference = "difference"),
     rows = list(
-      est_row("coefficient", "difference", "coef", "gaussian", FALSE, "\u03b2", "raw_diff", "coef",
+      est_row("coefficient", "difference", "coef", "gaussian", FALSE, "\u03b2", "raw_diff",
               crude_shape = "diff",
               note = function() gettext("coefficients (mean difference vs the reference category)")),
       # Phase 19e -- the capability gap `tab()` never had: a RATIO OF MEANS. Poisson pseudo-ML with
@@ -228,27 +280,27 @@ REG_ESTIMANDS <- list(
       # family over: a deliberately misspecified log-link likelihood whose sandwich variance is the
       # honest one. tabxplor already owned the mean_ratio scale, its ladder and three ci_mean_ratio
       # engines -- only tab_reg() refused.
-      est_row("coefficient", "ratio", "coef", "mr", TRUE, "RoM", "mean_ratio", "ratio",
+      est_row("coefficient", "ratio", "coef", "mr", TRUE, "RoM", "mean_ratio",
               crude_fam = "mr", crude_shape = "mr",
               note = function() gettext("ratios of adjusted means (vs the reference category)")),
-      est_row("coefficient", "log", "coef", "mr", FALSE, "\u03b2", "log_coef", "coef",
+      est_row("coefficient", "log", "coef", "mr", FALSE, "\u03b2", "log_coef",
               crude_fam = "mr", crude_shape = "mr_log",
               note = function() gettext("log-mean coefficients (vs the reference category)")),
-      est_row("coefficient", "odds_ratio", "coef", "gaussian", TRUE, "OR", "odds_ratio", "or",
+      est_row("coefficient", "odds_ratio", "coef", "gaussian", TRUE, "OR", "odds_ratio",
               status = "impossible",
               why = function() gettext("an odds ratio needs a probability to take the odds of; this outcome is continuous")),
-      est_row("marginal", "difference", "ame", "gaussian", FALSE, "AME", "raw_diff", "coef",
-              crude_shape = "diff", needs = "marginaleffects",
+      est_row("marginal", "difference", "ame", "gaussian", FALSE, "AME", "raw_diff",
+              crude_shape = "diff",
               note = est_note_marginal("raw")),
-      est_row("marginal", "ratio", "ame", "gaussian", TRUE, "RoM", "mean_ratio", "ratio",
+      est_row("marginal", "ratio", "ame", "gaussian", TRUE, "RoM", "mean_ratio",
               crude_fam = "mr", crude_shape = "mr", comparison = "lnratioavg",
-              needs = "marginaleffects", note = est_note_marginal("raw", ratio = TRUE)),
-      est_row("at_reference", "difference", "ame", "gaussian", FALSE, "MER", "raw_diff", "coef",
-              crude_shape = "diff", needs = "marginaleffects", obs = FALSE,
+              note = est_note_marginal("raw", ratio = TRUE)),
+      est_row("at_reference", "difference", "ame", "gaussian", FALSE, "MER", "raw_diff",
+              crude_shape = "diff", obs = FALSE,
               note = est_note_marginal("raw", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "gaussian", TRUE, "RoM", "mean_ratio", "ratio",
+      est_row("at_reference", "ratio", "ame", "gaussian", TRUE, "RoM", "mean_ratio",
               crude_fam = "mr", crude_shape = "mr", comparison = "lnratioavg",
-              needs = "marginaleffects", obs = FALSE,
+              obs = FALSE,
               note = est_note_marginal("raw", at_ref = TRUE, ratio = TRUE))
     )),
 
@@ -256,33 +308,33 @@ REG_ESTIMANDS <- list(
   binomial = list(
     default = c(coefficient = "odds_ratio", marginal = "difference", at_reference = "difference"),
     rows = list(
-      est_row("coefficient", "odds_ratio", "coef", "binomial", TRUE, "OR", "odds_ratio", "or",
+      est_row("coefficient", "odds_ratio", "coef", "binomial", TRUE, "OR", "odds_ratio",
               crude_shape = "or",
               note = function() gettext("odds ratios (vs the reference category)")),
-      est_row("coefficient", "log", "coef", "binomial", FALSE, "\u03b2", "log_coef", "coef",
+      est_row("coefficient", "log", "coef", "binomial", FALSE, "\u03b2", "log_coef",
               crude_shape = "or_log",
               note = function() gettext("log-odds coefficients (vs the reference category)")),
       # the modified Poisson (Zou 2004) -- reachable by NAME at last. It used to require typing
       # `family = "poisson"` on a binary outcome, which is the wrong distribution said out loud.
-      est_row("coefficient", "ratio", "coef", "rr", TRUE, "RR", "odds_ratio", "or",
+      est_row("coefficient", "ratio", "coef", "rr", TRUE, "RR", "odds_ratio",
               crude_fam = "rr", crude_shape = "rr",
               note = function() gettext("risk ratios (vs the reference category)")),
       # Phase 19e -- the second capability gap: the additive-risk (identity-link) model.
-      est_row("coefficient", "difference", "coef", "rd", FALSE, "RD", "points", "diff",
+      est_row("coefficient", "difference", "coef", "rd", FALSE, "RD", "points",
               crude_shape = "ame",
               note = function() gettext("risk differences (percentage points vs the reference category)")),
-      est_row("marginal", "difference", "ame", "binomial", FALSE, "AME", "points", "diff",
-              crude_shape = "ame", needs = "marginaleffects",
+      est_row("marginal", "difference", "ame", "binomial", FALSE, "AME", "points",
+              crude_shape = "ame",
               note = est_note_marginal("prob")),
-      est_row("marginal", "ratio", "ame", "binomial", TRUE, "RR", "odds_ratio", "or",
+      est_row("marginal", "ratio", "ame", "binomial", TRUE, "RR", "odds_ratio",
               crude_fam = "rr", crude_shape = "rr", comparison = "lnratioavg",
-              needs = "marginaleffects", note = est_note_marginal("prob", ratio = TRUE)),
-      est_row("at_reference", "difference", "ame", "binomial", FALSE, "MER", "points", "diff",
-              crude_shape = "ame", needs = "marginaleffects", obs = FALSE,
+              note = est_note_marginal("prob", ratio = TRUE)),
+      est_row("at_reference", "difference", "ame", "binomial", FALSE, "MER", "points",
+              crude_shape = "ame", obs = FALSE,
               note = est_note_marginal("prob", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "binomial", TRUE, "RR", "odds_ratio", "or",
+      est_row("at_reference", "ratio", "ame", "binomial", TRUE, "RR", "odds_ratio",
               crude_fam = "rr", crude_shape = "rr", comparison = "lnratioavg",
-              needs = "marginaleffects", obs = FALSE,
+              obs = FALSE,
               note = est_note_marginal("prob", at_ref = TRUE, ratio = TRUE))
     )),
 
@@ -290,28 +342,32 @@ REG_ESTIMANDS <- list(
   poisson = list(
     default = c(coefficient = "ratio", marginal = "difference", at_reference = "difference"),
     rows = list(
-      est_row("coefficient", "ratio", "coef", "poisson", TRUE, "IRR", "odds_ratio", "or",
+      # an incidence-rate ratio IS a ratio of means (of counts per unit of exposure), so it takes
+      # `mean_ratio` -- the scale whose `unit` already says "rate_ratio", whose breaks are the same
+      # 1.2 / 1.5 / 2 / 4, and whose level is a mean. It therefore prints "/2.5" like every other
+      # ratio of means, in a regression and in a crosstab alike.
+      est_row("coefficient", "ratio", "coef", "poisson", TRUE, "IRR", "mean_ratio",
               crude_shape = "irr",
               note = function() gettext("incidence-rate ratios (vs the reference category)")),
-      est_row("coefficient", "log", "coef", "poisson", FALSE, "\u03b2", "log_coef", "coef",
+      est_row("coefficient", "log", "coef", "poisson", FALSE, "\u03b2", "log_coef",
               crude_shape = "irr_log",
               note = function() gettext("log-rate coefficients (vs the reference category)")),
-      est_row("coefficient", "odds_ratio", "coef", "poisson", TRUE, "OR", "odds_ratio", "or",
+      est_row("coefficient", "odds_ratio", "coef", "poisson", TRUE, "OR", "odds_ratio",
               status = "impossible",
               why = function() gettext("an odds ratio needs a probability to take the odds of; this outcome is a count")),
       # a poisson AME is ADDITIVE while its crude companion stays a rate RATIO: the crude shape is
       # deliberately the coefficient one, and reg_same_estimand() then (rightly) refuses to pair
       # them. That fall-through used to live inside reg_crude_shape(); it is data now.
-      est_row("marginal", "difference", "ame", "poisson", FALSE, "AME", "raw_diff", "coef",
-              crude_shape = "irr", needs = "marginaleffects", note = est_note_marginal("raw")),
-      est_row("marginal", "ratio", "ame", "poisson", TRUE, "RoM", "mean_ratio", "ratio",
-              crude_shape = "irr", comparison = "lnratioavg", needs = "marginaleffects",
+      est_row("marginal", "difference", "ame", "poisson", FALSE, "AME", "raw_diff",
+              crude_shape = "irr", note = est_note_marginal("raw")),
+      est_row("marginal", "ratio", "ame", "poisson", TRUE, "RoM", "mean_ratio",
+              crude_shape = "irr", comparison = "lnratioavg",
               note = est_note_marginal("raw", ratio = TRUE)),
-      est_row("at_reference", "difference", "ame", "poisson", FALSE, "MER", "raw_diff", "coef",
-              crude_shape = "irr", needs = "marginaleffects", obs = FALSE,
+      est_row("at_reference", "difference", "ame", "poisson", FALSE, "MER", "raw_diff",
+              crude_shape = "irr", obs = FALSE,
               note = est_note_marginal("raw", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "poisson", TRUE, "RoM", "mean_ratio", "ratio",
-              crude_shape = "irr", comparison = "lnratioavg", needs = "marginaleffects", obs = FALSE,
+      est_row("at_reference", "ratio", "ame", "poisson", TRUE, "RoM", "mean_ratio",
+              crude_shape = "irr", comparison = "lnratioavg", obs = FALSE,
               note = est_note_marginal("raw", at_ref = TRUE, ratio = TRUE))
     )),
 
@@ -319,27 +375,27 @@ REG_ESTIMANDS <- list(
   multinomial = list(
     default = c(coefficient = "odds_ratio", marginal = "difference", at_reference = "odds_ratio"),
     rows = list(
-      est_row("coefficient", "odds_ratio", "coef", "multinomial", TRUE, "OR", "odds_ratio", "or",
+      est_row("coefficient", "odds_ratio", "coef", "multinomial", TRUE, "OR", "odds_ratio",
               crude_shape = "or",
               note = function() gettext("odds ratios (each category vs the reference)")),
-      est_row("coefficient", "log", "coef", "multinomial", FALSE, "\u03b2", "log_coef", "coef",
+      est_row("coefficient", "log", "coef", "multinomial", FALSE, "\u03b2", "log_coef",
               crude_shape = "or_log",
               note = function() gettext("log-odds coefficients (each category vs the reference)")),
-      est_row("marginal", "difference", "ame", "multinomial", FALSE, "AME", "points", "diff",
-              crude_shape = "ame", needs = "marginaleffects", note = est_note_marginal("prob")),
-      est_row("marginal", "ratio", "ame", "multinomial", TRUE, "RR", "odds_ratio", "or",
-              crude_shape = "ame_ratio", comparison = "lnratioavg", needs = "marginaleffects",
+      est_row("marginal", "difference", "ame", "multinomial", FALSE, "AME", "points",
+              crude_shape = "ame", note = est_note_marginal("prob")),
+      est_row("marginal", "ratio", "ame", "multinomial", TRUE, "RR", "odds_ratio",
+              crude_shape = "ame_ratio", comparison = "lnratioavg",
               note = est_note_marginal("prob", ratio = TRUE)),
       # the one cell whose BUILDER is neither coefficient nor marginal: at the reference profile a
       # multinomial coefficient becomes the odds ratio of each category VERSUS THE REST.
-      est_row("at_reference", "odds_ratio", "vsrest", "multinomial", TRUE, "OR", "odds_ratio", "or",
-              crude_shape = "or", comparison = "lnor", needs = "marginaleffects", obs = FALSE,
+      est_row("at_reference", "odds_ratio", "vsrest", "multinomial", TRUE, "OR", "odds_ratio",
+              crude_shape = "or", comparison = "lnor", obs = FALSE,
               note = function() gettext("odds ratios of each outcome category versus the rest, at the reference profile (other predictors held at their reference level / mean); profile-conditional")),
-      est_row("at_reference", "difference", "ame", "multinomial", FALSE, "MER", "points", "diff",
-              crude_shape = "ame", needs = "marginaleffects", obs = FALSE,
+      est_row("at_reference", "difference", "ame", "multinomial", FALSE, "MER", "points",
+              crude_shape = "ame", obs = FALSE,
               note = est_note_marginal("prob", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "multinomial", TRUE, "RR", "odds_ratio", "or",
-              crude_shape = "ame_ratio", comparison = "lnratioavg", needs = "marginaleffects",
+      est_row("at_reference", "ratio", "ame", "multinomial", TRUE, "RR", "odds_ratio",
+              crude_shape = "ame_ratio", comparison = "lnratioavg",
               obs = FALSE, note = est_note_marginal("prob", at_ref = TRUE, ratio = TRUE))
     )),
 
@@ -347,22 +403,22 @@ REG_ESTIMANDS <- list(
   ordinal = list(
     default = c(coefficient = "odds_ratio", marginal = "difference", at_reference = "difference"),
     rows = list(
-      est_row("coefficient", "odds_ratio", "coef", "ordinal", TRUE, "OR", "odds_ratio", "or",
+      est_row("coefficient", "odds_ratio", "coef", "ordinal", TRUE, "OR", "odds_ratio",
               crude_shape = "cumor",
               note = function() gettext("cumulative odds ratios (proportional-odds model)")),
-      est_row("coefficient", "log", "coef", "ordinal", FALSE, "\u03b2", "log_coef", "coef",
+      est_row("coefficient", "log", "coef", "ordinal", FALSE, "\u03b2", "log_coef",
               crude_shape = "cumor_log",
               note = function() gettext("proportional-odds model (log-odds coefficients)")),
-      est_row("marginal", "difference", "ame", "ordinal", FALSE, "AME", "points", "diff",
-              crude_shape = "ame", needs = "marginaleffects", note = est_note_marginal("prob")),
-      est_row("marginal", "ratio", "ame", "ordinal", TRUE, "RR", "odds_ratio", "or",
-              crude_shape = "ame_ratio", comparison = "lnratioavg", needs = "marginaleffects",
+      est_row("marginal", "difference", "ame", "ordinal", FALSE, "AME", "points",
+              crude_shape = "ame", note = est_note_marginal("prob")),
+      est_row("marginal", "ratio", "ame", "ordinal", TRUE, "RR", "odds_ratio",
+              crude_shape = "ame_ratio", comparison = "lnratioavg",
               note = est_note_marginal("prob", ratio = TRUE)),
-      est_row("at_reference", "difference", "ame", "ordinal", FALSE, "MER", "points", "diff",
-              crude_shape = "ame", needs = "marginaleffects", obs = FALSE,
+      est_row("at_reference", "difference", "ame", "ordinal", FALSE, "MER", "points",
+              crude_shape = "ame", obs = FALSE,
               note = est_note_marginal("prob", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "ordinal", TRUE, "RR", "odds_ratio", "or",
-              crude_shape = "ame_ratio", comparison = "lnratioavg", needs = "marginaleffects",
+      est_row("at_reference", "ratio", "ame", "ordinal", TRUE, "RR", "odds_ratio",
+              crude_shape = "ame_ratio", comparison = "lnratioavg",
               obs = FALSE, note = est_note_marginal("prob", at_ref = TRUE, ratio = TRUE))
     ))
 )
@@ -802,8 +858,12 @@ reg_normalize_color <- function(color) {
 #' @keywords internal
 #' @noRd
 reg_color_auto_measure <- function(est) {
-  ctx <- if (identical(EST_SCALES[[est$scale]]$geometry, "ratio")) "reg_ratio" else "reg_diff"
-  measure_auto(ctx, "text")
+  # THE measure the column's own scale declares (`label_meas`) -- the one whose glyphs the cells
+  # print and whose ladder the legend and the forest axis draw, so the four cannot disagree about
+  # what is being graded. It is also the only reading that keeps a measure pointed at a field the
+  # column actually fills: an odds ratio grades `or`, a ratio of means grades `ratio`, and a coarser
+  # "is it multiplicative?" would hand a rate ratio the odds-ratio measure and an empty field.
+  EST_SCALES[[est$scale]]$label_meas
 }
 
 # A TRUE in the text slot of an explicit two-channel spec is the same "the column's own geometry"
@@ -834,7 +894,7 @@ reg_color_for <- function(color, est) {
 #' @noRd
 reg_eff_word <- function(est, empirical = FALSE) {
   w <- est$word
-  if (!identical(est$builder, "coef") && isTRUE(empirical) && reg_fam_prob(est$family))
+  if (!identical(est$builder, "coef") && emp_on(empirical) && reg_fam_prob(est$family))
     w <- paste0(w, " (adjusted %)")
   w
 }
@@ -922,7 +982,7 @@ reg_measures <- function(data, outcome, family = "auto") {
   fam <- if (identical(family, "auto")) reg_detect_family(data, outcome) else family
   rows <- reg_estimands_for(fam)
   if (is.null(rows)) cli::cli_abort("Unknown {.arg family} {.val {fam}}.")
-  grid <- expand.grid(effect = REG_EFFECTS_VALUES, measure = c("odds_ratio", "ratio", "difference"),
+  grid <- expand.grid(effect = REG_EFFECTS_VALUES, measure = c("odds_ratio", "difference"),
                       stringsAsFactors = FALSE)
   out <- purrr::map(seq_len(nrow(grid)), function(i) {
     r <- reg_estimand(fam, grid$effect[[i]], grid$measure[[i]])
