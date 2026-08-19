@@ -257,7 +257,8 @@ test_that("split_var works with survey weights (per-group svyglm)", {
 test_that("split_var rejects an invalid grouping column", {
   d <- reg_split_data()
   expect_error(tab_reg(d, "y", "x1", tab_vars = "x1"), "cannot also be")   # a predictor
-  expect_error(tab_reg(d, "y", "x1", tab_vars = "nope"), "not a column")
+  # since 22b-vi the role is tidy-selected, so an absent column is tidyselect's own refusal
+  expect_error(tab_reg(d, "y", "x1", tab_vars = "nope"), "doesn't exist")
   expect_error(tab_reg(d, "y", "x1", tab_vars = "x2"), "factor or character")
 })
 

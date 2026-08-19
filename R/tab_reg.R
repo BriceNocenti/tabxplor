@@ -29,6 +29,8 @@
 #   - `trials` fits a summed score as a GROUPED binomial (cbind(score, trials - score)). A model
 #     FORMULA in `outcome` is the escape hatch: a plain `y ~ a + b` reduces to the outcome+predictors
 #     path, while interactions / poly() / I() are fit verbatim and rendered from the fitted terms.
+#   - ONE FORMULA ASSEMBLY for every fitter (reg_fit_formula), so reg_formulas() reports what really
+#     reached glm() / svyglm() / multinom() / polr() rather than a second reconstruction of it.
 #   - A 3+ LEVEL OUTCOME becomes several COLUMNS, not several tables: one multinomial fit gives one
 #     odds-ratio column per non-reference category, one proportional-odds fit one cumulative-OR
 #     column (its cut-point rows are dropped, so the Constant cell is empty). Both reuse the ordinary
@@ -101,7 +103,7 @@ reg_fam_percategory <- function(f) reg_fam_prob(f) & !f %in% "binomial"
 reg_fam_count    <- function(f) f %in% c("poisson", "quasipoisson")
 # ⚠ the question is about the OUTCOME family, never the fit key: `rr` / `rd` are binomial FITS under
 # another link, so a `family == "binomial"` test would drop `trials` on both. A compound formula owns
-# its LHS, so `trials` does not apply to it.
+# its LHS, so `trials` does not apply to it -- from a spec that flag is `sp$compound`, the one spelling.
 reg_is_grouped_binomial <- function(family, trials, compound = FALSE)
   reg_fam_binary(family) && !is.null(trials) && !isTRUE(compound)
 # fitted by stats::glm -- not one of the 3+ level machines, which have no glm-shaped coefficient
@@ -746,17 +748,85 @@ reg_wald_from_tidy <- function(td, conf_level, do_exp) {
 
 # === SECTION: The 3+ level engines (multinomial / proportional-odds) ============================
 
-# THE model formula of every fitter: a compound `formula` is fitted VERBATIM (it owns its RHS, so
-# the shape terms do not apply). ⚠ it must reach EVERY fitter -- a 3+ level engine building its own
-# formula silently dropped the user's interactions from the MODEL, not merely from the table.
+# THE model formula of EVERY fitter, glm path included -- so what a table says it fitted
+# (reg_formulas()) and what reg_fit() hands to glm() are one assembly. A compound `formula` is fitted
+# VERBATIM (it owns its RHS, so the shape terms do not apply). ⚠ it must reach every fitter -- a 3+
+# level engine building its own formula silently dropped the user's interactions from the MODEL, not
+# merely from the table.
+#   response   overrides the plain outcome: the grouped binomial's `cbind()` pair or `.gb_succ`.
+#   cross      a tab_vars, making the POOLED interaction fit: `(x1 + x2) * g`.
+#   offset     an offset term appended to the RHS (the grouped modified Poisson's log(trials)).
 #' @keywords internal
 #' @noRd
-reg_fit_formula <- function(outcome, predictors, add_terms = NULL, formula = NULL) {
+reg_fit_formula <- function(outcome, predictors, add_terms = NULL, formula = NULL,
+                            response = NULL, cross = NULL, offset = NULL) {
   if (!is.null(formula)) return(formula)
-  stats::as.formula(paste0(
-    "`", outcome, "` ~ ",
-    paste(c(paste0("`", predictors, "`"), add_terms), collapse = " + ")))
+  rhs <- paste0("`", predictors, "`", collapse = " + ")
+  if (!is.null(cross))    rhs <- paste0("(", rhs, ") * `", cross, "`")
+  if (length(add_terms))  rhs <- paste(c(rhs, add_terms), collapse = " + ")
+  if (!is.null(offset))   rhs <- paste0(rhs, " + ", offset)
+  stats::as.formula(paste0(response %||% paste0("`", outcome, "`"), " ~ ", rhs))
 }
+
+# The RESPONSE side of a grouped-binomial fit, from the estimand's link key: the modified Poisson
+# models the success COUNT (with log(trials) as offset), every other link the two-column pair.
+#' @keywords internal
+#' @noRd
+reg_grouped_response <- function(family)
+  if (identical(family, "rr")) "`.gb_succ`" else "cbind(`.gb_succ`, `.gb_fail`)"
+
+#' The model formulas a regression table fitted
+#'
+#' Shows the formula behind every column of a [tab_reg()] table --- exactly what reached
+#' [stats::glm()], [survey::svyglm()], [nnet::multinom()] or [MASS::polr()]. Use it to check what a
+#' `shape =`, a `trials =` or a model formula really built.
+#'
+#' @details
+#' One row per model: several `outcome`s give one each, a `predictors` list one per model. Two things
+#' the list does not repeat: under `tab_vars` the same formula is fitted **within each group**, and
+#' `color = "between_groups"` (or `stats = "interaction"`) fits one extra pooled model for the footer
+#' test only.
+#'
+#' A summed score (`trials =`) is fitted on a success / failure pair, so its formula names the two
+#' internal columns tabxplor builds for it (`.gb_succ`, `.gb_fail`, and `.gb_trials` in the offset of
+#' the risk-ratio link).
+#'
+#' @param x A table built by [tab_reg()].
+#' @return A tibble with one row per model: `model` (its name in the table), `outcome`, `family`
+#'   (the outcome family), `fit` (the internal link the measure asked for --- `"rr"`, `"rd"`, `"mr"`
+#'   --- or the family itself) and `formula`.
+#' @seealso [tab_reg()], [reg_measures()] (what an outcome can be modelled as).
+#' @export
+#' @examples
+#' \donttest{
+#' d <- forcats::gss_cat
+#' d$married <- as.integer(d$marital == "Married")
+#' reg_formulas(tab_reg(d, "married", c("race", "age"), family = "binomial"))
+#' }
+reg_formulas <- function(x) {
+  meta <- reg_call(x)
+  if (is.null(meta) || is.null(meta$fit_spec))
+    cli::cli_abort(c("{.arg x} must be a table built by {.fn tab_reg}.",
+                     "i" = "A crosstab has no model to show a formula for."))
+  fs <- meta$fit_spec
+  dplyr::bind_rows(purrr::map(fs$specs, function(sp) {
+    # the SAME assembly reg_fit() runs, on the SAME stored inputs -- so this cannot drift from what
+    # was fitted, exactly as reg_check_plots() refits from this same recipe.
+    grouped <- reg_is_grouped_binomial(sp$fit_family, sp$trials, sp$compound)
+    fml <- reg_fit_formula(
+      sp$outcome, sp$predictors,
+      add_terms = reg_shape_add(fs$shape_terms, sp$predictors), formula = sp$formula,
+      response  = if (grouped) reg_grouped_response(sp$fit_family),
+      offset    = if (grouped && identical(sp$fit_family, "rr")) "offset(log(`.gb_trials`))")
+    tibble::tibble(
+      model   = sp$label, outcome = sp$outcome,
+      family  = if (sp$fit_family %in% names(REG_FIT_FAMILY))
+                  unname(REG_FIT_FAMILY[[sp$fit_family]]) else sp$fit_family,
+      fit     = sp$fit_family,
+      formula = paste(deparse(fml, width.cutoff = 500L), collapse = " "))
+  }))
+}
+
 
 reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, method,
                              weighted = FALSE, make_design = NULL, add_terms = NULL,
@@ -1052,23 +1122,17 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
     ))
   }
 
-  fml_lpm <- NULL
-  fml <- if (!is.null(formula)) {
-    formula                                            # compound escape-hatch: fit verbatim
-  } else {
-    resp <- if (!grouped) paste0("`", outcome, "`") else if (identical(family, "rr"))
-      "`.gb_succ`" else "cbind(`.gb_succ`, `.gb_fail`)"
-    rhs  <- paste0("`", predictors, "`", collapse = " + ")
-    if (!is.null(cross)) rhs <- paste0("(", rhs, ") * `", cross, "`")   # the pooled interaction fit
-    if (length(add_terms)) rhs <- paste(c(rhs, add_terms), collapse = " + ")
-    fml_lpm <- stats::as.formula(
-      paste0(if (grouped) "`.gb_prop`" else resp, " ~ ", rhs))
-    # A Poisson likelihood has no two-column response: the grouped modified Poisson models the count
-    # with log(trials) as OFFSET, which keeps exp(coef) a per-item risk ratio.
-    if (grouped && identical(family, "rr")) rhs <- paste0(rhs, " + offset(log(`.gb_trials`))")
-    stats::as.formula(paste0(resp, " ~ ", rhs))
-  }
-  if (is.null(fml_lpm)) fml_lpm <- fml
+  # ONE assembly for every fitter (reg_fit_formula), so reg_formulas() reports what really ran.
+  # A Poisson likelihood has no two-column response: the grouped modified Poisson models the success
+  # count with log(trials) as OFFSET, which keeps exp(coef) a per-item risk ratio.
+  resp <- if (grouped) reg_grouped_response(family) else NULL
+  fml  <- reg_fit_formula(outcome, predictors, add_terms, formula, response = resp, cross = cross,
+                          offset = if (grouped && identical(family, "rr"))
+                            "offset(log(`.gb_trials`))")
+  # the identity-link fallback fits the RISK itself, and never carries the count's offset
+  fml_lpm <- if (!is.null(formula)) fml else
+    reg_fit_formula(outcome, predictors, add_terms, NULL,
+                    response = if (grouped) "`.gb_prop`", cross = cross)
 
   # ⚠ "rr" ALWAYS fits through svyglm, weighted or not: a Poisson likelihood on a 0/1 outcome is
   # deliberately misspecified, so its naive SEs must become the Huber-White SANDWICH -- which
@@ -2180,7 +2244,7 @@ reg_build_digest <- function(data, sp, family, design_spec, do_exp, outcome_leve
   names(coef_v) <- stringi::stri_replace_all_regex(names(coef_v), "`", "")   # match skeleton terms (as reg_fit does)
   dn <- stringi::stri_replace_all_regex(rownames(V), "`", "")
   dimnames(V) <- list(dn, dn)
-  grouped    <- reg_is_grouped_binomial(family, sp$trials, !is.null(sp$formula))
+  grouped    <- reg_is_grouped_binomial(family, sp$trials, sp$compound)
   over_disp  <- !weighted && reg_fam_overdispersed(family, grouped)
   phi        <- if (over_disp) reg_dispersion(fit) else NA_real_
   scaled     <- over_disp && !is.na(phi) && phi > 0
@@ -2399,7 +2463,7 @@ reg_inference <- function(shared, degraded = FALSE) {
 # WHICH STAGE PRODUCED WHICH PART OF THE TABLE. Each stage is named after the part it produces and
 # runs over ONE typed context; the per-MODEL half of them is ONE declared product (reg_spec_build(),
 # R/reg-spec-build.R), so the stages around the loop are cross-spec ASSEMBLERS and the loop itself is
-# dispatchable (`parallel`).
+# dispatchable (see R/tab-parallel.R).
 # ⚠ THE STAGE ORDER IS THE SOURCE ORDER, and load-bearing: every fit happens inside reg_stage_specs()
 # and may inform or warn, so the message stream is part of the output. It is SPEC-major.
 
@@ -2418,7 +2482,7 @@ new_reg_ctx <- function(
     # ⚠ `fit_cache` is NOT `.fit_cache`: `as.list(environment())` defaults to all.names = FALSE, so a
     # dot-prefixed key is SILENTLY DROPPED. No ctx key may start with a dot.
     data = NULL, specs = list(), shared = list(), tab_vars = NULL, fit_cache = NULL,
-    ref = NULL, reref = FALSE, skeleton_data = NULL, parallel = NULL,
+    ref = NULL, reref = FALSE, skeleton_data = NULL,
     # --- reg_stage_setup: the skeleton, the table's SHAPE facts and the per-spec PLAN ------------
     # ⚠ `data` is REWRITTEN here on the reref path and read afterwards by four consumers: a declared
     # PRODUCT as well as an input. `data_canon` is the PRE-relevel frame the digest is fitted on.
@@ -2457,11 +2521,11 @@ utils::globalVariables(names(formals(new_reg_ctx)))
 reg_ctx_locals <- function(ctx) c(ctx, ctx$shared)
 
 reg_build <- function(data, specs, shared, tab_vars = NULL, .fit_cache = NULL, ref = NULL,
-                      reref = FALSE, skeleton_data = data, parallel = NULL) {
+                      reref = FALSE, skeleton_data = data) {
   shared <- do.call(new_reg_shared, shared[intersect(names(shared), names(formals(new_reg_shared)))])
   ctx <- new_reg_ctx(
     data = data, specs = specs, shared = shared, tab_vars = tab_vars, fit_cache = .fit_cache,
-    ref = ref, reref = reref, skeleton_data = skeleton_data, parallel = parallel,
+    ref = ref, reref = reref, skeleton_data = skeleton_data,
     family = specs[[1]]$fit_family)
   list2env(reg_ctx_locals(ctx), environment())
 
@@ -2513,7 +2577,7 @@ reg_stage_split <- function(ctx) {
                                   fit_cache = fit_cache),
                     .ship  = list(shared = shared, data = data),
                     .names = as.character(sl),
-                    workers = tab_parallel_workers(parallel, fit_cache))
+                    workers = tab_parallel_workers(fit_cache))
   # `color = "between_groups"` scores each group's estimate against the REFERENCE GROUP's, and THIS
   # is the only point where the groups are parallel, separately addressable tibbles: vec_rbind()
   # then stacks them, and after the spread a group survives only in a name suffix. ⚠ the existing
@@ -2855,7 +2919,7 @@ reg_cols_coef <- function(f, sp, ctx) {
 
 # ONE reg_spec_build() PER MODEL, and the column LAYOUT their products imply. SERIAL OR POOLED:
 # reg_specs_independent() is the ONE predicate -- NULL when a spec needs nothing from another, else
-# the reason, reported only when `parallel` was explicitly asked for, so what was not parallelised
+# the reason, reported only when parallel was actually asked for, so what was not parallelised
 # is never silent. Its two reasons are exactly what rides the serial branch: the crude block spec 1
 # shares with the compared models, and the skeleton read back off the first fit.
 #' @keywords internal
@@ -2864,10 +2928,12 @@ reg_stage_specs <- function(ctx) {
   list2env(reg_ctx_locals(ctx), environment())
 
   why     <- reg_specs_independent(ctx)
-  workers <- if (is.null(why)) tab_parallel_workers(parallel, fit_cache) else 0L
-  # ⚠ only when the ARGUMENT was passed: an option set once must not nag on every comparison.
-  if (!is.null(why) && !is.null(parallel) && !isFALSE(parallel))
-    cli::cli_inform(c("i" = "{.arg parallel}: the models are built one after another here -- {why}."))
+  wanted  <- tab_parallel_workers(fit_cache)
+  workers <- if (is.null(why)) wanted else 0L
+  # ⚠ only when parallel was actually asked for: it must not nag on every comparison.
+  if (!is.null(why) && wanted > 1L)
+    cli::cli_inform(c("i" = paste0("{.code options(tabxplor.parallel)}: the models are built one ",
+                                   "after another here -- {why}.")))
 
   if (workers > 1L) {
     # ⚠ the whole ctx is the shipped object -- data, skeleton, design and crude block -- sent ONCE.
@@ -3179,15 +3245,20 @@ reg_stage_finalize <- function(ctx) {
 #'   is passed, its weights (and clustering / stratification / calibration) drive the estimation and
 #'   `wt` is ignored. Replicate-weight ([survey::svrepdesign()]) and two-phase designs are refused at
 #'   the boundary rather than approximated.
-#' @param outcome Character outcome variable name(s), **or a model formula** (the escape hatch).
-#'   With a `predictors` character vector, several names give one effect column per outcome; with a
-#'   `predictors` list, a single name is required. A formula supplies its own model (leave
-#'   `predictors` unset): a plain `y ~ a + b` behaves exactly like `outcome = "y"`,
+#' @param outcome <[`tidy-select`][tidyr::tidyr_tidy_select]> The outcome variable(s) --- bare
+#'   names, quoted names, or any selection helper, exactly as in [tab()] --- **or a model formula**
+#'   (the escape hatch). With a `predictors` character vector, several names give one effect column
+#'   per outcome; with a `predictors` list, a single name is required. A formula supplies its own
+#'   model (leave `predictors` unset): a plain `y ~ a + b` behaves exactly like `outcome = "y"`,
 #'   `predictors = c("a", "b")`, while interactions, `poly()` and `I()` terms render as best-effort
-#'   term rows.
-#' @param predictors Either a character vector of predictor names (one model), or a **named list**
-#'   of character vectors (one model per element, its name labelling the column). Leave `NULL` when
-#'   `outcome` is a formula.
+#'   term rows. See [reg_formulas()] to check what was fitted.
+#' @param predictors <[`tidy-select`][tidyr::tidyr_tidy_select]> The predictors of one model --- or a
+#'   **named list**, one model per element, its name labelling the column, each element selected on
+#'   its own (`list(m1 = c(race, age), m2 = starts_with("inc")))`). Leave `NULL` when `outcome` is a
+#'   formula.
+#'
+#'   A bare name is a **column of `data`** first; a name that is no column is looked up as an object,
+#'   so a variable holding names (`preds <- c("race", "age")`) works without `all_of()`.
 #' @param family The model family, **resolved per outcome** so several outcomes with different
 #'   families can share one table. `"auto"` (default) detects each one and says so: a binary outcome
 #'   gives `"binomial"`, an ordered 3+ level `"ordinal"`, a nominal 3+ level `"multinomial"`, any
@@ -3209,7 +3280,7 @@ reg_stage_finalize <- function(ctx) {
 #'   dispersion, so with an **over-dispersed** outcome its intervals and p-values are identical to
 #'   `"quasipoisson"`, and it warns to say so (the footer reports the dispersion). At equidispersion
 #'   the scaling is a no-op and the result matches a plain `glm(family = poisson)`.
-#' @param wt Optional. Name of a weight column (character). Switches to design-based survey
+#' @param wt <[`tidy-select`][tidyr::tidyr_tidy_select]> Optional. One weight column. Switches to design-based survey
 #'   estimation ([survey::svyglm()]): the sandwich standard errors are scale-invariant, so raw
 #'   population weights are handled correctly (no normalisation) and the point estimates match the
 #'   weighted crosstabs. For clustering, stratification, a finite-population correction or
@@ -3219,8 +3290,10 @@ reg_stage_finalize <- function(ctx) {
 #'   `"coefficient"` (default) is the model's own conditional effect ("holding the other predictors
 #'   constant"). `"marginal"` is the **average marginal effect**: the model's effect averaged over
 #'   the observed covariate distribution --- a probability-scale, cross-model-comparable summary
-#'   (Mood 2010) for logistic / multinomial / ordinal outcomes, the expected-count change for
-#'   poisson, the coefficient itself for gaussian. `"at_reference"` evaluates the same quantity **at
+#'   (Mood 2010) for logistic / multinomial / ordinal outcomes, and the expected-count change for
+#'   poisson. Where the link is collapsible the averaging changes nothing --- a linear model's
+#'   marginal effect *is* its coefficient --- so that combination is refused and names the
+#'   coefficient call instead. `"at_reference"` evaluates the same quantity **at
 #'   the reference profile** (every other predictor at its reference level or its mean), and for a
 #'   **multinomial** outcome the odds ratio of each category *versus the rest* there. Resolved **per
 #'   outcome** like `family` (scalar / vector / named vector).
@@ -3298,7 +3371,7 @@ reg_stage_finalize <- function(ctx) {
 #'     \item **ordinal, and any numeric outcome**: refused, with the reason. An ordinal outcome must
 #'       keep the order of its levels, so none of them can be singled out.
 #'   }
-#' @param tab_vars Optional. Name of a grouping variable (character) --- the same argument as
+#' @param tab_vars <[`tidy-select`][tidyr::tidyr_tidy_select]> Optional. One grouping variable --- the same argument as
 #'   [tab()]'s `tab_vars`: one sub-table per group, the same model(s) fitted **within each level**.
 #'   When that leaves one column per group (a single outcome, a single set of predictors, and not a
 #'   multinomial) the groups are pivoted into **side-by-side columns**; otherwise the per-group
@@ -3545,17 +3618,11 @@ reg_stage_finalize <- function(ctx) {
 #' @param cleannames Logical. If `TRUE`, strips numeric prefixes from factor levels for display.
 #'   Uses `getOption("tabxplor.cleannames")` when `NULL`.
 #' @param subtext Optional character. A note shown below the table.
-#' @param parallel Opt-in parallel build of the models of one call, using the (Suggests-only)
-#'   \pkg{mirai} package: several `outcome`s, a `predictors` list, or the `tab_vars` groups. `NULL`
-#'   (default) reads `getOption("tabxplor.parallel")` (off); `FALSE` forces serial; `TRUE` uses an
-#'   auto worker count; an integer sets the number of worker processes. Byte-identical to the serial
-#'   result. It pays off for **many, evenly sized** models against a survey-size data frame, and is a
-#'   loss otherwise. A model comparison (`stats = "compare_*"`) is always serial and says so when
-#'   asked: it is a test *between* the fits, so they are built together. The worker pool persists for
-#'   the session; release it with [tab_parallel_stop()].
 #' @return A `tabxplor_grouped_tab` (grouped by predictor), one effect column per model / outcome.
 #'
-#' @seealso [forest_plot()] draws the finished table --- every effect with its interval, its stars
+#' @seealso [reg_formulas()] shows the formula each column was fitted with, and [reg_measures()]
+#'   what an outcome can be modelled as.
+#'   [forest_plot()] draws the finished table --- every effect with its interval, its stars
 #'   and its colour, and (with `empirical = TRUE`) the observed effect beside it with the margin of
 #'   error of the gap. [reg_check_plots()] draws the model checks. [tab()] for cross-tables.
 #'
@@ -3636,7 +3703,12 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
                     outcome_level = NULL, ref = NULL,
                     multiplier = "sd", shape = NULL, stats = NULL,
                     na = c("drop_by_outcome", "drop_by_model", "drop_all"),
-                    display = NULL, cleannames = NULL, subtext = "", parallel = NULL, ...) {
+                    display = NULL, cleannames = NULL, subtext = "", ...) {
+  # ⚠ FIRST: capture the four variable roles before anything can force their promises.
+  outcome_quo    <- rlang::enquo(outcome)
+  predictors_quo <- rlang::enquo(predictors)
+  tab_vars_quo   <- rlang::enquo(tab_vars)
+  wt_quo         <- rlang::enquo(wt)
   # `.fit_cache` (the jamovi live-UI cache env) and `.levels_collapse` (the level-merge spec shared
   # with tab()) are jamovi-internal plumbing riding `...`; neither is a user argument.
   .dots      <- list(...)
@@ -3654,6 +3726,21 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
   na_explicit <- length(na) == 1L
   na      <- match.arg(na)
   cleannames <- resolve_cleannames(cleannames)
+
+  # --- THE VARIABLE ROLES: one tidy-select grammar, tab()'s (R/tab.R, tidy_select_chr) ------------
+  # Resolved HERE -- after tab_check_dots(), so a mistyped argument still says "unknown argument"
+  # rather than dying in tidyselect, and BEFORE the multi-outcome recursion below, which reads
+  # values. ⚠ svy_select_frame() and NOT svy_unwrap_data(): the unwrap informs, adds the reserved
+  # columns and computes degf, and it must run exactly once -- inside the boundary (R/reg-resolve.R).
+  sel_data   <- svy_select_frame(data, "tab_reg")
+  outcome    <- reg_select_outcome(outcome_quo, sel_data)
+  predictors <- reg_select_predictors(predictors_quo, sel_data)
+  tab_vars   <- reg_select_one(tab_vars_quo, sel_data, "tab_vars")
+  wt         <- reg_select_one(wt_quo, sel_data, "wt")
+  if (!rlang::is_formula(outcome) && length(outcome) == 0L)
+    cli::cli_abort(c("{.arg outcome} is required.",
+                     "i" = "Name one or more columns, or pass a model formula, e.g. {.code y ~ x1 + x2}."),
+                   call = NULL)
 
 
   # A models LIST and SEVERAL outcomes -> one model-comparison table per outcome, returned as a
@@ -3676,8 +3763,8 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
     # (reg_per_outcome()); every whole-call one is forwarded. The recursion itself is the namespaced
     # reg_build_outcome(), so this map IS tab_pmap() -- the cleanest of the three parallel axes,
     # each unit returning a FINISHED table with no cross-unit step at all.
-    # ⚠ `parallel = FALSE` inside the unit: THE NESTING RULE, stated once in tab_pmap()'s
-    # everywhere() block, where it is also enforced for any site that forgets it.
+    # THE NESTING RULE needs nothing here: tab_pmap() turns the option off around its whole map,
+    # serial branch included, so a recursed unit cannot dispatch again.
     args <- purrr::map(seq_along(outcome), function(i) {
       d   <- outcome[[i]]
       tri <- if (is.null(trials) || isTRUE(trials)) trials
@@ -3695,12 +3782,12 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
            stats = stats,
            display = display, color = color, color_signif = color_signif,
            stars = stars, na = na, cleannames = cleannames, subtext = subtext,
-           parallel = FALSE, .fit_cache = .fit_cache,
+           .fit_cache = .fit_cache,
            .levels_collapse = .levels_collapse)
     })
     tabs <- tab_pmap(list(args = args), "reg_build_outcome", .ship = list(data = data),
                      .names = outcome,
-                     workers = tab_parallel_workers(parallel, .fit_cache))
+                     workers = tab_parallel_workers(.fit_cache))
     names(tabs) <- outcome
     return(new_tabxplor_tabs(tabs))
   }
@@ -3718,7 +3805,7 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
     subtext = subtext, .fit_cache = .fit_cache, levels_collapse = .levels_collapse)
 
   res <- reg_build(a$data, a$specs, a$shared, tab_vars = tab_vars,
-                   .fit_cache = .fit_cache, ref = ref, reref = a$reref, parallel = parallel)
+                   .fit_cache = .fit_cache, ref = ref, reref = a$reref)
 
   # The p-value is stars-only -- colours read the CI bounds -- so `stars = FALSE` just drops it.
   if (!isTRUE(stars)) {

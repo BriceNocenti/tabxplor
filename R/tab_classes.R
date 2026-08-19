@@ -975,7 +975,6 @@ mat_reg_spark <- function(tab) {
   # groups are stacked rather than spread). "" when it is a COLUMN fact, read per column below.
   rg  <- if (length(dv$tab_vars) && dv$tab_vars[[1]] %in% names(tab))
     as.character(tab[[dv$tab_vars[[1]]]]) else rep("", nrow(tab))
-  style <- tx_option("spark")
   for (nm in names(tab)[purrr::map_lgl(tab, ~ is_fmt(.) && get_role(.) == "n")]) {
     col <- tab[[nm]]
     d   <- get_display(col)
@@ -991,7 +990,7 @@ mat_reg_spark <- function(tab) {
         g  <- if (nzchar(cg)) cg else rg[[i]]
         y  <- cu$y[cu$group == g]
         if (length(y) == 0L) y <- cu$y[cu$group == ""]
-        gl <- if (length(y) == 0L) NA_character_ else rd_spark(y, style)
+        gl <- if (length(y) == 0L) NA_character_ else rd_spark(y)
         if (is.na(gl)) next
         # no separator on an empty cell -- there is nothing to separate it from; a non-breaking one
         # where a count is actually printed beside it.

@@ -228,10 +228,6 @@ test_that("rd_spark() reads as the shape, and distinguishes a line from a satura
   expect_match(line, "\u2588$")                       # highest bin -> the full block
   # constant input must not divide by zero
   expect_equal(nchar(tabxplor:::rd_spark(rep(3, 5))), 5L)
-  # the ASCII fallback keeps the length and the ordering, without block glyphs
-  a <- tabxplor:::rd_spark(seq(0, 1, length.out = 10), "ascii")
-  expect_equal(nchar(a), 10L)
-  expect_false(grepl("[\u2581-\u2588]", a))
   expect_identical(tabxplor:::rd_spark(seq(0, 1, length.out = 10), FALSE), NA_character_)
 })
 

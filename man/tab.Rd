@@ -39,7 +39,6 @@ tab(
   display = NULL,
   color_breaks = NULL,
   output_list = FALSE,
-  parallel = NULL,
   spread_vars,
   filter
 )
@@ -401,14 +400,6 @@ the underlying fields are unchanged.}
 merges the mirror tables into a single \code{tabxplor_tab}; \code{TRUE} returns a list with
 one table per \code{row_var}. With \code{tab_vars}, tables stay a list regardless.}
 
-\item{parallel}{Opt-in parallel build of the per-\code{row_var} tables, using the (Suggests-only)
-\pkg{mirai} package. \code{NULL} (default) reads \code{getOption("tabxplor.parallel")} (off);
-\code{FALSE} forces serial; \code{TRUE} uses an auto worker count; an integer sets the number of
-worker processes. Byte-identical to the serial result. It pays off for the survey workflow --
-\emph{many} \code{row_vars} against a small/medium data frame (roughly 10k-60k rows) in ONE
-\code{tab()} call -- and is a loss for few tables or multi-million-row data (so it stays opt-in).
-The worker pool persists for the session; release it with \code{\link{tab_parallel_stop}}.}
-
 \item{spread_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> A subset of \code{tab_vars}
 to pivot from subtables into columns, via \code{\link{tab_spread}} (applied at the end).}
 
@@ -455,8 +446,7 @@ and \code{display} when you want odds ratios shown.
 \item \strong{Statistics}: \code{test} (chi-squared or Welch's F), and \code{ci} + \code{conf_level} + \code{stars}
 (confidence intervals). \code{ci_method} picks the engine for each kind of interval.
 \item \strong{Totals & missing values}: \code{tot}, \code{total_names}, \code{totaltab}, \code{na}, \code{levels}.
-\item \strong{Advanced / output}: \code{display}, \code{n_min}, \code{output_list}, \code{parallel}, \code{spread_vars},
-\code{filter}.
+\item \strong{Advanced / output}: \code{display}, \code{n_min}, \code{output_list}, \code{spread_vars}, \code{filter}.
 }
 The package-wide display, color and statistics defaults are \code{options()}, listed at
 \link{tabxplor-options}.

@@ -67,7 +67,7 @@ reg_emp_slim <- function(e) {
 
 
 # CAN THE SPECS BE BUILT WITHOUT ONE ANOTHER? NULL = yes; otherwise the REASON, reported when
-# `parallel` was explicitly asked for. BOTH are facts about the STATISTICS, not limits of the
+# parallel was actually asked for. BOTH are facts about the STATISTICS, not limits of the
 # builder:
 #   1. a model comparison is a test BETWEEN fits, so the fit OBJECTS have to meet; a distilled
 #      digest would make tabxplor a second producer of a survey Wald statistic. A DECLARED KEEP.
@@ -161,7 +161,9 @@ reg_spec_build_one <- function(i, ctx) {
   cols <- purrr::map(cols, function(cc) { cc$col <- set_n(set_wn(cc$col, cnt$wn), cnt$n); cc })
 
   # --- 3. THE FOOTER ROWS ------------------------------------------------------------------------
-  grouped <- sp_fam == "binomial" && !is.null(sp$trials) && !isTRUE(sp$compound)
+  # ⚠ the DECLARED predicate, never an inline `sp_fam == "binomial"`: `sp_fam` is the LINK key, and
+  # `rr` / `rd` are binomial fits under another link (see reg_is_grouped_binomial()).
+  grouped <- reg_is_grouped_binomial(sp_fam, sp$trials, sp$compound)
   gof_rows <- reg_gof_rows(f, sp, cv0, weighted = weighted, grouped = grouped, stats = stats)
   global_rows <- if (isTRUE(want_global)) reg_global_rows(f, sp, shared, cv0) else NULL
   check_rows <- reg_check_rows(data, f, sp, shared, stats, cv0, grouped)
@@ -316,9 +318,10 @@ reg_build_group <- function(g, sl, tab_vars, specs, fit_cache, shared, data) {
   # and reg_resolve_design() subsets the ORIGINAL design -- ONE subset into ONE row space. WARNING:
   # modifyList() RECURSES, and a survey.design IS a list of data.frames, so a per-group design merges
   # the two COLUMN BY COLUMN; and `[` does not drop rows on a CALIBRATED or PPS design.
-  # ⚠ `parallel = FALSE` is THE NESTING RULE: a group's model axis is not a second place to dispatch.
+  # THE NESTING RULE needs nothing here: tab_pmap() turns the option off around its whole map, so a
+  # group's model axis cannot become a second place to dispatch.
   tg <- reg_build(sub, specs, shared, tab_vars = NULL, .fit_cache = fit_cache,
-                  ref = NULL, reref = FALSE, skeleton_data = data, parallel = FALSE)
+                  ref = NULL, reref = FALSE, skeleton_data = data)
   tst <- get_test(tg); if (!is.null(tst) && nrow(tst) > 0) tst[[tab_vars]] <- as.character(g)
   # the group's OWN observed curves ride up beside its data: reg_stage_split() binds them into one
   # group-keyed `meta$assumptions`, so each group's base-count cell draws its own sparkline.

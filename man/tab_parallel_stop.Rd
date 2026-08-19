@@ -10,13 +10,16 @@ tab_parallel_stop()
 \code{invisible(NULL)}, called for its side effect.
 }
 \description{
-Shuts down the persistent \pkg{mirai} daemons tabxplor starts for
-\code{tab(..., parallel = )}. The pool is otherwise reused for the whole session and cleaned up
-when the package is unloaded; call this to release the workers earlier.
+Shuts down the persistent \pkg{mirai} daemons tabxplor starts under
+\code{options(tabxplor.parallel = )}. The pool is otherwise reused for the whole session and
+cleaned up when the package is unloaded; call this to release the workers earlier.
 }
 \examples{
 \donttest{
-# after tab(..., parallel = TRUE)
+# after options(tabxplor.parallel = TRUE)
 tab_parallel_stop()
 }
+}
+\seealso{
+\link{tabxplor-options} for \code{tabxplor.parallel}, the switch that starts the pool.
 }

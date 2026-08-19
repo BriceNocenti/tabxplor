@@ -105,11 +105,13 @@ test_that("reg_specs_independent() names its ONE reachable refusal and says noth
        stats = "compare_baseline")), "between the fits")
 })
 
-test_that("`parallel` reports the refusal only when it was asked for", {
+test_that("a parallel refusal is reported only when parallel was asked for", {
   expect_silent(tab_reg(reg_fx, "married", list(m1 = "race", m2 = c("race", "age")),
                         family = "binomial", stats = "compare_baseline"))
+  skip_if_not_installed("mirai")
+  withr::local_options(tabxplor.parallel = 2L)
   expect_message(tab_reg(reg_fx, "married", list(m1 = "race", m2 = c("race", "age")),
-                         family = "binomial", stats = "compare_baseline", parallel = TRUE),
+                         family = "binomial", stats = "compare_baseline"),
                  "one after another")
 })
 
@@ -210,9 +212,9 @@ test_that("a deferred skeleton survives the pooled branch (one compound spec)", 
   # -- where the serial loop's ctx update never runs. The skeleton must be taken from the product
   # after BOTH branches, or every later stage sees NULL.
   skip_if_not_installed("mirai")
-  t_ser <- tab_reg(reg_fx, married ~ race * age, family = "binomial", stats = FALSE,
-                   parallel = FALSE)
-  t_par <- tab_reg(reg_fx, married ~ race * age, family = "binomial", stats = FALSE,
-                   parallel = TRUE)
+  t_ser <- tab_reg(reg_fx, married ~ race * age, family = "binomial", stats = FALSE)
+  t_par <- withr::with_options(list(tabxplor.parallel = TRUE),
+                               tab_reg(reg_fx, married ~ race * age, family = "binomial",
+                                       stats = FALSE))
   expect_identical(t_par, t_ser)
 })

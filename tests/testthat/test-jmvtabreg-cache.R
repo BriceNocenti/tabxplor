@@ -455,16 +455,16 @@ test_that("Phase 19k: effect x measure x display pass straight through", {
 })
 
 # --- the module never dispatches (Phase 20f-iiii) ------------------------------------------------
-# `parallel` is a tab_reg() argument, and the jamovi bridge must never send it: the UI repaints on
-# every click, and a daemon pool inside jamovi's own R process is a cost with no payoff.
+# `options(tabxplor.parallel)` is the one switch, and the jamovi bridge must always turn it off: the
+# UI repaints on every click, and a daemon pool inside jamovi's own R process is a cost with no payoff.
 
 test_that("Phase 20f-iiii: jmvtab_reg_build() is serial in BOTH cache modes", {
   # (a) the live cache forces it: a cache_env is the tab_parallel_workers() escape hatch
-  expect_identical(tab_parallel_workers(parallel = TRUE, cache_env = new.env()), 0L)
-  expect_identical(tab_parallel_workers(parallel = 8L,   cache_env = new.env()), 0L)
+  withr::local_options(tabxplor.parallel = 8L)
+  expect_identical(tab_parallel_workers(cache_env = new.env()), 0L)
 
   # (b) ...but STAGED mode passes .fit_cache = NULL, so the bridge must say so itself -- otherwise
-  # `parallel` falls through to the option. Both modes must ignore a globally-set option.
+  # the build reads the option. Both modes must ignore a globally-set option.
   skip_if_not_installed("mirai")
   pool_n <- function() tryCatch(as.integer(mirai::status(.compute = "tabxplor")$connections),
                                 error = function(e) 0L)

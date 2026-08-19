@@ -2,7 +2,10 @@
 #   microdata every tabxplor engine already knows how to read -- plus the design constructors and the
 #   ROBUST omnibus tests for tab() crosstabs/means.
 # ROLE: Three things live here:
-#   1. The BOUNDARY (Phase 18z14-i): svy_is_design() / svy_unwrap_data() / svy_check_test().
+#   1. The BOUNDARY (Phase 18z14-i): svy_is_design() / svy_unwrap_data() / svy_check_test(), plus
+#      svy_select_frame() -- the SIDE-EFFECT-FREE frame a producer tidy-selects its variable roles
+#      against, because svy_unwrap_data() informs, adds the reserved columns and computes degf, and
+#      so must run exactly once per call.
 #      Every public entry point that accepts a survey design (tab, tab_many, tab_plain, tab_num,
 #      tab_reg) calls the same two lines; tab_counts() calls svy_is_design() to REFUSE one. Before
 #      z14-i the detection was written twice, and the two copies disagreed: tab() materialised the
@@ -61,17 +64,35 @@ svy_is_design <- function(x)
 # WARNING: weights(design) returns the n x R REPLICATE MATRIX for a svyrep.design; only
 #   type = "sampling" is the full-sample weight vector (D4). survey.design's own method absorbs `type`
 #   in `...`, so one call shape is right for both classes.
+# Replicate-weight and two-phase designs are OUT (ruling Q5): their variance is a set of alternative
+# weight columns / a two-phase formula, which none of the tabxplor engines can read. Refuse clearly
+# rather than approximate -- a replicate design would otherwise die inside survey with a raw error.
+# Shared by the unwrap and by svy_select_frame(), so the refusal has ONE wording wherever it fires.
+svy_abort_unsupported_design <- function(data, fn = "tab") {
+  if (!inherits(data, c("svyrep.design", "twophase", "twophase2"))) return(invisible(NULL))
+  cli::cli_abort(c(
+    "{.fn {fn}} does not support {.cls {class(data)[[1]]}} designs.",
+    "i" = "Build one with {.fn survey::svydesign} (weights, and optionally strata / clusters / fpc).",
+    "i" = paste("Replicate weights carry the variance as extra weight columns, which tabxplor",
+                "does not read.")))
+}
+
+# The frame to TIDY-SELECT against, with no side effect. svy_unwrap_data() informs, adds the two
+# reserved columns and computes degf, so it must run exactly once per call -- and a producer that
+# resolves its variable roles BEFORE reaching that one unwrap needs the column names only.
+# ⚠ a strict subset of the frame the unwrap later produces, so no membership check can regress.
+svy_select_frame <- function(data, fn = "tab") {
+  if (!svy_is_design(data)) return(data)
+  svy_abort_unsupported_design(data, fn)
+  as.data.frame(data$variables)
+}
+
 svy_unwrap_data <- function(data, fn = "tab") {
   if (!svy_is_design(data)) return(NULL)
   # Replicate-weight and two-phase designs are OUT (ruling Q5): their variance is a set of alternative
   # weight columns / a two-phase formula, which none of the tabxplor engines can read. Refuse clearly
   # rather than approximate -- a replicate design would otherwise die inside survey with a raw error.
-  if (inherits(data, c("svyrep.design", "twophase", "twophase2")))
-    cli::cli_abort(c(
-      "{.fn {fn}} does not support {.cls {class(data)[[1]]}} designs.",
-      "i" = "Build one with {.fn survey::svydesign} (weights, and optionally strata / clusters / fpc).",
-      "i" = paste("Replicate weights carry the variance as extra weight columns, which tabxplor",
-                  "does not read.")))
+  svy_abort_unsupported_design(data, fn)
   frame <- as.data.frame(data$variables)
   clash <- intersect(c(svy_wt_col, svy_row_col), names(frame))
   if (length(clash))

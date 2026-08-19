@@ -507,8 +507,7 @@ The `"adjustment"` colour always shows the **size** of the gap. Whether it also 
 
 | what you asked for | observed effect | gap tested? |
 |---|---|---|
-| `effect = "marginal"` — binomial, gaussian, multinomial, ordinal | yes | **yes** |
-| `effect = "marginal"` on a Poisson outcome | not paired (the crude effect is a rate ratio) | no |
+| `effect = "marginal"` — binomial, multinomial, ordinal, Poisson | yes | **yes** |
 | `measure = "ratio"` on a binary outcome (risk ratios) | yes | **yes** |
 | Poisson incidence-rate ratios, linear β | yes | **yes** |
 | odds ratios — binomial, multinomial, ordinal cumulative | yes | no (non-collapsible) |
@@ -587,11 +586,11 @@ Two of them are rarely typed. `family` is detected from the outcome, and `measur
 |-----------------|---------------------------------------------------------------------|---------------------------------------|
 | `"coefficient"` | two people alike on all other predictors: what does this one do?    | conditional effect (base model result)|
 | `"marginal"`    | if everyone switched it, how far would the outcome move on average? | average marginal effect (AME)         |
-| `"at_reference"`| the same, but for one person at the reference profile               | marginal effect at reference (MER)    |
+| `"at_reference"`| the same, but for one person at the reference profile               | effect at the reference profile       |
 
 By hand you would get them with `coef(glm(...))` (exponentiated when the measure is a ratio), with `marginaleffects::avg_comparisons(model)`, and with the same call on a one-row profile where every other predictor sits at its reference level or its mean. `"coefficient"` is the default, and the one every textbook prints.
 
-**When do the three differ?** In a linear model, not at all: the coefficient, the average marginal effect and the effect at the reference profile are the same number (unless the predictor was fitted with a curve — see `shape =` below). In a logistic, Poisson, multinomial or ordinal model the link is curved, so the effect of a predictor depends on where you stand on the curve. A coefficient then answers "for a person like this one", and an average marginal effect answers "for this population, as it actually is" — which is why an AME is usually the friendlier number to report, and a coefficient the more comparable one across studies.
+**When do the three differ?** In a linear model, not at all: the coefficient, the average marginal effect and the effect at the reference profile are the same number (unless the predictor was fitted with a curve — see `shape =` below). That is exactly why `effect = "marginal"` is *refused* on a linear model, and on a Poisson rate ratio: the averaging changes nothing, and one quantity should not have two names. Ask for the coefficient. In a logistic, Poisson, multinomial or ordinal model the link is curved, so the effect of a predictor depends on where you stand on the curve. A coefficient then answers "for a person like this one", and an average marginal effect answers "for this population, as it actually is" — which is why an AME is usually the friendlier number to report, and a coefficient the more comparable one across studies.
 
 **`effect = "at_reference"`** evaluates the effect at the reference profile — the abstract individual combining the reference level of every predictor — instead of averaging it over the sample. For a multinomial model it also unlocks a contrast the other two do not have: the odds ratio of each outcome category *versus all the others* at that profile.
 
@@ -601,14 +600,14 @@ tab_reg(gss_simple, "married", c("race", "age"), effect = "at_reference")
 
 ### The grid: what each combination builds
 
-Every cell below is the acronym the combination puts in the column header, after the constant `Model_` prefix (`diff` is `Model_diff`, `mRR` is `Model_mRR`). The first column says which outcomes reach each row, and † marks the family's default measure.
+Every cell below is the acronym the combination puts in the column header, after the constant `Model_` prefix (`diff` is `Model_diff`, `mRR` is `Model_mRR`). The first column says which outcomes reach each row, † marks the family's default measure, and ≡ marks a combination refused because it *is* the coefficient (see below).
 
 | outcome kind      | `family`          | `measure`        | `"coefficient"` | `"marginal"` | `"at_reference"` |
 |-------------------|-------------------|------------------|-----------------|--------------|------------------|
-| numeric           | gaussian          | `"difference"` † | `diff`          | `mdiff`      | `refdiff`        |
+| numeric           | gaussian          | `"difference"` † | `diff`          | ≡            | `refdiff`        |
 | numeric           | gaussian          | `"ratio"`        | `RoM`           | `mRoM`       | `refRoM`         |
 | numeric           | gaussian          | `"odds_ratio"`   | not defined     | —            | —                |
-| numeric (count)   | poisson           | `"ratio"` †      | `IRR`           | `mIRR`       | `refIRR`         |
+| numeric (count)   | poisson           | `"ratio"` †      | `IRR`           | ≡            | `refIRR`         |
 | numeric (count)   | poisson           | `"difference"`   | —               | `mdiff`      | `refdiff`        |
 | numeric (count)   | poisson           | `"odds_ratio"`   | not defined     | —            | —                |
 | numeric (score)   | binomial+`trials` | `"odds_ratio"` † | `OR`            | —            | —                |
@@ -626,14 +625,16 @@ Every cell below is the acronym the combination puts in the column header, after
 
 † the measure the family falls back on when you say nothing.
 ¹ each outcome category *versus the rest*, at the reference profile.
+≡ the same number as the coefficient, so the call is refused and points at `effect = "coefficient"`.
 
 The three states are the ones `reg_measures()` prints, and they are not the same refusal:
 
 - a header — **available**: the call builds it;
 - **not defined** — the quantity is not a thing for that outcome, whatever anyone implements (an odds ratio needs a probability to take the odds of, and a count has none);
-- `—` — **not offered**: tabxplor does not build it, and the error message lists what this outcome does offer.
+- `—` — **not offered**: tabxplor does not build it, and the error message lists what this outcome does offer;
+- `≡` — **the coefficient itself**: the link is collapsible, so averaging the individual effects gives back the coefficient exactly. Two names for one quantity is what this vocabulary exists to avoid, so the call is refused and names the coefficient. It is why a linear model has no `effect = "marginal"` row: its coefficient already *is* the average marginal effect.
 
-A fourth state exists only at run time: a link that does not converge on *your* data. The call says so, and for the risk difference it falls back to the linear probability model.
+A further state exists only at run time: a link that does not converge on *your* data. The call says so, and for the risk difference it falls back to the linear probability model.
 
 `family = "quasipoisson"` has exactly the grid of `poisson` — it changes the variance assumption, not what is estimated. And `measure = "log"` is not a fifth column: it is the family's default measure shown un-exponentiated, on the model's own link scale, and the header says which one it logs (`Model_log(OR)`, `Model_log(IRR)`, `Model_log(RoM)`, `Model_log(cumOR)`).
 
@@ -695,7 +696,7 @@ That said, the two are different questions rather than two spellings of one. A c
 - **`Model_RD` and `Model_mRD` are both percentage points, and are not the same number.** `Model_RD` is a conditional risk difference from an identity-link fit, `Model_mRD` a marginal one standardised over the logistic fit (see above) — which is what the `m` marker says.
 - **`measure = "log"` needs something to take the log of.** It logs the family's default measure, so it is refused where that default is already additive (a linear coefficient, an average marginal effect). Spell `"log_odds"`, `"log_risk"` or `"log_rate"` to log a chosen one instead.
 - **Odds ratios are non-collapsible**, so `color = "adjustment"` colours the gap on an OR column but never tests it (see *How to read it — and how not to*, above). Ask for `measure = "ratio"` or `effect = "marginal"` if you want a gap the test can read.
-- **Two combinations have no observed companion.** At `effect = "at_reference"` the model is conditional on one profile while the observed columns stay marginal over the whole sample, so the two are shown but not compared — `color = "adjustment"` and `{obs}` stay empty. And a **Poisson `effect = "marginal"`** is additive while its crude counterpart is a rate ratio: the two are not on the same scale, so they are not paired. Use `effect = "coefficient"` to compare them.
+- **One combination has no observed companion.** At `effect = "at_reference"` the model is conditional on one profile while the observed columns stay marginal over the whole sample, so the two are shown but not compared — `color = "adjustment"` and `{obs}` stay empty.
 - **What needs an extra package, and what has no method.** `effect = "at_reference"` goes through **marginaleffects**; a *survey-weighted* multinomial or ordinal model has no marginal-effects method at all, so use the default `effect = "coefficient"` there. (`display` itself reaches every column, marginal or not.)
 
 ### Asking your own outcome

@@ -267,13 +267,12 @@ TAB_OPTIONS <- list(
       "graphics-device font has them). `FALSE` removes it, and so does `n = \"no\"` (there is then",
       "no cell to draw it in).",
       "",
-      "`\"ascii\"` draws the curve with `. , - ~ + = * #` instead. Use it when the console column",
-      "looks *shifted* on the sparkline's row: the block characters are East-Asian **ambiguous**",
-      "width, so a terminal set to treat those as wide --- or one whose font lacks them and falls",
-      "back to another face --- draws them wider than a digit. The table is correctly aligned",
-      "character by character (nothing can measure the font from R); the ASCII ladder is",
-      "unambiguously one column wide, so it always lines up. Also the right choice for a LaTeX",
-      "font without block characters.")),
+      "\u26a0 In the CONSOLE the curve is drawn with the block characters `\u2581`...`\u2588`, which are",
+      "East-Asian *ambiguous* width: a terminal set to treat those as wide, or one whose font lacks",
+      "them and falls back to another face, draws them wider than a digit and the sparkline's row",
+      "then looks shifted. The table is correctly aligned character by character --- nothing can",
+      "measure the font from R --- so the fix is a console font that carries `U+2581`...`U+2588`",
+      "(Cascadia Mono, DejaVu Sans Mono, JetBrains Mono), or `FALSE` to drop the curve.")),
 
   # --- HTML --------------------------------------------------------------------------------------
   tab_kable_css = tx_opt(
@@ -335,12 +334,21 @@ TAB_OPTIONS <- list(
     doc = "the colour-legend language: `\"auto\"` (follows the R/OS locale), `\"en\"` or `\"fr\"`."),
 
   # --- parallel ----------------------------------------------------------------------------------
+  # There is deliberately NO `parallel =` argument: this is a machine-level knob, not a per-table
+  # statistical choice, and one switch is what lets tab_pmap() enforce the nesting rule for every
+  # producer at once (R/tab-parallel.R). One call at a time: `withr::with_options()`.
   parallel = tx_opt(
-    FALSE, "parallel", arg = "parallel",
+    FALSE, "parallel",
     doc = c("build the independent units of one call on parallel CPU cores (needs the `mirai`",
             "package): the per-`row_var` tables of a [tab()], the models / `tab_vars` groups /",
             "outcomes of a [tab_reg()]. `TRUE` = auto select number of cores, integer = that many",
-            "cores. Release the pool with [tab_parallel_stop()].")),
+            "cores; the result is byte-identical to the serial one. It pays off for MANY, evenly",
+            "sized units against a small/medium data frame, and is a loss for few units or",
+            "multi-million-row data --- which is why it stays opt-in. A model comparison",
+            "(`stats = \"compare_*\"`) is always serial and says so when asked: it is a test",
+            "BETWEEN the fits, so they are built together. For one call only, wrap it in",
+            "`withr::with_options(list(tabxplor.parallel = TRUE), ...)`. The pool persists for the",
+            "session; release it with [tab_parallel_stop()].")),
 
   parallel_min = tx_opt(
     2L, "parallel",

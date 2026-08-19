@@ -121,7 +121,7 @@ html_escape_br <- function(x) {
 # `inset` is half the stroke: without it the extreme bins are clipped by the viewBox edge.
 #' @keywords internal
 tx_spark_svg <- function(x, h = 22L, dx = 9L, lwd = 2.8) {
-  gl  <- rd_spark_glyphs(TRUE)
+  gl  <- rd_spark_glyphs()
   pat <- paste0("[", paste(gl, collapse = ""), "]{3,}")
   hit <- grepl(pat, x)
   if (!any(hit)) return(x)

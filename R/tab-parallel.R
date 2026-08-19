@@ -2,14 +2,18 @@
 # ROLE: tab_build() prepares the population and the tier-1 aggregates ONCE on the main process,
 #   then hands off to tab_build_tables(), which maps the per-row_var worker tab_build_one()
 #   (transform |> assemble_tables) through tab_pmap(). tab_pmap() IS purrr::map when serial -- same
-#   result, zero overhead -- or a persistent mirai daemon pool when `parallel` is set. Main gathers
+#   result, zero overhead -- or a persistent mirai daemon pool when the option is on. Main gathers
 #   the finished per-row_var tabs and runs the cross-row_var output shape. A single-row_var build
 #   equals its slice of the integrated build, which is what makes the two paths interchangeable.
 # KEY CONSTRAINTS:
 #   - mirai is Suggests-only: every use is guarded by requireNamespace(), and its absence falls
 #     back to serial.
 #   - The pool uses a NAMED compute profile ("tabxplor") so it never clobbers a user's own daemons().
-#   - A daemon must NEVER spawn daemons. This file is the one place that rule is enforced.
+#   - `options(tabxplor.parallel =)` is the ONE switch: there is no `parallel =` argument on either
+#     producer. That is what makes the next rule enforceable in one place instead of at every
+#     unit-construction site.
+#   - A daemon must NEVER spawn daemons, and neither may a nested SERIAL unit. tab_pmap() turns the
+#     option off around its whole map -- both branches -- and that is the only place the rule lives.
 #   - Workers run the INSTALLED tabxplor (a fresh process), so identity requires main and workers to
 #     run the same source. Under load_all() the pool auto-load_all()s each freshly spawned daemon.
 #   - jmvtab's live cache is ALWAYS serial: its cache hooks live on the serial map.
@@ -25,13 +29,15 @@
 tabxplor_compute <- "tabxplor"
 
 
-# DESIGN: the `parallel` argument beats the option; TRUE = auto (physical cores - 1, capped at 8), an
-# integer verbatim. The _R_CHECK_LIMIT_CORES_ cap of 2 keeps examples/tests inside CRAN's 2-core rule.
+# DESIGN: `options(tabxplor.parallel =)` is the ONE switch -- there is no argument, so a nested build
+# cannot forget to pass FALSE (tab_pmap() turns the option off around its map). TRUE = auto (physical
+# cores - 1, capped at 8), an integer verbatim. The _R_CHECK_LIMIT_CORES_ cap of 2 keeps
+# examples/tests inside CRAN's 2-core rule.
 #' @keywords internal
 #' @noRd
-tab_parallel_workers <- function(parallel = NULL, cache_env = NULL) {
+tab_parallel_workers <- function(cache_env = NULL) {
   if (!is.null(cache_env)) return(0L)                       # jmvtab live cache: always serial
-  p <- if (is.null(parallel)) tx_option("parallel") else parallel
+  p <- tx_option("parallel")
   if (is.null(p) || isFALSE(p)) return(0L)
   if (!requireNamespace("mirai", quietly = TRUE)) {
     rlang::warn(
@@ -96,15 +102,16 @@ tab_pool_ensure <- function(workers, compute = tabxplor_compute) {
 
 #' Stop the tabxplor parallel worker pool
 #'
-#' Shuts down the persistent \pkg{mirai} daemons tabxplor starts for
-#' \code{tab(..., parallel = )}. The pool is otherwise reused for the whole session and cleaned up
-#' when the package is unloaded; call this to release the workers earlier.
+#' Shuts down the persistent \pkg{mirai} daemons tabxplor starts under
+#' \code{options(tabxplor.parallel = )}. The pool is otherwise reused for the whole session and
+#' cleaned up when the package is unloaded; call this to release the workers earlier.
 #'
 #' @return \code{invisible(NULL)}, called for its side effect.
+#' @seealso \link{tabxplor-options} for \code{tabxplor.parallel}, the switch that starts the pool.
 #' @export
 #' @examples
 #' \donttest{
-#' # after tab(..., parallel = TRUE)
+#' # after options(tabxplor.parallel = TRUE)
 #' tab_parallel_stop()
 #' }
 tab_parallel_stop <- function() {
@@ -179,6 +186,14 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(), .names = NULL
   # Recycle length-1 per-unit args to the common length (pmap does this; transpose() does not).
   rows <- purrr::transpose(vctrs::vec_recycle_common(!!!.l))
 
+  # WARNING: THE NESTING RULE, enforced here and only here -- for BOTH branches. The axes NEST (a
+  # crosstab's `row_var`s; a regression's `tab_vars` groups x models x outcomes) and only the
+  # OUTERMOST dispatches. There is no `parallel` argument for a unit-construction site to zero, so
+  # the option IS the switch: set it off for the whole map, and every unit -- run here or shipped to
+  # a daemon (the `^tabxplor\.` snapshot below carries it) -- reads FALSE.
+  old_par <- options(tabxplor.parallel = FALSE)
+  on.exit(options(old_par), add = TRUE)
+
   serial <- workers <= 1L ||
     length(rows) < tx_option("parallel_min") ||
     !requireNamespace("mirai", quietly = TRUE)
@@ -201,11 +216,6 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(), .names = NULL
   # own glyphs and wrap width, and the relayed message would not match the serial one.
   keep <- "^tabxplor\\.|^datatable\\.|^cli\\.|^crayon\\.|^width$|^useFancyQuotes$"
   opts <- options()[grepl(keep, names(options()))]
-  # WARNING: THE NESTING RULE, enforced here and only here. The axes NEST (a crosstab's `row_var`s; a
-  # regression's `tab_vars` groups x models x outcomes) and only the OUTERMOST dispatches: a daemon must
-  # never spawn daemons. The unit-construction sites each pass `parallel = FALSE`, but the option ships
-  # too (`^tabxplor\.` matches `tabxplor.parallel`), so a site forwarding NULL would read a TRUE here.
-  opts[["tabxplor.parallel"]] <- FALSE
   mirai::everywhere(
     {
       options(tabx_opts)

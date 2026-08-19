@@ -526,8 +526,7 @@ La couleur `"adjustment"` montre toujours la **taille** de l'écart. Qu'elle le 
 
 | ce que vous avez demandé | effet observé | écart testé ? |
 |---|---|---|
-| `effect = "marginal"` — binomial, gaussian, multinomial, ordinal | oui | **oui** |
-| `effect = "marginal"` sur une variable de Poisson | non apparié (l'effet brut est un rapport de taux) | non |
+| `effect = "marginal"` — binomial, multinomial, ordinal, Poisson | oui | **oui** |
 | `measure = "ratio"` sur une variable binaire (rapports de risques) | oui | **oui** |
 | rapports de taux d'incidence de Poisson, bêta linéaire | oui | **oui** |
 | rapports de cotes — binomial, multinomial, ordinal cumulé | oui | non (non collapsible) |
@@ -615,11 +614,11 @@ Deux d'entre eux se tapent rarement. `family` est détectée à partir de la var
 |---|---|---|
 | `"coefficient"` | deux personnes semblables sur les autres prédicteurs : que fait celui-ci ? | effet conditionnel |
 | `"marginal"` | si tout le monde le changeait, de combien bougerait le résultat ? | effet marginal moyen (AME) |
-| `"at_reference"` | la même chose, pour une personne au profil de référence | effet marginal à la référence (MER) |
+| `"at_reference"` | la même chose, pour une personne au profil de référence | effet au profil de référence |
 
 À la main, on les obtiendrait avec `coef(glm(...))` (exponentié quand la mesure est un rapport), avec `marginaleffects::avg_comparisons(model)`, et avec le même appel sur un profil d'une seule ligne où chacun des autres prédicteurs est à sa modalité de référence ou à sa moyenne. `"coefficient"` est la valeur par défaut, et celle que tous les manuels impriment.
 
-**Quand les trois diffèrent-ils ?** Dans un modèle linéaire, jamais : le coefficient, l'effet marginal moyen et l'effet au profil de référence sont le même nombre (sauf si le prédicteur a été ajusté avec une courbe — voir `shape =` plus bas). Dans un modèle logistique, de Poisson, multinomial ou ordinal, le lien est courbe : l'effet d'un prédicteur dépend donc de l'endroit où l'on se trouve sur la courbe. Un coefficient répond alors « pour une personne comme celle-ci », et un effet marginal moyen répond « pour cette population, telle qu'elle est réellement » — c'est pourquoi l'AME est en général le nombre le plus parlant à rapporter, et le coefficient le plus comparable d'une étude à l'autre.
+**Quand les trois diffèrent-ils ?** Dans un modèle linéaire, jamais : le coefficient, l'effet marginal moyen et l'effet au profil de référence sont le même nombre (sauf si le prédicteur a été ajusté avec une courbe — voir `shape =` plus bas). C'est exactement pour cela que `effect = "marginal"` est *refusé* sur un modèle linéaire, comme sur un rapport de taux de Poisson : moyenner ne change rien, et une même quantité ne doit pas porter deux noms. Demandez le coefficient. Dans un modèle logistique, de Poisson, multinomial ou ordinal, le lien est courbe : l'effet d'un prédicteur dépend donc de l'endroit où l'on se trouve sur la courbe. Un coefficient répond alors « pour une personne comme celle-ci », et un effet marginal moyen répond « pour cette population, telle qu'elle est réellement » — c'est pourquoi l'AME est en général le nombre le plus parlant à rapporter, et le coefficient le plus comparable d'une étude à l'autre.
 
 **`effect = "at_reference"`** évalue l'effet au profil de référence — l'individu abstrait qui combine la modalité de référence de chaque prédicteur — au lieu de le moyenner sur l'échantillon. Pour un modèle multinomial, il donne en outre accès à un contraste que les deux autres n'ont pas : le rapport de cotes de chaque catégorie de la variable expliquée *contre toutes les autres*, à ce profil.
 
@@ -629,14 +628,14 @@ tab_reg(gss_simple, "married", c("race", "age"), effect = "at_reference")
 
 ### La grille : ce que construit chaque combinaison
 
-Chaque case ci-dessous est l'acronyme que la combinaison place dans l'en-tête de colonne, après le préfixe constant `Model_` (`diff` donne `Model_diff`, `mRR` donne `Model_mRR`). La première colonne dit quelles variables expliquées atteignent chaque ligne, et † marque la mesure par défaut de la famille.
+Chaque case ci-dessous est l'acronyme que la combinaison place dans l'en-tête de colonne, après le préfixe constant `Model_` (`diff` donne `Model_diff`, `mRR` donne `Model_mRR`). La première colonne dit quelles variables expliquées atteignent chaque ligne, † marque la mesure par défaut de la famille, et ≡ marque une combinaison refusée parce qu'elle *est* le coefficient (voir plus bas).
 
 | variable expliquée   | `family`          | `measure`        | `"coefficient"` | `"marginal"` | `"at_reference"` |
 |----------------------|-------------------|------------------|-----------------|--------------|------------------|
-| numérique            | gaussian          | `"difference"` † | `diff`          | `mdiff`      | `refdiff`        |
+| numérique            | gaussian          | `"difference"` † | `diff`          | ≡            | `refdiff`        |
 | numérique            | gaussian          | `"ratio"`        | `RoM`           | `mRoM`       | `refRoM`         |
 | numérique            | gaussian          | `"odds_ratio"`   | non défini      | —            | —                |
-| numérique (comptage) | poisson           | `"ratio"` †      | `IRR`           | `mIRR`       | `refIRR`         |
+| numérique (comptage) | poisson           | `"ratio"` †      | `IRR`           | ≡            | `refIRR`         |
 | numérique (comptage) | poisson           | `"difference"`   | —               | `mdiff`      | `refdiff`        |
 | numérique (comptage) | poisson           | `"odds_ratio"`   | non défini      | —            | —                |
 | numérique (score)    | binomial+`trials` | `"odds_ratio"` † | `OR`            | —            | —                |
@@ -654,14 +653,16 @@ Chaque case ci-dessous est l'acronyme que la combinaison place dans l'en-tête d
 
 † la mesure sur laquelle la famille retombe quand vous ne dites rien.
 ¹ chaque modalité de la variable expliquée *par rapport aux autres*, au profil de référence.
+≡ le même nombre que le coefficient : l'appel est refusé et renvoie vers `effect = "coefficient"`.
 
 Les trois états sont ceux qu'affiche `reg_measures()`, et ce ne sont pas les mêmes refus :
 
 - un en-tête — **available** (disponible) : l'appel le construit ;
 - **not defined** (non défini) — la quantité n'existe pas pour cette variable expliquée, quoi que l'on implémente (un rapport de cotes a besoin d'une probabilité dont prendre la cote, et un comptage n'en a pas) ;
-- `—` — **not offered** (non proposé) : tabxplor ne le construit pas, et le message d'erreur énumère ce que cette variable expliquée propose.
+- `—` — **not offered** (non proposé) : tabxplor ne le construit pas, et le message d'erreur énumère ce que cette variable expliquée propose ;
+- `≡` — **le coefficient lui-même** : le lien est collapsible, donc moyenner les effets individuels redonne exactement le coefficient. Deux noms pour une seule quantité, c'est précisément ce que ce vocabulaire cherche à éviter : l'appel est refusé et nomme le coefficient. C'est pourquoi un modèle linéaire n'a pas de ligne `effect = "marginal"` — son coefficient *est* déjà l'effet marginal moyen.
 
-Un quatrième état n'existe qu'à l'exécution : un lien qui ne converge pas sur *vos* données. L'appel le dit, et pour la différence de risques il retombe sur le modèle de probabilité linéaire.
+Un autre état n'existe qu'à l'exécution : un lien qui ne converge pas sur *vos* données. L'appel le dit, et pour la différence de risques il retombe sur le modèle de probabilité linéaire.
 
 `family = "quasipoisson"` a exactement la grille de `poisson` — elle change l'hypothèse de variance, pas ce qui est estimé. Et `measure = "log"` n'est pas une cinquième colonne : c'est la mesure par défaut de la famille montrée non exponentiée, sur l'échelle du lien du modèle, et l'en-tête dit laquelle il logarithme (`Model_log(OR)`, `Model_log(IRR)`, `Model_log(RoM)`, `Model_log(cumOR)`).
 
@@ -723,7 +724,7 @@ Cela dit, ce sont deux questions différentes, et non deux écritures d'une seul
 - **`Model_RD` et `Model_mRD` sont tous deux en points de pourcentage, et ne sont pas le même nombre.** `Model_RD` est une différence de risques conditionnelle issue d'un ajustement à lien identité, `Model_mRD` une différence marginale standardisée sur l'ajustement logistique (voir ci-dessus) — c'est ce que dit le marqueur `m`.
 - **`measure = "log"` a besoin de quelque chose dont prendre le log.** Il logarithmise la mesure par défaut de la famille, donc il est refusé là où cette mesure est déjà additive (un coefficient linéaire, un effet marginal moyen). Écrivez `"log_odds"`, `"log_risk"` ou `"log_rate"` pour logarithmiser une mesure choisie.
 - **Les rapports de cotes ne sont pas collapsibles** : `color = "adjustment"` colore donc l'écart sur une colonne OR mais ne le teste jamais (voir *Comment le lire — et comment ne pas le lire*, plus haut). Demandez `measure = "ratio"` ou `effect = "marginal"` si vous voulez un écart que le test puisse lire.
-- **Deux combinaisons n'ont pas de contrepartie observée.** Avec `effect = "at_reference"`, le modèle est conditionnel à un profil alors que les colonnes observées restent marginales sur tout l'échantillon : les deux sont montrées mais pas comparées — `color = "adjustment"` et `{obs}` restent vides. Et un `effect = "marginal"` **de Poisson** est additif alors que sa contrepartie brute est un rapport de taux : les deux ne sont pas sur la même échelle, donc elles ne sont pas appariées. Utilisez `effect = "coefficient"` pour les comparer.
+- **Une combinaison n'a pas de contrepartie observée.** Avec `effect = "at_reference"`, le modèle est conditionnel à un profil alors que les colonnes observées restent marginales sur tout l'échantillon : les deux sont montrées mais pas comparées — `color = "adjustment"` et `{obs}` restent vides.
 - **Ce qui demande un paquet en plus, et ce qui n'a pas de méthode.** `effect = "at_reference"` passe par **marginaleffects** ; un modèle multinomial ou ordinal *pondéré* n'a aucune méthode d'effets marginaux, il faut donc y garder `effect = "coefficient"`. (`display`, lui, s'applique à toutes les colonnes, marginales ou non.)
 
 ### Interroger votre propre variable expliquée

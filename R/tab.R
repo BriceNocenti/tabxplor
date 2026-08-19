@@ -19,6 +19,9 @@
 #     intervals see the full level set. The ordering is structural, not incidental.
 #   - The row_var axis is globalised on tab() (pct / color / comp / ci / chi2 / ref2 are scalar);
 #     `ref` is a named, ordered per-row_var vector; the col_var axis stays flexible.
+#   - ONE VARIABLE-SELECTION GRAMMAR for both producers: tidy_select_chr() (SECTION "shared leaf and
+#     reference helpers") is what tab() and tab_reg() both resolve their roles with, so a bare name,
+#     a helper and a variable holding names mean the same thing in either.
 #   - All public signatures are CRAN API -- soft-deprecate before changing one.
 #   - tab.R sorts AFTER every tab-*.R in R's C collation, so those files may read tab.R's top-level
 #     objects, never the reverse.
@@ -66,8 +69,7 @@ NULL
 #'   \item **Statistics**: `test` (chi-squared or Welch's F), and `ci` + `conf_level` + `stars`
 #'     (confidence intervals). `ci_method` picks the engine for each kind of interval.
 #'   \item **Totals & missing values**: `tot`, `total_names`, `totaltab`, `na`, `levels`.
-#'   \item **Advanced / output**: `display`, `n_min`, `output_list`, `parallel`, `spread_vars`,
-#'     `filter`.
+#'   \item **Advanced / output**: `display`, `n_min`, `output_list`, `spread_vars`, `filter`.
 #' }
 #' The package-wide display, color and statistics defaults are `options()`, listed at
 #' [tabxplor-options].
@@ -236,7 +238,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
                 totaltab = "line", common_totrow = FALSE, tot = c("row", "col"),
                 n = NULL, n_min = 0, add_pct = FALSE,
                 subtext = "", digits = 0, display = NULL, color_breaks = NULL,
-                output_list = FALSE, parallel = NULL,
+                output_list = FALSE,
                 spread_vars, filter) {
 
   .dots <- rlang::enquos(..., .ignore_empty = "all")
@@ -295,22 +297,17 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
     data <- data |> dplyr::mutate(no_row_var = factor("no_row_var")) # "n"
     row_var <- "no_row_var"
   } else {
-    row_var <- names(tidyselect::eval_select(row_var_quo, data))
+    row_var <- tidy_select_chr(row_var_quo, data)
   }
 
   if (quo_miss_na_null_empty_no(col_var_quo)) {
     data <- data |> dplyr::mutate(no_col_var = factor("n"))
     col_var <- "no_col_var"
   } else {
-    col_var <- names(tidyselect::eval_select(col_var_quo, data))
+    col_var <- tidy_select_chr(col_var_quo, data)
   }
 
-  tab_vars <- rlang::enquo(tab_vars)
-  if (quo_miss_na_null_empty_no(tab_vars)) {
-    tab_vars <- character()
-  } else {
-    tab_vars <- names(tidyselect::eval_select(tab_vars, data))
-  }
+  tab_vars <- tidy_select_chr(rlang::enquo(tab_vars), data)
 
   sup_cols_quo <- .dots$sup_cols
   if (is.null(sup_cols_quo) || quo_miss_na_null_empty_no(sup_cols_quo)) {
@@ -321,14 +318,11 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
       details = "Pass these columns in `col_vars` and set `levels = \"first\"`.",
       user_env = rlang::caller_env()
     )
-    sup_cols <- names(tidyselect::eval_select(sup_cols_quo, data))
+    sup_cols <- tidy_select_chr(sup_cols_quo, data)
   }
 
-  spread_vars_quo <- rlang::enquo(spread_vars)
-  if (quo_miss_na_null_empty_no(spread_vars_quo)) {
-    spread_vars <- character()
-  } else {
-    spread_vars <- names(tidyselect::eval_select(spread_vars_quo, data))
+  spread_vars <- tidy_select_chr(rlang::enquo(spread_vars), data)
+  if (length(spread_vars)) {
     if (!all(spread_vars %in% tab_vars)) {
       cli::cli_abort(c("{.arg spread_vars} must be among the {.arg tab_vars}.",
                        "i" = "Got {.val {setdiff(spread_vars, tab_vars)}}, tab_vars are {.val {tab_vars}}."))
@@ -412,7 +406,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
            color_ratio_ci = color_pct_text_is_ratio(color_spec),
            display = display,
            base_n = base_n, add_pct = add_pct,
-           subtext = subtext, n_min = n_min, parallel = parallel,
+           subtext = subtext, n_min = n_min,
            spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
            .cache = .cache, .defer_level_merge = .defer_level_merge,
            .levels_order = .levels_order, .levels_collapse = .levels_collapse)
@@ -711,7 +705,7 @@ new_ctx <- function(...) {
     inference = new_inference(),
     totaltab = "line", totaltab_name = "Ensemble", totrow = TRUE, totcol = "last",
     total_names = "Total", base_n = "range", add_pct = FALSE, common_totrow = FALSE, digits = 0,
-    subtext = "", n_min = 0, by_table = FALSE, parallel = NULL,
+    subtext = "", n_min = 0, by_table = FALSE,
     spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
     cache_env = NULL, defer_level_merge = FALSE, levels_order = NULL,
 
@@ -783,7 +777,6 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       totrow = TRUE, totcol = "last", total_names = "Total",
                       base_n = "range", add_pct = FALSE, common_totrow = FALSE,
                       digits = 0, subtext = "", n_min = 0,
-                      parallel = NULL,
                       .by_table = FALSE,
                       spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
                       .cache = NULL, .defer_level_merge = FALSE,
@@ -831,7 +824,6 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     total_names = total_names, base_n = base_n, add_pct = add_pct, common_totrow = common_totrow,
     digits = digits,
     subtext = subtext, n_min = n_min, by_table = .by_table,
-    parallel = parallel,
     spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
     cache_env = .cache, defer_level_merge = .defer_level_merge,
     levels_order = .levels_order
@@ -847,7 +839,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
 #' @keywords internal
 #' @noRd
 tab_build_tables <- function(ctx) {
-  workers <- tab_parallel_workers(ctx$parallel, ctx$cache_env)
+  workers <- tab_parallel_workers(ctx$cache_env)
   units   <- tab_rowvar_ctxs(ctx)
   rv_names <- as.character(ctx$row_vars)
   built   <- tab_pmap(list(ctx_i = units), "tab_build_one",
@@ -874,7 +866,6 @@ tab_rowvar_ctxs <- function(ctx) {
   shared <- ctx[setdiff(names(ctx), c(per_rv, "data", "fine_fused", "design_spec"))]
   shared$inference["design"] <- list(NULL)
   shared <- shared[!grepl("_quo$", names(shared))]
-  shared$parallel  <- FALSE     # THE NESTING RULE -- stated once, in tab_pmap()'s everywhere() block
   shared$cache_env <- NULL
 
   lapply(seq_len(n), function(i) {
@@ -2372,6 +2363,39 @@ fmt_stack_frames <- function(frames, meta) {
 
 
 # === SECTION: shared leaf and reference helpers ============================================
+
+# THE VARIABLE-SELECTION BOUNDARY, shared by both producers -- tab() and tab_reg() select the same
+# way, and one place decides what a role argument may be.
+#
+# tidyselect resolves a bare symbol from the CALLER'S ENVIRONMENT when it names no column, and
+# deprecated that in 1.1.0 ("use all_of()"). But a name held in a variable is how a package, a jamovi
+# bridge or a loop passes a role, so it must keep working silently: quo_peek_extern() catches exactly
+# that one case and tidy_select_chr() re-emits it as all_of(), which tidyselect still validates and
+# orders. ⚠ THE DATA ALWAYS WINS -- the peek only fires when the symbol names no column, which is
+# tidyselect's own rule, so no selection outcome changes. And the peek is restricted to a bare SYMBOL
+# on purpose: evaluating any other expression would error on starts_with() and warn on all_of().
+#' @keywords internal
+#' @noRd
+quo_peek_extern <- function(quo, data) {
+  expr <- rlang::quo_get_expr(quo)
+  if (!rlang::is_symbol(expr)) return(NULL)
+  if (rlang::as_string(expr) %in% names(data)) return(NULL)
+  tryCatch(rlang::eval_tidy(quo), error = function(e) NULL)
+}
+
+# One quosure -> the column names it selects. `peeked` is passed in where the caller already looked
+# (tab_reg() dispatches on the peeked value: a formula, a models list, or names).
+# ⚠ allow_rename = FALSE: `c(new = old)` is tidyselect RENAMING, and names() would then return the
+# NEW name -- a column that does not exist. A clean refusal beats a silent wrong answer.
+#' @keywords internal
+#' @noRd
+tidy_select_chr <- function(quo, data, peeked = quo_peek_extern(quo, data),
+                            call = rlang::caller_env()) {
+  if (quo_miss_na_null_empty_no(quo)) return(character())
+  if (is.character(peeked)) quo <- rlang::quo(tidyselect::all_of(!!unname(peeked)))
+  names(tidyselect::eval_select(quo, data, allow_rename = FALSE, error_call = call))
+}
+
 
 #' @keywords internal
 quo_miss_na_null_empty_no <- function(quo) {

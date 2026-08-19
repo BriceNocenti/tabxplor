@@ -787,14 +787,21 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
   expect_match(trimws(bs[blk]), "^-[0-9.]+%\\*+ \\([0-9.]+%\\)$")
 })
 
-test_that("gaussian AME uses the coef shape and matches marginaleffects", {
+test_that("a gaussian marginal difference is refused as the coefficient itself", {
+  # The identity link is collapsible, so the AME IS the coefficient -- one quantity, one name.
+  expect_error(tab_reg(reg_data(), "tvhours", c("age", "race"), family = "gaussian",
+                       effect = "marginal"),
+               "returns the coefficient itself")
+})
+
+test_that("the gaussian coefficient matches marginaleffects' AME", {
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
-  col <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", effect = "marginal", multiplier = 1,
-                 cleannames = FALSE)[["Model_mdiff"]]
+  col <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", multiplier = 1,
+                 cleannames = FALSE)[["Model_diff"]]
   expect_identical(tabxplor:::fmt_var_kind(col), "coef")
   expect_identical(get_scale(col), "raw_diff")
 
@@ -804,8 +811,11 @@ test_that("gaussian AME uses the coef shape and matches marginaleffects", {
   ac  <- rbind(as.data.frame(marginaleffects::avg_comparisons(m, variables = "age",  newdata = dm)),
                as.data.frame(marginaleffects::avg_comparisons(m, variables = "race", newdata = dm)))
   keep <- !is.na(get_pvalue(col)) & !is_refrow(col)       # reference betas are the additive neutral 0
-  expect_equal(sort(get_diff(col)[keep]),   sort(ac$estimate),  tolerance = 1e-6)
-  expect_equal(sort(get_pvalue(col)[keep]), sort(ac$p.value),   tolerance = 1e-6)
+  expect_equal(sort(get_diff(col)[keep]), sort(ac$estimate), tolerance = 1e-6)
+  # the p refers to t(df.residual), as the model's own does; marginaleffects refers to z, so the two
+  # differ in the third digit -- assert against the fit itself.
+  expect_equal(sort(get_pvalue(col)[keep]),
+               sort(unname(summary(m)$coefficients[-1, 4])), tolerance = 1e-8)
 })
 
 test_that("poisson AME is a raw count-change and matches marginaleffects", {

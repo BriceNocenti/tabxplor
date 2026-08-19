@@ -30,7 +30,6 @@ tab_reg(
   display = NULL,
   cleannames = NULL,
   subtext = "",
-  parallel = NULL,
   ...
 )
 }
@@ -40,18 +39,23 @@ is passed, its weights (and clustering / stratification / calibration) drive the
 \code{wt} is ignored. Replicate-weight (\code{\link[survey:svrepdesign]{survey::svrepdesign()}}) and two-phase designs are refused at
 the boundary rather than approximated.}
 
-\item{outcome}{Character outcome variable name(s), \strong{or a model formula} (the escape hatch).
-With a \code{predictors} character vector, several names give one effect column per outcome; with a
-\code{predictors} list, a single name is required. A formula supplies its own model (leave
-\code{predictors} unset): a plain \code{y ~ a + b} behaves exactly like \code{outcome = "y"},
+\item{outcome}{<\code{\link[tidyr:tidyr_tidy_select]{tidy-select}}> The outcome variable(s) --- bare
+names, quoted names, or any selection helper, exactly as in \code{\link[=tab]{tab()}} --- \strong{or a model formula}
+(the escape hatch). With a \code{predictors} character vector, several names give one effect column
+per outcome; with a \code{predictors} list, a single name is required. A formula supplies its own
+model (leave \code{predictors} unset): a plain \code{y ~ a + b} behaves exactly like \code{outcome = "y"},
 \code{predictors = c("a", "b")}, while interactions, \code{poly()} and \code{I()} terms render as best-effort
-term rows.}
+term rows. See \code{\link[=reg_formulas]{reg_formulas()}} to check what was fitted.}
 
-\item{predictors}{Either a character vector of predictor names (one model), or a \strong{named list}
-of character vectors (one model per element, its name labelling the column). Leave \code{NULL} when
-\code{outcome} is a formula.}
+\item{predictors}{<\code{\link[tidyr:tidyr_tidy_select]{tidy-select}}> The predictors of one model --- or a
+\strong{named list}, one model per element, its name labelling the column, each element selected on
+its own (\verb{list(m1 = c(race, age), m2 = starts_with("inc")))}). Leave \code{NULL} when \code{outcome} is a
+formula.
 
-\item{tab_vars}{Optional. Name of a grouping variable (character) --- the same argument as
+A bare name is a \strong{column of \code{data}} first; a name that is no column is looked up as an object,
+so a variable holding names (\code{preds <- c("race", "age")}) works without \code{all_of()}.}
+
+\item{tab_vars}{<\code{\link[tidyr:tidyr_tidy_select]{tidy-select}}> Optional. One grouping variable --- the same argument as
 \code{\link[=tab]{tab()}}'s \code{tab_vars}: one sub-table per group, the same model(s) fitted \strong{within each level}.
 When that leaves one column per group (a single outcome, a single set of predictors, and not a
 multinomial) the groups are pivoted into \strong{side-by-side columns}; otherwise the per-group
@@ -61,7 +65,7 @@ Two readings of "does this effect hold in every subgroup?" come with it:
 \code{color = "between_groups"} colours and tests each effect against the first group's, row by row,
 and \code{stats = c(..., "interaction")} adds the aggregated test, once per predictor.}
 
-\item{wt}{Optional. Name of a weight column (character). Switches to design-based survey
+\item{wt}{<\code{\link[tidyr:tidyr_tidy_select]{tidy-select}}> Optional. One weight column. Switches to design-based survey
 estimation (\code{\link[survey:svyglm]{survey::svyglm()}}): the sandwich standard errors are scale-invariant, so raw
 population weights are handled correctly (no normalisation) and the point estimates match the
 weighted crosstabs. For clustering, stratification, a finite-population correction or
@@ -93,8 +97,10 @@ the scaling is a no-op and the result matches a plain \code{glm(family = poisson
 \code{"coefficient"} (default) is the model's own conditional effect ("holding the other predictors
 constant"). \code{"marginal"} is the \strong{average marginal effect}: the model's effect averaged over
 the observed covariate distribution --- a probability-scale, cross-model-comparable summary
-(Mood 2010) for logistic / multinomial / ordinal outcomes, the expected-count change for
-poisson, the coefficient itself for gaussian. \code{"at_reference"} evaluates the same quantity \strong{at
+(Mood 2010) for logistic / multinomial / ordinal outcomes, and the expected-count change for
+poisson. Where the link is collapsible the averaging changes nothing --- a linear model's
+marginal effect \emph{is} its coefficient --- so that combination is refused and names the
+coefficient call instead. \code{"at_reference"} evaluates the same quantity \strong{at
 the reference profile} (every other predictor at its reference level or its mean), and for a
 \strong{multinomial} outcome the odds ratio of each category \emph{versus the rest} there. Resolved \strong{per
 outcome} like \code{family} (scalar / vector / named vector).
@@ -395,15 +401,6 @@ Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
 
 \item{subtext}{Optional character. A note shown below the table.}
 
-\item{parallel}{Opt-in parallel build of the models of one call, using the (Suggests-only)
-\pkg{mirai} package: several \code{outcome}s, a \code{predictors} list, or the \code{tab_vars} groups. \code{NULL}
-(default) reads \code{getOption("tabxplor.parallel")} (off); \code{FALSE} forces serial; \code{TRUE} uses an
-auto worker count; an integer sets the number of worker processes. Byte-identical to the serial
-result. It pays off for \strong{many, evenly sized} models against a survey-size data frame, and is a
-loss otherwise. A model comparison (\code{stats = "compare_*"}) is always serial and says so when
-asked: it is a test \emph{between} the fits, so they are built together. The worker pool persists for
-the session; release it with \code{\link[=tab_parallel_stop]{tab_parallel_stop()}}.}
-
 \item{...}{Not a user argument. It carries the internal \code{.fit_cache} (the jamovi live UI's fit
 cache environment), and it is what makes every argument removed or renamed while \code{tab_reg()} was
 in development --- \code{exponentiate}, \code{at}, \code{estimate_display}, \code{dependent}, \code{split_var},
@@ -519,9 +516,9 @@ Generated from the package's own resolution table, so it cannot drift from what
 \code{tab_reg()} builds. Call \code{\link{reg_measures}()} on your outcome for the same
 table with its per-cell status.
 \itemize{
-\item \strong{gaussian} --- \code{effect = "coefficient", measure = "difference"} (\code{Model_diff}); \code{effect = "coefficient", measure = "ratio"} (\code{Model_RoM}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(RoM)}); \code{effect = "marginal", measure = "difference"} (\code{Model_mdiff}); \code{effect = "marginal", measure = "ratio"} (\code{Model_mRoM}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refdiff}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refRoM})
+\item \strong{gaussian} --- \code{effect = "coefficient", measure = "difference"} (\code{Model_diff}); \code{effect = "coefficient", measure = "ratio"} (\code{Model_RoM}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(RoM)}); \code{effect = "marginal", measure = "ratio"} (\code{Model_mRoM}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refdiff}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refRoM})
 \item \strong{binomial} --- \code{effect = "coefficient", measure = "odds_ratio"} (\code{Model_OR}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(OR)}); \code{effect = "coefficient", measure = "ratio"} (\code{Model_RR}); \code{effect = "coefficient", measure = "difference"} (\code{Model_RD}); \code{effect = "marginal", measure = "difference"} (\code{Model_mRD}); \code{effect = "marginal", measure = "ratio"} (\code{Model_mRR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refRD}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refRR})
-\item \strong{poisson} --- \code{effect = "coefficient", measure = "ratio"} (\code{Model_IRR}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(IRR)}); \code{effect = "marginal", measure = "difference"} (\code{Model_mdiff}); \code{effect = "marginal", measure = "ratio"} (\code{Model_mIRR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refdiff}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refIRR})
+\item \strong{poisson} --- \code{effect = "coefficient", measure = "ratio"} (\code{Model_IRR}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(IRR)}); \code{effect = "marginal", measure = "difference"} (\code{Model_mdiff}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refdiff}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refIRR})
 \item \strong{multinomial} --- \code{effect = "coefficient", measure = "odds_ratio"} (\code{Model_OR}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(OR)}); \code{effect = "marginal", measure = "difference"} (\code{Model_mRD}); \code{effect = "marginal", measure = "ratio"} (\code{Model_mRR}); \code{effect = "at_reference", measure = "odds_ratio"} (\code{Model_refOR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refRD}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refRR})
 \item \strong{ordinal} --- \code{effect = "coefficient", measure = "odds_ratio"} (\code{Model_cumOR}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(cumOR)}); \code{effect = "marginal", measure = "difference"} (\code{Model_mRD}); \code{effect = "marginal", measure = "ratio"} (\code{Model_mRR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refRD}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refRR})
 }
@@ -583,6 +580,8 @@ Santos Silva, J. M. C. & Tenreyro, S. (2006). The log of gravity. \emph{The Revi
 Statistics}, 88(4), 641-658 --- \code{measure = "ratio"} on a continuous outcome.
 }
 \seealso{
+\code{\link[=reg_formulas]{reg_formulas()}} shows the formula each column was fitted with, and \code{\link[=reg_measures]{reg_measures()}}
+what an outcome can be modelled as.
 \code{\link[=forest_plot]{forest_plot()}} draws the finished table --- every effect with its interval, its stars
 and its colour, and (with \code{empirical = TRUE}) the observed effect beside it with the margin of
 error of the gap. \code{\link[=reg_check_plots]{reg_check_plots()}} draws the model checks. \code{\link[=tab]{tab()}} for cross-tables.

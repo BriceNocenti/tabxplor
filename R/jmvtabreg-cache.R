@@ -289,6 +289,13 @@ jmvtab_reg_dep_trials <- function(trials, dep) {
 #' @keywords internal
 #' @noRd
 jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
+  # ⚠ ALWAYS serial. The live cache normally forces it -- tab_parallel_workers() returns 0 whenever a
+  # `cache_env` is present -- but in STAGED mode `use_cache` is FALSE, so `.fit_cache` is NULL and the
+  # build would read getOption("tabxplor.parallel"): a user who set that option once would have jamovi
+  # spawning daemons inside its own R process, for a UI that repaints on every click. The module never
+  # dispatches; it is the interactive path.
+  .old_par <- options(tabxplor.parallel = FALSE)
+  on.exit(options(.old_par), add = TRUE)
   # DESIGN (Phase o): in a model COMPARISON the cache is worthless -- the reref digest fast-path is off
   # for comparisons (tab_reg's `reref` needs compare=="none"), so it only ever holds the RAW fits
   # (~10 MB each). Once persisted into cache_state$state they re-serialize on every UI round-trip -> the
@@ -351,19 +358,23 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
   # `measure` (which measure) x `display` (the cell layout). The jmv_reg_estimand_opts() translator
   # 19e put here for the retired `exponentiate` / `at` / `estimate_display` options is DELETED with
   # them: no argument reaches tab_reg() through a second vocabulary any more.
-  tabs <- tab_reg(
+  # ⚠ rlang::inject() + `!!` on the four VARIABLE ROLES: they are tidy-select since 22b-vi, and a
+  # bare local (`dep`, `preds`) would be resolved against the DATA first -- a dataset column named
+  # "dep" would hijack the argument. An injected value cannot be mistaken for a column name, which is
+  # the same reason jmvtab-cache.R injects tab()'s roles.
+  tabs <- rlang::inject(tab_reg(
     data,
-    outcome      = dep,
-    predictors   = preds,
+    outcome      = !!dep,
+    predictors   = !!preds,
     family       = fam_arg,
-    wt           = nz(opts$wt),
+    wt           = !!nz(opts$wt),
     effect       = opts$effect  %||% "coefficient",
     measure      = opts$measure %||% "auto",
     conf_level   = opts$conf_level,
     ci_method    = opts$ci_method,
     ref          = opts$ref,
     outcome_level = lvl_arg,
-    tab_vars     = nz(opts$tab_vars),
+    tab_vars     = !!nz(opts$tab_vars),
     # a pass-through: the option's values ARE the argument's ("no" / "column" / "cell"), and an older
     # stored state may still carry the logical the checkbox used to send.
     empirical    = if (is.logical(opts$empirical)) isTRUE(opts$empirical)
@@ -385,19 +396,13 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     subtext      = opts$subtext,
     multiplier   = jmvtab_reg_mult_vector(opts$multiplier),   # tab_reg skips mnl/ordinal specs per-spec
     trials       = tri_arg,
-    # ⚠ ALWAYS serial (Phase 20f-iiii). The live cache normally forces it -- tab_parallel_workers()
-    # returns 0 whenever a `cache_env` is present -- but in STAGED mode `use_cache` is FALSE, so
-    # `.fit_cache` is NULL and `parallel` would fall through to getOption("tabxplor.parallel"): a
-    # user who set that option once would have jamovi spawning daemons inside its own R process, for
-    # a UI that repaints on every click. The module never dispatches; it is the interactive path.
-    parallel     = FALSE,
     .fit_cache   = if (use_cache) cache_env else NULL,
     # Phase 20g-ii: the per-predictor level-merge tick-boxes, folded by the SAME function jmvtab
     # uses. It needs no cache entry of its own: jmvreg_fit_key() fingerprints the PREPARED frame's
     # levels, and reg_prepare_data() merges before any fit -- so a merge changes the key by
     # construction.
     .levels_collapse = jmvtab_levels_collapse(opts$levels_collapse)
-  )
+  ))
 
   cache_env$store <- jmvreg_cache_evict(cache_env$store)
   list(tabs = tabs, store = if (use_cache) cache_env$store else NULL, hits = cache_env$hits)

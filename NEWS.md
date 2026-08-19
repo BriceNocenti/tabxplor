@@ -95,8 +95,8 @@
   `options(tabxplor.var_labels = TRUE)` shows variable labels instead of names in exports.
 * **New arguments on `tab()`**: `na` gains `"common_base"` /,
   `spread_vars =`, `n_min =` (hide small-base cells), `display =` (composite cells like `"{pct} (n={n})"`),
-  `common_totrow =`, a per-`col_var` / positional `ref`, and `parallel =` (opt-in, needs `mirai`;
-  also on `tab_reg()`, where it builds the models / groups / outcomes of one call in parallel).
+  `common_totrow =`, and a per-`col_var` / positional `ref`. Opt-in parallel builds through
+  `options(tabxplor.parallel = TRUE)` (needs `mirai`), for `tab()` and `tab_reg()` alike.
 * **`tab_counts()`** — build a full colour-coded table from already-aggregated counts (long, wide, `table`,
   or frequencies + base N) instead of microdata.
 * **`tab_reg()`** — colour-coded regression tables (linear / logistic / Poisson / multinomial / ordinal),
@@ -248,7 +248,14 @@
 * **New `reg_measures(data, dependent)`** lists what an outcome can be modelled as: every
   `effect` × `measure` cell with its status — *available*, *not defined* (an odds ratio needs a
   probability), or *not offered* — and the header it would produce. It is the same runtime table
-  the argument validator, the error messages and `?tab_reg`'s own generated section read.
+  the argument validator, the error messages and `?tab_reg`'s own generated section read. A
+  combination that would return the coefficient under another name — `effect = "marginal"` on a
+  linear model, or on a Poisson rate ratio — is refused, naming the coefficient call instead.
+* **New `reg_formulas()`** shows the formula behind every column of a `tab_reg()` table: exactly what
+  reached `glm()`, `svyglm()`, `multinom()` or `polr()`.
+* **`tab_reg()` selects its variables like `tab()`** — `outcome`, `predictors`, `tab_vars` and `wt`
+  take bare names and every tidyselect helper. The two escape hatches are unchanged (a model formula
+  in `outcome`, a named list of models in `predictors`, each element selected on its own).
 * **`tab_reg(color =)` can no longer contradict the column.** The colour ladder comes from what the
   column estimates, so the geometry values are gone: `color = TRUE` grades each cell on its own
   scale, and what is left to choose is what to compare it *to* — `c(TRUE, "adjustment")` (was

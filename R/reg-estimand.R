@@ -22,11 +22,14 @@
 #
 #     the argument names the GEOMETRY; the attribute names the ROW.
 #
-# THE THREE STATES, which a user must be able to tell apart. Status "ok" -> build it. Status
+# THE FOUR STATES, which a user must be able to tell apart. Status "ok" -> build it. Status
 # "impossible" -> abort with the row's own `why` (an odds ratio of a continuous outcome is not a
-# thing, whatever anyone implements). NO ROW -> "not offered", and the message ENUMERATES what this
-# outcome does offer, generated from the table itself. A fourth exists only at run time: the fit
-# that did not converge (reg_fit()), which names the alternatives.
+# thing, whatever anyone implements). Status "redundant" -> abort naming the coefficient: where the
+# link is collapsible, a marginal contrast IS the coefficient, and one quantity may not have two
+# names (stamped by reg_mark_redundant(), DERIVED so a new family cannot forget it). NO ROW -> "not
+# offered", and the message ENUMERATES what this outcome does offer, generated from the table
+# itself. A fifth exists only at run time: the fit that did not converge (reg_fit()), which names
+# the alternatives.
 #
 # THE HEADER VOCABULARY is here too (REG_WORDS + REG_CONTRASTS). One name per quantity: a header
 # names the MEASURE and the CONTRAST is a marker on it, so the varying part of a column name is one
@@ -279,8 +282,10 @@ reg_word_noncollapsible <- function(word) {
 #                quantities (the fallback checks for the package where it actually falls back).
 #   obs          may an `obs` (crude) value be attached cell by cell? FALSE at the reference profile,
 #                where the model is conditional and the observed columns stay marginal.
-#   status       "ok" | "impossible"; ABSENT from the table = "not offered".
-#   why          for "impossible": a closure returning the reason (gettext at render, statically
+#   status       "ok" | "impossible"; ABSENT from the table = "not offered". A fourth value,
+#                "redundant", is STAMPED after the table is built (reg_mark_redundant(), below).
+#   why          for "impossible" / "redundant": a closure returning the reason (gettext at render,
+#                statically
 #                extractable -- the MEASURES$word pattern; a top-level gettext() would freeze the
 #                build locale).
 #   note         a closure returning the QUALIFIER clause of the "Model:" footer line -- what the
@@ -501,6 +506,43 @@ REG_ESTIMANDS$quasipoisson <- list(
     if (identical(r$fit, "poisson")) r$fit <- "quasipoisson"
     r
   }))
+
+# --- the REDUNDANT cells, derived ---------------------------------------------------------------
+# A marginal contrast IS the coefficient wherever the two run on the same fit and target the same
+# measure and the link is collapsible: averaging exp(xb) over the sample divides the exposure factor
+# out (log link), averaging a constant slope changes nothing (identity). So the sweep would return
+# the coefficient under a second header and a second name -- which is what the one-name-per-quantity
+# rule forbids. Those cells are REFUSED, with reg_estimand_abort() naming the coefficient call.
+#
+# DERIVED rather than declared row by row, so a family added later cannot forget the rule; the test
+# suite pins the resulting set. It reads only this file's own facts, all defined above.
+# ⚠ `at_reference` is NOT redundant: the estimate is the same, but the adjusted prediction beside it
+# comes from the column's OWN reference-profile sweep, not the sample-averaged one -- a different
+# table. And an odds ratio never qualifies (REG_WORDS' declared `noncollapsible`).
+#' @keywords internal
+#' @noRd
+reg_mark_redundant <- function(tbl) {
+  lapply(tbl, function(fr) {
+    coefs <- Filter(function(r) identical(r$effect, "coefficient") && identical(r$status, "ok"),
+                    fr$rows)
+    fr$rows <- lapply(fr$rows, function(r) {
+      if (!identical(r$effect, "marginal") || !identical(r$builder, "ame") ||
+          !identical(r$status, "ok") || reg_word_noncollapsible(r$word)) return(r)
+      same <- any(vapply(coefs, function(c)
+        identical(c$fit, r$fit) && identical(c$measure, r$measure), logical(1)))
+      if (!same) return(r)
+      r$status <- "redundant"
+      # the measure names the link, exactly because the pair only matches on the link's own contrast
+      r$why    <- if (identical(r$measure, "difference"))
+        function() gettext("the identity link is collapsible, so averaging changes nothing")
+      else
+        function() gettext("the log link is collapsible, so averaging changes nothing")
+      r
+    })
+    fr
+  })
+}
+REG_ESTIMANDS <- reg_mark_redundant(REG_ESTIMANDS)
 
 # REG_FAMILIES -- WHAT EACH MODEL FAMILY IS CALLED, and where it may be named. Every other name
 # table (reg_family_display_name(), reg_family_short(), the UI labels) is DERIVED from this one, so
@@ -764,7 +806,7 @@ reg_estimand <- function(family, effect = "coefficient", measure = "auto") {
                 measure = if (logged) mk$measure else meas, base = meas))
   }
   row <- hit[[1L]]
-  if (identical(row$status, "impossible"))
+  if (row$status %in% c("impossible", "redundant"))
     return(c(row, list(family = family, asked = meas)))
   if (logged) {
     # A LOG is only meaningful over a multiplicative estimand: an additive coefficient already lives
@@ -804,6 +846,11 @@ reg_estimand_abort <- function(res, outcome = NULL) {
   if (identical(res$status, "unknown_measure"))
     cli::cli_abort(c("Unknown {.arg measure} {.val {res$measure}}.",
                      "i" = "Valid: {.or {.val {REG_MEASURES_VALUES}}}."))
+  # A REDUNDANT cell has exactly one right call, so it gets the pointer rather than a menu.
+  if (identical(res$status, "redundant"))
+    cli::cli_abort(c(
+      "{.code effect = {.val {res$effect}}, measure = {.val {res$measure}}} returns the coefficient itself{who}: {res$why()}.",
+      "i" = 'Use {.code effect = "coefficient"} (the default).'))
   offered <- reg_estimand_offer_lines(fam, res$effect)
   if (identical(res$status, "impossible")) {
     cli::cli_abort(c(
@@ -985,8 +1032,10 @@ reg_estimand_offer_lines <- function(family, effect = NULL) {
 #'   probability to take the odds of), whatever anyone implements;
 #' * **not offered** — tabxplor does not build it (yet).
 #'
-#' A fourth state exists only at run time: a link that does not converge on your data. `tab_reg()`
-#' says so and, for the risk difference, falls back to the linear probability model.
+#' A combination that would return the coefficient under another name — a marginal effect where the
+#' link is collapsible, as in a linear model — is **not listed**: it is refused, with the coefficient
+#' call named. And one state exists only at run time: a link that does not converge on your data.
+#' `tab_reg()` says so and, for the risk difference, falls back to the linear probability model.
 #'
 #' @param data A data frame (or a `survey` design), as for [tab_reg()].
 #' @param outcome The outcome column name.
@@ -1008,8 +1057,11 @@ reg_measures <- function(data, outcome, family = "auto") {
   if (is.null(rows)) cli::cli_abort("Unknown {.arg family} {.val {fam}}.")
   # every declared measure, not a hand-picked pair -- "log" is not a peer (it is any multiplicative
   # row un-exponentiated), so it gets its own line below.
+  # a REDUNDANT cell is dropped, not shown as a status: it is the coefficient under another name, so
+  # listing it would offer two names for one quantity -- which is what the refusal exists to stop.
   row_of <- function(effect, measure) {
     r <- reg_estimand(fam, effect, measure)
+    if (identical(r$status, "redundant")) return(NULL)
     tibble::tibble(
       effect = effect, measure = measure,
       status = switch(r$status, ok = "available", impossible = "not defined", "not offered"),

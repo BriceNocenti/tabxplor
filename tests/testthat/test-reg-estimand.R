@@ -28,12 +28,29 @@ test_that("the estimand library resolves every family x contrast, and states its
   for (fam in names(REG_ESTIMANDS)) {
     for (eff in REG_EFFECTS_VALUES) {
       r <- reg_estimand(fam, eff, "auto")
-      expect_identical(r$status, "ok", info = paste(fam, eff))
+      expect_true(r$status %in% c("ok", "redundant"), info = paste(fam, eff))
       expect_true(r$scale %in% EST_SCALE_KEYS)
       expect_true(nzchar(r$word))
       expect_true(r$builder %in% c("coef", "ame", "vsrest"))
     }
   }
+})
+
+# The set reg_mark_redundant() derives -- pinned here rather than at load, since the derivation is
+# the point: a marginal contrast on a COLLAPSIBLE link, targeting the link's own measure, IS the
+# coefficient. `at_reference` never qualifies (its adjusted prediction is the reference profile's),
+# and neither does an odds ratio.
+test_that("exactly the collapsible marginal cells are refused as the coefficient itself", {
+  red <- unlist(lapply(names(REG_ESTIMANDS), function(f)
+    vapply(Filter(function(r) identical(r$status, "redundant"), REG_ESTIMANDS[[f]]$rows),
+           function(r) paste(f, r$effect, r$measure), character(1))))
+  expect_setequal(red, c("gaussian marginal difference", "poisson marginal ratio",
+                         "quasipoisson marginal ratio"))
+  # and each says why, and names the one right call
+  expect_error(reg_estimand_abort(reg_estimand("gaussian", "marginal", "difference")),
+               "identity link is collapsible")
+  expect_error(reg_estimand_abort(reg_estimand("poisson", "marginal", "ratio")),
+               'effect = "coefficient"', fixed = TRUE)
 })
 
 # --- 1b. the header vocabulary --------------------------------------------------------------------
@@ -67,7 +84,7 @@ test_that("the marker rides the measure, and the log wraps the whole token", {
   expect_identical(w("binomial", "coefficient",  "log"),        "log(OR)")
   expect_identical(w("ordinal",  "coefficient",  "odds_ratio"), "cumOR")   # cumulative, and it says so
   expect_identical(w("gaussian", "coefficient",  "difference"), "diff")    # never a bare greek letter
-  expect_identical(w("poisson",  "marginal",     "ratio"),      "mIRR")    # ONE ratio word per family
+  expect_identical(w("poisson",  "at_reference", "ratio"),      "refIRR")  # ONE ratio word per family
   # the log wraps the MARKED token ("the log of the at-reference odds ratio")
   expect_identical(w("multinomial", "at_reference", "log"), "log(refOR)")
   # the expansion is one declared string per acronym, wrapped the way each form is spoken
@@ -227,11 +244,17 @@ test_that("measure = 'ratio' on a continuous outcome is the ratio of adjusted me
                "non-negative")
 })
 
-test_that("a marginal ratio is available for a count outcome too", {
+test_that("a count outcome's ratio is the coefficient, at the reference profile or refused", {
   skip_if_not_installed("marginaleffects")
   d <- est_data()
-  t <- suppressMessages(tab_reg(d, "tvhours", "race", family = "poisson",
-                                effect = "marginal", measure = "ratio", cleannames = FALSE))
+  # the log link is collapsible, so the MARGINAL rate ratio would be the IRR under a second name
+  expect_error(tab_reg(d, "tvhours", "race", family = "poisson", effect = "marginal",
+                       measure = "ratio"),
+               "returns the coefficient itself")
+  # at the reference profile it is a different table (its own adjusted prediction), so it builds
+  t <- suppressMessages(suppressWarnings(
+    tab_reg(d, "tvhours", "race", family = "poisson", effect = "at_reference",
+            measure = "ratio", cleannames = FALSE)))
   mc <- t[[grep("^Model", names(t), value = TRUE)[1]]]
   expect_identical(get_scale(mc), "mean_ratio")
 })

@@ -3,8 +3,11 @@
 # ROLE: the regression twin of tab_resolve_common_args() (R/tab-resolve.R). One entry point,
 #   reg_resolve_args(), composed of six private stages; tab_reg() calls it once and receives
 #   new_reg_args(), the typed record the builder reads (the FORMALS are the contract, the body is
-#   as.list(environment()), and the globalVariables mirror is derived beneath it).
+#   as.list(environment()), and the globalVariables mirror is derived beneath it). One stage sits
+#   OUTSIDE that call, S0, because tab_reg() itself needs its answer first.
 #
+#     S0 reg_select_*()           the tidy-select variable roles, run BY tab_reg() -- the
+#                                 multi-outcome recursion above the boundary reads values
 #     S1 reg_validate_args()      the checks that are PURE
 #     S2 reg_prepare_data()       design unwrap / formula / predictors dispatch / labelled / the
 #                                 level merge / shape / all_predictors / tab_vars -- every rewrite
@@ -25,6 +28,9 @@
 #     it, and that relevel needs the multinomial outcomes the family stage resolved. A preparation
 #     the caller invoked separately would move the ordering into the caller: a second place to get
 #     it wrong. The prepared `data` and `design_obj` are declared FIELDS of the returned record.
+#   - S0 RUNS IN tab_reg(), AND SELECTS AGAINST svy_select_frame(), never svy_unwrap_data(): the
+#     unwrap informs, adds the reserved columns and computes degf, so S2 must stay its ONE caller.
+#     An empty selection becomes NULL, not character(0) -- every guard below tests is.null().
 #   - There is deliberately no REG_ARG_VALUES table. TAB_ARG_VALUES exists because five crosstab
 #     producers had each written one boundary and drifted; tab_reg() is one producer, its
 #     vocabularies are already declared once each (REG_USER_FAMILIES / REG_EFFECTS_VALUES /
@@ -32,6 +38,82 @@
 #     that REWRITES what it validates belongs to its own resolver -- one validator, in the one place
 #     that can also rewrite the value.
 # See: CLAUDE.md section "tabxplor architecture" (the regression subsystem).
+
+
+# === S0: the variable roles ======================================================================
+# The tidy-select boundary, run by tab_reg() itself (before the multi-outcome recursion, which reads
+# VALUES). It shares tab()'s selector, tidy_select_chr() (R/tab.R), and adds the two escape hatches
+# `outcome` and `predictors` carry -- a model formula, and a named list of models. Both are detected
+# on the EXPRESSION where they are written inline, and on the peeked value where they arrive in a
+# variable or spliced in by do.call(); tidyselect can see neither.
+# tidy_select_chr(), or the quosure's VALUE when selection fails and the value is what this role
+# also accepts. A CALL can build either escape hatch -- `as.formula(s)`, `specs[[i]]`, `f[[2]]` --
+# and nothing in its expression tells it from a tidyselect helper like starts_with(), so it is
+# recognised only once selection has failed. Any other failure re-raises tidyselect's own message.
+#' @keywords internal
+#' @noRd
+reg_select_else_value <- function(quo, data, peeked, accept) {
+  out <- tryCatch(list(sel = tidy_select_chr(quo, data, peeked = peeked)),
+                  error = function(cnd) list(err = cnd))
+  if (is.null(out$err)) return(list(sel = out$sel))
+  val <- tryCatch(rlang::eval_tidy(quo), error = function(e) NULL)
+  if (accept(val)) return(list(val = val))
+  stop(out$err)
+}
+
+#' @keywords internal
+#' @noRd
+reg_select_outcome <- function(quo, data) {
+  # is_formula() is TRUE for a quoted `~` call as well as for a formula object, so an inline
+  # `y ~ a + b` and an injected one take the same branch.
+  if (rlang::is_formula(rlang::quo_get_expr(quo))) return(rlang::eval_tidy(quo))
+  pk <- quo_peek_extern(quo, data)
+  if (rlang::is_formula(pk)) return(pk)
+  r <- reg_select_else_value(quo, data, pk, rlang::is_formula)
+  r$val %||% r$sel
+}
+
+# A character vector -> one model per outcome; a LIST -> one model per element, its name labelling
+# the column. Each element is its own selection, so a comparison reads like the rest of the grammar:
+# `list(m1 = c(race, age), m2 = starts_with("inc"))`.
+#' @keywords internal
+#' @noRd
+reg_select_predictors <- function(quo, data) {
+  expr <- rlang::quo_get_expr(quo)
+  each <- function(l) {
+    if (length(l) == 0L)
+      cli::cli_abort(c("A {.arg predictors} list needs at least one model.",
+                       "i" = "Name each one: {.code list(m1 = ..., m2 = ...)}."), call = NULL)
+    purrr::map(l, function(v) tidy_select_chr(rlang::quo(tidyselect::all_of(!!as.character(v))),
+                                              data))
+  }
+  # an INLINE list(): the elements are expressions, so each is selected in the caller's environment
+  if (rlang::is_call(expr, "list")) {
+    els <- rlang::call_args(expr)
+    if (length(els) == 0L) return(each(list()))
+    env <- rlang::quo_get_env(quo)
+    return(purrr::map(els, function(e) tidy_select_chr(rlang::new_quosure(e, env), data)))
+  }
+  if (is.list(expr) && !rlang::is_call(expr) && !rlang::is_symbol(expr)) return(each(expr))
+  pk <- quo_peek_extern(quo, data)
+  if (is.list(pk) && !rlang::is_formula(pk)) return(each(pk))
+  r <- reg_select_else_value(quo, data, pk, function(v) is.list(v) && !rlang::is_formula(v))
+  if (!is.null(r$val)) return(each(r$val))
+  if (length(r$sel) == 0L) NULL else r$sel
+}
+
+# A role that takes ONE column: `tab_vars` (one grouping variable) and `wt` (one weight). NULL when
+# empty -- 17 sites downstream test is.null(), and character(0) is not the same answer.
+#' @keywords internal
+#' @noRd
+reg_select_one <- function(quo, data, arg) {
+  v <- tidy_select_chr(quo, data)
+  if (length(v) == 0L) return(NULL)
+  if (length(v) > 1L)
+    cli::cli_abort(c("{.arg {arg}} must select a single column.",
+                     "x" = "Got {.val {v}}."), call = NULL)
+  v
+}
 
 
 # === S1: the pure checks =========================================================================

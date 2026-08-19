@@ -569,43 +569,54 @@ tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", 
         family = "gaussian", empirical=TRUE
 )
 tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all", 
+   color = "difference", color_signif = "grey_non_signif",
+)
+tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all", 
    color = TRUE, color_signif = "grey_non_signif",
 )
 # - bold only applies to the primary display token (right behaviour), but underline and italics also apply to the
 #   secondary display tokens: they too, like colors, should only apply to the primary display token by default (global option). Otherwise it’s noise.
-# - bold and underlines are visually very striking, but italics is subtle and not striking, specially with the current html monospace font.
-#   We’ll try something else:
-#   1. `tx_chrome_hex("print")$grey` identifies the greyed-out cells (the grey is much lighter than with colors)
-#   2. the direction information is carried by two things: 
-#     a. the over|under symbols +|- ×|÷ x|1/x  (they also carry the `measure`) ; 
-#     b. the italics for the "below null"/"under" branch, subtle but which only supports the over|under symbols
-#   3. the size of effect is carried by a 3 rungs ladder: `tx_chrome_hex("print")$text` pure "black" ; "black" + bold ; "black" + bold + underline
+# - bold is more visually striking than underline, and italics is subtle and not striking (specially with the current html monospace font).
+#   We’ll try something a bit different:
+#   1. `tx_chrome_hex("print")$grey` identifies the greyed-out cells (the "#888888" grey is much lighter than with colors)
+#   2. the direction information is carried by : over have underline ; under have italics and no underline
+#   3. the size of effect is carried by a 3 rungs ladder: "#333333" text ; "#000000" text ; "#000000" + bold text ; 
+
+
 # - some tests are now failing because I tweaked the `tx_chrome_hex("print") palette. A WCAG assertion is failing for 
 
 
 
-#   A possibility that would work for regression (were direction is clear), but not for percentages and means :
+#   A possibility that would work for regression (where direction is clear), but not for percentages and means :
 #   1. `tx_chrome_hex("print")$grey` identifies the greyed-out cells (the grey is much lighter than with colors)
 #   2. the direction information is carried by two things: 
 #     a. the over|under symbols +|- ×|÷ x|1/x  (they also carry the `measure`) ; 
 #     b. the italics for the "below null"/"under" branch, subtle but which only supports the over|under symbols
-#   3. the size of effect is carried by a 4 rungs ladder: `tx_chrome_hex("print")$grey2` ; `tx_chrome_hex("print")$text` pure "black"  ; "black" + bold ; "black" + bold + underline
+#   3. the size of effect is carried by a 4 rungs ladder: "black" text ; "black" + bold text ; "black" + bold + underline ; "black" + bold + double underline
 
 #   A possibility, for tab() pct and means, that is a bit overloaded would works (ratio display carry the direction) :
 #   1. `tx_chrome_hex("print")$grey` identifies the greyed-out cells (the grey is much lighter than with colors)
 #   2. the direction information is carried by two things: 
 #     a. a display = "{base} {ratio}" (with 1 digits ratio ×1.x or ÷1.x) ; 
 #     b. the italics for the "below null"/"under" branch, subtle but which only supports the over|under symbols
-#   3. the size of effect is carried by a 4 rungs ladder: `tx_chrome_hex("print")$grey2` ; `tx_chrome_hex("print")$text` pure "black"  ; "black" + bold ; "black" + bold + underline
+#   3. the size of effect is carried by a 4 rungs ladder: "black" text ; "black" + bold text ; "black" + bold + underline ; "black" + bold + double underline
 
+# Marks solution for tab()  
+# - repeated superscript marks + ++ +++ - -- --- ?
+
+# Marks solution for tab_reg() : 
+# - Just repeat the existing symbols + ++ +++ - -- --- × ×× ××× ÷ ÷÷ ÷÷÷ for the effect size ? Not good (non-significant, even gray, have one symbol)
 
 # - In the right parameters table, change the minimum digits for the observed mean and the adjusted mean to 1 (there’s too decimals here, I want to drop one) 
 
-# Just + ++ +++ - -- --- × ×× ××× ÷ ÷÷ ÷÷÷ for the effect size ?
+
+
+
+
 
 # Explain empirical counterpart too in the "Model:" first tab_reg() specific legend block ?
 
-
+# Sparkline wrong alignment due to the U+2581–U+2588 special characters not being monospace. Cascadia Mono ?
 
 
 

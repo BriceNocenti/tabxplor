@@ -1,4 +1,4 @@
-# Phase 8: tab(parallel=) must be BYTE-IDENTICAL to the serial build. The build is dispatched per
+# Phase 8: parallel builds must be BYTE-IDENTICAL to the serial one. The build is dispatched per
 # row_var to a named mirai daemon pool; everything cross-cutting (duplicated_levels rename, the join,
 # tab_apply_tests / chi2 / ci) stays on the main process, so parity holds by construction. These
 # tests exercise the real daemon path (skipped on CRAN / when mirai is absent).
@@ -52,6 +52,10 @@ warm_pool <- function(n = 2L) {
   invisible()
 }
 
+# Phase 22b-vi: `parallel` is an OPTION, not an argument -- so every "serial vs parallel" pair here
+# sets it around the call instead of passing it. `with_par(FALSE, ...)` is the serial branch.
+with_par <- function(p, expr) withr::with_options(list(tabxplor.parallel = p), expr)
+
 # Fixture: >=4 row_vars, 2 factor + 1 numeric col_var (exercises tab_transform's numeric + factor branches), a
 # weight, a deliberate cross-col_var level collision ("No answer" in partyid AND denom -> the global
 # duplicated_levels rename), and NAs (tvhours). Warnings from the arg cascade are pre-existing and fire
@@ -59,12 +63,10 @@ warm_pool <- function(n = 2L) {
 gss <- forcats::gss_cat
 withr::with_seed(1, gss$w <- runif(nrow(gss), 0.5, 2))
 
-tab_seq <- function(...) suppressWarnings(
-  tab(gss, c(race, relig, marital, rincome), c(partyid, denom, tvhours), wt = w,
-      parallel = FALSE, ...))
-tab_par <- function(..., workers = 2L) suppressWarnings(
-  tab(gss, c(race, relig, marital, rincome), c(partyid, denom, tvhours), wt = w,
-      parallel = workers, ...))
+tab_seq <- function(...) with_par(FALSE, suppressWarnings(
+  tab(gss, c(race, relig, marital, rincome), c(partyid, denom, tvhours), wt = w, ...)))
+tab_par <- function(..., workers = 2L) with_par(workers, suppressWarnings(
+  tab(gss, c(race, relig, marital, rincome), c(partyid, denom, tvhours), wt = w, ...)))
 
 
 test_that("parallel build is byte-identical to the serial build", {
@@ -89,8 +91,8 @@ test_that("option-sensitive leaf math is shipped: anova/stars overrides stay ide
 
 test_that("below the parallel_min threshold, a parallel request stays serial (and identical)", {
   warm_pool(2L)
-  one_seq <- suppressWarnings(tab(gss, race, c(partyid, tvhours), wt = w, parallel = FALSE))
-  one_par <- suppressWarnings(tab(gss, race, c(partyid, tvhours), wt = w, parallel = 2))
+  one_seq <- with_par(FALSE, suppressWarnings(tab(gss, race, c(partyid, tvhours), wt = w)))
+  one_par <- with_par(2, suppressWarnings(tab(gss, race, c(partyid, tvhours), wt = w)))
   expect_identical(one_par, one_seq)
   # the single row_var (< tabxplor.parallel_min = 2) never dispatched -> pool count untouched
   expect_identical(as.integer(mirai::status(.compute = "tabxplor")$connections), 2L)
@@ -138,8 +140,8 @@ test_that("a worker's messages reach the user, in unit order (Phase 20f)", {
   said <- function(parallel) {
     msgs <- character()
     withCallingHandlers(
-      tab(gss2, c(race, marital), c(tvhours, tvhours2), pct = "col",
-          ref = c(tvhours = "first", tvhours2 = "tot"), parallel = parallel),
+      with_par(parallel, tab(gss2, c(race, marital), c(tvhours, tvhours2), pct = "col",
+                             ref = c(tvhours = "first", tvhours2 = "tot"))),
       message = function(m) { msgs <<- c(msgs, conditionMessage(m)); invokeRestart("muffleMessage") },
       warning = function(w) { msgs <<- c(msgs, conditionMessage(w)); invokeRestart("muffleWarning") }
     )
@@ -166,39 +168,39 @@ reg_fx <- local({
   d
 })
 
-test_that("tab_reg(parallel=): the S axis (several outcomes in one table) is byte-identical", {
+test_that("tab_reg parallel: the S axis (several outcomes in one table) is byte-identical", {
   warm_pool(2L)
   args <- list(reg_fx, c("married", "tvhours"), c("race", "age"), stats = FALSE)
   expect_identical(
-    suppressMessages(do.call(tab_reg, c(args, list(parallel = 2L)))),
-    suppressMessages(do.call(tab_reg, c(args, list(parallel = FALSE)))))
+    suppressMessages(with_par(2L, do.call(tab_reg, args))),
+    suppressMessages(with_par(FALSE, do.call(tab_reg, args))))
 })
 
-test_that("tab_reg(parallel=): the G axis (tab_vars groups) is byte-identical", {
+test_that("tab_reg parallel: the G axis (tab_vars groups) is byte-identical", {
   warm_pool(2L)
   args <- list(reg_fx, "married", "race", family = "binomial", tab_vars = "year_f", stats = FALSE)
   expect_identical(
-    suppressMessages(do.call(tab_reg, c(args, list(parallel = 2L)))),
-    suppressMessages(do.call(tab_reg, c(args, list(parallel = FALSE)))))
+    suppressMessages(with_par(2L, do.call(tab_reg, args))),
+    suppressMessages(with_par(FALSE, do.call(tab_reg, args))))
 })
 
-test_that("tab_reg(parallel=): the R axis (outcomes x a models list) is byte-identical", {
+test_that("tab_reg parallel: the R axis (outcomes x a models list) is byte-identical", {
   warm_pool(2L)
   args <- list(reg_fx, c("married", "tvhours"),
                list(m1 = "race", m2 = c("race", "age")), stats = FALSE)
   expect_identical(
-    suppressMessages(do.call(tab_reg, c(args, list(parallel = 2L)))),
-    suppressMessages(do.call(tab_reg, c(args, list(parallel = FALSE)))))
+    suppressMessages(with_par(2L, do.call(tab_reg, args))),
+    suppressMessages(with_par(FALSE, do.call(tab_reg, args))))
 })
 
-test_that("tab_reg(parallel=): a worker's messages reach the user, in unit order", {
+test_that("tab_reg parallel: a worker's messages reach the user, in unit order", {
   # The family-detection notice fires once per outcome, in outcome order -- so it is both the
   # "did the relay work" check and an order-independent check that no unit was skipped.
   warm_pool(2L)
   said <- function(parallel) {
     msgs <- character()
     withCallingHandlers(
-      tab_reg(reg_fx, c("married", "tvhours"), "race", stats = FALSE, parallel = parallel),
+      with_par(parallel, tab_reg(reg_fx, c("married", "tvhours"), "race", stats = FALSE)),
       message = function(m) { msgs <<- c(msgs, conditionMessage(m)); invokeRestart("muffleMessage") })
     grep("outcome detected", msgs, value = TRUE)
   }
@@ -207,17 +209,17 @@ test_that("tab_reg(parallel=): a worker's messages reach the user, in unit order
   expect_identical(said(2L), serial)
 })
 
-test_that("tab_reg(parallel=): a shape that must stay serial says so, and is identical", {
+test_that("tab_reg parallel: a shape that must stay serial says so, and is identical", {
   warm_pool(2L)
   args <- list(reg_fx, "married", list(m1 = "race", m2 = c("race", "age")),
                family = "binomial", stats = "compare_baseline")
-  expect_message(do.call(tab_reg, c(args, list(parallel = 2L))), "one after another")
+  expect_message(with_par(2L, do.call(tab_reg, args)), "one after another")
   expect_identical(
-    suppressMessages(do.call(tab_reg, c(args, list(parallel = 2L)))),
-    suppressMessages(do.call(tab_reg, c(args, list(parallel = FALSE)))))
+    suppressMessages(with_par(2L, do.call(tab_reg, args))),
+    suppressMessages(with_par(FALSE, do.call(tab_reg, args))))
 })
 
-test_that("tab_reg(parallel=): compared models with a crude block DISPATCH (Phase 20f-iiii)", {
+test_that("tab_reg parallel: compared models with a crude block DISPATCH (Phase 20f-iiii)", {
   # 20f-iii refused this shape -- spec 1 built the observed block and handed it down the loop. It is
   # the OUTCOME's block now, built by reg_stage_crude() before any model, so nothing is shared
   # between specs. `color = "adjustment"` is the everyday way in: it turns `empirical` on.
@@ -225,13 +227,13 @@ test_that("tab_reg(parallel=): compared models with a crude block DISPATCH (Phas
   args <- list(reg_fx, "married", list(m1 = "race", m2 = c("race", "age")),
                family = "binomial", color = "adjustment", stats = FALSE)
   said <- character()
-  withCallingHandlers(do.call(tab_reg, c(args, list(parallel = 2L))),
+  withCallingHandlers(with_par(2L, do.call(tab_reg, args)),
                       message = function(m) { said <<- c(said, conditionMessage(m))
                                               invokeRestart("muffleMessage") })
   expect_false(any(grepl("one after another", said)))  # it is NOT refused any more
   expect_identical(
-    suppressMessages(do.call(tab_reg, c(args, list(parallel = 2L)))),
-    suppressMessages(do.call(tab_reg, c(args, list(parallel = FALSE)))))
+    suppressMessages(with_par(2L, do.call(tab_reg, args))),
+    suppressMessages(with_par(FALSE, do.call(tab_reg, args))))
 })
 
 
@@ -245,8 +247,9 @@ test_that("a failing unit is NAMED, identically in both branches", {
   bad <- reg_fx
   bad$constvar <- factor("only")                     # a one-level predictor: the fit cannot run
   fail <- function(parallel) tryCatch(
-    suppressMessages(tab_reg(bad, "married", list(m1 = "race", m2 = c("race", "constvar")),
-                             family = "binomial", stats = FALSE, parallel = parallel)),
+    with_par(parallel, suppressMessages(
+      tab_reg(bad, "married", list(m1 = "race", m2 = c("race", "constvar")),
+              family = "binomial", stats = FALSE))),
     error = conditionMessage)
 
   serial <- fail(FALSE)
@@ -260,8 +263,8 @@ test_that("a sibling unit's messages still reach the user when another unit fail
   bad$constvar <- factor("only")
   msgs <- character()
   expect_error(withCallingHandlers(
-    tab_reg(bad, c("married", "tvhours"), list(m1 = "race", m2 = c("race", "constvar")),
-            stats = FALSE, parallel = 2L),
+    with_par(2L, tab_reg(bad, c("married", "tvhours"),
+                         list(m1 = "race", m2 = c("race", "constvar")), stats = FALSE)),
     message = function(m) { msgs <<- c(msgs, conditionMessage(m)); invokeRestart("muffleMessage") }))
   # the family-detection notice of the FIRST outcome was produced before the failure and survives
   expect_true(any(grepl("outcome detected", msgs)))

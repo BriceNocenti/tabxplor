@@ -779,11 +779,11 @@ rd_bin <- function(x, y, w = NULL, nbins = 10L, link = "identity",
 }
 
 # The 8-level block sparkline of a curve, min-max rescaled WITHIN the predictor -- so it answers
-# "is it a line?" and never "is the effect big?". `style`: TRUE = block glyphs, "ascii" = a plain-text
-# ladder for fonts without them (skimr documents the Windows failure), FALSE = no sparkline.
+# "is it a line?" and never "is the effect big?". `style` is TRUE / FALSE: there is no plain-text
+# ladder, because eight ASCII ranks (". , - ~ + = * #") do not read as a CURVE at all -- the shape
+# is the whole point, and a reader who cannot see it is better served by no sparkline.
 #' @keywords internal
-rd_spark_glyphs <- function(style = TRUE) {
-  if (identical(style, "ascii")) return(c(".", ",", "-", "~", "+", "=", "*", "#"))
+rd_spark_glyphs <- function() {
   # U+2581..U+2588 (lower one-eighth block .. full block), as escapes: the source stays ASCII.
   c("\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587", "\u2588")
 }
@@ -800,7 +800,7 @@ tx_spark_strip <- function(x) {
 # the Excel per-cell write cannot disagree about what a run is.
 #' @keywords internal
 tx_spark_pattern <- function(sep = TRUE) {
-  gl <- paste(rd_spark_glyphs(TRUE), collapse = "")
+  gl <- paste(rd_spark_glyphs(), collapse = "")
   paste0(if (sep) "[ \u00a0]?", "[", gl, "]{3,}")
 }
 
@@ -808,10 +808,10 @@ tx_spark_pattern <- function(sep = TRUE) {
 tx_has_spark <- function(x) !is.na(x) & grepl(tx_spark_pattern(FALSE), x)
 
 #' @keywords internal
-rd_spark <- function(y, style = TRUE) {
-  if (isFALSE(style) || is.null(y) || length(y) < 3L || !all(is.finite(y))) return(NA_character_)
+rd_spark <- function(y, on = TRUE) {
+  if (isFALSE(on) || is.null(y) || length(y) < 3L || !all(is.finite(y))) return(NA_character_)
   r <- range(y)
-  gl <- rd_spark_glyphs(style)
+  gl <- rd_spark_glyphs()
   i  <- if (diff(r) <= 0) rep(ceiling(length(gl) / 2), length(y))
         else 1L + floor((y - r[[1L]]) / diff(r) * (length(gl) - 1e-9))
   paste(gl[pmax(pmin(i, length(gl)), 1L)], collapse = "")

@@ -33,8 +33,10 @@ probability to take the odds of), whatever anyone implements;
 \item \strong{not offered} — tabxplor does not build it (yet).
 }
 
-A fourth state exists only at run time: a link that does not converge on your data. \code{tab_reg()}
-says so and, for the risk difference, falls back to the linear probability model.
+A combination that would return the coefficient under another name — a marginal effect where the
+link is collapsible, as in a linear model — is \strong{not listed}: it is refused, with the coefficient
+call named. And one state exists only at run time: a link that does not converge on your data.
+\code{tab_reg()} says so and, for the risk difference, falls back to the linear probability model.
 }
 \examples{
 d <- forcats::gss_cat
