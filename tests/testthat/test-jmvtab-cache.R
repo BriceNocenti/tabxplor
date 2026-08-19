@@ -239,7 +239,9 @@ test_that("D11: ci = 'cell' with mixed col_vars stamps the same displays as tab(
   disp <- function(t) vapply(t[vapply(t, is_fmt, logical(1))],
                              function(x) get_display(x)[[1]], character(1))
   expect_identical(disp(jr), disp(ot))
-  expect_identical(unname(disp(jr)), c(rep("pct_ci", 4L), "mean_ci"))
+  # one token for every column type since the pipeline composites were retired: `ci = "cell"` writes
+  # the ordinary `{ci}`, and a percentage or a mean column answers it with its own scale.
+  expect_identical(unname(disp(jr)), rep("ci", 5L))
 })
 
 

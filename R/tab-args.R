@@ -339,7 +339,8 @@ TAB_ARGS <- list(
             " use the Wilson score interval for a cell and the Newcombe hybrid score for a difference (its",
             " dual, so the bracket and the stars always agree), and means the Welch t interval. With",
             " \\code{ci = \"cell\"} the result prints as `[inf;sup]`; set",
-            " `options(\"tabxplor.ci_print\" = \"moe\")` for `pct +- moe`.",
+            " Each cell then shows its own interval; `display = \"base_moe\"` writes it as",
+            " `pct +- margin of error` instead, and `display = \"base_ci\"` as `pct [inf; sup]`.",
             " \\code{\"diff\"} and \\code{\"ratio\"} are soft-deprecated spellings of \\code{\"ref\"} (the second one",
             " also pins the ratio scale -- say \\code{color = \"ratio\"} instead).")),
   conf_level = list(

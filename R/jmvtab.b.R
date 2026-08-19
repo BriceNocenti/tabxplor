@@ -8,14 +8,14 @@
 #     LAGS: a newly declared option reads back NULL until the next prepare(), so `.opts()` gives each
 #     one an explicit `%||%` fallback (the module runs on defaults in that window, never aborts).
 #   - Phase 19k: `.run()` is weights -> build -> render. NO option travels as a global around the
-#     build any more (`anova` was the last; it is tab()'s own argument now). `ci_print` keeps its
-#     options()/on.exit, deliberately: it is read inside format(), i.e. around the RENDER.
+#     build any more, and none travels around the RENDER either since `ci_print` was retired
+#     (`{ci}` / `{moe}` are display tokens now, so a notation is asked for by name).
 #   - Phase 20g-i: AN OPTION IS NAMED AFTER THE tab() ARGUMENT IT DRIVES -- exactly, or as
 #     `<argument>_<slot>` where several options fold into one (`ci_method_cell` ... -> `ci_method`,
 #     `ref` + `ref_levels` -> `ref`). `.opts()` is therefore a pass-through, not a translation
 #     table, and test-jamovi-vocabulary.R checks the rule (names, control names and `ui.<name>` in
 #     the .js alike). The declared exceptions are `lvs` (jmvcore::Options already has a levels()
-#     method) and the UI-only controls (export, wrap, models/run_compare, ci_print).
+#     method) and the UI-only controls (export, wrap, models/run_compare).
 #   - The module runs in Jamovi's bundled R -- keep dependencies to what the package Imports/Suggests.
 #   - The cache lives ONLY in $state (survives the engine reset); never rely on R globals (§5.2).
 #   - Export (Excel / HTML / Markdown; Phase 7g) resolves a typed path (Documents default) and
@@ -56,12 +56,6 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       built <- jmvtab_build(data, opts, store)
       self$results$cache_state$setState(built$store)   # persist tiers 1-2 for the next interaction
       tabs  <- built$tabs
-
-      # ci_print controls the [inf;sup] vs pct +- moe display; it is a global option read at
-      # format time, so set it around the render and restore it afterwards.
-      ci_print_option <- getOption("tabxplor.ci_print")
-      options("tabxplor.ci_print" = if (self$options$ci_print == "moe") "moe" else "ci")
-      on.exit(options("tabxplor.ci_print" = ci_print_option), add = TRUE)
 
       # --- Export (Excel / HTML / Markdown; Phase 7g) + HTML render (shared helpers) ----------
       # The export returns a styled status line (bold green with the path REALLY written / bold red on

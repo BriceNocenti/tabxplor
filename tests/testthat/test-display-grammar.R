@@ -222,13 +222,14 @@ testthat::test_that("tab(display = 'base_ci') == '{pct} {ci}' / '{mean} {ci}' pe
     format(tab(gss, race, age, ci = "cell", display = "{mean} {ci}"))
   )
 
-  # mixed factor + numeric in ONE call: each column resolves by its own type
+  # mixed factor + numeric in ONE call: each column resolves by its own type. Compared COLUMN by
+  # column -- the whole-tibble print truncates, and `{pct}` is explicit where `{base}` is relative,
+  # so they agree on the factor columns and deliberately not on the numeric one.
   t_mix <- tab(gss, race, c(marital, age), pct = "row", ci = "cell", display = "base_ci")
-  testthat::expect_identical(
-    format(t_mix),
-    format(tab(gss, race, c(marital, age), pct = "row", ci = "cell", display = "{pct} {ci}"))
-  )                                                                     # factors -> {pct}; age col type stays mean
+  t_tpl <- tab(gss, race, c(marital, age), pct = "row", ci = "cell", display = "{pct} {ci}")
+  testthat::expect_identical(format(t_mix$Married), format(t_tpl$Married))
   testthat::expect_identical(tabxplor:::fmt_var_kind(t_mix[["age"]]), "mean")
+  testthat::expect_match(format(t_mix$age)[1], "^ *[0-9.]+ +\\[")      # {base} -> the MEAN there
 })
 
 testthat::test_that("set_display(x, 'base_ci') == tab(display = 'base_ci') (same overlay, post-hoc)", {
@@ -282,7 +283,7 @@ testthat::test_that("the preset table is ONE table, resolved the same way by bot
   testthat::expect_identical(
     names(tabxplor:::DISPLAY_PRESETS),
     c("est", "est_ci", "est_base", "est_coef", "base_est_mdiff", "base_est_mratio",
-      "base_est", "base", "base_ci"))
+      "base_est", "base", "base_ci", "base_moe"))
   # a preset may declare one arm per column ROLE; an unknown role takes `default`.
   testthat::expect_identical(tabxplor:::display_resolve("est_base"), "{est} ({base})")
   testthat::expect_identical(tabxplor:::display_resolve("est_base", "model"), "{est} ({base})")
@@ -391,6 +392,29 @@ testthat::test_that("only the primary token is coloured, and the option says wha
     as.character(format(pillar::pillar_shaft(co2), width = 30))
   }
   testthat::expect_false(identical(hit(FALSE), hit(TRUE)))
+})
+
+testthat::test_that("{ci} and {moe} are one interval in two notations, both column-driven", {
+  gss <- forcats::gss_cat
+  # ONE preset on a MIXED table: the "%" and the x100 come from the COLUMN's declared scale, never
+  # from the template, so `base_moe` reads right on a percentage column and a mean column alike.
+  t <- tab(gss, race, c(marital, age), pct = "row", ci = "cell", display = "base_moe")
+  testthat::expect_match(format(t$Married)[1], "^ *[0-9]+% *\u00b1[0-9]+%$")
+  testthat::expect_match(format(t$age)[1],     "^ *[0-9.]+ *\u00b1[0-9.]+$")
+  # the same two cells in the bracket notation
+  b <- tab(gss, race, c(marital, age), pct = "row", ci = "cell", display = "base_ci")
+  testthat::expect_match(format(b$Married)[1], "\\[[0-9]+;[0-9]+\\]%$")
+  testthat::expect_match(format(b$age)[1],     "\\[[0-9.]+;[0-9.]+\\]$")
+  # `ci = "cell"` writes the ordinary `{ci}` token -- no pipeline-only composite left in the grammar
+  testthat::expect_identical(unique(get_display(tab(gss, race, marital, pct = "row",
+                                                    ci = "cell")[[2]])), "ci")
+  # a RATIO has no half-width -- `{moe}` is declared void there, `{ci}` still renders
+  co <- tab(gss, race, marital, pct = "row", color = "OR", ci = "ref")[[3]]
+  testthat::expect_true(all(is.na(get_num(set_display(co, "moe")))))
+  testthat::expect_true(any(!is.na(get_num(set_display(co, "ci")))))
+  # Excel: `{moe}` IS the +/- number format, the bracket form exports as the rendered string
+  testthat::expect_true(all(format(set_display(b$Married, "moe"), syntax = "excel") != "TEXT"))
+  testthat::expect_true(all(format(set_display(b$Married, "ci"),  syntax = "excel") == "TEXT"))
 })
 
 testthat::test_that("the aside's colour is the theme's own chrome, resolved PER THEME", {

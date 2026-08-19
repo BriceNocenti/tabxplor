@@ -685,7 +685,7 @@ Une poignée d'`options()` fixent les préférences par défaut, une fois pour t
 - `options(tabxplor.stars = TRUE)` — afficher les étoiles de significativité dans chaque tableau (comme `stars = TRUE`).
 - `options(tabxplor.conf_level = 0.9)` — le seuil de confiance des intervalles et des tests (défaut `0.95`).
 - `options(tabxplor.design_effect = TRUE)` — sur des données pondérées, faire tenir compte de l'inégalité des poids à chaque intervalle, étoile, seuil de couleur et test (voir [Pondération](#ponderation)).
-- `options(tabxplor.ci_print = "moe")` — imprimer un intervalle de confiance sous forme de `pct ± marge d'erreur` plutôt qu'en crochet `[bas ; haut]`.
+- `display = "base_moe"` — imprimer un intervalle de confiance sous forme de `pct ± marge d'erreur` plutôt qu'en crochet `[bas ; haut]`, ce que donne `display = "base_ci"`.
 - `options(tabxplor.lang = "fr")` — la langue des légendes de couleur et des notes de bas de tableau (`"auto"`/`"en"`/`"fr"`).
 
 Les seuils de couleur et les palettes ont leurs propres fonctions, `set_color_breaks()` et `set_color_palette()`. `?tabxplor-options` documente chaque option, et `vignette("tabxplor-programming")` couvre les plus avancées (polices d'export, calcul parallèle…).

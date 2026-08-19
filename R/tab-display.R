@@ -129,7 +129,7 @@ fmt_blank_fields <- function(col, pct = FALSE) {
 # verbatim and fmt_display_shows() compares the RAW value, so aliasing changes what a template matches.
 #
 # ⚠ WHY `settable` EXISTS: get_num() had arms set_num() lacked, and vec_arith goes through set_num(),
-# so arithmetic on a column displaying `pct_ci` / `mean_ci` / `pvalue` silently returned it UNCHANGED
+# so arithmetic on a column displaying `pvalue` / `or_pct` silently returned it UNCHANGED
 # (`x * 2` == `x`, no warning). The stopifnot() at the tail of this file keeps the three in step.
 #
 # THE HOT PATH STAYS HAND-WRITTEN: get_num()/set_num() are vectorised mask writes and format() is
@@ -211,7 +211,15 @@ DISPLAY_TOKENS <- list(
                   doc = 'the ratio to the reference (relative risk, or a ratio of means)'),
   ci      = .dtok("ci"   , user = TRUE, bare = TRUE, value_cell = TRUE,
                   source = 'ci = "ref"  (or ci = "cell" for each cell\'s own interval)',
-                  doc = 'the confidence interval of whatever the column compares'),
+                  doc = 'the confidence interval of whatever the column compares, as `[low;high]`'),
+  # the SAME field as `ci`, the other notation. Two forms, two tokens: a token names what a cell
+  # PRINTS, so neither of them reads an option to decide which of the two it is.
+  moe     = .dtok("ci"   , user = TRUE, bare = TRUE, value_cell = TRUE,
+                  source = 'ci = "ref"  (or ci = "cell" for each cell\'s own interval)',
+                  doc = paste('the margin of error --- the same interval as `ci`, written as the',
+                              'half-width `+/-x` around the estimate. Void where the column compares',
+                              'a RATIO: a ratio\'s interval is symmetric on the LOG scale, so it has',
+                              'no half-width')),
   or      = .dtok("or"   , user = TRUE, bare = TRUE, value_cell = TRUE, geometry = "ratio",
                   comparison = "odds_ratio",
                   min_digits = 2L,
@@ -247,12 +255,6 @@ DISPLAY_TOKENS <- list(
                               'What `color = "adjustment"` grades --- readable in print and Excel,',
                               'not only in an html tooltip')),
   # --- the ones the PIPELINE writes; never user-typed --------------------------------------------
-  # genuine VALUE cells: `display =` may re-template them, so `tab(ci = "cell", display = "{pct}")`
-  # means what it says instead of silently doing nothing.
-  pct_ci  = .dtok("pct"   , value_cell = TRUE,
-                  doc = 'the percentage, with its interval printed beside it'),
-  mean_ci = .dtok("mean"  , value_cell = TRUE,
-                  doc = 'the mean, with its interval printed beside it'),
   or_pct  = .dtok("or"    , value_cell = TRUE, min_digits = 2L,
                   doc = 'the odds ratio, with its percentage'),
   OR      = .dtok("or"    , value_cell = TRUE, min_digits = 2L,
@@ -365,7 +367,8 @@ DISPLAY_PRESETS <- list(
   base_est_mratio = c(default = "{est} ({ratio})", emp = "({base}) {est}"),
   base_est        = "({base}) {est}",
   base            = "{base}",
-  base_ci         = "{base} {ci}"
+  base_ci         = "{base} {ci}",
+  base_moe        = "{base} {moe}"
 )
 
 # THE display boundary, shared by tab(display =), tab_reg(display =) and set_display().
@@ -670,11 +673,16 @@ tab_row_totcols <- function(tab) {
                               is_real_col_var(get_col_var(.)))]
 }
 
-# tab_totcol_sums() -- does this Total column REALLY total what the reader can see? It does when the
-# visible cells of its block add up to it, and that one test answers three questions at once: an
-# odds-ratio table (whose cells are ratios, not shares), `levels = "first"` (where the other levels
-# were dropped after the tests) and any future display that stops summing. Judged on the rows where
-# every cell of the block renders, so an n_min blank cannot make an honest total look dishonest.
+# tab_totcol_sums() -- does this Total column REALLY total the quantity its block is about? It does
+# when the block's ESTIMATES add up to it, and that one test answers two questions at once: an
+# odds-ratio table (whose columns estimate ratios, not shares) and `levels = "first"` (where the
+# other levels were dropped after the tests). Judged on the rows where every cell of the block has an
+# estimate, so an n_min blank cannot make an honest total look dishonest.
+# ⚠ IT READS THE ESTIMATE, NOT get_num() -- what the column ESTIMATES (EST_SCALES' `est_field`, via
+# fmt_est_of()), never what it happens to PRINT. A cell showing `{ci}` is still about its percentage,
+# the interval merely brackets it, so the shares behind the intervals still sum to 100 %. Reading the
+# display instead made `ci = "cell"` drop the Total's "100%" -- and, worse, made a `display =`
+# CHANGE add or remove it, which is the one thing a display may never do.
 #' @keywords internal
 #' @noRd
 tab_totcol_sums <- function(tab, tot_nm) {
@@ -683,8 +691,8 @@ tab_totcol_sums <- function(tab, tot_nm) {
                                        get_col_var(.)   == get_col_var(col) &&
                                        get_col_group(.) == get_col_group(col))]
   if (!length(block)) return(FALSE)
-  s   <- purrr::reduce(purrr::map(tab[block], get_num), `+`)
-  tot <- get_num(col)
+  s   <- purrr::reduce(purrr::map(tab[block], fmt_est_of), `+`)
+  tot <- fmt_est_of(col)
   ok  <- !is.na(s) & !is.na(tot)
   if (!any(ok)) return(TRUE)                       # nothing to judge on: keep today's "100%"
   all(abs(s[ok] - tot[ok]) < 1e-6)

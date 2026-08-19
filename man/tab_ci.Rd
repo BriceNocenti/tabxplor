@@ -27,9 +27,8 @@ tab_ci(
 cell), \code{"cell"} (the cell's own value), \code{"no"}, or \code{"auto"} --- a comparison
 interval for means and row/column percentages, a cell interval for plain frequencies.
 \code{"diff"} and \code{"ratio"} are the older spellings of \code{"ref"}. With
-\code{ci = "cell"} the result prints as \verb{[inf;sup]}; set
-\code{options("tabxplor.ci_print" = "moe")} for \code{pct +- moe}. See \code{\link{tab}}, which is where
-this is normally set.}
+\code{ci = "cell"} the result prints as \verb{[inf;sup]}; \code{display = "base_moe"} writes it as
+\verb{pct +- margin of error} instead. See \code{\link{tab}}, which is where this is normally set.}
 
 \item{comp}{Comparison level, when \code{tab_vars} are present : the interval compares within
 each subtable/group (by default, \code{comp = "tab"}) or over the whole set of tables

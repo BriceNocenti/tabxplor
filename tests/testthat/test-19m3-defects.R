@@ -2,20 +2,19 @@
 # Each block fails on the pre-phase tree. Rule 7: a claimed fix ships with the fixture.
 
 # === 1. ARITHMETIC on a get-only display token ======================================================
-# get_num() had 22 arms, set_num() 17, and vec_arith() writes through set_num() -- so `x * 2` on a
-# column displaying pct_ci / mean_ci / pvalue returned x UNCHANGED, with no warning, on a `pct_ci`
-# that ?fmt documents as a display value. Declaring `settable` is what made the gap visible.
+# get_num() had arms set_num() lacked, and vec_arith() writes through set_num() -- so `x * 2` on a
+# column displaying one of them returned x UNCHANGED, with no warning, on a value ?fmt documents.
+# Declaring `settable` is what made the gap visible.
 
-testthat::test_that("arithmetic writes back on pct_ci / mean_ci / pvalue displays", {
-  testthat::expect_equal(get_num(fmt(n = c(10, 20), pct = c(.25, .5), display = "pct_ci") * 2),
-                         c(0.5, 1))
-  testthat::expect_equal(get_num(fmt(n = c(10, 20), mean = c(3, 4), display = "mean_ci") * 2),
-                         c(6, 8))
+testthat::test_that("arithmetic writes back on every settable display", {
   testthat::expect_equal(get_num(fmt(n = c(10, 20), pvalue = c(.02, .5), display = "pvalue") * 2),
                          c(0.04, 1))
-  # it must agree with the plain token it renders -- that is the whole claim
-  testthat::expect_equal(get_num(fmt(n = c(10, 20), pct = c(.25, .5), display = "pct_ci") * 2),
-                         get_num(fmt(n = c(10, 20), pct = c(.25, .5), display = "pct") * 2))
+  testthat::expect_equal(get_num(fmt(n = c(10, 20), or = c(2, 4), display = "or_pct") * 2),
+                         c(4, 8))
+  # `moe` and `ci` are one interval in two notations, so they write back to the same field
+  ci <- fmt(n = c(10, 20), pct = c(.25, .5), ci_inf = c(.2, .4), ci_sup = c(.3, .6),
+            scale = "level_pct", pct_type = "row")
+  testthat::expect_equal(get_num(set_display(ci, "moe") * 2), get_num(set_display(ci, "ci") * 2))
 })
 
 testthat::test_that("the two DECLARED read-only tokens stay no-ops, on purpose", {
@@ -34,11 +33,11 @@ testthat::test_that("the derived vocabularies reproduce what they replaced", {
   # "Valid fields" abort and ?tab's generated section).
   testthat::expect_identical(
     tabxplor:::DISPLAY_USER_FIELDS,
-    c("pct", "n", "wn", "mean", "est", "base", "diff", "ratio", "ci", "or", "ctr", "var",
+    c("pct", "n", "wn", "mean", "est", "base", "diff", "ratio", "ci", "moe", "or", "ctr", "var",
       "resid", "obs", "coef", "gap"))
   testthat::expect_identical(
     tabxplor:::DISPLAY_BARE_TOKENS,
-    c("pct", "n", "wn", "mean", "est", "base", "diff", "ratio", "ci", "or"))
+    c("pct", "n", "wn", "mean", "est", "base", "diff", "ratio", "ci", "moe", "or"))
   testthat::expect_identical(tabxplor:::DISPLAY_ALIASES, c(rr = "ratio"))
   # every token carrying a VALUE of the table is re-templatable; only the four that carry none are not
   testthat::expect_setequal(
@@ -96,7 +95,8 @@ testthat::test_that("the generated help sections are built from the table", {
     testthat::expect_true(any(grepl(paste0("\\code{", tk, "}"), user, fixed = TRUE)))
   for (tk in names(tabxplor:::DISPLAY_TOKENS))
     testthat::expect_true(any(grepl(paste0("\\code{", tk, "}"), full, fixed = TRUE)))
-  testthat::expect_gt(length(full), length(user))
+  # ?fmt names every token, ?tab only the ones a user may type
+  testthat::expect_gt(length(tabxplor:::DISPLAY_TOKENS), length(tabxplor:::DISPLAY_USER_FIELDS))
 })
 
 # === 3. the rule-2 repairs ===========================================================================

@@ -682,9 +682,8 @@ diff_formula <- function(x, type, ref, refer) {
 #'  cell), \code{"cell"} (the cell's own value), \code{"no"}, or \code{"auto"} --- a comparison
 #'  interval for means and row/column percentages, a cell interval for plain frequencies.
 #'  \code{"diff"} and \code{"ratio"} are the older spellings of \code{"ref"}. With
-#'  \code{ci = "cell"} the result prints as `[inf;sup]`; set
-#'  `options("tabxplor.ci_print" = "moe")` for `pct +- moe`. See \code{\link{tab}}, which is where
-#'  this is normally set.
+#'  \code{ci = "cell"} the result prints as `[inf;sup]`; `display = "base_moe"` writes it as
+#'  `pct +- margin of error` instead. See \code{\link{tab}}, which is where this is normally set.
 #' @param comp Comparison level, when \code{tab_vars} are present : the interval compares within
 #'  each subtable/group (by default, \code{comp = "tab"}) or over the whole set of tables
 #'  (\code{comp = "all"}). It must be set once and for all the first time you use
@@ -932,8 +931,7 @@ tab_ci <- function(tabs,
     comp_all_val <- comp[1] == "all"
     vis_mask     <- visible & ci != "no"
     visible_cols <- names(visible)[!is.na(vis_mask) & vis_mask]
-    display      <- stats::setNames(lapply(visible_cols, function(nm)
-      if (ci[[nm]] == "cell") ifelse(vkind[[nm]] == "mean", "mean_ci", "pct_ci") else "ci"), visible_cols)
+    display      <- stats::setNames(rep(list("ci"), length(visible_cols)), visible_cols)
     write_cols   <- if (diff_row_any) names(tabs)[purrr::map_lgl(tabs, is_fmt)]
                     else union(ci_cols, visible_cols)
     grp <- dplyr::group_vars(tabs); drp <- dplyr::group_by_drop_default(tabs)

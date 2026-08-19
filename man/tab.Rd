@@ -273,7 +273,8 @@ Methods are chosen with \code{ci_method} and named in the table's legend; by def
 use the Wilson score interval for a cell and the Newcombe hybrid score for a difference (its
 dual, so the bracket and the stars always agree), and means the Welch t interval. With
 \code{ci = "cell"} the result prints as \verb{[inf;sup]}; set
-\code{options("tabxplor.ci_print" = "moe")} for \code{pct +- moe}.
+Each cell then shows its own interval; \code{display = "base_moe"} writes it as
+\verb{pct +- margin of error} instead, and \code{display = "base_ci"} as \verb{pct [inf; sup]}.
 \code{"diff"} and \code{"ratio"} are soft-deprecated spellings of \code{"ref"} (the second one
 also pins the ratio scale -- say \code{color = "ratio"} instead).}
 
@@ -527,7 +528,8 @@ it is what Excel shows and what the colours read.
 \item \code{base} --- the level the estimate sits on: the percentage, the mean or the count. On a plain percentage table it is the same number as \code{est}; beside a regression effect it is the adjusted prediction. Needs a column that has a level beside its estimate.
 \item \code{diff} --- the difference from the reference. Needs a \code{ref} to compare to, and pct = "row" / "col".
 \item \code{ratio} --- the ratio to the reference (relative risk, or a ratio of means). Needs a \code{ref} to compare to, and pct = "row" / "col".
-\item \code{ci} --- the confidence interval of whatever the column compares. Needs ci = "ref"  (or ci = "cell" for each cell's own interval).
+\item \code{ci} --- the confidence interval of whatever the column compares, as \code{[low;high]}. Needs ci = "ref"  (or ci = "cell" for each cell's own interval).
+\item \code{moe} --- the margin of error --- the same interval as \code{ci}, written as the half-width \code{+/-x} around the estimate. Void where the column compares a RATIO: a ratio's interval is symmetric on the LOG scale, so it has no half-width. Needs ci = "ref"  (or ci = "cell" for each cell's own interval).
 \item \code{or} --- the odds ratio. Needs pct = "row" / "col"  (an odds ratio needs a percentage base).
 \item \code{ctr} --- the cell's contribution to the chi-squared. Needs test = TRUE  (the contributions come from the chi-squared).
 \item \code{var} --- the variance. Needs a numeric col_var.

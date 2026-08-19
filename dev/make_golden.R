@@ -10,6 +10,15 @@
 # See: CLAUDE.md > 2.0.0 roadmap > Golden regeneration protocol.
 #
 # LEDGER
+#   Phase 22b-ii: FOUR fixtures move, on the `display` FIELD and nothing else -- f_ci_cell,
+#     n_ci_tabvars, n_ci_tabvars_all, n_mean_ci, where `pct_ci` / `mean_ci` became `ci`. Those two
+#     pipeline-only tokens were the last composites in the display grammar that were not templates;
+#     `ci = "cell"` stamps the ordinary `{ci}` token now, and `options(tabxplor.ci_print =)` is
+#     retired (`display = "base_ci"` / `"base_moe"` are its two notations). VERIFIED field by field
+#     against `git archive HEAD` on all 36: no other field, no column attribute, no table attribute.
+#     The `golden.md` snapshot does NOT move: tab_totcol_sums() reads what a column ESTIMATES
+#     (fmt_est_of()) rather than what it prints, so a `{ci}` cell still counts as the share it
+#     brackets and the Total keeps its "100%".
 #   Phase 22b-i: ALL 36 regenerated, and NOTHING in the tables moved -- dev/verify_golden_field_
 #     delta.R reports "no new field" and "attributes unchanged" on all 1788 cells of all 36 cases.
 #     The only delta is the TABLE attribute `meta$render_extras`, whose `add_n = TRUE` became

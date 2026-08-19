@@ -656,7 +656,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 
   # these stamps are column-INVARIANT here, computed ONCE and recycled by new_fmt().
   display_1 <- dplyr::case_when(
-    isTRUE(ci_res$visible)                           ~ "pct_ci",
+    isTRUE(ci_res$visible)                           ~ "ci",
     pct != "no"                                      ~ "pct",
     length(wt) != 0                                  ~ "wn" ,
     TRUE                                             ~ "n"
@@ -1889,7 +1889,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
 
   # display / ref / comp are column-invariant here; `digits` and `col_var` stay per-column.
-  display_1 <- if (ci_visible) { "mean_ci" } else { "mean" }
+  display_1 <- if (ci_visible) { "ci" } else { "mean" }
   # what these columns estimate and WHICH engine built their bounds -- both the CI_GEOMS row above.
   scale_num  <- ci_geom_scale(ci, "mean", ci_scale[1])
   if (is.na(scale_num)) scale_num <- "level_mean"

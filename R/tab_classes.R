@@ -956,7 +956,7 @@ mat_base_n <- function(tab, backend, ctx) {
 #' @noRd
 mat_sd_twin <- function(tab) {
   is_mean_col <- function(col) is_fmt(col) && identical(fmt_var_kind(col), "mean") &&
-    any(get_display(col) %in% c("mean", "mean_ci"))
+    any(get_display(col) == "mean")
   means <- names(tab)[purrr::map_lgl(tab, is_mean_col)]
   for (nm in means) {
     sdc <- tab[[nm]]
@@ -1692,12 +1692,12 @@ tab_kable_print_tooltip <- function(x, .ref = NULL, .note = NULL) {
   if (!ci_cell) out_ci <- ""
 
   cond_pct <- get_pct_type(x) != "none" &
-    !is.na(get_pct(x)) & !shows("pct") & !disp %in% c("pct_ci")
+    !is.na(get_pct(x)) & !shows("pct")
   out_pct <- if (any(cond_pct)) {
     dplyr::if_else(cond_pct, tip_num(set_display(x, "pct")), "")
   } else blank
 
-  cond_mean <- vkind == "mean" & !is.na(get_mean(x)) & !shows("mean") & !disp %in% c("mean_ci")
+  cond_mean <- vkind == "mean" & !is.na(get_mean(x)) & !shows("mean")
   out_mean <- if (any(cond_mean)) {
     dplyr::if_else(cond_mean, tip_num(set_display(x, "mean")), "")
   } else blank

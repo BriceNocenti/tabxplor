@@ -573,12 +573,11 @@ the last few are not meant to be typed:
 \itemize{
 \item \code{est} --- the estimate, whatever this column estimates --- an odds ratio, a risk difference, a coefficient, a percentage. The one token that means the same thing on every table.
 \item \code{base} --- the level the estimate sits on: the percentage, the mean or the count. On a plain percentage table it is the same number as \code{est}; beside a regression effect it is the adjusted prediction.
-\item \code{ci} --- the confidence interval of whatever the column compares.
+\item \code{ci} --- the confidence interval of whatever the column compares, as \code{[low;high]}.
+\item \code{moe} --- the margin of error --- the same interval as \code{ci}, written as the half-width \code{+/-x} around the estimate. Void where the column compares a RATIO: a ratio's interval is symmetric on the LOG scale, so it has no half-width.
 \item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only.
 \item \code{coef} --- the estimate on the model's LINK scale --- the coefficient a linear or log-link model fitted. The same number as \code{est} where the column is already additive, its logarithm where the column shows a ratio.
 \item \code{gap} --- how far adjustment moved the effect: the gap between the modelled estimate and its observed counterpart, on the estimate's own scale. What \code{color = "adjustment"} grades --- readable in print and Excel, not only in an html tooltip.
-\item \code{pct_ci} --- the percentage, with its interval printed beside it.
-\item \code{mean_ci} --- the mean, with its interval printed beside it.
 \item \code{or_pct} --- the odds ratio, with its percentage.
 \item \code{OR} --- a legacy spelling of \code{or}, rendered identically.
 \item \code{OR_pct} --- a legacy spelling of \code{or_pct}, rendered identically.

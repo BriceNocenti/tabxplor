@@ -560,6 +560,11 @@
 
 ### Removed
 
+* **`options(tabxplor.ci_print =)` is gone**, and with it the last cell layout only an option could
+  reach. A confidence interval is a *display* now: `display = "base_ci"` prints `48% [45;50]%`,
+  `display = "base_moe"` prints `48% ±2%`, and the bare `"{ci}"` / `"{moe}"` tokens print the
+  interval alone. `ci = "cell"` shows each cell's own interval, as before. The option name is inert
+  (R offers no way to warn when one is set).
 * **The `kableExtra` HTML engine is gone.** `tab_html()` / `tab_kable()` render through the
   dependency-free engine that has been the default since the beta, whose every look is a CSS class
   you can restyle (`tab_css()`) and which is the only one that can follow a `theme = "auto"` toggle.

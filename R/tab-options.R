@@ -122,10 +122,6 @@ TAB_OPTIONS <- list(
     doc = c("`r lifecycle::badge(\"deprecated\")` the star glyphs. Give them to `tabxplor.stars`",
             "instead, as the NAMES of the cut-offs. Still read if you set it.")),
 
-  ci_print = tx_opt(
-    "ci", "display",
-    "shows the `[inf; sup]` interval; `\"moe\"` shows the larger half-width (margin of error)."),
-
   ratio_print = tx_opt(
     "inverse", "display",
     doc = c("prints a multiplicative value below its reference as the inverse --- an odds ratio of",

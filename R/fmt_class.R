@@ -500,8 +500,8 @@ is_fmt <- function(x) {
 #' @export
 get_num <- function(x) {
   # DESIGN: get_num() is the authoritative `display` -> underlying-field map. Allowed display values
-  # and the field each reads: n/(default)->n, wn->wn, pct/pct_ci/pvalue->pct, diff->diff, ctr->ctr,
-  # mean/mean_ci->mean, var->var, ci->get_ci() (the CI half-width from the ci_sup bound),
+  # and the field each reads: n/(default)->n, wn->wn, pct/pvalue->pct, diff->diff, ctr->ctr,
+  # mean->mean, var->var, ci/moe->get_ci() (the CI half-width from the ci_sup bound),
   # ratio (rr aliased to it)->ratio, or/OR/or_pct/OR_pct->or, obs->obs. When adding a display value,
   # keep this map, set_num() and format() in sync (see the /vctrs-field skill).
   out     <- get_n(x)
@@ -519,7 +519,6 @@ get_num <- function(x) {
   coef_m <- !nas & display == "coef"
   if (any(coef_m)) out[coef_m] <- fmt_coef_of(x)[coef_m]
   out[!nas & display == "gof"    ] <- get_diff(x)[!nas & display == "gof"    ]  # model-fit stat (N/R2/AIC/...) -> diff field
-  out[!nas & display == "pct_ci" ] <- get_pct (x)[!nas & display == "pct_ci" ]
   out[!nas & display == "ctr"    ] <- get_ctr (x)[!nas & display == "ctr"    ]
   # DERIVED (no field of its own): the adjusted standardized residual behind color = "contrib"'s
   # significance. Read-only: set_num() has no matching arm.
@@ -529,9 +528,13 @@ get_num <- function(x) {
   # its shade cannot disagree. Read-only: there is nothing to write a gap back into.
   out[!nas & display == "gap"    ] <- fmt_adjustment_score(x)[!nas & display == "gap"    ]
   out[!nas & display == "mean"   ] <- get_mean(x)[!nas & display == "mean"   ]
-  out[!nas & display == "mean_ci"] <- get_mean(x)[!nas & display == "mean_ci"]
   out[!nas & display == "var"    ] <- get_var (x)[!nas & display == "var"    ]
   out[!nas & display == "ci"     ] <- get_ci   (x)[!nas & display == "ci"     ]
+  # `moe` reads the SAME field as `ci` -- the two are one interval in two notations -- but a ratio
+  # has no half-width, so it is void on a multiplicative scale. Declared void, like any other token
+  # with nothing to show, rather than special-cased at render time.
+  moe_m <- !nas & display == "moe"
+  if (any(moe_m)) out[moe_m] <- if (isTRUE(fmt_scale_row(x)$mult)) NA_real_ else get_ci(x)[moe_m]
   out[!nas & display == "ratio"] <- get_ratio(x)[!nas & display == "ratio"]
   out[!nas & display %in% c("or", "OR")] <- get_or(x)[!nas & display %in% c("or", "OR")     ]
   # BOTH spellings: "OR_pct" is written verbatim by the jamovi display ComboBox.
@@ -573,15 +576,14 @@ set_num <- function(x, value) {
   out[!nas & display == "gof" ] <- set_diff(x[!nas & display == "gof" ], value[!nas & display == "gof" ])
   out[!nas & display == "ctr" ] <- set_ctr (x[!nas & display == "ctr" ], value[!nas & display == "ctr" ])
   out[!nas & display == "var" ] <- set_var (x[!nas & display == "var" ], value[!nas & display == "var" ])
-  out[!nas & display == "ci"  ] <- set_ci   (x[!nas & display == "ci"  ], value[!nas & display == "ci"  ])
+  ci_m <- !nas & display %in% c("ci", "moe")            # one field, two notations
+  out[ci_m] <- set_ci(x[ci_m], value[ci_m])
   out[!nas & display == "ratio"] <- set_ratio(x[!nas & display == "ratio"], value[!nas & display == "ratio"])
-  # `pct_ci`/`mean_ci`/`pvalue` need a write arm too, or arithmetic through vec_arith -> set_num()
-  # would return the column unchanged. R/tab-display.R asserts at BUILD time that every token
-  # DISPLAY_TOKENS marks `settable` has an arm here.
-  pct_m <- !nas & display %in% c("pct", "pct_ci")
-  out[pct_m] <- set_pct(x[pct_m], value[pct_m])
-  mean_m <- !nas & display %in% c("mean", "mean_ci")
-  out[mean_m] <- set_mean(x[mean_m], value[mean_m])
+  # `pvalue` needs a write arm too, or arithmetic through vec_arith -> set_num() would return the
+  # column unchanged. R/tab-display.R asserts at BUILD time that every token DISPLAY_TOKENS marks
+  # `settable` has an arm here.
+  out[!nas & display == "pct" ] <- set_pct (x[!nas & display == "pct" ], value[!nas & display == "pct" ])
+  out[!nas & display == "mean"] <- set_mean(x[!nas & display == "mean"], value[!nas & display == "mean"])
   out[!nas & display == "pvalue"] <- set_pvalue(x[!nas & display == "pvalue"],
                                                 value[!nas & display == "pvalue"])
   # ONE mask for target and value, plus the or_pct/OR_pct arms -- the three maps (get_num/set_num/
@@ -1630,8 +1632,8 @@ display_prune_template <- function(seg, empty)
   trimws(paste0(seg$pieces[display_template_keep(seg, empty)], collapse = ""))
 
 # WRITE-time: VALIDATE a `display=` {} template and return it. Composites use the {} grammar ONLY
-# (no curated recipes -- one consistent syntax; the internal pct_ci/mean_ci/or_pct tokens are pipeline-
-# set rendering modes, never user-typed, so they are unaffected). Checks balanced non-empty braces and
+# (no curated recipes -- one consistent syntax; the internal or_pct / OR_pct tokens are pipeline-set
+# rendering modes, never user-typed, so they are unaffected). Checks balanced non-empty braces and
 # known field names. The ONLY place a bad `display=` value aborts.
 #' @keywords internal
 validate_display_template <- function(recipe) {
@@ -1743,11 +1745,6 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", ...) {  # ... 
 #              count). NA where the level is ambiguous -- on a link scale a coefficient may sit over a
 #              probability or over a mean, and guessing would be a lie; `{base}` renders void there.
 #   unit       the axis title, as a KEY (translated at render, never here).
-#   ci_digits  the fewest decimals a CI BOUND of this scale is readable at -- THE declared floor,
-#              read by every interval renderer (`{ci}`, `pct_ci`, `mean_ci`, `base_ci`). 2 on a
-#              multiplicative scale, where at 1 dp the two bounds routinely round equal and the
-#              bracket collapses to a bare point estimate; 0 elsewhere, which leaves the cell's own
-#              `digits` in charge. Change a default here, not in format().
 #   break_key  the ESTIMATE's ladder in color_scales(); NA = no ladder, use the device's own breaks.
 #   gap_key    the adj_* ladder its GAP reads (fmt_gap_scale_key() reads this).
 #   label_meas which MEASURES row supplies this scale's glyphs -- the forest axis's break labels AND
@@ -1764,7 +1761,6 @@ EST_SCALES <- list(
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "or",    unit = "or",    default_display = "pct",
                     est_display = "or", base_display = "pct",
-                    ci_digits = 2L,
                     break_key = "odds_ratio", gap_key = "adj_ratio",
                     label_meas = "odds_ratio", sec = NULL),
   # a SUMMED SCORE's multiplicative effect (`tab_reg(trials =)`): an odds ratio, or a risk ratio, of
@@ -1779,21 +1775,18 @@ EST_SCALES <- list(
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "or",    unit = "or", default_display = "mean",
                     est_display = "or", base_display = "mean",
-                    ci_digits = 2L,
                     break_key = "odds_ratio", gap_key = "adj_ratio",
                     label_meas = "odds_ratio", sec = NULL),
   pct_ratio  = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "ratio", unit = "ratio", default_display = "pct",
                     est_display = "ratio", base_display = "pct",
-                    ci_digits = 2L,
                     break_key = "pct_ratio",  gap_key = "adj_ratio",
                     label_meas = "ratio", sec = NULL),
   mean_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "std",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "ratio", unit = "rate_ratio", default_display = "mean",
                     est_display = "ratio", base_display = "mean",
-                    ci_digits = 2L,
                     break_key = "mean_ratio", gap_key = "adj_ratio",
                     label_meas = "ratio", sec = NULL),
   # a beta / a count AME: printed in the OUTCOME's units, coloured on the SD-standardized ladder.
@@ -1805,7 +1798,6 @@ EST_SCALES <- list(
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "diff",  unit = "units", default_display = "n",
                     est_display = "coef", base_display = "mean",
-                    ci_digits = 0L,
                     break_key = "mean_diff",  gap_key = "adj_diff_std",
                     label_meas = "difference", sec = "sd", sd_from = "var"),
   # a crosstab MEAN difference: the same ladder, standardized by the REFERENCE cell's SD rather than
@@ -1814,9 +1806,6 @@ EST_SCALES <- list(
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "diff",  unit = "units", default_display = "mean",
                     est_display = "diff", base_display = "mean",
-                    # 1 decimal, like the cell itself: a difference of means in the outcome's own
-                    # units is unreadable rounded to the unit, and the bracket must match the number.
-                    ci_digits = 1L,
                     break_key = "mean_diff",  gap_key = "adj_diff",
                     label_meas = "difference", sec = "sd", sd_from = "ref_var"),
   # measure = "log": printed on the link scale, coloured on the logged odds_ratio ladder (what
@@ -1825,14 +1814,12 @@ EST_SCALES <- list(
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "diff",  unit = "log",   default_display = "n",
                     est_display = "coef", base_display = NA_character_,
-                    ci_digits = 0L,
                     break_key = "odds_ratio", gap_key = "adj_diff_log",
                     label_meas = "difference", sec = "exp"),
   points     = list(kind = "effect", geometry = "difference", var_kind = "pct", ladder = "pct",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = TRUE,
                     est_field = "diff",  unit = "points", default_display = "pct",
                     est_display = "diff", base_display = "pct",
-                    ci_digits = 0L,
                     break_key = "pct_diff",   gap_key = "adj_diff",
                     label_meas = "difference", sec = NULL),
   # the three LEVEL scales: a cell percentage / a mean / a count. No null to draw (the reference is a
@@ -1843,21 +1830,18 @@ EST_SCALES <- list(
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
                     est_field = "pct",   unit = "pct",   default_display = "pct",
                     est_display = "pct", base_display = "pct",
-                    ci_digits = 0L,
                     break_key = NA_character_, gap_key = "adj_diff",
                     label_meas = "difference", sec = NULL),
   level_mean = list(kind = "level",  geometry = "level", var_kind = "mean",  ladder = "std",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "mean",  unit = "units", default_display = "mean",
                     est_display = "mean", base_display = "mean",
-                    ci_digits = 0L,
                     break_key = NA_character_, gap_key = "adj_diff", sd_from = "ref_var",
                     label_meas = "difference", sec = NULL),
   level_n    = list(kind = "level",  geometry = "level", var_kind = "count", ladder = "std",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "n",     unit = "count", default_display = "n",
                     est_display = "n", base_display = "n",
-                    ci_digits = 0L,
                     break_key = NA_character_, gap_key = "adj_diff", sd_from = "ref_var",
                     label_meas = "difference", sec = NULL),
   # THE NEUTRAL: what binding two columns of unlike scales collapses to (fmt_attr_rules). Its content
@@ -1866,7 +1850,6 @@ EST_SCALES <- list(
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
                     est_field = "pct",   unit = "pct",   default_display = "n",
                     est_display = "pct", base_display = "pct",
-                    ci_digits = 0L,
                     break_key = NA_character_, gap_key = "adj_diff",
                     label_meas = "difference", sec = NULL)
 )
@@ -1931,6 +1914,14 @@ fmt_kind_label <- function(x) {
   if (!identical(base, "none")) return(paste0(base, "%"))
   switch(fmt_var_kind(x), mean = "mean", count = "n", coef = "coef", "mixed")
 }
+
+# THE decimals floor for an interval BOUND, read by `{ci}` and `{moe}` alike. DERIVED, not declared:
+# `mult` and `is_pct` already say everything it needs. 2 where the estimate is multiplicative (at 1 dp
+# the two bounds routinely round equal and the bracket collapses to a point), 0 where it is a
+# percentage (a point is already a readable unit), 1 where it is in the outcome's OWN units, whose
+# magnitude is unknown -- there 0 decimals can round a whole interval away and a "+/-0" says nothing.
+#' @keywords internal
+fmt_ci_digits <- function(row) if (isTRUE(row$mult)) 2L else if (isTRUE(row$is_pct)) 0L else 1L
 
 #' @keywords internal
 fmt_center_field <- function(x) fmt_scale_row(x)$est_field
@@ -2893,7 +2884,8 @@ fmt_rendered <- function(s) !is.na(s) & nzchar(stringi::stri_trim_both(s, "\\P{W
 # THE interval a `{ci}` token prints -- ONE renderer, on the COLUMN'S OWN SCALE, for every scale.
 # Everything it keys on is DECLARED in EST_SCALES: `is_pct` gives the x100 and the "%", `mult` the
 # measure's inverse glyph per BOUND (the bounds are NOT reordered -- the glyph carries the direction,
-# so "1/3.13" still sits left of "1/2.27" exactly as 0.32 sits left of 0.44), `ci_digits` the floor.
+# so "1/3.13" still sits left of "1/2.27" exactly as 0.32 sits left of 0.44), fmt_ci_digits() the
+# decimals floor.
 # A void bound yields NA: an interval that was never computed is BLANK, never the point estimate
 # wearing brackets. `clamp` holds a PROPORTION's own interval inside 0-100.
 # `{coef}` -- the estimate on the model's own LINK scale. On a multiplicative column that is
@@ -2932,7 +2924,7 @@ xl_numfmt_literal <- function(s) gsub("(.)", "\\\\\\1", s, perl = TRUE)
 # Excel number-format code per cell -- format()'s ONE display source of truth, so tab_xl() cannot
 # desync: it writes the raw get_num() value and hands display to Excel, fed format()'s OWN masks.
 #   digits format()'s adjusted digits; pct the x100 "%" mask; ci a standalone "ci" (prepend +/-);
-#   text  a pre-formatted pct_ci/mean_ci string, written as TEXT.
+#   text  a rendered string with no number format of its own (a `{ci}` bracket, an n RANGE).
 # WARNING: a negative digit count rounds to a power of ten (Excel thousands mask); a percentage so
 # rounded yields no code -> Excel "General".
 excel_numfmt_code <- function(digits, pct, ci, text, signed = FALSE, ratio = FALSE) {
@@ -3062,14 +3054,10 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # per-token guess that made a bare `{ci}` x100 a gaussian coefficient and drop the bracket on an
   # odds ratio altogether.
   is_pct  <- isTRUE(scl$is_pct)
-  pct_or_ci     <- ok & (display %in% c("pct", "pct_ci", "diff", "ctr") &
+  pct_or_ci     <- ok & (display %in% c("pct", "diff", "ctr") &
                            !(display == "diff" & is_mean) |
-                         (display == "ci" & is_pct))
-  pct_ci  <- ok & display == "pct_ci"
-  mean_ci <- ok & display == "mean_ci"
+                         (display %in% c("ci", "moe") & is_pct))
   diff_mean <- ok & display == "diff" & is_mean
-
-  ci_bare   <- !is_pct
 
   # `obs` and `gap` print exactly like the estimate they are compared to / measured on (per-COLUMN
   # scale, one branch per column). `gap` carries the ADJUSTMENT SCORE -- the very number the colour
@@ -3084,15 +3072,15 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   obs_as_pct <- obs_m & obs_pct
   # EVERY scale: the `ci` token is the interval of whatever this column compares, and each column
   # answers it with its own geometry.
-  disp_ci   <- display == "ci" & !nas
-  # THE declared decimals floor for an interval bound (EST_SCALES$ci_digits), one rule for the
-  # standalone token and for the pipeline's `pct_ci` / `mean_ci` alike.
-  ci_floor  <- as.integer(scl$ci_digits %||% 0L)
+  disp_ci   <- display == "ci"  & !nas
+  disp_moe  <- display == "moe" & !nas
+  # THE decimals floor for an interval bound, derived from the scale (fmt_ci_digits()), one rule for
+  # the `{ci}` bracket and the `{moe}` half-width alike.
+  ci_floor  <- fmt_ci_digits(scl)
   if (ci_floor > 0L) {
-    lo_dg <- !nas & display %in% c("ci", "pct_ci", "mean_ci") & digits < ci_floor
+    lo_dg <- !nas & display %in% c("ci", "moe") & digits < ci_floor
     digits[lo_dg] <- ci_floor
   }
-  plus_ci <- (pct_ci | mean_ci)
 
   pct_no_ci     <- ok & display %in% c("pct", "diff", "ctr") & !(display == "diff" & is_mean)
   pct_no_ci     <- pct_no_ci | obs_as_pct
@@ -3101,11 +3089,10 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # A ratio carries a multiply glyph instead, and `gof` shares the `diff` FIELD but is a model-fit
   # statistic, not an estimate -- neither is ever signed.
   diff_signed   <- ok & (display %in% c("diff", "coef", "resid") | (obs_m & !obs_mult))
-  n_wn          <- ok & (display %in% c("n", "n_range", "wn", "mean", "mean_ci", "var", "ratio",
+  n_wn          <- ok & (display %in% c("n", "n_range", "wn", "mean", "var", "ratio",
                                         "or", "or_pct", "OR", "OR_pct", "gof", "resid") |
-                           (display == "ci" & !is_pct) )
+                           (display %in% c("ci", "moe") & !is_pct) )
   n_wn          <- n_wn | (obs_m & obs_mult)
-  type_ci       <- ok & display == "ci"
   pvalue        <- ok & display == "pvalue"
   # a base count is a genuine RANGE only where a larger `tot_n` sits beside the `n`; otherwise the
   # token prints one number, and Excel keeps it an editable count instead of text.
@@ -3125,84 +3112,33 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     excel_pct <- pct_or_ci | (!nas & display == "pvalue")
     # diff + contrib get an explicit +/- sign; ratio a leading x; mean diffs join the `signed` mask
     # (so the bypass matches format()'s "+1.2").
+    # `moe` IS the +/- numFmt; the BRACKET form has no number format at all, so it exports as the
+    # rendered string like every other composite-looking cell.
     return(excel_numfmt_code(digits, pct = excel_pct,
-                             ci = !nas & display == "ci", text = plus_ci | n_range_hi,
+                             ci = !nas & display == "moe",
+                             text = n_range_hi | (!nas & display == "ci"),
                              signed = (!nas & display %in% c("ctr", "diff", "resid")) | obs_as_pct,
                              ratio  = !nas & display == "ratio"))
   }
 
 
-  ci_print_moe <- getOption("tabxplor.ci_print") == "moe"
-  if (any(plus_ci | disp_ci)) {
-    if (any(plus_ci) & ci_print_moe) {
-      # the +/- moe shows the conservative LARGER arm (Wilson bounds are asymmetric).
-      ci <- dplyr::if_else(condition = mean_ci[plus_ci],
-                           true  = get_ci_moe(x)[plus_ci] ,
-                           false = get_ci_moe(x)[plus_ci] * 100)
-
-      ci_print_trim <- function(x) {
-        x <- stringi::stri_replace_all_regex(x, paste0("^", pm, "0$|^", pm, "0.0+$|^", pm, "-0.0+$|^",
-                                               pm, "NA"), "")
-        stringi::stri_pad(x, max(stringi::stri_length(x)), pad = pad)
-      }
-
-
-
-      out_ci <-
-        paste0(print_num(out[plus_ci], digits[plus_ci]),
-               dplyr::if_else(pct_ci[plus_ci], "%", ""),
-               {
-                 .ci <- ci_print_trim(paste0(pm, sprintf(
-                   paste0("%-0.",
-                          digits[plus_ci] + dplyr::if_else(pct_ci[plus_ci] & digits[plus_ci] == 0, 1L, 0L),
-                          "f"), ci
-                 )) )
-                 # blank whitespace-only CI strings under html (subscript formatting is disabled).
-                 if (html) dplyr::if_else(stringi::stri_detect_regex(.ci, "^ *$"), "", .ci) else .ci
-               }
-        )
-
-    } else if (any(plus_ci)) { # !ci_print_moe
-      # THE LEVEL-WITH-ITS-OWN-INTERVAL cells (tab(ci = "cell")): read the real asymmetric bounds
-      # directly, clamped to 0-100 on a proportion, and collapsed to the point estimate when the two
-      # bounds round equal. A DIFFERENT quantity from the `{ci}` token below, which is the interval of
-      # whatever the column COMPARES -- hence two blocks, not one with a selector.
-      lower <- dplyr::if_else(rep(ci_bare, sum(plus_ci)),
-                              get_ci_inf(x)[plus_ci], get_ci_inf(x)[plus_ci] * 100)
-      upper <- dplyr::if_else(rep(ci_bare, sum(plus_ci)),
-                              get_ci_sup(x)[plus_ci], get_ci_sup(x)[plus_ci] * 100)
-      lower <- dplyr::if_else(pct_ci[plus_ci], pmax(lower,   0), lower)
-      upper <- dplyr::if_else(pct_ci[plus_ci], pmin(upper, 100), upper)
-
-      out_ci <- dplyr::if_else(
-        condition = is.na(lower) | is.na(upper) |
-          round(lower, digits[plus_ci]) == round(upper, digits[plus_ci]),
-        true      = print_num(out[plus_ci], digits[plus_ci]),
-        false     = paste0("[",
-                           sprintf(paste0("%-0.", digits[plus_ci], "f"), lower),
-                           ";",
-                           sprintf(paste0("%-0.", digits[plus_ci], "f"), upper),
-                           "]"
-        )
-      )
-      out_ci <- paste0(out_ci, if (ci_bare) "" else "%")
-    }
-  }
-  # THE `{ci}` TOKEN: the interval of whatever this column compares, on the column's own scale.
-  # A void bound yields NA -- an interval that was never computed renders BLANK, never the centre
-  # value wearing brackets -- and the composite expander then pads it to its column's width.
-  ci_tok <- if (!ci_print_moe && any(disp_ci)) {
-    fmt_ci_bracket(get_ci_inf(x)[disp_ci], get_ci_sup(x)[disp_ci], digits[disp_ci],
-                   is_pct = is_pct, clamp = is_pct && identical(scl$kind, "level"),
-                   mult_under = if (mult_inverse) mult_under else NULL)
-  } else NULL
-
   # the numbers as such, kept for the multiplicative block below (from here `out` is character).
   num_out <- out
   out[!na_out] <- print_num(out[!na_out], digits[!na_out])
   out[na_out] <- NA
-  if (any(plus_ci)) out[plus_ci] <- out_ci
-  if (!is.null(ci_tok))  out[disp_ci]  <- ci_tok
+  # THE TWO INTERVAL TOKENS, one notation each, neither reading an option: `{ci}` is `[lo;hi]` from
+  # the stored bounds, `{moe}` the half-width `+/-x`. Both take the "%"/x100 and the decimals from the
+  # COLUMN's own scale, so one template works on a percentage column and a mean column alike. A void
+  # bound yields NA -- an interval that was never computed renders BLANK, never the centre value
+  # wearing brackets -- and the composite expander then pads it to its column's width.
+  if (any(disp_ci))
+    out[disp_ci] <- fmt_ci_bracket(get_ci_inf(x)[disp_ci], get_ci_sup(x)[disp_ci], digits[disp_ci],
+                                   is_pct = is_pct, clamp = is_pct && identical(scl$kind, "level"),
+                                   mult_under = if (mult_inverse) mult_under else NULL)
+  if (any(disp_moe)) {
+    m <- out[disp_moe]                                    # NA -> NA, like the bracket
+    out[disp_moe] <- ifelse(is.na(m), NA_character_, paste0(pm, m, if (is_pct) "%" else ""))
+  }
   # the thousands mark IS the pad glyph (`pad` resolves per medium: ASCII in console/markdown, a figure
   # space in html/Excel), so the mark can never disagree with the padding it sits in.
   out[n_wn] <- out[n_wn] |> prettyNum(big.mark = pad, preserve.width = "individual")
@@ -3326,14 +3262,6 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   }
 
 
- if (ci_print_moe) {
-   # a "%" exactly on the columns whose ESTIMATE is a percentage (one declared fact, EST_SCALES).
-   out[type_ci] <- if (is_pct)
-     paste0(pm, out[type_ci], "%") |> stringi::stri_replace_all_regex("%%", "%")
-   else paste0(pm, out[type_ci])
- }
-
-
 
   # per-cell bold-prefix widths, written by TWO branches (the mean/sd tail and the composite `{}`
   # templates), so allocated here ahead of both. Attached to the result only if one actually wrote.
@@ -3355,7 +3283,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     is_crosstab <- !nzchar(as.character(get_role(x))[1])
 
     disp_diff   <- display == "diff" & !nas
-    disp_moe    <- disp_ci & ci_print_moe # no if `ci_print = "ci"`
+    # the "ref:x-" annotation belongs to the +/- notation, so it fires exactly where `{moe}` renders
     disp_ctr    <- display == "ctr" & !nas
     disp_or     <- display %in% c("or", "OR") & !nas
     disp_or_pct <- display %in% c("or_pct", "OR_pct") & !nas
@@ -3716,24 +3644,25 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
     # the ANSI-stripped width, so bold adds none -- alignment holds.
     bolded <- if (bold_on) ok & (totals | channels$text_slot > 0L) else rep(FALSE, length(out))
 
-    for (s in sort(unique(channels$text_slot[channels$text_slot > 0L & ok]))) {
-      cells <- ok & channels$text_slot == s
-      paint_cells(cells, text_styles[[s]], bolded)
-    }
-    # EVERY cell goes through paint() exactly once, whatever its primary's style, so the aside keeps
-    # the secondary colour in all four classes -- which is what the html stylesheet already does
-    # (.tx-sec is emitted after .g1, so it wins there too). Nesting the whole-cell styles afterwards
-    # instead would be wrong, not merely different: an inner reset ends the outer colour early, which
-    # is exactly what an aside written FIRST ("({base}) {est}") would do to its own number.
-    paint_cells(ok & !unselected & channels$text_slot == 0L, identity, bolded)
-    paint_cells(ok & unselected & !totals, pillar::style_subtle, bolded)
-    paint_cells(ok & unselected &  totals, identity,             bolded)
-
-    # the background FILL wraps the whole cell, aside included -- a fill is the cell's ground, not a
-    # statement about one of its numbers.
-    for (s in sort(unique(channels$bg_slot[channels$bg_slot > 0L & ok]))) {
-      cells <- ok & channels$bg_slot == s
-      out[cells] <- bg_styles[[s]](out[cells])
+    # EVERY cell goes through paint() exactly ONCE, and the style it paints with is the COMPOSITION of
+    # everything that applies to the primary: its text slot (or the greyed / anchor fallback), its
+    # BACKGROUND slot, and bold. Composed BEFORE the paint, never wrapped around the finished string.
+    # ⚠ THE BACKGROUND IS A COLOUR MEASURE, NOT THE CELL'S GROUND. It grades the number exactly as the
+    # text channel does, so it must stop at the primary; wrapping it afterwards filled the aside too,
+    # and the aside is not what any measure grades. Wrapping is also unsafe in general: an inner reset
+    # ends the outer style early, which is what an aside written FIRST ("({base}) {est}") would do.
+    grey_cells <- ok & unselected & !totals
+    key <- paste(channels$text_slot, channels$bg_slot, grey_cells, bolded)
+    for (k in unique(key[ok])) {
+      cells <- ok & key == k
+      i <- which(cells)[[1]]
+      f <- if (channels$text_slot[i] > 0L) text_styles[[channels$text_slot[i]]]
+           else if (grey_cells[i])         pillar::style_subtle
+           else                            identity
+      for (g in list(if (channels$bg_slot[i] > 0L) bg_styles[[channels$bg_slot[i]]],
+                     if (bolded[i]) cli::style_bold))
+        if (!is.null(g)) f <- local({ inner <- f; outer <- g; function(z) outer(inner(z)) })
+      out[cells] <- paint(out[cells], f, cells)
     }
 
     #Columns with no color

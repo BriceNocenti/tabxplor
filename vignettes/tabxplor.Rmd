@@ -687,7 +687,7 @@ A handful of `options()` set your preferred defaults once for the whole session 
 - `options(tabxplor.stars = TRUE)` — show significance stars in every table (like `stars = TRUE`).
 - `options(tabxplor.conf_level = 0.9)` — the confidence level for intervals and tests (default `0.95`).
 - `options(tabxplor.design_effect = TRUE)` — on weighted data, make every interval, star, colour threshold and test account for the unequal weighting (see [Weights](#weights)).
-- `options(tabxplor.ci_print = "moe")` — print a confidence interval as a `pct ± margin of error` instead of a `[low; high]` bracket.
+- `display = "base_moe"` — print a confidence interval as a `pct ± margin of error` instead of the `[low; high]` bracket `display = "base_ci"` gives.
 - `options(tabxplor.lang = "fr")` — the language of the colour legends and footers (`"auto"`/`"en"`/`"fr"`).
 
 Colour thresholds and palettes have their own helpers, `set_color_breaks()` and `set_color_palette()`. `?tabxplor-options` documents every option, and `vignette("tabxplor-programming")` covers the more advanced ones (export fonts, parallel builds…).
