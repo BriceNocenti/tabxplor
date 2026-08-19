@@ -507,14 +507,22 @@ tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "
 
 tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "drop_all", 
    color = TRUE, color_signif = "grey_non_signif", ref = 1, display = "{pct} ({or})"
-) # preset "pct_OR"
+) # preset "pct_OR" (if something like that does not already exist)
 tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "drop_all", 
    color = "OR", color_signif = "grey_non_signif", ref = 1, display = "{or} ({pct})"
-) # preset "OR_pct". 
+) # preset "OR_pct" (if something like that does not already exist)
 # - Also, accept "{OR}" as an alias for "{or}", and "OR" as an alias for "or" (otherwise it will confuse the user).
-# - Defect found : here, the 100% Total column is colored !
+# - Defect found : here, the 100% Total column is colored ! Two problems, OR should not be calculated if 
+#   it have no meaning (or do it have a meaning ?), and even if calculated it should print with no column 
+#   like a 100% total column (it may be a ref problem ?) ?
 # - Defect found : with OR display as the primary display token, like it’s already done with `display = "or"`,
-#   there should be no 100% column (but only the n inside the Total column. How to do this reliably ?
+#   there should be no 100% column (but only the n inside the Total column. How to do this reliably. 
+#   Same in other cases, like "{ratio} ({pct})" ; and here, `display = "ratio"` don’t do it yet (it keeps the 100%)
+
+
+tab(gss_simple, c(race, rincome, relig), c(party3, marital, tvhours), pct = "row",
+   color = , color_signif = "grey_non_signif"
+) 
 
 
 ### exports and display tests  ---- 

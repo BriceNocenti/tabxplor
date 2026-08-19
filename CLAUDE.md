@@ -702,7 +702,7 @@ Below are the results of the maintainer’s manual reviews of different features
 - **Vocabulary** — **D15** the header names the measure, the contrast is a marker ON the measure (unmarked = conditional, `m` prefix = marginal, `@ref` suffix = at the reference profile) · **D16** `measure = "log"` names what it logs · **D17** ordinal is `cumOR` on both sides · **D18** gaussian difference is `diff` / `mdiff`, which SUPERSEDES 22b's `Model_coeff` request (the word must be able to take the marginal marker; `mcoeff` is nonsense) · **D19** one declared `long` expansion per estimand row, read by every consumer · **D20** on per-category tables the measure lives in the `col_var` span · **D21** the vignette grid = acronym + meaning + a first column for the outcome kind.
 - **Inference** — **D22** the crude interval is the univariable model's UNDER THE TABLE'S OWN BASIS. Measured: unweighted the model is `lm` / `glm` and the closed form is pooled over ALL k levels (agreement 4e-14); weighted it is `svyglm` and the closed form is the per-group variance on `n_eff` (3e-03); today's fixed pairwise `student` / `quasipoisson` is right in NEITHER basis (8.9e-02). So `CI_METHODS$mean_diff` gains `"ols"`, `mean_ratio`'s `"quasipoisson"` is redefined to the global Pearson dispersion it is named after, and the `basis` attribute every column already carries selects between them · **D23** the crude CI method is labelled from the estimand, not from the engine key (Katz IS the Wald interval on the log risk ratio), which is what merges the legend bodies with no grouping-key change.
 
-Deferred elsewhere: the vignette prose for the new vocabulary (22h / 23a), one `jmvtools::prepare()` for every jamovi change of Phase 22 (22g), the `n` column's own semantics (22b-ii).
+Deferred elsewhere: the vignette prose for the new vocabulary (22h / 23a), one `jmvtools::prepare()` for every jamovi change of Phase 22 (22g), the `n` column's own semantics (22b-i).
 
 ##### Phase 22a-i — the shared display grammar and the crude-interval parity
 
@@ -758,7 +758,7 @@ Deferred elsewhere: the vignette prose for the new vocabulary (22h / 23a), one `
 
 **Accepted losses:** the crude stars now test the crude EFFECT (same 2×2 null, borderline cells differ); a gaussian crude column no longer prints `(σ1.83)` (its `var` is var(Y), the ladder's divisor); and a marginal reference row now prints its neutral where it printed nothing.
 
-**Deferred as planned:** `jmvtools::prepare()` for the four-value `empirical` ComboBox (22g — until then the new values are inert in the app); the `n` column's tooltip line (22b-ii); the vocabulary (22a-iii); the vignette PROSE (22h — only the sentences naming the deleted columns were repaired, in both languages).
+**Deferred as planned:** `jmvtools::prepare()` for the four-value `empirical` ComboBox (22g — until then the new values are inert in the app); the `n` column's tooltip line (22b-i); the vocabulary (22a-iii); the vignette PROSE (22h — only the sentences naming the deleted columns were repaired, in both languages).
 
 ##### Phase 22a-iii — the measure vocabulary
 
@@ -813,188 +813,117 @@ Every family × effect × measure combination of the review renders **one** lege
 
 **(7) A stale "no observed counterpart" note.** `reg_color_notes()` asked "does the marginal row reuse the coefficient row's crude shape?" as a proxy for "does this family declare a marginal crude twin?". Sharing that shape is the NORMAL case wherever the two contrasts are the same estimand — a linear model's AME IS its coefficient — so every gaussian marginal table under `color = "adjustment"` was told its crude effect "is a ratio" while both sides were a mean difference, and that the colour would stay empty while it was in fact fully populated (16 `obs` cells, 13 gap SEs). It now asks exactly what `reg_same_estimand()` asks at build time — does the declared crude shape's scale equal the one the column is stamped with — so the note and the gate cannot disagree. Verified over the whole grid: every REACHABLE marginal estimand pairs, so the note is now a dormant guard rather than a false positive.
 
-⚠ **Reported, not fixed** (pre-existing, reproduced on an ordinary ungrouped binomial, so it is not from this phase): the Constant row of every risk-difference table renders `ref:NA***`.
+⚠ **Reported, not fixed** (pre-existing, reproduced on an ordinary ungrouped binomial, so it is not from this phase): the Constant row of every risk-difference table renders `ref:NA***` — root-caused and owned by Phase 22b-ii (the rendering rule) and 22b-iii (what the Constant row should hold).
 
 
 #### Phase 22b — `tab_reg()` manual review
 
-Below are the maintainer’s manual reviews.
+Phase 22a merged the crude and the model column into one shape and gave both producers one display grammar. This phase is the review of what that left visible: the cell, the row axis, the column headers, the footer, and the argument surface. **Every claim below was reproduced against the running package at 22a-iii before being written down, and its root cause located** — a sub-phase inherits the diagnosis and plans its own fix, it does not re-derive it.
 
-```R
-gss_simple <- gss_cat_data_formatting()
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE
-)
-```
+Read this framing, then your sub-phase. `dev/reg_crude_adjusted_and_display_integration.md` §5 still holds the crude/adjusted target design — read it before touching a crude column or a display token.
 
-- is’t actually good that "age", being one line, have it’s variable name written horizontally, but it should be in bold to match the vertical ones.
-- age numeric variable "levels" column is written in html "age(per 1 SD\n (13.5)) <curve>" : it shouldn’t wrap after SD if there are other "levels" with longer names, like in "Model fit" (here the would be space for it to fit on 1 line) ; I want a bit more concise display : "per SD/13.5" (age do not need to be repeated here, it’s already in the variable name column ; only print the number of SD when it’s not 1)
-- Would it be possible to put the numeric predictors linearity check sparklines in the `n` column, that is always empty for numeric variables by design ? On html, put the sparkline in a small frame (with a smaller linewidth than the sparkline itself) for readability (otherwise, to the uninformed user, it looks more like stray pixels noise than plot).
+**Decisions taken with the maintainer (2026-08-19)** — respect them, do not silently widen them.
 
-```R
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", effect = "marginal", measure = "ratio" , empirical = TRUE
-)
-```
+- **E1 — under `color = "adjustment"`, colour and stars keep meaning two different things, and that is taught rather than fixed.** The shade grades the adjustment, the stars grade the printed estimate against its own null, and the grey already says "the adjustment is not solid". No extra legend sentence: a star must mean the same thing in every tabxplor table, and removing it would cost the reader real information.
+- **E2 — the stars sentence goes back to being readable.** Adding the Constant replaced *"significantly different from the reference category (in bold)"* with the cryptic *"significantly different from no effect (the reference category in bold; for the Constant, the null value)"* (`R/fmt_class.R:5390`). Restore the old clear wording for regression tables too, improve it now that the estimand metadata is available (the Constant's null is declared per scale — `0` or `1`), and append the Constant's case as a short aside, e.g. *"— from 0 for the Constant —"*. Concise; one sentence, not two.
+- **E3 — `ratio` and `diff` are filled on BOTH the model and the crude column wherever they are meaningful.** The `fmt` record is dense: both fields already exist on every cell of every table and already hold an `NA`, so filling them costs no memory at all, only a few vectorised divisions at build. This keeps D11 (the display is post-hoc and never triggers a computation) true without exception, and turns the two requested presets into ordinary templates.
+- **E4 — `{coeff}` is a DERIVED token, never a new `fmt` field.** β = log(OR) exactly, so nothing needs storing, and the record is not widened for every crosstab cell to serve a regression-only display. It derives like `{gap}` does. ⚠ It must render void on a MARGINAL column: `log(mRR)` is not the model's coefficient, and printing it as one would be a lie.
+- **E5 — interactions get a first-class argument in 2.0.0, but the research and the design come first** (22b-vii), and a reasoned refusal stays open.
 
-- ✔ MOVED TO 22a-i (decision D12, it is a prerequisite of the column merge): "Obs_RR" use the 1/x.xx display for < 1, but "Model_RR" does not and print raw "0.xx" : rule should be, always display the inverse for OR, RR, and more generally multiplicative scale ; add an opt-in global option to print "0.xx" instead for people who don’t love it `family = "binomial"` is ok, `family = "binomial", measure = "ratio"` is ok, but adding `effect = "marginal"` breaks it (`display = "ame"` breaks it too)
-- even with only `family = "binomial"` the Model_OR "obs" field use "0.xx" : with multiplicative scale  and with option default it should print 1/x.xx instead for consistency (otherwise it’s confusing)
-- `family = "binomial"` have a "Reference population" OR, and so does the same with `measure = "ratio"`, but with `effect = "marginal"` it gets an empty field : is there a statistically sound way to compute something here, use by other common regression packages or apps ?  `effect = "at_reference"` also have empty Reference population.
+**Still open, for the maintainer**: comparing a quadratic and a linear specification inside a predictors list needs `shape =` to become per-model (it is resolved once per table today). Recommendation: defer past 2.0.0 — the same comparison is one extra `tab_reg()` call away. Settle it when planning 22b-vi.
 
-adjustment
+**Already closed by Phase 22a, and deliberately not repeated below** (do not re-open them): the multiplicative `1/x.xx` rendering on every path, the `obs` field included (22a-i, D12) · the crude column as the uncoloured, bold reference under `color = "adjustment"` (22a-ii, D4) · the acronym-to-meaning equivalence in the model footer, `OR = odds ratio (…)` (22a-iii) · `Model_β` becoming `Model_diff` / `Model_mdiff` (22a-iii, D18).
 
-```R
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", effect = "marginal", measure = "ratio" , empirical = TRUE, color = "adjustment"
-)
-```
+**Deferred to other phases**: one `jmvtools::prepare()` for every jamovi-visible change (22g) · the vignette PROSE for the new numeric-predictor unit, the centering rule and the interaction escape hatch (22h) · the message clean-up sweep (23c).
 
-- with color = "adjustment", the colors seem quite off. I’m not sure if it’s errors or bad design
-  + race "other" have Obs_RR 1/1.06* and Model_RR 1.05 but the color is orange :
-  + relig "Jewish" have Obs_RR 1.04 and Model_RR 0.89 but the color is blue :
-  + relig Buddhist/Hinduist have Obs_RR 1/1.04 and Model_RR 0.86 :
-- with color="adjustment", the color of the Obs_RR column (or the future unique empirical column) is misleading, since it’s the reference for comparison (for Model_RR) and should be all bold/no colors. Too much different colors with different color scales is confusing the user. Use the reference detection and reference management subsystem to make a clean framework (`or` display already implement a two references system, with one reference in cols and one reference in rows).
-- I’m also not sure about the stars, since it can have Obs_RR `1.18***` and Model_RR `1.18***`: clearly the cell is gray and the stars are not for the adjustment, so I’m not sure what to do. Keeping as is is a bit misleading if the colors ares for the adjustement ; but at the same time stars for the significance of the adjustement are non-standard and will mislead some users too. Please study the problem, and propose me a user-friendly solution. Should we accept this is the sole case where colors and stars are for two different things, and document it, or can you think about a better solution ?
+##### Phase 22b-i — the `n` column of `tab_reg()` and the Total column of `tab()`
 
+⚠ First, because it moves columns and settles the tooltip contract Phase 22a-ii deferred here: once `n` is settled, the model column's tooltip mirrors whatever it becomes.
 
-several outcomes
+`tab_reg()` draws one `n` column per outcome, which is clutter as soon as there are two; the dormant feature that gives one column carrying everything should be finished instead. With a predictors list the current single column is already right (the populations coincide), and with spread `tab_vars` one column per level is right (it is what `tab_spread` means).
 
-```R
-tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
-        family = c("binomial", "poisson"), empirical = TRUE, 
-)
-```
+- With spread `tab_vars` the `n` columns sitting side by side is right and readable; moving the whole block to the RIGHT of the model columns would be better still.
+- `tab()`'s Total cell wastes horizontal space: `100% (n= 9 838)` should read `100% (9 838)`, the `100%` still bold, and in EXPORTS ONLY the column header should say `Total (n=)` — for this case alone, not for every `"{pct} ({n})"` display, and respecting a custom total name. Same for Total rows, keeping the two-lines-in-one-cell printing where it exists.
+- Keep the current display when the populations coincide and with `tab_spread`. With several outcomes, or several `col_var`s whose populations differ through NAs, or a predictors list with differing populations, the default becomes ONE column printing the range: `100% (6 712-9 838)`. The html tooltip of that column lists the `n` of every model / `col_var` (computed at display time, not stored); the cell tooltip prints `tot_n` after the cell's own `n`.
+- It is a display-time fact now, so soft-deprecate `add_n` in `tab()` (inert, no error), drop it outright in `tab_reg()` (never released), and drive it from a package option: `"range"` (default) · `"n_min"` (minimum only, header `Total (n_min =)` in exports) · `"each"` (exports only — one column per `col_var` / model read from `tot_n`, same display token as the column in the data) · `"no"` (no `n` at all: no `n` in `tab()`'s total, no `n` column in `tab_reg()`). Keep display and export unaffected in speed.
+- With `"each"`, exports must NOT repeat the `[married]` / `[tvhours]` tag on every `n` column, but fold each one into its own `col_var` block (see 22b-iv, which fixes the same repetition on the model columns).
+- Remove the `N` footer row of `tab_reg()` altogether — the information is in the `n` column's Constant row. Root cause if something still gates on it: the value is `reg_glance()`'s first row (`R/tab_reg.R:1667`), kept by every family's default in `reg_footer_stats()` (`R/tab_reg.R:1808-1823`); read the `n` field of the Constant row instead, and make sure it is populated for every model.
+- `tab()`'s Total column is last and `tab_reg()`'s `n` column is first, deliberately: the `100%` follows the columns it sums, while `n` sits by the predictor levels because it does not depend on the outcome. Under `"each"` the `n` becomes part of each `col_var` block in `tab_reg()` too, at display time — which means storing each factor predictor level's `n` in the `n` field, so it can also feed the tooltip under `"range"` and `"n_min"`. ⚠ `reg_level_counts()` (`R/reg-empirical.R:91-115`) deliberately leaves a numeric predictor's row `NA` — keep that, and see 22b-v, which wants that empty cell for the sparkline.
+- In `tab()` with `levels = "first"` (or `levels = "auto"` where every factor has ≤2 levels) the `100%` is misleading because the row does not sum to it: print `(9 828)` / `(6 712-9 838)` alone. With `levels = "first"` plus a `tab_vars` that is also a `spread_vars`, match `tab_reg()`'s spread behaviour: one `n` column per `spread_vars` level.
 
-- in the html export, the outcomes names [married] and [tvhours] are repeated on each column : they should never appear here since the name of the col_var is already written above in the first headers rows of the exports (if it’s the same in tab(), it needs be corrected here too). They only stay in console because column names can’t be duplicated there.
+##### Phase 22b-ii — the composite cell: alignment, empty tokens and signs
 
+Generic to `tab()`, not a regression fix — the reports came from `set_display()` on a regression table, but every rule below belongs to the display engine. Reproduced with `set_display(m, ...)` on `tab_reg(gss_simple, "married", c("race","rincome","relig","age"), family = "binomial", empirical = TRUE)`.
 
-predictor’s list
+- **A missing non-primary token breaks the column's alignment.** Root cause: `display_write_col()` (`R/tab-display.R:48-74`) only writes the composite where EVERY field is non-NA, so a cell missing one keeps its bare primary display; `format()` then pads composite cells among themselves (`R/fmt_class.R:3319-3325`) and the bare ones separately, so the two never line up. Visible on `est_base` at a numeric predictor's row (`{base}` is NA), on `{est} ({diff})` at the Constant, and on every `measure` and `effect`. The maintainer's rule is the fix, stated once and generically: **trim an empty parenthetical, keep its padding while any cell in the column still has content, and drop the padding entirely when they are all empty.**
+- **`est_ci` colours and stars the whole string.** Root cause: `est_ci` is a single `DISPLAY_TOKENS` entry, so there is no primary sub-range for `paint_split()` to restrict to (`R/fmt_class.R:3340-3349`), and the `1/x.xx` form inside the bracket makes the estimate part a variable width, so estimates do not line up. The direction that removes the special case rather than adding one: make `est_ci` the ordinary composite `"{est} {ci}"`, exactly as 22a-i already did for `base_ci`; then the per-token padding aligns the estimate, and only `{est}` is coloured and starred. ⚠ Also declare that `ci` can never BE the primary — it carries its own brackets whatever the template around it (`R/fmt_class.R:3009-3021`), so a user writing `"{ci} {est}"` must still centre on `{est}`. One declared fact in `DISPLAY_TOKENS`, so the rule holds for every composed CI display rather than for one preset.
+- **The `+` sign is applied by two different rules.** A pct difference prints `+` on everything that does not start with `-`, the neutral included (`+0%`); a gaussian mean difference prints no `+` at all, because `mean_diff` is simply not in the `diff_signed` mask (`R/fmt_class.R:2928,3110-3114`). Wanted: one rule for every additive estimand — `+` on a positive value, no sign on the neutral, so `+18.5%` / `0%` and `+3.33` / `0`. ⚠ While there: at `digits = 0` a tiny negative rounds to the literal string `"-0"`, which `print_num()`'s regex does not catch (`R/fmt_class.R:2758-2762`), so it escapes the re-signing and prints `-0%`.
+- **A void field must render blank, never `NA`, and must not take stars.** `set_display("est_ci")` prints a bare `NA` on the crude column's Constant row, and every `measure = "difference"` table prints `ref:NA***` on its Constant row. Root cause: for a reference cell `format()` replaces the diff reading by the `base_display` one (`R/fmt_class.R:3184-3193`), which is unpopulated on the Constant, and stars are then appended to any non-empty string (`R/fmt_class.R:3280-3294`). What the Constant row should HOLD is 22b-iii's question; the rendering rule is this phase's, and it is generic.
+- Two new presets once 22b-iii fills the fields: `base_est_mdiff` = `Obs: "({base}) {est}"` + `Model: "{est} ({diff})"`, and `base_est_mratio`, the same with `{ratio}`.
+- `{coeff}`, per decision E4: a derived token rendering the estimate on its own link scale — `log(est)` where the column's scale is multiplicative, the estimate itself where it is additive — void on a marginal column, and named in the tooltip as a coefficient rather than by the field's own word.
 
-```R
-tab_reg(gss_simple, outcome = "married", 
-        predictors = list(race  = "race", 
-                          two   = c("race", "rincome"), 
-                          three = c("race", "rincome", "relig"), 
-                          full  = c("race", "rincome", "relig", "age") ),
-        family = "binomial", effect = "marginal", measure = "ratio" , empirical = TRUE, color = "adjustment"
-)
-```
+##### Phase 22b-iii — what a regression cell carries
 
-- the "overall association" lines do not follow the order of the predictors
+Per decision E3, and it is the phase that makes `display` genuinely post-hoc on every regression column.
 
-tab_vars
+- **Fill `ratio` and `diff` on the model column and on the crude column wherever they are meaningful.** Today `set_display("{est} ({ratio})")` prints nothing on either column of a default logistic table: a marginal ratio is not stored, and the crude column has neither. Both fall out of arithmetic already in hand — the model column's `ratio` is a per-cell identity on what it already stores, and the crude RR / RD both fall out of the 2×2 grid `prob_effect()` already computes.
+- **Every reference cell carries its measure's neutral.** `reg_marginal_column()` writes the additive neutral only on the `raw_diff` scale and leaves the `points` scale `NA` (`R/tab_reg.R:1497-1543`), which is why a marginal risk-difference table prints `ref:51.3%` where its non-marginal twin prints `0%`. One rule across the scales, so the reference row reads the same whichever contrast is asked for.
+- **Decide what the Constant row holds for each `(effect, measure)`.** `family = "binomial"` and `measure = "ratio"` both give it a value; `effect = "marginal"` and `effect = "at_reference"` leave it empty, because the marginal sweep returns no `(Intercept)` row at all. The question is statistical, not cosmetic: is there a sound quantity here — the adjusted prediction at the reference profile is the obvious candidate — and is it what other regression packages report? Answer it, then either populate it or leave it genuinely blank (22b-ii makes blank render as blank).
 
-```R
-tab_reg(gss_simple, outcome = "married", tab_vars = "race",
-        predictors = c("rincome", "relig", "age", "tvhours"),
-        family = "binomial", effect = "marginal", measure = "ratio" , color ="between_groups"
-)
-```
+##### Phase 22b-iv — the table a reader scans: headers, footer order, reference and legend
 
-- here, all the "n" actually being side-by-side is good/readable/necessary, since it’s the result of tab_spread.
-  Put them after the models column (at their right), it would be even greater.
-- The reference column for "between_groups" doesn’t follow tabxplor rule : in bold (refcol)
-- remove the useless verbose message: "ℹ `color = "between_groups"` also adds the aggregated interaction test to the footer (one extra model fit).\nAsk for it without the colours with `stats = c(..., "interaction")`."
-- when I add `empirical=TRUE` here, the stats footer appear in the Obs_%_* part rather than on the model columns.
-- here too, the "Overall association (LR)" lines are not in the order of the predictors, which is a bit confusing.
+Seven independent defects that share one context: what surrounds the numbers.
 
+- **The footer rows are alphabetised, not ordered by the model.** `Overall association (LR): race, relig, rincome` for `predictors = c("race", "rincome", "relig", "age")`. Root cause: `reg_footer_plan()` sorts on the bare term name — `k[order(match(k$test, names(spec)), k$term), ]` (`R/tab-test-display.R:501`) — and both the console and the export read that one plan. The rows are BUILT in formula-term order (`R/tab_reg.R:2059-2079`); only the plan re-sorts them. Same defect with a predictors list.
+- **With `empirical = TRUE` the whole footer attaches to the `Obs_` column.** Root cause: `reg_stage_specs()` derives `fit_first_col` from the flattened, already-spliced `cols` (`R/tab_reg.R:2774-2787`), and step 7b of `reg_spec_build_one()` (`R/reg-spec-build.R:202-214`) PREPENDS the crude column — so "the spec's first column" stops being the model column and every gof / global / check row is rekeyed onto the crude one. `color = "between_groups"` is incidental; `empirical = TRUE` alone reproduces it. The footer belongs on the model column.
+- **The `[outcome]` tag is repeated on every export column header.** Root cause: it is baked into the `col_var` string itself by `reg_model_col_name()` when there are several outcomes (`R/tab_reg.R:507-510`), and the merged first header row already names the outcome. It is a console-only disambiguator (column names cannot repeat there), so exports should read the outcome out of the span and drop it from the level header — and it must fold the `n` columns in too, which is 22b-i's `"each"` requirement. ⚠ Verified NOT to affect `tab()`: a crosstab's `col_var` never carries the bracket.
+- **`color = "between_groups"` marks no reference column.** The legend says *"White …: between groups: reference group"*, but no column is `refcol`, so the tabxplor rule that a reference column prints bold is not applied. Root cause: `as_refcol()` is called only for the crude baseline under `adjustment` (`R/reg-empirical.R:557`) and for a crosstab OR baseline, and `get_reference()`'s boosting arm fires only for `ref_kind == "observed"` (`R/fmt_class.R:5541`), while `between_groups` declares `ref_kind = "group"` (`R/fmt_class.R:4103`). Extend the declared reference framework rather than special-casing the exporter.
+- **Remove the verbose `between_groups` message** (`R/reg-resolve.R:334-339`): it explains an internal cost, not a statistical caveat.
+- **The stars legend sentence**, per decision E2 (`R/fmt_class.R:5390`).
+- **The adjustment colours: a design limit, precisely located — not an arithmetic error.** `fmt_adjustment_score()` (`R/fmt_class.R:2552`) grades *amplified vs attenuated* (distance from the null), not *up vs down*. Measured on the reported cells: `race Other` crude `1/1.06` → model `1.05` scores `0.90` (read as attenuated, so orange) and `relig Jewish` crude `1.04` → model `0.89` scores `1.18` (read as amplified, so blue). Both are cases where the crude and the adjusted effect sit on OPPOSITE SIDES of the null — the adjustment reversed the effect's direction, which is the most important thing a reader could learn from the pair, and the amplify/attenuate framing cannot express it. `relig Buddhist/Hinduist` (`1/1.04` → `0.86`, both below the null) is graded correctly. Decide what the measure should say when the effect crosses the null: keep the framing and give a reversal its own maximal signal, or grade the signed move instead. ⚠ Whatever is chosen, the gap SE and its interval are computed on the log-ratio (`fmt_gap_raw()`), so the score and its bounds must keep coming from one decomposition.
 
-the Constant row of a risk-difference table
-- every `measure = "difference"` table renders `ref:NA***` on the Constant row (reproduced on an ordinary ungrouped binomial, so it predates Phase 22a). The intercept of an identity-link fit IS the baseline risk and has a value to show; the summed-score path now prints it (`2.71***`, the reference-profile mean score) because the estimate is scaled, which is what made the `NA` visible elsewhere.
+##### Phase 22b-v — the numeric predictor
 
-custom displays (22a-iii review; all reached through `set_display()` on a built table)
+Everything a continuous predictor's row does, end to end. ⚠ After 22b-i, which settles what the `n` column holds.
 
-```r
-model <- tab_reg(gss_simple, "married", c("race", "rincome", "relig", "age"),
-                 family = "binomial", empirical = TRUE)
-```
-
-- `set_display("est_ci")`: the `1/x.xx` form inside the CI bracket breaks the column alignment/padding.
-- `set_display("est_ci")`: only `{est}` should be coloured and carry the stars. The `ci` token brings its own bracket even where the display string does not show one, so the primary-token rule cannot see it — find a reliable, user-friendly rule for **every** composed CI display, not a special case.
-- `set_display("{est} ({diff})")`: the crude column prints an empty `()`. Rule wanted: **trim an empty parenthetical, keep the padding while any cell in the column is non-empty, and drop the padding entirely when they all are.** Generic to `tab()` as well.
-- `set_display("{est} ({ratio})")`: the parenthetical is empty on the MODEL column too. ⚠ measured: the marginal RATIO is genuinely not stored — 22a's §4.4 decided the additive twin and the adjusted prediction were enough, and that a ratio "is recoverable from `pct` at display time". Recovering it needs no second sweep (`pct_level / pct_ref`), so decide: fill a `ratio` field on every model column, or resolve `{ratio}` from `pct` at render.
-- the same question for the CRUDE column: pre-compute the crude risk ratio and risk difference wherever they are meaningful, as the model column already does. Both fall out of the 2x2 grid `prob_effect()` already computes, so the cost is a few vectorised divisions — **but it widens what every crude cell stores; ask before doing it.**
-- two presets to add, both good as they stand: `base_est_mdiff` = `Obs: "({base}) {est}"` + `Model: "{est} ({diff})"`, and `base_est_mratio` = the same with `{ratio}` (once it is filled).
-- `set_display("{est} ({coeff})")` — print the link-scale coefficient beside the exponentiated estimate. ⚠ there is no field to put it in: `mean` and `ctr` both carry meaning, so this is a NEW `fmt` field (the `/vctrs-field` checklist: ~9 sites, plus `get_num()`/`format()`/`tab_xl` and a `DISPLAY_TOKENS` row), and its tooltip must name it as a coefficient rather than by the field's own word.
-
-the collapsible-link redundancy: a marginal effect that IS the coefficient
-
-- A marginal contrast equals the conditional one **exactly when the family's own link already has that measure's geometry** — which is precisely when `measure` is the family's own **coefficient default** (`REG_ESTIMANDS[[fam]]$default[["coefficient"]]`), so the rule is a declared fact rather than a derived one. Measured (max relative difference over 16 cells, `gss_cat`):
-- So `poisson x {marginal, at_reference} x ratio` runs a g-computation sweep and influence functions to return `exp(coef)` under a different name (`mIRR`), which the header and the legend then present as a distinct estimand. Decide: refuse it naming `effect = "coefficient"`, or build it with a message.
-- ⚠ **`shape =` is the exception and a blanket refusal would be wrong**: with `poly(age, 2)` the marginal ratio of a curved predictor is no longer `exp(b)`, so the redundancy holds only where every predictor enters linearly.
-
-⚠ **And on gaussian the redundant cell IS the family's marginal DEFAULT.** `default[["marginal"]]` is `"difference"` there, so refusing `gaussian × marginal × difference` outright would make a bare `effect = "marginal"` an error on a numeric outcome and leave only `measure = "ratio"` — while the intro to the regression vignette teaches the identity ("in a linear model the coefficient, the AME and the effect at the reference profile are the same number") as a pedagogical point, and `shape =` breaks it. So the refusal must either be scoped to an EXPLICIT `measure =`, or become a message rather than an abort. ⚠ Note also that `measure = "auto"` never reaches these cells — the default is per CONTRAST (`default[["marginal"]]` is a difference), so they are only reachable by asking explicitly. Whatever is decided moves one cell of the combination grid in `?tab_reg` and in both regression vignettes.
-
-| combination                       | vs the coefficient | why                                                        |
-|-----------------------------------|--------------------|------------------------------------------------------------|
-| poisson x ratio *(its default)*   | **2.2e-16**        | log link: `E(Y|X,Z) = exp(b)e^(a+gZ)`, averaging factorises |
-| gaussian x difference *(default)* | identical          | identity link                                              |
-| binomial x odds_ratio *(default)* | —                  | already not offered                                        |
-| gaussian x ratio                  | 6.0e-03            | different FITS: an lm g-computed vs the log-link `mr` |
-| binomial x ratio                  | 1.8e-02            | logit g-computation vs the modified Poisson                |
-| binomial x difference             | 2.1e+00            | —                                                          |
-
-
-with "est_base" in the Model column, in numeric predictors cells where "base" is NA, alignment/padding is broken (not align with the other OR), and it’s the case for all measures and effects. Fix the padding when there are NAs.
-```r
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical=TRUE
-)
-```
-
-"difference" `measure` display consistency, for both mean and pct
-```r
-tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical=TRUE
-)
-# this one is nearly ok, ref is "0", but the positive ones should have a "+" sign to signify it’s a "difference" `measure`
-
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical=TRUE, measure = "difference"
-) # here positive have a "+" sign, but the ref/null is printed "+0%", I would prefer "0%".
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical=TRUE, effect = "marginal" #, measure = "difference"
-) # same here for Obs ; and worse, Model column lose it’s reference cell content altogether (void)
-```
-
-some models prints numeric predictors (like age) with 1 unit increment, instead of the default 1 SD, which is unreadable.
 ```r
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial"
-)
+        family = "multinomial")
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal"
-)
+        family = "ordinal")
 ```
 
-`reg_spec_build_one()` computes `grouped <- sp_fam == "binomial" && !is.null(sp$trials) && !isTRUE(sp$compound)` inline instead of calling `reg_is_grouped_binomial()` — and it tests `sp$fit_family`, which is the internal LINK key. That is precisely what the `⚠` above `reg_is_grouped_binomial()` says must never be done: `rr` and `rd` are binomial fits under another link, so a bare `== "binomial"` test drops `trials`. Confirmed reachable and reproduced: `tab_reg(..., trials = k, measure = "ratio")` resolves to `fit = "rr"`, where the inline test answers **FALSE** while the declared predicate answers **TRUE** (same for `measure = "difference"` -> `"rd"`). The flag feeds `reg_gof_rows()` and `reg_check_rows()`, so a summed score on those two measures gets its Pearson-dispersion footer row and its dispersion check computed as if it were an ungrouped binary logit. `reg_crude_key()`, `reg_fit()` and `reg_build_digest()` all use the correct predicate for the same question.
+- **Multinomial and ordinal print a per-1-unit effect**, which is unreadable next to a factor's contrast (`age` shows `1/1.01***`, and the row carries no unit label at all). Root cause: `need_mult` is gated on `reg_fam_glm()` (`R/reg-resolve.R:460-499`), a closed set that excludes both families, so `multiplier` comes back `NULL` — silently, since the informing message fires only when the user passes a non-default value. `reg_fit_multinom()` / `reg_fit_ordinal()` (`R/tab_reg.R:727`, `:774`) take no `multiplier` argument at all. The k-unit rescale is post-hoc arithmetic on the tidied coefficient (`estimate * k`, `se * |k|`, `R/tab_reg.R:1075-1086`), so it applies to their coefficients unchanged.
+- **The unit label is verbose and wraps badly**: `age (per 1 SD (13.5))` repeats the variable name, which the variable column already carries, and word-wraps after `SD` when a longer label elsewhere (`Model fit`) would have left room on one line. Wanted: `per SD/13.5`, with the count printed only when it is not 1. Root cause of the wrap: the label goes through `tab_wrap_text()` like every other label (`R/tab-export-prep.R:304-312`); root cause of the text: `reg_multiplier_value()` + `reg_stage_rows()` (`R/tab_reg.R:272-284`, `:2835-2846`).
+- **A one-row variable's name is not bold.** It is right that it stays horizontal, but it should match the vertical ones. Root cause: `vert <- ... & run$span > 1L` (`R/tab-render-html.R:352-361`) gives `tx-vname` only to a multi-row block, and bold is a row-level fact (`tx-b`) that a numeric predictor's row does not carry.
+- **Move the linearity sparkline into the `n` cell**, which is empty for a numeric predictor by design, and give it a small frame in html (a thinner line than the sparkline itself) so an uninformed reader sees a plot rather than stray pixels. Root cause / material already in place: the glyph run is appended to the LEVEL cell (`R/tab_reg.R:2854-2864`) and html already swaps it for an inline `<svg>` (`tx_spark_svg()`, `R/tab-render-html.R:111-143`). ⚠ The glyphs are dropped entirely from the html level cell today — check what actually reaches each backend before moving it.
+- **Document what "standardised" means here.** Measured answer to the maintainer's question: a numeric predictor is NOT centered and is not rescaled in the data at all — `multiplier` is a post-hoc k-unit contrast (`f(x+k) − f(x)`, or the coefficient times k), so centering never enters. That is worth one clear sentence in `?tab_reg` and the vignette (22h), because "standardised by default" invites the opposite assumption.
 
-Additional features requests
-- ✔ SUPERSEDED by 22a-iii (decision D18): "Model_β" becomes `Model_diff` / `Model_mdiff`, not `Model_coeff` — the header word must be able to take the marginal marker, and `mcoeff` is nonsense.
-- In the model legend, I want you to explicitly state the equivalence between the full name and the OR/RR/IRR/etc. abreviation for clarity. For example, with `family = "binomial", measure = "ratio"`, the legend says "Model: modified Poisson regression; risk ratio (vs the refrence category)": I would want something like "Model: modified Poisson regression; RR = risk ratio (vs the refrence category)".
-- handle the tidyselect in `tab_reg`, while preserving predictor’s list behaviour: otherwise the two main user-facing functions have different syntaxes for variables selection, which is confusing.
-- Add table metadata and accessor, teached in reg vignette and used by experts to check when they have a doubt, to get the different models formulas that were finally passed to the base model function (`glm()` etc.).
+##### Phase 22b-vi — estimand, fit and the argument surface
 
-Open-questions about possible additional features requests
-- Would there be a simple way to permit to add interactions in models ?
-- In predictor’s lists, how difficult would it be to add a comparison between quadratic and normal version for numeric predictors ? (I guess it would be quite difficult, so maybe not worthwhile).
-- Since numeric predictors are now standardised by default, can you confirm they are also **always centered by default** ? Is it documented ?
+- **`reg_spec_build_one()` tests the internal LINK key where it must test the outcome family.** `grouped <- sp_fam == "binomial" && !is.null(sp$trials) && !isTRUE(sp$compound)` (`R/reg-spec-build.R:149`) is exactly what the `⚠` above `reg_is_grouped_binomial()` (`R/tab_reg.R:100-104`) forbids: `rr` and `rd` are binomial fits under another link. Reproduced — `tab_reg(..., trials = k, measure = "ratio")` resolves to `fit = "rr"`, where the inline test answers FALSE and the declared predicate TRUE. The flag feeds `reg_gof_rows()` and `reg_check_rows()`, so a summed score on those two measures gets its Pearson-dispersion footer row and its dispersion check computed as an ungrouped binary logit. Every other caller uses the predicate.
+- **The collapsible-link redundancy.** A marginal contrast equals the conditional one exactly when `measure` is the family's own coefficient default (`REG_ESTIMANDS[[fam]]$default[["coefficient"]]`, `R/reg-estimand.R:352-417`) — so `poisson × {marginal, at_reference} × ratio` runs a g-computation sweep and influence functions to return `exp(coef)` under a different name, which the header and legend then present as a distinct estimand. ⚠ A blanket refusal would be wrong twice over: `shape = poly(age, 2)` breaks the identity, and on gaussian the redundant cell IS the family's marginal default, so refusing it would make a bare `effect = "marginal"` an error on a numeric outcome — while the vignette teaches that identity as a pedagogical point. Recommendation: a message, not an abort, suppressed where `shape` makes the identity false. Whatever is decided moves one cell of the combination grid in `?tab_reg` and both regression vignettes.
 
-Arguments reviews
-- in `tab_reg()` and in `tab()`, would it be possible to put the `parallel` argument in a `...` subfunction (if it’s needed at all and the option isn’t enough) ?
+  | combination                       | vs the coefficient | why                                                    |
+  |-----------------------------------|--------------------|--------------------------------------------------------|
+  | poisson × ratio *(its default)*   | **2.2e-16**        | log link: the averaging factorises out of `exp(b)`     |
+  | gaussian × difference *(default)* | identical          | identity link                                          |
+  | gaussian × ratio                  | 6.0e-03            | different FITS: an lm g-computed vs the log-link `mr`  |
+  | binomial × ratio                  | 1.8e-02            | logit g-computation vs the modified Poisson            |
+  | binomial × difference             | 2.1e+00            | —                                                      |
 
+- **Tidyselect in `tab_reg()`.** The two main user-facing functions must select variables the same way: `tab()` uses `rlang::enquo()` + `tidyselect::eval_select()` (`R/tab.R:286-312`), `tab_reg()` takes plain character (`R/reg-resolve.R:141-153`). ⚠ Both escape hatches must survive: the named list of character vectors (the model comparison) and the two-sided formula.
+- **Expose the fitted formulas.** Table metadata plus an accessor, taught in the regression vignette and used by an expert to check what actually reached `glm()`. Root cause of the gap: for the ordinary path the assembled formula is never persisted — `reg_call(x)$fit_spec$specs` carries `outcome` / `predictors`, and `sp$formula` is non-NULL only for the compound escape hatch; the string is rebuilt on demand inside `reg_fit()` (`R/tab_reg.R:1019-1034`).
+- **Move `parallel` into `...`** in `tab()` and `tab_reg()`, or drop it in favour of its option twin. It is a declared `TAB_ARGS` entry with an option (`R/tab-args.R:493-517`); both signatures already have a validated `...` (`tab_check_dots()`), so this is a small move that shortens two long signatures.
+- Settle the open per-model `shape =` question here (see the framing above).
 
-##### Phase 22b-i — `tab_reg()` ant `tab()` `n` column (or `n` row for `tab()` with `pct = "col"`) reworking
+##### Phase 22b-vii — interactions, research first
 
-⚠ Phase 22a-ii's tooltip contract defers its `n` line to this phase: settle `n` here, then the model column's tooltip mirrors whatever it becomes.
-Looking at `tab_reg()` n columns, I think the right way is to finish the dormant feature to be able to keep a unique `n` column giving all the information at once. With several outcomes, having one n column per outcome is not concise enough and add clutter. With predictor’s list the current default is ok, there’s only one column since the population of each model is by default the same. For spread tab_vars the "one n column per tab_vars" is justifiable since it’s the result of tab_spread.
-- For tab() Total columns with add_n, I want a small change to avoid wasting horizontal space : instead of "100% (n= 9 838)", I just want "100% (9 838)" (with the 100% still in bold). In exports only (not console), I want the column header to state "Total (n=)" (only for this particular case, not with every "{pct} ({n})" display, and respecting the custom total name). Also do the equivalent for Total rows, keeping the two lines in one cell printing where it’s implemented (to avoid wasting horizontal space).
-- I want to keep the current display when the population of the different models or col_vars is the same, and with tab_spread. But with several outcomes or several col_vars with different populations due to NAs (or predictor’s lists with different populations), I want the default to be one unique column printing the range of `n`: something like "100% (6 712-9 838)". The html tooltip of the Total/n column should print the `n` of every model or col_var (at display/export time, without storing them). The html tooltip of the cell should print the `tot_n` after the cell own `n`.
-- Since it’s now a display time thing, I want to soft-deprecate add_n argument in `tab` (no error but inactive), and remove it altogether in `tab_reg` (never released), and I want to use a global option instead. Ensure the implementation is efficient and doesn’t noticeably slow display/export. It should have these possibilities : default to `"range"` ; `"n_min"`, only printing the mininum in the row (or col) while stating "Total (n_min =)" in the exports’s header ; `"each"` for exports only, using one Total/n column for each col_var or model by reading `tot_n`, with a display token etc. equal to the one of the column existing in the data (not in console) ; `"no"` for no n display at all (no n displayed in the total column or row in `tab`, no `n` column at all for `tab_reg`).
-- With `"each"`, the exports must not repeat the [married] [tvhours] variable tag in all n columns, but integrate each one inside it’s own col_var (where the col_var name appear as an additional merged column header).
-- In tab_reg(), remove the `N` line of the footer altogether, the information is already in the column "N", reference population ; if the dada is needed somewhere to gate something, use the `n` field of the constant / reference population row, and ensure it’s populated for all models.
-- The Total column of tab and the n column of tab_reg, which are structurally equivalent, have a different behaviour because Total is the last column and n is the first column: it’s a wanted behaviour (the 100% is after the columns because they sum-up, the n column without 100% of tab_reg is near the predictors levels names because it does not depend on the outcomes and is not part of the model). With `"each"`, it becomes part of each col_var block even in `tab_reg`, at display time : it means we should now store the `n` of each factor predictor level in the population in the `n` field (printing it in tooltips even with `"range"` or `"min_n"`).
-- In tab(), with `levels="first"` (or `levels="auto"` with all factors having 2 levels or less), the `100%` is misleading since it does not sum up to 100%, so in this case we only want the "(9 828)" or "(6 712-9 838)" but without the "100%". With `levels="first"` plus a `tab_vars` that is a `spread_vars`, we want to match the current `tab_reg` with tab_vars and spread behaviour : one `n` column for each level of the `spread_vars`.
+Per decision E5: a first-class way to put an interaction in a model, designed properly rather than bolted on.
+
+⚠ **This needs real research and a well-thought design before any code, and a reasoned refusal stays a legitimate outcome.** It is the place in Phase 22 most exposed to producing a white elephant, so the plan must settle, with evidence, at least: what the user types and how it composes with `predictors` / a predictors list / `shape =` · WHICH cases are worth handling and which are not (two factors? two numerics? a numeric crossed with a factor? a factor crossed with `tab_vars`, which already has its own interaction test?) · how an interaction term renders on the row axis, which today has one row per level of one variable · whether it has a crude counterpart at all, and what `empirical = TRUE` should then draw · what a marginal sweep means over an interacted predictor, and whether the g-computation path and `marginaleffects` agree there · what the header word and the legend say.
+
+⚠ Measured starting point: interactions ALREADY FIT today through the formula escape hatch — `outcome = y ~ a * b` is detected by `reg_parse_formula()` (`R/tab_reg.R:70-91`), which sets `formula_mode` on any term of order > 1 and passes the formula verbatim to the fitter. So the missing pieces are the discoverable argument and the rendering, not the model. A separate internal `cross =` mechanism already builds the pooled `predictors * tab_vars` fit behind `color = "between_groups"` (`R/tab_reg.R:1966-1993`) — read it before inventing a second one. If the design lands on "not worthwhile", document the escape hatch in `?tab_reg` and the vignette (22h) and close the item.
 
 #### Phase 22c — tab manual review
 
@@ -1002,7 +931,7 @@ Looking at `tab_reg()` n columns, I think the right way is to finish the dormant
 
  Rewrite the short versions of legends ?
 
-##### Phase 22c-ii — tab_spread reworking
+##### Phase 22c-i — tab_spread reworking
 
 There’s a bit work remaining for tab_spread to behave as a very compact yet readable table.
 
@@ -1048,9 +977,11 @@ theme = "print" forced the one deviation from the table palettes — its text sl
 
 #### Phase 22g — Jamovi UIs manual reviews and final modifications
 
-⚠ **One `jmvtools::prepare()` for every jamovi-visible change of Phase 22**, batched here: the `display = "num_ci"` → `"base_ci"` rename and the new preset list (22a-i), `empirical`'s four values (22a-ii), the new estimand words (22a-iii). Until it runs, a YAML option that the stale `.h.R` does not carry is INERT, not merely undocumented — see the "Jamovi module development" section above.
+⚠ **One `jmvtools::prepare()` for every jamovi-visible change of Phase 22**, batched here: the `display = "num_ci"` → `"base_ci"` rename and the new preset list (22a-i), `empirical`'s four values (22a-ii), the new estimand words (22a-iii), plus whatever Phase 22b adds to the option surface (the `n` / Total-column option of 22b-i, the new display presets of 22b-ii, and any argument moved out of a signature in 22b-vi). Until it runs, a YAML option that the stale `.h.R` does not carry is INERT, not merely undocumented — see the "Jamovi module development" section above.
 
 #### Phase 22h — documentation reviews
+
+From Phase 22b: one clear sentence on what "standardised" means for a numeric predictor — it is a post-hoc k-unit contrast, the predictor is neither rescaled nor centered (22b-v) — and, if 22b-vii concludes that a first-class argument is not worthwhile, the formula escape hatch (`outcome = y ~ a * b`) documented in `?tab_reg` and the regression vignette instead.
 
 From Phase 22a: the regression vignettes' PROSE for the new vocabulary (22a-iii ships only the acronym grid) — the crude/adjusted comparison read across the table, the `m` / `@ref` markers, the `{est}` / `{base}` display recipes, and `empirical = "column"` in the multinomial part (one sentence + one `eval = FALSE` chunk).
 
@@ -1058,9 +989,9 @@ In the introduction vignette: teach levels = "first" and levels = "auto" with th
 
 **PARTLY DONE (2) — the assumptions behind a non-default `measure` are now written down.** Both regression vignettes gained `### With`effect = "coefficient"`, the measure chooses the model`, before the caveats list. The heading is scoped on purpose: only the COEFFICIENT row lets a measure change the fit — verified against the table, exactly three rows do (gaussian ratio -> `mr`, binomial ratio -> `rr`, binomial difference -> `rd`), while every `marginal` / `at_reference` row runs on the family's own model and differs only in the averaging step. The section holds: a table of every `(family, measure)` at `effect = "coefficient"` with what it fits and what the coefficient assumes, then what the literature says about the three that change the LINK (binomial ratio / difference, gaussian ratio) — and about the defaults, which are not assumption-free either. The recommendation is stated with its reasons rather than as a preference: keep the model on the family's own scale and get the reported measure through `effect = "marginal"`, because the logit always converges and cannot predict a probability outside 0–100 %, a marginal effect imposes no constant-effect assumption on the reported scale, and one fit answers every measure. With the counterweight: conditional and marginal are different ESTIMANDS, not two spellings, so the coefficient route is right when the conditional quantity is what is wanted. The three link-changing routes are graded rather than lumped — the modified Poisson is standard practice (its limits are small/sparse samples and unbounded risks), the identity link is the fragile one, PPML is consistent under a correct mean function only. Also corrected: the LPM fallback message claimed "same estimand, robust standard errors"; it targets the same risk difference but is a different ESTIMATOR, and now says so.
 
-**PARTLY DONE — `levels` and the summed score now run on the `tea` data.** `gss_cat` has no real multiple-answer question, so every place that taught a *battery of binary items* was faking one out of unrelated variables (`married` + `black` + `income25k`, and a 0–2 "score" from `married` + `income25k`). Both moved to `FactoMineR::tea`, which carries two real six-item batteries: the intro uses *when do you drink tea?* (`breakfast` … `always`), the regression vignette *where do you drink tea?* (`home` … `pub`) — the "where" battery because it actually separates groups (men `1/1.44***` per place, `senior` `1.44**`), while "when" produced a table with nothing significant to read. `score_from_lv1()` moved with them: its section LEFT the programming vignette (where it was taught in the abstract, away from any use case) and is now three sentences inside the intro vignette's new `### Multiple-answer questions: one column per item` subsection, where the battery it sums is already on screen — the score joins the six item columns of the same `levels = "first"` table as a mean. The regression vignette just uses it now and points there. **`levels = "auto"` was undocumented**; it now has the example that shows what it actually decides — a battery of binary items beside a 3+ level factor, where it collapses the first and keeps the second (`tot = "row"` drops the Total column, which would read a misleading 100 % there until Phase 22b-ii lands). `FactoMineR (>= 2.0)` added to Suggests; the shared prep chunk is inline and identical in all six files (a `tea_data_formatting()` twin of `gss_cat_data_formatting()` was considered and rejected — no new public API before CRAN).
+**PARTLY DONE — `levels` and the summed score now run on the `tea` data.** `gss_cat` has no real multiple-answer question, so every place that taught a *battery of binary items* was faking one out of unrelated variables (`married` + `black` + `income25k`, and a 0–2 "score" from `married` + `income25k`). Both moved to `FactoMineR::tea`, which carries two real six-item batteries: the intro uses *when do you drink tea?* (`breakfast` … `always`), the regression vignette *where do you drink tea?* (`home` … `pub`) — the "where" battery because it actually separates groups (men `1/1.44***` per place, `senior` `1.44**`), while "when" produced a table with nothing significant to read. `score_from_lv1()` moved with them: its section LEFT the programming vignette (where it was taught in the abstract, away from any use case) and is now three sentences inside the intro vignette's new `### Multiple-answer questions: one column per item` subsection, where the battery it sums is already on screen — the score joins the six item columns of the same `levels = "first"` table as a mean. The regression vignette just uses it now and points there. **`levels = "auto"` was undocumented**; it now has the example that shows what it actually decides — a battery of binary items beside a 3+ level factor, where it collapses the first and keeps the second (`tot = "row"` drops the Total column, which would read a misleading 100 % there until Phase 22b-i lands). `FactoMineR (>= 2.0)` added to Suggests; the shared prep chunk is inline and identical in all six files (a `tea_data_formatting()` twin of `gss_cat_data_formatting()` was considered and rejected — no new public API before CRAN).
 
-Two details worth keeping. The prep puts the "yes" level FIRST (`fct_rev()` on the items whose level 1 starts with "Not"), because that is both what `levels = "first"` keeps and what `score_from_lv1()` counts — the one thing a reader must get right. `Sport` gets the same cleanup, since it is a predictor in the regression example. `?score_from_lv1`'s `@seealso` was repointed from the programming vignette to the intro one. ⚠ Still open from this phase: the `tab_vars` + `spread_vars` condensed table on `tea`, which waits on Phase 22b-ii.
+Two details worth keeping. The prep puts the "yes" level FIRST (`fct_rev()` on the items whose level 1 starts with "Not"), because that is both what `levels = "first"` keeps and what `score_from_lv1()` counts — the one thing a reader must get right. `Sport` gets the same cleanup, since it is a predictor in the regression example. `?score_from_lv1`'s `@seealso` was repointed from the programming vignette to the intro one. ⚠ Still open from this phase: the `tab_vars` + `spread_vars` condensed table on `tea`, which waits on Phase 22b-i (the `n` / Total column) and 22c-ii (`tab_spread`).
 
 
 #### Phase 22x — very last features before release
