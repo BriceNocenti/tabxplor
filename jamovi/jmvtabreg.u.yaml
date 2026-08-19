@@ -317,6 +317,14 @@ children:
                   - type: RadioButton
                     name: display_5
                     optionName: display
+                    optionPart: base_est_mdiff
+                  - type: RadioButton
+                    name: display_6
+                    optionName: display
+                    optionPart: base_est_mratio
+                  - type: RadioButton
+                    name: display_7
+                    optionName: display
                     optionPart: base
                     enable: (effect_1)
           - type: LayoutBox

@@ -815,20 +815,50 @@ reg_estimand_abort <- function(res, outcome = NULL) {
     stats::setNames(offered, rep("i", length(offered)))))
 }
 
-# reg_estimand_note() -- the estimand phrase of the "Model:" footer line, plus the one clause that
-# depends on the CELL's layout rather than on the estimand: what the parenthetical in the cell is.
+# REG_ASIDE_NOTE -- what a model cell's PARENTHETICAL holds, keyed by the token the display resolves
+# to. This is the one clause of the "Model:" line that depends on the LAYOUT rather than on the
+# estimand, so it is read off the display itself and cannot claim a prediction where the cell prints
+# a difference. `{ci}`, `{n}` and `{n_range}` name themselves and get no clause.
+# ⚠ the sentence describes the MODEL cell: on the mirrored crude column the same slot holds the
+# OBSERVED level, which its `Obs_` header already says. (Naming an aside in every backend and in the
+# legend is Phase 22c-ii's general problem; this is the existing clause made true.)
+#' @keywords internal
+REG_ASIDE_NOTE <- list(
+  obs   = function() gettext("the observed (crude) one"),
+  pct   = function() gettext("the adjusted predicted probability"),
+  mean  = function() gettext("the adjusted predicted mean"),
+  diff  = function() gettext("the same effect as a difference"),
+  ratio = function() gettext("the same effect as a ratio"),
+  or    = function() gettext("the same effect as an odds ratio"),
+  coef  = function() gettext("the coefficient on the model's own link scale"),
+  gap   = function() gettext("its distance to the observed effect")
+)
+
+# The aside a model cell prints, as a RESOLVED token ("" = none). The scale-relative tokens are
+# resolved through the estimand's own scale, which is what makes one map serve every family.
 #' @keywords internal
 #' @noRd
-reg_estimand_note <- function(est, obs_in_cell = FALSE) {
+reg_aside_token <- function(display, scale = NULL) {
+  tmpl <- tryCatch(display_resolve(display), error = function(e) NULL)
+  if (is.null(tmpl) || !grepl("{", tmpl, fixed = TRUE)) return("")
+  seg <- parse_display_template(tmpl)
+  if (length(seg$fields) < 2L) return("")
+  tok <- fmt_resolve_scale_tokens(seg$fields, EST_SCALES[[scale %||% ""]] %||% list())
+  # the same two rules display_write_col() prunes by: an aside already printed as the primary, or one
+  # the scale cannot render, is not in the cell -- so the footer must not name it either.
+  tok <- setdiff(tok[-seg$primary], c(tok[[seg$primary]], "blank"))
+  if (!length(tok)) "" else tok[[1]]
+}
+
+# reg_estimand_note() -- the estimand phrase of the "Model:" footer line, plus that layout clause.
+#' @keywords internal
+#' @noRd
+reg_estimand_note <- function(est, aside = "") {
   if (is.null(est) || !is.function(est$note)) return("")
-  paren <- if (isTRUE(obs_in_cell))
-    gettext("; each cell shows the modelled effect vs the reference level and, in parentheses, the observed (crude) one")
-  else if (identical(est$builder, "ame") && reg_fam_prob(est$family %||% ""))
-    if (identical(est$comparison, "lnratioavg"))
-      gettext("; each cell shows the ratio vs the reference level and, in parentheses, the adjusted predicted probability")
-    else
-      gettext("; each cell shows the effect vs the reference level and, in parentheses, the adjusted predicted probability")
-  else NULL
+  note  <- if (aside %in% names(REG_ASIDE_NOTE)) REG_ASIDE_NOTE[[aside]] else NULL
+  paren <- if (is.null(note)) NULL else
+    paste0(gettext("; each cell shows the effect vs the reference level and, in parentheses, "),
+           note())
   # "OR = odds ratio (vs the reference category)": the acronym the header prints, its expansion and
   # the qualifier, composed from one declaration each so the three cannot drift apart.
   paste0(reg_word(est), " = ", reg_word_long(est), " (", est$note(), ")", paren)

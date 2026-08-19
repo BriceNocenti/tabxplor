@@ -400,6 +400,12 @@ options:
           name:  est_ci
         - title: "est_base <i>(the estimate, adjusted prediction in bracket)</i>"
           name:  est_base
+        - title: "est_coef <i>(the estimate, coefficient in bracket)</i>"
+          name:  est_coef
+        - title: "base_est_mdiff <i>(the estimate, its difference form in bracket)</i>"
+          name:  base_est_mdiff
+        - title: "base_est_mratio <i>(the estimate, its ratio form in bracket)</i>"
+          name:  base_est_mratio
         - title: "base_est <i>(the adjusted prediction, estimate in bracket)</i>"
           name:  base_est
         - title: "base <i>(adjusted predictions alone)</i>"

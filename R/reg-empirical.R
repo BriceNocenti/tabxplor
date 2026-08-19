@@ -8,8 +8,9 @@
 #     crude column is the model column's mirror: same stored scale, same colour measure (both
 #     channels), same display, same digits, same reference. Only the estimation differs. It carries
 #     exactly one interval -- its effect's -- and the level it sits on rides in the same cell, in the
-#     field its scale names (`{base}`). It must never carry `obs` or `gap_se`: it IS the observed
-#     value, and a column cannot be its own baseline.
+#     field its scale names (`{base}`), with the additive and multiplicative readings of that level
+#     PAIR beside it (with_base(), the twin of reg_fill_geometries()). It must never carry `obs` or
+#     `gap_se`: it IS the observed value, and a column cannot be its own baseline.
 #   - SAME ESTIMAND, SAME PEOPLE, or nothing. reg_same_estimand() / reg_same_frame() withhold the
 #     crude value rather than let a "gap" mean listwise deletion instead of confounding.
 #   - TWO SOURCES, ONE SHAPE. A CLOSED FORM off reg_empirical()'s per-(var, level, category) grid
@@ -582,12 +583,15 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
            function(nm) g[[nm]][mi])
   }
 
-  # THE LEVEL a crude cell prints beside its estimate (EST_SCALES$base_display). NA on a link
-  # scale and on a cumulative odds ratio -- `{base}` renders void.
-  with_base <- function(sh, fields, level) {
+  # THE LEVEL a crude cell prints beside its estimate (EST_SCALES$base_display) -- NA on a link scale
+  # and on a cumulative odds ratio, where `{base}` renders void -- and the two GEOMETRIES that level
+  # pair implies. The pair rule is the model column's own (reg_fill_geometries(), R/tab_reg.R): one
+  # comparison, read additively and multiplicatively, so `display` can show either on either column.
+  with_base <- function(sh, fields, level, ref_level = NULL) {
     b <- EST_SCALES[[sh$scale]]$base_display
-    if (is.na(b)) return(fields)
-    c(fields, stats::setNames(list(level), b))
+    if (!is.na(b)) fields <- c(fields, stats::setNames(list(level), b))
+    if (is.null(ref_level)) return(fields)
+    c(fields, reg_geometry_fields(EST_SCALES[[sh$scale]]$est_field, level, ref_level))
   }
   # the SD-standardized ladder's divisor (raw_diff): the model column carries var(Y) there.
   with_var <- function(sh, fields)
@@ -598,8 +602,9 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   if (identical(crude_key, "ordinal")) {
     # ⚠ the ESTIMATE has no closed form (spliced in by reg_fit_overlay); the LEVEL does.
     empty <- function(sh, g = NULL) {
-      fields <- list(diff = na_v(), n = if (is.null(g)) rep(NA_integer_, n_rows) else g$emp_n)
-      emp_col(sh, if (is.null(g)) fields else with_base(sh, fields, g$emp_prop))
+      # ⚠ `n` is what fmt() sizes the column from, so the no-grid branch must still pass it.
+      if (is.null(g)) return(emp_col(sh, list(n = rep(NA_integer_, n_rows))))
+      emp_col(sh, with_base(sh, list(n = g$emp_n), g$emp_prop, g$emp_ref_prop))
     }
     if (marginal) {
       cats <- names(fit_est$est)
@@ -617,8 +622,11 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   # WARNING: `emp_ratio` is an ODDS ratio, `emp_prop / emp_ref_prop` a RISK ratio.
   prob_effect <- function(sh, g) {
     prop <- g$emp_prop; rprop <- g$emp_ref_prop
-    # a share for a probability scale, the mean SCORE for a summed-score one.
-    level <- if (identical(EST_SCALES[[sh$scale]]$base_display, "mean")) g$emp_mean else prop
+    # a share for a probability scale, the mean SCORE for a summed-score one -- and its reference,
+    # in the same unit, so the derived geometries stay on the unit the cell prints.
+    score <- identical(EST_SCALES[[sh$scale]]$base_display, "mean")
+    level <- if (score) g$emp_mean     else prop
+    rlvl  <- if (score) g$emp_ref_mean else rprop
     ndr  <- g$emp_n_draw; rndr <- g$emp_ref_n_draw
     logged <- identical(sh$scale, "log_coef")
     base_sh <- if (logged) fam[[fam$coef]] else sh   # the exponentiated twin a logged shape logs
@@ -643,7 +651,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
     fields  <- c(stats::setNames(list(v), est_fld),
                  list(n = g$emp_n, tot_n = g$emp_n,
                       ci_inf = ci$inf, ci_sup = ci$sup, pvalue = ci$pvalue))
-    list(fields = with_var(sh, with_base(sh, fields, level)), vec = v, n_eff = g$emp_n_draw)
+    list(fields = with_var(sh, with_base(sh, fields, level, rlvl)), vec = v, n_eff = g$emp_n_draw)
   }
 
   if (identical(crude_key, "multinomial")) {
@@ -691,7 +699,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   moment <- function(sh, v, ci) {
     fields <- c(stats::setNames(list(v), EST_SCALES[[sh$scale]]$est_field),
                 list(n = nv, tot_n = nv, ci_inf = ci$inf, ci_sup = ci$sup, pvalue = ci$pvalue))
-    emit(list(col = emp_col(sh, with_var(sh, with_base(sh, fields, meanv)),
+    emit(list(col = emp_col(sh, with_var(sh, with_base(sh, fields, meanv, rmean)),
                             n_eff = neff_of(nv_ci)),
               vec = v, shape = sh), cat1)
   }

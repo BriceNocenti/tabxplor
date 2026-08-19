@@ -200,3 +200,86 @@ test_that("empirical columns keep the per-LEVEL n in the tooltip (Item D)", {
   tips <- tabxplor:::tab_kable_print_tooltip(t[["Obs_OR"]])
   expect_true(any(grepl("n: ", tips)))          # per-level counts survive
 })
+
+# ---- Phase 22b-iii: every geometry of one comparison, on both roles ----------------------
+
+test_that("a regression cell carries both geometries of its own comparison", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  # the pair is (level, reference level), so `diff` and `ratio` are filled on both roles and on
+  # every measure -- only the column's OWN estimate field keeps what was fitted.
+  for (meas in c("odds_ratio", "ratio", "difference")) {
+    t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial",
+                                  measure = meas, empirical = TRUE))
+    for (nm in c("Obs_OR", "Obs_RR", "Obs_RD", "Model_OR", "Model_RR", "Model_RD")) {
+      if (!nm %in% names(t)) next
+      col <- t[[nm]]
+      i   <- which(!is_refrow(col) & as.character(t$var) == "race")
+      expect_true(all(!is.na(get_diff(col)[i])),  label = paste(meas, nm, "diff"))
+      expect_true(all(!is.na(get_ratio(col)[i])), label = paste(meas, nm, "ratio"))
+    }
+  }
+})
+
+test_that("the crude column's derived geometries ARE the observed ones", {
+  skip_if_not_installed("broom")
+  d   <- reg_data()
+  t   <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE))
+  col <- t[["Obs_OR"]]
+  # computed from the data, not from the grid: a parity check, not a tautology
+  p   <- tapply(d$married == "Married", d$race, mean)
+  p   <- stats::setNames(as.vector(p), names(p))          # tapply() returns a 1-d array
+  ref <- levels(d$race)[1]
+  lv  <- setdiff(as.character(t$levels)[as.character(t$var) == "race"], ref)
+  i   <- match(lv, as.character(t$levels))
+  expect_equal(get_diff(col)[i],  unname(p[lv] - p[[ref]]), tolerance = 1e-12)
+  expect_equal(get_ratio(col)[i], unname(p[lv] / p[[ref]]), tolerance = 1e-12)
+  expect_equal(get_diff(col)[match(ref, as.character(t$levels))], 0)   # the reference's neutral
+  expect_equal(get_ratio(col)[match(ref, as.character(t$levels))], 1)
+})
+
+test_that("`base_est_mdiff` gives each ROLE its own arm, and never prints one field twice", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE,
+                                display = "base_est_mdiff"))
+  expect_identical(unique(get_display(t[["Model_OR"]])[!is_refrow(t[["Model_OR"]])]),
+                   "{est} ({diff})")
+  expect_identical(unique(get_display(t[["Obs_OR"]])[!is_refrow(t[["Obs_OR"]])]),
+                   "({base}) {est}")
+  # on a risk-DIFFERENCE column `{est}` IS `{diff}`: the aside collapses instead of doubling
+  rd <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", measure = "difference",
+                                 display = "base_est_mdiff"))
+  # ... and what is left is the pipeline's own bare token, `{est}` resolved by the column's scale
+  expect_identical(unique(get_display(rd[["Model_RD"]])[!is_refrow(rd[["Model_RD"]])]), "est")
+})
+
+test_that("the Model: footer names the aside the cell actually prints", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  line <- function(...) tabxplor:::reg_model_lines(
+    suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE, ...)))
+  expect_match(line(display = "est_base"),        "adjusted predicted probability")
+  expect_match(line(display = "base_est_mdiff"),  "as a difference")
+  expect_match(line(display = "base_est_mratio"), "as a ratio")
+  expect_false(grepl("in parentheses", line(display = "est")))
+  # a gaussian outcome answers `{base}` with a mean, so the same clause words itself
+  expect_match(tabxplor:::reg_model_lines(
+    suppressMessages(tab_reg(d, "tvhours", "race", family = "gaussian", empirical = TRUE))),
+    "adjusted predicted mean")
+})
+
+test_that("choosing a display changes no number (D11), presets included", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
+                                empirical = TRUE))
+  for (p in c("est", "est_base", "base_est_mdiff", "base_est_mratio", "est_coef")) {
+    for (nm in names(t)[purrr::map_lgl(t, is_fmt)]) {
+      before <- t[[nm]]; after <- set_display(before, p)
+      for (f in setdiff(tabxplor:::fmt_field_names, "display"))
+        expect_identical(vctrs::field(after, f), vctrs::field(before, f),
+                         label = paste(p, nm, f))
+    }
+  }
+})

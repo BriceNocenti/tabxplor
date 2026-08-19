@@ -3,8 +3,7 @@
 
 library(devtools)
 load_all()
-options(tabxplor.parallel = 8, tabxplor.cleannames = TRUE, tabxplor.print = "kable")
-
+options(tabxplor.parallel = 8, tabxplor.cleannames = TRUE, tabxplor.print = "kable") # options(tabxplor.print = "console")
 
 gss_simple <- gss_cat_data_formatting() # gss_simple with merged levels, and first levels chosen for reference (colors, regressions)
 
@@ -530,9 +529,7 @@ tab(gss_simple, c(race, rincome, relig), c(age, tvhours), color = TRUE)
 #  Would there be another, more useful and modern default display for numeric col_vars ? Is there a symbol usable instead of "cv"?
 # - In this case the "mean (sd)" column headers on exporters should be changed to "mean", since "mean (cv)" would be useless because it would repeat the acronym already on each cell.
 
-tab(gss_simple, c(race, rincome, relig), c(age, tvhours),
-   color = TRUE, color_signif = "guaranteed_effect"
-) 
+
 
 
 
@@ -554,14 +551,11 @@ tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "r
 # "html"
 tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "drop_all", 
    color = TRUE, color_signif = "grey_non_signif", ref = 1
-)
+) |> tab_export()
 # - We lose alignment a bit here, didn’t we resolve this for html before ? 
-#   Strange thing is that it seems to be caused not by bold, but by the colored background 
+#   Strange thing is that it seems to be caused not by bold anymore, but by the colored background 
 #   (do it adds a margin ? Would it be more reliable and more visually good if we remove the margin, 
 #   or add it in cells with no specific color background ?)
-
-
-
 
 
 

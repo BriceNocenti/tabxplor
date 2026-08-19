@@ -363,11 +363,23 @@ on a crude column the observed percentage or mean.
 cell is about (it carries the stars and the colour); the bracket is the aside.
 \item \code{"est_coef"} --- the effect with the model's own coefficient beside it: \code{1/2.22 (-0.80)}, the
 logarithm on a ratio scale, the effect itself on an additive one.
+\item \code{"base_est_mdiff"} / \code{"base_est_mratio"} --- \strong{the same comparison read the other way}:
+\verb{1/2.22 (-22\%)} puts the effect in percentage points beside an odds ratio,
+\verb{1/2.22 (\\u00f71.78)} as a ratio. The observed column keeps its level, \verb{(31\%) 1/2.68}, so the
+two effects stay side by side. Where the column already \emph{is} that geometry --- a risk
+difference under \code{"base_est_mdiff"} --- the aside would repeat the number and is dropped.
 \item \code{"base"} --- the levels alone, still coloured and starred by the effect.
 }
 
 A cell that cannot fill an aside leaves it \strong{blank but padded}, so the effects still line up;
 an aside no cell of the column can fill is dropped, padding and all.
+
+The \strong{Constant} row is the model's intercept, and it is the one row whose profile is not the
+reference profile the rest of the table uses: every factor sits at its reference level, but
+every numeric predictor sits at \strong{zero} --- which, for an age or an income, is outside the
+data. Read it as the baseline of the fitted equation, not as a population. It is empty under
+\code{effect = "marginal"} and \code{"at_reference"} (a sample-averaged table has no intercept to show)
+and for an ordinal outcome (a cumulative logit has thresholds, not one intercept).
 
 Or write a \code{{}} template: \code{"{est} (obs {obs})"} prints each adjusted effect next to the
 unadjusted one, \code{"{est} ({gap})"} next to how far adjustment moved it.

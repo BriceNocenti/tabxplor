@@ -13,7 +13,12 @@
 #     get_num() and Excel return, and the only part the colour paints by default. The rule lives in
 #     parse_display_template() (R/fmt_class.R); the presets below are spelt to obey it.
 #   - DISPLAY_PRESETS + display_resolve() are the ONE named-layout table, read by tab() and by
-#     tab_reg() alike, so a display learnt on a crosstab means the same on a regression.
+#     tab_reg() alike, so a display learnt on a crosstab means the same on a regression. A preset may
+#     declare one arm per column ROLE, which is where the crude/model mirror is stated -- so it holds
+#     for a post-hoc set_display() as much as for a build-time one.
+#   - A COMPOSITE NEVER PRINTS THE SAME FIELD TWICE. `{est}` and `{base}` are scale-RELATIVE, so two
+#     tokens of one template can land on one field; such an aside is dropped exactly as a void one
+#     is, and the preset degrades to the bare estimate.
 #   - THE VOID RULE HAS TWO HALVES. Per CELL, a token with nothing to show renders BLANK AND KEEPS
 #     ITS WIDTH, so one missing aside never breaks the column's alignment; per COLUMN, a token void
 #     everywhere leaves the template with its whole bracket group, padding and all, and the note
@@ -74,12 +79,20 @@ display_write_col <- function(col, tmpl) {
   display_refuse_mismatch(col, seg$fields, tmpl)
   have  <- lapply(seg$fields, function(f) !is.na(get_num(fmt_set_display(col, f))))
   empty <- vapply(have, function(h) all(!h[elig]), logical(1))
+  # DESIGN: A COMPOSITE NEVER PRINTS THE SAME FIELD TWICE. The scale-relative tokens are what make a
+  # preset family-agnostic, and the price is that two of them can land on one field: `{est}` IS
+  # `{base}` on a level column, and IS `{coef}` on an additive one. Such an aside is dropped exactly
+  # as a void one is -- so a preset degrades to the bare estimate instead of doubling it -- but it is
+  # NOT reported as missing: the field is there, it is simply already printed.
+  tok <- fmt_resolve_scale_tokens(seg$fields, fmt_scale_row(col))
+  dup <- tok == tok[[seg$primary]]
+  dup[[seg$primary]] <- FALSE
   # DESIGN: THE VOID RULE HAS TWO HALVES, and they are not the same rule. Per CELL (format()'s job) a
   # void aside renders BLANK AND KEEPS ITS WIDTH, so a total row missing its difference interval
   # still lines up with the rows that have one. Per COLUMN (here) a field void EVERYWHERE is not
   # padding worth keeping: its whole bracket group leaves the template, and a template left with one
   # bare token collapses onto that token.
-  tmpl2 <- display_prune_template(seg, empty)
+  tmpl2 <- display_prune_template(seg, empty | dup)
   f2    <- parse_display_template(tmpl2)$fields
   if (!length(f2)) return(list(col = col, missing = seg$fields[empty]))
   # DESIGN: a ONE-FIELD "composite" must render as the pipeline's own bare token -- the composite
@@ -336,30 +349,48 @@ DISPLAY_MIN_DIGITS     <- {
 # `est_ci` is an ordinary composite like the rest: `{ci}` renders the interval on the column's OWN
 # scale (inverted bounds on a ratio, blank where none was computed), so the estimate keeps the stars
 # and the colour and the per-token padding lines the estimates up.
+#
+# A preset may hold ONE template, or one per column ROLE (`default` plus an override). That is where
+# the crude/model MIRROR is declared -- `est_base` is the regression default, and its `emp` arm is
+# what puts the two estimates side by side across the pair. Declaring it here rather than in a
+# builder is what makes the mirror survive a post-hoc set_display() and reach every producer.
 #' @keywords internal
 #' @noRd
-DISPLAY_PRESETS <- c(
-  est      = "{est}",
-  est_ci   = "{est} {ci}",
-  est_base = "{est} ({base})",
-  est_coef = "{est} ({coef})",
-  base_est = "({base}) {est}",
-  base     = "{base}",
-  base_ci  = "{base} {ci}"
+DISPLAY_PRESETS <- list(
+  est             = "{est}",
+  est_ci          = "{est} {ci}",
+  est_base        = c(default = "{est} ({base})",  emp = "({base}) {est}"),
+  est_coef        = "{est} ({coef})",
+  base_est_mdiff  = c(default = "{est} ({diff})",  emp = "({base}) {est}"),
+  base_est_mratio = c(default = "{est} ({ratio})", emp = "({base}) {est}"),
+  base_est        = "({base}) {est}",
+  base            = "{base}",
+  base_ci         = "{base} {ci}"
 )
 
 # THE display boundary, shared by tab(display =), tab_reg(display =) and set_display().
 # Returns NULL for "leave every cell's own token alone" (the default, and the jamovi ComboBox's idle
 # value), a preset's template, "{tok}" for a bare token name, or the validated template as typed.
+# `role` is the column's own `role` attribute ("" on a crosstab, "emp" on a crude column): an unknown
+# or absent role takes the `default` arm, so only a preset that declares an override ever branches.
 #' @keywords internal
 #' @noRd
-display_resolve <- function(display) {
+display_resolve <- function(display, role = NULL) {
   if (is.null(display) || length(display) == 0L) return(NULL)
   d <- as.character(display)[[1]]
   if (is.na(d) || d %in% c("", "no", "auto")) return(NULL)
-  if (d %in% names(DISPLAY_PRESETS)) return(unname(DISPLAY_PRESETS[[d]]))
+  if (d %in% names(DISPLAY_PRESETS)) return(display_preset_arm(DISPLAY_PRESETS[[d]], role))
   if (d %in% DISPLAY_BARE_TOKENS) return(paste0("{", d, "}"))
   validate_display_template(d)
+}
+
+# One preset entry -> the template this role gets.
+#' @keywords internal
+#' @noRd
+display_preset_arm <- function(entry, role = NULL) {
+  if (length(entry) == 1L) return(unname(entry[[1]]))
+  role <- if (is.null(role) || !length(role)) "" else as.character(role)[[1]]
+  unname(entry[[if (role %in% names(entry)) role else "default"]])
 }
 
 

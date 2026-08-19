@@ -852,8 +852,10 @@ set_display.tabxplor_fmt <- function(x, value) {
   # (display_write_col) -- the same one tab(display =) runs, so a post-hoc set_display() and a
   # build-time one cannot differ, and the per-cell eligibility / void rules apply. A raw token or
   # {} template is written verbatim: the producers set per-cell tokens that way and must keep doing so.
+  # the column's own `role` picks the preset's arm, so `across()`-ing one preset over a regression
+  # table gives the crude and the model columns their mirrored layouts in one call.
   if (length(value) == 1L && !is.na(value) && as.character(value) %in% names(DISPLAY_PRESETS)) {
-    tmpl <- display_resolve(value)
+    tmpl <- display_resolve(value, get_role(x))
     if (grepl("{", tmpl, fixed = TRUE)) return(display_write_col(x, tmpl)$col)
     value <- tmpl
   }
@@ -3196,7 +3198,14 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   if (any(n_range_hi)) {
     hi <- print_num(get_tot_n(x)[n_range_hi], 0L) |>
       prettyNum(big.mark = pad, preserve.width = "individual")
-    out[n_range_hi] <- paste0(out[n_range_hi], "-", hi)
+    lo <- out[n_range_hi]
+    # WARNING: EACH BOUND IS PADDED TO ITS OWN COLUMN, so the "-" separators line up down the
+    # column. The composite expander pads the joined string as one token, which would leave the
+    # separator ragged ("( 8 610-16 301)" over "(  1 700-3 093)"). Same rule, and the same medium
+    # `pad` glyph, as the "(sigma sd)" tail below.
+    lo <- stringi::stri_pad(lo, width = max(stringi::stri_length(lo)), side = "left", pad = pad)
+    hi <- stringi::stri_pad(hi, width = max(stringi::stri_length(hi)), side = "left", pad = pad)
+    out[n_range_hi] <- paste0(lo, "-", hi)
   }
   out[pct_no_ci] <- paste0(out[pct_no_ci], "%")
 

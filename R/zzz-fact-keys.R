@@ -174,7 +174,8 @@ TAB_FOREIGN_KEYS <- list(
   # a preset resolves to a TOKEN or to a `{}` TEMPLATE; only the first kind is a key here (a template
   # is validated field by field by display_write_col()). No exemption: every preset names real tokens.
   tx_fk("DISPLAY_PRESETS",
-        function() { v <- as.character(DISPLAY_PRESETS); v[!grepl("{", v, fixed = TRUE)] },
+        function() { v <- unlist(DISPLAY_PRESETS, use.names = FALSE)
+                     v[!grepl("{", v, fixed = TRUE)] },
         function() names(DISPLAY_TOKENS)),
 
   # --- into fmt_field_names (the record) -----------------------------------------------------

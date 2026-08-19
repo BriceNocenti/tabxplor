@@ -281,7 +281,13 @@ testthat::test_that("{est} / {base} resolve to the token each COLUMN renders the
 testthat::test_that("the preset table is ONE table, resolved the same way by both producers", {
   testthat::expect_identical(
     names(tabxplor:::DISPLAY_PRESETS),
-    c("est", "est_ci", "est_base", "est_coef", "base_est", "base", "base_ci"))
+    c("est", "est_ci", "est_base", "est_coef", "base_est_mdiff", "base_est_mratio",
+      "base_est", "base", "base_ci"))
+  # a preset may declare one arm per column ROLE; an unknown role takes `default`.
+  testthat::expect_identical(tabxplor:::display_resolve("est_base"), "{est} ({base})")
+  testthat::expect_identical(tabxplor:::display_resolve("est_base", "model"), "{est} ({base})")
+  testthat::expect_identical(tabxplor:::display_resolve("est_base", "emp"), "({base}) {est}")
+  testthat::expect_identical(tabxplor:::display_resolve("base_est_mdiff", "emp"), "({base}) {est}")
   # idle values leave every cell's own token alone
   for (d in list(NULL, NA_character_, "", "no", "auto"))
     testthat::expect_null(tabxplor:::display_resolve(d))
