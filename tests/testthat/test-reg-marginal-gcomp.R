@@ -241,7 +241,7 @@ testthat::test_that("a built AME table carries the analytic interval and its sta
   x <- suppressMessages(tab_reg(d, outcome = "married", predictors = c("race", "age"),
                                 effect = "marginal"))
   col <- x[[grep("^Model", names(x))[1]]]
-  fin <- !is.na(get_diff(col))
+  fin <- !is.na(get_pvalue(col))   # a reference cell carries the neutral, and no interval
   testthat::expect_true(any(fin))
   testthat::expect_true(all(is.finite(get_ci_inf(col)[fin])))
   testthat::expect_true(all(get_ci_inf(col)[fin] <= get_diff(col)[fin]))

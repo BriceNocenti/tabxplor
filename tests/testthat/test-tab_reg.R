@@ -729,7 +729,8 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
   # which coheres with the AME -- NOT the observed-group average (by=).
   ap  <- as.data.frame(marginaleffects::avg_predictions(g, variables = "race", newdata = dm))
 
-  keep <- !is.na(get_diff(col))
+  # a reference cell carries the measure's NEUTRAL, so "an estimated effect" is one with a p-value
+  keep <- !is.na(get_pvalue(col))
   expect_equal(sort(get_diff(col)[keep]),   sort(c(acr$estimate, aca$estimate)),   tolerance = 1e-6)
   expect_equal(sort(get_ci_inf(col)[keep]), sort(c(acr$conf.low, aca$conf.low)),   tolerance = 1e-6)
   expect_equal(sort(get_ci_sup(col)[keep]), sort(c(acr$conf.high, aca$conf.high)), tolerance = 1e-6)
@@ -742,7 +743,7 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
   blk    <- which(as.character(t1$var) == "race" & as.character(t1$levels) == "Black")
   agerow <- which(as.character(t1$var) == "age")
   expect_identical(disp[c(ref, blk, agerow)], rep("est", 3L))
-  expect_true(is.na(get_diff(col)[ref]))                # the reference level has no marginal effect
+  expect_identical(get_diff(col)[ref], 0)               # the reference level carries the neutral
   expect_true(is.na(get_pvalue(col)[ref]))
 
   # rendered cell: the AME, with its stars. `display = "est_base"` adds the adjusted prediction.
@@ -768,7 +769,7 @@ test_that("gaussian AME uses the coef shape and matches marginaleffects", {
   m   <- stats::lm(tvhours ~ age + race, data = dm)
   ac  <- rbind(as.data.frame(marginaleffects::avg_comparisons(m, variables = "age",  newdata = dm)),
                as.data.frame(marginaleffects::avg_comparisons(m, variables = "race", newdata = dm)))
-  keep <- !is.na(get_diff(col)) & !is_refrow(col)       # reference betas are the additive neutral 0
+  keep <- !is.na(get_pvalue(col)) & !is_refrow(col)       # reference betas are the additive neutral 0
   expect_equal(sort(get_diff(col)[keep]),   sort(ac$estimate),  tolerance = 1e-6)
   expect_equal(sort(get_pvalue(col)[keep]), sort(ac$p.value),   tolerance = 1e-6)
 })
@@ -790,7 +791,7 @@ test_that("poisson AME is a raw count-change and matches marginaleffects", {
   m   <- stats::glm(tvhours ~ age + race, data = dm, family = stats::poisson())
   ac  <- rbind(as.data.frame(marginaleffects::avg_comparisons(m, variables = "age",  newdata = dm)),
                as.data.frame(marginaleffects::avg_comparisons(m, variables = "race", newdata = dm)))
-  keep <- !is.na(get_diff(col)) & !is_refrow(col)
+  keep <- !is.na(get_pvalue(col)) & !is_refrow(col)
   expect_equal(sort(get_diff(col)[keep]), sort(ac$estimate), tolerance = 1e-6)
 })
 
@@ -811,7 +812,7 @@ test_that("multinomial AME: one column per outcome category, matches marginaleff
               as.data.frame(marginaleffects::avg_comparisons(m, variables = "age",  newdata = dm)))
   for (j in c("Ind", "Dem", "Rep")) {
     col  <- t1[[j]]
-    keep <- !is.na(get_diff(col))
+    keep <- !is.na(get_pvalue(col))
     acj  <- ac[ac$group == j, ]
     expect_equal(sort(get_diff(col)[keep]),   sort(acj$estimate), tolerance = 1e-6)
     expect_equal(sort(get_pvalue(col)[keep]), sort(acj$p.value),  tolerance = 1e-6)
@@ -833,7 +834,7 @@ test_that("ordinal AME: one column per outcome category, matches marginaleffects
   ac <- as.data.frame(marginaleffects::avg_comparisons(o, variables = "race", newdata = dm))
   for (j in c("Rep", "Ind", "Dem")) {
     col  <- t1[[j]]
-    keep <- !is.na(get_diff(col))
+    keep <- !is.na(get_pvalue(col))
     acj  <- ac[ac$group == j, ]
     expect_equal(sort(get_diff(col)[keep]), sort(acj$estimate), tolerance = 1e-6)
   }
@@ -858,7 +859,7 @@ test_that("weighted binomial AME (svyglm) is population-weighted and matches mar
     survey::svyglm(married ~ race, design = des, family = stats::quasibinomial()))
   ac  <- as.data.frame(marginaleffects::avg_comparisons(g, variables = "race", newdata = dm,
                                                         wts = "tvhours"))
-  keep <- !is.na(get_diff(col))
+  keep <- !is.na(get_pvalue(col))
   expect_equal(sort(get_diff(col)[keep]), sort(ac$estimate), tolerance = 1e-6)
 })
 
@@ -897,7 +898,7 @@ test_that("MER-at-reference (binomial): effect/prediction/CI match marginaleffec
   pg   <- marginaleffects::datagrid(model = g, race = levels(dm$race), age = mean(dm$age))
   ap   <- as.data.frame(marginaleffects::predictions(g, newdata = pg))
 
-  keep <- !is.na(get_diff(col))
+  keep <- !is.na(get_pvalue(col))
   expect_equal(sort(get_diff(col)[keep]),   sort(c(acr$estimate, aca$estimate)),   tolerance = 1e-6)
   expect_equal(sort(get_ci_inf(col)[keep]), sort(c(acr$conf.low, aca$conf.low)),   tolerance = 1e-6)
   expect_equal(sort(get_pvalue(col)[keep]), sort(c(acr$p.value, aca$p.value)),     tolerance = 1e-6)

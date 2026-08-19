@@ -466,7 +466,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   # WARNING: resolve the scale-relative tokens first -- a regression cell displays `{est}`, which IS
   # the odds ratio on an odds-ratio column, and matching the raw token would silently export the
   # numbers where the console prints "1/2.67".
-  or_family <- c("or", "OR", "or_pct", "OR_pct", "est_ci")
+  or_family <- c("or", "OR", "or_pct", "OR_pct")
   xl_code   <- function(col) {
     code <- format(col, syntax = "excel")
     disp <- fmt_resolve_scale_tokens(display_primary(get_display(col)), fmt_scale_row(col))

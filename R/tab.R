@@ -234,9 +234,8 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
                 ci = "auto", conf_level = NULL, stars = NULL,
                 ci_method = NULL, anova = NULL, design_effect = NULL,
                 totaltab = "line", common_totrow = FALSE, tot = c("row", "col"),
-                n = NULL, add_pct = FALSE,
-                subtext = "", digits = 0, n_min = 0, display = NULL,
-                color_breaks = NULL,
+                n = NULL, n_min = 0, add_pct = FALSE,
+                subtext = "", digits = 0, display = NULL, color_breaks = NULL,
                 output_list = FALSE, parallel = NULL,
                 spread_vars, filter) {
 

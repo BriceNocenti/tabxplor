@@ -89,7 +89,9 @@ tx_theme_resolve <- function(theme = NULL, allow_auto = FALSE, note = NULL,
 # emits it as CSS (the html path), so the two renderings cannot drift.
 #   text  : the table's own font colour (also what a reference cell gets -- it inherits, no class)
 #   grey  : an uncoloured cell in a column that HAS a colour measure
-#   grey2 : an uncoloured cell in a column with no colour measure
+#   grey2 : an uncoloured cell in a column with no colour measure -- and, by the same logic, the
+#           SECONDARY tokens of a composite cell (color_secondary_hex()): both mean
+#           "present, but nothing is being said about it"
 #' @keywords internal
 # Phase 14e: `hover` is kableExtra's lightable yellow (its `tbody tr:hover` -- more visible and more
 # familiar than the grey wash we had). DARK: pure #FFFFFF on #111111 is a harsh, glare-y contrast for
@@ -99,16 +101,15 @@ tx_theme_resolve <- function(theme = NULL, allow_auto = FALSE, note = NULL,
 tx_chrome_hex <- function(theme = "light") {
   switch(
     tx_palette_theme(theme),
-    dark = list(text = "#CECDC3", grey = "#707070", grey2 = "#EEEEEE",
+    dark = list(text = "#CECDC3", grey = "#707070", grey2 = "#aeada5", # "#EEEEEE",
                 bg = "#222222", border = "#CECDC3", hover = "rgba(255,242,204,.10)"),
     # z11: the light chrome, with ONE deliberate change. `grey` (a non-significant cell under
     # color_signif = "grey_non_signif") must stay readable ON the print background fills: #9f9f9f is
     # 1.41:1 on the darkest fill #B8B8B8, i.e. invisible; #595959 is 3.53:1 on it and 7.0:1 on white,
-    # still plainly "greyed" against the pure black of a significant cell. `grey2` stays #111111 so an
-    # UNCOLOURED table prints byte-identically to the light theme. `hover` is meaningless on paper.
-    print = list(text = "#000000", grey = "#595959", grey2 = "#111111",
+    # still plainly "greyed" against the pure black of a significant cell. `hover` is meaningless on paper.
+    print = list(text = "#000000", grey = "#595959", grey2 = "#333333", # "#111111",
                  bg = "#ffffff", border = "#000000", hover = "transparent"),
-    list(text = "#000000", grey = "#9f9f9f", grey2 = "#111111",
+    list(text = "#000000", grey = "#9f9f9f", grey2 = "#333333",
          bg = "#ffffff", border = "#000000", hover = "#FFFCE5")
   )
 }
@@ -251,16 +252,14 @@ tx_css_rules <- function(chrome = TRUE) {
     # where it is the maintainer's requested pure black.
     add(".tabxplor-caption", "color", "#000000", "#FFFFFF", "#000000")
     # THE SECONDARY TOKENS of a composite cell. The colour grades the cell's PRIMARY number, so the
-    # aside beside it keeps the ordinary text colour ("black", theme-aware) unless the reader asks for
-    # a tint. `"same"` emits no rule at all: the aside then inherits the cell's own shade, which is
-    # what the span's absence already gives -- but the span is still written, so a stylesheet can
-    # restyle it either way.
-    sec <- color_secondary_opt()
-    if (!identical(sec, "same")) {
-      hex <- if (identical(sec, "black")) NULL else tx_css_color(sec)
-      if (is.null(hex)) add(".tabxplor-tab .tx-sec", "color", cl$text, cd$text, cp$text)
-      else              add(".tabxplor-tab .tx-sec", "color", hex, hex, hex)
-    }
+    # aside beside it is set slightly back from the table's own text. Resolved PER THEME by the one
+    # shared resolver, like every other chrome rule here -- a single hex would bake a light-theme
+    # grey into the dark page. Under `color_whole_cell` no rule is emitted at all: the aside then
+    # inherits the cell's own shade, which is what the span's absence already gives -- but the span
+    # is still written, so a stylesheet can restyle it either way.
+    if (!color_whole_cell_opt())
+      add(".tabxplor-tab .tx-sec", "color", color_secondary_hex("light"),
+          color_secondary_hex("dark"), color_secondary_hex("print"))
   }
 
   # Phase 14l: the text channel uses the text family and the bg channel the bg family -- the loop

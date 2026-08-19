@@ -142,16 +142,15 @@ TAB_OPTIONS <- list(
             "prints the smallest base only, `\"no\"` shows no count at all. It replaces the `add_n`",
             "argument, deprecated in 2.0.0.")),
 
-  color_secondary = tx_opt(
-    "black", "display",
-    doc = c("in a cell that prints SEVERAL fields, which colour the ones beside the primary take.",
-            "A composite reads as one number with an aside --- `1/1.63*** (31%)` --- and the colour",
-            "grades the number, not the aside, so by default only the primary token is shaded and",
-            "the rest is plain text (`\"black\"`, i.e. the table's normal text colour, whatever the",
-            "theme). Give any colour --- a name like `\"grey60\"` or a hex code like `\"#767676\"` ---",
-            "to tint the asides instead, which keeps the eye on the primary while still separating",
-            "them from the labels. `\"same\"` extends the primary's own colour over the whole cell.",
-            "Console and html; Markdown and Excel colour a cell as a whole.")),
+  color_whole_cell = tx_opt(
+    FALSE, "display",
+    doc = c("EXPERT. A cell that prints SEVERAL fields reads as one number with an aside ---",
+            "`1/1.63*** (31%)` --- so the colour grades the number and the aside is set slightly",
+            "back from the table's own text, following the theme. Set to `TRUE` to extend the",
+            "primary's own colour over the whole cell instead (the pre-2.0.0 rendering).",
+            "There is no colour to choose: which grey an aside takes belongs to the theme's",
+            "palette, not to a per-cell option --- see `set_color_palette()`.",
+            "Console and html; Markdown and Excel colour a cell as a whole either way.")),
 
   var_names = tx_opt(
     "both", "display", arg = "var_names",

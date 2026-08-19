@@ -21,7 +21,9 @@ testthat::test_that("a mean diff displays as a signed difference, not with a mul
   t  <- tab(forcats::gss_cat, race, tvhours, pct = "row", color = "diff")
   d  <- format(set_display(t$tvhours, "diff"))
   testthat::expect_false(any(grepl(mult_glyph, d, fixed = TRUE)))
-  testthat::expect_true(all(grepl("^[+-]", d[!is.na(d)])))
+  # signed, except on the reference cell, which prints the bare neutral "0"
+  testthat::expect_true(all(grepl("^[+-]", d[!is.na(d) & d != "0"])))
+  testthat::expect_true(any(d %in% "0"))
   # the rendered number IS the field (no standardization, no rescaling)
   raw <- get_diff(t$tvhours)
   testthat::expect_equal(as.numeric(sub("^\\+", "", d)), round(raw, 1), tolerance = 1e-8)
@@ -30,7 +32,9 @@ testthat::test_that("a mean diff displays as a signed difference, not with a mul
 testthat::test_that("a pct diff keeps its sign and its %", {
   t <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
   d <- format(set_display(t$Married, "diff"))
-  testthat::expect_true(all(grepl("^[+-].*%$", d[!is.na(d)])))
+  # signed, except the reference cell, which prints the bare neutral "0%"
+  testthat::expect_true(all(grepl("^[+-].*%$", d[!is.na(d) & d != "0%"])))
+  testthat::expect_true(any(d %in% "0%"))
 })
 
 testthat::test_that("the Excel numFmt follows the text display for BOTH diff kinds", {

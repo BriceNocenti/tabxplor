@@ -1264,7 +1264,8 @@ reg_fill_sweep <- function(fit, data, predictors, conf_level, wt = NULL, multipl
            error = function(e) NULL)
 
 # A pure template writer: every field it can name is already stored, and the per-cell rule is the
-# crosstab's own -- a cell takes the template only where every field it names exists.
+# crosstab's own -- a cell takes the template wherever its PRIMARY field exists, a void aside being
+# padded rather than dropped.
 #' @keywords internal
 #' @noRd
 reg_apply_display <- function(col, display) {
@@ -1519,10 +1520,10 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
   show    <- in_model & (!is.na(ame_v) | is_ref)
   if (shape == "prob") {
     display[show] <- "est"
-    # ⚠ a SUMMED SCORE's marginal effect is additive on the outcome's own scale, like a gaussian AME,
-    # so its reference carries the additive NEUTRAL. A probability-scale AME keeps NA: a
-    # percentage-point contrast has no reference value.
-    ame_v[is_ref] <- if (identical(scale %||% "points", "raw_diff")) 0 else NA_real_
+    # EVERY reference cell carries its measure's neutral, on every scale -- the additive 0 here, as in
+    # the coefficient twin (reg_column()) and in the three multiplicative arms below. It is what makes
+    # a marginal risk difference read like its conditional counterpart instead of leaving a hole.
+    ame_v[is_ref] <- 0
     # carry the model OR in `or` so the tooltip can surface it although the cell DISPLAYS the AME.
     or_v <- if (is.null(or_tip)) NA_real_ else or_tip
     # ⚠ the SCALE written into is the ESTIMAND's, never the arm's, and the estimate goes in the field
@@ -3316,13 +3317,19 @@ reg_stage_finalize <- function(ctx) {
 #'   shows the plain estimate, or, with `empirical`, the estimate with the level it sits on beside
 #'   it. The named layouts:
 #'   * `"est"` --- the effect alone.
-#'   * `"est_ci"` --- with a visible interval: `1/2.22 [1/2.47; 1/1.99]`.
+#'   * `"est_ci"` --- with a visible interval: `1/2.22*** [1/2.47;1/1.99]`. The stars and the colour
+#'     stay on the effect; the bracket is the aside.
 #'   * `"est_base"` --- the effect with the level beside it: `1/2.22 (32.8%)` on a logistic model,
 #'     `-0.89 (2.25)` on a linear one. On a model column that level is the **adjusted** prediction;
 #'     on a crude column the observed percentage or mean.
 #'   * `"base_est"` --- the mirror, level first: `(32.8%) 1/2.22`. The effect stays the number the
 #'     cell is about (it carries the stars and the colour); the bracket is the aside.
+#'   * `"est_coef"` --- the effect with the model's own coefficient beside it: `1/2.22 (-0.80)`, the
+#'     logarithm on a ratio scale, the effect itself on an additive one.
 #'   * `"base"` --- the levels alone, still coloured and starred by the effect.
+#'
+#'   A cell that cannot fill an aside leaves it **blank but padded**, so the effects still line up;
+#'   an aside no cell of the column can fill is dropped, padding and all.
 #'
 #'   Or write a `{}` template: `"{est} (obs {obs})"` prints each adjusted effect next to the
 #'   unadjusted one, `"{est} ({gap})"` next to how far adjustment moved it.

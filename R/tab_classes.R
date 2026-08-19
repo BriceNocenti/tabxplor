@@ -1680,13 +1680,11 @@ tab_kable_print_tooltip <- function(x, .ref = NULL, .note = NULL) {
   if (fold_ci) out_diff <- stringi::stri_trim(paste0(out_diff, " ", ci_txt))
   cond_est <- identical(scl$kind, "effect") && !fold_ci & has_ci
   out_est  <- if (any(cond_est)) {
-    # the `est_ci` TOKEN, which is exactly "the estimate with a visible interval" on whatever field
-    # the column centres on -- inverted bounds included, so a hovered odds ratio reads like a printed
-    # one. The exact p-value joins it: the cell shows only stars.
+    # the `est_ci` LAYOUT -- "the estimate with a visible interval", each column answering with its
+    # own field and its own bracket, inverted bounds included, so a hovered odds ratio reads like a
+    # printed one. The exact p-value joins it: the cell shows only stars.
     pv <- test_fmt_pvalue(get_pvalue(x))
-    # `special_formatting = TRUE`: the visible bracket IS a special rendering (inverted bounds, the
-    # reference row's bare "1"), so the plain pass would print the point estimate alone.
-    est <- stringi::stri_trim(format(set_display(x, "est_ci"), special_formatting = TRUE))
+    est <- stringi::stri_trim(format(set_display(x, DISPLAY_PRESETS[["est_ci"]])))
     dplyr::if_else(cond_est,
                    paste0(est, dplyr::if_else(is.na(pv), "", paste0(", p = ", pv))),
                    "")

@@ -32,10 +32,10 @@ tab(
   common_totrow = FALSE,
   tot = c("row", "col"),
   n = NULL,
+  n_min = 0,
   add_pct = FALSE,
   subtext = "",
   digits = 0,
-  n_min = 0,
   display = NULL,
   color_breaks = NULL,
   output_list = FALSE,
@@ -354,6 +354,12 @@ variables losing different missing values, several models --- it prints the whol
 range, \code{100\% (6 712-9 838)}, so an unequal base can never pass unnoticed.
 \code{"min"} prints the smallest base only; \code{"no"} prints no count.}
 
+\item{n_min}{A single positive integer (default \code{0}, off). A pure display filter applied
+last: it hides small-base cells without recomputing anything. A row is dropped only when its
+\emph{largest} base across the column variables is below \code{n_min}; surviving cells whose own
+base is below \code{n_min} are blanked. Under \code{pct = "col"} the same rule drops weak
+columns. Total rows/columns, the added-\code{n} row/column and the p-value line are always kept.}
+
 \item{add_pct}{Set to \code{TRUE} to add a column with the frequencies of the row
 variable (for \code{pct = "row"}) or a row with the frequencies of the column variable
 (for  \code{pct = "col"}).}
@@ -363,12 +369,6 @@ variable (for \code{pct = "row"}) or a row with the frequencies of the column va
 \item{digits}{The number of digits to print, as a single integer, or an integer vector the
 same length as \code{col_vars}.}
 
-\item{n_min}{A single positive integer (default \code{0}, off). A pure display filter applied
-last: it hides small-base cells without recomputing anything. A row is dropped only when its
-\emph{largest} base across the column variables is below \code{n_min}; surviving cells whose own
-base is below \code{n_min} are blanked. Under \code{pct = "col"} the same rule drops weak
-columns. Total rows/columns, the added-\code{n} row/column and the p-value line are always kept.}
-
 \item{display}{What each value cell shows (text output only -- the console, \code{\link{tab_kable}}
 and \code{\link{tab_md}}; Excel falls back to the primary field). \code{NULL} (default)
 keeps each cell's plain value. Three ways to ask, from the shortest:
@@ -376,7 +376,8 @@ keeps each cell's plain value. Three ways to ask, from the shortest:
 \item a \strong{named layout}: \code{"est"} (the estimate), \code{"est_ci"} (with a
 visible interval), \code{"base_ci"} (each value with its interval), \code{"est_base"}
 / \code{"base_est"} (the two together, in the order the words are written),
-\code{"base"} (the level alone). The same names work on \code{\link{tab_reg}}.
+\code{"est_coef"} (with the model's own coefficient), \code{"base"} (the level
+alone). The same names work on \code{\link{tab_reg}}.
 \item a \strong{single field}, e.g. \code{display = "ci"} or \code{"diff"}. Valid
 fields are listed in \emph{Display fields} below.
 \item a \strong{\{\} template} combining several, e.g. \code{"\{pct\} (n=\{n\})"}
@@ -532,6 +533,7 @@ it is what Excel shows and what the colours read.
 \item \code{var} --- the variance. Needs a numeric col_var.
 \item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only. Needs test = TRUE  (the residual comes from the chi-squared).
 \item \code{obs} --- the OBSERVED (crude) effect a modelled one is compared to. \code{tab_reg()} tables only. Needs tab_reg(empirical = TRUE)  (an observed effect to compare the model to).
+\item \code{coef} --- the estimate on the model's LINK scale --- the coefficient a linear or log-link model fitted. The same number as \code{est} where the column is already additive, its logarithm where the column shows a ratio. Needs a \code{tab_reg()} column (a crosstab estimates no coefficient).
 \item \code{gap} --- how far adjustment moved the effect: the gap between the modelled estimate and its observed counterpart, on the estimate's own scale. What \code{color = "adjustment"} grades --- readable in print and Excel, not only in an html tooltip. Needs tab_reg(empirical = TRUE)  (a model effect and its observed counterpart).
 }
 }

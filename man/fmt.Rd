@@ -575,15 +575,14 @@ the last few are not meant to be typed:
 \item \code{base} --- the level the estimate sits on: the percentage, the mean or the count. On a plain percentage table it is the same number as \code{est}; beside a regression effect it is the adjusted prediction.
 \item \code{ci} --- the confidence interval of whatever the column compares.
 \item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only.
+\item \code{coef} --- the estimate on the model's LINK scale --- the coefficient a linear or log-link model fitted. The same number as \code{est} where the column is already additive, its logarithm where the column shows a ratio.
 \item \code{gap} --- how far adjustment moved the effect: the gap between the modelled estimate and its observed counterpart, on the estimate's own scale. What \code{color = "adjustment"} grades --- readable in print and Excel, not only in an html tooltip.
 \item \code{pct_ci} --- the percentage, with its interval printed beside it.
 \item \code{mean_ci} --- the mean, with its interval printed beside it.
 \item \code{or_pct} --- the odds ratio, with its percentage.
 \item \code{OR} --- a legacy spelling of \code{or}, rendered identically.
 \item \code{OR_pct} --- a legacy spelling of \code{or_pct}, rendered identically.
-\item \code{coef} --- a regression coefficient, on its own scale.
 \item \code{gof} --- a model-fit statistic (N, R2, AIC, BIC, dispersion).
-\item \code{est_ci} --- the estimate with a visible interval, reading whichever field the column's scale centres on.
 \item \code{n_range} --- the unweighted base: one count, or a \code{min-max} range over the table.
 \item \code{blank} --- nothing: a cell masked by \code{n_min}.
 \item \code{rr} --- the legacy synonym of \code{ratio}, still accepted.

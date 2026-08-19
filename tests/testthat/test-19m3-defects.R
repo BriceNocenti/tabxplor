@@ -35,13 +35,15 @@ testthat::test_that("the derived vocabularies reproduce what they replaced", {
   testthat::expect_identical(
     tabxplor:::DISPLAY_USER_FIELDS,
     c("pct", "n", "wn", "mean", "est", "base", "diff", "ratio", "ci", "or", "ctr", "var",
-      "resid", "obs", "gap"))
+      "resid", "obs", "coef", "gap"))
   testthat::expect_identical(
     tabxplor:::DISPLAY_BARE_TOKENS,
     c("pct", "n", "wn", "mean", "est", "base", "diff", "ratio", "ci", "or"))
   testthat::expect_identical(tabxplor:::DISPLAY_ALIASES, c(rr = "ratio"))
-  testthat::expect_setequal(tabxplor:::DISPLAY_VALUE_CELLS,   c("pct", "mean", "n", "wn",
-                                                              "est", "base"))
+  # every token carrying a VALUE of the table is re-templatable; only the four that carry none are not
+  testthat::expect_setequal(
+    setdiff(names(tabxplor:::DISPLAY_TOKENS), tabxplor:::DISPLAY_VALUE_CELLS),
+    c("pvalue", "gof", "n_range", "blank", "rr"))
   testthat::expect_setequal(tabxplor:::DISPLAY_FOOTER_TOKENS, c("gof", "pvalue", "blank"))
   # `pvalue` is a footer token that IS coloured (a significance warning) -- the one disagreement
   # that makes these two facts two columns rather than one "numberless" flag.

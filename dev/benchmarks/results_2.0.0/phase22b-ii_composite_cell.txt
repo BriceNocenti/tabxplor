@@ -1,0 +1,15 @@
+Phase 22b-ii -- the composite cell: alignment, empty tokens and signs
+Measured on WSL2 / ext4, R 4.6.1, OMP_NUM_THREADS=1, 1e6 cells (level_pct column).
+Baseline = HEAD (git archive into a temp dir), after = the working tree.
+
+                     HEAD     after    delta
+format() bare       9.143 s   9.008 s   -1.5 %   (3 calls, stars = TRUE)
+format() composite 26.490 s  27.450 s   +3.6 %   (3 calls, "{pct} ({diff})")
+get_num() bare      1.372 s   1.361 s   -0.8 %   (5 calls)
+get_num() composite 1.630 s   1.702 s   +4.4 %   (5 calls)
+tab() build         1.279 s   1.320 s   +3.2 %   (5 builds, gss_cat, color = "diff")
+
+The only real cost is fmt_rendered() -- one Unicode whitespace trim per token per cell -- which the
+composite expander runs to decide what is void. Everything else is within run-to-run noise. The new
+bracket-group walk in parse_display_template() runs once per UNIQUE template per column, not per
+cell, so it does not show up at all.

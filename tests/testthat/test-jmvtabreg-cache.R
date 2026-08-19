@@ -162,6 +162,13 @@ test_that("a repeat build and a reference change reuse the fit (no refit)", {
 
   b4 <- jmvtab_reg_build(gss, reg_opts(color = "no"), b3$store)                    # display -> hit
   expect_gte(b4$hits, 1L)
+
+  # `display = "est_ci"` is the ONE layout the digest can serve without the fitted object, and the
+  # gate compares the RESOLVED template -- a stale literal there costs the fast path silently.
+  b5 <- jmvtab_reg_build(gss, reg_opts(display = "est_ci"), b4$store)
+  expect_gte(b5$hits, 1L)
+  b6 <- jmvtab_reg_build(gss, reg_opts(display = "est_ci", ref = c(race = "Black")), b5$store)
+  expect_gte(b6$hits, 1L)
 })
 
 test_that("a predictor / family change refits (a miss)", {

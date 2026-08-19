@@ -14,10 +14,14 @@
 #     parse_display_template() (R/fmt_class.R); the presets below are spelt to obey it.
 #   - DISPLAY_PRESETS + display_resolve() are the ONE named-layout table, read by tab() and by
 #     tab_reg() alike, so a display learnt on a crosstab means the same on a regression.
-#   - A token whose field is empty renders VOID and the note names the argument that would fill it;
-#     it never silently substitutes the column's own primary field.
-#   - WARNING: display_write_col()'s across() callback must stay a NAMED function -- dplyr inlines
-#     an anonymous one into the data mask, `r$col` yields NULL, and across() DROPS the column.
+#   - THE VOID RULE HAS TWO HALVES. Per CELL, a token with nothing to show renders BLANK AND KEEPS
+#     ITS WIDTH, so one missing aside never breaks the column's alignment; per COLUMN, a token void
+#     everywhere leaves the template with its whole bracket group, padding and all, and the note
+#     names the argument that would have filled it. A void token never silently substitutes the
+#     column's own primary field. display_template_keep() (R/fmt_class.R) is the shared rule.
+#   - WARNING: the two template writers loop over COLUMNS, never dplyr::across() -- across() runs per
+#     GROUP on a grouped tab, and "is this field empty in the whole column" would then be answered
+#     per sub-table, pruning an aside out of a one-row group while its neighbours keep it.
 #   - DISPLAY_TOKENS' row ORDER is a contract, and its `doc=` / `source=` strings are user-facing
 #     documentation: display_tokens_rd() emits them into ?fmt and ?tab through an `@eval` block.
 #   - THE BASE COUNT IS ONE DISPLAY-TIME FACT, for both producers. Nothing stores it: a crosstab
@@ -40,7 +44,13 @@ tab_apply_display <- function(tabs, display) {
     missing_tok <<- union(missing_tok, r$missing)
     r$col
   }
-  set_one <- function(tab) dplyr::mutate(tab, dplyr::across(dplyr::where(is_fmt), write_col))
+  # WARNING: column by column, NOT dplyr::across() -- across() runs PER GROUP on a grouped tab, and
+  # display_write_col()'s "empty in the WHOLE column" rule must be answered over the column, or a
+  # one-row sub-table loses an aside its neighbours keep and the column stops lining up.
+  set_one <- function(tab) {
+    for (nm in names(tab)) if (is_fmt(tab[[nm]])) tab[[nm]] <- write_col(tab[[nm]])
+    tab
+  }
   out <- if (is.data.frame(tabs)) set_one(tabs) else purrr::map(tabs, set_one)
   if (length(missing_tok)) display_note_empty(missing_tok)
   out
@@ -53,12 +63,7 @@ tab_apply_display <- function(tabs, display) {
 #' @keywords internal
 #' @noRd
 display_write_col <- function(col, tmpl) {
-  fields <- parse_display_template(tmpl)$fields
-  # DESIGN: a ONE-FIELD "composite" must render as the pipeline's own bare token -- the composite
-  # renderer calls format(special_formatting = FALSE), dropping the odds ratio's 1/x form and its
-  # reference-cell annotation. DISPLAY_BARE_TOKENS only: the other fields have no simple renderer.
-  bare <- if (length(fields) == 1L && identical(tmpl, paste0("{", fields, "}")) &&
-              fields %in% DISPLAY_BARE_TOKENS) fields else tmpl
+  seg  <- parse_display_template(tmpl)
   d    <- get_display(col)
   # Only genuine value cells; p-value / blank / total-marker cells keep their own token. Read through
   # display_primary(), so a cell ALREADY carrying a composite is re-templatable: since regression
@@ -66,18 +71,27 @@ display_write_col <- function(col, tmpl) {
   # `set_display()` recipe on exactly the tables that need it most.
   elig <- display_primary(d) %in% DISPLAY_VALUE_CELLS
   if (!any(elig)) return(list(col = col, missing = character()))
-  display_refuse_mismatch(col, fields, tmpl)
-  # DESIGN: the void rule is PER-CELL -- the template is written on the cells carrying EVERY one of
-  # its fields (a total row is the reference, so it has no difference interval and "{pct} {ci}"
-  # leaves it a bare `pct`). The note fires only for a field empty in the whole column.
-  missing <- character()
-  for (f in fields) {
-    have <- !is.na(get_num(fmt_set_display(col, f)))
-    if (all(!have[elig])) missing <- union(missing, f)
-    elig <- elig & have
-  }
+  display_refuse_mismatch(col, seg$fields, tmpl)
+  have  <- lapply(seg$fields, function(f) !is.na(get_num(fmt_set_display(col, f))))
+  empty <- vapply(have, function(h) all(!h[elig]), logical(1))
+  # DESIGN: THE VOID RULE HAS TWO HALVES, and they are not the same rule. Per CELL (format()'s job) a
+  # void aside renders BLANK AND KEEPS ITS WIDTH, so a total row missing its difference interval
+  # still lines up with the rows that have one. Per COLUMN (here) a field void EVERYWHERE is not
+  # padding worth keeping: its whole bracket group leaves the template, and a template left with one
+  # bare token collapses onto that token.
+  tmpl2 <- display_prune_template(seg, empty)
+  f2    <- parse_display_template(tmpl2)$fields
+  if (!length(f2)) return(list(col = col, missing = seg$fields[empty]))
+  # DESIGN: a ONE-FIELD "composite" must render as the pipeline's own bare token -- the composite
+  # renderer calls format(special_formatting = FALSE), dropping the odds ratio's 1/x form and its
+  # reference-cell annotation. DISPLAY_BARE_TOKENS only: the other fields have no simple renderer.
+  bare <- if (length(f2) == 1L && identical(tmpl2, paste0("{", f2, "}")) &&
+              f2 %in% DISPLAY_BARE_TOKENS) f2 else tmpl2
+  # the PRIMARY gates the stamping, and it alone: a cell is about its primary, and an aside missing
+  # on SOME cells is exactly what the per-cell padding is for.
+  elig <- elig & have[[seg$primary]]
   d[elig] <- bare
-  list(col = fmt_set_display(col, d), missing = missing)
+  list(col = fmt_set_display(col, d), missing = seg$fields[empty])
 }
 
 # fmt_blank_fields() -- the helper rows / columns copy a real column and re-display it, so every
@@ -110,14 +124,14 @@ fmt_blank_fields <- function(col, pct = FALSE) {
 #
 # COLUMNS
 #   field      the fmt field get_num() reads. NA = the token has none of its own: `resid` is DERIVED
-#              (fmt_resid(), from pvalue + sign(ctr)), `blank` prints nothing, and `est_ci` reads
-#              whichever field the COLUMN's scale centres on -- fmt_center_field(), which is
-#              EST_SCALES' vocabulary and deliberately not folded in here.
+#              (fmt_resid(), from pvalue + sign(ctr)) and `blank` prints nothing.
 #   settable   set_num() writes the field back. FALSE only where there is nothing to write.
 #   user       may be typed inside a {} template (and is named in the "Valid fields" message).
 #   bare       a one-field template collapses onto this token, inheriting its own rendering.
-#   value_cell display_write_col() may re-template a cell showing this -- a genuine value cell, as
-#              opposed to a p-value / blank / total-marker cell, which keeps its own token.
+#   value_cell display_write_col() may re-template a cell showing this. TRUE on every token that
+#              carries a VALUE of the table; FALSE only on the four that are not one -- a p-value, a
+#              model-fit statistic, the `n_min` blank, and the synthesised base count -- which keep
+#              their own token whatever `display =` asks for.
 #   footer     a footer STATISTIC, not data: it never carries a significance star, and a row whose
 #              every cell is one is a regression's model-fit block (read black + bold, not greyed).
 #   colour     may a cell showing this be coloured. `pvalue` is TRUE here while `footer` is also TRUE,
@@ -173,57 +187,69 @@ DISPLAY_TOKENS <- list(
                   doc = paste('the level the estimate sits on: the percentage, the mean or the',
                               'count. On a plain percentage table it is the same number as',
                               '`est`; beside a regression effect it is the adjusted prediction')),
-  diff    = .dtok("diff" , user = TRUE, bare = TRUE, geometry = "difference",
+  diff    = .dtok("diff" , user = TRUE, bare = TRUE, value_cell = TRUE, geometry = "difference",
                   comparison = "difference",
                   source = 'a `ref` to compare to, and pct = "row" / "col"',
                   doc = 'the difference from the reference'),
-  ratio   = .dtok("ratio", user = TRUE, bare = TRUE, geometry = "ratio", comparison = "ratio",
+  ratio   = .dtok("ratio", user = TRUE, bare = TRUE, value_cell = TRUE, geometry = "ratio",
+                  comparison = "ratio",
                   min_digits = 2L,
                   source = 'a `ref` to compare to, and pct = "row" / "col"',
                   doc = 'the ratio to the reference (relative risk, or a ratio of means)'),
-  ci      = .dtok("ci"   , user = TRUE, bare = TRUE,
+  ci      = .dtok("ci"   , user = TRUE, bare = TRUE, value_cell = TRUE,
                   source = 'ci = "ref"  (or ci = "cell" for each cell\'s own interval)',
                   doc = 'the confidence interval of whatever the column compares'),
-  or      = .dtok("or"   , user = TRUE, bare = TRUE, geometry = "ratio", comparison = "odds_ratio",
+  or      = .dtok("or"   , user = TRUE, bare = TRUE, value_cell = TRUE, geometry = "ratio",
+                  comparison = "odds_ratio",
                   min_digits = 2L,
                   source = 'pct = "row" / "col"  (an odds ratio needs a percentage base)',
                   doc = 'the odds ratio'),
-  ctr     = .dtok("ctr"  , user = TRUE,
+  ctr     = .dtok("ctr"  , user = TRUE, value_cell = TRUE,
                   source = 'test = TRUE  (the contributions come from the chi-squared)',
                   doc = "the cell's contribution to the chi-squared"),
-  var     = .dtok("var"  , user = TRUE, source = 'a numeric col_var',
+  var     = .dtok("var"  , user = TRUE, value_cell = TRUE, source = 'a numeric col_var',
                   doc = 'the variance'),
-  resid   = .dtok(          user = TRUE, settable = FALSE, min_digits = 1L,
+  resid   = .dtok(          user = TRUE, settable = FALSE, value_cell = TRUE, min_digits = 1L,
                   source = 'test = TRUE  (the residual comes from the chi-squared)',
                   doc = paste('the adjusted standardized residual -- whether the cell departs from',
                               'independence. Derived from the p-value and the sign of `ctr`, so it',
                               'is read-only')),
-  obs     = .dtok("obs"  , user = TRUE,
+  obs     = .dtok("obs"  , user = TRUE, value_cell = TRUE,
                   source = 'tab_reg(empirical = TRUE)  (an observed effect to compare the model to)',
                   doc = paste('the OBSERVED (crude) effect a modelled one is compared to.',
                               '`tab_reg()` tables only')),
+  # DERIVED where the column is multiplicative: log(estimate) IS the coefficient the model fitted, so
+  # nothing needs storing. Settable all the same -- the write mirrors the read through exp().
+  coef    = .dtok("diff"  , user = TRUE, value_cell = TRUE, min_digits = 2L,
+                  source = 'a `tab_reg()` column (a crosstab estimates no coefficient)',
+                  doc = paste('the estimate on the model\'s LINK scale --- the coefficient a linear',
+                              'or log-link model fitted. The same number as `est` where the column',
+                              'is already additive, its logarithm where the column shows a ratio')),
   # DERIVED, like `resid`: the gap IS fmt_adjustment_score(), the number color = "adjustment" grades,
   # so a printed gap and its shade cannot disagree. Read-only -- nothing to write a gap back into.
-  gap     = .dtok(         user = TRUE, settable = FALSE,
+  gap     = .dtok(         user = TRUE, settable = FALSE, value_cell = TRUE,
                   source = 'tab_reg(empirical = TRUE)  (a model effect and its observed counterpart)',
                   doc = paste('how far adjustment moved the effect: the gap between the modelled',
                               'estimate and its observed counterpart, on the estimate\'s own scale.',
                               'What `color = "adjustment"` grades --- readable in print and Excel,',
                               'not only in an html tooltip')),
   # --- the ones the PIPELINE writes; never user-typed --------------------------------------------
-  pct_ci  = .dtok("pct"   , doc = 'the percentage, with its interval printed beside it'),
-  mean_ci = .dtok("mean"  , doc = 'the mean, with its interval printed beside it'),
-  or_pct  = .dtok("or"    , min_digits = 2L, doc = 'the odds ratio, with its percentage'),
-  OR      = .dtok("or"    , min_digits = 2L, doc = 'a legacy spelling of `or`, rendered identically'),
-  OR_pct  = .dtok("or"    , min_digits = 2L, doc = 'a legacy spelling of `or_pct`, rendered identically'),
+  # genuine VALUE cells: `display =` may re-template them, so `tab(ci = "cell", display = "{pct}")`
+  # means what it says instead of silently doing nothing.
+  pct_ci  = .dtok("pct"   , value_cell = TRUE,
+                  doc = 'the percentage, with its interval printed beside it'),
+  mean_ci = .dtok("mean"  , value_cell = TRUE,
+                  doc = 'the mean, with its interval printed beside it'),
+  or_pct  = .dtok("or"    , value_cell = TRUE, min_digits = 2L,
+                  doc = 'the odds ratio, with its percentage'),
+  OR      = .dtok("or"    , value_cell = TRUE, min_digits = 2L,
+                  doc = 'a legacy spelling of `or`, rendered identically'),
+  OR_pct  = .dtok("or"    , value_cell = TRUE, min_digits = 2L,
+                  doc = 'a legacy spelling of `or_pct`, rendered identically'),
   pvalue  = .dtok("pvalue", footer = TRUE,           # footer, yet deliberately coloured
                   doc = "a test's p-value"),
-  coef    = .dtok("diff"  , doc = 'a regression coefficient, on its own scale'),
   gof     = .dtok("diff"  , footer = TRUE, colour = FALSE,
                   doc = 'a model-fit statistic (N, R2, AIC, BIC, dispersion)'),
-  est_ci  = .dtok(          min_digits = 2L,
-                  doc = paste('the estimate with a visible interval, reading whichever',
-                                        'field the column\'s scale centres on')),
   # The base count as the reader needs it: ONE number when every column block of the table rests on
   # the same population, `min-max` when they differ (several col_vars losing different NAs, several
   # models). Both ends are ordinary fields -- `n` the smallest base, `tot_n` the largest -- written
@@ -307,14 +333,16 @@ DISPLAY_MIN_DIGITS     <- {
 # beside a model column's "1/1.63 (31.5%)", with the two estimates adjacent and the stars on both.
 # The other reading -- the LEVEL as the subject, graded by the effect -- is `base` / `base_ci`.
 #
-# `est_ci` resolves to a TOKEN rather than a template: a visible interval is a rendering (inverted
-# bounds, the reference row's empty bracket), not two fields pasted together.
+# `est_ci` is an ordinary composite like the rest: `{ci}` renders the interval on the column's OWN
+# scale (inverted bounds on a ratio, blank where none was computed), so the estimate keeps the stars
+# and the colour and the per-token padding lines the estimates up.
 #' @keywords internal
 #' @noRd
 DISPLAY_PRESETS <- c(
   est      = "{est}",
-  est_ci   = "est_ci",
+  est_ci   = "{est} {ci}",
   est_base = "{est} ({base})",
+  est_coef = "{est} ({coef})",
   base_est = "({base}) {est}",
   base     = "{base}",
   base_ci  = "{base} {ci}"

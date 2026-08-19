@@ -406,8 +406,10 @@ test_that("change A: adjusted % coheres with the AME; unadjusted prediction == t
   rl  <- as.character(t$levels)[race_rows]
   adj <- get_pct(amecol)[race_rows];  names(adj) <- rl
   ame <- get_diff(amecol)[race_rows]; names(ame) <- rl
-  ref <- rl[is.na(ame)][1]
-  for (lv in rl[!is.na(ame)]) {
+  # a reference cell carries the measure's NEUTRAL now, so it is identified by its row, not by an NA
+  est <- !is.na(get_pvalue(amecol)[race_rows])
+  ref <- rl[!est][1]
+  for (lv in rl[est]) {
     expect_equal(unname(adj[ref] + ame[lv]), unname(adj[lv]), tolerance = 1e-6)
   }
 
@@ -537,8 +539,9 @@ testthat::test_that("`display` is post-hoc: it changes no number, on either colu
                   display = "est_base")
   est_cols <- names(base)[vapply(base, function(c) is_fmt(c) && nzchar(get_role(c)) &&
                                    get_role(c) != "n", logical(1))]
-  post <- dplyr::mutate(base, dplyr::across(dplyr::all_of(est_cols),
-                                            ~ set_display(.x, "est_base")))
+  # NOT dplyr::across(): on a grouped tab it runs per sub-table, and a display is a COLUMN fact
+  post <- base
+  for (nm in est_cols) post[[nm]] <- set_display(post[[nm]], "est_base")
   for (nm in est_cols) {
     for (f in c("or", "pct", "diff", "ci_inf", "ci_sup", "pvalue", "n")) {
       testthat::expect_equal(vctrs::field(base[[nm]], f), vctrs::field(same[[nm]], f), info = nm)

@@ -36,10 +36,17 @@ testthat::test_that("display_primary() never errors on malformed templates", {
 # === parse_display_template(): the segment parser ==================================
 
 testthat::test_that("parse_display_template() splits literals and {tokens} in order", {
+  # the literals are SPLIT at the top-level bracket boundaries, so every piece belongs to one group
   p <- parse_display_template("{pct} (n={n})")
-  testthat::expect_identical(p$pieces, c("{pct}", " (n=", "{n}", ")"))
-  testthat::expect_identical(p$is_tok, c(TRUE, FALSE, TRUE, FALSE))
+  testthat::expect_identical(p$pieces, c("{pct}", " ", "(n=", "{n}", ")"))
+  testthat::expect_identical(p$is_tok, c(TRUE, FALSE, FALSE, TRUE, FALSE))
+  testthat::expect_identical(p$group,  c(0L, 0L, 1L, 1L, 1L))
   testthat::expect_identical(p$fields, c("pct", "n"))
+  testthat::expect_identical(p$field_group, c(0L, 1L))
+
+  # ") (" closes one group and opens the next -- the split is what keeps them separable
+  p2 <- parse_display_template("{a} ({diff}) ({ratio})")
+  testthat::expect_identical(p2$group, c(0L, 0L, 1L, 1L, 1L, 0L, 2L, 2L, 2L))
 
   testthat::expect_identical(parse_display_template("{n} ({pct})")$fields, c("n", "pct"))
   testthat::expect_identical(parse_display_template("{ratio}")$fields, "ratio")     # canonical
@@ -110,11 +117,32 @@ testthat::test_that("stars ride the PRIMARY token, not the secondary (not double
   testthat::expect_true(any(stringi::stri_count_regex(plain, "\\*") > 0))  # the test is meaningful
 })
 
-testthat::test_that("a composite cell missing a field is left as the plain primary", {
+testthat::test_that("a void aside renders blank AND keeps its width, so the column stays aligned", {
   x <- fmt(n = c(10L, NA_integer_), scale = "level_pct", pct_type = "row", pct = c(0.4, 0.6), display = "pct")
   out <- format(set_display(x, "{pct} ({n})"))
   testthat::expect_identical(out[1], "40% (10)")
-  testthat::expect_identical(out[2], "60%")        # n is NA -> plain primary kept, no "(NA)"
+  testthat::expect_identical(out[2], "60%     ")   # no "(NA)", and the same width as its neighbour
+  testthat::expect_identical(nchar(out[1]), nchar(out[2]))
+  testthat::expect_false(grepl("(", out[2], fixed = TRUE))
+})
+
+testthat::test_that("an aside void in the WHOLE column is dropped, padding included", {
+  # the raw-template path (set_display writes it verbatim) prunes in format() ...
+  x <- fmt(n = c(NA_integer_, NA_integer_), scale = "level_pct", pct_type = "row",
+           pct = c(0.4, 0.6), display = "pct")
+  testthat::expect_identical(format(set_display(x, "{pct} ({n})")), c("40%", "60%"))
+  # ... and the preset path prunes the TEMPLATE itself, collapsing to the bare token
+  r <- tabxplor:::display_write_col(x, "{pct} ({n})")
+  testthat::expect_identical(unique(get_display(r$col)), "pct")
+  testthat::expect_identical(r$missing, "n")
+})
+
+testthat::test_that("the primary's own bracket group is never dropped", {
+  # "({n_range})" -- the base-count fold's template, whose only token is bracketed
+  x <- fmt(n = c(10L, 20L), tot_n = c(NA_real_, NA_real_), scale = "level_n", display = "n_range")
+  seg <- tabxplor:::parse_display_template("({n_range})")
+  testthat::expect_true(all(tabxplor:::display_template_keep(seg, TRUE)))
+  testthat::expect_identical(format(set_display(x, "({n_range})")), c("(10)", "(20)"))
 })
 
 # === consumer safety: a hand-injected bad template must not crash any consumer =====
@@ -253,12 +281,12 @@ testthat::test_that("{est} / {base} resolve to the token each COLUMN renders the
 testthat::test_that("the preset table is ONE table, resolved the same way by both producers", {
   testthat::expect_identical(
     names(tabxplor:::DISPLAY_PRESETS),
-    c("est", "est_ci", "est_base", "base_est", "base", "base_ci"))
+    c("est", "est_ci", "est_base", "est_coef", "base_est", "base", "base_ci"))
   # idle values leave every cell's own token alone
   for (d in list(NULL, NA_character_, "", "no", "auto"))
     testthat::expect_null(tabxplor:::display_resolve(d))
   testthat::expect_identical(tabxplor:::display_resolve("base_ci"), "{base} {ci}")
-  testthat::expect_identical(tabxplor:::display_resolve("est_ci"),  "est_ci")   # a token, not a template
+  testthat::expect_identical(tabxplor:::display_resolve("est_ci"),  "{est} {ci}")
   testthat::expect_identical(tabxplor:::display_resolve("diff"),    "{diff}")   # a bare token
   testthat::expect_error(tabxplor:::display_resolve("wibble"), "Unknown|Invalid")
   # post-hoc set_display() by preset NAME == the build-time request
@@ -280,10 +308,10 @@ testthat::test_that("a multiplicative cell prints its inverse below the neutral,
   testthat::expect_true(any(grepl("1/", format(set_display(co, "{or} ({pct})")), fixed = TRUE)))
   # so does the est_ci bracket, bounds included, and the bounds are NOT reordered
   ec <- set_display(co, "est_ci")
-  txt <- format(ec, special_formatting = TRUE)
+  txt <- stringi::stri_trim(format(ec, special_formatting = TRUE))
   i   <- which(!is.na(get_ci_inf(ec)) & get_or(ec) < 1)[1]
   testthat::skip_if(is.na(i))
-  testthat::expect_match(txt[i], "^1/[0-9.]+ \\[1/[0-9.]+;", perl = TRUE)
+  testthat::expect_match(txt[i], "^1/[0-9.]+ +\\[1/[0-9.]+;", perl = TRUE)
   # the option restores the journal convention everywhere at once, cell and ladder alike
   withr::local_options(tabxplor.ratio_print = "raw")
   testthat::expect_false(any(grepl("1/", format(co, special_formatting = TRUE), fixed = TRUE)))
@@ -345,19 +373,31 @@ testthat::test_that("only the primary token is coloured, and the option says wha
     withr::local_options(cli.num_colors = 256)
     as.character(format(pillar::pillar_shaft(t[["White"]]), width = 30))
   }
-  d <- paint(tabxplor.color_secondary = "black")
-  s <- paint(tabxplor.color_secondary = "same")
-  g <- paint(tabxplor.color_secondary = "grey60")
-  # a simple cell has no aside, so every mode paints it identically
+  d <- paint(tabxplor.color_whole_cell = FALSE)
+  s <- paint(tabxplor.color_whole_cell = TRUE)
+  # a simple cell has no aside, so both paint it identically
   testthat::expect_identical(d, s)
-  testthat::expect_identical(d, g)
-  # a composite one does: the aside is unstyled by default, tinted on request, and inherits the
-  # cell's own colour under "same"
+  # a composite one does: the aside is set back by default, and inherits the cell's own colour
+  # under the expert whole-cell opt-out
   co2 <- set_display(co, "{pct} (n={n})")
   hit <- function(opt) {
-    withr::local_options(tabxplor.color_secondary = opt, cli.num_colors = 256)
+    withr::local_options(tabxplor.color_whole_cell = opt, cli.num_colors = 256)
     as.character(format(pillar::pillar_shaft(co2), width = 30))
   }
-  testthat::expect_false(identical(hit("black"), hit("same")))
-  testthat::expect_false(identical(hit("black"), hit("grey60")))
+  testthat::expect_false(identical(hit(FALSE), hit(TRUE)))
+})
+
+testthat::test_that("the aside's colour is the theme's own chrome, resolved PER THEME", {
+  # it IS grey2, the slot an uncoloured cell already takes -- one literal, and it must differ
+  # between a light and a dark background, or the aside is baked for the wrong one.
+  hex <- tabxplor:::color_secondary_hex
+  testthat::expect_identical(hex("light"), tabxplor:::tx_chrome_hex("light")$grey2)
+  testthat::expect_identical(hex("dark"),  tabxplor:::tx_chrome_hex("dark")$grey2)
+  testthat::expect_false(identical(hex("light"), hex("dark")))
+  # the stylesheet carries both, never one hex for every theme
+  css <- tab_css(theme = "auto")
+  testthat::expect_true(grepl(tabxplor:::tx_chrome_hex("dark")$grey2, css, fixed = TRUE))
+  # the expert opt-out emits no rule at all: the aside then inherits the cell's own shade
+  withr::local_options(tabxplor.color_whole_cell = TRUE)
+  testthat::expect_false(grepl("tx-sec", tab_css(theme = "light"), fixed = TRUE))
 })

@@ -89,7 +89,7 @@ test_that("display reaches the marginal path too -- one grammar, both builders",
     tab_reg(reg_data(), "married", "race", family = "binomial", effect = "marginal",
             display = "est_ci"))
   col <- t[[grep("^Model", names(t))[[1]]]]
-  expect_true(any(get_display(col) == "est_ci"))
+  expect_true(any(get_display(col) == tabxplor:::DISPLAY_PRESETS[["est_ci"]]))
 })
 
 # ---- Excel in-cell test label ----------------------------------------------------------------

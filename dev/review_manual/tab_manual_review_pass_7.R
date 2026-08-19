@@ -519,10 +519,21 @@ tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "
 #   there should be no 100% column (but only the n inside the Total column. How to do this reliably. 
 #   Same in other cases, like "{ratio} ({pct})" ; and here, `display = "ratio"` don’t do it yet (it keeps the 100%)
 
+# numeric col_vars default display
+tab(gss_simple, c(race, rincome, relig), c(age, tvhours), color = TRUE) 
+# - I’m tired of seeing the numeric col_vars sigma sd, as pure uninterpretable noise in every "mean" column :
+# I want to keep it as a display option "mean_sd" or a display token "{sd}" (computing it from `var` field at render), 
+# and change the default for numeric col_vars to a coefficient of variation sd/mean
+# (computed from `var` and `mean` at render), with display preset "mean_cv" and display token "{cv}", formatted as a % with no decimals
+# Something like: "49 (cv 35%)". The "mean" or "{mean}" `display` should both print the bare mean (without sd or cv).
+# According to literature (make web searches) : would it be more useful as a default display, is it robust, is it readable ? ;
+#  Would there be another, more useful and modern default display for numeric col_vars ? Is there a symbol usable instead of "cv"?
+# - In this case the "mean (sd)" column headers on exporters should be changed to "mean", since "mean (cv)" would be useless because it would repeat the acronym already on each cell.
 
-tab(gss_simple, c(race, rincome, relig), c(party3, marital, tvhours), pct = "row",
-   color = , color_signif = "grey_non_signif"
+tab(gss_simple, c(race, rincome, relig), c(age, tvhours),
+   color = TRUE, color_signif = "guaranteed_effect"
 ) 
+
 
 
 ### exports and display tests  ---- 

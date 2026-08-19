@@ -175,9 +175,9 @@
   every quantity a layout can name is already stored, so `set_display()` on a finished table gives
   the same table as asking for it at build time.
 * **Only the primary field of a cell is coloured.** A cell printing several fields reads as one
-  number with an aside --- `1/1.63*** (31%)` --- so the shade now grades the number and the aside
-  keeps the ordinary text colour. `options(tabxplor.color_secondary = "grey60")` tints the asides
-  instead, and `"same"` restores the whole-cell colour. Which field is the primary --- the one that
+  number with an aside --- `1/1.63*** (31%)` --- so the shade now grades the number and the aside is
+  set slightly back from the table's own text, following the theme.
+  `options(tabxplor.color_whole_cell = TRUE)` restores the whole-cell colour. Which field is the primary --- the one that
   also carries the stars and that `get_num()` returns --- is the first one written outside brackets,
   so a layout may print the aside first (`"base_est"`) without demoting the number.
 * **One rule for multiplicative cells.** A value below its reference prints as its inverse

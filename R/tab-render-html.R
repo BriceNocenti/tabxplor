@@ -152,7 +152,7 @@ tx_spark_svg <- function(x, h = 12L, dx = 3L) {
 # A composite cell in THREE pieces -- the aside before the primary, the primary, the aside after --
 # so a backend can bold and colour the number without touching what sits beside it. The asides carry
 # a CLASS, never an inline colour (the "no inline colour" invariant): the stylesheet decides, from
-# `tabxplor.color_secondary`. A cell with no recorded range is one piece and gets no markup at all.
+# the theme's own chrome. A cell with no recorded range is one piece and gets no markup at all.
 #' @keywords internal
 html_cell_text <- function(raw, from, pn, bold, esc = htmltools::htmlEscape) {
   out <- esc(raw)

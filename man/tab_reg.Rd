@@ -354,14 +354,20 @@ shows the plain estimate, or, with \code{empirical}, the estimate with the level
 it. The named layouts:
 \itemize{
 \item \code{"est"} --- the effect alone.
-\item \code{"est_ci"} --- with a visible interval: \verb{1/2.22 [1/2.47; 1/1.99]}.
+\item \code{"est_ci"} --- with a visible interval: \verb{1/2.22*** [1/2.47;1/1.99]}. The stars and the colour
+stay on the effect; the bracket is the aside.
 \item \code{"est_base"} --- the effect with the level beside it: \verb{1/2.22 (32.8\%)} on a logistic model,
 \code{-0.89 (2.25)} on a linear one. On a model column that level is the \strong{adjusted} prediction;
 on a crude column the observed percentage or mean.
 \item \code{"base_est"} --- the mirror, level first: \verb{(32.8\%) 1/2.22}. The effect stays the number the
 cell is about (it carries the stars and the colour); the bracket is the aside.
+\item \code{"est_coef"} --- the effect with the model's own coefficient beside it: \code{1/2.22 (-0.80)}, the
+logarithm on a ratio scale, the effect itself on an additive one.
 \item \code{"base"} --- the levels alone, still coloured and starred by the effect.
 }
+
+A cell that cannot fill an aside leaves it \strong{blank but padded}, so the effects still line up;
+an aside no cell of the column can fill is dropped, padding and all.
 
 Or write a \code{{}} template: \code{"{est} (obs {obs})"} prints each adjusted effect next to the
 unadjusted one, \code{"{est} ({gap})"} next to how far adjustment moved it.
