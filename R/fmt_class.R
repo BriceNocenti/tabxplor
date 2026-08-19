@@ -2976,6 +2976,12 @@ excel_numfmt_code <- function(digits, pct, ci, text, signed = FALSE, ratio = FAL
 # reference "%" beside an odds ratio, the "(sigma sd)" tail -- is added only where fmt_rendered()
 # holds for the annotation AND the cell; otherwise the cell keeps its own value. So a void field
 # renders BLANK, never the literal "NA", and a blank cell takes no significance star.
+# DESIGN: ... but A TEMPLATE'S TOP-LEVEL LITERAL *IS* RENDERED CONTENT. A spent primary blanks the
+# cell only when the template has nothing else to say, so "{n_range}<sparkline>" still draws its
+# curve on a row that has no count. Only bracket-group 0 counts: "(Chi2)" and "(n=" sit inside a
+# group, which is what keeps a void p-value or a void percentage blank. No template the package
+# itself writes has a bare top-level literal (asserted in test-display-grammar.R), so this reaches
+# user-authored displays and the base-count sparkline alone.
 #' Print method for class tabxplor_fmt
 #'
 #' @param x A fmt object.
@@ -3267,6 +3273,8 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # templates), so allocated here ahead of both. Attached to the result only if one actually wrote.
   prim_nchar <- if (isTRUE(bold_split)) rep(NA_integer_, length(out)) else NULL
   prim_from  <- if (isTRUE(bold_split)) rep(NA_integer_, length(out)) else NULL
+  # cells the composite expander wrote: the `na` argument below must not paint over them.
+  wrote <- rep(FALSE, length(out))
 
   if (special_formatting) {
     # compute each reference mask ONCE per column; the exporter prep passes precomputed masks via
@@ -3438,6 +3446,11 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     for (tmpl in unique(raw_display[composite])) {
       seg   <- parse_display_template(tmpl)
       if (!any(seg$is_tok)) next
+      # A TOP-LEVEL LITERAL IS CONTENT. A spent primary blanks the cell only when the template has
+      # nothing else to say -- so "{n_range}<sparkline>" still draws its curve on a row that has no
+      # count. Restricted to bracket-group 0: "(Chi2)" and "(n=" sit INSIDE a group, which is what
+      # keeps a void p-value or a void percentage blank, exactly as before.
+      lit0  <- any(fmt_rendered(seg$pieces[!seg$is_tok & seg$group == 0L]))
       cells <- which(composite & raw_display == tmpl)
       xc    <- x[cells]
       toks  <- lapply(seq_along(seg$fields), function(i) {
@@ -3479,27 +3492,35 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
         for (j in which(seg$group == g & !seg$is_tok & keep))
           strs[[j]][spent] <- strrep(pad, nchar(strs[[j]][spent]))
       }
-      ok_c <- !void[[seg$primary]]
+      ok_c <- !void[[seg$primary]] | lit0
       asm  <- do.call(paste0, strs)
       out[cells[ok_c]] <- asm[ok_c]
+      wrote[cells[ok_c]] <- TRUE
       # OPT-IN (bold_split) record of the primary token's character RANGE, so a backend can bold --
       # and colour -- only the field the cell is really about. A RANGE, not a prefix width: the
       # primary is the first token OUTSIDE brackets, which "({base}) {est}" puts last.
       # A blanked group keeps its width and a dropped one is "" for every cell of the template, so
       # the head width stays uniform and this needs no adjustment.
       # Off by default -> attribute-free output.
+      # ⚠ NOT `ok_c`: a cell carried by its literal alone has no primary to bold or colour, and a
+      # recorded zero-width range would wrap the whole string in the grey aside span. NA = one plain
+      # piece, which is what paint_split() and html_cell_text() both read it as.
       if (bold_split) {
         pj    <- which(seg$is_tok)[seg$primary]
+        prim  <- ok_c & !void[[seg$primary]]
         head  <- if (pj > 1L) do.call(paste0, strs[seq_len(pj - 1L)]) else rep("", length(cells))
-        prim_from [cells[ok_c]] <- nchar(head)[ok_c] + 1L
-        prim_nchar[cells[ok_c]] <- nchar(strs[[pj]])[ok_c]
+        prim_from [cells[prim]] <- nchar(head)[prim] + 1L
+        prim_nchar[cells[prim]] <- nchar(strs[[pj]])[prim]
       }
     }
   }
 
   # honour the `na` argument on the main path, applied LAST so it dominates every intermediate append.
   # Default na=NA -> no-op; tab_kable()/tab_md() pass na="" -> NA cells render "" at source.
-  if (!is.na(na)) out[na_out] <- na
+  # ⚠ `!wrote`: a cell whose number is NA but whose template said something anyway (a top-level
+  # literal) HAS been rendered -- painting `na` over it would leave the feature console-only, since
+  # md / xl / html / transpose all pass na = "".
+  if (!is.na(na)) out[na_out & !wrote] <- na
 
   # expose the per-cell bold-prefix width (NA elsewhere) so exporters bold only the primary field.
   # Dropped by any downstream string op, so consumers must read it right after format().
@@ -5367,7 +5388,7 @@ legend_streams <- function(x, style, lang, theme = "light") {
           unname(CI_METHOD_CLOSED_FORM[o$ci_method %||% ""]), character(1))))
         if (length(cf) == 1L)
           spec$method_phrase <- if (mixed)
-            gettextf("%s --- %s closed form on the observed column", spec$method_phrase, cf)
+            gettextf("%s; %s closed form on the observed column", spec$method_phrase, cf)
           else gettextf("%s (%s closed form)", spec$method_phrase, cf)
       }
       if (identical(style, "prose")) legend_tokens_prose(spec, lg, show_this)
@@ -5597,15 +5618,15 @@ tab_stars_legend <- function(x, lang = NULL) {
     conf <- (1 - lev) * 100                                                    # aligned: *** <-> 99%
     semi <- if (identical(lg, "fr")) " ; " else "; "
     # ONE sentence for every table. A regression's `Constant` row is the exception -- its star tests
-    # the baseline value against the measure's own null -- so it is an ASIDE, appended only where such
+    # the baseline value against the measure's own null -- so it is a parenthesis, appended only where such
     # a row exists, naming the null EST_SCALES declares (1 on a ratio, 0 on a difference).
     nul   <- tab_constant_null(x, cols)
     first <- if (is.na(nul)) gettextf(
       "%s: significantly different from the reference category (in bold) at the %s%% confidence level",
       lab[1], legend_num(conf[1], lg))
     else gettextf(
-      "%s: significantly different from the reference category (in bold) \u2014 from %s for the Constant \u2014 at the %s%% confidence level",
-      lab[1], legend_num(nul, lg), legend_num(conf[1], lg))
+      "%s: significantly different from the reference category (in bold) at the %s%% confidence level (from %s for the Constant)",
+      lab[1], legend_num(conf[1], lg), legend_num(nul, lg))
     rest <- if (length(lab) > 1)
       vapply(2:length(lab), function(i) gettextf("%s: at the %s%% level", lab[i],
                                                  legend_num(conf[i], lg)), character(1))

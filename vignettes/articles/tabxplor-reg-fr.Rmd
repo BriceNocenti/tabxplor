@@ -875,7 +875,7 @@ tab_reg(gss_simple, "married", c("race", "age"), display = "est_base")
 
 Une différence à noter : `display = "est_base"` *conserve* la colonne du rapport de cotes et ajoute la probabilité ajustée à côté, tandis que `effect = "marginal"` (vu plus haut) transforme la colonne **entière** en un effet marginal.
 
-**`multiplier`** choisit l'**unité** dans laquelle l'effet d'un prédicteur continu est rapporté. Une unité est rarement une quantité lisible : un changement d'un an de `age` déplace à peine les cotes, donc son rapport de cotes reste près de 1, ne franchit jamais un seuil de couleur, et la ligne se lit comme « aucun effet » — alors qu'un écart-type entier d'âge multiplie les cotes par environ 0,66. Par défaut, l'effet est donc rapporté **par écart-type**, et l'intitulé de la ligne indique laquelle :
+**`multiplier`** choisit l'**unité** dans laquelle l'effet d'un prédicteur continu est rapporté. Une unité est rarement une quantité lisible : un changement d'un an de `age` déplace à peine les cotes, donc son rapport de cotes reste près de 1, ne franchit jamais un seuil de couleur, et la ligne se lit comme « aucun effet » — alors qu'un écart-type entier d'âge multiplie les cotes par environ 0,66. Par défaut, l'effet est donc rapporté **par écart-type**, et la ligne indique lequel (`per SD/13.5`) — la variable est nommée dans la colonne d'à côté :
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age"))
@@ -923,7 +923,7 @@ Deux choses à savoir. Un test de courbure sur un prédicteur peut capter la mau
 
 ### La forme sous laquelle un prédicteur continu est ajusté
 
-La ligne de linéarité dit *si* une seule droite suffit. La petite courbe dessinée dans le libellé de la ligne d'un prédicteur continu dit *quelle forme les données ont réellement* — dix classes de la variable expliquée face au prédicteur, sur l'échelle du modèle, sans aucun modèle dedans :
+La ligne de linéarité dit *si* une seule droite suffit. La petite courbe dessinée dans la cellule `n` — vide — d'un prédicteur continu dit *quelle forme les données ont réellement* — dix classes de la variable expliquée face au prédicteur, sur l'échelle du modèle, sans aucun modèle dedans :
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age"), family = "binomial")

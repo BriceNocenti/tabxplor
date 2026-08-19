@@ -320,10 +320,12 @@ reg_build_group <- function(g, sl, tab_vars, specs, fit_cache, shared, data) {
   tg <- reg_build(sub, specs, shared, tab_vars = NULL, .fit_cache = fit_cache,
                   ref = NULL, reref = FALSE, skeleton_data = data, parallel = FALSE)
   tst <- get_test(tg); if (!is.null(tst) && nrow(tst) > 0) tst[[tab_vars]] <- as.character(g)
+  # the group's OWN observed curves ride up beside its data: reg_stage_split() binds them into one
+  # group-keyed `meta$assumptions`, so each group's base-count cell draws its own sparkline.
   list(data = tibble::add_column(tibble::as_tibble(dplyr::ungroup(tg)),
                                  "{tab_vars}" := new_lvl(factor(g, levels = sl),
                                                           "tab_var", tab_vars), .before = 1L),
-       test = tst)
+       test = tst, assumptions = get_assumptions(tg))
 }
 
 

@@ -123,7 +123,7 @@ test_that("weighted ordinal (svyolr) matches a hand svyolr cumulative OR", {
   des <- survey::svydesign(ids = ~1, weights = ~w, data = d)
   hand <- survey::svyolr(yo ~ x1 + x2, design = des)
 
-  tab <- tab_reg(d, "yo", c("x1", "x2"), family = "ordinal", wt = "w")
+  tab <- tab_reg(d, "yo", c("x1", "x2"), family = "ordinal", wt = "w", multiplier = 1)
   oc  <- vapply(tab[[grep("^Model_", names(tab), value = TRUE)[1]]], tabxplor::get_num, numeric(1))
   # skeleton = Constant (NA), x1 ref (1), x1lo, x1mid, x2 -> drop NA + reference
   oc  <- oc[!is.na(oc) & oc != 1]

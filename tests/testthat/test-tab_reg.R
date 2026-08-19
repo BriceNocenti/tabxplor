@@ -568,7 +568,11 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
   skip_if_not_installed("broom")
   skip_if_not_installed("nnet")
   d  <- mnl_data()
-  t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", cleannames = FALSE)
+  # `multiplier = 1`: the parity claim is against nnet's own PER-UNIT coefficient. Since Phase 22b-v
+  # the default scales a continuous predictor per SD on every family, multinomial included -- which
+  # the block after this one checks.
+  t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", cleannames = FALSE,
+                multiplier = 1)
 
   # one OR column per non-reference outcome category, "vs <ref>" in the label
   expect_true(all(c("Dem vs Ind", "Rep vs Ind") %in% names(t1)))
@@ -617,8 +621,8 @@ test_that("tab_reg() ordinal cumulative OR / CI / p match MASS::polr; single col
   skip_if_not_installed("broom")
   skip_if_not_installed("MASS")
   d   <- ord_data()
-  t1  <- suppressWarnings(tab_reg(d, "spectrum", c("race", "age"),
-                                  family = "ordinal", cleannames = FALSE))
+  t1  <- suppressWarnings(tab_reg(d, "spectrum", c("race", "age"),   # per unit: polr's own scale
+                                  family = "ordinal", cleannames = FALSE, multiplier = 1))
   col <- t1[["Model_cumOR"]]            # an ordinal odds ratio is CUMULATIVE, and says so
   expect_identical(get_pct_type(col), "row")
   expect_identical(get_display(col)[1], "est")
@@ -639,6 +643,36 @@ test_that("tab_reg() ordinal cumulative OR / CI / p match MASS::polr; single col
                sort(2 * stats::pnorm(-abs(td$estimate / td$std.error))), tolerance = 1e-6)
   # a cumulative logit has no single intercept -> the "Constant" cell is blank
   expect_true(is.na(get_or(col)[as.character(t1$var) == "Constant"]))
+})
+
+test_that("multiplier reaches the 3+ level engines: per-SD by DEFAULT on ordinal and multinomial", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("MASS")
+  skip_if_not_installed("nnet")
+  # a per-ONE-unit effect beside a factor contrast is unreadable, so the default scales every family.
+  # The whole claim: est^k, se x |k|, p UNCHANGED -- and the level states the unit.
+  d  <- ord_data()
+  t1 <- suppressWarnings(tab_reg(d, "spectrum", c("race", "age"), family = "ordinal",
+                                 cleannames = FALSE))
+  tk <- suppressWarnings(tab_reg(d, "spectrum", c("race", "age"), family = "ordinal",
+                                 cleannames = FALSE, multiplier = 1))
+  i  <- which(as.character(t1$var) == "age")
+  k  <- reg_call(t1)$multiplier[["age"]]
+  expect_gt(k, 1)
+  expect_equal(get_or(t1[["Model_cumOR"]])[i], get_or(tk[["Model_cumOR"]])[i]^k, tolerance = 1e-8)
+  expect_equal(get_pvalue(t1[["Model_cumOR"]])[i], get_pvalue(tk[["Model_cumOR"]])[i])
+  expect_match(as.character(t1$levels)[i], "^per SD/")
+  # a factor level is untouched by the rescale
+  j <- which(as.character(t1$var) == "race" & !is_refrow(t1[["Model_cumOR"]]))
+  expect_equal(get_or(t1[["Model_cumOR"]])[j], get_or(tk[["Model_cumOR"]])[j])
+
+  m1 <- tab_reg(mnl_data(), "party3", c("race", "age"), family = "multinomial", cleannames = FALSE)
+  mk <- tab_reg(mnl_data(), "party3", c("race", "age"), family = "multinomial", cleannames = FALSE,
+                multiplier = 1)
+  ia <- which(as.character(m1$var) == "age")
+  km <- reg_call(m1)$multiplier[["age"]]
+  expect_equal(get_or(m1[["Dem vs Ind"]])[ia], get_or(mk[["Dem vs Ind"]])[ia]^km, tolerance = 1e-8)
+  expect_equal(get_pvalue(m1[["Rep vs Ind"]])[ia], get_pvalue(mk[["Rep vs Ind"]])[ia])
 })
 
 test_that("family='auto' detects nominal -> multinomial and ordered -> ordinal (messages)", {
@@ -801,7 +835,7 @@ test_that("multinomial AME: one column per outcome category, matches marginaleff
   skip_if_not_installed("marginaleffects")
   d  <- mnl_data()
   t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", effect = "marginal",
-                cleannames = FALSE)
+                cleannames = FALSE, multiplier = 1)   # marginaleffects' own per-unit contrast
   expect_true(all(c("Ind", "Dem", "Rep") %in% names(t1)))   # every outcome category
 
   dm <- d |> dplyr::filter(!is.na(party3), !is.na(race), !is.na(age))

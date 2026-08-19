@@ -114,23 +114,29 @@ html_escape_br <- function(x) {
 #
 # DESIGN: the GLYPH RUN IS THE DATA. Each of U+2581..U+2588 is one of eight levels, so the polyline is
 # read straight out of the rendered string -- no lookup into meta$assumptions, no key to keep in sync,
-# and it therefore survives transpose, tab_spread and any dplyr pipeline that moved the label.
+# and it therefore survives transpose, tab_spread and any dplyr pipeline that moved the cell.
 # `stroke="currentColor"` makes z11's light / dark / print themes carry it with no new colour rule.
+# It is drawn to FILL its cell -- the cell's own border is the plot's frame, so the svg carries none
+# of its own -- and `.tx-sparkcell` (emitted beside it) centres it and trims the cell's padding.
+# `inset` is half the stroke: without it the extreme bins are clipped by the viewBox edge.
 #' @keywords internal
-tx_spark_svg <- function(x, h = 12L, dx = 3L) {
+tx_spark_svg <- function(x, h = 22L, dx = 9L, lwd = 2.8) {
   gl  <- rd_spark_glyphs(TRUE)
   pat <- paste0("[", paste(gl, collapse = ""), "]{3,}")
   hit <- grepl(pat, x)
   if (!any(hit)) return(x)
+  inset <- lwd / 2
   one <- function(run) {
     v <- match(strsplit(run, "")[[1L]], gl)
     n <- length(v)
-    pts <- paste(sprintf("%d,%.1f", (seq_len(n) - 1L) * dx, h - (v - 1) / 7 * (h - 2) - 1),
-                 collapse = " ")
-    paste0('<svg class="tx-spark" width="', (n - 1L) * dx + 2L, '" height="', h,
-           '" viewBox="0 0 ', (n - 1L) * dx + 2L, ' ', h,
-           '" style="vertical-align:-2px" aria-hidden="true"><polyline points="', pts,
-           '" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>')
+    w <- (n - 1L) * dx + 2 * inset
+    pts <- paste(sprintf("%.1f,%.1f", inset + (seq_len(n) - 1L) * dx,
+                         h - inset - (v - 1) / 7 * (h - 2 * inset)), collapse = " ")
+    paste0('<svg class="tx-spark" width="', round(w, 1), '" height="', h,
+           '" viewBox="0 0 ', round(w, 1), ' ', h,
+           '" aria-hidden="true"><polyline points="', pts,
+           '" fill="none" stroke="currentColor" stroke-width="', lwd,
+           '" stroke-linejoin="round" stroke-linecap="round"/></svg>')
   }
   x[hit] <- vapply(x[hit], function(s) {
     m <- gregexpr(pat, s)[[1L]]
@@ -325,10 +331,14 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     if (!is.null(a)) bold_cell <- bold_cell | a$bold
     cell_html <- html_cell_text(cell, attr(cell, "primary_from"), attr(cell, "primary_nchar"),
                                 bold_cell, esc = identity)
-    # Phase 18z15: THE one place a row sparkline becomes an inline <svg>. It sits here, at the
-    # emission of an ordinary text cell, because that is the only kind of cell a glyph run can be in
-    # (a reg table's `levels` column) -- an fmt cell never carries one, and a rowspanned label cell
-    # (path c2) goes through html_escape_br(), which would escape the markup back into text.
+    # THE one place a row sparkline becomes an inline <svg>. It sits here, on the GENERIC cell path,
+    # which is what lets the run arrive in an FMT cell -- a regression's base-count column carries it
+    # as a literal in its own display template. ⚠ it must stay off the rowspanned label path (c2),
+    # which goes through html_escape_br() and would escape the markup back into text.
+    # The cell is tagged too: a plot wants the whole cell (centred, unpadded), where a number wants
+    # the column's own right-aligned, top-aligned geometry.
+    sp <- tx_has_spark(cell_html)
+    if (any(sp)) cls[sp] <- trimws(paste(cls[sp], "tx-sparkcell"))
     cell_html <- tx_spark_svg(cell_html)
     # z11: a palette whose meaning is TYPOGRAPHY writes it as markup too, so it survives a stylesheet-
     # less destination (GitHub, a Word paste). `bold_cell` rather than a$face_bold, so the structural
@@ -351,16 +361,19 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   # (c2) Phase 14i: the LABEL columns are re-emitted as ONE `rowspan` cell per block, so the row/tab
   # variable is named once instead of on every row. A continuation row contributes the empty string --
   # which is exactly what (d)'s column-wise paste0 needs, so the assembly is untouched.
-  # The name column additionally gets `tx-vname` (vertical text), but only where the run is longer than
-  # one row: a rotated single-row cell just makes that row tall, so it falls back to horizontal.
   # html_escape_br() (not the raw path (c) takes): a label cell carries no markup of ours EXCEPT the
   # `<br>` tab_wrap_text() may have injected, which is exactly what that helper preserves.
   for (cl in names(roles$label_cols)) {
     j    <- match(cl, nm)
     run  <- roles$label_runs[[cl]]
     if (is.null(run) || is.na(j)) next
-    vert <- cl %in% names(roles$var_name_col) & run$span > 1L
-    cls  <- paste(cls_col[j], "tx-lbl", ifelse(vert, "tx-vname", ""))
+    # a VARIABLE NAME is a heading, so it is bold in its own right. It used to be bold only by
+    # accident -- through `tr.tx-b` when its block's first row happened to be the reference row --
+    # which left a one-row block (a continuous predictor) plain beside a bold neighbour.
+    named <- cl %in% names(roles$var_name_col)
+    vert  <- named & run$span > 1L      # a rotated single-row cell only makes that row tall
+    cls   <- gsub(" +", " ", paste(cls_col[j], "tx-lbl", ifelse(vert, "tx-vname", ""),
+                                   ifelse(named, "tx-b", "")))
     # Phase 18r: a rowspanned label cell is anchored in its block's FIRST row, so the per-row
     # `tr.tx-bb>*` bottom rule never reaches the one covering the table's LAST row -> open bottom-left
     # corner. Tag that single cell `tx-bb` (the cell-scoped 1px rule in R/tab-css.R) to close it.

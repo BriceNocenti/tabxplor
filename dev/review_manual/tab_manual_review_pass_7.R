@@ -3,7 +3,7 @@
 
 library(devtools)
 load_all()
-options(tabxplor.parallel = 8, tabxplor.cleannames = TRUE, tabxplor.print = "kable") # options(tabxplor.print = "console")
+options(tabxplor.parallel = 8, tabxplor.cleannames = TRUE, tabxplor.print = "html") # options(tabxplor.print = "console")
 
 gss_simple <- gss_cat_data_formatting() # gss_simple with merged levels, and first levels chosen for reference (colors, regressions)
 
@@ -556,6 +556,62 @@ tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "
 #   Strange thing is that it seems to be caused not by bold anymore, but by the colored background 
 #   (do it adds a margin ? Would it be more reliable and more visually good if we remove the margin, 
 #   or add it in cells with no specific color background ?)
+
+
+
+
+
+# black and white publication ready tables ----
+load_all()
+options(tabxplor.theme = "print", tabxplor.print = "html", tabxplor.parallel = 8, tabxplor.cleannames = TRUE)
+
+tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+        family = "gaussian", empirical=TRUE
+)
+tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all", 
+   color = TRUE, color_signif = "grey_non_signif",
+)
+# - bold only applies to the primary display token (right behaviour), but underline and italics also apply to the
+#   secondary display tokens: they too, like colors, should only apply to the primary display token by default (global option). Otherwise it’s noise.
+# - bold and underlines are visually very striking, but italics is subtle and not striking, specially with the current html monospace font.
+#   We’ll try something else:
+#   1. `tx_chrome_hex("print")$grey` identifies the greyed-out cells (the grey is much lighter than with colors)
+#   2. the direction information is carried by two things: 
+#     a. the over|under symbols +|- ×|÷ x|1/x  (they also carry the `measure`) ; 
+#     b. the italics for the "below null"/"under" branch, subtle but which only supports the over|under symbols
+#   3. the size of effect is carried by a 3 rungs ladder: `tx_chrome_hex("print")$text` pure "black" ; "black" + bold ; "black" + bold + underline
+# - some tests are now failing because I tweaked the `tx_chrome_hex("print") palette. A WCAG assertion is failing for 
+
+
+
+#   A possibility that would work for regression (were direction is clear), but not for percentages and means :
+#   1. `tx_chrome_hex("print")$grey` identifies the greyed-out cells (the grey is much lighter than with colors)
+#   2. the direction information is carried by two things: 
+#     a. the over|under symbols +|- ×|÷ x|1/x  (they also carry the `measure`) ; 
+#     b. the italics for the "below null"/"under" branch, subtle but which only supports the over|under symbols
+#   3. the size of effect is carried by a 4 rungs ladder: `tx_chrome_hex("print")$grey2` ; `tx_chrome_hex("print")$text` pure "black"  ; "black" + bold ; "black" + bold + underline
+
+#   A possibility, for tab() pct and means, that is a bit overloaded would works (ratio display carry the direction) :
+#   1. `tx_chrome_hex("print")$grey` identifies the greyed-out cells (the grey is much lighter than with colors)
+#   2. the direction information is carried by two things: 
+#     a. a display = "{base} {ratio}" (with 1 digits ratio ×1.x or ÷1.x) ; 
+#     b. the italics for the "below null"/"under" branch, subtle but which only supports the over|under symbols
+#   3. the size of effect is carried by a 4 rungs ladder: `tx_chrome_hex("print")$grey2` ; `tx_chrome_hex("print")$text` pure "black"  ; "black" + bold ; "black" + bold + underline
+
+
+# - In the right parameters table, change the minimum digits for the observed mean and the adjusted mean to 1 (there’s too decimals here, I want to drop one) 
+
+# Just + ++ +++ - -- --- × ×× ××× ÷ ÷÷ ÷÷÷ for the effect size ?
+
+# Explain empirical counterpart too in the "Model:" first tab_reg() specific legend block ?
+
+
+
+
+
+
+
+
 
 
 

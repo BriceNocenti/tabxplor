@@ -450,27 +450,20 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
 
   # --- X + Y: frozen frame, PREDICTORS + design variables, never the outcome. Computed ONCE: the
   # multiplier's SD and the quadratic terms' centre must come from the SAME measurement.
-  need_mult  <- !formula_mode && any(reg_fam_glm(families))
+  need_mult  <- !formula_mode
   frozen     <- if (need_mult || length(reg_shapes) > 0L)
     reg_complete_frame(data, intersect(unique(c(all_predictors, wt)), names(data))) else NULL
 
   # multiplier: scale a CONTINUOUS predictor's effect to per-k units (OR^k / beta*k); a NAMED
-  # vector overrides per variable. `mult_default` stays silent for the multinomial/ordinal guards.
-  mult_default <- identical(multiplier, "sd")
+  # vector overrides per variable. EVERY family, multinomial and ordinal included: the rescale is
+  # arithmetic on the tidied coefficient, and a cumulative or per-category log-odds is as linear in
+  # the predictor as a glm's. A per-1-unit effect beside a factor contrast is unreadable.
   if (!is.null(multiplier)) {
     if (!(is.numeric(multiplier) || is.character(multiplier)) || length(multiplier) == 0L)
       cli::cli_abort(c(
         "{.arg multiplier} must be a number, {.val sd}, {.val 2sd}, or a named vector of those.",
         "i" = 'e.g. {.code multiplier = "sd"}, {.code c(age = 10)}, {.code c(age = "2sd")}.'),
         call = NULL)
-    # abort only when EVERY outcome is multinomial/ordinal; a mixed table scales the glm outcomes.
-    if (!mult_default && all(reg_fam_percategory(families)))
-      cli::cli_abort("{.arg multiplier} is not supported for {.val multinomial}/{.val ordinal} models.",
-                     call = NULL)
-    if (!mult_default && any(reg_fam_percategory(families)))
-      cli::cli_inform(c("i" = paste0(
-        "{.arg multiplier} scales the glm-family outcomes only; the multinomial/ordinal ",
-        "outcome{?s} are shown unscaled.")))
     if (!is.null(names(multiplier))) {
       bad <- setdiff(names(multiplier), reg_numeric_preds(data, all_predictors))
       if (length(bad) > 0L)

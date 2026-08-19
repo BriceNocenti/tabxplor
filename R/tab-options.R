@@ -112,16 +112,6 @@ TAB_OPTIONS <- list(
             "render-time reading of each cell's stored p-value, so it is this option alone --- change",
             "it and every table already built shows the new glyphs.")),
 
-  signif_levels = tx_opt(
-    c(0.10, 0.05, 0.01), "display", seed = "no",
-    doc = c("`r lifecycle::badge(\"deprecated\")` the star cut-offs. Give them to",
-            "`tabxplor.stars` instead, as a named vector. Still read if you set it.")),
-
-  signif_labels = tx_opt(
-    c("*", "**", "***"), "display", seed = "no",
-    doc = c("`r lifecycle::badge(\"deprecated\")` the star glyphs. Give them to `tabxplor.stars`",
-            "instead, as the NAMES of the cut-offs. Still read if you set it.")),
-
   ratio_print = tx_opt(
     "inverse", "display",
     doc = c("prints a multiplicative value below its reference as the inverse --- an odds ratio of",
@@ -269,12 +259,21 @@ TAB_OPTIONS <- list(
 
   spark = tx_opt(
     TRUE, "stats",
-    c("in a [tab_reg()] table, a continuous predictor's row label ends with a small curve showing the",
-      "OBSERVED shape of its effect (ten bins of the outcome against the predictor, on the model's",
-      "scale, with no model in it) --- the eye-half of the `Linearity` footer row. `\"ascii\"` uses a",
-      "plain-text ladder for a console or a LaTeX font without block characters; `FALSE` removes it.",
-      "In HTML the glyphs become an inline SVG; a plot never draws them (no graphics-device font has",
-      "them).")),
+    c("in a [tab_reg()] table, a continuous predictor's `n` cell --- empty, since a continuous",
+      "predictor has no level to count --- shows a small curve of the OBSERVED shape of its effect",
+      "(ten bins of the outcome against the predictor, on the model's scale, with no model in it)",
+      "--- the eye-half of the `Linearity` footer row. With `tab_vars`, one curve per group.",
+      "In HTML the glyphs become an inline SVG filling its cell; a plot never draws them (no",
+      "graphics-device font has them). `FALSE` removes it, and so does `n = \"no\"` (there is then",
+      "no cell to draw it in).",
+      "",
+      "`\"ascii\"` draws the curve with `. , - ~ + = * #` instead. Use it when the console column",
+      "looks *shifted* on the sparkline's row: the block characters are East-Asian **ambiguous**",
+      "width, so a terminal set to treat those as wide --- or one whose font lacks them and falls",
+      "back to another face --- draws them wider than a digit. The table is correctly aligned",
+      "character by character (nothing can measure the font from R); the ASCII ladder is",
+      "unambiguously one column wide, so it always lines up. Also the right choice for a LaTeX",
+      "font without block characters.")),
 
   # --- HTML --------------------------------------------------------------------------------------
   tab_kable_css = tx_opt(
@@ -364,18 +363,19 @@ stopifnot(
 tx_stars_ladder <- function() {
   v <- getOption("tabxplor.stars")
   if (is.numeric(v) && length(v) && !is.null(names(v))) return(sort(v, decreasing = TRUE))
-  # the retired pair still wins where a user set it (neither is seeded any more)
-  lev <- getOption("tabxplor.signif_levels")
-  lab <- getOption("tabxplor.signif_labels")
-  if (!is.null(lev) || !is.null(lab)) {
-    lev <- lev %||% tx_option_default("signif_levels")
-    lab <- lab %||% tx_option_default("signif_labels")
-    n   <- min(length(lev), length(lab))
-    return(sort(stats::setNames(lev[seq_len(n)], lab[seq_len(n)]), decreasing = TRUE))
-  }
-  sort(stats::setNames(tx_option_default("signif_levels"), tx_option_default("signif_labels")),
-       decreasing = TRUE)
+  # THE default ladder, stated here because it is the only thing that still needs it: the retired
+  # `signif_levels` / `signif_labels` pair is no longer declared in TAB_OPTIONS, so it has no default
+  # to read -- only a value a user set by hand, which still wins.
+  lev <- getOption("tabxplor.signif_levels") %||% TX_STARS_DEFAULT
+  lab <- getOption("tabxplor.signif_labels") %||% names(TX_STARS_DEFAULT)
+  n   <- min(length(lev), length(lab))
+  sort(stats::setNames(lev[seq_len(n)], lab[seq_len(n)]), decreasing = TRUE)
 }
+
+# what `options(tabxplor.stars = TRUE)` means, and what ?tabxplor-options promises it means.
+#' @keywords internal
+#' @noRd
+TX_STARS_DEFAULT <- c("*" = 0.10, "**" = 0.05, "***" = 0.01)
 
 # --- the loader ----------------------------------------------------------------------------------
 # THE seeding, called by .onLoad() (R/utils.R). Every default in the package comes from here, so a

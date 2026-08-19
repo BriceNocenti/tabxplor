@@ -36,6 +36,9 @@
 #     folding it into the Total cell (tab_fold_base_n), giving it a column (reg_base_n_cols, and
 #     the Excel branch of tab_base_n_pct) or dropping it. A range needs no literal and no second
 #     field: `{n_range}` renders `n`..`tot_n`, so format()'s per-template padding still aligns.
+#     A continuous predictor has no level to count, so that cell is empty by construction -- which
+#     is where its observed shape is drawn instead (mat_reg_spark, R/tab_classes.R), as a literal in
+#     the cell's own template. `n = "no"` therefore takes the sparkline with it.
 # See: CLAUDE.md § tabxplor architecture (the display grammar); R/fmt_class.R (the fields shown).
 
 #' @keywords internal

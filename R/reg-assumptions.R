@@ -25,7 +25,7 @@
 # what keeps them out of the default `stats` set and reachable by name. The other three are
 # arithmetic on the fit already in hand, and the two influence-based ones share one sweep. What is
 # opt-in is the p-value, not the diagnostic: reg_curves() bins the observed shape with no fit at all,
-# and the row sparkline and the reg_check_plots() panels draw it for free.
+# and the base-count-cell sparkline and the reg_check_plots() panels draw it for free.
 #
 # THE CURE IS PART OF THE CHECK. `shape =` is how a user fixes a non-linearity without leaving the
 # framework, and its design rule keeps it small: a shape either RECODES THE COLUMN or ADDS ONE TERM,
@@ -793,9 +793,19 @@ rd_spark_glyphs <- function(style = TRUE) {
 # The console, markdown, Excel and the html <svg> keep the glyphs; a ggplot never does.
 #' @keywords internal
 tx_spark_strip <- function(x) {
-  gl <- paste(rd_spark_glyphs(TRUE), collapse = "")
-  gsub(paste0("\u00a0?[", gl, "]{3,}"), "", x)
+  gsub(tx_spark_pattern(), "", x)
 }
+
+# THE one pattern for "this string carries a sparkline", so the strippers, the html <svg> upgrade and
+# the Excel per-cell write cannot disagree about what a run is.
+#' @keywords internal
+tx_spark_pattern <- function(sep = TRUE) {
+  gl <- paste(rd_spark_glyphs(TRUE), collapse = "")
+  paste0(if (sep) "[ \u00a0]?", "[", gl, "]{3,}")
+}
+
+#' @keywords internal
+tx_has_spark <- function(x) !is.na(x) & grepl(tx_spark_pattern(FALSE), x)
 
 #' @keywords internal
 rd_spark <- function(y, style = TRUE) {
@@ -901,6 +911,12 @@ rd_with_seed <- function(seed, expr) {
 # WITH SEVERAL OUTCOMES there is no single observed shape, so the whole thing is NULL rather than the
 # first outcome's silently: a sparkline describing only one of several outcomes would be a lie the
 # reader cannot see.
+#
+# THE CURVE IS THE STORED FACT, never the glyph run: the sparkline is drawn from it at display time
+# (materialize_specs()$reg_spark), which is what makes `options(tabxplor.spark = )` a display option
+# and what lets each `tab_vars` group carry its own curve -- measured on the group's own data, into
+# the group's own base-count cell. Keyed by (variable, group), and `linear_level` names the row it
+# belongs to, since `shape = "quadratic"` gives a predictor two of them.
 #' @keywords internal
 reg_curves <- function(data, specs, numeric_preds, wt = NULL, positive_level = NULL, nbins = 10L,
                        design = NULL) {

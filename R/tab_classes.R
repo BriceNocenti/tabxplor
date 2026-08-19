@@ -36,9 +36,9 @@
 #'   \item \code{empirical_tips} -- multinomial crude-companion tooltip data (a \code{tibble} keyed by
 #'   column, predictor and level), set by \code{tab_reg(empirical = TRUE)}.
 #'   \item \code{assumptions} -- the observed curve of each continuous predictor (weighted quantile
-#'   bins of the outcome on the family's link scale), set by \code{\link{tab_reg}}: the data behind
-#'   the sparkline in a continuous predictor's row label and behind
-#'   \code{\link{reg_check_plots}}'s linearity panel.
+#'   bins of the outcome on the family's link scale, one block per \code{tab_vars} group), set by
+#'   \code{\link{tab_reg}}: the data behind the sparkline drawn in a continuous predictor's
+#'   \code{n} cell, and behind \code{\link{reg_check_plots}}'s linearity panel.
 #'   \item \code{color_breaks} -- a per-table override of the colour break scales (see
 #'   \code{\link{set_color_breaks}}), merged over the global option at render time.
 #' }
@@ -908,6 +908,13 @@ materialize_specs <- function() list(
   base_n = list(
     when  = function(tab, backend, ctx) !identical(ctx$base_n, "no") || ctx$add_pct,
     apply = mat_base_n),
+  # A continuous predictor has no level population, so its base-count cell is empty by construction
+  # -- that is where its OBSERVED SHAPE goes, as a glyph run in the cell's own display template. Runs
+  # right after base_n (the columns must exist) and before the footer rows.
+  reg_spark = list(
+    when  = function(tab, backend, ctx) tab_is_reg(tab) && !is.null(get_assumptions(tab)) &&
+      !isFALSE(tx_option("spark")) && any(purrr::map_lgl(tab, ~ is_fmt(.) && get_role(.) == "n")),
+    apply = function(tab, backend, ctx) mat_reg_spark(tab)),
   # A Total column that does not total what the reader can see (an odds-ratio table, or one whose
   # other levels were dropped) says nothing once the count lives elsewhere: its own column in Excel,
   # nowhere at all under n = "no".
@@ -947,6 +954,53 @@ mat_base_n <- function(tab, backend, ctx) {
   tab <- tab_base_n_pct(list(tab), base_n = ctx$base_n, add_pct = ctx$add_pct, backend = backend)[[1]]
   if (identical(backend, "text") && on) tab <- tab_fold_base_n(tab, ctx$base_n)
   set_render_extras(tab, NULL)
+}
+
+# mat_reg_spark() -- the observed shape of each continuous predictor, drawn into the base-count cell
+# its row leaves empty, as a literal in that cell's display template. ONE writer for every medium:
+# format() renders the run, the console pads it, Markdown prints it and the html engine upgrades it
+# to an inline <svg>. Nothing rendered is ever stored -- the CURVE is the fact, so
+# `options(tabxplor.spark = )` is a display option like every other.
+# WARNING: writes a display, so it may only ever run on the EPHEMERAL materialised copy.
+#' @keywords internal
+#' @noRd
+mat_reg_spark <- function(tab) {
+  a  <- get_assumptions(tab)
+  dv <- tab_declared_vars(tab)
+  if (is.null(dv$var_col) || !dv$var_col %in% names(tab)) return(tab)
+  vc  <- as.character(tab[[dv$var_col]])
+  lv  <- if (length(dv$row_var) && dv$row_var %in% names(tab))
+    as.character(tab[[dv$row_var]]) else rep(NA_character_, nrow(tab))
+  # the group a row belongs to, when the split is a ROW fact (several models, or multinomial: the
+  # groups are stacked rather than spread). "" when it is a COLUMN fact, read per column below.
+  rg  <- if (length(dv$tab_vars) && dv$tab_vars[[1]] %in% names(tab))
+    as.character(tab[[dv$tab_vars[[1]]]]) else rep("", nrow(tab))
+  style <- tx_option("spark")
+  for (nm in names(tab)[purrr::map_lgl(tab, ~ is_fmt(.) && get_role(.) == "n")]) {
+    col <- tab[[nm]]
+    d   <- get_display(col)
+    cg  <- get_col_group(col)
+    for (v in names(a$curves)) {
+      # `linear_level` is what makes a curved predictor's SQUARED row keep its empty cell: both rows
+      # carry the same `var` and both have no count, so `var` alone cannot tell them apart.
+      hit <- vc == v & !is.na(lv) & lv == (a$linear_level[[v]] %||% NA_character_) &
+        !grepl("{", d, fixed = TRUE)
+      if (!any(hit)) next
+      cu <- a$curves[[v]]
+      for (i in which(hit)) {
+        g  <- if (nzchar(cg)) cg else rg[[i]]
+        y  <- cu$y[cu$group == g]
+        if (length(y) == 0L) y <- cu$y[cu$group == ""]
+        gl <- if (length(y) == 0L) NA_character_ else rd_spark(y, style)
+        if (is.na(gl)) next
+        # no separator on an empty cell -- there is nothing to separate it from; a non-breaking one
+        # where a count is actually printed beside it.
+        d[[i]] <- paste0("{n_range}", if (!is.na(get_n(col)[[i]])) "\u00a0", gl)
+      }
+    }
+    tab[[nm]] <- fmt_set_display(col, d)
+  }
+  tab
 }
 
 # Excel-only sd twin: for each numeric mean column insert an uncoloured sibling "<var>_sd" holding
@@ -1411,8 +1465,11 @@ tab_plot <- function(tabs,
     dplyr::mutate(
       dplyr::across(
         where(is_fmt),
-        ~ format(., special_formatting = TRUE,
-                 .ref = ann_ref(rd$ann[[dplyr::cur_column()]]))
+        # tx_spark_strip() again: a base-count cell now carries the row sparkline in its own display
+        # template, so the glyphs only exist once the fmt column has been rendered -- after the pass
+        # over the text columns above.
+        ~ tx_spark_strip(format(., special_formatting = TRUE,
+                                .ref = ann_ref(rd$ann[[dplyr::cur_column()]])))
       ),
       dplyr::across( # otherwise, unbreakable spaces fail in some graphic devices
         where(is.factor),

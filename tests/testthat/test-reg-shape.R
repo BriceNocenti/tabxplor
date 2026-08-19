@@ -55,7 +55,7 @@ test_that('shape = "quadratic" gives the predictor two rows, both fitted and bot
                                 shape = c(age = "quadratic"), stats = FALSE))
   labs <- lv(t, "age")
   expect_length(labs, 2L)
-  expect_match(labs[[1]], "^age \\(per 1 SD")
+  expect_match(labs[[1]], "^per SD/")
   expect_match(labs[[2]], "^age\u00b2")               # the curvature row, "age" + SUPERSCRIPT TWO
   or <- get_or(t[["Model_OR"]])[as.character(t$var) == "age"]
   expect_true(all(is.finite(or)))
@@ -269,19 +269,30 @@ test_that("rd_resid() is standard normal under a correct model, and refuses a mu
   expect_null(tabxplor:::rd_resid(f, "multinomial", y))
 })
 
-# ---- the sparkline in the row label ---------------------------------------------------------------
+# ---- the sparkline in the base-count cell ----------------------------------------------------------
+
+# what the base-count column PRINTS, per row: where the sparkline lives since Phase 22b-v (a
+# continuous predictor has no level population, so that cell is empty by construction).
+nprint <- function(t, v) {
+  m <- suppressMessages(tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE))
+  nc <- names(m)[purrr::map_lgl(m, ~ is_fmt(.) && get_role(.) == "n")]
+  vapply(nc, function(cl) paste(format(m[[cl]], na = "")[as.character(m$var) == v], collapse = " "),
+         character(1))
+}
 
 test_that("a continuous predictor's row carries its observed shape, and the option turns it off", {
   skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE))
-  expect_match(lv(t, "age"), "[\u2581-\u2588]{3,}")
-  # a factor row never gets one
-  expect_false(any(grepl("[\u2581-\u2588]", lv(t, "race"))))
+  # it is the base-count cell that carries it -- NOT the row label, which states the unit alone
+  expect_match(nprint(t, "age"), "[\u2581-\u2588]{3,}")
+  expect_false(grepl("[\u2581-\u2588]", lv(t, "age")))
+  # a factor row never gets one (it has a real count there)
+  expect_false(any(grepl("[\u2581-\u2588]", nprint(t, "race"))))
   withr::with_options(list(tabxplor.spark = FALSE), {
     t0 <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                    stats = FALSE))
-    expect_false(any(grepl("[\u2581-\u2588]", as.character(t0$levels))))
+    expect_false(any(grepl("[\u2581-\u2588]", nprint(t0, "age"))))
   })
 })
 
@@ -297,7 +308,7 @@ test_that("the curve is the MODELLED level's, not the factor's first level", {
   expect_gt(y[[length(y)]], y[[1]])
   # ten bins, and the sparkline printed is this curve
   expect_equal(nrow(a$curves$age), 10L)
-  expect_true(grepl(tabxplor:::rd_spark(y), lv(t, "age"), fixed = TRUE))
+  expect_true(grepl(tabxplor:::rd_spark(y), nprint(t, "age"), fixed = TRUE))
 })
 
 test_that("with several outcomes there is no single observed shape, so there is no sparkline", {

@@ -278,19 +278,20 @@ moves the odds, so its odds ratio sits inside the first colour break and the row
 effect"), so the default is \strong{one standard deviation}. Give either a \strong{single value}, applied
 to every continuous predictor, or a \strong{named vector} overriding chosen ones: \code{"sd"} (the
 default), \code{"2sd"} (roughly bottom to top of the distribution), or a number of units (\code{10} = per
-decade of age). \code{multiplier = 1} restores the per-one-unit reading, and the row label names the
-unit it used, e.g. \verb{age (per 1 SD (13.5))}.
+decade of age). \code{multiplier = 1} restores the per-one-unit reading. The row's level names the
+unit it used, e.g. \verb{per SD/13.5} --- the variable itself is named in the \code{var} column beside it.
 
 Everything scales together --- the estimate, its interval, the crude \verb{Obs_*} companion and the
 model-versus-observed comparison; the p-value is unchanged. \strong{Because the default is not 1, a
 continuous predictor's \verb{Model_*} cell does not equal \code{exp(coef(glm(...)))} unless you pass
 \code{multiplier = 1}.} The standard deviation is measured \strong{once}, on the complete cases of the
 predictors, so one predictor keeps one unit across outcomes, compared models and \code{tab_vars}
-groups. Not applied to multinomial / ordinal outcomes, nor to a \code{formula} model. A 0/1-coded
-\strong{numeric} predictor gets a "per 1 SD (0.5)" reading --- pass it as a factor instead.}
+groups. Applied to every family, multinomial and ordinal included; never to a \code{formula} model
+(it would scale the main effect alone). A 0/1-coded \strong{numeric} predictor gets a \verb{per SD/0.5}
+reading --- pass it as a factor instead.}
 
 \item{shape}{How a \strong{continuous} predictor enters the model, when one straight line is not
-enough. The \code{Linearity} footer row and the little curve drawn in the predictor's row label tell
+enough. The \code{Linearity} footer row and the little curve drawn in the predictor's \code{n} cell tell
 you \emph{whether} a line is enough; this argument is how you fix it without leaving the framework.
 A \strong{named vector} over continuous predictors --- everything it does not name stays linear:
 \describe{

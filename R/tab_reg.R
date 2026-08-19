@@ -277,12 +277,14 @@ reg_multiplier_value <- function(value, sd, digits = 3L) {
   if (is.character(v) && v %in% REG_MULTIPLIER_KEYWORDS) {
     if (!is.finite(sd) || sd <= 0) return(list(k = NA_real_, label = NA_character_))
     mult <- if (identical(v, "2sd")) 2 else 1
-    lab  <- if (mult == 1) "1 SD" else "2 SD"
-    return(list(k = mult * sd, label = paste0(lab, " (", format(signif(mult * sd, digits)), ")")))
+    # "SD/13.5" -- the count only when it is not 1, and a slash rather than a second parenthesis:
+    # the level cell reads "per SD/13.5", short enough never to wrap.
+    lab  <- if (mult == 1) "SD" else "2 SD"
+    return(list(k = mult * sd, label = paste0(lab, "/", format(signif(mult * sd, digits)))))
   }
   k <- suppressWarnings(as.numeric(v))
   if (!is.finite(k)) return(list(k = NA_real_, label = NA_character_))
-  list(k = k, label = if (k == 1) NA_character_ else paste0(format(k), " units"))
+  list(k = k, label = if (k == 1) NA_character_ else format(k))
 }
 
 #' @keywords internal
@@ -714,6 +716,26 @@ reg_wald_finalize <- function(est, do_exp, se = NULL, crit = NULL,
   list(estimate = est, conf.low = lo, conf.high = hi, p.value = p)
 }
 
+# A k-unit change multiplies the native-scale coefficient by k (se by |k|); the p is scale-invariant.
+# ONE writer for every family: the glm path needs `mult_vec` back for its profile bounds, the 3+ level
+# fitters call it on their hand-built tidy just before the Wald assembly. `td$term == v` is an exact
+# match, so a shape-generated squared term is never scaled -- and a multinomial tidy's `term x y.level`
+# rows all scale together, which is what a per-category coefficient wants.
+#' @keywords internal
+#' @noRd
+reg_tidy_rescale <- function(td, multiplier) {
+  mult_vec <- rep(1, nrow(td))
+  if (!is.null(multiplier)) {
+    for (v in names(multiplier)) {
+      mi <- td$term == v
+      if (any(mi)) mult_vec[mi] <- as.numeric(multiplier[[v]])
+    }
+    td$estimate  <- td$estimate  * mult_vec
+    td$std.error <- td$std.error * abs(mult_vec)
+  }
+  list(td = td, mult_vec = mult_vec)
+}
+
 reg_wald_from_tidy <- function(td, conf_level, do_exp) {
   res <- reg_wald_finalize(td$estimate, do_exp, se = td$std.error,
                            crit = stats::qnorm(1 - (1 - conf_level) / 2))
@@ -738,7 +760,7 @@ reg_fit_formula <- function(outcome, predictors, add_terms = NULL, formula = NUL
 
 reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, method,
                              weighted = FALSE, make_design = NULL, add_terms = NULL,
-                             formula = NULL) {
+                             formula = NULL, multiplier = NULL) {
   if (method == "profile") {
     cli::cli_inform(c("!" = "Profile intervals are not defined for multinomial models; using Wald."))
   }
@@ -767,7 +789,7 @@ reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, met
     ylev <- y_levels[-1]                               # non-reference categories, in level order
     td   <- tibble::tibble(y.level = ylev[k], term = stringi::stri_replace_all_regex(trm, "`", ""),
                            estimate = unname(cf), std.error = unname(se[nm]))
-    td   <- reg_wald_from_tidy(td, conf_level, do_exp)
+    td   <- reg_wald_from_tidy(reg_tidy_rescale(td, multiplier)$td, conf_level, do_exp)
     return(list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL,
                 fit = fit, data = mdata, y_ref = y_levels[1], y_levels = y_levels[-1]))
   }
@@ -775,7 +797,7 @@ reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, met
   fit <- nnet::multinom(fml, data = mdata, trace = FALSE)
   td  <- broom::tidy(fit)                              # y.level, term, estimate, std.error, ...
   td$term <- stringi::stri_replace_all_regex(td$term, "`", "")     # strip formula backticks -> match skeleton
-  td  <- reg_wald_from_tidy(td, conf_level, do_exp)
+  td  <- reg_wald_from_tidy(reg_tidy_rescale(td, multiplier)$td, conf_level, do_exp)
   list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL,
        fit = fit, data = mdata, y_ref = y_levels[1], y_levels = y_levels[-1])
 }
@@ -785,7 +807,7 @@ reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, met
 # "Constant" stays NA.
 reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, method,
                             weighted = FALSE, make_design = NULL, add_terms = NULL,
-                            formula = NULL) {
+                            formula = NULL, multiplier = NULL) {
   if (method == "profile") {
     cli::cli_inform(c("!" = "Profile intervals are not defined for proportional-odds models; using Wald."))
   }
@@ -817,7 +839,7 @@ reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, meth
     se  <- sqrt(diag(stats::vcov(fit)))[names(cf)]
     td  <- tibble::tibble(term = stringi::stri_replace_all_regex(names(cf), "`", ""),
                           estimate = unname(cf), std.error = unname(se))
-    td  <- reg_wald_from_tidy(td, conf_level, do_exp)
+    td  <- reg_wald_from_tidy(reg_tidy_rescale(td, multiplier)$td, conf_level, do_exp)
     cli::cli_inform(c("i" = paste0("The proportional-odds (parallel-lines) assumption is not tested for ",
                                    "survey-weighted ordinal models (the Brant test needs an unweighted fit).")))
     return(list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL, fit = fit,
@@ -828,7 +850,7 @@ reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, meth
   td  <- broom::tidy(fit)
   td  <- td[td$coef.type == "coefficient", , drop = FALSE]   # drop cut-point ("scale") intercepts
   td$term <- stringi::stri_replace_all_regex(td$term, "`", "")
-  td  <- reg_wald_from_tidy(td, conf_level, do_exp)
+  td  <- reg_wald_from_tidy(reg_tidy_rescale(td, multiplier)$td, conf_level, do_exp)
   # The Brant test is NOT run here: it is a footer ROW's statistic costing J-1 extra fits, so it is
   # built where that row is -- else every diagnostic and crude polr fit would pay for it.
   list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL, fit = fit,
@@ -951,11 +973,13 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
 
   if (family == "multinomial") {
     return(reg_fit_multinom(mdata, outcome, predictors, do_exp, conf_level, method,
-                            weighted, make_design, add_terms = add_terms, formula = formula))
+                            weighted, make_design, add_terms = add_terms, formula = formula,
+                            multiplier = multiplier))
   }
   if (family == "ordinal") {
     return(reg_fit_ordinal(mdata, outcome, predictors, do_exp, conf_level, method,
-                           weighted, make_design, add_terms = add_terms, formula = formula))
+                           weighted, make_design, add_terms = add_terms, formula = formula,
+                           multiplier = multiplier))
   }
 
   positive_level <- NULL
@@ -1084,18 +1108,10 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
   td <- broom::tidy(fit)                            # native scale: estimate, std.error, p.value
   td$term <- stringi::stri_replace_all_regex(td$term, "`", "")  # strip formula backticks -> match skeleton
 
-  # A k-unit change multiplies the native-scale coefficient by k (se by |k|). Applied BEFORE the CI,
-  # so the Wald interval and the profile bounds scale with it; the p is scale-invariant and is left
-  # alone.
-  mult_vec <- rep(1, nrow(td))
-  if (!is.null(multiplier)) {
-    for (v in names(multiplier)) {
-      mi <- td$term == v
-      if (any(mi)) mult_vec[mi] <- as.numeric(multiplier[[v]])
-    }
-    td$estimate  <- td$estimate  * mult_vec
-    td$std.error <- td$std.error * abs(mult_vec)
-  }
+  # BEFORE the CI, so the Wald interval and the profile bounds scale with it.
+  rs       <- reg_tidy_rescale(td, multiplier)
+  td       <- rs$td
+  mult_vec <- rs$mult_vec
 
   # An unweighted Poisson / grouped-binomial MLE reports naive SEs: scale them by sqrt(phi) so the
   # CI and stars match a quasi fit, while the MLE keeps its likelihood for the AIC / LR footer.
@@ -2468,6 +2484,23 @@ reg_build <- function(data, specs, shared, tab_vars = NULL, .fit_cache = NULL, r
 # The groups share ONE skeleton (the full data), so each has identical rows and columns. tab_vars is
 # placed FIRST because the index columns DECLARE their roles, so the spread machinery needs no
 # change. ⚠ it RETURNS A FINISHED TABLE, not a ctx -- the one early return.
+# ONE group-keyed `assumptions` out of the per-group parts: the scalars come from the first (same
+# specs, same outcome, so they are identical by construction), the curves are stacked with the group
+# they were measured on. `linear_level` is group-independent -- the groups share one skeleton.
+#' @keywords internal
+#' @noRd
+reg_bind_assumptions <- function(parts, sl) {
+  aa   <- stats::setNames(purrr::map(parts, "assumptions"), as.character(sl))
+  aa   <- purrr::compact(aa)
+  if (length(aa) == 0L) return(NULL)
+  vars <- unique(unlist(purrr::map(aa, ~ names(.x$curves))))
+  out  <- aa[[1]]
+  out$curves <- purrr::map(stats::setNames(nm = vars), function(v)
+    purrr::list_rbind(purrr::imap(aa, function(a, g)
+      if (is.null(a$curves[[v]])) NULL else dplyr::mutate(a$curves[[v]], group = g))))
+  out
+}
+
 #' @keywords internal
 #' @noRd
 reg_stage_split <- function(ctx) {
@@ -2499,11 +2532,14 @@ reg_stage_split <- function(ctx) {
     if (length(fit_cols) != length(specs)) fit_cols <- make.unique(purrr::map_chr(specs, "label"))
     tests <- reg_interaction_rows(tests, data, specs, shared, tab_vars, fit_cols)
   }
-  # `empirical_tips` / `assumptions` are deliberately NOT carried up: per-GROUP facts, and `meta` has
-  # no per-group slot, so merging would attach the FIRST group's numbers to every cell.
+  # `empirical_tips` is deliberately NOT carried up: a per-GROUP fact with no per-group slot in
+  # `meta`, so merging would attach the FIRST group's numbers to every cell. The observed CURVES do
+  # carry a group of their own, so they merge honestly -- one row block per group, read back by the
+  # base-count cell that belongs to it.
   grouped <- reg_finalize(combined, tests, conf_level, var_labels,
                           group_vars = c(tab_vars, "var"),
-                          meta_extra = list(subtext = subtext))
+                          meta_extra = list(subtext = subtext,
+                                            assumptions = reg_bind_assumptions(parts, sl)))
   # the groups go side by side whenever that is unambiguous -- ONE model, not multinomial. An
   # internal rule: tab_spread() is the public way to set the layout.
   if (length(specs) == 1L && !identical(family, "multinomial")) {
@@ -2925,35 +2961,37 @@ reg_stage_rows <- function(ctx) {
       if (any(hit)) disp_levels[hit] <- sub(v, shape_labels[[v]], disp_levels[hit], fixed = TRUE)
     }
   }
-  # relabel each scaled numeric predictor's level to "<var> (per <unit>)", found through the STORED
-  # predictor kind and keyed on the LINEAR term, so a curved predictor's squared row claims no unit.
+  # A scaled numeric predictor's level IS its unit -- "per SD/13.5", not "age (per 1 SD (13.5))".
+  # The `var` column already names the variable, so repeating it there only stretched the column and
+  # made the label wrap. Keyed on the LINEAR term, so a curved predictor's squared row claims no unit.
+  lin <- !is.na(skeleton$term) & skeleton$term == skeleton$var
   if (length(multiplier_label)) {
-    num_rows <- skeleton$var %in% numeric_preds &
-      !is.na(skeleton$term) & skeleton$term == skeleton$var
+    num_rows <- skeleton$var %in% numeric_preds & lin
     for (v in names(multiplier_label)) {
       lab <- multiplier_label[[v]]
       if (is.na(lab)) next
       hit <- num_rows & skeleton$var == v
-      if (any(hit)) disp_levels[hit] <- paste0(disp_levels[hit], " (per ", lab, ")")
+      if (any(hit)) disp_levels[hit] <- gettextf("per %s", lab)
     }
   }
 
-  # the OBSERVED shape of each continuous predictor, miniaturised into its row label. Fit-free, and
-  # drawn on `skeleton_data`: the groups share one skeleton, so a per-group curve would relabel a
-  # row.
-  assumptions <- reg_curves(skeleton_data, specs, numeric_preds, design_spec$wt,
+  # THE OBSERVED SHAPE of each continuous predictor, stored as a CURVE and drawn at display time
+  # into the row's empty base-count cell (materialize_specs()$reg_spark). Fit-free.
+  # ⚠ drawn on the GROUP's own `data`, not on the shared `skeleton_data`: a per-group curve used to
+  # be impossible because the glyphs lived in the row LABEL, and vec_rbind(), tab_spread()'s pivot
+  # and reg_write_group_gap()'s reg_skel_key() all key on (var, levels) -- two groups whose labels
+  # differed would double the pivot's rows and break the gap match. Out of the label, out of the key.
+  # `linear_level` is the row each curve belongs to: `shape = "quadratic"` gives a predictor TWO rows
+  # and `skeleton$term` does not exist at display time, so the linear one must be named here.
+  assumptions <- reg_curves(data, specs, numeric_preds, design_spec$wt,
                             positive_level = products[[1]]$positive_level,
                             design = design_spec$design)
   if (!is.null(assumptions)) {
-    spark <- tx_option("spark")
-    lin   <- !is.na(skeleton$term) & skeleton$term == skeleton$var
-    for (v in names(assumptions$curves)) {
-      gl <- rd_spark(assumptions$curves[[v]]$y, spark)
-      if (is.na(gl)) next
-      hit <- lin & skeleton$var == v
-      # a NON-BREAKING space (U+00A0): the glyph run belongs to the label and must not wrap off it
-      if (any(hit)) disp_levels[hit] <- paste0(disp_levels[hit], "\u00a0", gl)
-    }
+    assumptions$curves <- purrr::map(assumptions$curves, ~ dplyr::mutate(.x, group = ""))
+    assumptions$linear_level <- purrr::map_chr(
+      stats::setNames(nm = names(assumptions$curves)),
+      function(v) { hit <- lin & skeleton$var == v
+                    if (any(hit)) disp_levels[which(hit)[[1]]] else NA_character_ })
   }
 
   tab <- tibble::tibble(
@@ -3275,18 +3313,19 @@ reg_stage_finalize <- function(ctx) {
 #'   effect"), so the default is **one standard deviation**. Give either a **single value**, applied
 #'   to every continuous predictor, or a **named vector** overriding chosen ones: `"sd"` (the
 #'   default), `"2sd"` (roughly bottom to top of the distribution), or a number of units (`10` = per
-#'   decade of age). `multiplier = 1` restores the per-one-unit reading, and the row label names the
-#'   unit it used, e.g. `age (per 1 SD (13.5))`.
+#'   decade of age). `multiplier = 1` restores the per-one-unit reading. The row's level names the
+#'   unit it used, e.g. `per SD/13.5` --- the variable itself is named in the `var` column beside it.
 #'
 #'   Everything scales together --- the estimate, its interval, the crude `Obs_*` companion and the
 #'   model-versus-observed comparison; the p-value is unchanged. **Because the default is not 1, a
 #'   continuous predictor's `Model_*` cell does not equal `exp(coef(glm(...)))` unless you pass
 #'   `multiplier = 1`.** The standard deviation is measured **once**, on the complete cases of the
 #'   predictors, so one predictor keeps one unit across outcomes, compared models and `tab_vars`
-#'   groups. Not applied to multinomial / ordinal outcomes, nor to a `formula` model. A 0/1-coded
-#'   **numeric** predictor gets a "per 1 SD (0.5)" reading --- pass it as a factor instead.
+#'   groups. Applied to every family, multinomial and ordinal included; never to a `formula` model
+#'   (it would scale the main effect alone). A 0/1-coded **numeric** predictor gets a `per SD/0.5`
+#'   reading --- pass it as a factor instead.
 #' @param shape How a **continuous** predictor enters the model, when one straight line is not
-#'   enough. The `Linearity` footer row and the little curve drawn in the predictor's row label tell
+#'   enough. The `Linearity` footer row and the little curve drawn in the predictor's `n` cell tell
 #'   you *whether* a line is enough; this argument is how you fix it without leaving the framework.
 #'   A **named vector** over continuous predictors --- everything it does not name stays linear:
 #'   \describe{

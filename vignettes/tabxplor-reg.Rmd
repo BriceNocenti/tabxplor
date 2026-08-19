@@ -842,7 +842,7 @@ tab_reg(gss_simple, "married", c("race", "age"), display = "est_base")
 
 Note the difference: `display = "est_base"` *keeps* the odds-ratio column and adds the adjusted probability beside it, whereas `effect = "marginal"` (seen above) turns the **whole** column into a marginal effect.
 
-**`multiplier`** chooses the **unit** a continuous predictor's effect is reported per. One unit is rarely a readable amount: a one-year change in `age` barely moves the odds, so its odds ratio sits near 1, never crosses a colour threshold, and the row reads as "no effect" — while a whole standard deviation of age multiplies the odds by about 0.66. So the default is **per one standard deviation**, and the row label says which:
+**`multiplier`** chooses the **unit** a continuous predictor's effect is reported per. One unit is rarely a readable amount: a one-year change in `age` barely moves the odds, so its odds ratio sits near 1, never crosses a colour threshold, and the row reads as "no effect" — while a whole standard deviation of age multiplies the odds by about 0.66. So the default is **per one standard deviation**, and the row says which (`per SD/13.5`) — the variable is named in the column beside it:
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age"))
@@ -890,7 +890,7 @@ Two things worth knowing. A curvature test on one predictor can pick up **anothe
 
 ### The shape a continuous predictor is fitted with
 
-The linearity row tells you *whether* one straight line is enough. The little curve drawn inside a continuous predictor's own row label tells you *what shape the data actually has* — ten bins of the outcome against the predictor, on the model's own scale, with no model in it:
+The linearity row tells you *whether* one straight line is enough. The little curve drawn in a continuous predictor's otherwise-empty `n` cell tells you *what shape the data actually has* — ten bins of the outcome against the predictor, on the model's own scale, with no model in it:
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age"), family = "binomial")

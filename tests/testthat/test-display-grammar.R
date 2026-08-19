@@ -145,6 +145,49 @@ testthat::test_that("the primary's own bracket group is never dropped", {
   testthat::expect_identical(format(set_display(x, "({n_range})")), c("(10)", "(20)"))
 })
 
+testthat::test_that("no template the package writes has TOP-LEVEL literal content", {
+  # THE guard on the "a literal is content" rule: a void primary blanks a cell UNLESS the template
+  # says something outside its tokens. Every template the package itself writes separates its tokens
+  # with whitespace only -- "(Chi2)" and "(n=" sit inside a bracket GROUP, not at the top level -- so
+  # the rule cannot reach an existing column. A new template with a bare literal must be deliberate.
+  rfiles <- list.files(testthat::test_path("..", "..", "R"), "\\.R$", full.names = TRUE)
+  testthat::skip_if(length(rfiles) == 0, "package sources not available (installed check)")
+  src <- unlist(lapply(rfiles, readLines, warn = FALSE))
+  src <- src[!grepl("^\\s*#", src)]                    # a comment may QUOTE a template it does not write
+  lit <- gsub('^"|"$', "", unlist(regmatches(src, gregexpr('"[^"\\\\]*\\{[a-z_]+\\}[^"\\\\]*"', src))))
+  cand <- unique(c(unlist(DISPLAY_PRESETS, use.names = FALSE), lit,
+                   "{pvalue} (Chi2)", "{pvalue} (F, Welch)", "{pvalue} (Rao-Scott Chi2)"))
+  keep <- vapply(cand, function(t) {
+    if (nchar(t) > 40 || grepl("[.]code|cli::|\\\\", t)) return(FALSE)
+    f <- trimws(gsub("[{}]", "", regmatches(t, gregexpr("\\{[^{}]+\\}", t))[[1]]))
+    length(f) > 0 && all(f %in% names(DISPLAY_TOKENS))
+  }, logical(1))
+  cand <- unique(cand[keep])
+  testthat::expect_gt(length(cand), 15L)                       # the scan really found them
+  bare <- vapply(cand, function(t) {
+    seg <- parse_display_template(t)
+    any(fmt_rendered(seg$pieces[!seg$is_tok & seg$group == 0L]))
+  }, logical(1))
+  testthat::expect_identical(cand[bare], character(0))
+})
+
+testthat::test_that("a top-level literal renders even when the primary token is void", {
+  # the base-count cell of a regression's numeric-predictor row: no count, but the row sparkline
+  x <- fmt(n = c(100L, NA_integer_), tot_n = c(NA_real_, NA_real_), scale = "level_n",
+           display = "n_range", digits = 0L)
+  d <- set_display(x, c("n_range", "{n_range}\u2581\u2586\u2588"))
+  testthat::expect_identical(format(d, na = ""), c("100", "\u2581\u2586\u2588"))
+  testthat::expect_identical(format(d), c("100", "\u2581\u2586\u2588"))     # na = NA (the console)
+  # ... and the cell is ONE plain piece: no primary range, so no aside span / partial colouring
+  f  <- format(d, bold_split = TRUE)
+  pn <- attr(f, "primary_nchar")
+  testthat::expect_true(is.null(pn) || is.na(pn[[2]]))
+  # the pillar type tag still reads the TOKEN, never the literal
+  testthat::expect_identical(vctrs::vec_ptype_abbr(d), vctrs::vec_ptype_abbr(x))
+  # a whitespace-only top-level literal is NOT content: a void primary still blanks the cell
+  testthat::expect_identical(format(set_display(x, "{n_range} ({n})"), na = "")[[2]], "")
+})
+
 # === consumer safety: a hand-injected bad template must not crash any consumer =====
 
 testthat::test_that("every display consumer survives a hand-injected malformed template", {

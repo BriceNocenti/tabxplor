@@ -285,6 +285,16 @@
 
 ## Changes that may affect existing code
 
+* **In a `tab_reg()` table a continuous predictor's row now reports its unit in the level
+  (`per SD/13.5`) and draws its observed shape in the otherwise-empty `n` cell** (a framed
+  sparkline in HTML), instead of crowding both into the row label. `multiplier` now applies to
+  **multinomial and ordinal** outcomes too, so their continuous predictors read per standard
+  deviation by default like every other family --- pass `multiplier = 1` for the raw per-unit
+  coefficient. With `n = "no"` there is no cell left to draw the curve in.
+* **A `display` template's literal text now prints even when its main field is empty.**
+  `display = "{pct} pts"` on a cell with no percentage used to render nothing and now renders
+  `pts`. A literal *inside brackets* is unaffected: `"{pct} ({n})"` still renders nothing at all.
+
 * **A variable with a level named `"Total"` (or `"Ensemble"`) is now refused**, naming the level.
   `tab()` uses those labels for its own total rows and read such a level back AS one — bold, out of
   the percentage base, and printed twice, with no warning. Rename the level, or move tabxplor's

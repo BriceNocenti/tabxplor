@@ -483,6 +483,20 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   # invisible ghosts a user would find again on unmerging. Blank them at the source -- the display
   # equivalent of md's blanked cells, and on the WRITTEN copy only (every role is read off `tab`).
   xl_data <- xl_materialize_data(tab, fmt_cols, text_fmt_cols, transposed = transposed)
+  # A row sparkline lives in a base-count cell that holds NO number, so it displaces nothing: the
+  # column stays a real editable count and these few cells are written afterwards, individually, as
+  # text. Only where the column is numeric -- a genuine min-max range already makes it a
+  # `text_fmt_col`, whose format() string carries the glyphs on its own.
+  spark_cells <- if (isTRUE(transposed)) NULL else
+    purrr::list_rbind(purrr::map(setdiff(fmt_cols, text_fmt_cols), function(ci) {
+      cc  <- tab[[ci]]
+      hit <- which(is.na(get_num(cc)) & tx_has_spark(get_display(cc)))
+      if (!length(hit)) return(NULL)
+      # ⚠ NOT `col` for the local: tibble() evaluates in a data mask, so the `col =` column would
+      # shadow it and format() would dispatch on an integer.
+      txt <- format(cc, special_formatting = TRUE, na = "", stars = FALSE, pad = fig_space)
+      tibble::tibble(col = as.integer(ci), row = hit + data_row0, text = txt[hit])
+    }))
   for (cl in names(roles$label_cols)) {
     if (!cl %in% names(xl_data)) next
     xl_data[[cl]] <- as.character(xl_data[[cl]])
@@ -654,6 +668,9 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     # (values ARE variable names): merged AND rotated 90 degrees, so a long name costs one narrow
     # column. A kept tab_var is merged but never rotated -- its values are levels the user reads.
     label_merges = label_merges, vname_col = unname(roles$var_name_col),
+    # the few base-count cells that hold a row sparkline instead of a count: written individually,
+    # as text, after the numeric column (see xl_materialize_data above).
+    spark_cells = spark_cells,
     styles = styles, numfmt = numfmt
   )
 }
@@ -876,6 +893,11 @@ xl_write_table <- function(wb, plan, o, reg) {
 
   # values: raw numbers + header, title, subtext (styles applied below)
   xlb_write_data(wb, s, plan$data, hdr, 1L)
+  # ... then the row sparklines, one cell at a time: openxlsx2 types per CELL, so a text glyph run
+  # drops into an otherwise numeric count column without turning the whole column into text.
+  if (!is.null(plan$spark_cells) && nrow(plan$spark_cells))
+    purrr::pwalk(plan$spark_cells, function(col, row, text)
+      xlb_write_cell(wb, s, xl_cell(row, col), text))
   xlb_write_cell(wb, s, xl_cell(plan$title_row, 1L), plan$title)
   if (length(plan$subtext)) xlb_write_cell(wb, s, xl_cell(plan$subtext_row, 1L), plan$subtext)
 

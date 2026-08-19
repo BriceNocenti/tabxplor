@@ -300,18 +300,13 @@ test_that("the numeric row's label names its unit", {
   d <- num_data()
   t <- tab_reg(d, "married", c("age", "race"), family = "binomial", multiplier = "sd",
                cleannames = FALSE)
+  # the level IS the unit: the `var` column already names the variable, and the sparkline lives in
+  # the base-count cell, so nothing else shares this string.
   lab <- as.character(t$levels)[as.character(t$var) == "age"]
-  expect_match(lab, "^age \\(per 1 SD \\(.+\\)\\)")
+  expect_match(lab, "^per SD/[0-9.]+$")
   t10 <- tab_reg(d, "married", c("age", "race"), family = "binomial", multiplier = c(age = 10),
                  cleannames = FALSE)
-  expect_match(as.character(t10$levels)[as.character(t10$var) == "age"], "^age \\(per 10 units\\)")
-  # Phase 18z15: the label now ends with the OBSERVED-shape sparkline. options(tabxplor.spark =
-  # FALSE) restores it byte-for-byte -- the fixture that keeps the option honest.
-  withr::with_options(list(tabxplor.spark = FALSE), {
-    t0 <- tab_reg(d, "married", c("age", "race"), family = "binomial",
-                  multiplier = c(age = 10), cleannames = FALSE)
-    expect_identical(as.character(t0$levels)[as.character(t0$var) == "age"], "age (per 10 units)")
-  })
+  expect_identical(as.character(t10$levels)[as.character(t10$var) == "age"], "per 10")
 })
 
 test_that("the SD is frozen ONCE: same unit across split groups, compared models and dependents", {

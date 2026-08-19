@@ -107,7 +107,7 @@ tx_chrome_hex <- function(theme = "light") {
     # color_signif = "grey_non_signif") must stay readable ON the print background fills: #9f9f9f is
     # 1.41:1 on the darkest fill #B8B8B8, i.e. invisible; #595959 is 3.53:1 on it and 7.0:1 on white,
     # still plainly "greyed" against the pure black of a significant cell. `hover` is meaningless on paper.
-    print = list(text = "#000000", grey = "#595959", grey2 = "#333333", # "#111111",
+    print = list(text = "#000000", grey = "#888888", grey2 = "#333333", # "#111111",
                  bg = "#ffffff", border = "#000000", hover = "transparent"),
     list(text = "#000000", grey = "#9f9f9f", grey2 = "#333333",
          bg = "#ffffff", border = "#000000", hover = "#FFFCE5")
@@ -518,6 +518,12 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # reads as a blocky grid AND swallows the row hover (a child's background always paints over its
     # row's, whatever the specificity).
     ".tabxplor-tab .tx-pill{border-radius:4px;padding:1px 4px;}",
+    # a row sparkline is a PLOT and gets the whole cell: block + auto margins centre it horizontally
+    # whatever the column's text-align, and its own cell drops the numeric right/top geometry for
+    # middle/centre and trims the vertical padding to a hairline. NO border of its own -- the cell's
+    # own rule already draws the rectangle around it.
+    ".tabxplor-tab .tx-spark{display:block;margin:0 auto;}",
+    ".tabxplor-tab .tx-sparkcell{vertical-align:middle;text-align:center;padding:1px 2px;}",
     # Phase 14b: a cell tooltip is one line of "field: value ; field: value" prose, but bootstrap caps
     # .tooltip-inner at max-width:200px, so it wrapped to four lines and was unreadable.
     # WARNING: this selector is NOT scopable. Bootstrap moves the tooltip element to <body>
