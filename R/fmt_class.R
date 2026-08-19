@@ -3651,6 +3651,16 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
   paint   <- function(txt, style, cells)
     if (is.null(prim_f)) style(txt)
     else paint_split(txt, style, prim_f[cells], prim_n[cells], sec_sty)
+  # THE one styling write: paint the cells of `mask` and put them back. `bolded` rides the PRIMARY,
+  # so it is composed into the style rather than wrapped around the finished string.
+  paint_cells <- function(mask, style, bolded) {
+    for (b in unique(bolded[mask])) {
+      cells <- mask & bolded == b
+      if (!any(cells)) next
+      out[cells] <<- paint(out[cells],
+                           if (b) function(z) cli::style_bold(style(z)) else style, cells)
+    }
+  }
   out     <- as.character(out)
   display <- get_display(x)
   nas     <- is.na(display)
@@ -3683,45 +3693,51 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
     text_styles <- get_color_style()                  # current type/theme/24-bit options (ANSI, cli)
     bg_styles   <- get_color_style(type = "bg")
 
-    for (s in sort(unique(channels$text_slot[channels$text_slot > 0L & ok]))) {
-      cells <- ok & channels$text_slot == s
-      out[cells] <- paint(out[cells], text_styles[[s]], cells)
-    }
-    for (s in sort(unique(channels$bg_slot[channels$bg_slot > 0L & ok]))) {
-      cells <- ok & channels$bg_slot == s
-      out[cells] <- bg_styles[[s]](out[cells])
-    }
     totals <- if (!is.null(.ref)) .ref$all_totals else get_reference(x, "all_totals")
     # a reference ROW is also an anchor: a regression EMPIRICAL column marks its reference CATEGORY via
     # in_refrow, which get_reference("all_totals") misses. For crosstabs is_refrow is a subset -> no-op.
     totals <- totals | is_refrow(x)
-
-    # Cells matching no break on EITHER channel are greyed (style_subtle) so colored cells stand
-    # out; reference/total cells are exempt, staying full-strength as reading anchors.
+    # Cells matching no break on EITHER channel are greyed (style_subtle) so colored cells stand out;
+    # reference/total cells are exempt, staying full-strength as reading anchors.
     unselected <- channels$text_slot == 0L & channels$bg_slot == 0L
-    out[ok & unselected & !totals] <-
-      pillar::style_subtle(out[ok & unselected & !totals])
+    # bold = the anchors PLUS the text-coloured cells (export parity, matching fmt_col_ann()). It
+    # rides the PRIMARY only, like the html span's font-weight:normal on the aside. pillar measures
+    # the ANSI-stripped width, so bold adds none -- alignment holds.
+    bolded <- if (bold_on) ok & (totals | channels$text_slot > 0L) else rep(FALSE, length(out))
 
-    # export-parity bold = the anchors (totals) PLUS the text-coloured cells (matching fmt_col_ann()).
-    # pillar measures the ANSI-stripped width, so bold adds none -- alignment holds.
-    if (bold_on) {
-      m <- ok & (totals | channels$text_slot > 0L)
-      out[m] <- cli::style_bold(out[m])
+    for (s in sort(unique(channels$text_slot[channels$text_slot > 0L & ok]))) {
+      cells <- ok & channels$text_slot == s
+      paint_cells(cells, text_styles[[s]], bolded)
+    }
+    # EVERY cell goes through paint() exactly once, whatever its primary's style, so the aside keeps
+    # the secondary colour in all four classes -- which is what the html stylesheet already does
+    # (.tx-sec is emitted after .g1, so it wins there too). Nesting the whole-cell styles afterwards
+    # instead would be wrong, not merely different: an inner reset ends the outer colour early, which
+    # is exactly what an aside written FIRST ("({base}) {est}") would do to its own number.
+    paint_cells(ok & !unselected & channels$text_slot == 0L, identity, bolded)
+    paint_cells(ok & unselected & !totals, pillar::style_subtle, bolded)
+    paint_cells(ok & unselected &  totals, identity,             bolded)
+
+    # the background FILL wraps the whole cell, aside included -- a fill is the cell's ground, not a
+    # statement about one of its numbers.
+    for (s in sort(unique(channels$bg_slot[channels$bg_slot > 0L & ok]))) {
+      cells <- ok & channels$bg_slot == s
+      out[cells] <- bg_styles[[s]](out[cells])
     }
 
     #Columns with no color
   } else {
     # DESIGN: uncolored columns only grey out zeros here. Bold / underline / border styling for totals
     # was tried and rejected: bold offsets column widths in the console.
+    # The aside still takes the secondary colour: a Total cell's "100% (1 157-2 139)" reads the same
+    # way here as in every other column and in html.
+    bolded <- if (bold_on) {
+      ok & ((if (!is.null(.ref)) .ref$all_totals else get_reference(x, "all_totals")) | is_refrow(x))
+    } else rep(FALSE, length(out))
+    paint_cells(ok, identity, bolded)
     out[ok] <- out[ok] |>
       stringi::stri_replace_first_regex("^0%$|^-0%$", pillar::style_subtle("0%")) |> # 0 in gray
       stringi::stri_replace_first_regex("^0$|^0$", pillar::style_subtle("0"))
-
-    # an uncolored column has no text-coloured cells, so only the reference/total anchors are bold.
-    if (bold_on) {
-      tot <- (if (!is.null(.ref)) .ref$all_totals else get_reference(x, "all_totals")) | is_refrow(x)
-      out[ok & tot] <- cli::style_bold(out[ok & tot])
-    }
   }
 
   pillar::new_pillar_shaft_simple(out, align = "right", na = "")

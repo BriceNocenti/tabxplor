@@ -101,7 +101,7 @@ tx_theme_resolve <- function(theme = NULL, allow_auto = FALSE, note = NULL,
 tx_chrome_hex <- function(theme = "light") {
   switch(
     tx_palette_theme(theme),
-    dark = list(text = "#CECDC3", grey = "#707070", grey2 = "#a09f95", # "#EEEEEE",
+    dark = list(text = "#CECDC3", grey = "#707070", grey2 = "#bebebe", #"#afaea5", # "#EEEEEE",
                 bg = "#222222", border = "#CECDC3", hover = "rgba(255,242,204,.10)"),
     # z11: the light chrome, with ONE deliberate change. `grey` (a non-significant cell under
     # color_signif = "grey_non_signif") must stay readable ON the print background fills: #9f9f9f is

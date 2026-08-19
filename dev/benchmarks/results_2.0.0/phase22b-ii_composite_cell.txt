@@ -13,3 +13,17 @@ The only real cost is fmt_rendered() -- one Unicode whitespace trim per token pe
 composite expander runs to decide what is void. Everything else is within run-to-run noise. The new
 bracket-group walk in parse_display_template() runs once per UNIQUE template per column, not per
 cell, so it does not show up at all.
+
+--- follow-up: the console's single paint pass (pillar_shaft) ---------------------------------
+Every cell now goes through paint_split() exactly once, whatever its primary's style, so the aside
+keeps the secondary colour in all four cell classes (coloured / greyed / anchor / uncoloured column)
+instead of only in slot-coloured ones. Measured on 2e5 cells, 3 calls, against a git archive of HEAD:
+
+                     HEAD     after    delta
+format() bare       2.228 s   2.203 s   -1.1 %   (UNTOUCHED by this change)
+format() composite  5.955 s   6.091 s   +2.3 %   (UNTOUCHED by this change)
+pillar_shaft bare   2.148 s   2.205 s   +2.7 %
+pillar_shaft comp   7.274 s   7.324 s   +0.7 %
+
+All within run-to-run noise. A column with no composite pays nothing at all: `primary_from` is then
+NULL and paint() short-circuits to the style function itself, so the extra pass is one no-op call.
