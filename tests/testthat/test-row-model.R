@@ -17,7 +17,7 @@ testthat::test_that("the synthetic display rows carry their kind IN the record",
   # Before 19f these were a positional vector created at render and living one render pass, so any
   # consumer outside that pass had to match English row labels.
   m <- tabxplor:::tab_materialize_extras(
-    tab(gss, race, relig, pct = "col", add_n = TRUE, add_pct = TRUE, test = TRUE),
+    tab(gss, race, relig, pct = "col", n = "range", add_pct = TRUE, test = TRUE),
     backend = "text", pvalue = TRUE)
   rr <- tabxplor:::fmt_row_kind(m)
   testthat::expect_length(rr, nrow(m))

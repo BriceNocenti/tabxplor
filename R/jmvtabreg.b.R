@@ -145,7 +145,7 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
                               self$options$color),
         color_signif = self$options$color_signif,
         na           = self$options$na,
-        add_n        = self$options$add_n,
+        n            = self$options$n,
         cleannames   = self$options$cleannames,
         subtext      = self$options$subtext
       )

@@ -460,12 +460,24 @@ TAB_ARGS <- list(
     values_from = "COLOR_SCALES",
     doc = c("A per-table override of the colour thresholds, in the form",
             "\\code{\\link{set_color_breaks}} accepts; unset scales keep the global ones.")),
+  n = list(
+    default = NULL,
+    producers = c("tab", "tab_counts", "tab_reg"), option = "n",
+    values = c("range", "min", "no"), size = 1L,
+    doc = c("How many people this table is about. \\code{\"range\"} (the default) prints the",
+            "unweighted base beside the \\code{Total} cell --- \\code{100\\% (9 838)} --- and, in a",
+            "\\code{\\link{tab_reg}} table, in the \\code{n} column beside each predictor level.",
+            "When the parts of the table do not rest on the same people --- several column",
+            "variables losing different missing values, several models --- it prints the whole",
+            "range, \\code{100\\% (6 712-9 838)}, so an unequal base can never pass unnoticed.",
+            "\\code{\"min\"} prints the smallest base only; \\code{\"no\"} prints no count.")),
+  # NULL default on purpose: tab_dots_expand() refills an unsupplied declared argument, so a TRUE
+  # here would make every tab_counts() call look like a user-supplied one and warn.
   add_n = list(
-    default_for = list(tab_reg = TRUE),
-    default = TRUE,
-    producers = c("tab", "tab_counts", "tab_reg"),
-    doc = c("For `pct = \"row\"` or `pct = \"col\"`, set to `FALSE` not to add another",
-            "column or row with unweighted counts (`n`).")),
+    default = NULL,
+    producers = c("tab", "tab_counts"), status = "deprecated",
+    doc = c("`r lifecycle::badge(\"deprecated\")` use `n` instead: `add_n = FALSE` is",
+            "`n = \"no\"`.")),
   add_pct = list(
     default = FALSE,
     producers = c("tab", "tab_counts"),
@@ -1002,11 +1014,11 @@ stopifnot(
                all(r[["status"]] %in% c("live", "deprecated", "superseded", "internal")), logical(1))),
   all(vapply(TAB_ARGS, function(r) is.null(r[["check"]]) ||
                r[["check"]] %in% c("probability", "count"), logical(1))),
-  # the derived view must hold EXACTLY the nine 19i declared -- `ci` and `input` are declared here
-  # too but validated by their own resolvers (resolve_ci_value / rlang::arg_match), which is what
-  # `validate = FALSE` says.
+  # the derived view must hold EXACTLY the ones centrally validated -- `ci` and `input` are declared
+  # here too but validated by their own resolvers (resolve_ci_value / rlang::arg_match), which is
+  # what `validate = FALSE` says.
   setequal(names(TAB_ARG_VALUES),
-           c("pct", "na", "levels", "comp", "tot", "totaltab", "totcol", "output", "anova"))
+           c("pct", "na", "levels", "comp", "tot", "totaltab", "totcol", "output", "anova", "n"))
 )
 
 # ...and the SAME shape rules on the render surface (Phase 20h). Stated as its own block rather than a

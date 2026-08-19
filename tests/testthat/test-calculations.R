@@ -750,11 +750,11 @@ testthat::test_that("vectorised chi2 applies the Yates correction on 2x2 like ch
   testthat::expect_equal(chi2_row$pvalue,    ref$p.value,           tolerance = 1e-10)
 })
 
-testthat::test_that("chi2 is unaffected by add_n (now a display-only column)", {
+testthat::test_that("chi2 is unaffected by the base count (now a display-only column)", {
   ref_tab  <- tab(gss, race, marital, pct = "row", test = TRUE)
   ref_row  <- get_test(ref_tab) |> dplyr::filter(.data$test == "chi2")
-  # Phase 10i-B: add_n is display-only, so `tab(add_n = TRUE)` builds the SAME core table chi2 sees.
-  addn_tab <- tab(gss, race, marital, pct = "row", add_n = TRUE, test = TRUE)
+  # Phase 10i-B: the base count is display-only, so `tab(n = "range")` builds the SAME core table chi2 sees.
+  addn_tab <- tab(gss, race, marital, pct = "row", n = "range", test = TRUE)
   addn_row <- get_test(addn_tab) |> dplyr::filter(.data$test == "chi2")
 
   testthat::expect_equal(addn_row$statistic, ref_row$statistic, tolerance = 1e-6)

@@ -23,7 +23,7 @@ jmv_opts <- function(...) {
             # the jamovi UI keeps one ComboBox per interval kind; jmv_ci_method() folds them
             ci_method_cell = "wilson", ci_method_diff = "newcombe",
             ci_method_mean_diff = "welch", ci_method_mean_ratio = "robust",
-            totaltab = "line", digits = 0, other_if_less_than = 0, add_n = TRUE, add_pct = FALSE,
+            totaltab = "line", digits = 0, other_if_less_than = 0, add_pct = FALSE,
             # 20g-ii: `n_min` was MISSING here although .opts() sets it and it is in the tier-3
             # `reapplied` set -- the fixture must carry every key that vector names, or the D12
             # assertion below cannot see the real invariant.
@@ -69,7 +69,7 @@ jmv_oracle <- function(opts, data) {
     conf_level = opts$conf_level, stars = opts$stars, anova = opts$anova,
     ci_method = c(cell = opts$ci_method_cell, diff = opts$ci_method_diff),
     cleannames = FALSE, totaltab = opts$totaltab, digits = opts$digits,
-    other_if_less_than = opts$other_if_less_than, add_n = opts$add_n, add_pct = opts$add_pct,
+    other_if_less_than = opts$other_if_less_than, n = opts[["n"]], add_pct = opts$add_pct,
     subtext = opts$subtext, output_list = isTRUE(opts$output_list)
   ))
 }

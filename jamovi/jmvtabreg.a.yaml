@@ -101,7 +101,7 @@ options:
           elements:
               - name: var
                 type: Variable
-              - name: n
+              - name: "n"
                 type: String
 
     - name: effect
@@ -413,13 +413,22 @@ options:
            and \code{base} the level it sits on (an adjusted probability, an adjusted mean).
            \code{"auto"} keeps the built-in layout.
 
-    - name: add_n
-      title: add_n
-      type: Bool
-      default: true
+    - name: "n"   # quoted: YAML 1.1 reads a bare `n` as the boolean FALSE
+      title: n
+      type: List
+      options:
+        - name: range
+          title: range
+        - name: min
+          title: min
+        - name: "no"
+          title: "no"
+      default: range
       description:
           R: >
-           Add a column giving the number of observations behind each predictor level.
+           The column giving the number of observations behind each predictor level:
+           `"range"` prints `min-max` when several models were fitted on different people,
+           `"min"` the smallest count only, `"no"` no column at all.
 
     - name: cleannames
       title: cleannames

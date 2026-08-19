@@ -123,13 +123,13 @@ test_that("Phase 16c: a binary col_var references the complement (no column forc
 
 test_that("Phase 16c: an OR table's total column shows only the base n, not 100%", {
   t   <- tab(or_data(), g, y, pct = "row", display = "{or}", ref = "first")
-  # console/text: the Total cell folds to `n={n}` (no "100%" / "{pct}")
+  # console/text: the Total cell folds to the base count alone (no "100%" / "{pct}")
   mt  <- tab_materialize_extras(t, backend = "text", pvalue = FALSE)
   d   <- as.character(get_display(mt[["Total"]]))
-  expect_true (all(grepl("n=",  d, fixed = TRUE)))
-  expect_false(any(grepl("pct", d, fixed = TRUE)))
-  # add_n = FALSE drops the meaningless % total column entirely
-  t0  <- tab(or_data(), g, y, pct = "row", display = "{or}", ref = "first", add_n = FALSE)
+  expect_true (all(grepl("n_range", d, fixed = TRUE)))
+  expect_false(any(grepl("{pct}",   d, fixed = TRUE)))
+  # n = "no" drops the meaningless % total column entirely
+  t0  <- tab(or_data(), g, y, pct = "row", display = "{or}", ref = "first", n = "no")
   mt0 <- tab_materialize_extras(t0, backend = "text", pvalue = FALSE)
   expect_false("Total" %in% names(mt0))
   # Excel exports only the base-n column, no % total

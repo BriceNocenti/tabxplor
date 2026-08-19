@@ -31,13 +31,12 @@ source("tests/testthat/helper-golden.R")
 # already-landed change as a PROBLEM (measured in Phase 19a: z16-iiiii's `ci_settings` reshape rule
 # fired on four cases whose committed goldens already carry the new shape).
 #
-# Phase 22a-i: ONE attribute is RENAMED, `pct_base` -> `pct_type`. A rename needs no new mode: it is
-# an addition plus a removal, and `EXPECTED_ATTR`'s function form states the claim that makes it a
-# rename rather than two changes -- the new attribute must equal the old one, on every column of
-# every case. Anything else moving is a defect.
-ADDED_ATTRS   <- "pct_type"
-REMOVED_ATTRS <- "pct_base"
-EXPECTED_ATTR <- list(pct_type = function(ao, v, col) identical(v, ao$pct_base))
+# Phase 22b-i: NO field and NO attribute moves. The base count became a display MODE, so the only
+# delta is `meta$render_extras` (`add_n = TRUE` -> `n = "range"`), which this script reports on its
+# own. Everything else must be bit-identical -- that is the claim being proved before regenerating.
+ADDED_ATTRS   <- character(0)
+REMOVED_ATTRS <- character(0)
+EXPECTED_ATTR <- list()
 
 # POPULATED_FIELDS -- Phase 19m-i's mode: a rule change that FILLS cells which were NA, on a declared
 # subset of rows, and must touch nothing else. Per case: which fields may move, and a predicate over

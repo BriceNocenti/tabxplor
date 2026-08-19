@@ -565,10 +565,10 @@ children:
         stretchFactor: 1
         children:
           - type: Label
-            label: add_n = <i>(see unweighted counts)</i>
+            label: n = <i>(see unweighted counts)</i>
             children:
-              - type: CheckBox
-                name: add_n
+              - type: ComboBox
+                name: "n"
                 enable: (pct:row || pct:col)
       - type: LayoutBox
         margin: none

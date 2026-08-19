@@ -1,7 +1,7 @@
 # PURPOSE: Validate the Phase 7g `n_min` small-base display filter (tab_apply_n_min).
 # ROLE: n_min is a PURE display step -- it drops small-base rows/cols and blanks weak cells,
 #       recomputing nothing (no fields, no chi2/ANOVA/CI). These tests lock the drop/blank rule
-#       and the survival invariants (totals, add_n, p-value line, class + attributes).
+#       and the survival invariants (totals, the base count, p-value line, class + attributes).
 # KEY CONSTRAINTS:
 #   - Base = get_tot_n() (proportions) / get_n() (means); an NA base is never weak.
 #   - Row rule (row-oriented cols): drop only if the LARGEST base across cols < n_min.
@@ -85,16 +85,16 @@ testthat::test_that("means use the n base (not tot_n) for the drop", {
   testthat::expect_true("Total" %in% as.character(out$sex))
 })
 
-testthat::test_that("n_min never drops the total row, and keeps the add_n intent + test attr", {
-  out <- tab(gss, race, marital, pct = "row", test = TRUE, add_n = TRUE, n_min = 3000)
+testthat::test_that("n_min never drops the total row, and keeps the base-count intent + test attr", {
+  out <- tab(gss, race, marital, pct = "row", test = TRUE, n = "range", n_min = 3000)
   # total row present
   testthat::expect_true(any(is_totrow(out$Total)))
-  # Phase 10i-B: add_n / add_pct / p-value are now DISPLAY-only -- the built "core" table has NO `n`
+  # Phase 10i-B: the base count / add_pct / p-value are now DISPLAY-only -- the built "core" table has NO `n`
   # column and no p-value body row; n_min runs on the core and must PRESERVE the display intent (the
   # `render_extras` attribute) + the `test` attribute so the extras/p-values still materialise at
   # display. No body cell has an NA n now.
   testthat::expect_false("n" %in% names(out))
-  testthat::expect_true(isTRUE(get_render_extras(out)$add_n))
+  testthat::expect_identical(get_render_extras(out)$n, "range")
   testthat::expect_false(any(is.na(get_n(out$Total))))
   testthat::expect_false(is.null(get_test(out)))
   testthat::expect_gt(nrow(get_test(out)), 0)

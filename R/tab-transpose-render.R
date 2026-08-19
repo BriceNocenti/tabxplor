@@ -199,12 +199,12 @@ tx_transpose_render <- function(rd, backend) {
   # col_var borders). The Total / n / col_pct rows are absorbed into the preceding group -- no separator,
   # so a single-col_var transpose matches a native pct = "col" table (n right after Total, no rule),
   # while a several-col_var one keeps a rule before each new block (e.g. before the numeric means).
-  # Phase 17c: the absorbed synthetic columns-turned-rows are the total (roles$totcols) + the add_n /
+  # The absorbed synthetic columns-turned-rows are the total (roles$totcols) + the base-count /
   # add_pct columns -- both STRUCTURAL. The old `level_vals %in% c("pvalue", "row_pct")` clause was
   # dead here (level_vals is a COLUMN header, never an original row label) and missed col_pct.
   # Phase 19l: those two are found by their DECLARED role, not by the col_var tag they borrowed.
   col_of  <- unname(cvm[order_i])                  # each row's source col_var (STABLE; row_grp is mutated)
-  is_addn <- fmt_is_helper_col(tab[order_i])       # the add_n / add_pct columns-turned-rows
+  is_addn <- fmt_is_helper_col(tab[order_i])       # the base-count / add_pct columns-turned-rows
   row_grp <- col_of
   absorb  <- (order_i %in% roles$totcols) | is_addn
   row_grp[absorb] <- NA

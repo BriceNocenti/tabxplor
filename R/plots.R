@@ -940,23 +940,18 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
   e$ypos <- factor(e$row, levels = rev(sort(unique(e$row))))
   ylab   <- stats::setNames(as.character(rows$level), as.character(rows$row))
 
-  # --- point size: constant, or the base. `n` is NA on a model column (Phase 14r moved the whole-model
-  # N to the footer), so `size = "n"` reads the `add_n = TRUE` column when there is one -- the honest
-  # replacement for or_plot()'s `point_size`, which mapped that all-NA field and silently did nothing.
+  # --- point size: constant, or the base. A model column carries its level's own `n`, so the area
+  # of a point says how many people are behind it -- a small base and a wide interval then say the
+  # same thing twice, which is what makes a fragile estimate impossible to overlook.
   e$psize <- 1.9
   if (identical(size, "n")) {
     nv <- e$n
-    if (all(is.na(nv))) {
-      ncol_nm <- names(x)[fmt_has_role(x, "n")]
-      if (length(ncol_nm)) nv <- get_n(x[[ncol_nm[1]]])[e$row]
-    }
     if (any(is.finite(nv))) {
       r <- range(sqrt(nv), na.rm = TRUE, finite = TRUE)
       e$psize <- if (diff(r) > 0) 1.2 + 3.3 * (sqrt(nv) - r[1]) / diff(r) else 1.9
       e$psize[!is.finite(e$psize)] <- 1.2
     } else {
-      cli::cli_inform(c("i" = paste("{.code size = \"n\"}: this table carries no per-level base.",
-                                    "Build it with {.code add_n = TRUE}.")))
+      cli::cli_inform(c("i" = "{.code size = \"n\"}: this table carries no per-level base."))
     }
   }
 

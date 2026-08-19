@@ -615,26 +615,26 @@ testthat::test_that("tab colors are calculated with mean supplementary columns",
   tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind")) |> testthat::expect_s3_class("tabxplor_tab")
 })
 
-testthat::test_that("tab works with and without add_n and add_pct", {
-  tab(data, "sex", "hair_color", pct = "row", color = "diff", add_n   = FALSE)                 |> testthat::expect_s3_class("tabxplor_tab")
-  tab(data, "sex", "hair_color", pct = "row", color = "diff", add_n   = FALSE, add_pct = TRUE) |> testthat::expect_s3_class("tabxplor_tab")
+testthat::test_that("tab works with and without the base count and add_pct", {
+  tab(data, "sex", "hair_color", pct = "row", color = "diff", n       = "no")                 |> testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "sex", "hair_color", pct = "row", color = "diff", n       = "no", add_pct = TRUE) |> testthat::expect_s3_class("tabxplor_tab")
   tab(data, "sex", "hair_color", pct = "row", color = "diff", add_pct = TRUE)                  |> testthat::expect_s3_class("tabxplor_tab")
-  tab(data, "sex", "hair_color", pct = "col", color = "diff", add_n   = FALSE)                 |> testthat::expect_s3_class("tabxplor_tab")
-  tab(data, "sex", "hair_color", pct = "col", color = "diff", add_n   = FALSE, add_pct = TRUE) |> testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "sex", "hair_color", pct = "col", color = "diff", n       = "no")                 |> testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "sex", "hair_color", pct = "col", color = "diff", n       = "no", add_pct = TRUE) |> testthat::expect_s3_class("tabxplor_tab")
   tab(data, "sex", "hair_color", pct = "col", color = "diff", add_pct = TRUE)                  |> testthat::expect_s3_class("tabxplor_tab")
 })
 
 
 # Phase 14p: single-variable / no-col_var frequency tables keep their `n` / `pct` / `wn` columns at
-# DISPLAY (a <=1.3.1-breaking regression: the add_n intent used to fold + drop the real `n` column).
+# DISPLAY (a <=1.3.1-breaking regression: the base-count intent used to fold + drop the real `n` column).
 testthat::test_that("single-variable frequency table keeps its n column (Phase 14p)", {
   gss <- forcats::gss_cat
   disp <- function(x) names(tabxplor:::tab_materialize_extras(x, backend = "text", pvalue = FALSE))
 
   # plain count: levels + n
   testthat::expect_setequal(disp(tab(gss, relig)), c("relig", "n"))
-  # add_n = FALSE must NOT drop the frequency n (it is primary content, not the display extra)
-  testthat::expect_setequal(disp(tab(gss, relig, add_n = FALSE)), c("relig", "n"))
+  # n = "no" must NOT drop the frequency n (it is primary content, not the display extra)
+  testthat::expect_setequal(disp(tab(gss, relig, n = "no")), c("relig", "n"))
   # pct modes: pct + n both survive
   testthat::expect_setequal(disp(tab(gss, relig, pct = "col")), c("relig", "pct", "n"))
   testthat::expect_setequal(disp(tab(gss, relig, pct = "row")), c("relig", "pct", "n"))

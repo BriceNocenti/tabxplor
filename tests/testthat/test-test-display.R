@@ -53,7 +53,8 @@ test_that("reg grid: Model fit header, dependent-named columns, a shared predict
   expect_equal(g$stat_header, "Model fit")
   expect_setequal(g$value_headers, c("married", "income25k"))
   expect_true("predictors" %in% g$label_headers)
-  expect_true(any(vapply(g$groups[[1]]$rows, `[[`, character(1), "label") == "N"))
+  # the model N is a RECORD, not a footer row: it is shown in the `n` column (Phase 22b-i)
+  expect_false(any(vapply(g$groups[[1]]$rows, `[[`, character(1), "label") == "N"))
 })
 
 # Phase 19h (KEY 7): tab_spread() re-keys the `test` tibble onto what the spread made of what each

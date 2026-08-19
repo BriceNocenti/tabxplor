@@ -611,14 +611,22 @@ options:
             built with. A template naming a field the table does not carry renders empty and says
             which argument would fill it.
 
-    - name: add_n
+    - name: "n"   # quoted: YAML 1.1 reads a bare `n` as the boolean FALSE
       title: "" #
-      type: Bool
-      default: true
+      type: List
+      options:
+        - name: range
+          title: range
+        - name: min
+          title: min
+        - name: "no"
+          title: "no"
+      default: range
       description:
           R: >
-           For `pct = "row"` or `pct = "col"`, set to `FALSE` not to add another
-           column or row with unweighted counts (`n`).
+           How many people the table is about: `"range"` prints the unweighted base beside
+           the Total cell (as `min-max` when the column variables rest on different people),
+           `"min"` the smallest base only, `"no"` no count at all.
 
     - name: add_pct
       title: "" #

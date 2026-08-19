@@ -584,6 +584,7 @@ the last few are not meant to be typed:
 \item \code{coef} --- a regression coefficient, on its own scale.
 \item \code{gof} --- a model-fit statistic (N, R2, AIC, BIC, dispersion).
 \item \code{est_ci} --- the estimate with a visible interval, reading whichever field the column's scale centres on.
+\item \code{n_range} --- the unweighted base: one count, or a \code{min-max} range over the table.
 \item \code{blank} --- nothing: a cell masked by \code{n_min}.
 \item \code{rr} --- the legacy synonym of \code{ratio}, still accepted.
 }

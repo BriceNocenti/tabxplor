@@ -133,6 +133,15 @@ TAB_OPTIONS <- list(
             "strongly as \"2.7 times more\", and the same in a bracket. `\"raw\"` prints the plain",
             "number (`0.37`), the convention of most journals.")),
 
+  n = tx_opt(
+    "range", "display", arg = "n",
+    doc = c("how many people a table says are behind its numbers. `\"range\"` puts the unweighted",
+            "base beside the Total cell of a crosstab (`100% (9 838)`) and in the `n` column of a",
+            "regression table, printed as `min-max` when the blocks rest on different populations",
+            "--- several column variables losing different `NA`s, or several models. `\"min\"`",
+            "prints the smallest base only, `\"no\"` shows no count at all. It replaces the `add_n`",
+            "argument, deprecated in 2.0.0.")),
+
   color_secondary = tx_opt(
     "black", "display",
     doc = c("in a cell that prints SEVERAL fields, which colour the ones beside the primary take.",
@@ -260,7 +269,7 @@ TAB_OPTIONS <- list(
       "`\"summary\"` (p-value + effect size), `\"all\"` (+ the raw statistic), `\"stat\"` (p-value +",
       "statistic), or `\"pvalue\"` (the single p-value row). The p-value row name states the test used",
       "(\"pvalue (Chi2, Welch F; survey-design)\") and the effect-size row its measure (\"Cramer's V,",
-      "eta2\"). N is never added -- it is already shown by `add_n`. The console summary block always",
+      "eta2\"). N is never added -- it is already shown by the `n` column. The console block always",
       "shows N + p-value + effect size.")),
 
   spark = tx_opt(

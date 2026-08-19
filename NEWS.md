@@ -8,6 +8,10 @@
   with `output_list = TRUE`. `tab_many()` is kept as a soft-deprecated alias. Several `row_vars` and
   `tab_vars` now **compose** — `tab(data, c(race, relig), marital, tab_vars = year)` returns a table
   where it used to silently return a list.
+* **`n = c("range", "min", "no")`** says how many people a table is about: the unweighted base beside
+  the `Total` cell of a crosstab, in the `n` column of a regression table, and printed as a range
+  (`100% (6 712-9 838)`) whenever the parts of the table do not rest on the same people — several
+  column variables losing different `NA`s, or several models. It replaces `add_n`.
 * **Redesigned colour API.** Position picks the visual channel (1st value → text, 2nd → background),
   names pick the column type (`pct` / `mean`); `color = TRUE` is the smart per-type default. New OKLCH
   light/dark palettes, 24-bit truecolor console, `set_color_palette()` (replaces `set_color_style()`),
@@ -250,7 +254,7 @@
   scale, and what is left to choose is what to compare it *to* — `c(TRUE, "adjustment")` (was
   `c("OR", "adjustment")`) or `c(TRUE, "between_groups")`.
 * **Regression tables now show the numbers behind the estimates.** An `n` column gives each predictor
-  level its unadjusted count (`add_n = FALSE` to drop it), and the footer answers "is this variable
+  level its unadjusted count (`n = "no"` to drop it), and the footer answers "is this variable
   associated with the outcome at all?" with one overall test per multi-level predictor (it costs no
   extra model fit; `stats = FALSE` or an explicit `stats =` vector opts out).
 * **`tab_export()`** — one entry point for every export format. **`tab_html()`** is the new name for
@@ -275,7 +279,7 @@
 * **The jamovi panels now name every option after the R argument it drives** (`outcome`,
   `tab_vars`, `ci_method`, `multiplier`, `shape`, `ref`, `stats`…), so clicking through the module
   still teaches the R API. Two controls were added: the model checks that refit the model
-  (`stats = "all"`) and the N per predictor level (`add_n`). ⚠ jamovi keys an analysis's saved
+  (`stats = "all"`) and the N per predictor level (`n`). ⚠ jamovi keys an analysis's saved
   settings by option name, so **a `.omv` file saved with an earlier development build loses the
   values of the renamed options** and falls back to their defaults.
 
@@ -392,7 +396,7 @@
   Suggests; `survey` / `nnet` / `MASS` / `broom` become hard dependencies (weighted, multinomial, ordinal
   and basic `tab_reg()` work out of the box).
 * **Significance stars are opt-in** (off by default) in `tab()`; `tab_reg()` still shows them.
-* **`add_n`, `add_pct` and chi-squared / ANOVA p-values are now drawn at display/export time**, not stored
+* **The base count, `add_pct` and chi-squared / ANOVA p-values are now drawn at display/export time**, not stored
   as columns/rows in the built object. Read them via `get_n()` on the Total column and the `test` attribute
   (`get_test()`).
 * For **numeric (mean) columns**, the `diff` field is now a real **difference**; the cell/reference ratio
@@ -547,6 +551,8 @@
 
 ### Soft-deprecated
 
+* `tab(add_n =)` — use `n = c("range", "min", "no")`, or `options(tabxplor.n =)`. `add_n = FALSE`
+  is `n = "no"`.
 * `tab(total_names =)`, `tab(totaltab_name =)` and `tab(other_level =)` — use
   `options(tabxplor.total_names =)`. Same on `tab_plain()`, `tab_num()` and `tab_counts()`.
 * `options(tabxplor.signif_levels)` / `options(tabxplor.signif_labels)` — give the ladder to

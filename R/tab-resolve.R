@@ -344,6 +344,7 @@ tab_resolve_common_args <- function(fn = "tab",
                                     OR, display, ref, ref2, tot,
                                     total_names, totaltab_name, other_level,
                                     na, levels, pct, comp, totaltab, totcol, output, n_min, anova,
+                                    n, add_n,
                                     user_env = rlang::caller_env()) {
   out <- list()
 
@@ -446,6 +447,21 @@ tab_resolve_common_args <- function(fn = "tab",
   out$total_names   <- unname(lbl[c("row", "col")])
   out$totaltab_name <- unname(lbl[["tab"]])
   out$other_level   <- unname(lbl[["other"]])
+
+  # 8. the base count. One MODE, resolved here so no consumer re-derives it; the deprecated logical
+  # only ever said "off", which is the "no" mode.
+  if (!missing(n) || !missing(add_n)) {
+    base_n <- if (!missing(n) && !is.null(n)) as.character(n)[[1]] else tx_option("n")
+    if (!missing(add_n) && !is.null(add_n)) {
+      lifecycle::deprecate_soft(
+        "2.0.0", I(paste0(fn, "(add_n = )")), I(paste0(fn, '(n = "no")')),
+        details = paste0("The base count is a display choice now, with a global twin: ",
+                         "options(tabxplor.n = \"range\" / \"min\" / \"no\")."),
+        user_env = user_env)
+      if (isFALSE(add_n) && (missing(n) || is.null(n))) base_n <- "no"
+    }
+    out$base_n <- base_n
+  }
 
   out
 }

@@ -234,7 +234,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
                 ci = "auto", conf_level = NULL, stars = NULL,
                 ci_method = NULL, anova = NULL, design_effect = NULL,
                 totaltab = "line", common_totrow = FALSE, tot = c("row", "col"),
-                add_n = TRUE, add_pct = FALSE,
+                n = NULL, add_pct = FALSE,
                 subtext = "", digits = 0, n_min = 0, display = NULL,
                 color_breaks = NULL,
                 output_list = FALSE, parallel = NULL,
@@ -248,6 +248,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
   method_diff <- dots_value(.dots, "method_diff")
   names_prefix <- dots_value(.dots, "names_prefix")
   names_sort   <- dots_value(.dots, "names_sort", FALSE)
+  add_n        <- dots_value(.dots, "add_n")
   .cache             <- dots_value(.dots, ".cache")
   .defer_level_merge <- dots_value(.dots, ".defer_level_merge", FALSE)
   .return_armed      <- dots_value(.dots, ".return_armed", FALSE)
@@ -266,13 +267,14 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
     totaltab_name = dots_value(.dots, "totaltab_name"),
     other_level   = dots_value(.dots, "other_level"),
     comp = comp, totaltab = totaltab, n_min = n_min, anova = anova,
+    n = n, add_n = add_n,
     user_env = rlang::caller_env())
   test <- .a$test ; cleannames <- .a$cleannames ; stars <- .a$stars ; ci_method <- .a$ci_method
   display <- .a$display ; ref <- .a$ref ; ref2 <- .a$ref2
   color_spec <- .a$color_spec ; color <- .a$color
   total_names <- .a$total_names ; tot <- .a$tot
   totaltab_name <- .a$totaltab_name ; other_level <- .a$other_level
-  conf_level <- .a$conf_level
+  conf_level <- .a$conf_level ; base_n <- .a$base_n
 
   # WARNING: THE PARTIAL-MATCHING TRAP. R matches a partial argument name against the formals sitting
   #   BEFORE `...`, so `row_var` -- a PREFIX of `row_vars` -- binds there and never reaches `.dots`.
@@ -410,7 +412,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
            color_signif = color_spec$signif,
            color_ratio_ci = color_pct_text_is_ratio(color_spec),
            display = display,
-           add_n = add_n, add_pct = add_pct,
+           base_n = base_n, add_pct = add_pct,
            subtext = subtext, n_min = n_min, parallel = parallel,
            spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
            .cache = .cache, .defer_level_merge = .defer_level_merge,
@@ -709,7 +711,7 @@ new_ctx <- function(...) {
     ci_method = default_ci_method(), design_effect = NULL,
     inference = new_inference(),
     totaltab = "line", totaltab_name = "Ensemble", totrow = TRUE, totcol = "last",
-    total_names = "Total", add_n = TRUE, add_pct = FALSE, common_totrow = FALSE, digits = 0,
+    total_names = "Total", base_n = "range", add_pct = FALSE, common_totrow = FALSE, digits = 0,
     subtext = "", n_min = 0, by_table = FALSE, parallel = NULL,
     spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
     cache_env = NULL, defer_level_merge = FALSE, levels_order = NULL,
@@ -780,7 +782,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       ci_method = default_ci_method(), design_effect = NULL,
                       totaltab = "line", totaltab_name = "Ensemble",
                       totrow = TRUE, totcol = "last", total_names = "Total",
-                      add_n = TRUE, add_pct = FALSE, common_totrow = FALSE,
+                      base_n = "range", add_pct = FALSE, common_totrow = FALSE,
                       digits = 0, subtext = "", n_min = 0,
                       parallel = NULL,
                       .by_table = FALSE,
@@ -827,7 +829,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     ref = ref, ref2 = ref2, comp = comp, ci = ci, conf_level = conf_level, stars = stars,
     ci_method = ci_method, design_effect = design_effect,
     totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
-    total_names = total_names, add_n = add_n, add_pct = add_pct, common_totrow = common_totrow,
+    total_names = total_names, base_n = base_n, add_pct = add_pct, common_totrow = common_totrow,
     digits = digits,
     subtext = subtext, n_min = n_min, by_table = .by_table,
     parallel = parallel,
@@ -1584,12 +1586,12 @@ tab_assemble_tables <- function(ctx) {
     tests <- tab_robust_overlay(tests, robust_tests, as.character(tab_vars))
   }
 
-  # store the add_n / add_pct DISPLAY intent.
+  # store the base-count / add_pct DISPLAY intent.
   # WARNING: they only make sense beside a col_var, since they fold the base `n` INTO the crosstab. On
   #   a no-col_var table those columns ARE the content -- else the fold would drop the real `n`.
   fmt_here        <- purrr::map_lgl(tab, is_fmt)
   has_real_colvar <- any(fmt_here & is_real_col_var(get_col_var(tab)))
-  render_extras <- list(add_n  = isTRUE(add_n)  && has_real_colvar,
+  render_extras <- list(n = if (has_real_colvar) base_n else "no",
                         add_pct = isTRUE(add_pct) && has_real_colvar)
   if (isTRUE(common_totrow)) {
     render_extras$common_totrow     <- TRUE
@@ -1772,11 +1774,16 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
                                names_sort   = names_sort
     )
   } else {
+    # DESIGN: with SEVERAL value columns pivot_wider names them `<value>_<level>`; with one it drops
+    # the value name and the column stops saying what it holds -- a regression's `Model_OR_White`
+    # would become a bare `White`. names_glue restores the one rule for both.
+    glue1 <- paste0("{.value}_", paste0("{", spread_vars, "}", collapse = "_"))
     tabs <- tidyr::pivot_wider(tabs,
                                names_from   = tidyselect::all_of(spread_vars),
                                values_from  = tidyselect::all_of(col_levels),
                                values_fill  = na_values,
-                               names_sort   = names_sort
+                               names_sort   = names_sort,
+                               names_glue   = if (length(col_levels) == 1L) glue1 else NULL
     )
   }
 

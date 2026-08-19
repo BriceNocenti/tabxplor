@@ -1093,7 +1093,7 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
 
 
 # === SECTION: the steps' own machinery ============================================================
-# ⚠ detect_totcols() is deliberately NOT here: it has one live caller, tab_add_n_pct() on the
+# ⚠ detect_totcols() is deliberately NOT here: it has one live caller, tab_base_n_pct() on the
 #   EXPORTER path (R/tab.R), so it stays in R/fmt_class.R beside the other fmt-marker readers.
 
 #' @keywords internal

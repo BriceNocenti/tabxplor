@@ -31,7 +31,7 @@ tab(
   totaltab = "line",
   common_totrow = FALSE,
   tot = c("row", "col"),
-  add_n = TRUE,
+  n = NULL,
   add_pct = FALSE,
   subtext = "",
   digits = 0,
@@ -346,8 +346,13 @@ columns.
 \item \code{"no"}: remove all totals (after calculations if needed).
 }}
 
-\item{add_n}{For \code{pct = "row"} or \code{pct = "col"}, set to \code{FALSE} not to add another
-column or row with unweighted counts (\code{n}).}
+\item{n}{How many people this table is about. \code{"range"} (the default) prints the
+unweighted base beside the \code{Total} cell --- \code{100\% (9 838)} --- and, in a
+\code{\link{tab_reg}} table, in the \code{n} column beside each predictor level.
+When the parts of the table do not rest on the same people --- several column
+variables losing different missing values, several models --- it prints the whole
+range, \code{100\% (6 712-9 838)}, so an unequal base can never pass unnoticed.
+\code{"min"} prints the smallest base only; \code{"no"} prints no count.}
 
 \item{add_pct}{Set to \code{TRUE} to add a column with the frequencies of the row
 variable (for \code{pct = "row"}) or a row with the frequencies of the column variable

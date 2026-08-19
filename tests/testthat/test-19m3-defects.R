@@ -45,13 +45,13 @@ testthat::test_that("the derived vocabularies reproduce what they replaced", {
   testthat::expect_setequal(tabxplor:::DISPLAY_FOOTER_TOKENS, c("gof", "pvalue", "blank"))
   # `pvalue` is a footer token that IS coloured (a significance warning) -- the one disagreement
   # that makes these two facts two columns rather than one "numberless" flag.
-  testthat::expect_setequal(tabxplor:::DISPLAY_NO_COLOR, c("blank", "gof"))
+  testthat::expect_setequal(tabxplor:::DISPLAY_NO_COLOR, c("blank", "gof", "n_range"))
   testthat::expect_true("pvalue" %in% tabxplor:::DISPLAY_FOOTER_TOKENS)
   testthat::expect_false("pvalue" %in% tabxplor:::DISPLAY_NO_COLOR)
   testthat::expect_identical(
     tabxplor:::DISPLAY_TOKEN_GEOMETRY,
     c(pct = "level", n = "level", wn = "level", mean = "level", base = "level",
-      diff = "difference", ratio = "ratio", or = "ratio"))
+      diff = "difference", ratio = "ratio", or = "ratio", n_range = "level"))
   testthat::expect_identical(
     tabxplor:::DISPLAY_COMPARISON,
     c(diff = "difference", ratio = "ratio", or = "odds_ratio"))

@@ -743,7 +743,7 @@ JMV_TAB3_REAPPLIED <- c("digits", "display", "cleannames", "color", "color_signi
 # hashes the aggregate identity (population tag + per-variable fingerprint + grain + wt + other) plus
 # every remaining opt EXCEPT the ones re-applied post-cache (the tier-4 paint: digits/display/
 # cleannames/color/color_signif) and the transform-tuple items (ref/ref2/comp/OR/ci-params) -- so pct,
-# na, levels, add_n, totaltab, subtext ... any structural/display-baked arg invalidates the entry.
+# na, levels, n, totaltab, subtext ... any structural/display-baked arg invalidates the entry.
 #' @keywords internal
 #' @noRd
 jmv_tab3_base_key <- function(opts, ce, row_vars, col_vars, tab_vars, wt_chr) {
@@ -1090,7 +1090,8 @@ jmv_tab3_build_armed <- function(data, opts, color, color_signif, ci, wt_sym,
     totaltab     = opts$totaltab,
     digits       = opts$digits,
     other_if_less_than = opts$other_if_less_than,
-    add_n        = opts$add_n,
+    # ⚠ [["n"]], never $n: `$` PARTIAL-MATCHES on a list, so `opts$n` would return `opts$na`.
+    n            = opts[["n"]],
     add_pct      = opts$add_pct,
     subtext      = opts$subtext,
     output_list   = isTRUE(opts$output_list),

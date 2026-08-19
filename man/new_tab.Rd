@@ -41,9 +41,9 @@ ANOVA F for mean columns), filled by \code{\link{tab_chi2}}.}
 \item{meta}{The table's metadata, as a single named list gathering (all optional, \code{NULL}
 when unset):
 \itemize{
-\item \code{render_extras} -- display-only intent for the \code{add_n} / \code{add_pct} extras,
-\code{list(add_n =, add_pct =)}, materialised at print/export time from this attribute rather
-than baked into the table.
+\item \code{render_extras} -- display-only intent for the base count and the \code{add_pct}
+companion, \code{list(n =, add_pct =)}, materialised at print/export time from this attribute
+rather than baked into the table.
 \item \code{spec} -- the table's identity, \code{list(kind =, vars =, call =)}: its \code{kind}
 (\code{"crosstab"} or \code{"regression"}); \code{vars}, what no column can carry
 (\code{list(wt =, caption =, var_labels =)} -- see \code{\link{set_caption}}), the rest of the

@@ -163,8 +163,7 @@ test_that("totals are dropped by default and restored on request", {
 
 test_that("columns are chosen by ROLE, never by name", {
   d <- te_data()
-  r <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE,
-                                add_n = TRUE))
+  r <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE))
   expect_identical(unique(est(r)$column), "Model_OR")         # the models are the subject
   expect_false("n" %in% est(r)$column)                        # a count column carries no estimate
   # `observed = "ci"` pairs ONE crude column, by ci_type -- not every Obs_* column

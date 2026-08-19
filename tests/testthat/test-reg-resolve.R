@@ -102,7 +102,7 @@ test_that("the scalar logicals are refused when they are not scalar logicals", {
   skip_if_not_installed("broom")
   d <- rr_data()
   expect_error(tab_reg(d, "married", "race", family = "binomial", empirical = "yes"), "TRUE")
-  expect_error(tab_reg(d, "married", "race", family = "binomial", add_n = c(TRUE, FALSE)), "single")
+  expect_error(tab_reg(d, "married", "race", family = "binomial", n = "yes"), "Unknown")
 })
 
 # === S2: the split_var refusals now precede the colour/family informs (H23) =======================
@@ -351,7 +351,7 @@ test_that("the two producers now ask the shared questions with the shared word",
   # `tab_vars`, `ref` and `ci_method` are the SAME argument on both producers -- declared, so
   # tx_check_tab_args() polices tab_reg()'s signature against TAB_ARGS like a crosstab's.
   for (k in c("tab_vars", "ref", "ci_method", "na", "color", "color_signif", "display",
-              "conf_level", "stars", "wt", "add_n", "cleannames", "subtext")) {
+              "conf_level", "stars", "wt", "n", "cleannames", "subtext")) {
     expect_true(k %in% names(formals(tab_reg)), info = k)
     expect_true("tab_reg" %in% tabxplor:::TAB_ARGS[[k]][["producers"]], info = k)
     expect_true("tab"     %in% tabxplor:::TAB_ARGS[[k]][["producers"]], info = k)

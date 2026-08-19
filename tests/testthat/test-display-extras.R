@@ -1,4 +1,4 @@
-# PURPOSE: Phase 10i-B -- add_n / add_pct / p-value rows are DISPLAY-only. The built tab() is the
+# PURPOSE: Phase 10i-B -- the base count / add_pct / p-value rows are DISPLAY-only. The built tab() is the
 #          "core" table (no `n` / `col_pct` column, no p-value rows) carrying the intent (the
 #          `render_extras` attribute + the kept `test` attribute); tab_materialize_extras() re-creates
 #          the extras at display, byte-identically to the pre-migration built table.
@@ -16,10 +16,10 @@ gss <- forcats::gss_cat
 
 # --- the built "core" table carries the intent, not the extras --------------------------------
 testthat::test_that("built tab() is the core table: no n/col_pct column, no p-value rows, intent kept", {
-  t <- tab(gss, marital, race, pct = "row", add_n = TRUE, test = TRUE)
+  t <- tab(gss, marital, race, pct = "row", n = "range", test = TRUE)
   testthat::expect_false("n" %in% names(t))
   testthat::expect_false("col_pct" %in% names(t))
-  testthat::expect_identical(get_render_extras(t), list(add_n = TRUE, add_pct = FALSE))
+  testthat::expect_identical(get_render_extras(t), list(n = "range", add_pct = FALSE))
   testthat::expect_false(is.null(get_test(t)))                 # test attribute KEPT (was dropped pre-10i-B)
   rv <- tab_get_vars(t)$row_var
   testthat::expect_false(any(as.character(t[[rv]]) == "pvalue"))
@@ -27,20 +27,20 @@ testthat::test_that("built tab() is the core table: no n/col_pct column, no p-va
 
 # --- render_extras survives dplyr verbs (carried like subtext/test) ----------------------------
 testthat::test_that("render_extras is carried through dplyr verbs", {
-  t  <- tab(gss, marital, race, pct = "row", add_n = TRUE, add_pct = TRUE)
-  re <- list(add_n = TRUE, add_pct = TRUE)
+  t  <- tab(gss, marital, race, pct = "row", n = "range", add_pct = TRUE)
+  re <- list(n = "range", add_pct = TRUE)
   testthat::expect_identical(get_render_extras(dplyr::filter(t, TRUE)), re)
   testthat::expect_identical(get_render_extras(dplyr::arrange(t, Total)), re)
   testthat::expect_identical(get_render_extras(dplyr::mutate(t, .z = 1L)), re)
   testthat::expect_identical(get_render_extras(dplyr::select(t, marital, Total)), re)
-  tg <- tab(gss, marital, race, tab_vars = year, pct = "row", add_n = TRUE, output_list = TRUE)[[1]]
-  testthat::expect_identical(get_render_extras(dplyr::slice(tg, 1)), list(add_n = TRUE, add_pct = FALSE))
-  testthat::expect_identical(get_render_extras(dplyr::ungroup(tg)), list(add_n = TRUE, add_pct = FALSE))
+  tg <- tab(gss, marital, race, tab_vars = year, pct = "row", n = "range", output_list = TRUE)[[1]]
+  testthat::expect_identical(get_render_extras(dplyr::slice(tg, 1)), list(n = "range", add_pct = FALSE))
+  testthat::expect_identical(get_render_extras(dplyr::ungroup(tg)), list(n = "range", add_pct = FALSE))
 })
 
 # --- materialiser (xl backend) reproduces the extras as real columns/rows ----------------------
-testthat::test_that("tab_materialize_extras('xl') re-creates the add_n `n` column", {
-  t   <- tab(gss, marital, race, pct = "row", add_n = TRUE)
+testthat::test_that("tab_materialize_extras('xl') re-creates the base-count `n` column", {
+  t   <- tab(gss, marital, race, pct = "row", n = "range")
   hyd <- tabxplor:::tab_materialize_extras(t, backend = "xl", pvalue = FALSE)
   testthat::expect_true("n" %in% names(hyd))
   testthat::expect_identical(tabxplor:::fmt_var_kind(hyd$n), "count")
@@ -48,34 +48,68 @@ testthat::test_that("tab_materialize_extras('xl') re-creates the add_n `n` colum
 })
 
 testthat::test_that("materialiser is idempotent (clears render_extras after consuming)", {
-  t   <- tab(gss, marital, race, pct = "row", add_n = TRUE)
+  t   <- tab(gss, marital, race, pct = "row", n = "range")
   h1  <- tabxplor:::tab_materialize_extras(t, backend = "xl", pvalue = FALSE)
   h2  <- tabxplor:::tab_materialize_extras(h1, backend = "xl", pvalue = FALSE)   # no-op
   testthat::expect_identical(names(h1), names(h2))
   testthat::expect_null(get_render_extras(h1))
 })
 
-# --- text backend folds add_n IN-CELL on the Total column (no separate `n` column) -------------
-testthat::test_that("tab_materialize_extras('text') folds add_n into the Total cell", {
-  t   <- tab(gss, marital, race, pct = "row", add_n = TRUE)
+# --- text backend folds the base count IN-CELL on the Total column (no separate `n` column) -------------
+testthat::test_that("tab_materialize_extras('text') folds the base count into the Total cell", {
+  t   <- tab(gss, marital, race, pct = "row", n = "range")
   hyd <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE)
   testthat::expect_false("n" %in% names(hyd))
-  # the Total cell shows the {pct} (n={n}) composite
-  testthat::expect_match(format(hyd$Total)[1], "\\(n=", perl = TRUE)
+  # the Total cell shows the {pct} ({n_range}) composite
+  testthat::expect_match(format(hyd$Total)[1], "100% *\\(", perl = TRUE)
 })
 
-# --- transpose carries the intent: transpose(row% add_n) renders like a native col% add_n ------
-# Phase 14o: the render-level `transpose = TRUE` materialises xl-style so add_n's `n` COLUMN flips into
+# --- Phase 22b-i: the base is a RANGE when the blocks do not rest on the same people --------------
+testthat::test_that("the Total cell prints a range when the col_vars have different bases", {
+  d <- gss
+  d$partyid[1:3000] <- NA
+  t   <- tab(d, marital, c(race, partyid), pct = "row", na = "drop")
+  hyd <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE)
+  # ONE Total column, and it speaks for BOTH blocks: the smallest base and the largest
+  tot  <- names(hyd)[is_totcol(hyd)]
+  testthat::expect_length(tot, 1L)
+  race_base  <- get_tot_n(hyd[["White"]])
+  party_base <- get_tot_n(hyd[[names(hyd)[startsWith(names(hyd), "Ind")][1]]])
+  testthat::expect_equal(get_n(hyd[[tot]]),    as.integer(pmin(race_base, party_base)))
+  testthat::expect_equal(get_tot_n(hyd[[tot]]),         pmax(race_base, party_base))
+  testthat::expect_match(format(hyd[[tot]])[1], "-", fixed = TRUE)   # a genuine min-max
+  # ... and one number again under n = "min"
+  hyd2 <- tabxplor:::tab_materialize_extras(
+    tab(d, marital, c(race, partyid), pct = "row", na = "drop", n = "min"),
+    backend = "text", pvalue = FALSE)
+  testthat::expect_false(any(grepl("-", format(hyd2[[tot]]), fixed = TRUE)))
+})
+
+testthat::test_that("levels = 'first' drops the misleading 100%, keeping the base alone", {
+  t   <- tab(gss, marital, race, pct = "row", levels = "first")
+  hyd <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE)
+  tot <- names(hyd)[is_totcol(hyd)]
+  testthat::expect_length(tot, 1L)                      # the column stays: the base is worth seeing
+  testthat::expect_false(any(grepl("100%", format(hyd[[tot]]), fixed = TRUE)))
+  testthat::expect_match(format(hyd[[tot]])[1], "[0-9]")
+  # with every level shown, the same column DOES total what the reader sees
+  h2 <- tabxplor:::tab_materialize_extras(tab(gss, marital, race, pct = "row"),
+                                          backend = "text", pvalue = FALSE)
+  testthat::expect_match(format(h2$Total)[1], "100%", fixed = TRUE)
+})
+
+# --- transpose carries the intent: transpose(row% n) renders like a native col% n ------
+# Phase 14o: the render-level `transpose = TRUE` materialises xl-style so the base count's `n` COLUMN flips into
 # an `n` ROW -- byte-identical to a native pct = "col" add_n table.
-testthat::test_that("transpose = TRUE carries render_extras (transpose == native col% add_n)", {
-  transposed <- tab_md(tab(gss, marital, race, pct = "row", add_n = TRUE), transpose = TRUE, print = FALSE)
-  native     <- tab_md(tab(gss, race, marital, pct = "col", add_n = TRUE), print = FALSE)
+testthat::test_that("transpose = TRUE carries render_extras (transpose == native col% n)", {
+  transposed <- tab_md(tab(gss, marital, race, pct = "row", n = "range"), transpose = TRUE, print = FALSE)
+  native     <- tab_md(tab(gss, race, marital, pct = "col", n = "range"), print = FALSE)
   testthat::expect_identical(transposed, native)
 })
 
 # --- back-compat shim: $n / [[ / pull reconstruct the deprecated column ------------------------
-testthat::test_that("$n / [[ / pull reconstruct the display-only add_n column with a deprecation", {
-  t  <- tab(gss, marital, race, pct = "row", add_n = TRUE)
+testthat::test_that("$n / [[ / pull reconstruct the display-only `n` column with a deprecation", {
+  t  <- tab(gss, marital, race, pct = "row", n = "range")
   xl <- tabxplor:::tab_materialize_extras(t, backend = "xl", pvalue = FALSE)$n
 
   testthat::expect_warning(n1 <- t$n, class = "lifecycle_warning_deprecated")
@@ -87,12 +121,12 @@ testthat::test_that("$n / [[ / pull reconstruct the display-only add_n column wi
   # fast path: an existing column is returned with NO deprecation warning
   testthat::expect_no_warning(tot <- t$Total)
   testthat::expect_true(is_fmt(tot))
-  # add_n = FALSE -> never had an `n` column -> NULL (no reconstruction)
-  testthat::expect_null(suppressWarnings(tab(gss, marital, race, pct = "row", add_n = FALSE)$n))
+  # n = "no" -> never had an `n` column -> NULL (no reconstruction)
+  testthat::expect_null(suppressWarnings(tab(gss, marital, race, pct = "row", n = "no")$n))
   # a genuinely unknown column -> NULL (base tbl_df behaviour)
   testthat::expect_null(suppressWarnings(t$zzz_unknown))
-  # pct = "col": add_n was a ROW, so `$n` must NOT reconstruct a column
-  testthat::expect_null(suppressWarnings(tab(gss, marital, race, pct = "col", add_n = TRUE)$n))
+  # pct = "col": the base count was a ROW, so `$n` must NOT reconstruct a column
+  testthat::expect_null(suppressWarnings(tab(gss, marital, race, pct = "col", n = "range")$n))
 })
 
 # --- pull() of a normal (existing) column is untouched by the shim -----------------------------
@@ -319,7 +353,7 @@ testthat::test_that("a NON-significant p-value cell fires red under EVERY color_
 # ---- Phase 17c: the row-role model -- stored kind, not the English label ----------------------------
 testthat::test_that("materialised synthetic rows carry a STORED role aligned to the rows", {
   m  <- tabxplor:::tab_materialize_extras(
-    tab(forcats::gss_cat, c(race, marital), relig, pct = "col", add_n = TRUE, add_pct = TRUE, test = TRUE),
+    tab(forcats::gss_cat, c(race, marital), relig, pct = "col", n = "range", add_pct = TRUE, test = TRUE),
     backend = "text", pvalue = TRUE)
   rr  <- tabxplor:::tab_row_roles(m)
   testthat::expect_length(rr, nrow(m))
@@ -334,7 +368,7 @@ testthat::test_that("materialised synthetic rows carry a STORED role aligned to 
 
 testthat::test_that("the stored role WINS over a relabelled row (jamovi-gettext robustness)", {
   m   <- tabxplor:::tab_materialize_extras(
-    tab(forcats::gss_cat, race, relig, pct = "col", add_n = TRUE, add_pct = TRUE, test = TRUE),
+    tab(forcats::gss_cat, race, relig, pct = "col", n = "range", add_pct = TRUE, test = TRUE),
     backend = "text", pvalue = TRUE)
   rvc <- tabxplor:::tab_render_vars(m)$row_var
   # simulate a translated UI: rename the n / row_pct / pvalue labels away from English. Phase 18m: the
@@ -359,7 +393,7 @@ testthat::test_that("the stored role WINS over a relabelled row (jamovi-gettext 
 # them) and whose other, opposite meaning is the legacy tab_tot() grand-total column. Nothing
 # asserted it either way: no `_golden/` fixture uses add_n at all. They declare a `role` now.
 testthat::test_that("add_n / add_pct helper columns declare a role and carry no col_var", {
-  t  <- tab(gss, marital, race, pct = "row", add_n = TRUE, add_pct = TRUE)
+  t  <- tab(gss, marital, race, pct = "row", n = "range", add_pct = TRUE)
   mt <- tab_materialize_extras(t, backend = "xl")
 
   testthat::expect_true(all(c("n", "col_pct") %in% names(mt)))
@@ -375,7 +409,7 @@ testthat::test_that("add_n / add_pct helper columns declare a role and carry no 
   testthat::expect_false(fmt_is_helper_col(mt[["Total"]]))
 
   # no extras asked for -> no helper column at all
-  t0 <- tab(gss, marital, race, pct = "row", add_n = FALSE)
+  t0 <- tab(gss, marital, race, pct = "row", n = "no")
   testthat::expect_false(any(fmt_is_helper_col(tab_materialize_extras(t0, backend = "xl"))))
   # and the `n` one is xl-only: 17g folds the base into the Total cell on the text backends instead
   # of building a column to throw away, so only the add_pct helper survives there

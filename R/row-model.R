@@ -21,7 +21,7 @@
 # Every value `row_kind` may take, in reading order. "data" is the neutral (a real body row); the rest
 # are synthetic or summary rows a producer added:
 #   total    a total row (the only kind is_totrow() asks about)
-#   n        the add_n base-count row
+#   n        the base-count row
 #   pct      the add_pct percentage row
 #   pvalue   an appended test row (crosstab chi2/F, or a reg per-term test line)
 #   gof      a regression goodness-of-fit / model-summary footer row

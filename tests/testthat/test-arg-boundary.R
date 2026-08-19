@@ -269,7 +269,8 @@ testthat::test_that("20b: TAB_ARG_VALUES is DERIVED and unchanged", {
     totcol   = list(values = c("last","each","all_col_vars","no",""), leaf = NULL, size = 1L,
                     na_ok = FALSE),
     output   = list(values = c("single","list"), leaf = NULL, size = 1L, na_ok = FALSE),
-    anova    = list(values = c("welch","classic"), leaf = NULL, size = 1L, na_ok = FALSE))
+    anova    = list(values = c("welch","classic"), leaf = NULL, size = 1L, na_ok = FALSE),
+    n        = list(values = c("range","min","no"), leaf = NULL, size = 1L, na_ok = FALSE))
   testthat::expect_setequal(names(tabxplor:::TAB_ARG_VALUES), names(ref))
   for (k in names(ref)) testthat::expect_identical(tabxplor:::TAB_ARG_VALUES[[k]], ref[[k]], info = k)
 })
@@ -392,7 +393,7 @@ testthat::test_that("20h: EXPORT_ARGS cannot leak into TAB_ARG_VALUES", {
                                    function(r) is.null(r[["values"]]), logical(1))))
   testthat::expect_setequal(names(tabxplor:::TAB_ARG_VALUES),
                             c("pct", "na", "levels", "comp", "tot", "totaltab", "totcol",
-                              "output", "anova"))
+                              "output", "anova", "n"))
 })
 
 testthat::test_that("20h: every option's per-call twin is a DECLARED argument (no allow list)", {

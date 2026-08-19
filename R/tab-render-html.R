@@ -303,7 +303,9 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     # run, so tx_transpose_render() pre-built and flipped the tooltips (kable backend only).
     tp <- if (isTRUE(rd$transposed)) rd$tooltips[[name]]
           else if (tooltips && is_fmt(tab[[name]]))
-            tab_kable_print_tooltip(tab[[name]], .ref = if (is.null(a)) NULL else a$ref_cells)
+            tab_kable_print_tooltip(tab[[name]], .ref = if (is.null(a)) NULL else a$ref_cells,
+                                    .note = if (fmt_display_shows(get_display(tab[[name]]), "n_range")[[1]])
+                                      tab_base_notes(tab, name))
           else NULL
     # Phase 14v: append the multinomial crude-companion fragment (no-op on a crosstab / non-reg table)
     if (tooltips && !is.null(tp) && !isTRUE(rd$transposed)) tp <- reg_append_empirical_tip(tp, rd, name)

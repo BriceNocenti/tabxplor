@@ -15,7 +15,7 @@ tab_reg(
   measure = "auto",
   trials = NULL,
   empirical = FALSE,
-  add_n = TRUE,
+  n = NULL,
   color = TRUE,
   color_signif = NULL,
   stars = TRUE,
@@ -173,10 +173,13 @@ inference basis} --- which is why a weighted \code{tab_reg()} is \emph{always} d
 weighted \code{\link[=tab]{tab()}} is not unless asked (\code{design_effect = TRUE}). The footer says which basis a
 table used.}
 
-\item{add_n}{Logical, default \code{TRUE}. Add an \code{n} column, right after the level labels, holding the
-\strong{unadjusted count} behind each predictor level on the model's own complete cases --- the
-numbers a reader needs to judge the estimates beside them. The Constant row shows the model N.
-Continuous predictors are left blank: on a listwise-complete frame their count is the model N.}
+\item{n}{How many people the table is about. \code{"range"} (the default) adds an \code{n} column holding
+the \strong{unadjusted count} behind each predictor level, on the model's own complete cases --- the
+numbers a reader needs to judge the estimates beside them --- with the model N on the Constant
+row. When several models were fitted on different people it prints the whole range
+(\verb{5 139-9 862}), so an unequal base can never pass unnoticed; \code{"min"} shows the smallest count
+only, \code{"no"} no count at all. Continuous predictors are left blank: on a listwise-complete frame
+their count is the model N. With \code{tab_vars}, one column per group, to the right of the models.}
 
 \item{color, color_signif}{Colouring of the effect cells. \code{color = TRUE} (default) grades each cell
 on \strong{its own scale} --- the ladder follows what the column estimates (\code{measure}), so it is
@@ -308,8 +311,8 @@ observed companion is fitted with the same shape, the comparisons compare like w
 the marginal-effects engine silently returns zero for those.}
 
 \item{stats}{The statistics shown in the model-summary \strong{footer} (one block per model). \code{NULL}
-(default) uses the per-family set: linear models show N, R square, adjusted R square, the
-overall F-test and the residual SD; other models show N, the likelihood-ratio test versus the
+(default) uses the per-family set: linear models show R square, adjusted R square, the
+overall F-test and the residual SD; other models show the likelihood-ratio test versus the
 null model, McFadden's pseudo-R square, AIC and BIC (count and grouped-binomial models also show
 the Pearson dispersion, \code{"phi"}). Every default set also carries the overall-association test
 \code{"global"} and the \strong{model checks that cost nothing} (see below). Pass a character vector to

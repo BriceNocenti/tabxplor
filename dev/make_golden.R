@@ -10,6 +10,10 @@
 # See: CLAUDE.md > 2.0.0 roadmap > Golden regeneration protocol.
 #
 # LEDGER
+#   Phase 22b-i: ALL 36 regenerated, and NOTHING in the tables moved -- dev/verify_golden_field_
+#     delta.R reports "no new field" and "attributes unchanged" on all 1788 cells of all 36 cases.
+#     The only delta is the TABLE attribute `meta$render_extras`, whose `add_n = TRUE` became
+#     `n = "range"`: the base count is a display MODE now (range / min / no), not a logical.
 #   Phase 19h: f_totcol_each REGENERATED, and it alone -- verified by dev/verify_golden_field_delta.R
 #     that it is the ONLY case whose shape moves and that no other case changes a field, a column
 #     attribute, a `test` column or a `meta` sub-field (1655 cells across the other 35). `totcol =

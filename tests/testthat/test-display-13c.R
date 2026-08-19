@@ -76,20 +76,20 @@ testthat::test_that("a multiplicative cell keeps the decimals it ASKS for, and 0
 # Phase 13c-ii: composite partial bold (first token bold, rest plain).
 
 testthat::test_that("md bolds only the primary field of a composite cell in a bold row", {
-  t  <- tab(forcats::gss_cat, marital, race, pct = "row", add_n = TRUE)
+  t  <- tab(forcats::gss_cat, marital, race, pct = "row", n = "range")
   md <- tab_md(t, color = FALSE, print = FALSE, css = FALSE)
-  # the bold Total row's composite: pct bold, "(n=...)" plain -> "**100%** (n=...)". Phase g (A6): the
+  # the bold Total row's composite: pct bold, "(...)" plain -> "**100%** (...)". Phase g (A6): the
   # join is a non-breaking space (U+00A0) so html does not wrap the composite.
   nbsp <- intToUtf8(160L)
-  testthat::expect_match(md, paste0("\\*\\*100%\\*\\*", nbsp, "\\(n="))
-  # NOT whole-cell bold ("**100% (n=...)**")
-  testthat::expect_false(grepl(paste0("\\*\\*100%", nbsp, "\\(n=[0-9 ]+\\)\\*\\*"), md))
+  testthat::expect_match(md, paste0("\\*\\*100%\\*\\*", nbsp, "\\("))
+  # NOT whole-cell bold ("**100% (...)**")
+  testthat::expect_false(grepl(paste0("\\*\\*100%", nbsp, "\\([0-9 ]+\\)\\*\\*"), md))
 })
 
 testthat::test_that("html bolds only the primary field of a composite bold cell", {
-  t <- tab(forcats::gss_cat, marital, race, pct = "row", add_n = TRUE)
+  t <- tab(forcats::gss_cat, marital, race, pct = "row", n = "range")
   h <- as.character(tab_kable(t))
-  # a normal-weight span wraps the "(n=...)" suffix of the bold composite cells
+  # a normal-weight span wraps the "(...)" suffix of the bold composite cells
   testthat::expect_true(grepl("font-weight: ?normal", h))
 })
 

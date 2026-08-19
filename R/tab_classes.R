@@ -23,9 +23,9 @@
 #' @param meta The table's metadata, as a single named list gathering (all optional, \code{NULL}
 #' when unset):
 #' \itemize{
-#'   \item \code{render_extras} -- display-only intent for the \code{add_n} / \code{add_pct} extras,
-#'   \code{list(add_n =, add_pct =)}, materialised at print/export time from this attribute rather
-#'   than baked into the table.
+#'   \item \code{render_extras} -- display-only intent for the base count and the \code{add_pct}
+#'   companion, \code{list(n =, add_pct =)}, materialised at print/export time from this attribute
+#'   rather than baked into the table.
 #'   \item \code{spec} -- the table's identity, \code{list(kind =, vars =, call =)}: its \code{kind}
 #'   (\code{"crosstab"} or \code{"regression"}); \code{vars}, what no column can carry
 #'   (\code{list(wt =, caption =, var_labels =)} -- see \code{\link{set_caption}}), the rest of the
@@ -249,14 +249,15 @@ tab_bind_attrs <- function(x, other) {
 }
 
 
-# Back-compat shim for `tabs$n` / `tabs[["n"]]` (and `col_pct`): add_n / add_pct are DISPLAY-only, so the
+# Back-compat shim for `tabs$n` / `tabs[["n"]]` (and `col_pct`): both are DISPLAY-only, so the
 # built tab has no such column -- reconstruct it from the Total column with a soft-deprecation (only under
 # pct="row", where they were columns; pct="col" made them ROWS -> NULL).
 #' @keywords internal
 tabxplor_deprecated_column <- function(x, name, user_env = rlang::caller_env(2)) {
   if (length(name) != 1L || is.na(name) || !name %in% c("n", "col_pct")) return(NULL)
   re   <- get_render_extras(x)
-  want <- (name == "n" && isTRUE(re$add_n)) || (name == "col_pct" && isTRUE(re$add_pct))
+  want <- (name == "n" && !identical(re$n %||% tx_option("n"), "no")) ||
+    (name == "col_pct" && isTRUE(re$add_pct))
   if (!want) return(NULL)
   hyd  <- tryCatch(tab_materialize_extras(x, backend = "xl", pvalue = FALSE),
                    error = function(e) NULL)
@@ -265,19 +266,19 @@ tabxplor_deprecated_column <- function(x, name, user_env = rlang::caller_env(2))
     "2.0.0", I(paste0("`$", name, "` on a tabxplor tab")),
     details = c(
       paste0("The `", name, "` column is now added only at display; it is reconstructed here from ",
-             "the Total column and will stop being reconstructed in a future version."),
-      i = paste0("Read it from the printed / exported table, or use `get_n()` on the `Total` column.")),
+             "the columns it summarises and will stop being reconstructed in a future version."),
+      i = "Read it from the printed / exported table, or with `get_n()` on the columns themselves."),
     user_env = user_env)
   hyd[[name]]
 }
 
-#' Extract a column of a tabxplor tab (with the add_n/add_pct back-compat shim)
+#' Extract a column of a tabxplor tab (with the n/add_pct back-compat shim)
 #' @param x A \code{tabxplor_tab}.
 #' @param i A column name.
 #' @param name For \code{$}, a column name. For \code{\link[dplyr:pull]{dplyr::pull}}, the column
 #' to use to name the result -- see its documentation.
 #' @param ... Passed on.
-#' @return The column, or the reconstructed add_n/add_pct column (deprecated), or the base method's value.
+#' @return The column, or the reconstructed n/add_pct column (deprecated), or the base method's value.
 #' @method $ tabxplor_tab
 #' @export
 #' @keywords internal
@@ -870,17 +871,18 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 }
 
 
-# The SINGLE display-time materializer. The built tab() is the "core" table (no add_n / add_pct columns,
-# no p-value rows): it carries only the INTENT (the `test` attribute and `render_extras` flags), and this
-# is the ONE place every DISPLAY path hydrates it. IDEMPOTENT: each spec clears the intent it consumed.
+# The SINGLE display-time materializer. The built tab() is the "core" table (no base-count / add_pct
+# columns, no p-value rows): it carries only the INTENT (the `test` attribute and `render_extras`), and
+# this is the ONE place every DISPLAY path hydrates it. IDEMPOTENT: each spec clears what it consumed.
 #' @keywords internal
 #' @noRd
 tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE) {
   backend <- match.arg(backend)
 
-  # `ctx` reads the display intent ONCE (a spec cannot re-read it after add_n_pct clears render_extras).
+  # `ctx` reads the display intent ONCE (a spec cannot re-read it after mat_base_n clears it).
   re  <- get_render_extras(tab)
-  ctx <- list(add_n = isTRUE(re$add_n), add_pct = isTRUE(re$add_pct), pvalue = isTRUE(pvalue),
+  ctx <- list(base_n = re$n %||% tx_option("n"),
+              add_pct = isTRUE(re$add_pct), pvalue = isTRUE(pvalue),
               common_totrow = isTRUE(re$common_totrow), common_totrow_ref = isTRUE(re$common_totrow_ref))
   tab_materialize(tab, backend, ctx)
 }
@@ -900,16 +902,18 @@ tab_materialize <- function(tab, backend, ctx) {
 #' @keywords internal
 #' @noRd
 materialize_specs <- function() list(
-  # add_n / add_pct: the base-n column/row + the col%/row% companions. xl keeps the real `n` COLUMN;
-  # text folds the base into the Total cell (mat_add_n_pct). Clears the consumed render_extras intent.
-  add_n_pct = list(
-    when  = function(tab, backend, ctx) ctx$add_n || ctx$add_pct,
-    apply = mat_add_n_pct),
-  # An OR/RRR table's "100%" total column is meaningless: console+add_n keeps it as a base-n cell, Excel
-  # exports only the base-n column, console add_n=FALSE drops it. No-op on a non-OR table.
-  or_total = list(
-    when  = function(tab, backend, ctx) tab_is_or_display(tab),
-    apply = function(tab, backend, ctx) tab_or_total_col(tab, backend, ctx$add_n)),
+  # the base count + the col%/row% companions. xl keeps the real `n` COLUMN; text folds the base
+  # into the Total cell, and a regression table gets a column of its own (it has no Total cell).
+  # Clears the consumed render_extras intent.
+  base_n = list(
+    when  = function(tab, backend, ctx) !identical(ctx$base_n, "no") || ctx$add_pct,
+    apply = mat_base_n),
+  # A Total column that does not total what the reader can see (an odds-ratio table, or one whose
+  # other levels were dropped) says nothing once the count lives elsewhere: its own column in Excel,
+  # nowhere at all under n = "no".
+  total_col = list(
+    when  = function(tab, backend, ctx) TRUE,
+    apply = function(tab, backend, ctx) tab_drop_dishonest_totcol(tab, backend, ctx$base_n)),
   # Excel-only mean + sd twin column: console/md/kable show sd inline as "mean (sigma sd)".
   sd_twin = list(
     when  = function(tab, backend, ctx) identical(backend, "xl"),
@@ -934,9 +938,14 @@ materialize_specs <- function() list(
 
 #' @keywords internal
 #' @noRd
-mat_add_n_pct <- function(tab, backend, ctx) {
-  tab <- tab_add_n_pct(list(tab), add_n = ctx$add_n, add_pct = ctx$add_pct, backend = backend)[[1]]
-  if (identical(backend, "text") && ctx$add_n) tab <- tab_fold_addn_incell(tab)
+mat_base_n <- function(tab, backend, ctx) {
+  on <- !identical(ctx$base_n, "no")
+  if (tab_is_reg(tab)) {
+    if (on) tab <- reg_base_n_cols(tab, ctx$base_n)
+    return(set_render_extras(tab, NULL))
+  }
+  tab <- tab_base_n_pct(list(tab), base_n = ctx$base_n, add_pct = ctx$add_pct, backend = backend)[[1]]
+  if (identical(backend, "text") && on) tab <- tab_fold_base_n(tab, ctx$base_n)
   set_render_extras(tab, NULL)
 }
 
@@ -970,7 +979,7 @@ mat_sd_twin <- function(tab) {
 
 # Drops the redundant per-block Total rows of a COMPACTED table when they render identically (only
 # na = "drop" makes blocks differ; else keeps them all + a message). WARNING: the comparison unit is the
-# whole TOTAL BLOCK (Total row + its trailing add_n `n` row), not the Total row alone -- under pct = "col"
+# whole TOTAL BLOCK (Total row + its trailing base-count `n` row), not the Total row alone -- under pct = "col"
 # the Total row is always "100%" and the real base lives in the `n` row. The sweep keys on the declared
 # variable column (a tab_vars table can be compacted), never the first grouping variable.
 #' @keywords internal
@@ -986,7 +995,7 @@ tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
   n_row   <- nrow(tab)
   fmt_nms <- names(tab)[purrr::map_lgl(tab, is_fmt)]
 
-  # A block's total BLOCK = its Total row + the contiguous add_n / add_pct SUMMARY rows that follow it. A
+  # A block's total BLOCK = its Total row + the contiguous base-count / add_pct SUMMARY rows after it. A
   # p-value row is block-SPECIFIC, so it is NOT swept in and survives the collapse. The sweep reads the
   # STORED row role and is gated on the DECLARED variable column (not group_vars()[1], which with tab_vars
   # is the TAB_VAR), so it can never cross into the next variable's block.
@@ -1597,7 +1606,7 @@ tab_plot <- function(tabs,
 # Builds the hover-tooltip TEXT for a column. Each `out_*` fragment is any()-gated: the format() pass
 # runs only when some cell carries that field (a pct column has no or/mean/sd). TEXT only -- popover
 # HTML attributes live in tab_tooltip_attrs().
-tab_kable_print_tooltip <- function(x, .ref = NULL) {
+tab_kable_print_tooltip <- function(x, .ref = NULL, .note = NULL) {
 
   n       <- length(x)
   blank   <- rep("", n)
@@ -1768,8 +1777,12 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     dplyr::if_else(cond_n, paste0("n: ", tip_num(set_display(x, "n")) ), "")
   } else blank
 
+  # `.note` is what only the WHOLE table knows: on a cell reporting the base of several column
+  # blocks, which block each end of the range belongs to ("race: 9 838 ; relig: 6 712").
+  out_note <- if (is.null(.note)) blank else vctrs::vec_recycle(as.character(.note), n)
+
   frags <- list(out_pct, out_mean, out_sd, out_est, out_diff, out_std, out_rr, out_or,
-                out_ci, out_ctr, out_resid, out_obs, out_gap, out_n)
+                out_ci, out_ctr, out_resid, out_obs, out_gap, out_n, out_note)
   out <- rep("", n)
   for (f in frags) {
     k <- !is.na(f) & nzchar(f)

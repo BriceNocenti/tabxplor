@@ -1077,19 +1077,21 @@ test_that("Phase h: a predictor dropped from one comparison model keeps its refe
 
 # ---- Phase 18z13 (SS7.1): the N behind each predictor level -------------------------------------
 
-test_that("add_n gives every predictor level its unadjusted N, on the model's own frame", {
+test_that("the `n` column gives every predictor level its unadjusted N, on the model's own frame", {
   skip_if_not_installed("broom")
   d <- reg_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                 cleannames = FALSE))
-  expect_true("n" %in% names(t))
-  expect_identical(which(names(t) == "n"), 3L)              # right after var / levels
-  expect_identical(tabxplor:::get_role(t[["n"]]), "n")      # a stored role, not a name match
+  # the count is a DISPLAY fact: stored on the model columns, given a column of its own at render
+  expect_false("n" %in% names(t))
+  m <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE)
+  expect_identical(which(names(m) == "n"), 3L)              # right after var / levels
+  expect_identical(tabxplor:::get_role(m[["n"]]), "n")      # a stored role, not a name match
 
   # the numbers ARE counts of the model's complete cases -- the same frame the crude companion uses,
   # so an Obs_* block and this column can never count different people
   fr <- tidyr::drop_na(d[, c("married", "race", "age")])
-  nn <- get_n(t[["n"]])
+  nn <- get_n(m[["n"]])
   expect_equal(nn[as.character(t$var) == "Constant"], nrow(fr))
   race_rows <- as.character(t$var) == "race"
   expect_equal(sort(nn[race_rows]),
@@ -1098,20 +1100,22 @@ test_that("add_n gives every predictor level its unadjusted N, on the model's ow
   # a numeric predictor's count would be nrow(frame) for every one of them -> deliberately blank
   expect_true(all(is.na(nn[as.character(t$var) == "age"])))
 
-  # it exists WITHOUT empirical = TRUE (where the number used to live, tooltip-only), and opts out
-  expect_false("n" %in% names(suppressMessages(
-    tab_reg(d, "married", "race", family = "binomial", add_n = FALSE, cleannames = FALSE))))
+  # and it opts out
+  expect_false("n" %in% names(tabxplor:::tab_materialize_extras(suppressMessages(
+    tab_reg(d, "married", "race", family = "binomial", n = "no", cleannames = FALSE)),
+    backend = "text", pvalue = FALSE)))
 })
 
-test_that("add_n does not disturb the reference-row bold", {
+test_that("the `n` column does not disturb the reference-row bold", {
   skip_if_not_installed("broom")
   d <- reg_data()
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", cleannames = FALSE))
+  m <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE)
   # tab_bold_rows() ANDs in_refrow across every DISCRIMINATING column, so a column that omitted the
   # flag would silently un-bold every reference row -- the defect Phase 18h fixed for the crude
   # companions. Check the flag, and the rendering it drives.
-  expect_true(any(is_refrow(t[["n"]])))
-  expect_identical(is_refrow(t[["n"]]), is_refrow(t[["Model_OR"]]))
+  expect_true(any(is_refrow(m[["n"]])))
+  expect_identical(is_refrow(m[["n"]]), is_refrow(m[["Model_OR"]]))
   md <- tab_md(t, print = FALSE)
   expect_true(grepl("\\*\\*Other\\*\\*", md))          # the reference level, still bold
 })

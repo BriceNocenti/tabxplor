@@ -226,11 +226,12 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     total_names   = .d$total_names,
     totaltab_name = .d$totaltab_name,
     other_level   = .d$other_level,
-    totaltab = totaltab, n_min = n_min, user_env = rlang::caller_env())
+    totaltab = totaltab, n_min = n_min, n = n, add_n = add_n,
+    user_env = rlang::caller_env())
   test <- .a$test ; cleannames <- .a$cleannames ; stars <- .a$stars
   display <- .a$display ; ref <- .a$ref ; ref2 <- .a$ref2
   color_spec <- .a$color_spec ; total_names <- .a$total_names
-  conf_level <- .a$conf_level ; totaltab_name <- .a$totaltab_name
+  conf_level <- .a$conf_level ; totaltab_name <- .a$totaltab_name ; base_n <- .a$base_n
   counts_refuse_mean_methods(ci_method)
   ci_method <- .a$ci_method
 
@@ -283,7 +284,7 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     ref = ref, ref2 = ref2, comp = comp, ci = ci, conf_level = conf_level, stars = stars,
     ci_method = ci_method,
     totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
-    total_names = total_names, add_n = add_n, add_pct = add_pct, common_totrow = common_totrow,
+    total_names = total_names, base_n = base_n, add_pct = add_pct, common_totrow = common_totrow,
     digits = digits, n_min = n_min, subtext = subtext, by_table = FALSE,
     # DESIGN: pre-aggregated counts carry no per-observation Sum(w^2), so the inference basis is
     #   "n" -- declared here rather than discovered in the leaf.

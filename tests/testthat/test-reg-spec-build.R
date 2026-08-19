@@ -20,7 +20,7 @@ reg_fx <- local({
 
 test_that("new_reg_spec_product() declares every slot, and no dot-prefixed key", {
   p <- new_reg_spec_product()
-  expect_true(all(c("cols", "emp", "n_col", "gof_rows", "global_rows", "check_rows", "tips",
+  expect_true(all(c("cols", "emp", "gof_rows", "global_rows", "check_rows", "tips",
                     "positive_level", "fit", "skeleton", "degraded") %in% names(p)))
   # ⚠ as.list(environment()) defaults to all.names = FALSE: a `.key` would vanish in silence
   expect_false(any(startsWith(names(p), ".")))
@@ -195,19 +195,13 @@ test_that("compared multinomial models each get tooltips, and they agree", {
 
 # --- the plan ------------------------------------------------------------------------------------
 
-test_that("add_n's declared plan is one count column per distinct outcome", {
-  a <- reg_resolve_args(reg_fx, c("married", "tvhours"), "race", add_n = TRUE, na_explicit = FALSE)
-  ctx <- reg_stage_setup(new_reg_ctx(data = a$data, specs = a$specs, shared = a$shared,
-                                     family = a$specs[[1]]$fit_family))
-  expect_equal(ctx$spec_plan$want_n, c(TRUE, TRUE))
-  expect_equal(ctx$spec_plan$n_names, c("n [married]", "n [tvhours]"))
-
-  b <- reg_resolve_args(reg_fx, "married", list(m1 = "race", m2 = c("race", "age")),
-                        family = "binomial", add_n = TRUE, na_explicit = FALSE)
-  ctx2 <- reg_stage_setup(new_reg_ctx(data = b$data, specs = b$specs, shared = b$shared,
-                                      family = b$specs[[1]]$fit_family))
-  expect_equal(ctx2$spec_plan$want_n, c(TRUE, FALSE))   # the compared models share one population
-  expect_equal(ctx2$spec_plan$n_names, c("n", "n"))
+test_that("every built column carries its level's own N, on that model's own frame", {
+  t <- suppressMessages(tab_reg(reg_fx, c("married", "tvhours"), "race"))
+  mods <- names(t)[vapply(t, function(x) is_fmt(x) && get_role(x) == "model", logical(1))]
+  expect_length(mods, 2L)
+  # different outcomes = different complete cases, and each column says so for itself
+  expect_false(identical(get_n(t[[mods[[1]]]]), get_n(t[[mods[[2]]]])))
+  expect_true(all(!is.na(get_n(t[[mods[[1]]]])[as.character(t$var) == "race"])))
 })
 
 test_that("a deferred skeleton survives the pooled branch (one compound spec)", {

@@ -10,9 +10,14 @@
 #     process boundary. Two DECLARED exceptions, each matching a shape that is serial anyway
 #     (reg_specs_independent) -- `fit`, because a model comparison is a test BETWEEN the fit objects,
 #     and the crude block's heavy frame / fits, kept only for the block SHARED with other specs.
-#   - ⚠ THE ORDER INSIDE THE BUILDER IS PART OF THE OUTPUT: fit -> columns -> footer rows -> add_n ->
+#   - ⚠ THE ORDER INSIDE THE BUILDER IS PART OF THE OUTPUT: fit -> columns -> footer rows ->
 #     the crude block -> obs/gap_se -> tooltips. Three of those can emit a message, and the message
 #     stream is compared in order.
+#   - THE LEVEL COUNTS ARE STAMPED ON THE COLUMNS, not given a column of their own: every column of
+#     a fit rests on the same complete cases, so `n` is a property of the estimate. The base-count
+#     COLUMN is then synthesised at display time (reg_base_n_cols, R/tab-display.R), which is what
+#     lets `n = "range" / "min" / "no"` be chosen after the table is built, and what gives the
+#     tooltips and forest_plot(size = "n") one place to read.
 #   - ⚠ NO dot-prefixed key on the record: as.list(environment()) defaults to all.names = FALSE and
 #     drops them silently.
 #   - ⚠ this file sorts BEFORE R/tab_reg.R, so it may hold no top-level code reading a tab_reg.R
@@ -32,7 +37,7 @@
 #' @noRd
 new_reg_spec_product <- function(
     # --- the table's columns --------------------------------------------------------------------
-    cols = list(), emp = NULL, n_col = list(),
+    cols = list(), emp = NULL,
     # --- the `test` tibble ----------------------------------------------------------------------
     gof_rows = NULL, global_rows = NULL, check_rows = NULL,
     # --- meta$empirical_tips --------------------------------------------------------------------
@@ -144,6 +149,14 @@ reg_spec_build_one <- function(i, ctx) {
                  vsrest = reg_cols_vsrest(f, sp, ctx),
                  cli::cli_abort("Internal: unknown estimand builder {.val {sp$est$builder}}."))
   cv0 <- cols[[1]]$label            # the placeholder; see new_reg_spec_product()
+  # The N behind each level, on THIS model's complete cases, stamped on every column it belongs to:
+  # a stored fact, not a column of its own, so the base-count column is synthesised at display time
+  # (reg_base_n_cols()) and the tooltips, the footer and forest_plot(size = "n") all read one place.
+  # A numeric predictor keeps NA -- on a listwise-complete frame its count IS the model N.
+  cnt  <- reg_level_counts(reg_complete_frame(data, c(sp$outcome, union_predictors,
+                                                      reg_design_vars(design_spec))),
+                           skeleton, wt = design_spec$wt)
+  cols <- purrr::map(cols, function(cc) { cc$col <- set_n(set_wn(cc$col, cnt$wn), cnt$n); cc })
 
   # --- 3. THE FOOTER ROWS ------------------------------------------------------------------------
   grouped <- sp_fam == "binomial" && !is.null(sp$trials) && !isTRUE(sp$compound)
@@ -151,21 +164,7 @@ reg_spec_build_one <- function(i, ctx) {
   global_rows <- if (isTRUE(want_global)) reg_global_rows(f, sp, shared, cv0) else NULL
   check_rows <- reg_check_rows(data, f, sp, shared, stats, cv0, grouped)
 
-  # --- 4. add_n ----------------------------------------------------------------------------------
-  n_col <- list()
-  if (isTRUE(spec_plan$want_n[[i]])) {
-    cnt <- reg_level_counts(reg_complete_frame(data, c(sp$outcome, union_predictors,
-                                                       reg_design_vars(design_spec))),
-                            skeleton, wt = design_spec$wt)
-    n_col <- stats::setNames(
-      list(fmt(n = cnt$n, wn = cnt$wn, scale = "level_n", display = "n", digits = 0L,
-               color = "", color_signif = "ignore", col_var = "n", comp_all = FALSE,
-               # in_refrow is not decorative: tab_bold_rows() ANDs it across every column.
-               in_refrow = skeleton$is_ref, model_family = sp_fam, role = "n")),
-      spec_plan$n_names[[i]])
-  }
-
-  # --- 5. THE OBSERVED (CRUDE) BLOCK -------------------------------------------------------------
+  # --- 4. THE OBSERVED (CRUDE) BLOCK -------------------------------------------------------------
   # ONLY where this spec IS an outcome of its own; a one-outcome table's block was built before any
   # model by reg_stage_crude() and is read below as `crude`.
   own <- NULL
@@ -183,7 +182,7 @@ reg_spec_build_one <- function(i, ctx) {
   }
   degraded <- isTRUE(own$degraded)
 
-  # --- 6. `obs` AND `gap_se` ---------------------------------------------------------------------
+  # --- 5. `obs` AND `gap_se` ---------------------------------------------------------------------
   # ⚠ `own %||% crude`, NOT the other way round: with several outcomes each spec has its own block,
   # and it wins. The gap SE still comes from THIS column's own fit -- the covariance is per model
   # though `obs` is not, which is what makes `color = "adjustment"` work when models share one
@@ -191,7 +190,7 @@ reg_spec_build_one <- function(i, ctx) {
   e    <- own %||% crude
   cols <- purrr::map(cols, function(bi) { bi$col <- reg_set_obs(bi, e, f, sp, ctx); bi })
 
-  # --- 7. THE TOOLTIPS ---------------------------------------------------------------------------
+  # --- 6. THE TOOLTIPS ---------------------------------------------------------------------------
   # ⚠ the MULTINOMIAL fragment is the SPEC's, the NUMERIC one the BLOCK's -- see the section below.
   tips <- list(mnl = NULL, num = own$tips_num)
   if (emp_on(empirical)) {
@@ -199,7 +198,7 @@ reg_spec_build_one <- function(i, ctx) {
     degraded <- degraded || isTRUE(attr(tips$mnl, "degrade"))
   }
 
-  # --- 7b. THE PER-CATEGORY CRUDE COLUMNS --------------------------------------------------------
+  # --- 6b. THE PER-CATEGORY CRUDE COLUMNS --------------------------------------------------------
   # `empirical = "column"` draws one crude column per model column. Spliced HERE, after `obs` and the
   # tooltips: a crude column is not a model column, so it takes no `obs` and keys no fragment. Its
   # name and col_var come from the model column it mirrors.
@@ -216,7 +215,6 @@ reg_spec_build_one <- function(i, ctx) {
   new_reg_spec_product(
     cols = cols,
     emp  = reg_emp_slim(own),
-    n_col = n_col,
     gof_rows = gof_rows, global_rows = global_rows, check_rows = check_rows,
     tips = tips,
     positive_level = f$positive_level,

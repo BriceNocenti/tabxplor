@@ -297,7 +297,9 @@ test_that("ame_ratio: the legend names RR, not OR, on both the model and the cru
   nm <- grep("^Model", names(t), value = TRUE)[1]
   expect_equal(legend_reg_eff_word(t[[nm]], md), "RR")
   expect_equal(legend_reg_eff_word(t$Obs_RR, md), "RR")   # crude twin, same estimand
-  expect_true(is.na(legend_reg_eff_word(t[["n"]], md)))       # the n column has no effect word
+  # the base-count column (drawn at display) has no effect word
+  m <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE)
+  expect_true(is.na(legend_reg_eff_word(m[["n"]], md)))
 })
 
 test_that("ame_ratio: with ONE predictor the marginal RR == the crude RR", {

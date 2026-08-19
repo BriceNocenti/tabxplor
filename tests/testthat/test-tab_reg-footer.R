@@ -67,7 +67,8 @@ test_that("the footer does not alter the built coefficient skeleton (stats= togg
   # materialised only at display (backend text/xl, pvalue = TRUE)
   mat <- tab_materialize_extras(with, backend = "text", pvalue = TRUE)
   expect_true(any(as.character(mat$var) == "Model fit"))
-  expect_true("N" %in% as.character(mat$levels))
+  # the model N is a RECORD, not a footer row: the `n` column shows it (Phase 22b-i)
+  expect_false("N" %in% as.character(mat$levels))
   expect_gt(nrow(mat), nrow(with))
 })
 

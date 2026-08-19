@@ -801,7 +801,7 @@ resolve_export_opts <- function(theme = NULL,
 # what it does not use. `transpose = TRUE` (Phase 14o) flips the FINISHED render model of each table via
 # tx_transpose_render() -- colours and cell strings are computed per (correct, homogeneous) source
 # column, then rows and columns swap as plain data (see R/tab-transpose-render.R). Materialise runs
-# "xl"-style when transposing so add_n is an `n` COLUMN that flips into an `n` ROW.
+# "xl"-style when transposing so the base count is an `n` COLUMN that flips into an `n` ROW.
 #' @keywords internal
 tab_export_prep <- function(tabs,
                             backend       = c("kable", "md", "plot", "xl"),
@@ -841,10 +841,10 @@ tab_export_prep <- function(tabs,
   resolved <- tab_resolve_tables(tabs, list_method = list_method, what = what)
 
   # Phase 10i-B: hydrate the "core" table into its rendered shape ONCE, on the still-grouped resolved
-  # tables (before prep_one_table ungroups), so p-value rows + add_n/add_pct are real rows/cols the
-  # role detection then sees. "xl" keeps a real `n` column; every other backend folds add_n into the
+  # tables (before prep_one_table ungroups), so p-value rows + the base count / add_pct are real
+  # rows/cols the role detection then sees. "xl" keeps a real `n` column; the others fold it into the
   # Total cell (backend "text").
-  # Phase 14o: when transposing, materialise "xl"-style FOR EVERY backend, so `add_n` is a real `n`
+  # When transposing, materialise "xl"-style FOR EVERY backend, so the base count is a real `n`
   # COLUMN that flips into an `n` ROW (matching a native pct = "col" table) instead of a folded
   # "100% (n=849)" cell -- and 14n has already collapsed the redundant per-block Total rows to one, so
   # the single Total row flips to a single Total column. This supersedes 14d's transpose-before-

@@ -40,7 +40,7 @@
 #' @keywords internal
 #' @noRd
 reg_validate_args <- function(conf_level = NULL, stats = NULL, color_signif = NULL,
-                              empirical = NULL, add_n = NULL, stars = NULL) {
+                              empirical = NULL, stars = NULL) {
   # `conf_level`: reuse tab_validate_args() (the "did you mean 0.95?" hint), not a second check.
   tab_validate_args("tab_reg", conf_level = conf_level)
 
@@ -59,7 +59,7 @@ reg_validate_args <- function(conf_level = NULL, stats = NULL, color_signif = NU
   # the baseline model has no check here: it is the VALUE of a `stats` key.
 
   # the scalar logicals. NULL passes (several of them mean "read the option" upstream).
-  for (nm in c("add_n", "stars")) {
+  for (nm in c("stars")) {
     v <- get(nm)
     if (is.null(v)) next
     if (length(v) != 1L || !is.logical(v) || is.na(v))
@@ -576,7 +576,7 @@ utils::globalVariables(names(formals(new_reg_args)))
 #' @noRd
 reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NULL,
                              family = "auto", effect = "coefficient", measure = "auto",
-                             trials = NULL, empirical = FALSE, add_n = TRUE,
+                             trials = NULL, empirical = FALSE, n = NULL,
                              color = TRUE, color_signif = NULL, stars = TRUE,
                              conf_level = NULL, method = "wald",
                              ref = NULL, outcome_level = NULL,
@@ -592,10 +592,13 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   compare  <- cmp$compare
   baseline <- cmp$baseline
   reg_validate_args(conf_level = conf_level, stats = stats, color_signif = color_signif,
-                    empirical = empirical, add_n = add_n, stars = stars)
+                    empirical = empirical, stars = stars)
   # `conf_level` is NULL on every producer, each boundary resolving it against
   # options(tabxplor.conf_level) -- no default stated twice.
   conf_level <- conf_level %||% conf_level_default()
+  # the base count is a DISPLAY mode, resolved once here and read back at print/export time.
+  tab_validate_args("tab_reg", n = n)
+  base_n <- if (is.null(n)) tx_option("n") else as.character(n)[[1]]
 
   # S2 -- everything that touches `data`.
   prep <- reg_prepare_data(data, outcome, predictors, tab_vars = tab_vars, wt = wt,
@@ -661,7 +664,7 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
     stats = stats, compare = compare, baseline = baseline, multiplier = plan$multiplier,
     multiplier_label = plan$multiplier_label, shape_terms = plan$shape_terms,
     shape_labels = prep$shape_labels, empirical = out$empirical, display = out$display,
-    var_labels = prep$var_labels, na_shared_vars = plan$na_shared_vars, add_n = add_n)
+    var_labels = prep$var_labels, na_shared_vars = plan$na_shared_vars, base_n = base_n)
 
   # the weight column NAME (or NA) drives the footer "Weighted by <wt>." line; a prebuilt design
   # cannot be named -> NA.

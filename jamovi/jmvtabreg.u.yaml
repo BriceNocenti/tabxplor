@@ -337,9 +337,11 @@ children:
                   - type: TextBox
                     name: wrap_cols
                     format: number
-              - type: CheckBox
-                name: add_n
-                label: add_n = <i>(N per predictor level)</i>
+              - type: Label
+                label: n = <i>(N per predictor level)</i>
+                children:
+                  - type: ComboBox
+                    name: "n"
               - type: CheckBox
                 name: cleannames
                 label: cleannames = <i>(tidy level names)</i>

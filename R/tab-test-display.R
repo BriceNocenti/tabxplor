@@ -118,7 +118,10 @@ test_pvalue_label <- function(test, min_e = NA_real_) {
 #               it (test_grid_reg(), reg_footer_lines()), and reg_footer_plan()'s `%||% 0L` then
 #               gives every p-value row the same 0L instead of two values for one unread fact.
 #   render      "grid" = a footer ROW (a cell per model column) | "line" = a table-wide footer
-#               SENTENCE (a pooled test belongs to no single column).
+#               SENTENCE (a pooled test belongs to no single column) | "record" = recorded in the
+#               `test` tibble and rendered NOWHERE. Only the model N is a record: the `n` column
+#               shows it beside the levels it counts, and reg_plot_nobs() reads it back from here as
+#               the guard that a user-supplied `data` reproduces the fit.
 #   noun        the label's subject, a BARE MSGID -- gettext at render, never at load (a top-level
 #               gettext() freezes the build locale; REG_CHECKS' header states the same rule).
 #   instrument  the label's parenthetical, a bare msgid or NA. The label IS
@@ -165,8 +168,9 @@ test_pvalue_label <- function(test, min_e = NA_real_) {
 TEST_ROWS <- local({
   # ⚠ every member is NA when unset, never NULL: the defaulting below is utils::modifyList(), which
   # REMOVES an entry whose value is NULL rather than setting it.
-  reg_gof <- function(noun, digits, stat, instrument = NA_character_, method = NA_character_)
-    list(producer = "reg", kind = "gof", digits = as.integer(digits), render = "grid",
+  reg_gof <- function(noun, digits, stat, instrument = NA_character_, method = NA_character_,
+                      render = "grid")
+    list(producer = "reg", kind = "gof", digits = as.integer(digits), render = render,
          noun = noun, instrument = instrument, stat = stat, method = method)
   reg_p <- function(noun, stat, instrument = NA_character_, method = NA_character_)
     list(producer = "reg", kind = "pvalue", render = "grid",
@@ -183,7 +187,7 @@ TEST_ROWS <- local({
   blocks <- list(
     # --- goodness of fit, one per model column (reg_glance) --------------------------------------
     glance = list(
-      n             = reg_gof("N",              0L, stat = "n"),
+      n             = reg_gof("N",              0L, stat = "n", render = "record"),
       lr_null       = reg_p  ("LR vs null",         stat = "lr_null"),
       wald_null     = reg_p  ("Wald vs null",       stat = "wald_null"),
       f_model       = reg_p  ("F",                  stat = "f_model"),
@@ -939,7 +943,7 @@ stopifnot(exprs = {
   all(.trow_chr("block") %in% c("glance", "compare", "global", "check", "interaction", "omnibus"))
   # `producer` is the convenience name of `block`: only the crosstab block is not a regression one
   identical(.trow_chr("producer") == "tab", .trow_chr("block") == "omnibus")
-  all(.trow_chr("render")   %in% c("grid", "line"))
+  all(.trow_chr("render")   %in% c("grid", "line", "record"))
   all(is.na(.trow_chr("kind")) | .trow_chr("kind") %in% ROW_KINDS)
   all(is.na(.trow_chr("method")) | .trow_chr("method") %in% c("lr", "f", "wald", "aic"))
   all(is.na(.trow_chr("var_kind")) | .trow_chr("var_kind") %in% c("pct", "mean"))

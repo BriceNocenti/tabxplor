@@ -533,6 +533,9 @@ get_num <- function(x) {
   # declared `est_field` -- a per-column scalar attribute, so one branch per column.
   est_ci_m <- !nas & display == "est_ci"
   if (any(est_ci_m)) out[est_ci_m] <- fmt_est_of(x)[est_ci_m]
+  # the base count: the SMALLEST base sits in `n` (the largest, when the bases differ, in `tot_n` --
+  # a format() concern), so every numeric consumer here reads a real count.
+  out[!nas & display == "n_range"] <- get_n(x)[!nas & display == "n_range"]
   # "blank" is a display-only mask (n_min sets it on small-base cells): carries NO number (format()
   # emits ""), while the underlying n/pct/tot_n stay intact, so the mask is fully reversible.
   out[!nas & display == "blank"  ] <- NA_real_
@@ -637,7 +640,7 @@ get_pct_type.tabxplor_fmt <- function(x, ...) attr(x, "pct_type", exact = TRUE)
 #' @noRd
 get_pct_type.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_pct_type(.))
 
-# A column REPURPOSED as a plain count (the no-col_var `n`/`wn` columns, the Excel `add_n` layout
+# A column REPURPOSED as a plain count (the no-col_var `n`/`wn` columns, the Excel base-count layout
 # column): it estimates a count, of nothing. Both halves in one call, because setting only the scale
 # would leave a stale `pct_type` claiming the counts are percentages of a row.
 #' @keywords internal
@@ -1135,7 +1138,7 @@ set_role <- function(x, role) {
   `attr<-`(x, "role", role)
 }
 
-# the add_n / add_pct HELPER columns -- a whole-table count or column percentage belonging to NO
+# the base-count / add_pct HELPER columns -- a whole-table count or column percentage belonging to NO
 # col_var -- declare a `role` ("n" / "pct") and keep `col_var` "", so every "not a real col_var"
 # filter works unchanged.
 #' @keywords internal
@@ -1460,7 +1463,7 @@ DISPLAY_ASIDE_OPEN  <- c("(", "[")
 DISPLAY_ASIDE_CLOSE <- c(")", "]")
 # WARNING: display_primary() is on the O(cells) hot path (get_num/set_num/format) -- keep the
 # no-composite fast path a single fixed grepl, and resolve per UNIQUE template, never per cell. The
-# composite is per-CELL, not a column attribute (add_n/add_pct are ROWS under pct="col").
+# composite is per-CELL, not a column attribute (the base count / add_pct are ROWS under pct="col").
 
 # The accepted {} field names and read-side aliases are the `user` / `alias` columns of DISPLAY_TOKENS
 # (R/tab-display.R, as DISPLAY_USER_FIELDS / DISPLAY_ALIASES). Facts worth stating here beside
@@ -1500,7 +1503,13 @@ display_primary <- function(display) {
 # tokens first, so a cell printing "{base}" counts as showing the percentage it prints.
 #' @keywords internal
 fmt_display_shows <- function(display, token, row = NULL) {
-  resolve <- function(v) if (is.null(row)) v else fmt_resolve_scale_tokens(v, row)
+  # `n_range` IS the count (one number, or the min-max the base column reports): a cell showing it
+  # must not have the tooltip repeat `n:` beside it.
+  resolve <- function(v) {
+    v <- if (is.null(row)) v else fmt_resolve_scale_tokens(v, row)
+    if (identical(token, "n")) v[!is.na(v) & v == "n_range"] <- "n"
+    v
+  }
   out  <- !is.na(display) & resolve(display) == token
   comp <- !is.na(display) & grepl("{", display, fixed = TRUE)
   if (any(comp)) {
@@ -2075,7 +2084,7 @@ fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names, "...", "cla
 # The values a `col_var` attribute takes that are NOT a variable name -- the build's placeholders:
 #   "no_col_var" / "no_row_var"  the synthetic single-level factor tab() injects when an axis is
 #                                absent; "all_col_vars" a column belonging to no col_var; "" / "no" /
-#                                NA the empty spellings (incl. the add_n / add_pct helper columns).
+#                                NA the empty spellings (incl. the base-count / add_pct helpers).
 # `no_col_var` is NOT a real variable name -- rendering it as a header, or reporting it from
 # tab_shape(), is noise.
 #
@@ -2740,7 +2749,11 @@ set_ci      <- function(x, value) {
 set_pvalue  <- fmt_set_field_factory("pvalue" , cast = double()   )
 #' @keywords internal
 set_or      <- fmt_set_field_factory("or"     , cast = double()   )
-# `tot_n` / `n_eff` are write-once (the leaves' new_fmt() call) and read-only after, so they have no setter.
+# `n_eff` is write-once (the leaves' new_fmt() call) and read-only after, so it has no setter.
+# `tot_n` has exactly ONE writer after the build: mat_base_n(), which puts the LARGEST base of the
+# table in the presentation cell so `{n_range}` can print "min-max". Do not widen that.
+#' @keywords internal
+set_tot_n   <- fmt_set_field_factory("tot_n"  , cast = double()   )
 #' @keywords internal
 set_obs     <- fmt_set_field_factory("obs"    , cast = double()   )
 #' @keywords internal
@@ -2866,7 +2879,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   display <- fmt_resolve_scale_tokens(display_primary(raw_display), scl)
   nas  <- is.na(display)
   digits <- get_digits(x)
-  digits[!nas & display == "n"] <- 0
+  digits[!nas & display %in% c("n", "n_range")] <- 0
   # ONLY 0 is overridden, and only where the token declares a floor (DISPLAY_TOKENS$min_digits): a
   # cell asking for 1 or 3 decimals gets them. `digits` is per-cell but ONE value serves every
   # display of that cell -- a percentage wants 0 and its own ratio wants 2 -- so the floor cannot be
@@ -2926,12 +2939,17 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # every diff display is signed; `resid` joins the signed mask (direction is half of what a
   # standardized residual says, so it must never print bare).
   diff_signed   <- (ok & display %in% c("diff", "resid")) | obs_as_pct
-  n_wn          <- ok & (display %in% c("n", "wn", "mean", "mean_ci", "var", "ratio", "or", "or_pct",
-                                        "OR", "OR_pct", "gof", "resid") |
+  n_wn          <- ok & (display %in% c("n", "n_range", "wn", "mean", "mean_ci", "var", "ratio",
+                                        "or", "or_pct", "OR", "OR_pct", "gof", "resid") |
                            (display == "ci" & is_mean) )
   n_wn          <- n_wn | (obs_m & obs_mult)
   type_ci       <- ok & display == "ci"
   pvalue        <- ok & display == "pvalue"
+  # a base count is a genuine RANGE only where a larger `tot_n` sits beside the `n`; otherwise the
+  # token prints one number, and Excel keeps it an editable count instead of text.
+  n_range_hi    <- ok & display == "n_range" & !is.na(get_tot_n(x)) &
+    get_tot_n(x) > as.double(get_n(x))
+  n_range_hi[is.na(n_range_hi)] <- FALSE
 
   pct_or_ci <- pct_or_ci | obs_as_pct
   out[pct_or_ci] <- out[pct_or_ci] * 100
@@ -2946,7 +2964,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     # diff + contrib get an explicit +/- sign; ratio a leading x; mean diffs join the `signed` mask
     # (so the bypass matches format()'s "+1.2").
     return(excel_numfmt_code(digits, pct = excel_pct,
-                             ci = !nas & display == "ci", text = plus_ci,
+                             ci = !nas & display == "ci", text = plus_ci | n_range_hi,
                              signed = (!nas & display %in% c("ctr", "diff", "resid")) | obs_as_pct,
                              ratio  = !nas & display == "ratio"))
   }
@@ -3037,6 +3055,11 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # the thousands mark IS the pad glyph (`pad` resolves per medium: ASCII in console/markdown, a figure
   # space in html/Excel), so the mark can never disagree with the padding it sits in.
   out[n_wn] <- out[n_wn] |> prettyNum(big.mark = pad, preserve.width = "individual")
+  if (any(n_range_hi)) {
+    hi <- print_num(get_tot_n(x)[n_range_hi], 0L) |>
+      prettyNum(big.mark = pad, preserve.width = "individual")
+    out[n_range_hi] <- paste0(out[n_range_hi], "-", hi)
+  }
   out[pct_no_ci] <- paste0(out[pct_no_ci], "%")
 
   # === THE ONE MULTIPLICATIVE RENDERING ==========================================================

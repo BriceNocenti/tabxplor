@@ -1,6 +1,6 @@
 # PURPOSE: THE DISPLAY GRAMMAR -- how a built cell decides what to print.
-# ROLE: The `{}` template writer and its declared vocabulary (DISPLAY_TOKENS), plus the add_n /
-#   add_pct materialisation the exporters run. A display is an OVERLAY: get_num(), the colour
+# ROLE: The `{}` template writer and its declared vocabulary (DISPLAY_TOKENS), plus the base-count
+#   and add_pct materialisation the exporters run. A display is an OVERLAY: get_num(), the colour
 #   engine and the Excel bypass all keep reading the PRIMARY field, so changing a display never
 #   changes a number.
 # KEY CONSTRAINTS:
@@ -20,6 +20,13 @@
 #     an anonymous one into the data mask, `r$col` yields NULL, and across() DROPS the column.
 #   - DISPLAY_TOKENS' row ORDER is a contract, and its `doc=` / `source=` strings are user-facing
 #     documentation: display_tokens_rd() emits them into ?fmt and ?tab through an `@eval` block.
+#   - THE BASE COUNT IS ONE DISPLAY-TIME FACT, for both producers. Nothing stores it: a crosstab
+#     cell already carries its block's base in `tot_n` (a mean's in `n`), and a regression's model
+#     columns carry each level's own `n`. fmt_cell_base() reads whichever applies, tab_base_range()
+#     reduces it per row over a col_group, and `n = "range" | "min" | "no"` then chooses between
+#     folding it into the Total cell (tab_fold_base_n), giving it a column (reg_base_n_cols, and
+#     the Excel branch of tab_base_n_pct) or dropping it. A range needs no literal and no second
+#     field: `{n_range}` renders `n`..`tot_n`, so format()'s per-template padding still aligns.
 # See: CLAUDE.md § tabxplor architecture (the display grammar); R/fmt_class.R (the fields shown).
 
 #' @keywords internal
@@ -217,6 +224,12 @@ DISPLAY_TOKENS <- list(
   est_ci  = .dtok(          min_digits = 2L,
                   doc = paste('the estimate with a visible interval, reading whichever',
                                         'field the column\'s scale centres on')),
+  # The base count as the reader needs it: ONE number when every column block of the table rests on
+  # the same population, `min-max` when they differ (several col_vars losing different NAs, several
+  # models). Both ends are ordinary fields -- `n` the smallest base, `tot_n` the largest -- written
+  # by mat_base_n() at display time, so this token renders whatever it is given and reads no option.
+  n_range = .dtok("n"     , settable = FALSE, colour = FALSE, geometry = "level",
+                  doc = 'the unweighted base: one count, or a `min-max` range over the table'),
   blank   = .dtok(          settable = FALSE, footer = TRUE, colour = FALSE,
                   doc = 'nothing: a cell masked by `n_min`'),
   # --- a legacy SPELLING, resolved to its token by display_primary() -----------------------------
@@ -399,7 +412,7 @@ display_refuse_mismatch <- function(col, fields, tmpl) {
 }
 
 
-# tab_append_pctcol_rows() -- under pct = "col" the add_n / add_pct extras are ROWS: a re-displayed
+# tab_append_pctcol_rows() -- under pct = "col" the base-count / add_pct extras are ROWS: a re-displayed
 # copy of EACH sub-table's total row, spliced in after its own source row. `transform` returns the
 # row(s) to insert; `role` is the row_kind ("pct" / "n") stamped on their cells (NA = don't stamp).
 # Slicing runs UNGROUPED -- slice() would index within each group, the total-row index is global.
@@ -430,11 +443,13 @@ tab_append_pctcol_rows <- function(tab, transform, role = NA_character_) {
 }
 
 
-# tab_add_n_pct() -- append the base-n column (add_n) and/or the col%/row% companion (add_pct) to
-# each built factor table (the tabs_text LIST, one entry per row_var); shared by tab_many() and
-# tab_counts(). The `n` COLUMN is "xl"-only: text folds the base into the Total cell instead
-# (tab_fold_addn_incell). The pct = "col" rows are backend-invariant.
-tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
+# tab_base_n_pct() -- append the base-count column and/or the col%/row% companion (add_pct) to each
+# built factor table (the tabs_text LIST, one entry per row_var); shared by tab_many() and
+# tab_counts(). The `n` COLUMN is "xl"-only -- Excel wants a real, editable number and no composite
+# cell -- while text folds the base into the Total cell instead (tab_fold_base_n). The pct = "col"
+# rows are backend-invariant.
+tab_base_n_pct <- function(tabs_text, base_n, add_pct, backend = "xl") {
+  add_n <- !identical(base_n, "no")
   if (!add_n && !add_pct) return(tabs_text)
 
     # cols, with pct = "row"
@@ -472,15 +487,16 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
 
       if (add_n && !identical(backend, "text")) {
         tabs_text <- tabs_text |>
-          purrr::map2(
-            last_totcols_pct_rows, ~ dplyr::mutate(
-              .x,
-              n = set_display(!!rlang::sym(.y), "n") |>
-                set_count_col() |> as_totcol(FALSE) |> set_color("no") |>
-                set_col_var("") |> set_role("n") |>
-                fmt_blank_fields(pct = TRUE)
-            )
-          )
+          purrr::map2(last_totcols_pct_rows, function(tb, nm) {
+            # WARNING: `[[<-`, not mutate() -- the table may be GROUPED, and mutate() would try to
+            # recycle this whole-table column inside each group.
+            tb[["n"]] <- fmt_base_n_cell(tb[[nm]], tb, base_n) |>
+              set_display("n_range") |>
+              set_count_col() |> as_totcol(FALSE) |> set_color("no") |>
+              set_col_var("") |> set_role("n") |>
+              fmt_blank_fields(pct = TRUE)
+            tb
+          })
       }
 
     }
@@ -585,52 +601,178 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
 }
 
 
-# tab_is_or_display() -- TRUE when the table DISPLAYS odds ratios, so its "100%" total is meaningless
-# and gets folded to the base n / dropped. Keyed on the DISPLAYED quantity, NOT ci_type: `color =
-# "OR"` with `OR = "no"` shows real percentages (a meaningful 100%) yet can carry an OR interval.
-tab_is_or_display <- function(tab) {
-  if (!is.data.frame(tab)) return(FALSE)
-  fc <- purrr::map_lgl(tab, is_fmt)
-  if (!any(fc)) return(FALSE)
-  any(purrr::map_lgl(tab[fc], ~ any(get_display(.) %in% c("or", "or_pct"))))
+# tab_row_totcols() -- the row-% total columns a base count can be folded into: one per col_group,
+# so a spread table answers per sub-population instead of letting the last one speak for all.
+#' @keywords internal
+#' @noRd
+tab_row_totcols <- function(tab) {
+  if (!is.data.frame(tab)) return(character(0))
+  names(tab)[purrr::map_lgl(tab, ~ is_fmt(.) && is_totcol(.) && get_pct_type(.) == "row" &&
+                              is_real_col_var(get_col_var(.)))]
 }
 
-# tab_fold_addn_incell() -- for TEXT backends the add_n base shows inside the Total cell, as the
-# composite `{pct} (n={n})` read from that column's OWN `n` field: the only base a cell can honestly
-# show, since format() aligns per unique template and a per-row literal (a `[min;max]` over col_vars
-# with differing bases) defeats that padding. On an OR/RRR table the "100%" goes, leaving `n={n}`.
+# tab_totcol_sums() -- does this Total column REALLY total what the reader can see? It does when the
+# visible cells of its block add up to it, and that one test answers three questions at once: an
+# odds-ratio table (whose cells are ratios, not shares), `levels = "first"` (where the other levels
+# were dropped after the tests) and any future display that stops summing. Judged on the rows where
+# every cell of the block renders, so an n_min blank cannot make an honest total look dishonest.
+#' @keywords internal
+#' @noRd
+tab_totcol_sums <- function(tab, tot_nm) {
+  col   <- tab[[tot_nm]]
+  block <- names(tab)[purrr::map_lgl(tab, ~ is_fmt(.) && !is_totcol(.) && !fmt_is_helper_col(.) &&
+                                       get_col_var(.)   == get_col_var(col) &&
+                                       get_col_group(.) == get_col_group(col))]
+  if (!length(block)) return(FALSE)
+  s   <- purrr::reduce(purrr::map(tab[block], get_num), `+`)
+  tot <- get_num(col)
+  ok  <- !is.na(s) & !is.na(tot)
+  if (!any(ok)) return(TRUE)                       # nothing to judge on: keep today's "100%"
+  all(abs(s[ok] - tot[ok]) < 1e-6)
+}
+
+# fmt_base_n_cell() -- put the base(s) of a cell's own block INTO the cell that reports them: the
+# smallest in `n`, the largest in `tot_n`, so `{n_range}` prints one number when the whole block
+# rests on the same people and `6 712-9 838` when it does not. `"min"` simply withholds the largest.
+# WARNING: this writes fields, so it may only ever run on the EPHEMERAL materialised copy.
+#' @keywords internal
+#' @noRd
+fmt_base_n_cell <- function(col, tab, mode) {
+  rng <- tab_base_range(tab, tab_base_cols(tab, group = get_col_group(col)))
+  set_tot_n(set_n(col, rng$min), if (identical(mode, "range")) rng$max else NA_real_)
+}
+
+# tab_fold_base_n() -- the base count folded into the Total cell, for the backends that have no room
+# for a column of its own. The cell gets the SMALLEST base of its block in `n` and the largest in
+# `tot_n`, so `{n_range}` prints one number when the whole block rests on the same people and
+# `6 712-9 838` when it does not -- an unequal base can then never pass unnoticed. Where the block
+# does not sum, the "100%" is simply a lie and only the count is printed.
+# WARNING: this writes fields, so it may only ever run on the EPHEMERAL materialised copy.
 # WARNING: runs BEFORE tab_pvalue_lines(), so the Total column has only data/total cells.
-tab_fold_addn_incell <- function(tab) {
-  tot_nm <- dplyr::last(names(tab)[is_totcol(tab) & get_pct_type(tab) == "row" &
-                                     is_real_col_var(get_col_var(tab))])
-  if (length(tot_nm) != 1 || is.na(tot_nm)) return(dplyr::select(tab, -tidyselect::any_of("n")))
-  is_or <- tab_is_or_display(tab)
-
-  tmpl <- if (is_or) rep("n={n}", nrow(tab)) else NULL
-
-  tab <- dplyr::select(tab, -tidyselect::any_of("n"))
-  dplyr::mutate(tab, dplyr::across(tidyselect::all_of(tot_nm), function(col) {
-    d    <- get_display(col)
-    # both fields must render; here the Total column is all pct/n non-NA, so this is every cell.
-    elig <- !is.na(get_num(set_display(col, "pct"))) & !is.na(get_num(set_display(col, "n")))
-    if (is.null(tmpl)) d[elig] <- "{pct} (n={n})" else d[elig] <- tmpl[elig]
-    set_display(col, d)
-  }))
-}
-
-# tab_or_total_col() -- what the in-cell fold cannot cover: drop the meaningless "100%" column for
-# EXCEL (the base n is its own column there) and for console add_n = FALSE (no base to fold).
-tab_or_total_col <- function(tab, backend, add_n_on) {
-  if (!is.data.frame(tab) || !tab_is_or_display(tab)) return(tab)
-  tot_nm <- names(tab)[purrr::map_lgl(tab, ~ is_fmt(.) && is_totcol(.) &&
-                                        get_pct_type(.) == "row" && is_real_col_var(get_col_var(.)))]
+#' @keywords internal
+#' @noRd
+tab_fold_base_n <- function(tab, mode) {
+  tab    <- dplyr::select(tab, -tidyselect::any_of("n"))
+  tot_nm <- tab_row_totcols(tab)
   if (!length(tot_nm)) return(tab)
-  if (identical(backend, "xl") || !isTRUE(add_n_on)) {
-    tab <- dplyr::select(tab, -tidyselect::all_of(tot_nm))
+  for (nm in tot_nm) {
+    col  <- fmt_base_n_cell(tab[[nm]], tab, mode)
+    d    <- get_display(col)
+    elig <- !is.na(get_num(set_display(col, "n_range")))
+    d[elig] <- if (tab_totcol_sums(tab, nm)) "{pct} ({n_range})" else "({n_range})"
+    tab[[nm]] <- set_display(col, d)
   }
   tab
 }
 
+# tab_drop_dishonest_totcol() -- what the in-cell fold cannot cover: a Total column that does not
+# total anything (see tab_totcol_sums) has nothing left to say once the count lives elsewhere --
+# in its own column for Excel, nowhere at all under `n = "no"`.
+#' @keywords internal
+#' @noRd
+tab_drop_dishonest_totcol <- function(tab, backend, base_n) {
+  if (!is.data.frame(tab)) return(tab)
+  if (!identical(backend, "xl") && !identical(base_n, "no")) return(tab)
+  tot_nm <- tab_row_totcols(tab)
+  drop   <- tot_nm[!purrr::map_lgl(tot_nm, ~ tab_totcol_sums(tab, .))]
+  if (length(drop)) tab <- dplyr::select(tab, -tidyselect::all_of(drop))
+  tab
+}
+
+# reg_base_n_cols() -- the regression twin of the fold: `tab_reg()` has no Total cell, so the base
+# count gets a column, synthesised HERE from the `n` every model column already carries (its level's
+# own count, the model N on the Constant row). One column per col_group -- one when there is nothing
+# to spread, one per `tab_vars` level when there is, and then to the RIGHT of the models, where the
+# three counts can be read against each other instead of pushing the estimates away.
+#' @keywords internal
+#' @noRd
+reg_base_n_cols <- function(tab, mode) {
+  mods <- names(tab)[purrr::map_lgl(tab, ~ is_fmt(.) && get_role(.) == "model")]
+  if (!length(mods)) return(tab)
+  grps <- unique(purrr::map_chr(tab[mods], get_col_group))
+  for (g in grps) {
+    cols <- mods[purrr::map_chr(tab[mods], get_col_group) == g]
+    rng  <- tab_base_range(tab, cols)
+    ref  <- tab[[cols[[1]]]]
+    # `in_refrow` is ANDed across every column by tab_bold_rows(): a helper column that forgot it
+    # would un-bold the reference row of the whole table.
+    tab[[if (nzchar(g)) paste0("n_", g) else "n"]] <- fmt(
+      n = as.integer(rng$min), tot_n = if (identical(mode, "range")) rng$max else NA_real_,
+      display = "n_range", digits = 0L, scale = "level_n", color = "", color_signif = "ignore",
+      col_var = "n", col_group = g, comp_all = FALSE, role = "n", in_refrow = is_refrow(ref),
+      row_kind = get_row_kind(ref))
+  }
+  # one group = one count, and it belongs beside the levels it counts; several = the block goes to
+  # the right of the models, where the counts can be read against each other.
+  if (length(grps) == 1L) {
+    idx <- which(!purrr::map_lgl(tab, is_fmt))
+    if (length(idx)) tab <- dplyr::relocate(tab, tidyselect::all_of("n"), .after = max(idx))
+  }
+  tab
+}
+
+
+# fmt_cell_base() -- the population a cell rests on, whatever kind of column it sits in: the
+# percentage base for a proportion, the count for a mean, and for a regression column its level's
+# own n. THE one reader of that fact, shared by the n_min filter and by the base-count display.
+#' @keywords internal
+#' @noRd
+fmt_cell_base <- function(col) {
+  if (fmt_var_kind(col) == "mean" || get_role(col) %in% c("model", "emp")) get_n(col)
+  else get_tot_n(col)
+}
+
+# tab_base_cols() -- the value columns whose base the reader is being told about: the row-oriented
+# ones (a row / all-tabs percentage, or a mean) plus a regression's estimate columns. Totals and the
+# display-time helper columns are excluded -- they REPORT the base, they are not a population.
+#' @keywords internal
+#' @noRd
+tab_base_cols <- function(tab, group = NULL) {
+  nms <- names(tab)[purrr::map_lgl(tab, is_fmt)]
+  if (length(nms) == 0) return(character(0))
+  keep <- purrr::map_lgl(tab[nms], function(col) {
+    if (is_totcol(col) || fmt_is_helper_col(col)) return(FALSE)
+    if (get_role(col) %in% c("model", "emp")) return(TRUE)
+    get_pct_type(col) %in% c("row", "all", "all_tabs") || fmt_var_kind(col) == "mean"
+  })
+  nms <- nms[keep]
+  if (is.null(group)) return(nms)
+  nms[purrr::map_chr(tab[nms], get_col_group) == group]
+}
+
+# tab_base_range() -- per ROW, the smallest and the largest base among `cols`. They coincide whenever
+# every block rests on the same population; they differ when col_vars lose different NAs, or when
+# several models were fitted on different complete-case sets. A column with no base of its own is
+# skipped (not treated as zero, and not as infinite: it simply says nothing about the population).
+#' @keywords internal
+#' @noRd
+tab_base_range <- function(tab, cols) {
+  if (length(cols) == 0) return(list(min = rep(NA_real_, nrow(tab)), max = rep(NA_real_, nrow(tab))))
+  b <- purrr::map(tab[cols], ~ as.double(fmt_cell_base(.)))
+  list(min = purrr::reduce(b, pmin, na.rm = TRUE), max = purrr::reduce(b, pmax, na.rm = TRUE))
+}
+
+# tab_base_notes() -- the per-block breakdown behind a `min-max` base: which column variable (or
+# model) each end belongs to. Only the whole table knows it, so it travels to the tooltip as a note
+# rather than through a field. NULL where every block rests on the same people -- there is then
+# nothing to break down, and the cell already prints the one number.
+#' @keywords internal
+#' @noRd
+tab_base_notes <- function(tab, col_name) {
+  col <- tab[[col_name]]
+  if (!is_fmt(col)) return(NULL)
+  cols <- tab_base_cols(tab, group = get_col_group(col))
+  if (length(cols) < 2L) return(NULL)
+  blocks <- split(cols, purrr::map_chr(tab[cols], get_col_var))
+  if (length(blocks) < 2L) return(NULL)
+  per <- purrr::map(blocks, ~ tab_base_range(tab, .)$max)
+  if (length(unique(purrr::map(per, ~ round(., 6)))) < 2L) return(NULL)
+  # rendered through format(), so the thousands mark is the one every count in the table uses.
+  out <- purrr::imap(per, ~ paste0(.y, ": ", format(fmt(n = as.integer(.x), display = "n",
+                                                        digits = 0L))))
+  txt <- do.call(paste, c(unname(out), list(sep = " ; ")))
+  ifelse(is.na(get_n(col)), "", txt)
+}
 
 # tab_apply_n_min() -- the small-base display filter. A PURE DISPLAY helper: it recomputes NOTHING
 # (no fields, no chi2/ANOVA, no CI), it just strips the noise of unreliable small-base cells.
@@ -638,7 +780,7 @@ tab_or_total_col <- function(tab, backend, add_n_on) {
 # LARGEST base across them is < n_min, then blank each surviving cell whose OWN base is < n_min; for
 # col-oriented ones (pct = "col") drop the whole column when its base is < n_min. Orientation comes
 # from stored facts, so mixed tables just work. Base = get_tot_n() for proportions, get_n() for
-# means; an NA base is never weak. NEVER drops: total rows/tables, the total column, the add_n /
+# means; an NA base is never weak. NEVER drops: total rows/tables, the total column, the base-count /
 # add_pct helper rows and columns, or the p-value line.
 tab_apply_n_min <- function(tab, n_min) {
   if (length(n_min) == 0 || is.na(n_min[1]) || n_min[1] <= 0) return(tab)
@@ -653,7 +795,9 @@ tab_apply_n_min <- function(tab, n_min) {
   row_like <- base %in% c("row", "all") | vkind == "mean"
   totcol <- purrr::map_lgl(tab[fmt_names], is_totcol)
 
-  cell_base <- function(col) if (fmt_var_kind(col) == "mean") get_n(col) else get_tot_n(col)
+  # WARNING: n_min keeps its OWN NA rule -- "an NA base is never weak", so it maxes over Inf, where
+  # tab_base_range() skips an NA. The shared fact is fmt_cell_base(), not the reduce.
+  cell_base <- fmt_cell_base
 
   # --- protected rows (never dropped) --------------------------------------------------------
   # n_min runs at build, on the CORE table: the helper rows and columns only exist at display time.

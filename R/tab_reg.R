@@ -1181,7 +1181,9 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, est,
   }
   fields <- stats::setNames(list(est_v), est_field)
   args <- c(
-    list(n = rep(NA_integer_, n_rows)),   # the whole-model N is in the footer, not here
+    # NA here, overwritten in reg_spec_build_one() with each level's own count: the builders do
+    # not know the model's complete-case frame, and the count is the same for every column of a fit.
+    list(n = rep(NA_integer_, n_rows)),
     fields,
     list(ci_inf = lo, ci_sup = hi, pvalue = p,
          scale = scale_key, display = disp, digits = digits,
@@ -1533,7 +1535,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
     do.call(fmt, c(
       stats::setNames(list(pred_v), EST_SCALES[[sc]]$base_display),
       list(
-        n = rep(NA_integer_, n_rows),   # no misleading whole-model N (see the empirical cols)
+        n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
         diff = ame_v, or = or_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
         scale = sc, pct_type = reg_pct_type(sc), display = display,
         digits = reg_cell_digits(sc), ci_method = "wald",
@@ -1550,7 +1552,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
       stats::setNames(list(ame_v), EST_SCALES[[sc]]$est_field),
       stats::setNames(list(pred_v), EST_SCALES[[sc]]$base_display),
       list(
-        n = rep(NA_integer_, n_rows),   # no misleading whole-model N (see the empirical cols)
+        n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
         ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
         scale = sc, pct_type = reg_pct_type(sc), display = display,
         digits = reg_cell_digits(sc), ref = "1", ci_method = "wald_log",
@@ -1570,7 +1572,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
     display[show] <- "est"
     ame_v[is_ref] <- 1                                         # multiplicative neutral at the reference
     fmt(
-      n = rep(NA_integer_, n_rows),   # no misleading whole-model N here
+      n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
       or = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
       scale = "odds_ratio", pct_type = reg_pct_type("odds_ratio"), display = display, digits = reg_cell_digits("odds_ratio"), ref = "1",
       ci_method = "wald_log",
@@ -1581,7 +1583,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
     display[show] <- "est"
     ame_v[is_ref] <- 0                                         # additive neutral at the reference
     fmt(
-      n = rep(NA_integer_, n_rows),   # no misleading whole-model N here
+      n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
       diff = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
       var = rep(var_y, n_rows),                               # var(Y): standardizes the effect-size colour
       scale = "raw_diff", display = display, digits = reg_cell_digits("raw_diff"), ci_method = "wald",
@@ -2267,7 +2269,7 @@ new_reg_shared <- function(union_predictors = character(0), design_spec = list()
                            shape_terms = NULL, shape_labels = NULL,
                            empirical = FALSE, display = NULL,
                            var_labels = character(0), na_shared_vars = character(0),
-                           add_n = FALSE) {
+                           base_n = "range") {
   as.list(environment())
 }
 # ...and THE globalVariables mirror, DERIVED from those formals: reg_build() binds them with
@@ -2372,7 +2374,7 @@ reg_build <- function(data, specs, shared, tab_vars = NULL, .fit_cache = NULL, r
   ctx <- reg_stage_crude(ctx)      # the observed (crude) block of a ONE-outcome table, built once
   ctx <- reg_stage_specs(ctx)      # ONE reg_spec_build() per model (serial or pooled) + the layout
   ctx <- reg_stage_footer(ctx)     # the products' rows + the between-model comparison -> `test`
-  ctx <- reg_stage_rows(ctx)       # the row axis: labels, relabels, sparklines, add_n -> `tab`
+  ctx <- reg_stage_rows(ctx)       # the row axis: labels, relabels, sparklines -> `tab`
   ctx <- reg_stage_assemble(ctx)   # the crude blocks and the model columns into `tab`
   ctx <- reg_stage_tips(ctx)       # the crude tooltips (multinomial + numeric)
   reg_stage_finalize(ctx)          # the inference basis, then the shared assembly tail
@@ -2469,8 +2471,6 @@ reg_stage_setup <- function(ctx) {
     (is.character(stats) && "global" %in% stats)
 
   outcomes <- purrr::map_chr(specs, "outcome")
-  want_n   <- isTRUE(add_n) & (n_outcomes > 1L | seq_along(specs) == 1L) & !duplicated(outcomes)
-  n_names  <- if (n_outcomes > 1L) paste0("n [", outcomes, "]") else rep("n", length(specs))
   # THE CRUDE BLOCK BELONGS TO THE OUTCOME: every input is table-wide or per-OUTCOME, so ONE outcome
   # means ONE block built before any model (`want_crude`), while SEVERAL build one per spec
   # (`want_emp`) -- also an outcome, so the work stays on the parallel axis. A numeric predictor
@@ -2506,8 +2506,7 @@ reg_stage_setup <- function(ctx) {
                         is_comparison = is_comparison,
                         numeric_preds = numeric_preds, factor_preds = factor_preds,
                         want_global = want_global,
-                        spec_plan = list(want_n = want_n, n_names = n_names,
-                                         want_emp = want_emp, want_crude = want_crude,
+                        spec_plan = list(want_emp = want_emp, want_crude = want_crude,
                                          num_preds = num_e)))
 }
 
@@ -2867,10 +2866,6 @@ reg_stage_rows <- function(ctx) {
     var    = new_lvl(forcats::fct_inorder(skeleton$var), "var"),
     levels = new_lvl(forcats::fct_inorder(disp_levels) , "level")
   )
-  # the N behind each predictor level: a BUILT column, not a `render_extras` display intent like
-  # tab()'s own `add_n`, because the count needs the model's complete-case frame and tab_add_n_pct()
-  # folds into a Total cell a reg table does not have.
-  for (pr in products) for (nm in names(pr$n_col)) tab[[nm]] <- pr$n_col[[nm]]
 
   ctx_update(ctx, list(tab = tab, disp_levels = disp_levels, assumptions = assumptions))
 }
@@ -2997,10 +2992,13 @@ reg_stage_finalize <- function(ctx) {
   # The confidence level, the design df and the basis are stamped on EACH fmt column -- the colour
   # engine is per column and cannot read a table attribute.
   reg_inf <- reg_inference(shared, emp_degraded)
-  reg_finalize(tab, test, conf_level, var_labels, group_vars = "var",
-               degf = reg_inf$degf, basis = reg_inf$basis,
-               meta_extra = list(subtext = subtext, empirical_tips = empirical_tips,
-                                 assumptions = assumptions))
+  out <- reg_finalize(tab, test, conf_level, var_labels, group_vars = "var",
+                      degf = reg_inf$degf, basis = reg_inf$basis,
+                      meta_extra = list(subtext = subtext, empirical_tips = empirical_tips,
+                                        assumptions = assumptions))
+  # the base count is a DISPLAY intent here exactly as in tab(): the column is synthesised at
+  # print/export time from the `n` every model column carries.
+  set_render_extras(out, list(n = shared$base_n))
 }
 
 
@@ -3242,13 +3240,16 @@ reg_stage_finalize <- function(ctx) {
 #'   inference basis** --- which is why a weighted `tab_reg()` is *always* design-corrected where a
 #'   weighted [tab()] is not unless asked (`design_effect = TRUE`). The footer says which basis a
 #'   table used.
-#' @param add_n Logical, default `TRUE`. Add an `n` column, right after the level labels, holding the
-#'   **unadjusted count** behind each predictor level on the model's own complete cases --- the
-#'   numbers a reader needs to judge the estimates beside them. The Constant row shows the model N.
-#'   Continuous predictors are left blank: on a listwise-complete frame their count is the model N.
+#' @param n How many people the table is about. `"range"` (the default) adds an `n` column holding
+#'   the **unadjusted count** behind each predictor level, on the model's own complete cases --- the
+#'   numbers a reader needs to judge the estimates beside them --- with the model N on the Constant
+#'   row. When several models were fitted on different people it prints the whole range
+#'   (`5 139-9 862`), so an unequal base can never pass unnoticed; `"min"` shows the smallest count
+#'   only, `"no"` no count at all. Continuous predictors are left blank: on a listwise-complete frame
+#'   their count is the model N. With `tab_vars`, one column per group, to the right of the models.
 #' @param stats The statistics shown in the model-summary **footer** (one block per model). `NULL`
-#'   (default) uses the per-family set: linear models show N, R square, adjusted R square, the
-#'   overall F-test and the residual SD; other models show N, the likelihood-ratio test versus the
+#'   (default) uses the per-family set: linear models show R square, adjusted R square, the
+#'   overall F-test and the residual SD; other models show the likelihood-ratio test versus the
 #'   null model, McFadden's pseudo-R square, AIC and BIC (count and grouped-binomial models also show
 #'   the Pearson dispersion, `"phi"`). Every default set also carries the overall-association test
 #'   `"global"` and the **model checks that cost nothing** (see below). Pass a character vector to
@@ -3477,7 +3478,7 @@ reg_stage_finalize <- function(ctx) {
 #' @export
 tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL,
                     family = "auto", effect = "coefficient", measure = "auto",
-                    trials = NULL, empirical = FALSE, add_n = TRUE,
+                    trials = NULL, empirical = FALSE, n = NULL,
                     color = TRUE, color_signif = NULL, stars = TRUE,
                     conf_level = NULL, ci_method = NULL,
                     outcome_level = NULL, ref = NULL,
@@ -3538,7 +3539,7 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
            trials = tri, conf_level = conf_level, ci_method = ci_method,
            ref = ref, outcome_level = outcome_level,
            tab_vars = tab_vars, multiplier = multiplier, shape = shape,
-           empirical = empirical, add_n = add_n,
+           empirical = empirical, n = n,
            stats = stats,
            display = display, color = color, color_signif = color_signif,
            stars = stars, na = na, cleannames = cleannames, subtext = subtext,
@@ -3557,7 +3558,7 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
   a <- reg_resolve_args(
     data, outcome, predictors, tab_vars = tab_vars, wt = wt,
     family = family, effect = effect, measure = measure, trials = trials,
-    empirical = empirical, add_n = add_n, color = color, color_signif = color_signif,
+    empirical = empirical, n = n, color = color, color_signif = color_signif,
     stars = stars, conf_level = conf_level, method = method, ref = ref,
     outcome_level = outcome_level, multiplier = multiplier,
     shape = shape, stats = stats,

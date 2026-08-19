@@ -53,7 +53,7 @@ benchmark_jmvtab_opts <- function(...) {
             conf_level = 0.95, stars = TRUE,
             ci_method_cell = "wilson", ci_method_diff = "newcombe",
             ci_method_mean_diff = "welch", ci_method_mean_ratio = "robust",
-            totaltab = "line", digits = 0, other_if_less_than = 0, add_n = TRUE, add_pct = FALSE,
+            totaltab = "line", digits = 0, other_if_less_than = 0, add_pct = FALSE,
             subtext = "", output_list = FALSE, cleannames = TRUE, display = "auto",
             total_names = c(row = "Total", col = "Total", tab = "Ensemble", other = "Others"))
   utils::modifyList(o, list(...))

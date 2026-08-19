@@ -175,13 +175,13 @@ test_that("an ordered-factor predictor's coefficient OR is non-NA (was all-NA)",
   expect_gt(sum(!is.na(or[rin])), 0)
 })
 
-test_that("model effect columns drop the whole-model n; footer cells have no tooltip (Items D/L6)", {
+test_that("model effect columns carry their level's n; footer cells have no tooltip (Items D/L6)", {
   skip_if_not_installed("broom")
   d <- reg_data()
   t <- tab_reg(d, "married", c("race", "age"), family = "binomial")
-  # no whole-model "n:" on the coefficient column (built table)
+  # each level's own base is on hover, and the Constant row carries the model N (Phase 22b-i)
   tips0 <- tabxplor:::tab_kable_print_tooltip(first_fmt(t))
-  expect_false(any(grepl("n: ", tips0)))
+  expect_true(any(grepl("n: ", tips0)))
   # the GOF footer rows are materialised at display -> materialise, then check they carry no tooltip
   # (no nonsense "diff: +6378526%" on an AIC stored in the diff field)
   tm   <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = TRUE)

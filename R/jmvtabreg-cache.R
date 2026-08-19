@@ -379,7 +379,8 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     color_signif = opts$color_signif,
     stars        = isTRUE(opts$stars),
     na           = opts$na,
-    add_n        = opts$add_n %||% TRUE,
+    # ⚠ [["n"]], never $n: `$` PARTIAL-MATCHES on a list, so `opts$n` would return `opts$na`.
+    n            = opts[["n"]] %||% "range",
     cleannames   = opts$cleannames,
     subtext      = opts$subtext,
     multiplier   = jmvtab_reg_mult_vector(opts$multiplier),   # tab_reg skips mnl/ordinal specs per-spec
