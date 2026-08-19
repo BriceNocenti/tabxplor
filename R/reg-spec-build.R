@@ -240,7 +240,7 @@ reg_spec_build_one <- function(i, ctx) {
     # Phase 14w (item 3): the crude companions share the model column's outcome col_var (one span,
     # no border). NOT in comparison mode (the crude block stays a distinct col_var beside the models).
     if (!is_comparison && length(own$cols)) {
-      scv <- reg_shared_col_var(sp_fam, sp$outcome, pos_i, cleannames)
+      scv <- reg_shared_col_var(sp_fam, sp$outcome, pos_i, cleannames, sp$trials)
       own$cols <- purrr::map(own$cols, ~ set_col_var(.x, scv))
     }
     own$tips_num <- reg_spec_tips_num(sp, pos_i, own, ctx)
@@ -362,7 +362,7 @@ reg_spec_tips_num <- function(sp, positive_level, own, ctx) {
   list2env(reg_ctx_locals(ctx), environment())
   if (length(numeric_preds) == 0L) return(NULL)
   if (is.null(own) || is.null(own$shape)) return(NULL)
-  nm <- own$shape$nm                                   # the crude effect column's name
+  nm <- reg_crude_col_name(own$shape)                  # the crude effect column's name
   if (is.na(nm)) return(NULL)
   # ⚠ this was `nm %in% names(tab)` -- "did the crude effect column reach the table?". The table does
   # not exist yet, and the question is local anyway: reg_stage_assemble() splices EVERY entry of

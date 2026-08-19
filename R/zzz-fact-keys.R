@@ -248,6 +248,20 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("REG_ESTIMANDS$rows$crude_shape", function() tx_fk_scalar(tx_fk_reg_rows(), "crude_shape"),
         function() tx_fk_emp_shape_names()),
 
+  # --- into the header vocabulary (REG_WORDS / REG_CONTRASTS) ---------------------------------
+  # a header word is COMPOSED (marker o log-wrap o base acronym), so what both producers declare is
+  # the base -- and it must be an acronym the vocabulary can expand.
+  tx_fk("REG_ESTIMANDS$rows$word", function() tx_fk_scalar(tx_fk_reg_rows(), "word"),
+        function() names(REG_WORDS)),
+  tx_fk("REG_EMPIRICAL$*$word",    function() tx_fk_scalar(tx_fk_emp_shapes(), "word"),
+        function() names(REG_WORDS)),
+  # every acronym a header prints can be typed back into `measure`, so a reader of a table always
+  # holds a spelling the argument accepts.
+  tx_fk("names(REG_WORDS)",        function() names(REG_WORDS),
+        function() names(REG_MEASURE_ALIASES)),
+  tx_fk("names(REG_CONTRASTS)",    function() names(REG_CONTRASTS),
+        function() REG_EFFECTS_VALUES),
+
   # --- into the estimand vocabulary ----------------------------------------------------------
   # the VALUE is the measure a `log_*` spelling pins; the NAME is the spelling itself, so it must be
   # one the alias table can resolve.

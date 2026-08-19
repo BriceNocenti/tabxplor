@@ -111,16 +111,19 @@ the result matches a standard \code{glm(family = poisson)} z-interval — so a u
 hand-fit Poisson \code{glm} is not surprised by wider intervals.}
 
 \item{effect}{\strong{Which contrast} the table shows --- one of the two questions an estimand asks.
-\code{"coefficient"} (default) is the model's own conditional effect (the beta / odds ratio /
-incidence-rate ratio / cumulative odds ratio, "holding the other predictors constant").
-\code{"marginal"} is the \strong{average marginal effect}: the model's effect averaged over the observed
-covariate distribution --- a probability-scale, cross-model-comparable summary (Mood 2010) for
-logistic / multinomial / ordinal outcomes, the expected-count change for poisson, the
-coefficient itself for gaussian. \code{"at_reference"} evaluates the same quantity \strong{at the reference
-profile} (every other predictor at its reference level / mean): the marginal effect at
-reference (MER), and for a \strong{multinomial} outcome the odds ratio of each outcome category
-\emph{versus the rest} at that profile. \code{"marginal"} / \code{"at_reference"} need the \code{marginaleffects}
-package. Resolved \strong{per outcome} like \code{family} (scalar / vector / named vector).
+\code{"coefficient"} (default) is the model's own conditional effect ("holding the other predictors
+constant"). \code{"marginal"} is the \strong{average marginal effect}: the model's effect averaged over
+the observed covariate distribution --- a probability-scale, cross-model-comparable summary
+(Mood 2010) for logistic / multinomial / ordinal outcomes, the expected-count change for
+poisson, the coefficient itself for gaussian. \code{"at_reference"} evaluates the same quantity \strong{at
+the reference profile} (every other predictor at its reference level / mean), and for a
+\strong{multinomial} outcome the odds ratio of each outcome category \emph{versus the rest} at that
+profile. Resolved \strong{per outcome} like \code{family} (scalar / vector / named vector).
+
+The contrast is a \strong{marker on the measure} in the column header, so the acronym stays the thing
+to look up: no marker for a coefficient, an \code{m} prefix for a marginal effect, a \code{ref} prefix at
+the reference profile --- \code{Model_OR}, \code{Model_mRR}, \code{Model_refRD}. The observed companion carries
+the measure alone (\code{Obs_RR}), because a univariable effect has no adjustment to be marginal over.
 
 The parenthetical of a probability-scale marginal cell is a \emph{marginal-standardized} prediction
 (\code{avg_predictions(variables=)}: the predictor set to each level for the whole sample, other
@@ -131,10 +134,10 @@ manipulation. Note the reference profile can be an unusual baseline (e.g. a fact
 level = \code{"No answer"}).}
 
 \item{measure}{\strong{Which effect measure} --- the other question. \code{"auto"} (default) takes the
-family's usual one (odds ratios for a logit, incidence-rate ratios for a count, a coefficient
-for a linear model; a difference for a marginal contrast). The full word is the canonical
-spelling and the discipline's acronym is an accepted synonym, so the argument teaches the
-concept while the column header keeps the acronym:
+family's usual one (odds ratios for a logit, incidence-rate ratios for a count, a mean
+difference for a linear model; a difference for a marginal contrast). The full word is the
+canonical spelling and the discipline's acronym is an accepted synonym, so the argument teaches
+the concept while the column header keeps the acronym (see \emph{The header acronyms} below):
 \itemize{
 \item \code{"odds_ratio"} (\code{"OR"}) --- the odds ratio of a logit / multinomial / ordinal fit.
 \item \code{"ratio"} (\code{"RR"}, \code{"IRR"}, \code{"RoM"}) --- a \strong{risk} ratio on a binary outcome (the modified
@@ -152,7 +155,9 @@ fail to converge: the linear probability model then takes over, with a message, 
 says which one ran.
 \item \code{"log"} (\code{"log_odds"}, \code{"log_risk"}, \code{"log_rate"}) --- the same fit, \strong{un-exponentiated}:
 coefficients on the model's own link scale. Bare \code{"log"} logs the family's default measure;
-the precise spellings pin which (so \code{"log_risk"} is the modified-Poisson fit, logged).
+the precise spellings pin which (so \code{"log_risk"} is the modified-Poisson fit, logged). The
+header names what it logs --- \code{Model_log(OR)}, \code{Model_log(IRR)} --- rather than one greek
+letter for five different quantities.
 }
 
 Resolved \strong{per outcome} like \code{family}. \code{effect} and \code{measure} are orthogonal: a \emph{conditional}
@@ -678,17 +683,34 @@ Cox} models, \strong{mixed / multilevel} models, and pooling over \strong{multip
 those with their own packages.
 }
 
+\section{The header acronyms}{
+
+A column header names the \strong{measure}; the \strong{contrast} is a marker on it ---
+no marker for a coefficient, \code{m} for a marginal effect, \code{ref} at the reference
+profile --- and \code{measure = "log"} wraps it (\code{Model_mRR}, \code{Model_refRD},
+\code{Model_log(OR)}). The observed companion carries the measure alone (\code{Obs_RR}).
+\itemize{
+\item \code{OR} --- odds ratio (binomial, multinomial)
+\item \code{cumOR} --- cumulative odds ratio (ordinal)
+\item \code{RR} --- risk ratio (binomial, multinomial, ordinal)
+\item \code{RD} --- risk difference (binomial, multinomial, ordinal)
+\item \code{IRR} --- incidence-rate ratio (poisson)
+\item \code{RoM} --- ratio of means (gaussian)
+\item \code{diff} --- mean difference (gaussian, poisson)
+}
+}
+
 \section{Which estimands each outcome offers}{
 
 Generated from the package's own resolution table, so it cannot drift from what
 \code{tab_reg()} builds. Call \code{\link{reg_measures}()} on your outcome for the same
 table with its per-cell status.
 \itemize{
-\item \strong{gaussian} --- \code{effect = "coefficient", measure = "difference"} (\code{Model_β}); \code{effect = "coefficient", measure = "ratio"} (\code{Model_RoM}); \code{effect = "coefficient", measure = "log"} (\code{Model_β}); \code{effect = "marginal", measure = "difference"} (\code{Model_AME}); \code{effect = "marginal", measure = "ratio"} (\code{Model_RoM}); \code{effect = "at_reference", measure = "difference"} (\code{Model_MER}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_RoM})
-\item \strong{binomial} --- \code{effect = "coefficient", measure = "odds_ratio"} (\code{Model_OR}); \code{effect = "coefficient", measure = "log"} (\code{Model_β}); \code{effect = "coefficient", measure = "ratio"} (\code{Model_RR}); \code{effect = "coefficient", measure = "difference"} (\code{Model_RD}); \code{effect = "marginal", measure = "difference"} (\code{Model_AME}); \code{effect = "marginal", measure = "ratio"} (\code{Model_RR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_MER}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_RR})
-\item \strong{poisson} --- \code{effect = "coefficient", measure = "ratio"} (\code{Model_IRR}); \code{effect = "coefficient", measure = "log"} (\code{Model_β}); \code{effect = "marginal", measure = "difference"} (\code{Model_AME}); \code{effect = "marginal", measure = "ratio"} (\code{Model_RoM}); \code{effect = "at_reference", measure = "difference"} (\code{Model_MER}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_RoM})
-\item \strong{multinomial} --- \code{effect = "coefficient", measure = "odds_ratio"} (\code{Model_OR}); \code{effect = "coefficient", measure = "log"} (\code{Model_β}); \code{effect = "marginal", measure = "difference"} (\code{Model_AME}); \code{effect = "marginal", measure = "ratio"} (\code{Model_RR}); \code{effect = "at_reference", measure = "odds_ratio"} (\code{Model_OR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_MER}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_RR})
-\item \strong{ordinal} --- \code{effect = "coefficient", measure = "odds_ratio"} (\code{Model_OR}); \code{effect = "coefficient", measure = "log"} (\code{Model_β}); \code{effect = "marginal", measure = "difference"} (\code{Model_AME}); \code{effect = "marginal", measure = "ratio"} (\code{Model_RR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_MER}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_RR})
+\item \strong{gaussian} --- \code{effect = "coefficient", measure = "difference"} (\code{Model_diff}); \code{effect = "coefficient", measure = "ratio"} (\code{Model_RoM}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(RoM)}); \code{effect = "marginal", measure = "difference"} (\code{Model_mdiff}); \code{effect = "marginal", measure = "ratio"} (\code{Model_mRoM}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refdiff}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refRoM})
+\item \strong{binomial} --- \code{effect = "coefficient", measure = "odds_ratio"} (\code{Model_OR}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(OR)}); \code{effect = "coefficient", measure = "ratio"} (\code{Model_RR}); \code{effect = "coefficient", measure = "difference"} (\code{Model_RD}); \code{effect = "marginal", measure = "difference"} (\code{Model_mRD}); \code{effect = "marginal", measure = "ratio"} (\code{Model_mRR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refRD}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refRR})
+\item \strong{poisson} --- \code{effect = "coefficient", measure = "ratio"} (\code{Model_IRR}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(IRR)}); \code{effect = "marginal", measure = "difference"} (\code{Model_mdiff}); \code{effect = "marginal", measure = "ratio"} (\code{Model_mIRR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refdiff}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refIRR})
+\item \strong{multinomial} --- \code{effect = "coefficient", measure = "odds_ratio"} (\code{Model_OR}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(OR)}); \code{effect = "marginal", measure = "difference"} (\code{Model_mRD}); \code{effect = "marginal", measure = "ratio"} (\code{Model_mRR}); \code{effect = "at_reference", measure = "odds_ratio"} (\code{Model_refOR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refRD}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refRR})
+\item \strong{ordinal} --- \code{effect = "coefficient", measure = "odds_ratio"} (\code{Model_cumOR}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(cumOR)}); \code{effect = "marginal", measure = "difference"} (\code{Model_mRD}); \code{effect = "marginal", measure = "ratio"} (\code{Model_mRR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refRD}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refRR})
 }
 }
 

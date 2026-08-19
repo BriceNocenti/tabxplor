@@ -281,7 +281,7 @@ test_that("at = 'reference' writes no `obs`: the two columns are different estim
     "reference profile")
   mcol <- reg_fmt_cols(t)[[1]]
   testthat::expect_true(all(is.na(get_obs(t[[mcol]]))))
-  testthat::expect_true("Obs_diff" %in% names(t))       # the crude column is still shown
+  testthat::expect_true("Obs_RD" %in% names(t))         # the crude column is still shown
 })
 
 # --- Phase 18z13: D7 (the reference group is choosable) / D11 (no writes without a reader) --------

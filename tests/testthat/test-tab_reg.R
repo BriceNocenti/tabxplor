@@ -36,14 +36,14 @@ test_that("family='auto' detects binary -> binomial, and an integer outcome -> g
   # and the jamovi family selector agree on that rule.
   expect_message(t <- tab_reg(d, "tvhours", "race"), "gaussian")
   expect_message(tab_reg(d, "tvhours", "race"), "poisson")            # ... naming the count alternative
-  expect_identical(get_model_family(t[["Model_\u03b2"]]), "gaussian")
+  expect_identical(get_model_family(t[["Model_diff"]]), "gaussian")
 })
 
 test_that("family='auto' detects a continuous outcome -> gaussian (message)", {
   skip_if_not_installed("broom")
   d <- reg_data() |> dplyr::mutate(score = age + 0.5)                 # non-integer -> continuous
   expect_message(col_tab <- tab_reg(d, "score", "race"), "continuous")
-  expect_identical(tabxplor:::fmt_var_kind(col_tab[["Model_\u03b2"]]), "coef")
+  expect_identical(tabxplor:::fmt_var_kind(col_tab[["Model_diff"]]), "coef")
 })
 
 # ---- gaussian beta: parity + additive fmt shape ---------------------------------------------
@@ -55,7 +55,7 @@ test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the addit
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   t1  <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", multiplier = 1,
                  cleannames = FALSE)
-  col <- t1[["Model_\u03b2"]]
+  col <- t1[["Model_diff"]]
 
   expect_identical(tabxplor:::fmt_var_kind(col), "coef")
   expect_identical(get_display(col)[1], "est")
@@ -89,7 +89,7 @@ test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the addit
 test_that("gaussian beta renders raw (no % / x glyph), reference shows 0", {
   skip_if_not_installed("broom")
   t1  <- tab_reg(reg_data(), "tvhours", "race", family = "gaussian", cleannames = FALSE)
-  col <- t1[["Model_\u03b2"]]
+  col <- t1[["Model_diff"]]
   txt <- format(col, special_formatting = TRUE)
   expect_false(any(grepl("%", txt)))                 # no percentage suffix
   ref <- which(is_refrow(col) & as.character(t1$var) != "Constant")
@@ -140,7 +140,7 @@ test_that("measure = log on a logit yields raw log-odds (additive coef shape)", 
   skip_if_not_installed("broom")
   d   <- reg_data()
   col <- tab_reg(d, "married", "race", family = "binomial", measure = "log",
-                 cleannames = FALSE)[["Model_\u03b2"]]
+                 cleannames = FALSE)[["Model_log(OR)"]]
   expect_identical(tabxplor:::fmt_var_kind(col), "coef")
   expect_identical(get_scale(col), "log_coef")   # a link-scale (log-odds) coefficient
 
@@ -186,7 +186,7 @@ test_that("mixed binomial + gaussian: per-column families + byte-parity vs stand
   gau <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", cleannames = FALSE)
 
   or_col   <- "Model_OR [married]"
-  beta_col <- "Model_\u03b2 [tvhours]"
+  beta_col <- "Model_diff [tvhours]"
   expect_true(all(c(or_col, beta_col) %in% names(mix)))
 
   # each column self-describes its own family (the robust per-column attribute)
@@ -199,8 +199,8 @@ test_that("mixed binomial + gaussian: per-column families + byte-parity vs stand
   # a mixed build must NOT perturb any per-column value (identical to the standalone single-family col)
   expect_equal(get_or(mix[[or_col]]),        get_or(bin[["Model_OR"]]))
   expect_equal(get_pvalue(mix[[or_col]]),    get_pvalue(bin[["Model_OR"]]))
-  expect_equal(get_diff(mix[[beta_col]]),    get_diff(gau[["Model_\u03b2"]]))
-  expect_equal(get_ci_inf(mix[[beta_col]]),  get_ci_inf(gau[["Model_\u03b2"]]))
+  expect_equal(get_diff(mix[[beta_col]]),    get_diff(gau[["Model_diff"]]))
+  expect_equal(get_ci_inf(mix[[beta_col]]),  get_ci_inf(gau[["Model_diff"]]))
 })
 
 test_that("mixed binomial + poisson: legend effect words are OR and IRR per column", {
@@ -270,7 +270,7 @@ test_that("mixed-family GOF footer keeps each outcome's own stat set", {
                  family = c("binomial", "gaussian"), cleannames = FALSE)
   tst <- get_test(mix)
   or_col   <- "Model_OR [married]"
-  beta_col <- "Model_\u03b2 [tvhours]"
+  beta_col <- "Model_diff [tvhours]"
   # gaussian stats keyed to the gaussian column, glm stats to the logit column
   expect_true("r2"          %in% tst$test[tst$col == beta_col])
   expect_true("mcfadden_r2" %in% tst$test[tst$col == or_col])
@@ -284,7 +284,7 @@ test_that("auto colour default is per-family (OR for the logit, diff for the gau
   mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
                  family = c("binomial", "gaussian"), cleannames = FALSE)
   expect_identical(get_color(mix[["Model_OR [married]"]]),   "odds_ratio")
-  expect_identical(get_color(mix[["Model_\u03b2 [tvhours]"]]), "difference")
+  expect_identical(get_color(mix[["Model_diff [tvhours]"]]), "difference")
 })
 
 test_that("family accepts a named vector; auto-detection is per dependent (ambiguous integer names itself)", {
@@ -294,12 +294,12 @@ test_that("family accepts a named vector; auto-detection is per dependent (ambig
   mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
                  family = c(tvhours = "gaussian", married = "binomial"), cleannames = FALSE)
   expect_identical(get_model_family(mix[["Model_OR [married]"]]),   "binomial")
-  expect_identical(get_model_family(mix[["Model_\u03b2 [tvhours]"]]), "gaussian")
+  expect_identical(get_model_family(mix[["Model_diff [tvhours]"]]), "gaussian")
   # Phase 18z13 (D10): auto-detection resolves each outcome on its own -- binary -> binomial,
   # integer-valued numeric -> gaussian -- so a mixed pair needs no explicit `family` at all.
   auto <- suppressMessages(tab_reg(d, c("married", "tvhours"), "race", cleannames = FALSE))
   expect_identical(get_model_family(auto[["Model_OR [married]"]]), "binomial")
-  expect_identical(get_model_family(auto[["Model_\u03b2 [tvhours]"]]), "gaussian")
+  expect_identical(get_model_family(auto[["Model_diff [tvhours]"]]), "gaussian")
 })
 
 test_that("mixed-family table exports through md / kable without error", {
@@ -314,7 +314,7 @@ test_that("mixed-family table exports through md / kable without error", {
 test_that("colour: gaussian beta greys non-significant / reference, colours a large standardized beta", {
   skip_if_not_installed("broom")
   t1  <- tab_reg(reg_data(), "tvhours", c("age", "race"), family = "gaussian", cleannames = FALSE)
-  col <- t1[["Model_\u03b2"]]
+  col <- t1[["Model_diff"]]
   txt <- fmt_color_channels(col)$text
   sig <- !is.na(get_ci_inf(col)) & (get_ci_inf(col) > 0 | get_ci_sup(col) < 0)
 
@@ -381,7 +381,7 @@ test_that("trials=TRUE uses the observed max score; measure = log gives the coef
 
   b <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
                                 measure = "log",
-                                cleannames = FALSE))[["Model_\u03b2"]]
+                                cleannames = FALSE))[["Model_log(OR)"]]
   expect_identical(tabxplor:::fmt_var_kind(b), "coef")
   expect_identical(get_scale(b), "log_coef")
 })
@@ -415,12 +415,16 @@ test_that("trials= reaches the rr / rd links too (measure = ratio / difference)"
                                  measure = "difference", cleannames = FALSE))[["Model_RD"]]
   g_rd <- stats::glm(cbind(score, fail) ~ race, data = dm, family = stats::binomial("identity"),
                      start = stats::coef(stats::lm(I(score / 10) ~ race, data = dm)))
-  expect_identical(get_scale(rd), "points")
+  # a SUMMED SCORE's additive effect is a difference of mean SCORES, not of per-item probabilities:
+  # the fit reports the latter and E[score] = trials x p converts it exactly, so the column sits on
+  # `raw_diff` (one unit throughout: places out of 10) rather than on the probability-scale `points`.
+  expect_identical(get_scale(rd), "raw_diff")
   expect_equal(sort(get_diff(rd)[!is.na(get_pvalue(rd))]),
-               sort(unname(stats::coef(g_rd))), tolerance = 1e-6)
+               sort(unname(stats::coef(g_rd)) * 10), tolerance = 1e-6)
 
-  # the two links, fitted independently, agree on that reference-profile risk
-  expect_equal(get_or(rr)[[1]], get_diff(rd)[[1]], tolerance = 1e-6)
+  # the two links, fitted independently, agree on that reference-profile value -- once both are read
+  # in the same unit (the rr column's Constant is the per-ITEM risk, the rd column's the mean score)
+  expect_equal(get_or(rr)[[1]] * 10, get_diff(rd)[[1]], tolerance = 1e-6)
 })
 
 
@@ -463,7 +467,7 @@ test_that("a compound formula (poly) fits with best-effort term rows; coefs matc
   skip_if_not_installed("broom")
   d   <- reg_data()
   t1  <- tab_reg(d, tvhours ~ race + poly(age, 2), family = "gaussian", cleannames = FALSE)
-  col <- t1[["Model_\u03b2"]]
+  col <- t1[["Model_diff"]]
 
   expect_true(any(grepl("poly\\(age, 2\\)", as.character(t1$var))))   # poly -> its own term block
   expect_true(any(as.character(t1$var) == "race"))                    # race still a factor block
@@ -615,7 +619,7 @@ test_that("tab_reg() ordinal cumulative OR / CI / p match MASS::polr; single col
   d   <- ord_data()
   t1  <- suppressWarnings(tab_reg(d, "spectrum", c("race", "age"),
                                   family = "ordinal", cleannames = FALSE))
-  col <- t1[["Model_OR"]]
+  col <- t1[["Model_cumOR"]]            # an ordinal odds ratio is CUMULATIVE, and says so
   expect_identical(get_pct_type(col), "row")
   expect_identical(get_display(col)[1], "est")
   expect_identical(get_scale(col), "odds_ratio")
@@ -709,7 +713,7 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "marginal", multiplier = 1,
                  cleannames = FALSE)
-  col <- t1[["Model_AME"]]
+  col <- t1[["Model_mRD"]]
 
   expect_identical(get_pct_type(col), "row")
   expect_identical(get_scale(col), "points")   # a binomial AME is a risk difference, in points
@@ -755,7 +759,7 @@ test_that("gaussian AME uses the coef shape and matches marginaleffects", {
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   col <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", effect = "marginal", multiplier = 1,
-                 cleannames = FALSE)[["Model_AME"]]
+                 cleannames = FALSE)[["Model_mdiff"]]
   expect_identical(tabxplor:::fmt_var_kind(col), "coef")
   expect_identical(get_scale(col), "raw_diff")
 
@@ -778,7 +782,7 @@ test_that("poisson AME is a raw count-change and matches marginaleffects", {
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   col <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson", multiplier = 1,
-                                  effect = "marginal", cleannames = FALSE))[["Model_AME"]]
+                                  effect = "marginal", cleannames = FALSE))[["Model_mdiff"]]
   expect_identical(tabxplor:::fmt_var_kind(col), "coef")
 
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
@@ -844,7 +848,7 @@ test_that("weighted binomial AME (svyglm) is population-weighted and matches mar
   # svyglm() warns ("observations with zero weight not used for calculating dispersion"). That is
   # upstream (survey/stats), not tabxplor, and it fires identically on the hand-run oracle below.
   col <- suppressWarnings(tab_reg(d, "married", "race", family = "binomial", wt = "tvhours",
-                                  effect = "marginal", cleannames = FALSE))[["Model_AME"]]
+                                  effect = "marginal", cleannames = FALSE))[["Model_mRD"]]
 
   dm <- d |> dplyr::filter(!is.na(married), !is.na(race))
   dm$race    <- forcats::fct_drop(dm$race)
@@ -880,7 +884,7 @@ test_that("MER-at-reference (binomial): effect/prediction/CI match marginaleffec
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
   t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "at_reference", multiplier = 1, cleannames = FALSE)
-  col <- t1[["Model_MER"]]                           # the label switches AME -> MER at reference
+  col <- t1[["Model_refRD"]]                         # the marker switches m -> ref at the profile
   expect_identical(get_pct_type(col), "row")
 
   dm <- d |> dplyr::filter(!is.na(married), !is.na(race), !is.na(age))

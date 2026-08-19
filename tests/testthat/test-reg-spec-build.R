@@ -27,7 +27,7 @@ test_that("new_reg_spec_product() declares every slot, and no dot-prefixed key",
 })
 
 test_that("reg_emp_slim() keeps the columns and nothing else", {
-  e <- list(cols = list(a = 1), shape = list(nm = "Obs_%"),
+  e <- list(cols = list(a = 1), shape = list(word = "OR", scale = "odds_ratio"),
             effect = stats::setNames(list(1:3), ""),   # "" is the key of a single-column fit
             frame = data.frame(x = 1:100), fits = list(a = list(fit = 1)), grid = 1:9,
             fac_preds = "x", fit_preds = "x")

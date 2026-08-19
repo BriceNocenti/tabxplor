@@ -84,7 +84,7 @@ test_that("gaussian footer (N/R2/adjR2/F/sigma) matches broom::glance", {
   skip_if_not_installed("broom")
   d   <- reg_data()
   t1  <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", cleannames = FALSE)
-  tst <- get_test(t1); cv <- "Model_\u03b2"
+  tst <- get_test(t1); cv <- "Model_diff"
   gv  <- function(s) unname(tst$statistic[tst$col == cv & tst$test == s])
 
   # the lm default footer set (D7): N + R2 + adjR2 + F + residual SD (no AIC/BIC unless stats= asks),

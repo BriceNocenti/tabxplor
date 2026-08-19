@@ -36,6 +36,72 @@ test_that("the estimand library resolves every family x contrast, and states its
   }
 })
 
+# --- 1b. the header vocabulary --------------------------------------------------------------------
+# ONE NAME PER QUANTITY. Two properties carry the whole rule, so they are asserted over the FULL grid
+# rather than on samples: no two estimands share a header, and no estimand is named two ways.
+
+test_that("every buildable estimand has a distinct, composed header word", {
+  seen <- list()
+  for (fam in setdiff(names(REG_ESTIMANDS), "quasipoisson")) {
+    for (eff in REG_EFFECTS_VALUES) for (m in setdiff(REG_MEASURES_VALUES, "auto")) {
+      r <- reg_estimand(fam, eff, m)
+      if (!identical(r$status, "ok")) next
+      w <- reg_word(r)
+      # the word is COMPOSED: the base acronym is declared, the marker and the log wrapper are not
+      expect_true(r$word %in% names(REG_WORDS), info = paste(fam, eff, m))
+      expect_identical(reg_word_base(w), r$word, info = paste(fam, eff, m))
+      expect_true(nzchar(reg_word_long(r)), info = paste(fam, eff, m))
+      # ... and it identifies the estimand: one word never names two (effect, measure) pairs
+      k <- paste(fam, w)
+      if (!is.null(seen[[k]])) expect_identical(seen[[k]], c(eff, m), info = k)
+      seen[[k]] <- c(eff, m)
+    }
+  }
+})
+
+test_that("the marker rides the measure, and the log wraps the whole token", {
+  w <- function(...) reg_word(reg_estimand(...))
+  expect_identical(w("binomial", "coefficient",  "odds_ratio"), "OR")
+  expect_identical(w("binomial", "marginal",     "ratio"),      "mRR")
+  expect_identical(w("binomial", "at_reference", "difference"), "refRD")
+  expect_identical(w("binomial", "coefficient",  "log"),        "log(OR)")
+  expect_identical(w("ordinal",  "coefficient",  "odds_ratio"), "cumOR")   # cumulative, and it says so
+  expect_identical(w("gaussian", "coefficient",  "difference"), "diff")    # never a bare greek letter
+  expect_identical(w("poisson",  "marginal",     "ratio"),      "mIRR")    # ONE ratio word per family
+  # the log wraps the MARKED token ("the log of the at-reference odds ratio")
+  expect_identical(w("multinomial", "at_reference", "log"), "log(refOR)")
+  # the expansion is one declared string per acronym, wrapped the way each form is spoken
+  expect_identical(reg_word_long(reg_estimand("binomial", "marginal", "ratio")),
+                   "marginal risk ratio")
+  expect_identical(reg_word_long(reg_estimand("binomial", "coefficient", "log")), "log odds ratio")
+})
+
+test_that("the colour legend names the measure, never the contrast (one block per comparison)", {
+  # ⚠ load-bearing: legend_group_by_body() groups by the rendered sentence, so a crude column reading
+  # "RR" beside a model column reading "mRR" would split the block the crude/adjusted merge produces.
+  for (eff in REG_EFFECTS_VALUES) {
+    r <- reg_estimand("binomial", eff, "ratio")
+    expect_identical(reg_legend_word(r), "RR", info = eff)
+  }
+  expect_identical(reg_legend_word(reg_estimand("ordinal", "coefficient", "odds_ratio")), "cumOR")
+})
+
+test_that("the crude column names the measure alone, from its OWN shape", {
+  # it is a univariable effect: no contrast marker, and never the model's word when the two differ
+  cw <- function(fam, eff, m) {
+    e <- reg_estimand(fam, eff, m)
+    k <- if (identical(e$crude_fam, "auto")) fam else e$crude_fam
+    reg_crude_col_name(reg_crude_shape(k, e))
+  }
+  expect_identical(cw("binomial", "marginal",     "ratio"),      "Obs_RR")
+  expect_identical(cw("binomial", "at_reference", "difference"), "Obs_RD")
+  expect_identical(cw("binomial", "coefficient",  "log"),        "Obs_log(OR)")
+  expect_identical(cw("gaussian", "marginal",     "difference"), "Obs_diff")
+  # a poisson AME is additive, and so is its crude companion: the observed mean difference
+  expect_identical(cw("poisson",  "marginal",     "difference"), "Obs_diff")
+})
+
+
 test_that("the three states are distinct, and each says what IS offered", {
   # available
   expect_identical(reg_estimand("binomial", "coefficient", "odds_ratio")$status, "ok")
@@ -112,11 +178,13 @@ test_that("effect = 'marginal' + measure = 'ratio' is the old ame_ratio, exponen
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial",
                                 effect = "marginal", measure = "ratio", cleannames = FALSE))
   col <- t[[grep("^Model", names(t), value = TRUE)[1]]]
-  expect_identical(get_scale(col), "odds_ratio")
+  # a RISK ratio is a ratio of percentages, so it sits on `pct_ratio` and prints "x2" like every
+  # other ratio -- `odds_ratio` and its "1/x" notation are the odds ratio's alone.
+  expect_identical(get_scale(col), "pct_ratio")
   g  <- stats::glm(married ~ race, data = d, family = stats::binomial())
   m  <- marginaleffects::avg_comparisons(g, variables = "race", comparison = "lnratioavg")
   i  <- which(as.character(t$var) == "race" & !is_refrow(col))
-  expect_equal(sort(get_or(col)[i]), sort(exp(m$estimate)), tolerance = 1e-8)
+  expect_equal(sort(tabxplor:::fmt_est_of(col)[i]), sort(exp(m$estimate)), tolerance = 1e-8)
 })
 
 
@@ -131,7 +199,7 @@ test_that("measure = 'difference' on a binary outcome is the identity-link risk 
   mc <- t[[grep("^Model", names(t), value = TRUE)[1]]]
   expect_identical(get_scale(mc), "points")            # percentage points, not a ratio
   expect_true("Model_RD" %in% names(t))
-  expect_true("Obs_diff" %in% names(t))                # the crude twin is the crude risk difference
+  expect_true("Obs_RD" %in% names(t))                  # the crude twin is the crude risk difference
   # the coefficients ARE an identity-link binomial glm's
   dd <- stats::na.omit(d[, c("married", "race")])
   g  <- suppressWarnings(stats::glm(married ~ race, data = dd, family = stats::binomial("identity"),

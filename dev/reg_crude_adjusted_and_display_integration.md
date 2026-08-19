@@ -1,9 +1,15 @@
 # Phase 22a — one crude column, one model column, one display grammar
 
-Design study **and** implementation roadmap. Status: **22a-i and 22a-ii are implemented** (D1-D14,
-D22-D23 -- see their DONE summaries in `CLAUDE.md`); **22a-iii is not.** Read this before touching
-`R/reg-empirical.R`, `R/reg-estimand.R`, `tab_reg()`'s display block, the display grammar in
-`R/tab-display.R`, or the legend builder in `R/fmt_class.R`.
+Design study **and** implementation roadmap. Status: **the whole of 22a is implemented** (D1-D23 --
+see the DONE summaries in `CLAUDE.md`). Read this before touching `R/reg-empirical.R`,
+`R/reg-estimand.R`, `tab_reg()`'s display block, the display grammar in `R/tab-display.R`, or the
+legend builder in `R/fmt_class.R`.
+
+Two decisions were REFINED at implementation and the code, not this document, is the reference for
+them: the at-the-reference-profile marker is a `ref` PREFIX (`Model_refRR`), not the `@ref` suffix
+S5.4 proposes -- `t$Model_RD@ref` parses in R as an S4 slot access -- and poisson's marginal ratio is
+`mIRR`, not `mRoM`, so a count outcome keeps ONE ratio acronym beside its `Obs_IRR` companion. The
+crude column is never marked at all (S5.4's grid shows the model side only).
 
 ⚠ The captures below are from BEFORE 22a-i, so the display presets (`"value"` / `"prob"` / `"ame"` /
 `"ci"`), the raw `0.xx` ratios and `pct_base` no longer exist. What still holds is the DESIGN: §1.2's

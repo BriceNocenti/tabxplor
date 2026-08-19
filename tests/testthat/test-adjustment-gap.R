@@ -133,7 +133,7 @@ test_that("gap_se is the influence-function SE of the difference, and its p its 
     seen <- seen + 1L
   }
   testthat::expect_gt(seen, 0L)
-  g <- log(get_or(x)) - log(get_obs(x))
+  g <- log(tabxplor:::fmt_est_of(x)) - log(get_obs(x))
   testthat::expect_equal(fmt_gap_p(x), 2 * stats::pnorm(-abs(g / get_gap_se(x))))
 })
 
@@ -231,9 +231,10 @@ test_that("D1: every compared model shares its outcome's population, so every co
   # nothing is coloured. That equality is the whole of D1.
   # the union skeleton also carries m2's `inc` rows, which m1 does not estimate -> exclude them
   i <- which(!is_refrow(t[[fc[[1]]]]) & as.character(t$var) != "Constant" &
-               !is.na(get_or(t[[fc[[1]]]])))
+               !is.na(tabxplor:::fmt_est_of(t[[fc[[1]]]])))
   testthat::expect_gt(length(i), 0L)
-  testthat::expect_equal(get_or(t[[fc[[1]]]])[i], get_obs(t[[fc[[1]]]])[i], tolerance = 1e-8)
+  testthat::expect_equal(tabxplor:::fmt_est_of(t[[fc[[1]]]])[i], get_obs(t[[fc[[1]]]])[i],
+                         tolerance = 1e-8)
   testthat::expect_equal(tabxplor:::fmt_adjustment_score(t[[fc[[1]]]])[i], rep(1, length(i)),
                          tolerance = 1e-8)
   testthat::expect_true(all(fmt_color_channels(t[[fc[[1]]]])$bg_slot == 0L))
@@ -258,9 +259,10 @@ test_that("D1: under the opt-in per-model drop, a model on other rows gets NO ob
 })
 
 test_that("a crude companion on another scale writes neither obs nor a gap SE (a z5 defect)", {
-  # reg_empirical_columns() ignores `effect` on the poisson branch, so effect = "marginal" pairs an ADDITIVE
-  # count AME with the crude rate RATIO. z5 wrote that ratio into `obs` and scored the difference of
-  # two scales; reg_same_estimand() now gates both.
+  # a poisson marginal effect is a difference of expected COUNTS and pairs with the observed mean
+  # difference, so `adjustment` works here. (It used to fall back to the crude rate RATIO, which
+  # reg_same_estimand() refused to pair -- the gate is still what protects a real mismatch, asserted
+  # directly below.)
   skip_if_not_installed("marginaleffects")
   d <- gapb_data()
   # (tvhours is over-dispersed -> reg_fit warns and phi-scales; irrelevant here, and suppressed so the
@@ -270,8 +272,12 @@ test_that("a crude companion on another scale writes neither obs nor a gap SE (a
                                                  color = c(TRUE, "adjustment"))))
   x <- gapb_model_col(t)
   testthat::expect_identical(get_scale(x), "raw_diff")   # a count AME, in the outcome's own units
-  testthat::expect_true(all(is.na(get_obs(x))))
-  testthat::expect_true(all(is.na(get_gap_se(x))))
+  testthat::expect_false(all(is.na(get_obs(x))))
+  testthat::expect_false(all(is.na(get_gap_se(x))))
+  # the gate itself: a crude shape on another scale is still refused, so no future fall-back can
+  # silently write one estimand into another's `obs`.
+  testthat::expect_false(tabxplor:::reg_same_estimand(list(scale = "mean_ratio"), x))
+  testthat::expect_true(tabxplor:::reg_same_estimand(list(scale = "raw_diff"), x))
   # the coefficient path on the same data DOES match scales, so it keeps both
   t2 <- suppressWarnings(suppressMessages(tab_reg(d, "tvhours", "race", family = "poisson",
                                                   empirical = TRUE, color = c(TRUE, "adjustment"))))

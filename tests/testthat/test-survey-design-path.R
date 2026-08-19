@@ -62,7 +62,7 @@ test_that("D2 effect = 'ame' under a design is the POPULATION-average marginal e
   b   <- svy_fixture()
   des <- survey::svydesign(~psu, weights = ~w, data = b)
   ame <- function(t) {
-    col <- t[[grep("^Model_AME", names(t))[1]]]
+    col <- t[[grep("^Model_mRD", names(t))[1]]]
     unname(get_diff(col)[which(as.character(t$levels) == "high")])
   }
   a_des <- ame(suppressMessages(

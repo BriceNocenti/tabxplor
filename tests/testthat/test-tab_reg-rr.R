@@ -9,6 +9,8 @@
 #   - a genuine COUNT poisson model is untouched by any of it.
 # gss_cat-derived data only.
 
+est_of <- function(x) tabxplor:::fmt_est_of(x)
+
 rr_data <- function() {
   d <- forcats::gss_cat
   d$race    <- forcats::fct_drop(d$race)
@@ -36,7 +38,7 @@ test_that("family='poisson' on a binary FACTOR fits (it used to abort) and is na
   expect_true("Model_RR" %in% names(t))
   expect_false(any(grepl("IRR", names(t))))
   note <- reg_estimand_note(reg_estimand("binomial", "coefficient", "ratio"))
-  expect_match(note, "risk ratios")
+  expect_match(note, "RR = risk ratio")
   expect_no_match(note, "incidence-rate")
   # Sociology terminology trap: "log-linear model" means Goodman's contingency-table models.
   expect_no_match(reg_family_display_name("rr"), "log-linear")
@@ -52,7 +54,7 @@ test_that("modified Poisson == svyglm(quasipoisson) on a constant-weight design,
                        design = survey::svydesign(ids = ~1, weights = ~1, data = d))
   ci <- stats::confint(sv)
   # skeleton rows: 1 = Constant, 2..4 = the race levels (2 = reference)
-  expect_equal(unname(get_or(t$Model_RR)[3:4]),     unname(exp(stats::coef(sv))[2:3]),  tolerance = 1e-10)
+  expect_equal(unname(est_of(t$Model_RR)[3:4]),     unname(exp(stats::coef(sv))[2:3]),  tolerance = 1e-10)
   expect_equal(unname(get_ci_inf(t$Model_RR)[3:4]), unname(exp(ci[2:3, 1])),            tolerance = 1e-10)
   expect_equal(unname(get_ci_sup(t$Model_RR)[3:4]), unname(exp(ci[2:3, 2])),            tolerance = 1e-10)
 })
@@ -104,7 +106,7 @@ test_that("the modelled level is the binomial one, and `outcome_level` names it"
 test_that("the estimand invariant holds: the OR is always further from 1 than the RR", {
   d  <- rr_data()
   or <- get_or(suppressMessages(tab_reg(d, "married", "race", family = "binomial"))$Model_OR)[3:4]
-  rr <- get_or(suppressMessages(tab_reg(d, "married", "race", family = "poisson"))$Model_RR)[3:4]
+  rr <- est_of(suppressMessages(tab_reg(d, "married", "race", family = "poisson"))$Model_RR)[3:4]
   # The OR always EXAGGERATES, away from 1, whichever side the effect falls on -- stated
   # direction-agnostically as |log(OR)| > |log(RR)|, and both must sit on the same side of 1.
   expect_true(all(abs(log(or)) > abs(log(rr))))
@@ -120,12 +122,12 @@ test_that("Obs_RR is the crude RISK ratio with a Katz interval (never the crude 
   lv <- levels(d$race)
   p  <- vapply(lv, function(l) mean(rr_y01(d)[d$race == l]), numeric(1))
   nn <- vapply(lv, function(l) sum(d$race == l), numeric(1))
-  expect_equal(unname(get_or(t$Obs_RR)[3:4]), unname(p[-1] / p[1]), tolerance = 1e-10)
+  expect_equal(unname(est_of(t$Obs_RR)[3:4]), unname(p[-1] / p[1]), tolerance = 1e-10)
   ci <- ci_katz_rr(p[-1], nn[-1], p[1], nn[1], conf_level = 0.95, want_p = TRUE)
   expect_equal(unname(get_ci_inf(t$Obs_RR)[3:4]), unname(ci$inf), tolerance = 1e-10)
   # the crude ODDS ratio would be a DIFFERENT number -- guarding the emp_ratio trap
   odds <- (p[-1] / (1 - p[-1])) / (p[1] / (1 - p[1]))
-  expect_gt(max(abs(get_or(t$Obs_RR)[3:4] / odds - 1)), 0.01)
+  expect_gt(max(abs(est_of(t$Obs_RR)[3:4] / odds - 1)), 0.01)
 })
 
 test_that("with ONE predictor the model RR == the crude Obs_RR exactly", {
@@ -134,7 +136,7 @@ test_that("with ONE predictor the model RR == the crude Obs_RR exactly", {
                                 cleannames = FALSE))
   # rows 2..4 are the race levels; row 1 is the Constant (a model intercept the crude column has no
   # counterpart for, hence NA there).
-  expect_equal(get_or(t$Model_RR)[2:4], get_or(t$Obs_RR)[2:4], tolerance = 1e-9)
+  expect_equal(est_of(t$Model_RR)[2:4], est_of(t$Obs_RR)[2:4], tolerance = 1e-9)
 })
 
 # ---- (1c) the footer, the guards, and the un-exponentiated scale ----------------------------------
@@ -185,7 +187,7 @@ test_that("measure = log colours the log-RR coefficient on the log scale (is_log
   # the crude twin is the LOGGED risk ratio, matching the model's link scale
   expect_true("Obs_log(RR)" %in% names(t))
   expect_equal(get_diff(t[["Obs_log(RR)"]])[3:4],
-               log(get_or(suppressMessages(tab_reg(d, "married", "race", family = "poisson",
+               log(est_of(suppressMessages(tab_reg(d, "married", "race", family = "poisson",
                                                    empirical = TRUE, cleannames = FALSE))$Obs_RR))[3:4],
                tolerance = 1e-10)
 })
@@ -213,7 +215,7 @@ test_that("ame_ratio == marginaleffects' lnratioavg contrast, exponentiated", {
   lg <- stats::glm(y ~ race, data = d, family = stats::binomial())
   r  <- as.data.frame(marginaleffects::avg_comparisons(
     lg, variables = "race", comparison = "lnratioavg", newdata = d))
-  expect_equal(unname(get_or(t[[nm]])[3:4]), unname(exp(r$estimate)),  tolerance = 1e-10)
+  expect_equal(unname(est_of(t[[nm]])[3:4]), unname(exp(r$estimate)),  tolerance = 1e-10)
   # Phase 20d: the BOUND is looser than the estimate on purpose. Ours comes from an analytic jacobian,
   # marginaleffects' from a finite-difference one, and its own step-size choice (fdforward vs fdcenter)
   # moves this bound by ~4e-9 -- more than we differ from it. The oracle is the approximation here.
@@ -226,7 +228,7 @@ test_that("the ame_ratio cell is coherent: adjusted%(ref) * RR == adjusted%(leve
   t <- suppressMessages(tab_reg(d, "married", c("race", "inc3"), family = "binomial",
                                 effect = "marginal", measure = "ratio", cleannames = FALSE))
   nm  <- grep("^Model", names(t), value = TRUE)[1]
-  pct <- get_pct(t[[nm]]); or <- get_or(t[[nm]])
+  pct <- get_pct(t[[nm]]); or <- est_of(t[[nm]])
   # this is the identity the "prob_ratio" shape exists for -- the multiplicative twin of the AME's
   # adjusted%(ref) + AME == adjusted%(level).
   for (v in unique(as.character(t$var))) {
@@ -244,7 +246,7 @@ test_that("ame_ratio: label parsing survives a level containing ' - ' and ')'", 
   t <- suppressMessages(tab_reg(d, "married", "tricky", family = "binomial",
                                 effect = "marginal", measure = "ratio", cleannames = FALSE))
   nm <- grep("^Model", names(t), value = TRUE)[1]
-  expect_false(any(is.na(get_or(t[[nm]])[2:3])))   # both levels keyed to the skeleton
+  expect_false(any(is.na(est_of(t[[nm]])[2:3])))   # both levels keyed to the skeleton
 })
 
 test_that("ame_ratio: numeric predictors work and the crude twin is the Katz Obs_RR", {
@@ -254,11 +256,11 @@ test_that("ame_ratio: numeric predictors work and the crude twin is the Katz Obs
                                 effect = "marginal", measure = "ratio", empirical = TRUE, cleannames = FALSE))
   nm <- grep("^Model", names(t), value = TRUE)[1]
   i  <- which(as.character(t$var) == "tvhours")
-  expect_false(is.na(get_or(t[[nm]])[i]))
+  expect_false(is.na(est_of(t[[nm]])[i]))
   expect_true("Obs_RR" %in% names(t))
   lv <- levels(d$race)
   p  <- vapply(lv, function(l) mean(rr_y01(d)[d$race == l]), numeric(1))
-  expect_equal(unname(get_or(t$Obs_RR)[3:4]), unname(p[-1] / p[1]), tolerance = 1e-10)
+  expect_equal(unname(est_of(t$Obs_RR)[3:4]), unname(p[-1] / p[1]), tolerance = 1e-10)
 })
 
 # Phase 19e (capability gap closed): a marginal RATIO used to be refused for gaussian / poisson
@@ -277,13 +279,13 @@ test_that("a marginal ratio is available for gaussian / poisson outcomes", {
 test_that("a marginal ratio colours as a RATIO (its stored scale, not the contrast)", {
   skip_if_not_installed("marginaleffects")
   d <- rr_data()
-  # `exponentiate` is ignored for marginal effects, so effect_shape is "additive" here -- the colour
-  # ladder must still pick the multiplicative measure (rule 7: fails on the old `effect != "ame"` test).
+  # a marginal effect is not a coefficient, but the colour ladder must still pick the MULTIPLICATIVE
+  # measure -- and for a RISK ratio that is `ratio` on `pct_ratio`, not the odds ratio's own scale.
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial",
                                 effect = "marginal", measure = "ratio", cleannames = FALSE))
   nm <- grep("^Model", names(t), value = TRUE)[1]
-  expect_equal(get_color(t[[nm]])[1], "odds_ratio")
-  expect_equal(get_scale(t[[nm]]), "odds_ratio")
+  expect_equal(get_color(t[[nm]])[1], "ratio")
+  expect_equal(get_scale(t[[nm]]), "pct_ratio")
 })
 
 test_that("ame_ratio: the legend names RR, not OR, on both the model and the crude column", {
@@ -295,7 +297,7 @@ test_that("ame_ratio: the legend names RR, not OR, on both the model and the cru
   nm <- grep("^Model", names(t), value = TRUE)[1]
   expect_equal(legend_reg_eff_word(t[[nm]], md), "RR")
   expect_equal(legend_reg_eff_word(t$Obs_RR, md), "RR")   # crude twin, same estimand
-  expect_true(is.na(legend_reg_eff_word(t[["Obs_%"]], md)))   # a crude % has no effect word
+  expect_true(is.na(legend_reg_eff_word(t[["n"]], md)))       # the n column has no effect word
 })
 
 test_that("ame_ratio: with ONE predictor the marginal RR == the crude RR", {
@@ -306,7 +308,7 @@ test_that("ame_ratio: with ONE predictor the marginal RR == the crude RR", {
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", effect = "marginal", measure = "ratio",
                                 empirical = TRUE, cleannames = FALSE))
   nm <- grep("^Model", names(t), value = TRUE)[1]
-  expect_equal(get_or(t[[nm]])[3:4], get_or(t$Obs_RR)[3:4], tolerance = 1e-9)
+  expect_equal(est_of(t[[nm]])[3:4], est_of(t$Obs_RR)[3:4], tolerance = 1e-9)
 })
 
 test_that("effect='ame' is byte-unchanged by the ame_ratio addition", {
@@ -318,6 +320,6 @@ test_that("effect='ame' is byte-unchanged by the ame_ratio addition", {
   # still an additive risk DIFFERENCE with its "{diff} ({pct})" cell and diff colour
   expect_equal(get_scale(t[[nm]]), "points")
   expect_equal(get_color(t[[nm]])[1], "difference")
-  expect_true("Obs_diff" %in% names(t))
+  expect_true("Obs_RD" %in% names(t))
   expect_false("Obs_RR" %in% names(t))
 })

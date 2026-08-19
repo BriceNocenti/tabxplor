@@ -129,7 +129,7 @@ gss_simple |>
 Another way to interpret a logistic regression is to use **average marginal effects** (AME) with `effect = "marginal"` :
 
 - Instead of directly reading the modelised odd-ratio we can infer, from it, the average difference of percentage of each level compared to the reference.
-- Here `Model_AME` reads like this : "Comparing Black and White respondents who are alike in income, age and religion, being Black is associated with a marriage rate 19.8 points lower, on average."
+- Here `Model_mRD` reads like this : "Comparing Black and White respondents who are alike in income, age and religion, being Black is associated with a marriage rate 19.8 points lower, on average."
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "marginal", empirical = TRUE)
@@ -138,7 +138,7 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "m
 Then we can use `empirical = TRUE` to compare this new modelised quantity to the **raw, observed difference of percentages** : 
 
 - In the sample (`Obs_diff`), we observe a rate of marriages 23 points lower for black americans compared to white american (`28% - 51% = -23%`).
-- The modelised difference `Model_AME` is very close, `-19.8%`, so very little of this difference between black and white can be explained by age, income or religion.
+- The modelised difference `Model_mRD` is very close, `-19.8%`, so very little of this difference between black and white can be explained by age, income or religion.
 
 We can also compare the raw percentage — in the crude column's brackets — with the **model-adjusted probability**, in the model column's :
 
@@ -597,25 +597,31 @@ tab_reg(gss_simple, "married", c("race", "age"), effect = "at_reference")
 
 ### The grid: what each combination builds
 
-Every cell below is the column header the combination produces. *(default)* marks the measure the family falls back on when you say nothing.
+Every cell below is the acronym the combination puts in the column header, after the constant `Model_` prefix (`diff` is `Model_diff`, `mRR` is `Model_mRR`). The first column says which outcomes reach each row, and † marks the family's default measure.
 
-| `family`    | `measure`                  | `"coefficient"`         | `"marginal"` | `"at_reference"`          |
-|-------------|----------------------------|-------------------------|--------------|---------------------------|
-| gaussian    | `"difference"` *(default)* | `Model_β`               | `Model_AME`  | `Model_MER`               |
-| gaussian    | `"ratio"`                  | `Model_RoM`             | `Model_RoM`  | `Model_RoM`               |
-| gaussian    | `"odds_ratio"`             | not defined             | —            | —                         |
-| binomial    | `"odds_ratio"` *(default)* | `Model_OR`              | —            | —                         |
-| binomial    | `"ratio"`                  | `Model_RR`              | `Model_RR`   | `Model_RR`                |
-| binomial    | `"difference"`             | `Model_RD`              | `Model_AME`  | `Model_MER`               |
-| poisson     | `"ratio"` *(default)*      | `Model_IRR`             | `Model_RoM`  | `Model_RoM`               |
-| poisson     | `"difference"`             | —                       | `Model_AME`  | `Model_MER`               |
-| poisson     | `"odds_ratio"`             | not defined             | —            | —                         |
-| multinomial | `"odds_ratio"` *(default)* | `Model_OR`              | —            | `Model_OR` (vs. the rest) |
-| multinomial | `"ratio"`                  | —                       | `Model_RR`   | `Model_RR`                |
-| multinomial | `"difference"`             | —                       | `Model_AME`  | `Model_MER`               |
-| ordinal     | `"odds_ratio"` *(default)* | `Model_OR` (cumulative) | —            | —                         |
-| ordinal     | `"ratio"`                  | —                       | `Model_RR`   | `Model_RR`                |
-| ordinal     | `"difference"`             | —                       | `Model_AME`  | `Model_MER`               |
+| outcome kind      | `family`          | `measure`        | `"coefficient"` | `"marginal"` | `"at_reference"` |
+|-------------------|-------------------|------------------|-----------------|--------------|------------------|
+| numeric           | gaussian          | `"difference"` † | `diff`          | `mdiff`      | `refdiff`        |
+| numeric           | gaussian          | `"ratio"`        | `RoM`           | `mRoM`       | `refRoM`         |
+| numeric           | gaussian          | `"odds_ratio"`   | not defined     | —            | —                |
+| numeric (count)   | poisson           | `"ratio"` †      | `IRR`           | `mIRR`       | `refIRR`         |
+| numeric (count)   | poisson           | `"difference"`   | —               | `mdiff`      | `refdiff`        |
+| numeric (count)   | poisson           | `"odds_ratio"`   | not defined     | —            | —                |
+| numeric (score)   | binomial+`trials` | `"odds_ratio"` † | `OR`            | —            | —                |
+| numeric (score)   | binomial+`trials` | `"ratio"`        | `RR`            | `mRR`        | `refRR`          |
+| numeric (score)   | binomial+`trials` | `"difference"`   | `RD`            | `mRD`        | `refRD`          |
+| factor, 2 levels  | binomial          | `"odds_ratio"` † | `OR`            | —            | —                |
+| factor, 2 levels  | binomial          | `"ratio"`        | `RR`            | `mRR`        | `refRR`          |
+| factor, 2 levels  | binomial          | `"difference"`   | `RD`            | `mRD`        | `refRD`          |
+| factor, 3+ unord. | multinomial       | `"odds_ratio"` † | `OR`            | —            | `refOR` ¹        |
+| factor, 3+ unord. | multinomial       | `"ratio"`        | —               | `mRR`        | `refRR`          |
+| factor, 3+ unord. | multinomial       | `"difference"`   | —               | `mRD`        | `refRD`          |
+| factor, ordered   | ordinal           | `"odds_ratio"` † | `cumOR`         | —            | —                |
+| factor, ordered   | ordinal           | `"ratio"`        | —               | `mRR`        | `refRR`          |
+| factor, ordered   | ordinal           | `"difference"`   | —               | `mRD`        | `refRD`          |
+
+† the measure the family falls back on when you say nothing.
+¹ each outcome category *versus the rest*, at the reference profile.
 
 The three states are the ones `reg_measures()` prints, and they are not the same refusal:
 
@@ -625,20 +631,30 @@ The three states are the ones `reg_measures()` prints, and they are not the same
 
 A fourth state exists only at run time: a link that does not converge on *your* data. The call says so, and for the risk difference it falls back to the linear probability model.
 
-`family = "quasipoisson"` has exactly the grid of `poisson` — it changes the variance assumption, not what is estimated. And `measure = "log"` is not a fifth column: it is the family's default measure shown un-exponentiated, on the model's own link scale (`Model_β`).
+`family = "quasipoisson"` has exactly the grid of `poisson` — it changes the variance assumption, not what is estimated. And `measure = "log"` is not a fifth column: it is the family's default measure shown un-exponentiated, on the model's own link scale, and the header says which one it logs (`Model_log(OR)`, `Model_log(IRR)`, `Model_log(RoM)`, `Model_log(cumOR)`).
 
 ### What the header words mean
 
-| header      | the quantity                           | how you would get it by hand                                                 |
-|-------------|----------------------------------------|------------------------------------------------------------------------------|
-| `Model_β`   | a coefficient on the model's own scale | `coef(glm(...))`                                                             |
-| `Model_OR`  | odds ratio                             | `exp(coef(glm(y ~ ., binomial)))`                                            |
-| `Model_RR`  | risk ratio                             | modified Poisson, robust SE (Zou 2004), or a ratio of adjusted probabilities |
-| `Model_IRR` | incidence-rate ratio                   | `exp(coef(glm(y ~ ., poisson)))`                                             |
-| `Model_RoM` | ratio of means                         | log-link pseudo-Poisson, robust SE (Santos Silva & Tenreyro 2006)            |
-| `Model_RD`  | risk difference, in points             | `glm(y ~ ., binomial("identity"))`, robust SE                                |
-| `Model_AME` | average marginal effect                | `marginaleffects::avg_comparisons(model)`                                    |
-| `Model_MER` | the same, at the reference profile     | the same call on a one-row reference profile                                 |
+A header names the **measure**; the **contrast** is a marker on it. So there is one acronym to look up per quantity, and one marker to read on top of it.
+
+| acronym | the quantity               | how you would get it by hand                                      |
+|---------|----------------------------|-------------------------------------------------------------------|
+| `OR`    | odds ratio                 | `exp(coef(glm(y ~ ., binomial)))`                                 |
+| `cumOR` | cumulative odds ratio      | `exp(coef(MASS::polr(...)))`, the proportional-odds model         |
+| `RR`    | risk ratio                 | modified Poisson, robust SE (Zou 2004)                            |
+| `RD`    | risk difference, in points | `glm(y ~ ., binomial("identity"))`, robust SE                     |
+| `IRR`   | incidence-rate ratio       | `exp(coef(glm(y ~ ., poisson)))`                                  |
+| `RoM`   | ratio of means             | log-link pseudo-Poisson, robust SE (Santos Silva & Tenreyro 2006) |
+| `diff`  | mean difference            | `coef(lm(...))`                                                   |
+
+| marker        | reads                                             | example         |
+|---------------|---------------------------------------------------|-----------------|
+| *(none)*      | conditional — holding the other predictors fixed  | `Model_OR`      |
+| `m` prefix    | marginal — averaged over the sample               | `Model_mRR`     |
+| `ref` prefix  | at the reference profile                          | `Model_refRD`   |
+| `log(…)`      | the same estimand, un-exponentiated               | `Model_log(OR)` |
+
+The observed companion carries the measure **without** a marker (`Obs_RR` beside `Model_mRR`): it is a univariable effect, and where its levels come from the counts themselves a marginal and a conditional contrast are the same number.
 
 The two ratio routes are worth naming, because both are standard and neither is a `glm()` default: `measure = "ratio"` on a **binary** outcome is the modified Poisson (a Poisson likelihood on 0/1 data, made honest by a sandwich variance — Zou 2004), which is what epidemiologists use to get a risk ratio without the convergence trouble of a log-binomial fit; `measure = "ratio"` on a **numeric** outcome is the same trick one family over, a log-link Poisson pseudo-likelihood with robust standard errors (Santos Silva & Tenreyro 2006), giving a ratio of means.
 
@@ -672,7 +688,7 @@ That said, the two are different questions rather than two spellings of one. A c
 
 - **A binary outcome with `family = "poisson"` is not a count model.** tabxplor rewrites it to `family = "binomial", measure = "ratio"` — the modified Poisson, whose `exp(coef)` is a *risk* ratio, not an incidence-rate ratio — and says so. Naming the measure rather than the distribution is the clearer spelling.
 - **`measure = "ratio"` on a numeric outcome stops on a negative outcome.** A ratio of means is not defined there; the call suggests modelling `log()` of a positive outcome, or `measure = "difference"`.
-- **`Model_RD` and `Model_AME` are both percentage points, and are not the same number.** `Model_RD` is a conditional risk difference from an identity-link fit, `Model_AME` a marginal one standardised over the logistic fit (see above).
+- **`Model_RD` and `Model_mRD` are both percentage points, and are not the same number.** `Model_RD` is a conditional risk difference from an identity-link fit, `Model_mRD` a marginal one standardised over the logistic fit (see above) — which is what the `m` marker says.
 - **`measure = "log"` needs something to take the log of.** It logs the family's default measure, so it is refused where that default is already additive (a linear coefficient, an average marginal effect). Spell `"log_odds"`, `"log_risk"` or `"log_rate"` to log a chosen one instead.
 - **Odds ratios are non-collapsible**, so `color = "adjustment"` colours the gap on an OR column but never tests it (see *How to read it — and how not to*, above). Ask for `measure = "ratio"` or `effect = "marginal"` if you want a gap the test can read.
 - **Two combinations have no observed companion.** At `effect = "at_reference"` the model is conditional on one profile while the observed columns stay marginal over the whole sample, so the two are shown but not compared — `color = "adjustment"` and `{obs}` stay empty. And a **Poisson `effect = "marginal"`** is additive while its crude counterpart is a rate ratio: the two are not on the same scale, so they are not paired. Use `effect = "coefficient"` to compare them.

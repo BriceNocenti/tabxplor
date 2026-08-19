@@ -15,8 +15,8 @@ reg_measures(data, outcome, family = "auto")
 \code{\link[=tab_reg]{tab_reg()}} does.}
 }
 \value{
-A tibble of \code{effect}, \code{measure}, \code{status}, \code{header} (the column name it would produce)
-and \code{note} (why, when it is not available), invisibly when printed.
+A tibble of \code{effect}, \code{measure}, \code{status}, \code{header} (the column name it would produce),
+\code{long} (what that header's acronym means) and \code{note} (why, when it is not available).
 }
 \description{
 Lists every \code{effect} × \code{measure} combination \code{\link[=tab_reg]{tab_reg()}} can build for one outcome, with its

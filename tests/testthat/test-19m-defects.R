@@ -189,7 +189,7 @@ test_that("19m-i G4: the multiplicative effect word is DERIVED, total and single
   expect_identical(reg_family_mult_word("rr"), "RR")
   expect_identical(reg_family_mult_word("mr"), "RoM")
   expect_identical(reg_family_mult_word("multinomial"), "OR")
-  expect_identical(reg_family_mult_word("ordinal"), "OR")
+  expect_identical(reg_family_mult_word("ordinal"), "cumOR")
   # no exponentiated coefficient estimand -> no word (the old switch answered "OR" for both)
   expect_true(is.na(reg_family_mult_word("gaussian")))
   expect_true(is.na(reg_family_mult_word("rd")))
@@ -224,17 +224,36 @@ test_that("19m-i G4: every family's rendered effect word is unchanged", {
 
 test_that("19m-i G4: the worded CI-method labels are one declared table", {
   nm <- function(method, word) legend_method_name(list(ci_method = method, eff_word = word))
-  expect_identical(nm("katz", "IRR"), "Wald interval on the log rate-ratio")
-  expect_identical(nm("katz", "RR"),  "Wald interval on the log risk-ratio")
+  # the MODEL's engine is the one that needs the effect word: an OR, an IRR and an RR are the same
+  # interval on the same log scale, and only the word tells them apart.
   expect_identical(nm("wald_log", "IRR"), "Wald interval on the log rate-ratio")
   expect_identical(nm("wald_log", "OR"),  "Wald interval on the log odds-ratio")
   expect_identical(nm("wald_log", "RR"),  "Wald interval on the log risk-ratio")
   expect_identical(nm("wald_log", NA_character_), "Wald interval on the log scale")
-  # the plain engines still resolve, and an unknown one still degrades to the generic phrase
+  expect_identical(names(CI_METHOD_WORDED), "wald_log")
+  # every other engine names itself, including the closed forms on a plain tab() column
   expect_identical(nm("wilson", NA_character_), "Wilson score interval")
+  expect_identical(nm("katz",   NA_character_), "Wald interval on the log risk-ratio")
+  expect_identical(nm("quasipoisson", NA_character_), "quasi-Poisson interval")
   expect_identical(nm("wibble", NA_character_), "confidence interval")
-  # `katz`'s duplicated msgid is gone from CI_METHOD_LABELS (it lives in CI_METHOD_WORDED)
-  expect_false("katz" %in% names(CI_METHOD_LABELS))
+})
+
+test_that("D23: on a REG column a closed form renders the interval its model twin renders", {
+  # ⚠ load-bearing: a crude column and the model column beside it must produce ONE legend block, and
+  # legend_group_by_body() groups on the rendered sentence -- so the two phrases have to coincide.
+  reg <- function(method, word, scale)
+    legend_method_name(list(ci_method = method, eff_word = word, scale = scale, is_reg = TRUE))
+  expect_identical(reg("woolf", "OR",  "odds_ratio"), "Wald interval on the log odds-ratio")
+  expect_identical(reg("katz",  "RR",  "odds_ratio"), "Wald interval on the log risk-ratio")
+  expect_identical(reg("quasipoisson", "IRR", "mean_ratio"), "Wald interval on the log rate-ratio")
+  expect_identical(reg("quasipoisson", "RoM", "mean_ratio"), "Wald interval on the log scale")
+  # an additive or LINK-scale estimand is the plain Wald interval, whatever closed form evaluated it
+  expect_identical(reg("ols",   "diff",    "raw_diff"), "Wald interval")
+  expect_identical(reg("woolf", "log(OR)", "log_coef"), "Wald interval")
+  # ... and a plain tab() column keeps its own engine's name
+  expect_identical(legend_method_name(list(ci_method = "ols", eff_word = NA_character_,
+                                           scale = "raw_diff", is_reg = FALSE)),
+                   "Student t interval, pooled over the variable's levels")
 })
 
 test_that("19m-i G4: REG_OUTCOME_KINDS says how it names each kind", {

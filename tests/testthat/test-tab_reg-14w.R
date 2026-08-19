@@ -97,7 +97,7 @@ test_that("binomial: model + empirical columns share ONE outcome col_var; model 
 test_that("numeric outcome col_var is the dependent name alone", {
   skip_if_not_installed("broom")
   t <- tab_reg(forcats::gss_cat, "tvhours", "race", family = "gaussian", cleannames = FALSE)
-  expect_identical(tabxplor:::get_col_var(t[["Model_\u03b2"]])[1], "tvhours")
+  expect_identical(tabxplor:::get_col_var(t[["Model_diff"]])[1], "tvhours")
 })
 
 test_that("multinomial: category names drop the repeated ': OR'; one shared col_var", {

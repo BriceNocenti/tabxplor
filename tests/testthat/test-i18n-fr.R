@@ -60,14 +60,14 @@ reg_fit <- function() {
 test_that("regression 'Model:' footer + estimand stay English when asked in English", {
   en <- reg_model_lines(reg_fit(), "en")
   expect_match(en, "^Model: logistic regression")
-  expect_match(en, "odds ratios \\(vs the reference category\\)")
+  expect_match(en, "OR = odds ratio \\(vs the reference category\\)")
 })
 
 test_that("regression 'Model:' footer + estimand translate", {
   skip_if_no_gettext()
   fr <- reg_model_lines(reg_fit(), "fr")
   expect_match(fr, "^Mod\u00e8le : r\u00e9gression logistique")
-  expect_match(fr, "rapports de cotes")
+  expect_match(fr, "OR = rapport de cotes \\(par rapport \u00e0 la modalit\u00e9 de r\u00e9f\u00e9rence\\)")
   expect_no_match(fr, "logistic regression")
 })
 

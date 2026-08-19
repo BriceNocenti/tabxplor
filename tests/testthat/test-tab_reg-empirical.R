@@ -96,11 +96,11 @@ test_that("binomial coefficient: single-predictor OR == crude OR (Obs_OR) == mod
   }
 })
 
-test_that("binomial AME: single-predictor risk-diff (Obs_diff) == observed risk difference", {
+test_that("binomial AME: single-predictor risk-diff (Obs_RD) == observed risk difference", {
   d <- emp_data()
   t <- tab_reg(d, "married", "race", family = "binomial", effect = "marginal", empirical = TRUE,
                cleannames = FALSE)
-  emp_diff <- get_diff(t[["Obs_diff"]]); names(emp_diff) <- as.character(t$levels)
+  emp_diff <- get_diff(t[["Obs_RD"]]); names(emp_diff) <- as.character(t$levels)
 
   # a saturated single-predictor logit reproduces the observed proportions -> AME == observed risk diff
   pos  <- emp_positive_level(t, d, "married")
@@ -109,10 +109,11 @@ test_that("binomial AME: single-predictor risk-diff (Obs_diff) == observed risk 
   for (lev in names(rdif)[-1]) {
     expect_equal(unname(emp_diff[lev]), unname(rdif[lev]), tolerance = 1e-6)
   }
-  # the AME column carries "Obs_diff", NOT "Obs_OR", and the header names the (adjusted %)
-  expect_true("Obs_diff" %in% names(t))
-  expect_false("Obs_OR"  %in% names(t))
-  expect_true(any(grepl("adjusted %", names(t), fixed = TRUE)))
+  # the marginal column pairs with the crude RISK DIFFERENCE, not the crude odds ratio, and both
+  # name the same measure with the contrast marked on the model side only
+  expect_true("Obs_RD" %in% names(t))
+  expect_false("Obs_OR" %in% names(t))
+  expect_true("Model_mRD" %in% names(t))
 })
 
 # --- 14v-ii CRUDE CI PARITY: the empirical column's CI == the single-predictor model's CI ----------
@@ -165,11 +166,11 @@ test_that("binomial Obs_OR CI == crude logistic-regression CI (Woolf = Wald, per
 
 # Phase 16d: the crude risk-difference companion uses the two-proportion WALD interval (matching the
 # reg's method_diff = "wald" and the model AME's Wald delta interval), not Newcombe.
-test_that("binomial AME Obs_diff CI == Wald risk-difference CI", {
+test_that("binomial AME Obs_RD CI == Wald risk-difference CI", {
   d <- emp_data()
   t <- tab_reg(d, "married", "race", effect = "marginal", family = "binomial", empirical = TRUE,
                cleannames = FALSE)
-  ed  <- t[["Obs_diff"]]
+  ed  <- t[["Obs_RD"]]
   pos <- emp_positive_level(t, d, "married")
   y   <- as.integer(d$married == pos)
   pr  <- tapply(y, d$race, mean); nn <- tapply(y, d$race, length)
@@ -235,7 +236,7 @@ test_that("gaussian empirical: Obs_diff carries the level, coloured by SD(Y) (ma
   expect_true(any(is.finite(get_mean(t[["Obs_diff"]]))))    # ...which carries the observed mean
   expect_identical(tabxplor:::fmt_var_kind(t[["Obs_diff"]]), "coef")
   # the crude column takes the MODEL column's measure, so both grade on one ladder
-  expect_identical(get_color(t[["Obs_diff"]]), get_color(t[["Model_\u03b2"]]))
+  expect_identical(get_color(t[["Obs_diff"]]), get_color(t[["Model_diff"]]))
   # var = var(Y) (constant), so the std-diff colour matches the model beta column exactly
   vy <- stats::var(d$tvhours)
   vv <- get_var(t[["Obs_diff"]]); vv <- vv[!is.na(vv)]
@@ -274,7 +275,7 @@ test_that("measure = log: a binomial coefficient is coloured (log_odds scale), n
   d <- emp_data()
   t <- suppressWarnings(tab_reg(d, "married", c("race", "inc3"), family = "binomial",
                                 measure = "log", cleannames = FALSE))
-  bc <- t[["Model_\u03b2"]]
+  bc <- t[["Model_log(OR)"]]
   expect_identical(tabxplor:::fmt_var_kind(bc), "coef")
   expect_identical(get_model_family(bc), "binomial")
   # the fix: log-odds coefficients are coloured against the LOGGED odds_ratio scale, so a non-trivial
@@ -299,7 +300,7 @@ test_that("measure = log + empirical: Obs_log(OR) / Obs_log(IRR), logged effect 
   or <- get_or(tbo[["Obs_OR"]]); df <- get_diff(lc); k <- !is.na(or) & !is.na(df)
   expect_equal(df[k], log(or[k]), tolerance = 1e-8)                 # value: diff == log(OR)
   expect_equal(get_ci_inf(lc)[k], log(get_ci_inf(tbo[["Obs_OR"]])[k]), tolerance = 1e-8)  # logged CI
-  expect_identical(fmt_color_channels(lc)$text, fmt_color_channels(tb[["Model_\u03b2"]])$text)
+  expect_identical(fmt_color_channels(lc)$text, fmt_color_channels(tb[["Model_log(OR)"]])$text)
   # poisson: Obs_log(IRR)
   tp <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE,
                                  measure = "log", cleannames = FALSE))
@@ -400,7 +401,7 @@ test_that("change A: adjusted % coheres with the AME; unadjusted prediction == t
 
   # change A: adjusted%(reference) + AME(level) == adjusted%(level) -- the standardized prediction and
   # the AME are the SAME estimand (avg_predictions(variables=) / avg_comparisons(variables=)).
-  amecol    <- t[["Model_AME (adjusted %)"]]
+  amecol    <- t[["Model_mRD"]]
   race_rows <- which(as.character(t$var) == "race")
   rl  <- as.character(t$levels)[race_rows]
   adj <- get_pct(amecol)[race_rows];  names(adj) <- rl

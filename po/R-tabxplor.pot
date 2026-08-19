@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tabxplor 2.0.0\n"
-"POT-Creation-Date: 2026-08-15 19:13+0200\n"
+"POT-Creation-Date: 2026-08-19 07:58\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -10,1031 +10,1028 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: fmt_class.R:4421
+msgid "cannot print color == '"
+msgstr ""
+
+msgid "' with no total rows to store"
+msgstr ""
+
+msgid "information about mean contributions to variance"
+msgstr ""
+
 msgid "difference"
 msgstr ""
 
-#: fmt_class.R:4431
 msgid "ratio"
 msgstr ""
 
-#: fmt_class.R:4463
 msgid "contribution to Chi2"
 msgstr ""
 
-#: fmt_class.R:4487
 msgid "standardized residual"
 msgstr ""
 
-#: fmt_class.R:4512
 msgid "adjustment"
 msgstr ""
 
-#: fmt_class.R:4518
-msgid ""
-"z test on the difference between two estimates fitted on the same sample"
+msgid "z test on the difference between two estimates fitted on the same sample"
 msgstr ""
 
-#: fmt_class.R:4524
 msgid "between groups"
 msgstr ""
 
-#: fmt_class.R:4530
 msgid "z test on the difference between two independent estimates"
 msgstr ""
 
-#: fmt_class.R:4562
-msgid ""
-"Part of an odds-ratio gap is non-collapsibility, not confounding: a risk "
-"ratio or a marginal effect is the collapsible comparison."
+msgid "Part of an odds-ratio gap is non-collapsibility, not confounding: a risk ratio or a marginal effect is the collapsible comparison."
 msgstr ""
 
-#: fmt_class.R:4804
 msgid "reference group"
 msgstr ""
 
-#: fmt_class.R:4805
+msgid "the observed effect (the reference for the adjustment)"
+msgstr ""
+
 msgid "no observed effect"
 msgstr ""
 
-#: fmt_class.R:4874 fmt_class.R:5106 jmvtab.b.R:137
 msgid "Total"
 msgstr ""
 
-#: fmt_class.R:4875 fmt_class.R:4876
 msgid "ref."
 msgstr ""
 
-#: fmt_class.R:4877 fmt_class.R:5258
 msgid "vs the mean"
 msgstr ""
 
-#: fmt_class.R:4961 fmt_class.R:4962
 msgid "points"
 msgstr ""
 
-#: fmt_class.R:4961 fmt_class.R:4963
 msgid "SD"
 msgstr ""
 
-#: fmt_class.R:4964
 msgid "the mean contribution"
 msgstr ""
 
-#: fmt_class.R:4985
 msgid "Bold"
 msgstr ""
 
-#: fmt_class.R:4985
 msgid "Italic"
 msgstr ""
 
-#: fmt_class.R:4986 fmt_class.R:4986
 msgid "Grey fill"
 msgstr ""
 
-#: fmt_class.R:4994
 msgid "Shades of blue"
 msgstr ""
 
-#: fmt_class.R:4994
 msgid "Shades of yellow to red"
 msgstr ""
 
-#: fmt_class.R:5096
 msgid "independence"
 msgstr ""
 
-#: fmt_class.R:5097
 msgid "the observed (crude) effect"
 msgstr ""
 
-#: fmt_class.R:5100
 msgid "the reference group's effect"
 msgstr ""
 
-#: fmt_class.R:5102
-#, c-format
 msgid "the reference category (%s)"
 msgstr ""
 
-#: fmt_class.R:5103
 msgid "the reference category"
 msgstr ""
 
-#: fmt_class.R:5105
 msgid "column"
 msgstr ""
 
-#: fmt_class.R:5105
 msgid "row"
 msgstr ""
 
-#: fmt_class.R:5107
-#, c-format
 msgid "the %s %s"
 msgstr ""
 
-#: fmt_class.R:5121
 msgid "Wilson score interval"
 msgstr ""
 
-#: fmt_class.R:5122
 msgid "Wald interval"
 msgstr ""
 
-#: fmt_class.R:5123
 msgid "Korn-Graubard (beta) interval"
 msgstr ""
 
-#: fmt_class.R:5124
 msgid "Newcombe score interval"
 msgstr ""
 
-#: fmt_class.R:5125
 msgid "Wald interval with Agresti-Caffo adjustment"
 msgstr ""
 
-#: fmt_class.R:5126
 msgid "Welch t interval"
 msgstr ""
 
-#: fmt_class.R:5127
 msgid "Student t interval"
 msgstr ""
 
-#: fmt_class.R:5128 fmt_class.R:5150
+msgid "Student t interval, pooled over the variable's levels"
+msgstr ""
+
 msgid "Wald interval on the log odds-ratio"
 msgstr ""
 
-#: fmt_class.R:5129
 msgid "robust-Poisson (delta) interval"
 msgstr ""
 
-#: fmt_class.R:5130
-msgid "quasi-Poisson interval"
-msgstr ""
-
-#: fmt_class.R:5131
 msgid "Poisson interval"
 msgstr ""
 
-#: fmt_class.R:5132
 msgid "profile-likelihood interval"
 msgstr ""
 
-#: fmt_class.R:5147
-msgid "Katz interval on the log rate-ratio"
-msgstr ""
-
-#: fmt_class.R:5148
-msgid "Katz interval on the log risk-ratio"
-msgstr ""
-
-#: fmt_class.R:5149
 msgid "Wald interval on the log rate-ratio"
 msgstr ""
 
-#: fmt_class.R:5151
 msgid "Wald interval on the log risk-ratio"
 msgstr ""
 
-#: fmt_class.R:5152
+msgid "quasi-Poisson interval"
+msgstr ""
+
 msgid "Wald interval on the log scale"
 msgstr ""
 
-#: fmt_class.R:5187
 msgid "confidence interval"
 msgstr ""
 
-#: fmt_class.R:5192
-#, c-format
 msgid "%s%% confidence"
 msgstr ""
 
-#: fmt_class.R:5194
-#, c-format
+msgid "%s, %s design df"
+msgstr ""
+
 msgid "%s, %s"
 msgstr ""
 
-#: fmt_class.R:5201
 msgid "standardized difference"
 msgstr ""
 
-#: fmt_class.R:5237
 msgid "cells"
 msgstr ""
 
-#: fmt_class.R:5259
 msgid "vs independence"
 msgstr ""
 
-#: fmt_class.R:5300
 msgid "bg"
 msgstr ""
 
-#: fmt_class.R:5306
 msgid "or not tested"
 msgstr ""
 
-#: fmt_class.R:5309
-#, c-format
 msgid "grey: non-significant or under %s"
 msgstr ""
 
-#: fmt_class.R:5310
 msgid "grey: non-significant or small"
 msgstr ""
 
-#: fmt_class.R:5314
 msgid "all that is significant is colored"
 msgstr ""
 
-#: fmt_class.R:5315
 msgid "all that is significant is colored, error-adjusted"
 msgstr ""
 
-#: fmt_class.R:5351
-#, c-format
 msgid "%s %s %s"
 msgstr ""
 
-#: fmt_class.R:5352
-#, c-format
 msgid "%s %s"
 msgstr ""
 
-#: fmt_class.R:5358
-#, c-format
 msgid "after subtracting the margin of error (%s)"
 msgstr ""
 
-#: fmt_class.R:5385
-#, c-format
 msgid "Background colour (%s):"
 msgstr ""
 
-#: fmt_class.R:5406
-#, c-format
-msgid ""
-"Coloured: significantly different from %s (%s), by at least the first colour "
-"threshold. Uncoloured: either not significant, or a difference under %s."
+msgid "Coloured: significantly different from %s (%s), by at least the first colour threshold. Uncoloured: either not significant, or a difference under %s."
 msgstr ""
 
-#: fmt_class.R:5409
-#, c-format
-msgid ""
-"Coloured: significantly different from %s (%s), by at least the first colour "
-"threshold. Uncoloured: either not significant, or too small a difference to "
-"colour."
+msgid "Coloured: significantly different from %s (%s), by at least the first colour threshold. Uncoloured: either not significant, or too small a difference to colour."
 msgstr ""
 
-#: fmt_class.R:5415
 msgid "Some rows carry no test and are left uncoloured."
 msgstr ""
 
-#: fmt_class.R:5422
-#, c-format
-msgid ""
-"Grey: below the significance threshold (%s). The thresholds above are "
-"comparable between tables."
+msgid "Grey: below the significance threshold (%s). The thresholds above are comparable between tables."
 msgstr ""
 
-#: fmt_class.R:5424
-#, c-format
 msgid "Grey: not significantly different from %s after the margin of error."
 msgstr ""
 
-#: fmt_class.R:5436
-#, c-format
 msgid "Background: the same rule, applied to the gap with %s (%s)."
 msgstr ""
 
-#: fmt_class.R:5755
-#, c-format
 msgid "… +%d vars"
 msgstr ""
 
-#: fmt_class.R:5879
-#, c-format
+msgid "%s --- %s closed form on the observed column"
+msgstr ""
+
+msgid "%s (%s closed form)"
+msgstr ""
+
 msgid "vs %s"
 msgstr ""
 
-#: fmt_class.R:5882
 msgid "not significant"
 msgstr ""
 
-#: fmt_class.R:5883
 msgid "not guaranteed"
 msgstr ""
 
-#: fmt_class.R:5884
 msgid "below the first threshold"
 msgstr ""
 
-#: fmt_class.R:6029
-#, c-format
-msgid ""
-"%s: significantly different from no effect (the reference category in bold; "
-"for the Constant, the null value) at the %s%% confidence level"
+msgid "%s: significantly different from no effect (the reference category in bold; for the Constant, the null value) at the %s%% confidence level"
 msgstr ""
 
-#: fmt_class.R:6032
-#, c-format
-msgid ""
-"%s: significantly different from the reference category (in bold) at the %s%"
-"% confidence level"
+msgid "%s: significantly different from the reference category (in bold) at the %s%% confidence level"
 msgstr ""
 
-#: fmt_class.R:6035
-#, c-format
 msgid "%s: at the %s%% level"
 msgstr ""
 
-#: fmt_class.R:6038
 msgid "no star: not significant"
 msgstr ""
 
-#: fmt_class.R:6074
-msgid ""
-"Design-based (survey): weighted estimates, intervals and tests account for "
-"the sample design."
+msgid "Design-based (survey): weighted estimates, intervals and tests account for the sample design."
 msgstr ""
 
-#: fmt_class.R:6080
-msgid ""
-"Design-based (survey) estimates; this table's design variance could not be "
-"computed, so its intervals account for the weighting only."
+msgid "Design-based (survey) estimates; this table's design variance could not be computed, so its intervals account for the weighting only."
 msgstr ""
 
-#: fmt_class.R:6082
-#, c-format
-msgid ""
-"Weighted by %s; confidence intervals and tests account for the weighting."
+msgid "Weighted by %s; confidence intervals and tests account for the weighting."
 msgstr ""
 
-#: fmt_class.R:6083
-#, c-format
-msgid ""
-"Weighted by %s; confidence intervals and tests use the unweighted sample "
-"size."
+msgid "Weighted by %s; confidence intervals and tests use the unweighted sample size."
 msgstr ""
 
-#: jmvtab.b.R:136
+msgid "operation"
+msgstr ""
+
+msgid "over columns with different pct types,"
+msgstr ""
+
+msgid "or mixing pct and means ("
+msgstr ""
+
+msgid "/"
+msgstr ""
+
+msgid ")"
+msgstr ""
+
+msgid "may mix calculations made on tabs and calculations"
+msgstr ""
+
+msgid "made on all tabs (different 'comp_all')"
+msgstr ""
+
+msgid "over columns belonging to different variables("
+msgstr ""
+
+msgid "col_var"
+msgstr ""
+
+msgid "within a variable mixing different types of percentages"
+msgstr ""
+
+msgid "Excel export needs the 'openxlsx2' package. Install it with"
+msgstr ""
+
+msgid "install.packages(\"openxlsx2\"), or choose HTML or Markdown instead."
+msgstr ""
+
+msgid "Can't create the folder:"
+msgstr ""
+
+msgid "Choose a folder that exists, or check you're allowed to write there."
+msgstr ""
+
 msgid "Ensemble"
 msgstr ""
 
-#: jmvtab.b.R:138
 msgid "Others"
 msgstr ""
 
-#: plots.R:379
+msgid "jmvtab requires jmvcore to be installed (restart may be required)"
+msgstr ""
+
+msgid "jmvtabreg requires jmvcore to be installed (restart may be required)"
+msgstr ""
+
 msgid "Model"
 msgstr ""
 
-#: plots.R:515
-msgid ""
-"Observed curve (10 bins, +/-2 SE) against the straight line the model fits."
+msgid "Observed curve (10 bins, +/-2 SE) against the straight line the model fits."
 msgstr ""
 
-#: plots.R:541
-msgid ""
-"Binned residuals against the fitted value; ~95 % should sit in the band."
+msgid "Binned residuals against the fitted value; ~95 % should sit in the band."
 msgstr ""
 
-#: plots.R:542
 msgid "Fitted value"
 msgstr ""
 
-#: plots.R:542
 msgid "Mean residual"
 msgstr ""
 
-#: plots.R:563
-msgid ""
-"Quantile residuals against the normal. The band is POINTWISE: about 5 % of "
-"points fall outside it under a correct model."
+msgid "Quantile residuals against the normal. The band is POINTWISE: about 5 % of points fall outside it under a correct model."
 msgstr ""
 
-#: plots.R:564
 msgid "Theoretical quantiles"
 msgstr ""
 
-#: plots.R:564
 msgid "Quantile residuals"
 msgstr ""
 
-#: plots.R:605
-msgid ""
-"Robust against model standard errors, one point per coefficient. On the line "
-"= the family's variance assumption holds."
+msgid "Robust against model standard errors, one point per coefficient. On the line = the family's variance assumption holds."
 msgstr ""
 
-#: plots.R:606
 msgid "Model SE"
 msgstr ""
 
-#: plots.R:606
 msgid "Robust SE"
 msgstr ""
 
-#: plots.R:635
-msgid ""
-"How far one respondent moves a coefficient, in its own standard errors. "
-"Influence is leverage x outlyingness, not outlyingness."
+msgid "How far one respondent moves a coefficient, in its own standard errors. Influence is leverage x outlyingness, not outlyingness."
 msgstr ""
 
-#: plots.R:636
 msgid "Observation"
 msgstr ""
 
-#: plots.R:636
 msgid "max |dfbetas|"
 msgstr ""
 
-#: plots.R:659
-msgid ""
-"Variance inflation per term (5 and 10 are the usual thresholds). It biases "
-"nothing -- it widens intervals."
+msgid "Variance inflation per term (5 and 10 are the usual thresholds). It biases nothing -- it widens intervals."
 msgstr ""
 
-#: plots.R:660
 msgid "VIF"
 msgstr ""
 
-#: plots.R:693
-msgid ""
-"One line per cut of the outcome. Proportional odds means they are parallel."
+msgid "One line per cut of the outcome. Proportional odds means they are parallel."
 msgstr ""
 
-#: plots.R:694
 msgid "Empirical cumulative logit"
 msgstr ""
 
-#: plots.R:844 plots.R:1099
 msgid "Odds ratio"
 msgstr ""
 
-#: plots.R:845
 msgid "Ratio"
 msgstr ""
 
-#: plots.R:846
 msgid "Rate ratio"
 msgstr ""
 
-#: plots.R:847
 msgid "Percentage points"
 msgstr ""
 
-#: plots.R:848
 msgid "Percentage"
 msgstr ""
 
-#: plots.R:849
 msgid "Coefficient (log scale)"
 msgstr ""
 
-#: plots.R:853
 msgid "Units of the outcome"
 msgstr ""
 
-#: plots.R:856
-#, c-format
 msgid "%s (%s%% CI)"
 msgstr ""
 
-#: plots.R:1102
 msgid "SD of the outcome"
 msgstr ""
 
-#: reg-assumptions.R:178
-#, c-format
 msgid "%s (%s)"
 msgstr ""
 
-#: reg-assumptions.R:646
 msgid "mean"
 msgstr ""
 
-#: reg-assumptions.R:648
 msgid "log(mean)"
 msgstr ""
 
-#: reg-assumptions.R:650 reg-assumptions.R:654
 msgid "empirical logit"
 msgstr ""
 
-#: reg-assumptions.R:658
 msgid "empirical logit (beyond the first category)"
 msgstr ""
 
-#: reg-assumptions.R:904
 msgid "Linearity"
 msgstr ""
 
-#: reg-assumptions.R:904
 msgid "Proportionality"
 msgstr ""
 
-#: reg-assumptions.R:904
 msgid "Dispersion"
 msgstr ""
 
-#: reg-assumptions.R:905
 msgid "Influence"
 msgstr ""
 
-#: reg-assumptions.R:905
 msgid "Collinearity"
 msgstr ""
 
-#: reg-assumptions.R:905
 msgid "Overall association"
 msgstr ""
 
-#: reg-assumptions.R:906
 msgid "Pearson dispersion"
 msgstr ""
 
-#: reg-assumptions.R:906
 msgid "Residuals"
 msgstr ""
 
-#: reg-assumptions.R:906
 msgid "Normality"
 msgstr ""
 
-#: reg-assumptions.R:907
 msgid "LR"
 msgstr ""
 
-#: reg-assumptions.R:907 tab-test-display.R:208
 msgid "F"
 msgstr ""
 
-#: reg-assumptions.R:907
 msgid "Wald"
 msgstr ""
 
-#: reg-assumptions.R:907
 msgid "Brant"
 msgstr ""
 
-#: reg-assumptions.R:908
 msgid "robust/model SE"
 msgstr ""
 
-#: reg-assumptions.R:908
 msgid "max dfbetas"
 msgstr ""
 
-#: reg-assumptions.R:908
 msgid "max VIF"
 msgstr ""
 
-#: reg-assumptions.R:908
 msgid "phi"
 msgstr ""
 
-#: reg-estimand.R:163
-msgid ""
-"at the reference profile (other predictors held at their reference level / "
-"mean)"
+msgid "odds ratio"
 msgstr ""
 
-#: reg-estimand.R:164
-msgid "(sample-averaged)"
+msgid "cumulative odds ratio"
 msgstr ""
 
-#: reg-estimand.R:166
-msgid "marginal risk ratios (the ratio of adjusted predicted probabilities)"
+msgid "risk ratio"
 msgstr ""
 
-#: reg-estimand.R:168
-msgid "marginal ratios (the ratio of adjusted predicted values)"
+msgid "risk difference"
 msgstr ""
 
-#: reg-estimand.R:170
-msgid "marginal effects on the probability scale (percentage points)"
+msgid "incidence-rate ratio"
 msgstr ""
 
-#: reg-estimand.R:171
-msgid "marginal effects on the response scale"
+msgid "ratio of means"
 msgstr ""
 
-#: reg-estimand.R:189
-msgid "coefficients (mean difference vs the reference category)"
+msgid "mean difference"
 msgstr ""
 
-#: reg-estimand.R:197
-msgid "ratios of adjusted means (vs the reference category)"
+msgid "marginal %s"
 msgstr ""
 
-#: reg-estimand.R:200
-msgid "log-mean coefficients (vs the reference category)"
+msgid "%s at the reference profile"
 msgstr ""
 
-#: reg-estimand.R:203
-msgid ""
-"an odds ratio needs a probability to take the odds of; this outcome is "
-"continuous"
+msgid "log %s"
 msgstr ""
 
-#: reg-estimand.R:225
-msgid "odds ratios (vs the reference category)"
+msgid "other predictors held at their reference level / mean"
 msgstr ""
 
-#: reg-estimand.R:228
-msgid "log-odds coefficients (vs the reference category)"
+msgid "sample-averaged"
 msgstr ""
 
-#: reg-estimand.R:233
-msgid "risk ratios (vs the reference category)"
+msgid "the ratio of adjusted predicted probabilities"
 msgstr ""
 
-#: reg-estimand.R:237
-msgid "risk differences (percentage points vs the reference category)"
+msgid "the ratio of adjusted predicted values"
 msgstr ""
 
-#: reg-estimand.R:259
-msgid "incidence-rate ratios (vs the reference category)"
+msgid "on the probability scale, in percentage points"
 msgstr ""
 
-#: reg-estimand.R:262
-msgid "log-rate coefficients (vs the reference category)"
+msgid "on the response scale"
 msgstr ""
 
-#: reg-estimand.R:265
-msgid ""
-"an odds ratio needs a probability to take the odds of; this outcome is a "
-"count"
+msgid "%s; %s"
 msgstr ""
 
-#: reg-estimand.R:288
-msgid "odds ratios (each category vs the reference)"
+msgid "vs the reference category"
 msgstr ""
 
-#: reg-estimand.R:291
-msgid "log-odds coefficients (each category vs the reference)"
+msgid "an odds ratio needs a probability to take the odds of; this outcome is continuous"
 msgstr ""
 
-#: reg-estimand.R:301
-msgid ""
-"odds ratios of each outcome category versus the rest, at the reference "
-"profile (other predictors held at their reference level / mean); profile-"
-"conditional"
+msgid "in percentage points, vs the reference category"
 msgstr ""
 
-#: reg-estimand.R:316
-msgid "cumulative odds ratios (proportional-odds model)"
+msgid "an odds ratio needs a probability to take the odds of; this outcome is a count"
 msgstr ""
 
-#: reg-estimand.R:319
-msgid "proportional-odds model (log-odds coefficients)"
+msgid "each category vs the reference"
 msgstr ""
 
-#: reg-estimand.R:369
+msgid "each outcome category versus the rest; other predictors held at their reference level / mean; profile-conditional"
+msgstr ""
+
+msgid "proportional-odds model"
+msgstr ""
+
 msgid "linear regression"
 msgstr ""
 
-#: reg-estimand.R:372
 msgid "logistic regression"
 msgstr ""
 
-#: reg-estimand.R:375
 msgid "Poisson regression"
 msgstr ""
 
-#: reg-estimand.R:378
 msgid "multinomial logistic regression"
 msgstr ""
 
-#: reg-estimand.R:381
 msgid "ordinal logistic regression"
 msgstr ""
 
-#: reg-estimand.R:386
+msgid "an ordinal outcome must keep the order of its levels, so none can be singled out"
+msgstr ""
+
 msgid "quasi-Poisson regression"
 msgstr ""
 
-#: reg-estimand.R:390
 msgid "modified Poisson regression"
 msgstr ""
 
-#: reg-estimand.R:394
 msgid "additive-risk regression (identity link, robust standard errors)"
 msgstr ""
 
-#: reg-estimand.R:398
-msgid ""
-"log-link mean regression (Poisson pseudo-likelihood, robust standard errors)"
+msgid "log-link mean regression (Poisson pseudo-likelihood, robust standard errors)"
 msgstr ""
 
-#: reg-estimand.R:423
 msgid "regression"
 msgstr ""
 
-#: reg-estimand.R:563
-msgid ""
-"this outcome's coefficient is already additive, so there is no ratio to take "
-"the log of"
+msgid "this family models no single level of the outcome"
 msgstr ""
 
-#: reg-estimand.R:574
-msgid "coefficients on the model's own link scale"
+msgid "this outcome's coefficient is already additive, so there is no ratio to take the log of"
 msgstr ""
 
-#: reg-estimand.R:661
-msgid ""
-"; each cell shows the modelled effect vs the reference level and, in "
-"parentheses, the observed (crude) one"
+msgid "on the model's own link scale"
 msgstr ""
 
-#: reg-estimand.R:664
-msgid ""
-"; each cell shows the ratio vs the reference level and, in parentheses, the "
-"adjusted predicted probability"
+msgid "; each cell shows the modelled effect vs the reference level and, in parentheses, the observed (crude) one"
 msgstr ""
 
-#: reg-estimand.R:666
-msgid ""
-"; each cell shows the effect vs the reference level and, in parentheses, the "
-"adjusted predicted probability"
+msgid "; each cell shows the ratio vs the reference level and, in parentheses, the adjusted predicted probability"
 msgstr ""
 
-#: tab-resolve.R:340
-msgid ""
-"stores each cell's own interval, so there is nothing to test a comparison "
-"against"
+msgid "; each cell shows the effect vs the reference level and, in parentheses, the adjusted predicted probability"
 msgstr ""
 
-#: tab-resolve.R:341
-msgid ""
-"computes no interval, so there is nothing for a significance test to read"
+msgid "data is of length 0 (possibly after filter or na = 'drop')"
 msgstr ""
 
-#: tab-shape.R:139
+msgid "unknown method_diff:"
+msgstr ""
+
+msgid "unknown method_mean_ratio:"
+msgstr ""
+
+msgid "since color is"
+msgstr ""
+
+msgid "ref can't be `no` and was set to `tot`"
+msgstr ""
+
+msgid "since pct == 'row', a total column was added"
+msgstr ""
+
+msgid "since color =="
+msgstr ""
+
+msgid "and pct == 'col' and ref == 'tot', a total column was added"
+msgstr ""
+
+msgid "since pct == 'all' or 'all_tabs', a total column was added"
+msgstr ""
+
+msgid "since pct == 'col', total rows were added"
+msgstr ""
+
+msgid "and pct == 'row' and ref == 'tot', total rows were added"
+msgstr ""
+
+msgid "since pct == 'all' or 'all_tabs', total rows were added"
+msgstr ""
+
+msgid "since comp = 'all', a total table was added to compare with"
+msgstr ""
+
+msgid "since comp = 'all', a full total table was added to compare with"
+msgstr ""
+
+msgid "data is of length 0 (possibly after filter or na = 'drop_all')"
+msgstr ""
+
+msgid "in ref2 = '"
+msgstr ""
+
+msgid "' , no columns were found as reference for comparison ;"
+msgstr ""
+
+msgid "to remove this warning, precise the value of ref"
+msgstr ""
+
+msgid "until there is one column matched"
+msgstr ""
+
+msgid "in ref = '"
+msgstr ""
+
+msgid "since color = 'diff', ref must be provided and was set to 'tot'"
+msgstr ""
+
+msgid "since ci = 'diff', a diff was added with ref = 'tot'"
+msgstr ""
+
+msgid "total rows were added, since color == 'contrib' needs them"
+msgstr ""
+
+msgid "to store information about mean contributions to variance"
+msgstr ""
+
+msgid "stores each cell's own interval, so there is nothing to test a comparison against"
+msgstr ""
+
+msgid "computes no interval, so there is nothing for a significance test to read"
+msgstr ""
+
 msgid "tab_compact()"
 msgstr ""
 
-#: tab-shape.R:143
 msgid "the tables have different tab_vars"
 msgstr ""
 
-#: tab-shape.R:145
 msgid "the tables have different col_vars"
 msgstr ""
 
-#: tab-shape.R:149
 msgid "tab_transpose()"
 msgstr ""
 
-#: tab-shape.R:153
+msgid "it transposes a crosstab; a regression table transposes via tab_export(transpose = TRUE)"
+msgstr ""
+
 msgid "it transposes a single table, with no sub-tables (tab_vars)"
 msgstr ""
 
-#: tab-shape.R:155
 msgid "it needs a table with exactly one row variable"
 msgstr ""
 
-#: tab-shape.R:159
 msgid "transpose = TRUE"
 msgstr ""
 
-#: tab-shape.R:165
 msgid "it flips a table with no sub-tables (tab_vars)"
 msgstr ""
 
-#: tab-test-display.R:151
-msgid "F, survey"
+msgid "can't add a total column without at least one non-mean col_var"
 msgstr ""
 
-#: tab-test-display.R:170
+msgid "since percentages are 'all_tabs', a total table"
+msgstr ""
+
+msgid "was added"
+msgstr ""
+
+msgid "no total row(s) found. Some added based on actual grouping variables :"
+msgstr ""
+
+msgid ","
+msgstr ""
+
+msgid "no groups nor total row(s) found. One added for the whole table"
+msgstr ""
+
+msgid "no groups nor total row(s), but total table found."
+msgstr ""
+
+msgid "Grouped upon tab_vars and total rows added"
+msgstr ""
+
+msgid "grouping variable(s) not corresponding to total_rows,"
+msgstr ""
+
+msgid "new groups calculated, based on actual total_rows"
+msgstr ""
+
+msgid "no total column, one was added (from the last non-mean column)"
+msgstr ""
+
+msgid "since at least one column already have an element calculated"
+msgstr ""
+
+msgid "with comparison to the total row of the total table (pct or means"
+msgstr ""
+
+msgid "diffs from total, chi2 variances or confidence intervals),"
+msgstr ""
+
+msgid "comp were set to 'all'"
+msgstr ""
+
+msgid "with comparison to the total row of each tab_var (pct or means"
+msgstr ""
+
+msgid "comp were set to 'tab'"
+msgstr ""
+
+msgid "since 'comp' is 'all', a total table with a"
+msgstr ""
+
+msgid "total row was added"
+msgstr ""
+
+msgid "tabxplor: no single TEST_ROWS row for stat '"
+msgstr ""
+
+msgid "', method '"
+msgstr ""
+
+msgid "'."
+msgstr ""
+
 msgid "Fisher"
 msgstr ""
 
-#: tab-test-display.R:170
 msgid "Chi2 !"
 msgstr ""
 
-#: tab-test-display.R:170
-msgid "Chi2"
-msgstr ""
-
-#: tab-test-display.R:171
-msgid "ANOVA F"
-msgstr ""
-
-#: tab-test-display.R:171
-msgid "Welch F"
-msgstr ""
-
-#: tab-test-display.R:172
 msgid "pvalue"
 msgstr ""
 
-#: tab-test-display.R:173
 msgid "; survey-design"
 msgstr ""
 
-#: tab-test-display.R:174
-#, c-format
 msgid "pvalue (%s%s)"
 msgstr ""
 
-#: tab-test-display.R:181
 msgid "effect size"
 msgstr ""
 
-#: tab-test-display.R:184
 msgid "Cramér's V"
 msgstr ""
 
-#: tab-test-display.R:205
 msgid "N"
 msgstr ""
 
-#: tab-test-display.R:206
 msgid "LR vs null"
 msgstr ""
 
-#: tab-test-display.R:207
 msgid "Wald vs null"
 msgstr ""
 
-#: tab-test-display.R:209
 msgid "R2"
 msgstr ""
 
-#: tab-test-display.R:210
 msgid "Adjusted R2"
 msgstr ""
 
-#: tab-test-display.R:211
 msgid "McFadden R2"
 msgstr ""
 
-#: tab-test-display.R:212
 msgid "Nagelkerke R2"
 msgstr ""
 
-#: tab-test-display.R:213
 msgid "Cox-Snell R2"
 msgstr ""
 
-#: tab-test-display.R:214
 msgid "Residual SD"
 msgstr ""
 
-#: tab-test-display.R:215
 msgid "AIC"
 msgstr ""
 
-#: tab-test-display.R:216
 msgid "BIC"
 msgstr ""
 
-#: tab-test-display.R:221
 msgid "LR vs baseline"
 msgstr ""
 
-#: tab-test-display.R:222
 msgid "F vs baseline"
 msgstr ""
 
-#: tab-test-display.R:223
 msgid "Wald vs baseline"
 msgstr ""
 
-#: tab-test-display.R:224
 msgid "Delta-AIC vs baseline"
 msgstr ""
 
-#: tab-test-display.R:225
 msgid "LR vs previous"
 msgstr ""
 
-#: tab-test-display.R:226
 msgid "F vs previous"
 msgstr ""
 
-#: tab-test-display.R:227
 msgid "Wald vs previous"
 msgstr ""
 
-#: tab-test-display.R:228
 msgid "Delta-AIC vs previous"
 msgstr ""
 
-#: tab_classes.R:2107
-msgid "ref"
-msgstr ""
-
-#: tab_classes.R:2108
-msgid "diff"
-msgstr ""
-
-#: tab_classes.R:2124
-msgid "std diff"
-msgstr ""
-
-#: tab_classes.R:2200
-msgid "mean_ctr"
-msgstr ""
-
-#: tab_classes.R:2200
-msgid "contrib"
-msgstr ""
-
-#: tab_classes.R:2212
-msgid "std. residual"
-msgstr ""
-
-#: tab_classes.R:2228
-msgid "ref. group"
-msgstr ""
-
-#: tab_classes.R:2228
-msgid "obs"
-msgstr ""
-
-#: tab_classes.R:2245
-msgid "gap"
-msgstr ""
-
-#: tab_reg.R:589
-#, c-format
-msgid "of %s ('%s')"
-msgstr ""
-
-#: tab_reg.R:590
-#, c-format
-msgid "of %s"
-msgstr ""
-
-#: tab_reg.R:593
-#, c-format
-msgid "Model: %s%s; %s."
-msgstr ""
-
-#: tab_reg.R:594
-#, c-format
-msgid "Model: %s%s."
-msgstr ""
-
-#: tab_reg.R:622
-#, c-format
-msgid "Model (%s): %s; %s."
-msgstr ""
-
-#: tab_reg.R:623
-#, c-format
-msgid "Model (%s): %s."
-msgstr ""
-
-#: tab_reg.R:654
 msgid "likelihood ratio"
 msgstr ""
 
-#: tab_reg.R:654
 msgid "F test"
 msgstr ""
 
-#: tab_reg.R:655 tab_reg.R:662
 msgid "Wald test"
 msgstr ""
 
-#: tab_reg.R:663
-#, c-format
+msgid "Chi2"
+msgstr ""
+
+msgid "Chi2, Rao-Scott"
+msgstr ""
+
+msgid "F, Welch"
+msgstr ""
+
+msgid "F, survey"
+msgstr ""
+
+msgid "Welch F"
+msgstr ""
+
+msgid "ANOVA F"
+msgstr ""
+
+msgid "pct can't be recycled to the lengths of row_vars and col_vars (see documentation `?tab_many`)"
+msgstr ""
+
+msgid "with ref = '"
+msgstr ""
+
+msgid "' , several rows were found as"
+msgstr ""
+
+msgid "reference for comparison ; only the first was kept ;"
+msgstr ""
+
+msgid "until there is only one row_var level matched"
+msgstr ""
+
+msgid "' , several columns were found as"
+msgstr ""
+
+msgid "until there is only one column matched"
+msgstr ""
+
+msgid "' , no rows were found as reference for comparison ;"
+msgstr ""
+
+msgid "until there is one row_var level matched"
+msgstr ""
+
+msgid "Package \"ggpubr\" needed for this function to work."
+msgstr ""
+
+msgid "You can install it with : install.packages('ggpubr')"
+msgstr ""
+
+msgid "Package \"gtable\" needed for this function to work."
+msgstr ""
+
+msgid "You can install it with : install.packages('gtable')"
+msgstr ""
+
+msgid "Package \"ggplot2\" needed for this function to work."
+msgstr ""
+
+msgid "You can install it with : install.packages('ggplot2')"
+msgstr ""
+
+msgid "Package \"cowplot\" needed for this function to work."
+msgstr ""
+
+msgid "You can install it with : install.packages('cowplot')"
+msgstr ""
+
+msgid "ref"
+msgstr ""
+
+msgid "diff"
+msgstr ""
+
+msgid "std diff"
+msgstr ""
+
+msgid "mean_ctr"
+msgstr ""
+
+msgid "contrib"
+msgstr ""
+
+msgid "std. residual"
+msgstr ""
+
+msgid "ref. group"
+msgstr ""
+
+msgid "obs"
+msgstr ""
+
+msgid "gap"
+msgstr ""
+
+msgid "Package 'clipr' is needed to copy to clipboard."
+msgstr ""
+
+msgid "Install it with install.packages('clipr')."
+msgstr ""
+
+msgid "of %s ('%s')"
+msgstr ""
+
+msgid "of %s"
+msgstr ""
+
+msgid "Model: %s%s; %s."
+msgstr ""
+
+msgid "Model: %s%s."
+msgstr ""
+
+msgid "Model (%s): %s; %s."
+msgstr ""
+
+msgid "Model (%s): %s."
+msgstr ""
+
 msgid "%s on the coefficients"
 msgstr ""
 
-#: tab_reg.R:664
-#, c-format
 msgid "Interaction with %s (%s):"
 msgstr ""
 
-#: tab_reg.R:665
-#, c-format
 msgid "Interaction (%s):"
 msgstr ""
 
-#: tab_reg.R:686
 msgid "Regression models"
 msgstr ""
 
-#: tab_reg.R:690
-#, c-format
 msgid "(tabbed by %s)"
 msgstr ""
 
-#: tab_reg.R:691
-#, c-format
 msgid "by %s"
 msgstr ""
 
-#: tab_reg.R:697
-#, c-format
 msgid "%s (models comparison): %s"
+msgstr ""
+
+msgid "Package \"openxlsx2\" needed for this function to work."
+msgstr ""
+
+msgid "You can install it with : install.packages('openxlsx2')"
+msgstr ""
+
+msgid "tab should be an object from either ggpubr::ggtexttable() or gridExtra::tableGrob()."
+msgstr ""
+
+msgid "tabxplor: dangling key in"
+msgstr ""
+
+msgid ":"
+msgstr ""
+
+msgid "legal:"
+msgstr ""
+
+msgid "tabxplor:"
+msgstr ""
+
+msgid "() has formals with no TAB_ARGS row:"
+msgstr ""
+
+msgid "() declares"
+msgstr ""
+
+msgid "but takes neither the formal nor `...`."
+msgstr ""
+
+msgid "("
+msgstr ""
+
+msgid "= ) does not match its declared TAB_ARGS default."
+msgstr ""
+
+msgid "tabxplor: new_reg_ctx() and new_reg_shared() both declare:"
 msgstr ""

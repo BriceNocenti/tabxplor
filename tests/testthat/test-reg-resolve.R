@@ -137,14 +137,14 @@ test_that("the `color = \"adjustment\"` note fires on the DEFAULT color_signif, 
 test_that("`empirical` is FINAL before the effect word is recorded (H22)", {
   skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
   d <- rr_data()
-  # `color = "adjustment"` FORCES empirical on. The eager `eff_word` was computed BEFORE that
-  # forcing and stored in reg_call, while the specs and the column header were computed after --
-  # so the table's own narrative record contradicted its own column ("AME" vs "AME (adjusted %)").
+  # `color = "adjustment"` FORCES empirical on, and the table's own narrative record must still name
+  # the column it built: the header word is a pure function of the resolved estimand, so the two
+  # cannot drift whichever order the forcing runs in.
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                 effect = "marginal", color = "adjustment", empirical = FALSE))
   mcol <- grep("^Model", names(t), value = TRUE)[[1]]
   expect_identical(paste0("Model_", reg_call(t)$eff_word), mcol)
-  expect_match(reg_call(t)$eff_word, "adjusted %", fixed = TRUE)
+  expect_identical(reg_call(t)$eff_word, "mRD")
 })
 
 # === defect 1: reg_per_dep() is THE per-dependent slicer =========================================
@@ -280,13 +280,21 @@ test_that("reg_trials_observed_max() answers only where a trial count exists", {
   expect_true(is.na(reg_trials_observed_max(c(NA_real_, NA_real_)))) # all-NA: no finite max
 })
 
-test_that("reg_eff_word() takes `empirical` as an argument, so it cannot be read at the wrong time", {
-  e <- reg_estimand("binomial", "marginal", "difference")
-  expect_true(nzchar(reg_eff_word(e, FALSE)))
-  expect_identical(reg_eff_word(e, TRUE), paste0(reg_eff_word(e, FALSE), " (adjusted %)"))
-  # a coefficient estimand never takes the parenthetical, whatever `empirical` says
-  cf <- reg_estimand("binomial", "coefficient", "auto")
-  expect_identical(reg_eff_word(cf, TRUE), reg_eff_word(cf, FALSE))
+test_that("reg_word() composes the header: marker o log-wrap o base acronym", {
+  expect_identical(reg_word(reg_estimand("binomial", "coefficient", "odds_ratio")), "OR")
+  expect_identical(reg_word(reg_estimand("binomial", "marginal", "difference")),    "mRD")
+  expect_identical(reg_word(reg_estimand("binomial", "at_reference", "ratio")),     "refRR")
+  expect_identical(reg_word(reg_estimand("binomial", "coefficient", "log")),        "log(OR)")
+  expect_identical(reg_word(reg_estimand("ordinal",  "coefficient", "odds_ratio")), "cumOR")
+  # the expansion follows the same two rules, in the order each is spoken
+  expect_identical(reg_word_long(reg_estimand("binomial", "marginal", "ratio")),
+                   "marginal risk ratio")
+  expect_identical(reg_word_long(reg_estimand("binomial", "at_reference", "difference")),
+                   "risk difference at the reference profile")
+  # and the base acronym is recoverable from any composed word
+  expect_identical(reg_word_base("log(cumOR)"), "cumOR")
+  expect_identical(reg_word_base("mRR"),        "RR")
+  expect_identical(reg_word_base("refRD"),      "RD")
 })
 
 test_that("reg_color_for() fills only the auto slots, and is idempotent", {

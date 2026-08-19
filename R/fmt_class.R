@@ -3938,7 +3938,6 @@ fmt_face_semantic <- function(theme = "light") {
 .lg_le    <- "\u2264"   # <=
 .lg_times <- "\u00d7"   # x  (times)
 .lg_div   <- "\u00f7"   # /  (division)
-.lg_beta  <- "\u03b2"   # beta
 
 # The per-measure fact table -- every language-invariant fact of a colour measure in ONE place: its
 # vocabulary (name / where it may go / who may ask / what it needs / when it is automatic), its legend
@@ -4127,7 +4126,7 @@ stopifnot(all(vapply(MEASURES, function(m)
 #' @keywords internal
 fmt_noncollapsible_caveat <- function(spec) {
   if (!isTRUE(reg_fam_prob(spec$model_family))) return(NULL)
-  if (!(isTRUE(spec$is_coef) || isTRUE(spec$eff_word %in% c("OR", .lg_beta)))) return(NULL)
+  if (!(isTRUE(spec$is_coef) || isTRUE(reg_word_noncollapsible(spec$eff_word)))) return(NULL)
   gettext("Part of an odds-ratio gap is non-collapsibility, not confounding: a risk ratio or a marginal effect is the collapsible comparison.")
 }
 
@@ -4495,35 +4494,45 @@ legend_shade_names <- function(theme = "light") {
   list(text = pair, bg = pair)
 }
 
-# An EMPIRICAL crude column has no effect word; an empirical OR/IRR takes the family's multiplicative
-# word so its legend names the right scale.
+# THE word the colour legend names a regression column by.
+#
+# ⚠ it is the MEASURE, never the contrast: reg_legend_word() drops the `m` / `ref` marker on purpose,
+# because legend_group_by_body() groups columns by their rendered sentence and a crude column reading
+# "RR" beside a model column reading "mRR" would split the one block the crude/adjusted merge exists
+# to produce. The legend describes the ladder (the measure's); the header and the "Model:" line
+# describe the estimand.
 legend_reg_eff_word <- function(col, meta) {
-  # the OR-vs-IRR split reads the column's OWN family (the `model_family` attr), so a mixed table names
-  # each column correctly; fall back to the table's scalar family when unset. `effect`/`at` stay table-level.
+  # the column's OWN family (the `model_family` attr), so a mixed table names each column correctly;
+  # fall back to the table's scalar family when unset. `effect` / `measure` stay table-level.
   fam <- get_model_family(col); if (!nzchar(fam)) fam <- meta$family
-  # the word IS the estimand row's own `word` -- one lookup (a marginal RATIO is a RISK ratio whatever
-  # family was fitted; the modified-Poisson `fit` is one too).
   est <- reg_meta_estimand(meta, family = fam)
-  # every MULTIPLICATIVE scale, read off the declared flag rather than a scale name: an odds ratio, a
-  # summed-score odds ratio, a risk ratio and a rate ratio are one branch, and a new one needs no arm.
-  if (isTRUE(fmt_scale_row(col)$mult)) {
-    if (!identical(get_role(col), "emp") && !is.null(est$word) &&
-        est$word %in% c("RR", "IRR", "OR", "RoM"))
-      return(est$word)
-    # A CRUDE companion is on the crude scale of the FIT, not always the estimand's: a Poisson model
-    # asked for a marginal risk ratio still has a crude RATE ratio beside it. So the fit's own
-    # multiplicative word wins WHERE THE LINK MAKES ONE (something other than the odds ratio a logit
-    # gives); a binomial fit's crude column follows the estimand (a marginal RR is legended RR, not OR).
-    # reg_family_mult_word() is that lookup, from REG_ESTIMANDS' exponentiated-coefficient row.
-    w <- reg_family_mult_word(fam)
-    if (!is.na(w) && !identical(w, "OR")) return(w)
-    return(if (identical(est$word, "RR")) "RR" else "OR")
+  # ⚠ A CRUDE column is named from ITS OWN SHAPE, not from the model's estimand: the two are the same
+  # measure wherever they pair (so the block merges), and where they do not -- a poisson AME beside a
+  # crude rate ratio -- the crude column must say what it actually holds.
+  if (identical(get_role(col), "emp")) {
+    ck <- reg_meta_crude_key(meta, fam)
+    return(reg_crude_word(reg_crude_shape(ck, est)) %||% NA_character_)
   }
-  if (!identical(get_role(col), "emp")) {              # a model (not crude) column, by stored role
-    if (!is.null(est$word) && est$word %in% c("AME", "MER", "RoM", "RD")) return(est$word)
-    if (identical(fmt_var_kind(col), "coef")) return(.lg_beta)   # gaussian beta
+  if (!identical(get_role(col), "model")) return(NA_character_)   # an `n` column names no effect
+  # the model column's measure, marker dropped (reg_legend_word). An unnamed additive one falls
+  # through to the ladder's own word ("difference"), which reads better than an abbreviation would.
+  reg_legend_word(est)
+}
+
+# The crude BLOCK a column belongs to, from the table's own record -- the key reg_crude_shape() needs
+# to name a crude column. `crude_keys` is stored per outcome; a mixed table finds its own.
+#' @keywords internal
+reg_meta_crude_key <- function(meta, family = NULL) {
+  ck <- meta$crude_keys
+  if (is.null(ck) || !length(ck)) return(NA_character_)
+  ck <- unlist(ck)
+  if (!is.null(family) && nzchar(family)) {
+    fk   <- unname(REG_FIT_FAMILY[family]); if (is.na(fk)) fk <- family
+    fams <- meta$families %||% meta$family
+    hit  <- names(fams)[fams %in% c(family, fk)]
+    if (length(hit) && hit[[1]] %in% names(ck)) return(unname(ck[[hit[[1]]]]))
   }
-  NA_character_
+  unname(ck[[1]])
 }
 
 legend_ref_label <- function(x, col, orientation) {
@@ -4597,40 +4606,38 @@ CI_METHOD_LABELS <- list(
   student      = function() gettext("Student t interval"),
   ols          = function() gettext("Student t interval, pooled over the variable's levels"),
   woolf        = function() gettext("Wald interval on the log odds-ratio"),
+  katz         = function() gettext("Wald interval on the log risk-ratio"),
+  quasipoisson = function() gettext("quasi-Poisson interval"),
   robust       = function() gettext("robust-Poisson (delta) interval"),
   poisson      = function() gettext("Poisson interval"),
   profile      = function() gettext("profile-likelihood interval")
   # `katz` and `wald_log` live in CI_METHOD_WORDED below: their label needs the effect word.
 )
 
-# CI_METHOD_WORDED -- the engines whose LABEL needs a second fact. An OR, an IRR and an RR are the same
-# interval on the same log scale, and only the effect WORD tells them apart. `woolf` needs none (a 2x2
-# log-OR is an odds ratio by construction), nor does any additive method.
-#
-# DESIGN: a label names the ESTIMAND, not the engine. Woolf's and Katz's closed forms ARE the
-# univariable model's Wald interval on the log odds- / risk-ratio -- verified to 3e-13 and 8e-09 --
-# so they must render as that, or a crude column and the model column beside it get two legend blocks
-# for one arithmetic. The closed form is named once on the merged block instead (see
-# CI_METHOD_CLOSED_FORM), which is where a reader can act on it.
+# CI_METHOD_WORDED -- the engine whose LABEL needs a second fact. An OR, an IRR and an RR are the same
+# interval on the same log scale, and only the effect WORD tells them apart, so the MODEL's engine is
+# the one that has to ask. Every other engine names itself in CI_METHOD_LABELS.
 #' @keywords internal
 CI_METHOD_WORDED <- list(
-  katz = list(IRR      = function() gettext("Wald interval on the log rate-ratio"),
-              .default = function() gettext("Wald interval on the log risk-ratio")),
-  # on a RATE RATIO the dispersion-scaled closed form IS the quasi-Poisson model's own Wald interval
-  # on the log rate-ratio (measured to 5e-09), so it must render as that beside the model column.
-  # Without an effect word -- a plain tab() ratio-of-means column -- it names the assumption instead.
-  quasipoisson = list(IRR      = function() gettext("Wald interval on the log rate-ratio"),
-                      .default = function() gettext("quasi-Poisson interval")),
   wald_log = list(IRR      = function() gettext("Wald interval on the log rate-ratio"),
                   OR       = function() gettext("Wald interval on the log odds-ratio"),
                   RR       = function() gettext("Wald interval on the log risk-ratio"),
                   .default = function() gettext("Wald interval on the log scale"))
 )
 
-# The engines that are a CLOSED FORM of the interval their label names. A crude column evaluates one
-# of these instead of fitting; the merged legend block says so once, so the name is not lost.
+# The engines that are a CLOSED FORM of the interval a MODEL column would fit. A crude column
+# evaluates one of these instead of fitting, and each reproduces the univariable model's own interval:
+# Woolf's 3e-13, Katz's 8e-09, the pooled OLS 2e-14, the dispersion one 5e-09, and the per-group
+# (Welch / robust) forms the SANDWICH a design-based or over-dispersed fit reports -- 3e-03 on a
+# weighted mean difference, 1.5e-03 on a poisson marginal effect.
+#
+# DESIGN: a label names the ESTIMAND, not the engine, so on a REGRESSION column these render as the
+# interval the model column beside them renders (legend_method_name()) -- otherwise one arithmetic
+# gets two legend blocks. The closed form is named once on the merged block instead, which is where a
+# reader can act on it. On a plain `tab()` column there is no model twin and each names itself.
 #' @keywords internal
-CI_METHOD_CLOSED_FORM <- c(woolf = "Woolf", katz = "Katz", quasipoisson = "quasi-Poisson")
+CI_METHOD_CLOSED_FORM <- c(woolf = "Woolf", katz = "Katz", quasipoisson = "quasi-Poisson",
+                           ols = "pooled OLS", welch = "Welch", robust = "robust")
 # NOTE: potools extracts the closures above by static analysis (a gettext() literal inside a closure
 # body is statically visible), so no `if (FALSE)` anchor is needed here. Contrast REG_CHECKS
 # (R/reg-assumptions.R), whose nouns are BARE STRINGS gettext()ed dynamically -- its anchor is load-bearing.
@@ -4646,11 +4653,17 @@ legend_method_name <- function(spec, measure = spec$measure_text) {
   }
   m <- spec$ci_method
   if (is.null(m) || is.na(m) || !nzchar(m)) return(NA_character_)
-  wd <- CI_METHOD_WORDED[[m]]
-  if (!is.null(wd)) {
-    w <- spec$eff_word; if (is.null(w) || is.na(w)) w <- ""
-    return((wd[[w]] %||% wd[[".default"]])())
+  worded <- function(engine) {
+    wd <- CI_METHOD_WORDED[[engine]]
+    w  <- spec$eff_word; if (is.null(w) || is.na(w)) w <- ""
+    (wd[[w]] %||% wd[[".default"]])()
   }
+  # D23: on a REGRESSION column a closed form renders the interval its model twin renders, because it
+  # IS that interval. Which twin depends only on the column's own scale: a multiplicative estimand is
+  # a Wald interval on the log of it, everything else the plain Wald one.
+  if (isTRUE(spec$is_reg) && m %in% names(CI_METHOD_CLOSED_FORM))
+    return(if (isTRUE(EST_SCALES[[spec$scale]]$mult)) worded("wald_log") else CI_METHOD_LABELS$wald())
+  if (!is.null(CI_METHOD_WORDED[[m]])) return(worded(m))
   lab <- CI_METHOD_LABELS[[m]]
   if (is.null(lab)) gettext("confidence interval") else lab()
 }
@@ -4729,8 +4742,10 @@ legend_resolve_spec <- function(spec, lang) {
 legend_tokens_terse <- function(spec, lang, show_names) {
   colon <- if (identical(lang, "fr")) " : " else ": "
   toks <- list()
+  # `esc = TRUE`: a COLUMN NAME is data -- a money level ("1-Lt $10000") or a starred one would
+  # otherwise reach pandoc as inline math / emphasis.
   if (show_names) toks <- c(toks, list(.lg_tok(paste0(legend_name_list(spec$col_names),
-                                                      colon), bold = TRUE)))
+                                                      colon), bold = TRUE, esc = TRUE)))
   rs <- legend_ref_short(spec)
   add_channel <- function(plan, prefix, is_bg) {
     if (legend_gap_baseline(plan, spec$no_obs))
@@ -4802,9 +4817,9 @@ legend_tokens_prose <- function(spec, lang, show_names) {
   }
 
   toks <- list()
-  if (show_names)  # variable names are bold in every medium.
+  if (show_names)  # variable names are bold in every medium; `esc` keeps them DATA (see terse).
     toks <- c(toks, list(.lg_tok(paste0(legend_name_list(spec$col_names), " \u2014 "),
-                                 bold = TRUE)))
+                                 bold = TRUE, esc = TRUE)))
 
   # a measure may declare ONE sentence of honesty about itself (MEASURES$<m>$caveat). Only `adjustment`
   # has one -- see fmt_noncollapsible_caveat().
@@ -4908,17 +4923,22 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
   parts <- vapply(tokens, function(tk) {
     bold <- is_bold_tok(tk); ital <- is_ital_tok(tk); und <- is_under_tok(tk)
     if (!is_colored_tok(tk)) {
-      # plain token: a variable name (bold) or footer text (stars, weight line...). `esc` escapes `*`
-      # so pandoc does not read `***`/`*` as emphasis (user subtext left raw).
-      # DESIGN: the html medium needs it too -- a knitted page's raw-html goes THROUGH pandoc, which
-      # would pair the legend's `*` runs as emphasis. The html arm also entity-encodes `&` and `<`
-      # (the interaction line carries "<0.01%"); `&` FIRST, or it double-escapes the `&#42;`.
+      # plain token: a variable name (bold) or footer text (stars, weight line...). `esc` escapes the
+      # pandoc metacharacters so a legend is not re-read as markup (user subtext left raw): `*` runs
+      # would pair as emphasis, and `$` runs as INLINE MATH -- which a money level name ("1-Lt
+      # $10000", "$25000 or more") triggers as soon as two of them appear in one line.
+      # DESIGN: the html medium needs it too -- a knitted page's raw-html goes THROUGH pandoc. The
+      # html arm entity-encodes instead, `&` FIRST or it double-escapes the entities it just wrote.
       txt <- tk$t
-      if (identical(medium, "md")   && isTRUE(tk$esc)) txt <- gsub("*", "\\*", txt, fixed = TRUE)
+      if (identical(medium, "md")   && isTRUE(tk$esc)) {
+        txt <- gsub("*", "\\*", txt, fixed = TRUE)
+        txt <- gsub("$", "\\$", txt, fixed = TRUE)
+      }
       if (identical(medium, "html") && isTRUE(tk$esc)) {
         txt <- gsub("&", "&amp;", txt, fixed = TRUE)
         txt <- gsub("<", "&lt;" , txt, fixed = TRUE)
         txt <- gsub("*", "&#42;", txt, fixed = TRUE)
+        txt <- gsub("$", "&#36;", txt, fixed = TRUE)
       }
       if (!bold) return(txt)
       if (identical(medium, "console")) return(cli::style_bold(txt))
@@ -5098,26 +5118,16 @@ legend_group_by_body <- function(specs, style, lang) {
 }
 
 # reconcile the empirical + model specs of each col_var of a REG table so they fold into one legend
-# line. (1) SHARE the reference label -- when a col_var has one distinct non-NA label, apply it to every
-# spec. (2) NEUTRALISE the model's additive effect word -- when a col_var carries BOTH an empirical AND a
-# model additive ("diff") column, drop the model's "AME"/"beta" to the neutral "cells" the empirical
-# uses, so their bodies match (the effect identity survives in the prefix + the "Model:" line).
-# Multiplicative OR/IRR keep their word; a no-empirical table is left untouched.
+# line: when a col_var has one distinct non-NA reference label, apply it to every spec there.
+#
+# It used to NEUTRALISE the model's additive effect word as well, because a crude column had none to
+# match. Both sides name their own measure now (legend_reg_eff_word), and they agree wherever they
+# pair -- so neutralising would REINTRODUCE the mismatch it was written to remove.
 legend_reg_adapter <- function(specs) {
   by_cv <- split(seq_along(specs), purrr::map_chr(specs, "col_var"))
   for (idx in by_cv) {
     labs <- unique(stats::na.omit(vapply(specs[idx], function(s) s$ref$label, character(1))))
     if (length(labs) == 1L) for (i in idx) specs[[i]]$ref$label <- labs
-    for (i in idx) {
-      s <- specs[[i]]
-      if (identical(s$role, "model") && identical(s$measure_text, "difference") && !is.na(s$eff_word)) {
-        has_emp <- any(vapply(specs[idx], function(o)
-          identical(o$role, "emp") && identical(o$measure_text, "difference") &&
-          identical(o$policy, s$policy) && identical(o$is_std, s$is_std) &&
-          identical(o$orientation, s$orientation), logical(1)))
-        if (has_emp) specs[[i]]$eff_word <- NA_character_
-      }
-    }
   }
   specs
 }

@@ -772,7 +772,7 @@ reg_resolve_specs <- function(data, deps, predictors, is_comparison = FALSE, for
   } else {
     labels <- make.unique(vapply(seq_len(nrow(deps)), function(i)
       paste0(if (is.na(positive_levels[[i]])) outcome[[i]] else positive_levels[[i]], ": ",
-             reg_eff_word(deps$est[[i]], empirical)), character(1)))
+             reg_word(deps$est[[i]])), character(1)))
     rows       <- seq_len(nrow(deps))
     preds      <- rep(list(predictors), nrow(deps))
     spec_names <- NULL                                   # map2() over a bare vector carried none
@@ -947,7 +947,7 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
     # so a mixed-family multi-outcome table is column-correct; only the one-line summary is the first
     # outcome's.
     ests = stats::setNames(deps$est, deps$outcome), est = deps$est[[1]],
-    eff_word = reg_eff_word(deps$est[[1]], out$empirical),
+    eff_word = reg_word(deps$est[[1]]),
     is_comparison = prep$is_comparison, formula_mode = prep$formula_mode,
     empirical = out$empirical, display = out$display, multiplier = plan$multiplier,
     shape_terms = plan$shape_terms, na_shared_vars = plan$na_shared_vars,

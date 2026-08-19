@@ -750,19 +750,34 @@ reg_sheet_name <- function(meta) {
 # "<dep>: <positive_level>"; a numeric outcome (gaussian/poisson) -> the outcome name alone. NOT used in
 # comparison mode (each model keeps its own col_var = model name, so borders separate the models, and the
 # outcome / reference / effect go in the title instead).
-reg_shared_col_var <- function(family, outcome, positive_level, cleannames) {
-  if (reg_fam_binary(family) && !is.null(positive_level) && !is.na(positive_level)) {
-    pl <- reg_cleanup(positive_level, cleannames)
-    paste0(outcome, ": ", pl)
-  } else outcome
+# ⚠ a SUMMED SCORE (`trials =`) has no level to name: its "positive level" is the internal binomial
+# success code ("1"), not something a reader of a battery of items would recognise. Naming it made
+# the span disagree with the crude block's -- two spans, hence two legend blocks, for one comparison.
+reg_shared_col_var <- function(family, outcome, positive_level, cleannames, trials = NULL) {
+  named <- reg_fam_binary(family) && is.null(trials) &&
+    !is.null(positive_level) && !is.na(positive_level)
+  if (named) paste0(outcome, ": ", reg_cleanup(positive_level, cleannames)) else outcome
 }
 
-# Phase 14w (item 3): the single-model column NAME ("Model_OR" / "Model_IRR" / "Model_AME (adjusted %)"),
-# so the effect word lives in the column, not repeated in the span. Comparison mode keeps the model name;
-# a multi-outcome (several outcomes, one predictor set) suffixes the outcome so the names stay unique.
-# Phase g: "Model_" (snake-case) prefix; the multi-outcome disambiguator is a "[dep]" BRACKET, which the
-# console shows and every exporter STRIPS (tab_col_var_header) -- the col_var span row already names the
-# outcome, so repeating it per column wasted export width.
+# The col_var SPAN of a PER-CATEGORY column set -- a multinomial's category columns, an ordinal
+# marginal's, the "vs rest" ones, and the crude column each of them mirrors.
+#
+# There the outcome CATEGORY takes the header slot, so the measure has nowhere else to go and lives
+# in the span: "relig: mRR". One rule for every per-category family, and the place an exporter can
+# name the measure once above an Obs / Model pair. A model COMPARISON keeps each model's own name as
+# its span, so borders still separate the models.
+reg_category_col_var <- function(sp, is_comparison, positive_level, cleannames) {
+  if (isTRUE(is_comparison)) return(sp$label)
+  paste0(reg_shared_col_var(sp$fit_family, sp$outcome, positive_level, cleannames, sp$trials), ": ",
+         reg_word(sp$est))
+}
+
+# The single-model column NAME ("Model_OR" / "Model_mRR" / "Model_log(IRR)"): the measure word lives
+# in the column, not repeated in the span. Comparison mode keeps the model name; a multi-outcome table
+# (several outcomes, one predictor set) suffixes the outcome so the names stay unique.
+# The multi-outcome disambiguator is a "[dep]" BRACKET, which the console shows and every exporter
+# STRIPS (tab_col_var_header) -- the col_var span row already names the outcome, so repeating it per
+# column wasted export width.
 reg_model_col_name <- function(eff_word, outcome, is_comparison, model_label, n_outcomes) {
   if (isTRUE(is_comparison)) return(model_label)
   if (n_outcomes > 1L) paste0("Model_", eff_word, " [", outcome, "]") else paste0("Model_", eff_word)
@@ -1555,7 +1570,11 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
   td$conf.high <- res$conf.high; td$p.value <- res$p.value
 
   # var(Y) drives the additive gaussian effect-size colour (beta/SD(Y)); NA otherwise (no std colour)
-  var_y <- if (!do_exp && family == "gaussian") stats::var(mdata[[outcome]]) else NA_real_
+  # the SD the standardized ladder divides by. A summed score needs it too: its additive effect is a
+  # difference of mean SCORES, so it is graded against the score's own spread (the outcome column IS
+  # the score).
+  var_y <- if (!do_exp && (family == "gaussian" || !is.na(trials %||% NA)))
+    stats::var(as.numeric(mdata[[outcome]])) else NA_real_
 
   list(tidy = td, nobs = nrow(mdata), var_y = var_y, positive_level = positive_level, fit = fit,
        data = mdata)
@@ -1607,6 +1626,12 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, est,
 
   # the estimate goes in the field its SCALE declares (`or` / `ratio` / `diff`) -- one line instead
   # of a per-shape fmt() call, which is what made a third shape unrepresentable.
+  # ⚠ a SUMMED SCORE's additive effect is a difference of mean SCORES: the fit reports a per-item
+  # probability difference, and E[score] = trials x p makes the conversion exact (the interval scales
+  # by the same constant). Without it the cell printed a per-item share beside a mean score.
+  if (identical(scale_key, "raw_diff") && !is.na(trials %||% NA)) {
+    k <- as.numeric(trials); est_v <- est_v * k; lo <- lo * k; hi <- hi * k
+  }
   fields <- stats::setNames(list(est_v), est_field)
   args <- c(
     list(n = rep(NA_integer_, n_rows)),   # Phase 14r (D): whole-model N is in the footer, not "n:"
@@ -2013,7 +2038,7 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
 # the Constant carry no effect; predictors ABSENT from this model stay NA (empty cells).
 reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
                                 group, color, color_signif, col_var, or_tip = NULL,
-                                model_family = "") {
+                                model_family = "", scale = NULL, trials = NULL) {
   amt <- marg$ame; prd <- marg$pred
   if (!is.na(group)) {
     amt <- amt[!is.na(amt$group) & amt$group == group, , drop = FALSE]
@@ -2041,18 +2066,35 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
   show    <- in_model & (!is.na(ame_v) | is_ref)
   if (shape == "prob") {
     display[show] <- "est"
-    ame_v[is_ref] <- NA_real_                                  # reference has no marginal effect
+    # ⚠ a SUMMED SCORE's marginal effect is additive on the outcome's own scale (`raw_diff`), exactly
+    # like a gaussian AME -- so its reference carries the additive NEUTRAL, as that arm's does. A
+    # probability-scale AME keeps NA: it is a percentage-point contrast with no reference value, and
+    # the renderer annotates the level instead.
+    ame_v[is_ref] <- if (identical(scale %||% "points", "raw_diff")) 0 else NA_real_
     # Phase 14r (E): carry the model OR (coefficient path) in the `or` field so cond_or surfaces it on
     # hover though the cell DISPLAYS the AME. Read-only: the AME display / colour never read `or`, so it
     # is inert everywhere but the tooltip. NA on the reference (which shows "ref").
     or_v <- if (is.null(or_tip)) NA_real_ else or_tip
-    fmt(
-      n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
-      pct = pred_v, diff = ame_v, or = or_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      scale = "points", pct_type = reg_pct_type("points"), display = display, digits = reg_cell_digits("points"), ci_method = "wald",
-      color = color, color_signif = color_signif, col_var = col_var,
-      comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
-    )
+    # ⚠ the SCALE is the estimand's, and the level goes into the field that scale names -- never
+    # always `pct`. On a summed score that scale is `raw_diff`: the effect is a difference of mean
+    # SCORES, so it converts from the sweep's per-item contrast by `trials` (exact), and the level
+    # beside it is the mean score reg_scale_pred() already produced.
+    sc <- scale %||% "points"
+    if (identical(sc, "raw_diff") && !is.na(trials %||% NA)) {
+      k <- as.numeric(trials); ame_v <- ame_v * k; lo_v <- lo_v * k; hi_v <- hi_v * k
+    }
+    do.call(fmt, c(
+      stats::setNames(list(pred_v), EST_SCALES[[sc]]$base_display),
+      list(
+        n = rep(NA_integer_, n_rows),   # no misleading whole-model N (see the empirical cols)
+        diff = ame_v, or = or_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
+        scale = sc, pct_type = reg_pct_type(sc), display = display,
+        digits = reg_cell_digits(sc), ci_method = "wald",
+        color = color, color_signif = color_signif, col_var = col_var,
+        comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"),
+      # the standardized ladder's divisor, for the scales that declare one (a summed score's
+      # `raw_diff`; a probability-scale `points` has fixed breaks and needs none)
+      if (identical(EST_SCALES[[sc]]$sd_from %||% "", "var")) list(var = rep(var_y, n_rows))))
   } else if (shape == "prob_ratio") {
     # Phase 18z3: the RATIO twin of "prob" -- a marginal RISK RATIO with the adjusted predicted
     # probability in parentheses. The composite is coherent BY CONSTRUCTION: marginal standardization
@@ -2064,14 +2106,21 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
     # WHOLE template instead of its first token, which is a different bug, not this one.
     display[show] <- "est"
     ame_v[is_ref] <- 1                                         # multiplicative neutral at the reference
-    fmt(
-      n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
-      pct = pred_v, or = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      scale = "odds_ratio", pct_type = reg_pct_type("odds_ratio"), display = display, digits = reg_cell_digits("odds_ratio"), ref = "1",
-      ci_method = "wald_log",
-      color = color, color_signif = color_signif, col_var = col_var,
-      comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
-    )
+    # ⚠ the SCALE is the estimand's, not this arm's: a marginal risk ratio sits on `pct_ratio` (a
+    # ratio of percentages, printed "x2" like every other ratio) and a summed score's on
+    # `score_ratio`. Writing the estimate into the field that scale declares is what keeps the
+    # builder from re-deciding what the column estimates.
+    sc <- scale %||% "pct_ratio"
+    do.call(fmt, c(
+      stats::setNames(list(ame_v), EST_SCALES[[sc]]$est_field),
+      stats::setNames(list(pred_v), EST_SCALES[[sc]]$base_display),
+      list(
+        n = rep(NA_integer_, n_rows),   # no misleading whole-model N (see the empirical cols)
+        ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
+        scale = sc, pct_type = reg_pct_type(sc), display = display,
+        digits = reg_cell_digits(sc), ref = "1", ci_method = "wald_log",
+        color = color, color_signif = color_signif, col_var = col_var,
+        comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model")))
   } else if (shape == "raw_ratio") {
     # Phase 19e (capability gap): the ratio twin of "raw" -- a marginal RATIO OF ADJUSTED MEANS (or of
     # predicted counts), which used to be refused ("needs a probability-scale outcome") although
@@ -2120,7 +2169,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
 # them to the shared predictor skeleton unchanged. Label = "<j> vs <ref>: OR" (prefixed by the
 # outcome when several outcomes / models coexist, to disambiguate). Returns a list of {label, col}.
 reg_columns_multinom <- function(skeleton, f, sp, est, color, color_signif,
-                                 cleannames, prefix_dep, model_family = "multinomial",
+                                 cleannames, prefix_dep, col_var, model_family = "multinomial",
                                  method = "wald") {
   y_ref <- reg_cleanup(f$y_ref, cleannames)
   purrr::map(f$y_levels, function(j) {
@@ -2130,11 +2179,11 @@ reg_columns_multinom <- function(skeleton, f, sp, est, color, color_signif,
     jc  <- reg_cleanup(j, cleannames)
     lab <- paste0(if (prefix_dep) paste0(sp$outcome, " - ") else "",
                   jc, " vs ", y_ref)
-    # Phase 14s (G) + 14w (item 3): every category column of ONE model shares `sp$label` ("<dep>: OR")
-    # as its col_var, so no border is drawn between them (borders separate DIFFERENT col_vars) and the
-    # model name + effect span them once. The repeated ": OR" is stripped from the per-category NAME.
-    list(label = lab, emp_key = j,   # emp_key: raw category, for the empirical tooltip (Phase 14v)
-         col   = reg_column(skeleton, sub, sp$predictors, sp$label, est, color, color_signif,
+    # every category column of ONE model shares the per-category span (reg_category_col_var), so no
+    # border is drawn between them (borders separate DIFFERENT col_vars) and the outcome + measure are
+    # named once above them all.
+    list(label = lab, emp_key = j,   # emp_key: raw category, for the empirical tooltip
+         col   = reg_column(skeleton, sub, sp$predictors, col_var, est, color, color_signif,
                             model_family = model_family, method = method))
   })
 }
@@ -3047,7 +3096,7 @@ utils::globalVariables(names(formals(new_reg_shared)))
 # above reg_crude_key()). What LEFT are the three that were only other names for `est`:
 #   effect_shape -- ZERO readers; reg_column() recomputes the identical expression from est$exp.
 #   do_exp       -- exactly `isTRUE(est$exp)`, and its 5 readers all forward it straight to reg_fit().
-#   eff_word     -- `reg_eff_word(est, empirical)`, and its 2 readers are inside reg_build(), where
+#   eff_word     -- `reg_word(est)`, and its 2 readers are inside reg_build(), where
 #                   `empirical` is FINAL. Deriving it there is strictly better than storing it: the
 #                   header word can no longer disagree with the table's own shared$empirical, which
 #                   is what the eager-vs-lazy pair in tab_reg() could do.
@@ -3435,7 +3484,7 @@ reg_stage_crude <- function(ctx) {
   # Phase 14w (item 3): the crude companions share the model column's outcome col_var (one span, no
   # border). NOT in comparison mode, where the crude block stays a distinct col_var beside the models.
   if (!is_comparison && length(block$cols)) {
-    scv <- reg_shared_col_var(sp_fam, sp$outcome, pos, cleannames)
+    scv <- reg_shared_col_var(sp_fam, sp$outcome, pos, cleannames, sp$trials)
     block$cols <- purrr::map(block$cols, ~ set_col_var(.x, scv))
   }
   # the numeric predictors' descriptive tooltip belongs to the BLOCK, not to a model: it keys the
@@ -3514,6 +3563,19 @@ reg_crude_block <- function(sp, sp_fam, inv_sp, key, mdata, pos, y_ref, var_y, c
 }
 
 
+# A SUMMED-SCORE outcome's level is the mean SCORE, not the per-item share it is built from -- that is
+# the quantity a reader of a battery of items wants, and it is what the crude column beside it shows.
+# The fit predicts the share, so the adjusted score is that share times the number of items.
+# ⚠ EVERY builder needs it, not just the coefficient one: a marginal column drew its prediction from
+# the same sweep and printed the bare share (0.47) where its own scale promised a mean score (2.79).
+#' @keywords internal
+#' @noRd
+reg_scale_pred <- function(marg, trials) {
+  if (is.null(marg$pred) || !nrow(marg$pred) || is.na(trials %||% NA)) return(marg)
+  marg$pred$pred <- marg$pred$pred * as.numeric(trials)
+  marg
+}
+
 # reg_cols_ame() -- REG_ESTIMANDS builder "ame": the average marginal effect column(s) of one fit.
 #' @keywords internal
 #' @noRd
@@ -3522,10 +3584,9 @@ reg_cols_ame <- function(f, sp, ctx) {
   # Phase 15e: prob-scale / per-category / colour shape are per OUTCOME family (a mixed AME table
   # mixes binomial prob-points with a gaussian coef in one grid).
   sp_fam       <- sp$fit_family
-  # Phase 19m-ii: DERIVED here rather than stored on the spec. `empirical` is bound by
-  # reg_ctx_locals() and is FINAL at this point, so the header word cannot disagree
-  # with the table's own shared$empirical -- which the eager/lazy pair in tab_reg() could.
-  sp_eff       <- reg_eff_word(sp$est, empirical)
+  # COMPOSED here rather than stored on the spec: the header word is a pure function of the resolved
+  # estimand (measure + contrast marker), so it cannot disagree with the column it names.
+  sp_eff       <- reg_word(sp$est)
   sp_col       <- sp$color
   prob_scale   <- reg_fam_prob(sp_fam)
   per_category <- reg_fam_percategory(sp_fam)
@@ -3546,28 +3607,34 @@ reg_cols_ame <- function(f, sp, ctx) {
   # the ADDITIVE twin reg_fill_base() stores beside a multiplicative estimate. A ratio contrast is
   # not an average of differences, so it cannot be re-derived from `marg`; a second point-estimate
   # sweep is the honest way to get it, and it costs no fit. The additive paths reuse `marg` itself.
+  marg     <- reg_scale_pred(marg, sp$trials)
   marg_add <- if (!ratio_ame) marg
     else if (is.null(f$fit)) NULL
-    else reg_fill_sweep(f$fit, f$data, sp$predictors, conf_level, design_spec$wt, multiplier)
+    else reg_scale_pred(reg_fill_sweep(f$fit, f$data, sp$predictors, conf_level,
+                                       design_spec$wt, multiplier), sp$trials)
   dress <- function(col, group = NULL) {
     col <- reg_fill_base(col, marg_add, skeleton, sp$predictors, group = group)
     if (is.null(display)) reg_default_display(col, empirical)
     else reg_apply_display(col, display)
   }
-  var_y <- if (!prob_scale) suppressWarnings(stats::var(as.numeric(f$data[[sp$outcome]])))
-           else NA_real_
+  # a summed score is prob-scale by family but its additive effect is a difference of mean SCORES,
+  # graded against the score's own spread -- so it needs var(Y) exactly as a gaussian AME does.
+  var_y <- if (!prob_scale || !is.na(sp$trials %||% NA))
+    suppressWarnings(stats::var(as.numeric(f$data[[sp$outcome]]))) else NA_real_
   if (per_category) {                            # one AME column per OUTCOME category (all levels)
     groups <- levels(as.factor(f$data[[sp$outcome]]))
+    cv_cat <- reg_category_col_var(sp, is_comparison, f$positive_level, cleannames)
     purrr::map(groups, function(g) {
       jc  <- reg_cleanup(g, cleannames)
-      # Phase 14s (G) + 14w (item 3): the per-category AME columns of one model share `sp$label`
-      # ("<dep>: AME (adjusted %)") as col_var (no inter-category border, one span names the effect
-      # once); the visible NAME is just the category (the repeated ": AME" is stripped).
+      # the per-category columns of one model share the span (no inter-category border, and the
+      # measure is named there once); the visible NAME is just the category.
       lab <- paste0(if (prefix_dep) paste0(sp$outcome, " - ") else "", jc)
-      list(label = lab, emp_key = g,   # emp_key: raw category, for the empirical tooltip (Phase 14v)
+      list(label = lab, emp_key = g,   # emp_key: raw category, for the empirical tooltip
            col   = dress(reg_marginal_column(skeleton, marg, sp$predictors, shape,
-                                             var_y, g, sp_col, color_signif, sp$label,
-                                             model_family = sp_fam), g))
+                                             var_y, g, sp_col, color_signif, cv_cat,
+                                             model_family = sp_fam,
+                                             scale = reg_scale_of(sp_est, sp$trials),
+                                             trials = sp$trials), g))
     })
   } else {
     # Phase 14r (E): the model OR (exp of the fit's coefficient, aligned to the skeleton by term)
@@ -3578,15 +3645,17 @@ reg_cols_ame <- function(f, sp, ctx) {
       td <- broom::tidy(f$fit); td$term <- stringi::stri_replace_all_regex(td$term, "`", "")
       exp(td$estimate[match(skeleton$term, td$term)])
     } else NULL
-    # Phase 14w (item 3): the single AME column shares the outcome col_var with its empirical
-    # companions; its NAME carries the effect ("Model AME (adjusted %)").
+    # the single marginal column shares the outcome col_var with its crude companion (one span, no
+    # border); its NAME carries the measure and its contrast marker ("Model_mRD").
     cv <- if (is_comparison) sp$label
-          else reg_shared_col_var(sp_fam, sp$outcome, f$positive_level, cleannames)
+          else reg_shared_col_var(sp_fam, sp$outcome, f$positive_level, cleannames, sp$trials)
     list(list(
       label = reg_model_col_name(sp_eff, sp$outcome, is_comparison, sp$label, n_outcomes),
       col   = dress(reg_marginal_column(skeleton, marg, sp$predictors, shape,
                                         var_y, NA_character_, sp_col, color_signif,
-                                        cv, or_tip = or_tip, model_family = sp_fam))))
+                                        cv, or_tip = or_tip, model_family = sp_fam,
+                                        scale = reg_scale_of(sp_est, sp$trials),
+                                        trials = sp$trials))))
   }
 }
 
@@ -3608,15 +3677,16 @@ reg_cols_vsrest <- function(f, sp, ctx) {
   # the adjusted predictions of the same fit, sample-averaged: the "vs rest" contrast is evaluated at
   # a profile, but the LEVEL a reader compares it to is the population's.
   marg_add <- if (is.null(f$fit)) NULL else
-    reg_fill_sweep(f$fit, f$data, sp$predictors, conf_level, design_spec$wt)
+    reg_scale_pred(reg_fill_sweep(f$fit, f$data, sp$predictors, conf_level, design_spec$wt),
+                   sp$trials)
   groups <- levels(as.factor(f$data[[sp$outcome]]))
+  cv_cat <- reg_category_col_var(sp, is_comparison, f$positive_level, cleannames)
   purrr::map(groups, function(g) {
     jc  <- reg_cleanup(g, cleannames)
-    # Phase 14s (G) + 14w (item 3): shared col_var (`sp$label`) across the "vs rest" category columns
-    # of one model; the repeated ": OR" is stripped from the visible NAME (the span carries it).
+    # one span across the "vs rest" category columns of a model; the visible NAME is the category.
     lab <- paste0(if (prefix_dep) paste0(sp$outcome, " - ") else "", jc, " vs rest")
     col <- reg_marginal_column(skeleton, marg, sp$predictors, "or",
-                               NA_real_, g, sp_col, color_signif, sp$label,
+                               NA_real_, g, sp_col, color_signif, cv_cat,
                                model_family = sp_fam)
     col <- reg_fill_base(col, marg_add, skeleton, sp$predictors, group = g)
     list(label = lab,
@@ -3634,7 +3704,7 @@ reg_cols_coef <- function(f, sp, ctx) {
   list2env(reg_ctx_locals(ctx), environment())
   # Phase 15e: each column takes its own family shape (multinomial fans out; glm/gaussian are one col).
   sp_fam   <- sp$fit_family
-  sp_eff   <- reg_eff_word(sp$est, empirical)   # 19m-ii: derived, see cols_ame above
+  sp_eff   <- reg_word(sp$est)                  # composed from the estimand, see cols_ame above
   sp_col   <- sp$color
   # the coefficient path never runs a marginal sweep of its own, so it runs the one reg_fill_base()
   # needs: point estimates only, on the dependency-free engine.
@@ -3644,11 +3714,7 @@ reg_cols_coef <- function(f, sp, ctx) {
   marg <- if (!is.null(f$marg)) f$marg               # the digest path already ran the sweep
           else if (is.null(f$fit)) NULL
           else reg_fill_sweep(f$fit, f$data, sp$predictors, conf_level, design_spec$wt, multiplier)
-  # A SUMMED-SCORE outcome's level is the mean SCORE, not the share it is built from -- that is the
-  # quantity a reader of a battery of items wants, and it is what the crude column beside it shows.
-  # The fit predicts the share, so the adjusted score is that share times the number of items.
-  if (!is.null(marg$pred) && nrow(marg$pred) && !is.na(sp$trials %||% NA))
-    marg$pred$pred <- marg$pred$pred * as.numeric(sp$trials)
+  marg <- reg_scale_pred(marg, sp$trials)
   dress <- function(col, group = NULL) {
     col <- reg_fill_base(col, marg, skeleton, model_predictors, group = group)
     if (is.null(display)) reg_default_display(col, empirical)
@@ -3656,13 +3722,15 @@ reg_cols_coef <- function(f, sp, ctx) {
   }
   if (sp_fam == "multinomial") {
     cols <- reg_columns_multinom(skeleton, f, sp, sp$est, sp_col, color_signif,
-                                 cleannames, prefix_dep, model_family = sp_fam,
-                                 method = method)
+                                 cleannames, prefix_dep,
+                                 col_var = reg_category_col_var(sp, is_comparison,
+                                                                f$positive_level, cleannames),
+                                 model_family = sp_fam, method = method)
     return(purrr::map(cols, function(lc) { lc$col <- dress(lc$col, lc$emp_key); lc }))
   }
   # Phase 14w (item 3): outcome col_var + "Model <effect>" name (comparison keeps the model name).
   cv  <- if (is_comparison) sp$label
-         else reg_shared_col_var(sp_fam, sp$outcome, f$positive_level, cleannames)
+         else reg_shared_col_var(sp_fam, sp$outcome, f$positive_level, cleannames, sp$trials)
   col <- reg_column(skeleton, f, model_predictors, cv, sp$est, sp_col, color_signif,
                     model_family = sp_fam, method = method, trials = sp$trials)
   list(list(label = reg_model_col_name(sp_eff, sp$outcome, is_comparison, sp$label, n_outcomes),
@@ -4165,16 +4233,19 @@ reg_stage_finalize <- function(ctx) {
 #'   yourself with [survey::svydesign()] and pass it as `data` (see there); `wt` alone is a flat
 #'   `ids = ~1` design, which can understate the variance of a clustered sample.
 #' @param effect **Which contrast** the table shows --- one of the two questions an estimand asks.
-#'   `"coefficient"` (default) is the model's own conditional effect (the beta / odds ratio /
-#'   incidence-rate ratio / cumulative odds ratio, "holding the other predictors constant").
-#'   `"marginal"` is the **average marginal effect**: the model's effect averaged over the observed
-#'   covariate distribution --- a probability-scale, cross-model-comparable summary (Mood 2010) for
-#'   logistic / multinomial / ordinal outcomes, the expected-count change for poisson, the
-#'   coefficient itself for gaussian. `"at_reference"` evaluates the same quantity **at the reference
-#'   profile** (every other predictor at its reference level / mean): the marginal effect at
-#'   reference (MER), and for a **multinomial** outcome the odds ratio of each outcome category
-#'   *versus the rest* at that profile. `"marginal"` / `"at_reference"` need the `marginaleffects`
-#'   package. Resolved **per outcome** like `family` (scalar / vector / named vector).
+#'   `"coefficient"` (default) is the model's own conditional effect ("holding the other predictors
+#'   constant"). `"marginal"` is the **average marginal effect**: the model's effect averaged over
+#'   the observed covariate distribution --- a probability-scale, cross-model-comparable summary
+#'   (Mood 2010) for logistic / multinomial / ordinal outcomes, the expected-count change for
+#'   poisson, the coefficient itself for gaussian. `"at_reference"` evaluates the same quantity **at
+#'   the reference profile** (every other predictor at its reference level / mean), and for a
+#'   **multinomial** outcome the odds ratio of each outcome category *versus the rest* at that
+#'   profile. Resolved **per outcome** like `family` (scalar / vector / named vector).
+#'
+#'   The contrast is a **marker on the measure** in the column header, so the acronym stays the thing
+#'   to look up: no marker for a coefficient, an `m` prefix for a marginal effect, a `ref` prefix at
+#'   the reference profile --- `Model_OR`, `Model_mRR`, `Model_refRD`. The observed companion carries
+#'   the measure alone (`Obs_RR`), because a univariable effect has no adjustment to be marginal over.
 #'
 #'   The parenthetical of a probability-scale marginal cell is a *marginal-standardized* prediction
 #'   (`avg_predictions(variables=)`: the predictor set to each level for the whole sample, other
@@ -4184,10 +4255,10 @@ reg_stage_finalize <- function(ctx) {
 #'   manipulation. Note the reference profile can be an unusual baseline (e.g. a factor's first
 #'   level = `"No answer"`).
 #' @param measure **Which effect measure** --- the other question. `"auto"` (default) takes the
-#'   family's usual one (odds ratios for a logit, incidence-rate ratios for a count, a coefficient
-#'   for a linear model; a difference for a marginal contrast). The full word is the canonical
-#'   spelling and the discipline's acronym is an accepted synonym, so the argument teaches the
-#'   concept while the column header keeps the acronym:
+#'   family's usual one (odds ratios for a logit, incidence-rate ratios for a count, a mean
+#'   difference for a linear model; a difference for a marginal contrast). The full word is the
+#'   canonical spelling and the discipline's acronym is an accepted synonym, so the argument teaches
+#'   the concept while the column header keeps the acronym (see *The header acronyms* below):
 #'
 #'   * `"odds_ratio"` (`"OR"`) --- the odds ratio of a logit / multinomial / ordinal fit.
 #'   * `"ratio"` (`"RR"`, `"IRR"`, `"RoM"`) --- a **risk** ratio on a binary outcome (the modified
@@ -4205,7 +4276,9 @@ reg_stage_finalize <- function(ctx) {
 #'     says which one ran.
 #'   * `"log"` (`"log_odds"`, `"log_risk"`, `"log_rate"`) --- the same fit, **un-exponentiated**:
 #'     coefficients on the model's own link scale. Bare `"log"` logs the family's default measure;
-#'     the precise spellings pin which (so `"log_risk"` is the modified-Poisson fit, logged).
+#'     the precise spellings pin which (so `"log_risk"` is the modified-Poisson fit, logged). The
+#'     header names what it logs --- `Model_log(OR)`, `Model_log(IRR)` --- rather than one greek
+#'     letter for five different quantities.
 #'
 #'   Resolved **per outcome** like `family`. `effect` and `measure` are orthogonal: a *conditional*
 #'   ratio is a different **fit**, a *marginal* one a different **estimator**, and both land on the
@@ -4722,6 +4795,7 @@ reg_stage_finalize <- function(ctx) {
 #'   `reference`, `method`, `compare`, `baseline`, `inverse_two_level_factors`, and the `effect`
 #'   values `"ame"` / `"ame_ratio"` --- give an error naming its replacement at the moment of the
 #'   mistake, rather than R's bare "unused argument".
+#' @eval reg_words_rd()
 #' @eval reg_measures_rd()
 #' @export
 tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL,

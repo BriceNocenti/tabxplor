@@ -47,20 +47,21 @@ test_that("obs == the Obs_* effect column, for every family / effect shape", {
   chk(tab_reg(d, outcome = "married", predictors = c("race", "party3"),
               family = "binomial", empirical = TRUE), "Model_OR", "Obs_OR", get_or)
   chk(suppressMessages(tab_reg(d, outcome = "married", predictors = c("race", "party3"),
-                               family = "poisson", empirical = TRUE)), "Model_RR", "Obs_RR", get_or)
+                               family = "poisson", empirical = TRUE)), "Model_RR", "Obs_RR",
+      tabxplor:::fmt_est_of)
   chk(suppressWarnings(tab_reg(d, outcome = "tvhours", predictors = c("race", "party3"),
                                family = "poisson", empirical = TRUE)),   # tvhours is over-dispersed
       "Model_IRR", "Obs_IRR", get_ratio)
   chk(tab_reg(d, outcome = "age", predictors = c("race", "party3"),
-              family = "gaussian", empirical = TRUE), "Model_\u03b2", "Obs_diff", get_diff)
+              family = "gaussian", empirical = TRUE), "Model_diff", "Obs_diff", get_diff)
   chk(tab_reg(d, outcome = "married", predictors = c("race", "party3"), family = "binomial",
-              measure = "log", empirical = TRUE), "Model_\u03b2", "Obs_log(OR)", get_diff)
+              measure = "log", empirical = TRUE), "Model_log(OR)", "Obs_log(OR)", get_diff)
   t <- tab_reg(d, outcome = "married", predictors = c("race", "party3"),
                family = "binomial", effect = "marginal", empirical = TRUE)
-  chk(t, grep("^Model_", names(t), value = TRUE)[[1]], "Obs_diff", get_diff)
+  chk(t, grep("^Model_", names(t), value = TRUE)[[1]], "Obs_RD", get_diff)
   t <- tab_reg(d, outcome = "married", predictors = c("race", "party3"),
                family = "binomial", effect = "marginal", measure = "ratio", empirical = TRUE)
-  chk(t, grep("^Model_", names(t), value = TRUE)[[1]], "Obs_RR", get_or)
+  chk(t, grep("^Model_", names(t), value = TRUE)[[1]], "Obs_RR", tabxplor:::fmt_est_of)
 })
 
 test_that("obs is NA (-> uncoloured) wherever there is no crude counterpart", {

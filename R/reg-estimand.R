@@ -41,12 +41,19 @@
 #                                        does offer, generated from the table itself;
 #   * and at runtime, the fit that did not converge (reg_fit()), which names the alternatives.
 #
-# FOUR CONSUMERS, ONE TABLE (the standing rule: never a second hand-written list):
+# THE HEADER VOCABULARY, also here (REG_WORDS + REG_CONTRASTS, below). One name per quantity: a
+# header names the MEASURE and the CONTRAST is a marker on it, so the varying part of every column
+# name is one acronym a reader can look up -- and `Model_` stays a constant, ignorable prefix. The
+# word is COMPOSED (marker o log-wrap o base acronym), never declared, which is what makes it
+# impossible for two estimands to share a header or for one estimand to be named two ways.
+#
+# FIVE CONSUMERS, ONE TABLE (the standing rule: never a second hand-written list):
 #   1. the boundary resolver in tab_reg()          -> reg_estimand()
 #   2. the error message                            -> reg_estimand_abort()
 #   3. the user-callable lister                     -> reg_measures()
-#   4. the generated `?tab_reg` section (and, in Phase 19k, the jamovi eligibility rule)
-#                                                   -> reg_estimands_for()
+#   4. the generated `?tab_reg` sections (and the jamovi eligibility rule)
+#                                                   -> reg_estimands_for() / reg_words_rd()
+#   5. the "Model:" footer line                     -> reg_estimand_note()
 #
 # ALSO HERE (Phase 19m-i): **REG_FAMILIES** -- what each model family is CALLED, and where it may be
 # named. Four name tables and a switch before, in two files, already disagreeing: the footer sentence
@@ -70,7 +77,7 @@
 #' @keywords internal
 #' @noRd
 REG_MEASURE_ALIASES <- c(
-  odds_ratio = "odds_ratio", or = "odds_ratio", OR = "odds_ratio",
+  odds_ratio = "odds_ratio", or = "odds_ratio", OR = "odds_ratio", cumOR = "odds_ratio",
   ratio = "ratio", rr = "ratio", RR = "ratio", irr = "ratio", IRR = "ratio",
   mr = "ratio", MR = "ratio", RoM = "ratio", risk_ratio = "ratio", rate_ratio = "ratio",
   difference = "difference", diff = "difference", rd = "difference", RD = "difference",
@@ -128,7 +135,8 @@ reg_cell_digits <- function(scale) {
 # not: reg_same_estimand() compares exactly this, and a mismatch withholds `obs`).
 #' @keywords internal
 #' @noRd
-REG_SCALE_GROUPED <- c(odds_ratio = "score_ratio")
+REG_SCALE_GROUPED <- c(odds_ratio = "score_ratio", pct_ratio = "score_ratio",
+                       points = "raw_diff")
 
 #' @keywords internal
 #' @noRd
@@ -156,6 +164,125 @@ REG_MEASURES_VALUES <- c("auto", "odds_ratio", "ratio", "difference", "log")
 REG_EFFECTS_VALUES  <- c("coefficient", "marginal", "at_reference")
 
 
+# --- the header vocabulary ---------------------------------------------------------------------------
+#
+# ONE NAME PER QUANTITY. A header names the MEASURE; the contrast is a MARKER on that measure, and a
+# logged estimand wraps it. So a column header is composed, never declared:
+#
+#     header word  =  marker(effect)  o  log-wrap(measure)  o  the row's base acronym
+#     "mRR"        =     "m" +           (no log)             "RR"
+#     "log(OR)"    =     (none) +        "log(" "OR" ")"      "OR"
+#
+# That composition is what keeps `Model_` a constant, ignorable prefix while the varying part stays
+# one acronym a reader can look up -- and it is why no two estimands can share a header (the old
+# `RR` named the conditional AND the marginal risk ratio) and no estimand can be named two ways (the
+# old `AME` / `MER` / `RD` were three names for one measure, and `beta` was five quantities at once).
+#
+# REG_WORDS -- the acronyms themselves. Columns:
+#   long            the expansion, a CLOSURE so gettext() runs at render (the MEASURES$word pattern:
+#                   a top-level gettext() would freeze the build locale) -- read by the footer, by
+#                   reg_measures(), by the "what this outcome offers" abort and by ?tab_reg.
+#   noncollapsible  adjusting for a covariate moves this measure away from its neutral even with zero
+#                   confounding. Read by the `adjustment` legend caveat; set-identical to
+#                   reg_estimand_collapsible(), which states the same fact from the build side.
+#
+# WARNING: every acronym here must also be an accepted `measure` spelling (REG_MEASURE_ALIASES), so
+# what a header prints can always be typed back into the argument. A foreign key checks it at load.
+#' @keywords internal
+#' @noRd
+REG_WORDS <- list(
+  OR    = list(long = function() gettext("odds ratio"),            noncollapsible = TRUE),
+  cumOR = list(long = function() gettext("cumulative odds ratio"), noncollapsible = TRUE),
+  RR    = list(long = function() gettext("risk ratio"),            noncollapsible = FALSE),
+  RD    = list(long = function() gettext("risk difference"),       noncollapsible = FALSE),
+  IRR   = list(long = function() gettext("incidence-rate ratio"),  noncollapsible = FALSE),
+  RoM   = list(long = function() gettext("ratio of means"),        noncollapsible = FALSE),
+  diff  = list(long = function() gettext("mean difference"),       noncollapsible = FALSE)
+)
+
+# REG_CONTRASTS -- how each `effect` marks the measure it rides on. `mark` is a PREFIX on the acronym
+# (unmarked = conditional, as the literature reads an unqualified odds ratio), `long` wraps the
+# expansion the same way. One row per REG_EFFECTS_VALUES entry, asserted at load.
+#
+# The markers are prefixes rather than suffixes so the measure stays the last token of every header,
+# and they are plain letters so the name remains a syntactic R name -- `t$Model_refRR` works without
+# backticks, where an `@` would parse as an S4 slot access and fail with an unrelated message.
+#' @keywords internal
+#' @noRd
+REG_CONTRASTS <- list(
+  coefficient  = list(mark = "",    long = function(l) l),
+  marginal     = list(mark = "m",   long = function(l) gettextf("marginal %s", l)),
+  at_reference = list(mark = "ref", long = function(l) gettextf("%s at the reference profile", l))
+)
+
+stopifnot("every contrast declares its marker" = setequal(names(REG_CONTRASTS), REG_EFFECTS_VALUES))
+
+# The four readers of the two tables above. Each takes a resolved estimand row (reg_estimand()).
+
+# reg_word() -- THE column header word.
+#' @keywords internal
+#' @noRd
+reg_word <- function(est) {
+  if (is.null(est) || is.null(est$word)) return("")
+  # the log wraps the whole marked token ("log(refOR)" -- the log OF the at-reference odds ratio),
+  # while the expansion below logs the measure and marks the contrast around it ("marginal log odds
+  # ratio"). Each reads the way its own form is spoken.
+  reg_word_logged(paste0(REG_CONTRASTS[[est$effect]]$mark, est$word), est$measure)
+}
+
+# reg_word_long() -- THE expansion of that word, in one sentence fragment.
+#' @keywords internal
+#' @noRd
+reg_word_long <- function(est) {
+  if (is.null(est) || is.null(est$word)) return("")
+  base <- REG_WORDS[[est$word]]$long()
+  if (identical(est$measure, "log")) base <- gettextf("log %s", base)
+  REG_CONTRASTS[[est$effect]]$long(base)
+}
+
+# The log wrapper, shared by the header and by the crude column: `measure = "log"` shows the SAME
+# estimand un-exponentiated, so it names what it logs rather than collapsing to one greek letter.
+#' @keywords internal
+#' @noRd
+reg_word_logged <- function(word, measure)
+  if (identical(measure, "log")) paste0("log(", word, ")") else word
+
+# The acronym a composed header was built from -- "log(OR)" -> "OR", "mRR" -> "RR". The inverse of the
+# composition, for the consumers that hold a rendered word and need the fact behind it.
+#' @keywords internal
+#' @noRd
+reg_word_base <- function(word) {
+  if (is.null(word) || length(word) != 1L || is.na(word)) return(NA_character_)
+  w <- sub("^log\\((.*)\\)$", "\\1", word)
+  for (m in setdiff(vapply(REG_CONTRASTS, function(r) r$mark, character(1)), ""))
+    if (startsWith(w, m) && substring(w, nchar(m) + 1L) %in% names(REG_WORDS))
+      return(substring(w, nchar(m) + 1L))
+  if (w %in% names(REG_WORDS)) w else NA_character_
+}
+
+# reg_legend_word() -- the word the COLOUR legend names a column by: the measure, never the contrast.
+#
+# ⚠ the marker is deliberately dropped. legend_group_by_body() groups columns by their rendered
+# sentence, so a crude column reading "RR" beside a model column reading "mRR" would split the single
+# legend block the crude/adjusted merge exists to produce. The legend describes the LADDER, which is a
+# property of the measure; the header and the "Model:" line describe the estimand.
+#' @keywords internal
+#' @noRd
+reg_legend_word <- function(est) {
+  if (is.null(est) || is.null(est$word) || is.null(REG_WORDS[[est$word]])) return(NA_character_)
+  reg_word_logged(est$word, est$measure)
+}
+
+# Is this rendered word a non-collapsible measure? The legend's reading of the same fact
+# reg_estimand_collapsible() states from the build side.
+#' @keywords internal
+#' @noRd
+reg_word_noncollapsible <- function(word) {
+  b <- reg_word_base(word)
+  !is.na(b) && isTRUE(REG_WORDS[[b]]$noncollapsible)
+}
+
+
 # --- the library -------------------------------------------------------------------------------------
 #
 # ONE ROW per (family, effect, measure) the package can answer, plus the rows that state why a
@@ -168,8 +295,9 @@ REG_EFFECTS_VALUES  <- c("coefficient", "marginal", "at_reference")
 #                different MODEL: "rr" = modified Poisson (a conditional risk ratio), "rd" =
 #                identity link (a risk difference), "mr" = log-link pseudo-ML (a ratio of means).
 #   exp          exponentiate the tidy estimate (the old `exponentiate`, now derived).
-#   word         the column header's effect word -- "OR" / "IRR" / "RR" / "RoM" / "RD" / beta /
-#                "AME" / "MER". `reg_effect_word()`'s four-argument nested switch IS this column.
+#   word         the BASE measure acronym, a key into REG_WORDS. The contrast marker and the log
+#                wrapper are composed onto it by reg_word(), never declared -- see "the header
+#                vocabulary" above.
 #   scale        the EST_SCALES key stamped on the column (KEY 2). Its `est_field` says which fmt
 #                field the estimate is written into, so a scale change needs no builder change.
 #   crude_fam    which REG_EMPIRICAL block the observed companion comes from; "auto" =
@@ -200,12 +328,13 @@ REG_EFFECTS_VALUES  <- c("coefficient", "marginal", "at_reference")
 #   why          for "impossible": a closure returning the reason (gettext at render, statically
 #                extractable -- the MEASURES$word pattern; a top-level gettext() would freeze the
 #                build locale).
-#   note         a closure returning the estimand phrase of the "Model:" footer line.
-#                `reg_model_note()`'s six arms x `do_exp` ARE this column.
+#   note         a closure returning the QUALIFIER clause of the "Model:" footer line -- what the
+#                estimand is measured against, and any assumption worth one phrase. The measure
+#                itself is not repeated here: the footer composes "<word> = <long> (<note>)" from
+#                REG_WORDS, so the acronym in the header and its expansion are one fact.
 #
-# WARNING: the msgids in `why` / `note` are the ones `po/R-fr.po` already carries wherever the
-# phrase existed before -- do not re-word them in passing, or the French legend silently reverts to
-# English.
+# WARNING: the msgids in `why` / `note` are the ones `po/R-fr.po` carries -- do not re-word them in
+# passing, or the French footer silently reverts to English.
 # The two vocabularies the columns above are keyed on. `builder` names one of reg_build()'s three
 # column builders -- declared here, beside the column that chooses it, and policed BOTH ways by a
 # foreign key (R/zzz-fact-keys.R): tab_reg.R's dispatch had a silent fall-through arm, so a typo'd
@@ -248,16 +377,16 @@ reg_marginal_engine <- function(est) {
 est_note_marginal <- function(kind, at_ref = FALSE, ratio = FALSE) {
   function() {
     where <- if (at_ref)
-      gettext(" at the reference profile (other predictors held at their reference level / mean)")
-    else gettext(" (sample-averaged)")
-    head <- if (ratio && identical(kind, "prob"))
-      gettext("marginal risk ratios (the ratio of adjusted predicted probabilities)")
+      gettext("other predictors held at their reference level / mean")
+    else gettext("sample-averaged")
+    what <- if (ratio && identical(kind, "prob"))
+      gettext("the ratio of adjusted predicted probabilities")
     else if (ratio)
-      gettext("marginal ratios (the ratio of adjusted predicted values)")
+      gettext("the ratio of adjusted predicted values")
     else if (identical(kind, "prob"))
-      gettext("marginal effects on the probability scale (percentage points)")
-    else gettext("marginal effects on the response scale")
-    paste0(head, where)
+      gettext("on the probability scale, in percentage points")
+    else gettext("on the response scale")
+    gettextf("%s; %s", what, where)   # the separator is the TRANSLATION's (French: " ; ")
   }
 }
 
@@ -272,9 +401,9 @@ REG_ESTIMANDS <- list(
   gaussian = list(
     default = c(coefficient = "difference", marginal = "difference", at_reference = "difference"),
     rows = list(
-      est_row("coefficient", "difference", "coef", "gaussian", FALSE, "\u03b2", "raw_diff",
+      est_row("coefficient", "difference", "coef", "gaussian", FALSE, "diff", "raw_diff",
               crude_shape = "diff",
-              note = function() gettext("coefficients (mean difference vs the reference category)")),
+              note = function() gettext("vs the reference category")),
       # Phase 19e -- the capability gap `tab()` never had: a RATIO OF MEANS. Poisson pseudo-ML with
       # robust standard errors (Santos Silva & Tenreyro 2006), i.e. exactly the "rr" route one
       # family over: a deliberately misspecified log-link likelihood whose sandwich variance is the
@@ -282,20 +411,20 @@ REG_ESTIMANDS <- list(
       # engines -- only tab_reg() refused.
       est_row("coefficient", "ratio", "coef", "mr", TRUE, "RoM", "mean_ratio",
               crude_fam = "mr", crude_shape = "mr",
-              note = function() gettext("ratios of adjusted means (vs the reference category)")),
-      est_row("coefficient", "log", "coef", "mr", FALSE, "\u03b2", "log_coef",
+              note = function() gettext("vs the reference category")),
+      est_row("coefficient", "log", "coef", "mr", FALSE, "RoM", "log_coef",
               crude_fam = "mr", crude_shape = "mr_log",
-              note = function() gettext("log-mean coefficients (vs the reference category)")),
+              note = function() gettext("vs the reference category")),
       est_row("coefficient", "odds_ratio", "coef", "gaussian", TRUE, "OR", "odds_ratio",
               status = "impossible",
               why = function() gettext("an odds ratio needs a probability to take the odds of; this outcome is continuous")),
-      est_row("marginal", "difference", "ame", "gaussian", FALSE, "AME", "raw_diff",
+      est_row("marginal", "difference", "ame", "gaussian", FALSE, "diff", "raw_diff",
               crude_shape = "diff",
               note = est_note_marginal("raw")),
       est_row("marginal", "ratio", "ame", "gaussian", TRUE, "RoM", "mean_ratio",
               crude_fam = "mr", crude_shape = "mr", comparison = "lnratioavg",
               note = est_note_marginal("raw", ratio = TRUE)),
-      est_row("at_reference", "difference", "ame", "gaussian", FALSE, "MER", "raw_diff",
+      est_row("at_reference", "difference", "ame", "gaussian", FALSE, "diff", "raw_diff",
               crude_shape = "diff", obs = FALSE,
               note = est_note_marginal("raw", at_ref = TRUE)),
       est_row("at_reference", "ratio", "ame", "gaussian", TRUE, "RoM", "mean_ratio",
@@ -310,29 +439,29 @@ REG_ESTIMANDS <- list(
     rows = list(
       est_row("coefficient", "odds_ratio", "coef", "binomial", TRUE, "OR", "odds_ratio",
               crude_shape = "or",
-              note = function() gettext("odds ratios (vs the reference category)")),
-      est_row("coefficient", "log", "coef", "binomial", FALSE, "\u03b2", "log_coef",
+              note = function() gettext("vs the reference category")),
+      est_row("coefficient", "log", "coef", "binomial", FALSE, "OR", "log_coef",
               crude_shape = "or_log",
-              note = function() gettext("log-odds coefficients (vs the reference category)")),
+              note = function() gettext("vs the reference category")),
       # the modified Poisson (Zou 2004) -- reachable by NAME at last. It used to require typing
       # `family = "poisson"` on a binary outcome, which is the wrong distribution said out loud.
-      est_row("coefficient", "ratio", "coef", "rr", TRUE, "RR", "odds_ratio",
+      est_row("coefficient", "ratio", "coef", "rr", TRUE, "RR", "pct_ratio",
               crude_fam = "rr", crude_shape = "rr",
-              note = function() gettext("risk ratios (vs the reference category)")),
+              note = function() gettext("vs the reference category")),
       # Phase 19e -- the second capability gap: the additive-risk (identity-link) model.
       est_row("coefficient", "difference", "coef", "rd", FALSE, "RD", "points",
               crude_shape = "ame",
-              note = function() gettext("risk differences (percentage points vs the reference category)")),
-      est_row("marginal", "difference", "ame", "binomial", FALSE, "AME", "points",
+              note = function() gettext("in percentage points, vs the reference category")),
+      est_row("marginal", "difference", "ame", "binomial", FALSE, "RD", "points",
               crude_shape = "ame",
               note = est_note_marginal("prob")),
-      est_row("marginal", "ratio", "ame", "binomial", TRUE, "RR", "odds_ratio",
+      est_row("marginal", "ratio", "ame", "binomial", TRUE, "RR", "pct_ratio",
               crude_fam = "rr", crude_shape = "rr", comparison = "lnratioavg",
               note = est_note_marginal("prob", ratio = TRUE)),
-      est_row("at_reference", "difference", "ame", "binomial", FALSE, "MER", "points",
+      est_row("at_reference", "difference", "ame", "binomial", FALSE, "RD", "points",
               crude_shape = "ame", obs = FALSE,
               note = est_note_marginal("prob", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "binomial", TRUE, "RR", "odds_ratio",
+      est_row("at_reference", "ratio", "ame", "binomial", TRUE, "RR", "pct_ratio",
               crude_fam = "rr", crude_shape = "rr", comparison = "lnratioavg",
               obs = FALSE,
               note = est_note_marginal("prob", at_ref = TRUE, ratio = TRUE))
@@ -348,25 +477,31 @@ REG_ESTIMANDS <- list(
       # ratio of means, in a regression and in a crosstab alike.
       est_row("coefficient", "ratio", "coef", "poisson", TRUE, "IRR", "mean_ratio",
               crude_shape = "irr",
-              note = function() gettext("incidence-rate ratios (vs the reference category)")),
-      est_row("coefficient", "log", "coef", "poisson", FALSE, "\u03b2", "log_coef",
+              note = function() gettext("vs the reference category")),
+      est_row("coefficient", "log", "coef", "poisson", FALSE, "IRR", "log_coef",
               crude_shape = "irr_log",
-              note = function() gettext("log-rate coefficients (vs the reference category)")),
+              note = function() gettext("vs the reference category")),
       est_row("coefficient", "odds_ratio", "coef", "poisson", TRUE, "OR", "odds_ratio",
               status = "impossible",
               why = function() gettext("an odds ratio needs a probability to take the odds of; this outcome is a count")),
-      # a poisson AME is ADDITIVE while its crude companion stays a rate RATIO: the crude shape is
-      # deliberately the coefficient one, and reg_same_estimand() then (rightly) refuses to pair
-      # them. That fall-through used to live inside reg_crude_shape(); it is data now.
-      est_row("marginal", "difference", "ame", "poisson", FALSE, "AME", "raw_diff",
-              crude_shape = "irr", note = est_note_marginal("raw")),
-      est_row("marginal", "ratio", "ame", "poisson", TRUE, "RoM", "mean_ratio",
+      # a poisson marginal effect is a difference of expected COUNTS, so its crude companion is the
+      # observed difference of mean counts -- REG_EMPIRICAL$poisson$diff, the same estimand fitted
+      # with one predictor. (It used to fall back to the rate-ratio shape, which reg_same_estimand()
+      # then rightly refused to pair: an unpaired crude column on a second ladder, for a quantity
+      # that has a perfectly good closed form.)
+      est_row("marginal", "difference", "ame", "poisson", FALSE, "diff", "raw_diff",
+              crude_shape = "diff", note = est_note_marginal("raw")),
+      # a count outcome has ONE ratio acronym: the marginal contrast is the ratio of the adjusted
+      # predicted counts, which is the rate ratio standardised rather than a different measure. So it
+      # is "mIRR", and its crude companion beside it is "Obs_IRR" -- naming it "RoM" here would print
+      # two acronyms for one quantity, which is what this vocabulary exists to end.
+      est_row("marginal", "ratio", "ame", "poisson", TRUE, "IRR", "mean_ratio",
               crude_shape = "irr", comparison = "lnratioavg",
               note = est_note_marginal("raw", ratio = TRUE)),
-      est_row("at_reference", "difference", "ame", "poisson", FALSE, "MER", "raw_diff",
-              crude_shape = "irr", obs = FALSE,
+      est_row("at_reference", "difference", "ame", "poisson", FALSE, "diff", "raw_diff",
+              crude_shape = "diff", obs = FALSE,
               note = est_note_marginal("raw", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "poisson", TRUE, "RoM", "mean_ratio",
+      est_row("at_reference", "ratio", "ame", "poisson", TRUE, "IRR", "mean_ratio",
               crude_shape = "irr", comparison = "lnratioavg", obs = FALSE,
               note = est_note_marginal("raw", at_ref = TRUE, ratio = TRUE))
     )),
@@ -377,24 +512,24 @@ REG_ESTIMANDS <- list(
     rows = list(
       est_row("coefficient", "odds_ratio", "coef", "multinomial", TRUE, "OR", "odds_ratio",
               crude_shape = "or",
-              note = function() gettext("odds ratios (each category vs the reference)")),
-      est_row("coefficient", "log", "coef", "multinomial", FALSE, "\u03b2", "log_coef",
+              note = function() gettext("each category vs the reference")),
+      est_row("coefficient", "log", "coef", "multinomial", FALSE, "OR", "log_coef",
               crude_shape = "or_log",
-              note = function() gettext("log-odds coefficients (each category vs the reference)")),
-      est_row("marginal", "difference", "ame", "multinomial", FALSE, "AME", "points",
+              note = function() gettext("each category vs the reference")),
+      est_row("marginal", "difference", "ame", "multinomial", FALSE, "RD", "points",
               crude_shape = "ame", note = est_note_marginal("prob")),
-      est_row("marginal", "ratio", "ame", "multinomial", TRUE, "RR", "odds_ratio",
+      est_row("marginal", "ratio", "ame", "multinomial", TRUE, "RR", "pct_ratio",
               crude_shape = "ame_ratio", comparison = "lnratioavg",
               note = est_note_marginal("prob", ratio = TRUE)),
       # the one cell whose BUILDER is neither coefficient nor marginal: at the reference profile a
       # multinomial coefficient becomes the odds ratio of each category VERSUS THE REST.
       est_row("at_reference", "odds_ratio", "vsrest", "multinomial", TRUE, "OR", "odds_ratio",
               crude_shape = "or", comparison = "lnor", obs = FALSE,
-              note = function() gettext("odds ratios of each outcome category versus the rest, at the reference profile (other predictors held at their reference level / mean); profile-conditional")),
-      est_row("at_reference", "difference", "ame", "multinomial", FALSE, "MER", "points",
+              note = function() gettext("each outcome category versus the rest; other predictors held at their reference level / mean; profile-conditional")),
+      est_row("at_reference", "difference", "ame", "multinomial", FALSE, "RD", "points",
               crude_shape = "ame", obs = FALSE,
               note = est_note_marginal("prob", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "multinomial", TRUE, "RR", "odds_ratio",
+      est_row("at_reference", "ratio", "ame", "multinomial", TRUE, "RR", "pct_ratio",
               crude_shape = "ame_ratio", comparison = "lnratioavg",
               obs = FALSE, note = est_note_marginal("prob", at_ref = TRUE, ratio = TRUE))
     )),
@@ -403,21 +538,21 @@ REG_ESTIMANDS <- list(
   ordinal = list(
     default = c(coefficient = "odds_ratio", marginal = "difference", at_reference = "difference"),
     rows = list(
-      est_row("coefficient", "odds_ratio", "coef", "ordinal", TRUE, "OR", "odds_ratio",
+      est_row("coefficient", "odds_ratio", "coef", "ordinal", TRUE, "cumOR", "odds_ratio",
               crude_shape = "cumor",
-              note = function() gettext("cumulative odds ratios (proportional-odds model)")),
-      est_row("coefficient", "log", "coef", "ordinal", FALSE, "\u03b2", "log_coef",
+              note = function() gettext("proportional-odds model")),
+      est_row("coefficient", "log", "coef", "ordinal", FALSE, "cumOR", "log_coef",
               crude_shape = "cumor_log",
-              note = function() gettext("proportional-odds model (log-odds coefficients)")),
-      est_row("marginal", "difference", "ame", "ordinal", FALSE, "AME", "points",
+              note = function() gettext("proportional-odds model")),
+      est_row("marginal", "difference", "ame", "ordinal", FALSE, "RD", "points",
               crude_shape = "ame", note = est_note_marginal("prob")),
-      est_row("marginal", "ratio", "ame", "ordinal", TRUE, "RR", "odds_ratio",
+      est_row("marginal", "ratio", "ame", "ordinal", TRUE, "RR", "pct_ratio",
               crude_shape = "ame_ratio", comparison = "lnratioavg",
               note = est_note_marginal("prob", ratio = TRUE)),
-      est_row("at_reference", "difference", "ame", "ordinal", FALSE, "MER", "points",
+      est_row("at_reference", "difference", "ame", "ordinal", FALSE, "RD", "points",
               crude_shape = "ame", obs = FALSE,
               note = est_note_marginal("prob", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "ordinal", TRUE, "RR", "odds_ratio",
+      est_row("at_reference", "ratio", "ame", "ordinal", TRUE, "RR", "pct_ratio",
               crude_shape = "ame_ratio", comparison = "lnratioavg",
               obs = FALSE, note = est_note_marginal("prob", at_ref = TRUE, ratio = TRUE))
     ))
@@ -745,12 +880,14 @@ reg_estimand <- function(family, effect = "coefficient", measure = "auto") {
                      identical(r$fit, row$fit), fr$rows)
     if (length(lrow)) row <- lrow[[1L]]
     else {
+      # `word` is deliberately KEPT: the log wrapper is composed onto the base acronym by reg_word(),
+      # so a pinned `log_risk` on a binomial outcome reads "log(RR)" -- the quantity it logs -- with
+      # nothing to declare here.
       row$exp     <- FALSE
-      row$word    <- "\u03b2"
       row$scale   <- "log_coef"
       row$display <- "coef"
       row$crude_shape <- paste0(row$crude_shape, "_log")
-      row$note    <- function() gettext("coefficients on the model's own link scale")
+      row$note    <- function() gettext("on the model's own link scale")
     }
     row$measure <- "log"
   }
@@ -797,7 +934,9 @@ reg_estimand_note <- function(est, obs_in_cell = FALSE) {
     else
       gettext("; each cell shows the effect vs the reference level and, in parentheses, the adjusted predicted probability")
   else NULL
-  paste0(est$note(), paren)
+  # "OR = odds ratio (vs the reference category)": the acronym the header prints, its expansion and
+  # the qualifier, composed from one declaration each so the three cannot drift apart.
+  paste0(reg_word(est), " = ", reg_word_long(est), " (", est$note(), ")", paren)
 }
 
 # reg_normalize_color() -- Phase 19e (D25). THE `tab_reg(color =)` boundary.
@@ -878,26 +1017,6 @@ reg_color_for <- function(color, est) {
   color
 }
 
-# Phase 19m-ii: THE header word of an estimand, given the cell layout it will be rendered in.
-# Phase 14v: with an empirical companion, a prob-scale AME/MER cell folds in the model-adjusted
-# predicted % as "{diff} ({pct})"; name it in the header ("... AME (adjusted %)") so the parenthetical
-# is unambiguous next to the crude "Emp. %". It is the marginal-STANDARDISED predicted probability
-# (decisions doc S50, change A/C), hence "adjusted %" not "model %". Prob-scale families only
-# (a gaussian/poisson AME is a bare effect).
-#
-# ⚠ `empirical` is an EXPLICIT formal, and that is the point. It was a closure reading `empirical`
-# lazily from tab_reg()'s frame while two later blocks still mutated it (the `adjustment` forcing
-# turns it ON, the no-crude-companion degrade turns it OFF), so the eager `eff_word` recorded in
-# reg_call could disagree with the lazy one the specs and labels carried. A function of its arguments
-# can only be called once the caller has decided.
-#' @keywords internal
-#' @noRd
-reg_eff_word <- function(est, empirical = FALSE) {
-  w <- est$word
-  if (!identical(est$builder, "coef") && emp_on(empirical) && reg_fam_prob(est$family))
-    w <- paste0(w, " (adjusted %)")
-  w
-}
 
 # reg_per_outcome() -- THE per-outcome slicer, shared by `family`, `effect` and `measure` (and by the
 # multi-outcome recursion, which used to slice `trials` by hand and forward `family` whole -- D6).
@@ -940,8 +1059,12 @@ reg_estimand_offer_lines <- function(family, effect = NULL) {
                  (is.null(effect) || identical(r$effect, effect)), rows)
   if (!length(ok)) ok <- Filter(function(r) identical(r$status, "ok"), rows)
   lines <- vapply(ok, function(r) cli::format_inline(
-    "{.code effect = \"{r$effect}\", measure = \"{r$measure}\"} -> {.val {r$word}}"), character(1))
-  c(cli::format_inline("A {.val {family}} outcome offers:"), unique(lines),
+    "{.code measure = \"{r$measure}\"} -> {.val {reg_word(r)}}, the {reg_word_long(r)}"), character(1))
+  head <- if (is.null(effect) || !length(ok) || !identical(ok[[1]]$effect, effect))
+    cli::format_inline("A {.val {family}} outcome offers:")
+  else cli::format_inline(
+    "A {.val {family}} outcome offers, with {.code effect = \"{effect}\"}:")
+  c(head, unique(lines),
     cli::format_inline("Call {.fn reg_measures} on your outcome to see this table with its status."))
 }
 
@@ -969,8 +1092,8 @@ reg_estimand_offer_lines <- function(family, effect = NULL) {
 #' @param family The model family. `"auto"` (default) detects it and says so, exactly as
 #'   [tab_reg()] does.
 #'
-#' @return A tibble of `effect`, `measure`, `status`, `header` (the column name it would produce)
-#'   and `note` (why, when it is not available), invisibly when printed.
+#' @return A tibble of `effect`, `measure`, `status`, `header` (the column name it would produce),
+#'   `long` (what that header's acronym means) and `note` (why, when it is not available).
 #' @export
 #' @examples
 #' d <- forcats::gss_cat
@@ -982,25 +1105,24 @@ reg_measures <- function(data, outcome, family = "auto") {
   fam <- if (identical(family, "auto")) reg_detect_family(data, outcome) else family
   rows <- reg_estimands_for(fam)
   if (is.null(rows)) cli::cli_abort("Unknown {.arg family} {.val {fam}}.")
-  grid <- expand.grid(effect = REG_EFFECTS_VALUES, measure = c("odds_ratio", "difference"),
-                      stringsAsFactors = FALSE)
-  out <- purrr::map(seq_len(nrow(grid)), function(i) {
-    r <- reg_estimand(fam, grid$effect[[i]], grid$measure[[i]])
+  # every declared measure, not a hand-picked pair: `measure = "ratio"` is a third of what the grid
+  # offers and was missing from this lister entirely. "log" is not a peer -- it is any multiplicative
+  # row un-exponentiated -- so it gets its own single line below.
+  row_of <- function(effect, measure) {
+    r <- reg_estimand(fam, effect, measure)
     tibble::tibble(
-      effect  = grid$effect[[i]],
-      measure = grid$measure[[i]],
-      status  = switch(r$status, ok = "available", impossible = "not defined", "not offered"),
-      header  = if (identical(r$status, "ok")) paste0("Model_", r$word) else NA_character_,
-      note    = if (is.function(r$why)) r$why() else NA_character_)
-  })
-  out <- dplyr::bind_rows(out)
-  # `log` is not a peer measure -- it is any multiplicative row un-exponentiated, so it gets one line
-  lg <- reg_estimand(fam, "coefficient", "log")
-  out <- dplyr::bind_rows(out, tibble::tibble(
-    effect = "coefficient", measure = "log",
-    status = if (identical(lg$status, "ok")) "available" else "not defined",
-    header = if (identical(lg$status, "ok")) paste0("Model_", lg$word) else NA_character_,
-    note   = if (is.function(lg$why)) lg$why() else NA_character_))
+      effect = effect, measure = measure,
+      status = switch(r$status, ok = "available", impossible = "not defined", "not offered"),
+      header = if (identical(r$status, "ok")) paste0("Model_", reg_word(r)) else NA_character_,
+      long   = if (identical(r$status, "ok")) reg_word_long(r) else NA_character_,
+      note   = if (is.function(r$why)) r$why() else NA_character_)
+  }
+  grid <- expand.grid(effect = REG_EFFECTS_VALUES,
+                      measure = setdiff(REG_MEASURES_VALUES, c("auto", "log")),
+                      stringsAsFactors = FALSE)
+  out <- dplyr::bind_rows(purrr::map(seq_len(nrow(grid)),
+                                     function(i) row_of(grid$effect[[i]], grid$measure[[i]])))
+  out <- dplyr::bind_rows(out, row_of("coefficient", "log"))
   cli::cli_inform(c("i" = "{.val {outcome}}: {.code family = \"{fam}\"}.",
                     "i" = 'The default is {.code measure = "{reg_default_measure(fam)}"}.'))
   out
@@ -1017,7 +1139,7 @@ reg_measures_rd <- function() {
   line <- function(fam) {
     ok <- Filter(function(r) identical(r$status, "ok"), reg_estimands_for(fam))
     it <- vapply(ok, function(r) sprintf("\\code{effect = \"%s\", measure = \"%s\"} (\\code{Model_%s})",
-                                         r$effect, r$measure, r$word), character(1))
+                                         r$effect, r$measure, reg_word(r)), character(1))
     paste0("  \\item \\strong{", fam, "} --- ", paste(unique(it), collapse = "; "))
   }
   c("@section Which estimands each outcome offers:",
@@ -1025,6 +1147,29 @@ reg_measures_rd <- function() {
     "\\code{tab_reg()} builds. Call \\code{\\link{reg_measures}()} on your outcome for the same",
     "table with its per-cell status.",
     "\\itemize{", vapply(fams, line, character(1)), "}")
+}
+
+# --- consumer 5: the generated acronym grid ----------------------------------------------------
+# Acronym | what it means | which outcome families print it. Generated from REG_WORDS x
+# REG_ESTIMANDS so the taught vocabulary cannot drift from the headers the package builds.
+#' @keywords internal
+#' @noRd
+reg_words_rd <- function() {
+  rows <- unlist(lapply(setdiff(names(REG_ESTIMANDS), "quasipoisson"),
+                        function(f) lapply(reg_estimands_for(f),
+                                           function(r) c(f = f, w = r$word, s = r$status))),
+                 recursive = FALSE)
+  fams_of <- function(w) unique(vapply(Filter(function(r)
+    identical(r[["w"]], w) && identical(r[["s"]], "ok"), rows), function(r) r[["f"]], character(1)))
+  used <- Filter(function(w) length(fams_of(w)) > 0L, names(REG_WORDS))
+  item <- function(w) sprintf("  \\item \\code{%s} --- %s (%s)", w, REG_WORDS[[w]]$long(),
+                              paste(fams_of(w), collapse = ", "))
+  c("@section The header acronyms:",
+    "A column header names the \\strong{measure}; the \\strong{contrast} is a marker on it ---",
+    "no marker for a coefficient, \\code{m} for a marginal effect, \\code{ref} at the reference",
+    "profile --- and \\code{measure = \"log\"} wraps it (\\code{Model_mRR}, \\code{Model_refRD},",
+    "\\code{Model_log(OR)}). The observed companion carries the measure alone (\\code{Obs_RR}).",
+    "\\itemize{", vapply(used, item, character(1)), "}")
 }
 
 

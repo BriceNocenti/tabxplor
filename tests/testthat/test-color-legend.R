@@ -84,11 +84,11 @@ testthat::test_that("numeric diff prose shows the standardized SD thresholds, no
   testthat::expect_no_match(l, "\\+20%")          # the old beta-shows-percent bug
 })
 
-testthat::test_that("tab_reg: beta shows SD, IRR says IRR, OR says OR", {
+testthat::test_that("tab_reg: a mean difference shows SD, IRR says IRR, OR says OR", {
   skip_if_not_installed("broom")
   b <- suppressWarnings(tab_reg(gss, "tvhours", c("marital", "race"), family = "gaussian"))
   lb <- leg_en(b)
-  testthat::expect_match(lb, "\u03b2 \u2265")     # beta >=
+  testthat::expect_match(lb, "diff \u2265")        # the legend names the header's own acronym
   testthat::expect_match(lb, "SD")
   testthat::expect_no_match(lb, "\\+20%", perl = TRUE)   # the old beta-shows-percent bug (0.2 -> +20%)
 

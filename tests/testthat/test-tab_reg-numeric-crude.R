@@ -164,8 +164,8 @@ test_that("gaussian / poisson / rr numeric crude effects match their univariable
   tr <- tab_reg(d, "married", c("age", "race"), family = "poisson",   # binary -> modified Poisson
                 empirical = TRUE, cleannames = FALSE)
   ir <- which(as.character(tr$var) == "age")
-  expect_true(!is.na(get_or(tr[["Obs_RR"]])[ir]))
-  expect_true(get_or(tr[["Obs_RR"]])[ir] != 1)
+  expect_true(!is.na(tabxplor:::fmt_est_of(tr[["Obs_RR"]])[ir]))
+  expect_true(tabxplor:::fmt_est_of(tr[["Obs_RR"]])[ir] != 1)
 })
 
 test_that("measure = log gives the LOGGED crude effect for a numeric row", {
@@ -213,11 +213,11 @@ test_that("effect = 'ame' / 'ame_ratio': the numeric crude cell is the UNIVARIAB
     # one, whose own step-size choice (fdforward vs fdcenter) moves it by ~4e-9, more than we differ
     # from it. The oracle is the approximation here.
     if (eff == "ratio") {
-      expect_equal(get_or(t[["Obs_RR"]])[i],     exp(m$estimate), tolerance = 1e-10)
+      expect_equal(tabxplor:::fmt_est_of(t[["Obs_RR"]])[i], exp(m$estimate), tolerance = 1e-10)
       expect_equal(get_ci_inf(t[["Obs_RR"]])[i], exp(m$conf.low), tolerance = 1e-7)
     } else {
-      expect_equal(get_diff(t[["Obs_diff"]])[i],  m$estimate, tolerance = 1e-10)
-      expect_equal(get_ci_inf(t[["Obs_diff"]])[i], m$conf.low, tolerance = 1e-7)
+      expect_equal(get_diff(t[["Obs_RD"]])[i],  m$estimate, tolerance = 1e-10)
+      expect_equal(get_ci_inf(t[["Obs_RD"]])[i], m$conf.low, tolerance = 1e-7)
     }
     # and it reaches the model column's `obs`, so `adjustment` can score it
     model_col <- names(t)[purrr::map_lgl(t, is_fmt)]
@@ -225,15 +225,19 @@ test_that("effect = 'ame' / 'ame_ratio': the numeric crude cell is the UNIVARIAB
   }
 })
 
-test_that("poisson + effect='ame' still writes NO obs on a numeric row (estimand mismatch)", {
-  # z8-B's reg_same_estimand() gate: an additive count AME cannot be compared to a crude rate RATIO.
+test_that("poisson + effect='ame' pairs with the observed mean DIFFERENCE, numeric rows included", {
+  # a poisson marginal effect is a difference of expected COUNTS, so its crude counterpart is the
+  # observed difference of means -- REG_EMPIRICAL$poisson$diff. It used to fall back to the rate-ratio
+  # shape, which reg_same_estimand() then rightly refused to pair, leaving the column unusable.
   skip_if_not_installed("marginaleffects")
   d <- num_data()
   t <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson",
                                 effect = "marginal", empirical = TRUE, cleannames = FALSE))
   i  <- which(as.character(t$var) == "age")
   mc <- names(t)[purrr::map_lgl(t, is_fmt)]
-  expect_true(all(is.na(get_obs(t[[mc[[length(mc)]]]])[i])))
+  expect_true("Obs_diff" %in% names(t))
+  expect_identical(get_scale(t[["Obs_diff"]]), "raw_diff")
+  expect_false(any(is.na(get_obs(t[[mc[[length(mc)]]]])[i])))
 })
 
 test_that("at = 'reference' writes no obs on a numeric row either", {
@@ -398,7 +402,7 @@ test_that("effect = 'ame' / 'ame_ratio': numeric rows get a gap SE too (the IF n
                                                 !is_refrow(col)])), info = eff)
     # the two estimators share their rows, so the IF SE must be SMALLER than naive quadrature
     se_m <- (get_ci_sup(col)[i] - get_ci_inf(col)[i]) / (2 * stats::qnorm(0.975))
-    ec   <- if (eff == "ratio") "Obs_RR" else "Obs_diff"
+    ec   <- if (eff == "ratio") "Obs_RR" else "Obs_RD"
     se_c <- if (eff == "ratio")
       (log(get_ci_sup(t[[ec]])[i]) - log(get_ci_inf(t[[ec]])[i])) / (2 * stats::qnorm(0.975))
     else (get_ci_sup(t[[ec]])[i] - get_ci_inf(t[[ec]])[i]) / (2 * stats::qnorm(0.975))

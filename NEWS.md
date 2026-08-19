@@ -226,7 +226,9 @@
   measure*, so that is what the arguments are: **`effect = c("coefficient", "marginal",
   "at_reference")`** and **`measure = c("auto", "odds_ratio", "ratio", "difference", "log")`**, both
   resolved per dependent like `family`. `measure` takes the full word or the discipline's acronym
-  (`"RR"` / `"IRR"` / `"RD"` / `"OR"`), and the column header keeps the acronym. This **replaces**
+  (`"RR"` / `"IRR"` / `"RD"` / `"OR"`); the column header keeps the acronym and marks the contrast on
+  it (`Model_OR`, `Model_mRR` for a marginal one, `Model_refRD` at the reference profile,
+  `Model_log(OR)` un-exponentiated). This **replaces**
   `exponentiate` (→ `measure = "log"`), `at` (→ `effect = "at_reference"`), `effect = "ame"` /
   `"ame_ratio"` (→ `"marginal"`, with `measure = "ratio"`) and `estimate_display` (→ `display`,
   which also takes a `"{or} ({pct})"` template). The retired names abort with the new spelling.
@@ -437,7 +439,7 @@
   `dependent` or `predictors`, not both".
 * **A `tab_reg()` table's own record could contradict its own column header.** With
   `color = "adjustment"` (which turns `empirical` on), the stored effect word was captured before that
-  and the column header after it, so the two disagreed (`AME` vs `Model_AME (adjusted %)`).
+  and the column header after it, so the two disagreed.
 * **A table with no column variable could not be transposed**: `tab_html(tab(data, marital),
   transpose = TRUE)` aborted with "subscript out of bounds".
 * **A custom total-column name containing a regular-expression character** (e.g.
