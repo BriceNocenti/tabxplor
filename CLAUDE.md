@@ -650,6 +650,24 @@ Also plan for a reduction of the roxygen part, with the same logic : user-friend
 
 `tab_reg.R` · `reg-resolve.R` · `reg-estimand.R` · `reg-empirical.R` · `reg-influence.R` · `reg-assumptions.R` · `reg-spec-build.R`. `tab_reg()` + the estimand / empirical-companion / influence / model-check machinery; `?tab_reg`, `reg_measures`. (`reg-estimand`'s `measure` vocabulary IS `fmt_class`'s `EST_SCALES` — note the bridge.)
 
+**DONE.** Plain `#` comments **3849 → 1753 (2.19x)**, comment/code ratio **0.78 → 0.35**, code unchanged at 4948 lines; roxygen 1031 → 808. Per file (plain `#`): `tab_reg` 1689->594 (2.8x) · `reg-empirical` 520->194 (2.7x) · `reg-resolve` 474->200 (2.4x) · `reg-spec-build` 195->89 · `reg-estimand` 395->269 · `reg-assumptions` 360->255 · `reg-influence` 216->152.
+
+**The archaeology is gone — that part is complete.** Zero phase tags, `KEY n`, `H12`, `SS14`, `D6`, `z10`, zero "was / used to / no longer", zero bug post-mortems, zero benchmark figures, zero `dev/*.md` decision-log pointers remain in the seven files (two pointers survive by design, to the gap-test derivation and the assumption-plot designs, which hold maths a header cannot restate). Three epitaphs for deleted functions are deleted with them (`reg_fam_logscale()`, `reg_global_lines()`/`reg_term_test_line()`, and the nine-line `tab_logit()`/`multi_logit()` block). Every header is a `# PURPOSE / ROLE / KEY CONSTRAINTS` essay pointing to `CLAUDE.md § tabxplor architecture`, and `tab_reg.R` now runs on **16** `# === SECTION:` banners instead of 11.
+
+**Why 2.17x and not 5x, measured rather than asserted.** After the cut, the seven files hold **619 comment blocks outside their headers, and 524 of them are 3 lines or shorter** (959 lines, averaging 1.8 lines each) — one note per top-level definition plus roughly 1.5 inline notes, which IS the target style. Only 196 lines sit in blocks over 6 lines, and those are the protected dictionaries: `REG_ESTIMANDS` (42) and `REG_FAMILIES` (25) in `reg-estimand.R`, `REG_EMPIRICAL`'s 7-slot shape table, `REG_CHECKS`' 9 slots, and the four record dictionaries (`new_reg_ctx` 34 slots, `new_reg_shared` 21, `new_reg_spec` 11, `new_reg_spec_product` 11). The three files that floor hardest are exactly the dictionary- and trap-heavy ones: `reg-estimand.R` is 50 header + 67 dictionary + ~150 two-line notes over ~50 definitions, and `reg-influence.R` is almost entirely statistical *why* (the influence-function identity, the delta-vs-IF variance rule, the multinomial vcov ordering trap, the polr bread). **Reaching 0.20 from here would mean deleting ~400 two-line WHY notes or trimming the dictionaries — content, not history.** That call is the maintainer's; the lever is named here rather than pulled.
+
+**`?tab_reg` rewritten by hand: 690 -> 468 roxygen lines (-32%), the Rd 790 -> 567.** Nothing left the CRAN contract — all 26 `@param`, both `@section`s, both `@eval`-generated sections, `@examples`, `@references` and `@return` are in place and in order, `\usage` is byte-identical and every `\item{}` name set matches. The cut is duplication first (`@details` restated five `@param`s in miniature; the modified-Poisson essay was written twice; the contrast-marker rule three times, once of them generated), then deferral: the ~100-line `color`/collapsibility essay to 30, the *Model checks* `\describe{}` to 26, `@param empirical` 63 to 30 — each keeping what changes a user's choice and leaving the reasoning to `vignette("tabxplor-reg")`, which already carries those sections. No vignette anchors were hard-wired (Phase 23b finalises them).
+
+**Fifteen documentation defects fixed.** Six were dead function names inside live text: `reg_stage_fit()` (-> `reg_stage_setup()`), `reg_gof_tibble()` x2 (-> `reg_gof_rows()`), `reg_stage_empirical()` (-> `reg_stage_crude()`), `built_per_fit`'s "old role" (the identifier exists nowhere), and — worst, because it sat **inside a WARNING that had to be kept** — `reg-assumptions.R`'s i18n rule routing `gettext()` through `reg_check_spec_entries()`, which does not exist; the label builder is `reg_check_label()`. Four were stale facts: `reg-resolve.R`'s header naming `REG_DISPLAY_SHORTHANDS`, deleted in 22a-i; its S3 dictionary documenting a column `dep` when the tibble field is `outcome`; `reg-empirical.R`'s banner block documenting a grid shape (`emp_base` / `emp_var`) the function had stopped returning, contradicting its own dictionary 130 lines below; and `reg-influence.R`'s header placing `reg_gap_se_columns()` and the numeric crude fit in `tab_reg.R` when both are in `reg-empirical.R`. Three were stale vocabulary: `effect = "ame"` / `"ame_ratio"` in four comments (the values have been `coefficient` / `marginal` / `at_reference` since 19e), the "only `svyrecvar()` caller" claim (it routes through `svy_var_recvar()`), and `reg_build()`'s banner counting "seven stages" where it runs eight plus the split. Two were structural: three `#' @keywords internal` stubs stranded above plain comments so they attached to nothing (one a duplicate, deleted; two moved onto their objects), and three function descriptions sitting above the wrong function (`reg_model_line`, `reg_fit_multinom`, `reg_ordinal_diagnostic`), each re-attached.
+
+**Two of the fifteen were in `?tab_reg` itself, and both were user-facing.** The argument map in `@details` and `@param outcome_level` both told the reader to use **`reference`** — a name retired before release, which now aborts with "unknown argument"; both now say `ref`. And `display = "\{est\}..."` was escaped in a way that renders as a literal `\{est\}`, backslashes visible, on the built page (verified through `Rd2txt`); the unescaped form is what Rd wants, since balanced braces need no escape.
+
+**Also reported, out of scope**: `R/tab-test-display.R` names both dead functions (`reg_gof_tibble` at :426, `reg_check_spec_entries` at :126 and :432) — Phase 21b-vi owns that file. And the `@keywords internal` / `@noRd` convention is split three ways across the package, which is a package-wide call.
+
+**Verified.** All **287 top-level definitions across the seven files are byte-identical to the pre-edit working tree** (parse -> per-name `deparse` comparison; the baseline is the WORKING TREE, not `HEAD`, because two of these files carried uncommitted 22a-iii code). Behaviour therefore cannot have changed, and no test run was needed. `devtools::document()` clean, **NAMESPACE unchanged**, only `man/tab_reg.Rd` rewritten with identical `\usage` and `\item{}` name sets; roxygen is byte-identical in six files and changed only in `tab_reg.R` (the rewritten page plus the one deleted duplicate stub).
+
+**Cost, and the one method rule that failed.** ~2.7M subagent tokens (165K survey + 2.57M rewrite) across two surveys and three rewrite agents — the same order as 21b-iii, despite rule 11's changes, because **every agent had to be re-engaged for a second pass**. The cause is now known and is a flaw in the brief, not in the agents: **a KEEP list stated by CONTENT anchors an agent to keep each item at its CURRENT LENGTH.** All three first passes deleted the archaeology correctly and then stopped, each arguing (with correct arithmetic) that the named KEEPs already consumed the budget. The fix for 21b-v to -vii: state a per-block LINE BUDGET beside the KEEP list — "a kept item is its rule in 1-4 lines, never its derivation; only a named dictionary may exceed 6 lines" — which is what the second-pass message said, and what moved `reg-empirical.R` from 301 to 194 and `reg-resolve.R` from 320 to 200 in one round.
+
 ##### Phase 21b-v — Shared foundations: inference, arguments, options, integrity
 
 `survey-design.R` · `survey-variance.R` · `tab-args.R` · `tab-options.R` · `zzz-fact-keys.R` · `utils.R`. Cross-producer infrastructure: design-based inference · the declarative argument / option / foreign-key surface (`?tabxplor-options` generator) · utilities. Light; keep the survey-math and declarative-surface sub-groups distinct (`survey-variance` feeds the crosstab leaves but stays with its sibling; `zzz-fact-keys` is genuinely cross-cutting).
@@ -792,6 +810,9 @@ That exposed a real fork — the difference measures come out of the fit as Δ(p
 
 Every family × effect × measure combination of the review renders **one** legend block. The `reg_same_estimand()` gate stays as the guard against a future fall-back writing one estimand into another's `obs`, asserted directly rather than through a table that no longer produces a mismatch.
 
+
+**(7) A stale "no observed counterpart" note.** `reg_color_notes()` asked "does the marginal row reuse the coefficient row's crude shape?" as a proxy for "does this family declare a marginal crude twin?". Sharing that shape is the NORMAL case wherever the two contrasts are the same estimand — a linear model's AME IS its coefficient — so every gaussian marginal table under `color = "adjustment"` was told its crude effect "is a ratio" while both sides were a mean difference, and that the colour would stay empty while it was in fact fully populated (16 `obs` cells, 13 gap SEs). It now asks exactly what `reg_same_estimand()` asks at build time — does the declared crude shape's scale equal the one the column is stamped with — so the note and the gate cannot disagree. Verified over the whole grid: every REACHABLE marginal estimand pairs, so the note is now a dormant guard rather than a false positive.
+
 ⚠ **Reported, not fixed** (pre-existing, reproduced on an ordinary ungrouped binomial, so it is not from this phase): the Constant row of every risk-difference table renders `ref:NA***`.
 
 
@@ -879,7 +900,6 @@ tab_reg(gss_simple, outcome = "married", tab_vars = "race",
 
 
 the Constant row of a risk-difference table
-
 - every `measure = "difference"` table renders `ref:NA***` on the Constant row (reproduced on an ordinary ungrouped binomial, so it predates Phase 22a). The intercept of an identity-link fit IS the baseline risk and has a value to show; the summed-score path now prints it (`2.71***`, the reference-profile mean score) because the estimate is scaled, which is what made the `NA` visible elsewhere.
 
 custom displays (22a-iii review; all reached through `set_display()` on a built table)
@@ -901,7 +921,9 @@ the collapsible-link redundancy: a marginal effect that IS the coefficient
 
 - A marginal contrast equals the conditional one **exactly when the family's own link already has that measure's geometry** — which is precisely when `measure` is the family's own **coefficient default** (`REG_ESTIMANDS[[fam]]$default[["coefficient"]]`), so the rule is a declared fact rather than a derived one. Measured (max relative difference over 16 cells, `gss_cat`):
 - So `poisson x {marginal, at_reference} x ratio` runs a g-computation sweep and influence functions to return `exp(coef)` under a different name (`mIRR`), which the header and the legend then present as a distinct estimand. Decide: refuse it naming `effect = "coefficient"`, or build it with a message.
-- ⚠ **`shape =` is the exception and a blanket refusal would be wrong**: with `poly(age, 2)` the marginal ratio of a curved predictor is no longer `exp(b)`, so the redundancy holds only where every predictor enters linearly. ⚠ Note also that `measure = "auto"` never reaches these cells — the default is per CONTRAST (`default[["marginal"]]` is a difference), so they are only reachable by asking explicitly. Whatever is decided moves one cell of the combination grid in `?tab_reg` and in both regression vignettes.
+- ⚠ **`shape =` is the exception and a blanket refusal would be wrong**: with `poly(age, 2)` the marginal ratio of a curved predictor is no longer `exp(b)`, so the redundancy holds only where every predictor enters linearly.
+
+⚠ **And on gaussian the redundant cell IS the family's marginal DEFAULT.** `default[["marginal"]]` is `"difference"` there, so refusing `gaussian × marginal × difference` outright would make a bare `effect = "marginal"` an error on a numeric outcome and leave only `measure = "ratio"` — while the intro to the regression vignette teaches the identity ("in a linear model the coefficient, the AME and the effect at the reference profile are the same number") as a pedagogical point, and `shape =` breaks it. So the refusal must either be scoped to an EXPLICIT `measure =`, or become a message rather than an abort. ⚠ Note also that `measure = "auto"` never reaches these cells — the default is per CONTRAST (`default[["marginal"]]` is a difference), so they are only reachable by asking explicitly. Whatever is decided moves one cell of the combination grid in `?tab_reg` and in both regression vignettes.
 
 | combination                       | vs the coefficient | why                                                        |
 |-----------------------------------|--------------------|------------------------------------------------------------|
@@ -912,6 +934,40 @@ the collapsible-link redundancy: a marginal effect that IS the coefficient
 | binomial x ratio                  | 1.8e-02            | logit g-computation vs the modified Poisson                |
 | binomial x difference             | 2.1e+00            | —                                                          |
 
+
+with "est_base" in the Model column, in numeric predictors cells where "base" is NA, alignment/padding is broken (not align with the other OR), and it’s the case for all measures and effects. Fix the padding when there are NAs.
+```r
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical=TRUE
+)
+```
+
+"difference" `measure` display consistency, for both mean and pct
+```r
+tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+        family = "gaussian", empirical=TRUE
+)
+# this one is nearly ok, ref is "0", but the positive ones should have a "+" sign to signify it’s a "difference" `measure`
+
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical=TRUE, measure = "difference"
+) # here positive have a "+" sign, but the ref/null is printed "+0%", I would prefer "0%".
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical=TRUE, effect = "marginal" #, measure = "difference"
+) # same here for Obs ; and worse, Model column lose it’s reference cell content altogether (void)
+```
+
+some models prints numeric predictors (like age) with 1 unit increment, instead of the default 1 SD, which is unreadable.
+```r
+tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
+        family = "multinomial"
+)
+tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
+        family = "ordinal"
+)
+```
+
+`reg_spec_build_one()` computes `grouped <- sp_fam == "binomial" && !is.null(sp$trials) && !isTRUE(sp$compound)` inline instead of calling `reg_is_grouped_binomial()` — and it tests `sp$fit_family`, which is the internal LINK key. That is precisely what the `⚠` above `reg_is_grouped_binomial()` says must never be done: `rr` and `rd` are binomial fits under another link, so a bare `== "binomial"` test drops `trials`. Confirmed reachable and reproduced: `tab_reg(..., trials = k, measure = "ratio")` resolves to `fit = "rr"`, where the inline test answers **FALSE** while the declared predicate answers **TRUE** (same for `measure = "difference"` -> `"rd"`). The flag feeds `reg_gof_rows()` and `reg_check_rows()`, so a summed score on those two measures gets its Pearson-dispersion footer row and its dispersion check computed as if it were an ungrouped binary logit. `reg_crude_key()`, `reg_fit()` and `reg_build_digest()` all use the correct predicate for the same question.
 
 Additional features requests
 - ✔ SUPERSEDED by 22a-iii (decision D18): "Model_β" becomes `Model_diff` / `Model_mdiff`, not `Model_coeff` — the header word must be able to take the marginal marker, and `mcoeff` is nonsense.
@@ -924,17 +980,11 @@ Open-questions about possible additional features requests
 - In predictor’s lists, how difficult would it be to add a comparison between quadratic and normal version for numeric predictors ? (I guess it would be quite difficult, so maybe not worthwhile).
 - Since numeric predictors are now standardised by default, can you confirm they are also **always centered by default** ? Is it documented ?
 
-Corrected more readable table for regression vignette ?
-
 Arguments reviews
 - in `tab_reg()` and in `tab()`, would it be possible to put the `parallel` argument in a `...` subfunction (if it’s needed at all and the option isn’t enough) ?
 
-weigths and survey-design
 
-
-##### Phase 22b-i — write the phase roadmap
-
-##### Phase 22b-ii — `tab_reg()` ant `tab()` `n` column (or `n` row for `tab()` with `pct = "col"`) reworking
+##### Phase 22b-i — `tab_reg()` ant `tab()` `n` column (or `n` row for `tab()` with `pct = "col"`) reworking
 
 ⚠ Phase 22a-ii's tooltip contract defers its `n` line to this phase: settle `n` here, then the model column's tooltip mirrors whatever it becomes.
 Looking at `tab_reg()` n columns, I think the right way is to finish the dormant feature to be able to keep a unique `n` column giving all the information at once. With several outcomes, having one n column per outcome is not concise enough and add clutter. With predictor’s list the current default is ok, there’s only one column since the population of each model is by default the same. For spread tab_vars the "one n column per tab_vars" is justifiable since it’s the result of tab_spread.

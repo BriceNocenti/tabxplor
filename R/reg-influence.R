@@ -1,63 +1,52 @@
-# R/reg-influence.R -- Phase 18z8-B: influence functions, and the standard error of the GAP between
-# two estimators fitted on the SAME rows.
-#
-# WHY THIS EXISTS. `color = "adjustment"` scores how far a model effect sits from its observed (crude)
-# counterpart. Both are M-estimators on the same observations, so they are correlated (measured
-# r = 0.52-0.90) and the naive `sqrt(se_model^2 + se_crude^2)` is 2-4x too large, while Hausman's
-# `Var(crude) - Var(adj)` goes NEGATIVE for logistic. The only quantity that carries the covariance is
-# the difference of their influence functions:
+# PURPOSE: INFLUENCE FUNCTIONS, and the standard error of the GAP between two estimators fitted on
+#   the SAME rows.
+# ROLE: what makes `color = "adjustment"` a test rather than a description. A model effect and its
+#   observed (crude) counterpart are both M-estimators on the same observations, so they are
+#   strongly correlated: the naive sqrt(se_adj^2 + se_crude^2) is two to four times too large, and
+#   Hausman's Var(crude) - Var(adj) goes NEGATIVE for logistic. The only quantity that carries the
+#   covariance is the difference of their influence functions,
 #
 #     Var(theta_adj - theta_crude) = Var( sum_i ( IF_i^adj - IF_i^crude ) )
 #
-# This is seemingly-unrelated estimation (Stata's `suest`, Weesie 1999; Mize, Doan & Long 2019 is the
-# sociological statement). Measurements, rejected alternatives and the calibration study:
-# dev/model_vs_observed_gap_test.md SS2-SS4.
+#   which is seemingly-unrelated estimation (Stata's `suest`; Weesie 1999; Mize, Doan & Long 2019).
+# KEY CONSTRAINTS:
+#   - Pure matrix maths over `stats` + `survey`. No fmt types, no tabxplor classes: every function
+#     takes vectors, matrices and fits, and returns a number or a closure.
+#   - EVERY FUNCTION RETURNS NULL RATHER THAN A WRONG NUMBER when its inputs do not support the
+#     computation (singular information matrix, absent term, empty cell, unknown link). The caller
+#     reads NULL as "no test here" and writes no `gap_se`; MEASURES' force_policy closure then makes
+#     the column read under `ignore`, so a degraded path is descriptive, never falsely significant.
+#   - THE MEMORY CONTRACT: never materialise the per-observation influence matrix. reg_if_from_parts()
+#     exploits the fact that the score is a pure ROW SCALING of the model matrix, so peak memory
+#     stays the ONE n x p matrix the caller already holds -- and the callers (R/reg-empirical.R,
+#     R/reg-assumptions.R) keep to one length-n difference vector at a time.
+#   - ONE SWEEP, TWO VARIANCES, never swapped: a g-computation maker returns both the delta-method
+#     variance (the interval the marginal effect PRINTS) and the influence-function one (the colour's
+#     test). reg_gcomp_maker()'s own note says why they differ.
+#   - TWO CRUDE PATHS, by predictor kind. A FACTOR's crude effect is a saturated one-factor GLM, so
+#     it has a closed form and needs no fit; a CONTINUOUS predictor has no cells, so its crude leg is
+#     reg_coef_if_maker() over the univariable fit R/reg-empirical.R built. Both legs are then the
+#     same machinery over two fits solved on the same rows -- which is why the counterfactual takes
+#     SHIFTS rather than levels for a numeric column.
+#   - Design-based variance goes through svy_var_recvar() (R/survey-variance.R), the package's one
+#     wrapper over survey::svyrecvar(); this file is its only regression-side caller.
 #
-# WHAT IS HERE. Pure matrix math over `stats` + `survey` -- no fmt types, no tabxplor classes. The
-# orchestration (which cells get a gap SE at all) lives in R/tab_reg.R's reg_gap_se_columns(); the
-# printed marginal effects are R/tab_reg.R's reg_marginal_gcomp(). This is the ONE place in the package
-# that calls survey::svyrecvar().
-#
-#   reg_if_from_parts(X, W, r)  the ONE formula, as a closure over a contrast
-#   reg_coef_if_maker(fit)      its fit adapter -- lm / glm / svyglm alike
-#   reg_crude_if_maker(...)     the observed side of a FACTOR row, in closed form (no fit at all)
-#   reg_counterfactual(...)     "the sample with `var` set to this level", shared by the two below
-#   reg_gcomp_maker(...)        THE marginal sweep: estimate + analytic jacobian + empirical term
-#   reg_gcomp_cat_maker(...)    its 3+ level twin, answering for every outcome category at once
-#   reg_ame_if_maker(...)       effect = "ame" / "ame_ratio" (the two-term marginal influence function)
-#   reg_if_se(d, design)        design-based when a design exists, IID otherwise
-#
-# Phase 20d -- the g-computation makers are the PRODUCERS and the influence makers their consumers,
-# because one sweep answers two questions: what does this marginal effect print (delta method, the
-# printed interval) and is it different from its crude twin (influence function, the colour). See
-# reg_gcomp_maker()'s own note for why those two variances differ and must not be swapped.
-#
-# Phase 18z9 -- TWO crude paths, by predictor kind. A factor's crude effect is a saturated one-factor
-# GLM, hence the closed form above; a CONTINUOUS predictor has no cells, so its crude leg is
-# reg_coef_if_maker() on the row's own univariable fit (built in R/tab_reg.R). Both legs are then the
-# same machinery over two fits solved on the same rows. reg_ame_if_maker()'s counterfactual therefore
-# takes SHIFTS rather than levels for a numeric column -- see its own contract note.
-#
-# EVERY function here returns NULL rather than a wrong number when its inputs do not support the
-# computation (singular information matrix, absent term, empty cell, unknown link). The caller reads a
-# NULL as "no test here", writes no `gap_se`, and the colour engine's `force_policy` closure then makes
-# the column read under `ignore` -- so a degraded path is descriptive, never falsely significant.
+# The orchestration -- which cells get a gap SE at all -- is reg_gap_se_columns() in
+# R/reg-empirical.R; the printed marginal effects are reg_marginal_gcomp() in R/tab_reg.R.
+# See: CLAUDE.md section "tabxplor architecture" (the regression subsystem);
+#      dev/model_vs_observed_gap_test.md (the derivation and the calibration study).
 
 
 # reg_if_from_parts() -- the influence function of ANY M-estimator solving sum_i X_i W_i r_i = 0, as a
-# closure over the CONTRAST rather than a matrix. Given the working parts of an IRLS fit,
+# closure over the CONTRAST rather than a matrix:
 #
 #     A = X' W X        U_i = X_i W_i r_i        IF_i = U_i A^-1
 #
-# and the influence of one linear combination L of the coefficients is IF %*% L.
+# and the influence of one linear combination L is IF %*% L. `U = X * (W*r)` is a pure ROW scaling, so
+# holding X, W*r and A^-1 gives every contrast for one length-n allocation, without ever building U
+# or IF as an n x p matrix.
 #
-# DESIGN -- why a closure over `L` and not the n x p matrix. `U = X * (W*r)` is a pure ROW scaling, so
-#     (U %*% c)_i == (W_i r_i) * (X %*% c)_i
-# (verified to 1.7e-18). Holding X, the length-n vector W*r and the p x p A^-1 therefore gives every
-# contrast for one length-n allocation each, and the second n x p matrix is never built.
-# WARNING: peak memory is ONE n x p matrix -- the `model.matrix(fit)` the caller already holds. At
-# n = 5M and p = 50 that is ~2 GB, so never materialise `U`, `IF`, or a per-term matrix of differences
-# (dev/model_vs_observed_gap_test.md SS8).
+# WARNING: peak memory is ONE n x p matrix -- `model.matrix(fit)`. At n = 5M, p = 50 that is ~2 GB.
 #' @keywords internal
 reg_if_from_parts <- function(X, W, r) {
   if (is.null(X) || !is.matrix(X) || nrow(X) == 0L || ncol(X) == 0L) return(NULL)
@@ -78,27 +67,19 @@ reg_if_from_parts <- function(X, W, r) {
 }
 
 # reg_coef_if_maker() -- the fit adapter. ONE formula for stats::lm, stats::glm and survey::svyglm:
-# `fit$weights` are the IRLS working weights (already carrying the prior / design weights) and
-# `residuals(type = "working")` is (y - mu)/mu'(eta), so X'Wr is the score and X'WX the information.
-# Verified bit-identical to `attr(survey::svyglm(..., influence = TRUE), "influence")` (max difference
-# 5e-17) -- which is why nothing here ever passes `influence = TRUE`, and why the same code serves the
-# weighted, the survey-design and the "rr" (modified Poisson) paths.
+# `fit$weights` are the IRLS working weights and `residuals(type = "working")` is (y-mu)/mu'(eta), so
+# X'Wr is the score and X'WX the information -- verified bit-identical to
+# `attr(svyglm(..., influence = TRUE), "influence")`.
 #
-# NB the SE this implies is the HUBER-WHITE SANDWICH. That IS what svyglm prints, but a plain
-# unweighted glm prints the model-based SE, so the two agree only up to O(1/n) there. Correct for a gap
-# between two differently-specified estimators; see reg_gap_se_columns()'s docs for what it means for
-# the printed intervals.
+# NB the SE this implies is the HUBER-WHITE SANDWICH: what svyglm prints, but a plain unweighted glm
+# prints the model-based SE instead (they agree only up to O(1/n)).
 #
-# Backticks are stripped from the column names exactly as reg_fit() strips them from `td$term`, so a
-# contrast can be keyed by `skeleton$term` with no second naming rule. Aliased (rank-deficient)
-# coefficients are dropped: no displayed contrast can load a column the fit could not estimate.
+# Backticks are stripped from column names as reg_fit() strips them from `td$term`, so a contrast can
+# be keyed by `skeleton$term` with no second naming rule. Rank-deficient coefficients are dropped.
 #' @keywords internal
 reg_coef_if_maker <- function(fit, V = NULL) {
-  # Phase 18z10: a 3+ level fit has no working residuals / IRLS weights, so it goes through the
-  # score core instead. Same contract, different algebra (see reg_if_from_score's WARNING).
-  # `V` (Phase 20f) is the fit's vcov when a caller already holds it -- the GLM path below never
-  # needs one (it builds its own information matrix from X and W), so this is the only branch that
-  # reads it, and passing NULL is exactly today's behaviour.
+  # a 3+ level fit has no working residuals / IRLS weights, so it goes through the score core instead.
+  # `V` is the fit's vcov when a caller already holds it; the GLM path below builds its own, unused.
   if (inherits(fit, "multinom") || inherits(fit, "polr")) {
     sc <- if (inherits(fit, "multinom")) reg_score_multinom(fit, V) else reg_score_polr(fit, V)
     return(if (is.null(sc)) NULL else reg_if_from_score(sc$S, sc$bread))
@@ -115,31 +96,22 @@ reg_coef_if_maker <- function(fit, V = NULL) {
   reg_if_from_parts(X, W, r)
 }
 
-# reg_crude_if_maker() -- the OBSERVED side, in closed form. Every `Obs_*` effect tabxplor computes is
-# exactly the coefficient of a saturated one-factor GLM at the matching link (verified to 1e-13 on all
-# five families, weighted and unweighted), so its influence function is the two-cell expression
+# reg_crude_if_maker() -- the OBSERVED side, in closed form: every `Obs_*` effect is exactly the
+# coefficient of a saturated one-factor GLM at the matching link, so its influence function is
 #
 #   IF_i = 1(x_i = l) w_i (y_i - mu_l) / sum_{x=l} w * g'(mu_l)
 #        - 1(x_i = r) w_i (y_i - mu_r) / sum_{x=r} w * g'(mu_r)
 #
-# with no fit at all: measured identical to the fitted equivalent to 8e-17 and ~21x cheaper. For the
-# unweighted binomial case its SE is exactly the WOOLF interval the `Obs_OR` column already prints.
+# with no fit at all; for the unweighted binomial case its SE is exactly the WOOLF interval `Obs_OR`
+# already prints.
 #
-# WARNING: `link` describes the CRUDE estimator, not the model's family -- a binomial model shows a
-# logit-scale OR by default but an IDENTITY-link risk difference under effect = "ame" and a LOG-link
-# risk ratio under "ame_ratio". That is exactly why it is a fact of the REG_EMPIRICAL SHAPE row.
-# The frame must be the model's own complete cases, in its order (the caller proves that).
+# WARNING: `link` describes the CRUDE estimator, not the model's family -- e.g. a binomial model
+# shows a logit-scale OR by default but an identity-link risk difference or log-link risk ratio under
+# `effect = "marginal"` (a fact of the REG_EMPIRICAL SHAPE row).
 #
-# Phase 18z10: the outcome + weights come from reg_crude_yw(), the ONE description of "what the crude
-# estimator averages, and with what weights" -- so the influence function cannot be built around a
-# different `y` than the estimate it is the standard error OF (the invariant reg_crude_y() was extracted
-# for in z8-B, now covering two more shapes):
-#   grouped binomial : each ROW is a cluster of `trials` draws, so y = succ/trials with weight w*trials.
-#                      reg_if_se() then sums squares over ROWS, i.e. the cluster-robust variance -- the
-#                      right one under over-dispersion, and the same grain as the model leg
-#                      (reg_coef_if_maker on glm(cbind(s, f) ~ x) is also per row).
-#   multinomial      : `category` picks the 0/1 indicator of that outcome category, which is the crude
-#                      estimand of the column being tested.
+# `y` and its weights come from reg_crude_yw(), matching the estimate this is the SE of:
+#   grouped binomial : y = succ/trials, weight w*trials; reg_if_se() sums over ROWS (cluster-robust).
+#   multinomial      : `category` picks the 0/1 indicator of that outcome category.
 #' @keywords internal
 reg_crude_if_maker <- function(data, outcome, crude_key, positive_level, wt, link,
                                trials = NULL, category = "", ref_category = NULL) {
@@ -181,23 +153,18 @@ reg_crude_if_maker <- function(data, outcome, crude_key, positive_level, wt, lin
 
 # === G-COMPUTATION: THE MARGINAL SIDE ===========================================================
 #
-# reg_counterfactual(data, var, lv) -- "what the sample would look like with `var` set to lv", the ONE
-# rule the two g-computation makers share.
+# reg_counterfactual(data, var, lv) -- "what the sample would look like with `var` set to lv", shared
+# by both g-computation makers.
 #
-# CONTRACT, shared by every closure built on it, `(var, level, ref)`:
-#   * `var` is a FACTOR  -- `level` / `ref` are level LABELS, and the counterfactual sets the whole
-#     column to that level (the classic "everyone at level j vs everyone at the reference").
-#   * `var` is NUMERIC   -- Phase 18z9: `level` / `ref` are SHIFTS added to the observed x, so the
-#     caller passes (k, 0) for a k-unit contrast. That is marginaleffects' own forward difference
-#     `variables = list(v = k)`, which is what the numeric AME column shows. Assigning
-#     `as.character(lv)` unconditionally turned a numeric column into character -- model.matrix() then
-#     either errored (caught -> NULL, i.e. no test) or built the wrong contrast width.
+# CONTRACT `(var, level, ref)`:
+#   * `var` is a FACTOR  -- `level` / `ref` are level LABELS; the counterfactual sets the whole column
+#     to that level.
+#   * `var` is NUMERIC   -- `level` / `ref` are SHIFTS added to the observed x (marginaleffects' own
+#     forward difference `variables = list(v = k)`).
 #
-# WARNING -- assign through `[<-`, never through a fresh factor(). `factor(lv, levels = levels(x))`
-# drops the `ordered` class, and an ordered predictor then gets TREATMENT contrasts where the fit used
-# polynomial ones: measured on gss `rincome`, an AME of 0.1038 instead of 0.0302, silently. It cannot
-# bite through tab_reg() -- Phase 14r's reg_fit() de-orders every factor predictor before fitting -- but
-# this function's argument is "a level label", and it must be right for one.
+# WARNING -- assign through `[<-`, never a fresh factor(): `factor(lv, levels = levels(x))` drops the
+# `ordered` class, giving TREATMENT contrasts where the fit used polynomial ones (measured on gss
+# `rincome`: an AME of 0.1038 instead of 0.0302, silently).
 #' @keywords internal
 reg_counterfactual <- function(data, var, lv) {
   x <- data[[var]]
@@ -212,36 +179,27 @@ reg_counterfactual <- function(data, var, lv) {
   data
 }
 
-# reg_gcomp_maker() -- G-COMPUTATION for a single-equation fit (lm / glm / svyglm). An average marginal
-# effect and its two variances are the same sweep read three ways, so ONE producer computes all of it:
+# reg_gcomp_maker() -- G-COMPUTATION for a single-equation fit (lm / glm / svyglm): an average
+# marginal effect and its two variances are the same sweep read three ways:
 #
 #   est   = mean_i w_i (mu1_i - mu0_i)   (or log(M1/M0))   the printed estimate
 #   G     = d(est)/d(beta)                                 the delta method's jacobian, ANALYTIC
 #   emp   = the empirical-averaging influence term
 #   mean1 / mean0                                          the counterfactual adjusted means (`pct`)
 #
-# TWO CONSUMERS, TWO VARIANCES, AND THEY MUST NOT BE SWAPPED (Phase 20d):
+# TWO CONSUMERS, TWO VARIANCES, NEVER SWAPPED:
 #
 #   * the PRINTED interval is  est +- crit * sqrt(G' vcov(fit) G)  -- exactly marginaleffects' own
-#     quantity, which it reaches by a NUMERICAL derivative costing one full re-prediction per
-#     coefficient (measured: 5.9 s, against 0.8 s with vcov = FALSE, on 13 000 rows x 14 coefficients).
-#     Ours agrees with it to 1e-8 on estimate, standard error, both bounds and the p-value, on glm and
-#     weighted svyglm alike.
-#   * the GAP test needs the INFLUENCE FUNCTION, `emp + IF^beta %*% G` (reg_ame_if_maker below), because
-#     only an influence function carries the covariance between the model effect and its crude twin:
+#     quantity, reached here analytically instead of by a numerical derivative.
+#   * the GAP test needs the INFLUENCE FUNCTION, `emp + IF^beta %*% G` (reg_ame_if_maker below), the
+#     only quantity that carries the covariance between the model effect and its crude twin:
 #
-#       additive (effect = "ame"):       IF_i = wt_i (g_i - AME)       + IF^beta_i %*% G
-#       ratio    (effect = "ame_ratio"): IF_i = wt_i (mu1_i - M1)/M1 - wt_i (mu0_i - M0)/M0
+#       additive (marginal difference):  IF_i = wt_i (g_i - AME)       + IF^beta_i %*% G
+#       ratio    (marginal ratio):       IF_i = wt_i (mu1_i - M1)/M1 - wt_i (mu0_i - M0)/M0
 #                                              + IF^beta_i %*% (G1/M1 - G0/M0)
 #
-#     with g_i = mu1_i - mu0_i and wt_i = w_i / sum(w) (dev/model_vs_observed_gap_test.md SS3.4).
-#
-# That influence-function standard error is a SANDWICH variance and adds the empirical-averaging term;
-# measured against marginaleffects it differs by up to 3.6 % on a rare level. It is the better answer to
-# "is this effect different from that one" and the wrong answer to "what interval does this AME print".
-#
-# The counterfactual design matrices are built and released ONE LEVEL AT A TIME: `G` is a p-vector and
-# `g_i` a length-n vector, so peak memory stays X + one counterfactual.
+#     with g_i = mu1_i - mu0_i and wt_i = w_i / sum(w) -- a SANDWICH variance, the right answer to
+#     "is this different from that", the wrong one for "what interval does this AME print".
 #' @keywords internal
 reg_gcomp_maker <- function(fit, data, wt, ratio) {
   tt  <- tryCatch(stats::delete.response(stats::terms(fit)), error = function(e) NULL)
@@ -282,8 +240,7 @@ reg_gcomp_maker <- function(fit, data, wt, ratio) {
   }
 }
 
-# reg_ame_if_maker() -- the g-computation above wearing its influence-function hat: the empirical term
-# plus the coefficient influence carried along the jacobian.
+# reg_ame_if_maker() -- the g-computation above wearing its influence-function hat.
 #' @keywords internal
 reg_ame_if_maker <- function(fit, data, wt, ratio, coef_if) {
   if (is.null(coef_if)) return(NULL)
@@ -301,23 +258,19 @@ reg_ame_if_maker <- function(fit, data, wt, ratio, coef_if) {
 }
 
 
-# === 3+ LEVEL OUTCOMES (Phase 18z10) ============================================================
+# === 3+ LEVEL OUTCOMES ===========================================================================
 #
-# reg_coef_if_maker() above reaches lm / glm / svyglm through model.matrix() + residuals(type =
-# "working") + fit$weights, none of which nnet::multinom or MASS::polr provides -- so both correctly
-# returned NULL, and `color = "adjustment"` had no test on a 3+ level outcome. The generalisation is
-# NOT a branch per family: every one of these is an M-estimator, so
+# reg_coef_if_maker() above needs model.matrix() + residuals(type = "working") + fit$weights, none of
+# which nnet::multinom or MASS::polr provides. Every M-estimator's influence is still
 #
 #     IF = (per-observation score) %*% (bread)
 #
-# and reg_if_from_parts() is already exactly that in GLM-specialised algebra -- X*(W*r) IS the score,
-# solve(X'WX) IS the bread. What changes is only who supplies the score.
+# and reg_if_from_parts() is already exactly that (X*(W*r) the score, solve(X'WX) the bread) -- only
+# who supplies the score changes.
 #
-# WARNING -- the two cores are NOT merged, deliberately. reg_if_from_parts() exists to avoid ever
-# materialising U = X*(W*r): it exploits the fact that U is a pure ROW SCALING of X, so peak memory is
-# the ONE n x p model matrix the caller already holds. A multinomial / cumulative-logit score has no
-# such structure and must be held as a real n x q matrix (n = 20 000, q = 40 is 6.4 MB -- fine, but say
-# so). They share the CONTRACT (a closure over the contrast, NULL on failure), not the algebra.
+# WARNING -- the two cores are NOT merged: a multinomial / cumulative-logit score has no row-scaling
+# structure, unlike reg_if_from_parts()'s U, so it is held as a real n x q matrix. They share the
+# CONTRACT (a closure, NULL on failure), not the algebra.
 #' @keywords internal
 reg_if_from_score <- function(S, bread) {
   if (is.null(S) || !is.matrix(S) || !nrow(S) || !ncol(S)) return(NULL)
@@ -331,13 +284,11 @@ reg_if_from_score <- function(S, bread) {
   }
 }
 
-# The per-observation score of a MULTINOMIAL logit: U_i,(j) = x_i (1{y_i = j} - p_ij), the blocks
-# stacked CATEGORY-MAJOR.
-# WARNING -- trap measured, twice: coef(multinom) is a (K-1) x p MATRIX and vcov(multinom) is ordered
-# category-major ("Dem:(Intercept)", "Dem:raceBlack", ...), while as.vector() on that matrix is
-# category-MINOR. Getting it backwards produces a standard error ~2.7x too large with no warning. The
-# defence here is structural, not a comment: the columns are NAMED and every lookup goes by name, so a
-# mismatch is a NULL (the names test below), never a wrong number.
+# The per-observation score of a MULTINOMIAL logit: U_i,(j) = x_i (1{y_i = j} - p_ij), stacked
+# CATEGORY-MAJOR.
+# WARNING: coef(multinom) is (K-1) x p; vcov(multinom) is ordered category-major while as.vector() on
+# that matrix is category-MINOR -- backwards, the SE is ~2.7x too large with no warning. The defence
+# is structural: columns are NAMED, so a mismatch is a NULL, never a wrong number.
 #' @keywords internal
 reg_score_multinom <- function(fit, V = NULL) {
   if (is.null(V)) V <- tryCatch(stats::vcov(fit), error = function(e) NULL)
@@ -357,12 +308,10 @@ reg_score_multinom <- function(fit, V = NULL) {
 # L = F(z_j - eta) - F(z_{j-1} - eta):
 #   dlogL/dbeta  = -[f(z_j - eta) - f(z_{j-1} - eta)] / L * x
 #   dlogL/dzeta_k = [1{k = j} f(z_j - eta) - 1{k = j-1} f(z_{j-1} - eta)] / L
-# WARNING -- trap measured: the bread is vcov(fit), NEVER solve(fit$Hessian). MASS::polr optimises over
-# (beta, zeta_1, log(diff zeta)), so its Hessian is in THAT parameterisation; substituting it gave
-# standard errors up to 2x wrong here while looking entirely plausible. vcov() applies the transform's
-# jacobian. (For svyolr, fit$var is the design-based SANDWICH, not the bread -- substituting it would
-# double-count the design exactly as vcov(svyglm) would in the GLM path above. svyolr is unreachable
-# anyway: tab_reg() refuses a weighted 3+ level outcome with effect = "ame".)
+# WARNING: the bread is vcov(fit), NEVER solve(fit$Hessian) -- MASS::polr optimises over a different
+# parametrisation, (beta, zeta_1, log(diff zeta)); vcov() applies the transform's jacobian. (svyolr's
+# fit$var is the SANDWICH, not the bread, and is unreachable: tab_reg() refuses a weighted 3+ level
+# outcome under `effect = "marginal"`.)
 #' @keywords internal
 reg_score_polr <- function(fit, V = NULL) {
   if (inherits(fit, "svyolr")) return(NULL)
@@ -397,20 +346,12 @@ reg_score_polr <- function(fit, V = NULL) {
 # neither package exposes. Returns list(theta, levels, mm(newdata), probs(theta, X),
 # dmean(X, P, j, w)); NULL for anything else.
 #
-# DESIGN -- why a local predictor is not a duplicate implementation. marginaleffects computes its
-# delta-method standard errors from an internal jacobian it does not expose as an attribute (checked),
-# and perturbing the fit and re-calling it p+1 times costs ~4.6 s per table. The local softmax /
-# cumulative-logit IS the same arithmetic the SCORE functions above already need, so there is ONE
-# predictor with three consumers, not three predictors. It is policed the way reg_crude_if_maker() is: a
-# test pins the local AME to marginaleffects::avg_comparisons() (which it reproduces to 8 significant
-# digits) rather than to a hand-written expectation.
+# DESIGN -- a local predictor, not a duplicate: the local softmax / cumulative-logit IS the same
+# arithmetic the SCORE functions above already need, so ONE predictor serves three consumers. Tested
+# against marginaleffects::avg_comparisons() rather than a hand-written expectation.
 #
-# `dmean(X, P, j, w)` is Phase 20d's addition: d/d(theta) of `sum_i w_i P_ij`, ANALYTIC, in the SAME
-# parameter order as `theta` and `vcov(fit)`. It is the derivative of `probs` above, so it belongs to
-# the one predictor rather than beside a caller, and it is what lets both the printed interval and the
-# gap test read one jacobian. It replaced a central-difference jacobian that cost 2.4 s PER CONTRAST
-# (44 re-predictions on a 21 000-row frame); the analytic one is 6.6 ms and agrees with it, and with
-# marginaleffects' standard error, to ~1e-9.
+# `dmean(X, P, j, w)` is d/d(theta) of `sum_i w_i P_ij`, ANALYTIC, in the SAME order as `theta` /
+# `vcov(fit)`, so both the printed interval and the gap test read one jacobian.
 #' @keywords internal
 reg_prob_engine <- function(fit) {
   tt <- tryCatch(stats::delete.response(stats::terms(fit)), error = function(e) NULL)
@@ -486,11 +427,9 @@ reg_prob_engine <- function(fit) {
   NULL
 }
 
-# reg_gcomp_cat_maker() -- reg_gcomp_maker()'s twin for a 3+ level outcome. Same closure contract, one
-# difference that is forced by the shape of the table: a multinomial / ordinal model shows ONE COLUMN
-# PER OUTCOME CATEGORY, so the closure answers for ALL of them at once. The two counterfactual
-# probability matrices are what costs anything, and they serve every category, so producing them once
-# is also what makes this cheaper than asking per category.
+# reg_gcomp_cat_maker() -- reg_gcomp_maker()'s twin for a 3+ level outcome: a multinomial / ordinal
+# model shows ONE COLUMN PER CATEGORY, so the closure answers for ALL of them at once from the same
+# two counterfactual probability matrices.
 #' @keywords internal
 reg_gcomp_cat_maker <- function(fit, data, wt, ratio) {
   eng <- reg_prob_engine(fit)
@@ -532,9 +471,9 @@ reg_gcomp_cat_maker <- function(fit, data, wt, ratio) {
   }
 }
 
-# reg_ame_if_cat_maker() -- the marginal influence function for a 3+ level outcome, ONE outcome
-# category at a time (each model column shows one). The g-computation above, plus the score-based
-# coefficient influence: same two-term shape as reg_ame_if_maker().
+# reg_ame_if_cat_maker() -- the marginal influence function for a 3+ level outcome, ONE category at a
+# time: the g-computation above plus the score-based coefficient influence, same shape as
+# reg_ame_if_maker().
 #' @keywords internal
 reg_ame_if_cat_maker <- function(fit, data, wt, ratio, category) {
   eng <- reg_prob_engine(fit)
@@ -557,15 +496,12 @@ reg_ame_if_cat_maker <- function(fit, data, wt, ratio, category) {
   }
 }
 
-# reg_if_align() -- Phase 18z14-iii: put an influence vector built on a FRAME into the row space
-# the DESIGN uses, which is also the fit's. `[` does not drop rows on a CALIBRATED or PPS design --
-# survey keeps all n and sets prob = Inf -- so svy_domain_design() pads the fit's design back to full
-# length and svyglm keeps those zero-weight rows in model.matrix(). A leg built on the complete-case
-# frame is then SHORTER than its counterpart, and the two could not be differenced: measured, the
-# closed-form crude leg was 380 against a model leg of 400 (the length guard dropped the test), while
-# reg_ame_if_maker()'s own `emp + delta` RECYCLED, i.e. returned a wrong number with only a warning.
-# Scattering with zeros is exact, not an approximation: the padded rows carry design weight 0, so they
-# contribute nothing to either term. NULL when no row rule applies (svy_row_at()).
+# reg_if_align() -- put an influence vector built on a FRAME into the row space the DESIGN uses (also
+# the fit's). `[` does not drop rows on a CALIBRATED or PPS design (survey keeps all n, prob = Inf), so
+# a leg built on the complete-case frame is SHORTER than its counterpart: without this, `emp + delta`
+# in reg_ame_if_maker() would RECYCLE, returning a wrong number with only a warning.
+# Scattering with zeros is exact: the padded rows carry design weight 0, contributing nothing to
+# either term. NULL when no row rule applies (svy_row_at()).
 #' @keywords internal
 reg_if_align <- function(v, n, des_rows) {
   if (is.null(v) || length(v) == n) return(v)
@@ -574,11 +510,9 @@ reg_if_align <- function(v, n, des_rows) {
   out <- numeric(n); out[at] <- v; out
 }
 
-# reg_delta_se() -- the standard error a g-computed quantity PRINTS: the delta method, sqrt(G' V G),
-# with V the fit's own variance-covariance matrix. It is marginaleffects' quantity exactly (measured to
-# 1e-8 on glm and weighted svyglm alike); the difference is that G comes from reg_gcomp_maker()
-# analytically instead of from p+1 numerical re-predictions. On an svyglm, `vcov(fit)` is already the
-# design-based sandwich, so a survey design is right by construction and needs no branch here.
+# reg_delta_se() -- the standard error a g-computed quantity PRINTS: sqrt(G' V G), the delta method,
+# with V the fit's own vcov -- marginaleffects' quantity exactly, reached here analytically. On an
+# svyglm, `vcov(fit)` is already the design-based sandwich, so no branch is needed here.
 # ⚠ NOT interchangeable with reg_if_se() below -- see reg_gcomp_maker()'s note on the two variances.
 #' @keywords internal
 reg_delta_se <- function(G, V) {
@@ -593,16 +527,11 @@ reg_delta_se <- function(G, V) {
   sqrt(v)
 }
 
-# reg_if_se() -- the standard error of a quantity whose per-observation influence contributions are `d`.
-# With a survey design that is survey::svyrecvar() -- the Binder (1983) linearization survey uses for
-# its OWN variances, so strata, clusters and finite-population corrections come along for free
-# (measured: it reproduces SE(svyglm) exactly, ratio 1.0000, while the IID version is 6 % too small on a
-# mild stratified/clustered design). Without one it is the plain sum of squares.
-# Phase 18z16-iiiii (defect 5): the svyrecvar call goes through svy_var_recvar(), the ONE place the
-# package answers the lonely-PSU question. It was inlined here WITHOUT that policy, so survey's default
-# ("fail") made svyrecvar error on a design with a single-PSU stratum -- the tryCatch then returned NA
-# and the gap test silently vanished, while tab()'s cell variances and the omnibus test, which both
-# say "adjust", succeeded on the very same design.
+# reg_if_se() -- the SE of a quantity whose per-observation influence contributions are `d`. With a
+# survey design that is survey::svyrecvar() (Binder 1983); without one, the plain sum of squares.
+# The call goes through svy_var_recvar(), the ONE place the package answers the lonely-PSU question:
+# survey's default ("fail") errors on a single-PSU stratum, which an un-policied tryCatch would
+# silently turn into a vanished gap test.
 #' @keywords internal
 reg_if_se <- function(d, design = NULL) {
   if (is.null(d)) return(NA_real_)

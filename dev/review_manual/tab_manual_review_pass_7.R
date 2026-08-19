@@ -321,13 +321,11 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "reli
         family = "binomial", color = "adjustment", effect = "marginal", measure = "ratio"
 )
 
-## effect = "at_reference"
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", color = "adjustment", effect = "at_reference" #, measure = "difference"
-)
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", color = "adjustment", effect = "at_reference", measure = "ratio"
-)
+# ## effect = "at_reference"
+# tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+#         family = "binomial", color = "adjustment", effect = "at_reference" #, measure = "difference"
+# )
+
 
 # gaussian
 ## effect = "coefficient"
@@ -346,14 +344,6 @@ tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", 
         family = "gaussian", color = "adjustment", effect = "marginal", measure = "ratio"
 )
 
-## effect = "at_reference"
-tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", color = "adjustment", effect = "at_reference"
-) 
-tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", color = "adjustment", effect = "at_reference", measure = "ratio"
-)
-
 
 # poisson
 ## effect = "coefficient"
@@ -365,20 +355,13 @@ tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "reli
 )
 
 ## effect = "marginal"
-tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", color = "adjustment", effect = "marginal"# , measure = "difference"
-)
+# tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
+#         family = "poisson", color = "adjustment", effect = "marginal"# , measure = "difference"
+# )
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
         family = "poisson", color = "adjustment", effect = "marginal", measure = "ratio"
 )
 
-## effect = "at_reference"
-tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", color = "adjustment", effect = "at_reference"# , measure = "difference"
-)
-tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", color = "adjustment", effect = "at_reference", measure = "ratio"
-)
 
 # summed-score binomial
 ## effect = "coefficient"
@@ -401,53 +384,7 @@ tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_whe
 )
 
 
-
-# multinomial: empirical="column"
-## effect = "coefficient"
-tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = "column"
-)
-## effect = "marginal"
-tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = "column", effect = "marginal"
-)
-tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = "column", effect = "marginal", measure = "ratio"
-)
-
-## effect = "at_reference"
-tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = "column", effect = "at_reference" #, measure = "odds_ratio"
-)
-tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = "column", effect = "at_reference", measure = "difference"
-)
-tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = "column", effect = "at_reference", measure = "ratio"
-)
-
-# ordinal: empirical="column"
-## effect = "coefficient"
-tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", empirical = "column"
-)
-## effect = "marginal"
-tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", empirical = "column", effect = "marginal" #, measure = "difference"
-)
-tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", empirical = "column", effect = "marginal", measure = "ratio"
-)
-## effect = "at_reference"
-tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", empirical = "column", effect = "at_reference" #, measure = "difference"
-)
-tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", empirical = "column", effect = "at_reference", measure = "ratio"
-)
-# Problem found in passing: the $ in "Lt$100000" like names destroy html formatting in footer (such ones should be escaped ?)
-
-# multinomial: empirical="cell" are all ok
+# multinomial: empirical="cell"
 ## effect = "coefficient"
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
         family = "multinomial", color = "adjustment"
@@ -460,13 +397,6 @@ tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig
         family = "multinomial", color = "adjustment", effect = "marginal", measure = "ratio"
 )
 
-## effect = "at_reference"
-tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", color = "adjustment", effect = "at_reference"
-)
-tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", color = "adjustment", effect = "at_reference", measure = "ratio"
-)
 
 # ordinal: empirical="cell"
 ## effect = "coefficient"
@@ -480,38 +410,8 @@ tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "reli
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
         family = "ordinal", color = "adjustment", effect = "marginal", measure = "ratio"
 )
-## effect = "at_reference"
-tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", color = "adjustment", effect = "at_reference" #, measure = "difference"
-) 
-tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", color = "adjustment", effect = "at_reference", measure = "ratio"
-) 
 
 
-
-
-
-
-
-
-#### miscellaneous
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical=TRUE
-) # with "est_base" in the Model column, in numeric predictors cells where "base" is NA, alignment/padding is broken (not align with the other OR), and it’s the case for all measures and effects. Fix the padding when there are NAs.
-
-
-
-# "difference" `measure` display consistency, for both mean and pct
-tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical=TRUE
-) # this one is nearly ok, ref is "0", but the positive ones should have a "+" sign to signify it’s a "difference" `measure`
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical=TRUE, measure = "difference"
-) # here positive have a "+" sign, but the ref/null is printed "+0%", I would prefer "0%".
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical=TRUE, effect = "marginal" #, measure = "difference"
-) # same here for Obs ; and worse, Model column lose it’s reference cell content altogether (void)
 
 
 
@@ -555,62 +455,99 @@ tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "reli
 
 
 
-
-
-
-
-
-# Variable name duplication in exports
-tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
-        family = c("binomial", "poisson"), empirical = TRUE, 
-) |> 
-  tab_export("md")
-# |           | levels               |Emp. % [married]  |Emp. OR [married]  |Model OR [married]  | |Emp. rate [tvhours]  |Emp. IRR [tvhours]  |Model IRR [tvhours]  |
-# |:----------|:---------------------|-----------------:|------------------:|-------------------:|-|--------------------:|-------------------:|--------------------:|
-# |           |                      | *married: 01-Married*|               |                    | | *tvhours*           |
-tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
-        family = c("binomial", "poisson"), empirical = TRUE, 
-) |> 
-  tab_export()
-# First row : married: 01-Married	tvhours
-# Second row . "levels" "Obs_%\n[married]" "Obs_OR\n[married]" "Model_OR\[married]" "Obs_rate\[tvhours]" "Obs_IRR\[tvhours]" "Model_IRR\[tvhours]"
-# - On exports, much space is lost for duplicated informations : the variable name is aldeady on the col_var row,
-#   but it’s also repeated on each column headers / second row. We must keep the "[married]" "[tvhours]" precision in
-#   console, to avoid name clashed, but it’s not needed in exports since the col_var names row already gives the information : 
-#   please **remove the [] in levels / headers row in html and Excel** in a reliable way.
-
-# No colors and wrong empirical counterpart for logistic models with exponentiate = FALSE
+#### miscellaneous
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, exponentiate = FALSE, 
+        family = "binomial", empirical=TRUE
+) # with "est_base" in the Model column, in numeric predictors cells where "base" is NA, alignment/padding is broken (not align with the other OR), and it’s the case for all measures and effects. Fix the padding when there are NAs.
+
+
+
+# "difference" `measure` display consistency, for both mean and pct
+tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+        family = "gaussian", empirical=TRUE
+) # this one is nearly ok, ref is "0", but the positive ones should have a "+" sign to signify it’s a "difference" `measure`
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical=TRUE, measure = "difference"
+) # here positive have a "+" sign, but the ref/null is printed "+0%", I would prefer "0%".
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical=TRUE, effect = "marginal" #, measure = "difference"
+) # same here for Obs ; and worse, Model column lose it’s reference cell content altogether (void)
+
+
+# some models prints numeric predictors like age with 1 unit increment, instead of the default 1 SD.
+tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
+        family = "multinomial"
 )
-# - Strange enough, when I add `exponentiate = FALSE`, all the levels colums and numbers rows, in fact all the cells, turn bold : 
-#   all look mistaken with a total row or a reference row. Stanger still, the same with 
-#  outcome = "tvhours" and family = "poisson" have the righ bold (only reference rows and summary stats fully in bold).
+tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
+        family = "ordinal"
+)
 
 
 
 
-tab_reg(gss_simple, outcome = "married", predictors = c("rincome", "party3"), tab_vars = "race")
-# - auto tab_spread() with a split var and just one dependent is not working for summary stats : 
-#   summary stats rows are repeated three times but they are all empty. 
-# - We just want a unique summary stats block below the predictors : please fix the code
-#   to make the two features (tab_spread and summary tables) work with one another.
+### tab() manual review ----
 
+# `ordered` class for rincome still causes problems in tab,
+#   but only when I added a numeric col_vars `tvhours` and `na = "drop_all"` !: please fix everywhere and add a test.
+tab(gss_simple, c(race, rincome, relig), c(party3, marital, tvhours), pct = "row", na = "drop_all", 
+   color = TRUE, color_signif = "grey_non_signif", ref = 1
+) 
+# Error:
+# ! Build failed on "rincome".
+# Caused by error in `dplyr::full_join()`:
+# ! Can't join `x$rincome` with `y$rincome` due to incompatible types.
+# ℹ `x$rincome` is a <ordered<f0104>>.
+# ℹ `y$rincome` is a <ordered<63988>>.
 
+# `display` presets
+# The following `display` are good, please create display presets for then, and document.
+tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "drop_all", 
+   color = TRUE, color_signif = "grey_non_signif", ref = 1, display = "{base} ({ratio})"
+) # preset "base_ratio" (working for both pct and mean)
+
+tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "drop_all", 
+   color = TRUE, color_signif = "grey_non_signif", ref = 1, display = "{pct} ({or})"
+) # preset "pct_OR"
+tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "drop_all", 
+   color = "OR", color_signif = "grey_non_signif", ref = 1, display = "{or} ({pct})"
+) # preset "OR_pct". 
+# - Also, accept "{OR}" as an alias for "{or}", and "OR" as an alias for "or" (otherwise it will confuse the user).
+# - Defect found : here, the 100% Total column is colored !
+# - Defect found : with OR display as the primary display token, like it’s already done with `display = "or"`,
+#   there should be no 100% column (but only the n inside the Total column. How to do this reliably ?
 
 
 ### exports and display tests  ---- 
 
+# "md"
+tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
+        family = c("binomial", "poisson"), empirical = TRUE, 
+) |> 
+  tab_export("md")
+# | *relig*     |**Protestant**                       | |   **6 269**|  **3 230**| |  (52%)      **1**        |   **1    (53%)**       | |  (2.72)     **1**        |  **1    (2.61)**       |
+# |             | Catholic                            | |     3 121  |    1 617  | |    (52%) 1/1.03          |  1/1.17*** (49%)       | |    (2.50) ÷1.09***       |  ×1.02    (2.65)       |
+# Reference rows have a small misalignment/mispadding for the "base" field in parenthesis, compared to the other rows. @dev/review_manual/tab_md_test_5.md
+# Once renderer in html @dev/review_manual/tab_md_test_5.htm : 
+# - the long default cell content like "(31%) 1/2.43***" is wrapped on two lines, which makes it utterly unreadable for humans.
+# - in the footer, empty cells seem to add a vertical border where there are none, and all footer internal vertical borders seems to have more linewidth than the predictors colums (constant reference population does the same) ; because because the borders are duplicated ?
 
-# tab_md 
-tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = "drop_all", 
+
+# "html"
+tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "drop_all", 
    color = TRUE, color_signif = "grey_non_signif", ref = 1
 )
-tab(gss_simple, col_vars = c(race, rincome))
+# - We lose alignment a bit here, didn’t we resolve this for html before ? 
+#   Strange thing is that it seems to be caused not by bold, but by the colored background 
+#   (do it adds a margin ? Would it be more reliable and more visually good if we remove the margin, 
+#   or add it in cells with no specific color background ?)
 
 
 
 
+
+
+
+### weights and survey-design pvalues display improvement ----
 pc18 <- readRDS("~/Data/Pratiques culturelles/Pratiques culturelles 2018/pc18.rds")
 musique_vars <- c("ROCK", "JAZZ", "CLASSIQUE", "VARIETE", "ELECTRO", "METAL", "CHANSON", "WORLD", "RAP", "TRADI")
 pc18 <- pc18 |>
@@ -640,9 +577,6 @@ cols1 <- c("CONCERTS", "JV", "NB_CONCERTS")
 rows2 <- c("SEXE", "DIPLOM", "CRITREVENU", "CRITAGE")
 cols2 <- c(musique_vars, "NB_MUSIQUES") # plus the related score as numeric variable
 
-
-### weights and survey-design pvalues display improvement ----
-
 # Base unweighted pvalues
 options(tabxplor.kish_neff = FALSE)
 tab(pc18, c(SEXE, CRITREVENU), c(CLASSIQUE, METAL, WORLD, RAP, TRADI, NB_MUSIQUES), 
@@ -663,24 +597,6 @@ tab(pc18, c(SEXE, CRITREVENU), c(CLASSIQUE, METAL, WORLD, RAP, TRADI, NB_MUSIQUE
     wt = POND, test = "survey", ids  = ~ZAE
 )
 
-# Display improvements : 
-# - remove the "statistic" row from displayed summary stats : now that we have not 
-#    just pvalue, but also effect size, the user don’t know anymore which statistic it is.
-# - order of summary stats : first pvalue, then effect size
-# - pvalue in-cell text waste a lot of horizontal space with "(Chi2, Kish)", "(F, Kish)" "(Chi2, Rao-Scott)", "(F, survey)", etc.
-#   Since the type of pvalue, with or without Kish, with or without survey, Welch or Classic, 
-#   is at the whole table level, I would want this information to be displayed 
-#   in the row name only ("levels" column). So parenthesis is to be removed from the fmt cell altogether. 
-#   Exemples of the display I want in the row names : 
-#   - With both factors and numeric col_vars : "pvalue (Chi2, Welch F)"
-#   - With only factors col_vars : "pvalue (Chi2)"
-#   - With only numeric col_vars, and classic ANOVA F chosen : "pvalue (ANOVA F)"
-#   - With both factors and numeric col_vars and Kish (on both) : "pvalue (Chi2, Welch F; Kish)"
-#   - With both factors and numeric col_vars and survey design (Rao-Scott, etc.) : "pvalue (Chi2, Welch F; survey-design)"
-#   - Say it’s Fisher when it’s fisher.
-# - "effect size" is not clear either : depending on if there are only factors col_vars, only numeric, or factors and numeric both,
-#   it should say which measure of the effect size is used. Ex : "Kramer’s V" (no parenthesis here, 
-#   adding both an "effect size" text and a "Kramer’s V" text would be useless here), "eta2", "Kramer’s V, eta2", etc.
 
 
 

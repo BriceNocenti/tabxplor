@@ -1,77 +1,54 @@
-# R/reg-resolve.R -- Phase 19m-ii: THE argument boundary of tab_reg().
+# PURPOSE: THE argument boundary of tab_reg() -- every check, and every rewrite of `data`, once and
+#   in one ordered place.
+# ROLE: the regression twin of tab_resolve_common_args() (R/tab-resolve.R). One entry point,
+#   reg_resolve_args(), composed of six private stages; tab_reg() calls it once and receives
+#   new_reg_args(), the typed record the builder reads (the FORMALS are the contract, the body is
+#   as.list(environment()), and the globalVariables mirror is derived beneath it).
 #
-# WHY THIS FILE EXISTS. Phase 19i gave the four CROSSTAB producers one boundary
-# (tab_resolve_common_args(), R/tab-resolve.R). The regression producer never got one: 738 of
-# tab_reg()'s 821 lines resolved 28 arguments before a single reg_build() call, and 30 of the
-# package's ~190 user messages lived in that region -- 48 % of them in 13 % of the file. Inside it
-# sat twelve ad-hoc local closures and two near-identical spec literals, all of them there for ONE
-# reason: the per-outcome facts (family, estimand, trials, outcome level, crude key, colour, label,
-# effect word) were never materialised, so each was recomputed on demand by a function closing over
-# a frame that later blocks kept mutating.
+#     S1 reg_validate_args()      the checks that are PURE
+#     S2 reg_prepare_data()       design unwrap / formula / predictors dispatch / labelled / the
+#                                 level merge / shape / all_predictors / tab_vars -- every rewrite
+#                                 of `data`
+#     S3 reg_resolve_estimands()  the PER-OUTCOME TABLE (family / estimand / trials / outcome level
+#                                 / crude key)
+#     S4 reg_resolve_output()     display / colour / the empirical mode -- and the notes, LAST
+#     S5 reg_resolve_fit_plan()   na / reref / the reference relevel / multiplier / shape terms
+#     S6 reg_resolve_specs()      the labels, the positive levels, the one new_reg_spec() call site
 #
-# THE SHAPE. One entry point, reg_resolve_args(), composed of six private stages. tab_reg() calls it
-# once and receives new_reg_args() -- the typed record, on new_reg_shared()'s idiom (the FORMALS are
-# the contract, the body is as.list(environment()), the globalVariables mirror is derived beneath).
-#
-#   S1 reg_validate_args()      the checks that are PURE
-#   S2 reg_prepare_data()       design unwrap / formula / predictors dispatch / labelled / the level
-#                               merge / shape / all_predictors / tab_vars -- every rewrite of `data`
-#   S3 reg_resolve_estimands()  the PER-DEPENDENT TABLE (family / estimand / trials / level / crude)
-#   S4 reg_resolve_output()     display / colour / the empirical degrade -- and the notes, LAST
-#   S5 reg_resolve_fit_plan()   na / reref / the reference relevel / multiplier / shape terms
-#   S6 reg_resolve_specs()      the labels, the positive levels and the one new_reg_spec() call site
-#
-# ⚠ WHY `data` IS INSIDE THE BOUNDARY, NOT LIFTED OUT OF IT. tab_resolve_common_args() can be pure
-# because tab()'s arguments are answerable without the data frame -- the data-outcome half is
-# tab_setup()'s job, downstream. tab_reg() has no such split, and not incidentally: `family = "auto"`
-# is ANSWERED by the data, `trials = TRUE` is, `multiplier = "sd"` IS a number measured from it,
-# `shape` recodes it and `ref` relevels it -- and the relevel needs the multinomial outcomes
-# the family stage resolves. A separate reg_prepare_data() that tab_reg() called itself would put
-# the ORDERING in the caller: a second place it can be got wrong. The prepared `data` and
-# `design_obj` are therefore DECLARED FIELDS of the returned record, exactly as `data` is a declared
-# field of new_ctx() (R/tab.R) that pipeline stages rewrite.
-#
-# ⚠ WHY THERE IS NO `REG_ARG_VALUES` TABLE. TAB_ARG_VALUES exists because FIVE producers had each
-# re-implemented one boundary and drifted (`tot`'s expansion written four times, `na`'s allow-list
-# three times with three contents). tab_reg() is ONE producer with two forwarding wrappers, and its
-# vocabularies are already declared once each -- REG_USER_FAMILIES / REG_EFFECTS_VALUES /
-# REG_MEASURES_VALUES / REG_SHAPES / reg_stat_keys() / REG_MULTIPLIER_KEYWORDS /
-# REG_DISPLAY_SHORTHANDS. And TAB_ARG_VALUES' own exclusion rule (R/tab-resolve.R: "validating it
-# means RESOLVING it, and that is resolve_ci_value()'s job -- one validator, in the one place that
-# can also rewrite the value") disqualifies eleven of the fifteen candidates: `family`, `effect`,
-# `measure`, `shape`, `color`, `display`, `multiplier`, `trials`, `ref`, `cleannames` and `na`
-# all REWRITE what they validate, so each is checked by its own resolver. `method` / `compare` / `na`
-# are validated by match.arg AGAINST THEIR FORMALS, which is tighter single-sourcing than a table.
-# What is left is reg_validate_args() below: five checks, each CALLING an existing single source.
+# KEY CONSTRAINTS:
+#   - THE ORDER IS THE DESIGN, between the stages and inside each of them. A fact resolved after a
+#     block that reads it is a wrong number, not untidiness, so each stage states what its own order
+#     buys.
+#   - `data` IS INSIDE THE BOUNDARY, not lifted out of it. tab()'s arguments are answerable without
+#     the data frame; tab_reg()'s are not -- `family = "auto"` is ANSWERED by the data, `trials =
+#     TRUE` is, `multiplier = "sd"` IS a number measured from it, `shape` recodes it, `ref` relevels
+#     it, and that relevel needs the multinomial outcomes the family stage resolved. A preparation
+#     the caller invoked separately would move the ordering into the caller: a second place to get
+#     it wrong. The prepared `data` and `design_obj` are declared FIELDS of the returned record.
+#   - There is deliberately no REG_ARG_VALUES table. TAB_ARG_VALUES exists because five crosstab
+#     producers had each written one boundary and drifted; tab_reg() is one producer, its
+#     vocabularies are already declared once each (REG_USER_FAMILIES / REG_EFFECTS_VALUES /
+#     REG_MEASURES_VALUES / REG_SHAPES / reg_stat_keys() / REG_MULTIPLIER_KEYWORDS), and an argument
+#     that REWRITES what it validates belongs to its own resolver -- one validator, in the one place
+#     that can also rewrite the value.
+# See: CLAUDE.md section "tabxplor architecture" (the regression subsystem).
 
 
 # === S1: the pure checks =========================================================================
-# Only what needs no data, no other resolution and no rewrite. Everything else is a `ci` (see above)
-# and lives with its resolver.
+# Only what needs no data, no other resolution and no rewrite. A `ci`-style argument that REWRITES
+# what it validates lives with its own resolver instead, not here.
 #' @keywords internal
 #' @noRd
 reg_validate_args <- function(conf_level = NULL, stats = NULL, color_signif = NULL,
                               empirical = NULL, add_n = NULL, stars = NULL) {
-  # 1. `conf_level` -- the reg producer had NEVER validated it, so `conf_level = 95` reached the
-  # interval engine as a probability. tab_validate_args() has done this for the crosstab producers
-  # since 19i and already carries the "did you mean 0.95?" hint: reuse, do not rewrite.
+  # `conf_level`: reuse tab_validate_args() (the "did you mean 0.95?" hint), not a second check.
   tab_validate_args("tab_reg", conf_level = conf_level)
 
-  # 2. `stats` -- reg_validate_stat_keys() has carried `arg = "stats"` as its DEFAULT since 19g and
-  # was called from exactly one site, for `check`. The `stats` path silently FILTERED instead
-  # (reg_footer_stats: `stats[stats %in% reg_stat_keys()]`), so a typo produced a missing footer row
-  # with no message at all. `NULL` / `TRUE` / `FALSE` / "all" / "none" are the declared special
-  # values and pass through untouched.
-  # Phase 20c: it is the KEYS that are validated -- a named entry carries its key in the NAME
-  # (`c(compare_baseline = "M1")`), so reg_stats_keys_of() is what the two readers share.
+  # `stats`: the KEYS are validated -- a named entry carries its key in the NAME (e.g. "M1").
   if (is.character(stats) && !identical(stats, "all") && !identical(stats, "none"))
     reg_validate_stat_keys(reg_stats_keys_of(stats), arg = "stats")
 
-  # 3. `color_signif` -- unvalidated on this path entirely. tab() goes through
-  # normalize_color_spec(), which aborts; tab_reg() put the raw value into new_reg_shared() ->
-  # reg_column() -> fmt(color_signif = ), and fmt() casts without validating -- so
-  # `color_signif = "grey"` built a table whose stored policy was a value no consumer knows, and
-  # which therefore silently painted as "ignore". ONE vocabulary (R/fmt_class.R), three readers.
+  # `color_signif`: ONE vocabulary (R/fmt_class.R), checked here -- fmt() casts without validating.
   if (!is.null(color_signif)) {
     cs <- as.character(color_signif)[1]
     if (!identical(cs, "color_all_signif") && !cs %in% COLOR_SIGNIF_VALUES)
@@ -79,15 +56,9 @@ reg_validate_args <- function(conf_level = NULL, stats = NULL, color_signif = NU
                        "i" = "Valid: {.val {COLOR_SIGNIF_VALUES}}."), call = NULL)
   }
 
-  # 4. THE BASELINE MODEL HAS NO CHECK HERE ANY MORE, and that is the point of Phase 20c's merge.
-  # It used to be its own argument, so its SHAPE was a thing a user could get wrong (a vector, a
-  # zero, a logical) and its RELATION to `compare` another ("you named a baseline but asked for no
-  # comparison"). It is the VALUE of a `stats` key now, so the grammar guarantees a single string --
-  # naming the baseline IS asking for the comparison, and both messages became unrepresentable.
-  # What is left -- an empty or NA value, and "which model is that" -- belongs to the two places that
-  # can act on it: reg_resolve_stats() rewrites, reg_compare_rows() matches the model labels.
+  # the baseline model has no check here: it is the VALUE of a `stats` key.
 
-  # 5. the scalar logicals. NULL passes (several of them mean "read the option" upstream).
+  # the scalar logicals. NULL passes (several of them mean "read the option" upstream).
   for (nm in c("add_n", "stars")) {
     v <- get(nm)
     if (is.null(v)) next
@@ -111,62 +82,36 @@ reg_validate_args <- function(conf_level = NULL, stats = NULL, color_signif = NU
 
 
 # === S2: everything that touches `data` ==========================================================
-# The design unwrap, the formula escape hatch, the predictors dispatch, the labelled conversion, the
-# `shape` recode, the predictor union and the tab_vars validation -- i.e. every block that rewrites
-# `data` or decides what the model's variables ARE, in the one order they may run in.
+# The design unwrap, the formula escape hatch, the predictors dispatch, the labelled conversion,
+# the `shape` recode, the predictor union and the tab_vars validation, in the order they may run.
 #
-# ⚠ THE ORDER IS THE DESIGN. Each of these was written where it is for a reason that is now stated:
-#   H2  the design unwrap BEFORE the formula: reg_parse_formula() calls terms(formula, data = data),
-#       and on a prebuilt design `data` is not a data frame.
-#   H3  the formula BEFORE everything else: it REWRITES `outcome` and `predictors`, so the
-#       labelled scan, the shape validation and `all_predictors` would otherwise see the wrong names.
-#   H4  labelled BEFORE shape: reg_resolve_shape() refuses a factor predictor, and
-#       tab_apply_val_labels() is what turns a labelled numeric into one.
-#   H5  labelled BEFORE the family stage: a coded 0/1 outcome must be a real factor when
-#       reg_detect_family() looks at it, or it is detected as gaussian.
-#   H6  labelled BEFORE the trials stage: reg_trials_observed_max() answers NA for a factor.
-#   H18 shape BEFORE the frozen multiplier frame: a quantile-cut predictor's SD would otherwise be
-#       measured on the raw numeric.
-#   H25 the level MERGE (20g-ii) with `shape`, and before the family stage / the reference relevel /
-#       the frozen SD / the skeleton -- so every one of them sees the predictor as fitted. It cannot
-#       collide with `shape`: reg_resolve_shape() refuses a factor predictor, so `shape` acts on the
-#       numeric ones and a merge on the factor ones, and the two are disjoint by construction.
-#   H23 tab_vars validation BEFORE the family/estimand stages. It used to run 500 lines later, so
-#       "`tab_vars` is not a column of `data`" arrived after up to eight informs about families,
-#       colours and forcings the call was never going to produce.
+# ⚠ THE ORDER IS THE DESIGN: design unwrap before the formula (not yet a data frame to parse), the
+# formula before everything else (it REWRITES `outcome`/`predictors`), labelled conversion before
+# `shape`/family-detection/`trials`, `shape` before the frozen multiplier frame, and tab_vars
+# validation before the family/estimand stages.
 #' @keywords internal
 #' @noRd
 reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NULL,
                              shape = NULL, family = "auto", levels_collapse = NULL) {
-  # --- C: a PREBUILT survey design as `data` (Phase 12g / 18z14-i) ------------------------------
-  # THE shared boundary (R/survey-design.R) extracts its model frame for family-detect / reference /
-  # skeleton and materialises the design's own weights as a column; the design itself still drives
-  # every fit.
-  # WARNING: `wt` MUST become that column, not NULL. It used to be nulled here, and since ~11 sites
-  #   read `design_spec$wt`, a design-weighted Model_* column sat beside an UNWEIGHTED crude Obs_*
-  #   column, a sample-average (not population-average) AME, an unweighted frozen SD for
-  #   `multiplier = "sd"`, unweighted influence weights in the gap test, and no "Weighted by" footer
-  #   at all (D1 / D2 / D8 of dev/full_survey_design_scope.md S2.3). The FIT is unaffected:
-  #   reg_resolve_design() branches on design_spec$design first, so a non-NULL `wt` never rebuilds one.
+  # --- C: a PREBUILT survey design as `data` --------------------------------------------------
+  # THE shared boundary (R/survey-design.R) extracts its model frame and materialises the design's
+  # weights as a column; the design itself still drives every fit.
+  # WARNING: `wt` MUST become that column, not NULL -- many downstream sites read `design_spec$wt`.
   svy <- svy_unwrap_data(data, "tab_reg")
   design_obj <- svy$spec$design
   if (!is.null(svy)) {
-    # Phase 18z16-i (W10): one rule across the package -- `wt` beside a design ABORTS (it used to
-    # be silently ignored here with a note nothing downstream could see).
+    # `wt` beside a prebuilt design ABORTS, one rule across the package.
     svy_abort_wt_design(!is.null(wt))
     data <- svy$data
     wt   <- svy$spec$wt
   }
   stopifnot(is.data.frame(data))
   weighted <- svy_weighted(list(design = design_obj), wt)
-  # the design's own degrees of freedom (#PSU - #strata), captured at THE boundary and carried to
-  # every interval's critical value; NULL for a plain frame.
-  degf <- svy$spec$degf
+  degf <- svy$spec$degf   # #PSU - #strata, carried to every interval's critical value
 
-  # --- D: the formula escape hatch (D9) ---------------------------------------------------------
-  # A SIMPLE formula (bare response ~ bare main-effect vars) reduces losslessly to the
-  # outcome+predictors character path; a COMPOUND one (interactions / poly() / I() / calls) is fit
-  # verbatim with a fit-read skeleton.
+  # --- D: the formula escape hatch -----------------------------------------------------------
+  # A SIMPLE formula reduces losslessly to the outcome+predictors character path; a COMPOUND one
+  # (interactions / poly() / I() / calls) is fit verbatim with a fit-read skeleton.
   formula_mode <- FALSE
   raw_formula  <- NULL
   if (rlang::is_formula(outcome)) {
@@ -207,12 +152,9 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                    call = NULL)
   }
 
-  # --- F: labelled interop (Phase k) ------------------------------------------------------------
-  # Capture variable labels (BEFORE conversion strips them) then convert labelled (haven/labelled)
-  # predictors / outcome / split columns to value-label factors -- so family detection, the
-  # skeleton and the fit all see real factors. Covers a prebuilt survey design's variables too.
-  # `var_labels` rides `shared` into the reg table's meta$vars for the opt-in name display-swap.
-  # Idempotent / no-op for non-labelled data.
+  # --- F: labelled interop -------------------------------------------------------------------
+  # Capture variable labels (BEFORE conversion strips them), then convert labelled columns to
+  # value-label factors. `var_labels` rides `shared` into meta$vars for the opt-in display-swap.
   reg_lbl_vars   <- intersect(unique(c(as.character(outcome),
                                        unlist(predictors, use.names = FALSE),
                                        as.character(tab_vars))), names(data))
@@ -220,26 +162,17 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   data       <- tab_apply_val_labels(data, reg_lbl_vars)
   if (!is.null(design_obj)) design_obj$variables <- data
 
-  # --- G0: the level MERGE (Phase 20g-ii) -------------------------------------------------------
-  # tab()'s own pre-aggregate recode (R/tab.R), applied here for the same reason `shape` is: this is
-  # THE one boundary where `data` is rewritten, and it is before family detection, the reference
-  # relevel, the frozen multiplier SD and the skeleton -- so a merged predictor level is simply a
-  # level, and inherits the whole factor machinery with no code of its own. Like `shape`, the design's
-  # own `$variables` must be recoded too (svyglm reads its columns off the design, not off `data`).
+  # --- G0: the level MERGE -----------------------------------------------------------------------
+  # tab()'s own pre-aggregate recode (R/tab.R), applied before family detection, the relevel, the
+  # frozen multiplier SD and the skeleton. The design's own `$variables` must be recoded too.
   if (!is.null(levels_collapse)) {
     data <- tab_collapse_levels(data, levels_collapse)
     if (!is.null(design_obj)) design_obj$variables <- data
   }
 
-  # --- G: `shape` (Phase 18z15) -----------------------------------------------------------------
-  # Fit a continuous predictor as something other than a line. THE boundary, and there is only one:
-  # a shape either RECODES the column here (log / sqrt / quantile groups) or emits ONE extra model
-  # term (quadratic). Before family detection, the reference relevel, the frozen multiplier SD and
-  # the skeleton, so every one of them sees the predictor AS FITTED -- a quantile-cut `age` is a
-  # factor from this line on, and inherits the entire factor machinery (one estimate per group, a
-  # saturated crude twin, per-level N and colours) with no code of its own. The design's own
-  # variables are recoded too, exactly as reg_relevel_design() does: a prebuilt survey design reads
-  # its columns off `$variables`, not off `data`.
+  # --- G: `shape` ----------------------------------------------------------------------------
+  # At the SAME boundary as G0: a shape either RECODES the column (log/sqrt/quantile groups) or
+  # emits ONE extra model term (quadratic) -- a quantile-cut `age` is a factor from this line on.
   reg_shapes   <- reg_resolve_shape(shape, data, unlist(predictors, use.names = FALSE))
   shape_labels <- character(0)
   if (length(reg_shapes) > 0L) {
@@ -252,9 +185,8 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   # --- R: the predictor union -------------------------------------------------------------------
   all_predictors <- if (is_comparison) unique(purrr::flatten_chr(predictors)) else predictors
 
-  # --- W: tab_vars (Phase 12g) -----------------------------------------------------------------
-  # One grouping column, distinct from the outcome / predictors, that a model is fitted within each
-  # level of. Must be a factor / character; reg_build recurses per level and stacks.
+  # --- W: tab_vars -----------------------------------------------------------------------------
+  # One grouping column that a model is fitted within each level of; reg_build recurses and stacks.
   reg_check_tab_vars(data, tab_vars, outcome, all_predictors, formula_mode)
 
   list(data = data, design_obj = design_obj, wt = wt, weighted = weighted,
@@ -267,9 +199,9 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
 # THE fact table of a tab_reg() call: one row per outcome, in `outcome` order, carrying every
 # per-outcome fact the rest of the boundary and the whole of reg_build() need.
 #
-#   dep         the outcome name
+#   outcome     the outcome name
 #   family      the USER-facing outcome family, "auto" resolved by reg_detect_family()
-#   rr_promoted did `family = "poisson"` on a binary outcome mean `measure = "ratio"` (Phase 18z3)
+#   rr_promoted did `family = "poisson"` on a binary outcome mean `measure = "ratio"`
 #   est         the resolved ESTIMAND row (R/reg-estimand.R) -- the single answer to which model to
 #               fit, whether to exponentiate, the header word, the stored `scale`, the crude
 #               companion and the marginaleffects contrast
@@ -278,19 +210,10 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
 #   outcome_level  the level of the outcome the user singled out: MODELLED on a binomial, the
 #               BASELINE category on a multinomial (REG_FAMILIES declares which). NA = the family's
 #               own default.
-#   crude_key   which observed counterpart this outcome has, NA = none (the z10 stored fact)
+#   crude_key   which observed counterpart this outcome has, NA = none
 #
-# WHY A TABLE. Nine of tab_reg()'s twelve local closures existed because these facts were never
-# materialised: `family_for`, `est_for` (with its own local() memo cache), `do_exp_for`,
-# `effect_shape_for`, `eff_word_for`, `trials_for` (DEFINED TWICE -- an off default and an on-path
-# redefinition nested two `if`s deep), `trials_auto`, `inverse_for` and `color_for` each re-derived
-# one column on demand, from a frame later blocks kept mutating. Computing the rows once makes the
-# memo cache unnecessary by construction, and turns the survivors into what they should always have
-# been: one-line LOOKUPS, not resolutions.
-#
-# ⚠ ORDER: the family must be resolved before the estimand (reg_estimand() takes it), before the
-# trials block (which asks "is any outcome binomial?" and gates the count on it), and before the
-# survey-feasibility refusal. That is why they are one stage and not three.
+# ⚠ ORDER: family before the estimand (reg_estimand() takes it), before the trials block (gates
+# the count on "is any outcome binomial?"), and before the survey-feasibility refusal.
 #' @keywords internal
 #' @noRd
 reg_resolve_estimands <- function(data, outcome, family = "auto", effect = "coefficient",
@@ -299,11 +222,8 @@ reg_resolve_estimands <- function(data, outcome, family = "auto", effect = "coef
                                   formula_mode = FALSE, weighted = FALSE) {
   n <- length(outcome)
 
-  # --- H: `family`, per outcome ---------------------------------------------------------------
-  # Phase 15e: one call can model several outcomes with DIFFERENT families (one column-group per
-  # outcome). Accepts "auto" (detect each outcome), a scalar, a positional vector or a named vector
-  # -- through reg_per_outcome(), the ONE declared slicer (R/reg-estimand.R). Auto-detection stays
-  # honest and per-outcome (an ambiguous integer count aborts for THAT outcome, not the table).
+  # --- H: `family`, per outcome -- several outcomes may have DIFFERENT families, through
+  # reg_per_outcome(); an ambiguous count aborts for THAT outcome only.
   rr_promoted <- rep(FALSE, n)
   families    <- vapply(seq_len(n), function(i) {
     d <- outcome[[i]]
@@ -312,37 +232,23 @@ reg_resolve_estimands <- function(data, outcome, family = "auto", effect = "coef
     if (!f %in% REG_USER_FAMILIES)
       cli::cli_abort(c("{.arg family} for {.val {d}} must be one of {.or {.val {REG_USER_FAMILIES}}}.",
                        "x" = "Got {.val {f}}."), call = NULL)
-    # DESIGN (Phase 18z3): THE resolution site for the modified-Poisson path. An explicit
-    # poisson/quasipoisson on a BINARY outcome is not a count model -- it is Zou (2004)'s modified
-    # Poisson, whose exp(coef) is a RISK RATIO, not an incidence-rate ratio. Resolving it here
-    # (before the specs) means the tab_vars recursion, the multi-outcome recursion and the jamovi
-    # bridge all inherit it, and every family switch downstream dispatches on ONE key. "rr" is
-    # deliberately absent from REG_USER_FAMILIES: a user reaches it through family = "poisson".
+    # THE resolution site for the modified-Poisson path: poisson/quasipoisson on a BINARY outcome
+    # is Zou (2004)'s modified Poisson (a RISK RATIO), reached only through family = "poisson".
     if (reg_fam_count(f) && reg_is_binary_outcome(data[[d]])) {
-      # Phase 19e: this route still works exactly as documented, but it is no longer the ONLY one --
-      # so the message names the front door. Asking for a risk ratio by naming the wrong distribution
-      # was the clearest case in the study of a measure hidden inside another argument.
       cli::cli_inform(c("i" = paste0(
         "{.val {d}} is binary: fitting a modified Poisson regression (robust standard errors) -> ",
         "{.strong risk ratios}, not incidence-rate ratios."),
         "i" = paste0("The same table is {.code family = \"binomial\", measure = \"ratio\"}, ",
                      "which names the measure rather than the distribution.")))
-      # Phase 19e: the promotion sets the MEASURE, not the family. "rr" was only ever a link chosen
-      # to reach a risk ratio, so it is the estimand row's `fit` now, and the outcome stays what it
-      # is -- which is what makes the two spellings one code path.
-      rr_promoted[[i]] <<- TRUE
+      rr_promoted[[i]] <<- TRUE   # the promotion sets the MEASURE, not the family
       f <- "binomial"
     }
     f
   }, character(1))
 
-  # --- I: THE ESTIMAND (Phase 19e, KEY 8b) ------------------------------------------------------
-  # `effect` (which contrast) x `measure` (which measure) resolve PER DEPENDENT, exactly where
-  # `family` does, into ONE row of the declared library. It replaces `family` x `effect` x `at` x
-  # `exponentiate` -- 36 combinations for 9 estimands, with three degrade blocks, two aborts and ~19
-  # cells where an argument was silently ignored. Every one is now either a row (legal), a row with
-  # status "impossible" (cannot be), or no row at all (not offered) -- and the message enumerates the
-  # alternatives from the table itself.
+  # --- I: THE ESTIMAND -----------------------------------------------------------------------
+  # `effect` x `measure` resolve PER DEPENDENT into ONE row of the declared library: legal, status
+  # "impossible", or no row at all (not offered) -- the abort enumerates the table's alternatives.
   ests <- lapply(seq_len(n), function(i) {
     d   <- outcome[[i]]
     ekv <- reg_effect_key(reg_per_outcome(effect, d, i, "coefficient"))
@@ -356,10 +262,8 @@ reg_resolve_estimands <- function(data, outcome, family = "auto", effect = "coef
     res
   })
 
-  # --- J: estimand x survey feasibility ---------------------------------------------------------
-  # Phase 12g: survey-weighted 3+ level outcomes are supported -- ordinal via survey::svyolr, nominal
-  # via svyVGAM::svy_vglm. The marginaleffects paths have no method for svyolr / svy_vglm -> error.
-  # Asked of the resolved estimand (`builder`), not of an argument.
+  # --- J: estimand x survey feasibility -- the marginaleffects paths have no method for
+  # survey-weighted 3+ level outcomes. Asked of the resolved estimand (`builder`).
   if (weighted && any(reg_fam_percategory(families)) &&
       any(vapply(ests, function(e) !identical(e$builder, "coef"), logical(1)))) {
     cli::cli_abort(c(
@@ -367,14 +271,9 @@ reg_resolve_estimands <- function(data, outcome, family = "auto", effect = "coef
       "i" = "Use the default {.code effect = \"coefficient\"}, or drop the weights."), call = NULL)
   }
 
-  # --- M: `trials` -> grouped binomial (D2) -----------------------------------------------------
-  # A summed-score outcome fit as cbind(score, trials - score). NULL = off (binary logit).
-  # TRUE = observed max per outcome. Numeric / named vector = the item count. Applied per BINOMIAL
-  # outcome only (Phase 15e).
-  # Phase 19k: `TRUE` and `NA` both mean "the observed maximum", and BOTH are outcome-aware -- an
-  # outcome that is not a numeric score has no maximum to take, so it stays an ordinary binary logit.
-  # `NA` inside a named vector is what lets a caller mix explicit counts with automatic ones, which
-  # is the shape the jamovi Model table produces.
+  # --- M: `trials` -> grouped binomial -----------------------------------------------------------
+  # A summed-score outcome fit as cbind(score, trials - score). NULL = off. TRUE/NA = the observed
+  # maximum, outcome-aware. NA inside a named vector mixes explicit counts with automatic ones.
   tv <- rep(NA_integer_, n)
   if (isFALSE(trials)) trials <- NULL           # the natural off switch, symmetric with TRUE
   if (!is.null(trials)) tv <- reg_resolve_trials(trials, outcome, families, data, formula_mode)
@@ -386,13 +285,8 @@ reg_resolve_estimands <- function(data, outcome, family = "auto", effect = "coef
     est         = ests,
     fit_family  = vapply(ests, function(e) e$fit, character(1)),
     # gated on the family HERE, so the column means "this outcome IS a grouped binomial" and every
-    # reader is a lookup (tab_reg()'s local `trials_for` closure used to re-apply the gate on
-    # every call).
+    # reader is a plain lookup.
     trials      = ifelse(families == "binomial", tv, NA_integer_),
-    # Phase 20c: the per-outcome LEVEL to model (binomial) / to pivot on (multinomial), validated
-    # against the family's declared role and against the column's own levels. NA = the family's own
-    # default (binomial models the first level). A character column, not a logical: `outcome_level`
-    # names what the user knows.
     outcome_level = vapply(seq_len(n), function(i)
       reg_resolve_outcome_level(outcome_level, outcome[[i]], families[[i]],
                                 data[[outcome[[i]]]]) %||% NA_character_, character(1)),
@@ -404,27 +298,11 @@ reg_resolve_estimands <- function(data, outcome, family = "auto", effect = "coef
 }
 
 # === S4: what the table SHOWS ====================================================================
-# `display`, `color`, `color_signif` and `empirical` -- the four arguments that describe the output
-# rather than the model, and the one cluster whose ORDER was wrong.
+# `display`, `color`, `color_signif` and `empirical` -- the four arguments that describe the output.
 #
-# ⚠ THE ORDER IS THE FIX. `empirical` is written by TWO blocks -- the `adjustment` forcing turns it
-# ON, the no-crude-companion degrade turns it OFF -- and three later things read it: the notes, the
-# specs' effect word, and reg_call's own record. The old body ran forcing -> NOTES -> ... -> degrade
-# -> specs, so:
-#   H20  a spec and a label could carry " (adjusted %)" on a table whose `empirical` was then turned
-#        off, and reg_call$eff_word (computed eagerly, pre-forcing) could disagree with the specs
-#        beside it (computed lazily, post-forcing).
-#   H21  reg_color_notes() tested `!is.null(color_signif)` while the default "grey_non_signif" was
-#        applied 22 lines LATER -- so `tab_reg(color = "adjustment")` was silent and
-#        `tab_reg(color = "adjustment", color_signif = "grey_non_signif")`, the identical effective
-#        state, emitted the note.
-# The order here is display -> colour -> forcings -> DEGRADE -> the color_signif default -> the
-# NOTES, so reg_color_notes() describes the state the table is actually built in, and `empirical` is
-# final before anything reads it.
-#
-# ⚠ the notes read the UNFILLED colour spec (`color_arg`), as they always have: `gap` asks which
-# own-ref measures the USER named, and the auto fill answers a different question (which ladder an
-# auto slot follows).
+# ⚠ `empirical` is written by TWO blocks (`adjustment` forcing ON, the degrade OFF); later readers
+# must see it FINAL, so the order is display -> colour -> forcings -> degrade -> color_signif
+# default -> the NOTES, run LAST, reading the UNFILLED colour spec (`color_arg`).
 #' @keywords internal
 #' @noRd
 reg_resolve_output <- function(display = NULL, color = TRUE, color_signif = NULL,
@@ -434,45 +312,26 @@ reg_resolve_output <- function(display = NULL, color = TRUE, color_signif = NULL
   ests     <- deps$est
 
   # --- L: `display` ------------------------------------------------------------------------------
-  # The estimate-cell layout, in tab()'s own grammar and presets (R/tab-display.R). NULL leaves each
-  # cell the token the builder gave it; a template naming a LEVEL or a marginal effect folds that
-  # quantity in beside the estimate, on every family.
-  #
-  # THE RULE: a display template may ask for AUXILIARY quantities from the SAME fit; it may never
-  # change the fit or the estimand. `measure` is the only estimand argument.
+  # THE RULE: a template may ask for AUXILIARY quantities from the SAME fit; it may never change the
+  # fit or the estimand -- `measure` is the only estimand argument.
   display <- reg_resolve_display(display)
 
   # --- O: `color` -- normalise, then validate through the storage boundary -----------------------
-  # It is logical-primary: TRUE (default) auto-picks the per-column measure; FALSE turns every column
-  # (model AND empirical companion) uncoloured; NULL == TRUE.
-  # Phase 19e (D25): the GEOMETRY words are gone from this argument. `tab_reg(color = "difference")`
-  # on an odds-ratio column used to be ACCEPTED and stored a measure contradicting what the column
-  # estimates. Since KEY 2 the column states its own scale, so the ladder comes from the column and
-  # what is left to choose is only the two measures whose baseline is ANOTHER COLUMN.
+  # Logical-primary: TRUE auto-picks the per-column measure; FALSE uncoloured. The GEOMETRY words
+  # are gone: only the two measures whose baseline is ANOTHER COLUMN remain choosable.
   color_arg  <- reg_normalize_color(color)
-  # `color[1]`: since Phase 18z5 the measure may be a length-2 (text, background) vector. Only the
-  # text channel carries the auto sentinel.
-  # Phase 18z5: VALIDATE through the storage boundary itself rather than repeating its rules here --
-  # fmt() casts `color` without validating, so tab_reg would otherwise accept an unknown measure, a
-  # whole-cell measure on the background, or the two mutually exclusive `obs` measures together, and
-  # only fail (or silently mis-colour) much later. The result is discarded.
+  # VALIDATE through the storage boundary itself (fmt() casts without validating); discarded.
   if (!is.na(color_arg[1])) invisible(resolve_color_channels(color_arg))
 
   # --- P: the forcings --------------------------------------------------------------------------
-  # Phase 18z5: `adjustment` scores the model effect against its OBSERVED counterpart, which lives in
-  # the `obs` field only when the crude companion was computed -- so asking for the colour asks for
-  # `empirical`. Same shape as color = "contrib" forcing chi2 + totrow in the crosstab resolve
-  # cascade: the user states an intent, the pipeline computes what it needs. Phase 19c: the forcing
-  # is the measure's own declared `requires["empirical"]`, from the same table.
+  # `adjustment` scores the model effect against its OBSERVED counterpart, in `obs` -- so asking for
+  # the colour asks for `empirical` (the measure's own declared `requires["empirical"]`).
   if (any(vapply(color_arg, measure_forces, logical(1), "empirical")) && !emp_on(empirical)) {
     cli::cli_inform(c("i" = paste0("{.code color = \"adjustment\"} compares each model effect to its ",
                                    "observed one, so {.code empirical = TRUE} is turned on.")))
     empirical <- TRUE
   }
-  # Phase 18z8: `between_groups` also gets the AGGREGATED companion of its per-cell colours -- one
-  # pooled interaction test per predictor, in the footer. Automatic here for discoverability (and
-  # because the two readings belong together); `stats = c(..., "interaction")` asks for it without
-  # the colours. It costs one extra model fit per model, so say so.
+  # `between_groups` also gets the AGGREGATED interaction test in the footer, costing one extra fit.
   if (any(vapply(color_arg, measure_forces, logical(1), "interaction")) && !is.null(tab_vars) &&
       !(is.character(stats) && "interaction" %in% stats)) {
     cli::cli_inform(c("i" = paste0("{.code color = \"between_groups\"} also adds the aggregated ",
@@ -481,18 +340,10 @@ reg_resolve_output <- function(display = NULL, color = TRUE, color_signif = NULL
   }
 
   # --- Z: the `empirical` degrade ---------------------------------------------------------------
-  # The descriptive crude companion beside the model effect -- the unadjusted bivariate association
-  # (which IS the modelised quantity when there is a single predictor). Wired for binomial /
-  # gaussian / poisson (explicit columns) and multinomial (tooltip only). Kept ON whenever ANY
-  # outcome supports one (the per-fit loop skips the ineligible ones individually); dropped only when
-  # NONE is eligible.
-  # Phase 19m-ii: it asks the SPEC's own stored answer (`deps$crude_key`, the z10 fact) instead of
-  # re-deriving the key from the OUTCOME family -- a third encoding, and one that read a different
-  # family from the one the spec pairs its crude block with.
+  # Kept ON whenever ANY outcome supports a crude companion; dropped only when NONE is eligible.
+  # Reads the SPEC's own stored answer (`deps$crude_key`), never re-derived from the outcome family.
   if (emp_on(empirical) && all(is.na(deps$crude_key))) {
-    # Phase 18z15 (SS12.6 defect 1): name the REAL cause. A compound formula has no predictor
-    # structure to be crude about, whatever the family -- the old message blamed the outcome family
-    # and so told a binomial user their binomial outcome was unsupported.
+    # name the REAL cause: a compound formula has no predictor structure to be crude about.
     cli::cli_inform(if (formula_mode) c("i" = paste0(
       "{.arg empirical} (crude descriptive companion) needs one predictor per row; a compound formula ",
       "({.code poly()} / interactions / {.code I()}) has none, so it is ignored here."),
@@ -505,31 +356,24 @@ reg_resolve_output <- function(display = NULL, color = TRUE, color_signif = NULL
 
   # --- Q: the policy default, then THE NOTES ----------------------------------------------------
   if (is.null(color_signif)) color_signif <- "grey_non_signif"
-  # Phase 18z13 (D6): every "the colour you asked for cannot be computed / cannot be tested here"
-  # comes from ONE producer, so the rule is uniform -- before it, four cases said so in four blocks
-  # and two said nothing at all. It runs LAST so that the `empirical` and `color_signif` it describes
-  # are the ones the table is built with (H20 / H21).
+  # every "cannot be computed / cannot be tested here" note comes from ONE producer, run LAST.
   for (note in reg_color_notes(color_arg, color_signif, stats::setNames(ests, deps$outcome), tab_vars,
-                               na, na_explicit, empirical = empirical)) {
-    # `{note}` substitutes the already-interpolated string as a VALUE -- passing it as the template
-    # would glue it a second time, and one of these notes legitimately prints a literal "{obs}".
+                               na, na_explicit, empirical = empirical,
+                               crude_keys = stats::setNames(deps$crude_key, deps$outcome),
+                               trials     = stats::setNames(deps$trials,    deps$outcome))) {
+    # `{note}` substitutes the interpolated string as a VALUE -- one note prints "{obs}" literally.
     cli::cli_inform(c("i" = "{note}"))
   }
 
-  # `empirical` leaves the boundary RESOLVED to its mode -- "no" / "cell" / "column" -- so no consumer
-  # re-derives where the crude effect goes, and none has to know the argument's spellings.
+  # `empirical` leaves the boundary RESOLVED to its mode -- "no"/"cell"/"column".
   list(display = display, color_arg = color_arg, color_signif = color_signif,
        empirical = reg_emp_mode(empirical, deps$crude_key, ests))
 }
 
 
-# emp_on() / reg_emp_mode() -- `empirical` asked, and WHERE the crude effect goes.
-#
-# The auto rule (`TRUE`): a crude COLUMN, except where one model column would need SEVERAL of them --
-# a 3+ level outcome, whose crude effect is per outcome CATEGORY. There the value rides inside the
-# model cell instead, because a column set that multiplies with the outcome is not readable. `"cell"`
-# and `"column"` force one or the other; `"column"` is the exit door that draws the per-category
-# columns anyway.
+# emp_on() / reg_emp_mode() -- `empirical` asked, and WHERE the crude effect goes. The auto rule
+# (`TRUE`): a crude COLUMN, except a 3+ level outcome (per-CATEGORY), which rides in the model cell
+# instead. `"cell"`/`"column"` force one or the other.
 #' @keywords internal
 #' @noRd
 emp_on <- function(empirical)
@@ -551,22 +395,10 @@ reg_emp_mode <- function(empirical, crude_key, ests) {
 
 
 # === S5: the fit plan ============================================================================
-# Which rows every model is fitted on, whether the cached-digest fast path can serve this call, the
-# reference relevel, and the two things measured on ONE frozen frame (the multiplier's unit and the
-# quadratic shape terms).
-#
-# ⚠ THE ORDER, again, is the design:
-#   H11 the `reref` gate reads the RESOLVED trials, not the raw argument (19k's fix).
-#   H12 a `shape` narrows the fast path -- a shaped model served from the linear fit's digest is a
-#       WRONG NUMBER, silently. That clause is why this gate gets its own warning.
-#   H14 `reref` BEFORE the relevel: on the digest path the body must NOT relevel (reg_build fits the
-#       canonical digest and reparametrizes), so releveling first would fit at the wrong one.
-#   H15 the family stage BEFORE the relevel: a multinomial OUTCOME's baseline is releveled too.
-#   H16 the relevel BEFORE the specs: reg_positive_level() reads the factor's FIRST level.
-#   H18 the `shape` recode (S2) BEFORE the frozen frame: a quantile-cut predictor's SD would
-#       otherwise be measured on the raw numeric.
-#   H19 the multiplier's SD and the quadratic terms share ONE frozen frame. They were two verbatim
-#       reg_complete_frame() calls ten lines apart, under a comment demanding they be the same frame.
+# Which rows every model is fitted on, the cached-digest fast path, the reference relevel, and the
+# two things measured on ONE frozen frame (the multiplier's unit and the quadratic shape terms).
+# ⚠ `reref` is computed BEFORE the relevel (see block T for why); the relevel comes after the
+# family stage and before S6 (reg_positive_level() reads the factor's FIRST level).
 #' @keywords internal
 #' @noRd
 reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NULL,
@@ -577,22 +409,9 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
                                  method = "wald", display = NULL, color = NA_character_) {
   families <- deps$family
 
-  # --- S: which rows every model is fitted on (Phase 18z13, D1) ---------------------------------
-  # Resolved ONCE into the extra variables each fit must be complete on, and consumed by reg_build
-  # through reg_fit(drop_extra=). That mechanism (Phase z9) exists for exactly this: variables
-  # joining the complete-case drop without joining the formula, and it is the ONLY sound route --
-  # pre-filtering `data` instead breaks a PREBUILT design's keep_mask (reg_resolve_design computes it
-  # from `data` itself). So the old `drop_all_models` pre-pass, and its "ignored for a prebuilt
-  # survey design" caveat, are both gone.
-  #
-  # "drop_by_outcome" (the default) makes every model OF ONE OUTCOME share a population, which is
-  # what makes the crude companion comparable: reg_build's local `emp_frame_of` is then the model's own
-  # frame, so "crude and adjusted are computed on the same people" is structural rather than checked.
-  # It also equalises N across nested models, so the likelihood-ratio comparison fires instead of
-  # degrading to an AIC difference. A second outcome keeps its own rows (comparing outcomes is not
-  # what the call asked for); "drop_all" opts into one population for the whole call.
-  # The design variables need no mention: reg_fit's own drop_vars already carries reg_design_vars(),
-  # and tab_vars needs none either (the split filters its group before fitting).
+  # --- S: which rows every model is fitted on -----------------------------------------------------
+  # Resolved ONCE via reg_fit(drop_extra=) -- pre-filtering `data` would break a PREBUILT design's
+  # keep_mask. "drop_by_outcome" makes every model OF ONE OUTCOME share a population.
   na_shared_vars <- if (formula_mode) character(0) else
     intersect(unique(switch(na,
                             "drop_by_model"   = character(0),
@@ -600,37 +419,16 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
                             "drop_all"        = c(all_predictors, outcome))),
               names(data))
 
-  # --- T: the cached-digest fast path (Phase 15b, jamovi live reref) ----------------------------
-  # With a `.fit_cache`, a single-equation GLM coefficient table can be recomputed at any
-  # factor-predictor reference from ONE canonical fit (reg_build_digest) -- no refit. On that path
-  # the body does NOT relevel; reg_build fits the canonical digest + reparametrizes to `ref`.
-  # Everything the reparametrization cannot handle keeps the refit path.
+  # --- T: the cached-digest fast path (jamovi live reref) ---------------------------------------
+  # With a `.fit_cache`, a GLM coefficient table can be recomputed at any factor-predictor reference
+  # from ONE canonical fit (reg_build_digest); the body does NOT relevel, reg_build reparametrizes.
   #
-  # ⚠ THIS IS THE ONE CLAUSE WHERE A WRONG `TRUE` IS A WRONG NUMBER, NOT AN ERROR. It reads thirteen
-  # resolved values spanning eight of the boundary's blocks, which is why the stage order above is
-  # the design and not a convenience. Each clause, and what it protects:
-  #   builder / mnl_vsrest -- the digest reparametrizes COEFFICIENTS; a marginal effect or a
-  #     multinomial-vs-rest column is a different estimator entirely.
-  #   display / method     -- a fold needs the fitted object; a profile interval is not a Wald dual.
-  #   families             -- Phase 15e: an all-glm mixed table keeps the fast path (each spec caches
-  #     its own family's digest); any multinomial/ordinal outcome degrades the whole table.
-  #   trials               -- Phase 19k: the RESOLVED trials, not the raw argument. `trials` may now
-  #     carry NA = "take the observed maximum", which resolves to NULL on an outcome that has none --
-  #     and the jamovi Model table sends exactly that for every binomial outcome. Read raw, a table
-  #     of ordinary binary logits looked grouped-binomial and lost the fast path entirely.
-  #   color "adjustment"   -- Phase 18z8-B: its gap test needs the FITTED object (influence
-  #     functions), which the digest deliberately discards, so asking for it takes the refit path
-  #     rather than getting a silently untested colour. Phase 19k made the jamovi reg `color` a
-  #     MEASURE list, so a live-UI call CAN reach here with it. The recipe for a digest-based arm is
-  #     in dev/model_vs_observed_gap_test.md SS6.
-  #   reg_shapes           -- ⚠ Phase 18z15: a `shape` is a DIFFERENT MODEL, not a reparametrization
-  #     of the canonical one (unlike `ref` / `multiplier`, which are exact transforms of it).
-  #     Serving a shaped model from the linear fit's digest returns a plausible wrong number.
-  # Phase 18z9: `multiplier` deliberately LEFT this list. The digest is fitted natively
-  # (reg_build_digest passes multiplier = NULL), so it is multiplier-independent exactly as it is
-  # reference-independent, and reg_reref_fit_res() applies the scaling itself -- a scaling change is
-  # a cache HIT. Keeping the clause would kill the fast path for every table with a numeric
-  # predictor once "sd" became the default, which is the regression Phase 15b exists to prevent.
+  # ⚠ THIS IS THE ONE CLAUSE WHERE A WRONG `TRUE` IS A WRONG NUMBER, NOT AN ERROR. Each condition
+  # protects one fact the digest cannot serve: `builder`/`vsrest` (COEFFICIENTS only, not a marginal
+  # effect); `display`/`method` (a fold needs the fitted object); `families` (multinomial/ordinal
+  # degrades the table); `trials` (the RESOLVED value); `color "adjustment"` (the gap test needs the
+  # FITTED object); `reg_shapes` (⚠ a DIFFERENT MODEL, not a reparametrization like `ref`).
+  # `multiplier` stays OUT: the digest is fitted natively, so a scaling change is a cache HIT.
   reref <- !is.null(.fit_cache) &&
     all(vapply(deps$est, function(e) identical(e$builder, "coef"), logical(1))) &&
     !any(vapply(deps$est, function(e) identical(e$builder, "vsrest"), logical(1))) &&
@@ -640,27 +438,14 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
     compare == "none" && !is_comparison && !("adjustment" %in% color) &&
     length(reg_shapes) == 0L
 
-  # --- U: the level relevels ---------------------------------------------------------------------
-  # TWO arguments, ONE mechanism (a factor relevel), because they ask OPPOSITE questions:
-  #   `ref`           names the level a predictor's other levels are compared AGAINST
-  #   `outcome_level` names the level of the OUTCOME that is modelled (binomial) or pivoted on
-  #                   (multinomial) -- REG_FAMILIES declares which, per family
-  # Phase 20c moved the multinomial half OUT of `ref` (`reference` until this phase), where it was
-  # outcome rather than a predictor: one argument carrying two meanings is the disease 19b cured
-  # for `type`/`ci_type`, and it is why an outcome name in `ref` now aborts pointing here
-  # (reg_apply_references()) instead of warning "matches no predictor".
-  # A multinomial's baseline IS the outcome factor's first level, so singling one out is a relevel.
-  # An ordinal outcome must keep its order and is refused at S3; a binomial's chosen level is applied
-  # later, by reg_prep_binary(), because it also decides the column header.
+  # --- U: the level relevels: `ref` names the level a predictor is compared AGAINST;
+  # `outcome_level` the OUTCOME level modelled (binomial) or pivoted on (multinomial).
   relevel <- ref
   mnl <- deps$outcome[families == "multinomial" & !is.na(deps$outcome_level)]
   if (length(mnl))
     relevel <- c(relevel, stats::setNames(deps$outcome_level[match(mnl, deps$outcome)], mnl))
   if (!is.null(relevel) && !reref) {
-    # Phase 18z13 (D7): and the SPLIT variable. `color = "between_groups"` compares every effect to
-    # the FIRST split level's, so which level that is is a reference choice like any other -- but
-    # `ref = c(race = "Black")` was silently dropped for it (tab_vars is not a predictor), and
-    # the only way to move the baseline was to relevel the data upstream. One name in this union.
+    # and the SPLIT variable: `between_groups` compares every effect to the FIRST split level's.
     relevelable <- union(union(all_predictors, tab_vars), mnl)
     if (!is.null(design_obj)) {
       design_obj <- reg_relevel_design(design_obj, relevel, relevelable)  # relevel in the design
@@ -670,22 +455,14 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
     }
   }
 
-  # --- X + Y: the frozen frame, and the two things measured on it -------------------------------
-  # Complete on the PREDICTORS + design variables, never on the outcome -- so one predictor keeps
-  # one unit across outcomes, compared models and split groups. Phase 19m-ii: computed ONCE. It was
-  # two verbatim reg_complete_frame() calls ten lines apart, under a comment (18z15) demanding that
-  # the multiplier's SD and the quadratic terms' centre come from the SAME measurement of the SAME
-  # column -- true by luck rather than by construction.
+  # --- X + Y: frozen frame, PREDICTORS + design variables, never the outcome. Computed ONCE: the
+  # multiplier's SD and the quadratic terms' centre must come from the SAME measurement.
   need_mult  <- !formula_mode && any(reg_fam_glm(families))
   frozen     <- if (need_mult || length(reg_shapes) > 0L)
     reg_complete_frame(data, intersect(unique(c(all_predictors, wt)), names(data))) else NULL
 
-  # multiplier (Phase 12g; grammar + resolution Phase 18z9): scale a CONTINUOUS predictor's effect to
-  # per-k units (OR^k / beta*k). A SCALAR ("sd" / "2sd" / a number) applies to every numeric
-  # predictor; a NAMED vector overrides per variable and the rest keep the scalar default.
-  # `mult_default` = the argument's own default reaching us untouched. The multinomial/ordinal guards
-  # answer "you asked for something that cannot happen", so they must stay silent for a default
-  # nobody asked for -- otherwise every multinomial table would abort.
+  # multiplier: scale a CONTINUOUS predictor's effect to per-k units (OR^k / beta*k); a NAMED
+  # vector overrides per variable. `mult_default` stays silent for the multinomial/ordinal guards.
   mult_default <- identical(multiplier, "sd")
   if (!is.null(multiplier)) {
     if (!(is.numeric(multiplier) || is.character(multiplier)) || length(multiplier) == 0L)
@@ -693,8 +470,7 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
         "{.arg multiplier} must be a number, {.val sd}, {.val 2sd}, or a named vector of those.",
         "i" = 'e.g. {.code multiplier = "sd"}, {.code c(age = 10)}, {.code c(age = "2sd")}.'),
         call = NULL)
-    # Phase 15e: multiplier scales glm-family coefficients; abort only when EVERY outcome is
-    # multinomial/ordinal (nothing to scale). In a mixed table it applies to the glm outcomes.
+    # abort only when EVERY outcome is multinomial/ordinal; a mixed table scales the glm outcomes.
     if (!mult_default && all(reg_fam_percategory(families)))
       cli::cli_abort("{.arg multiplier} is not supported for {.val multinomial}/{.val ordinal} models.",
                      call = NULL)
@@ -709,18 +485,13 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
                          "x" = "Not numeric predictor{?s}: {.val {bad}}."), call = NULL)
     }
   }
-  # Phase 18z9: "sd" is the DEFAULT scalar. Per 1 unit a numeric predictor sits inside the first
-  # colour break and reads as "no effect" beside the factor contrasts next to it; per 1 SD it lands
-  # on the same visual scale. `multiplier = 1` restores the per-unit reading. Never applied in
-  # compound-formula mode, where a bare RHS name may carry an interaction or a basis expansion and
-  # reg_fit()'s `td$term == v` match would scale the main effect while leaving `age:raceWhite` alone.
+  # "sd" is the DEFAULT scalar, landing a numeric predictor on the same visual scale as the factor
+  # contrasts. Never applied in compound-formula mode (would scale only the main effect).
   mult_res <- if (!need_mult) list(k = NULL, label = NULL) else
     reg_resolve_multiplier(multiplier, "sd", frozen,
                            reg_numeric_preds(data, all_predictors), wt = wt)
 
-  # Phase 18z15: the quadratic terms, on the SAME frozen frame -- so the centre and the unit of a
-  # curved predictor's two rows come from one measurement of one column, and a split group / compared
-  # model cannot re-centre it. Empty unless a shape asked for one.
+  # the quadratic terms, on the SAME frozen frame. Empty unless a shape asked for one.
   shape_terms <- if (length(reg_shapes) > 0L) reg_shape_terms(frozen, reg_shapes, w = wt)
                  else stats::setNames(character(0), character(0))
 
@@ -732,19 +503,8 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
 # === S6: the specs ===============================================================================
 # The per-model labels, the positive levels, and the ONE new_reg_spec() call site.
 #
-# The two branches produce only what genuinely differs -- which outcome each spec is about, its
-# predictors, its label and the union of predictors -- and the record itself is built once, per
-# outcome, from the per-outcome table.
-#
-# ⚠ A COMPARISON is single-outcome (guarded in S2), so `outcome[[1]]` is the only outcome and
-# every table-scalar the old branch carried (`est`, `do_exp`, `eff_word`, `color`) was exactly its
-# per-outcome value there. `compound = FALSE, formula = NULL` were hardcoded and are PROVABLY the
-# general values: `formula_mode` is set only inside the `is_formula(outcome)` branch, which aborts
-# if `predictors` is non-NULL and then assigns `predictors` a CHARACTER vector from
-# reg_parse_formula() -- so `is_comparison <- is.list(predictors)` cannot be TRUE alongside it.
-#
-# `positive_levels` is built HERE and read twice (the label base, and reg_call's own record). It was
-# two copies of one expression 200 lines apart, and both must see the POST-relevel data (H16/H17).
+# ⚠ A COMPARISON is single-outcome (guarded in S2): `compound = FALSE, formula = NULL` generalize.
+# `positive_levels` is built HERE and read twice, both needing the POST-relevel data.
 #' @keywords internal
 #' @noRd
 reg_resolve_specs <- function(data, deps, predictors, is_comparison = FALSE, formula_mode = FALSE,
@@ -768,7 +528,7 @@ reg_resolve_specs <- function(data, deps, predictors, is_comparison = FALSE, for
     rows       <- rep(1L, length(models))
     preds      <- models
     spec_names <- names(models)                          # map2() over a named list carried these
-    union_predictors <- reg_order_union(models)          # Phase 14u (L1): complete-model order if any
+    union_predictors <- reg_order_union(models)          # complete-model order if any
   } else {
     labels <- make.unique(vapply(seq_len(nrow(deps)), function(i)
       paste0(if (is.na(positive_levels[[i]])) outcome[[i]] else positive_levels[[i]], ": ",
@@ -778,13 +538,11 @@ reg_resolve_specs <- function(data, deps, predictors, is_comparison = FALSE, for
     spec_names <- NULL                                   # map2() over a bare vector carried none
     union_predictors <- predictors
   }
-  # Phase 15e: each spec carries its OWN resolved family shape and its own resolved ESTIMAND row
-  # (`est`), so reg_build builds a mixed-family table one column-group per outcome.
+  # each spec carries its OWN resolved family shape and ESTIMAND row (`est`).
   specs <- purrr::pmap(list(rows, preds, labels), function(r, p, l)
     new_reg_spec(outcome = outcome[[r]], predictors = p, label = l,
                  fit_family = deps$fit_family[[r]],
-                 # the table stores NA for "not a grouped binomial"; the spec field is NULL, which is
-                 # what its ten `is.null(sp$trials)` readers speak.
+                 # NA in the table means "not a grouped binomial"; the spec field is NULL instead.
                  trials = if (is.na(deps$trials[[r]])) NULL else deps$trials[[r]],
                  outcome_level = deps$outcome_level[[r]], compound = formula_mode, formula = raw_formula,
                  color = reg_color_for(color_arg, deps$est[[r]]), est = deps$est[[r]],
@@ -796,12 +554,8 @@ reg_resolve_specs <- function(data, deps, predictors, is_comparison = FALSE, for
 
 
 # === new_reg_args(): the record reg_resolve_args() returns =======================================
-# new_reg_shared()'s idiom (Phase 19g): the FORMALS are the contract, the body is
-# as.list(environment()), the globalVariables mirror is derived beneath. It declares MORE than
-# reg_build() needs, because new_ctx()'s lesson applies (R/tab.R): tab_reg()'s post-build tail reads
-# `positive_levels`, `families`, `eff_word`, `est`, `wt_disp` and `multiplier`, and an undeclared key
-# would simply be ABSENT. as.list(environment()) guarantees presence, so a missing binding here is
-# structurally impossible.
+# Over-declares beyond what reg_build() needs: as.list(environment()) guarantees every formal is
+# PRESENT, so tab_reg()'s post-build tail cannot hit a silently absent binding.
 #' @keywords internal
 new_reg_args <- function(data = NULL, specs = list(), shared = list(), reref = FALSE,
                          deps = NULL, outcome = character(0),
@@ -831,17 +585,16 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                              display = NULL, cleannames = TRUE, subtext = "",
                              .fit_cache = NULL, levels_collapse = NULL) {
   # S1 -- the pure checks.
-  # ⚠ H0 (Phase 20c): the `stats` SPLIT runs FIRST, before the validation that reads its parts and
-  # before every stage that receives them. `stats` is one argument at the surface and the triple
-  # (stats, compare, baseline) everywhere below, so exactly one place knows both readings.
+  # ⚠ the `stats` SPLIT runs FIRST: `stats` is one argument at the surface, the triple (stats,
+  # compare, baseline) everywhere below.
   cmp      <- reg_resolve_stats(stats)
   stats    <- cmp$stats
   compare  <- cmp$compare
   baseline <- cmp$baseline
   reg_validate_args(conf_level = conf_level, stats = stats, color_signif = color_signif,
                     empirical = empirical, add_n = add_n, stars = stars)
-  # Phase 20c: `conf_level` is NULL on every producer now (20b's idiom), each boundary resolving it
-  # against options(tabxplor.conf_level) -- so the signature carries no call and no default twice.
+  # `conf_level` is NULL on every producer, each boundary resolving it against
+  # options(tabxplor.conf_level) -- no default stated twice.
   conf_level <- conf_level %||% conf_level_default()
 
   # S2 -- everything that touches `data`.
@@ -849,13 +602,8 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                            shape = shape, family = family,
                            levels_collapse = levels_collapse)
 
-  # ⚠ H24 (Phase 20f-ii): a between-model test compares two fits OF THE SAME OUTCOME, and nothing
-  # said so. A models LIST already refuses several outcomes (block E), but the one-model-per-outcome
-  # shape did not: `outcome = c("a","b"), stats = "compare_baseline"` reached reg_compare_rows()
-  # with two different responses, where `anova.glmlist`'s own `sameresp` filter silently dropped a
-  # model and the surviving row was labelled with specs[[1]]$outcome -- a wrong outcome on a wrong
-  # test, with no message. It must be refused HERE: `compare` is resolved in S1 and `prep$outcome`
-  # is the resolved outcome vector, so this is the first point both are known.
+  # ⚠ a between-model test compares two fits OF THE SAME OUTCOME -- refused HERE, the first point
+  # both `compare` and the resolved outcome vector are known.
   if (!identical(compare, "none") && length(prep$outcome) > 1L)
     cli::cli_abort(c("A model comparison needs the models to share one {.arg outcome}.",
                      "x" = paste0("{.arg stats} asks for {.val {paste0('compare_', compare)}}, but ",
@@ -871,7 +619,7 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                                 outcome_level = outcome_level,
                                 formula_mode = prep$formula_mode, weighted = prep$weighted)
 
-  # S4 -- what the table shows (and the one cluster whose order was wrong).
+  # S4 -- what the table shows.
   out <- reg_resolve_output(display = display, color = color, color_signif = color_signif,
                             empirical = empirical, deps = deps, tab_vars = tab_vars,
                             stats = stats, na = na, na_explicit = na_explicit,
@@ -889,35 +637,23 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                                compare = compare, method = method, display = out$display,
                                color = color_filled)
 
-  # S6 -- the specs, on the POST-relevel data (H16).
+  # S6 -- the specs, on the POST-relevel data.
   sp <- reg_resolve_specs(plan$data, deps, prep$predictors, is_comparison = prep$is_comparison,
                           formula_mode = prep$formula_mode, raw_formula = prep$raw_formula,
                           color_arg = out$color_arg, empirical = out$empirical,
                           cleannames = cleannames)
 
-  # --- AA: what reg_build() is handed ------------------------------------------------------------
-  # Phase 18z16-iiiii (defect 3): `degf` (#PSU - #strata) is captured ONCE at the boundary
-  # (svy_unwrap_data -> svy$spec$degf) and this literal used to drop it, so tab_reg() was the only
-  # consumer of a design that never saw its degrees of freedom. The model columns were on t(degf)
-  # regardless -- stats::df.residual() of an svyglm IS the design df -- while the crude Obs_* columns
-  # stayed on z: measured at degf = 8, the crude bracket came out 15 % NARROWER than the model
-  # bracket beside it, in a table whose whole premise (ruling 1) is that the two are comparable.
-  # WARNING: `design_obj` is re-assigned by S5 (its `$variables` are swapped, and
-  #   reg_relevel_design() may relevel a factor inside it). Neither touches PSUs or strata, so
-  #   `degf` is stable.
+  # --- AA: what reg_build() is handed --------------------------------------------------------------
+  # `degf` (#PSU - #strata) captured ONCE, so the model columns and the crude Obs_* columns refer to
+  # the SAME design df. WARNING: `design_obj` is re-assigned by S5, but neither touches PSUs/strata.
   design_spec <- list(design = plan$design_obj, wt = prep$wt, degf = prep$degf)
-  # Phase 15e: check the Suggests deps of EVERY family present (nnet for multinomial, MASS for
-  # ordinal...).
-  # `marginaleffects` is required exactly where an estimand's ENGINE resolves to it -- one fact, read
-  # from reg_marginal_engine() rather than declared a second time per row. `display` is not part of
-  # this: it never triggers a computation.
+  # check the Suggests deps of EVERY family present.
   for (fm in unique(deps$family))
     reg_check_deps(fm, prep$weighted,
                    needs_marginaleffects = any(vapply(
                      deps$est, function(e) identical(reg_marginal_engine(e), "marginaleffects"),
                      logical(1))))
-  # Phase 17h: every per-call setting reg_build's leaves + assembler read, bundled once (the specs
-  # carry the per-outcome family / estimand / colour, so those scalars are not threaded).
+  # every per-call setting reg_build's leaves + assembler read, bundled once.
   shared <- new_reg_shared(
     union_predictors = sp$union_predictors, design_spec = design_spec, weighted = prep$weighted,
     outcome_level = outcome_level, conf_level = conf_level, method = method,
@@ -927,9 +663,8 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
     shape_labels = prep$shape_labels, empirical = out$empirical, display = out$display,
     var_labels = prep$var_labels, na_shared_vars = plan$na_shared_vars, add_n = add_n)
 
-  # Phase 16d: the weight column NAME (or NA) drives the footer "Weighted by <wt>." line. `wt` is a
-  # character column name or a formula (reg_design_formula accepts both); a prebuilt design carries
-  # its own weights and cannot be named -> NA.
+  # the weight column NAME (or NA) drives the footer "Weighted by <wt>." line; a prebuilt design
+  # cannot be named -> NA.
   wt_disp <- if (is.null(prep$wt) || (length(prep$wt) == 1L && is.na(prep$wt))) NA_character_
              else if (rlang::is_formula(prep$wt)) all.vars(prep$wt)[1]
              else as.character(prep$wt)[1]
@@ -939,13 +674,8 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
     outcome = prep$outcome, union_predictors = sp$union_predictors,
     positive_levels = sp$positive_levels,
     families = stats::setNames(deps$family, deps$outcome),
-    # NAMED by outcome: reg_call's `measures` / `effects` are per-outcome maps, and vapply over an
-    # unnamed list silently drops those names.
-    # DESIGN (20i): `est`/`eff_word` are the table's REPRESENTATIVE estimand (the first outcome) --
-    # they feed the reg_call SUMMARY (title / legend fallback). The per-outcome facts live in `ests`
-    # and in the specs (each column carries its own scale/role, and the legend reads them per spec),
-    # so a mixed-family multi-outcome table is column-correct; only the one-line summary is the first
-    # outcome's.
+    # `est`/`eff_word` are the table's REPRESENTATIVE estimand (first outcome), feeding the
+    # reg_call SUMMARY; the per-outcome facts live in `ests` and the specs.
     ests = stats::setNames(deps$est, deps$outcome), est = deps$est[[1]],
     eff_word = reg_word(deps$est[[1]]),
     is_comparison = prep$is_comparison, formula_mode = prep$formula_mode,
@@ -955,17 +685,12 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
 }
 
 
-# `trials`'s own validation + resolution: the six aborts and the warn that were block M's bulk.
-# Returns one integer per outcome, NA = "not a grouped binomial".
+# `trials`'s own validation + resolution. Returns one integer per outcome, NA = "not grouped".
 #' @keywords internal
 #' @noRd
 reg_resolve_trials <- function(trials, outcome, families, data, formula_mode) {
   n <- length(outcome)
-  # Phase 18z16-iv (S6): validate HERE. A column name -- the shape a reader naturally reaches for,
-  # since a respondent may have answered a different number of items -- used to reach
-  # as.numeric("q_count") -> NA -> `cbind(score, NA - score)`, and died deep inside glm() with
-  # "contrasts can be applied only to factors with 2 or more levels", naming neither the argument
-  # nor the reason. `trials` is one item COUNT per outcome, not a per-row column.
+  # `trials` is one item COUNT per outcome, not a per-row column.
   if (is.character(trials) || is.factor(trials))
     cli::cli_abort(c(
       "{.arg trials} must be an item count, not a column name.",
@@ -987,8 +712,7 @@ reg_resolve_trials <- function(trials, outcome, families, data, formula_mode) {
     return(rep(NA_integer_, n))
   }
   if (!isTRUE(trials) && !is.null(names(trials))) {
-    # a name that matches no outcome is a typo, not a mixing request -- say so, rather than
-    # silently auto-resolving the outcome the user meant to pin.
+    # a name that matches no outcome is a typo, not a mixing request -- say so.
     unknown <- setdiff(names(trials), outcome)
     if (length(unknown))
       cli::cli_abort(c("{.arg trials} names {.val {unknown}}, which is not an outcome.",
@@ -997,15 +721,12 @@ reg_resolve_trials <- function(trials, outcome, families, data, formula_mode) {
   tv <- if (isTRUE(trials))               rep(NA_real_, n)
         else if (!is.null(names(trials))) unname(as.numeric(trials[outcome]))
         else                              rep_len(as.numeric(trials), n)
-  # NA = "take this outcome's observed maximum" -- from `TRUE` (all of them), from an NA entry, or
-  # from a named vector that simply does not name this outcome.
+  # NA = "take this outcome's observed maximum" (from `TRUE`, an NA entry, or an unnamed outcome).
   auto <- is.na(tv)
   if (any(auto)) tv[auto] <- vapply(outcome[auto], function(d) reg_trials_observed_max(data[[d]]),
                                     double(1))
   tv <- as.integer(round(tv))
-  # An outcome with no observed maximum (a factor, or a 0/1 numeric) keeps NA and is fit as an
-  # ordinary binary logit -- there is nothing to abort about. Only an EXPLICIT bad count is an
-  # error, and it names itself.
+  # an outcome with no observed maximum keeps NA; only an EXPLICIT bad count is an error.
   bad <- outcome[!auto & (is.na(tv) | tv < 1L)]
   if (length(bad))
     cli::cli_abort(c(
@@ -1017,7 +738,7 @@ reg_resolve_trials <- function(trials, outcome, families, data, formula_mode) {
 }
 
 
-# The five `tab_vars` refusals, extracted so S2's own body stays a readable sequence of blocks.
+# The `tab_vars` refusals, extracted so S2's own body stays a readable sequence of blocks.
 #' @keywords internal
 #' @noRd
 reg_check_tab_vars <- function(data, tab_vars, outcome, all_predictors, formula_mode) {
@@ -1036,11 +757,7 @@ reg_check_tab_vars <- function(data, tab_vars, outcome, all_predictors, formula_
     cli::cli_abort("{.arg tab_vars} {.val {tab_vars}} must be a factor or character column.",
                    call = NULL)
   }
-  # Phase 18z13 (D9): a group in which the outcome or a predictor has ONE value cannot be fitted --
-  # `contrasts can only be applied to factors with 2 or more levels`, or "the outcome must be
-  # binary", both wrapped in purrr's `In index: 1.` noise, naming neither the group nor the variable.
-  # Splitting by a coarsening of a predictor (race / black) is a common first attempt, so check it
-  # here, where both names are in scope, in the shape tab() uses for its own degenerate inputs.
+  # a group with a ONE-value outcome or predictor cannot be fitted (an opaque glm error otherwise).
   if (formula_mode) return(invisible(NULL))
   sl   <- levels(forcats::fct_drop(as.factor(data[[tab_vars]])))
   vars <- intersect(unique(c(outcome, all_predictors)), names(data))

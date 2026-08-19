@@ -43,72 +43,51 @@ the boundary rather than approximated.}
 \item{outcome}{Character outcome variable name(s), \strong{or a model formula} (the escape hatch).
 With a \code{predictors} character vector, several names give one effect column per outcome; with a
 \code{predictors} list, a single name is required. A formula supplies its own model (leave
-\code{predictors} unset).}
+\code{predictors} unset): a plain \code{y ~ a + b} behaves exactly like \code{outcome = "y"},
+\code{predictors = c("a", "b")}, while interactions, \code{poly()} and \code{I()} terms render as best-effort
+term rows.}
 
 \item{predictors}{Either a character vector of predictor names (one model), or a \strong{named list}
 of character vectors (one model per element, its name labelling the column). Leave \code{NULL} when
 \code{outcome} is a formula.}
 
 \item{tab_vars}{Optional. Name of a grouping variable (character) --- the same argument as
-\code{\link[=tab]{tab()}}'s \code{tab_vars}, and the same idea: one sub-table per group. The same model(s) are fitted
-\strong{within each level} of this variable.
-When that leaves one column per group — a single outcome, a single set of predictors, and not a
-multinomial — the groups are pivoted into \strong{side-by-side columns} for an easy across-group
-comparison; otherwise the per-group tables are stacked into one grouped table (grouped by
-\code{tab_vars}), sharing the variable/level stub. Call \code{\link[=tab_spread]{tab_spread()}} yourself for full control of
-the layout in that case. A level absent from a group shows empty cells.
+\code{\link[=tab]{tab()}}'s \code{tab_vars}: one sub-table per group, the same model(s) fitted \strong{within each level}.
+When that leaves one column per group (a single outcome, a single set of predictors, and not a
+multinomial) the groups are pivoted into \strong{side-by-side columns}; otherwise the per-group
+tables are stacked into one grouped table sharing the variable / level stub --- call
+\code{\link[=tab_spread]{tab_spread()}} yourself for full control there. A level absent from a group shows empty cells.
 Two readings of "does this effect hold in every subgroup?" come with it:
-\code{color = "between_groups"} colours (and tests) each effect against the first group's, row by row,
+\code{color = "between_groups"} colours and tests each effect against the first group's, row by row,
 and \code{stats = c(..., "interaction")} adds the aggregated test, once per predictor.}
 
-\item{wt}{Optional. Name of a weight column (character). Switches to design-based survey estimation
-(\code{\link[survey:svyglm]{survey::svyglm()}}): the sandwich standard errors are scale-invariant, so raw population weights
-are handled correctly (no normalisation) and the point estimates match the weighted crosstabs.
-For clustering, stratification, a finite-population correction or calibration, build the design
-yourself with \code{\link[survey:svydesign]{survey::svydesign()}} and pass it as \code{data} (see there); \code{wt} alone is a flat
-\code{ids = ~1} design, which can understate the variance of a clustered sample.}
+\item{wt}{Optional. Name of a weight column (character). Switches to design-based survey
+estimation (\code{\link[survey:svyglm]{survey::svyglm()}}): the sandwich standard errors are scale-invariant, so raw
+population weights are handled correctly (no normalisation) and the point estimates match the
+weighted crosstabs. For clustering, stratification, a finite-population correction or
+calibration, build the design yourself with \code{\link[survey:svydesign]{survey::svydesign()}} and pass it as \code{data}; \code{wt}
+alone is a flat \code{ids = ~1} design, which can understate the variance of a clustered sample.}
 
 \item{family}{The model family, \strong{resolved per outcome} so several outcomes with different
-families can share one table (one effect column-group each). \code{"auto"} (default) detects each
-outcome: a binary (-> \code{"binomial"}), an ordered 3+ level (-> \code{"ordinal"}), a nominal 3+ level
-(-> \code{"multinomial"}), or any other numeric (-> \code{"gaussian"}) outcome, emitting a message. An
-integer-valued numeric reads as \code{"gaussian"} too --- age in years, years of schooling, a summed
-score and income in whole units are all integers, and a linear model always fits --- with the
-message naming \code{"poisson"} for a genuine count. Set it explicitly with
+families can share one table. \code{"auto"} (default) detects each one and says so: a binary outcome
+gives \code{"binomial"}, an ordered 3+ level \code{"ordinal"}, a nominal 3+ level \code{"multinomial"}, any
+other numeric \code{"gaussian"}. An integer-valued numeric reads as \code{"gaussian"} too --- age in
+years, years of schooling and income in whole units are all integers, and a linear model always
+fits --- with the message naming \code{"poisson"} for a genuine count. Set it explicitly with
 \code{"gaussian"} (linear), \code{"binomial"} (logistic), \code{"poisson"} / \code{"quasipoisson"} (counts),
-\code{"multinomial"} (nominal 3+ level), \code{"ordinal"} (ordered 3+ level). A \strong{scalar} applies to every
-outcome; a \strong{vector} aligned to \code{outcome}, or a \strong{named} vector keyed by outcome
-(e.g. \code{c(income = "poisson", satisfied = "binomial")}), sets one family per outcome. Mixed
-families work only with a character \code{predictors} (one model per outcome); a \code{predictors} list
-(model comparison) is single-outcome, hence single-family.
+\code{"multinomial"}, \code{"ordinal"}. A \strong{scalar} applies to every outcome; a \strong{vector} aligned to
+\code{outcome}, or a \strong{named} vector keyed by outcome (e.g. \code{c(income = "poisson", satisfied = "binomial")}), sets one family per outcome. Mixed families work only with a character
+\code{predictors}; a \code{predictors} list is single-outcome, hence single-family.
 
-\strong{A binary outcome with \code{family = "poisson"} (modified Poisson).} Asking for \code{"poisson"} on a
-binary outcome is not a mistake and not a count model: it fits the \strong{modified Poisson regression}
-(Zou 2004), whose exponentiated coefficient is a \strong{risk ratio} (RR), not an odds ratio --- the same
-table as \code{measure = "ratio"}, which names the measure rather than the distribution. It is
-strictly opt-in --- a binary outcome still auto-detects as \code{"binomial"}; you must name \code{"poisson"}.
-Reach for it when the outcome is \strong{common} (above roughly 10\%), where an odds ratio is much further
-from 1 than the risk ratio and is almost always narrated as if it were one ("twice as likely"), and
-when you compare a coefficient \strong{across nested models}, which an odds ratio does not support (it is
-non-collapsible: it moves when you add a covariate even if that covariate is not a confounder).
-\strong{Standard errors are handled consistently}: the Poisson likelihood is deliberately
-misspecified for a 0/1 outcome, so the naive standard errors are too wide and are replaced by the
-robust \strong{Huber--White sandwich} --- via \code{survey::svyglm()} in both cases, which means the
-design-based variance when you supply \code{wt} or a design, and the equivalent of \code{HC0} on a
-constant-weight design when you do not. The observed companion (\code{empirical = TRUE}) follows the same
-estimand: \code{Obs_RR} is the crude \strong{risk} ratio with a Katz interval, not the crude odds ratio.
-Two caveats: the log link is unbounded above, so predicted probabilities can exceed 1 --- the model
-is for \strong{effect estimation, not prediction}; and the sandwich needs a decent sample (n of at least
-about 100). \code{method = "profile"} is not available (a quasi-likelihood has no profile), and the
-footer reports N and a Wald-vs-null test rather than AIC/BIC/pseudo-R2, which a quasi-likelihood
-does not define.
+\code{family = "poisson"} on a \strong{binary} outcome is neither a mistake nor a count model: it fits the
+\strong{modified Poisson} (Zou 2004), whose exponentiated coefficient is a \strong{risk ratio}. It is the
+same table as \code{measure = "ratio"}, which names the measure rather than the distribution --- see
+there. It is strictly opt-in: a binary outcome still auto-detects as \code{"binomial"}.
 
-\strong{Over-dispersed counts.} An unweighted \code{"poisson"} fit auto-scales its standard errors by
-the square root of the Pearson dispersion, so with an over-dispersed outcome (dispersion clearly
-above 1) its CIs and p-values are \strong{identical to \code{"quasipoisson"}}, and it \strong{warns} to say so
-(the footer reports the dispersion). At equidispersion (\eqn{\approx}1) the scaling is a no-op and
-the result matches a standard \code{glm(family = poisson)} z-interval — so a user comparing to a
-hand-fit Poisson \code{glm} is not surprised by wider intervals.}
+An unweighted \code{"poisson"} fit auto-scales its standard errors by the square root of the Pearson
+dispersion, so with an \strong{over-dispersed} outcome its intervals and p-values are identical to
+\code{"quasipoisson"}, and it warns to say so (the footer reports the dispersion). At equidispersion
+the scaling is a no-op and the result matches a plain \code{glm(family = poisson)}.}
 
 \item{effect}{\strong{Which contrast} the table shows --- one of the two questions an estimand asks.
 \code{"coefficient"} (default) is the model's own conditional effect ("holding the other predictors
@@ -116,81 +95,57 @@ constant"). \code{"marginal"} is the \strong{average marginal effect}: the model
 the observed covariate distribution --- a probability-scale, cross-model-comparable summary
 (Mood 2010) for logistic / multinomial / ordinal outcomes, the expected-count change for
 poisson, the coefficient itself for gaussian. \code{"at_reference"} evaluates the same quantity \strong{at
-the reference profile} (every other predictor at its reference level / mean), and for a
-\strong{multinomial} outcome the odds ratio of each outcome category \emph{versus the rest} at that
-profile. Resolved \strong{per outcome} like \code{family} (scalar / vector / named vector).
+the reference profile} (every other predictor at its reference level or its mean), and for a
+\strong{multinomial} outcome the odds ratio of each category \emph{versus the rest} there. Resolved \strong{per
+outcome} like \code{family} (scalar / vector / named vector).
 
-The contrast is a \strong{marker on the measure} in the column header, so the acronym stays the thing
-to look up: no marker for a coefficient, an \code{m} prefix for a marginal effect, a \code{ref} prefix at
-the reference profile --- \code{Model_OR}, \code{Model_mRR}, \code{Model_refRD}. The observed companion carries
-the measure alone (\code{Obs_RR}), because a univariable effect has no adjustment to be marginal over.
-
-The parenthetical of a probability-scale marginal cell is a \emph{marginal-standardized} prediction
-(\code{avg_predictions(variables=)}: the predictor set to each level for the whole sample, other
-covariates kept as observed, then averaged), so it is genuinely covariate-adjusted and coheres
-with the effect --- adjusted-\%(reference) + AME(level) equals adjusted-\%(level). Read it as a
-standardized comparison ("holding the measured covariates' distribution fixed"), not a
-manipulation. Note the reference profile can be an unusual baseline (e.g. a factor's first
-level = \code{"No answer"}).}
+The contrast is a \strong{marker on the measure} in the column header, so the acronym stays the one
+thing to look up: \code{Model_OR}, \code{Model_mRR}, \code{Model_refRD} (see \emph{The header acronyms} below). The
+observed companion carries the measure alone (\code{Obs_RR}), a univariable effect having no
+adjustment to be marginal over. A marginal quantity is standardized to the covariate
+distribution at hand, so under \code{tab_vars} each group standardizes to its own subpopulation.}
 
 \item{measure}{\strong{Which effect measure} --- the other question. \code{"auto"} (default) takes the
 family's usual one (odds ratios for a logit, incidence-rate ratios for a count, a mean
 difference for a linear model; a difference for a marginal contrast). The full word is the
-canonical spelling and the discipline's acronym is an accepted synonym, so the argument teaches
-the concept while the column header keeps the acronym (see \emph{The header acronyms} below):
+canonical spelling and the discipline's acronym an accepted synonym, so the argument teaches the
+concept while the column header keeps the acronym:
 \itemize{
 \item \code{"odds_ratio"} (\code{"OR"}) --- the odds ratio of a logit / multinomial / ordinal fit.
 \item \code{"ratio"} (\code{"RR"}, \code{"IRR"}, \code{"RoM"}) --- a \strong{risk} ratio on a binary outcome (the modified
-Poisson, Zou 2004: a log link with robust standard errors), an \strong{incidence-rate} ratio on a
-count, a \strong{ratio of adjusted means} on a continuous one (Poisson pseudo-maximum-likelihood,
-Santos Silva & Tenreyro 2006). Reach for it when the outcome is \strong{common}: an odds ratio is
-then much further from 1 than the risk ratio and is almost always narrated as if it were one
-("twice as likely"), and unlike an odds ratio a risk ratio stays comparable \strong{across nested
-models} (an odds ratio is non-collapsible --- it moves when you add a covariate even if that
-covariate is not a confounder).
+Poisson, Zou 2004), an \strong{incidence-rate} ratio on a count, a \strong{ratio of adjusted means} on a
+continuous one (Poisson pseudo-maximum-likelihood, Santos Silva & Tenreyro 2006). Reach for it
+when the outcome is \strong{common}: an odds ratio is then much further from 1 than the risk ratio
+and is almost always narrated as if it were one ("twice as likely"), and unlike an odds ratio
+a risk ratio stays comparable \strong{across nested models}.
 \item \code{"difference"} (\code{"RD"}, \code{"diff"}) --- a linear coefficient on a continuous outcome; on a
-\strong{binary} one the \strong{risk difference} in percentage points, from an identity-link
-(additive-risk) fit with robust standard errors. The identity link is unbounded, so it can
-fail to converge: the linear probability model then takes over, with a message, and the footer
-says which one ran.
-\item \code{"log"} (\code{"log_odds"}, \code{"log_risk"}, \code{"log_rate"}) --- the same fit, \strong{un-exponentiated}:
-coefficients on the model's own link scale. Bare \code{"log"} logs the family's default measure;
-the precise spellings pin which (so \code{"log_risk"} is the modified-Poisson fit, logged). The
-header names what it logs --- \code{Model_log(OR)}, \code{Model_log(IRR)} --- rather than one greek
-letter for five different quantities.
+\strong{binary} one the \strong{risk difference} in percentage points, from an identity-link fit with
+robust standard errors. That link is unbounded and can fail to converge: the linear
+probability model then takes over, with a message, and the footer says which one ran.
+\item \code{"log"} (\code{"log_odds"}, \code{"log_risk"}, \code{"log_rate"}) --- the same fit, \strong{un-exponentiated}.
+Bare \code{"log"} logs the family's default measure; the precise spellings pin which one. The
+header names what it logs (\code{Model_log(OR)}), never one greek letter for five quantities.
 }
 
 Resolved \strong{per outcome} like \code{family}. \code{effect} and \code{measure} are orthogonal: a \emph{conditional}
 ratio is a different \strong{fit}, a \emph{marginal} one a different \strong{estimator}, and both land on the
 same stored scale. Call \code{\link[=reg_measures]{reg_measures()}} on your outcome to see what it offers, with the reason
-whenever something is not available.
-
-Two caveats worth knowing. A conditional risk ratio and a marginal one answer slightly different
-questions --- the marginal one is population-averaged and can never predict a probability above
-1 --- though on real data they agree closely; and a marginal estimate is standardized to the
-covariate distribution at hand, so under \code{tab_vars} each group standardizes to \strong{its own}
-subpopulation.
-
-\strong{How this is called elsewhere.} \code{measure = "ratio"} on a binary outcome is Stata's
-\verb{binreg y x, rr}, \code{glm(family = binomial("log"))} or the modified Poisson, and
-\code{marginaleffects}' \code{comparison = "ratio"} on the marginal path; \code{measure = "log"} is
+wherever it does not; \code{vignette("tabxplor-reg")} discusses what each route assumes. Elsewhere,
+\code{measure = "ratio"} on a binary outcome is Stata's \verb{binreg y x, rr}; \code{measure = "log"} is
 \code{exponentiate = FALSE} in broom / parameters / gtsummary; \code{effect = "marginal"} is
-\code{avg_comparisons()}.}
+\code{marginaleffects::avg_comparisons()}.}
 
 \item{trials}{Grouped-binomial (summed-score) outcomes only. The number of items behind the score,
 fitting \code{cbind(score, trials - score)} as a binomial. \code{NULL} (default) fits an ordinary binary
 logit; a single integer (or a vector named by outcome) sets the item count; \code{TRUE}, or an \code{NA}
 entry in a named vector, uses that outcome's \strong{observed maximum} score --- so explicit and
-automatic counts can be mixed, and an outcome with no score to take a maximum of (a factor, a
-0/1 numeric) simply stays an ordinary binary logit. Requires \code{family = "binomial"}. It is one
-count per \emph{outcome}, never a column name --- a per-row item count is not supported; write the
-model with \code{cbind()} in a compound \code{formula} instead.}
+automatic counts can be mixed. Requires \code{family = "binomial"}. It is one count per \emph{outcome},
+never a column name; for a per-row item count, write \code{cbind()} in a compound \code{formula}.}
 
 \item{empirical}{Show the \strong{observed, unadjusted (crude)} effect beside each modelled one ---
-the same quantity fitted with a single predictor. It IS the modelised quantity when there is
-only one predictor, so the distance between the two is exactly what adjustment changed, read
-left to right. \code{FALSE} (default) or \code{TRUE}; the two expert spellings say \emph{where} the crude
-effect goes:
+the same quantity fitted with a single predictor. It IS the modelled quantity when there is only
+one predictor, so the distance between the two is exactly what adjustment changed, read left to
+right. \code{FALSE} (default) or \code{TRUE}; two expert spellings say \emph{where} the crude effect goes:
 \itemize{
 \item \code{TRUE} --- a crude \strong{column} beside the model one, except on a 3+ level outcome
 (multinomial, or an ordinal marginal effect), where one model column would need one crude
@@ -201,296 +156,194 @@ as \verb{1/1.63*** (1/1.69)}.
 }
 The two columns are the same column twice: same estimand, same colour ladder, same layout, one
 legend block. Each cell prints the effect with the level it sits on beside it --- the observed
-percentage or mean on the crude side, the \strong{adjusted} prediction on the model side --- and the
-two effects end up adjacent, in the middle. Ask for a different layout with \code{display}.
+percentage or mean on the crude side, the \strong{adjusted} prediction on the model side --- so the
+two effects end up adjacent. Ask for another layout with \code{display}.
 
-The rule behind it is one sentence: \emph{the observed effect is the model's own effect, fitted with
-a single predictor}. Where that univariable model is \strong{saturated} (a categorical predictor
-under every family except ordinal) it has a closed form and is computed directly; otherwise it
-is a real fit, so the crude column shares the model's family, link, confidence-interval method
-and \code{multiplier} by construction. A \strong{continuous} predictor has no levels, so its cell shows
-the effect alone --- the univariable slope, which assumes linearity on the model's scale (check
-that with \verb{shape =} before trusting it) --- and its distribution goes to the html tooltip.
-The only outcomes with no crude counterpart at all are the compound-\code{formula} escape hatch
-(there is no predictor structure to be crude about) and, for a marginal contrast, a \emph{weighted}
-3+ level outcome (no \code{marginaleffects} method).
+Where the univariable model is \strong{saturated} (a categorical predictor under every family except
+ordinal) the crude effect has a closed form; otherwise it is a real fit, so the crude column
+shares the model's family, link, interval method and \code{multiplier} by construction. A
+\strong{continuous} predictor has no levels, so its cell shows the univariable slope alone, which
+assumes linearity on the model's scale --- check that with \code{shape} before trusting it.
 
-Every crude quantity is computed on \strong{exactly the same complete-case population as the model}
-(listwise-complete on the outcome, all predictors and any design variable), so crude and
-adjusted are comparable and not confounded by differing missingness --- reproduce it with
-\code{\link[dplyr:filter]{dplyr::filter()}} + \code{\link[=tab]{tab()}} on the same rows. Under \code{na = "drop_by_model"} a model fitted on
-rows the observed block does not cover gets \strong{no} observed value at all, because the distance
-between two such estimates would be listwise deletion rather than adjustment.
-
-Both columns are always on the \strong{same inference basis}, which is the whole point of putting
-them side by side: weighted data gives both intervals that account for the weighting, and a
-\code{survey::svydesign} gives both the full design. Each column stores the base its own interval
-used in the \code{n_eff} \code{\link[=fmt]{fmt()}} field, while the displayed \code{n} stays the raw count.
-
-\strong{Two consequences worth knowing}, both deliberate. First, a weighted \code{tab_reg()} is \emph{always}
-design-corrected while a weighted \code{\link[=tab]{tab()}} is \emph{not} unless you ask (\code{design_effect = TRUE}).
-\code{tab_reg()} has no choice --- its observed columns must be measured like the model column beside
-them, and that one is design-based by construction (\code{survey::svyglm}); \code{\link[=tab]{tab()}} does, and
-keeps the descriptive convention (a weighted estimate on the raw sample size) as its default.
-Each table's footer says which it used --- so the same weight can legitimately give a slightly
-wider interval here than in a crosstab beside it, and \code{tab(design_effect = TRUE)} is what brings
-the two into line. Second, the crude percentage \emph{difference} here uses the
-\strong{Wald} interval, matching the model AME so one legend can name one method, where
-\code{tab(ci = "ref")} uses Newcombe; on a real table they differ by a few tenths of a percent.
-
-\strong{Under a \code{survey::svydesign}} every column is design-based. The \verb{Model_*} ones through
-\code{survey::svyglm}; the crude ones through an effective sample size derived from the design
-variance of each cell (Korn & Graubard's device, the same one \code{\link[=tab]{tab()}}'s cells use). That base is
-\strong{exact} for a single cell, and for each leg of a ratio: the odds-ratio and risk-ratio brackets
-built on it \emph{are} the design variance of the log odds and of the log risk. A \strong{difference or a
-ratio between two cells} additionally ignores the design covariance between them, so it lands a
-few percent either side of the exact answer — against the 15–25 \% it was out by before. Two
-things stay outside: a 3+ level outcome (multinomial, ordinal) has no crude \emph{column}, only a
-crude value folded into the model cell, and replicate-weight designs (\code{svrepdesign}) are refused
-at the boundary. If the design variance cannot be computed the intervals fall back to the raw
-count and say so.}
+Every crude quantity is computed on \strong{exactly the same complete-case population as the model},
+so the two are not confounded by differing missingness; under \code{na = "drop_by_model"} a model
+fitted on other rows gets \strong{no} observed value at all, the distance between two such estimates
+being listwise deletion rather than adjustment. Both columns are also always on the \strong{same
+inference basis} --- which is why a weighted \code{tab_reg()} is \emph{always} design-corrected where a
+weighted \code{\link[=tab]{tab()}} is not unless asked (\code{design_effect = TRUE}). The footer says which basis a
+table used.}
 
 \item{add_n}{Logical, default \code{TRUE}. Add an \code{n} column, right after the level labels, holding the
-\strong{unadjusted count} behind each predictor level on the model's own complete cases --- the numbers
-a reader needs to judge the estimates beside them (and which reporting guidelines ask for). The
-Constant row shows the model N. Continuous predictors are left blank: on a listwise-complete frame
-their count is the model N for every one of them. Unlike \code{\link[=tab]{tab()}}'s \code{add_n}, this is a real column
-rather than a display option, because only the model frame knows the counts.}
+\strong{unadjusted count} behind each predictor level on the model's own complete cases --- the
+numbers a reader needs to judge the estimates beside them. The Constant row shows the model N.
+Continuous predictors are left blank: on a listwise-complete frame their count is the model N.}
 
 \item{color, color_signif}{Colouring of the effect cells. \code{color = TRUE} (default) grades each cell
-on \strong{its own scale} --- the ladder follows what the column estimates (\code{measure}), so it is never
-asked for separately; \code{color = FALSE} turns colouring off for every column (model and empirical).
-\code{color_signif} is the significance policy (default \code{"grey_non_signif"}). See \code{\link[=tab]{tab()}}.
+on \strong{its own scale} --- the ladder follows what the column estimates (\code{measure}), so it is
+never asked for separately; \code{color = FALSE} turns colouring off. \code{color_signif} is the
+significance policy (default \code{"grey_non_signif"}). See \code{\link[=tab]{tab()}}.
 
-What is left to choose is what each effect is compared \strong{to}, and both such measures are meant
-for the \emph{background} channel so the text keeps showing the effect size. \code{color} is positional,
-\code{c(text, background)}, and \code{TRUE} in the text slot means "the column's own scale" --- so
+What is left to choose is what each effect is compared \strong{to}. Both such measures are meant for
+the \emph{background} channel so the text keeps showing the effect size: \code{color} is positional,
+\code{c(text, background)}, and \code{TRUE} in the text slot means "the column's own scale", so
 \code{color = c(TRUE, "adjustment")} answers "how strong is this effect?" and "how much did the model
-change it?" in one glance:
+change it?" in one glance.
 \itemize{
-\item \code{"adjustment"} — how far each \strong{modelled} effect sits from its \strong{observed} (crude,
-unadjusted) counterpart, i.e. what adjusting for the other predictors did to it. It turns
-\code{empirical = TRUE} on (that is where the observed effect comes from). The ladder follows the
-estimate's own scale, so a threshold means the same thing in every table: \verb{×1.1 / ×1.25 / ×1.5 / ×2} for a ratio (odds, risk or rate), \verb{±2 / ±5 / ±10 / ±20} \strong{points} for a
-probability-scale marginal effect, and \verb{±0.05 / ±0.1 / ±0.2 / ±0.4} \strong{standard deviations of
-the outcome} for an effect in the outcome's own units (a linear beta, a count marginal
-effect) --- otherwise the same model on an outcome recorded in hours, minutes or days would
-read three different ways. The first ratio threshold is the classic 10\% "change in estimate"
-rule, a convention rather than a decision rule; set them all with
-\code{\link[=set_color_breaks]{set_color_breaks()}} (\code{adj_ratio}, \code{adj_diff}, \code{adj_diff_std}). One pole means the model \strong{strengthened} the
-effect (suppression), the other that it \strong{attenuated} it — measured from the null, so a
-protective effect (OR < 1) and a risky one read the same way.
-\item \code{"between_groups"} — with \code{tab_vars}, how far each group's effect sits from the \strong{first}
-group's, on the same row: a per-predictor reading of effect modification, beside the global
-comparison a likelihood-ratio test gives. Pick the baseline group with \code{ref} keyed by the
-split variable (e.g. \code{ref = c(race = "Black")}). It also adds the \strong{aggregated}
-interaction test to the footer (see \code{stats}).
+\item \code{"adjustment"} --- how far each \strong{modelled} effect sits from its \strong{observed} (crude)
+counterpart, i.e. what adjusting for the other predictors did to it. It turns
+\code{empirical = TRUE} on. The ladder follows the estimate's own scale, so a threshold means the
+same thing in every table: \code{x1.1 / x1.25 / x1.5 / x2} for a ratio, \code{2 / 5 / 10 / 20}
+\strong{points} for a probability-scale marginal effect, \code{0.05 / 0.1 / 0.2 / 0.4} \strong{standard
+deviations of the outcome} for an effect in the outcome's own units --- otherwise the same
+model on an outcome recorded in hours, minutes or days would read three different ways. Set
+them with \code{\link[=set_color_breaks]{set_color_breaks()}} (\code{adj_ratio}, \code{adj_diff}, \code{adj_diff_std}). One pole means the
+model \strong{strengthened} the effect (suppression), the other that it \strong{attenuated} it,
+measured from the null so a protective and a risky effect read the same way.
+\item \code{"between_groups"} --- with \code{tab_vars}, how far each group's effect sits from the \strong{first}
+group's, on the same row: a per-predictor reading of effect modification. Pick the baseline
+group with \code{ref} keyed by the split variable (e.g. \code{ref = c(race = "Black")}). It also adds
+the aggregated interaction test to the footer (see \code{stats}).
 }
 
-The two are mutually exclusive (they share one per-cell slot). The gap itself is readable as a
-number, with \code{display = "\\{or\\} (obs \\{obs\\})"}, and the html tooltip adds its confidence interval
-and p-value.
+The two are mutually exclusive (they share one per-cell slot). The gap is readable as a number
+with \code{display = "{est} ({gap})"}, and the HTML tooltip adds its interval and p-value.
 
-\strong{Significance.} Both measures test their own gap, and the usual policies then follow —
-\code{"grey_non_signif"} greys a gap whose interval covers "no change"; \code{"guaranteed_effect"} colours
-its floor, i.e. "the two differ by at least ×1.1". They use different standard errors, because
-they compare different things:
-\itemize{
-\item \code{"between_groups"} compares two \code{tab_vars} groups, which are \strong{different people}, so the gap's
-standard error is \verb{sqrt(SE_A² + SE_B²)} — recovered from the two Wald intervals the table
-already prints, which is why the colours can never contradict them.
-\item \code{"adjustment"} compares two estimates fitted on the \strong{same rows}, which are correlated, so its
-standard error is the sampling variance of the difference of their influence functions (the
-"seemingly unrelated estimation" of Weesie 1999 / Mize, Doan & Long 2019). With survey weights
-or a design it is design-based (strata, clusters and FPC respected).
-}
+\strong{Significance.} Each measure tests its own gap, and \code{color_signif} then applies as usual. The
+two standard errors differ because they compare different things: two \code{tab_vars} groups are
+\strong{different people}, so that gap's error comes from the two intervals the table already prints,
+while an adjustment compares two estimates fitted on the \strong{same rows}, which are correlated, so
+its error comes from the difference of their influence functions (Weesie 1999; Mize, Doan & Long
+2019) --- design-based when there are weights or a design. The \code{"adjustment"} test runs only
+where a zero gap really means "no confounding", i.e. on a \strong{collapsible} measure (a marginal
+effect, a risk ratio, an incidence-rate ratio, a linear mean difference). A \strong{conditional odds
+ratio} is not collapsible --- adjusting it moves it away from 1 even when the added variable is
+independent of the exposure --- so there the colours stay descriptive, \code{color_signif} is
+ignored, and \code{tab_reg()} says so once; the same ruling is why a multinomial or ordinal
+\emph{coefficient} column shows the observed effect but carries no test, while its marginal path
+does.
 
-The \code{"adjustment"} test is only computed where a zero gap really means "no confounding" — that is,
-on a \strong{collapsible} effect measure: an average marginal effect (\code{effect = "marginal"}), a marginal risk
-ratio (\verb{effect = "marginal", measure = "ratio"}), a conditional risk ratio (\code{measure = "ratio"}), an
-incidence-rate ratio, or a linear β. A \strong{conditional odds ratio} is not collapsible: adjusting it
-moves it away from 1 even when the extra variable is independent of the exposure, so at survey
-sizes every row would test "significant" for a reason that is not confounding. There the colours
-stay descriptive, \code{color_signif} is ignored, and \code{tab_reg()} says so once. The test is also skipped
-when the two estimates cannot be compared cell by cell: at \code{effect = "at_reference"}, and under
-\code{na = "drop_by_model"} when a compared model's complete cases differ from the observed columns'
-(there the observed value is withheld altogether, so nothing is coloured either).
+Read a coloured cell as "adjustment moved this effect", not as "this variable is a confounder",
+and read the pattern rather than the single cell: each is tested on its own, with no
+multiple-comparison correction. \code{vignette("tabxplor-reg")} gives the literature and the worked
+reading.}
 
-That ruling covers the \strong{3+ level outcomes} too, and it is the reason they behave as they do: a
-multinomial or ordinal \emph{coefficient} is a conditional odds ratio, so those columns show the
-observed effect but carry no test. Their \strong{marginal} paths (\code{effect = "marginal"}) are
-collapsible and do get one, per outcome category.
-
-Two things to keep in mind. A difference between two groups, or before and after adjustment, is a
-difference in \emph{that effect measure}: groups with different base rates or more variable outcomes can
-show different effects on every scale without the underlying cause differing. And each cell is
-tested on its own, with no multiple-comparison correction — with seven comparisons about one table
-in five shows a spurious coloured cell, so read the pattern rather than the single cell (for
-\code{"between_groups"}, the footer's aggregated test is the multiplicity-free reading).
-
-Where a row carries no test at all — a group with an empty cell leaves no recoverable standard
-error, and \code{method = "profile"} bounds are not \verb{estimate ± critical value × SE} — the cell stays
-uncoloured under \code{"grey_non_signif"} and the legend says that some rows are untested (the HTML
-tooltip shows which: an untested cell has no gap line).
-
-\strong{On what the comparison is.} This reports how much two numbers differ and whether that
-difference exceeds noise; it does not detect confounding. The change-in-estimate criterion it
-operationalises is contested as a \emph{confounder-selection rule} — the 10\% cut-off is a convention,
-not a threshold with a decision-theoretic basis — so read a coloured cell as "adjustment moved
-this effect", not as "this variable is a confounder". For a formal treatment of the crude-versus-
-adjusted difference see Clogg, Petkova & Haritou (1995) and Allison's (1995) comment; for nested
-logit models, where part of the change is rescaling rather than confounding, see the KHB
-decomposition (Karlson, Holm & Breen 2012; Kohler, Karlson & Holm 2011). The collapsible routes
-this function offers (\code{effect = "marginal"}, \code{measure = "ratio"}) are what the
-literature calls \strong{marginal standardization} (g-computation).
-
-The gap test uses the \strong{robust (sandwich)} variance on both sides, which is what a comparison of
-two differently-specified estimators needs. For an unweighted binomial odds ratio that is exactly
-the Woolf interval the \code{Obs_OR} column prints; elsewhere it can differ slightly from the printed
-descriptive intervals, which follow \code{tab()}'s own conventions (pooled Student \emph{t} for a mean
-difference, unweighted \emph{n} under \code{wt}).
-
-\strong{Caveat on odds ratios.} The odds ratio is \emph{non-collapsible}: adjusting for a covariate that
-predicts the outcome moves it away from 1 even with no confounding at all (about +8\% in a
-simulation where the covariate is independent of the exposure — the same size as the first
-colour step). So part of an OR gap is arithmetic, not confounding. The collapsible comparisons
-are \code{effect = "marginal"} (marginal effects), \code{measure = "ratio"} on a binary
-outcome (risk ratios) and a gaussian beta; on those the gap is confounding by the adjustment
-set. The legend says so on the odds-ratio path, and it is why the significance test above is
-computed only on the collapsible scales.}
-
-\item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are standard).
-When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still read the CI).}
+\item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are
+standard). When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still
+read the interval).}
 
 \item{conf_level}{Confidence level for the intervals. Default \code{0.95}. It drives every interval in
-the table, the significance stars, and the greying under \code{color_signif} --- including the
-model-vs-observed gap interval, which is computed at print time from the stored standard error and
-is stored on each column so it follows this argument rather than
-\code{options("tabxplor.conf_level")}.}
+the table, the significance stars, the greying under \code{color_signif} and the
+model-versus-observed gap interval, and is stored on each column, so it follows this argument
+rather than \code{options("tabxplor.conf_level")}.}
 
 \item{ci_method}{How the interval and p-value are computed --- the same argument, and the same
 named-vector grammar, as in \code{\link[=tab]{tab()}}, whose fifth slot is this producer's:
 \code{ci_method = c(model = "profile")}. On a regression there is only one interval to choose a
-method for, so a bare \code{"profile"} means that slot.
-\code{"wald"} (default) uses the Wald interval and the Wald z / t test: fast, matches standard
-software output, and the only option for weighted models. \code{"profile"} uses the
-profile-likelihood interval (\code{\link[stats:confint]{stats::confint()}}, needs \code{MASS}) and the likelihood-ratio test:
-more accurate near separation, unweighted binomial/poisson models only (else it falls back to
-Wald with a message; gaussian always uses the exact-t interval).}
+method for, so a bare \code{"profile"} means that slot. \code{"wald"} (default) uses the Wald interval and
+the Wald z / t test: fast, matching standard software output, and the only option for weighted
+models. \code{"profile"} uses the profile-likelihood interval (\code{\link[stats:confint]{stats::confint()}}, needs \code{MASS}) and
+the likelihood-ratio test: more accurate near separation, unweighted binomial / poisson only
+(otherwise it falls back to Wald with a message; gaussian always uses the exact-t interval).}
 
 \item{outcome_level}{Which level of the \strong{outcome} to single out, as a named vector keyed by
 outcome name --- \code{outcome_level = c(married = "Married")} --- so several outcomes each get their
-own. It is the twin of \code{reference}, and the pair asks opposite questions:
-\strong{\code{reference} names the level you compare AGAINST, \code{outcome_level} the level you MODEL.}
+own. It is the twin of \code{ref}: \strong{\code{ref} names the level you compare AGAINST, \code{outcome_level} the
+one you MODEL.}
 \itemize{
-\item \strong{binomial}: the level whose probability is estimated. It becomes the column header, and
-every odds ratio is the odds of \emph{that} level. Defaults to the outcome's \strong{first} level
+\item \strong{binomial}: the level whose probability is estimated. It becomes the column header,
+and every odds ratio is the odds of \emph{that} level. Defaults to the outcome's \strong{first} level
 (so a coded factor like \code{"1-Married"} / \code{"2-Not married"} models "1-Married"). A 0/1 numeric
 outcome is labelled \code{"Not <outcome>"} / \code{"<outcome>"}, and either spelling --- or the raw
 \code{"0"} / \code{"1"} --- may be named.
 \item \strong{multinomial}: the baseline category every other category's column is compared to.
 With more than two levels you cannot choose what is modelled (all of them are), only the
-pivot --- which is why the same argument means the opposite thing here. The rule is declared
-once, per family, in \code{REG_FAMILIES}.
+pivot --- which is why the same argument means the opposite thing here.
 \item \strong{ordinal, and any numeric outcome}: refused, with the reason. An ordinal outcome must
 keep the order of its levels, so none of them can be singled out.
 }}
 
 \item{ref}{Optional named vector \code{c(var = "baseline level")} --- the same grammar as \code{\link[=tab]{tab()}}'s
 \code{ref} --- choosing the treatment-contrast reference level of one or more factor \strong{predictors}
-(the effect of every other level is measured against it), and of \code{tab_vars} (which group
-\code{color = "between_groups"} compares to). This is how factor contrasts are set; other contrast
-codings can be applied by passing a formula in \code{outcome} with the terms already coded.
-For the level of the \strong{outcome}, see \code{outcome_level}: \code{ref} names the level you compare
-AGAINST, \code{outcome_level} the level you MODEL.}
+(every other level's effect is measured against it), and of \code{tab_vars} (which group
+\code{color = "between_groups"} compares to). Other contrast codings can be applied by passing a
+formula in \code{outcome} with the terms already coded. For the level of the \strong{outcome}, see
+\code{outcome_level}: \code{ref} names the level you compare AGAINST, \code{outcome_level} the one you MODEL.}
 
-\item{multiplier}{How a \strong{continuous} predictor's effect is scaled — the unit its row reports.
+\item{multiplier}{How a \strong{continuous} predictor's effect is scaled --- the unit its row reports.
 One unit of a continuous variable is rarely a readable amount (a one-year change in \code{age} barely
 moves the odds, so its odds ratio sits inside the first colour break and the row reads as "no
-effect"), so the default is \strong{one standard deviation}.
+effect"), so the default is \strong{one standard deviation}. Give either a \strong{single value}, applied
+to every continuous predictor, or a \strong{named vector} overriding chosen ones: \code{"sd"} (the
+default), \code{"2sd"} (roughly bottom to top of the distribution), or a number of units (\code{10} = per
+decade of age). \code{multiplier = 1} restores the per-one-unit reading, and the row label names the
+unit it used, e.g. \verb{age (per 1 SD (13.5))}.
 
-Give either a \strong{single value}, applied to every continuous predictor, or a \strong{named vector}
-overriding chosen ones (predictors it does not name keep the single-value default). Accepted
-values: \code{"sd"} (the default — per one standard deviation), \code{"2sd"} (per two, i.e. roughly bottom
-to top of the distribution), or a number of units (\code{10} = per decade of age). \code{multiplier = 1}
-restores the per-one-unit reading. The row label names the unit it used, e.g.
-\verb{age (per 1 SD (13.5))}.
+Everything scales together --- the estimate, its interval, the crude \verb{Obs_*} companion and the
+model-versus-observed comparison; the p-value is unchanged. \strong{Because the default is not 1, a
+continuous predictor's \verb{Model_*} cell does not equal \code{exp(coef(glm(...)))} unless you pass
+\code{multiplier = 1}.} The standard deviation is measured \strong{once}, on the complete cases of the
+predictors, so one predictor keeps one unit across outcomes, compared models and \code{tab_vars}
+groups. Not applied to multinomial / ordinal outcomes, nor to a \code{formula} model. A 0/1-coded
+\strong{numeric} predictor gets a "per 1 SD (0.5)" reading --- pass it as a factor instead.}
 
-Everything scales together: the estimate (\code{OR^k} / \code{beta*k}), its confidence interval, the crude
-\verb{Obs_*} companion and the model-versus-observed comparison; the p-value is unchanged. \strong{Because
-the default is not 1, a continuous predictor's \verb{Model_*} cell does not equal \code{exp(coef(glm(...)))}
-unless you pass \code{multiplier = 1}.} The standard deviation is measured \strong{once}, on the complete
-cases of the predictors (not of the outcome), so one predictor keeps one unit across several
-outcomes, across compared models and across \code{tab_vars} groups. Names must be continuous
-predictors. Not applied to multinomial / ordinal outcomes, nor to a \code{formula} model (where a
-variable may enter through an interaction or a \code{poly()} basis). A 0/1-coded \strong{numeric} predictor
-gets a "per 1 SD (0.5)" reading — pass such a variable as a factor instead.}
-
-\item{shape}{How a \strong{continuous} predictor enters the model, when one straight line is not enough.
-The \code{Linearity} footer row and the little curve drawn in the predictor's own row label tell you
-\emph{whether} a line is enough; this argument is how you fix it without leaving the framework.
-
-A \strong{named vector} over continuous predictors — everything it does not name stays linear:
+\item{shape}{How a \strong{continuous} predictor enters the model, when one straight line is not
+enough. The \code{Linearity} footer row and the little curve drawn in the predictor's row label tell
+you \emph{whether} a line is enough; this argument is how you fix it without leaving the framework.
+A \strong{named vector} over continuous predictors --- everything it does not name stays linear:
 \describe{
 \item{\code{"linear"}}{one slope (the default).}
 \item{\code{"quintiles"} / \code{"quartiles"} / an integer \code{k}}{cut into \code{k} quantile groups, so the
-predictor becomes an ordinary \strong{factor}: one estimate per group, its own observed companion,
-counts and colours per group — the non-linearity becomes visible in the printed numbers. Start
-here; it is the most readable answer.}
-\item{\code{"quadratic"}}{adds a curvature term, so the predictor takes \strong{two rows} — the slope at
-the mean, and \verb{age²}, which says whether the slope flattens (< 1) or accelerates (> 1) as you
-move away from it. Parsimonious, but two coefficients to read.}
-\item{\code{"log"} / \code{"sqrt"}}{fit \code{log(x)} / \code{sqrt(x)} instead of \code{x} — diminishing returns. The row
-label says which (\code{log(age)}). \code{"log"} needs strictly positive values.}
+predictor becomes an ordinary \strong{factor}: one estimate per group, its own observed
+companion, counts and colours per group --- the non-linearity becomes visible in the printed
+numbers. Start here; it is the most readable answer.}
+\item{\code{"quadratic"}}{adds a curvature term, so the predictor takes \strong{two rows} --- the slope
+at the mean, and the squared term, which says whether the slope flattens or accelerates as
+you move away from it.}
+\item{\code{"log"} / \code{"sqrt"}}{fit \code{log(x)} / \code{sqrt(x)} instead of \code{x} --- diminishing returns. The
+row label says which (\code{log(age)}); \code{"log"} needs strictly positive values.}
 }
-Example: \code{shape = c(age = "quadratic", income = "log")}.
-
-Everything else keeps working: the observed \verb{Obs_*} companion is fitted with the same shape, the
-model-versus-observed colour and test compare like with like, and \code{multiplier} still names the
-unit. A \code{poly()} / \code{ns()} basis is deliberately never emitted — the marginal-effects engine
-silently returns zero for those (a warning fires if you reach one through a \code{formula}).}
+Example: \code{shape = c(age = "quadratic", income = "log")}. Everything else keeps working: the
+observed companion is fitted with the same shape, the comparisons compare like with like, and
+\code{multiplier} still names the unit. A \code{poly()} / \code{ns()} basis is deliberately never emitted ---
+the marginal-effects engine silently returns zero for those.}
 
 \item{stats}{The statistics shown in the model-summary \strong{footer} (one block per model). \code{NULL}
-(default) uses the per-family set: linear models show N, R square, adjusted R square, the overall
-F-test and the residual SD; other models show N, the likelihood-ratio test versus the null model,
-McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models also show the Pearson
-dispersion, \code{"phi"}). Every default set also carries the overall-association test \code{"global"} and
-the \strong{model checks that cost nothing} (see below). Pass a character vector to pick the statistics
-(\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"phi"}, \code{"r2"}, \code{"r2_adj"},
-\code{"f_model"}, \code{"sigma"}, \code{"global"}, \code{"interaction"}, \code{"linearity"}, \code{"proportionality"},
-\code{"dispersion"}, \code{"influence"}, \code{"collinearity"}), \code{"all"} for \strong{everything this model can
-report}, or \code{FALSE} / \code{"none"} to hide the footer entirely.
+(default) uses the per-family set: linear models show N, R square, adjusted R square, the
+overall F-test and the residual SD; other models show N, the likelihood-ratio test versus the
+null model, McFadden's pseudo-R square, AIC and BIC (count and grouped-binomial models also show
+the Pearson dispersion, \code{"phi"}). Every default set also carries the overall-association test
+\code{"global"} and the \strong{model checks that cost nothing} (see below). Pass a character vector to
+pick the statistics (\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"phi"}, \code{"r2"},
+\code{"r2_adj"}, \code{"f_model"}, \code{"sigma"}, \code{"global"}, \code{"interaction"}, \code{"linearity"},
+\code{"proportionality"}, \code{"dispersion"}, \code{"influence"}, \code{"collinearity"}), \code{"all"} for everything
+this model can report, or \code{FALSE} / \code{"none"} to hide the footer. Weighted models show a reduced,
+survey-appropriate set (design-based Wald test, Nagelkerke pseudo-R square, AIC).
 
 \strong{Model comparison} (several models / outcomes only) is two more keys, so it needs no separate
 argument: \code{"compare_sequential"} tests each model against the previous one, and
-\code{"compare_baseline"} tests each against one reference model --- the first by default, or the one
-you name as the key's value, \code{stats = c("n", "aic", compare_baseline = "Model 1")} (an index
-works too, \code{compare_baseline = 2}). Both use a likelihood-ratio test (F for linear / quasi
-models, a design-based Wald test for weighted / survey models); when the models are not nested or
-are fitted on different numbers of observations, they fall back to the AIC difference with a
-message. A comparison key \strong{adds} a row and restricts nothing, so
-\code{stats = "compare_sequential"} keeps the default statistics beside it; name the others too
-(\code{c("n", "aic", "compare_sequential")}) to narrow the block.
+\code{"compare_baseline"} each against one reference model --- the first by default, or the one you
+name as the key's value, \code{stats = c("n", "aic", compare_baseline = "Model 1")}. Both use a
+likelihood-ratio test (F for linear / quasi models, a design-based Wald test for weighted ones),
+falling back to the AIC difference with a message when the models are not nested or have
+different N. A comparison key \strong{adds} a row and restricts nothing.
 
-\code{"global"} (in the default set) adds one \strong{overall test per predictor} --- "is this variable
-associated with the outcome at all?", the question a block of stars against a reference category
-cannot answer, and the reason a multi-level factor needs more than its cells. It is shown for
-predictors carrying two or more coefficients (for a single-coefficient term it would simply repeat
-that cell's own p-value), and it costs \strong{no extra model fit}: it is a likelihood-ratio test on
-the fitted model (an F test for linear and quasi models, a design-based Wald test for weighted /
-survey models). Multinomial and ordinal outcomes get no such test.}
+\code{"global"} adds one \strong{overall test per predictor} --- "is this variable associated with the
+outcome at all?", the question a block of stars against a reference category cannot answer. It
+costs no extra fit and is shown for predictors carrying two or more coefficients.
+\code{"interaction"} needs \code{tab_vars} and adds one \strong{aggregated effect-modification test per
+predictor}, asked once for all its levels together, so it carries none of the multiplicity of
+the per-cell \code{color = "between_groups"} colours --- which turns it on for you. It costs one
+extra fit. Neither test is available for multinomial or ordinal outcomes.}
 
-\item{na}{Which rows each model is fitted on — the grain at which missing values are dropped.
+\item{na}{Which rows each model is fitted on --- the grain at which missing values are dropped.
 \code{"drop_by_outcome"} (default) gives every model \strong{of one outcome} the same complete-case
 population (no \code{NA} on the outcome, on any predictor of any model in the call, or on a design
-variable); a second outcome keeps its own rows. That is what makes the comparisons in the table
-honest: the observed columns (\code{empirical}) are then computed on exactly the model's rows, and
-nested models get equal N so the likelihood-ratio comparison can run instead of degrading to an
-AIC difference. \code{"drop_by_model"} lets each model use its own complete cases — every model then
-keeps as many rows as it can, at the price of comparability: models fitted on different people
-get no observed effect at all (no \code{obs}, no \code{color = "adjustment"}, no gap test), because the
-distance between two such estimates is listwise deletion rather than adjustment.
-\code{"drop_all"} shares one population across the whole call, all outcomes included.}
+variable); a second outcome keeps its own rows. That is what makes the comparisons honest: the
+observed columns are computed on exactly the model's rows, and nested models get equal N so the
+likelihood-ratio comparison can run instead of degrading to an AIC difference.
+\code{"drop_by_model"} lets each model use its own complete cases --- more rows, at the price of
+comparability: models fitted on different people get no observed effect at all. \code{"drop_all"}
+shares one population across the whole call, all outcomes included.}
 
 \item{display}{What each effect cell shows --- \code{\link[=tab]{tab()}}'s display grammar, same names, same
 meaning, on every family and on the crude column as well as the model one. \code{NULL} (default)
@@ -499,24 +352,21 @@ it. The named layouts:
 \itemize{
 \item \code{"est"} --- the effect alone.
 \item \code{"est_ci"} --- with a visible interval: \verb{1/2.22 [1/2.47; 1/1.99]}.
-\item \code{"est_base"} --- the effect, with the level beside it: \verb{1/2.22 (32.8\%)} on a logistic model,
+\item \code{"est_base"} --- the effect with the level beside it: \verb{1/2.22 (32.8\%)} on a logistic model,
 \code{-0.89 (2.25)} on a linear one. On a model column that level is the \strong{adjusted} prediction;
-on a crude column it is the observed percentage or mean.
+on a crude column the observed percentage or mean.
 \item \code{"base_est"} --- the mirror, level first: \verb{(32.8\%) 1/2.22}. The effect stays the number the
 cell is about (it carries the stars and the colour); the bracket is the aside.
 \item \code{"base"} --- the levels alone, still coloured and starred by the effect.
 }
 
 Or write a \code{{}} template: \code{"{est} (obs {obs})"} prints each adjusted effect next to the
-unadjusted one it is compared to, \code{"{est} ({gap})"} next to how far adjustment moved it (see
-\code{color = "adjustment"} below).
+unadjusted one, \code{"{est} ({gap})"} next to how far adjustment moved it.
 
 \code{display} is a \strong{post-hoc} property: every quantity it can name is already stored, so choosing
-a layout never triggers a computation and never changes a number --- and \code{\link[=set_display]{set_display()}} on a
-built table gives the same result as asking for it here. It may show an \strong{auxiliary} quantity
-of the same fit; it never changes the fit or the estimand, which is \code{measure}'s job alone.
-So \code{display = "est_base"} \emph{adds} the adjusted prediction beside the odds ratio, while
-\code{effect = "marginal"} makes the whole column a marginal effect.}
+a layout never triggers a computation and never changes a number --- \code{\link[=set_display]{set_display()}} on a built
+table gives the same result as asking for it here. It never changes the fit or the estimand,
+which is \code{measure}'s job alone.}
 
 \item{cleannames}{Logical. If \code{TRUE}, strips numeric prefixes from factor levels for display.
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
@@ -524,155 +374,96 @@ Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
 \item{subtext}{Optional character. A note shown below the table.}
 
 \item{parallel}{Opt-in parallel build of the models of one call, using the (Suggests-only)
-\pkg{mirai} package: several \code{outcome}s, a \code{predictors} list, or the \code{tab_vars} groups.
-\code{NULL} (default) reads \code{getOption("tabxplor.parallel")} (off); \code{FALSE} forces serial; \code{TRUE}
-uses an auto worker count; an integer sets the number of worker processes. Byte-identical to
-the serial result. It pays off for \strong{many, evenly sized} models against a survey-size data
-frame, and is a loss otherwise (the pool costs about a second to start, and two uneven models
-cannot gain much). One shape is always serial and says so when asked: a model comparison
-(\code{stats = "compare_*"}) is a test \emph{between} the fits, so they are built together. The worker
-pool persists for the session; release it with \code{\link[=tab_parallel_stop]{tab_parallel_stop()}}.}
+\pkg{mirai} package: several \code{outcome}s, a \code{predictors} list, or the \code{tab_vars} groups. \code{NULL}
+(default) reads \code{getOption("tabxplor.parallel")} (off); \code{FALSE} forces serial; \code{TRUE} uses an
+auto worker count; an integer sets the number of worker processes. Byte-identical to the serial
+result. It pays off for \strong{many, evenly sized} models against a survey-size data frame, and is a
+loss otherwise. A model comparison (\code{stats = "compare_*"}) is always serial and says so when
+asked: it is a test \emph{between} the fits, so they are built together. The worker pool persists for
+the session; release it with \code{\link[=tab_parallel_stop]{tab_parallel_stop()}}.}
 
 \item{...}{Not a user argument. It carries the internal \code{.fit_cache} (the jamovi live UI's fit
-cache environment), and it is what makes every argument removed or renamed while \code{tab_reg()}
-was in development --- \code{exponentiate}, \code{at}, \code{estimate_display}, \code{dependent}, \code{split_var},
+cache environment), and it is what makes every argument removed or renamed while \code{tab_reg()} was
+in development --- \code{exponentiate}, \code{at}, \code{estimate_display}, \code{dependent}, \code{split_var},
 \code{reference}, \code{method}, \code{compare}, \code{baseline}, \code{inverse_two_level_factors}, and the \code{effect}
-values \code{"ame"} / \code{"ame_ratio"} --- give an error naming its replacement at the moment of the
-mistake, rather than R's bare "unused argument".}
+values \code{"ame"} / \code{"ame_ratio"} --- give an error naming its replacement, rather than R's bare
+"unused argument".}
 }
 \value{
 A \code{tabxplor_grouped_tab} (grouped by predictor), one effect column per model / outcome.
 }
 \description{
 Fits one regression model per column and returns a \code{tabxplor} table of the per-family effect
-measure -- linear \strong{beta} (gaussian), \strong{odds ratios} (binomial / logistic), \strong{incidence-rate
-ratios} (poisson), \strong{multinomial odds ratios} (one column per outcome category vs the reference,
-nominal 3+ level), \strong{cumulative odds ratios} (ordinal / proportional-odds) -- one row per predictor
-level (the reference level shown as the neutral value \code{0} or \code{1}), grouped by predictor. Each cell
-stores the estimate, its confidence interval and p-value, so the table prints with significance
-stars, greys out non-significant effects, and exports (kable / Markdown / Excel) like any \code{tabxplor}
-crosstab.
+measure --- a linear \strong{mean difference} (gaussian), \strong{odds ratios} (binomial / logistic),
+\strong{incidence-rate ratios} (poisson), one \strong{odds-ratio column per outcome category} (nominal 3+
+level), a \strong{cumulative odds ratio} (ordinal) --- with one row per predictor level, the reference
+level shown as the neutral value \code{0} or \code{1}, grouped by predictor. Each cell stores its estimate,
+confidence interval and p-value, so the table prints with significance stars, greys out what is
+not significant, and exports (HTML / Markdown / Excel) like any \code{tabxplor} crosstab.
 }
 \details{
-New to regressions with tabxplor? A first model needs only three arguments: \code{data}, \code{outcome}
-(the outcome) and \code{predictors}. tabxplor picks the right model from the outcome's type --- a
-two-level factor gives logistic \strong{odds ratios}, a numeric gives linear \strong{betas}, a count gives
-Poisson \strong{rate ratios}, and a 3+ level factor gives multinomial or ordinal odds ratios --- so you
-rarely set \code{family} by hand. Add \code{empirical = TRUE} to show the crude (unadjusted) effect beside the
-model's adjusted one. See \code{vignette("tabxplor-reg")} for a guided tour.
+New to regressions with tabxplor? A first model needs three arguments: \code{data}, \code{outcome} and
+\code{predictors}. The model follows the outcome's type --- a two-level factor gives logistic \strong{odds
+ratios}, a numeric a linear \strong{mean difference}, a count Poisson \strong{rate ratios}, a 3+ level
+factor multinomial or ordinal odds ratios --- so you rarely set \code{family} by hand. Add
+\code{empirical = TRUE} to put the crude (unadjusted) effect beside each adjusted one. See
+\code{vignette("tabxplor-reg")} for a guided tour.
 
 The arguments fall into groups:
 \itemize{
-\item \strong{The model}: \code{data}, \code{outcome}, \code{predictors} (a character vector = one model; a named
-list = several models to compare), \code{family} (usually detected), \code{wt} (survey weights).
-\item \strong{What each cell shows}: \code{effect} (which contrast) x \code{measure} (which effect measure),
-\code{display} (the cell layout), \code{empirical} (crude vs adjusted effect).
-\item \strong{Colors & significance}: \code{color}, \code{color_signif}, \code{stars}, \code{conf_level} --- as in \code{\link[=tab]{tab()}}.
-\item \strong{Comparisons & structure}: \code{reference} (baseline levels), \code{tab_vars} (one table per
-group), \code{multiplier} (the unit a continuous predictor's effect is reported per — one standard
-deviation by default).
-\item \strong{Survey design}: \code{wt} for a simple weight, or a prebuilt \code{\link[survey:svydesign]{survey::svydesign()}} as \code{data}.
-\item \strong{The footer}: \code{stats} --- one argument for everything the model-summary block shows:
-the goodness-of-fit rows, the model checks (linearity, dispersion, influence, collinearity,
-proportionality) and the model-comparison test (\code{"compare_baseline"} / \code{"compare_sequential"}).
-\item \strong{Model checks}: \code{shape} (the cure for a non-linearity), and the plot
-\code{\link[=reg_check_plots]{reg_check_plots()}}. \item \strong{Chart}: \code{\link[=forest_plot]{forest_plot()}} draws the finished table.
+\item \strong{The model}: \code{data}, \code{outcome}, \code{predictors} (a character vector = one model, a named
+list = several models to compare), \code{family}, \code{wt} (survey weights).
+\item \strong{What each cell shows}: \code{effect} x \code{measure} (which contrast, which effect measure),
+\code{display} (the layout), \code{empirical} (the crude effect beside the adjusted one).
+\item \strong{Colours & significance}: \code{color}, \code{color_signif}, \code{stars}, \code{conf_level}, as in \code{\link[=tab]{tab()}}.
+\item \strong{Comparisons & structure}: \code{ref} (baseline levels), \code{outcome_level} (the level
+modelled), \code{tab_vars} (one table per group), \code{multiplier} (a continuous predictor's unit).
+\item \strong{The footer}: \code{stats} --- goodness-of-fit rows, model checks and the model comparison.
+\item \strong{Fixing what a check flags}: \code{shape}, drawn by \code{\link[=reg_check_plots]{reg_check_plots()}}. \strong{Charting the
+result}: \code{\link[=forest_plot]{forest_plot()}}.
 }
 
-\code{predictors} selects the mode: a \strong{character vector} fits one model, and \code{outcome} may itself
-be a vector -> one column per outcome; a \strong{named list} of predictor sets fits one model each ->
-one column per model (predictors absent from a model are left blank), for comparing specifications.
-
-\code{effect = "marginal"} switches from the native coefficient to \strong{average marginal effects} with the
-adjusted \strong{predicted probability} shown in parentheses (e.g. \verb{-8\%*** (16\%)}) -- a probability-scale,
-cross-model-comparable interpretation (Mood 2010), computed with the \code{marginaleffects} package.
-\code{effect = "at_reference"} instead evaluates at a \strong{reference profile} (other predictors held at their
-reference level / mean): the marginal effect \emph{at reference}, or -- for a multinomial
-\code{effect = "coefficient"} -- the odds ratio of each outcome category \emph{versus the rest} at that profile.
-
-Unweighted models use \code{\link[stats:lm]{stats::lm()}} / \code{\link[stats:glm]{stats::glm()}}; a \code{wt} weight column switches to a survey
-design (\code{\link[survey:svyglm]{survey::svyglm()}}), which gives correct design-based standard errors rather than the
-frequency-inflated ones of \code{glm(weights=)}. \code{broom} (always) and \code{survey} (only with \code{wt}) are
-optional dependencies.
-
-A \strong{nominal} outcome with 3+ unordered levels is fit as one multinomial logit (\code{\link[nnet:multinom]{nnet::multinom()}}),
-giving \strong{one odds-ratio column per non-reference outcome category} ("\verb{<category>} vs \verb{<reference>}:
-OR"). An \strong{ordered} outcome with 3+ levels is fit as a proportional-odds cumulative logit
-(\code{\link[MASS:polr]{MASS::polr()}}), giving one cumulative-odds-ratio column; the parallel-lines assumption is tested
-with the Brant test (install the \code{brant} package) and a warning is issued if it is violated.
-(Weighted 3+ level models are planned for a later release.)
-
-A \strong{summed-score} outcome (a count of "yes" answers out of a fixed number of items) is fit as a
-grouped binomial when you pass \code{trials} (the number of items). Power users can pass a \strong{model
-formula} as \code{outcome} -- \code{tab_reg(data, y ~ x1 + poly(x2, 2) + x1:x3)} -- driving the model
-directly; simple \code{y ~ a + b} formulas behave exactly like \code{outcome = "y"}, \code{predictors = c("a", "b")}, while interactions / \code{poly()} / \code{I()} terms render as best-effort term rows.
+\code{predictors} selects the mode: a \strong{character vector} fits one model, and \code{outcome} may then be a
+vector too (one column per outcome); a \strong{named list} of predictor sets fits one model each, one
+column per model, for comparing specifications (a predictor absent from a model leaves its cells
+blank).
 }
 \section{Model checks}{
 
 
-Five checks, in the order of what each one threatens --- the estimate, what the estimate means, its
-interval, whether it is real at all, and why it is wide. Each is a footer row, so it travels into
-every export, and each is named in \code{stats}.
-
-Three of them --- \strong{Dispersion}, \strong{Influence} and \strong{Collinearity} --- are arithmetic on the model
-already fitted, so they ride the default footer and cost nothing. The other two fit a model:
-\strong{Linearity} refits once per numeric predictor and \strong{Proportionality} fits the Brant test's
-auxiliary logits. Those two are therefore \strong{asked for by name} ---
-\code{stats = c("n", "aic", "linearity")}, or \code{stats = "all"} for every check this model allows.
-The cheap answer to the same question is already on screen either way: the observed shape of each
-numeric predictor is binned with no fit at all and drawn as the row's sparkline, and
-\code{\link[=reg_check_plots]{reg_check_plots()}} draws the full diagnostic panel for \strong{every} check, free of the footer.
+Five checks, in the order of what each one threatens --- the estimate, what the estimate means,
+its interval, whether it is real at all, and why it is wide. Each is a footer row, so it travels
+into every export, and each is named in \code{stats}.
 
 \describe{
-\item{\strong{Linearity} (p-value, per numeric predictor; costs one model fit)}{Is this predictor's
-effect really one straight line? The model is refitted with that predictor's centred squared
-term and the two compared. A small p says one slope is the wrong summary --- and the damage is \strong{not confined to
-that row}: on the model used throughout \code{vignette("tabxplor-reg")}, letting \code{age} curve moves
-the top income category's odds ratio by 24 \% and flips another income level's conclusion at the
-5 \% threshold.}
-\item{\strong{Proportionality (Brant)} (p-value, ordinal outcomes; costs one model fit)}{Is one cumulative odds ratio enough
-for every cut of the outcome? Read it beside the size of the departure: at survey sample sizes
-this test rejects on differences the eye calls mild. Weighted ordinal models (\code{svyolr}) have no
+\item{\strong{Linearity} (p-value, per numeric predictor)}{Is this predictor's effect really one
+straight line? The model is refitted with that predictor's centred squared term and the two
+compared. The damage a curve does is \strong{not confined to its own row}. Cure it with \code{shape}.}
+\item{\strong{Proportionality (Brant)} (p-value, ordinal outcomes)}{Is one cumulative odds ratio
+enough for every cut of the outcome? Read it beside the size of the departure: at survey
+sample sizes it rejects on differences the eye calls mild. Weighted ordinal models have no
 Brant fit, so the row is absent rather than approximated.}
-\item{\strong{Dispersion (robust/model SE)} (a ratio)}{Are the standard errors wide enough? The largest
-ratio, over the coefficients, of a robust (sandwich) standard error to the model-based one. About
-1 means the family's variance assumption holds; above 1 it does not --- over-dispersion,
-heteroscedasticity or clustering, by roughly that factor. For a count model it is close to the
-square root of the Pearson dispersion, and it correctly returns to about 1 once
-\code{family = "quasipoisson"} has widened the intervals (while \code{"phi"} still reports the
-dispersion). Under a survey design it measures what the design did to the standard errors, which
-are already the design's --- nothing to act on.}
+\item{\strong{Dispersion (robust/model SE)} (a ratio)}{Are the standard errors wide enough? The
+largest ratio of a robust (sandwich) standard error to the model-based one. About 1 means the
+family's variance assumption holds; above 1 it does not --- over-dispersion,
+heteroscedasticity or clustering, by roughly that factor.}
 \item{\strong{Influence (max dfbetas)} (a ratio)}{Does one respondent carry the result? The largest
-change, over coefficients and observations, that dropping a single observation makes to a
-coefficient, in units of that coefficient's own standard error. It is printed as a
-\emph{reassurance}: with thousands of respondents no single one should move anything, and a near-zero
-value is the finding. Note that influence is not outlyingness --- a surprising outcome with an
-ordinary covariate profile moves nothing.}
-\item{\strong{Collinearity (max VIF)} (a ratio)}{Can the data tell these predictors apart? The largest
-variance inflation factor (\code{car::vif()}, on one scale whatever a term's degrees of freedom).
-It is the one check that is not a comparison with the data: collinearity biases nothing, it only
-widens intervals, and a wide interval already shows that. It is here because it is what every
-textbook teaches first. Needs the \code{car} package; refused for multinomial outcomes.}
+change dropping a single observation makes to a coefficient, in units of its own standard
+error. Printed as a \emph{reassurance}: with thousands of respondents a near-zero value is the
+finding. Influence is not outlyingness.}
+\item{\strong{Collinearity (max VIF)} (a ratio)}{Can the data tell these predictors apart? The
+largest variance inflation factor (\code{car::vif()}). The one check that is not a comparison with
+the data --- collinearity biases nothing, it only widens intervals. Needs \code{car}; refused for
+multinomial outcomes.}
 }
 
-Two cautions. A curvature test on one predictor can pick up \strong{another} predictor's
-mis-specification when the two are near-collinear --- one more reason the collinearity row sits in
-the same block. And at survey sample sizes a diagnostic p-value rejects almost anything, which is
-why three of the five report a \emph{magnitude} rather than a p-value.
-
-\code{"interaction"} is different from the others: with \code{tab_vars}, it adds one \strong{aggregated
-effect-modification test per predictor} — "does this predictor act differently between the
-groups?", asked once for all its levels together, so it carries none of the multiplicity of the
-per-cell \code{color = "between_groups"} colours. It is printed as a footer line rather than a footer
-row (a pooled test belongs to no single model column), and it costs one extra model fit.
-\code{color = "between_groups"} turns it on for you. It is a likelihood-ratio test (an F test for
-linear and quasi models, a design-based Wald test for weighted / survey models, exactly like
-\code{compare}) on the model \strong{coefficients} — so under a marginal contrast the footer
-and the colours answer related but distinct questions, and the line says so. Multinomial and
-ordinal outcomes get no such test.
-
-Weighted models show a reduced, survey-appropriate set of goodness-of-fit statistics
-(design-based Wald test, Nagelkerke pseudo-R square, AIC).
+Dispersion, Influence and Collinearity are arithmetic on the model already fitted, so they ride
+the default footer and cost nothing; Linearity and Proportionality fit a model and are therefore
+\strong{asked for by name} (\code{stats = c("n", "aic", "linearity")}, or \code{stats = "all"}). The cheap answer
+is on screen either way: each numeric predictor's observed shape is binned with no fit at all and
+drawn as the row's sparkline, and \code{\link[=reg_check_plots]{reg_check_plots()}} draws the full panel for \strong{every} check.
+At survey sample sizes a diagnostic p-value rejects almost anything, which is why three of the
+five report a \emph{magnitude} instead.
 }
 
 \section{Out of scope}{
@@ -725,25 +516,17 @@ table with its per-cell status.
           family = "binomial")
 
 \donttest{
-  # linear (betas):
-  tab_reg(reg_data, outcome = "tvhours", predictors = c("rincome", "age"),
-          family = "gaussian")
-  # to use normal R model formulas instead (same model, terser):
+  # linear (mean differences), and the same model written as a formula:
+  tab_reg(reg_data, outcome = "tvhours", predictors = c("rincome", "age"), family = "gaussian")
   tab_reg(reg_data, married ~ race + rincome, family = "binomial")
 
- # logistic : comparison between observed odds-ratio and modelised odds-ratio
+  # the observed odds ratio beside the modelled one:
   tab_reg(reg_data, outcome = "married", predictors = c("race", "rincome"),
-          family = "binomial", empirical = TRUE
-  )
-# average marginal effects + adjusted predictions (needs the marginaleffects package):
+          family = "binomial", empirical = TRUE)
+
+# average marginal effects, as a RATIO: with a common outcome this is what a reader means by
+# "x times more likely" -- an odds ratio is not. (Needs the marginaleffects package.)
 if (requireNamespace("marginaleffects", quietly = TRUE)) {
-  tab_reg(reg_data, outcome = "married", predictors = c("race", "rincome"),
-                family = "binomial", effect = "marginal")
-  # the same contrast at the reference profile (others at their reference level / mean):
-  tab_reg(reg_data, outcome = "married", predictors = c("race", "rincome"),
-                family = "binomial", effect = "at_reference")
-  # the same quantity as a RATIO: marginal risk ratios beside the crude ones. With a common
-  # outcome this is what a reader means by "x times more likely" -- an odds ratio is not.
   tab_reg(reg_data, outcome = "married", predictors = c("race", "rincome"),
                 family = "binomial", effect = "marginal", measure = "ratio", empirical = TRUE)
 }
@@ -751,11 +534,6 @@ if (requireNamespace("marginaleffects", quietly = TRUE)) {
 # (Zou 2004), a log link with robust standard errors. Ask for the measure, not the distribution.
   tab_reg(reg_data, outcome = "married", predictors = c("race", "rincome"),
                 measure = "ratio", empirical = TRUE)
-# ... and the risk DIFFERENCE, from an identity-link (additive-risk) fit:
-  tab_reg(reg_data, outcome = "married", predictors = c("race", "rincome"),
-                measure = "difference")
-# what this outcome can be modelled as, with the reason wherever it cannot:
-  reg_measures(reg_data, "married")
 # multinomial (nominal 3+ level): one OR column per outcome category vs the baseline
   tab_reg(reg_data, outcome = "party3", predictors = c("race", "age"),
                 family = "multinomial", outcome_level = c(party3 = "3-Republican"))
@@ -766,25 +544,24 @@ if (requireNamespace("marginaleffects", quietly = TRUE)) {
 }
 \references{
 Clogg, C. C., Petkova, E. & Haritou, A. (1995). Statistical Methods for Comparing Regression
-Coefficients between Models. \emph{American Journal of Sociology}, 100(5), 1261-1293. (With
-Allison, P. D. (1995), \emph{ibid.} 1294-1305.) --- the crude-versus-adjusted comparison
-\code{color = "adjustment"} implements, generalised here to GLMs, survey designs and marginal effects.
+Coefficients between Models. \emph{American Journal of Sociology}, 100(5), 1261-1293 (with
+Allison, P. D. (1995), \emph{ibid.} 1294-1305) --- the comparison \code{color = "adjustment"} implements.
 
 Karlson, K. B., Holm, A. & Breen, R. (2012). Comparing Regression Coefficients Between Same-sample
-Nested Models Using Logit and Probit. \emph{Sociological Methodology}, 42(1), 286-313. --- the KHB
-decomposition, which separates confounding from rescaling in nested logit models.
+Nested Models Using Logit and Probit. \emph{Sociological Methodology}, 42(1), 286-313 --- the KHB
+decomposition, separating confounding from rescaling in nested logit models.
 
 Zou, G. (2004). A Modified Poisson Regression Approach to Prospective Studies with Binary Data.
 \emph{American Journal of Epidemiology}, 159(7), 702-706.
 
 Altman, D. G. & Bland, J. M. (2003). Interaction revisited: the difference between two estimates.
-\emph{BMJ}, 326, 219. --- the \code{color = "between_groups"} test.
+\emph{BMJ}, 326, 219 --- the \code{color = "between_groups"} test.
 
 Santos Silva, J. M. C. & Tenreyro, S. (2006). The log of gravity. \emph{The Review of Economics and
-Statistics}, 88(4), 641-658. --- \code{measure = "ratio"} on a continuous outcome.
+Statistics}, 88(4), 641-658 --- \code{measure = "ratio"} on a continuous outcome.
 }
 \seealso{
-\code{\link[=forest_plot]{forest_plot()}} draws the finished table -- every effect with its interval, its stars and
-its colour, and (with \code{empirical = TRUE}) the observed effect beside it with the margin of error
-of the gap. \code{\link[=reg_check_plots]{reg_check_plots()}} draws the model checks. \code{\link[=tab]{tab()}} for cross-tables.
+\code{\link[=forest_plot]{forest_plot()}} draws the finished table --- every effect with its interval, its stars
+and its colour, and (with \code{empirical = TRUE}) the observed effect beside it with the margin of
+error of the gap. \code{\link[=reg_check_plots]{reg_check_plots()}} draws the model checks. \code{\link[=tab]{tab()}} for cross-tables.
 }

@@ -1,39 +1,48 @@
-# Phase 18z15 -- THE model checks of a `tab_reg()` table, their CURE (`shape =`) and the
-# primitives its plots are drawn from.
-#
+# PURPOSE: THE MODEL CHECKS of a tab_reg() table, the `shape =` CURE for what they flag, and the
+#   primitives their plots are drawn from.
 # ROLE: one fact table (REG_CHECKS), one selection rule (reg_checks_for), one producer
-# (reg_check_rows) and one label builder (reg_check_spec_entries). Adding a check is ONE row: the
-# footer label, the `stats =` value, the `check =` value and the panel title all derive from it, so
-# they cannot drift -- the REG_EMPIRICAL / reg_crude_shape pattern of Phase 17h.
+#   (reg_check_rows) and one label builder (reg_check_label). Adding a check is ONE row: the footer
+#   label, its `stats =` value, its `check =` value and its panel title all derive from that row, so
+#   they cannot drift.
 #
-# THE IDEA. tabxplor's headline feature is a comparison: `Model_OR` beside `Obs_OR`, coloured by the
-# gap and tested by `gap_se`. Every check here is that same comparison applied to something other than
-# an effect -- the SHAPE of a numeric predictor's effect (Linearity), the SPREAD of the outcome
+# THE IDEA. tabxplor's headline feature is a comparison -- Model_OR beside Obs_OR, coloured by the
+# gap and tested by `gap_se`. Every check here is that same comparison applied to something other
+# than an effect: the SHAPE of a numeric predictor's effect (Linearity), the SPREAD of the outcome
 # (Dispersion), the MEANING of an ordinal effect (Proportionality), the WEIGHT of one respondent
-# (Influence). Collinearity is the one exception and says so (it is a property of the design matrix,
-# it biases nothing) -- it is here because it is what every textbook and jamovi's own Assumption
-# Checks pane put first, so its absence would read as an omission.
+# (Influence). Collinearity is the declared exception and says so -- it is a property of the design
+# matrix and biases nothing -- and it is here because it is what every textbook, and jamovi's own
+# Assumption Checks pane, puts first, so its absence would read as an omission.
 #
-# NOTHING HERE IS A NEW STATISTIC ENGINE. Four of the five reuse code the package already owns:
+# NOTHING HERE IS A NEW STATISTICS ENGINE. Four of the five reuse code the package already owns:
 #   Linearity       reg_fit(add_terms =) + reg_nested_test()  -- both fits in hand, no second one
 #   Proportionality reg_ordinal_diagnostic()                  -- the Brant test, run where its row is
 #   Dispersion      reg_check_influence_pass() + reg_if_se()  -- the sandwich, design-aware
 #   Influence       reg_check_influence_pass()                -- the SAME sweep, read the other way
 #   Collinearity    car::vif()                                -- the one new Suggest
 #
-# EACH COSTS WHAT IT SAYS (Phase 20f). Two of the five need a model fit -- Linearity one per numeric
-# predictor, Proportionality the Brant test's J-1 logits -- and `REG_CHECKS$cost` declares that, which
-# is what keeps them out of the default `stats` set and reachable by name. The other three are
-# arithmetic on the fit already in hand, and the two influence-based ones share one sweep.
+# EACH COSTS WHAT IT SAYS. Two of the five need a model fit -- Linearity one per numeric predictor,
+# Proportionality the Brant test's auxiliary logits -- and REG_CHECKS$cost declares that, which is
+# what keeps them out of the default `stats` set and reachable by name. The other three are
+# arithmetic on the fit already in hand, and the two influence-based ones share one sweep. What is
+# opt-in is the p-value, not the diagnostic: reg_curves() bins the observed shape with no fit at all,
+# and the row sparkline and the reg_check_plots() panels draw it for free.
+#
+# THE CURE IS PART OF THE CHECK. `shape =` is how a user fixes a non-linearity without leaving the
+# framework, and its design rule keeps it small: a shape either RECODES THE COLUMN or ADDS ONE TERM,
+# nothing else. A quantile-cut predictor genuinely IS a factor, so it inherits the saturated crude
+# twin, the per-level counts, colours and gap tests for free.
 #
 # WARNING -- i18n. `noun` and the `types` values (the instrument) are BARE MSGIDS and are never
 # gettext()'d in the list: a top-level list evaluates ONCE at load, which would freeze the msgid at
 # the build locale and make with_legend_lang()'s LANGUAGE switch a no-op. gettext() is applied by
-# reg_check_spec_entries(), at render. Because those gettext() calls are DYNAMIC (gettext(ck$noun)),
-# potools cannot see them -- hence the dead-code extraction anchor at the bottom of this file, the
-# same device legend_measure_word() uses for the MEASURES words.
+# reg_check_label(), at render. Because those calls are DYNAMIC (gettext(ck$noun)), potools cannot
+# see them -- hence the dead-code extraction anchor at the bottom of this file, the same device
+# legend_measure_word() uses for the MEASURES words.
 #
-# See: dev/regression_assumptions_plots.md (the design, its measurements and its twelve rulings).
+# WARNING: this file sorts BEFORE R/reg-estimand.R, so REG_CHECK_FAMILIES cannot be derived from
+# REG_FIT_FAMILY; the exhaustiveness is asserted at load instead (R/zzz-fact-keys.R).
+# See: CLAUDE.md section "tabxplor architecture" (the regression subsystem);
+#      dev/regression_assumptions_plots.md (the panel designs and their measurements).
 
 
 # === SECTION: the fact table ========================================================================
@@ -41,23 +50,16 @@
 # Every family a check can be asked about. `grouped` (a summed-score binomial) is a flag on top of
 # "binomial", never a family of its own, so it needs no entry.
 #
-# ⚠ Phase 19l: it must name every INTERNAL LINK KEY too (`rr` / `rd` / `mr`, REG_FIT_FAMILY in
-# R/reg-estimand.R). It named only `rr`, and `reg_checks_for()` filters on `sp$fit_family`, which IS
-# `est$fit` -- so `tab_reg(family = "binomial", measure = "difference")` and
-# `tab_reg(family = "gaussian", measure = "ratio")`, the two estimands 19e added, got ZERO assumption
-# checks and ZERO diagnostic panels, silently. A link chosen to reach a MEASURE is still the same
-# distribution underneath.
-# It cannot be DERIVED here (this file loads before R/reg-estimand.R, and REG_CHECKS below consumes
-# it at build time), so the exhaustiveness is a build-time stopifnot at the end of reg-estimand.R --
-# the same idiom fmt_attr_rules and MEASURES use.
+# ⚠ must name every INTERNAL LINK KEY too (`rr` / `rd` / `mr`, REG_FIT_FAMILY in R/reg-estimand.R),
+# not just the outcome families -- a link chosen to reach a MEASURE is still the same distribution
+# underneath. (Load order: see the file header; exhaustiveness is asserted at the end of reg-estimand.R.)
 #' @keywords internal
 REG_CHECK_FAMILIES <- c("gaussian", "binomial", "poisson", "quasipoisson",
                         "multinomial", "ordinal", "rr", "rd", "mr")
 
 # The DISTRIBUTION behind a fit key: `rd`/`rr` are binomial, `mr` is gaussian, everything else is
-# itself. Every check that dispatches on the family reads this, never the raw key -- otherwise a link
-# key falls through every arm and lands on whatever the last `else` happens to be (measured: `mr`
-# would have been read as an ordinal/multinomial outcome, and handed to pbinom()).
+# itself. Every check that dispatches on family reads this, never the raw key, or a link key falls
+# through every arm into the last `else` (e.g. `mr` landing on pbinom()).
 #' @keywords internal
 reg_check_family_of <- function(f) {
   d <- unname(REG_FIT_FAMILY[f])
@@ -66,23 +68,18 @@ reg_check_family_of <- function(f) {
 
 # ONE row per check.
 #   noun          the assumption, as a word the reader already knows (a msgid)
-#   types         discriminator -> INSTRUMENT (a msgid). The label is "<noun> (<instrument>)", the
-#                 convention Phase 18m set for the crosstab summary ("pvalue (Chi2, Welch F)").
-#                 A term test carries three discriminators because exactly one of LR / F / Wald fires,
-#                 and which one is a fact about the model the reader should see.
-#                 EMPTY = the check is TAUGHT but never SCORED: it contributes a panel and no footer
-#                 row (SS14 -- the two panels that measured as non-discriminating checks).
+#   types         discriminator -> INSTRUMENT (a msgid). The label is "<noun> (<instrument>)" (the
+#                 crosstab summary's own convention, "pvalue (Chi2, Welch F)"). A term test carries
+#                 three discriminators because exactly one of LR / F / Wald fires, and which one is a
+#                 fact about the model the reader should see. EMPTY = the check is TAUGHT but never
+#                 SCORED: it contributes a panel and no footer row.
 #   kind/digits   the reg_footer_spec() rendering (a p-value cell, or a gof number with `digits`)
 #   families      where the check is defined at all
 #   weighted_ok   FALSE = refused on a weighted / design fit (never approximated)
 #   per_predictor one row per (model column x predictor) rather than one per model column
-#   cost          "free"  = arithmetic on the fit already in hand -- in the DEFAULT `stats` set
-#                 "refit" = it fits a model, so the user asks for it by name (Phase 20f). Measured:
-#                 the fit-based pair was 87 % of a default binomial table at n = 200 000 and 80 % of
-#                 an ordinal one. The cheap answer to the same question is already shown for free --
-#                 reg_curves() bins the observed shape with no fit at all, and the row sparkline and
-#                 the reg_check_plots() panels draw it -- so what is opt-in here is the p-value, not
-#                 the diagnostic. `stats = "all"` turns every one of them on.
+#   cost          "free"  = arithmetic on the fit already in hand -- in the DEFAULT `stats` set.
+#                 "refit" = it fits a model, so the user asks for it by name. `stats = "all"` turns
+#                 every one of them on.
 #   panel         the reg_check_plots() panel this check draws (NA = no panel), and the `check =`
 #                 vocabulary. `auto` draws every panel the family allows. ⚠ INDEPENDENT of `cost`:
 #                 a panel is always free, which is why reg_check_plots() never filters on it.
@@ -123,10 +120,9 @@ REG_CHECKS <- list(
     kind = "gof", digits = 2L,
     families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
     per_predictor = FALSE, cost = "free", panel = "collinearity"),
-  # TAUGHT, NEVER SCORED (SS14). Both were measured NOT to discriminate as verdicts -- binned residuals
-  # put 45 % of bins outside the band for the mis-specified model against 40 % for the corrected one,
-  # and normality is irrelevant to coefficient inference at survey n -- but both are the canonical
-  # lessons, so they keep their panel and give up their row. An empty `types` IS that statement.
+  # TAUGHT, NEVER SCORED. Both were measured not to discriminate as verdicts, but both are the
+  # canonical lessons, so they keep their panel and give up their row -- an empty `types` IS that
+  # statement.
   residuals = list(
     noun = "Residuals", types = character(0), kind = NA_character_, digits = NA_integer_,
     families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
@@ -142,11 +138,9 @@ REG_CHECKS <- list(
 reg_check_types <- function() unlist(lapply(REG_CHECKS, function(ck) names(ck$types)),
                                      use.names = FALSE)
 
-# THE selection rule: which checks apply to this fit? Read by reg_footer_stats() (the default set +
-# the `stats =` vocabulary), by reg_check_rows() (what to compute) and by reg_check_plots()
-# (`what = "panel"`, which keeps the taught-but-unscored rows and drops any check with no panel).
-# `has_fit` is FALSE on the jamovi digest path, which deliberately keeps no model frame -- every
-# check reads the fit, so they degrade to absent there rather than to a wrong number.
+# THE selection rule: which checks apply to this fit? Read by reg_footer_stats(), reg_check_rows()
+# and reg_check_plots(). `has_fit` is FALSE on the jamovi digest path (no model frame kept) -- checks
+# degrade to absent there rather than to a wrong number.
 #' @keywords internal
 reg_checks_for <- function(family, weighted = FALSE, has_fit = TRUE,
                            what = c("footer", "panel")) {
@@ -160,10 +154,8 @@ reg_checks_for <- function(family, weighted = FALSE, has_fit = TRUE,
   }, logical(1))]
 }
 
-# The DEFAULT footer set: the applicable checks that cost no model fit (Phase 20f). Its ONE caller is
-# reg_footer_stats()'s default composition -- reg_check_rows() keeps asking reg_checks_for(), so a
-# check named in `stats =` is still computed and still shown. Default set vs vocabulary, not
-# vocabulary vs nothing.
+# The DEFAULT footer set: the applicable checks that cost no model fit. A check named explicitly in
+# `stats =` is still computed and shown -- default set vs vocabulary, not vocabulary vs nothing.
 #' @keywords internal
 reg_checks_default <- function(family, weighted = FALSE, has_fit = TRUE) {
   keys <- reg_checks_for(family, weighted, has_fit, what = "footer")
@@ -196,16 +188,10 @@ reg_check_expand <- function(stats) {
   if (is.null(out)) character(0) else out
 }
 
-# The TEST_ROWS rows the checks contribute -- one per discriminator (Phase 20c, KEY 5). GENERATED
-# rather than declared literally beside the other 32, because REG_CHECKS owns facts TEST_ROWS must
-# not: `families`, `weighted_ok`, `panel`, and the two taught-but-never-scored checks that have a
-# panel and NO test row at all. Declaring them twice would make `types` a second encoding of the
-# same ladder.
-# `noun` is the CHECK's (one per check); only `instrument` varies per row -- which is exactly why
-# the generator exists rather than three near-identical literals for `linearity`.
-# ⚠ `digits` is emitted only for a "gof" check: a pvalue row's digits is never read (only
-# `kind == "gof"` consults it), and leaving the member absent gives every p-value row in TEST_ROWS
-# the one shape. See the `digits` note in R/tab-test-display.R's TEST_ROWS header.
+# The TEST_ROWS rows the checks contribute -- one per discriminator. GENERATED rather than declared
+# literally: REG_CHECKS owns facts TEST_ROWS must not (`families`, `weighted_ok`, `panel`), so
+# declaring them twice would make `types` a second encoding of the same ladder.
+# ⚠ `digits` is emitted only for a "gof" check. See the `digits` note in R/tab-test-display.R.
 #' @keywords internal
 #' @noRd
 test_rows_from_checks <- function() {
@@ -234,9 +220,8 @@ REG_CHECK_KEY_OF <- local({
   as.list(k)
 })
 
-# instrument msgid -> the TEST_ROWS `method` key. Only the three that are a real term-test instrument
-# map; a check whose instrument names a quantity ("max VIF") has no method, and NULL becomes NA in
-# TEST_ROWS' own defaulting. Asserted round-trip in R/tab-test-display.R's tail.
+# instrument msgid -> the TEST_ROWS `method` key. Only the three real term-test instruments map; a
+# check naming a quantity ("max VIF") has no method, and NULL becomes NA in TEST_ROWS' defaulting.
 #' @keywords internal
 #' @noRd
 REG_CHECK_METHOD <- list(LR = "lr", F = "f", Wald = "wald")
@@ -254,7 +239,7 @@ reg_check_label <- function(noun, instrument) {
 
 # The design object a sandwich must be computed against: a linearized survey design when the fit is
 # one, NULL otherwise (then reg_if_se() falls back to the sum of squares). A replicate design needs
-# withReplicates, which svyrecvar cannot do -- refuse rather than approximate, as z8-B already does.
+# withReplicates, which svyrecvar cannot do -- refuse rather than approximate.
 #' @keywords internal
 reg_check_design <- function(fit) {
   des <- if (inherits(fit, "svyglm")) fit$survey.design else NULL
@@ -262,20 +247,15 @@ reg_check_design <- function(fit) {
   des
 }
 
-# THE fit's coefficient covariance, resolved once (Phase 20f). It is a per-fit constant that checks 3
-# and 4 each used to recompute twice -- four times per fit -- and on a multinomial fit ONE call is
-# `nnet:::multinomHess` re-deriving the whole Hessian, measured at 0.757 s against a 1.10 s table.
-# Returns NULL rather than a substitute: reg_check_model_se() below keeps its own svy_vglm
-# degradation, because `fit$var` is a SANDWICH and handing that to reg_score_polr() as the bread
-# would double-count the design (the trap that function's own WARNING documents).
+# THE fit's coefficient covariance, resolved once (checks 3 and 4 both need it). Returns NULL rather
+# than a substitute: `fit$var` is a SANDWICH, and handing it in as the bread would double-count the
+# design (the trap reg_score_polr()'s own WARNING documents).
 #' @keywords internal
 reg_fit_vcov <- function(fit) tryCatch(stats::vcov(fit), error = function(e) NULL)
 
-# The model-based standard errors, on the fit's NATIVE coefficient scale, in vcov order. This is the
-# denominator of both Dispersion and Influence, and taking it from vcov() rather than from the printed
-# `tidy` is what makes Dispersion answer the question SS9.2 states: vcov() already carries a
-# quasi-likelihood's estimated dispersion (so a quasipoisson fit reads ~1) while a plain poisson's
-# does not (so it reads ~sqrt(phi)) -- the two families' rows then say different, true things.
+# The model-based standard errors, on the fit's NATIVE scale, in vcov order -- the denominator of
+# both Dispersion and Influence. Taken from vcov(), not the printed `tidy`: vcov() already carries a
+# quasi-likelihood's dispersion (so quasipoisson reads ~1) while plain poisson does not (~sqrt(phi)).
 #' @keywords internal
 reg_check_model_se <- function(fit, V = NULL) {
   if (is.null(V)) V <- reg_fit_vcov(fit)
@@ -290,43 +270,28 @@ reg_check_model_se <- function(fit, V = NULL) {
   se
 }
 
-# Check 3 -- DISPERSION, as max_j |SE_robust,j / SE_model,j|.
-#
-# One number replacing four textbook checks: it reads ~1 when the family's variance assumption holds,
-# and above 1 under over-dispersion, heteroscedasticity or clustering. It never touches df.residual,
-# which is why it is computable on a clustered design where the Pearson phi is not (df.residual of an
-# svyglm is the DESIGN df).
+# Check 3 -- DISPERSION, as max_j |SE_robust,j / SE_model,j|: one number replacing four textbook
+# checks, reading ~1 when the family's variance assumption holds and above 1 under over-dispersion,
+# heteroscedasticity or clustering. It never touches df.residual, so it works on a clustered design
+# where the Pearson phi does not (df.residual of an svyglm is the DESIGN df).
 #' @keywords internal
 reg_check_dispersion <- function(fit, V = NULL)
   reg_check_influence_pass(fit, "dispersion", V)[["dispersion"]]
 
-# Check 4 -- INFLUENCE, as max_j max_i |dfbetas_ij|: "no single respondent moves any coefficient by
-# more than X of its own standard error". dfbetas rather than Cook's distance because Cook's D is
-# unreadable at survey n (its conventional cutoff of 1 fires at no sample size measured) while a
-# standardized change is scale-free at any n.
-#
-# The one-step dfbeta IS the influence function the package already computes: IF_i(e_j) =
-# (A^-1 X_i' W_i r_i)_j, which is dfbeta_ij up to the (1 - h_i) leverage correction -- measured
-# against stats::dfbetas() at correlation 0.999999 (0.214 vs 0.215) on the vignette's own model. And
-# unlike base R it exists for polr / multinom, and it is design-aware.
-#
-# WARNING: never materialise the n x p matrix (reg-influence.R's memory contract). The loop keeps a
-# running maximum and discards each length-n vector.
+# Check 4 -- INFLUENCE, as max_j max_i |dfbetas_ij|: no single respondent moves any coefficient by
+# more than X of its own SE. dfbetas rather than Cook's distance (unreadable at survey n). The
+# one-step dfbeta IS the influence function the package already computes, so it exists for
+# polr / multinom (unlike base R) and is design-aware.
 #' @keywords internal
 reg_check_influence <- function(fit, V = NULL)
   reg_check_influence_pass(fit, "influence", V)[["influence"]]
 
-# THE pass both of them are (Phase 20f). Checks 3 and 4 are ONE decomposition read two ways: the same
-# vcov, the same influence closure, and the same p unit contrasts -- of which dispersion keeps
-# `reg_if_se(d)` and influence keeps `max|d|`. Computing them separately meant two vcov() calls each,
-# and two full sweeps of length-n influence vectors, for numbers derived from the same object; the
-# fmt_gap_parts() idiom, applied where it was missing.
+# THE pass both checks 3 and 4 are: ONE decomposition read two ways -- the same vcov, the same
+# influence closure, the same p unit contrasts. Dispersion keeps `reg_if_se(d)`, influence keeps
+# `max|d|`; `want` lets a table that asked for just one of them pay for just one.
 #
-# The two footer ROWS stay two declared rows (REG_CHECKS is unchanged) -- only the arithmetic merges,
-# and `want` is what lets a table that asked for just one of them pay for just one.
-#
-# WARNING: never materialise the n x p matrix (reg-influence.R's memory contract). The loop keeps two
-# running maxima and discards each length-n vector.
+# WARNING: never materialise the n x p matrix (the memory contract R/reg-influence.R states). The
+# loop keeps two running maxima and discards each length-n vector.
 #' @keywords internal
 reg_check_influence_pass <- function(fit, want = c("dispersion", "influence"), V = NULL) {
   none <- c(dispersion = NA_real_, influence = NA_real_)
@@ -363,12 +328,10 @@ reg_check_influence_pass <- function(fit, want = c("dispersion", "influence"), V
 # Check 5 -- COLLINEARITY, as the largest variance inflation factor.
 #
 # car::vif() returns a bare VIF per term when every term is 1-df, and a (GVIF, Df, GVIF^(1/(2Df)))
-# matrix as soon as one is not. Those are different scales, so the matrix form is squared back onto
-# the familiar VIF scale (what performance::check_collinearity() reports) -- a 1-df term then gives
-# exactly its VIF either way, and the usual 5 / 10 readings apply to one column of numbers.
+# matrix otherwise -- different scales, so the matrix form is squared back onto the familiar VIF scale
+# (what performance::check_collinearity() reports), and the usual 5 / 10 readings apply either way.
 #
-# `car` is Suggests-only: absent -> no row, never a hand-rolled substitute (the det-ratio alternative
-# was measured at 11.45 where car returns 1.01 on a polr fit).
+# `car` is Suggests-only: absent -> no row, never a hand-rolled substitute.
 #' @keywords internal
 reg_check_collinearity <- function(fit) {
   if (!requireNamespace("car", quietly = TRUE)) return(NA_real_)
@@ -382,45 +345,23 @@ reg_check_collinearity <- function(fit) {
   max(val)
 }
 
-# Check 1 -- LINEARITY, per numeric predictor: the model plus this predictor's CENTRED SQUARED term.
-# This is car::residualPlots()'s curvature test, design-correct for free -- and deliberately NOT the
-# cheaper no-refit Rao score test, which returns the IDENTICAL p on a weights-only and on a
-# stratified+clustered design where the design-based Wald differs by thirty orders of magnitude.
+# Check 1 -- LINEARITY, per numeric predictor: the model plus this predictor's CENTRED SQUARED term
+# (car::residualPlots()'s curvature test). NOT the cheaper no-refit Rao score test, whose p can
+# disagree with the design-based Wald by orders of magnitude.
 #
-# THE CHECK COSTS EXACTLY ONE FIT (Phase 20f). The augmented likelihood IS the test, so that fit is
-# irreducible; the SECOND one was not. Until 20f the row went through reg_term_tests() -> drop1(),
-# which refits the reduced model -- and the reduced model is `base_fit`, already in hand. Measured:
-# 1.02 s against 0.028 s at n = 200 000, and the check is the largest single cost of a default
-# tab_reg() call. reg_nested_test() is now the FIRST choice, not the fallback it was.
+# It IS what drop1() returns on both arms: the LR arm doubles the log-likelihood difference; the F
+# arm reads the two deviances against the AUGMENTED fit's `deviance / df.residual` -- drop1.glm's
+# default `scale = 0`. ⚠ NOT the Pearson dispersion `summary()` reports, nor what
+# `anova(base, aug, test = "F")` uses.
 #
-# The squared term is built by reg_shape_term(), which the `shape = "quadratic"` remedy will emit --
-# so the check and its cure are provably the same object, not two spellings of one idea. Centring is
-# not cosmetic: uncentred, the pair's own VIF is 38.7 against 1.2 centred, so check 5 would flag every
-# curved model as broken.
-# THE test between two NESTED fits ALREADY IN HAND -- the no-refit twin of reg_term_tests()'s drop1
-# branch, and since Phase 20f the route the Linearity check takes.
-#
-# It is not an approximation of what drop1() returns, it IS what drop1() returns, on BOTH arms and to
-# the last bit (asserted in test-reg-checks.R at tolerance 0, on lm / gaussian glm / quasipoisson /
-# poisson / binomial):
-#   * the LR arm reads the two log-likelihoods, because drop1's LRT is their doubled difference;
-#   * the F arm reads the two deviances against the AUGMENTED fit's `deviance / df.residual`, which is
-#     the dispersion drop1.glm estimates at its default `scale = 0`. ⚠ that is NOT the Pearson
-#     dispersion `summary()` reports and NOT what `anova(base, aug, test = "F")` uses -- on a
-#     quasipoisson fit those give 14.25 where drop1 gives 12.47, so neither may be substituted here.
-#
-# It predates 20f because `nnet:::drop1.multinom` computes only Df and AIC (no `test` argument, no
-# p-value at all), so the multinomial arm had no test otherwise.
-#
-# `use_f` is the caller's family fact (reg_fam_disp_estimated), never re-derived here. Returns NULL --
-# never a wrong number -- for anything without a usable logLik / deviance, for a non-nested pair, and
-# for two fits built on different rows.
+# `nnet:::drop1.multinom` has no `test` argument, so the multinomial arm needs its own route (below).
+# `use_f` is the caller's family fact, never re-derived here; returns NULL for a non-nested pair, two
+# fits on different rows, or an unusable logLik / deviance.
 #' @keywords internal
 reg_nested_test <- function(base, aug, use_f = FALSE) {
   num <- function(expr) tryCatch(as.numeric(expr), error = function(e) NA_real_)
-  # Two fits on different N are not nested, whatever their formulas say. The augmented term is a
-  # function of a predictor already in the model, so the complete-case set cannot change -- this
-  # asserts that rather than assuming it. An engine with no nobs() method stays eligible.
+  # two fits on different N are not nested; the augmented term is a function of a predictor already
+  # in the model, so the complete-case set cannot change. An engine with no nobs() method stays eligible.
   n0 <- num(stats::nobs(base)); n1 <- num(stats::nobs(aug))
   if (!is.na(n0) && !is.na(n1) && !isTRUE(all.equal(n0, n1))) return(NULL)
 
@@ -453,24 +394,21 @@ reg_nested_test <- function(base, aug, use_f = FALSE) {
 #' @keywords internal
 reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit = NULL) {
   # A predictor the user has already CURED gets no row: `shape = "quadratic"` puts this very term in
-  # the model, so adding it again is a collinear duplicate the engine silently drops. (`log`/`sqrt`
-  # recode the column, so the check then asks the right new question -- does log(x) still curve? -- and
-  # a quantile-cut predictor is a factor, which has no functional form to mis-specify.)
+  # the model, so adding it again is a collinear duplicate. (`log`/`sqrt` recode the column, so the
+  # check asks the right new question; a quantile-cut predictor is a factor, with no form to mis-specify.)
   num <- setdiff(reg_numeric_preds(data, sp$predictors), names(shared$shape_terms))
   if (length(num) == 0L) return(NULL)
   weighted <- isTRUE(shared$weighted)
   use_f    <- reg_fam_disp_estimated(sp$fit_family)
   use_wald <- reg_fam_svy_fitted(sp$fit_family, weighted)
-  # Phase 20c: the check's own three discriminators, read off TEST_ROWS instead of respelled here.
+  # the check's own three discriminators, read off TEST_ROWS instead of respelled here.
   types    <- test_row_types("linearity")
 
   purrr::flatten(purrr::map(num, function(v) {
     tm <- reg_shape_term(data[[v]], v, "quadratic")
     if (is.null(tm)) return(NULL)
-    # A diagnostic refit must be SILENT: reg_fit() informs about the detected binary level, about an
-    # ordinal outcome being ordered, about svyolr's untested parallel lines, and warns about
-    # over-dispersion -- all already said once by the real fit, and this runs once per numeric
-    # predictor. Its only output is a p-value.
+    # a diagnostic refit must be SILENT: reg_fit() would otherwise repeat, once per numeric predictor,
+    # every message the real fit already gave. Its only output is a p-value.
     f2 <- tryCatch(suppressWarnings(suppressMessages(
             reg_fit(data, sp$outcome, sp$predictors, sp$fit_family, shared$design_spec, isTRUE(sp$est$exp),
                     reg_outcome_level_of(sp$outcome_level) %||% shared$outcome_level,
@@ -479,10 +417,9 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
                    error = function(e) NULL)
     if (is.null(f2) || is.null(f2$fit)) return(NULL)
 
-    # THE FAST ROUTE, and the ordinary one: both fits are in hand and nested by construction, so the
-    # comparison between them IS drop1's answer, bit for bit, with no second fit (Phase 20f). A
-    # design fit is excluded on principle rather than on cost -- a design-based Wald is not a
-    # likelihood ratio, and regTermTest() refits nothing anyway.
+    # THE FAST ROUTE: both fits are in hand and nested by construction, so their comparison IS drop1's
+    # answer, bit for bit, with no second fit. A design fit is excluded on principle, not cost -- a
+    # design-based Wald is not a likelihood ratio.
     if (!use_wald && !is.null(base_fit)) {
       nt <- reg_nested_test(base_fit, f2$fit, use_f)
       if (!is.null(nt))
@@ -490,15 +427,11 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
                                  nt$stat, nt$df, nt$df2, nt$p, f2$nobs, outcome = sp$outcome)))
     }
 
-    # The slow route: a design fit, no base fit (a direct caller), or an engine whose logLik /
-    # deviance is not usable. drop1() refits through update(), which re-evaluates the fit's stored
-    # `data` SYMBOL -- a local of reg_fit() that is long gone by now. multinom / polr keep that
-    # symbol, so without this the whole multinomial and ordinal arm silently produced no row (the
-    # failure was hidden behind drop1.multinom's own cat() progress until reg_term_tests started
-    # capturing it).
+    # the slow route: drop1() refits through update(), which re-evaluates the fit's stored `data`
+    # SYMBOL -- a local of reg_fit() long gone by now; reg_selfheal_call() restores it.
     fit2 <- reg_selfheal_call(f2$fit, f2$data)
     # WARNING: the scope must be the FIT's own term label, verbatim -- terms() may re-spell what we
-    # pasted, and drop1() then rejects the scope (the trap z8 documented for interactions).
+    # pasted, and drop1() then rejects the scope.
     have <- tryCatch(attr(stats::terms(fit2), "term.labels"), error = function(e) character(0))
     lab  <- have[length(have)]
     if (!length(lab) || is.na(lab)) return(NULL)
@@ -510,12 +443,7 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
 
 # THE producer: the check rows of ONE fit. A sibling of reg_gof_rows() / reg_global_rows(), and the
 # only one of the three that needs `data` -- the Linearity check refits with an added term.
-# Phase 20f-iii: per SPEC. It was vectorised over `fits` and accumulated onto the GOF tibble; its one
-# caller is reg_spec_build(), which holds one model at a time, and reg_stage_footer() concatenates.
-# NULL = this model contributes no check row.
 #' @keywords internal
-# `shared` is new_reg_shared()'s record (Phase 20e: it used to be a hand-written subset of it, so a
-# renamed setting could go quiet here while the real record still carried it).
 reg_check_rows <- function(data, f, sp, shared, stats, col_var, grouped) {
   weighted <- isTRUE(shared$weighted)
   gof <- function(test, col_var, value, nobs, outcome = NA_character_)
@@ -534,18 +462,15 @@ reg_check_rows <- function(data, f, sp, shared, stats, col_var, grouped) {
     out <- list()
     if ("linearity" %in% keys && !isTRUE(sp$compound))
       out <- c(out, reg_check_linearity_rows(data, sp, shared, cv, base_fit = fit))
-    # Phase 20f: the Brant test is computed HERE, where its row is built, and nowhere else. It used to
-    # run inside reg_fit_ordinal() on every polr fit -- the reported one, both Linearity refits and
-    # every crude univariable fit -- and be read only here: three runs at ~1.1 s for one number, and
-    # its "assumption is rejected" warning fired once per fit (the crude fits are suppressMessages'd,
-    # not suppressWarnings'd, so their copies escaped). One producer, one consumer, one warning.
+    # the Brant test runs HERE, where its row is built, and nowhere else -- one producer, one
+    # consumer, one warning.
     if ("proportionality" %in% keys) {
       bp <- reg_ordinal_diagnostic(fit)
       if (!is.null(bp) && !is.na(bp))
         out <- c(out, list(reg_test_row("proportionality", cv, "", NA_real_, NA_real_,
                                        NA_real_, bp, f$nobs, outcome = sp$outcome)))
     }
-    # Phase 20f: ONE vcov and ONE influence sweep for both, computed only if either is wanted.
+    # ONE vcov and ONE influence sweep for both checks, computed only if either is wanted.
     if (any(c("dispersion", "influence") %in% keys)) {
       di <- reg_check_influence_pass(fit, intersect(c("dispersion", "influence"), keys))
       if ("dispersion" %in% keys) out <- c(out, list(gof("dispersion", cv, di[["dispersion"]], f$nobs, sp$outcome)))
@@ -562,27 +487,13 @@ reg_check_rows <- function(data, f, sp, shared, stats, col_var, grouped) {
 
 # === SECTION: `shape` -- fitting a predictor as something other than a line =========================
 #
-# The checks FIND a non-linearity; `shape` is how the user FIXES it without leaving the framework.
-# Before it, they could not: `predictors = c("race", "poly(age, 2)")` errors, and the formula escape
-# hatch silently disables `empirical =`, `color = "adjustment"`, `multiplier` and the per-predictor
-# tests.
-#
-# THE DESIGN RULE, and it is what makes the whole feature ~60 lines: a shape either RECODES THE COLUMN
-# or ADDS ONE TERM, and nothing else.
-#   * log / sqrt / quantile groups recode `data[[v]]` at ONE boundary in tab_reg(). Every downstream
-#     subsystem then works untouched, because the predictor genuinely IS its new self: a quantile-cut
-#     `age` is a FACTOR, so it inherits one OR per group, a SATURATED crude twin, per-level N,
-#     per-level colours and adjustment gaps with no code at all (SS12.4 -- the sociologist's remedy,
-#     and the one this package renders best).
-#   * quadratic adds reg_shape_term()'s centred squared term -- the SAME object the Linearity check
-#     refits with -- plus one skeleton row. The predictor stays ONE predictor, which is the property
-#     every downstream site keys on.
-# Nothing here needs a new fmt field, a new column attribute or a new alignment key.
+# The design rule is stated in the file header (THE CURE IS PART OF THE CHECK). Before this feature,
+# `predictors = c("race", "poly(age, 2)")` errored, and the formula escape hatch silently disabled
+# `empirical =`, `color = "adjustment"`, `multiplier` and the per-predictor tests.
 #
 # WARNING -- poly() / ns() / bs() are NEVER emitted, and that is a wrong-number refusal, not taste:
-# `marginaleffects` returns AME = 0.000000 for them, silently, through every contrast form (the basis
-# is re-evaluated on the perturbed data and an orthogonal basis absorbs a location shift exactly).
-# I(x^2), raw polynomials and log() are correct through every route.
+# `marginaleffects` returns AME = 0.000000 for them, silently, through every contrast form. I(x^2),
+# raw polynomials and log() are correct through every route.
 
 # The closed vocabulary. Anything else is an integer k (k quantile groups) or an error -- there is no
 # alias table, so what the docs list is what the parser accepts.
@@ -599,22 +510,18 @@ reg_shape_k <- function(value) {
     k else NA_integer_
 }
 
-# Phase 18z15 -- the extra model TERM a numeric predictor's non-linear SHAPE emits, with its centre
-# and scale frozen as LITERALS in the formula string. Frozen for the reason z9 freezes the multiplier's
-# SD: `scale()` inside a formula re-scales on new data, so predict(newdata =) would silently disagree
-# with the fit. Returns NULL (never a broken term) when the column cannot supply a finite scale.
+# The extra model TERM a numeric predictor's non-linear SHAPE emits, with its centre and scale frozen
+# as LITERALS in the formula string -- frozen for the same reason the multiplier's SD is: `scale()`
+# inside a formula re-scales on new data. Returns NULL when the column cannot supply a finite scale.
 #
-# ONE builder, two consumers: the Linearity check refits "the model plus this term" (reg_fit(add_terms =))
-# and the `shape = "quadratic"` remedy emits the same term -- so the check and its cure are the same
-# object rather than two spellings of one idea. Centring is not cosmetic: uncentred, the pair's own VIF
-# is 38.7 against 1.2 centred, so the Collinearity check would flag every curved model as broken. It
-# leaves the curvature p-value untouched, since {x, (x-a)^2} spans {x, x^2} for any a with 1 and x in
-# the model.
+# ONE builder, two consumers: the Linearity check refits with this term, and `shape = "quadratic"`
+# emits the same one, so the check and its cure are the same object. Centring is not cosmetic:
+# uncentred, the pair's own VIF is 38.7 against 1.2 centred, so Collinearity would flag every curved
+# model as broken.
 #
-# WHY THE LINEAR TERM STAYS RAW. eta = a*x + b*((x-m)/s)^2 and eta = A*z + B*z^2 are the same model with
-# A = a*s, B = b -- so with `multiplier = "sd"` (the default, which multiplies a numeric coefficient by
-# its SD) the printed linear row ALREADY is the per-SD slope of the centred parametrisation. The table
-# reads as SS12.3 specifies with no second scaling rule.
+# WHY THE LINEAR TERM STAYS RAW: eta = a*x + b*((x-m)/s)^2 and eta = A*z + B*z^2 are the same model
+# with A = a*s, B = b -- so with the default `multiplier = "sd"` the printed linear row ALREADY is
+# the per-SD slope of the centred parametrisation.
 #' @keywords internal
 reg_shape_term <- function(x, var, shape = "quadratic", w = NULL, digits = 8L) {
   if (!identical(shape, "quadratic")) return(NULL)
@@ -668,9 +575,9 @@ reg_resolve_shape <- function(shape, data, predictors) {
   out
 }
 
-# k quantile groups of a continuous column, as an ordinary (unordered) factor. The breaks are WEIGHTED
-# quantiles when the call carries weights -- a survey package's "age groups" are equal-share of the
-# POPULATION, not of the sample -- with the extremes forced to the observed range so no value falls out.
+# k quantile groups of a continuous column, as an ordinary (unordered) factor. Breaks are WEIGHTED
+# quantiles when the call carries weights (equal-share of the POPULATION, not the sample), with the
+# extremes forced to the observed range so no value falls out.
 #' @keywords internal
 reg_cut_quantiles <- function(x, k, w = NULL, var = "x") {
   x  <- as.numeric(x)
@@ -722,8 +629,7 @@ reg_shape_apply <- function(data, shapes, w = NULL) {
 }
 
 # The quadratic terms a `shape` asks for, named by variable so the skeleton can key its extra row on
-# the same string the formula carries. `w` is the WEIGHT COLUMN NAME (as everywhere else in tab_reg),
-# resolved here -- the centre and scale are weighted whenever the call is.
+# the same string the formula carries; the centre and scale are weighted whenever the call is.
 #' @keywords internal
 reg_shape_terms <- function(data, shapes, w = NULL) {
   q <- names(shapes)[vapply(shapes, function(s) identical(s$kind, "quadratic"), logical(1))]
@@ -736,15 +642,13 @@ reg_shape_terms <- function(data, shapes, w = NULL) {
   tm[!is.na(tm)]
 }
 
-# The display label of a numeric predictor's squared row: "age²". It is also the skeleton `level`,
-# so it must differ from the variable name (the level is the alignment key of every crude / marginal
-# join, and `level == var` is what marks the plain linear row).
+# The display label of a numeric predictor's squared row: "age²" -- also the skeleton `level`, which
+# must differ from the variable name (`level == var` is what marks the plain linear row).
 #' @keywords internal
 reg_shape_sq_level <- function(var) paste0(var, "\u00b2")     # U+00B2 SUPERSCRIPT TWO
 
-# The `add_terms` one model contributes: its own predictors' quadratic terms, in predictor order.
-# A model COMPARISON is why this filter exists -- a shaped predictor may be in some models and not
-# others, and a term for a variable the model does not carry would abort the fit.
+# The `add_terms` one model contributes: its own predictors' quadratic terms. A model COMPARISON is
+# why this filter exists -- a term for a variable the model does not carry would abort the fit.
 #' @keywords internal
 reg_shape_add <- function(shape_terms, predictors) {
   if (is.null(shape_terms) || length(shape_terms) == 0L) return(NULL)
@@ -756,8 +660,8 @@ reg_shape_add <- function(shape_terms, predictors) {
 
 # === SECTION: the plot primitives ===================================================================
 #
-# Five base-R functions, no dependency, each measured against the reference the design names (SS23).
-# They are the ONLY producers of the numbers every panel and the row sparkline draw.
+# Five base-R functions, no dependency. They are the ONLY producers of the numbers every panel and
+# the row sparkline draw.
 #
 # WARNING for whoever adds a panel later: never `geom_smooth(method = "auto")`. It switches loess -> gam
 # at 1000 observations in the largest GROUP, so a facetted 50 000-row plot gets loess and an unfacetted
@@ -780,12 +684,12 @@ rd_wquantile <- function(x, probs, w = NULL) {
   stats::approx(cw, x, xout = probs, rule = 2, ties = "ordered")$y
 }
 
-# The per-observation outcome a check reads, on the family's own LINK scale, plus the label of that
-# scale. ONE dispatch: an ordinal / multinomial outcome has no single curve, so it is read as
-# "beyond the first category" -- stated in the axis label, never implied.
+# The per-observation outcome a check reads, on the family's own LINK scale, plus that scale's label.
+# An ordinal / multinomial outcome has no single curve, so it is read as "beyond the first category"
+# -- stated in the axis label, never implied.
 #' @keywords internal
 rd_link_y <- function(y, family, trials = NULL, positive_level = NULL) {
-  family <- reg_check_family_of(family)          # 19l: a LINK key (rd/rr/mr) reads as its distribution
+  family <- reg_check_family_of(family)          # a LINK key (rd/rr/mr) reads as its distribution
   if (family == "gaussian")
     return(list(y = as.numeric(y), link = "identity", lab = gettext("mean")))
   if (reg_fam_count(family))
@@ -803,22 +707,14 @@ rd_link_y <- function(y, family, trials = NULL, positive_level = NULL) {
 }
 
 # Weighted quantile bins of y against x, on the link scale: the OBSERVED shape, with no fit in it.
-# Returns x (weighted bin mean), y (link-scale bin estimate), n (sum of weights) and se (the
-# THEORETICAL +/-1 SE of that estimate, from the family's own variance function).
+# The band is the theoretical one, 2*sqrt(p(1-p)/n) as ROS SS14.5 p.253 specifies -- not
+# `arm::binnedplot`'s empirical 2*sd(y)/sqrt(n), which ignores weights. Zero cells use
+# Haldane-Anscombe (k + 0.5)/(n + 1) -- symmetric, never infinite, no arbitrary floor.
 #
-# The band is deliberately the theoretical one, 2*sqrt(p(1-p)/n) as ROS SS14.5 p.253 specifies -- NOT
-# `arm::binnedplot`'s empirical 2*sd(y)/sqrt(n), which its own book does not describe: measured, they
-# agree on average (ratio 0.997) but differ +/-30 % per bin, and the empirical one ignores weights.
-# Zero cells use Haldane-Anscombe (k + 0.5)/(n + 1) -- symmetric, never infinite, no arbitrary floor.
-# Phase 18z16-iv (W-G.4): the bin's EFFECTIVE base is the package's one device, not a hand-rolled
-# Kish -- `ne = num / Var(mean of y in the bin)`, where `num` is what that variance would be times n
-# under simple random sampling (p(1-p) for a share, the mean for a count, the within-bin variance for
-# a mean). Three inputs, one formula:
-#   a survey DESIGN  -> Var comes from svyrecvar (strata, clusters, fpc, calibration all reach the band)
-#   weights only     -> the EXACT flat closed form (svy_flat_neff_rows), the ids = ~1 design
-#   unweighted       -> `sw` (= n), which is what Kish returns at equal weights, so bands do not move
-# A design whose variance cannot be computed for a bin falls through to the flat form, never to a
-# wrong number.
+# The bin's EFFECTIVE base (`ne = num / Var(mean of y in the bin)`) uses the package's one device,
+# not a hand-rolled Kish: a survey DESIGN reaches svyrecvar, weights alone use the exact flat closed
+# form (svy_flat_neff_rows), unweighted uses `sw`. A design whose variance cannot be computed for a
+# bin falls through to the flat form, never to a wrong number.
 #' @keywords internal
 rd_bin_neff <- function(sw, num, w, y, g, design = NULL, des_rows = NULL) {
   nb   <- length(sw)
@@ -892,10 +788,9 @@ rd_spark_glyphs <- function(style = TRUE) {
   c("\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587", "\u2588")
 }
 
-# Remove a glyph run (and the non-breaking space that ties it to its label) from a rendered string.
-# THE plot medium's answer to SS17's font trap: a graphics device substitutes its own font and has no
-# block glyphs, so grid emits one "conversion failure in mbcsToSbcs" per label and draws garbage. The
-# console, markdown, Excel and the html <svg> all keep it; a ggplot never does.
+# Remove a glyph run (and the non-breaking space that ties it to its label) from a rendered string --
+# a graphics device substitutes its own font and has no block glyphs, so grid would draw garbage.
+# The console, markdown, Excel and the html <svg> keep the glyphs; a ggplot never does.
 #' @keywords internal
 tx_spark_strip <- function(x) {
   gl <- paste(rd_spark_glyphs(TRUE), collapse = "")
@@ -912,17 +807,15 @@ rd_spark <- function(y, style = TRUE) {
   paste(gl[pmax(pmin(i, length(gl)), 1L)], collapse = "")
 }
 
-# ONE residual per family, for the teaching panels. A raw residual takes exactly two values given
-# p-hat for a binary outcome (ROS SS14.5), so every non-gaussian family gets the RANDOMISED QUANTILE
-# residual (Dunn & Smyth 1996), which is standard normal under a correct model whatever the family --
-# including ordinal, whose fitted() matrix gives cumulative probabilities exactly as ppois() does for a
-# count. Multinomial is REFUSED: two level orderings give residuals correlated -0.705, so every plot
-# would be an artefact of the coding.
+# ONE residual per family, for the teaching panels: a raw residual takes exactly two values for a
+# binary outcome (ROS SS14.5), so every non-gaussian family gets the RANDOMISED QUANTILE residual
+# (Dunn & Smyth 1996), standard normal under a correct model whatever the family. Multinomial is
+# REFUSED: two level orderings give residuals correlated -0.705, an artefact of the coding.
 #
 # WARNING: qnorm(1) = Inf -- u must be clamped, or a single saturated fitted value returns Inf.
 #' @keywords internal
 rd_resid <- function(fit, family, y, trials = NULL, seed = 20260810) {
-  family <- reg_check_family_of(family)          # 19l: a LINK key (rd/rr/mr) reads as its distribution
+  family <- reg_check_family_of(family)          # a LINK key (rd/rr/mr) reads as its distribution
   if (family == "multinomial") return(NULL)
   clamp <- function(u) pmin(pmax(u, 1e-10), 1 - 1e-10)
   draw  <- function(lo, hi) rd_with_seed(seed, stats::qnorm(clamp(stats::runif(length(lo), lo, hi))))
@@ -954,11 +847,11 @@ rd_resid <- function(fit, family, y, trials = NULL, seed = 20260810) {
 }
 
 # The ANALYTIC pointwise Q-Q band: the i-th of n uniform order statistics is Beta(i, n-i+1), so the
-# band is qnorm(qbeta(alpha/2, i, n-i+1)) .. qnorm(qbeta(1-alpha/2, ...)). 28 ms for every point
-# against 1182 ms for a 19-replicate simulated envelope, agreeing to 0.19 on the most extreme one.
+# band is qnorm(qbeta(alpha/2, i, n-i+1)) .. qnorm(qbeta(1-alpha/2, ...)) -- no simulated envelope
+# needed.
 #
-# WARNING: it is POINTWISE, not simultaneous -- under a true model ~5 % of points fall outside AT EACH
-# POSITION. The panel subtitle says so; the docs alone would not be enough.
+# WARNING: it is POINTWISE, not simultaneous -- under a true model ~5 % of points fall outside AT
+# EACH POSITION. The panel subtitle says so; the docs alone would not be enough.
 #' @keywords internal
 rd_qq <- function(r, conf = 0.95, max_pts = 400L) {
   r <- sort(r[is.finite(r)])
@@ -984,9 +877,8 @@ rd_thin <- function(v, max_points = 2000L, seed = 20260810) {
   rd_with_seed(seed, sort(c(keep, sample(rest, max_points - length(keep)))))
 }
 
-# Evaluate under a fixed seed and give the caller its RNG stream back. `seed = NULL` is a fresh draw --
-# the honest way to check that a pattern in a randomised residual is not a randomisation artefact.
-# Base R rather than withr::with_seed(): withr is Suggests-only, and these primitives have no dependency.
+# Evaluate under a fixed seed and give the caller its RNG stream back (`seed = NULL` = a fresh draw).
+# Base R, not withr::with_seed(): withr is Suggests-only and these primitives have no dependency.
 #' @keywords internal
 rd_with_seed <- function(seed, expr) {
   if (is.null(seed)) return(expr)
@@ -1002,13 +894,13 @@ rd_with_seed <- function(seed, expr) {
 # === SECTION: the stored curves =====================================================================
 
 # THE observed curve of every continuous predictor: 10 weighted quantile bins of the outcome against
-# the predictor, on the family's own link scale. ~1.6 KB each, computed ONCE per predictor -- never per
-# model, never per rendering -- because it contains no fit: a 5-model comparison stores five references
-# to one tibble, and it survives the jamovi digest path, where no fit exists.
+# the predictor, on the family's own link scale. Computed ONCE per predictor, because it contains no
+# fit: a 5-model comparison stores five references to one tibble, and it survives the jamovi digest
+# path, where no fit exists.
 #
 # WITH SEVERAL OUTCOMES there is no single observed shape, so the whole thing is NULL rather than the
-# first outcome's silently: a row label is shared by every model column, and a sparkline that described
-# only one of them would be a lie the reader cannot see.
+# first outcome's silently: a sparkline describing only one of several outcomes would be a lie the
+# reader cannot see.
 #' @keywords internal
 reg_curves <- function(data, specs, numeric_preds, wt = NULL, positive_level = NULL, nbins = 10L,
                        design = NULL) {
@@ -1017,16 +909,13 @@ reg_curves <- function(data, specs, numeric_preds, wt = NULL, positive_level = N
   if (length(deps) != 1L) return(NULL)
   sp <- specs[[1L]]
   if (isTRUE(sp$compound) || is.null(data[[deps]])) return(NULL)
-  # WARNING: the MODELLED level, taken from the fit, never the factor's first level. `Married` before
-  # `Not married` in the data is exactly the case outcome_level exists for, and reading the
-  # level order here instead drew the curve of the COMPLEMENT -- an upside-down sparkline beside a
-  # correct odds ratio, which is worse than none.
+  # WARNING: the MODELLED level, taken from the fit, never the factor's first level -- reading the
+  # level order instead draws the curve of the COMPLEMENT (an upside-down sparkline).
   ly <- rd_link_y(data[[deps]], sp$fit_family, sp$trials, positive_level)
   w  <- if (!is.null(wt) && is.character(wt) && length(wt) == 1L && wt %in% names(data))
           data[[wt]] else NULL
-  # Phase 18z16-iv (W-G.4): under a survey design the bands take the DESIGN variance, reached
-  # through `.svy_row` -- the position each prepared row holds in the original design -- exactly as
-  # every other design quantity in the package is.
+  # under a survey design the bands take the DESIGN variance, reached through `.svy_row`, as every
+  # other design quantity in the package.
   dr <- if (!is.null(design)) data[[svy_row_col]] else NULL
   curves <- purrr::compact(stats::setNames(
     purrr::map(numeric_preds, function(v)
@@ -1039,9 +928,7 @@ reg_curves <- function(data, specs, numeric_preds, wt = NULL, positive_level = N
 
 # === SECTION: potools extraction anchor =============================================================
 
-# The check nouns and instruments are gettext()'d DYNAMICALLY (gettext(ck$noun)), which potools cannot
-# see. This dead branch makes every msgid literal exactly once, so `Rscript dev/update_translations.R`
-# extracts them; nothing here ever runs. Same device as legend_measure_word()'s anchor.
+# Nothing here ever runs -- see the file header (i18n) for why this anchor exists.
 #' @keywords internal
 reg_check_msgid_anchor <- function() {
   if (FALSE) c(
