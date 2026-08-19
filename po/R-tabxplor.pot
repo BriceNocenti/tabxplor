@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tabxplor 2.0.0\n"
-"POT-Creation-Date: 2026-08-19 07:58\n"
+"POT-Creation-Date: 2026-08-19 19:03\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,6 +17,12 @@ msgid "' with no total rows to store"
 msgstr ""
 
 msgid "information about mean contributions to variance"
+msgstr ""
+
+msgid "%s further from no effect than %s, by"
+msgstr ""
+
+msgid "%s closer to no effect than %s, by"
 msgstr ""
 
 msgid "difference"
@@ -139,6 +145,12 @@ msgstr ""
 msgid "Wald interval on the log odds-ratio"
 msgstr ""
 
+msgid "Wald interval on the log risk-ratio"
+msgstr ""
+
+msgid "quasi-Poisson interval"
+msgstr ""
+
 msgid "robust-Poisson (delta) interval"
 msgstr ""
 
@@ -149,12 +161,6 @@ msgid "profile-likelihood interval"
 msgstr ""
 
 msgid "Wald interval on the log rate-ratio"
-msgstr ""
-
-msgid "Wald interval on the log risk-ratio"
-msgstr ""
-
-msgid "quasi-Poisson interval"
 msgstr ""
 
 msgid "Wald interval on the log scale"
@@ -250,10 +256,10 @@ msgstr ""
 msgid "below the first threshold"
 msgstr ""
 
-msgid "%s: significantly different from no effect (the reference category in bold; for the Constant, the null value) at the %s%% confidence level"
+msgid "%s: significantly different from the reference category (in bold) at the %s%% confidence level"
 msgstr ""
 
-msgid "%s: significantly different from the reference category (in bold) at the %s%% confidence level"
+msgid "%s: significantly different from the reference category (in bold) — from %s for the Constant — at the %s%% confidence level"
 msgstr ""
 
 msgid "%s: at the %s%% level"
@@ -589,13 +595,31 @@ msgstr ""
 msgid "on the model's own link scale"
 msgstr ""
 
-msgid "; each cell shows the modelled effect vs the reference level and, in parentheses, the observed (crude) one"
+msgid "the observed (crude) one"
 msgstr ""
 
-msgid "; each cell shows the ratio vs the reference level and, in parentheses, the adjusted predicted probability"
+msgid "the adjusted predicted probability"
 msgstr ""
 
-msgid "; each cell shows the effect vs the reference level and, in parentheses, the adjusted predicted probability"
+msgid "the adjusted predicted mean"
+msgstr ""
+
+msgid "the same effect as a difference"
+msgstr ""
+
+msgid "the same effect as a ratio"
+msgstr ""
+
+msgid "the same effect as an odds ratio"
+msgstr ""
+
+msgid "the coefficient on the model's own link scale"
+msgstr ""
+
+msgid "its distance to the observed effect"
+msgstr ""
+
+msgid "; each cell shows the effect vs the reference level and, in parentheses,"
 msgstr ""
 
 msgid "data is of length 0 (possibly after filter or na = 'drop')"

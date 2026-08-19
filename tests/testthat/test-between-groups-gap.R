@@ -221,10 +221,9 @@ test_that("the footer line reaches every medium, once per model", {
 
 test_that("`color = 'between_groups'` turns the interaction test on; `stats=` asks for it alone", {
   d <- gap_data()
-  testthat::expect_message(
-    t <- tab_reg(d, outcome = "married", predictors = "race", tab_vars = "party3",
-                 family = "binomial", color = c(TRUE, "between_groups")),
-    "interaction test")
+  # silently: the cost of the extra fit is an internal fact, not a statistical caveat.
+  t <- suppressMessages(tab_reg(d, outcome = "married", predictors = "race", tab_vars = "party3",
+                                family = "binomial", color = c(TRUE, "between_groups")))
   testthat::expect_length(tabxplor:::reg_interaction_lines(t, "en"), 1L)
   # off by default
   t0 <- suppressMessages(tab_reg(d, outcome = "married", predictors = "race", tab_vars = "party3",
@@ -324,4 +323,27 @@ test_that("D11: obs / gap_se are written only where a gap measure reads them", {
     testthat::expect_true(any(!is.na(get_obs(sp[[reg_group_col(sp, nm)]]))), info = nm)
     testthat::expect_false(isTRUE(is_refcol(sp[[reg_group_col(sp, nm)]])), info = nm)
   }
+})
+
+# --- Phase 22b-iv: the reference GROUP is a reading anchor ---------------------------------------
+
+test_that("`between_groups` marks the reference group's columns refcol, spread only", {
+  d <- gap_data()
+  sp <- suppressMessages(tab_reg(d, "married", "race", tab_vars = "party3", family = "binomial",
+                                 color = "between_groups", empirical = TRUE))
+  fc  <- names(sp)[vapply(sp, is_fmt, logical(1))]
+  ref <- levels(forcats::fct_drop(as.factor(d$party3)))[[1]]
+  marked <- fc[vapply(sp[fc], function(cl) isTRUE(is_refcol(cl)), logical(1))]
+  testthat::expect_gt(length(marked), 0L)
+  # exactly the model / crude columns of the FIRST group, and nothing else
+  testthat::expect_true(all(vapply(sp[marked], function(cl)
+    identical(get_col_group(cl), ref) && get_role(cl) %in% c("model", "emp"), logical(1))))
+  # get_reference() bolds them whole, so the exporter picks them up as reference COLUMNS
+  testthat::expect_true(all(marked %in%
+    tabxplor:::tab_export_prep(sp, backend = "md")$tables[[1]]$bold_cols))
+  # the STACKED shape has no reference column at all: there the reference group is a block of rows
+  st <- suppressMessages(tab_reg(d, "married", list(m1 = "race", m2 = "race"), tab_vars = "party3",
+                                 family = "binomial", color = "between_groups"))
+  fst <- names(st)[vapply(st, is_fmt, logical(1))]
+  testthat::expect_false(any(vapply(st[fst], function(cl) isTRUE(is_refcol(cl)), logical(1))))
 })

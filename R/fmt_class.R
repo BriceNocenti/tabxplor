@@ -2624,7 +2624,15 @@ fmt_resid <- function(x) {
 #   mult  the estimate is multiplicative (or / ratio) -> neutral 1, else additive -> neutral 0;
 #   est / obs / ok  the two values and where both are usable;
 #   sign  the NULL DIRECTION: +1 when the estimate is FURTHER from the null than `obs` (strengthened),
-#         -1 when nearer (attenuated), 0 when equal.
+#         -1 when nearer (attenuated) OR when the two sit on OPPOSITE SIDES of the null, 0 when equal.
+#
+# DESIGN -- why a REVERSAL is signed as attenuation. With two poles a reversal has to be one of them,
+# and it belongs on the attenuated side: whatever the observed effect claimed, the model says it is
+# not that -- the crude reading did not survive, which is exactly what that pole means. Its magnitude
+# stays the full move, so a big flip reads as a big move; and the reader sees the reversal itself in
+# the pair of cells, whose multiplicative glyphs face opposite ways. This also removes the one case
+# `sign` could come out 0 with a large magnitude (a perfect mirror, x2 -> /2), which fell into the
+# "strengthened" arm and painted the deepest blue.
 
 #' @keywords internal
 fmt_est_of <- function(x) as.double(vctrs::field(x, fmt_center_field(x)))
@@ -2637,10 +2645,13 @@ fmt_gap_parts <- function(x) {
   if (mult) {
     ok <- is.finite(est) & is.finite(obs) & est > 0 & obs > 0
     s  <- sign(abs(log(ifelse(ok, est, NA_real_))) - abs(log(ifelse(ok, obs, NA_real_))))
+    flip <- ok & (est - 1) * (obs - 1) < 0
   } else {
     ok <- is.finite(est) & is.finite(obs)
     s  <- sign(abs(est) - abs(obs))
+    flip <- ok & est * obs < 0
   }
+  s[flip] <- -1
   list(mult = mult, est = est, obs = obs, ok = ok, sign = s)
 }
 
@@ -4210,6 +4221,8 @@ fmt_face_semantic <- function(theme = "light") {
 #   unit_kind          the prose unit suffix: "diff" | "contrib" | "none".
 #   has_ref_lead       the effect is stated vs a reference in the sentence LEAD (diff/ratio) rather than
 #                      already relative to it (or/contrib/reg effect).
+#   lead               optional closure(subject, ref, dir) -> the whole sentence lead, for a measure the
+#                      default "<subject> >= <reference>" mis-states. Absent = that default.
 # Engine fields (read by fmt_color_plan):
 #   raw                a getter closure(x) -> the observed per-cell quantity scored + coloured.
 #   scale              named c(pct=, std=, log=) of color_scales() keys, ONE PER LADDER; the COLUMN says
@@ -4229,6 +4242,18 @@ fmt_face_semantic <- function(theme = "light") {
 # The presentation of a gap measure's ADDITIVE scales, shared by both gap measures: a "+"/"-" ladder
 # around 0, and the unit the legend names (points on a probability-scale ME, SD on a standardized one,
 # nothing on a log coefficient). `break_scale = TRUE` renders the probability ladder x100.
+
+# fmt_gap_lead() -- the legend lead of the two GAP measures. The generic "<subject> >= <reference>"
+# states a SIGNED move (is the model estimate higher than the crude one?), which is not what
+# fmt_adjustment_score() grades: it compares DISTANCES FROM THE NULL, so on a protective effect the
+# two disagree outright -- a crude 0.92 adjusted to 0.74 is a strengthening, and the generic lead
+# called it a fall. Declared per measure so the sentence and the shade cannot drift apart again.
+#' @keywords internal
+fmt_gap_lead <- function(subject, ref, dir) {
+  if (dir > 0) gettextf("%s further from no effect than %s, by", subject, ref)
+  else         gettextf("%s closer to no effect than %s, by", subject, ref)
+}
+
 #' @keywords internal
 GAP_ADDITIVE_FACTS <- list(
   adj_diff     = list(break_over = "+", break_under = "-", threshold_mult = FALSE,
@@ -4321,7 +4346,7 @@ MEASURES <- list(
   adjustment = list(word = function() gettext("adjustment"),    break_over = .lg_times, break_under = .lg_div,
                  doc = "how far each \\strong{modelled} effect sits from its \\strong{observed} (crude, unadjusted) counterpart -- what adjusting for the other predictors did to it. Turns \\code{empirical = TRUE} on. Meant for the \\emph{background} channel.",
                  break_scale = FALSE, ref_kind = "observed",     threshold_mult = TRUE,  unit_kind = "none",
-                 has_ref_lead = TRUE,
+                 has_ref_lead = TRUE, lead = fmt_gap_lead,
                  channels = c("text", "bg"), producers = "reg",
                  applies_to = c("pct", "num"), builds = "diff",
                  requires = c(empirical = "always"),
@@ -4334,7 +4359,7 @@ MEASURES <- list(
   between_groups = list(word = function() gettext("between groups"), break_over = .lg_times, break_under = .lg_div,
                  doc = "with \\code{tab_vars}, how far each group's effect sits from the \\strong{first} group's, on the same row: a per-predictor reading of effect modification. Meant for the \\emph{background} channel.",
                  break_scale = FALSE, ref_kind = "group",        threshold_mult = TRUE,  unit_kind = "none",
-                 has_ref_lead = TRUE,
+                 has_ref_lead = TRUE, lead = fmt_gap_lead,
                  channels = c("text", "bg"), producers = "reg",
                  applies_to = c("pct", "num"), builds = "diff",
                  requires = c(interaction = "always"),
@@ -4959,6 +4984,8 @@ legend_resolve_spec <- function(spec, lang) {
          # the interval NAME is per channel: a gap measure on the background runs its own test, so the
          # tail must not borrow the text channel's model interval.
          method_phrase = legend_method_phrase(spec, lang, measure),
+         # a measure the generic "<subject> >= <reference>" lead would mis-state writes its own.
+         lead_fn      = MEASURES[[measure]]$lead,
          unit         = unit)
   }
   spec$txt <- chan(spec$measure_text, spec$plan_txt$policy, spec$plan_txt$scale_key)
@@ -5037,8 +5064,9 @@ legend_tokens_prose <- function(spec, lang, show_names) {
     sh    <- spec$shades[[if (is_bg) "bg" else "text"]]
     shade <- if (no_shade) NA_character_ else if (dir > 0) sh[["over"]] else sh[["under"]]
     rp    <- if (!is.na(cf$ref_lead)) cf$ref_lead else spec$ref_phrase   # per channel
-    lead  <- if (cf$has_ref_lead) gettextf("%s %s %s", cf$subject, cmp, rp)
-             else                 gettextf("%s %s", cf$subject, cmp)
+    lead  <- if (!is.null(cf$lead_fn))  cf$lead_fn(cf$subject, rp, dir)
+             else if (cf$has_ref_lead) gettextf("%s %s %s", cf$subject, cmp, rp)
+             else                      gettextf("%s %s", cf$subject, cmp)
     head_toks <- if (!is.na(shade)) list(.lg_tok(paste0(shade, colon, lead, " ")))
                  else               list(.lg_tok(paste0(legend_ucfirst(lead), " ")))
     # guaranteed_effect: the coloured thresholds are the CI floor -> annotate the OVER sentence
@@ -5602,6 +5630,29 @@ render_footer <- function(streams, medium, theme = NULL, colored = TRUE, classes
   out
 }
 
+# The null a regression `Constant` row's star is tested against, or NA when the table has no such row
+# (a marginal / at-reference table has no intercept, and a crosstab none either). "Constant" is the
+# SKELETON's own untranslated key, not a label, so this reads a stored fact. NA too when the starred
+# model columns disagree about their null -- a mixed table cannot name one number.
+#' @keywords internal
+tab_constant_null <- function(x, cols) {
+  if (!tab_is_reg(x)) return(NA_real_)
+  ax <- x[["var"]]
+  if (is.null(ax)) return(NA_real_)
+  cst <- as.character(ax) == "Constant"
+  cst[is.na(cst)] <- FALSE
+  if (!any(cst)) return(NA_real_)
+  n <- unique(unlist(purrr::map(cols, function(cl) {
+    # a MODEL column that actually shows something on that row: `marginal` / `at_reference` and an
+    # ordinal fit have no intercept, so the row exists but is empty and has no null to name.
+    if (!identical(get_role(cl), "model")) return(NULL)
+    if (!any(is.finite(fmt_est_of(cl)[cst]))) return(NULL)
+    fmt_scale_row(cl)$neutral
+  })))
+  n <- n[!is.na(n)]
+  if (length(n) == 1L) n else NA_real_
+}
+
 # the significance-stars legend line, shown when any DISPLAYED, star-applicable fmt column carries a
 # star (never on a contrib table -- fmt_stars_applicable). Thresholds/labels come from the same options
 # get_stars() reads, so the named confidence levels match the glyphs drawn. Returns one plain string or NULL.
@@ -5616,15 +5667,16 @@ tab_stars_legend <- function(x, lang = NULL) {
     lab  <- lab[order(nchar(lab), decreasing = TRUE)]                          # most stars first
     conf <- (1 - lev) * 100                                                    # aligned: *** <-> 99%
     semi <- if (identical(lg, "fr")) " ; " else "; "
-    # a REGRESSION table's stars do not all test "vs the reference category" -- the `Constant` row's
-    # star tests the baseline value itself. One wording true of every starred row, keyed on stored reg
-    # metadata, not a row label.
-    first <- if (tab_is_reg(x)) gettextf(
-      "%s: significantly different from no effect (the reference category in bold; for the Constant, the null value) at the %s%% confidence level",
-      lab[1], legend_num(conf[1], lg))
-    else gettextf(
+    # ONE sentence for every table. A regression's `Constant` row is the exception -- its star tests
+    # the baseline value against the measure's own null -- so it is an ASIDE, appended only where such
+    # a row exists, naming the null EST_SCALES declares (1 on a ratio, 0 on a difference).
+    nul   <- tab_constant_null(x, cols)
+    first <- if (is.na(nul)) gettextf(
       "%s: significantly different from the reference category (in bold) at the %s%% confidence level",
       lab[1], legend_num(conf[1], lg))
+    else gettextf(
+      "%s: significantly different from the reference category (in bold) \u2014 from %s for the Constant \u2014 at the %s%% confidence level",
+      lab[1], legend_num(nul, lg), legend_num(conf[1], lg))
     rest <- if (length(lab) > 1)
       vapply(2:length(lab), function(i) gettextf("%s: at the %s%% level", lab[i],
                                                  legend_num(conf[i], lg)), character(1))
@@ -5760,18 +5812,20 @@ get_reference_base <- function(x, mode = c("cells", "lines", "all_totals")) {
   }
 }
 
-# DESIGN: a GAP measure ("adjustment" / "between_groups") compares each cell to ANOTHER COLUMN, and
-# that column is marked `refcol`. It is uncoloured by construction (its own `obs` is empty), so the
-# reading anchor is what tells a reader which column the shades are measured from -- the same job
-# `refcol` already does under an odds ratio, one measure over. "cells" is left alone: this is a
-# whole-column baseline, not the cell a difference is taken against, so no "ref:" label appears.
+# DESIGN: a GAP measure compares each cell to ANOTHER COLUMN, and that column is marked `refcol` --
+# the crude column under `adjustment`, the reference group's block under `between_groups`. It is
+# uncoloured by construction (its own `obs` is empty), so the reading anchor is what tells a reader
+# which column the shades are measured from -- the same job `refcol` already does under an odds
+# ratio, one measure over. The gate is the DECLARED predicate `measure_own_ref()`, so a new
+# baseline-in-another-column measure needs no edit here. "cells" is left alone: this is a whole-column
+# baseline, not the cell a difference is taken against, so no "ref:" label appears.
 get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
   m   <- match.arg(mode)
   out <- get_reference_base(x, m)
   if (m == "cells" || !isTRUE(is_refcol(x))) return(out)
   gap <- any(vapply(c(get_color(x), get_color_bg(x)), function(k) {
     mk <- measure_key(k)
-    !is.na(mk) && nzchar(mk) && identical(MEASURES[[mk]]$ref_kind, "observed")
+    !is.na(mk) && nzchar(mk) && measure_own_ref(mk)
   }, logical(1)))
   if (gap) out | TRUE else out
 }

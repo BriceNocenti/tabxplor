@@ -408,3 +408,19 @@ testthat::test_that("L3: a redundant col_var span (name == col_var for all cols)
   # empirical companions it spans them all with no border between).
   testthat::expect_true(span(tab_reg(d, "married", c("race", "age"), family = "binomial")))
 })
+
+# --- Phase 22b-iv: the [outcome] bracket never reaches an exported header -------------------------
+
+test_that("the outcome bracket is stripped in EVERY backend, wrapped names included", {
+  d <- suppressWarnings(gss_cat_data_formatting())
+  t <- suppressWarnings(suppressMessages(
+    tab_reg(d, c("married", "tvhours"), c("race", "relig"), empirical = TRUE)))
+  testthat::expect_true(any(grepl("[married]", names(t), fixed = TRUE)))   # the console keeps it
+  for (b in c("kable", "md", "xl")) {
+    cl <- tabxplor:::tab_export_prep(t, backend = b)$tables[[1]]$col_var_header$clean
+    testthat::expect_false(any(grepl("[", cl, fixed = TRUE)), info = b)
+  }
+  # html WRAPS the header names first, so the separator before the bracket is not a plain space
+  h <- as.character(tab_html(t, print = FALSE))
+  testthat::expect_false(grepl("[married]", substr(h, 1L, regexpr("</thead>", h)), fixed = TRUE))
+})

@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tabxplor 2.0.0\n"
-"POT-Creation-Date: 2026-08-19 07:58\n"
+"POT-Creation-Date: 2026-08-19 19:03\n"
 "PO-Revision-Date: 2024-07-31 18:51+0200\n"
 "Last-Translator: tabxplor (Phase 18w draft)\n"
 "Language-Team: none\n"
@@ -19,6 +19,12 @@ msgstr ""
 
 msgid "information about mean contributions to variance"
 msgstr ""
+
+msgid "%s further from no effect than %s, by"
+msgstr "%s s'éloigne de l'absence d'effet par rapport à %s, de"
+
+msgid "%s closer to no effect than %s, by"
+msgstr "%s se rapproche de l'absence d'effet par rapport à %s, de"
 
 msgid "difference"
 msgstr "différence"
@@ -148,6 +154,12 @@ msgstr ""
 msgid "Wald interval on the log odds-ratio"
 msgstr "intervalle de Wald sur le log rapport de cotes"
 
+msgid "Wald interval on the log risk-ratio"
+msgstr "intervalle de Wald sur le log rapport de risques"
+
+msgid "quasi-Poisson interval"
+msgstr "intervalle quasi-Poisson"
+
 msgid "robust-Poisson (delta) interval"
 msgstr "intervalle de Poisson robuste (delta)"
 
@@ -159,12 +171,6 @@ msgstr "intervalle de vraisemblance"
 
 msgid "Wald interval on the log rate-ratio"
 msgstr "intervalle de Wald sur le log rapport de taux"
-
-msgid "Wald interval on the log risk-ratio"
-msgstr "intervalle de Wald sur le log rapport de risques"
-
-msgid "quasi-Poisson interval"
-msgstr "intervalle quasi-Poisson"
 
 msgid "Wald interval on the log scale"
 msgstr "intervalle de Wald sur l'échelle logarithmique"
@@ -277,19 +283,19 @@ msgid "below the first threshold"
 msgstr "sous le premier seuil"
 
 msgid ""
-"%s: significantly different from no effect (the reference category in bold; "
-"for the Constant, the null value) at the %s%% confidence level"
-msgstr ""
-"%s : effet significativement différent de zéro (de la modalité de référence "
-"en gras ; pour la Constante, de la valeur nulle), au seuil de confiance de "
-"%s %%"
-
-msgid ""
 "%s: significantly different from the reference category (in bold) at the %s%"
 "% confidence level"
 msgstr ""
 "%s : chiffre significativement différent de celui de la modalité de "
 "référence (en gras), au seuil de confiance de %s %%"
+
+msgid ""
+"%s: significantly different from the reference category (in bold) — from %s "
+"for the Constant — at the %s%% confidence level"
+msgstr ""
+"%s : chiffre significativement différent de celui de la modalité de "
+"référence (en gras) — de %s pour la Constante —, au seuil de confiance de %s "
+"%%"
 
 msgid "%s: at the %s%% level"
 msgstr "%s : au seuil de %s %%"
@@ -700,26 +706,42 @@ msgstr ""
 msgid "on the model's own link scale"
 msgstr "sur l'échelle de lien propre au modèle"
 
+#, fuzzy
+msgid "the observed (crude) one"
+msgstr "l'effet observé (brut)"
+
+#, fuzzy
+msgid "the adjusted predicted probability"
+msgstr "rapport des probabilités prédites ajustées"
+
+#, fuzzy
+msgid "the adjusted predicted mean"
+msgstr "rapport des valeurs prédites ajustées"
+
+#, fuzzy
+msgid "the same effect as a difference"
+msgstr "différence de moyennes"
+
+msgid "the same effect as a ratio"
+msgstr ""
+
+msgid "the same effect as an odds ratio"
+msgstr ""
+
+#, fuzzy
+msgid "the coefficient on the model's own link scale"
+msgstr "sur l'échelle de lien propre au modèle"
+
+#, fuzzy
+msgid "its distance to the observed effect"
+msgstr "aucun effet observé"
+
+#, fuzzy
 msgid ""
-"; each cell shows the modelled effect vs the reference level and, in "
-"parentheses, the observed (crude) one"
+"; each cell shows the effect vs the reference level and, in parentheses,"
 msgstr ""
 " ; chaque case indique l'effet modélisé par rapport à la modalité de "
 "référence et, entre parenthèses, l'effet observé (brut)"
-
-msgid ""
-"; each cell shows the ratio vs the reference level and, in parentheses, the "
-"adjusted predicted probability"
-msgstr ""
-" ; chaque case montre le rapport par rapport à la modalité de référence et, "
-"entre parenthèses, la probabilité prédite ajustée"
-
-msgid ""
-"; each cell shows the effect vs the reference level and, in parentheses, the "
-"adjusted predicted probability"
-msgstr ""
-" ; chaque case indique l'effet par rapport à la modalité de référence et, "
-"entre parenthèses, la probabilité prédite ajustée"
 
 msgid "data is of length 0 (possibly after filter or na = 'drop')"
 msgstr ""
@@ -1173,6 +1195,20 @@ msgstr ""
 
 msgid "tabxplor: new_reg_ctx() and new_reg_shared() both declare:"
 msgstr ""
+
+#~ msgid ""
+#~ "; each cell shows the ratio vs the reference level and, in parentheses, "
+#~ "the adjusted predicted probability"
+#~ msgstr ""
+#~ " ; chaque case montre le rapport par rapport à la modalité de référence "
+#~ "et, entre parenthèses, la probabilité prédite ajustée"
+
+#~ msgid ""
+#~ "; each cell shows the effect vs the reference level and, in parentheses, "
+#~ "the adjusted predicted probability"
+#~ msgstr ""
+#~ " ; chaque case indique l'effet par rapport à la modalité de référence et, "
+#~ "entre parenthèses, la probabilité prédite ajustée"
 
 #~ msgid "Katz interval on the log rate-ratio"
 #~ msgstr "intervalle de Katz sur le log rapport de taux"

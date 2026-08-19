@@ -233,7 +233,11 @@ tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
 ```
 
 Couleur du texte = la force du rapport de cotes ajusté. Fond = sa distance à l'effet observé : un pôle
-signifie que l'ajustement a **renforcé** l'effet, l'autre qu'il l'a **atténué**. Le premier seuil est
+signifie que l'ajustement a **renforcé** l'effet (il s'est éloigné de « pas d'effet »), l'autre qu'il
+l'a **atténué** (il s'en est rapproché). Un effet dont l'ajustement change le *sens* — observé
+au-dessus de 1, modélisé en dessous — compte comme atténué, et fortement : quoi qu'ait dit
+l'association brute, le modèle dit que ce n'est pas cela. Le renversement lui-même se voit dans la
+paire de cases, dont les `×` et `÷` pointent en sens inverse. Le premier seuil est
 ×1,1, la convention classique « une variation de 10 % de l'estimation mérite l'attention » ; viennent
 ensuite ×1,25, ×1,5 et ×2 (modifiables avec `set_color_breaks(adj_ratio = ...)`). Un effet *additif*
 reçoit une échelle additive : des points de pourcentage pour un effet marginal sur une probabilité

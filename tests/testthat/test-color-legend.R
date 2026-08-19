@@ -223,3 +223,28 @@ testthat::test_that("French catalog translates the prose when the .mo is availab
   testthat::expect_match(l, "Color\u00e9 : significativement diff\u00e9rent")
   testthat::expect_no_match(l, "Gris\u00e9 : chiffre non significativement")
 })
+
+# --- Phase 22b-iv: the stars sentence, and the gap lead that matches its own shades ----------------
+
+test_that("the stars sentence names the Constant's null only where that row is populated", {
+  d <- suppressWarnings(gss_cat_data_formatting())
+  co <- suppressMessages(tab_reg(d, "married", c("race", "relig"), family = "binomial"))
+  testthat::expect_match(tabxplor:::tab_stars_legend(co),
+                         "reference category (in bold)", fixed = TRUE)
+  testthat::expect_match(tabxplor:::tab_stars_legend(co), "from 1 for the Constant", fixed = TRUE)
+  # a marginal table has a Constant ROW but no intercept to show -> no aside
+  mg <- suppressMessages(tab_reg(d, "married", c("race", "relig"), family = "binomial",
+                                 effect = "marginal"))
+  testthat::expect_false(grepl("Constant", tabxplor:::tab_stars_legend(mg), fixed = TRUE))
+})
+
+test_that("a gap measure's legend states distance-from-the-null, which is what it grades", {
+  d <- suppressWarnings(gss_cat_data_formatting())
+  t <- suppressMessages(tab_reg(d, "married", c("race", "relig"), family = "binomial",
+                                empirical = TRUE, color = "adjustment"))
+  lg <- paste(tab_md(t, print = FALSE), collapse = " ")
+  testthat::expect_match(lg, "further from no effect than the observed (crude) effect", fixed = TRUE)
+  testthat::expect_match(lg, "closer to no effect than the observed (crude) effect",  fixed = TRUE)
+  # the generic signed-move lead is exactly what the score does NOT compute
+  testthat::expect_false(grepl("OR \u2265 the observed", lg))
+})

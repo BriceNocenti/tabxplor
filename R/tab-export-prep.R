@@ -696,14 +696,18 @@ roles_col_var_edges <- function(col_var_map, other_cols = NULL, real_col_vars = 
   else                 which(nzchar(cv) & cv != dplyr::lag(cv, default = NA_character_))
 }
 
-# tx_strip_outcome_suffix() -- Phase 19h: the trailing " [outcome]" disambiguation bracket, removed in
-# ONE place. A regression column built across several outcomes carries it in its stored NAME
+# tx_strip_outcome_suffix() -- the trailing " [outcome]" disambiguation bracket, removed in ONE
+# place. A regression column built across several outcomes carries it in its stored NAME
 # ("Model_OR [married]") so the console can tell two outcomes' columns apart; wherever the outcome is
 # already named -- the col_var span row above the level header, the colour legend -- it is noise.
-# The regex was written twice, each copy commenting that the other existed. The two GATES stay local:
-# the header strip keys on the column's own role, the legend on the group carrying any role at all.
+# The two GATES stay local: the header strip keys on the column's own role, the legend on the group
+# carrying any role at all.
+# WARNING: the separator is NOT always a plain space. tab_export_prep() runs tab_wrap_text() BEFORE
+# building the header, and it rewrites a name's spaces into U+202F or breaks them with `<br>` -- so a
+# regex anchored on " " silently stopped matching in html alone, and only there.
 #' @keywords internal
-tx_strip_outcome_suffix <- function(x) sub(" \\[[^]]*\\]$", "", x)
+tx_strip_outcome_suffix <- function(x)
+  sub("([[:space:]\u202f\u00a0]|<br>)*\\[[^]]*\\]$", "", x)
 
 # tx_num_font() -- Phase 19h: THE number-font rule, which is one DECISION written twice.
 #

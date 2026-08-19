@@ -502,7 +502,11 @@ reg_footer_plan <- function(reg) {
   keep <- reg$test %in% names(spec)
   if (!any(keep)) return(NULL)
   k <- unique(data.frame(test = reg$test[keep], term = tm[keep], stringsAsFactors = FALSE))
-  k <- k[order(match(k$test, names(spec)), k$term), , drop = FALSE]
+  # DESIGN: rows group by KIND (the TEST_ROWS declaration order) and, inside a kind, keep the order
+  # they were BUILT in -- which for a per-predictor row is the model's own term order
+  # (`terms(fit)$term.labels`). Sorting on the term name instead alphabetised the predictors, so a
+  # footer listed them in an order the formula never had.
+  k <- k[order(match(k$test, names(spec)), seq_len(nrow(k))), , drop = FALSE]
   sp <- spec[k$test]
   lab <- vapply(sp, `[[`, character(1), "label")
   k$label  <- ifelse(nzchar(k$term), paste0(lab, ": ", k$term), lab)

@@ -31,8 +31,10 @@
 # FORMALS ARE THE CONTRACT, so a slot is never a missing binding. Two carry a PLACEHOLDER, a worker
 # not knowing what exists only once every spec is built: the footer rows' `col` is this spec's
 # PRE-make.unique() first column label, overwritten wholesale by the footer stage, and a tooltip
-# fragment carries `col_idx` / `row` indices reg_stage_tips() maps to the final labels -- which is
-# what frees the tooltips from needing the rows stage first.
+# fragment carries a column LABEL plus a `row` index reg_stage_tips() maps to the final names --
+# which is what frees the tooltips from needing the rows stage first.
+# ⚠ a placeholder is a NAME, never a position: step 6b below may prepend a crude column, so an index
+# taken while the columns are being built no longer points at the same column afterwards.
 #' @keywords internal
 #' @noRd
 new_reg_spec_product <- function(
@@ -250,7 +252,9 @@ reg_spec_tips_mnl <- function(sp, e, cols, ctx) {
     j  <- mi2[keep]
     pr <- tipsd$emp_prop[j]; df <- tipsd$emp_diff[j]
     tibble::tibble(
-      col_idx = k, row = which(keep),
+      # ⚠ the column is named, not numbered: step 6b below may prepend a crude column, which would
+      # shift any index taken here (reg_stage_tips() resolves it through `product_labels`).
+      col_label = b$label, row = which(keep),
       var   = as.character(skeleton$var[keep]),
       tip   = ifelse(skeleton$is_ref[keep],
                      sprintf("crude: %.0f%% [%.0f; %.0f]",

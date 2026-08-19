@@ -331,14 +331,6 @@ reg_resolve_output <- function(display = NULL, color = TRUE, color_signif = NULL
                                    "observed one, so {.code empirical = TRUE} is turned on.")))
     empirical <- TRUE
   }
-  # `between_groups` also gets the AGGREGATED interaction test in the footer, costing one extra fit.
-  if (any(vapply(color_arg, measure_forces, logical(1), "interaction")) && !is.null(tab_vars) &&
-      !(is.character(stats) && "interaction" %in% stats)) {
-    cli::cli_inform(c("i" = paste0("{.code color = \"between_groups\"} also adds the aggregated ",
-                                   "interaction test to the footer (one extra model fit). Ask for it ",
-                                   "without the colours with {.code stats = c(..., \"interaction\")}.")))
-  }
-
   # --- Z: the `empirical` degrade ---------------------------------------------------------------
   # Kept ON whenever ANY outcome supports a crude companion; dropped only when NONE is eligible.
   # Reads the SPEC's own stored answer (`deps$crude_key`), never re-derived from the outcome family.

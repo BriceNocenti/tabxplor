@@ -342,3 +342,25 @@ test_that("on a split table the per-predictor rows name the predictors, not the 
   expect_setequal(unique(g$grp), c("early", "late"))
   expect_false(any(g$var %in% c("early", "late")))
 })
+
+# --- Phase 22b-iv: the footer follows the model ---------------------------------------------------
+
+test_that("per-predictor footer rows keep the model's term order, not the alphabet", {
+  d <- suppressWarnings(gss_cat_data_formatting())
+  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome", "relig"), family = "binomial"))
+  lab <- tabxplor:::reg_footer_plan(get_test(t))$label
+  glob <- sub("^.*: ", "", grep("^Overall association", lab, value = TRUE))
+  testthat::expect_equal(glob, c("race", "rincome", "relig"))
+})
+
+test_that("the footer and the crude tooltips key onto the MODEL column, never the spliced Obs_ one", {
+  skip_if_not_installed("nnet")
+  d <- suppressWarnings(gss_cat_data_formatting())
+  t <- suppressMessages(tab_reg(d, "party3", c("race", "relig"), family = "multinomial",
+                                empirical = "column"))
+  mdl <- names(t)[vapply(t, function(x) is_fmt(x) && identical(get_role(x), "model"), logical(1))]
+  testthat::expect_true(all(unique(get_test(t)$col) %in% mdl))
+  tips <- attr(t, "meta")$empirical_tips
+  testthat::expect_gt(nrow(tips), 0L)
+  testthat::expect_true(all(unique(tips$col) %in% mdl))
+})

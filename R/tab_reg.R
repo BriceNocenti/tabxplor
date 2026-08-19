@@ -2293,6 +2293,31 @@ reg_write_group_gap <- function(parts, color, conf_level = 0.95, method = "wald"
 }
 
 
+# The reference GROUP's columns, marked as the reading anchor of `between_groups` -- the twin of the
+# crude column `adjustment` marks (reg-empirical.R). Uncoloured by construction (their own `obs` is
+# empty), so `refcol` is what says which block the shades beside them are measured from, and
+# get_reference()'s gap arm then bolds them whole.
+# ⚠ ONLY after the spread: `refcol` merges "same" and falls to its neutral on disagreement, so a
+# per-group stamp cannot survive the vec_rbind() -- and in the stacked shape the reference group is a
+# block of ROWS, where a reference COLUMN would be a lie. The synthesised `n` column is left alone:
+# it carries no estimate to be a baseline for.
+#' @keywords internal
+#' @noRd
+reg_mark_ref_group <- function(tab, ref_level, color) {
+  if (!any(vapply(color, function(k) {
+    mk <- measure_key(k)
+    !is.na(mk) && nzchar(mk) && identical(MEASURES[[mk]]$ref_kind, "group")
+  }, logical(1)))) return(tab)
+  for (nm in names(tab)) {
+    cl <- tab[[nm]]
+    if (!is_fmt(cl) || !get_role(cl) %in% c("model", "emp")) next
+    if (!identical(get_col_group(cl), as.character(ref_level))) next
+    tab[[nm]] <- as_refcol(cl, TRUE)
+  }
+  tab
+}
+
+
 # THE assembly tail, shared by BOTH branches of reg_build(). A weighted tab_reg() is ALWAYS on the
 # weighted basis, so tab()'s design_effect option is never read. ⚠ `basis` / `degf` are NULL on the
 # split branch BY DESIGN: each group stamped its own, and the vec_rbind() reconcile took the weakest.
@@ -2392,9 +2417,11 @@ new_reg_ctx <- function(
     # NULL when the table has several outcomes (each spec builds its own) or no crude companion.
     crude = NULL,
     # --- reg_stage_specs: one new_reg_spec_product() per spec, and the column LAYOUT -------------
-    # `built` is the flattened VIEW of the products' `cols`, in order.
+    # `built` is the flattened VIEW of the products' `cols`, in order; `labels` their uniquified
+    # names; `product_labels` those same names split back per product, which is how every later
+    # stage names one of a product's columns without recomputing a position.
     products = list(),
-    built = list(), labels = character(0),
+    built = list(), labels = character(0), product_labels = list(),
     fit_first_idx = integer(0), fit_first_col = character(0),
     emp_degraded = FALSE,
     # --- reg_stage_footer: the `test` tibble -----------------------------------------------------
@@ -2480,7 +2507,7 @@ reg_stage_split <- function(ctx) {
   # the groups go side by side whenever that is unambiguous -- ONE model, not multinomial. An
   # internal rule: tab_spread() is the public way to set the layout.
   if (length(specs) == 1L && !identical(family, "multinomial")) {
-    return(tab_spread(grouped, tidyselect::all_of(tab_vars)))
+    return(reg_mark_ref_group(tab_spread(grouped, tidyselect::all_of(tab_vars)), sl[[1L]], color_ms))
   }
   return(grouped)
 }
@@ -2827,16 +2854,27 @@ reg_stage_specs <- function(ctx) {
   built  <- purrr::flatten(purrr::map(products, "cols"))
   labels <- make.unique(purrr::map_chr(built, "label"))
 
-  # the footer keys each fit's GOF to its FIRST output column. ⚠ every model owns at least one column
-  # and the LAYOUT depends on it: two models sharing a fit_first_idx would collide in the assembler's
-  # match(), silently dropping the second's crude block.
+  # `fit_first_idx` = each product's OFFSET into `built`, which the assembler and the tooltips index
+  # from. ⚠ every model owns at least one column and the LAYOUT depends on it: two models sharing an
+  # offset would collide in the assembler's match(), silently dropping the second's crude block.
   fit_ncol      <- purrr::map_int(products, ~ length(.x$cols))
   if (any(fit_ncol == 0L)) cli::cli_abort("Internal: a model produced no column.")
   fit_first_idx <- cumsum(c(1L, utils::head(fit_ncol, -1L)))
-  fit_first_col <- labels[fit_first_idx]
+  # `product_labels[[k]]` = the UNIQUIFIED names product k's own columns ended up with, in order.
+  # DESIGN: everything downstream keys a column BY LABEL through this, never by a position computed
+  # before the product was assembled -- step 6b of reg_spec_build_one() PREPENDS a crude column, so an
+  # index taken earlier points one column too far left. That silently keyed the whole footer, and the
+  # multinomial crude tooltips, onto the `Obs_*` column.
+  product_labels <- purrr::map2(fit_first_idx, fit_ncol, ~ labels[.x + seq_len(.y) - 1L])
+  # the footer keys each fit's GOF to its MODEL column -- the column the numbers belong to, whatever
+  # crude companions were spliced in beside it.
+  fit_first_col <- purrr::map2_chr(products, product_labels, function(p, lb) {
+    m <- which(purrr::map_chr(p$cols, ~ get_role(.x$col)) == "model")
+    lb[[if (length(m)) m[[1L]] else 1L]]
+  })
 
   ctx_update(ctx, list(products = products, skeleton = skeleton,
-                        built = built, labels = labels,
+                        built = built, labels = labels, product_labels = product_labels,
                         fit_first_idx = fit_first_idx, fit_first_col = fit_first_col,
                         emp_degraded = any(purrr::map_lgl(products, ~ isTRUE(.x$degraded))) ||
                           isTRUE(crude$degraded)))
@@ -2853,6 +2891,8 @@ reg_stage_specs <- function(ctx) {
 reg_stage_footer <- function(ctx) {
   list2env(reg_ctx_locals(ctx), environment())
 
+  # every per-fit row is rekeyed onto that fit's MODEL column: the spec wrote a placeholder before
+  # make.unique() ran, and the crude columns spliced in beside it are not what the gof describes.
   rekey <- function(slot) {
     rows <- purrr::compact(purrr::map(seq_along(products), function(k) {
       r <- products[[k]][[slot]]
@@ -3010,8 +3050,8 @@ reg_stage_assemble <- function(ctx) {
 # `meta$empirical_tips`, from the products' fragments. The two blocks that produce them live in
 # reg_spec_build(), because both read the crude block's HEAVY halves -- the grid and the
 # complete-case frame -- which must not travel back from a worker. What arrives is keyed by SKELETON
-# ROW and, for the multinomial fragment, by WITHIN-SPEC COLUMN. ⚠ SLOT-MAJOR, the order the two
-# blocks ran in.
+# ROW and, for the multinomial fragment, by the within-spec column's own LABEL, resolved here
+# through `product_labels`. ⚠ SLOT-MAJOR, the order the two blocks ran in.
 #' @keywords internal
 #' @noRd
 reg_stage_tips <- function(ctx) {
@@ -3020,7 +3060,8 @@ reg_stage_tips <- function(ctx) {
   mnl <- purrr::compact(purrr::map(seq_along(products), function(k) {
     fr <- products[[k]]$tips$mnl
     if (is.null(fr) || nrow(fr) == 0L) return(NULL)
-    tibble::tibble(col   = labels[fit_first_idx[[k]] + fr$col_idx - 1L],
+    tibble::tibble(col   = product_labels[[k]][match(fr$col_label,
+                                                    purrr::map_chr(products[[k]]$cols, "label"))],
                    var   = fr$var,
                    level = disp_levels[fr$row],
                    tip   = fr$tip)

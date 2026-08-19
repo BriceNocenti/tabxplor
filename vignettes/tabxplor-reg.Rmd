@@ -225,7 +225,11 @@ tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
 ```
 
 Text colour = how strong the adjusted odds ratio is. Background = how far it sits from the observed
-one: one pole means adjustment **strengthened** the effect, the other that it **attenuated** it. The
+one: one pole means adjustment **strengthened** the effect (it moved further from "no effect"), the
+other that it **attenuated** it (it moved closer). An effect that changed *direction* under
+adjustment — crude above 1, modelled below it — counts as attenuated, and strongly so: whatever the
+raw association said, the model says it is not that. You can see the reversal itself in the pair of
+cells, whose `×` and `÷` face opposite ways. The
 first threshold is ×1.1, the classic "a 10% change in the estimate is worth noticing" convention; the
 rest are ×1.25, ×1.5 and ×2 (change them with `set_color_breaks(adj_ratio = ...)`). An *additive*
 effect gets an additive ladder instead: percentage points for a marginal effect on a probability

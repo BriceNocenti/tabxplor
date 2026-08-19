@@ -151,8 +151,12 @@ test_that("the score is toward/away from the null, not raw up/down", {
   s <- tabxplor:::fmt_adjustment_score(mk(c(0.5 / 1.2, 2 * 1.2), c(0.5, 2)))
   testthat::expect_equal(s[[1]], s[[2]])
   testthat::expect_gt(s[[1]], 1)
-  # crossing the null still reads as strengthened (|log 1.2| > |log 0.9|)
-  testthat::expect_gt(tabxplor:::fmt_adjustment_score(mk(1.2, 0.9)), 1)
+  # a REVERSAL (the two on opposite sides of the null) reads as attenuation: whatever the observed
+  # effect claimed, the model says it is not that. Its magnitude is the FULL move, so a big flip is
+  # a big move -- and a perfect mirror can no longer score as the deepest "strengthened".
+  testthat::expect_lt(tabxplor:::fmt_adjustment_score(mk(1.2, 0.9)), 1)
+  testthat::expect_equal(tabxplor:::fmt_adjustment_score(mk(1.2, 0.9)), 0.9 / 1.2)
+  testthat::expect_equal(tabxplor:::fmt_adjustment_score(mk(0.5, 2)), 0.25)
   # equal estimates are neutral, whatever the scale
   testthat::expect_equal(tabxplor:::fmt_adjustment_score(mk(2, 2)), 1)
   add <- fmt(n = c(1L, 1L), diff = c(0.1, -0.1), obs = c(0.1, -0.1),
