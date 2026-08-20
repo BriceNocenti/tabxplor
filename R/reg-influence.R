@@ -115,6 +115,16 @@ reg_coef_if_maker <- function(fit, V = NULL) {
 # `y` and its weights come from reg_crude_yw(), matching the estimate this is the SE of:
 #   grouped binomial : y = succ/trials, weight w*trials; reg_if_se() sums over ROWS (cluster-robust).
 #   multinomial      : `category` picks the 0/1 indicator of that outcome category.
+#
+# ⚠ WHICH CONTRAST, read off the estimator rather than assumed. A categorical outcome offers two, and
+# they are different quantities:
+#   * category vs REST   -- what a marginal probability contrast estimates (identity / log link).
+#   * category vs PIVOT  -- what a multinomial's own CONDITIONAL odds ratio estimates, and what the
+#     crude column's interval computes since 22b-xiii-1. Restricting the weights to the {category,
+#     pivot} pair makes `mu` the share WITHIN the pair, whose logit is that log-odds; unweighted, the
+#     resulting SE is exactly Woolf on the restricted 2x2, as it is for the binary case below.
+# The two coincide when the outcome has 2 categories ("the rest" IS the pivot), which is why a binary
+# outcome needs no arm of its own.
 #' @keywords internal
 reg_crude_if_maker <- function(data, outcome, crude_key, positive_level, wt, link,
                                trials = NULL, category = "", ref_category = NULL) {
@@ -128,9 +138,13 @@ reg_crude_if_maker <- function(data, outcome, crude_key, positive_level, wt, lin
                  error = function(e) NULL)
   if (is.null(yw)) return(NULL)
   # a categorical outcome averages the 0/1 indicator of the category this column shows
+  cat_lv <- if (nzchar(category)) category else "1"
   y <- if (identical(yw$cats, "")) as.numeric(yw$y) else
-    as.numeric(as.character(yw$y) == (if (nzchar(category)) category else "1"))
+    as.numeric(as.character(yw$y) == cat_lv)
   w <- yw$w
+  # an ODDS ratio on a 3+ category outcome is conditional on the pivot: drop everything else.
+  if (length(yw$cats) > 2L && identical(as.character(link)[1], "logit"))
+    w <- w * as.numeric(as.character(yw$y) %in% c(cat_lv, yw$ref))
   if (length(y) != nrow(data) || length(w) != nrow(data)) return(NULL)
   fin <- is.finite(y) & is.finite(w)
   function(var, level, ref) {

@@ -402,7 +402,7 @@ tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks")
 |:-----------------|:----------------------------------------------------------------------------|:-----------------------------------------------|
 | `"coefficient"`  | the model's own coefficients — the deviation is what the model fits          | anybody — it assumes one answer fits everyone  |
 | `"marginal"`     | worked out from the model's predictions, for every real person, then averaged | the people you actually surveyed               |
-| `"at_reference"` | worked out the same way, but for one imaginary person                        | the reference profile, and nobody else         |
+| `"at_reference"` | worked out the same way, at one **ideal-typical** profile                    | that profile — a figure you built on purpose   |
 
 So the three arguments are three questions, asked in this order: **`family`** — what kind of number is your outcome? **`measure`** — which kind of deviation do you want? **`effect`** — should the model fit that deviation directly, or work it out from the family's own measure?
 
@@ -410,11 +410,13 @@ That order is not the order they appear in the help page, and it is deliberate. 
 
 The two do meet in one place, worth knowing rather than discovering: on the `"coefficient"` row the measure **is** the coefficient, so asking there for something other than the family's own measure changes the model that is fitted. At `"marginal"` and `"at_reference"` the model is always the family's own, and only the last step differs. `vignette("tabxplor-reg")` sets out which combinations do what.
 
+**And a word on `"at_reference"`, because "reference profile" undersells it.** That profile is not an average and not an accident: it is a **figure you construct**, one level of every predictor, chosen because it is worth thinking about. Sociologists have a name for that move — Weber's **ideal type**: a deliberate simplification, built to think with rather than to describe anyone in particular. `ref` is what builds it, so *the young male senior manager* and *the older woman in an unskilled job* are both one argument away, and the model will tell you what it expects of each. Section 2's warning applies with full force, though: an ideal type is built, not found, so check how many people it actually fits before you let it speak for them.
+
 **And a word on "marginal", because the word puts people off.** It does not mean *slight*, and it has nothing to do with being marginal in importance. It is the same *margin* as the **margins of a cross-table** — the Total row you have been reading since the first page. A total is what you get when you stop splitting people into groups and look at everybody at once, and that is the operation here: the model works the effect out for each respondent, at their own combination of characteristics, and then averages, the way a Total row averages over the rows above it.
 
 ⚠ **One thing "marginal" does *not* mean is "unadjusted".** The Total row of a cross-table is both marginal and unadjusted, which makes the trap an easy one to fall into. A marginal effect is still fully adjusted: every one of those per-person figures is computed with the other predictors held at that person's own values. What is averaged away is not the adjustment — it is the fact that the effect is a different size for different people.
 
-**And that is why the round trip closes here, and not anywhere else.** Going out, we left the percentages behind and climbed onto the odds scale, which is where the model does its work; that step was necessary and it made the numbers abstract. Averaging back over real people is the step that brings us down again: it lands on the very scale the counted percentages live on, which is what lets the modelled figure and the observed one sit in the same row and be compared at all. `at_reference` does not do that — it lands on a single profile, and Section 2 showed you one that described seven people.
+**And that is why the round trip closes here, and not anywhere else.** Going out, we left the percentages behind and climbed onto the odds scale, which is where the model does its work; that step was necessary and it made the numbers abstract. Averaging back over real people is the step that brings us down again: it lands on the very scale the counted percentages live on, which is what lets the modelled figure and the observed one sit in the same row and be compared at all. `at_reference` does not do that — it lands on a single profile, and Section 2 showed you one that fitted seven people.
 
 **The risk ratio** — `effect = "marginal", measure = "ratio"`. Now it *is* "how many times as likely".
 

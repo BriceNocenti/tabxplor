@@ -347,3 +347,58 @@ test_that("`between_groups` marks the reference group's columns refcol, spread o
   fst <- names(st)[vapply(st, is_fmt, logical(1))]
   testthat::expect_false(any(vapply(st[fst], function(cl) isTRUE(is_refcol(cl)), logical(1))))
 })
+
+
+# --- 22b-xiii-2 (C2): the SE is recovered with the crit that BUILT the interval -------------------
+
+test_that("a t-referred column's gap SE is not inflated by t/z", {
+  # reg_gap_se_of() used to divide every printed half-width by z, on the stated ground that "the gap
+  # test is a z test throughout". But the interval it reads was built with t on any gaussian, quasi
+  # or svyglm column, so the recovered SE came back inflated by exactly qt(df)/z -- +31 % at 5 df,
+  # which costs discoveries and mis-sizes forest_plot()'s gap band. Recovering and testing are two
+  # decisions: recover with the column's own critical value, test with z.
+  d  <- gap_data()
+  sp <- suppressMessages(tab_reg(d, outcome = "age", predictors = "race", tab_vars = "party3",
+                                 family = "gaussian", color = c(TRUE, "between_groups")))
+  fc <- reg_fmt_cols(sp)
+  hand <- function(g) {
+    f <- stats::lm(age ~ race, data = d[d$party3 == g, ])
+    summary(f)$coefficients[, "Std. Error"]
+  }
+  se_ref <- hand("Ind")
+  seen <- 0L
+  for (g in c("Dem", "Rep")) {
+    expected <- sqrt(hand(g)^2 + se_ref^2)
+    got      <- get_gap_se(sp[[reg_group_col(sp, g)]])
+    testthat::expect_equal(got[c(1L, 3L, 4L)], unname(expected), tolerance = 1e-6)
+    seen <- seen + 1L
+  }
+  testthat::expect_identical(seen, 2L)
+  # NON-VACUOUS: a gaussian column really is on t, so the old z recovery was a different number.
+  mc <- sp[[reg_group_col(sp, "Dem")]]
+  testthat::expect_true(is.finite(get_degf(mc)))
+  testthat::expect_gt(conf_level_to_crit(0.95, get_degf(mc)), zscore_formula(0.95))
+})
+
+test_that("a pinned gap bound renders as the null, never as a negative zero", {
+  # C3: `p$sign * pmax(0, |gap| - half)` is IEEE -0 whenever the near bound is pinned and the score is
+  # negative (an ATTENUATED gap), and sprintf("%+.1f", -0) prints "-0.0" -- which reads as "just
+  # excludes the null" when it IS the null, right beside a p-value saying the opposite.
+  # Hand-built, because a fixture only pins a bound by luck: cell 1 is attenuated and not
+  # significant (so its near bound pins), cell 2 is amplified and significant (so it does not).
+  x  <- fmt(n = c(10L, 10L), diff = c(0.10, 0.30), obs = c(0.12, 0.10),
+            gap_se = c(0.05, 0.02), scale = "points", color = "adjustment")
+  bd <- tabxplor:::fmt_gap_bounds(x)
+  pv <- tabxplor:::fmt_gap_p(x)
+  testthat::expect_gt(pv[[1]], 0.05); testthat::expect_lt(pv[[2]], 0.05)
+  pinned <- c(bd$lo, bd$hi)[c(bd$lo, bd$hi) == 0]
+  testthat::expect_length(pinned, 1L)                       # cell 1 pins, cell 2 does not
+  rendered <- vapply(pinned, function(v) tabxplor:::fmt_gap_render(x, v), character(1))
+  testthat::expect_false(any(grepl("^-", rendered)))
+  testthat::expect_identical(unname(rendered), "+0.0 pts")
+  # the multiplicative branch pins at exp(0) == 1, where a signed zero never showed.
+  m  <- fmt(n = c(10L, 10L), or = c(1.10, 2.00), obs = c(1.20, 1.10),
+            gap_se = c(0.30, 0.05), scale = "odds_ratio", color = "adjustment")
+  mb <- tabxplor:::fmt_gap_bounds(m)
+  testthat::expect_true(any(c(mb$lo, mb$hi) == 1))
+})

@@ -584,3 +584,29 @@ test_that("a multinomial crude odds ratio brackets the estimand it prints", {
   }
   expect_gt(done, 3L)   # the comparison must actually have run: this test went vacuous once
 })
+
+test_that("a multinomial crude column answers for its NUMERIC predictors too", {
+  # 22b-xiii-2. A 3+ level fit answers PER OUTCOME CATEGORY, but reg_empirical_fit()'s coefficient
+  # branch stamped `category = ""` while emit() looks its rows up under the category key -- so every
+  # fit-derived row missed, and each crude column left its numeric predictors entirely empty.
+  skip_if_not_installed("nnet")
+  d  <- emp_data()
+  dm <- d[stats::complete.cases(d[c("party3", "race", "tvhours")]), ]
+  t  <- suppressMessages(tab_reg(dm, "party3", c("race", "tvhours"), family = "multinomial",
+                                 empirical = "column", cleannames = FALSE, stats = FALSE))
+  i <- which(as.character(t$var) == "tvhours")
+  expect_length(i, 1L)
+  cols <- names(t)[vapply(t, function(x) is_fmt(x) && identical(get_role(x), "emp"), logical(1))]
+  expect_gt(length(cols), 1L)
+  # the univariable multinom, per SD -- tab_reg's own default multiplier. ⚠ loose tolerance: two
+  # independent nnet::multinom runs agree only to its optimiser's own convergence tolerance.
+  m  <- nnet::multinom(party3 ~ tvhours, data = dm, trace = FALSE)
+  k  <- stats::sd(dm$tvhours)
+  hand <- exp(summary(m)$coefficients[, "tvhours"] * k)
+  for (cn in cols) {
+    cat_j <- sub(" vs .*$", "", sub("^Obs_", "", cn))
+    expect_true(is.finite(get_or(t[[cn]])[i]))
+    expect_equal(get_or(t[[cn]])[i], unname(hand[[cat_j]]), tolerance = 1e-4)
+    expect_true(is.finite(get_ci_inf(t[[cn]])[i]))
+  }
+})

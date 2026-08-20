@@ -146,9 +146,10 @@ test_that("the covariance is real: the gap SE sits strictly inside the two naive
   t <- gapb_tab(d)
   x <- gapb_model_col(t)
   o <- t[[grep("^Obs_(RR|OR|IRR)", names(t), value = TRUE)[[1]]]]
-  z <- conf_level_to_z(0.95, digits = 12)
-  se_m <- tabxplor:::reg_gap_se_of(x, z)
-  se_o <- tabxplor:::reg_gap_se_of(o, z)
+  # reg_gap_se_of() recovers with the column's OWN critical value (22b-xiii-2 / C2), so it needs no
+  # crit argument: a t-referred interval would otherwise come back inflated by t/z.
+  se_m <- tabxplor:::reg_gap_se_of(x)
+  se_o <- tabxplor:::reg_gap_se_of(o)
   g    <- get_gap_se(x)
   k    <- which(is.finite(g) & is.finite(se_m) & is.finite(se_o))
   testthat::expect_gt(length(k), 3L)
@@ -454,4 +455,43 @@ test_that("D3: an unrecorded level stays unknown through a bind (it must not bak
   x <- fmt(1, conf_level = 0.95); y <- fmt(2, conf_level = 0.99)
   testthat::expect_identical(tabxplor:::fmt_conf_level_attr(c(x, x)), 0.95)
   testthat::expect_true(is.na(tabxplor:::fmt_conf_level_attr(c(x, y))))
+})
+
+
+# --- 22b-xiii-2 (Part 5): the crude influence leg reads its shape's CONTRAST ----------------------
+
+test_that("the crude influence function builds the contrast its estimate is of", {
+  # A categorical outcome offers two contrasts and they are different quantities. The maker used to
+  # build category-vs-REST unconditionally: right for a marginal probability contrast, wrong for a
+  # multinomial's own conditional ODDS ratio, which is category-vs-PIVOT -- and which is what the
+  # crude column's interval computes since 22b-xiii-1. Both arms are asserted against hand values, so
+  # neither can drift into the other.
+  d <- gapb_data()
+  d <- d[stats::complete.cases(d[c("party3", "race")]), ]
+
+  # vs PIVOT (logit, 3 categories): the SE is exactly Woolf on the {category, pivot} x {level, ref}
+  # 2x2 -- the same table the crude interval is built from.
+  mk <- tabxplor:::reg_crude_if_maker(d, "party3", "multinomial", NULL, NULL, "logit",
+                                      category = "Rep", ref_category = "Ind")
+  v  <- mk("race", "Black", "White")
+  tb <- table(d$race, d$party3)[c("White", "Black"), c("Ind", "Rep")]
+  expect_equal(tabxplor:::reg_if_se(v), sqrt(sum(1 / tb)), tolerance = 1e-8)
+
+  # vs REST (identity): the SE of a difference of two independent proportions -- untouched.
+  mk2 <- tabxplor:::reg_crude_if_maker(d, "party3", "multinomial", NULL, NULL, "identity",
+                                       category = "Rep", ref_category = "Ind")
+  v2  <- mk2("race", "Black", "White")
+  p   <- tapply(d$party3 == "Rep", d$race, mean)
+  n   <- table(d$race)
+  expect_equal(tabxplor:::reg_if_se(v2),
+               sqrt(sum((p * (1 - p) / n)[c("Black", "White")])), tolerance = 1e-8)
+  # NON-VACUOUS: the two contrasts really are different numbers.
+  expect_false(isTRUE(all.equal(tabxplor:::reg_if_se(v), tabxplor:::reg_if_se(v2))))
+
+  # a BINARY outcome has only one contrast ("the rest" IS the pivot), so it needs no arm of its own:
+  # the logit leg is still exactly Woolf.
+  b  <- tabxplor:::reg_crude_if_maker(d, "married", "binomial", "yes", NULL, "logit")
+  vb <- b("race", "Black", "White")
+  tb2 <- table(d$race, d$married)[c("White", "Black"), c("yes", "no")]
+  expect_equal(tabxplor:::reg_if_se(vb), sqrt(sum(1 / tb2)), tolerance = 1e-8)
 })

@@ -307,3 +307,59 @@ test_that("empirical: gaussian now produces crude columns (Phase 14v)", {
   expect_true("Obs_diff" %in% names(tg))
   expect_true(any(is.finite(get_mean(tg[["Obs_diff"]]))))     # the crude mean rides in the same cell
 })
+
+
+# --- 22b-xiii-2 (C1 / G7): ONE reference distribution per table, taken from the fit ---------------
+
+test_that("every column of a fit refers to the SAME distribution, and stores which", {
+  # A table used to refer three ways at once: the coefficient column to t(df.residual), the crude
+  # column to t(degf(design)), and every marginal / baseline column to z. The df is now decided once
+  # per fit and read back by everything it produces -- and stamped, so the gap SE can recover an SE
+  # with the very critical value that built the interval.
+  d   <- reg_survey_data()
+  des <- survey::svydesign(ids = ~psu, strata = ~strata, weights = ~w, data = d, nest = TRUE)
+  d01 <- dplyr::mutate(d, y01 = as.integer(y == levels(y)[1]))
+  hand <- survey::svyglm(y01 ~ x1 + x2,
+                         design = survey::svydesign(ids = ~psu, strata = ~strata, weights = ~w,
+                                                    data = d01, nest = TRUE),
+                         family = quasibinomial())
+  dfr <- as.double(stats::df.residual(hand))
+  expect_lt(dfr, as.double(survey::degf(des)))          # non-vacuous: the two really differ
+
+  degf_of <- function(t, role) {
+    cols <- names(t)[vapply(t, function(x) is_fmt(x) && identical(get_role(x), role), logical(1))]
+    unique(vapply(cols, function(n) get_degf(t[[n]]), numeric(1), USE.NAMES = FALSE))
+  }
+  for (eff in c("coefficient", "marginal", "at_reference")) {
+    if (eff != "coefficient") skip_if_not_installed("marginaleffects")
+    t <- suppressMessages(suppressWarnings(
+      tab_reg(des, "y", c("x1", "x2"), effect = eff, empirical = "column")))
+    # EVERY column of the model's own fit -- the estimate, the marginal sweep, the baseline row.
+    expect_identical(degf_of(t, "model"), dfr, info = eff)
+    # ⚠ the crude column is a DIFFERENT fit (one predictor, hence fewer parameters), so it refers to
+    # more df -- the weakest of its own univariable fits. One reference per FIT, not per table.
+    expect_length(degf_of(t, "emp"), 1L)
+    expect_gt(degf_of(t, "emp"), dfr)
+  }
+  # and the interval really is est +/- qt(df) * se: recover the SE from the coefficient column and
+  # compare with the fit's own.
+  t  <- suppressMessages(tab_reg(des, "y", c("x1", "x2"), multiplier = 1, ref = c(x2 = 0)))
+  mc <- t[[grep("^Model_", names(t), value = TRUE)[[1]]]]
+  k  <- which(is.finite(get_ci_inf(mc)) & as.character(t$var) != "Constant")
+  se <- (log(get_ci_sup(mc)[k]) - log(get_ci_inf(mc)[k])) / (2 * stats::qt(.975, dfr))
+  expect_equal(sort(se), sort(unname(sqrt(diag(stats::vcov(hand)))[-1])), tolerance = 1e-8)
+  # the design's own df is a TABLE fact now, and it is what the "Model:" footer names.
+  expect_identical(reg_call(t)$design_degf, as.double(survey::degf(des)))
+  expect_match(tabxplor:::reg_model_lines(t)[[1]],
+               paste0("t\\(", dfr, "\\) on ", survey::degf(des), " design df"))
+})
+
+test_that("a family that FIXES its dispersion stays on z, weighted or not", {
+  d <- reg_survey_data()
+  t <- suppressMessages(tab_reg(d, "y", c("x1", "x2")))          # unweighted binomial
+  mc <- t[[grep("^Model_", names(t), value = TRUE)[[1]]]]
+  expect_identical(get_degf(mc), Inf)                            # NA stamp -> refer to z
+  g <- suppressWarnings(suppressMessages(tab_reg(d, "x2", "x1", family = "gaussian")))
+  gc <- g[[grep("^Model_", names(g), value = TRUE)[[1]]]]        # lm: dispersion ESTIMATED -> t
+  expect_identical(get_degf(gc), as.double(stats::df.residual(stats::lm(x2 ~ x1, data = d))))
+})

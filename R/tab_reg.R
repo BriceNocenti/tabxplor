@@ -16,6 +16,15 @@
 #     poisson) and to t(df.residual) where it is ESTIMATED (lm, quasi*, weighted svyglm), which is
 #     what makes it match broom's own z / t p exactly. `"profile"` pairs confint() with the
 #     likelihood-ratio p, its dual.
+#   - ONE REFERENCE DISTRIBUTION PER FIT. That z-or-t choice is made ONCE, in reg_fit(), and travels
+#     out with the tidy (`disp_known` / `df_residual`); the marginal sweep, the baseline row and a
+#     crude column refit from the same fitter all read it back rather than assuming z. Each column
+#     then STAMPS the df it used (reg_wald_degf), which is what lets the between_groups gap SE be
+#     recovered with the very critical value that built the interval. ⚠ the df is therefore NOT a
+#     table fact and reg_finalize() stamps none: a model column and its crude twin are fitted on
+#     different numbers of parameters. The DESIGN's own df is a table fact and lives in the model
+#     record, where the "Model:" footer line reads it. The 3+ level engines refer to z throughout,
+#     deliberately -- they define no residual df (reg_wald_from_tidy).
 #   - THE ESTIMAND'S DECLARED SCALE decides a column's whole shape: which fmt field the estimate
 #     lands in (multiplicative -> `or`, neutral 1; additive -> `diff`, neutral 0, with `var` = var(Y)
 #     where the scale asks for it) and which ladder it is graded on. No builder names a
@@ -430,11 +439,30 @@ reg_meta_estimand <- function(meta, outcome = NULL, family = NULL) {
   if (identical(res$status, "ok")) res else reg_estimand(fam %||% "gaussian", "coefficient", "auto")
 }
 
-reg_model_line <- function(meta) {
+# THE REFERENCE-DISTRIBUTION CLAUSE of a "Model:" line, and only under a survey design -- elsewhere
+# it names a t on thousands of df, which says nothing a reader can act on. The two numbers answer
+# different questions: `t(17)` is what THIS model's intervals were referred to (survey's own
+# `degf + 1 - p`, read back off the columns that used it), while `20 design df` is the design's own
+# #PSU - #strata, which no interval uses directly. It lives here rather than in the colour legend
+# because the df is per column there, and naming it would split the crude/adjusted block.
+reg_model_df_clause <- function(x, meta, lang = NULL) {
+  dg <- meta$design_degf
+  if (is.null(dg) || length(dg) != 1L || !is.finite(dg) || dg <= 0) return("")
+  cols <- purrr::keep(x, ~ is_fmt(.) && identical(get_role(.), "model"))
+  df   <- unique(vapply(cols, fmt_degf_attr, numeric(1), USE.NAMES = FALSE))
+  df   <- df[is.finite(df) & df > 0]
+  # several models with different residual df: name only the design's, which they do share.
+  if (length(df) == 1L) gettextf("t(%s) on %s design df", legend_num(df, lang), legend_num(dg, lang))
+  else                  gettextf("%s design df", legend_num(dg, lang))
+}
+
+reg_model_line <- function(meta, df_clause = "") {
   if (is.null(meta)) return(NULL)
   fam <- reg_family_display_name(reg_meta_estimand(meta)$fit %||% meta$family)
   e   <- reg_meta_estimand(meta)
   est <- reg_estimand_note(e, aside = reg_meta_aside(meta, e))
+  if (nzchar(df_clause))
+    est <- if (nzchar(est)) gettextf("%s; %s", est, df_clause) else df_clause
   # `who` carries no leading space: xgettext strips edge whitespace from a msgid, so the space and
   # the punctuation live in the outer template, which the translation then controls.
   who <- if (isTRUE(meta$comparison)) {
@@ -454,13 +482,15 @@ reg_model_lines <- function(x, lang = NULL) {
   with_legend_lang(lang, function(lg) {
     fams <- meta$families; if (is.null(fams)) fams <- meta$family
     uf   <- unique(fams)
-    if (length(uf) <= 1L) { rl <- reg_model_line(meta); return(if (is.null(rl)) character(0) else rl) }
+    dfc  <- reg_model_df_clause(x, meta, lg)
+    if (length(uf) <= 1L) { rl <- reg_model_line(meta, dfc); return(if (is.null(rl)) character(0) else rl) }
     deps <- meta$outcome
     vapply(uf, function(fm) {
       grp   <- deps[fams == fm]
       e     <- reg_meta_estimand(meta, grp[[1]])
       fname <- reg_family_display_name(e$fit %||% fm)
       est   <- reg_estimand_note(e, aside = reg_meta_aside(meta, e, grp))
+      if (nzchar(dfc)) est <- if (nzchar(est)) gettextf("%s; %s", est, dfc) else dfc
       enc2utf8(if (nzchar(est)) gettextf("Model (%s): %s; %s.", legend_name_list(grp), fname, est)
                else            gettextf("Model (%s): %s.", legend_name_list(grp), fname))
     }, character(1), USE.NAMES = FALSE)
@@ -817,6 +847,46 @@ reg_lr_pvalues <- function(fit) {
   stats::setNames(p, stringi::stri_replace_all_regex(colnames(X), "`", ""))
 }
 
+# === SECTION: ONE REFERENCE DISTRIBUTION PER FIT ================================================
+#
+# THE RULE: a fit decides z-or-t ONCE, and everything it goes on to produce reads that decision back
+# -- the coefficient interval, the marginal sweep, the baseline row, and a crude column refit from
+# it. Nothing downstream may assume z. The pair (`disp_known`, `df_residual`) travels out of
+# reg_fit() beside the tidy, and is frozen into the jamovi digest for the same reason.
+#
+# ⚠ `df.residual()` on an svyglm is `degf(design) + 1 - p`, NOT n - p -- survey's own convention, and
+# what confint.svyglm refers to. That is deliberate here and wrong for a dispersion denominator (see
+# reg_dispersion(), which computes n - rank by hand).
+
+# The fit's own arm of the package's one critical value. `conf_level_to_crit()` sanitises the df
+# through df_clean(), so an absent one (NULL / NA -- a 3+ level engine, a distilled fit) degrades to
+# z rather than propagating NA into every bound.
+reg_wald_crit <- function(disp_known, df_residual, conf_level) {
+  if (isTRUE(disp_known)) stats::qnorm(1 - (1 - conf_level) / 2)
+  else                    conf_level_to_crit(conf_level, df_residual)
+}
+
+# NA rather than an error wherever the engine defines no residual df -- a 3+ level fitter, a fit that
+# lost its frame. conf_level_to_crit() / df_clean() read NA as "refer to z", so the fallback is the
+# same one every other df in the package takes.
+reg_df_residual <- function(fit) {
+  d <- suppressWarnings(tryCatch(as.numeric(stats::df.residual(fit)), error = function(e) NA_real_))
+  if (length(d) != 1L || !is.finite(d) || d <= 0) NA_real_ else d
+}
+
+# WHAT A WALD-BUILT COLUMN STAMPS about its own interval -- written once because three builders do it
+# (the coefficient column, a marginal one, and a crude column refit from the same fitter), and a crude
+# column must stamp EXACTLY what its model twin does or the two stop folding into one legend block.
+#   the METHOD word its legend renders; `mult` = the estimate is multiplicative, so Wald on the log.
+reg_wald_method_name <- function(method, mult)
+  if (identical(method, "profile")) "profile" else if (isTRUE(mult)) "wald_log" else "wald"
+#   the DF it was referred to. NA where the reference is z, and NA under `profile`, whose
+#   likelihood-ratio bounds refer to no distribution at all; get_degf() reads NA as "refer to z".
+reg_wald_degf <- function(method, disp_known, df_residual) {
+  if (identical(method, "profile") || isTRUE(disp_known)) return(NA_real_)
+  as.double(df_residual %||% NA_real_)
+}
+
 # The shared Wald assembly: the interval is est +/- crit * se and the p is recomputed from those same
 # two numbers, so bounds and stars are exact duals. `disp_known` picks z (dispersion fixed by the
 # family) over t on `df` (dispersion estimated: lm, quasi*, weighted).
@@ -855,6 +925,10 @@ reg_tidy_rescale <- function(td, multiplier) {
   list(td = td, mult_vec = mult_vec)
 }
 
+# The 3+ level engines' Wald assembly. ⚠ z, deliberately and for all four of them: multinom, polr,
+# svy_vglm and svyolr define no residual-df convention (there is no single equation to count against),
+# and their own summaries report z. So a multinomial or ordinal table is internally consistent on z --
+# its coefficient columns, its marginal columns and its crude twin all refer the same way.
 reg_wald_from_tidy <- function(td, conf_level, do_exp) {
   res <- reg_wald_finalize(td$estimate, do_exp, se = td$std.error,
                            crit = stats::qnorm(1 - (1 - conf_level) / 2))
@@ -983,7 +1057,8 @@ reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, met
                            estimate = unname(cf), std.error = unname(se[nm]))
     td   <- reg_wald_from_tidy(reg_tidy_rescale(td, multiplier)$td, conf_level, do_exp)
     return(list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL,
-                fit = fit, data = mdata, y_ref = y_levels[1], y_levels = y_levels[-1]))
+                fit = fit, data = mdata, y_ref = y_levels[1], y_levels = y_levels[-1],
+                disp_known = TRUE, df_residual = NA_real_))
   }
 
   fit <- nnet::multinom(fml, data = mdata, trace = FALSE)
@@ -991,7 +1066,8 @@ reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, met
   td$term <- stringi::stri_replace_all_regex(td$term, "`", "")     # strip formula backticks -> match skeleton
   td  <- reg_wald_from_tidy(reg_tidy_rescale(td, multiplier)$td, conf_level, do_exp)
   list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL,
-       fit = fit, data = mdata, y_ref = y_levels[1], y_levels = y_levels[-1])
+       fit = fit, data = mdata, y_ref = y_levels[1], y_levels = y_levels[-1],
+       disp_known = TRUE, df_residual = NA_real_)
 }
 
 # Ordered 3+ level outcome: proportional-odds cumulative logit -- MASS::polr unweighted,
@@ -1035,7 +1111,7 @@ reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, meth
     cli::cli_inform(c("i" = paste0("The proportional-odds (parallel-lines) assumption is not tested for ",
                                    "survey-weighted ordinal models (the Brant test needs an unweighted fit).")))
     return(list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL, fit = fit,
-                data = mdata))
+                data = mdata, disp_known = TRUE, df_residual = NA_real_))
   }
 
   fit <- MASS::polr(fml, data = mdata, Hess = TRUE, method = "logistic")
@@ -1046,7 +1122,7 @@ reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, meth
   # The Brant test is NOT run here: it is a footer ROW's statistic costing J-1 extra fits, so it is
   # built where that row is -- else every diagnostic and crude polr fit would pay for it.
   list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL, fit = fit,
-       data = mdata)
+       data = mdata, disp_known = TRUE, df_residual = NA_real_)
 }
 
 # Make a fit SELF-CONTAINED: nnet::multinom / MASS::polr store `data = mdata`, a local of reg_fit(),
@@ -1324,6 +1400,14 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
                                    "fit (a quasi-likelihood); using the robust Wald interval.")))
   }
 
+  # THE fit's own reference distribution, decided ONCE and carried out with the fit: z where the
+  # family FIXES the dispersion, else t on df.residual -- an ESTIMATED dispersion (lm, quasi*,
+  # weighted, or a phi-scaled fit) moves the reference off z. Everything this fit goes on to produce
+  # -- the marginal sweep, the baseline row, a crude column refit from it -- READS it back instead of
+  # assuming z, which is what keeps one table on one reference distribution.
+  disp_known <- !weighted && reg_fam_disp_known(family) && !scaled
+  df_res     <- reg_df_residual(fit)
+
   if (use_profile) {
     ci   <- suppressMessages(stats::confint(fit, level = conf_level))   # log/native scale
     idx  <- match(td$term, stringi::stri_replace_all_regex(rownames(ci), "`", ""))
@@ -1331,15 +1415,12 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
     lrp  <- reg_lr_pvalues(fit)
     p_in <- unname(lrp[match(td$term, names(lrp))])
   } else {
-    # z where the family FIXES the dispersion, else t on df.residual -- an ESTIMATED dispersion (lm,
-    # quasi*, weighted, or a phi-scaled fit) moves the reference off z.
-    disp_known <- !weighted && reg_fam_disp_known(family) && !scaled
-    crit <- reg_wald_crit(disp_known, stats::df.residual(fit), conf_level)   # shared with reg_reref (15b)
+    crit <- reg_wald_crit(disp_known, df_res, conf_level)   # shared with reg_reref (15b)
     lo <- td$estimate - crit * td$std.error
     hi <- td$estimate + crit * td$std.error
     # with the SE scaled and the t reference, p is recomputed from est / se so p, CI and stars stay
     # duals (broom's own p belongs to the un-scaled model).
-    p_in <- if (scaled) 2 * stats::pt(-abs(td$estimate / td$std.error), df = stats::df.residual(fit))
+    p_in <- if (scaled) 2 * stats::pt(-abs(td$estimate / td$std.error), df = df_res)
             else        td$p.value
   }
   res <- reg_wald_finalize(td$estimate, do_exp, lo = lo, hi = hi, p = p_in)   # shared exp assembly
@@ -1352,7 +1433,7 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
     stats::var(as.numeric(mdata[[outcome]])) else NA_real_
 
   list(tidy = td, nobs = nrow(mdata), var_y = var_y, positive_level = positive_level, fit = fit,
-       data = mdata)
+       data = mdata, disp_known = disp_known, df_residual = df_res)
 }
 
 # === SECTION: The column builders ================================================================
@@ -1411,8 +1492,8 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, est,
     fields,
     list(ci_inf = lo, ci_sup = hi, pvalue = p,
          scale = scale_key, display = disp, digits = digits,
-         ci_method = if (identical(method, "profile")) "profile"
-                     else if (identical(effect_shape, "ratio")) "wald_log" else "wald",
+         ci_method = reg_wald_method_name(method, identical(effect_shape, "ratio")),
+         degf = reg_wald_degf(method, fit_res$disp_known, fit_res$df_residual),
          color = color, color_signif = color_signif, col_var = col_var,
          comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"))
   if (identical(effect_shape, "ratio")) args <- c(args, list(ref = "1"))
@@ -1611,7 +1692,8 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
                          at = "average", comparison = NULL, want_pred = TRUE,
                          exponentiate = TRUE,
                          multiplier = NULL, engine = "marginaleffects", want_se = TRUE,
-                         anchors = NULL, crosses = list()) {
+                         anchors = NULL, crosses = list(),
+                         disp_known = TRUE, df_residual = NA_real_) {
   log_ratio <- !is.null(comparison) && comparison %in% c("lnor", "lnratioavg")
   do_exp    <- log_ratio && isTRUE(exponentiate)
   out <- NULL
@@ -1620,7 +1702,8 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
     out <- reg_marginal_gcomp(fit, data, predictors, conf_level, wt, ratio = log_ratio,
                               do_exp = do_exp,
                               want_pred = want_pred, want_se = want_se, multiplier = multiplier,
-                              crosses = crosses)
+                              crosses = crosses,
+                              disp_known = disp_known, df_residual = df_residual)
   # THE fallback, and the only place `marginaleffects` is genuinely required: the estimand's engine
   # named it, or gcomp refused this fit -- which the argument boundary cannot know.
   if (is.null(out)) {
@@ -1629,7 +1712,8 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
     out <- reg_marginal_me(fit, data, predictors, conf_level, wt, at = at, comparison = comparison,
                            want_pred = want_pred, exponentiate = exponentiate,
                            multiplier = multiplier, want_se = want_se,
-                           anchors = anchors, crosses = crosses)
+                           anchors = anchors, crosses = crosses,
+                           disp_known = disp_known, df_residual = df_residual)
   }
   if (identical(at, "average")) reg_marginal_basis_warn(fit, data, predictors, multiplier,
                                                         out$ame, log_ratio, do_exp)
@@ -1640,7 +1724,8 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
 reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, ratio = FALSE,
                                do_exp = ratio,
                                want_pred = TRUE, want_se = TRUE, multiplier = NULL,
-                               crosses = list()) {
+                               crosses = list(),
+                               disp_known = TRUE, df_residual = NA_real_) {
   tvars <- tryCatch(all.vars(stats::delete.response(stats::terms(fit))), error = function(e) NULL)
   # a nested cross block is named by its BLOCK, whose parents are the formula's own variables.
   need  <- unlist(lapply(predictors, function(v) {
@@ -1653,7 +1738,7 @@ reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, rat
   g <- if (per_cat) reg_gcomp_cat_maker(fit, data, wt, ratio)
        else         reg_gcomp_maker(fit, data, wt, ratio)
   if (is.null(g)) return(NULL)
-  crit <- stats::qnorm(1 - (1 - conf_level) / 2)
+  crit <- reg_wald_crit(disp_known, df_residual, conf_level)   # the FIT's reference, never z by default
   amel <- list(); predl <- list()
   for (v in predictors) {
     rec    <- reg_cross_of(crosses, v)
@@ -1686,7 +1771,8 @@ reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, rat
       grp <- if (per_cat) as.character(p$levels) else NA_character_
       se  <- if (per_cat) vapply(p$G, function(gj) reg_delta_se(gj, V), numeric(1))
              else         reg_delta_se(p$G, V)
-      res <- reg_wald_finalize(p$est, do_exp, se = se, crit = crit)
+      res <- reg_wald_finalize(p$est, do_exp, se = se, crit = crit,
+                               disp_known = disp_known, df = df_residual)
       amel[[length(amel) + 1L]] <- tibble::tibble(
         var = v, level = as.character(ct$level), group = grp,
         ame = res$estimate, ame_lo = res$conf.low, ame_hi = res$conf.high, ame_p = res$p.value)
@@ -1737,7 +1823,8 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
                             at = "average", comparison = NULL, want_pred = TRUE,
                             exponentiate = TRUE,
                             multiplier = NULL, want_se = TRUE, anchors = NULL,
-                            crosses = list()) {
+                            crosses = list(),
+                            disp_known = TRUE, df_residual = NA_real_) {
   ref_vals <- if (at == "reference")
     reg_reference_grid_values(data, predictors, anchors,
                               if (is.null(wt) || !wt %in% names(data)) NULL else data[[wt]]) else NULL
@@ -1769,6 +1856,25 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
   # the delta-method jacobian costs one re-prediction PER COEFFICIENT, unpaid where the caller
   # discards the interval.
   se_arg <- if (want_se) list() else list(vcov = FALSE)
+  # ⚠ marginaleffects always refers to z; the FIT may refer to t. Rebuild the bounds and the p from
+  # the estimate and SE it reports, so this engine and the analytic one cannot hand one table two
+  # reference distributions. The exp() fold rides here too, once for both arms. Where no SE comes
+  # back (`want_se = FALSE`, or a comparison that reports none) the engine's own numbers stand.
+  crit  <- reg_wald_crit(disp_known, df_residual, conf_level)
+  refer <- function(ac) {
+    n  <- length(ac$estimate)
+    se <- ac[["std.error"]] %||% rep(NA_real_, n)   # [[: `$` partial-matches on a data frame
+    r  <- if (all(is.na(se)))
+      list(estimate  = ac$estimate,
+           conf.low  = ac$conf.low  %||% rep(NA_real_, n),
+           conf.high = ac$conf.high %||% rep(NA_real_, n),
+           p.value   = ac$p.value   %||% rep(NA_real_, n))
+    else reg_wald_finalize(ac$estimate, do_exp = FALSE, se = se, crit = crit,
+                           disp_known = disp_known, df = df_residual)
+    if (do_exp) r[c("estimate", "conf.low", "conf.high")] <-
+      lapply(r[c("estimate", "conf.low", "conf.high")], exp)
+    r
+  }
   amelist <- purrr::map(predictors, function(v) {
     rec <- reg_cross_of(crosses, v)
     if (!is.null(rec) && identical(rec$arm, "nested")) {
@@ -1780,15 +1886,12 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
         else do.call(marginaleffects::avg_comparisons, c(
           list(fit, variables = va, by = rec$moderator, newdata = data, conf_level = conf_level),
           wts_arg, cmp_arg, se_arg)))
-      est <- ac$estimate
-      lo  <- ac$conf.low  %||% rep(NA_real_, length(est))
-      hi  <- ac$conf.high %||% rep(NA_real_, length(est))
-      if (do_exp) { est <- exp(est); lo <- exp(lo); hi <- exp(hi) }
+      r <- refer(ac)
       return(tibble::tibble(
         var = v, level = as.character(ac[[rec$moderator]]),
         group = if ("group" %in% names(ac)) as.character(ac$group) else NA_character_,
-        ame = est, ame_lo = lo, ame_hi = hi,
-        ame_p = ac$p.value %||% rep(NA_real_, length(est))))
+        ame = r$estimate, ame_lo = r$conf.low, ame_hi = r$conf.high,
+        ame_p = r$p.value))
     }
     ac <- if (at == "reference")
       as.data.frame(do.call(marginaleffects::comparisons, c(
@@ -1812,13 +1915,9 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
       substr(ac$contrast, nchar(pre) + 1L, nchar(ac$contrast) - nchar(suf))
     }
     grp    <- if ("group" %in% names(ac)) as.character(ac$group) else NA_character_
-    est <- ac$estimate
-    lo <- ac$conf.low %||% rep(NA_real_, length(est))
-    hi <- ac$conf.high %||% rep(NA_real_, length(est))
-    pv <- ac$p.value %||% rep(NA_real_, length(est))
-    if (do_exp) { est <- exp(est); lo <- exp(lo); hi <- exp(hi) }   # log-ratio -> OR / RR (and its CI)
+    r <- refer(ac)                                     # log-ratio -> OR / RR (and its CI) rides here
     tibble::tibble(var = v, level = as.character(level), group = grp,
-                   ame = est, ame_lo = lo, ame_hi = hi, ame_p = pv)
+                   ame = r$estimate, ame_lo = r$conf.low, ame_hi = r$conf.high, ame_p = r$p.value)
   })
   ame <- dplyr::bind_rows(amelist)
 
@@ -1974,7 +2073,8 @@ reg_constant_cell <- function(P, se, scale_key, crit) {
 # stays exact rather than needing an arm of its own.
 #' @keywords internal
 reg_constant_baseline <- function(fit, data, predictors, at, wt, conf_level, scale_key,
-                                  log = FALSE, anchors = NULL) {
+                                  log = FALSE, anchors = NULL,
+                                  disp_known = TRUE, df_residual = NA_real_) {
   if (is.null(fit) || is.null(scale_key)) return(NULL)
   w  <- if (!is.null(wt) && wt %in% names(data)) data[[wt]] else NULL
   nd <- if (identical(at, "reference")) reg_profile_row(data, predictors, anchors, w) else NULL
@@ -1982,7 +2082,7 @@ reg_constant_baseline <- function(fit, data, predictors, at, wt, conf_level, sca
   if (is.null(b)) return(NULL)
   V <- tryCatch(stats::vcov(fit), error = function(e) NULL)
   if (is.null(V) || !is.matrix(V)) return(NULL)
-  crit <- stats::qnorm(1 - (1 - conf_level) / 2)
+  crit <- reg_wald_crit(disp_known, df_residual, conf_level)   # the FIT's reference, never z by default
   cells <- purrr::map(seq_along(b$est), function(j)
     reg_constant_cell(b$est[[j]], reg_delta_se(b$G[[j]], V), scale_key, crit))
   out <- tibble::tibble(group = as.character(b$levels),
@@ -2000,7 +2100,8 @@ reg_constant_baseline <- function(fit, data, predictors, at, wt, conf_level, sca
 # symmetric interval without a sixth branch.
 reg_marginal_column <- function(skeleton, marg, model_predictors, scale, var_y,
                                 group, color, color_signif, col_var, or_tip = NULL,
-                                model_family = "", trials = NULL, const = NULL) {
+                                model_family = "", trials = NULL, const = NULL,
+                                degf = NA_real_) {
   amt <- marg$ame; prd <- marg$pred
   if (!is.na(group)) {
     amt <- amt[!is.na(amt$group) & amt$group == group, , drop = FALSE]
@@ -2065,7 +2166,8 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, scale, var_y,
       scale = sc, pct_type = reg_pct_type(sc), display = display,
       digits = reg_cell_digits(sc),
       # a multiplicative estimate's interval is Wald on the LOG, and its baseline is the neutral 1.
-      ci_method = if (isTRUE(scr$mult)) "wald_log" else "wald",
+      # A marginal effect is ALWAYS Wald -- neither engine produces profile bounds.
+      ci_method = reg_wald_method_name("wald", scr$mult), degf = degf,
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"),
     if (isTRUE(scr$mult)) list(ref = "1"),
@@ -2584,11 +2686,6 @@ reg_global_rows <- function(f, sp, shared, col_var) {
 # reg_column() / reg_gof_rows(). Reached ONLY with `.fit_cache` present, on the single-equation GLM
 # coefficient path, and locked byte-identical to a real refit by a test.
 
-reg_wald_crit <- function(disp_known, df_residual, conf_level) {
-  if (disp_known) stats::qnorm(1 - (1 - conf_level) / 2)
-  else            stats::qt(1 - (1 - conf_level) / 2, df = df_residual)
-}
-
 # reg_fit() de-orders factor predictors and drops NA rows deterministically, so the canonical basis
 # does not depend on `reference`. Only kilobytes are kept -- never the model object.
 reg_build_digest <- function(data, sp, family, design_spec, do_exp, outcome_level,
@@ -2675,16 +2772,22 @@ reg_reref_fit_res <- function(digest, skeleton, conf_level, multiplier = NULL) {
   list(tidy = tibble::tibble(term = rows$term, estimate = res$estimate,
                              conf.low = res$conf.low, conf.high = res$conf.high, p.value = res$p.value),
        nobs = digest$nobs, var_y = digest$var_y, positive_level = digest$positive_level,
-       glance = digest$glance, fit = NULL, data = NULL, marg = digest$marg)
+       glance = digest$glance, fit = NULL, data = NULL, marg = digest$marg,
+       disp_known = digest$disp_known, df_residual = digest$df_residual)
 }
 
 
 # Recover a column's per-cell SE, on the estimate's own TEST scale, from the Wald interval it
 # stores. ⚠ on a MULTIPLICATIVE scale the SE lives on the LOG, where the gap is measured too.
-# DESIGN: divide by z, never by the interval's own critical value -- the gap test is a z test
-# throughout.
+#
+# DESIGN -- TWO decisions, and they are independent. Divide by the critical value that BUILT the
+# interval (the column's own `conf_level` / `degf`, stamped by the builder), or the SE comes back
+# inflated by t/z on every gaussian, quasi or svyglm column -- +31 % at 5 df. Then TEST with z,
+# which is the convention fmt_gap_bounds() / fmt_gap_p() share and the only one open to the
+# `adjustment` gap, whose SE is an influence-function sandwich referring to no df at all.
 #' @keywords internal
-reg_gap_se_of <- function(col, crit) {
+reg_gap_se_of <- function(col) {
+  crit <- conf_level_to_crit(get_conf_level(col), get_degf(col))
   lo <- get_ci_inf(col); hi <- get_ci_sup(col)
   if (isTRUE(fmt_scale_row(col)$mult)) {          # a multiplicative scale -> the SE lives on the log
     ok <- is.finite(lo) & is.finite(hi) & lo > 0 & hi > 0
@@ -2703,13 +2806,13 @@ reg_gap_se_of <- function(col, crit) {
 # Bland 2003), recovered from the intervals the table already prints, so test and intervals cannot
 # disagree. ⚠ a profile interval is asymmetric -> no SE is written.
 #' @keywords internal
-reg_write_group_gap <- function(parts, color, conf_level = 0.95, method = "wald") {
+reg_write_group_gap <- function(parts, color, method = "wald") {
   if (!"between_groups" %in% color || length(parts) < 2L) return(parts)
   key_of <- function(d) reg_skel_key(as.character(d$var), as.character(d$levels))
   ref_d  <- parts[[1L]]$data                                  # the FIRST split level is the baseline
   ref_k  <- key_of(ref_d)
   fmt_nm <- names(ref_d)[purrr::map_lgl(ref_d, is_fmt)]
-  crit   <- if (identical(method, "profile")) NA_real_ else zscore_formula(conf_level)
+  wald   <- !identical(method, "profile")       # asymmetric bounds yield no SE
   est_of <- fmt_est_of
   for (i in seq_along(parts)) {
     d <- parts[[i]]$data
@@ -2720,9 +2823,9 @@ reg_write_group_gap <- function(parts, color, conf_level = 0.95, method = "wald"
       # fmt_color_attr, not get_color: a gap usually rides the BACKGROUND channel.
       if (!any(c("adjustment", "between_groups") %in% fmt_color_attr(d[[nm]]))) next
       d[[nm]] <- set_obs(d[[nm]], est_of(ref_d[[nm]])[m])
-      if (!is.na(crit)) {
-        se_ref <- reg_gap_se_of(ref_d[[nm]], crit)[m]
-        d[[nm]] <- set_gap_se(d[[nm]], sqrt(reg_gap_se_of(d[[nm]], crit)^2 + se_ref^2))
+      if (wald) {
+        se_ref <- reg_gap_se_of(ref_d[[nm]])[m]
+        d[[nm]] <- set_gap_se(d[[nm]], sqrt(reg_gap_se_of(d[[nm]])^2 + se_ref^2))
       }
     }
     parts[[i]]$data <- d
@@ -2757,13 +2860,18 @@ reg_mark_ref_group <- function(tab, ref_level, color) {
 
 
 # THE assembly tail, shared by BOTH branches of reg_build(). A weighted tab_reg() is ALWAYS on the
-# weighted basis, so tab()'s design_effect option is never read. ⚠ `basis` / `degf` are NULL on the
-# split branch BY DESIGN: each group stamped its own, and the vec_rbind() reconcile took the weakest.
+# weighted basis, so tab()'s design_effect option is never read. ⚠ `basis` is NULL on the split branch
+# BY DESIGN: each group stamped its own, and the vec_rbind() reconcile took the weakest.
+#
+# ⚠ NO `degf` IS STAMPED HERE. On a regression the df is not a table fact: each column carries the df
+# ITS OWN interval was referred to (reg_wald_degf()), which is what lets the gap SE be recovered with
+# the critical value that built the interval. Stamping a table-wide one would overwrite all of them
+# with the design's df -- a number no column used.
 #' @keywords internal
 reg_finalize <- function(tab, tests, conf_level, var_labels, group_vars,
-                         degf = NULL, basis = NULL, meta_extra = list()) {
+                         basis = NULL, meta_extra = list()) {
   tab |>
-    tab_stamp_inference(conf_level, degf, basis) |>
+    tab_stamp_inference(conf_level, degf = NULL, basis) |>
     new_tab(subtext = meta_extra$subtext, test = tests,
             meta = c(meta_extra[setdiff(names(meta_extra), "subtext")],
                      list(spec = reg_spec(var_labels)))) |>
@@ -2945,7 +3053,7 @@ reg_stage_split <- function(ctx) {
   # reference machinery cannot do it -- fmt_broadcast_last() groups by runs of `in_refrow`, which
   # cross the split boundary.
   color_ms <- unique(unlist(purrr::map(specs, "color")))
-  parts <- reg_write_group_gap(parts, color_ms, conf_level = conf_level, method = method)
+  parts <- reg_write_group_gap(parts, color_ms, method = method)
   combined <- vctrs::vec_rbind(!!!purrr::map(parts, "data"))
   tests    <- purrr::list_rbind(purrr::compact(purrr::map(parts, "test")))
   if (is.null(tests) || nrow(tests) == 0) tests <- new_test_tibble()
@@ -3102,12 +3210,14 @@ reg_crude_block <- function(sp, sp_fam, inv_sp, key, mdata, pos, y_ref, var_y, c
   emp <- reg_empirical(mdata, fac_preds_e, sp$outcome, key, pos, design_spec$wt,
                        trials = sp$trials, ref_category = y_ref,
                        conf_level = conf_level, design_spec = design_spec)
-  # Which predictors have no closed form and must be fitted? The numeric ones, and EVERY predictor
-  # under an ordinal outcome (proportional odds is a constraint, so a univariable fit is not
-  # saturated).
+  # THE FORK, answered once for the whole block: is the closed form the univariable model's own
+  # interval? A numeric predictor is never saturated; a factor one stops being so under an ordinal
+  # outcome, or under a design carrying structure the closed form cannot see (reg_crude_saturated()).
+  # Everything that is not saturated is REFIT, through the very fitter the table came from.
+  saturated   <- reg_crude_saturated(key, TRUE, design_spec$design)
   fit_preds_e <- c(
     num_preds_e, reg_cross_nested_vars(crosses),
-    if (!reg_crude_saturated(key, TRUE)) fac_preds_e else character(0))
+    if (!saturated) fac_preds_e else character(0))
   # The crude fits take the FULL `data` + `drop_extra`, never the pre-filtered frame: a prebuilt
   # design's keep mask is computed from `data` itself. `marginal` swaps the crude shape for a
   # marginal one only where the model's estimand is marginal AND on a probability scale.
@@ -3126,7 +3236,8 @@ reg_crude_block <- function(sp, sp_fam, inv_sp, key, mdata, pos, y_ref, var_y, c
                                color = sp$color, fit_est = fit_e,
                                weighted = svy_weighted(design_spec, design_spec$wt),
                                degf = design_spec$degf %||% Inf,
-                               emp_mode = empirical)
+                               emp_mode = empirical,
+                               saturated = saturated, method = method)
   # the crude columns take the table's own display -- one grammar, and by default the MIRROR layout.
   disp  <- reg_display_of(display, empirical)
   dress <- function(cl) purrr::map(cl, function(col) reg_apply_display(col, disp))
@@ -3136,6 +3247,7 @@ reg_crude_block <- function(sp, sp_fam, inv_sp, key, mdata, pos, y_ref, var_y, c
   out$frame     <- mdata
   out$fac_preds <- fac_preds_e          # ⚠ live: reg_set_obs() -> reg_gap_se_columns(fac_preds =)
   out$fit_preds <- fit_preds_e
+  out$saturated <- saturated
   out$fits      <- fit_e$fits
   out$grid      <- emp
   out$degraded  <- isTRUE(attr(emp, "degrade"))
@@ -3176,8 +3288,10 @@ reg_cols_ame <- function(f, sp, ctx) {
                         comparison = if (ratio_ame) "lnratioavg" else NULL,
                         exponentiate = isTRUE(sp_est$exp),
                         multiplier = multiplier, engine = reg_marginal_engine(sp_est),
-                        anchors = anchors, crosses = crosses)
+                        anchors = anchors, crosses = crosses,
+                        disp_known = f$disp_known, df_residual = f$df_residual)
   marg     <- reg_scale_pred(marg, sp$trials)
+  marg_degf <- reg_wald_degf("wald", f$disp_known, f$df_residual)
   # the Constant row: this contrast has no intercept in its tidy, so the baseline is the model's own
   # predicted outcome, at the very profile the column's effects are read at.
   # ⚠ a LOGGED column's baseline is computed on the scale it is the log OF -- the baseline odds under
@@ -3189,7 +3303,7 @@ reg_cols_ame <- function(f, sp, ctx) {
     at = if (identical(sp_est$effect, "at_reference")) "reference" else "average",
     wt = design_spec$wt, conf_level = conf_level,
     scale_key = if (is.na(exp_sc)) sp_scale else exp_sc, log = !is.na(exp_sc),
-    anchors = anchors)
+    anchors = anchors, disp_known = f$disp_known, df_residual = f$df_residual)
   marg_add <- if (!ratio_ame) marg
     else if (is.null(f$fit)) NULL
     else reg_scale_pred(reg_fill_sweep(f$fit, f$data, sp$row_vars, conf_level,
@@ -3215,7 +3329,8 @@ reg_cols_ame <- function(f, sp, ctx) {
            col   = dress(reg_marginal_column(skeleton, marg, sp$row_vars, sp_scale,
                                              var_y, g, sp_col, color_signif, cv_cat,
                                              model_family = sp_fam,
-                                             trials = sp$trials, const = const), g))
+                                             trials = sp$trials, const = const,
+                                             degf = marg_degf), g))
     })
   } else {
     or_tip <- if (sp_fam == "binomial" && !ratio_ame) {
@@ -3229,7 +3344,8 @@ reg_cols_ame <- function(f, sp, ctx) {
       col   = dress(reg_marginal_column(skeleton, marg, sp$row_vars, sp_scale,
                                         var_y, NA_character_, sp_col, color_signif,
                                         cv, or_tip = or_tip, model_family = sp_fam,
-                                        trials = sp$trials, const = const))))
+                                        trials = sp$trials, const = const,
+                                        degf = marg_degf))))
   }
 }
 
@@ -3246,14 +3362,16 @@ reg_cols_vsrest <- function(f, sp, ctx) {
                          at = "reference", comparison = "lnor", want_pred = FALSE,
                          exponentiate = isTRUE(sp$est$exp),
                          engine = reg_marginal_engine(sp$est), anchors = anchors,
-                         crosses = crosses)
+                         crosses = crosses,
+                         disp_known = f$disp_known, df_residual = f$df_residual)
   marg_add <- if (is.null(f$fit)) NULL else
     reg_scale_pred(reg_fill_sweep(f$fit, f$data, sp$row_vars, conf_level, design_spec$wt,
                                   crosses = crosses), sp$trials)
   const  <- reg_constant_baseline(f$fit, f$data, sp$predictors, at = "reference",
                                   wt = design_spec$wt, conf_level = conf_level,
                                   scale_key = if (is.na(exp_sc)) sp_scale else exp_sc,
-                                  log = !is.na(exp_sc), anchors = anchors)
+                                  log = !is.na(exp_sc), anchors = anchors,
+                                  disp_known = f$disp_known, df_residual = f$df_residual)
   groups <- levels(as.factor(f$data[[sp$outcome]]))
   cv_cat <- reg_category_col_var(sp, is_comparison, f$positive_level, cleannames)
   purrr::map(groups, function(g) {
@@ -3261,7 +3379,8 @@ reg_cols_vsrest <- function(f, sp, ctx) {
     lab <- paste0(if (prefix_dep) paste0(sp$outcome, " - ") else "", jc, " vs rest")
     col <- reg_marginal_column(skeleton, marg, sp$row_vars, sp_scale,
                                NA_real_, g, sp_col, color_signif, cv_cat,
-                               model_family = sp_fam, const = const)
+                               model_family = sp_fam, const = const,
+                               degf = reg_wald_degf("wald", f$disp_known, f$df_residual))
     col <- reg_fill_base(col, marg_add, skeleton, sp$row_vars, group = g, crosses = crosses)
     list(label = lab, col = reg_apply_display(col, reg_display_of(display, empirical)))
   })
@@ -3533,7 +3652,7 @@ reg_set_obs <- function(bi, e, f, sp, ctx) {
   g <- reg_gap_se_columns(f, sp, col, skeleton, e$shape, e$frame,
                           e$fac_preds, sp$est, design_spec$wt,
                           fits_crude = e$fits, fit_preds = e$fit_preds, multiplier = multiplier,
-                          category = key, crosses = crosses)
+                          category = key, crosses = crosses, saturated = e$saturated)
   if (is.null(g)) col else set_gap_se(col, g)
 }
 
@@ -3610,11 +3729,11 @@ reg_stage_tips <- function(ctx) {
 reg_stage_finalize <- function(ctx) {
   list2env(reg_ctx_locals(ctx), environment())
 
-  # The confidence level, the design df and the basis are stamped on EACH fmt column -- the colour
-  # engine is per column and cannot read a table attribute.
+  # The confidence level and the basis are stamped on EACH fmt column -- the colour engine is per
+  # column and cannot read a table attribute. The df is NOT: every column already carries its own.
   reg_inf <- reg_inference(shared, emp_degraded)
   out <- reg_finalize(tab, test, conf_level, var_labels, group_vars = "var",
-                      degf = reg_inf$degf, basis = reg_inf$basis,
+                      basis = reg_inf$basis,
                       meta_extra = list(subtext = subtext, empirical_tips = empirical_tips,
                                         assumptions = assumptions))
   # the base count is a DISPLAY intent here exactly as in tab(): the column is synthesised at
@@ -3925,9 +4044,12 @@ reg_stage_finalize <- function(ctx) {
 #'
 #'   Where the univariable model is **saturated** (a categorical predictor under every family except
 #'   ordinal) the crude effect has a closed form; otherwise it is a real fit, so the crude column
-#'   shares the model's family, link, interval method and `multiplier` by construction. A
-#'   **continuous** predictor has no levels, so its cell shows the univariable slope alone, which
-#'   assumes linearity on the model's scale --- check that with `shape` before trusting it.
+#'   shares the model's family, link, interval method and `multiplier` by construction. Under a
+#'   survey design carrying clusters, strata or calibration it is always a real fit, because a
+#'   closed form assumes the two compared groups are independent and a shared sampling unit makes
+#'   them anything but. A **continuous** predictor has no levels, so its cell shows the univariable
+#'   slope alone, which assumes linearity on the model's scale --- check that with `shape` before
+#'   trusting it.
 #'
 #'   Every crude quantity is computed on **exactly the same complete-case population as the model**,
 #'   so the two are not confounded by differing missingness; under `na = "drop_by_model"` a model
@@ -4366,6 +4488,9 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
       stats::setNames(purrr::map_chr(a$specs, ~ .$crude_key), purrr::map_chr(a$specs, "outcome"))
       else stats::setNames(rep(NA_character_, length(a$specs)),
                            purrr::map_chr(a$specs, "outcome")),
+    # THE DESIGN's own df (#PSU - #strata). A table-level fact, so it lives here and not on a column:
+    # every column now carries the df ITS OWN interval was referred to, which is a different number.
+    design_degf = a$design_spec$degf %||% NA_real_,
     tab_vars = tab_vars, comparison = a$is_comparison, wt = a$wt_disp
   )
   # The model record IS this table's `spec$call` -- "how was this table made", the slot every

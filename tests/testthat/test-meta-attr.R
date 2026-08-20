@@ -270,13 +270,19 @@ test_that("tab_reg() on a survey design keeps the design's degrees of freedom", 
     y     = factor(sample(c("no", "yes"), n, TRUE))
   )
   des <- survey::svydesign(ids = ~psu, strata = ~strat, weights = ~w, data = dd, nest = TRUE)
-  # tab_reg() rebuilt its design_spec from a literal AFTER the boundary had computed degf, so it was
-  # the one design consumer that never saw it: its model columns were on t(degf) (df.residual() of an
-  # svyglm IS the design df) while its crude Obs_* columns stayed on z.
   tr <- suppressMessages(
     tab_reg(des, outcome = "y", predictors = "g", family = "binomial", empirical = TRUE))
   tt <- suppressMessages(tab(des, g, y, pct = "row", ci = "cell"))
+  # A CROSSTAB's cells all refer to the design's own df, so the table answers with it.
   # (svy_degf() stores it as a double; survey::degf() returns an integer)
-  expect_identical(tabxplor:::tab_inference_degf(tr), as.double(survey::degf(des)))
-  expect_identical(tabxplor:::tab_inference_degf(tr), tabxplor:::tab_inference_degf(tt))
+  expect_identical(tabxplor:::tab_inference_degf(tt), as.double(survey::degf(des)))
+  # A REGRESSION's do not: since 22b-xiii-2 each column carries the df ITS OWN interval was referred
+  # to -- `degf + 1 - p`, survey's own rule, which is what confint.svyglm() uses and what the gap SE
+  # is recovered with. So the table-level answer is the weakest of those, strictly below the design's,
+  # and the design's own df lives in the model record instead (it is what the "Model:" line prints).
+  expect_lt(tabxplor:::tab_inference_degf(tr), as.double(survey::degf(des)))
+  fit <- suppressWarnings(survey::svyglm(I(y == "yes") ~ g, design = des,
+                                         family = stats::quasibinomial()))
+  expect_identical(get_degf(tr[["Model_OR"]]), as.double(stats::df.residual(fit)))
+  expect_identical(reg_call(tr)$design_degf, as.double(survey::degf(des)))
 })

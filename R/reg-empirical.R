@@ -20,15 +20,21 @@
 #     differ. And a shape a block does not declare means NO crude column, never another estimand's --
 #     every reachable key is a foreign key checked at load (R/zzz-fact-keys.R).
 #   - TWO SOURCES, ONE SHAPE. A CLOSED FORM off reg_empirical()'s per-(var, level, category) grid
-#     wherever the univariable model is saturated (every factor predictor except under ordinal) --
-#     there the crude odds ratio IS the Woolf 2x2 ratio. Otherwise a univariable reg_fit() through
-#     the very fitter the table came from (ordinal, every numeric predictor, every marginal shape,
-#     and a NESTED interaction block, whose univariable model is `y ~ M/X`), so "same estimand, link,
-#     CI rule, multiplier" holds by construction. A COMBINED-factor interaction needs neither route
-#     of its own: it is a factor, so it takes the closed form, and there the closed form IS the
+#     wherever the univariable model is saturated AND the closed form's own assumption holds
+#     (reg_crude_saturated) -- there the crude odds ratio IS the Woolf 2x2 ratio. Otherwise a
+#     univariable reg_fit() through the very fitter the table came from (ordinal, every numeric
+#     predictor, every marginal shape, a NESTED interaction block whose univariable model is
+#     `y ~ M/X`, and every factor predictor under a structured survey design), so "same estimand,
+#     link, CI rule, multiplier" holds by construction. A COMBINED-factor interaction needs neither
+#     route of its own: it is a factor, so it takes the closed form, and there the closed form IS the
 #     observed cell table.
 #   - The crude interval is the univariable MODEL's, under the table's own inference basis: pooled /
 #     model-based unweighted, the sandwich weighted. See REG_EMPIRICAL's `ci_method_design`.
+#     ⚠ EVERY closed form here assumes the two compared groups are INDEPENDENT (Woolf's
+#     1/a+1/b+1/c+1/d, and its moment twins). Weights alone do not break that -- a flat design is a
+#     weight vector -- but clusters, strata and calibration do: the groups share PSUs, so the formula
+#     drops a covariance whose SIGN nothing in the number reveals. That is why a structured design
+#     refits instead, and why a flat one does not.
 #   - WEIGHTED means weighted estimates on unweighted counts, with the effective n carried apart --
 #     the package's rule everywhere. Here the basis is FORCED weighted: these columns must be
 #     measured like the model column beside them.
@@ -189,7 +195,7 @@ reg_empirical <- function(data, fac_preds, outcome, crude_key, positive_level, w
     NULL
   }
   # a FLAT svydesign(ids = ~1) has the closed form as its exact answer -- no influence matrix.
-  need_svy <- !is.null(design_spec$design) && !svy_design_is_flat(design_spec$design)
+  need_svy <- svy_design_structured(design_spec$design)
   prep <- if (need_svy) svy_var_prep(design_spec$design, data[[svy_row_col]]) else NULL
   if (need_svy && is.null(prep)) degrade()
   if (!is.null(prep)) {
@@ -322,11 +328,27 @@ reg_empirical <- function(data, fac_preds, outcome, crude_key, positive_level, w
 # always on the NATIVE (link) scale.
 #
 # Returns list(est = <named by outcome category, "" when none> of tibble(row, est, lo, hi, p),
-#              fits = <named by predictor> of list(fit, data)) -- `row` is the SKELETON row index.
+#              fits = <named by predictor> of list(fit, data),
+#              degf = the WEAKEST reference these fits used) -- `row` is the SKELETON row index.
+# ⚠ `degf` is one number for a column whose rows come from k different univariable fits, so it is the
+# weakest claim among them (the smallest positive df, hence the widest critical value) -- which is
+# exactly what `degf`'s own merge rule declares the attribute to mean.
 # WARNING: messages are suppressed -- already emitted by the model fit on the same data/method.
+# IS THE UNIVARIABLE MODEL'S INTERVAL AVAILABLE IN CLOSED FORM? Two things must hold, and the second
+# is why a design object is an argument here.
+#   * the univariable model must be SATURATED -- true of every factor predictor except under an
+#     ordinal outcome, where proportional odds is a constraint, so a one-factor polr is not the cell
+#     table. A numeric predictor is never saturated.
+#   * the closed form's own assumption must be true. Woolf / Katz / the moment engines all read
+#     `1/a + 1/b + 1/c + 1/d` style variances, which assume the two compared groups are INDEPENDENT.
+#     Weights alone do not break that (a flat design is a weight vector); clusters, strata and
+#     calibration do -- the groups share PSUs, so the closed form drops a covariance that can make it
+#     28 % too narrow or twice too wide, with nothing in the number to say which.
+# Where either fails the crude column is REFIT through reg_empirical_fit(), i.e. through the very
+# fitter the table came from, which is what D22 asks for in the first place.
 #' @keywords internal
-reg_crude_saturated <- function(crude_key, is_factor)
-  isTRUE(is_factor) && !identical(crude_key, "ordinal")
+reg_crude_saturated <- function(crude_key, is_factor, design = NULL)
+  isTRUE(is_factor) && !identical(crude_key, "ordinal") && !svy_design_structured(design)
 
 #' @keywords internal
 reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome_level,
@@ -334,11 +356,12 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
                               other_preds = character(0), est = NULL, wt = NULL,
                               want_fit = FALSE, marginal = FALSE, trials = NULL,
                               shape_terms = NULL, crosses = list()) {
-  if (length(preds) == 0L) return(list(est = list(), fits = list()))
+  if (length(preds) == 0L) return(list(est = list(), fits = list(), degf = NA_real_))
   ratio  <- !is.null(est) && identical(est$comparison, "lnratioavg")
   skey   <- reg_skel_key(skeleton$var, skeleton$level)
   rows   <- list()
   fits   <- list()
+  dfs    <- numeric(0)
   for (v in preds) {
     # a nested cross block's univariable model is `y ~ M/X` -- the moderator plus the crossed term,
     # through this same producer, so estimand, link and CI rule are shared by construction.
@@ -355,14 +378,19 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
       error = function(e) NULL)
     if (is.null(f)) next
     if (want_fit) fits[[v]] <- list(fit = f$fit, data = f$data)
+    # a MARGINAL crude row is always Wald; a coefficient one follows the table's own `method`.
+    dfs <- c(dfs, reg_wald_degf(if (marginal) "wald" else method, f$disp_known, f$df_residual))
     if (!marginal) {
       # align the univariable fit's terms to the skeleton exactly as the model column does.
       td <- f$tidy[!is.na(f$tidy$term) & f$tidy$term %in% skeleton$term[skeleton$var == v], ,
                    drop = FALSE]
       if (!nrow(td)) next
       idx <- match(td$term, skeleton$term)
+      # ⚠ a 3+ level fit answers PER OUTCOME CATEGORY, and emit() looks these rows up under that key
+      # -- so a multinomial tidy must carry its `y.level` here or every fitted row silently misses.
       rows[[length(rows) + 1L]] <- tibble::tibble(
-        category = "", row = idx, est = td$estimate, lo = td$conf.low, hi = td$conf.high,
+        category = if ("y.level" %in% names(td)) as.character(td$y.level) else "",
+        row = idx, est = td$estimate, lo = td$conf.low, hi = td$conf.high,
         p = td$p.value)
     } else {
       # `at = "average"` always: the crude effect is a whole-sample quantity, like the factor arm's.
@@ -372,7 +400,8 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
         f$fit, f$data, v, conf_level, wt, at = "average",
         comparison = if (ratio) "lnratioavg" else NULL, want_pred = FALSE,
         exponentiate = FALSE, multiplier = multiplier, crosses = crosses,
-        engine = if (is.null(est)) "marginaleffects" else reg_marginal_engine(est))),
+        engine = if (is.null(est)) "marginaleffects" else reg_marginal_engine(est),
+        disp_known = f$disp_known, df_residual = f$df_residual)),
         error = function(e) NULL)
       if (is.null(m) || !nrow(m$ame)) next
       a <- m$ame[m$ame$var == v, , drop = FALSE]
@@ -388,9 +417,11 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
         est = e_v, lo = lo, hi = hi, p = a$ame_p)
     }
   }
-  if (!length(rows)) return(list(est = list(), fits = fits))
+  fit_degf <- { d <- dfs[is.finite(dfs) & dfs > 0]; if (length(d)) min(d) else NA_real_ }
+  if (!length(rows)) return(list(est = list(), fits = fits, degf = fit_degf))
   all <- vctrs::vec_rbind(!!!rows)
-  list(est = split(all[setdiff(names(all), "category")], all$category), fits = fits)
+  list(est = split(all[setdiff(names(all), "category")], all$category), fits = fits,
+       degf = fit_degf)
 }
 
 
@@ -553,7 +584,8 @@ cat_get <- function(l, key) {
 reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, est, var_y,
                                   conf_level = 0.95, color_signif = "grey_non_signif",
                                   color = NULL, fit_est = NULL, weighted = FALSE,
-                                  degf = Inf, emp_mode = "column") {
+                                  degf = Inf, emp_mode = "column",
+                                  saturated = TRUE, method = "wald") {
   if (is.null(REG_EMPIRICAL[[crude_key]]))
     return(list(cols = list(), cat_cols = list(), effect = NULL, shape = NULL))
   # read off the ESTIMAND row, never (effect, do_exp).
@@ -576,22 +608,31 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   na_ref <- function(ci) { ci$inf[refrows] <- NA_real_; ci$sup[refrows] <- NA_real_
                            ci$pvalue[refrows] <- NA_real_; ci }
   na_v   <- function() rep(NA_real_, n_rows)
-  # the crude interval a shape asks for, under THIS table's inference basis (see REG_EMPIRICAL).
+  # THE CRUDE INTERVAL a shape asks for, under THIS table's inference basis (see REG_EMPIRICAL) --
+  # or, where no closed form is exact (`saturated = FALSE`), the fit's own, which is the very interval
+  # its MODEL twin stamps. Stamping the same word is what keeps the pair in ONE legend block.
   emp_method <- function(shape)
-    (if (isTRUE(weighted)) shape$ci_method_design %||% shape$ci_method else shape$ci_method) %||% ""
+    if (!isTRUE(saturated)) reg_wald_method_name(method, EST_SCALES[[shape$scale]]$mult)
+    else (if (isTRUE(weighted)) shape$ci_method_design %||% shape$ci_method else shape$ci_method) %||% ""
+  # the df the column's interval was referred to: the crude fits' weakest where they built it, and
+  # the table's own (the design's) where a closed form did.
+  emp_degf <- if (!isTRUE(saturated)) (fit_est$degf %||% NA_real_) else degf
   emp_col <- function(shape, fields, n_eff = NULL) {
     args <- c(fields, if (!is.null(n_eff)) list(n_eff = n_eff), list(
       scale = shape$scale, pct_type = reg_pct_type(shape$scale),
       digits = reg_cell_digits(shape$scale),
       display = "est",
-      ci_method = emp_method(shape),
+      ci_method = emp_method(shape), degf = emp_degf,
       color = emp_color, color_signif = emp_signif, refcol = gap_base,
       col_var = reg_crude_col_name(shape), comp_all = FALSE, in_refrow = refrows,
       model_family = family, role = "emp"))
     if (!is.na(shape$ref)) args$ref <- shape$ref
     do.call(fmt, args)
   }
-  neff_of <- function(v) if (isTRUE(weighted)) as.double(v) else rep(NA_real_, n_rows)
+  # `n_eff` IS "the effective sample size used for this cell's CI" -- so it is NA wherever the
+  # interval did not come from a closed form on that base.
+  neff_of <- function(v)
+    if (isTRUE(weighted) && isTRUE(saturated)) as.double(v) else rep(NA_real_, n_rows)
   # emit() -- the finished column, plus the EFFECT VECTOR + SHAPE that become `obs`. A per-category
   # shape returns its column under `cat_cols`; `emp_mode = "cell"` draws no column at all.
   emit <- function(eff, cat = "") {
@@ -797,7 +838,8 @@ reg_same_frame <- function(mdata, f) {
 #' @keywords internal
 reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_preds,
                                est, wt, fits_crude = NULL, fit_preds = character(0),
-                               multiplier = NULL, category = "", crosses = list()) {
+                               multiplier = NULL, category = "", crosses = list(),
+                               saturated = TRUE) {
   # the estimand ROW carries both the profile axis (`at_reference`) and the marginal ratio.
   effect   <- est$effect
   marginal <- !identical(effect, "coefficient")
@@ -833,7 +875,10 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
   # the spec's ROW blocks, not its formula terms: a nested cross block's name is not a main effect.
   in_mod  <- skeleton$var %in% unique(c(sp$predictors, sp$row_vars))
   # WARNING: one length-n difference vector at a time -- never an n x p matrix of them.
-  closed_form <- !is.null(crude_if) && reg_crude_saturated(sp$crude_key, TRUE)
+  # ⚠ ONE fork, the block's own (reg_crude_block): where the crude column was refit rather than read
+  # off the cells, its influence leg comes from that fit too -- the `fits_crude` loop below, which
+  # covers factor predictors. The two loops stay disjoint because they read the same `saturated`.
+  closed_form <- !is.null(crude_if) && isTRUE(saturated)
   for (k in if (closed_form) which(in_mod & skeleton$var %in% fac_preds & !skeleton$is_ref) else
               integer(0)) {
     v <- as.character(skeleton$var[k]); r <- ref_of(v)

@@ -288,8 +288,9 @@ tab_estimates <- function(x, columns = NULL, what = c("auto", "effect", "level")
     # with the same z that fmt_gap_p() inverts).
     obs  <- get_obs(col)
     gse  <- get_gap_se(col)
-    zc   <- conf_level_to_z(get_conf_level(col))
-    half <- zc * gse
+    # ⚠ zscore_formula(), NOT conf_level_to_z(): the latter ROUNDS to 1.96 (it exists to name colour
+    # BREAKS), and the band has to be the very interval fmt_gap_bounds() draws and fmt_gap_p() inverts.
+    half <- zscore_formula(get_conf_level(col)) * gse
     band <- if (isTRUE(scl$mult)) list(lo = obs * exp(-half), hi = obs * exp(half))
             else                  list(lo = obs - half,       hi = obs + half)
 

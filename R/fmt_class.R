@@ -144,8 +144,9 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 #' (the CI falls back to the raw unweighted base). It records \emph{the base that was used}: a finite
 #' value where the design or weights corrected it, \code{NA} where nothing did, and the \strong{raw
 #' count} where a correction was asked for but this cell could not carry one. Populated for
-#' descriptive cells (a crosstab/mean cell, a \code{tab_reg} \code{Obs_*} column); a coefficient
-#' column carries none. A double vector the length of \code{n}. Non-displayed.
+#' descriptive cells (a crosstab/mean cell, a \code{tab_reg} \code{Obs_*} column whose interval came
+#' from a closed form); a coefficient column, and any column whose interval came from a fit instead,
+#' carry none. A double vector the length of \code{n}. Non-displayed.
 #' @param obs The value this cell's estimate is COMPARED TO by the \code{tab_reg} colour measures
 #' \code{"adjustment"} / \code{"between_groups"}, on the cell's own scale: the observed (crude)
 #' effect beside a model effect, or -- under \code{tab_vars} with \code{color = "between_groups"} --
@@ -207,8 +208,10 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 #' a single number in (0, 1). \code{NA} (default) means "unknown" --- the colour engine then falls
 #' back to \code{options("tabxplor.conf_level")}. Stored per COLUMN, because colours are resolved per
 #' column at print time and cannot see the table's \code{conf_level} argument.
-#' @param degf The degrees of freedom this column's interval is referred to (a survey design's
-#' \code{#PSU - #strata}, which matters below ~30 primary sampling units). \code{NA} (default) means
+#' @param degf The degrees of freedom this column's interval is referred to. On a cross-table that is
+#' the survey design's \code{#PSU - #strata}, which matters below ~30 primary sampling units; on a
+#' regression it is the fitted model's own residual df (for an \code{svyglm}, \code{degf + 1 - p}),
+#' so a model column and its observed companion legitimately differ. \code{NA} (default) means
 #' "refer to the normal quantile".
 #' @param basis How this column's interval and significance were computed --- \code{"n"} (the raw
 #' sample size), \code{"weights"} (the design effect of the weights), \code{"design"} (a full
@@ -2731,8 +2734,11 @@ fmt_gap_bounds <- function(x) {
           else        ifelse(p$ok, p$est - p$obs           , NA_real_)
   ok   <- is.finite(g) & is.finite(se) & se > 0 & !is.na(p$sign)
   half <- zscore_formula(get_conf_level(x)) * se
-  lo   <- ifelse(ok, p$sign * pmax(0, abs(g) - half), NA_real_)   # magnitude interval of |gap|,
-  hi   <- ifelse(ok, p$sign * (abs(g) + half)       , NA_real_)   #   re-signed by the null direction
+  # ⚠ `+ 0` kills the IEEE NEGATIVE ZERO a pinned near bound carries out of the sign flip:
+  # sprintf("%+.1f", -0) renders "-0.0", which reads as "just excludes the null" when it IS the null.
+  # exp(-0) is 1, so only the additive branch ever showed it.
+  lo   <- ifelse(ok, p$sign * pmax(0, abs(g) - half) + 0, NA_real_)   # magnitude interval of |gap|,
+  hi   <- ifelse(ok, p$sign * (abs(g) + half)           , NA_real_)   #   re-signed by the null direction
   if (p$mult) { lo <- exp(lo); hi <- exp(hi) }                    # centre 1 (exp is monotone)
   list(lo = pmin(lo, hi), hi = pmax(lo, hi))
 }
@@ -4992,10 +4998,15 @@ legend_method_name <- function(spec, measure = spec$measure_text) {
 
 # GATED on the basis: an unweighted / weights-only table refers to z and must not grow a "design df"
 # clause that says nothing; only a real survey design gains it (df = t(#PSU - #strata), not z).
+#
+# ⚠ AND GATED OFF A REGRESSION. There the df is per COLUMN -- a model column and its crude twin are
+# fitted on different numbers of parameters -- while this phrase is part of the legend's GROUPING
+# key, so naming a number here would split the one crude/adjusted block the pair exists to form. A
+# regression states its reference distribution once per model, in the "Model:" footer line instead.
 legend_method_phrase <- function(spec, lang, measure = spec$measure_text) {
   conf <- gettextf("%s%% confidence", legend_num(spec$conf_level * 100, lang))
   df   <- spec$degf
-  if (isTRUE(spec$basis %in% c("design", "design_partial")) &&
+  if (!isTRUE(spec$is_reg) && isTRUE(spec$basis %in% c("design", "design_partial")) &&
       !is.null(df) && length(df) == 1L && is.finite(df) && df > 0)
     conf <- gettextf("%s, %s design df", conf, legend_num(df, lang))
   m    <- legend_method_name(spec, measure)

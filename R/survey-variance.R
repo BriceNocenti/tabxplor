@@ -169,6 +169,12 @@ svy_flat_neff_rows <- function(w, u, v, n_obs, num = NULL) {
   svy_flat_base_neff(B, sum(w^2))
 }
 
+# THE ONE QUESTION a closed form has to ask of a design: does it carry structure the closed form
+# cannot see? A flat design is a weight vector and nothing else, so every closed form in the package
+# is exact on it; anything else -- clusters, strata, calibration, an fpc -- carries a covariance
+# between cells that a per-cell formula drops.
+svy_design_structured <- function(design) !is.null(design) && !svy_design_is_flat(design)
+
 svy_design_is_flat <- function(design) {
   if (is.null(design) || !inherits(design, "survey.design")) return(FALSE)
   if (!is.null(design$postStrata) && length(design$postStrata))  return(FALSE)

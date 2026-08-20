@@ -112,37 +112,57 @@ test_that("a GROUPED binomial base is respondent-level, not n x trials", {
 
 # ---- the intervals the columns print ------------------------------------------------------------
 
-test_that("Obs_OR's bracket IS the design variance of the log odds-ratio, and beats the old one", {
+test_that("under a real design Obs_OR IS the univariable design-based fit, exactly", {
+  # Phase 22b-xiii-2 (B1). A structured design breaks the closed form's own assumption: the two
+  # compared groups share PSUs, so Woolf's 1/a+1/b+1/c+1/d drops a covariance the design carries and
+  # the interval lands anywhere from 28 % narrow to 2.2x wide. There the crude column is REFIT
+  # through the table's own fitter, which is what D22 asked for in the first place -- so the bracket
+  # is not "close to" svyglm's any more, it IS svyglm's.
   d <- svc_fixture(); des <- svc_des(d)
   tt <- suppressMessages(tab_reg(des, "y", "x", family = "binomial", empirical = TRUE))
   oc <- tt[["Obs_OR"]]
-  lw <- log(get_ci_sup(oc)) - log(get_ci_inf(oc))
   k  <- which(as.character(tt$levels) %in% c("b", "c"))
 
-  V <- svc_se(survey::svyby(~I(y == "yes"), ~x, des, survey::svymean))[seq_len(3)]^2
-  p <- as.numeric(tapply(d$w * (d$y == "yes"), d$x, sum) / tapply(d$w, d$x, sum))
-  vl <- V / (p * (1 - p))^2                       # delta-method Var(logit p), per level
-  # z16-iiiii (D4): the critical value is the DESIGN's t, the one the Model_OR column beside it uses
-  z  <- conf_level_to_crit(0.95, svy_degf(des))
-  expect_equal(unname(lw[k]), unname(2 * z * sqrt(vl[2:3] + vl[1])), tolerance = 1e-3)
-
-  # against the design-based univariable model: MOST of the error goes, but not all of it -- Route A
-  # discards the cell-to-cell covariance, so a ratio lands a few percent either side (S3.4 measured
-  # 0.97-0.99 with a segregated predictor). What must hold is that it beats the single-stage base.
-  fit <- suppressWarnings(survey::svyglm(I(y == "yes") ~ x, design = des,
+  # tab_reg models the outcome's FIRST level, so the OR is the inverse of I(y == "yes")'s.
+  fit <- suppressWarnings(survey::svyglm(I(y == "no") ~ x, design = des,
                                          family = stats::quasibinomial()))
   ci  <- suppressMessages(stats::confint(fit))
-  tw  <- unname(ci[2:3, 2] - ci[2:3, 1])
-  expect_true(all(abs(unname(lw[k]) / tw - 1) < 0.10))
+  expect_equal(unname(get_num(oc)[k]),     unname(exp(stats::coef(fit)[2:3])), tolerance = 1e-9)
+  expect_equal(unname(get_ci_inf(oc)[k]),  unname(exp(ci[2:3, 1])),            tolerance = 1e-9)
+  expect_equal(unname(get_ci_sup(oc)[k]),  unname(exp(ci[2:3, 2])),            tolerance = 1e-9)
+  # and it SAYS so: the same method word and the same df as the model column beside it, so the two
+  # still fold into one legend block, and no effective base -- none was used.
+  expect_identical(fmt_attr(oc, "ci_method"), fmt_attr(tt[["Model_OR"]], "ci_method"))
+  expect_identical(get_degf(oc), as.double(stats::df.residual(fit)))
+  expect_true(all(is.na(get_n_eff(oc))))
+  # NON-VACUOUS: the closed form on the same grid is a different, measurably wrong interval.
+  g  <- svc_grid(des, "y", "binomial", "yes")
+  cf <- reg_empirical_columns(
+    tibble::tibble(var = "x", level = levels(d$x), is_ref = c(TRUE, FALSE, FALSE)),
+    g, "x", "binomial", "binomial", reg_estimand("binomial"), NA_real_, weighted = TRUE,
+    degf = svy_degf(des))$cols[[1]]
+  lw_cf <- log(get_ci_sup(cf) / get_ci_inf(cf))[2:3]
+  lw_ok <- log(get_ci_sup(oc) / get_ci_inf(oc))[k]
+  expect_true(any(abs(lw_cf / lw_ok - 1) > 0.02))
+})
+
+test_that("a WEIGHTS-only table keeps the closed form, and it tracks the flat univariable model", {
+  d <- svc_fixture()
   # Phase 18z16-i (W1/W2): the WEIGHTS-only table is no longer on the raw n -- tab_reg() forces the
   # weighted basis -- so it now tracks the FLAT univariable model instead of missing it by ~17 %.
+  # ⚠ NO refit here (22b-xiii-2): with no clusters the closed form's independence assumption is TRUE,
+  # so it stays -- which is what keeps a flat design and a `wt =` table telling the same story.
   flat <- survey::svydesign(ids = ~1, weights = ~w, data = d)
   ffit <- suppressWarnings(survey::svyglm(I(y == "yes") ~ x, design = flat,
                                           family = stats::quasibinomial()))
   fw   <- unname(apply(suppressMessages(stats::confint(ffit))[2:3, ], 1, diff))
-  raw  <- tab_reg(d, "y", "x", family = "binomial", empirical = TRUE, wt = "w")[["Obs_OR"]]
+  tw   <- tab_reg(d, "y", "x", family = "binomial", empirical = TRUE, wt = "w")
+  raw  <- tw[["Obs_OR"]]
+  k    <- which(as.character(tw$levels) %in% c("b", "c"))
   rw   <- unname((log(get_ci_sup(raw)) - log(get_ci_inf(raw)))[k])
   expect_true(all(abs(rw / fw - 1) < 0.10))
+  expect_identical(fmt_attr(raw, "ci_method"), "woolf")          # the closed form, still
+  expect_true(any(is.finite(get_n_eff(raw))))                    # on its own effective base
 })
 
 test_that("the crude columns follow the DESIGN, and the point estimates do not move", {
@@ -373,9 +393,12 @@ test_that("the crude columns STORE the effective base they used (W-D)", {
   # a MEAN column takes the mean's own base (n_ci), not the draw base -- each column stores ITS OWN
   gg <- suppressWarnings(tab_reg(d, "num", "x", family = "gaussian", empirical = TRUE, wt = "w"))
   nm <- get_n_eff(gg[["Obs_diff"]]); expect_true(any(is.finite(nm)))
-  # under a DESIGN the stored base is the design one (strictly different from the flat-weighted one)
+  # under a real DESIGN there is no effective base to store: 22b-xiii-2 refits the crude column from
+  # the univariable design-based fit, and `n_eff` IS "the base this cell's CI was computed on".
   dsg <- suppressMessages(tab_reg(des, "y", "x", family = "binomial", empirical = TRUE))
-  nd  <- get_n_eff(dsg[["Obs_OR"]]); nd <- nd[is.finite(nd)]
-  expect_length(nd, length(ne))
-  expect_false(isTRUE(all.equal(sort(nd), sort(ne))))
+  expect_true(all(is.na(get_n_eff(dsg[["Obs_OR"]]))))
+  # the GRID still computes it -- it is the design-based effective base, and it is what the flat
+  # closed form would have used; only the column no longer claims the interval came from it.
+  gd <- svc_grid(des, "y", "binomial", "yes")
+  expect_true(any(is.finite(gd$emp_n_draw)))
 })
