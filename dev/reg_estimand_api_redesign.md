@@ -112,11 +112,11 @@ The scale map, read off every row:
 
 | level kind | `difference` | `ratio`      | `odds_ratio` |
 |------------|--------------|--------------|--------------|
-| share      | `points`     | `pct_ratio`  | `odds_ratio` |
+| proportion | `points`     | `pct_ratio`  | `odds_ratio` |
 | mean       | `raw_diff`   | `mean_ratio` | — (no odds)  |
 | count      | `raw_diff`   | `mean_ratio` | — (no odds)  |
 
-plus `log` → `log_coef`, and the existing `REG_SCALE_GROUPED` remap for a `trials =` outcome. The word map is the same shape: share → `RD` / `RR` / `OR`, mean → `diff` / `RoM`, count → `diff` / `IRR`.
+plus `log` → `log_coef`, and the existing `REG_SCALE_GROUPED` remap for a `trials =` outcome. The word map is the same shape: proportion → `RD` / `RR` / `OR`, mean → `diff` / `RoM`, count → `diff` / `IRR`.
 
 ### 3.2 The crude companion derives too, and that was not expected
 
@@ -212,13 +212,13 @@ The default table is **unchanged**, which is the point: `measure = "auto"` still
 
 ### 4.4 Which inconsistencies it resolves
 
-| inconsistency (earlier study)                 | how the rule resolves it                                           |
-|-----------------------------------------------|--------------------------------------------------------------------|
+| inconsistency (earlier study)                 | how the rule resolves it                                       |
+|-----------------------------------------------|----------------------------------------------------------------|
 | §4.3 the "orthogonal" claim                   | true statement: independent on the prediction routes only      |
-| §3.1 five single-option cells                 | the user never enters through `effect`; that axis is not met       |
-| §5.1 "auto" is effect-keyed                   | two rules with two reasons, not a table of ten values (§8.1)       |
-| §4.1 three mechanisms, one idea               | two of the three go (§7); the third becomes §2's second clause     |
-| jamovi's "watch the measure change under you" | the UI leads with measure and lets effect follow, as in R          |
+| §3.1 five single-option cells                 | the user never enters through `effect`; that axis is not met   |
+| §5.1 "auto" is effect-keyed                   | two rules with two reasons, not a table of ten values (§8.1)   |
+| §4.1 three mechanisms, one idea               | two of the three go (§7); the third becomes §2's second clause |
+| jamovi's "watch the measure change under you" | the UI leads with measure and lets effect follow, as in R      |
 
 ### 4.5 Reaching the modified Poisson, and `at_reference`
 
@@ -351,19 +351,19 @@ A readable default for everybody, expert tweaking in the vocabulary experts alre
 **The package is already there, literally.** `reg_fit()`'s `switch()` **already returns family objects**, so the internal link keys ARE `(outcome, family object)` pairs:
 
 | internal key | what it builds         | what it really is                            |
-|--------------|-------------------------|-----------------------------------------------|
+|--------------|------------------------|----------------------------------------------|
 | `binomial`   | `binomial("logit")`    | `quasibinomial("logit")` when weighted       |
 | `poisson`    | `poisson("log")`       | `quasipoisson("log")` when weighted          |
 | `rr`         | `quasipoisson("log")`  | on a BINARY outcome + robust SE — Zou (2004) |
 | `mr`         | `quasipoisson("log")`  | on a CONTINUOUS outcome + robust SE — PPML   |
-| `rd`         | `binomial("identity")` | + robust SE                                   |
+| `rd`         | `binomial("identity")` | + robust SE                                  |
 
 So `rr` and `mr` are **the same family object**, distinguished only by the outcome — which is exactly what §3's derivation already keys on. §3.3's `fits` column stops being a map to an opaque key and becomes a map **to a family object**, and `reg_fit()`'s `switch()` collapses into it. Another deletion, not an addition.
 
 **Measured: the engines are already link-agnostic.** `reg_gcomp_maker()` reads `stats::family(fit)` and uses its `linkinv` / `mu.eta`, so it never knew which link it was on. Run directly on `gss_cat` (n ≈ 21 400) — the AME of Black vs White with its delta-method half-width:
 
 | fit                    | AME      | half-width | note                                      |
-|------------------------|----------|------------|--------------------------------------------|
+|------------------------|----------|------------|-------------------------------------------|
 | `binomial("logit")`    | −0.19092 | 0.01930    | today's route                             |
 | `binomial("probit")`   | −0.18986 | 0.01924    | **unreachable today**                     |
 | `binomial("cloglog")`  | −0.19459 | 0.01952    | **unreachable today**                     |
@@ -382,14 +382,14 @@ Two readings, both supporting the design. The **point estimates barely move acro
 
 **What does not break** — each checked, not assumed:
 
-| subsystem                     | why it is unaffected                                          |
-|-------------------------------|----------------------------------------------------------------|
-| g-computation, influence fns  | reads `stats::family(fit)` — measured above                   |
-| the crude companion           | keys on the **measure's** link, never the model's (§3.2)      |
-| the interval                  | read off the fitted object since 22b-xiii-2                   |
-| `EST_SCALES` stamping         | keys on (level kind, measure) — §3.1                          |
-| survey                        | `svyglm()` takes a family object natively                     |
-| the per-outcome grammar       | a **named list** of family objects already slices correctly   |
+| subsystem                    | why it is unaffected                                        |
+|------------------------------|-------------------------------------------------------------|
+| g-computation, influence fns | reads `stats::family(fit)` — measured above                 |
+| the crude companion          | keys on the **measure's** link, never the model's (§3.2)    |
+| the interval                 | read off the fitted object since 22b-xiii-2                 |
+| `EST_SCALES` stamping        | keys on (level kind, measure) — §3.1                        |
+| survey                       | `svyglm()` takes a family object natively                   |
+| the per-outcome grammar      | a **named list** of family objects already slices correctly |
 
 **What needs a declared rule — six, each small:**
 
@@ -424,30 +424,30 @@ The maintainer's question, and the right one to press on: three intervals have t
 1. A **saturated** univariable fit has the same fitted values under *every* link — they are the observed cell proportions. Verified to 10 decimals across `logit` / `probit` / `log` / `identity` / `cloglog` on `married ~ race`.
 2. Therefore the closed form and the refit agree exactly:
 
-| crude interval, Black vs Other      | estimate | lower    | upper    |
-|-------------------------------------|----------|----------|----------|
-| Woolf closed form (log OR)          | 0.423707 | 0.376454 | 0.476892 |
-| `glm(y ~ race, binomial("logit"))`  | 0.423707 | 0.376454 | 0.476892 |
-| Katz closed form (log RR)           | 0.583758 | 0.542570 | 0.628072 |
-| `glm(y ~ race, binomial("log"))`    | 0.583758 | 0.542571 | 0.628072 |
+| crude interval, Black vs Other     | estimate | lower    | upper    |
+|------------------------------------|----------|----------|----------|
+| Woolf closed form (log OR)         | 0.423707 | 0.376454 | 0.476892 |
+| `glm(y ~ race, binomial("logit"))` | 0.423707 | 0.376454 | 0.476892 |
+| Katz closed form (log RR)          | 0.583758 | 0.542570 | 0.628072 |
+| `glm(y ~ race, binomial("log"))`   | 0.583758 | 0.542571 | 0.628072 |
 
 So **a new family needs no new closed form**: the refit gives the identical number, and the refit path (`reg_empirical_fit()`) already exists and was extended to the design rung in 22b-xiii-2. The closed forms stay where they are declared, as the fast exact path; anything else routes through the refit. Note also that the *saturated* log-binomial **converges** where the adjusted one fails (§5.5), because a saturated fit is just the cell means — so the crude column never meets the convergence edge that the model column does.
 
 ⚠ **And what varies across families is the variance function, not the link.** Measured on a Gamma-distributed cost outcome, the same saturated ratio of means:
 
-| univariable fit          | RoM      | se(log)  | interval          |
-|--------------------------|----------|----------|--------------------|
-| `gaussian("log")`        | 1.405057 | 0.019366 | [1.3527 ; 1.4594] |
-| `quasipoisson("log")`    | 1.405057 | 0.019634 | [1.3520 ; 1.4602] |
-| `Gamma("log")`           | 1.405057 | 0.020346 | [1.3501 ; 1.4622] |
-| `inverse.gaussian("log")`| 1.405057 | 0.021535 | [1.3470 ; 1.4656] |
+| univariable fit           | RoM      | se(log)  | interval          |
+|---------------------------|----------|----------|-------------------|
+| `gaussian("log")`         | 1.405057 | 0.019366 | [1.3527 ; 1.4594] |
+| `quasipoisson("log")`     | 1.405057 | 0.019634 | [1.3520 ; 1.4602] |
+| `Gamma("log")`            | 1.405057 | 0.020346 | [1.3501 ; 1.4622] |
+| `inverse.gaussian("log")` | 1.405057 | 0.021535 | [1.3470 ; 1.4656] |
 
 The point estimate is **identical** — it is a cell mean — and only the interval moves, by about 11 % across the four. That is the containment, stated as a rule: **the crude grid is (variance function × measure), never (family × link × measure × route).** Links contribute **zero** rows.
 
 And the refit path is already generic. The univariable AME and its SE from `reg_marginal_gcomp()`, against `marginaleffects::avg_comparisons()`:
 
 | univariable fit       | crude AME | half-width | marginaleffects       |
-|-----------------------|-----------|------------|------------------------|
+|-----------------------|-----------|------------|-----------------------|
 | `gaussian("log")`     | +3.01909  | 0.16038    | +3.01909 / se 0.16038 |
 | `Gamma("log")`        | +3.01909  | 0.17784    | +3.01909 / se 0.17784 |
 | `quasipoisson("log")` | +3.01909  | 0.16688    | +3.01909 / se 0.16688 |
@@ -460,40 +460,40 @@ The crude leg (`reg_crude_if_maker()`, `:129`) is the *nonparametric* influence 
 
 **The work map.** Which crude engines exist, per variance function × measure — the only grid that matters:
 
-| variance function (family)      | difference       | ratio                    | odds ratio  |
-|---------------------------------|------------------|--------------------------|-------------|
-| binomial / quasibinomial (share)| ✓ `ame`, Wald    | ✓ `rr`, Katz             | ✓ `or`, Woolf |
-| gaussian (mean)                 | ✓ `diff`, ols    | ✓ `mr`, quasi-Poisson    | n/a         |
-| poisson / quasipoisson (count)  | ✓ `diff`, Welch  | ✓ `irr`, quasi-Poisson   | n/a         |
-| **Gamma** (mean)                | **new**          | **new**                  | n/a         |
-| **inverse.gaussian** (mean)     | **new**          | **new**                  | n/a         |
+| variance function (family)       | difference      | ratio                  | odds ratio    |
+|----------------------------------|-----------------|------------------------|---------------|
+| binomial / quasibinomial (share) | ✓ `ame`, Wald   | ✓ `rr`, Katz           | ✓ `or`, Woolf |
+| gaussian (mean)                  | ✓ `diff`, ols   | ✓ `mr`, quasi-Poisson  | n/a           |
+| poisson / quasipoisson (count)   | ✓ `diff`, Welch | ✓ `irr`, quasi-Poisson | n/a           |
+| **Gamma** (mean)                 | **new**         | **new**                | n/a           |
+| **inverse.gaussian** (mean)      | **new**         | **new**                | n/a           |
 
 **Four new cells, and none needs new mathematics** — all four route to the refit, which is measured above to reproduce `marginaleffects` exactly. Against a naive count of family × link × measure × route (7 × ~4 × 3 × 3 ≈ 250), this is the difference between a contained change and endless tweaking.
 
 **Cost, measured at n = 21 407**, per predictor:
 
-| step                                        | time     |
-|---------------------------------------------|----------|
-| Woolf closed form                           | ~0.0 ms  |
-| univariable `glm(binomial)` refit           | 2.5 ms   |
-| univariable `glm(Gamma("log"))` refit       | 2.7 ms   |
-| `reg_marginal_gcomp()` on it, estimate + SE | 4.9 ms   |
-| `reg_coef_if_maker()` on it                 | 0.1 ms   |
+| step                                        | time    |
+|---------------------------------------------|---------|
+| Woolf closed form                           | ~0.0 ms |
+| univariable `glm(binomial)` refit           | 2.5 ms  |
+| univariable `glm(Gamma("log"))` refit       | 2.7 ms  |
+| `reg_marginal_gcomp()` on it, estimate + SE | 4.9 ms  |
+| `reg_coef_if_maker()` on it                 | 0.1 ms  |
 
 So about **7.5 ms per predictor**, ~38 ms for a five-predictor table — against the +131 ms that 22b-xiii-2 measured and accepted for the design-rung crude refit. Not a performance question.
 
 **So what IS the work?**
 
-| item                                              | size                    | note                                   |
-|---------------------------------------------------|-----------------------|-----------------------------------------|
-| `disp_known` read from `fam$family`               | 1 line                  | R's own rule                           |
-| the allow-list column (family → level kind)       | 1 column, ~7 rows       | **the containment**                    |
-| crude engine, Gamma / inverse.gaussian            | 0 new maths — route it  | measured identical to the refit        |
-| the g'(μ) map, shared with §6.4                   | 1 table, 2 readers      | needed for the marginal OR anyway      |
-| robust-vs-model SE rule                           | 1 declared rule         | §5.5(1)                                |
-| **footer statistics per family**                  | **the real work**       | `reg_glance()` assumes known families  |
-| **model checks (`REG_CHECKS$families`)**          | **the real work**       | dispersion / linearity / influence     |
-| display name, digest key, `reg_per_outcome()` guard | 3 small               | §5.5(3–5)                              |
+| item                                                | size                   | note                                  |
+|-----------------------------------------------------|------------------------|---------------------------------------|
+| `disp_known` read from `fam$family`                 | 1 line                 | R's own rule                          |
+| the allow-list column (family → level kind)         | 1 column, ~7 rows      | **the containment**                   |
+| crude engine, Gamma / inverse.gaussian              | 0 new maths — route it | measured identical to the refit       |
+| the g'(μ) map, shared with §6.4                     | 1 table, 2 readers     | needed for the marginal OR anyway     |
+| robust-vs-model SE rule                             | 1 declared rule        | §5.5(1)                               |
+| **footer statistics per family**                    | **the real work**      | `reg_glance()` assumes known families |
+| **model checks (`REG_CHECKS$families`)**            | **the real work**      | dispersion / linearity / influence    |
+| display name, digest key, `reg_per_outcome()` guard | 3 small                | §5.5(3–5)                             |
 
 ⚠ **The endless-tweaking risk is not in the inference layer — it is in the footer and the checks**, the two subsystems carrying per-family knowledge that R itself does not supply. Both are already declared tables with a `families` column, so the containment is the same allow-list, not a second mechanism.
 
@@ -612,19 +612,19 @@ For jamovi the same reorder applies to the radio groups and to `applyModelEnable
 
 Everything below is removed or derived, not moved. Nothing in this phase adds a mechanism.
 
-| what                                       | where                             | why it goes                       |
-|--------------------------------------------|-----------------------------------|-----------------------------------|
-| 43 declared `est_row()` calls (146 lines)  | `R/reg-estimand.R:370-524`        | composed from 4 facts (§3)        |
-| `est_row()` + its positional hazard        | `:324-335`                        | no rows left to write by hand     |
-| `reg_mark_redundant()` + `redundant`       | `:526-561`, `:825`, `:870-873`    | decided (§7)                      |
-| the `engine` column                        | `:281-294`, FK at `zzz:233`       | **no row ever sets it**; one line |
-| the `obs` column                           | `:295-296`                        | asserted = `!at_reference`        |
-| `est$display`                              | `:848`                            | **write-only — no reader**        |
-| `reg_effect_key()`'s vestigial `measure`   | `:1011-1018`, `reg-resolve.R:441` | a retired `effect` spelling       |
-| `REG_ESTIMANDS[[fam]]$default`             | `:374, :406, :438, :467, :495`    | derived from `level` + `fits`     |
-| the two `status = "impossible"` rows       | `:386-388`, `:448-450`            | generated by §2's first clause    |
-| the `≡` marker, its legend, its paragraph  | both reg vignettes                | the refusal is gone               |
-| the effect-first `TABX_ESTIMANDS` gating   | `jamovi/js/jmvtabreg.js:902-931`  | transposed, simplified (§8.2)     |
+| what                                      | where                             | why it goes                       |
+|-------------------------------------------|-----------------------------------|-----------------------------------|
+| 43 declared `est_row()` calls (146 lines) | `R/reg-estimand.R:370-524`        | composed from 4 facts (§3)        |
+| `est_row()` + its positional hazard       | `:324-335`                        | no rows left to write by hand     |
+| `reg_mark_redundant()` + `redundant`      | `:526-561`, `:825`, `:870-873`    | decided (§7)                      |
+| the `engine` column                       | `:281-294`, FK at `zzz:233`       | **no row ever sets it**; one line |
+| the `obs` column                          | `:295-296`                        | asserted = `!at_reference`        |
+| `est$display`                             | `:848`                            | **write-only — no reader**        |
+| `reg_effect_key()`'s vestigial `measure`  | `:1011-1018`, `reg-resolve.R:441` | a retired `effect` spelling       |
+| `REG_ESTIMANDS[[fam]]$default`            | `:374, :406, :438, :467, :495`    | derived from `level` + `fits`     |
+| the two `status = "impossible"` rows      | `:386-388`, `:448-450`            | generated by §2's first clause    |
+| the `≡` marker, its legend, its paragraph | both reg vignettes                | the refusal is gone               |
+| the effect-first `TABX_ESTIMANDS` gating  | `jamovi/js/jmvtabreg.js:902-931`  | transposed, simplified (§8.2)     |
 
 What is **kept and untouched**: `reg_estimand()`'s signature and typed-refusal contract, every `REG_WORDS` / `REG_CONTRASTS` composition rule, `REG_MEASURE_ALIASES`, `REG_EMPIRICAL`, `EST_SCALES`, `MEASURES`, the colour engine, and every foreign key in `zzz-fact-keys.R` (which now checks composed rows over the same enumerated grid).
 
@@ -644,7 +644,7 @@ Three claims in this document are derivations from the declared tables, not runt
 
 §8.1 makes `ratio` the prediction default for binomial / multinomial / ordinal. `dev/reg_family_measure_effect.md` §5.3 **measured** that on a common outcome a marginal risk ratio compresses toward 1 — three effects spanning 16 percentage points all printing `×1.1` — and that against the shipped `pct_ratio` ladder (1.5 / 2 / 4) **100 % of that table's cells fall in the uncoloured slot.**
 
-So if this phase lands before 22b-xiv-2, **the package's default binomial marginal table renders entirely grey**, in a package whose thesis is that colour is how a table is read. Two of the three symptoms are 22b-xiv-2's to fix (P5's `min_digits` 1 → 2, and P6's fourth break with a recalibrated ladder). **Recommendation: land 22b-xiv-2 first, or land the two together and review the flagship tables in one pass.** This is the single most important sequencing fact in this document.
+So if this phase lands before 22b-xiv-2, **the package's default binomial marginal table renders entirely grey**, in a package whose thesis is that colour is how a table is read. Two of the three symptoms are 22b-xiv-2's to fix (P5's `min_digits` 1 → 2, and P6's fourth break with a recalibrated ladder). **Recommendation: land 22b-xiv-2 first, or land the two together and review the flagship tables in one pass.** This is the single most important sequencing fact in this document. **Maintainer’s decision: we keep the order, it’s not a problem (tables will stay grey for one phase only).**
 
 ### 10.3 Documentation blast radius
 
@@ -683,7 +683,7 @@ Steps 1–3 are net deletions with no output change and could land on their own 
 **(1) The modified-Poisson message is unconditional; the promotion it announces is not.** `family = "poisson"` on a binary outcome informs *"fitting a modified Poisson regression (robust standard errors) -> risk ratios"*, but the promotion only rewrites `measure` **when `measure` is `"auto"`** (`R/reg-resolve.R:424-447`). Measured on `gss_cat` with `reg_formulas()`:
 
 | call                                                              | message says     | actually fits          |
-|-------------------------------------------------------------------|------------------|-------------------------|
+|-------------------------------------------------------------------|------------------|------------------------|
 | `family = "poisson"`                                              | modified Poisson | `rr` ✓                 |
 | `family = "poisson", measure = "difference"`                      | modified Poisson | `rd` — identity link ✗ |
 | `family = "poisson", effect = "marginal", measure = "difference"` | modified Poisson | `binomial` — logit ✗   |
@@ -694,23 +694,28 @@ The family is rewritten to `"binomial"` unconditionally and the message is emitt
 
 ---
 
-## 11. Where each decision stands
+## 11. Where each decision stands: maintainer’s review
 
-| #  | decision                                                     | status                                  |
-|----|--------------------------------------------------------------|-----------------------------------------|
-| 1  | Delete `status = "redundant"`; the three cells build         | **decided** (this session)              |
-| 2  | Derive `REG_ESTIMANDS` from four facts per family            | recommended — §3, verified row by row   |
-| 3  | `effect = "auto"`, measure-first routing                     | **studied** — §4; recommended, see §4.8 |
-| 4  | `measure = "auto"` = the base-link measure on the coef route | recommended — §4.6                      |
-| 5  | Prediction defaults: share → `ratio`, else `difference` (P8) | recommended — §8.1 ⚠ see §10.2          |
-| 6  | Marginal OR: binary free, 3+ category with `obs` withheld    | **open** — §6; binary-only is the cut   |
-| 7a | `link =` as a fourth argument                                | **open, both studied** — §5; Shape A    |
-| 7b | Fit on one link, marginalise on another                      | **open** — §5.4; recommend (c) now      |
-| 7c | If opened: `family = binomial(link = "log")`                 | **preferred over `link =`** — §5.5      |
-| 7d | Is the interval the blocker? **No** — §5.6                   | 4 new crude cells, all routed           |
-| 8  | Reorder to `family` → `measure` → `effect`                   | recommended — §8.2, free in R           |
-| 9  | Keep `effect` and its three value names                      | settled in Phase 22h; not reopened      |
-| 10 | Correct the "orthogonal" claim (P4)                          | **decided** earlier; falls out of §1    |
+| #  | possible decision                                               | status: maintainer’s call                                    |
+|----|-----------------------------------------------------------------|--------------------------------------------------------------|
+| 1  | Delete `status = "redundant"`; the three cells build            | **decided** (this session)                                   |
+| 2  | Derive `REG_ESTIMANDS` from four facts per family               | **decided** — §3, verified row by row                        |
+| 3  | `effect = "auto"`, measure-first routing                        | **see "Remaining problems to study" below** — §4.            |
+| 4  | `measure = "auto"` = the base-link measure on the coef route    | **decided, see below** — §4.6                                |
+| 5  | Prediction defaults: share → `ratio`, else `difference` (P8)    | **not consistent with the chosen framework (study)?** — §8.1 |
+| 6  | Marginal OR: binary free, 3+ category with `obs` withheld       | **decided: binary-only** — §6;                               |
+| 7a | `link =` as a fourth argument                                   | **open, to study"** — §5 Shape A                             |
+| 7b | Fit on one link/measure, marginalise on another                 | **open, to study** — §5.4;                                   |
+| 7c | If opened: `family = binomial(link = "log")`                    | **no, it would fight tabxplor vocabulary** — §5.5            |
+| 7d | Interval is the blocker? **No** We could route 4 new crude §5.6 | **no new families for now**: would need new model checks etc.|
+| 8  | Reorder to `family` → `measure` → `effect`                      | **decided, but must study what `effect` becomes** — §8.2.    |
+| 9  | Keep `effect` and its three value names                         | **reopened, restudy**                                        |
+| 10 | Correct the "orthogonal" claim (P4)                             | **decided** earlier; falls out of §1                         |
+
+**Remaining problems to study:**
+- Nearly everything call for `measure` first, but at the same time **it would override the `link =` if it was not already chosen in `family`**, and the user won’t easily know what exactly he has modelised. At the same time, `link =` syntax family objects syntax is technical, goes against tabxplor API, and it would add a second more complicated syntax to choose a first measure, who *is* really a "model measure" : "identity" == "difference", "log" == "ratio", "logit" == "odds_ratio" (is that all, or are there other cases ?).
+- A good solution to study may be: `link =` as a fourth argument (the second one in the chain), but taking the same options as `measure`, "difference", "ratio", "odds_ratio" ("identidy", "log", "logit", should still work without a message, but won’t be teached first-hand by the package)
+- We would have an "auto" chain: the family decides the "auto" `link`; the "auto" `measure` is to take the same than the link (would name this default option "model_link" or "model_default_link" be more clear ?) ; the "auto" `effect` is then the coefficient if `measure = "model_link"` or so (there’s not choice left to be made here, right, or am I wrong ? So `effect = "coefficient"` becomes a bit meaningless, because the choice is already made ?), choosing another `measure` goes marginal by default, and "at_reference" should stay an option here. How should we modify `effect` to reflect this philosophy ? Only a choice between marginal and at_reference for the case where it’s not the model coefficient ? Would it be readable ? User-friendly ? Can you think about caveats ? What would be the smooth and logical chain of arguments for consistency, readability and user-friendliness ? Do you see a better possibility ?
 
 ---
 
