@@ -62,10 +62,10 @@
 #' @param text_size,text_size_headers,text_size_subtext Font sizes of text elements.
 #' @param theme By default (\code{"light"}) a white table with black text; set to \code{"dark"}
 #'   for a black table with white text (the colours follow the theme).
-#'   \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
-#'   cells underlined, under-represented ones in italic, the ink darkening and turning bold with the
-#'   size of the deviation, and a grey fill for the second colour measure -- readable in a greyscale
-#'   print, where the colour palette's two directions become the same shade.
+#'   The black-and-white **publication** palettes render a table for a page that has no colour:
+#'   \code{"print_ready"} picks the right one per table, or name it yourself --
+#'   \code{"print_marks"}, \code{"print_emphasis"}, \code{"print_minimalistic"} (\code{"bw"}).
+#'   See \code{\link{tab_css}} for what each of them says.
 #' @param print_color_legend `r lifecycle::badge("deprecated")` Renamed to \code{color_legend}.
 #' @param sheets The Excel sheets options :
 #' \itemize{
@@ -141,7 +141,8 @@ tab_xl <-
     # Shared option resolver (theme/color/color_legend/transpose). Phase 10j makes tab_xl theme-aware:
     # the palettes below now honour `theme` (was hardcoded "light").
     o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
-                             transpose = transpose, caption = caption, var_names = var_names)
+                             transpose = transpose, caption = caption, var_names = var_names,
+                             tabs = tabs)
     theme <- o$theme
     color_legend <- o$color_legend; color <- o$color
     # `caption` (single) is the unified alias; an explicit `titles` (per-sheet) still wins.
@@ -312,7 +313,10 @@ tab_xl <-
       text_size_subtext = text_size_subtext,
       # Phase 17g: no private palette -- slot->hex is single-sourced through ann (fmt_channel_codes),
       # the same source the CSS side reads. tab_xl_plan_one() consumes ann$text_hex / ann$bg_hex.
-      or_numeric        = isTRUE(or_numeric)      # Phase 13c-v: OR as text (1/x) by default
+      or_numeric        = isTRUE(or_numeric),     # Phase 13c-v: OR as text (1/x) by default
+      # the RESOLVED palette: format() needs it to write a publication palette's marks into the cell
+      # (and into the numFmt literal), exactly as it writes the significance stars.
+      theme             = theme
     )
 
     # === Per-table plans (pure: raw values + numFmt codes + colour slots + font plan + geometry) ===
@@ -398,12 +402,12 @@ tab_xl_resolve_path <- function(path, replace) {
 # becomes its format() display string (character); every other fmt column its raw get_num() number.
 # Mixed column types in one tibble are fine (openxlsx2 writes each column by its R type).
 #' @keywords internal
-xl_materialize_data <- function(tab, fmt_cols, text_fmt_cols, transposed = FALSE) {
+xl_materialize_data <- function(tab, fmt_cols, text_fmt_cols, transposed = FALSE, theme = NULL) {
   for (ci in fmt_cols) {
     tab[[ci]] <- if (isTRUE(transposed)) {
       as.character(tab[[ci]])                       # Phase 14o: already a pre-formatted display string
     } else if (ci %in% text_fmt_cols) {
-      format(tab[[ci]], special_formatting = TRUE, na = "", stars = TRUE)
+      format(tab[[ci]], special_formatting = TRUE, na = "", stars = TRUE, theme = theme)
     } else {
       # NaN -> NA so an empty numeric cell (a summary-stat / p-value row where the test does not apply)
       # writes as a BLANK cell, not the Excel #VALUE!/#N/A error -- openxlsx2 renders NaN as an error even
@@ -483,7 +487,8 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   # Phase 14i: Excel keeps only a merged range's top-left value, so the label repeats below one become
   # invisible ghosts a user would find again on unmerging. Blank them at the source -- the display
   # equivalent of md's blanked cells, and on the WRITTEN copy only (every role is read off `tab`).
-  xl_data <- xl_materialize_data(tab, fmt_cols, text_fmt_cols, transposed = transposed)
+  xl_data <- xl_materialize_data(tab, fmt_cols, text_fmt_cols, transposed = transposed,
+                                 theme = o$theme)
   # A row sparkline lives in a base-count cell that holds NO number, so it displaces nothing: the
   # column stays a real editable count and these few cells are written afterwards, individually, as
   # text. Only where the column is numeric -- a genuine min-max range already makes it a
@@ -517,12 +522,15 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
       # lever here: it would also switch on the html-only <sub> markup.
       # Phase 14o: a transposed column is already a pre-formatted display string (character).
       val  <- if (isTRUE(transposed)) as.character(col)
-              else format(col, special_formatting = TRUE, na = "", stars = TRUE, pad = fig_space)
+              else format(col, special_formatting = TRUE, na = "", stars = TRUE, theme = o$theme,
+                          pad = fig_space)
       code <- ifelse(!is.na(val) & nzchar(val), "@", NA_character_)
       return(tibble::tibble(col = as.integer(ci), row = seq_along(code) + data_row0, code = code))
     }
     code <- xl_code(col)
-    st   <- get_stars(col)
+    # the SAME suffix format() writes into the text, so Excel and every other backend annotate a cell
+    # identically -- and a `contrib` column, which stars nothing, gets nothing here either.
+    st   <- fmt_cell_suffix(col, stars = TRUE, theme = o$theme)
     val  <- !is.na(code) & code != "TEXT"
     if (any(val & nzchar(st))) {
       # Phase 14h: the same width and the same pad glyph as format()'s star field (fmt_class.R) --
@@ -571,9 +579,9 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
                      bold = a$face_bold, italic = a$face_italic, underline = a$face_underline,
                      channel = "text"),
       tibble::tibble(col = as.integer(ci), row = rows, slot = a$bg_slot,   hex = a$bg_hex,
-                     bold = FALSE, italic = FALSE, underline = FALSE, channel = "bg"))
+                     bold = FALSE, italic = FALSE, underline = "", channel = "bg"))
   }) else tibble::tibble(col = integer(), row = integer(), slot = integer(), hex = character(),
-                         bold = logical(), italic = logical(), underline = logical(),
+                         bold = logical(), italic = logical(), underline = character(),
                          channel = character())
   colour <- dplyr::filter(colour, .data$slot > 0L)
 
@@ -590,7 +598,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
                      color = NA_character_) {
     if (!length(rows) || !length(cols)) return(NULL)
     g <- tidyr::expand_grid(row = as.integer(rows), col = as.integer(cols))
-    dplyr::mutate(g, name = name, size = size, bold = bold, italic = FALSE, underline = FALSE,
+    dplyr::mutate(g, name = name, size = size, bold = bold, italic = FALSE, underline = "",
                   color = color)
   }
   txt_colour <- dplyr::filter(colour, .data$channel == "text")
@@ -618,7 +626,9 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
         size      = c(size[!is.na(size)], NA_real_)[1],
         bold      = any(.data$bold),
         italic    = any(.data$italic),
-        underline = any(.data$underline),
+        # `underline` is "" / "single" / "double": a cell takes the STRONGEST rule any of its sources
+        # asks for, which is what `any()` does on the logical aspects beside it.
+        underline = face_underline_max(.data$underline),
         color     = c(color[!is.na(color)], NA_character_)[1],
         .groups = "drop")
   }
@@ -748,7 +758,7 @@ xl_build_styles <- function(header_row, data_rows, last_row, ncl, fmt_cols, txt_
   # z11: the palette's face beyond weight. Constant FALSE under the colour palettes, so the style
   # partition, its ordering and hence the emitted font ids are unchanged there.
   cells$fital  <- !is.na(fm) & fonts$italic[fm]
-  cells$fund   <- !is.na(fm) & fonts$underline[fm]
+  cells$fund   <- dplyr::coalesce(fonts$underline[fm], "")
   cells$fcolor <- fonts$color[fm]
   # overlay per-cell fill
   lm <- if (nrow(bg_fill)) match(bkey, paste(bg_fill$row, bg_fill$col, sep = ":")) else rep(NA_integer_, nrow(cells))
@@ -758,12 +768,12 @@ xl_build_styles <- function(header_row, data_rows, last_row, ncl, fmt_cols, txt_
   extra <- dplyr::bind_rows(
     tibble::tibble(row = title_row, col = 1L, bt = 0L, bb = 0L, bl = 0L, br = 0L,
                    ah = NA_character_, av = "", aw = FALSE, ar = 0L,
-                   fname = o$font_text, fsize = 12, fbold = TRUE, fital = FALSE, fund = FALSE,
+                   fname = o$font_text, fsize = 12, fbold = TRUE, fital = FALSE, fund = "",
                    fcolor = NA_character_, fill = NA_character_),
     if (length(subtext_rows)) tibble::tibble(row = subtext_rows, col = 1L, bt = 0L, bb = 0L, bl = 0L, br = 0L,
                    ah = "left", av = "center", aw = FALSE, ar = 0L,
                    fname = o$font_text, fsize = as.double(o$text_size_subtext), fbold = FALSE,
-                   fital = FALSE, fund = FALSE, fcolor = NA_character_, fill = NA_character_))
+                   fital = FALSE, fund = "", fcolor = NA_character_, fill = NA_character_))
   cells <- dplyr::bind_rows(cells, extra)
 
   # group into distinct styles + coalesce each style's cells to the fewest multi-area dims
@@ -800,16 +810,17 @@ xl_style_registrar <- function(wb) {
   # font box in Excel read "DejaVu Sans Condensed (Body)". Never let `scheme` back in.
   # WARNING: `scheme` is safely absent from the dedup key below ONLY because it is a constant. A
   # per-font scheme would need `key` to grow a field, or two different fonts would collide onto one id.
-  # z11: `italic`/`underline` carry the print palette's typography (its under-cells are italic, its
-  # second intensity level underlined). Constant FALSE for the colour palettes, so the key partition
-  # and hence the emitted font ids are unchanged there.
-  font_id <- function(name, size, bold, color, italic = FALSE, underline = FALSE) {
+  # `italic`/`underline` carry a publication palette's typography (its under-cells are italic, its
+  # upper rungs ruled). Constant FALSE / "" for the colour palettes, so the key partition and hence the
+  # emitted font ids are unchanged there. `underline` is OOXML's own vocabulary ("single" / "double"),
+  # so it is written verbatim -- and it is IN the dedup key, which every font aspect must be.
+  font_id <- function(name, size, bold, color, italic = FALSE, underline = "") {
     key <- paste(name, size, bold, italic, underline, color, sep = "\r")
     if (is.null(fc[[key]])) {
       args <- list(name = name, sz = as.character(size), scheme = "")
       if (isTRUE(bold))      args$b <- "1"
       if (isTRUE(italic))    args$i <- "1"
-      if (isTRUE(underline)) args$u <- "single"
+      if (nzchar(underline)) args$u <- underline
       if (!is.na(color))  args$color <- xl_color(color)
       nm <- paste0("txf", uid()); sm$add(do.call(openxlsx2::create_font, args), nm)
       fc[[key]] <- sm$get_font_id(nm)
@@ -842,7 +853,7 @@ xl_style_registrar <- function(wb) {
   }
   # composed cell xf: dedup on the full (font, fill, border, alignment) tuple.
   xf_id <- function(fname, fsize, fbold, fcolor, fill, bt, bb, bl, br, ah, av, aw, ar,
-                    fital = FALSE, fund = FALSE) {
+                    fital = FALSE, fund = "") {
     fid <- font_id(fname, fsize, fbold, fcolor, fital, fund)
     lid <- fill_id(fill)
     bid <- border_id(bt, bb, bl, br)
@@ -876,7 +887,7 @@ xl_apply_styles <- function(wb, s, styles, reg) {
       if (nzchar(r$av)) r$av else "",
       if (isTRUE(r$aw)) "1" else "",
       if (r$ar != 0L) as.character(r$ar) else "",
-      isTRUE(r$fital), isTRUE(r$fund))
+      isTRUE(r$fital), if (is.na(r$fund)) "" else as.character(r$fund))
     xlb_set_cell_style(wb, s, r$dims, xf)
   }
   invisible(wb)

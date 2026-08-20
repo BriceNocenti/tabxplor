@@ -89,10 +89,10 @@ be named here. Set the options to a font you know is installed.}
 
 \item{theme}{By default (\code{"light"}) a white table with black text; set to \code{"dark"}
 for a black table with white text (the colours follow the theme).
-\code{"print"} (or \code{"bw"}) is the black-and-white \strong{publication} palette: over-represented
-cells underlined, under-represented ones in italic, the ink darkening and turning bold with the
-size of the deviation, and a grey fill for the second colour measure -- readable in a greyscale
-print, where the colour palette's two directions become the same shade.}
+The black-and-white \strong{publication} palettes render a table for a page that has no colour:
+\code{"print_ready"} picks the right one per table, or name it yourself --
+\code{"print_marks"}, \code{"print_emphasis"}, \code{"print_minimalistic"} (\code{"bw"}).
+See \code{\link{tab_css}} for what each of them says.}
 
 \item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
 

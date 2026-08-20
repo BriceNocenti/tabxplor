@@ -974,7 +974,7 @@ reg_check_plots(t, gss_simple)                       # every panel the family al
 reg_check_plots(t, gss_simple, check = "linearity")  # just one
 ```
 
-The same five nouns as the footer rows, one panel each, faceted across every model in the table. These are a **teaching** companion, not a decision tool: every verdict they illustrate is already a footer row, in every export, with no plotting package installed. They exist to show what a violation looks like. `theme = "print"` gives a greyscale version for a thesis appendix; you can also pass a plain fitted model instead of a table.
+The same five nouns as the footer rows, one panel each, faceted across every model in the table. These are a **teaching** companion, not a decision tool: every verdict they illustrate is already a footer row, in every export, with no plotting package installed. They exist to show what a violation looks like. `theme = "print_ready"` gives a greyscale version for a thesis appendix; you can also pass a plain fitted model instead of a table.
 
 Note the opposite contracts: `forest_plot()` never re-fits (the results are in the table), `reg_check_plots()` always does (residuals are not).
 

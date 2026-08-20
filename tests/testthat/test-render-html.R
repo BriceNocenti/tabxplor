@@ -106,8 +106,8 @@ testthat::test_that("theme drives the emitted CSS (light / dark / auto)", {
 testthat::test_that("the generated CSS is syntactically valid in every mode", {
   # A single malformed rule makes the browser drop it -- and, inside @media, potentially the whole
   # block -- with no error anywhere. No selector-presence test catches that, so check the shape.
-  # z11: "print" joins the list, and `@media print {` joins the at-rule opener stripped below.
-  for (fmt in c("html", "md")) for (th in c("light", "dark", "auto", "print")) {
+  # z11: "print_minimalistic" joins the list, and `@media print {` joins the at-rule opener stripped below.
+  for (fmt in c("html", "md")) for (th in c("light", "dark", "auto", "print_minimalistic")) {
     css <- tab_css(theme = th, format = fmt, style_tag = FALSE)
     lab <- paste0(th, "/", fmt)
     testthat::expect_identical(lengths(regmatches(css, gregexpr("[{]", css))),
@@ -368,7 +368,7 @@ testthat::test_that("no border SHORTHAND survives in the stylesheet (coloured ce
   # styles and recorded the bug as fixed; that removed the INLINE half only, and three docs + NEWS
   # repeated the claim for two phases while a +20% cell kept drawing a blue border. Nothing tested it.
   # Both halves are locked here: the CSS uses longhands only, and a real cell carries both classes.
-  for (th in c("light", "dark", "auto", "print")) {
+  for (th in c("light", "dark", "auto", "print_minimalistic")) {
     css <- tab_css(theme = th, style_tag = FALSE)
     testthat::expect_no_match(css, "border-(top|right|bottom|left)\\s*:", label = th)
     # ... and the rule that must therefore win is present, for every theme in the file

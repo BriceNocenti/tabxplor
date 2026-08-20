@@ -277,8 +277,10 @@ test_that("the colours are the table's own slots and hexes", {
     s  <- e[e$column == nm, , drop = FALSE]
     # the colour is the EXPORTERS' resolved one (fmt_col_ann): the cell's hex where it has one, the
     # theme's grey where it does not -- not the raw channel code, which is NA there.
-    an <- tabxplor:::fmt_col_ann(t[[nm]], list(theme = "light", text = "#000000",
-                                               grey = "#9f9f9f", grey2 = "#111111"))
+    # read the chrome, never inline it: these literals had already drifted from tx_chrome_hex()
+    # (`grey2` by two retunes), which is the very rule tab_export_prep() states at its own site.
+    an <- tabxplor:::fmt_col_ann(t[[nm]], c(list(theme = "light"),
+                                            tx_chrome_hex("light")[c("text", "grey", "grey2")]))
     expect_identical(s$slot_text, cd$text_slot[s$row])
     expect_identical(s$hex_text,  an$font[s$row])
     expect_identical(s$slot_bg,   cd$bg_slot[s$row])
@@ -287,7 +289,7 @@ test_that("the colours are the table's own slots and hexes", {
   expect_identical(unique(e$measure), "difference")
   expect_identical(unique(e$policy),  "grey_non_signif")
   # the print palette speaks through the FACE, which the model carries too
-  ep <- est(t, theme = "print")
+  ep <- est(t, theme = "print_minimalistic")
   expect_true(any(ep$bold) || any(ep$italic))
 })
 

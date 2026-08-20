@@ -452,6 +452,108 @@ tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "reli
 
 
 
+#### tab_reg() constants formatting manual review
+# - Reference profile for the gaussian shows "+40.76" : but it is the mean at the reference profile,
+#   so there should be no "+"" (it’s not a diff but a baseline). I wonder what would be the best solution to fix that, 
+#   a custom display for that cell, or a reliable rule ensuring that for reference rows (can you see some situations were it would be wrong ?).
+#   Same problem with the poisson reference profile: "×2.79", but its in fact the mean at the reference profile. It goes for "poisson" × "marginal" × "ratio" too.
+#   The baseline odds formatting is ok for binomials. More details in the comments below
+# - In the right parameters table, change the minimum digits for the observed mean and the adjusted mean to 1 (there’s 2 decimals by default, I want 1) ;
+#   change the minimum digits for mean differences, pct differences, mean ratio and pct ratio to 1 too.
+# - Having the overall N in the row "Reference profile" is meaningless and confusing, since the constant does not give the population 
+#    average proportion or mean or odds at all (unless effect="marginal"). 
+#    I want to remove the overall N here, and re-add N as the first stats footer row.
+# binomial
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+) # Constant "1/1.19", baseline odds, formatting is ok.
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, measure = "log"
+) # Constant "-0.17", log(odds) ok. 
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, measure = "ratio"
+) # Constant "÷2.30", should be baseline reference profile proportion "43%" ?
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, measure = "difference"
+) # Constant "+45.7%", should be "45.7%".
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, effect = "marginal" #, measure = "difference"
+)
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, effect = "marginal", measure = "ratio"
+) # Constant "×2.05", should be average proportion "49%" ?
+# gaussian
+tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+        family = "gaussian", empirical = TRUE
+) # Constant "+40.76", should be "40.76"
+tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+        family = "gaussian", empirical = TRUE, measure = "ratio"
+) # Constant "×40.47", should be "40.47". 
+tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+        family = "gaussian", empirical = TRUE, effect = "marginal", measure = "ratio"
+) # Constant "×42.36", should be "42.36". 
+# poisson
+tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
+        family = "poisson", empirical = TRUE
+) # Constant "×2.95", should be "2.95"
+tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
+        family = "poisson", empirical = TRUE, measure = "log"
+) # Constant "+1.08", should be "1.08"
+tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
+        family = "poisson", empirical = TRUE, effect = "marginal"# , measure = "difference"
+) # Constant "+2.56", should be "2.56"
+# summed-score binomial
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"),  empirical = TRUE
+) # Constant "1/1.20", baseline odds ok.
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "ratio"
+) # Constant "1/1.20". Here all RR in the table are displayed as OR, fix this (math problem or display problem ?) !
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "difference"
+) # Constant "+2.72", should be "2.72"
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, effect = "marginal"# # measure = "difference"
+) # Constant "+2.58", should be "2.58"
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, effect = "marginal", measure = "ratio"
+)
+# multinomial
+tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
+        family = "multinomial", empirical = TRUE
+) # Constants are baseline odds, ok.
+tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
+        family = "multinomial", empirical = TRUE, effect = "marginal"
+) # Constants "+45.3%" etc., should be "45.3%" etc.
+tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
+        family = "multinomial", empirical = TRUE, effect = "marginal", measure = "ratio"
+) # Constants "÷2.21" etc., should be 1/2.21 = "45%" average population proportion etc.
+# ordinal: empirical="cell"
+tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
+        family = "ordinal", empirical = TRUE
+) # No constants.
+tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
+        family = "ordinal", empirical = TRUE, effect = "marginal" #, measure = "difference"
+) # Constants are "+16.5%" etc., should be "16.5%", whole average population proportions.
+tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
+        family = "ordinal", empirical = TRUE, effect = "marginal", measure = "ratio"
+) # Constants "÷6.06" etc., should be 1/6.06 = "16.5%" average population proportion etc.
+
+
+
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "tvhours", "age", "relig"),
+         family = "binomial", empirical = TRUE
+)
+# - With two numeric predictors, the width of the sparkline appear to differ depending on the variable. 
+#   I want to standardise that so they all have the same height and the same width. Here, the width of tvhours is about right,
+#   (just a bit wider could do) but age wastes horizontal space. 
+#   If you think it would be better to only keep the 95% central distribution, do it. If you think its best keep all for outliers, keep them.
+# - In html, there are two visual defects in the first column with the variables names : at the bottom of "tvhours", 
+#   there is a horizontal border that should not be here (no horizontal borders between other variables names) ; 
+#   at the top and at the bottom of "Model fit", the horizontal border (which belongs) have a smaller linewidth
+#   than on every other columns, which is not visually consistent.
+
+
 
 
 #### miscellaneous
@@ -563,8 +665,13 @@ tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "
 
 # black and white publication ready tables ----
 load_all()
-options(tabxplor.theme = "print", tabxplor.print = "html", tabxplor.parallel = 8, tabxplor.cleannames = TRUE)
 
+# options(tabxplor.theme = "light", tabxplor.print = "html", tabxplor.parallel = 8, tabxplor.cleannames = TRUE)
+# tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+#         family = "gaussian", empirical=TRUE
+# )
+
+options(tabxplor.theme = "print_ready", tabxplor.print = "html", tabxplor.parallel = 8, tabxplor.cleannames = TRUE)
 tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all", 
    color = "difference", color_signif = "grey_non_signif",
 )
@@ -574,34 +681,45 @@ tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all"
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
         family = "gaussian", empirical=TRUE
 )
-# - bold only applies to the primary display token (right behaviour), but underline and italics also apply to the
-#   secondary display tokens: they too, like colors, should only apply to the primary display token by default (global option). Otherwise it’s noise.
-# - bold is more visually striking than underline, and italics is subtle and not striking (specially with the current html monospace font).
-#   I want to try something a bit different (then, I’ll decide with visual review):
-#   1. `tx_chrome_hex("print")$grey` identifies the greyed-out cells (the "#888888" grey is much lighter than with colors)
-#   2. the direction information is carried by : "over" have underline ; "under" have italics and no underline
-#   3. the size of effect is carried by a 3 rungs ladder: "#333333" text ; "#000000" text ; "#000000" + bold text ; 
-# - some tests are now failing because I tweaked the `tx_chrome_hex("print") palette. A WCAG assertion may be failing 
-# for the greyed-out cells, but it’s on purpose since grey-out mean "volontarity more difficult to read".
+
+options(tabxplor.theme = "print_minimalistic", tabxplor.print = "html", tabxplor.parallel = 8, tabxplor.cleannames = TRUE)
+tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all", 
+   color = "difference", color_signif = "grey_non_signif",
+)
+tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all", 
+   color = TRUE, color_signif = "grey_non_signif",
+)
+tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+        family = "gaussian", empirical=TRUE
+)
+
+options(tabxplor.theme = "print_marks", tabxplor.print = "html", tabxplor.parallel = 8, tabxplor.cleannames = TRUE)
+tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all", 
+   color = "difference", color_signif = "grey_non_signif",
+)
+tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all", 
+   color = TRUE, color_signif = "grey_non_signif",
+)
+# tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+#         family = "gaussian", empirical=TRUE
+# ) # kills stars
+
+options(tabxplor.theme = "print_emphasis", tabxplor.print = "html", tabxplor.parallel = 8, tabxplor.cleannames = TRUE)
+tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+        family = "gaussian", empirical=TRUE
+)
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical=TRUE
+)
+tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all", 
+   color = "difference", color_signif = "grey_non_signif", display = "{base} ({ratio})"
+)
+tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all", 
+   color = TRUE, color_signif = "grey_non_signif", display = "{base} ({ratio})"
+)
 
 
-
-#   A possibility that would work for regression (where direction is clear), but not for percentages and means :
-#   1. `tx_chrome_hex("print")$grey` identifies the greyed-out cells (the grey is much lighter than with colors)
-#   2. the direction information is carried by two things: 
-#     a. the over|under symbols +|- ×|÷ x|1/x  (they also carry the `measure`) ; 
-#     b. the italics for the "below null"/"under" branch, subtle but which only supports the over|under symbols
-#   3. the size of effect is carried by a 4 rungs ladder: "black" text ; "black" + bold text ; "black" + bold + underline ; "black" + bold + double underline
-
-#   A possibility, for tab() pct and means, that is a bit overloaded would works (ratio display carry the direction) :
-#   1. `tx_chrome_hex("print")$grey` identifies the greyed-out cells (the grey is much lighter than with colors)
-#   2. the direction information is carried by two things: 
-#     a. a display = "{base} {ratio}" (with 1 digits ratio ×1.x or ÷1.x) ; 
-#     b. the italics for the "below null"/"under" branch, subtle but which only supports the over|under symbols
-#   3. the size of effect is carried by a 4 rungs ladder: "black" text ; "black" + bold text ; "black" + bold + underline ; "black" + bold + double underline
-
-# Marks solution for tab()  
-# - repeated superscript marks + ++ +++ - -- --- ?
+# WITH EXPORTS
 
 
 
@@ -611,32 +729,6 @@ tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", 
 
 
 # Sparkline wrong alignment due to the U+2581–U+2588 special characters not being monospace. Cascadia Mono ?
-
-
-
-tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-         family = "gaussian", empirical = TRUE
-)
-# - Reference profile shows "+40.76" : but it is the mean at the reference profile,
-#   so there should be no "+"" (it’s not a diff but a baseline). I wonder what would be the best solution to fix that, 
-#   a custom display for that cell, or a reliable rule ensuring that for reference rows (can you see some situations were it would be wrong ?).
-# - In the right parameters table, change the minimum digits for the observed mean and the adjusted mean to 1 (there’s too decimals here, I want to drop one) 
-
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "tvhours", "age", "relig"),
-         family = "binomial", empirical = TRUE
-)
-# - With two numeric predictors, the width of the sparkline appear to differ depending on the variable. 
-#   I want to standardise that so they all have the same height and the same width. Here, the width of tvhours is about right,
-#   (just a bit wider could do) but age wastes horizontal space.
-# - In html, there are two visual defects in the first column with the variables names : at the bottom of "tvhours", 
-#   there is a horizontal border that should not be here (no horizontal borders between other variables names) ; 
-#   at the top and at the bottom of "Model fit", the horizontal border (which belongs) have a smaller linewidth
-#   than on every other columns, which is not visually consistent.
-
-tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age", "marital"),
-         family = "poisson", empirical = TRUE
-)
-
 
 
 

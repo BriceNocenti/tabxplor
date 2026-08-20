@@ -14,8 +14,9 @@ tab_css(
 )
 }
 \arguments{
-\item{theme}{\code{"light"}, \code{"dark"}, \code{"print"} (the black-and-white publication palette; \code{"bw"} is
-accepted as a synonym), or -- opt-in -- \code{"auto"} to follow the reader's colour scheme (their
+\item{theme}{\code{"light"}, \code{"dark"}, a black-and-white publication palette (\code{"print_ready"},
+\code{"print_marks"}, \code{"print_emphasis"}, \code{"print_minimalistic"}; \code{"bw"} is a synonym of the last --
+see the section below), or -- opt-in -- \code{"auto"} to follow the reader's colour scheme (their
 operating system, and any dark-mode toggle of the host page: Quarto, Bootstrap 5.3, Tailwind).
 Defaults to \code{getOption("tabxplor.theme")}, i.e. \code{"light"}: a dark table is always a
 deliberate choice. \code{"auto"} emits every rule four times (a light base, the OS media query, then
@@ -32,10 +33,12 @@ or publisher's CSS.}
 
 \item{file}{Optional path to write to instead of returning.}
 
-\item{print_rules}{Also emit the black-and-white publication palette inside an \verb{@media print}
+\item{print_rules}{Also emit a black-and-white publication palette inside an \verb{@media print}
 block, so a coloured page prints (or saves to PDF) publication-ready with no further action.
 Defaults to \code{getOption("tabxplor.print_rules")}. Set to \code{FALSE} if your printer is a colour one
-and the colours are the point. It adds roughly 1.5 KB to a \code{light}/\code{dark} stylesheet and 6 KB to
+and the colours are the point, or name a palette (\code{"print_emphasis"}) to print in that one.
+\code{"print_marks"} cannot be used here: its marks are cell text, and a print rule can restyle a
+page but not add characters to it. It adds roughly 1.5 KB to a \code{light}/\code{dark} stylesheet and 6 KB to
 an \code{"auto"} one (where the rules must also be emitted against the page-toggle hooks, which would
 otherwise out-specify them).}
 
@@ -96,6 +99,28 @@ row-variable levels column), \code{.tx-tot} (total columns), \code{.tx-bl}/\code
 \code{.tx-b} (bold), \code{.tx-lbl}/\code{.tx-vname} (a variable name spanning its block), \code{.tx-pill} (a
 background-coloured value), \code{.tx-span} (the variable-name header row), \code{.tx-foot} (the footnote).
 Rows carry \code{.tx-bt}/\code{.tx-bb}/\code{.tx-bb2} (top / bottom / thick-bottom rules).
+}
+
+\section{The black-and-white publication palettes}{
+
+A greyscale print loses colour entirely --- both direction ramps become the same grey --- so
+these palettes say the same thing with something else. \strong{\code{theme = "print_ready"}
+is the one to reach for}: it picks per table, the marks for a cross-table and the emphasis
+ladder for a regression, whose cells already carry their own direction symbol. Name one
+yourself to override that. They share ONE grey fill ramp (a background colour measure keeps
+carrying its magnitude) and differ in the text channel:
+\describe{
+\item{\code{"print_minimalistic"}}{direction by underline (over) and italic (under); magnitude by an ink ladder.}
+\item{\code{"print_emphasis"}}{magnitude by an emphasis ladder (bold, then underline, then double underline) in pure black; direction by the cell's own measure symbol, plus italic under the null.}
+\item{\code{"print_marks"}}{magnitude and direction by a repeated superscript mark after the value (no significance stars: the marks take their place, do not use with \code{tab_reg()}).}
+}
+In all of them a non-significant cell is greyed out, and the significance stars stay --- except
+under \code{"print_marks"}, where the marks take their place (one run of symbols after a
+value, not two). \code{"bw"} is a synonym of \code{"print_minimalistic"}.
+\emph{One caveat}, and only for a document that emits \code{\link{tab_css}()} once and renders
+its tables with \code{css = FALSE}: a stylesheet is table-independent, so it carries ONE of
+them. A cross-table is fine whatever it carries (its marks are cell text), but a regression's
+ladder is css and nothing else --- name it there, \code{tab_css(theme = "print_emphasis")}.
 }
 
 \examples{

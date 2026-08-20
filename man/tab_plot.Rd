@@ -29,12 +29,12 @@ another, each keeping its own sub-tables.}
 black table with white text. This backend ships no stylesheet, so it does NOT take \code{"auto"}
 (which needs one to follow the reader) -- \code{tab_html()}, \code{tab_md()} and
 \code{\link{tab_css}} do.
-\code{"print"} (or \code{"bw"}) is the black-and-white \strong{publication} palette: over-represented
-cells underlined, under-represented ones in italic, the ink darkening and turning bold with the
-size of the deviation, and a grey fill for the second colour measure -- readable in a greyscale
-print, where the colour palette's two directions become the same shade.
-(\code{tab_plot} draws the ink and the italic; ggplot2 has no underline, so an over-represented
-cell is told apart by its ink alone there.)}
+The black-and-white \strong{publication} palettes render a table for a page that has no colour:
+\code{"print_ready"} picks the right one per table, or name it yourself --
+\code{"print_marks"}, \code{"print_emphasis"}, \code{"print_minimalistic"} (\code{"bw"}).
+See \code{\link{tab_css}} for what each of them says.
+(ggplot2 has no underline, so on a plot a publication palette reads its magnitude off a four-step
+grey ramp instead of the page's black ink, keeping bold and italic beside it.)}
 
 \item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
 

@@ -30,7 +30,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 **Core type system** — the `fmt` record, the table classes, the row/table identity.
 
 - `fmt_class.R` — the `tabxplor_fmt` vctrs record (the rich cell): fields, attributes, arithmetic, colour engine; the `MEASURES` / `EST_SCALES` fact tables.
-- `tab_classes.R` — `tabxplor_tab`/`grouped_tab` S3 classes, dplyr methods, print, palettes/breaks, `tab_compact()`/`tab_plot()`, the `test` footer; `COLOR_SCALES`.
+- `tab_classes.R` — `tabxplor_tab`/`grouped_tab` S3 classes, dplyr methods, print, `tab_compact()`/`tab_plot()`, the `test` footer; the palette/breaks API and `COLOR_SCALES`.
 - `row-model.R` — the row axis: `row_kind` field + `tabxplor_lvl` factor subclass; `ROW_KINDS`; level operations.
 - `table-spec.R` — the table identity `meta$spec` (kind / vars / call).
 - `tab-shape.R` — `tab_shape()`/`tab_supports()`/`tab_columns()`: which reshape ops accept which shape; `TAB_OPS`.
@@ -79,6 +79,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 - `tab_xl.R` — the Excel exporter (openxlsx2, colours/bold, numFmt from `format(syntax = "excel")`).
 - `tab-xl-backend.R` — openxlsx2 wrappers + the range coalescer.
 - `tab-css.R` — the one CSS generator (`tab_css`); light/dark/print themes.
+- `tab-palettes.R` — every palette: the OKLCH colour ramps, the chrome, the publication grids (`PRINT_PALETTES`, `PRINT_READY`), the store.
 - `tab-test-display.R` — the shared `test`-attribute renderer (console + export footers); `TEST_ROWS`.
 - `tab-transpose-render.R` — the render-level transpose seam.
 - `tab-theme-detect.R` — best-effort console light/dark detection.
@@ -121,24 +122,25 @@ The codebase is organised around **declared fact tables**. Instead of scattering
 
 The payoff to internalise: **adding a measure, an option, an argument, an estimand is one new row — not N scattered edits.** Do not re-introduce ad-hoc branches; extend the table. The main fact tables:
 
-| Fact table         | Home                 | Declares                                                                               |
-|--------------------|----------------------|----------------------------------------------------------------------------------------|
-| `MEASURES`         | `fmt_class.R`        | The colour measures (raw field, scale keys, significance source, legend, requirements) |
-| `EST_SCALES`       | `fmt_class.R`        | What a column estimates (field, null, geometry, colour ladder, SD source)              |
-| `DISPLAY_TOKENS`   | `tab-display.R`      | The `{}` display grammar (field source, geometry, aliases, placement)                  |
-| `DISPLAY_PRESETS`  | `tab-display.R`      | The named cell layouts both producers resolve (`est` / `est_ci` / `est_base` / …)      |
-| `CI_METHODS`       | `tab-agg.R`          | The confidence-interval methods and geometries (with `CI_GEOMS`)                       |
-| `COLOR_SCALES`     | `tab_classes.R`      | The break scales and palettes                                                          |
-| `TAB_ARGS`         | `tab-args.R`         | The argument surface (signatures, values, option twins, prose; + `EXPORT_ARGS`)        |
-| `TAB_OPTIONS`      | `tab-options.R`      | The package options and their defaults                                                 |
-| `ROW_KINDS`        | `row-model.R`        | The row-kind vocabulary                                                                |
-| `TEST_ROWS`        | `tab-test-display.R` | The footer / statistical-row catalogue                                                 |
-| `TAB_OPS`          | `tab-shape.R`        | Which reshape operations accept which table shape                                      |
-| `REG_ESTIMANDS`    | `reg-estimand.R`     | What a regression column estimates (family × effect × measure)                         |
-| `REG_WORDS`        | `reg-estimand.R`     | The header acronyms and their expansions (with `REG_CONTRASTS`, the contrast markers)  |
-| `REG_EMPIRICAL`    | `reg-empirical.R`    | The crude-companion column shapes per family                                           |
-| `REG_CHECKS`       | `reg-assumptions.R`  | The model-check / assumption catalogue                                                 |
-| `TAB_FOREIGN_KEYS` | `zzz-fact-keys.R`    | The cross-table foreign-key edges, checked at load                                     |
+| Fact table         | Home                   | Declares                                                                               |
+|--------------------|------------------------|----------------------------------------------------------------------------------------|
+| `MEASURES`         | `fmt_class.R`          | The colour measures (raw field, scale keys, significance source, legend, requirements) |
+| `EST_SCALES`       | `fmt_class.R`          | What a column estimates (field, null, geometry, colour ladder, SD source)              |
+| `DISPLAY_TOKENS`   | `tab-display.R`        | The `{}` display grammar (field source, geometry, aliases, placement)                  |
+| `DISPLAY_PRESETS`  | `tab-display.R`        | The named cell layouts both producers resolve (`est` / `est_ci` / `est_base` / …)      |
+| `CI_METHODS`       | `tab-agg.R`            | The confidence-interval methods and geometries (with `CI_GEOMS`)                       |
+| `COLOR_SCALES`     | `tab_classes.R`        | The break scales and palettes                                                          |
+| `PRINT_PALETTES`   | `tab-palettes.R`       | The black-and-white publication palettes: a row per break slot (ink, face, mark)       |
+| `TAB_ARGS`         | `tab-args.R`           | The argument surface (signatures, values, option twins, prose; + `EXPORT_ARGS`)        |
+| `TAB_OPTIONS`      | `tab-options.R`        | The package options and their defaults                                                 |
+| `ROW_KINDS`        | `row-model.R`          | The row-kind vocabulary                                                                |
+| `TEST_ROWS`        | `tab-test-display.R`   | The footer / statistical-row catalogue                                                 |
+| `TAB_OPS`          | `tab-shape.R`          | Which reshape operations accept which table shape                                      |
+| `REG_ESTIMANDS`    | `reg-estimand.R`       | What a regression column estimates (family × effect × measure)                         |
+| `REG_WORDS`        | `reg-estimand.R`       | The header acronyms and their expansions (with `REG_CONTRASTS`, the contrast markers)  |
+| `REG_EMPIRICAL`    | `reg-empirical.R`      | The crude-companion column shapes per family                                           |
+| `REG_CHECKS`       | `reg-assumptions.R`    | The model-check / assumption catalogue                                                 |
+| `TAB_FOREIGN_KEYS` | `zzz-fact-keys.R`      | The cross-table foreign-key edges, checked at load                                     |
 
 Three supporting mechanisms carry the same spirit: **typed contexts** (`new_ctx()`, `new_reg_ctx()`) declare every value a pipeline threads, so a stage cannot read an undeclared field; **single argument boundaries** (`tab_resolve_common_args()`, `reg_resolve_args()`) normalise every producer's arguments in one place; and **one table identity** — `meta$spec`, with three slots `kind` / `vars` / `call` — says what a table is, read through `tab_kind()` / `tab_is_reg()`.
 
@@ -241,7 +243,7 @@ tab() / tab_many()                          [public; differ only in default outp
 
 Colour is decomposed into three orthogonal axes: a **measure** (what to compare — `diff` / `ratio` / `contrib` / `or`), a **channel** (text and/or background), and a **significance policy** (`color_signif`: `ignore` / `grey_non_signif` / `guaranteed_effect`). The engine has three layers:
 
-1. **Palettes** — OKLCH colour ramps, hand-tuned so intensity levels are distinguishable, in light, dark, and 8-bit (non-truecolor terminal) variants, set via `set_color_palette()`.
+1. **Palettes** (`tab-palettes.R`, which holds every one of them) — OKLCH colour ramps, hand-tuned so intensity levels are distinguishable, in light, dark, and 8-bit (non-truecolor terminal) variants, set via `set_color_palette()`; the **chrome** beside them (`tx_chrome_hex()`: the table's own ink, the greyed-out cell, the aside); and, where a page has no colour, three **publication palettes** (`PRINT_PALETTES`) saying the same thing typographically — one declared grid each, a row per break slot carrying its ink, face and mark, with `theme = "print_ready"` choosing between them from what the table IS. A palette is always hex **and** face: a backend must never derive "is this bold" from "does this have a hex".
 2. **Breaks** — per-scale thresholds (`COLOR_SCALES`), mirrored for the under side; a break value above 1 means a *ratio* comparison (the "×2" rule), so the default pct breaks encode both additive and multiplicative thresholds.
 3. **Selection** — a vectorised `findInterval` engine (`fmt_color_plan` → `fmt_color_slots` → `fmt_color_channels`) that folds each cell per side and picks the strongest matching threshold.
 
@@ -267,7 +269,7 @@ The measure's behaviour — its raw getter, scale keys, significance source and 
 
 `tab_export(x, format =)` (`tab-export.R`) is the facade over four backends: HTML (the default), Markdown, Excel and plot. They share one preparation step, `tab_export_prep()` (`tab-export-prep.R`), which builds an ephemeral render model (roles, references, bold/italic, header spans, variable-name blocks) that every backend consumes.
 
-Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML; `tab_xl()` writes the raw value and takes its number-format codes from the *same* `format(syntax = "excel")`, so a display change never needs mirroring. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, with the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so `theme = "auto"` (light/dark) and `theme = "print"` (bold/italic, black-and-white) work by stylesheet. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's light/dark scheme — a subsystem that must never error, because a wrong guess only mis-tints, never breaks.
+Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML; `tab_xl()` writes the raw value and takes its number-format codes from the *same* `format(syntax = "excel")`, so a display change never needs mirroring. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, with the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so `theme = "auto"` (light/dark) and the black-and-white publication palettes work by stylesheet — except `print_marks`, whose signal is cell text and therefore comes from `format()` like the significance stars. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's light/dark scheme — a subsystem that must never error, because a wrong guess only mis-tints, never breaks.
 
 ### jamovi
 
@@ -690,7 +692,7 @@ Also plan for a reduction of the roxygen part, with the same logic : user-friend
 
 ##### Phase 21b-vi — Exporters & rendering
 
-`tab-export.R` · `tab-export-prep.R` · `tab-render-html.R` · `tab_md.R` · `tab_xl.R` · `tab-xl-backend.R` · `tab-css.R` · `tab-test-display.R` · `tab-transpose-render.R` · `tab-theme-detect.R` · `plots.R`. One shared prep model → the four backends + the footer / CSS / transpose / theme / plot support.
+`tab-export.R` · `tab-export-prep.R` · `tab-render-html.R` · `tab_md.R` · `tab_xl.R` · `tab-xl-backend.R` · `tab-css.R` · `tab-palettes.R` · `tab-test-display.R` · `tab-transpose-render.R` · `tab-theme-detect.R` · `plots.R`. One shared prep model → the four backends + the footer / CSS / transpose / theme / plot support.
 
 ##### Phase 21b-vii — Jamovi modules
 
@@ -1175,6 +1177,105 @@ Part C of the study. **Read `dev/reg_interactions_and_predictor_terms.md`**; it 
 - Since adding an interaction materialises a compound predictor column, **would it be reliable to pass it in the `predictors =` argument directly with the `"var1:var2"` syntax ?** Would it be user-friendly ? Would it we workable from the tidyselect syntax or asks to remove it ? For example: `predictors = c("race", "rincome", "relig", "tvhours", "race:tvhours")`. Main interests: no new argument ; possibility to skip the main term to only add the interaction (removing `"tvhours"` in the former vector). Would it work ? Can you sea caveats ?
 
 
+##### Phase 22b-x — tab_reg() constants formatting manual review
+- Reference profile for the gaussian shows "+40.76" : but it is the mean at the reference profile, so there should be no "+"" (it’s not a diff but a baseline). I wonder what would be the best solution to fix that, a custom display for that cell, or a reliable rule ensuring that for reference rows (can you see some situations were it would be wrong ?). Same problem with the poisson reference profile: "×2.79", but its in fact the mean at the reference profile. It goes for "poisson" × "marginal" × "ratio" too. The baseline odds formatting is ok for binomials. More details in the comments below
+- In the right parameters table, change the minimum digits for the observed mean and the adjusted mean to 1 (there’s 2 decimals by default, I want 1) ; change the minimum digits for mean differences, pct differences, mean ratio and pct ratio to 1 too.
+- Having the overall N in the row "Reference profile" is meaningless and confusing, since the constant does not give the population average proportion or mean or odds at all (unless effect="marginal"). I want to remove the overall N here (only keep it for `effect="marginals"`), and re-add N as the first stats footer row. Would there be an interest to give the population at the reference when there are no numeric predictors (meaningless with continuous numeric predictors, by definition nobody is "at the mean") ?
+
+```r
+# binomial
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+) # Constant "1/1.19", baseline odds, formatting is ok.
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, measure = "log"
+) # Constant "-0.17", log(odds) ok. 
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, measure = "ratio"
+) # Constant "÷2.30", should be baseline reference profile proportion "43%" ?
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, measure = "difference"
+) # Constant "+45.7%", should be "45.7%".
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, effect = "marginal" #, measure = "difference"
+)
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, effect = "marginal", measure = "ratio"
+) # Constant "×2.05", should be average proportion "49%" ?
+# gaussian
+tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+        family = "gaussian", empirical = TRUE
+) # Constant "+40.76", should be "40.76"
+tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+        family = "gaussian", empirical = TRUE, measure = "ratio"
+) # Constant "×40.47", should be "40.47". 
+tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+        family = "gaussian", empirical = TRUE, effect = "marginal", measure = "ratio"
+) # Constant "×42.36", should be "42.36". 
+# poisson
+tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
+        family = "poisson", empirical = TRUE
+) # Constant "×2.95", should be "2.95"
+tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
+        family = "poisson", empirical = TRUE, measure = "log"
+) # Constant "+1.08", should be "1.08"
+tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
+        family = "poisson", empirical = TRUE, effect = "marginal"# , measure = "difference"
+) # Constant "+2.56", should be "2.56"
+# summed-score binomial
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"),  empirical = TRUE
+) # Constant "1/1.20", baseline odds ok.
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "ratio"
+) # Constant "1/1.20". Here all RR in the table are displayed as OR, fix this (math problem or display problem ?) !
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "difference"
+) # Constant "+2.72", should be "2.72"
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, effect = "marginal"# # measure = "difference"
+) # Constant "+2.58", should be "2.58"
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, effect = "marginal", measure = "ratio"
+)
+# multinomial
+tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
+        family = "multinomial", empirical = TRUE
+) # Constants are baseline odds, ok.
+tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
+        family = "multinomial", empirical = TRUE, effect = "marginal"
+) # Constants "+45.3%" etc., should be "45.3%" etc.
+tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
+        family = "multinomial", empirical = TRUE, effect = "marginal", measure = "ratio"
+) # Constants "÷2.21" etc., should be 1/2.21 = "45%" average population proportion etc.
+# ordinal: empirical="cell"
+tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
+        family = "ordinal", empirical = TRUE
+) # No constants.
+tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
+        family = "ordinal", empirical = TRUE, effect = "marginal" #, measure = "difference"
+) # Constants are "+16.5%" etc., should be "16.5%", whole average population proportions.
+tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
+        family = "ordinal", empirical = TRUE, effect = "marginal", measure = "ratio"
+) # Constants "÷6.06" etc., should be 1/6.06 = "16.5%" average population proportion etc.
+```
+
+Miscellaneous
+```r
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "tvhours", "age", "relig"),
+         family = "binomial", empirical = TRUE
+)
+```
+- With two numeric predictors, the width of the sparkline appear to differ depending on the variable.
+  I want to standardise that so they all have the same height and the same width. Here, the width of tvhours is about right,
+  (just a bit wider could do) but age wastes horizontal space.
+  If you think it would be better to only keep the 95% central distribution, do it. If you think its best keep all for outliers, keep them.
+- In html, there are two visual defects in the first column with the variables names : at the bottom of "tvhours",
+  there is a horizontal border that should not be here (no horizontal borders between other variables names) ;
+  at the top and at the bottom of "Model fit", the horizontal border (which belongs) have a smaller linewidth
+  than on every other columns, which is not visually consistent.
+
+
 
 #### Phase 22c — tab manual review
 
@@ -1274,7 +1375,7 @@ I want to try something a bit different (then, I’ll decide with visual review)
 
 ##### Phase 22d-ii — new print palettes
 
-I want 3 black and white typo text palettes (plus only one background greys palette, the current one)
+I want 3 black and white typo text palettes (plus only one background greys palette, the current one).
 
 1. The current palette, with less effect size breaks (only 3) but working everywhere.
 
@@ -1283,23 +1384,51 @@ I want 3 black and white typo text palettes (plus only one background greys pale
 - The size of effect is carried by a 4 rungs ladder: "black" text ; "black" + bold text ; "black" + bold + underline ; "black" + bold + double underline.
 - A possibility to use it with `tab()` pct and means is `display = "{base} ({ratio})"`, so that ratio `×`|`÷` symbols carries the direction the same way.
 
-3. Repeated superscript marks, to use with no stars, so in `tab()` rather than in `tab_reg()`
-- Look at the original idea in `dev/black_and_white_publication_palette.md`
-- The size of effect is carried by a 4 rungs ladder: "black" text ; "black" + bold text ; "black" + bold + underline ; "black" + bold + double underline
+3. Repeated superscript marks, to use with no stars, rather used in `tab()` than in `tab_reg()` (where stars are default)
+- The direction is carried by `+` or `-`.
+- The size of effect is carried by a 4 rungs ladder of repeated superscript marks in both directions: `+` `++` `+++` `++++` `-` `--` `---` `----`, at the same positon than current stars, everything padded and aligned for human readability like everytime.
+- Look at the original idea in `dev/black_and_white_publication_palette.md`.
+- Please study how superscripts do in the current monospace fonts, in html, in Excel, etc. Would there be a possibility to only use 2 base characters length for them, replacing blanks with half-character lenghts, and still ensuring alignement (to avoid wasting around 4 horizontal spaces per column) ? I guess in markdown only the symbols without superscript would be better (superscript would waste horizontal space in the raw unrendered markdown) ?
 
-In all scenarios, `tx_chrome_hex("print")$grey` identifies the greyed-out cells (the grey is much lighter than with colors, please calculate it’s oklch contrast and tell me if it’s acceptable and good practice for a greyed-out cell on pure white background ; if not acceptable, the only solution is to only have 2 rungs for effect size in the first palette).
+In all scenarios, `tx_chrome_hex("print")$grey` identifies the greyed-out cells.
+- Currently the grey is much lighter than with colors ("#aaaaaa"), because it’s needed for the first palette to have 3 visually striking rungs on the luminance scale: please calculate it’s oklch contrast and tell me if it’s acceptable and good practice for a greyed-out cell on pure white background ; if not acceptable, the only solution is to only have 2 rungs for effect size in the first palette.
+- Print palettes 2 and 3 would not need such a light grey since they won’t use a darker grey as rung 1: would there be a reliable and integrated way to change the framework to allow different "greyed-out" colors for different palettes, without adding white elephants ? Then, we could go back to "#888888" for grey-out cells in print palettes 2 and 3.
 
+There should be a user-friendly way to decide which palette to use, global options + override possibility in `tab_export()`. Each should have a readable and easily understandable name. Also, the current code of the print palette is not easily modifiable by me, because not every formatting are at the same place, would there be a way to make it more readable for humans, visually seeing what typos and chromes define a color break at the same place ?
 
-(:
-2. the direction information is carried by two things:
-  a. a display = "{base} {ratio}" (with 1 digits ratio ×1.x or ÷1.x) ;
-  b. the italics for the "below null"/"under" branch, subtle but which only supports the over|under symbols
-3.
+**DONE.** Suite **FAIL 0 | WARN 0 | SKIP 4 | PASS 7932** -- and that closes the **20 failures that were pre-existing at HEAD** when the phase started (16 `golden display` snapshots carrying 22d-i's un-accepted CSS diff, and 4 `test-print-palette.R` contrast/ink assertions against the hand-edited greys): nothing is left red. `devtools::document()` clean, **NAMESPACE unchanged**; 11 man pages rewritten, all with identical `\usage` and `\item{}` name sets except `?format.tabxplor_fmt`, which gains the one new formal. The 36 `_golden/*.rds` did **not** move; `_snaps/golden.md` moved by exactly **3 CSS declarations x 16 tables, every one inside the `@media print` layer** (the pending 22d-i diff plus this phase's grey), and `_snaps/golden.new.md` -- a failing-snapshot artifact committed by mistake in `637ea9d` -- is deleted.
 
-Marks solution for tab()  
-- repeated superscript marks + ++ +++ - -- --- ?
+**The grid IS the definition, and that is the phase's real deliverable.** A print palette was three unrelated literals -- an ink ramp in `default_print_palette()`, three parallel 8-logical vectors in `tx_palette_faces()`, and a grey buried in `tx_chrome_hex()`'s `switch` two files away -- so "what does break 2 look like" could not be read anywhere. It is now one row of one `tribble` per break slot, carrying its ink, weight, slant, rule and mark side by side, in **`R/tab-palettes.R`**, beside every other palette. `default_print_palette()` and `tx_palette_faces()` are both **deleted** -- the first because the grid replaces it, the second because after the merge its only unique content was the colour palettes' one constant fact, and `build_palettes()` now assembles ink, face and ANSI style the same way for every palette: light, dark, then a loop over `PRINT_PALETTES`. The face record's SHAPE is written ONCE (`face_record()`), so a constant face and a graded one are the same object built two ways rather than two hand-rolled literals. A fourth publication palette is one row in the table and reaches every backend, the stylesheet and the legend with no other edit. The one principle the file states, because every palette is a choice of how to apply it: **an ordered channel (ink, emphasis, a repeated mark) carries MAGNITUDE; a selective channel (underline vs italic, or the cell's own +/- symbol) carries DIRECTION.**
 
+**Three palettes, selected by `theme` -- no new argument anywhere.** `"print"` (`"bw"` still its alias) keeps 22d-i's design unchanged; `"print_emphasis"` spends everything on magnitude -- pure black ink, bold, then a rule, then a DOUBLED rule -- for a table whose cells already carry their direction (`tab_reg()`'s own `+`/`-`, `x`/`div`, `x`/`1/x` glyphs, or `tab()` under `display = "{base} ({ratio})"`), with italic left as the quiet second voice under the null; `"print_marks"` says it all in characters. `tx_resolve_theme()` reads its value list from `names(PRINT_PALETTES)`, and every hard-coded `identical(theme, "print")` became `tx_is_print()` -- one predicate, seven sites. `tab_css()` carries exactly one publication palette: the one the page is rendered in, or the one a COLOURED page falls back to on paper, which is `print_rules` -- widened from a logical to `TRUE` / `FALSE` / a palette name, no signature change. `"print_marks"` is refused there with the reason: its marks are cell text, and a media query can restyle a page but cannot add characters to it.
 
+**The greyed-out cell is a per-PALETTE fact now, and the maintainer's question has a number.** `#aaaaaa` measures **2.32:1 on white** and **1.17:1 on the deepest fill** -- below the package's own stated 3:1 non-text floor, below even the light theme's grey (`#9f9f9f`, 2.65:1), and effectively invisible on a dark fill, which is exactly what `test-print-palette.R:104` exists to prevent. Not defensible by any WCAG threshold. Palette 1 keeps its ink ladder untouched and takes **`#949494`** -- the lightest grey that still clears 3:1 (3.03:1 on white, 1.53:1 on the deepest fill, L\* 66.7 against rung 1's 45.0, so the reading order greyed < rung 1 < rung 2 stays plainly monotone). **Both existing WCAG assertions pass unchanged**, which is the check that chose the value. Palettes 2 and 3 declare `#888888`: their first rung is pure black, so they never needed a light grey. `tx_chrome_hex()` is a lookup now -- the chrome on paper is fixed (black on white, no hover) and the only thing a palette decides is how a cell is SET BACK -- and html, kableExtra, the plots, the aside and the ggplot legend guide follow for free, since all of them already funnelled through it.
+
+**The marks: ONE cell suffix, two ladders.** `fmt_cell_suffix()` replaces the star block in `format()`: a palette's marks, or the significance stars, never both -- they sit in the same place after the value and say different things (how big, against the breaks; how sure, against a p-value). It needs **no direction logic of its own**: the mark is the SLOT's rendering exactly like the ink and the face, so the slot already carries the side and the magnitude, a greyed cell has slot 0 and takes none, and a footer row is excluded by the rule `get_stars()` already used. `format()` gains one formal, `theme = NULL` (= no palette, so tooltips and character casts stay annotation-free), passed by the four main display sites and by the composite expander for its PRIMARY token only.
+
+**The glyphs are Unicode superscripts, and that is a measurement rather than a taste.** `⁺` / `⁻` are East-Asian **Neutral**, so every terminal draws them one cell wide and the character-count padding stays exact -- unlike the block glyphs of the row sparkline, which are Ambiguous and shift a CJK-configured terminal. That is recorded as a `WARNING` at the declaration. It also answers the two open questions in the brief. **Excel**: a data cell is a real NUMBER whose star rides the numFmt LITERAL, and a numFmt literal cannot carry a `vertAlign` run -- so a true Excel superscript would have meant demoting every marked column to text. Unicode codepoints go into that literal unchanged, and the cells stay numbers (`formatCode="0%⁺⁺"`). **Markdown** therefore needs no pandoc `^..^` and no change to `md_color_cell()`'s alignment maths at all -- the very thing the design doc's SS12.6 refused to drag in. **The width cost is not 4 characters**: the pad is to the column MAXIMUM, so a column whose strongest cell is rank 2 costs 2, exactly what `**` costs today, and only a column reaching rank 4 pays one character more than stars -- which it does not pay at all, since the marks REPLACE them.
+
+**A doubled rule needed the face vocabulary widened, not a fourth flag.** `underline` went from a logical to `"" / "single" / "double"` -- OOXML's own words, so `create_font()` writes the value verbatim and `fmt_txt()` carries it into the Excel legend runs too. The five boundaries that only ask "is it ruled" take `nzchar()`; `tx_face_decls()` emits `text-decoration:underline double`; the transposed model flips it as a character (`slot_chr`, not `slot_lgl` -- which would have collapsed a doubled rule to TRUE and lost it); `font_id()`'s dedup key carries it, as every font aspect must. There is no markup for a doubled rule, so both ruled rungs emit `<u>` and the CSS class does the doubling -- the same trade the colour hexes already make against a class-stripping destination. Markdown loses nothing: its cells are pandoc spans carrying the slot class, so `tab_css()` doubles the rule there exactly as in html.
+
+**On a graphics device a publication palette borrows its own grey ramp.** ggplot2's `fontface` has no underline and a plotted point has no face at all, so an all-black ink would collapse to one shade. `tx_plot_ink_family()` states the rule once: on a device the TEXT channel reads `bg_legend` -- the four-step dark ramp that already stands in for a fill wherever a fill is impossible -- keeping bold and italic beside it. `fmt_point_palette()`'s private `identical(theme, "print")` special case becomes a call to it, and `fmt_channel_codes()` gains an `ink` argument that only the `"plot"` backend sets. This RAISES palette 1's plot resolution (2 ink levels -> 4) and is what makes palettes 2 and 3 legible on a plot at all.
+
+**The legend follows the palette, in three places.** A break-word now WEARS its slot's mark (`+10⁺⁺`), because under a marks palette nothing else tells the four thresholds apart -- and the mark joined `legend_break_tokens()`'s `look()` key, so the existing "drop a break that renders like the previous one" rule keeps collapsing palette 1's slots 3 and 4 and keeps all four of palette 2's. `tab_stars_legend()` returns NULL under a marks palette (no star is drawn, so none is explained). `legend_shade_names()` reads the palette's own `shade` pair -- closures, the `REG_WORDS$long` pattern, so `gettext()` runs at render and the msgids stay extractable -- and it is `NA` on a side the palette does not name typographically (palette 2's over side, both of palette 3's), where the legend then leads with the threshold instead of promising a distinction that is not there.
+
+**And it stopped saying "Coloured" about a black-and-white table.** Under any publication palette the significance sentence now reads *"Marked: ... Unmarked: ..."*. One WHOLE sentence per variant, never a `%s` for the verb: a single word carries gender and number in French, which only a full-sentence msgid can get right. Three new msgids, translated (*"Marqué : ... Non marqué : ..."*); `po/R-tabxplor.pot` regenerated, `po/R-fr.po` merged and the `.mo` recompiled -- 243 translated, 10 fuzzy, 109 untranslated (all pre-existing debt for Phase 23f).
+
+**Every palette now lives in one file.** `R/tab-print-palettes.R` became **`R/tab-palettes.R`** and took in the two literal blocks that were scattered elsewhere: the 24-bit OKLCH colour ramps and the 8-bit RStudio fallback (from `tab_classes.R`, moved VERBATIM -- their `oklch(...)` annotations are how the ramps were chosen and the only way to re-tune them), and `tx_chrome_hex()` (from `tab-css.R`). Five sections, general to specific: the colour ramps, the chrome, the publication grids, then the store and the ONE assembly that keys every palette by `(family, theme)`. `tab_classes.R` keeps the user-facing SURFACE (`set_color_palette()` / `get_color_style()` / the breaks) and `tab-css.R` the CSS vocabulary, each with a one-line pointer where the literals used to be -- so "what is this cell drawn with" is now one file rather than three, which is what the phase was about.
+
+**`theme = "print_ready"` picks the palette from what the table IS.** A cross-table reads best with the MARKS -- nothing typographic then competes with the numbers, and a run of glyphs survives a plain-text copy -- while a regression reads best with the EMPHASIS ladder, because its cells already carry their own direction symbol (`+`/`-`, `x`/`div`), which frees the typography to spend everything on magnitude. The detection is a READ, not a guess: `tab_is_reg()` on `meta$spec$kind`, the declared table identity. It resolves in `resolve_export_opts(tabs =)` -- the one place a theme becomes concrete -- so every backend that styles itself is exact with no thought, and `tx_palette_theme()` applies the same fallback, so no palette lookup can be handed a key that does not exist. The old `"print"` is renamed **`print_minimalistic`** (which is what `"bw"` now means), giving four names: `print_ready` / `print_marks` / `print_emphasis` / `print_minimalistic`. ⚠ **The one caveat, and it is inherent**: the two arms write different `.p1..m4` rules while a stylesheet is table-INDEPENDENT by contract, so a document that emits `tab_css()` once and renders with `css = FALSE` carries only one of them. A cross-table is fine whatever it carries (its marks are cell text and need no rules at all); a regression's ladder is CSS and nothing else, so such a document names it -- which is exactly what `README.Rmd` now does. `print_rules` refuses both `print_ready` and `print_marks` for the same reason a media query cannot add characters to a page.
+
+**A publication palette is a SHEET, and a sheet is all-or-nothing.** Measured on the shipped `README.md`: the tables carry ZERO inline colour (only `font-weight`), so on GitHub -- which strips `<style>`, `style=` and `class=` alike -- every table inherits the reader's own theme and is already correct in light and dark, with nothing of ours surviving to clash. That is what the `semantic` markup exists for. Where the stylesheet IS read (pkgdown, Quarto, a knitted page) there was a real mixing risk, and not a hypothetical one: the chrome was stated on the TABLE (0,1,0) and left the cells to inherit, but a host that colours the `<td>` directly beats an inherited value -- Bootstrap's `.table>:not(caption)>*>*` (0,1,1), which pkgdown stamps on every table -- so on a dark page the cells would have kept the page's dark ground inside a white table. The publication chrome is now stated again ON THE CELLS, at (0,1,1) deliberately: it ties the host and wins on source order (our stylesheet is emitted in the body, after its `<head>`), and still loses to our own `.tabxplor-tab .p1` (0,2,0), so an ink ladder is not flattened by it. The colour themes carry `""` there and are dropped -- light, dark and `auto` follow the page on purpose. ⚠ **Reported, not changed**: `.tabxplor-caption` is the one element left outside the sheet (it sits outside the `<table>`), so on a dark page a captioned table would show a black title on a dark ground. It is opt-in (`caption =`) and absent from the README; the two cures are to give it the sheet's background too (a full-width light strip above a content-width table) or to let it inherit the page like ordinary furniture -- a visual call rather than a technical one.
+
+**One rule added late, and it cost less than a branch.** The cell suffix -- stars OR marks, in every theme, colour ones included -- now renders as a SUPPORTING piece: the chrome's `grey2`, with none of the cell's own bold / italic / underline, so the two annotations look alike everywhere and neither outshouts the number it qualifies. It needed no new code path, only one fact stated correctly: **the primary character range ends where the VALUE ends**, so the suffix falls outside it and `paint_split()` (console) and `html_cell_text()` (html) already draw it exactly as they draw an aside. Three recording sites moved -- a plain cell now gets a range it did not need before, the `mean (sigma sd)` branch records before pasting rather than after, and the composite expander subtracts the width its primary token wears (learned from the token's own `suffix_nchar`, not re-derived). Verified per medium: console wraps `1/2.68` in bold+red and then opens a separate grey style for the star; html emits `<i>1/1.29</i><span class="tx-sec">***</span>`. ⚠ **Markdown and Excel cannot honour the colour half**: md wraps a cell in ONE pandoc span and Excel folds the suffix into the numFmt literal, so in both the suffix takes the cell's colour -- the same whole-cell limitation their ASIDES already have, and fixing md would drag `md_color_cell()`'s width maths into per-piece widths. The face half holds everywhere.
+
+**Four defects fixed on the way.** (1) **The cell suffix was landing in the ASIDE.** On a `mean (sigma sd)` cell the star was appended after the whole string, i.e. inside the `.tx-sec` piece, where it was drawn in the aside's grey and un-bolded -- against 22d-i's own "the face stops at the primary token" rule, and fatal for a mark, which IS the effect-size signal. The suffix is computed before the tail now, pasted onto the primary, and `primary_nchar` recorded around it -- measured, a `12.3*** (sigma2.0)` cell reports a primary span of `12.3***` where it used to report `12.3`. No golden moved: the fixtures carry no starred mean column, so the defect was reachable only in real use. (2) **`tab_xl()` starred a `contrib` column** that no other backend stars: it called `get_stars()` directly, skipping the `fmt_stars_applicable()` gate `format()` applies. Routing it through `fmt_cell_suffix()` deletes that private copy of the star logic and the divergence with it. (3) `roles$has_stars` -- which switches the number font to a monospace stack so the suffixes align -- counted stars only, so a marks table would have been rendered proportional; it counts the suffix now (the name stays: "stars" is what a reader calls the run of symbols after a number). (4) Two comments were describing code that had been hand-edited under them: `tx_chrome_hex()`'s *"3.54:1 on white, 1.79:1 on the darkest fill"* were `#888888`'s numbers, and the ink ladder's *"#333333, then #000000"* had become `#555555`. Plus one stranded `#' @keywords internal` attached to nothing, and the committed `golden.new.md`.
+
+**Verified.** Targeted suite green while iterating (`print-palette` 125 passing, up from 88); the full suite at the end. The perceptual block of `test-print-palette.R` was NOT relaxed -- its two WCAG assertions are the ones that chose `#949494`, and they pass as written. Three tests added, all shaped so a fourth palette needs no fourth test: every declared grid is complete and ordered, its greys clear 3:1 and stay lighter than rung 1, its fill ramp IS the shared one, and marks and typography are never mixed; `print_emphasis` emits `underline double` in CSS and `<u val="double"/>` in the xlsx; `print_marks` marks in console / markdown / html / xlsx, drops the stars a colour palette keeps, and carries its marks into the legend. Twelve review files (a crosstab and a regression, html + xlsx, one pair per palette) are in `~/tabxplor_print_palettes` for the visual pass.
+
+**Open, and named rather than pulled.** Palette 2's rungs 3 and 4 are one signal wherever there is no stylesheet (a Word paste, a plain-text markdown read, a plot): the legend collapses them there on its own, which is honest, but it IS a loss against html and Excel. And a console font lacking U+207A/U+207B will fall back to another face -- the console never selects a publication palette by default, so this only bites a user who sets `options(tabxplor.color_style_theme = "print_marks")` deliberately. **Nothing is owed to 22g**: neither jamovi module exposes `theme` at all (no hit in the four YAMLs), so the new palettes need no `jmvtools::prepare()`.
 
 
 
@@ -1307,7 +1436,7 @@ Marks solution for tab()
 
 #### Phase 22f — `forest_plot` manual review
 D6 has a limit I could not design away. ggplot has one scale per aesthetic, so a key list describes one ladder. legend_guide_spec() returns NULL when the plotted columns form several legend_group_by_body() groups and the caption prints the prose legend instead — the same grouping the footer uses, so they can't disagree about how many ladders exist.
-theme = "print" forced the one deviation from the table palettes — its text slots are all black (the table separates directions by bold vs italic, which a point can't be), so a mark borrows the print palette's grey ramp. Nothing is lost: in a forest plot direction is the position relative to the null line.
+a publication palette forces the one deviation from the table palettes — its text slots are all black (the table separates directions by bold vs italic, which a point can't be), so a mark borrows the print palette's grey ramp. Nothing is lost: in a forest plot direction is the position relative to the null line.
 `or_plot()` was deleted with its inert `point_size`. Reimplement `point_size` in `forest_plot`, since the model columns now store the factor predictors levels `n` in `n` field.
 
 #### Phase 22g — Jamovi UIs manual reviews and final modifications

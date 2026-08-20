@@ -211,7 +211,10 @@ html_face_wrap <- function(html, bold, italic, underline) {
   g <- function(v) {
     if (is.null(v)) return(logical(n))
     stopifnot(length(v) == n)
-    v %in% TRUE
+    # `underline` arrives as "" / "single" / "double"; the OTHER two as logicals. There is no markup
+    # for a doubled rule, so both ruled rungs emit <u> and the CSS class carries the doubling -- which
+    # is the same trade the colour hexes already make against a class-stripping destination.
+    if (is.character(v)) nzchar(v) else v %in% TRUE
   }
   bold <- g(bold); italic <- g(italic); underline <- g(underline)
   # Innermost first, so the nesting reads <b><i><u>x</u></i></b>.
@@ -250,6 +253,7 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   } else purrr::imap(tab, function(col, name) {
     if (is_fmt(col)) {
       format(col, html = TRUE, special_formatting = TRUE, na = "", stars = TRUE,
+             theme = meta$theme_cols$theme %||% "light",
              bold_split = TRUE, .ref = ann_ref(ann[[name]]))
     } else {
       as.character(col)

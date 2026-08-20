@@ -506,11 +506,11 @@ Tous les styles sont ensuite modifiables via du CSS ordinaire (largeurs de colon
 
 ### Noir et blanc, pour la publication
 
-Les couleurs servent à explorer. Pour une revue, `theme = "print"` restitue la même lecture en noir et blanc : **les cases sur-représentées en gras**, *les sous-représentées en italique*, un soulignement pour le seuil le plus fort, et un aplat de gris pour une seconde mesure. La légende nomme alors la typographie, et non plus les teintes.
+Les couleurs servent à explorer. Pour une revue, `theme = "print_minimalistic"` restitue la même lecture en noir et blanc : **les cases sur-représentées en gras**, *les sous-représentées en italique*, un soulignement pour le seuil le plus fort, et un aplat de gris pour une seconde mesure. La légende nomme alors la typographie, et non plus les teintes.
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, pct = "row", color = "difference") |>
-  tab_html(theme = "print")
+  tab_html(theme = "print_minimalistic")
 ```
 
 Ce n'est pas qu'une affaire de goût : converties en clarté, les deux directions de la palette de couleurs donnent *les mêmes* nuances de gris, si bien qu'une impression en niveaux de gris perd entièrement l'opposition sur-représenté / sous-représenté. Le rendu fonctionne dans tous les exports — `tab_html()`, `tab_md()` et `tab_xl()` (véritables gras / italique / soulignement dans le tableur) — et la typographie est écrite sous forme de balises `<b>`/`<i>`/`<u>` en plus du CSS : elle survit donc aussi à un copier-coller dans Word.
@@ -531,7 +531,7 @@ Il trace **ce que le tableau a calculé** — aucun argument à apprendre : avec
 Deux choses à savoir :
 
 * **Les lignes de grille sont vos seuils de couleur.** Changez-les avec `set_color_breaks()` et l'axe suit le tableau. La légende de couleur à côté du graphique est celle du tableau, avec les mêmes seuils et les mêmes nuances.
-* **Il lit le tableau et ne calcule rien.** Il renvoie un `ggplot` ordinaire : `+ ggplot2::labs(...)`, `+ ggplot2::theme(...)` et `ggsave()` fonctionnent ; `theme = "print"` en donne la version en niveaux de gris, et `guide = "bands"` colore le fond du panneau avec l'échelle elle-même (une bonne façon de *montrer* à une classe ce que les couleurs veulent dire).
+* **Il lit le tableau et ne calcule rien.** Il renvoie un `ggplot` ordinaire : `+ ggplot2::labs(...)`, `+ ggplot2::theme(...)` et `ggsave()` fonctionnent ; `theme = "print_minimalistic"` en donne la version en niveaux de gris, et `guide = "bands"` colore le fond du panneau avec l'échelle elle-même (une bonne façon de *montrer* à une classe ce que les couleurs veulent dire).
 
 À ne pas confondre avec `tab_plot()`, qui fabrique une image *du tableau* (pratique pour coller un tableau coloré là où rien d'autre ne s'affiche). `forest_plot()` est le graphique ; il trace aussi les tableaux de régression — voir `vignette("tabxplor-reg")`.
 

@@ -1007,7 +1007,7 @@ reg_check_plots(t, gss_simple)                       # tous les panneaux permis 
 reg_check_plots(t, gss_simple, check = "linearity")  # un seul
 ```
 
-Les mêmes cinq noms que les lignes de bas de tableau, un panneau chacun, en facettes sur tous les modèles du tableau. Ce sont des compagnons **pédagogiques**, pas un outil de décision : chaque verdict qu'ils illustrent est déjà une ligne de bas de tableau, dans tous les exports, sans aucun package graphique installé. Ils existent pour montrer à quoi ressemble une violation. `theme = "print"` en donne une version en niveaux de gris pour une annexe de mémoire ; vous pouvez aussi passer directement un modèle ajusté au lieu d'un tableau.
+Les mêmes cinq noms que les lignes de bas de tableau, un panneau chacun, en facettes sur tous les modèles du tableau. Ce sont des compagnons **pédagogiques**, pas un outil de décision : chaque verdict qu'ils illustrent est déjà une ligne de bas de tableau, dans tous les exports, sans aucun package graphique installé. Ils existent pour montrer à quoi ressemble une violation. `theme = "print_ready"` en donne une version en niveaux de gris pour une annexe de mémoire ; vous pouvez aussi passer directement un modèle ajusté au lieu d'un tableau.
 
 Notez les contrats opposés : `forest_plot()` ne réajuste jamais (les résultats sont dans le tableau), `reg_check_plots()` réajuste toujours (les résidus, eux, n'y sont pas).
 

@@ -38,7 +38,8 @@ words the footer rows and \code{\link[=tab_reg]{tab_reg()}}'s \code{stats} argum
 
 \item{facet_ncol}{Number of facet columns \emph{inside} a panel (default: let \pkg{ggplot2} choose).}
 
-\item{theme}{\code{"light"}, \code{"dark"} or \code{"print"} (greyscale, for a thesis appendix). Defaults to
+\item{theme}{\code{"light"}, \code{"dark"}, or a black-and-white publication palette (\code{"print_ready"} and
+friends -- greyscale, for a thesis appendix). Defaults to
 \code{options("tabxplor.theme")}, like the table exporters.}
 
 \item{lang}{Language of the titles and captions (\code{"en"}, \code{"fr"}, ...). Defaults to

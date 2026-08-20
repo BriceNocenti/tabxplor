@@ -31,8 +31,8 @@ whether the observed (crude) counterpart of a regression estimate is included.}
 
 \item{totals}{Keep total rows and total columns.}
 
-\item{theme}{Palette theme for the colour columns (\code{"light"} / \code{"dark"} / \code{"print"};
-\code{NULL} follows \code{getOption("tabxplor.export_theme")}).}
+\item{theme}{Palette theme for the colour columns (\code{"light"} / \code{"dark"} / a publication
+palette; \code{NULL} follows \code{getOption("tabxplor.export_theme")}).}
 }
 \value{
 A tibble with one row per plotted cell.

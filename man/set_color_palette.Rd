@@ -60,9 +60,10 @@ now (the RStudio theme, the Positron theme, or \code{COLORFGBG}; \code{"light"} 
 told). Detection is best-effort and resolved ONCE: call again after changing your editor's theme.
 (This is the console only --- \code{\link{tab_css}} / \code{\link{tab_html}} take their own
 \code{theme = "auto"}, which follows the reader's browser.) In \code{get_color_style()}:
-\code{"light"}, \code{"dark"} or \code{"print"} (the black-and-white publication palette); the
-export theme \code{"auto"} resolves to \code{"light"} there, a palette being always one definite
-thing. Both default to the current setting.}
+\code{"light"}, \code{"dark"} or one of the black-and-white publication palettes
+(\code{"print_minimalistic"}, \code{"print_emphasis"}, \code{"print_marks"}); \code{"auto"}
+resolves to \code{"light"} there, a palette being always one definite thing. Both default to the
+current setting.}
 
 \item{type}{Which palette, or which half of a break scale --- the word means one thing per
 function, and both are given here because they share this page. In \code{get_color_style()} and
@@ -84,7 +85,7 @@ over- and 4 under-represented colours are mapped onto \code{set_color_palette()}
 functions (the historical value \code{"crayon"}, now built with \pkg{cli}). Set to
 \code{"color_code"} to return html color codes, or \code{"face"} to return the palette's
 TYPOGRAPHY -- a list \code{bold} / \code{italic} / \code{underline} of 8 logicals each (plus a
-\code{semantic} flag), which is how \code{theme = "print"} says "over-represented cells are bold,
+\code{semantic} flag), which is how a publication palette says "over-represented cells are bold,
 under-represented ones italic". The colour palettes report bold on every text slot and nothing on
 the background ones, i.e. exactly how they have always been drawn.}
 

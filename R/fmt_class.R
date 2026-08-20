@@ -2531,6 +2531,25 @@ get_stars  <- function(x, p = get_pvalue(x)) {
   out[display_primary(get_display(x)) %in% DISPLAY_FOOTER_TOKENS] <- ""
   out
 }
+# THE cell suffix: a publication palette's effect-size MARKS, or the significance STARS -- one or the
+# other, never both. They sit in the same place after the value and say different things (how big the
+# deviation is, against the breaks; how sure it is, against a p-value threshold), so a palette that
+# marks its cells suppresses the stars rather than crowding them into two contradictory symbol runs.
+# The mark is the SLOT's rendering, exactly like the ink and the face, so nothing here re-derives a
+# direction: the slot already carries the side and the magnitude, and a greyed cell has slot 0.
+#' @keywords internal
+fmt_cell_suffix <- function(x, stars = FALSE, theme = NULL) {
+  # `theme = NULL` means "no palette" -- the tooltip and character-cast re-renders, which must stay
+  # theme-blind. Reading the option here would annotate a cell nobody asked to annotate.
+  marks <- if (is.null(theme)) NULL else get_color_style("face", type = "text", theme = theme)$marks
+  if (!is.null(marks) && any(nzchar(marks))) {
+    out <- c("", marks)[fmt_color_channels(x)$text_slot + 1L]
+    out[display_primary(get_display(x)) %in% DISPLAY_FOOTER_TOKENS] <- ""
+    return(out)
+  }
+  if (isTRUE(stars) && fmt_stars_applicable(x)) get_stars(x) else rep("", length(x))
+}
+
 # whether a column's stored pvalue drives significance STARS. A `contrib` column stores a
 # standardized-residual pvalue only to gate its OWN colouring -- not a "different from the reference"
 # test -- so it must not print stars. That IS `sig_source == "pvalue"`: it names the rule, not the row.
@@ -2992,8 +3011,15 @@ excel_numfmt_code <- function(digits, pct, ci, text, signed = FALSE, ratio = FAL
 #' like indicating which is the reference row or col for differences.
 #' @param stars Append significance stars after the value (opt-in; default `FALSE`). Stars appear
 #' only where a per-cell p-value was stored (diff-type CIs / regression coefficients) and are
-#' right-padded so numbers stay aligned. The main display (console, [tab_kable()], [tab_md()]) sets
-#' this `TRUE`; tooltip / secondary-field re-renders leave it `FALSE`, so stars never leak.
+#' right-padded so numbers stay aligned. They **support** the number rather than compete with it: in
+#' every theme they are drawn like an aside -- the chrome's secondary grey, never bold, italic or
+#' underlined -- so a run of symbols never shouts louder than the value it qualifies. The main
+#' display (console, [tab_kable()], [tab_md()]) sets this `TRUE`; tooltip / secondary-field
+#' re-renders leave it `FALSE`, so stars never leak.
+#' @param theme Which palette the cells are being rendered in. Only the black-and-white publication
+#' palettes use it: `theme = "print_marks"` writes a repeated superscript mark after each value
+#' instead of the significance stars, drawn exactly like them (see `stars`). `NULL` (the default)
+#' renders no palette annotation at all.
 #' @param bold_split Internal (default `FALSE`): when `TRUE`, attach a per-cell `primary_nchar`
 #' attribute giving the bold-prefix width of a composite `"{pct} (n={n})"` cell, so exporters can
 #' bold only the primary field in a bold row. Off by default -> the output is attribute-free.
@@ -3013,7 +3039,7 @@ excel_numfmt_code <- function(digits, pct, ci, text, signed = FALSE, ratio = FAL
 #' @export
 #' @keywords internal
 format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
-                                special_formatting = FALSE, stars = FALSE,
+                                special_formatting = FALSE, stars = FALSE, theme = NULL,
                                 bold_split = FALSE, pad = if (isTRUE(html)) fig_space else " ",
                                 syntax = c("text", "excel"), .ref = NULL) {
   syntax <- match.arg(syntax)
@@ -3276,6 +3302,25 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # cells the composite expander wrote: the `na` argument below must not paint over them.
   wrote <- rep(FALSE, length(out))
 
+  # THE CELL SUFFIX (stars, or a publication palette's marks), computed HERE -- before the
+  # "mean (sigma sd)" tail -- so it can be attached to the PRIMARY token rather than after the aside.
+  # WARNING: appending it at the end instead is what used to drop a star into the `.tx-sec` piece of a
+  # "mean (sigma sd)" cell, where it was drawn in the aside's grey and un-bolded. The face and the
+  # colour stop at the primary; so must what they grade.
+  # PADDING: when any cell carries a suffix, every value cell reserves the column-max width, so the
+  # numbers stay aligned. Footer SUMMARY cells (gof / pvalue rows) carry none and reserve none.
+  st     <- fmt_cell_suffix(x, stars = stars, theme = theme)
+  # fmt_rendered(), not nzchar(): a void token is padded to its width, not emptied.
+  st_val <- fmt_rendered(out) & !(display %in% DISPLAY_FOOTER_TOKENS)
+  st_pad <- rep("", length(out))
+  st_w   <- 0L
+  if (any(st_val & nzchar(st))) {
+    st_w   <- max(nchar(st[st_val]))
+    st_pad <- stringi::stri_pad(st, st_w, side = "right", pad = pad)
+    st_pad[!st_val] <- ""
+  }
+  st_done <- rep(FALSE, length(out))
+
   if (special_formatting) {
     # compute each reference mask ONCE per column; the exporter prep passes precomputed masks via
     # `.ref`, else memoized lazily below (`ref_alltot` above). Keep `.ref = NULL` on the nested
@@ -3315,11 +3360,14 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
         stringi::stri_pad(width = max(stringi::stri_length(sd)), side = "right", pad = pad)
 
       # bold only the MEAN of a "mean (sigma sd)" cell in a bold row (bold glyphs are wider, so a fully
-      # bold cell stops aligning). Recorded before the tail is pasted.
+      # bold cell stops aligning). Recorded before the suffix and the tail are pasted -- both are
+      # SUPPORTING pieces, and neither is what the colour and the face grade.
       if (isTRUE(bold_split)) {
         prim_from [disp_mean_sd] <- 1L
         prim_nchar[disp_mean_sd] <- nchar(out[disp_mean_sd])
       }
+      out[disp_mean_sd]     <- paste0(out[disp_mean_sd], st_pad[disp_mean_sd])
+      st_done[disp_mean_sd] <- TRUE
 
       # the mean <-> "(sigma sd)" joiner is the medium `pad` (ASCII in console/markdown, figure space
       # in html), so the tail keeps the same digit-grid gap as the rest of the row.
@@ -3333,6 +3381,8 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
           prim_from [disp_mean_nosd] <- 1L
           prim_nchar[disp_mean_nosd] <- nchar(out[disp_mean_nosd])
         }
+        out[disp_mean_nosd]     <- paste0(out[disp_mean_nosd], st_pad[disp_mean_nosd])
+        st_done[disp_mean_nosd] <- TRUE
         out[disp_mean_nosd] <- paste0(out[disp_mean_nosd], strrep(pad, tail_w))
       }
     }
@@ -3410,21 +3460,20 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
   }
 
-  # append significance stars (universal CI-inclusion) after the cell value, wherever a per-cell
-  # pvalue was stored. OPT-IN: `stars` is TRUE only at the MAIN display sites (pillar_shaft, tab_kable,
-  # tab_md), so tooltip / character-cast re-renders never leak stars. PADDING: when any cell is
-  # starred, right-pad every cell's star field to the column-max width so numbers stay aligned. Footer
-  # SUMMARY cells (gof / pvalue rows) carry no star and reserve no star column.
-  if (isTRUE(stars) && fmt_stars_applicable(x)) {
-    st  <- get_stars(x)
-    # the DECLARED footer tokens (DISPLAY_TOKENS' `footer`). A cell that rendered nothing takes no
-    # star -- fmt_rendered(), not nzchar(), because a void token is padded to its width, not emptied.
-    val <- fmt_rendered(out) & !(display %in% DISPLAY_FOOTER_TOKENS)
-    if (any(val & nzchar(st))) {
-      w  <- max(nchar(st[val]))
-      st_pad <- stringi::stri_pad(st, w, side = "right", pad = pad)  # glyphs left, pad right
-      out[val] <- paste0(out[val], st_pad[val])
+  # OPT-IN: `stars` / `theme` are set only at the MAIN display sites (pillar_shaft, tab_kable, tab_md,
+  # tab_xl), so tooltip / character-cast re-renders never leak an annotation.
+  # Every value cell the "mean (sigma sd)" branch did not already suffix. THE SUFFIX IS A SUPPORTING
+  # PIECE, not part of the number: a plain cell that wears one therefore gets a primary RANGE it would
+  # not otherwise need, ending where the value ends -- so the stars / marks fall outside it and every
+  # backend draws them like an aside.
+  st_sel <- st_val & !st_done & nzchar(st_pad)
+  if (any(st_sel)) {
+    if (isTRUE(bold_split)) {
+      fresh <- st_sel & is.na(prim_nchar)
+      prim_from [fresh] <- 1L
+      prim_nchar[fresh] <- nchar(out[fresh])
     }
+    out[st_sel] <- paste0(out[st_sel], st_pad[st_sel])
   }
 
   # a "blank" cell (n_min mask) renders as a true empty string in every consumer, distinct from NA.
@@ -3461,8 +3510,14 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
               else set_pvalue(xc, NA_real_)
         # fmt_set_display(): the RAW write. `est` / `base` are tokens here, never preset names.
         format(fmt_set_display(xi, seg$fields[i]), na = na, special_formatting = FALSE,
-               stars = isTRUE(stars) && i == seg$primary, pad = pad)  # the inner tokens pad too
+               stars = isTRUE(stars) && i == seg$primary,
+               theme = if (i == seg$primary) theme else NULL,
+               # `bold_split` on the primary ONLY to learn how wide the suffix it added is, so the
+               # range recorded below can stop before it.
+               bold_split = i == seg$primary, pad = pad)  # the inner tokens pad too
       })
+      # read BEFORE the padding below, which returns fresh vectors and drops the attribute.
+      sfx_w <- attr(toks[[seg$primary]], "suffix_nchar") %||% 0L
       # an empty token becomes "" and is padded WITH the others, so it occupies its column's width
       void <- lapply(toks, function(s) !fmt_rendered(s))
       toks <- purrr::map2(toks, void, function(s, e) {
@@ -3510,7 +3565,10 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
         prim  <- ok_c & !void[[seg$primary]]
         head  <- if (pj > 1L) do.call(paste0, strs[seq_len(pj - 1L)]) else rep("", length(cells))
         prim_from [cells[prim]] <- nchar(head)[prim] + 1L
-        prim_nchar[cells[prim]] <- nchar(strs[[pj]])[prim]
+        # minus the suffix the primary token wears: the stars / marks are a supporting piece and fall
+        # OUTSIDE the range, beside the asides. The token's own pad is leading, so the range still
+        # ends on the value.
+        prim_nchar[cells[prim]] <- nchar(strs[[pj]])[prim] - sfx_w
       }
     }
   }
@@ -3528,6 +3586,9 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     attr(out, "primary_nchar") <- prim_nchar
     attr(out, "primary_from")  <- prim_from
   }
+  # how wide the cell suffix is -- read by the composite expander above, which calls this on its own
+  # primary token and must subtract it from the range it records.
+  if (isTRUE(bold_split) && st_w > 0L) attr(out, "suffix_nchar") <- st_w
 
   out
 }
@@ -3542,7 +3603,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 # A composite cell reads as ONE number with an aside -- "1/1.63*** (31%)" -- and what a measure grades
 # is the number, not the aside. So only the PRIMARY token carries the cell's rendering and the aside is
 # set slightly back from the table's own text. That is the colour, and equally the FACE wherever a
-# palette speaks through typography (theme = "print"): both are the measure talking, so both stop in
+# palette speaks through typography (a publication one): both are the measure talking, so both stop in
 # the same place -- the face half is applied by html_cell_text() (R/tab-render-html.R), which is where
 # the pieces are known. The split is possible at all because format(bold_split = TRUE) hands back the
 # primary's character RANGE -- the same fact the exporters already use to bold only the primary field.
@@ -3603,7 +3664,10 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
   # NULL on the console path.
   # `bold_split`: the primary token's character range, so the colour lands on the number and not on
   # the aside beside it (unless tabxplor.color_whole_cell opts out of the split).
-  out     <- format(x, special_formatting = TRUE, stars = TRUE, .ref = .ref, bold_split = TRUE)
+  # the console's own palette decides the cell suffix: a publication palette marks, the colour ones
+  # star. The console does not select one by default -- options(tabxplor.color_style_theme=) can.
+  out     <- format(x, special_formatting = TRUE, stars = TRUE, .ref = .ref, bold_split = TRUE,
+                    theme = tx_theme_option("console") %||% "light")
   prim_f  <- if (color_whole_cell_opt()) NULL else attr(out, "primary_from")
   prim_n  <- attr(out, "primary_nchar")
   # the CONSOLE's own theme (tabxplor.color_style_theme, best-effort detected), so a dark terminal
@@ -4075,11 +4139,14 @@ fmt_color_channels <- function(x) {
 # THE ENGINE STAYS THEME-BLIND: slots are computed without knowing the theme; only this boundary turns
 # a slot into an appearance.
 #' @keywords internal
-fmt_channel_codes <- function(x, theme = "light") {
+fmt_channel_codes <- function(x, theme = "light", ink = "text") {
   n  <- length(x)
   ch <- fmt_color_channels(x)
 
-  text_styles <- get_color_style("color_code", type = "text", theme = theme)
+  # `ink` names the family the TEXT channel takes its hex from -- "text" everywhere except a graphics
+  # device, which cannot draw a rule (tx_plot_ink_family). The FACE is always the text family's: a
+  # substitution changes what a cell is coloured with, never what the palette says about the slot.
+  text_styles <- get_color_style("color_code", type = ink, theme = theme)
   bg_styles   <- get_color_style("color_code", type = "bg", theme = theme)
 
   text <- rep(NA_character_, n)
@@ -4093,7 +4160,9 @@ fmt_channel_codes <- function(x, theme = "light") {
   slot_face <- function(slot, type) {
     f   <- get_color_style("face", type = type, theme = theme)
     sel <- slot > 0L
-    out <- list(bold = logical(n), italic = logical(n), underline = logical(n))
+    # `underline` is "" / "single" / "double", not a logical -- see print_palette().
+    out <- list(bold = logical(n), italic = logical(n), underline = character(n))
+    out$underline[] <- ""
     for (k in names(out)) out[[k]][sel] <- f[[k]][slot[sel]]
     out
   }
@@ -4624,14 +4693,16 @@ legend_break_label <- function(measure, brk, dir, is_pct, lang, policy = "ignore
 legend_break_tokens <- function(plan, is_pct, channel, lang, theme = "light") {
   if (is.null(plan)) return(list(over = list(), under = list()))
   measure <- plan$measure
-  # the legend must not promise a distinction the cells do not make: typography honestly supports 2
-  # levels per side, so the print palette renders slots 1&2 (and 3&4) the same; a token whose rendering
+  # the legend must not promise a distinction the cells do not make: a publication palette can render
+  # two slots the same (the default one gives slots 3 and 4 one rendering), so a token whose rendering
   # repeats the previous one is dropped, keeping the LOWER threshold ("bold = at least +5 points"). NOT
-  # a cap inside fmt_color_slots() -- the ENGINE stays theme-blind.
+  # a cap inside fmt_color_slots() -- the ENGINE stays theme-blind. The key is the WHOLE rendering,
+  # marks included, so a palette that separates two slots by their mark alone keeps both break-words.
   fam <- if (identical(channel, "text")) "text" else "bg"
   hex <- get_color_style("color_code", type = fam, theme = theme)
   fc  <- get_color_style("face",       type = fam, theme = theme)
-  look <- function(slot) paste(hex[slot], fc$bold[slot], fc$italic[slot], fc$underline[slot])
+  look <- function(slot) paste(hex[slot], fc$bold[slot], fc$italic[slot], fc$underline[slot],
+                               fc$marks[slot])
   mk_side <- function(breaks, slots, dir) {
     prev <- NA_character_
     out  <- list()
@@ -4642,7 +4713,9 @@ legend_break_tokens <- function(plan, is_pct, channel, lang, theme = "light") {
       key <- look(slot)
       if (!is.na(prev) && identical(key, prev)) next     # same rendering as the previous break
       prev <- key
-      out  <- c(out, list(.lg_ctok(lab, slot, channel)))
+      # a marks palette says nothing typographically, so the break-word must WEAR its mark or the
+      # legend would list four thresholds that all look alike.
+      out  <- c(out, list(.lg_ctok(paste0(lab, fc$marks[slot]), slot, channel)))
     }
     out
   }
@@ -4685,14 +4758,17 @@ legend_join <- function(toks, sep) {
 }
 
 # default palette -> baked shade names; a custom palette -> NA (the coloured break-words carry the
-# meaning). One pair PER CHANNEL: the print palette's text side names the DIRECTION face
-# (Underlined/Italic -- its ink ramp is the magnitude, which the break-words already show) and its
-# background side a grey fill, so a background-only column must not announce "Underlined:" about fills.
+# meaning). One pair PER CHANNEL: a publication palette's text side names the DIRECTION face, if it
+# has one -- its magnitude ladder is what the break-words already show -- and its background side a
+# grey fill, so a background-only column must not announce "Underlined:" about fills. NA on a side the
+# palette does not name typographically (the emphasis palette's over side, both sides of the marks
+# one): the legend then leads with the threshold instead of promising a distinction that is not there.
 legend_shade_names <- function(theme = "light") {
-  if (identical(tx_palette_theme(theme), "print")) {
-    # Curated palette, so these are always right: they describe the face table.
-    return(list(text = c(over = gettext("Underlined"), under = gettext("Italic")),
-                bg   = c(over = gettext("Grey fill"),   under = gettext("Grey fill"))))
+  pal <- print_palette_of(tx_palette_theme(theme))
+  if (!is.null(pal)) {
+    nm <- function(f) if (is.null(f)) NA_character_ else f()
+    return(list(text = c(over = nm(pal$shade$over), under = nm(pal$shade$under)),
+                bg   = c(over = gettext("Grey fill"), under = gettext("Grey fill"))))
   }
   is_default <- tryCatch({
     b <- get0("base", envir = tabxplor_palette_env)
@@ -5068,16 +5144,30 @@ legend_tokens_prose <- function(spec, lang, show_names) {
   # fails. Keep it on one line.
   if (identical(spec$policy, "grey_non_signif")) {
     thr  <- spec$threshold_phrase
-    note <- if (!is.na(thr))
-      gettextf("Coloured: significantly different from %s (%s), by at least the first colour threshold. Uncoloured: either not significant, or a difference under %s.",
-               spec$ref_phrase, spec$method_phrase, thr)
-    else
-      gettextf("Coloured: significantly different from %s (%s), by at least the first colour threshold. Uncoloured: either not significant, or too small a difference to colour.",
-               spec$ref_phrase, spec$method_phrase)
+    # A publication palette colours nothing -- it underlines, emphasises or marks -- so it says the
+    # same thing in its own vocabulary. One WHOLE sentence per variant, never a %s for the verb: a
+    # single word carries gender and number in French, which only a full-sentence msgid can get right.
+    mark <- tx_is_print(tx_palette_theme(spec$theme))
+    note <- if (!is.na(thr)) {
+      if (mark)
+        gettextf("Marked: significantly different from %s (%s), by at least the first threshold. Unmarked: either not significant, or a difference under %s.",
+                 spec$ref_phrase, spec$method_phrase, thr)
+      else
+        gettextf("Coloured: significantly different from %s (%s), by at least the first colour threshold. Uncoloured: either not significant, or a difference under %s.",
+                 spec$ref_phrase, spec$method_phrase, thr)
+    } else {
+      if (mark)
+        gettextf("Marked: significantly different from %s (%s), by at least the first threshold. Unmarked: either not significant, or too small a difference to mark.",
+                 spec$ref_phrase, spec$method_phrase)
+      else
+        gettextf("Coloured: significantly different from %s (%s), by at least the first colour threshold. Uncoloured: either not significant, or too small a difference to colour.",
+                 spec$ref_phrase, spec$method_phrase)
+    }
     # where only SOME rows carry a test, grey means a third thing -- say so, or a reader takes an
     # untested cell for a tested-and-null one.
     if (isTRUE(spec$partial_test))
-      note <- paste0(note, " ", gettext("Some rows carry no test and are left uncoloured."))
+      note <- paste0(note, " ", if (mark) gettext("Some rows carry no test and are left unmarked.")
+                               else      gettext("Some rows carry no test and are left uncoloured."))
     toks <- c(toks, list(.lg_tok(paste0(" ", note))))
   }
   else if (identical(spec$policy, "guaranteed_effect"))
@@ -5127,7 +5217,11 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
   is_bold_tok  <- function(tk) tok_face(tk, "bold") || isTRUE(tk$b)
   semantic     <- fmt_face_semantic(pal)
   is_ital_tok  <- function(tk) tok_face(tk, "italic")
-  is_under_tok <- function(tk) tok_face(tk, "underline")
+  # `underline` is the three-value vocabulary, so it has its own reader.
+  is_under_tok <- function(tk) {
+    if (!is_colored_tok(tk)) return("")
+    get_color_style("face", type = fam(tk$ch), theme = pal)$underline[tk$c]
+  }
   if (identical(medium, "runs")) {
     return(lapply(tokens, function(tk) {
       col <- if (is_colored_tok(tk)) slot_hex(tk$c, tk$ch) else NA_character_
@@ -5168,7 +5262,8 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
       out <- style(tk$t)
       if (bold) out <- cli::style_bold(out)
       if (ital) out <- cli::style_italic(out)
-      if (und)  out <- cli::style_underline(out)
+      # no terminal rule is portably doubled, so both ruled rungs read as one line here.
+      if (nzchar(und))  out <- cli::style_underline(out)
       out
     } else if (identical(medium, "html")) {
       # DESIGN: the span is emitted inline (kableExtra::text_spec() is byte-unstable across releases).
@@ -5178,7 +5273,9 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
       # span must override the stylesheet's `.p1..m4{font-weight:bold}` baseline.
       wt <- if (bold) "font-weight:bold;" else if (identical(tk$ch, "text")) "font-weight:normal;" else ""
       if (ital) wt <- paste0(wt, "font-style:italic;")
-      if (und)  wt <- paste0(wt, "text-decoration:underline;")
+      if (nzchar(und)) wt <- paste0(wt, "text-decoration:",
+                                    if (identical(und, "double")) "underline double" else "underline",
+                                    ";")
       # a palette whose meaning is TYPOGRAPHY writes the break-word as markup too, so a sanitizer that
       # strips class/style (GitHub, Word paste) keeps the tags. No-op under the colour palettes.
       lab <- if (semantic) html_face_wrap(tk$t, bold, ital, und) else tk$t
@@ -5402,21 +5499,18 @@ legend_streams <- function(x, style, lang, theme = "light") {
 }
 
 # fmt_point_palette() -- the 8 slot colours to paint a MARK with (a plotted point, a row band), not a
-# glyph. One forced deviation: `theme = "print"` gives every TEXT slot black and separates directions by
+# glyph. One forced deviation: a publication palette gives every TEXT slot near-black and separates directions by
 # bold vs italic, which a point cannot be, so a mark borrows the print palette's dark grey ramp
 # (bg_legend). Nothing is lost: in a forest plot the DIRECTION is read off the null line, so colour only
 # carries magnitude. Every other theme returns the table's own palette.
 #' @keywords internal
 fmt_point_palette <- function(theme = "light", channel = c("text", "bg")) {
-  channel <- match.arg(channel)
-  fam <- if (identical(channel, "bg")) "bg"
-         else if (identical(theme, "print")) "bg_legend" else "text"
-  get_color_style("color_code", type = fam, theme = theme)
+  get_color_style("color_code", type = tx_plot_ink_family(theme, channel), theme = theme)
 }
 
 # legend_guide_spec() -- the colour legend as a real GGPLOT GUIDE instead of a sentence. Same producers,
 # a different medium: legend_specs() -> legend_resolve_spec() -> legend_break_tokens() (which already
-# drops a break that renders identically, so under `theme = "print"` the twin ladders collapse for free).
+# drops a break that renders identically, so under a publication palette the twin ladders collapse for free).
 #
 # The honest limit: a ggplot has exactly ONE scale per aesthetic, so a key list can describe only one
 # ladder. When the plotted columns form several legend body-groups this returns NULL and forest_plot()
@@ -5451,7 +5545,7 @@ legend_guide_spec <- function(x, cols, channel = c("text", "bg"), theme = "light
     # vertical guide beside a forest plot whose x axis runs the same way.
     keys <- rbind(side(rev(tk$over), .lg_ge), side(tk$under, .lg_le))
     keys$hex <- hex[keys$slot]
-    # A palette whose two directions render the SAME swatch (theme = "print") would produce duplicate
+    # A palette whose two directions render the SAME swatch (a publication one) would produce duplicate
     # keys. Merge them: one swatch, both thresholds (the direction is read off the axis anyway).
     if (anyDuplicated(keys$hex)) {
       keys <- do.call(rbind, lapply(unique(keys$hex), function(h) {
@@ -5559,7 +5653,8 @@ tab_footer_streams <- function(x, style = "prose", lang = NULL,
   # (the per-predictor global test is footer ROWS -- see reg_footer_plan() -- not a line here.)
   if (isTRUE(legend)) for (toks in legend_streams(x, style, lg, theme)) push(toks, "legend")
   # `esc = TRUE` -> the md renderer escapes the `*` glyphs (else pandoc reads them as emphasis).
-  sl <- suppressWarnings(tab_stars_legend(x, lang = lg)); if (!is.null(sl)) push(list(.lg_tok(sl, esc = TRUE)), "stars")
+  sl <- suppressWarnings(tab_stars_legend(x, lang = lg, theme = theme))
+  if (!is.null(sl)) push(list(.lg_tok(sl, esc = TRUE)), "stars")
   for (s in subtext) if (nzchar(s)) push(list(.lg_tok(s)), "subtext")
   streams
 }
@@ -5610,7 +5705,10 @@ tab_constant_null <- function(x, cols) {
 # the significance-stars legend line, shown when any DISPLAYED, star-applicable fmt column carries a
 # star (never on a contrib table -- fmt_stars_applicable). Thresholds/labels come from the same options
 # get_stars() reads, so the named confidence levels match the glyphs drawn. Returns one plain string or NULL.
-tab_stars_legend <- function(x, lang = NULL) {
+# A publication palette that MARKS its cells prints no star at all (fmt_cell_suffix), so it prints no
+# stars legend either -- the marks are explained by the break-words they ride on.
+tab_stars_legend <- function(x, lang = NULL, theme = NULL) {
+  if (print_palette_marks(print_palette_of(tx_palette_theme(theme)))) return(NULL)
   cols <- purrr::keep(x, ~ is_fmt(.) && fmt_stars_applicable(.))
   if (length(cols) == 0) return(NULL)
   if (!any(vapply(cols, function(cl) any(nzchar(get_stars(cl))), logical(1)))) return(NULL)

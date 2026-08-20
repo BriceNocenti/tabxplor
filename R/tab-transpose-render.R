@@ -122,7 +122,9 @@ tx_transpose_render <- function(rd, backend) {
   # colour palettes). Without these a TRANSPOSED table would lose the print scheme in html AND Excel.
   facebold_d  <- slot_lgl("face_bold")
   faceital_d  <- slot_lgl("face_italic")
-  faceund_d   <- slot_lgl("face_underline")
+  # `face_underline` is the three-value vocabulary ("" / "single" / "double"), so it flips as a
+  # CHARACTER: slot_lgl() would collapse a doubled rule to TRUE and lose it.
+  faceund_d   <- slot_chr("face_underline", "")
   refalltot_d <- slot_lgl("ref_alltot")
   # Phase 19h (D1): `keep_black` is the "do not grey this cell" anchor set -- ref_alltot | is_refrow |
   # a regression's GOF footer rows (prep_one_table). It was NOT flipped, so a transposed table handed

@@ -11,6 +11,7 @@
   na = NA,
   special_formatting = FALSE,
   stars = FALSE,
+  theme = NULL,
   bold_split = FALSE,
   pad = if (isTRUE(html)) fig_space else " ",
   syntax = c("text", "excel"),
@@ -31,8 +32,16 @@ like indicating which is the reference row or col for differences.}
 
 \item{stars}{Append significance stars after the value (opt-in; default \code{FALSE}). Stars appear
 only where a per-cell p-value was stored (diff-type CIs / regression coefficients) and are
-right-padded so numbers stay aligned. The main display (console, \code{\link[=tab_kable]{tab_kable()}}, \code{\link[=tab_md]{tab_md()}}) sets
-this \code{TRUE}; tooltip / secondary-field re-renders leave it \code{FALSE}, so stars never leak.}
+right-padded so numbers stay aligned. They \strong{support} the number rather than compete with it: in
+every theme they are drawn like an aside -- the chrome's secondary grey, never bold, italic or
+underlined -- so a run of symbols never shouts louder than the value it qualifies. The main
+display (console, \code{\link[=tab_kable]{tab_kable()}}, \code{\link[=tab_md]{tab_md()}}) sets this \code{TRUE}; tooltip / secondary-field
+re-renders leave it \code{FALSE}, so stars never leak.}
+
+\item{theme}{Which palette the cells are being rendered in. Only the black-and-white publication
+palettes use it: \code{theme = "print_marks"} writes a repeated superscript mark after each value
+instead of the significance stars, drawn exactly like them (see \code{stars}). \code{NULL} (the default)
+renders no palette annotation at all.}
 
 \item{bold_split}{Internal (default \code{FALSE}): when \code{TRUE}, attach a per-cell \code{primary_nchar}
 attribute giving the bold-prefix width of a composite \code{"{pct} (n={n})"} cell, so exporters can

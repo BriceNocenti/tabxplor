@@ -60,8 +60,10 @@ breaks -- the teaching mode) or \code{"none"}.}
 
 \item{size}{\code{NULL} for constant point size, or \code{"n"} to map the sample size.}
 
-\item{theme}{\code{"light"}, \code{"dark"} or \code{"print"} (the black-and-white publication
-palette). \code{NULL} follows \code{getOption("tabxplor.export_theme")}.}
+\item{theme}{\code{"light"}, \code{"dark"} or one of the black-and-white publication palettes
+(\code{"print_ready"} and friends; a plotted mark then reads its
+magnitude off a grey ramp, since a point has no typography).
+\code{NULL} follows \code{getOption("tabxplor.export_theme")}.}
 
 \item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
 \code{"en"} or \code{"fr"}.}

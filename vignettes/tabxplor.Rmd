@@ -514,11 +514,11 @@ Nothing is written inline on a cell, so any look is overridable with plain CSS a
 
 ### Black and white, for publication
 
-Colors are for exploring. For a journal, `theme = "print"` renders the same reading in black and white: **over-represented cells in bold**, *under-represented ones in italic*, an underline for the strongest threshold, and a grey fill for a second measure. The legend names the typography instead of the hues.
+Colors are for exploring. For a journal, `theme = "print_minimalistic"` renders the same reading in black and white: **over-represented cells in bold**, *under-represented ones in italic*, an underline for the strongest threshold, and a grey fill for a second measure. The legend names the typography instead of the hues.
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, pct = "row", color = "difference") |>
-  tab_html(theme = "print")
+  tab_html(theme = "print_minimalistic")
 ```
 
 This is not merely a taste: converted to lightness, the two directions of the color palette come out as the *same* shades of grey, so a grayscale print loses over-vs-under entirely. It works in every export — `tab_html()`, `tab_md()` and `tab_xl()` (real bold/italic/underline in the spreadsheet) — and the typography is written as `<b>`/`<i>`/`<u>` markup as well as CSS, so it also survives a paste into Word.
@@ -539,7 +539,7 @@ It draws **whatever the table computed** — no argument to learn: with `ci = "c
 Two things are worth knowing:
 
 * **The gridlines are your colour breaks.** Change them with `set_color_breaks()` and the axis moves with the table. The colour key beside the plot is the table's own legend, with the same thresholds and the same shades.
-* **It reads the table, and computes nothing.** It returns a plain `ggplot`, so `+ ggplot2::labs(...)`, `+ ggplot2::theme(...)` and `ggsave()` work; `theme = "print"` gives the greyscale version, `guide = "bands"` shades the panel behind the points with the colour scale itself (a good way to *show* a class what the colours mean).
+* **It reads the table, and computes nothing.** It returns a plain `ggplot`, so `+ ggplot2::labs(...)`, `+ ggplot2::theme(...)` and `ggsave()` work; `theme = "print_minimalistic"` gives the greyscale version, `guide = "bands"` shades the panel behind the points with the colour scale itself (a good way to *show* a class what the colours mean).
 
 Do not confuse it with `tab_plot()`, which makes a picture *of the table* (useful to paste a coloured table where nothing else renders). `forest_plot()` is the chart; it also draws regression tables — see `vignette("tabxplor-reg")`.
 

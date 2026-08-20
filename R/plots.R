@@ -51,7 +51,7 @@ tx_plot_deps <- function(pkgs = c("ggplot2", "gridExtra")) {
 
 # THE plot theme, from the same `tx_chrome_hex()` vocabulary the tables use (z11: light / dark /
 # print), so a diagnostic panel beside a table is the same object in the same clothes. It replaced the
-# five hard-coded "#c00000" literals: `theme = "print"` matters, because a diagnostic panel is exactly
+# five hard-coded "#c00000" literals: a publication palette matters, because a diagnostic panel is exactly
 # what ends up in a thesis appendix in greyscale.
 #' @keywords internal
 tx_plot_colors <- function(theme = NULL) {
@@ -60,8 +60,8 @@ tx_plot_colors <- function(theme = NULL) {
   list(theme = th, text = ch$text, grey = ch$grey, bg = ch$bg,
        # the accent: a hue under colour themes, pure black under `print` (a greyscale panel leans on
        # line TYPE, not on a hue that photocopies to the same grey as the data)
-       accent = if (identical(th, "print")) "#000000" else "#c00000",
-       point  = if (identical(th, "dark")) "#8fb8dd" else if (identical(th, "print")) "#000000"
+       accent = if (tx_is_print(th)) "#000000" else "#c00000",
+       point  = if (identical(th, "dark")) "#8fb8dd" else if (tx_is_print(th)) "#000000"
                 else "#33648c")
 }
 
@@ -224,8 +224,8 @@ est_row_axis <- function(x) {
 #'   whether the observed (crude) counterpart of a regression estimate is included.
 #' @param intercept Keep the regression \code{Constant} row.
 #' @param totals Keep total rows and total columns.
-#' @param theme Palette theme for the colour columns (\code{"light"} / \code{"dark"} / \code{"print"};
-#'   \code{NULL} follows \code{getOption("tabxplor.export_theme")}).
+#' @param theme Palette theme for the colour columns (\code{"light"} / \code{"dark"} / a publication
+#'   palette; \code{NULL} follows \code{getOption("tabxplor.export_theme")}).
 #' @return A tibble with one row per plotted cell.
 #' @keywords internal
 tab_estimates <- function(x, columns = NULL, what = c("auto", "effect", "level"),
@@ -321,8 +321,8 @@ tab_estimates <- function(x, columns = NULL, what = c("auto", "effect", "level")
       policy  = if (is.null(pl$text)) NA_character_ else pl$text$policy,
       slot_text = ann$text_slot, slot_bg = ann$bg_slot,
       hex_text = ann$font, hex_bg = dplyr::na_if(ann$back, "none"),
-      # what a MARK is painted with: the cell's own colour, except under `theme = "print"` where the
-      # text palette is all black and a point borrows the grey ramp (fmt_point_palette). Identical to
+      # what a MARK is painted with: the cell's own colour, except under a publication palette where
+      # the text ink is all black and a point borrows the grey ramp (fmt_point_palette). Identical to
       # `hex_text` under every colour theme.
       point_hex = ifelse(ann$text_slot > 0L, pp[pmax(ann$text_slot, 1L)], ann$font),
       bold = ann$face_bold, italic = ann$face_italic, underline = ann$face_underline,
@@ -725,7 +725,8 @@ reg_panel_proportionality <- function(ctxs, cols, opts) {
 #' @param predictors Optional: restrict the linearity panel to these continuous predictors.
 #' @param ncol Number of panel columns in the assembled grid (default: 3, or fewer with few panels).
 #' @param facet_ncol Number of facet columns *inside* a panel (default: let \pkg{ggplot2} choose).
-#' @param theme `"light"`, `"dark"` or `"print"` (greyscale, for a thesis appendix). Defaults to
+#' @param theme `"light"`, `"dark"`, or a black-and-white publication palette (`"print_ready"` and
+#'   friends -- greyscale, for a thesis appendix). Defaults to
 #'   `options("tabxplor.theme")`, like the table exporters.
 #' @param lang Language of the titles and captions (`"en"`, `"fr"`, ...). Defaults to
 #'   `options("tabxplor.lang")`.
@@ -898,8 +899,10 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
 #' @param intercept Draw the regression \code{Constant} row.
 #' @param totals Draw total rows and total columns.
 #' @param size \code{NULL} for constant point size, or \code{"n"} to map the sample size.
-#' @param theme \code{"light"}, \code{"dark"} or \code{"print"} (the black-and-white publication
-#'   palette). \code{NULL} follows \code{getOption("tabxplor.export_theme")}.
+#' @param theme \code{"light"}, \code{"dark"} or one of the black-and-white publication palettes
+#'   (\code{"print_ready"} and friends; a plotted mark then reads its
+#'   magnitude off a grey ramp, since a point has no typography).
+#'   \code{NULL} follows \code{getOption("tabxplor.export_theme")}.
 #' @param caption A caption. \code{NULL} keeps the table's own.
 #' @param legend Print the colour legend (as a guide, or in the caption when several ladders apply).
 #' @param subtext Include the table's subtext and footer lines in the caption.

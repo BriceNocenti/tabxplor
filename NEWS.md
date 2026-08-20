@@ -19,14 +19,22 @@
 * **Dark mode.** `theme = "auto"` on `tab_html()` / `tab_md()` / `tab_css()` / `tab_export()` follows
   whoever is reading the table (their browser, or the editor for the Viewer). The console also
   auto-detects a dark editor (RStudio and Positron).
-* **A black-and-white publication palette.** `theme = "print"` (on `tab_html()` / `tab_md()` /
-  `tab_xl()` / `tab_export()` / `tab_css()`) renders the colour measures typographically — an underline
-  for over-represented cells, italic for under-represented ones, the ink darkening and turning bold
-  with the size of the deviation, a grey fill for a second measure — because a greyscale print turns
-  the two colour directions into the same shades of grey. It reaches Excel as real font attributes, and is written as `<b>`/`<i>`/`<u>`
-  markup as well as CSS, so it survives a paste into Word. Every stylesheet also carries it in an
-  `@media print` block, so a coloured html table already prints publication-ready
-  (`options(tabxplor.print_rules = FALSE)` to opt out).
+* **Black-and-white publication palettes.** `theme = "print_ready"` (on `tab_html()` / `tab_md()` /
+  `tab_xl()` / `tab_export()` / `tab_css()`) renders the colour measures typographically, because a
+  greyscale print turns the two colour directions into the same shades of grey. It picks the right
+  encoding for each table: `"print_marks"` for a cross-table, which writes a repeated superscript
+  mark after each value (`24%⁺⁺`) instead of the significance stars — the one encoding that survives
+  a plain-text copy — and `"print_emphasis"` for a regression, whose cells already show their own
+  direction, so its typography spends everything on magnitude (bold, then underline, then double
+  underline). Name either yourself, or `"print_minimalistic"` (`"bw"`) for the general-purpose one:
+  an underline for over-represented cells, italic for under-represented ones, the ink darkening and
+  turning bold with the size of the deviation, and a grey fill for a second measure. They reach Excel as real font attributes (the marks as real numbers), and are
+  written as `<b>`/`<i>`/`<u>` markup as well as CSS, so they survive a paste into Word. In every
+  theme, colour ones included, significance stars (and the marks that replace them) are now drawn in
+  the theme's secondary grey and never bold, italic or underlined: they support the number instead of
+  outshouting it. Every
+  stylesheet also carries one in an `@media print` block, so a coloured html table already prints
+  publication-ready (`options(tabxplor.print_rules = FALSE)` to opt out, or name another palette).
 * **A new, dependency-free HTML engine, now the default** for `tab_html()` (about 3× faster and much
   lighter than kableExtra, which becomes optional). Its geometry is CSS classes, so your own CSS can
   restyle it.
@@ -483,12 +491,12 @@
 * **A transposed regression table's model-fit footer rendered grey in HTML**, where the untransposed
   one keeps it black: the transpose dropped the per-cell "reading anchor" flags, and a silent fallback
   hid it.
-* **`theme = "print"` on `tab_html(engine = "kableExtra")` rendered a black table** — the
+* **`theme = "print_minimalistic"` on `tab_html(engine = "kableExtra")` rendered a black table** — the
   black-and-white publication palette got the dark theme.
 * **`tab_spread()` left the table's tests pointing at columns that no longer exist**, so a spread
   cross-table lost its whole test summary (chi-squared, effect size, p-value).
 * **`tab_plot()`'s colour legend ignored the palette's typography** and forced every token bold, so
-  under `theme = "print"` — where the direction is a typographic face, not a colour — the legend became
+  under `theme = "print_minimalistic"` — where the direction is a typographic face, not a colour — the legend became
   unreadable.
 
 * **`color = "auto"` works beside `color_signif`**, and now means exactly what `color = TRUE` means.

@@ -61,15 +61,13 @@ Positron's, best-effort).
 Defaults to \code{getOption("tabxplor.theme")},
 i.e. \code{"light"} -- a dark table is always a deliberate choice.
 
-\code{"print"} (or \code{"bw"}) is the black-and-white \strong{publication} palette: over-represented
-cells underlined, under-represented ones in italic, the ink darkening and turning bold with the
-size of the deviation, and a grey fill for a second colour measure. It exists because a greyscale
-print loses the colour palette's direction entirely (both background ramps convert to the same
-shades of grey). The
-typography is written as real \verb{<b>}/\verb{<i>}/\verb{<u>} markup as well as CSS, so it survives a
-stylesheet-less destination -- a paste into Word, or GitHub's markdown. You rarely need to ask for
-it: any coloured table already \strong{prints} in this scheme, see \code{\link{tab_css}}'s
-\code{print_rules}.}
+\code{"print_ready"}, \code{"print_marks"}, \code{"print_emphasis"} and
+\code{"print_minimalistic"} (\code{"bw"}) are the black-and-white \strong{publication} palettes: a
+greyscale print loses the colour palette's direction entirely (both ramps convert to the same
+greys), so each says it with something else --- see \code{\link{tab_css}} for what. Their typography is written as real \verb{<b>}/\verb{<i>}/\verb{<u>} markup as
+well as CSS, so it survives a stylesheet-less destination (a paste into Word, GitHub's markdown).
+You rarely need to ask for one: any coloured table already \strong{prints} in the first, see
+\code{\link{tab_css}}'s \code{print_rules}.}
 
 \item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
 

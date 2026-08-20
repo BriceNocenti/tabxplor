@@ -175,18 +175,24 @@ TAB_OPTIONS <- list(
 
   theme = tx_opt(
     "light", "colours", arg = "theme", alias = "export_theme",
-    doc = c("the *export* theme, `\"light\"`, `\"dark\"`, `\"print\"` (the black-and-white",
-            "publication palette; `\"bw\"` is a synonym) or `\"auto\"` (follow the reader).",
+    doc = c("the *export* theme: `\"light\"`, `\"dark\"`, `\"auto\"` (follow the reader), or a",
+            "black-and-white **publication** palette -- `\"print_ready\"` picks one per table (marks",
+            "for a cross-table, the emphasis ladder for a regression), or name it yourself:",
+            "`\"print_marks\"`, `\"print_emphasis\"`, `\"print_minimalistic\"` (`\"bw\"` is a synonym",
+            "of the last). See [tab_css()] for what each says.",
             "`\"auto\"` needs a stylesheet, so only [tab_html()], [tab_md()] and [tab_css()] honour",
-            "it; static backends resolve it to `\"light\"`. `\"print\"` reaches every backend, Excel",
-            "included.")),
+            "it; static backends resolve it to `\"light\"`. A publication palette reaches every",
+            "backend, Excel included.")),
 
   print_rules = tx_opt(
     TRUE, "colours", arg = "print_rules",
-    doc = c("every stylesheet [tab_css()] emits also carries the black-and-white publication palette",
+    doc = c("every stylesheet [tab_css()] emits also carries a black-and-white publication palette",
             "inside an `@media print` block, so a table rendered in colour **prints** (or saves to",
             "PDF) publication-ready with no further action. Set `FALSE` if your printer is a colour",
-            "one and the colours are the point.")),
+            "one and the colours are the point, or name a palette (`\"print_emphasis\"`) to print in",
+            "that one instead of the default `\"print_minimalistic\"`. `\"print_marks\"` and",
+            "`\"print_ready\"` cannot be used here: their marks are cell text, and a print rule can",
+            "restyle a page but not add characters to it.")),
 
   # --- statistics and confidence intervals -------------------------------------------------------
   anova = tx_opt(

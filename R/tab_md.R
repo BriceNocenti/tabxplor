@@ -101,7 +101,7 @@ tab_md <- function(tabs,
   # Phase 13d: `allow_auto` -- markdown carries a stylesheet (css = TRUE / tab_css()), so it can follow
   # the reader's colour scheme. The spans themselves are theme-independent (only the CSS differs).
   o <- resolve_export_opts(theme = theme, color = color, transpose = transpose,
-                           var_names = var_names, allow_auto = TRUE)
+                           var_names = var_names, allow_auto = TRUE, tabs = tabs)
   theme <- o$theme; color <- o$color
 
   # --- Phase 10d/10f: shared exporter prep + the base/list split. ---
@@ -256,7 +256,8 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
       # unchanged (a figure space is one codepoint), so the raw-markdown column layout is byte-for-byte
       # the same, only the pad glyph inside a value differs.
       raw     <- format(col, special_formatting = special_formatting, na = "", stars = TRUE,
-                        bold_split = TRUE, pad = fig_space, .ref = ann_ref(rd$ann[[nm]]))
+                        theme = theme, bold_split = TRUE, pad = fig_space,
+                        .ref = ann_ref(rd$ann[[nm]]))
       pn      <- attr(raw, "primary_nchar")
       pf      <- attr(raw, "primary_from")
       trimmed <- stringi::stri_trim(raw, side = "left")

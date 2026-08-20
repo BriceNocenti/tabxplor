@@ -595,15 +595,13 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' Defaults to \code{getOption("tabxplor.theme")},
 #' i.e. \code{"light"} -- a dark table is always a deliberate choice.
 #'
-#' \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
-#' cells underlined, under-represented ones in italic, the ink darkening and turning bold with the
-#' size of the deviation, and a grey fill for a second colour measure. It exists because a greyscale
-#' print loses the colour palette's direction entirely (both background ramps convert to the same
-#' shades of grey). The
-#' typography is written as real `<b>`/`<i>`/`<u>` markup as well as CSS, so it survives a
-#' stylesheet-less destination -- a paste into Word, or GitHub's markdown. You rarely need to ask for
-#' it: any coloured table already **prints** in this scheme, see \code{\link{tab_css}}'s
-#' `print_rules`.
+#' \code{"print_ready"}, \code{"print_marks"}, \code{"print_emphasis"} and
+#' \code{"print_minimalistic"} (\code{"bw"}) are the black-and-white **publication** palettes: a
+#' greyscale print loses the colour palette's direction entirely (both ramps convert to the same
+#' greys), so each says it with something else --- see \code{\link{tab_css}} for what. Their typography is written as real `<b>`/`<i>`/`<u>` markup as
+#' well as CSS, so it survives a stylesheet-less destination (a paste into Word, GitHub's markdown).
+#' You rarely need to ask for one: any coloured table already **prints** in the first, see
+#' \code{\link{tab_css}}'s `print_rules`.
 #' @param css Inline the stylesheet with the table, so the output is
 #' self-contained (default, from \code{getOption("tabxplor.tab_kable_css")}). Set `FALSE` in a many-table
 #' document that emits \code{\link{tab_css}} once at the top -- the stylesheet is table-independent,
@@ -661,7 +659,8 @@ tab_html <- function(tabs,
   tx_deprecate_inert(rlang::list2(...), "tab_html")
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
-                           transpose = transpose, var_names = var_names, allow_auto = TRUE)
+                           transpose = transpose, var_names = var_names, allow_auto = TRUE,
+                           tabs = tabs)
   theme <- o$theme
   color_legend <- o$color_legend
   compute <- c("refs", "bold")
@@ -1305,12 +1304,12 @@ reg_footer_lines <- function(tabs) {
 #' black table with white text. This backend ships no stylesheet, so it does NOT take \code{"auto"}
 #' (which needs one to follow the reader) -- \code{tab_html()}, \code{tab_md()} and
 #' \code{\link{tab_css}} do.
-#'   \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
-#'   cells underlined, under-represented ones in italic, the ink darkening and turning bold with the
-#'   size of the deviation, and a grey fill for the second colour measure -- readable in a greyscale
-#'   print, where the colour palette's two directions become the same shade.
-#' (\code{tab_plot} draws the ink and the italic; ggplot2 has no underline, so an over-represented
-#' cell is told apart by its ink alone there.)
+#'   The black-and-white **publication** palettes render a table for a page that has no colour:
+#'   \code{"print_ready"} picks the right one per table, or name it yourself --
+#'   \code{"print_marks"}, \code{"print_emphasis"}, \code{"print_minimalistic"} (\code{"bw"}).
+#'   See \code{\link{tab_css}} for what each of them says.
+#' (ggplot2 has no underline, so on a plot a publication palette reads its magnitude off a four-step
+#' grey ramp instead of the page's black ink, keeping bold and italic beside it.)
 #' @param caption The table caption.
 # @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
@@ -1368,7 +1367,7 @@ tab_plot <- function(tabs,
   }
 
   o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
-                           transpose = transpose, var_names = var_names)
+                           transpose = transpose, var_names = var_names, tabs = tabs)
   theme <- o$theme
   color_legend <- o$color_legend
   compute <- c("refs", "bold")
@@ -2629,223 +2628,9 @@ vec_cast.data.frame.tabxplor_grouped_tab <- function(x, to, ...) {
 }
 
 
-#Colors for printing fmt in tabs -------------------------------------------------------
-
-## 8-BIT FALLBACK PALETTES (RStudio console only) ----
-# The console default is the 24-bit OKLCH palette (below). RStudio's console cannot render 24-bit
-# truecolor, so there we fall back to these curated 256-colour palettes (4 over + 4 neg). Positron /
-# modern terminals get the 24-bit palette.
-#' @keywords internal
-palette_8bit <- list(
-  text_light = c("#33FFFF", "#00CCFF", "#0066FF", "#0000FF",   # over (faint -> strong)
-                 "#FF9933", "#FF6600", "#FF3333", "#FF0000"),  # under
-  text_dark  = c("#CCFF33", "#99FF33", "#33FF33", "#00FF00",
-                 "#FF9933", "#FF6633", "#FF3300", "#FF0000"),
-  bg_light   = c("#F6F3FF", "#E9E3FF", "#DED3FF", "#D2C3FF",
-                 "#fff8e6", "#ffeab1", "#fddb7c", "#ffce2d"),
-  bg_dark    = c("#000066", "#000099", "#0000CC", "#0000FF",
-                 "#660000", "#990000", "#CC0000", "#FF0000")
-)
-
-
-## 24-BIT OKLCH PALETTES ----
-
-# OKLCH Chroma Peaks
-# - Blue            H265 / L45  ; H180 to 265
-# - to Orange Red   H28 / L62   ; H90 to 28   (avoid true red ?)
-# 
-# - Green           H142 / L86  ; H110 to H160
-# - to Violet Red   H325 / L70  ; H285 to H25
-
-### Light palette ----
-#### Text colors ----
-default_text_colors <- c(
-  "#02a5b3", # oklch(0.66 0.1124 205) # better for color blindness
-  "#0891c9", # oklch(0.62 0.13 235)
-  "#0267c7", # oklch(0.52 0.17 255)
-  "#300dfd"  # oklch(0.47 0.30 270)
-)
-default_text_colors_neg <- c( 
-  # more ligthness differences for color blinds
-  "#dca331", # oklch(0.75 0.1400 80)
-  "#de7c01", # oklch(0.68 0.1596 60)
-  "#dd5301", # oklch(0.62 0.1868 42)
-  "#d60103"#,# oklch(0.55 0.2253 29)
-)
-
-#### Background colors ----
-default_background_colors <-  c(
-  "#dffcff", # oklch(0.97 0.0304 205)  # better for color blindness
-  "#d7efff", # oklch(0.94 0.0336 235) # "#d4f0ff", # oklch(0.94 0.0358 230)   # "#E9E3FF", # oklch(0.93 0.038 295)
-  "#cee3ff", # oklch(0.91 0.0439 255) # "#d3e2ff", # oklch(0.91 0.0429 265)   # "#DED3FF", # oklch(0.89 0.060 295)
-  "#bbccff"  # oklch(0.85 0.0733 270) # "#c8c7ff"  # oklch(0.85 0.0771 285)   # "#D2C3FF"# # oklch(0.85 0.084 295)
-)
-default_background_colors_neg <- c(
-  "#fff4e1", # oklch(0.97 0.0271 80)   # "#ffeccd", # oklch(0.95 0.0456 80)    # "#ffe9e5", # oklch(0.95 0.0249 30)  # "#fff8e6", # oklch(0.98 0.025 90)
-  "#ffe6d3", # oklch(0.94 0.0374 60)   # "#ffddc3", # oklch(0.92 0.051 60)     # "#ffdad3", # oklch(0.92 0.0461 30)  # "#ffeab1", # oklch(0.94 0.076 90)
-  "#ffd7c8", # oklch(0.91 0.0488 42)   # "#ffcebc", # oklch(0.89 0.0608 42)    # "#ffcdc5", # oklch(0.89 0.0575 30)  # "#fddb7c", # oklch(0.90 0.12  90)
-  "#ffbaaf"#,# oklch(0.85 0.082 29)    # "#ffbfb5"#,# oklch(0.86 0.0754 29.01) # "#ffbfb4"#,# oklch(0.86 0.0754 30)  # "#ffce2d"#,# oklch(0.87 0.168 90)
-)
-
-#### Background-legend colors ----
-# A colour legend break-word for the BACKGROUND channel cannot be drawn with a fill in every medium (an
-# Excel run / ggpubr label carry a font colour only), and the pale background fills are invisible as text
-# on white. These are the same hues darkened to read as text. Light only (the dark bg palette already
-# reads as text). Produced by dev/color_palette_tools.R::darken_for_legend(); regenerate there.
-default_bg_legend_colors <- c(
-  "#67A1A7", # oklch(0.67 0.0611 204)  <- #dffcff
-  "#6492B0", # oklch(0.64 0.0674 238)  <- #d7efff
-  "#5E85B8", # oklch(0.61 0.0896 255)  <- #cee3ff
-  "#5169C7"  # oklch(0.55 0.1481 270)  <- #bbccff
-)
-default_bg_legend_colors_neg <- c(
-  "#A7936F", # oklch(0.67 0.0553 82)   <- #fff4e1
-  "#AE815E", # oklch(0.64 0.0741 59)   <- #ffe6d3
-  "#B56E53", # oklch(0.61 0.0989 41)   <- #ffd7c8
-  "#BE4034"  # oklch(0.55 0.1639 29)   <- #ffbaaf
-)
-
-
-### Dark palette ----
-#### Dark text colors ----
-default_dark_text_colors <- c(
-  "#028282", # oklch(0.55 0.0934 195) # better for color blindness
-  "#0286b1", # oklch(0.58 0.1151 230)
-  "#4687d8", # oklch(0.62 0.1400 255)
-  "#6987ff"#,# oklch(0.66 0.1797 270)
-)
-default_dark_text_colors_neg <- c(
-  # more ligthness differences for color blinds
-  "#867002", # oklch(0.55 0.1124 95)
-  "#b87501", # oklch(0.62 0.1341 70)
-  "#ec6f02", # oklch(0.68 0.1792 50)
-  "#ff626b"# # oklch(0.70 0.1906 20)
-)
-
-
-#### Dark background colors ----
-default_dark_background_colors <-  c(
-  "#002828", # oklch(0.25 0.0423 195)   # "#001b1b", # oklch(0.20 0.0336 195)  # better for color blindness
-  "#012d3f", # oklch(0.28 0.0553 230)   # "#002537", # oklch(0.25 0.0526 235)
-  "#122e5d", # oklch(0.31 0.09   260)   # "#132d5c", # oklch(0.30 0.0900 261)
-  "#202e7a"#,# oklch(0.34 0.13   270)   # "#17226d"#,# oklch(0.30 0.1300 270)
-)
-default_dark_background_colors_neg <- c(
-  "#292100", # oklch(0.25 0.051  95)   # "#1c1600", # oklch(0.20 0.0407 95) # "#211a00", # oklch(0.22 0.045 95) # "#1f1400", # oklch(0.2 0.0412 81.48)   # "#fff4e1", # oklch(0.97 0.0271 80) 
-  "#3b2300", # oklch(0.28 0.0602 70)   # "#321c00", # oklch(0.25 0.0537 70) # "#321c00", # oklch(0.25 0.0537 70) # "#2f1d0e", # oklch(0.25 0.0374 59.56)   # "#ffe6d3", # oklch(0.94 0.0374 60) 
-  "#4f2100", # oklch(0.31 0.0814 50)   # "#4c1f00", # oklch(0.30 0.0792 50) # "#441b00", # oklch(0.28 0.0738 50) # "#511900", # oklch(0.3 0.0906 41.62)   # "#ffd7c8", # oklch(0.91 0.0488 42) 
-  "#720119"# # oklch(0.35 0.1401 20)   # "#6b141f"# # oklch(0.35 0.1200 20) # "#6b141f"# # oklch(0.35 0.12 19.39) # "#6c1610"#,# oklch(0.35 0.12 29)   # "#ffbaaf"#,# oklch(0.85 0.082 29)  
-)
-
-#' @keywords internal
-tabxplor_palette_env <- new.env(parent = emptyenv())
-
-# THE black-and-white publication palette (`theme = "print"`).
-# It CANNOT be derived from the colour palettes: desaturating them collapses both direction ramps to the
-# same greyscale. DESIGN: CURATED and composed independently of `e$base`, so set_color_palette() provably
-# cannot alter print output (its validator could not check the L*-separation/contrast this relies on). A
-# user who wants other greys writes CSS after tab_css().
-#' @keywords internal
-default_print_palette <- function() {
-  list(
-    # The MAGNITUDE ladder, three rungs over four break slots: #333333, then #000000, then #000000 with
-    # the face's bold (slots 3 and 4 share it, so the legend collapses their two thresholds into one).
-    # The SAME ramp on both sides -- a magnitude knows no direction; direction is the face
-    # (tx_palette_faces). NOT NA: fmt_col_ann's `font` falls back to grey where text_hex is NA, which
-    # would grey every coloured cell.
-    text_colors     = c("#555555", "#000000", "#000000", "#000000"),
-    text_colors_neg = c("#555555", "#000000", "#000000", "#000000"),
-    # ONE ordered grey ramp, the SAME on both sides: greyscale cannot diverge, so the fill carries
-    # MAGNITUDE only and direction is read off the cell's bold/italic.
-    background_colors     = c("#F5F5F5", "#E4E4E4", "#D0D0D0", "#B8B8B8"),
-    background_colors_neg = c("#F5F5F5", "#E4E4E4", "#D0D0D0", "#B8B8B8"),
-    # the FONT stand-in where a fill is impossible (an Excel run, a ggpubr label); a DARK ramp, since the
-    # fill ramp is invisible as text on white.
-    bg_legend_colors     = c("#767676", "#595959", "#3F3F3F", "#1A1A1A"),
-    bg_legend_colors_neg = c("#767676", "#595959", "#3F3F3F", "#1A1A1A")
-  )
-}
-
-# THE face fact table: the 8 slot renderings of each (family, theme) in the TYPOGRAPHIC vocabulary
-# (bold/italic/underline), so a backend reads the face rather than deriving "bold" from "has a colour hex"
-# (which collapses in the all-black print palette). `semantic`: emit the face as MARKUP (<b>/<i>/<u>),
-# not only CSS -- TRUE for print, whose destinations (GitHub markdown, HTML->Word) carry tags, not styles.
-#' @keywords internal
-tx_palette_faces <- function() {
-  none  <- list(bold = rep(FALSE, 8L), italic = rep(FALSE, 8L), underline = rep(FALSE, 8L),
-                semantic = FALSE)
-  bold8 <- list(bold = rep(TRUE,  8L), italic = rep(FALSE, 8L), underline = rep(FALSE, 8L),
-                semantic = FALSE)
-  list(
-    text_light = bold8, text_dark = bold8, bg_light = none, bg_dark = none,
-    bg_legend_light = none, bg_legend_dark = none,
-    # THE two axes, split: DIRECTION is the face -- over is UNDERLINED, under is ITALIC and never
-    # underlined -- and MAGNITUDE is the ink ramp above, whose top rung is bold. Bold is the loudest
-    # signal a page has, so it marks the strongest deviation rather than a mere direction; italic is the
-    # quietest, which is why it never has to compete with it. Slots 3 and 4 share a rendering ON PURPOSE
-    # (the ladder is 3 rungs, the breaks are 4): the legend drops the repeated break-word to match.
-    text_print = list(bold      = c(FALSE, FALSE, TRUE,  TRUE,  FALSE, FALSE, TRUE,  TRUE ),
-                      italic    = c(FALSE, FALSE, FALSE, FALSE, TRUE,  TRUE,  TRUE,  TRUE ),
-                      underline = c(TRUE,  TRUE,  TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE),
-                      semantic  = TRUE),
-    bg_print = none, bg_legend_print = none
-  )
-}
-
-#' @keywords internal
-default_palette_base <- function() {
-  list(
-    text_colors                = default_text_colors,
-    text_colors_neg            = default_text_colors_neg,
-    background_colors          = default_background_colors,
-    background_colors_neg      = default_background_colors_neg,
-    dark_text_colors           = default_dark_text_colors,
-    dark_text_colors_neg       = default_dark_text_colors_neg,
-    dark_background_colors     = default_dark_background_colors,
-    dark_background_colors_neg = default_dark_background_colors_neg,
-    bg_legend_colors           = default_bg_legend_colors,
-    bg_legend_colors_neg       = default_bg_legend_colors_neg
-  )
-}
-
-#' @keywords internal
-build_palettes <- function() {
-  e <- tabxplor_palette_env
-  if (is.null(e$base)) e$base <- default_palette_base()
-  b <- e$base
-  p <- default_print_palette()
-  e$hex <- list(
-    text_light = c(b$text_colors,            b$text_colors_neg),
-    text_dark  = c(b$dark_text_colors,       b$dark_text_colors_neg),
-    bg_light   = c(b$background_colors,       b$background_colors_neg),
-    bg_dark    = c(b$dark_background_colors,  b$dark_background_colors_neg),
-    bg_legend_light = c(b$bg_legend_colors,        b$bg_legend_colors_neg),
-    bg_legend_dark  = c(b$dark_background_colors,  b$dark_background_colors_neg),
-    # the print palette reads from its OWN literal, never from `b` -- that is what makes set_color_palette()
-    # unable to touch print output.
-    text_print      = c(p$text_colors,       p$text_colors_neg),
-    bg_print        = c(p$background_colors, p$background_colors_neg),
-    bg_legend_print = c(p$bg_legend_colors,  p$bg_legend_colors_neg)
-  )
-  e$face <- tx_palette_faces()
-  bit8 <- isTRUE(Sys.getenv("RSTUDIO") == "1")
-  ncol <- if (bit8) 256L else cli::num_ansi_colors()
-  mk <- function(key, is_bg) {
-    # palette_8bit has no print key -- without the is.null guard the RStudio console would build an EMPTY
-    # style list and every slot lookup would abort ("subscript out of bounds").
-    src <- if (bit8 && !is.null(palette_8bit[[key]])) palette_8bit[[key]] else e$hex[[key]]
-    purrr::map(src, ~ cli::make_ansi_style(., bg = is_bg, colors = ncol))
-  }
-  e$ansi <- list(
-    text_light = mk("text_light", FALSE), text_dark = mk("text_dark", FALSE),
-    bg_light   = mk("bg_light",   TRUE),  bg_dark   = mk("bg_dark",   TRUE),
-    # Built so get_color_style("crayon", theme = "print") cannot error (the console never selects print).
-    # The FACE is deliberately NOT baked here: the console applies bold separately via
-    # options(tabxplor.console_bold), so baking it would double-apply.
-    text_print = mk("text_print", FALSE), bg_print  = mk("bg_print",  TRUE)
-  )
-  invisible()
-}
+# The colour / chrome / typographic PALETTES all live in R/tab-palettes.R -- every literal a slot,
+# a cell or a table's chrome is drawn with, and the assembly that keys them by (family, theme).
+# What stays here is the user-facing SURFACE that reads and writes them.
 
 #' Colours: palettes, styles and breaks
 #' @description
@@ -2876,9 +2661,10 @@ build_palettes <- function() {
 #' told). Detection is best-effort and resolved ONCE: call again after changing your editor's theme.
 #' (This is the console only --- \code{\link{tab_css}} / \code{\link{tab_html}} take their own
 #' \code{theme = "auto"}, which follows the reader's browser.) In \code{get_color_style()}:
-#' \code{"light"}, \code{"dark"} or \code{"print"} (the black-and-white publication palette); the
-#' export theme \code{"auto"} resolves to \code{"light"} there, a palette being always one definite
-#' thing. Both default to the current setting.
+#' \code{"light"}, \code{"dark"} or one of the black-and-white publication palettes
+#' (\code{"print_minimalistic"}, \code{"print_emphasis"}, \code{"print_marks"}); \code{"auto"}
+#' resolves to \code{"light"} there, a palette being always one definite thing. Both default to the
+#' current setting.
 #' @return Sets the internal color palettes (invisibly) and the option
 #' \code{"tabxplor.color_style_theme"}.
 #' @export
@@ -2972,7 +2758,7 @@ set_color_style <- function(type = c("text", "bg"), theme = NULL,
 #' functions (the historical value \code{"crayon"}, now built with \pkg{cli}). Set to
 #' \code{"color_code"} to return html color codes, or \code{"face"} to return the palette's
 #' TYPOGRAPHY -- a list \code{bold} / \code{italic} / \code{underline} of 8 logicals each (plus a
-#' \code{semantic} flag), which is how \code{theme = "print"} says "over-represented cells are bold,
+#' \code{semantic} flag), which is how a publication palette says "over-represented cells are bold,
 #' under-represented ones italic". The colour palettes report bold on every text slot and nothing on
 #' the background ones, i.e. exactly how they have always been drawn.
 #' @param type Which palette, or which half of a break scale --- the word means one thing per

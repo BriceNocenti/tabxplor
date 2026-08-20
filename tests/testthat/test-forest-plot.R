@@ -51,7 +51,7 @@ test_that("every table shape draws one ggplot", {
   # and the options, on one of them
   t <- shapes$xt_diff
   for (a in list(list(guide = "bands"), list(facet = FALSE), list(color = FALSE),
-                 list(labels = "estimate"), list(theme = "print"), list(theme = "dark"),
+                 list(labels = "estimate"), list(theme = "print_minimalistic"), list(theme = "dark"),
                  list(totals = TRUE), list(what = "level"), list(what = "effect")))
     expect_no_error(fp_build(do.call(forest_plot, c(list(t), a))))
 })

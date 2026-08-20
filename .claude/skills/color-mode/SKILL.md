@@ -139,26 +139,41 @@ on the background channel (`color = c("diff", "ratio")`, default `pct_ratio = li
   `type = "all"` gives the signed engine breaks. Per-table override: `tab(color_breaks = list(...))`
   stores a table attribute; render entry points install it transiently via
   `push_color_breaks()`/`pop_color_breaks()` (fallback to global if absent/malformed).
-- **Palette** — 8 OKLCH base palettes (`default_*_colors`, light/dark × text/bg × pos/neg, 4 hex each),
-  wired into `tabxplor_palette_env` by `build_palettes()`; customise with `set_color_palette()`.
+- **Palette** — EVERY palette literal lives in `R/tab-palettes.R`: the 8 OKLCH base ramps
+  (`default_*_colors`, light/dark × text/bg × pos/neg, 4 hex each, each hex carrying the `oklch(...)`
+  that chose it — keep those), the 8-bit RStudio fallback, the chrome (`tx_chrome_hex()`), the three
+  publication grids, and the store. Wired into `tabxplor_palette_env` by `build_palettes()`; customise
+  the colour ramps with `set_color_palette()`.
   `get_color_style(mode, type, theme)` returns an 8-element slot vector (4 over + 4 under) — crayon
   functions for the console (24-bit, or the curated 8-bit `palette_8bit` in the RStudio console),
   hex for exports. NO `html_24_bit` / green_red/blue_red variants / `custom_palette` anymore.
-- **A palette is hex AND face** (Phase 18z11). `mode = "face"` returns `tx_palette_faces()`'s row for
-  that (family, theme): `list(bold, italic, underline, semantic)`, 8 logicals each. The colour palettes
-  answer bold-on-all-8-text-slots / nothing-on-bg — today's rendering, as data — which is what makes
-  `tx_css_render()`'s static `.p1..m4{font-weight:bold}` rule THE CSS baseline that `tx_face_decls()`
-  diffs each theme against. Never re-derive "is this bold" from "does this have a hex": five sites used
-  to, and all five broke on the third theme **`"print"`** (alias `"bw"`, `tx_resolve_theme()`), the
-  black-and-white publication palette — every text slot `#000000`, over = bold / under = italic /
-  2nd level underlined, one grey fill ramp identical on both sides (greyscale cannot diverge, so the
-  fill carries magnitude and the typography carries direction). Consumers read the face through
-  `fmt_channel_codes()`'s `text_face`/`bg_face` -> `ann$face_bold`/`_italic`/`_underline`.
-  `semantic = TRUE` also emits it as `<b>`/`<i>`/`<u>` markup (GitHub and a Word paste keep tags, not
-  classes). Adding a theme = one `default_*_palette()` literal + one `tx_palette_faces()` row + one
-  `tx_chrome_hex()` arm + `tx_resolve_theme()`; the ENGINE must stay theme-blind (no `pmin` on slots --
-  a palette expresses a lower resolution by REPEATING a face, and `legend_break_tokens()` collapses
-  break-words that render identically). See `dev/black_and_white_publication_palette.md`.
+- **A palette is hex AND face.** `mode = "face"` returns the record for that (family, theme):
+  `list(bold, italic, underline, marks, semantic)` — 8 slots each, `underline` being the three-value
+  OOXML vocabulary (`""` / `"single"` / `"double"`) and `marks` the run of glyphs a cell wears after
+  its value. Its shape is written once, in `face_record()` (`R/tab-palettes.R`). The colour
+  palettes answer bold-on-all-8-text-slots / nothing-on-bg — today's rendering, as data — which is what
+  makes `tx_css_render()`'s static `.p1..m4{font-weight:bold}` rule THE CSS baseline that
+  `tx_face_decls()` diffs each palette against. Never re-derive "is this bold" from "does this have a
+  hex": five sites used to, and all five broke on the black-and-white palettes, whose every text slot
+  is near-black. Consumers read the face through `fmt_channel_codes()`'s `text_face`/`bg_face` ->
+  `ann$face_bold`/`_italic`/`_underline`; `semantic = TRUE` also emits it as `<b>`/`<i>`/`<u>` markup
+  (GitHub and a Word paste keep tags, not classes). The ENGINE must stay theme-blind (no `pmin` on
+  slots — a palette expresses a lower resolution by REPEATING a rendering, and
+  `legend_break_tokens()` collapses break-words that render identically).
+- **The three publication palettes** (`"print_minimalistic"` — alias `"bw"` — `"print_emphasis"`,
+  `"print_marks"`) are `PRINT_PALETTES` in `R/tab-palettes.R`: ONE `tribble` per palette, a row per break slot
+  carrying its ink, bold, italic, underline and mark rank, plus the palette's own greyed-out colour
+  and the word its legend uses. **Adding one is one row there** — `build_palettes()`,
+  `tx_chrome_hex()`, `tx_resolve_theme()` and the CSS all read the table. They share one grey fill
+  ramp (greyscale cannot diverge, so a fill carries magnitude only). A palette that declares marks
+  suppresses the significance stars, derived in `fmt_cell_suffix()`: one place after the value, one
+  meaning. **`theme = "print_ready"` is not a palette but a CHOICE of one** (`PRINT_READY`), made per
+  table at the export boundary: `tx_theme_for_table()` reads `tab_is_reg()` — the declared table
+  identity — and gives a cross-table the marks, a regression the emphasis ladder. Resolved inside
+  `resolve_export_opts(tabs =)`, the one place a theme becomes concrete; a caller with no table (the
+  console, a standalone `tab_css()`) takes `PRINT_READY[["fallback"]]`, and `tx_palette_theme()`
+  applies that too, so no palette lookup can ever be handed a key that does not exist.
+  See `dev/black_and_white_publication_palette.md` for the measurement they answer.
 
 ## Arg parsing (R/tab.R)
 
