@@ -271,21 +271,50 @@ pivot --- which is why the same argument means the opposite thing here.
 keep the order of its levels, so none of them can be singled out.
 }}
 
-\item{ref}{Optional named vector \code{c(var = "baseline level")} --- the same grammar as \code{\link[=tab]{tab()}}'s
-\code{ref} --- choosing the treatment-contrast reference level of one or more factor \strong{predictors}
-(every other level's effect is measured against it), and of \code{tab_vars} (which group
-\code{color = "between_groups"} compares to). Other contrast codings can be applied by passing a
-formula in \code{outcome} with the terms already coded. For the level of the \strong{outcome}, see
-\code{outcome_level}: \code{ref} names the level you compare AGAINST, \code{outcome_level} the one you MODEL.}
+\item{ref}{The reference every effect is measured \strong{from} --- one argument, one meaning per kind
+of predictor.
+\itemize{
+\item a \strong{factor}: the level the others are compared against (its \verb{Model_*} cell reads \code{1}
+or \code{0}, and its row is bold). A level name, or \code{"first"} (the default) / \code{"last"}.
+\item a \strong{continuous} predictor: the value it is \strong{anchored} at --- a number, or \code{"mean"}
+(the default), \code{"median"}, \code{"min"}, \code{"max"}.
+}
+A continuous predictor's row says where its anchor sits, beside the unit its effect is per:
+\verb{per SD/13.5 (at mean/42.4)}, or \verb{(at min/0)}, or \verb{(at 40)} for a value you gave yourself.
+
+Write it as \code{ref = c(race = "Black", age = 40)}. A value given \strong{without a variable name} is
+the default for every predictor it can apply to, so \code{ref = "median"} anchors every continuous
+predictor and \code{ref = c("median", "last", race = "Black")} sets both defaults at once (see
+\code{multiplier} for the same grammar).
+
+Anchoring a continuous predictor \strong{does not change its own effect} --- a slope is the same
+wherever you start reading it from --- but it does change the \strong{Constant} row, and every term
+the predictor interacts with. The default anchor is the mean because zero is usually outside
+the data: nobody is 0 years old. If a predictor's zero is meaningful (\code{tvhours}, a count), say
+\code{ref = c(tvhours = 0)}.
+
+The anchor is measured \strong{once}, on the complete cases of the predictors, so one predictor keeps
+one reference across outcomes, compared models and \code{tab_vars} groups. \code{shape} applies first, so
+\code{ref} on a \code{"log"}-shaped predictor anchors the log (use a keyword there, or write
+\code{ref = c(age = log(30))}), and a \code{"quartiles"}-shaped one is a factor, taking a level name. A
+\code{poly()} / \code{I()} term written by hand in a \code{formula} is never anchored.
+
+For the level of the \strong{outcome}, see \code{outcome_level}: \code{ref} names the level you compare
+AGAINST, \code{outcome_level} the one you MODEL.}
 
 \item{multiplier}{How a \strong{continuous} predictor's effect is scaled --- the unit its row reports.
 One unit of a continuous variable is rarely a readable amount (a one-year change in \code{age} barely
 moves the odds, so its odds ratio sits inside the first colour break and the row reads as "no
-effect"), so the default is \strong{one standard deviation}. Give either a \strong{single value}, applied
-to every continuous predictor, or a \strong{named vector} overriding chosen ones: \code{"sd"} (the
-default), \code{"2sd"} (roughly bottom to top of the distribution), or a number of units (\code{10} = per
-decade of age). \code{multiplier = 1} restores the per-one-unit reading. The row's level names the
-unit it used, e.g. \verb{per SD/13.5} --- the variable itself is named in the \code{var} column beside it.
+effect"), so the default is \strong{one standard deviation}. Values: \code{"sd"} (the default), \code{"2sd"}
+(roughly bottom to top of the distribution), or a number of units (\code{10} = per decade of age);
+\code{multiplier = 1} restores the per-one-unit reading. The row's level states both facts that place
+it --- the unit, and the \code{ref} anchor the Constant row sits at: \verb{per SD/13.5 (at mean/42.4)}.
+The variable itself is named in the \code{var} column beside it.
+
+\code{multiplier}, \code{shape} and \code{ref} share one grammar: a \strong{value on its own} applies to every
+continuous predictor, a \strong{named} one overrides that variable, and \verb{default =} spells the first
+out --- so \code{multiplier = c("2sd", age = 10)} reads "per two standard deviations, except \code{age},
+per decade".
 
 Everything scales together --- the estimate, its interval, the crude \verb{Obs_*} companion and the
 model-versus-observed comparison; the p-value is unchanged. \strong{Because the default is not 1, a
@@ -299,7 +328,8 @@ reading --- pass it as a factor instead.}
 \item{shape}{How a \strong{continuous} predictor enters the model, when one straight line is not
 enough. The \code{Linearity} footer row and the little curve drawn in the predictor's \code{n} cell tell
 you \emph{whether} a line is enough; this argument is how you fix it without leaving the framework.
-A \strong{named vector} over continuous predictors --- everything it does not name stays linear:
+Same grammar as \code{multiplier} and \code{ref} --- \code{shape = "quintiles"} cuts every continuous
+predictor, \code{shape = c(age = "quadratic")} only that one, and anything unnamed stays linear:
 \describe{
 \item{\code{"linear"}}{one slope (the default).}
 \item{\code{"quintiles"} / \code{"quartiles"} / an integer \code{k}}{cut into \code{k} quantile groups, so the
@@ -381,12 +411,16 @@ difference under \code{"base_est_mdiff"} --- the aside would repeat the number a
 A cell that cannot fill an aside leaves it \strong{blank but padded}, so the effects still line up;
 an aside no cell of the column can fill is dropped, padding and all.
 
-The \strong{Constant} row is the model's intercept, and it is the one row whose profile is not the
-reference profile the rest of the table uses: every factor sits at its reference level, but
-every numeric predictor sits at \strong{zero} --- which, for an age or an income, is outside the
-data. Read it as the baseline of the fitted equation, not as a population. It is empty under
-\code{effect = "marginal"} and \code{"at_reference"} (a sample-averaged table has no intercept to show)
-and for an ordinal outcome (a cumulative logit has thresholds, not one intercept).
+The \strong{Constant} row is the baseline the rest of the column is read against, at the very point
+that column's effects are read at: under \code{effect = "coefficient"} the model's intercept ---
+every factor at its reference level and every continuous predictor at its \code{ref} anchor, the
+mean by default; under \code{"at_reference"} the outcome the model predicts at that same profile;
+under \code{"marginal"} the \strong{population average} the sample-averaged effects sit on, which is what
+its label then says. On a multiplicative column it is a baseline \emph{odds} (or risk, or rate), on
+an additive one a baseline probability or mean --- the quantity the effects beside it move.
+It carries its confidence interval but \strong{no star} except under \code{"coefficient"}, where the star
+is the fit's own test of the intercept: a predicted 48.7 \% is not "different from zero". An
+ordinal outcome leaves it empty (a cumulative logit has thresholds, not one intercept).
 
 Or write a \code{{}} template: \code{"{est} (obs {obs})"} prints each adjusted effect next to the
 unadjusted one, \code{"{est} ({gap})"} next to how far adjustment moved it.

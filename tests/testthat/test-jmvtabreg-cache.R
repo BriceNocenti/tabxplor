@@ -171,6 +171,23 @@ test_that("a repeat build and a reference change reuse the fit (no refit)", {
   expect_gte(b6$hits, 1L)
 })
 
+test_that("a NUMERIC reference is a miss, a factor one stays a hit (Phase 22b-viii)", {
+  # a factor reference is a REPARAMETRIZATION of one canonical fit; a numeric one is an ANCHOR, i.e.
+  # part of the prepared data -- so jmvreg_fit_key()'s per-column fingerprint misses by construction.
+  gss <- gss_reg()
+  b1  <- jmvtab_reg_build(gss, reg_opts(predictors = c("race", "age")), NULL)
+  b2  <- jmvtab_reg_build(gss, reg_opts(predictors = c("race", "age"),
+                                        ref = c(race = "Black")), b1$store)
+  expect_gte(b2$hits, 1L)
+  b3  <- jmvtab_reg_build(gss, reg_opts(predictors = c("race", "age"),
+                                        ref = c(age = "40")), b2$store)
+  expect_equal(b3$hits, 0L)
+  # and the anchor really landed: its Constant row is the one a direct call gives
+  direct <- quiet(tab_reg(gss, "married", c("race", "age"), family = "binomial",
+                          ref = c(age = 40), cleannames = TRUE))
+  expect_equal(reg_field(b3$tabs, "or")[[1]], reg_field(direct, "or")[[1]], tolerance = 1e-8)
+})
+
 test_that("a predictor / family change refits (a miss)", {
   gss <- gss_reg()
   b1  <- jmvtab_reg_build(gss, reg_opts(predictors = c("race", "age")), NULL)

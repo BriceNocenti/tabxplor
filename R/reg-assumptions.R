@@ -30,7 +30,11 @@
 # THE CURE IS PART OF THE CHECK. `shape =` is how a user fixes a non-linearity without leaving the
 # framework, and its design rule keeps it small: a shape either RECODES THE COLUMN or ADDS ONE TERM,
 # nothing else. A quantile-cut predictor genuinely IS a factor, so it inherits the saturated crude
-# twin, the per-level counts, colours and gap tests for free.
+# twin, the per-level counts, colours and gap tests for free. It reads the package's shared
+# per-predictor grammar (reg_per_predictor(), R/reg-resolve.R), so `shape = "quintiles"` cuts every
+# continuous predictor and a named value overrides one. ⚠ ORDER: a shape recodes the column FIRST --
+# it defines what the model's variable is -- and `ref`'s anchor then applies to the result, which is
+# why the quadratic term below takes its square around 0 rather than measuring a centre of its own.
 #
 # WARNING -- i18n. `noun` and the `types` values (the instrument) are BARE MSGIDS and are never
 # gettext()'d in the list: a top-level list evaluates ONCE at load, which would freeze the msgid at
@@ -398,6 +402,9 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
   # check asks the right new question; a quantile-cut predictor is a factor, with no form to mis-specify.)
   num <- setdiff(reg_numeric_preds(data, sp$predictors), names(shared$shape_terms))
   if (length(num) == 0L) return(NULL)
+  wtc <- shared$design_spec$wt
+  wv  <- if (!is.null(wtc) && is.character(wtc) && length(wtc) == 1L && wtc %in% names(data))
+           data[[wtc]] else NULL
   weighted <- isTRUE(shared$weighted)
   use_f    <- reg_fam_disp_estimated(sp$fit_family)
   use_wald <- reg_fam_svy_fitted(sp$fit_family, weighted)
@@ -405,7 +412,7 @@ reg_check_linearity_rows <- function(data, sp, shared, fit_first_col_i, base_fit
   types    <- test_row_types("linearity")
 
   purrr::flatten(purrr::map(num, function(v) {
-    tm <- reg_shape_term(data[[v]], v, "quadratic")
+    tm <- reg_shape_term(data[[v]], v, "quadratic", w = wv)
     if (is.null(tm)) return(NULL)
     # a diagnostic refit must be SILENT: reg_fit() would otherwise repeat, once per numeric predictor,
     # every message the real fit already gave. Its only output is a p-value.
@@ -510,77 +517,76 @@ reg_shape_k <- function(value) {
     k else NA_integer_
 }
 
-# The extra model TERM a numeric predictor's non-linear SHAPE emits, with its centre and scale frozen
-# as LITERALS in the formula string -- frozen for the same reason the multiplier's SD is: `scale()`
-# inside a formula re-scales on new data. Returns NULL when the column cannot supply a finite scale.
+# The extra model TERM a numeric predictor's non-linear SHAPE emits, its scale frozen as a LITERAL
+# in the formula string -- frozen for the same reason the multiplier's SD is: `scale()` inside a
+# formula re-scales on new data. Returns NULL when the column cannot supply a finite scale.
 #
 # ONE builder, two consumers: the Linearity check refits with this term, and `shape = "quadratic"`
-# emits the same one, so the check and its cure are the same object. Centring is not cosmetic:
-# uncentred, the pair's own VIF is 38.7 against 1.2 centred, so Collinearity would flag every curved
-# model as broken.
+# emits the same one, so the check and its cure are the same object.
 #
-# WHY THE LINEAR TERM STAYS RAW: eta = a*x + b*((x-m)/s)^2 and eta = A*z + B*z^2 are the same model
-# with A = a*s, B = b -- so with the default `multiplier = "sd"` the printed linear row ALREADY is
-# the per-SD slope of the centred parametrisation.
+# ⚠ THE COLUMN IS ALREADY CENTRED WHEN THIS RUNS: `ref` anchors every continuous predictor at the
+# argument boundary (R/reg-resolve.R, block Y), so the square is taken around the DECLARED anchor
+# and needs no centre of its own. A second, self-measured centre would put the curve at the mean
+# while the linear row sits at the anchor -- two answers to one question. Centring is not cosmetic:
+# uncentred, the pair's own VIF is 38.7 against 1.2 centred.
+#
+# WHY THE LINEAR TERM STAYS RAW: eta = a*x + b*(x/s)^2 and eta = A*z + B*z^2 are the same model with
+# A = a*s, B = b -- so with the default `multiplier = "sd"` the printed linear row ALREADY is the
+# per-SD slope of the centred parametrisation.
 #' @keywords internal
 reg_shape_term <- function(x, var, shape = "quadratic", w = NULL, digits = 8L) {
   if (!identical(shape, "quadratic")) return(NULL)
-  m <- reg_weighted_mean(x, w)
   s <- reg_predictor_sd(x, w)
-  if (!is.finite(m) || !is.finite(s) || s <= 0) return(NULL)
+  if (!is.finite(s) || s <= 0) return(NULL)
   num <- function(v) format(signif(v, digits), scientific = FALSE)
   # WARNING: return the DEPARSED form, not the pasted one. A model-matrix column is named by the
   # formula's own term label, which R produces by deparsing -- and deparse drops the spaces around `/`
   # that a hand-pasted string keeps. Without this the skeleton's `term` misses the fit's by two
   # characters and the curvature row renders EMPTY (measured).
-  s2l <- tryCatch(str2lang(paste0("I(((`", var, "` - ", num(m), ") / ", num(s), ")^2)")),
+  s2l <- tryCatch(str2lang(paste0("I((`", var, "` / ", num(s), ")^2)")),
                   error = function(e) NULL)
   if (is.null(s2l)) return(NULL)
   paste(deparse(s2l, width.cutoff = 500L), collapse = "")
 }
 
-# Parse the whole `shape` argument -> a named list of list(kind, k). Validated against the data, so
-# every refusal names the variable and the value the user wrote.
+# One value -> the shape spec it names, or NULL for the default. The whole vocabulary is here: a
+# quantile count, or one of REG_SHAPES.
+#' @keywords internal
+reg_shape_value <- function(val, var) {
+  kind <- if (is.character(val)) trimws(tolower(val)) else val
+  k    <- reg_shape_k(kind)
+  if (!is.na(k)) return(list(kind = "quantiles", k = k))
+  if (!is.character(kind) || length(kind) != 1L || !kind %in% REG_SHAPES)
+    cli::cli_abort(c(
+      "{.arg shape} for {.val {var}} must be one of {.or {.val {REG_SHAPES}}}, or a number of groups.",
+      "x" = "Got {.val {as.character(val)[[1]]}}.",
+      "i" = '{.val quintiles} (or an integer) cuts it into quantile groups -- one estimate each.'),
+      call = NULL)
+  if (identical(kind, "linear")) return(NULL)          # the default, spelled out: nothing to emit
+  list(kind = kind, k = NA_integer_)
+}
+
+# The whole `shape` argument -> a named list of list(kind, k), on the package's shared per-predictor
+# grammar (reg_per_predictor(), R/reg-resolve.R). Validated against the data, so every refusal names
+# the variable and the value the user wrote.
 #' @keywords internal
 reg_resolve_shape <- function(shape, data, predictors) {
   if (is.null(shape) || length(shape) == 0L) return(list())
-  if (is.null(names(shape)) || !all(nzchar(names(shape)))) {
-    cli::cli_abort(c("{.arg shape} must be a NAMED vector over numeric predictors.",
-                     "i" = 'e.g. {.code shape = c(age = "quadratic")}.'))
-  }
-  bad <- setdiff(names(shape), predictors)
-  if (length(bad) > 0L) {
-    cli::cli_abort(c("{.arg shape} names must be predictors of the model.",
-                     "x" = "Not {?a predictor/predictors}: {.val {bad}}."))
-  }
-  out <- list()
-  for (v in names(shape)) {
-    if (reg_is_factor_var(data[[v]])) {
-      cli::cli_abort(c("{.arg shape} applies to continuous predictors only.",
-                       "x" = "{.val {v}} is already {.cls {class(data[[v]])}}."))
-    }
-    val  <- shape[[v]]
-    kind <- if (is.character(val)) trimws(tolower(val)) else val
-    k    <- reg_shape_k(kind)
-    if (!is.na(k)) { out[[v]] <- list(kind = "quantiles", k = k); next }
-    if (!is.character(kind) || length(kind) != 1L || !kind %in% REG_SHAPES) {
-      cli::cli_abort(c(
-        "{.arg shape} for {.val {v}} must be one of {.or {.val {REG_SHAPES}}}, or a number of groups.",
-        "x" = "Got {.val {val}}.",
-        "i" = '{.val quintiles} (or an integer) cuts it into quantile groups -- one estimate each.'))
-    }
-    if (identical(kind, "linear")) next                 # the default, spelled out: nothing to emit
-    out[[v]] <- list(kind = kind, k = NA_integer_)
-  }
-  out
+  preds <- intersect(predictors, names(data))
+  reg_check_continuous_names(shape, data, preds, "shape")
+  vals  <- reg_per_predictor(shape, reg_numeric_preds(data, preds), "shape")
+  purrr::compact(purrr::imap(vals, function(v, nm) reg_shape_value(v, nm)))
 }
 
 # k quantile groups of a continuous column, as an ordinary (unordered) factor. Breaks are WEIGHTED
 # quantiles when the call carries weights (equal-share of the POPULATION, not the sample), with the
 # extremes forced to the observed range so no value falls out.
 #' @keywords internal
-reg_cut_quantiles <- function(x, k, w = NULL, var = "x") {
+reg_cut_quantiles <- function(x, k, w = NULL, var = "x", breaks = NULL) {
   x  <- as.numeric(x)
+  if (!is.null(breaks))
+    return(local({ f <- cut(x, breaks = breaks, include.lowest = TRUE, right = FALSE, dig.lab = 4L)
+                   factor(as.character(f), levels = levels(f)) }))
   br <- rd_wquantile(x, seq(0, 1, length.out = k + 1L), w)
   if (all(is.finite(x[!is.na(x)]))) {
     br[[1L]]      <- min(x, na.rm = TRUE)
@@ -593,11 +599,14 @@ reg_cut_quantiles <- function(x, k, w = NULL, var = "x") {
                      "i" = "Use fewer groups, or pass it as a factor."))
   }
   f <- cut(x, breaks = br, include.lowest = TRUE, right = FALSE, dig.lab = 4L)
-  factor(as.character(f), levels = levels(f))           # unordered: reg_fit de-orders predictors anyway
+  # ⚠ the BREAKS ride out with the factor: reg_prepare_replay() must cut a refit's frame at exactly
+  # the same places, and a weighted quantile of a different frame would not land there.
+  structure(factor(as.character(f), levels = levels(f)), tabxplor_breaks = br)
 }
 
 # Apply every column-recoding shape ONCE, and return the display labels the transformed ones need
-# ("log(age)"). `quadratic` is not a recode -- it emits a term -- so it passes through untouched.
+# ("log(age)") plus the shapes with their quantile BREAKS filled in. `quadratic` is not a recode --
+# it emits a term -- so it passes through untouched.
 #' @keywords internal
 reg_shape_apply <- function(data, shapes, w = NULL) {
   labels <- character(0)
@@ -622,10 +631,13 @@ reg_shape_apply <- function(data, shapes, w = NULL) {
       data[[v]] <- sqrt(x)
       labels[[v]] <- paste0("sqrt(", v, ")")
     } else if (kind == "quantiles") {
-      data[[v]] <- reg_cut_quantiles(x, shapes[[v]]$k, wv, var = v)
+      f <- reg_cut_quantiles(x, shapes[[v]]$k, wv, var = v, breaks = shapes[[v]]$breaks)
+      shapes[[v]]$breaks <- attr(f, "tabxplor_breaks") %||% shapes[[v]]$breaks
+      attr(f, "tabxplor_breaks") <- NULL
+      data[[v]] <- f
     }
   }
-  list(data = data, labels = labels)
+  list(data = data, labels = labels, shapes = shapes)
 }
 
 # The quadratic terms a `shape` asks for, named by variable so the skeleton can key its extra row on

@@ -890,6 +890,21 @@ tab_reg(gss_simple, "married", c("race", "age"), multiplier = c(age = 10))
 
 Tout est mis à l'échelle ensemble — l'estimation, son intervalle, la colonne observée `Obs_*` et la comparaison modèle/observé — et la p-value ne change jamais. Deux points à connaître : comme la valeur par défaut n'est pas 1, le `Model_OR` d'un prédicteur continu ne correspondra **pas** à `exp(coef(glm(...)))` tant que vous ne demandez pas `multiplier = 1` ; et l'écart-type est mesuré une seule fois, sur les cas complets des prédicteurs, de sorte qu'une même variable garde la même unité entre plusieurs variables expliquées, entre modèles comparés et entre groupes de `split_var`.
 
+### La référence à partir de laquelle un effet se lit
+
+`ref` nomme la **référence** — pour un facteur, la modalité à laquelle les autres sont comparées ; pour un prédicteur continu, la valeur à laquelle il est **ancré** :
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age"), ref = c(race = "Black", age = 40))
+```
+
+Les deux moitiés sont une seule idée, et elles partagent une grammaire avec `multiplier` et `shape` : une valeur écrite **sans nom de variable** est la valeur par défaut pour tous les prédicteurs auxquels elle peut s'appliquer, une valeur nommée ne concerne que cette variable. Ainsi `shape = "quintiles"` découpe tous les prédicteurs continus, `multiplier = c("2sd", age = 10)` se lit « par deux écarts-types, sauf `age`, par décennie », et `ref = c("median", "last", race = "Black")` fixe les deux valeurs par défaut d'un coup — la valeur dit elle-même à quel type de prédicteur elle s'adresse (un nombre ou `"mean"` / `"median"` / `"min"` / `"max"` pour un continu, `"first"` / `"last"` pour un facteur).
+
+Ancrer un prédicteur continu **ne change pas son propre effet** : une pente est la même d'où qu'on la lise. La ligne du prédicteur indique où se situe son ancrage, juste à côté de l'unité dans laquelle son effet est rapporté — `per SD/13.5 (at mean/42.4)`, ou `(at min/0)` — de sorte que le profil de la ligne Constant se lit sur le tableau lui-même. Ce que cela change, c'est la ligne **Constant**, et tout terme avec lequel le prédicteur interagit. C'est pourquoi la valeur par défaut est la moyenne et non zéro : personne n'a 0 an, donc l'ordonnée à l'origine d'un ajustement brut ne décrit personne. Lisez la ligne Constant comme la ligne de base dont le reste de la colonne s'écarte — une cote de base sur une colonne de rapports de cotes, une probabilité ou une moyenne de base sur une colonne additive — et son intitulé dit où se situe cette base (`Reference profile`, ou `Population average` avec `effect = "marginal"`). Si le zéro d'un prédicteur a bien un sens, dites-le : `ref = c(tvhours = 0)`.
+
+L'ordre compte à un endroit, et il est fixé plutôt que deviné : `shape` recode d'abord la colonne (c'est elle qui définit *ce qu'est* la variable du modèle), puis l'ancrage s'applique au résultat. Donc `ref` sur un prédicteur en `"log"` ancre le log, et un prédicteur découpé en `"quartiles"` est devenu un facteur et prend un nom de modalité.
+
+
 
 ## Lire le résumé statistique du modèle
 

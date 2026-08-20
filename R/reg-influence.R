@@ -427,6 +427,47 @@ reg_prob_engine <- function(fit) {
   NULL
 }
 
+# reg_gcomp_baseline() -- THE model's own predicted outcome at a profile, with the analytic jacobian
+# its interval needs. It is what the Constant row holds wherever there is no intercept in the tidy to
+# read: `newdata = NULL` averages over the fitted sample (weighted), a one-row frame evaluates at
+# that profile. One producer, both contrasts, single-equation and per-category alike.
+#
+# ⚠ an OFFSET term is refused rather than approximated: model.matrix() emits no column for it, so
+# linkinv(X b) would silently drop it.
+#' @keywords internal
+reg_gcomp_baseline <- function(fit, data, wt = NULL, newdata = NULL) {
+  d  <- newdata %||% data
+  w  <- if (!is.null(newdata) || is.null(wt)) rep(1, nrow(d)) else as.numeric(data[[wt]])
+  if (length(w) != nrow(d) || !all(is.finite(w)) || sum(w) <= 0) return(NULL)
+  sw <- sum(w)
+  if (inherits(fit, "multinom") || inherits(fit, "polr")) {
+    eng <- reg_prob_engine(fit)
+    if (is.null(eng)) return(NULL)
+    X <- tryCatch(eng$mm(d), error = function(e) NULL)
+    P <- if (is.null(X)) NULL else tryCatch(eng$probs(eng$theta, X), error = function(e) NULL)
+    if (is.null(P) || !all(is.finite(P))) return(NULL)
+    K <- length(eng$levels)
+    return(list(levels = eng$levels,
+                est = vapply(seq_len(K), function(j) sum(w * P[, j]) / sw, numeric(1)),
+                G   = lapply(seq_len(K), function(j) eng$dmean(X, P, j, w) / sw)))
+  }
+  tt  <- tryCatch(stats::delete.response(stats::terms(fit)), error = function(e) NULL)
+  fam <- tryCatch(stats::family(fit), error = function(e) NULL)
+  if (is.null(tt) || is.null(fam) || is.null(fam$linkinv) || is.null(fam$mu.eta)) return(NULL)
+  if (length(attr(tt, "offset")) > 0L) return(NULL)
+  b    <- stats::coef(fit)
+  keep <- !is.na(b)
+  X <- tryCatch(stats::model.matrix(tt, d), error = function(e) NULL)
+  if (is.null(X) || ncol(X) != length(b)) return(NULL)
+  X   <- X[, keep, drop = FALSE]
+  eta <- as.vector(X %*% b[keep])
+  mu  <- fam$linkinv(eta)
+  dd  <- fam$mu.eta(eta)
+  if (!all(is.finite(mu)) || !all(is.finite(dd))) return(NULL)
+  list(levels = NA_character_, est = sum(w * mu) / sw,
+       G = list(colSums(w * X * dd) / sw))
+}
+
 # reg_gcomp_cat_maker() -- reg_gcomp_maker()'s twin for a 3+ level outcome: a multinomial / ordinal
 # model shows ONE COLUMN PER CATEGORY, so the closure answers for ALL of them at once from the same
 # two counterfactual probability matrices.

@@ -25,12 +25,17 @@
 #   - `data` IS INSIDE THE BOUNDARY, not lifted out of it. tab()'s arguments are answerable without
 #     the data frame; tab_reg()'s are not -- `family = "auto"` is ANSWERED by the data, `trials =
 #     TRUE` is, `multiplier = "sd"` IS a number measured from it, `shape` recodes it, `ref` relevels
-#     it, and that relevel needs the multinomial outcomes the family stage resolved. A preparation
+#     a factor and SHIFTS a continuous predictor to its anchor, and that relevel needs the
+#     multinomial outcomes the family stage resolved. A preparation
 #     the caller invoked separately would move the ordering into the caller: a second place to get
 #     it wrong. The prepared `data` and `design_obj` are declared FIELDS of the returned record.
 #   - S0 RUNS IN tab_reg(), AND SELECTS AGAINST svy_select_frame(), never svy_unwrap_data(): the
 #     unwrap informs, adds the reserved columns and computes degf, so S2 must stay its ONE caller.
 #     An empty selection becomes NULL, not character(0) -- every guard below tests is.null().
+#   - ONE PER-PREDICTOR GRAMMAR, three arguments. `multiplier` / `shape` / `ref` share
+#     reg_per_predictor() (below): an unnamed value -- or one named `default` -- is the fallback, a
+#     named one overrides that variable. Each argument keeps its own VOCABULARY; only the parsing is
+#     shared, which is why this is a resolver and not a fourth fact table.
 #   - There is deliberately no REG_ARG_VALUES table. TAB_ARG_VALUES exists because five crosstab
 #     producers had each written one boundary and drifted; tab_reg() is one producer, its
 #     vocabularies are already declared once each (REG_USER_FAMILIES / REG_EFFECTS_VALUES /
@@ -113,6 +118,74 @@ reg_select_one <- function(quo, data, arg) {
     cli::cli_abort(c("{.arg {arg}} must select a single column.",
                      "x" = "Got {.val {v}}."), call = NULL)
   v
+}
+
+
+# === The per-predictor grammar ===================================================================
+# ONE grammar for `multiplier`, `shape` and `ref` -- the predictor-axis sibling of reg_per_outcome()
+# (R/reg-estimand.R), and, like it, the GRAMMAR only: each argument keeps its own vocabulary.
+#
+#   an UNNAMED element -- or one named `default` -- is a FALLBACK, and its VALUE names the kind of
+#     variable it applies to (a number or an anchor keyword -> the continuous predictors, a level
+#     keyword -> the factors);
+#   a NAMED element overrides that one variable, and there the VARIABLE's kind picks the vocabulary;
+#   two fallbacks of one kind, an unknown name, or a fallback matching no vocabulary -> an abort.
+#
+# `also` (tab_vars, the multinomial pivot) is addressable BY NAME ONLY: a fallback meant for the
+# predictors must never silently move a grouping variable's reference.
+#' @keywords internal
+#' @noRd
+reg_per_predictor <- function(x, eligible, arg, kinds = NULL, fallback_kind = NULL,
+                              also = character(0), vocab = NULL, example = NULL) {
+  if (is.null(x) || length(x) == 0L) return(list())
+  nm <- names(x) %||% rep("", length(x))
+  nm[is.na(nm)] <- ""
+  is_fb <- !nzchar(nm) | nm == "default"
+  out   <- list()
+
+  # the fallbacks FIRST, so a named override always wins whatever the writing order was.
+  seen <- character(0)
+  for (i in which(is_fb)) {
+    v <- x[[i]]
+    k <- if (is.null(fallback_kind)) "" else fallback_kind(v)
+    if (is.na(k))
+      cli::cli_abort(c(
+        "{.arg {arg}} cannot use {.val {as.character(v)[[1]]}} as a default for every variable.",
+        stats::setNames(c(vocab, if (!is.null(example))
+          paste0("A value for one variable must name it: {.code ", example, "}.")),
+          rep("i", length(vocab) + !is.null(example)))), call = NULL)
+    if (k %in% seen)
+      cli::cli_abort(c("{.arg {arg}} has two defaults for the same kind of predictor.",
+                       "i" = "Give one unnamed value per kind, or name the variable."), call = NULL)
+    seen    <- c(seen, k)
+    targets <- if (!nzchar(k)) eligible else eligible[kinds[eligible] == k]
+    if (length(targets) == 0L)
+      cli::cli_abort(c("{.arg {arg}}: no predictor for the default {.val {as.character(v)[[1]]}}.",
+                       "i" = "Eligible: {.val {eligible}}."), call = NULL)
+    for (v2 in targets) out[[v2]] <- v
+  }
+
+  named <- nm[!is_fb]
+  bad   <- setdiff(named, c(eligible, also))
+  if (length(bad) > 0L)
+    cli::cli_abort(c("{.arg {arg}} must name predictors it applies to.",
+                     "x" = "Not {?a predictor/predictors} it applies to: {.val {bad}}.",
+                     "i" = "Eligible: {.val {c(eligible, also)}}."), call = NULL)
+  for (i in which(!is_fb)) out[[nm[[i]]]] <- x[[i]]
+  out
+}
+
+# The one message the generic abort cannot give: `multiplier` / `shape` on a factor predictor.
+#' @keywords internal
+#' @noRd
+reg_check_continuous_names <- function(x, data, predictors, arg) {
+  nm  <- setdiff(names(x) %||% character(0), c("", "default"))
+  fac <- intersect(nm, reg_factor_preds(data, intersect(predictors, names(data))))
+  if (length(fac) > 0L)
+    cli::cli_abort(c("{.arg {arg}} applies to continuous predictors only.",
+                     "x" = "Not {?a numeric predictor/numeric predictors}: {.val {fac}}.",
+                     "i" = "{.val {fac}} {?is/are} already {?a factor/factors}."), call = NULL)
+  invisible(TRUE)
 }
 
 
@@ -261,6 +334,7 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
     sh   <- reg_shape_apply(data, reg_shapes, w = wt)
     data <- sh$data
     shape_labels <- sh$labels
+    reg_shapes   <- sh$shapes                    # with each quantile shape's breaks frozen
     if (!is.null(design_obj)) design_obj$variables <- data
   }
 
@@ -469,17 +543,22 @@ reg_emp_mode <- function(empirical, crude_key, ests) {
 
 
 # === S5: the fit plan ============================================================================
-# Which rows every model is fitted on, the cached-digest fast path, the reference relevel, and the
-# two things measured on ONE frozen frame (the multiplier's unit and the quadratic shape terms).
-# ⚠ `reref` is computed BEFORE the relevel (see block T for why); the relevel comes after the
-# family stage and before S6 (reg_positive_level() reads the factor's FIRST level).
+# Which rows every model is fitted on, the cached-digest fast path, and the ORIGIN of every
+# predictor: a factor's reference level, a continuous predictor's anchor, its unit, its curvature.
+#
+# S2 defines the model's VARIABLES (labels -> merge -> shape); S5 fixes their ORIGIN. The order
+# inside is the design: `ref` parsed once (U0) -> the frozen frame (X) -> the anchor SHIFT (Y) ->
+# the multiplier's SD and the quadratic terms, on the shifted frame -> the factor relevel (U), last
+# because it is the one step the reref fast path defers, and before S6 (reg_positive_level() reads
+# the factor's FIRST level).
 #' @keywords internal
 #' @noRd
 reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NULL,
                                  .fit_cache = NULL, all_predictors = character(0),
                                  outcome = character(0), tab_vars = NULL, wt = NULL,
                                  multiplier = "sd", reg_shapes = list(), na = "drop_by_outcome",
-                                 formula_mode = FALSE, is_comparison = FALSE, compare = "none",
+                                 formula_mode = FALSE, raw_formula = NULL,
+                                 is_comparison = FALSE, compare = "none",
                                  method = "wald", display = NULL, color = NA_character_) {
   families <- deps$family
 
@@ -513,58 +592,165 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
     compare == "none" && !is_comparison && !("adjustment" %in% color) &&
     length(reg_shapes) == 0L
 
-  # --- U: the level relevels: `ref` names the level a predictor is compared AGAINST;
-  # `outcome_level` the OUTCOME level modelled (binomial) or pivoted on (multinomial).
-  relevel <- ref
+  # --- U0: `ref`, parsed ONCE for both kinds of variable: the LEVEL a factor is compared against,
+  # and the raw anchor VALUE a continuous predictor is shifted to (turned into a number in block Y).
+  # ⚠ under a COMPOUND formula only a predictor the formula uses AS ITSELF is anchorable: shifting a
+  # column the user wraps in poly() / log() / I() would change what that call computes.
+  num_preds  <- reg_numeric_preds(data, intersect(all_predictors, names(data)))
+  anchorable <- if (!formula_mode) num_preds
+                else intersect(num_preds, reg_formula_bare_vars(raw_formula, num_preds))
+  refs <- reg_resolve_references(ref, data, all_predictors, tab_vars = tab_vars,
+                                 outcomes = deps$outcome, num_eligible = anchorable)
+  # `outcome_level` on a MULTINOMIAL is a relevel of the outcome factor, so it joins the level map
+  # here -- appended, never eligible for a default.
   mnl <- deps$outcome[families == "multinomial" & !is.na(deps$outcome_level)]
   if (length(mnl))
-    relevel <- c(relevel, stats::setNames(deps$outcome_level[match(mnl, deps$outcome)], mnl))
-  if (!is.null(relevel) && !reref) {
-    # and the SPLIT variable: `between_groups` compares every effect to the FIRST split level's.
-    relevelable <- union(union(all_predictors, tab_vars), mnl)
-    if (!is.null(design_obj)) {
-      design_obj <- reg_relevel_design(design_obj, relevel, relevelable)  # relevel in the design
-      data       <- design_obj$variables
-    } else {
-      data <- reg_apply_references(data, relevel, relevelable, outcomes = deps$outcome)
-    }
-  }
+    refs$levels <- c(refs$levels,
+                     stats::setNames(deps$outcome_level[match(mnl, deps$outcome)], mnl))
 
-  # --- X + Y: frozen frame, PREDICTORS + design variables, never the outcome. Computed ONCE: the
-  # multiplier's SD and the quadratic terms' centre must come from the SAME measurement.
-  need_mult  <- !formula_mode
-  frozen     <- if (need_mult || length(reg_shapes) > 0L)
+  # --- X: the frozen frame, PREDICTORS + design variables, never the outcome. Computed ONCE: the
+  # anchor, the multiplier's SD and the quadratic terms' centre are three readings of one
+  # distribution and must come from the SAME measurement.
+  # ⚠ built BEFORE the relevel, which is a no-op for it -- a relevel changes neither the row set nor
+  # any numeric column -- and that is what lets the anchor be measured here.
+  need_mult <- !formula_mode
+  frozen    <- if (need_mult || length(reg_shapes) > 0L || length(anchorable) > 0L)
     reg_complete_frame(data, intersect(unique(c(all_predictors, wt)), names(data))) else NULL
 
-  # multiplier: scale a CONTINUOUS predictor's effect to per-k units (OR^k / beta*k); a NAMED
-  # vector overrides per variable. EVERY family, multinomial and ordinal included: the rescale is
-  # arithmetic on the tidied coefficient, and a cumulative or per-category log-odds is as linear in
-  # the predictor as a glm's. A per-1-unit effect beside a factor contrast is unreadable.
-  if (!is.null(multiplier)) {
-    if (!(is.numeric(multiplier) || is.character(multiplier)) || length(multiplier) == 0L)
-      cli::cli_abort(c(
-        "{.arg multiplier} must be a number, {.val sd}, {.val 2sd}, or a named vector of those.",
-        "i" = 'e.g. {.code multiplier = "sd"}, {.code c(age = 10)}, {.code c(age = "2sd")}.'),
-        call = NULL)
-    if (!is.null(names(multiplier))) {
-      bad <- setdiff(names(multiplier), reg_numeric_preds(data, all_predictors))
-      if (length(bad) > 0L)
-        cli::cli_abort(c("{.arg multiplier} names must be numeric predictors.",
-                         "x" = "Not numeric predictor{?s}: {.val {bad}}."), call = NULL)
-    }
+  # --- Y: THE ANCHOR. Shifting the column here is what makes the fit's own coefficients anchored:
+  # the intercept becomes the reference profile's baseline, and every lower-order term of an
+  # interaction is read at the declared point instead of at zero. A slope is invariant, so nothing
+  # that is an ESTIMATE moves. An anchor of 0 is dropped -- there is nothing to shift.
+  anch    <- if (is.null(frozen))
+    list(a = stats::setNames(numeric(0), character(0)),
+         keyword = stats::setNames(character(0), character(0)))
+    else reg_resolve_anchors(refs$anchors, frozen, anchorable, wt = wt, reg_shapes = reg_shapes)
+  anchors <- anch$a
+  if (any(anchors != 0)) {
+    data   <- reg_anchor_apply(data, anchors)
+    frozen <- reg_anchor_apply(frozen, anchors)
+    if (!is.null(design_obj)) design_obj$variables <- data
   }
-  # "sd" is the DEFAULT scalar, landing a numeric predictor on the same visual scale as the factor
-  # contrasts. Never applied in compound-formula mode (would scale only the main effect).
+
+  # multiplier: scale a CONTINUOUS predictor's effect to per-k units (OR^k / beta*k). EVERY family,
+  # multinomial and ordinal included: the rescale is arithmetic on the tidied coefficient, and a
+  # cumulative or per-category log-odds is as linear in the predictor as a glm's. A per-1-unit
+  # effect beside a factor contrast is unreadable. Never applied in compound-formula mode (it would
+  # scale only the main effect). "sd" is the default, landing a numeric predictor on the same visual
+  # scale as the factor contrasts.
   mult_res <- if (!need_mult) list(k = NULL, label = NULL) else
-    reg_resolve_multiplier(multiplier, "sd", frozen,
-                           reg_numeric_preds(data, all_predictors), wt = wt)
+    reg_resolve_multiplier(multiplier, "sd", frozen, num_preds, wt = wt)
 
   # the quadratic terms, on the SAME frozen frame. Empty unless a shape asked for one.
   shape_terms <- if (length(reg_shapes) > 0L) reg_shape_terms(frozen, reg_shapes, w = wt)
                  else stats::setNames(character(0), character(0))
 
+  # --- U: the FACTOR relevel, LAST -- the one step the reref fast path defers, reg_build()
+  # reparametrizing the canonical digest instead. `between_groups` reads it too: it compares every
+  # effect to the FIRST level of the split variable.
+  if (length(refs$levels) > 0L && !reref) {
+    data <- reg_relevel_data(data, refs$levels)
+    if (!is.null(design_obj)) design_obj$variables <- data
+  }
+
   list(data = data, design_obj = design_obj, na_shared_vars = na_shared_vars, reref = reref,
+       ref_levels = refs$levels, anchors = anchors, anchor_keyword = anch$keyword,
        multiplier = mult_res$k, multiplier_label = mult_res$label, shape_terms = shape_terms)
+}
+
+
+# `ref`'s own resolver: ONE parse, two products. The level map (factor predictors + tab_vars, the
+# multinomial pivot appended by the caller) and the raw anchor VALUES, which block Y turns into
+# numbers on the frozen frame -- the anchor cannot be measured here, before that frame exists.
+#' @keywords internal
+#' @noRd
+reg_resolve_references <- function(ref, data, all_predictors, tab_vars = NULL,
+                                   outcomes = character(0), num_eligible = character(0)) {
+  preds <- intersect(all_predictors, names(data))
+  fac   <- reg_factor_preds(data, preds)
+  num   <- intersect(num_eligible, preds)
+  elig  <- c(fac, num)
+  kinds <- stats::setNames(c(rep("factor", length(fac)), rep("numeric", length(num))), elig)
+
+  named <- setdiff(names(ref) %||% character(0), c("", "default"))
+  # An OUTCOME named here is the other question: `ref` names the level compared AGAINST,
+  # `outcome_level` the level MODELLED.
+  wrong <- intersect(named, outcomes)
+  if (length(wrong) > 0L)
+    cli::cli_abort(c(
+      "{.val {wrong[[1]]}} is an outcome, not a predictor, so {.arg ref} cannot set its level.",
+      "i" = paste0("{.arg ref} names the level other levels are compared AGAINST; ",
+                   "{.arg outcome_level} names the level that is MODELLED."),
+      "i" = 'Did you mean {.code outcome_level = c({wrong[[1]]} = "{ref[[wrong[[1]]]]}")}?'),
+      call = NULL)
+
+  vals <- reg_per_predictor(
+    ref, elig, "ref", kinds = kinds, fallback_kind = reg_ref_fallback_kind,
+    also = intersect(as.character(tab_vars), names(data)),
+    vocab = paste0("A default says which kind of predictor it is for: a number or ",
+                   "{.or {.val {REG_ANCHOR_KEYWORDS}}} for the continuous ones, ",
+                   "{.or {.val {REG_LEVEL_KEYWORDS}}} for the factors."),
+    example = 'ref = c(race = "Black")')
+  lv <- intersect(names(vals), c(fac, as.character(tab_vars)))
+  list(levels  = vapply(stats::setNames(lv, lv),
+                        function(v) reg_ref_level(vals[[v]], data[[v]], v), character(1)),
+       anchors = vals[intersect(names(vals), num)])
+}
+
+# The anchors as NUMBERS, measured on the frozen frame with the call's own weights. EVERY continuous
+# predictor gets one -- "mean" is the package default, because zero is outside the data for an age
+# or an income. The zeros are KEPT: `names(anchors)` is what says which columns are anchored, which
+# the reference grid and the two descriptive readers each need; only reg_anchor_apply() skips them.
+#' @keywords internal
+#' @noRd
+reg_resolve_anchors <- function(anchors, data, num_preds, wt = NULL, reg_shapes = list()) {
+  none <- list(a = stats::setNames(numeric(0), character(0)),
+               keyword = stats::setNames(character(0), character(0)))
+  if (length(num_preds) == 0L) return(none)
+  w <- if (!is.null(wt) && is.character(wt) && length(wt) == 1L && wt %in% names(data))
+         data[[wt]] else NULL
+  vals <- purrr::map(stats::setNames(num_preds, num_preds), function(v) {
+    val  <- anchors[[v]] %||% "mean"
+    kind <- reg_shapes[[v]]$kind %||% ""
+    # ⚠ `shape` recodes FIRST, so a bare number here would be subtracted from log(x) / sqrt(x). The
+    # keywords are measured on the transformed column and are always right; only a number is a trap.
+    if (kind %in% c("log", "sqrt") && !is.na(suppressWarnings(as.numeric(val))))
+      cli::cli_abort(c(
+        '{.arg ref} for {.val {v}} is a value of {.code {kind}({v})}, not of {.val {v}}.',
+        "i" = 'The shape is applied first, so write {.code ref = c({v} = {kind}({val}))}.',
+        "i" = 'Or use {.or {.val {REG_ANCHOR_KEYWORDS}}}, which are read on the transformed column.'),
+        call = NULL)
+    # the KEYWORD that named it rides along, "" for a bare number: the row label says where the
+    # anchor sits ("at mean/2.98"), and only the user's own word can name it.
+    kw <- if (is.character(val) && is.na(suppressWarnings(as.numeric(val))))
+            trimws(tolower(val[[1]])) else ""
+    list(a = reg_anchor_value(val, data[[v]], w, var = v), keyword = kw)
+  })
+  a  <- vapply(vals, `[[`, numeric(1), "a")
+  kw <- vapply(vals, `[[`, character(1), "keyword")
+  ok <- is.finite(a)
+  list(a = a[ok], keyword = kw[ok])
+}
+
+
+# Replay the PREPARATION on a fresh frame: the column recodes a `shape` applied, then the anchors.
+# ⚠ reg_check_plots() refits from the USER's raw data, so without this the diagnostic would be a
+# different model from the one the table shows -- silently, since the row count is unchanged. The
+# quantile breaks are the frozen ones, never re-measured.
+#' @keywords internal
+#' @noRd
+reg_prepare_replay <- function(data, prep) {
+  if (is.null(prep)) return(data)
+  for (v in intersect(names(prep$shapes %||% list()), names(data))) {
+    sp <- prep$shapes[[v]]
+    x  <- as.numeric(data[[v]])
+    data[[v]] <- switch(sp$kind,
+                        log       = log(x),
+                        sqrt      = sqrt(x),
+                        quantiles = reg_cut_quantiles(x, sp$k, var = v, breaks = sp$breaks),
+                        data[[v]])
+  }
+  reg_anchor_apply(data, prep$anchors %||% stats::setNames(numeric(0), character(0)))
 }
 
 
@@ -631,6 +817,7 @@ new_reg_args <- function(data = NULL, specs = list(), shared = list(), reref = F
                          families = character(0), ests = list(), est = NULL, eff_word = "",
                          is_comparison = FALSE, formula_mode = FALSE, empirical = FALSE,
                          display = NULL, multiplier = NULL, shape_terms = NULL,
+                         ref_levels = NULL, anchors = NULL, prep = NULL,
                          na_shared_vars = character(0), design_spec = list(),
                          wt_disp = NA_character_) {
   as.list(environment())
@@ -704,7 +891,8 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                                all_predictors = prep$all_predictors, outcome = prep$outcome,
                                tab_vars = tab_vars, wt = prep$wt, multiplier = multiplier,
                                reg_shapes = prep$reg_shapes, na = na,
-                               formula_mode = prep$formula_mode, is_comparison = prep$is_comparison,
+                               formula_mode = prep$formula_mode, raw_formula = prep$raw_formula,
+                               is_comparison = prep$is_comparison,
                                compare = compare, method = method, display = out$display,
                                color = color_filled)
 
@@ -730,7 +918,8 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
     outcome_level = outcome_level, conf_level = conf_level, method = method,
     color_signif = out$color_signif, cleannames = cleannames, subtext = subtext,
     stats = stats, compare = compare, baseline = baseline, multiplier = plan$multiplier,
-    multiplier_label = plan$multiplier_label, shape_terms = plan$shape_terms,
+    multiplier_label = plan$multiplier_label, anchors = plan$anchors,
+    anchor_keyword = plan$anchor_keyword, shape_terms = plan$shape_terms,
     shape_labels = prep$shape_labels, empirical = out$empirical, display = out$display,
     var_labels = prep$var_labels, na_shared_vars = plan$na_shared_vars, base_n = base_n)
 
@@ -747,11 +936,13 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
     families = stats::setNames(deps$family, deps$outcome),
     # `est`/`eff_word` are the table's REPRESENTATIVE estimand (first outcome), feeding the
     # reg_call SUMMARY; the per-outcome facts live in `ests` and the specs.
+    prep = list(shapes = prep$reg_shapes, anchors = plan$anchors),
     ests = stats::setNames(deps$est, deps$outcome), est = deps$est[[1]],
     eff_word = reg_word(deps$est[[1]]),
     is_comparison = prep$is_comparison, formula_mode = prep$formula_mode,
     empirical = out$empirical, display = out$display, multiplier = plan$multiplier,
-    shape_terms = plan$shape_terms, na_shared_vars = plan$na_shared_vars,
+    shape_terms = plan$shape_terms, ref_levels = plan$ref_levels, anchors = plan$anchors,
+    na_shared_vars = plan$na_shared_vars,
     design_spec = design_spec, wt_disp = wt_disp)
 }
 

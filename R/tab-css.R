@@ -108,7 +108,7 @@ tx_chrome_hex <- function(theme = "light") {
     # darkest fill: greyed means "deliberately harder to read", so it is held to the large-text /
     # non-text floor, never to the 4.5:1 body-text one. `grey2` is the aside's ink, and the ladder's
     # first rung reuses it (both mean "set slightly back"). `hover` is meaningless on paper.
-    print = list(text = "#000000", grey = "#888888", grey2 = "#333333",
+    print = list(text = "#000000", grey = "#aaaaaa", grey2 = "#333333",
                  bg = "#ffffff", border = "#000000", hover = "transparent"),
     list(text = "#000000", grey = "#9f9f9f", grey2 = "#333333",
          bg = "#ffffff", border = "#000000", hover = "#FFFCE5")

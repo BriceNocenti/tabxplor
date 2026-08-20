@@ -28,6 +28,10 @@ test only.
 A summed score (\verb{trials =}) is fitted on a success / failure pair, so its formula names the two
 internal columns tabxplor builds for it (\code{.gb_succ}, \code{.gb_fail}, and \code{.gb_trials} in the offset of
 the risk-ratio link).
+
+The formula names the columns as the user wrote them, but a continuous predictor is fitted
+\strong{anchored} at its \code{ref} (its mean by default), and a \verb{shape =} may have recoded it --- neither
+changes any effect, only what the Constant row means.
 }
 \examples{
 \donttest{

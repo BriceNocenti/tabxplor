@@ -395,6 +395,10 @@ reg_plot_fits <- function(x, data = NULL) {
                wt = if (is.null(svy)) fs$wt else svy$spec$wt)
   if (!is.null(ds$wt) && is.na(ds$wt)) ds$wt <- NULL
   if (!is.null(ds$wt) && !ds$wt %in% names(data)) ds$wt <- NULL
+  # the same preparation the table was built on -- the `shape` recodes and the `ref` anchors -- so
+  # the refit below is the SAME MODEL, not a look-alike on raw columns.
+  data <- reg_prepare_replay(data, fs$prep)
+  if (!is.null(ds$design)) ds$design$variables <- data
   nobs_tab <- reg_plot_nobs(x)
   purrr::imap(fs$specs, function(sp, i) {
     f <- tryCatch(suppressMessages(suppressWarnings(reg_fit(
@@ -416,7 +420,7 @@ reg_plot_fits <- function(x, data = NULL) {
     }
     list(fit = f$fit, data = f$data, family = sp$fit_family, outcome = sp$outcome,
          predictors = sp$predictors, trials = sp$trials, wt = ds$wt, design = ds$design,
-         positive_level = f$positive_level, label = sp$label)
+         positive_level = f$positive_level, label = sp$label, anchors = fs$prep$anchors)
   }) |> purrr::compact()
 }
 
@@ -489,7 +493,10 @@ reg_panel_linearity <- function(ctxs, cols, opts) {
       # Phase 18z16-iv (W-G.4): the band takes the DESIGN variance when the user handed a
       # svydesign to reg_check_plots(), the exact flat closed form on a plain weight column, and is
       # unchanged (n) unweighted.
-      b <- rd_bin(cx$data[[v]], ly$y, w, opts$nbins, ly$link,
+      # the x axis is the ONE reading of a predictor's own values a plot makes, so it is the second
+      # place a `ref` anchor must be added back (the first is reg_spec_tips_num()'s tooltip). The
+      # curve's SHAPE is invariant under a location shift; only the axis labels are not.
+      b <- rd_bin(cx$data[[v]] + reg_anchor_of(cx$anchors, v), ly$y, w, opts$nbins, ly$link,
                   design = cx$design, des_rows = cx$data[[svy_row_col]])
       if (is.null(b)) return(NULL)
       dplyr::mutate(b, predictor = v, model = cx$label, ylab = ly$lab)

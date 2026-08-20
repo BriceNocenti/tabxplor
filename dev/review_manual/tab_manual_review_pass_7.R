@@ -565,14 +565,14 @@ tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "
 load_all()
 options(tabxplor.theme = "print", tabxplor.print = "html", tabxplor.parallel = 8, tabxplor.cleannames = TRUE)
 
-tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical=TRUE
-)
 tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all", 
    color = "difference", color_signif = "grey_non_signif",
 )
 tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all", 
    color = TRUE, color_signif = "grey_non_signif",
+)
+tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+        family = "gaussian", empirical=TRUE
 )
 # - bold only applies to the primary display token (right behaviour), but underline and italics also apply to the
 #   secondary display tokens: they too, like colors, should only apply to the primary display token by default (global option). Otherwise it’s noise.
@@ -581,8 +581,6 @@ tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all"
 #   1. `tx_chrome_hex("print")$grey` identifies the greyed-out cells (the "#888888" grey is much lighter than with colors)
 #   2. the direction information is carried by : "over" have underline ; "under" have italics and no underline
 #   3. the size of effect is carried by a 3 rungs ladder: "#333333" text ; "#000000" text ; "#000000" + bold text ; 
-
-
 # - some tests are now failing because I tweaked the `tx_chrome_hex("print") palette. A WCAG assertion may be failing 
 # for the greyed-out cells, but it’s on purpose since grey-out mean "volontarity more difficult to read".
 
@@ -605,24 +603,45 @@ tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all"
 # Marks solution for tab()  
 # - repeated superscript marks + ++ +++ - -- --- ?
 
-# Marks solution for tab_reg() : 
-# - Just repeat the existing symbols + ++ +++ - -- --- × ×× ××× ÷ ÷÷ ÷÷÷ for the effect size ? Not good (non-significant, even gray, have one symbol)
 
+
+# The legend still says "Coloured: significantly different from the Total row... Uncoloured: either not significant, or a difference under...".
+
+
+
+
+# Sparkline wrong alignment due to the U+2581–U+2588 special characters not being monospace. Cascadia Mono ?
+
+
+
+tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+         family = "gaussian", empirical = TRUE
+)
+# - Reference profile shows "+40.76" : but it is the mean at the reference profile,
+#   so there should be no "+"" (it’s not a diff but a baseline). I wonder what would be the best solution to fix that, 
+#   a custom display for that cell, or a reliable rule ensuring that for reference rows (can you see some situations were it would be wrong ?).
 # - In the right parameters table, change the minimum digits for the observed mean and the adjusted mean to 1 (there’s too decimals here, I want to drop one) 
 
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "tvhours", "age", "relig"),
+         family = "binomial", empirical = TRUE
+)
+# - With two numeric predictors, the width of the sparkline appear to differ depending on the variable. 
+#   I want to standardise that so they all have the same height and the same width. Here, the width of tvhours is about right,
+#   (just a bit wider could do) but age wastes horizontal space.
+# - In html, there are two visual defects in the first column with the variables names : at the bottom of "tvhours", 
+#   there is a horizontal border that should not be here (no horizontal borders between other variables names) ; 
+#   at the top and at the bottom of "Model fit", the horizontal border (which belongs) have a smaller linewidth
+#   than on every other columns, which is not visually consistent.
+
+tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age", "marital"),
+         family = "poisson", empirical = TRUE
+)
 
 
 
 
 
 # Explain empirical counterpart too in the "Model:" first tab_reg() specific legend block ?
-
-# Sparkline wrong alignment due to the U+2581–U+2588 special characters not being monospace. Cascadia Mono ?
-
-
-
-
-
 
 
 

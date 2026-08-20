@@ -296,17 +296,19 @@ test_that("multiplier = 1 is per-1-unit everywhere (and stores nothing)", {
   expect_false(any(grepl("per ", as.character(t$levels), fixed = TRUE)))
 })
 
-test_that("the numeric row's label names its unit", {
+test_that("the numeric row's label names its unit AND its anchor", {
   d <- num_data()
   t <- tab_reg(d, "married", c("age", "race"), family = "binomial", multiplier = "sd",
                cleannames = FALSE)
-  # the level IS the unit: the `var` column already names the variable, and the sparkline lives in
-  # the base-count cell, so nothing else shares this string.
+  # the level carries the two facts that place the row: the unit its effect is per, and the anchor
+  # the Constant row sits at. The `var` column already names the variable, and the sparkline lives
+  # in the base-count cell, so nothing else shares this string.
   lab <- as.character(t$levels)[as.character(t$var) == "age"]
-  expect_match(lab, "^per SD/[0-9.]+$")
+  expect_match(lab, "^per SD/[0-9.]+ \\(at mean/[0-9.]+\\)$")
   t10 <- tab_reg(d, "married", c("age", "race"), family = "binomial", multiplier = c(age = 10),
-                 cleannames = FALSE)
-  expect_identical(as.character(t10$levels)[as.character(t10$var) == "age"], "per 10")
+                 ref = c(age = "min"), cleannames = FALSE)
+  expect_identical(as.character(t10$levels)[as.character(t10$var) == "age"],
+                   paste0("per 10 (at min/", format(signif(min(d$age), 3)), ")"))
 })
 
 test_that("the SD is frozen ONCE: same unit across split groups, compared models and dependents", {
@@ -336,7 +338,7 @@ test_that("multiplier rejects a non-numeric predictor name and a bad value", {
   expect_error(tab_reg(d, "married", c("age", "race"), family = "binomial",
                        multiplier = c(race = 2)), "numeric predictor")
   expect_error(tab_reg(d, "married", c("age", "race"), family = "binomial",
-                       multiplier = list(age = 2)), "must be a number")
+                       multiplier = c(age = "banana")), "must be a number")
 })
 
 

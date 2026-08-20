@@ -5584,10 +5584,9 @@ render_footer <- function(streams, medium, theme = NULL, colored = TRUE, classes
   out
 }
 
-# The null a regression `Constant` row's star is tested against, or NA when the table has no such row
-# (a marginal / at-reference table has no intercept, and a crosstab none either). "Constant" is the
-# SKELETON's own untranslated key, not a label, so this reads a stored fact. NA too when the starred
-# model columns disagree about their null -- a mixed table cannot name one number.
+# The null a regression `Constant` row's star is tested against, or NA when no column TESTS that row.
+# "Constant" is the SKELETON's own untranslated key, not a label, so this reads a stored fact. NA too
+# when the starred model columns disagree about their null -- a mixed table cannot name one number.
 #' @keywords internal
 tab_constant_null <- function(x, cols) {
   if (!tab_is_reg(x)) return(NA_real_)
@@ -5597,10 +5596,11 @@ tab_constant_null <- function(x, cols) {
   cst[is.na(cst)] <- FALSE
   if (!any(cst)) return(NA_real_)
   n <- unique(unlist(purrr::map(cols, function(cl) {
-    # a MODEL column that actually shows something on that row: `marginal` / `at_reference` and an
-    # ordinal fit have no intercept, so the row exists but is empty and has no null to name.
+    # ⚠ the test is a finite P-VALUE, not a finite estimate: a `marginal` / `at_reference` Constant
+    # holds a predicted BASELINE, which carries no p-value and takes no star, so it has no null to
+    # name; an ordinal fit has no intercept at all and shows nothing there.
     if (!identical(get_role(cl), "model")) return(NULL)
-    if (!any(is.finite(fmt_est_of(cl)[cst]))) return(NULL)
+    if (!any(is.finite(get_pvalue(cl)[cst]))) return(NULL)
     fmt_scale_row(cl)$neutral
   })))
   n <- n[!is.na(n)]

@@ -54,7 +54,7 @@ test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the addit
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   t1  <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", multiplier = 1,
-                 cleannames = FALSE)
+                 ref = c(age = 0), cleannames = FALSE)
   col <- t1[["Model_diff"]]
 
   expect_identical(tabxplor:::fmt_var_kind(col), "coef")
@@ -106,7 +106,7 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   t1  <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson", multiplier = 1,
-                                  cleannames = FALSE))
+                                  ref = c(age = 0), cleannames = FALSE))
   col <- t1[["Model_IRR"]]
 
   # a rate ratio's own scale: odds_ratio's ladder and glyphs, a MEAN as the level it sits on
@@ -572,7 +572,7 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
   # the default scales a continuous predictor per SD on every family, multinomial included -- which
   # the block after this one checks.
   t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", cleannames = FALSE,
-                multiplier = 1)
+                multiplier = 1, ref = c(age = 0))
 
   # one OR column per non-reference outcome category, "vs <ref>" in the label
   expect_true(all(c("Dem vs Ind", "Rep vs Ind") %in% names(t1)))
@@ -622,7 +622,8 @@ test_that("tab_reg() ordinal cumulative OR / CI / p match MASS::polr; single col
   skip_if_not_installed("MASS")
   d   <- ord_data()
   t1  <- suppressWarnings(tab_reg(d, "spectrum", c("race", "age"),   # per unit: polr's own scale
-                                  family = "ordinal", cleannames = FALSE, multiplier = 1))
+                                  family = "ordinal", cleannames = FALSE, multiplier = 1,
+                                  ref = c(age = 0)))
   col <- t1[["Model_cumOR"]]            # an ordinal odds ratio is CUMULATIVE, and says so
   expect_identical(get_pct_type(col), "row")
   expect_identical(get_display(col)[1], "est")
@@ -845,7 +846,7 @@ test_that("multinomial AME: one column per outcome category, matches marginaleff
   skip_if_not_installed("marginaleffects")
   d  <- mnl_data()
   t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", effect = "marginal",
-                cleannames = FALSE, multiplier = 1)   # marginaleffects' own per-unit contrast
+                cleannames = FALSE, multiplier = 1, ref = c(age = 0))   # per-unit, raw origin
   expect_true(all(c("Ind", "Dem", "Rep") %in% names(t1)))   # every outcome category
 
   dm <- d |> dplyr::filter(!is.na(party3), !is.na(race), !is.na(age))
@@ -928,7 +929,8 @@ test_that("MER-at-reference (binomial): effect/prediction/CI match marginaleffec
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
-  t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "at_reference", multiplier = 1, cleannames = FALSE)
+  t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "at_reference",
+                 multiplier = 1, ref = c(age = 0), cleannames = FALSE)
   col <- t1[["Model_refRD"]]                         # the marker switches m -> ref at the profile
   expect_identical(get_pct_type(col), "row")
 
@@ -936,10 +938,10 @@ test_that("MER-at-reference (binomial): effect/prediction/CI match marginaleffec
   dm$race    <- forcats::fct_drop(dm$race)
   dm$married <- forcats::fct_rev(forcats::fct_drop(factor(dm$married)))
   g    <- stats::glm(married ~ race + age, data = dm, family = stats::binomial())
-  grid <- marginaleffects::datagrid(model = g, race = levels(dm$race)[1], age = mean(dm$age))
+  grid <- marginaleffects::datagrid(model = g, race = levels(dm$race)[1], age = 0)
   acr  <- as.data.frame(marginaleffects::comparisons(g, variables = "race", newdata = grid))
   aca  <- as.data.frame(marginaleffects::comparisons(g, variables = "age",  newdata = grid))
-  pg   <- marginaleffects::datagrid(model = g, race = levels(dm$race), age = mean(dm$age))
+  pg   <- marginaleffects::datagrid(model = g, race = levels(dm$race), age = 0)
   ap   <- as.data.frame(marginaleffects::predictions(g, newdata = pg))
 
   keep <- !is.na(get_pvalue(col))
@@ -955,7 +957,7 @@ test_that("MNL 'j vs rest' OR at the reference profile matches marginaleffects (
   skip_if_not_installed("marginaleffects")
   d  <- mnl_data()
   t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", effect = "at_reference",
-                cleannames = FALSE)
+                cleannames = FALSE, ref = c(age = 0))
   expect_true(all(c("Ind vs rest", "Dem vs rest", "Rep vs rest") %in% names(t1)))
   expect_identical(get_scale(t1[["Dem vs rest"]]), "odds_ratio")
 
@@ -963,7 +965,7 @@ test_that("MNL 'j vs rest' OR at the reference profile matches marginaleffects (
   dm$race   <- forcats::fct_drop(dm$race)
   dm$party3 <- forcats::fct_drop(dm$party3)
   m    <- nnet::multinom(party3 ~ race + age, data = dm, trace = FALSE)
-  grid <- marginaleffects::datagrid(model = m, race = levels(dm$race)[1], age = mean(dm$age))
+  grid <- marginaleffects::datagrid(model = m, race = levels(dm$race)[1], age = 0)
   lc   <- rbind(
     as.data.frame(marginaleffects::comparisons(m, variables = "race", newdata = grid, comparison = "lnor")),
     as.data.frame(marginaleffects::comparisons(m, variables = "age",  newdata = grid, comparison = "lnor")))

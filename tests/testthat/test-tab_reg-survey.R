@@ -37,7 +37,7 @@ test_that("a clustered, stratified design matches a hand svyglm", {
   des <- survey::svydesign(ids = ~psu, strata = ~strata, weights = ~w, data = d, nest = TRUE)
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", which would compare a per-SD OR to a per-unit coefficient).
-  tab <- suppressMessages(tab_reg(des, "y", c("x1", "x2"), multiplier = 1))
+  tab <- suppressMessages(tab_reg(des, "y", c("x1", "x2"), multiplier = 1, ref = c(x2 = 0)))
   tv  <- or_col(tab)
   # skeleton = Constant, x1(ref), x1 mid, x1 hi, x2 -> drop the reference row (OR = 1) for the term match
   hand_or <- exp(stats::coef(hand))
@@ -50,7 +50,7 @@ test_that("a prebuilt survey design passed as `data` equals the hand svyglm", {
   des  <- survey::svydesign(ids = ~psu, strata = ~strata, weights = ~w, data = d01, nest = TRUE)
   hand <- survey::svyglm(y01 ~ x1 + x2, design = des, family = quasibinomial())
 
-  tab <- tab_reg(des, "y01", c("x1", "x2"), multiplier = 1)
+  tab <- tab_reg(des, "y01", c("x1", "x2"), multiplier = 1, ref = c(x2 = 0))
   tv  <- or_col(tab)
   expect_equal(unname(tv[tv != 1]), unname(exp(stats::coef(hand))), tolerance = 1e-6)
 })
@@ -100,7 +100,7 @@ test_that("weighted model comparison emits a design-based Wald row", {
 
 test_that("an unweighted binomial fit is unchanged by the design plumbing", {
   d  <- reg_survey_data()
-  t0 <- tab_reg(d, "y", c("x1", "x2"), multiplier = 1)
+  t0 <- tab_reg(d, "y", c("x1", "x2"), multiplier = 1, ref = c(x2 = 0))
   hand <- stats::glm(as.integer(y == levels(y)[1]) ~ x1 + x2, data = d, family = binomial())
   tv <- or_col(t0)
   expect_equal(unname(tv[tv != 1]), unname(exp(stats::coef(hand))), tolerance = 1e-6)
@@ -139,7 +139,7 @@ test_that("weighted multinomial (svyVGAM) matches a hand svy_vglm OR", {
                             family = VGAM::multinomial(refLevel = 1))
   hand_or <- exp(stats::coef(hand))
 
-  tab <- tab_reg(d, "yn", c("x1", "x2"), family = "multinomial", wt = "w")
+  tab <- tab_reg(d, "yn", c("x1", "x2"), family = "multinomial", wt = "w", ref = c(x2 = 0))
   # one OR column per non-reference outcome category ("B", "C"); 14w strips the trailing ": OR"
   or_cols <- grep(" vs ", names(tab), value = TRUE)
   expect_length(or_cols, 2L)
@@ -208,7 +208,8 @@ test_that("Phase g: split_var + a single model auto-spreads to side-by-side colu
 test_that("each split group equals a manual per-subset fit", {
   d <- reg_split_data()
   # the groups are side by side now, so each group's estimates are its OWN column
-  t <- dplyr::ungroup(tab_reg(d, "y", c("x1", "x2"), tab_vars = "g", multiplier = 1))
+  t <- dplyr::ungroup(tab_reg(d, "y", c("x1", "x2"), tab_vars = "g", multiplier = 1,
+                              ref = c(x2 = 0)))
   for (grp in c("north", "south")) {
     sub  <- dplyr::filter(d, g == grp)
     hand <- stats::glm(as.integer(y == levels(y)[1]) ~ x1 + x2, data = sub, family = binomial())
@@ -243,7 +244,7 @@ test_that("split_var footer carries per-group GOF", {
 test_that("split_var works with survey weights (per-group svyglm)", {
   d <- reg_split_data()
   t <- tab_reg(d, "y", list(m1 = c("x1", "x2"), m2 = c("x1", "x2")), family = "binomial",
-               wt = "w", tab_vars = "g", multiplier = 1)
+               wt = "w", tab_vars = "g", multiplier = 1, ref = c(x2 = 0))
   expect_s3_class(t, "tabxplor_grouped_tab")
   sub  <- dplyr::filter(d, g == "north")
   des  <- survey::svydesign(ids = ~1, weights = ~w,
@@ -280,7 +281,7 @@ test_that("multiplier scales a continuous predictor's OR to OR^k, p unchanged", 
 test_that("multiplier rejects non-numeric predictors / wrong families", {
   d <- reg_split_data()
   expect_error(suppressWarnings(tab_reg(d, "y", c("x1", "x2"), multiplier = c(x1 = 2))),
-               "numeric predictors")
+               "numeric predictor")
 })
 
 test_that("empirical crude OR matches the weighted 2x2 odds ratio", {

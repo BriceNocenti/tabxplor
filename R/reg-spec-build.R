@@ -118,7 +118,10 @@ reg_spec_build_one <- function(i, ctx) {
     # reparametrized.
     digest <- jmvreg_cached(
       fit_cache, "digest",
-      jmvreg_fit_key(sp, data_canon, sp_fam, design_spec, extra = list(multiplier)),
+      # ⚠ `anchors` is IN the key, and must be: jmv_col_fp() fingerprints a column's class, levels
+      # and NA count -- never its values -- so a `ref` anchor shifting it is invisible there. Unlike
+      # a factor reference, an anchor is not a reparametrization reg_reref_fit_res() can apply.
+      jmvreg_fit_key(sp, data_canon, sp_fam, design_spec, extra = list(multiplier, anchors)),
       function() reg_build_digest(data_canon, sp, sp_fam, design_spec, sp_dox,
                                   inv_sp, conf_level, weighted, multiplier = multiplier))
     f <- reg_reref_fit_res(digest, skeleton, conf_level, multiplier = multiplier)
@@ -133,7 +136,7 @@ reg_spec_build_one <- function(i, ctx) {
                             jmvreg_fit_key(sp, data, sp_fam, design_spec,
                                            extra = list(method, sp_dox, conf_level, sp$est$effect,
                                                         sp$est$measure, display, multiplier,
-                                                        shape_terms)),
+                                                        shape_terms, anchors)),
                             thunk)
   }
   skel_out <- NULL
@@ -290,7 +293,11 @@ reg_spec_tips_num <- function(sp, positive_level, own, ctx) {
   yb <- reg_crude_y(own$frame, sp$outcome, sp$fit_family,
                     if (reg_fam_binary(sp$fit_family)) positive_level else NULL)
   purrr::list_rbind(purrr::map(vars, function(v) {
-    x <- as.numeric(own$frame[[v]])
+    # ⚠ THE ONE PLACE a shifted column must be read back in the user's own units: `ref` anchors every
+    # continuous predictor before the fit, so the stored column is x - anchor. Every ESTIMATE is
+    # invariant under that shift; only a descriptive reading of the values is not, and this tooltip
+    # and the linearity panel's x axis (R/plots.R) are the two.
+    x <- as.numeric(own$frame[[v]]) + reg_anchor_of(anchors, v)
     m <- reg_weighted_mean(x, w); s <- reg_predictor_sd(x, w)
     by <- if (reg_fam_binary(sp$fit_family) && length(unique(stats::na.omit(yb))) == 2L)
       sprintf("; mean if yes %s, if no %s",

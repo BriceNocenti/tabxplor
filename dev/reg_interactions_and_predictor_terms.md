@@ -430,8 +430,9 @@ Under `effect = "marginal"` the row is a different quantity and should say so : 
 
 - Every table with a continuous predictor gets a different Constant row, and every table with an
   *interacted* continuous predictor gets different lower-order rows as well (measured: up to ×2.74 on
-  the odds scale). The 36 `_golden/*.rds` and the `golden` snapshot move; each diff is a deliberate
-  change and has to be read as one.
+  the odds scale). ⚠ **Correction, verified at implementation time: no golden and no snapshot moves.**
+  No `_golden/*.rds` case and no `_snaps` file builds a `tab_reg()` table, so the regression side is
+  golden-blind. What moves is the parity tests that include the intercept in their comparison.
 - A `multinom` or `polr` golden may move in its **last digits** (4.6e-07 / 6.9e-07), because those
   fitters are restarted on a shifted design. Worth knowing before a snapshot diff is blamed on the
   logic.

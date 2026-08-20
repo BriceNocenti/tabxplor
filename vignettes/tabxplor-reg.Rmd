@@ -857,6 +857,21 @@ tab_reg(gss_simple, "married", c("race", "age"), multiplier = c(age = 10))
 
 Everything scales together — the estimate, its interval, the observed `Obs_*` companion and the model-versus-observed comparison — and the p-value never changes. Two things worth knowing: because the default is not 1, a continuous predictor's `Model_OR` will **not** match `exp(coef(glm(...)))` unless you ask for `multiplier = 1`; and the standard deviation is measured once, on the predictors' complete cases, so the same variable keeps the same unit across several outcomes, compared models and `split_var` groups.
 
+### The reference a predictor's effect is measured from
+
+`ref` names the **reference** — for a factor, the level the others are compared against; for a continuous predictor, the value it is **anchored** at:
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age"), ref = c(race = "Black", age = 40))
+```
+
+The two halves are one idea, and they share one grammar with `multiplier` and `shape`: a value written **without a variable name** is the default for every predictor it can apply to, a named one overrides that variable. So `shape = "quintiles"` cuts every continuous predictor, `multiplier = c("2sd", age = 10)` reads "per two standard deviations, except `age`, per decade", and `ref = c("median", "last", race = "Black")` sets both defaults at once — the value itself says which kind of predictor it is for (a number or `"mean"` / `"median"` / `"min"` / `"max"` for a continuous one, `"first"` / `"last"` for a factor).
+
+Anchoring a continuous predictor **does not change its own effect**: a slope is the same wherever you start reading it from. The predictor's row says where its anchor sits, right beside the unit its effect is per — `per SD/13.5 (at mean/42.4)`, or `(at min/0)` — so the Constant row's profile is readable from the table itself. What it changes is the **Constant** row, and any term the predictor interacts with. That is why the default is the mean rather than zero: nobody is 0 years old, so the intercept of a raw fit describes nobody. Read the Constant row as the baseline the rest of the column moves away from — a baseline odds on an odds-ratio column, a baseline probability or mean on an additive one — and its label says where that baseline sits (`Reference profile`, or `Population average` under `effect = "marginal"`). If a predictor's zero *is* meaningful, say so: `ref = c(tvhours = 0)`.
+
+Order matters in one place, and it is stated rather than guessed: `shape` recodes the column first (it defines what the model's variable *is*), then the anchor applies to the result. So `ref` on a `"log"`-shaped predictor anchors the log, and a `"quartiles"`-shaped one has become a factor and takes a level name.
+
+
 
 ## Reading the footer statistics
 

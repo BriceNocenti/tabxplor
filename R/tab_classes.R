@@ -2753,8 +2753,8 @@ default_print_palette <- function() {
     # The SAME ramp on both sides -- a magnitude knows no direction; direction is the face
     # (tx_palette_faces). NOT NA: fmt_col_ann's `font` falls back to grey where text_hex is NA, which
     # would grey every coloured cell.
-    text_colors     = c("#333333", "#000000", "#000000", "#000000"),
-    text_colors_neg = c("#333333", "#000000", "#000000", "#000000"),
+    text_colors     = c("#555555", "#000000", "#000000", "#000000"),
+    text_colors_neg = c("#555555", "#000000", "#000000", "#000000"),
     # ONE ordered grey ramp, the SAME on both sides: greyscale cannot diverge, so the fill carries
     # MAGNITUDE only and direction is read off the cell's bold/italic.
     background_colors     = c("#F5F5F5", "#E4E4E4", "#D0D0D0", "#B8B8B8"),

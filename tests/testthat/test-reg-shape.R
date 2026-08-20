@@ -28,9 +28,10 @@ test_that("`shape` refuses everything outside its closed vocabulary, naming the 
   # a factor has no functional form to mis-specify
   expect_error(tab_reg(d, "married", c("race", "age"), family = "binomial",
                        shape = c(race = "quadratic")), "continuous")
-  # unnamed: there is no "apply to everything" form -- a shape is a statement about ONE variable
-  expect_error(tab_reg(d, "married", c("race", "age"), family = "binomial",
-                       shape = "quadratic"), "NAMED")
+  # unnamed IS the "every continuous predictor" form, the shared per-predictor grammar's default
+  t <- suppressWarnings(tab_reg(d, "married", c("race", "age"), family = "binomial",
+                                shape = "quadratic", stats = FALSE))
+  expect_true(any(as.character(t$levels) == "age\u00b2"))
   # log needs strictly positive values (tvhours has zeros)
   expect_error(tab_reg(d, "married", c("race", "tvhours"), family = "binomial",
                        shape = c(tvhours = "log")), "positive")

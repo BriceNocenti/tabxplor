@@ -31,6 +31,17 @@
 #     path, while interactions / poly() / I() are fit verbatim and rendered from the fitted terms.
 #   - ONE FORMULA ASSEMBLY for every fitter (reg_fit_formula), so reg_formulas() reports what really
 #     reached glm() / svyglm() / multinom() / polr() rather than a second reconstruction of it.
+#   - EVERY PREDICTOR IS FITTED AT ITS DECLARED REFERENCE. A factor is releveled, a continuous
+#     predictor SHIFTED to its `ref` anchor (its weighted mean by default) -- both at the argument
+#     boundary, so the fit's own coefficients are already anchored and nothing downstream needs a
+#     contrast engine. A slope is invariant under the shift, so no estimate moves; what moves is the
+#     Constant row and every term the predictor interacts with. Exactly TWO readers must add the
+#     offset back, because they describe the variable's own VALUES rather than an estimate:
+#     reg_spec_tips_num()'s tooltip and reg_panel_linearity()'s x axis (R/plots.R).
+#   - THE CONSTANT ROW IS A BASELINE, NOT AN EFFECT: the fit's intercept under `coefficient`, the
+#     predicted outcome at the reference profile under `at_reference`, the population average under
+#     `marginal` -- one quantity, then converted to the column's own geometry (reg_constant_cell).
+#     Only the tested intercept carries a p-value, so only it takes a star.
 #   - A 3+ LEVEL OUTCOME becomes several COLUMNS, not several tables: one multinomial fit gives one
 #     odds-ratio column per non-reference category, one proportional-odds fit one cumulative-OR
 #     column (its cut-point rows are dropped, so the Constant cell is empty). Both reuse the ordinary
@@ -238,8 +249,9 @@ reg_numeric_preds <- function(data, predictors)
 
 # === SECTION: `multiplier` -- the per-unit scaling of a continuous predictor's effect ============
 #
-# GRAMMAR: a SCALAR ("sd", "2sd" or a number) applies to every numeric predictor; a NAMED vector
-# overrides per variable, anything it does not name keeping the scalar default.
+# GRAMMAR: the package's shared per-predictor one (reg_per_predictor(), R/reg-resolve.R) -- an
+# unnamed value, or one named `default`, applies to every continuous predictor; a named element
+# overrides that one.
 #
 # The SD is measured on the complete cases of the PREDICTORS + design variables -- not of the
 # outcome -- and resolved ONCE, before `shared` is built, so the split recursion, the compared
@@ -272,6 +284,15 @@ reg_predictor_sd <- function(x, w = NULL) {
 #' @keywords internal
 REG_MULTIPLIER_KEYWORDS <- c("sd", "1sd", "2sd")
 
+# A value the unit vocabulary accepts. Refusing here rather than in reg_multiplier_value() is what
+# stops a typo becoming a silent per-1-unit reading.
+#' @keywords internal
+reg_multiplier_ok <- function(v) {
+  if (is.numeric(v)) return(TRUE)
+  s <- trimws(tolower(as.character(v)[[1]]))
+  s %in% REG_MULTIPLIER_KEYWORDS || !is.na(suppressWarnings(as.numeric(s)))
+}
+
 #' @keywords internal
 reg_multiplier_value <- function(value, sd, digits = 3L) {
   v <- if (is.character(value)) trimws(tolower(value)) else value
@@ -292,17 +313,19 @@ reg_multiplier_value <- function(value, sd, digits = 3L) {
 #' @keywords internal
 reg_resolve_multiplier <- function(multiplier, default, data, num_preds, wt = NULL) {
   if (length(num_preds) == 0L) return(list(k = NULL, label = NULL))
-  named  <- if (!is.null(multiplier) && !is.null(names(multiplier))) multiplier else NULL
-  scalar <- if (is.null(multiplier)) default
-            else if (is.null(names(multiplier))) multiplier[[1]]
-            else default
+  reg_check_continuous_names(multiplier, data, names(data), "multiplier")
+  vals <- reg_per_predictor(multiplier, num_preds, "multiplier")
+  for (v in names(vals)) {
+    if (!reg_multiplier_ok(vals[[v]]))
+      cli::cli_abort(c(paste0("{.arg multiplier} for {.val {v}} must be a number or ",
+                              "{.or {.val {REG_MULTIPLIER_KEYWORDS}}}."),
+                       "x" = "Got {.val {as.character(vals[[v]])[[1]]}}."), call = NULL)
+  }
   w   <- if (!is.null(wt) && is.character(wt) && length(wt) == 1L && wt %in% names(data))
            data[[wt]] else NULL
   sds <- vapply(num_preds, function(v) reg_predictor_sd(data[[v]], w), numeric(1))
-  res <- purrr::map(stats::setNames(num_preds, num_preds), function(v) {
-    val <- if (!is.null(named) && v %in% names(named)) named[[v]] else scalar
-    reg_multiplier_value(val, sds[[v]])
-  })
+  res <- purrr::map(stats::setNames(num_preds, num_preds), function(v)
+    reg_multiplier_value(vals[[v]] %||% default, sds[[v]]))
   k   <- vapply(res, function(z) z$k,     numeric(1))
   lab <- vapply(res, function(z) z$label, character(1))
   keep <- is.finite(k) & k != 1
@@ -562,38 +585,124 @@ reg_positive_level <- function(data, outcome, outcome_level = NULL) {
   if (!is.null(outcome_level) && outcome_level %in% lv) outcome_level else lv[[1L]]
 }
 
-reg_apply_references <- function(data, ref, predictors, outcomes = character(0)) {
-  nm <- names(ref)
-  if (is.null(nm) || any(!nzchar(nm))) {
-    cli::cli_abort(c("{.arg ref} must be a named vector, e.g. {.code c(race = \"White\")}."))
-  }
-  extra <- setdiff(nm, predictors)
-    # An OUTCOME named here is the other question: `ref` names the level compared AGAINST,
-    # `outcome_level` the level MODELLED.
-  wrong <- intersect(extra, outcomes)
-  if (length(wrong))
-    cli::cli_abort(c("{.val {wrong[[1]]}} is an outcome, not a predictor, so {.arg ref} cannot set its level.",
-                     "i" = paste0("{.arg ref} names the level other levels are compared AGAINST; ",
-                                  "{.arg outcome_level} names the level that is MODELLED."),
-                     "i" = 'Did you mean {.code outcome_level = c({wrong[[1]]} = "{ref[[wrong[[1]]]]}")}?'),
-                   call = NULL)
-  extra <- setdiff(extra, outcomes)
-  if (length(extra) > 0L) {
-    cli::cli_warn("{.arg ref} name{?s} {.val {extra}} match no predictor; ignored.")
-  }
-  for (v in intersect(nm, predictors)) {
-    f <- data[[v]]
-    if (!is.factor(f) && !is.character(f)) {
-      cli::cli_warn("{.arg ref} ignored for {.val {v}}: not a factor/character predictor.")
-      next
+# === SECTION: `ref` -- the reference every effect is measured from ===============================
+#
+# ONE argument, one meaning per kind of variable. A FACTOR's reference is the level the others are
+# compared against. A CONTINUOUS predictor's is the value it is ANCHORED at, realised by SHIFTING
+# the column at the argument boundary -- so the fit's own coefficients are already anchored and no
+# consumer downstream needs a contrast engine. The predictor's own slope never moves; the Constant
+# row, and every term the predictor interacts with, do.
+# ⚠ the two vocabularies are DISJOINT, which is what lets a bare default name its own kind.
+
+#' @keywords internal
+REG_ANCHOR_KEYWORDS <- c("mean", "median", "min", "max")
+
+#' @keywords internal
+REG_LEVEL_KEYWORDS <- c("first", "last")
+
+# Which kind of predictor a `ref` DEFAULT addresses. NA = neither vocabulary -> the shared resolver
+# aborts (a bare level name cannot be portable across factors, so it must be named).
+#' @keywords internal
+reg_ref_fallback_kind <- function(v) {
+  if (is.numeric(v)) return("numeric")
+  s <- trimws(tolower(as.character(v)[[1]]))
+  if (s %in% REG_ANCHOR_KEYWORDS) return("numeric")
+  if (s %in% REG_LEVEL_KEYWORDS)  return("factor")
+  if (!is.na(suppressWarnings(as.numeric(s)))) return("numeric")
+  NA_character_
+}
+
+# A factor's reference: a LEVEL NAME first, the keyword only when no level matches -- so a variable
+# owning a level called "last" keeps its own reading.
+#' @keywords internal
+reg_ref_level <- function(value, x, var) {
+  # ⚠ EMPTY levels dropped first: reg_fit() drops them, so "last" must name the last level the model
+  # will actually see -- otherwise the reference silently lands on the next one.
+  lv <- levels(forcats::fct_drop(as.factor(x)))
+  s  <- as.character(value)[[1]]
+  if (s %in% lv) return(s)
+  k <- trimws(tolower(s))
+  if (identical(k, "first")) return(lv[[1L]])
+  if (identical(k, "last"))  return(lv[[length(lv)]])
+  cli::cli_abort(c("{.arg ref} level {.val {s}} not found in {.val {var}}.",
+                   "i" = "Levels: {.val {lv}}."), call = NULL)
+}
+
+# A continuous predictor's anchor, as a number. WEIGHTED wherever the call is: the anchor, the
+# multiplier's SD and a quantile shape's breaks are three readings of ONE distribution and must
+# never disagree about which one they read.
+#' @keywords internal
+reg_anchor_value <- function(value, x, w = NULL, var = "x") {
+  if (is.numeric(value)) return(as.numeric(value)[[1]])
+  s <- trimws(tolower(as.character(value)[[1]]))
+  k <- suppressWarnings(as.numeric(s))
+  if (!is.na(k)) return(k)
+  x <- as.numeric(x)
+  switch(s,
+         mean   = reg_weighted_mean(x, w),
+         median = rd_wquantile(x, 0.5, w),
+         min    = suppressWarnings(min(x[is.finite(x)])),
+         max    = suppressWarnings(max(x[is.finite(x)])),
+         cli::cli_abort(c(paste0("{.arg ref} for the continuous predictor {.val {var}} must be a ",
+                                 "number or {.or {.val {REG_ANCHOR_KEYWORDS}}}."),
+                          "x" = "Got {.val {s}}."), call = NULL))
+}
+
+# The two rewriters. Pure now that the boundary validates: each takes the RESOLVED map and applies
+# it, so a survey design is served by the caller re-assigning $variables, as every other data
+# rewrite of R/reg-resolve.R's S2 already does.
+#' @keywords internal
+reg_relevel_data <- function(data, levels) {
+  for (v in intersect(names(levels), names(data)))
+    data[[v]] <- forcats::fct_relevel(as.factor(data[[v]]), levels[[v]])
+  data
+}
+
+# WARNING: `as.numeric()` is load-bearing -- reg_is_factor_var() keeps a Date numeric, and
+# `Date - <number>` shifts by DAYS.
+# Which variables a COMPOUND formula uses AS THEMSELVES. A bare symbol may be anchored -- the fit is
+# then the same model in different coordinates, which is exactly what an interacted `race * age`
+# wants. A variable inside a CALL (`poly(age, 2)`, `log(age)`, `I(age^2)`, `offset()`) may not: the
+# transform would be applied to shifted values, which is a different model, or undefined.
+#' @keywords internal
+reg_formula_bare_vars <- function(formula, vars) {
+  if (is.null(formula) || length(vars) == 0L) return(character(0))
+  wrapped <- character(0)
+  walk <- function(e, inside) {
+    if (is.symbol(e)) {
+      if (inside) wrapped <<- c(wrapped, as.character(e))
+      return(invisible(NULL))
     }
-    f   <- as.factor(f)
-    lev <- ref[[v]]
-    if (!lev %in% levels(f)) {
-      cli::cli_abort(c("{.arg ref} level {.val {lev}} not found in {.val {v}}.",
-                       "i" = "Levels: {.val {levels(f)}}."))
-    }
-    data[[v]] <- forcats::fct_relevel(f, lev)
+    if (!is.call(e)) return(invisible(NULL))
+    op  <- if (is.symbol(e[[1L]])) as.character(e[[1L]]) else ""
+    nxt <- inside || !(op %in% c("+", "-", "*", "/", ":", "("))
+    for (k in seq_along(e)[-1L]) walk(e[[k]], nxt)
+    invisible(NULL)
+  }
+  walk(formula[[length(formula)]], FALSE)
+  setdiff(vars, wrapped)
+}
+
+# The anchor keyword, translated. A literal per arm: gettext() on a bare variable is invisible to
+# potools, so the extractor must see each word written out.
+#' @keywords internal
+reg_anchor_word <- function(k)
+  switch(k, mean = gettext("mean"), median = gettext("median"),
+         min = gettext("min"), max = gettext("max"), k)
+
+# One predictor's anchor, 0 when it has none. ⚠ `anchors[[v]]` cannot be used: on a named NUMERIC an
+# absent name is an error, not NULL.
+#' @keywords internal
+reg_anchor_of <- function(anchors, v) {
+  a <- if (is.null(anchors)) NA_real_ else unname(anchors[v])
+  if (length(a) != 1L || is.na(a)) 0 else a
+}
+
+#' @keywords internal
+reg_anchor_apply <- function(data, anchors) {
+  for (v in intersect(names(anchors), names(data))) {
+    if (anchors[[v]] == 0) next                       # nothing to shift, and nothing to coerce
+    data[[v]] <- as.numeric(data[[v]]) - anchors[[v]]
   }
   data
 }
@@ -625,12 +734,16 @@ reg_skeleton <- function(data, predictors, shape_terms = NULL) {
       )
     }
   })
-  dplyr::bind_rows(
-    tibble::tibble(var = "Constant", level = "Reference population",
-                   term = "(Intercept)", is_ref = TRUE),
-    parts
-  )
+  dplyr::bind_rows(reg_constant_row(), parts)
 }
+
+# The skeleton's intercept row. `level` is a KEY, not a label: the displayed one says which baseline
+# the contrast puts there ("Reference profile" / "Population average") and is written once, at row
+# time, by reg_stage_rows(). ⚠ the `var` key "Constant" is read by forest_plot(intercept =),
+# tab_constant_null() and reg_level_counts(), and never changes.
+#' @keywords internal
+reg_constant_row <- function()
+  tibble::tibble(var = "Constant", level = "Constant", term = "(Intercept)", is_ref = TRUE)
 
 reg_skeleton_from_fit <- function(fit) {
   tt      <- stats::terms(fit)
@@ -660,11 +773,7 @@ reg_skeleton_from_fit <- function(fit) {
       tibble::tibble(var = lab, level = lvl, term = cols, is_ref = FALSE)
     }
   })
-  dplyr::bind_rows(
-    tibble::tibble(var = "Constant", level = "Reference population",
-                   term = "(Intercept)", is_ref = TRUE),
-    parts
-  )
+  dplyr::bind_rows(reg_constant_row(), parts)
 }
 
 term_prefix <- function(label) {
@@ -790,6 +899,10 @@ reg_grouped_response <- function(family)
 #' A summed score (`trials =`) is fitted on a success / failure pair, so its formula names the two
 #' internal columns tabxplor builds for it (`.gb_succ`, `.gb_fail`, and `.gb_trials` in the offset of
 #' the risk-ratio link).
+#'
+#' The formula names the columns as the user wrote them, but a continuous predictor is fitted
+#' **anchored** at its `ref` (its mean by default), and a `shape =` may have recoded it --- neither
+#' changes any effect, only what the Constant row means.
 #'
 #' @param x A table built by [tab_reg()].
 #' @return A tibble with one row per model: `model` (its name in the table), `outcome`, `family`
@@ -1005,12 +1118,6 @@ reg_svyglm_env <- function(fit) {
   }
   fit
 }
-# Releveling touches only $variables, never the weights / strata / fpc / row set.
-reg_relevel_design <- function(design, ref, relevelable) {
-  design$variables <- reg_apply_references(design$variables, ref, relevelable)
-  design
-}
-
 # === SECTION: reg_fit() -- one model, one tidy ===================================================
 # Fit ONE model on complete cases -> a tidy of the effect measure + CI + p + n. `do_exp` chooses the
 # estimate scale: exp(coef) multiplicative, raw coef additive.
@@ -1420,14 +1527,16 @@ reg_display_of <- function(display, empirical) {
 
 # === SECTION: Marginal effects and adjusted predictions (the `at` profile axis) ==================
 
-# The REFERENCE PROFILE: every predictor at its reference -- a factor at its first level (the model's
-# treatment-contrast baseline), a numeric at its mean -- which can be an odd baseline.
-reg_reference_grid_values <- function(data, predictors) {
+# THE reference profile, and the one producer of it: every predictor at its declared reference -- a
+# factor at its first level (the model's treatment-contrast baseline), a continuous predictor at its
+# ANCHOR, which the boundary already shifted to 0. The fallback is the WEIGHTED mean, and it is
+# reached only where nothing was anchored (a compound formula).
+reg_reference_grid_values <- function(data, predictors, anchors = NULL, w = NULL) {
   vals <- lapply(predictors, function(v) {
     x <- data[[v]]
-    if (is.factor(x))        levels(x)[1]
-    else if (is.character(x)) sort(unique(x))[1]
-    else                      mean(x, na.rm = TRUE)
+    if (reg_is_factor_var(x))       levels(as.factor(x))[1]
+    else if (v %in% names(anchors)) 0
+    else                            reg_weighted_mean(x, w)
   })
   stats::setNames(vals, predictors)
 }
@@ -1463,7 +1572,8 @@ reg_marginal_basis_ok <- function(fit, data, v, k, est, ratio) {
 # the fallback then runs for the WHOLE call, so one column carries one convention.
 reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
                          at = "average", comparison = NULL, want_pred = TRUE,
-                         multiplier = NULL, engine = "marginaleffects", want_se = TRUE) {
+                         multiplier = NULL, engine = "marginaleffects", want_se = TRUE,
+                         anchors = NULL) {
   do_exp <- !is.null(comparison) && comparison %in% c("lnor", "lnratioavg")
   out <- NULL
   # "lnor" is the MNL j-vs-rest contrast, which only ever comes with at = "reference".
@@ -1476,7 +1586,8 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
     if (!requireNamespace("marginaleffects", quietly = TRUE))
       reg_abort_marginaleffects("this contrast, which has no closed form on this model")
     out <- reg_marginal_me(fit, data, predictors, conf_level, wt, at = at, comparison = comparison,
-                           want_pred = want_pred, multiplier = multiplier, want_se = want_se)
+                           want_pred = want_pred, multiplier = multiplier, want_se = want_se,
+                           anchors = anchors)
   }
   if (identical(at, "average")) reg_marginal_basis_warn(fit, data, predictors, multiplier,
                                                         out$ame, do_exp)
@@ -1559,8 +1670,10 @@ reg_marginal_basis_warn <- function(fit, data, predictors, multiplier, ame, rati
 # ratio twin; both return a log exp()'d here, so the interval stays a Wald one on the log scale.
 reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
                             at = "average", comparison = NULL, want_pred = TRUE,
-                            multiplier = NULL, want_se = TRUE) {
-  ref_vals <- if (at == "reference") reg_reference_grid_values(data, predictors) else NULL
+                            multiplier = NULL, want_se = TRUE, anchors = NULL) {
+  ref_vals <- if (at == "reference")
+    reg_reference_grid_values(data, predictors, anchors,
+                              if (is.null(wt) || !wt %in% names(data)) NULL else data[[wt]]) else NULL
   ref_grid <- if (at == "reference")
     do.call(marginaleffects::datagrid, c(list(model = fit), ref_vals)) else NULL
   # weights only at the AVERAGING step; a single-row profile takes none, and `wts = NULL` is
@@ -1631,9 +1744,77 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
   list(ame = ame, pred = pred)
 }
 
+# === SECTION: the Constant row of a sample-averaged or at-reference table ========================
+#
+# Under `effect = "coefficient"` the Constant row IS the fit's own intercept, anchored by `ref`, and
+# reg_column() reads it straight from the tidy. The other two contrasts have no intercept in their
+# tidy, so the row holds the same thing computed the way THAT contrast computes everything else: the
+# model's predicted outcome, averaged over the sample (`marginal`) or evaluated at the reference
+# profile (`at_reference`). One quantity, then converted to the column's own geometry.
+#
+# ⚠ it carries its interval and NO p-value. A predicted 48.7 % is trivially "different from 0", so a
+# star there would mean something else than everywhere else in the table; only a tested intercept
+# earns one (tab_constant_null(), R/fmt_class.R, reads exactly that).
+
+# The one-row frame the reference profile is evaluated on. Built from `data` so every factor keeps
+# its full level set -- a one-row grid assembled from scratch would drop levels and shorten the model
+# matrix.
+#' @keywords internal
+reg_profile_row <- function(data, predictors, anchors = NULL, w = NULL) {
+  d    <- data[1L, , drop = FALSE]
+  vals <- reg_reference_grid_values(data, intersect(predictors, names(data)), anchors, w)
+  for (v in names(vals)) {
+    d[[v]] <- if (is.factor(data[[v]])) factor(vals[[v]], levels = levels(data[[v]]))
+              else vals[[v]]
+  }
+  d
+}
+
+# A predicted outcome read on the column's own geometry, with the interval taken where that geometry
+# is linear: an ODDS RATIO column shows the baseline odds and brackets it on the log-odds, a ratio
+# column the baseline risk/rate on the log, an additive column the probability/mean as it is.
+#' @keywords internal
+reg_constant_cell <- function(P, se, scale_key, crit) {
+  if (!is.finite(P) || !is.finite(se)) return(list(est = NA_real_, lo = NA_real_, hi = NA_real_))
+  sc <- EST_SCALES[[scale_key]]
+  if (identical(sc$est_field, "or")) {
+    if (!isTRUE(P > 0 && P < 1)) return(list(est = NA_real_, lo = NA_real_, hi = NA_real_))
+    o  <- P / (1 - P)
+    sl <- se / (P * (1 - P))                                   # d log-odds / dP
+    return(list(est = o, lo = o * exp(-crit * sl), hi = o * exp(crit * sl)))
+  }
+  if (isTRUE(sc$mult)) {
+    if (!isTRUE(P > 0)) return(list(est = NA_real_, lo = NA_real_, hi = NA_real_))
+    sl <- se / P
+    return(list(est = P, lo = P * exp(-crit * sl), hi = P * exp(crit * sl)))
+  }
+  list(est = P, lo = P - crit * se, hi = P + crit * se)
+}
+
+# The whole row, per outcome category: NULL wherever the baseline cannot be computed (an offset, a
+# polr under `coefficient`, a fit the digest path did not keep).
+#' @keywords internal
+reg_constant_baseline <- function(fit, data, predictors, at, wt, conf_level, scale_key,
+                                  anchors = NULL) {
+  if (is.null(fit) || is.null(scale_key)) return(NULL)
+  w  <- if (!is.null(wt) && wt %in% names(data)) data[[wt]] else NULL
+  nd <- if (identical(at, "reference")) reg_profile_row(data, predictors, anchors, w) else NULL
+  b  <- reg_gcomp_baseline(fit, data, wt, newdata = nd)
+  if (is.null(b)) return(NULL)
+  V <- tryCatch(stats::vcov(fit), error = function(e) NULL)
+  if (is.null(V) || !is.matrix(V)) return(NULL)
+  crit <- stats::qnorm(1 - (1 - conf_level) / 2)
+  cells <- purrr::map(seq_along(b$est), function(j)
+    reg_constant_cell(b$est[[j]], reg_delta_se(b$G[[j]], V), scale_key, crit))
+  tibble::tibble(group = as.character(b$levels),
+                 est = vapply(cells, `[[`, numeric(1), "est"),
+                 lo  = vapply(cells, `[[`, numeric(1), "lo"),
+                 hi  = vapply(cells, `[[`, numeric(1), "hi"))
+}
+
 reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
                                 group, color, color_signif, col_var, or_tip = NULL,
-                                model_family = "", scale = NULL, trials = NULL) {
+                                model_family = "", scale = NULL, trials = NULL, const = NULL) {
   amt <- marg$ame; prd <- marg$pred
   if (!is.na(group)) {
     amt <- amt[!is.na(amt$group) & amt$group == group, , drop = FALSE]
@@ -1650,8 +1831,21 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
   # in_refrow is the UNION-skeleton row fact (see reg_column); `is_ref` stays in_model-gated below.
   refrows  <- (skeleton$is_ref & !is_const) | is_const
 
+  # THE SCALE the estimand declares, resolved once: every arm writes into the field it names.
+  sc <- scale %||% switch(shape, prob = "points", prob_ratio = "pct_ratio",
+                          raw_ratio = "mean_ratio", or = "odds_ratio", "raw_diff")
+
   display <- rep("blank", n_rows)
   show    <- in_model & (!is.na(ame_v) | is_ref)
+  # the baseline this contrast is read against (see reg_constant_baseline): no p-value, so the row
+  # takes no star and `keep <- !is.na(get_pvalue(col))` still means "an estimated effect".
+  if (!is.null(const) && any(is_const)) {
+    cst <- if (is.na(group)) const[1L, ] else const[const$group == group, , drop = FALSE]
+    if (nrow(cst) == 1L && is.finite(cst$est)) {
+      ame_v[is_const] <- cst$est; lo_v[is_const] <- cst$lo; hi_v[is_const] <- cst$hi
+      show <- show | is_const
+    }
+  }
   if (shape == "prob") {
     display[show] <- "est"
     # EVERY reference cell carries its measure's neutral, on every scale -- the additive 0 here, as in
@@ -1663,7 +1857,6 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
     # ⚠ the SCALE written into is the ESTIMAND's, never the arm's, and the estimate goes in the field
     # that scale declares -- on a summed score `raw_diff`, converted from the per-item contrast by
     # `trials` (exact), beside the mean score as its level.
-    sc <- scale %||% "points"
     if (identical(sc, "raw_diff") && !is.na(trials %||% NA)) {
       k <- as.numeric(trials); ame_v <- ame_v * k; lo_v <- lo_v * k; hi_v <- hi_v * k
     }
@@ -1682,7 +1875,6 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
     # adjusted(ref) x RR(level) == adjusted(level). The reference cell keeps the FULL template.
     display[show] <- "est"
     ame_v[is_ref] <- 1                                         # multiplicative neutral at the reference
-    sc <- scale %||% "pct_ratio"
     do.call(fmt, c(
       stats::setNames(list(ame_v), EST_SCALES[[sc]]$est_field),
       stats::setNames(list(pred_v), EST_SCALES[[sc]]$base_display),
@@ -1699,7 +1891,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
     fmt(
       n = rep(NA_integer_, n_rows),
       ratio = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      scale = "mean_ratio", display = display, digits = reg_cell_digits("mean_ratio"), ref = "1", ci_method = "wald_log",
+      scale = sc, display = display, digits = reg_cell_digits(sc), ref = "1", ci_method = "wald_log",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
@@ -1709,7 +1901,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
     fmt(
       n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
       or = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      scale = "odds_ratio", pct_type = reg_pct_type("odds_ratio"), display = display, digits = reg_cell_digits("odds_ratio"), ref = "1",
+      scale = sc, pct_type = reg_pct_type(sc), display = display, digits = reg_cell_digits(sc), ref = "1",
       ci_method = "wald_log",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
@@ -1721,7 +1913,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
       n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
       diff = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
       var = rep(var_y, n_rows),                               # var(Y): standardizes the effect-size colour
-      scale = "raw_diff", display = display, digits = reg_cell_digits("raw_diff"), ci_method = "wald",
+      scale = sc, display = display, digits = reg_cell_digits(sc), ci_method = "wald",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
@@ -2426,6 +2618,7 @@ new_reg_shared <- function(union_predictors = character(0), design_spec = list()
                            subtext = "",
                            stats = NULL, compare = "none", baseline = NULL,
                            multiplier = NULL, multiplier_label = NULL,
+                           anchors = NULL, anchor_keyword = NULL,
                            shape_terms = NULL, shape_labels = NULL,
                            empirical = FALSE, display = NULL,
                            var_labels = character(0), na_shared_vars = character(0),
@@ -2482,6 +2675,7 @@ new_reg_ctx <- function(
     # ⚠ `fit_cache` is NOT `.fit_cache`: `as.list(environment())` defaults to all.names = FALSE, so a
     # dot-prefixed key is SILENTLY DROPPED. No ctx key may start with a dot.
     data = NULL, specs = list(), shared = list(), tab_vars = NULL, fit_cache = NULL,
+    # `ref` here is the RESOLVED factor-level map, the reref path's only deferred rewrite.
     ref = NULL, reref = FALSE, skeleton_data = NULL,
     # --- reg_stage_setup: the skeleton, the table's SHAPE facts and the per-spec PLAN ------------
     # ⚠ `data` is REWRITTEN here on the reref path and read afterwards by four consumers: a declared
@@ -2630,7 +2824,7 @@ reg_stage_setup <- function(ctx) {
   skeleton   <- NULL
   if (isTRUE(reref)) {
     data_canon <- data
-    if (!is.null(ref)) data <- reg_apply_references(data, ref, union_predictors)
+    if (length(ref) > 0L) data <- reg_relevel_data(data, ref)
     skeleton <- reg_skeleton(data, union_predictors)   # an INPUT to reg_reref_fit_res(), not an output
   }
 
@@ -2809,8 +3003,16 @@ reg_cols_ame <- function(f, sp, ctx) {
                         at = if (identical(sp_est$effect, "at_reference")) "reference" else "average",
                         want_pred = TRUE,
                         comparison = if (ratio_ame) "lnratioavg" else NULL,
-                        multiplier = multiplier, engine = reg_marginal_engine(sp_est))
+                        multiplier = multiplier, engine = reg_marginal_engine(sp_est),
+                        anchors = anchors)
   marg     <- reg_scale_pred(marg, sp$trials)
+  # the Constant row: this contrast has no intercept in its tidy, so the baseline is the model's own
+  # predicted outcome, at the very profile the column's effects are read at.
+  const <- reg_constant_baseline(
+    f$fit, f$data, sp$predictors,
+    at = if (identical(sp_est$effect, "at_reference")) "reference" else "average",
+    wt = design_spec$wt, conf_level = conf_level,
+    scale_key = reg_scale_of(sp_est, sp$trials), anchors = anchors)
   marg_add <- if (!ratio_ame) marg
     else if (is.null(f$fit)) NULL
     else reg_scale_pred(reg_fill_sweep(f$fit, f$data, sp$predictors, conf_level,
@@ -2837,7 +3039,7 @@ reg_cols_ame <- function(f, sp, ctx) {
                                              var_y, g, sp_col, color_signif, cv_cat,
                                              model_family = sp_fam,
                                              scale = reg_scale_of(sp_est, sp$trials),
-                                             trials = sp$trials), g))
+                                             trials = sp$trials, const = const), g))
     })
   } else {
     or_tip <- if (sp_fam == "binomial" && !ratio_ame) {
@@ -2852,7 +3054,7 @@ reg_cols_ame <- function(f, sp, ctx) {
                                         var_y, NA_character_, sp_col, color_signif,
                                         cv, or_tip = or_tip, model_family = sp_fam,
                                         scale = reg_scale_of(sp_est, sp$trials),
-                                        trials = sp$trials))))
+                                        trials = sp$trials, const = const))))
   }
 }
 
@@ -2865,10 +3067,13 @@ reg_cols_vsrest <- function(f, sp, ctx) {
   sp_col <- sp$color
   marg   <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, design_spec$wt,
                          at = "reference", comparison = "lnor", want_pred = FALSE,
-                         engine = reg_marginal_engine(sp$est))
+                         engine = reg_marginal_engine(sp$est), anchors = anchors)
   marg_add <- if (is.null(f$fit)) NULL else
     reg_scale_pred(reg_fill_sweep(f$fit, f$data, sp$predictors, conf_level, design_spec$wt),
                    sp$trials)
+  const  <- reg_constant_baseline(f$fit, f$data, sp$predictors, at = "reference",
+                                  wt = design_spec$wt, conf_level = conf_level,
+                                  scale_key = "odds_ratio", anchors = anchors)
   groups <- levels(as.factor(f$data[[sp$outcome]]))
   cv_cat <- reg_category_col_var(sp, is_comparison, f$positive_level, cleannames)
   purrr::map(groups, function(g) {
@@ -2876,7 +3081,7 @@ reg_cols_vsrest <- function(f, sp, ctx) {
     lab <- paste0(if (prefix_dep) paste0(sp$outcome, " - ") else "", jc, " vs rest")
     col <- reg_marginal_column(skeleton, marg, sp$predictors, "or",
                                NA_real_, g, sp_col, color_signif, cv_cat,
-                               model_family = sp_fam)
+                               model_family = sp_fam, const = const)
     col <- reg_fill_base(col, marg_add, skeleton, sp$predictors, group = g)
     list(label = lab, col = reg_apply_display(col, reg_display_of(display, empirical)))
   })
@@ -3030,15 +3235,40 @@ reg_stage_rows <- function(ctx) {
   # A scaled numeric predictor's level IS its unit -- "per SD/13.5", not "age (per 1 SD (13.5))".
   # The `var` column already names the variable, so repeating it there only stretched the column and
   # made the label wrap. Keyed on the LINEAR term, so a curved predictor's squared row claims no unit.
-  lin <- !is.na(skeleton$term) & skeleton$term == skeleton$var
+  # The Constant row says WHICH baseline it holds, which is a property of the CONTRAST: a
+  # sample-averaged table's is the population, every other one's is the reference profile. A row
+  # label cannot be per column, so a table mixing contrasts takes the profile reading -- the one
+  # that is true of the anchored intercept the other columns show.
+  cst <- skeleton$var == "Constant"
+  if (any(cst)) {
+    effs <- vapply(specs, function(sp) sp$est$effect %||% "coefficient", character(1))
+    disp_levels[cst] <- if (all(effs == "marginal")) gettext("Population average")
+                        else gettext("Reference profile")
+  }
+
+  lin      <- !is.na(skeleton$term) & skeleton$term == skeleton$var
+  num_rows <- skeleton$var %in% numeric_preds & lin
   if (length(multiplier_label)) {
-    num_rows <- skeleton$var %in% numeric_preds & lin
     for (v in names(multiplier_label)) {
       lab <- multiplier_label[[v]]
       if (is.na(lab)) next
       hit <- num_rows & skeleton$var == v
       if (any(hit)) disp_levels[hit] <- gettextf("per %s", lab)
     }
+  }
+  # ...and WHERE it is read from: "per SD/2.07 (at mean/2.98)". A continuous predictor's row states
+  # the two facts a reader needs to place it -- the unit its effect is per, and the anchor the
+  # Constant row and every interacted term sit at. Without the second the reference profile is
+  # invisible. Keyed on the LINEAR row, like the unit: the squared row shares the same anchor.
+  # ⚠ the separating space stays OUT of the msgid: potools strips a leading one, so " (at %s)" would
+  # be extracted as "(at %s)" and the runtime lookup could never match its own catalogue entry.
+  for (v in intersect(names(anchors), numeric_preds)) {
+    hit <- num_rows & skeleton$var == v
+    if (!any(hit)) next
+    kw  <- anchor_keyword[[v]] %||% ""
+    num <- format(signif(anchors[[v]], 3), scientific = FALSE)
+    disp_levels[hit] <- paste0(disp_levels[hit], " ", gettextf(
+      "(at %s)", if (nzchar(kw)) paste0(reg_anchor_word(kw), "/", num) else num))
   }
 
   # THE OBSERVED SHAPE of each continuous predictor, stored as a CURVE and drawn at display time
@@ -3349,12 +3579,36 @@ reg_stage_finalize <- function(ctx) {
 #'   models. `"profile"` uses the profile-likelihood interval ([stats::confint()], needs `MASS`) and
 #'   the likelihood-ratio test: more accurate near separation, unweighted binomial / poisson only
 #'   (otherwise it falls back to Wald with a message; gaussian always uses the exact-t interval).
-#' @param ref Optional named vector `c(var = "baseline level")` --- the same grammar as [tab()]'s
-#'   `ref` --- choosing the treatment-contrast reference level of one or more factor **predictors**
-#'   (every other level's effect is measured against it), and of `tab_vars` (which group
-#'   `color = "between_groups"` compares to). Other contrast codings can be applied by passing a
-#'   formula in `outcome` with the terms already coded. For the level of the **outcome**, see
-#'   `outcome_level`: `ref` names the level you compare AGAINST, `outcome_level` the one you MODEL.
+#' @param ref The reference every effect is measured **from** --- one argument, one meaning per kind
+#'   of predictor.
+#'   \itemize{
+#'     \item a **factor**: the level the others are compared against (its `Model_*` cell reads `1`
+#'       or `0`, and its row is bold). A level name, or `"first"` (the default) / `"last"`.
+#'     \item a **continuous** predictor: the value it is **anchored** at --- a number, or `"mean"`
+#'       (the default), `"median"`, `"min"`, `"max"`.
+#'   }
+#'   A continuous predictor's row says where its anchor sits, beside the unit its effect is per:
+#'   `per SD/13.5 (at mean/42.4)`, or `(at min/0)`, or `(at 40)` for a value you gave yourself.
+#'
+#'   Write it as `ref = c(race = "Black", age = 40)`. A value given **without a variable name** is
+#'   the default for every predictor it can apply to, so `ref = "median"` anchors every continuous
+#'   predictor and `ref = c("median", "last", race = "Black")` sets both defaults at once (see
+#'   `multiplier` for the same grammar).
+#'
+#'   Anchoring a continuous predictor **does not change its own effect** --- a slope is the same
+#'   wherever you start reading it from --- but it does change the **Constant** row, and every term
+#'   the predictor interacts with. The default anchor is the mean because zero is usually outside
+#'   the data: nobody is 0 years old. If a predictor's zero is meaningful (`tvhours`, a count), say
+#'   `ref = c(tvhours = 0)`.
+#'
+#'   The anchor is measured **once**, on the complete cases of the predictors, so one predictor keeps
+#'   one reference across outcomes, compared models and `tab_vars` groups. `shape` applies first, so
+#'   `ref` on a `"log"`-shaped predictor anchors the log (use a keyword there, or write
+#'   `ref = c(age = log(30))`), and a `"quartiles"`-shaped one is a factor, taking a level name. A
+#'   `poly()` / `I()` term written by hand in a `formula` is never anchored.
+#'
+#'   For the level of the **outcome**, see `outcome_level`: `ref` names the level you compare
+#'   AGAINST, `outcome_level` the one you MODEL.
 #' @param outcome_level Which level of the **outcome** to single out, as a named vector keyed by
 #'   outcome name --- `outcome_level = c(married = "Married")` --- so several outcomes each get their
 #'   own. It is the twin of `ref`: **`ref` names the level you compare AGAINST, `outcome_level` the
@@ -3383,11 +3637,16 @@ reg_stage_finalize <- function(ctx) {
 #' @param multiplier How a **continuous** predictor's effect is scaled --- the unit its row reports.
 #'   One unit of a continuous variable is rarely a readable amount (a one-year change in `age` barely
 #'   moves the odds, so its odds ratio sits inside the first colour break and the row reads as "no
-#'   effect"), so the default is **one standard deviation**. Give either a **single value**, applied
-#'   to every continuous predictor, or a **named vector** overriding chosen ones: `"sd"` (the
-#'   default), `"2sd"` (roughly bottom to top of the distribution), or a number of units (`10` = per
-#'   decade of age). `multiplier = 1` restores the per-one-unit reading. The row's level names the
-#'   unit it used, e.g. `per SD/13.5` --- the variable itself is named in the `var` column beside it.
+#'   effect"), so the default is **one standard deviation**. Values: `"sd"` (the default), `"2sd"`
+#'   (roughly bottom to top of the distribution), or a number of units (`10` = per decade of age);
+#'   `multiplier = 1` restores the per-one-unit reading. The row's level states both facts that place
+#'   it --- the unit, and the `ref` anchor the Constant row sits at: `per SD/13.5 (at mean/42.4)`.
+#'   The variable itself is named in the `var` column beside it.
+#'
+#'   `multiplier`, `shape` and `ref` share one grammar: a **value on its own** applies to every
+#'   continuous predictor, a **named** one overrides that variable, and `default =` spells the first
+#'   out --- so `multiplier = c("2sd", age = 10)` reads "per two standard deviations, except `age`,
+#'   per decade".
 #'
 #'   Everything scales together --- the estimate, its interval, the crude `Obs_*` companion and the
 #'   model-versus-observed comparison; the p-value is unchanged. **Because the default is not 1, a
@@ -3400,7 +3659,8 @@ reg_stage_finalize <- function(ctx) {
 #' @param shape How a **continuous** predictor enters the model, when one straight line is not
 #'   enough. The `Linearity` footer row and the little curve drawn in the predictor's `n` cell tell
 #'   you *whether* a line is enough; this argument is how you fix it without leaving the framework.
-#'   A **named vector** over continuous predictors --- everything it does not name stays linear:
+#'   Same grammar as `multiplier` and `ref` --- `shape = "quintiles"` cuts every continuous
+#'   predictor, `shape = c(age = "quadratic")` only that one, and anything unnamed stays linear:
 #'   \describe{
 #'     \item{`"linear"`}{one slope (the default).}
 #'     \item{`"quintiles"` / `"quartiles"` / an integer `k`}{cut into `k` quantile groups, so the
@@ -3542,12 +3802,16 @@ reg_stage_finalize <- function(ctx) {
 #'   A cell that cannot fill an aside leaves it **blank but padded**, so the effects still line up;
 #'   an aside no cell of the column can fill is dropped, padding and all.
 #'
-#'   The **Constant** row is the model's intercept, and it is the one row whose profile is not the
-#'   reference profile the rest of the table uses: every factor sits at its reference level, but
-#'   every numeric predictor sits at **zero** --- which, for an age or an income, is outside the
-#'   data. Read it as the baseline of the fitted equation, not as a population. It is empty under
-#'   `effect = "marginal"` and `"at_reference"` (a sample-averaged table has no intercept to show)
-#'   and for an ordinal outcome (a cumulative logit has thresholds, not one intercept).
+#'   The **Constant** row is the baseline the rest of the column is read against, at the very point
+#'   that column's effects are read at: under `effect = "coefficient"` the model's intercept ---
+#'   every factor at its reference level and every continuous predictor at its `ref` anchor, the
+#'   mean by default; under `"at_reference"` the outcome the model predicts at that same profile;
+#'   under `"marginal"` the **population average** the sample-averaged effects sit on, which is what
+#'   its label then says. On a multiplicative column it is a baseline *odds* (or risk, or rate), on
+#'   an additive one a baseline probability or mean --- the quantity the effects beside it move.
+#'   It carries its confidence interval but **no star** except under `"coefficient"`, where the star
+#'   is the fit's own test of the intercept: a predicted 48.7 % is not "different from zero". An
+#'   ordinal outcome leaves it empty (a cumulative logit has thresholds, not one intercept).
 #'
 #'   Or write a `{}` template: `"{est} (obs {obs})"` prints each adjusted effect next to the
 #'   unadjusted one, `"{est} ({gap})"` next to how far adjustment moved it.
@@ -3805,7 +4069,7 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
     subtext = subtext, .fit_cache = .fit_cache, levels_collapse = .levels_collapse)
 
   res <- reg_build(a$data, a$specs, a$shared, tab_vars = tab_vars,
-                   .fit_cache = .fit_cache, ref = ref, reref = a$reref)
+                   .fit_cache = .fit_cache, ref = a$ref_levels, reref = a$reref)
 
   # The p-value is stars-only -- colours read the CI bounds -- so `stars = FALSE` just drops it.
   if (!isTRUE(stars)) {
@@ -3838,6 +4102,9 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
     fit_spec = list(specs = a$specs, method = method, conf_level = a$shared$conf_level,
                     outcome_level = outcome_level,
                     na_shared_vars = a$na_shared_vars, shape_terms = a$shape_terms,
+                    # THE preparation recipe (the column recodes + the anchors), so a refit from the
+                    # user's raw data reproduces the very model the table shows.
+                    prep = a$prep,
                     multiplier = a$multiplier, effect = a$est$effect, measure = a$est$measure,
                     wt = a$wt_disp, design_vars = reg_design_vars(a$design_spec)),
     # which observed counterpart each outcome has (NA = none), and where it went -- stored, with the
