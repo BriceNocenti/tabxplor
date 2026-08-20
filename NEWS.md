@@ -20,10 +20,10 @@
   whoever is reading the table (their browser, or the editor for the Viewer). The console also
   auto-detects a dark editor (RStudio and Positron).
 * **A black-and-white publication palette.** `theme = "print"` (on `tab_html()` / `tab_md()` /
-  `tab_xl()` / `tab_export()` / `tab_css()`) renders the colour measures typographically — bold for
-  over-represented cells, italic for under-represented ones, an underline for the strongest threshold,
-  a grey fill for a second measure — because a greyscale print turns the two colour directions into the
-  same shades of grey. It reaches Excel as real font attributes, and is written as `<b>`/`<i>`/`<u>`
+  `tab_xl()` / `tab_export()` / `tab_css()`) renders the colour measures typographically — an underline
+  for over-represented cells, italic for under-represented ones, the ink darkening and turning bold
+  with the size of the deviation, a grey fill for a second measure — because a greyscale print turns
+  the two colour directions into the same shades of grey. It reaches Excel as real font attributes, and is written as `<b>`/`<i>`/`<u>`
   markup as well as CSS, so it survives a paste into Word. Every stylesheet also carries it in an
   `@media print` block, so a coloured html table already prints publication-ready
   (`options(tabxplor.print_rules = FALSE)` to opt out).
@@ -488,8 +488,8 @@
 * **`tab_spread()` left the table's tests pointing at columns that no longer exist**, so a spread
   cross-table lost its whole test summary (chi-squared, effect size, p-value).
 * **`tab_plot()`'s colour legend ignored the palette's typography** and forced every token bold, so
-  under `theme = "print"` — where direction is encoded as bold vs italic on black text — the legend
-  became unreadable.
+  under `theme = "print"` — where the direction is a typographic face, not a colour — the legend became
+  unreadable.
 
 * **`color = "auto"` works beside `color_signif`**, and now means exactly what `color = TRUE` means.
   The combination used to abort with *"Unknown color measure"* — on cross-tables and on mean tables

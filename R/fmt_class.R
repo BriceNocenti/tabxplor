@@ -3539,11 +3539,14 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
 # === SECTION: the primary/secondary paint split ======================================================
 #
-# A composite cell reads as ONE number with an aside -- "1/1.63*** (31%)" -- and the colour grades the
-# number, not the aside. So only the PRIMARY token is shaded and the aside is set slightly back from
-# the table's own text. The split is possible at all because format(bold_split = TRUE) hands back the
+# A composite cell reads as ONE number with an aside -- "1/1.63*** (31%)" -- and what a measure grades
+# is the number, not the aside. So only the PRIMARY token carries the cell's rendering and the aside is
+# set slightly back from the table's own text. That is the colour, and equally the FACE wherever a
+# palette speaks through typography (theme = "print"): both are the measure talking, so both stop in
+# the same place -- the face half is applied by html_cell_text() (R/tab-render-html.R), which is where
+# the pieces are known. The split is possible at all because format(bold_split = TRUE) hands back the
 # primary's character RANGE -- the same fact the exporters already use to bold only the primary field.
-# DESIGN: THERE IS NO COLOUR TO CHOOSE HERE. Which shade an aside takes is a PALETTE fact, resolved
+# DESIGN: THERE IS NOTHING TO CHOOSE HERE. Which shade an aside takes is a PALETTE fact, resolved
 # per theme like every other piece of chrome; the only thing left to decide is whether the split
 # happens at all, which is the one expert opt-out below.
 #' @keywords internal
@@ -4682,13 +4685,14 @@ legend_join <- function(toks, sep) {
 }
 
 # default palette -> baked shade names; a custom palette -> NA (the coloured break-words carry the
-# meaning). One pair PER CHANNEL: the print palette's text side is a TYPOGRAPHY (Bold/Italic) and its
-# background side a grey fill, so a background-only column must not announce "Bold:" about grey fills.
+# meaning). One pair PER CHANNEL: the print palette's text side names the DIRECTION face
+# (Underlined/Italic -- its ink ramp is the magnitude, which the break-words already show) and its
+# background side a grey fill, so a background-only column must not announce "Underlined:" about fills.
 legend_shade_names <- function(theme = "light") {
   if (identical(tx_palette_theme(theme), "print")) {
     # Curated palette, so these are always right: they describe the face table.
-    return(list(text = c(over = gettext("Bold"),       under = gettext("Italic")),
-                bg   = c(over = gettext("Grey fill"),  under = gettext("Grey fill"))))
+    return(list(text = c(over = gettext("Underlined"), under = gettext("Italic")),
+                bg   = c(over = gettext("Grey fill"),   under = gettext("Grey fill"))))
   }
   is_default <- tryCatch({
     b <- get0("base", envir = tabxplor_palette_env)

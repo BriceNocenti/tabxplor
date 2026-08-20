@@ -88,8 +88,8 @@ msgstr "écarts-types"
 msgid "the mean contribution"
 msgstr "la contribution moyenne"
 
-msgid "Bold"
-msgstr "Gras"
+msgid "Underlined"
+msgstr "Souligné"
 
 msgid "Italic"
 msgstr "Italique"

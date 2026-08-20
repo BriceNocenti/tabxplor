@@ -577,13 +577,14 @@ tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all"
 # - bold only applies to the primary display token (right behaviour), but underline and italics also apply to the
 #   secondary display tokens: they too, like colors, should only apply to the primary display token by default (global option). Otherwise it’s noise.
 # - bold is more visually striking than underline, and italics is subtle and not striking (specially with the current html monospace font).
-#   We’ll try something a bit different:
+#   I want to try something a bit different (then, I’ll decide with visual review):
 #   1. `tx_chrome_hex("print")$grey` identifies the greyed-out cells (the "#888888" grey is much lighter than with colors)
-#   2. the direction information is carried by : over have underline ; under have italics and no underline
+#   2. the direction information is carried by : "over" have underline ; "under" have italics and no underline
 #   3. the size of effect is carried by a 3 rungs ladder: "#333333" text ; "#000000" text ; "#000000" + bold text ; 
 
 
-# - some tests are now failing because I tweaked the `tx_chrome_hex("print") palette. A WCAG assertion is failing for 
+# - some tests are now failing because I tweaked the `tx_chrome_hex("print") palette. A WCAG assertion may be failing 
+# for the greyed-out cells, but it’s on purpose since grey-out mean "volontarity more difficult to read".
 
 
 

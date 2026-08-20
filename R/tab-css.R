@@ -103,11 +103,12 @@ tx_chrome_hex <- function(theme = "light") {
     tx_palette_theme(theme),
     dark = list(text = "#CECDC3", grey = "#707070", grey2 = "#bebebe", #"#afaea5", # "#EEEEEE",
                 bg = "#222222", border = "#CECDC3", hover = "rgba(255,242,204,.10)"),
-    # z11: the light chrome, with ONE deliberate change. `grey` (a non-significant cell under
-    # color_signif = "grey_non_signif") must stay readable ON the print background fills: #9f9f9f is
-    # 1.41:1 on the darkest fill #B8B8B8, i.e. invisible; #595959 is 3.53:1 on it and 7.0:1 on white,
-    # still plainly "greyed" against the pure black of a significant cell. `hover` is meaningless on paper.
-    print = list(text = "#000000", grey = "#888888", grey2 = "#333333", # "#111111",
+    # z11: the light chrome, with two deliberate changes. `grey` (a non-significant cell under
+    # color_signif = "grey_non_signif") is set LIGHT on purpose -- 3.54:1 on white, 1.79:1 on the
+    # darkest fill: greyed means "deliberately harder to read", so it is held to the large-text /
+    # non-text floor, never to the 4.5:1 body-text one. `grey2` is the aside's ink, and the ladder's
+    # first rung reuses it (both mean "set slightly back"). `hover` is meaningless on paper.
+    print = list(text = "#000000", grey = "#888888", grey2 = "#333333",
                  bg = "#ffffff", border = "#000000", hover = "transparent"),
     list(text = "#000000", grey = "#9f9f9f", grey2 = "#333333",
          bg = "#ffffff", border = "#000000", hover = "#FFFCE5")
@@ -257,9 +258,20 @@ tx_css_rules <- function(chrome = TRUE) {
     # grey into the dark page. Under `color_whole_cell` no rule is emitted at all: the aside then
     # inherits the cell's own shade, which is what the span's absence already gives -- but the span
     # is still written, so a stylesheet can restyle it either way.
-    if (!color_whole_cell_opt())
+    if (!color_whole_cell_opt()) {
       add(".tabxplor-tab .tx-sec", "color", color_secondary_hex("light"),
           color_secondary_hex("dark"), color_secondary_hex("print"))
+      # ... and the same for the FACE, which only the print palette has: the aside is not what any
+      # measure grades, so the direction/magnitude typography stops at the primary exactly as the colour
+      # does. Print-only values, so the light/dark layers stay byte-identical.
+      # WARNING: `display:inline-block` is the load-bearing one, NOT `text-decoration:none`. A CSS
+      # text-decoration is drawn by the ancestor box across everything inside it and CANNOT be switched
+      # off by a descendant; only an atomic inline box (an inline-block) is left out of it. The `none`
+      # is kept for the reader and for a host that decorates the span itself.
+      sec_face <- c("font-style" = "normal", "text-decoration" = "none",
+                    "display" = "inline-block")
+      for (k in names(sec_face)) add(".tabxplor-tab .tx-sec", k, "", "", sec_face[[k]])
+    }
   }
 
   # Phase 14l: the text channel uses the text family and the bg channel the bg family -- the loop

@@ -47,15 +47,15 @@ A's three arguments — so they are designed together and implemented together.
 That single sentence is what makes every subsystem work with no new machinery, because each of them
 already knows what to do with a predictor:
 
-| subsystem | what it needs | what a compound predictor gives it |
-|---|---|---|
-| row model | one row per level | one row per cell |
-| `n` / `{base}` | a count and a level per row | the cell count, the observed and adjusted rates |
-| crude companion | a univariable model on the same estimand | the saturated cell fit — closed form, exact |
-| adjustment gap | crude and adjusted from one fitted frame | both, so the influence-function CI applies |
-| colour + stars | an estimate, a null, an interval | unchanged — it is the same measure |
-| survey design | a formula `svyglm` accepts | an ordinary factor term |
-| jamovi cache | a fingerprint of the prepared frame | the new column moves the key by construction |
+| subsystem       | what it needs                            | what a compound predictor gives it              |
+|-----------------|------------------------------------------|-------------------------------------------------|
+| row model       | one row per level                        | one row per cell                                |
+| `n` / `{base}`  | a count and a level per row              | the cell count, the observed and adjusted rates |
+| crude companion | a univariable model on the same estimand | the saturated cell fit — closed form, exact     |
+| adjustment gap  | crude and adjusted from one fitted frame | both, so the influence-function CI applies      |
+| colour + stars  | an estimate, a null, an interval         | unchanged — it is the same measure              |
+| survey design   | a formula `svyglm` accepts               | an ordinary factor term                         |
+| jamovi cache    | a fingerprint of the prepared frame      | the new column moves the key by construction    |
 
 The same sentence generalises one level up, and that is what ties Part B to Part C: **decide the
 parametrisation while the data is being prepared, and the fit's own output is already the table.** An
@@ -87,13 +87,13 @@ that decide the design:
 
 Settled with the maintainer during this phase; the evidence is the section named.
 
-| # | decision | where |
-|---|----------|-------|
-| **F1** | Keep the three arguments; unify their grammar. No `pred()` constructor. | §2.3 |
-| **F2** | `ref` extends to continuous predictors; the default profile value is the **mean**. | §3.3 |
-| **F3** | The Constant row is anchored at the declared reference — revised below, see R1/R2/R3. | §3.3 |
-| **F4** | Under `effect = "marginal"` the Constant row is the **population-average** prediction instead. | §3.5 |
-| **F5** | Interactions get a first-class argument, `cross =`; the formula hatch is not the answer. | §4 |
+| #      | decision                                                                                       | where |
+|--------|------------------------------------------------------------------------------------------------|-------|
+| **F1** | Keep the three arguments; unify their grammar. No `pred()` constructor.                        | §2.3  |
+| **F2** | `ref` extends to continuous predictors; the default profile value is the **mean**.             | §3.3  |
+| **F3** | The Constant row is anchored at the declared reference — revised below, see R1/R2/R3.          | §3.3  |
+| **F4** | Under `effect = "marginal"` the Constant row is the **population-average** prediction instead. | §3.5  |
+| **F5** | Interactions get a first-class argument, `cross =`; the formula hatch is not the answer.       | §4    |
 
 ⚠ **F3 was revised inside this study.** It was first written as *"the model's prediction at the
 reference profile; never centre the data"*. The maintainer then asked what happens with an
@@ -103,18 +103,18 @@ reference — but the *route* is now P8.
 
 Proposed by this study, for the maintainer to confirm:
 
-| # | proposal | where |
-|---|----------|-------|
-| **P1** | "The rest" is spelled with a reserved `default` name: `multiplier = c(default = "2sd", age = 10)`. | §2.3 |
-| **P2** | `cross` materialises a **compound predictor column**; it does not add a model term. | §4.5 |
-| **P3** | Both parents categorical → a combined **factor**. One continuous → **nested slopes**. | §4.6, §4.7 |
-| **P4** | The compound predictor's reference is composed from its parents' own `ref` — no new grammar. | §4.12 |
-| **P5** | The interaction test is one extra additive fit, reusing `reg_interaction_rows()`'s pattern. | §4.11 |
-| **P6** | The compound column is nameable in `predictors`, so a comparison can omit it. | §4.12 |
-| **P7** | A new colour measure grades each cell's departure from **no interaction**, on the bg channel. | §4.15 |
-| **P8** | The anchor is realised by SHIFTING the column before the fit (R2), not by predicting after. | §3.4 |
-| **P9** | `shape` recodes first, the anchor applies to the result; a quantile shape is never shifted. | §3.7 |
-| **P10** | A re-anchor is an exact linear reparametrisation — the jamovi fast path, not the semantics. | §3.6 |
+| #       | proposal                                                                                           | where      |
+|---------|----------------------------------------------------------------------------------------------------|------------|
+| **P1**  | "The rest" is spelled with a reserved `default` name: `multiplier = c(default = "2sd", age = 10)`. | §2.3       |
+| **P2**  | `cross` materialises a **compound predictor column**; it does not add a model term.                | §4.5       |
+| **P3**  | Both parents categorical → a combined **factor**. One continuous → **nested slopes**.              | §4.6, §4.7 |
+| **P4**  | The compound predictor's reference is composed from its parents' own `ref` — no new grammar.       | §4.12      |
+| **P5**  | The interaction test is one extra additive fit, reusing `reg_interaction_rows()`'s pattern.        | §4.11      |
+| **P6**  | The compound column is nameable in `predictors`, so a comparison can omit it.                      | §4.12      |
+| **P7**  | A new colour measure grades each cell's departure from **no interaction**, on the bg channel.      | §4.15      |
+| **P8**  | The anchor is realised by SHIFTING the column before the fit (R2), not by predicting after.        | §3.4       |
+| **P9**  | `shape` recodes first, the anchor applies to the result; a quantile shape is never shifted.        | §3.7       |
+| **P10** | A re-anchor is an exact linear reparametrisation — the jamovi fast path, not the semantics.        | §3.6       |
 
 ---
 
@@ -124,18 +124,18 @@ Proposed by this study, for the maintainer to confirm:
 
 Measured against the resolvers, not against the prose.
 
-| | `multiplier` | `shape` | `ref` |
-|---|---|---|---|
-| declared | `TAB_ARGS` :633 | `TAB_ARGS` :634 | `TAB_ARGS` :208 |
-| resolver | `reg_resolve_multiplier()` | `reg_resolve_shape()` | `reg_apply_references()` |
-| defined at | `R/tab_reg.R:293` | `R/reg-assumptions.R:545` | `R/tab_reg.R:565` |
-| default | `"sd"` | `NULL` | `NULL` |
-| bare scalar | accepted — applies to every continuous predictor | **aborts** | **aborts** |
-| fully named | accepted | accepted | accepted |
-| partially named | names win; the rest silently revert to `"sd"` | **aborts** | the rest keep their own first level |
-| unknown name | aborts | aborts | warns and ignores |
-| applies to | continuous predictors | continuous predictors | factor predictors, `tab_vars`, the multinomial pivot |
-| a continuous predictor | — | — | warns and ignores |
+|                        | `multiplier`                                     | `shape`                   | `ref`                                                |
+|------------------------|--------------------------------------------------|---------------------------|------------------------------------------------------|
+| declared               | `TAB_ARGS` :633                                  | `TAB_ARGS` :634           | `TAB_ARGS` :208                                      |
+| resolver               | `reg_resolve_multiplier()`                       | `reg_resolve_shape()`     | `reg_apply_references()`                             |
+| defined at             | `R/tab_reg.R:293`                                | `R/reg-assumptions.R:545` | `R/tab_reg.R:565`                                    |
+| default                | `"sd"`                                           | `NULL`                    | `NULL`                                               |
+| bare scalar            | accepted — applies to every continuous predictor | **aborts**                | **aborts**                                           |
+| fully named            | accepted                                         | accepted                  | accepted                                             |
+| partially named        | names win; the rest silently revert to `"sd"`    | **aborts**                | the rest keep their own first level                  |
+| unknown name           | aborts                                           | aborts                    | warns and ignores                                    |
+| applies to             | continuous predictors                            | continuous predictors     | factor predictors, `tab_vars`, the multinomial pivot |
+| a continuous predictor | —                                                | —                         | warns and ignores                                    |
 
 Three grammars for one idea. The asymmetry is not cosmetic: `shape` refusing a scalar means
 `shape = "quintiles"` — "cut every continuous predictor into five groups", a perfectly ordinary
@@ -203,7 +203,7 @@ A `default` row could be offered later as one more entry with an empty `var`; it
   while `multiplier` and `shape` measure their centre with `reg_weighted_mean()` on the frozen frame
   (`R/reg-resolve.R:530-563`). With weights the reference profile therefore sits at a different place
   from the unit the same table prints. Part B makes this visible, since the profile starts driving a
-  printed row.
+  printed row. More generally, do avoid these inconsistencies, **you must check that the weighted path always use weighted means**. For example, is `multiplier = "sd"` a weighted sd when `wt` is provided ?
 - **A2-2 — `shape` rejects a partially-named vector** (`R/reg-assumptions.R:547`), because the same
   guard tests `is.null(names())` and `!all(nzchar(names()))`. The uniform grammar needs the second
   half of that test removed.
@@ -222,19 +222,18 @@ Two different profiles coexist, and neither is declarable.
 - The **reference grid** that `effect = "at_reference"` evaluates at puts a continuous predictor at
   its **mean** (`reg_reference_grid_values()`, `R/tab_reg.R:1425-1433`).
 
-So one table can contain both conventions, and `?tab_reg` promises the second while the Constant row
-delivers the first. The row is also empty under `effect = "marginal"` / `"at_reference"` (there is no
-intercept in a sample-averaged table) and for an ordinal outcome (a cumulative logit has thresholds,
-not one intercept).
+So one table can contain both conventions, and **`?tab_reg` promises the second while the Constant row delivers the first**. The row is also empty under `effect = "marginal"` / `"at_reference"` (there is no intercept in a sample-averaged table) and for an ordinal outcome (a cumulative logit has thresholds, not one intercept).
+
+The main goal of this phase is to ensure **every `effect =` have all quantities calculated at the right and relevant point for it**.
 
 ### 3.2 The measurement that decides it
 
 On `married ~ race + relig + age` (logistic, n = 12 960), with **no interaction**:
 
-| quantity | estimate | standard error | as an odds |
-|---|---|---|---|
-| raw intercept (age = 0) | -0.8209236 | 0.06845486 | 0.44 |
-| intercept after centring `age` | 0.2369388 | 0.02878313 | 1.2674 |
+| quantity                                | estimate      | standard error | as an odds |
+|-----------------------------------------|---------------|----------------|------------|
+| raw intercept (age = 0)                 | -0.8209236    | 0.06845486     | 0.44       |
+| intercept after centring `age`          | 0.2369388     | 0.02878313     | 1.2674     |
 | **prediction at the reference profile** | **0.2369388** | **0.02878313** | **1.2674** |
 
 The centred intercept and the profile prediction are the same number to the last printed digit, the
@@ -254,10 +253,10 @@ nothing for those rows, because they come from the tidied coefficient.
 
 Measured on `married ~ race * age + relig`:
 
-| `race` level | raw coefficient | as OR | centred coefficient | as OR | moves by |
-|---|---|---|---|---|---|
-| Black | -1.0957954848 | 0.334 | -0.9119008590 | 0.402 | ×1.20 |
-| Other | -0.8587570881 | 0.424 | +0.1507274276 | **1.163** | **×2.74** |
+| `race` level | raw coefficient | as OR | centred coefficient | as OR     | moves by  |
+|--------------|-----------------|-------|---------------------|-----------|-----------|
+| Black        | -1.0957954848   | 0.334 | -0.9119008590       | 0.402     | ×1.20     |
+| Other        | -0.8587570881   | 0.424 | +0.1507274276       | **1.163** | **×2.74** |
 
 The `Other` row goes from "0.42, a strong negative effect" to "1.16, essentially nothing" — and the
 raw number is the one tabxplor prints today (§7.3 shows it in a real table, at OR 2.36 / 2.99 in
@@ -269,11 +268,11 @@ at the profile**, `L'β` with `L` the difference of two model-matrix rows. Measu
 the centred coefficient: agreement **1.58e-15** on estimates and **6.94e-17** on standard errors. So
 the three routes all produce one set of numbers, and the choice is purely about plumbing:
 
-| route | what it fixes | what it costs |
-|---|---|---|
-| **R1** prediction at the profile | the Constant row only | leaves every lower-order term at zero — rejected |
-| **R2** shift the column before the fit | every row, from the fit's output | a refit; two readers need un-shifting |
-| **R3** reparametrise the fitted object | every row, exactly | cannot produce profile-likelihood bounds |
+| route                                  | what it fixes                    | what it costs                                    |
+|----------------------------------------|----------------------------------|--------------------------------------------------|
+| **R1** prediction at the profile       | the Constant row only            | leaves every lower-order term at zero — rejected |
+| **R2** shift the column before the fit | every row, from the fit's output | a refit; two readers need un-shifting            |
+| **R3** reparametrise the fitted object | every row, exactly               | cannot produce profile-likelihood bounds         |
 
 ### 3.4 The verdict — prepare the variable, let the fit do its job
 
@@ -315,17 +314,17 @@ recorded for `shape = "quadratic"` is the same phenomenon, and one rule now fixe
 
 Everything that is an **estimate** is invariant under the shift, or improved by it. Measured:
 
-| quantity | max abs. difference |
-|---|---|
-| fitted values | 5.55e-16 |
-| log-likelihood | 0 |
-| the slope itself | 2.43e-17 |
-| the interaction coefficients and their SEs | 9.54e-18 / 8.67e-19 |
-| the LR test of the interaction | bit-identical (p = 2.435877e-05) |
-| the AME of the slope, and of a factor | 0 / 2.78e-17 |
-| the crude univariable slope | 2.43e-17 |
-| adjusted predictions | 3.33e-16 |
-| `multiplier = "sd"` | SD is invariant by construction |
+| quantity                                   | max abs. difference              |
+|--------------------------------------------|----------------------------------|
+| fitted values                              | 5.55e-16                         |
+| log-likelihood                             | 0                                |
+| the slope itself                           | 2.43e-17                         |
+| the interaction coefficients and their SEs | 9.54e-18 / 8.67e-19              |
+| the LR test of the interaction             | bit-identical (p = 2.435877e-05) |
+| the AME of the slope, and of a factor      | 0 / 2.78e-17                     |
+| the crude univariable slope                | 2.43e-17                         |
+| adjusted predictions                       | 3.33e-16                         |
+| `multiplier = "sd"`                        | SD is invariant by construction  |
 
 So the rule is short enough to state once: **an estimate never needs un-centring; only a descriptive
 reading of the variable's own values does.** There are exactly two such readers in the package:
@@ -347,9 +346,10 @@ That is the same fact `reg_reref_fit_res()` already exploits for a **factor** re
 (`R/tab_reg.R:2271-2290`), and it has two consequences worth designing for:
 
 - **the jamovi live path** can treat a numeric `ref` change as a cache HIT, reparametrising instead of
-  refitting, exactly as it does for a factor reference today;
-- **the two routes are provably the same numbers**, so R3 is an optimisation of R2 rather than a rival
-  — which is why R2 can be the semantics without closing the door on R3.
+  refitting, exactly as it does for a factor reference today; **but it would be worth checking if it works
+  with interactions, which is doubtful.**
+- **the two routes are provably the same numbers**, so R3 is an optimisation of R2 rather than a rival,
+  **unless there are interactions with numeric vars ?**
 
 ⚠ The one thing R3 cannot do, and the reason it must not become the semantics: a
 **profile-likelihood interval is not a linear map**. `method = "profile"` is a supported option
@@ -364,20 +364,16 @@ refit anyway.
 - a **continuous predictor**: the value it is anchored at — realised by shifting the column at the
   preparation boundary, so the fit's own coefficients are already anchored there.
 
-Its reach is worth one sentence of documentation, because it is not the same in both cases and the
-difference is exactly what §3.3 is about: **the predictor's own slope never moves** (a slope is the
-same wherever you start from), but **the Constant row and every term the predictor interacts with
-do** — and in a model with no interaction the second half is just the Constant row, which is why the
-anchor looks cosmetic until an interaction is added.
+Its reach is worth one sentence of documentation, because it is not the same in both cases and the difference is exactly what §3.3 is about: **the predictor's own slope never moves** (a slope is the same wherever you start from), but **the Constant row and every term the predictor interacts with do** — and in a model with no interaction the second half is just the Constant row, which is why the anchor looks cosmetic until an interaction is added.
 
 Values worth accepting, and no more:
 
-| value | meaning | why |
-|---|---|---|
-| a number | the anchor, verbatim | `ref = c(tvhours = 0)` — a count's meaningful zero |
-| `"mean"` | the weighted mean (**default**) | what `at_reference` already uses; a real, central value |
-| `"median"` | the weighted median | robust where the mean is dragged by a tail |
-| `"min"` / `"max"` | the observed extreme | the natural anchor for a duration or an exposure |
+| value             | meaning                         | why                                                     |
+|-------------------|---------------------------------|---------------------------------------------------------|
+| a number          | the anchor, verbatim            | `ref = c(tvhours = 0)` — a count's meaningful zero      |
+| `"mean"`          | the weighted mean (**default**) | what `at_reference` already uses; a real, central value |
+| `"median"`        | the weighted median             | robust where the mean is dragged by a tail              |
+| `"min"` / `"max"` | the observed extreme            | the natural anchor for a duration or an exposure        |
 
 Rejected: quantile keywords (`"q25"`), which invite a mini-language for a value a user can type; and
 `"zero"`, which is just `0`. ⚠ `"mean"` must be the **weighted** mean, closing defect A2-1.
@@ -389,11 +385,11 @@ the log. Any other order makes `log(x - mean(x))` undefined for half the sample.
 
 ### 3.8 What the Constant row holds
 
-| effect | single-equation GLM | multinomial | ordinal |
-|---|---|---|---|
-| `coefficient` | the **intercept**, now anchored at the profile | one per outcome category | empty (see below) |
-| `at_reference` | the same | the same | empty |
-| `marginal` | the population-average prediction (§3.9) | the same | the same |
+| effect         | single-equation GLM                            | multinomial              | ordinal           |
+|----------------|------------------------------------------------|--------------------------|-------------------|
+| `coefficient`  | the **intercept**, now anchored at the profile | one per outcome category | empty (see below) |
+| `at_reference` | the same                                       | the same                 | empty             |
+| `marginal`     | the population-average prediction (§3.9)       | the same                 | the same          |
 
 **The point of R2 is that this table needs almost no code.** Under `coefficient` the quantity is the
 fit's own intercept, read by the ordinary term match that `reg_column()` already performs — the `L'β`
@@ -425,15 +421,10 @@ is what `reg_marginal(want_pred = TRUE)` already returns.
 *"Reference population"* over-promises today, since the row describes nobody (numerics at zero). Once
 the profile is declarable and defaults to the mean the label becomes nearly true — "nearly", because
 a profile at the mean of `age` and the modal-by-convention first level of each factor is still a
-constructed person. Two candidates, for the maintainer:
+constructed person. **Maintainer’s choice: **`Reference profile`**, which claims exactly what it is.**
 
-- keep **`Reference population`**, now that it is a real profile; or
-- **`Reference profile`**, which claims exactly what it is.
-
-Under `effect = "marginal"` the row is a different quantity and should say so — **`Overall`** or
-**`Whole sample`**. The `var` key stays `"Constant"` in every case: it is the skeleton's key, read by
-`forest_plot(intercept =)`, `tab_constant_null()` and `reg_level_counts()`, and none of them should
-learn about labels.
+Under `effect = "marginal"` the row is a different quantity and should say so : **`Population average`** (an alternative would be **`Sample average`**, but the model do really modelise the whole *population* average with inference and CIs.)
+- The `var` key stays `"Constant"` in every case: it is the skeleton's key, read by `forest_plot(intercept =)`, `tab_constant_null()` and `reg_level_counts()`, and none of them should learn about labels.
 
 ### 3.11 What moves
 
@@ -450,7 +441,7 @@ learn about labels.
   stops being a detail.
 - `reg_reference_grid_values()` becomes the one profile producer, reading declared references and
   weighted means; with the column already shifted, a continuous predictor's grid value is `0`.
-- The two descriptive readers of §3.5 need the offset added back, and nothing else does.
+- **The two descriptive readers of §3.5 need the offset added back, and nothing else does**.
 - The jamovi cache fingerprints the prepared frame, so a numeric `ref` change is a MISS until §3.6's
   reparametrisation is wired into `reg_reref_fit_res()`; that is an optimisation, not a correctness
   requirement.
@@ -468,8 +459,7 @@ An interaction has no variable to be about, which is why the compound-formula ha
 labelled `raceBlack:age` with no count, no crude column and no unit (§7.3) — the fit is right and
 everything around it is empty.
 
-So the question is not "how do we fit an interaction" (tabxplor already can) but **"what is the
-variable an interaction is about?"**
+So the question is not "how do we fit an interaction" (tabxplor already can) but **"what is the variable an interaction is about?"**
 
 ### 4.2 What the framework already answers, and where it stops
 
@@ -483,7 +473,8 @@ sub-populations rather than between two predictors.
 
 The compound-formula hatch (`outcome = y ~ a * b`) covers the rest by abandoning the framework: 48
 gates across the codebase turn off `multiplier`, `shape`, `empirical`, the adjustment gap, the
-linearity check, the per-predictor tests, the jamovi fast path and the declarative skeleton.
+linearity check, the per-predictor tests, the jamovi fast path and the declarative skeleton. 
+Nearly everything interesting in tabxplor.
 
 ### 4.3 The statistical background
 
@@ -497,7 +488,7 @@ Ai & Norton's point (2003) that in a nonlinear model the interaction *effect* is
 *term*: the cross-partial varies observation by observation and can differ in sign from the
 coefficient.
 
-The design consequence is not to pick a winner but to make the scale visible, which tabxplor already
+The design consequence is not to pick a winner but to **make the scale visible**, which tabxplor already
 does: `measure` names the scale, the legend states it, and the same table can be printed on the
 multiplicative and the additive scale (§7.4 shows both).
 
@@ -516,7 +507,7 @@ is why Part B's anchor has to be realised **before** the fit rather than by pred
 Two consequences specific to Part C. The collinearity check false-alarms on any interacted fit — max
 VIF **11.74** raw, **1.28** anchored — so Part B's shift repairs a check that Part C would otherwise
 break. And the compound-predictor design of §4.6 sidesteps the problem entirely for the crossed pair:
-a combined factor **has no lower-order terms**, so there is nothing left to misread (its own max VIF
+**a combined factor has no lower-order terms, so there is nothing left to misread** (its own max VIF
 is **1.02**). The anchor still matters for every *other* continuous predictor in the model, and for
 the nested-slope arm of §4.7, where the moderator's own rows are read at the anchor.
 
@@ -524,11 +515,11 @@ the nested-slope arm of §4.7, where the moderator's own rows are read at the an
 
 The decisive measurement. For a numeric predictor crossed with a factor:
 
-| model | log-likelihood | rank | max abs. fitted difference vs `race*age` |
-|---|---|---|---|
-| `y ~ race * age + rincome + relig` | -8454.563 | 16 | — |
-| `y ~ race / age + rincome + relig` | -8454.563 | 16 | 5.55e-16 |
-| `y ~ race + age_White + age_Black + age_Other + …` | -8454.563 | 16 | 5.55e-16 |
+| model                                              | log-likelihood | rank | max abs. fitted difference vs `race*age` |
+|----------------------------------------------------|----------------|------|------------------------------------------|
+| `y ~ race * age + rincome + relig`                 | -8454.563      | 16   | —                                        |
+| `y ~ race / age + rincome + relig`                 | -8454.563      | 16   | 5.55e-16                                 |
+| `y ~ race + age_White + age_Black + age_Other + …` | -8454.563      | 16   | 5.55e-16                                 |
 
 and for two factors, `race * inc3` / `race / inc3` / a combined `interaction(race, inc3)` factor:
 identical log-likelihood (-8468.788) and rank (14), fitted values within 5.0e-16.
@@ -657,37 +648,37 @@ everywhere — in the same spirit as `REG_EMPIRICAL` declaring the crude column'
 
 `+` works today or falls out; `~` needs work; `-` is a real loss.
 
-| criterion | combined factor | nested slopes | contrast `L'β` | raw interaction terms | stratified columns |
-|---|---|---|---|---|---|
-| readable without arithmetic | + | + | + | - | + |
-| rows fit the 2-tier row model | + | + | + | + | + |
-| row count | k·m | m | m or k·m | (k−1)(m−1) | unchanged |
-| estimate, SE, p from the fit | + | + | ~ | + | + |
-| crude companion | + closed form | ~ nested refit | - | - | ~ per group |
-| per-row `n` | + | ~ group `n` | - | - | + |
-| adjustment gap + its CI | + | ~ | - | - | + |
-| colour, stars, legend, header word | + | + | + | ~ | + |
-| `effect = "marginal"` | + | ~ | ~ | - | + |
-| `at_reference` | + | ~ | ~ | - | + |
-| omnibus interaction test | ~ one extra fit | ~ one extra fit | + `drop1` | + `drop1` | + exists |
-| survey designs | + | + | + | + | + |
-| multinomial / ordinal | + | + | ~ | + | + |
-| `multiplier` reaches it | n/a | - see C4-2 | - | - | + |
-| collinearity check | + 1.02 | ~ | ~ 11.74 | ~ 11.74 | + |
-| sparse cells | - | + | + | + | ~ |
-| jamovi + cache | + | + | ~ | ~ | + |
-| new code | least | small | large | small | medium |
+| criterion                          | combined factor | nested slopes   | contrast `L'β` | raw interaction terms | stratified columns |
+|------------------------------------|-----------------|-----------------|----------------|-----------------------|--------------------|
+| readable without arithmetic        | +               | +               | +              | -                     | +                  |
+| rows fit the 2-tier row model      | +               | +               | +              | +                     | +                  |
+| row count                          | k·m             | m               | m or k·m       | (k−1)(m−1)            | unchanged          |
+| estimate, SE, p from the fit       | +               | +               | ~              | +                     | +                  |
+| crude companion                    | + closed form   | ~ nested refit  | -              | -                     | ~ per group        |
+| per-row `n`                        | +               | ~ group `n`     | -              | -                     | +                  |
+| adjustment gap + its CI            | +               | ~               | -              | -                     | +                  |
+| colour, stars, legend, header word | +               | +               | +              | ~                     | +                  |
+| `effect = "marginal"`              | +               | ~               | ~              | -                     | +                  |
+| `at_reference`                     | +               | ~               | ~              | -                     | +                  |
+| omnibus interaction test           | ~ one extra fit | ~ one extra fit | + `drop1`      | + `drop1`             | + exists           |
+| survey designs                     | +               | +               | +              | +                     | +                  |
+| multinomial / ordinal              | +               | +               | ~              | +                     | +                  |
+| `multiplier` reaches it            | n/a             | - see C4-2      | -              | -                     | +                  |
+| collinearity check                 | + 1.02          | ~               | ~ 11.74        | ~ 11.74               | +                  |
+| sparse cells                       | -               | +               | +              | +                     | ~                  |
+| jamovi + cache                     | +               | +               | ~              | ~                     | +                  |
+| new code                           | least           | small           | large          | small                 | medium             |
 
 ### 4.10 The crude companion — four routes, measured
 
 The maintainer asked for this explicitly. All four were run on the same data.
 
-| route | what it is | result |
-|---|---|---|
-| **saturated closed form** on the cells | observed cell odds ratios, Woolf | **exact**: 1.4e-12 est., 9.3e-8 SE |
-| **univariable nested fit** `y ~ M / X` | the same `reg_fit()` producer | both arms; the only continuous route |
-| **the materialised variable, crude engine** | no new route — it *is* a factor | works today, unchanged (§7.4) |
-| **subgroup g-computation** | `avg_comparisons(by = M)`, crude fit | works; only for `effect = "marginal"` |
+| route                                       | what it is                           | result                                |
+|---------------------------------------------|--------------------------------------|---------------------------------------|
+| **saturated closed form** on the cells      | observed cell odds ratios, Woolf     | **exact**: 1.4e-12 est., 9.3e-8 SE    |
+| **univariable nested fit** `y ~ M / X`      | the same `reg_fit()` producer        | both arms; the only continuous route  |
+| **the materialised variable, crude engine** | no new route — it *is* a factor      | works today, unchanged (§7.4)         |
+| **subgroup g-computation**                  | `avg_comparisons(by = M)`, crude fit | works; only for `effect = "marginal"` |
 
 Two conclusions. For the categorical case the first three collapse into **one** route — materialising
 the variable *is* using the closed form, because the closed form is what the crude engine already
@@ -699,8 +690,7 @@ uncrossed case.
 
 ### 4.11 What is actually missing
 
-Everything below is what §7.4's table does **not** already give. It is a short list, which is the
-point.
+Everything below is what §7.4's table does **not** already give. It is a short list, which is the point.
 
 1. **The argument** — `cross`, its resolver, its `TAB_ARGS` row, its validation and its abort
    messages (§4.12).
@@ -800,8 +790,7 @@ already being fitted, for the omnibus test row (§4.11). So the measure is exact
 `color = "adjustment"` already has: `obs` holds the value the cell is compared to, `est` the value it
 shows, `gap_se` the standard error of their difference. Both are nested fits on one frame, which is
 the same situation `reg-influence.R` already solves for crude-versus-adjusted — so the existing
-influence-function machinery applies rather than a new derivation. **One new `MEASURES` row, no new
-`fmt` field, no new legend grammar.**
+influence-function machinery applies rather than a new derivation. **One new `MEASURES` row, no new `fmt` field, no new legend grammar.**
 
 Demonstrated on `married ~ race × age4 + relig` (the departure is the ratio of the saturated cell
 odds ratio to the additive model's, with a stacked influence-function standard error):
@@ -838,7 +827,7 @@ tabxplor prints today:
 
 ---
 
-## 5. Open questions for the maintainer
+## 5. Maintainer’s answers to the open questions
 
 1. **The compound predictor and a predictors list.** When `predictors` is a list of models and
    `cross = c(race = "age4")` is set, should a model that names both parents automatically get the
@@ -847,31 +836,40 @@ tabxplor prints today:
    exists. A third option is automatic with an explicit opt-out. This also settles the open
    "per-model `shape`" question the roadmap deferred, because a materialised column has exactly the
    same property.
+   **Maintainer’s decision: study the possibility to pass interactions in `predictors =` as "var1:var2". It would permit to compare model with an interaction with the model with no interaction**
 2. **The `×` in the block name.** `race × age` reads best and is safe in every exporter, but it is a
    non-ASCII character in a value the package constructs. `race:age` and `race_x_age` are the
    alternatives. (The separator between cell levels — ` · ` in every capture here — is the same
    question one level down.)
+   **Maintainer’s decision: even if the user pass "var1:var2", reading `race × age` in the rows names is more clear.**
 3. **Whether to offer the nested-slope arm at all in the first implementation**, or ship the
    categorical arm alone and name `shape = c(age = "quartiles")` as the route for a continuous
    predictor. Shipping one arm is materially less work and loses the simple-slope reading.
+   **Maintainer’s decision: offer the nested-slope arm.**
 4. **Sparse cells.** Warn above what threshold, and drop or keep a cell below it? The measured
    `race × relig` case has a cell of 4.
+   **Maintainer’s decision: don’t warn, the `n` column is made for the user to check.**
 5. **The Constant row's label** under each contrast (§3.10), and whether `Overall` is worth a second
    label at all.
+   **Maintainer’s decision: see above, `Reference profile`, and for `effect = "marginal"` `Population average`.**
 6. **Whether the interaction test row is on by default** or only under `stats = "interaction"`, as
    the `tab_vars` one is under `between_groups`.
+   **Maintainer’s decision: study the speed lost when adding `stats = "interaction"` before we decide.**
 7. **Is the anchor's shift visible enough?** With R2 the stored predictor column is not the user's
    own any more. `reg_formulas()` would print `y ~ race * age` with `age` shifted, and the two
    descriptive readers of §3.5 get the offset back — but a user reading `reg_call()` or exporting the
    prepared frame sees shifted values. Options: say it in the row's tooltip beside `per SD/13.5`,
    record the anchor in `meta`, or leave it to the documentation.
+   **Maintainer’s decision: leave it to the documentation.**
 8. **Should `multinom` / `polr` avoid the shift** to keep their goldens bit-stable (4.6e-07 /
    6.9e-07), taking §3.6's reparametrisation for those two families instead? It buys exactness at the
    cost of a second route, and the drift is far below anything printed.
+   **Maintainer’s decision: they do not avoid the shift, no second route.**
 9. **The interaction colour of §4.15** — wanted at all, and if so in the first implementation or as a
    second step? It is the part of the design with the most upside and the least precedent: it needs
    one `MEASURES` row and the nested-pair influence function, and it is what turns an interaction
    table from "read the footer p-value" into something the eye can scan.
+   **Maintainer’s decision: I’m not sure. If the interactions rows already have their ci and pvalues, what does it adds ? How is it useful in real-world use cases ?**
 
 ---
 

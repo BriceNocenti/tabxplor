@@ -38,8 +38,9 @@ and any dark-mode toggle of the host page), which needs a stylesheet: it works f
 \code{format = "html"} and \code{"md"}, and resolves to
 \code{"light"} for the static \code{"xl"} / \code{"plot"} backends.
 \code{"print"} (or \code{"bw"}) is the black-and-white \strong{publication} palette: over-represented
-cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
-readable in a greyscale print, where the colour palette's two directions become the same shade.
+cells underlined, under-represented ones in italic, the ink darkening and turning bold with the
+size of the deviation, and a grey fill for the second colour measure -- readable in a greyscale
+print, where the colour palette's two directions become the same shade.
 Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}}.}
 
 \item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}

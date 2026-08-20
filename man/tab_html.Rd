@@ -62,9 +62,10 @@ Defaults to \code{getOption("tabxplor.theme")},
 i.e. \code{"light"} -- a dark table is always a deliberate choice.
 
 \code{"print"} (or \code{"bw"}) is the black-and-white \strong{publication} palette: over-represented
-cells in bold, under-represented ones in italic, an underline for the strongest threshold, and a
-grey fill for a second colour measure. It exists because a greyscale print loses the colour
-palette's direction entirely (both background ramps convert to the same shades of grey). The
+cells underlined, under-represented ones in italic, the ink darkening and turning bold with the
+size of the deviation, and a grey fill for a second colour measure. It exists because a greyscale
+print loses the colour palette's direction entirely (both background ramps convert to the same
+shades of grey). The
 typography is written as real \verb{<b>}/\verb{<i>}/\verb{<u>} markup as well as CSS, so it survives a
 stylesheet-less destination -- a paste into Word, or GitHub's markdown. You rarely need to ask for
 it: any coloured table already \strong{prints} in this scheme, see \code{\link{tab_css}}'s

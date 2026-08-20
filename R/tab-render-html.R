@@ -19,6 +19,11 @@
 #     tab_kable_join() stamps `kableExtra` so print.kableExtra()/knit_print.kableExtra() route the
 #     fragment to the Viewer and bind the bootstrap tooltips. We produce what they expect (an HTML
 #     fragment); do not "clean up" that class because the engine is gone.
+#   - A cell's rendering stops at its PRIMARY token: the colour AND, under a typographic palette, the
+#     face (bold / italic / underline). html_cell_text() is the one place the three pieces are known,
+#     so it applies both; the aside gets the `tx-sec` class and the stylesheet sets it back. The face
+#     is written as <b>/<i>/<u> markup rather than only as CSS, because the destinations that matter
+#     for a publication table (GitHub, a Word paste) strip class AND style but keep tags.
 #   - Phase 14k: the html result is classed `tabxplor_kable` and carries the render intent in a
 #     `tabxplor_theme` attribute -- but ONLY when our stylesheet ships with it (tab_kable_join()).
 #     print.tabxplor_kable() is the one place a theme is resolved in R rather than by the browser: the
@@ -159,10 +164,16 @@ tx_spark_svg <- function(x, h = 22L, dx = 9L, lwd = 2.8) {
 # so a backend can bold and colour the number without touching what sits beside it. The asides carry
 # a CLASS, never an inline colour (the "no inline colour" invariant): the stylesheet decides, from
 # the theme's own chrome. A cell with no recorded range is one piece and gets no markup at all.
+# `face` (a palette whose typography must survive without a stylesheet -- see html_face_wrap) is
+# applied HERE, and only to the primary piece: the aside is not what any measure grades, so the
+# direction/magnitude face stops where the colour stops. NULL = no semantic face (the colour palettes).
 #' @keywords internal
-html_cell_text <- function(raw, from, pn, bold, esc = htmltools::htmlEscape) {
+html_cell_text <- function(raw, from, pn, bold, esc = htmltools::htmlEscape, face = NULL) {
   out <- esc(raw)
-  if (is.null(pn)) return(out)
+  wrap_face <- function(s, i)
+    if (is.null(face)) s
+    else html_face_wrap(s, bold[i], face$italic[i], face$underline[i])
+  if (is.null(pn)) return(wrap_face(out, seq_along(out)))
   from <- if (is.null(from)) rep(1L, length(raw)) else from
   hit  <- !is.na(pn) & !is.na(from) & pn >= 1L & (from > 1L | pn < nchar(raw))
   if (any(hit)) {
@@ -174,9 +185,10 @@ html_cell_text <- function(raw, from, pn, bold, esc = htmltools::htmlEscape) {
     wrap <- function(s) ifelse(nzchar(s),
                                paste0("<span class=\"tx-sec\"", wt, ">", esc(s), "</span>"), "")
     out[hit] <- paste0(wrap(substr(raw[hit], 1L, from[hit] - 1L)),
-                       esc(substr(raw[hit], from[hit], to)),
+                       wrap_face(esc(substr(raw[hit], from[hit], to)), which(hit)),
                        wrap(substr(raw[hit], to + 1L, nchar(raw[hit]))))
   }
+  if (any(!hit)) out[!hit] <- wrap_face(out[!hit], which(!hit))
   out
 }
 
@@ -327,10 +339,17 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     j <- match(name, nm)
     # Phase 13c-ii: in a bold row/cell, bold only the PRIMARY field of a composite "{pct} (n={n})"
     # cell (the "(n=...)" stays plain). Cells are placed raw here, so esc = identity (byte-identical).
+    # z11: a palette whose meaning is TYPOGRAPHY writes it as markup too (<b>/<i>/<u>), so it survives
+    # a stylesheet-less destination (GitHub strips class+style, a Word paste keeps tags). It rides the
+    # PRIMARY only, like the colour and like the aside's font-weight:normal -- html_cell_text() is
+    # where the three pieces are known, so it applies it. `bold_cell` rather than a$face_bold, so the
+    # structural reference/total bold travels as well. NULL under the colour palettes.
     bold_cell <- seq_len(n_row) %in% rd$bold_rows
     if (!is.null(a)) bold_cell <- bold_cell | a$bold
+    face <- if (semantic_face && !color_whole_cell_opt() && !is.null(a))
+      list(italic = a$face_italic, underline = a$face_underline)
     cell_html <- html_cell_text(cell, attr(cell, "primary_from"), attr(cell, "primary_nchar"),
-                                bold_cell, esc = identity)
+                                bold_cell, esc = identity, face = face)
     # THE one place a row sparkline becomes an inline <svg>. It sits here, on the GENERIC cell path,
     # which is what lets the run arrive in an FMT cell -- a regression's base-count column carries it
     # as a literal in its own display template. ⚠ it must stay off the rowspanned label path (c2),
@@ -340,10 +359,9 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     sp <- tx_has_spark(cell_html)
     if (any(sp)) cls[sp] <- trimws(paste(cls[sp], "tx-sparkcell"))
     cell_html <- tx_spark_svg(cell_html)
-    # z11: a palette whose meaning is TYPOGRAPHY writes it as markup too, so it survives a stylesheet-
-    # less destination (GitHub, a Word paste). `bold_cell` rather than a$face_bold, so the structural
-    # reference/total bold travels as well. No-op under the colour palettes (semantic_face = FALSE).
-    if (semantic_face) {
+    # the whole-cell face: `color_whole_cell` opts out of the split, and a column with no `ann`
+    # (a degraded model) carries no face flags -- both leave the cell in one piece.
+    if (semantic_face && (color_whole_cell_opt() || is.null(a))) {
       cell_html <- html_face_wrap(cell_html, bold_cell,
                                   if (is.null(a)) NULL else a$face_italic,
                                   if (is.null(a)) NULL else a$face_underline)

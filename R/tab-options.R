@@ -119,12 +119,13 @@ TAB_OPTIONS <- list(
   color_whole_cell = tx_opt(
     FALSE, "display",
     doc = c("EXPERT. A cell that prints SEVERAL fields reads as one number with an aside ---",
-            "`1/1.63*** (31%)` --- so the colour grades the number and the aside is set slightly",
-            "back from the table's own text, following the theme. Set to `TRUE` to extend the",
-            "primary's own colour over the whole cell instead (the pre-2.0.0 rendering).",
-            "There is no colour to choose: which grey an aside takes belongs to the theme's",
-            "palette, not to a per-cell option --- see `set_color_palette()`.",
-            "Console and html; Markdown and Excel colour a cell as a whole either way.")),
+            "`1/1.63*** (31%)` --- so the cell's rendering grades the number and the aside is set",
+            "slightly back from the table's own text, following the theme. That covers the colour",
+            "and, under `theme = \"print\"`, the typography (bold, italic, underline) alike. Set to",
+            "`TRUE` to extend the primary's own rendering over the whole cell instead (the",
+            "pre-2.0.0 look). There is nothing to choose beyond that: which grey an aside takes",
+            "belongs to the theme's palette, not to a per-cell option --- see `set_color_palette()`.",
+            "Console and html; Markdown and Excel render a cell as a whole either way.")),
 
   var_names = tx_opt(
     "both", "display", arg = "var_names",

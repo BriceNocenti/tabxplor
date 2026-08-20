@@ -648,7 +648,7 @@ rd_footer <- function(src, medium, theme = NULL, want_legend = TRUE,
     tab_footer_streams(src, style = legend_export_style(), lang = lang,
                        subtext = subtext, legend = want_legend,
                        # z11: the shade NAMES are a palette fact, decided while the tokens are built --
-                       # a print legend says "Bold"/"Italic" where a colour one says "Shades of blue".
+                       # a print legend says "Underlined"/"Italic" where a colour one says "Shades of blue".
                        theme = tx_palette_theme(theme)),
     medium = medium, theme = theme, classes = classes))
 }

@@ -55,17 +55,21 @@ testthat::test_that("the colour palettes' face IS the CSS baseline (bold on ever
   }
 })
 
-testthat::test_that("the print palette is typographic: black text, one grey fill ramp, a real face", {
+testthat::test_that("the print palette is typographic: an ink ladder, one grey fill ramp, a real face", {
   ft <- get_color_style("face", type = "text", theme = "print")
-  # over = bold (slots 1-4), under = italic (slots 5-8); the second intensity level adds an underline.
-  testthat::expect_identical(ft$bold,      c(TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE))
+  # THE two axes, split: DIRECTION is the face -- over is UNDERLINED (slots 1-4), under is ITALIC
+  # (slots 5-8) and never underlined. MAGNITUDE is the ink ramp, whose top rung adds the bold.
+  testthat::expect_identical(ft$underline, c(TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE))
   testthat::expect_identical(ft$italic,    c(FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE))
-  testthat::expect_identical(ft$underline, c(FALSE, FALSE, TRUE, TRUE, FALSE, FALSE, TRUE, TRUE))
+  testthat::expect_identical(ft$bold,      c(FALSE, FALSE, TRUE, TRUE, FALSE, FALSE, TRUE, TRUE))
   # the face must survive without a stylesheet (GitHub strips class+style; a Word paste keeps tags)
   testthat::expect_true(isTRUE(ft$semantic))
 
-  testthat::expect_identical(unname(get_color_style("color_code", "text", "print")),
-                             rep("#000000", 8L))
+  # the ink is the MAGNITUDE: 3 rungs over 4 slots (#333333, #000000, #000000 + bold), the SAME on
+  # both sides -- a magnitude knows no direction. Slots 3 and 4 therefore render identically.
+  ink <- unname(get_color_style("color_code", "text", "print"))
+  testthat::expect_identical(ink[1:4], c("#333333", "#000000", "#000000", "#000000"))
+  testthat::expect_identical(ink[1:4], ink[5:8])
   bg <- unname(get_color_style("color_code", "bg", "print"))
   # The two directions are DELIBERATELY the same ramp: greyscale cannot diverge (a diverging grey scale
   # needs a mid-grey neutral, i.e. shading every cell). The fill carries magnitude; direction is read
@@ -90,13 +94,20 @@ testthat::test_that("the print palette meets its perceptual specification", {
   testthat::expect_gte(min(abs(diff(L))), 4)                    # each step discriminable
   testthat::expect_gte(zz_contrast("#000000", fills[4]), 7)     # black on the darkest stays AAA
 
-  # The non-significant grey must stay legible ON the deepest fill -- the light theme's #9f9f9f is
-  # 1.41:1 there (invisible), which is why print carries its own.
+  # The non-significant grey is DELIBERATELY light: greyed out means "harder to read on purpose", so
+  # it is held to the WCAG large-text / non-text floor (3:1 on white, measured 3.54) and merely to
+  # VISIBLE on the deepest fill (1.79) -- never to the 4.5:1 body-text floor a cell that is meant to be
+  # read must meet. Do not "fix" it back up: that is what would make a non-significant cell compete
+  # with a significant one.
   grey <- tx_chrome_hex("print")$grey
-  testthat::expect_gte(zz_contrast(grey, fills[4]), 3)
-  testthat::expect_gte(zz_contrast(grey, "#FFFFFF"), 4.5)
+  testthat::expect_gte(zz_contrast(grey, "#FFFFFF"), 3)
+  testthat::expect_gte(zz_contrast(grey, fills[4]), 1.5)
   # ... and still reads as GREYED beside a significant cell's pure black.
   testthat::expect_lt(zz_contrast(grey, "#FFFFFF"), zz_contrast("#000000", "#FFFFFF"))
+  # THE reading ladder, weakest to strongest: greyed < the ink's first rung < its second (bold rides
+  # the second, so the last step is typographic rather than a third shade).
+  ink <- unname(get_color_style("color_code", "text", "print"))
+  testthat::expect_true(all(diff(zz_contrast(c(grey, ink[1], ink[2]), "#FFFFFF")) > 0))
 
   # The legend's font stand-in for the fills (an Excel run / ggpubr label cannot fill).
   testthat::expect_true(all(zz_contrast(get_color_style("color_code", "bg_legend", "print"),
@@ -131,11 +142,26 @@ testthat::test_that("the print stylesheet says exactly what the face table says"
 
   testthat::expect_match(one("m1"), "font-weight:normal;")   # must beat the static bold baseline
   testthat::expect_match(one("m1"), "font-style:italic;")
+  # the ink ladder's first rung (the stylesheet upper-cases every slot hex)
+  testthat::expect_match(one("m1"), "#333333", fixed = TRUE)
+  # the under side is NEVER underlined -- that is the whole direction signal
   testthat::expect_no_match(one("m1"), "text-decoration:underline;")
-  testthat::expect_match(one("m3"), "text-decoration:underline;")
+  testthat::expect_no_match(one("m3"), "text-decoration:underline;")
+  # ... and the over side always is, at every rung
+  testthat::expect_match(one("p1"), "text-decoration:underline;")
   testthat::expect_match(one("p3"), "text-decoration:underline;")
-  testthat::expect_no_match(one("p1"), "text-decoration:underline;")
-  testthat::expect_no_match(one("p1"), "font-style:")        # over-cells are bold, never italic
+  testthat::expect_no_match(one("p1"), "font-style:")        # over-cells are underlined, never italic
+  # bold is the ladder's TOP rung, on both sides: slots 1-2 must beat the static baseline, slots 3-4
+  # inherit it and so state nothing at all.
+  testthat::expect_match(one("p1"), "font-weight:normal;")
+  testthat::expect_no_match(one("p3"), "font-weight:")
+  testthat::expect_no_match(one("m3"), "font-weight:")
+
+  # the aside of a composite cell is left out of the face, as it is left out of the colour. The
+  # inline-block is what does it: a text-decoration cannot be switched off by a descendant.
+  sec <- grep("^\\.tabxplor-tab \\.tx-sec\\{", ln, value = TRUE)
+  testthat::expect_match(sec, "display:inline-block;")
+  testthat::expect_match(sec, "font-style:normal;")
   testthat::expect_match(one("g1"), tx_chrome_hex("print")$grey, fixed = TRUE)
   # the background channel carries NO typography (a fill alone does not bold, in any palette)
   testthat::expect_no_match(one("o2"), "font-")
@@ -185,15 +211,34 @@ testthat::test_that("html cells wear the face as a class AND as markup", {
   p <- strip(tab_html(zz_tab(), theme = "print", tooltips = FALSE))
   l <- strip(tab_html(zz_tab(), theme = "light", tooltips = FALSE))
 
-  # An under-represented cell is NOT bold (it used to be: `ann$bold` was hex-driven, so every coloured
-  # cell was bold whatever the palette said) and it IS italic.
+  # An under-represented cell at the ladder's first rungs is NOT bold (bold is the top rung, not the
+  # direction) and it IS italic; an over-represented one is underlined.
   testthat::expect_match(p, '<td class="[^"]*\\bm[0-9]\\b[^"]*"><i>')
-  testthat::expect_no_match(p, '<td class="[^"]*\\bm[0-9] tx-b"')
-  testthat::expect_match(p, '<td class="[^"]*\\bp[0-9] tx-b"><b>')
+  testthat::expect_no_match(p, '<td class="[^"]*\\bm[12] tx-b"')
+  testthat::expect_match(p, '<td class="[^"]*\\bp[0-9]\\b[^"]*"><u>')
   # The markup is what survives GitHub (class+style stripped) and an HTML -> Word paste.
-  testthat::expect_true(grepl("<i>", p, fixed = TRUE) && grepl("<b>", p, fixed = TRUE))
+  testthat::expect_true(grepl("<i>", p, fixed = TRUE) && grepl("<u>", p, fixed = TRUE))
   # ... and the colour palettes emit none of it, which is why they stayed byte-identical.
   testthat::expect_false(grepl("<i>", l, fixed = TRUE) || grepl("<b>", l, fixed = TRUE))
+})
+
+testthat::test_that("the face stops at the primary token, as the colour does", {
+  # THE 22d-ii rule. A composite cell prints "24% (1 234)": the count is an aside, not what the measure
+  # grades, so the <u>/<i> must close before it -- and the `tx-sec` span must sit OUTSIDE the markup.
+  strip <- function(h) gsub("(?s)<style>.*?</style>", "", as.character(h), perl = TRUE)
+  t <- tab(forcats::gss_cat, marital, race, pct = "row", color = "diff",
+           display = "{pct} ({n})")
+  h <- strip(tab_html(t, theme = "print", tooltips = FALSE))
+  cells <- regmatches(h, gregexpr("<td[^>]*>(<[ubi]>)?[^<]*(</[ubi]>)?<span class=\"tx-sec\"",
+                                  h, perl = TRUE))[[1]]
+  testthat::expect_gt(length(cells), 0L)               # never vacuous
+  # every composite cell closes its face before the aside opens
+  testthat::expect_false(any(grepl("<[ubi]><span", cells)))
+
+  # ... and the opt-out puts it back over the whole cell.
+  hw <- withr::with_options(list(tabxplor.color_whole_cell = TRUE),
+                            strip(tab_html(t, theme = "print", tooltips = FALSE)))
+  testthat::expect_match(hw, "<td[^>]*><[ubi]>[^<]*<span", perl = TRUE)
 })
 
 testthat::test_that("markdown needs no code of its own: the stylesheet carries print", {
@@ -229,7 +274,8 @@ testthat::test_that("the legend wears the same face as the cells it describes", 
   m <- regmatches(h, regexpr('<span class="m[0-9]"[^>]*>', h))
   testthat::expect_match(m, "font-style:italic;")
   testthat::expect_no_match(m, "font-weight:bold;")
-  testthat::expect_match(regmatches(h, regexpr('<span class="p[0-9]"[^>]*>', h)), "font-weight:bold;")
+  testthat::expect_match(regmatches(h, regexpr('<span class="p[0-9]"[^>]*>', h)),
+                         "text-decoration:underline;")
 
   testthat::expect_true(any(vapply(zz_runs(zz_tab(), "print"),
                                    function(r) isTRUE(r$italic), logical(1))))
@@ -239,19 +285,20 @@ testthat::test_that("the legend wears the same face as the cells it describes", 
 
 testthat::test_that("the legend names the face, not a colour, and never promises unmade distinctions", {
   pl <- tab_color_legend(zz_tab(), medium = "plain", theme = "print")
-  testthat::expect_match(pl, "Bold")
+  testthat::expect_match(pl, "Underlined")
   testthat::expect_match(pl, "Italic")
   testthat::expect_no_match(pl, "Shades of blue")
   testthat::expect_match(tab_color_legend(zz_tab(), medium = "plain", theme = "light"),
                          "Shades of blue")
 
-  # Typography honestly supports 2 levels per side, so slots 1&2 (and 3&4) share a rendering and the
-  # legend collapses the repeated break-words -- keeping the LOWER threshold ("bold = at least +5").
+  # The ink ladder has 3 rungs and the break scale 4 slots, so slots 3&4 share a rendering and the
+  # legend drops the repeated break-word -- keeping the LOWER threshold of the pair.
   n_breaks <- function(theme)
     sum(vapply(zz_runs(zz_tab(), theme), function(x) !is.na(x$color), logical(1)))
   testthat::expect_lt(n_breaks("print"), n_breaks("light"))
   testthat::expect_match(pl, "+5", fixed = TRUE)
-  testthat::expect_no_match(pl, "+10", fixed = TRUE)
+  testthat::expect_match(pl, "+10", fixed = TRUE)
+  testthat::expect_no_match(pl, "+30", fixed = TRUE)
 })
 
 testthat::test_that("tab_plot renders the print palette without error", {

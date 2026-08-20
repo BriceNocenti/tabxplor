@@ -63,8 +63,9 @@
 #' @param theme By default (\code{"light"}) a white table with black text; set to \code{"dark"}
 #'   for a black table with white text (the colours follow the theme).
 #'   \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
-#'   cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
-#'   readable in a greyscale print, where the colour palette's two directions become the same shade.
+#'   cells underlined, under-represented ones in italic, the ink darkening and turning bold with the
+#'   size of the deviation, and a grey fill for the second colour measure -- readable in a greyscale
+#'   print, where the colour palette's two directions become the same shade.
 #' @param print_color_legend `r lifecycle::badge("deprecated")` Renamed to \code{color_legend}.
 #' @param sheets The Excel sheets options :
 #' \itemize{

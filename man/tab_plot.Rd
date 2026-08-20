@@ -30,9 +30,11 @@ black table with white text. This backend ships no stylesheet, so it does NOT ta
 (which needs one to follow the reader) -- \code{tab_html()}, \code{tab_md()} and
 \code{\link{tab_css}} do.
 \code{"print"} (or \code{"bw"}) is the black-and-white \strong{publication} palette: over-represented
-cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
-readable in a greyscale print, where the colour palette's two directions become the same shade.
-(\code{tab_plot} draws bold and italic; the underline of the second level has no ggplot2 equivalent.)}
+cells underlined, under-represented ones in italic, the ink darkening and turning bold with the
+size of the deviation, and a grey fill for the second colour measure -- readable in a greyscale
+print, where the colour palette's two directions become the same shade.
+(\code{tab_plot} draws the ink and the italic; ggplot2 has no underline, so an over-represented
+cell is told apart by its ink alone there.)}
 
 \item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
 

@@ -410,8 +410,9 @@ testthat::test_that("tab_md() output is valid pandoc: it renders as a real <tabl
                  var_names = if (identical(nm, "no col_var name")) "rows" else "both")
     h  <- md_pandoc_html(md)
     testthat::expect_match(h, "<table", label = nm)
-    # the two symptoms of a table pandoc refused
-    testthat::expect_false(grepl("line-block", h, fixed = TRUE), label = nm)
+    # the two symptoms of a table pandoc refused. ⚠ the marker is pandoc's own ELEMENT, not the bare
+    # word: `h` carries our inlined stylesheet, where "line-block" is a substring of `display:inline-block`.
+    testthat::expect_false(grepl('class="line-block"', h, fixed = TRUE), label = nm)
     testthat::expect_false(grepl("|:--", h, fixed = TRUE), label = nm)
     # every data cell really became a cell
     testthat::expect_gt(lengths(regmatches(h, gregexpr("<td", h)))[[1]], nrow(cases[[nm]]))

@@ -596,9 +596,10 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' i.e. \code{"light"} -- a dark table is always a deliberate choice.
 #'
 #' \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
-#' cells in bold, under-represented ones in italic, an underline for the strongest threshold, and a
-#' grey fill for a second colour measure. It exists because a greyscale print loses the colour
-#' palette's direction entirely (both background ramps convert to the same shades of grey). The
+#' cells underlined, under-represented ones in italic, the ink darkening and turning bold with the
+#' size of the deviation, and a grey fill for a second colour measure. It exists because a greyscale
+#' print loses the colour palette's direction entirely (both background ramps convert to the same
+#' shades of grey). The
 #' typography is written as real `<b>`/`<i>`/`<u>` markup as well as CSS, so it survives a
 #' stylesheet-less destination -- a paste into Word, or GitHub's markdown. You rarely need to ask for
 #' it: any coloured table already **prints** in this scheme, see \code{\link{tab_css}}'s
@@ -1305,9 +1306,11 @@ reg_footer_lines <- function(tabs) {
 #' (which needs one to follow the reader) -- \code{tab_html()}, \code{tab_md()} and
 #' \code{\link{tab_css}} do.
 #'   \code{"print"} (or \code{"bw"}) is the black-and-white **publication** palette: over-represented
-#'   cells in bold, under-represented ones in italic, a grey fill for the second colour measure --
-#'   readable in a greyscale print, where the colour palette's two directions become the same shade.
-#' (\code{tab_plot} draws bold and italic; the underline of the second level has no ggplot2 equivalent.)
+#'   cells underlined, under-represented ones in italic, the ink darkening and turning bold with the
+#'   size of the deviation, and a grey fill for the second colour measure -- readable in a greyscale
+#'   print, where the colour palette's two directions become the same shade.
+#' (\code{tab_plot} draws the ink and the italic; ggplot2 has no underline, so an over-represented
+#' cell is told apart by its ink alone there.)
 #' @param caption The table caption.
 # @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
@@ -1422,8 +1425,9 @@ tab_plot <- function(tabs,
 
   # The face comes from the PALETTE (`ann$face_bold`), not from guessing at the hex, and NOT from
   # `ann$bold` (which folds in the per-CELL keep_black) -- tab_plot's structural bolding is the row/column
-  # SETS refs2/refs3, kept as separate terms below. ggplot2's `fontface` has no underline, so the print
-  # palette's second intensity level degrades to bold/italic only here (accepted loss on frozen legacy).
+  # SETS refs2/refs3, kept as separate terms below. ggplot2's `fontface` has no underline, so under the
+  # print palette -- where the underline IS the over direction -- an over-represented cell is told apart
+  # by its ink alone here. Accepted loss: the plot backends are frozen legacy.
   face_of <- function(field) {
     sel <- purrr::map(rd$ann, field)
     if (length(other_cols) != 0) {
@@ -2744,10 +2748,13 @@ tabxplor_palette_env <- new.env(parent = emptyenv())
 #' @keywords internal
 default_print_palette <- function() {
   list(
-    # every text slot is BLACK -- direction/magnitude ride the FACE (tx_palette_faces). NOT NA: fmt_col_ann's
-    # `font` falls back to grey where text_hex is NA, which would grey every coloured cell.
-    text_colors     = rep("#000000", 4L),
-    text_colors_neg = rep("#000000", 4L),
+    # The MAGNITUDE ladder, three rungs over four break slots: #333333, then #000000, then #000000 with
+    # the face's bold (slots 3 and 4 share it, so the legend collapses their two thresholds into one).
+    # The SAME ramp on both sides -- a magnitude knows no direction; direction is the face
+    # (tx_palette_faces). NOT NA: fmt_col_ann's `font` falls back to grey where text_hex is NA, which
+    # would grey every coloured cell.
+    text_colors     = c("#333333", "#000000", "#000000", "#000000"),
+    text_colors_neg = c("#333333", "#000000", "#000000", "#000000"),
     # ONE ordered grey ramp, the SAME on both sides: greyscale cannot diverge, so the fill carries
     # MAGNITUDE only and direction is read off the cell's bold/italic.
     background_colors     = c("#F5F5F5", "#E4E4E4", "#D0D0D0", "#B8B8B8"),
@@ -2772,11 +2779,14 @@ tx_palette_faces <- function() {
   list(
     text_light = bold8, text_dark = bold8, bg_light = none, bg_dark = none,
     bg_legend_light = none, bg_legend_dark = none,
-    # over = BOLD, under = ITALIC (direction); the second intensity level adds an UNDERLINE (magnitude).
-    # Slots share a face ON PURPOSE: typography supports 2 levels per side, not 4 (the legend collapses to match).
-    text_print = list(bold      = c(TRUE,  TRUE,  TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE),
+    # THE two axes, split: DIRECTION is the face -- over is UNDERLINED, under is ITALIC and never
+    # underlined -- and MAGNITUDE is the ink ramp above, whose top rung is bold. Bold is the loudest
+    # signal a page has, so it marks the strongest deviation rather than a mere direction; italic is the
+    # quietest, which is why it never has to compete with it. Slots 3 and 4 share a rendering ON PURPOSE
+    # (the ladder is 3 rungs, the breaks are 4): the legend drops the repeated break-word to match.
+    text_print = list(bold      = c(FALSE, FALSE, TRUE,  TRUE,  FALSE, FALSE, TRUE,  TRUE ),
                       italic    = c(FALSE, FALSE, FALSE, FALSE, TRUE,  TRUE,  TRUE,  TRUE ),
-                      underline = c(FALSE, FALSE, TRUE,  TRUE,  FALSE, FALSE, TRUE,  TRUE ),
+                      underline = c(TRUE,  TRUE,  TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE),
                       semantic  = TRUE),
     bg_print = none, bg_legend_print = none
   )

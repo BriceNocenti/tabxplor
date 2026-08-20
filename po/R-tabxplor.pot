@@ -79,7 +79,7 @@ msgstr ""
 msgid "the mean contribution"
 msgstr ""
 
-msgid "Bold"
+msgid "Underlined"
 msgstr ""
 
 msgid "Italic"

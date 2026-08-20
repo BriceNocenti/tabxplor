@@ -1122,23 +1122,23 @@ The population-average arm must be computed as the model's average prediction, n
 
 **Three defects found and reported, not fixed.** (1) **A variable whose name needs backticks silently loses its `Overall association (LR)` footer row** — `reg_global_rows()` filters `have %in% sp$predictors` (`R/tab_reg.R:2207`) where `have` is `terms(fit)$term.labels`, which is backticked for a non-syntactic name; measured, `race_age` gets the row and the identical model named `race x age` gets none. Pre-existing and general (any name with a space), and it matters because `race × age` is the natural name for a compound predictor. (2) `reg_reference_grid_values()` uses an unweighted `mean()` while `multiplier` and `shape` measure their centre with `reg_weighted_mean()` on the frozen frame. (3) `reg_tidy_rescale()` matches `td$term == v` exactly, so `multiplier` cannot reach a nested slope term — silent, and only if the nested arm lands. Also confirmed: the collinearity check reads max VIF 11.74 on an interacted fit against 1.28 centred and **1.02** under the compound-predictor parametrisation, which avoids the false alarm entirely.
 
-**Nine open questions** are listed in the study's §5 — chiefly whether a predictors-list model that names both parents gets the compound column automatically or only by name (which also settles the deferred "per-model `shape`" question, since a materialised column has the same property), the `×` character in the block name, whether the nested-slope arm ships in the first implementation, and the sparse-cell threshold (measured: `race × relig` gives 24 cells, 6 under 30, minimum 4).
-
 ⚠ **The compound-formula hatch stays.** The roadmap wanted it removed before release; the study recommends keeping it as the expert exit door for a specification the argument surface cannot express (custom contrasts, hand-written offsets, three-way terms), exactly as `empirical = "column"` is. What it must stop being is the *answer to interactions* — its own capture (§7.3) shows why: raw coefficient names, no counts, no crude column, no unit, and the lower-order block reporting its effect at age = 0.
 
 ##### Phase 22b-viii — the per-predictor grammar and the reference anchor
 
-Parts A and B of the study, implemented together. **Read `dev/reg_interactions_and_predictor_terms.md` §2, §3 and §5 before planning** — the design is settled there and must not be re-derived.
+Parts A and B of the study, implemented together. **Read `dev/reg_interactions_and_predictor_terms.md` before planning** — most of the design is settled there.
 
 One shared per-predictor resolver and the uniform grammar on `multiplier` / `shape` / `ref` (scalar = every eligible predictor, named = per variable, a reserved `default` name for the rest); `ref` extended to continuous predictors with the mean as its default; **the anchor realised as a column SHIFT at the preparation boundary, beside `reg_shape_apply()` and after it** (shape recodes first — a quantile shape becomes a factor and is never shifted); the Constant row then read from the fit's own intercept, with the population-average arm under `marginal`; the offset added back in the study's two descriptive readers; the row label; defects A2-1 and A2-2. Goldens and the `golden` snapshot move — including the last digits of `multinom` / `polr` cases — so review each diff deliberately. `?tab_reg`'s Constant paragraph currently teaches the opposite and must be rewritten; both regression vignettes gain a paragraph, because with interactions the anchor stops being a detail. The reparametrisation identity (study §3.6) is an optional follow-up for the jamovi fast path, not part of the semantics.
 
-##### Phase 22b-ix — interactions (`cross =`)
+##### Phase 22b-ix — interactions
 
-Part C of the study. **Read `dev/reg_interactions_and_predictor_terms.md` §4 and §5 first**; it holds the argument surface, the two arms, the criteria matrix and the caveats.
+Part C of the study. **Read `dev/reg_interactions_and_predictor_terms.md`**; it holds the argument surface, the two arms, the criteria matrix and the caveats.
 
 `cross` and its boundary stage (beside `reg_shape_apply()`, which already rewrites columns at the same point and must also write into `design_obj$variables`); the compound column, its level order and its labels; the categorical arm (a combined factor) first, the nested-slope arm second; the reference cell composed from the parents' own `ref`; the interaction test row as one extra additive fit joining `TEST_ROWS`; defects C4-1 and C4-2; the jamovi option; documentation in two languages. The list of what is missing is short by construction — §4.11 — because the design was chosen to make it short.
 
-The study's §4.15 proposes a second step worth its own decision: because the no-interaction model is ALREADY fitted for the footer test, the background channel can grade each cell's **departure from additivity**, greyed by `color_signif` when it could be chance — one `MEASURES` row, no new `fmt` field, the `adjustment` gap's own shape (both are nested fits on one frame, so `reg-influence.R` applies unchanged), and the additive-scale twin plus a RERI footer row come with it. Demonstrated on real data in that section.
+**Open question to study:**
+- Since adding an interaction materialises a compound predictor column, **would it be reliable to pass it in the `predictors =` argument directly with the `"var1:var2"` syntax ?** Would it be user-friendly ? Would it we workable from the tidyselect syntax or asks to remove it ? For example: `predictors = c("race", "rincome", "relig", "tvhours", "race:tvhours")`. Main interests: no new argument ; possibility to skip the main term to only add the interaction (removing `"tvhours"` in the former vector). Would it work ? Can you sea caveats ?
+
 
 
 #### Phase 22c — tab manual review
@@ -1202,8 +1202,54 @@ Decide ONE rule and apply it to every secondary token, not just to the base coun
 Read `R/tab-display.R`'s header (the display grammar) and `R/fmt_class.R`'s `parse_display_template()` / `format()` composite expander before planning: the primary-token rule, the bracket-group model and the per-template padding are what any naming rule has to respect.
 
 #### Phase 22d — Black and white publication print manual review
-The grey fill carries no direction, and cannot. o1..o4 and u1..u4 are the same four greys; direction is only readable from the cell's own bold/italic. That's forced by the ruling and by Bertin, and it only bites for a table coloured on the background channel alone. The legend names it ("Grey fill" both sides).
-The legend now collapses repeated break-words — print shows +5 and +20, not +5 +10 +20 +30, because slots 1–2 render identically. That is honest, but it does mean the print legend lists fewer thresholds than the colour one.
+
+##### Phase 22d-i — formatting change
+
+```r
+options(tabxplor.theme = "print", tabxplor.print = "html", tabxplor.cleannames = TRUE)
+tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all", 
+   color = "difference", color_signif = "grey_non_signif",
+)
+```
+- bold only applies to the primary display token (right behaviour), but underline and italics also apply to the secondary display tokens: they too, like colors, should only apply to the primary display token by default (global option). Otherwise it’s noise.
+- bold is more visually striking than underline, and italics is subtle and not striking (specially with the current html monospace font).
+I want to try something a bit different (then, I’ll decide with visual review):
+1. `tx_chrome_hex("print")$grey` identifies the greyed-out cells (the "#888888" grey is much lighter than with colors)
+2. the direction information is carried by : "over" have underline ; "under" have italics and no underline
+3. the size of effect is carried by a 3 rungs ladder: "#333333" text ; "#000000" text ; "#000000" + bold text.
+
+**DONE.** Suite **FAIL 0 | WARN 0 | SKIP 4 | PASS 7840**. `devtools::document()` clean, **NAMESPACE unchanged**, five man pages with prose-only edits. The 36 `_golden/*.rds` did not move at all; `_snaps/golden.md` moved by exactly **9 CSS rules x 16 tables, every one of them inside the `@media print` layer** (plus 22b-v's two pending `.tx-spark` rules, accepted with it).
+
+**The two axes are split, and that is the whole change.** DIRECTION is now the face alone -- over is UNDERLINED, under is ITALIC and never underlined -- and MAGNITUDE is an ink ladder the palette gained: `#333333`, then `#000000`, then `#000000` + **bold**. Bold is the loudest signal a page has, so it now marks the strongest deviation instead of a mere direction, and italic (the quietest, especially in the html monospace font) no longer has to compete with it. Three rungs over four break slots, mapped **1 | 2 | 3-4** per the maintainer's call: `legend_break_tokens()`'s existing "drop a break that renders like the previous one" rule then collapses slots 3 and 4 for free, so the print legend reads `+5 ; +10 ; +20` where the colour legend lists four thresholds. Nothing was added to make that work -- the collapse rule already keyed on the full (hex, bold, italic, underline) tuple.
+
+**The greyed-out cell is deliberately light, and the test now says so.** The maintainer's `tx_chrome_hex("print")` tweak (`grey` `#595959` -> `#888888`, `grey2` `#111111` -> `#333333`) broke two WCAG assertions **on purpose**: greyed means "harder to read on purpose", so it is held to the large-text / non-text floor (3:1 on white, measured 3.54) and merely to VISIBLE on the deepest fill (1.79), never to the 4.5:1 body-text floor a cell meant to be read must meet. Both are restated in those terms with the reason in the comment, and one is ADDED that the old pair never made: the reading ladder itself must be monotone -- greyed lighter than rung 1 lighter than rung 2 (L* 56.7 / 21.2 / 0; bold rides rung 2, so the last step is typographic rather than a third shade). `tx_chrome_hex()`'s comment argued for `#595959` at 3.53:1 and is rewritten. `grey2` gains a THIRD reader on the way -- the aside's ink, an uncoloured cell in an uncoloured column, and the ladder's first rung are one hex, all three meaning "present, set slightly back".
+
+**The face stops at the primary token, like the colour.** Two paths carried it to a cell and both had to move. (1) The slot class sits on the `<td>`, so `.p1{text-decoration:underline}` underlined the aside too -- `.tabxplor-tab .tx-sec` now carries three print-only declarations. WARNING recorded at the site: **`display:inline-block` is the load-bearing one, not `text-decoration:none`** -- a CSS text-decoration is drawn by the ancestor box across everything inside it and CANNOT be switched off by a descendant; only an atomic inline box is left out of it. (2) The `<b>/<i>/<u>` markup wrapped the whole cell; it is applied inside `html_cell_text()` now, to the primary piece only, and the engine's separate `html_face_wrap()` call is kept solely for the two whole-cell cases (`color_whole_cell`, and a degraded column carrying no face flags). `html_face_wrap()`'s own signature is untouched -- it is locked by `test-19m-defects.R`. Measured on a coloured composite cell: `<td class="... p1"><u>24%</u><span class="tx-sec"> (1 305)</span></td>`, and under the opt-out `<td class="... p1"><u>24%<span class="tx-sec"> (1 305)</span></u></td>`.
+
+**One switch, widened rather than duplicated** (maintainer's call): `options(tabxplor.color_whole_cell = TRUE)` now opts out of the whole primary/secondary split -- colour and face alike. A second option would have been a second rule to remember for one idea; `?tabxplor-options` says "the cell's rendering" where it said "the colour".
+
+**The legend names the direction, not the loudest face.** `legend_shade_names()`'s print pair is `Underlined` / `Italic` (the ink ramp is the magnitude, which the coloured break-words already show). One msgid moved: `po/R-fr.po` + `po/R-tabxplor.pot` + the compiled `inst/po/fr/LC_MESSAGES/R-tabxplor.mo`, verified rendering *"Souligne : cases >= a la ligne Total +5 ; +10 ; +20 points. Italique : ..."*. The 9 fuzzy / 106 untranslated msgids are pre-existing debt for Phase 23f.
+
+**One test defect found and fixed, and it was a real trap.** `test-tab_md.R`'s pandoc-validity check looked for the bare word `"line-block"` in the rendered html as its "pandoc refused this table" marker -- but `h` carries our inlined stylesheet, where it is a substring of **`display:inline-block`**. Six cases failed while every table rendered perfectly. The marker is pandoc's own element now (`class="line-block"`), with the reason at the site.
+
+**Accepted losses, both documented rather than worked around.** `tab_plot()` maps the face onto ggplot2's `fontface`, which has no underline, so an over-represented cell is told apart by its INK alone there (the plot backends are frozen legacy; `forest_plot` is Phase 22f). And Markdown and Excel colour a cell as a whole, so their face follows their colour -- the aside keeps it in those two media, exactly as it keeps the colour.
+
+**Unchanged, deliberately:** the background channel (one grey fill ramp, magnitude only -- a fill cannot carry a direction), `bg_legend` (the font stand-in where a fill is impossible), `fmt_point_palette()`'s print deviation for plotted marks, and `set_color_palette()`'s provable inability to touch the print palette.
+
+##### Phase 22d-ii — new print palettes
+
+I want 3 black and white typo text palettes (plus only one background greys palette, the current one)
+
+1. The current palette, with less effect size breaks but working everywhere.
+
+2. Regression only palette, to use with `tab_reg()`, where the direction is already given by a clear symbol in every cell (`+`|`-` `×`|`÷` `x`|`1/x` depending on the `measure`).
+
+3. Repeated superscript marks, to use with no stars, so in `tab()` rather than in `tab_reg()`
+
+
+
+
+
 
 #### Phase 22e — assumptions plots manual review
 
