@@ -274,10 +274,23 @@ test_that("a crude companion on another scale writes neither obs nor a gap SE (a
   testthat::expect_identical(get_scale(x), "raw_diff")   # a count AME, in the outcome's own units
   testthat::expect_false(all(is.na(get_obs(x))))
   testthat::expect_false(all(is.na(get_gap_se(x))))
-  # the gate itself: a crude shape on another scale is still refused, so no future fall-back can
-  # silently write one estimand into another's `obs`.
-  testthat::expect_false(tabxplor:::reg_same_estimand(list(scale = "mean_ratio"), x))
-  testthat::expect_true(tabxplor:::reg_same_estimand(list(scale = "raw_diff"), x))
+  # the gate itself: a crude shape on another scale -- or on the same scale under another MEASURE,
+  # which every logged one shares -- is still refused, so no future fall-back can silently write one
+  # estimand into another's `obs`.
+  est <- tabxplor:::reg_estimand("poisson", "marginal", "difference")
+  sc  <- get_scale(x)
+  testthat::expect_false(tabxplor:::reg_same_estimand(list(scale = "mean_ratio", word = "diff"),
+                                                      sc, est))
+  testthat::expect_false(tabxplor:::reg_same_estimand(list(scale = "raw_diff", word = "IRR"),
+                                                      sc, est))
+  testthat::expect_true(tabxplor:::reg_same_estimand(list(scale = "raw_diff", word = "diff"),
+                                                     sc, est))
+  # two log_coef columns are told apart by the WORD alone: log(OR) is not log(RR).
+  lg <- tabxplor:::reg_estimand("binomial", "coefficient", "log_odds")
+  testthat::expect_true(tabxplor:::reg_same_estimand(list(scale = "log_coef", word = "OR"),
+                                                     "log_coef", lg))
+  testthat::expect_false(tabxplor:::reg_same_estimand(list(scale = "log_coef", word = "RR"),
+                                                      "log_coef", lg))
   # the coefficient path on the same data DOES match scales, so it keeps both
   t2 <- suppressWarnings(suppressMessages(tab_reg(d, "tvhours", "race", family = "poisson",
                                                   empirical = TRUE, color = c(TRUE, "adjustment"))))

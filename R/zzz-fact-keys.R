@@ -55,7 +55,7 @@ tx_fk_all <- function(tbl, field) {
 #' @noRd
 tx_fk_reg_rows <- function() unlist(lapply(REG_ESTIMANDS, `[[`, "rows"), recursive = FALSE)
 
-# REG_EMPIRICAL mixes per-family SCALARS (method_diff, coef, coef_log) with SHAPE rows; only the
+# REG_EMPIRICAL mixes per-family SCALARS (method_diff, coef) with SHAPE rows; only the
 # latter have members.
 #' @keywords internal
 #' @noRd
@@ -68,6 +68,43 @@ tx_fk_emp_shapes <- function() {
 #' @noRd
 tx_fk_emp_shape_names <- function()
   unique(unlist(lapply(REG_EMPIRICAL, function(fam) names(fam)[vapply(fam, is.list, logical(1))])))
+
+# The shape keys QUALIFIED by their block ("binomial.or_log"). A bare name is ambiguous -- `or` is
+# declared by four blocks, `rr_log` by two -- so only the qualified form can say "this shape exists
+# in the block that will be asked for it".
+#' @keywords internal
+#' @noRd
+tx_fk_emp_shape_keys <- function()
+  unlist(lapply(names(REG_EMPIRICAL), function(f) {
+    fam <- REG_EMPIRICAL[[f]]
+    paste0(f, ".", names(fam)[vapply(fam, is.list, logical(1))])
+  }), use.names = FALSE)
+
+# Every crude shape a REACHABLE estimand asks for, resolved exactly as reg_crude_shape() resolves it.
+# Two things the bare-name edge cannot see, and both have drawn another estimand's column: the BLOCK
+# is chosen by `crude_fam` / `crude_key` (a borrow crosses families, and a summed score overrides
+# both), and a `measure = "log_*"` request composes the `_log` twin by string concatenation, so a
+# shape no one declared silently resolved to its block's coefficient shape.
+#' @keywords internal
+#' @noRd
+tx_fk_emp_reachable <- function() {
+  out <- character(0)
+  for (f in names(REG_ESTIMANDS)) for (r in REG_ESTIMANDS[[f]]$rows) {
+    if (!identical(r$status, "ok")) next
+    # `trials = ` is the one caller-supplied fact that moves a block, so both states are enumerated.
+    for (tr in list(NULL, 1)) {
+      key <- reg_crude_key(r$fit, tr)
+      if (is.na(key)) next
+      blk <- if (identical(key, "grouped_binomial")) key
+             else if (!identical(r$crude_fam %||% "auto", "auto")) r$crude_fam else key
+      base <- if (is.na(r$crude_shape)) REG_EMPIRICAL[[blk]]$coef else r$crude_shape
+      # only a multiplicative row has a log twin: reg_estimand() refuses to log an additive one.
+      out <- c(out, paste0(blk, ".", base),
+               if (isTRUE(r$exp)) paste0(blk, ".", base, "_log"))
+    }
+  }
+  unique(out)
+}
 
 
 # --- the declared edges --------------------------------------------------------------------------
@@ -201,6 +238,9 @@ TAB_FOREIGN_KEYS <- list(
         function() names(REG_EMPIRICAL), allow = "auto"),
   tx_fk("REG_ESTIMANDS$rows$crude_shape", function() tx_fk_scalar(tx_fk_reg_rows(), "crude_shape"),
         function() tx_fk_emp_shape_names()),
+  # ...and the same keys QUALIFIED by the block that will be asked for them, log twins included.
+  tx_fk("the crude shape every reachable estimand resolves to", tx_fk_emp_reachable,
+        tx_fk_emp_shape_keys),
 
   # --- into the header vocabulary (REG_WORDS / REG_CONTRASTS) ---------------------------------
   tx_fk("REG_ESTIMANDS$rows$word", function() tx_fk_scalar(tx_fk_reg_rows(), "word"),

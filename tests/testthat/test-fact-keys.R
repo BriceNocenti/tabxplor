@@ -51,3 +51,22 @@ testthat::test_that("the edge inventory covers the tables a rename would break",
   testthat::expect_true("DISPLAY_TOKENS$field" %in% froms)
   testthat::expect_gt(length(froms), 25L)
 })
+
+testthat::test_that("the crude shape of every reachable estimand exists IN ITS OWN BLOCK", {
+  # The bare-name edge above only asks "does some block declare this shape". Two things it cannot
+  # see, and both drew another estimand's column: the BLOCK is chosen by `crude_fam`/`crude_key`
+  # (a borrow crosses families), and a `measure = "log_*"` request composes the `_log` twin by
+  # string concatenation, so an undeclared one silently resolved to its block's coefficient shape.
+  reach <- tabxplor:::tx_fk_emp_reachable()
+  testthat::expect_gt(length(reach), 20L)
+  testthat::expect_true(all(grepl("\\.", reach)))
+  testthat::expect_true(all(reach %in% tabxplor:::tx_fk_emp_shape_keys()))
+  # the pairs the qualified form exists for: same shape NAME, different blocks and different engines
+  keys <- tabxplor:::tx_fk_emp_shape_keys()
+  testthat::expect_true(all(c("binomial.or_log", "rr.rr_log", "grouped_binomial.rr_log",
+                              "multinomial.ame_ratio_log", "ordinal.ame_ratio_log") %in% keys))
+  # and the edge itself refuses a block that does not declare the shape asked of it
+  broken <- list(tabxplor:::tx_fk("FAKE", function() "binomial.rr_log",
+                                  tabxplor:::tx_fk_emp_shape_keys))
+  testthat::expect_error(tabxplor:::tx_check_foreign_keys(broken), "binomial.rr_log")
+})

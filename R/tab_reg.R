@@ -166,15 +166,15 @@ reg_color_notes <- function(color, color_signif, ests, tab_vars, na, na_explicit
         "stay empty).")
   }
   if ("adjustment" %in% gap) {
-    # Asked exactly as reg_same_estimand() asks it at build time, so the note and the gate cannot
-    # disagree. ⚠ do NOT approximate it by "does the marginal row reuse the coefficient row's crude
-    # shape": sharing that shape is the NORMAL case wherever the two contrasts are one estimand.
+    # THE SAME PREDICATE the gate uses at build time (reg_same_estimand()), so the note and the gate
+    # cannot disagree. ⚠ do NOT approximate it by "does the marginal row reuse the coefficient row's
+    # crude shape": sharing that shape is the NORMAL case wherever the two contrasts are one estimand.
     if (!identical(effect, "coefficient")) {
       bare <- unique(vapply(names(ests), function(d) {
         e  <- ests[[d]]
         tr <- if (is.null(trials)) NA else trials[[d]] %||% NA
         sh <- reg_crude_shape(if (is.null(crude_keys)) NA_character_ else crude_keys[[d]], e)
-        if (is.null(sh) || !identical(sh$scale, reg_scale_of(e, tr))) e$family else NA_character_
+        if (!reg_same_estimand(sh, reg_scale_of(e, tr), e)) e$family else NA_character_
       }, character(1)))
       bare <- stats::na.omit(bare)
       if (length(bare)) {
@@ -1585,7 +1585,7 @@ reg_basis_vars <- function(fit, predictors) {
 }
 
 #' @keywords internal
-reg_marginal_basis_ok <- function(fit, data, v, k, est, ratio) {
+reg_marginal_basis_ok <- function(fit, data, v, k, est, ratio, do_exp = ratio) {
   truth <- tryCatch({
     p0 <- stats::predict(fit, newdata = data, type = "response")
     d2 <- data; d2[[v]] <- as.numeric(d2[[v]]) + (if (is.finite(k) && k != 0) k else 1)
@@ -1593,21 +1593,32 @@ reg_marginal_basis_ok <- function(fit, data, v, k, est, ratio) {
          na.rm = TRUE)
   }, error = function(e) NA_real_)
   if (!is.finite(truth) || abs(truth) < 1e-10) return(TRUE)          # nothing to disagree about
-  if (isTRUE(ratio)) return(!isTRUE(all.equal(unname(est[[1]]), 1, tolerance = 1e-8)))
+  # a ratio has no `truth` to compare against, so the tell is "did it come back NEUTRAL?" -- and the
+  # neutral is the one the column PRINTS: 1 exponentiated, 0 on a kept log.
+  if (isTRUE(ratio))
+    return(!isTRUE(all.equal(unname(est[[1]]), if (isTRUE(do_exp)) 1 else 0, tolerance = 1e-8)))
   isTRUE(abs(unname(est[[1]]) - truth) <= 0.02 * abs(truth) + 1e-10)
 }
 
 # THE dispatcher between the two engines: the fast route returns NULL rather than a wrong number, and
 # the fallback then runs for the WHOLE call, so one column carries one convention.
+#
+# ⚠ TWO DECISIONS, NEVER ONE FLAG. `comparison` says what the ENGINE computes -- "lnratioavg" /
+# "lnor" make it work on the log of a ratio, which is where the interval is Wald. `exponentiate` says
+# what the COLUMN prints, and it comes from the estimand's own `exp`: a `measure = "log_*"` column
+# keeps the log, and folding the two together printed ratios on a column stamped `log_coef`.
 reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
                          at = "average", comparison = NULL, want_pred = TRUE,
+                         exponentiate = TRUE,
                          multiplier = NULL, engine = "marginaleffects", want_se = TRUE,
                          anchors = NULL, crosses = list()) {
-  do_exp <- !is.null(comparison) && comparison %in% c("lnor", "lnratioavg")
+  log_ratio <- !is.null(comparison) && comparison %in% c("lnor", "lnratioavg")
+  do_exp    <- log_ratio && isTRUE(exponentiate)
   out <- NULL
   # "lnor" is the MNL j-vs-rest contrast, which only ever comes with at = "reference".
   if (identical(engine, "gcomp") && identical(at, "average") && !identical(comparison, "lnor"))
-    out <- reg_marginal_gcomp(fit, data, predictors, conf_level, wt, ratio = do_exp,
+    out <- reg_marginal_gcomp(fit, data, predictors, conf_level, wt, ratio = log_ratio,
+                              do_exp = do_exp,
                               want_pred = want_pred, want_se = want_se, multiplier = multiplier,
                               crosses = crosses)
   # THE fallback, and the only place `marginaleffects` is genuinely required: the estimand's engine
@@ -1616,16 +1627,18 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
     if (!requireNamespace("marginaleffects", quietly = TRUE))
       reg_abort_marginaleffects("this contrast, which has no closed form on this model")
     out <- reg_marginal_me(fit, data, predictors, conf_level, wt, at = at, comparison = comparison,
-                           want_pred = want_pred, multiplier = multiplier, want_se = want_se,
+                           want_pred = want_pred, exponentiate = exponentiate,
+                           multiplier = multiplier, want_se = want_se,
                            anchors = anchors, crosses = crosses)
   }
   if (identical(at, "average")) reg_marginal_basis_warn(fit, data, predictors, multiplier,
-                                                        out$ame, do_exp)
+                                                        out$ame, log_ratio, do_exp)
   out
 }
 
 #' @keywords internal
 reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, ratio = FALSE,
+                               do_exp = ratio,
                                want_pred = TRUE, want_se = TRUE, multiplier = NULL,
                                crosses = list()) {
   tvars <- tryCatch(all.vars(stats::delete.response(stats::terms(fit))), error = function(e) NULL)
@@ -1673,7 +1686,7 @@ reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, rat
       grp <- if (per_cat) as.character(p$levels) else NA_character_
       se  <- if (per_cat) vapply(p$G, function(gj) reg_delta_se(gj, V), numeric(1))
              else         reg_delta_se(p$G, V)
-      res <- reg_wald_finalize(p$est, ratio, se = se, crit = crit)
+      res <- reg_wald_finalize(p$est, do_exp, se = se, crit = crit)
       amel[[length(amel) + 1L]] <- tibble::tibble(
         var = v, level = as.character(ct$level), group = grp,
         ame = res$estimate, ame_lo = res$conf.low, ame_hi = res$conf.high, ame_p = res$p.value)
@@ -1692,7 +1705,8 @@ reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, rat
 }
 
 #' @keywords internal
-reg_marginal_basis_warn <- function(fit, data, predictors, multiplier, ame, ratio) {
+reg_marginal_basis_warn <- function(fit, data, predictors, multiplier, ame, ratio,
+                                    do_exp = ratio) {
   bv <- reg_basis_vars(fit, predictors)
   if (!length(bv) || is.null(ame) || !nrow(ame)) return(invisible(NULL))
   for (v in bv) {
@@ -1700,7 +1714,7 @@ reg_marginal_basis_warn <- function(fit, data, predictors, multiplier, ame, rati
     est <- ame$ame[ame$var == v]
     if (length(est) != 1L) next
     k <- if (!is.null(multiplier) && v %in% names(multiplier)) as.numeric(multiplier[[v]]) else 1
-    if (reg_marginal_basis_ok(fit, data, v, k, est, ratio)) next
+    if (reg_marginal_basis_ok(fit, data, v, k, est, ratio, do_exp)) next
     cli::cli_warn(c(
       "!" = paste0("The marginal effect of {.val {v}} is not trustworthy: it is fitted through a ",
                    "basis expansion ({.code poly()} / {.code ns()}), which the marginal-effects ",
@@ -1717,9 +1731,11 @@ reg_marginal_basis_warn <- function(fit, data, predictors, multiplier, ame, rati
 #   at = "average"   -> averaged over `data`, weighted by `wt`: a population quantity.
 #   at = "reference" -> at the reference profile, a single datagrid row: no averaging, no weights.
 # `comparison = "lnor"` is the multinomial j-vs-rest contrast (profile only) and `"lnratioavg"` its
-# ratio twin; both return a log exp()'d here, so the interval stays a Wald one on the log scale.
+# ratio twin; both return a log, so the interval stays a Wald one on the log scale. It is exp()'d
+# back here only where the ESTIMAND asks for it -- see reg_marginal()'s two decisions.
 reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
                             at = "average", comparison = NULL, want_pred = TRUE,
+                            exponentiate = TRUE,
                             multiplier = NULL, want_se = TRUE, anchors = NULL,
                             crosses = list()) {
   ref_vals <- if (at == "reference")
@@ -1732,8 +1748,9 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
   wts_arg <- if (at == "reference" || is.null(wt)) list() else list(wts = wt)
   cmp_arg <- if (is.null(comparison)) list() else list(comparison = comparison)
   # WARNING: `comparison` is NULL on the additive default, and `NULL %in% x` is logical(0), not
-  # FALSE -- which would make every `if (do_exp)` below error with "argument is of length zero".
-  do_exp  <- !is.null(comparison) && comparison %in% c("lnor", "lnratioavg")
+  # FALSE -- which would make every `if (log_ratio)` below error with "argument is of length zero".
+  log_ratio <- !is.null(comparison) && comparison %in% c("lnor", "lnratioavg")
+  do_exp    <- log_ratio && isTRUE(exponentiate)
 
   # `variables = list(v = k)` is a k-unit FORWARD DIFFERENCE, not k x the 1-unit AME. ⚠ the KEYWORD
   # is never passed through (see the `multiplier` section).
@@ -1788,8 +1805,10 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
     ref_lv <- if (is_fac) levels(forcats::fct_drop(as.factor(data[[v]])))[1] else NA_character_
     level  <- if (!is_fac) v else {
       inner <- if (identical(comparison, "lnor")) "odds" else "mean"
-      pre <- if (do_exp) paste0("ln(", inner, "(") else ""
-      suf <- if (do_exp) paste0(") / ", inner, "(", ref_lv, "))") else paste0(" - ", ref_lv)
+      # ⚠ the label is `marginaleffects`' own, so it follows what the engine was ASKED (`log_ratio`),
+      # never what this column prints.
+      pre <- if (log_ratio) paste0("ln(", inner, "(") else ""
+      suf <- if (log_ratio) paste0(") / ", inner, "(", ref_lv, "))") else paste0(" - ", ref_lv)
       substr(ac$contrast, nchar(pre) + 1L, nchar(ac$contrast) - nchar(suf))
     }
     grp    <- if ("group" %in% names(ac)) as.character(ac$group) else NA_character_
@@ -1950,9 +1969,12 @@ reg_constant_cell <- function(P, se, scale_key, crit) {
 
 # The whole row, per outcome category: NULL wherever the baseline cannot be computed (an offset, a
 # polr under `coefficient`, a fit the digest path did not keep).
+# `log = TRUE` is the link-scale column's route: the cell is built on the scale the estimand is the
+# log OF (so the odds / level geometry above still applies), then logged -- which is why the interval
+# stays exact rather than needing an arm of its own.
 #' @keywords internal
 reg_constant_baseline <- function(fit, data, predictors, at, wt, conf_level, scale_key,
-                                  anchors = NULL) {
+                                  log = FALSE, anchors = NULL) {
   if (is.null(fit) || is.null(scale_key)) return(NULL)
   w  <- if (!is.null(wt) && wt %in% names(data)) data[[wt]] else NULL
   nd <- if (identical(at, "reference")) reg_profile_row(data, predictors, anchors, w) else NULL
@@ -1963,15 +1985,22 @@ reg_constant_baseline <- function(fit, data, predictors, at, wt, conf_level, sca
   crit <- stats::qnorm(1 - (1 - conf_level) / 2)
   cells <- purrr::map(seq_along(b$est), function(j)
     reg_constant_cell(b$est[[j]], reg_delta_se(b$G[[j]], V), scale_key, crit))
-  tibble::tibble(group = as.character(b$levels),
-                 est = vapply(cells, `[[`, numeric(1), "est"),
-                 lo  = vapply(cells, `[[`, numeric(1), "lo"),
-                 hi  = vapply(cells, `[[`, numeric(1), "hi"))
+  out <- tibble::tibble(group = as.character(b$levels),
+                        est = vapply(cells, `[[`, numeric(1), "est"),
+                        lo  = vapply(cells, `[[`, numeric(1), "lo"),
+                        hi  = vapply(cells, `[[`, numeric(1), "hi"))
+  if (isTRUE(log)) out[c("est", "lo", "hi")] <- lapply(out[c("est", "lo", "hi")], base::log)
+  out
 }
 
-reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
+# ONE build, every stamp read off the estimand's own EST_SCALES row -- the field the estimate goes
+# in, the neutral a reference cell carries, whether the interval is Wald on the log, whether there is
+# a multiplicative reference to mark, and where the SD ladder's divisor comes from. There is no
+# per-family arm, which is what lets a `measure = "log_*"` column print logs with a 0 neutral and a
+# symmetric interval without a sixth branch.
+reg_marginal_column <- function(skeleton, marg, model_predictors, scale, var_y,
                                 group, color, color_signif, col_var, or_tip = NULL,
-                                model_family = "", scale = NULL, trials = NULL, const = NULL) {
+                                model_family = "", trials = NULL, const = NULL) {
   amt <- marg$ame; prd <- marg$pred
   if (!is.na(group)) {
     amt <- amt[!is.na(amt$group) & amt$group == group, , drop = FALSE]
@@ -1988,9 +2017,9 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
   # in_refrow is the UNION-skeleton row fact (see reg_column); `is_ref` stays in_model-gated below.
   refrows  <- (skeleton$is_ref & !is_const) | is_const
 
-  # THE SCALE the estimand declares, resolved once: every arm writes into the field it names.
-  sc <- scale %||% switch(shape, prob = "points", prob_ratio = "pct_ratio",
-                          raw_ratio = "mean_ratio", or = "odds_ratio", "raw_diff")
+  # THE SCALE the estimand declares, and everything the cell is stamped with follows from it.
+  sc  <- scale
+  scr <- EST_SCALES[[sc]]
 
   display <- rep("blank", n_rows)
   show    <- in_model & (!is.na(ame_v) | is_ref)
@@ -2010,84 +2039,40 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
   display[show] <- "est"
   # ...then the baseline row leaves the estimate field wherever its scale says the effects act on the
   # level. One rule, shared with the coefficient arm (reg_constant_place).
-  base_fld <- EST_SCALES[[sc]]$base_display %||% NA_character_
+  base_fld <- scr$base_display %||% NA_character_
   cp     <- reg_constant_place(sc, trials, is_const, ame_v, pred_v, p_v, display)
   ame_v  <- cp$est; pred_v <- cp$base; p_v <- cp$p; display <- cp$display
   # every branch offers the level its scale names, so a baseline placed there is not dropped; where
   # the sweep has none the field is simply all-NA and reg_fill_base() fills it later.
-  base_args <- if (!is.na(base_fld) && !identical(base_fld, EST_SCALES[[sc]]$est_field))
+  base_args <- if (!is.na(base_fld) && !identical(base_fld, scr$est_field))
     stats::setNames(list(pred_v), base_fld) else list()
-  if (shape == "prob") {
-    # EVERY reference cell carries its measure's neutral, on every scale -- the additive 0 here, as in
-    # the coefficient twin (reg_column()) and in the three multiplicative arms below. It is what makes
-    # a marginal risk difference read like its conditional counterpart instead of leaving a hole.
-    ame_v[is_ref] <- 0
-    # carry the model OR in `or` so the tooltip can surface it although the cell DISPLAYS the AME.
-    or_v <- if (is.null(or_tip)) NA_real_ else or_tip
-    # ⚠ the SCALE written into is the ESTIMAND's, never the arm's, and the estimate goes in the field
-    # that scale declares -- on a summed score `raw_diff`, converted from the per-item contrast by
-    # `trials` (exact), beside the mean score as its level.
-    if (identical(sc, "raw_diff") && !is.na(trials %||% NA)) {
-      k <- as.numeric(trials); ame_v <- ame_v * k; lo_v <- lo_v * k; hi_v <- hi_v * k
-    }
-    do.call(fmt, c(
-      base_args,
-      list(
-        n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
-        diff = ame_v, or = or_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-        scale = sc, pct_type = reg_pct_type(sc), display = display,
-        digits = reg_cell_digits(sc), ci_method = "wald",
-        color = color, color_signif = color_signif, col_var = col_var,
-        comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"),
-      if (identical(EST_SCALES[[sc]]$sd_from %||% "", "var")) list(var = rep(var_y, n_rows))))
-  } else if (shape == "prob_ratio") {
-    # the RATIO twin of "prob", coherent BY CONSTRUCTION: marginal standardization gives
-    # adjusted(ref) x RR(level) == adjusted(level). The reference cell keeps the FULL template.
-    ame_v[is_ref] <- 1                                         # multiplicative neutral at the reference
-    do.call(fmt, c(
-      stats::setNames(list(ame_v), EST_SCALES[[sc]]$est_field),
-      base_args,
-      list(
-        n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
-        ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-        scale = sc, pct_type = reg_pct_type(sc), display = display,
-        digits = reg_cell_digits(sc), ref = "1", ci_method = "wald_log",
-        color = color, color_signif = color_signif, col_var = col_var,
-        comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model")))
-  } else if (shape == "raw_ratio") {
-    ame_v[is_ref] <- 1                                         # multiplicative neutral at the reference
-    do.call(fmt, c(
-      base_args,
-      list(
-        n = rep(NA_integer_, n_rows),
-        ratio = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-        scale = sc, display = display, digits = reg_cell_digits(sc), ref = "1",
-        ci_method = "wald_log",
-        color = color, color_signif = color_signif, col_var = col_var,
-        comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model")))
-  } else if (shape == "or") {                                  # MNL "j vs rest" OR at the profile
-    ame_v[is_ref] <- 1                                         # multiplicative neutral at the reference
-    do.call(fmt, c(
-      base_args,
-      list(
-        n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
-        or = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-        scale = sc, pct_type = reg_pct_type(sc), display = display,
-        digits = reg_cell_digits(sc), ref = "1", ci_method = "wald_log",
-        color = color, color_signif = color_signif, col_var = col_var,
-        comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model")))
-  } else {                                                     # "raw" (gaussian / poisson)
-    ame_v[is_ref] <- 0                                         # additive neutral at the reference
-    do.call(fmt, c(
-      base_args,
-      list(
-        n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
-        diff = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-        var = rep(var_y, n_rows),                    # var(Y): standardizes the effect-size colour
-        scale = sc, display = display, digits = reg_cell_digits(sc), ci_method = "wald",
-        color = color, color_signif = color_signif, col_var = col_var,
-        comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model")))
+
+  # EVERY reference cell carries its measure's own neutral -- 0 additive, 1 multiplicative, 0 again
+  # on a link scale -- exactly as the coefficient twin does (reg_column()). It is what makes a
+  # marginal effect read like its conditional counterpart instead of leaving a hole.
+  ame_v[is_ref] <- scr$neutral
+  # a SUMMED SCORE's additive effect is a difference of mean SCORES: the per-item contrast the sweep
+  # returns, x `trials` (exact, since the interval scales by the same constant).
+  if (identical(sc, "raw_diff") && !is.na(trials %||% NA)) {
+    k <- as.numeric(trials); ame_v <- ame_v * k; lo_v <- lo_v * k; hi_v <- hi_v * k
   }
+  do.call(fmt, c(
+    stats::setNames(list(ame_v), scr$est_field),
+    base_args,
+    list(
+      n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
+      ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
+      scale = sc, pct_type = reg_pct_type(sc), display = display,
+      digits = reg_cell_digits(sc),
+      # a multiplicative estimate's interval is Wald on the LOG, and its baseline is the neutral 1.
+      ci_method = if (isTRUE(scr$mult)) "wald_log" else "wald",
+      color = color, color_signif = color_signif, col_var = col_var,
+      comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"),
+    if (isTRUE(scr$mult)) list(ref = "1"),
+    # the model OR rides in `or` so the tooltip can surface it although the cell DISPLAYS the AME.
+    if (!is.null(or_tip) && !identical(scr$est_field, "or")) list(or = or_tip),
+    # var(Y): the divisor of the SD-standardized colour ladder, where the scale declares one.
+    if (identical(scr$sd_from %||% "", "var")) list(var = rep(var_y, n_rows))))
 }
 
 reg_columns_multinom <- function(skeleton, f, sp, est, color, color_signif,
@@ -3179,25 +3164,32 @@ reg_cols_ame <- function(f, sp, ctx) {
   sp_col       <- sp$color
   prob_scale   <- reg_fam_prob(sp_fam)
   per_category <- reg_fam_percategory(sp_fam)
-  # the contrast asked of the engine and the cell SHAPE both come from the estimand row.
+  # the contrast asked of the ENGINE and the scale the COLUMN prints both come from the estimand row,
+  # and they are two decisions: a `measure = "log_*"` row still wants the log-ratio contrast, and
+  # still keeps the log (`exp` FALSE). See reg_marginal().
   sp_est       <- sp$est
   ratio_ame    <- !is.na(sp_est$comparison) && identical(sp_est$comparison, "lnratioavg")
-  shape        <- if (!prob_scale) (if (ratio_ame) "raw_ratio" else "raw")
-                  else if (ratio_ame) "prob_ratio" else "prob"
+  sp_scale     <- reg_scale_of(sp_est, sp$trials)
   marg  <- reg_marginal(f$fit, f$data, sp$row_vars, conf_level, design_spec$wt,
                         at = if (identical(sp_est$effect, "at_reference")) "reference" else "average",
                         want_pred = TRUE,
                         comparison = if (ratio_ame) "lnratioavg" else NULL,
+                        exponentiate = isTRUE(sp_est$exp),
                         multiplier = multiplier, engine = reg_marginal_engine(sp_est),
                         anchors = anchors, crosses = crosses)
   marg     <- reg_scale_pred(marg, sp$trials)
   # the Constant row: this contrast has no intercept in its tidy, so the baseline is the model's own
   # predicted outcome, at the very profile the column's effects are read at.
+  # ⚠ a LOGGED column's baseline is computed on the scale it is the log OF -- the baseline odds under
+  # a logged odds ratio, the baseline level under a logged risk / rate ratio -- and logged after, so
+  # `Constant + effect` stays coherent on the link scale.
+  exp_sc <- reg_exp_scale_of(sp_est, sp$trials)
   const <- reg_constant_baseline(
     f$fit, f$data, sp$predictors,
     at = if (identical(sp_est$effect, "at_reference")) "reference" else "average",
     wt = design_spec$wt, conf_level = conf_level,
-    scale_key = reg_scale_of(sp_est, sp$trials), anchors = anchors)
+    scale_key = if (is.na(exp_sc)) sp_scale else exp_sc, log = !is.na(exp_sc),
+    anchors = anchors)
   marg_add <- if (!ratio_ame) marg
     else if (is.null(f$fit)) NULL
     else reg_scale_pred(reg_fill_sweep(f$fit, f$data, sp$row_vars, conf_level,
@@ -3220,10 +3212,9 @@ reg_cols_ame <- function(f, sp, ctx) {
       jc  <- reg_cleanup(g, cleannames)
       lab <- paste0(if (prefix_dep) paste0(sp$outcome, " - ") else "", jc)
       list(label = lab, emp_key = g,   # emp_key: raw category, for the empirical tooltip
-           col   = dress(reg_marginal_column(skeleton, marg, sp$row_vars, shape,
+           col   = dress(reg_marginal_column(skeleton, marg, sp$row_vars, sp_scale,
                                              var_y, g, sp_col, color_signif, cv_cat,
                                              model_family = sp_fam,
-                                             scale = reg_scale_of(sp_est, sp$trials),
                                              trials = sp$trials, const = const), g))
     })
   } else {
@@ -3235,10 +3226,9 @@ reg_cols_ame <- function(f, sp, ctx) {
           else reg_shared_col_var(sp_fam, sp$outcome, f$positive_level, cleannames, sp$trials)
     list(list(
       label = reg_model_col_name(sp_eff, sp$outcome, is_comparison, sp$label, n_outcomes),
-      col   = dress(reg_marginal_column(skeleton, marg, sp$row_vars, shape,
+      col   = dress(reg_marginal_column(skeleton, marg, sp$row_vars, sp_scale,
                                         var_y, NA_character_, sp_col, color_signif,
                                         cv, or_tip = or_tip, model_family = sp_fam,
-                                        scale = reg_scale_of(sp_est, sp$trials),
                                         trials = sp$trials, const = const))))
   }
 }
@@ -3250,8 +3240,11 @@ reg_cols_vsrest <- function(f, sp, ctx) {
   list2env(reg_ctx_locals(ctx), environment())
   sp_fam <- sp$fit_family
   sp_col <- sp$color
+  sp_scale <- reg_scale_of(sp$est, sp$trials)
+  exp_sc   <- reg_exp_scale_of(sp$est, sp$trials)
   marg   <- reg_marginal(f$fit, f$data, sp$row_vars, conf_level, design_spec$wt,
                          at = "reference", comparison = "lnor", want_pred = FALSE,
+                         exponentiate = isTRUE(sp$est$exp),
                          engine = reg_marginal_engine(sp$est), anchors = anchors,
                          crosses = crosses)
   marg_add <- if (is.null(f$fit)) NULL else
@@ -3259,13 +3252,14 @@ reg_cols_vsrest <- function(f, sp, ctx) {
                                   crosses = crosses), sp$trials)
   const  <- reg_constant_baseline(f$fit, f$data, sp$predictors, at = "reference",
                                   wt = design_spec$wt, conf_level = conf_level,
-                                  scale_key = "odds_ratio", anchors = anchors)
+                                  scale_key = if (is.na(exp_sc)) sp_scale else exp_sc,
+                                  log = !is.na(exp_sc), anchors = anchors)
   groups <- levels(as.factor(f$data[[sp$outcome]]))
   cv_cat <- reg_category_col_var(sp, is_comparison, f$positive_level, cleannames)
   purrr::map(groups, function(g) {
     jc  <- reg_cleanup(g, cleannames)
     lab <- paste0(if (prefix_dep) paste0(sp$outcome, " - ") else "", jc, " vs rest")
-    col <- reg_marginal_column(skeleton, marg, sp$row_vars, "or",
+    col <- reg_marginal_column(skeleton, marg, sp$row_vars, sp_scale,
                                NA_real_, g, sp_col, color_signif, cv_cat,
                                model_family = sp_fam, const = const)
     col <- reg_fill_base(col, marg_add, skeleton, sp$row_vars, group = g, crosses = crosses)
@@ -3521,7 +3515,7 @@ reg_set_obs <- function(bi, e, f, sp, ctx) {
   col <- bi$col
   # the "may a crude value be attached?" decision is PER SPEC (the estimand's declared `obs`).
   if (is.null(e) || !isTRUE(sp$est$obs)) return(col)
-  if (!reg_same_estimand(e$shape, col)) return(col)     # same scale, or nothing
+  if (!reg_same_estimand(e$shape, get_scale(col), sp$est)) return(col)  # same estimand, or nothing
   # ...and the same PEOPLE, or nothing: otherwise the "gap" is listwise deletion, not adjustment.
   if (!reg_same_frame(e$frame, f)) return(col)
   key <- if (is.null(bi$emp_key)) "" else as.character(bi$emp_key)

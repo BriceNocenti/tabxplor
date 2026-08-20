@@ -43,11 +43,15 @@ the running package before being written down, and each one names the line that 
 | A3 | **A**    | `marginal` x `log_*`     | The model column is stamped `log_coef` but holds un-logged ratios.                                 |
 | B1 | **B**    | survey designs           | The crude interval is an `n_eff` plug-in, not the design-based variance; measured 28 % too narrow. |
 | B2 | **B**    | separation               | A ~1e8 estimate is printed, unflagged, with p = 0.99 on one link and p < 0.001 on another.         |
-| B3 | **B**    | crude risk difference    | Plain Wald where `tab()` uses Newcombe for the same quantity; changes stars at small n.            |
 | C1 | **C**    | degrees of freedom       | Up to three different reference distributions inside one table.                                    |
 | C2 | **C**    | `between_groups` gap     | The recovered SE is inflated by t/z of the smaller group (+31 % at df = 5).                        |
 | C3 | **C**    | gap interval             | A magnitude interval rendered as a signed one; a pinned null bound prints as `-0.0`.               |
 | C4 | **C**    | estimand guard           | `reg_same_estimand()` cannot see a mismatch between two `log_coef` columns.                        |
+
+A sixth candidate, **B3** (the crude risk difference on plain Wald where `tab()` uses Newcombe), was raised on
+a first pass and **withdrawn on review**: Wald is the choice that satisfies the crude/model consistency rule,
+not a lapse from it. Section 7.1 keeps the analysis, because the reasoning is the clearest statement of what
+that rule actually requires.
 
 Section 8 lists, equally explicitly, **what was tested and found sound** — including the pieces most likely to
 be wrong a priori, which are not.
@@ -293,7 +297,9 @@ factor helps one group and hurts the other.
 
 ### 5.4 Suggested fix
 
-Two honest options, in increasing cost:
+**Settled (roadmap decision G5): option 1, scoped to the `design` rung only.** The closed form is provably
+right at the `n` and `weights` rungs (no clusters, so the independence assumption holds), so it stays there;
+only a real `svydesign` triggers the refit. The two options that were weighed:
 
 1. **Compute the crude column from the univariable design-based fit** whenever `basis == "design"`, exactly as
    the numeric-predictor arm already does (it calls `reg_empirical_fit()` and gets `svyglm` for free). The
@@ -350,46 +356,63 @@ subgroups are exactly where an exploratory package gets used.
 
 ### 6.3 Suggested fix
 
-Detect non-identification at the fit and say so. The cheapest reliable test is on the fitted values, not on the
-coefficients: for a binomial fit, `any(fitted < 1e-8 | fitted > 1 - 1e-8)`; for Poisson, `any(fitted < 1e-8)`.
-On a hit:
+**Settled (roadmap decision G6): render an unbounded marker, strip the star, emit no message — the marker is
+the message.** Detect on the fitted values, not on the coefficients: for a binomial fit,
+`any(fitted < 1e-8 | fitted > 1 - 1e-8)`; for Poisson, `any(fitted < 1e-8)`. On a hit the cell prints `>1000`
+(and its inverse form on a `1/x` column) with `set_pvalue(x, NA_real_)`, which already removes the star. The
+footer's `LR vs null` row continues to report the association correctly, so nothing informative is lost.
 
-- emit one message naming the predictor and level ("`g = B` has no observed successes: its effect is not
-  identified"), and
-- render the cell as a non-value rather than a number — the display grammar already has `blank`, and
-  `set_pvalue(x, NA_real_)` already removes the star, so both halves exist.
-
-A Firth / penalised refit is the statistically complete answer but is a much larger change (`logistf` /
-`brglm2` are not currently dependencies); refusing to print a meaningless number is the minimum.
+A Firth / penalised refit is the statistically complete answer but was declined: it is a much larger change,
+needs a new dependency (`logistf` / `brglm2`), and silently swaps the estimator the table reports.
 
 ---
 
-## 7. B3, C1-C4 — inference details that change verdicts
+## 7. C1-C4 — inference details that change verdicts
 
-### 7.1 B3 — the crude risk difference uses plain Wald where `tab()` uses Newcombe
+### 7.1 B3, withdrawn — the crude risk difference is *right* to use plain Wald
 
-`CI_METHODS$diff` declares `newcombe, ac, wald`, in that order, and `tab(ci = "ref")` uses Newcombe — the
-golden fixture `f_ci_diff` is explicitly labelled "Newcombe diff-interval". Every family in `REG_EMPIRICAL`
-declares `method_diff = "wald"`, so the crude column of `tab_reg()` uses the **third** option for the same
-statistic.
+**Raised, then withdrawn. Recorded because the reasoning is the clearest statement of the crude/model
+consistency rule.**
 
-Measured on n = 200 (White 73/73, Black 9/20):
+The observation that raised it: `CI_METHODS$diff` declares `newcombe, ac, wald` in that order, `tab(ci = "ref")`
+uses Newcombe (the golden fixture `f_ci_diff` is labelled "Newcombe diff-interval"), and every family in
+`REG_EMPIRICAL` declares `method_diff = "wald"` — so the package's two producers give the same observed
+statistic different intervals. At n = 200 (White 73/73, Black 9/20) that flips a star:
 
-| method                         |       RD | CI                        | verdict at 95 %           |
-|--------------------------------|---------:|---------------------------|---------------------------|
-| Wald (what `Obs_RD` prints)    | -0.18966 | [-0.37655 ; **-0.00276**] | p = 0.0467, **starred**   |
-| Newcombe (what `tab()` prints) | -0.18966 | [-0.34884 ; **+0.00913**] | covers 0, not significant |
+| method                            |       RD | CI                        | verdict at 95 %           |
+|-----------------------------------|---------:|---------------------------|---------------------------|
+| Wald (what `Obs_RD` prints)       | -0.18966 | [-0.37655 ; **-0.00276**] | p = 0.0467, **starred**   |
+| Newcombe (what `tab(ci=)` prints) | -0.18966 | [-0.34884 ; **+0.00913**] | covers 0, not significant |
 
-The Wald interval for a difference of proportions is the one method the literature agrees should not be the
-default — it undercovers at small n and near the boundaries, which is precisely why `ci_prop_diff()` carries
-`newcombe` and `ac` arms. Here it flips a star.
+**Why the fix is nevertheless wrong.** Decision D22 requires the crude column to carry *the univariable
+model's own interval*, so that the pair on screen is one comparison computed twice rather than two methods
+argued against each other. Woolf is Wald on the log odds ratio — exactly what a saturated logistic model
+gives; Katz is Wald on the log risk ratio — exactly what a saturated log-binomial gives. Plain Wald on the
+risk difference is the third face of the same rule, and the model column for `measure = "difference"` is an
+**identity-link binomial**, whose interval is Wald on that scale.
 
-Two further consequences: the **tooltip** for the same cell is built with the Newcombe arm
-(`R/reg-empirical.R:281-285`, feeding `reg-spec-build.R`), so hover and cell can disagree; and the same
-observed contrast gets different intervals depending on which of the package's two producers drew it.
+Measured, n = 200:
 
-**Fix:** set `method_diff = "newcombe"` (or `"ac"`) in `REG_EMPIRICAL`. It is a one-token change per family and
-it aligns the two producers. It moves goldens, so it wants a deliberate review pass.
+| source                                                 |    estimate | CI                            |           p |
+|--------------------------------------------------------|------------:|-------------------------------|------------:|
+| crude `Obs_RD`                                         | -0.18965517 | [-0.37654887 ; -0.0027614795] | 0.046709618 |
+| saturated `glm(y ~ race, binomial(link = "identity"))` | -0.18965517 | [-0.37654887 ; -0.0027614795] | 0.046709618 |
+
+Bit-identical to eight digits. Newcombe is a **score** interval; no GLM produces it, so adopting it would make
+the risk difference the one estimand where the crude column stopped mirroring its model twin — breaking the
+rule that makes Woolf and Katz right everywhere else.
+
+**The second half of the original claim was also false.** The tooltip does *not* use Newcombe: the block at
+`R/reg-empirical.R:281-285` passes `emp_method_diff`, the family's declared method, and carries an explicit
+comment saying so — *"the family's DECLARED difference method, not `tab(ci = "diff")`'s Newcombe."* Verified in
+the rendered HTML: cell and hover both show the Wald bounds. Newcombe is unreachable from the regression path,
+by design.
+
+**What remains true, and is a caveat rather than a defect.** A risk-difference table at small n near a
+boundary rests on Wald intervals on **both** sides — which is a property of the `rd` estimand's own model, not
+of the crude column. If that is ever judged unacceptable it has to be answered for the model column first, and
+the crude column follows it; changing one side alone would trade a real inconsistency for a cosmetic one. A
+sentence in the regression vignette is the proportionate response (22h / 23a).
 
 ### 7.2 C1 — the degrees-of-freedom zoo
 
@@ -412,8 +435,12 @@ the marginal path's `qnorm` at `R/tab_reg.R:1643` and `:1963` is the one that di
 `marginaleffects` is also z by default, so the AME column is *conventional*; it is only inconsistent with the
 coefficient column standing next to it.
 
-**Fix:** thread the column's own `get_degf()` into the marginal finalisers, and print the model column's df in
-the legend rather than the stamped design df. If z is kept deliberately, say so in the legend.
+**Settled (roadmap decision G7): one reference distribution per table, taken from the fit.** The marginal /
+at-reference / Constant finalisers call the same `reg_wald_crit()` the coefficient path already calls, so the
+rule needs no rung-specific branch: dispersion known -> z (an unweighted binomial is unchanged), otherwise t
+on `df.residual(fit)`. It is immaterial at the `n` and `weights` rungs (t(n-p) vs z is under 0.1 % beyond
+n = 200) and is the real correction at the `design` rung. The legend must then print the model's df, not the
+stamped design df. G5 settles the crude half for free: a refit crude column carries its own `df.residual`.
 
 ### 7.3 C2 — the `between_groups` gap SE is inflated by t/z
 
@@ -490,24 +517,25 @@ including any future logged measure.
 This half matters as much as the findings: the pieces most likely to be wrong a priori are right, and several
 of my own initial hypotheses were falsified by measurement.
 
-| Area                                              | Test                                            | Result                                                          |
-|---------------------------------------------------|-------------------------------------------------|-----------------------------------------------------------------|
-| Binomial AME, analytic g-computation              | vs `marginaleffects`, n = 12 990 / 120 / **40** | ~7 digits at every n: est, CI and p                             |
-| **multinomial** AME (`nnet`)                      | vs `marginaleffects`, n = full / 600 / **150**  | agrees to ~6 digits on all 6 category x level cells             |
-| **ordinal** AME (`MASS::polr`)                    | vs `marginaleffects`, n = full / **400**        | agrees to ~6 digits on all 8 cells                              |
-| Gaussian coefficient path                         | vs `lm` + `confint`, n = 60                     | exact, t on residual df                                         |
-| Binomial coefficient path                         | vs `glm` + Wald, n = 21 483 / 250 / **60**      | exact                                                           |
-| Survey model column                               | vs `svyglm` + `confint.svyglm`                  | exact, including the t on `degf + 1 - p`                        |
-| Crude OR / RR / log(OR) / log(RR), plain binomial | vs hand Woolf and Katz                          | exact, including the log variants                               |
-| Crude column population                           | 40 % missing on a confounder only               | uses the **model's** complete cases (0.370387, not 0.373555)    |
-| `multiplier` (k-unit contrasts)                   | k = 1, `"sd"`, 10, crude and model              | exact `exp(k*b)`, `se x | k | `, p invariant; glm, mlogit, polr |
-| Weights-only basis (`ids = ~1`)                   | vs `svyglm(ids = ~1)`                           | estimate exact, interval within 0.03 %                          |
-| `conf_level`                                      | 0.95 vs 0.99, model / crude / gap               | propagates to all three; implied SE identical                   |
-| Model comparison with unequal missingness         | two models, one extra predictor 50 % missing    | both refitted on the **common** 5 652 rows — correct            |
-| Interaction fits                                  | combined factor, nested slopes, empty cell      | empty cell dropped cleanly; saturated fit = crude column        |
-| `ci_method = "profile"`                           | vs `confint.glm` and LR p                       | CI and p are both LR-based, so the duality holds                |
-| Non-collapsible OR gap                            | default binomial OR + `color = "adjustment"`    | correctly refused, **and clearly messaged** (quoted below)      |
-| `at_reference` gap                                | `obs` unpopulated                               | correctly refused, and the legend says *"no observed effect"*   |
+| Area                                  | Test                                         | Result                                      |
+|---------------------------------------|----------------------------------------------|---------------------------------------------|
+| Binomial AME (analytic g-computation) | vs `marginaleffects`, n = 12 990 / **40**    | ~7 digits at every n: est, CI, p            |
+| **multinomial** AME (`nnet`)          | vs `marginaleffects`, n = full / **150**     | ~6 digits, all 6 category x level cells     |
+| **ordinal** AME (`MASS::polr`)        | vs `marginaleffects`, n = full / **400**     | ~6 digits, all 8 cells                      |
+| Gaussian coefficient path             | vs `lm` + `confint`, n = 60                  | exact, t on residual df                     |
+| Binomial coefficient path             | vs `glm` + Wald, n = 21 483 / **60**         | exact                                       |
+| Survey model column                   | vs `svyglm` + `confint.svyglm`               | exact, incl. t on `degf + 1 - p`            |
+| Crude OR / RR and their log twins     | vs hand Woolf and Katz, plain binomial       | exact, log variants included                |
+| Crude column population               | 40 % missing on a confounder only            | uses the **model's** complete cases         |
+| `multiplier` (k-unit contrasts)       | k = 1, `"sd"`, 10, crude and model           | exact rescale, p invariant, all fitters     |
+| Weights-only basis (`ids = ~1`)       | vs `svyglm(ids = ~1)`                        | estimate exact, interval within 0.03 %      |
+| `conf_level`                          | 0.95 vs 0.99, model / crude / gap            | reaches all three, implied SE identical     |
+| Comparison, unequal missingness       | two models, one predictor 50 % missing       | both refitted on the common 5 652 rows      |
+| Interaction fits                      | combined factor, nested slopes, empty cell   | empty cell dropped, saturated fit = crude   |
+| `ci_method = "profile"`               | vs `confint.glm` and the LR p                | both LR-based, so the duality holds         |
+| Non-collapsible OR gap                | default binomial OR + `color = "adjustment"` | correctly refused **and messaged**          |
+| `at_reference` gap                    | `obs` unpopulated                            | refused; legend says *"no observed effect"* |
+| Crude risk difference (Wald)          | vs saturated `glm(binomial(identity))`       | bit-identical to 8 digits — see §7.1        |
 
 The non-collapsibility message reads, verbatim: *"`color_signif` does not apply to an odds-ratio
 "adjustment" gap: part of it is non-collapsibility, not confounding. Use `effect = "marginal"` or
@@ -555,6 +583,10 @@ supersedes it** and is the number to quote.
 
 ## 9. Recommendations, in priority order
 
+The maintainer's decisions on the three forks below are recorded as **G5 / G6 / G7** in CLAUDE.md, under
+`Phase 22b-xiii`, which also carries the implementation order and the inference-basis ladder these fixes must
+respect.
+
 ### 9.1 Before release
 
 1. **Fix A1** (multinomial crude interval). A printed estimate outside its printed interval is the kind of
@@ -566,18 +598,16 @@ supersedes it** and is the number to quote.
 4. **Handle separation (B2).** Do not print a twelve-digit ratio. Detect it on the fitted values, message
    once, blank the cell. This is the finding most likely to be met by a real user, because it needs only a
    small subgroup and a rare outcome.
-5. **Decide B1.** Either compute the crude column from the univariable design-based fit under
-   `basis == "design"` (recommended: it makes the documented rule true and removes the df mismatch), or say in
-   the legend that the interval assumes independence across clusters.
+5. **B1 / G5.** Compute the crude column from the univariable design-based fit at the `design` rung only.
+   The closed form stays at `n` and `weights`, where its independence assumption is true.
 
 ### 9.2 Worth doing, lower risk
 
-6. `method_diff = "newcombe"` in `REG_EMPIRICAL` (B3), aligning `tab_reg()` with `tab()`.
-7. Thread `get_degf()` into the marginal / Constant finalisers, and print the model's df in the legend (C1).
-8. Recover the `between_groups` SE with the column's own critical value (C2).
-9. Render a pinned gap bound as the unsigned null (C3).
-10. Add the estimand `word` to `reg_same_estimand()` (C4).
-11. One legend sentence distinguishing the model-based printed interval from the sandwich-based gap interval
+6. Thread `get_degf()` into the marginal / Constant finalisers, and print the model's df in the legend (C1).
+7. Recover the `between_groups` SE with the column's own critical value (C2).
+8. Render a pinned gap bound as the unsigned null (C3).
+9. Add the estimand `word` to `reg_same_estimand()` (C4).
+10. One legend sentence distinguishing the model-based printed interval from the sandwich-based gap interval
     (section 8.1).
 
 ### 9.3 Three regression tests that would have caught most of this
@@ -625,3 +655,15 @@ Not tested, and therefore not cleared:
   closed form, so they inherit that fitter's properties, but the refit's population and reference handling
   were not verified line by line.
 - Numerical behaviour under **extreme weights** (ratios beyond ~10:1) and under zero or negative weights.
+
+
+
+
+
+
+
+
+
+
+
+

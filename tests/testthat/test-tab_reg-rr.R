@@ -327,3 +327,56 @@ test_that("effect='ame' is byte-unchanged by the ame_ratio addition", {
   expect_true("Obs_RD" %in% names(t))
   expect_false("Obs_RR" %in% names(t))
 })
+
+
+# --- A LOGGED CRUDE COLUMN RUNS ITS OWN ARITHMETIC -------------------------------------------------
+
+test_that("a logged crude column is the log of ITS measure, never of the family's default", {
+  # `measure = "log_risk"` declares the Katz log-RR engine on its own shape. The arm used to be
+  # re-derived from the crude family's COEFFICIENT shape, so wherever the two differ -- a summed
+  # score (whose block's coefficient is an odds ratio) or a borrowed shape (a binary marginal ratio's
+  # crude twin lives in another block) -- `Obs_log(RR)` printed Woolf's log(OR).
+  skip_if_not_installed("FactoMineR")
+  e <- new.env(); utils::data("tea", package = "FactoMineR", envir = e); tea <- e$tea
+  items <- c("home", "tearoom", "work", "friends", "resto", "pub")
+  tea$tea_where <- rowSums(vapply(items, function(v) as.integer(tea[[v]] == v),
+                                  integer(nrow(tea))))
+  tea$sex <- factor(tea$sex)
+  obs <- function(m) {
+    t <- suppressMessages(tab_reg(tea, "tea_where", "sex", family = "binomial", trials = 6,
+                                  measure = m, empirical = "column", stats = FALSE))
+    t[[grep("^Obs_", names(t))[[1]]]]
+  }
+  a  <- sum(tea$tea_where[tea$sex == "M"]);      b  <- sum(6 - tea$tea_where[tea$sex == "M"])
+  cc <- sum(tea$tea_where[tea$sex == "F"]);      dd <- sum(6 - tea$tea_where[tea$sex == "F"])
+  p1 <- a / (a + b); p0 <- cc / (cc + dd)
+  i  <- 3L                                         # the non-reference level's row
+  lrr <- obs("log_risk"); lor <- obs("log_odds")
+  kz  <- ci_katz_rr(p1, a + b, p0, cc + dd)
+  wf  <- ci_or(a, b, cc, dd)
+  expect_identical(get_ci_method(lrr), "katz")
+  expect_equal(get_diff(lrr)[i],    log(p1 / p0),    tolerance = 1e-10)
+  expect_equal(get_ci_inf(lrr)[i],  log(kz$inf),     tolerance = 1e-10)
+  expect_equal(get_ci_sup(lrr)[i],  log(kz$sup),     tolerance = 1e-10)
+  # ...and it is a DIFFERENT number from the odds-ratio twin, which is what went unnoticed
+  expect_identical(get_ci_method(lor), "woolf")
+  expect_equal(get_diff(lor)[i], log((a * dd) / (b * cc)), tolerance = 1e-10)
+  expect_gt(abs(get_diff(lrr)[i] - get_diff(lor)[i]), 0.05)
+})
+
+test_that("a binary MARGINAL log risk ratio takes the borrowed block's Katz arm", {
+  # `crude_fam = "rr"` while `crude_key` is "binomial": the shape is borrowed across blocks, so the
+  # family in hand is the wrong place to look up which arithmetic to run.
+  skip_if_not_installed("marginaleffects")
+  d <- rr_data()
+  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", effect = "marginal",
+                                measure = "log_risk", empirical = "column", stats = FALSE))
+  o <- t[[grep("^Obs_", names(t))[[1]]]]
+  expect_identical(get_scale(o), "log_coef")
+  expect_identical(get_ci_method(o), "katz")
+  # ⚠ the modelled level is the outcome's FIRST, which is `tab_reg()`'s documented default.
+  tb <- table(d$race, d$married)
+  p  <- tb[, levels(d$married)[[1]]] / rowSums(tb)
+  i  <- which(as.character(t$levels) == names(p)[[2]])
+  expect_equal(get_diff(o)[i], log(p[[2]] / p[[1]]), tolerance = 1e-10)
+})

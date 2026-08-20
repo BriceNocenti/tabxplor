@@ -549,3 +549,38 @@ testthat::test_that("`display` is post-hoc: it changes no number, on either colu
     testthat::expect_identical(format(same[[nm]]), format(post[[nm]]), info = nm)
   }
 })
+
+
+# --- THE CRUDE INTERVAL IS ITS OWN ESTIMATE'S ------------------------------------------------------
+
+test_that("a multinomial crude odds ratio brackets the estimand it prints", {
+  # The estimate is category j against the PIVOT (the reference outcome category) -- nnet::multinom's
+  # own estimand. Its interval used to be built against "everything else", so the two were different
+  # odds ratios printed as one cell, and the estimate fell OUTSIDE its own bracket.
+  skip_if_not_installed("nnet")
+  d <- emp_data()
+  t <- suppressMessages(tab_reg(d, "party3", "race", family = "multinomial",
+                                empirical = "column", cleannames = FALSE, stats = FALSE))
+  tb  <- table(d$race, d$party3)
+  piv <- colnames(tb)[[1]]; rlv <- rownames(tb)[[1]]
+  cols <- names(t)[vapply(t, function(x) is_fmt(x) && identical(get_role(x), "emp"), logical(1))]
+  expect_gt(length(cols), 0L)
+  done <- 0L
+  for (cn in cols) {
+    col   <- t[[cn]]
+    cat_j <- sub(" vs .*$", "", sub("^Obs_", "", cn))   # "Obs_Dem vs Ind" -> "Dem"
+    expect_true(cat_j %in% colnames(tb))
+    for (lv in setdiff(rownames(tb), rlv)) {
+      i <- which(as.character(t$var) == "race" & as.character(t$levels) == lv)
+      if (!length(i)) next
+      hand <- ci_or(tb[lv, cat_j], tb[lv, piv], tb[rlv, cat_j], tb[rlv, piv])
+      expect_equal(get_or(col)[i], (tb[lv, cat_j] * tb[rlv, piv]) / (tb[lv, piv] * tb[rlv, cat_j]),
+                   tolerance = 1e-10)
+      expect_equal(get_ci_inf(col)[i], hand$inf,    tolerance = 1e-10)
+      expect_equal(get_ci_sup(col)[i], hand$sup,    tolerance = 1e-10)
+      expect_equal(get_pvalue(col)[i], hand$pvalue, tolerance = 1e-10)
+      done <- done + 1L
+    }
+  }
+  expect_gt(done, 3L)   # the comparison must actually have run: this test went vacuous once
+})

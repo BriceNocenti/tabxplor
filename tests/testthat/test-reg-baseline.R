@@ -127,3 +127,46 @@ test_that("a model check past its convention is MARKED, at the faintest shade", 
   expect_true(any(disp == "gof"))
   expect_true(all(fmt_color_channels(col)$text_slot[disp == "gof"] == 0L))
 })
+
+
+test_that("a logged MARGINAL column's baseline is the log of what its twin shows", {
+  # `log_coef` is one row shared by every logged measure, so the column cannot say on its own whether
+  # its exponential is an odds or a level -- and the baseline differs by exactly that. The estimand
+  # records what it is the log OF (`log_of`), and the baseline is built on that scale, then logged.
+  skip_if_not_installed("marginaleffects")
+  d <- bl_data()
+  arg <- list(d, "married", c("race", "rincome"), family = "binomial", effect = "marginal",
+              stats = FALSE)
+  lg <- suppressMessages(do.call(tab_reg, c(arg, list(measure = "log_risk"))))
+  rr <- suppressMessages(do.call(tab_reg, c(arg, list(measure = "ratio"))))
+  i  <- bl_cst(lg)
+  lc <- bl_first(lg); rc <- bl_first(rr)
+  expect_identical(get_scale(lc), "log_coef")
+  # the twin shows the baseline LEVEL (a risk ratio multiplies the level), so the log column shows
+  # its log -- and the interval with it, so `Constant + effect` is coherent on the link scale.
+  expect_equal(get_diff(lc)[i], log(get_pct(rc)[i]), tolerance = 1e-10)
+  expect_true(is.finite(get_ci_inf(lc)[i]) && is.finite(get_ci_sup(lc)[i]))
+  expect_true(get_ci_inf(lc)[i] <= get_diff(lc)[i] && get_diff(lc)[i] <= get_ci_sup(lc)[i])
+  # ...and it is still a baseline, so it carries no test.
+  expect_true(is.na(get_pvalue(lc)[i]))
+})
+
+test_that("an odds-scale baseline logs to the log(OR) column's own Constant", {
+  # the other arm of the same rule: an odds ratio multiplies ODDS, so its logged twin's baseline is
+  # the log-odds, not the log of the probability.
+  skip_if_not_installed("nnet")
+  d <- bl_data()
+  d$p3 <- factor(dplyr::case_when(grepl("dem", d$partyid, ignore.case = TRUE) ~ "Dem",
+                                  grepl("rep", d$partyid, ignore.case = TRUE) ~ "Rep",
+                                  TRUE ~ "Ind"), levels = c("Ind", "Dem", "Rep"))
+  or <- suppressMessages(tab_reg(d, "p3", "race", family = "multinomial",
+                                 effect = "at_reference", measure = "odds_ratio", stats = FALSE))
+  lg <- suppressMessages(tab_reg(d, "p3", "race", family = "multinomial",
+                                 effect = "at_reference", measure = "log_odds", stats = FALSE))
+  i  <- bl_cst(or)
+  oc <- or[[names(or)[vapply(or, is_fmt, logical(1))][[1]]]]
+  lc <- lg[[names(lg)[vapply(lg, is_fmt, logical(1))][[1]]]]
+  expect_identical(get_scale(oc), "odds_ratio")
+  expect_identical(get_scale(lc), "log_coef")
+  expect_equal(get_diff(lc)[i], log(get_or(oc)[i]), tolerance = 1e-10)
+})

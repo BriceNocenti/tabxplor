@@ -127,6 +127,18 @@ reg_scale_of <- function(est, trials = NA) {
   if (is.na(g)) sc else g
 }
 
+# The scale a LOGGED estimand is the log OF, `NA` on any other column. `log_coef` is one row shared
+# by every logged measure, so a link-scale column cannot say on its own whether its exponential is an
+# odds or a level -- and its baseline row differs by exactly that. Set by reg_estimand()'s logged
+# branch; the declared `measure = "log"` COEFFICIENT rows carry no `log_of` and need none (their
+# baseline is the fit's own intercept, already on the link scale).
+#' @keywords internal
+#' @noRd
+reg_exp_scale_of <- function(est, trials = NA) {
+  if (is.null(est$log_of)) return(NA_character_)
+  reg_scale_of(list(scale = est$log_of), trials)
+}
+
 # WHICH KIND OF PERCENTAGE a regression cell holds -- derived, never declared: a column's `pct` field
 # exists exactly where the scale names `pct` as its level, and is always a ROW percentage there.
 #' @keywords internal
@@ -292,6 +304,10 @@ reg_word_noncollapsible <- function(word) {
 #                estimand is measured against, and any assumption worth one phrase. The measure
 #                itself is not repeated here: the footer composes "<word> = <long> (<note>)" from
 #                REG_WORDS, so the acronym in the header and its expansion are one fact.
+#
+# Two members exist only on a SYNTHESIZED logged row (reg_estimand()'s `measure = "log_*"` branch,
+# where a family declares no explicit log twin): `display`, the token the cell renders, and `log_of`,
+# the scale the column is the log OF -- read by reg_exp_scale_of() for the baseline row.
 #
 # WARNING: the msgids in `why` / `note` are the ones `po/R-fr.po` carries -- do not re-word them in
 # passing, or the French footer silently reverts to English.
@@ -823,6 +839,10 @@ reg_estimand <- function(family, effect = "coefficient", measure = "auto") {
     else {
       # `word` is deliberately KEPT: reg_word() composes the log wrapper onto it, so a pinned
       # `log_risk` on a binomial outcome reads "log(RR)" with nothing to declare here.
+      # `log_of` records WHAT is being logged: `log_coef` is one shared row, so it cannot say whether
+      # the exponential is an odds (baseline = odds) or a ratio (baseline = level). Read only by
+      # reg_exp_scale_of(), for the marginal builders' baseline row.
+      row$log_of  <- row$scale
       row$exp     <- FALSE
       row$scale   <- "log_coef"
       row$display <- "coef"
