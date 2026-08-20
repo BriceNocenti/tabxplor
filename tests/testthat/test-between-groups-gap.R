@@ -182,12 +182,12 @@ test_that("the interaction test IS drop1() on the pooled model", {
   d <- gap_data()
   t <- suppressMessages(tab_reg(d, outcome = "married", predictors = c("race", "age"),
                                 tab_vars = "party3", family = "binomial",
-                                stats = c("n", "interaction")))
+                                stats = c("n", "group_interaction")))
   it <- get_test(t)
   it <- it[it$test %in% tabxplor:::reg_interaction_types(), , drop = FALSE]
   # Phase 19g: the predictor rides `var`; the split-group level rides a column named after split_var
   testthat::expect_identical(sort(it$var), c("age", "race"))
-  testthat::expect_identical(unique(it$test), "interact_lr")
+  testthat::expect_identical(unique(it$test), "group_interact_lr")
 
   g  <- stats::glm(married ~ (race + age) * party3, stats::binomial, data = d)
   d1 <- stats::drop1(g, scope = c("race:party3", "age:party3"), test = "Chisq")
@@ -247,16 +247,16 @@ test_that("the statistic follows compare=: F for gaussian, design-based Wald whe
   d <- gap_data()
   gs <- suppressMessages(tab_reg(d[!is.na(d$tvhours), ], outcome = "tvhours", predictors = "race",
                                  tab_vars = "party3", family = "gaussian",
-                                 stats = c("n", "interaction")))
+                                 stats = c("n", "group_interaction")))
   testthat::expect_identical(unique(get_test(gs)$test[get_test(gs)$test %in%
                                                         tabxplor:::reg_interaction_types()]),
-                             "interact_f")
+                             "group_interact_f")
   d$w <- 1 + (as.integer(d$race) %% 3) / 2                    # deterministic weights
   wt <- suppressWarnings(suppressMessages(
     tab_reg(d, outcome = "married", predictors = "race", tab_vars = "party3",
-            family = "binomial", wt = "w", stats = c("n", "interaction"))))
+            family = "binomial", wt = "w", stats = c("n", "group_interaction"))))
   it <- get_test(wt); it <- it[it$test %in% tabxplor:::reg_interaction_types(), ]
-  testthat::expect_identical(unique(it$test), "interact_wald")
+  testthat::expect_identical(unique(it$test), "group_interact_wald")
   testthat::expect_true(all(!is.na(it$pvalue)))
 })
 
@@ -264,7 +264,7 @@ test_that("an unsupported engine degrades to no line, never to an error", {
   d <- gap_data()
   mn <- suppressWarnings(suppressMessages(
     tab_reg(d, outcome = "party3", predictors = "race", tab_vars = "marital",
-            family = "multinomial", stats = c("n", "interaction"))))
+            family = "multinomial", stats = c("n", "group_interaction"))))
   testthat::expect_length(tabxplor:::reg_interaction_lines(mn, "en"), 0L)
   testthat::expect_no_error(tab_md(mn))
 })

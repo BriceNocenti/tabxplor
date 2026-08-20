@@ -102,7 +102,12 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         outcome      = self$options$outcome,
         # the model-builder (`models` Array) folds into `predictors`: empty -> the flat pool (one
         # model); >=1 card -> a named list of predictor subsets (model comparison).
-        predictors   = jmvtab_reg_models(self$options$models, self$options$predictors),
+        # ...and the interaction picker folds INTO it too, as `a*b` keys -- so there is one
+        # `predictors` argument here exactly as there is in tab_reg(), and no second one to keep in
+        # step.
+        predictors   = jmvtab_reg_models(
+          self$options$models, self$options$predictors,
+          jmvtab_reg_cross_keys(self$options$crosses, self$options$predictors)),
         # `stats =` is ONE argument (Phase 20c) and three controls: the comparison key, the baseline
         # model position it may carry, and the opt-in slow checks. jmvtab_reg_stats() is the one
         # place that folds them, and the ComboBox values ARE the R keys (`compare_baseline`, ...).

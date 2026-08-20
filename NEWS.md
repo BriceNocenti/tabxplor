@@ -3,6 +3,13 @@
 
 ## New features
 
+* **Interactions in `tab_reg()`**: write `a*b` in `predictors` (bare or quoted), R's own spelling.
+  Two categorical variables give one row per cell against a common reference; a continuous one gives
+  its slope within each level of the moderator. The footer reports whether the interaction is real,
+  and "with and without" is an ordinary model comparison. See `vignette("tabxplor-reg")`.
+  The `stats` key for the `tab_vars` effect-modification test is renamed `"group_interaction"`, so
+  that `"interaction"` names this one.
+
 * **`tab()` is now the unified entry point.** It accepts **several `row_vars` / `col_vars`**
   (e.g. `tab(data, c(race, relig), marital)`), merged into one table by default or returned as a list
   with `output_list = TRUE`. `tab_many()` is kept as a soft-deprecated alias. Several `row_vars` and

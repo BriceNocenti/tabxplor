@@ -17,7 +17,7 @@ test_that("every discriminator a producer can write is a declared row", {
                                         list(a = "race", b = c("race", "age")),
                                         family = "binomial", stats = "compare_sequential")),
     split    = suppressMessages(tab_reg(gss, "married", "age", family = "binomial",
-                                        tab_vars = "race", stats = c("n", "interaction")))
+                                        tab_vars = "race", stats = c("n", "group_interaction")))
   )
   for (nm in names(tabs)) {
     tt <- get_test(tabs[[nm]])
@@ -32,7 +32,7 @@ test_that("the derived vocabularies keep their contents and their order", {
   expect_identical(tabxplor:::reg_footer_test_types(), tabxplor:::TEST_FOOTER_KEYS)
   # the three instrument blocks
   expect_identical(tabxplor:::reg_global_types(),      c("global_lr", "global_f", "global_wald"))
-  expect_identical(tabxplor:::reg_interaction_types(), c("interact_lr", "interact_f", "interact_wald"))
+  expect_identical(tabxplor:::reg_interaction_types(), c("group_interact_lr", "group_interact_f", "group_interact_wald"))
   # the goodness-of-fit block is reg_glance()'s, not "every row whose stat is its own name"
   expect_identical(tabxplor:::REG_GOF_KEYS,
                    c("n", "lr_null", "wald_null", "f_model", "r2", "r2_adj", "mcfadden_r2",

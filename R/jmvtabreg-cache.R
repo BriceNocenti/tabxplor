@@ -31,7 +31,9 @@
 # === Constants + config ====================================================================
 # The reg store rides the shared cache kernel (R/jmvtab-cache.R: jmv_cache_config + jmv_store_*) with
 # its own 2-tier config; only the store is decoupled (its tiers + $state differ from the crosstab store).
-JMVREG_CACHE_SCHEMA <- 6L   # bump on any store-shape change -> discard stale stores
+JMVREG_CACHE_SCHEMA <- 7L   # bump on any store-shape change -> discard stale stores
+# 7 (Phase 22b-ix): `crosses` joins jmvreg_fit_key()'s `extra`. A nested cross is a formula TERM,
+#   not a column, so jmv_col_fp() cannot see it and a stale hit would be a wrong table.
 # 6 (Phase 20g-i): jmvreg_fit_key()'s element for the singled-out outcome level is named
 #   `outcome_level` (it was `inverse`, the retired `inverse_two_level_factors` spelling). The key's
 #   VALUE is unchanged, but a member name is part of the hash, so every key moves.
@@ -131,11 +133,44 @@ jmvtab_reg_ref_vector <- function(ref_levels) {
 # tab_reg()'s all-or-nothing rename); empty-var cards are dropped; if nothing survives -> the pool.
 #' @keywords internal
 #' @noRd
-jmvtab_reg_models <- function(models, pool) {
+# Fold the interaction picker (the `crosses` Array of Group{var1, var2}) into the `a*b` keys
+# tab_reg()'s `predictors` takes. Both variables must be in the pool; the FIRST is the modified
+# one, which is the grammar's own reading of `a*b`.
+#' @keywords internal
+#' @noRd
+jmvtab_reg_cross_keys <- function(crosses, pool) {
+  if (length(crosses) == 0L) return(character(0))
+  get1 <- function(e, k) { v <- e[[k]]; if (is.null(v)) NA_character_ else as.character(v)[[1]] }
+  a <- vapply(crosses, get1, character(1), k = "var1")
+  b <- vapply(crosses, get1, character(1), k = "var2")
+  keep <- !is.na(a) & !is.na(b) & nzchar(a) & nzchar(b) & a != b & a %in% pool & b %in% pool
+  if (!any(keep)) return(character(0))
+  unique(paste(a[keep], b[keep], sep = "*"))
+}
+
+# One model's variables, with every applicable pair REPLACED by its key: an interaction supplies
+# both parents, so listing them beside it is what tab_reg() refuses. A model that does not hold both
+# is left alone, which is what makes a with/without comparison expressible from the "+" builder.
+#' @keywords internal
+#' @noRd
+jmvtab_reg_cross_fold <- function(vars, keys) {
+  for (k in keys) {
+    p <- strsplit(k, "*", fixed = TRUE)[[1]]
+    if (!all(p %in% vars)) next
+    i <- which(vars %in% p)
+    vars[i[[1]]] <- k
+    if (length(i) > 1L) vars <- vars[-i[-1]]
+  }
+  vars
+}
+
+jmvtab_reg_models <- function(models, pool, cross_keys = character(0)) {
   pool <- if (length(pool)) as.character(pool) else character()
-  flat <- if (length(pool)) pool else NULL
+  flat <- if (length(pool)) jmvtab_reg_cross_fold(pool, cross_keys) else NULL
   if (length(models) == 0L) return(flat)
-  built  <- lapply(models, function(e) intersect(pool, as.character(unlist(e$vars, use.names = FALSE))))
+  built  <- lapply(models, function(e)
+    jmvtab_reg_cross_fold(intersect(pool, as.character(unlist(e$vars, use.names = FALSE))),
+                          cross_keys))
   labels <- vapply(models, function(e) { v <- e$label; if (is.null(v)) "" else as.character(v) },
                    character(1))
   keep   <- vapply(built, length, integer(1)) > 0L

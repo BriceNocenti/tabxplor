@@ -53,7 +53,31 @@ its own (\verb{list(m1 = c(race, age), m2 = starts_with("inc")))}). Leave \code{
 formula.
 
 A bare name is a \strong{column of \code{data}} first; a name that is no column is looked up as an object,
-so a variable holding names (\code{preds <- c("race", "age")}) works without \code{all_of()}.}
+so a variable holding names (\code{preds <- c("race", "age")}) works without \code{all_of()}.
+
+\strong{\code{a*b} is an interaction}, R's own spelling, written bare or quoted ---
+\code{c(race, relig, race*age4)} or \code{c("race", "relig", "race*age4")}. It reads \emph{"a's effect,
+allowed to vary with b"}, and gives one row block named \verb{a × b}. Two shapes, chosen from what
+\code{a} is:
+\itemize{
+\item \strong{two categorical variables} give one row per \strong{cell} --- \verb{Black · 34-46} --- each
+compared to a single common reference cell, with its own count, its observed rate and its
+adjusted one. This is the readable form, and the one every \code{effect} supports.
+\item a \strong{continuous} \code{a} gives one row per level of \code{b}, holding \code{a}'s \strong{slope within that
+group} (\verb{per SD/13.5 · Black}). To get the cell table instead, cut it:
+\code{shape = c(age = "quartiles")}. \code{b} must be categorical either way --- a \strong{continuous by
+continuous} interaction has no groups to make rows from, so cut one of the two, or write the
+model as a formula (\code{outcome = y ~ a * b}) if you want the bare coefficient.
+}
+An interaction \strong{supplies both its variables} --- \code{a*b} \emph{is} \code{a + b + a:b} --- so do not list
+them beside it. That is what makes "with and without" an ordinary model comparison:
+\code{list(additive = c(race, age4), crossed = c(race*age4))}. The footer then reports whether the
+interaction is real (see \code{stats}).
+
+The \strong{order} picks the presentation, never the model: \code{a*b} and \code{b*a} are the same fit, and the
+rows are about whichever you put first. R's \code{a:b} --- the interaction term \emph{without} its main
+effects --- is a different model, and one whose fit depends on where each variable's zero
+happens to be, so it is refused by name rather than treated as a synonym.}
 
 \item{tab_vars}{<\code{\link[tidyr:tidyr_tidy_select]{tidy-select}}> Optional. One grouping variable --- the same argument as
 \code{\link[=tab]{tab()}}'s \code{tab_vars}: one sub-table per group, the same model(s) fitted \strong{within each level}.
@@ -63,7 +87,8 @@ tables are stacked into one grouped table sharing the variable / level stub --- 
 \code{\link[=tab_spread]{tab_spread()}} yourself for full control there. A level absent from a group shows empty cells.
 Two readings of "does this effect hold in every subgroup?" come with it:
 \code{color = "between_groups"} colours and tests each effect against the first group's, row by row,
-and \code{stats = c(..., "interaction")} adds the aggregated test, once per predictor.}
+and \code{stats = c(..., "group_interaction")} adds the aggregated test, once per predictor. For an
+interaction between two PREDICTORS of one model, write it in \code{predictors} as \code{a:b} instead.}
 
 \item{wt}{<\code{\link[tidyr:tidyr_tidy_select]{tidy-select}}> Optional. One weight column. Switches to design-based survey
 estimation (\code{\link[survey:svyglm]{survey::svyglm()}}): the sandwich standard errors are scale-invariant, so raw
@@ -354,7 +379,8 @@ null model, McFadden's pseudo-R square, AIC and BIC (count and grouped-binomial 
 the Pearson dispersion, \code{"phi"}). Every default set also carries the overall-association test
 \code{"global"} and the \strong{model checks that cost nothing} (see below). Pass a character vector to
 pick the statistics (\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"phi"}, \code{"r2"},
-\code{"r2_adj"}, \code{"f_model"}, \code{"sigma"}, \code{"global"}, \code{"interaction"}, \code{"linearity"},
+\code{"r2_adj"}, \code{"f_model"}, \code{"sigma"}, \code{"global"}, \code{"interaction"}, \code{"group_interaction"},
+\code{"linearity"},
 \code{"proportionality"}, \code{"dispersion"}, \code{"influence"}, \code{"collinearity"}), \code{"all"} for everything
 this model can report, or \code{FALSE} / \code{"none"} to hide the footer. Weighted models show a reduced,
 survey-appropriate set (design-based Wald test, Nagelkerke pseudo-R square, AIC).
@@ -370,10 +396,16 @@ different N. A comparison key \strong{adds} a row and restricts nothing.
 \code{"global"} adds one \strong{overall test per predictor} --- "is this variable associated with the
 outcome at all?", the question a block of stars against a reference category cannot answer. It
 costs no extra fit and is shown for predictors carrying two or more coefficients.
-\code{"interaction"} needs \code{tab_vars} and adds one \strong{aggregated effect-modification test per
-predictor}, asked once for all its levels together, so it carries none of the multiplicity of
-the per-cell \code{color = "between_groups"} colours --- which turns it on for you. It costs one
-extra fit. Neither test is available for multinomial or ordinal outcomes.}
+\code{"interaction"} tests each \strong{crossed pair} written in \code{predictors} (\code{race:age4}): is the
+interaction real, or is the additive model enough? It compares the two models directly, so it
+costs one extra fit --- about 20 ms on a linear or logistic model, which is why it is already in
+the default set there, and roughly a doubling of the fitting time on a multinomial or ordinal
+outcome, where you ask for it by name. It produces nothing unless \code{predictors} declares a pair.
+\code{"group_interaction"} is the other question: it needs \code{tab_vars} and adds one \strong{aggregated
+effect-modification test per predictor}, asked once for all its levels together, so it carries
+none of the multiplicity of the per-cell \code{color = "between_groups"} colours --- which turns it
+on for you. It also costs one extra fit, and is not available for multinomial or ordinal
+outcomes (nor is \code{"global"}).}
 
 \item{na}{Which rows each model is fitted on --- the grain at which missing values are dropped.
 \code{"drop_by_outcome"} (default) gives every model \strong{of one outcome} the same complete-case

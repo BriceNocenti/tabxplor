@@ -223,13 +223,23 @@ TEST_ROWS <- local({
       global_wald = reg_p("Overall association", stat = "global", instrument = "Wald", method = "wald")),
     # --- the five model checks, GENERATED from REG_CHECKS ----------------------------------------
     check = test_rows_from_checks(),
-    # --- the aggregated effect-modification test: a footer LINE, not rows -------------------------
+    # --- the aggregated effect-modification test ACROSS tab_vars GROUPS: a footer LINE, not rows --
     # Its `instrument` is the phrase reg_interaction_lines() prints ("a likelihood ratio test"), the
     # only label these rows have -- they carry no footer row, so `noun` is free.
+    # ⚠ its key is `group_interaction`, not `interaction`: that one names the test of a crossed PAIR
+    # of predictors, which is a footer ROW and is in the default set on a glm.
+    group_interaction = list(
+      group_interact_lr   = reg_line("likelihood ratio", stat = "group_interaction", method = "lr"),
+      group_interact_f    = reg_line("F test",           stat = "group_interaction", method = "f"),
+      group_interact_wald = reg_line("Wald test",        stat = "group_interaction", method = "wald")),
+
+    # --- the interaction between two PREDICTORS: one row per crossed pair, keyed to its model
+    # column. The test is a model COMPARISON with the additive counterpart (R/reg-cross.R), so a
+    # combined factor -- which has no interaction TERM to drop -- is tested like any other.
     interaction = list(
-      interact_lr   = reg_line("likelihood ratio", stat = "interaction", method = "lr"),
-      interact_f    = reg_line("F test",           stat = "interaction", method = "f"),
-      interact_wald = reg_line("Wald test",        stat = "interaction", method = "wald")),
+      cross_lr   = reg_p("Interaction", stat = "interaction", instrument = "LR",   method = "lr"),
+      cross_f    = reg_p("Interaction", stat = "interaction", instrument = "F",    method = "f"),
+      cross_wald = reg_p("Interaction", stat = "interaction", instrument = "Wald", method = "wald")),
     # --- the crosstab omnibus tests ---------------------------------------------------------------
     # ⚠ exactly one row per (var_kind x anova x design) -- asserted below. That invariant is what
     # lets a third ANOVA F be added as one row, with no code change anywhere.
@@ -944,7 +954,8 @@ stopifnot(exprs = {
 
   # S2 -- the enums
   all(.trow_chr("producer") %in% c("tab", "reg"))
-  all(.trow_chr("block") %in% c("glance", "compare", "global", "check", "interaction", "omnibus"))
+  all(.trow_chr("block") %in% c("glance", "compare", "global", "check", "interaction",
+                                "group_interaction", "omnibus"))
   # `producer` is the convenience name of `block`: only the crosstab block is not a regression one
   identical(.trow_chr("producer") == "tab", .trow_chr("block") == "omnibus")
   all(.trow_chr("render")   %in% c("grid", "line", "record"))

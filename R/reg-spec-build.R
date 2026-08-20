@@ -41,7 +41,7 @@ new_reg_spec_product <- function(
     # --- the table's columns --------------------------------------------------------------------
     cols = list(), emp = NULL,
     # --- the `test` tibble ----------------------------------------------------------------------
-    gof_rows = NULL, global_rows = NULL, check_rows = NULL,
+    gof_rows = NULL, global_rows = NULL, check_rows = NULL, cross_rows = NULL,
     # --- meta$empirical_tips --------------------------------------------------------------------
     tips = list(mnl = NULL, num = NULL),
     # --- the ONE scalar a table-scalar stage reads off a fit --------------------------------------
@@ -121,7 +121,8 @@ reg_spec_build_one <- function(i, ctx) {
       # ⚠ `anchors` is IN the key, and must be: jmv_col_fp() fingerprints a column's class, levels
       # and NA count -- never its values -- so a `ref` anchor shifting it is invisible there. Unlike
       # a factor reference, an anchor is not a reparametrization reg_reref_fit_res() can apply.
-      jmvreg_fit_key(sp, data_canon, sp_fam, design_spec, extra = list(multiplier, anchors)),
+      jmvreg_fit_key(sp, data_canon, sp_fam, design_spec,
+                     extra = list(multiplier, anchors, crosses)),
       function() reg_build_digest(data_canon, sp, sp_fam, design_spec, sp_dox,
                                   inv_sp, conf_level, weighted, multiplier = multiplier))
     f <- reg_reref_fit_res(digest, skeleton, conf_level, multiplier = multiplier)
@@ -130,13 +131,14 @@ reg_spec_build_one <- function(i, ctx) {
                                 inv_sp, conf_level, method,
                                 trials = sp$trials, formula = sp$formula, multiplier = multiplier,
                                 drop_extra = na_shared_vars,
-                                add_terms = reg_shape_add(shape_terms, sp$predictors))
+                                add_terms = c(reg_shape_add(shape_terms, sp$predictors),
+                                              reg_cross_add(crosses, sp$cross)))
     f <- if (is.null(fit_cache)) thunk()
          else jmvreg_cached(fit_cache, "fit",
                             jmvreg_fit_key(sp, data, sp_fam, design_spec,
                                            extra = list(method, sp_dox, conf_level, sp$est$effect,
                                                         sp$est$measure, display, multiplier,
-                                                        shape_terms, anchors)),
+                                                        shape_terms, anchors, crosses)),
                             thunk)
   }
   skel_out <- NULL
@@ -159,8 +161,9 @@ reg_spec_build_one <- function(i, ctx) {
   # (reg_base_n_cols()) and the tooltips, the footer and forest_plot(size = "n") all read one place.
   # A numeric predictor keeps NA -- on a listwise-complete frame its count IS the model N.
   cnt  <- reg_level_counts(reg_complete_frame(data, c(sp$outcome, union_predictors,
+                                                      reg_cross_parents(crosses),
                                                       reg_design_vars(design_spec))),
-                           skeleton, wt = design_spec$wt)
+                           skeleton, wt = design_spec$wt, crosses = crosses)
   cols <- purrr::map(cols, function(cc) { cc$col <- set_n(set_wn(cc$col, cnt$wn), cnt$n); cc })
 
   # --- 3. THE FOOTER ROWS ------------------------------------------------------------------------
@@ -170,6 +173,8 @@ reg_spec_build_one <- function(i, ctx) {
   gof_rows <- reg_gof_rows(f, sp, cv0, weighted = weighted, grouped = grouped, stats = stats)
   global_rows <- if (isTRUE(want_global)) reg_global_rows(f, sp, shared, cv0) else NULL
   check_rows <- reg_check_rows(data, f, sp, shared, stats, cv0, grouped)
+  # is each crossed pair real? one extra ADDITIVE fit per cross (R/reg-cross.R).
+  cross_rows <- reg_cross_rows(f, sp, ctx, cv0)
 
   # --- 4. THE OBSERVED (CRUDE) BLOCK -------------------------------------------------------------
   # ONLY where this spec IS an outcome of its own; a one-outcome table's block was built before any
@@ -223,6 +228,7 @@ reg_spec_build_one <- function(i, ctx) {
     cols = cols,
     emp  = reg_emp_slim(own),
     gof_rows = gof_rows, global_rows = global_rows, check_rows = check_rows,
+    cross_rows = cross_rows,
     tips = tips,
     positive_level = f$positive_level,
     fit = if (!identical(compare, "none")) f else NULL,

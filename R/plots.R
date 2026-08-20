@@ -406,7 +406,8 @@ reg_plot_fits <- function(x, data = NULL) {
       reg_outcome_level_of(sp$outcome_level) %||% fs$outcome_level,
       fs$conf_level, fs$method, trials = sp$trials, formula = sp$formula,
       multiplier = fs$multiplier, drop_extra = fs$na_shared_vars,
-      add_terms = reg_shape_add(fs$shape_terms, sp$predictors)))),
+      add_terms = c(reg_shape_add(fs$shape_terms, sp$predictors),
+                    reg_cross_add(fs$crosses, sp$cross))))),
       error = function(e) NULL)
     if (is.null(f)) return(NULL)
     # THE guard, and it is required rather than optional: a diagnostic plot of the wrong model is

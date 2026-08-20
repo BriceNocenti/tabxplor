@@ -63,6 +63,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 - `reg-empirical.R` — the observed/crude companion columns; `REG_EMPIRICAL`.
 - `reg-influence.R` — influence-function math for the gap SE (g-computation, `svyrecvar`).
 - `reg-assumptions.R` — model checks + `shape=` cures; `REG_CHECKS`; the plot primitives.
+- `reg-cross.R` — interactions: the `a*b` entries of `predictors`, prepared as a variable; `REG_CROSS_ARMS`.
 - `reg-spec-build.R` — the per-model product builder (`reg_spec_build`).
 
 **Survey** — design-based inference.
@@ -122,25 +123,26 @@ The codebase is organised around **declared fact tables**. Instead of scattering
 
 The payoff to internalise: **adding a measure, an option, an argument, an estimand is one new row — not N scattered edits.** Do not re-introduce ad-hoc branches; extend the table. The main fact tables:
 
-| Fact table         | Home                   | Declares                                                                               |
-|--------------------|------------------------|----------------------------------------------------------------------------------------|
-| `MEASURES`         | `fmt_class.R`          | The colour measures (raw field, scale keys, significance source, legend, requirements) |
-| `EST_SCALES`       | `fmt_class.R`          | What a column estimates (field, null, geometry, colour ladder, SD source)              |
-| `DISPLAY_TOKENS`   | `tab-display.R`        | The `{}` display grammar (field source, geometry, aliases, placement)                  |
-| `DISPLAY_PRESETS`  | `tab-display.R`        | The named cell layouts both producers resolve (`est` / `est_ci` / `est_base` / …)      |
-| `CI_METHODS`       | `tab-agg.R`            | The confidence-interval methods and geometries (with `CI_GEOMS`)                       |
-| `COLOR_SCALES`     | `tab_classes.R`        | The break scales and palettes                                                          |
-| `PRINT_PALETTES`   | `tab-palettes.R`       | The black-and-white publication palettes: a row per break slot (ink, face, mark)       |
-| `TAB_ARGS`         | `tab-args.R`           | The argument surface (signatures, values, option twins, prose; + `EXPORT_ARGS`)        |
-| `TAB_OPTIONS`      | `tab-options.R`        | The package options and their defaults                                                 |
-| `ROW_KINDS`        | `row-model.R`          | The row-kind vocabulary                                                                |
-| `TEST_ROWS`        | `tab-test-display.R`   | The footer / statistical-row catalogue                                                 |
-| `TAB_OPS`          | `tab-shape.R`          | Which reshape operations accept which table shape                                      |
-| `REG_ESTIMANDS`    | `reg-estimand.R`       | What a regression column estimates (family × effect × measure)                         |
-| `REG_WORDS`        | `reg-estimand.R`       | The header acronyms and their expansions (with `REG_CONTRASTS`, the contrast markers)  |
-| `REG_EMPIRICAL`    | `reg-empirical.R`      | The crude-companion column shapes per family                                           |
-| `REG_CHECKS`       | `reg-assumptions.R`    | The model-check / assumption catalogue                                                 |
-| `TAB_FOREIGN_KEYS` | `zzz-fact-keys.R`      | The cross-table foreign-key edges, checked at load                                     |
+| Fact table         | Home                 | Declares                                                                               |
+|--------------------|----------------------|----------------------------------------------------------------------------------------|
+| `MEASURES`         | `fmt_class.R`        | The colour measures (raw field, scale keys, significance source, legend, requirements) |
+| `EST_SCALES`       | `fmt_class.R`        | What a column estimates (field, null, geometry, colour ladder, SD source)              |
+| `DISPLAY_TOKENS`   | `tab-display.R`      | The `{}` display grammar (field source, geometry, aliases, placement)                  |
+| `DISPLAY_PRESETS`  | `tab-display.R`      | The named cell layouts both producers resolve (`est` / `est_ci` / `est_base` / …)      |
+| `CI_METHODS`       | `tab-agg.R`          | The confidence-interval methods and geometries (with `CI_GEOMS`)                       |
+| `COLOR_SCALES`     | `tab_classes.R`      | The break scales and palettes                                                          |
+| `PRINT_PALETTES`   | `tab-palettes.R`     | The black-and-white publication palettes: a row per break slot (ink, face, mark)       |
+| `TAB_ARGS`         | `tab-args.R`         | The argument surface (signatures, values, option twins, prose; + `EXPORT_ARGS`)        |
+| `TAB_OPTIONS`      | `tab-options.R`      | The package options and their defaults                                                 |
+| `ROW_KINDS`        | `row-model.R`        | The row-kind vocabulary                                                                |
+| `TEST_ROWS`        | `tab-test-display.R` | The footer / statistical-row catalogue                                                 |
+| `TAB_OPS`          | `tab-shape.R`        | Which reshape operations accept which table shape                                      |
+| `REG_ESTIMANDS`    | `reg-estimand.R`     | What a regression column estimates (family × effect × measure)                         |
+| `REG_WORDS`        | `reg-estimand.R`     | The header acronyms and their expansions (with `REG_CONTRASTS`, the contrast markers)  |
+| `REG_EMPIRICAL`    | `reg-empirical.R`    | The crude-companion column shapes per family                                           |
+| `REG_CROSS_ARMS`   | `reg-cross.R`        | The two interaction shapes: a combined factor, or slopes nested in a moderator         |
+| `REG_CHECKS`       | `reg-assumptions.R`  | The model-check / assumption catalogue                                                 |
+| `TAB_FOREIGN_KEYS` | `zzz-fact-keys.R`    | The cross-table foreign-key edges, checked at load                                     |
 
 Three supporting mechanisms carry the same spirit: **typed contexts** (`new_ctx()`, `new_reg_ctx()`) declare every value a pipeline threads, so a stage cannot read an undeclared field; **single argument boundaries** (`tab_resolve_common_args()`, `reg_resolve_args()`) normalise every producer's arguments in one place; and **one table identity** — `meta$spec`, with three slots `kind` / `vars` / `call` — says what a table is, read through `tab_kind()` / `tab_is_reg()`.
 
@@ -258,6 +260,8 @@ The measure's behaviour — its raw getter, scale keys, significance source and 
 **One name per quantity** (`REG_WORDS` + `REG_CONTRASTS`). A header names the **measure**; the **contrast** is a marker on it and a log wraps the result, so the word is *composed* — `marker ∘ log-wrap ∘ acronym` gives `OR`, `mRR`, `refRD`, `log(cumOR)` — which is what stops two estimands sharing a header and one estimand being named twice. Each acronym's expansion is declared once and read by the header, the `Model:` footer ("`OR` = odds ratio (vs the reference category)"), `reg_measures()`, the abort and the generated `?tab_reg` sections. The crude companion and the colour legend both take the measure **without** the marker: a univariable effect has no adjustment to be marginal over, and a legend that named the contrast would split the crude/model pair into two blocks. `reg_measures(data, outcome)` lists what an outcome offers; a missing `(effect, measure)` combination aborts with the list of what it does offer.
 
 **The observed companion — the distinctive feature** (`reg-empirical.R` + `reg-influence.R`). With `empirical = TRUE`, each model effect is placed beside its **crude/observed counterpart** on the same scale — so "what did adjustment change" is read directly. `REG_EMPIRICAL` declares, per family, the shape of the crude column and its CI method; the crude value comes either from a closed form on a per-cell grid or from a univariable refit through the same fitter, so the two share estimand, link and CI rule by construction. `reg-influence.R` computes the **standard error of the gap** between the adjusted and crude estimates (their covariance, which no arithmetic on the two printed intervals could recover) via influence functions — the package's only `survey::svyrecvar` caller — and that gap SE is what lets `color_signif` colour the adjustment itself.
+
+**Interactions are a prepared VARIABLE, not a model term** (`reg-cross.R`). An `a*b` entry in `predictors` is *a predictor whose levels are combinations, and whose univariable model is its own saturated fit* — so it is materialised before the fit and every subsystem keeps reading an ordinary predictor: the skeleton, the per-cell counts, the crude closed form, the colour ladders and the marginal sweep all need nothing. `REG_CROSS_ARMS` declares the two shapes: two categorical parents become one **combined factor** (every cell against one common reference), a continuous one becomes **slopes nested in its moderator**. It is the same move `shape` makes for one variable and `ref`'s anchor for one column's origin — decide the parametrisation while the data is prepared, and the fit's own output is already the table.
 
 **The argument boundary** (`reg-resolve.R`). `reg_resolve_args()` is the `tab_reg()` analogue of the crosstab boundary: six declared stages (validate → prepare data → resolve estimands → resolve output → resolve fit plan → resolve specs) that do every check and every rewrite of `data` in one ordered place, returning a typed record the builder reads.
 
@@ -1176,8 +1180,42 @@ Part C of the study. **Read `dev/reg_interactions_and_predictor_terms.md`**; it 
 **Open question to study:**
 - Since adding an interaction materialises a compound predictor column, **would it be reliable to pass it in the `predictors =` argument directly with the `"var1:var2"` syntax ?** Would it be user-friendly ? Would it we workable from the tidyselect syntax or asks to remove it ? For example: `predictors = c("race", "rincome", "relig", "tvhours", "race:tvhours")`. Main interests: no new argument ; possibility to skip the main term to only add the interaction (removing `"tvhours"` in the former vector). Would it work ? Can you sea caveats ?
 
+**DONE.** Suite **FAIL 0 | WARN 0 | SKIP 4 | PASS 7995** (7932 before; +63, from the 13 tests added here). `devtools::document()` clean, **NAMESPACE unchanged**, only `man/tab_reg.Rd` and `man/reg_formulas.Rd` rewritten, both with byte-identical `\usage` and identical `\item{}` name sets. ⚠ **Not one `_golden/*.rds` or `_snaps` file moved**, as predicted: no golden case builds a `tab_reg()` table, so the regression side is golden-blind.
 
-##### Phase 22b-x — tab_reg() constants formatting manual review
+**THE OPEN QUESTION IS ANSWERED, AND IT DELETED THE ARGUMENT.** `a:b` inside `predictors` works, bare or quoted, and it is strictly better than the study's `cross =`: it needs no new argument (and `cross` was **already taken** internally, by `reg_fit_formula(cross =)`, the pooled `tab_vars` fit), it is **per model** by construction — so `list(additive = c(race, party3), crossed = c(race:party3))` is an ordinary model comparison, the thing the roadmap had deferred as "per-model `shape`" — and the parents need no magic removal, because the user simply does not list them. The one cost, measured and accepted: **a bare `a:b` no longer selects a column RANGE inside `predictors`**. That is not a loss but a repair — before this phase `predictors = c(race, age4, race:age4)` selected the columns *between* `race` and `age4` and fitted a silently wrong model with no error at all. `all_of()` still gives a range; nothing released depended on it.
+
+**One rule, and the phase is a preparation step rather than a feature.** *An interaction is a predictor whose levels are combinations, and whose univariable model is its own saturated fit.* Prepare the pair as a variable and there is nothing to integrate — `reg_skeleton()`'s `term = paste0(var, level)`, `reg_column()`'s join on that term, `reg_level_counts()`, `reg_crude_saturated()`, `reg_reference_grid_values()` and `reg_marginal_gcomp()`'s level sweep all read a factor COLUMN generically. The new file `R/reg-cross.R` is 300 lines and the rest of the package barely moved.
+
+**Two arms, declared in `REG_CROSS_ARMS`, chosen by what the MODIFIED parent is.** `race:party3` (both categorical) materialises **one combined factor**, every observed cell against one common reference cell — the presentation Knol & VanderWeele (2012) recommend, with the actual rates in the cells. `age:race` (a continuous modified predictor) emits the **nested term** `M:X` beside the moderator's own main effect, i.e. R's `M/X`, whose rows are the slope within each level. Both parents are supplied BY the cross and listing one beside it aborts — rank-deficient in the first arm, a silent reparametrisation in the second (R gives full dummy coding, one slope per level, precisely because the modified variable has no main effect). ⚠ **the parent rule is PER MODEL, never across the list**, or the with/without comparison it exists for would be refused.
+
+**The measurements that carry the design, all reproduced here.** The three parametrisations are ONE fit — `y ~ race*age4` and the combined factor agree on logLik and rank with fitted values within **3.3e-15**, so the choice is of presentation and never of statistics. The crude column of a combined factor **is** the observed cell table, exact to **1e-9** against the two-way tabulation, because a factor already takes the saturated closed form. A nested block's slopes are `glm(y ~ M/X)`'s own coefficients (**1e-9**, per SD), and its crude twin is that model's univariable fit (**exact**). And a crossed slope's subgroup AME equals `marginaleffects::avg_comparisons(variables = list(age = k), by = "race")` to **1e-8**.
+
+**Full `effect` support cost three lines, because of one thing the engine already was.** Every quantity `reg_gcomp_maker()` produces — `est`, `emp`, `G`, `mean1`, `mean0` — is a WEIGHTED MEAN, so **a subgroup effect is the same sweep under a restricted weight vector**. The closure gained a `mask` argument, `w <- w0 * mask` and `sw <- sum(w)`; `reg_gcomp_cat_maker()` took the same three lines, `reg_ame_if_maker()` / `reg_ame_if_cat_maker()` pass it through, and the **gap SE therefore came for free**. `reg_marginal_me()` covers the `at = "reference"` half with `by =` and a per-level datagrid. `marginal` and `at_reference` work on both arms, and each nested row carries its group's own adjusted prediction — the level a bare slope never had.
+
+**`sp$row_vars`: a spec now says what it FITS and what it SHOWS, separately.** A nested block's name is not a formula term, so five sites keyed on `sp$predictors` were reading the wrong list: `reg_cols_coef()`'s `model_predictors`, `reg_gap_se_columns()`'s `in_mod`, `reg_marginal_column()` (×3), `reg_fill_base()` and every `reg_fill_sweep()`. They read the declared row blocks now, and `sp$cross` carries the model's keys so **every rebuild of the formula reads one fact** — `reg_fit()`, `reg_formulas()`, the crude fit and `reg_check_plots()`'s replay all take the term through the existing `add_terms` seam, exactly as a `shape = "quadratic"` term does.
+
+**Where it happens, and why there.** The pair is PARSED in S2 (block E2), so both parents reach `shape`, `multiplier`, `ref`/the anchor and the complete-case frame as ordinary variables — `shape = c(age = "quartiles")` on a crossed parent is what turns the nested arm into the cells arm, and it is the cure both refusals name. It is MATERIALISED at the very end of S5 (block Z), after the shape recode, after the anchor shift and **after the relevel** — which is what makes the combined factor's first level the pair of the parents' own references, so **`ref` needs no cross-specific grammar at all** (the study's P4, for free). The jamovi `reref` fast path is disabled under a cross for the same reason, and `crosses` joins both `jmvreg_fit_key(extra =)` lists: a nested arm's term is not a column, so `jmv_col_fp()` cannot see it and a stale hit would be a wrong table.
+
+**The footer answers "is it real?" twice, with the same number.** The test is a **model comparison** with the additive counterpart, which is what covers both arms from one producer — a combined factor has no interaction TERM for `drop1()` to drop, yet it nests the additive model exactly. Measured against `anova(additive, crossed)` to **1e-10**. Cost, measured at n = 21 400: **+19 ms on a glm**, **+540 ms (ordinal)** and **+1 100 ms (multinomial)**, i.e. roughly a doubling of the fitting time for a 3+ level outcome — so per the maintainer's decision it joins the **default** `stats` set on a glm and is opt-in elsewhere, reusing `REG_CHECKS`' own free/refit vocabulary rather than inventing a rule. ⚠ that default **required a user-facing rename**: the `tab_vars` effect-modification test is `stats = "group_interaction"` now (`group_interact_lr` / `_f` / `_wald`), freeing `"interaction"` for the pair test — without it, putting `"interaction"` in the default set would have silently switched the `tab_vars` test on.
+
+**Four defects found and fixed on the way, three of them beyond the two the study named.** (1) **C4-1** — `reg_global_rows()` compared *backticked* `term.labels` against bare names, so any variable whose name needs backticks lost its `Overall association (LR)` row silently, and `race × age4` is exactly that; it compares on the bare name and keeps `terms_i` verbatim for `drop1()`'s scope. (2) **C4-2** — `reg_tidy_rescale()`'s `td$term == v` is exact, so `multiplier` never reached `raceBlack:age` and a crossed slope printed a per-1-unit effect under a row labelled `per SD/17.3`; it matches a term whose `:`-split parts contain the variable, which leaves the squared term and the multinomial `term × y.level` behaviour untouched. (3) **`reg_compare_guard()` proves nesting from TERM LABELS**, and a combined factor's label contains neither parent's — so the headline "additive vs crossed" comparison degraded to Delta-AIC where a real LR test exists. It expands DECLARED crosses into their parents now (`reg_cross_expand_terms()`), and only declared ones: a hand-written `a:b` in a compound formula may genuinely not contain its main effects, and claiming otherwise would compute a bogus likelihood ratio. (4) **`reg_fit()`'s `drop_vars` ignored `add_terms`**, so a model's population was what `predictors` listed rather than what the formula uses — inert for a shape term (its variable is a predictor) but wrong for a crossed slope; it reads the terms' own variables now. Plus one message leak: `car::vif()` prints a note about higher-order terms on any interacted fit, describing a model the user asked for and offering nothing to act on — suppressed at the site.
+
+**Two smaller decisions worth recording.** A nested block gets its own `Overall association (LR)` row — the joint test of its m slopes, the same question a factor block's row answers — through one declared term→block map (`reg_cross_term_var()`); and the crude nested fit's own `M` main effects are **not** poked into the moderator's block, which falls out of `reg_empirical_fit()`'s existing term filter rather than needing a guard.
+
+**Four existing test contracts moved, and three of them were caught by the package's own guards rather than by review.** `test-jamovi-vocabulary.R` refused the new YAML option until it was declared UI-only — `crosses` folds into `predictors` exactly as `models` does, so it is not an argument of `tab_reg()` and had to say so. `test-non-ascii.R` refused `"race × age4"` written literally in the new test file (the `\uXXXX` rule covers `tests/` too, comments exempt). `test-test-rows.R` and `test-between-groups-gap.R` (6 assertions) pinned the old `interact_*` keys and the old `stats = "interaction"` spelling, which is precisely the rename this phase makes — updated, and they are what proves the tab_vars test still fires under its new key. `test-tab_reg-rr.R` pinned the default `stats` set, which now carries `"interaction"`.
+
+**jamovi**: a hidden `crosses` Array of `Group{var1, var2}` in `jmvtabreg.a.yaml`, folded by `jmvtab_reg_cross_keys()` / `jmvtab_reg_cross_fold()` into `"a:b"` keys **appended to the predictors vector** — so the backend stays a pass-through and there is no second argument to keep in step; a model card that does not hold both parents is left alone, which is what makes with/without expressible from the "+" builder. `JMVREG_CACHE_SCHEMA` 6 → 7. The generated `.h.R` and JS are regenerated in **22g**, as declared; until then the option is inert and the module is correct.
+
+**Documentation**: `?tab_reg`'s `@param predictors` gains the `:` rule, the two arms, the parent rule and the range caveat; `@param stats` gains both interaction keys with their cost; both regression vignettes gain a section (EN + FR) — how to read a cell row, the two arms, `shape = "quartiles"` as the route from a continuous predictor to the cell table, the footer test, the scale-dependence caveat (Ai & Norton), and the compound formula named as the **expert exit door** it is rather than as the way to write an interaction. One `NEWS.md` bullet, carrying the `:`-range and `stats`-key changes.
+
+**The spelling is `a*b`, R's own, settled by a third follow-up question (§8.9 of the same doc).** `a:b` and `a*b` are not the same thing in R, and what tabxplor fits is always the FULL model — a combined factor spans `a + b + a:b`, the nested arm is `M/X` — so `a:b` would have named it correctly only half the time: measured, the two coincide for a factor pair (logLik −14142.9662 both) and diverge the moment a parent is continuous (−14505.62 against −14443.20), into exactly the origin-dependent model. `*` names it always, and it is what an R user already reads. `:` is now refused by NAME, a teaching error rather than a synonym — which also **removes the one cost the design carried**: `:` never had to be taken from tidyselect, because `*` does not collide with it. And the ORDER is presentation only: `race*age4` and `age4*race` are one fit (fitted values 2.6e-15 apart, same rank, same coefficient values renamed), differing in R only for the sequential Type-I `anova()` this package never uses (`drop1()` gives 8.286093 either way, the two-model LR p = 0.2178837 either way) — in tabxplor it says which variable the rows are about, so where only one parent is continuous the abort names the swap before the cure.
+
+**A follow-up review asked whether the two refusals are really wanted, and the answer is written up as `dev/reg_interactions_and_predictor_terms.md` §8** (measured, with the literature). Both stand, and neither refuses a model a user can soundly ask for. For a categorical moderator, `a:b`, `a + a:b` and `a + b + a:b` are **ONE fit** — measured identical to the last digit (logLik −7580.837869 both ways, fitted values 1e-15) — so the parent rule refuses a *spelling*, and the alternative spelling's rows are a slope plus differences-of-slopes with no count, no crude twin and no reference row. The only genuinely different models it blocks are the ones that drop a continuous parent's main effect, and **every one of those depends on the anchor** — which since 22b-viii is a package default the user never set: re-fitting `married ~ age:tvhours` on a mean-centred `age` moves fitted **probabilities** by up to **0.55**, against 5e-16 for the invariant spelling. So the rule is the package's own mechanics, not a convention: *tabxplor fits only interaction models that are invariant to the anchoring of their continuous parents, because it anchors them.* Morris et al. (2023) name three cases where breaking marginality is right, and all three share a meaningful zero — which `ref = c(v = 0)` plus the formula hatch already expresses explicitly. **Both messages were rewritten to teach rather than refuse** (the parent rule now says the model is unchanged and only the rows differ; the continuous-moderator abort now names the formula hatch beside `shape`), and `?tab_reg` gained the continuous × continuous sentence. The two possible extensions are **Phase 22b-xii** below.
+
+**Deferred, per the maintainer's decision**: the per-cell interaction COLOUR (the study's §4.15) — see the new phase below. Nothing structural is lost by waiting: it is one `MEASURES` row plus the nested-pair influence function, and the additive fit it needs is already computed for the test row.
+
+
+##### Phase 22b-x — tab_reg() constants formatting and shapes manual review
 - Reference profile for the gaussian shows "+40.76" : but it is the mean at the reference profile, so there should be no "+"" (it’s not a diff but a baseline). I wonder what would be the best solution to fix that, a custom display for that cell, or a reliable rule ensuring that for reference rows (can you see some situations were it would be wrong ?). Same problem with the poisson reference profile: "×2.79", but its in fact the mean at the reference profile. It goes for "poisson" × "marginal" × "ratio" too. The baseline odds formatting is ok for binomials. More details in the comments below
 - In the right parameters table, change the minimum digits for the observed mean and the adjusted mean to 1 (there’s 2 decimals by default, I want 1) ; change the minimum digits for mean differences, pct differences, mean ratio and pct ratio to 1 too.
 - Having the overall N in the row "Reference profile" is meaningless and confusing, since the constant does not give the population average proportion or mean or odds at all (unless effect="marginal"). I want to remove the overall N here (only keep it for `effect="marginals"`), and re-add N as the first stats footer row. Would there be an interest to give the population at the reference when there are no numeric predictors (meaningless with continuous numeric predictors, by definition nobody is "at the mean") ?
@@ -1260,12 +1298,61 @@ tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "reli
 ) # Constants "÷6.06" etc., should be 1/6.06 = "16.5%" average population proportion etc.
 ```
 
+shapes
+- shapes are written nowhere for some numeric predictors
+  + "quadratic" and quantiles are visible on the table (age^2 row added, perfect)
+  + "sqrt" and "log" are invisible since we removed the duplicated variable name in "levels" column:
+    add "√(x)" or "log(x)" at the start of the "levels". Or if you have a reliable idea for a more modern look (mathjax in html?), say it.
+  + I also want to change a bit the normal display, with or without shape, to something like : "√(x), per 1.04 (SD), at 6.43 (mean)", or "log(x), per 10, at 0 (min)", or "per 2.08 (2SD), at 0"
+- Also, the sparkline seems to be the same for identity, quadratic, sqrt, log. How to handle this ?
+  Should the sparkline change with the shape so that the user can verify if the new shape is more linear with the outcome ?
+  What is the standard in regression models assumptions checks ?
+
+```r
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+)
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
+        shape = c(age = 3), 
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+)
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
+        shape = c(age = "quadratic"), 
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+)
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
+        shape = c(age = "sqrt"),
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+)
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
+        shape = c(age = "log"), 
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+)
+```
+
+
+Interactions
+- in html, "age × race" is written vertically, and it’s long (wastes vertical space, but here there’s horizontal space remaining), plase wrap it before the `×`, so it prints vertically in two columns.
+```r
+tab_reg(gss_simple, outcome = "married", predictors = c("age:race", "rincome",),
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+)
+```
+
+
+Stats footers
+- Are there standards and good practices for the thresholds after which max VIF is too big, or max dfbetas is too big, that we could reliably use to color the cell red like when a pvalue is >=5%, with statistically soundness ?
+
+
+
 Miscellaneous
+
 ```r
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "tvhours", "age", "relig"),
          family = "binomial", empirical = TRUE
 )
 ```
+
 - With two numeric predictors, the width of the sparkline appear to differ depending on the variable.
   I want to standardise that so they all have the same height and the same width. Here, the width of tvhours is about right,
   (just a bit wider could do) but age wastes horizontal space.
@@ -1275,6 +1362,22 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "tvho
   at the top and at the bottom of "Model fit", the horizontal border (which belongs) have a smaller linewidth
   than on every other columns, which is not visually consistent.
 
+
+
+##### Phase 22b-xi — the interaction colour: NOT IMPLEMENTED
+
+The study's §4.15, deferred by decision G4 of 22b-ix. Once an interaction is a predictor, the two-channel colour language has a second thing to say about each cell, and it needs **no new `fmt` field**: the **text** grades the cell's own effect against the reference cell (the ordinary measure), the **background** grades how far the cell departs from **no interaction at all**, greyed by `color_signif` when that departure could be chance.
+
+The no-interaction expectation is the ADDITIVE model's estimate for that cell — and that model is already fitted, for 22b-ix's `Interaction (LR)` footer row. So the measure has exactly the shape `color = "adjustment"` already has (`obs` = the value compared to, `est` = the value shown, `gap_se` = the SE of their difference), and both legs are nested fits on one frame, which is the situation `reg-influence.R` already solves. **One new `MEASURES` row**, routed through the existing nested-pair machinery so the design-based case comes for free.
+
+Why it is worth its own phase, and what to weigh first: a cell's own stars answer *"is this cell different from the REFERENCE cell?"* — mostly the two main effects talking — while this answers *"does this cell depart from what those main effects alone predict?"*, which is what an interaction table is for. Against it: k×m per-cell departure tests are multiple comparisons on a quantity the footer already summarises once, and it spends the background channel. Two things come at no extra cost if it lands: the **additive-scale** departure is the same measure under `measure = "difference"`, and a **RERI** footer row is one more `TEST_ROWS` entry from the same two fits.
+
+##### Phase 22b-xii — a continuous x continuous interaction, if it is wanted: NOT IMPLEMENTED
+
+Studied and grounded in `dev/reg_interactions_and_predictor_terms.md` **section 8** (measured on real data, with the literature). The refusal stands as the DEFAULT — `shape = c(b = "quartiles")` gives a strictly more informative table than any alternative, and the formula hatch already fits the model correctly and anchored. Two extensions exist if the classical table is wanted anyway, in increasing cost:
+
+- **a third arm, `both_numeric`** — model `a + b + a:b` (the only origin-invariant spelling), ONE interaction row, with `multiplier` applied as `k_a x k_b` so it reads `1/1.07` per SD x SD instead of the unreadable `1.00` the hatch prints. It reuses the `add_terms` seam and the skeleton's numeric branch; the footer test needs nothing. The row carries no count, no `{base}` and no `Obs_*`, which must be documented rather than discovered. ⚠ **precondition**: `reg_tidy_rescale()` applies ONE `k` per term, so a term whose two parts BOTH carry a multiplier would silently take the last one — it needs the product. Unreachable today (the arm aborts, and `multiplier` is off in formula mode), so it is a landmine to defuse before the arm lands, not a live bug.
+- **simple slopes at declared moderator values** — the genuinely tabxplor-shaped answer and the one the literature recommends (Aiken & West; Johnson-Neyman): rows at `mean -/+ SD`, or at values named through `ref`'s own grammar, each an effect the colour engine and the stars already understand. 22b-viii's anchor plus `at_reference`'s datagrid are most of the machinery. It cannot carry counts or an observed companion — those rows describe nobody as a group.
 
 
 #### Phase 22c — tab manual review

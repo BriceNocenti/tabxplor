@@ -713,8 +713,11 @@ reg_anchor_apply <- function(data, anchors) {
 # aligns to it by term. `shape_terms` adds a non-linear `shape =`'s CURVATURE row, breaking the
 # 1-to-1 by a rule: ONE ROW PER MODEL TERM on the coefficient path, ONE ROW PER PREDICTOR on the
 # marginal one.
-reg_skeleton <- function(data, predictors, shape_terms = NULL) {
+reg_skeleton <- function(data, predictors, shape_terms = NULL, crosses = list()) {
   parts <- purrr::map(predictors, function(p) {
+    # a crossed pair's `cells` arm IS a factor column, so only the nested one needs its own rows.
+    rec <- reg_cross_of(crosses, p)
+    if (!is.null(rec) && identical(rec$arm, "nested")) return(reg_cross_skeleton(rec, data))
     v <- data[[p]]
     if (reg_is_factor_var(v)) {
       lv <- levels(forcats::fct_drop(as.factor(v)))
@@ -837,8 +840,12 @@ reg_wald_finalize <- function(est, do_exp, se = NULL, crit = NULL,
 reg_tidy_rescale <- function(td, multiplier) {
   mult_vec <- rep(1, nrow(td))
   if (!is.null(multiplier)) {
+    # the variable IS the term, or is one PART of an interaction: a crossed slope `raceBlack:age`
+    # is still an effect per unit of `age`. A shape-generated squared term names no part, so it
+    # stays unscaled, and a multinomial's `term x y.level` rows still scale together.
+    parts <- strsplit(td$term, ":", fixed = TRUE)
     for (v in names(multiplier)) {
-      mi <- td$term == v
+      mi <- vapply(parts, function(pp) any(pp == v), logical(1))
       if (any(mi)) mult_vec[mi] <- as.numeric(multiplier[[v]])
     }
     td$estimate  <- td$estimate  * mult_vec
@@ -893,7 +900,7 @@ reg_grouped_response <- function(family)
 #' @details
 #' One row per model: several `outcome`s give one each, a `predictors` list one per model. Two things
 #' the list does not repeat: under `tab_vars` the same formula is fitted **within each group**, and
-#' `color = "between_groups"` (or `stats = "interaction"`) fits one extra pooled model for the footer
+#' `color = "between_groups"` (or `stats = "group_interaction"`) fits one extra pooled model for the footer
 #' test only.
 #'
 #' A summed score (`trials =`) is fitted on a success / failure pair, so its formula names the two
@@ -928,7 +935,8 @@ reg_formulas <- function(x) {
     grouped <- reg_is_grouped_binomial(sp$fit_family, sp$trials, sp$compound)
     fml <- reg_fit_formula(
       sp$outcome, sp$predictors,
-      add_terms = reg_shape_add(fs$shape_terms, sp$predictors), formula = sp$formula,
+      add_terms = c(reg_shape_add(fs$shape_terms, sp$predictors),
+                    reg_cross_add(fs$crosses, sp$cross)), formula = sp$formula,
       response  = if (grouped) reg_grouped_response(sp$fit_family),
       offset    = if (grouped && identical(sp$fit_family, "rr")) "offset(log(`.gb_trials`))")
     tibble::tibble(
@@ -1132,7 +1140,12 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
   # be COMPLETE ON without modelling, which is how a crude univariable fit lands on exactly the
   # model's population. ⚠ a pre-filtered frame passed as `data` is NOT equivalent: a PREBUILT
   # design's keep mask is computed from `data` itself, and a shorter one recycles silently.
-  drop_vars <- unique(c(outcome, predictors, cross, drop_extra, reg_design_vars(design_spec)))
+  # `add_terms` may name a variable the main effects do not -- a crossed slope's modified predictor
+  # -- and the model's population is what the formula uses, not what `predictors` lists.
+  add_vars  <- if (length(add_terms))
+    all.vars(stats::as.formula(paste("~", paste(add_terms, collapse = " + ")))) else NULL
+  drop_vars <- unique(c(outcome, predictors, cross, add_vars, drop_extra,
+                        reg_design_vars(design_spec)))
   mdata     <- reg_complete_frame(data, drop_vars)
 
   fac_preds <- reg_factor_preds(mdata, c(predictors, cross))
@@ -1496,9 +1509,10 @@ reg_fill_geometries <- function(col, lvl, ref_lvl, fallback_diff = NULL) {
 # optional annotation into a hard dependency and, worse, an abort.
 #' @keywords internal
 #' @noRd
-reg_fill_sweep <- function(fit, data, predictors, conf_level, wt = NULL, multiplier = NULL)
+reg_fill_sweep <- function(fit, data, predictors, conf_level, wt = NULL, multiplier = NULL,
+                           crosses = list())
   tryCatch(reg_marginal_gcomp(fit, data, predictors, conf_level, wt, want_pred = TRUE,
-                              want_se = FALSE, multiplier = multiplier),
+                              want_se = FALSE, multiplier = multiplier, crosses = crosses),
            error = function(e) NULL)
 
 # A pure template writer: every field it can name is already stored, and the per-cell rule is the
@@ -1573,13 +1587,14 @@ reg_marginal_basis_ok <- function(fit, data, v, k, est, ratio) {
 reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
                          at = "average", comparison = NULL, want_pred = TRUE,
                          multiplier = NULL, engine = "marginaleffects", want_se = TRUE,
-                         anchors = NULL) {
+                         anchors = NULL, crosses = list()) {
   do_exp <- !is.null(comparison) && comparison %in% c("lnor", "lnratioavg")
   out <- NULL
   # "lnor" is the MNL j-vs-rest contrast, which only ever comes with at = "reference".
   if (identical(engine, "gcomp") && identical(at, "average") && !identical(comparison, "lnor"))
     out <- reg_marginal_gcomp(fit, data, predictors, conf_level, wt, ratio = do_exp,
-                              want_pred = want_pred, want_se = want_se, multiplier = multiplier)
+                              want_pred = want_pred, want_se = want_se, multiplier = multiplier,
+                              crosses = crosses)
   # THE fallback, and the only place `marginaleffects` is genuinely required: the estimand's engine
   # named it, or gcomp refused this fit -- which the argument boundary cannot know.
   if (is.null(out)) {
@@ -1587,7 +1602,7 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
       reg_abort_marginaleffects("this contrast, which has no closed form on this model")
     out <- reg_marginal_me(fit, data, predictors, conf_level, wt, at = at, comparison = comparison,
                            want_pred = want_pred, multiplier = multiplier, want_se = want_se,
-                           anchors = anchors)
+                           anchors = anchors, crosses = crosses)
   }
   if (identical(at, "average")) reg_marginal_basis_warn(fit, data, predictors, multiplier,
                                                         out$ame, do_exp)
@@ -1596,9 +1611,14 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
 
 #' @keywords internal
 reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, ratio = FALSE,
-                               want_pred = TRUE, want_se = TRUE, multiplier = NULL) {
+                               want_pred = TRUE, want_se = TRUE, multiplier = NULL,
+                               crosses = list()) {
   tvars <- tryCatch(all.vars(stats::delete.response(stats::terms(fit))), error = function(e) NULL)
-  if (is.null(tvars) || !all(predictors %in% tvars)) return(NULL)
+  # a nested cross block is named by its BLOCK, whose parents are the formula's own variables.
+  need  <- unlist(lapply(predictors, function(v) {
+    r <- reg_cross_of(crosses, v); if (is.null(r)) v else c(r$modified, r$moderator) }),
+    use.names = FALSE)
+  if (is.null(tvars) || !all(need %in% tvars)) return(NULL)
   V <- if (want_se) tryCatch(stats::vcov(fit), error = function(e) NULL) else NULL
   if (want_se && (is.null(V) || !is.matrix(V))) return(NULL)
   per_cat <- inherits(fit, "multinom") || inherits(fit, "polr")
@@ -1608,18 +1628,30 @@ reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, rat
   crit <- stats::qnorm(1 - (1 - conf_level) / 2)
   amel <- list(); predl <- list()
   for (v in predictors) {
-    is_fac <- reg_is_factor_var(data[[v]])
-    if (is_fac) {
+    rec    <- reg_cross_of(crosses, v)
+    nested <- !is.null(rec) && identical(rec$arm, "nested")
+    is_fac <- !nested && reg_is_factor_var(data[[v]])
+    kof <- function(x) {
+      k <- if (!is.null(multiplier) && x %in% names(multiplier)) as.numeric(multiplier[[x]]) else 1
+      if (!is.finite(k) || k == 0) 1 else k
+    }
+    if (nested) {
+      # ONE k-unit forward difference per moderator level, each averaged over that level's rows --
+      # a subgroup AME, which the sweep already is once its weights are masked.
+      lv  <- levels(forcats::fct_drop(as.factor(data[[rec$moderator]])))
+      k   <- kof(rec$modified)
+      cls <- lapply(lv, function(l) list(level = l, at = k, ref = 0, on = rec$modified,
+                                         mask = as.numeric(!is.na(data[[rec$moderator]]) &
+                                                             data[[rec$moderator]] == l)))
+    } else if (is_fac) {
       lv <- levels(forcats::fct_drop(as.factor(data[[v]])))
       if (length(lv) < 2L) return(NULL)
       cls <- lapply(lv[-1], function(l) list(level = l, at = l, ref = lv[[1]]))
     } else {
-      k <- if (!is.null(multiplier) && v %in% names(multiplier)) as.numeric(multiplier[[v]]) else 1
-      if (!is.finite(k) || k == 0) k <- 1
-      cls <- list(list(level = v, at = k, ref = 0))   # a k-unit FORWARD DIFFERENCE, as `variables=list(v=k)`
+      cls <- list(list(level = v, at = kof(v), ref = 0))   # a k-unit FORWARD DIFFERENCE
     }
     for (ct in cls) {
-      p <- g(v, ct$at, ct$ref)
+      p <- g(ct$on %||% v, ct$at, ct$ref, ct$mask)
       if (is.null(p)) return(NULL)
       # The 3+ level producer answers for every category at once (K-long, `group` naming them) where
       # a single-equation one is scalar. Hence one loop.
@@ -1630,12 +1662,15 @@ reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, rat
       amel[[length(amel) + 1L]] <- tibble::tibble(
         var = v, level = as.character(ct$level), group = grp,
         ame = res$estimate, ame_lo = res$conf.low, ame_hi = res$conf.high, ame_p = res$p.value)
+      add_pred <- function(l, val) predl[[length(predl) + 1L]] <<-
+        tibble::tibble(var = v, level = l, group = grp, pred = val)
       if (want_pred && is_fac) {
-        add_pred <- function(l, val) predl[[length(predl) + 1L]] <<-
-          tibble::tibble(var = v, level = l, group = grp, pred = val)
         add_pred(as.character(ct$level), p$mean1)
         if (identical(ct$level, lv[[2]])) add_pred(lv[[1]], p$mean0)  # the reference's own, once
       }
+      # a crossed slope has no level of its own, so the adjusted level it sits on is its GROUP's:
+      # `mean0` is the prediction with the predictor left where the data has it.
+      if (want_pred && nested) add_pred(as.character(ct$level), p$mean0)
     }
   }
   list(ame = dplyr::bind_rows(amel), pred = dplyr::bind_rows(predl))
@@ -1670,7 +1705,8 @@ reg_marginal_basis_warn <- function(fit, data, predictors, multiplier, ame, rati
 # ratio twin; both return a log exp()'d here, so the interval stays a Wald one on the log scale.
 reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
                             at = "average", comparison = NULL, want_pred = TRUE,
-                            multiplier = NULL, want_se = TRUE, anchors = NULL) {
+                            multiplier = NULL, want_se = TRUE, anchors = NULL,
+                            crosses = list()) {
   ref_vals <- if (at == "reference")
     reg_reference_grid_values(data, predictors, anchors,
                               if (is.null(wt) || !wt %in% names(data)) NULL else data[[wt]]) else NULL
@@ -1690,10 +1726,38 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
     k <- if (!is.null(multiplier) && v %in% names(multiplier)) as.numeric(multiplier[[v]]) else NA_real_
     if (is.finite(k) && k != 1 && !reg_is_factor_var(data[[v]])) stats::setNames(list(k), v) else v
   }
+  # A crossed slope is `variables = list(x = k)` READ WITHIN each level of its moderator: `by` at
+  # the sample average, one datagrid row per level at the reference profile. The block's rows ARE
+  # the moderator's levels, so the level comes off that column rather than off a contrast label.
+  x_ref_grid <- function(rec) do.call(marginaleffects::datagrid, c(
+    list(model = fit),
+    utils::modifyList(ref_vals %||% list(),
+                      stats::setNames(list(levels(forcats::fct_drop(
+                        as.factor(data[[rec$moderator]])))), rec$moderator))))
   # the delta-method jacobian costs one re-prediction PER COEFFICIENT, unpaid where the caller
   # discards the interval.
   se_arg <- if (want_se) list() else list(vcov = FALSE)
   amelist <- purrr::map(predictors, function(v) {
+    rec <- reg_cross_of(crosses, v)
+    if (!is.null(rec) && identical(rec$arm, "nested")) {
+      va <- var_arg(rec$modified)
+      ac <- as.data.frame(if (at == "reference")
+        do.call(marginaleffects::comparisons, c(
+          list(fit, variables = va, newdata = x_ref_grid(rec), conf_level = conf_level),
+          cmp_arg, se_arg))
+        else do.call(marginaleffects::avg_comparisons, c(
+          list(fit, variables = va, by = rec$moderator, newdata = data, conf_level = conf_level),
+          wts_arg, cmp_arg, se_arg)))
+      est <- ac$estimate
+      lo  <- ac$conf.low  %||% rep(NA_real_, length(est))
+      hi  <- ac$conf.high %||% rep(NA_real_, length(est))
+      if (do_exp) { est <- exp(est); lo <- exp(lo); hi <- exp(hi) }
+      return(tibble::tibble(
+        var = v, level = as.character(ac[[rec$moderator]]),
+        group = if ("group" %in% names(ac)) as.character(ac$group) else NA_character_,
+        ame = est, ame_lo = lo, ame_hi = hi,
+        ame_p = ac$p.value %||% rep(NA_real_, length(est))))
+    }
     ac <- if (at == "reference")
       as.data.frame(do.call(marginaleffects::comparisons, c(
         list(fit, variables = var_arg(v), newdata = ref_grid, conf_level = conf_level),
@@ -1725,6 +1789,18 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
   ame <- dplyr::bind_rows(amelist)
 
   predlist <- if (want_pred) purrr::map(predictors, function(v) {
+    rec <- reg_cross_of(crosses, v)
+    if (!is.null(rec) && identical(rec$arm, "nested")) {
+      # a slope has no level of its own; the level it sits on is its GROUP's adjusted prediction.
+      ap <- as.data.frame(if (at == "reference")
+        marginaleffects::predictions(fit, newdata = x_ref_grid(rec), vcov = FALSE)
+        else do.call(marginaleffects::avg_predictions, c(
+          list(fit, variables = rec$moderator, newdata = data, vcov = FALSE), wts_arg)))
+      return(tibble::tibble(
+        var = v, level = as.character(ap[[rec$moderator]]),
+        group = if ("group" %in% names(ap)) as.character(ap$group) else NA_character_,
+        pred = ap$estimate))
+    }
     if (!reg_is_factor_var(data[[v]])) return(NULL)      # no per-level prediction for numerics
     ap <- if (at == "reference") {
       grid_v <- do.call(marginaleffects::datagrid, c(list(model = fit),
@@ -2144,7 +2220,11 @@ reg_footer_stats <- function(family, weighted, grouped, stats) {
   # the per-predictor global test is in the DEFAULT set -- the question a multi-level factor block
   # leaves unanswered -- and so are the checks that cost no fit.
   checks  <- reg_checks_for(family, weighted)
-  default <- c(default, "global", reg_checks_default(family, weighted))
+  # the crossed-pair interaction test costs ONE extra fit, and only where a cross was asked for. On
+  # a glm that is ~20 ms, so it joins the default set; on multinomial / ordinal it roughly DOUBLES
+  # the fitting time, so it is opt-in -- the free/refit rule REG_CHECKS already states for a check.
+  default <- c(default, "global", if (reg_fam_glm(family)) "interaction",
+               reg_checks_default(family, weighted))
   if (identical(stats, "all")) return(reg_check_expand(unique(c(default, checks))))
   if (is.null(stats) || isTRUE(stats)) return(reg_check_expand(default))
   if (isFALSE(stats) || identical(stats, "none")) return(character(0))
@@ -2167,11 +2247,13 @@ reg_gof_rows <- function(f, sp, col_var, weighted, grouped, stats) {
 # An LR / F test between two models is only valid on the SAME complete-case set and when one nests in
 # the other; a guard failure falls back to Delta-AIC. Nesting is checked in BOTH directions, a
 # baseline being allowed to be the SUPERSET.
-reg_compare_guard <- function(m_ref, m_full) {
+reg_compare_guard <- function(m_ref, m_full, crosses = list()) {
   ok_n   <- tryCatch(stats::nobs(m_ref) == stats::nobs(m_full), error = function(e) FALSE)
   t_ref  <- tryCatch(attr(stats::terms(m_ref),  "term.labels"), error = function(e) NULL)
   t_full <- tryCatch(attr(stats::terms(m_full), "term.labels"), error = function(e) NULL)
   if (is.null(t_ref) || is.null(t_full) || !isTRUE(ok_n)) return(0L)
+  t_ref  <- reg_cross_expand_terms(t_ref,  crosses)
+  t_full <- reg_cross_expand_terms(t_full, crosses)
   if (all(t_ref %in% t_full)) return(1L)                  # ref nested in full
   if (all(t_full %in% t_ref)) return(-1L)                 # full nested in ref (superset baseline)
   0L
@@ -2199,7 +2281,7 @@ reg_compare_extract <- function(an, use_f) {
 # gaussian / quasi, a design-based Wald for a WEIGHTED (or "rr") model so no false-LR claim is made.
 # Distinct discriminators per test kind keep each row homogeneous, so its label alone names the test.
 reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_col,
-                             compare = "none", baseline = NULL) {
+                             compare = "none", baseline = NULL, crosses = list()) {
   if (identical(compare, "none")) return(reg_gof)
   n <- length(fits)
   if (n < 2L) {
@@ -2233,7 +2315,7 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
     if (is.na(ref_i) || ref_i < 1L || ref_i == i) return(NULL)
     m_full <- fits[[i]]$fit; m_ref <- fits[[ref_i]]$fit
     col    <- fit_first_col[[i]]
-    dir  <- reg_compare_guard(m_ref, m_full)
+    dir  <- reg_compare_guard(m_ref, m_full, crosses)
     m_lo <- if (dir >= 0L) m_ref  else m_full
     m_hi <- if (dir >= 0L) m_full else m_ref
     if (dir != 0L) {
@@ -2290,7 +2372,7 @@ reg_test_row <- function(test, col, var = "", statistic = NA_real_, df1 = NA_rea
                  df1 = df1, df2 = df2, pvalue = pvalue, n = nobs, min_e = NA_real_, outcome = outcome)
 
 #' @keywords internal
-reg_interaction_types <- function() unname(test_row_types("interaction"))
+reg_interaction_types <- function() unname(test_row_types("group_interaction"))
 
 # ⚠ THE FOURTH FITTING SITE, and the one that cannot join a per-spec product: it fits the POOLED
 # model -- every tab_vars group at once, with the group interacted -- so it lives AFTER the split
@@ -2329,7 +2411,7 @@ reg_interaction_rows <- function(reg_gof, data, specs, shared, tab_vars, fit_fir
     keep    <- keyed[ok]
 
     reg_term_tests(fit, keep, terms_i, use_f, use_wald,
-                   types = test_row_types("interaction"),
+                   types = test_row_types("group_interaction"),
                    col_var = fit_first_col[[i]], nobs = f$nobs, outcome = sp$outcome)
   })
   rows <- purrr::compact(purrr::flatten(purrr::compact(rows)))
@@ -2396,10 +2478,15 @@ reg_global_rows <- function(f, sp, shared, col_var) {
     a <- attr(stats::model.matrix(fit), "assign")
     vapply(seq_along(have), function(k) sum(a == k), integer(1))
   }, error = function(e) rep(NA_integer_, length(have)))
-  keep    <- have %in% sp$predictors & !is.na(df_of) & df_of >= 2L
+  # ⚠ compare on the BARE name and keep `terms_i` verbatim: reg_fit_formula() backticks every
+  # predictor, so `terms(fit)$term.labels` reads `` `race x age4` `` for any non-syntactic name and
+  # the row silently disappeared -- while drop1()'s scope needs the label exactly as terms() spells
+  # it.
+  bare    <- reg_cross_term_var(gsub("`", "", have, fixed = TRUE), shared$crosses)
+  keep    <- bare %in% c(sp$predictors, sp$row_vars) & !is.na(df_of) & df_of >= 2L
   terms_i <- have[keep]
   if (length(terms_i) == 0L) return(NULL)
-  rows <- purrr::compact(reg_term_tests(fit, terms_i, terms_i,
+  rows <- purrr::compact(reg_term_tests(fit, bare[keep], terms_i,
                                         use_f = reg_fam_disp_estimated(sp$fit_family),
                                         use_wald = reg_fam_svy_fitted(sp$fit_family, shared$weighted),
                                         types = test_row_types("global"),
@@ -2619,7 +2706,7 @@ new_reg_shared <- function(union_predictors = character(0), design_spec = list()
                            stats = NULL, compare = "none", baseline = NULL,
                            multiplier = NULL, multiplier_label = NULL,
                            anchors = NULL, anchor_keyword = NULL,
-                           shape_terms = NULL, shape_labels = NULL,
+                           shape_terms = NULL, shape_labels = NULL, crosses = list(),
                            empirical = FALSE, display = NULL,
                            var_labels = character(0), na_shared_vars = character(0),
                            base_n = "range") {
@@ -2636,7 +2723,8 @@ utils::globalVariables(names(formals(new_reg_shared)))
 #' @keywords internal
 new_reg_spec <- function(outcome = character(0), predictors = character(0), label = "",
                          fit_family = "", trials = NULL, outcome_level = NA_character_,
-                         compound = FALSE, formula = NULL,
+                         compound = FALSE, formula = NULL, cross = character(0),
+                         row_vars = character(0),
                          color = NA_character_, est = NULL, crude_key = NA_character_) {
   # `outcome` arrives NAMED on the comparison branch and unnamed on the per-outcome one, and every
   # downstream map_chr(specs, "outcome") compares it to a bare column name.
@@ -2785,7 +2873,7 @@ reg_stage_split <- function(ctx) {
   # the AGGREGATED companion of the per-cell gap colour, automatic under `color = "between_groups"`.
   # It costs one fit per spec, and this is the ONE place with the full data.
   if ("between_groups" %in% color_ms ||
-      (is.character(shared$stats) && "interaction" %in% shared$stats)) {
+      (is.character(shared$stats) && "group_interaction" %in% shared$stats)) {
     fit_cols <- unique(tests$col[tests$test %in% reg_footer_test_types()])
     if (length(fit_cols) != length(specs)) fit_cols <- make.unique(purrr::map_chr(specs, "label"))
     tests <- reg_interaction_rows(tests, data, specs, shared, tab_vars, fit_cols)
@@ -2832,9 +2920,11 @@ reg_stage_setup <- function(ctx) {
   builders   <- purrr::map_chr(specs, ~ .$est$builder %||% "coef")
   skeleton_deferred <- FALSE
   if (is.null(skeleton)) {
-    if (any(builders != "coef"))  skeleton <- reg_skeleton(skeleton_data, union_predictors)  # one row per PREDICTOR
+    if (any(builders != "coef"))  skeleton <- reg_skeleton(skeleton_data, union_predictors,
+                                                            crosses = crosses)
     else if (any(compound))       skeleton_deferred <- TRUE          # only here: reg_skeleton_from_fit()
-    else                          skeleton <- reg_skeleton(skeleton_data, union_predictors, shape_terms)
+    else                          skeleton <- reg_skeleton(skeleton_data, union_predictors,
+                                                            shape_terms, crosses)
   }
 
   prefix_dep    <- length(specs) > 1L
@@ -2937,7 +3027,7 @@ reg_crude_block <- function(sp, sp_fam, inv_sp, key, mdata, pos, y_ref, var_y, c
   # under an ordinal outcome (proportional odds is a constraint, so a univariable fit is not
   # saturated).
   fit_preds_e <- c(
-    num_preds_e,
+    num_preds_e, reg_cross_nested_vars(crosses),
     if (!reg_crude_saturated(key, TRUE)) fac_preds_e else character(0))
   # The crude fits take the FULL `data` + `drop_extra`, never the pre-filtered frame: a prebuilt
   # design's keep mask is computed from `data` itself. `marginal` swaps the crude shape for a
@@ -2946,9 +3036,10 @@ reg_crude_block <- function(sp, sp_fam, inv_sp, key, mdata, pos, y_ref, var_y, c
     data, fit_preds_e, sp$outcome, sp_fam, design_spec,
     outcome_level = inv_sp,
     conf_level = conf_level, method = method, skeleton = skeleton, multiplier = multiplier,
-    other_preds = union_predictors, est = sp$est, wt = design_spec$wt,
+    other_preds = c(union_predictors, reg_cross_parents(crosses)), est = sp$est,
+    wt = design_spec$wt,
     want_fit = TRUE, trials = sp$trials,
-    shape_terms = shape_terms,
+    shape_terms = shape_terms, crosses = crosses,
     marginal = !identical(sp$est$effect, "coefficient") &&
       (reg_fam_binary(sp_fam) || reg_fam_prob(sp_fam)))
   out <- reg_empirical_columns(skeleton, emp, fac_preds_e, key, sp_fam, sp$est, var_y,
@@ -2999,12 +3090,12 @@ reg_cols_ame <- function(f, sp, ctx) {
   ratio_ame    <- !is.na(sp_est$comparison) && identical(sp_est$comparison, "lnratioavg")
   shape        <- if (!prob_scale) (if (ratio_ame) "raw_ratio" else "raw")
                   else if (ratio_ame) "prob_ratio" else "prob"
-  marg  <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, design_spec$wt,
+  marg  <- reg_marginal(f$fit, f$data, sp$row_vars, conf_level, design_spec$wt,
                         at = if (identical(sp_est$effect, "at_reference")) "reference" else "average",
                         want_pred = TRUE,
                         comparison = if (ratio_ame) "lnratioavg" else NULL,
                         multiplier = multiplier, engine = reg_marginal_engine(sp_est),
-                        anchors = anchors)
+                        anchors = anchors, crosses = crosses)
   marg     <- reg_scale_pred(marg, sp$trials)
   # the Constant row: this contrast has no intercept in its tidy, so the baseline is the model's own
   # predicted outcome, at the very profile the column's effects are read at.
@@ -3015,15 +3106,15 @@ reg_cols_ame <- function(f, sp, ctx) {
     scale_key = reg_scale_of(sp_est, sp$trials), anchors = anchors)
   marg_add <- if (!ratio_ame) marg
     else if (is.null(f$fit)) NULL
-    else reg_scale_pred(reg_fill_sweep(f$fit, f$data, sp$predictors, conf_level,
-                                       design_spec$wt, multiplier), sp$trials)
+    else reg_scale_pred(reg_fill_sweep(f$fit, f$data, sp$row_vars, conf_level,
+                                       design_spec$wt, multiplier, crosses = crosses), sp$trials)
   disp  <- reg_display_of(display, empirical)
   # ⚠ the LEVELS come from this column's own sweep (`marg`, at its own profile); `marg_add` only
   # supplies the additive fallback where the column reports a ratio and a numeric predictor has no
   # level pair. Reading the levels off `marg_add` would put the sample-averaged prediction beside an
   # at-reference estimate.
   dress <- function(col, group = NULL)
-    reg_apply_display(reg_fill_base(col, marg, skeleton, sp$predictors, group = group,
+    reg_apply_display(reg_fill_base(col, marg, skeleton, sp$row_vars, group = group,
                                     add = marg_add), disp)
   # a summed score is prob-scale by family, but its additive effect is a difference of mean SCORES.
   var_y <- if (!prob_scale || !is.na(sp$trials %||% NA))
@@ -3035,7 +3126,7 @@ reg_cols_ame <- function(f, sp, ctx) {
       jc  <- reg_cleanup(g, cleannames)
       lab <- paste0(if (prefix_dep) paste0(sp$outcome, " - ") else "", jc)
       list(label = lab, emp_key = g,   # emp_key: raw category, for the empirical tooltip
-           col   = dress(reg_marginal_column(skeleton, marg, sp$predictors, shape,
+           col   = dress(reg_marginal_column(skeleton, marg, sp$row_vars, shape,
                                              var_y, g, sp_col, color_signif, cv_cat,
                                              model_family = sp_fam,
                                              scale = reg_scale_of(sp_est, sp$trials),
@@ -3050,7 +3141,7 @@ reg_cols_ame <- function(f, sp, ctx) {
           else reg_shared_col_var(sp_fam, sp$outcome, f$positive_level, cleannames, sp$trials)
     list(list(
       label = reg_model_col_name(sp_eff, sp$outcome, is_comparison, sp$label, n_outcomes),
-      col   = dress(reg_marginal_column(skeleton, marg, sp$predictors, shape,
+      col   = dress(reg_marginal_column(skeleton, marg, sp$row_vars, shape,
                                         var_y, NA_character_, sp_col, color_signif,
                                         cv, or_tip = or_tip, model_family = sp_fam,
                                         scale = reg_scale_of(sp_est, sp$trials),
@@ -3065,12 +3156,13 @@ reg_cols_vsrest <- function(f, sp, ctx) {
   list2env(reg_ctx_locals(ctx), environment())
   sp_fam <- sp$fit_family
   sp_col <- sp$color
-  marg   <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, design_spec$wt,
+  marg   <- reg_marginal(f$fit, f$data, sp$row_vars, conf_level, design_spec$wt,
                          at = "reference", comparison = "lnor", want_pred = FALSE,
-                         engine = reg_marginal_engine(sp$est), anchors = anchors)
+                         engine = reg_marginal_engine(sp$est), anchors = anchors,
+                         crosses = crosses)
   marg_add <- if (is.null(f$fit)) NULL else
-    reg_scale_pred(reg_fill_sweep(f$fit, f$data, sp$predictors, conf_level, design_spec$wt),
-                   sp$trials)
+    reg_scale_pred(reg_fill_sweep(f$fit, f$data, sp$row_vars, conf_level, design_spec$wt,
+                                  crosses = crosses), sp$trials)
   const  <- reg_constant_baseline(f$fit, f$data, sp$predictors, at = "reference",
                                   wt = design_spec$wt, conf_level = conf_level,
                                   scale_key = "odds_ratio", anchors = anchors)
@@ -3079,10 +3171,10 @@ reg_cols_vsrest <- function(f, sp, ctx) {
   purrr::map(groups, function(g) {
     jc  <- reg_cleanup(g, cleannames)
     lab <- paste0(if (prefix_dep) paste0(sp$outcome, " - ") else "", jc, " vs rest")
-    col <- reg_marginal_column(skeleton, marg, sp$predictors, "or",
+    col <- reg_marginal_column(skeleton, marg, sp$row_vars, "or",
                                NA_real_, g, sp_col, color_signif, cv_cat,
                                model_family = sp_fam, const = const)
-    col <- reg_fill_base(col, marg_add, skeleton, sp$predictors, group = g)
+    col <- reg_fill_base(col, marg_add, skeleton, sp$row_vars, group = g)
     list(label = lab, col = reg_apply_display(col, reg_display_of(display, empirical)))
   })
 }
@@ -3097,10 +3189,12 @@ reg_cols_coef <- function(f, sp, ctx) {
   sp_col   <- sp$color
   # the coefficient path runs no marginal sweep of its own, so it runs the one reg_fill_base() needs.
   # WARNING: a cached fit may have been DROPPED (`want_fit = FALSE`, the jamovi repaint path).
-  model_predictors <- if (isTRUE(sp$compound)) unique(skeleton$var) else sp$predictors
+  model_predictors <- if (isTRUE(sp$compound)) unique(skeleton$var)
+                     else unique(c(sp$predictors, sp$row_vars))
   marg <- if (!is.null(f$marg)) f$marg               # the digest path already ran the sweep
           else if (is.null(f$fit)) NULL
-          else reg_fill_sweep(f$fit, f$data, sp$predictors, conf_level, design_spec$wt, multiplier)
+          else reg_fill_sweep(f$fit, f$data, sp$row_vars, conf_level, design_spec$wt, multiplier,
+                              crosses = crosses)
   marg <- reg_scale_pred(marg, sp$trials)
   disp  <- reg_display_of(display, empirical)
   dress <- function(col, group = NULL)
@@ -3212,9 +3306,11 @@ reg_stage_footer <- function(ctx) {
 
   reg_gof <- rekey("gof_rows") %||% new_test_tibble()
   reg_gof <- reg_compare_rows(reg_gof, purrr::map(products, "fit"), specs, family, weighted = weighted,
-                              fit_first_col = fit_first_col, compare = compare, baseline = baseline)
+                              fit_first_col = fit_first_col, compare = compare, baseline = baseline,
+                              crosses = crosses)
   gl <- rekey("global_rows"); if (!is.null(gl)) reg_gof <- dplyr::bind_rows(reg_gof, gl)
   ck <- rekey("check_rows");  if (!is.null(ck)) reg_gof <- dplyr::bind_rows(reg_gof, ck)
+  cx <- rekey("cross_rows");  if (!is.null(cx)) reg_gof <- dplyr::bind_rows(reg_gof, cx)
 
   ctx_update(ctx, list(test = reg_gof))
 }
@@ -3254,6 +3350,14 @@ reg_stage_rows <- function(ctx) {
       if (is.na(lab)) next
       hit <- num_rows & skeleton$var == v
       if (any(hit)) disp_levels[hit] <- gettextf("per %s", lab)
+    }
+    # a CROSSED slope's rows are the moderator's levels, so the unit goes in front of each: the
+    # block says which variable, the row says per what and within which group.
+    for (rec in crosses) {
+      lab <- if (identical(rec$arm, "nested")) multiplier_label[[rec$modified]] else NULL
+      hit <- skeleton$var == rec$var
+      if (is.null(lab) || is.na(lab) || !any(hit)) next
+      disp_levels[hit] <- paste0(gettextf("per %s", lab), reg_cross_sep(), disp_levels[hit])
     }
   }
   # ...and WHERE it is read from: "per SD/2.07 (at mean/2.98)". A continuous predictor's row states
@@ -3341,7 +3445,7 @@ reg_set_obs <- function(bi, e, f, sp, ctx) {
   g <- reg_gap_se_columns(f, sp, col, skeleton, e$shape, e$frame,
                           e$fac_preds, sp$est, design_spec$wt,
                           fits_crude = e$fits, fit_preds = e$fit_preds, multiplier = multiplier,
-                          category = key)
+                          category = key, crosses = crosses)
   if (is.null(g)) col else set_gap_se(col, g)
 }
 
@@ -3489,6 +3593,30 @@ reg_stage_finalize <- function(ctx) {
 #'
 #'   A bare name is a **column of `data`** first; a name that is no column is looked up as an object,
 #'   so a variable holding names (`preds <- c("race", "age")`) works without `all_of()`.
+#'
+#'   **`a*b` is an interaction**, R's own spelling, written bare or quoted ---
+#'   `c(race, relig, race*age4)` or `c("race", "relig", "race*age4")`. It reads *"a's effect,
+#'   allowed to vary with b"*, and gives one row block named `a × b`. Two shapes, chosen from what
+#'   `a` is:
+#'   \itemize{
+#'     \item **two categorical variables** give one row per **cell** --- `Black · 34-46` --- each
+#'     compared to a single common reference cell, with its own count, its observed rate and its
+#'     adjusted one. This is the readable form, and the one every `effect` supports.
+#'     \item a **continuous** `a` gives one row per level of `b`, holding `a`'s **slope within that
+#'     group** (`per SD/13.5 · Black`). To get the cell table instead, cut it:
+#'     `shape = c(age = "quartiles")`. `b` must be categorical either way --- a **continuous by
+#'     continuous** interaction has no groups to make rows from, so cut one of the two, or write the
+#'     model as a formula (`outcome = y ~ a * b`) if you want the bare coefficient.
+#'   }
+#'   An interaction **supplies both its variables** --- `a*b` *is* `a + b + a:b` --- so do not list
+#'   them beside it. That is what makes "with and without" an ordinary model comparison:
+#'   `list(additive = c(race, age4), crossed = c(race*age4))`. The footer then reports whether the
+#'   interaction is real (see `stats`).
+#'
+#'   The **order** picks the presentation, never the model: `a*b` and `b*a` are the same fit, and the
+#'   rows are about whichever you put first. R's `a:b` --- the interaction term *without* its main
+#'   effects --- is a different model, and one whose fit depends on where each variable's zero
+#'   happens to be, so it is refused by name rather than treated as a synonym.
 #' @param family The model family, **resolved per outcome** so several outcomes with different
 #'   families can share one table. `"auto"` (default) detects each one and says so: a binary outcome
 #'   gives `"binomial"`, an ordered 3+ level `"ordinal"`, a nominal 3+ level `"multinomial"`, any
@@ -3633,7 +3761,8 @@ reg_stage_finalize <- function(ctx) {
 #'   [tab_spread()] yourself for full control there. A level absent from a group shows empty cells.
 #'   Two readings of "does this effect hold in every subgroup?" come with it:
 #'   `color = "between_groups"` colours and tests each effect against the first group's, row by row,
-#'   and `stats = c(..., "interaction")` adds the aggregated test, once per predictor.
+#'   and `stats = c(..., "group_interaction")` adds the aggregated test, once per predictor. For an
+#'   interaction between two PREDICTORS of one model, write it in `predictors` as `a:b` instead.
 #' @param multiplier How a **continuous** predictor's effect is scaled --- the unit its row reports.
 #'   One unit of a continuous variable is rarely a readable amount (a one-year change in `age` barely
 #'   moves the odds, so its odds ratio sits inside the first colour break and the row reads as "no
@@ -3721,7 +3850,8 @@ reg_stage_finalize <- function(ctx) {
 #'   the Pearson dispersion, `"phi"`). Every default set also carries the overall-association test
 #'   `"global"` and the **model checks that cost nothing** (see below). Pass a character vector to
 #'   pick the statistics (`"n"`, `"lr_null"`, `"mcfadden_r2"`, `"aic"`, `"bic"`, `"phi"`, `"r2"`,
-#'   `"r2_adj"`, `"f_model"`, `"sigma"`, `"global"`, `"interaction"`, `"linearity"`,
+#'   `"r2_adj"`, `"f_model"`, `"sigma"`, `"global"`, `"interaction"`, `"group_interaction"`,
+#'   `"linearity"`,
 #'   `"proportionality"`, `"dispersion"`, `"influence"`, `"collinearity"`), `"all"` for everything
 #'   this model can report, or `FALSE` / `"none"` to hide the footer. Weighted models show a reduced,
 #'   survey-appropriate set (design-based Wald test, Nagelkerke pseudo-R square, AIC).
@@ -3737,10 +3867,16 @@ reg_stage_finalize <- function(ctx) {
 #'   `"global"` adds one **overall test per predictor** --- "is this variable associated with the
 #'   outcome at all?", the question a block of stars against a reference category cannot answer. It
 #'   costs no extra fit and is shown for predictors carrying two or more coefficients.
-#'   `"interaction"` needs `tab_vars` and adds one **aggregated effect-modification test per
-#'   predictor**, asked once for all its levels together, so it carries none of the multiplicity of
-#'   the per-cell `color = "between_groups"` colours --- which turns it on for you. It costs one
-#'   extra fit. Neither test is available for multinomial or ordinal outcomes.
+#'   `"interaction"` tests each **crossed pair** written in `predictors` (`race:age4`): is the
+#'   interaction real, or is the additive model enough? It compares the two models directly, so it
+#'   costs one extra fit --- about 20 ms on a linear or logistic model, which is why it is already in
+#'   the default set there, and roughly a doubling of the fitting time on a multinomial or ordinal
+#'   outcome, where you ask for it by name. It produces nothing unless `predictors` declares a pair.
+#'   `"group_interaction"` is the other question: it needs `tab_vars` and adds one **aggregated
+#'   effect-modification test per predictor**, asked once for all its levels together, so it carries
+#'   none of the multiplicity of the per-cell `color = "between_groups"` colours --- which turns it
+#'   on for you. It also costs one extra fit, and is not available for multinomial or ordinal
+#'   outcomes (nor is `"global"`).
 #'
 #' @section Model checks:
 #'
@@ -4102,6 +4238,7 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
     fit_spec = list(specs = a$specs, method = method, conf_level = a$shared$conf_level,
                     outcome_level = outcome_level,
                     na_shared_vars = a$na_shared_vars, shape_terms = a$shape_terms,
+                    crosses = a$crosses,
                     # THE preparation recipe (the column recodes + the anchors), so a refit from the
                     # user's raw data reproduces the very model the table shows.
                     prep = a$prep,

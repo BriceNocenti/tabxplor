@@ -811,7 +811,88 @@ Le bas de tableau a gagné une ligne au passage : **un test par prédicteur**, q
 prédicteur agit-il différemment selon les groupes ? » pour toutes ses modalités à la fois. C'est la
 version agrégée de la même question, et c'est celle qu'il faut citer — parce qu'elle est posée une
 fois, et non une fois par case. Elle s'obtient aussi seule, sans les couleurs, avec
-`stats = c("n", "interaction")`.
+`stats = c("n", "group_interaction")`.
+
+## Interactions : l'effet d'un prédicteur qui dépend d'un autre
+
+La section précédente compare des **sous-populations** — un modèle par groupe. Une interaction pose la
+même question **à l'intérieur d'un seul modèle**, où une troisième variable peut être contrôlée sur
+tout l'échantillon. Elle s'écrit dans `predictors` avec le `*` de R, nu ou entre guillemets :
+
+```{r}
+tab_reg(gss_simple, "married", c(race*party3, relig), empirical = TRUE)
+```
+
+`race*party3` se lit « l'effet de la race, autorisé à varier avec le parti », et c'est un
+**prédicteur comme un autre** : une ligne par case du croisement, chacune comparée à une seule case de
+référence commune, avec son effectif, le taux observé et le taux ajusté à côté. Rien d'autre ne
+change — les couleurs, les étoiles, la colonne observée et le pied de tableau fonctionnent comme sur
+n'importe quelle variable, parce que le couple *est* devenu une variable.
+
+Lisez une ligne à la fois : « les Noirs républicains ont <tant> de fois les chances d'être mariés de
+la case de référence, et <x> % contre <y> % prédits ». C'est la présentation que les épidémiologistes
+recommandent pour une interaction (Knol & VanderWeele 2012) : un effet par strate contre une référence
+commune unique, avec les taux réels affichés.
+
+`a*b` est l'écriture de R et signifie ici exactement ce qu'elle signifie dans `glm()` : `a + b + a:b`.
+L'ordre choisit la présentation, jamais le modèle — `a*b` et `b*a` sont le même ajustement, et les
+lignes portent sur celle que vous mettez en premier. (Le `a:b` de R, c'est-à-dire le terme
+d'interaction *sans* ses effets principaux, est un autre modèle, dont l'ajustement dépend de l'endroit
+où se trouve le zéro de chaque variable : `tab_reg()` le refuse en le nommant plutôt que d'en faire un
+synonyme.)
+
+Les deux variables d'un couple sont **fournies par l'interaction** : ne les listez pas à côté d'elle.
+Écrire `c(race, party3, race*party3)` est une erreur, pas un modèle plus riche. Ce que cela permet,
+c'est de demander naturellement si l'interaction vaut la peine :
+
+```{r}
+tab_reg(gss_simple, "married",
+        list(additive = c(race, party3), crossed = c(race*party3)),
+        stats = "compare_sequential")
+```
+
+Le pied de tableau y répond deux fois, avec le même nombre : la comparaison de modèles, et la ligne
+**`Interaction (LR)`**, présente par défaut sur un modèle linéaire ou logistique. C'est cette ligne
+qu'il faut citer : les étoiles d'une case disent qu'elle diffère de la case de référence, ce qui est
+surtout l'effet des deux variables prises séparément ; la ligne du pied dit si la *configuration*
+s'écarte de ce que ces effets séparés prédisent à eux seuls.
+
+### Un prédicteur continu : des pentes par groupe
+
+Une variable continue n'a pas de cases à croiser : `age*race` donne alors l'autre lecture honnête —
+la **pente de `age` à l'intérieur de chaque modalité de `race`**, directement issue du modèle, dans
+l'unité que la ligne nomme :
+
+```{r}
+tab_reg(gss_simple, "married", c(age*race, relig), empirical = TRUE)
+```
+
+Le modérateur garde son propre bloc (le modèle le contient), et tous les `effect` fonctionnent ici
+aussi : `effect = "marginal"` donne l'effet marginal moyen de chaque groupe. Pour obtenir plutôt le
+tableau de cases, découpez la variable continue en groupes — c'est en général la réponse la plus
+lisible :
+
+```{r, eval = FALSE}
+tab_reg(gss_simple, "married", c(age*race, relig), shape = c(age = "quartiles"))
+```
+
+### L'échelle porte l'interaction
+
+Une réserve à énoncer clairement, car ce n'est le défaut d'aucune méthode : **une interaction dépend
+de l'échelle sur laquelle on la mesure**. Un modèle sans interaction sur l'échelle des rapports de
+cotes en a généralement une sur l'échelle des probabilités, et réciproquement — c'est ce que font une
+fonction de lien et la non-collapsibilité (Ai & Norton 2003). La réponse de tabxplor est de rendre
+l'échelle visible plutôt que d'en choisir une : imprimez le même tableau des deux façons,
+`measure = "odds_ratio"` puis `effect = "marginal", measure = "difference"`, et dites laquelle vous
+lisez.
+
+Pour une spécification que la surface d'arguments ne sait pas exprimer — contrastes personnalisés,
+offset écrit à la main, terme à trois facteurs — une **formule de modèle** dans `outcome` reste la
+porte de sortie des expert·es (`tab_reg(d, married ~ race * age * relig)`). Elle ajuste exactement ce
+que vous écrivez, mais elle sort du cadre : ses lignes portent des noms bruts de coefficients, sans
+effectifs, sans contrepartie observée et sans unité.
+
+
 
 ### Trois façons de se tromper
 

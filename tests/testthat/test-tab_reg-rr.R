@@ -151,8 +151,10 @@ test_that("the footer reports n + Wald-vs-null only (no AIC/BIC/McFadden/dispers
   expect_false(any(c("aic", "bic", "mcfadden_r2", "lr_null", "phi") %in% tt$test))
   # z13's "global" and the FREE checks join every default set (20f: the ones that refit are opt-in);
   # neither brings a quasi-likelihood statistic with it.
+  # 22b-ix: the crossed-pair interaction test joins every glm default set (it produces no row
+  # unless `predictors` actually declares an `a:b` pair).
   expect_equal(reg_footer_stats("rr", weighted = FALSE, grouped = FALSE, stats = NULL),
-               c("n", "wald_null", "global",
+               c("n", "wald_null", "global", "interaction",
                  tabxplor:::reg_check_expand(tabxplor:::reg_checks_default("rr"))))
   # and `stats = "all"` adds exactly the costly ones on top -- nothing else
   expect_setequal(setdiff(reg_footer_stats("rr", FALSE, FALSE, "all"),

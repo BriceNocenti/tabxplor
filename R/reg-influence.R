@@ -28,6 +28,9 @@
 #     reg_coef_if_maker() over the univariable fit R/reg-empirical.R built. Both legs are then the
 #     same machinery over two fits solved on the same rows -- which is why the counterfactual takes
 #     SHIFTS rather than levels for a numeric column.
+#   - EVERY quantity the g-computation sweep produces is a WEIGHTED MEAN, which is why a subgroup
+#     effect -- a crossed slope read within one level of its moderator -- is the same sweep under a
+#     restricted weight vector (`mask`), and its influence function follows with no second engine.
 #   - Design-based variance goes through svy_var_recvar() (R/survey-variance.R), the package's one
 #     wrapper over survey::svyrecvar(); this file is its only regression-side caller.
 #
@@ -208,9 +211,8 @@ reg_gcomp_maker <- function(fit, data, wt, ratio) {
   b    <- stats::coef(fit)
   keep <- !is.na(b)
   bk   <- b[keep]
-  w    <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
-  if (length(w) != nrow(data) || !all(is.finite(w))) return(NULL)
-  sw <- sum(w)
+  w0   <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
+  if (length(w0) != nrow(data) || !all(is.finite(w0))) return(NULL)
   cf <- function(lv, var) {                       # the counterfactual model matrix at one level/shift
     d <- reg_counterfactual(data, var, lv)
     if (is.null(d)) return(NULL)
@@ -218,7 +220,13 @@ reg_gcomp_maker <- function(fit, data, wt, ratio) {
     if (is.null(X) || ncol(X) != length(b)) return(NULL)
     X[, keep, drop = FALSE]
   }
-  function(var, level, ref) {
+  # `mask` restricts the AVERAGING to a subgroup -- a crossed slope's effect within one level of its
+  # moderator. Every quantity below is a weighted mean, so a subgroup is the same sweep under a
+  # restricted weight vector: no second engine, and the influence function follows for free.
+  function(var, level, ref, mask = NULL) {
+    w  <- if (is.null(mask)) w0 else w0 * as.numeric(mask)
+    sw <- sum(w)
+    if (!isTRUE(sw > 0)) return(NULL)
     X1 <- cf(level, var); X0 <- cf(ref, var)
     if (is.null(X1) || is.null(X0)) return(NULL)
     e1 <- as.vector(X1 %*% bk);  e0 <- as.vector(X0 %*% bk)
@@ -246,8 +254,8 @@ reg_ame_if_maker <- function(fit, data, wt, ratio, coef_if) {
   if (is.null(coef_if)) return(NULL)
   g <- reg_gcomp_maker(fit, data, wt, ratio)
   if (is.null(g)) return(NULL)
-  function(var, level, ref) {
-    p <- g(var, level, ref)
+  function(var, level, ref, mask = NULL) {
+    p <- g(var, level, ref, mask)
     if (is.null(p)) return(NULL)
     delta <- coef_if(unname(p$G))
     if (is.null(delta)) return(NULL)
@@ -475,15 +483,17 @@ reg_gcomp_baseline <- function(fit, data, wt = NULL, newdata = NULL) {
 reg_gcomp_cat_maker <- function(fit, data, wt, ratio) {
   eng <- reg_prob_engine(fit)
   if (is.null(eng)) return(NULL)
-  w <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
-  if (length(w) != nrow(data) || !all(is.finite(w))) return(NULL)
-  sw <- sum(w)
+  w0 <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
+  if (length(w0) != nrow(data) || !all(is.finite(w0))) return(NULL)
   cf <- function(lv, var) {
     d <- reg_counterfactual(data, var, lv)
     if (is.null(d)) return(NULL)
     eng$mm(d)
   }
-  function(var, level, ref) {
+  function(var, level, ref, mask = NULL) {
+    w  <- if (is.null(mask)) w0 else w0 * as.numeric(mask)
+    sw <- sum(w)
+    if (!isTRUE(sw > 0)) return(NULL)
     X1 <- cf(level, var); X0 <- cf(ref, var)
     if (is.null(X1) || is.null(X0)) return(NULL)
     P1 <- tryCatch(eng$probs(eng$theta, X1), error = function(e) NULL)
@@ -526,8 +536,8 @@ reg_ame_if_cat_maker <- function(fit, data, wt, ratio, category) {
   if (is.na(j)) return(NULL)
   g <- reg_gcomp_cat_maker(fit, data, wt, ratio)
   if (is.null(g)) return(NULL)
-  function(var, level, ref) {
-    p <- g(var, level, ref)
+  function(var, level, ref, mask = NULL) {
+    p <- g(var, level, ref, mask)
     if (is.null(p)) return(NULL)
     delta <- cif(p$G[[j]])
     if (is.null(delta)) return(NULL)

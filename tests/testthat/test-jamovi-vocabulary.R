@@ -174,6 +174,7 @@ JMV_UI_ONLY_EXTRA <- list(
   ),
   jmvtabreg = c(
     models      = "the model-comparison builder; folded into `predictors` by jmvtab_reg_models()",
+    crosses     = "the interaction picker; folded into `predictors` as `a:b` keys (22b-ix)",
     run_compare = "an Action button: the staged-comparison trigger"
   )
 )

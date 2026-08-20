@@ -781,7 +781,82 @@ the other group's effect, the size of the gap, its confidence interval and its p
 The footer gained a line at the same time: **one test per predictor**, asking "does this predictor act
 differently between the groups?" for all its levels at once. That is the aggregated version of the same
 question, and it is the one to quote — because it is asked once, not once per cell. You can ask for it
-alone, without the colours, with `stats = c("n", "interaction")`.
+alone, without the colours, with `stats = c("n", "group_interaction")`.
+
+## Interactions: one predictor's effect depending on another
+
+The section above compares **sub-populations** — one model per group. An interaction asks the same
+question **inside one model**, where a third variable can be adjusted for across the whole sample.
+Write it in `predictors` with R's own `*`, bare or quoted:
+
+```{r}
+tab_reg(gss_simple, "married", c(race*party3, relig), empirical = TRUE)
+```
+
+`race*party3` reads *"race's effect, allowed to vary with party"*, and it is a **predictor like any
+other**: one row per cell of the pair, each compared to one common reference cell, with its own
+count, the observed rate and the adjusted one beside it. Nothing else changes — the colours, the
+stars, the crude companion and the footer all work as they do on an ordinary variable, because the
+pair really is one variable now.
+
+Read one row at a time: *"Black Republicans have <that> the odds of being married of the reference
+cell, and <x> % against <y> % predicted"*. That is the presentation epidemiologists
+recommend for an interaction (Knol & VanderWeele 2012): one effect per stratum against a single
+common reference, with the actual rates shown.
+
+`a*b` is R's own spelling and means here exactly what it means in `glm()`: `a + b + a:b`. The order
+picks the presentation, never the model — `a*b` and `b*a` are the same fit, and the rows are about
+whichever you put first. (R's `a:b`, the interaction term *without* its main effects, is a different
+model whose fit depends on where each variable's zero happens to be, so `tab_reg()` refuses it by
+name rather than treat it as a synonym.)
+
+The parts of a pair are **supplied by the interaction**, so do not list them beside it: writing
+`c(race, party3, race*party3)` is an error, not a richer model. What that buys is the natural way to ask
+whether the interaction is worth it at all:
+
+```{r}
+tab_reg(gss_simple, "married",
+        list(additive = c(race, party3), crossed = c(race*party3)),
+        stats = "compare_sequential")
+```
+
+The footer answers it twice, with the same number: the model comparison, and the
+**`Interaction (LR)`** row, which is in the default footer of a linear or logistic model. That row is
+the one to quote — a cell's own stars say it differs from the reference cell, which is mostly the two
+main effects talking; the footer row says whether the *pattern* departs from what those main effects
+alone predict.
+
+### A continuous predictor: slopes within groups
+
+A continuous variable has no cells to cross, so `age*race` gives the other honest reading — `age`'s
+**slope within each level of `race`**, straight out of the fit, in the unit the row names:
+
+```{r}
+tab_reg(gss_simple, "married", c(age*race, relig), empirical = TRUE)
+```
+
+The moderator keeps its own block (the model contains it), and every `effect` works here too:
+`effect = "marginal"` gives each group's average marginal effect. To get the cell table instead, cut
+the continuous variable into groups — which is usually the more readable answer:
+
+```{r, eval = FALSE}
+tab_reg(gss_simple, "married", c(age*race, relig), shape = c(age = "quartiles"))
+```
+
+### The scale carries the interaction
+
+One caveat worth stating plainly, because it is not a defect of any method: **an interaction depends
+on the scale it is measured on**. A model with no interaction on the odds-ratio scale generally has
+one on the probability scale, and the reverse — that is what a link function and non-collapsibility
+do (Ai & Norton 2003). tabxplor's answer is to make the scale visible rather than to pick one: print
+the same table both ways, `measure = "odds_ratio"` and `effect = "marginal", measure = "difference"`,
+and say which one you are reading.
+
+For a specification the argument surface cannot express — custom contrasts, a hand-written offset, a
+three-way term — a **model formula** in `outcome` is still the expert exit door
+(`tab_reg(d, married ~ race * age * relig)`). It fits exactly what you write, but it steps outside
+the framework: its rows are raw coefficient names, with no counts, no observed companion and no unit.
+
 
 ### Three ways to get this wrong
 

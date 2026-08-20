@@ -7,15 +7,17 @@
 #   OUTSIDE that call, S0, because tab_reg() itself needs its answer first.
 #
 #     S0 reg_select_*()           the tidy-select variable roles, run BY tab_reg() -- the
-#                                 multi-outcome recursion above the boundary reads values
+#                                 multi-outcome recursion above the boundary reads values. It also
+#                                 PEELS the `a:b` interactions, which tidyselect cannot see
 #     S1 reg_validate_args()      the checks that are PURE
-#     S2 reg_prepare_data()       design unwrap / formula / predictors dispatch / labelled / the
-#                                 level merge / shape / all_predictors / tab_vars -- every rewrite
-#                                 of `data`
+#     S2 reg_prepare_data()       design unwrap / formula / predictors dispatch / the interactions'
+#                                 parents / labelled / the level merge / shape / all_predictors /
+#                                 tab_vars -- every rewrite of `data`
 #     S3 reg_resolve_estimands()  the PER-OUTCOME TABLE (family / estimand / trials / outcome level
 #                                 / crude key)
 #     S4 reg_resolve_output()     display / colour / the empirical mode -- and the notes, LAST
-#     S5 reg_resolve_fit_plan()   na / reref / the reference relevel / multiplier / shape terms
+#     S5 reg_resolve_fit_plan()   na / reref / the reference relevel / multiplier / shape terms /
+#                                 the interactions MATERIALISED, last of all
 #     S6 reg_resolve_specs()      the labels, the positive levels, the one new_reg_spec() call site
 #
 # KEY CONSTRAINTS:
@@ -81,25 +83,40 @@ reg_select_outcome <- function(quo, data) {
 # A character vector -> one model per outcome; a LIST -> one model per element, its name labelling
 # the column. Each element is its own selection, so a comparison reads like the rest of the grammar:
 # `list(m1 = c(race, age), m2 = starts_with("inc"))`.
+#
+# ⚠ `a*b` is an INTERACTION here: it is peeled off before selection and re-appended verbatim
+# (R/reg-cross.R), so a model's crosses ride inside its own predictor vector and no parallel
+# structure is threaded through the boundary. `a:b` is peeled too, only to be REFUSED with the
+# message naming `*` -- it is a different model in R, and not one this package fits.
 #' @keywords internal
 #' @noRd
 reg_select_predictors <- function(quo, data) {
   expr <- rlang::quo_get_expr(quo)
+  one  <- function(q) {
+    sl <- reg_cross_slots_quo(q, data)
+    if (is.null(sl)) return(tidy_select_chr(q, data))
+    reg_cross_slots_select(sl, data)
+  }
   each <- function(l) {
     if (length(l) == 0L)
       cli::cli_abort(c("A {.arg predictors} list needs at least one model.",
                        "i" = "Name each one: {.code list(m1 = ..., m2 = ...)}."), call = NULL)
-    purrr::map(l, function(v) tidy_select_chr(rlang::quo(tidyselect::all_of(!!as.character(v))),
-                                              data))
+    purrr::map(l, function(v) {
+      v <- as.character(v)
+      if (!any(reg_cross_has_op(v)))
+        return(tidy_select_chr(rlang::quo(tidyselect::all_of(!!v)), data))
+      reg_cross_slots_select(reg_cross_slots_chr(v), data)
+    })
   }
   # an INLINE list(): the elements are expressions, so each is selected in the caller's environment
   if (rlang::is_call(expr, "list")) {
     els <- rlang::call_args(expr)
     if (length(els) == 0L) return(each(list()))
     env <- rlang::quo_get_env(quo)
-    return(purrr::map(els, function(e) tidy_select_chr(rlang::new_quosure(e, env), data)))
+    return(purrr::map(els, function(e) one(rlang::new_quosure(e, env))))
   }
   if (is.list(expr) && !rlang::is_call(expr) && !rlang::is_symbol(expr)) return(each(expr))
+  if (!is.null(reg_cross_slots_quo(quo, data))) return(one(quo))
   pk <- quo_peek_extern(quo, data)
   if (is.list(pk) && !rlang::is_formula(pk)) return(each(pk))
   r <- reg_select_else_value(quo, data, pk, function(v) is.list(v) && !rlang::is_formula(v))
@@ -307,11 +324,16 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                    call = NULL)
   }
 
+  # --- E2: the interactions ----------------------------------------------------------------------
+  # Validated here, and BOTH PARENTS named, so `shape`, `multiplier`, `ref` and the complete-case
+  # frame see them as ordinary variables. The arm is decided in S5, on the final columns.
+  cross <- reg_parse_crosses(predictors, data, outcome, tab_vars)
+
   # --- F: labelled interop -------------------------------------------------------------------
   # Capture variable labels (BEFORE conversion strips them), then convert labelled columns to
   # value-label factors. `var_labels` rides `shared` into meta$vars for the opt-in display-swap.
   reg_lbl_vars   <- intersect(unique(c(as.character(outcome),
-                                       unlist(predictors, use.names = FALSE),
+                                       unlist(predictors, use.names = FALSE), cross$parents,
                                        as.character(tab_vars))), names(data))
   var_labels <- capture_var_labels(data, reg_lbl_vars)
   data       <- tab_apply_val_labels(data, reg_lbl_vars)
@@ -328,7 +350,8 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   # --- G: `shape` ----------------------------------------------------------------------------
   # At the SAME boundary as G0: a shape either RECODES the column (log/sqrt/quantile groups) or
   # emits ONE extra model term (quadratic) -- a quantile-cut `age` is a factor from this line on.
-  reg_shapes   <- reg_resolve_shape(shape, data, unlist(predictors, use.names = FALSE))
+  reg_shapes   <- reg_resolve_shape(shape, data,
+                                    c(unlist(predictors, use.names = FALSE), cross$parents))
   shape_labels <- character(0)
   if (length(reg_shapes) > 0L) {
     sh   <- reg_shape_apply(data, reg_shapes, w = wt)
@@ -339,7 +362,10 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   }
 
   # --- R: the predictor union -------------------------------------------------------------------
+  # REAL columns only: an `a:b` key is a declaration, its PARENTS are the variables every later
+  # stage measures (the frozen frame, the multiplier's SD, the anchor, the complete cases).
   all_predictors <- if (is_comparison) unique(purrr::flatten_chr(predictors)) else predictors
+  all_predictors <- unique(c(setdiff(all_predictors, cross$keys), cross$parents))
 
   # --- W: tab_vars -----------------------------------------------------------------------------
   # One grouping column that a model is fitted within each level of; reg_build recurses and stacks.
@@ -348,7 +374,8 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   list(data = data, design_obj = design_obj, wt = wt, weighted = weighted,
        outcome = outcome, predictors = predictors, all_predictors = all_predictors,
        is_comparison = is_comparison, formula_mode = formula_mode, raw_formula = raw_formula,
-       reg_shapes = reg_shapes, shape_labels = shape_labels, var_labels = var_labels, degf = degf)
+       reg_shapes = reg_shapes, shape_labels = shape_labels, var_labels = var_labels, degf = degf,
+       cross_keys = cross$keys)
 }
 
 # === S3: the per-outcome TABLE =================================================================
@@ -557,6 +584,7 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
                                  .fit_cache = NULL, all_predictors = character(0),
                                  outcome = character(0), tab_vars = NULL, wt = NULL,
                                  multiplier = "sd", reg_shapes = list(), na = "drop_by_outcome",
+                                 cross_keys = character(0),
                                  formula_mode = FALSE, raw_formula = NULL,
                                  is_comparison = FALSE, compare = "none",
                                  method = "wald", display = NULL, color = NA_character_) {
@@ -590,7 +618,7 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
     all(reg_fam_glm(families)) &&
     !formula_mode && is.null(tab_vars) && all(is.na(deps$trials)) &&
     compare == "none" && !is_comparison && !("adjustment" %in% color) &&
-    length(reg_shapes) == 0L
+    length(reg_shapes) == 0L && length(cross_keys) == 0L
 
   # --- U0: `ref`, parsed ONCE for both kinds of variable: the LEVEL a factor is compared against,
   # and the raw anchor VALUE a continuous predictor is shifted to (turned into a number in block Y).
@@ -653,9 +681,20 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
     if (!is.null(design_obj)) design_obj$variables <- data
   }
 
+  # --- Z: THE INTERACTIONS, last of all (R/reg-cross.R). A crossed pair is combined from variables
+  # that are already final: cut by `shape`, shifted to their anchor, and releveled -- which is what
+  # makes the combined factor's FIRST level the pair of the parents' own references, with no
+  # cross-specific `ref` grammar.
+  crosses <- reg_cross_resolve(cross_keys, data, reg_shapes)
+  if (length(crosses) > 0L) {
+    data <- reg_cross_apply(data, crosses)
+    if (!is.null(design_obj)) design_obj$variables <- data
+  }
+
   list(data = data, design_obj = design_obj, na_shared_vars = na_shared_vars, reref = reref,
        ref_levels = refs$levels, anchors = anchors, anchor_keyword = anch$keyword,
-       multiplier = mult_res$k, multiplier_label = mult_res$label, shape_terms = shape_terms)
+       multiplier = mult_res$k, multiplier_label = mult_res$label, shape_terms = shape_terms,
+       crosses = crosses)
 }
 
 
@@ -750,7 +789,8 @@ reg_prepare_replay <- function(data, prep) {
                         quantiles = reg_cut_quantiles(x, sp$k, var = v, breaks = sp$breaks),
                         data[[v]])
   }
-  reg_anchor_apply(data, prep$anchors %||% stats::setNames(numeric(0), character(0)))
+  data <- reg_anchor_apply(data, prep$anchors %||% stats::setNames(numeric(0), character(0)))
+  reg_cross_apply(data, prep$crosses %||% list())
 }
 
 
@@ -763,7 +803,7 @@ reg_prepare_replay <- function(data, prep) {
 #' @noRd
 reg_resolve_specs <- function(data, deps, predictors, is_comparison = FALSE, formula_mode = FALSE,
                               raw_formula = NULL, color_arg = NA_character_, empirical = FALSE,
-                              cleannames = TRUE) {
+                              cleannames = TRUE, crosses = list()) {
   outcome <- deps$outcome
   # a summed-score / compound-formula binomial has no single "positive level" -> label by name
   positive_levels <- vapply(seq_len(nrow(deps)), function(i) {
@@ -782,7 +822,7 @@ reg_resolve_specs <- function(data, deps, predictors, is_comparison = FALSE, for
     rows       <- rep(1L, length(models))
     preds      <- models
     spec_names <- names(models)                          # map2() over a named list carried these
-    union_predictors <- reg_order_union(models)          # complete-model order if any
+    union_predictors <- reg_order_union(purrr::map(models, reg_cross_row_vars, crosses))
   } else {
     labels <- make.unique(vapply(seq_len(nrow(deps)), function(i)
       paste0(if (is.na(positive_levels[[i]])) outcome[[i]] else positive_levels[[i]], ": ",
@@ -790,11 +830,12 @@ reg_resolve_specs <- function(data, deps, predictors, is_comparison = FALSE, for
     rows       <- seq_len(nrow(deps))
     preds      <- rep(list(predictors), nrow(deps))
     spec_names <- NULL                                   # map2() over a bare vector carried none
-    union_predictors <- predictors
+    union_predictors <- reg_cross_row_vars(predictors, crosses)
   }
   # each spec carries its OWN resolved family shape and ESTIMAND row (`est`).
   specs <- purrr::pmap(list(rows, preds, labels), function(r, p, l)
-    new_reg_spec(outcome = outcome[[r]], predictors = p, label = l,
+    new_reg_spec(outcome = outcome[[r]], predictors = reg_cross_predictors(p, crosses), label = l,
+                 cross = reg_cross_keys(p, crosses), row_vars = reg_cross_row_vars(p, crosses),
                  fit_family = deps$fit_family[[r]],
                  # NA in the table means "not a grouped binomial"; the spec field is NULL instead.
                  trials = if (is.na(deps$trials[[r]])) NULL else deps$trials[[r]],
@@ -817,7 +858,7 @@ new_reg_args <- function(data = NULL, specs = list(), shared = list(), reref = F
                          families = character(0), ests = list(), est = NULL, eff_word = "",
                          is_comparison = FALSE, formula_mode = FALSE, empirical = FALSE,
                          display = NULL, multiplier = NULL, shape_terms = NULL,
-                         ref_levels = NULL, anchors = NULL, prep = NULL,
+                         ref_levels = NULL, anchors = NULL, prep = NULL, crosses = list(),
                          na_shared_vars = character(0), design_spec = list(),
                          wt_disp = NA_character_) {
   as.list(environment())
@@ -891,6 +932,7 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                                all_predictors = prep$all_predictors, outcome = prep$outcome,
                                tab_vars = tab_vars, wt = prep$wt, multiplier = multiplier,
                                reg_shapes = prep$reg_shapes, na = na,
+                               cross_keys = prep$cross_keys,
                                formula_mode = prep$formula_mode, raw_formula = prep$raw_formula,
                                is_comparison = prep$is_comparison,
                                compare = compare, method = method, display = out$display,
@@ -900,7 +942,7 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   sp <- reg_resolve_specs(plan$data, deps, prep$predictors, is_comparison = prep$is_comparison,
                           formula_mode = prep$formula_mode, raw_formula = prep$raw_formula,
                           color_arg = out$color_arg, empirical = out$empirical,
-                          cleannames = cleannames)
+                          cleannames = cleannames, crosses = plan$crosses)
 
   # --- AA: what reg_build() is handed --------------------------------------------------------------
   # `degf` (#PSU - #strata) captured ONCE, so the model columns and the crude Obs_* columns refer to
@@ -920,6 +962,7 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
     stats = stats, compare = compare, baseline = baseline, multiplier = plan$multiplier,
     multiplier_label = plan$multiplier_label, anchors = plan$anchors,
     anchor_keyword = plan$anchor_keyword, shape_terms = plan$shape_terms,
+    crosses = plan$crosses,
     shape_labels = prep$shape_labels, empirical = out$empirical, display = out$display,
     var_labels = prep$var_labels, na_shared_vars = plan$na_shared_vars, base_n = base_n)
 
@@ -936,13 +979,13 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
     families = stats::setNames(deps$family, deps$outcome),
     # `est`/`eff_word` are the table's REPRESENTATIVE estimand (first outcome), feeding the
     # reg_call SUMMARY; the per-outcome facts live in `ests` and the specs.
-    prep = list(shapes = prep$reg_shapes, anchors = plan$anchors),
+    prep = list(shapes = prep$reg_shapes, anchors = plan$anchors, crosses = plan$crosses),
     ests = stats::setNames(deps$est, deps$outcome), est = deps$est[[1]],
     eff_word = reg_word(deps$est[[1]]),
     is_comparison = prep$is_comparison, formula_mode = prep$formula_mode,
     empirical = out$empirical, display = out$display, multiplier = plan$multiplier,
     shape_terms = plan$shape_terms, ref_levels = plan$ref_levels, anchors = plan$anchors,
-    na_shared_vars = plan$na_shared_vars,
+    crosses = plan$crosses, na_shared_vars = plan$na_shared_vars,
     design_spec = design_spec, wt_disp = wt_disp)
 }
 

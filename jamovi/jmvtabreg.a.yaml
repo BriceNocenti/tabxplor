@@ -270,6 +270,19 @@ options:
                 template:
                     type: String
 
+    - name: crosses
+      title: "interactions (predictors)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var1
+                type: Variable
+              - name: var2
+                type: Variable
+
     - name: ref_levels
       title: "ref (per predictor)"
       type: Array

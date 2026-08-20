@@ -339,7 +339,9 @@ reg_check_influence_pass <- function(fit, want = c("dispersion", "influence"), V
 #' @keywords internal
 reg_check_collinearity <- function(fit) {
   if (!requireNamespace("car", quietly = TRUE)) return(NA_real_)
-  v <- tryCatch(suppressWarnings(car::vif(fit)), error = function(e) NULL)
+  # ⚠ suppressMessages too: on an interacted fit car::vif() prints a note about higher-order terms,
+  # which describes a model the user deliberately asked for and says nothing they can act on.
+  v <- tryCatch(suppressMessages(suppressWarnings(car::vif(fit))), error = function(e) NULL)
   if (is.null(v) || !length(v)) return(NA_real_)
   val <- if (is.matrix(v)) {
     if (ncol(v) >= 3L) v[, 3]^2 else v[, 1]

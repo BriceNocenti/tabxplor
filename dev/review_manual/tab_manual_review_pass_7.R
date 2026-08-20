@@ -556,6 +556,63 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "tvho
 
 
 
+#### shapes
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+)
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
+        shape = c(age = 3), 
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+)
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
+        shape = c(age = "quadratic"), 
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+)
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
+        shape = c(age = "sqrt"),
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+)
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
+        shape = c(age = "log"), 
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+)
+# - shapes are written nowhere for some numeric predictors 
+#   - "quadratic" and quantiles are visible on the table (age^2 row added, perfect)
+#   - "sqrt" and "log" are invisible since we removed the duplicated variable name in "levels" column:
+#     add "√(x)" or "log(x)" at the start of the "levels". Or if you have a reliable idea for a more modern look (mathjax in html?), say it.
+#   - I also want to change a bit the normal display, with or without shape, to something like : 
+#      "√(x), per 1.04 (SD), at 6.43 (mean)", or "log(x), per 10, at 0 (min)", or "per 2.08 (2SD), at 0"
+# - Also, the sparkline seems to be the same for identity, quadratic, sqrt, log. How to handle this ? 
+#   Should the sparkline change with the shape so that the user can verify if the new shape is more linear with the outcome ? 
+#   What is the standard in regression models assumptions checks ?
+
+#### interactions
+# options(tabxplor.parallel = 8, tabxplor.cleannames = TRUE, tabxplor.print = "html") # options(tabxplor.print = "console")
+
+tab_reg(gss_simple, outcome = "married", predictors = c("rincome", "age*race"),
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+)
+# - in html, "age × race" is written vertically, and it’s long (wastes vertical space, but here there’s horizontal space remaining): 
+#   plase wrap it before the `×`, so it prints vertically in two columns ?
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "age*tvhours"),
+        shape = c(tvhours = "quartiles"),
+        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+)
+# - the rows are not very clear, because the user can’t be sure which variable is what. Ex: "per SD/13.4 · [0,1)"
+#   In interactions only, I would want: the main numeric variable, here "age", to be written at the start of "levels" ;
+#    the quantile variable to ; the separetor to be "–". Example: "age per 13.4 (SD) — [0,1)"
+# - in tooltips, the observed counterparts of "age × tvhours" have many `NA`s, tooltips are very long and unreadable ; 
+#    calculate the meaningful quantities to populate it, or when a field is really NA the rule should be "never shows it in the tooltips"
+# - "age × tvhours" displays an adjusted proportion here, is it right ? Is it meaningful ?
+
+
+#### stats footers
+# - Are there standards and good practices for the thresholds after which max VIF is too big, or max dfbetas is too big, 
+#   that we could reliably use to color the cell red like when a pvalue is >=5%, with statistically soundness ?
+
+
+
+
 #### miscellaneous
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", empirical=TRUE

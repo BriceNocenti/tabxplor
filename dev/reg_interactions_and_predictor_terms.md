@@ -1146,7 +1146,269 @@ spaced name, global rows:
 
 ---
 
-## 8. References
+## 8. The argument surface, re-examined — the two questions from the 22b-ix review
+
+Phase 22b-ix shipped two refusals. The maintainer asked whether either is really wanted. Everything
+below was measured on `gss_cat` (n = 11 299–21 407 complete cases) against the running package; the
+scripts are in the session scratchpad and every number is reproduced inline.
+
+### 8.1 What the two refusals actually refuse
+
+```r
+tab_reg(gss_simple, "married", c("race", "rincome", "age", "age:tvhours"), family = "binomial")
+#> Error: `predictors` lists "age" beside an interaction it is part of.
+tab_reg(gss_simple, "married", c("race", "rincome", "age:tvhours"), family = "binomial")
+#> Error: `predictors`: "age:tvhours" needs a categorical moderator.
+```
+
+The questions behind them are fair, and both point at the same place: R's formula language lets you
+write `a`, `b`, `a:b`, `a + a:b`, `a + b + a:b` and treat each as a model of its own, so why does
+`predictors` not? The answer turns out to be short, and it is not a matter of taste.
+
+### 8.2 The complete classification, measured
+
+Every spelling of a pair, by what kind of variables the pair holds. `origin-inv` = does the FIT change
+when a continuous parent is shifted by a constant (which is exactly what `ref` does, at the mean, by
+default since 22b-viii)?
+
+| parents             | RHS                           | logLik    | rank-deficient | origin-inv |
+|---------------------|-------------------------------|-----------|----------------|------------|
+| factor x factor     | `race:age4`                   | -7418.171 | **YES**        | yes        |
+|                     | `race + race:age4`            | -7418.171 | -              | yes        |
+|                     | `age4 + race:age4`            | -7418.171 | -              | yes        |
+|                     | `race + age4 + race:age4`     | -7418.171 | -              | yes        |
+| numeric x factor    | `age:race`                    | -7621.319 | -              | **NO**     |
+|                     | `age + age:race`              | -7621.319 | -              | **NO**     |
+|                     | `race + race:age`             | -7580.838 | -              | yes        |
+|                     | `age + race + age:race`       | -7580.838 | -              | yes        |
+| numeric x numeric   | `age:tvhours`                 | -7758.718 | -              | **NO**     |
+|                     | `age + age:tvhours`           | -7632.197 | -              | **NO**     |
+|                     | `tvhours + age:tvhours`       | -7678.267 | -              | **NO**     |
+|                     | `age + tvhours + age:tvhours` | -7630.699 | -              | yes        |
+
+Read down the `logLik` column and the whole design falls out:
+
+- **factor x factor: there is only ONE model.** All four spellings are the saturated cell model, to the
+  last printed digit. `race:age4` alone is merely a redundant parametrisation of it (13 columns,
+  rank 12), and so is the one the parent rule refuses — `race + interaction(race, age4)` has 14
+  columns and rank 12, i.e. it is **rank-deficient**, which is not a modelling choice but an error a
+  fitter has to paper over.
+- **numeric x factor: there are TWO models**, and the pair `{age:race, age + age:race}` is the one
+  without the moderator's main effect. It is not origin-invariant.
+- **numeric x numeric: there are FOUR models**, and exactly one is origin-invariant.
+
+### 8.3 Question 1 — "the terms plus the interaction" is a SPELLING, not a model
+
+The decisive measurement. On `married ~ age + race + age:race` (the classical "star" table) against
+`married ~ race + race:age` (what tabxplor fits):
+
+```text
+logLik star -7580.837869   nested -7580.837869   max |fitted difference| = 9.99e-16
+```
+
+They are the same fit. What differs is what a ROW says:
+
+```text
+star                                nested (tabxplor)
+(Intercept)   -1.22752              (Intercept)   -1.22752
+age            0.02737              raceOther:age  0.02737     <- the same number
+raceBlack     -0.56658              raceBlack     -0.56658
+raceWhite      0.87039              raceWhite      0.87039
+age:raceBlack -0.01059              raceBlack:age  0.01677     <- 0.02737 + (-0.01059)
+age:raceWhite -0.02050              raceWhite:age  0.00686     <- 0.02737 + (-0.02050)
+```
+
+The star prints one slope plus two *differences of slopes*; the nested prints the three slopes. Each is recoverable from the other by addition, so **nothing is lost** — but only one of them can be read without arithmetic, and **only one of them gives every row a level, a count, an observed counterpart and a reference row**. That is §4.8's argument, now with the numbers attached.
+
+So the first refusal does not forbid a model. For a categorical moderator it forbids a *redundant or
+rank-deficient re-spelling of the model tabxplor is already fitting*. The only spellings it refuses
+that really are different models are `age:race` / `age + age:race` — and those are the origin-dependent
+ones, which brings us to why that matters more here than in a bare `glm()`.
+
+### 8.4 Why marginality is load-bearing in THIS package
+
+Since Phase 22b-viii, tabxplor **shifts every continuous predictor to its anchor** (the weighted mean,
+unless `ref` says otherwise) before fitting. An estimate is invariant under that shift — that is the
+whole basis of Part B — **but only in a model that contains the other parent's main effect**. Measured,
+by re-fitting on `age - mean(age)`:
+
+```text
+married ~ age:tvhours              max |fitted difference| = 5.477e-01   <- CHANGES
+married ~ age + age:tvhours        max |fitted difference| = 4.548e-01   <- CHANGES
+married ~ tvhours + age:tvhours    max |fitted difference| = 4.996e-16   invariant
+married ~ age * tvhours            max |fitted difference| = 3.331e-16   invariant
+married ~ age:race                 max |fitted difference| = 4.557e-01   <- CHANGES
+married ~ race + race:age          max |fitted difference| = 4.441e-16   invariant
+```
+
+A fitted **probability** moving by up to **0.55** because of where the origin was put is not a subtlety.
+And the origin here is not the user's choice: it is a package default they never set. A factor has no
+origin, and re-levelling one changes nothing (2.1e-15) — which is why the factor x factor arm is free of
+the whole problem.
+
+The rule tabxplor enforces can therefore be stated without appealing to any authority:
+
+> **tabxplor fits only interaction models that are invariant to the anchoring of their continuous
+> parents — because it anchors them.**
+
+That set is exactly the one the marginality principle names, arrived at from the package's own
+mechanics rather than from convention.
+
+### 8.5 What the literature says, including where it pushes back
+
+The classical rule is Nelder's (1977) "neglect of marginality", restated in McCullagh & Nelder (1989)
+as *"interactions should not be included without their main effects"*, and defended at length by
+Venables (2000). The honest counterweight is **Morris et al. (2023)**, who argue the principle is
+weaker than its reputation and name three contexts where breaking it is right: **ratio variables**
+(where the denominator is a design choice, not a characteristic), **polynomials** (which term is
+"lower order" depends on an arbitrary measurement scale), and **factorial experiments where a component
+alone is of no interest**.
+
+Every one of those exceptions shares a feature: **the variable has a meaningful, non-arbitrary zero**.
+That is precisely what `ref = c(v = 0)` declares in this package. So tabxplor already has the escape
+hatch the modern literature asks for, and it is explicit rather than accidental: a user who means "zero
+is real here" writes the anchor and the compound formula, and gets the model they intend. What the
+argument surface refuses is doing it *silently*, which is the case Morris et al. do not defend.
+
+### 8.6 Question 2 — numeric x numeric: the fit is easy, the ROW is the problem
+
+Yes on all three counts of the question: a continuous-by-continuous interaction is standard practice,
+it is trivial to fit, and it is interpretable. It is also **already reachable today**, through the
+documented formula hatch — and that capture is the best argument about what it should look like:
+
+```text
+tab_reg(g, married ~ race + age * tvhours, family = "binomial")
+
+  var         levels                         n  Model_OR
+5 age         age (at mean/47.2)               1/1.01***
+6 tvhours     tvhours (at mean/2.98)             1.10***
+7 age:tvhours age:tvhours                        1.00***
+```
+
+The model is right — both main effects are present, both parents are anchored, so it is the invariant
+specification — and the interaction row is **unreadable**: `1.00***`, a cross-partial per one year times
+one hour, with no level, no count and no observed companion. Note also that `multiplier` is switched
+off in formula mode, which is what leaves `age` at `1/1.01`.
+
+### 8.7 Three presentations of one numeric x numeric interaction, measured
+
+`married ~ age * tvhours`, logistic, n = 11 299. The interaction coefficient is **-0.001554**
+(SE 0.000482, p = 0.0013).
+
+| presentation                                | what a row says                    | count | crude twin |
+|---------------------------------------------|------------------------------------|-------|------------|
+| (a) the raw cross-partial                   | `1/1.00` per year x hour           | no    | no         |
+| (a') the same, scaled per SD x SD           | `1/1.07` (-0.070 on the log scale) | no    | no         |
+| (b) simple slopes at mean -/+ 1 SD          | 3 rows, no group behind them       | no    | no         |
+| (c) cut the moderator (`shape = "quartiles"`)| 4 real groups                     | yes   | yes        |
+
+```text
+(b) Aiken & West, slope of `age` per SD, probability scale:
+      at tvhours = 0.39   +0.0758   p = 4e-24
+      at tvhours = 2.98   +0.0581   p = 5e-33
+      at tvhours = 5.57   +0.0389   p = 5e-09
+
+(c) shape = c(tvhours = "quartiles") -- the arm tabxplor already has:
+      level      n      OR per SD of age
+      [0,1]   3011      1.477
+      (1,2]   3027      1.257
+      (2,4]   3356      1.226
+      (4,24]  1905      1.165
+```
+
+(b) and (c) tell the **same story** — the age effect weakens as television hours rise — but only (c) has
+real people in its rows. Aiken & West's mean -/+ 1 SD is a convention rather than a law, and the modern
+recommendation for a continuous-by-continuous interaction is either the **Johnson-Neyman** interval (the
+whole region of the moderator where the slope is significant) or a 3D surface; neither has a row model.
+Note too that `tvhours = 0.39` and `5.57` describe nobody as a group, which is exactly why those rows
+can carry no count and no `Obs_*` column — the two things a tabxplor row is for.
+
+And the nonlinear caveat is visible in the same data. Ai & Norton (2003): on a logistic model the
+interaction *term* is not the interaction *effect*. The term is -0.001554 on the log-odds scale, while
+the quantity a reader can act on is the probability-scale effect, which the quartile table gives
+directly:
+
+```text
+probability-scale AME of age (per SD) by tvhours quartile:
+      [0,1]   +0.0718     (1,2]  +0.0641     (2,4]  +0.0547     (4,24]  +0.0297
+```
+
+### 8.8 Verdict, and the options if the maintainer wants more
+
+**Question 1 — keep the refusal, fix the message.** It refuses no model a user can soundly ask for:
+for a categorical moderator it refuses a re-spelling of the model already being fitted (rank-deficient
+in one case), and the only genuinely different models it blocks are the origin-dependent ones. But the
+message currently says *"an interaction supplies both variables"*, which is true and unhelpful. It
+should say the thing that resolves the user's doubt: **the model you are asking for is the one being
+fitted** — what differs is which rows it prints.
+
+**Question 2 — keep the refusal as the default; the cure it names is measurably the better table.**
+The message is already right (it names `shape = c(tvhours = "quartiles")`). Three extensions are
+available if the maintainer wants the classical table too, in increasing cost:
+
+1. **Document the hatch.** `tab_reg(d, y ~ a * b)` already fits it correctly and anchored. Free; the
+   row stays unreadable.
+2. **A third arm, `both_numeric`.** Model `a + b + a:b` (the only invariant one), one interaction row,
+   with `multiplier` applied as `k_a x k_b` so it reads **`1/1.07` per SD of age x per SD of tvhours**
+   instead of `1.00`. It reuses the `add_terms` seam and the skeleton's numeric branch; the footer test
+   works unchanged. The row would carry no count, no `{base}` and no `Obs_*`, and that must be said in
+   the documentation rather than discovered. ⚠ **precondition**: `reg_tidy_rescale()` applies ONE `k`
+   per term (22b-ix's C4-2 fix splits on `:` and takes any matching part), so a term whose *two* parts
+   both carry a multiplier would silently take the last one. It needs the PRODUCT. Unreachable today
+   (the arm aborts, and `multiplier` is off in formula mode), so this is a landmine to defuse before
+   the arm lands, not a live bug.
+3. **Simple slopes at declared moderator values** — the genuinely tabxplor-shaped answer, and a phase
+   of its own: rows at `mean - SD / mean / mean + SD` (or at values named through `ref`'s own grammar),
+   each an effect the colour engine and the stars already understand. It is the presentation the
+   literature recommends, and 22b-viii's anchor plus `at_reference`'s datagrid are most of the
+   machinery. What it cannot have is counts or an observed companion, for the reason in §8.7.
+
+**Recommendation**: 1 now (one documentation sentence), 2 only if the classical coefficient is wanted
+for reporting parity with other software, and 3 as the real feature — noting that in almost every case
+`shape = c(b = "quartiles")` gives a strictly more informative table than any of them.
+
+### 8.9 The notation itself: `a*b`, not `a:b`
+
+A third question followed, and it settles the spelling. In R, `a:b` and `a*b` are **not** the same
+thing, so which one does `predictors` mean? Measured:
+
+```text
+race:age4   logLik -14142.9662  |  race*age4   logLik -14142.9662   same? YES
+age:race    logLik -14505.6240  |  age*race    logLik -14443.2021   same? NO
+```
+
+R's `a:b` coincides with `a*b` for two factors and diverges the moment a parent is continuous — and
+it diverges into precisely the origin-dependent model of §8.4. What tabxplor fits is always the FULL
+model (a combined factor spans `a + b + a:b`; the nested arm is `M/X`, which spans the same), so
+**`a:b` would name it correctly only half the time**. `a*b` names it always, and it is what an R user
+already reads.
+
+So the surface takes **`a*b`**, and `a:b` is refused by name rather than accepted as a synonym — a
+teaching error that states the difference and points at `all_of()` for a column range. That refusal
+also **removes the one cost the 22b-ix design carried**: `:` no longer has to be taken away from
+tidyselect for an interaction's sake, because `*` never collided with it in the first place.
+
+**Does the order matter?** In `glm()`, no — for anything this package computes. `race*age4` and
+`age4*race` are one fit (logLik identical, fitted values 2.6e-15 apart, same rank, the same set of
+coefficient values under different names). The only thing order changes in R is the **sequential
+(Type I) `anova()`** decomposition — `race` takes deviance 574.35 when it comes first and 556.03 when
+it comes second — and tabxplor never uses it: the `Overall association` row is `drop1()` (8.286093
+either way) and the `Interaction` row is a two-model comparison (p = 0.2178837 either way).
+
+In **tabxplor** the order does matter, for presentation only: the rows are about the FIRST variable —
+which cell varies fastest, or whose slopes are shown within whose groups. `race*age4` and `age4*race`
+are therefore the same model shown two ways, and where only one parent is continuous, only one
+ordering has rows to show, so the abort names the swap before the cure.
+
+### 8.10 The one change worth making either way
+
+Both messages should teach rather than refuse. Concretely: the parent-rule abort should state that the
+model is unchanged and name the two spellings; and both should point at the compound formula as the
+door for a specification the surface cannot express, since it exists and works.
+
+---
+
+## 9. References
 
 - Ai, C. & Norton, E. C. (2003). Interaction terms in logit and probit models. *Economics Letters*
   80(1), 123–129.
@@ -1162,3 +1424,14 @@ spaced name, global rows:
   *Methods in Ecology and Evolution* 1(2), 103–113.
 - Echambadi, R. & Hess, J. D. (2007). Mean-centering does not alleviate collinearity problems.
   *Marketing Science* 26(3), 438–445.
+- Nelder, J. A. (1977). A reformulation of linear models. *JRSS A* 140(1), 48–77. ("The neglect of
+  marginality".)
+- McCullagh, P. & Nelder, J. A. (1989). *Generalized Linear Models*, 2nd ed. Chapman & Hall.
+- Venables, W. N. (2000). *Exegeses on Linear Models*. S-PLUS User's Conference, Washington DC.
+- Morris, T. P., van Smeden, M. & Pham, T. M. (2023). The marginality principle revisited: should
+  "higher-order" terms always be accompanied by "lower-order" terms in regression analyses?
+  *Biometrical Journal* 65(8), 2300069.
+- Aiken, L. S. & West, S. G. (1991). *Multiple Regression: Testing and Interpreting Interactions*. Sage.
+- Preacher, K. J., Curran, P. J. & Bauer, D. J. (2006). Computational tools for probing interactions in
+  multiple linear regression, multilevel modeling, and latent curve analysis. *Journal of Educational
+  and Behavioral Statistics* 31(4), 437–448. (The Johnson-Neyman technique.)

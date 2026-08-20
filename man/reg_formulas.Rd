@@ -22,7 +22,7 @@ Shows the formula behind every column of a \code{\link[=tab_reg]{tab_reg()}} tab
 \details{
 One row per model: several \code{outcome}s give one each, a \code{predictors} list one per model. Two things
 the list does not repeat: under \code{tab_vars} the same formula is fitted \strong{within each group}, and
-\code{color = "between_groups"} (or \code{stats = "interaction"}) fits one extra pooled model for the footer
+\code{color = "between_groups"} (or \code{stats = "group_interaction"}) fits one extra pooled model for the footer
 test only.
 
 A summed score (\verb{trials =}) is fitted on a success / failure pair, so its formula names the two

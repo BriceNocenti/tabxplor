@@ -16,8 +16,11 @@
 #   - TWO SOURCES, ONE SHAPE. A CLOSED FORM off reg_empirical()'s per-(var, level, category) grid
 #     wherever the univariable model is saturated (every factor predictor except under ordinal) --
 #     there the crude odds ratio IS the Woolf 2x2 ratio. Otherwise a univariable reg_fit() through
-#     the very fitter the table came from (ordinal, every numeric predictor, every marginal shape),
-#     so "same estimand, link, CI rule, multiplier" holds by construction.
+#     the very fitter the table came from (ordinal, every numeric predictor, every marginal shape,
+#     and a NESTED interaction block, whose univariable model is `y ~ M/X`), so "same estimand, link,
+#     CI rule, multiplier" holds by construction. A COMBINED-factor interaction needs neither route
+#     of its own: it is a factor, so it takes the closed form, and there the closed form IS the
+#     observed cell table.
 #   - The crude interval is the univariable MODEL's, under the table's own inference basis: pooled /
 #     model-based unweighted, the sandwich weighted. See REG_EMPIRICAL's `ci_method_design`.
 #   - WEIGHTED means weighted estimates on unweighted counts, with the effective n carried apart --
@@ -93,15 +96,19 @@ reg_crude_yw <- function(data, outcome, crude_key, positive_level = NULL, wt = N
 # agreeing with reg_empirical()'s own `emp_n`. NA on a numeric predictor's row and the Constant is
 # deliberate (nrow(frame) for EVERY numeric predictor); the Constant row shows the model N instead.
 #' @keywords internal
-reg_level_counts <- function(frame, skeleton, wt = NULL) {
+reg_level_counts <- function(frame, skeleton, wt = NULL, crosses = list()) {
   n  <- rep(NA_integer_, nrow(skeleton))
   wn <- rep(NA_real_,    nrow(skeleton))
   w  <- if (!is.null(wt) && wt %in% names(frame)) as.numeric(frame[[wt]]) else NULL
   n[skeleton$var == "Constant"] <- nrow(frame)
   if (!is.null(w)) wn[skeleton$var == "Constant"] <- sum(w, na.rm = TRUE)
   for (v in setdiff(unique(skeleton$var), "Constant")) {
-    if (!v %in% names(frame) || !reg_is_factor_var(frame[[v]])) next
-    lv  <- as.character(frame[[v]])
+    # a nested cross block's rows are its MODERATOR's levels -- the count a continuous predictor
+    # never had, and what a crossed slope is read with.
+    rec <- reg_cross_of(crosses, v)
+    cv  <- if (is.null(rec)) v else reg_cross_count_var(rec)
+    if (!cv %in% names(frame) || !reg_is_factor_var(frame[[cv]])) next
+    lv  <- as.character(frame[[cv]])
     idx <- which(skeleton$var == v)
     m   <- match(as.character(skeleton$level)[idx], lv)   # a level absent from the frame stays NA
     cnt <- tapply(rep(1L, length(lv)), lv, sum)
@@ -313,20 +320,25 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
                               conf_level, method, skeleton, multiplier = NULL,
                               other_preds = character(0), est = NULL, wt = NULL,
                               want_fit = FALSE, marginal = FALSE, trials = NULL,
-                              shape_terms = NULL) {
+                              shape_terms = NULL, crosses = list()) {
   if (length(preds) == 0L) return(list(est = list(), fits = list()))
   ratio  <- !is.null(est) && identical(est$comparison, "lnratioavg")
   skey   <- reg_skel_key(skeleton$var, skeleton$level)
   rows   <- list()
   fits   <- list()
   for (v in preds) {
+    # a nested cross block's univariable model is `y ~ M/X` -- the moderator plus the crossed term,
+    # through this same producer, so estimand, link and CI rule are shared by construction.
+    rec <- reg_cross_of(crosses, v)
+    fp  <- if (is.null(rec)) v else rec$moderator
+    add <- if (is.null(rec)) reg_shape_add(shape_terms, v) else rec$term
     f <- tryCatch(
       # the crude fit takes the SAME shape as the model's (`add_terms`), so term names match.
-      suppressMessages(reg_fit(data, outcome, v, family, design_spec, do_exp = FALSE,
+      suppressMessages(reg_fit(data, outcome, fp, family, design_spec, do_exp = FALSE,
                                outcome_level, conf_level, method,
                                trials = trials, formula = NULL, multiplier = multiplier,
-                               drop_extra = setdiff(other_preds, v),
-                               add_terms = reg_shape_add(shape_terms, v))),
+                               drop_extra = setdiff(other_preds, c(v, fp)),
+                               add_terms = add)),
       error = function(e) NULL)
     if (is.null(f)) next
     if (want_fit) fits[[v]] <- list(fit = f$fit, data = f$data)
@@ -344,7 +356,7 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
       m <- tryCatch(suppressMessages(reg_marginal(
         f$fit, f$data, v, conf_level, wt, at = "average",
         comparison = if (ratio) "lnratioavg" else NULL, want_pred = FALSE,
-        multiplier = multiplier,
+        multiplier = multiplier, crosses = crosses,
         engine = if (is.null(est)) "marginaleffects" else reg_marginal_engine(est))),
         error = function(e) NULL)
       if (is.null(m) || !nrow(m$ame)) next
@@ -758,7 +770,7 @@ reg_same_frame <- function(mdata, f) {
 #' @keywords internal
 reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_preds,
                                est, wt, fits_crude = NULL, fit_preds = character(0),
-                               multiplier = NULL, category = "") {
+                               multiplier = NULL, category = "", crosses = list()) {
   # the estimand ROW carries both the profile axis (`at_reference`) and the marginal ratio.
   effect   <- est$effect
   marginal <- !identical(effect, "coefficient")
@@ -791,7 +803,8 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
   out     <- rep(NA_real_, n_rows)
   ref_of  <- function(v) { r <- skeleton$level[skeleton$var == v & skeleton$is_ref]
                            if (length(r)) as.character(r[[1]]) else NA_character_ }
-  in_mod  <- skeleton$var %in% sp$predictors
+  # the spec's ROW blocks, not its formula terms: a nested cross block's name is not a main effect.
+  in_mod  <- skeleton$var %in% unique(c(sp$predictors, sp$row_vars))
   # WARNING: one length-n difference vector at a time -- never an n x p matrix of them.
   closed_form <- !is.null(crude_if) && reg_crude_saturated(sp$crude_key, TRUE)
   for (k in if (closed_form) which(in_mod & skeleton$var %in% fac_preds & !skeleton$is_ref) else
@@ -819,7 +832,9 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
       v  <- as.character(skeleton$var[k])
       nv <- fits_crude[[v]]
       if (is.null(nv) || is.null(nv$fit)) next
-      kk <- if (!is.null(multiplier) && v %in% names(multiplier)) as.numeric(multiplier[[v]]) else 1
+      # a crossed slope's unit is its MODIFIED variable's, so the |k| rescale is looked up there.
+      mv <- reg_cross_of(crosses, v)$modified %||% v
+      kk <- if (!is.null(multiplier) && mv %in% names(multiplier)) as.numeric(multiplier[[mv]]) else 1
       if (!is.finite(kk) || kk == 0) next
       cif_v <- reg_coef_if_maker(nv$fit)
       if (is.null(cif_v)) next
