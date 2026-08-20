@@ -74,7 +74,7 @@ test_that("the grouped binomial's LEVEL is the mean SCORE, not a share of respon
   # a summed score's odds ratio sits on the mean SCORE -- the average number of "yes" out of
   # `trials`, which is what a reader of a battery of items wants. That is `score_ratio`, the one
   # scale whose estimate is an odds ratio and whose level is a mean.
-  expect_identical(get_scale(t[["Obs_OR"]]), "score_ratio")
+  expect_identical(get_scale(t[["Obs_OR"]]), "score_odds_ratio")
   expect_identical(tabxplor:::fmt_var_kind(t[["Obs_OR"]]), "mean")
   want <- as.vector(tapply(d$score, d$race, mean))
   names(want) <- levels(d$race)

@@ -160,10 +160,11 @@ reg_spec_build_one <- function(i, ctx) {
   # a stored fact, not a column of its own, so the base-count column is synthesised at display time
   # (reg_base_n_cols()) and the tooltips, the footer and forest_plot(size = "n") all read one place.
   # A numeric predictor keeps NA -- on a listwise-complete frame its count IS the model N.
-  cnt  <- reg_level_counts(reg_complete_frame(data, c(sp$outcome, union_predictors,
-                                                      reg_cross_parents(crosses),
-                                                      reg_design_vars(design_spec))),
-                           skeleton, wt = design_spec$wt, crosses = crosses)
+  frame <- reg_complete_frame(data, c(sp$outcome, union_predictors,
+                                      reg_cross_parents(crosses),
+                                      reg_design_vars(design_spec)))
+  cnt  <- reg_level_counts(frame, skeleton, wt = design_spec$wt, crosses = crosses)
+  cnt  <- reg_constant_count(cnt, frame, sp, skeleton, design_spec$wt, anchors)
   cols <- purrr::map(cols, function(cc) { cc$col <- set_n(set_wn(cc$col, cnt$wn), cnt$n); cc })
 
   # --- 3. THE FOOTER ROWS ------------------------------------------------------------------------
@@ -293,28 +294,45 @@ reg_spec_tips_num <- function(sp, positive_level, own, ctx) {
   # Where the crude value rides in the model cell instead, the fragment has nowhere to hang.
   if (!nm %in% names(own$cols)) return(NULL)
   if (n_outcomes > 1L) nm <- paste0(nm, " [", sp$outcome, "]")
-  vars <- intersect(intersect(own$fit_preds, numeric_preds), as.character(skeleton$var))
+  # WHICH numeric variable each row BLOCK is about: itself for an ordinary predictor, the MODIFIED
+  # parent for a nested cross block, whose rows are that variable's slopes. ⚠ the block key of a
+  # cross is not a column at all, and reading it printed "age*tvhours: mean NA (SD NA)".
+  blocks <- intersect(unique(as.character(skeleton$var)), sp$row_vars)
+  if (!length(blocks)) return(NULL)
+  vars   <- stats::setNames(vapply(blocks, function(b) {
+    rec <- reg_cross_of(crosses, b)
+    if (is.null(rec)) b else if (identical(rec$arm, "nested")) rec$modified else NA_character_
+  }, character(1)), blocks)
+  # the test is on the COLUMN, not on `numeric_preds`: a crossed slope's parent is supplied by the
+  # interaction term, so it is never listed among the model's own predictors.
+  vars <- vars[!is.na(vars) & vars %in% names(own$frame)]
+  if (length(vars))
+    vars <- vars[!vapply(vars, function(v) reg_is_factor_var(own$frame[[v]]), logical(1))]
   if (!length(vars)) return(NULL)
   w  <- if (is.null(design_spec$wt)) NULL else own$frame[[design_spec$wt]]
   yb <- reg_crude_y(own$frame, sp$outcome, sp$fit_family,
                     if (reg_fam_binary(sp$fit_family)) positive_level else NULL)
-  purrr::list_rbind(purrr::map(vars, function(v) {
+  purrr::list_rbind(purrr::compact(purrr::map(names(vars), function(b) {
+    v <- unname(vars[[b]])
     # ⚠ THE ONE PLACE a shifted column must be read back in the user's own units: `ref` anchors every
     # continuous predictor before the fit, so the stored column is x - anchor. Every ESTIMATE is
     # invariant under that shift; only a descriptive reading of the values is not, and this tooltip
     # and the linearity panel's x axis (R/plots.R) are the two.
     x <- as.numeric(own$frame[[v]]) + reg_anchor_of(anchors, v)
     m <- reg_weighted_mean(x, w); s <- reg_predictor_sd(x, w)
-    by <- if (reg_fam_binary(sp$fit_family) && length(unique(stats::na.omit(yb))) == 2L)
-      sprintf("; mean if yes %s, if no %s",
-              format(signif(reg_weighted_mean(x[yb == 1], w[yb == 1]), 3)),
-              format(signif(reg_weighted_mean(x[yb == 0], w[yb == 0]), 3)))
+    # A TOOLTIP NEVER SHOWS A FIELD IT DOES NOT HAVE: no fragment at all rather than a line of NAs.
+    if (!is.finite(m) || !is.finite(s)) return(NULL)
+    m1 <- if (reg_fam_binary(sp$fit_family) && length(unique(stats::na.omit(yb))) == 2L)
+      c(reg_weighted_mean(x[yb == 1], w[yb == 1]), reg_weighted_mean(x[yb == 0], w[yb == 0]))
+    else c(NA_real_, NA_real_)
+    by <- if (all(is.finite(m1)))
+      sprintf("; mean if yes %s, if no %s", format(signif(m1[[1]], 3)), format(signif(m1[[2]], 3)))
     else ""
-    k <- which(as.character(skeleton$var) == v)
-    tibble::tibble(col = nm, row = k, var = v,
+    k <- which(as.character(skeleton$var) == b)
+    tibble::tibble(col = nm, row = k, var = b,
                    tip = sprintf("%s: mean %s (SD %s)%s", v,
                                  format(signif(m, 3)), format(signif(s, 3)), by))
-  }))
+  })))
 }
 
 

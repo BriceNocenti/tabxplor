@@ -56,7 +56,7 @@ test_that('shape = "quadratic" gives the predictor two rows, both fitted and bot
                                 shape = c(age = "quadratic"), stats = FALSE))
   labs <- lv(t, "age")
   expect_length(labs, 2L)
-  expect_match(labs[[1]], "^per SD/")
+  expect_match(labs[[1]], "^per [0-9.]+ \\(SD\\)")
   expect_match(labs[[2]], "^age\u00b2")               # the curvature row, "age" + SUPERSCRIPT TWO
   or <- get_or(t[["Model_OR"]])[as.character(t$var) == "age"]
   expect_true(all(is.finite(or)))
@@ -145,7 +145,7 @@ test_that('shape = "sqrt" fits the transformed column and says so in the label',
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "tvhours"), family = "binomial",
                                 multiplier = 1, shape = c(tvhours = "sqrt"), stats = FALSE))
-  expect_match(lv(t, "tvhours"), "^sqrt\\(tvhours\\)")
+  expect_match(lv(t, "tvhours"), "^\u221a\\(x\\)")   # the shape names itself, the var column names x
   dm <- tidyr::drop_na(d, dplyr::all_of(c("married", "race", "tvhours")))
   dm$married <- forcats::fct_rev(forcats::fct_drop(factor(dm$married)))
   ref <- stats::glm(married ~ race + sqrt(tvhours), data = dm, family = stats::binomial())
@@ -305,7 +305,8 @@ test_that("the curve is the MODELLED level's, not the factor's first level", {
   expect_gt(y[[length(y)]], y[[1]])
   # ten bins, and the sparkline printed is this curve
   expect_equal(nrow(a$curves$age), 10L)
-  expect_true(grepl(tabxplor:::rd_spark(y), nprint(t, "age"), fixed = TRUE))
+  # the printed run is the curve RESAMPLED onto its own x axis, so it is read from the curve
+  expect_true(grepl(tabxplor:::rd_spark(a$curves$age), nprint(t, "age"), fixed = TRUE))
 })
 
 test_that("with several outcomes there is no single observed shape, so there is no sparkline", {
@@ -332,4 +333,42 @@ test_that("the html engine upgrades the glyph run to an inline <svg>; the plot m
                    "age (per 1 SD)")
   # markdown and the console KEEP them
   expect_true(grepl("[\u2581-\u2588]", tab_md(t)))
+})
+
+# ---- the composed unit label, and the sparkline that follows the shape ---------------------------
+
+test_that("a continuous row's level is COMPOSED: shape, unit, anchor -- and none overwrites another", {
+  skip_if_not_installed("broom")
+  d <- shp_data()
+  f <- function(...) suppressMessages(
+    tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE, ...))
+  expect_match(lv(f(), "age"), "^per [0-9.]+ \\(SD\\), at [0-9.]+ \\(mean\\)$")
+  expect_match(lv(f(multiplier = c(age = "2sd")), "age"), "^per [0-9.]+ \\(2SD\\),")
+  expect_match(lv(f(multiplier = c(age = 10), ref = c(age = 0)), "age"), "^per 10, at 0$")
+  # the shape used to be written first and then OVERWRITTEN by the unit, so it was invisible under
+  # the default multiplier -- reachable only with multiplier = 1
+  expect_match(lv(f(shape = c(age = "log")),  "age"), "^log\\(x\\), per ")
+  expect_match(lv(f(shape = c(age = "sqrt")), "age"), "^\u221a\\(x\\), per ")
+})
+
+test_that("the sparkline is drawn on the model's own x axis: one width, and the shape moves it", {
+  skip_if_not_installed("broom")
+  d  <- shp_data()
+  gl <- function(t, v) {
+    r <- regmatches(as.character(t$levels)[as.character(t$var) == v],
+                    regexpr("[\u2581-\u2588]+", as.character(t$levels)[as.character(t$var) == v]))
+    m <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE)
+    dd <- get_display(m[["n"]])[as.character(m$var) == v]
+    regmatches(dd, regexpr("[\u2581-\u2588]+", dd))
+  }
+  t0 <- suppressMessages(tab_reg(d, "married", c("age", "tvhours"), family = "binomial",
+                                 stats = FALSE))
+  # EVERY predictor gets the same number of glyphs -- the run's length is the grid's, not the data's
+  expect_identical(nchar(gl(t0, "age")), nchar(gl(t0, "tvhours")))
+  expect_identical(nchar(gl(t0, "age")), 10L)
+  # ...and a monotone shape CHANGES the curve, which is the whole point of drawing it to scale
+  tl <- suppressMessages(tab_reg(d, "married", c("age", "tvhours"), family = "binomial",
+                                 shape = c(age = "log"), stats = FALSE))
+  expect_false(identical(gl(t0, "age"), gl(tl, "age")))
+  expect_identical(gl(t0, "tvhours"), gl(tl, "tvhours"))   # the untouched predictor does not move
 })

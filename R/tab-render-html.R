@@ -124,8 +124,22 @@ html_escape_br <- function(x) {
 # It is drawn to FILL its cell -- the cell's own border is the plot's frame, so the svg carries none
 # of its own -- and `.tx-sparkcell` (emitted beside it) centres it and trims the cell's padding.
 # `inset` is half the stroke: without it the extreme bins are clipped by the viewBox edge.
+# The run's LENGTH is fixed (rd_spark() resamples onto one grid), so `dx` alone sets the width and
+# every predictor's plot is the same size -- which is what a reader compares them by.
+# A rotated variable name may be long, and an interaction block's is the longest ("age*tvhours").
+# Break it BEFORE the operator so it reads as two short vertical columns instead of one tall one.
+# ⚠ reliable because `*` is not a legal character in an R name: in a variable-name cell it can only be
+# the cross operator. tab_wrap_text() cannot do this -- it breaks on spaces, and turns the ones it
+# keeps into NARROW NO-BREAK spaces, which `white-space:normal` may never break.
 #' @keywords internal
-tx_spark_svg <- function(x, h = 22L, dx = 9L, lwd = 2.8) {
+html_break_cross <- function(x, vert) {
+  if (!any(vert)) return(x)
+  ifelse(vert & grepl("*", x, fixed = TRUE),
+         gsub("[\u202f ]?[*]", "<br>*", x), x)
+}
+
+#' @keywords internal
+tx_spark_svg <- function(x, h = 22L, dx = 5L, lwd = 2.4) {
   gl  <- rd_spark_glyphs()
   pat <- paste0("[", paste(gl, collapse = ""), "]{3,}")
   hit <- grepl(pat, x)
@@ -235,6 +249,10 @@ html_face_wrap <- function(html, bold, italic, underline) {
 # `semantic` flag -- see html_face_wrap). That reads the RESOLVED palette theme, never `meta$theme`.
 #' @keywords internal
 render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, get_data) {
+  # the model-fit block's first row: a boundary between two KINDS of block, drawn across the whole
+  # table (2px) where a row_var separator stops at the name column.
+  foot_top <- if (length(rd$footer_rows)) min(rd$footer_rows) else NA_integer_
+  if (!is.na(foot_top) && foot_top > nrow(rd$tab)) foot_top <- NA_integer_
   tab   <- rd$tab
   roles <- rd$roles
   ann   <- rd$ann
@@ -394,17 +412,25 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     # which left a one-row block (a continuous predictor) plain beside a bold neighbour.
     named <- cl %in% names(roles$var_name_col)
     vert  <- named & run$span > 1L      # a rotated single-row cell only makes that row tall
-    cls   <- gsub(" +", " ", paste(cls_col[j], "tx-lbl", ifelse(vert, "tx-vname", ""),
-                                   ifelse(named, "tx-b", "")))
-    # Phase 18r: a rowspanned label cell is anchored in its block's FIRST row, so the per-row
-    # `tr.tx-bb>*` bottom rule never reaches the one covering the table's LAST row -> open bottom-left
-    # corner. Tag that single cell `tx-bb` (the cell-scoped 1px rule in R/tab-css.R) to close it.
+    # THE BOTTOM RULE OF A NAME CELL IS DECIDED HERE, never by the row it happens to sit in. A
+    # rowspanned cell is anchored in its block's FIRST row, so `tr.tx-bb2>*` never reaches it while a
+    # ONE-ROW block's cell is a direct child of the closing row and did draw one -- a rule under
+    # `tvhours` and none under `race`. So: a row_var separator does not cross the name column
+    # (`tx-nb` opts out), and the two boundaries that do get their own cell-scoped class -- the table
+    # bottom at 1px (Phase 18r's open corner), and the model-fit block, a boundary between two KINDS
+    # of block, at the same 2px every other column shows.
+    bot <- rep("", n_row)
     if (any(run$show)) {
       last_i <- max(which(run$show))
-      if (last_i + run$span[last_i] - 1L >= n_row) cls[last_i] <- paste(cls[last_i], "tx-bb")
+      if (last_i + run$span[last_i] - 1L >= n_row) bot[last_i] <- "tx-bb"
+      if (!is.na(foot_top) && foot_top <= n_row && isTRUE(run$show[[foot_top]]))
+        bot[foot_top] <- "tx-bb2"
     }
+    cls   <- gsub(" +", " ", paste(cls_col[j], "tx-lbl", ifelse(vert, "tx-vname", ""),
+                                   ifelse(named, "tx-b", ""),
+                                   ifelse(named & !nzchar(bot), "tx-nb", ""), bot))
     td   <- paste0('<td class="', trimws(cls), '" rowspan="', run$span, '">',
-                   html_escape_br(cells[[j]]), '</td>')
+                   html_escape_br(html_break_cross(cells[[j]], vert)), '</td>')
     td[!run$show] <- ""
     td_html[[j]]  <- td
   }
@@ -421,7 +447,10 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   rcls <- rep("", n_row)
   radd <- function(i, k) rcls[i] <<- paste0(rcls[i], " ", k)
   radd(rd$bold_rows,          "tx-b")
-  radd(roles$totblock_top,    "tx-bt")
+  # the model-fit block opens at 2px, matching the row_var separator that closes the block above it;
+  # every OTHER total-block top stays the 1px `tx-bt`
+  radd(setdiff(roles$totblock_top, foot_top),   "tx-bt")
+  radd(intersect(roles$totblock_top, foot_top), "tx-bt2")
   # the table's last row always closes, so it folds into the bottom rule rather than repeating it
   radd(union(roles$totblock_bottom, n_row), "tx-bb")
   radd(roles$new_group,       "tx-bb2")     # a thicker rule between row_var blocks

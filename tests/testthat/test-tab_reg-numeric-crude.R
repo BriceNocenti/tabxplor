@@ -304,11 +304,11 @@ test_that("the numeric row's label names its unit AND its anchor", {
   # the Constant row sits at. The `var` column already names the variable, and the sparkline lives
   # in the base-count cell, so nothing else shares this string.
   lab <- as.character(t$levels)[as.character(t$var) == "age"]
-  expect_match(lab, "^per SD/[0-9.]+ \\(at mean/[0-9.]+\\)$")
+  expect_match(lab, "^per [0-9.]+ \\(SD\\), at [0-9.]+ \\(mean\\)$")
   t10 <- tab_reg(d, "married", c("age", "race"), family = "binomial", multiplier = c(age = 10),
                  ref = c(age = "min"), cleannames = FALSE)
   expect_identical(as.character(t10$levels)[as.character(t10$var) == "age"],
-                   paste0("per 10 (at min/", format(signif(min(d$age), 3)), ")"))
+                   paste0("per 10, at ", format(signif(min(d$age), 3)), " (min)"))
 })
 
 test_that("the SD is frozen ONCE: same unit across split groups, compared models and dependents", {

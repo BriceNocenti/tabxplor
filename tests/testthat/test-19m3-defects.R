@@ -42,8 +42,8 @@ testthat::test_that("the derived vocabularies reproduce what they replaced", {
   # every token carrying a VALUE of the table is re-templatable; only the four that carry none are not
   testthat::expect_setequal(
     setdiff(names(tabxplor:::DISPLAY_TOKENS), tabxplor:::DISPLAY_VALUE_CELLS),
-    c("pvalue", "gof", "n_range", "blank", "rr"))
-  testthat::expect_setequal(tabxplor:::DISPLAY_FOOTER_TOKENS, c("gof", "pvalue", "blank"))
+    c("pvalue", "gof", "gof_warn", "n_range", "blank", "rr"))
+  testthat::expect_setequal(tabxplor:::DISPLAY_FOOTER_TOKENS, c("gof", "gof_warn", "pvalue", "blank"))
   # `pvalue` is a footer token that IS coloured (a significance warning) -- the one disagreement
   # that makes these two facts two columns rather than one "numberless" flag.
   testthat::expect_setequal(tabxplor:::DISPLAY_NO_COLOR, c("blank", "gof", "n_range"))

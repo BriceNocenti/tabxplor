@@ -300,10 +300,11 @@ reg_multiplier_value <- function(value, sd, digits = 3L) {
   if (is.character(v) && v %in% REG_MULTIPLIER_KEYWORDS) {
     if (!is.finite(sd) || sd <= 0) return(list(k = NA_real_, label = NA_character_))
     mult <- if (identical(v, "2sd")) 2 else 1
-    # "SD/13.5" -- the count only when it is not 1, and a slash rather than a second parenthesis:
-    # the level cell reads "per SD/13.5", short enough never to wrap.
-    lab  <- if (mult == 1) "SD" else "2 SD"
-    return(list(k = mult * sd, label = paste0(lab, "/", format(signif(mult * sd, digits)))))
+    # "13.5 (SD)" -- the NUMBER first, because that is the unit the effect is per; the keyword is
+    # what it was read from, and the count in it only when it is not 1.
+    lab  <- if (mult == 1) "SD" else paste0(mult, "SD")
+    return(list(k = mult * sd,
+                label = paste0(format(signif(mult * sd, digits)), " (", lab, ")")))
   }
   k <- suppressWarnings(as.numeric(v))
   if (!is.finite(k)) return(list(k = NA_real_, label = NA_character_))
@@ -1364,7 +1365,7 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, est,
   # digits. No builder names a family-specific field.
   scale_key    <- reg_scale_of(est, trials)
   est_field    <- EST_SCALES[[scale_key]]$est_field
-  disp         <- "est"
+  base_field   <- EST_SCALES[[scale_key]]$base_display %||% NA_character_
   digits       <- reg_cell_digits(scale_key)
   td  <- fit_res$tidy
   m   <- match(skeleton$term, td$term)
@@ -1396,7 +1397,13 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, est,
   if (identical(scale_key, "raw_diff") && !is.na(trials %||% NA)) {
     k <- as.numeric(trials); est_v <- est_v * k; lo <- lo * k; hi <- hi * k
   }
+  # the baseline row leaves the estimate field wherever its scale says the effects act on the level
+  cp     <- reg_constant_place(scale_key, trials, skeleton$var == "Constant",
+                               est_v, NULL, p, rep("est", n_rows))
+  est_v  <- cp$est; p <- cp$p; disp <- cp$display
   fields <- stats::setNames(list(est_v), est_field)
+  if (!is.null(cp$base) && !is.na(base_field) && !identical(base_field, est_field))
+    fields[[base_field]] <- cp$base
   args <- c(
     # NA here, overwritten in reg_spec_build_one() with each level's own count: the builders do
     # not know the model's complete-case frame, and the count is the same for every column of a fit.
@@ -1437,7 +1444,8 @@ reg_resolve_display <- function(display) {
 # ratio); the PREDICTIONS always come from `marg`, the sweep at this column's own profile.
 #' @keywords internal
 #' @noRd
-reg_fill_base <- function(col, marg, skeleton, model_predictors, group = NULL, add = NULL) {
+reg_fill_base <- function(col, marg, skeleton, model_predictors, group = NULL, add = NULL,
+                          crosses = NULL) {
   if (is.null(marg)) return(col)
   add <- add %||% marg
   n_rows   <- nrow(skeleton)
@@ -1459,8 +1467,15 @@ reg_fill_base <- function(col, marg, skeleton, model_predictors, group = NULL, a
     d[[col_nm]][reg_skel_match(skeleton, d)]
   }
   pred_v <- if (is.null(marg$pred)) rep(NA_real_, n_rows) else take(marg$pred, "pred")
-  if (!is.na(base_fld) && !identical(base_fld, est_fld))
+  # ROWS THE SWEEP MUST NOT WRITE A LEVEL INTO, so they keep whatever is already stored: the
+  # Constant, whose baseline reg_constant_place() has placed on the scale's own terms; and a NESTED
+  # cross block's slopes, which have no level pair -- exactly like a plain numeric predictor's row,
+  # and the moderator's own block already shows each group's adjusted level.
+  no_lvl <- as.character(skeleton$var) %in% c("Constant", reg_cross_nested_vars(crosses))
+  if (!is.na(base_fld) && !identical(base_fld, est_fld)) {
+    pred_v[no_lvl] <- as.double(vctrs::field(col, base_fld))[no_lvl]
     col <- vctrs::`field<-`(col, base_fld, pred_v)
+  }
   # DESIGN: a factor level's ADDITIVE effect is derived from the two adjusted predictions rather than
   # from the sweep's own contrast. The two are the same number (averaging commutes with an additive
   # contrast), but the derived form is reference-INVARIANT, which is what lets jamovi's digest
@@ -1820,17 +1835,48 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
   list(ame = ame, pred = pred)
 }
 
-# === SECTION: the Constant row of a sample-averaged or at-reference table ========================
+# === SECTION: the Constant row -- the baseline the column is read against ========================
 #
-# Under `effect = "coefficient"` the Constant row IS the fit's own intercept, anchored by `ref`, and
-# reg_column() reads it straight from the tidy. The other two contrasts have no intercept in their
-# tidy, so the row holds the same thing computed the way THAT contrast computes everything else: the
-# model's predicted outcome, averaged over the sample (`marginal`) or evaluated at the reference
-# profile (`at_reference`). One quantity, then converted to the column's own geometry.
+# WHERE ITS VALUE COMES FROM. Under `effect = "coefficient"` it IS the fit's own intercept, anchored
+# by `ref`, and reg_column() reads it straight from the tidy. The other two contrasts have no
+# intercept in their tidy, so the row holds the same thing computed the way THAT contrast computes
+# everything else: the model's predicted outcome, averaged over the sample (`marginal`) or evaluated
+# at the reference profile (`at_reference`).
 #
-# ⚠ it carries its interval and NO p-value. A predicted 48.7 % is trivially "different from 0", so a
-# star there would mean something else than everywhere else in the table; only a tested intercept
-# earns one (tab_constant_null(), R/fmt_class.R, reads exactly that).
+# WHERE IT LANDS is reg_constant_place()'s one rule, shared by both producers: the row holds the
+# quantity the column's effects OPERATE ON (EST_SCALES$const_display), so it leaves the estimate
+# field wherever that is the level. Nothing downstream needs a branch -- the cell then carries a
+# LEVEL token, which the signing and multiplicative-glyph rules of format() simply do not match.
+#
+# ⚠ it carries its interval, and a p-value only where what it prints has a null: a predicted 48.7 %
+# is trivially "different from 0", so a star there would mean something else than everywhere else in
+# the table (tab_constant_null(), R/fmt_class.R, reads exactly that).
+
+# THE BASELINE ROW'S OWN BASE -- which is a property of the CONTRAST, so it is decided where the
+# spec is known rather than in the family-free counter. Under `marginal` the row IS the population
+# and rests on the whole model N. Otherwise it is a PROFILE, and a profile is a countable subgroup
+# only when every predictor is categorical: with a continuous one nobody is at the mean, by
+# definition, so the cell stays empty and the model N is read from the "N" footer row instead.
+#' @keywords internal
+reg_constant_count <- function(cnt, frame, sp, skeleton, wt = NULL, anchors = NULL) {
+  i <- which(as.character(skeleton$var) == "Constant")
+  if (!length(i)) return(cnt)
+  w <- if (!is.null(wt) && length(wt) == 1L && !is.na(wt) && wt %in% names(frame))
+    as.numeric(frame[[wt]]) else NULL
+  keep <- if (identical(sp$est$effect %||% "", "marginal")) {
+    rep(TRUE, nrow(frame))
+  } else {
+    vars <- sp$row_vars
+    if (!length(vars) || !all(vars %in% names(frame))) return(cnt)
+    if (!all(vapply(frame[vars], reg_is_factor_var, logical(1)))) return(cnt)
+    vals <- reg_reference_grid_values(frame, vars, anchors, w)
+    Reduce(`&`, lapply(names(vals), function(v)
+      as.character(frame[[v]]) == as.character(vals[[v]])), rep(TRUE, nrow(frame)))
+  }
+  cnt$n[i] <- sum(keep, na.rm = TRUE)
+  if (!is.null(w)) cnt$wn[i] <- sum(w[keep], na.rm = TRUE)
+  cnt
+}
 
 # The one-row frame the reference profile is evaluated on. Built from `data` so every factor keeps
 # its full level set -- a one-row grid assembled from scratch would drop levels and shorten the model
@@ -1844,6 +1890,41 @@ reg_profile_row <- function(data, predictors, anchors = NULL, w = NULL) {
               else vals[[v]]
   }
   d
+}
+
+# WHERE THE BASELINE ROW'S VALUE BELONGS, for both contrasts at once. `EST_SCALES$const_display`
+# names the quantity this column's effects OPERATE ON: an odds ratio multiplies odds, so an odds
+# column keeps the baseline odds (with its level as the cell's aside); a risk / rate ratio multiplies
+# the level and a difference adds to it, so those show the LEVEL itself; a coefficient adds on the
+# link scale. The number never changes -- only the field it sits in and the token that renders it --
+# which is what stops the row wearing a comparison sign or a "x" glyph it has no reference for.
+# ⚠ a baseline shown as a LEVEL carries no p-value: a predicted 43 % is trivially "different from 0",
+# and a star there would mean something else than everywhere else in the table.
+# `base_v` may be NULL where the caller writes no level; it is returned filled if one is due.
+#' @keywords internal
+reg_constant_place <- function(scale_key, trials, is_cst, est_v, base_v, p_v, display) {
+  sc  <- EST_SCALES[[scale_key]]
+  tok <- sc$const_display %||% NA_character_
+  out <- function() list(est = est_v, base = base_v, p = p_v, display = display)
+  # ⚠ only where a baseline was actually computed: a cumulative logit has thresholds and no single
+  # intercept, so stamping the token there would print the token's own NA where the row is empty.
+  is_cst <- is_cst & !is.na(est_v)
+  if (is.na(tok) || !any(is_cst)) return(out())
+  # a summed score's LEVEL is the mean SCORE, the per-item probability x `trials` (exact). An
+  # additive summed-score effect is already in score units (reg_column() scales the whole tidy).
+  k  <- if (!is.na(trials %||% NA) && identical(sc$var_kind, "mean")) as.numeric(trials) else 1
+  display[is_cst] <- tok
+  if (identical(tok, sc$base_display)) {
+    if (is.null(base_v)) base_v <- rep(NA_real_, length(est_v))
+    base_v[is_cst] <- est_v[is_cst] * k
+    est_v[is_cst]  <- NA_real_
+    p_v[is_cst]    <- NA_real_
+  } else if (identical(tok, "or") && !is.na(sc$base_display %||% NA)) {
+    if (is.null(base_v)) base_v <- rep(NA_real_, length(est_v))
+    o <- est_v[is_cst]
+    base_v[is_cst] <- o / (1 + o) * k
+  }
+  out()
 }
 
 # A predicted outcome read on the column's own geometry, with the interval taken where that geometry
@@ -1918,12 +1999,25 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
   if (!is.null(const) && any(is_const)) {
     cst <- if (is.na(group)) const[1L, ] else const[const$group == group, , drop = FALSE]
     if (nrow(cst) == 1L && is.finite(cst$est)) {
-      ame_v[is_const] <- cst$est; lo_v[is_const] <- cst$lo; hi_v[is_const] <- cst$hi
+      # ⚠ on a summed score the baseline arrives PER ITEM, like everything the sweep returns. The
+      # additive branch below scales the whole vector by `trials`, but the placer takes the baseline
+      # out of that vector first, so it is converted here.
+      k <- if (identical(sc, "raw_diff") && !is.na(trials %||% NA)) as.numeric(trials) else 1
+      ame_v[is_const] <- cst$est * k; lo_v[is_const] <- cst$lo * k; hi_v[is_const] <- cst$hi * k
       show <- show | is_const
     }
   }
+  display[show] <- "est"
+  # ...then the baseline row leaves the estimate field wherever its scale says the effects act on the
+  # level. One rule, shared with the coefficient arm (reg_constant_place).
+  base_fld <- EST_SCALES[[sc]]$base_display %||% NA_character_
+  cp     <- reg_constant_place(sc, trials, is_const, ame_v, pred_v, p_v, display)
+  ame_v  <- cp$est; pred_v <- cp$base; p_v <- cp$p; display <- cp$display
+  # every branch offers the level its scale names, so a baseline placed there is not dropped; where
+  # the sweep has none the field is simply all-NA and reg_fill_base() fills it later.
+  base_args <- if (!is.na(base_fld) && !identical(base_fld, EST_SCALES[[sc]]$est_field))
+    stats::setNames(list(pred_v), base_fld) else list()
   if (shape == "prob") {
-    display[show] <- "est"
     # EVERY reference cell carries its measure's neutral, on every scale -- the additive 0 here, as in
     # the coefficient twin (reg_column()) and in the three multiplicative arms below. It is what makes
     # a marginal risk difference read like its conditional counterpart instead of leaving a hole.
@@ -1937,7 +2031,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
       k <- as.numeric(trials); ame_v <- ame_v * k; lo_v <- lo_v * k; hi_v <- hi_v * k
     }
     do.call(fmt, c(
-      stats::setNames(list(pred_v), EST_SCALES[[sc]]$base_display),
+      base_args,
       list(
         n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
         diff = ame_v, or = or_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
@@ -1949,11 +2043,10 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
   } else if (shape == "prob_ratio") {
     # the RATIO twin of "prob", coherent BY CONSTRUCTION: marginal standardization gives
     # adjusted(ref) x RR(level) == adjusted(level). The reference cell keeps the FULL template.
-    display[show] <- "est"
     ame_v[is_ref] <- 1                                         # multiplicative neutral at the reference
     do.call(fmt, c(
       stats::setNames(list(ame_v), EST_SCALES[[sc]]$est_field),
-      stats::setNames(list(pred_v), EST_SCALES[[sc]]$base_display),
+      base_args,
       list(
         n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
         ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
@@ -1962,37 +2055,38 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, shape, var_y,
         color = color, color_signif = color_signif, col_var = col_var,
         comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model")))
   } else if (shape == "raw_ratio") {
-    display[show] <- "est"
     ame_v[is_ref] <- 1                                         # multiplicative neutral at the reference
-    fmt(
-      n = rep(NA_integer_, n_rows),
-      ratio = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      scale = sc, display = display, digits = reg_cell_digits(sc), ref = "1", ci_method = "wald_log",
-      color = color, color_signif = color_signif, col_var = col_var,
-      comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
-    )
+    do.call(fmt, c(
+      base_args,
+      list(
+        n = rep(NA_integer_, n_rows),
+        ratio = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
+        scale = sc, display = display, digits = reg_cell_digits(sc), ref = "1",
+        ci_method = "wald_log",
+        color = color, color_signif = color_signif, col_var = col_var,
+        comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model")))
   } else if (shape == "or") {                                  # MNL "j vs rest" OR at the profile
-    display[show] <- "est"
     ame_v[is_ref] <- 1                                         # multiplicative neutral at the reference
-    fmt(
-      n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
-      or = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      scale = sc, pct_type = reg_pct_type(sc), display = display, digits = reg_cell_digits(sc), ref = "1",
-      ci_method = "wald_log",
-      color = color, color_signif = color_signif, col_var = col_var,
-      comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
-    )
+    do.call(fmt, c(
+      base_args,
+      list(
+        n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
+        or = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
+        scale = sc, pct_type = reg_pct_type(sc), display = display,
+        digits = reg_cell_digits(sc), ref = "1", ci_method = "wald_log",
+        color = color, color_signif = color_signif, col_var = col_var,
+        comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model")))
   } else {                                                     # "raw" (gaussian / poisson)
-    display[show] <- "est"
     ame_v[is_ref] <- 0                                         # additive neutral at the reference
-    fmt(
-      n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
-      diff = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
-      var = rep(var_y, n_rows),                               # var(Y): standardizes the effect-size colour
-      scale = sc, display = display, digits = reg_cell_digits(sc), ci_method = "wald",
-      color = color, color_signif = color_signif, col_var = col_var,
-      comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
-    )
+    do.call(fmt, c(
+      base_args,
+      list(
+        n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
+        diff = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
+        var = rep(var_y, n_rows),                    # var(Y): standardizes the effect-size colour
+        scale = sc, display = display, digits = reg_cell_digits(sc), ci_method = "wald",
+        color = color, color_signif = color_signif, col_var = col_var,
+        comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model")))
   }
 }
 
@@ -2706,7 +2800,7 @@ new_reg_shared <- function(union_predictors = character(0), design_spec = list()
                            stats = NULL, compare = "none", baseline = NULL,
                            multiplier = NULL, multiplier_label = NULL,
                            anchors = NULL, anchor_keyword = NULL,
-                           shape_terms = NULL, shape_labels = NULL, crosses = list(),
+                           shape_terms = NULL, shape_kinds = character(0), crosses = list(),
                            empirical = FALSE, display = NULL,
                            var_labels = character(0), na_shared_vars = character(0),
                            base_n = "range") {
@@ -3115,7 +3209,7 @@ reg_cols_ame <- function(f, sp, ctx) {
   # at-reference estimate.
   dress <- function(col, group = NULL)
     reg_apply_display(reg_fill_base(col, marg, skeleton, sp$row_vars, group = group,
-                                    add = marg_add), disp)
+                                    add = marg_add, crosses = crosses), disp)
   # a summed score is prob-scale by family, but its additive effect is a difference of mean SCORES.
   var_y <- if (!prob_scale || !is.na(sp$trials %||% NA))
     suppressWarnings(stats::var(as.numeric(f$data[[sp$outcome]]))) else NA_real_
@@ -3174,7 +3268,7 @@ reg_cols_vsrest <- function(f, sp, ctx) {
     col <- reg_marginal_column(skeleton, marg, sp$row_vars, "or",
                                NA_real_, g, sp_col, color_signif, cv_cat,
                                model_family = sp_fam, const = const)
-    col <- reg_fill_base(col, marg_add, skeleton, sp$row_vars, group = g)
+    col <- reg_fill_base(col, marg_add, skeleton, sp$row_vars, group = g, crosses = crosses)
     list(label = lab, col = reg_apply_display(col, reg_display_of(display, empirical)))
   })
 }
@@ -3198,7 +3292,8 @@ reg_cols_coef <- function(f, sp, ctx) {
   marg <- reg_scale_pred(marg, sp$trials)
   disp  <- reg_display_of(display, empirical)
   dress <- function(col, group = NULL)
-    reg_apply_display(reg_fill_base(col, marg, skeleton, model_predictors, group = group), disp)
+    reg_apply_display(reg_fill_base(col, marg, skeleton, model_predictors, group = group,
+                                    crosses = crosses), disp)
   if (sp_fam == "multinomial") {
     cols <- reg_columns_multinom(skeleton, f, sp, sp$est, sp_col, color_signif,
                                  cleannames, prefix_dep,
@@ -3322,15 +3417,6 @@ reg_stage_rows <- function(ctx) {
   list2env(reg_ctx_locals(ctx), environment())
 
   disp_levels <- reg_cleanup(skeleton$level, cleannames)
-  if (length(shape_labels)) {
-    for (v in names(shape_labels)) {
-      hit <- skeleton$var == v & !is.na(skeleton$term)
-      if (any(hit)) disp_levels[hit] <- sub(v, shape_labels[[v]], disp_levels[hit], fixed = TRUE)
-    }
-  }
-  # A scaled numeric predictor's level IS its unit -- "per SD/13.5", not "age (per 1 SD (13.5))".
-  # The `var` column already names the variable, so repeating it there only stretched the column and
-  # made the label wrap. Keyed on the LINEAR term, so a curved predictor's squared row claims no unit.
   # The Constant row says WHICH baseline it holds, which is a property of the CONTRAST: a
   # sample-averaged table's is the population, every other one's is the reference profile. A row
   # label cannot be per column, so a table mixing contrasts takes the profile reading -- the one
@@ -3342,37 +3428,45 @@ reg_stage_rows <- function(ctx) {
                         else gettext("Reference profile")
   }
 
+  # A CONTINUOUS PREDICTOR'S LEVEL IS ITS UNIT, composed once so no clause can overwrite another:
+  # "log(x), per 10 (SD), at 42.4 (mean)". The `var` column already names the variable, so the row
+  # states only what a reader needs to place the effect -- the transform it was fitted through, the
+  # step it is per, and the origin the Constant row and every interacted term sit at.
+  # Keyed on the LINEAR term, so a curved predictor's squared row claims neither unit nor anchor.
   lin      <- !is.na(skeleton$term) & skeleton$term == skeleton$var
   num_rows <- skeleton$var %in% numeric_preds & lin
-  if (length(multiplier_label)) {
-    for (v in names(multiplier_label)) {
-      lab <- multiplier_label[[v]]
-      if (is.na(lab)) next
-      hit <- num_rows & skeleton$var == v
-      if (any(hit)) disp_levels[hit] <- gettextf("per %s", lab)
-    }
-    # a CROSSED slope's rows are the moderator's levels, so the unit goes in front of each: the
-    # block says which variable, the row says per what and within which group.
-    for (rec in crosses) {
-      lab <- if (identical(rec$arm, "nested")) multiplier_label[[rec$modified]] else NULL
-      hit <- skeleton$var == rec$var
-      if (is.null(lab) || is.na(lab) || !any(hit)) next
-      disp_levels[hit] <- paste0(gettextf("per %s", lab), reg_cross_sep(), disp_levels[hit])
-    }
+  # ⚠ every lookup is `[v]`, never `[[v]]`: each of the four is a NAMED vector holding only the
+  # predictors it applies to, and `[[` on an absent name is an error rather than NA.
+  one <- function(x, v) { y <- unname(x[v]); if (length(y) && !is.na(y)) y else NULL }
+  unit_of  <- function(v, anchor = TRUE) {
+    mult <- one(multiplier_label, v)
+    anch <- if (anchor) one(anchors, v) else NULL
+    parts <- c(one(REG_SHAPE_MARKS[unname(shape_kinds[v])], 1L),
+               if (!is.null(mult)) gettextf("per %s", mult),
+               if (!is.null(anch)) {
+                 kw  <- one(unlist(anchor_keyword), v) %||% ""
+                 num <- format(signif(anch, 3), scientific = FALSE)
+                 gettextf("at %s", if (nzchar(kw)) paste0(num, " (", reg_anchor_word(kw), ")")
+                                   else num)
+               })
+    paste(parts, collapse = ", ")
   }
-  # ...and WHERE it is read from: "per SD/2.07 (at mean/2.98)". A continuous predictor's row states
-  # the two facts a reader needs to place it -- the unit its effect is per, and the anchor the
-  # Constant row and every interacted term sit at. Without the second the reference profile is
-  # invisible. Keyed on the LINEAR row, like the unit: the squared row shares the same anchor.
-  # ⚠ the separating space stays OUT of the msgid: potools strips a leading one, so " (at %s)" would
-  # be extracted as "(at %s)" and the runtime lookup could never match its own catalogue entry.
-  for (v in intersect(names(anchors), numeric_preds)) {
+  for (v in intersect(numeric_preds, as.character(skeleton$var))) {
     hit <- num_rows & skeleton$var == v
     if (!any(hit)) next
-    kw  <- anchor_keyword[[v]] %||% ""
-    num <- format(signif(anchors[[v]], 3), scientific = FALSE)
-    disp_levels[hit] <- paste0(disp_levels[hit], " ", gettextf(
-      "(at %s)", if (nzchar(kw)) paste0(reg_anchor_word(kw), "/", num) else num))
+    u <- unit_of(v)
+    if (nzchar(u)) disp_levels[hit] <- u
+  }
+  # A CROSSED slope's rows are the moderator's LEVELS, so the modified variable and its unit open
+  # each of them: the block names the pair, the row says whose slope this is and within which group.
+  # No anchor clause -- a nested slope does not depend on it, and the row is long enough.
+  for (rec in crosses) {
+    if (!identical(rec$arm, "nested")) next
+    hit <- skeleton$var == rec$var
+    if (!any(hit)) next
+    u <- unit_of(rec$modified, anchor = FALSE)
+    disp_levels[hit] <- paste0(rec$modified, if (nzchar(u)) paste0(" ", u),
+                               reg_cross_row_sep(), disp_levels[hit])
   }
 
   # THE OBSERVED SHAPE of each continuous predictor, stored as a CURVE and drawn at display time
@@ -3596,14 +3690,15 @@ reg_stage_finalize <- function(ctx) {
 #'
 #'   **`a*b` is an interaction**, R's own spelling, written bare or quoted ---
 #'   `c(race, relig, race*age4)` or `c("race", "relig", "race*age4")`. It reads *"a's effect,
-#'   allowed to vary with b"*, and gives one row block named `a × b`. Two shapes, chosen from what
-#'   `a` is:
+#'   allowed to vary with b"*, and gives one row block named exactly as you wrote it, `race*age4`.
+#'   Two shapes, chosen from what `a` is:
 #'   \itemize{
 #'     \item **two categorical variables** give one row per **cell** --- `Black · 34-46` --- each
 #'     compared to a single common reference cell, with its own count, its observed rate and its
 #'     adjusted one. This is the readable form, and the one every `effect` supports.
 #'     \item a **continuous** `a` gives one row per level of `b`, holding `a`'s **slope within that
-#'     group** (`per SD/13.5 · Black`). To get the cell table instead, cut it:
+#'     group** --- the row names it, `age per 13.5 (SD) --- Black`. To get the cell table instead,
+#'     cut it:
 #'     `shape = c(age = "quartiles")`. `b` must be categorical either way --- a **continuous by
 #'     continuous** interaction has no groups to make rows from, so cut one of the two, or write the
 #'     model as a formula (`outcome = y ~ a * b`) if you want the bare coefficient.
@@ -3768,9 +3863,10 @@ reg_stage_finalize <- function(ctx) {
 #'   moves the odds, so its odds ratio sits inside the first colour break and the row reads as "no
 #'   effect"), so the default is **one standard deviation**. Values: `"sd"` (the default), `"2sd"`
 #'   (roughly bottom to top of the distribution), or a number of units (`10` = per decade of age);
-#'   `multiplier = 1` restores the per-one-unit reading. The row's level states both facts that place
-#'   it --- the unit, and the `ref` anchor the Constant row sits at: `per SD/13.5 (at mean/42.4)`.
-#'   The variable itself is named in the `var` column beside it.
+#'   `multiplier = 1` restores the per-one-unit reading. The row's level states every fact that
+#'   places it --- the transform `shape` fitted it through, the unit its effect is per, and the `ref`
+#'   anchor the Constant row sits at: `log(x), per 0.39 (SD), at 3.78 (mean)`. The variable itself is
+#'   named in the `var` column beside it.
 #'
 #'   `multiplier`, `shape` and `ref` share one grammar: a **value on its own** applies to every
 #'   continuous predictor, a **named** one overrides that variable, and `default =` spells the first
@@ -3838,8 +3934,11 @@ reg_stage_finalize <- function(ctx) {
 #'   table used.
 #' @param n How many people the table is about. `"range"` (the default) adds an `n` column holding
 #'   the **unadjusted count** behind each predictor level, on the model's own complete cases --- the
-#'   numbers a reader needs to judge the estimates beside them --- with the model N on the Constant
-#'   row. When several models were fitted on different people it prints the whole range
+#'   numbers a reader needs to judge the estimates beside them. The **Constant** row shows the count
+#'   of its own reference profile where every predictor is categorical, the model N under
+#'   `effect = "marginal"` (the row is then the whole population), and nothing where a continuous
+#'   predictor makes the profile a place nobody is --- the model N is the first footer row.
+#'   When several models were fitted on different people it prints the whole range
 #'   (`5 139-9 862`), so an unequal base can never pass unnoticed; `"min"` shows the smallest count
 #'   only, `"no"` no count at all. Continuous predictors are left blank: on a listwise-complete frame
 #'   their count is the model N. With `tab_vars`, one column per group, to the right of the models.
@@ -3899,12 +3998,18 @@ reg_stage_finalize <- function(ctx) {
 #'   \item{**Influence (max dfbetas)** (a ratio)}{Does one respondent carry the result? The largest
 #'     change dropping a single observation makes to a coefficient, in units of its own standard
 #'     error. Printed as a *reassurance*: with thousands of respondents a near-zero value is the
-#'     finding. Influence is not outlyingness.}
+#'     finding. Influence is not outlyingness. **Marked** from 1 --- one respondent moving a
+#'     coefficient by a whole standard error.}
 #'   \item{**Collinearity (max VIF)** (a ratio)}{Can the data tell these predictors apart? The
 #'     largest variance inflation factor (`car::vif()`). The one check that is not a comparison with
-#'     the data --- collinearity biases nothing, it only widens intervals. Needs `car`; refused for
-#'     multinomial outcomes.}
+#'     the data --- collinearity biases nothing, it only widens intervals. **Marked** from 10, the
+#'     textbook figure. Needs `car`; refused for multinomial outcomes.}
 #' }
+#'
+#' The two marked thresholds are **conventions, not tests**: no cut-off on a variance inflation
+#' factor or a dfbeta has a null distribution behind it, and the literature is openly divided on the
+#' VIF one. So a marked cell wears the *faintest* shade, a warning --- "look at this" --- where a
+#' non-significant test wears the deepest. Read the number, not the mark.
 #'
 #' Dispersion, Influence and Collinearity are arithmetic on the model already fitted, so they ride
 #' the default footer and cost nothing; Linearity and Proportionality fit a model and are therefore
@@ -3943,11 +4048,17 @@ reg_stage_finalize <- function(ctx) {
 #'   every factor at its reference level and every continuous predictor at its `ref` anchor, the
 #'   mean by default; under `"at_reference"` the outcome the model predicts at that same profile;
 #'   under `"marginal"` the **population average** the sample-averaged effects sit on, which is what
-#'   its label then says. On a multiplicative column it is a baseline *odds* (or risk, or rate), on
-#'   an additive one a baseline probability or mean --- the quantity the effects beside it move.
-#'   It carries its confidence interval but **no star** except under `"coefficient"`, where the star
-#'   is the fit's own test of the intercept: a predicted 48.7 % is not "different from zero". An
-#'   ordinal outcome leaves it empty (a cumulative logit has thresholds, not one intercept).
+#'   its label then says.
+#'
+#'   It holds **the quantity the column's effects operate on**, so it is read in one step: an odds
+#'   ratio multiplies odds, so an odds column shows the baseline *odds* (`1/1.51`) with the
+#'   probability beside it (`(40%)`); a risk or rate ratio multiplies the level and a difference adds
+#'   to it, so those show the **level itself** --- `39%`, `40.8`, `2.9`; and `measure = "log"` shows
+#'   the intercept on the link scale. It is a baseline, not a comparison, so it never carries a `+`
+#'   or a `x` sign. It carries its confidence interval, and a **star** only where what it prints has
+#'   a null to be tested against (the odds and link scales, under `effect = "coefficient"`): a
+#'   predicted 48.7 % is not "different from zero". An ordinal outcome leaves it empty (a cumulative
+#'   logit has thresholds, not one intercept).
 #'
 #'   Or write a `{}` template: `"{est} (obs {obs})"` prints each adjusted effect next to the
 #'   unadjusted one, `"{est} ({gap})"` next to how far adjustment moved it.

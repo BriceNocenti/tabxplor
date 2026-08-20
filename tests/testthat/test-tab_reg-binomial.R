@@ -20,7 +20,8 @@ test_that("tab_reg() returns a grouped odds-ratio tab with the right structure",
   expect_true("Model_OR" %in% names(t1))
   col <- t1[["Model_OR"]]
   expect_true(is_fmt(col))
-  expect_identical(get_display(col)[1], "est")
+  expect_identical(get_display(col)[1], "or")     # the Constant: a baseline ODDS, not an effect
+  expect_identical(get_display(col)[2], "est")
   expect_identical(get_pct_type(col), "row")
   expect_identical(get_scale(col), "odds_ratio")
   expect_identical(get_color(col), "odds_ratio")

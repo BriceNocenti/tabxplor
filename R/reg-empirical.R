@@ -93,15 +93,14 @@ reg_crude_yw <- function(data, outcome, crude_key, positive_level = NULL, wt = N
 }
 
 # reg_level_counts() -- the N behind each predictor level, aligned to the skeleton; family-free,
-# agreeing with reg_empirical()'s own `emp_n`. NA on a numeric predictor's row and the Constant is
-# deliberate (nrow(frame) for EVERY numeric predictor); the Constant row shows the model N instead.
+# agreeing with reg_empirical()'s own `emp_n`. NA on a numeric predictor's row is deliberate: on a
+# listwise-complete frame its count IS the model N. The BASELINE row is left to reg_constant_count(),
+# which needs the contrast to know what its base even is.
 #' @keywords internal
 reg_level_counts <- function(frame, skeleton, wt = NULL, crosses = list()) {
   n  <- rep(NA_integer_, nrow(skeleton))
   wn <- rep(NA_real_,    nrow(skeleton))
   w  <- if (!is.null(wt) && wt %in% names(frame)) as.numeric(frame[[wt]]) else NULL
-  n[skeleton$var == "Constant"] <- nrow(frame)
-  if (!is.null(w)) wn[skeleton$var == "Constant"] <- sum(w, na.rm = TRUE)
   for (v in setdiff(unique(skeleton$var), "Constant")) {
     # a nested cross block's rows are its MODERATOR's levels -- the count a continuous predictor
     # never had, and what a crossed slope is read with.
@@ -455,12 +454,12 @@ REG_EMPIRICAL <- list(
     irr_log = list(word = "IRR",  scale = "log_coef",   ref = NA_character_, ci_method = "quasipoisson", ci_method_design = "robust", link = "log"),
     diff    = list(word = "diff", scale = "raw_diff",   ref = NA_character_, ci_method = "welch", ci_method_design = "welch", link = "identity")),
   # grouped_binomial (`trials =`): still saturated, Woolf 2x2 on the SUMMED counts; its LEVEL is
-  # the mean SCORE, hence `score_ratio`. ⚠ its own `rr`/`rr_log` (the two groups' mean SCORES),
-  # not the respondent-level REG_EMPIRICAL$rr -- reg_crude_shape() enforces this precedence.
+  # the mean SCORE, hence the two `score_*` scales. ⚠ its own `rr`/`rr_log` (the two groups' mean
+  # SCORES), not the respondent-level REG_EMPIRICAL$rr -- reg_crude_shape() enforces this precedence.
   grouped_binomial = list(
     method_diff = "wald", coef = "or", coef_log = "or_log",
     ame    = list(word = "RD",  scale = "raw_diff",    ref = NA_character_, ci_method = "welch", ci_method_design = "welch", link = "identity"),
-    or     = list(word = "OR",  scale = "score_ratio", ref = "1",           ci_method = "woolf", link = "logit"),
+    or     = list(word = "OR",  scale = "score_odds_ratio", ref = "1",     ci_method = "woolf", link = "logit"),
     or_log = list(word = "OR",  scale = "log_coef",    ref = NA_character_, ci_method = "woolf", link = "logit"),
     rr     = list(word = "RR",  scale = "score_ratio", ref = "1",           ci_method = "katz",  link = "log"),
     rr_log = list(word = "RR",  scale = "log_coef",    ref = NA_character_, ci_method = "katz",  link = "log")),

@@ -603,7 +603,8 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "age*
 #    the quantile variable to ; the separetor to be "–". Example: "age per 13.4 (SD) — [0,1)"
 # - in tooltips, the observed counterparts of "age × tvhours" have many `NA`s, tooltips are very long and unreadable ; 
 #    calculate the meaningful quantities to populate it, or when a field is really NA the rule should be "never shows it in the tooltips"
-# - "age × tvhours" displays an adjusted proportion here, is it right ? Is it meaningful ?
+# - "age × tvhours" displays an adjusted proportion here, is it right ? Is it meaningful ? 
+#    Adjusted married proportion of the tvhours level given it’s specific age slope (how to word it) ?
 
 
 #### stats footers

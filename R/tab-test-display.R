@@ -64,6 +64,15 @@ test_fmt_num <- function(v, digits = 0L) {
 # The single red-helper predicate: a p-value at or above 0.05 (a non-significant result). Vectorised.
 test_is_nonsig <- function(p) !is.na(p) & p >= 0.05
 
+# ...and its model-check twin: is this goodness-of-fit number past the CONVENTION its check declares
+# (REG_CHECKS$<k>$flag)? A rule of thumb, so it earns the faintest under-shade -- "look at this" --
+# where a non-significant test earns the deepest. NA threshold = the check names none.
+#' @keywords internal
+test_is_flagged <- function(value, flag) {
+  if (length(flag) != 1L || is.na(flag)) return(FALSE)
+  !is.na(value) && value >= flag
+}
+
 # The short symbol for each effect-size measure (ASCII, so every backend renders it): Cramer's V,
 # phi (2x2), eta^2 (numeric / ANOVA). Phase 18j.
 test_es_symbol <- function(es_type)
@@ -187,7 +196,7 @@ TEST_ROWS <- local({
   blocks <- list(
     # --- goodness of fit, one per model column (reg_glance) --------------------------------------
     glance = list(
-      n             = reg_gof("N",              0L, stat = "n", render = "record"),
+      n             = reg_gof("N",              0L, stat = "n"),
       lr_null       = reg_p  ("LR vs null",         stat = "lr_null"),
       wald_null     = reg_p  ("Wald vs null",       stat = "wald_null"),
       f_model       = reg_p  ("F",                  stat = "f_model"),
@@ -456,7 +465,10 @@ reg_footer_spec <- function() {
     # ⚠ the member is ABSENT on a pvalue row, never NA: reg_footer_plan()'s `s$digits %||% 0L` is
     # what turns that into the 0L every p-value row has always carried, and only `kind == "gof"`
     # ever reads it (test_grid_reg(), reg_footer_lines()).
-    if (identical(r$kind, "gof")) out$digits <- r$digits
+    if (identical(r$kind, "gof")) {
+      out$digits <- r$digits
+      out$flag   <- as.numeric(r$flag %||% NA_real_)   # the "worth a look" threshold, or none
+    }
     out
   }), TEST_FOOTER_KEYS)
 }
@@ -522,6 +534,7 @@ reg_footer_plan <- function(reg) {
   k$label  <- ifelse(nzchar(k$term), paste0(lab, ": ", k$term), lab)
   k$kind   <- vapply(sp, `[[`, character(1), "kind")
   k$digits <- vapply(sp, function(s) as.integer(s$digits %||% 0L), integer(1))
+  k$flag   <- vapply(sp, function(s) as.numeric(s$flag %||% NA_real_), numeric(1))
   rownames(k) <- NULL
   k
 }
@@ -529,8 +542,9 @@ reg_footer_plan <- function(reg) {
 # A single footer cell (one fmt value), for the appended export rows. gof -> the "gof" token (value in
 # `diff`); pvalue -> the pvalue_line_fmt shape (no in-cell label: the reg row label already names the
 # stat). A missing stat -> a "blank" cell (renders "").
-reg_gof_cell   <- function(value, digits) fmt(display = "gof", scale = "level_n", n = NA_integer_,
-                                              diff = value, digits = as.integer(digits))
+reg_gof_cell   <- function(value, digits, flag = NA_real_)
+  fmt(display = if (test_is_flagged(value, flag)) "gof_warn" else "gof",
+      scale = "level_n", n = NA_integer_, diff = value, digits = as.integer(digits))
 reg_pvalue_cell <- function(p) pvalue_line_fmt(p)
 reg_blank_cell  <- function() fmt(display = "blank", scale = "level_n", n = NA_integer_)
 
@@ -717,7 +731,11 @@ test_grid_reg <- function(x, test_tbl) {
         r <- hit(cv)
         identical(pk$kind, "pvalue") && nrow(r) > 0 && test_is_nonsig(r$pvalue[1])
       }, logical(1))
-      list(label = pk$label, cells = cells, nonsig = nonsig)
+      warn <- vapply(value_cols, function(cv) {
+        r <- hit(cv)
+        test_is_flagged(if (nrow(r) > 0) r$statistic[1] else NA_real_, pk$flag)
+      }, logical(1))
+      list(label = pk$label, cells = cells, nonsig = nonsig, warn = warn)
     })
     label_lines <- c(if (is_split) list(g) else NULL, if (show_preds) list(pred_lines) else NULL)
     list(label_lines = label_lines, rows = rows)
@@ -780,6 +798,7 @@ test_render_console <- function(grid) {
   stat  <- character(n_out)
   val   <- matrix("", nrow = n_out, ncol = V)
   red   <- matrix(FALSE, nrow = n_out, ncol = V)
+  warn  <- matrix(FALSE, nrow = n_out, ncol = V)   # a model check past its convention (see below)
   dashr <- logical(n_out)                                   # which output rows are group separators
 
   r <- 0L
@@ -795,6 +814,7 @@ test_render_console <- function(grid) {
       stat[r]   <- row$label
       val[r, ]  <- row$cells
       red[r, ]  <- row$nonsig
+      warn[r, ] <- row$warn %||% FALSE
     }
     if (gi < length(grid$groups)) { r <- r + 1L; dashr[r] <- TRUE }
   }
@@ -851,9 +871,13 @@ test_render_console <- function(grid) {
         interleave_val(vapply(seq_len(V), function(c) strrep("-", val_w[c]), character(1))))))
       next
     }
+    # a non-significant test is the deepest under-shade (a verdict); a model check past its
+    # CONVENTION is the faintest (a warning). One ladder, so the two never read as the same thing.
     vcells <- vapply(seq_len(V), function(c) {
       cell <- padr(val[r, c], val_w[c])
-      if (red[r, c]) cli::col_red(cell) else cell
+      if (red[r, c]) cli::col_red(cell)
+      else if (warn[r, c]) test_warn_style()(cell)
+      else cell
     }, character(1))
     lines_out <- c(lines_out, emit(c(
       vapply(seq_len(L), function(c) padl(lab[r, c], lab_w[c]), character(1)),
@@ -864,6 +888,16 @@ test_render_console <- function(grid) {
   cli::cat_line(lines_out)
   cli::cat_line()
   invisible(NULL)
+}
+
+# The console style of a flagged model check: the palette's FAINTEST under slot, read from the
+# console's own detected theme so it matches the cells above it. Falls back to the plain string
+# wherever the palette cannot be resolved -- a footer must never fail to print.
+#' @keywords internal
+test_warn_style <- function() {
+  hex <- tryCatch(get_color_style("color_code", type = "text")[[5L]], error = function(e) NA)
+  if (is.null(hex) || length(hex) != 1L || is.na(hex)) return(identity)
+  tryCatch(cli::make_ansi_style(hex), error = function(e) identity)
 }
 
 # One GFM alignment marker filling a "| x |" slot: content width `w` + the 2 surrounding spaces. left

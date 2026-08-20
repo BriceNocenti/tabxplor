@@ -58,7 +58,10 @@ test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the addit
   col <- t1[["Model_diff"]]
 
   expect_identical(tabxplor:::fmt_var_kind(col), "coef")
-  expect_identical(get_display(col)[1], "est")
+  # row 1 is the Constant, a BASELINE: it renders the scale's `const_display` (the mean the
+  # coefficients add to), not the effect token every other row carries.
+  expect_identical(get_display(col)[1], "mean")
+  expect_identical(get_display(col)[2], "est")
   expect_identical(get_scale(col), "raw_diff")
   expect_identical(get_color(col), "difference")
   expect_identical(get_color_signif(col), "grey_non_signif")
@@ -72,12 +75,14 @@ test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the addit
   hi <- co[, "Estimate"] + tq * co[, "Std. Error"]
   pm <- co[, 4]
 
-  keep <- !is.na(get_pvalue(col))                    # intercept + estimated coefs (ref levels NA)
-  expect_equal(sum(keep), length(bm))
-  expect_equal(sort(get_diff(col)[keep]),   sort(unname(bm)), tolerance = 1e-6)  # beta in `diff`
-  expect_equal(sort(get_ci_inf(col)[keep]), sort(unname(lo)), tolerance = 1e-6)
-  expect_equal(sort(get_ci_sup(col)[keep]), sort(unname(hi)), tolerance = 1e-6)
-  expect_equal(sort(get_pvalue(col)[keep]), sort(unname(pm)), tolerance = 1e-6)
+  keep <- !is.na(get_pvalue(col))     # the estimated coefs (ref levels and the Constant carry no test)
+  expect_equal(sum(keep), length(bm) - 1L)
+  expect_equal(sort(get_diff(col)[keep]),   sort(unname(bm[-1])), tolerance = 1e-6)  # beta in `diff`
+  expect_equal(sort(get_ci_inf(col)[keep]), sort(unname(lo[-1])), tolerance = 1e-6)
+  expect_equal(sort(get_ci_sup(col)[keep]), sort(unname(hi[-1])), tolerance = 1e-6)
+  expect_equal(sort(get_pvalue(col)[keep]), sort(unname(pm[-1])), tolerance = 1e-6)
+  # the intercept is still the fit's own, on the baseline row's own field
+  expect_equal(get_mean(col)[1], unname(bm[1]), tolerance = 1e-6)
 
   # reference-level betas are 0 (the additive neutral), no CI/p; var field carries var(Y)
   ref_lvls <- is_refrow(col) & as.character(t1$var) != "Constant"
@@ -111,7 +116,8 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
 
   # a rate ratio's own scale: odds_ratio's ladder and glyphs, a MEAN as the level it sits on
   expect_identical(get_pct_type(col), "none")
-  expect_identical(get_display(col)[1], "est")
+  expect_identical(get_display(col)[1], "mean")   # the Constant: the baseline mean count
+  expect_identical(get_display(col)[2], "est")
   expect_identical(get_scale(col), "mean_ratio")
 
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
@@ -127,11 +133,12 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
   hi  <- exp(coq[, 1] + crit * coq[, 2])
   pm  <- coq[, 4]
 
-  keep <- !is.na(get_pvalue(col))
-  expect_equal(sort(get_ratio(col)[keep]),  sort(unname(irr)), tolerance = 1e-6)
-  expect_equal(sort(get_ci_inf(col)[keep]), sort(unname(lo)),  tolerance = 1e-6)
-  expect_equal(sort(get_ci_sup(col)[keep]), sort(unname(hi)),  tolerance = 1e-6)
-  expect_equal(sort(get_pvalue(col)[keep]), sort(unname(pm)),  tolerance = 1e-6)
+  keep <- !is.na(get_pvalue(col))     # the Constant is a baseline mean count: no test, no ratio
+  expect_equal(sort(get_ratio(col)[keep]),  sort(unname(irr)[-1]), tolerance = 1e-6)
+  expect_equal(sort(get_ci_inf(col)[keep]), sort(unname(lo)[-1]),  tolerance = 1e-6)
+  expect_equal(sort(get_ci_sup(col)[keep]), sort(unname(hi)[-1]),  tolerance = 1e-6)
+  expect_equal(sort(get_pvalue(col)[keep]), sort(unname(pm)[-1]),  tolerance = 1e-6)
+  expect_equal(get_mean(col)[1], unname(irr)[1], tolerance = 1e-6)
 })
 
 # ---- exponentiate + references --------------------------------------------------------------
@@ -344,8 +351,9 @@ test_that("grouped binomial (trials=) matches glm(cbind(s, q-s)); OR fmt shape",
 
   # a summed score's odds ratio sits on the mean SCORE, which is a mean and not a percentage
   expect_identical(get_pct_type(col), "none")
-  expect_identical(get_display(col)[1], "est")
-  expect_identical(get_scale(col), "score_ratio")
+  expect_identical(get_display(col)[1], "or")    # the Constant: the baseline per-item odds
+  expect_identical(get_display(col)[2], "est")
+  expect_identical(get_scale(col), "score_odds_ratio")
 
   dm <- d |> dplyr::filter(!is.na(score), !is.na(race))
   dm$race <- forcats::fct_drop(factor(dm$race))
@@ -406,9 +414,13 @@ test_that("trials= reaches the rr / rd links too (measure = ratio / difference)"
   # the Constant row is kept in the comparison: exp(intercept) is the per-item risk at the reference
   # profile, and it is the value that proves the offset was applied (without it the intercept would
   # be an expected count out of 10).
+  # a summed score's RISK ratio has its own scale, `ratio` field and "/ x" glyphs -- borrowing the
+  # odds-ratio row printed every one of them as "1/x".
   expect_identical(get_scale(rr), "score_ratio")
-  expect_equal(sort(get_or(rr)[!is.na(get_pvalue(rr))]),
-               sort(exp(unname(stats::coef(g_rr)))), tolerance = 1e-6)
+  expect_equal(sort(get_ratio(rr)[!is.na(get_pvalue(rr))]),
+               sort(exp(unname(stats::coef(g_rr))[-1])), tolerance = 1e-6)
+  # the intercept sits on the row's baseline field, in the column's own unit (the mean SCORE)
+  expect_equal(get_mean(rr)[[1]], exp(unname(stats::coef(g_rr))[[1]]) * 10, tolerance = 1e-6)
 
   # rd: the identity link takes the two-column response directly.
   rd <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
@@ -420,11 +432,11 @@ test_that("trials= reaches the rr / rd links too (measure = ratio / difference)"
   # `raw_diff` (one unit throughout: places out of 10) rather than on the probability-scale `points`.
   expect_identical(get_scale(rd), "raw_diff")
   expect_equal(sort(get_diff(rd)[!is.na(get_pvalue(rd))]),
-               sort(unname(stats::coef(g_rd)) * 10), tolerance = 1e-6)
+               sort(unname(stats::coef(g_rd))[-1] * 10), tolerance = 1e-6)
 
-  # the two links, fitted independently, agree on that reference-profile value -- once both are read
-  # in the same unit (the rr column's Constant is the per-ITEM risk, the rd column's the mean score)
-  expect_equal(get_or(rr)[[1]] * 10, get_diff(rd)[[1]], tolerance = 1e-6)
+  # the two links, fitted independently, agree on that reference-profile value -- and both baseline
+  # rows now state it in the same unit, the mean score
+  expect_equal(get_mean(rr)[[1]], get_mean(rd)[[1]], tolerance = 1e-6)
 })
 
 
@@ -477,8 +489,8 @@ test_that("a compound formula (poly) fits with best-effort term rows; coefs matc
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
   m  <- stats::lm(tvhours ~ race + poly(age, 2), data = dm)
   co <- summary(m)$coefficients
-  keep <- !is.na(get_pvalue(col))
-  expect_equal(sort(get_diff(col)[keep]), sort(unname(co[, "Estimate"])), tolerance = 1e-6)
+  keep <- !is.na(get_pvalue(col))                     # the Constant is a baseline: no test
+  expect_equal(sort(get_diff(col)[keep]), sort(unname(co[, "Estimate"])[-1]), tolerance = 1e-6)
 })
 
 test_that("a compound formula with an interaction renders and exports without error", {
@@ -578,7 +590,8 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
   expect_true(all(c("Dem vs Ind", "Rep vs Ind") %in% names(t1)))
   col1 <- t1[["Dem vs Ind"]]
   expect_identical(get_pct_type(col1), "row")
-  expect_identical(get_display(col1)[1], "est")
+  expect_identical(get_display(col1)[1], "or")     # the Constant: a baseline odds
+  expect_identical(get_display(col1)[2], "est")
   expect_identical(get_scale(col1), "odds_ratio")
 
   dm <- d |> dplyr::filter(!is.na(party3), !is.na(race), !is.na(age))
@@ -626,7 +639,10 @@ test_that("tab_reg() ordinal cumulative OR / CI / p match MASS::polr; single col
                                   ref = c(age = 0)))
   col <- t1[["Model_cumOR"]]            # an ordinal odds ratio is CUMULATIVE, and says so
   expect_identical(get_pct_type(col), "row")
+  # a cumulative logit has THRESHOLDS, not one intercept: there is no baseline to place, so the row
+  # keeps the ordinary token and stays empty
   expect_identical(get_display(col)[1], "est")
+  expect_true(is.na(get_or(col)[1]))
   expect_identical(get_scale(col), "odds_ratio")
 
   dm <- d |> dplyr::filter(!is.na(spectrum), !is.na(race), !is.na(age))
@@ -662,7 +678,7 @@ test_that("multiplier reaches the 3+ level engines: per-SD by DEFAULT on ordinal
   expect_gt(k, 1)
   expect_equal(get_or(t1[["Model_cumOR"]])[i], get_or(tk[["Model_cumOR"]])[i]^k, tolerance = 1e-8)
   expect_equal(get_pvalue(t1[["Model_cumOR"]])[i], get_pvalue(tk[["Model_cumOR"]])[i])
-  expect_match(as.character(t1$levels)[i], "^per SD/")
+  expect_match(as.character(t1$levels)[i], "^per [0-9.]+ \\(SD\\)")
   # a factor level is untouched by the rescale
   j <- which(as.character(t1$var) == "race" & !is_refrow(t1[["Model_cumOR"]]))
   expect_equal(get_or(t1[["Model_cumOR"]])[j], get_or(tk[["Model_cumOR"]])[j])
@@ -770,7 +786,8 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
   expect_equal(sort(get_ci_inf(col)[keep]), sort(c(acr$conf.low, aca$conf.low)),   tolerance = 1e-6)
   expect_equal(sort(get_ci_sup(col)[keep]), sort(c(acr$conf.high, aca$conf.high)), tolerance = 1e-6)
   expect_equal(sort(get_pvalue(col)[keep]), sort(c(acr$p.value, aca$p.value)),     tolerance = 1e-6)
-  expect_equal(sort(get_pct(col)[!is.na(get_pct(col))]), sort(ap$estimate),        tolerance = 1e-6)
+  lvl_pct <- !is.na(get_pct(col)) & as.character(t1$var) != "Constant"   # the baseline is its own
+  expect_equal(sort(get_pct(col)[lvl_pct]), sort(ap$estimate),                    tolerance = 1e-6)
 
   # every value cell shows THE ESTIMATE; the layout beside it is the table's `display` (here none)
   disp   <- get_display(col)
@@ -948,7 +965,8 @@ test_that("MER-at-reference (binomial): effect/prediction/CI match marginaleffec
   expect_equal(sort(get_diff(col)[keep]),   sort(c(acr$estimate, aca$estimate)),   tolerance = 1e-6)
   expect_equal(sort(get_ci_inf(col)[keep]), sort(c(acr$conf.low, aca$conf.low)),   tolerance = 1e-6)
   expect_equal(sort(get_pvalue(col)[keep]), sort(c(acr$p.value, aca$p.value)),     tolerance = 1e-6)
-  expect_equal(sort(get_pct(col)[!is.na(get_pct(col))]), sort(ap$estimate),        tolerance = 1e-6)
+  lvl_pct <- !is.na(get_pct(col)) & as.character(t1$var) != "Constant"   # the baseline is its own
+  expect_equal(sort(get_pct(col)[lvl_pct]), sort(ap$estimate),                    tolerance = 1e-6)
 })
 
 test_that("MNL 'j vs rest' OR at the reference profile matches marginaleffects (comparison='lnor')", {
@@ -1139,7 +1157,9 @@ test_that("the `n` column gives every predictor level its unadjusted N, on the m
   # so an Obs_* block and this column can never count different people
   fr <- tidyr::drop_na(d[, c("married", "race", "age")])
   nn <- get_n(m[["n"]])
-  expect_equal(nn[as.character(t$var) == "Constant"], nrow(fr))
+  # the baseline row is a PROFILE, and `age` is continuous, so nobody is at it: the cell is empty and
+  # the model N is the first "Model fit" footer row instead
+  expect_true(is.na(nn[as.character(t$var) == "Constant"]))
   race_rows <- as.character(t$var) == "race"
   expect_equal(sort(nn[race_rows]),
                sort(unname(as.integer(table(forcats::fct_drop(fr$race))))))

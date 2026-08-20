@@ -514,6 +514,15 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # cell is not a direct child of the tx-bb2 bottom row, so it stays 1px, not 2px -- as asked).
     ".tabxplor-tab tr.tx-bb>*,.tabxplor-tab td.tx-bb{border-bottom-style:solid;border-bottom-width:1px;}",
     ".tabxplor-tab tr.tx-bb2>*{border-bottom-style:solid;border-bottom-width:2px;}",
+    # A ROW SEPARATOR DOES NOT CROSS THE VARIABLE-NAME COLUMN. A rowspanned name cell is anchored in
+    # its block's first row and so escapes `tr.tx-bb2>*` anyway; a ONE-ROW block's cell is a direct
+    # child of the closing row and drew a rule its neighbours did not. `tx-nb` (emitted by the html
+    # engine on exactly the name cells that should draw none) opts them all out.
+    # ⚠ a name cell that DOES close a boundary carries `tx-bb` / `tx-bb2` instead of `tx-nb`, never
+    # both -- which is what keeps this rule from having to out-specify the cell-scoped ones below.
+    ".tabxplor-tab tr.tx-bb>.tx-nb,.tabxplor-tab tr.tx-bb2>.tx-nb{border-bottom-style:none;}",
+    ".tabxplor-tab td.tx-bb2{border-bottom-style:solid;border-bottom-width:2px;}",
+    ".tabxplor-tab tr.tx-bt2>*{border-top-style:solid;border-top-width:2px;}",
     # Phase 14j: the footnote (subtext + colour legend) must not SIZE the table. Its cell spans every
     # column, and its prose is ~330 characters on one line, so its max-content dwarfed the data's --
     # and a table's used width is max(min-content, min(max-content, available)), so the table took the

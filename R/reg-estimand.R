@@ -99,8 +99,8 @@ reg_measure_key <- function(x) {
 # WARNING: a crosstab's digits are its own (tab(digits =)); this is the regression side only.
 #' @keywords internal
 #' @noRd
-REG_CELL_DIGITS <- c(odds_ratio = 0L, score_ratio = 2L, pct_ratio = 0L, mean_ratio = 2L,
-                     raw_diff = 2L, mean_diff = 2L, log_coef = 2L, points = 1L)
+REG_CELL_DIGITS <- c(odds_ratio = 0L, score_odds_ratio = 2L, pct_ratio = 0L, score_ratio = 1L,
+                     mean_ratio = 1L, raw_diff = 1L, mean_diff = 1L, log_coef = 2L, points = 1L)
 
 #' @keywords internal
 #' @noRd
@@ -115,7 +115,7 @@ reg_cell_digits <- function(scale) {
 # compares exactly this, and a mismatch withholds `obs`).
 #' @keywords internal
 #' @noRd
-REG_SCALE_GROUPED <- c(odds_ratio = "score_ratio", pct_ratio = "score_ratio",
+REG_SCALE_GROUPED <- c(odds_ratio = "score_odds_ratio", pct_ratio = "score_ratio",
                        points = "raw_diff")
 
 #' @keywords internal

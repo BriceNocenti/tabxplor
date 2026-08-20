@@ -30,8 +30,8 @@ testthat::test_that("ratio (rr) display shows the multiplicative x / div sign", 
   # >= 1 -> "x<r>"; < 1 -> "/<1/r>"; a value ROUNDING to the neutral takes the over glyph, never the
   # confusing "/1.00". Only a REFERENCE cell loses the glyph (see the next test).
   testthat::expect_identical(
-    f, c(paste0(mult_glyph, "2.00"), paste0(div_glyph, "2.00"),
-         paste0(mult_glyph, "1.00"), paste0(mult_glyph, "1.00")))
+    f, c(paste0(mult_glyph, "2.0"), paste0(div_glyph, "2.0"),
+         paste0(mult_glyph, "1.0"), paste0(mult_glyph, "1.0")))
 })
 
 testthat::test_that("a REFERENCE cell at the neutral prints a bare 1, a cell that merely equals it does not", {
@@ -41,7 +41,7 @@ testthat::test_that("a REFERENCE cell at the neutral prints a bare 1, a cell tha
   # the Total row IS the reference: no glyph, no decimals, so its row stands out
   testthat::expect_identical(f[is_totrow(col)], "1")
   # a non-reference cell rounding to the neutral keeps the glyph and the decimals
-  testthat::expect_true(any(f[!is_totrow(col)] == paste0(mult_glyph, "1.00")))
+  testthat::expect_true(any(f[!is_totrow(col)] == paste0(mult_glyph, "1.0")))
   # and a regression Constant IS a reference row, but its odds ratio is a real baseline value
   skip_if_not_installed("broom")
   reg <- suppressMessages(tab_reg(gss_cat_data_formatting(), "married", "race",
@@ -50,7 +50,7 @@ testthat::test_that("a REFERENCE cell at the neutral prints a bare 1, a cell tha
   testthat::expect_false(cst == "1")
 })
 
-testthat::test_that("a multiplicative cell keeps the decimals it ASKS for, and 0 falls back to 2", {
+testthat::test_that("a multiplicative cell keeps the decimals it ASKS for, and 0 takes the floor", {
   # DISPLAY_TOKENS$min_digits overrides ONLY 0: a ratio read against the x1.2 / x1.5 thresholds is
   # meaningless at "1", but a cell asking for 1 or 3 decimals gets exactly that.
   x <- set_display(
@@ -59,7 +59,7 @@ testthat::test_that("a multiplicative cell keeps the decimals it ASKS for, and 0
     "rr")
   m <- mult_glyph; d <- div_glyph
   testthat::expect_identical(format(set_digits(x, 0L)),
-                             c(paste0(m, "1.50"), paste0(d, "4.00"), paste0(m, "1.06")))
+                             c(paste0(m, "1.5"), paste0(d, "4.0"), paste0(m, "1.1")))
   testthat::expect_identical(format(set_digits(x, 1L)),
                              c(paste0(m, "1.5"), paste0(d, "4.0"), paste0(m, "1.1")))
   testthat::expect_identical(format(set_digits(x, 3L)),

@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tabxplor 2.0.0\n"
-"POT-Creation-Date: 2026-08-20 11:27\n"
+"POT-Creation-Date: 2026-08-20 17:03\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1054,7 +1054,7 @@ msgstr ""
 msgid "per %s"
 msgstr ""
 
-msgid "(at %s)"
+msgid "at %s"
 msgstr ""
 
 msgid "Package \"openxlsx2\" needed for this function to work."

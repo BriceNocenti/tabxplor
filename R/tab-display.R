@@ -209,7 +209,7 @@ DISPLAY_TOKENS <- list(
                   doc = 'the difference from the reference'),
   ratio   = .dtok("ratio", user = TRUE, bare = TRUE, value_cell = TRUE, geometry = "ratio",
                   comparison = "ratio",
-                  min_digits = 2L,
+                  min_digits = 1L,
                   source = 'a `ref` to compare to, and pct = "row" / "col"',
                   doc = 'the ratio to the reference (relative risk, or a ratio of means)'),
   ci      = .dtok("ci"   , user = TRUE, bare = TRUE, value_cell = TRUE,
@@ -268,6 +268,11 @@ DISPLAY_TOKENS <- list(
                   doc = "a test's p-value"),
   gof     = .dtok("diff"  , footer = TRUE, colour = FALSE,
                   doc = 'a model-fit statistic (N, R2, AIC, BIC, dispersion)'),
+  # the same cell, MARKED: a model check past the convention its REG_CHECKS row declares. A separate
+  # token rather than a per-cell flag, because "what a cell shows" is exactly what `display` is for,
+  # and it is the one thing the colour engine already dispatches on.
+  gof_warn = .dtok("diff" , footer = TRUE,
+                  doc = 'a model-fit statistic past the threshold its check is read against'),
   # The base count as the reader needs it: ONE number when every column block of the table rests on
   # the same population, `min-max` when they differ (several col_vars losing different NAs, several
   # models). Both ends are ordinary fields -- `n` the smallest base, `tot_n` the largest -- written
@@ -316,6 +321,13 @@ DISPLAY_FOOTER_TOKENS  <- .dtok_which("footer")
 #' @keywords internal
 #' @noRd
 DISPLAY_NO_COLOR       <- names(DISPLAY_TOKENS)[.dtok_real & !.dtok_lgl("colour")]
+# THE model-fit tokens: a footer statistic living in the `diff` field. Derived, so the marked twin
+# and any future sibling reach every reader (get_num/set_num, the padding, the tooltip) at once.
+#' @keywords internal
+#' @noRd
+DISPLAY_GOF_TOKENS     <- names(DISPLAY_TOKENS)[
+  .dtok_real & .dtok_lgl("footer") &
+    vapply(DISPLAY_TOKENS, function(r) identical(r$field, "diff"), logical(1))]
 #' @keywords internal
 #' @noRd
 DISPLAY_SETTABLE       <- .dtok_which("settable")

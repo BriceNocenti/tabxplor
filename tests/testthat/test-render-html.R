@@ -725,3 +725,34 @@ testthat::test_that("tabxplor.tab_kable_tooltips = FALSE strips tooltips documen
   h_arg <- as.character(tab_html(t1, tooltips = TRUE))
   testthat::expect_match(h_arg, 'data-toggle="tooltip"', fixed = TRUE)
 })
+
+# ---- Phase 22b-x: what the FIRST column draws, and how a long block name is folded ---------------
+
+testthat::test_that("a row_var separator stops at the name column; the model-fit block's does not", {
+  testthat::skip_if_not_installed("broom")
+  d <- forcats::gss_cat |>
+    dplyr::mutate(married = factor(dplyr::if_else(marital == "Married", "Married", "Not married")))
+  t <- suppressMessages(tab_reg(d, "married", c("race", "tvhours"), family = "binomial"))
+  h <- as.character(tab_html(t))
+  cells <- regmatches(h, gregexpr('<td class="[^"]*"[^>]*>[^<]*', h))[[1]]
+  nm <- grep("tx-lbl", cells, value = TRUE)
+  # a ONE-ROW block's name cell is a direct child of its closing row, so it used to draw a rule its
+  # multi-row neighbours did not: `tx-nb` opts every name cell out of the row separator
+  testthat::expect_true(any(grepl("tx-nb[^\"]*\" rowspan=\"1\"", nm)))
+  testthat::expect_true(any(grepl("tx-nb", nm, fixed = TRUE) & grepl("rowspan=\"3\"", nm)))
+  # ...while the model-fit block is a boundary between two KINDS of block: 2px, across every column
+  testthat::expect_match(h, 'class="tx-b tx-bt2"', fixed = TRUE)
+  # "Model fit" carries a NARROW NO-BREAK space by then (tab_wrap_text), so match the first word
+  testthat::expect_true(any(grepl("tx-bb2", nm[grepl(">Model", nm, fixed = TRUE)], fixed = TRUE)))
+})
+
+testthat::test_that("a rotated interaction name breaks before its operator", {
+  testthat::skip_if_not_installed("broom")
+  d <- forcats::gss_cat |>
+    dplyr::mutate(married = factor(dplyr::if_else(marital == "Married", "Married", "Not married")))
+  t <- suppressMessages(tab_reg(d, "married", c("relig", "age*race"), family = "binomial",
+                                stats = FALSE))
+  h <- as.character(tab_html(t))
+  testthat::expect_match(h, "age<br>*race", fixed = TRUE)
+  testthat::expect_no_match(h, "age*race", fixed = TRUE)   # never left on one long vertical line
+})

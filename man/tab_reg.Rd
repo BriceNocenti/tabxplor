@@ -57,14 +57,15 @@ so a variable holding names (\code{preds <- c("race", "age")}) works without \co
 
 \strong{\code{a*b} is an interaction}, R's own spelling, written bare or quoted ---
 \code{c(race, relig, race*age4)} or \code{c("race", "relig", "race*age4")}. It reads \emph{"a's effect,
-allowed to vary with b"}, and gives one row block named \verb{a × b}. Two shapes, chosen from what
-\code{a} is:
+allowed to vary with b"}, and gives one row block named exactly as you wrote it, \code{race*age4}.
+Two shapes, chosen from what \code{a} is:
 \itemize{
 \item \strong{two categorical variables} give one row per \strong{cell} --- \verb{Black · 34-46} --- each
 compared to a single common reference cell, with its own count, its observed rate and its
 adjusted one. This is the readable form, and the one every \code{effect} supports.
 \item a \strong{continuous} \code{a} gives one row per level of \code{b}, holding \code{a}'s \strong{slope within that
-group} (\verb{per SD/13.5 · Black}). To get the cell table instead, cut it:
+group} --- the row names it, \verb{age per 13.5 (SD) --- Black}. To get the cell table instead,
+cut it:
 \code{shape = c(age = "quartiles")}. \code{b} must be categorical either way --- a \strong{continuous by
 continuous} interaction has no groups to make rows from, so cut one of the two, or write the
 model as a formula (\code{outcome = y ~ a * b}) if you want the bare coefficient.
@@ -206,8 +207,11 @@ table used.}
 
 \item{n}{How many people the table is about. \code{"range"} (the default) adds an \code{n} column holding
 the \strong{unadjusted count} behind each predictor level, on the model's own complete cases --- the
-numbers a reader needs to judge the estimates beside them --- with the model N on the Constant
-row. When several models were fitted on different people it prints the whole range
+numbers a reader needs to judge the estimates beside them. The \strong{Constant} row shows the count
+of its own reference profile where every predictor is categorical, the model N under
+\code{effect = "marginal"} (the row is then the whole population), and nothing where a continuous
+predictor makes the profile a place nobody is --- the model N is the first footer row.
+When several models were fitted on different people it prints the whole range
 (\verb{5 139-9 862}), so an unequal base can never pass unnoticed; \code{"min"} shows the smallest count
 only, \code{"no"} no count at all. Continuous predictors are left blank: on a listwise-complete frame
 their count is the model N. With \code{tab_vars}, one column per group, to the right of the models.}
@@ -332,9 +336,10 @@ One unit of a continuous variable is rarely a readable amount (a one-year change
 moves the odds, so its odds ratio sits inside the first colour break and the row reads as "no
 effect"), so the default is \strong{one standard deviation}. Values: \code{"sd"} (the default), \code{"2sd"}
 (roughly bottom to top of the distribution), or a number of units (\code{10} = per decade of age);
-\code{multiplier = 1} restores the per-one-unit reading. The row's level states both facts that place
-it --- the unit, and the \code{ref} anchor the Constant row sits at: \verb{per SD/13.5 (at mean/42.4)}.
-The variable itself is named in the \code{var} column beside it.
+\code{multiplier = 1} restores the per-one-unit reading. The row's level states every fact that
+places it --- the transform \code{shape} fitted it through, the unit its effect is per, and the \code{ref}
+anchor the Constant row sits at: \verb{log(x), per 0.39 (SD), at 3.78 (mean)}. The variable itself is
+named in the \code{var} column beside it.
 
 \code{multiplier}, \code{shape} and \code{ref} share one grammar: a \strong{value on its own} applies to every
 continuous predictor, a \strong{named} one overrides that variable, and \verb{default =} spells the first
@@ -448,11 +453,17 @@ that column's effects are read at: under \code{effect = "coefficient"} the model
 every factor at its reference level and every continuous predictor at its \code{ref} anchor, the
 mean by default; under \code{"at_reference"} the outcome the model predicts at that same profile;
 under \code{"marginal"} the \strong{population average} the sample-averaged effects sit on, which is what
-its label then says. On a multiplicative column it is a baseline \emph{odds} (or risk, or rate), on
-an additive one a baseline probability or mean --- the quantity the effects beside it move.
-It carries its confidence interval but \strong{no star} except under \code{"coefficient"}, where the star
-is the fit's own test of the intercept: a predicted 48.7 \% is not "different from zero". An
-ordinal outcome leaves it empty (a cumulative logit has thresholds, not one intercept).
+its label then says.
+
+It holds \strong{the quantity the column's effects operate on}, so it is read in one step: an odds
+ratio multiplies odds, so an odds column shows the baseline \emph{odds} (\code{1/1.51}) with the
+probability beside it (\verb{(40\%)}); a risk or rate ratio multiplies the level and a difference adds
+to it, so those show the \strong{level itself} --- \verb{39\%}, \code{40.8}, \code{2.9}; and \code{measure = "log"} shows
+the intercept on the link scale. It is a baseline, not a comparison, so it never carries a \code{+}
+or a \code{x} sign. It carries its confidence interval, and a \strong{star} only where what it prints has
+a null to be tested against (the odds and link scales, under \code{effect = "coefficient"}): a
+predicted 48.7 \% is not "different from zero". An ordinal outcome leaves it empty (a cumulative
+logit has thresholds, not one intercept).
 
 Or write a \code{{}} template: \code{"{est} (obs {obs})"} prints each adjusted effect next to the
 unadjusted one, \code{"{est} ({gap})"} next to how far adjustment moved it.
@@ -535,12 +546,18 @@ heteroscedasticity or clustering, by roughly that factor.}
 \item{\strong{Influence (max dfbetas)} (a ratio)}{Does one respondent carry the result? The largest
 change dropping a single observation makes to a coefficient, in units of its own standard
 error. Printed as a \emph{reassurance}: with thousands of respondents a near-zero value is the
-finding. Influence is not outlyingness.}
+finding. Influence is not outlyingness. \strong{Marked} from 1 --- one respondent moving a
+coefficient by a whole standard error.}
 \item{\strong{Collinearity (max VIF)} (a ratio)}{Can the data tell these predictors apart? The
 largest variance inflation factor (\code{car::vif()}). The one check that is not a comparison with
-the data --- collinearity biases nothing, it only widens intervals. Needs \code{car}; refused for
-multinomial outcomes.}
+the data --- collinearity biases nothing, it only widens intervals. \strong{Marked} from 10, the
+textbook figure. Needs \code{car}; refused for multinomial outcomes.}
 }
+
+The two marked thresholds are \strong{conventions, not tests}: no cut-off on a variance inflation
+factor or a dfbeta has a null distribution behind it, and the literature is openly divided on the
+VIF one. So a marked cell wears the \emph{faintest} shade, a warning --- "look at this" --- where a
+non-significant test wears the deepest. Read the number, not the mark.
 
 Dispersion, Influence and Collinearity are arithmetic on the model already fitted, so they ride
 the default footer and cost nothing; Linearity and Proportionality fit a model and are therefore

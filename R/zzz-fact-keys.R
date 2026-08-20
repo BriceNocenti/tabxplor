@@ -141,6 +141,8 @@ TAB_FOREIGN_KEYS <- list(
         function() names(DISPLAY_TOKENS)),
   tx_fk("EST_SCALES$base_display", function() tx_fk_scalar(EST_SCALES, "base_display"),
         function() names(DISPLAY_TOKENS)),
+  tx_fk("EST_SCALES$const_display", function() tx_fk_scalar(EST_SCALES, "const_display"),
+        function() names(DISPLAY_TOKENS)),
   tx_fk("REG_CELL_DIGITS", function() names(REG_CELL_DIGITS), function() names(EST_SCALES)),
   tx_fk("DISPLAY_TOKENS$alias",    function() tx_fk_scalar(DISPLAY_TOKENS, "alias"),
         function() names(DISPLAY_TOKENS)),

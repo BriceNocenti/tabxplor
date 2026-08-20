@@ -582,6 +582,7 @@ the last few are not meant to be typed:
 \item \code{OR} --- a legacy spelling of \code{or}, rendered identically.
 \item \code{OR_pct} --- a legacy spelling of \code{or_pct}, rendered identically.
 \item \code{gof} --- a model-fit statistic (N, R2, AIC, BIC, dispersion).
+\item \code{gof_warn} --- a model-fit statistic past the threshold its check is read against.
 \item \code{n_range} --- the unweighted base: one count, or a \code{min-max} range over the table.
 \item \code{blank} --- nothing: a cell masked by \code{n_min}.
 \item \code{rr} --- the legacy synonym of \code{ratio}, still accepted.

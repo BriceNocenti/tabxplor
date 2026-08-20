@@ -28,14 +28,14 @@ test_that("a combined factor is the SAME fit as the star parametrisation", {
   expect_equal(star$rank, comb$rank)
   expect_lt(max(abs(stats::fitted(star) - stats::fitted(comb))), 1e-12)
   # and the table is that fit: one row per observed cell, plus the Constant
-  expect_equal(sum(cx(t) == "race \u00d7 age4"), nlevels(forcats::fct_drop(interaction(d$race, d$age4))))
+  expect_equal(sum(cx(t) == "race*age4"), nlevels(forcats::fct_drop(interaction(d$race, d$age4))))
 })
 
 test_that("the crude column of a combined factor IS the observed cell table", {
   d <- cr_data()
   t <- quiet(tab_reg(d, "married", "race*age4", family = "binomial", empirical = TRUE,
                      stats = FALSE))
-  i  <- cx(t) == "race \u00d7 age4"
+  i  <- cx(t) == "race*age4"
   lv <- as.character(t$levels[i])
   cell <- paste(as.character(d$race), as.character(d$age4), sep = " \u00b7 ")
   # the observed odds ratio of each cell against the first one, computed straight off the data
@@ -56,8 +56,8 @@ test_that("`a*b` is an interaction in `predictors`, bare or quoted", {
   pv <- c("race*age4", "relig")
   expect_identical(t1, quiet(tab_reg(d, "married", pv, family = "binomial", stats = FALSE)))
   # the block keeps the position it was written at, and is named with the times sign
-  expect_identical(unique(cx(t1))[[2]], "race \u00d7 age4")
-  expect_match(reg_formulas(t1)$formula, "race \u00d7 age4", fixed = TRUE)
+  expect_identical(unique(cx(t1))[[2]], "race*age4")
+  expect_match(reg_formulas(t1)$formula, "race*age4", fixed = TRUE)
 })
 
 test_that("`:` is refused by name: it is a different model in R, not a synonym", {
@@ -83,8 +83,8 @@ test_that("the ORDER picks the presentation, never the model", {
   expect_lt(max(abs(stats::fitted(A) - stats::fitted(B))), 1e-12)
   t1 <- quiet(tab_reg(d, "married", "race*age4", family = "binomial", stats = FALSE))
   t2 <- quiet(tab_reg(d, "married", "age4*race", family = "binomial", stats = FALSE))
-  expect_identical(unique(cx(t1))[[2]], "race \u00d7 age4")
-  expect_identical(unique(cx(t2))[[2]], "age4 \u00d7 race")
+  expect_identical(unique(cx(t1))[[2]], "race*age4")
+  expect_identical(unique(cx(t2))[[2]], "age4*race")
   # same cells, ordered the other way round -- so the same multiset of estimates
   expect_equal(sort(get_or(t1$Model_OR)), sort(get_or(t2$Model_OR)), tolerance = 1e-8)
 })
@@ -120,16 +120,16 @@ test_that("the parent rule is PER MODEL, so with/without is one comparison", {
 test_that("a crossed continuous predictor gives the fit's own slope per moderator level", {
   d <- cr_data()
   t <- quiet(tab_reg(d, "married", c("age*race", "relig"), family = "binomial", stats = FALSE))
-  i <- cx(t) == "age \u00d7 race"
+  i <- cx(t) == "age*race"
   expect_equal(sum(i), nlevels(d$race))
   nest <- stats::glm(married ~ race + relig + race:age, d, family = stats::binomial())
   k    <- tabxplor:::reg_predictor_sd(d$age)
   b    <- stats::coef(nest)[paste0("race", as.character(t$levels[i]) |>
-                                     sub(pattern = "^.* \u00b7 ", replacement = ""), ":age")]
+                                     sub(pattern = "^.*\u2014 ", replacement = ""), ":age")]
   # C4-2: `multiplier` reaches a crossed slope -- it was left at one raw unit before this phase.
   # ⚠ tab_reg models the FIRST outcome level and glm() the second, so the two are reciprocals.
   expect_equal(unname(get_or(t$Model_OR[i])), unname(exp(-b * k)), tolerance = 1e-9)
-  expect_match(as.character(t$levels[i])[[1]], "^per SD/")
+  expect_match(as.character(t$levels[i])[[1]], "^age per [0-9.]+ \\(SD\\)")
   # its `n` is the moderator level's, and the moderator keeps a row block of its own
   expect_equal(unname(get_n(t$Model_OR[i])), as.integer(as.vector(table(d$race))))
   expect_true("race" %in% cx(t))
@@ -140,7 +140,7 @@ test_that("a crossed slope has a subgroup AME, and it is marginaleffects'", {
   d <- cr_data()
   t <- quiet(tab_reg(d, "married", c("age*race", "relig"), family = "binomial",
                      effect = "marginal", stats = FALSE))
-  i <- cx(t) == "age \u00d7 race"
+  i <- cx(t) == "age*race"
   nest <- stats::glm(married ~ race + relig + race:age, d, family = stats::binomial())
   k    <- tabxplor:::reg_predictor_sd(d$age)
   ref  <- marginaleffects::avg_comparisons(nest, variables = list(age = k), by = "race")
@@ -158,14 +158,14 @@ test_that("the interaction test is the additive-vs-crossed model comparison", {
   tt <- get_test(t)
   r  <- tt[tt$test == "cross_lr", ]
   expect_equal(nrow(r), 1L)
-  expect_identical(r$var, "race \u00d7 age4")
+  expect_identical(r$var, "race*age4")
   a <- stats::glm(married ~ race + age4 + relig, d, family = stats::binomial())
   b <- stats::glm(married ~ relig + interaction(race, age4), d, family = stats::binomial())
   an <- stats::anova(a, b, test = "Chisq")
   expect_equal(r$pvalue, an[["Pr(>Chi)"]][[2]], tolerance = 1e-10)
   expect_equal(r$df1, an$Df[[2]])
   # C4-1: a non-syntactic block name keeps its overall-association row (it was silently lost)
-  expect_true("race \u00d7 age4" %in% tt$var[tt$test == "global_lr"])
+  expect_true("race*age4" %in% tt$var[tt$test == "global_lr"])
 })
 
 test_that("the interaction row is free on a glm and opt-in where it costs a second fit", {

@@ -25,7 +25,9 @@
 # what keeps them out of the default `stats` set and reachable by name. The other three are
 # arithmetic on the fit already in hand, and the two influence-based ones share one sweep. What is
 # opt-in is the p-value, not the diagnostic: reg_curves() bins the observed shape with no fit at all,
-# and the base-count-cell sparkline and the reg_check_plots() panels draw it for free.
+# and the base-count-cell sparkline and the reg_check_plots() panels draw it for free. Two of the
+# three free checks also declare a `flag` -- the conventional value past which their footer cell is
+# marked -- which is a rule of thumb wearing the faintest shade, never a test.
 #
 # THE CURE IS PART OF THE CHECK. `shape =` is how a user fixes a non-linearity without leaving the
 # framework, and its design rule keeps it small: a shape either RECODES THE COLUMN or ADDS ONE TERM,
@@ -84,7 +86,11 @@ reg_check_family_of <- function(f) {
 #   cost          "free"  = arithmetic on the fit already in hand -- in the DEFAULT `stats` set.
 #                 "refit" = it fits a model, so the user asks for it by name. `stats = "all"` turns
 #                 every one of them on.
-#   panel         the reg_check_plots() panel this check draws (NA = no panel), and the `check =`
+#   flag          a gof check only: the value past which the footer cell is MARKED as worth a look
+#                 (the faintest under-shade, a warning -- never the p-value's deep red). ⚠ these are
+#                 CONVENTIONS, not tests: no threshold on a VIF or a dfbeta has a null distribution
+#                 behind it, so the mark says "look at this", never "this is significant".
+#   panel         the reg_check_plots() panel this check draws (NA = no panel), and the `check =
 #                 vocabulary. `auto` draws every panel the family allows. ⚠ INDEPENDENT of `cost`:
 #                 a panel is always free, which is why reg_check_plots() never filters on it.
 #' @keywords internal
@@ -114,14 +120,19 @@ REG_CHECKS <- list(
   influence = list(
     noun = "Influence",
     types = c(influence = "max dfbetas"),
-    kind = "gof", digits = 2L,
+    # |dfbetas| >= 1: ONE respondent moves a coefficient by a full standard error. Belsley, Kuh &
+    # Welsch's small-sample rule -- their 2/sqrt(n) large-sample one is useless at survey n, where it
+    # flags thousands of points.
+    kind = "gof", digits = 2L, flag = 1,
     families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = FALSE,
     cost = "free", panel = "influence"),
   # 5. why is it WIDE: can the data tell these predictors apart?
   collinearity = list(
     noun = "Collinearity",
     types = c(collinearity = "max VIF"),
-    kind = "gof", digits = 2L,
+    # VIF >= 10: the textbook convention (Kutner et al.). ⚠ O'Brien (2007) argues explicitly against
+    # any such cut-off -- hence a warning shade and a documented rule of thumb, not a verdict.
+    kind = "gof", digits = 2L, flag = 10,
     families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
     per_predictor = FALSE, cost = "free", panel = "collinearity"),
   # TAUGHT, NEVER SCORED. Both were measured not to discriminate as verdicts, but both are the
@@ -208,7 +219,10 @@ test_rows_from_checks <- function() {
                 noun = ck$noun, instrument = ck$types[[d]],
                 stat = REG_CHECK_KEY_OF[[d]] %||% NA_character_,
                 method = REG_CHECK_METHOD[[ck$types[[d]]]] %||% NA_character_)
-    if (identical(ck$kind, "gof")) row$digits <- as.integer(ck$digits)
+    if (identical(ck$kind, "gof")) {
+      row$digits <- as.integer(ck$digits)
+      if (!is.null(ck$flag)) row$flag <- as.numeric(ck$flag)
+    }
     out[[d]] <- row
   }
   out
@@ -611,7 +625,6 @@ reg_cut_quantiles <- function(x, k, w = NULL, var = "x", breaks = NULL) {
 # it emits a term -- so it passes through untouched.
 #' @keywords internal
 reg_shape_apply <- function(data, shapes, w = NULL) {
-  labels <- character(0)
   wv <- if (!is.null(w) && is.character(w) && length(w) == 1L && w %in% names(data)) data[[w]] else NULL
   for (v in names(shapes)) {
     kind <- shapes[[v]]$kind
@@ -624,14 +637,12 @@ reg_shape_apply <- function(data, shapes, w = NULL) {
                          "i" = 'Use {.val sqrt}, {.val quintiles}, or shift the variable first.'))
       }
       data[[v]] <- log(x)
-      labels[[v]] <- paste0("log(", v, ")")
     } else if (kind == "sqrt") {
       if (any(x < 0, na.rm = TRUE)) {
         cli::cli_abort(c('{.code shape = "sqrt"} needs non-negative values.',
                          "x" = "{.val {v}} has negative values."))
       }
       data[[v]] <- sqrt(x)
-      labels[[v]] <- paste0("sqrt(", v, ")")
     } else if (kind == "quantiles") {
       f <- reg_cut_quantiles(x, shapes[[v]]$k, wv, var = v, breaks = shapes[[v]]$breaks)
       shapes[[v]]$breaks <- attr(f, "tabxplor_breaks") %||% shapes[[v]]$breaks
@@ -639,8 +650,14 @@ reg_shape_apply <- function(data, shapes, w = NULL) {
       data[[v]] <- f
     }
   }
-  list(data = data, labels = labels, shapes = shapes)
+  list(data = data, shapes = shapes)
 }
+
+# HOW A SHAPE NAMES ITSELF in a row label: "log(x)" / "sqrt(x)", written with a literal "x" because
+# the `var` column beside it already names the variable. The other kinds show themselves without a
+# word -- a quadratic adds its own "x2" row, a quantile shape becomes ordinary factor levels.
+#' @keywords internal
+REG_SHAPE_MARKS <- c(log = "log(x)", sqrt = "\u221a(x)")
 
 # The quadratic terms a `shape` asks for, named by variable so the skeleton can key its extra row on
 # the same string the formula carries; the centre and scale are weighted whenever the call is.
@@ -789,13 +806,28 @@ rd_bin <- function(x, y, w = NULL, nbins = 10L, link = "identity",
     },
     list(y = my, se = sqrt(vy / ne))
   )
-  tibble::tibble(x = mx, y = out$y, n = sw, se = out$se)
+  # the central 95 % of x, for the sparkline's own axis: it is drawn to SCALE, so one far outlier
+  # would otherwise squeeze the whole curve into the first cell. Computed here because this is the
+  # only place x and its weights are both in scope; the panel plot ignores it (it draws real points).
+  # ⚠ COLUMNS, not an attribute: the curve is mutate()d, bound per tab_vars group and sliced again
+  # before it is drawn, and only a column survives all three.
+  q95 <- tryCatch(rd_wquantile(x, c(0.025, 0.975), w), error = function(e) range(x))
+  tibble::tibble(x = mx, y = out$y, n = sw, se = out$se,
+                 xlo = min(q95), xhi = max(q95))
 }
 
-# The 8-level block sparkline of a curve, min-max rescaled WITHIN the predictor -- so it answers
-# "is it a line?" and never "is the effect big?". `style` is TRUE / FALSE: there is no plain-text
-# ladder, because eight ASCII ranks (". , - ~ + = * #") do not read as a CURVE at all -- the shape
-# is the whole point, and a reader who cannot see it is better served by no sparkline.
+# THE SPARKLINE: the binned curve DRAWN TO SCALE on the predictor's own axis, then flattened to 8
+# block levels, min-max rescaled WITHIN the predictor -- so it answers "is it a line?" and never
+# "is the effect big?". There is no plain-text ladder: eight ASCII ranks (". , - ~ + = * #") do not
+# read as a CURVE at all, and a reader who cannot see the shape is better served by no sparkline.
+#
+# WHY IT IS RESAMPLED. The bins are equal-COUNT (robust: every point rests on the same amount of
+# data), so drawing one glyph per bin plots the curve against RANK, not against x -- and a monotone
+# `shape` (log, sqrt) leaves rank order untouched, which is why the same curve came out for every
+# transform. Interpolating onto a grid equally spaced in the SHAPED variable's own units is what
+# every standard linearity diagnostic does (component+residual, empirical-logit plots), what the
+# assumption panel already does, and what lets a reader SEE whether the transform straightened it.
+# It also fixes the run's length, so every sparkline is the same width.
 #' @keywords internal
 rd_spark_glyphs <- function() {
   # U+2581..U+2588 (lower one-eighth block .. full block), as escapes: the source stays ASCII.
@@ -822,8 +854,16 @@ tx_spark_pattern <- function(sep = TRUE) {
 tx_has_spark <- function(x) !is.na(x) & grepl(tx_spark_pattern(FALSE), x)
 
 #' @keywords internal
-rd_spark <- function(y, on = TRUE) {
+rd_spark <- function(curve, on = TRUE, n = 10L) {
+  y <- if (is.data.frame(curve)) curve$y else curve
   if (isFALSE(on) || is.null(y) || length(y) < 3L || !all(is.finite(y))) return(NA_character_)
+  if (is.data.frame(curve) && !is.null(curve$x) && all(is.finite(curve$x)) &&
+      diff(range(curve$x)) > 0) {
+    lo <- max(min(curve$x), min(curve$xlo %||% curve$x))
+    hi <- min(max(curve$x), max(curve$xhi %||% curve$x))
+    if (!(is.finite(lo) && is.finite(hi) && hi > lo)) { lo <- min(curve$x); hi <- max(curve$x) }
+    y  <- stats::approx(curve$x, y, xout = seq(lo, hi, length.out = n), rule = 2)$y
+  }
   r <- range(y)
   gl <- rd_spark_glyphs()
   i  <- if (diff(r) <= 0) rep(ceiling(length(gl) / 2), length(y))

@@ -286,6 +286,9 @@ tx_transpose_render <- function(rd, backend) {
   rd2$roles <- c(rd2$roles, roles_color_flags(ann_new, rd$roles$color_cols))
   rd2$ann            <- ann_new
   rd2$bold_rows      <- bold_rows
+  # ⚠ a ROW-INDEX fact of the original table means nothing here: the footer block is a set of
+  # COLUMNS after the flip, so the html engine must not draw its boundary from stale indices.
+  rd2$footer_rows    <- integer(0)
   rd2$bold_cols      <- bold_cols
   rd2$col_var_header <- col_var_header
   rd2

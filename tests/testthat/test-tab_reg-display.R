@@ -22,7 +22,8 @@ test_that("display='est_ci' shows a visible CI bracket for OR and beta", {
   bc <- first_fmt(tab_reg(d, "tvhours", c("race", "age"), family = "gaussian",
                           display = "est_ci"))
   expect_true(any(grepl("\\[.*;.*\\]", format(bc, special_formatting = TRUE))))
-  expect_equal(get_num(bc), get_diff(bc))                # beta point estimate
+  # row 1 is the Constant, a baseline shown as a mean; everywhere else the beta is the primary
+  expect_equal(get_num(bc)[-1], get_diff(bc)[-1])        # beta point estimate
 })
 
 test_that("est_ci bracket reads the stored asymmetric bounds, on the cell's own scale", {
@@ -80,7 +81,7 @@ test_that("the folds reach EVERY family: a gaussian cell folds an adjusted MEAN"
                           display = "est_base"))
   expect_true(any(grepl("\\([0-9]", format(bc))))        # "(2.37)" the adjusted mean
   expect_true(any(!is.na(get_mean(bc))))                 # written into `mean`, not `pct`
-  expect_equal(get_num(bc), get_diff(bc))                # the coefficient stays primary
+  expect_equal(get_num(bc)[-1], get_diff(bc)[-1])        # the coefficient stays primary
 })
 
 test_that("display reaches the marginal path too -- one grammar, both builders", {

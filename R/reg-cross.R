@@ -6,7 +6,9 @@
 #   - a cross is prepared, never special-cased downstream: every subsystem must keep reading an
 #     ordinary predictor;
 #   - the two arms are declared in REG_CROSS_ARMS, never re-derived from a pair of kinds;
-#   - a parent may not also be a plain predictor.
+#   - a parent may not also be a plain predictor;
+#   - the block is NAMED AS IT WAS TYPED (`age*tvhours`), so the var column, the footer rows and
+#     reg_formulas() all read the string the user wrote in `predictors`.
 # See: CLAUDE.md section "tabxplor architecture" (the regression subsystem).
 #
 # THE IDEA, in one sentence: an interaction is a predictor whose levels are combinations, and whose
@@ -49,15 +51,31 @@ REG_CROSS_ARMS <- list(
                 crude = "nested_fit", count = "moderator")
 )
 
-# The cell separator, and the block name's operator. Both are \uXXXX so the source stays ASCII;
-# `mult_sign` (R/utils.R) is the same codepoint, already the package's "x" everywhere else.
+# The CELL separator, inside a combined factor's own levels ("White \u00b7 [0,1)"). \uXXXX so the
+# source stays ASCII.
+# WARNING: this is DATA -- a materialised factor's levels, and every key built from them -- not a
+# label. The nested arm's row LABEL uses its own separator (reg_stage_rows), which is free to change.
 #' @keywords internal
 #' @noRd
 reg_cross_sep <- function() " \u00b7 "
 
+# The NESTED arm's row-label separator, between "<var> per <unit>" and the moderator's level. A dash
+# rather than the cell dot: the two sides name different variables, where a combined factor's level
+# joins two values of one comparison.
 #' @keywords internal
 #' @noRd
-reg_cross_label <- function(modified, moderator) paste(modified, mult_sign, moderator)
+reg_cross_row_sep <- function() " \u2014 "
+
+# The rows of a NESTED block: slopes, so they have no level pair and no adjusted level of their own
+# (reg_fill_base() skips them). Read as VAR names, which since the block is named by its own key are
+# the keys themselves.
+#' @keywords internal
+#' @noRd
+reg_cross_nested_vars <- function(crosses) {
+  if (!length(crosses)) return(character(0))
+  keep <- vapply(crosses, function(r) identical(r$arm, "nested"), logical(1))
+  vapply(crosses[keep], function(r) r$var, character(1), USE.NAMES = FALSE)
+}
 
 
 # === SECTION: the surface -- peeling `a*b` out of a tidy-select ===================================
@@ -249,8 +267,12 @@ reg_cross_resolve <- function(keys, data, reg_shapes = NULL) {
                        "x" = paste("{.code shape = c({md} = \"quadratic\")} adds a term that would",
                                    "sit outside the interaction."),
                        "i" = 'Cut it instead: {.code shape = c({md} = "quartiles")}.'), call = NULL)
+    # DESIGN: the block is NAMED AS IT WAS TYPED -- `age*tvhours`, the `predictors =` key itself.
+    # `*` is the one accepted spelling (`:` is refused above), so the key is canonical, and a
+    # prettified "age x tvhours" would only make the var column, the footer rows and reg_formulas()
+    # disagree with the call the user wrote.
     out[[k]] <- list(key = k, modified = md, moderator = mr, arm = arm,
-                     var  = reg_cross_label(md, mr),
+                     var  = k,
                      term = if (arm == "nested") paste0("`", mr, "`:`", md, "`") else NA_character_)
   }
   out

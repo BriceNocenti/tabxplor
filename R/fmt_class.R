@@ -518,7 +518,8 @@ get_num <- function(x) {
   # log(OR) IS the coefficient the model fitted. Derived there, so nothing is stored twice.
   coef_m <- !nas & display == "coef"
   if (any(coef_m)) out[coef_m] <- fmt_coef_of(x)[coef_m]
-  out[!nas & display == "gof"    ] <- get_diff(x)[!nas & display == "gof"    ]  # model-fit stat (N/R2/AIC/...) -> diff field
+  gf <- !nas & display %in% c("gof", "gof_warn")     # model-fit stat (N/R2/AIC/...) -> diff field
+  out[gf] <- get_diff(x)[gf]
   out[!nas & display == "ctr"    ] <- get_ctr (x)[!nas & display == "ctr"    ]
   # DERIVED (no field of its own): the adjusted standardized residual behind color = "contrib"'s
   # significance. Read-only: set_num() has no matching arm.
@@ -573,7 +574,8 @@ set_num <- function(x, value) {
                    else switch(fmt_center_field(x), or = set_or, ratio = set_ratio,
                                set_diff)(x[coef_m], exp(value[coef_m]))
   }
-  out[!nas & display == "gof" ] <- set_diff(x[!nas & display == "gof" ], value[!nas & display == "gof" ])
+  gf <- !nas & display %in% c("gof", "gof_warn")
+  out[gf] <- set_diff(x[gf], value[gf])
   out[!nas & display == "ctr" ] <- set_ctr (x[!nas & display == "ctr" ], value[!nas & display == "ctr" ])
   out[!nas & display == "var" ] <- set_var (x[!nas & display == "var" ], value[!nas & display == "var" ])
   ci_m <- !nas & display %in% c("ci", "moe")            # one field, two notations
@@ -1744,6 +1746,12 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", ...) {  # ... 
 #   base_display  the token `{base}` borrows: the LEVEL beside the estimate (a percentage, a mean, a
 #              count). NA where the level is ambiguous -- on a link scale a coefficient may sit over a
 #              probability or over a mean, and guessing would be a lie; `{base}` renders void there.
+#   const_display the token a regression's BASELINE row renders: the quantity this column's effects
+#              OPERATE ON. Odds ratios multiply odds, so an odds column shows the baseline odds; risk
+#              and rate ratios multiply the level, and differences add to it, so those show the level
+#              itself; a coefficient adds on the link scale. NA on the level scales, which have no
+#              baseline row. A LEVEL token here also means the row carries no p-value: there is no
+#              null a percentage or a mean could be tested against.
 #   unit       the axis title, as a KEY (translated at render, never here).
 #   break_key  the ESTIMATE's ladder in color_scales(); NA = no ladder, use the device's own breaks.
 #   gap_key    the adj_* ladder its GAP reads (fmt_gap_scale_key() reads this).
@@ -1760,33 +1768,40 @@ EST_SCALES <- list(
   odds_ratio = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "or",    unit = "or",    default_display = "pct",
-                    est_display = "or", base_display = "pct",
+                    est_display = "or", base_display = "pct", const_display = "or",
                     break_key = "odds_ratio", gap_key = "adj_ratio",
                     label_meas = "odds_ratio", sec = NULL),
-  # a SUMMED SCORE's multiplicative effect (`tab_reg(trials =)`): an odds ratio, or a risk ratio, of
-  # the PER-ITEM probability -- odds_ratio's geometry, ladder and glyphs exactly -- sitting on the
-  # mean SCORE, the average number of "yes" out of `trials`, which is the quantity a reader of a
-  # battery of items wants. ⚠ "score" names the LEVEL, not the ratio. It is the one place an
-  # estimate's geometry and its level live on different axes, which is why it cannot borrow
-  # odds_ratio's row: `{base}` would fold a score into `pct` (x100, "%") and the column would claim
-  # var_kind "pct" to every tooltip and plot. An incidence-rate ratio is NOT here -- a rate ratio is
-  # a ratio of means, so it is `mean_ratio`, whose `unit` already says so.
-  score_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "pct",
+  # THE TWO SUMMED-SCORE ROWS (`tab_reg(trials =)`): a multiplicative effect on the PER-ITEM
+  # probability, sitting on the mean SCORE -- the average number of "yes" out of `trials`, which is
+  # what a reader of a battery of items wants. ⚠ "score" names the LEVEL, not the ratio, so
+  # neither can borrow its ungrouped twin's row: `{base}` would fold a score into `pct` (x100, "%")
+  # and the column would claim var_kind "pct" to every tooltip and plot.
+  # WARNING: they are TWO rows for the same reason odds_ratio and pct_ratio are -- an odds ratio and
+  # a risk ratio are different quantities with different fields and different glyphs, and folding
+  # them printed every summed-score RR as "1/x". An incidence-rate ratio is in neither: a rate ratio
+  # is a ratio of means, so it is `mean_ratio`, whose `unit` already says so.
+  score_odds_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "pct",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "or",    unit = "or", default_display = "mean",
-                    est_display = "or", base_display = "mean",
+                    est_display = "or", base_display = "mean", const_display = "or",
                     break_key = "odds_ratio", gap_key = "adj_ratio",
                     label_meas = "odds_ratio", sec = NULL),
+  score_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "pct",
+                    neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
+                    est_field = "ratio", unit = "ratio", default_display = "mean",
+                    est_display = "ratio", base_display = "mean", const_display = "mean",
+                    break_key = "pct_ratio", gap_key = "adj_ratio",
+                    label_meas = "ratio", sec = NULL),
   pct_ratio  = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "ratio", unit = "ratio", default_display = "pct",
-                    est_display = "ratio", base_display = "pct",
+                    est_display = "ratio", base_display = "pct", const_display = "pct",
                     break_key = "pct_ratio",  gap_key = "adj_ratio",
                     label_meas = "ratio", sec = NULL),
   mean_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "std",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "ratio", unit = "rate_ratio", default_display = "mean",
-                    est_display = "ratio", base_display = "mean",
+                    est_display = "ratio", base_display = "mean", const_display = "mean",
                     break_key = "mean_ratio", gap_key = "adj_ratio",
                     label_meas = "ratio", sec = NULL),
   # a beta / a count AME: printed in the OUTCOME's units, coloured on the SD-standardized ladder.
@@ -1797,7 +1812,7 @@ EST_SCALES <- list(
   raw_diff   = list(kind = "effect", geometry = "difference", var_kind = "coef", ladder = "std",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "diff",  unit = "units", default_display = "n",
-                    est_display = "coef", base_display = "mean",
+                    est_display = "coef", base_display = "mean", const_display = "mean",
                     break_key = "mean_diff",  gap_key = "adj_diff_std",
                     label_meas = "difference", sec = "sd", sd_from = "var"),
   # a crosstab MEAN difference: the same ladder, standardized by the REFERENCE cell's SD rather than
@@ -1805,7 +1820,7 @@ EST_SCALES <- list(
   mean_diff  = list(kind = "effect", geometry = "difference", var_kind = "mean", ladder = "std",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "diff",  unit = "units", default_display = "mean",
-                    est_display = "diff", base_display = "mean",
+                    est_display = "diff", base_display = "mean", const_display = "mean",
                     break_key = "mean_diff",  gap_key = "adj_diff",
                     label_meas = "difference", sec = "sd", sd_from = "ref_var"),
   # measure = "log": printed on the link scale, coloured on the logged odds_ratio ladder (what
@@ -1813,13 +1828,13 @@ EST_SCALES <- list(
   log_coef   = list(kind = "effect", geometry = "log", var_kind = "coef", ladder = "log",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "diff",  unit = "log",   default_display = "n",
-                    est_display = "coef", base_display = NA_character_,
+                    est_display = "coef", base_display = NA_character_, const_display = "coef",
                     break_key = "odds_ratio", gap_key = "adj_diff_log",
                     label_meas = "difference", sec = "exp"),
   points     = list(kind = "effect", geometry = "difference", var_kind = "pct", ladder = "pct",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = TRUE,
                     est_field = "diff",  unit = "points", default_display = "pct",
-                    est_display = "diff", base_display = "pct",
+                    est_display = "diff", base_display = "pct", const_display = "pct",
                     break_key = "pct_diff",   gap_key = "adj_diff",
                     label_meas = "difference", sec = NULL),
   # the three LEVEL scales: a cell percentage / a mean / a count. No null to draw (the reference is a
@@ -1829,19 +1844,19 @@ EST_SCALES <- list(
   level_pct  = list(kind = "level",  geometry = "level", var_kind = "pct",   ladder = "pct",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
                     est_field = "pct",   unit = "pct",   default_display = "pct",
-                    est_display = "pct", base_display = "pct",
+                    est_display = "pct", base_display = "pct", const_display = NA_character_,
                     break_key = NA_character_, gap_key = "adj_diff",
                     label_meas = "difference", sec = NULL),
   level_mean = list(kind = "level",  geometry = "level", var_kind = "mean",  ladder = "std",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "mean",  unit = "units", default_display = "mean",
-                    est_display = "mean", base_display = "mean",
+                    est_display = "mean", base_display = "mean", const_display = NA_character_,
                     break_key = NA_character_, gap_key = "adj_diff", sd_from = "ref_var",
                     label_meas = "difference", sec = NULL),
   level_n    = list(kind = "level",  geometry = "level", var_kind = "count", ladder = "std",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "n",     unit = "count", default_display = "n",
-                    est_display = "n", base_display = "n",
+                    est_display = "n", base_display = "n", const_display = NA_character_,
                     break_key = NA_character_, gap_key = "adj_diff", sd_from = "ref_var",
                     label_meas = "difference", sec = NULL),
   # THE NEUTRAL: what binding two columns of unlike scales collapses to (fmt_attr_rules). Its content
@@ -1849,7 +1864,7 @@ EST_SCALES <- list(
   mixed      = list(kind = "level",  geometry = "level", var_kind = "pct",   ladder = "pct",
                     neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
                     est_field = "pct",   unit = "pct",   default_display = "n",
-                    est_display = "pct", base_display = "pct",
+                    est_display = "pct", base_display = "pct", const_display = NA_character_,
                     break_key = NA_character_, gap_key = "adj_diff",
                     label_meas = "difference", sec = NULL)
 )
@@ -3100,7 +3115,13 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   obs_pct  <- !ci_mult && !is_coef             # AME / risk-diff     -> like `diff` (x100, signed, %)
   # the precision follows the SCALE, not the cell's own value, so an empty cell keeps its column's
   # Excel number format (`!nas` rather than `ok`).
-  if (obs_mult) digits[!nas & display %in% c("obs", "gap") & digits == 0L] <- 2L
+  # an `obs` / `gap` takes the SAME decimals floor as the estimate it is compared to: one comparison,
+  # one precision, so a crude ratio never prints two decimals beside a modelled one printing one.
+  if (obs_mult) {
+    o_floor <- unname(DISPLAY_MIN_DIGITS[scl$est_display %||% NA_character_])
+    if (!is.na(o_floor))
+      digits[!nas & display %in% c("obs", "gap") & digits == 0L] <- o_floor
+  }
   obs_as_pct <- obs_m & obs_pct
   # EVERY scale: the `ci` token is the interval of whatever this column compares, and each column
   # answers it with its own geometry.
@@ -3122,7 +3143,8 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # statistic, not an estimate -- neither is ever signed.
   diff_signed   <- ok & (display %in% c("diff", "coef", "resid") | (obs_m & !obs_mult))
   n_wn          <- ok & (display %in% c("n", "n_range", "wn", "mean", "var", "ratio",
-                                        "or", "or_pct", "OR", "OR_pct", "gof", "resid") |
+                                        "or", "or_pct", "OR", "OR_pct", "resid") |
+                           display %in% DISPLAY_GOF_TOKENS |
                            (display %in% c("ci", "moe") & !is_pct) )
   n_wn          <- n_wn | (obs_m & obs_mult)
   pvalue        <- ok & display == "pvalue"
@@ -3286,10 +3308,15 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # rounds to the neutral. WARNING: it sits OUTSIDE special_formatting for the same reason its twin
   # does -- the composite expander recurses with special_formatting = FALSE, and a reference cell
   # would print "+0% (49%)" where the bare token prints "0%".
+  # DESIGN: on a REGRESSION column the baseline row drops the sign whatever its value, because there
+  # it is a LEVEL and not a comparison -- a log-scale intercept is log(odds) / log(mean), which "+"
+  # would read as a gain. Every other scale renders that row on a level token, where the signing rule
+  # never fires at all; only the log scales reach here. ⚠ the twin above keeps `at_one` all the same:
+  # there the rule REPLACES the value, and a baseline odds is a real number.
   if (any(diff_signed)) {
     at_zero <- !is.na(num_out) & round(num_out, digits) == 0
     at_zero[is.na(at_zero)] <- FALSE
-    base_c  <- diff_signed & ref_base() & at_zero
+    base_c  <- diff_signed & ref_base() & (at_zero | nzchar(as.character(get_role(x))[1]))
     out[base_c] <- stringi::stri_replace_first_fixed(out[base_c], "+", "")
   }
 
@@ -4096,6 +4123,13 @@ fmt_color_slots <- function(x, plan) {
   # a "pvalue" test cell colours as a SIGNIFICANCE WARNING, not a data effect: a non-significant test
   # (p > alpha) gets the deepest under-slot (deep red), a significant one stays uncoloured. Reads the
   # honest `pvalue` field, scoped to the additive `diff` channel (the crosstab default).
+  # ...and a MODEL CHECK past the convention its REG_CHECKS row declares takes the FAINTEST under
+  # slot: a rule of thumb earns "look at this", never the verdict's deep red.
+  # ⚠ `under_slots` carries a leading 0 (the below-the-first-break slot), so the FAINTEST shade is
+  # the smallest POSITIVE one, never min().
+  is_wn <- disp0 == "gof_warn"
+  faint <- plan$under_slots[plan$under_slots > 0L]
+  if (any(is_wn) && length(faint)) slot[is_wn] <- min(faint)
   is_pv <- disp0 == "pvalue"
   if (any(is_pv) && identical(plan$measure, "difference")) {
     alpha  <- 1 - get_conf_level(x)

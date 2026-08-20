@@ -424,10 +424,14 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
       ~ display_primary(get_display(tab[[.x]])) %in% DISPLAY_FOOTER_TOKENS), `&`)
   } else logical(nrow(tab))
   if (any(footer_rows)) {
-    ann <- purrr::map(ann, function(a) {
-      a$keep_black[footer_rows] <- TRUE
-      a$font[footer_rows]       <- theme_cols$text
-      a$bold[footer_rows]       <- TRUE
+    ann <- purrr::imap(ann, function(a, nm) {
+      # ⚠ a MARKED model check (`gof_warn`) keeps the shade it was given: the black-and-bold rule is
+      # about not GREYING a model-fit number to make the data pop, not about refusing the one signal
+      # the footer itself carries.
+      blk <- footer_rows & display_primary(get_display(tab[[nm]])) != "gof_warn"
+      a$keep_black[blk] <- TRUE
+      a$font[blk]       <- theme_cols$text
+      a$bold[footer_rows] <- TRUE
       a
     })
   }
@@ -493,6 +497,9 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
                  color_cols = color_flags$color_cols, any_bg = color_flags$any_bg,
                  has_color = color_flags$has_color, has_stars = has_stars),
     ann = ann,
+    # WHICH ROWS ARE THE MODEL-FIT BLOCK: a different KIND of block, so its boundary is drawn across
+    # the whole table (the html engine's 2px top/bottom), where a row_var separator is not.
+    footer_rows = which(footer_rows),
     bold_rows = bold_rows,
     bold_cols = bold_cols,
     col_var_header = col_var_header,

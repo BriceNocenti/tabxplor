@@ -988,9 +988,9 @@ mat_reg_spark <- function(tab) {
       cu <- a$curves[[v]]
       for (i in which(hit)) {
         g  <- if (nzchar(cg)) cg else rg[[i]]
-        y  <- cu$y[cu$group == g]
-        if (length(y) == 0L) y <- cu$y[cu$group == ""]
-        gl <- if (length(y) == 0L) NA_character_ else rd_spark(y)
+        cg2 <- cu[cu$group == g, , drop = FALSE]
+        if (nrow(cg2) == 0L) cg2 <- cu[cu$group == "", , drop = FALSE]
+        gl  <- if (nrow(cg2) == 0L) NA_character_ else rd_spark(cg2)
         if (is.na(gl)) next
         # no separator on an empty cell -- there is nothing to separate it from; a non-breaking one
         # where a count is actually printed beside it.
@@ -1259,7 +1259,7 @@ reg_footer_lines <- function(tabs) {
       (if (is_split) reg_rv == g else TRUE)
     r <- reg[sel, , drop = FALSE]
     if (nrow(r) == 0) return(reg_blank_cell())
-    if (identical(pk$kind, "gof")) reg_gof_cell(r$statistic[1], pk$digits)
+    if (identical(pk$kind, "gof")) reg_gof_cell(r$statistic[1], pk$digits, pk$flag)
     else                           reg_pvalue_cell(r$pvalue[1])
   }
   fmt_cell   <- function(nm, g) do.call(vctrs::vec_c, lapply(seq_len(K), cell_for, nm = nm, g = g))
@@ -1848,7 +1848,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL, .note = NULL) {
   }
 
   # GOF / blank footer cells carry model-fit numbers in fields never meant to be compared, so no tooltip.
-  out[disp %in% c("gof", "blank")] <- ""
+  out[disp %in% c(DISPLAY_GOF_TOKENS, "blank")] <- ""
   # the field-name labels are gettext'd and follow the AMBIENT locale, NOT the per-call lang= (which
   # reaches the footer, not tooltips). enc2utf8 keeps French accents well-formed.
   enc2utf8(out)

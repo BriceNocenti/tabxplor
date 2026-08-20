@@ -352,11 +352,9 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   # emits ONE extra model term (quadratic) -- a quantile-cut `age` is a factor from this line on.
   reg_shapes   <- reg_resolve_shape(shape, data,
                                     c(unlist(predictors, use.names = FALSE), cross$parents))
-  shape_labels <- character(0)
   if (length(reg_shapes) > 0L) {
     sh   <- reg_shape_apply(data, reg_shapes, w = wt)
     data <- sh$data
-    shape_labels <- sh$labels
     reg_shapes   <- sh$shapes                    # with each quantile shape's breaks frozen
     if (!is.null(design_obj)) design_obj$variables <- data
   }
@@ -374,7 +372,7 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   list(data = data, design_obj = design_obj, wt = wt, weighted = weighted,
        outcome = outcome, predictors = predictors, all_predictors = all_predictors,
        is_comparison = is_comparison, formula_mode = formula_mode, raw_formula = raw_formula,
-       reg_shapes = reg_shapes, shape_labels = shape_labels, var_labels = var_labels, degf = degf,
+       reg_shapes = reg_shapes, var_labels = var_labels, degf = degf,
        cross_keys = cross$keys)
 }
 
@@ -963,7 +961,8 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
     multiplier_label = plan$multiplier_label, anchors = plan$anchors,
     anchor_keyword = plan$anchor_keyword, shape_terms = plan$shape_terms,
     crosses = plan$crosses,
-    shape_labels = prep$shape_labels, empirical = out$empirical, display = out$display,
+    shape_kinds = vapply(prep$reg_shapes, function(z) z$kind, character(1)),
+    empirical = out$empirical, display = out$display,
     var_labels = prep$var_labels, na_shared_vars = plan$na_shared_vars, base_n = base_n)
 
   # the weight column NAME (or NA) drives the footer "Weighted by <wt>." line; a prebuilt design
