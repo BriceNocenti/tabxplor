@@ -28,26 +28,26 @@ the running package before being written down, and each one names the line that 
 
 ### 1.2 How to read the severity column
 
-| Level | Meaning |
-|---|---|
-| **A** | A printed number is wrong, or a printed interval does not belong to the printed estimate. |
+| Level | Meaning                                                                                              |
+|-------|------------------------------------------------------------------------------------------------------|
+| **A** | A printed number is wrong, or a printed interval does not belong to the printed estimate.            |
 | **B** | The number is right but the inference attached to it can be materially wrong (wrong width, wrong p). |
-| **C** | Correct but fragile, or inconsistent across the package; a future change can turn it into A or B. |
+| **C** | Correct but fragile, or inconsistent across the package; a future change can turn it into A or B.    |
 
 ### 1.3 Summary of findings
 
-| # | Severity | Area | One line |
-|---|---|---|---|
-| A1 | **A** | multinomial crude | The estimate falls outside its own confidence interval. |
-| A2 | **A** | summed score, `log_risk` | `Obs_log(RR)` prints log(OR) with a Woolf interval. |
-| A3 | **A** | `marginal` x `log_*` | The model column is stamped `log_coef` but holds un-logged ratios. |
-| B1 | **B** | survey designs | The crude interval is an `n_eff` plug-in, not the design-based variance; measured 28 % too narrow. |
-| B2 | **B** | separation | A ~1e8 estimate is printed, unflagged, with p = 0.99 on one link and p < 0.001 on another. |
-| B3 | **B** | crude risk difference | Plain Wald where `tab()` uses Newcombe for the same quantity; changes stars at small n. |
-| C1 | **C** | degrees of freedom | Up to three different reference distributions inside one table. |
-| C2 | **C** | `between_groups` gap | The recovered SE is inflated by t/z of the smaller group (+31 % at df = 5). |
-| C3 | **C** | gap interval | A magnitude interval rendered as a signed one; a pinned null bound prints as `-0.0`. |
-| C4 | **C** | estimand guard | `reg_same_estimand()` cannot see a mismatch between two `log_coef` columns. |
+| #  | Severity | Area                     | One line                                                                                           |
+|----|----------|--------------------------|----------------------------------------------------------------------------------------------------|
+| A1 | **A**    | multinomial crude        | The estimate falls outside its own confidence interval.                                            |
+| A2 | **A**    | summed score, `log_risk` | `Obs_log(RR)` prints log(OR) with a Woolf interval.                                                |
+| A3 | **A**    | `marginal` x `log_*`     | The model column is stamped `log_coef` but holds un-logged ratios.                                 |
+| B1 | **B**    | survey designs           | The crude interval is an `n_eff` plug-in, not the design-based variance; measured 28 % too narrow. |
+| B2 | **B**    | separation               | A ~1e8 estimate is printed, unflagged, with p = 0.99 on one link and p < 0.001 on another.         |
+| B3 | **B**    | crude risk difference    | Plain Wald where `tab()` uses Newcombe for the same quantity; changes stars at small n.            |
+| C1 | **C**    | degrees of freedom       | Up to three different reference distributions inside one table.                                    |
+| C2 | **C**    | `between_groups` gap     | The recovered SE is inflated by t/z of the smaller group (+31 % at df = 5).                        |
+| C3 | **C**    | gap interval             | A magnitude interval rendered as a signed one; a pinned null bound prints as `-0.0`.               |
+| C4 | **C**    | estimand guard           | `reg_same_estimand()` cannot see a mismatch between two `log_coef` columns.                        |
 
 Section 8 lists, equally explicitly, **what was tested and found sound** — including the pieces most likely to
 be wrong a priori, which are not.
@@ -67,12 +67,12 @@ tab_reg(d, outcome = "party3", predictors = c("race", "age"),
         family = "multinomial", empirical = "column")
 ```
 
-| column | level | estimate | ci_inf | ci_sup | p |
-|---|---|---:|---:|---:|---:|
-| `Obs_2-Independent, other vs 1-Democrat` | Black | **0.416391** | 0.691391 | 0.848289 | 3.16e-07 |
-| `Obs_2-Independent, other vs 1-Democrat` | Other | **1.272497** | 1.688638 | 2.072795 | 4.56e-33 |
-| `Obs_3-Republican vs 1-Democrat` | Black | **0.098253** | 0.107269 | 0.140990 | 1.95e-198 |
-| `Obs_3-Republican vs 1-Democrat` | Other | **0.367911** | 0.298493 | 0.378978 | 1.37e-71 |
+| column                                   | level |     estimate |   ci_inf |   ci_sup |         p |
+|------------------------------------------|-------|-------------:|---------:|---------:|----------:|
+| `Obs_2-Independent, other vs 1-Democrat` | Black | **0.416391** | 0.691391 | 0.848289 |  3.16e-07 |
+| `Obs_2-Independent, other vs 1-Democrat` | Other | **1.272497** | 1.688638 | 2.072795 |  4.56e-33 |
+| `Obs_3-Republican vs 1-Democrat`         | Black | **0.098253** | 0.107269 | 0.140990 | 1.95e-198 |
+| `Obs_3-Republican vs 1-Democrat`         | Other | **0.367911** | 0.298493 | 0.378978 |  1.37e-71 |
 
 In three of the four cells the point estimate lies **outside the bracket printed beside it**.
 
@@ -80,10 +80,10 @@ In three of the four cells the point estimate lies **outside the bracket printed
 
 Computed by hand from `table(race, party3)`:
 
-| quantity | Black, "2-Independent" |
-|---|---|
+| quantity                                                              | Black, "2-Independent"        |
+|-----------------------------------------------------------------------|-------------------------------|
 | odds vs the **reference category** (`1-Democrat`) — mlogit's estimand | 0.41639, CI [0.3751 ; 0.4622] |
-| odds vs **everything else** (the collapsed 2x2) | 0.76583, CI [0.6914 ; 0.8483] |
+| odds vs **everything else** (the collapsed 2x2)                       | 0.76583, CI [0.6914 ; 0.8483] |
 
 The **estimate** is the first (correct: it matches what the model column estimates, and it is what `obs`
 carries for the adjustment comparison). The **interval and the p-value** are the second. They are two
@@ -130,11 +130,11 @@ section 9.
 
 With the `FactoMineR::tea` six-item battery (`trials = 6`), predictor `sex`, reference `F`:
 
-| what | value | CI | p |
-|---|---|---|---|
+| what                           | value         | CI                     | p        |
+|--------------------------------|---------------|------------------------|----------|
 | printed `Obs_log(RR)`, level M | **-0.225087** | [-0.454673 ; 0.004499] | 0.054662 |
-| hand log(RR) | -0.175970 | [-0.356500 ; 0.004600] | 0.056079 |
-| hand log(OR) | **-0.225087** | [-0.454673 ; 0.004499] | 0.054662 |
+| hand log(RR)                   | -0.175970     | [-0.356500 ; 0.004600] | 0.056079 |
+| hand log(OR)                   | **-0.225087** | [-0.454673 ; 0.004499] | 0.054662 |
 
 The printed column is log(OR) to the last digit, including its p-value. Two further confirmations: the
 `Obs_log(OR)` column obtained with `measure = "log_odds"` is **numerically identical**, and the stored
@@ -182,12 +182,12 @@ tab_reg(d, outcome = "married", predictors = c("race", "age"), family = "binomia
 
 `Model_log(mRR)` is stamped `scale = "log_coef"` and contains:
 
-| level | stored estimate | ci_inf | ci_sup | p |
-|---|---:|---:|---:|---:|
-| Population average | 0.4713412 | 0.464758 | 0.477924 | — |
-| White (reference) | **1.0000000** | — | — | — |
-| Black | **0.5623027** | 0.530487 | 0.596027 | 1.3e-83 |
-| Other | **0.9737260** | 0.927991 | 1.021715 | 0.278 |
+| level              | stored estimate |   ci_inf |   ci_sup |       p |
+|--------------------|----------------:|---------:|---------:|--------:|
+| Population average |       0.4713412 | 0.464758 | 0.477924 |       — |
+| White (reference)  |   **1.0000000** |        — |        — |       — |
+| Black              |   **0.5623027** | 0.530487 | 0.596027 | 1.3e-83 |
+| Other              |   **0.9737260** | 0.927991 | 1.021715 |   0.278 |
 
 These are **risk ratios**, not log risk ratios. Three independent tells:
 
@@ -257,22 +257,22 @@ nothing in the code can see it.**
 **Case 1 — positively correlated groups (the plug-in is conservative).** 30 PSUs x 40, a cluster intercept
 shared by both races (`degf = 29`):
 
-| quantity | value |
-|---|---|
+| quantity                              | value       |
+|---------------------------------------|-------------|
 | `Obs_OR` interval, implied SE(log OR) | **0.32491** |
-| `svyglm(y ~ race, design)` SE(log OR) | 0.14568 |
-| naive SRS Woolf SE(log OR) | 0.11252 |
-| ratio crude / design-based | **2.23** |
+| `svyglm(y ~ race, design)` SE(log OR) | 0.14568     |
+| naive SRS Woolf SE(log OR)            | 0.11252     |
+| ratio crude / design-based            | **2.23**    |
 
 **Case 2 — negatively correlated groups (the plug-in is anticonservative).** 40 PSUs x 60, a cluster shift
 applied with opposite sign to the two races, so `cor(p_W, p_B)` across PSUs = **-0.941** (`degf = 39`):
 
-| quantity | crude column | design-based `svyglm` |
-|---|---:|---:|
-| OR | 0.56693 | 0.56693 |
-| CI | **[0.3034 ; 1.0594]** | [0.2390 ; 1.3447] |
-| SE(log OR) | **0.30908** | 0.42664 |
-| p | **0.0740** | 0.1914 |
+| quantity   |          crude column | design-based `svyglm` |
+|------------|----------------------:|----------------------:|
+| OR         |               0.56693 |               0.56693 |
+| CI         | **[0.3034 ; 1.0594]** |     [0.2390 ; 1.3447] |
+| SE(log OR) |           **0.30908** |               0.42664 |
+| p          |            **0.0740** |                0.1914 |
 
 The point estimate is exact; the interval is **28 % too narrow**, and the p-value crosses the 10 % threshold —
 the cell is starred `*` when the design-based test says 0.19.
@@ -375,9 +375,9 @@ statistic.
 
 Measured on n = 200 (White 73/73, Black 9/20):
 
-| method | RD | CI | verdict at 95 % |
-|---|---:|---|---|
-| Wald (what `Obs_RD` prints) | -0.18966 | [-0.37655 ; **-0.00276**] | p = 0.0467, **starred** |
+| method                         |       RD | CI                        | verdict at 95 %           |
+|--------------------------------|---------:|---------------------------|---------------------------|
+| Wald (what `Obs_RD` prints)    | -0.18966 | [-0.37655 ; **-0.00276**] | p = 0.0467, **starred**   |
 | Newcombe (what `tab()` prints) | -0.18966 | [-0.34884 ; **+0.00913**] | covers 0, not significant |
 
 The Wald interval for a difference of proportions is the one method the literature agrees should not be the
@@ -395,13 +395,13 @@ it aligns the two producers. It moves goldens, so it wants a deliberate review p
 
 Measured on one survey table (24 PSUs, 4 strata, `degf(design) = 20`, 3 coefficients):
 
-| column | reference distribution | df |
-|---|---|---|
-| `Model_OR` (coefficient path) | t | **17** = `degf + 1 - p`, survey's own `df.residual` |
-| `Obs_OR` (crude closed form) | t | **20** = `degf(design)` |
-| a marginal / AME column of the same fit | **z** | Inf |
-| a weighted multinomial or ordinal column | **z** | Inf |
-| the stamped `degf` attribute, which the legend prints | — | **20** |
+| column                                                | reference distribution | df                                                  |
+|-------------------------------------------------------|------------------------|-----------------------------------------------------|
+| `Model_OR` (coefficient path)                         | t                      | **17** = `degf + 1 - p`, survey's own `df.residual` |
+| `Obs_OR` (crude closed form)                          | t                      | **20** = `degf(design)`                             |
+| a marginal / AME column of the same fit               | **z**                  | Inf                                                 |
+| a weighted multinomial or ordinal column              | **z**                  | Inf                                                 |
+| the stamped `degf` attribute, which the legend prints | —                      | **20**                                              |
 
 So a single table can refer three ways at once, and the legend's "20 design df" is not the df any model column
 used. The gaps are small at 20 df (t(17)/z = 1.076) and negligible at 1000, but they are systematic and they
@@ -424,11 +424,11 @@ reads was built with **t** on a gaussian, quasi or `svyglm` column, so the recov
 
 Measured with a deliberately tiny group (n = 22, df = 19):
 
-| quantity | value |
-|---|---|
-| true SE from `lm` | 7.5249 |
-| SE recovered by `reg_gap_se_of()` | **8.0357** |
-| ratio | 1.0679 = `qt(.975, 19) / qnorm(.975)` exactly |
+| quantity                          | value                                         |
+|-----------------------------------|-----------------------------------------------|
+| true SE from `lm`                 | 7.5249                                        |
+| SE recovered by `reg_gap_se_of()` | **8.0357**                                    |
+| ratio                             | 1.0679 = `qt(.975, 19) / qnorm(.975)` exactly |
 
 At df = 5 the factor is 1.31. The direction is conservative (the gap test loses power), so it costs
 discoveries rather than creating false ones — but the same code is what `forest_plot()`'s gap band reads.
@@ -490,24 +490,24 @@ including any future logged measure.
 This half matters as much as the findings: the pieces most likely to be wrong a priori are right, and several
 of my own initial hypotheses were falsified by measurement.
 
-| Area | Test | Result |
-|---|---|---|
-| Binomial AME, analytic g-computation | vs `marginaleffects`, n = 12 990 / 120 / **40** | ~7 digits at every n: est, CI and p |
-| **multinomial** AME (`nnet`) | vs `marginaleffects`, n = full / 600 / **150** | agrees to ~6 digits on all 6 category x level cells |
-| **ordinal** AME (`MASS::polr`) | vs `marginaleffects`, n = full / **400** | agrees to ~6 digits on all 8 cells |
-| Gaussian coefficient path | vs `lm` + `confint`, n = 60 | exact, t on residual df |
-| Binomial coefficient path | vs `glm` + Wald, n = 21 483 / 250 / **60** | exact |
-| Survey model column | vs `svyglm` + `confint.svyglm` | exact, including the t on `degf + 1 - p` |
-| Crude OR / RR / log(OR) / log(RR), plain binomial | vs hand Woolf and Katz | exact, including the log variants |
-| Crude column population | 40 % missing on a confounder only | uses the **model's** complete cases (0.370387, not 0.373555) |
-| `multiplier` (k-unit contrasts) | k = 1, `"sd"`, 10, crude and model | exact `exp(k*b)`, `se x |k|`, p invariant; glm, mlogit, polr |
-| Weights-only basis (`ids = ~1`) | vs `svyglm(ids = ~1)` | estimate exact, interval within 0.03 % |
-| `conf_level` | 0.95 vs 0.99, model / crude / gap | propagates to all three; implied SE identical |
-| Model comparison with unequal missingness | two models, one extra predictor 50 % missing | both refitted on the **common** 5 652 rows — correct |
-| Interaction fits | combined factor, nested slopes, empty cell | empty cell dropped cleanly; saturated fit = crude column |
-| `ci_method = "profile"` | vs `confint.glm` and LR p | CI and p are both LR-based, so the duality holds |
-| Non-collapsible OR gap | default binomial OR + `color = "adjustment"` | correctly refused, **and clearly messaged** (quoted below) |
-| `at_reference` gap | `obs` unpopulated | correctly refused, and the legend says *"no observed effect"* |
+| Area                                              | Test                                            | Result                                                          |
+|---------------------------------------------------|-------------------------------------------------|-----------------------------------------------------------------|
+| Binomial AME, analytic g-computation              | vs `marginaleffects`, n = 12 990 / 120 / **40** | ~7 digits at every n: est, CI and p                             |
+| **multinomial** AME (`nnet`)                      | vs `marginaleffects`, n = full / 600 / **150**  | agrees to ~6 digits on all 6 category x level cells             |
+| **ordinal** AME (`MASS::polr`)                    | vs `marginaleffects`, n = full / **400**        | agrees to ~6 digits on all 8 cells                              |
+| Gaussian coefficient path                         | vs `lm` + `confint`, n = 60                     | exact, t on residual df                                         |
+| Binomial coefficient path                         | vs `glm` + Wald, n = 21 483 / 250 / **60**      | exact                                                           |
+| Survey model column                               | vs `svyglm` + `confint.svyglm`                  | exact, including the t on `degf + 1 - p`                        |
+| Crude OR / RR / log(OR) / log(RR), plain binomial | vs hand Woolf and Katz                          | exact, including the log variants                               |
+| Crude column population                           | 40 % missing on a confounder only               | uses the **model's** complete cases (0.370387, not 0.373555)    |
+| `multiplier` (k-unit contrasts)                   | k = 1, `"sd"`, 10, crude and model              | exact `exp(k*b)`, `se x | k | `, p invariant; glm, mlogit, polr |
+| Weights-only basis (`ids = ~1`)                   | vs `svyglm(ids = ~1)`                           | estimate exact, interval within 0.03 %                          |
+| `conf_level`                                      | 0.95 vs 0.99, model / crude / gap               | propagates to all three; implied SE identical                   |
+| Model comparison with unequal missingness         | two models, one extra predictor 50 % missing    | both refitted on the **common** 5 652 rows — correct            |
+| Interaction fits                                  | combined factor, nested slopes, empty cell      | empty cell dropped cleanly; saturated fit = crude column        |
+| `ci_method = "profile"`                           | vs `confint.glm` and LR p                       | CI and p are both LR-based, so the duality holds                |
+| Non-collapsible OR gap                            | default binomial OR + `color = "adjustment"`    | correctly refused, **and clearly messaged** (quoted below)      |
+| `at_reference` gap                                | `obs` unpopulated                               | correctly refused, and the legend says *"no observed effect"*   |
 
 The non-collapsibility message reads, verbatim: *"`color_signif` does not apply to an odds-ratio
 "adjustment" gap: part of it is non-collapsibility, not confounding. Use `effect = "marginal"` or
@@ -521,14 +521,14 @@ was checked by simulation rather than by parity. 400 independent samples were dr
 population at each size; the "true" gap is the population-level difference between the adjusted and crude
 log risk ratios.
 
-| n | level | sd(gap) across replicates | mean reported `gap_se` | ratio | 95 % coverage |
-|---:|---|---:|---:|---:|---:|
-| 1000 | Black | 0.01077 | 0.01157 | 1.075 | 0.945 |
-| 1000 | Other | 0.01766 | 0.01948 | 1.103 | 0.968 |
-| 300 | Black | 0.02194 | 0.02237 | 1.019 | 0.915 |
-| 300 | Other | 0.03702 | 0.03662 | 0.989 | 0.932 |
-| 120 | Black | — | 0.04462 | — | 0.962 |
-| 120 | Other | — | 0.06423 | — | 0.954 |
+|    n | level | sd(gap) across replicates | mean reported `gap_se` | ratio | 95 % coverage |
+|-----:|-------|--------------------------:|-----------------------:|------:|--------------:|
+| 1000 | Black |                   0.01077 |                0.01157 | 1.075 |         0.945 |
+| 1000 | Other |                   0.01766 |                0.01948 | 1.103 |         0.968 |
+|  300 | Black |                   0.02194 |                0.02237 | 1.019 |         0.915 |
+|  300 | Other |                   0.03702 |                0.03662 | 0.989 |         0.932 |
+|  120 | Black |                         — |                0.04462 |     — |         0.962 |
+|  120 | Other |                         — |                0.06423 |     — |         0.954 |
 
 **The gap SE is well calibrated.** Coverage sits near nominal throughout, with mild undercoverage at n = 300
 (0.915 and 0.932 against 0.95; Monte-Carlo error is about 0.011). At n = 120 the sampling sd is undefined

@@ -22,6 +22,8 @@ navbar:
         href: articles/tabxplor.html
       - text: Regression tables with tab_reg()
         href: articles/tabxplor-reg.html
+      - text: "All else equal: reading a regression without losing the data"
+        href: articles/tabxplor-all-else-equal.html
       - text: Programming with tabxplor
         href: articles/tabxplor-programming.html
       - text: -------
@@ -177,6 +179,7 @@ articles:
   contents:
   - tabxplor
   - tabxplor-reg
+  - articles/tabxplor-all-else-equal
   - tabxplor-programming
 - title: En français
   navbar: Français
