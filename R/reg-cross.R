@@ -238,26 +238,66 @@ reg_parse_crosses <- function(predictors, data, outcome, tab_vars = NULL) {
   list(keys = keys, parents = parents)
 }
 
+# TWO CONTINUOUS PARENTS have no rows to cross, so the MODERATOR is cut into quartiles and the table
+# is built -- with a one-line message, never silently. The cut is a MODELLING choice, not a
+# presentation one: it changes the fit, and the `Interaction (LR)` row moves with the bin count
+# (measured, p = 0.0007 at 4 groups against 0.0086 at 3). So it is stated, and both ways out are
+# named -- pick the cut with `shape`, or swap the order to cut the other one.
+#
+# It runs where `shape` is RESOLVED and before it is applied (S2, block G), because that is the one
+# point where "will this variable still be continuous?" is answerable. A variable the user has
+# already shaped is left alone: their choice stands, and if it keeps the moderator continuous
+# (`"log"`, `"sqrt"`) reg_cross_resolve() aborts as before.
+#' @keywords internal
+#' @noRd
+reg_cross_autocut <- function(keys, data, reg_shapes) {
+  add <- list()
+  cuts <- c("quantiles", "sd_bands")
+  stays_numeric <- function(v)
+    !is.null(data[[v]]) && !reg_is_factor_var(data[[v]]) &&
+      !(reg_shapes[[v]]$kind %||% "") %in% cuts
+  for (k in keys) {
+    p <- strsplit(k, "*", fixed = TRUE)[[1]]
+    if (length(p) != 2L) next
+    md <- p[[1]]; mr <- p[[2]]
+    if (!stays_numeric(md) || !stays_numeric(mr)) next
+    if (!is.null(reg_shapes[[mr]]) || !is.null(add[[mr]])) next
+    add[[mr]] <- "quartiles"
+    cli::cli_inform(c("i" = paste0(
+      "{.code ", k, "}: two continuous variables have no cells to cross, so {.val ", mr, "} was cut ",
+      "-- {.code shape = c(", mr, ' = "quartiles")}. Write {.code ', mr, "*", md,
+      "} to cut {.val ", md, "} instead.")))
+  }
+  add
+}
+
 # S5, last of all. Decide each cross's arm from the FINAL columns, then build what the arm makes.
 #' @keywords internal
 #' @noRd
 reg_cross_resolve <- function(keys, data, reg_shapes = NULL) {
   if (length(keys) == 0L) return(list())
   out <- stats::setNames(vector("list", length(keys)), keys)
-  for (k in keys) {
+  for (i in seq_along(keys)) {
+    k  <- keys[[i]]
     p  <- strsplit(k, "*", fixed = TRUE)[[1]]
     md <- p[[1]]; mr <- p[[2]]
     kind <- function(v) if (reg_is_factor_var(data[[v]])) "factor" else "numeric"
+    # ⚠ THE SWAP. `*` is symmetric in the MODEL -- `a*b` and `b*a` are one fit -- so where only the
+    # ORDER is wrong there is exactly one table that can exist, and refusing it would make the user
+    # retype for no information. Swap to it and say so in one line; the block is then named as the
+    # swap, which is what the var column, the footer and reg_formulas() print.
+    if (kind(mr) != "factor" && kind(md) == "factor") {
+      cli::cli_inform(c("i" = paste0(
+        "{.code ", k, "} read as {.code ", mr, "*", md, "}: the rows are about the FIRST variable, ",
+        "and only a continuous one has slopes to show within groups.")))
+      swap <- md; md <- mr; mr <- swap
+      k    <- paste0(md, "*", mr)
+    }
     if (kind(mr) != "factor")
       cli::cli_abort(c(
         "{.arg predictors}: {.val {k}} needs a categorical moderator.",
         "x" = "{.val {mr}} is continuous.",
-        # ⚠ `*` reads as symmetric, so where only the ORDER is wrong, name the swap FIRST: the rows
-        # are about the first variable, and only a continuous one can carry slopes within groups.
-        if (kind(md) == "factor")
-          c("i" = paste0("The rows are about the FIRST variable, and only a continuous one has ",
-                         "slopes to show within groups -- write {.code ", mr, "*", md, "}.")),
-        "i" = paste0('Or cut it: {.code shape = c(', mr, ' = "quartiles")} -- one slope per group, ',
+        "i" = paste0('Cut it: {.code shape = c(', mr, ' = "quartiles")} -- one slope per group, ',
                      "each with its own count and observed effect."),
         "i" = paste0("For the classical coefficient instead, write the model as a formula: ",
                      "{.code outcome = y ~ ... + ", md, " * ", mr, "}.")), call = NULL)
@@ -271,7 +311,10 @@ reg_cross_resolve <- function(keys, data, reg_shapes = NULL) {
     # `*` is the one accepted spelling (`:` is refused above), so the key is canonical, and a
     # prettified "age x tvhours" would only make the var column, the footer rows and reg_formulas()
     # disagree with the call the user wrote.
-    out[[k]] <- list(key = k, modified = md, moderator = mr, arm = arm,
+    # ⚠ the list NAME stays the DECLARED key -- `sp$cross`, reg_cross_add() and reg_cross_keys() all
+    # look a record up by what the user typed -- while `key`/`var` carry the swap, which is what the
+    # table prints.
+    out[[keys[[i]]]] <- list(key = k, modified = md, moderator = mr, arm = arm,
                      var  = k,
                      term = if (arm == "nested") paste0("`", mr, "`:`", md, "`") else NA_character_)
   }

@@ -1408,6 +1408,91 @@ door for a specification the surface cannot express, since it exists and works.
 
 ---
 
+## 8.11 The two automatic behaviours, and the SD-band cut (implemented)
+
+A third round asked whether the two remaining refusals could be replaced by doing the sensible thing.
+They can, but they are not the same kind of decision, and the difference is what shaped the answer.
+
+### The swap is FREE: it decides a presentation
+
+`race*age` (categorical modified, continuous moderator) has exactly one table that can exist, because
+only a continuous variable has slopes to show within groups. And `*` is symmetric in the fit
+(§8.9: logLik identical, fitted values 2.6e-15 apart), so **reading it as `age*race` decides nothing
+statistical**. Refusing it made the user retype for no information. It now swaps, says so in one line,
+and names the block as the swap — which is what the var column, the footer and `reg_formulas()` print.
+
+### The cut is NOT free: it decides a model
+
+`age*tvhours` has no cells at all, so something has to give. Cutting the moderator into quartiles is
+the right table — §8.7 measured it as the only presentation with counts and an observed twin — but it
+**changes the fit**, and by a lot:
+
+| model                     | df | LRT    | p       | logLik    |
+|---------------------------|----|--------|---------|-----------|
+| continuous (as written)   | 1  | 10.387 | 0.00127 | -7630.699 |
+| cut into 3 groups         | 2  | 9.515  | 0.00859 | -7623.366 |
+| cut into 4 groups         | 3  | 17.087 | 0.00068 | -7611.149 |
+| cut into 5 groups         | 4  | 18.027 | 0.00122 | -7604.506 |
+
+The `Interaction (LR)` row — the number a reader quotes — moves by **13x** across bin counts nobody
+chose, and on `married ~ tvhours * age` the conclusion flips outright (continuous p = 0.0013 against
+0.0651 at three groups). So the cut happens, because a table beats an error, but it is **stated in one
+line and never silent**, both ways out are named (`shape` to choose it, the swapped order to cut the
+other parent), and a variable the user has already shaped is left alone. A shape that keeps the
+moderator continuous (`"log"`, `"sqrt"`) still aborts, which is the user's own choice standing.
+
+It is decided where `shape` is RESOLVED and before it is applied (S2, block G) -- the one point that
+can answer "will this variable still be continuous?", which is also what makes an unnamed fallback
+(`shape = 3`) win by itself: it has already cut both parents, so the pair is an ordinary cells arm and
+nothing is added.
+
+### `shape = "sd_bands"`
+
+Bands at the mean and one SD either side. The landmarks are moderated regression's own low / medium /
+high (Aiken & West), used here as the **boundaries** rather than as evaluation points.
+
+**Four bands, not three**, and the measurement decides it. Per cent of the sample per band:
+
+| variable (skew)   | 3 bands (m-s, m+s) | 4 bands (m-s, m, m+s) | 5 bands (+/-0.5, +/-1.5) |
+|-------------------|--------------------|-----------------------|--------------------------|
+| normal (0.02)     | 16 / 68 / 16       | 16 / 34 / 34 / 16     | 6.9 / 24 / 39 / 24 / 6.8 |
+| age (0.36)        | 18 / 64 / 18       | 18 / 36 / 28 / 18     | **4.2** / 32 / 33 / 23 / 9 |
+| tvhours (2.92)    | 6.0 / 83 / 11      | 6.0 / 48 / 36 / 11    | **0** / 27 / 57 / 10 / 6.5 |
+| lognormal (6.72)  | **0** / 91 / 8.8   | **0** / 70 / 22 / 8.8 | **0** / 28 / 57 / 10 / 5.5 |
+
+Three bands leave 64-68 % of a symmetric variable in one undifferentiated row — no gradient to read.
+Five empty a band on anything skewed. Four is the readable middle, and it is exactly the three
+landmarks as cuts.
+
+**The caveat that quantiles do not have, stated in the docs**: SD bands are *not balanced*, and on a
+skewed variable a landmark can fall outside the data entirely (`m - sd` is below the minimum for a
+lognormal or an exponential). Such a landmark is **dropped** rather than asked of `cut()`, so an
+exponential variable gets three bands and the labels say which landmarks survived. The mean is always
+strictly inside the range of a variable that varies, so the only reachable refusal is one that does
+not vary at all — the abort says so.
+
+**Labels carry both facts**, as asked: `[29.89,47.18) m-sd..m` — the real cut points in the variable's
+own units, and where the band sits on the mean/SD scale.
+
+**Is it standard?** The *landmarks* are (Aiken & West's M∓1SD is the convention in moderated
+regression). The *binning* is not a named standard, and the literature is hostile to categorising
+continuous predictors at all — Royston, Altman & Sauerbrei (2006) show dichotomisation costs power and
+invites residual confounding, and a data-derived cutpoint biases the result. That criticism applies to
+`"quartiles"` just as much, so it is a caveat on the whole `shape` family rather than on this value;
+what is specific here is the balance problem above. Two things make SD bands the better choice when
+they apply: the cut points **mean the same thing** across sub-samples of one variable (a quantile moves
+with each one), and they are the scale a reader of moderated regression already has in mind.
+
+### One defect found on the way, and fixed
+
+`tab_html()` escaped column headers but **not row labels**: an ordinary level like `Arts & Humanities`
+emitted a raw `&`, and `<25 years` a raw `<` — invalid html since the beginning. The generic cell path
+passes `esc = identity`, which is right for an fmt cell (it carries our own `<span>` and `<svg>`) and
+wrong for a character column, which is user data. It now escapes non-fmt columns. The band labels above
+would have been the first ones in the package to hit it by construction.
+
+---
+
 ## 9. References
 
 - Ai, C. & Norton, E. C. (2003). Interaction terms in logit and probit models. *Economics Letters*

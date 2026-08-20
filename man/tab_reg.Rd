@@ -65,11 +65,14 @@ compared to a single common reference cell, with its own count, its observed rat
 adjusted one. This is the readable form, and the one every \code{effect} supports.
 \item a \strong{continuous} \code{a} gives one row per level of \code{b}, holding \code{a}'s \strong{slope within that
 group} --- the row names it, \verb{age per 13.5 (SD) --- Black}. To get the cell table instead,
-cut it:
-\code{shape = c(age = "quartiles")}. \code{b} must be categorical either way --- a \strong{continuous by
-continuous} interaction has no groups to make rows from, so cut one of the two, or write the
-model as a formula (\code{outcome = y ~ a * b}) if you want the bare coefficient.
+cut it: \code{shape = c(age = "quartiles")}.
 }
+Two things are then decided for you, each in \strong{one message}, never silently. If only \code{b} is
+continuous the pair is read the other way round (\code{race*age} becomes \code{age*race}): the same fit,
+since \code{*} is symmetric, and the only table that can exist, since only a continuous variable has
+slopes to show within groups. If \strong{both} are continuous there are no cells to cross, so \code{b} is
+cut into quartiles --- choose the cut yourself with \code{shape}, or swap the order to cut \code{a}
+instead. A variable you have already given a \code{shape} is left alone.
 An interaction \strong{supplies both its variables} --- \code{a*b} \emph{is} \code{a + b + a:b} --- so do not list
 them beside it. That is what makes "with and without" an ordinary model comparison:
 \code{list(additive = c(race, age4), crossed = c(race*age4))}. The footer then reports whether the
@@ -366,6 +369,13 @@ predictor, \code{shape = c(age = "quadratic")} only that one, and anything unnam
 predictor becomes an ordinary \strong{factor}: one estimate per group, its own observed
 companion, counts and colours per group --- the non-linearity becomes visible in the printed
 numbers. Start here; it is the most readable answer.}
+\item{\code{"sd_bands"}}{cut at the \strong{mean and one standard deviation either side} --- four
+bands, whose labels carry both the real cut points and where each sits on that scale
+(\verb{[30,47) m-sd..m}). It is the low / average / high reading of moderated regression, and its
+cut points mean the same thing across sub-samples of one variable, where quantiles move with
+each one. \emph{Unlike quantile groups the bands are not balanced}: on a skewed variable the
+bottom one can be small, and a landmark falling outside the data is dropped (an exponential
+variable gets three bands, not four). Prefer quantiles when the group sizes matter.}
 \item{\code{"quadratic"}}{adds a curvature term, so the predictor takes \strong{two rows} --- the slope
 at the mean, and the squared term, which says whether the slope flattens or accelerates as
 you move away from it.}

@@ -843,6 +843,23 @@ the continuous variable into groups — which is usually the more readable answe
 tab_reg(gss_simple, "married", c(age*race, relig), shape = c(age = "quartiles"))
 ```
 
+The order does not have to be right: if you write `race*age`, tabxplor reads it as `age*race` and says
+so in one line — `*` is symmetric in the fit, and only a continuous variable has slopes to show within
+groups, so there is exactly one table that can exist.
+
+And if **both** variables are continuous there are no cells to cross at all, so the second one is cut
+into quartiles, again in one line:
+
+```{r}
+tab_reg(gss_simple, "married", c(age*tvhours, race), empirical = TRUE)
+```
+
+That cut is a modelling choice, not a presentation one — the footer's interaction test moves with the
+number of bins — which is why it is stated rather than silent. Choose it yourself with `shape`
+(`shape = c(tvhours = "quintiles")`), or write `tvhours*age` to cut `age` instead. If you want the
+bare product coefficient with no bins at all, write the model as a formula: `outcome = y ~ ... + age *
+tvhours`.
+
 ### The scale carries the interaction
 
 One caveat worth stating plainly, because it is not a defect of any method: **an interaction depends

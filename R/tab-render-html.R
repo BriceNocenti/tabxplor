@@ -370,8 +370,15 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     if (!is.null(a)) bold_cell <- bold_cell | a$bold
     face <- if (semantic_face && !color_whole_cell_opt() && !is.null(a))
       list(italic = a$face_italic, underline = a$face_underline)
+    # ⚠ WHAT MAY CARRY MARKUP DECIDES THE ESCAPING. An fmt cell is OURS -- the aside's <span>, the
+    # sparkline's <svg> -- so it is placed raw; a CHARACTER column is user data (a level, a variable
+    # name) and must be escaped, or an ordinary level like "Arts & Humanities" or a band label like
+    # "< m-sd" emits invalid html. The column HEADERS were escaped from the start; the row labels
+    # were not. A transposed table's columns are heterogeneous and pre-rendered, so they keep the
+    # raw path.
+    esc_cell <- if (is_fmt(tab[[name]]) || isTRUE(rd$transposed)) identity else html_escape_br
     cell_html <- html_cell_text(cell, attr(cell, "primary_from"), attr(cell, "primary_nchar"),
-                                bold_cell, esc = identity, face = face)
+                                bold_cell, esc = esc_cell, face = face)
     # THE one place a row sparkline becomes an inline <svg>. It sits here, on the GENERIC cell path,
     # which is what lets the run arrive in an FMT cell -- a regression's base-count column carries it
     # as a literal in its own display template. ⚠ it must stay off the rowspanned label path (c2),

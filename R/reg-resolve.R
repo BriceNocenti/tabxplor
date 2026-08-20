@@ -352,6 +352,13 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   # emits ONE extra model term (quadratic) -- a quantile-cut `age` is a factor from this line on.
   reg_shapes   <- reg_resolve_shape(shape, data,
                                     c(unlist(predictors, use.names = FALSE), cross$parents))
+  # a crossed pair of CONTINUOUS variables has no cells, so its moderator is cut here -- decided
+  # where a shape is resolved and before it is applied, the one point that can answer "will this
+  # still be continuous?". Never silent (R/reg-cross.R).
+  reg_shapes <- utils::modifyList(
+    reg_shapes,
+    purrr::imap(reg_cross_autocut(cross$keys, data, reg_shapes),
+                function(v, nm) reg_shape_value(v, nm)))
   if (length(reg_shapes) > 0L) {
     sh   <- reg_shape_apply(data, reg_shapes, w = wt)
     data <- sh$data
@@ -785,6 +792,8 @@ reg_prepare_replay <- function(data, prep) {
                         log       = log(x),
                         sqrt      = sqrt(x),
                         quantiles = reg_cut_quantiles(x, sp$k, var = v, breaks = sp$breaks),
+                        sd_bands  = reg_cut_sd_bands(x, var = v, breaks = sp$breaks,
+                                                     labels = sp$labels),
                         data[[v]])
   }
   data <- reg_anchor_apply(data, prep$anchors %||% stats::setNames(numeric(0), character(0)))

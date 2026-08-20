@@ -521,7 +521,7 @@ reg_check_rows <- function(data, f, sp, shared, stats, col_var, grouped) {
 # The closed vocabulary. Anything else is an integer k (k quantile groups) or an error -- there is no
 # alias table, so what the docs list is what the parser accepts.
 #' @keywords internal
-REG_SHAPES <- c("linear", "quadratic", "log", "sqrt", "quartiles", "quintiles")
+REG_SHAPES <- c("linear", "quadratic", "log", "sqrt", "quartiles", "quintiles", "sd_bands")
 
 # The number of quantile groups a value asks for (NA = it is not a cut request).
 #' @keywords internal
@@ -620,6 +620,53 @@ reg_cut_quantiles <- function(x, k, w = NULL, var = "x", breaks = NULL) {
   structure(factor(as.character(f), levels = levels(f)), tabxplor_breaks = br)
 }
 
+# THE OTHER CUT: bands at the mean and one SD either side -- the landmarks moderated regression
+# already names low / medium / high (Aiken & West's evaluation points, used here as the BOUNDARIES).
+# FOUR bands, not three: measured on a normal variable the cuts (m-sd, m, m+sd) give 16/34/34/16,
+# where dropping the middle cut leaves 64-68 % of the sample in one undifferentiated row.
+#
+# ⚠ UNLIKE QUANTILES, THE BANDS ARE NOT BALANCED, and on a skewed variable a landmark can fall
+# outside the data entirely -- measured, `m - sd` is below the minimum for a lognormal or an
+# exponential, which would ask cut() for an empty band. Such a landmark is DROPPED, so an exponential
+# gets three bands rather than an empty one, and the labels say which landmarks survived. Where
+# BALANCE matters more than the landmarks, quantiles are the other cut: that asymmetry is the whole
+# reason both exist.
+#' @keywords internal
+reg_cut_sd_bands <- function(x, w = NULL, var = "x", breaks = NULL, labels = NULL) {
+  x <- as.numeric(x)
+  # a replay re-cuts at the FROZEN breaks and labels, exactly as the quantile branch does: the mean
+  # and SD of a refit's frame would not land in the same places.
+  if (!is.null(breaks) && !is.null(labels)) {
+    f <- cut(x, breaks = breaks, include.lowest = TRUE, right = FALSE)
+    return(factor(labels[as.integer(f)], levels = labels))
+  }
+  m  <- reg_weighted_mean(x, w)
+  s  <- reg_predictor_sd(x, w)
+  rg <- range(x, na.rm = TRUE)
+  land <- c(m - s, m, m + s)
+  tag  <- c("m-sd", "m", "m+sd")
+  keep <- is.finite(land) & land > rg[[1L]] & land < rg[[2L]]
+  land <- land[keep]; tag <- tag[keep]
+  # ⚠ the mean is always strictly inside the range of a variable that varies, so the only reachable
+  # refusal is one that does not: a skewed variable DEGRADES to fewer bands (see above) rather than
+  # aborting, which is the behaviour to keep.
+  if (!is.finite(s) || s <= 0 || length(land) == 0L)
+    cli::cli_abort(c(
+      '{.code shape = "sd_bands"} needs {.val {var}} to vary.',
+      "x" = "Its standard deviation is zero, so there are no bands to cut.",
+      "i" = "Drop it from {.arg predictors}, or pass it as a factor."), call = NULL)
+  f0   <- cut(x, breaks = c(rg[[1L]], land, rg[[2L]]), include.lowest = TRUE, right = FALSE,
+              dig.lab = 4L)
+  # the label carries BOTH: the real cut points (the interval cut() built, identical in form to a
+  # quantile group's) and where the band sits on the mean/SD scale.
+  side <- c(paste0("< ", tag[[1L]]),
+            if (length(tag) > 1L) paste0(tag[-length(tag)], "..", tag[-1L]),
+            paste0("> ", tag[[length(tag)]]))
+  labs <- paste0(levels(f0), " ", side)
+  structure(factor(labs[as.integer(f0)], levels = labs),
+            tabxplor_breaks = c(rg[[1L]], land, rg[[2L]]), tabxplor_labels = labs)
+}
+
 # Apply every column-recoding shape ONCE, and return the display labels the transformed ones need
 # ("log(age)") plus the shapes with their quantile BREAKS filled in. `quadratic` is not a recode --
 # it emits a term -- so it passes through untouched.
@@ -647,6 +694,13 @@ reg_shape_apply <- function(data, shapes, w = NULL) {
       f <- reg_cut_quantiles(x, shapes[[v]]$k, wv, var = v, breaks = shapes[[v]]$breaks)
       shapes[[v]]$breaks <- attr(f, "tabxplor_breaks") %||% shapes[[v]]$breaks
       attr(f, "tabxplor_breaks") <- NULL
+      data[[v]] <- f
+    } else if (kind == "sd_bands") {
+      f <- reg_cut_sd_bands(x, wv, var = v, breaks = shapes[[v]]$breaks,
+                            labels = shapes[[v]]$labels)
+      shapes[[v]]$breaks <- attr(f, "tabxplor_breaks") %||% shapes[[v]]$breaks
+      shapes[[v]]$labels <- attr(f, "tabxplor_labels") %||% shapes[[v]]$labels
+      attributes(f)[c("tabxplor_breaks", "tabxplor_labels")] <- NULL
       data[[v]] <- f
     }
   }

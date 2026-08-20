@@ -93,13 +93,74 @@ test_that("the refusals name the cure", {
   d <- cr_data()
   f <- function(p) tab_reg(d, "married", p, family = "binomial", stats = FALSE)
   expect_error(f(c("race", "race*age4")), "beside an interaction")   # the parent rule
-  expect_error(f("age*tvhours"), "categorical moderator")            # a continuous moderator
-  expect_error(f("race*age"), "write .age\\*race.")                   # only the order is wrong
   expect_error(f("race*nope"), "does not exist")
   expect_error(f("race*race"), "with itself")
-  # ...and the cure works: cutting the moderator gives the cells arm
-  expect_silent(quiet(tab_reg(d, "married", "age*tvhours", family = "binomial", stats = FALSE,
-                              shape = c(tvhours = "quartiles"))))
+  # a shape that keeps the moderator CONTINUOUS is the user's own choice, so the abort stands
+  expect_error(tab_reg(d, "married", "age*tvhours", family = "binomial", stats = FALSE,
+                       shape = c(tvhours = "sqrt")), "categorical moderator")
+})
+
+test_that("only the ORDER wrong: swap to the one table that can exist, and say so", {
+  d <- cr_data()
+  expect_message(tab_reg(d, "married", "race*age", family = "binomial", stats = FALSE),
+                 "read as .age\\*race.")
+  t <- quiet(tab_reg(d, "married", "race*age", family = "binomial", stats = FALSE))
+  # the block is named as the SWAP, which is what the table prints...
+  expect_true("age*race" %in% cx(t))
+  expect_false("race*age" %in% cx(t))
+  # ...and the moderator keeps its own block, because the model contains it
+  expect_true("race" %in% cx(t))
+  # `*` is symmetric in the FIT, so the swap decides a presentation and never a model
+  expect_identical(reg_render_ish <- get_or(t$Model_OR),
+                   get_or(quiet(tab_reg(d, "married", "age*race", family = "binomial",
+                                        stats = FALSE))$Model_OR))
+})
+
+test_that("two continuous parents: the moderator is cut, never silently", {
+  d <- cr_data()
+  expect_message(tab_reg(d, "married", "age*tvhours", family = "binomial", stats = FALSE),
+                 "no cells to cross")
+  t <- quiet(tab_reg(d, "married", "age*tvhours", family = "binomial", stats = FALSE))
+  # the cut IS the table: one slope per quartile of the moderator, and the moderator's own block
+  expect_equal(sum(cx(t) == "age*tvhours"), 4L)
+  expect_true("tvhours" %in% cx(t))
+  # a user shape on the moderator wins outright -- their choice, no message
+  q5 <- quiet(tab_reg(d, "married", "age*tvhours", family = "binomial", stats = FALSE,
+                      shape = c(tvhours = "quintiles")))
+  expect_equal(sum(cx(q5) == "age*tvhours"), 5L)
+  expect_silent(suppressWarnings(tab_reg(d, "married", "age*tvhours", family = "binomial",
+                                         stats = FALSE, shape = c(tvhours = "quintiles"))))
+  # ...and so does an unnamed fallback, which reg_resolve_shape() has already spread: it cuts BOTH
+  # parents, so the pair becomes the ordinary cells arm (3 x 3) and nothing is auto-cut.
+  q3 <- quiet(tab_reg(d, "married", "age*tvhours", family = "binomial", stats = FALSE, shape = 3))
+  expect_equal(sum(cx(q3) == "age*tvhours"), 9L)
+  expect_silent(suppressWarnings(tab_reg(d, "married", "age*tvhours", family = "binomial",
+                                         stats = FALSE, shape = 3)))
+})
+
+test_that("`shape = \"sd_bands\"` bands at the mean and one SD either side", {
+  d <- cr_data()
+  t <- quiet(tab_reg(d, "married", c("age", "race"), family = "binomial", stats = FALSE,
+                     shape = c(age = "sd_bands")))
+  lv <- as.character(t$levels)[cx(t) == "age"]
+  expect_length(lv, 4L)
+  # every label carries BOTH facts: the real cut points, and where the band sits on the mean/SD scale
+  expect_match(lv[[1]], "^\\[.*\\) < m-sd$")
+  expect_match(lv[[2]], "m-sd\\.\\.m$")
+  expect_match(lv[[3]], "m\\.\\.m\\+sd$")
+  expect_match(lv[[4]], "> m\\+sd$")
+  # the cuts really are the landmarks
+  m <- mean(d$age); s <- stats::sd(d$age)
+  br <- attr(tabxplor:::reg_cut_sd_bands(d$age, var = "age"), "tabxplor_breaks")
+  expect_equal(br[2:4], c(m - s, m, m + s), tolerance = 1e-8)
+  # ⚠ unlike quantiles the bands are NOT balanced: a landmark outside the data is DROPPED rather
+  # than asked of cut(), and a variable with none left is refused, naming the balanced cure.
+  set.seed(1)
+  ex <- stats::rexp(5000, 1 / 3e4)                       # mean - sd is below the minimum
+  expect_length(levels(tabxplor:::reg_cut_sd_bands(ex, var = "x")), 3L)
+  # the mean is always inside the range of a variable that varies, so the only refusal left is one
+  # that does not vary at all.
+  expect_error(tabxplor:::reg_cut_sd_bands(rep(1, 100), var = "x"), "to vary")
 })
 
 test_that("the parent rule is PER MODEL, so with/without is one comparison", {

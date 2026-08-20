@@ -10,6 +10,12 @@
   The `stats` key for the `tab_vars` effect-modification test is renamed `"group_interaction"`, so
   that `"interaction"` names this one.
 
+* `tab_reg(shape =)` gains `"sd_bands"`: cut a continuous predictor at the mean and one standard
+  deviation either side, with labels carrying both the real cut points and the mean/SD scale.
+
+* `tab_html()` now escapes row labels, so an ordinary level like `Arts & Humanities` no longer emits
+  invalid HTML (column headers were already escaped).
+
 * **`tab()` is now the unified entry point.** It accepts **several `row_vars` / `col_vars`**
   (e.g. `tab(data, c(race, relig), marital)`), merged into one table by default or returned as a list
   with `output_list = TRUE`. `tab_many()` is kept as a soft-deprecated alias. Several `row_vars` and

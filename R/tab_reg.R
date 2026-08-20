@@ -3698,11 +3698,14 @@ reg_stage_finalize <- function(ctx) {
 #'     adjusted one. This is the readable form, and the one every `effect` supports.
 #'     \item a **continuous** `a` gives one row per level of `b`, holding `a`'s **slope within that
 #'     group** --- the row names it, `age per 13.5 (SD) --- Black`. To get the cell table instead,
-#'     cut it:
-#'     `shape = c(age = "quartiles")`. `b` must be categorical either way --- a **continuous by
-#'     continuous** interaction has no groups to make rows from, so cut one of the two, or write the
-#'     model as a formula (`outcome = y ~ a * b`) if you want the bare coefficient.
+#'     cut it: `shape = c(age = "quartiles")`.
 #'   }
+#'   Two things are then decided for you, each in **one message**, never silently. If only `b` is
+#'   continuous the pair is read the other way round (`race*age` becomes `age*race`): the same fit,
+#'   since `*` is symmetric, and the only table that can exist, since only a continuous variable has
+#'   slopes to show within groups. If **both** are continuous there are no cells to cross, so `b` is
+#'   cut into quartiles --- choose the cut yourself with `shape`, or swap the order to cut `a`
+#'   instead. A variable you have already given a `shape` is left alone.
 #'   An interaction **supplies both its variables** --- `a*b` *is* `a + b + a:b` --- so do not list
 #'   them beside it. That is what makes "with and without" an ordinary model comparison:
 #'   `list(additive = c(race, age4), crossed = c(race*age4))`. The footer then reports whether the
@@ -3892,6 +3895,13 @@ reg_stage_finalize <- function(ctx) {
 #'       predictor becomes an ordinary **factor**: one estimate per group, its own observed
 #'       companion, counts and colours per group --- the non-linearity becomes visible in the printed
 #'       numbers. Start here; it is the most readable answer.}
+#'     \item{`"sd_bands"`}{cut at the **mean and one standard deviation either side** --- four
+#'       bands, whose labels carry both the real cut points and where each sits on that scale
+#'       (`[30,47) m-sd..m`). It is the low / average / high reading of moderated regression, and its
+#'       cut points mean the same thing across sub-samples of one variable, where quantiles move with
+#'       each one. \emph{Unlike quantile groups the bands are not balanced}: on a skewed variable the
+#'       bottom one can be small, and a landmark falling outside the data is dropped (an exponential
+#'       variable gets three bands, not four). Prefer quantiles when the group sizes matter.}
 #'     \item{`"quadratic"`}{adds a curvature term, so the predictor takes **two rows** --- the slope
 #'       at the mean, and the squared term, which says whether the slope flattens or accelerates as
 #'       you move away from it.}

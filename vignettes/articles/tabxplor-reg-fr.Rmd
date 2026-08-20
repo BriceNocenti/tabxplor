@@ -876,6 +876,23 @@ lisible :
 tab_reg(gss_simple, "married", c(age*race, relig), shape = c(age = "quartiles"))
 ```
 
+L'ordre n'a pas besoin d'être le bon : si vous écrivez `race*age`, tabxplor le lit comme `age*race` et
+le dit en une ligne — `*` est symétrique dans l'ajustement, et seule une variable continue a des pentes
+à montrer par groupe : il n'existe donc qu'un seul tableau possible.
+
+Et si les **deux** variables sont continues, il n'y a aucune case à croiser : la seconde est alors
+découpée en quartiles, là encore en une ligne :
+
+```{r}
+tab_reg(gss_simple, "married", c(age*tvhours, race), empirical = TRUE)
+```
+
+Ce découpage est un choix de modèle, pas de présentation — le test d'interaction du pied de tableau
+varie avec le nombre de classes —, et c'est pourquoi il est annoncé plutôt que silencieux. Choisissez-le
+vous-même avec `shape` (`shape = c(tvhours = "quintiles")`), ou écrivez `tvhours*age` pour découper
+`age` à la place. Si vous voulez le coefficient du produit sans aucun découpage, écrivez le modèle sous
+forme de formule : `outcome = y ~ ... + age * tvhours`.
+
 ### L'échelle porte l'interaction
 
 Une réserve à énoncer clairement, car ce n'est le défaut d'aucune méthode : **une interaction dépend
