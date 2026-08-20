@@ -20,19 +20,15 @@ missing values, counts as 0.}
 \code{data} with the integer score column \code{name} added (or replaced).
 }
 \description{
-Builds an integer score column that counts, for each row, how many of the
-listed factors sit at their \strong{first level}. Each factor contributes 1 when
-it equals its first level and 0 otherwise, so the score ranges from 0 to
-\code{length(vars_list)}. This is the natural way to turn a battery of yes/no
-(or agree/disagree) survey items into a single summed score, and it feeds
-the grouped-binomial outcome of \code{\link[=tab_reg]{tab_reg()}} (its \code{trials} argument).
+Builds an integer score column counting, for each row, how many of the listed factors sit at
+their \strong{first level} (1 if so, 0 otherwise) -- the score ranges 0 to \code{length(vars_list)}. The
+natural way to sum a battery of yes/no survey items into one score, feeding the grouped-binomial
+outcome of \code{\link[=tab_reg]{tab_reg()}} (its \code{trials} argument).
 }
 \details{
-The "first level" is \code{levels(as.factor(x))[1]} -- the reference level of the
-factor. Non-factor columns are coerced with \code{\link[=as.factor]{as.factor()}}. Missing values
-are folded into an explicit \code{"NA"} level before counting (via
-\code{\link[forcats:fct_na_value_to_level]{forcats::fct_na_value_to_level()}}), so an \code{NA} never matches the first
-level and contributes 0.
+The "first level" is \code{levels(as.factor(x))[1]}. Non-factor columns are coerced with
+\code{\link[=as.factor]{as.factor()}}; missing values are folded into an explicit \code{"NA"} level first (via
+\code{\link[forcats:fct_na_value_to_level]{forcats::fct_na_value_to_level()}}), so \code{NA} never counts as the first level.
 }
 \examples{
 data <- tibble::tibble(group = factor(c("G1", "G1", "G2", "G2", "G3", "G3")),

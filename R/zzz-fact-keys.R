@@ -1,39 +1,30 @@
-# =====================================================================================================
-# R/zzz-fact-keys.R -- REFERENTIAL INTEGRITY BETWEEN THE DECLARED FACT TABLES (Phase 20a, KEY 2)
-# =====================================================================================================
-# Phase 19 replaced ~15 vocabularies-written-in-their-consumers with ~15 declared fact tables. That
-# closed one class of drift and opened another: **a key written by hand in one table and read by name
-# in another is a foreign key**, and nothing checked them.
-#
-#   19d renamed the colour measures to full words and did not reach `EST_SCALES$label_meas`. The
-#   forest plot lost its glyphs and ERRORED on lookup. The fix shipped with a comment reading
-#   "WARNING: a MEASURES KEY -- 19d's full-word rename had to reach here, and did not", which is
-#   hard rule 4's forbidden pattern ("two encodings kept in sync by a comment") one level up.
-#
-# THE RULE: a dangling key is a **LOAD** failure, not a runtime one. Adding an edge is one row.
-#
-# WHY THIS FILE SORTS LAST. There is no `Collate:` field, so R sources R/ in C collation, and the
-# tables are spread across seven files: `COLOR_SCALES` is in tab_classes.R, `REG_EMPIRICAL` in
-# tab_reg.R, `DISPLAY_TOKENS` in tab-display.R, `CI_GEOMS` in tab-agg.R, `MEASURES`/`EST_SCALES` in
-# fmt_class.R. `reg-estimand.R` -- 19o's proposed home -- sees none of the first three. `zzz-` is the
-# only prefix that is last **by construction**, whatever the other files are called.
-#
-# WHAT IS HERE, AND WHAT IS NOT.
+# PURPOSE: REFERENTIAL INTEGRITY between the declared fact tables -- checked when the namespace
+#   loads, so a broken reference fails the install rather than a user's table.
+# ROLE: a key written by hand in one table and read by name in another is a FOREIGN KEY.
+#   TAB_FOREIGN_KEYS declares every such edge and tx_check_foreign_keys() walks them at load. Two
+#   sibling checkers ride along: tx_check_tab_args() (the argument surface against the real
+#   signatures) and tx_check_reg_ctx() (the two regression records against each other).
+#   THE RULE: a dangling key is a LOAD failure, not a runtime one. Adding an edge is one row.
+# DESIGN -- what is here, and what is not:
 #   here     every edge from one declared table's VALUES to another's KEYS, including a table's
 #            references to itself (COLOR_SCALES$derive, DISPLAY_TOKENS$alias).
-#   not here a table's self-consistency ("does it cover its own key set", "does it agree with the
-#            two switch bodies") -- those stay beside the table, where they already are and where
-#            their operands are in scope:
-#              fmt_class.R   FMT_FIELD_DOC vs fmt_field_names; fmt_attr_rules vs fmt_col_attrs;
-#                            MEASURES' required members; COLOR_BUILD_ORDER <-> MEASURES$builds
-#              tab-agg.R     CI_GEOMS' member list and key reconstruction
-#              tab-display.R DISPLAY_TOKENS vs the get_num()/set_num() switch bodies
-#              reg-estimand.R  per-family defaults, duplicate (effect, measure), REG_FAMILY_MULT_WORD
-#
-# ⚠ READ EVERY TABLE WITH `[[`, NEVER `$`. `MEASURES$adjustment` has `scale_from` and no `scale`, so
-# `$scale` PARTIAL-MATCHES to `"gap"` and a generic checker would silently validate the wrong string.
-# `[[` on a list is exact by default; the two readers below are the only way rows are read here.
-# =====================================================================================================
+#   not here a table's OWN self-consistency -- "does it cover its own key set", "does it agree with
+#            the switch bodies". Those stay beside the table, where their operands are in scope:
+#            fmt_class.R (FMT_FIELD_DOC, fmt_attr_rules, MEASURES' members), tab-agg.R (CI_GEOMS),
+#            tab-display.R (DISPLAY_TOKENS vs the get_num()/set_num() bodies), reg-estimand.R
+#            (per-family defaults).
+# KEY CONSTRAINTS:
+#   - ⚠ WHY THIS FILE SORTS LAST. There is no `Collate:` field, so R sources R/ in C collation and
+#     the tables are spread over seven files. `zzz-` is the only prefix that is last BY
+#     CONSTRUCTION, whatever the other files are called -- and it is the only reason
+#     tx_check_tab_args() can exist at all: formals(tab) is not available while tab-args.R is
+#     being sourced.
+#   - ⚠ READ EVERY TABLE WITH `[[`, NEVER `$`. MEASURES$adjustment has `scale_from` and no `scale`,
+#     so `$scale` PARTIAL-MATCHES to "gap" and a generic checker would silently validate the wrong
+#     string. The two readers below are the only way rows are read here.
+#   - The checkers use stop(), not cli::cli_abort(): they run while the namespace is still being
+#     built and must not depend on the package's own machinery.
+# See: CLAUDE.md § tabxplor architecture (the declarative architecture).
 
 
 # --- reading a table's rows ---------------------------------------------------------------------
@@ -48,8 +39,8 @@ tx_fk_scalar <- function(tbl, field) {
   }, character(1), USE.NAMES = FALSE)
 }
 
-# EVERY value of a member, over every row (a member may be a vector: MEASURES$applies_to, a 3-slot
-# `scale`, REG_CHECKS$families).
+# EVERY value of a member, over every row (a member may itself be a vector: MEASURES$applies_to,
+# REG_CHECKS$families).
 #' @keywords internal
 #' @noRd
 tx_fk_all <- function(tbl, field) {
@@ -65,7 +56,7 @@ tx_fk_all <- function(tbl, field) {
 tx_fk_reg_rows <- function() unlist(lapply(REG_ESTIMANDS, `[[`, "rows"), recursive = FALSE)
 
 # REG_EMPIRICAL mixes per-family SCALARS (method_diff, coef, coef_log) with SHAPE rows; only the
-# latter are rows with members.
+# latter have members.
 #' @keywords internal
 #' @noRd
 tx_fk_emp_shapes <- function() {
@@ -80,11 +71,9 @@ tx_fk_emp_shape_names <- function()
 
 
 # --- the declared edges --------------------------------------------------------------------------
-# Each row: `from` (what the message names) · `get` (the values, as a closure) · `to` (the legal key
-# set, as a closure) · `allow` (values that are legal but are NOT keys of the target -- each one is a
-# stated fact, never a way to silence a real dangling key) · `orphan` (also report target keys that
-# NO edge references: "this row is dead weight", reported by tx_check_foreign_keys() rather than
-# aborting, because an unreferenced row is not a wrong number).
+# Each row: `from` (what the message names) - `get`/`to` (closures for the values / the legal key
+# set) - `allow` (legal non-key values) - `orphan` (TRUE: also REPORT target keys no edge references
+# -- dead weight, a fact to report, never a failure).
 #' @keywords internal
 #' @noRd
 tx_fk <- function(from, get, to, allow = character(0), orphan = FALSE)
@@ -95,7 +84,6 @@ tx_fk <- function(from, get, to, allow = character(0), orphan = FALSE)
 TAB_FOREIGN_KEYS <- list(
 
   # --- into MEASURES (the colour measures) ---------------------------------------------------
-  # THE edge 19d broke: the forest plot takes a scale's break glyphs from a MEASURES row.
   tx_fk("EST_SCALES$label_meas",   function() tx_fk_scalar(EST_SCALES, "label_meas"),
         function() names(MEASURES)),
   tx_fk("DISPLAY_TOKENS$comparison", function() tx_fk_scalar(DISPLAY_TOKENS, "comparison"),
@@ -112,11 +100,9 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("MEASURES$guar$scale",
         function() unlist(lapply(MEASURES, function(m) as.character(m[["guar"]][["scale"]]))),
         function() names(COLOR_SCALES), orphan = TRUE),
-  # here the NAMES are the key: `by_scale` is "this measure's per-SCALE override", keyed by ladder.
   tx_fk("names(MEASURES$by_scale)",
         function() unlist(lapply(MEASURES, function(m) names(m[["by_scale"]]))),
         function() names(COLOR_SCALES), orphan = TRUE),
-  # a DERIVED scale names its parent instead of owning a switch arm in fmt_color_plan().
   tx_fk("COLOR_SCALES$derive$from",
         function() unlist(lapply(COLOR_SCALES, function(s) as.character(s[["derive"]][["from"]]))),
         function() names(COLOR_SCALES)),
@@ -124,32 +110,24 @@ TAB_FOREIGN_KEYS <- list(
   # --- into EST_SCALES (what a column ESTIMATES) ---------------------------------------------
   tx_fk("CI_GEOMS$scale_key",      function() tx_fk_scalar(CI_GEOMS, "scale_key"),
         function() names(EST_SCALES)),
-  # moved here from reg-estimand.R (Phase 20a): its target lives in fmt_class.R, so this is a
-  # cross-table edge like any other, and keeping it apart is what made the inventory incomplete.
   tx_fk("REG_ESTIMANDS$rows$scale", function() tx_fk_scalar(tx_fk_reg_rows(), "scale"),
         function() names(EST_SCALES)),
   tx_fk("REG_EMPIRICAL$*$scale",   function() tx_fk_scalar(tx_fk_emp_shapes(), "scale"),
         function() names(EST_SCALES)),
-  # the LADDER a scale reads on a measure: MEASURES$scale is a 3-slot c(pct=, std=, log=) vector and
-  # fmt_color_plan() indexes it by this string.
   tx_fk("EST_SCALES$ladder",       function() tx_fk_scalar(EST_SCALES, "ladder"),
         function() unique(unlist(lapply(MEASURES, function(m) names(m[["scale"]]))))),
 
   # --- into the interval vocabulary ----------------------------------------------------------
   tx_fk("CI_GEOMS$method_slot",    function() tx_fk_scalar(CI_GEOMS, "method_slot"),
         function() names(CI_METHODS)),
-  # ⚠ "katz" is deliberately outside CI_METHODS: a proportion RATIO has one interval, so it is not a
-  # choice a user makes, and declaring it as one would put an empty menu in `ci_method`.
+  # ⚠ "katz" is deliberately outside CI_METHODS: a proportion RATIO has exactly one interval, so
+  #   declaring it a ci_method choice would offer an empty menu.
   tx_fk("CI_GEOMS$method_fixed",   function() tx_fk_scalar(CI_GEOMS, "method_fixed"),
         function() unlist(CI_METHODS, use.names = FALSE), allow = "katz"),
-  # ⚠ the crude columns add three engines of their own, for the same reason: the Woolf log-OR, the
-  # Katz log-RR and the log-scale Wald are the ONLY interval of their geometry, so none of them is a
-  # `ci_method` a user picks. All three have a CI_METHOD_LABELS / CI_METHOD_WORDED row, which is
-  # where the legend names them.
+  # ⚠ woolf/katz/wald_log: each the ONLY interval of its shape, not a `ci_method` a user picks --
+  #   named in the legend instead.
   tx_fk("REG_EMPIRICAL$*$ci_method", function() tx_fk_scalar(tx_fk_emp_shapes(), "ci_method"),
         function() unlist(CI_METHODS, use.names = FALSE), allow = c("woolf", "katz", "wald_log")),
-  # the twin a crude shape uses on a WEIGHTED / design basis, where the univariable model is svyglm
-  # and its interval is the sandwich rather than the model-based one.
   tx_fk("REG_EMPIRICAL$*$ci_method_design",
         function() tx_fk_scalar(tx_fk_emp_shapes(), "ci_method_design"),
         function() unlist(CI_METHODS, use.names = FALSE)),
@@ -159,29 +137,19 @@ TAB_FOREIGN_KEYS <- list(
   # --- into DISPLAY_TOKENS (what a cell shows) -----------------------------------------------
   tx_fk("EST_SCALES$default_display", function() tx_fk_scalar(EST_SCALES, "default_display"),
         function() names(DISPLAY_TOKENS)),
-  # what a column renders `{est}` / `{base}` as. `base_display` is NA on the link scales, where a
-  # coefficient has no unambiguous level -- fmt_resolve_scale_tokens() renders those void.
   tx_fk("EST_SCALES$est_display",  function() tx_fk_scalar(EST_SCALES, "est_display"),
         function() names(DISPLAY_TOKENS)),
   tx_fk("EST_SCALES$base_display", function() tx_fk_scalar(EST_SCALES, "base_display"),
         function() names(DISPLAY_TOKENS)),
-  # every EFFECT scale states the precision its regression cells print at (the level scales are the
-  # crosstab's, whose digits are the user's own argument).
   tx_fk("REG_CELL_DIGITS", function() names(REG_CELL_DIGITS), function() names(EST_SCALES)),
-  # `rr` -> `ratio`: a token may name another token as its spelling.
   tx_fk("DISPLAY_TOKENS$alias",    function() tx_fk_scalar(DISPLAY_TOKENS, "alias"),
         function() names(DISPLAY_TOKENS)),
-  # a preset resolves to a TOKEN or to a `{}` TEMPLATE; only the first kind is a key here (a template
-  # is validated field by field by display_write_col()). No exemption: every preset names real tokens.
   tx_fk("DISPLAY_PRESETS",
         function() { v <- unlist(DISPLAY_PRESETS, use.names = FALSE)
                      v[!grepl("{", v, fixed = TRUE)] },
         function() names(DISPLAY_TOKENS)),
 
   # --- into fmt_field_names (the record) -----------------------------------------------------
-  # ⚠ `ci` is DERIVED (get_ci() is a shim over the ci_inf/ci_sup bounds), so the `ci` token names a
-  # quantity, not a field. It is the one legal non-field, and it is stated here rather than by
-  # widening fmt_field_names, which would claim a 22nd field that new_fmt() does not have.
   tx_fk("DISPLAY_TOKENS$field",    function() tx_fk_scalar(DISPLAY_TOKENS, "field"),
         function() fmt_field_names, allow = "ci"),
   tx_fk("EST_SCALES$est_field",    function() tx_fk_scalar(EST_SCALES, "est_field"),
@@ -195,20 +163,14 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("REG_CHECKS$kind",         function() tx_fk_scalar(REG_CHECKS, "kind"),
         function() ROW_KINDS),
 
-  # --- into TEST_ROWS (Phase 20c, KEY 5): what kind of statistical row this is ----------------
-  # `kind` is the same row-kind vocabulary a data row uses -- a footer row IS a row.
+  # --- into TEST_ROWS: what kind of statistical row this is -----------------------------------
   tx_fk("TEST_ROWS$kind",          function() tx_fk_scalar(TEST_ROWS, "kind"),
         function() ROW_KINDS),
-  # `stat` is the `stats =` key that requests the row. A SELF-edge onto the vocabulary the argument
-  # boundary validates against (the DISPLAY_TOKENS$alias precedent), so a typo'd `stat` -- which
-  # would make a footer row unrequestable and therefore invisible -- breaks the build.
   tx_fk("TEST_ROWS$stat",          function() tx_fk_scalar(TEST_ROWS, "stat"),
         function() reg_stat_keys()),
-  # a crosstab row says which column kind it describes, in EST_SCALES' words
   tx_fk("TEST_ROWS$var_kind",      function() tx_fk_scalar(TEST_ROWS, "var_kind"),
         function() unique(tx_fk_scalar(EST_SCALES, "var_kind"))),
-  # the `anova` argument's two values ARE the two rows that declare them: TAB_ARGS owns the argument,
-  # TEST_ROWS owns which test each value selects.
+  # TAB_ARGS owns the argument, TEST_ROWS owns which test each of its two values selects.
   tx_fk("TAB_ARGS$anova$values",   function() TAB_ARGS[["anova"]][["values"]],
         function() unique(tx_fk_scalar(TEST_ROWS, "anova"))),
 
@@ -217,9 +179,6 @@ TAB_FOREIGN_KEYS <- list(
         function() names(REG_FAMILIES)),
   tx_fk("REG_ESTIMANDS$rows$fit",  function() tx_fk_scalar(tx_fk_reg_rows(), "fit"),
         function() names(REG_FAMILIES)),
-  # "every estimand's fit has model checks" -- the invariant 19l added reactively, after discovering
-  # that 19e's two new estimands silently had none. Stated on the ROWS now, which is stronger than
-  # the REG_FIT_FAMILY subset it replaces (that one only covered the three link-key families).
   tx_fk("REG_ESTIMANDS$rows$fit -> checks", function() tx_fk_scalar(tx_fk_reg_rows(), "fit"),
         function() REG_CHECK_FAMILIES),
   tx_fk("REG_CHECKS$families",     function() tx_fk_all(REG_CHECKS, "families"),
@@ -230,42 +189,28 @@ TAB_FOREIGN_KEYS <- list(
         function() names(REG_FAMILIES)),
 
   # --- into the two vocabularies reg_build() dispatches on -----------------------------------
-  # A declared `builder` must name one reg_build() implements. The other direction is reg_build()'s own
-  # `switch()`, whose arms are all NAMED and whose default aborts -- it used to fall through to the
-  # coefficient builder, so a typo built the wrong column in silence.
   tx_fk("REG_ESTIMANDS$rows$builder", function() tx_fk_scalar(tx_fk_reg_rows(), "builder"),
         function() REG_BUILDERS),
-  # ⚠ "auto" is the sentinel for reg_marginal_engine()'s rule, resolved per row at run time.
   tx_fk("REG_ESTIMANDS$rows$engine", function() tx_fk_scalar(tx_fk_reg_rows(), "engine"),
         function() REG_MARGINAL_ENGINES, allow = "auto"),
 
   # --- into REG_EMPIRICAL (which crude column pairs with which estimand) ----------------------
-  # ⚠ "auto" is the sentinel for "the outcome's own family", resolved at run time.
   tx_fk("REG_ESTIMANDS$rows$crude_fam", function() tx_fk_scalar(tx_fk_reg_rows(), "crude_fam"),
         function() names(REG_EMPIRICAL), allow = "auto"),
-  # the (crude_fam, crude_shape) PAIR is resolved at run time (an "auto" family, plus the documented
-  # cross-family borrow: a binomial marginal ratio takes REG_EMPIRICAL$rr$rr), so what is checkable
-  # here is that the shape name exists at all -- which is what a typo breaks.
   tx_fk("REG_ESTIMANDS$rows$crude_shape", function() tx_fk_scalar(tx_fk_reg_rows(), "crude_shape"),
         function() tx_fk_emp_shape_names()),
 
   # --- into the header vocabulary (REG_WORDS / REG_CONTRASTS) ---------------------------------
-  # a header word is COMPOSED (marker o log-wrap o base acronym), so what both producers declare is
-  # the base -- and it must be an acronym the vocabulary can expand.
   tx_fk("REG_ESTIMANDS$rows$word", function() tx_fk_scalar(tx_fk_reg_rows(), "word"),
         function() names(REG_WORDS)),
   tx_fk("REG_EMPIRICAL$*$word",    function() tx_fk_scalar(tx_fk_emp_shapes(), "word"),
         function() names(REG_WORDS)),
-  # every acronym a header prints can be typed back into `measure`, so a reader of a table always
-  # holds a spelling the argument accepts.
   tx_fk("names(REG_WORDS)",        function() names(REG_WORDS),
         function() names(REG_MEASURE_ALIASES)),
   tx_fk("names(REG_CONTRASTS)",    function() names(REG_CONTRASTS),
         function() REG_EFFECTS_VALUES),
 
   # --- into the estimand vocabulary ----------------------------------------------------------
-  # the VALUE is the measure a `log_*` spelling pins; the NAME is the spelling itself, so it must be
-  # one the alias table can resolve.
   tx_fk("REG_LOG_BASE",            function() as.character(REG_LOG_BASE),
         function() REG_MEASURES_VALUES),
   tx_fk("names(REG_LOG_BASE)",     function() names(REG_LOG_BASE),
@@ -273,14 +218,10 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("REG_MEASURE_ALIASES",     function() as.character(REG_MEASURE_ALIASES),
         function() REG_MEASURES_VALUES),
 
-  # --- into the ARGUMENT surface (Phase 20b) -------------------------------------------------
-  # TAB_ARGS declares, per argument, which fact table owns its vocabulary, which renderer prints
-  # it, and which option is its default. Each of those three is a key written by hand in one table
-  # and read by name in another -- the definition of a foreign key.
+  # --- into the ARGUMENT surface ---------------------------------------------------------------
   tx_fk("TAB_ARGS$values_from",    function() tx_fk_all(TAB_ARGS, "values_from"),
         function() c("MEASURES", "COLOR_SIGNIF_VALUES", "CI_METHODS", "COLOR_SCALES",
                      "DISPLAY_TOKENS",
-                     # 20c: tab_reg()'s own vocabularies, each already declared once
                      "REG_FAMILIES", "REG_ESTIMANDS", "REG_CHECKS", "TEST_ROWS")),
   tx_fk("TAB_ARGS$values_rd",      function() tx_fk_all(TAB_ARGS, "values_rd"),
         function() ls(asNamespace("tabxplor"), pattern = "_rd$")),
@@ -290,10 +231,8 @@ TAB_FOREIGN_KEYS <- list(
         function() names(TAB_ARGS)),
   tx_fk("TAB_ARGS$pct$stored",     function() TAB_ARGS[["pct"]][["stored"]],
         function() PCT_TYPES),
-  # Phase 20h: the `allow` list is GONE. Every option's per-call twin now HAS a declared row --
-  # the crosstab ones in TAB_ARGS since 20b, the eleven render ones in EXPORT_ARGS since 20h -- so
-  # this edge is checked outright instead of carrying an eleven-name exception whose only reason was
-  # "those `@param`s are still hand-written".
+  # Every option's per-call twin has a declared row (crosstab in TAB_ARGS, render in EXPORT_ARGS),
+  # so this edge is checked outright, with no exception list.
   tx_fk("TAB_OPTIONS$arg",         function() tx_fk_scalar(TAB_OPTIONS, "arg"),
         function() unique(c(names(TAB_ARGS), names(EXPORT_ARGS),
                             tx_fk_all(TAB_OPTIONS, "arg_extra"))))
@@ -302,14 +241,8 @@ TAB_FOREIGN_KEYS <- list(
 
 # --- the checker ----------------------------------------------------------------------------------
 
-# tx_check_foreign_keys() -- run at LOAD (below). `stop()`, not cli::cli_abort(): this executes while
-# the namespace is still being built, so it must not depend on anything of ours.
-#
-# @param keys  the edges to check. A parameter ONLY so the test suite can hand it a deliberately
-#   broken edge and see the failure -- every real caller uses the default.
-# @return invisibly, the ORPHAN report: target keys that no edge references. Not a failure (an
-#   unreferenced colour scale is dead weight, not a wrong number), so it is returned rather than
-#   thrown, and asserted by test-fact-keys.R.
+# Runs at load, below. `keys` lets the test suite hand a deliberately broken edge and see the
+# failure. Returns the ORPHAN report invisibly (not thrown -- dead weight, not a wrong number).
 #' @keywords internal
 #' @noRd
 tx_check_foreign_keys <- function(keys = TAB_FOREIGN_KEYS) {
@@ -339,39 +272,27 @@ tx_check_foreign_keys <- function(keys = TAB_FOREIGN_KEYS) {
   invisible(orphans)
 }
 
-# --- the argument surface's own anti-drift check (Phase 20b) --------------------------------------
-# tx_check_tab_args() -- every covered producer's FORMALS and its declared TAB_ARGS rows are the
-# same set, and every surviving formal's default is the declared one. This is what makes the
-# generated `@param` blocks safe: an argument added to a signature without a row, or a default
-# changed in a signature without changing the declaration, breaks the BUILD.
-# ⚠ It must live here and not in R/tab-args.R: `formals(tab)` is not available while that file is
-# being sourced (tab.R comes later). zzz- sorts last, which is the whole reason this file exists.
+# --- the argument surface's own anti-drift check -----------------------------------------------
+# Every covered producer's FORMALS and its declared TAB_ARGS rows are the same set, and every
+# surviving formal's default is the declared one -- what makes the generated `@param` blocks safe.
 #' @keywords internal
 #' @noRd
 tx_check_tab_args <- function(producers = c("tab", "tab_plain", "tab_num", "tab_counts",
                                             "tab_many", "tab_build",
-                                            # 20h (KEY 8): the render surface, SCOPED -- see below
                                             EXPORT_PRODUCERS,
-                                            # 20c (KEY 4): the regression producer joined TAB_ARGS,
-                                            # so a `tab_reg()` formal is checked against its
-                                            # declaration exactly like a crosstab one -- the first
-                                            # mechanical guard that argument and declaration agree.
                                             "tab_reg")) {
   for (p in producers) {
     fn <- get(p, envir = asNamespace("tabxplor"))
     f  <- setdiff(names(formals(fn)), "...")
     d  <- tab_args_for(p)
-    # SCOPED producers: the table owns SOME of the signature, not all of it, so only the declared
-    # rows are checked. tab_build is internal (only `output` is declared); an exporter's private
-    # geometry arguments stay in its own roxygen by EXPORT_ARGS' scope rule. The other direction --
-    # a declared row that is no longer a formal -- is still checked for every producer below.
+    # SCOPED producers: the table owns SOME of the signature, so only the declared rows are checked
+    # (tab_build's is just `output`); the other direction is still checked for every producer.
     if (p == "tab_build" || p %in% EXPORT_PRODUCERS) f <- intersect(f, d)
     if (length(setdiff(f, d)))
       stop("tabxplor: ", p, "() has formals with no TAB_ARGS row: ",
            paste(setdiff(f, d), collapse = ", "), call. = FALSE)
     if (length(setdiff(d, f)) && p != "tab_build") {
-      # a DECLARED argument that is no longer a formal must ride `...` -- so the producer must have
-      # one, or the argument is simply unreachable.
+      # a declared argument that is no longer a formal must ride `...`, or it is unreachable.
       if (!"..." %in% names(formals(fn)))
         stop("tabxplor: ", p, "() declares ", paste(setdiff(d, f), collapse = ", "),
              " but takes neither the formal nor `...`.", call. = FALSE)
@@ -383,8 +304,8 @@ tx_check_tab_args <- function(producers = c("tab", "tab_plain", "tab_num", "tab_
       ov <- r[["default_for"]]
       dd <- if (!is.null(ov) && p %in% names(ov)) ov[[p]] else r[["default"]]
       got <- formals(fn)[[k]]
-      # ⚠ rlang::is_missing(), never `is.symbol(x)`: a formal with NO default IS the empty symbol,
-      # and merely touching it raises "argument is missing".
+      # ⚠ rlang::is_missing(), never is.symbol(): a formal with NO default IS the empty symbol, and
+      # merely touching it raises "argument is missing".
       if (rlang::is_missing(got)) next
       if (!identical(eval(got, envir = asNamespace("tabxplor")), dd))
         stop("tabxplor: ", p, "(", k, " = ) does not match its declared TAB_ARGS default.",
@@ -394,13 +315,9 @@ tx_check_tab_args <- function(producers = c("tab", "tab_plain", "tab_num", "tab_
   invisible(TRUE)
 }
 
-# --- the regression context's own anti-shadow check (Phase 20e) -----------------------------------
-# tx_check_reg_ctx() -- new_reg_ctx() and new_reg_shared() declare TWO record types that every
-# reg_stage_*() binds into ONE scope (reg_ctx_locals() = the ctx plus its `shared` element). A name
-# in both would silently shadow: `c()` keeps both entries and list2env() lets the LAST one win, so a
-# stage would read the per-call setting where it meant its own product, or the reverse.
-# ⚠ Same reason tx_check_tab_args() lives here: neither constructor exists while the other's file is
-# being sourced, and zzz- is last by construction.
+# --- the regression context's own anti-shadow check --------------------------------------------
+# new_reg_ctx() and new_reg_shared() are unpacked into ONE scope by every reg_stage_*(), so a name
+# declared in both would silently shadow -- list2env() lets the LAST one win.
 #' @keywords internal
 #' @noRd
 tx_check_reg_ctx <- function() {
@@ -411,8 +328,8 @@ tx_check_reg_ctx <- function() {
   invisible(TRUE)
 }
 
-# THE load-time check. It runs at R CMD INSTALL / pkgload::load_all(), so a rename that does not
-# reach a fact table breaks the BUILD, at the moment it is made -- which is the whole point.
+# Runs at namespace load (R CMD INSTALL / pkgload::load_all()), so a broken reference fails the
+# build, at the moment it is made.
 tx_check_foreign_keys()
 tx_check_tab_args()
 tx_check_reg_ctx()

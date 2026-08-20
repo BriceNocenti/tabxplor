@@ -115,30 +115,19 @@ With \code{color = "contrib"} the three values are three readings of the same de
 independence, because a contribution has no confidence interval to floor:
 \itemize{
 \item \code{"ignore"} and \code{"grey_non_signif"} color the \strong{relative} contribution
-(a share of \emph{this} table's chi-squared, in multiples of the mean cell contribution --
-the correspondence-analysis reading, so the scale is relative to the table);
+-- a share of \emph{this} table's chi-squared, in multiples of the mean cell contribution, so
+the scale is relative to the table (the correspondence-analysis reading);
 \item \code{"guaranteed_effect"} colors the \strong{adjusted standardized residual} itself, on
-the absolute \code{zscore} break scale (+/-1.96, +/-2.58, +/-3.89, +/-6 by default). Those
-thresholds mean the same thing in every table, which is the SPSS "adjusted residual" reading.
+the absolute \code{zscore} break scale (+/-1.96, +/-2.58, +/-3.89, +/-6 by default), whose
+thresholds mean the same thing in every table (the SPSS "adjusted residual" reading).
 }
 In all three, significance is the adjusted standardized residual (Haberman; SPSS's "adjusted
-residual", R's \code{chisq.test()$stdres}), \emph{not} the Pearson residual \code{(o-e)/sqrt(e)},
-whose variance is below 1 and which therefore under-rejects. Under weights the residual follows
-the package rule -- weighted estimate, and a base that follows the inference basis: the raw
-\code{n} by default (the reading a correspondence analysis expects), and under
-\code{options(tabxplor.design_effect = TRUE)} or a \code{survey} design that raw \code{n} divided
-by the \strong{association's} design effect -- Rao-Scott's mean generalized delta-bar, the very
-one the whole-table test reports, so the colours and the p-value of one table describe one design
-effect. The
-contribution itself stays weighted (it estimates the population table's structure, and is therefore
-identical at every basis, which is what keeps the correspondence-analysis reading safe). One base
-for the whole table, so a counts table and a percentage table of the same data give the SAME
-residuals. Cells whose expected count is below 1 are left
-uncolored: the normal approximation does not hold there.
-Colors are computed per column at print time; since 2.0.0 each column records the confidence level
-it was built at, so the significance thresholds follow the call's \code{conf_level}. A column that
-never recorded one (a hand-built \code{\link{fmt}}) falls back to
-\code{options(tabxplor.conf_level)}.}
+residual", R's \code{chisq.test()$stdres}), \emph{not} the Pearson residual
+\code{(o-e)/sqrt(e)}, which under-rejects. Under weights it uses ONE base for the whole table,
+following the table's inference basis, so a counts table and a percentage table of the same data
+give the SAME residuals. Cells whose expected count is below 1 are left uncolored: the normal
+approximation does not hold there. Thresholds follow the call's \code{conf_level}, which each
+column records; a hand-built \code{\link{fmt}} falls back to \code{options(tabxplor.conf_level)}.}
 
 \item{test}{Set to \code{TRUE} to calculate a statistical test of independence for each
 (sub)table: \strong{Chi-squared} for factor \code{col_vars}, \strong{Welch's F} (one-way
@@ -149,33 +138,21 @@ metadata, and to color cells based on their contribution to variance (\code{colo
 Automatically added if needed for \code{color}.
 
 \code{test} says only \emph{whether} to test; \strong{what kind of test you get follows what you
-passed}. \code{wt} says how the \emph{estimate} is computed; a second, orthogonal fact --- the
-\strong{inference basis} (the "weighting level" of \code{vignette("tabxplor")}), stored on each
-column and named in the table's footer --- says how the \emph{interval and the test} are:
+passed}, and the table's footer names it:
 \enumerate{
-\item \code{wt = w} --- estimates, the whole-table test and the effect size are all computed on the
-\strong{weighted} table, but with the raw unweighted number of respondents as the sample size, so
-they carry no design effect. This is the default, and the footer says so.
-\item \code{wt = w} plus \code{design_effect = TRUE} (or, for a whole session,
-\code{options(tabxplor.design_effect = TRUE)}) --- the same intervals and
-tests \strong{account for the unequal weighting, exactly}. A weight column IS a survey design
-(the flat one, \code{ids = ~1}), so this is not an approximation: the base becomes
-\code{n_eff = p(1-p) / Var_design(p)} in closed form, and the whole-table test becomes
-\code{survey::svychisq} / a \code{svyglm} Wald F on that same flat design. Being exact rather
-than a bound, it can make an interval \emph{narrower} as well as wider --- unequal probabilities
-can carry more information than equal ones. It is blind to clustering and to calibration, which
-the weights do not record.
-\item a prebuilt \code{survey::svydesign} passed as \code{data} --- fully \strong{design-based}:
-the same quantities, now with strata, clusters, \code{fpc} and calibration, and every interval
-referred to the design's own degrees of freedom.
+\item \code{wt = w} --- the estimates, the test and the effect size are all \strong{weighted},
+but the sample size is the raw number of respondents, so they carry no design effect (default).
+\item plus \code{design_effect = TRUE} --- the intervals and the test \strong{account for the
+unequal weighting, exactly}: a weight column IS a survey design (the flat one), so this is not an
+approximation, and it can make an interval \emph{narrower} as well as wider. It stays blind to
+clustering and to calibration, which weights do not record.
+\item a \code{survey::svydesign} passed as \code{data} --- fully \strong{design-based}: strata,
+clusters, \code{fpc} and calibration, every interval referred to the design's own degrees of
+freedom. When that variance cannot be computed, the table falls back to the weighting-only
+correction and says so.
 }
-A fourth basis is not a choice but a fallback: when a design-based table's variance cannot be
-computed, it reverts to the weighting-only correction, and its footer says so.
-Turn the option on when you want a \code{tab()} percentage interval to be comparable with the
-\code{Obs_*} column of a \code{\link{tab_reg}} on the same data: \code{tab_reg()} never reads it,
-because its crude companions are \emph{always} on the weighted basis, beside a model column that
-always was. Replicate-weight (\code{svrepdesign}) and two-phase designs are not supported, and
-\code{wt} beside a design is an error (a design already carries its own weights).}
+Replicate-weight (\code{svrepdesign}) and two-phase designs are not supported, and \code{wt}
+beside a design is an error (a design already carries its own weights).}
 
 \item{na}{The policy to adopt for missing values, as a single string :
 \itemize{
@@ -214,24 +191,21 @@ passed to \code{\link{tab_prepare}}.}
 \item{other_if_less_than}{When set to a positive integer, levels with less count
 than it will be merged into an "Others" level.}
 
-\item{ref}{The reference cell to calculate differences and ratios
-(used to print \code{colors}) :
+\item{ref}{The reference cell that differences and ratios are computed against:
 \itemize{
-\item \code{"auto"}: by default, cell difference from the corresponding total
-(rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
-used for \code{diff}; the first line (or col) is used for the odds ratio.
-\item \code{"tot"}: totals are always used.
-\item \code{"first"}: calculate cell difference or ratio from the first cell
-of the row or column (useful to color temporal developments).
-\item \code{"last"}: the mirror of \code{"first"} -- the \strong{last level} of the row (or column)
-variable. A total row or column is not a level and is never selected: use \code{"tot"} for that.
-Resolved inside each subtable when there are \code{tab_vars}.
-\item \code{n}: when \code{ref} is an integer, the nth row (or column) is used for comparison.
-\item \code{"regex"}: when \code{ref} is a string, it it used as a regular expression,
-to match with the names of the rows (or columns). Be precise enough to match only one
-column or row, otherwise you get a warning message.
-\item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
+\item \code{"auto"} (default): the corresponding total (row or column, following
+\code{pct}) for a difference; the first row (or column) for an odds ratio.
+\item \code{"tot"}: always the total.
+\item \code{"first"}: the first cell of the row or column -- useful to color a temporal
+development.
+\item \code{"last"}: its mirror, the \strong{last level} of the row (or column) variable. A
+total row or column is not a level and is never selected: use \code{"tot"} for that.
+\item an \strong{integer}: the nth row (or column).
+\item a \strong{string}: a regular expression matched against the row (or column) names. Be
+precise enough to match only one, otherwise you get a warning.
+\item \code{"no"}: no reference, and no differences computed -- saves calculation time.
 }
+Resolved inside each subtable when there are \code{tab_vars}.
 A (named) vector gives one reference per \code{row_vars} --- \code{ref = c(race = "first")}
 names the row variable it applies to, an unnamed vector goes by position, and any variable it
 does not mention keeps \code{"auto"}.}
@@ -268,12 +242,9 @@ and its reference -- the total cell, or the first cell under \code{ref = "first"
 \code{"cell"} and \code{"no"} anchor nothing to compare, so \code{stars} and
 \code{color_signif} have nothing to read: asking for either alongside them informs you once and
 disables it, rather than silently testing something else.
-Methods are chosen with \code{ci_method} and named in the table's legend; by default percentages
-use the Wilson score interval for a cell and the Newcombe hybrid score for a difference (its
-dual, so the bracket and the stars always agree), and means the Welch t interval. With
-\code{ci = "cell"} the result prints as \verb{[inf;sup]}; set
-Each cell then shows its own interval; \code{display = "base_moe"} writes it as
-\verb{pct +- margin of error} instead, and \code{display = "base_ci"} as \verb{pct [inf; sup]}.
+Methods are chosen with \code{ci_method} and named in the table's legend. The interval prints
+as \code{[inf;sup]}; \code{display = "base_moe"} writes it as \code{pct +- margin of error}
+instead, and \code{display = "base_ci"} as \code{pct [inf;sup]}.
 \code{"diff"} and \code{"ratio"} are soft-deprecated spellings of \code{"ref"} (the second one
 also pins the ratio scale -- say \code{color = "ratio"} instead).}
 

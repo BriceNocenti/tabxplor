@@ -1,73 +1,46 @@
-# PURPOSE: THE survey-design boundary -- one place turns a design object passed as `data` into the
-#   microdata every tabxplor engine already knows how to read -- plus the design constructors and the
-#   ROBUST omnibus tests for tab() crosstabs/means.
-# ROLE: Three things live here:
-#   1. The BOUNDARY (Phase 18z14-i): svy_is_design() / svy_unwrap_data() / svy_check_test(), plus
-#      svy_select_frame() -- the SIDE-EFFECT-FREE frame a producer tidy-selects its variable roles
-#      against, because svy_unwrap_data() informs, adds the reserved columns and computes degf, and
-#      so must run exactly once per call.
-#      Every public entry point that accepts a survey design (tab, tab_many, tab_plain, tab_num,
-#      tab_reg) calls the same two lines; tab_counts() calls svy_is_design() to REFUSE one. Before
-#      z14-i the detection was written twice, and the two copies disagreed: tab() materialised the
-#      design's weights (tab.R:630) and tab_reg() set `wt <- NULL`, so every crude Obs_* column, the
-#      population-average AME, the frozen SD and the "Weighted by" footer silently lost the weights
-#      (D1/D2/D8 of dev/full_survey_design_scope.md S2.3).
-#   2. The design constructors (svy_*), shared by tab_reg's weighted models.
-#   3. tab_robust_overlay(): recompute each whole-table omnibus p-value ON A DESIGN -- the user's own,
-#      or the flat one a weight column defines -- and overlay it on the classic `test` attribute
-#      (Phase 18j; z16-iii made the two bases run the SAME survey estimator). survey::svychisq
-#      (Rao-Scott 2nd-order F) for factors, svyglm + regTermTest's Wald F for means.
-# DESIGN (Phase 18z16-i): the INFERENCE BASIS is derived, never asked for, and now STORED
-#   (meta$inference). `test` says only WHETHER to test; what the user already passed says HOW.
-#   `wt` says how the ESTIMATE is computed; the basis says how the INTERVAL is computed -- two
-#   orthogonal facts, which is why the framework kept needing four encodings of one thing.
-#     "n"              the raw sample size (unweighted, or weighted with the option off = the default)
-#     "weights"        the design effect of the weights, exactly -- the flat ids = ~1 design
+# PURPOSE: THE survey-design boundary -- one place turns a `survey` design passed as `data` into the
+#   microdata every tabxplor engine already reads -- plus the design constructors and the
+#   design-based omnibus tests.
+# ROLE: the boundary (svy_is_design / svy_select_frame / svy_unwrap_data / svy_check_test), the
+#   constructors shared with tab_reg()'s weighted models, and tab_robust_overlay(), which recomputes
+#   each whole-table omnibus ON a design -- the user's own, or the flat one a weight column defines
+#   -- and overlays it on the classic `test` attribute. survey::svychisq (Rao-Scott F) for factors,
+#   svyglm + regTermTest's Wald F for means.
+# DESIGN: the INFERENCE BASIS is derived, never asked for. `test` says only WHETHER to test; `wt`
+#   says how the ESTIMATE is computed; the basis says how the INTERVAL and the test are. Those two
+#   are orthogonal, and keeping them so is what stops one fact needing several encodings.
+#   svy_inference_basis() is the ONLY reader of the option and of the design object; every consumer
+#   takes the resolved value.
+#     "n"              the raw sample size -- unweighted, or weighted with no design effect (default)
+#     "weights"        the design effect of the weights, exactly: the flat ids = ~1 design
 #     "design"         the full design: strata, clusters, fpc, calibration
-#     "design_partial" a design was given but its variance could not be computed here
-#   svy_inference_basis() is the ONLY place the option or the design object is read; every consumer
-#   takes the resolved value. That is also why `ids`/`strata`/`fpc`/`nest` are gone: they reached the
-#   omnibus p and nothing else, and svydesign() says all four better.
-#   See dev/weights_framework_redesign.md S2.1, and R/survey-variance.R for the two variance
-#   implementations the basis selects between.
+#     "design_partial" a design was given but its variance could not be computed
+#   The four are RANKED weakest-first by basis_rank() (R/fmt_class.R) and stamped on every fmt
+#   COLUMN by tab_stamp_inference() -- never on the table, which dplyr would drop.
 # KEY CONSTRAINTS:
-#   - The robust p replaces ONLY the p-value / statistic / df / n on the chi2 / F rows; the descriptive
-#     effect size is carried through (it is computed on the same weighted table since z14-i).
-#   - Robust tests run on complete cases of (row_var, col_var) per subtable (the survey convention);
-#     this can differ slightly from the classic chi2 when na = "keep" counts NA as a category -- documented.
-#   - Fisher rows are dropped in robust mode (the robust p is the answer there).
-#   - This is the ONE architectural exception to "the test comes from the aggregate": a design-based
-#     omnibus needs the observations. It runs only when the basis is not "n" -- i.e. opt-in.
-# See: dev/full_survey_design_scope.md (z14-i); dev/tabxplor_2.0.0_decisions.md S51; CLAUDE.md Phase 18j.
+#   - svy_unwrap_data() runs exactly ONCE per call: it informs, adds the two reserved columns and
+#     captures the design's degrees of freedom. svy_select_frame() is its side-effect-free twin, for
+#     tidy-selection only; its frame must stay a subset of what the unwrap produces.
+#   - Replicate-weight (svyrepdesign) and two-phase designs are REFUSED, never approximated.
+#   - The robust p replaces only the p-value / statistic / df / n; the effect size is carried through.
+#   - Robust tests use complete cases of (row_var, col_var) per subtable, the survey convention, so
+#     they can differ from the classic chi2 when na = "keep" counts NA as a category. Fisher rows are
+#     dropped in robust mode: the robust p is the answer there.
+#   - THE exception to "the test comes from the aggregate": a design-based omnibus needs the
+#     observations, so it runs only when the basis is not "n" -- i.e. opt-in.
+# See: CLAUDE.md § tabxplor architecture (the inference layer); R/survey-variance.R (the two variance
+#   implementations the basis selects between).
 
 # === SECTION: the design boundary ===================================================================
 
-# Package-owned column names written into the unwrapped frame. `.svy_weights` is ALSO the fact "this
-# table is design-based": it is the resolved weight name on every path (tab()'s vars_attr, the
-# tab_plain/tab_num leaves, tab_reg's reg_meta), so tab_weight_line() reads it as a fact instead of
-# printing it as a name (D7). `.svy_row` is the position into the ORIGINAL design, so a table built on
-# PREPARED microdata (filtered, lumped, relabelled) can still index the design it came from.
+# Package-owned columns of the unwrapped frame. `.svy_weights` is ALSO the fact "this table is
+# design-based"; `.svy_row` indexes PREPARED microdata back into the ORIGINAL design.
 svy_wt_col  <- ".svy_weights"
 svy_row_col <- ".svy_row"
 
-# The four inference bases this resolver produces are RANKED weakest-first by basis_rank()
-# (R/fmt_class.R), beside the per-column `basis` attribute they are stored in.
-
-# THE class list. Shared by the entry points that accept a design and by tab_counts(), which refuses
-# one -- so "what is a design" cannot be answered two ways.
 svy_is_design <- function(x)
   inherits(x, c("survey.design", "survey.design2", "svyrep.design", "twophase", "twophase2"))
 
-# Unwrap a survey design passed as `data`. Returns NULL when `data` is not a design -- so the ordinary
-# path costs one inherits() and is byte-identical -- else the design's model frame with the two
-# package columns added, plus the `spec` that IS the design_spec every consumer reads.
-# WARNING: weights(design) returns the n x R REPLICATE MATRIX for a svyrep.design; only
-#   type = "sampling" is the full-sample weight vector (D4). survey.design's own method absorbs `type`
-#   in `...`, so one call shape is right for both classes.
-# Replicate-weight and two-phase designs are OUT (ruling Q5): their variance is a set of alternative
-# weight columns / a two-phase formula, which none of the tabxplor engines can read. Refuse clearly
-# rather than approximate -- a replicate design would otherwise die inside survey with a raw error.
-# Shared by the unwrap and by svy_select_frame(), so the refusal has ONE wording wherever it fires.
 svy_abort_unsupported_design <- function(data, fn = "tab") {
   if (!inherits(data, c("svyrep.design", "twophase", "twophase2"))) return(invisible(NULL))
   cli::cli_abort(c(
@@ -77,10 +50,6 @@ svy_abort_unsupported_design <- function(data, fn = "tab") {
                 "does not read.")))
 }
 
-# The frame to TIDY-SELECT against, with no side effect. svy_unwrap_data() informs, adds the two
-# reserved columns and computes degf, so it must run exactly once per call -- and a producer that
-# resolves its variable roles BEFORE reaching that one unwrap needs the column names only.
-# ⚠ a strict subset of the frame the unwrap later produces, so no membership check can regress.
 svy_select_frame <- function(data, fn = "tab") {
   if (!svy_is_design(data)) return(data)
   svy_abort_unsupported_design(data, fn)
@@ -89,30 +58,23 @@ svy_select_frame <- function(data, fn = "tab") {
 
 svy_unwrap_data <- function(data, fn = "tab") {
   if (!svy_is_design(data)) return(NULL)
-  # Replicate-weight and two-phase designs are OUT (ruling Q5): their variance is a set of alternative
-  # weight columns / a two-phase formula, which none of the tabxplor engines can read. Refuse clearly
-  # rather than approximate -- a replicate design would otherwise die inside survey with a raw error.
   svy_abort_unsupported_design(data, fn)
   frame <- as.data.frame(data$variables)
   clash <- intersect(c(svy_wt_col, svy_row_col), names(frame))
   if (length(clash))
     cli::cli_abort(c("{.val {clash}} {?is/are} reserved by tabxplor for the survey design.",
                      "i" = "Rename {?it/them} in the design's data before passing it as {.arg data}."))
+  # ⚠ weights(design) is the n x R REPLICATE MATRIX for a svyrep.design; only type = "sampling" is the
+  #   weight vector. survey.design absorbs `type` in `...`, so one call shape serves both classes.
   frame[[svy_wt_col]]  <- as.double(stats::weights(data, type = "sampling"))
   frame[[svy_row_col]] <- seq_len(nrow(frame))
   cli::cli_inform(c("i" = "Survey design detected: estimates and tests use the design."))
-  # Phase 18z16-i (W7): the design's DEGREES OF FREEDOM, captured once at the boundary. survey
-  # refers every interval to t(degf) where degf = #PSU - #strata; tabxplor referred proportions to z
-  # and means to t(n_eff - 1), which is anti-conservative by up to 15 % below 30 PSUs. It rides the
-  # spec to the leaves and then meta$inference, so the exported step path gets it too.
+  # degf captured once here: survey refers every interval to t(degf), not to z.
   list(data = frame, spec = list(design = data, wt = svy_wt_col,
                                  degf = svy_degf(data)))
 }
 
-# Phase 18z16-i (W10): `wt` beside a design is a contradiction, not a preference -- the design
-# carries its own weights and the `wt` column was silently thrown away. Every other collision in the
-# package aborts (a weight that is also a row_var, a row_var that is also a tab_var); this one now
-# does too, from the ONE place both are visible. `wt_given` is TRUE when the user actually passed one.
+# `wt` beside a design is a contradiction, not a preference: the design carries its own weights.
 svy_abort_wt_design <- function(wt_given) {
   if (!isTRUE(wt_given)) return(invisible(NULL))
   cli::cli_abort(c(
@@ -122,16 +84,11 @@ svy_abort_wt_design <- function(wt_given) {
            {.code survey::svydesign(ids = ~1, weights = ~w, data = d)}."))
 }
 
-# The design's degrees of freedom, or NA when they cannot be had (never errors, never guesses).
 svy_degf <- function(design) {
   d <- tryCatch(as.double(survey::degf(design)), error = function(e) NA_real_)
   if (length(d) != 1L || !is.finite(d) || d <= 0) NA_real_ else d
 }
 
-# `test` says only WHETHER to test -- TRUE/FALSE, nothing else. Validated at the PUBLIC boundary
-# (tab / tab_many / tab_counts) so the error points at the user's call; returns the boolean.
-# Before z14-i `test` also took "survey"/"design" and was never validated at all, so a typo
-# ("surveyy") silently meant no test and tab_counts("survey") silently meant a classic one.
 svy_check_test <- function(test, arg = "test") {
   if (!(is.logical(test) && length(test) == 1L && !is.na(test)))
     cli::cli_abort(c(
@@ -145,22 +102,10 @@ svy_check_test <- function(test, arg = "test") {
   isTRUE(test)
 }
 
-# THE inference basis (ruling Q2) -- resolved once, in tab_setup(), where the weight is resolved and
-# the design_spec is in the ctx. That is why neither tab() nor tab_many() computes it: they used to
-# drift (only tab() had the rule, so tab_many() was silently always classic).
-# It governs the CELL INTERVALS, the whole-table test and the contrib residual alike -- one basis, one
-# resolution, every inference in the table -- and Phase 18z16-i STORES it (meta$inference), so the
-# footer, the exporters and jamovi can name it instead of re-deriving it from a weight-column name.
-# `force` is how tab_reg() states its own rule (ruling 1): its crude Obs_* columns are ALWAYS on the
-# weighted basis when weighted, so they always match the Model_* column beside them; the option is
-# tab()-scoped and tab_reg() never reads it.
-# `can_serve` (Phase 18z16-iiiii) is the INPUT's half of the answer: the weighted basis needs a
-# per-observation Sum(w^2), which pre-aggregated counts do not carry. Declared once in the ctx
-# (`agg_only`) and folded in HERE, so the basis a table reports is already the one it can honour --
-# the same fact used to be re-derived three incompatible ways downstream (`has_w2` in one leaf,
-# `num_served` in the other, `is.null(fine_fused) || by_table` in the omnibus gate).
-# `design_effect` (Phase 18z16-iiiii) is the per-call argument of tab() / tab_many() / tab_num() /
-# tab_plain() / tab_counts(): NULL means "the global option", which keeps this the ONE reader of it.
+# `force` is tab_reg()'s rule: its crude Obs_* columns are ALWAYS on the weighted basis when weighted,
+# so they match the Model_* column beside them, and it never reads the tab()-scoped option.
+# `can_serve` is the INPUT's half -- the weighted basis needs a per-observation Sum(w^2), which a
+# pre-aggregate (the ctx's `agg_only`) cannot supply.
 svy_inference_basis <- function(design_spec, wt, force = FALSE, can_serve = TRUE,
                                 design_effect = NULL) {
   if (!is.null(design_spec) && !is.null(design_spec$design))          return("design")
@@ -170,28 +115,11 @@ svy_inference_basis <- function(design_spec, wt, force = FALSE, can_serve = TRUE
   "n"
 }
 
-# "Is anything weighted here?" -- the ONE predicate (W12.3 counted three spellings of it: reg_fit(),
-# reg_resolve_multiplier()'s caller, and the crude grid). A design always is; otherwise it is the
-# presence of a weight, whatever its shape (NULL / character(0) / a name / a symbol). `x` is a
-# design_spec or an inference object -- both name their design `$design` and their weight `$wt`.
 svy_weighted <- function(x = NULL, wt = x$wt)
   !is.null(x$design) || length(wt) > 0L
 
-# THE inference object (Phase 18z16-iiiii) -- "how is every interval, star and colour threshold in
-# this table computed". Resolved ONCE, in tab_setup(), and carried whole from there:
-#   wt          the weight column NAME (character(0) unweighted) -- how the ESTIMATE is computed
-#   design      the survey design object, or NULL
-#   basis       "n" / "weights" / "design" / "design_partial" -- how the INTERVAL is computed
-#   degf        the design's degrees of freedom (Inf = refer to z)
-#   conf_level  the level every interval in the table is built at
-#   method      the four interval methods (see CI_METHODS / default_ci_method())
-#   agg_only    this call holds a pre-aggregate, not microdata -- so it cannot SERVE the weighted
-#               basis, which is why the resolver takes it (tab_counts declares it; see `can_serve`)
-# DESIGN: it replaced ten flat formals on plain_core() / num_core() (and on the post-join test pass
-#   19j deleted), each of which
-#   had to be threaded through five layers by hand and could be (and repeatedly was) forgotten at one
-#   of them. It is a BUILD-TIME object: what survives the build is the per-column `conf_level` / `degf`
-#   / `basis` attributes tab_stamp_inference() projects from it.
+# THE inference object, BUILD-TIME only: what survives the build is the per-column `conf_level` /
+# `degf` / `basis` attributes tab_stamp_inference() projects from it.
 new_inference <- function(wt = character(), design_spec = NULL,
                           conf_level = conf_level_default(),
                           method = default_ci_method(), agg_only = FALSE, force = FALSE,
@@ -209,18 +137,14 @@ new_inference <- function(wt = character(), design_spec = NULL,
 
 # === SECTION: design construction (shared with tab_reg) =============================================
 
-# Coerce a design argument (NULL / a column name, symbol or char vector / a formula) to a survey
-# formula. as.character() also normalises a bare symbol (tab()'s resolved weight is a symbol).
 svy_design_formula <- function(x) {
   if (is.null(x)) return(NULL)
   if (rlang::is_formula(x)) return(x)
   stats::reformulate(as.character(x))
 }
 
-# The data columns a design spec references (so a complete-case drop never feeds NA weights to
-# svydesign). A prebuilt design carries its own metadata -> character(0), and that early return is
-# LOAD-BEARING: it keeps `.svy_weights` out of reg_fit()'s drop_vars, whose complete-case mask must
-# stay the design's own row set.
+# The early return on a prebuilt design is LOAD-BEARING: it keeps `.svy_weights` out of reg_fit()'s
+# drop_vars, whose complete-case mask must stay the design's own row set.
 svy_design_vars <- function(design_spec) {
   if (is.null(design_spec) || !is.null(design_spec$design)) return(character(0))
   wt <- design_spec$wt
@@ -228,24 +152,14 @@ svy_design_vars <- function(design_spec) {
   if (rlang::is_formula(wt)) all.vars(wt) else as.character(wt)
 }
 
-# Build a survey.design from a weight column. ids = ~1 (no clustering) reproduces the flat weighted
-# path exactly; anything richer is the user's own svydesign() passed as `data`.
 svy_make_design <- function(data, wt) {
   survey::svydesign(ids = stats::as.formula("~1"), weights = svy_design_formula(wt), data = data)
 }
 
-# THE domain-estimation helper: restrict a prebuilt design to `rows` (INTEGER positions into the
-# original design) and swap its model frame for `frame` -- the prepared / recoded rows, in the same
-# order. Both consumers need exactly this: tab()'s robust overlay (whose test must see the lumped,
-# relabelled, filtered table the user is looking at, not the design's original variables) and
-# tab_reg()'s per-model design (whose fit must see the recoded complete-case frame).
-# WARNING: `[` does NOT drop rows on a CALIBRATED or PPS design -- it keeps all n and marks the
-#   excluded ones prob = Inf (weight 0), survey's own domain idiom. Assigning a shorter frame into
-#   such a design errors ("replacement has m rows, data has n"), which is why tab_reg() used to fail
-#   on a calibrated design with ANY incomplete case (D10). Pad back to full length instead: the padded
-#   rows carry zero weight, so they can reach neither an estimate nor a variance.
-# WARNING: subset ONCE, and always into the ORIGINAL design. design[rows, ][keep, ] applies a short
-#   mask to a design `[` may not have shrunk.
+# ⚠ `[` does NOT drop rows on a CALIBRATED or PPS design -- it keeps all n at prob = Inf (weight 0),
+#   so a shorter frame cannot be assigned in: pad back to full length, the padding carrying weight 0.
+# ⚠ subset ONCE, and always into the ORIGINAL design: design[rows, ][keep, ] applies a short mask to a
+#   design `[` may not have shrunk.
 svy_domain_design <- function(design, rows, frame) {
   dd <- design[rows, ]
   if (nrow(dd$variables) == nrow(frame)) {
@@ -261,30 +175,9 @@ svy_domain_design <- function(design, rows, frame) {
 
 # === SECTION: the robust omnibus overlay ============================================================
 
-# ONE subtable x col_var robust test. `sub` is the subtable frame (a data.frame, the PREPARED
-# microdata), `des_rows` the positions of its rows in the original design (NULL when no design).
-# `basis` is the resolved inference basis ("weights" / "design"); "n" never reaches here, and
-# `design` is the survey design object itself (NULL at basis "weights", which synthesises a flat one).
-# `rv`/`cv` are the variable names, `is_num` its type, `wt` the weight name. Returns a one-row list
-# with the test discriminator + (statistic, df1, df2, pvalue, n, deff); an all-NA row on any failure
-# (never crashes tab()).
-#
-# DESIGN (Phase 18z16-iii, ruling 7): ONE estimator, two ways in. A weight column IS a survey
-# design -- the flat one -- so the "weights" basis SYNTHESISES `svydesign(ids = ~1, weights = ~w)` and
-# runs exactly the same survey estimator the "design" basis runs: survey::svychisq's Rao-Scott
-# second-order F for factors, svyglm + regTermTest's Wald F for means. That is why there are two
-# discriminators (`chi2` / `chi2_design`) and not four: labelling the two designs differently would be
-# a second encoding of the basis, which meta$inference already stores.
-#
-# It replaces ~35 lines of hand-rolled statistics -- a FIRST-ORDER Rao-Scott rescale of the Pearson
-# chi2 to Kish's n_eff, and a weighted ANOVA on per-group Kish n -- which were an approximation of
-# exactly this. Not re-implementing it is the module's own standing rule ("`survey` owns the variance
-# algebra", R/survey-variance.R): the closed form in survey-variance.R exists because the CELL
-# variance is needed per cell in an O(cells) leaf, which is not the shape of a whole-table test.
-#
-# Phase 18z16-i (W8): `n` is ALWAYS the raw count -- at the old rung 2 it silently became the
-# effective sample size, so one column meant two things depending on a global option. The effective
-# information moved to `deff`, the mean design effect this test corrected by, at its own grain.
+# DESIGN: two discriminators (`chi2_design` / `F_design`), not four -- a weight column IS a flat
+#   design, so both bases run the IDENTICAL survey estimator. `n` is ALWAYS the raw count; the
+#   effective information is `deff`. An all-NA row on any failure, so a test never crashes tab().
 svy_omnibus_one <- function(sub, rv, cv, is_num, wt, basis, des_rows, design) {
   disc   <- if (is_num) "F_design" else "chi2_design"
   na_row <- function() list(test = disc, statistic = NA_real_, df1 = NA_real_,
@@ -296,10 +189,6 @@ svy_omnibus_one <- function(sub, rv, cv, is_num, wt, basis, des_rows, design) {
   n_obs <- nrow(d)
   if (n_obs < 3) return(na_row())
 
-  # The design the test runs on: the user's own (restricted to these rows and given the PREPARED
-  # frame -- so the p describes the lumped, relabelled, filtered table that is actually displayed,
-  # and an excluded row is a proper survey DOMAIN rather than a rebuilt design), or the flat one the
-  # weights themselves define.
   des <- tryCatch(
     if (identical(basis, "design")) svy_domain_design(design, des_rows[keep], d)
     else                            svy_make_design(d, wt),
@@ -318,10 +207,8 @@ svy_omnibus_one <- function(sub, rv, cv, is_num, wt, basis, des_rows, design) {
   }
   res <- tryCatch({
     ch <- survey::svychisq(stats::reformulate(c(rv, cv)), design = des, statistic = "F")
-    # deff = Rao-Scott's mean generalized design effect, delta-bar = X2_Pearson / (F * df_Pearson).
-    # svychisq's own `ndf` is Satterthwaite's d0, not (r-1)(c-1), so the Pearson df is recomputed here.
-    # `ch$observed` is survey's own weighted table rescaled to the raw n, i.e. exactly the table
-    # agg_chi2() works on -- so this X2 IS the classic statistic beside it.
+    # svychisq's `ndf` is Satterthwaite's d0, not (r-1)(c-1), so the Pearson df is recomputed here for
+    # delta-bar = X2_Pearson / (F * df_Pearson), Rao-Scott's mean generalized design effect.
     dfp <- (nlevels(d[[rv]]) - 1) * (nlevels(d[[cv]]) - 1)
     x2p <- tryCatch(as.double(sum((ch$observed - ch$expected)^2 / ch$expected)),
                     error = function(e) NA_real_)
@@ -334,28 +221,10 @@ svy_omnibus_one <- function(sub, rv, cv, is_num, wt, basis, des_rows, design) {
   res %||% na_row()
 }
 
-# svy_omnibus_grid() -- THE PRODUCER: one robust omnibus per (subtable x col_var), straight from the
-# microdata, as a raw tibble carrying `deff`. Returns NULL when there is nothing to compute.
-# DESIGN (Phase 18z16-iv, W-B): this used to be the head of tab_robust_overlay(), which runs in
-#   tab_assemble_tables(). It is split out because TWO consumers need the same numbers at two
-#   different times: the `color = "contrib"` residual's base, DURING tab_transform() (the residual is
-#   written by chi2_write_contrib(), inside tab_chi2()), and the `test` overlay, AFTER the numeric
-#   ANOVA rows are bound in tab_assemble_tables(). Producing it ONCE is also what makes the omnibus p
-#   and the cell colours of one table describe the SAME design effect -- they were 2.5 % apart at
-#   basis "weights", and a factor 7 apart when the row_var is cluster-level.
-# DESIGN (z14-i): the frame is ALWAYS the PREPARED microdata -- the table the user is looking at.
-#   It used to be the design's own `$variables` on the prebuilt path, i.e. the ORIGINAL frame, so the
-#   design-based p ignored `filter=`, `other_if_less_than` lumping and `cleannames` relabelling and
-#   could describe a different table than the one printed (measured: a table displaying `a / Others`
-#   carried the p of the unlumped `a / b / c`). The design is reached instead through `.svy_row`, the
-#   position each prepared row holds in the original design -- which is also what makes an excluded
-#   row a proper survey DOMAIN rather than a rebuilt design.
-# `col_num` is a named logical (col_var -> is numeric); `comp = "all"` tests the whole table (one
-# group), else one test per tab_var subtable.
-# `totaltab_name` adds the TOTAL-TABLE group (every row, keyed by that name in each tab_var column):
-#   chi2_compute_test() emits a test row for it, and the overlay used to drop it silently, because its
-#   groups came from `unique(frame[tab_vars])`, which has no such level, and it REPLACES the classic
-#   tibble. So a weighted / design table with tab_vars + totaltab = "table" lost its whole-table test.
+# THE PRODUCER, straight from the microdata: produced ONCE for two consumers (the `color = "contrib"`
+# residual, then the `test` overlay), so the omnibus p and the cell colours describe the SAME effect.
+# ⚠ the frame is ALWAYS the PREPARED microdata, the design reached through `.svy_row`: the design's own
+#   `$variables` would give the p of the unlumped, unfiltered table.
 svy_omnibus_grid <- function(data, row_var, col_vars, col_num, tab_vars, wt,
                              basis, design, comp, totaltab_name = NULL) {
   frame    <- as.data.frame(data)
@@ -366,9 +235,8 @@ svy_omnibus_grid <- function(data, row_var, col_vars, col_num, tab_vars, wt,
     groups <- list(list(keys = NULL, rows = seq_len(nrow(frame))))
   } else {
     gk <- unique(frame[tabvars_in])
-    # the total table's tab_var value IS `totaltab_name` (leaf_rename_totals): expand each key column's
-    # levels ONCE so the extra row binds as a FACTOR -- a character row would coerce the whole tab_var
-    # column of `test` on the vec_rbind.
+    # expand each key column's levels ONCE so the total-table row binds as a FACTOR -- a character row
+    # would coerce the whole tab_var column of `test` on the vec_rbind.
     add_tot <- !is.null(totaltab_name) && length(totaltab_name) == 1L && nzchar(totaltab_name)
     if (add_tot) for (tc in tabvars_in) {
       lv <- union(levels(as.factor(gk[[tc]])), totaltab_name)
@@ -404,32 +272,19 @@ svy_omnibus_grid <- function(data, row_var, col_vars, col_num, tab_vars, wt,
   if (nrow(rob) == 0) NULL else rob
 }
 
-# Overlay the producer's grid onto a classic `test` tibble: replace (statistic, df, pvalue, n, deff)
-# per (subtable x col), keep the classic effect_size / es_type / min_e, drop Fisher. The result
-# has chi2_compute_test's column shape, so every downstream reader (display, bind) is unchanged.
-# The effect size is deliberately NOT recomputed here: it is descriptive, so it describes the weighted
-#   population (chi2_compute_test already computes it on the weighted table), never the effective
-#   sample an inferential rescale works in.
-# `tabxplor.anova` (Welch vs classic F) is deliberately NOT read here: it chooses between two CLASSIC
-# F statistics, and a design-based numeric test is the svyglm Wald F, which has no such variant.
-# The semi_join is the "replace, never invent" rule: a grid row whose subtable the classic test does
-# not have (a tab_var level emptied by the complete-case drop, or the total-table group of a table
-# built with totaltab = "line") is dropped rather than injected with an NA effect size.
+# `tabxplor.anova` (Welch vs classic F) is deliberately NOT read here: it picks between two CLASSIC F
+# statistics, and a design-based numeric test is the svyglm Wald F, which has no such variant.
 tab_robust_overlay <- function(test_tbl, rob, tab_vars) {
   if (is.null(test_tbl) || nrow(test_tbl) == 0) return(test_tbl)
   if (is.null(rob) || nrow(rob) == 0)           return(test_tbl)
-  # The classic per-(subtable x col) effect-size / validity facts to carry through. Phase 20c: the
-  # rule is "every CLASSIC crosstab row" (TEST_ROWS `producer == "tab" & !design`), deduplicated on
-  # the join key -- it used to name `c("chi2", "F_welch")`, which READ like a display choice and was
-  # in fact a de-duplication device (chi2_compute_test() emits F_welch and F_classic from the same
-  # table with the same eta2, so naming one picked a representative row). Stated as what it is, the
-  # failure mode goes with it: a producer emitting F_classic without F_welch dropped the whole
-  # design row for that column, p-value included, through the semi_join below.
+  # EVERY classic crosstab row, deduplicated on the join key: naming test kinds instead would drop a
+  # whole design row, p-value included, for a producer emitting one of them without the other.
   es_keep    <- test_tbl[test_tbl$test %in% TEST_CROSSTAB_KEYS[
     !vapply(TEST_CROSSTAB_KEYS, function(k) isTRUE(TEST_ROWS[[k]]$design), logical(1))], , drop = FALSE]
   tabvars_in <- intersect(tab_vars, names(test_tbl))
   jk  <- intersect(c(tabvars_in, "col"), names(es_keep))
   es_keep <- dplyr::distinct(es_keep, dplyr::across(dplyr::all_of(jk)), .keep_all = TRUE)
+  # "replace, never invent": a grid row whose subtable the classic test lacks is dropped, not injected.
   rob <- dplyr::semi_join(rob, dplyr::distinct(es_keep[jk]), by = jk)
   if (nrow(rob) == 0) return(test_tbl)
   rob <- dplyr::left_join(
@@ -437,12 +292,8 @@ tab_robust_overlay <- function(test_tbl, rob, tab_vars) {
   dplyr::relocate(rob, tidyselect::any_of(c(tabvars_in, "var", "col")))
 }
 
-# svy_deff_lookup() -- key a producer grid onto a BUILT table's groups: a named numeric (Rao-Scott's
-# mean generalized design effect) keyed on `paste(<group key tuple>, col_var, sep = "\r")`.
-# `svy_key_chr()` (R/survey-variance.R) spells BOTH sides the same way -- it exists for exactly this
-# ("key values as the wide table and the microdata both spell them"), so there is no second key
-# convention. NULL -- "no correction available, use the ladder" -- when the grid cannot be keyed onto
-# these groups: a grouping it does not carry, or an ambiguous grain. Never a wrong number.
+# Key a producer grid onto a BUILT table's groups; svy_key_chr() (R/survey-variance.R) spells both
+# sides, so there is no second key convention. NULL -- "use the ladder" -- rather than a wrong number.
 svy_deff_lookup <- function(rob, group_vars) {
   if (is.null(rob) || !nrow(rob) || !"deff" %in% names(rob))  return(NULL)
   if (length(group_vars) && !all(group_vars %in% names(rob))) return(NULL)

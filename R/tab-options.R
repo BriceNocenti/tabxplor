@@ -1,27 +1,23 @@
 # PURPOSE: THE global-option subsystem -- the declared table, the loader that seeds from it, the
 #   readers, and the `?tabxplor-options` page GENERATED from it.
-# ROLE (Phase 20b, KEY 1): an option is declared ONCE. Before, one option meant three hand-written
-#   places -- an `options()` call in .onLoad(), an `\item{}` in this file's roxygen, and a default
-#   restated in the prose -- kept in step by a comment saying "keep this in sync". That comment was
-#   the promise; TAB_OPTIONS is the mechanism.
+# ROLE: an option is declared ONCE, as one TAB_OPTIONS row: its default, its section, its prose, its
+#   per-call argument twin, its synonyms, and whether .onLoad() seeds it. Adding an option is one row.
 # KEY CONSTRAINTS:
 #   - `default` is the ONLY statement of a default. The doc page renders it, so the prose must not
-#     restate it (and `arg` renders the "Per-call" sentence, so the prose must not restate that
-#     either). Adding an option is ONE row.
+#     restate it -- and `arg` renders the "Per-call" sentence, so the prose must not restate that
+#     either.
 #   - ⚠ THE FILE NAME IS LOAD-BEARING. It must sort before `tab.R` in C collation ('-' < '.'), which
-#     is why it is `tab-options.R` and not `tabxplor-options.R`: tab.R's own DERIVED
-#     globalVariables() tail calls new_ctx(), whose `conf_level` default calls conf_level_default()
-#     -> tx_option() AT SOURCE TIME. Everything else here is read at runtime only, and every
-#     computed `default` is a CLOSURE for the same reason (a palette or a front-end probe must run
-#     at .onLoad(), never while the namespace is still being sourced).
+#     is why it is `tab-options.R` and not `tabxplor-options.R`: tab.R's derived globalVariables()
+#     tail calls new_ctx() and new_inference(), and new_inference()'s `conf_level` formal default
+#     reaches conf_level_default() -> tx_option() AT SOURCE TIME. Everything else here is read at
+#     runtime only, and every computed `default` is a CLOSURE for the same reason -- a palette or a
+#     front-end probe must run at .onLoad(), never while the namespace is still being sourced.
 #   - TAB_ARGS (R/tab-args.R) points at these keys through its `option` column; the edge is checked
 #     at load in R/zzz-fact-keys.R.
+# See: CLAUDE.md § tabxplor architecture (the declarative architecture).
 
-# Read a tabxplor option that accepts synonym names (a renamed option's old name, or a
-# convenience alias); the FIRST name that is set (non-NULL) wins, then `default`. Pass the
-# SEEDED/canonical name LAST: the seeded default is always present, so a user's explicit
-# legacy/alias value must be checked before it to win. One resolver for every option synonym.
-# (Phase 17j; moved here from R/utils.R in 20b, beside the table that declares the synonyms.)
+# Read a tabxplor option that accepts synonym names; the FIRST set name wins, then `default`.
+#   Pass the seeded/canonical name LAST -- it is always present, so an explicit alias must win first.
 #' @keywords internal
 tx_getOption <- function(names, default = NULL) {
   for (nm in names) {
@@ -31,13 +27,10 @@ tx_getOption <- function(names, default = NULL) {
   default
 }
 
-# The option NAME is `tabxplor.<key>`; the prefix is uniform, so the table is keyed on the bare word.
 #' @keywords internal
 #' @noRd
 tx_option_name <- function(key) paste0("tabxplor.", key)
 
-# Every name a reader must try, in tx_getOption()'s order: the aliases FIRST (a user's explicit
-# legacy value must win), the seeded canonical name LAST.
 #' @keywords internal
 #' @noRd
 tx_option_names <- function(key) {
@@ -45,7 +38,6 @@ tx_option_names <- function(key) {
   tx_option_name(c(if (is.null(r)) character(0) else r$alias, key))
 }
 
-# The declared default, resolved (a closure is computed at load, never at source time).
 #' @keywords internal
 #' @noRd
 tx_option_default <- function(key) {
@@ -53,8 +45,6 @@ tx_option_default <- function(key) {
   if (is.function(v)) v() else v
 }
 
-# THE read: the option, its aliases, then the declared default. One reader for every option that has
-# no special resolution of its own.
 #' @keywords internal
 #' @noRd
 tx_option <- function(key) tx_getOption(tx_option_names(key), tx_option_default(key))
@@ -98,10 +88,8 @@ TAB_OPTIONS <- list(
       "documents) --- recommended when you work in an IDE with a Viewer. `\"kable\"` is an accepted",
       "synonym of `\"html\"` (the pre-2.0.0 name).")),
 
-  # 20b: ONE option for the stars, not three. `tabxplor.signif_levels` + `tabxplor.signif_labels`
-  # were a second and a third name for one thing -- a LADDER -- and nothing tied their lengths
-  # together. They are read only if a user set them (seed = "no"), and then they win, which is the
-  # tx_getOption() "first name set wins" rule applied to a pair rather than a synonym.
+  # `signif_levels` / `signif_labels` were a second and third name for one LADDER, with nothing
+  #   tying their lengths together. Read only if a user set them (seed = "no"), and then they win.
   stars = tx_opt(
     FALSE, "display", arg = "stars",
     doc = c("whether cells show significance stars, and at which cut-offs. `FALSE` (no stars),",
@@ -155,10 +143,6 @@ TAB_OPTIONS <- list(
     doc = c("clean up variable/level names in output. Also strips a `\"1-\"`-style prefix from",
             "`labelled` value labels turned into factor levels.")),
 
-  # 20b: the four synthetic row/column/table labels a built table carries. They were hard-coded
-  # literals in five signatures, in TWO languages (`"Total"` / `"Ensemble"` / `"Others"`) and with no
-  # option twin at all -- for a French-authored package that is a real gap, and it is why two of the
-  # three formals had 3 and 2 corpus uses. Set it once per document, or per language.
   total_names = tx_opt(
     c(row = "Total", col = "Total", tab = "Ensemble", other = "Others"), "display",
     c("the four synthetic labels a table carries: `row` and `col` name the total row and the total",
@@ -334,9 +318,8 @@ TAB_OPTIONS <- list(
     doc = "the colour-legend language: `\"auto\"` (follows the R/OS locale), `\"en\"` or `\"fr\"`."),
 
   # --- parallel ----------------------------------------------------------------------------------
-  # There is deliberately NO `parallel =` argument: this is a machine-level knob, not a per-table
-  # statistical choice, and one switch is what lets tab_pmap() enforce the nesting rule for every
-  # producer at once (R/tab-parallel.R). One call at a time: `withr::with_options()`.
+  # Deliberately no `parallel =` argument: a machine-level knob, not a per-table statistical
+  #   choice, and one switch lets tab_pmap() enforce the nesting rule for every producer at once.
   parallel = tx_opt(
     FALSE, "parallel",
     doc = c("build the independent units of one call on parallel CPU cores (needs the `mirai`",
@@ -362,32 +345,25 @@ stopifnot(
              logical(1)))
 )
 
-# tx_stars_ladder() -- THE star ladder: a named numeric, glyph -> p-value cut-off, in the order the
-# glyphs are stacked. It is read at RENDER time from the stored per-cell p-value, which is why it is
-# an option and not a stored column attribute: changing it re-reads every table that already exists,
-# and a table built at one ladder is not a different table.
+# tx_stars_ladder() -- glyph -> p-value cut-off, read at RENDER time from the stored per-cell
+#   p-value. That is why it is an option and not a stored column attribute: changing it re-reads
+#   every table that already exists.
 #' @keywords internal
 #' @noRd
 tx_stars_ladder <- function() {
   v <- getOption("tabxplor.stars")
   if (is.numeric(v) && length(v) && !is.null(names(v))) return(sort(v, decreasing = TRUE))
-  # THE default ladder, stated here because it is the only thing that still needs it: the retired
-  # `signif_levels` / `signif_labels` pair is no longer declared in TAB_OPTIONS, so it has no default
-  # to read -- only a value a user set by hand, which still wins.
   lev <- getOption("tabxplor.signif_levels") %||% TX_STARS_DEFAULT
   lab <- getOption("tabxplor.signif_labels") %||% names(TX_STARS_DEFAULT)
   n   <- min(length(lev), length(lab))
   sort(stats::setNames(lev[seq_len(n)], lab[seq_len(n)]), decreasing = TRUE)
 }
 
-# what `options(tabxplor.stars = TRUE)` means, and what ?tabxplor-options promises it means.
 #' @keywords internal
 #' @noRd
 TX_STARS_DEFAULT <- c("*" = 0.10, "**" = 0.05, "***" = 0.01)
 
 # --- the loader ----------------------------------------------------------------------------------
-# THE seeding, called by .onLoad() (R/utils.R). Every default in the package comes from here, so a
-# changed default is one edit and the documentation follows it.
 #' @keywords internal
 #' @noRd
 tx_seed_options <- function() {
@@ -404,10 +380,8 @@ tx_seed_options <- function() {
 }
 
 # --- the generated help page ---------------------------------------------------------------------
-# The `#' @eval` generator behind ?tabxplor-options (the reg_measures_rd() precedent). The DEFAULT
-# and the per-call ARGUMENT are rendered from the table, so neither can drift from `.onLoad()` or
-# from a signature -- which is exactly what the deleted "keep this in sync" comment used to ask a
-# reader to do by hand.
+# The `#' @eval` generator behind ?tabxplor-options. The DEFAULT and the per-call ARGUMENT are
+#   rendered from the table, so neither can drift from `.onLoad()` or from a signature.
 #' @keywords internal
 #' @noRd
 tx_option_default_rd <- function(key) {

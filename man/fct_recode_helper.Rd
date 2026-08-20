@@ -20,35 +20,30 @@ fct_recode_helper(
 
 \item{.cols}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> The variables to recode.}
 
-\item{name_in}{The name of the input data frame. Default to the expression given in \code{data}.}
+\item{name_in}{The input data frame's name (default: the expression given as \code{data}).}
 
-\item{name_out}{The name of the output data frame, if different from the
-input data frame.}
+\item{name_out}{The output data frame's name, if different from \code{name_in}.}
 
-\item{freq}{Set to \code{TRUE} to print frequency and count of each level as comment.
-Set to \code{FALSE} to avoid this behavior. By default, frequencies and counts are
-only calculated when less than 6 variables are provided.}
+\item{freq}{Print each level's frequency and count as a comment; defaults to \code{TRUE} when 5 or
+fewer variables are given.}
 
-\item{style}{Default is to use \code{dplyr::mutate()}. Set to \code{base} to use \verb{data$var <-} style.}
+\item{style}{\code{"mutate"} (default) writes a \code{dplyr::mutate()} call; \code{"base"} writes \verb{data$var <-}.}
 
-\item{reminder}{By default, a reminder of the syntax (\code{"new" = "old"}) is printed.
-Set to \code{FALSE} to remove it.}
+\item{reminder}{Print a \code{"new" = "old"} syntax reminder. Default \code{TRUE}.}
 
-\item{cat}{By default the result is written in the console if there are less than
-6 variables, written in a temporary file and opened otherwise. Set to
-false to get a data frame with a character variable instead.}
+\item{cat}{Print to console, or open a temporary file when there are more than 5 variables;
+\code{FALSE} returns a data frame of the recode text instead.}
 }
 \value{
-When the number of variables is less than 5, a text in console as a side effect.
-With more than 5 variables, a temporary R file. A \code{tibble} with the recode text as a
-character variable is returned invisibly (or as main result if \code{cat = TRUE}).
-When a column carries a variable label (its \code{label} attribute), it is used as title in a comment.
+With \code{cat = TRUE} (default), the text printed to console (or written to a temp R file for
+more than 5 variables), returned invisibly. With \code{cat = FALSE}, a \code{tibble} of the recode text is
+returned instead. A column carrying a \code{label} attribute is used as its comment title.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
 
-A code-writing convenience for \code{\link[forcats:fct_recode]{forcats::fct_recode()}}, unrelated to cross-tabulation: it
-prints a ready-to-paste \code{mutate()} call for a set of factor columns. Nothing in tabxplor uses it.
-It will be removed in 2.1.0 — copy it into your own project if you rely on it.
+Printed a ready-to-paste \code{mutate()} call recoding a set of factor columns via
+\code{\link[forcats:fct_recode]{forcats::fct_recode()}} -- unrelated to cross-tabulation, and unused elsewhere in tabxplor.
+Removed in 2.1.0; copy it into your own project if you rely on it.
 }
 \keyword{internal}

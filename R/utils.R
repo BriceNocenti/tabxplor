@@ -1,10 +1,15 @@
-# PURPOSE: Package initialization (.onLoad), factor/list/string utilities (incl. stringi-based
-#          tx_str_wrap/tx_str_trunc, the two str_wrap/str_trunc replacements after stringr was dropped).
-# ROLE: Entry point for package configuration: .onLoad() seeds the options from their declared table.
+# PURPOSE: package initialization plus the shared factor / list / string utilities.
+# ROLE: .onLoad() SEEDS the package options and the colour palette; everything else here is a small
+#   helper with no home of its own -- the two stringi-based replacements for str_wrap/str_trunc, the
+#   retired-export-argument catcher, and the three exported user helpers (score_from_lv1(),
+#   gss_cat_data_formatting(), and the deprecated fct_recode_helper()).
 # KEY CONSTRAINTS:
 #   - TAB_OPTIONS (R/tab-options.R) is the single source of truth for option names and defaults;
-#     .onLoad() only SEEDS them, through tx_seed_options().
-#   - set_color_style() and set_color_breaks() are defined in tab_classes.R but called here.
+#     .onLoad() only seeds them, through tx_seed_options().
+#   - set_color_style() and set_color_breaks() are defined in tab_classes.R but called from here.
+#   - This file sorts second-to-last in C collation (only zzz-fact-keys.R follows), so nothing in
+#     the package may depend on it at SOURCE time.
+# See: CLAUDE.md § tabxplor architecture.
 
 # Rlang .data to bind data masking variable in dplyr
 #' @keywords internal
@@ -12,12 +17,8 @@
 NULL
 
 
-
-
-
-# Internal stringi-based replacements for the two stringr functions with no direct stringi
-# equivalent (Phase 18b-ii: stringr dropped as a dependency). Signatures mirror the stringr
-# originals (arg names + order), so every call site is a plain name swap.
+# Internal stringi replacements for two stringr functions with no direct stringi equivalent.
+# Signatures mirror the stringr originals (arg names + order), so every call site is a name swap.
 
 # str_wrap(): wrap each element to `width`; stri_wrap returns a list of lines, join with "\n".
 tx_str_wrap <- function(string, width = 80, exdent = 0, whitespace_only = TRUE) {
@@ -36,23 +37,8 @@ tx_str_trunc <- function(string, width, ellipsis = "...") {
   string
 }
 
-# tx_getOption() MOVED to R/tab-options.R in Phase 20b, with the rest of the option subsystem it
-# belongs to -- and it had to: tab.R's top-level globalVariables() tail reaches conf_level_default()
-# -> tx_option() -> tx_getOption() while the namespace is still being SOURCED, and utils.R sorts
-# last of all.
-
-# THE retired-argument catcher for the export backends (Phase 19l).
-#
-# WHY IT EXISTS. `color_type` and `html_24_bit` were inert 1.3.1 arguments carried as real formals by
-# SIX exporters and threaded down whole call chains just to be dropped (~40 sites); `engine`,
-# `html_font` and `full_width` joined them when 19l deleted the kableExtra engine. A formal per
-# retired argument per backend is the shape this phase exists to delete -- and it is also what made
-# `tab_export()` warn once and its child warn a second time for one user mistake.
-#
-# THE RULE: a retired export argument is absorbed by `...`, named HERE, warned about ONCE per call,
-# and never forwarded. Anything else in `...` is passed on untouched, so a real typo still reaches
-# R's own "unused argument" error at the leaf. `fn` names the function in the message, so the user
-# is told where they wrote it.
+# A retired export argument is absorbed by `...`, named here, warned about ONCE per call and never
+# forwarded; anything else in `...` passes through untouched, so a real typo still errors at the leaf.
 #' @keywords internal
 TX_INERT_EXPORT_ARGS <- c(
   color_type  = "the text channel always uses the text palette; the CHANNEL is chosen by color = c(text, background)",
@@ -76,12 +62,8 @@ tx_deprecate_inert <- function(dots, fn) {
 
 #' @keywords internal
 .onLoad <- function(libname, pkgname) {
-  # option "tabxplor.color_style_theme" is seeded by set_color_palette() below.
-
-  # HISTORY: these OMP / data.table thread caps are commented out on purpose. data.table's
-  # multithreading once triggered a CRAN thread-count flag that blocked tabxplor's acceptance,
-  # until it was shown to originate in data.table itself. Left disabled; re-enable only if
-  # CRAN flags threads again.
+  # These OMP / data.table thread caps are commented out on purpose (data.table's multithreading
+  # once triggered a CRAN thread-count flag traced to data.table itself); re-enable only if needed.
   # # CRAN OMP THREAD LIMIT
   # if (Sys.info()[['sysname']] == "Linux") {
   #  Sys.setenv("OMP_THREAD_LIMIT" = 2)
@@ -90,56 +72,39 @@ tx_deprecate_inert <- function(dots, fn) {
   # data.table::setDTthreads(threads = 2)
   # data.table::getDTthreads(verbose = getOption("datatable.verbose"))
 
-
   set_color_palette()   # seeds tabxplor.color_style_theme (declared seed = "elsewhere")
 
-  # Phase 20b (KEY 1): EVERY default comes from the declared table -- name, value, doc page and the
-  # "seed only if unset" rule alike. R/tabxplor-options.R.
   tx_seed_options()
 
-  # Bind the R-tabxplor gettext catalog to the package's compiled .mo (found under system.file("po");
-  # harmless if absent -> English msgids).
+  # Bind the R-tabxplor gettext catalog to the package's compiled .mo (harmless if absent -> English).
   po <- system.file("po", package = pkgname)
   if (nzchar(po)) try(bindtextdomain("R-tabxplor", po), silent = TRUE)
 
   invisible()
 }
 
-# Phase 8: release the persistent mirai daemon pool when tabxplor is unloaded (a CRAN cleanliness
-# backstop; tab_parallel_stop() lets users do it earlier). No pool is ever warmed at load.
+# Releases the persistent mirai daemon pool as a CRAN-cleanliness backstop; no pool is ever warmed
+# at load (tab_parallel_stop() lets users release it earlier).
 #' @keywords internal
 .onUnload <- function(libpath) {
   tab_parallel_stop()
 }
 
-# getOption("tabxplor.color_breaks")
-# getOption("tabxplor.color_style_theme")
-# get_color_breaks()
-# get_color_style()
 
-
-
-
-#Functions and options to work with factors and lists -------------
+# Functions and options to work with factors and lists --------------------------------------------
 
 #' A regex pattern to clean the names of factors.
 #' @keywords internal
-# @export
 cleannames_condition <- function()
   "^[^- ]+-(?![[:lower:]])|^[^- ]+(?<![[:lower:]])-| *\\(.+\\)"
 
 
-
-
-
 #' Create a score variable by counting factors at their first level
 #'
-#' Builds an integer score column that counts, for each row, how many of the
-#' listed factors sit at their **first level**. Each factor contributes 1 when
-#' it equals its first level and 0 otherwise, so the score ranges from 0 to
-#' `length(vars_list)`. This is the natural way to turn a battery of yes/no
-#' (or agree/disagree) survey items into a single summed score, and it feeds
-#' the grouped-binomial outcome of [tab_reg()] (its `trials` argument).
+#' Builds an integer score column counting, for each row, how many of the listed factors sit at
+#' their **first level** (1 if so, 0 otherwise) -- the score ranges 0 to `length(vars_list)`. The
+#' natural way to sum a battery of yes/no survey items into one score, feeding the grouped-binomial
+#' outcome of [tab_reg()] (its `trials` argument).
 #'
 #' @param data A data.frame.
 #' @param name The name of the score variable to create (unquoted or a string);
@@ -151,11 +116,9 @@ cleannames_condition <- function()
 #' @return `data` with the integer score column `name` added (or replaced).
 #'
 #' @details
-#'   The "first level" is `levels(as.factor(x))[1]` -- the reference level of the
-#'   factor. Non-factor columns are coerced with [as.factor()]. Missing values
-#'   are folded into an explicit `"NA"` level before counting (via
-#'   [forcats::fct_na_value_to_level()]), so an `NA` never matches the first
-#'   level and contributes 0.
+#'   The "first level" is `levels(as.factor(x))[1]`. Non-factor columns are coerced with
+#'   [as.factor()]; missing values are folded into an explicit `"NA"` level first (via
+#'   [forcats::fct_na_value_to_level()]), so `NA` never counts as the first level.
 #'
 #' @seealso [tab_reg()] and its `trials` argument for modelling a summed score
 #'   as a grouped binomial; `vignette("tabxplor")`, section "Multiple-answer
@@ -193,23 +156,13 @@ score_from_lv1 <- function (data, name, vars_list) {
   )
 
   var_final_ <- dplyr::pull(new_data, as.character(name))
-    #dplyr::select(new_data, tidyselect::all_of(as.character(name)))
 
   data |> tibble::add_column(!!rlang::sym(name) := var_final_)
 }
 
 
-
-
-
-# tx_user_call() -- was this deprecated function called by a USER, or by tabxplor itself?
-#
-# WHY IT EXISTS (Phase 20a). Two functions being un-exported in 2.1.0 -- tab_prepare() and
-# complete_partial_totals() -- still have exactly one caller each, and it is the package's own build.
-# `lifecycle::deprecate_soft()` is meant to handle that ("silent for same-package callers"), but it
-# treats a testthat run as a direct user call whatever `user_env` says, so under the suite EVERY
-# tab() would emit the nudge for a call the user never made. This asks the question the message is
-# actually about: whose code called it.
+# lifecycle::deprecate_soft()'s "silent for same-package callers" rule is fooled by a testthat run
+# (it treats the suite as a direct user call), so this asks the real question: whose code called it.
 #' @keywords internal
 #' @noRd
 tx_user_call <- function(env = parent.frame(2)) !identical(topenv(env), asNamespace("tabxplor"))
@@ -220,33 +173,28 @@ tx_user_call <- function(env = parent.frame(2)) !identical(topenv(env), asNamesp
 #' @description
 #' `r lifecycle::badge("deprecated")`
 #'
-#' A code-writing convenience for [forcats::fct_recode()], unrelated to cross-tabulation: it
-#' prints a ready-to-paste `mutate()` call for a set of factor columns. Nothing in tabxplor uses it.
-#' It will be removed in 2.1.0 — copy it into your own project if you rely on it.
+#' Printed a ready-to-paste `mutate()` call recoding a set of factor columns via
+#' [forcats::fct_recode()] -- unrelated to cross-tabulation, and unused elsewhere in tabxplor.
+#' Removed in 2.1.0; copy it into your own project if you rely on it.
 #'
 #' @param data The data frame.
 #' @param .cols <\link[tidyr:tidyr_tidy_select]{tidy-select}> The variables to recode.
-#' @param name_in The name of the input data frame. Default to the expression given in `data`.
-#' @param name_out The name of the output data frame, if different from the
-#' input data frame.
-#' @param style Default is to use `dplyr::mutate()`. Set to `base` to use `data$var <-` style.
-#' @param reminder By default, a reminder of the syntax (`"new" = "old"`) is printed.
-#'  Set to `FALSE` to remove it.
-#' @param freq Set to `TRUE` to print frequency and count of each level as comment.
-#' Set to `FALSE` to avoid this behavior. By default, frequencies and counts are 
-#' only calculated when less than 6 variables are provided.
-#' @param cat By default the result is written in the console if there are less than
-#' 6 variables, written in a temporary file and opened otherwise. Set to
-#' false to get a data frame with a character variable instead.
+#' @param name_in The input data frame's name (default: the expression given as `data`).
+#' @param name_out The output data frame's name, if different from `name_in`.
+#' @param style `"mutate"` (default) writes a `dplyr::mutate()` call; `"base"` writes `data$var <-`.
+#' @param reminder Print a `"new" = "old"` syntax reminder. Default `TRUE`.
+#' @param freq Print each level's frequency and count as a comment; defaults to `TRUE` when 5 or
+#'   fewer variables are given.
+#' @param cat Print to console, or open a temporary file when there are more than 5 variables;
+#'   `FALSE` returns a data frame of the recode text instead.
 #'
-#' @return When the number of variables is less than 5, a text in console as a side effect.
-#' With more than 5 variables, a temporary R file. A `tibble` with the recode text as a
-#' character variable is returned invisibly (or as main result if `cat = TRUE`).
-#' When a column carries a variable label (its `label` attribute), it is used as title in a comment.
+#' @return With `cat = TRUE` (default), the text printed to console (or written to a temp R file for
+#'   more than 5 variables), returned invisibly. With `cat = FALSE`, a `tibble` of the recode text is
+#'   returned instead. A column carrying a `label` attribute is used as its comment title.
 #' @keywords internal
 #' @export
 fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_out,
-                              freq = NULL, 
+                              freq = NULL,
                               style = c("mutate", "base"), reminder = TRUE, cat = TRUE) {
   lifecycle::deprecate_soft("2.0.0", "fct_recode_helper()",
                             details = "It writes forcats code and has nothing to do with tables.")
@@ -257,36 +205,31 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
       name_in <-
         stringi::stri_extract_first_regex(name_in, "[^\\(]+$") |>
         stringi::stri_replace_all_regex("\\).*$", "")
-      # name_in <- "data"
     }
   }
-  if (missing(name_out)) name_out <- name_in # if (missing(name_in)) {"data"} else {name_in}
+  if (missing(name_out)) name_out <- name_in
 
   pos_cols <- tidyselect::eval_select(rlang::enquo(.cols), data)
   data <- data[pos_cols]
 
-  # Variable labels as titles: the `label` attribute (e.g. from haven / labelled-imported data).
-  # get_variable_labels() returned exactly this per-column named list, so read it with base attr()
-  # and drop the `labelled` dependency (Phase 18b-ii).
+  # Variable labels come from the `label` attribute (haven / labelled-imported data), read directly
+  # with base attr() rather than depending on the labelled package.
   var_labs <- purrr::map(data, \(col) attr(col, "label", exact = TRUE))
   var_labs <- var_labs[purrr::map_lgl(var_labs, ~ !is.null(.))]
   with_variable_label_as_title <- length(var_labs) > 0
 
 
   data <- data |> dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = as.factor))
-  
-  # By default, if not chosen by user, only calculate frequencies for less that 10 vars
+
   if (is.null(freq)) {
     freq <- ncol(data) <= 5
   }
-  
-  if (freq) { # With frequencies and counts helpers 
-    frequencies <- names(data) |> 
+
+  if (freq) { # With frequencies and counts helpers
+    frequencies <- names(data) |>
       purrr::map(
-        # Phase 14p: fully qualify the non-base calls. `filter` is NOT imported, so the bare form
-        # resolved to stats::filter(), which evaluated `!is_totrow(pct)` OUTSIDE the data mask ->
-        # "object 'pct' not found" (the reported freq = TRUE crash). A no-col_var pct = "col" table
-        # is `<row_var> | pct | n`, so both columns exist and are read straight.
+        # `filter` is NOT imported: the bare call resolves to stats::filter(), which evaluates
+        # outside the data mask and crashes. dplyr::filter() must stay fully qualified here.
         ~ tab_plain(data, !!rlang::sym(.x), pct = "col", na = "drop") |>
           dplyr::filter(!is_totrow(.data$pct)) |>
           dplyr::rename_with(~ "lvs", .cols = 1) |>
@@ -302,36 +245,34 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
           ) |>
           dplyr::select(lvs, txt)
       ) |>
-      purrr::set_names(names(data)) 
-    
+      purrr::set_names(names(data))
+
     recode <- frequencies |>
       purrr::map(
         ~ paste0(stringi::stri_pad(.x$lvs, max(stringi::stri_length(.x$lvs)), "right"), " = ",
-                 stringi::stri_pad(.x$lvs, max(stringi::stri_length(.x$lvs)), "right"), 
-                 ", # ", 
+                 stringi::stri_pad(.x$lvs, max(stringi::stri_length(.x$lvs)), "right"),
+                 ", # ",
                  .x$txt
         )
       ) |>
       purrr::map(~ paste0(., collapse = "\n"))
-    
-  } else { # Without frequencies and counts helpers
+
+  } else {
     recode <- data |>
       purrr::map(~ paste0("\"",
-                          #stringi::stri_escape_unicode(
                           stringi::stri_replace_all_regex(
                             levels(.), "\"", "'"
-                            #)
                           ),
                           "\"")) |>
       purrr::map(
         ~ paste0(stringi::stri_pad(., max(stringi::stri_length(.)), "right"), " = ",
                  stringi::stri_pad(., max(stringi::stri_length(.)), "right"), collapse = ",\n")
       )
-    
+
   }
 
- 
-  
+
+
 
 
   if (with_variable_label_as_title) {
@@ -397,7 +338,7 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
   invisible(recode)
 }
 
-#' `forcats::gss_cat` test dataframe, from US General Social Survey, 
+#' `forcats::gss_cat` test dataframe, from US General Social Survey,
 #'   but formatted with merged levels for cleaner tables,
 #'   and first levels chosen to be used as references (for color helpers, regressions, etc.)
 #' @export
@@ -416,13 +357,13 @@ income25k = factor(dplyr::if_else(rincome == "$25000 or more",
 "01-$25000 or more",
 "02-Less than 25k")
 ),
-race = forcats::fct_relevel(race, "White", "Black", "Other"), 
+race = forcats::fct_relevel(race, "White", "Black", "Other"),
 marital = forcats::fct_relevel(marital, "Married", "Separated", "Divorced", "Widowed", "Never married", "No answer"),
 year = as.factor(year),
-  
+
 dplyr::across(dplyr::where(is.factor), ~ forcats::fct_recode(., "NULL" = "No answer", "NULL" = "Refused", "NULL" = "Don't know", "NULL" = "Not applicable")),
 
-rincome = forcats::fct_recode(   # "new" = "old" 
+rincome = forcats::fct_recode(   # "new" = "old"
   rincome,
   "1-Lt $10000"      = "Lt $1000"       , #  1%   286
   "1-Lt $10000"      = "$1000 to 2999"  , #  2%   395
@@ -436,12 +377,12 @@ rincome = forcats::fct_recode(   # "new" = "old"
   "3-$15000 to 24999" = "$15000 - 19999", #  5% 1 048
   "3-$15000 to 24999" = "$20000 - 24999", #  6% 1 283
   "4-$25000 or more"  = "$25000 or more"  # 34% 7 363
-) |> 
+) |>
 forcats::fct_relevel(sort) |>
 as.ordered(),
 
-  
-party3 = forcats::fct_recode(   # "new" = "old" 
+
+party3 = forcats::fct_recode(   # "new" = "old"
   partyid,
   "NULL"                 = "No answer"         , #  1%   154
   "NULL"                 = "Don't know"        , #  0%     1
@@ -454,9 +395,9 @@ party3 = forcats::fct_recode(   # "new" = "old"
   "1-Democrat"           = "Not str democrat"  , # 17% 3 690
   "1-Democrat"           = "Strong democrat"   , # 16% 3 490
   ) |> forcats::fct_relevel(sort),
-  
 
-relig = forcats::fct_recode( 
+
+relig = forcats::fct_recode(
   relig,
   "1-Protestant"        = "Protestant"             , # 50% 10 846
   "2-Catholic"          = "Catholic"               , # 24%  5 124
@@ -479,17 +420,7 @@ relig = forcats::fct_recode(
 }
 
 
-
-
-
-
-# Adapt purrr::map_if function to pmap et map2
-# (when FALSE the result is the first element of .l, or the content of .else)
-
-
-#tidyselect:::where
-# MIT + Lience : https://tidyselect.r-lib.org/LICENSE.html
-# Thanks to Hadley Wickham and Lionel Henry
+# Vendored from tidyselect:::where (MIT licence: https://tidyselect.r-lib.org/LICENSE.html).
 #' @keywords internal
 where <- function (fn)
 {
@@ -504,76 +435,18 @@ where <- function (fn)
 }
 
 
+# ggpubr functions (vendored, for tab_plot() as a tableGrob) ---------------------------------------
 
-
-# formats_SAS_to_R() (INSEE SAS formats -> R fct_recode code) moved to dev/formats_SAS_to_R.R in
-# Phase 17a: unexported, no callers, a personal maintainer tool rather than package surface.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Escaped characters ----
-#' @keywords internal
-unbrk      <- stringi::stri_unescape_unicode("\\u202f") # unbreakable space
-sigma_sign <- stringi::stri_unescape_unicode("\\u03c3") # sigma for sd
-mult_sign  <- stringi::stri_unescape_unicode("\\u00d7") # multiply sign (ratio >= 1)
-div_sign   <- stringi::stri_unescape_unicode("\\u00f7") # divide sign (ratio < 1, shows 1/ratio)
-# Phase 14d/14e: FIGURE SPACE -- defined by Unicode to be exactly as wide as a digit in fonts with
-# tabular figures, which is what format()'s alignment padding assumes. An ASCII space is only HALF a
-# digit in DejaVu Sans (measured: 651 vs 1303/2048 em), so "100% (n=  849)" aligned in the console
-# collapsed into a ragged mess in html/Excel -- and CSS additionally collapses runs of ASCII spaces.
-# Used where the output is rendered in a PROPORTIONAL font (html, Excel); console/markdown, which are
-# read in a monospace font, keep the ASCII space (see format.tabxplor_fmt(pad =)).
-fig_space  <- stringi::stri_unescape_unicode("\\u2007")
-
-# Phase 14m-ii (reworked): the number font is CONDITIONAL on whether the table shows significance
-# stars. A plain table keeps the proportional DejaVu Sans it always had (compact, better-looking); only
-# a STARRED table switches to a MONOSPACE stack, because that is the one case where alignment breaks -- a
-# proportional "*" is narrower than a digit, so a starred cell slides out of its column. In a monospace
-# font every glyph (digits, "%", brackets, "*", the figure-space pad) is one width, so stars and
-# "(n=...)" composites line up. The TEXT channel (row labels, headers) always stays DejaVu Sans Condensed.
-#   - tx_num_font_html_stars : the html/md `.tx-num` font -- MONOSPACE (Phase g: numbers are monospace
-#     by default so figures stay column-aligned, worse under the bold references / significant cells the
-#     html render adds). Cascadia Mono target, then Cascadia Code (same metrics, far more widely
-#     installed), then per-OS monos, then the generic `monospace`. `ui-monospace` is deliberately absent:
-#     it resolves to the OS's OWN mono (SF Mono, ...), which would override Cascadia; at the tail it is
-#     never reached (Menlo/Consolas/DejaVu already cover every OS), so it would only add noise.
-# The one option is tabxplor.tab_kable_num_font (default = this monospace stack); tab_css() stays
-# table-independent (one `.tx-num` rule, no per-table class needed).
-tx_num_font_html_stars <-
-  '"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace'
-
-
-
-
-
-
-# ggpubr functions (for tab_plot() as tableGrob ) ----
-
-# ggpubr:::is_tablegrob
 #' @keywords internal
 is_tablegrob <- function (tab) {
   inherits(tab, "gtable") & inherits(tab, "grob")
 }
 
-# ggpubr:::is_ggtexttable
 #' @keywords internal
 is_ggtexttable <- function (tab) {
   !is.null(attr(tab, "ggtexttableGrob"))
 }
 
-# ggpubr:::as_ggtexttable
 #' @keywords internal
 as_ggtexttable <- function (tabgrob) {
   res <- ggpubr::as_ggplot(tabgrob)
@@ -581,7 +454,6 @@ as_ggtexttable <- function (tabgrob) {
   res
 }
 
-# ggpubr:::get_tablegrob
 #' @keywords internal
 get_tablegrob <- function (tab)
 {
@@ -597,7 +469,6 @@ get_tablegrob <- function (tab)
   tabgrob
 }
 
-# ggpubr:::tab_return_same_class_as_input
 #' @keywords internal
 tab_return_same_class_as_input <- function (tabgrob, input) {
   if (is_ggtexttable(input)) {
@@ -632,11 +503,20 @@ justify_grob <- function(grob, hjust = "left", vjust = "top", pad = 5){
 }
 
 
+# Escaped characters ------------------------------------------------------------------------------
+#' @keywords internal
+unbrk      <- stringi::stri_unescape_unicode("\\u202f") # unbreakable space
+sigma_sign <- stringi::stri_unescape_unicode("\\u03c3") # sigma for sd
+mult_sign  <- stringi::stri_unescape_unicode("\\u00d7") # multiply sign (ratio >= 1)
+div_sign   <- stringi::stri_unescape_unicode("\\u00f7") # divide sign (ratio < 1, shows 1/ratio)
+# U+2007 FIGURE SPACE is exactly digit-width in tabular fonts, where an ASCII space is not (and CSS
+# collapses space runs) -- used for proportional-font exports (html/Excel) only; console and
+# markdown keep the ASCII space.
+fig_space  <- stringi::stri_unescape_unicode("\\u2007")
 
-# Phase 19l: `tr_()` (a gettext wrapper) and `po_to_dt()` (a 40-line .po parser) are DELETED.
-# They were kept for "the upcoming French translation phase"; that phase shipped using potools
-# and gettext() directly, and neither function ever acquired a caller.
 
-# path_sanitize() (a vendored copy of fs::path_sanitize) was removed in Phase 17a: it had no callers.
-# jmvtab-export.R is self-contained -- it uses fs::path_sanitize() with its own base-R fallback.
-
+# Only a STARRED table needs the monospace stack below: a proportional "*" is narrower than a digit
+# and slides a starred cell out of column alignment. `ui-monospace` is deliberately excluded -- it
+# resolves to the OS's own mono and would override the pinned target.
+tx_num_font_html_stars <-
+  '"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace'

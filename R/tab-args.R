@@ -1,53 +1,37 @@
-# PURPOSE: THE argument surface as data (Phase 20b, KEY 1 + KEY 8).
+# PURPOSE: THE argument surface as data.
 # ROLE: an argument of a crosstab producer is declared ONCE -- which producers take it, what it may
 #   be, which option is its default, and what it means -- and the signature, the reference page and
-#   the value list all read that declaration.
-#
-# WHY IT EXISTS. 83 of the 149 crosstab formals were the same argument written a 2nd, 3rd or 4th
-# time, each mirror carrying its own `@param` block: `@param color` was written 16 times across R/,
-# `@param theme` 12, `@param conf_level` 9. 19i gave the four producers ONE resolver
-# (tab_resolve_common_args); it did not give them one DECLARATION, so a vocabulary could be added to
-# TAB_ARG_VALUES and still be described three ways in three help pages.
-#
-# THE RULE, and it is what keeps this table from swallowing the fact tables:
-#   *** THE FACT TABLE OWNS THE VOCABULARY. TAB_ARGS OWNS THE ARGUMENT. ***
-# MEASURES knows what `difference` is; TAB_ARGS knows that `color` is an argument of four producers,
-# that it names a measure, and how to say so in a help page. `values_rd` is the edge between them
-# (checked in R/zzz-fact-keys.R). An argument whose vocabulary has no other home -- `na`, `tot`,
-# `levels`, `totaltab`, `comp`, `pct` -- declares it HERE, in `values`, and that is why
-# TAB_ARG_VALUES is derived from this table rather than living beside it.
-#
+#   the value list all read that declaration. TAB_ARGS covers the producers; EXPORT_ARGS is its twin
+#   for the render surface.
+# DESIGN -- THE RULE, and it is what keeps this table from swallowing the fact tables:
+#     *** THE FACT TABLE OWNS THE VOCABULARY. TAB_ARGS OWNS THE ARGUMENT. ***
+#   MEASURES knows what `difference` is; TAB_ARGS knows that `color` is an argument of four
+#   producers, that it names a measure, and how to say so in a help page. `values_rd` is the edge
+#   between them, checked at load in R/zzz-fact-keys.R. An argument whose vocabulary has no other
+#   home -- `na`, `tot`, `levels`, `totaltab`, `comp`, `pct` -- declares it HERE, in `values`, which
+#   is why TAB_ARG_VALUES is derived from this table rather than living beside it.
+# DESIGN: `doc` IS the roxygen text, rendered by tab_args_rd(), which orders by formals() and
+#   ASSERTS that the declared set and the formals are the same set -- so an argument added to a
+#   signature without a row breaks the build. `doc_in_producer = TRUE` says the prose stays in the
+#   producer's own roxygen. tab_reg() declares all 25 of its formals here, so tx_check_tab_args()
+#   polices its signature exactly as it polices a crosstab one -- but it does NOT get
+#   @eval tab_args_rd(): the two producers share the NAME and the GRAMMAR of `wt` / `ref` / `na` /
+#   `display` / `color` / `ci_method` / `tab_vars` / `conf_level` / `data`, and not the PROSE. Every
+#   one of those reads differently on a model, and emitting the crosstab text into ?tab_reg would be
+#   WRONG documentation, not deduplicated documentation.
 # KEY CONSTRAINTS:
-#   - `doc_in_producer = TRUE` says the prose stays in the producer's OWN roxygen.
-#
-#     ⚠ WHAT `tab_reg()`'s ROWS DECLARE, AND WHAT THEY DO NOT (Phase 20c, KEY 4). All 25 of its
-#     formals have a row, and every row states `producers`, `default_for` and where its vocabulary
-#     lives -- which is what lets tx_check_tab_args() police that signature exactly as it polices a
-#     crosstab one, and what makes "these two producers ask the SAME question" a declared fact
-#     rather than a claim. But `tab_reg()` does NOT get `@eval tab_args_rd()`, because the phase
-#     MEASURED the thing that would have justified it and it was not there:
-#
-#         the two producers share the NAME and the GRAMMAR of `wt` / `ref` / `na` / `display` /
-#         `color` / `ci_method` / `tab_vars` / `conf_level` / `add_n` / `data`.
-#         They do NOT share the PROSE -- every one of those reads differently on a model
-#         (`wt` is a survey design, `ref` a treatment contrast, `na` a per-fit drop grain,
-#         `display` an effect cell), and emitting the crosstab text into ?tab_reg would be
-#         WRONG documentation, not deduplicated documentation.
-#
-#     THE TEST for moving prose here is the one §4 states for a bundle: it must remove a DUPLICATE.
-#     Two hundred lines that say two different things are not a duplicate.
-#   - `doc` is roxygen text, moved VERBATIM from the producer's own block. It is rendered by
-#     tab_args_rd(), which orders by `formals()` and ASSERTS that the declared set and the formals
-#     are the same set -- so an argument added to a signature without a row breaks the build.
-#   - ⚠ There is deliberately NO `group` column. The plan proposed one for grouping the generated
-#     `@param`s; ordering by `formals()` is better (it matches `\usage{}` and it is self-checking),
-#     which left `group` with no reader -- and a column with no reader is weight, not a fact (19b's
-#     admission test). Add it the day something groups by it.
+#   - There is deliberately NO `group` column: ordering by formals() matches \usage{} and is
+#     self-checking, which left `group` with no reader. Add it the day something groups by it.
 #   - ⚠ `status` may be a NAMED vector when an argument is deprecated on ONE producer and live on
-#     another: `row_var` is a deprecated singular alias on tab() and the REAL formal of the leaves.
-#     Read it with tab_arg_status(name, producer), never with `$status`.
+#     another (`row_var` is a deprecated alias on tab() and the real formal of the leaves). Read it
+#     with tab_arg_status(name, producer), never with `$status`.
+#   - EXPORT_ARGS is a separate table rather than more rows: `color`, `subtext` and `stars` mean
+#     something structurally different on an exporter than on a producer. Its own scope rule is
+#     stated at the table.
 #   - This file sorts before tab.R, so nothing here may read tab.R's top-level objects at SOURCE
 #     time. Everything below is a literal or a function body.
+# See: CLAUDE.md § tabxplor architecture (the declarative architecture); R/tab-options.R (the option
+#   twins this table's `option` column points at).
 
 #' @keywords internal
 #' @noRd
@@ -208,24 +192,21 @@ TAB_ARGS <- list(
   ref = list(
     default = "auto", default_for = list(tab_reg = NULL, tab_num = "tot"),
     producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
-    doc = c("The reference cell to calculate differences and ratios",
-            " (used to print \\code{colors}) :",
+    doc = c("The reference cell that differences and ratios are computed against:",
             " \\itemize{",
-            "  \\item \\code{\"auto\"}: by default, cell difference from the corresponding total",
-            "  (rows or cols depending on \\code{pct = \"row\"} or \\code{pct = \"col\"}) is",
-            "  used for `diff`; the first line (or col) is used for the odds ratio.",
-            "  \\item \\code{\"tot\"}: totals are always used.",
-            "  \\item \\code{\"first\"}: calculate cell difference or ratio from the first cell",
-            "of the row or column (useful to color temporal developments).",
-            "  \\item \\code{\"last\"}: the mirror of \\code{\"first\"} -- the **last level** of the row (or column)",
-            "variable. A total row or column is not a level and is never selected: use \\code{\"tot\"} for that.",
-            "Resolved inside each subtable when there are \\code{tab_vars}.",
-            "  \\item \\code{n}: when `ref` is an integer, the nth row (or column) is used for comparison.",
-            "  \\item \\code{\"regex\"}: when `ref` is a string, it it used as a regular expression,",
-            "  to match with the names of the rows (or columns). Be precise enough to match only one",
-            "  column or row, otherwise you get a warning message.",
-            "  \\item \\code{\"no\"}: not use ref and not calculate diffs to gain calculation time.",
+            "  \\item \\code{\"auto\"} (default): the corresponding total (row or column, following",
+            "  \\code{pct}) for a difference; the first row (or column) for an odds ratio.",
+            "  \\item \\code{\"tot\"}: always the total.",
+            "  \\item \\code{\"first\"}: the first cell of the row or column -- useful to color a temporal",
+            "  development.",
+            "  \\item \\code{\"last\"}: its mirror, the \\strong{last level} of the row (or column) variable. A",
+            "  total row or column is not a level and is never selected: use \\code{\"tot\"} for that.",
+            "  \\item an \\strong{integer}: the nth row (or column).",
+            "  \\item a \\strong{string}: a regular expression matched against the row (or column) names. Be",
+            "  precise enough to match only one, otherwise you get a warning.",
+            "  \\item \\code{\"no\"}: no reference, and no differences computed -- saves calculation time.",
             "}",
+            "Resolved inside each subtable when there are \\code{tab_vars}.",
             "A (named) vector gives one reference per \\code{row_vars} --- \\code{ref = c(race = \"first\")}",
             "names the row variable it applies to, an unnamed vector goes by position, and any variable it",
             "does not mention keeps \\code{\"auto\"}.")),
@@ -274,33 +255,21 @@ TAB_ARGS <- list(
             "Automatically added if needed for \\code{color}.",
             "",
             "\\code{test} says only \\emph{whether} to test; \\strong{what kind of test you get follows what you",
-            "passed}. \\code{wt} says how the \\emph{estimate} is computed; a second, orthogonal fact --- the",
-            "\\strong{inference basis} (the \"weighting level\" of \\code{vignette(\"tabxplor\")}), stored on each",
-            "column and named in the table's footer --- says how the \\emph{interval and the test} are:",
+            "passed}, and the table's footer names it:",
             "\\enumerate{",
-            " \\item \\code{wt = w} --- estimates, the whole-table test and the effect size are all computed on the",
-            " \\strong{weighted} table, but with the raw unweighted number of respondents as the sample size, so",
-            " they carry no design effect. This is the default, and the footer says so.",
-            " \\item \\code{wt = w} plus \\code{design_effect = TRUE} (or, for a whole session,",
-            " \\code{options(tabxplor.design_effect = TRUE)}) --- the same intervals and",
-            " tests \\strong{account for the unequal weighting, exactly}. A weight column IS a survey design",
-            " (the flat one, \\code{ids = ~1}), so this is not an approximation: the base becomes",
-            " \\code{n_eff = p(1-p) / Var_design(p)} in closed form, and the whole-table test becomes",
-            " \\code{survey::svychisq} / a \\code{svyglm} Wald F on that same flat design. Being exact rather",
-            " than a bound, it can make an interval \\emph{narrower} as well as wider --- unequal probabilities",
-            " can carry more information than equal ones. It is blind to clustering and to calibration, which",
-            " the weights do not record.",
-            " \\item a prebuilt \\code{survey::svydesign} passed as \\code{data} --- fully \\strong{design-based}:",
-            " the same quantities, now with strata, clusters, \\code{fpc} and calibration, and every interval",
-            " referred to the design's own degrees of freedom.",
+            " \\item \\code{wt = w} --- the estimates, the test and the effect size are all \\strong{weighted},",
+            " but the sample size is the raw number of respondents, so they carry no design effect (default).",
+            " \\item plus \\code{design_effect = TRUE} --- the intervals and the test \\strong{account for the",
+            " unequal weighting, exactly}: a weight column IS a survey design (the flat one), so this is not an",
+            " approximation, and it can make an interval \\emph{narrower} as well as wider. It stays blind to",
+            " clustering and to calibration, which weights do not record.",
+            " \\item a \\code{survey::svydesign} passed as \\code{data} --- fully \\strong{design-based}: strata,",
+            " clusters, \\code{fpc} and calibration, every interval referred to the design's own degrees of",
+            " freedom. When that variance cannot be computed, the table falls back to the weighting-only",
+            " correction and says so.",
             "}",
-            "A fourth basis is not a choice but a fallback: when a design-based table's variance cannot be",
-            "computed, it reverts to the weighting-only correction, and its footer says so.",
-            "Turn the option on when you want a \\code{tab()} percentage interval to be comparable with the",
-            "\\code{Obs_*} column of a \\code{\\link{tab_reg}} on the same data: \\code{tab_reg()} never reads it,",
-            "because its crude companions are \\emph{always} on the weighted basis, beside a model column that",
-            "always was. Replicate-weight (\\code{svrepdesign}) and two-phase designs are not supported, and",
-            "\\code{wt} beside a design is an error (a design already carries its own weights).")),
+            "Replicate-weight (\\code{svrepdesign}) and two-phase designs are not supported, and \\code{wt}",
+            "beside a design is an error (a design already carries its own weights).")),
   anova = list(
     default = NULL,
     producers = c("tab", "tab_num"), option = "anova", values = c("welch", "classic"), size = 1L,
@@ -335,18 +304,13 @@ TAB_ARGS <- list(
             " \\code{\"cell\"} and \\code{\"no\"} anchor nothing to compare, so \\code{stars} and",
             " \\code{color_signif} have nothing to read: asking for either alongside them informs you once and",
             " disables it, rather than silently testing something else.",
-            " Methods are chosen with \\code{ci_method} and named in the table's legend; by default percentages",
-            " use the Wilson score interval for a cell and the Newcombe hybrid score for a difference (its",
-            " dual, so the bracket and the stars always agree), and means the Welch t interval. With",
-            " \\code{ci = \"cell\"} the result prints as `[inf;sup]`; set",
-            " Each cell then shows its own interval; `display = \"base_moe\"` writes it as",
-            " `pct +- margin of error` instead, and `display = \"base_ci\"` as `pct [inf; sup]`.",
+            " Methods are chosen with \\code{ci_method} and named in the table's legend. The interval prints",
+            " as \\code{[inf;sup]}; \\code{display = \"base_moe\"} writes it as \\code{pct +- margin of error}",
+            " instead, and \\code{display = \"base_ci\"} as \\code{pct [inf;sup]}.",
             " \\code{\"diff\"} and \\code{\"ratio\"} are soft-deprecated spellings of \\code{\"ref\"} (the second one",
             " also pins the ratio scale -- say \\code{color = \"ratio\"} instead).")),
   conf_level = list(
-    default = NULL,   # 20b/20c: NULL on EVERY producer, the crosstab boundary and the
-                      # regression one each resolving it -- one idiom, and no call at source time
-                      # (this file sorts before the one that defines conf_level_default()).
+    default = NULL,   # NULL everywhere; each producer's own boundary resolves it at call time.
     producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), option = "conf_level", check = "probability",
     doc = c("The confidence level, as a single numeric between 0 and 1.",
             "Default to 0.95 (95%).")),
@@ -432,30 +396,19 @@ TAB_ARGS <- list(
             "independence, because a contribution has no confidence interval to floor:",
             " \\itemize{",
             "  \\item \\code{\"ignore\"} and \\code{\"grey_non_signif\"} color the \\strong{relative} contribution",
-            "  (a share of \\emph{this} table's chi-squared, in multiples of the mean cell contribution --",
-            "  the correspondence-analysis reading, so the scale is relative to the table);",
+            "  -- a share of \\emph{this} table's chi-squared, in multiples of the mean cell contribution, so",
+            "  the scale is relative to the table (the correspondence-analysis reading);",
             "  \\item \\code{\"guaranteed_effect\"} colors the \\strong{adjusted standardized residual} itself, on",
-            "  the absolute \\code{zscore} break scale (+/-1.96, +/-2.58, +/-3.89, +/-6 by default). Those",
-            "  thresholds mean the same thing in every table, which is the SPSS \"adjusted residual\" reading.",
+            "  the absolute \\code{zscore} break scale (+/-1.96, +/-2.58, +/-3.89, +/-6 by default), whose",
+            "  thresholds mean the same thing in every table (the SPSS \"adjusted residual\" reading).",
             " }",
             "In all three, significance is the adjusted standardized residual (Haberman; SPSS's \"adjusted",
-            "residual\", R's \\code{chisq.test()$stdres}), \\emph{not} the Pearson residual \\code{(o-e)/sqrt(e)},",
-            "whose variance is below 1 and which therefore under-rejects. Under weights the residual follows",
-            "the package rule -- weighted estimate, and a base that follows the inference basis: the raw",
-            "\\code{n} by default (the reading a correspondence analysis expects), and under",
-            "\\code{options(tabxplor.design_effect = TRUE)} or a \\code{survey} design that raw \\code{n} divided",
-            "by the \\strong{association's} design effect -- Rao-Scott's mean generalized delta-bar, the very",
-            "one the whole-table test reports, so the colours and the p-value of one table describe one design",
-            "effect. The",
-            "contribution itself stays weighted (it estimates the population table's structure, and is therefore",
-            "identical at every basis, which is what keeps the correspondence-analysis reading safe). One base",
-            "for the whole table, so a counts table and a percentage table of the same data give the SAME",
-            "residuals. Cells whose expected count is below 1 are left",
-            "uncolored: the normal approximation does not hold there.",
-            "Colors are computed per column at print time; since 2.0.0 each column records the confidence level",
-            "it was built at, so the significance thresholds follow the call's \\code{conf_level}. A column that",
-            "never recorded one (a hand-built \\code{\\link{fmt}}) falls back to",
-            "\\code{options(tabxplor.conf_level)}.")),
+            "residual\", R's \\code{chisq.test()$stdres}), \\emph{not} the Pearson residual",
+            "\\code{(o-e)/sqrt(e)}, which under-rejects. Under weights it uses ONE base for the whole table,",
+            "following the table's inference basis, so a counts table and a percentage table of the same data",
+            "give the SAME residuals. Cells whose expected count is below 1 are left uncolored: the normal",
+            "approximation does not hold there. Thresholds follow the call's \\code{conf_level}, which each",
+            "column records; a hand-built \\code{\\link{fmt}} falls back to \\code{options(tabxplor.conf_level)}.")),
   color_breaks = list(
     default = NULL,
     producers = c("tab", "tab_num", "tab_counts"), option = "color_breaks",
@@ -473,8 +426,8 @@ TAB_ARGS <- list(
             "variables losing different missing values, several models --- it prints the whole",
             "range, \\code{100\\% (6 712-9 838)}, so an unequal base can never pass unnoticed.",
             "\\code{\"min\"} prints the smallest base only; \\code{\"no\"} prints no count.")),
-  # NULL default on purpose: tab_dots_expand() refills an unsupplied declared argument, so a TRUE
-  # here would make every tab_counts() call look like a user-supplied one and warn.
+  # NULL default on purpose: tab_dots_expand() refills an unsupplied argument, so a TRUE here
+  #   would make every tab_counts() call look user-supplied and warn.
   add_n = list(
     default = NULL,
     producers = c("tab", "tab_counts"), status = "deprecated",
@@ -544,13 +497,13 @@ TAB_ARGS <- list(
     producers = c("tab"), status = "internal",
     doc = c("Internal, for the jamovi",
             "\\code{jmvtab} live cache only: \\code{.cache} is a mutable environment the content-addressed",
-            "multi-tier store is threaded through (Phase 7e); \\code{.defer_level_merge} keeps full factor",
+            "multi-tier store is threaded through; \\code{.defer_level_merge} keeps full factor",
             "levels through the aggregate and test so \\code{levels} becomes a display-time drop;",
-            "\\code{.return_armed} (Phase 7f) returns the pre-\\code{finalize_color_spec} table so the tier-3",
-            "cache can re-paint colours without a rebuild; \\code{.levels_order} (Phase 7g-ii) is a named list",
+            "\\code{.return_armed} returns the pre-\\code{finalize_color_spec} table so the tier-3",
+            "cache can re-paint colours without a rebuild; \\code{.levels_order} is a named list",
             "of factor level orders applied post-aggregate, backing the jamovi level-reordering control (in R,",
             "relevel with \\code{\\link[forcats:fct_relevel]{forcats::fct_relevel}} before calling \\code{tab()});",
-            "\\code{.levels_collapse} (Phase 20g-ii) is its twin for MERGING levels -- a named list, one",
+            "\\code{.levels_collapse} is its twin for MERGING levels -- a named list, one",
             "element per variable, of merged label -> the levels it swallows -- applied pre-aggregate, so it",
             "is exactly \\code{\\link[forcats:fct_collapse]{forcats::fct_collapse}} on the data before",
             "\\code{tab()}, which is how to do it in R.",
@@ -613,10 +566,7 @@ TAB_ARGS <- list(
     producers = c("tab_many"), status = "deprecated",
     doc = c("`r lifecycle::badge(\"deprecated\")` <\\link[tidyr:tidyr_tidy_select]{tidy-select}>",
             "  Use [tab()]'s `filter`: `na_drop_all = c(a, b)` is `filter = !is.na(a) & !is.na(b)`.")),
-  # --- tab_reg()'s own arguments (Phase 20c, KEY 4) -----------------------------------------------
-  # Declared so tx_check_tab_args() covers the whole signature and `producers` / `default` /
-  # `values_from` are stated once; the prose stays in R/tab_reg.R's roxygen (`doc_in_producer`),
-  # because none of it has a duplicate to remove -- see the header.
+  # --- tab_reg()'s own arguments -------------------------------------------------------------------
   outcome = list(producers = "tab_reg", doc_in_producer = TRUE),
   predictors = list(producers = "tab_reg", default = NULL, doc_in_producer = TRUE),
   family = list(producers = "tab_reg", default = "auto", values_from = "REG_FAMILIES",
@@ -641,45 +591,15 @@ TAB_ARGS <- list(
     doc = "Internal. The shape tab_build() returns: one merged table, or a list.")
 )
 
-# --- EXPORT_ARGS: the RENDER surface (Phase 20h, KEY 8) -------------------------------------------
-# The exporters' half of the argument surface, in the same shape and read through the same functions.
-#
-# WHY IT IS A SECOND TABLE AND NOT MORE ROWS OF TAB_ARGS -- three names mean something ELSE here, and
-# a named list cannot hold two rows under one key:
-#   `color`   on a producer is a MEASURE spec ("difference"); on an exporter a logical ("render in
-#             colour at all").
-#   `subtext` on a producer is the character vector of legend lines; on an exporter a logical
-#             ("print the footer").
-#   `stars`   likewise (a ladder vs "draw them"). It stays LOCAL to forest_plot -- see the scope rule.
-# So this is not a duplicate of TAB_ARGS; it is the other producer family's surface.
-#
-# THE SCOPE RULE (this table's own admission test -- narrower than TAB_ARGS', deliberately):
-# a row for an exporter argument that is EITHER
-#   (i)  shared by >= 2 exporters, OR
-#   (ii) the per-call twin of an option (TAB_OPTIONS$arg) that has no TAB_ARGS row.
-# A single-backend geometry argument (`sheets`, `titles`, `colwidth`, `colnames_rotation`, the text
-# sizes, `get_data`, `style_tag`, and forest_plot's ten plot controls) stays in its own roxygen: the
-# table owns what is SHARED or CROSS-REFERENCED, not everything an exporter takes. That is why
-# tx_check_tab_args() checks the exporters SCOPED (R/zzz-fact-keys.R), the way it already checks
-# tab_build().
-#
-# ⚠ WHICH ROWS CARRY PROSE, AND WHY MOST DO NOT. The rule for moving prose is the one the header
-# above states: *it must remove a DUPLICATE*. Measured across the seven exporters, that is true of
-# nine concepts (`lang`, `var_names`, `color`, `color_legend`, `transpose`, `wrap_rows`, `wrap_cols`,
-# `whitespace_only`, `tabs`/`x`), whose ~26 hand-written blocks said one thing in up to five
-# wordings. It is NOT true of the rest, and one case is worth recording because it looks like the
-# worst duplication in the package and is not:
-#
-#     `@param theme` is written seven times, but the ACCEPTED VALUES differ by backend --
-#     `allow_auto = TRUE` is passed only by tab_html(), tab_md() and tab_css(), the three that ship a
-#     stylesheet, so only they take "auto"; tab_plot() and tab_xl() resolve it to "light".
-#     Seven texts describing five value sets are not one duplicate, so `theme` keeps its prose
-#     per backend and takes `doc_in_producer = TRUE` -- a DECLARED row (which is what empties the
-#     foreign key) with its documentation left where it is true.
-#
-# Same verdict, same mechanism, for `caption` (five different renderings: a pandoc caption line, an
-# Excel title, an html caption needing CSS, a ggplot caption, "NULL keeps the table's own"), `css`,
-# `format`, `file`, `path`, `subtext`, and every option twin whose prose is one backend's business.
+# --- EXPORT_ARGS: the RENDER surface ---------------------------------------------------------------
+# The exporters' half of the argument surface, a separate table because `color` / `subtext` /
+#   `stars` mean something ELSE on an exporter (a logical switch) than on a producer -- a shared
+#   key cannot hold both rows.
+# DESIGN -- the scope rule (narrower than TAB_ARGS'): a row exists only when shared by >= 2
+#   exporters, or is the per-call twin of an option with no TAB_ARGS row of its own. Most rows
+#   carry no `doc` here even though shared, because the ACCEPTED VALUES differ by backend
+#   (`theme`'s "auto" exists only where a stylesheet ships) -- differing value sets are not a
+#   duplicate, so the prose stays with `doc_in_producer = TRUE`.
 #' @keywords internal
 #' @noRd
 EXPORT_ARGS <- list(
@@ -690,14 +610,12 @@ EXPORT_ARGS <- list(
             "A list of tables sharing the same `col_vars` (and no `tab_vars`) is merged into one; any",
             "other list --- several `row_vars` and/or `tab_vars` --- is rendered one table after",
             "another, each keeping its own sub-tables.")),
-  # tab_export() and forest_plot() name the same thing `x`; one prose, each producer's own tag.
   x = list(producers = c("tab_export", "forest_plot"), doc_with = "tabs"),
 
   # --- the shared render controls ---------------------------------------------------------------
   color = list(
     producers = c("tab_html", "tab_xl", "tab_plot", "tab_export"), option = NULL,
     doc = "Set to \\code{FALSE} to render the table without colours (monochrome).",
-    # md wraps each cell in a pandoc span, and a forest plot colours POINTS -- two real differences.
     doc_for = list(
       tab_md = c("When `TRUE` (default) and the table carries colours (e.g. built with",
                  "`tab(..., color = \"difference\")`), each fmt cell is wrapped in a short pandoc",
@@ -728,7 +646,6 @@ EXPORT_ARGS <- list(
   wrap_rows = list(
     producers = c("tab_html", "tab_md", "tab_plot"),
     doc = "By default, rownames are wrapped when larger than 30 characters.",
-    # a markdown pipe cell cannot hold a raw newline, so md can only truncate.
     doc_for = list(
       tab_md = c("Max width for row labels before truncation. `NULL` (default) never truncates",
                  "(lossless -- the column grows); set a number to cap the label width. A markdown pipe",
@@ -760,26 +677,19 @@ EXPORT_ARGS <- list(
   font_num_stars = list(producers = "tab_xl", option = "font_num_stars", doc_in_producer = TRUE)
 )
 
-# EXPORT_PRODUCERS -- DERIVED, never a hand-written mapping: it is what tells the shared readers which
-# of the two tables declares a given producer.
 #' @keywords internal
 #' @noRd
 EXPORT_PRODUCERS <- sort(unique(unlist(lapply(EXPORT_ARGS, `[[`, "producers"))))
 
-# THE table that declares a producer's arguments. One line, so `tab_args_rd()` / `tab_args_for()` /
-# `tab_arg()` / `tab_arg_status()` serve both surfaces without knowing there are two.
 #' @keywords internal
 #' @noRd
 arg_table_of <- function(producer)
   if (producer %in% EXPORT_PRODUCERS) EXPORT_ARGS else TAB_ARGS
 
 # --- the derived vocabulary view ------------------------------------------------------------------
-# TAB_ARG_VALUES survives, DERIVED, with its contents AND ORDER intact (the DISPLAY_TOKENS
-# precedent, 19m-iii): tab_validate_args(), tab_deprecate_many(), tab_ci()'s totcol guard and
-# test-jamovi-vocabulary.R all read it unchanged.
-# ⚠ `validate = FALSE` is what keeps `ci` out of it. Its vocabulary is DECLARED here (so
-# resolve_ci_value() stops spelling it twice in its own body) but it is validated by that resolver
-# instead, because two of its values are soft-deprecated: validating them means REWRITING them.
+# TAB_ARG_VALUES is DERIVED, order preserved -- callers read it as a stable vocabulary list.
+# ⚠ `ci` is deliberately excluded: two of its values are soft-deprecated, and validating them
+#   centrally here would silently rewrite them instead of warning.
 #' @keywords internal
 #' @noRd
 TAB_ARG_VALUES <- local({
@@ -798,8 +708,6 @@ TAB_ARG_VALUES <- local({
 tab_arg <- function(name, producer = NULL)
   if (is.null(producer)) TAB_ARGS[[name]] else arg_table_of(producer)[[name]]
 
-# Every argument a producer declares. `formals()` is the ORDER (it matches \usage{}) and the
-# declared set is the CHECK: the two must agree, which is asserted at load in R/zzz-fact-keys.R.
 #' @keywords internal
 #' @noRd
 tab_args_for <- function(producer) {
@@ -807,8 +715,6 @@ tab_args_for <- function(producer) {
   names(tb)[vapply(tb, function(r) producer %in% r[["producers"]], logical(1))]
 }
 
-# An argument's status FOR ONE PRODUCER: a bare string applies everywhere, a named one overrides
-# per producer (see the header's `row_var` note).
 #' @keywords internal
 #' @noRd
 tab_arg_status <- function(name, producer = NULL) {
@@ -819,21 +725,9 @@ tab_arg_status <- function(name, producer = NULL) {
 }
 
 # --- `...` on the superseded producers ------------------------------------------------------------
-# tab_check_dots() -- THE validator that makes `...` a net gain rather than a loss. Before it, a typo
-# produced R's bare "unused argument"; now it produces a suggestion, and an UNNAMED extra argument is
-# refused by name rather than silently bound to whatever formal happened to sit at that position.
-#
-# ⚠ SCOPE -- three surfaces, two reaches:
-#   tab_args_rd()   serves BOTH the crosstab producers and the exporters (via arg_table_of): a
-#     declaration is documentation either way.
-#   tab_check_dots() validates the `...` of the crosstab producers AND tab_reg() (Phase 20j: one
-#     dots-validator for both, replacing tab_reg()'s own retired-arg guard) -- every declared formal
-#     is a known name, and a dot-prefixed name is skipped as internal plumbing. It does NOT serve the
-#     exporters: a backend's `...` is a pass-through, so refusing an unknown name would refuse a
-#     legitimate backend argument, and tx_deprecate_inert() (R/utils.R) already names the retired ones.
-#   tab_dots_expand() serves the CROSSTAB leaves only (it fills an unsupplied formal from its default;
-#     tab_reg() declares every argument as a real formal, so it needs no expansion).
-# The exporters' narrower scope (EXPORT_ARGS' header) is why tab_check_dots() stops at them.
+# tab_check_dots() validates `...`: an unnamed argument is refused by name rather than silently
+#   bound to a formal's position, and a typo gets a suggestion. It validates the crosstab producers
+#   AND tab_reg(), but not the exporters -- a backend's `...` is a pass-through.
 #' @keywords internal
 #' @noRd
 tab_check_dots <- function(dots, producer, call = rlang::caller_env()) {
@@ -848,15 +742,13 @@ tab_check_dots <- function(dots, producer, call = rlang::caller_env()) {
   }
   if (!length(dots)) return(invisible(TRUE))
   known <- tab_args_for(producer)
-  # A DOT-PREFIXED name is internal plumbing, never a user argument: `.fit_cache` /
-  # `.levels_collapse` (tab_reg's jamovi-live cache + level-merge spec) ride `...`, as do tab()'s
-  # `.cache` / `.return_armed`. The convention is the whole package's, so the validator honours it.
+  # A dot-prefixed name is internal plumbing (the jamovi live-cache / level-merge fields), never a
+  #   user argument, so it is never flagged as unknown.
   bad   <- setdiff(nms, known)
   bad   <- bad[!startsWith(bad, ".")]
   if (!length(bad)) return(invisible(TRUE))
-  # Two kinds of near miss, and the second matters more than it looks: an argument sitting AFTER
-  # `...` is matched EXACTLY, so an ABBREVIATION that R's partial matching used to accept silently
-  # now arrives here. It must be named, not merely refused.
+  # R does NOT partial-match an argument written after `...`: an abbreviation lands here instead,
+  #   indistinguishable from a typo -- hence the "did you mean" suggestion below.
   near <- function(x) {
     pre <- known[startsWith(known, x)]
     d   <- utils::adist(x, known, ignore.case = TRUE)[1, ]
@@ -871,8 +763,6 @@ tab_check_dots <- function(dots, producer, call = rlang::caller_env()) {
     call = call)
 }
 
-# Read one argument out of a captured `...`. The quosures are captured by the CALLER (rlang::enquos),
-# so an NSE argument stays a quosure and a value argument is evaluated in the user's own environment.
 #' @keywords internal
 #' @noRd
 dots_value <- function(dots, name, default = NULL) {
@@ -881,12 +771,6 @@ dots_value <- function(dots, name, default = NULL) {
 }
 
 # --- the generated documentation ------------------------------------------------------------------
-# tab_args_rd() -- the `#' @eval` generator behind every producer's `@param` block (the
-# reg_measures_rd() precedent, but emitting `@param` tags rather than an `@section`).
-#
-# The ORDER is formals(); the SET is asserted equal to the declared one at load. An argument
-# documented WITH another (`col_vars` with `row_vars`) is folded into one comma-separated tag, in the
-# order the formals give.
 #' @keywords internal
 #' @noRd
 tab_args_rd <- function(producer) {
@@ -901,22 +785,16 @@ tab_args_rd <- function(producer) {
     o <- owner(k)
     if (o %in% done) next
     done <- c(done, o)
-    # ⚠ the tag head must be a formal OF THIS PRODUCER: tab_num() takes `row_var` and `col_vars`,
-    # whose doc owners are `row_var` and `row_vars` -- emitting the owner blindly would document a
-    # `row_vars` this function does not have (checkDocFiles catches it, but only after the fact).
+    # The tag head must be a formal OF THIS PRODUCER (a leaf's doc owner can differ from its own
+    #   formal name) -- emitting the owner blindly would document an argument the function lacks.
     tag <- nms[vapply(nms, owner, character(1)) == o]
     tag <- c(intersect(o, tag), setdiff(tag, o))
     r   <- tb[[o]]
-    # a row may hold ONE prose per producer (`doc_for`) where the same argument genuinely reads
-    # differently -- `na`'s two vocabularies, `color`'s two channel sets. `default_for`'s idiom.
     body <- r[["doc_for"]][[producer]] %||% r[["doc"]]
-    # ...and a row may hold NO prose at all: see `doc_in_producer` in the header.
     if (is.null(body)) next
     if (!is.null(r[["values_rd"]])) {
       vals <- do.call(r[["values_rd"]], list(producer = producer))
       at   <- which(body == "{VALUES}")
-      # the list goes where the prose asks for it, not at the end: an argument's value list usually
-      # sits mid-paragraph, with the grammar explained after it.
       body <- if (length(at)) append(body[-at], vals, after = at[[1]] - 1L) else c(body, vals)
     }
     out <- c(out, paste0("@param ", paste(tag, collapse = ","), " ", body[[1]]), body[-1])
@@ -925,10 +803,6 @@ tab_args_rd <- function(producer) {
 }
 
 # --- the value-list renderers ---------------------------------------------------------------------
-# Each reads the table that OWNS the vocabulary, so a measure or a policy is described exactly once,
-# in the file that declares it. `producer` filters: a reg-only measure is not offered in ?tab, and a
-# crosstab-only one is not offered in ?tab_reg -- which is the disagreement three hand-written value
-# lists used to encode three ways.
 #' @keywords internal
 #' @noRd
 color_measures_rd <- function(producer = "tab") {
@@ -941,8 +815,6 @@ color_measures_rd <- function(producer = "tab") {
     " }")
 }
 
-# The significance POLICY vocabulary. Its values are COLOR_SIGNIF_VALUES (fmt_class.R); the glosses
-# are the argument's own business, so they live here.
 #' @keywords internal
 #' @noRd
 COLOR_SIGNIF_DOC <- c(
@@ -958,11 +830,9 @@ COLOR_SIGNIF_DOC <- c(
     "threshold, with dimmer, conservative colors.")
 )
 
-# The FIRST value is the default -- the convention CI_METHODS already uses ("first = the default"),
-# so the marker is derived rather than typed into the prose beside it.
-# ⚠ `producer` is UNREAD here and KEPT: it is the `values_rd` calling convention (tab_args_rd() passes
-# it to every renderer), so the formal is the INTERFACE, not weight. The policies are the same on both
-# producers -- unlike the measures, which color_measures_rd() really does filter.
+# The first value is the default (the CI_METHODS convention); `producer` is unread here and kept
+#   anyway -- it is the `values_rd` calling convention (every renderer takes it), so the formal is
+#   the interface, not dead weight.
 #' @keywords internal
 #' @noRd
 color_signif_rd <- function(producer = "tab") {
@@ -976,13 +846,8 @@ color_signif_rd <- function(producer = "tab") {
 }
 
 # --- build-time exhaustiveness --------------------------------------------------------------------
-# The CROSS-table edges (a `values_from` / `values_rd` / `option` naming something that does not
-# exist, and every producer's formals against its declared rows) live in R/zzz-fact-keys.R, which is
-# the only file that sorts after all of them. What is checked HERE is this table's own shape.
 stopifnot(
   all(vapply(TAB_ARGS, function(r) !is.null(r[["producers"]]) && is.character(r[["producers"]]), logical(1))),
-  # every row says where its prose is: here (`doc`), on a sibling row (`doc_with`), or in the
-  # producer's own roxygen (`doc_in_producer`). What is forbidden is saying nothing.
   all(vapply(TAB_ARGS, function(r) !is.null(r[["doc"]]) || !is.null(r[["doc_with"]]) ||
                isTRUE(r[["doc_in_producer"]]), logical(1))),
   all(vapply(TAB_ARGS, function(r)
@@ -991,15 +856,10 @@ stopifnot(
                all(r[["status"]] %in% c("live", "deprecated", "superseded", "internal")), logical(1))),
   all(vapply(TAB_ARGS, function(r) is.null(r[["check"]]) ||
                r[["check"]] %in% c("probability", "count"), logical(1))),
-  # the derived view must hold EXACTLY the ones centrally validated -- `ci` and `input` are declared
-  # here too but validated by their own resolvers (resolve_ci_value / rlang::arg_match), which is
-  # what `validate = FALSE` says.
   setequal(names(TAB_ARG_VALUES),
            c("pct", "na", "levels", "comp", "tot", "totaltab", "totcol", "output", "anova", "n"))
 )
 
-# ...and the SAME shape rules on the render surface (Phase 20h). Stated as its own block rather than a
-# loop over both tables: the two differ in what they may declare, and the differences are the point.
 stopifnot(
   all(vapply(EXPORT_ARGS, function(r)
     !is.null(r[["producers"]]) && is.character(r[["producers"]]), logical(1))),
@@ -1007,9 +867,6 @@ stopifnot(
                isTRUE(r[["doc_in_producer"]]), logical(1))),
   all(vapply(EXPORT_ARGS, function(r)
     is.null(r[["doc_with"]]) || r[["doc_with"]] %in% names(EXPORT_ARGS), logical(1))),
-  # ⚠ no `values` on this table, so it CANNOT feed TAB_ARG_VALUES (whose derived set is asserted
-  # exactly above). A render argument's vocabulary lives with its resolver (tx_theme_resolve,
-  # resolve_export_opts), not here.
   all(vapply(EXPORT_ARGS, function(r) is.null(r[["values"]]), logical(1))),
   # the two surfaces may share a NAME (`color` / `subtext` / `stars`) but must not share a producer:
   # one function's arguments are declared in exactly one table, or arg_table_of() would be a coin toss.
@@ -1018,21 +875,13 @@ stopifnot(
     unique(unlist(lapply(TAB_ARGS, `[[`, "producers"))))) == 0L
 )
 
-# tab_dots_expand() -- a superseded producer's `...` becomes the arguments it declares, each
-# unsupplied one filled from its DECLARED default.
-#
-# WHY THE DEFAULTS ARE DECLARED (`default` / `default_for`). tab_plain(), tab_num() and tab_counts()
-# share 25-34 of their formals with tab(), and the mirrors documented themselves as "same meaning as
-# in tab()" -- but their DEFAULTS were not all the same, and nothing said which: tab_num() alone
-# starts from `color = "auto"`, `ref = "tot"`, `comp = c("tab", "all")` and `na = c("keep", "drop")`,
-# and both leaves start from `tot = NULL`. Moving those formals into `...` would have thrown that
-# away silently, so the divergences are stated (`default_for`) instead of lost -- and a load-time
-# check in R/zzz-fact-keys.R holds the surviving formals to what is declared here.
+# tab_dots_expand() -- a superseded producer's `...` becomes its declared arguments, filled from
+#   its DECLARED default. The leaves' defaults diverge from tab()'s for several shared formals
+#   (tab_num() alone starts `color` at `"auto"`, `ref` at `"tot"`) -- `default_for` records the
+#   divergence so it is not silently lost when the formal moves into `...`.
 #' @keywords internal
 #' @noRd
 tab_dots_expand <- function(dots, producer) {
-  # ⚠ crosstab producers ONLY (see tab_check_dots()'s SCOPE note): an exporter's `...` is a
-  # pass-through to its backend, so nothing there is filled from a declared default.
   keys <- setdiff(tab_args_for(producer), names(formals(get(producer, envir = asNamespace("tabxplor")))))
   out  <- list()
   for (k in keys) {
