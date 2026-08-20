@@ -283,26 +283,25 @@ Three things fall out:
 
 None of these is decided. Each names its own evidence and its own cost.
 
-**The`family` × `measure` × `effect` arguments**
+### Phase 22b-xiv-1 — The `family` × `measure` × `effect` framework: consistency, user-friendliness and how to teach it
 
 **P1 — Make redundancy dynamic.** Decide "does this equal the coefficient?" from the fitted model (is the predictor in an interaction, or under a non-identity `shape`?) rather than from a static `REG_ESTIMANDS` row. Fixes the three wrong refusals of §4.2, and lets gaussian keep `difference` as its marginal default — it would then *build* when it differs and *refuse* when it does not, which is exactly right. **Cost:** the check must run after the fit plan is resolved; the abort message becomes conditional. **Test:** one additive/interacted pair per affected row of §3.2.
-**Maintainer’s decision: authorise the currently wrong refusals, let gaussian keep difference as its marginal default, but do not make redundancy dynamic (the user will see nothing has changed, it’s ok, he’s an adult.)**
+**Maintainer’s decision: authorise the currently wrong refusals, let gaussian keep difference as its marginal default, but do not make redundancy dynamic (the user will see himself nothing has changed, it’s ok, he’s an adult.) ?** But at the same time, is reopen near-useless flexibility, that is white elephants, unreadable, where the user don’t really know what he’s chosing, and is a bit lost ?
 
 **P2 — Unify the three mechanisms** of §4.1 into one, and fix the backwards gaussian `at_reference` case. Open question: should a duplicate be *refused*, or *built with a note*? The `{base}` argument says the table differs even when the estimate does not.
-**Maintainer’s decision:**
+**Maintainer’s decision: yes, make it consistent. Refused, or note, or let the user to his thing, I’m not sure, this needs studing, or maybe we need to find a framework when this question doesn’t have to arise ?**
 
 **P3 — Teach `family` × `measure` × `effect` everywhere.** Signature, `@param` order, the `:3651` argument map, the reference vignette's heading and section order, `reg_measures()` column order. **Nearly free in R** — `effect`/`measure` are always passed by name (181/158 occurrences, never positionally) and the grid and `reg_measures()` rows are already measure-major. ⚠ **Caveat: jamovi.** `TABX_ESTIMANDS` nests family → effect → measures and `measureOffered(ui, effect, measure)` gates measures *given* effect; reversing means transposing the generated structure and inverting the gating, in untested JS. Worse, the effect-keyed default (§5.1) is most confusing in a *live* UI — pick a measure, pick an effect, watch the measure change under you. **Proposition: change the docs and the R surface, leave the jamovi UI effect-first, and say why.** A click-through UI and a written explanation have different constraints; that is a defensible divergence rather than a sloppy one.
-**Maintainer’s decision:**
+**Maintainer’s decision: I’m not sure anymore**, because there is a contradiction between the statistical and sociological thinking (starting from the observed base and chosing a measure to compare on, like `tab()` colors do) and the modelisation workflow (take a family, choose a model and how to use it, derive some other measures from the coefficient if you want to). **This is fully open to study**: should the user more clearly choose a model (family + link ; and the link is the first measure), then if he needs to, choose to derive something from the coefficients (two remaining choices: average or at reference ? ; which second measure (new or same) ?) ? This is the whole technical workflow, but the aim of  `family` × `measure` × `effect` was to think about a more user-friendly, shorter pipeline, with no white elephants and useless possibilities, staying closer to the "start from observed base then choose a measure of deviation to compare on" which is tabxplor philosophy. Given all the current contradictions and inconsistencies, would there be a better way to achieve that goal ? What should be the arguments and their order and dependencies for that, and for them to be really helpful (no white elephants, no useless flexibility, meaningful readable choices) ?
 
 **P4 — Correct `?tab_reg`'s "orthogonal" claim** (§4.3). Independent of everything else.
 **Maintainer’s decision: yes.**
 
-**P8 — Document the rare-outcome case.** If `difference` stays the marginal default (§5.3), `?tab_reg` and the regression vignettes should say plainly: *when the outcome is rare, read the ratio instead*. This is the honest half of the rejected proposition.
-**Maintainer’s decision: do it.**
+ **P8 — Should `difference` stays the marginal default ? + Document the rare-outcome case.** Should `difference` stays the marginal default (§5.3) ? If so,`?tab_reg` and the regression vignettes should say plainly: *when the outcome is rare, read the ratio instead*. This is the honest half of the rejected proposition.
+**Maintainer’s decision: I want "ratio" as a marginal + at_reference default for all families whose base link is log(OR).** "difference" stays for poisson and gaussian marginal and at_reference default. **Document** *when the outcome is rare, read the ratio instead*, but also *when the outcome is common, think about reading the difference instead*, and finally *ratio is the right way to rightly say "all other chosen variables being equal, A is x times more likely than B to have...* (use the most precise wording if it’s not the right one) ; in base regression vignettes + `vignettes/articles/tabxplor-all-else-equal.Rmd` (use "ratio" marginals in one example in this vignette if one example is relevant for that).
 
 
-
-**The measure ladders balance problem**
+### Phase 22b-xiv-2 — 8.2 The `measure` ladders balance problem
 **P5 — Ratio rendering: `min_digits` 1 → 2** (§7.4). Small, isolated, fixes the `×1.1` symptom. ⚠ check the golden files: a crosstab `display = "ratio"` column and its tooltips will move.
 **Maintainer’s decision: obviously.**
 
@@ -312,16 +311,15 @@ None of these is decided. Each names its own evidence and its own cost.
 - **P6c — base-rate-aware breaks**, derived per table so a ratio always corresponds to the same point difference. Principled, and it is exactly the transposition of §7.1 — but it **breaks comparability between tables**, which the intro vignette explicitly promises for the residual scale. Probably disqualifying; recorded so it is not re-proposed blind.
 - ⚠ Whatever is chosen, weigh the **under side** separately (§7.3). An asymmetric ladder is thinkable and currently unexplored — the `over`/`under` split already exists in `color_breaks`.
 - ⚠ The value of the first break was left unspecified in the request; §7.3 gives the evidence for choosing it, not a decision.
-**Maintainer’s decision:**
+**Maintainer’s decision: weigh the under side separately anyway ; no base-rate-aware breaks**
 
 **P7 — Reconsider `mean_diff`.** It ships **three** breaks (0.2/0.5/0.8) where `pct_diff` has four. Not investigated here; the same "restore the fourth slot" question applies.
-**Maintainer’s decision: to be studied thoroughly.**
+**Maintainer’s decision: to be studied more thoroughly.**
 
-
-
+### Phase 22b-xiv-3 — 8.3 `at_reference` as a first-class way to compare ideal types ?
 
 **P9 — A first-class way to compare ideal types.** §6.3 shows the comparison is meaningful, wanted by the literature, and currently only reachable as two separate `tab_reg()` calls whose tables the user must align by hand — with a trap (changing `ref` moves the contrast baseline as well as the profile). Options, unexplored: a `profiles =` argument taking a named list of `ref` vectors and emitting one column per profile, reusing the model-comparison layout that `list()` in `predictors` already produces; or documenting the two-call recipe and the "hold the focal reference fixed" rule and going no further. ⚠ Weigh against scope: the machinery would have to fit one model and sweep it at several grids, which `reg_marginal(at = )` already does for one.
-**Maintainer’s decision: so the right call would be to take a list of ref profiles, not only just a ref vector ? And it would permits to use the current model comparison’s framework, with colors, significance gap, etc. ?**
+**Maintainer’s decision: so the right call would be to take a list of ref profiles, not only just a ref vector ? And it would permits to use the current model comparison’s framework, with colors, significance gap, etc. ?** How easy would it be to implement this ? Are there caveats ? White elephants if for most models the coefficients are all the same and only the Constant moves (in which case a simpler mechanism to get the adjusted proportions/means at difference reference profiles would be a better call ?) ?
 
 
 

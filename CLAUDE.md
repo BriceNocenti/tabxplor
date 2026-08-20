@@ -1548,11 +1548,21 @@ Then the §9.3 invariants, which is what makes the whole class non-recurring: an
 
 **Reported, not fixed**: a flat `svydesign(ids = ~1)` and a `wt =` table still give a crude column a different interval, because the flat design passes `svy_degf(design)` into the closed form where `wt =` passes `Inf`. Pre-existing (the `degf` argument has always been `design_spec$degf %||% Inf`), unrelated to this phase, and arguably right either way — but the two paths are meant to tell the same story, so it is a real inconsistency for whoever next touches the basis ladder.
 
-##### Phase 22b-xiv — `family` x `measure` x `effect`: order, `"auto"` picks, refusals, ladders: NOT IMPLEMENTED
+##### Phase 22b-xiv — improving the consistency and usefulness of regression API and `measure` scales
 
-⚠ **Read `dev/reg_family_measure_effect.md` before planning** — it holds the settled vocabulary, the measured facts, the inconsistencies and eight open propositions (P1-P8), each with its evidence and its cost. `dev/breaks_balance_probe.R` regenerates the colour-ladder measurements. Nothing here is decided; the doc is written so a fresh session can weigh the options rather than inherit a conclusion.
+**Read `dev/reg_family_measure_effect.md` before planning for additional details about each phase and maintainer’s reflexions about open questions.**.
 
-The three things it establishes, so they need not be re-derived: (1) the pedagogical order is **`family` x `measure` x `effect`** — measure is answerable from a cross-table with no model, effect is not — and `reg_measures()` plus the reference vignette's grid are **already** measure-major, so the change is smaller than it looks; (2) **"this combination equals the coefficient" is a property of the FITTED MODEL, not of the (family, effect, measure) triple** — measured: gaussian marginal AME `8 419.81` vs coefficient `13 840.22` under an interaction, poisson `1.3648` vs `1.1639` — so the static `redundant` status, written in 22b-vi, is falsified by the interactions 22b-ix added, and `tab_reg()` currently refuses three combinations while telling the user "averaging changes nothing", which is false there; (3) the **`odds_ratio` colour ladder IS the `pct_diff` ladder transposed at a 50 % base rate** (1.22/1.50/2.33/4.00 vs the shipped 1.2/1.5/2/4), while `pct_ratio` ships **three** breaks calibrated to nothing — measured, 88.7 % of crosstab cells fall uncoloured on the ratio scale against 71.1 % on the difference scale, and a marginal risk-ratio table on a common outcome renders **100 % grey**.
+###### Phase 22b-xiv-1 — The `family` × `measure` × `effect` framework inconsistencies and unreadability
+
+⚠ **Read `dev/reg_estimand_api_redesign.md` before planning** — the design study for this sub-phase. Its §1 holds the key the whole redesign rests on (a *measure* names a **link**; `effect` says whether the model is fitted on it or it is applied to its predictions), §3 the derivation that replaces the 43 hand-written `REG_ESTIMANDS` rows, §4 the `effect = "auto"` study, §5 the `link =` study, §6 the marginal-odds-ratio evidence, §10 the blast radius, §11 where each decision stands. ⚠ §10.2 is an **ordering constraint**: the new prediction defaults make a marginal risk ratio the binomial default, which renders entirely grey against the shipped ladder — so 22b-xiv-2 lands first, or both land together.
+
+###### Phase 22b-xiv-2 — 8.2 The `measure` ladders balance problem
+
+###### Phase 22b-xiv-3 — 8.3 `at_reference` as a first-class way to compare ideal types ?
+
+
+
+
 
 #### Phase 22c — tab manual review
 
