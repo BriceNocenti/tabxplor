@@ -76,6 +76,12 @@ test_that("`link` takes `measure`'s own words, plus the glm spellings, silently"
   expect_identical(reg_link_key("logit"),      "odds_ratio")
   expect_identical(reg_link_key("identity"),   "difference")
   expect_identical(reg_link_key("RR"),         "ratio")        # the acronyms work here too
+  expect_identical(reg_link_key("IRR"),        "ratio")        # ...every one of them, since 22c-v
+  expect_identical(reg_link_key("RoM"),        "ratio")
+  # 22c-v: what reg_formulas() prints in `fit` is typeable back into `link`
+  expect_identical(reg_link_key("rr"),         "ratio")
+  expect_identical(reg_link_key("rd"),         "difference")
+  expect_identical(reg_link_key("mr"),         "ratio")
   expect_identical(reg_link_key(NULL),         "auto")
   expect_null(reg_link_key("nonsense"))
   expect_setequal(REG_LINKS_VALUES, c("auto", "odds_ratio", "ratio", "difference"))
@@ -224,7 +230,15 @@ test_that("the measure aliases work both ways and `log` pins its base", {
   expect_identical(reg_measure_key("OR")$measure,  "odds_ratio")
   expect_identical(reg_measure_key("IRR")$measure, "ratio")
   expect_identical(reg_measure_key("RD")$measure,  "difference")
+  expect_identical(reg_measure_key("RoM")$measure, "ratio")
+  expect_identical(reg_measure_key("rom")$measure, "ratio")   # the twin is DERIVED, not listed
   expect_null(reg_measure_key("nonsense"))
+  # 22c-v: ONE vocabulary, so no case folding and no spelling that is not a header word
+  expect_null(reg_measure_key("Difference"))
+  expect_null(reg_measure_key("DIFF"))
+  expect_null(reg_measure_key("MR"))          # a fit key names a MODEL: it belongs to `link`
+  expect_null(reg_measure_key("risk_ratio"))  # the taught long form is the concept word
+  expect_null(reg_measure_key("d"))           # a one-letter acronym gets no lowercase twin
   # bare "log" logs whatever the cascade would report; log_risk pins the risk-ratio base
   expect_identical(reg_estimand("binomial", measure = "log")$word,      "OR")
   expect_identical(reg_estimand("binomial", measure = "log_risk")$word, "RR")

@@ -65,25 +65,33 @@
 #
 # THREE base geometries + `log`, which is NOT a peer: it is the same fit, un-exponentiated. A precise
 # spelling (`log_odds` / `log_risk` / `log_rate`) additionally PINS which base.
-# The acronyms are permanent aliases, never deprecated: the argument teaches the concept word
-# ("ratio"), the header keeps the discipline's ("RR" / "IRR" / "RoM").
+#
+# THE ACRONYMS ARE NOT DECLARED HERE. They are MEASURE_ACRONYMS (R/fmt_class.R), the one table every
+# argument that names a measure reads, so `tab(color = "RR")` and `tab_reg(measure = "RR")` cannot
+# answer differently. This is the REGRESSION VIEW of it: the same acronyms, plus the three a model
+# alone estimates (MEASURE_ACRONYMS_REG), plus the `log*` family and the cascade's `auto` -- the two
+# things a crosstab has no use for. Composed, never listed, so a spelling exists once.
+# ⚠ Case-sensitive, and deliberately: `Difference` / `ODDS_RATIO` / `Rom` are not spellings anyone
+#   should be taught, and a tolower() fallback made them legal for free.
+# The canonical values of `measure` -- what the argument is TAUGHT, and what every acronym resolves to.
 #' @keywords internal
 #' @noRd
-REG_MEASURE_ALIASES <- c(
-  odds_ratio = "odds_ratio", or = "odds_ratio", OR = "odds_ratio", cumOR = "odds_ratio",
-  ratio = "ratio", rr = "ratio", RR = "ratio", irr = "ratio", IRR = "ratio",
-  mr = "ratio", MR = "ratio", RoM = "ratio", risk_ratio = "ratio", rate_ratio = "ratio",
-  difference = "difference", diff = "difference", rd = "difference", RD = "difference",
-  D = "difference", WR = "ratio",
-  log = "log", log_odds = "log", log_risk = "log", log_rate = "log", log_ratio = "log",
-  auto = "auto"
-)
+REG_MEASURES_VALUES <- c("auto", "odds_ratio", "ratio", "difference", "log")
 
 # The BASE a `log_*` spelling pins ("" = the family's default estimand, i.e. bare "log").
 #' @keywords internal
 #' @noRd
 REG_LOG_BASE <- c(log = "", log_odds = "odds_ratio", log_risk = "ratio",
                   log_rate = "ratio", log_ratio = "ratio")
+
+#' @keywords internal
+#' @noRd
+REG_MEASURE_SPELLINGS <- {
+  v <- c(stats::setNames(REG_MEASURES_VALUES, REG_MEASURES_VALUES),
+         measure_twins(c(MEASURE_ACRONYMS, MEASURE_ACRONYMS_REG)),
+         stats::setNames(rep("log", length(REG_LOG_BASE)), names(REG_LOG_BASE)))
+  v[!duplicated(names(v))]
+}
 
 # reg_measure_key() -- one spelling -> (measure, log_base). The twin of measure_key() on the colour
 # side. Returns NULL for an unknown spelling, so the caller aborts naming the argument.
@@ -92,10 +100,9 @@ REG_LOG_BASE <- c(log = "", log_odds = "odds_ratio", log_risk = "ratio",
 reg_measure_key <- function(x) {
   if (is.null(x) || length(x) != 1L || is.na(x)) return(list(measure = "auto", log_base = ""))
   x   <- as.character(x)
-  key <- unname(REG_MEASURE_ALIASES[x])
-  if (is.na(key)) key <- unname(REG_MEASURE_ALIASES[tolower(x)])
+  key <- unname(REG_MEASURE_SPELLINGS[x])
   if (is.na(key)) return(NULL)
-  base <- if (identical(key, "log")) unname(REG_LOG_BASE[tolower(x)]) else ""
+  base <- if (identical(key, "log")) unname(REG_LOG_BASE[x]) else ""
   list(measure = key, log_base = if (is.na(base)) "" else base)
 }
 
@@ -157,9 +164,6 @@ reg_pct_type <- function(scale)
 
 #' @keywords internal
 #' @noRd
-REG_MEASURES_VALUES <- c("auto", "odds_ratio", "ratio", "difference", "log")
-#' @keywords internal
-#' @noRd
 REG_EFFECTS_VALUES  <- c("auto", "conditional", "marginal", "at_reference")
 # The three CONTRASTS themselves -- the value set minus the cascade's sentinel.
 #' @keywords internal
@@ -180,15 +184,17 @@ REG_MEASURE_LINK <- c(odds_ratio = "logit", ratio = "log", difference = "identit
 #' @noRd
 REG_LINKS_VALUES <- c("auto", names(REG_MEASURE_LINK))
 
-# The glm spellings, accepted silently and never taught. ⚠ NOT folded into REG_MEASURE_ALIASES: on
-# `link` the word "log" means the LOG LINK, while on `measure` it means "un-exponentiated" -- the one
-# word the two vocabularies do not share.
+# The glm spellings, accepted silently and never taught. ⚠ THE ONE VOCABULARY NOT SHARED, and the
+# reason it stays a table of its own: on `link` the word "log" means the LOG LINK, while on `measure`
+# it means "un-exponentiated". Consulted FIRST by reg_link_key() for exactly that reason.
 #' @keywords internal
 #' @noRd
 REG_LINK_ALIASES <- c(identity = "difference", log = "ratio", logit = "odds_ratio")
 
 # reg_link_key() -- one spelling -> a link, NULL for an unknown one (so the caller aborts naming the
-# argument). A link takes `measure`'s own values, which is what keeps four arguments feeling like two.
+# argument). A link takes `measure`'s own values, which is what keeps four arguments feeling like two,
+# plus the INTERNAL FIT KEYS (REG_FIT_SPELLINGS), so what reg_formulas() prints in its `fit` column
+# can be typed straight back into `link`.
 #' @keywords internal
 #' @noRd
 reg_link_key <- function(x) {
@@ -196,6 +202,8 @@ reg_link_key <- function(x) {
   x <- as.character(x)[[1L]]
   a <- unname(REG_LINK_ALIASES[x])
   if (!is.na(a)) return(a)
+  f <- unname(REG_FIT_SPELLINGS[x])
+  if (!is.na(f)) return(f)
   k <- reg_measure_key(x)
   if (is.null(k) || identical(k$measure, "log")) return(NULL)
   k$measure
@@ -253,6 +261,36 @@ reg_level_measures <- function(level) {
   names(REG_LEVEL_MEASURES[[level[[1]]]])
 }
 
+# --- which acronyms only a MODEL can print ------------------------------------------------------------
+#
+# The (acronym -> measure) pairs the library DERIVES: one per REG_LEVEL_MEASURES cell, plus a family's
+# own header-word override. This IS the shared acronym vocabulary (MEASURE_ACRONYMS +
+# MEASURE_ACRONYMS_REG, R/fmt_class.R), and two foreign keys check the two directions at load -- so an
+# acronym cannot name a measure no header prints, nor a header print one no argument takes.
+#' @keywords internal
+#' @noRd
+reg_word_measures <- function() {
+  lv <- unlist(lapply(REG_LEVEL_MEASURES, function(l)
+    vapply(names(l), function(m) paste0(l[[m]][["word"]], "->", m), character(1))), use.names = FALSE)
+  fw <- unlist(lapply(REG_FAMILIES, function(r)
+    if (is.null(r$words)) character(0) else
+      vapply(names(r$words), function(m) paste0(r$words[[m]], "->", m), character(1))),
+    use.names = FALSE)
+  unique(c(lv, fw))
+}
+
+# ...and of those, the ones a CROSSTAB can never print: a crosstab cell is a share, a mean or a count,
+# while a RANK is a share of PAIRS -- which only a model estimates. That is the whole rule behind
+# MEASURE_ACRONYMS_REG, stated where the level kinds live rather than at the colour engine.
+#' @keywords internal
+#' @noRd
+reg_model_only_words <- function() {
+  crosstab <- unlist(lapply(REG_LEVEL_MEASURES[setdiff(names(REG_LEVEL_MEASURES), "rank")],
+                            function(l) vapply(l, function(z) z[["word"]], character(1))),
+                     use.names = FALSE)
+  setdiff(unique(sub("->.*$", "", reg_word_measures())), crosstab)
+}
+
 
 # --- the header vocabulary ---------------------------------------------------------------------------
 #
@@ -264,8 +302,10 @@ reg_level_measures <- function(level) {
 #                   confounding. Read by the `adjustment` legend caveat; set-identical to
 #                   reg_estimand_collapsible(), which states the same fact from the build side.
 #
-# WARNING: every acronym here must also be an accepted `measure` spelling (REG_MEASURE_ALIASES), so
-# what a header prints can always be typed back into the argument. A foreign key checks it at load.
+# WARNING: this list and the shared acronym vocabulary (MEASURE_ACRONYMS + MEASURE_ACRONYMS_REG,
+# R/fmt_class.R) are the SAME SET, so what a header prints can always be typed back into `measure`,
+# and no acronym can name a measure the table does not print. Foreign keys check both directions at
+# load -- one for the names, one for the (acronym -> measure) pairs REG_LEVEL_MEASURES derives.
 #' @keywords internal
 #' @noRd
 REG_WORDS <- list(
@@ -476,6 +516,21 @@ REG_FIT_FAMILY <- {
 #' @keywords internal
 #' @noRd
 REG_FIT_ONLY_FAMILIES <- names(REG_FIT_FAMILY)
+
+# ...and which MEASURE each of them fits, DERIVED by inverting `fits` (measure -> fit key) on the
+# families that offer them. So `reg_formulas()`'s `fit` column round-trips: what it printed can be
+# typed back into `link`. Read only by reg_link_key(); never a `measure` spelling, because "mr" and
+# "rd" name a MODEL, not a quantity to report.
+#' @keywords internal
+#' @noRd
+REG_FIT_SPELLINGS <- {
+  f <- unlist(lapply(REG_FAMILIES, function(r) r$fits))
+  f <- f[f %in% REG_FIT_ONLY_FAMILIES]
+  v <- stats::setNames(sub("^.*\\.", "", names(f)), unname(f))
+  v[!duplicated(names(v))]
+}
+stopifnot("every internal fit family is reachable from some family's `fits`" =
+            setequal(names(REG_FIT_SPELLINGS), REG_FIT_ONLY_FAMILIES))
 
 #' @keywords internal
 #' @noRd
@@ -1087,8 +1142,9 @@ reg_estimand_note <- function(est, aside = "") {
 }
 
 # reg_normalize_color() -- THE `tab_reg(color =)` boundary. What is left to CHOOSE is "compared to
-# what": `adjustment` / `between_groups`, the measures whose baseline is another column, so the
-# allow-list is DERIVED from MEASURES.
+# what": `adjustment` / `between_groups`, the measures whose baseline is another column. The
+# allow-list is measure_nameable("reg") -- the SAME accessor tab()'s refusal and the generated
+# @param read, so the three cannot state three different rules.
 #
 # Grammar (positional c(text, background)):
 #   TRUE / NULL / "auto"  the column's own geometry           (the sentinel NA_character_)
@@ -1110,8 +1166,8 @@ reg_normalize_color <- function(color) {
     if (isFALSE(v) || identical(v, "no")   || identical(v, "FALSE") || identical(v, "")) return("no")
     v <- as.character(v)
     key <- measure_key(v)
-    if (!is.na(key) && nzchar(key) && measure_own_ref(key)) return(key)
-    own <- names(MEASURES)[vapply(names(MEASURES), measure_own_ref, logical(1))]
+    own <- measure_nameable("reg")
+    if (!is.na(key) && nzchar(key) && key %in% own) return(key)
     cli::cli_abort(c(
       "{.arg color} = {.val {v}} is not a {.fn tab_reg} colour.",
       "i" = paste0("A regression column states what it estimates, so its colour LADDER comes from ",

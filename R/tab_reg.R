@@ -3945,6 +3945,12 @@ reg_stage_finalize <- function(ctx) {
 #'   Reach for it when you want the model's *coefficient* to be that measure. To report a measure
 #'   without changing the model, set `measure` instead. A link the outcome cannot be fitted on says
 #'   so and names the ones it can; resolved **per outcome** like `family`.
+#'
+#'   It takes `measure`'s spellings, acronyms included, plus the glm words (`"identity"`, `"log"`,
+#'   `"logit"`) and the internal fit keys [reg_formulas()] reports in its `fit` column (`"rr"`,
+#'   `"rd"`, `"mr"`) --- so what the package printed can be typed straight back. ⚠ `"log"` is the one
+#'   word the two arguments do not share: here it is the **log link**, on `measure` it means
+#'   *un-exponentiated*.
 #' @param measure **Which measure is reported** --- the one argument most readers ever set, and the
 #'   one that never changes the model. `"auto"` (default) is the model's own measure: follow from
 #'   the left. The full word is the canonical spelling and the discipline's acronym an accepted
@@ -3968,6 +3974,12 @@ reg_stage_finalize <- function(ctx) {
 #'   * `"log"` (`"log_odds"`, `"log_risk"`, `"log_rate"`) --- the same estimand, **un-exponentiated**.
 #'     Bare `"log"` logs whatever the cascade would report; the precise spellings pin which base. The
 #'     header names what it logs (`Model_log(OR)`), never one greek letter for five quantities.
+#'
+#'   **Every acronym a header can print is an accepted spelling here** --- the list under *The header
+#'   acronyms* below is the same table this argument reads, so `"cumOR"`, `"D"` and `"WR"` work too,
+#'   as does the all-lowercase twin of each (`"or"`, `"rr"`, `"irr"`, `"rom"`, `"rd"`). Spelling is
+#'   **case-sensitive** otherwise: `"Difference"` and `"ODDS_RATIO"` are not accepted. The same words
+#'   colour a crosstab ([tab()]'s `color`), minus the three only a model estimates.
 #'
 #'   Where it IS the model's own measure it is read off the coefficients; where it is not, it is
 #'   worked out from the model's predictions --- so it is available whichever model you fit, and

@@ -106,13 +106,16 @@ prints no color; \code{TRUE} uses the smart per-column-type scheme (factors: the
 \code{difference} on the text + the \code{ratio} on the background; numerics: the
 \code{ratio}; counts: \code{contrib}). Otherwise a measure name, on the \strong{text} channel:
 \itemize{
-\item \code{"difference"}: cell difference from the reference (percentage points for factors; the standardized difference Glass's \eqn{\Delta} for numeric means).
-\item \code{"ratio"}: relative risk (factors) or mean ratio (numerics) vs the reference.
-\item \code{"odds_ratio"}: the empirical odds ratio (for \code{pct = "row"}/\code{"col"}), coloured on its own symmetric \code{odds_ratio} scale (so \code{pct_ratio} stays free for \code{"ratio"}).
+\item \code{"difference"} (\code{"RD"}, \code{"diff"}): cell difference from the reference (percentage points for factors; the standardized difference Glass's \eqn{\Delta} for numeric means).
+\item \code{"ratio"} (\code{"RR"}, \code{"IRR"}, \code{"RoM"}): relative risk (factors) or mean ratio (numerics) vs the reference.
+\item \code{"odds_ratio"} (\code{"OR"}): the empirical odds ratio (for \code{pct = "row"}/\code{"col"}), coloured on its own symmetric \code{odds_ratio} scale (so \code{pct_ratio} stays free for \code{"ratio"}).
 \item \code{"contrib"}: signed contribution to the chi-squared (reference-free).
 }
-The discipline's acronyms are permanent aliases of those names: \code{"diff"} / \code{"RD"},
-\code{"RR"}, \code{"or"} / \code{"OR"}.
+The acronyms in brackets are permanent aliases, the same words \code{\link{tab_reg}}'s
+\code{measure} takes, each with an all-lowercase twin (\code{"rd"}, \code{"rr"},
+\code{"irr"}, \code{"rom"}, \code{"or"}). An acronym always names a \strong{measure}:
+\code{display =} names a \emph{field} and \code{OR =} / \code{ref2 =} a \emph{level},
+so the same letters mean different things in those arguments.
 The grammar: \strong{position picks the channel} (1st value -> text, 2nd -> background) and
 \strong{names pick the column type} (\code{pct} / \code{mean}). So
 \code{c("difference", "ratio")} puts the difference on the text and the ratio on the background

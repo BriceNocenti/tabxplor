@@ -164,9 +164,9 @@ options:
           name:  auto
         - title: "odds ratio (OR)"
           name:  odds_ratio
-        - title: "ratio (RR / IRR / MR)"
+        - title: "ratio (RR / IRR / RoM)"
           name:  ratio
-        - title: "difference (RD / AME / beta)"
+        - title: "difference (RD / diff)"
           name:  difference
         - title: "log <i>(un-exponentiated coefficient)</i>"
           name:  log

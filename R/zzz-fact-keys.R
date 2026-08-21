@@ -122,7 +122,11 @@ TAB_FOREIGN_KEYS <- list(
         function() names(MEASURES)),
   tx_fk("DISPLAY_TOKENS$comparison", function() tx_fk_scalar(DISPLAY_TOKENS, "comparison"),
         function() names(MEASURES)),
-  tx_fk("COLOR_ALIASES$measure",   function() tx_fk_scalar(COLOR_ALIASES, "measure"),
+  tx_fk("COLOR_LEGACY_ALIASES$measure",   function() tx_fk_scalar(COLOR_LEGACY_ALIASES, "measure"),
+        function() names(MEASURES)),
+  tx_fk("MEASURE_ACRONYMS",        function() unname(MEASURE_ACRONYMS),
+        function() names(MEASURES)),
+  tx_fk("MEASURE_ACRONYMS_REG",    function() unname(MEASURE_ACRONYMS_REG),
         function() names(MEASURES)),
   # --- into COLOR_SCALES (the break ladders) -------------------------------------------------
   tx_fk("EST_SCALES$break_key",    function() tx_fk_scalar(EST_SCALES, "break_key"),
@@ -206,10 +210,17 @@ TAB_FOREIGN_KEYS <- list(
         function() fmt_field_names),
 
   # --- into the small declared enums ---------------------------------------------------------
-  tx_fk("COLOR_ALIASES$policy",    function() tx_fk_scalar(COLOR_ALIASES, "policy"),
+  tx_fk("COLOR_LEGACY_ALIASES$policy",    function() tx_fk_scalar(COLOR_LEGACY_ALIASES, "policy"),
         function() COLOR_SIGNIF_VALUES),
   tx_fk("MEASURES$applies_to",     function() tx_fk_all(MEASURES, "applies_to"),
         function() COLOR_COL_KINDS),
+  # who can BUILD a measure, and whose `color =` may NAME it -- two questions, one value set.
+  tx_fk("MEASURES$producers",      function() tx_fk_all(MEASURES, "producers"),
+        function() MEASURE_PRODUCERS),
+  tx_fk("MEASURES$color_arg",      function() tx_fk_scalar(MEASURES, "color_arg"),
+        function() MEASURE_PRODUCERS),
+  tx_fk("names(MEASURE_PRODUCER_FN)", function() names(MEASURE_PRODUCER_FN),
+        function() MEASURE_PRODUCERS),
   tx_fk("REG_CHECKS$kind",         function() tx_fk_scalar(REG_CHECKS, "kind"),
         function() ROW_KINDS),
 
@@ -257,16 +268,39 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("REG_EMPIRICAL$*$word",    function() tx_fk_scalar(tx_fk_emp_shapes(), "word"),
         function() names(REG_WORDS)),
   tx_fk("names(REG_WORDS)",        function() names(REG_WORDS),
-        function() names(REG_MEASURE_ALIASES)),
+        function() names(REG_MEASURE_SPELLINGS)),
   tx_fk("names(REG_CONTRASTS)",    function() names(REG_CONTRASTS),
         function() REG_EFFECTS_VALUES),
+
+  # --- the ACRONYM vocabulary is ONE table, checked in both directions ------------------------
+  # What a header can print is what an argument can be typed. The pairs are encoded as
+  # "OR->odds_ratio" strings because tx_fk() compares value SETS, one direction at a time (the
+  # tx_fk_emp_shape_keys idiom), and an acronym naming the WRONG measure must fail too.
+  tx_fk("the acronym of every estimand the library composes", reg_word_measures,
+        function() {
+          a <- c(MEASURE_ACRONYMS, MEASURE_ACRONYMS_REG); paste0(names(a), "->", unname(a))
+        }),
+  tx_fk("MEASURE_ACRONYMS + MEASURE_ACRONYMS_REG",
+        function() {
+          a <- c(MEASURE_ACRONYMS, MEASURE_ACRONYMS_REG); paste0(names(a), "->", unname(a))
+        }, reg_word_measures),
+  # ...and WHICH HALF: a word only a rank level names is one a crosstab can never print.
+  tx_fk("the acronyms only a model can print", reg_model_only_words,
+        function() names(MEASURE_ACRONYMS_REG)),
+  tx_fk("names(MEASURE_ACRONYMS_REG)", function() names(MEASURE_ACRONYMS_REG),
+        reg_model_only_words),
 
   # --- into the estimand vocabulary ----------------------------------------------------------
   tx_fk("REG_LOG_BASE",            function() as.character(REG_LOG_BASE),
         function() REG_MEASURES_VALUES),
   tx_fk("names(REG_LOG_BASE)",     function() names(REG_LOG_BASE),
-        function() names(REG_MEASURE_ALIASES)),
-  tx_fk("REG_MEASURE_ALIASES",     function() as.character(REG_MEASURE_ALIASES),
+        function() names(REG_MEASURE_SPELLINGS)),
+  tx_fk("REG_MEASURE_SPELLINGS",   function() as.character(REG_MEASURE_SPELLINGS),
+        function() REG_MEASURES_VALUES),
+  # what reg_formulas() prints in `fit` can be typed straight back into `link`.
+  tx_fk("REG_FIT_ONLY_FAMILIES",   function() REG_FIT_ONLY_FAMILIES,
+        function() names(REG_FIT_SPELLINGS)),
+  tx_fk("REG_FIT_SPELLINGS",       function() unname(REG_FIT_SPELLINGS),
         function() REG_MEASURES_VALUES),
 
   # --- into the ARGUMENT surface ---------------------------------------------------------------

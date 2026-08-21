@@ -358,6 +358,22 @@
 
 ## Changes that may affect existing code
 
+* **One vocabulary for measure names.** Every argument that names a measure --- `tab(color =)`,
+  `fmt(color =)`, `tab_reg(measure =)`, `tab_reg(link =)` --- now reads one table, so the
+  discipline's acronyms work everywhere the measure does: `"RD"` / `"diff"`, `"RR"` / `"IRR"` /
+  `"RoM"`, `"OR"`, each with an all-lowercase twin. `tab(color = "rr")` and `color = "IRR"` used to
+  abort while `tab_reg(measure = )` accepted them. What only a model estimates (`"cumOR"`, `"D"`,
+  `"WR"`) stays on the regression arguments, and says so instead of reading as an unknown word.
+
+* **`fmt(color =)` validates its value**, as the documentation always said it did: an unknown
+  measure is an error where it used to be stored verbatim and colour nothing, and every accepted
+  spelling is stored as its canonical measure name. `fmt(color_signif =)` likewise.
+
+* **On the regression side only, three spellings are gone**: `measure = "risk_ratio"` /
+  `"rate_ratio"` / `"MR"` (the taught spellings are `"ratio"` and its acronyms; `"mr"` names a
+  *model* and belongs to `link`), and case folding, so `measure = "Difference"` or `"ODDS_RATIO"`
+  is no longer silently accepted.
+
 * **A numeric `row_vars` / `tab_vars` is grouped rather than given one row per value**, and a
   numeric column's cell shows a coefficient of variation instead of a standard deviation (see *New
   features*). `shape = "levels"` and `display = "mean_sd"` restore the old output exactly.

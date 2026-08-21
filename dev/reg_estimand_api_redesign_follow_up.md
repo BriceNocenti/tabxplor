@@ -281,10 +281,12 @@ That self-correction is what makes the permissive table safe and is why **no mes
 MEASURE_ACRONYMS     <- c(RD = "difference", diff = "difference",
                           RR = "ratio", IRR = "ratio", RoM = "ratio",
                           OR = "odds_ratio")
-MEASURE_ACRONYMS_REG <- c(cumOR = "odds_ratio")   # a crosstab has no cumulative odds ratio
+# a word only a RANK level names -- a crosstab has neither a cumulative odds ratio nor a pair of
+# people to rank (`D` / `WR` came with 22c-vi, after this section was first written).
+MEASURE_ACRONYMS_REG <- c(cumOR = "odds_ratio", D = "difference", WR = "ratio")
 # R/reg-estimand.R -- the internal fit keys, so that what reg_formulas() PRINTS is typeable back
-# into `link` (measured: rr / rd / mr already round-trip; binomial / gaussian / poisson do not --
-# they are the family's own link, i.e. `link = "auto"`).
+# into `link` (binomial / gaussian / poisson do not need a row -- they are the family's own link,
+# i.e. `link = "auto"`). DERIVED by inverting REG_FAMILIES$fits on REG_FIT_ONLY_FAMILIES, not listed.
 REG_FIT_SPELLINGS    <- c(rr = "ratio", rd = "difference", mr = "ratio")
 ```
 
@@ -319,7 +321,7 @@ REG_FIT_SPELLINGS    <- c(rr = "ratio", rd = "difference", mr = "ratio")
 | I5 | Explicit rows only; delete `reg_measure_key()`'s `tolower()` fallback  | **yes** — no case folding       |
 | I6 | Lowercase twin of every acronym, **derived** rather than listed        | **yes** — §7.3                  |
 | I7 | Drop `risk_ratio` / `rate_ratio` / `MR`; fit keys move to `link` | **yes** — §7.3, they are not header words |
-| I8 | `cumOR` stays regression-only                                         | **yes** — §7.2                  |
+| I8 | The words only a RANK level names (`cumOR`, `D`, `WR`) stay regression-only | **yes** — §7.2, derived   |
 | I9 | `fmt(color =)` validates and normalises                               | **yes** — §7.4                  |
 | I10| Acronyms in `display =`                                         | **no** — `display` names fields, not measures |
 

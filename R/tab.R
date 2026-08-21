@@ -458,7 +458,7 @@ finalize_color_tail <- function(result, color_spec, color_breaks = NULL, display
 
 #' @keywords internal
 color_decode_legacy <- function(color) {
-  a <- COLOR_ALIASES[[color]]
+  a <- COLOR_LEGACY_ALIASES[[color]]
   if (is.null(a)) list(measure = color, policy = NULL) else a
 }
 
@@ -482,6 +482,8 @@ normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRU
   uenv       <- rlang::caller_env(2)
   # WARNING: normalising must run AFTER the alias decode -- measure_key() resolves a policy-carrying
   #   alias to its MEASURE, so normalising first discards the policy half. "auto" passes through.
+  #   ⚠ This is THE decoder, and the only one: fmt() deliberately normalises WITHOUT decoding (a
+  #   hand-built column takes its policy from `color_signif`), so do not add a second one there.
   norm       <- function(m) {
     if (is.na(m) || identical(m, "no")) return("")
     if (identical(m, "auto")) return("auto")
@@ -512,7 +514,7 @@ normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRU
     bg   <- if (length(v) >= 2L) v[2] else NA_character_
     # DESIGN: a combined string is a (measure, policy) pair and the policy is scalar for the whole
     #   spec, so it cannot describe a second channel -- refuse it, never keep its measure half.
-    if (!is.na(bg) && !is.null(COLOR_ALIASES[[bg]]$policy)) {
+    if (!is.na(bg) && !is.null(COLOR_LEGACY_ALIASES[[bg]]$policy)) {
       cli::cli_abort(c("{.val {bg}} cannot go on the background channel.",
                        "i" = "It also names a significance policy; set that with {.arg color_signif}."))
     }

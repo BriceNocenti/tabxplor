@@ -374,8 +374,11 @@ TAB_ARGS <- list(
             "\\code{difference} on the text + the \\code{ratio} on the background; numerics: the",
             "\\code{ratio}; counts: \\code{contrib}). Otherwise a measure name, on the \\strong{text} channel:",
             "{VALUES}",
-            "The discipline's acronyms are permanent aliases of those names: \\code{\"diff\"} / \\code{\"RD\"},",
-            "\\code{\"RR\"}, \\code{\"or\"} / \\code{\"OR\"}.",
+            "The acronyms in brackets are permanent aliases, the same words \\code{\\link{tab_reg}}'s",
+            "\\code{measure} takes, each with an all-lowercase twin (\\code{\"rd\"}, \\code{\"rr\"},",
+            "\\code{\"irr\"}, \\code{\"rom\"}, \\code{\"or\"}). An acronym always names a \\strong{measure}:",
+            "\\code{display =} names a \\emph{field} and \\code{OR =} / \\code{ref2 =} a \\emph{level},",
+            "so the same letters mean different things in those arguments.",
             "The grammar: \\strong{position picks the channel} (1st value -> text, 2nd -> background) and",
             "\\strong{names pick the column type} (\\code{pct} / \\code{mean}). So",
             "\\code{c(\"difference\", \"ratio\")} puts the difference on the text and the ratio on the background",
@@ -875,12 +878,20 @@ tab_args_rd <- function(producer) {
 #' @keywords internal
 #' @noRd
 color_measures_rd <- function(producer = "tab") {
-  who <- if (identical(producer, "tab_reg")) "reg" else "tab"
-  keys <- names(MEASURES)[vapply(MEASURES, function(m)
-    who %in% m[["producers"]] && "text" %in% m[["channels"]], logical(1))]
+  # `producer` is the values_rd calling convention; only the crosstab producers reach this today
+  # (?tab_reg's @param color is hand-written, and richer than MEASURES$doc).
+  who  <- if (identical(producer, "tab_reg")) "reg" else "tab"
+  keys <- measure_nameable(who, channel = "text")
+  quo  <- function(v) paste0("\\code{\"", v, "\"}")
   c(" \\itemize{",
-    vapply(keys, function(k)
-      paste0("  \\item \\code{\"", k, "\"}: ", MEASURES[[k]][["doc"]]), character(1)),
+    vapply(keys, function(k) {
+      # each measure followed by the acronyms that reach it, read off the ONE shared table -- so this
+      # list and the argument accept the same words by construction.
+      a <- measure_spellings(k)
+      paste0("  \\item ", quo(k),
+             if (length(a)) paste0(" (", paste(vapply(a, quo, character(1)), collapse = ", "), ")"),
+             ": ", MEASURES[[k]][["doc"]])
+    }, character(1)),
     " }")
 }
 

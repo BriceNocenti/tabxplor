@@ -141,7 +141,13 @@ then takes over, with a message, and the footer says which one ran.
 
 Reach for it when you want the model's \emph{coefficient} to be that measure. To report a measure
 without changing the model, set \code{measure} instead. A link the outcome cannot be fitted on says
-so and names the ones it can; resolved \strong{per outcome} like \code{family}.}
+so and names the ones it can; resolved \strong{per outcome} like \code{family}.
+
+It takes \code{measure}'s spellings, acronyms included, plus the glm words (\code{"identity"}, \code{"log"},
+\code{"logit"}) and the internal fit keys \code{\link[=reg_formulas]{reg_formulas()}} reports in its \code{fit} column (\code{"rr"},
+\code{"rd"}, \code{"mr"}) --- so what the package printed can be typed straight back. ⚠ \code{"log"} is the one
+word the two arguments do not share: here it is the \strong{log link}, on \code{measure} it means
+\emph{un-exponentiated}.}
 
 \item{measure}{\strong{Which measure is reported} --- the one argument most readers ever set, and the
 one that never changes the model. \code{"auto"} (default) is the model's own measure: follow from
@@ -169,6 +175,12 @@ probability itself in brackets, 50 \% being a coin flip. For a number per outcom
 Bare \code{"log"} logs whatever the cascade would report; the precise spellings pin which base. The
 header names what it logs (\code{Model_log(OR)}), never one greek letter for five quantities.
 }
+
+\strong{Every acronym a header can print is an accepted spelling here} --- the list under \emph{The header
+acronyms} below is the same table this argument reads, so \code{"cumOR"}, \code{"D"} and \code{"WR"} work too,
+as does the all-lowercase twin of each (\code{"or"}, \code{"rr"}, \code{"irr"}, \code{"rom"}, \code{"rd"}). Spelling is
+\strong{case-sensitive} otherwise: \code{"Difference"} and \code{"ODDS_RATIO"} are not accepted. The same words
+colour a crosstab (\code{\link[=tab]{tab()}}'s \code{color}), minus the three only a model estimates.
 
 Where it IS the model's own measure it is read off the coefficients; where it is not, it is
 worked out from the model's predictions --- so it is available whichever model you fit, and

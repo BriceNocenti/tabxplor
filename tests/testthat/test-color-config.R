@@ -215,7 +215,7 @@ testthat::test_that("color = 'auto' behaves like color = TRUE, and colours numer
 # Phase 19c: the vocabulary IS the MEASURES / COLOR_SCALES tables. These lock the accessors every
 # consumer reads, so a row added with a missing field fails here rather than in a rendered legend.
 testthat::test_that("the colour vocabulary is declared, not written out", {
-  # names(MEASURES) + names(COLOR_ALIASES) is the allow-list
+  # MEASURE_COLOR_KEYS is the allow-list: MEASURES + the shared acronyms + the legacy spellings
   testthat::expect_setequal(names(MEASURES),
                             c("difference", "ratio", "odds_ratio", "contrib", "adjustment", "between_groups"))
   testthat::expect_equal(measure_key("OR"), "odds_ratio")
@@ -223,6 +223,30 @@ testthat::test_that("the colour vocabulary is declared, not written out", {
   testthat::expect_equal(measure_key("after_ci"), "difference")   # an alias resolves to its measure
   testthat::expect_equal(measure_key("no"), "")
   testthat::expect_true(is.na(measure_key("nonesuch")))
+  testthat::expect_equal(measure_key(NA_character_), "")
+  testthat::expect_equal(measure_key(character(0)), "")
+
+  # Phase 22c-v: ONE acronym vocabulary, so every spelling `tab_reg(measure =)` takes and every word
+  # a header can print works here too -- with its DERIVED lowercase twin.
+  testthat::expect_equal(vapply(c("RD", "diff", "rd", "RR", "IRR", "RoM", "rr", "irr", "rom", "or"),
+                                measure_key, character(1), USE.NAMES = FALSE),
+                         c("difference", "difference", "difference", "ratio", "ratio", "ratio",
+                           "ratio", "ratio", "ratio", "odds_ratio"))
+  # ...but NOT the three only a model estimates, and they are refused BY NAME, not as unknown
+  testthat::expect_true(all(is.na(vapply(c("cumOR", "D", "WR"), measure_key, character(1)))))
+  testthat::expect_error(tab(forcats::gss_cat, race, marital, pct = "row", color = "cumOR"),
+                         "tab_reg")
+  # a one-letter acronym gets no lowercase twin -- `d` is a slip, not a spelling
+  testthat::expect_true(is.na(measure_key("d")))
+  # a stored colour attribute is ALWAYS canonical, whichever spelling was typed
+  testthat::expect_equal(
+    get_color(tab(forcats::gss_cat, race, marital, pct = "row", color = "RR")[[3]]), "ratio")
+
+  # who may NAME a measure is a declared fact, distinct from who can BUILD one
+  testthat::expect_setequal(measure_nameable("tab"),
+                            c("difference", "ratio", "odds_ratio", "contrib"))
+  testthat::expect_setequal(measure_nameable("reg"), c("adjustment", "between_groups"))
+  testthat::expect_setequal(measure_nameable("tab", channel = "bg"), c("difference", "ratio"))
 
   # the build classes: diff and ratio share one (the leaf computes both fields together)
   testthat::expect_equal(measure_builds("ratio"), measure_builds("difference"))

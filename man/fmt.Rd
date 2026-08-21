@@ -303,9 +303,16 @@ difference for means.
 \item \code{"contrib"}: the cell's contribution to the table's variance. Under
 \code{color_signif = "guaranteed_effect"} it switches to the absolute adjusted standardized
 residual --- see \code{\link{tab}}.
+\item \code{"adjustment"} / \code{"between_groups"}: the two \code{\link{tab_reg}} measures,
+which compare a cell to \emph{another column} rather than to a reference row. A hand-built
+column may carry them, provided it fills the \code{obs} field they score.
 }
+The value is \strong{validated and normalised}: every accepted spelling --- the discipline's
+acronyms included (\code{"RD"}, \code{"RR"}, \code{"IRR"}, \code{"RoM"}, \code{"OR"} and their
+lowercase twins) --- is stored as its canonical measure name, and an unknown one is an error.
 The tabxplor 1.x combined strings \code{"diff_ci"} / \code{"after_ci"} still work but are
-superseded by the \code{color} + \code{color_signif} pair.}
+superseded by the \code{color} + \code{color_signif} pair; here they resolve to their
+\emph{measure} half only, so pass the significance policy through \code{color_signif}.}
 
 \item{color_signif}{How significance gates the color, as a single string
 (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"}). See \code{\link{tab}}.}

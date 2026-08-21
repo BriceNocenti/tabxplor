@@ -179,7 +179,8 @@ reg_validate_args <- function(conf_level = NULL, stats = NULL, color_signif = NU
   if (is.character(stats) && !identical(stats, "all") && !identical(stats, "none"))
     reg_validate_stat_keys(reg_stats_keys_of(stats), arg = "stats")
 
-  # `color_signif`: ONE vocabulary (R/fmt_class.R), checked here -- fmt() casts without validating.
+  # `color_signif`: ONE vocabulary (R/fmt_class.R). Checked HERE so the abort names {.arg color_signif}
+  # at the argument the user wrote, before any column exists -- fmt() validates the same value set.
   if (!is.null(color_signif)) {
     cs <- as.character(color_signif)[1]
     if (!identical(cs, "color_all_signif") && !cs %in% COLOR_SIGNIF_VALUES)
@@ -469,7 +470,8 @@ reg_resolve_output <- function(display = NULL, color = TRUE, color_signif = NULL
   # Logical-primary: TRUE auto-picks the per-column measure; FALSE uncoloured. The GEOMETRY words
   # are gone: only the two measures whose baseline is ANOTHER COLUMN remain choosable.
   color_arg  <- reg_normalize_color(color)
-  # VALIDATE through the storage boundary itself (fmt() casts without validating); discarded.
+  # ...then through the storage boundary, for the pair rules a single-value normaliser cannot see:
+  # two measures whose baseline is another column cannot share a cell. Result discarded.
   if (!is.na(color_arg[1])) invisible(resolve_color_channels(color_arg))
 
   # --- P: the forcings --------------------------------------------------------------------------

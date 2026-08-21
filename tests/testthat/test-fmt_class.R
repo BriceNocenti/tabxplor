@@ -293,7 +293,7 @@ test_that("every fmt column attribute is DECLARED, and a bind yields its neutral
            conf_level = 0.99, degf = 30, basis = "design", ci_method = "newcombe",
            comp_all = TRUE)
   b <- fmt(1:2, "points", pct_type = "col", pct = c(.3, .4), ref = "first", col_var = "v2",
-           col_group = "g2", totcol = FALSE, refcol = FALSE, color = c("contrib", "OR"),
+           col_group = "g2", totcol = FALSE, refcol = FALSE, color = c("ratio", "difference"),
            color_signif = "ignore", model_family = "poisson", role = "emp",
            conf_level = 0.90, degf = 12, basis = "weights", ci_method = "wilson",
            comp_all = FALSE)
@@ -311,6 +311,24 @@ test_that("every fmt column attribute is DECLARED, and a bind yields its neutral
       stop("unhandled merge rule: ", rule$merge))
     expect_identical(got[[nm]][[1]], expected, label = paste0("neutral of `", nm, "`"))
   }
+})
+
+# Phase 22c-v: fmt() is the LAST writer of the `color` attribute that did not validate, so a stored
+# colour was not guaranteed to be a MEASURES key. Now it is, by construction.
+test_that("fmt() validates and canonicalises `color` / `color_signif` (22c-v)", {
+  expect_identical(get_color(fmt(1L, color = "OR")),   "odds_ratio")
+  expect_identical(get_color(fmt(1L, color = "rr")),   "ratio")
+  expect_identical(get_color(fmt(1L, color = "RoM")),  "ratio")
+  expect_identical(get_color(fmt(1L, color = "diff")), "difference")
+  # a legacy combined string keeps its MEASURE half; the policy half belongs to color_signif
+  expect_identical(get_color(fmt(1L, color = "after_ci")), "difference")
+  # ...and an unknown one is an error, where it used to colour nothing in silence
+  expect_error(fmt(1L, color = "banana"), "Unknown color measure")
+  expect_error(fmt(1L, color = "IRR", color_signif = "banana"), "color_signif")
+  # a regression-only acronym is named, not called unknown
+  expect_error(fmt(1L, color = "cumOR"), "tab_reg")
+  # the two gap measures ARE storable on a hand-built column (it may fill `obs` itself)
+  expect_identical(get_color(fmt(1L, color = "adjustment")), "adjustment")
 })
 
 test_that("fmt arithmetic reconciles the INFERENCE claim instead of taking x's (E1)", {

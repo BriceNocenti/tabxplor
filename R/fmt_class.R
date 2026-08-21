@@ -199,9 +199,16 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 #'   \item \code{"contrib"}: the cell's contribution to the table's variance. Under
 #'   \code{color_signif = "guaranteed_effect"} it switches to the absolute adjusted standardized
 #'   residual --- see \code{\link{tab}}.
+#'   \item \code{"adjustment"} / \code{"between_groups"}: the two \code{\link{tab_reg}} measures,
+#'   which compare a cell to \emph{another column} rather than to a reference row. A hand-built
+#'   column may carry them, provided it fills the \code{obs} field they score.
 #' }
+#' The value is \strong{validated and normalised}: every accepted spelling --- the discipline's
+#' acronyms included (\code{"RD"}, \code{"RR"}, \code{"IRR"}, \code{"RoM"}, \code{"OR"} and their
+#' lowercase twins) --- is stored as its canonical measure name, and an unknown one is an error.
 #' The tabxplor 1.x combined strings \code{"diff_ci"} / \code{"after_ci"} still work but are
-#' superseded by the \code{color} + \code{color_signif} pair.
+#' superseded by the \code{color} + \code{color_signif} pair; here they resolve to their
+#' \emph{measure} half only, so pass the significance policy through \code{color_signif}.
 #' @param color_signif How significance gates the color, as a single string
 #' (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"}). See \code{\link{tab}}.
 #' @param model_family For regression tables (\code{\link{tab_reg}}): the column's model family
@@ -454,9 +461,16 @@ fmt <- function(n         = integer(),
   totcol    <- vctrs::vec_recycle(vctrs::vec_cast(totcol   , logical()  ), size = 1)
   refcol    <- vctrs::vec_recycle(vctrs::vec_cast(refcol   , logical()  ), size = 1)
   # `color` is a per-column attribute of length 1 (text channel) or 2 (text, background) -- NOT
-  # recycled to 1. color_signif is the scalar significance policy.
-  color        <- vctrs::vec_cast(color, character())
+  # recycled to 1. color_signif is the scalar significance policy. BOTH go through the storage
+  # boundary the setters use, so every spelling is resolved to its canonical measure here and an
+  # unknown one aborts: a stored `color` attribute is ALWAYS a MEASURES key, never an acronym, which
+  # is what lets every reader compare it to a literal.
+  # ⚠ `fmt()` normalises WITHOUT decoding: a legacy `"after_ci"` resolves to its MEASURE half and
+  #   drops the policy half, exactly as set_color() does. Only tab()'s argument boundary decodes the
+  #   pair (color_decode_legacy(), R/tab.R) -- one decoder, and this is not it.
+  color        <- resolve_color_channels(color)
   color_signif <- vctrs::vec_recycle(vctrs::vec_cast(color_signif, character()), size = 1)
+  color_signif <- resolve_color_signif(color_signif)
   model_family <- vctrs::vec_recycle(vctrs::vec_cast(model_family, character()), size = 1)
   role         <- vctrs::vec_recycle(vctrs::vec_cast(role        , character()), size = 1)
   conf_level   <- vctrs::vec_recycle(vctrs::vec_cast(conf_level  , double()   ), size = 1)
@@ -1475,17 +1489,23 @@ COLOR_SIGNIF_VALUES <- c("ignore", "grey_non_signif", "guaranteed_effect")
 #' @describeIn fmt set the significance policy attribute of a \code{fmt} vector
 #' @export
 set_color_signif <- function(x, color_signif) {
+  `attr<-`(x, "color_signif", resolve_color_signif(color_signif))
+}
+
+# the policy half of the storage boundary, split out of set_color_signif() so the CONSTRUCTOR can
+# validate too -- fmt() has no `x` to set the attribute on yet. The twin of resolve_color_channels().
+#' @keywords internal
+resolve_color_signif <- function(color_signif) {
   color_signif <- color_signif[1]
   if (is.na(color_signif) || color_signif %in% c("", "no")) color_signif <- "ignore"
   # COMPAT: the renamed policy value, accepted silently (the user-facing deprecation fires once in
   # normalize_color_spec()).
   if (identical(color_signif, "color_all_signif")) color_signif <- "guaranteed_effect"
-  ok <- COLOR_SIGNIF_VALUES
-  if (!color_signif %in% ok) {
+  if (!color_signif %in% COLOR_SIGNIF_VALUES) {
     cli::cli_abort(c("Unknown {.arg color_signif} value {.val {color_signif}}.",
-                     "i" = "Valid: {.val {ok}}."))
+                     "i" = "Valid: {.val {COLOR_SIGNIF_VALUES}}."))
   }
-  `attr<-`(x, "color_signif", color_signif)
+  color_signif
 }
 
 # === SECTION: display {} grammar ======================================
@@ -2166,6 +2186,8 @@ fmt_scale_of <- function(x, kind = "auto") {
 #   per-column; fields (n, pct, diff, ...) are per-cell vectors. See vctrs::new_rcrd().
 # No validation, no recycling -- fmt() does both and calls this. Not exported and not its own topic
 # (roxygen would produce a page of undocumented formals); `?fmt` documents the whole type.
+# ⚠ AND NEVER HERE: `fmt_ptype_empty <- new_fmt()` runs at SOURCE time, ~1900 lines before MEASURES
+#   is bound, so a validating call moved into this constructor fails the install outright.
 #' @noRd
 new_fmt <- function(n         = integer(),
                     scale     = "level_n"    ,
@@ -4401,6 +4423,11 @@ fmt_face_semantic <- function(theme = "light") {
 #   producers    which producer can BUILD it: "tab" (crosstab core) and/or "reg" (tab_reg). Separates
 #                "illegal" from "not available here": `adjustment` scores `obs`, which only a regression
 #                fills, so tab() refuses it.
+#   color_arg    whose `color =` argument may NAME it -- a DIFFERENT question from `producers`, and the
+#                one the scope refusals ask. tab_reg() BUILDS `difference`/`ratio`/`odds_ratio` (its
+#                columns are coloured on them) yet its `color` names none of them: there the estimand
+#                is `measure`'s job, and what is left to choose is what to compare it TO. Read only
+#                through measure_nameable().
 #   applies_to   which column kinds it can colour: "pct" (a percentage) and/or "num" (mean/count/coef).
 #   builds       WHICH per-cell fields the pipeline must compute: "diff" (diff + ratio, together), "or"
 #                (the odds ratio + its Woolf interval) or "contrib" (the chi2 contributions). Two measures
@@ -4473,7 +4500,7 @@ MEASURES <- list(
                  doc = "cell difference from the reference (percentage points for factors; the standardized difference Glass's \\eqn{\\Delta} for numeric means).",
                  break_scale = TRUE,  ref_kind = NA_character_, threshold_mult = FALSE, unit_kind = "diff",
                  has_ref_lead = TRUE,
-                 channels = c("text", "bg"), producers = c("tab", "reg"),
+                 channels = c("text", "bg"), producers = c("tab", "reg"), color_arg = "tab",
                  applies_to = c("pct", "num"), builds = "diff",
                  requires = c(ref = "always", ci = "gated"),
                  auto_for = list(text = c("pct", "reg_diff")),
@@ -4486,7 +4513,7 @@ MEASURES <- list(
                  has_ref_lead = TRUE,
                  # `ratio` shares `diff`'s build class: the leaf computes both fields in one pass (a
                  # diff <-> ratio toggle never rebuilds -- jamovi tier-3 re-paint).
-                 channels = c("text", "bg"), producers = c("tab", "reg"),
+                 channels = c("text", "bg"), producers = c("tab", "reg"), color_arg = "tab",
                  applies_to = c("pct", "num"), builds = "diff",
                  requires = c(ref = "always", ci = "gated"),
                  auto_for = list(text = "num", bg = "pct"),
@@ -4500,7 +4527,7 @@ MEASURES <- list(
                  # text-only (a whole-cell measure) and percentages only (a mean has no odds). Its
                  # baseline is the FIRST level, not the total row. "gated" here means the Woolf interval
                  # (the interval of THIS comparison), tested against the odds-ratio neutral.
-                 channels = "text", producers = c("tab", "reg"),
+                 channels = "text", producers = c("tab", "reg"), color_arg = "tab",
                  applies_to = "pct", builds = "or", ref_auto = "first",
                  requires = c(ref = "always", ci = "gated"),
                  # ⚠ tab() NEVER auto-resolves to the odds ratio (it is asked for by name) -> reg-only context.
@@ -4516,7 +4543,7 @@ MEASURES <- list(
                  # the ONE measure the test step computes and stamps: the signed chi2 residual needs the
                  # whole table and stores each cell's mean contribution ON the total row (both forced).
                  # `method = NA` = no interval to name.
-                 channels = "text", producers = "tab",
+                 channels = "text", producers = "tab", color_arg = "tab",
                  applies_to = "pct", builds = "contrib",
                  requires = c(chi2 = "always", totrow = "always"),
                  auto_for = list(text = "counts"),
@@ -4551,7 +4578,7 @@ MEASURES <- list(
                  doc = "how far each \\strong{modelled} effect sits from its \\strong{observed} (crude, unadjusted) counterpart -- what adjusting for the other predictors did to it. Turns \\code{empirical = TRUE} on. Meant for the \\emph{background} channel.",
                  break_scale = FALSE, ref_kind = "observed",     threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = TRUE, lead = fmt_gap_lead,
-                 channels = c("text", "bg"), producers = "reg",
+                 channels = c("text", "bg"), producers = "reg", color_arg = "reg",
                  applies_to = c("pct", "num"), builds = "diff",
                  requires = c(empirical = "always"),
                  method = function() gettext("z test on the difference between two estimates fitted on the same sample"),
@@ -4564,7 +4591,7 @@ MEASURES <- list(
                  doc = "with \\code{tab_vars}, how far each group's effect sits from the \\strong{first} group's, on the same row: a per-predictor reading of effect modification. Meant for the \\emph{background} channel.",
                  break_scale = FALSE, ref_kind = "group",        threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = TRUE, lead = fmt_gap_lead,
-                 channels = c("text", "bg"), producers = "reg",
+                 channels = c("text", "bg"), producers = "reg", color_arg = "reg",
                  applies_to = c("pct", "num"), builds = "diff",
                  requires = c(interaction = "always"),
                  method = function() gettext("z test on the difference between two independent estimates"),
@@ -4577,7 +4604,15 @@ MEASURES <- list(
 # the table must be COMPLETE on the vocabulary fields, or an accessor would silently answer "no channel"
 # for a forgotten row. Build-time, like fmt_attr_rules' exhaustiveness check.
 stopifnot(all(vapply(MEASURES, function(m)
-  all(c("channels", "producers", "applies_to", "builds", "doc") %in% names(m)), logical(1))))
+  all(c("channels", "producers", "color_arg", "applies_to", "builds", "doc") %in% names(m)),
+  logical(1))))
+
+# WHO a measure belongs to, the value set of both scope columns.
+#' @keywords internal
+MEASURE_PRODUCERS <- c("tab", "reg")
+# ...and the user-facing function each names, so a refusal names the door instead of hardcoding it.
+#' @keywords internal
+MEASURE_PRODUCER_FN <- c(tab = "tab", reg = "tab_reg")
 
 # `adjustment` on an ODDS RATIO needs one sentence of honesty: the odds ratio is NON-COLLAPSIBLE --
 # adjusting for a covariate that predicts the outcome moves it away from 1 even with zero confounding,
@@ -4624,42 +4659,90 @@ measure_facts <- function(measure, policy = "ignore", scale_key = NULL) {
 #' @keywords internal
 measure_own_ref <- function(measure) isTRUE(MEASURES[[measure]]$ref_kind %in% c("observed", "group"))
 
+# WHICH measures a producer's `color =` argument may NAME -- the declared `color_arg`, a different
+# question from `producers` (which says who can BUILD one; see the field block above). ONE reader for
+# the two scope refusals and for the generated @param list, so the rule is stated once.
+# `channel` narrows it to the measures eligible on that channel: `?tab`'s value list is the TEXT one.
+#' @keywords internal
+measure_nameable <- function(producer, channel = NULL) {
+  k <- names(MEASURES)[vapply(MEASURES, function(m) identical(m$color_arg, producer), logical(1))]
+  if (is.null(channel)) k else
+    k[vapply(k, function(z) channel %in% MEASURES[[z]]$channels, logical(1))]
+}
+
 # ---- the vocabulary accessors ---------------------------------------------
 # Each is the ONLY reader of its fact. Nothing outside this block indexes MEASURES by a literal measure
 # name, which is what makes "adding a measure is one row" true.
 
-# The accepted SPELLINGS of a measure, as one declared table: alias -> (measure, policy). The combined
-# legacy strings are a (measure, policy) PAIR (which is why they could never be a measure value). The
-# CANONICAL values are the full words -- the same `tab_reg(measure =)` uses -- so argument, attribute,
-# legend and plot axis speak one vocabulary. The acronyms are permanent aliases (`policy = NULL` = leave
-# color_signif as is), the combined strings soft-deprecated (they carry a policy).
+# THE ACRONYM VOCABULARY -- the discipline's short names, ONE table for every argument that names a
+# measure: `tab(color =)`, `fmt(color =)`, `tab_reg(measure =)`, `tab_reg(link =)`. It IS the REG_WORDS
+# set -- what a header can print is what an argument can be typed -- and a foreign key checks that at
+# load, in both directions. The acronyms are permanent aliases, never deprecated: the argument teaches
+# the CONCEPT word ("ratio"), the header keeps the discipline's ("RR" / "IRR" / "RoM").
+#
+# A mismatched acronym is a REQUEST, and the header is the answer: `measure = "IRR"` on a gaussian
+# outcome resolves to the outcome's own word (`Model_mRoM`), and a crosstab's legend prints the concept
+# word, so nothing can mislabel itself. That is why the table is permissive and needs no message.
 #' @keywords internal
-COLOR_ALIASES <- list(
-  or         = list(measure = "odds_ratio", policy = NULL),
-  OR         = list(measure = "odds_ratio", policy = NULL),
-  diff       = list(measure = "difference", policy = NULL),
-  RD         = list(measure = "difference", policy = NULL),
-  RR         = list(measure = "ratio",      policy = NULL),
+MEASURE_ACRONYMS <- c(RD = "difference", diff = "difference",
+                      RR = "ratio", IRR = "ratio", RoM = "ratio",
+                      OR = "odds_ratio")
+
+# ⚠ REGRESSION-ONLY: the words a RANK level names (REG_LEVEL_MEASURES$rank) plus the ordinal family's
+# own `cumOR`. A crosstab has neither a cumulative odds ratio nor a pair of people to rank, so
+# accepting them there would widen the request silently under a legend that does not say so. They are
+# declared HERE, beside the shared table, so a crosstab can refuse them BY NAME rather than call them
+# unknown -- the header prints `Model_cumOR`, so a reader will type it.
+#' @keywords internal
+MEASURE_ACRONYMS_REG <- c(cumOR = "odds_ratio", D = "difference", WR = "ratio")
+
+# the all-lowercase twin of every acronym, DERIVED so that a row cannot be forgotten. ⚠ ONE clause: a
+# ONE-LETTER acronym gets none -- `d` is a slip, not a spelling.
+#' @keywords internal
+measure_twins <- function(x) {
+  keep <- nchar(names(x)) > 1L & tolower(names(x)) != names(x)
+  c(x, stats::setNames(unname(x[keep]), tolower(names(x)[keep])))
+}
+
+# the spellings that reach ONE measure, for a message or an @param bullet. ONE renderer, so a hint and
+# a help page cannot list different ones.
+#' @keywords internal
+measure_spellings <- function(measure, scope = MEASURE_ACRONYMS)
+  names(scope)[scope %in% measure]
+
+# The SOFT-DEPRECATED spellings, and all that is left of the old alias table: each is a
+# (measure, policy) PAIR, which is why none could ever be a measure value -- `color_signif` owns the
+# policy half now. The plain acronyms moved to MEASURE_ACRONYMS above.
+#' @keywords internal
+COLOR_LEGACY_ALIASES <- list(
   diff_ci    = list(measure = "difference", policy = "grey_non_signif"),
   after_ci   = list(measure = "difference", policy = "guaranteed_effect"),
   ci         = list(measure = "difference", policy = "guaranteed_effect")
 )
-# the soft-deprecated spellings = the aliases carrying a POLICY (color_signif's job now). Derived.
 #' @keywords internal
-color_legacy_spellings <- function()
-  names(COLOR_ALIASES)[!vapply(COLOR_ALIASES, function(a) is.null(a$policy), logical(1))]
+color_legacy_spellings <- function() names(COLOR_LEGACY_ALIASES)
+
+# THE COLOUR VIEW -- every spelling `tab(color =)` / `fmt(color =)` accept, to its MEASURES key.
+# Precomputed, because measure_key() resolves per (column x channel x backend).
+#' @keywords internal
+MEASURE_COLOR_KEYS <- c(
+  stats::setNames(names(MEASURES), names(MEASURES)),
+  measure_twins(MEASURE_ACRONYMS),
+  vapply(COLOR_LEGACY_ALIASES, function(a) a$measure, character(1))
+)
+stopifnot("no colour spelling is declared twice" = !anyDuplicated(names(MEASURE_COLOR_KEYS)))
 
 # a colour token -> its MEASURES key. "" for a "no colour" spelling, NA for a token that names nothing
 # (the caller decides: an argument error, or an uncoloured hand-built column).
-# WARNING: on the hot path (get_reference, fmt_color_plan). Keep it a lookup, never a regex.
+# WARNING: read once per (column x channel x backend) -- 85 lookups to build a 324-cell table, 129 in
+# tab_html(), never one per cell. Keep it a lookup on the precomputed vector, never a regex.
+# ⚠ single `[`: on a named CHARACTER vector `[[` throws on a missing name, where `[` gives NA.
 #' @keywords internal
 measure_key <- function(x) {
   if (length(x) == 0L) return("")
   x <- as.character(x)[1]
   if (is.na(x) || x %in% c("", "no")) return("")
-  a <- COLOR_ALIASES[[x]]
-  if (!is.null(a)) return(a$measure)
-  if (x %in% names(MEASURES)) x else NA_character_
+  unname(MEASURE_COLOR_KEYS[x])
 }
 
 # "diff" | "or" | "contrib" (or "off"). Two measures sharing a class are a pure re-paint of each other.
@@ -4736,22 +4819,41 @@ measure_kind_keyed <- function(measure) {
 #' @keywords internal
 measure_validate <- function(color, producer = NULL, call = rlang::caller_env()) {
   keys <- vapply(color, measure_key, character(1), USE.NAMES = FALSE)
+  # what may be NAMED here, each measure followed by the spellings that reach it -- so a near-miss
+  # user is shown the acronym they actually typed, not only the canonical word.
+  ok_here <- vapply(if (is.null(producer)) names(MEASURES) else measure_nameable(producer),
+                    function(k) {
+                      a <- measure_spellings(k)
+                      paste0("\"", k, "\"",
+                             if (length(a)) paste0(" (", paste0("\"", a, "\"", collapse = ", "), ")")
+                             else "")
+                    }, character(1), USE.NAMES = FALSE)
   bad  <- color[is.na(keys)]
   if (length(bad)) {
-    ok_here <- if (is.null(producer)) names(MEASURES) else
-      names(MEASURES)[vapply(MEASURES, function(m) producer %in% m$producers, logical(1))]
+    # a REGRESSION-ONLY acronym is not "unknown": it names a real measure, at another door. Derived
+    # from the scoped table, so the two cannot drift.
+    scoped <- measure_twins(MEASURE_ACRONYMS_REG)
+    hit    <- bad[bad %in% names(scoped)]
+    if (length(hit)) cli::cli_abort(c(
+      "{.val {hit}} {?is/are} a {.fn tab_reg} spelling of {.val {unname(scoped[hit])}}.",
+      "i" = "Only a model estimates {?it/them}; here, write {.val {unname(scoped[hit])}}."),
+      call = call)
     cli::cli_abort(c("Unknown color measure {.val {bad}}.",
-                     "i" = "Valid measures: {.val {ok_here}}."),
+                     "i" = "Valid measures: {ok_here}."),
                    call = call)
   }
   if (!is.null(producer)) {
-    elsewhere <- keys[nzchar(keys)][
-      !vapply(keys[nzchar(keys)], function(k) producer %in% MEASURES[[k]]$producers, logical(1))]
+    elsewhere <- setdiff(keys[nzchar(keys)], measure_nameable(producer))
     if (length(elsewhere)) {
-      # name WHERE the measure lives instead of a bare "unknown measure".
+      # name WHERE the measure lives instead of a bare "unknown measure". The producer's own word and
+      # the sentence both DERIVE: measure_nameable("reg") is exactly the own-ref set (a measure whose
+      # baseline is another column), which is what makes the second line true without a branch.
+      other <- setdiff(MEASURE_PRODUCERS, producer)
       cli::cli_abort(c(
-        "{.val {elsewhere}} cannot be used in a {.fn tab} table.",
-        "i" = "It is a {.fn tab_reg} measure: it compares a model effect to its observed one."),
+        "{.val {elsewhere}} cannot be used in a {.fn {MEASURE_PRODUCER_FN[[producer]]}} table.",
+        "i" = paste0("It is a {.fn {MEASURE_PRODUCER_FN[[other]]}} measure: it compares an effect to ",
+                     "another COLUMN, which only a model fills."),
+        "i" = "Valid here: {ok_here}."),
         call = call)
     }
   }
