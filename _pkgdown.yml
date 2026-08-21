@@ -131,13 +131,13 @@ reference:
 
 - title: Inspect a table
   desc: >
-    What have I got, and what can I do with it? `tab_shape()` reports the shape (merged, grouped, a
+    What have I got, and what can I do with it? `tab_structure()` reports the structure (merged, grouped, a
     list) and `tab_supports()` which operations accept it; `tab_columns()` lists every numeric
     column with what it estimates, how it is coloured and how its interval was computed;
     `tab_get_vars()` names the variables and `is_tab()` tests the class. `fmt_attr()` reads or
     writes one column attribute by name.
   contents:
-  - tab_shape
+  - tab_structure
   - tab_supports
   - tab_columns
   - tab_get_vars

@@ -50,32 +50,32 @@ testthat::test_that("format(): a composite's mark and its padding are the SAME g
 })
 
 # === mean (sigma sd): the sd-less cell is padded ==================================
+# Phase 22c-iii: the sd tail is an ORDINARY COMPOSITE now (`{mean} (sigma{sd})`, the `mean_sd`
+# preset) -- format() has no mean-specific branch left, and the generic per-token padding does the
+# work. It aligns the MEANS too, which the hand-rolled tail never did.
 
 mean_col <- function(digits = 1L) {
   fmt(mean = c(1.0, 1.7, 10.25), var = c(NA, 2.1^2, 3^2), n = rep(5L, 3),
-      display = "mean", scale = "level_mean", digits = digits)
+      display = DISPLAY_PRESETS$mean_sd$template, scale = "level_mean", digits = digits)
 }
 
 testthat::test_that("format(): a mean with no sd is padded to the tail, so the means align", {
   f <- format(mean_col(), special_formatting = TRUE)
-  # Phase 14x: the mean <-> "(sd)" joiner is the medium `pad` -- a plain ASCII space in the console,
-  # not the narrow no-break space that used to sit there.
-  testthat::expect_identical(f, c(paste0("1.0", strrep(" ", 7)),
-                                  paste0("1.7 (", sig, "2.1)"),
+  testthat::expect_identical(f, c(paste0(" 1.0", strrep(" ", 7)),
+                                  paste0(" 1.7 (", sig, "2.1)"),
                                   paste0("10.2 (", sig, "3.0)")))
   testthat::expect_false(any(grepl(nbs, f, fixed = TRUE)))
-  # what alignment MEANS here: every cell's tail is the same width, so the column's right-align
-  # lines the means up (it is the mean, not the cell, that must align).
-  tails <- nchar(f) - nchar(c("1.0", "1.7", "10.2"))
-  testthat::expect_identical(length(unique(tails)), 1L)
+  # what alignment MEANS here: every cell is the same width AND the means occupy the same columns,
+  # so the decimal points line up whether or not a cell has an sd.
+  testthat::expect_identical(length(unique(nchar(f))), 1L)
+  testthat::expect_identical(unique(substr(f, 5, 5)), " ")
 })
 
-testthat::test_that("format(): the sd-less pad AND the sd joiner follow `pad`", {
+testthat::test_that("format(): the sd-less pad follows `pad` (figure space in html)", {
   h <- format(mean_col(), special_formatting = TRUE, html = TRUE)
-  testthat::expect_identical(h[1], paste0("1.0", strrep(fig, 7)))
+  testthat::expect_identical(h[1], paste0(fig, "1.0\u00a0", strrep(fig, 6)))
   testthat::expect_false(grepl(" ", h[1], fixed = TRUE))
-  # the joiner is a FIGURE space in html (digit-width), never the narrow no-break space
-  testthat::expect_identical(h[2], paste0("1.7", fig, "(", sig, "2.1)"))
+  testthat::expect_identical(h[2], paste0(fig, "1.7\u00a0(", sig, "2.1)"))
   testthat::expect_false(any(grepl(nbs, h, fixed = TRUE)))
 })
 
@@ -84,7 +84,7 @@ testthat::test_that("format(): an EMPTY mean cell stays NA -- it is not padded",
   # NA -> the literal string "NA" + spaces. Only `na` (which kable/md pass as "") hid it; the
   # console, which keeps NA, printed "NA       ".
   x <- fmt(mean = c(1.0, NA, 2.5), var = c(NA, NA, 4), n = c(5L, 0L, 5L),
-           display = "mean", scale = "level_mean", digits = 1L)
+           display = DISPLAY_PRESETS$mean_sd$template, scale = "level_mean", digits = 1L)
   f <- format(x, special_formatting = TRUE)
   testthat::expect_true(is.na(f[2]))
   testthat::expect_false(any(grepl("NA", f[!is.na(f)], fixed = TRUE)))
@@ -92,8 +92,9 @@ testthat::test_that("format(): an EMPTY mean cell stays NA -- it is not padded",
 })
 
 testthat::test_that("format(): a mean column with no sd at all is untouched", {
-  x <- fmt(mean = c(1.0, 2.0), var = c(NA, NA), n = c(5L, 5L), display = "mean", scale = "level_mean",
-           digits = 1L)
+  # the whole `(sigma{sd})` group is void down the column, so it leaves the template entirely
+  x <- fmt(mean = c(1.0, 2.0), var = c(NA, NA), n = c(5L, 5L),
+           display = DISPLAY_PRESETS$mean_sd$template, scale = "level_mean", digits = 1L)
   testthat::expect_identical(format(x, special_formatting = TRUE), c("1.0", "2.0"))
 })
 
@@ -102,9 +103,9 @@ testthat::test_that("format(): a mean column with no sd at all is untouched", {
 testthat::test_that("format(bold_split): only the MEAN of a mean (sd) cell is the bold prefix", {
   b  <- format(mean_col(), special_formatting = TRUE, bold_split = TRUE)
   pn <- attr(b, "primary_nchar")
-  testthat::expect_identical(pn, c(3L, 3L, 4L))
+  testthat::expect_identical(pn, c(4L, 4L, 4L))
   # the prefix is exactly the mean -> the "(sigma sd)" tail stays plain in a bold row
-  testthat::expect_identical(as.character(substr(b, 1, pn)), c("1.0", "1.7", "10.2"))
+  testthat::expect_identical(trimws(as.character(substr(b, 1, pn))), c("1.0", "1.7", "10.2"))
 })
 
 testthat::test_that("format(): primary_nchar is attached only when something splits", {
@@ -115,12 +116,13 @@ testthat::test_that("format(): primary_nchar is attached only when something spl
 })
 
 testthat::test_that("tab_md(): a bold row bolds the mean, not the sd", {
-  t <- tab(forcats::gss_cat, marital, tvhours, pct = "row", color = FALSE)
+  t <- tab(forcats::gss_cat, marital, tvhours, pct = "row", color = FALSE, display = "mean_sd")
   md <- tab_md(t, color = FALSE, css = FALSE, color_legend = FALSE)
   # bold closes BEFORE the joiner: "**3.0**<figsp>(sigma2.6)", never "**3.0 (sigma2.6)**".
   # Phase 14x: the joiner is now the FIGURE space (markdown renders in a proportional host font).
-  testthat::expect_match(md, paste0("\\*\\*[0-9.]+\\*\\*", fig, "\\(", sig), all = FALSE)
-  testthat::expect_no_match(md, paste0("\\*\\*[0-9.]+", fig, "\\(", sig, "[0-9. ]+\\)\\*\\*"),
+  jn <- stringi::stri_unescape_unicode("\\u00a0")   # the template literal's own space
+  testthat::expect_match(md, paste0("\\*\\*[0-9.]+\\*\\*", jn, "\\(", sig), all = FALSE)
+  testthat::expect_no_match(md, paste0("\\*\\*[0-9.]+", jn, "\\(", sig, "[0-9. ]+\\)\\*\\*"),
                             all = TRUE)
   testthat::expect_false(any(grepl(nbs, md, fixed = TRUE)))   # the narrow no-break space is gone
 })

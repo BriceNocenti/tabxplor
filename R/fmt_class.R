@@ -550,6 +550,19 @@ get_num <- function(x) {
   out[!nas & display == "gap"    ] <- fmt_adjustment_score(x)[!nas & display == "gap"    ]
   out[!nas & display == "mean"   ] <- get_mean(x)[!nas & display == "mean"   ]
   out[!nas & display == "var"    ] <- get_var (x)[!nas & display == "var"    ]
+  # DERIVED from `var`, like `resid` and `gap`: the sd is its square root, so nothing is stored twice.
+  sd_m <- !nas & display == "sd"
+  if (any(sd_m)) out[sd_m] <- suppressWarnings(sqrt(get_var(x)))[sd_m]
+  # DERIVED from `var` AND `mean`. VOID where the mean is not strictly positive: a spread expressed as
+  # a share of a level at or below zero is not a share of anything, and it flips sign with the mean.
+  # Declared void here, exactly as `moe` is on a multiplicative scale, rather than special-cased at
+  # render time -- so the per-cell void rule blanks it and keeps the column aligned.
+  cv_m <- !nas & display == "cv"
+  if (any(cv_m)) {
+    m <- get_mean(x) ; v <- get_var(x)
+    out[cv_m] <- ifelse(!is.na(m) & m > 0 & !is.na(v) & v >= 0,
+                        suppressWarnings(sqrt(v)) / m, NA_real_)[cv_m]
+  }
   out[!nas & display == "ci"     ] <- get_ci   (x)[!nas & display == "ci"     ]
   # `moe` reads the SAME field as `ci` -- the two are one interval in two notations -- but a ratio
   # has no half-width, so it is void on a multiplicative scale. Declared void, like any other token
@@ -1163,7 +1176,7 @@ get_role <- function(x, ...) {
 }
 
 # the reg builders write `role` through fmt()'s formal, but a column built by COPYING another (the
-# Excel sd twin, mat_sd_twin) needs to restate it afterwards -- hence a setter.
+# Excel aside column, mat_aside_cols) needs to restate it afterwards -- hence a setter.
 #' @keywords internal
 #' @noRd
 set_role <- function(x, role) {
@@ -2032,7 +2045,32 @@ display_template_label <- function(tmpl, x, scl) {
     j <- which(seg$group == prim_g & !seg$is_tok)
     out[j] <- gsub("[][()]", "", out[j])
   }
-  trimws(paste0(out, collapse = ""))
+  # a literal reduced to its punctuation may leave a space hugging a bracket ("{mean} (cv {cv})" ->
+  # "mean ( cv)"): the brackets are structure, the space was wording.
+  trimws(gsub("[[:space:]]+([])])", "\\1", gsub("([[(])[[:space:]]+", "\\1",
+                                                paste0(out, collapse = ""))))
+}
+
+# THE COLUMN NAME AN EXPORT HEADER USES: fmt_display_label(), minus any aside whose rendered cell
+# already says its own name ("cv 36 %"). A header that repeated it would say it twice; the console
+# type tag keeps it, because there the tag is the only thing naming the layout.
+#' @keywords internal
+#' @noRd
+fmt_header_label <- function(x) {
+  d <- unique(get_display(x))
+  d <- d[!is.na(d) & grepl("{", d, fixed = TRUE)]
+  if (length(d) && length(DISPLAY_SELF_NAMED)) {
+    tmpl <- d[[which.max(vapply(d, function(t) length(parse_display_template(t)$fields), integer(1)))]]
+    seg  <- parse_display_template(tmpl)
+    tok  <- fmt_resolve_scale_tokens(seg$fields, fmt_scale_row(x))
+    hit  <- setdiff(which(tok %in% DISPLAY_SELF_NAMED), seg$primary)
+    if (length(hit))
+      return(display_template_label(display_prune_template(seg, seq_along(tok) %in% hit),
+                                    x, fmt_scale_row(x)))
+  }
+  # the TAG style: its prefix is what says a bare deviation is a deviation of means
+  # ("mean-ci" for a column of intervals), which is the whole job of a level header.
+  fmt_display_label(x, "tag")
 }
 
 #' @keywords internal
@@ -2311,7 +2349,7 @@ fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names, "...", "cla
 #                                absent; "all_col_vars" a column belonging to no col_var; "" / "no" /
 #                                NA the empty spellings (incl. the base-count / add_pct helpers).
 # `no_col_var` is NOT a real variable name -- rendering it as a header, or reporting it from
-# tab_shape(), is noise.
+# tab_structure(), is noise.
 #
 # TWO predicates, deliberately distinct:
 #   is_real_col_var(x)     of a STORED col_var: "does this name a column variable?"
@@ -3228,9 +3266,13 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # per-token guess that made a bare `{ci}` x100 a gaussian coefficient and drop the bracket on an
   # odds ratio altogether.
   is_pct  <- isTRUE(scl$is_pct)
+  # a token whose declared `unit` is "pct" is a PROPORTION: printed x100 with a "%", wherever it sits.
+  # One statement of it (DISPLAY_TOKENS), so a new such token needs no edit here.
+  unit_pct      <- ok & display %in% DISPLAY_PCT_TOKENS
   pct_or_ci     <- ok & (display %in% c("pct", "diff", "ctr") &
                            !(display == "diff" & is_mean) |
                          (display %in% c("ci", "moe") & is_pct))
+  pct_or_ci     <- pct_or_ci | unit_pct
   diff_mean <- ok & display == "diff" & is_mean
 
   # `obs` and `gap` print exactly like the estimate they are compared to / measured on (per-COLUMN
@@ -3263,7 +3305,10 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   }
 
   pct_no_ci     <- ok & display %in% c("pct", "diff", "ctr") & !(display == "diff" & is_mean)
-  pct_no_ci     <- pct_no_ci | obs_as_pct
+  pct_no_ci     <- pct_no_ci | obs_as_pct | unit_pct
+  # a coefficient of variation is read as a rough order of magnitude ("about a third of the mean"),
+  # so it takes no decimals whatever the cell's own `digits` says.
+  digits[ok & display == "cv"] <- 0L
   # THE ADDITIVE ESTIMANDS, one list: a difference, a coefficient, a standardized residual (direction
   # is half of what one says, so it must never print bare) and an `obs`/`gap` on an additive scale.
   # A ratio carries a multiply glyph instead, and `gof` shares the `diff` FIELD but is a model-fit
@@ -3492,54 +3537,6 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     # the "ref:x-" annotation belongs to the +/- notation, so it fires exactly where `{moe}` renders
     disp_ctr    <- display == "ctr" & !nas
     disp_or     <- display == "or" & !nas
-    # get_var() (the field accessor), NOT x$var (the dplyr `$` method) -- the latter ran for every
-    # column and dominated format() self-time.
-    # `var >= 0` guards the sqrt: a negative variance (a design-based estimate can be) would render
-    # the literal "(sigmaNaN)". Such a cell takes the padding branch instead.
-    has_sd       <- !is.na(get_var(x)) & get_var(x) >= 0
-    disp_mean_sd <- display == "mean" & is_mean & !nas & has_sd
-    # a mean cell with no sd gets no "(sigma sd)" tail, so it is padded to the tail's width below.
-    # WARNING: `!na_out` is load-bearing -- an EMPTY cell also has NA var, and padding it would paste
-    # onto the NA, turning it into the literal "NA" + spaces.
-    disp_mean_nosd <- display == "mean" & is_mean & !nas & !na_out & !has_sd
-
-    if (any (disp_mean_sd)) {
-      sd <-
-        print_num(get_num(set_display(set_var(x[disp_mean_sd],
-                                              suppressWarnings(sqrt(get_var(x[disp_mean_sd]))) ), "var")),
-                  digits = get_digits(x[disp_mean_sd])) # + 1L
-      sd <- sd |>
-        stringi::stri_pad(width = max(stringi::stri_length(sd)), side = "right", pad = pad)
-
-      # bold only the MEAN of a "mean (sigma sd)" cell in a bold row (bold glyphs are wider, so a fully
-      # bold cell stops aligning). Recorded before the suffix and the tail are pasted -- both are
-      # SUPPORTING pieces, and neither is what the colour and the face grade.
-      if (isTRUE(bold_split)) {
-        prim_from [disp_mean_sd] <- 1L
-        prim_nchar[disp_mean_sd] <- nchar(out[disp_mean_sd])
-      }
-      out[disp_mean_sd]     <- paste0(out[disp_mean_sd], st_pad[disp_mean_sd])
-      st_done[disp_mean_sd] <- TRUE
-
-      # the mean <-> "(sigma sd)" joiner is the medium `pad` (ASCII in console/markdown, figure space
-      # in html), so the tail keeps the same digit-grid gap as the rest of the row.
-      out[disp_mean_sd] <- paste0(out[disp_mean_sd], pad, "(", sigma_sign, sd, ")")
-
-      # WARNING: this pads by CHARACTER COUNT, exact only in a monospace medium; in html/Excel it lands
-      # within ~one digit-width (an exact fix needs markup, which belongs to the html engine).
-      if (any(disp_mean_nosd)) {
-        tail_w <- nchar(pad) + nchar(sigma_sign) + 2L + max(stringi::stri_length(sd))
-        if (isTRUE(bold_split)) {
-          prim_from [disp_mean_nosd] <- 1L
-          prim_nchar[disp_mean_nosd] <- nchar(out[disp_mean_nosd])
-        }
-        out[disp_mean_nosd]     <- paste0(out[disp_mean_nosd], st_pad[disp_mean_nosd])
-        st_done[disp_mean_nosd] <- TRUE
-        out[disp_mean_nosd] <- paste0(out[disp_mean_nosd], strrep(pad, tail_w))
-      }
-    }
-
-
     if (any(disp_diff) && is_crosstab) {
       if (is.null(ref_cells)) ref_cells <- get_reference(x, "cells")
       ref     <- ref_cells[disp_diff]

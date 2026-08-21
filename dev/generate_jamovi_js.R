@@ -83,7 +83,7 @@ reg_block <- function() {
   c(
     BEGIN,
     "// Generated from R/tab_reg.R (REG_OUTCOME_KINDS), R/reg-estimand.R (REG_FAMILIES,",
-    "// REG_ESTIMANDS) and R/reg-assumptions.R (REG_SHAPES). Re-run dev/generate_jamovi_js.R after",
+    "// REG_ESTIMANDS) and R/var-shape.R (VAR_SHAPES). Re-run dev/generate_jamovi_js.R after",
     "// changing any of them; the suite checks this block (test-jamovi-vocabulary.R).",
     paste0("var TABX_FAMILY_LABEL = ", js_obj(tabxplor:::reg_family_ui_labels()), ";"),
     paste0("var TABX_FAMILY_LABEL_BINARY = ", js_obj(tabxplor:::reg_family_ui_labels(binary = TRUE)), ";"),
@@ -95,8 +95,8 @@ reg_block <- function() {
                                vapply(grid, function(g)
                                  js_obj(g, function(x) js_obj(x, js_arr)), character(1)),
                                collapse = ", "), " }"), ";"),
-    # the per-predictor functional forms (REG_SHAPES, R/reg-assumptions.R)
-    paste0("var TABX_SHAPES = ", js_arr(tabxplor:::REG_SHAPES), ";"),
+    # the per-predictor functional forms (VAR_SHAPES, R/var-shape.R)
+    paste0("var TABX_SHAPES = ", js_arr(tabxplor:::shape_vocab("tab_reg")), ";"),
     END
   )
 }

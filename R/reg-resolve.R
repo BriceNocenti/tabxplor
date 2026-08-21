@@ -39,13 +39,13 @@
 #     reg_per_outcome() and are resolved together, in cascade order, by reg_estimand(): the boundary
 #     slices them and never interprets them, so "what does auto mean" has ONE home.
 #   - ONE PER-PREDICTOR GRAMMAR, three arguments. `multiplier` / `shape` / `ref` share
-#     reg_per_predictor() (below): an unnamed value -- or one named `default` -- is the fallback, a
+#     per_variable() (below): an unnamed value -- or one named `default` -- is the fallback, a
 #     named one overrides that variable. Each argument keeps its own VOCABULARY; only the parsing is
 #     shared, which is why this is a resolver and not a fourth fact table.
 #   - There is deliberately no REG_ARG_VALUES table. TAB_ARG_VALUES exists because five crosstab
 #     producers had each written one boundary and drifted; tab_reg() is one producer, its
 #     vocabularies are already declared once each (REG_USER_FAMILIES / REG_LINKS_VALUES /
-#     REG_MEASURES_VALUES / REG_EFFECTS_VALUES / REG_SHAPES / reg_stat_keys() /
+#     REG_MEASURES_VALUES / REG_EFFECTS_VALUES / VAR_SHAPES / reg_stat_keys() /
 #     REG_MULTIPLIER_KEYWORDS), and an argument
 #     that REWRITES what it validates belongs to its own resolver -- one validator, in the one place
 #     that can also rewrite the value.
@@ -146,58 +146,12 @@ reg_select_one <- function(quo, data, arg) {
 # === The per-predictor grammar ===================================================================
 # ONE grammar for `multiplier`, `shape` and `ref` -- the predictor-axis sibling of reg_per_outcome()
 # (R/reg-estimand.R), and, like it, the GRAMMAR only: each argument keeps its own vocabulary.
-#
-#   an UNNAMED element -- or one named `default` -- is a FALLBACK, and its VALUE names the kind of
-#     variable it applies to (a number or an anchor keyword -> the continuous predictors, a level
-#     keyword -> the factors);
-#   a NAMED element overrides that one variable, and there the VARIABLE's kind picks the vocabulary;
-#   two fallbacks of one kind, an unknown name, or a fallback matching no vocabulary -> an abort.
-#
-# `also` (tab_vars, the multinomial pivot) is addressable BY NAME ONLY: a fallback meant for the
-# predictors must never silently move a grouping variable's reference.
-#' @keywords internal
-#' @noRd
-reg_per_predictor <- function(x, eligible, arg, kinds = NULL, fallback_kind = NULL,
-                              also = character(0), vocab = NULL, example = NULL) {
-  if (is.null(x) || length(x) == 0L) return(list())
-  nm <- names(x) %||% rep("", length(x))
-  nm[is.na(nm)] <- ""
-  is_fb <- !nzchar(nm) | nm == "default"
-  out   <- list()
+# It is per_variable() (R/var-shape.R), shared with tab(): an UNNAMED element -- or one named
+# `default` -- is a FALLBACK whose VALUE names the kind of variable it applies to; a NAMED element
+# overrides that one variable. Only `reg_check_continuous_names()` stays here, because its message
+# is about PREDICTORS.
 
-  # the fallbacks FIRST, so a named override always wins whatever the writing order was.
-  seen <- character(0)
-  for (i in which(is_fb)) {
-    v <- x[[i]]
-    k <- if (is.null(fallback_kind)) "" else fallback_kind(v)
-    if (is.na(k))
-      cli::cli_abort(c(
-        "{.arg {arg}} cannot use {.val {as.character(v)[[1]]}} as a default for every variable.",
-        stats::setNames(c(vocab, if (!is.null(example))
-          paste0("A value for one variable must name it: {.code ", example, "}.")),
-          rep("i", length(vocab) + !is.null(example)))), call = NULL)
-    if (k %in% seen)
-      cli::cli_abort(c("{.arg {arg}} has two defaults for the same kind of predictor.",
-                       "i" = "Give one unnamed value per kind, or name the variable."), call = NULL)
-    seen    <- c(seen, k)
-    targets <- if (!nzchar(k)) eligible else eligible[kinds[eligible] == k]
-    if (length(targets) == 0L)
-      cli::cli_abort(c("{.arg {arg}}: no predictor for the default {.val {as.character(v)[[1]]}}.",
-                       "i" = "Eligible: {.val {eligible}}."), call = NULL)
-    for (v2 in targets) out[[v2]] <- v
-  }
-
-  named <- nm[!is_fb]
-  bad   <- setdiff(named, c(eligible, also))
-  if (length(bad) > 0L)
-    cli::cli_abort(c("{.arg {arg}} must name predictors it applies to.",
-                     "x" = "Not {?a predictor/predictors} it applies to: {.val {bad}}.",
-                     "i" = "Eligible: {.val {c(eligible, also)}}."), call = NULL)
-  for (i in which(!is_fb)) out[[nm[[i]]]] <- x[[i]]
-  out
-}
-
-# The one message the generic abort cannot give: `multiplier` / `shape` on a factor predictor.
+# The one message the generic abort cannot give: `multiplier` / `ref` on a factor predictor.
 #' @keywords internal
 #' @noRd
 reg_check_continuous_names <- function(x, data, predictors, arg) {
@@ -355,17 +309,18 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   # --- G: `shape` ----------------------------------------------------------------------------
   # At the SAME boundary as G0: a shape either RECODES the column (log/sqrt/quantile groups) or
   # emits ONE extra model term (quadratic) -- a quantile-cut `age` is a factor from this line on.
-  reg_shapes   <- reg_resolve_shape(shape, data,
-                                    c(unlist(predictors, use.names = FALSE), cross$parents))
+  reg_shapes   <- shape_resolve(shape, data,
+                                c(unlist(predictors, use.names = FALSE), cross$parents),
+                                producer = "tab_reg")
   # a crossed pair of CONTINUOUS variables has no cells, so its moderator is cut here -- decided
   # where a shape is resolved and before it is applied, the one point that can answer "will this
   # still be continuous?". Never silent (R/reg-cross.R).
   reg_shapes <- utils::modifyList(
     reg_shapes,
     purrr::imap(reg_cross_autocut(cross$keys, data, reg_shapes),
-                function(v, nm) reg_shape_value(v, nm)))
+                function(v, nm) shape_value(v, nm, "tab_reg")))
   if (length(reg_shapes) > 0L) {
-    sh   <- reg_shape_apply(data, reg_shapes, w = wt)
+    sh   <- shape_apply(data, reg_shapes, w = wt)
     data <- sh$data
     reg_shapes   <- sh$shapes                    # with each quantile shape's breaks frozen
     if (!is.null(design_obj)) design_obj$variables <- data
@@ -734,13 +689,13 @@ reg_resolve_references <- function(ref, data, all_predictors, tab_vars = NULL,
       "i" = 'Did you mean {.code outcome_level = c({wrong[[1]]} = "{ref[[wrong[[1]]]]}")}?'),
       call = NULL)
 
-  vals <- reg_per_predictor(
+  vals <- per_variable(
     ref, elig, "ref", kinds = kinds, fallback_kind = reg_ref_fallback_kind,
     also = intersect(as.character(tab_vars), names(data)),
     vocab = paste0("A default says which kind of predictor it is for: a number or ",
                    "{.or {.val {REG_ANCHOR_KEYWORDS}}} for the continuous ones, ",
                    "{.or {.val {REG_LEVEL_KEYWORDS}}} for the factors."),
-    example = 'ref = c(race = "Black")')
+    example = 'ref = c(race = "Black")', what = "predictor")
   lv <- intersect(names(vals), c(fac, as.character(tab_vars)))
   list(levels  = vapply(stats::setNames(lv, lv),
                         function(v) reg_ref_level(vals[[v]], data[[v]], v), character(1)),
@@ -797,8 +752,8 @@ reg_prepare_replay <- function(data, prep) {
     data[[v]] <- switch(sp$kind,
                         log       = log(x),
                         sqrt      = sqrt(x),
-                        quantiles = reg_cut_quantiles(x, sp$k, var = v, breaks = sp$breaks),
-                        sd_bands  = reg_cut_sd_bands(x, var = v, breaks = sp$breaks,
+                        quantiles = shape_cut_quantiles(x, sp$k, var = v, breaks = sp$breaks),
+                        sd_bands  = shape_cut_bands(x, var = v, breaks = sp$breaks,
                                                      labels = sp$labels),
                         data[[v]])
   }

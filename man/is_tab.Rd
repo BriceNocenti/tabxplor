@@ -15,9 +15,9 @@ A single logical.
 \description{
 \code{TRUE} for a table built by \code{\link{tab}}, \code{\link{tab_reg}} or any of their
 variants --- i.e. for a \code{tabxplor_tab} (a \code{tabxplor_grouped_tab} with \code{tab_vars}).
-\code{\link{tab_shape}} answers the fuller question: what shape is it, and what can be done
+\code{\link{tab_structure}} answers the fuller question: what structure is it, and what can be done
 with it.
 }
 \seealso{
-\code{\link[=tab_shape]{tab_shape()}}, \code{\link[=tab_get_vars]{tab_get_vars()}}.
+\code{\link[=tab_structure]{tab_structure()}}, \code{\link[=tab_get_vars]{tab_get_vars()}}.
 }

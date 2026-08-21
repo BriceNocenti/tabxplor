@@ -130,7 +130,7 @@ test_that("two continuous parents: the moderator is cut, never silently", {
   expect_equal(sum(cx(q5) == "age*tvhours"), 5L)
   expect_silent(suppressWarnings(tab_reg(d, "married", "age*tvhours", family = "binomial",
                                          stats = FALSE, shape = c(tvhours = "quintiles"))))
-  # ...and so does an unnamed fallback, which reg_resolve_shape() has already spread: it cuts BOTH
+  # ...and so does an unnamed fallback, which shape_resolve() has already spread: it cuts BOTH
   # parents, so the pair becomes the ordinary cells arm (3 x 3) and nothing is auto-cut.
   q3 <- quiet(tab_reg(d, "married", "age*tvhours", family = "binomial", stats = FALSE, shape = 3))
   expect_equal(sum(cx(q3) == "age*tvhours"), 9L)
@@ -144,23 +144,27 @@ test_that("`shape = \"sd_bands\"` bands at the mean and one SD either side", {
                      shape = c(age = "sd_bands")))
   lv <- as.character(t$levels)[cx(t) == "age"]
   expect_length(lv, 4L)
-  # every label carries BOTH facts: the real cut points, and where the band sits on the mean/SD scale
-  expect_match(lv[[1]], "^\\[.*\\) < m-sd$")
-  expect_match(lv[[2]], "m-sd\\.\\.m$")
-  expect_match(lv[[3]], "m\\.\\.m\\+sd$")
-  expect_match(lv[[4]], "> m\\+sd$")
-  # the cuts really are the landmarks
+  # every label carries BOTH facts: the real cut points, and IN WORDS where the band sits
+  expect_match(lv[[1]], "^\\[.*\\) low$")
+  expect_match(lv[[2]], "below average$")
+  expect_match(lv[[3]], "above average$")
+  expect_match(lv[[4]], "high$")
+  # the cuts really are the landmarks -- snapped UP to the whole number on a whole-numbered variable,
+  # which with `right = FALSE` is the identical cut and a far shorter label.
   m <- mean(d$age); s <- stats::sd(d$age)
-  br <- attr(tabxplor:::reg_cut_sd_bands(d$age, var = "age"), "tabxplor_breaks")
-  expect_equal(br[2:4], c(m - s, m, m + s), tolerance = 1e-8)
+  br <- attr(tabxplor:::shape_cut_bands(d$age, var = "age"), "tabxplor_breaks")
+  expect_equal(br[2:4], ceiling(c(m - s, m, m + s) - 1e-8), tolerance = 1e-8)
+  expect_equal(as.integer(table(cut(d$age, br, include.lowest = TRUE, right = FALSE))),
+               as.integer(table(cut(d$age, c(min(d$age), m - s, m, m + s, max(d$age)),
+                                    include.lowest = TRUE, right = FALSE))))
   # ⚠ unlike quantiles the bands are NOT balanced: a landmark outside the data is DROPPED rather
   # than asked of cut(), and a variable with none left is refused, naming the balanced cure.
   set.seed(1)
   ex <- stats::rexp(5000, 1 / 3e4)                       # mean - sd is below the minimum
-  expect_length(levels(tabxplor:::reg_cut_sd_bands(ex, var = "x")), 3L)
+  expect_length(levels(tabxplor:::shape_cut_bands(ex, var = "x")), 3L)
   # the mean is always inside the range of a variable that varies, so the only refusal left is one
   # that does not vary at all.
-  expect_error(tabxplor:::reg_cut_sd_bands(rep(1, 100), var = "x"), "to vary")
+  expect_error(tabxplor:::shape_cut_bands(rep(1, 100), var = "x"), "to vary")
 })
 
 test_that("the parent rule is PER MODEL, so with/without is one comparison", {
@@ -184,7 +188,7 @@ test_that("a crossed continuous predictor gives the fit's own slope per moderato
   i <- cx(t) == "age*race"
   expect_equal(sum(i), nlevels(d$race))
   nest <- stats::glm(married ~ race + relig + race:age, d, family = stats::binomial())
-  k    <- tabxplor:::reg_predictor_sd(d$age)
+  k    <- tabxplor:::wtd_sd(d$age)
   b    <- stats::coef(nest)[paste0("race", as.character(t$levels[i]) |>
                                      sub(pattern = "^.*\u2014 ", replacement = ""), ":age")]
   # C4-2: `multiplier` reaches a crossed slope -- it was left at one raw unit before this phase.
@@ -203,7 +207,7 @@ test_that("a crossed slope has a subgroup AME, and it is marginaleffects'", {
                      effect = "marginal", measure = "difference", stats = FALSE))
   i <- cx(t) == "age*race"
   nest <- stats::glm(married ~ race + relig + race:age, d, family = stats::binomial())
-  k    <- tabxplor:::reg_predictor_sd(d$age)
+  k    <- tabxplor:::wtd_sd(d$age)
   ref  <- marginaleffects::avg_comparisons(nest, variables = list(age = k), by = "race")
   # tab_reg models the FIRST outcome level, glm() the second, so the two differ by sign only
   expect_equal(sort(abs(get_diff(t$Model_mRD[i]))), sort(abs(ref$estimate)), tolerance = 1e-8)

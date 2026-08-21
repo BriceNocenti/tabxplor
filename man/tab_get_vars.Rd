@@ -23,6 +23,6 @@ roles and the \code{fmt} columns' \code{col_var}), never guessed from a column n
 renaming, \code{dplyr} verbs and a merge of several row variables.
 }
 \seealso{
-\code{\link[=tab_shape]{tab_shape()}}, which reports the table's SHAPE (merged / grouped / list) and which
+\code{\link[=tab_structure]{tab_structure()}}, which reports the table's STRUCTURE (merged / grouped / list) and which
 operations accept it.
 }

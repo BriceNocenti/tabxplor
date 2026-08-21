@@ -3,6 +3,20 @@
 
 ## New features
 
+* **A numeric row or tab variable is now grouped, not exploded.** `tab(data, age, y)` used to make
+  one row per distinct value; it now cuts `age` into four bands at its mean and one standard
+  deviation either side (one row per value is kept for a counted number or a short scale), and says
+  which it chose. The new `shape` argument decides it explicitly --- `"quartiles"`, `"quintiles"`, a
+  number of groups, `"sd_bands"`, `"levels"`, or `"log"` / `"sqrt"` for a column variable --- and is
+  the same vocabulary [tab_reg()] already took. The new `shape_numeric_var()` applies it to one
+  vector.
+
+* **A numeric column now shows how spread out it is, readably.** The cell was `49 (s17)`; it is
+  `49 (cv 36%)` --- the standard deviation as a percentage of the mean, which is comparable between
+  columns measured in different units (a column whose mean is not positive keeps the bare mean).
+  `display = "mean_sd"` restores the standard deviation, `display = "mean"` shows neither, and
+  `{sd}` / `{cv}` are ordinary display tokens usable in any layout.
+
 * **Every column now says what it holds.** A cell showing a secondary number in brackets
   (`100% (9 838)`, `1/1.63*** (31%)`) named it nowhere: the console type tag reads `<row% (n)>` /
   `<OR (row%)>` now, and html, Markdown and Excel exports gain a discrete third header row saying
@@ -93,10 +107,10 @@
   `tab_plain(ci = "cell")` and `tab(ci = "cell")` agree cell for cell.
 * **Effect sizes and Fisher's exact.** `test = TRUE` now carries Cramér's V / phi or eta²; a small
   sparse table uses Fisher's exact.
-* **`tab_shape()` and `tab_supports()`** answer "what have I got, and what can I do with it?" before
-  you try. A table reports whether it is merged (several row variables), grouped (sub-tables), or a
-  list, and which of `tab_compact()` / `tab_transpose()` / `transpose = TRUE` accept that shape — a
-  support matrix that used to exist only as scattered error messages.
+* **`tab_structure()` and `tab_supports()`** answer "what have I got, and what can I do with it?"
+  before you try. A table reports whether it is merged (several row variables), grouped
+  (sub-tables), or a list, and which of `tab_compact()` / `tab_transpose()` / `transpose = TRUE`
+  accept it — a support matrix that used to exist only as scattered error messages.
 * **`tab_columns()`** does the same for the columns: one row per numeric column with what it
   estimates, how it is coloured, and — side by side for the first time — the confidence level, the
   degrees of freedom, the basis (raw count / weights / survey design) and the method its interval was
@@ -343,6 +357,10 @@
   values of the renamed options** and falls back to their defaults.
 
 ## Changes that may affect existing code
+
+* **A numeric `row_vars` / `tab_vars` is grouped rather than given one row per value**, and a
+  numeric column's cell shows a coefficient of variation instead of a standard deviation (see *New
+  features*). `shape = "levels"` and `display = "mean_sd"` restore the old output exactly.
 
 * **The colour thresholds moved.** `pct_ratio` is now `×1.1 / ×1.2 / ×1.5 / ×2` above the reference
   and `÷1.1 / ÷1.25 / ÷2 / ÷4` below it (a percentage ratio is capped at `1 / base`, so a cell reaches

@@ -1,5 +1,9 @@
 # PURPOSE: THE MODEL CHECKS of a tab_reg() table, the `shape =` CURE for what they flag, and the
 #   primitives their plots are drawn from.
+# ⚠ `shape` ITSELF LIVES IN R/var-shape.R -- one vocabulary, one cutter, one label rule, shared with
+#   tab(). What stays here is the half that is genuinely about a FIT: the quadratic TERM
+#   (reg_shape_term), its per-model injection (reg_shape_add), and the Linearity check whose cure it
+#   is -- one builder, so the check and its cure can only ever be the same object.
 # ROLE: one fact table (REG_CHECKS), one selection rule (reg_checks_for), one producer
 #   (reg_check_rows) and one label builder (reg_check_label). Adding a check is ONE row: the footer
 #   label, its `stats =` value, its `check =` value and its panel title all derive from that row, so
@@ -33,7 +37,7 @@
 # framework, and its design rule keeps it small: a shape either RECODES THE COLUMN or ADDS ONE TERM,
 # nothing else. A quantile-cut predictor genuinely IS a factor, so it inherits the saturated crude
 # twin, the per-level counts, colours and gap tests for free. It reads the package's shared
-# per-predictor grammar (reg_per_predictor(), R/reg-resolve.R), so `shape = "quintiles"` cuts every
+# per-predictor grammar (per_variable(), R/reg-resolve.R), so `shape = "quintiles"` cuts every
 # continuous predictor and a named value overrides one. ⚠ ORDER: a shape recodes the column FIRST --
 # it defines what the model's variable is -- and `ref`'s anchor then applies to the result, which is
 # why the quadratic term below takes its square around 0 rather than measuring a centre of its own.
@@ -508,30 +512,18 @@ reg_check_rows <- function(data, f, sp, shared, stats, col_var, grouped) {
 }
 
 
-# === SECTION: `shape` -- fitting a predictor as something other than a line =========================
+# === SECTION: the quadratic TERM -- the one `shape` a fit adds rather than a recode ================
 #
 # The design rule is stated in the file header (THE CURE IS PART OF THE CHECK). Before this feature,
 # `predictors = c("race", "poly(age, 2)")` errored, and the formula escape hatch silently disabled
 # `empirical =`, `color = "adjustment"`, `multiplier` and the per-predictor tests.
+# The recoding shapes (quantile groups, sd bands, log, sqrt) are in R/var-shape.R: they change the
+# COLUMN, which is a fact about the data and belongs to both producers. Only a curvature is a fact
+# about the MODEL, so only it is here.
 #
 # WARNING -- poly() / ns() / bs() are NEVER emitted, and that is a wrong-number refusal, not taste:
 # `marginaleffects` returns AME = 0.000000 for them, silently, through every contrast form. I(x^2),
 # raw polynomials and log() are correct through every route.
-
-# The closed vocabulary. Anything else is an integer k (k quantile groups) or an error -- there is no
-# alias table, so what the docs list is what the parser accepts.
-#' @keywords internal
-REG_SHAPES <- c("linear", "quadratic", "log", "sqrt", "quartiles", "quintiles", "sd_bands")
-
-# The number of quantile groups a value asks for (NA = it is not a cut request).
-#' @keywords internal
-reg_shape_k <- function(value) {
-  if (identical(value, "quartiles")) return(4L)
-  if (identical(value, "quintiles")) return(5L)
-  k <- suppressWarnings(as.integer(value))
-  if (!is.na(k) && k >= 2L && k <= 20L && identical(trimws(as.character(value)), as.character(k)))
-    k else NA_integer_
-}
 
 # The extra model TERM a numeric predictor's non-linear SHAPE emits, its scale frozen as a LITERAL
 # in the formula string -- frozen for the same reason the multiplier's SD is: `scale()` inside a
@@ -552,7 +544,7 @@ reg_shape_k <- function(value) {
 #' @keywords internal
 reg_shape_term <- function(x, var, shape = "quadratic", w = NULL, digits = 8L) {
   if (!identical(shape, "quadratic")) return(NULL)
-  s <- reg_predictor_sd(x, w)
+  s <- wtd_sd(x, w)
   if (!is.finite(s) || s <= 0) return(NULL)
   num <- function(v) format(signif(v, digits), scientific = FALSE)
   # WARNING: return the DEPARSED form, not the pasted one. A model-matrix column is named by the
@@ -564,154 +556,6 @@ reg_shape_term <- function(x, var, shape = "quadratic", w = NULL, digits = 8L) {
   if (is.null(s2l)) return(NULL)
   paste(deparse(s2l, width.cutoff = 500L), collapse = "")
 }
-
-# One value -> the shape spec it names, or NULL for the default. The whole vocabulary is here: a
-# quantile count, or one of REG_SHAPES.
-#' @keywords internal
-reg_shape_value <- function(val, var) {
-  kind <- if (is.character(val)) trimws(tolower(val)) else val
-  k    <- reg_shape_k(kind)
-  if (!is.na(k)) return(list(kind = "quantiles", k = k))
-  if (!is.character(kind) || length(kind) != 1L || !kind %in% REG_SHAPES)
-    cli::cli_abort(c(
-      "{.arg shape} for {.val {var}} must be one of {.or {.val {REG_SHAPES}}}, or a number of groups.",
-      "x" = "Got {.val {as.character(val)[[1]]}}.",
-      "i" = '{.val quintiles} (or an integer) cuts it into quantile groups -- one estimate each.'),
-      call = NULL)
-  if (identical(kind, "linear")) return(NULL)          # the default, spelled out: nothing to emit
-  list(kind = kind, k = NA_integer_)
-}
-
-# The whole `shape` argument -> a named list of list(kind, k), on the package's shared per-predictor
-# grammar (reg_per_predictor(), R/reg-resolve.R). Validated against the data, so every refusal names
-# the variable and the value the user wrote.
-#' @keywords internal
-reg_resolve_shape <- function(shape, data, predictors) {
-  if (is.null(shape) || length(shape) == 0L) return(list())
-  preds <- intersect(predictors, names(data))
-  reg_check_continuous_names(shape, data, preds, "shape")
-  vals  <- reg_per_predictor(shape, reg_numeric_preds(data, preds), "shape")
-  purrr::compact(purrr::imap(vals, function(v, nm) reg_shape_value(v, nm)))
-}
-
-# k quantile groups of a continuous column, as an ordinary (unordered) factor. Breaks are WEIGHTED
-# quantiles when the call carries weights (equal-share of the POPULATION, not the sample), with the
-# extremes forced to the observed range so no value falls out.
-#' @keywords internal
-reg_cut_quantiles <- function(x, k, w = NULL, var = "x", breaks = NULL) {
-  x  <- as.numeric(x)
-  if (!is.null(breaks))
-    return(local({ f <- cut(x, breaks = breaks, include.lowest = TRUE, right = FALSE, dig.lab = 4L)
-                   factor(as.character(f), levels = levels(f)) }))
-  br <- rd_wquantile(x, seq(0, 1, length.out = k + 1L), w)
-  if (all(is.finite(x[!is.na(x)]))) {
-    br[[1L]]      <- min(x, na.rm = TRUE)
-    br[[k + 1L]]  <- max(x, na.rm = TRUE)
-  }
-  br <- unique(br[is.finite(br)])
-  if (length(br) < 3L) {
-    cli::cli_abort(c("{.arg shape} cannot cut {.val {var}} into {k} groups.",
-                     "x" = "Its distribution has too few distinct values.",
-                     "i" = "Use fewer groups, or pass it as a factor."))
-  }
-  f <- cut(x, breaks = br, include.lowest = TRUE, right = FALSE, dig.lab = 4L)
-  # ⚠ the BREAKS ride out with the factor: reg_prepare_replay() must cut a refit's frame at exactly
-  # the same places, and a weighted quantile of a different frame would not land there.
-  structure(factor(as.character(f), levels = levels(f)), tabxplor_breaks = br)
-}
-
-# THE OTHER CUT: bands at the mean and one SD either side -- the landmarks moderated regression
-# already names low / medium / high (Aiken & West's evaluation points, used here as the BOUNDARIES).
-# FOUR bands, not three: measured on a normal variable the cuts (m-sd, m, m+sd) give 16/34/34/16,
-# where dropping the middle cut leaves 64-68 % of the sample in one undifferentiated row.
-#
-# ⚠ UNLIKE QUANTILES, THE BANDS ARE NOT BALANCED, and on a skewed variable a landmark can fall
-# outside the data entirely -- measured, `m - sd` is below the minimum for a lognormal or an
-# exponential, which would ask cut() for an empty band. Such a landmark is DROPPED, so an exponential
-# gets three bands rather than an empty one, and the labels say which landmarks survived. Where
-# BALANCE matters more than the landmarks, quantiles are the other cut: that asymmetry is the whole
-# reason both exist.
-#' @keywords internal
-reg_cut_sd_bands <- function(x, w = NULL, var = "x", breaks = NULL, labels = NULL) {
-  x <- as.numeric(x)
-  # a replay re-cuts at the FROZEN breaks and labels, exactly as the quantile branch does: the mean
-  # and SD of a refit's frame would not land in the same places.
-  if (!is.null(breaks) && !is.null(labels)) {
-    f <- cut(x, breaks = breaks, include.lowest = TRUE, right = FALSE)
-    return(factor(labels[as.integer(f)], levels = labels))
-  }
-  m  <- reg_weighted_mean(x, w)
-  s  <- reg_predictor_sd(x, w)
-  rg <- range(x, na.rm = TRUE)
-  land <- c(m - s, m, m + s)
-  tag  <- c("m-sd", "m", "m+sd")
-  keep <- is.finite(land) & land > rg[[1L]] & land < rg[[2L]]
-  land <- land[keep]; tag <- tag[keep]
-  # ⚠ the mean is always strictly inside the range of a variable that varies, so the only reachable
-  # refusal is one that does not: a skewed variable DEGRADES to fewer bands (see above) rather than
-  # aborting, which is the behaviour to keep.
-  if (!is.finite(s) || s <= 0 || length(land) == 0L)
-    cli::cli_abort(c(
-      '{.code shape = "sd_bands"} needs {.val {var}} to vary.',
-      "x" = "Its standard deviation is zero, so there are no bands to cut.",
-      "i" = "Drop it from {.arg predictors}, or pass it as a factor."), call = NULL)
-  f0   <- cut(x, breaks = c(rg[[1L]], land, rg[[2L]]), include.lowest = TRUE, right = FALSE,
-              dig.lab = 4L)
-  # the label carries BOTH: the real cut points (the interval cut() built, identical in form to a
-  # quantile group's) and where the band sits on the mean/SD scale.
-  side <- c(paste0("< ", tag[[1L]]),
-            if (length(tag) > 1L) paste0(tag[-length(tag)], "..", tag[-1L]),
-            paste0("> ", tag[[length(tag)]]))
-  labs <- paste0(levels(f0), " ", side)
-  structure(factor(labs[as.integer(f0)], levels = labs),
-            tabxplor_breaks = c(rg[[1L]], land, rg[[2L]]), tabxplor_labels = labs)
-}
-
-# Apply every column-recoding shape ONCE, and return the display labels the transformed ones need
-# ("log(age)") plus the shapes with their quantile BREAKS filled in. `quadratic` is not a recode --
-# it emits a term -- so it passes through untouched.
-#' @keywords internal
-reg_shape_apply <- function(data, shapes, w = NULL) {
-  wv <- if (!is.null(w) && is.character(w) && length(w) == 1L && w %in% names(data)) data[[w]] else NULL
-  for (v in names(shapes)) {
-    kind <- shapes[[v]]$kind
-    x    <- as.numeric(data[[v]])
-    if (kind == "quadratic") next
-    if (kind == "log") {
-      if (any(x <= 0, na.rm = TRUE)) {
-        cli::cli_abort(c('{.code shape = "log"} needs strictly positive values.',
-                         "x" = "{.val {v}} has values <= 0.",
-                         "i" = 'Use {.val sqrt}, {.val quintiles}, or shift the variable first.'))
-      }
-      data[[v]] <- log(x)
-    } else if (kind == "sqrt") {
-      if (any(x < 0, na.rm = TRUE)) {
-        cli::cli_abort(c('{.code shape = "sqrt"} needs non-negative values.',
-                         "x" = "{.val {v}} has negative values."))
-      }
-      data[[v]] <- sqrt(x)
-    } else if (kind == "quantiles") {
-      f <- reg_cut_quantiles(x, shapes[[v]]$k, wv, var = v, breaks = shapes[[v]]$breaks)
-      shapes[[v]]$breaks <- attr(f, "tabxplor_breaks") %||% shapes[[v]]$breaks
-      attr(f, "tabxplor_breaks") <- NULL
-      data[[v]] <- f
-    } else if (kind == "sd_bands") {
-      f <- reg_cut_sd_bands(x, wv, var = v, breaks = shapes[[v]]$breaks,
-                            labels = shapes[[v]]$labels)
-      shapes[[v]]$breaks <- attr(f, "tabxplor_breaks") %||% shapes[[v]]$breaks
-      shapes[[v]]$labels <- attr(f, "tabxplor_labels") %||% shapes[[v]]$labels
-      attributes(f)[c("tabxplor_breaks", "tabxplor_labels")] <- NULL
-      data[[v]] <- f
-    }
-  }
-  list(data = data, shapes = shapes)
-}
-
-# HOW A SHAPE NAMES ITSELF in a row label: "log(x)" / "sqrt(x)", written with a literal "x" because
-# the `var` column beside it already names the variable. The other kinds show themselves without a
-# word -- a quadratic adds its own "x2" row, a quantile shape becomes ordinary factor levels.
-#' @keywords internal
-REG_SHAPE_MARKS <- c(log = "log(x)", sqrt = "\u221a(x)")
 
 # The quadratic terms a `shape` asks for, named by variable so the skeleton can key its extra row on
 # the same string the formula carries; the centre and scale are weighted whenever the call is.
@@ -752,22 +596,6 @@ reg_shape_add <- function(shape_terms, predictors) {
 # at 1000 observations in the largest GROUP, so a facetted 50 000-row plot gets loess and an unfacetted
 # 1200-row one gets gam -- and its message is assembled dynamically, so it cannot be regex-suppressed.
 # Nothing here smooths: the comparator of a linearity panel must be the STRAIGHT line the model assumes.
-
-# Weighted quantiles (the midpoint / Hmisc definition). One producer for the sparkline bins, the panel
-# bins and `shape = "quintiles"`, so a cut group and its curve can never disagree about where a break is.
-#' @keywords internal
-rd_wquantile <- function(x, probs, w = NULL) {
-  x <- as.numeric(x)
-  ok <- is.finite(x)
-  w  <- if (is.null(w)) rep(1, length(x)) else as.numeric(w)
-  ok <- ok & is.finite(w) & w > 0
-  if (!any(ok)) return(rep(NA_real_, length(probs)))
-  x <- x[ok]; w <- w[ok]
-  o <- order(x); x <- x[o]; w <- w[o]
-  if (length(x) == 1L) return(rep(x, length(probs)))
-  cw <- (cumsum(w) - 0.5 * w) / sum(w)
-  stats::approx(cw, x, xout = probs, rule = 2, ties = "ordered")$y
-}
 
 # The per-observation outcome a check reads, on the family's own LINK scale, plus that scale's label.
 # An ordinal / multinomial outcome has no single curve, so it is read as "beyond the first category"
@@ -835,7 +663,7 @@ rd_bin <- function(x, y, w = NULL, nbins = 10L, link = "identity",
   if (sum(ok) < 2L) return(NULL)
   x <- x[ok]; y <- y[ok]; w <- w[ok]
   if (!is.null(des_rows)) des_rows <- des_rows[ok]
-  br <- unique(rd_wquantile(x, seq(0, 1, length.out = nbins + 1L), w))
+  br <- unique(shape_wquantile(x, seq(0, 1, length.out = nbins + 1L), w))
   br[[1L]] <- min(x) - 1e-9; br[[length(br)]] <- max(x) + 1e-9
   if (length(br) < 3L) return(NULL)
   g  <- findInterval(x, br, rightmost.closed = TRUE)
@@ -865,7 +693,7 @@ rd_bin <- function(x, y, w = NULL, nbins = 10L, link = "identity",
   # only place x and its weights are both in scope; the panel plot ignores it (it draws real points).
   # ⚠ COLUMNS, not an attribute: the curve is mutate()d, bound per tab_vars group and sliced again
   # before it is drawn, and only a column survives all three.
-  q95 <- tryCatch(rd_wquantile(x, c(0.025, 0.975), w), error = function(e) range(x))
+  q95 <- tryCatch(shape_wquantile(x, c(0.025, 0.975), w), error = function(e) range(x))
   tibble::tibble(x = mx, y = out$y, n = sw, se = out$se,
                  xlo = min(q95), xhi = max(q95))
 }

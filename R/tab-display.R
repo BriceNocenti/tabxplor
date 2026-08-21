@@ -216,6 +216,11 @@ reg_role_qualifier <- function(x, sep = "") {
 #              of that cell, and a percentage wanting 0 shares it with the ratio wanting 2.
 #   source     the argument that would fill an empty field, for the void note. NA where it always
 #              exists (pct / n / wn), which display_note_empty() drops.
+#   unit       "pct" where the stored field is a proportion the cell prints x100 with a "%" -- the one
+#              statement of it, read by format() instead of a hard-coded list of tokens.
+#   self_named the RENDERED cell already carries the token's own name ("cv 35%"), so a header that
+#              repeated it would say it twice: the export header drops such an aside, while the
+#              console type tag keeps it (there the tag is the only thing naming the layout).
 #   alias      this row is not a token but a legacy SPELLING of one, resolved by display_primary().
 #   label      the token's SHORT name, the one word that says what the number is: the console type
 #              tag, the exports' unit line and an Excel aside column's header all read it through
@@ -231,8 +236,10 @@ reg_role_qualifier <- function(x, sep = "") {
 .dtok <- function(field = NA_character_, settable = TRUE, user = FALSE, bare = FALSE,
                   value_cell = FALSE, footer = FALSE, colour = TRUE, geometry = NA_character_,
                   comparison = NA_character_, min_digits = NA_integer_, source = NA_character_,
-                  alias = NA_character_, label = NA_character_, doc = NA_character_)
+                  alias = NA_character_, label = NA_character_, unit = NA_character_,
+                  self_named = FALSE, doc = NA_character_)
   list(field = field, settable = settable, user = user, bare = bare, value_cell = value_cell,
+       unit = unit, self_named = self_named,
        footer = footer, colour = colour, geometry = geometry, comparison = comparison,
        min_digits = min_digits, source = source, alias = alias, label = label, doc = doc)
 
@@ -261,11 +268,9 @@ DISPLAY_TOKENS <- list(
                   doc = 'the weighted count'),
   mean    = .dtok("mean", user = TRUE, bare = TRUE, value_cell = TRUE, geometry = "level",
                   source = 'a numeric col_var',
-                  # format() folds the sd into a mean cell as "1.7 (sigma 2.1)" without a token for
-                  # it, so the name says so where it actually prints -- and, on a regression column,
-                  # whose mean it is (see `pct` above).
-                  label = function(x) paste0(reg_role_qualifier(x, " "),
-                                             if (mean_shows_sd(x)) "mean (sd)" else "mean"),
+                  # on a regression column, WHOSE mean it is (see `pct` above). The sd / cv tail is
+                  # an ordinary aside token now, so the composite name builder appends it.
+                  label = function(x) paste0(reg_role_qualifier(x, " "), "mean"),
                   doc = 'the mean'),
   # the two SCALE-RELATIVE tokens: they name a ROLE, and each column answers with the token it has
   # always rendered (EST_SCALES' `est_display` / `base_display`, resolved by
@@ -316,9 +321,22 @@ DISPLAY_TOKENS <- list(
                   label = "ctr",
                   doc = "the cell's contribution to the chi-squared"),
   var     = .dtok("var"  , user = TRUE, value_cell = TRUE, source = 'a numeric col_var',
-                  # the Excel sd twin stores sqrt(var) in the same field and declares role "sd"
-                  label = function(x) if (identical(get_role(x), "sd")) "sd" else "var",
+                  label = "var",
                   doc = 'the variance'),
+  # DERIVED from `var`, like `resid` and `gap` from theirs: the sd is sqrt(variance) and nothing is
+  # stored twice. Read-only -- writing one back would mean writing a variance.
+  sd      = .dtok(         user = TRUE, settable = FALSE, value_cell = TRUE, geometry = "level",
+                  source = 'a numeric col_var',
+                  label = "sd",
+                  doc = 'the standard deviation, in the variable\'s own unit'),
+  # DERIVED too, from `var` AND `mean`: the spread as a share of the level, so two columns measured
+  # in different units can be compared for how dispersed they are. Void where the mean is not
+  # strictly positive -- a ratio to something at or below zero says nothing (see ?tab).
+  cv      = .dtok(         user = TRUE, settable = FALSE, value_cell = TRUE,
+                  source = 'a numeric col_var whose mean is positive',
+                  label = "cv", unit = "pct", self_named = TRUE,
+                  doc = paste('the coefficient of variation --- the standard deviation as a',
+                              'percentage of the mean')),
   resid   = .dtok(          user = TRUE, settable = FALSE, value_cell = TRUE, min_digits = 1L,
                   source = 'test = TRUE  (the residual comes from the chi-squared)',
                   label = "resid",
@@ -426,6 +444,19 @@ DISPLAY_GOF_TOKENS     <- names(DISPLAY_TOKENS)[
 #' @keywords internal
 #' @noRd
 DISPLAY_SETTABLE       <- .dtok_which("settable")
+# The tokens whose stored field is a PROPORTION, printed x100 with a "%": one statement, read by
+# format() instead of a hard-coded list of token names.
+#' @keywords internal
+#' @noRd
+DISPLAY_PCT_TOKENS     <- names(DISPLAY_TOKENS)[
+  vapply(DISPLAY_TOKENS, function(r) identical(r$unit %||% NA_character_, "pct"), logical(1))]
+# The tokens whose rendered cell already says their own name ("cv 35%"): an export HEADER drops such
+# an aside rather than repeating it, while the console type tag keeps it (there it is the only thing
+# naming the layout).
+#' @keywords internal
+#' @noRd
+DISPLAY_SELF_NAMED     <- names(DISPLAY_TOKENS)[
+  vapply(DISPLAY_TOKENS, function(r) isTRUE(r$self_named), logical(1))]
 #' @keywords internal
 #' @noRd
 DISPLAY_TOKEN_GEOMETRY <- .dtok_map("geometry")
@@ -513,6 +544,14 @@ DISPLAY_PRESETS <- list(
                              doc = 'the level and, in parentheses, its odds ratio'),
   or_base         = .dpreset("{or} ({base})",
                              doc = 'the odds ratio and, in parentheses, the percentage it rests on'),
+  # the two numeric-column layouts. `mean` needs no preset: it is already a bare token.
+  mean_sd         = .dpreset("{mean} (\u03c3{sd})",
+                             doc = 'the mean and, in parentheses, its standard deviation'),
+  mean_cv         = .dpreset("{mean} (cv {cv})",
+                             doc = paste('the mean and, in parentheses, its coefficient of',
+                                         'variation --- the spread as a percentage of the mean,',
+                                         'comparable between columns measured in different units',
+                                         '(the default where every mean is positive)')),
   # legacy SPELLINGS: the 1.x `OR = "or_pct"` layout, and the value the jamovi display ComboBox writes
   or_pct          = .dpreset(alias = "or_base"),
   OR_pct          = .dpreset(alias = "or_base")

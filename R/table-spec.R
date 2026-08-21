@@ -1,13 +1,13 @@
 # PURPOSE: The table identity -- what kind of table this is, which variables are in it, and how it
 #   was made -- for both producers (tab() and tab_reg()).
 # ROLE: One `meta$spec` list, read through tab_kind() / tab_is_reg() / tab_call(); consumed by the
-#   shape model (R/tab-shape.R), the exporters and the render tail.
+#   structure model (R/tab-structure.R), the exporters and the render tail.
 # KEY CONSTRAINTS:
 #   - `spec$kind` is STATED by the producer, never sniffed from the data.
 #   - `spec` is OPTIONAL: a table that lost it (or a plain tibble mid-pipeline) still prints and
 #     exports. tab_kind() then DERIVES the kind from the `test` tibble's discriminators (TEST_REG_KEYS)
 #     -- the degraded fallback, never the normal path.
-# See: CLAUDE.md § tabxplor architecture (declarative architecture); R/tab-shape.R.
+# See: CLAUDE.md § tabxplor architecture (declarative architecture); R/tab-structure.R.
 #
 # THE MODEL -- one `meta$spec`, three slots:
 #   kind   "crosstab" | "regression".

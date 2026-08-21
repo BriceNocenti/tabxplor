@@ -29,7 +29,7 @@ So every finding holds at `HEAD` as well; only some decimal counts in the captur
 There is **one builder and one appender**:
 
 | piece | home | what it produces |
-|-------|------|------------------|
+| ------- | ------ | ------------------ |
 | `tab_kable_print_tooltip()` | `tab_classes.R:1668` | the whole text of one **fmt column**, per row |
 | `reg_append_empirical_tip()` | `tab-render-html.R:71` | appends the multinomial crude fragment |
 | `reg_spec_tips_mnl()` | `reg-spec-build.R:250` | builds that fragment |
@@ -49,7 +49,7 @@ Each fragment is `any()`-gated (the `format()` pass runs only where some cell ca
 Measured size of the surface (median / max characters per tooltip, and fragments per tooltip):
 
 | table | n tips | chars (med / max) | fragments (med / max) |
-|-------|-------:|------------------:|----------------------:|
+| ------- | -------: | ------------------: | ----------------------: |
 | `tab(pct = "row", color = "diff")` | 28 | 32 / 36 | 3 / 3 |
 | `tab(ci = "cell", color = "contrib", guaranteed_effect)` | 28 | 90 / 99 | 7 / 7 |
 | `tab()` on a numeric col_var | 4 | 67 / 68 | 5 / 5 |
@@ -80,7 +80,7 @@ section named on the right.
 ### Severity A — the reader is told something untrue
 
 | key | finding | § |
-|-----|---------|---|
+| ----- | --------- | --- |
 | T1 | `diff:` prints a coefficient / a count difference / a log-odds **as a percentage** (`-312.07%` for `-3.1`) | 4.1 |
 | T2 | In that line the **interval is right and the estimate wrong** — two scales in one fragment | 4.1 |
 | T3 | The multinomial crude fragment is in **percentage points** while its own cell shows an **odds ratio** | 4.2 |
@@ -89,7 +89,7 @@ section named on the right.
 ### Severity B — right number, wrong or missing label
 
 | key | finding | § |
-|-----|---------|---|
+| ----- | --------- | --- |
 | T5 | The **exact p-value appears only on multiplicative columns** — while `gap:` carries one either way | 4.4 |
 | T6 | An **unlabelled percentage or mean** opens most tooltips (`14% ; 1/2.89 [...]`) | 5.1 |
 | T7 | Labels name the **field**, never the estimand; `obs:` and `crude:` are two names for one thing | 5.1 |
@@ -102,7 +102,7 @@ section named on the right.
 ### Severity C — noise and polish
 
 | key | finding | § |
-|-----|---------|---|
+| ----- | --------- | --- |
 | T12 | `OR: 1` on every reference cell, where `diff` / `ratio` correctly collapse to `ref` | 6 |
 | T13 | `OR:` on a Total row whose `diff` and `ratio` were dropped as non-comparable | 6 |
 | T14 | `diff:` / `ratio:` **repeat the cell** under a composite display | 6 |
@@ -116,7 +116,7 @@ section named on the right.
 ### Root causes, in one place
 
 | key | root cause |
-|-----|------------|
+| ----- | ------------ |
 | T1, T2 | `pct_or_ci` (`fmt_class.R:3111`) asks `var_kind == "mean"` where it means "is this a percentage" |
 | T3 | `reg-spec-build.R:274`, a hard-coded `sprintf("%+.0f pts")` that never reaches `format()` |
 | T4, T17 | the builder reads `get_reference(x, "cells")`; `format()` reads a role-aware mask |
@@ -172,7 +172,7 @@ pct_or_ci <- ok & (display %in% c("pct", "diff", "ctr") & !(display == "diff" & 
 whether the *tooltip* is (§8.2):
 
 | scale | `var_kind` | `est_display` | cell | tooltip's `diff:` | |
-|-------|------------|---------------|------|-------------------|---|
+| ------- | ------------ | --------------- | ------ | ------------------- | --- |
 | `points` | `pct` | `diff` | `-19.8%` | `-19.8%` | ✓ |
 | `mean_diff` | `mean` | `diff` | `+1.5` | `+1.5` | ✓ |
 | `odds_ratio` · `pct_ratio` | `pct` | `or` / `ratio` | `1/2.40` · `÷1.63` | `-23%` · `-20%` | ✓ derived |
@@ -247,7 +247,7 @@ Verified sound, listed so a later pass does not disturb them:
 ### 5.1 The current labels
 
 | fragment | label | translated | names |
-|----------|-------|:----------:|-------|
+| ---------- | ------- | :----------: | ------- |
 | `pct` | *(none)* | — | the level, or on a regression the **adjusted** level |
 | `mean` | *(none)* | — | idem |
 | `sd` | `sd:` | ✗ | the cell's own SD |
@@ -308,7 +308,7 @@ then adjusted 14% ; OR 1/2.89 [1/3.33;1/2.51], p = <0.01% ; as points -6% ; as R
 `mean_ctr` is a code identifier printed to a reader (French is already fine: *contrib. moy.*). And `"diff"` and `"gap"` both translate to **`écart`**, so the French tooltip reads `écart: -19.8% … écart: -1.4 pts` — two different quantities under one word, and under the word Phase 22h made the *umbrella* term. `dev/french_glossary.md` should settle the pair before the catalogue sweep of Phase 23f.
 
 And **T20**: five of the fifteen labels were never wrapped in `gettext()` — `sd:`, `ratio:`, `OR:`, `n:` and
-`, p = `. `OR` is an acronym and can stay; the other four are words. Neither reg fragment is translatable at
+`, p =`. `OR` is an acronym and can stay; the other four are words. Neither reg fragment is translatable at
 all: `"crude: %.0f%% (%+.0f pts …)"` and `"%s: mean %s (SD %s); mean if yes %s, if no %s"` are `sprintf`
 formats with English embedded in them, and the second also hard-codes the binary *yes / no* wording.
 
@@ -387,7 +387,7 @@ The derived additive reading of an odds-ratio column is a **risk difference in p
 `var_kind` is right on all thirteen rows, which is the check that chose it:
 
 | scale | `var_kind` | today | with `var_kind == "pct"` | |
-|-------|------------|-------|--------------------------|---|
+| ------- | ------------ | ------- | -------------------------- | --- |
 | `level_pct` · `points` · `mixed` | `pct` | `%` | `%` | unchanged |
 | `odds_ratio` · `pct_ratio` | `pct` | `%` | `%` | unchanged — the derived risk difference |
 | `mean_diff` · `level_mean` · `mean_ratio` · `score_ratio` · `score_odds_ratio` | `mean` | bare | bare | unchanged |
@@ -426,7 +426,7 @@ That single rule closes T12, T13, T14, T15 and — once the reference mask is th
 ## 9. Blast radius and a suggested order
 
 | step | touches | risk | closes |
-|------|---------|------|--------|
+| ------ | --------- | ------ | -------- |
 | 1 | `pct_or_ci` mask: `var_kind == "pct"` instead of `!is_mean` | **medium** — display engine + Excel numFmt | T1, T2 |
 | 2 | the reference mask in the builder → the role-aware one | low | T4, and half of T17 |
 | 3 | one shared `show(token)` gate | low | T12, T13, T14, T15 |

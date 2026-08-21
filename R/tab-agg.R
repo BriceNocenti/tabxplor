@@ -46,16 +46,23 @@ num_derive_stats <- function(tabs, col_vars, weighted) {
 }
 
 # Total rows and total tables by SUMMING the moment sums, which are ADDITIVE: exact, no N re-scan.
-num_rollup <- function(agg, by, drop_keys, moment_cols, tab_vars_chr) {
+num_rollup <- function(agg, by, drop_keys, moment_cols, index_keys) {
   roll <- if (length(by) == 0) {
     agg[, lapply(.SD, sum, na.rm = TRUE), .SDcols = moment_cols]
   } else {
     agg[, lapply(.SD, sum, na.rm = TRUE), .SDcols = moment_cols, keyby = by]
   }
   if (length(drop_keys) > 0)    roll[, (drop_keys) := "Total"]
-  # DESIGN: one SHARED factor ptype per tab_var, taken from the source aggregate -- vctrs refuses to
-  # combine two ORDERED factors with different level sets, and a collapsed set carries only "Total".
-  if (length(tab_vars_chr) > 0) for (v in tab_vars_chr) {
+  # DESIGN: one SHARED factor ptype per INDEX key -- every tab_var AND the row_var. vctrs refuses to
+  # combine two ORDERED factors with different level sets, and a collapsed key carries only "Total";
+  # restating the source's own levels here is what makes the rollup bind back onto the aggregate by
+  # construction rather than by rbindlist's coercion rules. It is `plain_core()`'s
+  # finalize_total_rows() written on the other leaf, and the row_var is the column the two leaves are
+  # full_join()ed on, so it is the one that must not be left to chance.
+  # ⚠ "Total" joins the levels of EVERY index key, not only the ones collapsed in THIS rollup: a
+  # tab_var is a grouping key in one rollup of the series and a drop_key in the next, and the two are
+  # bound together -- gating on `drop_keys` gave them two level sets and the bind refused.
+  for (v in intersect(index_keys, names(roll))) {
     src <- agg[[v]]
     data.table::set(roll, j = v, value = if (is.factor(src)) {
       factor(as.character(roll[[v]]), levels = unique(c(levels(src), "Total")),

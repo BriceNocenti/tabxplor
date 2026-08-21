@@ -148,7 +148,9 @@ testthat::test_that("tab_xl emits no font `scheme` (numbers really render in fon
 # Phase 14l: an "<var>_sd" sibling holds "s2.1" under a header of "sd" -- it never needs a mean's width.
 testthat::test_that("tab_xl narrows the sd column", {
   testthat::skip_if_not_installed("openxlsx2")
-  tb <- tab(forcats::gss_cat, marital, c(race, tvhours), pct = "row")
+  # `mean_sd`: the sd aside is what gets a column of its own here, and the narrow-width rule is
+  # declared for it alone (its numbers are short under a two-letter header).
+  tb <- tab(forcats::gss_cat, marital, c(race, tvhours), pct = "row", display = "mean_sd")
   p  <- withr::local_tempfile(fileext = ".xlsx")
   suppressMessages(tab_xl(tb, path = p, sheets = "unique", replace = TRUE, open = FALSE))
   cols <- openxlsx2::wb_load(p)$worksheets[[1]]$cols_attr
@@ -227,7 +229,8 @@ testthat::test_that("tab_xl(transpose = TRUE) writes a valid workbook", {
 testthat::test_that("ci = 'cell' exports the CI text (not the raw proportion)", {
   testthat::skip_if_not_installed("openxlsx2")
   t   <- tab(forcats::gss_cat, marital, race, pct = "row", ci = "cell")
-  tmp <- tempfile(fileext = ".xlsx"); tab_xl(t, path = tmp, open = FALSE, replace = TRUE)
+  tmp <- tempfile(fileext = ".xlsx")
+  tab_xl(set_display(t, "mean_sd"), path = tmp, open = FALSE, replace = TRUE)
   df  <- openxlsx2::wb_to_df(openxlsx2::wb_load(tmp), col_names = FALSE)
   testthat::expect_true(any(grepl("\\[[0-9]+;[0-9]+\\]", as.matrix(df))))   # a "[lo;hi]" bracket
 })
@@ -255,7 +258,8 @@ testthat::test_that("OR exports as 1/x text by default, numbers with or_numeric 
 testthat::test_that("numeric vars export a mean + separate sd column, named by the statistic", {
   testthat::skip_if_not_installed("openxlsx2")
   t   <- tab_num(forcats::gss_cat, race, c(age, tvhours), digits = 1L)
-  tmp <- tempfile(fileext = ".xlsx"); tab_xl(t, path = tmp, open = FALSE, replace = TRUE)
+  tmp <- tempfile(fileext = ".xlsx")
+  tab_xl(set_display(t, "mean_sd"), path = tmp, open = FALSE, replace = TRUE)
   df   <- openxlsx2::wb_to_df(openxlsx2::wb_load(tmp), col_names = FALSE)
   span <- as.character(df[2, ])   # Phase 13c-iii col_var spanning-name row (row 1 = the title)
   hdr  <- as.character(df[3, ])   # level-header row
@@ -272,7 +276,8 @@ testthat::test_that("Excel gets a col_var spanning-name row + suffix-stripped le
   d <- forcats::gss_cat
   d$grp <- factor(ifelse(d$age < 40, "Young", "Other"))
   t   <- tab(d, row_vars = marital, col_vars = c(race, grp), pct = "row")
-  tmp <- tempfile(fileext = ".xlsx"); tab_xl(t, path = tmp, open = FALSE, replace = TRUE)
+  tmp <- tempfile(fileext = ".xlsx")
+  tab_xl(set_display(t, "mean_sd"), path = tmp, open = FALSE, replace = TRUE)
   df  <- openxlsx2::wb_to_df(openxlsx2::wb_load(tmp), col_names = FALSE)
   span_row <- as.character(df[2, ]); hdr_row <- as.character(df[3, ])
   testthat::expect_true(all(c("race", "grp") %in% span_row))               # spanning names row

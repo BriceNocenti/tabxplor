@@ -578,6 +578,8 @@ the last few are not meant to be typed:
 \item \code{base} --- the level the estimate sits on: the percentage, the mean or the count. On a plain percentage table it is the same number as \code{est}; beside a regression effect it is the adjusted prediction.
 \item \code{ci} --- the confidence interval of whatever the column compares, as \code{[low;high]}.
 \item \code{moe} --- the margin of error --- the same interval as \code{ci}, written as the half-width \code{+/-x} around the estimate. Void where the column compares a RATIO: a ratio's interval is symmetric on the LOG scale, so it has no half-width.
+\item \code{sd} --- the standard deviation, in the variable's own unit.
+\item \code{cv} --- the coefficient of variation --- the standard deviation as a percentage of the mean.
 \item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only.
 \item \code{coef} --- the estimate on the model's LINK scale --- the coefficient a linear or log-link model fitted. The same number as \code{est} where the column is already additive, its logarithm where the column shows a ratio.
 \item \code{gap} --- how far adjustment moved the effect: the gap between the modelled estimate and its observed counterpart, on the estimate's own scale. What \code{color = "adjustment"} grades --- readable in print and Excel, not only in an html tooltip.
@@ -609,6 +611,8 @@ and on a \code{\link{tab_reg}} table:
 \item \code{"base_ratio"} (\code{\{base\} (\{ratio\})}) --- the level and, in parentheses, its ratio to the reference.
 \item \code{"base_or"} (\code{\{base\} (\{or\})}) --- the level and, in parentheses, its odds ratio.
 \item \code{"or_base"} (\code{\{or\} (\{base\})}) --- the odds ratio and, in parentheses, the percentage it rests on.
+\item \code{"mean_sd"} (\code{\{mean\} (σ\{sd\})}) --- the mean and, in parentheses, its standard deviation.
+\item \code{"mean_cv"} (\code{\{mean\} (cv \{cv\})}) --- the mean and, in parentheses, its coefficient of variation --- the spread as a percentage of the mean, comparable between columns measured in different units (the default where every mean is positive).
 }
 }
 

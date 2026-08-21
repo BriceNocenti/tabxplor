@@ -27,7 +27,7 @@ test_that("one grammar: a bare scalar, `default =`, and per-variable overrides",
   k <- reg_call(m)$multiplier
   expect_equal(unname(k[["age"]]), 10)
   expect_equal(unname(k[["tvhours"]]),
-               2 * tabxplor:::reg_predictor_sd(d$tvhours[!is.na(d$race)]), tolerance = 1e-8)
+               2 * tabxplor:::wtd_sd(d$tvhours[!is.na(d$race)]), tolerance = 1e-8)
   expect_equal(k, reg_call(tab_reg(d, "married", c("race", "age", "tvhours"), family = "binomial",
                                    stats = FALSE,
                                    multiplier = c(default = "2sd", age = 10)))$multiplier)
@@ -43,7 +43,7 @@ test_that("one grammar: a bare scalar, `default =`, and per-variable overrides",
                 ref = c("median", "last", race = "Black"))
   fr <- d[!is.na(d$race) & !is.na(d$relig) & !is.na(d$age), ]
   expect_equal(unname(reg_call(r)$fit_spec$prep$anchors[["age"]]),
-               tabxplor:::rd_wquantile(fr$age, 0.5), tolerance = 1e-8)
+               tabxplor:::shape_wquantile(fr$age, 0.5), tolerance = 1e-8)
   expect_identical(as.character(r$levels)[as.character(r$var) == "race"][[1]], "Black")
   lv <- as.character(r$levels)[as.character(r$var) == "relig"]
   expect_identical(lv[[1]], utils::tail(levels(forcats::fct_drop(d$relig)), 1))  # `last`, every OTHER factor

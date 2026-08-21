@@ -93,11 +93,11 @@ new_grouped_tab <-
 #' @description
 #' \code{TRUE} for a table built by \code{\link{tab}}, \code{\link{tab_reg}} or any of their
 #' variants --- i.e. for a \code{tabxplor_tab} (a \code{tabxplor_grouped_tab} with `tab_vars`).
-#' \code{\link{tab_shape}} answers the fuller question: what shape is it, and what can be done
+#' \code{\link{tab_structure}} answers the fuller question: what structure is it, and what can be done
 #' with it.
 #' @param x An object to test.
 #' @return A single logical.
-#' @seealso [tab_shape()], [tab_get_vars()].
+#' @seealso [tab_structure()], [tab_get_vars()].
 #' @export
 is_tab <- function(x) {
   inherits(x, "tabxplor_tab")
@@ -801,9 +801,9 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   # a second time (col 1 "row_var" -> "levels", a new `row_var` on top).
   if (any(purrr::map_lgl(tabs, ~ isTRUE(tab_declared_vars(.)$compacted)))) return(tabs_base)
 
-  # The shape refusals are DECLARED (TAB_OPS, R/tab-shape.R), so tab_supports(x, "compact") answers them
+  # The structural refusals are DECLARED (TAB_OPS, R/tab-structure.R), so tab_supports(x, "compact") answers them
   # before the call. What is refused: tables that disagree about WHICH tab_vars they have (no common axis).
-  if (!tab_check_shape(tabs, "compact")) return(tabs_base)
+  if (!tab_check_structure(tabs, "compact")) return(tabs_base)
   merge_tab_vars <- tab_get_vars(tabs[[1]])$tab_vars
 
 
@@ -875,12 +875,14 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 # this is the ONE place every DISPLAY path hydrates it. IDEMPOTENT: each spec clears what it consumed.
 #' @keywords internal
 #' @noRd
-tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE) {
+tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE,
+                                   transposed = FALSE) {
   backend <- match.arg(backend)
 
   # `ctx` reads the display intent ONCE (a spec cannot re-read it after mat_base_n clears it).
   re  <- get_render_extras(tab)
   ctx <- list(base_n = re$n %||% tx_option("n"),
+              transposed = isTRUE(transposed),
               add_pct = isTRUE(re$add_pct), pvalue = isTRUE(pvalue),
               common_totrow = isTRUE(re$common_totrow), common_totrow_ref = isTRUE(re$common_totrow_ref))
   tab_materialize(tab, backend, ctx)
@@ -921,15 +923,14 @@ materialize_specs <- function() list(
     apply = function(tab, backend, ctx) tab_drop_totcol(tab, backend, ctx$base_n)),
   # Excel-only: a composite cell's ASIDES, each split into a column of its own. Excel writes ONE raw
   # value + a numFmt per cell, so a bracket cannot survive -- the aside was simply LOST on export.
-  # Runs after base_n (whose column must exist first) and before sd_twin (the same shape, for the one
-  # aside that is not a {} token).
+  # Runs after base_n, whose column must exist first. A mean's sd is one of these: it is an ordinary
+  # `{sd}` token in the column's own template, not a hand-rolled twin.
+  # ⚠ NOT under `transpose = TRUE`, although that path materialises as "xl" (for the `n` COLUMN it
+  # needs): a transposed render writes the formatted STRING for every backend, Excel included, so the
+  # composite survives there and splitting it would only strip the aside off the cell.
   aside_cols = list(
-    when  = function(tab, backend, ctx) identical(backend, "xl"),
+    when  = function(tab, backend, ctx) identical(backend, "xl") && !isTRUE(ctx$transposed),
     apply = function(tab, backend, ctx) mat_aside_cols(tab)),
-  # Excel-only mean + sd twin column: console/md/kable show sd inline as "mean (sigma sd)".
-  sd_twin = list(
-    when  = function(tab, backend, ctx) identical(backend, "xl"),
-    apply = function(tab, backend, ctx) mat_sd_twin(tab)),
   # p-value / GOF footer rows from the kept `test` attribute. tab_pvalue_lines no-ops on a regression
   # table, so a crosstab gets its chi2 row and a reg table its GOF footer.
   footer = list(
@@ -1024,7 +1025,7 @@ mat_reg_spark <- function(tab) {
 #' @keywords internal
 #' @noRd
 mat_aside_cols <- function(tab) {
-  splittable <- function(col) is_fmt(col) && !get_role(col) %in% c("n", "pct", "sd", "aside")
+  splittable <- function(col) is_fmt(col) && !get_role(col) %in% c("n", "pct", "aside")
   added <- list()                                   # source name -> the new columns, in cell order
   for (nm in names(tab)[purrr::map_lgl(tab, splittable)]) {
     col <- tab[[nm]]
@@ -1052,34 +1053,6 @@ mat_aside_cols <- function(tab) {
     ord <- append(ord, names(added[[nm]]), after = which(ord == nm))
   }
   tab[ord]
-}
-
-# Excel-only sd twin: for each numeric mean column insert an uncoloured sibling "<var>_sd" holding
-# sd = sqrt(var) (display "var" -> get_num() IS the sd; tab_xl's numFmt adds the sigma prefix), placed
-# directly after its mean column. Purely an Excel layout concern (text backends fold sd inline).
-#' @keywords internal
-#' @noRd
-mat_sd_twin <- function(tab) {
-  is_mean_col <- function(col) is_fmt(col) && identical(fmt_var_kind(col), "mean") &&
-    any(get_display(col) == "mean")
-  means <- names(tab)[purrr::map_lgl(tab, is_mean_col)]
-  for (nm in means) {
-    sdc <- tab[[nm]]
-    # The twin DECLARES itself (role "sd"); the name is a layout detail, the role is the fact.
-    tab[[paste0(nm, "_sd")]] <-
-      set_role(set_color(set_display(set_var(sdc, suppressWarnings(sqrt(get_var(sdc)))), "var"),
-                         "no"), "sd")
-  }
-  if (length(means) > 0) {                       # place each _sd directly after its mean column
-    ord <- names(tab)
-    for (nm in rev(means)) {
-      sd_nm <- paste0(nm, "_sd")
-      rest  <- ord[ord != sd_nm]
-      ord   <- append(rest, sd_nm, after = which(rest == nm))
-    }
-    tab <- tab[ord]
-  }
-  tab
 }
 
 # Drops the redundant per-block Total rows of a COMPACTED table when they render identically (only

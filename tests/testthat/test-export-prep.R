@@ -239,13 +239,13 @@ testthat::test_that("the title names the DEPENDENT axis first, decided by pct", 
                          "race by marital (tabbed by year)")
 })
 
-testthat::test_that("roles$sd_cols finds the Excel sd siblings, ungated by var_names", {
-  # Phase 14l: ONE definition of the "<var>_sd" rule, read by tab_col_var_header() and by tab_xl's
-  # column widths. The header rewrite is gated on `var_names`; the ROLE must not be -- a width is not
-  # a naming decision.
+testthat::test_that("roles$sd_cols finds the Excel sd aside column, ungated by var_names", {
+  # The sd is an ordinary `{sd}` aside now, so mat_aside_cols() splits it off like any other and the
+  # role is "aside". `sd_cols` survives as the ONE definition tab_xl's narrow column width reads --
+  # a width is not a naming decision, so it is not gated on `var_names`.
   pr <- function(vn) tabxplor:::tab_export_prep(
-    tab(gss, marital, c(race, tvhours), pct = "row"), backend = "xl", list_method = TRUE,
-    var_names = vn, compute = c("refs", "bold"))$tables[[1]]
+    tab(gss, marital, c(race, tvhours), pct = "row", display = "mean_sd"), backend = "xl",
+    list_method = TRUE, var_names = vn, compute = c("refs", "bold"))$tables[[1]]
   for (vn in c("both", "cols", "rows", "none")) {
     testthat::expect_equal(names(pr(vn)$roles$sd_cols), "tvhours_sd", info = vn)
   }
@@ -353,16 +353,23 @@ testthat::test_that("a numeric col_var names the VARIABLE once, and the statisti
   # better keep the variable name + just write 'mean (sd)' in the normal header". A numeric col_var
   # contributes a column named after the variable, so under its own span the name was said twice --
   # three times in Excel, which splits off a `<var>_sd` sibling too.
-  t_num <- tab(gss, marital, c(race, tvhours), pct = "row", color = "diff")
+  t_num <- tab(gss, marital, c(race, tvhours), pct = "row", color = "diff", display = "mean_sd")
   hdr <- function(backend, vn = "both") {
     cvh <- tabxplor:::tab_export_prep(t_num, backend = backend, wrap = NULL,
                                       var_names = vn)$tables[[1]]$col_var_header
     stats::setNames(cvh$clean, cvh$label)
   }
-  # text backends fold the sd into the cell ("1.7 (s2.1)"), so the header says so
+  # text backends print the sd inside the cell ("49 (s17)"), so the header says so
   testthat::expect_equal(unname(hdr("kable")[names(hdr("kable")) == "tvhours"]), "mean (sd)")
   # Excel splits it into a real `_sd` column: one header each
   testthat::expect_equal(unname(hdr("xl")[names(hdr("xl")) == "tvhours"]), c("mean", "sd"))
+  # ⚠ the DEFAULT aside is the coefficient of variation, and it NAMES ITSELF in the cell
+  # ("49 (cv 36%)"), so the level header must not say it twice.
+  t_cv <- tab(gss, marital, c(race, tvhours), pct = "row")
+  cvh0 <- tabxplor:::tab_export_prep(t_cv, backend = "kable",
+                                     wrap = NULL)$tables[[1]]$col_var_header
+  testthat::expect_equal(cvh0$clean[cvh0$label == "tvhours"], "mean")
+  testthat::expect_equal(cvh0$unit [cvh0$label == "tvhours"], "mean (cv)")
 
   # ... but the level header may only name the STATISTIC while the span names the VARIABLE. Blanking
   # the span after the fact (as Phase 14i did) left `var_names = "none"` with a column headed "mean"
@@ -371,11 +378,11 @@ testthat::test_that("a numeric col_var names the VARIABLE once, and the statisti
                                                          "Total", "tvhours"))
   testthat::expect_true(all(c("tvhours", "tvhours_sd") %in% hdr("xl", "none")))
 
-  # A mean column that shows no sd (ci = "cell" prints an interval) is just "mean" -- the header reads
-  # the same predicate format() does, so the two cannot disagree.
+  # A mean column showing an interval and nothing else says so: the header is built from the column's
+  # OWN template (fmt_header_label), so it cannot promise a number the cell does not print.
   cvh <- tabxplor:::tab_export_prep(tab_num(gss, marital, tvhours, ci = "cell"),
                                     backend = "kable", wrap = NULL)$tables[[1]]$col_var_header
-  testthat::expect_equal(cvh$clean[cvh$label == "tvhours"], "mean")
+  testthat::expect_equal(cvh$clean[cvh$label == "tvhours"], "mean-ci")
 })
 
 testthat::test_that("the literal `row_var` header is always dropped (a bug fix, not a setting)", {
@@ -436,10 +443,20 @@ testthat::test_that("the unit row names what each column holds, once per col_var
   testthat::expect_true(all(!nzchar(u[c("Never married", "Separated", "Married")])))
   # the Total says what its cell shows -- the base count the reader had no name for
   testthat::expect_identical(unname(u[["Total"]]), "row% (n_range)")
-  # ... and nothing the header ALREADY says is repeated (a numeric col_var is headed "mean (sd)")
+  # ... and nothing the header ALREADY says is repeated. A numeric col_var is headed "mean": its
+  # default aside, the coefficient of variation, names itself in the cell, so the header drops it and
+  # the unit line is what states the layout once.
   testthat::expect_identical(unname(rd$col_var_header$clean[[which(names(rd$tab) == "tvhours")]]),
+                             "mean")
+  testthat::expect_identical(unname(u[["tvhours"]]), "mean (cv)")
+  # where the aside DOES need naming, the header says it and the unit line stays silent
+  rd2 <- tabxplor:::tab_export_prep(tab(gss, race, c(marital, tvhours), pct = "row",
+                                        color = "diff", display = "mean_sd"),
+                                    backend = "kable", wrap = NULL)$tables[[1]]
+  u2  <- stats::setNames(rd2$col_var_header$unit, names(rd2$tab))
+  testthat::expect_identical(unname(rd2$col_var_header$clean[[which(names(rd2$tab) == "tvhours")]]),
                              "mean (sd)")
-  testthat::expect_identical(unname(u[["tvhours"]]), "")
+  testthat::expect_identical(unname(u2[["tvhours"]]), "")
 })
 
 testthat::test_that("a whole-table helper column takes no variable name", {

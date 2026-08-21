@@ -1,25 +1,28 @@
-# PURPOSE: What shape a tabxplor result has (merged / grouped / a list), and which reshape operations
-#   accept it -- so "can I transpose a grouped table?" is read, not discovered by hitting an abort.
-# ROLE: The single reader every shape-sensitive operation (tab_compact, tab_transpose, the exporters'
-#   transpose = TRUE) consults before refusing a table.
+# PURPOSE: What STRUCTURE a tabxplor result has (merged / grouped / a list), and which reshape
+#   operations accept it -- so "can I transpose a grouped table?" is read, not discovered by hitting
+#   an abort.
+# ROLE: The single reader every structure-sensitive operation (tab_compact, tab_transpose, the
+#   exporters' transpose = TRUE) consults before refusing a table.
+# ⚠ THE WORD: this is the structure of a TABLE. The structure of a numeric VARIABLE is `shape`
+#   (R/var-shape.R) -- one word, one object, in both directions.
 # KEY CONSTRAINTS:
-#   - Shape is read from the DECLARED model only -- the index columns (R/row-model.R) and
+#   - The structure is read from the DECLARED model only -- the index columns (R/row-model.R) and
 #     `meta$spec$kind` (R/table-spec.R). Never a column NAME, never a heuristic.
-#   - Not every refusal is a shape fact: tab_transpose() also refuses duplicated row keys and multiple
+#   - Not every refusal is a structural fact: tab_transpose() also refuses duplicated row keys and multiple
 #     total rows/columns, which are properties of the CONTENT and stay local to that function.
 # See: CLAUDE.md § tabxplor architecture (declarative architecture); TAB_OPS below.
 #
 # THE MODEL -- one reader, one declared table:
-#   tab_shape(x)        the shape facts. Exported ("what have I got?" is a user question).
+#   tab_structure(x)    the structural facts. Exported ("what have I got?" is a user question).
 #   TAB_OPS             one ROW per operation: which facts it requires and why. A new operation is a
-#                       row; a new shape fact is a column.
+#                       row; a new structural fact is a column.
 #   tab_supports(x, op) the predicate, so a caller can ASK instead of trying. Exported.
-#   tab_check_shape()   the internal enforcer every abort site calls.
+#   tab_check_structure()   the internal enforcer every abort site calls.
 
 
 # --- the facts ---------------------------------------------------------------------------------------
 
-#' The shape of a tabxplor table
+#' The structure of a tabxplor table
 #'
 #' @description
 #' `r lifecycle::badge("experimental")`
@@ -41,17 +44,17 @@
 #'   \item{`same_col_vars`, `same_tab_vars`}{for a list only: whether its tables agree.}
 #' }
 #'
-#' @seealso [tab_supports()] for what each shape allows.
+#' @seealso [tab_supports()] for what each structure allows.
 #' @export
 #'
 #' @examples
 #' \donttest{
 #' t <- tab(forcats::gss_cat, c(marital, relig), race, pct = "row")
-#' tab_shape(t)$merged
+#' tab_structure(t)$merged
 #' }
-tab_shape <- function(x) {
+tab_structure <- function(x) {
   if (is.list(x) && !is.data.frame(x)) {
-    parts <- lapply(x, tab_shape)
+    parts <- lapply(x, tab_structure)
     keep  <- vapply(parts, function(p) !is.null(p), logical(1))
     parts <- parts[keep]
     # `tab_vars` must MATCH (there is no one sub-table axis to merge otherwise); `col_vars` need only be
@@ -98,7 +101,7 @@ tab_shape <- function(x) {
 }
 
 
-# tab_columns() -- the COLUMN-axis mirror of tab_shape(): one row per fmt column with the attributes
+# tab_columns() -- the COLUMN-axis mirror of tab_structure(): one row per fmt column with the attributes
 # that decide what it shows, estimates, colours and how its interval was computed. The only place the
 # four inference facts (conf_level / degf / basis / ci_method) can be read side by side. It reports the
 # STORED attributes (fmt_attrs_of()), never a render-time default: `conf_level = NA` honestly means
@@ -111,7 +114,7 @@ tab_shape <- function(x) {
 #'
 #' One row per numeric (`tabxplor_fmt`) column, with the per-column attributes that decide what it
 #' shows, what it estimates, how it is coloured and how its confidence interval was computed. The
-#' column-axis companion of [tab_shape()], which describes the table as a whole.
+#' column-axis companion of [tab_structure()], which describes the table as a whole.
 #'
 #' @param x A `tabxplor_tab` / `tabxplor_grouped_tab`, or any data.frame holding `fmt` columns.
 #'
@@ -132,7 +135,7 @@ tab_shape <- function(x) {
 #'   \item{`model_family`, `role`}{for a [tab_reg()] table: the column's model family, and whether it
 #'     holds the model estimate (`"model"`) or its observed counterpart (`"emp"`).}
 #' }
-#' @seealso [tab_shape()] for the table's own shape; [fmt_attr()] to read or write one attribute;
+#' @seealso [tab_structure()] for the table's own structure; [fmt_attr()] to read or write one attribute;
 #'   [fmt()] for what each attribute means.
 #' @export
 #'
@@ -177,11 +180,11 @@ tab_columns <- function(x) {
 }
 
 
-# rd_shape() -- the SAME record, read off a finished render model (R/tab-export-prep.R) instead of a
+# rd_structure() -- the SAME record, read off a finished render model (R/tab-export-prep.R) instead of a
 # table, whose `$vars` already IS the variable model. One record type, one checker for both producers.
 #' @keywords internal
 #' @noRd
-rd_shape <- function(rd) {
+rd_structure <- function(rd) {
   list(container = "table",
        kind      = NA_character_,
        merged    = isTRUE(rd$vars$compacted),
@@ -194,7 +197,7 @@ rd_shape <- function(rd) {
 
 
 # --- the declared support matrix ----------------------------------------------------------------------
-# One row per operation. Each requirement is a PREDICATE on the shape record, paired with the reason
+# One row per operation. Each requirement is a PREDICATE on the structure record, paired with the reason
 # it exists; `severity` says what happens when it is not met:
 #   "abort"  the operation cannot produce a meaningful result   -> cli_abort
 #   "bail"   the operation is a no-op here                      -> message + return the input unchanged
@@ -218,7 +221,7 @@ TAB_OPS <- list(
     label    = function() gettext("tab_transpose()"),
     severity = "abort",
     checks   = list(
-      # `kind` FIRST, so a regression gets its own reason rather than failing the crosstab-shaped
+      # `kind` FIRST, so a regression gets its own reason rather than failing the crosstab
       # `!merged` check below (a reg table carries a `var`-role predictor column, so it reads as
       # merged) with the misleading "it needs exactly one row variable".
       list(ok = function(s) !identical(s$kind, "regression"),
@@ -244,21 +247,21 @@ TAB_OPS <- list(
 
 # --- the readers --------------------------------------------------------------------------------------
 
-#' Does this table's shape allow an operation?
+#' Does this table's structure allow an operation?
 #'
 #' @description
 #' `r lifecycle::badge("experimental")`
 #'
-#' The support matrix of the shape-sensitive operations, as a predicate. Every place the package
-#' refuses a table for its shape reads this same table of rules, so what is allowed can be *read*
+#' The support matrix of the structure-sensitive operations, as a predicate. Every place the package
+#' refuses a table for its structure reads this same table of rules, so what is allowed can be *read*
 #' instead of discovered.
 #'
-#' @param x A table or list of tables — see [tab_shape()].
+#' @param x A table or list of tables — see [tab_structure()].
 #' @param op One of `"compact"`, `"transpose_object"` (the deprecated object-level
 #'   [tab_transpose()]) or `"transpose_render"` (the `transpose = TRUE` argument of the exporters).
 #'
 #' @return A single `TRUE`/`FALSE`.
-#' @seealso [tab_shape()].
+#' @seealso [tab_structure()].
 #' @export
 #'
 #' @examples
@@ -269,19 +272,19 @@ TAB_OPS <- list(
 tab_supports <- function(x, op) {
   op   <- match.arg(op, names(TAB_OPS))
   spec <- TAB_OPS[[op]]
-  s    <- tab_shape(x)
+  s    <- tab_structure(x)
   if (is.null(s)) return(FALSE)
   all(vapply(spec$checks, function(ck) isTRUE(ck$ok(s)), logical(1)))
 }
 
-# tab_check_shape() -- THE enforcer. Returns TRUE when the operation may proceed; otherwise it aborts
+# tab_check_structure() -- THE enforcer. Returns TRUE when the operation may proceed; otherwise it aborts
 # or (severity "bail") messages and returns FALSE, so the caller returns its input unchanged.
 #' @keywords internal
 #' @noRd
-tab_check_shape <- function(x, op) {
+tab_check_structure <- function(x, op) {
   spec <- TAB_OPS[[op]]
-  # `x` is a table / list, or an already-built shape record (rd_shape(), the render stack's producer)
-  s    <- if (is.list(x) && !is.data.frame(x) && !is.null(x$container)) x else tab_shape(x)
+  # `x` is a table / list, or an already-built record (rd_structure(), the render stack's producer)
+  s    <- if (is.list(x) && !is.data.frame(x) && !is.null(x$container)) x else tab_structure(x)
   if (is.null(s)) return(TRUE)
   bad  <- Filter(function(ck) !isTRUE(ck$ok(s)), spec$checks)
   if (!length(bad)) return(TRUE)

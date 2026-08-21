@@ -155,12 +155,12 @@ test_that('shape = "sqrt" fits the transformed column and says so in the label',
 
 # ---- the primitives ------------------------------------------------------------------------------
 
-test_that("rd_wquantile() weights, and reproduces stats::quantile() unweighted", {
+test_that("shape_wquantile() weights, and reproduces stats::quantile() unweighted", {
   x <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-  expect_equal(tabxplor:::rd_wquantile(x, 0.5), stats::median(x), tolerance = 1e-8)
+  expect_equal(tabxplor:::shape_wquantile(x, 0.5), stats::median(x), tolerance = 1e-8)
   # weighting the top half twice must push the median up
   w <- c(rep(1, 5), rep(2, 5))
-  expect_gt(tabxplor:::rd_wquantile(x, 0.5, w), tabxplor:::rd_wquantile(x, 0.5))
+  expect_gt(tabxplor:::shape_wquantile(x, 0.5, w), tabxplor:::shape_wquantile(x, 0.5))
 })
 
 test_that("rd_bin() is stats::weighted.mean() per bin, and its band is the theoretical one", {
@@ -169,7 +169,7 @@ test_that("rd_bin() is stats::weighted.mean() per bin, and its band is the theor
   b <- tabxplor:::rd_bin(x, y, w, 5L, "identity")
   expect_equal(nrow(b), 5L)
   # bin 1 by hand
-  br <- unique(tabxplor:::rd_wquantile(x, seq(0, 1, length.out = 6L), w))
+  br <- unique(tabxplor:::shape_wquantile(x, seq(0, 1, length.out = 6L), w))
   br[[1]] <- min(x) - 1e-9; br[[length(br)]] <- max(x) + 1e-9
   g  <- findInterval(x, br, rightmost.closed = TRUE)
   expect_equal(b$y[[1]], stats::weighted.mean(y[g == 1], w[g == 1]), tolerance = 1e-10)
@@ -190,7 +190,7 @@ test_that("rd_bin() is stats::weighted.mean() per bin, and its band is the theor
   # UNWEIGHTED is byte-unchanged: Kish at equal weights IS n, so the bands do not move
   bu <- tabxplor:::rd_bin(x, y, NULL, 5L, "logit")
   gu <- findInterval(x, {
-    b0 <- unique(tabxplor:::rd_wquantile(x, seq(0, 1, length.out = 6L)))
+    b0 <- unique(tabxplor:::shape_wquantile(x, seq(0, 1, length.out = 6L)))
     b0[[1]] <- min(x) - 1e-9; b0[[length(b0)]] <- max(x) + 1e-9; b0
   }, rightmost.closed = TRUE)
   n1 <- sum(gu == 1); m1 <- mean(y[gu == 1]); p1 <- (m1 * n1 + 0.5) / (n1 + 1)
@@ -213,7 +213,7 @@ test_that("rd_bin()'s band takes the DESIGN variance when a design is given (W-G
   expect_false(isTRUE(all.equal(dsg$se, flat$se)))
   expect_true(mean(dsg$se) > mean(flat$se))            # clustering widens it
   # and it IS survey's own number: ne = Var_srs / Var_design, so se == SE(svymean) on the bin's domain
-  br <- unique(tabxplor:::rd_wquantile(d$x, seq(0, 1, length.out = 6L), d$w))
+  br <- unique(tabxplor:::shape_wquantile(d$x, seq(0, 1, length.out = 6L), d$w))
   br[[1]] <- min(d$x) - 1e-9; br[[length(br)]] <- max(d$x) + 1e-9
   g  <- pmax(pmin(findInterval(d$x, br, rightmost.closed = TRUE), length(br) - 1L), 1L)
   sv <- survey::SE(survey::svymean(~y, subset(des, g == 1)))

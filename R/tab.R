@@ -13,6 +13,11 @@
 #     the spine owns leave it once tab_setup() has consumed them. That is what keeps two parallel
 #     argument vectors from recycling against each other.
 #   - The population is prepared ONCE for the whole database. Do only per-table work per row_var.
+#     `shape` (R/var-shape.R) rides on that: RESOLVED in tab_setup(), where the variable
+#     classification must already know what a column WILL be, and APPLIED in tab_prepare_pop(),
+#     after the filter and the NA policy and before any split -- so the breaks describe the
+#     population tabulated and every sub-table is cut at the same places. A numeric row or tab
+#     variable is therefore an ordinary factor from that stage on, and no leaf special-cases one.
 #   - THE AGGREGATE CORE IS THE LEAF (R/tab-leaf.R): it computes the cells, their interval and the
 #     whole-table test in one pass. Nothing here re-reads a built table to add them.
 #   - Levels drop AFTER the tests: non-first levels are removed only in assembly, so chi2 and the
@@ -212,7 +217,7 @@ NULL
 #'   [tab_reg()] (regression tables), and the variants [tab_num()] (numeric variables),
 #'   [tab_counts()] (pre-aggregated counts) and [tab_plain()] (one bare cross-table).
 #'   [set_color_breaks()] / [set_color_palette()] customise the colours,
-#'   [tab_shape()] reports what a finished table is and what accepts it.
+#'   [tab_structure()] reports what a finished table is and what accepts it.
 #'   Export a table with [tab_xl()] (Excel), [tab_kable()] (HTML), [tab_md()] (Markdown) or
 #'   [tab_plot()], and CHART it with [forest_plot()] (every cell's estimate, interval and colour --
 #'   `tab_plot()` renders the table as an image, `forest_plot()` is the real chart).
@@ -246,6 +251,8 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
   names_sort   <- dots_value(.dots, "names_sort", FALSE)
   add_n        <- dots_value(.dots, "add_n")
   tot          <- dots_value(.dots, "tot", TAB_ARGS$tot$default)
+  shape        <- dots_value(.dots, "shape")
+  shape_name   <- dots_value(.dots, "shape_name", TRUE)
   .cache             <- dots_value(.dots, ".cache")
   .defer_level_merge <- dots_value(.dots, ".defer_level_merge", FALSE)
   .return_armed      <- dots_value(.dots, ".return_armed", FALSE)
@@ -304,6 +311,11 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
   }
 
   tab_vars <- tidy_select_chr(rlang::enquo(tab_vars), data)
+
+  # A `shape` that keeps the column a NUMBER renames it, here, where the variables are still just
+  # names: see shape_rename_transformed() (R/var-shape.R) for why a display label will not do.
+  .rn      <- shape_rename_transformed(data, col_var, shape)
+  data     <- .rn$data ; col_var <- .rn$vars ; shape <- .rn$shape
 
   sup_cols_quo <- .dots$sup_cols
   if (is.null(sup_cols_quo) || quo_miss_na_null_empty_no(sup_cols_quo)) {
@@ -414,6 +426,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
            base_n = base_n, add_pct = add_pct,
            subtext = subtext, n_min = n_min,
            spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
+           shape = shape, shape_name = shape_name,
            .cache = .cache, .defer_level_merge = .defer_level_merge,
            .levels_order = .levels_order, .levels_collapse = .levels_collapse)
 
@@ -729,12 +742,17 @@ new_ctx <- function(...) {
     total_names = "Total", base_n = "range", add_pct = FALSE, common_totrow = FALSE, digits = 0,
     subtext = "", n_min = 0, by_table = FALSE,
     spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
+    shape = NULL, shape_name = TRUE,
     cache_env = NULL, defer_level_merge = FALSE, levels_order = NULL,
 
     # --- STAGE PRODUCTS: written by one stage, read by a later one -----------------------------
     # tab_setup:        the resolved variable roles + the arg products no grain fits
     settings = NULL, row_vars = NULL, col_vars = NULL, tab_vars = NULL, wt = NULL,
     tab_row_names = NULL, na_drop_all = NULL, tot_cols_type = NULL, cache_keys = NULL,
+    # tab_setup:        `shape` resolved against the data, one spec per variable it recodes; the
+    #                   variable classification below reads shape_produces() off it, so a column
+    #                   variable about to be cut is known to be a FACTOR before it is one.
+    shapes = list(), shape_named = character(0),
     # tab_prepare_pop:  the non-first levels dropped at display time (NULL = nothing to drop)
     remove_levels = NULL,
     # tab_aggregate:    the tier-1 aggregates + the two jmvtab cache products
@@ -801,6 +819,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       digits = 0, subtext = "", n_min = 0,
                       .by_table = FALSE,
                       spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
+                      shape = NULL, shape_name = TRUE,
                       .cache = NULL, .defer_level_merge = FALSE,
                       .levels_order = NULL, .levels_collapse = NULL,
 
@@ -847,6 +866,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     digits = digits,
     subtext = subtext, n_min = n_min, by_table = .by_table,
     spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
+    shape = shape, shape_name = shape_name,
     cache_env = .cache, defer_level_merge = .defer_level_merge,
     levels_order = .levels_order
   )
@@ -1005,11 +1025,31 @@ tab_setup <- function(ctx) {
     }
   }
 
+  # --- `shape`: RESOLVED here, APPLIED in tab_prepare_pop() -------------------------------------
+  # DESIGN: the two stages answer two different questions. What a variable will BE is an argument
+  #   fact, and the classification below must read it -- a col_var about to be cut into groups is a
+  #   factor from the spine's point of view, whatever its column still holds. WHERE it is cut is a
+  #   fact about the population, so the cutting itself waits until the filter and the NA policy have
+  #   run. Deciding "auto" here is what makes both true at once: it needs the data, which is present.
+  shapes <- shape_resolve(shape, data, sel_vars, "tab")
+  shape_refuse_numeric_index(shapes, unique(c(as.character(row_vars), as.character(tab_vars))))
+  .auto  <- shape_fill_auto(shapes, data,
+                            unique(c(as.character(row_vars), as.character(tab_vars))))
+  shapes <- .auto$shapes
+  shape_report(shapes, .auto$auto)
+  # `shape_name` writes the variable's name onto the first level of a ROW or COLUMN variable, the two
+  # axes where a level may reach the reader with nothing else naming it. A tab_var always sits in a
+  # column headed by its own name, and its total rows already read "Total <level>".
+  shape_named <- if (isTRUE(shape_name))
+    intersect(names(shapes), c(as.character(row_vars), as.character(col_vars))) else character(0)
+
   # WARNING: extract by POSITION with `[[`, never `data[<int vector>]` -- that is column-subsetting on
   #   a data.frame but ROW-subsetting on a data.table, which silently mis-classified the col_vars.
-  col_vars_num  <- purrr::map_lgl(pos_col_vars, ~ is.numeric(data[[.x]]))
+  col_vars_num  <- purrr::map_lgl(pos_col_vars, ~ is.numeric(data[[.x]]) &&
+                                    !shape_is_factor(shapes[[names(data)[[.x]]]]))
   col_vars_text <- purrr::map_lgl(pos_col_vars,
-                                  ~ is.factor(data[[.x]]) || is.character(data[[.x]]))
+                                  ~ is.factor(data[[.x]]) || is.character(data[[.x]]) ||
+                                    shape_is_factor(shapes[[names(data)[[.x]]]]))
   col_vars_cumor <- purrr::map_lgl(pos_col_vars, ~ or_cum_ok(data[[.x]]))
 
   if (quo_miss_na_null_empty_no(wt_quo)) {
@@ -1208,7 +1248,8 @@ tab_setup <- function(ctx) {
     total_names = total_names, na = na,
     totcol = totcol, tot_cols_type = tot_cols_type,
     cache_keys = cache_keys,
-    var_labels = var_labels
+    shapes = shapes, shape_named = shape_named,
+    var_labels = shape_var_labels(var_labels, shapes)
   ))
   ctx[SPINE_OWNED_INPUTS] <- NULL
   ctx
@@ -1274,17 +1315,35 @@ tab_prepare_pop <- function(ctx) {
       levels_collapse = levels_collapse
     )
 
+  # DESIGN: THE SHAPE IS APPLIED HERE, AND EXACTLY ONCE. After the filter and the `na` policy, so
+  #   the quantile breaks and the mean/SD landmarks describe the population actually tabulated; and
+  #   on the whole database, before the row_var loop and before any tab_vars split, so every
+  #   sub-table is cut at the SAME places -- a per-group quantile would silently compare different
+  #   things. From this line on a shaped variable is an ordinary factor, so the levels resolution
+  #   below, both leaves, the chi2, the intervals and the colour engine need no code of their own.
+  #   ORDERED, unlike tab_reg()'s cut: bands and groups have a real order, and there is no model
+  #   here whose contrasts an ordered factor would change.
+  if (length(shapes) > 0L) {
+    data <- shape_apply(data, shapes, w = if (length(wt)) as.character(wt) else NULL,
+                        ordered = TRUE, var_names = shape_named)$data
+    lvl_check_reserved(data, names(shapes))
+  }
 
-  if (other_if_less_than > 0 & length(tab_vars) != 0) {
+  # WARNING: factor columns only. A numeric row_var reaches this with no levels to lump, and
+  #   fct_lump_min() aborts on a double; a SHAPED one is a factor by now, but lumping its bands
+  #   would undo the cut the user asked for, so it is excluded by name.
+  lumpable <- as.character(row_vars)
+  lumpable <- setdiff(lumpable[purrr::map_lgl(lumpable, ~ is.factor(data[[.x]]))], names(shapes))
+  if (other_if_less_than > 0 & length(tab_vars) != 0 & length(lumpable) != 0) {
     data <- data |>
       dplyr::group_by(!!!tab_vars) |>
-      dplyr::mutate(dplyr::across(tidyselect::all_of(as.character(row_vars)),
+      dplyr::mutate(dplyr::across(tidyselect::all_of(lumpable),
                                   ~ forcats::fct_lump_min(., other_if_less_than,
                                                           other_level = other_level))) |>
       dplyr::ungroup() |>
       # WARNING: no nested lambda referencing `.x` here -- dplyr >= 1.2 inlines across() functions, which
       #   breaks the closure (`object '.x' not found`). Keep `.x` in the direct body only.
-      dplyr::mutate(dplyr::across(tidyselect::all_of(as.character(row_vars)), function(.x) {
+      dplyr::mutate(dplyr::across(tidyselect::all_of(lumpable), function(.x) {
         lvs <- unique(append(levels(dplyr::pull(data, dplyr::cur_column())), other_level))
         forcats::fct_relevel(.x, lvs[lvs %in% levels(.x)])
       }))
@@ -1945,7 +2004,7 @@ tab_transpose <- function(tabs, name = NULL) {
   }
   tabs <- dplyr::ungroup(tabs)
 
-  tab_check_shape(tabs, "transpose_object")
+  tab_check_structure(tabs, "transpose_object")
 
   vars    <- tab_get_vars(tabs)
   row_var <- vars$row_var
@@ -2082,7 +2141,7 @@ tab_last_factor_row_var <- function(fct_names, groups = character(0)) {
 #' \code{"row_var"}, \code{"col_vars"} or \code{"tab_vars"}.
 #'
 #' @return A list with the variables names.
-#' @seealso [tab_shape()], which reports the table's SHAPE (merged / grouped / list) and which
+#' @seealso [tab_structure()], which reports the table's STRUCTURE (merged / grouped / list) and which
 #'   operations accept it.
 #' @export
 #'

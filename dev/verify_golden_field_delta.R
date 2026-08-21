@@ -31,9 +31,10 @@ source("tests/testthat/helper-golden.R")
 # already-landed change as a PROBLEM (measured in Phase 19a: z16-iiiii's `ci_settings` reshape rule
 # fired on four cases whose committed goldens already carry the new shape).
 #
-# Phase 22b-xvi: NO field moves and NO attribute is added or removed. ONE attribute VALUE changes,
-# on numeric columns only: `color = "auto"` is now `color = TRUE`, whose declared automatic measure
-# for a numeric column is `ratio` (MEASURES$ratio$auto_for). Everything else must be bit-identical.
+# Phase 22c-iii: NO field is added or removed and NO attribute moves. ONE field's VALUE changes, on
+# numeric columns only: `display` was the bare token "mean" and is now the `mean_cv` template, on
+# every such column whose means are all strictly positive (num_default_display()). Everything else
+# must be bit-identical.
 ADDED_ATTRS   <- character(0)
 REMOVED_ATTRS <- character(0)
 EXPECTED_ATTR <- list()
@@ -41,9 +42,19 @@ EXPECTED_ATTR <- list()
 # CHANGED_ATTRS -- an EXISTING attribute whose VALUE is allowed to move, with the rule that says
 # where and to what: function(old_value, new_value, column) -> TRUE if this move is the declared one.
 # Anything else stays "attribute CHANGED", which is the whole point of the script.
-CHANGED_ATTRS <- list(
-  color = function(o, n, col) identical(o, "difference") && identical(n, "ratio") &&
-                              !identical(fmt_var_kind(col), "pct")
+CHANGED_ATTRS <- list()
+
+# CHANGED_FIELDS -- the same mode one level down: an EXISTING per-cell field whose VALUE is allowed
+# to move, stated as function(old_vector, new_vector, column) -> TRUE. A `display` is not a number,
+# so a layout change is not a "changed golden" in the sense the rest of this script polices -- but it
+# must still be exactly the declared move, and every other field bit-identical.
+CHANGED_FIELDS <- list(
+  display = function(o, n, col) {
+    m <- vctrs::field(col, "mean")
+    ok <- length(m[!is.na(m)]) > 0 && all(m[!is.na(m)] > 0)
+    identical(unique(o), "mean") && ok &&
+      identical(unique(n), tabxplor:::DISPLAY_PRESETS$mean_cv$template)
+  }
 )
 
 # POPULATED_FIELDS -- Phase 19m-i's mode: a rule change that FILLS cells which were NA, on a declared
@@ -181,6 +192,9 @@ for (nm in names(cases)) {
                                    "declared rows were not NA -> finite)"))
         next
       }
+      cf <- CHANGED_FIELDS[[fd]]
+      if (!is.null(cf) && isTRUE(tryCatch(cf(do[[fd]], dn[[fd]], new[[col]]),
+                                          error = function(e) FALSE))) next
       issues <- c(issues, paste0(nm, " / ", col, " / ", fd, ": field CHANGED"))
     }
     for (fd in setdiff(names(dn), names(do))) {

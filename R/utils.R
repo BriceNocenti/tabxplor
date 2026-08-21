@@ -520,3 +520,29 @@ fig_space  <- stringi::stri_unescape_unicode("\\u2007")
 # resolves to the OS's own mono and would override the pinned target.
 tx_num_font_html_stars <-
   '"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace'
+
+
+# --- weighted moments -----------------------------------------------------------------------------
+# The ML weighted variance (/ sum w), which is what tab()'s numeric leaf computes too, so a band cut
+# by shape_cut_bands() and a mean printed in a cell rest on the same definition. Unweighted, the SD
+# is the ordinary sample one.
+#' @keywords internal
+wtd_mean <- function(x, w = NULL) {
+  x <- as.numeric(x)
+  ok <- is.finite(x)
+  if (!is.null(w)) { w <- as.numeric(w); ok <- ok & is.finite(w) & w > 0 }
+  if (!any(ok)) return(NA_real_)
+  if (is.null(w)) mean(x[ok]) else sum(w[ok] * x[ok]) / sum(w[ok])
+}
+
+#' @keywords internal
+wtd_sd <- function(x, w = NULL) {
+  x <- as.numeric(x)
+  ok <- is.finite(x)
+  if (!is.null(w)) { w <- as.numeric(w); ok <- ok & is.finite(w) & w > 0 }
+  if (sum(ok) < 2L) return(NA_real_)
+  if (is.null(w)) return(stats::sd(x[ok]))
+  xw <- x[ok]; ww <- w[ok]
+  m  <- sum(ww * xw) / sum(ww)
+  sqrt(sum(ww * (xw - m)^2) / sum(ww))          # the ML weighted variance, as tab()'s numeric side uses
+}

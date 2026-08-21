@@ -78,14 +78,14 @@ test_that("19m-i C: a short annotation vector is an error, an absent one is not"
 })
 
 
-# --- G2: the col_var placeholder set, and tab_shape()'s report ------------------------------------
+# --- G2: the col_var placeholder set, and tab_structure()'s report ------------------------------------
 # `col_var` takes six values that are not a variable name. Eight filters spelled between two and six
 # of them; the exported shape reader spelled two, so it reported the internal sentinel "no_col_var"
 # as if it were a variable.
 test_that("19m-i G2: no placeholder col_var reaches an exported reader", {
   t0 <- tab(gss, marital)                     # no col_var: every column carries "no_col_var"
-  expect_identical(tab_shape(t0)$col_vars, character(0))
-  expect_identical(tab_shape(tab(gss, marital, race))$col_vars, "race")
+  expect_identical(tab_structure(t0)$col_vars, character(0))
+  expect_identical(tab_structure(tab(gss, marital, race))$col_vars, "race")
   expect_false(any(is_real_col_var(TAB_PLACEHOLDER_COL_VARS)))
   expect_true(all(is_real_col_var(c("race", "marital"))))
 })

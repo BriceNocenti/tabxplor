@@ -388,7 +388,9 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
   # Naturally integer(0) for every other backend: nothing else creates those columns.
   # WARNING: ungated by `var_names`, unlike the header rewrite. A width is not a naming decision, so
   # `var_names = "none"` must still get a narrow sd column.
-  sd_cols <- fmt_cols[vapply(tab[fmt_cols], \(col) identical(get_role(col), "sd"), logical(1))]
+  sd_cols <- fmt_cols[vapply(tab[fmt_cols], \(col)
+    identical(get_role(col), "aside") &&
+      identical(display_primary(get_display(col))[[1]], "sd"), logical(1))]
 
   # Total-BLOCK border rows (block D borders), lifted verbatim from tab_kable (derive-once, shared by
   # both render engines). A "total block" is a maximal run of total rows OR the synthetic n / pvalue /
@@ -563,9 +565,6 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
   cvm   <- roles$col_var_map
   real  <- roles$real_col_vars
   totc  <- seq_along(nms) %in% roles$totcols
-  # Phase 19l: which col_vars have an Excel sd twin beside their mean, read off the twins' DECLARED
-  # role (roles$sd_cols) rather than by re-minting their "<col_var>_sd" name below.
-  sd_of <- unname(cvm[roles$sd_cols])
   # a real col_var LEVEL column: not the row var / all_col_vars / "" (no span name), and not a total
   # column (the marginal, not a level). Kept separate from `label` because the rewrites below must run
   # even when nothing is NAMED -- a "_race" suffix is noise whatever `var_names` says.
@@ -601,17 +600,9 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
       # thing: a TRANSPOSED render turns this header into the ROW LABEL and carries no unit row, so
       # blanking it would leave that row unnamed. The unit line simply says nothing where the header
       # already does (the `unit == clean` rule below).
-      # NB a different question from `j %in% roles$sd_cols` below: this asks whether THIS mean has an
-      # sd sibling to hand its "(sd)" tail to, not whether j is one.
-      clean[j] <- if (cvm[[j]] %in% sd_of) {
-        "mean"                       # Excel: the sd is its own column, headed "sd" below
-      } else if (mean_shows_sd(tab[[j]])) {
-        "mean (sd)"                  # text backends: format() folds the sd into the cell, "1.7 (s2.1)"
-      } else {
-        "mean"
-      }
-    } else if (isTRUE(name_cols) && j %in% roles$sd_cols) {
-      clean[j] <- "sd"
+      # It reads the column's OWN template (fmt_header_label): "mean", "mean (sd)" where the cell
+      # folds one in, and just "mean" where the aside names itself in the cell ("cv 36 %").
+      clean[j] <- fmt_header_label(tab[[j]])
     } else if (isTRUE(name_cols) && is_fmt(tab[[j]]) && identical(get_role(tab[[j]]), "aside")) {
       # an Excel aside column (mat_aside_cols): headed by the token it holds -- "OR", "n", "ratio"
       clean[j] <- fmt_display_label(tab[[j]], "plain")
@@ -675,7 +666,7 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
   if (length(lvl) > 0 && all(clean[lvl] == unname(cvm)[lvl])) label <- rep("", length(nms))
   # a blanked span row carries no sub-population either: `group` only ever qualifies a `label`.
   grp[!nzchar(label)] <- ""
-  unit <- tab_col_units(tab, cvm, sd_of)
+  unit <- tab_col_units(tab, cvm)
   # THE UNIT LINE REPEATS NOTHING THE HEADER ALREADY SAYS: an "n" / "sd" / "OR" column is named by its
   # own header, so it takes no unit -- the line exists for what a header CANNOT say.
   unit[unit == clean] <- ""
@@ -689,13 +680,12 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
 # and per column wherever the block's columns disagree, which is the only case a reader must be told
 # about. Non-fmt (index) columns hold no unit.
 #' @keywords internal
-tab_col_units <- function(tab, cvm, sd_of = character(0)) {
+tab_col_units <- function(tab, cvm) {
+  # a column whose aside has MOVED OUT into a column of its own (mat_aside_cols) has already had its
+  # display reduced to the primary, so its name promises nothing the cell no longer shows.
   u <- vapply(seq_along(tab), function(j) {
     col <- tab[[j]]
     if (!is_fmt(col)) return("")
-    # where the sd has MOVED OUT into a twin column (Excel), the mean cell renders no "(sigma sd)"
-    # tail, so its name must not promise one -- the same fact `sd_of` states for the level header.
-    if (cvm[[j]] %in% sd_of && identical(fmt_var_kind(col), "mean")) col <- set_var(col, NA_real_)
     fmt_display_label(col, "tag")
   }, character(1))
   tab_units_once(u, unname(cvm))
@@ -710,14 +700,6 @@ tab_units_once <- function(unit, group) {
   out   <- rep("", length(unit))
   out[first] <- unit[first]
   out
-}
-
-# Does this mean column actually render a "(sigma sd)" tail? THE SAME predicate format() uses for its
-# `disp_mean_sd` mask (R/fmt_class.R), so the header and the cells cannot disagree: a mean cell shows
-# its sd exactly when the display is "mean" and the var field is there.
-#' @keywords internal
-mean_shows_sd <- function(col) {
-  any(get_display(col) == "mean" & !is.na(get_var(col)), na.rm = TRUE)
 }
 
 # Phase 13c-iii: run-length-encode the header `label` vector into (label, span) runs for the spanning
@@ -960,7 +942,8 @@ tab_export_prep <- function(tabs,
   # the single Total row flips to a single Total column. This supersedes 14d's transpose-before-
   # materialise: the flip is now a render-model transform (below), oriented for free.
   mat_backend <- if (identical(backend, "xl") || isTRUE(transpose)) "xl" else "text"
-  resolved <- purrr::map(resolved, tab_materialize_extras, backend = mat_backend, pvalue = TRUE)
+  resolved <- purrr::map(resolved, tab_materialize_extras, backend = mat_backend, pvalue = TRUE,
+                         transposed = isTRUE(transpose))
 
   tables <- purrr::map(
     resolved,

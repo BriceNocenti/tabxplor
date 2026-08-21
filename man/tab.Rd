@@ -68,6 +68,22 @@ columns.
 \item \code{"col"}: only total column.
 \item \code{"no"}: remove all totals (after calculations if needed).
 }
+\strong{\code{shape}} How a \strong{numeric} variable enters the table. Cut it into groups and it
+becomes an ordinary factor --- one row (or one column) per group:
+\code{"quartiles"}, \code{"quintiles"}, an integer number of groups,
+\code{"sd_bands"} (four bands at the mean and one standard deviation either
+side) or \code{"levels"} (one level per distinct value). \code{"log"} /
+\code{"sqrt"} keep it a number and are for \code{col_vars} only.
+One value for every numeric variable, or one per variable:
+\code{shape = c(age = "quintiles")}. A numeric \code{row_vars} /
+\code{tab_vars} defaults to \code{"auto"} --- one level per value for a
+counted number or a short scale, \code{"sd_bands"} for a continuous one ---
+and a numeric \code{col_vars} keeps its means. See
+\code{\link{shape_numeric_var}} for the whole vocabulary.
+\strong{\code{shape_name}} Whether a shaped variable writes its own name onto its
+\strong{first} level (\code{"age: [18,30) low"}), so a table whose
+leading text columns are stripped still says what the levels are levels
+of. \code{TRUE} by default.
 \strong{Retired in 2.0.0}, still taken by name, each warning once and saying what to use instead: \code{row_var}, \code{col_var}, \code{sup_cols}, \code{totaltab_name}, \code{total_names}, \code{OR}, \code{chi2}, \code{method_cell}, \code{method_diff}, \code{add_n}, \code{names_prefix}, \code{names_sort}, \code{other_level}.
 The dot-prefixed names (\code{.cache}, \code{.defer_level_merge}, \code{.return_armed}, \code{.levels_order}, \code{.levels_collapse}) are internal plumbing, not user arguments.}
 
@@ -498,6 +514,8 @@ it is what Excel shows and what the colours read.
 \item \code{or} --- the odds ratio. Needs pct = "row" / "col"  (an odds ratio needs a percentage base).
 \item \code{ctr} --- the cell's contribution to the chi-squared. Needs test = TRUE  (the contributions come from the chi-squared).
 \item \code{var} --- the variance. Needs a numeric col_var.
+\item \code{sd} --- the standard deviation, in the variable's own unit. Needs a numeric col_var.
+\item \code{cv} --- the coefficient of variation --- the standard deviation as a percentage of the mean. Needs a numeric col_var whose mean is positive.
 \item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only. Needs test = TRUE  (the residual comes from the chi-squared).
 \item \code{obs} --- the OBSERVED (crude) effect a modelled one is compared to. \code{tab_reg()} tables only. Needs tab_reg(empirical = TRUE)  (an observed effect to compare the model to).
 \item \code{coef} --- the estimate on the model's LINK scale --- the coefficient a linear or log-link model fitted. The same number as \code{est} where the column is already additive, its logarithm where the column shows a ratio. Needs a \code{tab_reg()} column (a crosstab estimates no coefficient).
@@ -524,6 +542,8 @@ and on a \code{\link{tab_reg}} table:
 \item \code{"base_ratio"} (\code{\{base\} (\{ratio\})}) --- the level and, in parentheses, its ratio to the reference.
 \item \code{"base_or"} (\code{\{base\} (\{or\})}) --- the level and, in parentheses, its odds ratio.
 \item \code{"or_base"} (\code{\{or\} (\{base\})}) --- the odds ratio and, in parentheses, the percentage it rests on.
+\item \code{"mean_sd"} (\code{\{mean\} (σ\{sd\})}) --- the mean and, in parentheses, its standard deviation.
+\item \code{"mean_cv"} (\code{\{mean\} (cv \{cv\})}) --- the mean and, in parentheses, its coefficient of variation --- the spread as a percentage of the mean, comparable between columns measured in different units (the default where every mean is positive).
 }
 }
 
@@ -599,7 +619,7 @@ tab(data, race, marital, year, pct = "row") |>
 \code{\link[=tab_reg]{tab_reg()}} (regression tables), and the variants \code{\link[=tab_num]{tab_num()}} (numeric variables),
 \code{\link[=tab_counts]{tab_counts()}} (pre-aggregated counts) and \code{\link[=tab_plain]{tab_plain()}} (one bare cross-table).
 \code{\link[=set_color_breaks]{set_color_breaks()}} / \code{\link[=set_color_palette]{set_color_palette()}} customise the colours,
-\code{\link[=tab_shape]{tab_shape()}} reports what a finished table is and what accepts it.
+\code{\link[=tab_structure]{tab_structure()}} reports what a finished table is and what accepts it.
 Export a table with \code{\link[=tab_xl]{tab_xl()}} (Excel), \code{\link[=tab_kable]{tab_kable()}} (HTML), \code{\link[=tab_md]{tab_md()}} (Markdown) or
 \code{\link[=tab_plot]{tab_plot()}}, and CHART it with \code{\link[=forest_plot]{forest_plot()}} (every cell's estimate, interval and colour --
 \code{tab_plot()} renders the table as an image, \code{forest_plot()} is the real chart).

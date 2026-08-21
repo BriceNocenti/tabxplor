@@ -159,7 +159,8 @@ testthat::test_that("no template the package writes has TOP-LEVEL literal conten
                    "{pvalue} (Chi2)", "{pvalue} (F, Welch)", "{pvalue} (Rao-Scott Chi2)"))
   cand <- cand[!is.na(cand)]
   keep <- vapply(cand, function(t) {
-    if (nchar(t) > 40 || grepl("[.]code|cli::|\\\\", t)) return(FALSE)
+    # cli inline markup is never a display template, and `{.val {var}}` would otherwise read as one
+    if (nchar(t) > 40 || grepl("[.](code|val|arg|field|fn|or)|cli::|\\\\", t)) return(FALSE)
     f <- trimws(gsub("[{}]", "", regmatches(t, gregexpr("\\{[^{}]+\\}", t))[[1]]))
     length(f) > 0 && all(f %in% names(DISPLAY_TOKENS))
   }, logical(1))
@@ -328,7 +329,7 @@ testthat::test_that("the preset table is ONE table, resolved the same way by bot
     names(tabxplor:::DISPLAY_PRESETS),
     c("est", "est_ci", "est_base", "est_coef", "base_est_mdiff", "base_est_mratio",
       "base_est", "base", "base_ci", "base_moe", "base_ratio", "base_or", "or_base",
-      "or_pct", "OR_pct"))
+      "mean_sd", "mean_cv", "or_pct", "OR_pct"))
   # a preset may declare one arm per column ROLE; an unknown role takes `default`.
   testthat::expect_identical(tabxplor:::display_resolve("est_base"), "{est} ({base})")
   testthat::expect_identical(tabxplor:::display_resolve("est_base", "model"), "{est} ({base})")
@@ -494,9 +495,13 @@ testthat::test_that("a column's NAME is its own template, token by token", {
   testthat::expect_identical(tag(display = "{or} ({pct})")[[1]], "OR (row%)")
   testthat::expect_identical(tag(display = "or")[[1]],          "row%-OR")
   testthat::expect_identical(tag(display = "ratio")[[1]],       "row%-ratio")
-  # a numeric column names the sd tail format() folds into it
+  # a numeric column names its aside: the coefficient of variation by default, the sd on request
   testthat::expect_identical(
     vctrs::vec_ptype_abbr(tab(g, race, tvhours, na = "drop_all", color = TRUE)[[2]]),
+    "mean (cv)")
+  testthat::expect_identical(
+    vctrs::vec_ptype_abbr(tab(g, race, tvhours, na = "drop_all", color = TRUE,
+                              display = "mean_sd")[[2]]),
     "mean (sd)")
   # a REGRESSION column never takes the pct-type prefix: its estimate is not a percentage. What its
   # LEVEL says instead is WHOSE it is -- the observed one, or the model's adjusted prediction.

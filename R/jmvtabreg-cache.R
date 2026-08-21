@@ -228,7 +228,7 @@ jmvtab_reg_compare_sig <- function(opts) jmv_hash(opts)
 
 # Fold the per-numeric-predictor shape picker (the jamovi `shape` Array of Group{var, shape}) into
 # tab_reg()'s `shape`. Blank / "linear" entries are dropped (linear is the default and needs no
-# entry); NULL when nothing was picked. Values come from REG_SHAPES (R/reg-assumptions.R), which is
+# entry); NULL when nothing was picked. Values come from VAR_SHAPES (R/var-shape.R), which is
 # also what the .a.yaml offers -- one vocabulary, checked by test-jamovi-vocabulary.R.
 #' @keywords internal
 #' @noRd

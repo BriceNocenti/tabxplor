@@ -319,11 +319,11 @@ reg_spec_tips_num <- function(sp, positive_level, own, ctx) {
     # invariant under that shift; only a descriptive reading of the values is not, and this tooltip
     # and the linearity panel's x axis (R/plots.R) are the two.
     x <- as.numeric(own$frame[[v]]) + reg_anchor_of(anchors, v)
-    m <- reg_weighted_mean(x, w); s <- reg_predictor_sd(x, w)
+    m <- wtd_mean(x, w); s <- wtd_sd(x, w)
     # A TOOLTIP NEVER SHOWS A FIELD IT DOES NOT HAVE: no fragment at all rather than a line of NAs.
     if (!is.finite(m) || !is.finite(s)) return(NULL)
     m1 <- if (reg_fam_binary(sp$fit_family) && length(unique(stats::na.omit(yb))) == 2L)
-      c(reg_weighted_mean(x[yb == 1], w[yb == 1]), reg_weighted_mean(x[yb == 0], w[yb == 0]))
+      c(wtd_mean(x[yb == 1], w[yb == 1]), wtd_mean(x[yb == 0], w[yb == 0]))
     else c(NA_real_, NA_real_)
     by <- if (all(is.finite(m1)))
       sprintf("; mean if yes %s, if no %s", format(signif(m1[[1]], 3)), format(signif(m1[[2]], 3)))

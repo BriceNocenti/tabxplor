@@ -406,12 +406,13 @@ predictor becomes an ordinary \strong{factor}: one estimate per group, its own o
 companion, counts and colours per group --- the non-linearity becomes visible in the printed
 numbers. Start here; it is the most readable answer.}
 \item{\code{"sd_bands"}}{cut at the \strong{mean and one standard deviation either side} --- four
-bands, whose labels carry both the real cut points and where each sits on that scale
-(\verb{[30,47) m-sd..m}). It is the low / average / high reading of moderated regression, and its
-cut points mean the same thing across sub-samples of one variable, where quantiles move with
-each one. \emph{Unlike quantile groups the bands are not balanced}: on a skewed variable the
-bottom one can be small, and a landmark falling outside the data is dropped (an exponential
-variable gets three bands, not four). Prefer quantiles when the group sizes matter.}
+bands, whose labels carry both the real cut points and, in words, where each sits on that
+scale (\verb{[30,47) below average}). It is the low / average / high reading of moderated
+regression, and its cut points mean the same thing across sub-samples of one variable, where
+quantiles move with each one. \emph{Unlike quantile groups the bands are not balanced}: on a
+skewed variable the bottom one can be small, and a landmark falling outside the data is
+dropped (an exponential variable gets three bands, not four). Prefer quantiles when the
+group sizes matter.}
 \item{\code{"quadratic"}}{adds a curvature term, so the predictor takes \strong{two rows} --- the slope
 at the mean, and the squared term, which says whether the slope flattens or accelerates as
 you move away from it.}
@@ -421,7 +422,9 @@ row label says which (\code{log(age)}); \code{"log"} needs strictly positive val
 Example: \code{shape = c(age = "quadratic", income = "log")}. Everything else keeps working: the
 observed companion is fitted with the same shape, the comparisons compare like with like, and
 \code{multiplier} still names the unit. A \code{poly()} / \code{ns()} basis is deliberately never emitted ---
-the marginal-effects engine silently returns zero for those.}
+the marginal-effects engine silently returns zero for those.
+It is the same vocabulary \code{\link[=tab]{tab()}} takes, on one vector in \code{\link[=shape_numeric_var]{shape_numeric_var()}} --- minus
+\code{"quadratic"}, which is a model term and so belongs to this function alone.}
 
 \item{stats}{The statistics shown in the model-summary \strong{footer} (one block per model). \code{NULL}
 (default) uses the per-family set: linear models show R square, adjusted R square, the
@@ -653,6 +656,8 @@ and on a \code{\link{tab_reg}} table:
 \item \code{"base_ratio"} (\code{\{base\} (\{ratio\})}) --- the level and, in parentheses, its ratio to the reference.
 \item \code{"base_or"} (\code{\{base\} (\{or\})}) --- the level and, in parentheses, its odds ratio.
 \item \code{"or_base"} (\code{\{or\} (\{base\})}) --- the odds ratio and, in parentheses, the percentage it rests on.
+\item \code{"mean_sd"} (\code{\{mean\} (σ\{sd\})}) --- the mean and, in parentheses, its standard deviation.
+\item \code{"mean_cv"} (\code{\{mean\} (cv \{cv\})}) --- the mean and, in parentheses, its coefficient of variation --- the spread as a percentage of the mean, comparable between columns measured in different units (the default where every mean is positive).
 }
 }
 

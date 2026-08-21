@@ -19,8 +19,9 @@
 #     untouched (non-transposed path byte-identical).
 #   - Runs AFTER tab_materialize_extras(backend = "xl"): that keeps `n` as a COLUMN (which flips to an
 #     `n` ROW, matching a native pct = "col" table) and 14n has already collapsed the redundant Total
-#     rows to one (-> one Total column, no `Total_<var>` suffix). The Excel-only `<var>_sd` sibling is
-#     DROPPED here (the mean cell folds its sigma back in via special_formatting).
+#     rows to one (-> one Total column, no `Total_<var>` suffix). ⚠ The Excel ASIDE split does NOT run
+#     under a transpose: every backend gets a formatted string here, so a composite cell survives the
+#     flip whole ("49 (sigma17)") and splitting it would strip the aside off.
 # See: dev/tabxplor_2.0.0_decisions.md S46.
 
 # === SECTION: the model flip =========================================================================
@@ -35,9 +36,9 @@ tx_transpose_render <- function(rd, backend) {
   if (isTRUE(rd$vars$degrade)) return(rd)                       # a malformed table degrades unchanged
   # A real tab_vars table (sub-tabled / grouped) is out of scope -- its two-level structure has no
   # single flip. A SEVERAL-row_var (compacted) table is fine: it is the whole point of this phase.
-  # Phase 19h (KEY 7): declared in TAB_OPS (R/tab-shape.R), read here through the render model's own
+  # Phase 19h (KEY 7): declared in TAB_OPS (R/tab-structure.R), read here through the render model's own
   # variable block, so the rule and its wording live with every other shape rule.
-  tab_check_shape(rd_shape(rd), "transpose_render")
+  tab_check_structure(rd_structure(rd), "transpose_render")
 
   tab   <- rd$tab
   roles <- rd$roles
@@ -49,9 +50,12 @@ tx_transpose_render <- function(rd, backend) {
   cvm    <- roles$col_var_map
 
   # ---- (A) the ORIGINAL data columns become the new ROWS, reordered ------------------------------
-  # Drop the Excel-only <var>_sd siblings (the mean cell re-folds its sigma). Order the survivors as
-  # the review asks: factor col_var levels, then Total, then n, then numeric means.
-  data_i  <- setdiff(unname(roles$fmt_cols), unname(roles$sd_cols))
+  # Drop any Excel-only ASIDE column (there is none under a transpose -- mat_aside_cols does not run
+  # here, so the composite survives in the cell -- but a stray one would duplicate its source row).
+  # Order the survivors as the review asks: factor col_var levels, then Total, then n, then means.
+  aside_i <- unname(roles$fmt_cols)[vapply(tab[unname(roles$fmt_cols)],
+                                           function(c) identical(get_role(c), "aside"), logical(1))]
+  data_i  <- setdiff(unname(roles$fmt_cols), aside_i)
   is_tot  <- data_i %in% roles$totcols
   is_n    <- fmt_is_helper_col(tab[data_i])
   types   <- vapply(data_i, function(j) fmt_var_kind(tab[[j]]), character(1))

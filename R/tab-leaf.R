@@ -14,6 +14,15 @@
 #     stamp and the row index are written in exactly one place each.
 #   - build_total_rows() and num_rollup() are deliberately NOT merged: base::sum over split() vs
 #     data.table gforce is a 1-ULP contract on both sides. See their headers before touching either.
+#   - THE TWO LEAVES MUST AGREE ABOUT THE ROW INDEX, because tab_transform() full_join()s their
+#     blocks on it: the same level set, built the same way, ordered or not the same. Every past
+#     divergence has been an ORDERED factor refusing the join or degrading to a plain one --
+#     an "NA" level minted on one side only (the gate in num_core() and in num_total_postprocess()),
+#     or a "Total" level left to rbind's coercion rules instead of restated (num_rollup()'s shared
+#     ptype, R/tab-agg.R). A change to either leaf's index is a change to both.
+#   - A numeric column's DEFAULT LAYOUT is num_default_display(): the coefficient of variation
+#     beside the mean, guarded per column. It is chosen here because only the leaf holds the
+#     column's own means, which is what the guard reads.
 # See: CLAUDE.md § tabxplor architecture (the calculation pipeline).
 
 # === SECTION: The factor leaf -- tab_plain() / plain_resolve() / plain_core() =================
@@ -890,6 +899,12 @@ num_total_postprocess <- function(dt, keys, na, tab_row_names) {
     dt[, names(not_fct)[not_fct] := purrr::map(.SD, forcats::as_factor),
        .SDcols = names(not_fct)[not_fct]]
   }
+  # WARNING: gated on an ACTUAL missing value, per key -- fct_na_value_to_level() appends the "NA"
+  #   level unconditionally, so an ungated call gave the rollup a level the main aggregate did not
+  #   have. On the row_var (totaltab = "table") that is the very column the two leaves are
+  #   full_join()ed on, and rbind() then degraded an ORDERED index to a plain factor, silently.
+  #   Same gate as num_core()'s main path and plain_core()'s.
+  keys <- keys[purrr::map_lgl(keys, ~ anyNA(dt[[.x]]))]
   if (identical(na, "keep") && length(keys) != 0) {
     data.table::setorderv(dt, keys, na.last = TRUE
     )[, (keys) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"), .SDcols = keys]
@@ -1523,6 +1538,22 @@ num_resolve <- function(color, ref, ci, tot, comp, totaltab, row_var, col_vars, 
 # WARNING: an all-NA col_var makes every mean NA, so max(na.rm = TRUE) warns and returns -Inf.
 #' @keywords internal
 #' @noRd
+# THE DEFAULT LAYOUT OF A NUMERIC COLUMN, decided per column from its own means.
+#
+# DESIGN: a mean alone says nothing about how spread out the values behind it are, and a standard
+# deviation in the variable's own unit is not comparable between columns -- so the default aside is
+# the COEFFICIENT OF VARIATION, the spread as a percentage of the level ("49 (cv 36%)").
+# ⚠ GUARDED, and the guard is per COLUMN, not per cell: a ratio to a mean at or below zero is not a
+# share of anything and flips sign with the mean, so a column holding one falls back to the bare mean
+# rather than printing a wild or negative figure in some rows and a sensible one in others. One
+# layout per column is what keeps a column readable -- and `mean_sd` is one word away.
+#' @keywords internal
+#' @noRd
+num_default_display <- function(mean) {
+  m <- mean[!is.na(mean)]
+  if (length(m) && all(m > 0)) DISPLAY_PRESETS$mean_cv$template else "mean"
+}
+
 num_digits_floor <- function(digits, means) {
   m <- suppressWarnings(max(means, na.rm = TRUE))
   if (!is.finite(m)) m <- 0
@@ -1642,7 +1673,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
         by           = .,
         drop_keys    = as.character(c(tab_vars[!tab_vars %in% .], row_var)),
         moment_cols  = moment_cols,
-        tab_vars_chr = as.character(tab_vars)
+        index_keys   = tab_row_names
       )
     )
 
@@ -1662,7 +1693,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
       by           = as.character(row_var),
       drop_keys    = as.character(tab_vars),
       moment_cols  = moment_cols,
-      tab_vars_chr = as.character(tab_vars)
+      index_keys   = tab_row_names
     )
 
     num_total_postprocess(tabs_totaltab, as.character(row_var), na, tab_row_names)
@@ -1918,8 +1949,10 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   if (ref %in% c("tot", "no", "")) refrows <- rep(FALSE, nrow(tabs))
 
 
-  # display / ref / comp are column-invariant here; `digits` and `col_var` stay per-column.
-  display_1 <- if (ci_visible) { "ci" } else { "mean" }
+  # display / ref / comp are column-invariant here; `digits` and `col_var` stay per-column -- and so
+  # is the numeric column's DEFAULT LAYOUT (num_default_display(), below), which reads each column's
+  # own means.
+  display_1 <- if (ci_visible) "ci" else NULL
   # what these columns estimate and WHICH engine built their bounds -- both the CI_GEOMS row above.
   scale_num  <- ci_geom_scale(ci, "mean", ci_scale[1])
   if (is.na(scale_num)) scale_num <- "level_mean"
@@ -1936,7 +1969,8 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
       digits_col <- vec_recycle(num_digits_floor(a[[8]], a[[3]]), length(a[[1]]))
       fmt_materialize_col(
         frame = list(
-          n         = a[[1]], display = display_1, digits = digits_col,
+          n         = a[[1]], display = display_1 %||% num_default_display(a[[3]]),
+          digits    = digits_col,
           wn        = a[[2]], pct = NA_reals, mean = a[[3]], diff = a[[5]], ratio = a[[9]],
           ctr       = NA_reals, var = a[[4]], ci_inf = a[[10]], ci_sup = a[[6]],
           pvalue    = a[[11]], or = NA_reals, tot_n = NA_reals, n_eff = a[[12]],

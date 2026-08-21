@@ -594,8 +594,29 @@ TAB_ARGS <- list(
   outcome_level = list(producers = "tab_reg", default = NULL, values_from = "REG_FAMILIES",
                        doc_in_producer = TRUE),
   multiplier = list(producers = "tab_reg", default = "sd", doc_in_producer = TRUE),
-  shape = list(producers = "tab_reg", default = NULL, values_from = "REG_CHECKS",
-               doc_in_producer = TRUE),
+  # `dots` on tab(): the whole vocabulary is one help page of its own (?shape_numeric_var), and a
+  # crowded signature is the wrong place to teach it. tab_reg() keeps its own prose -- there `shape`
+  # is about FITTING, and a quadratic is a model term tab() cannot take.
+  shape = list(producers = c("tab", "tab_reg"), default = NULL, values_from = "VAR_SHAPES",
+               dots = "tab", doc_in_producer = TRUE,
+               doc_for = list(tab = c(
+                 "How a \\strong{numeric} variable enters the table. Cut it into groups and it",
+                 "  becomes an ordinary factor --- one row (or one column) per group:",
+                 "  \\code{\"quartiles\"}, \\code{\"quintiles\"}, an integer number of groups,",
+                 "  \\code{\"sd_bands\"} (four bands at the mean and one standard deviation either",
+                 "  side) or \\code{\"levels\"} (one level per distinct value). \\code{\"log\"} /",
+                 "  \\code{\"sqrt\"} keep it a number and are for \\code{col_vars} only.",
+                 "  One value for every numeric variable, or one per variable:",
+                 "  \\code{shape = c(age = \"quintiles\")}. A numeric \\code{row_vars} /",
+                 "  \\code{tab_vars} defaults to \\code{\"auto\"} --- one level per value for a",
+                 "  counted number or a short scale, \\code{\"sd_bands\"} for a continuous one ---",
+                 "  and a numeric \\code{col_vars} keeps its means. See",
+                 "  \\code{\\link{shape_numeric_var}} for the whole vocabulary."))),
+  shape_name = list(producers = "tab", default = TRUE, dots = "tab",
+                    doc = c("Whether a shaped variable writes its own name onto its",
+                            "  \\strong{first} level (\\code{\"age: [18,30) low\"}), so a table whose",
+                            "  leading text columns are stripped still says what the levels are levels",
+                            "  of. \\code{TRUE} by default.")),
   stats = list(producers = "tab_reg", default = NULL, values_from = "TEST_ROWS",
                doc_in_producer = TRUE),
   output = list(

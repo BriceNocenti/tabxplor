@@ -1,7 +1,7 @@
 # PURPOSE: The row model -- rows describe themselves the way columns do, so "what is this row" reads
 #   stored facts instead of re-deriving them from labels or render-time vectors.
 # ROLE: Feeds the crosstab pipeline's row axis; read by the colour engine (is_totrow()), the shape
-#   model (R/tab-shape.R) and every exporter.
+#   model (R/tab-structure.R) and every exporter.
 # KEY CONSTRAINTS:
 #   - `role` says what the COLUMN is; `var` says which VARIABLE its labels belong to. On a merged
 #     `levels` column `var` is NA. Never infer either from a column NAME.
@@ -161,10 +161,16 @@ vec_ptype2.tabxplor_lvl.tabxplor_lvl <- function(x, y, ...) {
   r <- lvl_reconcile(x, y)
   new_lvl(lvl_ptype2_union(unlvl(x), unlvl(y), ...), r$role, r$var, r$ordered)
 }
+# DESIGN: an index column bound against an UNDECLARED factor keeps its declaration -- the other side
+# states nothing, so there is nothing to reconcile away. Returning the bare union instead dropped the
+# `tabxplor_lvl` class, after which tab_index_cols() found no index and the next bind of two ordered
+# factors was unprotected again.
 #' @export
-vec_ptype2.tabxplor_lvl.factor    <- function(x, y, ...) lvl_ptype2_union(unlvl(x), y, ...)
+vec_ptype2.tabxplor_lvl.factor <- function(x, y, ...)
+  lvl_restore(lvl_ptype2_union(unlvl(x), y, ...), x)
 #' @export
-vec_ptype2.factor.tabxplor_lvl    <- function(x, y, ...) lvl_ptype2_union(x, unlvl(y), ...)
+vec_ptype2.factor.tabxplor_lvl <- function(x, y, ...)
+  lvl_restore(lvl_ptype2_union(x, unlvl(y), ...), y)
 #' @export
 vec_ptype2.tabxplor_lvl.character <- function(x, y, ...) vctrs::vec_ptype2(unlvl(x), y, ...)
 #' @export

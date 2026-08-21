@@ -265,7 +265,7 @@ reg_numeric_preds <- function(data, predictors)
 
 # === SECTION: `multiplier` -- the per-unit scaling of a continuous predictor's effect ============
 #
-# GRAMMAR: the package's shared per-predictor one (reg_per_predictor(), R/reg-resolve.R) -- an
+# GRAMMAR: the package's shared per-predictor one (per_variable(), R/var-shape.R) -- an
 # unnamed value, or one named `default`, applies to every continuous predictor; a named element
 # overrides that one.
 #
@@ -274,28 +274,6 @@ reg_numeric_preds <- function(data, predictors)
 # models, the crude companions and the jamovi cache key all see the SAME numbers; a per-group SD
 # would make `color = "between_groups"` compare different quantities. ⚠ never passed downstream as
 # a KEYWORD: marginaleffects reads "sd" as a CENTRED contrast on the SD of its own `newdata`.
-
-#' @keywords internal
-reg_weighted_mean <- function(x, w = NULL) {
-  x <- as.numeric(x)
-  ok <- is.finite(x)
-  if (!is.null(w)) { w <- as.numeric(w); ok <- ok & is.finite(w) & w > 0 }
-  if (!any(ok)) return(NA_real_)
-  if (is.null(w)) mean(x[ok]) else sum(w[ok] * x[ok]) / sum(w[ok])
-}
-
-#' @keywords internal
-reg_predictor_sd <- function(x, w = NULL) {
-  x <- as.numeric(x)
-  ok <- is.finite(x)
-  if (!is.null(w)) { w <- as.numeric(w); ok <- ok & is.finite(w) & w > 0 }
-  if (sum(ok) < 2L) return(NA_real_)
-  if (is.null(w)) return(stats::sd(x[ok]))
-  xw <- x[ok]; ww <- w[ok]
-  m  <- sum(ww * xw) / sum(ww)
-  sqrt(sum(ww * (xw - m)^2) / sum(ww))          # the ML weighted variance, as tab()'s numeric side uses
-}
-
 
 #' @keywords internal
 REG_MULTIPLIER_KEYWORDS <- c("sd", "1sd", "2sd")
@@ -331,7 +309,7 @@ reg_multiplier_value <- function(value, sd, digits = 3L) {
 reg_resolve_multiplier <- function(multiplier, default, data, num_preds, wt = NULL) {
   if (length(num_preds) == 0L) return(list(k = NULL, label = NULL))
   reg_check_continuous_names(multiplier, data, names(data), "multiplier")
-  vals <- reg_per_predictor(multiplier, num_preds, "multiplier")
+  vals <- per_variable(multiplier, num_preds, "multiplier", what = "predictor")
   for (v in names(vals)) {
     if (!reg_multiplier_ok(vals[[v]]))
       cli::cli_abort(c(paste0("{.arg multiplier} for {.val {v}} must be a number or ",
@@ -340,7 +318,7 @@ reg_resolve_multiplier <- function(multiplier, default, data, num_preds, wt = NU
   }
   w   <- if (!is.null(wt) && is.character(wt) && length(wt) == 1L && wt %in% names(data))
            data[[wt]] else NULL
-  sds <- vapply(num_preds, function(v) reg_predictor_sd(data[[v]], w), numeric(1))
+  sds <- vapply(num_preds, function(v) wtd_sd(data[[v]], w), numeric(1))
   res <- purrr::map(stats::setNames(num_preds, num_preds), function(v)
     reg_multiplier_value(vals[[v]] %||% default, sds[[v]]))
   k   <- vapply(res, function(z) z$k,     numeric(1))
@@ -717,8 +695,8 @@ reg_anchor_value <- function(value, x, w = NULL, var = "x") {
   if (!is.na(k)) return(k)
   x <- as.numeric(x)
   switch(s,
-         mean   = reg_weighted_mean(x, w),
-         median = rd_wquantile(x, 0.5, w),
+         mean   = wtd_mean(x, w),
+         median = shape_wquantile(x, 0.5, w),
          min    = suppressWarnings(min(x[is.finite(x)])),
          max    = suppressWarnings(max(x[is.finite(x)])),
          cli::cli_abort(c(paste0("{.arg ref} for the continuous predictor {.val {var}} must be a ",
@@ -1705,7 +1683,7 @@ reg_reference_grid_values <- function(data, predictors, anchors = NULL, w = NULL
     x <- data[[v]]
     if (reg_is_factor_var(x))       levels(as.factor(x))[1]
     else if (v %in% names(anchors)) 0
-    else                            reg_weighted_mean(x, w)
+    else                            wtd_mean(x, w)
   })
   stats::setNames(vals, predictors)
 }
@@ -3642,7 +3620,7 @@ reg_stage_rows <- function(ctx) {
   unit_of  <- function(v, anchor = TRUE) {
     mult <- one(multiplier_label, v)
     anch <- if (anchor) one(anchors, v) else NULL
-    parts <- c(one(REG_SHAPE_MARKS[unname(shape_kinds[v])], 1L),
+    parts <- c(one(SHAPE_MARKS[unname(shape_kinds[v])], 1L),
                if (!is.null(mult)) gettextf("per %s", mult),
                if (!is.null(anch)) {
                  kw  <- one(unlist(anchor_keyword), v) %||% ""
@@ -4136,12 +4114,13 @@ reg_stage_finalize <- function(ctx) {
 #'       companion, counts and colours per group --- the non-linearity becomes visible in the printed
 #'       numbers. Start here; it is the most readable answer.}
 #'     \item{`"sd_bands"`}{cut at the **mean and one standard deviation either side** --- four
-#'       bands, whose labels carry both the real cut points and where each sits on that scale
-#'       (`[30,47) m-sd..m`). It is the low / average / high reading of moderated regression, and its
-#'       cut points mean the same thing across sub-samples of one variable, where quantiles move with
-#'       each one. \emph{Unlike quantile groups the bands are not balanced}: on a skewed variable the
-#'       bottom one can be small, and a landmark falling outside the data is dropped (an exponential
-#'       variable gets three bands, not four). Prefer quantiles when the group sizes matter.}
+#'       bands, whose labels carry both the real cut points and, in words, where each sits on that
+#'       scale (`[30,47) below average`). It is the low / average / high reading of moderated
+#'       regression, and its cut points mean the same thing across sub-samples of one variable, where
+#'       quantiles move with each one. \emph{Unlike quantile groups the bands are not balanced}: on a
+#'       skewed variable the bottom one can be small, and a landmark falling outside the data is
+#'       dropped (an exponential variable gets three bands, not four). Prefer quantiles when the
+#'       group sizes matter.}
 #'     \item{`"quadratic"`}{adds a curvature term, so the predictor takes **two rows** --- the slope
 #'       at the mean, and the squared term, which says whether the slope flattens or accelerates as
 #'       you move away from it.}
@@ -4152,6 +4131,8 @@ reg_stage_finalize <- function(ctx) {
 #'   observed companion is fitted with the same shape, the comparisons compare like with like, and
 #'   `multiplier` still names the unit. A `poly()` / `ns()` basis is deliberately never emitted ---
 #'   the marginal-effects engine silently returns zero for those.
+#'   It is the same vocabulary [tab()] takes, on one vector in [shape_numeric_var()] --- minus
+#'   `"quadratic"`, which is a model term and so belongs to this function alone.
 #' @param empirical Show the **observed, unadjusted (crude)** effect beside each modelled one ---
 #'   the same quantity fitted with a single predictor. It IS the modelled quantity when there is only
 #'   one predictor, so the distance between the two is exactly what adjustment changed, read left to

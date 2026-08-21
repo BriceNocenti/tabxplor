@@ -73,10 +73,14 @@ tx_prep <- function(t, backend = "kable", color = TRUE) {
   tab_export_prep(t, backend = backend, transpose = TRUE, compute = compute)$tables[[1]]
 }
 # the untransposed reference must materialise the SAME way the transposed flip does (xl-style: `n` a
-# column, mean split off its sd), so the slot grids line up cell-for-cell. backend = "xl" does that.
+# column), so the slot grids line up cell-for-cell. backend = "xl" does that -- but it ALSO splits
+# every composite's aside into a column of its own, which a transpose does not (the flipped cell
+# keeps its bracket), so those columns are dropped below by their declared role.
 plain_prep <- function(t) {
   tab_export_prep(t, backend = "xl", compute = c("refs", "colors", "bold"))$tables[[1]]
 }
+drop_asides <- function(rdu, i) i[!vapply(rdu$tab[i], function(c)
+  identical(tabxplor:::get_role(c), "aside"), logical(1))]
 
 testthat::test_that("numeric cells keep their OWN colour on transpose (the finding-8 regression)", {
   # A multi-row_var table with a numeric (mean) col_var. The object-level flip stamped one factor
@@ -86,8 +90,8 @@ testthat::test_that("numeric cells keep their OWN colour on transpose (the findi
   rd  <- tx_prep(t)
   rdu <- plain_prep(t)
 
-  # untransposed slot matrix [orig row, orig data col] (drop the Excel _sd siblings -- none for kable)
-  data_i <- setdiff(unname(rdu$roles$fmt_cols), unname(rdu$roles$sd_cols))
+  # untransposed slot matrix [orig row, orig data col] (drop the Excel aside columns -- none flipped)
+  data_i <- drop_asides(rdu, unname(rdu$roles$fmt_cols))
   onm    <- names(rdu$tab)
   U <- vapply(data_i, function(j) rdu$ann[[onm[j]]]$text_slot, integer(nrow(rdu$tab)))
   # transposed: ann keyed by data-column name; recompute the row order to map d -> new row
@@ -148,7 +152,7 @@ testthat::test_that("transpose = TRUE keeps both colour channels + the numeric m
   h <- as.character(tab_kable(t, transpose = TRUE))
   testthat::expect_match(h, "tx-pill")                          # background-channel colour survives
   testthat::expect_match(h, 'class="[^"]*p[0-9]')               # text-channel slot survives
-  tn <- tab_num(gss, race, c(age, tvhours), color = "diff")
+  tn <- set_display(tab_num(gss, race, c(age, tvhours), color = "diff"), "mean_sd")
   md <- tab_md(tn, transpose = TRUE, print = FALSE)
   testthat::expect_true(grepl(intToUtf8(0x03c3), md))           # inline sigma sd survives the flip
 })

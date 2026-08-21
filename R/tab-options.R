@@ -195,6 +195,14 @@ TAB_OPTIONS <- list(
             "`\"print_ready\"` cannot be used here: their marks are cell text, and a print rule can",
             "restyle a page but not add characters to it.")),
 
+  shape_auto_max = tx_opt(
+    12L, "display",
+    doc = c("where {.code shape = \"auto\"} draws the line for a numeric row or tab variable: a",
+            "column with at most this many distinct \\strong{whole} values is a counted number or a",
+            "short scale, and keeps one level per value; anything else is continuous and is cut into",
+            "`\"sd_bands\"`. Raise it for a long scale, lower it to band more eagerly --- or name the",
+            "variable in `shape` and decide yourself.")),
+
   # --- statistics and confidence intervals -------------------------------------------------------
   anova = tx_opt(
     "welch", "stats", arg = "anova",
