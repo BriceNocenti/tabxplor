@@ -82,7 +82,7 @@ Une case `tabxplor_fmt` porte **21 champs** (beaucoup valent `NA` lorsque la qua
 | `pct`       | pourcentage |
 | `mean`      | moyenne (variables en colonne numériques) |
 | `diff`      | différence avec la case Total / de référence |
-| `ratio`     | rapport à la référence (la « règle ×2 » ; risque relatif) |
+| `ratio`     | rapport à la référence (risque relatif, ou rapport de moyennes) |
 | `ci_inf`, `ci_sup` | bornes de l'intervalle de confiance |
 | `pvalue`    | p-valeur de significativité par case (alimente les étoiles) |
 | `or`        | rapport de cotes / rapport de risques relatifs |

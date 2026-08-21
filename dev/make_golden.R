@@ -10,6 +10,11 @@
 # See: CLAUDE.md > 2.0.0 roadmap > Golden regeneration protocol.
 #
 # LEDGER
+#   Phase 22b-xvi: FOUR fixtures move, on ONE column ATTRIBUTE and nothing else -- n_mean, n_mean_w,
+#   n_mean_sparse, n_mean_tottab (plus n_ci_tabvars / n_ci_tabvars_all, same reason). `color = "auto"`
+#   is now `color = TRUE`, and the declared automatic measure of a NUMERIC column is `ratio`, so
+#   `tab_num()`'s default stamps `color = "ratio"` where it stamped `"difference"`. Every field is
+#   bit-identical (dev/verify_golden_field_delta.R, 1788 cells).
 #   Phase 22b-ii: FOUR fixtures move, on the `display` FIELD and nothing else -- f_ci_cell,
 #     n_ci_tabvars, n_ci_tabvars_all, n_mean_ci, where `pct_ci` / `mean_ci` became `ci`. Those two
 #     pipeline-only tokens were the last composites in the display grammar that were not templates;

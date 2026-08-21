@@ -584,6 +584,7 @@ Les méthodes d'intervalle alternatives tiennent dans UN seul argument, `ci_meth
 - Plusieurs à la fois : `ci_method = c(cell = "beta", diff = "ac")`.
 - Les intervalles du risque relatif (Katz) et du rapport de cotes (Woolf) n'ont pas d'alternative : ce n'est donc pas un choix.
 - Une **différence** de moyennes est, par défault, **standardisée** : les seuils de couleur `mean_diff` se lisent en unités d'écart-type (Δ de Glass, différence divisée par l'écart-type de la référence), sauf si l'utilisateur fournit une échelle de seuils personnalisée avec `set_color_breaks(mean_diff = c(100, 200, 500))`.
+- **Chaque seuil est le même seuil, écrit dans une autre mesure.** Les ±5 points enseignés ici sont le premier échelon de `pct_diff` ; lus sur une case de référence à 50 %, ces mêmes 5 points valent 0,1 écart-type, un rapport de ×1,1 et un rapport de cotes de ×1,2 — c'est-à-dire exactement là où commence chacune des autres échelles. Une nuance signifie donc le même écart quelle que soit la mesure sur laquelle on lit un tableau, et `set_color_breaks()` est l'endroit où on les déplace toutes.
 - Pour un facteur à **3 modalités ou plus**, l’*odds-ratio* ou rapport de cotes (et son intervalle) compare chaque modalité à la modalité de base `ref2` : c'est un rapport de risques relatifs (RRR) (la même quantité observée que celle modélisée par une régression logistique multinomiale).
 
 **Les intervalles de confiance simples, case par case** (`ci = "cell"`) comparent chaque case à 0 % (ou à une moyenne de 0), *et non* à une référence :

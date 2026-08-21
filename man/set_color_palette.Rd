@@ -101,11 +101,11 @@ or a \code{list(over =, under =)} of magnitudes (no mirror; omit a side to switc
 \code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = list(over = 2))}. Unset scales keep
 their current value.}
 
-\item{brk}{When missing, return the full named list of break scales (\code{pct_diff},
-\code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}, \code{zscore}) -- the same shape
-\code{\link{set_color_breaks}} accepts, so it round-trips. Specify one scale name to return
-only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and \code{"mean"} (->
-\code{mean_ratio}) are still accepted.}
+\item{brk}{When missing, return the full named list of the ten break scales -- the same shape
+\code{\link{set_color_breaks}} accepts, so it round-trips (an asymmetric scale comes back as
+\code{list(over =, under =)}, a standardized one with \code{std = TRUE}). Specify one scale name
+to return only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and \code{"mean"}
+(-> \code{mean_ratio}) are still accepted.}
 }
 \value{
 Sets the internal color palettes (invisibly) and the option
@@ -131,10 +131,15 @@ thresholds with \code{tab(color_breaks =)}.
 Color breaks are a named list of the ten measure scales \code{pct_diff},
 \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib},
 \code{zscore}, \code{adj_ratio}, \code{adj_diff} and \code{adj_diff_std}. Each is
-a vector of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 5
-values, one per color step: \code{pct_diff} colors percentage-point differences,
-\code{pct_ratio} the relative risk (the "x2 rule"), \code{odds_ratio} the odds ratio (\code{color =
-"OR"}; symmetric by default), \code{mean_diff} the standardized mean difference (Glass's delta) by
+a vector of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 4
+values, one per color step.
+
+Every default is the same ladder in another measure, read at ONE reference cell of 50 \%: 5 / 10 /
+20 / 30 percentage points is also 0.1 / 0.2 / 0.4 / 0.8 SD, x1.1 / x1.2 / x1.5 / x2 as a ratio and
+x1.2 / x1.5 / x2 / x4 as an odds ratio -- so a shade means the same size of deviation whichever
+measure a table is read on. \code{pct_diff} colors percentage-point differences,
+\code{pct_ratio} the relative risk, \code{odds_ratio} the odds ratio (\code{color =
+"odds_ratio"}), \code{mean_diff} the standardized mean difference (Glass's delta) by
 default (supply data-unit values for absolute coloring), \code{mean_ratio} the mean ratio,
 \code{contrib} the chi2 contribution (in multiples of the mean cell contribution) and
 \code{zscore} an absolute z scale (the adjusted standardized residual) -- the absolute scale
@@ -151,6 +156,15 @@ and \code{adj_diff_std} for an additive effect in the outcome's own units (a gau
 marginal effect), where the gap is divided by SD(Y) so the same threshold means the same thing
 whatever unit the outcome is recorded in. An empty/\code{NULL} scale
 drops that measure for its column type.
+
+Two rules shape a default, and a custom one is free to break them. A ladder is MIRRORED unless the
+quantity it grades is bounded above: a percentage ratio is capped at \code{1 / base}, so a cell can
+sit far below its reference and never far above it, and \code{pct_ratio} is stricter below
+(\code{list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4))}) -- a mean ratio, a rate ratio
+and a ratio of two estimates have no ceiling and stay symmetric. And a fill is read at a glance, so
+on the BACKGROUND channel the two ratio scales keep their two loudest rungs only: with the default
+\code{color = TRUE} the text grades every deviation and the background flags the ones whose
+RELATIVE size is out of proportion.
 }
 \details{
 \code{set_color_palette()} customises the palette used to print \code{\link{tab}}. Each
@@ -180,4 +194,5 @@ set_color_breaks(
   mean_ratio = c(1.15, 2, 4),
   contrib    = c(1, 2, 5)
 )
+set_color_breaks(get_color_breaks())   # a no-op: the shape round-trips
 }

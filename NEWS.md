@@ -26,9 +26,11 @@
   (`100% (6 712-9 838)`) whenever the parts of the table do not rest on the same people — several
   column variables losing different `NA`s, or several models. It replaces `add_n`.
 * **Redesigned colour API.** Position picks the visual channel (1st value → text, 2nd → background),
-  names pick the column type (`pct` / `mean`); `color = TRUE` is the smart per-type default. New OKLCH
-  light/dark palettes, 24-bit truecolor console, `set_color_palette()` (replaces `set_color_style()`),
-  and a per-table `color_breaks =` argument.
+  names pick the column type (`pct` / `mean`); `color = TRUE` (or `"auto"`) is the smart per-type
+  default. New OKLCH light/dark palettes, 24-bit truecolor console, `set_color_palette()` (replaces
+  `set_color_style()`), and a per-table `color_breaks =` argument. Every colour ladder is now the same
+  ladder written in another measure at a 50 % reference cell, so a shade means the same size of
+  deviation whichever measure a table is read on.
 * **Dark mode.** `theme = "auto"` on `tab_html()` / `tab_md()` / `tab_css()` / `tab_export()` follows
   whoever is reading the table (their browser, or the editor for the Viewer). The console also
   auto-detects a dark editor (RStudio and Positron).
@@ -319,6 +321,16 @@
 
 ## Changes that may affect existing code
 
+* **The colour thresholds moved.** `pct_ratio` is now `×1.1 / ×1.2 / ×1.5 / ×2` above the reference
+  and `÷1.1 / ÷1.25 / ÷2 / ÷4` below it (a percentage ratio is capped at `1 / base`, so a cell reaches
+  much further below its reference than above); `mean_ratio` takes the same over side, mirrored; and
+  `mean_diff` is `0.1 / 0.2 / 0.4 / 0.8` SD instead of Cohen's three rungs. On the **background**
+  channel the two ratio scales keep their two loudest rungs only, so the default `color = TRUE` still
+  flags relative deviations without shading half the table. `pct_diff`, `odds_ratio` and `contrib` are
+  unchanged. `set_color_breaks()` restores any of them.
+* **`color_signif = "guaranteed_effect"` reads the same numbers as `"ignore"`** — its ladder is now the
+  scale's own, one rung down, instead of being rescaled (which printed thresholds like `×1.3333`).
+* **A ratio prints two decimals** (`×1.29`), like the odds ratio beside it, when the cell asks for none.
 * **In a `tab_reg()` table a continuous predictor's row now reports its unit in the level
   (`per SD/13.5`) and draws its observed shape in the otherwise-empty `n` cell** (a framed
   sparkline in HTML), instead of crowding both into the row label. `multiplier` now applies to

@@ -592,6 +592,7 @@ Alternative interval methods go in ONE argument, `ci_method` — a named vector,
 - Several at once: `ci_method = c(cell = "beta", diff = "ac")`.
 - The relative-risk (Katz) and odds-ratio (Woolf) intervals have no alternative, so they are not a choice.
 - A mean **difference** is colored **standardized** — Glass's Δ, the difference divided by the reference's standard deviation — so the `mean_diff` color breaks are read in SD units, unless the user provides a custom break scale.
+- **Every threshold is the same threshold, written in another measure.** The taught ±5 points is the first rung of `pct_diff`; read at a 50 % reference cell, those same 5 points are 0.1 SD, a ratio of ×1.1 and an odds ratio of ×1.2 — which is exactly where each of the other ladders starts. So a shade means the same size of deviation whichever measure you read a table on, and `set_color_breaks()` is where you move them all.
 - For a factor with **3 or more levels**, the odds ratio (and its interval) compares each level to the `ref2` baseline level : it is a relative risk ratio (RRR) (the same observed quantity that is modelised by a multinomial logistic regression). The OR interval is computed only when `color_signif` or `stars` needs it.
 
 **Simple, cell-by-cell confidence intervals** (`ci = "cell"`) compare each cell to 0 % (or a mean of 0), *not* to a reference:

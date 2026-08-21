@@ -1832,7 +1832,7 @@ EST_SCALES <- list(
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "diff",  unit = "log",   default_display = "n",
                     est_display = "coef", base_display = NA_character_, const_display = "coef",
-                    break_key = "odds_ratio", gap_key = "adj_diff_log",
+                    break_key = "log_odds",   gap_key = "adj_diff_log",
                     label_meas = "difference", sec = "exp"),
   points     = list(kind = "effect", geometry = "difference", var_kind = "pct", ladder = "pct",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = TRUE,
@@ -1979,8 +1979,9 @@ fmt_scale_of <- function(x, kind = "auto") {
   }
 
   if (!is.na(s$break_key)) {
-    sc <- color_scales()[[s$break_key]]
-    if (identical(key, "log_coef") && !is.null(sc)) sc <- log_odds_scale(sc)
+    # through color_scale_resolve(), so a DERIVED ladder (log_odds) reads its derivation from the one
+    # declared place -- the axis and the colour engine cannot disagree about it.
+    sc <- color_scale_resolve(s$break_key, color_scales())
     over  <- if (is.null(sc)) numeric(0) else sc$over$breaks
     under <- if (is.null(sc)) numeric(0) else sc$under$breaks
     over  <- over[ is.finite(over) ]
@@ -3882,20 +3883,26 @@ color_scales <- function() {
   utils::modifyList(default_color_scales(), sc)
 }
 
-# shift ONE per-direction break scale so its first break sits at the neutral value, for the
-# `guaranteed_effect` policy. `breaks` are POSITIVE magnitudes (fmt_color_slots folds each side around
-# the centre), so the neutral magnitude is 0 on an additive scale, 1 on a multiplicative one.
-#   additive       c(0.05, 0.10, 0.20, 0.30) -> c(0, 0.05, 0.15, 0.25)
-#   multiplicative c(1.15, 1.5,  2,    4   ) -> c(1, 1.30, 1.74, 3.48)
-# `origin` re-anchors an ADDITIVE offset scale elsewhere than 0: `color = "contrib"` passes z(conf_level)
-# so its guaranteed reading scores the ABSOLUTE standardized residual, and the breaks stay real |z|
-# values the legend can name ("a +-3 cell").
+# ONE per-direction break scale, rewritten for the `guaranteed_effect` policy. That policy scores the
+# CI FLOOR instead of the estimate, and is meant to COLOUR MORE -- to show everything solid in a small
+# table while still grading what is left of the effect -- so the ladder starts at the neutral: every
+# cell whose interval excludes it takes at least the faintest shade.
+#   THE RULE: prepend the neutral, drop the top rung. One rung down, no arithmetic, so every printed
+#   threshold is a number the reader already knows from the same ladder under `ignore`, and a shade
+#   means the same size of deviation whichever policy is on.
+#     additive       c(0.05, 0.10, 0.20, 0.30) -> c(0, 0.05, 0.10, 0.20)
+#     multiplicative c(1.1,  1.2,  1.5,  2   ) -> c(1, 1.1,  1.2,  1.5 )
+#   The top rung is not lost: a guaranteed effect is smaller than its estimate by construction, so the
+#   old top rung fired on almost nothing -- dropping it RECOVERS the deepest shade.
+# `origin` is the one exemption, declared by the scale that needs it: `zscore` is written in confidence
+# levels, its first rung IS the significance threshold, so it re-anchors there instead. Prepending 0
+# would give it a structurally empty faintest shade (|z| <= 1.96 is exactly a gated-out cell).
 #   c(1.96, 2.58, 3.89, 6) with origin 1.96 -> unchanged ; at conf 0.99 -> c(2.58, 3.20, 4.51, 6.62)
 #' @keywords internal
-offset_guaranteed_breaks <- function(breaks, center, origin = NULL) {
+guaranteed_breaks <- function(breaks, center, origin = NULL) {
   if (length(breaks) == 0L || is.na(breaks[1])) return(breaks)
-  if (identical(center, 1)) return(breaks / breaks[1])
-  breaks - breaks[1] + if (is.null(origin)) 0 else origin
+  if (!is.null(origin)) return(breaks - breaks[1] + origin)
+  c(center, utils::head(breaks, -1L))
 }
 
 # the additive (center-0) break scale for a NON-gaussian regression coefficient on the LINK scale,
@@ -4057,25 +4064,40 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
 
   # Per-direction breaks + palette slots: each side carries its own magnitudes (over/under $breaks) and
   # intensities 1:4. The engine folds each cell to a magnitude >= the neutral, findInterval() against
-  # the side's breaks: over -> slots 1:4, under -> slots 5:8. The "x2 rule" is a 1-break ratio scale on
-  # the background channel (color = c("diff", "ratio")).
+  # the side's breaks: over -> slots 1:4, under -> slots 5:8.
   over_breaks  <- scale$over$breaks
   under_breaks <- scale$under$breaks
   over_slots   <- c(0L, scale$over$slots)         # 0 = neutral level, then intensities 1:4
   under_slots  <- c(0L, scale$under$slots + 4L)   # 0 = neutral, then 5:8 (under half of the palette)
 
   # under `guaranteed_effect` the score is the CI FLOOR (the effect you are confident of AT LEAST), so
-  # the scale must START at the neutral value: a cell whose interval excludes the neutral IS a
-  # guaranteed effect and must be coloured. Offset each side by its OWN first break (the sides are
-  # independent, may be asymmetric). legend_specs() reads this same plan, so the legend follows.
+  # the ladder must START at the neutral: a cell whose interval excludes the neutral IS a guaranteed
+  # effect and must be coloured -- which is what the policy is for. See guaranteed_breaks().
   if (identical(policy, "guaranteed_effect")) {
-    # `break_origin` is a declared measure fact (only contrib's `guar` sets it): "threshold" re-anchors
-    # the offset at z(conf_level) instead of 0. See offset_guaranteed_breaks().
+    # `break_origin` is a declared measure fact (only contrib's `guar` sets it): its ladder is written
+    # in confidence levels, so it re-anchors at z(conf_level) instead of taking the rung shift.
     org <- if (identical(md$break_origin, "threshold")) {
       zscore_formula(get_conf_level(x))
     } else NULL
-    over_breaks  <- offset_guaranteed_breaks(over_breaks,  center, org)
-    under_breaks <- offset_guaranteed_breaks(under_breaks, center, org)
+    over_breaks  <- guaranteed_breaks(over_breaks,  center, org)
+    under_breaks <- guaranteed_breaks(under_breaks, center, org)
+  }
+
+  # THE BACKGROUND IS A COARSER VOICE. A fill is read at a glance and sits behind a number the text
+  # channel already grades, so a ladder may declare (COLOR_SCALES$bg_keep) how many of its LOUD rungs
+  # survive there -- the ratio scales keep two, because their faint rungs only restate the difference
+  # channel beside them. The slots come along unchanged, so a fill means what its shade always meant.
+  # WARNING: after the guaranteed_effect shift, never before -- trimming first would leave the
+  # prepended neutral as the background's own faintest rung, colouring every significant cell.
+  keep <- COLOR_SCALES[[scale_key]]$bg_keep
+  if (identical(channel, "bg") && !is.null(keep)) {
+    trim <- function(b, sl) {
+      if (length(b) <= keep) return(list(b, sl))
+      i <- seq.int(length(b) - keep + 1L, length(b))
+      list(b[i], c(0L, sl[-1L][i]))
+    }
+    o <- trim(over_breaks,  over_slots);  over_breaks  <- o[[1]]; over_slots  <- o[[2]]
+    u <- trim(under_breaks, under_slots); under_breaks <- u[[1]]; under_slots <- u[[2]]
   }
 
   # a `guaranteed_effect` channel with a single break per side collapses to a flat "x1" fill (no
@@ -4764,20 +4786,25 @@ legend_break_tokens <- function(plan, is_pct, channel, lang, theme = "light") {
 }
 
 legend_threshold_phrase <- function(plan, is_pct, is_std, lang) {
-  if (is.null(plan) || length(plan$over_breaks) == 0L) return(NA_character_)
-  brk <- plan$over_breaks[[1]]
-  if (is.na(brk)) return(NA_character_)
-  md <- measure_facts(plan$measure, plan$policy, plan$scale_key)
-  if (isTRUE(md$threshold_mult)) {                         # ratio / OR / contrib
-    paste0(.lg_times, legend_num(abs(brk), lang))
-  } else {                                                 # diff: symmetric +/- <v> [unit]
-    # the x100 rule is the one legend_break_label() uses, so the grey-note threshold and the break
-    # ladder it describes cannot disagree.
+  if (is.null(plan)) return(NA_character_)
+  md   <- measure_facts(plan$measure, plan$policy, plan$scale_key)
+  # ONE break, written the way the ladder writes it. The x100 rule is legend_break_label()'s, so the
+  # grey note and the ladder it describes cannot disagree.
+  one  <- function(brk, glyph) {
+    if (isTRUE(md$threshold_mult)) return(paste0(glyph, legend_num(abs(brk), lang)))
     sc100 <- isTRUE(md$break_scale) && isTRUE(is_pct)
     val   <- legend_num(abs(brk) * if (sc100) 100 else 1, lang)
     unit  <- legend_unit_word(md, is_pct, is_std)
-    if (nzchar(unit)) paste0("\u00b1", val, " ", unit) else paste0("\u00b1", val)
+    if (nzchar(unit)) paste0(glyph, val, " ", unit) else paste0(glyph, val)
   }
+  pick <- function(v) if (length(v) == 0L || is.na(v[[1]])) NA_real_ else v[[1]]
+  o <- pick(plan$over_breaks); u <- pick(plan$under_breaks)
+  if (is.na(o) && is.na(u)) return(NA_character_)
+  if (is.na(o) || is.na(u) || isTRUE(all.equal(o, u)))
+    one(if (is.na(o)) u else o, if (isTRUE(md$threshold_mult)) .lg_times else "\u00b1")
+  else
+    # an ASYMMETRIC ladder enters at a different rung on each side, so the note must name both.
+    paste0(one(o, md$break_over), " / ", one(u, md$break_under))
 }
 
 # `"diff"` consults the column kind (factor pct vs standardized numeric); the gap scales DECLARE their

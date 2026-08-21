@@ -213,8 +213,8 @@ testthat::test_that("legend weight: text break-words bold, background break-word
   }
   # md: text breaks carry `**`; background breaks do not (plain bracketed span).
   testthat::expect_match(tab_color_legend(tb, medium = "md"), "[*][*]\\[[+]5\\]\\{[.]p1\\}[*][*]")
-  testthat::expect_match(tab_color_legend(tb, medium = "md"), "\\[.2\\]\\{[.]o3\\}")
-  testthat::expect_no_match(tab_color_legend(tb, medium = "md"), "[*][*]\\[.2\\]\\{[.]o3\\}")
+  testthat::expect_match(tab_color_legend(tb, medium = "md"), "\\[.2\\]\\{[.]o4\\}")
+  testthat::expect_no_match(tab_color_legend(tb, medium = "md"), "[*][*]\\[.2\\]\\{[.]o4\\}")
   # runs (excel / plot): the text channel is bold, the background channel plain.
   runs <- tab_color_legend(tb, medium = "runs")[[1]]
   coloured <- purrr::keep(runs, ~ !is.na(.$color))

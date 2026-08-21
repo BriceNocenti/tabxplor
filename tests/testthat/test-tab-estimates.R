@@ -66,7 +66,7 @@ test_that("the record carries the ladder, the SD and the secondary axis", {
   sg <- tabxplor:::fmt_scale_of(g[[mod_col(g)]])
   expect_identical(sg$sec, "sd")
   expect_true(is.finite(sg$sd_y))
-  expect_equal(sort(sg$breaks[sg$break_dir > 0]), sort(c(0.2, 0.5, 0.8) * sg$sd_y))
+  expect_equal(sort(sg$breaks[sg$break_dir > 0]), sort(c(0.1, 0.2, 0.4, 0.8) * sg$sd_y))
 
   # measure = "log": the secondary axis is exp(), the ladder the logged odds_ratio one
   bl <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", measure = "log"))

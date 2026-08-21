@@ -88,7 +88,7 @@ A `tabxplor_fmt` cell carries **21 fields** (many are `NA` when the relevant qua
 | `pct`       | percentage |
 | `mean`      | mean (numeric column variables) |
 | `diff`      | difference from the total / reference cell |
-| `ratio`     | ratio to the reference (the "×2 rule"; relative risk) |
+| `ratio`     | ratio to the reference (relative risk, or a ratio of means) |
 | `ci_inf`, `ci_sup` | confidence-interval bounds |
 | `pvalue`    | per-cell significance p-value (feeds the stars) |
 | `or`        | odds ratio / relative-risk ratio |

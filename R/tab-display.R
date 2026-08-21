@@ -207,9 +207,11 @@ DISPLAY_TOKENS <- list(
                   comparison = "difference",
                   source = 'a `ref` to compare to, and pct = "row" / "col"',
                   doc = 'the difference from the reference'),
+  # 2 decimals like the odds ratio beside it: a ratio's information sits in the digits AFTER the
+  # constant "1.", so at 1 decimal three distinct effects collapse onto one string.
   ratio   = .dtok("ratio", user = TRUE, bare = TRUE, value_cell = TRUE, geometry = "ratio",
                   comparison = "ratio",
-                  min_digits = 1L,
+                  min_digits = 2L,
                   source = 'a `ref` to compare to, and pct = "row" / "col"',
                   doc = 'the ratio to the reference (relative risk, or a ratio of means)'),
   ci      = .dtok("ci"   , user = TRUE, bare = TRUE, value_cell = TRUE,

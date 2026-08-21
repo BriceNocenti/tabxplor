@@ -1022,7 +1022,7 @@ finalize_total_rows <- function(tabs, extra, cols_get_total, tab_row_names) {
 # === SECTION: The reference, and the fields derived from it ===================================
 
 # tab_apply_reference() -- from the pct data.table and a reference selector, derive diff
-# (cell - ref), ratio (cell / ref, the "x2 rule"), rr / or and the ref-row / ref-col markers; what a
+# (cell - ref), ratio (cell / ref), rr / or and the ref-row / ref-col markers; what a
 # given `pct` does not compute comes back NULL. Shared verbatim with the jamovi tier-3 re-reference.
 # DESIGN: the odds ratio is computed UNCONDITIONALLY on a row / col % table -- its 2x2 is four
 #   numbers this sweep already holds. `or_compare` says whether it IS the comparison the table is

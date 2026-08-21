@@ -2805,9 +2805,17 @@ get_color_style <- function(mode = c("crayon", "color_code", "face"), type = NUL
 #Color breaks for printing fmt in tabs ------------------------------------------------
 
 # PURPOSE: the canonical color-break representation and its accessors.
-# The stored option "tabxplor.color_breaks" is a named list of the measure scales
-#   pct_diff, pct_ratio, odds_ratio, mean_diff, mean_ratio, contrib, zscore
-#   (odds_ratio is the dedicated OR scale, read by the "or" colour measure in fmt_color_plan)
+#
+# THE ONE IDEA: every ladder in the package is the SAME ladder, written in another measure at one
+# reference cell of 50 %. 5 / 10 / 20 / 30 percentage points is also 0.1 / 0.2 / 0.4 / 0.8 SD (a
+# binary variable at p = 0.5 has SD 0.5), x1.1 / x1.2 / x1.5 / x2 as a ratio and x1.2 / x1.5 / x2 / x4
+# as an odds ratio. So a shade means the same size of deviation whichever measure a table is read on,
+# and each ladder has exactly ONE free number -- its first rung, the smallest deviation worth
+# noticing there. The rest is a shape rule (each rung about twice the previous, in the scale's own
+# metric), and both are DECLARED per scale and checked at load by tx_check_color_scales().
+#
+# The stored option "tabxplor.color_breaks" is a named list of the settable measure scales
+#   (odds_ratio is the dedicated OR scale, read by the "odds_ratio" measure in fmt_color_plan)
 # each a list(center, strict, std, over = list(breaks, slots), under = list(breaks, slots)):
 #   - over/under : the two sides, each a list(breaks = <ascending POSITIVE magnitudes>,
 #                  slots = <intensities 1:4 into the 4-colour palette>). An empty side is off.
@@ -2869,7 +2877,8 @@ parse_color_side <- function(v, name) {
 #     (multiplicative) are the under-represented side; a one-sided vector auto-mirrors, a two-sided
 #     one is used as-is. `NA` entries skip an intensity slot (one-sided vectors only).
 #   - list(over =, under =): explicit per-side magnitudes, NO mirror; omit a side to switch it off
-#     (e.g. list(over = 2) = the "only x2" rule).
+#     (e.g. list(over = 2) = the "only x2" rule). An optional `std =` says the numbers are SD units.
+#   - the canonical record this function returns, so set_color_breaks(get_color_breaks()) is a no-op.
 #   - NULL / empty: drop the measure for its column type -- except mean_diff = NULL, which restores
 #     the standardized (Glass's delta) default.
 #' @keywords internal
@@ -2892,14 +2901,31 @@ mk_color_scale <- function(name, values) {
   }
 
   if (is.list(values)) {
-    nms <- names(values)
-    if (is.null(nms) || !all(nzchar(nms)) || !all(nms %in% c("over", "under"))) {
+    # ITS OWN CANONICAL OUTPUT, accepted so that set_color_breaks(get_color_breaks()) and
+    # set_color_breaks(default_color_scales()) are true no-ops. `center` / `strict` are the row's,
+    # never the record's: they are facts of the scale, not of the value.
+    if (is.list(values$over) || is.list(values$under)) {
+      side_rec <- function(v) {
+        if (is.null(v)) return(list(breaks = numeric(0), slots = integer(0)))
+        if (!is.list(v) || !all(c("breaks", "slots") %in% names(v)))
+          cli::cli_abort("Color breaks {.arg {name}}: a side record needs {.field breaks} and {.field slots}.")
+        list(breaks = as.double(v$breaks), slots = as.integer(v$slots))
+      }
+      return(list(center = center, strict = strict, std = isTRUE(values$std),
+                  over = side_rec(values$over), under = side_rec(values$under)))
+    }
+    nms <- setdiff(names(values), "std")
+    if (is.null(names(values)) || !all(nzchar(names(values))) || !all(nms %in% c("over", "under"))) {
       cli::cli_abort(c("A color scale given as a list must use {.field over} / {.field under}.",
                        "i" = 'e.g. {.code list(over = c(1.5, 2, 4))} for the over-represented side only.'))
     }
     over  <- parse_color_side(if (is.null(values$over))  numeric(0) else values$over,  name)
     under <- parse_color_side(if (is.null(values$under)) numeric(0) else values$under, name)
-    return(list(center = center, strict = strict, std = std, over = over, under = under))
+    # `std =` carries the ONE fact a bare vector cannot: whether these numbers are SD units. Without
+    # it, round-tripping a standardized mean_diff ladder would silently make it absolute.
+    return(list(center = center, strict = strict,
+                std = if (is.null(values$std)) std else isTRUE(values$std),
+                over = over, under = under))
   }
 
   if (!is.numeric(values)) {
@@ -2949,51 +2975,91 @@ mk_color_scale <- function(name, values) {
 #   settable   a user scale (set_color_breaks / the color_breaks argument) rather than a derived one.
 #   default    the default breaks, in mk_color_scale()'s own input grammar (NULL = "use null_default").
 #   null_default  what an empty/NULL value restores instead of switching the scale off.
+#   quantity   WHAT the numbers measure: points / sd / relative / log_odds / z / contrib. A ladder is
+#              read in its own metric -- the value itself, except `relative` and `log_odds`, read in log.
+#   anchor     where the first rung came from, in prose. Every ladder is the 5-point rung written in
+#              another measure at ONE reference cell of 50 %, which is why they can be compared at all.
+#   sides      "mirror" (the two sides carry the same thresholds) or "asymmetric". A multiplicative
+#              ladder MIRRORS unless the quantity it grades is BOUNDED ABOVE: a percentage ratio is
+#              capped at 1/base, so a cell can sit far below its reference and never far above it,
+#              while a mean ratio, a rate ratio and a ratio of two estimates have no ceiling.
+#   bg_keep    how many LOUD rungs this ladder keeps when carried on the BACKGROUND channel (NA = all).
+#              A fill is a secondary, at-a-glance voice: on `color = c("difference", "ratio")` the
+#              ratio's faint rungs only restate what the text channel already says.
 #   derive     for a NON-settable scale: how the plan builds it from another (`log` = log_odds_scale).
 #   legacy     the pre-2.0 flat argument that set it; `alias` the short name get_color_breaks() takes.
 #' @keywords internal
 COLOR_SCALES <- list(
   pct_diff   = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE,
-                    default = c(0.05, 0.1, 0.2, 0.3), legacy = "pct_breaks", alias = "pct"),
+                    default = c(0.05, 0.1, 0.2, 0.3), legacy = "pct_breaks", alias = "pct",
+                    quantity = "points", sides = "mirror",
+                    anchor = "5 points -- the reference rung the whole package is written from"),
+  # asymmetric: a percentage ratio is capped at 1/base, so the over side has a ceiling the under side
+  # has not. The under rungs are the over rungs read as the same relative deviation, one rung stricter.
   pct_ratio  = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
-                    default = list(over = c(NA, 1.5, 2, 4), under = c(NA, 1.5, 2, 4)),
-                    legacy = "pct_breaks"),
+                    default = list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4)),
+                    legacy = "pct_breaks",
+                    quantity = "relative", sides = "asymmetric", bg_keep = 2L,
+                    anchor = "x1.1 = 5 points at a 50 % reference"),
   # odds_ratio is the dedicated OR scale (symmetric): OR colour reads it, so pct_ratio / mean_ratio can
-  # be set asymmetrically without changing OR breaks.
+  # be set asymmetrically without changing OR breaks. Its metric is the log-odds, which runs to
+  # infinity both ways, so mirroring it is right rather than merely convenient.
   odds_ratio = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
-                    default = list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4))),
+                    default = list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4)),
+                    quantity = "log_odds", sides = "mirror",
+                    anchor = "x1.2 = 5 points at a 50 % reference (1.22, rounded)"),
   # `mean_diff` is standardized only on its NULL-default arm -- supplying data-unit values is how a user
   # asks for absolute colouring, so `std` is FALSE here and TRUE in null_default.
   mean_diff  = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE, default = NULL,
-                    null_default = list(breaks = c(0.2, 0.5, 0.8), std = TRUE)),
+                    null_default = list(breaks = c(0.1, 0.2, 0.4, 0.8), std = TRUE),
+                    quantity = "sd", sides = "mirror",
+                    anchor = "0.1 SD = 5 points at a 50 % reference (Cohen's 0.2 / 0.8 kept as rungs 2 and 4)"),
+  # a mean, a count and a rate are unbounded above, so this one mirrors where pct_ratio does not.
   mean_ratio = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
-                    default = list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4)),
-                    legacy = "mean_breaks", alias = "mean"),
+                    default = c(1.1, 1.2, 1.5, 2),
+                    legacy = "mean_breaks", alias = "mean",
+                    quantity = "relative", sides = "mirror", bg_keep = 2L,
+                    anchor = "x1.1 = a 10 % relative deviation"),
   contrib    = list(center = 0, strict = FALSE, std = FALSE, settable = TRUE,
-                    default = c(1, 2, 5, 10), legacy = "contrib_breaks"),
+                    default = c(1, 2, 5, 10), legacy = "contrib_breaks",
+                    quantity = "contrib", sides = "mirror",
+                    anchor = "1x the mean cell contribution"),
   # the ABSOLUTE z scale, read by color = "contrib" under color_signif = "guaranteed_effect". Written in
   # confidence levels (95/99/99.99 % -> 1.96/2.58/3.89/6) so it means the same thing in every table,
-  # unlike `contrib` (a share of the table's own chi2).
+  # unlike `contrib` (a share of the table's own chi2). The one ladder with its own published shape.
   zscore     = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE,
-                    default = quote(conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9)))),
+                    default = quote(conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))),
+                    quantity = "z", sides = "mirror",
+                    anchor = "confidence levels -- a declared convention, exempt from the shape rule"),
   # the two scales of `color = "adjustment"` / "between_groups" -- how far a model estimate sits from
   # the value it is compared to. The multiplicative anchor is the epidemiological 10 % change-in-estimate
   # rule; the additive one is in the effect's OWN units (a RELATIVE change would explode near the null).
   adj_ratio  = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
                     default = list(over = c(1.10, 1.25, 1.50, 2.00),
-                                   under = c(1.10, 1.25, 1.50, 2.00))),
+                                   under = c(1.10, 1.25, 1.50, 2.00)),
+                    quantity = "relative", sides = "mirror",
+                    anchor = "x1.1 = the 10 % change-in-estimate rule (Mickey & Greenland 1989)"),
   adj_diff   = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE,
-                    default = c(0.02, 0.05, 0.10, 0.20)),
+                    default = c(0.02, 0.05, 0.10, 0.20),
+                    quantity = "points", sides = "mirror", anchor = "2 points of the estimate"),
   # the additive gap for an outcome whose units are ARBITRARY (a gaussian beta, a count AME): `adj_diff`'s
   # probability ladder would make the reading depend on the unit, so this one is standardized by SD(Y).
   # NOT Cohen's 0.2/0.5/0.8 (that measures an effect; this measures the gap BETWEEN two effects).
   adj_diff_std = list(center = 0, strict = TRUE, std = TRUE, settable = TRUE,
-                      default = c(0.05, 0.10, 0.20, 0.40)),
+                      default = c(0.05, 0.10, 0.20, 0.40),
+                      quantity = "sd", sides = "mirror", anchor = "0.05 SD of the outcome"),
   # DERIVED at plan time from a settable sibling (never stored, never user-settable): the LOG of a
   # multiplicative ladder, so set_color_breaks(odds_ratio=)/(adj_ratio=) reaches the log readings too.
   log_odds     = list(settable = FALSE, derive = list(from = "odds_ratio", how = "log")),
   adj_diff_log = list(settable = FALSE, derive = list(from = "adj_ratio",  how = "log"))
 )
+
+# the declared vocabulary of `quantity`, and which of them are read in LOG when the shape rule
+# measures a ladder in "its own metric".
+#' @keywords internal
+COLOR_QUANTITIES <- c("points", "sd", "relative", "log_odds", "z", "contrib")
+#' @keywords internal
+COLOR_QUANTITIES_LOG <- c("relative", "log_odds")
 
 #' @keywords internal
 color_scale_names <- function()
@@ -3008,15 +3074,71 @@ default_color_scales <- function() {
 }
 
 
+# THE LADDERS' OWN SHAPE RULE, checked at load so a drifting default fails the install rather than a
+# user's table. (Foreign keys are zzz-fact-keys.R's job; a table's own self-consistency stays beside
+# the table, where its operands are in scope.)
+#   K2  each rung is about twice the previous ONE IN THE SCALE'S OWN METRIC -- x1.5 to x2.5. `zscore`
+#       is exempt: it declares a published convention (confidence levels), and says so in `anchor`.
+#   K3  a "mirror" ladder carries the same thresholds on both sides; an "asymmetric" one is stricter
+#       below and never laxer. Which a scale is follows from its `quantity` -- see the dictionary.
+#' @keywords internal
+COLOR_SHAPE_EXEMPT <- "zscore"
+
+#' @keywords internal
+tx_check_color_scales <- function(tbl = COLOR_SCALES) {
+  bad <- function(nm, ...) stop("tabxplor: color scale `", nm, "`: ", ..., call. = FALSE)
+  keys   <- names(tbl)[vapply(tbl, function(s) isTRUE(s$settable), logical(1))]
+  scales <- purrr::map(rlang::set_names(keys), function(nm) {
+    d <- tbl[[nm]]$default
+    mk_color_scale(nm, if (is.language(d)) eval(d) else d)
+  })
+  for (nm in names(scales)) {
+    r <- tbl[[nm]]
+    if (!isTRUE(r$quantity %in% COLOR_QUANTITIES))
+      bad(nm, "undeclared `quantity` (one of ", paste(COLOR_QUANTITIES, collapse = "/"), ").")
+    if (!isTRUE(r$sides %in% c("mirror", "asymmetric")))
+      bad(nm, "undeclared `sides` (\"mirror\" or \"asymmetric\").")
+    if (!is.character(r$anchor) || !nzchar(r$anchor[1]))
+      bad(nm, "no `anchor`: state where the first rung comes from.")
+
+    ov <- scales[[nm]]$over$breaks
+    un <- scales[[nm]]$under$breaks
+    if (!nm %in% COLOR_SHAPE_EXEMPT && length(ov) > 1L) {
+      m <- if (r$quantity %in% COLOR_QUANTITIES_LOG) log(ov) else ov
+      step <- m[-1L] / m[-length(m)]
+      if (any(!is.finite(step) | step < 1.5 - 1e-8 | step > 2.5 + 1e-8))
+        bad(nm, "off the shape rule: rungs step by ",
+            paste(sprintf("x%.2f", step), collapse = " "), " (each must be x1.5 to x2.5).")
+    }
+    mirrored <- identical(ov, un) && identical(scales[[nm]]$over$slots, scales[[nm]]$under$slots)
+    if (identical(r$sides, "mirror") && !mirrored)
+      bad(nm, "declares `sides = \"mirror\"` but its two sides differ.")
+    if (identical(r$sides, "asymmetric")) {
+      if (mirrored) bad(nm, "declares `sides = \"asymmetric\"` but its two sides are identical.")
+      if (length(ov) == length(un) && any(un < ov))
+        bad(nm, "an asymmetric ladder is stricter below, never laxer: ",
+            paste(sprintf("%g<%g", un[un < ov], ov[un < ov]), collapse = " "), ".")
+    }
+  }
+  invisible(TRUE)
+}
+
+tx_check_color_scales()
+
 #' Set the breaks used to print colors
 #' @describeIn set_color_palette set the breaks used to print colors.
 #' @description Color breaks are a named list of the ten measure scales \code{pct_diff},
 #' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib},
 #' \code{zscore}, \code{adj_ratio}, \code{adj_diff} and \code{adj_diff_std}. Each is
-#' a vector of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 5
-#' values, one per color step: \code{pct_diff} colors percentage-point differences,
-#' \code{pct_ratio} the relative risk (the "x2 rule"), \code{odds_ratio} the odds ratio (\code{color =
-#' "OR"}; symmetric by default), \code{mean_diff} the standardized mean difference (Glass's delta) by
+#' a vector of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 4
+#' values, one per color step.
+#'
+#' Every default is the same ladder in another measure, read at ONE reference cell of 50 %: 5 / 10 /
+#' 20 / 30 percentage points is also 0.1 / 0.2 / 0.4 / 0.8 SD, x1.1 / x1.2 / x1.5 / x2 as a ratio and
+#' x1.2 / x1.5 / x2 / x4 as an odds ratio -- so a shade means the same size of deviation whichever
+#' measure a table is read on. \code{pct_diff} colors percentage-point differences,
+#' \code{pct_ratio} the relative risk, \code{odds_ratio} the odds ratio (\code{color =
+#' "odds_ratio"}), \code{mean_diff} the standardized mean difference (Glass's delta) by
 #' default (supply data-unit values for absolute coloring), \code{mean_ratio} the mean ratio,
 #' \code{contrib} the chi2 contribution (in multiples of the mean cell contribution) and
 #' \code{zscore} an absolute z scale (the adjusted standardized residual) -- the absolute scale
@@ -3033,6 +3155,15 @@ default_color_scales <- function() {
 #' marginal effect), where the gap is divided by SD(Y) so the same threshold means the same thing
 #' whatever unit the outcome is recorded in. An empty/\code{NULL} scale
 #' drops that measure for its column type.
+#'
+#' Two rules shape a default, and a custom one is free to break them. A ladder is MIRRORED unless the
+#' quantity it grades is bounded above: a percentage ratio is capped at \code{1 / base}, so a cell can
+#' sit far below its reference and never far above it, and \code{pct_ratio} is stricter below
+#' (\code{list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4))}) -- a mean ratio, a rate ratio
+#' and a ratio of two estimates have no ceiling and stay symmetric. And a fill is read at a glance, so
+#' on the BACKGROUND channel the two ratio scales keep their two loudest rungs only: with the default
+#' \code{color = TRUE} the text grades every deviation and the background flags the ones whose
+#' RELATIVE size is out of proportion.
 #' @param breaks A named list of scales to set, e.g.
 #' \code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = list(over = 2))}. Unset scales keep
 #' their current value.
@@ -3053,6 +3184,7 @@ default_color_scales <- function() {
 #'   mean_ratio = c(1.15, 2, 4),
 #'   contrib    = c(1, 2, 5)
 #' )
+#' set_color_breaks(get_color_breaks())   # a no-op: the shape round-trips
 set_color_breaks <- function(breaks = NULL, ...) {
   cur <- getOption("tabxplor.color_breaks")
   if (is.null(cur) || is.null(cur$pct_diff)) cur <- default_color_scales()
@@ -3148,11 +3280,11 @@ pop_color_breaks <- function(state) {
 
 #' Get the breaks currently used to print colors
 #' @describeIn set_color_palette get the color breaks currently in use, in the canonical shape.
-#' @param brk When missing, return the full named list of break scales (\code{pct_diff},
-#' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}, \code{zscore}) -- the same shape
-#' \code{\link{set_color_breaks}} accepts, so it round-trips. Specify one scale name to return
-#' only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and \code{"mean"} (->
-#' \code{mean_ratio}) are still accepted.
+#' @param brk When missing, return the full named list of the ten break scales -- the same shape
+#' \code{\link{set_color_breaks}} accepts, so it round-trips (an asymmetric scale comes back as
+#' \code{list(over =, under =)}, a standardized one with \code{std = TRUE}). Specify one scale name
+#' to return only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and \code{"mean"}
+#' (-> \code{mean_ratio}) are still accepted.
 #' @return The color breaks as a double vector or a \code{list(over =, under =)}, or a named list
 #' of these.
 #' @export
@@ -3162,17 +3294,29 @@ get_color_breaks <- function(brk, type = c("positive", "all")) {
 
   lit_under <- function(sc) if (isTRUE(sc$center == 1)) 1 / sc$under$breaks else -sc$under$breaks
 
-  as_form <- function(sc) {
+  # LOSSLESS by construction: a side whose slots are not the default for its length is written back
+  # with the `NA` slot-skips that produced them, and a `std` that differs from the scale's declared
+  # one is named -- so set_color_breaks(get_color_breaks()) cannot silently move a tint or turn a
+  # standardized ladder into an absolute one.
+  with_skips <- function(side) {
+    b <- side$breaks
+    if (length(b) == 0L || identical(side$slots, intensity_slots(length(b)))) return(b)
+    out <- rep(NA_real_, max(side$slots)); out[side$slots] <- b; out
+  }
+
+  as_form <- function(sc, nm) {
     ob <- sc$over$breaks; ub <- sc$under$breaks
     if (identical(type[1], "all")) return(c(rev(lit_under(sc)), ob))
     if (length(ob) == 0L && length(ub) == 0L) return(numeric(0))
-    if (length(ub) == 0L) return(list(over = ob))
-    if (length(ob) == 0L) return(list(under = ub))
-    if (identical(ob, ub) && identical(sc$over$slots, sc$under$slots)) return(ob)
-    list(over = ob, under = ub)
+    ov <- with_skips(sc$over); un <- with_skips(sc$under)
+    std_named <- !identical(isTRUE(sc$std), isTRUE(COLOR_SCALES[[nm]]$std))
+    if (length(ub) == 0L) return(if (std_named) list(over = ov, std = sc$std) else list(over = ov))
+    if (length(ob) == 0L) return(if (std_named) list(under = un, std = sc$std) else list(under = un))
+    if (identical(ob, ub) && identical(sc$over$slots, sc$under$slots) && !std_named) return(ov)
+    if (std_named) list(over = ov, under = un, std = sc$std) else list(over = ov, under = un)
   }
 
-  if (missing(brk)) return(purrr::map(scales, as_form))
+  if (missing(brk)) return(purrr::imap(scales, function(sc, nm) as_form(sc, nm)))
 
   # the short aliases are the scales' own declared `alias` field.
   aliases <- purrr::compact(purrr::map(COLOR_SCALES, "alias"))
@@ -3182,5 +3326,5 @@ get_color_breaks <- function(brk, type = c("positive", "all")) {
     cli::cli_abort(c("Unknown color break {.val {brk}}.",
                      "i" = "Valid scales: {.val {names(scales)}} (aliases {.val {names(ali)}})."))
   }
-  as_form(scales[[brk]])
+  as_form(scales[[brk]], brk)
 }

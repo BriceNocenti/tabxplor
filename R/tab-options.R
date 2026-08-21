@@ -157,7 +157,8 @@ TAB_OPTIONS <- list(
   color_breaks = tx_opt(
     function() default_color_scales(), "colours", arg = "color_breaks",
     doc = c("the colour-break scales (a named list of `pct_diff`, `pct_ratio`, `odds_ratio`,",
-            "`mean_diff`, `mean_ratio`, `contrib`, `zscore`). Set with [set_color_breaks()].")),
+            "`mean_diff`, `mean_ratio`, `contrib`, `zscore`, `adj_ratio`, `adj_diff`,",
+            "`adj_diff_std`). Set with [set_color_breaks()].")),
 
   color_style_theme = tx_opt(
     NULL, "colours", alias = "console_theme", seed = "elsewhere",

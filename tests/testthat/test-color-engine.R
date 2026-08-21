@@ -44,12 +44,12 @@ testthat::test_that("engine: all-NA and cell==reference give slot 0 (uncolored)"
 })
 
 testthat::test_that("engine: numeric diff = Glass's delta; sd_ref 0/NA -> uncolored", {
-  # ref (total) var = 4 -> sd_ref = 2 ; Glass = diff/sd_ref = 2/2 = 1.0 -> |1.0| > 0.8 -> level 3
+  # ref (total) var = 4 -> sd_ref = 2 ; Glass = diff/sd_ref = 2/2 = 1.0 -> |1.0| > 0.8 -> level 4
   col  <- fmt(n = c(10L, 10L), scale = "level_mean", mean = c(5, 3), diff = c(2, 0), var = c(4, 4),
               color = "diff", row_kind = c("data", "total"), ref = "tot", comp_all = FALSE)
   plan <- fmt_color_plan(col, "text")
-  os   <- plan$over_slots                            # c(0, 1, 3, 4) for the 3 default mean_diff breaks
-  testthat::expect_equal(fmt_color_slots(col, plan)[1], os[4])   # level 3 -> intensity 4
+  os   <- plan$over_slots                            # c(0, 1, 2, 3, 4) for the 4 mean_diff breaks
+  testthat::expect_equal(fmt_color_slots(col, plan)[1], os[5])   # level 4 -> intensity 4
 
   bad <- fmt(n = c(10L, 10L), scale = "level_mean", mean = c(5, 3), diff = c(2, 0), var = c(0, 0),
              color = "diff", row_kind = c("data", "total"), ref = "tot", comp_all = FALSE)
@@ -117,26 +117,47 @@ testthat::test_that("grey_non_signif ratio channel still colours the OBSERVED ra
 
 
 # --- Phase 14a: the guaranteed_effect break offset --------------------------------------------
-# Under `guaranteed_effect` the score is the CI FLOOR, so the scale must START at the neutral value:
+# Under `guaranteed_effect` the score is the CI FLOOR, so the ladder must START at the neutral value:
 # "the interval excludes the neutral" IS the definition of a guaranteed effect, and such a cell must
-# be coloured. Before 14a the floor was scored against the ordinary magnitude breaks, so a
-# significant-but-modest cell (diff +7%, ci_inf +0.4%) stayed grey.
+# be coloured -- the policy exists to colour MORE, so that everything solid shows in a small table.
+# The rule is one rung down, not arithmetic, so every printed threshold is a number the reader
+# already knows from the same ladder under `ignore`.
 
-testthat::test_that("offset_guaranteed_breaks shifts each scale onto its neutral", {
-  # additive: subtract the first break -> starts at 0
-  testthat::expect_equal(offset_guaranteed_breaks(c(0.05, 0.10, 0.20, 0.30), 0),
-                         c(0, 0.05, 0.15, 0.25))
-  # multiplicative: divide by the first break -> starts at 1
-  testthat::expect_equal(offset_guaranteed_breaks(c(1.15, 1.5, 2, 4), 1),
-                         c(1.15, 1.5, 2, 4) / 1.15)
+testthat::test_that("guaranteed_breaks prepends the neutral and drops the top rung", {
+  # additive and multiplicative alike: no subtraction, no division
+  testthat::expect_equal(guaranteed_breaks(c(0.05, 0.10, 0.20, 0.30), 0), c(0, 0.05, 0.10, 0.20))
+  testthat::expect_equal(guaranteed_breaks(c(1.1, 1.2, 1.5, 2), 1),       c(1, 1.1, 1.2, 1.5))
   # a single break collapses onto the neutral (any guaranteed effect then takes slot 1)
-  testthat::expect_equal(offset_guaranteed_breaks(0.05, 0), 0)
-  testthat::expect_equal(offset_guaranteed_breaks(2, 1), 1)
+  testthat::expect_equal(guaranteed_breaks(0.05, 0), 0)
+  testthat::expect_equal(guaranteed_breaks(2, 1), 1)
   # an empty side (that measure is off for this column type) is untouched
-  testthat::expect_equal(offset_guaranteed_breaks(numeric(0), 0), numeric(0))
-  testthat::expect_equal(offset_guaranteed_breaks(numeric(0), 1), numeric(0))
-  # the sides are independent: an ASYMMETRIC scale offsets each by its OWN first break
-  testthat::expect_equal(offset_guaranteed_breaks(c(1.5, 2, 4), 1), c(1.5, 2, 4) / 1.5)
+  testthat::expect_equal(guaranteed_breaks(numeric(0), 0), numeric(0))
+  testthat::expect_equal(guaranteed_breaks(numeric(0), 1), numeric(0))
+  # the length is preserved, so the slot vector still aligns
+  testthat::expect_length(guaranteed_breaks(c(1.5, 2, 4), 1), 3L)
+  # `origin` is the ONE exemption, for a ladder written in confidence levels (zscore): re-anchoring
+  # there instead, because prepending 0 would give it a structurally empty faintest shade.
+  testthat::expect_equal(guaranteed_breaks(c(1.96, 2.58, 3.89, 6), 0, 1.96), c(1.96, 2.58, 3.89, 6))
+  testthat::expect_equal(guaranteed_breaks(c(1.96, 2.58, 3.89, 6), 0, 2.58)[1], 2.58)
+})
+
+testthat::test_that("the background channel keeps a ladder's LOUD rungs only", {
+  # a fill is a secondary, at-a-glance voice: COLOR_SCALES$bg_keep says how many rungs survive there.
+  col <- fmt(n = rep(100L, 2), scale = "level_pct", pct_type = "row", pct = c(.6, .5),
+             diff = c(.1, 0), ratio = c(1.2, 1))
+  col <- set_color(col, c("difference", "ratio"))
+  p   <- resolve_color_channel_plans(col)
+  testthat::expect_length(p$text$over_breaks, 4L)                 # pct_diff, untouched
+  testthat::expect_equal(p$bg$over_breaks,  c(1.5, 2))            # pct_ratio, two loud rungs
+  testthat::expect_equal(p$bg$under_breaks, c(2, 4))
+  testthat::expect_equal(p$bg$over_slots,   c(0L, 3L, 4L))        # with their OWN fills
+  testthat::expect_equal(p$bg$under_slots,  c(0L, 7L, 8L))
+  # the text channel of the same measure keeps every rung
+  testthat::expect_equal(fmt_color_plan(col, "text", color = "ratio")$over_breaks,
+                         c(1.1, 1.2, 1.5, 2))
+  # the trim runs AFTER the guaranteed_effect shift, never before
+  g <- resolve_color_channel_plans(set_color_signif(col, "guaranteed_effect"))
+  testthat::expect_equal(g$bg$over_breaks, c(1.2, 1.5))
 })
 
 testthat::test_that("guaranteed_effect offsets the plan's breaks; other policies do not", {
@@ -150,9 +171,9 @@ testthat::test_that("guaranteed_effect offsets the plan's breaks; other policies
   ig <- fmt_color_plan(mk("ignore"),            "text")
   sc <- color_scales()$pct_diff
 
-  testthat::expect_equal(ge$over_breaks,  sc$over$breaks  - sc$over$breaks[1])
-  testthat::expect_equal(ge$under_breaks, sc$under$breaks - sc$under$breaks[1])
-  testthat::expect_equal(ge$over_breaks[1], 0)                    # the scale starts at the neutral
+  testthat::expect_equal(ge$over_breaks,  c(0, utils::head(sc$over$breaks,  -1L)))
+  testthat::expect_equal(ge$under_breaks, c(0, utils::head(sc$under$breaks, -1L)))
+  testthat::expect_equal(ge$over_breaks[1], 0)                    # the ladder starts at the neutral
   # every other policy scores the OBSERVED value -> the ordinary breaks, untouched
   testthat::expect_equal(gn$over_breaks, sc$over$breaks)
   testthat::expect_equal(ig$over_breaks, sc$over$breaks)
@@ -190,14 +211,14 @@ testthat::test_that("guaranteed_effect: strict breaks keep an exactly-neutral fl
   testthat::expect_true(slot[2] >= 1L)                    # floor just beyond 0 -> coloured
 })
 
-testthat::test_that("guaranteed_effect offsets the RATIO (multiplicative) scale around 1", {
+testthat::test_that("guaranteed_effect starts the RATIO (multiplicative) ladder at 1", {
   set_color_breaks(pct_ratio = c(1.5, 2, 4))
   withr::defer(options("tabxplor.color_breaks" = default_color_scales()))
   p_ref <- 0.2; pct <- 0.24                               # ratio 1.2 -- below the 1.5 first break
   col <- fmt(n = 500L, scale = "points", pct_type = "row", pct = pct, diff = pct - p_ref, ratio = pct / p_ref,
              ci_inf = 0.01, ci_sup = 0.07)
-  col  <- set_color_signif(set_color(col, c("diff", "ratio")), "guaranteed_effect")
-  plan <- fmt_color_plan(col, "bg", color = "ratio")
+  col  <- set_color_signif(set_color(col, "ratio"), "guaranteed_effect")
+  plan <- fmt_color_plan(col, "text")
   testthat::expect_equal(plan$over_breaks[1], 1)          # multiplicative neutral
   testthat::expect_true(fmt_color_slots(col, plan)[1] >= 1L)   # significant -> coloured
 })

@@ -518,6 +518,13 @@ normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRU
     "no"
   }
 
+  # `color = "auto"` IS `color = TRUE`: one request, so it becomes ONE spec here rather than two paths
+  # that have to agree downstream (they did not -- finalize_color_spec()'s rewrite guard skipped the
+  # string form, so it silently lost the background channel). A positional c("auto", <bg>) keeps its
+  # explicit background and stays a flat spec.
+  if (is.character(color) && length(color) == 1L && is.null(names(color)) &&
+      identical(unname(color), "auto")) color <- TRUE
+
   # ---- FALSE / TRUE ----
   if (is.logical(color)) {
     if (isTRUE(color)) {
@@ -571,7 +578,14 @@ finalize_color_spec <- function(x, spec) {
   rewrite <- spec$mode %in% c("auto", "by_type") || !is.na(spec$bg) ||
     spec$signif != "ignore" || identical(spec$text, "ratio")
   if (!rewrite) return(x)
-  dplyr::mutate(x, dplyr::across(dplyr::where(is_fmt), ~ finalize_one_col(.x, spec)))
+  # WARNING: column by column, never `mutate(across())`. A colour measure is a property of the COLUMN,
+  # and on a GROUPED tab across() answers per sub-table -- which also re-binds each column through
+  # vec_cast(), whose documented wn fixup would MATERIALISE `wn` from `n` on an unweighted table. An
+  # attribute stamp must not move a field.
+  cols <- names(x)[vapply(x, is_fmt, logical(1))]
+  if (!length(cols)) return(x)
+  dplyr::dplyr_col_modify(x, rlang::set_names(lapply(cols, function(nm)
+    finalize_one_col(x[[nm]], spec)), cols))
 }
 
 #' @keywords internal
@@ -584,17 +598,27 @@ color_pct_text_is_ratio <- function(spec) {
   "ratio" %in% unname(m)
 }
 
+# THE `color = TRUE` / `color = "auto"` answer, in ONE place so the two spellings cannot diverge:
+# they are the same request, and the stored `color` attribute they produce is identical anyway.
+# `built` is what the PIPELINE coloured: `contrib` and `odds_ratio` are keyed by what the whole TABLE
+# is, not by a column kind, so an automatic answer must not repaint them.
+#' @keywords internal
+auto_col_measures <- function(kind, built, bg = NA_character_) {
+  if (!measure_kind_keyed(built))
+    return(if (identical(measure_builds(built), "or")) "odds_ratio" else NULL)
+  if (is.na(kind)) return(NULL)
+  text <- measure_auto(kind, "text")
+  # an explicit background wins over the automatic one; "" on either channel means "nothing here".
+  bg   <- if (is.na(bg)) measure_auto(kind, "bg") else bg
+  m    <- c(text, bg)
+  m    <- m[!is.na(m) & nzchar(m)]
+  if (length(m) == 0L) NULL else unname(m)
+}
+
 #' @keywords internal
 resolve_col_measures <- function(spec, numeric_col, pct_col, built) {
   kind <- if (numeric_col) "num" else if (pct_col) "pct" else NA_character_
-  if (spec$mode == "auto") {                                # color = TRUE smart per-kind default
-    if (!measure_kind_keyed(built))
-      return(if (identical(measure_builds(built), "or")) "odds_ratio" else NULL)
-    if (is.na(kind)) return(NULL)
-    m <- c(measure_auto(kind, "text"), measure_auto(kind, "bg"))
-    m <- m[nzchar(m)]
-    return(if (length(m) == 0L) NULL else unname(m))
-  }
+  if (spec$mode == "auto") return(auto_col_measures(kind, built))   # color = TRUE
   if (spec$mode == "by_type") {
     if (!measure_kind_keyed(built)) return(NULL)            # keep what the pipeline built
     key <- if (numeric_col) "mean" else if (pct_col) "pct" else NA_character_
@@ -603,15 +627,7 @@ resolve_col_measures <- function(spec, numeric_col, pct_col, built) {
     return(if (is.na(m[2])) m[1] else m)
   }
   text <- spec$text
-  if (identical(text, "auto")) {
-    if (is.na(kind)) return(NULL)
-    text <- measure_auto(kind, "text")
-    if (!nzchar(text)) return(NULL)
-    if (is.na(spec$bg)) {
-      bg <- measure_auto(kind, "bg")
-      return(if (nzchar(bg)) c(text, bg) else text)
-    }
-  }
+  if (identical(text, "auto")) return(auto_col_measures(kind, built, spec$bg))
   if (text == "" && is.na(spec$bg)) return(NULL)
   if (is.na(spec$bg)) text else c(text, spec$bg)
 }

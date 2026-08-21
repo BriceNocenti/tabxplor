@@ -31,12 +31,20 @@ source("tests/testthat/helper-golden.R")
 # already-landed change as a PROBLEM (measured in Phase 19a: z16-iiiii's `ci_settings` reshape rule
 # fired on four cases whose committed goldens already carry the new shape).
 #
-# Phase 22b-i: NO field and NO attribute moves. The base count became a display MODE, so the only
-# delta is `meta$render_extras` (`add_n = TRUE` -> `n = "range"`), which this script reports on its
-# own. Everything else must be bit-identical -- that is the claim being proved before regenerating.
+# Phase 22b-xvi: NO field moves and NO attribute is added or removed. ONE attribute VALUE changes,
+# on numeric columns only: `color = "auto"` is now `color = TRUE`, whose declared automatic measure
+# for a numeric column is `ratio` (MEASURES$ratio$auto_for). Everything else must be bit-identical.
 ADDED_ATTRS   <- character(0)
 REMOVED_ATTRS <- character(0)
 EXPECTED_ATTR <- list()
+
+# CHANGED_ATTRS -- an EXISTING attribute whose VALUE is allowed to move, with the rule that says
+# where and to what: function(old_value, new_value, column) -> TRUE if this move is the declared one.
+# Anything else stays "attribute CHANGED", which is the whole point of the script.
+CHANGED_ATTRS <- list(
+  color = function(o, n, col) identical(o, "difference") && identical(n, "ratio") &&
+                              !identical(fmt_var_kind(col), "pct")
+)
 
 # POPULATED_FIELDS -- Phase 19m-i's mode: a rule change that FILLS cells which were NA, on a declared
 # subset of rows, and must touch nothing else. Per case: which fields may move, and a predicate over
@@ -189,9 +197,14 @@ for (nm in names(cases)) {
     if (!setequal(gone, intersect(REMOVED_ATTRS, gone)))
       issues <- c(issues, paste0(nm, " / ", col, ": UNDECLARED removed attribute(s): ",
                                  paste(setdiff(gone, REMOVED_ATTRS), collapse = ", ")))
-    for (a in setdiff(intersect(names(ao), names(an)), REMOVED_ATTRS))
-      if (!identical(ao[[a]], an[[a]]))
-        issues <- c(issues, paste0(nm, " / ", col, " / ", a, ": attribute CHANGED"))
+    for (a in setdiff(intersect(names(ao), names(an)), REMOVED_ATTRS)) {
+      if (identical(ao[[a]], an[[a]])) next
+      rule <- CHANGED_ATTRS[[a]]
+      if (!is.null(rule) && isTRUE(rule(ao[[a]], an[[a]], new[[col]]))) next
+      issues <- c(issues, paste0(nm, " / ", col, " / ", a, ": attribute CHANGED (",
+                                 paste(ao[[a]], collapse = ", "), " -> ",
+                                 paste(an[[a]], collapse = ", "), ")"))
+    }
     for (a in new_at) {
       seen_attrs[[a]] <- unique(c(seen_attrs[[a]], an[[a]]))
       exp <- EXPECTED_ATTR[[a]]

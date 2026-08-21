@@ -18,7 +18,7 @@ testthat::test_that("set_color_breaks() sets named scales, keeps the others (lis
   testthat::expect_equal(cur$pct_diff$over$breaks, c(0.05, 0.15, 0.3))
   testthat::expect_equal(cur$pct_ratio$over$breaks, 3)
   testthat::expect_length(cur$pct_ratio$under$breaks, 0L)         # over-only -> no under
-  testthat::expect_equal(cur$mean_ratio$over$breaks, c(1.2, 1.5, 2, 4))  # untouched (symmetric default)
+  testthat::expect_equal(cur$mean_ratio$over$breaks, c(1.1, 1.2, 1.5, 2))  # untouched (symmetric default)
   # the `...` named-scale form works too
   set_color_breaks(contrib = c(1, 2, 5))
   testthat::expect_equal(getOption("tabxplor.color_breaks")$contrib$over$breaks, c(1, 2, 5))
@@ -31,7 +31,7 @@ testthat::test_that("mk_color_scale metadata + notation: mirror / signed / list(
   testthat::expect_equal(mk_color_scale("pct_ratio", list(over = 2))$center, 1)
   testthat::expect_false(mk_color_scale("contrib",   c(1))$strict)      # inclusive
   testthat::expect_true (mk_color_scale("mean_diff", NULL)$std)          # NULL -> standardized
-  testthat::expect_equal(mk_color_scale("mean_diff", NULL)$over$breaks, c(0.2, 0.5, 0.8))
+  testthat::expect_equal(mk_color_scale("mean_diff", NULL)$over$breaks, c(0.1, 0.2, 0.4, 0.8))
   testthat::expect_false(mk_color_scale("mean_diff", c(200, 500))$std)   # units -> absolute
 
   # one-sided plain vector auto-mirrors (over == under)
@@ -62,7 +62,7 @@ testthat::test_that("an empty/NULL scale drops the measure for its column type (
   testthat::expect_length(mk_color_scale("pct_ratio", numeric())$over$breaks, 0L)
   testthat::expect_length(mk_color_scale("mean_ratio", NULL)$over$breaks, 0L)
   # mean_diff NULL is the ONE exception: restores the standardized default (not "off")
-  testthat::expect_length(mk_color_scale("mean_diff", NULL)$over$breaks, 3L)
+  testthat::expect_length(mk_color_scale("mean_diff", NULL)$over$breaks, 4L)
 })
 
 testthat::test_that("set_color_breaks validates its input with clear errors", {
@@ -85,15 +85,17 @@ testthat::test_that("get_color_breaks(type = 'all') gives the signed / reciproca
   testthat::expect_equal(get_color_breaks("pct_diff", "all"),
                          c(-0.3, -0.2, -0.1, -0.05, 0.05, 0.1, 0.2, 0.3))
   testthat::expect_equal(get_color_breaks("mean_ratio", "all"),
-                         c(1/4, 1/2, 1/1.5, 1/1.2, 1.2, 1.5, 2, 4))
+                         c(1/2, 1/1.5, 1/1.2, 1/1.1, 1.1, 1.2, 1.5, 2))
   testthat::expect_equal(get_color_breaks("contrib", "all"), c(-10, -5, -2, -1, 1, 2, 5, 10))
   # Phase 18z4: the absolute standardized-residual scale (color = "contrib" +
   # color_signif = "guaranteed_effect"), written in confidence levels but STORED as plain z.
   testthat::expect_equal(get_color_breaks("zscore", "all"),
                          c(-6, -3.89, -2.58, -1.96, 1.96, 2.58, 3.89, 6))
   testthat::expect_equal(mk_color_scale("zscore", c(2, 3))$center, 0)
-  # pct_ratio symmetric default (Phase 16c): both sides c(NA, 1.5, 2, 4) -> breaks 1.5, 2, 4
-  testthat::expect_equal(get_color_breaks("pct_ratio", "all"), c(1/4, 1/2, 1/1.5, 1.5, 2, 4))
+  # pct_ratio is the one ASYMMETRIC default: a percentage ratio is capped at 1/base, so the under
+  # side is stricter (it enters at the same relative deviation but reaches further).
+  testthat::expect_equal(get_color_breaks("pct_ratio", "all"),
+                         c(1/4, 1/2, 1/1.25, 1/1.1, 1.1, 1.2, 1.5, 2))
   # odds_ratio (Phase 16c): the dedicated OR scale, symmetric
   testthat::expect_equal(get_color_breaks("odds_ratio", "all"), c(1/4, 1/2, 1/1.5, 1/1.2, 1.2, 1.5, 2, 4))
 })
@@ -107,13 +109,28 @@ testthat::test_that("get_color_breaks returns a readable form and round-trips", 
   testthat::expect_named(gb, c("pct_diff", "pct_ratio", "odds_ratio", "mean_diff", "mean_ratio",
                                "contrib", "zscore", "adj_ratio", "adj_diff", "adj_diff_std"))
   testthat::expect_equal(gb$pct_diff, c(0.05, 0.1, 0.2, 0.3))    # symmetric -> plain magnitudes
-  testthat::expect_equal(gb$pct_ratio, c(1.5, 2, 4))            # symmetric (Phase 16c) -> plain magnitudes
+  testthat::expect_equal(gb$pct_ratio, list(over = c(1.1, 1.2, 1.5, 2),
+                                            under = c(1.1, 1.25, 2, 4)))   # asymmetric -> both sides
   testthat::expect_equal(get_color_breaks("pct"),  c(0.05, 0.1, 0.2, 0.3))   # old alias
-  testthat::expect_equal(get_color_breaks("mean"), c(1.2, 1.5, 2, 4))         # mean_ratio symmetric default
+  testthat::expect_equal(get_color_breaks("mean"), c(1.1, 1.2, 1.5, 2))       # mean_ratio symmetric default
   # round-trips through set_color_breaks()
   set_color_breaks(get_color_breaks())
   testthat::expect_equal(get_color_breaks()$pct_diff, c(0.05, 0.1, 0.2, 0.3))
-  testthat::expect_equal(get_color_breaks("pct_ratio"), c(1.5, 2, 4))
+  testthat::expect_equal(get_color_breaks("pct_ratio"),
+                         list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4)))
+  # LOSSLESS: an NA slot-skip and a standardized `std` survive the round trip, so a call that looks
+  # like a no-op cannot move a tint or turn a Glass delta ladder into an absolute one.
+  set_color_breaks(pct_ratio = c(NA, 1.2, 1.5, 2))
+  set_color_breaks(get_color_breaks())
+  testthat::expect_equal(getOption("tabxplor.color_breaks")$pct_ratio$over$slots, 2:4)
+  reset_breaks()
+  testthat::expect_true(getOption("tabxplor.color_breaks")$mean_diff$std)
+  set_color_breaks(get_color_breaks())
+  testthat::expect_true(getOption("tabxplor.color_breaks")$mean_diff$std)
+  # ... and the internal canonical shape is accepted too
+  set_color_breaks(default_color_scales())
+  testthat::expect_equal(getOption("tabxplor.color_breaks")[names(default_color_scales())],
+                         default_color_scales())
 })
 
 # --- the tab() color / color_signif argument grammar (position = channel, names = type) ---
@@ -160,9 +177,11 @@ testthat::test_that("color = 'auto' behaves like color = TRUE, and colours numer
   d <- forcats::gss_cat
   col1 <- function(t) t[[names(t)[purrr::map_lgl(t, is_fmt)][1]]]
 
-  # (1) a numeric auto table with a difference CI stores a real measure -- and colours
+  # (1) a numeric auto table stores a real measure -- and colours. `ratio` is the declared auto for a
+  # numeric column (MEASURES$ratio$auto_for), whatever interval was built: a Glass delta is
+  # standardized, so it would stop saying which columns hold the biggest deviations.
   n1 <- col1(tab_num(d, race, c(age, tvhours), ci = "ref"))
-  testthat::expect_equal(get_color(n1), "difference")
+  testthat::expect_equal(get_color(n1), "ratio")
   testthat::expect_true(any(fmt_color_channels(n1)$text_slot != 0L))
 
   # (2) the string "auto" + a policy is exactly the logical TRUE + that policy, both producers
@@ -182,10 +201,15 @@ testthat::test_that("color = 'auto' behaves like color = TRUE, and colours numer
   testthat::expect_equal(get_color(n2), get_color(n3))
   testthat::expect_equal(fmt_color_channels(n2)$text_slot, fmt_color_channels(n3)$text_slot)
 
-  # (3) with NO policy the plain `color = "auto"` string is untouched (one channel, as before)
+  # (3) `color = "auto"` IS `color = TRUE`: one request, one spec, both channels
   p <- col1(tab(d, marital, race, pct = "row", color = "auto"))
   testthat::expect_equal(get_color(p), "difference")
-  testthat::expect_true(is.na(get_color_bg(p)))
+  testthat::expect_equal(get_color_bg(p), "ratio")
+  testthat::expect_equal(attributes(p), attributes(col1(tab(d, marital, race, pct = "row",
+                                                            color = TRUE))))
+  # ... while a positional c("auto", <bg>) keeps its explicit background
+  q <- col1(tab(d, marital, race, pct = "row", color = c("auto", "difference")))
+  testthat::expect_equal(c(get_color(q), get_color_bg(q)), c("difference", "difference"))
 })
 
 # Phase 19c: the vocabulary IS the MEASURES / COLOR_SCALES tables. These lock the accessors every
@@ -237,6 +261,33 @@ testthat::test_that("the colour vocabulary is declared, not written out", {
   testthat::expect_equal(COLOR_SCALES$log_odds$derive$from, "odds_ratio")
   testthat::expect_false(isTRUE(COLOR_SCALES$log_odds$settable))
   testthat::expect_error(mk_color_scale("log_odds", 2), "Unknown color-break scale")
+})
+
+# The ladders' SHAPE is declared and checked at load (tx_check_color_scales() runs at the bottom of
+# R/tab_classes.R), so a drifting default fails the install rather than a user's table.
+testthat::test_that("every ladder declares its quantity, anchor and sides -- and keeps the shape", {
+  testthat::expect_true(tx_check_color_scales())
+  for (nm in color_scale_names()) {
+    r <- COLOR_SCALES[[nm]]
+    testthat::expect_true(r$quantity %in% COLOR_QUANTITIES, info = nm)
+    testthat::expect_true(r$sides %in% c("mirror", "asymmetric"), info = nm)
+    testthat::expect_true(nzchar(r$anchor), info = nm)
+  }
+  # `pct_ratio` is the one asymmetric ladder, and the ONE reason is the ceiling: a percentage ratio
+  # cannot exceed 1 / base, so a cell reaches much further below its reference than above it.
+  testthat::expect_equal(COLOR_SCALES$pct_ratio$sides,  "asymmetric")
+  testthat::expect_equal(COLOR_SCALES$mean_ratio$sides, "mirror")
+  # the background keeps a ladder's loud rungs only -- declared, and only on the ratio scales
+  testthat::expect_equal(COLOR_SCALES$pct_ratio$bg_keep, 2L)
+  testthat::expect_null(COLOR_SCALES$pct_diff$bg_keep)
+
+  # the check REFUSES a ladder off the grid, so it cannot be re-guessed
+  bad <- COLOR_SCALES; bad$pct_diff$default <- c(0.05, 0.06, 0.2, 0.3)
+  testthat::expect_error(tx_check_color_scales(bad), "off the shape rule")
+  bad2 <- COLOR_SCALES; bad2$mean_ratio$sides <- "asymmetric"
+  testthat::expect_error(tx_check_color_scales(bad2), "sides")
+  bad3 <- COLOR_SCALES; bad3$pct_ratio$quantity <- NULL
+  testthat::expect_error(tx_check_color_scales(bad3), "quantity")
 })
 
 testthat::test_that("tab() color argument errors are clear", {

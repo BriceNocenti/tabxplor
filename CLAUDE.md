@@ -10,7 +10,7 @@ It sits at the intersection of three things most tools keep separate, and its ar
 - a **rich cell data-model** — every cell is a `vctrs` record carrying all the numbers behind the one it shows, so tables stay ordinary `dplyr`-manipulable tibbles and the display can switch losslessly;
 - a **statistical-inference layer** — exact survey/design-effect variance (reproducing the `survey` package), named CI methods (Wilson, Newcombe, Katz, Woolf, Welch), Haberman adjusted residuals. **regression tables** get the same language plus the observed-vs-modelled comparison.
 
-The target users are : 1. a "literary" social sciences student, not good at math, learning to read equiped crosstables and regression models using colors ; 2. a serious quantitative analyst — survey researcher, sociologist — often working with **weighted or complex-survey data**. That is why the inference layer is unusually deep for an exploration tool, and why `tab_reg()` pairs a model's adjusted effect with its **observed (crude) counterpart**, so "what did controlling for the other variables actually change" is visible in one table.
+The target users are : 1. a "literary" social sciences student, not good at math, learning to read equiped crosstables and regression models using colors ; 2. a serious quantitative analyst — survey researcher, sociologist — often working with **weighted or complex-survey data**. That is why the inference layer is unusually deep for an exploration tool, and why `tab_reg()` pairs a model's adjusted effect with its **observed (crude) counterpart**, so "what did holding the other variables equal actually change" is visible in one table.
 
 Two design principles underpin the whole package:
 
@@ -41,7 +41,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 - `tab-leaf.R` — the aggregate core: `tab_plain`/`tab_num`, `plain_core`/`num_core`, the leaves' CI/chi2, total rows.
 - `tab-agg.R` — sufficient-statistic aggregation + the CI engine; `CI_METHODS` / `CI_GEOMS`.
 - `tab-chi2.R` — the whole-table chi²/ANOVA test and the per-cell contribution writer.
-- `tab-display.R` — the `{}` display grammar, its named layouts and `add_n`/`add_pct`; `DISPLAY_TOKENS` / `DISPLAY_PRESETS`.
+- `tab-display.R` — the `{}` display grammar, its named layouts, the display-time base count; `DISPLAY_TOKENS` / `DISPLAY_PRESETS`.
 - `tab-resolve.R` — the crosstab argument boundary (validation + the colour/settings cascade).
 - `tab-counts.R` — `tab_counts()`, the from-aggregated-counts constructor.
 - `tab-parallel.R` — serial/parallel row-axis dispatch (mirai, Suggests-only).
@@ -57,11 +57,11 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 
 **Regression** — `tab_reg()` and its model machinery.
 
-- `tab_reg.R` — `tab_reg()`: fits per column, renders per-family effect measures, the staged `reg_build()`.
-- `reg-resolve.R` — the `tab_reg()` argument boundary (`reg_resolve_args`, six stages).
+- `tab_reg.R` — `tab_reg()`: fits per column, renders each estimand as cells, the staged `reg_build()`.
+- `reg-resolve.R` — the `tab_reg()` argument boundary (`reg_resolve_args`, six stages + the tidy-select one).
 - `reg-estimand.R` — the estimand cascade (family → link → measure → effect) and the library it composes; `REG_FAMILIES` / `REG_ESTIMANDS` / `REG_WORDS`; `reg_measures()`.
-- `reg-empirical.R` — the observed/crude companion columns; `REG_EMPIRICAL`.
-- `reg-influence.R` — influence-function math for the gap SE (g-computation, `svyrecvar`).
+- `reg-empirical.R` — the observed (crude) companion columns; `REG_EMPIRICAL` / `REG_EMP_BY_LINK`.
+- `reg-influence.R` — the marginal engine (g-computation over `REG_LINK_FUNS`) + the gap-SE influence functions.
 - `reg-assumptions.R` — model checks + `shape=` cures; `REG_CHECKS`; the plot primitives.
 - `reg-cross.R` — interactions: the `a*b` entries of `predictors`, prepared as a variable; `REG_CROSS_ARMS`.
 - `reg-spec-build.R` — the per-model product builder (`reg_spec_build`).
@@ -115,43 +115,44 @@ Three kinds of input converge on one output through one pipeline:
  a fitted model┘      statistics)           records)         metadata)                             markdown · plot
 ```
 
-There are **two producers, one output type**. `tab()` builds crosstabs from microdata; `tab_reg()` builds regression tables from a model. Both emit a `tabxplor_tab` of `fmt` columns, so the colour engine, the accessors, the reshape operations and every exporter treat them identically — one visual language, one export path. `tab_counts()` is a third entry that starts "from the middle", building the same object from already-aggregated counts.
+There are **two producers, one output type**. `tab()` builds crosstabs from microdata, `tab_reg()` regression tables from a model, and both emit a `tabxplor_tab` of `fmt` columns — so the colour engine, the accessors, the reshape operations and every exporter treat them identically, one visual language and one export path. `tab_counts()` starts "from the middle", building the same object from already-aggregated counts.
 
 ### The declarative architecture
 
-The codebase is organised around **declared fact tables**. Instead of scattering literals and re-deriving `switch` statements, each fact — a colour measure, an option, an argument, an estimand, a display token, a kind of row — is stated **once, in one table**, and read through named accessors. The single rule a future change must respect: *every fact is stated once, in one declared table; a key one table reads out of another is a foreign key, checked at load* (`zzz-fact-keys.R` validates every edge when the namespace loads, so a rename that breaks a reference fails the install, not a user's table).
+The codebase is organised around **declared fact tables**: each fact — a colour measure, an option, an argument, an estimand, a display token, a kind of row — is stated **once, in one table** and read through named accessors, instead of being scattered across literals and `switch` statements. The single rule a future change must respect: *every fact is stated once, in one declared table; a key one table reads out of another is a foreign key, checked at load* — `zzz-fact-keys.R` validates every edge at namespace load, so a rename that breaks a reference fails the install, not a user's table.
 
 The payoff to internalise: **adding a measure, an option, an argument, an estimand is one new row — not N scattered edits.** Do not re-introduce ad-hoc branches; extend the table. The main fact tables:
 
-| Fact table         | Home                 | Declares                                                                               |
-|--------------------|----------------------|----------------------------------------------------------------------------------------|
-| `MEASURES`         | `fmt_class.R`        | The colour measures (raw field, scale keys, significance source, legend, requirements) |
-| `EST_SCALES`       | `fmt_class.R`        | What a column estimates (field, null, geometry, colour ladder, SD source)              |
-| `DISPLAY_TOKENS`   | `tab-display.R`      | The `{}` display grammar (field source, geometry, aliases, placement)                  |
-| `DISPLAY_PRESETS`  | `tab-display.R`      | The named cell layouts both producers resolve (`est` / `est_ci` / `est_base` / …)      |
-| `CI_METHODS`       | `tab-agg.R`          | The confidence-interval methods and geometries (with `CI_GEOMS`)                       |
-| `COLOR_SCALES`     | `tab_classes.R`      | The break scales and palettes                                                          |
-| `PRINT_PALETTES`   | `tab-palettes.R`     | The black-and-white publication palettes: a row per break slot (ink, face, mark)       |
-| `TAB_ARGS`         | `tab-args.R`         | The argument surface (signatures, values, option twins, prose; + `EXPORT_ARGS`)        |
-| `TAB_OPTIONS`      | `tab-options.R`      | The package options and their defaults                                                 |
-| `ROW_KINDS`        | `row-model.R`        | The row-kind vocabulary                                                                |
-| `TEST_ROWS`        | `tab-test-display.R` | The footer / statistical-row catalogue                                                 |
-| `TAB_OPS`          | `tab-shape.R`        | Which reshape operations accept which table shape                                      |
+| Fact table         | Home                 | Declares                                                                                |
+|--------------------|----------------------|-----------------------------------------------------------------------------------------|
+| `MEASURES`         | `fmt_class.R`        | The colour measures (raw field, scale keys, significance source, legend, requirements)  |
+| `EST_SCALES`       | `fmt_class.R`        | What a column estimates (field, null, geometry, colour ladder, SD source)               |
+| `DISPLAY_TOKENS`   | `tab-display.R`      | The `{}` display grammar (field source, geometry, aliases, placement)                   |
+| `DISPLAY_PRESETS`  | `tab-display.R`      | The named cell layouts both producers resolve (`est` / `est_ci` / `est_base` / …)       |
+| `CI_METHODS`       | `tab-agg.R`          | The confidence-interval methods and geometries (with `CI_GEOMS`)                        |
+| `COLOR_SCALES`     | `tab_classes.R`      | The break scales and palettes                                                           |
+| `PRINT_PALETTES`   | `tab-palettes.R`     | The black-and-white publication palettes: a row per break slot (ink, face, mark)        |
+| `TAB_ARGS`         | `tab-args.R`         | The argument surface (signatures, values, option twins, prose; + `EXPORT_ARGS`)         |
+| `TAB_OPTIONS`      | `tab-options.R`      | The package options and their defaults                                                  |
+| `ROW_KINDS`        | `row-model.R`        | The row-kind vocabulary                                                                 |
+| `TEST_ROWS`        | `tab-test-display.R` | The footer / statistical-row catalogue                                                  |
+| `TAB_OPS`          | `tab-shape.R`        | Which reshape operations accept which table shape                                       |
 | `REG_FAMILIES`     | `reg-estimand.R`     | Per family: the level kind, the links it fits, its names — the estimand library derives |
-| `REG_ESTIMANDS`    | `reg-estimand.R`     | Composed from it: one row per buildable (link, effect, measure)                        |
-| `REG_WORDS`        | `reg-estimand.R`     | The header acronyms and their expansions (with `REG_CONTRASTS`, the contrast markers)  |
-| `REG_EMPIRICAL`    | `reg-empirical.R`    | The crude-companion column shapes per family                                           |
-| `REG_CROSS_ARMS`   | `reg-cross.R`        | The two interaction shapes: a combined factor, or slopes nested in a moderator         |
-| `REG_CHECKS`       | `reg-assumptions.R`  | The model-check / assumption catalogue                                                 |
-| `TAB_FOREIGN_KEYS` | `zzz-fact-keys.R`    | The cross-table foreign-key edges, checked at load                                     |
+| `REG_ESTIMANDS`    | `reg-estimand.R`     | Composed from it: one row per buildable (link, effect, measure)                         |
+| `REG_WORDS`        | `reg-estimand.R`     | The header acronyms and their expansions (with `REG_CONTRASTS`, the contrast markers)   |
+| `REG_LINK_FUNS`    | `reg-influence.R`    | Per link: its transform and derivative — all a marginal contrast needs of one           |
+| `REG_EMPIRICAL`    | `reg-empirical.R`    | The observed-companion column shapes per family                                         |
+| `REG_CROSS_ARMS`   | `reg-cross.R`        | The two interaction shapes: a combined factor, or slopes nested in a moderator          |
+| `REG_CHECKS`       | `reg-assumptions.R`  | The model-check / assumption catalogue                                                  |
+| `TAB_FOREIGN_KEYS` | `zzz-fact-keys.R`    | The cross-table foreign-key edges, checked at load                                      |
 
-Three supporting mechanisms carry the same spirit: **typed contexts** (`new_ctx()`, `new_reg_ctx()`) declare every value a pipeline threads, so a stage cannot read an undeclared field; **single argument boundaries** (`tab_resolve_common_args()`, `reg_resolve_args()`) normalise every producer's arguments in one place; and **one table identity** — `meta$spec`, with three slots `kind` / `vars` / `call` — says what a table is, read through `tab_kind()` / `tab_is_reg()`.
+Three supporting mechanisms carry the same spirit: **typed contexts** (`new_ctx()`, `new_reg_ctx()`) declare every value a pipeline threads, so a stage cannot read an undeclared field; **single argument boundaries** (`tab_resolve_common_args()`, `reg_resolve_args()`) normalise each producer's arguments in one place; and **one table identity**, `meta$spec` (`kind` / `vars` / `call`), read through `tab_kind()` / `tab_is_reg()`.
 
 ### The type system
 
 #### tabxplor_fmt — the rich cell
 
-`tabxplor_fmt` (`R/fmt_class.R`) is a `vctrs::new_rcrd()` record and the foundation of the package: every numeric column of a table is an `fmt` vector. It has **21 per-cell fields** and **16 per-column attributes**.
+`tabxplor_fmt` (`R/fmt_class.R`) is a `vctrs::new_rcrd()` record and the foundation of the package: every numeric column is an `fmt` vector, with **21 per-cell fields** and **16 per-column attributes**.
 
 **Fields** (per-cell, via `vctrs::field()`):
 
@@ -163,9 +164,9 @@ Three supporting mechanisms carry the same spirit: **typed contexts** (`new_ctx(
 | `mean`      | dbl  | Cell mean (numeric column variables; `NA` on pct columns)                           |
 | `tot_n`     | dbl  | The cell's own unweighted percentage base (row/col/grand total per `pct`)           |
 | `diff`      | dbl  | Difference from the reference                                                       |
-| `ratio`     | dbl  | Ratio to the reference (the "×2" reference-relative ratio the colour engine reads)  |
+| `ratio`     | dbl  | Ratio to the reference (the "×2" comparison the colour engine reads)  |
 | `or`        | dbl  | Odds ratio / relative-risk ratio                                                    |
-| `obs`       | dbl  | The observed/crude value a `tab_reg` estimate is compared to (`NA` elsewhere)       |
+| `obs`       | dbl  | The observed value a `tab_reg` estimate is compared to (`NA` elsewhere)       |
 | `gap_se`    | dbl  | SE of the gap between the estimate and `obs` (drives `color_signif` on adjustments) |
 | `ctr`       | dbl  | Contribution to chi-squared variance                                                |
 | `var`       | dbl  | Variance (CI / effect size)                                                         |
@@ -190,7 +191,7 @@ Three supporting mechanisms carry the same spirit: **typed contexts** (`new_ctx(
 | `degf`         | dbl  | Degrees of freedom the interval refers to (`NA` → refer to z)                                   |
 | `basis`        | chr  | How the interval was computed: `n` / `weights` / `design` / `design_partial`                    |
 | `col_var`      | chr  | Name of the column variable                                                                     |
-| `col_group`    | chr  | Which sub-population the block belongs to (a spread level or `tab_vars` group; `""` otherwise)  |
+| `col_group`    | chr  | The sub-population a block belongs to (a spread level or `tab_vars` group; `""` otherwise)  |
 | `ref`          | chr  | Reference type (`tot` / `first`)                                                                |
 | `comp_all`     | lgl  | Compare against the total table (TRUE) or the subtable (FALSE)                                  |
 | `totcol`       | lgl  | This column is a total column                                                                   |
@@ -200,19 +201,19 @@ Three supporting mechanisms carry the same spirit: **typed contexts** (`new_ctx(
 | `model_family` | chr  | A regression column's own family (`""` on crosstabs)                                            |
 | `role`         | chr  | A regression column's role: `model` / `emp` / `n` (`""` on crosstabs)                           |
 
-**The critical distinction:** fields vary per cell; attributes are scalar over a whole column. Do not confuse them. The record is deliberately **dense** — every column carries all 21 fields, an inapplicable one stored as `NA`, never absent — so the colour engine and tooltip builder read any field on any column and simply find `NA` where it does not apply (sparse fields buy almost nothing and would add a second encoding of "not applicable", so the shape is fixed).
+**The critical distinction:** fields vary per cell, attributes over a whole column. The record is deliberately **dense** — every column carries all 21 fields, an inapplicable one stored as `NA` — so the colour engine and the tooltip builder read any field on any column and simply find `NA` where it does not apply.
 
-The attribute list is **derived** from `new_fmt()`'s formals (attributes = formals that are not fields), and how each attribute is carried through casts, arithmetic and binds is itself a declared table (`fmt_attr_rules`: `neutral` / `merge` / `arith` / `scalar` / `write`). Adding an attribute is a `new_fmt()` formal plus one rule row; a build-time assertion refuses an attribute with no rule. Read/write any attribute by name with `fmt_attr()` / `` `fmt_attr<-` `` (the programmatic surface); the named `get_*`/`set_*` accessors are the taught surface. Constructor chain: `fmt()` (public, validates) → `new_fmt()` (internal).
+The attribute list is **derived** from `new_fmt()`'s formals (attributes = formals that are not fields), and how each is carried through casts, arithmetic and binds is itself a declared table (`fmt_attr_rules`); adding one is a formal plus one rule row, and a build-time assertion refuses an attribute with no rule. Read or write any attribute by name with `fmt_attr()` (the programmatic surface); the `get_*`/`set_*` accessors are the taught one. Constructor chain: `fmt()` (public, validates) → `new_fmt()`.
 
-**Adding a field** touches ~9 sites in `fmt_class.R` (the field list, `fmt()`, `new_fmt()`, the getters/setters, the four reconstructors) plus, for a *displayed* field, `get_num()`/`set_num()`, `format()`, `tab_xl` and a `DISPLAY_TOKENS` row — follow the `/vctrs-field` skill, which encodes the checklist.
+**Adding a field** touches ~9 sites in `fmt_class.R` (the field list, `fmt()`, `new_fmt()`, the accessors, the four reconstructors) plus, for a *displayed* field, `get_num()`/`set_num()`, `format()`, `tab_xl` and a `DISPLAY_TOKENS` row — follow the `/vctrs-field` skill.
 
 #### tabxplor_tab — the table
 
-`tabxplor_tab` is a `tibble` subclass; `tabxplor_grouped_tab` extends `grouped_df` when `tab_vars` split the table into sub-tables. Class and metadata survive `dplyr` through ~30 S3 methods, anchored by the `dplyr_row_slice()` / `dplyr_col_modify()` / `dplyr_reconstruct()` trio (a missing method silently downgrades to a plain tibble). A table carries three **optional, NULL-safe** attributes: `subtext` (legend text), `test` (a tibble of chi²/ANOVA/model-footer rows), and `meta` (one list holding `spec`, the variable model, CI settings, render intent, and any regression/assumption records). Every getter tolerates absence: a table stripped of `test` still prints, dropping only the summary it powered — cell fields and column attributes stay required, a standalone extracted `fmt` column formats and colours on its own.
+`tabxplor_tab` is a `tibble` subclass; `tabxplor_grouped_tab` extends `grouped_df` when `tab_vars` split the table into sub-tables. Class and metadata survive `dplyr` through ~30 S3 methods, anchored by the `dplyr_row_slice()` / `dplyr_col_modify()` / `dplyr_reconstruct()` trio (a missing method silently downgrades to a plain tibble). A table carries three **optional, NULL-safe** attributes: `subtext` (legend text), `test` (chi²/ANOVA/model-footer rows) and `meta` (`spec`, the variable model, CI settings, render intent, any regression records). Every getter tolerates absence — a stripped table still prints, dropping only what it powered — while cell fields and column attributes stay required, so an extracted `fmt` column formats and colours on its own.
 
 #### The row model
 
-Rows describe themselves the way columns do. The `row_kind` field (from `ROW_KINDS`: `data`/`total`/`n`/`pct`/`pvalue`/`gof`/`blank`) says what kind of row a cell sits in; `is_totrow()` is the derived read. The index columns are a `tabxplor_lvl` factor subclass carrying each level's `role` (level / variable / tab-variable) and originating `var`, so variable detection and rendering read stored facts rather than guessing from labels.
+Rows describe themselves the way columns do. The `row_kind` field (`ROW_KINDS`: `data`/`total`/`n`/`pct`/`pvalue`/`gof`/`blank`) says what kind of row a cell sits in, `is_totrow()` being the derived read; the index columns are a `tabxplor_lvl` factor subclass carrying each level's `role` and originating `var`, so variable detection and rendering read stored facts rather than guessing from labels.
 
 ### The calculation pipeline
 
@@ -228,59 +229,63 @@ tab() / tab_many()                          [public; differ only in default outp
        └─ tab_assemble_output output shape (merge / spread / compact / unwrap)
 ```
 
-**The settings spine** (`ctx$settings` = a `rows` / `cols` / `pairs` star schema) is where the row and column axes meet exactly once, so parallel argument vectors cannot recycle against each other. Each stage projects the spine into the bare names its resolution block reads, so a pre-resolution value can never leak into a computation.
+**The settings spine** (`ctx$settings` = a `rows` / `cols` / `pairs` star schema) is where the row and column axes meet exactly once, so parallel argument vectors cannot recycle against each other. Each stage projects it into the bare names its resolution block reads, so a pre-resolution value cannot leak into a computation.
 
-**The aggregate core** (`tab-leaf.R` + `tab-agg.R`) is the single place microdata becomes cells: the leaves `plain_core()` (factors) and `num_core()` (numeric column variables) turn sufficient statistics into `fmt` fields, their confidence interval and the whole-table test in one pass — there is no separate step chain. The superseded dplyr-era steps (`tab_pct` → `tab_ci` → `tab_chi2` → …) are quarantined in `tab-steps-legacy.R`: still exported for back-compatibility, they reconstruct a plan from `fmt` markers but share the *arithmetic* (`ci_dispatch()`, `chi2_compute_test()`) with the leaves, so a step and a build cannot compute two different answers.
+**The aggregate core** (`tab-leaf.R` + `tab-agg.R`) is the single place microdata becomes cells: the leaves `plain_core()` (factors) and `num_core()` (numeric column variables) turn sufficient statistics into `fmt` fields, their confidence interval and the whole-table test in one pass. The superseded dplyr-era steps (`tab_pct` → `tab_ci` → `tab_chi2` → …) are quarantined in `tab-steps-legacy.R`: still exported, they share the *arithmetic* (`ci_dispatch()`, `chi2_compute_test()`) with the leaves, so a step and a build cannot compute two different answers.
 
-**The reference system:** `ref` picks the comparison baseline (`tot` / `first` / an index / a regex), reinterpreted by `pct` (a reference *row* under row%/means, a reference *column* under col%); `ref2` names the second level for odds ratios; `comp = "tab"` compares within each sub-table, `comp = "all"` against the total table. **Significance:** a cell is significant when its confidence interval excludes the null; the displayed p-value (and its stars) come from inverting that interval, so one CI-inclusion rule governs colour, greying and stars alike. Interval geometry (proportion pivot, mean difference, multiplicative log) is declared in `CI_GEOMS`, its method in `CI_METHODS`.
+**The reference system:** `ref` picks the baseline a deviation is measured from (`tot` / `first` / an index / a regex), reinterpreted by `pct` (a reference *row* under row%/means, a reference *column* under col%); `ref2` names the second level for odds ratios; `comp` compares within each sub-table or against the total table. **Significance:** a cell is significant when its confidence interval excludes the **neutral value** — 0 for a difference, 1 for a ratio — and the displayed p-value and stars come from inverting that same interval, so colour, greying and stars cannot disagree. Interval geometry is declared in `CI_GEOMS`, its method in `CI_METHODS`.
 
 ### The inference layer
 
-**The survey-design boundary** (`survey-design.R`) is one unwrap point: a `survey` design passed as `data` becomes the microdata every engine already reads, plus its sampling weights and design metadata — so the crude columns, the AME, the tests and the footer are all design-weighted, and a `svyrepdesign`/`twophase` is refused rather than approximated.
+**The survey-design boundary** (`survey-design.R`) is one unwrap point: a `survey` design passed as `data` becomes the microdata every engine already reads, plus its sampling weights and design metadata — so the observed columns, the marginal effects, the tests and the footer are all design-weighted, and a `svyrepdesign`/`twophase` is refused rather than approximated.
 
-**The inference basis** is the layer's central idea: how the *estimate* is computed (`wt`) and how the *interval and test* are computed (the basis) are **orthogonal**. The basis is one of `n` / `weights` / `design` / `design_partial`, and — with `conf_level`, `degf` and `ci_method` — it is stored **on each column, not on the table**, because `dplyr` drops table attributes and a number must never depend on one. A bind reconciles these by the weakest-claim rule, so a merge can only claim the inference its weakest part carried.
+**The inference basis** is the layer's central idea: how the *estimate* is computed (`wt`) and how the *interval and test* are computed (the basis) are **orthogonal**. The basis is one of `n` / `weights` / `design` / `design_partial` and — with `conf_level`, `degf` and `ci_method` — is stored **on each column, not on the table**, because `dplyr` drops table attributes and a number must never depend on one. A bind reconciles them by the weakest-claim rule.
 
-**Design-based cell variance** (`survey-variance.R`) feeds the existing `n_eff` field (effective sample size), so the ordinary CI machinery becomes design-aware with no new field. A plain weight column is a survey design at `ids = ~1`, where the general formula collapses to a per-cell closed form computed from the aggregate alone (Kish is its degenerate limit); a real design uses `survey::svyrecvar`. survey owns the variance algebra throughout.
+**Design-based cell variance** (`survey-variance.R`) feeds the existing `n_eff` field, so the ordinary CI machinery becomes design-aware with no new field. A plain weight column is a survey design at `ids = ~1`, where the general formula collapses to a per-cell closed form computed from the aggregate alone (Kish is its degenerate limit); a real design goes through `survey::svyrecvar`, which owns the variance algebra throughout.
+
+### The display grammar
+
+What a cell prints is a `{}` template over declared tokens (`DISPLAY_TOKENS`), resolved by one boundary `tab()`, `tab_reg()` and `set_display()` share, so a layout learnt on a crosstab means the same on a regression. `{est}` and `{base}` are **scale-relative** — the deviation a column estimates, and the level it sits on — which is what lets one named preset (`DISPLAY_PRESETS`) render an odds ratio, a mean difference and a percentage alike. A composite has a **primary** token, the first outside brackets: it carries the stars, it is what `get_num()` and Excel return, and it is the only part the colour paints. **A display is post-hoc** — every field a layout can print is populated at build, so choosing one triggers no computation and changes no number.
 
 ### The colour system
 
-Colour is decomposed into three orthogonal axes: a **measure** (what to compare — `diff` / `ratio` / `contrib` / `or`), a **channel** (text and/or background), and a **significance policy** (`color_signif`: `ignore` / `grey_non_signif` / `guaranteed_effect`). The engine has three layers:
+Colour has three orthogonal axes: a **measure** (which deviation to grade — `difference` / `ratio` / `odds_ratio` / `contrib`, or the two gap measures `adjustment` / `between_groups`), a **channel** (text and/or background), and a **significance policy** (`color_signif`: `ignore` / `grey_non_signif` / `guaranteed_effect`). The engine has three layers:
 
-1. **Palettes** (`tab-palettes.R`, which holds every one of them) — OKLCH colour ramps, hand-tuned so intensity levels are distinguishable, in light, dark, and 8-bit (non-truecolor terminal) variants, set via `set_color_palette()`; the **chrome** beside them (`tx_chrome_hex()`: the table's own ink, the greyed-out cell, the aside); and, where a page has no colour, three **publication palettes** (`PRINT_PALETTES`) saying the same thing typographically — one declared grid each, a row per break slot carrying its ink, face and mark, with `theme = "print_ready"` choosing between them from what the table IS. A palette is always hex **and** face: a backend must never derive "is this bold" from "does this have a hex".
-2. **Breaks** — per-scale thresholds (`COLOR_SCALES`), mirrored for the under side; a break value above 1 means a *ratio* comparison (the "×2" rule), so the default pct breaks encode both additive and multiplicative thresholds.
+1. **Palettes** (`tab-palettes.R`, which holds every one of them) — OKLCH colour ramps, hand-tuned so intensity levels stay distinguishable, in light, dark and 8-bit variants, set via `set_color_palette()`; the **chrome** beside them (`tx_chrome_hex()`: the table's own ink, the greyed-out cell, the aside); and, where a page has no colour, three **publication palettes** (`PRINT_PALETTES`) saying the same thing typographically — one declared grid each, a row per break slot carrying its ink, face and mark, `theme = "print_ready"` choosing between them from what the table IS. A palette is always hex **and** face: a backend must never derive "is this bold" from "does this have a hex".
+2. **Breaks** — per-scale thresholds (`COLOR_SCALES`). Every ladder is the SAME ladder written in another measure at one reference cell of 50 %, so a shade means the same size of deviation whichever measure a table is read on; each declares its `quantity`, its `anchor`, whether its two `sides` mirror (only where the quantity is unbounded above), and how many loud rungs it keeps on the background channel (`bg_keep` — a fill is the corrective voice). The shape rule is checked at load.
 3. **Selection** — a vectorised `findInterval` engine (`fmt_color_plan` → `fmt_color_slots` → `fmt_color_channels`) that folds each cell per side and picks the strongest matching threshold.
 
-The measure's behaviour — its raw getter, scale keys, significance source and gating — lives in the `MEASURES` row, which drives both the plan and the legend (no per-measure branches). Every backend consumes the one artifact `fmt_color_channels` produces, which is why console, HTML, Excel, Markdown and plots colour identically.
+The measure's behaviour — raw getter, scale keys, significance source, gating — lives in its `MEASURES` row, which drives both the plan and the legend with no per-measure branches; every backend then consumes the one artifact `fmt_color_channels` produces, which is why console, HTML, Excel, Markdown and plots colour identically.
 
 ### The regression subsystem
 
-`tab_reg()` gives models the same visual language: it fits one model, renders per-family effect measures as `fmt` cells, and returns the same `tabxplor_tab` — same colours, same accessors, same exports. It reuses the 21 `fmt` fields unchanged; `obs` and `gap_se` carry the regression-specific facts, so there is no separate field set. The subsystem is seven files, each with a fuller header.
+`tab_reg()` gives models the same visual language: one model per column, each estimand rendered as `fmt` cells in the same `tabxplor_tab`. It reuses the 21 fields unchanged; `obs` and `gap_se` carry the regression-specific facts.
 
-**The estimand — a cascade, and a composed library** (`reg-estimand.R`). **A link is a measure**: the one a model estimates directly. So the argument that names the model takes the same words as the argument that names the report — `difference` ↔ identity, `ratio` ↔ log, `odds_ratio` ↔ logit — and the statistician's vocabulary never surfaces. Four arguments, `family` → `link` → `measure` → `effect`, where `"auto"` means *follow from the left*; a **coefficient** exists only where the reported measure IS the model's, and any other measure is applied to the model's predictions instead. One clause qualifies it: `"auto"` never resolves to a *predicted* odds ratio, a specialist quantity that must be asked for by name.
+**A model column holds the crosstab's own pair.** It stores an adjusted level and its reference level, and derives both readings of that pair — additive (`diff`) and multiplicative (`ratio`); the observed column derives the same two from the counted pair. `measure` says which geometry is **promoted to the estimate** — the one carrying the interval, the stars and the colour — the others riding as asides exactly as in `tab()`. That is the round trip the package exists for: from an observed percentage out to a model and back to a percentage.
 
-`REG_ESTIMANDS` is **composed, not written**: `reg_compose_library()` emits one row per buildable `(link, effect, measure)` from four facts a family declares in `REG_FAMILIES` — its `level` kind (`pct` / `mean` / `count`), the `fits` it offers (the value set of `link`, first entry = the family's own), any header-word override, and its coefficient qualifier — plus two shared maps (the link ↔ measure one, and what each kind of level can be compared by). A refusal is not a row: it is derived from the clause that failed, so a hole and its reason cannot drift apart. The **family is auto-detected** from the outcome — a 2-level factor → logistic/OR, numeric → linear/mean difference, a count → Poisson/IRR, 3+ unordered → multinomial, ordered → cumulative-OR ordinal — but one table can mix families (each column stores its own `model_family`).
+**The estimand is a cascade** (`reg-estimand.R`). **A link is a measure**: the one a model estimates directly — `difference` ↔ identity, `ratio` ↔ log, `odds_ratio` ↔ logit — so the argument naming the model takes the same words as the argument naming the report, and the statistician's vocabulary never surfaces. Four arguments, `family` → `link` → `measure` → `effect`, where `"auto"` means *follow from the left*, and one rule decides the rest: **a coefficient exists only where the reported measure IS the model's**; any other measure is applied to the model's predictions, averaged over the sample (`marginal`) or read at one constructed profile (`at_reference`, the ideal type). One clause qualifies it: `"auto"` never resolves to a *predicted* odds ratio, a specialist quantity asked for by name. Which model is fitted and which deviation is reported are two axes — `reg_formulas()` says what reached `glm()`, `reg_measures()` what an outcome can be asked.
 
-**One name per quantity** (`REG_WORDS` + `REG_CONTRASTS`). A header names the **measure**; the **contrast** is a marker on it and a log wraps the result, so the word is *composed* — `marker ∘ log-wrap ∘ acronym` gives `OR`, `mRR`, `refRD`, `log(cumOR)` — which is what stops two estimands sharing a header and one estimand being named twice. Each acronym's expansion is declared once and read by the header, the `Model:` footer ("`OR` = odds ratio (vs the reference category)"), `reg_measures()`, the abort and the generated `?tab_reg` sections. The crude companion and the colour legend both take the measure **without** the marker: a univariable effect has no adjustment to be marginal over, and a legend that named the contrast would split the crude/model pair into two blocks. `reg_measures(data, outcome)` lists what an outcome offers; a missing `(effect, measure)` combination aborts with the list of what it does offer.
+`REG_ESTIMANDS` is **composed, not written**: `reg_compose_library()` emits one row per buildable `(link, effect, measure)` from four facts a family declares in `REG_FAMILIES` — its `level` kind (`pct` / `mean` / `count`), the `fits` it offers (the value set of `link`, first entry = its own), any header-word override and its footer qualifier — plus two shared maps: link ↔ measure, and what each kind of level can be compared by. A refusal is not a row but a derivation from the clause that failed, so a hole and its reason cannot drift apart. The family is auto-detected from the outcome (binary → logistic, unordered → multinomial, ordered → cumulative-OR ordinal) while a *number* is the user's call; one table can mix families, each column storing its own `model_family`. Hence the extension rule: **a new model is a row in a declared table, never a new argument or a word a user must learn** — a link is one map entry plus one `REG_LINK_FUNS` row (its transform and derivative — all a marginal contrast needs of a link, which is why the engine has no per-measure arm); a family is one `REG_FAMILIES` row, its footer statistics and model checks the only per-family work.
 
-**The observed companion — the distinctive feature** (`reg-empirical.R` + `reg-influence.R`). With `empirical = TRUE`, each model effect is placed beside its **crude/observed counterpart** on the same scale — so "what did adjustment change" is read directly. `REG_EMPIRICAL` declares, per family, the shape of the crude column and its CI method; the crude value comes either from a closed form on a per-cell grid or from a univariable refit through the same fitter, so the two share estimand, link and CI rule by construction. `reg-influence.R` computes the **standard error of the gap** between the adjusted and crude estimates (their covariance, which no arithmetic on the two printed intervals could recover) via influence functions — the package's only `survey::svyrecvar` caller — and that gap SE is what lets `color_signif` colour the adjustment itself.
+**One name per quantity** (`REG_WORDS` + `REG_CONTRASTS`). A header names the **measure**, the **contrast** is a marker on it and a log wraps the result, so the word is *composed* — `marker ∘ log-wrap ∘ acronym` gives `OR`, `mRR`, `refRD`, `log(cumOR)` — which stops two estimands sharing a header, or one estimand being named twice. The observed column and the colour legend take the measure **without** the marker — a univariable effect has no adjustment to be marginal over — so the observed/model pair stays one legend block.
 
-**Interactions are a prepared VARIABLE, not a model term** (`reg-cross.R`). An `a*b` entry in `predictors` is *a predictor whose levels are combinations, and whose univariable model is its own saturated fit* — so it is materialised before the fit and every subsystem keeps reading an ordinary predictor: the skeleton, the per-cell counts, the crude closed form, the colour ladders and the marginal sweep all need nothing. `REG_CROSS_ARMS` declares the two shapes: two categorical parents become one **combined factor** (every cell against one common reference), a continuous one becomes **slopes nested in its moderator**. It is the same move `shape` makes for one variable and `ref`'s anchor for one column's origin — decide the parametrisation while the data is prepared, and the fit's own output is already the table.
+**The observed companion — the distinctive feature** (`reg-empirical.R` + `reg-influence.R`). With `empirical = TRUE` each modelled effect sits beside the **observed (crude)** one: the same estimand, on the same people, with one predictor instead of all of them — so *what did adjustment change* is read across the table. One column shape built twice, and the observed shape is composed rather than declared (`REG_EMP_BY_LINK` indexes `REG_EMPIRICAL` by the measure's link), so a model row and its twin cannot state two estimands; its value is a closed form on the per-cell grid where the univariable model is saturated, otherwise a refit through the very fitter the table came from. `reg-influence.R` computes the **standard error of the gap**: both estimators are fitted on the same rows, so only the difference of their influence functions carries the covariance — and that gap SE is what makes `color = "adjustment"` a test rather than a description. On a non-collapsible measure the movement is coloured but never tested: an odds ratio moves when any strong predictor is added, which is arithmetic, not confounding.
 
-**The argument boundary** (`reg-resolve.R`). `reg_resolve_args()` is the `tab_reg()` analogue of the crosstab boundary: six declared stages (validate → prepare data → resolve estimands → resolve output → resolve fit plan → resolve specs) that do every check and every rewrite of `data` in one ordered place, returning a typed record the builder reads.
+**A parametrisation is decided while the data is prepared.** An `a*b` entry in `predictors` is *a predictor whose levels are combinations, and whose univariable model is its own saturated fit*, so it is materialised as a column before the fit and every subsystem keeps reading an ordinary predictor; `REG_CROSS_ARMS` (`reg-cross.R`) declares its two shapes — a combined factor against one common reference, or slopes nested in a moderator. `shape` recodes a continuous predictor the same way, and `ref` shifts one to its anchor so the fit's own intercept is already the baseline the Constant row shows. One rule covers the three: **the boundary defines the model's variables, then fixes their origin** — and the fit's own output is already the table.
 
-**The staged build** (`tab_reg.R` + `reg-spec-build.R`). `reg_build()` runs over a typed `new_reg_ctx`, one named stage per part of the table it produces; the per-model half is a declared product (`reg_spec_build()`), so "what is per-model vs between-models" has one answer. The three nesting axes — `tab_vars` groups × models × outcomes — dispatch through the shared parallel seam. The stage order is the source order and is load-bearing: every fit may emit a message, and the characterisation harness compares the message stream in order.
+**The boundary and the build** (`reg-resolve.R`, `tab_reg.R` + `reg-spec-build.R`). `reg_resolve_args()` is the crosstab boundary's twin, with `data` *inside* it — `family = "auto"`, `multiplier = "sd"` and `shape` are answered by the data — and one grammar per axis: the four estimand arguments per outcome, `multiplier` / `shape` / `ref` per predictor (unnamed = the fallback, named = that variable). `reg_build()` then runs over a typed `new_reg_ctx`, its per-model half a declared product (`reg_spec_build()`), the three nesting axes — `tab_vars` groups × models × outcomes — dispatching through the shared parallel seam.
 
-**Effects and model checks.** Marginal effects (AME, and MER at a reference profile) are computed by analytic g-computation (`reg-influence.R`) or `marginaleffects`, chosen per estimand. `REG_CHECKS` catalogues the model checks (linearity, dispersion, influence, proportionality, collinearity), each with the `shape =` cure that fixes what it flags — the check and its cure are one object — and each priced (`free` runs by default, `refit`-cost checks are opt-in).
+**Effects and model checks.** A marginal quantity comes from tabxplor's own analytic g-computation, or from `marginaleffects` at a reference profile — derived from the contrast, never declared per row. `REG_CHECKS` catalogues the checks (linearity, dispersion, influence, proportionality, collinearity), each with the `shape =` cure that fixes what it flags — the check and its cure are one object — and each priced (`free` runs by default, `refit`-cost checks are opt-in).
 
 ### Exports and rendering
 
-`tab_export(x, format =)` (`tab-export.R`) is the facade over four backends: HTML (the default), Markdown, Excel and plot. They share one preparation step, `tab_export_prep()` (`tab-export-prep.R`), which builds an ephemeral render model (roles, references, bold/italic, header spans, variable-name blocks) that every backend consumes.
+`tab_export(x, format =)` (`tab-export.R`) is the facade over four backends: HTML (the default), Markdown, Excel and plot, sharing one preparation step — `tab_export_prep()` (`tab-export-prep.R`) builds an ephemeral render model (roles, references, faces, header spans, variable-name blocks) that every backend consumes.
 
-Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML; `tab_xl()` writes the raw value and takes its number-format codes from the *same* `format(syntax = "excel")`, so a display change never needs mirroring. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, with the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so `theme = "auto"` (light/dark) and the black-and-white publication palettes work by stylesheet — except `print_marks`, whose signal is cell text and therefore comes from `format()` like the significance stars. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's light/dark scheme — a subsystem that must never error, because a wrong guess only mis-tints, never breaks.
+Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML, and `tab_xl()` writes the raw value with number-format codes from that *same* `format(syntax = "excel")`, so a display change never needs mirroring. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so light/dark and the publication palettes work by stylesheet — except `print_marks`, whose signal is cell text and so comes from `format()` like the stars. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's scheme — a subsystem that must never error, because a wrong guess only mis-tints.
 
 ### jamovi
 
-Two point-and-click analyses mirror the two producers: `jmvtab` (Crosstables) and `jmvtabreg` (Regressions). Each is a thin `R6` backend (`*.b.R`) over an engine-free build core (`jmvtab_build()` / `jmvtab_reg_build()`) that drives `tab()` / `tab_reg()` through a content-addressed **live-UI cache** (`*-cache.R`), so a repeated interactive tweak re-paints instead of recomputing. Each option is named after the argument it drives, so the backend is a pass-through rather than a translation table. The generated `*.h.R` option headers are never hand-edited.
+Two point-and-click analyses mirror the two producers: `jmvtab` (Crosstables) and `jmvtabreg` (Regressions). Each is a thin `R6` backend (`*.b.R`) over an engine-free build core (`jmvtab_build()` / `jmvtab_reg_build()`) driving `tab()` / `tab_reg()` through a content-addressed **live-UI cache** (`*-cache.R`), so an interactive tweak re-paints instead of recomputing. Each option is named after the argument it drives, so the backend is a pass-through, not a translation table. The generated `*.h.R` option headers are never hand-edited.
 
 ### Cross-cutting invariants
 
@@ -288,8 +293,8 @@ Rules that span subsystems — do not undo them without reading why:
 
 - **A number must not depend on a table attribute.** Inference facts (`conf_level`/`degf`/`basis`/`ci_method`) live on columns; `dplyr` drops table attributes.
 - **A merge claims only what its weakest part carried** — the `vec_ptype2` reconcile applies the weakest-claim rule to inference attributes so a bind cannot over-claim.
-- **Public API is stable; internals are free.** Soft-deprecate public arguments; the `fmt` fields users read with `$`/`mutate()` must not break.
-- **Facts live in one table.** Add a row to a fact table and read it through its accessor; a foreign key checked at load keeps cross-table references honest.
+- **Public API is stable; internals are free.** Soft-deprecate public arguments, and never break the `fmt` fields users read with `$`/`mutate()`.
+- **Facts live in one table.** Add a row and read it through its accessor; the foreign keys checked at load keep cross-table references honest.
 - **The `fmt` record is dense.** Every column carries all fields; "not applicable" is `NA`, never an absent field.
 - **`format()` is the one display source of truth** — text backends and the Excel numFmt codes both come from it.
 - **Levels drop after the tests.** Non-first levels (`levels = "first"`) are removed only after chi²/CI, so tests see the full level set.
@@ -297,28 +302,29 @@ Rules that span subsystems — do not undo them without reading why:
 
 ### Key Dependency APIs to read up on
 
-Before working on the `tabxplor_fmt` type system, arithmetic, or display, fetch the help pages for these via the `r-btw` MCP **docs** tools (or `?`) — the model's recall of their exact current contracts is the weakest link:
+Before working on the `fmt` type system, arithmetic or display, fetch these help pages via the `r-btw` MCP **docs** tools (or `?`) — recall of their exact contracts is the weakest link:
 
 - `vctrs::new_rcrd`, `vctrs::field` — record type and per-cell field access
 - `vctrs::vec_arith`, `vctrs::vec_cast`, `vctrs::vec_ptype2` — arithmetic and casting S3 contracts
 - `pillar::pillar_shaft` — console display method
 - `data.table` reference semantics (`:=`, `.SD`, `.N`) — internal aggregation
-- `DescTools::BinomCI`, `DescTools::BinomDiffCI` — **now Suggests-only** (test parity only). Since Phase 3a the CI math is the closed-form engine in `R/tab-agg.R` (`ci_pivot`/`ci_wilson`/`ci_newcombe`); read it, not DescTools, before touching CI.
+- `DescTools::BinomCI`, `DescTools::BinomDiffCI` — **Suggests-only**, for test parity: the CI math is the closed-form engine in `R/tab-agg.R` (`ci_pivot`/`ci_wilson`/`ci_newcombe`), which is what to read before touching CI.
 
 ### Documentation ecosystem
 
 The docs form one hierarchy, general to specific. **Each fact is stated at exactly one layer, referenced (never duplicated) across the others, and always written present-tense** — the current design is the reference point, never how it got there. The one place dev history is allowed is the roadmap "DONE" summaries. In R scripts, **the comments/code ratio should stay under 0.2**.
 
-- **`## tabxplor architecture`** (this file) — the cross-subsystem big picture: goals, data-flow, the declarative pattern, the type system, each subsystem's role and its meaningful "why". Rewritten only when the maintainer asks,never per session ; mostly with targeted cuts and replacements rather than accretion.
+- **`## tabxplor architecture`** (this file) — the cross-subsystem big picture: goals, data-flow, the declarative pattern, the type system, each subsystem's role and its meaningful "why". Rewritten only when the maintainer asks, by targeted cuts and replacements rather than accretion.
 - **`## Repository Map`** (this file) — the file index: one role line per R file. *Cut, don’t accrete.*
 - **R file-header comments** — per-file subsystem design: current architecture, key constraints, a pointer up to this file.
 - **Inline `# DESIGN:` / `# WARNING:` tags** — the non-obvious "why" at the exact line, caveats to avoid, etc.
 - **Vignettes** (`vignette("tabxplor")`, regression, programming) — usage and teaching, for users.
+- **`vignettes/articles/tabxplor-all-else-equal.Rmd`** — the most precise account of what tabxplor's *philosophy*, *vocabulary*, *usage* and *real-world regression use cases* really are; its words (deviation, observed vs adjusted, the base, the round trip) are the package's own.
 - **Roxygen man pages** (`?tab`, `?tabxplor-vctrs`, `?tabxplor-options`, `?tabxplor-data.table`) — user-facing reference: *usage* and the main use cases, never build/internals/history.
 - **`dev/*.md`** (`.Rbuildignore`'d) — transversal or expert technical guides only.
 - **Roadmap "DONE" summaries → `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`** — the ONLY place dev history lives.
 
-Inspect a built table at runtime through the accessors: `tab_shape()`, `tab_columns()`, `reg_measures()`, `fmt_attr()`, and the `get_*` / `set_*` family.
+Inspect a built table at runtime through the accessors: `tab_shape()`, `tab_columns()`, `reg_measures()`, `reg_formulas()`, `fmt_attr()`, and the `get_*` / `set_*` family.
 
 
 ---
@@ -1335,11 +1341,13 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "reli
 
 
 Interactions
+
 ```r
 tab_reg(gss_simple, outcome = "married", predictors = c("age:race", "rincome",),
         family = "binomial", empirical = TRUE #, measure = "odds_ratio"
 )
 ```
+
 - in html, "age × race" is written vertically, and it’s long (wastes vertical space, but here there’s horizontal space remaining), plase wrap it before the `×`, so it prints vertically in two columns.
 
 
@@ -1349,12 +1357,13 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "age*
         family = "binomial", empirical = TRUE #, measure = "odds_ratio"
 )
 ```
+
 - the rows are not very clear, because the user can’t be sure which variable is what. Ex: "per SD/13.4 · [0,1)"
   In interactions only, I would want: the main numeric variable, here "age", to be written at the start of "levels" ;
    the quantile variable to ; the separetor to be "–". Example: "age per 13.4 (SD) — [0,1)"
-- in tooltips, the observed counterparts of "age × tvhours" have many `NA`s, tooltips are very long and unreadable ; 
+- in tooltips, the observed counterparts of "age × tvhours" have many `NA`s, tooltips are very long and unreadable ;
    calculate the meaningful quantities to populate it, or when a field is really NA the rule should be "never shows it in theooltips"
-- "age × tvhours" displays an adjusted proportion here, is it right ? Is it meaningful ? 
+- "age × tvhours" displays an adjusted proportion here, is it right ? Is it meaningful ?
    Adjusted married proportion of the tvhours level given it’s specific age slope (how to word it) ?
 
 
@@ -1446,11 +1455,11 @@ A full review of `tab_reg()`'s statistical framework has landed in `dev/reg_math
 
 ⚠ **The inference-basis ladder — recall it before touching any interval, and never mix its rungs.** `svy_inference_basis()` (`R/survey-design.R:109`) returns exactly one of three states, and what is statistically right differs at each:
 
-| rung | reached when | what the crude closed form assumes | verdict of the review |
-|------|--------------|-------------------------------------|-----------------------|
-| `n` | no `wt`, no design (an ordinary `tab_reg()`) | i.i.d. rows | exact — hand-checked vs Woolf / Katz |
-| `weights` | a `wt` column | a design at `ids = ~1`: weights, **no clusters, no strata, no calibration** | exact — 0.03 % from `svyglm(ids = ~1)` |
-| `design` | a `svydesign` passed as `data` | still independence across PSUs — **false as soon as clusters exist** | 28 % narrow to 2.2x wide (§5) |
+| rung      | reached when                                 | what the crude closed form assumes                                          | verdict of the review                  |
+|-----------|----------------------------------------------|-----------------------------------------------------------------------------|----------------------------------------|
+| `n`       | no `wt`, no design (an ordinary `tab_reg()`) | i.i.d. rows                                                                 | exact — hand-checked vs Woolf / Katz   |
+| `weights` | a `wt` column                                | a design at `ids = ~1`: weights, **no clusters, no strata, no calibration** | exact — 0.03 % from `svyglm(ids = ~1)` |
+| `design`  | a `svydesign` passed as `data`               | still independence across PSUs — **false as soon as clusters exist**        | 28 % narrow to 2.2x wide (§5)          |
 
 Two consequences to carry. The independence assumption the crude closed form makes is **correct at the first two rungs**, so nothing there is to be "fixed" — the defect is specific to a real cluster design. And `tab_reg()` has no "weights without design effect" state: `reg-empirical.R:153` and `tab_reg.R:2832` pass `force = TRUE`, so any `wt` lands on `weights` whatever `options(tabxplor.design_effect)` says, unlike `tab()`. `design_partial` is `design` degraded and follows it.
 
@@ -1555,15 +1564,15 @@ Then the §9.3 invariants, which is what makes the whole class non-recurring: an
 
 First draft of the research was `dev/reg_family_measure_effect.md` (superseded by the research documents below).
 
-###### Phase 22b-xiv-1 — The `family` × `measure` × `effect` framework inconsistencies and unreadability
+###### Phase 22b-xiv-1 — The `family` × `measure` × `effect` framework inconsistencies and unreadability research
 
 **DONE.** Delivered:`dev/reg_estimand_api_redesign.md`.
 
-###### Phase 22b-xiv-2 — 8.2 The `measure` ladders balance problem
+###### Phase 22b-xiv-2 — 8.2 The `measure` ladders balance problem research
 
 **DONE.** Delivered:`dev/color_ladders_balance.md`.
 
-###### Phase 22b-xiv-3 — 8.3 `at_reference` as a first-class way to compare ideal types ?
+###### Phase 22b-xiv-3 — 8.3 `at_reference` as a first-class way to compare ideal types research
 
 **DONE.** Delivered:`dev/reg_profiles_ideal_types.md`.
 
@@ -1660,23 +1669,46 @@ Both are one guard aborting with the reason (`reg_select_outcome()`, and the per
 
 **Two passages describing output that moved were fixed rather than left**: `reg_measures()` now prints which model would be fitted and which others could be, and its `not offered` rows carry a reason — the §1 prose says so; and §2's `measure` gloss became *"which kind of deviation you want **reported**"*, which is what sets up §4's rule.
 
+##### Phase 22b-xvi — The `measure` ladders balance problem
+
+Implement `dev/color_ladders_balance.md`.
+
+**DONE.** Suite **FAIL 0 | WARN 0 | SKIP 4 | PASS 9319** (9266 before; +53 from the tests added here). `devtools::document()` clean, **NAMESPACE unchanged**, two man pages with prose-only edits (byte-identical `\usage`, identical `\item{}` name sets). Six `_golden/*.rds`, five `_color_golden/*.rds` and both `_snaps` moved, each reviewed by LADDER rather than by table.
+
+**THE LADDERS WERE NOT BADLY CHOSEN — THEY WERE UNDECLARED.** Each was a literal vector with no statement of what quantity it grades, at what anchor, or by what shape, so the three written at different times had been transposed at different, unstated anchors (`odds_ratio` at a 50 % reference cell, `pct_ratio` at a 10 % one, neither recorded). `COLOR_SCALES` now declares four more facts per scale — **`quantity`** (points / sd / relative / log_odds / z / contrib), **`anchor`** (where the first rung comes from, in prose), **`sides`**, **`bg_keep`** — and `tx_check_color_scales()` asserts the shape at load, so a drifting default fails the install rather than a user's table. It lives beside the table, per `zzz-fact-keys.R`'s own rule (foreign keys there; a table's own self-consistency where its operands are in scope), and takes the table as an argument so a deliberately broken ladder is testable without unlocking the namespace.
+
+**The one idea, stated once and now checkable:** every ladder is the SAME ladder written in another measure at one reference cell of 50 %. 5 / 10 / 20 / 30 points is also 0.1 / 0.2 / 0.4 / 0.8 SD, ×1.1 / ×1.2 / ×1.5 / ×2 as a ratio and ×1.2 / ×1.5 / ×2 / ×4 as an odds ratio. Each scale then has exactly ONE free number — its first rung — and the rest is a shape rule (each rung ×1.5 to ×2.5 of the previous, in the scale's own metric). `odds_ratio`, `pct_diff`, `contrib`, `zscore`, `adj_diff` and `adj_diff_std` do not move at all, which is what makes this a statement of the existing design rather than a re-tuning.
+
+**What moved:** `pct_ratio` → over `1.1 / 1.2 / 1.5 / 2`, under `1.1 / 1.25 / 2 / 4`; `mean_ratio` → `1.1 / 1.2 / 1.5 / 2` mirrored; `mean_diff` → `0.1 / 0.2 / 0.4 / 0.8` SD (Cohen's 0.2 and 0.8 kept as rungs 2 and 4 — his 0.5 is off the grid, and three rungs left the second palette intensity permanently unused). The phase's motivating defect is measured gone: a marginal risk ratio on a common outcome went from **100 % grey to 66.7 % coloured**, and `tab(gss, race, c(age, tvhours), color = TRUE)` from 100 % grey to a full spread.
+
+**THE ASYMMETRY IS A RULE, NOT A TASTE: a multiplicative ladder mirrors unless the quantity it grades is BOUNDED ABOVE.** A percentage ratio is capped at `1/base`, so a cell reaches far below its reference and never far above it — measured over 120 crosstab cells, ×1.83 above against ÷4.39 below, and the ceiling explains it band by band. A mean ratio, a rate ratio and a ratio of two estimates have no ceiling. So `pct_ratio` (and `score_ratio`, and every regression risk-ratio column) is asymmetric while `mean_ratio` and `adj_ratio` mirror — one declared `sides` value each, checked at load, never a per-scale preference. ⚠ And no per-PRODUCER rule anywhere: a `tab()` cell and its `Obs_RR` twin are the same number, so they take the same ladder.
+
+**THE BACKGROUND IS A COARSER VOICE, and that is what fixes the reported over-firing.** `color = TRUE` on a percentage table puts `difference` on the text and `ratio` on the background, where the ratio's job is only to correct what the difference has to say — at u = 10 % on a 40 % base it merely restates a 4-point difference the text channel already grades. ⚠ It could NOT be a `color = TRUE`-only rule: `color = TRUE` and `color = c("difference", "ratio")` produce the identical stored `color` attribute, so the engine cannot tell them apart. It is a CHANNEL rule — `fmt_color_plan(x, channel, …)` already took `channel` and ignored it — declared as `bg_keep` (how many LOUD rungs survive there, with their own fills; the two ratio scales declare 2). Derived from the ladder in force, so `set_color_breaks()` moves both channels coherently. Both sides then enter at the same relative deviation (u > 50 %), where the shipped under side entered at 33 % against its over side's 50 %. Measured on the maintainer's two test tables: background coverage 27.6 → 22.8 % and 29.3 → 22.0 %, on small columns 41.3 → 32.9 %, and the under side's grey share 66 → 76 %. It also answers the teaching objection — 8 text shades + 8 background shades is too much for a first course, and this leaves **4** on the background. ⚠ The trim runs AFTER the `guaranteed_effect` transform, never before: trimming first would leave the prepended neutral as the background's own faintest rung, colouring every significant cell.
+
+**`guaranteed_effect` stopped doing arithmetic on the ladder.** It rescaled every scale so the first break sat at the neutral — subtract on an additive one, DIVIDE on a multiplicative one — which printed thresholds like `×1.3333` and made a shade mean something different under each policy. Measured on `relig`: by subtraction the policy coloured **43.7 %** of cells against `ignore`'s 9.5 %, with **36.5 % of the whole table on shade 1 alone**. The rule is now *prepend the neutral, drop the top rung* — no arithmetic, the length preserved so the slot vectors still align — so every printed threshold is a number the reader already knows from the same ladder under `ignore`. Coverage is identical (break 1 is the neutral either way, which is the policy's purpose: show everything solid in a small-n table), and the top rung is not lost but RECOVERED: a guaranteed effect is smaller than its estimate by construction, so the old top rung fired on almost nothing (deepest shade 0.8 → 2.4 % on `difference`, 4.8 → 9.5 % on `odds_ratio`). ⚠ **`zscore` keeps its own arm, and that is measured rather than argued**: under the rung shift its faintest shade is **exactly 0.0 %** of cells — its score is `-qnorm(p/2)`, so `|z| ≤ 1.96` is precisely a cell the policy has already gated out. `MEASURES$contrib$guar$break_origin = "threshold"` is now the ONLY exemption and `guaranteed_breaks()` has exactly two arms.
+
+**`color = "auto"` and `color = TRUE` are ONE spec, not two paths that agree.** They diverged in three ways, and one was a live defect: `finalize_color_spec()`'s rewrite guard skipped the string form, so `color = "auto"` **silently lost the background channel**. The scalar string becomes `TRUE` at the boundary, `resolve_col_measures()`'s two `"auto"` arms collapse into one `auto_col_measures()` helper, and a positional `c("auto", <bg>)` keeps its explicit background. Consequence, declared in the golden ledger: `tab_num()`'s own default was `"auto"`, so its numeric columns now stamp `color = "ratio"` — the declared automatic measure for a numeric column — where they stamped `"difference"`. That is the six `_golden/*.rds` that moved, on that one attribute and nothing else (`dev/verify_golden_field_delta.R`, 1788 cells).
+
+**A ratio prints two decimals** (`DISPLAY_TOKENS$ratio$min_digits` 1 → 2), like the odds ratio beside it. This reverses half of 22b-x deliberately: at one decimal three marginal effects spanning 16 percentage points collapse onto two glyph-identical strings, because a ratio's information sits in the digits AFTER the constant `1.`. `REG_CELL_DIGITS` is a separate fact and does not move.
+
+**Five defects fixed, three of them silent.** (1) **`set_color_breaks(get_color_breaks())` was not a round trip and one loss changed numbers**: `pct_ratio`'s slots went 2/3/4 → 1/3/4 and **`mean_diff$std` went TRUE → FALSE**, silently turning the Glass-Δ ladder into an absolute one — `get_color_breaks()` writes the `NA` slot-skips back and names `std` when it differs. (2) `mk_color_scale()` accepts its own canonical output, so `set_color_breaks(default_color_scales())` is a no-op too. (3) **Stamping the colour attribute MATERIALISED `wn`**: `finalize_color_spec()` used `mutate(across(where(is_fmt), …))`, which on a GROUPED tab answers per sub-table AND re-binds each column through `vec_cast()`, whose documented `wn` fixup fills the weighted count from `n` on an unweighted table — an attribute stamp must not move a field, so it walks the columns now, which is also 22b-ii's rule for the display writers. (4) `legend_threshold_phrase()` built the grey note from the over side's first break alone; it names both, in each side's own glyph, when they differ. (5) `EST_SCALES$log_coef` declares `break_key = "log_odds"` and `fmt_scale_of()` routes through `color_scale_resolve()`, deleting the one hard-coded `identical(key, "log_coef")` special case — the plot axis and the colour engine now read the derivation from the one declared place.
+
+**One test defect found and fixed**: `test-tab_reg-binomial.R` derived an odds-ratio column's threshold from the **`mean_ratio`** ladder. It only ever passed because the two shared a default; it reads the column's own `EST_SCALES$break_key` now.
+
+**Closed, not fixed** (the maintainer's call, recorded in the doc's §8): a numeric column's automatic measure stays `ratio`. A Glass Δ is standardized, so colouring by it would stop saying which columns hold the biggest deviations, and a standardized ladder does not match `pct_ratio`'s fixed thresholds — the two defaults measure different things rather than disagreeing by accident.
+
+**Verified.** `dev/verify_color_attrs.R` over 293 cases: 117 changed, and **every difference is a slot vector except eight** — `tab_num`'s `color` and `tab.auto_str.plain`'s `color_bg`, both declared above. `dev/verify_golden_field_delta.R` gained a **`CHANGED_ATTRS`** mode (an existing attribute whose value may move, with the rule that says where and to what), since it only knew how to declare an ADDED one. `dev/breaks_balance_probe.R` was rewritten to carry all four corpora and now reproduces every table of the design document — the three readings of one percentage cell, the two sides and the ceiling that separates them, the background channel, the mean corpus, six regression columns and the `guaranteed_effect` ladders; its stale `effect = "marginal", measure = "ratio"` calls were ported to the 22b-xv cascade. Documentation: `?set_color_breaks` / `?get_color_breaks` (the anchor, the two rules, "1 to 5" → 4, the 7-scale lists that returned 10), `?tabxplor-options`, both intro vignettes (one bullet naming the anchor), both programming vignettes (the "×2 rule" name is gone), and `dev/color_ladders_balance.md` updated in place — §4.1, §5.3, §5.5, a new §5.8 for the background, a new §6.3 for `guaranteed_effect`, §8 with each defect marked, and §10–§11 rewritten to what landed.
+
+**Open, recorded rather than pulled** (doc §11): the top over rung (×2 is never reached in `tab()`, so the deepest OVER shade is a `tab_reg()`-only shade there — lowering it to ×1.6 would make both sides reachable and would saturate strong tables); and the faintest break-word under `guaranteed_effect` still renders as `+0` / `×1` — true before this phase too, but an odd word in a legend a first-year student reads.
+
+##### Phase 22b-xvii — `at_reference` as a first-class way to compare ideal types
+
+Implement `dev/reg_profiles_ideal_types.md`.
+
 
 ---
 
 #### Phase 22c — tab manual review
-
- is the `tot = c("row", "col")` argument still needed at all, if the totals are always printed ? If it’s only soft-deprecation, would it be possible to put it in `...` with the other soft-deprecated arguments ? Also, document in roxygen and link where to find the soft-deprecated arguments documentation.
-
-Would it be easily possible to use the `tabxplor_fmt` class pillar abbreviations to carry informations about display tokens in console ?
-<!-- tibble print first rows, it’s the second one :
-row_var levels            `1-Democrat` `2-Independent, other` `3-Republican`                Total    tvhours
-<fct>   <fct>                   <row%>                 <row%>         <row%>               <row%>     <mean> 
--->
-- For example, a column with `display` to `"{base} ({n})"` in all rows, would print `"<row% (n)>"`, mirroring the display token, functioning as a kind of concise column legend ("row%" is just the display token "{pct}" resolve by it’s `pct_base`). A tab() Total column with "range", a very common and default case, should then print something like `"<row% (n_range)>"`. The size of the abbreviation would only grow for columns quite wide (with several display tokens), so it won’t be a waste of horizontal space. In case a secondary display token only have `NA`s, nothing prints, so its name should be dropped from the column pillar abbreviation.
-- If this line is really possible, useful, and cheap to compute at display/export time, I’m thinking about adding it in html exports too. But maybe only having the secondary display tokens integrated in the column headers for all exports would be good (then, pillar abbreviation would stay in console).
-
-
-
 
 
 
@@ -1710,7 +1742,18 @@ tab(gss_simple, rincome, party3, tab_vars = race, spread_vars = race,
 - `tab(gss_simple, rincome, party3, spread_vars = race, ...` should work (auto-adding race to `tab_vars` since it’s not passed anywhere before `spread_vars` ; with several `tab_vars` I’m not sure if it’s prepend or append to get the most useful totals calculated and the less voids in the table).
 - The main compact table use case should appear in the introduction vignette (binary factor + numeric col_var).
 
-##### Phase 22c-ii — naming the secondary display tokens
+ is the `tot = c("row", "col")` argument still needed at all, if the totals are always printed ? If it’s only soft-deprecation, would it be possible to put it in `...` with the other soft-deprecated arguments ? Also, document in roxygen and link where to find the soft-deprecated arguments documentation.
+
+
+##### Phase 22c-ii — naming the secondary display tokens, new display presets
+
+Would it be easily possible to use the `tabxplor_fmt` class pillar abbreviations to carry informations about display tokens in console ?
+<!-- tibble print first rows, it’s the second one :
+row_var levels            `1-Democrat` `2-Independent, other` `3-Republican`                Total    tvhours
+<fct>   <fct>                   <row%>                 <row%>         <row%>               <row%>     <mean> 
+-->
+- For example, a column with `display` to `"{base} ({n})"` in all rows, would print `"<row% (n)>"`, mirroring the display token, functioning as a kind of concise column legend ("row%" is just the display token "{pct}" resolve by it’s `pct_base`). A tab() Total column with "range", a very common and default case, should then print something like `"<row% (n_range)>"`. The size of the abbreviation would only grow for columns quite wide (with several display tokens), so it won’t be a waste of horizontal space. In case a secondary display token only have `NA`s, nothing prints, so its name should be dropped from the column pillar abbreviation.
+- If this line is really possible, useful, and cheap to compute at display/export time, I’m thinking about adding it in html exports too. But maybe only having the secondary display tokens integrated in the column headers for all exports would be good (then, pillar abbreviation would stay in console).
 
 A composite cell shows a secondary token in brackets — `100% (9 838)`, `1/1.63*** (31%)`, `{est} ({obs})` — and **nothing anywhere says what it is**. The primary token is named by the column header and by the legend; the aside is named nowhere, in any backend. 22b-i made this visible by dropping the `n=` cue from the Total cell (to save console width, and because a `Total (n=)` header would force backtick syntax in programming), and deliberately left the general problem here rather than adding a one-off header suffix.
 
@@ -1721,7 +1764,59 @@ Decide ONE rule and apply it to every secondary token, not just to the base coun
 
 ⚠ **And the Excel study that belongs with it**: Excel is the one backend that cannot show a composite cell as a composite, so it currently prints only the primary and the aside is LOST (`tab_xl()` writes the raw value plus a numFmt). Study giving every secondary display token its own **column** in Excel — as the base count already gets one — when the column carries the same secondary field on every row (or nearly). That is the same "is this token uniform down the column?" test as direction 1, which is why the two are one sub-phase.
 
-Read `R/tab-display.R`'s header (the display grammar) and `R/fmt_class.R`'s `parse_display_template()` / `format()` composite expander before planning: the primary-token rule, the bracket-group model and the per-template padding are what any naming rule has to respect.
+Also, the following `display` are good, please **create display presets** for then, and document.
+```r
+tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "drop_all", 
+   color = TRUE, color_signif = "grey_non_signif", ref = 1, display = "{base} ({ratio})"
+) # preset "base_ratio" (working for both pct and mean)
+tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "drop_all", 
+   color = TRUE, color_signif = "grey_non_signif", ref = 1, display = "{pct} ({or})"
+) # preset "pct_OR" (if something like that does not already exist)
+tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "drop_all", 
+   color = "OR", color_signif = "grey_non_signif", ref = 1, display = "{or} ({pct})"
+) # preset "OR_pct" (if something like that does not already exist)
+```
+- Also, accept "{OR}" as an alias for "{or}", and "OR" as an alias for "or" (otherwise it will confuse the user).
+- Defect found : here, the 100% Total column is colored ! Two problems, OR should not be calculated if 
+  it have no meaning (or do it have a meaning ?), and even if calculated it should print with no column 
+  like a 100% total column (it may be a ref problem ?) ?
+- Defect found : with OR display as the primary display token, like it’s already done with `display = "or"`,
+  there should be no 100% column (but only the n inside the Total column. How to do this reliably.
+  Same in other cases, like "{ratio} ({pct})" ; and here, `display = "ratio"` don’t do it yet (it keeps the 100%)
+
+##### Phase 22c-iii — `tab()` handling and display of numeric variables
+
+Now that we have a `shape` argument for numeric variables in `tab_reg`, used also for empirical counterparts, we could add it in `tab()` too. Would it be a good idea ? I would rather add it as `...` and document them in a subfunction with a link to it in the roxygen (not to clutter `?tab` even more). If the function used need to be merged or wrapped into a new exported function, let’s think about what its API should be to be user-friendly and consistent with the framework. 
+- quantiles and "sd_bands", and all transformations that creates a factor (it should be an ordered factor), should work for all variables selectors, `col_vars` but also `row_vars` and `tab_vars` (user-friendly and readable levels names should be designed ; the variable name should be repeated in the first level, since in some tables the row variable name is not printed elsewhere when the first text columns are stripped, but not in the next levels to avoid duplication ; it should indicate both the cut interval and the SD / mean bounds). The default for numeric variables passed as `row_vars` or `tab_vars` should be `"sd_bands"`, which is a much better default than the current 1.3.1 "transform all values into a factor level" (giving a table with hundreds of near-empty rows ; nobody used that as a feature, so the default behaviour change is not a deprecation problem). Can you see caveats, and real-world situation when it would actually not be user-friendly ?
+- transformations that keep a numeric (quadratic, sqrt, log, etc.) should only work for `col_vars`. The default for `col_vars` should stay the current one (no transformation).
+- all transformations must be done in a data.table efficient way, with no duplications, not to hinder performances.
+
+numeric col_vars default display ?
+`tab(gss_simple, c(race, rincome, relig), c(age, tvhours), color = TRUE)`
+- I’m tired of seeing the numeric col_vars sigma sd, as pure uninterpretable noise in every "mean" column :
+I want to keep it as a display option "mean_sd" or a display token "{sd}" (computing it from `var` field at render), 
+and change the default for numeric col_vars to a coefficient of variation sd/mean
+(computed from `var` and `mean` at render), with display preset "mean_cv" and display token "{cv}", formatted as a % with no decimals
+Something like: "49 (cv 35%)". The "mean" or "{mean}" `display` should both print the bare mean (without sd or cv).
+According to literature (make web searches) : would it be more useful as a default display, is it robust, is it readable ? ;
+ Would there be another, more useful and modern default display for numeric col_vars ? Is there a symbol usable instead of "cv"?
+- In this case the "mean (sd)" column headers on exporters should be changed to "mean", since "mean (cv)" would be useless because it wouldrepeat the acronym already on each cell.
+
+`ordered` class for rincome still causes problems in tab, but only when I added a numeric col_vars `tvhours` and `na = "drop_all"` !: please fix everywhere and add a test.
+`tab(gss_simple, c(race, rincome, relig), c(party3, marital, tvhours), pct = "row", na = "drop_all", color = TRUE, color_signif = "grey_non_signif", ref = 1)`
+Error:
+! Build failed on "rincome".
+Caused by error in `dplyr::full_join()`:
+! Can't join `x$rincome` with `y$rincome` due to incompatible types.
+ℹ `x$rincome` is a <ordered<f0104>>.
+ℹ `y$rincome` is a <ordered<63988>>.
+
+
+##### Phase 22c-iv — tooltips consistency and display presets
+
+Study and implement the main corrections proposed by `dev/tooltip_consistency_review.md`.
+
+
 
 #### Phase 22d — Black and white publication print manual review
 
