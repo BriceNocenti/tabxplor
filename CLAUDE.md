@@ -1548,21 +1548,38 @@ Then the §9.3 invariants, which is what makes the whole class non-recurring: an
 
 **Reported, not fixed**: a flat `svydesign(ids = ~1)` and a `wt =` table still give a crude column a different interval, because the flat design passes `svy_degf(design)` into the closed form where `wt =` passes `Inf`. Pre-existing (the `degf` argument has always been `design_spec$degf %||% Inf`), unrelated to this phase, and arguably right either way — but the two paths are meant to tell the same story, so it is a real inconsistency for whoever next touches the basis ladder.
 
-##### Phase 22b-xiv — improving the consistency and usefulness of regression API and `measure` scales
+##### Phase 22b-xiv — improving the consistency and usefulness of regression API and `measure` scales: research
 
-**Read `dev/reg_family_measure_effect.md` before planning for additional details about each phase and maintainer’s reflexions about open questions.**.
+First draft of the research was `dev/reg_family_measure_effect.md` (superseded by the research documents below).
 
 ###### Phase 22b-xiv-1 — The `family` × `measure` × `effect` framework inconsistencies and unreadability
 
-⚠ **Read `dev/reg_estimand_api_redesign.md` before planning** — the design study for this sub-phase. Its §1 holds the key the whole redesign rests on (a *measure* names a **link**; `effect` says whether the model is fitted on it or it is applied to its predictions), §3 the derivation that replaces the 43 hand-written `REG_ESTIMANDS` rows, §4 the `effect = "auto"` study, §5 the `link =` study, §6 the marginal-odds-ratio evidence, §10 the blast radius, §11 where each decision stands. ⚠ §10.2 is an **ordering constraint**: the new prediction defaults make a marginal risk ratio the binomial default, which renders entirely grey against the shipped ladder — so 22b-xiv-2 lands first, or both land together.
+**DONE.** Delivered:`dev/reg_estimand_api_redesign.md`.
 
 ###### Phase 22b-xiv-2 — 8.2 The `measure` ladders balance problem
 
+**DONE.** Delivered:`dev/color_ladders_balance.md`.
+
 ###### Phase 22b-xiv-3 — 8.3 `at_reference` as a first-class way to compare ideal types ?
 
+**DONE.** Delivered:`dev/reg_profiles_ideal_types.md`.
 
 
 
+##### Phase 22b-xv — the regression estimand API: one cascade, one derivation
+
+⚠ **`dev/reg_estimand_api_redesign.md` is the reference document — read it before planning either sub-phase.** Its Part I is the design (the idea, the argument surface, the architecture), Part II §8 the roadmap these two sub-phases come from, Part III the studies, the measurements and the blast radius. Every open question of 22b-xiv-1 is decided there (§7's register).
+
+**The design in three lines.** A **link is a measure** — the one the model estimates directly — so `link` takes `measure`'s own words and the statistician's vocabulary never surfaces. The surface becomes a cascade, `family` → `link` → `measure` → `effect`, where **`"auto"` means "follow from the left"**. `REG_ESTIMANDS`' 43 hand-written rows become a generator over four declared facts per family, three refusal mechanisms are deleted, and `link` is the only argument added.
+
+⚠ **The default `tab_reg()` call is byte-identical**, so nothing lands on a golden. What does move: `measure = "ratio"` / `"difference"` stop refitting and become marginal, `effect = "marginal"` reports the model's own measure averaged, and `effect`'s first value is renamed `"coefficient"` → `"conditional"`. Two orderings bind: the ladder stays uncoloured for one phase (accepted — 22b-xiv-2 fixes it), and jamovi's `prepare()` is batched at 22g.
+
+###### Phase 22b-xv-1 — the estimand engine and the argument cascade
+
+###### Phase 22b-xv-2 — teaching the cascade
+
+
+---
 
 #### Phase 22c — tab manual review
 
