@@ -184,7 +184,7 @@ Rather than memorise the grid, ask:
 reg_measures(arrests, "released")
 ```
 
-The `status` column is the useful one. **available** means the call will build it. **not offered** means tabxplor does not produce that combination. **not defined** means the quantity is not a thing for this kind of outcome at all — try it on `checks` and you will be told that an odds ratio needs a probability to take the odds of, and a quantity has none.
+Two things are printed. The lines above the table say **which model would be fitted** — here a logistic one, which works in odds ratios — and which others could be. The table then lists what that model can report, and the `status` column is the useful one: **available** means the call will build it, **not offered** means this model has no such coefficient (the `note` column says so, and Section 4 explains the cure), and **not defined** means the quantity is not a thing for this kind of outcome at all — try it on `checks` and you will be told that an odds ratio needs a probability to take the odds of, and a quantity has none.
 
 # 2. Turn a percentage into a comparison
 
@@ -207,7 +207,7 @@ Read the last three columns. From 86 % and 74 %, one gets:
 - a **ratio** of **&divide;1.2** — black arrestees were released 1.2 times *less* often;
 - an **odds ratio** of **1/2.11** — a little over twice, on the odds scale.
 
-**In `tab_reg()` this choice has a name — `measure` — and it is worth reading it in full, as the *measure of deviation*.** Not an abstract "scale", and not a unit either: it asks **which kind of deviation you want** — subtract, divide, or divide the odds.
+**In `tab_reg()` this choice has a name — `measure` — and it is worth reading it in full, as the *measure of deviation*.** Not an abstract "scale", and not a unit either: it asks **which kind of deviation you want reported** — subtract, divide, or divide the odds. It is the one argument of the four you will regularly set, and Section 4 is where it does its work.
 
 **These are not three sizes of deviation. They are three different measures of the same one.** And notice how differently they read: the odds ratio makes the gap sound roughly twice as large as the ratio does. That is not a distortion — an odds ratio is a ratio of *odds* (86 to 14, against 74 to 26), not of percentages — but it is the single most common misreading in the social sciences, and it is worth being blunt about it now: **an odds ratio of 2 does not mean "twice as likely"**. Carina Mood's 2010 paper in the *European Sociological Review* is the standard warning in sociology, and Section 5 below shows you a case where the odds ratio moves a lot and the percentages barely move at all.
 
@@ -318,6 +318,8 @@ And the sentence, at last:
 
 Note what the adjusted percentages let you say that the odds ratio does not. `1/1.48` is a number; *84 % against 79 %* is a fact about people.
 
+**And the small block sitting below every table?** That is the model's own report card — how many people it was fitted on, how much of the outcome it accounts for, and a few checks on whether it behaved (whether one respondent is carrying the result, whether two predictors are measuring the same thing). This article never uses it, because its question is what adjustment *did*, not whether the model is a good one. Both matter, and `vignette("tabxplor-reg")` explains every row of it. The one line worth reading here is the first, **N** — it tells you how many people the whole table rests on.
+
 ## The five things adjustment can do
 
 Students arrive expecting adjustment to shrink effects, and it very often does. But there are five outcomes, all of them common, and a reader who knows only one of them will misread the other four. Each row below is a real result from this article:
@@ -336,11 +338,11 @@ Every row is in **percentage points**, and that is deliberate: Section 5 shows w
 
 **It shrinks.** The race gap in Toronto loses more than half its size. Part of what looked like a race effect was employment, citizenship and prior record — and part of it was not.
 
-**It vanishes.** Women were released slightly more often than men (86 % against 83 %, just significant). Among comparable people, nothing at all — the table below is in percentage points, which is what `effect = "marginal"` asks for (Section 4 explains the word):
+**It vanishes.** Women were released slightly more often than men (86 % against 83 %, just significant). Among comparable people, nothing at all — the table below is in percentage points, which is what `measure = "difference"` asks for. (The `m` that appears in the column header says the model worked the effect out person by person and averaged it; Section 4 explains.)
 
 ```{r}
 tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
-        effect = "marginal", empirical = TRUE)
+        measure = "difference", empirical = TRUE)
 ```
 
 The `sex` row goes from `-3.1 %*` to `+0.1 %`. Read that carefully, because it is the most common place to over-claim: this does not say men and women were treated the same. It says the small observed difference is what you would expect from the fact that the men and women in this file differ in employment, citizenship and record — so there is nothing left for sex to explain.
@@ -356,7 +358,7 @@ tab_reg(arrests, "released",
         list("race alone"     = "colour",
              "+ who they are" = c("colour", "sex", "citizen", "employed"),
              "+ prior record" = c("colour", "sex", "citizen", "employed", "checks")),
-        effect = "marginal", stats = "compare_sequential")
+        measure = "difference", stats = "compare_sequential")
 ```
 
 Read the `colour` row across: **&minus;11.7 points &rarr; &minus;7.8 &rarr; &minus;5.2**. Employment and citizenship account for about a third of the gap; prior record accounts for another quarter; and about **five points survive everything in the file**.
@@ -369,7 +371,7 @@ On a wide table, comparing two columns cell by cell is tiring. `color = "adjustm
 
 ```{r}
 tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
-        effect = "marginal", measure = "ratio", empirical = TRUE,
+        measure = "ratio", empirical = TRUE,
         color = c(TRUE, "adjustment"), color_signif = "grey_non_signif")
 ```
 
@@ -383,11 +385,44 @@ Here is the problem with everything above. Try saying `1/1.48` out loud to someb
 
 An odds ratio is a fine thing for a model to produce and a poor thing for a person to read. It is not "how many times as likely"; it is a ratio of odds, and it exaggerates — the more common the outcome, the worse. With 83 % of people released, the outcome here is very common indeed.
 
-So the last step of the round trip is to come **back down** to a quantity you could put in a sentence. This costs nothing: it is the *same model*, fitted once, read four ways. Changing what you read never changes what was estimated.
+So the last step of the round trip is to come **back down** to a quantity you could put in a sentence. This costs nothing: it is the *same model*, fitted once, read several ways.
+
+## One knob, and one rule
+
+`tab_reg()` asks four questions, and they chain: each one follows from the one before unless you say otherwise. Written out, that is the whole argument surface.
+
+| argument  | the question it answers                        | in practice                          |
+|:----------|:-----------------------------------------------|:-------------------------------------|
+| `family`  | what kind of number is the outcome?            | detected for a factor; **yours to pick** for a number (Section 1) |
+| `link`    | which kind of deviation does the **model** work in? | leave it alone — see the end of this section |
+| `measure` | which kind of deviation do you want **reported**?   | **this is the one you set**          |
+| `effect`  | where is that number taken from?               | leave it alone, except for an ideal type |
+
+And one rule ties `measure` to everything else:
+
+> **If the measure you ask for is the one the model already works in, you read the model's own coefficient. If it is not, the model works your measure out from its predictions — for every person in the file — and averages them.**
+
+That is the round trip, in one sentence, and it is why the second route lands back on the scale your percentages live on. It is also why the column headers change: an unmarked `Model_OR` is a coefficient, and the little **`m`** in `Model_mRD` says *this was worked out and averaged*.
+
+**That second operation has a name, and it is worth learning now because it is what you will mostly be doing.** Working an effect out for every person and averaging is what statisticians call a **marginal** effect — the `m` of the header. Since `measure` left alone gives you the model's own coefficient, *every other measure you ask for is a marginal effect*. You have already read several without being told: every table in Section 3 that showed percentage points or risk ratios was one.
+
+**And "marginal" does not mean *slight*.** It is the same *margin* as the **margins of a cross-table** — the Total row you have been reading since the first page. A total is what you get when you stop splitting people into groups and look at everybody at once, and that is exactly the operation: work the effect out for each respondent, at their own combination of characteristics, then average, the way a Total row averages over the rows above it.
+
+⚠ **What it does *not* mean is "unadjusted".** The Total row of a cross-table is both marginal and unadjusted, which makes the trap an easy one. A marginal effect is still fully adjusted: every one of those per-person figures is computed with the other predictors held at that person's own values. What is averaged away is not the adjustment — it is the fact that the effect is a different size for different people.
+
+**And you never have to remember which you asked for, because the table says so — in three places.**
+
+| where to look             | you are reading a coefficient            | you are reading a marginal effect     |
+|:--------------------------|:-----------------------------------------|:--------------------------------------|
+| the column header         | `Model_OR` — no marker                   | `Model_mRR` — the **`m`**             |
+| the **Constant** row      | *Reference profile*                      | *Population average*                  |
+| the footer's `Model:` line | "odds ratio (vs the reference category)" | "…sample-averaged"                    |
+
+The Constant row is the quickest of the three, and it is not decoration: a coefficient is measured *from* a starting point, so the table shows you that point — one level of every predictor. A marginal effect is averaged over everybody, so there is no starting point to show, and the row gives the population's own figure instead. The two labels are the two halves of the rule, printed. (A fourth check, `reg_formulas()`, tells you which model was *fitted* rather than what was reported; it appears at the end of this section, where that finally differs.)
 
 ## One model, four readings
 
-**The odds ratio** — the default, comparable with the published literature, hard to say aloud.
+**The odds ratio** — the default, because a logistic model works in odds ratios. Comparable with the published literature, hard to say aloud.
 
 ```{r}
 tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
@@ -396,42 +431,20 @@ tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks")
 
 > Black arrestees had **1/1.48** the odds of release of white arrestees, all else equal.
 
-**The argument that does this is `effect`, and the clearest way to read it is as a question about *where the number comes from*.** Every family has one measure it produces by itself — an odds ratio for a logistic model, a mean difference for a linear one, a rate ratio for a count. Call it the **family's own measure**: the one its arithmetic hands you without being asked twice. `effect` decides whether you take that, or something worked out from it.
-
-| `effect`         | where the number comes from                                                | so it describes&hellip;                       |
-|:-----------------|:----------------------------------------------------------------------------|:-----------------------------------------------|
-| `"coefficient"`  | the model's own coefficients — the deviation is what the model fits          | anybody — it assumes one answer fits everyone  |
-| `"marginal"`     | worked out from the model's predictions, for every real person, then averaged | the people you actually surveyed               |
-| `"at_reference"` | worked out the same way, at one **ideal-typical** profile                    | that profile — a figure you built on purpose   |
-
-So the three arguments are three questions, asked in this order: **`family`** — what kind of number is your outcome? **`measure`** — which kind of deviation do you want? **`effect`** — should the model fit that deviation directly, or work it out from the family's own measure?
-
-That order is not the order they appear in the help page, and it is deliberate. `measure` is a question about *what you want to know*, and Section 2 answered it with no model at all. `effect` is a question about *how to get it*, and it cannot be asked until there is a model to get it from.
-
-The two do meet in one place, worth knowing rather than discovering: on the `"coefficient"` row the measure **is** the coefficient, so asking there for something other than the family's own measure changes the model that is fitted. At `"marginal"` and `"at_reference"` the model is always the family's own, and only the last step differs. `vignette("tabxplor-reg")` sets out which combinations do what.
-
-**And a word on `"at_reference"`, because "reference profile" undersells it.** That profile is not an average and not an accident: it is a **figure you construct**, one level of every predictor, chosen because it is worth thinking about. Sociologists have a name for that move — Weber's **ideal type**: a deliberate simplification, built to think with rather than to describe anyone in particular. `ref` is what builds it, so *the young male senior manager* and *the older woman in an unskilled job* are both one argument away, and the model will tell you what it expects of each. Section 2's warning applies with full force, though: an ideal type is built, not found, so check how many people it actually fits before you let it speak for them.
-
-**And a word on "marginal", because the word puts people off.** It does not mean *slight*, and it has nothing to do with being marginal in importance. It is the same *margin* as the **margins of a cross-table** — the Total row you have been reading since the first page. A total is what you get when you stop splitting people into groups and look at everybody at once, and that is the operation here: the model works the effect out for each respondent, at their own combination of characteristics, and then averages, the way a Total row averages over the rows above it.
-
-⚠ **One thing "marginal" does *not* mean is "unadjusted".** The Total row of a cross-table is both marginal and unadjusted, which makes the trap an easy one to fall into. A marginal effect is still fully adjusted: every one of those per-person figures is computed with the other predictors held at that person's own values. What is averaged away is not the adjustment — it is the fact that the effect is a different size for different people.
-
-**And that is why the round trip closes here, and not anywhere else.** Going out, we left the percentages behind and climbed onto the odds scale, which is where the model does its work; that step was necessary and it made the numbers abstract. Averaging back over real people is the step that brings us down again: it lands on the very scale the counted percentages live on, which is what lets the modelled figure and the observed one sit in the same row and be compared at all. `at_reference` does not do that — it lands on a single profile, and Section 2 showed you one that fitted seven people.
-
-**The risk ratio** — `effect = "marginal", measure = "ratio"`. Now it *is* "how many times as likely".
+**The risk ratio** — `measure = "ratio"`. Not the model's own measure, so it is worked out and averaged, and the header says so: `Model_mRR`. Now it *is* "how many times as likely".
 
 ```{r}
 tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
-        effect = "marginal", measure = "ratio", empirical = TRUE)
+        measure = "ratio", empirical = TRUE)
 ```
 
 > Comparing people alike in sex, employment, citizenship and record, black arrestees were about **1.1 times less likely** to be released.
 
-**The difference in percentage points** — `effect = "marginal"`. Usually the most useful of all, because points are the unit people already think in.
+**The difference in percentage points** — `measure = "difference"`. Usually the most useful of all, because points are the unit people already think in.
 
 ```{r}
 tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
-        effect = "marginal", empirical = TRUE)
+        measure = "difference", empirical = TRUE)
 ```
 
 > Comparing people alike in sex, employment, citizenship and record, black arrestees were released **5.2 percentage points less often**.
@@ -451,14 +464,48 @@ That last sentence is worth dwelling on, because it is what an adjusted percenta
 
 ## Which one to report
 
-| you want to                   | ask for                                  | you can then write      |
-|:------------------------------|:-----------------------------------------|:------------------------|
-| compare with published models | the default                              | "odds ratio 1.48"       |
-| say "times more likely"       | `effect = "marginal", measure = "ratio"` | "1.1 times less likely" |
-| say "how many points"         | `effect = "marginal"`                    | "5.2 points less often" |
-| show the percentages          | `display = "base"`                       | "84 % against 79 %"     |
+| you want to                   | ask for                  | you can then write      |
+|:------------------------------|:-------------------------|:------------------------|
+| compare with published models | the default              | "odds ratio 1.48"       |
+| say "times more likely"       | `measure = "ratio"`      | "1.1 times less likely" |
+| say "how many points"         | `measure = "difference"` | "5.2 points less often" |
+| show the percentages          | `display = "base"`       | "84 % against 79 %"     |
 
 If you report one number, report the **percentage points**: it is the one your reader can check against the observed percentages sitting in the same table. If you report two, add the odds ratio for the specialists.
+
+## For whom? — `effect`, and the ideal type
+
+`measure` says *which* deviation; `effect` says **whose**. You will rarely set it, because the rule above already picks well — the model's own coefficient when you ask for its own measure, a marginal effect when you ask for another. What it is for is the third possibility.
+
+| `effect`         | the number describes&hellip;                   |
+|:-----------------|:------------------------------------------------|
+| `"conditional"`  | anybody — the model assumes one answer fits all  |
+| `"marginal"`     | the people you actually surveyed, averaged       |
+| `"at_reference"` | one **ideal-typical** profile, built on purpose  |
+
+**The third row is the one to reach for, and "reference profile" undersells it.** That profile is not an average and not an accident: it is a **figure you construct**, one level of every predictor, chosen because it is worth thinking about. Sociologists have a name for that move — Weber's **ideal type**: a deliberate simplification, built to think with rather than to describe anyone in particular. `ref` is what builds it, so *the young male senior manager* and *the older woman in an unskilled job* are both one argument away, and the model will tell you what it expects of each. Section 2's warning applies with full force, though: an ideal type is built, not found, so check how many people it actually fits before you let it speak for them.
+
+## The expert knob: `link`, and the two risk ratios
+
+Everything above changed what was **reported**, never what was **fitted**. One argument changes the model itself, and it is the one you will most likely never touch: `link` says which kind of deviation the model *works in*.
+
+It matters exactly once, and it is worth seeing because both spellings are called a risk ratio:
+
+```{r}
+tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+        link = "ratio", empirical = TRUE)
+```
+
+`Model_RR` — unmarked, so a coefficient. This is the **modified Poisson** model epidemiologists use, which works in risk ratios directly. Compare it with the `Model_mRR` above, and you will find they nearly agree here (`0.930` against `0.938` for the `colour` row). What differs is the claim each makes, and which model ran:
+
+```{r}
+reg_formulas(tab_reg(arrests, "released", c("colour", "checks"), measure = "ratio"))
+reg_formulas(tab_reg(arrests, "released", c("colour", "checks"), link    = "ratio"))
+```
+
+The `fit` column is the answer: `binomial` for the first — the ordinary logistic model, with the ratio worked out from its predictions — and `rr` for the second, a different model altogether.
+
+**Which to use.** Prefer **`measure = "ratio"`**, the marginal one, in almost every case: the logistic model always converges, can never predict a probability above 100 %, and the number it gives describes the people you surveyed. Reach for **`link = "ratio"`** when you need the *conditional* risk ratio — the one that assumes the same ratio holds for everybody, which is what a reader coming from epidemiology will expect, and what you must use to line up with a published modified-Poisson estimate. The full grid of what each family can fit and report is in `vignette("tabxplor-reg")`.
 
 **A note on `display` and `set_display()`.** Named layouts (`"est_ci"`, `"est_base"`, `"base"`, `"base_ci"`) and `{}` templates both work in `display =`, and `set_display()` applies the same thing to a finished table. Two of the tokens — `{obs}`, the observed effect, and `{gap}`, its distance from the modelled one — are only filled in *after* the columns are built, so reach them with `set_display()` on the finished table rather than with `display =` in the call:
 
@@ -478,7 +525,7 @@ The adjusted number depends entirely on which variables you listed. Not a little
 tab_reg(arrests, "released",
         list("with prior record"    = c("colour", "employed", "citizen", "checks"),
              "without prior record" = c("colour", "employed", "citizen")),
-        effect = "marginal")
+        measure = "difference")
 ```
 
 The same race gap is **&minus;5.2 points** in one column and **&minus;7.9** in the other. Both are "all else equal". They differ by half again, and the only difference is one variable.
@@ -550,7 +597,7 @@ tab(ucb, Gender, Admit, pct = "row", color = "difference", color_signif = "grey_
 **45 % of men were admitted against 30 % of women** — a gap of fourteen points, on 4 526 applications. Now hold the department equal:
 
 ```{r}
-tab_reg(ucb, "Admit", c("Gender", "Dept"), effect = "marginal", empirical = TRUE)
+tab_reg(ucb, "Admit", c("Gender", "Dept"), measure = "difference", empirical = TRUE)
 ```
 
 **&minus;14.2 points becomes +1.9**, and no longer significant. Not reduced — **reversed in sign**. And the mechanism is entirely visible in a cross-table, which is the point:
@@ -590,7 +637,7 @@ From the odds ratio itself. **An odds ratio moves when you add any strong predic
 The way to check is to ask the same question with a measure of deviation that does not have the problem:
 
 ```{r}
-tab_reg(hdv, "cinema", c("qualif", "age"), effect = "marginal", empirical = TRUE)
+tab_reg(hdv, "cinema", c("qualif", "age"), measure = "difference", empirical = TRUE)
 ```
 
 | unskilled workers vs senior managers |    crude |  adjusted |       moved by |
@@ -601,7 +648,7 @@ tab_reg(hdv, "cinema", c("qualif", "age"), effect = "marginal", empirical = TRUE
 
 On the two measures that behave, the class gap **barely moves at all** — the honest finding, and a much duller one: age explains essentially none of the cultural gap between classes. All the drama on the first line was the odds ratio rescaling itself.
 
-**This is why tabxplor colours the movement on an odds-ratio column but refuses to test it**, and says so in the table's own legend. If reading the adjustment is the point of your table — and in this article it always is — work with a measure of deviation where the movement means what you think it means: `effect = "marginal"` for points, `measure = "ratio"` for risk ratios. The odds ratio is for reporting alongside a literature that uses it.
+**This is why tabxplor colours the movement on an odds-ratio column but refuses to test it**, and says so in the table's own legend. If reading the adjustment is the point of your table — and in this article it always is — work with a measure of deviation where the movement means what you think it means: `measure = "difference"` for points, `measure = "ratio"` for risk ratios. The odds ratio is for reporting alongside a literature that uses it.
 
 ## Not every row deserves the same reading
 
@@ -621,7 +668,7 @@ Epidemiologists call this the **Table 2 fallacy**, after the table in a paper wh
 
 # Where to go next
 
-- `vignette("tabxplor-reg")` — the reference: every family, the full grid of what each family, measure and effect combination builds, weighted and survey data, interactions, model checks, forest plots.
+- `vignette("tabxplor-reg")` — the reference: every family, the full grid of what each family, link, measure and effect combination builds, weighted and survey data, interactions, model checks, forest plots.
 - `vignette("tabxplor")` — cross-tables, colours, and the confidence intervals used above.
 - `reg_measures(data, outcome)` lists what a given outcome can be asked; `reg_formulas(model)` shows the formulas that were actually fitted; `tab_columns(model)` says what each column estimates and how its interval was built.
 - `?tab_reg` documents every argument, grouped by purpose.
