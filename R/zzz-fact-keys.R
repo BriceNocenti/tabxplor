@@ -195,6 +195,9 @@ TAB_FOREIGN_KEYS <- list(
         function() names(DISPLAY_TOKENS)),
   tx_fk("DISPLAY_PRESETS$alias", function() unname(DISPLAY_PRESET_ALIASES),
         function() names(DISPLAY_PRESETS)),
+  # every hover LINE renders a declared token, so a tooltip cannot name one that went away
+  tx_fk("TOOLTIP_LINES$token",     function() tx_fk_scalar(TOOLTIP_LINES, "token"),
+        function() names(DISPLAY_TOKENS)),
 
   # --- into fmt_field_names (the record) -----------------------------------------------------
   tx_fk("DISPLAY_TOKENS$field",    function() tx_fk_scalar(DISPLAY_TOKENS, "field"),

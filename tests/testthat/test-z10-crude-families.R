@@ -130,7 +130,7 @@ test_that("the in-cell fold does not duplicate itself in the html tooltip", {
   d <- z10_data()
   t <- suppressMessages(tab_reg(d, "party3", "race", family = "multinomial", empirical = TRUE,
                                 cleannames = FALSE))
-  tips <- tabxplor:::tab_kable_print_tooltip(t[[reg_fmt_cols(t)[[1]]]])
+  tips <- tabxplor:::tab_tooltip_text(t[[reg_fmt_cols(t)[[1]]]])
   expect_false(any(grepl("obs:", tips, fixed = TRUE)))     # already in the cell
 })
 

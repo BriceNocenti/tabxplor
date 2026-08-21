@@ -67,7 +67,7 @@ tab_tooltip_attrs <- function(text, popover = FALSE, escape = FALSE) {
 }
 
 # Phase 14v: append the multinomial crude-companion tooltip fragment to a per-column tooltip vector `tp`
-# (from tab_kable_print_tooltip). The values are NOT in an fmt field -- so the shared per-column tooltip
+# (from tab_tooltip_text). The values are NOT in an fmt field -- so the shared per-column tooltip
 # builder never sees them and tab()/other reg tooltips are untouched. prep_one_table() resolved them to
 # rd$empirical_tips[[col_name]] (a per-row char vector, or NULL); a plain crosstab has none -> `tp`
 # returned unchanged.
@@ -314,6 +314,9 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   #   text_slot > 0        -> .p1-.p4 / .m1-.m4      bg_slot > 0 -> .o1-.o4 / .u1-.u4
   #   ref_alltot, slot 0   -> no class: `theme_cols$text` IS the table's colour, so it inherits
   #   otherwise            -> .g1 (column has a colour measure) / .g2 (it has none)
+  # the counts a base-count column already prints on each row: the tooltip does not repeat them.
+  base_n <- if (tooltips && !isTRUE(rd$transposed)) tab_base_n_values(tab) else NULL
+
   td_html <- purrr::imap(cells, function(cell, name) {
     a   <- ann[[name]]
     cls <- rep("", n_row)      # the <td>'s classes: text slot / grey / bold
@@ -346,9 +349,10 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     # run, so tx_transpose_render() pre-built and flipped the tooltips (kable backend only).
     tp <- if (isTRUE(rd$transposed)) rd$tooltips[[name]]
           else if (tooltips && is_fmt(tab[[name]]))
-            tab_kable_print_tooltip(tab[[name]], .ref = if (is.null(a)) NULL else a$ref_cells,
-                                    .note = if (fmt_display_shows(get_display(tab[[name]]), "n_range")[[1]])
-                                      tab_base_notes(tab, name))
+            tab_tooltip_text(tab[[name]], .ref = if (is.null(a)) NULL else a$ref_cells,
+                             .note = if (fmt_display_shows(get_display(tab[[name]]), "n_range")[[1]])
+                               tab_base_notes(tab, name),
+                             .base_n = base_n)
           else NULL
     # Phase 14v: append the multinomial crude-companion fragment (no-op on a crosstab / non-reg table)
     if (tooltips && !is.null(tp) && !isTRUE(rd$transposed)) tp <- reg_append_empirical_tip(tp, rd, name)

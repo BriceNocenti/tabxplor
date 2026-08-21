@@ -95,7 +95,7 @@ testthat::test_that("html bolds only the primary field of a composite bold cell"
 
 testthat::test_that("kable tooltip shows the ratio field (not OR) under a 'ratio:' label", {
   t <- tab(forcats::gss_cat, marital, race, pct = "row", color = c("diff", "ratio"))
-  tt <- tab_kable_print_tooltip(t[[2]])
+  tt <- tabxplor:::tab_tooltip_text(t[[2]])
   testthat::expect_true(any(grepl("ratio:", tt, fixed = TRUE)))
   testthat::expect_false(any(grepl("rr:", tt, fixed = TRUE)))
   # the ratio value is present (x or div sign), not an empty field.

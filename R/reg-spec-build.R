@@ -262,17 +262,16 @@ reg_spec_tips_mnl <- function(sp, e, cols, ctx) {
     keep <- is_fac_t & !is.na(mi2) & !is.na(tipsd$emp_prop[mi2])
     if (!any(keep)) return(NULL)
     j  <- mi2[keep]
-    pr <- tipsd$emp_prop[j]; df <- tipsd$emp_diff[j]
+    pr <- tipsd$emp_prop[j]
     tibble::tibble(
       # ⚠ the column is named, not numbered: step 6b below may prepend a crude column, which would
       # shift any index taken here (reg_stage_tips() resolves it through `product_labels`).
       col_label = b$label, row = which(keep),
       var   = as.character(skeleton$var[keep]),
-      tip   = ifelse(skeleton$is_ref[keep],
-                     sprintf("crude: %.0f%% [%.0f; %.0f]",
-                             pr * 100, tipsd$emp_prop_inf[j] * 100, tipsd$emp_prop_sup[j] * 100),
-                     sprintf("crude: %.0f%% (%+.0f pts [%+.0f; %+.0f])",
-                             pr * 100, df * 100, tipsd$emp_diff_inf[j] * 100, tipsd$emp_diff_sup[j] * 100)))
+      # THE OBSERVED LEVEL AND ITS INTERVAL, and nothing else: the cell already folds in the crude
+      # odds ratio (22a-ii), so the risk difference this line used to add was a third estimand
+      # contradicting the one beside it. Rendered as an ordinary fmt cell.
+      tip   = tip_crude_level(pr, tipsd$emp_prop_inf[j], tipsd$emp_prop_sup[j]))
   }))
   if (length(out) == 0L) return(NULL)
   structure(purrr::list_rbind(out), degrade = isTRUE(attr(tipsd, "degrade")))
@@ -325,12 +324,13 @@ reg_spec_tips_num <- function(sp, positive_level, own, ctx) {
     m1 <- if (reg_fam_binary(sp$fit_family) && length(unique(stats::na.omit(yb))) == 2L)
       c(wtd_mean(x[yb == 1], w[yb == 1]), wtd_mean(x[yb == 0], w[yb == 0]))
     else c(NA_real_, NA_real_)
+    # the tags are the hover's own (`mean`, `sd`), so this descriptive reads like every other line.
     by <- if (all(is.finite(m1)))
-      sprintf("; mean if yes %s, if no %s", format(signif(m1[[1]], 3)), format(signif(m1[[2]], 3)))
+      sprintf(" ; yes %s / no %s", format(signif(m1[[1]], 3)), format(signif(m1[[2]], 3)))
     else ""
     k <- which(as.character(skeleton$var) == b)
     tibble::tibble(col = nm, row = k, var = b,
-                   tip = sprintf("%s: mean %s (SD %s)%s", v,
+                   tip = sprintf("%s: mean %s (sd %s)%s", v,
                                  format(signif(m, 3)), format(signif(s, 3)), by))
   })))
 }

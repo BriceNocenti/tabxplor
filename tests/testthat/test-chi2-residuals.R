@@ -205,7 +205,8 @@ testthat::test_that("the tooltip carries the standardized residual", {
   d <- gss_r()
   h <- tab(d, race, rincome, pct = "row", color = "contrib", na = "drop") |>
     tab_html(tooltips = TRUE) |> as.character()
-  testthat::expect_match(h, "residual", fixed = TRUE)
+  # named by the token itself (DISPLAY_TOKENS$label), as every hover line is
+  testthat::expect_match(h, "resid: ", fixed = TRUE)
 })
 
 testthat::test_that("a cell with expected count < 1 gets no residual (sparse guard)", {

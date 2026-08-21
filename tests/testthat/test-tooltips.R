@@ -1,18 +1,24 @@
-# Phase 14b: tooltips + the numeric-diff display.
+# The html hover tooltip: TOOLTIP_LINES, its shared gates, and the numeric-diff display.
 #
 # What is locked here:
-#   - a mean `diff` renders as a SIGNED DIFFERENCE, never with the legacy multiply sign (the field
-#     has been a real difference since Phase 2; only the display lagged), and the Excel numFmt
-#     bypass follows it;
-#   - diff + ratio are one comparison group: same gate, ONE "ref" token, no vacuous line on a
-#     Total column / 100% cell;
-#   - values are trimmed (column padding is table alignment, noise in prose);
+#   - a mean `diff` renders as a SIGNED DIFFERENCE, never with the legacy multiply sign, and a
+#     COEFFICIENT renders bare -- format()'s "%" mask asks about the column's LEVEL (`var_kind`),
+#     so a gaussian beta is not multiplied by 100 in print, in Excel or on hover;
+#   - one gate for every line: a reference cell says "ref" ONCE, a 100 % base says nothing, and no
+#     line repeats what the cell already prints;
+#   - a regression's BASELINE row is the reference for nothing, and names nothing;
+#   - values are trimmed, inside a composite as well as at the ends;
 #   - both html engines emit the SAME bootstrap attributes, from one builder.
 
 mult_glyph <- stringi::stri_unescape_unicode("\\u00d7")
 div_glyph  <- stringi::stri_unescape_unicode("\\u00f7")
 
-tip_of <- function(t, col) tab_kable_print_tooltip(t[[col]])
+tip_of <- function(t, col) tabxplor:::tab_tooltip_text(t[[col]])
+
+reg_data <- function() {
+  forcats::gss_cat |>
+    dplyr::mutate(married = factor(dplyr::if_else(marital == "Married", "Married", "Not married")))
+}
 
 
 # --- the numeric-diff display -------------------------------------------------------------
@@ -129,7 +135,7 @@ testthat::test_that("tooltip attributes carry the auto placement (reoriented on 
 })
 
 testthat::test_that("a popover carries the tooltip TEXT as its content, not its own attributes", {
-  # regression: tab_kable_print_tooltip(popover = TRUE) used to return spec_popover()'s ATTRIBUTE
+  # regression: the builder called with popover = TRUE used to return spec_popover()'s ATTRIBUTE
   # string, which the html engine then wrapped again -> data-content="data-toggle=&quot;popover..."
   t <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
   h <- as.character(tab_kable(t, popover = TRUE, tooltips = TRUE, css = FALSE))
@@ -141,4 +147,72 @@ testthat::test_that("a popover carries the tooltip TEXT as its content, not its 
 testthat::test_that("the one-line tooltip rule ships with the chrome, never with tab_md's CSS", {
   testthat::expect_match(tab_css(format = "html", style_tag = FALSE), "\\.tooltip-inner\\{")
   testthat::expect_false(grepl("tooltip", tab_css(format = "md",   style_tag = FALSE)))
+})
+
+
+# --- the gates, on the two producers -------------------------------------------------------
+
+testthat::test_that("a coefficient is never printed as a percentage, on hover or in Excel", {
+  t   <- tab_reg(reg_data(), outcome = "age", predictors = "race", family = "gaussian",
+                 empirical = FALSE)
+  col <- t[[reg_fmt_cols(t)[[1]]]]
+  testthat::expect_identical(get_scale(col), "raw_diff")
+  d   <- format(set_display(col, "diff"))
+  testthat::expect_false(any(grepl("%", d, fixed = TRUE)))
+  testthat::expect_false(any(grepl("%", format(set_display(col, "diff"), syntax = "excel"),
+                                   fixed = TRUE)))
+  tt <- tabxplor:::tab_tooltip_text(col)
+  # the line is the estimate's own, so it is named by the token the scale renders `est` as
+  testthat::expect_true(any(grepl("coef: ", tt, fixed = TRUE)))
+  testthat::expect_false(any(grepl("%", sub(", p = .*$", "", tt), fixed = TRUE)))
+})
+
+testthat::test_that("a crude column and its model twin agree about the reference row", {
+  t <- tab_reg(reg_data(), outcome = "married", predictors = "race", empirical = TRUE)
+  tips <- lapply(reg_fmt_cols(t), function(nm) tabxplor:::tab_tooltip_text(t[[nm]]))
+  testthat::expect_length(tips, 2L)                       # the crude column and the model one
+  r <- which(is_refrow(t[[reg_fmt_cols(t)[[1]]]]) & as.character(t$var) != "Constant")[1]
+  for (tt in tips) testthat::expect_match(tt[r], "^ref\\b")
+})
+
+testthat::test_that("the baseline row is the reference for nothing, and names nothing", {
+  t   <- tab_reg(reg_data(), outcome = "married", predictors = "race", empirical = TRUE)
+  nm  <- reg_fmt_cols(t)
+  col <- t[[nm[[length(nm)]]]]                            # the MODEL column: a crude one has no baseline
+  i   <- which(as.character(t$var) == "Constant")
+  tt  <- tabxplor:::tab_tooltip_text(col)[i]
+  testthat::expect_false(grepl("ref", tt, fixed = TRUE))     # it is not one
+  testthat::expect_false(grepl("OR:", tt, fixed = TRUE))     # a baseline odds is not an odds RATIO
+  testthat::expect_match(tt, "n: ")                          # its own base still names itself
+})
+
+testthat::test_that("the odds ratio is shown on every percentage column, but not on its baseline", {
+  t  <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
+  tt <- tip_of(t, "Separated")
+  testthat::expect_true(any(grepl("OR: ", tt, fixed = TRUE)))
+  # the FIRST column is the odds ratio's complementary category: a column of 1s says nothing
+  first <- names(t)[purrr::map_lgl(t, is_fmt)][[1]]
+  testthat::expect_false(any(grepl("OR: ", tip_of(t, first), fixed = TRUE)))
+  # and a reference cell still collapses to one "ref"
+  r <- which(get_reference(t$Separated, mode = "cells"))
+  testthat::expect_match(tt[r], "^ref ; n: ")
+})
+
+testthat::test_that("no line repeats an interval the cell already prints", {
+  t  <- tab(forcats::gss_cat, race, marital, pct = "row", ci = "cell")
+  tt <- tip_of(t, "Married")
+  testthat::expect_false(any(grepl("[", tt, fixed = TRUE)))
+  testthat::expect_true(any(grepl("row%: ", tt, fixed = TRUE)))
+})
+
+testthat::test_that("a total row's contribution is named as the MEAN it is", {
+  t  <- tab(forcats::gss_cat, race, marital, pct = "row", color = "contrib")
+  tt <- tip_of(t, "Married")
+  r  <- which(is_totrow(t$Married))
+  testthat::expect_true(any(grepl("mean ctr: ", tt[r], fixed = TRUE)))
+  testthat::expect_true(any(grepl("ctr: ", tt[-r], fixed = TRUE)))
+  # under `guaranteed_effect` the measure IS the standardized residual: no mean to compare to
+  t2 <- tab(forcats::gss_cat, race, marital, pct = "row", color = "contrib",
+            color_signif = "guaranteed_effect")
+  testthat::expect_false(any(grepl("mean ctr", tip_of(t2, "Married"), fixed = TRUE)))
 })

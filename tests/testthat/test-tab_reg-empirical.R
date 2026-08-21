@@ -342,7 +342,7 @@ test_that("multinomial empirical: tooltip-only via the empirical_tips attribute;
   h  <- paste(as.character(tabxplor:::render_html_engine(
     rd, meta = list(theme = "light"), subtext = "", caption = NULL,
     tooltips = TRUE, popover = FALSE, get_data = FALSE)), collapse = "\n")
-  expect_match(h, "crude:")
+  expect_match(h, "obs%: ", fixed = TRUE)
 
   ct <- tab(d, party3, race, pct = "row")
   expect_null(tabxplor:::get_empirical_tips(ct))

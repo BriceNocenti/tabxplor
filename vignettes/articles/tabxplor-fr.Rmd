@@ -462,8 +462,9 @@ tab(gss_simple, race, party3, pct = "row", color = "contrib",
     display = "{pct} ({resid})")
 ```
 
-Le survol d'un tableau html montre les deux nombres (`contrib :` et `résidu std. :`) dans l'infobulle,
-quel que soit l'affichage choisi.
+Le survol d'un tableau html montre les deux nombres (`ctr:` et `resid:`) dans l'infobulle, quel que
+soit l'affichage choisi : chaque ligne d'infobulle porte le nom du champ qu'elle affiche — les mêmes
+mots que les en-têtes de colonnes et que `$` (ils restent en anglais, comme les noms de champs).
 
 **Pour mémoire** (le vocabulaire, si vous devez le citer) : il s'agit du *résidu standardisé ajusté* de
 Haberman — le « résidu ajusté » de SPSS, le `chisq.test()$stdres` de R. Attention, plusieurs outils

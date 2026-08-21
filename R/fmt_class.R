@@ -3269,11 +3269,17 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # a token whose declared `unit` is "pct" is a PROPORTION: printed x100 with a "%", wherever it sits.
   # One statement of it (DISPLAY_TOKENS), so a new such token needs no edit here.
   unit_pct      <- ok & display %in% DISPLAY_PCT_TOKENS
-  pct_or_ci     <- ok & (display %in% c("pct", "diff", "ctr") &
-                           !(display == "diff" & is_mean) |
+  # ⚠ THE `diff` TOKEN ASKS ABOUT THE COLUMN'S LEVEL, not about its estimate, and `var_kind` is that
+  # fact: a difference is in percentage POINTS wherever the level it is a difference of is a
+  # percentage -- which includes the additive reading of an odds-ratio or risk-ratio column, whose
+  # own `is_pct` is FALSE. A COEFFICIENT column (`var_kind = "coef"`: a gaussian beta, a log-link
+  # estimate) is bare, and used to print "-364.1%" for -3.6 in print, in Excel and on hover alike.
+  diff_pct      <- identical(scl$var_kind, "pct")
+  pct_or_ci     <- ok & (display %in% c("pct", "ctr") | (display == "diff" & diff_pct) |
                          (display %in% c("ci", "moe") & is_pct))
   pct_or_ci     <- pct_or_ci | unit_pct
-  diff_mean <- ok & display == "diff" & is_mean
+  # a bare difference reads at ONE decimal at least, whether it is a mean's or a coefficient's.
+  diff_mean <- ok & display == "diff" & !diff_pct
 
   # `obs` and `gap` print exactly like the estimate they are compared to / measured on (per-COLUMN
   # scale, one branch per column). `gap` carries the ADJUSTMENT SCORE -- the very number the colour
@@ -3304,7 +3310,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     digits[lo_dg] <- ci_floor
   }
 
-  pct_no_ci     <- ok & display %in% c("pct", "diff", "ctr") & !(display == "diff" & is_mean)
+  pct_no_ci     <- ok & (display %in% c("pct", "ctr") | (display == "diff" & diff_pct))
   pct_no_ci     <- pct_no_ci | obs_as_pct | unit_pct
   # a coefficient of variation is read as a rough order of magnitude ("about a third of the mean"),
   # so it takes no decimals whatever the cell's own `digits` says.
@@ -6111,6 +6117,16 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
   if (gap) out | TRUE else out
 }
 
+# fmt_ref_cells() -- THE cells a column compares against, ROLE-AWARE. `get_reference()` answers on
+# the crosstab's percentage axis and so returns nothing at all on a regression column, whose baseline
+# is `in_refrow` -- every producer stamps it. Twin of format()'s own ref_base() (the `all_totals`
+# variant, which additionally keeps the reading anchors full-strength); the two must agree about
+# WHICH rule applies to a column, never about how many total cells it folds in.
+#' @keywords internal
+fmt_ref_cells <- function(x, .ref = NULL) {
+  if (nzchar(as.character(get_role(x))[1])) return(is_refrow(x))
+  if (!is.null(.ref)) .ref else get_reference(x, "cells")
+}
 
 
 

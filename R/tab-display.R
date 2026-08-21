@@ -150,7 +150,9 @@ display_write_col <- function(col, tmpl) {
 fmt_blank_fields <- function(col, pct = FALSE) {
   col <- set_diff(col, NA_real_) |> set_ci(NA_real_) |> set_mean(NA_real_)
   if (pct) col <- set_pct(col, NA_real_)
-  set_ctr(col, NA_real_) |> set_var(NA_real_)
+  # ⚠ EVERY comparison field, not only the additive ones: a base-count column that kept its source
+  # cell's `ratio` and `or` had a hover reading "ratio: x1.00 ; ref" over a count.
+  set_ctr(col, NA_real_) |> set_var(NA_real_) |> set_ratio(NA_real_) |> set_or(NA_real_)
 }
 
 # WHOSE level is this? A regression column states it in `role`, and that is what a LEVEL token says
@@ -460,6 +462,16 @@ DISPLAY_SELF_NAMED     <- names(DISPLAY_TOKENS)[
 #' @keywords internal
 #' @noRd
 DISPLAY_TOKEN_GEOMETRY <- .dtok_map("geometry")
+# The tokens that render each FIELD. "Does the cell already show this quantity?" is a question about
+# the field, not the token: `diff` and `coef` are one number written two ways, `ci` and `moe` one
+# interval, `n` and `n_range` one count.
+#' @keywords internal
+#' @noRd
+DISPLAY_FIELD_TOKENS <- {
+  f <- .dtok_chr("field")
+  f <- f[.dtok_real & !is.na(f)]
+  split(unname(names(f)), unname(f))
+}
 #' @keywords internal
 #' @noRd
 DISPLAY_COMPARISON     <- .dtok_map("comparison")

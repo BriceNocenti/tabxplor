@@ -126,9 +126,10 @@ and colour are all \code{\link{tab_css}}'s business now.}
 }
 \value{
 A html table. Printing it opens it in the Viewer, on a page painted to match the table --
-so a \code{theme = "dark"} table no longer sits in a white pane. Differences from totals, confidence
-intervals, contribution to variance, and unweighted counts, are available in an html tooltip at
-cells hover.
+so a \code{theme = "dark"} table no longer sits in a white pane. Everything the cell has no room for --
+the confidence interval, the exact p-value, the other ways of reading the same comparison
+(difference, ratio, odds ratio), the chi-squared contribution and the base count -- is one hover
+away, each line named after the field it shows.
 }
 \description{
 The HTML exporter behind \code{\link{tab_export}}: \code{tab_export(x, format = "html")} calls this, and

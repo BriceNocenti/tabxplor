@@ -340,15 +340,17 @@ test_that("the tooltip carries the comparison value once, and never on a cross-t
   d <- adj_data()
   t <- tab_reg(d, outcome = "married", predictors = c("race", "party3"),
                family = "binomial", empirical = TRUE)
-  tip <- tabxplor:::tab_kable_print_tooltip(t$Model_OR)
-  ok  <- !is.na(get_obs(t$Model_OR))
+  tip <- tabxplor:::tab_tooltip_text(t$Model_OR)
+  # a REFERENCE cell's crude value is the neutral itself: it collapses into the one "ref" token,
+  # like every other comparison there.
+  ok  <- !is.na(get_obs(t$Model_OR)) & !is_refrow(t$Model_OR)
   testthat::expect_true(all(grepl("obs: ", tip[ok], fixed = TRUE)))
   testthat::expect_equal(lengths(regmatches(tip[ok], gregexpr("obs: ", tip[ok], fixed = TRUE))),
                          rep(1L, sum(ok)))
   testthat::expect_false(any(grepl("obs: ", tip[!ok], fixed = TRUE)))
   # a cross-table has no `obs` -> the fragment never appears (the render snapshots must not move)
   ct <- tab(d, race, party3, color = TRUE)
-  testthat::expect_false(any(grepl("obs: ", tabxplor:::tab_kable_print_tooltip(ct[[2]]), fixed = TRUE)))
+  testthat::expect_false(any(grepl("obs: ", tabxplor:::tab_tooltip_text(ct[[2]]), fixed = TRUE)))
 })
 
 test_that("stars still ride the model estimate under color = 'adjustment'", {

@@ -513,6 +513,18 @@
 
 ## Bug fixes
 
+* **A regression coefficient is no longer printed as a percentage.** On the two scales whose level is
+  neither a percentage nor a mean --- a gaussian beta, a `measure = "log"` estimate --- a difference
+  of -3.6 was rendered `-364.1%`, in print, in Excel and in the html tooltip, next to a correct
+  confidence interval.
+
+* **The html tooltip was rewritten.** Every line now goes through the same renderer as the cells and
+  is named after the field it shows (`diff`, `ratio`, `OR`, `ctr`, `resid`, `obs`, `gap`, `n`, and
+  `row%` / `adj%` / `obs%` for a level), no line repeats what the cell already prints, a reference
+  cell says `ref` once, and the exact p-value now appears wherever the interval is the one being
+  reported. The odds ratio is shown on every row/column-percentage table, not only where it is the
+  colour measure. Tooltip labels are no longer translated: they are the field names.
+
 * **No odds ratio on a Total column that is 100 % by construction.** An odds ratio needs a 2x2, and
   on the margin the percentages sum to there is none; the number computed there was meaningless, and
   it was colouring the `Total` column of an odds-ratio table and showing a confidence interval on

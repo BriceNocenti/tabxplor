@@ -11,7 +11,14 @@ A full review of the hover-tooltip text both producers emit, against the four qu
 
 Every claim below was **reproduced against the running package** (`devtools::load_all()` at the current working tree) before being written down, and its root cause located at a line. Findings are keyed `T1`…`T21` and gathered in §3; §4–§7 hold one root cause and one capture each; §8 is the proposed design; §9 the blast radius and an implementation order.
 
-⚠ Nothing here has been implemented. This is a review.
+⚠ **Implemented in Phase 22c-iv** (see the roadmap's DONE summary). The review's findings stand as
+written — they are what was measured before the rewrite — but the hover layer they describe is gone:
+the 15 hand-written fragments are one declared table (`TOOLTIP_LINES`, `R/tab-tooltip.R`) and one
+gate. What was **not** taken: **T11** (the weighted base — a maintainer's call: `n:` stays the
+unweighted count) and **T21** (`+0`, whose only non-ad-hoc fix would make every reference cell print
+`0.0` instead of the clean neutral). §8.3's label design landed differently from the sketch: the
+labels are the token TAGS (`diff` / `ratio` / `OR` / `ctr` / `resid` / `obs` / `gap` / `n`), not prose
+nouns, and **nothing in a tooltip is translated any more** — which is what dissolves T9 and T20.
 
 ⚠ **Which tree this was measured on.** The captures come from `devtools::load_all()` on the **working
 tree**, which carried in-flight colour-ladder work from another session (uncommitted changes to

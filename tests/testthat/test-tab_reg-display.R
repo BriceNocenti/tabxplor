@@ -160,7 +160,7 @@ test_that("an ordered-factor predictor's AME is non-NA on every non-reference le
   ame  <- get_diff(col)
   expect_false(any(is.na(ame[rin]) & !is_refrow(col)[rin]))
   # the AME tooltip carries the model OR too (Item E)
-  tips <- tabxplor:::tab_kable_print_tooltip(col)
+  tips <- tabxplor:::tab_tooltip_text(col)
   expect_true(any(grepl("OR: ", tips)))
 })
 
@@ -181,13 +181,13 @@ test_that("model effect columns carry their level's n; footer cells have no tool
   d <- reg_data()
   t <- tab_reg(d, "married", c("race", "age"), family = "binomial")
   # each level's own base is on hover, and the Constant row carries the model N (Phase 22b-i)
-  tips0 <- tabxplor:::tab_kable_print_tooltip(first_fmt(t))
+  tips0 <- tabxplor:::tab_tooltip_text(first_fmt(t))
   expect_true(any(grepl("n: ", tips0)))
   # the GOF footer rows are materialised at display -> materialise, then check they carry no tooltip
   # (no nonsense "diff: +6378526%" on an AIC stored in the diff field)
   tm   <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = TRUE)
   col  <- first_fmt(tm)
-  tips <- tabxplor:::tab_kable_print_tooltip(col)
+  tips <- tabxplor:::tab_tooltip_text(col)
   disp <- tabxplor:::display_primary(get_display(col))
   foot <- disp %in% c("gof", "blank")
   expect_true(any(foot))
@@ -198,7 +198,7 @@ test_that("empirical columns keep the per-LEVEL n in the tooltip (Item D)", {
   skip_if_not_installed("broom")
   d <- reg_data()
   t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", empirical = TRUE)
-  tips <- tabxplor:::tab_kable_print_tooltip(t[["Obs_OR"]])
+  tips <- tabxplor:::tab_tooltip_text(t[["Obs_OR"]])
   expect_true(any(grepl("n: ", tips)))          # per-level counts survive
 })
 

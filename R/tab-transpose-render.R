@@ -152,7 +152,7 @@ tx_transpose_render <- function(rd, backend) {
   tips_data <- NULL
   if (identical(backend, "kable")) {
     tips_src <- lapply(order_i, function(j) {
-      tp <- tab_kable_print_tooltip(tab[[j]], .ref = ann[[onm[j]]]$ref_cells)
+      tp <- tab_tooltip_text(tab[[j]], .ref = ann[[onm[j]]]$ref_cells)
       tp[is.na(tp)] <- ""
       tp
     })

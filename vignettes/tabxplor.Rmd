@@ -472,8 +472,9 @@ tab(gss_simple, race, party3, pct = "row", color = "contrib",
     display = "{pct} ({resid})")
 ```
 
-Hovering an html table shows both numbers (`contrib:` and `std. residual:`) in the tooltip, whatever
-you display.
+Hovering an html table shows both numbers (`ctr:` and `resid:`) in the tooltip, whatever you
+display: every tooltip line is named after the field it shows, so the hover uses the same words as
+the column headers and as `$`.
 
 **For the record** (the vocabulary, if you need to cite it): the residual is the *adjusted standardized
 residual* of Haberman — SPSS's "adjusted residual", R's `chisq.test()$stdres`. Careful, several tools

@@ -426,8 +426,8 @@ test_that("a numeric row carries its distribution in the crude column's tooltip"
   row <- tp[tp$var == "age", ]
   expect_identical(nrow(row), 1L)
   expect_identical(row$col, "Obs_OR")                  # the EFFECT column, which has visible content
-  expect_match(row$tip, "mean .* \\(SD .*\\)")
-  expect_match(row$tip, "mean if yes")                 # binary outcome -> mean(X | Y) per group
+  expect_match(row$tip, "mean .* \\(sd .*\\)")
+  expect_match(row$tip, " ; yes ")                 # binary outcome -> mean(X | Y) per group
 
   # gaussian: no per-group split, just the predictor's own distribution
   tg  <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", empirical = TRUE,
