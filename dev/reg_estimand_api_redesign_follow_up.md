@@ -28,14 +28,14 @@ tab_reg(d, c(married, married), c(race, age),
 
 **Would the surrounding features still mean anything if it worked?** Per feature:
 
-| feature | on two links of one outcome |
-|---|---|
-| `empirical` / `Obs_*` | **yes** — each column pairs with a crude twin on *its own* measure, which IS the point |
-| `color = "adjustment"` | **yes** — the gap is per column, model vs its own crude twin |
-| `color = "between_groups"` | yes, orthogonal (it compares across `tab_vars` groups) |
-| `tab_vars` | yes, orthogonal |
-| `predictors = list(...)` | **no** — the model-COMPARISON axis is single-outcome AND single-estimand (see below) |
-| `stats = "compare_*"` | **no** — a logit and a modified Poisson are neither nested nor likelihood-comparable |
+| feature                    | on two links of one outcome                                                            |
+|----------------------------|----------------------------------------------------------------------------------------|
+| `empirical` / `Obs_*`      | **yes** — each column pairs with a crude twin on *its own* measure, which IS the point |
+| `color = "adjustment"`     | **yes** — the gap is per column, model vs its own crude twin                           |
+| `color = "between_groups"` | yes, orthogonal (it compares across `tab_vars` groups)                                 |
+| `tab_vars`                 | yes, orthogonal                                                                        |
+| `predictors = list(...)`   | **no** — the model-COMPARISON axis is single-outcome AND single-estimand (see below)   |
+| `stats = "compare_*"`      | **no** — a logit and a modified Poisson are neither nested nor likelihood-comparable   |
 
 `predictors = list(...)` varies the PREDICTORS, so every model in the list shares one `link` / `measure` / `effect`; and a likelihood-ratio or Δ-AIC comparison needs two models of the same response nested in one another, which a logit and a quasi-likelihood modified Poisson are not. So the honest shape of the feature is *"two columns side by side, no footer test"* — which is what a manual bind already gives:
 
@@ -80,19 +80,19 @@ So the repetition the question worries about is one name, in one argument, in th
 
 **Because it compared two ROUTES, not two versions.** Nothing in `tab_reg()` became slower. Measured against a `git archive HEAD` build, the same estimand asked for in each API's own words costs the same to the millisecond:
 
-| the same estimand | old | new |
-|---|---|---|
+| the same estimand                          | old     | new     |
+|--------------------------------------------|---------|---------|
 | the default call (odds ratio, coefficient) | 0.523 s | 0.495 s |
-| the marginal risk difference | 0.542 s | 0.502 s |
-| the modified Poisson's risk ratio | 0.834 s | 0.816 s |
+| the marginal risk difference               | 0.542 s | 0.502 s |
+| the modified Poisson's risk ratio          | 0.834 s | 0.816 s |
 
 The engines were **generalised, not extended**: `reg_gcomp_maker()`'s two arms became one link table, and the identity arm keeps its exact arithmetic on purpose, so no AME moves by an ulp.
 
 **What moved is which route a SPELLING takes**, and the maintainer's guess is right — with one correction worth having, because it goes the other way from the first report:
 
-| spelling | old route | new route | old | new |
-|---|---|---|---|---|
-| `measure = "ratio"` | an `rr` **refit** | a log-scale sweep on the logit fit | 0.842 s | 0.867 s |
+| spelling                 | old route         | new route                               | old     | new         |
+|--------------------------|-------------------|-----------------------------------------|---------|-------------|
+| `measure = "ratio"`      | an `rr` **refit** | a log-scale sweep on the logit fit      | 0.842 s | 0.867 s     |
 | `measure = "difference"` | an `rd` **refit** | an identity-link sweep on the logit fit | 0.817 s | **0.509 s** |
 
 So `measure = "difference"` got **38 % cheaper** (a sweep costs less than an identity-link binomial refit with its convergence fallback) and `measure = "ratio"` costs what its refit did. The "+30 %" of the first report was the cost of a *prediction route against a coefficient route* — real, and the right thing to know before setting `effect = "marginal"` — but it is not a regression, and it is not what any existing call now pays.

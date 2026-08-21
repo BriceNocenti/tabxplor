@@ -74,19 +74,19 @@ tab_reg(gss_simple, outcome = "married", tab_vars = "race",
 #### the different families × effects × measure columns names, displays, and footers
 
 # binomial
-## effect = "coefficient"
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
-) # Ok.
+## effect = "conditional"
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
+        empirical = TRUE, family = "binomial" #, measure = "odds_ratio", 
+)
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", empirical = TRUE, measure = "log"
-) # The two names are homogeneous, it’s ok. Two legends blocks instead of 1.
+)
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", empirical = TRUE, measure = "ratio"
-) # Ok. 
+)
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", empirical = TRUE, measure = "difference"
-) # Ok.
+)
 
 ## effect = "marginal"
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
@@ -105,21 +105,21 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "reli
 )
 
 # gaussian
-## effect = "coefficient"
+## effect = "conditional"
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
         family = "gaussian", empirical = TRUE
-) # Two legends blocks instead of 1.
+)
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
         family = "gaussian", empirical = TRUE, measure = "ratio"
-) # Two legends blocks instead of 1.
+)
 
 ## effect = "marginal"
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
         family = "gaussian", empirical = TRUE, effect = "marginal"
-) # Two legends blocks instead of 1.
+)
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
         family = "gaussian", empirical = TRUE, effect = "marginal", measure = "ratio"
-) # Seems wrong : Obs_diff and Model_mRoM. The math seems wrong : Obs_diff is +-. Two legends blocks instead of 1 (legend don’t match the diff one, which is multiplicative).
+)
 
 ## effect = "at_reference"
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
@@ -127,94 +127,94 @@ tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", 
 ) 
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
         family = "gaussian", empirical = TRUE, effect = "at_reference", measure = "ratio"
-) # Seems wrong : Obs_diff and Model_refRoM. The math seems wrong : Obs_diff is +-. Two legends blocks instead of 1 (legend don’t match the diff one, which is multiplicative).
+)
 
 
 # poisson
-## effect = "coefficient"
+## effect = "conditional"
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
         family = "poisson", empirical = TRUE
-) # this one is right
+)
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
         family = "poisson", empirical = TRUE, measure = "log"
-) # this one is right
+)
 
 ## effect = "marginal"
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
         family = "poisson", empirical = TRUE, effect = "marginal"# , measure = "difference"
-) # Obs-log(IRR), Model_mdiff : the log one seems wrong (it’s not a coeff but a marginal effect ?) ? Math seems ok. Two legends blocks instead of 1.
+)
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
         family = "poisson", empirical = TRUE, effect = "marginal", measure = "ratio"
-) # This one is right.
+)
 
 ## effect = "at_reference"
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
         family = "poisson", empirical = TRUE, effect = "at_reference"# , measure = "difference"
-) # Wrong name ? : Obs_log(IRR) and Model_refdiff. Math seem ok. Two legends blocks instead of 1.
+)
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
         family = "poisson", empirical = TRUE, effect = "at_reference", measure = "ratio"
-) # Ok. 
+)
 
 # summed-score binomial
-## effect = "coefficient"
+## effect = "conditional"
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
         predictors = c("sex", "SPC", "Sport"),  empirical = TRUE
-) # Ok for names and math. Strange col_var artifact: "tea_where:1" and "tea_where".
+)
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
         predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "ratio"
-) # This one seems wrong : Obs_OR, Model_RR. Two legends blocks instead of 1. Strange col_var artifact: "tea_where:1" and "tea_where"
+)
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
         predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "difference"
-) # Strange col_var artifact: "tea_where:1" and "tea_where". Two legends blocks instead of 1.
+)
 
 ## effect = "marginal"
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
         predictors = c("sex", "SPC", "Sport"), empirical = TRUE, effect = "marginal"# # measure = "difference"
-) # This one is right. Two legends blocks instead of 1. Strange col_var artifact: "tea_where:1" and "tea_where".
+)
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
         predictors = c("sex", "SPC", "Sport"), empirical = TRUE, effect = "marginal", measure = "ratio"
-) # This one is right. Strange col_var artifact: "tea_where:1" and "tea_where".
+)
 
 
 # summed-score defects pass 2
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
         predictors = c("sex", "SPC", "Sport"), empirical = TRUE
-) # ok. Both Obs and Model "base" are the mean summed-score.
+)
 
-## effect = "coefficient"
+## effect = "conditional"
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
         predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "difference"
-) # Obs_ observed "base" is not the mean sum, but the mean proportion ; Model_ "base" is the sum, but formatted as a proportion not as a mean.
+)
 ## effect = "marginal" (same defects with effect="at_reference")
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
         predictors = c("sex", "SPC", "Sport"), empirical = TRUE, effect = "marginal"# # measure = "difference"
-) # Obs_ and Model_ both show the mean proportion, not the mean summed score is formatted right, but the number is wrong (it’s the mean proportion not the mean sum)
+)
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
         predictors = c("sex", "SPC", "Sport"), empirical = TRUE, effect = "marginal", measure = "ratio"
-) # Obs is ok. the Model_mRR summed score is formatted right, but the number is wrong (it’s the mean proportion not the mean sum).
+)
 
 
 
 ## effect = "at_reference"
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
         predictors = c("sex", "SPC", "Sport"), empirical = TRUE, effect = "at_reference"# # measure = "difference"
-) # Two legends blocks instead of 1. Strange col_var artifact: "tea_where:1" and "tea_where".
+)
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
         predictors = c("sex", "SPC", "Sport"), empirical = TRUE, effect = "at_reference", measure = "ratio"
-) # Strange col_var artifact: "tea_where:1" and "tea_where".
+)
 
 # multinomial: empirical="column"
-## effect = "coefficient"
+## effect = "conditional"
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
         family = "multinomial", empirical = "column"
-) # Ok. 
+)
 ## effect = "marginal"
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
         family = "multinomial", empirical = "column", effect = "marginal"
-) # Ok.
+)
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
         family = "multinomial", empirical = "column", effect = "marginal", measure = "ratio"
-) # Names ok. But marginal risk ratio prints like an OR, I don’t know if it’s a math or a display problem.
+)
 
 ## effect = "at_reference"
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
@@ -222,34 +222,34 @@ tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig
 )
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
         family = "multinomial", empirical = "column", effect = "at_reference", measure = "difference"
-) # Ok. 
+)
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
         family = "multinomial", empirical = "column", effect = "at_reference", measure = "ratio"
-) # risk ratio at ref prints like an OR, I don’t know if it’s a math or a display problem.
+)
 
 # ordinal: empirical="column"
-## effect = "coefficient"
+## effect = "conditional"
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
         family = "ordinal", empirical = "column"
-) # ok
+)
 ## effect = "marginal"
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
         family = "ordinal", empirical = "column", effect = "marginal" #, measure = "difference"
-) # ok.
+)
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
         family = "ordinal", empirical = "column", effect = "marginal", measure = "ratio"
-) # Here the observed percentage is missing from the "Obs_*" columns display. 
+)
 ## effect = "at_reference"
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
         family = "ordinal", empirical = "column", effect = "at_reference" #, measure = "difference"
-) # Here the observed percentage is missing from the "Obs_*" columns display. 
+)
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
         family = "ordinal", empirical = "column", effect = "at_reference", measure = "ratio"
-) # Here the observed percentage is missing from the "Obs_*" columns display. 
+)
 # Problem found in passing: the $ in "Lt$100000" like names destroy html formatting in footer (such ones should be escaped ?)
 
 # multinomial: empirical="cell" are all ok
-## effect = "coefficient"
+## effect = "conditional"
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
         family = "multinomial", empirical = TRUE
 )
@@ -270,14 +270,14 @@ tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig
 )
 
 # ordinal: empirical="cell"
-## effect = "coefficient"
+## effect = "conditional"
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
         family = "ordinal", empirical = TRUE
-) # ok
+)
 ## effect = "marginal"
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
         family = "ordinal", empirical = TRUE, effect = "marginal" #, measure = "difference"
-) # ok.
+)
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
         family = "ordinal", empirical = TRUE, effect = "marginal", measure = "ratio"
 )
@@ -296,132 +296,12 @@ tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "reli
 
 
 
-#### review the adjustment
-# binomial
-## effect = "coefficient"
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", color = "adjustment" #, measure = "odds_ratio"
-)
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", color = "adjustment", measure = "log"
-)
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", color = "adjustment", measure = "ratio"
-)
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", color = "adjustment", measure = "difference"
-) 
-
-## effect = "marginal"
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", color = "adjustment", effect = "marginal" #, measure = "difference"
-)
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", color = "adjustment", effect = "marginal", measure = "ratio"
-)
-
-# ## effect = "at_reference"
-# tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-#         family = "binomial", color = "adjustment", effect = "at_reference" #, measure = "difference"
-# )
-
-
-# gaussian
-## effect = "coefficient"
-tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", color = "adjustment"
-)
-tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", color = "adjustment", measure = "ratio"
-)
-
-## effect = "marginal"
-tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", color = "adjustment", effect = "marginal"
-)
-tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", color = "adjustment", effect = "marginal", measure = "ratio"
-)
-
-
-# poisson
-## effect = "coefficient"
-tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", color = "adjustment"
-)
-tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", color = "adjustment", measure = "log"
-)
-
-## effect = "marginal"
-# tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-#         family = "poisson", color = "adjustment", effect = "marginal"# , measure = "difference"
-# )
-tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", color = "adjustment", effect = "marginal", measure = "ratio"
-)
-
-
-# summed-score binomial
-## effect = "coefficient"
-tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"),  color = "adjustment"
-)
-tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), color = "adjustment", measure = "ratio"
-)
-tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), color = "adjustment", measure = "difference"
-)
-
-## effect = "marginal"
-tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), color = "adjustment", effect = "marginal"# # measure = "difference"
-)
-tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), color = "adjustment", effect = "marginal", measure = "ratio"
-)
-
-
-# multinomial: empirical="cell"
-## effect = "coefficient"
-tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", color = "adjustment"
-)
-## effect = "marginal"
-tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", color = "adjustment", effect = "marginal"
-)
-tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", color = "adjustment", effect = "marginal", measure = "ratio"
-)
-
-
-# ordinal: empirical="cell"
-## effect = "coefficient"
-tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", color = "adjustment"
-)
-## effect = "marginal"
-tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", color = "adjustment", effect = "marginal" #, measure = "difference"
-)
-tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", color = "adjustment", effect = "marginal", measure = "ratio"
-)
-
-
-
-
-
-
-
 
 
 #### the different families × effects × measure: custom displays
 
 # binomial
-## effect = "coefficient"
+## effect = "conditional"
 model <- tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", empirical = TRUE #, measure = "odds_ratio"
 ) 

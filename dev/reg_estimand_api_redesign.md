@@ -12,7 +12,7 @@ Phase 22b-xiv-1 asked for a way out of a contradiction. `dev/reg_family_measure_
 
 **There is no third way to invent: the two are the two halves of one rule the code already implements and has never stated.** Once stated, it derives the whole estimand library, deletes three refusal mechanisms, and settles the argument surface for a reason rather than a preference.
 
-**Status: BUILT.** Part I describes the framework as the package implements it (Phase 22b-xv-1); §7's register is settled, including the four decisions taken at implementation time; §8.2 is the prose that remains, with its migration table. What is still open is stated as such where it appears.
+**Status: BUILT AND TAUGHT.** Part I describes the framework as the package implements it (Phase 22b-xv-1); §7's register is settled, including the four decisions taken at implementation time; §8.2's prose landed in Phase 22b-xv-2, and its migration table (§8.2.1) is kept as the reader-facing record of what every old spelling becomes. What is still open is stated as such where it appears.
 
 **Scope.** The estimand surface — `family`, `link`, `measure`, `effect`, their defaults, their availability and the fact tables behind them. Not the colour ladders (Phase 22b-xiv-2) nor the ideal-type comparison (22b-xiv-3), except where they bind — §8.3.
 
@@ -531,6 +531,8 @@ Two phases. The first is all of the code and the reference documentation that li
 
 ### 8.2 Phase 22b-xv-2 — teaching the cascade everywhere
 
+**Landed**, except the article's French twin, which Phase 22h owns and conditions on a manual review of the English one. `vignettes/tabxplor-reg.Rmd` and `vignettes/articles/tabxplor-reg-fr.Rmd` are ported; `NEWS.md` was checked against them and needed no change. What follows is the brief it was written from.
+
 **The prose**: both regression vignettes and their French twins, `vignettes/articles/tabxplor-all-else-equal.Rmd`, and one `NEWS.md` bullet (already written — check it rather than rewrite it).
 
 The shape of the work, from §12.1: the combination grid gains a `link` column and loses the `≡` marker; the headline rule at `vignettes/tabxplor-reg.Rmd:583` (*"`effect` and `measure` change the model that is fitted"*) becomes true **by deletion** — only `link` changes the model; and `effect = "conditional"` is introduced as *the model's own coefficients*, with `"auto"` explained as choosing it when the reported measure is the model's own.
@@ -697,7 +699,7 @@ Larger than the code change, and it is where the risk of a stale claim lives. In
 - ⚠ **The `effect = "marginal"` idiom moves**, and it is the largest single documentation cost of the proposal (§4.3(1)). Every passage teaching `effect = "marginal"` → percentage points becomes `measure = "difference"`: `vignettes/tabxplor-reg.Rmd:137`, `:504`, and `vignettes/articles/tabxplor-all-else-equal.Rmd:339`, `:433`, `:458`, with their printed numbers. The replacement is shorter and clearer, but it is not a rename — the numbers change too.
 - ✅ **`NEWS.md`** — written with the code (the cascade, the two risk ratios, the marginal odds ratio, `reg_measures(link =)`). Check it against the vignettes rather than rewriting it.
 
-Two stale strings still to fix in the same pass, since they sit in the paragraphs being edited: `vignettes/tabxplor-reg.Rmd:50` names `dependent`, an argument that now errors, and `:940` / `:964` print the retired `per SD/13.5` label format. (The third, `?tab_reg`'s `a:b`, went with the code.)
+✅ Two stale strings fixed in the same pass, since they sat in the paragraphs being edited: `vignettes/tabxplor-reg.Rmd:50` named `dependent`, an argument that now errors, and `:940` / `:964` printed the retired `per SD/13.5` label format. (The third, `?tab_reg`'s `a:b`, went with the code.) ⚠ Four more stale figures were found by re-running the tables rather than by reading: the logistic section's `28% / 51%` raw percentages (now `31% / 52%`), its `2.68` crude odds ratio (`1/2.43`), the four-row stars-vs-gap table, and the multinomial in-cell example.
 
 - **P4**: the orthogonality claim (`R/tab_reg.R:3895-3897`) becomes the true statement — `link` says what the model estimates, `measure` what is reported, and a coefficient exists only where they agree. The internal twin at `R/reg-estimand.R:1007-1008` and the `reg_effect_key()` abort's `effect × measure` grid go with it.
 - The `@details` argument map (`R/tab_reg.R:3766-3778`) files `effect × measure` under *"What each cell shows"*, beside `display`. Under the cascade `link` belongs to **"The model"** and `measure` / `effect` to **"What each cell shows"** — which is finally a true division, and the misfiling this phase set out to correct.

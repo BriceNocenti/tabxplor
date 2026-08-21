@@ -1198,11 +1198,13 @@ reg_measures <- function(data, outcome, family = "auto", link = "auto") {
                       stringsAsFactors = FALSE)
   out   <- dplyr::bind_rows(purrr::map(seq_len(nrow(grid)),
                                        function(i) row_of(grid$effect[[i]], grid$measure[[i]])))
-  other <- setdiff(names(REG_FAMILIES[[fam]]$fits), lk)
+  # the other models, spelled by reg_link_calls() -- the same producer the abort reads, so one call
+  # cannot be worded differently from the other (and a bare {.code link = "{other}"} would collapse a
+  # two-element vector INSIDE one code span).
+  other <- reg_link_calls(fam, exclude = lk)
   cli::cli_inform(c(
     "i" = "{.val {outcome}}: {.code family = \"{fam}\"}, {.code link = \"{lk}\"} ({reg_family_display_name(REG_FAMILIES[[fam]]$fits[[lk]])}).",
-    if (length(other))
-      c("i" = "Other models: {.or {.code link = \"{other}\"}}.")))
+    if (length(other)) c("i" = "Other models: {.or {.code {other}}}.")))
   out
 }
 

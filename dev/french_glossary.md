@@ -97,6 +97,30 @@ The three earlier renderings of *effective sample size* (`taille d'échantillon 
 | Residual SD                            | Écart-type résiduel                                   |
 | vs null / baseline / previous          | vs nul / vs référence / vs précédent                  |
 
+### The estimand cascade (`family` → `link` → `measure` → `effect`)
+
+The argument names themselves are code and stay English; what is translated is the prose around them.
+
+| English                                | French                                                |
+|----------------------------------------|-------------------------------------------------------|
+| deviation (the umbrella)               | écart                                                 |
+| measure (of deviation)                 | mesure (de l'écart)                                   |
+| link (the measure the model estimates) | lien (la mesure que le modèle estime)                 |
+| effect (where the number comes from)   | effet (d'où le nombre est tiré)                       |
+| conditional effect                     | effet conditionnel                                    |
+| marginal effect / sample-averaged      | effet marginal / moyenné sur l'échantillon            |
+| at the reference profile               | au profil de référence                                |
+| risk ratio / risk difference           | rapport de risques / différence de risques            |
+| ratio of means                         | rapport de moyennes                                   |
+| marginal odds ratio                    | rapport de cotes marginal                             |
+| modified Poisson (regression)          | (régression de) Poisson modifiée                      |
+| collapsible / non-collapsible          | collapsible / non collapsible                         |
+| adjusted prediction                    | prédiction ajustée                                    |
+| crude / observed (companion) column    | colonne brute / observée                              |
+
+⚠ A **quoted cell value** keeps the decimal point the table actually prints (`1/2.43`, `÷1.7`), never
+a French comma — it is a quotation of the output. Ordinary prose numbers stay French (`19,8 points`).
+
 ## Known first-draft rough spots (for maintainer review)
 
 - **Reg caption** (`reg_title`): the `": "` after the family name keeps an English colon
