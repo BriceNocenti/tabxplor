@@ -23,6 +23,12 @@
 #   - ONE SWEEP, TWO VARIANCES, never swapped: a g-computation maker returns both the delta-method
 #     variance (the interval the marginal effect PRINTS) and the influence-function one (the colour's
 #     test). reg_gcomp_maker()'s own note says why they differ.
+#   - ONE CLOSURE CONTRACT, THREE SWEEPS. reg_gcomp_maker() (single-equation), reg_gcomp_cat_maker()
+#     (one answer per outcome category) and reg_gcomp_rank_maker() (the ordinal superiority pair: the
+#     whole predicted distribution in, one number out) return the same list, so the callers pick a
+#     sweep and branch on nothing else -- and the rank one, answering once, IS a drop-in for the
+#     single-equation path from reg_marginal_gcomp() downwards. Its own arithmetic is shared further
+#     still: reg_rank_pair() is the one comparison the model column and its crude twin both run.
 #   - ONE LINK TABLE, THREE READERS. A marginal contrast is h(M1) - h(M0), so a link contributes the
 #     transform and its derivative and nothing else (REG_LINK_FUNS). Both g-computation makers and
 #     the crude leg read it, which is why the engines never knew which measure they were computing
@@ -295,11 +301,13 @@ reg_gcomp_maker <- function(fit, data, wt, link = "identity") {
   }
 }
 
-# reg_ame_if_maker() -- the g-computation above wearing its influence-function hat.
+# reg_ame_if_maker() -- the g-computation above wearing its influence-function hat. `g` overrides
+# WHICH sweep it wears: any maker with this closure contract (est / G / emp) gets its influence from
+# here rather than from a copy of these six lines -- reg_gcomp_rank_maker() is the second one.
 #' @keywords internal
-reg_ame_if_maker <- function(fit, data, wt, link, coef_if) {
+reg_ame_if_maker <- function(fit, data, wt, link, coef_if, g = NULL) {
   if (is.null(coef_if)) return(NULL)
-  g <- reg_gcomp_maker(fit, data, wt, link)
+  g <- g %||% reg_gcomp_maker(fit, data, wt, link)
   if (is.null(g)) return(NULL)
   function(var, level, ref, mask = NULL) {
     p <- g(var, level, ref, mask)
@@ -437,10 +445,20 @@ reg_prob_engine <- function(fit) {
           colSums((w * P[, j] * ((j == cc) - P[, cc])) * X), numeric(ncol(X))))
       }))
   }
-  if (inherits(fit, "polr") && !inherits(fit, "svyolr")) {
+  # ⚠ svyolr IS accepted, and it is NOT a polr subclass: it carries the same (beta, zeta)
+  # parameterisation and its vcov() is already the DESIGN-BASED one, so reg_delta_se() needs no
+  # branch -- but its coef() returns the THRESHOLDS TOO, which is the one difference. What it does
+  # not carry is per-observation scores, so a gap SE is unavailable there, which makes
+  # `color = "adjustment"` descriptive under a design rather than falsely significant.
+  if (inherits(fit, "polr") || inherits(fit, "svyolr")) {
     b <- tryCatch(stats::coef(fit), error = function(e) NULL)
     z <- fit$zeta
-    if (is.null(b) || is.null(z) || !length(b)) return(NULL)
+    if (is.null(b) || is.null(z) || !length(z)) return(NULL)
+    # ⚠ by CLASS and by NAME, never by length: polr's own coef() is already the betas alone, and a
+    # length rule would silently truncate it.
+    if (inherits(fit, "svyolr")) b <- b[!names(b) %in% names(z)]
+    if (!length(b) || length(b) + length(z) != length(stats::coef(fit)) +
+        (if (inherits(fit, "svyolr")) 0L else length(z))) return(NULL)
     lev <- levels(tryCatch(stats::model.frame(fit)[[1L]], error = function(e) NULL))
     if (length(lev) != length(z) + 1L) return(NULL)
     nb <- length(b)
@@ -568,6 +586,147 @@ reg_gcomp_cat_maker <- function(fit, data, wt, link = "identity") {
       if (!is.finite(est[j])) return(NULL)
     }
     list(levels = eng$levels, est = est, G = G, emp = emp, mean1 = M1, mean0 = M0)
+  }
+}
+
+# reg_rank_pair() -- THE SUPERIORITY PAIR, and the ONE piece of arithmetic the model column and its
+# crude twin share. Two distributions over the same ordered categories in, one comparison out:
+#
+#     win = sum_k p1_k P(Y0 < k)    loss = sum_k p0_k P(Y1 < k)    gamma = win + sum_k p1_k p0_k / 2
+#
+# It returns the two READINGS of that pair (`est` on the asked link, `alt` on the other) and, with
+# them, the GRADIENT of `est` in each distribution -- which is all either side needs for a variance:
+# the model side pushes a1/a0 through the fit's own jacobians, the crude side through the multinomial
+# covariance of two independent samples. At `est = gamma` the gradients are the placement values, so
+# the crude variance IS DeLong's, arrived at rather than special-cased.
+#
+#     a1 = d est / d p1     a0 = d est / d p0
+#     dwin/dp1 = P(Y0 < k)  dwin/dp0 = P(Y1 > k)  dloss/dp0 = P(Y1 < k)  dloss/dp1 = P(Y0 > k)
+#' @keywords internal
+reg_rank_pair <- function(p1, p0, link = "identity") {
+  K <- length(p1)
+  if (K < 2L || length(p0) != K) return(NULL)
+  c1 <- cumsum(p1);      c0 <- cumsum(p0)
+  lt1 <- c(0, c1[-K]);   lt0 <- c(0, c0[-K])            # P(Y < k)
+  win <- sum(p1 * lt0);  loss <- sum(p0 * lt1)
+  if (!is.finite(win) || !is.finite(loss)) return(NULL)
+  mult <- identical(link, "log")
+  if (mult && !(win > 0 && loss > 0)) return(NULL)
+  est <- if (mult) log(win) - log(loss) else win - loss
+  if (!is.finite(est)) return(NULL)
+  list(win = win, loss = loss, gamma = win + sum(p1 * p0) / 2, est = est,
+       a1 = if (mult) lt0 / win - (1 - c0) / loss else lt0 - (1 - c0),
+       a0 = if (mult) (1 - c1) / win - lt1 / loss else (1 - c1) - lt1,
+       alt = if (mult) win - loss else win / loss)
+}
+
+# reg_rank_se() -- the crude side's variance of that comparison: two INDEPENDENT multinomial samples,
+# so a1' (diag(p) - p p') a1 / n on each, which is just the sampling variance of the gradient read as
+# a score over the categories. Verified against a 2 000-draw bootstrap.
+#' @keywords internal
+reg_rank_se <- function(pr, p1, p0, n1, n0) {
+  v <- function(a, p, n) {
+    if (!isTRUE(n > 0)) return(NA_real_)
+    max(sum(a * a * p) - sum(a * p)^2, 0) / n
+  }
+  sqrt(v(pr$a1, p1, n1) + v(pr$a0, p0, n0))
+}
+
+# reg_crude_rank_if_maker() -- the CRUDE leg of a rank gap, and reg_crude_if_maker()'s twin: where
+# that one averages a 0/1 indicator of one category, this one reads the gradient of the whole pair as
+# a SCORE over the categories -- a_g[y_i] centred on its own mean, which is the same object whose
+# sampling variance reg_rank_se() takes.
+#
+# ⚠ Both legs of the gap must be built from the same pair, so the link is the REPORTED one and the
+# distributions are the observed cell shares of the two groups -- exactly what the crude column shows.
+#' @keywords internal
+reg_crude_rank_if_maker <- function(data, outcome, wt, link) {
+  yw <- tryCatch(reg_crude_yw(data, outcome, "ordinal", NULL, wt), error = function(e) NULL)
+  if (is.null(yw) || !identical(yw$kind, "labels")) return(NULL)
+  cats <- yw$cats
+  y    <- as.character(yw$y)
+  w    <- yw$w
+  if (length(y) != nrow(data) || length(w) != nrow(data)) return(NULL)
+  idx  <- match(y, cats)
+  fin  <- !is.na(idx) & is.finite(w)
+  function(var, level, ref) {
+    x <- data[[var]]
+    if (is.null(x)) return(NULL)
+    x <- as.character(x)
+    leg <- function(l) {
+      m  <- fin & !is.na(x) & x == as.character(l)
+      sw <- sum(w[m])
+      if (!isTRUE(sw > 0)) return(NULL)
+      list(m = m, sw = sw,
+           p = vapply(seq_along(cats), function(k) sum(w[m & idx == k]) / sw, numeric(1)))
+    }
+    a <- leg(level); b <- leg(ref)
+    if (is.null(a) || is.null(b)) return(NULL)
+    pr <- reg_rank_pair(a$p, b$p, link)
+    if (is.null(pr)) return(NULL)
+    score <- function(g, av) {
+      v <- numeric(length(y))
+      v[g$m] <- w[g$m] * (av[idx[g$m]] - sum(av * g$p)) / g$sw
+      v
+    }
+    score(a, pr$a1) + score(b, pr$a0)
+  }
+}
+
+# reg_gcomp_rank_maker() -- THE ORDINAL SUPERIORITY PAIR, and a DROP-IN for reg_gcomp_maker(): one
+# value per (var, level) and the same closure contract, so reg_marginal_gcomp(), reg_marginal_column()
+# and reg_wald_finalize() carry no arm for it.
+#
+# Of two people drawn independently from the sample, one forced to `level` and one to `ref`:
+#
+#     win = P(Y1 > Y0)     loss = P(Y1 < Y0)     gamma = win + P(Y1 == Y0) / 2
+#
+# DESIGN: the pairwise double sum over PEOPLE factorises exactly into the two standardised
+# (g-computed) marginal distributions -- verified against the brute-force average -- so the whole
+# measure is O(K) arithmetic on the very column means the per-category sweep already forms. That
+# factorisation is also what makes it MARGINAL rather than matched, hence collapsible, hence worth
+# testing against the crude twin (see REG_WORDS$D).
+#
+#     est   = win - loss (identity: Somers' D)  |  log(win / loss) (log: the win ratio)
+#     mean1 = gamma, mean0 = 1/2 -- so `{base}` reads the probability of superiority and the
+#             reference row's own base is a coin flip, exactly.
+#     alt   = the OTHER reading, which is a primitive of the same pair rather than something
+#             derivable from (mean1, mean0). reg_fill_base() prefers it over its own derivation.
+#' @keywords internal
+reg_gcomp_rank_maker <- function(fit, data, wt, link = "identity") {
+  eng <- reg_prob_engine(fit)
+  # only the two readings of the pair: a logit contrast of win/loss names no measure, and the
+  # estimand library composes no such row.
+  if (is.null(eng) || !link %in% c("identity", "log")) return(NULL)
+  w0 <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
+  if (length(w0) != nrow(data) || !all(is.finite(w0))) return(NULL)
+  cf <- function(lv, var) {
+    d <- reg_counterfactual(data, var, lv)
+    if (is.null(d)) return(NULL)
+    eng$mm(d)
+  }
+  function(var, level, ref, mask = NULL) {
+    w  <- if (is.null(mask)) w0 else w0 * as.numeric(mask)
+    sw <- sum(w)
+    if (!isTRUE(sw > 0)) return(NULL)
+    X1 <- cf(level, var); X0 <- cf(ref, var)
+    if (is.null(X1) || is.null(X0)) return(NULL)
+    P1 <- tryCatch(eng$probs(eng$theta, X1), error = function(e) NULL)
+    P0 <- tryCatch(eng$probs(eng$theta, X0), error = function(e) NULL)
+    if (is.null(P1) || is.null(P0) || !all(is.finite(P1)) || !all(is.finite(P0))) return(NULL)
+    K  <- length(eng$levels)
+    p1 <- as.vector(crossprod(P1, w)) / sw           # the two STANDARDISED distributions
+    p0 <- as.vector(crossprod(P0, w)) / sw
+    pr <- reg_rank_pair(p1, p0, link)
+    if (is.null(pr)) return(NULL)
+    # the chain rule over the per-category jacobians the engine already computes: d est / d theta =
+    # sum_k a1_k dp1_k/dtheta + a0_k dp0_k/dtheta.
+    G <- 0
+    for (j in seq_len(K))
+      G <- G + pr$a1[[j]] * eng$dmean(X1, P1, j, w) + pr$a0[[j]] * eng$dmean(X0, P0, j, w)
+    emp <- w * ((as.vector(P1 %*% pr$a1) - sum(p1 * pr$a1)) +
+                (as.vector(P0 %*% pr$a0) - sum(p0 * pr$a0))) / sw
+    list(est = pr$est, G = G / sw, emp = emp, mean1 = pr$gamma, mean0 = 0.5, alt = pr$alt)
   }
 }
 

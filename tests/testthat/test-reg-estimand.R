@@ -58,9 +58,13 @@ test_that("`measure = \"auto\"` follows the link -- except that it never PREDICT
   expect_identical(reg_estimand("binomial", link = "ratio", effect = "marginal")$measure, "ratio")
   # ... and the one clause: a non-collapsible link falls back to the LEVEL's own measure, on BOTH
   # prediction routes. A marginal odds ratio is a specialist quantity: asked for by name, never auto.
-  for (fam in c("binomial", "multinomial", "ordinal"))
+  for (fam in c("binomial", "multinomial"))
     for (eff in c("marginal", "at_reference"))
       expect_identical(reg_estimand(fam, effect = eff)$measure, "ratio", info = paste(fam, eff))
+  # an ORDINAL outcome's level is a RANK, whose own measure is Somers' D; and its pair is drawn from
+  # the population, so there is no at_reference row for the fallback to land on at all.
+  expect_identical(reg_estimand("ordinal", effect = "marginal")$measure, "difference")
+  expect_identical(reg_estimand("ordinal", effect = "at_reference")$status, "not_offered")
   # the clause reads REG_WORDS' declared flag, so it is the same fact the adjustment caveat reads
   expect_true(reg_word_noncollapsible("OR"))
   expect_false(reg_word_noncollapsible("RR"))

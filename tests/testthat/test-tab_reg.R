@@ -892,25 +892,34 @@ test_that("multinomial AME: one column per outcome category, matches marginaleff
   }
 })
 
-test_that("ordinal AME: one column per outcome category, matches marginaleffects", {
+test_that("ordinal marginal: ONE column, and Somers' D matches a hand-computed pair", {
   skip_if_not_installed("broom")
   skip_if_not_installed("MASS")
-  skip_if_not_installed("marginaleffects")
   d  <- ord_data()
-  t1 <- suppressWarnings(tab_reg(d, "spectrum", "race", family = "ordinal", effect = "marginal", measure = "difference",
-                                 cleannames = FALSE))
-  expect_true(all(c("Rep", "Ind", "Dem") %in% names(t1)))
+  t1 <- suppressWarnings(tab_reg(d, "spectrum", "race", family = "ordinal", effect = "marginal",
+                                 measure = "difference", cleannames = FALSE))
+  # the whole point of the phase: an ordinal model reports on the ORDER, in one column
+  expect_true("Model_mD" %in% names(t1))
+  expect_false(any(c("Rep", "Ind", "Dem") %in% names(t1)))
 
   dm <- d |> dplyr::filter(!is.na(spectrum), !is.na(race))
   dm$race <- forcats::fct_drop(dm$race)
   o  <- MASS::polr(spectrum ~ race, data = dm, Hess = TRUE, method = "logistic")
-  ac <- as.data.frame(marginaleffects::avg_comparisons(o, variables = "race", newdata = dm))
-  for (j in c("Rep", "Ind", "Dem")) {
-    col  <- t1[[j]]
-    keep <- !is.na(get_pvalue(col))
-    acj  <- ac[ac$group == j, ]
-    expect_equal(sort(get_diff(col)[keep]), sort(acj$estimate), tolerance = 1e-6)
+  pm <- function(lv) colMeans(predict(o, newdata = transform(
+    dm, race = factor(lv, levels = levels(dm$race))), type = "probs"))
+  hand <- function(lv) {                         # win - loss on the two standardised distributions
+    p1 <- pm(lv); p0 <- pm(levels(dm$race)[[1]]); K <- length(p1)
+    sum(p1 * c(0, cumsum(p0)[-K])) - sum(p0 * c(0, cumsum(p1)[-K]))
   }
+  col <- t1[["Model_mD"]]
+  for (lv in levels(dm$race)[-1]) {
+    i <- which(as.character(t1$levels) == lv)
+    expect_equal(get_diff(col)[i], hand(lv), tolerance = 1e-8)
+  }
+  # `{base}` is the probability of superiority, and the reference row's own is a coin flip
+  iref <- which(as.character(t1$levels) == levels(dm$race)[[1]])
+  expect_equal(get_pct(col)[iref], 0.5, tolerance = 1e-12)
+  expect_true(is.na(get_pct(col)[1]))            # the Constant row: a rank has no baseline
 })
 
 test_that("weighted binomial AME (svyglm) is population-weighted and matches marginaleffects", {

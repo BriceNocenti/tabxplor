@@ -699,6 +699,32 @@ tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "
 
 
 
+#### the different main use cases ----
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE) |> 
+  tab_export()
+# adjustment
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", measure = "ratio" , empirical = TRUE, color = "adjustment") |> 
+  tab_export()
+# several outcomes
+tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
+        family = c("binomial", "poisson"), empirical = TRUE) |> 
+  tab_export()
+# predictor’s list
+tab_reg(gss_simple, outcome = "married", 
+        predictors = list(race  = "race", 
+                          two   = c("race", "rincome"), 
+                          three = c("race", "rincome", "relig"), 
+                          full  = c("race", "rincome", "relig", "age") ),
+        family = "binomial", measure = "ratio" , empirical = TRUE, color = "adjustment") |> 
+  tab_export()
+# tab_vars 
+tab_reg(gss_simple, outcome = "married", tab_vars = "race",
+        predictors = c("rincome", "relig", "age", "tvhours"),
+        family = "binomial", measure = "ratio" , color ="between_groups") |> 
+  tab_export()
+
 
 
 # black and white publication ready tables ----

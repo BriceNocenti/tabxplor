@@ -64,7 +64,7 @@ testthat::test_that("the crude shape of every reachable estimand exists IN ITS O
   # the pairs the qualified form exists for: same shape NAME, different blocks and different engines
   keys <- tabxplor:::tx_fk_emp_shape_keys()
   testthat::expect_true(all(c("binomial.or_log", "rr.rr_log", "grouped_binomial.rr_log",
-                              "multinomial.ame_ratio_log", "ordinal.ame_ratio_log") %in% keys))
+                              "multinomial.ame_ratio_log", "ordinal.win_ratio_log") %in% keys))
   # and the edge itself refuses a block that does not declare the shape asked of it
   broken <- list(tabxplor:::tx_fk("FAKE", function() "binomial.rr_log",
                                   tabxplor:::tx_fk_emp_shape_keys))

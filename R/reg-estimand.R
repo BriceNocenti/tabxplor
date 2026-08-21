@@ -22,6 +22,10 @@
 # odds ratio is a specialist quantity (Karlson & Jann 2023), so it is asked for by name; auto falls
 # back to the LEVEL's own measure, which for a percentage is "x times as likely".
 #
+# WHAT A LEVEL IS decides which measures exist at all, and an ORDERED outcome's level is a RANK --
+# compared by pairs of people rather than by shares, which is what lets it report in ONE column.
+# REG_LEVEL_MEASURES holds that vocabulary and the reason it is not a `var_kind`.
+#
 # THE LIBRARY IS COMPOSED, NEVER WRITTEN. reg_compose_library() emits one row per BUILDABLE
 # (link, effect, measure) from four facts a family declares -- `level`, `fits`, `words`, `note` --
 # and two shared maps (REG_MEASURE_LINK, REG_LEVEL_MEASURES). So adding a family is one REG_FAMILIES
@@ -70,6 +74,7 @@ REG_MEASURE_ALIASES <- c(
   ratio = "ratio", rr = "ratio", RR = "ratio", irr = "ratio", IRR = "ratio",
   mr = "ratio", MR = "ratio", RoM = "ratio", risk_ratio = "ratio", rate_ratio = "ratio",
   difference = "difference", diff = "difference", rd = "difference", RD = "difference",
+  D = "difference", WR = "ratio",
   log = "log", log_odds = "log", log_risk = "log", log_rate = "log", log_ratio = "log",
   auto = "auto"
 )
@@ -206,7 +211,19 @@ REG_MARGINAL_COMPARISON <- c(identity = NA_character_, log = "lnratioavg", logit
 #
 # A measure exists for an outcome when the outcome's LEVEL can be transformed by that measure's link:
 # a PERCENTAGE has an identity, a log and a logit, so all three; a MEAN or a COUNT has no odds, so no
-# odds ratio. The level kinds are EST_SCALES$var_kind's own words.
+# odds ratio.
+#
+# ⚠ A LEVEL KIND IS NOT A `var_kind`. The two coincided while every level was a number a cell holds
+# (pct / mean / count, EST_SCALES' own words), and `rank` is where they part: it asks WHICH MEASURES
+# EXIST, while a var_kind says how a number formats and colours. A rank's two measures are stamped
+# with ordinary `points` / `pct_ratio` scales, so nothing downstream learns a fourth var_kind.
+#
+# A RANK is what an ORDERED outcome's cell is: not a share of one category but a share of PAIRS. Of
+# two people, one from this group and one from the reference group, who ends up higher? That pair --
+# (win, loss) -- has the same two readings as a level and its reference, additive and multiplicative,
+# and it is the exact K-category generalisation of a binary outcome's own measures: at K = 2,
+# win - loss IS the risk difference and win / loss IS the odds ratio. It carries no `at_reference`
+# row (reg_compose_row()) because a pair drawn at one profile is a different, matched estimand.
 #
 # Each cell names the EST_SCALES row the column is stamped with and the base acronym its header
 # prints. ⚠ ORDER IS LOAD-BEARING: the first entry is the LEVEL'S OWN measure, which is what the
@@ -220,7 +237,12 @@ REG_LEVEL_MEASURES <- list(
   mean  = list(difference = c(scale = "raw_diff",   word = "diff"),
                ratio      = c(scale = "mean_ratio", word = "RoM")),
   count = list(difference = c(scale = "raw_diff",   word = "diff"),
-               ratio      = c(scale = "mean_ratio", word = "IRR"))
+               ratio      = c(scale = "mean_ratio", word = "IRR")),
+  # DESIGN: Somers' D first -- it is stable in K (measured: 0.212 at K=4, 0.227 at K=20 for a
+  # cumulative OR of 2) where the win ratio drifts (1.79 -> 1.63), so it is what `auto` falls back to.
+  rank  = list(difference = c(scale = "points",     word = "D"),
+               ratio      = c(scale = "pct_ratio",  word = "WR"),
+               odds_ratio = c(scale = "odds_ratio", word = "OR"))
 )
 
 #' @keywords internal
@@ -253,7 +275,12 @@ REG_WORDS <- list(
   RD    = list(long = function() gettext("risk difference"),       noncollapsible = FALSE),
   IRR   = list(long = function() gettext("incidence-rate ratio"),  noncollapsible = FALSE),
   RoM   = list(long = function() gettext("ratio of means"),        noncollapsible = FALSE),
-  diff  = list(long = function() gettext("mean difference"),       noncollapsible = FALSE)
+  diff  = list(long = function() gettext("mean difference"),       noncollapsible = FALSE),
+  # DESIGN: both COLLAPSIBLE, and measured rather than assumed: with a covariate independent of the
+  # exposure (so no confounding to find), the cumulative odds ratio moves 1.47 -> 2.24 while the
+  # superiority pair does not move at all. That is what makes `color = "adjustment"` a TEST here.
+  D     = list(long = function() gettext("Somers' D"),             noncollapsible = FALSE),
+  WR    = list(long = function() gettext("win ratio"),             noncollapsible = FALSE)
 )
 
 # REG_CONTRASTS -- how each `effect` marks the measure it rides on. `mark` is a PREFIX on the acronym
@@ -339,9 +366,10 @@ reg_word_noncollapsible <- function(word) {
 # and so is the whole estimand library -- so adding a family is one row.
 #
 # The estimand columns, which are what the library composes from:
-#   level      what a cell of this outcome IS: "pct" | "mean" | "count", EST_SCALES$var_kind's own
-#              words. It decides which measures exist (REG_LEVEL_MEASURES) and which is the level's
-#              own. Declaring it (with `fits`) IS the fact "a user family".
+#   level      what a cell of this outcome IS: "pct" | "mean" | "count" | "rank". It decides which
+#              measures exist (REG_LEVEL_MEASURES) and which is the level's own. Declaring it (with
+#              `fits`) IS the fact "a user family". ⚠ NOT a var_kind: the first three happen to
+#              share EST_SCALES' words, "rank" does not -- see REG_LEVEL_MEASURES.
 #   fits       THE VALUE SET OF `link`, measure-keyed, mapping to the internal fit key reg_fit()
 #              takes. ⚠ ORDER IS LOAD-BEARING: the first entry is the family's own link, which is
 #              what `link = "auto"` resolves to and what the default table shows.
@@ -410,7 +438,7 @@ REG_FAMILIES <- list(
   ordinal      = list(display = function() gettext("ordinal logistic regression"),
                       short = "ologit",   ui = "ordinal (ordered)",    ui_binary = NA_character_,
                       outcome = NA_character_, outcome_level = NA_character_,
-                      level = "pct",   fits = c(odds_ratio = "ordinal"),
+                      level = "rank",  fits = c(odds_ratio = "ordinal"),
                       words = list(odds_ratio = "cumOR"),
                       note = function() gettext("proportional-odds model"),
                       why = function() gettext(
@@ -690,6 +718,23 @@ est_note_marginal <- function(kind, at_ref = FALSE, measure = "difference") {
   }
 }
 
+# The RANK prediction phrase -- the one sentence that teaches the whole measure, so it says what is
+# compared rather than naming the statistic again.
+#' @keywords internal
+#' @noRd
+est_note_rank <- function(measure) {
+  function() {
+    # WARNING -- i18n: every piece is its OWN literal gettext(). A gettext() over a paste0() would
+    # look up a msgid no catalogue holds, and silently return English.
+    who <- gettext(
+      "how often someone from this group ends up higher than someone from the reference group")
+    what <- if (identical(measure, "ratio"))
+      gettext("as a ratio of wins to losses")
+    else gettext("as a difference in percentage points, wins minus losses")
+    gettextf("%s, %s; %s", who, what, gettext("sample-averaged"))
+  }
+}
+
 # The estimand phrase of one composed row: the family's own qualifier on a coefficient (saying so
 # when the scale is percentage points), the generated prediction phrase otherwise.
 #' @keywords internal
@@ -702,6 +747,7 @@ reg_compose_note <- function(family, effect, measure, scale, vsrest) {
     return(if (identical(scale, "points"))
       function() gettextf("in percentage points, %s", own()) else own)
   }
+  if (identical(REG_FAMILIES[[family]]$level, "rank")) return(est_note_rank(measure))
   est_note_marginal(if (identical(REG_FAMILIES[[family]]$level, "pct")) "prob" else "raw",
                     at_ref = identical(effect, "at_reference"), measure = measure)
 }
@@ -716,6 +762,12 @@ reg_compose_row <- function(family, link, effect, measure) {
   if (is.null(cell)) return(NULL)                                  # the level has no such measure
   pred <- !identical(effect, "conditional")
   if (!pred && !identical(measure, link)) return(NULL)              # a coefficient IS the link's
+  rank <- identical(fam$level, "rank")
+  # DESIGN: a superiority pair compares two people DRAWN FROM THE POPULATION. At one profile both are
+  # the same person, so the pair collapses to a matched comparison -- a different estimand, and a
+  # non-collapsible one (measured: it moves under adjustment with zero confounding, the marginal one
+  # does not). Refused rather than silently renamed.
+  if (rank && identical(effect, "at_reference")) return(NULL)
   vsrest <- FALSE
   if (pred && identical(measure, "odds_ratio")) {
     # an odds ratio needs a percentage AND its complement, which only a binary outcome has; a 3+
@@ -730,7 +782,15 @@ reg_compose_row <- function(family, link, effect, measure) {
   fit   <- unname(fam$fits[[link]])
   crude <- reg_compose_crude(family, fit, measure, mlink, FALSE)
   list(link = link, effect = effect, measure = measure, base_measure = measure,
+       level = fam$level %||% NA_character_,
        measure_link = mlink, builder = if (!pred) "coef" else if (vsrest) "vsrest" else "ame",
+       # DESIGN: WHETHER THIS ESTIMAND NEEDS ONE COLUMN PER OUTCOME CATEGORY is a fact about the
+       # estimand, not about the family -- the crude side has always modelled it that way
+       # (REG_EMPIRICAL$*$per_category). Derived, never declared: a prediction about a SHARE needs one
+       # column per share, unless the outcome has exactly two of them (`outcome_level = "modelled"`
+       # IS that fact) -- while a prediction about a RANK is one number by construction.
+       per_level = pred && (vsrest || (identical(fam$level, "pct") &&
+                                       !identical(fam$outcome_level, "modelled"))),
        fit = fit, exp = !identical(mlink, "identity"),
        word = cell$word, scale = cell$scale,
        crude_fam = crude$fam, crude_shape = crude$shape,
@@ -900,6 +960,10 @@ reg_estimand <- function(family, link = "auto", measure = "auto", effect = "auto
     return(list(status = "not_offered", family = family, link = lk, effect = ef, measure = base,
                 why = function() gettext(
                   "an odds ratio needs a percentage and its complement, so a 3+ category outcome has to be asked \"versus what?\" first")))
+  if (identical(REG_FAMILIES[[family]]$level, "rank") && identical(ef, "at_reference"))
+    return(list(status = "not_offered", family = family, link = lk, effect = ef, measure = base,
+                why = function() gettext(
+                  "this measure compares two people drawn from the population, and one profile holds only one")))
   list(status = "not_offered", family = family, link = lk, effect = ef, measure = base)
 }
 
@@ -915,6 +979,8 @@ reg_no_coefficient_why <- function(link)
 #' @keywords internal
 #' @noRd
 reg_no_measure_why <- function(family) {
+  if (identical(REG_FAMILIES[[family]]$level, "rank")) return(function() gettext(
+    "an ordinal outcome's cell is a rank, so its measures compare PAIRS of people, not shares"))
   what <- switch(REG_FAMILIES[[family]]$level %||% "",
                  mean = gettext("continuous"), count = gettext("a count"), NULL)
   if (is.null(what)) return(function() gettext("this outcome does not support that measure"))
@@ -979,6 +1045,8 @@ reg_estimand_abort <- function(res, outcome = NULL) {
 REG_ASIDE_NOTE <- list(
   obs   = function() gettext("the observed (crude) one"),
   pct   = function() gettext("the adjusted predicted probability"),
+  # the same token on a RANK column is a different quantity: 50 % there means "no difference".
+  rank_pct = function() gettext("the probability of superiority itself, 50 % being a coin flip"),
   mean  = function() gettext("the adjusted predicted mean"),
   diff  = function() gettext("the same effect as a difference"),
   ratio = function() gettext("the same effect as a ratio"),
@@ -1008,6 +1076,7 @@ reg_aside_token <- function(display, scale = NULL) {
 #' @noRd
 reg_estimand_note <- function(est, aside = "") {
   if (is.null(est) || !is.function(est$note)) return("")
+  if (identical(aside, "pct") && identical(est$level, "rank")) aside <- "rank_pct"
   note  <- if (aside %in% names(REG_ASIDE_NOTE)) REG_ASIDE_NOTE[[aside]] else NULL
   paren <- if (is.null(note)) NULL else
     paste0(gettext("; each cell shows the effect vs the reference level and, in parentheses, "),
@@ -1221,7 +1290,8 @@ reg_measures_rd <- function() {
       reg_family_display_name(fits[[m]])), character(1))
     meas <- vapply(c(reg_level_measures(REG_FAMILIES[[fam]]$level), "log"),
                    function(m) sprintf("\\code{\"%s\"}", m), character(1))
-    lvl <- c(pct = "a percentage", mean = "a mean", count = "a count")[[REG_FAMILIES[[fam]]$level]]
+    lvl <- c(pct = "a percentage", mean = "a mean", count = "a count",
+             rank = "a position on an ordered scale")[[REG_FAMILIES[[fam]]$level]]
     paste0("  \\item \\strong{", fam, "} --- a cell is ", lvl, ". Models: ",
            paste(mods, collapse = "; "),
            ". Reported: \\code{measure = }", paste(meas, collapse = ", "), ".")

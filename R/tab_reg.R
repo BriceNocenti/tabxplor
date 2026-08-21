@@ -124,7 +124,10 @@ reg_is_binary_outcome <- function(y) length(unique(stats::na.omit(y))) == 2L
 reg_fam_binary   <- function(f)
   f %in% c("binomial", names(REG_FIT_FAMILY)[REG_FIT_FAMILY == "binomial"])
 reg_fam_prob     <- function(f) f %in% c("binomial", "multinomial", "ordinal")
-reg_fam_percategory <- function(f) reg_fam_prob(f) & !f %in% "binomial"
+# fitted by one of the 3+ level machines (nnet::multinom / MASS::polr), which have no marginal-effects
+# method under a survey design. ⚠ NOT "how many columns this estimand needs": that is the estimand's
+# own `per_level`, derived in reg_compose_row().
+reg_fam_3plus    <- function(f) reg_fam_prob(f) & !f %in% "binomial"
 reg_fam_count    <- function(f) f %in% c("poisson", "quasipoisson")
 # ⚠ the question is about the OUTCOME family, never the fit key: `rr` / `rd` are binomial FITS under
 # another link, so a `family == "binomial"` test would drop `trials` on both. A compound formula owns
@@ -483,6 +486,41 @@ reg_model_line <- function(meta, df_clause = "") {
   enc2utf8(line)
 }
 
+# reg_outcome_scale() -- WHAT "HIGHER" MEANS, for the outcomes that report on their order. A rank
+# column names its outcome and nothing else, so unlike a per-category table it never shows the
+# categories: the footer has to. Stored on the record because the footer is composed from it long
+# after the data is gone, and computed only where a family actually reads on a rank.
+#' @keywords internal
+#' @noRd
+reg_outcome_scale <- function(data, outcome, families) {
+  out <- list()
+  for (d in unique(as.character(outcome))) {
+    fm <- unname(families[[d]] %||% "")
+    if (!identical(REG_FAMILIES[[fm]]$level %||% "", "rank")) next
+    y <- data[[d]]
+    if (is.null(y)) next
+    y  <- forcats::fct_drop(as.factor(y))
+    lv <- levels(y)
+    if (length(lv) < 2L) next
+    out[[d]] <- list(levels = lv, share = unname(as.numeric(table(y)) / sum(!is.na(y))))
+  }
+  out
+}
+
+# The footer's own rendering of it: the ordered levels, low to high, each with the share of the
+# sample sitting on it -- so the reader sees both the direction and the shape of the scale.
+#' @keywords internal
+#' @noRd
+reg_scale_lines <- function(meta) {
+  sc <- meta$outcome_scale
+  if (!length(sc)) return(character(0))
+  vapply(names(sc), function(d) {
+    r <- sc[[d]]
+    enc2utf8(gettextf("%s, from low to high: %s.", d, paste0(
+      r$levels, " (", round(r$share * 100), "%)", collapse = " < ")))
+  }, character(1), USE.NAMES = FALSE)
+}
+
 reg_model_lines <- function(x, lang = NULL) {
   meta <- reg_call(x)
   if (is.null(meta)) return(character(0))
@@ -490,9 +528,11 @@ reg_model_lines <- function(x, lang = NULL) {
     fams <- meta$families; if (is.null(fams)) fams <- meta$family
     uf   <- unique(fams)
     dfc  <- reg_model_df_clause(x, meta, lg)
-    if (length(uf) <= 1L) { rl <- reg_model_line(meta, dfc); return(if (is.null(rl)) character(0) else rl) }
+    scl <- reg_scale_lines(meta)
+    if (length(uf) <= 1L) { rl <- reg_model_line(meta, dfc)
+                            return(c(if (is.null(rl)) character(0) else rl, scl)) }
     deps <- meta$outcome
-    vapply(uf, function(fm) {
+    c(vapply(uf, function(fm) {
       grp   <- deps[fams == fm]
       e     <- reg_meta_estimand(meta, grp[[1]])
       fname <- reg_family_display_name(e$fit %||% fm)
@@ -500,7 +540,7 @@ reg_model_lines <- function(x, lang = NULL) {
       if (nzchar(dfc)) est <- if (nzchar(est)) gettextf("%s; %s", est, dfc) else dfc
       enc2utf8(if (nzchar(est)) gettextf("Model (%s): %s; %s.", legend_name_list(grp), fname, est)
                else            gettextf("Model (%s): %s.", legend_name_list(grp), fname))
-    }, character(1), USE.NAMES = FALSE)
+    }, character(1), USE.NAMES = FALSE), scl)
   })
 }
 
@@ -1572,7 +1612,19 @@ reg_fill_base <- function(col, marg, skeleton, model_predictors, group = NULL, a
   refi   <- which(skeleton$is_ref & in_model)
   ref_of <- pred_v[refi][match(as.character(skeleton$var), as.character(skeleton$var)[refi])]
   ame_v  <- if (is.null(add$ame)) rep(NA_real_, n_rows) else take(add$ame, "ame")
-  reg_fill_geometries(col, pred_v, ref_of, fallback_diff = ame_v)
+  col    <- reg_fill_geometries(col, pred_v, ref_of, fallback_diff = ame_v)
+  # DESIGN: where the sweep carries the OTHER geometry itself, it wins over the derivation above. A
+  # rank pair's two readings are both primitives of (win, loss) -- neither follows from the level and
+  # its reference, which here are the probability of superiority and a coin flip.
+  alt_v <- if (is.null(add$ame) || !"alt" %in% names(add$ame)) rep(NA_real_, n_rows)
+           else take(add$ame, "alt")
+  if (any(!is.na(alt_v))) {
+    fld <- if (identical(est_fld, "diff")) "ratio" else "diff"
+    v   <- as.double(vctrs::field(col, fld))
+    v[!is.na(alt_v)] <- alt_v[!is.na(alt_v)]
+    col <- vctrs::`field<-`(col, fld, v)
+  }
+  col
 }
 
 # THE THREE GEOMETRIES OF ONE COMPARISON, from ONE pair of levels -- the adjusted predictions on a
@@ -1699,7 +1751,7 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
                          at = "average", link = "identity", comparison = NULL, want_pred = TRUE,
                          exponentiate = TRUE,
                          multiplier = NULL, engine = "marginaleffects", want_se = TRUE,
-                         anchors = NULL, crosses = list(),
+                         anchors = NULL, crosses = list(), rank = FALSE,
                          disp_known = TRUE, df_residual = NA_real_) {
   # `link` is the REPORTED comparison's, and it is what decides both questions: the contrast the
   # sweep computes, and whether the result comes back on a log scale that `exponentiate` may undo.
@@ -1715,11 +1767,19 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
     out <- reg_marginal_gcomp(fit, data, predictors, conf_level, wt, link = link,
                               do_exp = do_exp,
                               want_pred = want_pred, want_se = want_se, multiplier = multiplier,
-                              crosses = crosses,
+                              crosses = crosses, rank = rank,
                               disp_known = disp_known, df_residual = df_residual)
   # THE fallback, and the only place `marginaleffects` is genuinely required: the estimand's engine
   # named it, or gcomp refused this fit -- which the argument boundary cannot know.
   if (is.null(out)) {
+    # WARNING: a superiority pair has NO marginaleffects contrast -- falling through would silently
+    # print a per-category average marginal effect under a Somers' D header. The one fit that gets
+    # here is survey::svyolr(), which reg_prob_engine() refuses.
+    if (isTRUE(rank)) cli::cli_abort(c(
+      "This ordinal model cannot be read as a probability of superiority.",
+      "i" = "Weighted ordinal fits have no marginal quantities here.",
+      "x" = "Use {.code effect = \"conditional\"} (the cumulative odds ratio), or drop the weights."),
+      call = NULL)
     if (!requireNamespace("marginaleffects", quietly = TRUE))
       reg_abort_marginaleffects("this contrast, which has no closed form on this model")
     out <- reg_marginal_me(fit, data, predictors, conf_level, wt, at = at, link = link,
@@ -1738,7 +1798,7 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
 reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, link = "identity",
                                do_exp = !identical(link, "identity"),
                                want_pred = TRUE, want_se = TRUE, multiplier = NULL,
-                               crosses = list(),
+                               crosses = list(), rank = FALSE,
                                disp_known = TRUE, df_residual = NA_real_) {
   tvars <- tryCatch(all.vars(stats::delete.response(stats::terms(fit))), error = function(e) NULL)
   # a nested cross block is named by its BLOCK, whose parents are the formula's own variables.
@@ -1748,9 +1808,13 @@ reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, lin
   if (is.null(tvars) || !all(need %in% tvars)) return(NULL)
   V <- if (want_se) tryCatch(stats::vcov(fit), error = function(e) NULL) else NULL
   if (want_se && (is.null(V) || !is.matrix(V))) return(NULL)
-  per_cat <- inherits(fit, "multinom") || inherits(fit, "polr")
-  g <- if (per_cat) reg_gcomp_cat_maker(fit, data, wt, link)
-       else         reg_gcomp_maker(fit, data, wt, link)
+  # THE THREE SWEEPS, chosen once: a rank contrast reads the whole predicted distribution and answers
+  # with ONE number, so it takes the single-equation path from here on -- `per_cat` is what fans a
+  # sweep out over the outcome's categories, and a rank has none to fan out over.
+  per_cat <- !isTRUE(rank) && (inherits(fit, "multinom") || inherits(fit, "polr"))
+  g <- if (isTRUE(rank)) reg_gcomp_rank_maker(fit, data, wt, link)
+       else if (per_cat) reg_gcomp_cat_maker(fit, data, wt, link)
+       else              reg_gcomp_maker(fit, data, wt, link)
   if (is.null(g)) return(NULL)
   crit <- reg_wald_crit(disp_known, df_residual, conf_level)   # the FIT's reference, never z by default
   amel <- list(); predl <- list()
@@ -1789,7 +1853,8 @@ reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, lin
                                disp_known = disp_known, df = df_residual)
       amel[[length(amel) + 1L]] <- tibble::tibble(
         var = v, level = as.character(ct$level), group = grp,
-        ame = res$estimate, ame_lo = res$conf.low, ame_hi = res$conf.high, ame_p = res$p.value)
+        ame = res$estimate, ame_lo = res$conf.low, ame_hi = res$conf.high, ame_p = res$p.value,
+        alt = p$alt %||% NA_real_)
       add_pred <- function(l, val) predl[[length(predl) + 1L]] <<-
         tibble::tibble(var = v, level = l, group = grp, pred = val)
       if (want_pred && is_fac) {
@@ -3226,10 +3291,11 @@ reg_crude_block <- function(sp, sp_fam, inv_sp, key, mdata, pos, y_ref, var_y, c
                        trials = sp$trials, ref_category = y_ref,
                        conf_level = conf_level, design_spec = design_spec)
   # THE FORK, answered once for the whole block: is the closed form the univariable model's own
-  # interval? A numeric predictor is never saturated; a factor one stops being so under an ordinal
-  # outcome, or under a design carrying structure the closed form cannot see (reg_crude_saturated()).
+  # interval? A numeric predictor is never saturated; a factor one stops being so where the SHAPE
+  # declares `refit`, or under a design carrying structure the closed form cannot see.
   # Everything that is not saturated is REFIT, through the very fitter the table came from.
-  saturated   <- reg_crude_saturated(key, TRUE, design_spec$design)
+  saturated   <- reg_crude_saturated(key, TRUE, design_spec$design,
+                                     reg_crude_shape(key, sp$est))
   fit_preds_e <- c(
     num_preds_e, reg_cross_nested_vars(crosses),
     if (!saturated) fac_preds_e else character(0))
@@ -3290,7 +3356,8 @@ reg_cols_ame <- function(f, sp, ctx) {
   sp_eff       <- reg_word(sp$est)
   sp_col       <- sp$color
   prob_scale   <- reg_fam_prob(sp_fam)
-  per_category <- reg_fam_percategory(sp_fam)
+  per_category <- isTRUE(sp$est$per_level)
+  rank_est     <- identical(sp$est$level, "rank")
   # the contrast asked of the ENGINE and the scale the COLUMN prints both come from the estimand row,
   # and they are two decisions: a `measure = "log_*"` row still wants the log-ratio contrast, and
   # still keeps the log (`exp` FALSE). See reg_marginal().
@@ -3304,7 +3371,7 @@ reg_cols_ame <- function(f, sp, ctx) {
                         comparison = sp_est$comparison,
                         exponentiate = isTRUE(sp_est$exp),
                         multiplier = multiplier, engine = reg_marginal_engine(sp_est),
-                        anchors = anchors, crosses = crosses,
+                        anchors = anchors, crosses = crosses, rank = rank_est,
                         disp_known = f$disp_known, df_residual = f$df_residual)
   marg     <- reg_scale_pred(marg, sp$trials)
   marg_degf <- reg_wald_degf("wald", f$disp_known, f$df_residual)
@@ -3314,7 +3381,11 @@ reg_cols_ame <- function(f, sp, ctx) {
   # a logged odds ratio, the baseline level under a logged risk / rate ratio -- and logged after, so
   # `Constant + effect` stays coherent on the link scale.
   exp_sc <- reg_exp_scale_of(sp_est, sp$trials)
-  const <- reg_constant_baseline(
+  # DESIGN: a RANK column has no baseline to place. The model's predicted outcome distribution is a
+  # fact about the OUTCOME, not the level this column's effects move away from -- that one is a coin
+  # flip, and the reference row already prints it. The distribution goes to the footer instead
+  # (reg_model_lines()), where it names a scale rather than pretending to be an intercept.
+  const <- if (rank_est) NULL else reg_constant_baseline(
     f$fit, f$data, sp$predictors,
     at = if (identical(sp_est$effect, "at_reference")) "reference" else "average",
     wt = design_spec$wt, conf_level = conf_level,
@@ -3909,6 +3980,13 @@ reg_stage_finalize <- function(ctx) {
 #'     an odds ratio a risk ratio stays comparable **across nested models**.
 #'   * `"difference"` (`"RD"`, `"diff"`) --- how much more, in the outcome's own units (percentage
 #'     points on a probability).
+#'
+#'   On an **ordered** outcome these read the model's whole predicted distribution rather than one
+#'   category of it, so they stay in **one column**: `"difference"` gives Somers' `D` and `"ratio"`
+#'   the win ratio, both of them *of two people, one from this group and one from the reference
+#'   group, how often does the one from this group end up higher on the scale* --- with that
+#'   probability itself in brackets, 50 % being a coin flip. For a number per outcome category, use
+#'   `family = "multinomial"`.
 #'   * `"log"` (`"log_odds"`, `"log_risk"`, `"log_rate"`) --- the same estimand, **un-exponentiated**.
 #'     Bare `"log"` logs whatever the cascade would report; the precise spellings pin which base. The
 #'     header names what it logs (`Model_log(OR)`), never one greek letter for five quantities.
@@ -4519,6 +4597,7 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
     # relabel. `multiplier` records the RESOLVED scaling used, frozen SDs included, so the footer and
     # legend can name the unit.
     predictor_types = reg_predictor_types(a$data, a$union_predictors), multiplier = a$multiplier,
+    outcome_scale = reg_outcome_scale(a$data, a$outcome, a$families),
     # THE RECIPE reg_check_plots() refits from: the specs plus the few scalars reg_fit() takes, a few
     # KB of strings. Deliberately NOT the fits -- they are megabytes each, and a refit through the
     # very fitter the table came from is both cheaper and impossible to drift from.

@@ -451,13 +451,18 @@ reg_resolve_estimands <- function(data, outcome, family = "auto", link = "auto",
 
   # --- J: estimand x survey feasibility -- the marginaleffects paths have no method for
   # survey-weighted 3+ level outcomes. Asked of the resolved estimand (`builder`).
-  if (weighted && any(reg_fam_percategory(families)) &&
-      any(vapply(ests, function(e) !identical(e$builder, "coef"), logical(1)))) {
+  # ⚠ EXCEPT a RANK estimand, which runs on tabxplor's own g-computation over svyolr's (beta, zeta)
+  # and takes its variance from that fit's already design-based vcov(). It is the one marginal
+  # quantity a weighted ordinal model can report, so it is exempted here rather than by a message.
+  no_method <- vapply(ests, function(e) !identical(e$builder, "coef") &&
+                        !identical(e$level, "rank"), logical(1))
+  if (weighted && any(reg_fam_3plus(families)) && any(no_method)) {
     cli::cli_abort(c(
       "A survey-weighted {.val multinomial}/{.val ordinal} outcome can only be read on its coefficients.",
       "i" = paste0("Its marginal quantities have no method here, so a measure other than the ",
                    "model's own cannot be reported."),
-      "i" = "Use {.code effect = \"conditional\"} with the model's own measure, or drop the weights."),
+      "i" = paste0("Use {.code effect = \"conditional\"} with the model's own measure, drop the ",
+                   "weights, or -- on an ordered outcome -- ask for {.code measure = \"difference\"}.")),
       call = NULL)
   }
 

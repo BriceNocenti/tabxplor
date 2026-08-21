@@ -155,13 +155,26 @@ test_that("weighted multinomial errors clearly without svyVGAM", {
   expect_error(tab_reg(d, "yn", c("x1", "x2"), family = "multinomial", wt = "w"), "svyVGAM")
 })
 
-test_that("a weighted 3+ level outcome can only be read on its coefficients", {
+test_that("a weighted NOMINAL outcome can only be read on its coefficients", {
+  skip_if_not_installed("svyVGAM")
   d <- reg_survey_multi_data()
-  # the marginal quantities have no survey method here, so the refusal covers BOTH ways of asking:
-  # naming the contrast, and naming a measure the model does not estimate.
+  # marginaleffects has no survey method for a multinomial fit, so the refusal covers BOTH ways of
+  # asking: naming the contrast, and naming a measure the model does not estimate.
   for (a in list(list(effect = "marginal"), list(measure = "difference")))
-    expect_error(do.call(tab_reg, c(list(d, "yo", "x1", family = "ordinal", wt = "w"), a)),
+    expect_error(do.call(tab_reg, c(list(d, "yn", "x1", family = "multinomial", wt = "w"), a)),
                  "only be read on its coefficients")
+})
+
+test_that("a weighted ORDINAL outcome CAN be read on its rank measures", {
+  d <- reg_survey_multi_data()
+  # the exception to the rule above: a rank estimand runs on tabxplor's own g-computation over
+  # svyolr's (beta, zeta), and takes its variance from that fit's already design-based vcov().
+  for (a in list(list(effect = "marginal"), list(measure = "difference"), list(measure = "ratio"))) {
+    t <- suppressMessages(suppressWarnings(
+      do.call(tab_reg, c(list(d, "yo", "x1", family = "ordinal", wt = "w"), a))))
+    col <- t[[grep("^Model_", names(t), value = TRUE)[[1]]]]
+    expect_true(any(is.finite(get_ci_inf(col))))
+  }
 })
 
 # --- Phase 12g-iii: split_var (stacked grouped subtables + tab_spread) ------------------------------

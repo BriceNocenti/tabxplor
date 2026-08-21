@@ -1,10 +1,8 @@
 # One column for an ordinal model — the ordinal superiority measures
 
-Study of a single question: **can `tab_reg(family = "ordinal")` report a marginal, readable effect in ONE column per model, instead of one column per outcome level?**
+`tab_reg(family = "ordinal")` reports a marginal, readable effect in **one column per model**, not one per outcome level. The measure is standard in the statistical literature, it is *exactly computable from the numbers `tab_reg()` already builds*, and it is the **exact generalisation to K categories of what tabxplor already does on a binary outcome**.
 
-The answer is yes, the measure is standard in the statistical literature, it is *exactly computable from the numbers `tab_reg()` already builds*, and it turns out to be the **exact generalisation to K categories of what tabxplor already does on a binary outcome**. This file records the reasoning, the measurements that back it, the proposed integration into the declared tables, and the caveats.
-
-Nothing here is implemented. No `.R` file was touched. Every figure below was measured on `gss_cat_data_formatting()`, on the working tree of 2026-08-21, or by simulation; the scripts are throwaway and the results are reproduced inline so they can be re-checked.
+This file is the expert guide to that measure: why it and not another (§§1–3), what it looks like (§4), how it is inferred (§5), how it is built (§6), and what it cannot do (§7). Every figure was measured on `gss_cat_data_formatting()` or by simulation and is reproduced inline so it can be re-checked; §9 is the checklist those checks became.
 
 ---
 
@@ -247,70 +245,82 @@ The g-computation passes are the same ones the current `effect = "marginal"` rou
 
 ---
 
-## 6. Proposed integration into the declared tables
+## 6. How it is built
 
-The proposal is expressible entirely in the package's own vocabulary — no new user argument, no new word to learn.
+Implemented in Phase 22c-vi. This section states the current design; §§1–5 are the measurements it rests on.
 
-### 6.1 The key architectural statement
+### 6.1 The architectural statement
 
-The ordinal family currently declares `level = "pct"`: a cell is *the share of one outcome category*, which is what forces K columns. The superiority route is a different **kind of level** — *a share of pairs* — and it is what makes the column count 1 by construction.
+An ordinal outcome's **level kind is a rank** (`REG_FAMILIES$ordinal$level = "rank"`), not `"pct"`. That one word is what makes the column count 1: a rank is compared by pairs of people rather than by shares, so its measures read the whole predicted distribution and answer once. `REG_LEVEL_MEASURES` gains one entry, and order is load-bearing — the first is the level's own measure, which `auto` falls back to on a prediction route:
 
-So the clean framing is a new `level` kind, say `superiority`, alongside `pct` / `mean` / `count` in `EST_SCALES$var_kind`:
+```r
+rank = list(difference = c(scale = "points",     word = "D"),
+            ratio      = c(scale = "pct_ratio",  word = "WR"),
+            odds_ratio = c(scale = "odds_ratio", word = "OR"))
+```
 
-| level kind | a cell is | measures it supports | columns |
-|---|---|---|---|
-| `pct` | share of one category | difference, ratio, odds_ratio | K |
-| `superiority` | share of **pairs** won | difference (`delta`), ratio (`WR`) | 1 |
+⚠ **A level kind is not a `var_kind`.** The first three (`pct` / `mean` / `count`) happen to share `EST_SCALES`' words; `rank` does not. It asks *which measures exist*, while a `var_kind` says how a number formats and colours — and there is deliberately **no fourth `var_kind`**, because five places answer "percentage" for an unknown one instead of erroring.
 
-`ordinal` would declare `superiority` as its level kind for the two prediction routes, and keep `pct` reachable for the user who explicitly wants the per-level breakdown. `gaussian` could declare it too (for a linear model the same pair is defined and equals `Phi(beta/(sigma*sqrt(2)))`), but that is out of scope here.
+The library then composes 5 ordinal rows instead of 10: conditional `cumOR` + `log(cumOR)`, marginal `mD`, `mWR` + `log(mWR)`. `at_reference` is refused on a rank by one clause in `reg_compose_row()` — a pair drawn at one profile is the *matched* comparison, a different and non-collapsible estimand (§3.2).
 
-### 6.2 Where each fact would go
+### 6.2 Where each fact lives
 
-| Table | Row / change |
+| Table | What it holds |
 |---|---|
-| `REG_FAMILIES$ordinal` | a `level` that varies by effect route, or a second declared level kind |
-| `REG_ESTIMANDS` | `coefficient` → cumOR unchanged; `marginal` → `delta` / `WR`; same two at `at_reference` |
-| `EST_SCALES` | one scale, field `diff` or `ratio`, `var_kind = "superiority"`, null 0 / 1, base field = `gamma` |
-| `REG_WORDS` | `PS` for the base, `D` for `delta`, `genOR` for `WR`; the `m` marker composes → `mD`, `mgenOR` |
-| `DISPLAY_TOKENS` | `{est}`/`{base}` already scale-relative; a `{gamma}` alias is optional |
-| `COLOR_SCALES` | the `delta` ladder below |
-| `REG_EMPIRICAL` | one closed-form entry: the same formula on the cross-table's row percentages |
-| `REG_LINK_FUNS` | untouched — the measure is a functional of the predicted distribution, not of a link |
+| `REG_FAMILIES$ordinal` | `level = "rank"`, and the `words` override that keeps the coefficient `cumOR` |
+| `REG_LEVEL_MEASURES$rank` | the three cells above — the whole measure surface |
+| `REG_ESTIMANDS` | composed: `conditional` → `cumOR`; `marginal` → `D` / `WR`; no `at_reference` row |
+| `EST_SCALES` | **untouched** — `points` and `pct_ratio` already declare the right geometry |
+| `COLOR_SCALES` | **untouched** — see §6.3 |
+| `REG_WORDS` | `D` ("Somers' D") and `WR` ("win ratio"), both `noncollapsible = FALSE` |
+| `REG_MEASURE_ALIASES` | `D = "difference"`, `WR = "ratio"` (the FK: a header word is a typable measure) |
+| `REG_EMPIRICAL$ordinal` | `somers_d` / `win_ratio` / `win_ratio_log`, closed form; `cumor` declares `refit` |
+| `REG_LINK_FUNS` | untouched — the measure is a functional of the distribution, not of a link |
 
-### 6.3 The colour ladder, calibrated
+Two ad-hoc predicates became declared facts on the way: the estimand row carries **`per_level`** (how many columns it needs), replacing the family-name test `reg_fam_percategory()`; and a crude shape carries **`refit`** (it has no closed form), so `reg_crude_saturated()` names no family.
 
-`CLAUDE.md` requires every ladder to be *the same ladder written in another measure at a 50 % reference cell*. The mapping is measured and, usefully, near-invariant in K:
+### 6.3 The colour ladder needs no calibration
+
+`points` and `pct_ratio` are already right. `CLAUDE.md` requires every ladder to be *the same ladder written in another measure at a 50 % reference cell*, and `pct_diff`'s declared anchor is *"5 points at a 50 % reference"* — which is literally what `D` measures. The mapping is near-invariant in K:
 
 | package rung | ×1.1 | ×1.2 | ×1.5 | ×2 | ×4 |
 |---|---|---|---|---|---|
-| `delta`, K=4 | 0.030 | 0.057 | 0.126 | 0.212 | 0.397 |
-| `delta`, K=5 | 0.030 | 0.058 | 0.129 | 0.217 | 0.410 |
-| `delta`, K=7 | 0.031 | 0.059 | 0.132 | 0.222 | 0.422 |
+| `D`, K=4 | 0.030 | 0.057 | 0.126 | 0.212 | 0.397 |
+| `D`, K=5 | 0.030 | 0.058 | 0.129 | 0.217 | 0.410 |
+| `D`, K=7 | 0.031 | 0.059 | 0.132 | 0.222 | 0.422 |
 | `WR`, K=4 | 1.083 | 1.164 | 1.403 | 1.788 | 3.252 |
 
-So a `delta` ladder of **0.03 / 0.06 / 0.13 / 0.21 / 0.40** is the package's own ratio ladder rewritten, to two digits, for any realistic K. It also happens to sit close to the conventional Somers' D reading guide (negligible < 0.10, weak 0.10–0.30, moderate 0.30–0.50, strong > 0.50), so the colours and the literature's own thresholds agree.
+It also sits close to the conventional Somers' D reading guide (negligible < 0.10, weak 0.10–0.30, moderate 0.30–0.50, strong > 0.50). ⚠ The `WR` ladder is only approximate, since the win ratio drifts with K — one more reason `D` leads the list.
 
-The `WR` ladder must be declared per-K or accepted as approximate — a further reason to make `delta` the primary reading.
+### 6.4 One estimator, two callers
 
-### 6.4 The footer and the legend
+`reg_rank_pair(p1, p0, link)` is the whole arithmetic: two distributions in, both readings out (`est` on the asked link, `alt` on the other), plus the gradient of `est` in each distribution. It runs on the model column's two **standardised** distributions and on its crude twin's two **counted** ones — one formula, two inputs, which is what makes the distance between the columns mean adjustment and nothing else.
 
-The footer clause writes itself from the definition, and it is the whole teaching payload:
+- `reg_gcomp_rank_maker()` pushes the gradients through the fit's own per-category jacobians (`reg_prob_engine()$dmean`). Answering once, it is a **drop-in for `reg_gcomp_maker()`**, so nothing downstream branches.
+- `reg_rank_se()` pushes them through the multinomial covariance of two independent samples. At `est = gamma` the gradients are the placement values, so this **is** DeLong's variance, arrived at rather than special-cased.
+- `reg_crude_rank_if_maker()` reads the same gradient as a per-observation score, for the gap SE.
+
+`mean1 = gamma`, `mean0 = 1/2`, so `{base}` prints the probability of superiority and the reference row's own base is a coin flip, exactly. The *other* reading rides in `alt`, because both readings are primitives of the pair rather than derivations from `(gamma, 1/2)` — `reg_fill_base()` prefers it over its own geometry rule.
+
+### 6.5 The Constant row, and the footer
+
+The Constant **value cell is void** on a rank column. The model's predicted outcome distribution is a fact about the outcome, not the level these effects move away from — that one is a coin flip, and the reference row already prints it. Instead `reg_outcome_scale()` stores the ordered levels and their shares, and the footer prints the scale:
 
 ```text
-Model: ordinal logistic regression (proportional odds); PS = probability of superiority — of two
-people drawn at random, one from this group and one from the reference group, all else equal, how
-often the one from this group ends up higher on the scale (a tie counting half). 50 % = no
-difference. In parentheses, the observed (crude) figure.
+Model: ordinal logistic regression; mD = marginal Somers' D (how often someone from this group ends
+up higher than someone from the reference group, as a difference in percentage points, wins minus
+losses; sample-averaged); each cell shows the effect vs the reference level and, in parentheses, the
+probability of superiority itself, 50 % being a coin flip.
+rincome, from low to high: 1-Lt $10000 (17%) < 2-$10000 to 14999 (9%) < ... < 4-$25000 or more (57%).
 ```
 
-### 6.5 What `measure = "ratio"` should do
+That second line is necessary rather than decorative: a one-column table shows the outcome's name and none of its categories, so nothing else says what "higher" means.
 
-The user's call asked for `ratio`. Two defensible answers, and the trade-off should be a maintainer decision:
+### 6.6 What `measure = "ratio"` does
 
-1. **`ratio` → `WR`** (recommended). The pair `(win, loss)` gets both readings, exactly as a level and its reference do elsewhere in the package; one architecture, no exception. Caveat to document: at K = 2 the superiority ratio is the *odds* ratio, not the risk ratio, so the ordinal `ratio` column is not the continuation of the binomial `ratio` column. Since a 2-level outcome is never `family = "ordinal"`, the two never appear in one table.
-2. **`ratio` → keep the K per-level marginal RRs**, and let the one-column route be `difference` only. Honest, but leaves the default question unanswered and keeps a wide table one argument away.
+It gives the **win ratio**, the multiplicative reading of the same pair — so the two measure words behave on a rank exactly as they do on a level and its reference. One caveat to know: at K = 2 the superiority ratio is the *odds* ratio, not the risk ratio, so the ordinal `ratio` column is not the continuation of the binomial `ratio` column. A 2-level outcome is never `family = "ordinal"`, so the two never meet in one table.
 
-Either way, **the default for `family = "ordinal"` should become the one-column route**, since one column is the entire reason to prefer an ordinal model to a multinomial one. The per-level breakdown stays reachable explicitly — it is a legitimate thing to want when the proportional-odds assumption is in doubt, and `brant`-style evidence belongs beside it in `REG_CHECKS`.
+The per-level breakdown is **not** reachable from an ordinal fit any more. Wanting a number per outcome category is a question the ordering does not help with, and `family = "multinomial"` answers it without assuming proportional odds — which is strictly better whenever that assumption is in doubt (§3.3, and the measured comparison in the roadmap's Phase 22c-vi summary).
 
 ---
 
@@ -339,16 +349,17 @@ The gap tabxplor would fill: **the adjusted superiority measure as a column of a
 
 ---
 
-## 9. Verification checklist for whoever implements this
+## 9. What the tests pin
 
-- [ ] `delta == 2*gamma - 1` and `gamma == 0.5` exactly on the reference row and at `beta = 0`
-- [ ] on a 2-level outcome, `delta` equals the marginal risk difference to machine precision
-- [ ] `2*gamma - 1` equals `Hmisc::somers2()`'s `Dxy` on the crude/unadjusted path
-- [ ] the `colMeans` shortcut equals the brute-force pairwise average
-- [ ] stars agree cell-for-cell with the four-column `measure = "ratio"` table
-- [ ] the collapsibility simulation of §3.2 reproduces: crude and adjusted agree within Monte-Carlo error when `Z` is independent of `X`
-- [ ] the crude analytic SE matches a multinomial bootstrap
-- [ ] `gamma` from `polr` and from `nnet::multinom` agree within ~0.005 on `gss_simple`
+`tests/testthat/test-reg-rank.R`, plus the invariants `test-fact-keys.R` / `test-reg-estimand.R` / `test-reg-invariants.R` already assert about the library:
+
+- `D == 2*gamma - 1 == win - loss`, and `gamma == 0.5` exactly when the two distributions are equal
+- on two categories, `D` IS the risk difference and `WR` IS the odds ratio, to machine precision
+- both analytic gradients against numeric differentiation (3e-10 on both links) — the one thing that fails silently
+- the crude closed-form SE against a multinomial bootstrap, and the gap SE against a paired one
+- the collapsibility simulation of §3.2: crude and adjusted agree where the covariate is independent of the exposure, while the cumulative OR moves
+- one column and not K; `{base}` a probability of superiority; the reference row a coin flip; the footer naming the scale
+- a weighted (`svyolr`) ordinal model reads on its rank measures, while a weighted multinomial one still cannot
 
 ---
 

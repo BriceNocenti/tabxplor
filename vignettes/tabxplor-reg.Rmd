@@ -68,7 +68,7 @@ You rarely set `family` by hand — `tab_reg()` mostly detects it:
 | numeric (continuous) | gaussian (linear) | mean difference (`diff`) |
 | count | poisson | incidence-rate ratio (`IRR`) |
 | 3+ level unordered factor | multinomial | one `OR` column per category vs. the reference |
-| 3+ level ordered factor | ordinal (proportional odds) | cumulative `OR` |
+| 3+ level ordered factor | ordinal (proportional odds) | cumulative `OR`, or Somers' `D` |
 
 That last column is the measure the model **estimates**, not a ceiling: any other measure can still be *reported* from the same fit, and `measure =` is how you ask. Four arguments chain — `family` says what kind of number the outcome is, `link` which measure the model estimates, `measure` which one is reported, `effect` where that number comes from — and each follows from the one before unless you say otherwise. The full grid is in [What a model column reports](#what-a-model-column-reports-family-link-measure-effect) below.
 
@@ -471,11 +471,22 @@ Grouped-binomial (like Poisson) models report a Pearson **dispersion** check in 
 
 ## Ordinal and nominal outcomes (a factor with 3+ levels)
 
-An **ordered** factor outcome is fit as a proportional-odds (cumulative) logistic model:
+An **ordered** factor outcome is fit as a proportional-odds (cumulative) logistic model, and it reports in **one column**: its whole claim is that one number per predictor level is enough, so it never spends a column per outcome category. By default that number is the cumulative odds ratio `cumOR` — the model's own coefficient, and the one measure the proportional-odds assumption makes the same at every cut:
 
 ```{r}
 tab_reg(gss_simple, "rincome", c("race", "age", "relig"))
 ```
+
+A cumulative odds ratio is hard to say out loud, so ask for another **measure of deviation** and the same fit is read as a probability. `measure = "difference"` gives Somers' `D` — *of two people, one from this group and one from the reference group, how often does the one from this group end up higher on the scale?* — with that probability itself in brackets, 50 % being a coin flip:
+
+```{r}
+tab_reg(gss_simple, "rincome", c("race", "age", "relig"),
+        measure = "difference", display = "est_base")
+```
+
+`measure = "ratio"` reads the same pair multiplicatively, as a **win ratio** (wins to losses). Both still take one column, because both read the whole predicted distribution rather than one slice of it — and both are robust where the cumulative odds ratio is not: they barely move when the proportional-odds assumption fails, and, unlike an odds ratio, they do not drift under adjustment when there is nothing to adjust for. The footer names the scale from low to high, since a one-column table shows the outcome's name and none of its categories.
+
+If you want a number **per outcome category** — a percentage-point effect on each income band — that is a question the ordering does not help with, and `family = "multinomial"` answers it without assuming proportional odds.
 
 A nominal outcome with three or more unordered levels is fit as one **multinomial** logistic model, giving one odds-ratio column per outcome category versus the reference category (also called relative risks ratios) :
 
@@ -516,6 +527,13 @@ tab_reg(gss_simple, "rincome", c("race", "relig"),
 ```
 
 Read a row left to right: the observed cumulative odds ratio, then the modelled one, with the **background** colouring the gap between them. Being Black is associated with lower income (`1/1.54` observed), and adjusting for religion barely moves it (`1/1.51`) — the association is not explained by religion. Compare Buddhist/Hinduist, where the effect *grows* once race and the other groups are held constant: adjustment can strengthen an association as easily as it can wash one away.
+
+On this scale the **background colour is not a test**: an odds ratio moves when any strong predictor is added, which is arithmetic rather than confounding. Ask for `measure = "difference"` and the same comparison is read on Somers' `D`, where it *is* one — the crude value is then the cross-table's own superiority probability, computed from the counts with no model at all, so the distance to the modelled one measures adjustment and nothing else:
+
+```{r}
+tab_reg(gss_simple, "rincome", c("race", "relig"), measure = "difference",
+        empirical = TRUE, display = "est_base", color = c(TRUE, "adjustment"))
+```
 
 ### A nominal outcome: the crude number rides in the cell
 
@@ -701,7 +719,7 @@ measure — the one the model estimates directly — so the statistician's vocab
 |                |                  |            | `"ratio"`        | log-link Poisson pseudo-ML  | `RoM`          |
 | numeric, count | `poisson`        | a count    | `"ratio"` †      | Poisson, quasi-Poisson SEs  | `IRR`          |
 | factor, 3+ un. | `multinomial`    | percentage | `"odds_ratio"` † | multinomial logit           | `OR`           |
-| factor, ord.   | `ordinal`        | percentage | `"odds_ratio"` † | proportional-odds model     | `cumOR`        |
+| factor, ord.   | `ordinal`        | a rank     | `"odds_ratio"` † | proportional-odds model     | `cumOR`        |
 
 `family = "quasipoisson"` has exactly the row of `poisson` — it changes the variance assumption, not
 what is estimated.
@@ -709,12 +727,14 @@ what is estimated.
 ### What each measure reports, from any of them
 
 Which measures exist is decided by **what a cell is**: a percentage has an identity, a log and a
-logit, so all three; a mean or a count has no odds, so no odds ratio. Every cell below is the acronym
-the combination puts in the column header, after the constant `Model_` prefix.
+logit, so all three; a mean or a count has no odds, so no odds ratio; and a **rank** — an ordered
+outcome's cell — is compared by pairs of people rather than by shares, which is what lets an ordinal
+model report in one column. Every cell below is the acronym the combination puts in the column
+header, after the constant `Model_` prefix.
 
 | a cell is… | `measure =`    | `"conditional"` \*      | `"marginal"` | `"at_reference"` |
 |------------|----------------|-------------------------|--------------|------------------|
-| percentage | `"odds_ratio"` | `OR` (`cumOR`, ordinal) | `mOR` ¹      | `refOR` ¹        |
+| percentage | `"odds_ratio"` | `OR`                    | `mOR` ¹      | `refOR` ¹        |
 | percentage | `"ratio"`      | `RR`                    | `mRR`        | `refRR`          |
 | percentage | `"difference"` | `RD`                    | `mRD`        | `refRD`          |
 | a mean     | `"difference"` | `diff`                  | `mdiff`      | `refdiff`        |
@@ -723,6 +743,9 @@ the combination puts in the column header, after the constant `Model_` prefix.
 | a count    | `"ratio"`      | `IRR`                   | `mIRR`       | `refIRR`         |
 | a count    | `"difference"` | —                       | `mdiff`      | `refdiff`        |
 | a count    | `"odds_ratio"` | not defined             | not defined  | not defined      |
+| a rank     | `"difference"` | —                       | `mD`         | not offered ²    |
+| a rank     | `"ratio"`      | —                       | `mWR`        | not offered ²    |
+| a rank     | `"odds_ratio"` | `cumOR`                 | not offered ¹| not offered ¹    |
 
 \* a coefficient exists **only where that measure is the `link`** — see the previous table. Ask for
 one that is not, and the call is refused naming its two cures: drop `effect`, or fit the model that
@@ -731,6 +754,8 @@ estimates it.
 ¹ a predicted odds ratio needs a percentage **and its complement**, so a 3+ category outcome has to
 be asked "versus what?" first: on a multinomial outcome it exists only as the *versus the rest*
 contrast at `effect = "at_reference"`, and on an ordinal one not at all.
+
+² a rank's measures compare two people **drawn from the population**, and one profile holds only one.
 
 The three states are the ones `reg_measures()` prints, and they are not the same refusal:
 
@@ -848,10 +873,7 @@ is the claim you actually mean to make. `reg_formulas()` tells you which model r
 - **One combination has no observed companion.** At `effect = "at_reference"` the model is
   conditional on one profile while the observed columns stay marginal over the whole sample, so the
   two are shown but not compared — `color = "adjustment"` and `{obs}` stay empty.
-- **What needs an extra package, and what has no method.** `effect = "at_reference"` goes through
-  **marginaleffects**; a *survey-weighted* multinomial or ordinal model has no marginal-effects
-  method at all, so there it can only be read on its coefficients — keep the model's own measure and
-  the call goes through. (`display` itself reaches every column, marginal or not.)
+- **What needs an extra package, and what has no method.** `effect = "at_reference"` goes through **marginaleffects**; a *survey-weighted* multinomial model has no marginal-effects method at all, so there it can only be read on its coefficients — keep the model's own measure and the call goes through. A survey-weighted **ordinal** model is the exception: its rank measures (`measure = "difference"` / `"ratio"`) run on tabxplor's own g-computation and take the design-based variance straight from the fit, so they work under any design — only the crude/adjusted *gap test* is unavailable there, and `color = "adjustment"` then colours without testing. (`display` itself reaches every column, marginal or not.)
 
 ### Asking your own outcome
 
@@ -893,7 +915,7 @@ tab_reg(d, "outcome", c("pred1", "pred2"), empirical = TRUE)
 
 Everything then follows that design, in one regime: the `Model_*` coefficients and their intervals (`survey::svyglm()`), the average marginal effects, the per-standard-deviation scaling of numeric predictors, the model-vs-observed gap test — **and the observed `Obs_*` companion columns**, whose intervals are built on the design variance of each cell. That last point matters for the comparison this vignette is about: the model column and the observed column beside it are now measured the same way, so a difference between them is about *adjustment*, not about two different notions of uncertainty.
 
-Two honest limits. A comparison *between two cells* (an observed odds ratio, a risk difference) ignores the design covariance between them, so it lands a few percent either side of the exact answer — against the 15–25 % it was out by when those columns were computed as if the sample were simple random. And a 3+ level outcome (nominal, ordinal) has no observed *column*: its crude value is folded into the model cell as a point, with no interval to make design-based.
+Two honest limits. A comparison *between two cells* (an observed odds ratio, a risk difference) ignores the design covariance between them, so it lands a few percent either side of the exact answer — against the 15–25 % it was out by when those columns were computed as if the sample were simple random. And a *nominal* outcome has no observed *column*: its crude value is folded into the model cell as a point, with no interval to make design-based. An ordinal one does have a column — its crude superiority pair is a closed form on the cell table — but a survey-weighted ordinal model cannot be read on it at all (see below).
 
 Without a design, the observed columns' intervals already account for the weighting exactly (the flat survey design, `ids = ~1`) — a correction for unequal weighting only, blind to clustering and calibration.
 
@@ -1153,7 +1175,7 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), stats = c("
 Read them in the order they print, which is the order of what each one threatens:
 
 - **Linearity** — *is this predictor's effect really one straight line?* One row per continuous predictor. This is the one to look at first, because a wrong shape does not stay in its own row. In the model above, letting `age` curve instead of run straight moves the top income category's odds ratio by about a quarter, and flips another income level's verdict at the 5 % threshold — while nothing in the table hints at it.
-- **Proportionality (Brant)** — for an ordinal outcome, *is one cumulative odds ratio enough for every cut?*
+- **Proportionality (Brant)** — for an ordinal outcome, *is one cumulative odds ratio enough for every cut?* When it fails, `measure = "difference"` is the robust way to keep reading the same fit (Somers' `D` barely moves when the assumption breaks); `family = "multinomial"` is the way to stop assuming it at all.
 - **Dispersion (robust/model SE)** — *are the standard errors wide enough?* About 1 means the family's variance assumption holds; 1.4 means the intervals should be about 40 % wider than they are. For a count outcome, `family = "quasipoisson"` fixes exactly that, and the row then returns to about 1 (while the Pearson dispersion φ still reports the over-dispersion itself). Under a survey design it simply says how much the design mattered — the intervals are already the design's.
 - **Influence (max dfbetas)** — *does one respondent carry the result?* The largest amount, in standard errors, by which dropping a single respondent moves any coefficient. With thousands of respondents this is normally reassuringly small, and that reassurance is the point. Careful: influence is not the same as being an outlier — a surprising answer from an otherwise ordinary respondent moves nothing.
 - **Collinearity (max VIF)** — *can the data tell these predictors apart?* Above about 5, two predictors are measuring much the same thing and their intervals are inflated. Collinearity biases nothing, so this is the one check that is a caution rather than a problem. (It needs the `car` package.)

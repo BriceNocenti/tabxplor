@@ -25,12 +25,13 @@
 #   - TWO SOURCES, ONE SHAPE. A CLOSED FORM off reg_empirical()'s per-(var, level, category) grid
 #     wherever the univariable model is saturated AND the closed form's own assumption holds
 #     (reg_crude_saturated) -- there the crude odds ratio IS the Woolf 2x2 ratio. Otherwise a
-#     univariable reg_fit() through the very fitter the table came from (ordinal, every numeric
-#     predictor, every marginal shape, a NESTED interaction block whose univariable model is
-#     `y ~ M/X`, and every factor predictor under a structured survey design), so "same estimand,
-#     link, CI rule, multiplier" holds by construction. A COMBINED-factor interaction needs neither
-#     route of its own: it is a factor, so it takes the closed form, and there the closed form IS the
-#     observed cell table.
+#     univariable reg_fit() through the very fitter the table came from (a shape declaring `refit` --
+#     the cumulative odds ratio, whose proportional-odds constraint means a one-factor polr is not
+#     the cell table; every numeric predictor, every marginal shape, a NESTED interaction block whose
+#     univariable model is `y ~ M/X`, and every factor predictor under a structured survey design),
+#     so "same estimand, link, CI rule, multiplier" holds by construction. A COMBINED-factor
+#     interaction needs neither route of its own: it is a factor, so it takes the closed form, and
+#     there the closed form IS the observed cell table.
 #   - The crude interval is the univariable MODEL's, under the table's own inference basis: pooled /
 #     model-based unweighted, the sandwich weighted. See REG_EMPIRICAL's `ci_method_design`.
 #     ⚠ EVERY closed form here assumes the two compared groups are INDEPENDENT (Woolf's
@@ -339,9 +340,9 @@ reg_empirical <- function(data, fac_preds, outcome, crude_key, positive_level, w
 # WARNING: messages are suppressed -- already emitted by the model fit on the same data/method.
 # IS THE UNIVARIABLE MODEL'S INTERVAL AVAILABLE IN CLOSED FORM? Two things must hold, and the second
 # is why a design object is an argument here.
-#   * the univariable model must be SATURATED -- true of every factor predictor except under an
-#     ordinal outcome, where proportional odds is a constraint, so a one-factor polr is not the cell
-#     table. A numeric predictor is never saturated.
+#   * the univariable model must be SATURATED -- true of every factor predictor except where the
+#     SHAPE declares `refit` (the cumulative odds ratio: proportional odds is a constraint, so a
+#     one-factor polr is not the cell table). A numeric predictor is never saturated.
 #   * the closed form's own assumption must be true. Woolf / Katz / the moment engines all read
 #     `1/a + 1/b + 1/c + 1/d` style variances, which assume the two compared groups are INDEPENDENT.
 #     Weights alone do not break that (a flat design is a weight vector); clusters, strata and
@@ -350,8 +351,8 @@ reg_empirical <- function(data, fac_preds, outcome, crude_key, positive_level, w
 # Where either fails the crude column is REFIT through reg_empirical_fit(), i.e. through the very
 # fitter the table came from, which is what D22 asks for in the first place.
 #' @keywords internal
-reg_crude_saturated <- function(crude_key, is_factor, design = NULL)
-  isTRUE(is_factor) && !identical(crude_key, "ordinal") && !svy_design_structured(design)
+reg_crude_saturated <- function(crude_key, is_factor, design = NULL, shape = NULL)
+  isTRUE(is_factor) && !isTRUE((shape %||% list())$refit) && !svy_design_structured(design)
 
 #' @keywords internal
 reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome_level,
@@ -403,6 +404,9 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
         f$fit, f$data, v, conf_level, wt, at = "average",
         link = mlink, comparison = if (is.null(est)) NULL else est$comparison, want_pred = FALSE,
         exponentiate = FALSE, multiplier = multiplier, crosses = crosses,
+        # ⚠ the crude sweep must compute the SAME contrast as the model's: a rank estimand asks for
+        # the superiority pair here too, or the fallback quietly returns a per-category AME.
+        rank = identical((est %||% list())$level, "rank"),
         engine = if (is.null(est)) "marginaleffects" else reg_marginal_engine(est),
         disp_known = f$disp_known, df_residual = f$df_residual)),
         error = function(e) NULL)
@@ -468,8 +472,12 @@ reg_fit_overlay <- function(col, eff, est, shape) {
 #               is svyglm and the interval is the SANDWICH. Absent = the same interval either way.
 #   link        the crude estimator's link, for the gap SE's influence function (g'(mu)). NA where
 #               the shape is not an effect.
-#   per_category  one crude effect per OUTCOME category (multinomial, ordinal-marginal): rides in the
-#               model cell unless `empirical = "column"` asks for the columns.
+#   per_category  one crude effect per OUTCOME category (multinomial): rides in the model cell
+#               unless `empirical = "column"` asks for the columns.
+#   refit       this shape has NO closed form, so its crude estimate comes from a univariable fit
+#               through the table's own fitter. Only the cumulative odds ratio declares it:
+#               proportional odds is a CONSTRAINT, so a one-factor polr is not the cell table.
+#               reg_crude_saturated() reads it, which is why that predicate names no family.
 #
 # A family's own scalars: `coef` names the shape a row with no declared `crude_shape` falls back to;
 # `method_diff` the engine of the GRID's own level-vs-reference difference (a descriptive quantity
@@ -522,13 +530,17 @@ REG_EMPIRICAL <- list(
     ame_ratio_log = list(word = "RR", scale = "log_coef", ref = NA_character_, ci_method = "katz", link = "log",     per_category = TRUE)),
   # ordinal: no closed form (proportional odds is a constraint), so a univariable polr/svyolr through
   # reg_fit(). A cumulative odds ratio has no single share to sit on: `{base}` renders void.
+  # The ordinal block is the one that mixes the two ROUTES: `cumor` has no closed form (proportional
+  # odds is a constraint, so a one-factor polr is not the cell table) and refits, while the three
+  # rank shapes are exact arithmetic on two rows of the outcome x predictor table -- which is why
+  # reg_crude_saturated() asks the SHAPE, not the family.
   ordinal = list(
     coef = "cumor",
-    cumor     = list(word = "cumOR", scale = "odds_ratio", ref = "1",           ci_method = "wald_log", link = "logit"),
-    cumor_log = list(word = "cumOR", scale = "log_coef",   ref = NA_character_, ci_method = "wald_log", link = "logit"),
-    ame       = list(word = "RD",    scale = "points",     ref = "tot",         ci_method = "wald",     link = "identity", per_category = TRUE),
-    ame_ratio = list(word = "RR",    scale = "pct_ratio",  ref = "1",           ci_method = "wald_log", link = "log",      per_category = TRUE),
-    ame_ratio_log = list(word = "RR", scale = "log_coef",  ref = NA_character_, ci_method = "wald_log", link = "log",      per_category = TRUE))
+    cumor     = list(word = "cumOR", scale = "odds_ratio", ref = "1",           ci_method = "wald_log", link = "logit", refit = TRUE),
+    cumor_log = list(word = "cumOR", scale = "log_coef",   ref = NA_character_, ci_method = "wald_log", link = "logit", refit = TRUE),
+    somers_d  = list(word = "D",     scale = "points",     ref = "tot",         ci_method = "wald",     link = "identity"),
+    win_ratio = list(word = "WR",    scale = "pct_ratio",  ref = "1",           ci_method = "wald_log", link = "log"),
+    win_ratio_log = list(word = "WR", scale = "log_coef",  ref = NA_character_, ci_method = "wald_log", link = "log"))
 )
 
 # REG_EMP_BY_LINK -- (block, link, logged) -> the shape name, read off the table's OWN `link` column
@@ -623,9 +635,9 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
                                   saturated = TRUE, method = "wald") {
   if (is.null(REG_EMPIRICAL[[crude_key]]))
     return(list(cols = list(), cat_cols = list(), effect = NULL, shape = NULL))
-  # read off the ESTIMAND row, never (effect, do_exp).
-  marginal   <- !identical(est$effect, "conditional")
-  # THE crude shape, resolved ONCE (reg_crude_shape) and read by every arm below.
+  # THE crude shape, resolved ONCE (reg_crude_shape) and read by every arm below. ⚠ THE ARMS BRANCH
+  # ON THE SHAPE, never on (effect, do_exp): a marginal crude effect IS what the shape's own
+  # declarations compute, which is why no arm here asks whether the estimand was marginal.
   shape      <- reg_crude_shape(crude_key, est)
   if (is.null(shape)) return(list(cols = list(), cat_cols = list(), effect = NULL, shape = NULL))
   # THE COLOUR IS THE MODEL COLUMN'S. Under a GAP measure the crude column IS the baseline (`obs`
@@ -704,24 +716,53 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
     if (identical(EST_SCALES[[sh$scale]]$sd_from %||% "", "var"))
       c(fields, list(var = rep(var_y, n_rows))) else fields
 
-  # ---- ordinal: proportional odds has no closed form, so every row comes from a univariable fit ----
+  # ---- the SUPERIORITY PAIR, read off the outcome x predictor table -------------------------------
+  # The crude twin of a rank column is the SAME reg_rank_pair() its model column's sweep runs, given
+  # the counted distributions instead of the two standardised predictions. One formula, two inputs --
+  # which is what makes the distance between the two columns mean adjustment and nothing else.
+  rank_effect <- function(sh) {
+    sc   <- EST_SCALES[[sh$scale]]
+    gl   <- lapply(unique(emp$category), cat_of)     # level-major grid: already in level ORDER
+    P1   <- do.call(cbind, lapply(gl, `[[`, "emp_prop"))
+    P0   <- do.call(cbind, lapply(gl, `[[`, "emp_ref_prop"))
+    n1   <- gl[[1]]$emp_n_draw; n0 <- gl[[1]]$emp_ref_n_draw
+    # a multiplicative or a link scale is the log of the win ratio; anything else is Somers' D.
+    lnk  <- if (isTRUE(sc$mult) || identical(sc$geometry, "log")) "log" else "identity"
+    zed  <- !is.finite(degf)
+    est  <- gam <- alt <- se <- na_v()
+    for (i in seq_len(n_rows)) {
+      if (anyNA(P1[i, ]) || anyNA(P0[i, ])) next
+      pr <- reg_rank_pair(P1[i, ], P0[i, ], lnk)
+      if (is.null(pr)) next
+      est[i] <- pr$est; gam[i] <- pr$gamma; alt[i] <- pr$alt
+      se[i]  <- reg_rank_se(pr, P1[i, ], P0[i, ], n1[[i]], n0[[i]])
+    }
+    res <- reg_wald_finalize(est, do_exp = isTRUE(sc$mult), se = se,
+                             crit = reg_wald_crit(zed, degf, conf_level),
+                             disp_known = zed, df = degf)
+    ci  <- na_ref(list(inf = res$conf.low, sup = res$conf.high, pvalue = res$p.value))
+    fields <- c(stats::setNames(list(res$estimate), sc$est_field),
+                list(n = gl[[1]]$emp_n, tot_n = gl[[1]]$emp_n,
+                     ci_inf = ci$inf, ci_sup = ci$sup, pvalue = ci$pvalue))
+    # the base is gamma, and the OTHER reading is a primitive of the same pair rather than something
+    # derivable from (gamma, 1/2) -- so both are written here, not by with_base()'s geometry rule.
+    if (!is.na(sc$base_display))
+      fields <- c(fields, stats::setNames(list(gam), sc$base_display),
+                  stats::setNames(list(alt),
+                                  if (identical(sc$est_field, "diff")) "ratio" else "diff"))
+    list(fields = fields, vec = res$estimate, n_eff = gl[[1]]$emp_n_draw)
+  }
+
   if (identical(crude_key, "ordinal")) {
-    # ⚠ the ESTIMATE has no closed form (spliced in by reg_fit_overlay); the LEVEL does.
-    empty <- function(sh, g = NULL) {
-      # ⚠ `n` is what fmt() sizes the column from, so the no-grid branch must still pass it.
-      if (is.null(g)) return(emp_col(sh, list(n = rep(NA_integer_, n_rows))))
-      emp_col(sh, with_base(sh, list(n = g$emp_n), g$emp_prop, g$emp_ref_prop))
-    }
-    if (marginal) {
-      cats <- names(fit_est$est)
-      if (!length(cats)) return(list(cols = list(), cat_cols = list(), effect = NULL, shape = shape))
-      out  <- purrr::map(stats::setNames(nm = cats), function(k)
-        emit(list(col = empty(shape, cat_of(k)), vec = na_v(), shape = shape), k))
-      return(list(cols = list(), cat_cols = purrr::flatten(purrr::map(out, "cat_cols")),
-                  shape = shape, effect = purrr::flatten(purrr::map(out, "effect"))))
-    }
-    # a CUMULATIVE odds ratio has no single share to sit on: `{base}` stays void by construction.
-    return(emit(list(col = empty(shape), vec = na_v(), shape = shape)))
+    # a CUMULATIVE odds ratio has no closed form (the estimate is spliced in by reg_fit_overlay) and
+    # no single share to sit on, so `{base}` stays void by construction.
+    # ⚠ `n` is what fmt() sizes the column from, so the void branch must still pass it.
+    if (isTRUE(shape$refit))
+      return(emit(list(col = emp_col(shape, list(n = rep(NA_integer_, n_rows))),
+                       vec = na_v(), shape = shape)))
+    pe <- rank_effect(shape)
+    return(emit(list(col = emp_col(shape, pe$fields, n_eff = neff_of(pe$n_eff)),
+                     vec = pe$vec, shape = shape)))
   }
 
   # ---- the probability families: one closed form per OUTCOME CATEGORY, dispatched on the SHAPE's
@@ -891,16 +932,23 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
 
   coef_if <- reg_coef_if_maker(f$fit)
   if (is.null(coef_if)) return(NULL)
-  # a 3+ level outcome's marginal influence function is per CATEGORY too (family()$mu.eta lacks it).
-  per_cat  <- inherits(f$fit, "multinom") || inherits(f$fit, "polr")
-  model_if <- if (marginal && per_cat)
+  # a 3+ level outcome's marginal influence function is per CATEGORY too (family()$mu.eta lacks it) --
+  # unless the estimand is a RANK, which reads the whole distribution and answers once.
+  rank_est <- identical(est$level, "rank")
+  per_cat  <- !rank_est && (inherits(f$fit, "multinom") || inherits(f$fit, "polr"))
+  model_if <- if (marginal && rank_est)
+    reg_ame_if_maker(f$fit, f$data, wt, link = mlink, coef_if = coef_if,
+                     g = reg_gcomp_rank_maker(f$fit, f$data, wt, mlink))
+  else if (marginal && per_cat)
     reg_ame_if_cat_maker(f$fit, f$data, wt, link = mlink, category = category)
   else if (marginal)
     reg_ame_if_maker(f$fit, f$data, wt, link = mlink, coef_if = coef_if)
   else coef_if
-  # the crude leg must be built around the SAME indicator the crude estimate was.
-  crude_if <- reg_crude_if_maker(mdata, sp$outcome, sp$crude_key, f$positive_level, wt, shape$link,
-                                 trials = sp$trials, category = category, ref_category = f$y_ref)
+  # the crude leg must be built around the SAME quantity the crude estimate was: one category's
+  # indicator, or -- on a rank column -- the pair's own gradient read over every category.
+  crude_if <- if (rank_est) reg_crude_rank_if_maker(mdata, sp$outcome, wt, mlink)
+  else reg_crude_if_maker(mdata, sp$outcome, sp$crude_key, f$positive_level, wt, shape$link,
+                          trials = sp$trials, category = category, ref_category = f$y_ref)
   if (is.null(model_if)) return(NULL)
 
   n_rows  <- nrow(skeleton)

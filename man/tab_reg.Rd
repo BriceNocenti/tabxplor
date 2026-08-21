@@ -156,6 +156,15 @@ the risk ratio and is almost always narrated as if it were one ("twice as likely
 an odds ratio a risk ratio stays comparable \strong{across nested models}.
 \item \code{"difference"} (\code{"RD"}, \code{"diff"}) --- how much more, in the outcome's own units (percentage
 points on a probability).
+}
+
+On an \strong{ordered} outcome these read the model's whole predicted distribution rather than one
+category of it, so they stay in \strong{one column}: \code{"difference"} gives Somers' \code{D} and \code{"ratio"}
+the win ratio, both of them \emph{of two people, one from this group and one from the reference
+group, how often does the one from this group end up higher on the scale} --- with that
+probability itself in brackets, 50 \% being a coin flip. For a number per outcome category, use
+\code{family = "multinomial"}.
+\itemize{
 \item \code{"log"} (\code{"log_odds"}, \code{"log_risk"}, \code{"log_rate"}) --- the same estimand, \strong{un-exponentiated}.
 Bare \code{"log"} logs whatever the cascade would report; the precise spellings pin which base. The
 header names what it logs (\code{Model_log(OR)}), never one greek letter for five quantities.
@@ -656,11 +665,13 @@ profile --- and \code{measure = "log"} wraps it (\code{Model_mRR}, \code{Model_r
 \itemize{
 \item \code{OR} --- odds ratio (binomial, multinomial)
 \item \code{cumOR} --- cumulative odds ratio (ordinal)
-\item \code{RR} --- risk ratio (binomial, multinomial, ordinal)
-\item \code{RD} --- risk difference (binomial, multinomial, ordinal)
+\item \code{RR} --- risk ratio (binomial, multinomial)
+\item \code{RD} --- risk difference (binomial, multinomial)
 \item \code{IRR} --- incidence-rate ratio (poisson)
 \item \code{RoM} --- ratio of means (gaussian)
 \item \code{diff} --- mean difference (gaussian, poisson)
+\item \code{D} --- Somers' D (ordinal)
+\item \code{WR} --- win ratio (ordinal)
 }
 }
 
@@ -676,7 +687,7 @@ table with its per-cell status.
 \item \strong{binomial} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (logistic regression); \code{link = "ratio"} (modified Poisson regression); \code{link = "difference"} (additive-risk regression (identity link, robust standard errors)). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"log"}.
 \item \strong{poisson} --- a cell is a count. Models: \code{link = "ratio"}, the default (Poisson regression). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"log"}.
 \item \strong{multinomial} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (multinomial logistic regression). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"log"}.
-\item \strong{ordinal} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (ordinal logistic regression). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"log"}.
+\item \strong{ordinal} --- a cell is a position on an ordered scale. Models: \code{link = "odds_ratio"}, the default (ordinal logistic regression). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"odds_ratio"}, \code{"log"}.
 }
 }
 

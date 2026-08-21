@@ -161,6 +161,12 @@ fmt_blank_fields <- function(col, pct = FALSE) {
 #' @noRd
 reg_role_qualifier <- function(x, sep = "") {
   r <- tryCatch(get_role(x) %||% "", error = function(e) "")
+  if (!nzchar(r)) return("")
+  # a RANK column's percentage is a probability of SUPERIORITY, not an adjusted prediction of a
+  # category -- 50 % means "no difference" there, so the abbreviation must not read "adj%". Both
+  # roles take it: the crude twin measures the same thing, and its header already says whose it is.
+  fam <- tryCatch(fmt_attr(x, "model_family") %||% "", error = function(e) "")
+  if (identical(REG_FAMILIES[[fam]]$level %||% "", "rank")) return(paste0(gettext("sup"), sep))
   if (identical(r, "emp"))   return(paste0(gettext("obs"), sep))
   if (identical(r, "model")) return(paste0(gettext("adj"), sep))
   ""

@@ -12,6 +12,14 @@
 * **New `display` layouts** `"base_ratio"`, `"base_or"` and `"or_base"`, and `"OR"` / `"{OR}"`
   accepted as spellings of `"or"`. The full list of named layouts is now in `?tab`.
 
+* **An ordinal regression now reports in one column, readably.** `tab_reg(family = "ordinal")`
+  keeps its cumulative odds ratio by default, and `measure = "difference"` / `"ratio"` now read the
+  same fit as a *probability of superiority*: of two people, one from this group and one from the
+  reference group, how often does the one from this group come out higher on the scale. It takes one
+  column (not one per outcome category), it has an observed counterpart with a real interval, and
+  the crude/adjusted gap is genuinely tested. Ordinal models can be read this way on weighted and
+  survey data too. For a number per outcome category, use `family = "multinomial"`.
+
 * **`spread_vars` gives the most compact table**: each level of a sub-table variable becomes a block
   of columns, the whole table keeps ONE `Total` row, and the base count takes one `n` column per
   block at the right (instead of a `Total` column per block, repeating 100%). A variable named in
