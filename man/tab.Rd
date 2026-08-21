@@ -30,7 +30,6 @@ tab(
   design_effect = NULL,
   totaltab = "line",
   common_totrow = FALSE,
-  tot = c("row", "col"),
   n = NULL,
   n_min = 0,
   add_pct = FALSE,
@@ -58,14 +57,19 @@ Leave empty to make a simple cross-table. All \code{tab_vars} are converted to f
 
 \item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
 
-\item{...}{The arguments retired in 2.0.0, caught by name: the nine deprecated formals
-(\code{sup_cols}, \code{OR}, \code{chi2}, \code{method_cell}, \code{method_diff}, \code{names_prefix}, \code{names_sort},
-\code{row_var}, \code{col_var}), the three total-label ones now carried by
-\code{options(tabxplor.total_names)} (\code{total_names}, \code{totaltab_name}, \code{other_level}), and the five
-jamovi-internal ones (\code{.cache}, \code{.defer_level_merge}, \code{.return_armed}, \code{.levels_order},
-\code{.levels_collapse}).
-Everything else is refused with a suggestion, and an UNNAMED argument here is refused outright
--- past the variable roles, every argument must be named.}
+\item{...}{Arguments taken by name, and kept out of the signature. An UNNAMED argument
+here is refused outright --- past the variable roles, every argument must be named ---
+and an unknown name is refused with a suggestion.
+\strong{\code{tot}} The totals :
+\itemize{
+\item \code{c("col", "row")} or \code{"both"} : by default, both total rows and total
+columns.
+\item \code{"row"}: only total rows.
+\item \code{"col"}: only total column.
+\item \code{"no"}: remove all totals (after calculations if needed).
+}
+\strong{Retired in 2.0.0}, still taken by name, each warning once and saying what to use instead: \code{row_var}, \code{col_var}, \code{sup_cols}, \code{totaltab_name}, \code{total_names}, \code{OR}, \code{chi2}, \code{method_cell}, \code{method_diff}, \code{add_n}, \code{names_prefix}, \code{names_sort}, \code{other_level}.
+The dot-prefixed names (\code{.cache}, \code{.defer_level_merge}, \code{.return_armed}, \code{.levels_order}, \code{.levels_collapse}) are internal plumbing, not user arguments.}
 
 \item{pct}{The type of percentages to calculate, as a single string or a vector the same length
 as \code{col_vars} (like \code{levels} and \code{digits}) :
@@ -308,15 +312,6 @@ row variable. Set to \code{TRUE} to collapse the identical Total rows into a sin
 displayed in its own group after a blank-line separator (bold when the total is the reference for
 at least one row variable). Genuinely different totals (e.g. under \code{na = "drop"}) are never merged.}
 
-\item{tot}{The totals :
-\itemize{
-\item \code{c("col", "row")} or \code{"both"} : by default, both total rows and total
-columns.
-\item \code{"row"}: only total rows.
-\item \code{"col"}: only total column.
-\item \code{"no"}: remove all totals (after calculations if needed).
-}}
-
 \item{n}{How many people this table is about. \code{"range"} (the default) prints the
 unweighted base beside the \code{Total} cell --- \code{100\% (9 838)} --- and, in a
 \code{\link{tab_reg}} table, in the \code{n} column beside each predictor level.
@@ -371,8 +366,16 @@ the underlying fields are unchanged.}
 merges the mirror tables into a single \code{tabxplor_tab}; \code{TRUE} returns a list with
 one table per \code{row_var}. With \code{tab_vars}, tables stay a list regardless.}
 
-\item{spread_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> A subset of \code{tab_vars}
-to pivot from subtables into columns, via \code{\link{tab_spread}} (applied at the end).}
+\item{spread_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> The \code{tab_vars} to show
+ACROSS the page instead of down it: each of their levels becomes a block of columns,
+and the table becomes as compact as it can be. A variable named here alone is added to
+\code{tab_vars} for you.
+The layout follows: one \code{Total} row for the whole table, the base count in one
+\code{n} column per block at the right (instead of a \code{Total} column per block,
+which would only repeat 100\\%), and --- since a total \emph{line} cannot become a block
+--- \code{totaltab = "line"} becomes \code{"table"}. Pair it with
+\code{comp = "all"} to compare every block against the overall total, and with
+\code{levels = "first"} to keep one column per block.}
 
 \item{filter}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}} A
 \code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame first, as a single string
@@ -416,7 +419,8 @@ with \code{\link[=set_color_breaks]{set_color_breaks()}} and \code{\link[=set_co
 and \code{display} when you want odds ratios shown.
 \item \strong{Statistics}: \code{test} (chi-squared or Welch's F), and \code{ci} + \code{conf_level} + \code{stars}
 (confidence intervals). \code{ci_method} picks the engine for each kind of interval.
-\item \strong{Totals & missing values}: \code{tot}, \code{total_names}, \code{totaltab}, \code{na}, \code{levels}.
+\item \strong{Totals & missing values}: \code{totaltab}, \code{na}, \code{levels}, and \code{tot} (which totals to
+show), taken by name through \code{...}.
 \item \strong{Advanced / output}: \code{display}, \code{n_min}, \code{output_list}, \code{spread_vars}, \code{filter}.
 }
 The package-wide display, color and statistics defaults are \code{options()}, listed at

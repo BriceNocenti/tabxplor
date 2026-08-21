@@ -265,6 +265,25 @@ When you pass several **row variables** *without* `tab_vars`, `tab()` merges the
 tab(gss_simple, c(married, income25k), race, pct = "row", output_list = TRUE)
 ```
 
+### The most compact table: one block of columns per group
+
+`spread_vars` shows a sub-table variable **across** the page instead of down it: each of its levels becomes a *block of columns*. Put it together with `levels = "first"` (one column per variable, see above) and you get the most condensed table the package can draw --- several variables, several groups, one screen:
+
+```{r, echo = TRUE}
+tab(gss_simple, rincome, c(married, tvhours), tab_vars = race, spread_vars = race,
+    pct = "row", na = "drop", levels = "first", comp = "all",
+    color = TRUE, color_signif = "grey_non_signif")
+```
+
+The layout follows from the shape, and the table says so:
+
+- there is **one `Total` row** for the whole table; each block answers in its own columns.
+- the base count takes **one `n` column per block**, gathered at the right, so the counts can be read against each other. A `Total` column per block would only repeat `100%`.
+- `comp = "all"` compares every cell against the **overall** total rather than its own group's --- here the `Ensemble` block's `Total` cell, the one number every shade in the table is measured from. The color legend names it.
+- a total *line* cannot become a block of columns, so `totaltab = "line"` (the default) is promoted to `"table"`, and the message says so. Say `totaltab = "no"` if you want no overall block at all.
+
+A variable named in `spread_vars` alone is added to `tab_vars` for you, so `tab(gss_simple, rincome, party3, spread_vars = race, pct = "row")` is a complete call.
+
 ## colors: reading helpers
 
 One you the main purposes of `tabxplor` is to provide a full palette of color helpers for data exploration. `color = "difference"` colors each cell by **how far it sits from its reference** — by default the Total of its row or column. Cells clearly above the average turn **blue**, cells clearly below turn **red/orange** — the further a cell sits from its reference, the stronger the shade — and a color legend is printed underneath.

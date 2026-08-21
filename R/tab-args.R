@@ -156,8 +156,10 @@ TAB_ARGS <- list(
     default = "Ensemble",
     producers = c("tab", "tab_plain", "tab_num", "tab_counts"),
     doc = "The name of the total table, as a single string."),
+  # `dots`: still current, but out of tab()'s signature -- a table always HAS both totals, so this
+  # only says which ones to show, and a crowded signature is the wrong place to ask that.
   tot = list(
-    default = c("row", "col"), default_for = list(tab_plain = NULL, tab_num = NULL),
+    default = c("row", "col"), default_for = list(tab_plain = NULL, tab_num = NULL), dots = "tab",
     producers = c("tab", "tab_plain", "tab_num", "tab_counts"), values = c("row", "col", "both", "no", ""),
     doc = c("The totals :",
             " \\itemize{",
@@ -460,8 +462,16 @@ TAB_ARGS <- list(
   spread_vars = list(
     default = character(),
     producers = c("tab", "tab_counts"),
-    doc = c("<\\link[tidyr:tidyr_tidy_select]{tidy-select}> A subset of \\code{tab_vars}",
-            " to pivot from subtables into columns, via \\code{\\link{tab_spread}} (applied at the end).")),
+    doc = c("<\\link[tidyr:tidyr_tidy_select]{tidy-select}> The \\code{tab_vars} to show",
+            "  ACROSS the page instead of down it: each of their levels becomes a block of columns,",
+            "  and the table becomes as compact as it can be. A variable named here alone is added to",
+            "  \\code{tab_vars} for you.",
+            "  The layout follows: one \\code{Total} row for the whole table, the base count in one",
+            "  \\code{n} column per block at the right (instead of a \\code{Total} column per block,",
+            "  which would only repeat 100\\%), and --- since a total \\emph{line} cannot become a block",
+            "  --- \\code{totaltab = \"line\"} becomes \\code{\"table\"}. Pair it with",
+            "  \\code{comp = \"all\"} to compare every block against the overall total, and with",
+            "  \\code{levels = \"first\"} to keep one column per block.")),
   names_prefix = list(
     default = NULL,
     producers = c("tab", "tab_counts"), status = "deprecated",
@@ -774,6 +784,41 @@ dots_value <- function(dots, name, default = NULL) {
 }
 
 # --- the generated documentation ------------------------------------------------------------------
+
+# tab_dots_rd() -- the `@param ...` twin of tab_args_rd(): what a producer accepts BY NAME without
+# declaring a formal, read off the same declaration instead of a hand-kept list that drifts. Two
+# groups, and the difference is the whole point: an argument still current but kept out of a crowded
+# signature (`dots = <producer>`), and one retired in 2.0.0 (declared, not a formal, no `dots`).
+# ⚠ Only for a producer whose signature declares MOST of its arguments -- tab_counts() takes
+# everything through `...`, so the second group would list its whole surface.
+#' @keywords internal
+#' @noRd
+tab_dots_rd <- function(producer, extra = NULL) {
+  tb   <- arg_table_of(producer)
+  nms  <- setdiff(tab_args_for(producer), names(formals(get(producer, envir = asNamespace("tabxplor")))))
+  live <- nms[vapply(nms, function(k) producer %in% (tb[[k]][["dots"]] %||% character()), logical(1))]
+  out  <- c("@param ... Arguments taken by name, and kept out of the signature. An UNNAMED argument",
+            "  here is refused outright --- past the variable roles, every argument must be named ---",
+            "  and an unknown name is refused with a suggestion.")
+  for (k in live) {
+    body <- tb[[k]][["doc_for"]][[producer]] %||% tb[[k]][["doc"]]
+    if (is.null(body)) next
+    out <- c(out, paste0("  \\strong{\\code{", k, "}} ", body[[1]]), paste0("  ", body[-1]))
+  }
+  dead <- setdiff(nms, live)
+  # a dot-prefixed name is never a user argument -- the jamovi live-cache plumbing tab_check_dots()
+  # lets through. Named, not documented as a choice.
+  hidden <- dead[startsWith(dead, ".")]
+  dead   <- setdiff(dead, hidden)
+  if (length(dead))
+    out <- c(out, paste0("  \\strong{Retired in 2.0.0}, still taken by name, each warning once and saying",
+                         " what to use instead: \\code{", paste(dead, collapse = "}, \\code{"), "}."))
+  if (length(hidden))
+    out <- c(out, paste0("  The dot-prefixed names (\\code{", paste(hidden, collapse = "}, \\code{"),
+                         "}) are internal plumbing, not user arguments."))
+  c(out, extra)
+}
+
 #' @keywords internal
 #' @noRd
 tab_args_rd <- function(producer) {

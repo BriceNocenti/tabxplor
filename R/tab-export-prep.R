@@ -610,6 +610,37 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
     if (is_fmt(tab[[j]]) && get_role(tab[[j]]) %in% c("model", "emp", "n"))
       clean[j] <- tx_strip_outcome_suffix(clean[j])
   }
+  # DESIGN -- THE SPREAD SWAP. After a spread, a COLUMN is identified by its sub-population and a
+  # BLOCK by its variable: what used to head the column (the col_var LEVEL) heads the block, and the
+  # sub-population -- which used to ride the span as a second line -- becomes the column header. The
+  # level band survives only where the variable contributes SEVERAL columns per sub-population;
+  # where it contributes one, its own name identifies it and repeating the level says it twice.
+  # Both producers, one rule: a regression's `Obs_OR` / `Model_OR` are that variable's several
+  # columns, so a spread reg table draws two spans instead of one per group.
+  spread_grp <- ifelse(is_level, gvec, "")
+  if (length(unique(spread_grp[nzchar(spread_grp)])) > 1L) {
+    cv_lab <- var_label_display(unname(cvm), tab)
+    # the level WITHOUT its sub-population suffix -- the pivot appends "_<group>" to every name, and
+    # only the "_<col_var>" disambiguator was stripped above.
+    lvl0 <- ifelse(nzchar(spread_grp) & endsWith(clean, paste0("_", spread_grp)),
+                   substr(clean, 1L, nchar(clean) - nchar(spread_grp) - 1L), clean)
+    for (j in which(is_level)) {
+      many <- length(unique(lvl0[is_level & unname(cvm) == cvm[[j]]])) > 1L
+      clean[j] <- spread_grp[[j]]
+      label[j] <- if (isTRUE(name_cols)) { if (many) lvl0[[j]] else cv_lab[[j]] } else ""
+      grp[j]   <- if (isTRUE(name_cols) && many) cv_lab[[j]] else ""
+    }
+    # the per-block base-count columns (tab_base_n_cols): their col_var is the "n" PLACEHOLDER, so
+    # they are not level columns and would otherwise render as a bare `n_White`.
+    is_n <- vapply(seq_along(nms), function(k) is_fmt(tab[[k]]) &&
+                     get_role(tab[[k]]) == "n" && nzchar(gvec[[k]]), logical(1))
+    for (j in which(is_n & !is_level)) {
+      clean[j] <- gvec[[j]]
+      label[j] <- if (isTRUE(name_cols)) gettext("n") else ""
+      grp[j]   <- ""
+    }
+  }
+
   # Phase 14s (L3): if EVERY level column's DISPLAYED header already equals its col_var, the spanning
   # name row would only duplicate the column headers -> drop it. A regression table named after the
   # model / outcome ("Married: OR" over "Married: OR") is the case this targets. Compare the CLEAN

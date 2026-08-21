@@ -33,7 +33,7 @@
 #     cell already carries its block's base in `tot_n` (a mean's in `n`), and a regression's model
 #     columns carry each level's own `n`. fmt_cell_base() reads whichever applies, tab_base_range()
 #     reduces it per row over a col_group, and `n = "range" | "min" | "no"` then chooses between
-#     folding it into the Total cell (tab_fold_base_n), giving it a column (reg_base_n_cols, and
+#     folding it into the Total cell (tab_fold_base_n), giving it a column (tab_base_n_cols, and
 #     the Excel branch of tab_base_n_pct) or dropping it. A range needs no literal and no second
 #     field: `{n_range}` renders `n`..`tot_n`, so format()'s per-template padding still aligns.
 #     A continuous predictor has no level to count, so that cell is empty by construction -- which
@@ -629,8 +629,8 @@ tab_base_n_pct <- function(tabs_text, base_n, add_pct, backend = "xl") {
                         ),
                         dplyr::across(
                           all_of(row_lab),
-                          # WARNING: a declared index column must keep its declaration
-                          ~ lvl_restore(factor("row_pct"), .)
+                          # WARNING: a declared index column must keep its declaration AND its type
+                          ~ lvl_add_label(., "row_pct")
                         )
                       )
                   }, role = "pct")
@@ -659,8 +659,8 @@ tab_base_n_pct <- function(tabs_text, base_n, add_pct, backend = "xl") {
                                   ),
                                   dplyr::across(
                                     all_of(row_lab),
-                                    # WARNING: a declared index column must keep its declaration
-                                    ~ lvl_restore(factor("n"), .)
+                                    # WARNING: a declared index column must keep its declaration AND its type
+                                    ~ lvl_add_label(., "n")
                                   )
                                 )
                             }, role = "n")
@@ -749,33 +749,55 @@ tab_fold_base_n <- function(tab, mode) {
   tab
 }
 
-# tab_drop_dishonest_totcol() -- what the in-cell fold cannot cover: a Total column that does not
-# total anything (see tab_totcol_sums) has nothing left to say once the count lives elsewhere --
-# in its own column for Excel, nowhere at all under `n = "no"`.
+# tab_drop_totcol() -- a row-% Total column holds two things: a constant (the 100 % its block sums
+# to, when it sums at all) and the base count folded into it. Once the count lives elsewhere, only
+# the constant is left. It lives elsewhere in three cases: Excel gives it a real column, `n = "no"`
+# asks for none, and SEVERAL SUB-POPULATIONS give it one column per block (tab_base_n_cols) -- and
+# there the whole set goes, because four "100 %" columns earn no width and invite reading across
+# blocks that do not add up. In the first two cases only the columns that never summed are dropped,
+# since an honest "100 %" still tells a reader the block is a distribution.
 #' @keywords internal
 #' @noRd
-tab_drop_dishonest_totcol <- function(tab, backend, base_n) {
+tab_drop_totcol <- function(tab, backend, base_n) {
   if (!is.data.frame(tab)) return(tab)
-  if (!identical(backend, "xl") && !identical(base_n, "no")) return(tab)
   tot_nm <- tab_row_totcols(tab)
-  drop   <- tot_nm[!purrr::map_lgl(tot_nm, ~ tab_totcol_sums(tab, .))]
+  if (!length(tot_nm)) return(tab)
+  drop <-
+    if (tab_base_blocks(tab) > 1L)                                     tot_nm
+    else if (identical(backend, "xl") || identical(base_n, "no"))
+      tot_nm[!purrr::map_lgl(tot_nm, ~ tab_totcol_sums(tab, .))]
+    else                                                               character(0)
   if (length(drop)) tab <- dplyr::select(tab, -tidyselect::all_of(drop))
   tab
 }
 
-# reg_base_n_cols() -- the regression twin of the fold: `tab_reg()` has no Total cell, so the base
-# count gets a column, synthesised HERE from the `n` every model column already carries (its level's
-# own count, the model N on the Constant row). One column per col_group -- one when there is nothing
-# to spread, one per `tab_vars` level when there is, and then to the RIGHT of the models, where the
-# three counts can be read against each other instead of pushing the estimates away.
+# tab_base_blocks() -- how many SUB-POPULATIONS the value columns rest on: one on an ordinary
+# table, one per spread level once a `tab_vars` axis went to column. The one test that decides
+# whether the base count is folded into a Total cell or given a column of its own.
 #' @keywords internal
 #' @noRd
-reg_base_n_cols <- function(tab, mode) {
-  mods <- names(tab)[purrr::map_lgl(tab, ~ is_fmt(.) && get_role(.) == "model")]
-  if (!length(mods)) return(tab)
-  grps <- unique(purrr::map_chr(tab[mods], get_col_group))
+tab_base_blocks <- function(tab) {
+  cols <- tab_base_cols(tab)
+  if (!length(cols)) return(0L)
+  length(unique(purrr::map_chr(tab[cols], get_col_group)))
+}
+
+# tab_base_n_cols() -- the base count as a COLUMN, one per sub-population, for the two tables that
+# have no Total cell to fold it into: a regression (which has no Total column at all) and a spread
+# crosstab (whose per-block Total columns are four constants). Synthesised from the `n` the value
+# columns already carry -- a level's own count, a model's N on the Constant row. One group and the
+# count belongs beside the levels it counts; several and the block goes to the RIGHT of the values,
+# where the counts can be read against each other instead of pushing the estimates away.
+#' @keywords internal
+#' @noRd
+tab_base_n_cols <- function(tab, mode) {
+  vals <- tab_base_cols(tab)
+  if (!length(vals)) return(tab)
+  tab  <- dplyr::select(tab, -tidyselect::any_of("n"))
+  vals <- intersect(vals, names(tab))
+  grps <- unique(purrr::map_chr(tab[vals], get_col_group))
   for (g in grps) {
-    cols <- mods[purrr::map_chr(tab[mods], get_col_group) == g]
+    cols <- vals[purrr::map_chr(tab[vals], get_col_group) == g]
     rng  <- tab_base_range(tab, cols)
     ref  <- tab[[cols[[1]]]]
     # `in_refrow` is ANDed across every column by tab_bold_rows(): a helper column that forgot it
@@ -786,8 +808,8 @@ reg_base_n_cols <- function(tab, mode) {
       col_var = "n", col_group = g, comp_all = FALSE, role = "n", in_refrow = is_refrow(ref),
       row_kind = get_row_kind(ref))
   }
-  # one group = one count, and it belongs beside the levels it counts; several = the block goes to
-  # the right of the models, where the counts can be read against each other.
+  # one group = one count, and it belongs beside the values it counts; several = the block goes to
+  # the right of them, where the counts can be read against each other.
   if (length(grps) == 1L) {
     idx <- which(!purrr::map_lgl(tab, is_fmt))
     if (length(idx)) tab <- dplyr::relocate(tab, tidyselect::all_of("n"), .after = max(idx))

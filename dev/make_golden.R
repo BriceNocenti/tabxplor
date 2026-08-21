@@ -10,6 +10,14 @@
 # See: CLAUDE.md > 2.0.0 roadmap > Golden regeneration protocol.
 #
 # LEDGER
+#   Phase 22c-i: FOUR fixtures move, on the row INDEX COLUMN's level set and nothing else -- an
+#   unused "NA" level disappears from the tables whose row axis has no missing value. num_core()
+#   appended it whenever `na = "keep"`, gated on nothing, while plain_core() gated on an actual NA;
+#   under `na = "drop_all"` (which drops globally and then hands both leaves "keep") the two leaves
+#   therefore built DIFFERENT level sets and the full_join() of the text and numeric blocks aborted
+#   on an `ordered` row variable. No cell, no field and no attribute moves. The `golden.md` snapshot
+#   moves on two `comp = "all"` cases, where the colour legend now names the baseline it actually
+#   uses ("the Total Ensemble row" rather than "the Total row").
 #   Phase 22b-xvi: FOUR fixtures move, on ONE column ATTRIBUTE and nothing else -- n_mean, n_mean_w,
 #   n_mean_sparse, n_mean_tottab (plus n_ci_tabvars / n_ci_tabvars_all, same reason). `color = "auto"`
 #   is now `color = TRUE`, and the declared automatic measure of a NUMERIC column is `ratio`, so

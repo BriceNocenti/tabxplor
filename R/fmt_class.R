@@ -754,8 +754,9 @@ as_totrow  <- function(x, in_totrow = TRUE) {
 #' `r lifecycle::badge("deprecated")`
 #'
 #' A build-internal repair: after a reshape, a row that is a total in SOME columns is made a total
-#' in all of them. Its only caller is [tab_spread()], inside the package. It will be made internal
-#' in 2.1.0.
+#' in all of them --- **and so are `in_tottab` and `in_refrow`**, which is why nothing calls it any
+#' more: after a spread those two are facts about a column BLOCK, not about a row. [tab_spread()]
+#' completes the row kind alone. It will be made internal in 2.1.0.
 #'
 #' @param tabs A table or data frame containing `tabxplor_fmt` columns.
 #'
@@ -4908,6 +4909,21 @@ legend_ref_label <- function(x, col, orientation) {
   }, error = function(e) NA_character_)
 }
 
+# legend_tottab_label() -- the name of the TOTAL TABLE, for a column that compares against it
+# (`comp = "all"`). Composed from the two declared total names, never read off a row label: after a
+# spread the total table IS a column block and has no row of its own to name it.
+#' @keywords internal
+#' @noRd
+legend_tottab_label <- function(x) {
+  tn <- tab_total_names()
+  g  <- tryCatch({
+    idx <- which(purrr::map_lgl(x, ~ is_fmt(.) && nzchar(get_col_group(.)) && all(is_tottab(.))))
+    if (length(idx)) get_col_group(x[[idx[[1]]]]) else NA_character_
+  }, error = function(e) NA_character_)
+  if (is.na(g) || !nzchar(g)) g <- unname(tn[["tab"]])
+  paste(unname(tn[["row"]]), g)
+}
+
 legend_ref_info <- function(x, col, measure, orientation, is_coef = FALSE, is_reg = FALSE,
                             policy = "ignore") {
   base_kind <- measure_facts(measure, policy)$ref_kind  # the measure's baseline concept, one field
@@ -4922,8 +4938,13 @@ legend_ref_info <- function(x, col, measure, orientation, is_coef = FALSE, is_re
   if (isTRUE(is_reg) || identical(base_kind, "category") || isTRUE(is_coef))
     return(list(kind = "category", label = legend_ref_label(x, col, "row"), orientation = "row"))
   ref <- get_ref_type(col); ref <- if (length(ref)) as.character(ref)[1] else "tot"
+  # DESIGN: `comp = "all"` moves the baseline from the sub-table's own total to the TOTAL TABLE's --
+  # the whole point of the argument, and the legend used to print "Total" for both. Naming it is
+  # what makes a spread table readable: the reference is one CELL, in the total-table block.
   if (identical(ref, "tot"))
-    list(kind = "tot", label = NA_character_, orientation = orientation)
+    list(kind = "tot",
+         label = if (isTRUE(get_comp_all(col))) legend_tottab_label(x) else NA_character_,
+         orientation = orientation)
   else
     list(kind = "level", label = legend_ref_label(x, col, orientation), orientation = orientation)
 }

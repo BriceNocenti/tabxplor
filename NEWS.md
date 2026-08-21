@@ -3,6 +3,12 @@
 
 ## New features
 
+* **`spread_vars` gives the most compact table**: each level of a sub-table variable becomes a block
+  of columns, the whole table keeps ONE `Total` row, and the base count takes one `n` column per
+  block at the right (instead of a `Total` column per block, repeating 100%). A variable named in
+  `spread_vars` alone is added to `tab_vars` for you. In exports, the column header names the
+  sub-population and one merged span names the variable. See `vignette("tabxplor")`.
+
 * **Interactions in `tab_reg()`**: write `a*b` in `predictors` (bare or quoted), R's own spelling.
   Two categorical variables give one row per cell against a common reference; a continuous one gives
   its slope within each level of the moderator. The footer reports whether the interaction is real,
@@ -471,6 +477,12 @@
   (`multiplier = "sd"`, see above). Pass `multiplier = 1` for the previous per-one-unit reading.
 
 ## Bug fixes
+
+* **`pct = "col"` failed on an `ordered` row variable**, with `Can't combine <ordered> and <factor>`,
+  whenever the base count or `add_pct` row was added --- that is, on printing or exporting.
+
+* **`na = "drop_all"` failed with both factor and numeric column variables** on an `ordered` row
+  variable, with `Can't join ... due to incompatible types`.
 
 * **`tab_plain(color_signif =)` did nothing.** The superseded factor leaf never applied the colour
   spec it resolved, so the significance policy was stored as `"ignore"` whatever you asked, a

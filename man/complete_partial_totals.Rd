@@ -16,7 +16,8 @@ The table with completed total rows, total tables, and reference rows.
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
 
 A build-internal repair: after a reshape, a row that is a total in SOME columns is made a total
-in all of them. Its only caller is \code{\link[=tab_spread]{tab_spread()}}, inside the package. It will be made internal
-in 2.1.0.
+in all of them --- \strong{and so are \code{in_tottab} and \code{in_refrow}}, which is why nothing calls it any
+more: after a spread those two are facts about a column BLOCK, not about a row. \code{\link[=tab_spread]{tab_spread()}}
+completes the row kind alone. It will be made internal in 2.1.0.
 }
 \keyword{internal}

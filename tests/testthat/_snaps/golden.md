@@ -580,7 +580,7 @@
       |               |                     | |                         | |                       |
       | Ensemble      |**Total Ensemble**   | |  **47.2** (σ17.3)       | |  **3.0** (σ2.6)       |
       
-      Shades of blue: cells ≥ the Total row **[×1.1]{.p1}**; **[×1.2]{.p2}**; **[×1.5]{.p3}**; **[×2]{.p4}**. Shades of yellow to red: cells ≤ the Total row **[÷1.1]{.m1}**; **[÷1.2]{.m2}**; **[÷1.5]{.m3}**; **[÷2]{.m4}**.
+      Shades of blue: cells ≥ the Total Ensemble row **[×1.1]{.p1}**; **[×1.2]{.p2}**; **[×1.5]{.p3}**; **[×2]{.p4}**. Shades of yellow to red: cells ≤ the Total Ensemble row **[÷1.1]{.m1}**; **[÷1.2]{.m2}**; **[÷1.5]{.m3}**; **[÷2]{.m4}**.
       :::
 
 # golden display (tab_md) unchanged: n_mean_ci
@@ -1486,7 +1486,7 @@
       |               | White               | |      48.7 (σ17.5)       | |      2.8 (σ2.3)       |
       |               |**Total Ensemble**   | |  **47.2** (σ17.3)       | |  **3.0** (σ2.6)       |
       
-      Shades of blue: cells ≥ the Total row **[×1.1]{.p1}**; **[×1.2]{.p2}**; **[×1.5]{.p3}**; **[×2]{.p4}**. Shades of yellow to red: cells ≤ the Total row **[÷1.1]{.m1}**; **[÷1.2]{.m2}**; **[÷1.5]{.m3}**; **[÷2]{.m4}**.
+      Shades of blue: cells ≥ the Total Ensemble row **[×1.1]{.p1}**; **[×1.2]{.p2}**; **[×1.5]{.p3}**; **[×2]{.p4}**. Shades of yellow to red: cells ≤ the Total Ensemble row **[÷1.1]{.m1}**; **[÷1.2]{.m2}**; **[÷1.5]{.m3}**; **[÷2]{.m4}**.
       :::
 
 # golden display (tab_md) unchanged: f_col_ref_lvl

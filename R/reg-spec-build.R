@@ -15,7 +15,7 @@
 #     stream is compared in order.
 #   - THE LEVEL COUNTS ARE STAMPED ON THE COLUMNS, not given a column of their own: every column of
 #     a fit rests on the same complete cases, so `n` is a property of the estimate. The base-count
-#     COLUMN is then synthesised at display time (reg_base_n_cols, R/tab-display.R), which is what
+#     COLUMN is then synthesised at display time (tab_base_n_cols, R/tab-display.R), which is what
 #     lets `n = "range" / "min" / "no"` be chosen after the table is built, and what gives the
 #     tooltips and forest_plot(size = "n") one place to read.
 #   - ⚠ NO dot-prefixed key on the record: as.list(environment()) defaults to all.names = FALSE and
@@ -158,7 +158,7 @@ reg_spec_build_one <- function(i, ctx) {
   cv0 <- cols[[1]]$label            # the placeholder; see new_reg_spec_product()
   # The N behind each level, on THIS model's complete cases, stamped on every column it belongs to:
   # a stored fact, not a column of its own, so the base-count column is synthesised at display time
-  # (reg_base_n_cols()) and the tooltips, the footer and forest_plot(size = "n") all read one place.
+  # (tab_base_n_cols()) and the tooltips, the footer and forest_plot(size = "n") all read one place.
   # A numeric predictor keeps NA -- on a listwise-complete frame its count IS the model N.
   frame <- reg_complete_frame(data, c(sp$outcome, union_predictors,
                                       reg_cross_parents(crosses),

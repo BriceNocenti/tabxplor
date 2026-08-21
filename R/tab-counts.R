@@ -244,6 +244,19 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     wt_counts = rlang::enquo(wt_counts), cols     = rlang::enquo(cols),
     base      = rlang::enquo(base),     col_name  = col_name, input = input)
 
+  # The same two rules as tab(): a spread variable IS a tab variable -- it splits the population and
+  # merely shows the split across the page -- and a total LINE cannot become a column block. Applied
+  # BEFORE the normalisation, which aggregates away every column no role claims.
+  if (is.character(spread_vars) && length(spread_vars)) {
+    resh$tab_vars <- c(resh$tab_vars, setdiff(spread_vars, resh$tab_vars))
+    if (any(totaltab == "line")) {
+      cli::cli_inform(c("i" = paste(
+        "A total line cannot become a column block: a full total table was added",
+        "({.code totaltab = \"table\"}). Use {.code totaltab = \"no\"} for no overall column.")))
+      totaltab[totaltab == "line"] <- "table"
+    }
+  }
+
   norm       <- tab_counts_normalize(resh$data, resh$row_var, resh$col_var, resh$tab_vars,
                                       resh$n_col, resh$wn_col, cleannames = cleannames)
   fine       <- norm$fine

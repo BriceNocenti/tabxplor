@@ -237,8 +237,9 @@ Every cell below was run against the loaded package. `✓` builds, `✗` aborts.
 | `rd`, `rr`                            | **✗**         | ✓ *unval.*    | ✓          | ✓            | ✗            |
 | `IRR`, `irr`, `RoM`, `MR`, `mr`       | **✗**         | ✓ *unval.*    | ✓          | ✓            | ✗            |
 | `risk_ratio`, `rate_ratio`            | **✗**         | ✓ *unval.*    | ✓          | ✓            | ✗            |
-| `cumOR`                               | **✗**         | ✓ *unval.*    | ✓          | **✗**        | ✗            |
-| `log`, `log_odds`, `log_risk`, …      | ✗             | ✓ *unval.*    | ✓          | ✓ *log link* | ✗            |
+| `cumOR`                               | **✗**         | ✓ *unval.*    | ✓          | ✓            | ✗            |
+| `log`                                 | ✗             | ✓ *unval.*    | ✓          | ✓ *log link* | ✗            |
+| `log_odds`, `log_risk`, `log_rate`, … | ✗             | ✓ *unval.*    | ✓          | **✗**        | ✗            |
 | `identity`, `logit`                   | ✗             | ✓ *unval.*    | ✗          | ✓            | ✗            |
 | `Difference`, `DIFF`                  | ✗             | ✓ *unval.*    | **✓**      | **✓**        | ✗            |
 | `contrib`                             | ✓             | ✓             | n/a        | n/a          | ✗            |
@@ -247,7 +248,7 @@ Every cell below was run against the loaded package. `✓` builds, `✗` aborts.
 
 Four defects fall straight out of it.
 
-1. **`tab(color = "rr")` aborts while `tab_reg(measure = "rr")` builds.** Same word, same measure, two answers — because `COLOR_ALIASES` lists five spellings where `REG_MEASURE_ALIASES` lists twenty-three.
+1. **`tab(color = "rr")` aborts while `tab_reg(measure = "rr")` builds.** Same word, same measure, two answers — because `COLOR_ALIASES` lists **five** non-canonical spellings (`or`, `OR`, `diff`, `RD`, `RR`) where `REG_MEASURE_ALIASES` lists **fifteen**.
 2. **`reg_measure_key()` case-folds and `measure_key()` does not.** Measured: `tab_reg(measure = "Difference")` and `measure = "DIFF"` both build. That fallback makes `ODDS_RATIO`, `Rom` and `Cumor` legal too, none of which is a spelling anyone should be taught.
 3. ⚠ **`fmt()` does not validate `color` at all** — `fmt(n = 1L, color = "banana")` stores `"banana"`, and `fmt(n = 1L, color = "IRR")` stores `"IRR"`; `measure_key()` then returns `NA` and the column silently colours **nothing**. `CLAUDE.md` describes the constructor chain as *"`fmt()` (public, validates) → `new_fmt()`"*, so this is a contract the code does not keep. It is also the **only** reason `measure_key()` must normalise on read: both producers already normalise at their boundary (verified — `tab(color = "OR")` stores `odds_ratio`, `tab_reg(measure = "rr")` stores `ratio`), so `fmt()` is the last un-normalised writer.
 4. **`REG_MEASURE_ALIASES` is internally uneven.** It carries the lowercase twin of `OR`, `RR`, `IRR`, `MR` and `RD` but not of `RoM` or `cumOR` — an omission, not a decision.
@@ -275,21 +276,27 @@ That self-correction is what makes the permissive table safe and is why **no mes
 
 ```r
 # R/fmt_class.R, beside MEASURES -- THE acronym vocabulary, shared by every argument that names a
-# measure. One entry per acronym; the all-lowercase twin is DERIVED, so a row cannot be forgotten.
-MEASURE_ACRONYMS <- c(RD = "difference", diff = "difference",
-                      RR = "ratio", IRR = "ratio", RoM = "ratio", MR = "ratio",
-                      OR = "odds_ratio")
-MEASURE_ACRONYMS_REG <- c(cumOR = "odds_ratio")     # a crosstab has no cumulative odds ratio
+# measure. It IS the REG_WORDS set: what a header can print is what the argument can be typed.
+# One entry per acronym; the all-lowercase twin is DERIVED, so a row cannot be forgotten.
+MEASURE_ACRONYMS     <- c(RD = "difference", diff = "difference",
+                          RR = "ratio", IRR = "ratio", RoM = "ratio",
+                          OR = "odds_ratio")
+MEASURE_ACRONYMS_REG <- c(cumOR = "odds_ratio")   # a crosstab has no cumulative odds ratio
+# R/reg-estimand.R -- the internal fit keys, so that what reg_formulas() PRINTS is typeable back
+# into `link` (measured: rr / rd / mr already round-trip; binomial / gaussian / poisson do not --
+# they are the family's own link, i.e. `link = "auto"`).
+REG_FIT_SPELLINGS    <- c(rr = "ratio", rd = "difference", mr = "ratio")
 ```
 
 - **`measure_key()`** (colour side) reads `MEASURE_ACRONYMS` + its lowercase twins + `MEASURES` names + the three legacy policy spellings. `tab(color = "rr")`, `"IRR"`, `"RoM"` start working; nothing that works today stops.
-- **`reg_measure_key()`** reads the same table + `MEASURE_ACRONYMS_REG` + the `log*` family + `auto`. Its `tolower()` fallback is **deleted**, so `Difference` / `ODDS_RATIO` / `Rom` stop being legal — a hard break on the regression side, where none is owed, in exchange for one taught vocabulary. `risk_ratio` / `rate_ratio` go with it: the taught long form is the concept word (`ratio`), and the discipline's short forms are `RR` / `IRR`.
-- **`reg_link_key()`** is unchanged in shape: `REG_LINK_ALIASES` (`identity` / `log` / `logit`) stays separate, because `"log"` means the **log link** on `link` and *"un-exponentiated"* on `measure` — the one word the two vocabularies do not share, already documented at the declaration.
+- **`reg_measure_key()`** reads the same table + `MEASURE_ACRONYMS_REG` + the `log*` family + `auto`. Its `tolower()` fallback is **deleted**, so `Difference` / `ODDS_RATIO` / `Rom` stop being legal — a hard break on the regression side, where none is owed, in exchange for one taught vocabulary. `risk_ratio`, `rate_ratio` and `MR` go with it (none is a header word), and the fit keys move to `link`, where they mean something.
+- **`reg_link_key()`** reads the shared table + `REG_FIT_SPELLINGS` + `REG_LINK_ALIASES`. The last stays separate, because `"log"` means the **log link** on `link` and *"un-exponentiated"* on `measure` — the one word the two vocabularies do not share, already documented at the declaration.
 - **`DISPLAY_TOKENS`** is **not** touched, and the rule is stated once: **an acronym names a MEASURE, never a display token.** `display =` names *fields* (`or`, `diff`, `ratio`, `pct`, …), and `{est}` is already scale-relative, which is what makes a preset family-agnostic; adding `RD` / `RR` there would be a fifth vocabulary saying what `est` already says. ⚠ The overlap that exists (`or`, `diff`, `ratio` are legal in both, `rr` and `OR` are legacy display rows) is harmless — different arguments, different vocabularies — but it should be said in `?tab` rather than discovered.
 
-**Two foreign keys**, replacing the one that exists today (*"every `REG_WORDS` acronym must be an accepted `measure` spelling"*):
+**Three foreign keys**, replacing the one that exists today (*"every `REG_WORDS` acronym must be an accepted `measure` spelling"*) — each one an *"what the package printed can be typed back"* invariant:
 
-- every `REG_WORDS` name resolves through the shared table — so **what a header prints can always be typed back into `measure`**, on both producers;
+- every `REG_WORDS` name resolves through the shared table — so **what a header prints can be typed back into `measure`**, on both producers;
+- every internal fit key `reg_formulas()` prints resolves through `REG_FIT_SPELLINGS` or is a family's own link — so **what `reg_formulas()` prints can be typed back into `link`**;
 - every `MEASURES` name is reachable from every argument its own `producers` column allows — which is what turns the current `tab()` / `tab_reg()` scope refusals into derived messages rather than hand-written ones.
 
 #### 7.4 Validating `fmt()`, and what it then simplifies
@@ -311,7 +318,7 @@ MEASURE_ACRONYMS_REG <- c(cumOR = "odds_ratio")     # a crosstab has no cumulati
 | I4 | One declared acronym table, two scoped views                          | **yes** — §7.3                  |
 | I5 | Explicit rows only; delete `reg_measure_key()`'s `tolower()` fallback  | **yes** — no case folding       |
 | I6 | Lowercase twin of every acronym, **derived** rather than listed        | **yes** — §7.3                  |
-| I7 | Drop `risk_ratio` / `rate_ratio`                                | **yes** — the taught long form is `ratio` |
+| I7 | Drop `risk_ratio` / `rate_ratio` / `MR`; fit keys move to `link` | **yes** — §7.3, they are not header words |
 | I8 | `cumOR` stays regression-only                                         | **yes** — §7.2                  |
 | I9 | `fmt(color =)` validates and normalises                               | **yes** — §7.4                  |
 | I10| Acronyms in `display =`                                         | **no** — `display` names fields, not measures |
@@ -345,12 +352,12 @@ tab(forcats::gss_cat, race, tvhours, color = TRUE, ci = "ref", display = "est_ci
 #> # ratio (Total): ÷2 ÷1.5 ÷1.2 ÷1.1 ×1.1 ×1.2 ×1.5 ×2      <- a ladder the cells do not show
 ```
 
-The cells print a mean difference with a Welch interval; the legend below them describes the ratio ladder. With `color = "ratio"` written out, everything lines up (`mean_ratio`, `robust`, `÷1.1***  [÷1.14;÷1.02]`). ⚠ `dev/color_ladders_balance.md` §2.5 records the *calibration* half of this (the ratio ladder almost never fires on a mean); the **scale / interval / stars mismatch is not in that document** and is the half that makes the legend untrue.
+The cells print a mean difference with a Welch interval; the legend below them describes the ratio ladder. With `color = "ratio"` written out, everything lines up (`mean_ratio`, `robust`, `÷1.1*** [÷1.14;÷1.02]`). ⚠ **Re-checked after Phase 22b-xvi: it still reproduces.** That phase fixed the *calibration* half `dev/color_ladders_balance.md` §2.5 records — the recalibrated ratio ladder now fires (`÷2 ÷1.5 ÷1.2 ÷1.1 ×1.1 …`) — so what is left is the **scale / interval / stars mismatch**, which is not in that document and is the half that makes the legend untrue.
 
 **(2) `display` and `color` can name two different geometries, with no reconciliation.** `tab(…, display = "ratio", color = "difference", ci = "ref")` prints `×1.01` in every cell while the scale, the interval, the stars and the legend are all the difference. That is legitimate as a *display* choice — `display` is post-hoc by contract — but nothing states which of the two the reader should believe.
 
 **Why `tab_reg()` cannot have either defect**, and what that suggests: there, `measure` names the estimand and `color` names only what to compare it to (`TRUE`, `adjustment`, `between_groups`), so the two questions have two arguments. The same split is already **latent in `MEASURES`**: `difference` / `ratio` / `odds_ratio` set the scale, while `contrib`, `adjustment` and `between_groups` never do (measured: `color = "contrib"` leaves `scale = points`). Splitting `tab()`'s two axes the same way would fix both consequences by construction and give both producers one argument name per question — at the cost of moving 150 documented `color = "<measure>"` spellings, on the half of the package that has users.
 
-→ **Phase 22b-xvi** owns `auto_col_measures()` and the ladders, so consequence (1) is cheapest to fix there. → **Phase 22c** owns the `tab()` argument surface, and is where the axis split belongs if it is wanted.
+→ **Phase 22c** owns the `tab()` argument surface and is where both belong: consequence (1) is one resolution-order fix inside `auto_col_measures()`; consequence (2) needs the axis split, which is the maintainer's call.
 
 ---

@@ -1,5 +1,7 @@
 # Profiles — comparing ideal types with one fitted model
 
+**NOT IMPLEMENTED YET, POSTPONED: TO KEEP FOR A POST 2.0.0 VERSION.**
+
 ## 0. What this document is for
 
 `dev/reg_family_measure_effect.md` §6.3 found that `effect = "at_reference"` can compare **opposed ideal types**, that the comparison is meaningful, that the literature asks for it, and that tabxplor has no first-class way to express it. Its proposition **P9** — the roadmap's **Phase 22b-xiv-3** — asks four questions:
@@ -19,18 +21,18 @@ This document answers all four, proposes an architecture, and records what it me
 
 ## 1. Decision register
 
-| # | proposition | recommendation |
-|:--|:------------|:---------------|
-| **R1** | A profile becomes a first-class object, named by a new `profiles =` argument | **yes** |
-| **R2** | `profiles` is separate from `ref`, not a list-valued `ref` | **yes** — §4.2 |
-| **R3** | Profiles are **columns** from **one fit** — the per-category pattern, not the models one | **yes** — §4.4 |
-| **R4** | g-computation gains a `newdata` grid, so `at_reference` leaves `marginaleffects` | **yes** — §5.1 |
-| **R5** | One declared predicate, *profile-invariance*, shared with 22b-xiv-1's P1/P2 | **yes** — §3 |
-| **R6** | A `between_profiles` gap colour with stars | **no** — §6, measured: the sign reverses |
-| **R7** | A declared note saying whether a between-column difference is *implied* or *measured* | **yes** — §6.3 |
-| **R8** | The "portrait" table is the Constant row of the same object, not a second object | **yes** — §4.6 |
-| **R9** | Eight guards, each naming its cure | **yes** — §4.8 |
-| **R10** | jamovi waits: an Array-of-Groups control, after the R surface settles | **defer** — §5.4 |
+| #       | proposition                                                                              | recommendation                           |
+|:--------|:-----------------------------------------------------------------------------------------|:-----------------------------------------|
+| **R1**  | A profile becomes a first-class object, named by a new `profiles =` argument             | **yes**                                  |
+| **R2**  | `profiles` is separate from `ref`, not a list-valued `ref`                               | **yes** — §4.2                           |
+| **R3**  | Profiles are **columns** from **one fit** — the per-category pattern, not the models one | **yes** — §4.4                           |
+| **R4**  | g-computation gains a `newdata` grid, so `at_reference` leaves `marginaleffects`         | **yes** — §5.1                           |
+| **R5**  | One declared predicate, *profile-invariance*, shared with 22b-xiv-1's P1/P2              | **yes** — §3                             |
+| **R6**  | A `between_profiles` gap colour with stars                                               | **no** — §6, measured: the sign reverses |
+| **R7**  | A declared note saying whether a between-column difference is *implied* or *measured*    | **yes** — §6.3                           |
+| **R8**  | The "portrait" table is the Constant row of the same object, not a second object         | **yes** — §4.6                           |
+| **R9**  | Eight guards, each naming its cure                                                       | **yes** — §4.8                           |
+| **R10** | jamovi waits: an Array-of-Groups control, after the R surface settles                    | **defer** — §5.4                         |
 
 **The one-sentence answer to P9.** Yes to a list of profiles, no to putting it inside `ref`, yes to the column layout, **no to the significance gap** — and it is not a white elephant, because the two combinations where profile columns would be identical are exactly the two that 22b-xiv-1 must settle anyway.
 
@@ -62,9 +64,9 @@ The two tables are not comparable row by row, and nothing says so. The user must
 
 ### 2.3 The two readings a profile supports
 
-| reading | question | what it needs |
-|:--------|:---------|:--------------|
-| **portrait** | what does the model predict for these four people | one number per profile |
+| reading                 | question                                            | what it needs          |
+|:------------------------|:----------------------------------------------------|:-----------------------|
+| **portrait**            | what does the model predict for these four people   | one number per profile |
 | **effect at a profile** | is this effect bigger here or there in social space | one column per profile |
 
 They are **not two features**: the portrait is the Constant row of the effect table (§4.6). That is the integration argument, and it is why this document proposes one object.
@@ -85,12 +87,12 @@ Same model, same rows, two profiles differing only on a third predictor (`occup`
 
 | family × measure at `at_reference`   | fit's link | max abs gap between the two profiles | verdict       |
 |:-------------------------------------|:-----------|-------------------------------------:|:--------------|
-| gaussian × `difference`              | identity   | `7.1e-15`                            | **invariant** |
-| poisson × `ratio`                    | log        | `6.7e-16`                            | **invariant** |
-| gaussian × `ratio`                   | identity   | `2.4e-02`                            | varies        |
-| binomial × `difference`              | logit      | `1.6e-01` (16 points)                | varies        |
-| binomial × `ratio`                   | logit      | `1.5e+00`                            | varies        |
-| multinomial × `odds_ratio` (vs rest) | logit      | `0.34` on one row                    | varies        |
+| gaussian × `difference`              | identity   |                            `7.1e-15` | **invariant** |
+| poisson × `ratio`                    | log        |                            `6.7e-16` | **invariant** |
+| gaussian × `ratio`                   | identity   |                            `2.4e-02` | varies        |
+| binomial × `difference`              | logit      |                `1.6e-01` (16 points) | varies        |
+| binomial × `ratio`                   | logit      |                            `1.5e+00` | varies        |
+| multinomial × `odds_ratio` (vs rest) | logit      |                    `0.34` on one row | varies        |
 
 The gaussian × `ratio` row is the one that shows the predicate must read the **fit**, not the family's habit. `reg_formulas()` says why: at `effect = "coefficient"` a gaussian ratio is fitted as `mr` (log-link pseudo-ML), so it *is* `exp(b)` and invariant; at `at_reference` the fit is the plain `gaussian` **identity** link and the reported ratio is a ratio of two linear predictions, which moves with the profile. Verified on one row: `exp(coef())` of the log-link fit gives `0.9544`, the `coefficient` column gives `0.9544`, and the `at_reference` column gives `0.9443`.
 
@@ -100,17 +102,17 @@ So there are exactly **two** invariant cells in the whole grid: `gaussian × at_
 
 The same question is asked three times across three sub-phases, and today it has three unrelated answers:
 
-| asked by | question | today |
-|:---------|:---------|:------|
-| 22b-xiv-1 **P2** | does `at_reference` duplicate the coefficient | nothing — the cell builds a duplicate |
-| 22b-xiv-1 **P1** | does `marginal` duplicate the coefficient | a static `status`, wrong on interacted models |
-| **this phase** | do two profiles give different columns | — |
+| asked by         | question                                      | today                                         |
+|:-----------------|:----------------------------------------------|:----------------------------------------------|
+| 22b-xiv-1 **P2** | does `at_reference` duplicate the coefficient | nothing — the cell builds a duplicate         |
+| 22b-xiv-1 **P1** | does `marginal` duplicate the coefficient     | a static `status`, wrong on interacted models |
+| **this phase**   | do two profiles give different columns        | —                                             |
 
 All three are *"is this estimand invariant to where you stand?"*. One declared fact answers them: a **`link_measure`** column on `REG_FAMILIES` — the measure the link is additive in, nine values, foreign-key checked against `REG_MEASURES_VALUES`:
 
-| fit key | `gaussian` | `binomial` | `poisson`, `quasipoisson` | `multinomial` | `ordinal` | `rr` | `rd` | `mr` |
-|:--------|:-----------|:-----------|:--------------------------|:--------------|:----------|:-----|:-----|:-----|
-| link's own | `difference` | `odds_ratio` | `ratio` | `odds_ratio` | `odds_ratio` | `ratio` | `difference` | `ratio` |
+| fit key    | `gaussian`   | `binomial`   | `poisson`, `quasipoisson` | `multinomial` | `ordinal`    | `rr`    | `rd`         | `mr`    |
+|:-----------|:-------------|:-------------|:--------------------------|:--------------|:-------------|:--------|:-------------|:--------|
+| link's own | `difference` | `odds_ratio` | `ratio`                   | `odds_ratio`  | `odds_ratio` | `ratio` | `difference` | `ratio` |
 
 and one reader, `reg_profile_invariant(fit, measure, builder, additive)`, with two guards worth stating: the multinomial `vsrest` builder is **never** invariant (its contrast is category-vs-rest, which the logit is not additive in — measured above), and `additive` is FALSE as soon as the predictor appears in a `cross` or under a value-recoding `shape`.
 
@@ -164,12 +166,12 @@ The maintainer's own suggestion, and it is tempting: no new argument, and the pl
 
 Nothing new. It is the ordinary `at_reference` column, evaluated at its own grid:
 
-| row | holds |
-|:----|:------|
-| a factor level | the effect vs the level's reference, at this profile, with its interval and stars |
-| a numeric predictor | the `multiplier`-unit slope contrast, read **from that profile's own value** |
-| `Constant` | the model's predicted outcome at this profile, and its own count |
-| `{base}` | the adjusted prediction for that level at this profile |
+| row                 | holds                                                                             |
+|:--------------------|:----------------------------------------------------------------------------------|
+| a factor level      | the effect vs the level's reference, at this profile, with its interval and stars |
+| a numeric predictor | the `multiplier`-unit slope contrast, read **from that profile's own value**      |
+| `Constant`          | the model's predicted outcome at this profile, and its own count                  |
+| `{base}`            | the adjusted prediction for that level at this profile                            |
 
 Two asymmetries worth stating in the docs, because they follow from what a profile is:
 
@@ -203,7 +205,7 @@ And the table **already says where its own reading is fragile**: `Technicien` re
 
 ⚠ `set_col_group()` is called **nowhere** in the regression builders today, so `fmt_col_block()` collapses to `col_var` on every `tab_reg()` table. Profiles are the first legitimate user of that slot — which is what the attribute was defined for ("which sub-population the block belongs to").
 
-**The `n` column.** `reg_base_n_cols()` (`R/tab-display.R:771`) emits one synthesised count column **per `col_group`**. Under `tab_vars` that is right — the groups are disjoint samples. Under profiles it is wrong: the sample is the same, so the N columns would be identical. The fix is a derived rule, three lines, and it is honest on its own terms: *a count column says how many people each row rests on, so two blocks resting on the same people get one column.* Groups whose count vectors are identical collapse to a single `n`.
+**The `n` column.** `tab_base_n_cols()` (`R/tab-display.R:771`) emits one synthesised count column **per `col_group`**. Under `tab_vars` that is right — the groups are disjoint samples. Under profiles it is wrong: the sample is the same, so the N columns would be identical. The fix is a derived rule, three lines, and it is honest on its own terms: *a count column says how many people each row rests on, so two blocks resting on the same people get one column.* Groups whose count vectors are identical collapse to a single `n`.
 
 **The footer.** The model-fit rows (N, AIC, LR, the checks) describe the model, not the profile, so they stay keyed to the first model column and appear once. Nothing per-profile is needed there: the profile's own count already lands on its Constant row (§4.6).
 
@@ -217,11 +219,11 @@ Read across the profile columns, the `Constant` row is exactly the ideal-type ta
 
 | adjusted P(goes to the cinema) | young man | young woman | older man | older woman |
 |:-------------------------------|----------:|------------:|----------:|------------:|
-| Cadre                          | 89.9 %    | 90.5 %      | 37.1 %    | 38.8 %      |
-| Ouvrier specialise             | 46.3 %    | 48.0 %      |  5.4 %    |  5.8 %      |
-| Ouvrier qualifie               | 53.8 %    | 55.5 %      |  7.2 %    |  7.7 %      |
-| Technicien                     | 70.3 %    | 71.7 %      | 13.6 %    | 14.4 %      |
-| Employe                        | 71.3 %    | 72.7 %      | 14.2 %    | 15.1 %      |
+| Cadre                          |    89.9 % |      90.5 % |    37.1 % |      38.8 % |
+| Ouvrier specialise             |    46.3 % |      48.0 % |     5.4 % |       5.8 % |
+| Ouvrier qualifie               |    53.8 % |      55.5 % |     7.2 % |       7.7 % |
+| Technicien                     |    70.3 % |      71.7 % |    13.6 % |      14.4 % |
+| Employe                        |    71.3 % |      72.7 % |    14.2 % |      15.1 % |
 
 That whole grid is `display = "base"` on the same object; the `Cadre` line is the Constant row. So the "simpler mechanism to get the adjusted proportions at several reference profiles" the maintainer asks about is **not a second feature** — it is this one, read with one argument. Nothing else is needed, and a separate producer would duplicate the guards, the counts and the export path.
 
@@ -244,16 +246,16 @@ young man: sexe = Homme, age = 30 (qualif at its reference; 110 respondents matc
 
 Each names its cure, in the package's own style.
 
-| guard | the message names |
-|:------|:------------------|
-| a profile-invariant estimand (§3) | `measure = "difference"` / `"ratio"`, or `display = "base"` for the predictions |
-| `profiles` with another `effect` | sets `at_reference` and says so once — a profile indexes only that column |
-| a variable that is not a predictor of this model | the model's own predictor list |
-| a factor level that does not exist | the levels the variable has |
-| `profiles` with `predictors = list(...)` | two column axes; run one model, or one profile |
-| `profiles` with `tab_vars` | real groups and imagined ones both want the spread; pick one |
-| a model with **one** predictor | a profile holds the *other* predictors, and this model has none |
-| a numeric value outside the observed range | informs, not an error: an extrapolation; the count will be 0 |
+| guard                                            | the message names                                                               |
+|:-------------------------------------------------|:--------------------------------------------------------------------------------|
+| a profile-invariant estimand (§3)                | `measure = "difference"` / `"ratio"`, or `display = "base"` for the predictions |
+| `profiles` with another `effect`                 | sets `at_reference` and says so once — a profile indexes only that column       |
+| a variable that is not a predictor of this model | the model's own predictor list                                                  |
+| a factor level that does not exist               | the levels the variable has                                                     |
+| `profiles` with `predictors = list(...)`         | two column axes; run one model, or one profile                                  |
+| `profiles` with `tab_vars`                       | real groups and imagined ones both want the spread; pick one                    |
+| a model with **one** predictor                   | a profile holds the *other* predictors, and this model has none                 |
+| a numeric value outside the observed range       | informs, not an error: an extrapolation; the count will be 0                    |
 
 ### 4.9 What profiles deliberately do not get
 
@@ -280,24 +282,24 @@ Its sibling already does. `reg_gcomp_baseline(fit, data, wt, newdata =)` (`R/reg
 
 Roughly 300–400 lines of R plus documentation. Every item is an extension of a function that exists.
 
-| file | function | change |
-|:-----|:---------|:-------|
-| `R/reg-resolve.R` | `reg_per_predictor()` | reused unchanged, once per profile |
-| | `reg_resolve_fit_plan()` | a new block after U0: parse `profiles`, validate names and values |
-| | `new_reg_args` / `new_reg_shared` | one `profiles` slot, carried to the builders |
-| `R/tab_reg.R` | `reg_reference_grid_values()` | take an override list; keep the two arms |
-| | `reg_profile_row()` | same override; already builds from `data[1L, ]` |
-| | `reg_marginal()` | accept `at = <named list>` beside `"average"` / `"reference"` |
-| | `reg_marginal_me()` | pass `ref_vals` in rather than compute them (already does `modifyList`) |
-| | `reg_cols_ame()` / `reg_cols_vsrest()` | one outer `map()` over profiles; labels and `col_group` |
-| | `reg_constant_baseline()` / `reg_constant_count()` | per profile instead of per spec |
-| | `reg_stage_rows()` | drop the anchor clause under `profiles` (§4.5) |
-| | `reg_color_notes()` | the implied-vs-measured note (§6.3) |
-| `R/reg-influence.R` | `reg_gcomp_maker()` | the `newdata` slot (§5.1) |
-| `R/reg-estimand.R` | `REG_FAMILIES` | one `link_measure` column; `reg_profile_invariant()` |
-| | `reg_marginal_engine()` | `at_reference` may resolve to `"gcomp"` once the grid exists |
-| `R/tab-display.R` | `reg_base_n_cols()` | collapse `col_group`s with identical counts (§4.4) |
-| `R/zzz-fact-keys.R` | `TAB_FOREIGN_KEYS` | `REG_FAMILIES$link_measure` into `REG_MEASURES_VALUES` |
+| file                | function                                           | change                                                                  |
+|:--------------------|:---------------------------------------------------|:------------------------------------------------------------------------|
+| `R/reg-resolve.R`   | `reg_per_predictor()`                              | reused unchanged, once per profile                                      |
+|                     | `reg_resolve_fit_plan()`                           | a new block after U0: parse `profiles`, validate names and values       |
+|                     | `new_reg_args` / `new_reg_shared`                  | one `profiles` slot, carried to the builders                            |
+| `R/tab_reg.R`       | `reg_reference_grid_values()`                      | take an override list; keep the two arms                                |
+|                     | `reg_profile_row()`                                | same override; already builds from `data[1L, ]`                         |
+|                     | `reg_marginal()`                                   | accept `at = <named list>` beside `"average"` / `"reference"`           |
+|                     | `reg_marginal_me()`                                | pass `ref_vals` in rather than compute them (already does `modifyList`) |
+|                     | `reg_cols_ame()` / `reg_cols_vsrest()`             | one outer `map()` over profiles; labels and `col_group`                 |
+|                     | `reg_constant_baseline()` / `reg_constant_count()` | per profile instead of per spec                                         |
+|                     | `reg_stage_rows()`                                 | drop the anchor clause under `profiles` (§4.5)                          |
+|                     | `reg_color_notes()`                                | the implied-vs-measured note (§6.3)                                     |
+| `R/reg-influence.R` | `reg_gcomp_maker()`                                | the `newdata` slot (§5.1)                                               |
+| `R/reg-estimand.R`  | `REG_FAMILIES`                                     | one `link_measure` column; `reg_profile_invariant()`                    |
+|                     | `reg_marginal_engine()`                            | `at_reference` may resolve to `"gcomp"` once the grid exists            |
+| `R/tab-display.R`   | `tab_base_n_cols()`                                | collapse `col_group`s with identical counts (§4.4)                      |
+| `R/zzz-fact-keys.R` | `TAB_FOREIGN_KEYS`                                 | `REG_FAMILIES$link_measure` into `REG_MEASURES_VALUES`                  |
 
 Untouched: `EST_SCALES`, `MEASURES`, the colour engine, `format()`, every exporter, `tab()`.
 
@@ -321,10 +323,10 @@ The gap seam is already generic. `obs` and `gap_se` are plain per-cell fields; e
 
 ⚠ **But it must not reuse `between_groups`' arithmetic.** That writer adds the two legs' variances **in quadrature**, which is exact for `tab_vars` groups because they are disjoint samples — and wrong for two profiles of one fit, which are correlated through β. Measured, for the class gap of *Ouvrier specialise* at the young-man and older-man profiles:
 
-| | estimate | SE | z | p |
-|:--|---:|---:|---:|---:|
-| exact, delta method on the full vcov | −0.1186 | 0.0519 | −2.28 | **0.0224** |
-| quadrature (`between_groups`' formula) | −0.1186 | 0.0640 | −1.85 | **0.0637** |
+|                                        | estimate |     SE |     z |          p |
+|:---------------------------------------|---------:|-------:|------:|-----------:|
+| exact, delta method on the full vcov   |  −0.1186 | 0.0519 | −2.28 | **0.0224** |
+| quadrature (`between_groups`' formula) |  −0.1186 | 0.0640 | −1.85 | **0.0637** |
 
 The correlation between the two legs is +0.349, the quadrature SE is **1.23× too wide**, and the conclusion flips. So the honest implementation needs the influence functions of §5.1 — which is the second reason `R4` is not optional if any of this lands.
 
@@ -332,10 +334,10 @@ The correlation between the two legs is +0.349, the quadrature SE is **1.23× to
 
 The model above contains **no interaction**. Its class effect nevertheless differs between profiles, and significantly so, purely through the curvature of the logit. Fit the model that actually *measures* effect modification and the answer changes sign:
 
-| model | RD, young man | RD, older man | gap | p |
-|:------|--------------:|--------------:|----:|---:|
-| additive `qualif + sexe + age4` | −43.6 pts | −31.7 pts | **−11.9 pts** | 0.022 |
-| interacted `qualif*age4 + sexe` | −28.7 pts | −44.3 pts | **+15.6 pts** | 0.211 |
+| model                           | RD, young man | RD, older man |           gap |     p |
+|:--------------------------------|--------------:|--------------:|--------------:|------:|
+| additive `qualif + sexe + age4` |     −43.6 pts |     −31.7 pts | **−11.9 pts** | 0.022 |
+| interacted `qualif*age4 + sexe` |     −28.7 pts |     −44.3 pts | **+15.6 pts** | 0.211 |
 
 And the interaction is real: `anova()` on the two fits gives `p = 0.0014`.
 
@@ -376,18 +378,18 @@ One note, two arms, and it converts the trap into the teaching moment.
 
 ## 8. Scope options
 
-| option | what ships | cost | verdict |
-|:-------|:-----------|:-----|:--------|
-| **A** — docs only | the two-call recipe and the focal-reference rule | ~0 | the trap survives; aligned by hand |
-| **B** — portrait only | a `Profiles` row block of predictions | small | cheap; cannot say where an effect is bigger |
-| **C** — profile columns | §4 in full, no gap colour | ~300-400 lines | **recommended** |
-| **D** — C plus the gap colour | one `MEASURES` row, a writer, influence functions | +~120 lines | refused by §6.2 |
+| option                        | what ships                                        | cost           | verdict                                     |
+|:------------------------------|:--------------------------------------------------|:---------------|:--------------------------------------------|
+| **A** — docs only             | the two-call recipe and the focal-reference rule  | ~0             | the trap survives; aligned by hand          |
+| **B** — portrait only         | a `Profiles` row block of predictions             | small          | cheap; cannot say where an effect is bigger |
+| **C** — profile columns       | §4 in full, no gap colour                         | ~300-400 lines | **recommended**                             |
+| **D** — C plus the gap colour | one `MEASURES` row, a writer, influence functions | +~120 lines    | refused by §6.2                             |
 
 **Option B deserves a fair hearing**, because it is genuinely attractive: it works under `effect = "coefficient"` — the default, the most common table — where a portrait block beside an ordinary odds-ratio column would be very useful, and it never raises the curvature question. It is rejected only because it is **contained in C**: with profiles as columns, the portrait is the Constant row and `display = "base"` is the whole grid, so B would be a second object answering a subset of the same question. If the maintainer prefers to land the cheap half first, B is a coherent staging of C rather than an alternative to it — the same parser, the same guards, the same `reg_gcomp_baseline()` call, without the column axis.
 
 **Recommendation: C, staged as C1 then C2.**
 
-- **C1** — `profiles`, the columns, the guards, the Constant row and its counts, `reg_base_n_cols()`'s collapse rule, the note of §6.3, and the documentation. Runs on `marginaleffects` as `at_reference` does today.
+- **C1** — `profiles`, the columns, the guards, the Constant row and its counts, `tab_base_n_cols()`'s collapse rule, the note of §6.3, and the documentation. Runs on `marginaleffects` as `at_reference` does today.
 - **C2** — the `newdata` grid in `reg_gcomp_maker()`, which drops the dependency for the whole `at_reference` path. Independently valuable, and a prerequisite for D if D is ever revisited.
 
 ---

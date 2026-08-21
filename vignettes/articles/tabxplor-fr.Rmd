@@ -251,6 +251,25 @@ Passer plusieurs **variables de ligne** (`row_vars`) *sans* `tab_vars` fusionne 
 tab(gss_simple, c(married, income25k), race, pct = "row", output_list = TRUE)
 ```
 
+### Le tableau le plus compact : un bloc de colonnes par groupe
+
+`spread_vars` affiche une variable de sous-tableau **en largeur** plutôt qu'en hauteur : chacune de ses modalités devient un *bloc de colonnes*. Combiné à `levels = "first"` (une colonne par variable, voir plus haut), on obtient le tableau le plus condensé que le package sache dessiner --- plusieurs variables, plusieurs groupes, un seul écran :
+
+```{r, echo = TRUE}
+tab(gss_simple, rincome, c(married, tvhours), tab_vars = race, spread_vars = race,
+    pct = "row", na = "drop", levels = "first", comp = "all",
+    color = TRUE, color_signif = "grey_non_signif")
+```
+
+La mise en page découle de cette forme, et le tableau le dit :
+
+- il y a **une seule ligne `Total`** pour tout le tableau ; chaque bloc répond dans ses propres colonnes.
+- l'effectif de base prend **une colonne `n` par bloc**, regroupées à droite, pour qu'on puisse les comparer entre elles. Une colonne `Total` par bloc ne ferait que répéter `100 %`.
+- `comp = "all"` compare chaque case au total **d'ensemble** plutôt qu'à celui de son groupe --- ici la case `Total` du bloc `Ensemble`, le seul chiffre dont tous les écarts colorés du tableau sont mesurés. La légende des couleurs le nomme.
+- une *ligne* de total ne peut pas devenir un bloc de colonnes : `totaltab = "line"` (le défaut) est donc promu en `"table"`, et le message le dit. Utilisez `totaltab = "no"` pour n'avoir aucun bloc d'ensemble.
+
+Une variable indiquée dans `spread_vars` seulement est ajoutée aux `tab_vars` pour vous : `tab(gss_simple, rincome, party3, spread_vars = race, pct = "row")` suffit.
+
 ## Couleurs : des repères de lecture
 
 L'un des objectifs de `tabxplor` est de fournir une gamme complète de repères de couleurs pour l'exploration de données. `color = "difference"` colore chaque case selon **son écart à sa référence** — par défaut le Total de sa ligne ou de sa colonne (le pourcentage moyen pour toute la population). Les cases nettement au-dessus de la moyenne deviennent **bleues**, celles nettement en dessous **rouge/orange** — plus une case s'éloigne de sa référence, plus la nuance est forte.

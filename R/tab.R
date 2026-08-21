@@ -68,21 +68,15 @@ NULL
 #'     and `display` when you want odds ratios shown.
 #'   \item **Statistics**: `test` (chi-squared or Welch's F), and `ci` + `conf_level` + `stars`
 #'     (confidence intervals). `ci_method` picks the engine for each kind of interval.
-#'   \item **Totals & missing values**: `tot`, `total_names`, `totaltab`, `na`, `levels`.
+#'   \item **Totals & missing values**: `totaltab`, `na`, `levels`, and `tot` (which totals to
+#'     show), taken by name through `...`.
 #'   \item **Advanced / output**: `display`, `n_min`, `output_list`, `spread_vars`, `filter`.
 #' }
 #' The package-wide display, color and statistics defaults are `options()`, listed at
 #' [tabxplor-options].
 #'
 #' @eval tab_args_rd("tab")
-#' @param ... The arguments retired in 2.0.0, caught by name: the nine deprecated formals
-#'   (`sup_cols`, `OR`, `chi2`, `method_cell`, `method_diff`, `names_prefix`, `names_sort`,
-#'   `row_var`, `col_var`), the three total-label ones now carried by
-#'   `options(tabxplor.total_names)` (`total_names`, `totaltab_name`, `other_level`), and the five
-#'   jamovi-internal ones (`.cache`, `.defer_level_merge`, `.return_armed`, `.levels_order`,
-#'   `.levels_collapse`).
-#'   Everything else is refused with a suggestion, and an UNNAMED argument here is refused outright
-#'   -- past the variable roles, every argument must be named.
+#' @eval tab_dots_rd("tab")
 #'
 #' @details
 #' \strong{Ordered factors.} An \code{ordered} factor stays ordered through the whole pipeline,
@@ -235,7 +229,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
                 ref = "auto", ref2 = "first", comp = "tab",
                 ci = "auto", conf_level = NULL, stars = NULL,
                 ci_method = NULL, anova = NULL, design_effect = NULL,
-                totaltab = "line", common_totrow = FALSE, tot = c("row", "col"),
+                totaltab = "line", common_totrow = FALSE,
                 n = NULL, n_min = 0, add_pct = FALSE,
                 subtext = "", digits = 0, display = NULL, color_breaks = NULL,
                 output_list = FALSE,
@@ -250,6 +244,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
   names_prefix <- dots_value(.dots, "names_prefix")
   names_sort   <- dots_value(.dots, "names_sort", FALSE)
   add_n        <- dots_value(.dots, "add_n")
+  tot          <- dots_value(.dots, "tot", TAB_ARGS$tot$default)
   .cache             <- dots_value(.dots, ".cache")
   .defer_level_merge <- dots_value(.dots, ".defer_level_merge", FALSE)
   .return_armed      <- dots_value(.dots, ".return_armed", FALSE)
@@ -273,7 +268,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
   test <- .a$test ; cleannames <- .a$cleannames ; stars <- .a$stars ; ci_method <- .a$ci_method
   display <- .a$display ; ref <- .a$ref ; ref2 <- .a$ref2
   color_spec <- .a$color_spec ; color <- .a$color
-  total_names <- .a$total_names ; tot <- .a$tot
+  total_names <- .a$total_names
   totaltab_name <- .a$totaltab_name ; other_level <- .a$other_level
   conf_level <- .a$conf_level ; base_n <- .a$base_n
 
@@ -323,9 +318,19 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
 
   spread_vars <- tidy_select_chr(rlang::enquo(spread_vars), data)
   if (length(spread_vars)) {
-    if (!all(spread_vars %in% tab_vars)) {
-      cli::cli_abort(c("{.arg spread_vars} must be among the {.arg tab_vars}.",
-                       "i" = "Got {.val {setdiff(spread_vars, tab_vars)}}, tab_vars are {.val {tab_vars}}."))
+    # DESIGN: a spread variable IS a tab variable -- it splits the population, it just shows the
+    #   split across the page instead of down it. One named in `spread_vars` alone is APPENDED to
+    #   `tab_vars` (the user's own order and nesting survive; the spread variable is the innermost
+    #   split, which is what a column block is) rather than refused.
+    tab_vars <- c(tab_vars, setdiff(spread_vars, tab_vars))
+
+    # DESIGN: a total LINE cannot become a column block -- spread, it leaves a block holding one
+    #   cell. Asked for a spread, the table needs a full total table or none at all.
+    if (any(totaltab == "line")) {
+      cli::cli_inform(c("i" = paste(
+        "A total line cannot become a column block: a full total table was added",
+        "({.code totaltab = \"table\"}). Use {.code totaltab = \"no\"} for no overall column.")))
+      totaltab[totaltab == "line"] <- "table"
     }
   }
 
@@ -1679,6 +1684,14 @@ tab_assemble_output <- function(ctx) {
 
 #' Spread a tab, passing a tab variable to column
 #'
+#' @description
+#' Turns each level of a `tab_vars` variable into a **block of columns**: fewer rows, more columns,
+#' and every column stores which sub-population it belongs to (`col_group`) beside the variable it
+#' shows (`col_var`). Every total row merges into ONE, named `totname` --- the remaining `tab_vars`
+#' are still index columns of their own, so the label does not repeat them. A total *table*'s own
+#' line joins that row when no `tab_vars` is left to hold it, and is dropped when one is.
+#' [tab()]'s `spread_vars` calls it for you, and takes care of the totals beforehand.
+#'
 #' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab}},
 #' \code{\link{tab_reg}} or \code{\link{tab_plain}}.
 #' @param spread_vars <\link[tidyr:tidyr_tidy_select]{tidy-select}>  The tab variables
@@ -1687,7 +1700,8 @@ tab_assemble_output <- function(ctx) {
 #' @param names_sort If no \code{names_prefix} is given, new names takes the form
 #'  \code{spread_var}_\code{col_var_level}. Should then the column names be sorted ?
 #'  If \code{FALSE}, the default, column names are ordered by first appearance.
-#' @param totname The new name of the total rows, as a single string.
+#' @param totname The name the merged total row takes, as a single string. `NULL` (default)
+#'   uses the one `options(tabxplor.total_names)` declares.
 #'
 #' @return A \code{tibble} of class \code{tab}, with less rows and more columns.
 #' @export
@@ -1704,8 +1718,9 @@ tab_assemble_output <- function(ctx) {
 #'   tab_spread(race)
 #'   }
 tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
-                       totname = "Total" #, recalculate = TRUE
+                       totname = NULL #, recalculate = TRUE
 ) {
+  if (is.null(totname)) totname <- tab_total_names()[["row"]]
   spread_vars     <- rlang::enquo(spread_vars)
   pos_spread_vars <- tidyselect::eval_select(spread_vars, tabs)
   spread_vars     <- names(pos_spread_vars)
@@ -1741,24 +1756,31 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
     tabs <- tabs |> dplyr::group_by(!!!rlang::syms(tab_vars))
     groups <- dplyr::group_vars(tabs)
 
-    tottab_rows <- is_tottab(tabs)
-    tottab_line <- length(tottab_rows[tottab_rows]) == 1 & tottab_rows & totrows
+    # NA-safe: a table built with `totaltab = "no"` can leave `in_tottab` unset on a numeric block.
+    tottab_rows <- is_tottab(tabs) %in% TRUE
+    tottab_line <- sum(tottab_rows) == 1 & tottab_rows & totrows
 
     tabs <- tabs |> tibble::add_column(totrows, tottab_rows, tottab_line)
 
-    if (length(tab_vars_new) != 0 & any(tottab_rows)) {
-      tabs <- tabs |> dplyr::filter(!tottab_line)
+    # DESIGN: what becomes of the total TABLE's own line. When some tab_vars remain it has no row
+    #   axis left to sit on and is dropped; when every tab_var went to column, it is a total row like
+    #   any other and joins the others -- so the whole table ends with ONE total row, each block
+    #   answering in its own columns (this is where `comp = "all"`'s reference cell lives).
+    if (any(tottab_rows)) {
+      if (length(tab_vars_new) != 0) tabs <- tabs |> dplyr::filter(!tottab_line)
+      else                           tabs <- tabs |> dplyr::mutate(tottab_line = FALSE)
     }
 
+    # DESIGN: the merged total row takes the PLAIN total name. The remaining tab_vars are still
+    #   index columns of their own after the pivot, so naming them again in the label duplicates
+    #   what the row already shows -- and an uppercase label was this reshape's own invention,
+    #   out of step with leaf_rename_totals().
     new_levels <- tabs |>
       dplyr::filter(.data$totrows & !.data$tottab_line) |>
       dplyr::select(!!!tab_vars, !!row_var) |>
       dplyr::arrange(!!!rlang::syms(tab_vars_new), .by_group = FALSE,
                      .by_totals = FALSE, .only_main_display = FALSE) |>
-      dplyr::mutate(
-        new_levels = paste(totname, paste(!!!rlang::syms(tab_vars_new), sep = " / ")) |>
-          stringi::stri_trans_toupper()
-      )
+      dplyr::mutate(new_levels = totname)
     new_levels <- purrr::set_names(as.character(dplyr::pull(new_levels, row_var)),
                                    new_levels$new_levels)
 
@@ -1797,7 +1819,7 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
     dplyr::arrange(!!!rlang::syms(tab_vars_new), !!rlang::sym(row_var),
                    .only_main_display = FALSE)
 
-  tabs <- complete_partial_totals(tabs)
+  tabs <- spread_complete_totrows(tabs)
 
   spread <- spread_relabel(tabs, spread_vars, spread_levels, test, get_vars$col_vars)
   tabs   <- spread$tabs ; test <- spread$test
@@ -1812,6 +1834,26 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
     new_grouped_tab(tabs, groups = group_dat, subtext = subtext, test = test, meta = meta_out)
   }
 
+}
+
+
+# spread_complete_totrows() -- the ONE fact the pivot leaves half-written. `values_fill` mints
+# neutral fmt0() cells, and a total row that exists in only some blocks lands beside them: the row
+# is then a total row in some columns and a data row in others, which nothing downstream can read.
+# Completing `row_kind` is all that is needed -- and all that is ALLOWED. `in_tottab` and
+# `in_refrow` are, after a spread, facts about a COLUMN BLOCK (which sub-population it holds), not
+# about a row; broadcasting them down the row is what used to make every cell of a spread table
+# claim to belong to the total table, so the whole total row read as the reference in every block.
+#' @keywords internal
+#' @noRd
+spread_complete_totrows <- function(tabs) {
+  diff_totrows <- suppressWarnings(is_totrow(tabs)) != is_totrow(tabs, partial = TRUE)
+  if (!any(diff_totrows)) return(tabs)
+  tabs |>
+    tibble::add_column(diff_totrows) |>
+    dplyr::mutate(dplyr::across(where(is_fmt),
+                                ~ dplyr::if_else(diff_totrows, as_totrow(.), .))) |>
+    dplyr::select(-"diff_totrows")
 }
 
 

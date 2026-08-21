@@ -915,12 +915,11 @@ materialize_specs <- function() list(
     when  = function(tab, backend, ctx) tab_is_reg(tab) && !is.null(get_assumptions(tab)) &&
       !isFALSE(tx_option("spark")) && any(purrr::map_lgl(tab, ~ is_fmt(.) && get_role(.) == "n")),
     apply = function(tab, backend, ctx) mat_reg_spark(tab)),
-  # A Total column that does not total what the reader can see (an odds-ratio table, or one whose
-  # other levels were dropped) says nothing once the count lives elsewhere: its own column in Excel,
-  # nowhere at all under n = "no".
+  # A Total column whose content has moved: the count into its own column (Excel, or one per block
+  # on a spread table) or nowhere at all (n = "no"), leaving a constant behind.
   total_col = list(
     when  = function(tab, backend, ctx) TRUE,
-    apply = function(tab, backend, ctx) tab_drop_dishonest_totcol(tab, backend, ctx$base_n)),
+    apply = function(tab, backend, ctx) tab_drop_totcol(tab, backend, ctx$base_n)),
   # Excel-only mean + sd twin column: console/md/kable show sd inline as "mean (sigma sd)".
   sd_twin = list(
     when  = function(tab, backend, ctx) identical(backend, "xl"),
@@ -948,11 +947,19 @@ materialize_specs <- function() list(
 mat_base_n <- function(tab, backend, ctx) {
   on <- !identical(ctx$base_n, "no")
   if (tab_is_reg(tab)) {
-    if (on) tab <- reg_base_n_cols(tab, ctx$base_n)
+    if (on) tab <- tab_base_n_cols(tab, ctx$base_n)
     return(set_render_extras(tab, NULL))
   }
   tab <- tab_base_n_pct(list(tab), base_n = ctx$base_n, add_pct = ctx$add_pct, backend = backend)[[1]]
-  if (identical(backend, "text") && on) tab <- tab_fold_base_n(tab, ctx$base_n)
+  # DESIGN: WHERE the count goes is decided by how many sub-populations the table rests on, not by
+  #   the backend. One, and it folds into the Total cell the reader is already looking at (text
+  #   only -- Excel wants a real number in a column of its own). Several, and there is no single
+  #   Total cell that could hold it: it takes one column per block, the same shape a regression
+  #   table has always had, and the per-block Total columns go (tab_drop_totcol).
+  if (on) {
+    if (tab_base_blocks(tab) > 1L)       tab <- tab_base_n_cols(tab, ctx$base_n)
+    else if (identical(backend, "text")) tab <- tab_fold_base_n(tab, ctx$base_n)
+  }
   set_render_extras(tab, NULL)
 }
 

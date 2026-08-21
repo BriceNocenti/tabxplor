@@ -1577,7 +1577,12 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
          .SDcols = names(not_fct)[not_fct]]
   }
 
-  if (na == "keep") {
+  # WARNING: gated on an ACTUAL missing value, exactly as plain_core() is. fct_na_value_to_level()
+  #   appends the "NA" level unconditionally, so an ungated call gave the numeric leaf a level the
+  #   text leaf did not have -- and the two blocks are full_join()ed on this very column, which an
+  #   `ordered` factor refuses across two level sets (`na = "drop_all"` hands both leaves "keep").
+  if (na == "keep" &&
+      any(purrr::map_lgl(dplyr::select(tabs, tidyselect::any_of(tab_row_names)), anyNA))) {
     data.table::setorderv(
       tabs, tab_row_names, na.last = TRUE
     )[, paste0(tab_row_names) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"),
@@ -1603,6 +1608,11 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
     # WARNING: when tot = "no" but a total table is still built, keep ONLY the grand total -- as a
     # length-1 LIST, never the bare vector, which makes map_dfr() iterate zero times.
     if (!"row" %in% tot) group_vars <- group_vars[length(group_vars)]
+    # ... and symmetrically: the LAST grouping is the roll-up over every tab_var, i.e. the total
+    # TABLE's own line. `totaltab = "no"` asked for no total table, so it is not built -- which is
+    # what plain_core() already does, and the two leaves are full_join()ed row by row.
+    else if (!totaltab %in% c("line", "table") && length(tab_vars) != 0)
+      group_vars <- group_vars[-length(group_vars)]
 
 
     tabs_tot <- purrr::map_dfr(

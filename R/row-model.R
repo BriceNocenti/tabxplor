@@ -103,6 +103,19 @@ lvl_restore <- function(to, from) {
   new_lvl(to, lvl_role(from), lvl_var(from), lvl_ordered(from))
 }
 
+# lvl_add_label() -- a SYNTHETIC index label (the "n" / "row_pct" rows the display adds), minted in
+# the column's OWN type. Building it as a fresh factor() restored only the declaration, not the
+# type: an `ordered` index column became a plain factor and the bind that splices the row in had no
+# common type. Appending the level instead keeps the column bindable by construction.
+#' @keywords internal
+#' @noRd
+lvl_add_label <- function(x, label) {
+  u  <- unlvl(x)
+  lv <- levels(u)
+  if (!label %in% lv) lv <- c(lv, label)
+  lvl_restore(factor(label, levels = lv, ordered = is.ordered(u)), x)
+}
+
 # Reconcile two declarations on a bind: a shared fact survives, differing facts fall back to the
 # neutral (role "level", no single var). The `ordered` maps UNION, so a merged table remembers which
 # stacked variables were ordinal.
@@ -130,27 +143,51 @@ lvl_reconcile <- function(x, y) {
 #' @export
 droplevels.tabxplor_lvl <- function(x, ...) lvl_restore(droplevels(unlvl(x), ...), x)
 
+# lvl_ptype2_union() -- THE combining rule for a label column, and the reason it is not the factor
+# one: two index columns may legitimately reach a bind with different level sets (one block lost its
+# NA level, a synthetic row adds its own), and `ordered` refuses that outright. A label column is a
+# LABEL: when no common ordered type exists it degrades to a plain factor over the union, and the
+# ordinality survives where it is read from anyway -- the `ordered` map of the declaration.
+#' @keywords internal
+#' @noRd
+lvl_ptype2_union <- function(x, y, ...) {
+  tryCatch(vctrs::vec_ptype2(x, y, ...),
+           vctrs_error_incompatible_type = function(e)
+             factor(levels = union(levels(x), levels(y))))
+}
+
 #' @export
 vec_ptype2.tabxplor_lvl.tabxplor_lvl <- function(x, y, ...) {
   r <- lvl_reconcile(x, y)
-  new_lvl(vctrs::vec_ptype2(unlvl(x), unlvl(y), ...), r$role, r$var, r$ordered)
+  new_lvl(lvl_ptype2_union(unlvl(x), unlvl(y), ...), r$role, r$var, r$ordered)
 }
 #' @export
-vec_ptype2.tabxplor_lvl.factor    <- function(x, y, ...) vctrs::vec_ptype2(unlvl(x), y, ...)
+vec_ptype2.tabxplor_lvl.factor    <- function(x, y, ...) lvl_ptype2_union(unlvl(x), y, ...)
 #' @export
-vec_ptype2.factor.tabxplor_lvl    <- function(x, y, ...) vctrs::vec_ptype2(x, unlvl(y), ...)
+vec_ptype2.factor.tabxplor_lvl    <- function(x, y, ...) lvl_ptype2_union(x, unlvl(y), ...)
 #' @export
 vec_ptype2.tabxplor_lvl.character <- function(x, y, ...) vctrs::vec_ptype2(unlvl(x), y, ...)
 #' @export
 vec_ptype2.character.tabxplor_lvl <- function(x, y, ...) vctrs::vec_ptype2(x, unlvl(y), ...)
 
+# The cast twin of lvl_ptype2_union(): once the common type has degraded to a plain factor, the
+# ORDERED half of the bind must still reach it -- vctrs refuses ordered -> factor, so route through
+# the labels, which is all a label column ever holds.
+#' @keywords internal
+#' @noRd
+lvl_cast_labels <- function(x, to, ...) {
+  tryCatch(vctrs::vec_cast(x, to, ...),
+           vctrs_error_incompatible_type = function(e)
+             vctrs::vec_cast(as.character(x), to))
+}
+
 #' @export
 vec_cast.tabxplor_lvl.tabxplor_lvl <- function(x, to, ...)
-  lvl_restore(vctrs::vec_cast(unlvl(x), unlvl(to), ...), to)
+  lvl_restore(lvl_cast_labels(unlvl(x), unlvl(to), ...), to)
 #' @export
-vec_cast.tabxplor_lvl.factor    <- function(x, to, ...) lvl_restore(vctrs::vec_cast(x, unlvl(to), ...), to)
+vec_cast.tabxplor_lvl.factor    <- function(x, to, ...) lvl_restore(lvl_cast_labels(x, unlvl(to), ...), to)
 #' @export
-vec_cast.factor.tabxplor_lvl    <- function(x, to, ...) vctrs::vec_cast(unlvl(x), to, ...)
+vec_cast.factor.tabxplor_lvl    <- function(x, to, ...) lvl_cast_labels(unlvl(x), to, ...)
 #' @export
 vec_cast.tabxplor_lvl.character <- function(x, to, ...) lvl_restore(vctrs::vec_cast(x, unlvl(to), ...), to)
 #' @export
