@@ -144,7 +144,7 @@ test_that("`empirical` is FINAL before the effect word is recorded (H22)", {
                                 effect = "marginal", color = "adjustment", empirical = FALSE))
   mcol <- grep("^Model", names(t), value = TRUE)[[1]]
   expect_identical(paste0("Model_", reg_call(t)$eff_word), mcol)
-  expect_identical(reg_call(t)$eff_word, "mRD")
+  expect_identical(reg_call(t)$eff_word, "mRR")   # auto never marginalises an odds ratio
 })
 
 # === defect 1: reg_per_dep() is THE per-dependent slicer =========================================
@@ -281,15 +281,15 @@ test_that("reg_trials_observed_max() answers only where a trial count exists", {
 })
 
 test_that("reg_word() composes the header: marker o log-wrap o base acronym", {
-  expect_identical(reg_word(reg_estimand("binomial", "coefficient", "odds_ratio")), "OR")
-  expect_identical(reg_word(reg_estimand("binomial", "marginal", "difference")),    "mRD")
-  expect_identical(reg_word(reg_estimand("binomial", "at_reference", "ratio")),     "refRR")
-  expect_identical(reg_word(reg_estimand("binomial", "coefficient", "log")),        "log(OR)")
-  expect_identical(reg_word(reg_estimand("ordinal",  "coefficient", "odds_ratio")), "cumOR")
+  expect_identical(reg_word(reg_estimand("binomial", measure = "odds_ratio", effect = "conditional")), "OR")
+  expect_identical(reg_word(reg_estimand("binomial", measure = "difference", effect = "marginal")),    "mRD")
+  expect_identical(reg_word(reg_estimand("binomial", measure = "ratio", effect = "at_reference")),     "refRR")
+  expect_identical(reg_word(reg_estimand("binomial", measure = "log", effect = "conditional")),        "log(OR)")
+  expect_identical(reg_word(reg_estimand("ordinal", measure = "odds_ratio", effect = "conditional")), "cumOR")
   # the expansion follows the same two rules, in the order each is spoken
-  expect_identical(reg_word_long(reg_estimand("binomial", "marginal", "ratio")),
+  expect_identical(reg_word_long(reg_estimand("binomial", measure = "ratio", effect = "marginal")),
                    "marginal risk ratio")
-  expect_identical(reg_word_long(reg_estimand("binomial", "at_reference", "difference")),
+  expect_identical(reg_word_long(reg_estimand("binomial", measure = "difference", effect = "at_reference")),
                    "risk difference at the reference profile")
   # and the base acronym is recoverable from any composed word
   expect_identical(reg_word_base("log(cumOR)"), "cumOR")
@@ -298,7 +298,7 @@ test_that("reg_word() composes the header: marker o log-wrap o base acronym", {
 })
 
 test_that("reg_color_for() fills only the auto slots, and is idempotent", {
-  e  <- reg_estimand("binomial", "coefficient", "auto")
+  e  <- reg_estimand("binomial", measure = "auto", effect = "conditional")
   # the bare-TRUE sentinel
   one <- reg_color_for(reg_normalize_color(TRUE), e)
   expect_false(any(is.na(one)))
@@ -312,12 +312,12 @@ test_that("reg_color_for() fills only the auto slots, and is idempotent", {
 })
 
 test_that("reg_color_auto_measure() reads the estimand's stored SCALE, not its arguments", {
-  or  <- reg_estimand("binomial", "coefficient", "auto")             # odds_ratio scale
-  lg  <- reg_estimand("binomial", "coefficient", "log")              # log_odds scale
+  or  <- reg_estimand("binomial", measure = "auto", effect = "conditional")             # odds_ratio scale
+  lg  <- reg_estimand("binomial", measure = "log", effect = "conditional")              # log_odds scale
   expect_true(nzchar(reg_color_auto_measure(or)))
   expect_true(nzchar(reg_color_auto_measure(lg)))
   # a ratio geometry and an additive one do not answer the same context
-  bt  <- reg_estimand("gaussian", "coefficient", "auto")             # raw_diff scale
+  bt  <- reg_estimand("gaussian", measure = "auto", effect = "conditional")             # raw_diff scale
   expect_false(identical(reg_color_auto_measure(or), reg_color_auto_measure(bt)))
 })
 

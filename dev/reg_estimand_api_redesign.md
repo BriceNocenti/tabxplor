@@ -12,7 +12,7 @@ Phase 22b-xiv-1 asked for a way out of a contradiction. `dev/reg_family_measure_
 
 **There is no third way to invent: the two are the two halves of one rule the code already implements and has never stated.** Once stated, it derives the whole estimand library, deletes three refusal mechanisms, and settles the argument surface for a reason rather than a preference.
 
-**Status: decided.** Every question in §7's register is settled; §8 is the implementation roadmap. What remains open is stated as such where it appears.
+**Status: BUILT.** Part I describes the framework as the package implements it (Phase 22b-xv-1); §7's register is settled, including the four decisions taken at implementation time; §8.2 is the prose that remains, with its migration table. What is still open is stated as such where it appears.
 
 **Scope.** The estimand surface — `family`, `link`, `measure`, `effect`, their defaults, their availability and the fact tables behind them. Not the colour ladders (Phase 22b-xiv-2) nor the ideal-type comparison (22b-xiv-3), except where they bind — §8.3.
 
@@ -43,18 +43,13 @@ Phase 22b-xiv-1 asked for a way out of a contradiction. `dev/reg_family_measure_
 
 **⚠ A vocabulary note, settled here.** The three kinds of level are **`pct` / `mean` / `count`** — not "share", not "proportion". `EST_SCALES$var_kind` **already declares exactly this fact** (`R/fmt_class.R:1736`: *"what the column summarises: `pct` | `mean` | `count` | `coef`"*, with 105 readers across `R/`), so a new `level` field with a new word would be a second name for an existing one — the defect this phase deletes. In prose the word is **"percentage"**, which is what the user-facing documentation already says (32 uses in the article, 19 in the regression vignette, against 9 for "proportion"); reserve "proportion" for the places where statistical precision needs it, such as *a difference of proportions*.
 
-### 2.2 The prediction routes already fit the family's own model
+### 2.2 The prediction routes fit the model, not the measure
 
-This is a measured fact about the current table, not a proposal. Every `effect = "marginal"` and `effect = "at_reference"` row in `REG_ESTIMANDS` carries the family's own `fit` key:
+The second half of the rule was **already true of the package before the cascade named it**: every `effect = "marginal"` and `effect = "at_reference"` row carried the family's own `fit` key, and only the coefficient rows ever named `rr` / `rd` / `mr`.
 
-| row                                  | `fit`        | not                       |
-|--------------------------------------|--------------|---------------------------|
-| `binomial` × `marginal` × `ratio`    | `"binomial"` | `"rr"` (modified Poisson) |
-| `gaussian` × `marginal` × `ratio`    | `"gaussian"` | `"mr"` (log-link mean)    |
-| `poisson` × `at_reference` × `ratio` | `"poisson"`  | —                         |
-| every other `ame` / `vsrest` row     | the family's | —                         |
+What it was never allowed to do, and now can: run a prediction route on a **non-default** fit. A row's `fit` is `fits[[link]]` on **every** route, so `link = "ratio", measure = "difference"` is a marginal risk difference computed from the modified-Poisson fit — two axes, separately chosen. ⚠ this is why `reg_marginal()` takes the REPORTED comparison's link rather than inferring one from the family, and why `reg_formulas()` is the way to see which model actually ran.
 
-Only the **coefficient** rows ever name `rr` / `rd` / `mr`. So the second half of the rule — *"a measure changes your model only under `effect = \"coefficient\"`"* — is **already true of the running package**. It is simply never stated, never used to organise the argument surface, and contradicted by the reference vignette's own headline rule (`vignettes/tabxplor-reg.Rmd:583`: *"`effect` and `measure` change the model that is fitted"*, which its own line 670 corrects 90 lines later).
+The old surface said otherwise in prose: `vignettes/tabxplor-reg.Rmd:583` still claims *"`effect` and `measure` change the model that is fitted"*, which its own line 670 corrects 90 lines later — §8.2's first deletion.
 
 ### 2.3 A model column already carries the crosstab's own pair
 
@@ -89,7 +84,7 @@ outcome ──auto──▶ family ──auto──▶ link ──auto──▶ 
 | `measure` | which measure do you want **reported**? | the link's                        | **everyone**               |
 | `effect`  | where is that number taken from?        | coefficient if any, else marginal | rarely; for `at_reference` |
 
-Set any one and everything to its right re-derives. Nothing ever depends on an argument to its right — which is what makes the chain teachable and what the earlier draft's `effect`-keyed default violated.
+Set any one and everything to its right re-derives. Nothing depends on an argument to its right — which is what makes the chain teachable — with exactly one documented exception, §3.4's clause, which fires only where `effect` was named explicitly.
 
 ### 3.2 What the two measures mean together
 
@@ -127,20 +122,24 @@ The third row is the payoff for the user: today it is a bare *"tabxplor does not
 
 `measure = "auto"` is **the link's measure**. That is the cascade, and it makes the earlier draft's "prediction default" (decision 5 / P8) dissolve: there is no second default table, only "follow from the left".
 
-⚠ **One clause, with its own reason: `"auto"` never lands on a marginalised non-collapsible measure.** A *marginal odds ratio* is a specialist quantity — Karlson & Jann had to write a paper to define it (§10) — so it must be asked for by name, never arrived at by default. Where the link's measure is non-collapsible **and** the reading is marginal, `"auto"` falls to the outcome level's own measure: a **percentage** reads as "x times as likely" (`ratio`), a **quantity** or a **count** in its own units (`difference`).
+⚠ **One clause, with its own reason: `"auto"` never lands on a PREDICTED non-collapsible measure.** A *marginal odds ratio* is a specialist quantity — Karlson & Jann had to write a paper to define it (§10) — so it must be asked for by name, never arrived at by default. Where the link's measure is non-collapsible **and** the user named a prediction route (`marginal` *or* `at_reference` — decision H2), `"auto"` falls to the outcome level's own measure: a **percentage** reads as "x times as likely" (`ratio`), a **quantity** or a **count** in its own units (`difference`).
 
 This is not a new fact: `REG_WORDS$noncollapsible` already declares it, and `reg_estimand_collapsible()` already uses it to decide whether the adjustment gap may be *tested*. One fact, now with two readers — the house style.
 
-What it gives, per family, for a bare `effect = "marginal"`:
+⚠ **This is the one place an argument reads one to its RIGHT**, and the reason it is not circular: the clause fires only where `effect` was named EXPLICITLY. Under `effect = "auto"` the measure resolves to the link's, and `effect` then resolves to `conditional` — so the cascade still runs strictly left to right on a default call.
 
-| family                | link (auto) | collapsible? | `measure` auto under `marginal` | header        |
-|-----------------------|-------------|--------------|---------------------------------|---------------|
-| gaussian              | difference  | yes          | difference (the link's)         | `Model_mdiff` |
-| poisson               | ratio       | yes          | ratio (the link's)              | `Model_mIRR`  |
-| binomial              | odds_ratio  | **no**       | ratio (the level's)             | `Model_mRR`   |
-| multinomial / ordinal | odds_ratio  | **no**       | ratio (the level's)             | `Model_mRR`   |
+What it gives, per family, on a bare prediction route:
 
-So decision 5 survives, but only as this clause, and only where it has a reason. ⚠ The alternative — a pure cascade with no clause — is coherent too, but it hands a marginal odds ratio to anyone who types `effect = "marginal"` on a binary outcome, and it makes that call **abort** on a multinomial (where decision 6 keeps the marginal OR unavailable). The clause is one sentence and buys both away.
+| family                | link (auto) | collapsible? | `measure` auto | `marginal`    | `at_reference`  |
+|-----------------------|-------------|--------------|----------------|---------------|-----------------|
+| gaussian              | difference  | yes          | the link's     | `Model_mdiff` | `Model_refdiff` |
+| poisson               | ratio       | yes          | the link's     | `Model_mIRR`  | `Model_refIRR`  |
+| binomial              | odds_ratio  | **no**       | the level's    | `Model_mRR`   | `Model_refRR`   |
+| multinomial / ordinal | odds_ratio  | **no**       | the level's    | `Model_mRR` ¹ | `Model_refRR`   |
+
+¹ on a 3+ category outcome a predicted odds ratio is refused outright, not merely un-defaulted (§10.5): it has no complement, so it must be asked "versus what?" first. The one answer is `multinomial × at_reference × odds_ratio`, the vs-rest builder, and it is reached by naming `measure = "odds_ratio"`.
+
+So decision 5 survives, but only as this clause, and only where it has a reason. ⚠ The alternative — a pure cascade with no clause — is coherent too, but it hands a marginal odds ratio to anyone who types `effect = "marginal"` on a binary outcome, and on a multinomial it would hand them an abort. The clause is one sentence and buys both away.
 
 ### 3.5 What `effect` becomes
 
@@ -176,18 +175,18 @@ It is free in R: **0 of 757 `tab_reg()` call sites in this repository pass `effe
 
 ### 4.1 Worked calls
 
-| call                                      | today                               | proposed                           |
+| call                                      | before                              | now                                |
 |-------------------------------------------|-------------------------------------|------------------------------------|
 | `tab_reg(d, "married", x)`                | `Model_OR`                          | **identical**                      |
 | `… measure = "ratio"`                     | `Model_RR`, refits modified Poisson | `Model_mRR`, marginal on the logit |
 | `… measure = "difference"`                | `Model_RD`, refits identity link    | `Model_mRD` — the AME              |
-| `… link = "ratio"`                        | via `effect="coefficient"`          | `Model_RR`, modified Poisson       |
+| `… link = "ratio"`                        | only via `family = "poisson"`       | `Model_RR`, modified Poisson       |
 | `… link="ratio", measure="difference"`    | **impossible**                      | `Model_mRD`, mod.-Poisson fit      |
 | `… effect = "marginal"`                   | `Model_mRD` (points)                | `Model_mRR` — see §3.4             |
 | `tab_reg(d, "age", x, effect="marginal")` | **refused** as redundant            | `Model_mdiff`                      |
 | `tab_reg(d, "party3", x, measure="diff")` | **abort**, a nine-line menu         | `Model_mRD`                        |
 
-**The default call does not move.** `family` auto → binomial; `link` auto → odds_ratio; `measure` auto → odds_ratio; `effect` auto → coefficient. Byte-identical to today, which is what lets the chain be adopted without moving a single golden.
+**The default call does not move.** `family` auto → binomial; `link` auto → odds_ratio; `measure` auto → odds_ratio; `effect` auto → conditional. Verified byte-identical on all five families — names, every rendered cell and the footer — which is what let the chain be adopted without moving a single golden.
 
 **And the user always knows what was modelled**, which was the maintainer's Problem A: either they set `link`, or it is the family's own — and the footer names it either way. `measure` can no longer change the model behind their back, because changing the model is now a different argument with a different name.
 
@@ -209,37 +208,42 @@ It is free in R: **0 of 757 `tab_reg()` call sites in this repository pass `effe
 
 ### 4.3 Caveats — the honest list
 
-1. **`effect = "marginal"` changes meaning**, from "the AME in percentage points" to "the model's own effect, averaged" — which on a binary outcome is now `Model_mRR`, not `Model_mRD`. This is the biggest behavioural break in the proposal and it hits **the most-taught idiom in the package**: `vignettes/tabxplor-reg.Rmd:137`, `:504` and `vignettes/articles/tabxplor-all-else-equal.Rmd:339`, `:433`, `:458` all teach `effect = "marginal"` → points. The replacement is **one argument and clearer** — `measure = "difference"` — but every one of those passages moves, and their printed numbers with them.
-2. **Three call spellings change what they fit**: `measure = "ratio"` and `measure = "difference"` on a binomial, and `measure = "ratio"` on a gaussian, stop refitting and become marginal. `tab_reg()` is unreleased, so nothing is owed a deprecation — but the worked examples at `vignettes/tabxplor-reg.Rmd:183`, `:197`, `:291` are exactly these.
+1. ⚠ **`effect = "marginal"` changed meaning**, from "the AME in percentage points" to "the model's own effect, averaged" — on a binary outcome `Model_mRR`, not `Model_mRD`. It is the **only** spelling that changes an answer without saying so, and it hits the most-taught idiom in the package. The replacement is one argument and clearer (`measure = "difference"`), but every passage teaching it moves, and its printed numbers with it — §8.2.1.
+2. **Three spellings changed which model they fit**: `measure = "ratio"` and `measure = "difference"` on a binomial, and `measure = "ratio"` on a gaussian, no longer refit — they report from the family's own model. The conditional readings they used to give are `link = "..."`, and asking for them the old way now aborts naming the cure.
 3. **Four arguments where the phase set out to simplify.** The defence is that three of the four are `"auto"` in every teaching example and the fourth (`measure`) is the only one a reader types — but the signature is longer, and jamovi gains a control.
-4. **`link` is a technical word** even with friendly values. `model =` was the runner-up and was rejected only because `predictors = list(...)` already produces "models" in the comparison sense. Worth one more look before implementation.
-5. **The cheap call gets more expensive.** A marginal route pays a g-computation sweep plus influence functions where a coefficient route pays a `tidy()`. Unmeasured for this change; measure it on `Arrests` (n = 5 226) and `gss_simple` (n ≈ 21 400) before landing, and record it under `dev/benchmarks/results_2.0.0/`.
-6. **A weighted 3+ level outcome refuses every non-`coef` builder** (`R/reg-resolve.R:452-461`), so a `measure` ≠ link there resolves to a route that then aborts. The cascade must consult that refusal and say *"a weighted 3+ level outcome can only be read on its coefficients"*, which is the true statement.
-7. **It does not, on its own, fix the ladder** — see §8.3, which is an ordering constraint against Phase 22b-xiv-2 and is unchanged by this restructure.
+4. **`link` is a technical word** even with friendly values. `model =` was the runner-up, rejected because `predictors = list(...)` already produces "models" in the comparison sense; decision H1 kept `link` and settled the internal naming around it.
+5. **A prediction route is not free**: it pays a counterfactual sweep plus an analytic jacobian where a coefficient route pays a `tidy()`. Measured, with the surprise that two spellings got *cheaper* — §14.3.
+6. **A weighted 3+ level outcome can only be read on its coefficients**: its marginal quantities have no survey method, so any `measure` other than the model's own aborts. The refusal covers both ways of asking (naming the contrast, or naming the measure) and says so in those words.
+7. **It does not, on its own, fix the ladder** — see §8.3, an ordering constraint against Phase 22b-xiv-2 and unchanged by this restructure.
 
 ---
 
-## 5. The architecture — `REG_ESTIMANDS` becomes a generator
+## 5. The architecture — `REG_ESTIMANDS` is a generator
 
-`REG_ESTIMANDS` is 43 rows over 146 declared lines plus a 21-line post-processor (`R/reg-estimand.R:370-561`), with a documented hazard — its constructor's first eight arguments are positional at all 36 call sites (`R/reg-estimand.R:324-325`). Below, every column is checked against the actual rows to see whether it is a **fact** or a **consequence**.
+`reg_compose_library()` emits one row per **buildable** `(link, effect, measure)`. A refusal is **not a row**: `reg_estimand()` derives it from the clause that failed, so a hole and its reason cannot drift apart.
 
-### 5.1 What derives
+### 5.1 The composed row, member by member
 
-| column        | derives from                                         | verified                                  |
-|---------------|------------------------------------------------------|-------------------------------------------|
-| `scale`       | (level kind, measure)                                | **18/18 rows** — map below                |
-| `word`        | (level kind, measure); coefficient takes the link's  | **17/18** — ordinal's `cumOR` overrides   |
-| `exp`         | measure is multiplicative and not logged             | all rows                                  |
-| `builder`     | `"coef"`, else `"ame"` (`"vsrest"` for a profile OR) | all rows                                  |
-| `fit`         | coefficient → the family's link table; else its own  | all rows (§2.2)                           |
-| `comparison`  | the measure's link, on prediction routes only        | all rows                                  |
-| `obs`         | `!at_reference`                                      | **already asserted at load** (`:772-774`) |
-| `engine`      | `at_reference` → `marginaleffects`, else `gcomp`     | **no row ever sets it** — all 36 default  |
-| `status`      | the two clauses of §3.3                                | the 2 `impossible` rows and every hole    |
-| `why`         | which clause failed                                  | generated, better than today's menu       |
-| `note`        | (route, measure, level kind)                         | `est_note_marginal()` already does this   |
-| `crude_fam`   | the measure's link + the borrow rule                 | **see §5.2 — the surprise**               |
-| `crude_shape` | the measure's link + logged                          | **8/8 blocks**                            |
+| member         | comes from                                                              |
+|----------------|-------------------------------------------------------------------------|
+| `link`         | the key into the family's `fits`; `"auto"` = its first entry             |
+| `effect`       | the contrast: `conditional` / `marginal` / `at_reference`                |
+| `measure`      | what is REPORTED; `"log"` on a logged row                                |
+| `base_measure` | what a logged row is the log OF (itself elsewhere) — **the lookup key**  |
+| `measure_link` | the link the REPORTED comparison is taken on; == the model's on a coef   |
+| `fit`          | `fits[[link]]` — on EVERY route, which is what `link` buys               |
+| `builder`      | `coef`; else `ame`, or `vsrest` for a profile odds ratio                 |
+| `exp`          | the measure is multiplicative and not logged                             |
+| `scale`, `word`| `REG_LEVEL_MEASURES[[level]][[measure]]`, the family's `words` overriding|
+| `crude_fam` / `crude_shape` | the block's shape on `measure_link` (§5.2)                  |
+| `comparison`   | `measure_link`'s marginaleffects spelling; `lnor` on the vs-rest arm      |
+| `note`         | the family's qualifier on a coefficient, `est_note_marginal()` otherwise |
+| `log_of`       | on a logged row, the scale it is the log of                              |
+| `status`       | `"ok"` — every row in the table builds                                   |
+
+⚠ **`base_measure` is not decoration.** Under one `(link, effect)` a ratio and an odds ratio both log, so `measure = "log"` alone would name two rows; the lookup keys on the base, and `"log"` / `"log_odds"` / `"log_risk"` / `"log_rate"` are the spellings that pick one.
+
+There is **no `engine`, `obs` or `display` member**: `reg_marginal_engine()` derives the engine from the contrast, `reg_estimand_obs()` the crude permission, and the display was write-only.
 
 The scale map, read off every row:
 
@@ -268,65 +272,75 @@ plus `log` → `log_coef`, and the existing `REG_SCALE_GROUPED` remap for a `tri
 
 So `crude_shape` **is** the block's shape on the measure's link (with `_log` when logged), and the two cross-family borrows that look ad hoc are one rule: *when the outcome's own block has no shape on that link, take the block named by the fit for that link* — which is why `binomial` × `ratio` borrows `rr` and `gaussian` × `ratio` borrows `mr`. The borrow is `family$fits[[measure]]`, a value the coefficient route already needs.
 
+Two derived objects carry it, and both have exactly two readers:
+
+- **`REG_EMP_BY_LINK`** (`R/reg-empirical.R`) indexes the table above by `(block, link, logged)`, read off `REG_EMPIRICAL$*$link` itself. `reg_compose_crude()` picks each row's shape through it, which is what makes *"a model row and its observed twin state one estimand"* true by construction rather than by two declarations agreeing.
+- **`reg_emp_block()`** (`R/reg-estimand.R`) answers "which block does this family-or-fit key resolve to" — its own if it has one, else the outcome family it belongs to. ⚠ **`reg_crude_key()` calls it**, so its two hardcoded remaps (`quasipoisson → poisson`, `rd → binomial`) are one declared fact with a compose-time and a run-time reader. `tx_fk_emp_reachable()` likewise calls `reg_emp_block_of()` rather than re-implementing the selection.
+
 ### 5.3 The declared residue
 
-What is left to declare, per family, is four facts — and the first of them **reuses an existing vocabulary rather than inventing one**: `level` takes `EST_SCALES$var_kind`'s own words (`pct` / `mean` / `count`), which already declare exactly this distinction (§2.1).
-
-The four:
+What a family declares, beyond its names, and what the whole library is composed from. `level` **reuses an existing vocabulary rather than inventing one**: it takes `EST_SCALES$var_kind`'s own words (`pct` / `mean` / `count`), which already declare exactly this distinction (§2.1).
 
 ```r
 REG_FAMILIES$binomial <- list(
-  # ... display / short / ui / outcome_level, unchanged ...
-  level = "pct",                       # pct | mean | count -- EST_SCALES$var_kind's own words -> which measures exist, and the default
+  # ... display / short / ui / ui_binary / outcome / outcome_level, unchanged ...
+  level = "pct",                       # pct | mean | count -- which measures exist, and the level's own
   fits  = c(odds_ratio = "binomial",   # THE VALUE SET OF `link`, measure-keyed -> the fit key.
             ratio      = "rr",         # ORDER IS LOAD-BEARING: the first entry is the family's own
             difference = "rd"),        # link, which is what `link = "auto"` resolves to
-  words = NULL,                        # per-link header override; ordinal declares c(odds_ratio = "cumOR")
-  coef_note = NULL                     # per-family qualifier for the coefficient route's footer clause
+  odds_pred = "complement",            # HOW a PREDICTED odds ratio is defined here (below)
+  note = function() gettext("vs the reference category")   # the coefficient route's footer clause
 )
 ```
 
-and `gaussian` is `level = "mean"`, `fits = c(difference = "gaussian", ratio = "mr")`; `poisson` is `level = "count"`, `fits = c(ratio = "poisson")`; `multinomial` and `ordinal` are `level = "pct"`, `fits = c(odds_ratio = <own>)`, the second declaring `words = c(odds_ratio = "cumOR")`.
+- **`words`** is a per-measure header override, and only `ordinal` declares one (`list(odds_ratio = "cumOR")`): a cumulative odds ratio is not a plain one, and the header says so.
+- **`odds_pred`** states §10.5's rule where it belongs — *an odds ratio needs a percentage **and its complement***. `"complement"` (binomial: both prediction routes), `"vsrest"` (multinomial: at a profile only, each category versus the rest — the existing builder), absent (ordinal, and every non-`pct` level: refused, with the reason).
+- **`crude`** names the `REG_EMPIRICAL` block when it is not the family's own name. Only `quasipoisson` needs it (`"poisson"`): it differs in the variance assumption, not in what it estimates.
+- **Declaring `fits` IS the fact "a user family"** — `REG_USER_FAMILIES` filters on it, and the internal link keys (`rr` / `rd` / `mr`) declare none.
 
-Two small shared tables carry the rest:
+The other families: `gaussian` is `level = "mean"`, `fits = c(difference = "gaussian", ratio = "mr")`; `poisson` `level = "count"`, `fits = c(ratio = "poisson")`; `multinomial` and `ordinal` `level = "pct"`, `fits = c(odds_ratio = <own>)`.
+
+Two shared tables carry the rest:
 
 ```r
 # the link <-> measure map of section 2.1 -- the ONE place the statistician's word appears
-REG_MEASURE_LINK  <- c(difference = "identity", ratio = "log", odds_ratio = "logit")
-# which measures each kind of level supports; the FIRST is the level's own (section 3.4's clause)
-REG_LEVEL_MEASURE <- list(pct   = c("ratio", "difference", "odds_ratio"),
-                          mean  = c("difference", "ratio"),
-                          count = c("difference", "ratio"))
+REG_MEASURE_LINK   <- c(odds_ratio = "logit", ratio = "log", difference = "identity")
+# what each kind of LEVEL can be compared by, what that comparison is called and which EST_SCALES
+# row carries it. ORDER IS LOAD-BEARING: the first entry is the LEVEL'S OWN measure.
+REG_LEVEL_MEASURES <- list(
+  pct   = list(ratio      = c(scale = "pct_ratio",  word = "RR"),
+               difference = c(scale = "points",     word = "RD"),
+               odds_ratio = c(scale = "odds_ratio", word = "OR")),
+  mean  = list(difference = c(scale = "raw_diff",   word = "diff"),
+               ratio      = c(scale = "mean_ratio", word = "RoM")),
+  count = list(difference = c(scale = "raw_diff",   word = "diff"),
+               ratio      = c(scale = "mean_ratio", word = "IRR")))
 ```
 
-⚠ `REG_LEVEL_MEASURE`'s first element **is** load-bearing: it is the level's own measure, which §3.4's one clause falls back to when `"auto"` refuses to marginalise a non-collapsible link. Adding `hazard_ratio = "cloglog"` to the first map and `"hazard_ratio"` to `pct` is the whole of §6.2.
+⚠ `REG_LEVEL_MEASURES`' first element **is** load-bearing: it is the level's own measure, which §3.4's one clause falls back to. `REG_LINKS_VALUES` (`link`'s value set) is `c("auto", names(REG_MEASURE_LINK))`, and `REG_LINK_ALIASES` accepts the glm spellings silently — ⚠ NOT folded into `REG_MEASURE_ALIASES`, because on `link` the word `"log"` means the LOG LINK while on `measure` it means "un-exponentiated": the one word the two vocabularies do not share.
 
-`reg_estimand(family, effect, measure)` keeps its signature and its typed-refusal contract exactly (29 positional call sites depend on the signature; every consumer reads the returned row). It stops *looking a row up* and starts *composing one*. Every foreign key in `zzz-fact-keys.R` still has something to check — it checks the composed rows instead of the declared ones, over the same enumerated grid `tx_fk_emp_reachable()` already walks (`R/zzz-fact-keys.R:88-105`).
+**`reg_estimand(family, link, measure, effect)`** keeps its typed-refusal contract, and its formals are in **cascade order** so a call reads the way the arguments resolve. Every argument is validated against its own vocabulary, so a stale positional call aborts rather than quietly meaning something else. Every foreign key in `zzz-fact-keys.R` now checks the composed rows over the same enumerated grid.
 
-**What this buys, concretely**: adding a family becomes one row of four facts instead of 6-8 hand-written `est_row()` calls whose 15 members must each be right; the positional-argument hazard disappears with `est_row()`; and a family cannot declare a scale, a word and a crude shape that disagree with each other, because it no longer declares them.
+**What this buys, concretely**: adding a family is one row of declared facts instead of 6-8 hand-written rows whose 15 members must each be right; the positional-constructor hazard is gone with the constructor; and a family **cannot** declare a scale, a header word and a crude shape that disagree, because it no longer declares them.
 
-### 5.4 The deletion inventory
+### 5.4 What is deliberately NOT there
 
-Everything below is removed or derived, not moved. Nothing in this phase adds a mechanism.
+Mechanisms that used to exist and must not be re-added, because the composition is what replaced them:
 
-| what                                      | where                             | why it goes                       |
-|-------------------------------------------|-----------------------------------|-----------------------------------|
-| 43 declared `est_row()` calls (146 lines) | `R/reg-estimand.R:370-524`        | composed from 4 facts (§5)        |
-| `est_row()` + its positional hazard       | `:324-335`                        | no rows left to write by hand     |
-| `reg_mark_redundant()` + `redundant`      | `:526-561`, `:825`, `:870-873`    | decided (§11)                      |
-| the `engine` column                       | `:281-294`, FK at `zzz:233`       | **no row ever sets it**; one line |
-| the `obs` column                          | `:295-296`                        | asserted = `!at_reference`        |
-| `est$display`                             | `:848`                            | **write-only — no reader**        |
-| `reg_effect_key()`'s vestigial `measure`  | `:1011-1018`, `reg-resolve.R:441` | a retired `effect` spelling       |
-| `REG_ESTIMANDS[[fam]]$default`            | `:374, :406, :438, :467, :495`    | derived from `level` + `fits`     |
-| the two `status = "impossible"` rows      | `:386-388`, `:448-450`            | generated by §3.3's first clause    |
-| the `≡` marker, its legend, its paragraph | both reg vignettes                | the refusal is gone               |
-| the effect-first `TABX_ESTIMANDS` gating  | `jamovi/js/jmvtabreg.js:902-931`  | keyed on `link` now (§3.6)        |
-| the `rr_promoted` special case            | `R/reg-resolve.R:424-447`         | it **is** `link = "ratio"` (§3.6) |
+| gone                                        | because                                                   |
+|---------------------------------------------|-----------------------------------------------------------|
+| a hand-written row per estimand, and `est_row()` | composed from the facts of §5.3                      |
+| `status = "redundant"` and its post-processor | a marginal contrast that equals the coefficient builds (§11) |
+| the `engine` / `obs` / `display` members    | derived, or write-only                                     |
+| `REG_ESTIMANDS[[fam]]$default`              | `"auto"` follows from the left                             |
+| declared `impossible` rows                  | generated from the clause that failed (§3.3)               |
+| `reg_default_measure()`                     | `reg_auto_measure(family, link, effect)` answers it        |
+| `rr_promoted`, and `family = "poisson"` on a binary outcome | it **is** `link = "ratio"` (H3)            |
+| `TABX_DEFAULT_MEASURE`                      | generated and read nowhere                                 |
 
-⚠ **The one addition is `link` itself** — one argument, one jamovi control, one `TAB_ARGS` row. Everything it makes possible (a non-default model, and reporting a different measure from it) is otherwise expressed by *deleting* the two indirect spellings above.
+⚠ **The one addition is `link` itself** — one argument, one jamovi control, one `TAB_ARGS` row. Everything it makes possible (a non-default model, and reporting a different measure from it) is otherwise expressed by *deleting* two indirect spellings.
 
-What is **kept and untouched**: `reg_estimand()`'s signature and typed-refusal contract, every `REG_WORDS` / `REG_CONTRASTS` composition rule, `REG_MEASURE_ALIASES`, `REG_EMPIRICAL`, `EST_SCALES`, `MEASURES`, the colour engine, and every foreign key in `zzz-fact-keys.R` (which now checks composed rows over the same enumerated grid).
+What is **kept and untouched**: `reg_estimand()`'s typed-refusal contract, every `REG_WORDS` / `REG_CONTRASTS` composition rule, `REG_MEASURE_ALIASES`, `REG_EMPIRICAL`, `EST_SCALES`, `MEASURES`, and the colour engine.
 
 ---
 
@@ -344,14 +358,17 @@ Three things follow, and each is checked below: a new **link** is one row of the
 
 `cloglog` → hazard ratio is the only credible candidate (§2.1). Landing it:
 
-| what                                                                    | size    |
-|-------------------------------------------------------------------------|---------|
-| one row in the link ↔ measure map                                       | 1 line  |
-| `"hazard_ratio"` in `REG_MEASURE_ALIASES`                               | 1 line  |
-| `HR` in `REG_WORDS` with its `long`                                     | 1 line  |
-| `fits = c(…, hazard_ratio = "cloglog")` on the families that can fit it | 1 field |
+| what                                                                     | size    |
+|--------------------------------------------------------------------------|---------|
+| one row in `REG_MEASURE_LINK`                                            | 1 line  |
+| one cell per level kind in `REG_LEVEL_MEASURES` (its scale + its acronym) | 1 line  |
+| `"hazard_ratio"` in `REG_MEASURE_ALIASES`, and `cloglog` in `REG_LINK_ALIASES` | 2 lines |
+| `HR` in `REG_WORDS` with its `long`                                      | 1 line  |
+| one row in **`REG_LINK_FUNS`** (`h`, `h'`, the domain guard)             | 1 line  |
+| `fits = c(…, hazard_ratio = "cloglog")` on the families that can fit it  | 1 field |
+| a `reg_fit()` `switch` arm, and a `REG_CHECKS$families` membership       | 2 edits |
 
-And **nothing else**: the availability rule (§3.3) derives, the scale derives, the header word composes, the g-computation arm needs `g'(μ)` for cloglog which is one entry in the same map §10.4 already builds, and the crude counterpart keys on the measure (§6.5). The user's vocabulary gains one word and loses none.
+And **nothing else**: the availability rule (§3.3) derives, the scale and the header word come from `REG_LEVEL_MEASURES`, both g-computation makers read `REG_LINK_FUNS` (so the marginal contrast needs no arm), and the crude counterpart keys on the measure (§6.5). ⚠ **`REG_LINK_FUNS` is the one that fails loudly if forgotten**: a foreign key checks `REG_EMPIRICAL$*$link` against its names at load, because an undeclared link would otherwise drop the gap test silently rather than error. The user's vocabulary gains one word and loses none.
 
 ### 6.3 Adding a family — one row plus two edges
 
@@ -442,13 +459,14 @@ Both are already declared tables with a `families` column, so a new family is an
 
 What a future session must do to add a model, and what it must **not**:
 
-| must do                                         | must NOT do                                        |
-|-------------------------------------------------|----------------------------------------------------|
-| one `REG_FAMILIES` row (`level`, `fits`, names) | add an argument                                    |
-| place it in `REG_CHECKS$families`               | add a `measure` or `effect` value the user learns  |
-| give it footer statistics                       | write a crude closed form                          |
-| one parity test vs `confint(glm())`             | touch `reg_gcomp_maker()` or `reg_coef_if_maker()` |
-| regenerate the jamovi vocabulary block          | hand-edit the generated `.h.R` or JS               |
+| must do                                                | must NOT do                                        |
+|--------------------------------------------------------|----------------------------------------------------|
+| one `REG_FAMILIES` row (`level`, `fits`, `note`, names)| add an argument                                    |
+| a `REG_LINK_FUNS` row, for any link not already there  | add a `measure` or `effect` value the user learns  |
+| place it in `REG_CHECKS$families`                      | write a crude closed form                          |
+| give it footer statistics                              | touch `reg_gcomp_maker()` or `reg_coef_if_maker()` |
+| one parity test vs `confint(glm())`                    | hand-write an estimand row                         |
+| regenerate the jamovi vocabulary block                 | hand-edit the generated `.h.R` or JS               |
 
 ⚠ Two boundaries to keep deliberately: `quasi()` and `MASS::negative.binomial()` stay out (an arbitrary variance function has no footer statistics and no check semantics), and the eight declared crude blocks keep their closed forms — they are free, exact, and what the goldens pin.
 
@@ -471,6 +489,17 @@ What a future session must do to add a model, and what it must **not**:
 | 8  | Reorder to `family` → `link` → `measure` → `effect`     | **decided** — §3.6                                 |
 | 9  | Keep `effect`, rename "coefficient" to "conditional"    | **decided** — §3.5, §9; docs teach it = the coeffs |
 | 10 | Correct the "orthogonal" claim (P4)                     | **decided** earlier; falls out of §2               |
+| H1 | The fourth argument's NAME, one more look (§4.3(4))     | **`link`** — see the note below                     |
+| H2 | Does §3.4's clause cover `at_reference` too?            | **both prediction routes** — see the note below     |
+| H3 | Keep `family = "poisson"` on a binary outcome?          | **retired** — `link = "ratio"` is the one route     |
+| H4 | `reg_measures()`'s shape under the cascade              | **a `link =` argument**, one model per call         |
+
+⚠ H1–H4 were taken at implementation time (Phase 22b-xv-1) and are what the package does.
+
+- **H1.** The row member that means *the reported comparison's* link is named `measure_link`, so three words stay distinct: `link` (the user's, naming the model), `fit` (the internal key it selects), `measure_link` (what is reported).
+- **H2.** One rule — **`"auto"` never resolves to a PREDICTED odds ratio.** `binomial` / `ordinal` × `at_reference` therefore default to `refRR`, and multinomial's vs-rest OR is reached by naming `measure = "odds_ratio"`.
+- **H3.** The spelling aborts naming both things it could have meant, and `rr_promoted` goes with it — taking §13's defect (1).
+- **H4.** The grid stays `effect × measure`, read at one model, with the other models named in the message.
 
 **Remaining problems — answered in §3 and §6.** The maintainer's own sketch turned out to be the design; what follows is where each question is answered and what the study added to it.
 
@@ -494,28 +523,47 @@ Two phases. The first is all of the code and the reference documentation that li
 
 ### 8.1 Phase 22b-xv-1 — the estimand engine and the argument cascade
 
-**Everything under `R/`, plus the tests and the jamovi option surface.** In dependency order, which is also the order that keeps each step verifiable:
+**Landed.** Part I describes what it built; the per-file design is in the R headers, and the phase's own record is `CLAUDE.md`'s DONE summary. What is worth carrying forward from it into any later work here:
 
-1. **Derive the estimand library** (§5): compose `REG_ESTIMANDS`' rows from the four declared facts per family instead of writing them, and take the deletions of §5.4 with it — `est_row()` and its positional hazard, the `engine` / `obs` columns, the dead `est$display`, the per-family `default`, the two `impossible` rows.
-2. **Delete the redundancy refusal** (§11). Three cells start building.
-3. **Generalise the marginal engine** (§10.4): `reg_gcomp_maker()`'s `ratio` boolean becomes the measure's link, with `g'(μ)` as the delta-method factor — which also lands the binary marginal odds ratio (§10.5).
-4. **Let a prediction route run on a non-default fit.** The one piece of plumbing `link` needs; measured generic in §6.5, so it is wiring rather than mathematics.
-5. **The cascade** (§3): `link`, its `"auto"`, `measure`'s new resolution, `effect = "auto"`, the `"conditional"` rename, the signature order, and the messages and aborts that follow.
-6. **`?tab_reg`** — the roxygen lives in `R/tab_reg.R` and must move with the argument — plus the four corrections of §12.1 and the jamovi YAML.
+- the composed grid is swept against a snapshot of the retired table by `dev/verify_estimand_library.R`, which is how a future change to §5.3's facts is checked;
+- `test-reg-invariants.R` sweeps the three invariants over **every** composed row, link axis included — that is what catches a row whose `(scale, word)` no longer matches its crude shape, the tightest coupling in the subsystem;
+- the default `tab_reg()` call is byte-identical to the pre-cascade one, and should stay so.
 
-⚠ **Steps 1–4 change no output at all**, and that is the phase's own safety net: verify them with the composed-vs-declared sweep (§12.4) and a full suite run *before* step 5 lands. That checkpoint is what makes a third phase unnecessary — it is a natural commit point inside this one.
+### 8.2 Phase 22b-xv-2 — teaching the cascade everywhere
 
-**Done when**: the suite is green, the composed grid equals the declared one except for the cells §5.4 and §10.5 name, the default `tab_reg()` call is byte-identical (§4.1), and `?tab_reg` describes the cascade.
+**The prose**: both regression vignettes and their French twins, `vignettes/articles/tabxplor-all-else-equal.Rmd`, and one `NEWS.md` bullet (already written — check it rather than rewrite it).
 
-### 8.2 Phase 22b-xv-2 — teaching the cascade
+The shape of the work, from §12.1: the combination grid gains a `link` column and loses the `≡` marker; the headline rule at `vignettes/tabxplor-reg.Rmd:583` (*"`effect` and `measure` change the model that is fitted"*) becomes true **by deletion** — only `link` changes the model; and `effect = "conditional"` is introduced as *the model's own coefficients*, with `"auto"` explained as choosing it when the reported measure is the model's own.
 
-**The prose**: both regression vignettes and their French twins, `vignettes/articles/tabxplor-all-else-equal.Rmd`, and one `NEWS.md` bullet.
+⚠ **The vignette must say which risk ratio to use when** (maintainer's requirement). `link = "ratio"` is the modified Poisson's **conditional** risk ratio; `measure = "ratio"` is the **marginal** one, g-computed from the ordinary logistic fit. They are different estimands, and the prose has to say when each is the one to report — not merely that both exist.
 
-The shape of the work, from §12.1: the combination grid gains a `link` column and loses the `≡` marker; the headline rule at `vignettes/tabxplor-reg.Rmd:583` becomes true by deletion; **the `effect = "marginal"` idiom becomes `measure = "difference"` everywhere it is taught**, with the printed numbers re-run; and `effect = "conditional"` is introduced as *the model's own coefficients*, with `"auto"` explained as choosing it when the reported measure is the model's own.
+⚠ **Method** — the Phase 22h rule, not optional here because the article quotes figures in prose in at least eight places: re-run every table into a scratch file first, quote from that file, then re-check the rendered HTML against it.
 
-⚠ **Method** — the Phase 22h rule, and it is not optional here because the article quotes figures in prose in at least eight places: re-run every table into a scratch file first, quote from that file, then re-check the rendered HTML against it.
+#### 8.2.1 The migration table
 
-**Done when**: both vignettes and the article render, every quoted figure matches its table, and no passage teaches an argument spelling the package no longer has.
+Gathered by porting the whole test suite. Every row is a spelling that **still runs** but now means something else, or that has moved — which is exactly what a reader of the old vignettes will type.
+
+| was                                                | now                                | why                                     |
+|-----------------------------------------------------|-------------------------------------|------------------------------------------|
+| `effect = "coefficient"`                            | drop it, or `"conditional"`         | the value names the quantity              |
+| `measure = "ratio"` (wanting the modified Poisson)  | `link = "ratio"`                    | only `link` changes the model             |
+| `measure = "difference"` (wanting the identity link)| `link = "difference"`               | idem                                      |
+| `measure = "ratio"` on a gaussian (the `mr` fit)    | `link = "ratio"`                    | idem                                      |
+| `family = "poisson"` on a **binary** outcome        | `link = "ratio"`                    | `family` never picks a link (H3)          |
+| `trials = k, measure = "ratio"` / `"difference"`    | `trials = k, link = ...`            | idem, on a summed score                   |
+| `measure = "log_risk"` on a binomial                | `link = "ratio", measure = "log"`   | a `log_*` spelling pins the MEASURE       |
+| `effect = "marginal"` (wanting percentage points)   | add `measure = "difference"`        | ⚠ **the one silent change** (below)       |
+| `effect = "at_reference"` on a multinomial          | add `measure = "odds_ratio"`        | `"auto"` never predicts an OR (§3.4)      |
+
+⚠ **Only one row changes an answer without saying so**: a bare `effect = "marginal"` now reports the level's own measure — a **ratio** on a probability, where it used to give percentage points. Everything else on the list either aborts naming its cure, or is a rename. The taught idiom therefore becomes `measure = "difference"` (shorter than the old `effect = "marginal"`, and it says what it wants), and the passages to move are `vignettes/tabxplor-reg.Rmd:137`, `:504` and `vignettes/articles/tabxplor-all-else-equal.Rmd:339`, `:433`, `:458` — **with their printed numbers**.
+
+**Three ways to check what a table actually did**, worth teaching once because they are what makes the cascade legible:
+
+- the **header marker** — unmarked = the model's own coefficient, `m` = marginal, `ref` = at a profile;
+- **`reg_formulas(t)`** — the formula and the internal `fit` key of every column, i.e. what really reached `glm()`;
+- **`reg_call(t)$link` / `$measure` / `$effect`** — what the table remembers asking for.
+
+And **`reg_measures(data, outcome, link = )`** is the discovery tool: it lists what one outcome offers at one model, with a reason wherever it offers nothing.
 
 ### 8.3 What belongs to other phases
 
@@ -595,7 +643,13 @@ So the two literatures agree on the diagnosis — the **conditional** odds ratio
 
 ### 10.4 What it costs here
 
-The engine change is small and generalising: `reg_gcomp_maker()`'s `ratio` **boolean becomes the measure's link**, with the delta-method factor g'(M) — `1` for identity, `1/M` for log, `1/(M(1-M))` for logit — and one domain guard (0 < M < 1) mirroring the existing M > 0 one. Three arms instead of two, and the `emp` influence-function term and the `G` jacobian follow the same pattern the ratio arm already sets. That is §2.1's rule made operational, and it is worth doing for its own sake even if only one new cell is exposed.
+The engine change is small and generalising: `reg_gcomp_maker()`'s `ratio` **boolean becomes the measure's link**, and the arms collapse into `REG_LINK_FUNS` — one declared row per link carrying `h`, the delta-method factor `h'(M)` (`1` for identity, `1/M` for log, `1/(M(1-M))` for logit) and its DOMAIN guard. The sweep then reads
+
+```text
+est = h(M1) - h(M0)     emp = w((m1-M1)h'(M1) - (m0-M0)h'(M0))/sw     G likewise
+```
+
+with **two** code paths rather than three: the general form above, and the identity link written out so its arithmetic is bit-for-bit what it was (no AME moves by an ulp). Three readers share the table — both g-computation makers and `reg_crude_if_maker()`, whose private `switch(link, …)` this replaces. That is §2.1's rule made operational, and it is worth doing for its own sake even if only one new cell is exposed.
 
 The crude companion is where the real cost sits, and it is **not uniform**:
 
@@ -637,13 +691,13 @@ Why it is right rather than merely permitted:
 
 Larger than the code change, and it is where the risk of a stale claim lives. In descending order of exposure:
 
-- **`?tab_reg`** — `@param effect`, `@param measure`, the `@details` argument map, and the four corrections of §12.1. Both `@eval` sections (`reg_measures_rd()`, `reg_words_rd()`) regenerate themselves from the resolver and need no edit.
+- ✅ **`?tab_reg`** — done with the code: `@param link` added, `family` / `measure` / `effect` rewritten, the `@details` argument map re-divided (`link` under *The model*), and the `a:b` → `a*b` correction made. Both `@eval` sections regenerate themselves from the resolver.
 - **`vignettes/tabxplor-reg.Rmd`** (and its French twin) — the headline rule at `:583`, the grid and its two legends at `:603-641`, the "when do the three differ" paragraph at `:595`, the "which route to take" box at `:690-692` (which already argues *for* the marginal route and becomes the rule's own statement), and the worked examples at `:183`, `:197`, `:291` whose spellings change meaning under §4.3(1).
 - **`vignettes/articles/tabxplor-all-else-equal.Rmd`** — its `:407-411` order paragraph becomes *correct by construction* rather than a deliberate divergence from the help page, which is a simplification of the prose rather than a rewrite. But **every printed number in its §3 "one model, four readings" moves** if the marginal default changes, and the article quotes figures in prose in at least eight places. The Phase 22h method applies: re-run every table into a scratch file first, quote from it, then re-check the rendered HTML against it.
 - ⚠ **The `effect = "marginal"` idiom moves**, and it is the largest single documentation cost of the proposal (§4.3(1)). Every passage teaching `effect = "marginal"` → percentage points becomes `measure = "difference"`: `vignettes/tabxplor-reg.Rmd:137`, `:504`, and `vignettes/articles/tabxplor-all-else-equal.Rmd:339`, `:433`, `:458`, with their printed numbers. The replacement is shorter and clearer, but it is not a rename — the numbers change too.
-- **`NEWS.md`** — one bullet: the estimand grid is derived, `measure` no longer changes the model unless `effect = "coefficient"`, and the marginal defaults.
+- ✅ **`NEWS.md`** — written with the code (the cascade, the two risk ratios, the marginal odds ratio, `reg_measures(link =)`). Check it against the vignettes rather than rewriting it.
 
-Three stale strings already found and worth fixing in the same pass, since they are in the paragraphs being edited: `vignettes/tabxplor-reg.Rmd:50` names `dependent`, an argument that now errors; `:940` and `:964` print the retired `per SD/13.5` label format; and `?tab_reg`'s `@param tab_vars` (`R/tab_reg.R:3976`) tells the reader to write `a:b`, which 22b-ix refuses by name in favour of `a*b`.
+Two stale strings still to fix in the same pass, since they sit in the paragraphs being edited: `vignettes/tabxplor-reg.Rmd:50` names `dependent`, an argument that now errors, and `:940` / `:964` print the retired `per SD/13.5` label format. (The third, `?tab_reg`'s `a:b`, went with the code.)
 
 - **P4**: the orthogonality claim (`R/tab_reg.R:3895-3897`) becomes the true statement — `link` says what the model estimates, `measure` what is reported, and a coefficient exists only where they agree. The internal twin at `R/reg-estimand.R:1007-1008` and the `reg_effect_key()` abort's `effect × measure` grid go with it.
 - The `@details` argument map (`R/tab_reg.R:3766-3778`) files `effect × measure` under *"What each cell shows"*, beside `display`. Under the cascade `link` belongs to **"The model"** and `measure` / `effect` to **"What each cell shows"** — which is finally a true division, and the misfiling this phase set out to correct.
@@ -661,13 +715,13 @@ Three stale strings already found and worth fixing in the same pass, since they 
 
 Everything here is generated (`TABX_ESTIMANDS`, `TABX_DEFAULT_MEASURE`) or declared in YAML, so it costs one `jmvtools::prepare()` — already batched as **Phase 22g**. Two substantive UI changes: the radio groups reorder to measure-then-effect (§4.2), and an `auto` effect value joins the group. ⚠ Until `prepare()` runs, a YAML option the stale `.h.R` does not carry is **inert, not merely undocumented**.
 
-### 12.4 What must be measured before this is implemented
+### 12.4 The three claims that had to be measured, and where the measurement lives
 
-Three claims in this document are derivations from the declared tables, not runtime measurements, and each should be pinned by a test rather than trusted:
+Each was a derivation from the declared tables rather than a runtime fact, so none was trusted:
 
-1. **The composed grid equals the declared one** where both exist. Sweep every `(family, effect, measure)` and compare the composed row member by member against the current `REG_ESTIMANDS` — the whole derivation of §5 stands or falls on this, and it is one script. Expected differences: the three redundant cells (now `ok`), the new `odds_ratio` cells, and nothing else.
-2. **The cost of `effect = "auto"`.** A marginal route pays a sweep plus influence functions where a coefficient route pays a `tidy()`. Unmeasured for this change; measure on `Arrests` (n = 5 226) and `gss_simple` (n ≈ 21 400), coefficient against marginal, and record it under `dev/benchmarks/results_2.0.0/`.
-3. **The logit arm's interval**, against `marginaleffects::avg_comparisons(comparison = "lnoravg", transform = "exp")`, on an additive and on an interacted fit — the same parity contract the `lnratioavg` arm already meets to 1e-8.
+1. **The composed grid equals the declared one** where both exist — `dev/verify_estimand_library.R`, which sweeps every `(family, effect, measure)` against a snapshot of the retired table. Every difference is a named one: the three redundant cells now `ok`, the new `odds_ratio` cells, H2's `auto` defaults, and the refusals that gained a reason.
+2. **What the cascade costs** — `dev/benchmarks/results_2.0.0/phase22b-xv-1_cascade_cost.txt`. Answered in §14.3: no route got slower, and one spelling got 38 % cheaper.
+3. **The logit arm's interval**, against `marginaleffects::avg_comparisons(comparison = "lnoravg")` on an additive and an interacted fit: **1.1e-16** on the estimate, **1.5e-08** on the SE — the contract the `lnratioavg` arm already met. Pinned in `test-reg-estimand.R`.
 
 ---
 
@@ -681,13 +735,185 @@ Three claims in this document are derivations from the declared tables, not runt
 | `family = "poisson", measure = "difference"`                      | modified Poisson | `rd` — identity link ✗ |
 | `family = "poisson", effect = "marginal", measure = "difference"` | modified Poisson | `binomial` — logit ✗   |
 
-The family is rewritten to `"binomial"` unconditionally and the message is emitted unconditionally, so the two disagree the moment an explicit `measure` is given. Small and self-contained: emit the message only where `rr_promoted` actually binds, or better, state what was fitted rather than what was assumed.
+The family is rewritten to `"binomial"` unconditionally and the message is emitted unconditionally, so the two disagree the moment an explicit `measure` is given. ✅ **Fixed in 22b-xv-1 by deletion** (decision H3): `family = "poisson"` on a binary outcome is refused, naming the two things it could have meant, and `rr_promoted` is gone.
 
-**(2) Nothing states that a prediction route drops the link.** `effect = "marginal", measure = "ratio"` on a gaussian outcome silently runs the plain `lm`, where the same measure on the coefficient route runs the `mr` fit (§6.4's table). That is by design, but no message, `@param` or vignette line says so, and `reg_formulas()` is the only way to find out. One clause under `@param effect`.
+**(2) Nothing states that a prediction route drops the link.** `effect = "marginal", measure = "ratio"` on a gaussian outcome silently runs the plain `lm`, where the same measure on the coefficient route runs the `mr` fit (§6.4's table). That is by design, but no message, `@param` or vignette line said so, and `reg_formulas()` was the only way to find out. ✅ **Fixed in 22b-xv-1** — and the cascade makes it a stronger statement than the clause this asked for: a prediction route runs on the model **`link` names**, so it is now a user's own choice rather than a silent fallback. `@param effect` says it, and points at `reg_formulas()`.
 
 ---
 
-## 14. References
+## 14. Three questions asked after implementation
+
+Answered by measurement against the built package (Phase 22b-xv-1), not by reasoning.
+
+### 14.1 Is `link` vectorised over `outcome`, and can one outcome be modelled twice?
+
+**Vectorised: yes, identically to `family`.** All four estimand arguments go through the one slicer, `reg_per_outcome()`, so each takes a **scalar** (every outcome), a **positional vector** (aligned to `outcome`), or a **named vector** keyed by outcome — and a partial named vector defaults the rest. Verified:
+
+```r
+tab_reg(d, c(married, tvhours), c(race, age),
+        family = c("binomial", "poisson"), link = c("ratio", "auto"))
+#> Model_RR [married]   Model_IRR [tvhours]
+tab_reg(d, c(married, tvhours), c(race, age),
+        family = c(tvhours = "poisson"), link = c(married = "difference"))
+#> Model_RD [married]   Model_IRR [tvhours]
+```
+
+**Naming one outcome twice: no, and it fails SILENTLY today.** `outcome` is tidy-selected, and `tidyselect::eval_select()` **deduplicates positions**, so `c(married, married)` resolves to one column before any tabxplor code sees it:
+
+```r
+tab_reg(d, c(married, married), c(race, age),
+        family = "binomial", link = c("odds_ratio", "ratio"))
+#> Model_OR          <- one column; the second link is dropped without a word
+```
+
+⚠ **That is a defect worth fixing**: a duplicated `outcome` should abort naming the reason, since the user plainly asked for two things and got one. It is not this phase's, and it is one guard in `reg_select_outcome()`.
+
+**Would the surrounding features still mean anything if it worked?** Per feature:
+
+| feature | on two links of one outcome |
+|---|---|
+| `empirical` / `Obs_*` | **yes** — each column pairs with a crude twin on *its own* measure, which IS the point |
+| `color = "adjustment"` | **yes** — the gap is per column, model vs its own crude twin |
+| `color = "between_groups"` | yes, orthogonal (it compares across `tab_vars` groups) |
+| `tab_vars` | yes, orthogonal |
+| `predictors = list(...)` | **no** — the model-COMPARISON axis is single-outcome AND single-estimand (see below) |
+| `stats = "compare_*"` | **no** — a logit and a modified Poisson are neither nested nor likelihood-comparable |
+
+`predictors = list(...)` varies the PREDICTORS, so every model in the list shares one `link` / `measure` / `effect`; and a likelihood-ratio or Δ-AIC comparison needs two models of the same response nested in one another, which a logit and a quasi-likelihood modified Poisson are not. So the honest shape of the feature is *"two columns side by side, no footer test"* — which is what a manual bind already gives:
+
+```r
+a <- tab_reg(d, married, c(race, age), family = "binomial")
+b <- tab_reg(d, married, c(race, age), family = "binomial", link = "ratio")
+dplyr::bind_cols(a, b[setdiff(names(b), c("var", "levels"))])
+#> Model_OR   Model_RR   -- both ladders, both legend blocks, side by side
+```
+
+⚠ with one caveat, and it is why this is a workaround rather than the answer: the bound table keeps the **first** table's `meta` and `test`, so the footer names only the first model and the colour legend reads the first column's effect word for both. Making it first-class would mean letting `link` / `measure` / `effect` vary **within one outcome** — i.e. a second comparison axis beside `predictors`. **§14.4 works that out**: the disambiguation rule, what already exists, the blast radius and what such a table could and could not claim.
+
+### 14.2 Should `outcome` and `family` merge?
+
+**No.** The proposal is `outcome = c(poisson = "tvhours", binomial = "married", "age")`, on the ground that `family` has to repeat the outcome names anyway. ⚠ this is the form where the **name is the family**; §14.5 answers the corrected one, where the name is the variable. Three findings against it, in increasing weight:
+
+**(a) The name slot on `outcome` is already taken, by tidyselect, and taking it back reverses a decision made two phases ago.** `outcome` is tidy-selected since 22b-vi, and in tidyselect a name is a **rename**:
+
+```r
+names(tidyselect::eval_select(quo(c(poisson = tvhours)), d))
+#> "poisson"                       <- tidyselect renames the column
+tab_reg(d, c(poisson = tvhours), ...)
+#> Error: Can't rename variables in this context.
+```
+
+That error is deliberate: `tidy_select_chr(allow_rename = FALSE)` was added in 22b-vi precisely because a silent rename (`c(m = "race")` returning `"m"`, a column that does not exist) was a real trap. Making the name mean a family would give one syntax two meanings distinguished only by **whether the name happens to match a column** — the exact ambiguity that phase deleted.
+
+**(b) The maintainer's own objection stands, and is the decisive one for the audience.** `c(poisson = "tvhours")` asks a reader to know that the *name* is the model and the *value* the variable — backwards from every other named vector in the package, where the name is the thing being described (`ref = c(age = "median")`, `shape = c(age = "quadratic")`, `multiplier = c(age = 10)`). For the literary student the package names first, that is a worse first page than one extra argument.
+
+**(c) It would fold ONE of six per-outcome arguments and leave five.** `family`, `link`, `measure`, `effect`, `trials` and `outcome_level` are all keyed by outcome through the same slicer. Merging one buys no systematic simplification; it buys one fewer argument in the *rare* call that needs it — and `family` is auto-detected, so the case where it must be named at all is a genuine count, a forced link, or a mixed-family table, which additionally requires a character `predictors` (a list is single-outcome, hence single-family).
+
+**What is already the minimal spelling**, and what the documentation should teach instead — a **partial named vector**, which defaults every outcome it does not name:
+
+```r
+tab_reg(d, c(married, tvhours, age), c(race, relig),
+        family = c(tvhours = "poisson"))     # married and age auto-detect
+```
+
+So the repetition the question worries about is one name, in one argument, in the one call that needs it. **Decision: keep them separate.** If the surface is ever reduced, the candidate is not `outcome` + `family` but the six per-outcome arguments as a whole — and 22b-vii already weighed and rejected that shape (a `pred()`-style constructor, E6) for the predictor axis, for reasons that transfer.
+
+### 14.3 Why did the first cost measurement read +30 %?
+
+**Because it compared two ROUTES, not two versions.** Nothing in `tab_reg()` became slower. Measured against a `git archive HEAD` build, the same estimand asked for in each API's own words costs the same to the millisecond:
+
+| the same estimand | old | new |
+|---|---|---|
+| the default call (odds ratio, coefficient) | 0.523 s | 0.495 s |
+| the marginal risk difference | 0.542 s | 0.502 s |
+| the modified Poisson's risk ratio | 0.834 s | 0.816 s |
+
+The engines were **generalised, not extended**: `reg_gcomp_maker()`'s two arms became one link table, and the identity arm keeps its exact arithmetic on purpose, so no AME moves by an ulp.
+
+**What moved is which route a SPELLING takes**, and the maintainer's guess is right — with one correction worth having, because it goes the other way from the first report:
+
+| spelling | old route | new route | old | new |
+|---|---|---|---|---|
+| `measure = "ratio"` | an `rr` **refit** | a log-scale sweep on the logit fit | 0.842 s | 0.867 s |
+| `measure = "difference"` | an `rd` **refit** | an identity-link sweep on the logit fit | 0.817 s | **0.509 s** |
+
+So `measure = "difference"` got **38 % cheaper** (a sweep costs less than an identity-link binomial refit with its convergence fallback) and `measure = "ratio"` costs what its refit did. The "+30 %" of the first report was the cost of a *prediction route against a coefficient route* — real, and the right thing to know before setting `effect = "marginal"` — but it is not a regression, and it is not what any existing call now pays.
+
+Full figures in `dev/benchmarks/results_2.0.0/phase22b-xv-1_cascade_cost.txt`.
+
+### 14.4 One outcome, several models: `link` / `family` as a comparison axis
+
+The proposal: **when there is a single outcome**, an unnamed multi-valued `family` or `link` means *one model per entry*, side by side.
+
+```r
+tab_reg(d, married, c(race, age), family = "binomial", link = c("odds_ratio", "ratio"))
+tab_reg(d, tvhours, c(race, age), family = c("gaussian", "poisson", "binomial"), trials = 6)
+```
+
+**The disambiguation rule is clean, and it is the package's own.** `reg_per_outcome()` already reads a **named** vector as *keyed by outcome* and an **unnamed** one as the value itself; the per-predictor grammar (22b-viii) makes the same split. So the rule is one sentence — *unnamed and longer than one, with a single outcome, means one model per entry* — and it collides with nothing.
+
+⚠ **And the slot is free because today that input is silently wrong.** Measured: `tab_reg(d, married, …, link = c("odds_ratio", "ratio"))` returns **one** column, `Model_OR`; `reg_per_outcome()` falls to `x[[i]]` with `i = 1` and the second link is dropped without a word. Implementing this therefore *fixes a silent drop* rather than repurposing a working behaviour — the same defect class as the duplicated `outcome` of §14.1.
+
+**Most of the machinery exists.** `reg_resolve_specs()` already builds several specs from one `deps` row (the model-comparison branch) or one spec per `deps` row (the normal branch), and the normal branch's label is already `"<outcome>: <word>"` — which for two links reads `married: OR` / `married: RR`, **distinct without any new naming rule**. The implementation is: let `reg_resolve_estimands()` emit one row per (outcome × estimand) instead of per outcome.
+
+⚠ **The blast radius is `deps$outcome` used as a unique key**, in five places that would silently take the first of a duplicate: `reg_color_notes()`'s three `setNames(…, deps$outcome)` arguments, the multinomial `match(mnl, deps$outcome)`, and — the one that matters — `families = setNames(deps$family, deps$outcome)` in the model record, which `reg_meta_estimand()` reads by name for the footer, the legend and the plots. Those would have to key by the spec **label** rather than by the outcome. Contained, but it reaches the table's own narrative record.
+
+**What it would and would not give.** Per feature, the same audit as §14.1: `empirical` / `Obs_*` and `color = "adjustment"` work (each block pairs with a crude twin on its own measure), `tab_vars` is orthogonal, and each block keeps its **own footer gof rows** — which is the comparison a reader actually makes by eye. What it does **not** give is `stats = "compare_*"`: a logit and a modified Poisson are neither nested nor likelihood-comparable, and neither are a gaussian and a Poisson fit of the same response.
+
+⚠ **And that footer needs one caveat or it teaches a mistake**: AIC / BIC are comparable only between models of the **same response on the same scale**. Across `family = c("gaussian", "poisson")` they are not (a density against a probability mass function), and a `trials =` grouped binomial changes the response outright. So the honest reading of such a table is *per-block* — the dispersion, the R², the checks — never a cross-block AIC ranking.
+
+**Recommendation: coherent, and worth doing — but as its own phase, not inside 22b-xv.** It is a genuine feature (a second comparison axis) with a genuine blast radius, and 2.0.0 is at "last features before release". Two things make deferring cheap: the silent drop should be turned into an **abort** in the meantime (one guard, beside §14.1's), and the 80 % is already available as two calls plus `dplyr::bind_cols()` — with the footer caveat of §14.1.
+
+**One cheaper variant worth weighing first.** `predictors = list(...)` is *already* the model-comparison axis, with labels, per-model specs and per-model footer rows. Letting the estimand arguments be keyed by **model label** there —
+
+```r
+tab_reg(d, married, predictors = list(logit = c(race, age), modP = c(race, age)),
+        link = c(logit = "odds_ratio", modP = "ratio"))
+```
+
+— reuses that axis entirely, needs no change to `deps`, and makes "same predictors, different model" expressible. ⚠ it needs one guard of its own: `stats = "compare_*"` must be refused when the links differ, since the comparison it runs there is a likelihood-ratio test. And it needs a rule for a label that happens to equal an outcome name.
+
+### 14.5 Removing `family`, and letting `outcome` carry it
+
+The proposal, in its **corrected** direction — the name is the variable, the value the family:
+
+```r
+outcome = "tvhours"
+outcome = c("tvhours", "age")
+outcome = c(tvhours = "poisson", married = "binomial", "age")
+```
+
+**The convention is right, and better than §14.2's.** *Name = the thing described, value = its setting* is tabxplor's own (`ref = c(age = "median")`, `shape = c(age = "quadratic")`, `multiplier = c(age = 10)`), and §14.2 argued against the **inverted** form (`c(poisson = "tvhours")`), not against this one.
+
+**And there is a precedent, in a package tabxplor already uses.** `marginaleffects::comparisons(variables = )` takes a bare character vector for "just these variables" and a **named list** for "these variables, with this contrast" — selection and configuration in one argument, exactly this shape. So the idea is not a hack in the abstract.
+
+⚠ **But it does not survive contact with tidy-select, and that is decisive.** `outcome` is tidy-selected (22b-vi), and **tidyselect names every selection by column name**:
+
+```r
+tidyselect::eval_select(quo(c(married, tvhours)), d)
+#> married tvhours
+#>      10       9        <- already named, by tabxplor's own selection
+```
+
+So "does this element have a name?" **cannot** separate *the user configured a family* from *tidyselect named the column*. Telling them apart means inspecting the unevaluated expression instead of the value — which breaks the moment the outcome comes from a variable (`outcome = v`), the exact case 22b-vi made work.
+
+Three further costs, in decreasing weight:
+
+- **It would cost `outcome` its bare-name grammar in the configured form.** Families are strings, so `c(tvhours = poisson, age)` cannot work; the whole vector has to be quoted the moment one family is named. An argument that silently changes grammar depending on whether one element is configured is worse to teach than two arguments.
+- **It removes one of six per-outcome arguments.** `link`, `measure`, `effect`, `trials` and `outcome_level` keep the separate convention, so the call still repeats outcome names wherever it needs to — there is no systematic saving, only one fewer argument in the rare call.
+- **The readability gain lands on the wrong reader.** The beginner never sets `family` at all: it is auto-detected, and the message says what it detected. The person who sets it is doing something deliberate — and is exactly the reader least confused by a separate argument.
+
+**"Difficult to program with?"** Mildly, and it fails loudly rather than silently: every base-R set operation on a character vector drops names, so an `unname()` / `setdiff()` / `union()` in a caller turns `"poisson"` into an outcome name and tidyselect aborts with *"Column `poisson` doesn't exist"*. Marginaleffects avoids even that by using a **different container** for the configured form (a list, not a named vector) — which is the only version of this idea that is safe, and which buys nothing here because `family = c(tvhours = "poisson")` already works and is shorter.
+
+**Recommendation: keep them separate.** What the documentation should teach instead is that a **partial** named vector defaults every outcome it does not name, so the repetition is one name, in one argument, in the one call that needs it:
+
+```r
+tab_reg(d, c(married, tvhours, age), c(race, relig), family = c(tvhours = "poisson"))
+```
+
+---
+
+## 15. References
 
 **The marginal odds ratio**
 

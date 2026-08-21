@@ -47,7 +47,7 @@ test_that("obs == the Obs_* effect column, for every family / effect shape", {
   chk(tab_reg(d, outcome = "married", predictors = c("race", "party3"),
               family = "binomial", empirical = TRUE), "Model_OR", "Obs_OR", get_or)
   chk(suppressMessages(tab_reg(d, outcome = "married", predictors = c("race", "party3"),
-                               family = "poisson", empirical = TRUE)), "Model_RR", "Obs_RR",
+                               family = "binomial", link = "ratio", empirical = TRUE)), "Model_RR", "Obs_RR",
       tabxplor:::fmt_est_of)
   chk(suppressWarnings(tab_reg(d, outcome = "tvhours", predictors = c("race", "party3"),
                                family = "poisson", empirical = TRUE)),   # tvhours is over-dispersed
@@ -57,7 +57,7 @@ test_that("obs == the Obs_* effect column, for every family / effect shape", {
   chk(tab_reg(d, outcome = "married", predictors = c("race", "party3"), family = "binomial",
               measure = "log", empirical = TRUE), "Model_log(OR)", "Obs_log(OR)", get_diff)
   t <- tab_reg(d, outcome = "married", predictors = c("race", "party3"),
-               family = "binomial", effect = "marginal", empirical = TRUE)
+               family = "binomial", effect = "marginal", measure = "difference", empirical = TRUE)
   chk(t, grep("^Model_", names(t), value = TRUE)[[1]], "Obs_RD", get_diff)
   t <- tab_reg(d, outcome = "married", predictors = c("race", "party3"),
                family = "binomial", effect = "marginal", measure = "ratio", empirical = TRUE)
@@ -289,7 +289,7 @@ test_that("the legend names each channel's own baseline, and warns only on a non
   testthat::expect_true(any(grepl("non-collapsibility", l, fixed = TRUE)))
   # a COLLAPSIBLE estimand earns no caveat -- that contrast is the point of the sentence
   t2 <- suppressMessages(tab_reg(d, outcome = "married", predictors = c("race", "party3"),
-                                 family = "poisson", empirical = TRUE, color = c(TRUE, "adjustment")))
+                                 family = "binomial", link = "ratio", empirical = TRUE, color = c(TRUE, "adjustment")))
   testthat::expect_false(any(grepl("non-collapsibility", leg(t2), fixed = TRUE)))
   # and the group measure names ITS baseline, not the observed effect
   t3 <- tab_reg(d, outcome = "married", predictors = "race", tab_vars = "party3",
@@ -315,7 +315,7 @@ test_that("{obs} renders bare and in a composite, and round-trips through get_nu
   testthat::expect_equal(unique(format(set_display(x, "obs"), syntax = "excel")), "#,##0.00")
   # an AME column's obs is a probability difference -> x100, signed, "%" (both media agree)
   a <- tab_reg(d, outcome = "married", predictors = c("race", "party3"), family = "binomial",
-               effect = "marginal", empirical = TRUE)
+               effect = "marginal", measure = "difference", empirical = TRUE)
   ac <- a[[grep("^Model_", names(a), value = TRUE)[[1]]]]
   testthat::expect_true(any(grepl("%$", format(set_display(ac, "obs")))))
   testthat::expect_true(any(grepl("^\\+", stringi::stri_trim(format(set_display(ac, "obs"))))))
@@ -408,7 +408,7 @@ test_that("D4: the gap's break glyphs follow the selected scale, not the measure
   leg <- function(t) paste(tab_color_legend(t, medium = "plain", style = "terse"), collapse = " | ")
 
   # multiplicative estimate -> a multiplicative ladder
-  t_mult <- suppressMessages(tab_reg(d, "married", c("race", "party3"), family = "poisson",
+  t_mult <- suppressMessages(tab_reg(d, "married", c("race", "party3"), family = "binomial", link = "ratio",
                                      empirical = TRUE, color = c(TRUE, "adjustment"),
                                      cleannames = FALSE))
   l_mult <- leg(t_mult)

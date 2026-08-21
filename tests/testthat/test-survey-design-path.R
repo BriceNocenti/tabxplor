@@ -57,7 +57,7 @@ test_that("D1 the crude Obs_* columns under a design are weighted, not unweighte
   expect_equal(mid_cell(t_des, "^Obs_OR", get_pct), oracle, tolerance = 1e-8)
 })
 
-test_that("D2 effect = 'ame' under a design is the POPULATION-average marginal effect", {
+test_that("D2 a marginal effect under a design is the POPULATION-average one", {
   skip_if_not_installed("marginaleffects")
   b   <- svy_fixture()
   des <- survey::svydesign(~psu, weights = ~w, data = b)
@@ -66,11 +66,11 @@ test_that("D2 effect = 'ame' under a design is the POPULATION-average marginal e
     unname(get_diff(col)[which(as.character(t$levels) == "high")])
   }
   a_des <- ame(suppressMessages(
-    tab_reg(des, outcome = "y", predictors = c("x", "z"), family = "binomial", effect = "marginal")))
+    tab_reg(des, outcome = "y", predictors = c("x", "z"), family = "binomial", effect = "marginal", measure = "difference")))
   a_wt  <- ame(tab_reg(b, outcome = "y", predictors = c("x", "z"), family = "binomial",
-                       effect = "marginal", wt = "w"))
+                       effect = "marginal", measure = "difference", wt = "w"))
   a_un  <- ame(tab_reg(b, outcome = "y", predictors = c("x", "z"), family = "binomial",
-                       effect = "marginal"))
+                       effect = "marginal", measure = "difference"))
   expect_equal(a_des, a_wt, tolerance = 1e-8)
   expect_false(isTRUE(all.equal(a_des, a_un, tolerance = 1e-3)))
 })

@@ -4,7 +4,7 @@
 \alias{reg_measures}
 \title{What can this outcome be modelled as?}
 \usage{
-reg_measures(data, outcome, family = "auto")
+reg_measures(data, outcome, family = "auto", link = "auto")
 }
 \arguments{
 \item{data}{A data frame (or a \code{survey} design), as for \code{\link[=tab_reg]{tab_reg()}}.}
@@ -13,6 +13,8 @@ reg_measures(data, outcome, family = "auto")
 
 \item{family}{The model family. \code{"auto"} (default) detects it and says so, exactly as
 \code{\link[=tab_reg]{tab_reg()}} does.}
+
+\item{link}{Which measure the model estimates. \code{"auto"} (default) is the family's own.}
 }
 \value{
 A tibble of \code{effect}, \code{measure}, \code{status}, \code{header} (the column name it would produce),
@@ -33,10 +35,13 @@ probability to take the odds of), whatever anyone implements;
 \item \strong{not offered} — tabxplor does not build it (yet).
 }
 
-A combination that would return the coefficient under another name — a marginal effect where the
-link is collapsible, as in a linear model — is \strong{not listed}: it is refused, with the coefficient
-call named. And one state exists only at run time: a link that does not converge on your data.
-\code{tab_reg()} says so and, for the risk difference, falls back to the linear probability model.
+The table is read at \strong{one model}. \code{link} names which one: \code{"auto"} is the family's own (a
+logistic regression for a binary outcome), and the message lists the others. A measure that is
+not the model's own is reported from its predictions, so it is available whichever model you
+pick — what changes with \code{link} is which measure has a \emph{coefficient}.
+
+One state exists only at run time: a link that does not converge on your data. \code{tab_reg()} says
+so and, for the risk difference, falls back to the linear probability model.
 }
 \examples{
 d <- forcats::gss_cat

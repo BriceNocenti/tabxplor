@@ -64,9 +64,9 @@ children:
       - type: LayoutBox
         margin: large
         children:
-          # Phase 19k: the estimand is TWO questions -- which contrast, and in which measure. The
-          # retired `exponentiate` checkbox and `at` radios are folded into them (`at = "reference"`
-          # is the third `effect`; un-exponentiated is `measure = "log"`).
+          # Phase 22b-xv: THE CASCADE, left to right -- `link` (which measure the MODEL estimates),
+          # `measure` (which one is REPORTED), `effect` (where the number comes from). "auto" means
+          # follow from the left, so an ordinary user touches the middle column only.
           - type: LayoutBox
             margin: none
             children:
@@ -74,25 +74,29 @@ children:
                 cell: { column: 0, row: 0 }
                 children:
                   - type: Label
-                    label: effect = <i>(which contrast)</i>
+                    label: link = <i>(which model)</i>
                     children:
                       - type: RadioButton
-                        name: effect_1
-                        optionName: effect
-                        optionPart: coefficient
+                        name: link_1
+                        optionName: link
+                        optionPart: auto
                       - type: RadioButton
-                        name: effect_2
-                        optionName: effect
-                        optionPart: marginal
+                        name: link_2
+                        optionName: link
+                        optionPart: odds_ratio
                       - type: RadioButton
-                        name: effect_3
-                        optionName: effect
-                        optionPart: at_reference
+                        name: link_3
+                        optionName: link
+                        optionPart: ratio
+                      - type: RadioButton
+                        name: link_4
+                        optionName: link
+                        optionPart: difference
               - type: LayoutBox
                 cell: { column: 1, row: 0 }
                 children:
                   - type: Label
-                    label: measure = <i>(which measure)</i>
+                    label: measure = <i>(which measure is reported)</i>
                     children:
                       - type: RadioButton
                         name: measure_1
@@ -114,6 +118,28 @@ children:
                         name: measure_5
                         optionName: measure
                         optionPart: log
+              - type: LayoutBox
+                cell: { column: 2, row: 0 }
+                children:
+                  - type: Label
+                    label: effect = <i>(where it comes from)</i>
+                    children:
+                      - type: RadioButton
+                        name: effect_1
+                        optionName: effect
+                        optionPart: auto
+                      - type: RadioButton
+                        name: effect_2
+                        optionName: effect
+                        optionPart: conditional
+                      - type: RadioButton
+                        name: effect_3
+                        optionName: effect
+                        optionPart: marginal
+                      - type: RadioButton
+                        name: effect_4
+                        optionName: effect
+                        optionPart: at_reference
           - type: ComboBox
             name: empirical
             label: empirical = <i>(show the observed effect beside the modelled one)</i>
@@ -308,12 +334,10 @@ children:
                     name: display_3
                     optionName: display
                     optionPart: est_base
-                    enable: (effect_1)
                   - type: RadioButton
                     name: display_4
                     optionName: display
                     optionPart: base_est
-                    enable: (effect_1)
                   - type: RadioButton
                     name: display_5
                     optionName: display
@@ -326,7 +350,6 @@ children:
                     name: display_7
                     optionName: display
                     optionPart: base
-                    enable: (effect_1)
           - type: LayoutBox
             cell: { column: 1, row: 0 }
             stretchFactor: 1

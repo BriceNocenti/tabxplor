@@ -63,16 +63,35 @@ test_that("every family's cells hold one estimand: interval, neutral and star ag
   skip_if_not_installed("MASS")
   skip_if_not_installed("FactoMineR")
   d <- inv_data()
-  # family x contrast x measure -> the one case that exercises each producer.
+  # family x LINK x contrast x measure -> the one case that exercises each producer. Since the
+  # cascade, `link` and `measure` are separate axes, so both routes to a ratio are swept: the
+  # model's own coefficient (`link`) and the same measure read off its predictions (`measure`).
   cases <- list(
     list(tag = "gaussian coef diff",   a = list(d, "age",     c("race", "tvhours"),
                                                 family = "gaussian")),
-    list(tag = "gaussian coef ratio",  a = list(d, "age",     c("race", "tvhours"),
+    list(tag = "gaussian coef RoM",    a = list(d, "age",     c("race", "tvhours"),
+                                                family = "gaussian", link = "ratio")),
+    list(tag = "gaussian marg RoM",    a = list(d, "age",     c("race", "tvhours"),
                                                 family = "gaussian", measure = "ratio")),
     list(tag = "binomial coef OR",     a = list(d, "married", c("race", "age"),
                                                 family = "binomial")),
-    list(tag = "binomial marg RD",     a = list(d, "married", c("race", "age"),
+    list(tag = "binomial coef RR",     a = list(d, "married", c("race", "age"),
+                                                family = "binomial", link = "ratio")),
+    list(tag = "binomial coef RD",     a = list(d, "married", c("race", "age"),
+                                                family = "binomial", link = "difference")),
+    list(tag = "binomial marg RR",     a = list(d, "married", c("race", "age"),
                                                 family = "binomial", effect = "marginal")),
+    list(tag = "binomial marg RD",     a = list(d, "married", c("race", "age"),
+                                                family = "binomial", effect = "marginal",
+                                                measure = "difference")),
+    # the estimand the generalised marginal engine added (Karlson & Jann 2023)
+    list(tag = "binomial marg OR",     a = list(d, "married", c("race", "age"),
+                                                family = "binomial", effect = "marginal",
+                                                measure = "odds_ratio")),
+    # fit on ONE scale, report on ANOTHER -- the capability only the cascade opens
+    list(tag = "binomial rr -> mRD",   a = list(d, "married", c("race", "age"),
+                                                family = "binomial", link = "ratio",
+                                                measure = "difference")),
     list(tag = "poisson coef IRR",     a = list(d, "tvhours", c("race", "age"),
                                                 family = "poisson")),
     list(tag = "multinomial coef OR",  a = list(d, "party3",  c("race", "age"),
@@ -88,7 +107,7 @@ test_that("every family's cells hold one estimand: interval, neutral and star ag
     # a SUMMED SCORE, whose crude effect sits on the mean score rather than a share
     list(tag = "grouped binomial RR",   a = list(inv_tea(), "tea_where", c("sex", "SPC"),
                                                  family = "binomial", trials = 6,
-                                                 measure = "ratio"))
+                                                 link = "ratio"))
   )
   for (cs in cases) {
     t <- suppressWarnings(suppressMessages(
@@ -125,7 +144,6 @@ test_that("every reachable estimand pairs with its declared crude shape", {
   # reg_same_estimand() is the gate that withholds `obs` and the gap SE. It must refuse a mismatch
   # WITHOUT refusing anything the package can legitimately build, so the whole grid is swept.
   for (f in names(REG_ESTIMANDS)) for (r in REG_ESTIMANDS[[f]]$rows) {
-    if (!identical(r$status, "ok")) next
     # `trials =` is the one caller-supplied fact that moves a block, and it applies to a BINARY
     # outcome only -- the argument boundary refuses it elsewhere.
     tris <- c(list(NA), if (reg_is_grouped_binomial(r$fit, 6)) list(6))
@@ -134,9 +152,9 @@ test_that("every reachable estimand pairs with its declared crude shape", {
       if (is.na(key)) next
       sh <- reg_crude_shape(key, r)
       expect_false(is.null(sh),
-                   info = paste(f, r$effect, r$measure, "-- no crude shape resolves"))
+                   info = paste(f, r$link, r$effect, r$measure, "-- no crude shape resolves"))
       expect_true(reg_same_estimand(sh, reg_scale_of(r, tri), r),
-                  info = paste(f, r$effect, r$measure, "trials:", tri))
+                  info = paste(f, r$link, r$effect, r$measure, "trials:", tri))
     }
   }
 })

@@ -155,10 +155,13 @@ test_that("weighted multinomial errors clearly without svyVGAM", {
   expect_error(tab_reg(d, "yn", c("x1", "x2"), family = "multinomial", wt = "w"), "svyVGAM")
 })
 
-test_that("effect='ame' is refused for weighted 3+ level outcomes", {
+test_that("a weighted 3+ level outcome can only be read on its coefficients", {
   d <- reg_survey_multi_data()
-  expect_error(tab_reg(d, "yo", "x1", family = "ordinal", wt = "w", effect = "marginal"),
-               "not available for survey-weighted")
+  # the marginal quantities have no survey method here, so the refusal covers BOTH ways of asking:
+  # naming the contrast, and naming a measure the model does not estimate.
+  for (a in list(list(effect = "marginal"), list(measure = "difference")))
+    expect_error(do.call(tab_reg, c(list(d, "yo", "x1", family = "ordinal", wt = "w"), a)),
+                 "only be read on its coefficients")
 })
 
 # --- Phase 12g-iii: split_var (stacked grouped subtables + tab_spread) ------------------------------
@@ -330,8 +333,8 @@ test_that("every column of a fit refers to the SAME distribution, and stores whi
     cols <- names(t)[vapply(t, function(x) is_fmt(x) && identical(get_role(x), role), logical(1))]
     unique(vapply(cols, function(n) get_degf(t[[n]]), numeric(1), USE.NAMES = FALSE))
   }
-  for (eff in c("coefficient", "marginal", "at_reference")) {
-    if (eff != "coefficient") skip_if_not_installed("marginaleffects")
+  for (eff in c("conditional", "marginal", "at_reference")) {
+    if (eff != "conditional") skip_if_not_installed("marginaleffects")
     t <- suppressMessages(suppressWarnings(
       tab_reg(des, "y", c("x1", "x2"), effect = eff, empirical = "column")))
     # EVERY column of the model's own fit -- the estimate, the marginal sweep, the baseline row.

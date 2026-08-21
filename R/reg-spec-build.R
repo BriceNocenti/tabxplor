@@ -136,9 +136,9 @@ reg_spec_build_one <- function(i, ctx) {
     f <- if (is.null(fit_cache)) thunk()
          else jmvreg_cached(fit_cache, "fit",
                             jmvreg_fit_key(sp, data, sp_fam, design_spec,
-                                           extra = list(method, sp_dox, conf_level, sp$est$effect,
-                                                        sp$est$measure, display, multiplier,
-                                                        shape_terms, anchors, crosses)),
+                                           extra = list(method, sp_dox, conf_level, sp$est$link,
+                                                        sp$est$effect, sp$est$measure, display,
+                                                        multiplier, shape_terms, anchors, crosses)),
                             thunk)
   }
   skel_out <- NULL

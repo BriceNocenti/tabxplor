@@ -200,7 +200,7 @@ test_that("a crossed slope has a subgroup AME, and it is marginaleffects'", {
   skip_if_not_installed("marginaleffects")
   d <- cr_data()
   t <- quiet(tab_reg(d, "married", c("age*race", "relig"), family = "binomial",
-                     effect = "marginal", stats = FALSE))
+                     effect = "marginal", measure = "difference", stats = FALSE))
   i <- cx(t) == "age*race"
   nest <- stats::glm(married ~ race + relig + race:age, d, family = stats::binomial())
   k    <- tabxplor:::reg_predictor_sd(d$age)

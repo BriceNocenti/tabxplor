@@ -25,6 +25,11 @@
 #     different numbers of parameters. The DESIGN's own df is a table fact and lives in the model
 #     record, where the "Model:" footer line reads it. The 3+ level engines refer to z throughout,
 #     deliberately -- they define no residual df (reg_wald_from_tidy).
+#   - THE CASCADE IS RESOLVED BEFORE THIS FILE RUNS. `link` picked the fit (`sp$fit_family`),
+#     `measure` what is reported and `effect` where it comes from, all in R/reg-estimand.R; here a
+#     COEFFICIENT route reads the tidy and a PREDICTION route sweeps the model -- on whichever fit
+#     `link` chose, which is why reg_marginal() takes the REPORTED comparison's link rather than
+#     inferring one from the family.
 #   - THE ESTIMAND'S DECLARED SCALE decides a column's whole shape: which fmt field the estimate
 #     lands in (multiplicative -> `or`, neutral 1; additive -> `diff`, neutral 0, with `var` = var(Y)
 #     where the scale asks for it) and which ladder it is graded on. No builder names a
@@ -47,7 +52,7 @@
 #     Constant row and every term the predictor interacts with. Exactly TWO readers must add the
 #     offset back, because they describe the variable's own VALUES rather than an estimate:
 #     reg_spec_tips_num()'s tooltip and reg_panel_linearity()'s x axis (R/plots.R).
-#   - THE CONSTANT ROW IS A BASELINE, NOT AN EFFECT: the fit's intercept under `coefficient`, the
+#   - THE CONSTANT ROW IS A BASELINE, NOT AN EFFECT: the fit's intercept under `conditional`, the
 #     predicted outcome at the reference profile under `at_reference`, the population average under
 #     `marginal` -- one quantity, then converted to the column's own geometry (reg_constant_cell).
 #     Only the tested intercept carries a p-value, so only it takes a star.
@@ -69,7 +74,7 @@ reg_abort_marginaleffects <- function(what) {
   cli::cli_abort(c(
     "{.pkg marginaleffects} is required for {.code {what}}.",
     "i" = 'Install it with {.code install.packages("marginaleffects")}, or use
-           {.code effect = "coefficient"} / {.code effect = "marginal"}, which need no extra package.'
+           {.code effect = "conditional"} / {.code effect = "marginal"}, which need no extra package.'
   ))
 }
 
@@ -148,7 +153,7 @@ reg_fam_svy_fitted <- function(f, weighted = FALSE)
 # coefficient; exponentiating is irrelevant, a raw logit coefficient is the same estimand logged).
 # ⚠ ask it of each resolved estimand's FIT, never of the outcome family.
 reg_estimand_collapsible <- function(family, effect)
-  !(identical(effect, "coefficient") && reg_fam_prob(family))
+  !(identical(effect, "conditional") && reg_fam_prob(family))
 
 # THE producer of "the colour you asked for cannot be computed here": one entry per reason, never a
 # block at a call site, and run BEFORE the build, which would otherwise repeat itself per group.
@@ -178,7 +183,7 @@ reg_color_notes <- function(color, color_signif, ests, tab_vars, na, na_explicit
     # THE SAME PREDICATE the gate uses at build time (reg_same_estimand()), so the note and the gate
     # cannot disagree. ⚠ do NOT approximate it by "does the marginal row reuse the coefficient row's
     # crude shape": sharing that shape is the NORMAL case wherever the two contrasts are one estimand.
-    if (!identical(effect, "coefficient")) {
+    if (!identical(effect, "conditional")) {
       bare <- unique(vapply(names(ests), function(d) {
         e  <- ests[[d]]
         tr <- if (is.null(trials)) NA else trials[[d]] %||% NA
@@ -189,7 +194,7 @@ reg_color_notes <- function(color, color_signif, ests, tab_vars, na, na_explicit
       if (length(bare)) {
         add("{.code effect = {.val {effect}}} has no observed counterpart on the same scale for ",
             "{.val {bare}}, so {.code color = \"adjustment\"} stays empty there. Use ",
-            "{.code effect = \"coefficient\"} to compare them.")
+            "{.code effect = \"conditional\"} to compare them.")
       }
     }
     if (!is.null(color_signif) && !identical(color_signif, "ignore") &&
@@ -212,13 +217,12 @@ reg_color_notes <- function(color, color_signif, ests, tab_vars, na, na_explicit
 # construction, where family, trials and the compound flag are all in scope.
 reg_crude_key <- function(family, trials = NULL, compound = FALSE) {
   if (isTRUE(compound))                                 return(NA_character_)
-  if (identical(family, "quasipoisson"))                return("poisson")
   # ⚠ the grouped test comes FIRST and must stay there: `rd` and `rr` are binomial FITS, so a
   # summed-score outcome under either is a grouped binomial -- its crude base is the mean SCORE.
   if (reg_is_grouped_binomial(family, trials, compound)) return("grouped_binomial")
-  if (identical(family, "rd"))                          return("binomial")
-  if (is.null(REG_EMPIRICAL[[family]]))                 return(NA_character_)
-  family
+  # everything else is the declared block rule, shared with the estimand library's own composition
+  # (reg_emp_block(), R/reg-estimand.R) so a run-time key and a composed shape cannot disagree.
+  reg_emp_block(family)
 }
 
 # `trials = TRUE` means "the observed maximum"; NA where there is none (a factor outcome is an
@@ -356,7 +360,9 @@ reg_resolve_multiplier <- function(multiplier, default, data, num_preds, wt = NU
 #   said   : how reg_detect_family() names the kind (a bare string: not translated today).
 #' @keywords internal
 REG_OUTCOME_KINDS <- list(
-  binary   = list(detect = "binomial",    offers = c("binomial", "poisson"),
+  # ⚠ a binary outcome offers ONE family: the modified Poisson is a LINK of the binomial
+  # (`link = "ratio"`), not a count model, and naming it twice is what the cascade deletes.
+  binary   = list(detect = "binomial",    offers = "binomial",
                   said = "binary outcome detected"),
   ordered  = list(detect = "ordinal",     offers = c("ordinal", "multinomial"),
                   said = "ordered outcome detected"),
@@ -424,19 +430,20 @@ reg_meta_estimand <- function(meta, outcome = NULL, family = NULL) {
     fk   <- unname(REG_FIT_FAMILY[family]); if (is.na(fk)) fk <- family
     fams <- meta$families %||% meta$family
     hit  <- names(fams)[fams %in% c(family, fk)]
-    if (length(hit)) d <- hit[[1]] else return(reg_estimand(fk, meta$effect %||% "coefficient",
-                                                            meta$measure %||% "auto"))
+    if (length(hit)) d <- hit[[1]] else return(reg_estimand(
+      fk, link = meta$link %||% "auto", measure = meta$measure %||% "auto",
+      effect = meta$effect %||% "auto"))
   }
   pick <- function(v, scalar) {
     if (is.null(v)) return(scalar)
     if (!is.null(d) && !is.null(names(v)) && d %in% names(v)) return(unname(v[[d]]))
     unname(v[[1]])
   }
-  fam <- pick(meta$families, meta$family)
-  eff <- pick(meta$effects,  meta$effect  %||% "coefficient")
-  mea <- pick(meta$measures, meta$measure %||% "auto")
-  res <- reg_estimand(fam %||% "gaussian", eff %||% "coefficient", mea %||% "auto")
-  if (identical(res$status, "ok")) res else reg_estimand(fam %||% "gaussian", "coefficient", "auto")
+  fam <- pick(meta$families, meta$family) %||% "gaussian"
+  res <- reg_estimand(fam, link = pick(meta$links, meta$link %||% "auto") %||% "auto",
+                      measure = pick(meta$measures, meta$measure %||% "auto") %||% "auto",
+                      effect  = pick(meta$effects,  meta$effect  %||% "auto")  %||% "auto")
+  if (identical(res$status, "ok")) res else reg_estimand(fam)
 }
 
 # THE REFERENCE-DISTRIBUTION CLAUSE of a "Model:" line, and only under a survey design -- elsewhere
@@ -510,7 +517,7 @@ reg_interaction_lines <- function(x, lang = NULL) {
   with_legend_lang(lang, function(lg) {
     tname <- vapply(reg_interaction_types(),
                     function(k) gettext(TEST_ROWS[[k]]$instrument), character(1))
-    on_coef <- !is.null(meta) && !identical(meta$effect %||% "coefficient", "coefficient")
+    on_coef <- !is.null(meta) && !identical(meta$effect %||% "conditional", "conditional")
     vapply(split(seq_len(nrow(it)), factor(it$col, levels = unique(it$col))), function(idx) {
       d     <- it[idx, , drop = FALSE]
       items <- paste0(test_key_col(d, "var"), " p = ", test_fmt_pvalue(d$pvalue),
@@ -1689,17 +1696,23 @@ reg_marginal_basis_ok <- function(fit, data, v, k, est, ratio, do_exp = ratio) {
 # what the COLUMN prints, and it comes from the estimand's own `exp`: a `measure = "log_*"` column
 # keeps the log, and folding the two together printed ratios on a column stamped `log_coef`.
 reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
-                         at = "average", comparison = NULL, want_pred = TRUE,
+                         at = "average", link = "identity", comparison = NULL, want_pred = TRUE,
                          exponentiate = TRUE,
                          multiplier = NULL, engine = "marginaleffects", want_se = TRUE,
                          anchors = NULL, crosses = list(),
                          disp_known = TRUE, df_residual = NA_real_) {
-  log_ratio <- !is.null(comparison) && comparison %in% c("lnor", "lnratioavg")
+  # `link` is the REPORTED comparison's, and it is what decides both questions: the contrast the
+  # sweep computes, and whether the result comes back on a log scale that `exponentiate` may undo.
+  # `comparison` is the marginaleffects spelling of that same contrast, so it FOLLOWS the link unless
+  # the caller names another -- which only the multinomial vs-rest arm ("lnor") does.
+  if (is.null(comparison) || is.na(comparison))
+    comparison <- unname(REG_MARGINAL_COMPARISON[[link]])
+  log_ratio <- !identical(link, "identity")
   do_exp    <- log_ratio && isTRUE(exponentiate)
   out <- NULL
   # "lnor" is the MNL j-vs-rest contrast, which only ever comes with at = "reference".
   if (identical(engine, "gcomp") && identical(at, "average") && !identical(comparison, "lnor"))
-    out <- reg_marginal_gcomp(fit, data, predictors, conf_level, wt, ratio = log_ratio,
+    out <- reg_marginal_gcomp(fit, data, predictors, conf_level, wt, link = link,
                               do_exp = do_exp,
                               want_pred = want_pred, want_se = want_se, multiplier = multiplier,
                               crosses = crosses,
@@ -1709,7 +1722,8 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
   if (is.null(out)) {
     if (!requireNamespace("marginaleffects", quietly = TRUE))
       reg_abort_marginaleffects("this contrast, which has no closed form on this model")
-    out <- reg_marginal_me(fit, data, predictors, conf_level, wt, at = at, comparison = comparison,
+    out <- reg_marginal_me(fit, data, predictors, conf_level, wt, at = at, link = link,
+                           comparison = comparison,
                            want_pred = want_pred, exponentiate = exponentiate,
                            multiplier = multiplier, want_se = want_se,
                            anchors = anchors, crosses = crosses,
@@ -1721,8 +1735,8 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
 }
 
 #' @keywords internal
-reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, ratio = FALSE,
-                               do_exp = ratio,
+reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, link = "identity",
+                               do_exp = !identical(link, "identity"),
                                want_pred = TRUE, want_se = TRUE, multiplier = NULL,
                                crosses = list(),
                                disp_known = TRUE, df_residual = NA_real_) {
@@ -1735,8 +1749,8 @@ reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, rat
   V <- if (want_se) tryCatch(stats::vcov(fit), error = function(e) NULL) else NULL
   if (want_se && (is.null(V) || !is.matrix(V))) return(NULL)
   per_cat <- inherits(fit, "multinom") || inherits(fit, "polr")
-  g <- if (per_cat) reg_gcomp_cat_maker(fit, data, wt, ratio)
-       else         reg_gcomp_maker(fit, data, wt, ratio)
+  g <- if (per_cat) reg_gcomp_cat_maker(fit, data, wt, link)
+       else         reg_gcomp_maker(fit, data, wt, link)
   if (is.null(g)) return(NULL)
   crit <- reg_wald_crit(disp_known, df_residual, conf_level)   # the FIT's reference, never z by default
   amel <- list(); predl <- list()
@@ -1820,7 +1834,7 @@ reg_marginal_basis_warn <- function(fit, data, predictors, multiplier, ame, rati
 # ratio twin; both return a log, so the interval stays a Wald one on the log scale. It is exp()'d
 # back here only where the ESTIMAND asks for it -- see reg_marginal()'s two decisions.
 reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
-                            at = "average", comparison = NULL, want_pred = TRUE,
+                            at = "average", link = "identity", comparison = NULL, want_pred = TRUE,
                             exponentiate = TRUE,
                             multiplier = NULL, want_se = TRUE, anchors = NULL,
                             crosses = list(),
@@ -1833,10 +1847,10 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
   # weights only at the AVERAGING step; a single-row profile takes none, and `wts = NULL` is
   # rejected.
   wts_arg <- if (at == "reference" || is.null(wt)) list() else list(wts = wt)
-  cmp_arg <- if (is.null(comparison)) list() else list(comparison = comparison)
-  # WARNING: `comparison` is NULL on the additive default, and `NULL %in% x` is logical(0), not
-  # FALSE -- which would make every `if (log_ratio)` below error with "argument is of length zero".
-  log_ratio <- !is.null(comparison) && comparison %in% c("lnor", "lnratioavg")
+  cmp_arg <- if (is.null(comparison) || is.na(comparison)) list() else list(comparison = comparison)
+  # the REPORTED link decides both: the engine works on the log of a ratio wherever it is not the
+  # identity, and `exponentiate` says whether the column prints that log or undoes it.
+  log_ratio <- !identical(link, "identity")
   do_exp    <- log_ratio && isTRUE(exponentiate)
 
   # `variables = list(v = k)` is a k-unit FORWARD DIFFERENCE, not k x the 1-unit AME. ⚠ the KEYWORD
@@ -1907,9 +1921,10 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
     # NA cell.
     ref_lv <- if (is_fac) levels(forcats::fct_drop(as.factor(data[[v]])))[1] else NA_character_
     level  <- if (!is_fac) v else {
-      inner <- if (identical(comparison, "lnor")) "odds" else "mean"
-      # ⚠ the label is `marginaleffects`' own, so it follows what the engine was ASKED (`log_ratio`),
-      # never what this column prints.
+      # the label is `marginaleffects`' own: it names what the engine was ASKED to take the log OF,
+      # which is the REPORTED link -- odds on a logit, the mean on a log -- never what this column
+      # prints (`exponentiate` may undo it).
+      inner <- if (identical(link, "logit")) "odds" else "mean"
       pre <- if (log_ratio) paste0("ln(", inner, "(") else ""
       suf <- if (log_ratio) paste0(") / ", inner, "(", ref_lv, "))") else paste0(" - ", ref_lv)
       substr(ac$contrast, nchar(pre) + 1L, nchar(ac$contrast) - nchar(suf))
@@ -1955,7 +1970,7 @@ reg_marginal_me <- function(fit, data, predictors, conf_level, wt = NULL,
 
 # === SECTION: the Constant row -- the baseline the column is read against ========================
 #
-# WHERE ITS VALUE COMES FROM. Under `effect = "coefficient"` it IS the fit's own intercept, anchored
+# WHERE ITS VALUE COMES FROM. Under `effect = "conditional"` it IS the fit's own intercept, anchored
 # by `ref`, and reg_column() reads it straight from the tidy. The other two contrasts have no
 # intercept in their tidy, so the row holds the same thing computed the way THAT contrast computes
 # everything else: the model's predicted outcome, averaged over the sample (`marginal`) or evaluated
@@ -3229,7 +3244,7 @@ reg_crude_block <- function(sp, sp_fam, inv_sp, key, mdata, pos, y_ref, var_y, c
     wt = design_spec$wt,
     want_fit = TRUE, trials = sp$trials,
     shape_terms = shape_terms, crosses = crosses,
-    marginal = !identical(sp$est$effect, "coefficient") &&
+    marginal = !identical(sp$est$effect, "conditional") &&
       (reg_fam_binary(sp_fam) || reg_fam_prob(sp_fam)))
   out <- reg_empirical_columns(skeleton, emp, fac_preds_e, key, sp_fam, sp$est, var_y,
                                conf_level = conf_level, color_signif = color_signif,
@@ -3280,12 +3295,13 @@ reg_cols_ame <- function(f, sp, ctx) {
   # and they are two decisions: a `measure = "log_*"` row still wants the log-ratio contrast, and
   # still keeps the log (`exp` FALSE). See reg_marginal().
   sp_est       <- sp$est
-  ratio_ame    <- !is.na(sp_est$comparison) && identical(sp_est$comparison, "lnratioavg")
+  sp_link      <- sp_est$measure_link                  # the REPORTED comparison's, not the fit's
+  ratio_ame    <- !identical(sp_link, "identity")
   sp_scale     <- reg_scale_of(sp_est, sp$trials)
   marg  <- reg_marginal(f$fit, f$data, sp$row_vars, conf_level, design_spec$wt,
                         at = if (identical(sp_est$effect, "at_reference")) "reference" else "average",
-                        want_pred = TRUE,
-                        comparison = if (ratio_ame) "lnratioavg" else NULL,
+                        link = sp_link, want_pred = TRUE,
+                        comparison = sp_est$comparison,
                         exponentiate = isTRUE(sp_est$exp),
                         multiplier = multiplier, engine = reg_marginal_engine(sp_est),
                         anchors = anchors, crosses = crosses,
@@ -3359,7 +3375,8 @@ reg_cols_vsrest <- function(f, sp, ctx) {
   sp_scale <- reg_scale_of(sp$est, sp$trials)
   exp_sc   <- reg_exp_scale_of(sp$est, sp$trials)
   marg   <- reg_marginal(f$fit, f$data, sp$row_vars, conf_level, design_spec$wt,
-                         at = "reference", comparison = "lnor", want_pred = FALSE,
+                         at = "reference", link = sp$est$measure_link,
+                         comparison = sp$est$comparison, want_pred = FALSE,
                          exponentiate = isTRUE(sp$est$exp),
                          engine = reg_marginal_engine(sp$est), anchors = anchors,
                          crosses = crosses,
@@ -3536,7 +3553,7 @@ reg_stage_rows <- function(ctx) {
   # that is true of the anchored intercept the other columns show.
   cst <- skeleton$var == "Constant"
   if (any(cst)) {
-    effs <- vapply(specs, function(sp) sp$est$effect %||% "coefficient", character(1))
+    effs <- vapply(specs, function(sp) sp$est$effect %||% "conditional", character(1))
     disp_levels[cst] <- if (all(effs == "marginal")) gettext("Population average")
                         else gettext("Reference profile")
   }
@@ -3633,7 +3650,7 @@ reg_set_obs <- function(bi, e, f, sp, ctx) {
   list2env(reg_ctx_locals(ctx), environment())
   col <- bi$col
   # the "may a crude value be attached?" decision is PER SPEC (the estimand's declared `obs`).
-  if (is.null(e) || !isTRUE(sp$est$obs)) return(col)
+  if (is.null(e) || !reg_estimand_obs(sp$est)) return(col)
   if (!reg_same_estimand(e$shape, get_scale(col), sp$est)) return(col)  # same estimand, or nothing
   # ...and the same PEOPLE, or nothing: otherwise the "gap" is listwise deletion, not adjustment.
   if (!reg_same_frame(e$frame, f)) return(col)
@@ -3763,11 +3780,23 @@ reg_stage_finalize <- function(ctx) {
 #' `empirical = TRUE` to put the crude (unadjusted) effect beside each adjusted one. See
 #' `vignette("tabxplor-reg")` for a guided tour.
 #'
+#' **The estimand is a cascade**: `family` -> `link` -> `measure` -> `effect`, where `"auto"` means
+#' *follow from the left*. `family` says what kind of number the outcome is; `link` **which measure
+#' the model estimates** (a link *is* a measure, so it takes the same words); `measure` **which one
+#' is reported**; `effect` where that number comes from. Set any one and everything to its right
+#' re-derives, so most tables set none of them --- and the one most people ever set is `measure`.
+#'
+#' A **coefficient** exists only where the reported measure IS the model's own. Ask for another and
+#' it is worked out from the model's predictions instead, averaged over the sample. So
+#' `measure = "ratio"` on a binary outcome gives a *marginal* risk ratio from the logistic fit, while
+#' `link = "ratio"` fits the modified Poisson and gives its *conditional* one --- two different
+#' quantities, and now two different arguments.
+#'
 #' The arguments fall into groups:
 #' \itemize{
 #'   \item **The model**: `data`, `outcome`, `predictors` (a character vector = one model, a named
-#'     list = several models to compare), `family`, `wt` (survey weights).
-#'   \item **What each cell shows**: `effect` x `measure` (which contrast, which effect measure),
+#'     list = several models to compare), `family`, `link`, `wt` (survey weights).
+#'   \item **What each cell shows**: `measure` x `effect` (which measure, where it comes from),
 #'     `display` (the layout), `empirical` (the crude effect beside the adjusted one).
 #'   \item **Colours & significance**: `color`, `color_signif`, `stars`, `conf_level`, as in [tab()].
 #'   \item **Comparisons & structure**: `ref` (baseline levels), `outcome_level` (the level
@@ -3840,66 +3869,86 @@ reg_stage_finalize <- function(ctx) {
 #'   "binomial")`), sets one family per outcome. Mixed families work only with a character
 #'   `predictors`; a `predictors` list is single-outcome, hence single-family.
 #'
-#'   `family = "poisson"` on a **binary** outcome is neither a mistake nor a count model: it fits the
-#'   **modified Poisson** (Zou 2004), whose exponentiated coefficient is a **risk ratio**. It is the
-#'   same table as `measure = "ratio"`, which names the measure rather than the distribution --- see
-#'   there. It is strictly opt-in: a binary outcome still auto-detects as `"binomial"`.
+#'   `family` answers **one** question --- what kind of number the outcome is --- and never picks a
+#'   link behind your back. On a binary outcome `family = "poisson"` is therefore refused, naming the
+#'   two things it could have meant: `link = "ratio"` (the **modified Poisson**, Zou 2004, whose
+#'   coefficient is a *conditional* risk ratio) or `measure = "ratio"` (the *marginal* one, from the
+#'   logistic fit).
 #'
 #'   An unweighted `"poisson"` fit auto-scales its standard errors by the square root of the Pearson
 #'   dispersion, so with an **over-dispersed** outcome its intervals and p-values are identical to
 #'   `"quasipoisson"`, and it warns to say so (the footer reports the dispersion). At equidispersion
 #'   the scaling is a no-op and the result matches a plain `glm(family = poisson)`.
-#' @param wt <[`tidy-select`][tidyr::tidyr_tidy_select]> Optional. One weight column. Switches to design-based survey
-#'   estimation ([survey::svyglm()]): the sandwich standard errors are scale-invariant, so raw
-#'   population weights are handled correctly (no normalisation) and the point estimates match the
-#'   weighted crosstabs. For clustering, stratification, a finite-population correction or
-#'   calibration, build the design yourself with [survey::svydesign()] and pass it as `data`; `wt`
-#'   alone is a flat `ids = ~1` design, which can understate the variance of a clustered sample.
-#' @param effect **Which contrast** the table shows --- one of the two questions an estimand asks.
-#'   `"coefficient"` (default) is the model's own conditional effect ("holding the other predictors
-#'   constant"). `"marginal"` is the **average marginal effect**: the model's effect averaged over
-#'   the observed covariate distribution --- a probability-scale, cross-model-comparable summary
-#'   (Mood 2010) for logistic / multinomial / ordinal outcomes, and the expected-count change for
-#'   poisson. Where the link is collapsible the averaging changes nothing --- a linear model's
-#'   marginal effect *is* its coefficient --- so that combination is refused and names the
-#'   coefficient call instead. `"at_reference"` evaluates the same quantity **at
-#'   the reference profile** (every other predictor at its reference level or its mean), and for a
-#'   **multinomial** outcome the odds ratio of each category *versus the rest* there. Resolved **per
-#'   outcome** like `family` (scalar / vector / named vector).
+#' @param link **Which measure the model estimates** --- the only argument that changes the model.
+#'   A link *is* a measure (the one a model gives you directly), so it takes `measure`'s own words
+#'   and the statistician's vocabulary never surfaces:
+#'
+#'   * `"auto"` (default) --- the family's own: a logistic fit for a binary outcome, a linear one for
+#'     a quantity, a Poisson one for a count.
+#'   * `"odds_ratio"` --- the logit fit (binomial, multinomial, ordinal).
+#'   * `"ratio"` --- the log link: the **modified Poisson** on a binary outcome (Zou 2004, a
+#'     conditional risk ratio), Poisson on a count, and Poisson pseudo-maximum-likelihood on a
+#'     continuous one (a ratio of adjusted means; Santos Silva & Tenreyro 2006).
+#'   * `"difference"` --- the identity link: on a binary outcome the **risk difference**, with robust
+#'     standard errors. That link is unbounded and can fail to converge; the linear probability model
+#'     then takes over, with a message, and the footer says which one ran.
+#'
+#'   Reach for it when you want the model's *coefficient* to be that measure. To report a measure
+#'   without changing the model, set `measure` instead. A link the outcome cannot be fitted on says
+#'   so and names the ones it can; resolved **per outcome** like `family`.
+#' @param measure **Which measure is reported** --- the one argument most readers ever set, and the
+#'   one that never changes the model. `"auto"` (default) is the model's own measure: follow from
+#'   the left. The full word is the canonical spelling and the discipline's acronym an accepted
+#'   synonym, so the argument teaches the concept while the column header keeps the acronym:
+#'
+#'   * `"odds_ratio"` (`"OR"`) --- the odds of the outcome, times what. Needs a percentage **and its
+#'     complement**, so a 3+ category outcome has to be asked "versus what?" first.
+#'   * `"ratio"` (`"RR"`, `"IRR"`, `"RoM"`) --- how many times as likely, as frequent, as large.
+#'     Reach for it when the outcome is **common**: an odds ratio is then much further from 1 than
+#'     the risk ratio and is almost always narrated as if it were one ("twice as likely"), and unlike
+#'     an odds ratio a risk ratio stays comparable **across nested models**.
+#'   * `"difference"` (`"RD"`, `"diff"`) --- how much more, in the outcome's own units (percentage
+#'     points on a probability).
+#'   * `"log"` (`"log_odds"`, `"log_risk"`, `"log_rate"`) --- the same estimand, **un-exponentiated**.
+#'     Bare `"log"` logs whatever the cascade would report; the precise spellings pin which base. The
+#'     header names what it logs (`Model_log(OR)`), never one greek letter for five quantities.
+#'
+#'   Where it IS the model's own measure it is read off the coefficients; where it is not, it is
+#'   worked out from the model's predictions --- so it is available whichever model you fit, and
+#'   what `link` changes is which measure has a *coefficient*. ⚠ one clause qualifies `"auto"`: it
+#'   never lands on a **predicted odds ratio**, which is a specialist quantity (Karlson & Jann 2023)
+#'   and must be asked for by name; on a prediction route it steps back to the outcome's own measure
+#'   ("x times as likely" for a percentage). Resolved **per outcome** like `family`. Call
+#'   [reg_measures()] on your outcome to see what it offers, with the reason wherever it does not.
+#' @param effect **Where the reported number comes from**, once the model and the measure are fixed.
+#'   `"auto"` (default) needs no thought: the model's own coefficients when the reported measure is
+#'   the model's, its predictions otherwise. The other values name a reading:
+#'
+#'   * `"conditional"` --- read off the model's own coefficients ("holding the other predictors
+#'     constant"). Only available where `measure` is the model's own measure; otherwise the abort
+#'     names the two cures.
+#'   * `"marginal"` --- the **average marginal effect**: worked out from the model's prediction for
+#'     every observed person, then averaged. A probability-scale, cross-model-comparable summary
+#'     (Mood 2010), and the route that always exists.
+#'   * `"at_reference"` --- the same, at **one profile** (every other predictor at its reference
+#'     level or its mean); for a **multinomial** outcome with `measure = "odds_ratio"`, the odds
+#'     ratio of each category *versus the rest* there.
+#'
+#'   ⚠ a prediction route runs on the model `link` names, so `link = "ratio", measure = "difference"`
+#'   is a marginal risk difference computed from the modified-Poisson fit. [reg_formulas()] reports
+#'   what was actually fitted. Resolved **per outcome** like `family`.
 #'
 #'   The contrast is a **marker on the measure** in the column header, so the acronym stays the one
 #'   thing to look up: `Model_OR`, `Model_mRR`, `Model_refRD` (see *The header acronyms* below). The
 #'   observed companion carries the measure alone (`Obs_RR`), a univariable effect having no
 #'   adjustment to be marginal over. A marginal quantity is standardized to the covariate
 #'   distribution at hand, so under `tab_vars` each group standardizes to its own subpopulation.
-#' @param measure **Which effect measure** --- the other question. `"auto"` (default) takes the
-#'   family's usual one (odds ratios for a logit, incidence-rate ratios for a count, a mean
-#'   difference for a linear model; a difference for a marginal contrast). The full word is the
-#'   canonical spelling and the discipline's acronym an accepted synonym, so the argument teaches the
-#'   concept while the column header keeps the acronym:
-#'
-#'   * `"odds_ratio"` (`"OR"`) --- the odds ratio of a logit / multinomial / ordinal fit.
-#'   * `"ratio"` (`"RR"`, `"IRR"`, `"RoM"`) --- a **risk** ratio on a binary outcome (the modified
-#'     Poisson, Zou 2004), an **incidence-rate** ratio on a count, a **ratio of adjusted means** on a
-#'     continuous one (Poisson pseudo-maximum-likelihood, Santos Silva & Tenreyro 2006). Reach for it
-#'     when the outcome is **common**: an odds ratio is then much further from 1 than the risk ratio
-#'     and is almost always narrated as if it were one ("twice as likely"), and unlike an odds ratio
-#'     a risk ratio stays comparable **across nested models**.
-#'   * `"difference"` (`"RD"`, `"diff"`) --- a linear coefficient on a continuous outcome; on a
-#'     **binary** one the **risk difference** in percentage points, from an identity-link fit with
-#'     robust standard errors. That link is unbounded and can fail to converge: the linear
-#'     probability model then takes over, with a message, and the footer says which one ran.
-#'   * `"log"` (`"log_odds"`, `"log_risk"`, `"log_rate"`) --- the same fit, **un-exponentiated**.
-#'     Bare `"log"` logs the family's default measure; the precise spellings pin which one. The
-#'     header names what it logs (`Model_log(OR)`), never one greek letter for five quantities.
-#'
-#'   Resolved **per outcome** like `family`. `effect` and `measure` are orthogonal: a *conditional*
-#'   ratio is a different **fit**, a *marginal* one a different **estimator**, and both land on the
-#'   same stored scale. Call [reg_measures()] on your outcome to see what it offers, with the reason
-#'   wherever it does not; `vignette("tabxplor-reg")` discusses what each route assumes. Elsewhere,
-#'   `measure = "ratio"` on a binary outcome is Stata's `binreg y x, rr`; `measure = "log"` is
-#'   `exponentiate = FALSE` in broom / parameters / gtsummary; `effect = "marginal"` is
-#'   `marginaleffects::avg_comparisons()`.
+#' @param wt <[`tidy-select`][tidyr::tidyr_tidy_select]> Optional. One weight column. Switches to design-based survey
+#'   estimation ([survey::svyglm()]): the sandwich standard errors are scale-invariant, so raw
+#'   population weights are handled correctly (no normalisation) and the point estimates match the
+#'   weighted crosstabs. For clustering, stratification, a finite-population correction or
+#'   calibration, build the design yourself with [survey::svydesign()] and pass it as `data`; `wt`
+#'   alone is a flat `ids = ~1` design, which can understate the variance of a clustered sample.
 #' @param trials Grouped-binomial (summed-score) outcomes only. The number of items behind the score,
 #'   fitting `cbind(score, trials - score)` as a binomial. `NULL` (default) fits an ordinary binary
 #'   logit; a single integer (or a vector named by outcome) sets the item count; `TRUE`, or an `NA`
@@ -3973,7 +4022,7 @@ reg_stage_finalize <- function(ctx) {
 #'   Two readings of "does this effect hold in every subgroup?" come with it:
 #'   `color = "between_groups"` colours and tests each effect against the first group's, row by row,
 #'   and `stats = c(..., "group_interaction")` adds the aggregated test, once per predictor. For an
-#'   interaction between two PREDICTORS of one model, write it in `predictors` as `a:b` instead.
+#'   interaction between two PREDICTORS of one model, write it in `predictors` as `a*b` instead.
 #' @param multiplier How a **continuous** predictor's effect is scaled --- the unit its row reports.
 #'   One unit of a continuous variable is rarely a readable amount (a one-year change in `age` barely
 #'   moves the odds, so its odds ratio sits inside the first colour break and the row reads as "no
@@ -4170,7 +4219,7 @@ reg_stage_finalize <- function(ctx) {
 #'   an aside no cell of the column can fill is dropped, padding and all.
 #'
 #'   The **Constant** row is the baseline the rest of the column is read against, at the very point
-#'   that column's effects are read at: under `effect = "coefficient"` the model's intercept ---
+#'   that column's effects are read at: under `effect = "conditional"` the model's intercept ---
 #'   every factor at its reference level and every continuous predictor at its `ref` anchor, the
 #'   mean by default; under `"at_reference"` the outcome the model predicts at that same profile;
 #'   under `"marginal"` the **population average** the sample-averaged effects sit on, which is what
@@ -4182,7 +4231,7 @@ reg_stage_finalize <- function(ctx) {
 #'   to it, so those show the **level itself** --- `39%`, `40.8`, `2.9`; and `measure = "log"` shows
 #'   the intercept on the link scale. It is a baseline, not a comparison, so it never carries a `+`
 #'   or a `x` sign. It carries its confidence interval, and a **star** only where what it prints has
-#'   a null to be tested against (the odds and link scales, under `effect = "coefficient"`): a
+#'   a null to be tested against (the odds and link scales, under `effect = "conditional"`): a
 #'   predicted 48.7 % is not "different from zero". An ordinal outcome leaves it empty (a cumulative
 #'   logit has thresholds, not one intercept).
 #'
@@ -4326,14 +4375,14 @@ reg_stage_finalize <- function(ctx) {
 #' @param ... Not a user argument. It carries the internal `.fit_cache` (the jamovi live UI's fit
 #'   cache environment), and it is what makes every argument removed or renamed while `tab_reg()` was
 #'   in development --- `exponentiate`, `at`, `estimate_display`, `dependent`, `split_var`,
-#'   `reference`, `method`, `compare`, `baseline`, `inverse_two_level_factors`, and the `effect`
-#'   values `"ame"` / `"ame_ratio"` --- give an error naming its replacement, rather than R's bare
-#'   "unused argument".
+#'   `reference`, `method`, `compare`, `baseline`, `inverse_two_level_factors`, `parallel`, and the
+#'   `effect` values `"ame"` / `"ame_ratio"` / `"coefficient"` --- give an error naming its
+#'   replacement, rather than R's bare "unused argument".
 #' @eval reg_words_rd()
 #' @eval reg_measures_rd()
 #' @export
 tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL,
-                    family = "auto", effect = "coefficient", measure = "auto",
+                    family = "auto", link = "auto", measure = "auto", effect = "auto",
                     trials = NULL, empirical = FALSE, n = NULL,
                     color = TRUE, color_signif = NULL, stars = TRUE,
                     conf_level = NULL, ci_method = NULL,
@@ -4410,8 +4459,9 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
              else                                   trials[[i]]
       list(outcome = d, predictors = predictors, wt = wt,
            family  = reg_per_outcome(family,  d, i, "auto"),
-           effect  = reg_per_outcome(effect,  d, i, "coefficient"),
+           link    = reg_per_outcome(link,    d, i, "auto"),
            measure = reg_per_outcome(measure, d, i, "auto"),
+           effect  = reg_per_outcome(effect,  d, i, "auto"),
            trials = tri, conf_level = conf_level, ci_method = ci_method,
            ref = ref, outcome_level = outcome_level,
            tab_vars = tab_vars, multiplier = multiplier, shape = shape,
@@ -4433,7 +4483,7 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
   # in, every check and every rewrite of `data` among them.
   a <- reg_resolve_args(
     data, outcome, predictors, tab_vars = tab_vars, wt = wt,
-    family = family, effect = effect, measure = measure, trials = trials,
+    family = family, link = link, measure = measure, effect = effect, trials = trials,
     empirical = empirical, n = n, color = color, color_signif = color_signif,
     stars = stars, conf_level = conf_level, method = method, ref = ref,
     outcome_level = outcome_level, multiplier = multiplier,
@@ -4458,7 +4508,8 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
   # changes it. Every field is READ OFF the boundary's record rather than recomputed here.
   reg_call_record <- list(
     family = a$families[[1]], families = a$families,
-    effect = a$est$effect, measure = a$est$measure, eff_word = a$eff_word,
+    link = a$est$link, effect = a$est$effect, measure = a$est$measure, eff_word = a$eff_word,
+    links    = vapply(a$ests, function(e) e$link,    character(1)),
     measures = vapply(a$ests, function(e) e$measure, character(1)),
     effects  = vapply(a$ests, function(e) e$effect,  character(1)),
     outcome = a$outcome, positive_level = a$positive_levels, predictors = a$union_predictors,
@@ -4479,7 +4530,8 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
                     # THE preparation recipe (the column recodes + the anchors), so a refit from the
                     # user's raw data reproduces the very model the table shows.
                     prep = a$prep,
-                    multiplier = a$multiplier, effect = a$est$effect, measure = a$est$measure,
+                    multiplier = a$multiplier, link = a$est$link,
+                    effect = a$est$effect, measure = a$est$measure,
                     wt = a$wt_disp, design_vars = reg_design_vars(a$design_spec)),
     # which observed counterpart each outcome has (NA = none), and where it went -- stored, with the
     # LAYOUT, so the footer can word whatever the cell's bracket actually holds.

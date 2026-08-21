@@ -2,6 +2,9 @@
 # The governing statistical claim: the crude quantity IS the model quantity when there is ONE
 # predictor. These tests prove, per family, that a SINGLE-predictor model estimate == the empirical
 # column == the tab() (no-model) quantity. gss_cat-derived data only (never pc18 / ct13).
+#
+# ⚠ a marginal block that asserts an ADDITIVE effect names `measure = "difference"`: since the
+# cascade (22b-xv-1) a bare `effect = "marginal"` reports the level's own measure, a ratio.
 
 emp_data <- function() {
   d <- forcats::gss_cat
@@ -98,7 +101,7 @@ test_that("binomial coefficient: single-predictor OR == crude OR (Obs_OR) == mod
 
 test_that("binomial AME: single-predictor risk-diff (Obs_RD) == observed risk difference", {
   d <- emp_data()
-  t <- tab_reg(d, "married", "race", family = "binomial", effect = "marginal", empirical = TRUE,
+  t <- tab_reg(d, "married", "race", family = "binomial", effect = "marginal", measure = "difference", empirical = TRUE,
                cleannames = FALSE)
   emp_diff <- get_diff(t[["Obs_RD"]]); names(emp_diff) <- as.character(t$levels)
 
@@ -168,7 +171,7 @@ test_that("binomial Obs_OR CI == crude logistic-regression CI (Woolf = Wald, per
 # reg's method_diff = "wald" and the model AME's Wald delta interval), not Newcombe.
 test_that("binomial AME Obs_RD CI == Wald risk-difference CI", {
   d <- emp_data()
-  t <- tab_reg(d, "married", "race", effect = "marginal", family = "binomial", empirical = TRUE,
+  t <- tab_reg(d, "married", "race", effect = "marginal", measure = "difference", family = "binomial", empirical = TRUE,
                cleannames = FALSE)
   ed  <- t[["Obs_RD"]]
   pos <- emp_positive_level(t, d, "married")
@@ -396,7 +399,7 @@ test_that("change B: empirical companions use the model's complete-case frame, n
 test_that("change A: adjusted % coheres with the AME; unadjusted prediction == the crude % (identity)", {
   skip_if_not_installed("marginaleffects")
   d <- emp_data()
-  t <- tab_reg(d, "married", c("race", "inc3"), family = "binomial", effect = "marginal",
+  t <- tab_reg(d, "married", c("race", "inc3"), family = "binomial", effect = "marginal", measure = "difference",
                empirical = TRUE, cleannames = FALSE)
 
   # change A: adjusted%(reference) + AME(level) == adjusted%(level) -- the standardized prediction and
@@ -500,7 +503,7 @@ testthat::test_that("one crude column per model column, on ONE ladder and ONE le
 testthat::test_that("a crude column is never its own baseline (ruling Q1(b))", {
   skip_if_not_installed("broom")
   d <- emp_data()
-  for (a in list(list(family = "binomial"), list(family = "gaussian"), list(family = "poisson"))) {
+  for (a in list(list(family = "binomial"), list(family = "gaussian"), list(family = "binomial", link = "ratio"))) {
     dep <- if (identical(a$family, "binomial")) "married" else "tvhours"
     t <- suppressWarnings(suppressMessages(do.call(
       tab_reg, c(list(data = d, outcome = dep, predictors = "race", empirical = TRUE,

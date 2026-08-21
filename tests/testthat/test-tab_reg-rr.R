@@ -1,8 +1,8 @@
-# Phase 18z3: the two RISK-RATIO routes.
-#   (1) family = "poisson" on a BINARY outcome  -> modified Poisson (Zou 2004), a CONDITIONAL risk ratio
-#       with a robust sandwich variance (internal family key "rr").
-#   (2) effect = "marginal", measure = "ratio"                    -> marginal standardization / g-computation on the
-#       ordinary logistic fit, a MARGINAL risk ratio.
+# THE TWO RISK-RATIO ROUTES, which since the cascade (22b-xv-1) are two ARGUMENTS:
+#   (1) link = "ratio"    -> the modified Poisson (Zou 2004): a CONDITIONAL risk ratio with a robust
+#       sandwich variance (internal fit key "rr"). `link` names the measure the MODEL estimates.
+#   (2) measure = "ratio" -> marginal standardization / g-computation on the ordinary logistic fit:
+#       a MARGINAL risk ratio. `measure` names the one REPORTED, and never changes the model.
 # The governing claims these tests pin:
 #   - the modified-Poisson SE is the SANDWICH, not the naive Poisson SE and not the phi-scaled one;
 #   - with ONE predictor, both routes reproduce the CRUDE risk ratio exactly (the empirical companion);
@@ -31,13 +31,18 @@ rr_y01 <- function(d, dep = "married", inverse = TRUE)
 
 # ---- (1) modified Poisson: the fit and its variance ------------------------------------------------
 
-test_that("family='poisson' on a binary FACTOR fits (it used to abort) and is named a risk ratio", {
+test_that("link='ratio' on a binary outcome fits the modified Poisson, and is named a risk ratio", {
   d <- rr_data()
-  expect_message(t <- tab_reg(d, "married", "race", family = "poisson"), "modified Poisson")
-  # the column is Model_RR (not Model_IRR, not Model_exp(beta)), and the estimand prose says so
+  # `link` names the measure the MODEL estimates, so the conditional risk ratio is one argument away
+  # -- and `family` no longer secretly picks a link (the retired `family = "poisson"` spelling).
+  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio"))
+  expect_error(suppressMessages(tab_reg(d, "married", "race", family = "poisson")),
+               'link = "ratio"', fixed = TRUE)
+  # the column is Model_RR (not Model_IRR, not Model_mRR: the coefficient is unmarked), and the
+  # estimand prose says so
   expect_true("Model_RR" %in% names(t))
   expect_false(any(grepl("IRR", names(t))))
-  note <- reg_estimand_note(reg_estimand("binomial", "coefficient", "ratio"))
+  note <- reg_estimand_note(reg_estimand("binomial", link = "ratio"))
   expect_match(note, "RR = risk ratio")
   expect_no_match(note, "incidence-rate")
   # Sociology terminology trap: "log-linear model" means Goodman's contingency-table models.
@@ -48,7 +53,7 @@ test_that("family='poisson' on a binary FACTOR fits (it used to abort) and is na
 test_that("modified Poisson == svyglm(quasipoisson) on a constant-weight design, to the last digit", {
   skip_if_not_installed("survey")
   d <- rr_data()
-  t <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", cleannames = FALSE))
+  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio", cleannames = FALSE))
   d$y <- rr_y01(d)
   sv <- survey::svyglm(y ~ race, family = stats::quasipoisson("log"),
                        design = survey::svydesign(ids = ~1, weights = ~1, data = d))
@@ -62,7 +67,7 @@ test_that("modified Poisson == svyglm(quasipoisson) on a constant-weight design,
 test_that("the SE is the HC0 sandwich (not the naive Poisson SE, not the phi-scaled one)", {
   skip_if_not_installed("survey")
   d <- rr_data()
-  t <- suppressMessages(tab_reg(d, "married", c("race", "inc3"), family = "poisson",
+  t <- suppressMessages(tab_reg(d, "married", c("race", "inc3"), family = "binomial", link = "ratio",
                                 cleannames = FALSE))
   d$y <- rr_y01(d)
   g  <- stats::glm(y ~ race + inc3, data = d, family = stats::poisson("log"))
@@ -95,8 +100,8 @@ test_that("the SE is the HC0 sandwich (not the naive Poisson SE, not the phi-sca
 
 test_that("the modelled level is the binomial one, and `outcome_level` names it", {
   d <- rr_data()                                        # married: levels "no", "yes"
-  t1 <- suppressMessages(tab_reg(d, "married", "race", family = "poisson"))
-  t2 <- suppressMessages(tab_reg(d, "married", "race", family = "poisson",
+  t1 <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio"))
+  t2 <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio",
                                  outcome_level = c(married = "yes")))
   expect_equal(reg_call(t1)$positive_level, "no")       # the FIRST level, by default
   expect_equal(reg_call(t2)$positive_level, "yes")      # the one that was named
@@ -106,7 +111,7 @@ test_that("the modelled level is the binomial one, and `outcome_level` names it"
 test_that("the estimand invariant holds: the OR is always further from 1 than the RR", {
   d  <- rr_data()
   or <- get_or(suppressMessages(tab_reg(d, "married", "race", family = "binomial"))$Model_OR)[3:4]
-  rr <- est_of(suppressMessages(tab_reg(d, "married", "race", family = "poisson"))$Model_RR)[3:4]
+  rr <- est_of(suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio"))$Model_RR)[3:4]
   # The OR always EXAGGERATES, away from 1, whichever side the effect falls on -- stated
   # direction-agnostically as |log(OR)| > |log(RR)|, and both must sit on the same side of 1.
   expect_true(all(abs(log(or)) > abs(log(rr))))
@@ -117,7 +122,7 @@ test_that("the estimand invariant holds: the OR is always further from 1 than th
 
 test_that("Obs_RR is the crude RISK ratio with a Katz interval (never the crude ODDS ratio)", {
   d <- rr_data()
-  t <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", empirical = TRUE,
+  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio", empirical = TRUE,
                                 cleannames = FALSE))
   lv <- levels(d$race)
   p  <- vapply(lv, function(l) mean(rr_y01(d)[d$race == l]), numeric(1))
@@ -132,7 +137,7 @@ test_that("Obs_RR is the crude RISK ratio with a Katz interval (never the crude 
 
 test_that("with ONE predictor the model RR == the crude Obs_RR exactly", {
   d <- rr_data()
-  t <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", empirical = TRUE,
+  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio", empirical = TRUE,
                                 cleannames = FALSE))
   # rows 2..4 are the race levels; row 1 is the Constant (a model intercept the crude column has no
   # counterpart for, hence NA there).
@@ -143,7 +148,7 @@ test_that("with ONE predictor the model RR == the crude Obs_RR exactly", {
 
 test_that("the footer reports n + Wald-vs-null only (no AIC/BIC/McFadden/dispersion)", {
   d  <- rr_data()
-  t  <- suppressMessages(tab_reg(d, "married", "race", family = "poisson"))
+  t  <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio"))
   tt <- get_test(t)
   expect_true(all(c("n", "wald_null") %in% tt$test))
   # a quasi-likelihood has no AIC/BIC/McFadden; binary Pearson dispersion (`phi`, z15) is just
@@ -166,11 +171,11 @@ test_that("the footer reports n + Wald-vs-null only (no AIC/BIC/McFadden/dispers
 test_that("method='profile' is refused for a modified Poisson and degrades to the robust Wald", {
   d <- rr_data()
   # it SAYS so (a profile likelihood on a deliberately misspecified quasi-likelihood is meaningless)...
-  expect_message(tab_reg(d, "married", "race", family = "poisson", ci_method = "profile"),
+  expect_message(tab_reg(d, "married", "race", family = "binomial", link = "ratio", ci_method = "profile"),
                  "quasi-likelihood")
   # ...and the interval it returns is exactly the robust Wald one.
-  tp <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", ci_method = "profile"))
-  tw <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", ci_method = "wald"))
+  tp <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio", ci_method = "profile"))
+  tw <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio", ci_method = "wald"))
   expect_equal(get_ci_inf(tp$Model_RR), get_ci_inf(tw$Model_RR), tolerance = 1e-12)
   expect_equal(get_ci_sup(tp$Model_RR), get_ci_sup(tw$Model_RR), tolerance = 1e-12)
 })
@@ -178,8 +183,8 @@ test_that("method='profile' is refused for a modified Poisson and degrades to th
 test_that("measure = log colours the log-RR coefficient on the log scale (is_logcoef)", {
   d <- rr_data()
   # `measure = "log"` logs the family's DEFAULT estimand (a binomial's odds ratio); `log_risk` pins
-  # the modified-Poisson fit, which is what `family = "poisson", exponentiate = FALSE` used to mean.
-  t <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", measure = "log_risk",
+  # the modified-Poisson fit, which is what `family = "binomial", link = "ratio", exponentiate = FALSE` used to mean.
+  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio", measure = "log_risk",
                                 empirical = TRUE, cleannames = FALSE))
   cf <- t[[grep("^Model", names(t), value = TRUE)[1]]]
   expect_equal(get_model_family(cf), "rr")
@@ -189,7 +194,7 @@ test_that("measure = log colours the log-RR coefficient on the log scale (is_log
   # the crude twin is the LOGGED risk ratio, matching the model's link scale
   expect_true("Obs_log(RR)" %in% names(t))
   expect_equal(get_diff(t[["Obs_log(RR)"]])[3:4],
-               log(est_of(suppressMessages(tab_reg(d, "married", "race", family = "poisson",
+               log(est_of(suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio",
                                                    empirical = TRUE, cleannames = FALSE))$Obs_RR))[3:4],
                tolerance = 1e-10)
 })
@@ -205,9 +210,9 @@ test_that("a real COUNT poisson keeps its IRR, its dispersion row and its over-d
   expect_equal(get_model_family(t$Model_IRR), "poisson")
 })
 
-# ---- (2) effect = "marginal", measure = "ratio": the marginal risk ratio --------------------------------------------
+# ---- (2) measure = "ratio": the MARGINAL risk ratio ----------------------------------------------
 
-test_that("ame_ratio == marginaleffects' lnratioavg contrast, exponentiated", {
+test_that("a marginal ratio == marginaleffects' lnratioavg contrast, exponentiated", {
   skip_if_not_installed("marginaleffects")
   d <- rr_data()
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", effect = "marginal", measure = "ratio",
@@ -224,7 +229,7 @@ test_that("ame_ratio == marginaleffects' lnratioavg contrast, exponentiated", {
   expect_equal(unname(get_ci_inf(t[[nm]])[3:4]), unname(exp(r$conf.low)), tolerance = 1e-7)
 })
 
-test_that("the ame_ratio cell is coherent: adjusted%(ref) * RR == adjusted%(level)", {
+test_that("the marginal-ratio cell is coherent: adjusted%(ref) * RR == adjusted%(level)", {
   skip_if_not_installed("marginaleffects")
   d <- rr_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "inc3"), family = "binomial",
@@ -240,7 +245,7 @@ test_that("the ame_ratio cell is coherent: adjusted%(ref) * RR == adjusted%(leve
   }
 })
 
-test_that("ame_ratio: label parsing survives a level containing ' - ' and ')'", {
+test_that("a marginal ratio: label parsing survives a level containing ' - ' and ')'", {
   skip_if_not_installed("marginaleffects")
   d <- rr_data()
   # the Phase 14r regression class, re-armed for the new "ln(mean(L) / mean(R))" prefix/suffix
@@ -251,7 +256,7 @@ test_that("ame_ratio: label parsing survives a level containing ' - ' and ')'", 
   expect_false(any(is.na(est_of(t[[nm]])[2:3])))   # both levels keyed to the skeleton
 })
 
-test_that("ame_ratio: numeric predictors work and the crude twin is the Katz Obs_RR", {
+test_that("a marginal ratio: numeric predictors work and the crude twin is the Katz Obs_RR", {
   skip_if_not_installed("marginaleffects")
   d <- rr_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "tvhours"), family = "binomial",
@@ -290,7 +295,7 @@ test_that("a marginal ratio colours as a RATIO (its stored scale, not the contra
   expect_equal(get_scale(t[[nm]]), "pct_ratio")
 })
 
-test_that("ame_ratio: the legend names RR, not OR, on both the model and the crude column", {
+test_that("a marginal ratio: the legend names RR, not OR, on both the model and the crude column", {
   skip_if_not_installed("marginaleffects")
   d  <- rr_data()
   t  <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", effect = "marginal", measure = "ratio",
@@ -304,7 +309,7 @@ test_that("ame_ratio: the legend names RR, not OR, on both the model and the cru
   expect_true(is.na(legend_reg_eff_word(m[["n"]], md)))
 })
 
-test_that("ame_ratio: with ONE predictor the marginal RR == the crude RR", {
+test_that("a marginal ratio: with ONE predictor the marginal RR == the crude RR", {
   skip_if_not_installed("marginaleffects")
   d <- rr_data()
   # a saturated single-predictor model reproduces the observed rates, so g-computation returns the
@@ -315,10 +320,10 @@ test_that("ame_ratio: with ONE predictor the marginal RR == the crude RR", {
   expect_equal(est_of(t[[nm]])[3:4], est_of(t$Obs_RR)[3:4], tolerance = 1e-9)
 })
 
-test_that("effect='ame' is byte-unchanged by the ame_ratio addition", {
+test_that("a marginal risk DIFFERENCE is untouched by the marginal ratio beside it", {
   skip_if_not_installed("marginaleffects")
   d <- rr_data()
-  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", effect = "marginal",
+  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", effect = "marginal", measure = "difference",
                                 empirical = TRUE, cleannames = FALSE))
   nm <- grep("^Model", names(t), value = TRUE)[1]
   # still an additive risk DIFFERENCE with its "{diff} ({pct})" cell and diff colour

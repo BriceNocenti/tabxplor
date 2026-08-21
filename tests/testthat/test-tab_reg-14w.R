@@ -24,7 +24,7 @@ test_that("tab_reg() records reg_meta; a crosstab records none", {
   m  <- tabxplor:::reg_call(t)
   expect_type(m, "list")
   expect_identical(m$family, "binomial")
-  expect_identical(m$effect, "coefficient")
+  expect_identical(m$effect, "conditional")
   expect_false(m$comparison)
   expect_identical(m$outcome, "married")
   expect_identical(unname(m$positive_level), "Married")   # outcome_level default: the FIRST level is modelled
@@ -127,7 +127,7 @@ test_that("a reg legend says 'reference category', never 'Total row' (AME includ
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   leg <- tabxplor:::tab_color_legend(
-    tab_reg(w14_data(), "married", "race", family = "binomial", effect = "marginal",
+    tab_reg(w14_data(), "married", "race", family = "binomial", effect = "marginal", measure = "difference",
             cleannames = FALSE),
     medium = "md", style = "prose")
   expect_true(any(grepl("reference category", leg)))
@@ -154,7 +154,7 @@ test_that("Obs_RR and Model_RR share one PROSE block, which names the closed for
   skip_if_not_installed("broom")
   leg <- tabxplor:::tab_color_legend(
     suppressMessages(tab_reg(gss_cat_data_formatting(), "married", "race", family = "binomial",
-                             measure = "ratio", empirical = TRUE, cleannames = FALSE)),
+                             link = "ratio", empirical = TRUE, cleannames = FALSE)),
     medium = "md", style = "prose")
   rr <- leg[grepl("RR", leg)]
   expect_length(rr, 1L)                                   # ONE block, not one per column

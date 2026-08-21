@@ -1,14 +1,16 @@
-# === Phase 19e (KEY 8b): the estimand surface ======================================================
+# === Phase 22b-xv-1: THE CASCADE ==================================================================
 #
-# `effect` (which contrast) x `measure` (which effect measure) replaced a four-argument product
-# (`family` x `effect` x `at` x `exponentiate`). Everything here is the contract of that move:
+# `family` -> `link` -> `measure` -> `effect`, each "auto" following from the left, over a library
+# that is COMPOSED from four facts per family rather than written row by row. What is under test:
 #
-#   1. the resolver's THREE states (available / not defined / not offered), and that the message of
-#      each names what the outcome DOES offer;
-#   2. BYTE-IDENTITY with the retired spellings -- every one of them had an exact new equivalent, so
-#      no number may move;
-#   3. the two capability gaps 19e closed, checked against hand-fitted models;
-#   4. the retired arguments aborting with their mapping, D25's colour refusal, D6's forwarding.
+#   1. the cascade itself -- what each "auto" resolves to, and the one clause that qualifies it;
+#   2. the composed library's own invariants (a coefficient IS the model's measure; the crude
+#      companion pairs; no two estimands share a header);
+#   3. the four typed refusals, each naming its cure;
+#   4. the two routes to a risk ratio -- `link` (conditional) and `measure` (marginal) -- which are
+#      different estimands, and the capability that only the cascade opens (fit on one scale, report
+#      on another);
+#   5. the retired surface: the `effect` value and the family spelling that now abort.
 
 est_data <- function() {
   d <- forcats::gss_cat[!is.na(forcats::gss_cat$tvhours), ]
@@ -20,118 +22,198 @@ est_data <- function() {
 
 fmtcols <- function(t) names(t)[vapply(t, is_fmt, logical(1))]
 render  <- function(t) lapply(t[fmtcols(t)], format)
+modcol  <- function(t) t[[grep("^Model", names(t), value = TRUE)[[1]]]]
 
 
-# --- 1. the resolver ------------------------------------------------------------------------------
+# --- 1. the cascade -------------------------------------------------------------------------------
 
-test_that("the estimand library resolves every family x contrast, and states its default", {
-  for (fam in names(REG_ESTIMANDS)) {
-    for (eff in REG_EFFECTS_VALUES) {
-      r <- reg_estimand(fam, eff, "auto")
-      expect_true(r$status %in% c("ok", "redundant"), info = paste(fam, eff))
-      expect_true(r$scale %in% EST_SCALE_KEYS)
-      expect_true(nzchar(r$word))
-      expect_true(r$builder %in% c("coef", "ame", "vsrest"))
-    }
+test_that("the default call is the family's own link, measure and coefficient", {
+  want <- list(gaussian    = c("difference",  "difference", "gaussian",    "diff"),
+               binomial    = c("odds_ratio",  "odds_ratio", "binomial",    "OR"),
+               poisson     = c("ratio",       "ratio",      "poisson",     "IRR"),
+               multinomial = c("odds_ratio",  "odds_ratio", "multinomial", "OR"),
+               ordinal     = c("odds_ratio",  "odds_ratio", "ordinal",     "cumOR"))
+  for (fam in names(want)) {
+    e <- reg_estimand(fam)
+    expect_identical(c(e$link, e$measure, e$fit, reg_word(e)), want[[fam]], info = fam)
+    expect_identical(e$effect, "conditional", info = fam)
   }
 })
 
-# The set reg_mark_redundant() derives -- pinned here rather than at load, since the derivation is
-# the point: a marginal contrast on a COLLAPSIBLE link, targeting the link's own measure, IS the
-# coefficient. `at_reference` never qualifies (its adjusted prediction is the reference profile's),
-# and neither does an odds ratio.
-test_that("exactly the collapsible marginal cells are refused as the coefficient itself", {
-  red <- unlist(lapply(names(REG_ESTIMANDS), function(f)
-    vapply(Filter(function(r) identical(r$status, "redundant"), REG_ESTIMANDS[[f]]$rows),
-           function(r) paste(f, r$effect, r$measure), character(1))))
-  expect_setequal(red, c("gaussian marginal difference", "poisson marginal ratio",
-                         "quasipoisson marginal ratio"))
-  # and each says why, and names the one right call
-  expect_error(reg_estimand_abort(reg_estimand("gaussian", "marginal", "difference")),
-               "identity link is collapsible")
-  expect_error(reg_estimand_abort(reg_estimand("poisson", "marginal", "ratio")),
-               'effect = "coefficient"', fixed = TRUE)
+test_that("`effect = \"auto\"` takes the coefficient when the measure IS the model's, else the predictions", {
+  # measure == link -> read it off the coefficients
+  expect_identical(reg_estimand("binomial", measure = "odds_ratio")$effect, "conditional")
+  expect_identical(reg_estimand("binomial", link = "ratio", measure = "ratio")$effect, "conditional")
+  # measure != link -> from the model's predictions, sample-averaged
+  expect_identical(reg_estimand("binomial", measure = "ratio")$effect,      "marginal")
+  expect_identical(reg_estimand("binomial", measure = "difference")$effect, "marginal")
+  expect_identical(reg_estimand("multinomial", measure = "difference")$effect, "marginal")
 })
 
-# --- 1b. the header vocabulary --------------------------------------------------------------------
-# ONE NAME PER QUANTITY. Two properties carry the whole rule, so they are asserted over the FULL grid
-# rather than on samples: no two estimands share a header, and no estimand is named two ways.
+test_that("`measure = \"auto\"` follows the link -- except that it never PREDICTS an odds ratio", {
+  # follow from the left, on both prediction routes
+  expect_identical(reg_estimand("poisson",  effect = "marginal")$measure,     "ratio")
+  expect_identical(reg_estimand("gaussian", effect = "marginal")$measure,     "difference")
+  expect_identical(reg_estimand("gaussian", effect = "at_reference")$measure, "difference")
+  expect_identical(reg_estimand("binomial", link = "ratio", effect = "marginal")$measure, "ratio")
+  # ... and the one clause: a non-collapsible link falls back to the LEVEL's own measure, on BOTH
+  # prediction routes. A marginal odds ratio is a specialist quantity: asked for by name, never auto.
+  for (fam in c("binomial", "multinomial", "ordinal"))
+    for (eff in c("marginal", "at_reference"))
+      expect_identical(reg_estimand(fam, effect = eff)$measure, "ratio", info = paste(fam, eff))
+  # the clause reads REG_WORDS' declared flag, so it is the same fact the adjustment caveat reads
+  expect_true(reg_word_noncollapsible("OR"))
+  expect_false(reg_word_noncollapsible("RR"))
+})
+
+test_that("`link` takes `measure`'s own words, plus the glm spellings, silently", {
+  expect_identical(reg_link_key("ratio"),      "ratio")
+  expect_identical(reg_link_key("log"),        "ratio")        # the LOG LINK, not "un-exponentiated"
+  expect_identical(reg_link_key("logit"),      "odds_ratio")
+  expect_identical(reg_link_key("identity"),   "difference")
+  expect_identical(reg_link_key("RR"),         "ratio")        # the acronyms work here too
+  expect_identical(reg_link_key(NULL),         "auto")
+  expect_null(reg_link_key("nonsense"))
+  expect_setequal(REG_LINKS_VALUES, c("auto", "odds_ratio", "ratio", "difference"))
+})
+
+
+# --- 2. the composed library ----------------------------------------------------------------------
+
+test_that("every composed row is buildable, and a coefficient row IS the model's own measure", {
+  for (fam in names(REG_ESTIMANDS)) for (r in REG_ESTIMANDS[[fam]]$rows) {
+    info <- paste(fam, r$link, r$effect, r$measure)
+    expect_identical(r$status, "ok",            info = info)
+    expect_true(r$scale %in% EST_SCALE_KEYS,    info = info)
+    expect_true(r$word  %in% names(REG_WORDS),  info = info)
+    expect_true(r$builder %in% REG_BUILDERS,    info = info)
+    expect_true(r$fit %in% names(REG_FAMILIES), info = info)
+    expect_true(r$link %in% names(REG_FAMILIES[[fam]]$fits), info = info)
+    expect_identical(unname(r$fit), unname(REG_FAMILIES[[fam]]$fits[[r$link]]), info = info)
+    if (identical(r$effect, "conditional"))
+      expect_identical(r$base_measure, r$link, info = info)
+  }
+})
+
+# The refusal mechanism 22b-xv-1 DELETED: a marginal contrast on a collapsible link targeting the
+# link's own measure used to be refused as "the coefficient under another name". It builds now --
+# and section 4 shows the two agree on an additive model and diverge under a non-linear shape.
+test_that("no cell is refused as redundant any more", {
+  for (fam in names(REG_ESTIMANDS)) for (eff in REG_CONTRAST_VALUES) {
+    r <- reg_estimand(fam, effect = eff)
+    expect_false(identical(r$status, "redundant"), info = paste(fam, eff))
+  }
+  expect_identical(reg_estimand("gaussian", measure = "difference", effect = "marginal")$status, "ok")
+  expect_identical(reg_estimand("poisson",  measure = "ratio",      effect = "marginal")$status, "ok")
+})
 
 test_that("every buildable estimand has a distinct, composed header word", {
   seen <- list()
   for (fam in setdiff(names(REG_ESTIMANDS), "quasipoisson")) {
-    for (eff in REG_EFFECTS_VALUES) for (m in setdiff(REG_MEASURES_VALUES, "auto")) {
-      r <- reg_estimand(fam, eff, m)
-      if (!identical(r$status, "ok")) next
-      w <- reg_word(r)
-      # the word is COMPOSED: the base acronym is declared, the marker and the log wrapper are not
-      expect_true(r$word %in% names(REG_WORDS), info = paste(fam, eff, m))
-      expect_identical(reg_word_base(w), r$word, info = paste(fam, eff, m))
-      expect_true(nzchar(reg_word_long(r)), info = paste(fam, eff, m))
-      # ... and it identifies the estimand: one word never names two (effect, measure) pairs
-      k <- paste(fam, w)
-      if (!is.null(seen[[k]])) expect_identical(seen[[k]], c(eff, m), info = k)
-      seen[[k]] <- c(eff, m)
-    }
+    for (lk in names(REG_FAMILIES[[fam]]$fits))
+      for (eff in REG_CONTRAST_VALUES) for (m in setdiff(REG_MEASURES_VALUES, "auto")) {
+        r <- reg_estimand(fam, link = lk, measure = m, effect = eff)
+        if (!identical(r$status, "ok")) next
+        w <- reg_word(r)
+        # the word is COMPOSED: the base acronym is declared, the marker and the log wrapper are not
+        expect_identical(reg_word_base(w), r$word, info = paste(fam, lk, eff, m))
+        expect_true(nzchar(reg_word_long(r)), info = paste(fam, lk, eff, m))
+        # ... and it identifies the estimand: one word never names two (effect, measure) pairs
+        k <- paste(fam, w)
+        if (!is.null(seen[[k]])) expect_identical(seen[[k]], c(eff, r$base_measure), info = k)
+        seen[[k]] <- c(eff, r$base_measure)
+      }
   }
 })
 
 test_that("the marker rides the measure, and the log wraps the whole token", {
-  w <- function(...) reg_word(reg_estimand(...))
-  expect_identical(w("binomial", "coefficient",  "odds_ratio"), "OR")
+  w <- function(fam, eff, m) reg_word(reg_estimand(fam, measure = m, effect = eff))
+  expect_identical(w("binomial", "conditional",  "odds_ratio"), "OR")
   expect_identical(w("binomial", "marginal",     "ratio"),      "mRR")
   expect_identical(w("binomial", "at_reference", "difference"), "refRD")
-  expect_identical(w("binomial", "coefficient",  "log"),        "log(OR)")
-  expect_identical(w("ordinal",  "coefficient",  "odds_ratio"), "cumOR")   # cumulative, and it says so
-  expect_identical(w("gaussian", "coefficient",  "difference"), "diff")    # never a bare greek letter
+  expect_identical(w("binomial", "conditional",  "log"),        "log(OR)")
+  expect_identical(w("ordinal",  "conditional",  "odds_ratio"), "cumOR")   # cumulative, and it says so
+  expect_identical(w("gaussian", "conditional",  "difference"), "diff")    # never a bare greek letter
   expect_identical(w("poisson",  "at_reference", "ratio"),      "refIRR")  # ONE ratio word per family
-  # the log wraps the MARKED token ("the log of the at-reference odds ratio")
-  expect_identical(w("multinomial", "at_reference", "log"), "log(refOR)")
+  # the log wraps the MARKED token; `log_odds` pins the odds base auto would not reach at a profile
+  expect_identical(w("multinomial", "at_reference", "log_odds"), "log(refOR)")
   # the expansion is one declared string per acronym, wrapped the way each form is spoken
-  expect_identical(reg_word_long(reg_estimand("binomial", "marginal", "ratio")),
+  expect_identical(reg_word_long(reg_estimand("binomial", measure = "ratio", effect = "marginal")),
                    "marginal risk ratio")
-  expect_identical(reg_word_long(reg_estimand("binomial", "coefficient", "log")), "log odds ratio")
+  expect_identical(reg_word_long(reg_estimand("binomial", measure = "log", effect = "conditional")),
+                   "log odds ratio")
 })
 
 test_that("the colour legend names the measure, never the contrast (one block per comparison)", {
   # ⚠ load-bearing: legend_group_by_body() groups by the rendered sentence, so a crude column reading
   # "RR" beside a model column reading "mRR" would split the block the crude/adjusted merge produces.
-  for (eff in REG_EFFECTS_VALUES) {
-    r <- reg_estimand("binomial", eff, "ratio")
+  # ⚠ a CONDITIONAL risk ratio is the modified Poisson, i.e. `link`'s: on the logit fit the same
+  # measure is only reachable from the predictions, which is the cascade's whole point.
+  expect_identical(reg_legend_word(reg_estimand("binomial", link = "ratio", measure = "ratio")), "RR")
+  for (eff in c("marginal", "at_reference")) {
+    r <- reg_estimand("binomial", measure = "ratio", effect = eff)
     expect_identical(reg_legend_word(r), "RR", info = eff)
   }
-  expect_identical(reg_legend_word(reg_estimand("ordinal", "coefficient", "odds_ratio")), "cumOR")
+  expect_identical(reg_legend_word(reg_estimand("ordinal", measure = "odds_ratio")), "cumOR")
 })
 
 test_that("the crude column names the measure alone, from its OWN shape", {
   # it is a univariable effect: no contrast marker, and never the model's word when the two differ
-  cw <- function(fam, eff, m) {
-    e <- reg_estimand(fam, eff, m)
-    k <- if (identical(e$crude_fam, "auto")) fam else e$crude_fam
+  cw <- function(fam, eff, m, ...) {
+    e <- reg_estimand(fam, measure = m, effect = eff, ...)
+    k <- if (identical(e$crude_fam, "auto")) reg_crude_key(e$fit) else e$crude_fam
     reg_crude_col_name(reg_crude_shape(k, e))
   }
   expect_identical(cw("binomial", "marginal",     "ratio"),      "Obs_RR")
   expect_identical(cw("binomial", "at_reference", "difference"), "Obs_RD")
-  expect_identical(cw("binomial", "coefficient",  "log"),        "Obs_log(OR)")
+  expect_identical(cw("binomial", "conditional",  "log"),        "Obs_log(OR)")
   expect_identical(cw("gaussian", "marginal",     "difference"), "Obs_diff")
   # a poisson AME is additive, and so is its crude companion: the observed mean difference
   expect_identical(cw("poisson",  "marginal",     "difference"), "Obs_diff")
+  # a NON-default link keeps the pairing: the crude twin follows the REPORTED measure, not the fit
+  expect_identical(cw("binomial", "conditional",  "ratio", link = "ratio"),      "Obs_RR")
+  expect_identical(cw("binomial", "marginal",     "difference", link = "ratio"), "Obs_RD")
 })
 
 
-test_that("the three states are distinct, and each says what IS offered", {
-  # available
-  expect_identical(reg_estimand("binomial", "coefficient", "odds_ratio")$status, "ok")
-  # not defined -- true whatever anyone implements
-  imp <- reg_estimand("gaussian", "coefficient", "odds_ratio")
+# --- 3. the four refusals, each naming its cure ---------------------------------------------------
+
+test_that("a measure the LEVEL cannot carry is refused as not defined", {
+  imp <- reg_estimand("gaussian", measure = "odds_ratio", effect = "conditional")
   expect_identical(imp$status, "impossible")
   expect_match(imp$why(), "odds")
-  # not offered -- tabxplor does not build it (yet)
-  expect_identical(reg_estimand("ordinal", "coefficient", "difference")$status, "not_offered")
-  # and the enumerated message is generated from the table
-  lines <- reg_estimand_offer_lines("binomial", "coefficient")
-  expect_true(any(grepl("odds_ratio", lines)))
-  expect_true(any(grepl("reg_measures", lines)))
+  expect_match(reg_estimand("poisson", measure = "odds_ratio")$why(), "count")
+  expect_error(reg_estimand_abort(imp), "not defined")
+})
+
+test_that("a link the family cannot fit is refused, naming the ones it can", {
+  r <- reg_estimand("multinomial", link = "difference")
+  expect_identical(r$status, "no_link")
+  expect_error(reg_estimand_abort(r), "fits no")
+  expect_error(reg_estimand_abort(r), 'link = "odds_ratio"', fixed = TRUE)
+})
+
+test_that("a coefficient that is not the model's measure names its TWO cures", {
+  r <- reg_estimand("binomial", measure = "difference", effect = "conditional")
+  expect_identical(r$status, "no_coefficient")
+  expect_error(reg_estimand_abort(r), "cannot be read off its coefficients")
+  expect_error(reg_estimand_abort(r), 'link = "difference"', fixed = TRUE)
+  # where the family fits no such link, the predictions are the only route, and it says so
+  expect_error(reg_estimand_abort(reg_estimand("multinomial", measure = "difference",
+                                               effect = "conditional")),
+               "fits no")
+})
+
+test_that("a PREDICTED odds ratio needs a percentage and its complement", {
+  expect_identical(reg_estimand("binomial", measure = "odds_ratio", effect = "marginal")$status, "ok")
+  for (fam in c("multinomial", "ordinal")) {
+    r <- reg_estimand(fam, measure = "odds_ratio", effect = "marginal")
+    expect_identical(r$status, "not_offered", info = fam)
+    expect_match(r$why(), "complement", info = fam)
+  }
+  # the vs-rest builder IS the one answer a 3+ category outcome has to "versus what?"
+  expect_identical(reg_estimand("multinomial", measure = "odds_ratio",
+                                effect = "at_reference")$builder, "vsrest")
 })
 
 test_that("the measure aliases work both ways and `log` pins its base", {
@@ -139,40 +221,62 @@ test_that("the measure aliases work both ways and `log` pins its base", {
   expect_identical(reg_measure_key("IRR")$measure, "ratio")
   expect_identical(reg_measure_key("RD")$measure,  "difference")
   expect_null(reg_measure_key("nonsense"))
-  # bare "log" logs the family's DEFAULT estimand; log_risk pins the modified-Poisson fit
-  expect_identical(reg_estimand("binomial", "coefficient", "log")$fit,      "binomial")
-  expect_identical(reg_estimand("binomial", "coefficient", "log_risk")$fit, "rr")
+  # bare "log" logs whatever the cascade would report; log_risk pins the risk-ratio base
+  expect_identical(reg_estimand("binomial", measure = "log")$word,      "OR")
+  expect_identical(reg_estimand("binomial", measure = "log_risk")$word, "RR")
+  expect_identical(reg_estimand("binomial", link = "ratio", measure = "log")$fit, "rr")
   # a log of an additive coefficient is not a thing, and says so rather than silently answering
-  expect_identical(reg_estimand("gaussian", "coefficient", "log")$status, "impossible")
+  expect_identical(reg_estimand("gaussian", measure = "log", effect = "conditional")$status,
+                   "impossible")
 })
 
-test_that("reg_measures() lists an outcome's estimands with a status for each", {
+test_that("reg_measures() lists an outcome's estimands at ONE link, with a status for each", {
   skip_if_not_installed("broom")
   m <- suppressMessages(reg_measures(est_data(), "married"))
   expect_true(all(c("effect", "measure", "status", "header") %in% names(m)))
-  expect_setequal(unique(m$status), c("available", "not offered"))
-  expect_identical(m$header[m$effect == "coefficient" & m$measure == "odds_ratio"], "Model_OR")
-  # a continuous outcome is where the THIRD state shows: an odds ratio of a mean is not a thing
+  expect_identical(m$header[m$effect == "conditional" & m$measure == "odds_ratio"], "Model_OR")
+  # the SAME grid at another model: the measure that had no coefficient now has one
+  r <- suppressMessages(reg_measures(est_data(), "married", link = "ratio"))
+  expect_identical(r$header[r$effect == "conditional" & r$measure == "ratio"], "Model_RR")
+  expect_identical(m$status[m$effect == "conditional" & m$measure == "ratio"], "not offered")
+  # a continuous outcome is where "not defined" shows: an odds ratio of a mean is not a thing
   g <- suppressMessages(reg_measures(est_data(), "tvhours"))
-  expect_identical(g$status[g$effect == "coefficient" & g$measure == "odds_ratio"], "not defined")
-  expect_match(g$note[g$effect == "coefficient" & g$measure == "odds_ratio"], "odds")
+  expect_identical(g$status[g$effect == "conditional" & g$measure == "odds_ratio"], "not defined")
+  expect_match(g$note[g$effect == "conditional" & g$measure == "odds_ratio"], "odds")
   # the generated ?tab_reg section reads the same table
-  expect_true(any(grepl("Model_OR", reg_measures_rd())))
+  expect_true(any(grepl("link = ", reg_measures_rd(), fixed = TRUE)))
 })
 
 
-# --- 2. byte-identity with the retired spellings --------------------------------------------------
+# --- 4. the two routes to a ratio, and what only the cascade opens --------------------------------
 
-test_that("measure = 'ratio' on a binary outcome == the old family = 'poisson' route", {
-  skip_if_not_installed("broom")
-  skip_if_not_installed("survey")
+test_that("`link` names the model and `measure` the report: two different risk ratios", {
+  skip_if_not_installed("broom"); skip_if_not_installed("survey")
   d <- est_data()
-  a <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
-                                measure = "ratio", empirical = TRUE, cleannames = FALSE))
-  b <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "poisson",
-                                empirical = TRUE, cleannames = FALSE))
-  expect_identical(names(a), names(b))
-  expect_identical(render(a), render(b))
+  cond <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
+                                   link = "ratio", empirical = TRUE, cleannames = FALSE))
+  marg <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
+                                   measure = "ratio", empirical = TRUE, cleannames = FALSE))
+  expect_true("Model_RR"  %in% names(cond))     # the modified Poisson's own coefficient
+  expect_true("Model_mRR" %in% names(marg))     # g-computed from the logistic fit
+  expect_identical(reg_formulas(cond)$fit, "rr")
+  expect_identical(reg_formulas(marg)$fit, "binomial")
+  # both are risk ratios, so both sit on the same scale and pair with the same crude column
+  expect_identical(get_scale(modcol(cond)), "pct_ratio")
+  expect_identical(get_scale(modcol(marg)), "pct_ratio")
+  expect_true(all(c("Obs_RR") %in% names(cond)) && "Obs_RR" %in% names(marg))
+})
+
+test_that("a prediction route may run on a NON-default fit -- link and measure are separate axes", {
+  skip_if_not_installed("broom"); skip_if_not_installed("survey")
+  d <- est_data()
+  t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
+                                link = "ratio", measure = "difference", cleannames = FALSE))
+  expect_true("Model_mRD" %in% names(t))
+  expect_identical(get_scale(modcol(t)), "points")
+  expect_identical(reg_formulas(t)$fit, "rr")        # the model is the modified Poisson...
+  expect_identical(reg_call(t)$link, "ratio")        # ...and the table remembers it
+  expect_identical(reg_call(t)$measure, "difference")
 })
 
 test_that("measure = 'log' == the old exponentiate = FALSE", {
@@ -180,40 +284,21 @@ test_that("measure = 'log' == the old exponentiate = FALSE", {
   d <- est_data()
   t <- suppressMessages(tab_reg(d, "married", c("race"), family = "binomial", measure = "log",
                                 cleannames = FALSE))
-  cf <- t[[grep("^Model", names(t), value = TRUE)[1]]]
+  cf <- modcol(t)
   expect_identical(get_scale(cf), "log_coef")
   # the same numbers as the exponentiated column, logged
-  e <- suppressMessages(tab_reg(d, "married", c("race"), family = "binomial", cleannames = FALSE))
-  ec <- e[[grep("^Model", names(e), value = TRUE)[1]]]
+  e  <- suppressMessages(tab_reg(d, "married", c("race"), family = "binomial", cleannames = FALSE))
+  ec <- modcol(e)
   keep <- !is.na(get_or(ec)) & get_or(ec) > 0
   expect_equal(get_diff(cf)[keep], log(get_or(ec)[keep]), tolerance = 1e-10)
 })
 
-test_that("effect = 'marginal' + measure = 'ratio' is the old ame_ratio, exponentiated lnratioavg", {
-  skip_if_not_installed("marginaleffects")
-  d <- est_data()
-  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial",
-                                effect = "marginal", measure = "ratio", cleannames = FALSE))
-  col <- t[[grep("^Model", names(t), value = TRUE)[1]]]
-  # a RISK ratio is a ratio of percentages, so it sits on `pct_ratio` and prints "x2" like every
-  # other ratio -- `odds_ratio` and its "1/x" notation are the odds ratio's alone.
-  expect_identical(get_scale(col), "pct_ratio")
-  g  <- stats::glm(married ~ race, data = d, family = stats::binomial())
-  m  <- marginaleffects::avg_comparisons(g, variables = "race", comparison = "lnratioavg")
-  i  <- which(as.character(t$var) == "race" & !is_refrow(col))
-  expect_equal(sort(tabxplor:::fmt_est_of(col)[i]), sort(exp(m$estimate)), tolerance = 1e-8)
-})
-
-
-# --- 3. the two capability gaps 19e closed --------------------------------------------------------
-
-test_that("measure = 'difference' on a binary outcome is the identity-link risk difference", {
-  skip_if_not_installed("broom")
-  skip_if_not_installed("survey")
+test_that("link = 'difference' on a binary outcome is the identity-link risk difference", {
+  skip_if_not_installed("broom"); skip_if_not_installed("survey")
   d  <- est_data()
-  t  <- suppressMessages(tab_reg(d, "married", "race", family = "binomial",
-                                 measure = "difference", empirical = TRUE, cleannames = FALSE))
-  mc <- t[[grep("^Model", names(t), value = TRUE)[1]]]
+  t  <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "difference",
+                                 empirical = TRUE, cleannames = FALSE))
+  mc <- modcol(t)
   expect_identical(get_scale(mc), "points")            # percentage points, not a ratio
   expect_true("Model_RD" %in% names(t))
   expect_true("Obs_RD" %in% names(t))                  # the crude twin is the crude risk difference
@@ -225,13 +310,12 @@ test_that("measure = 'difference' on a binary outcome is the identity-link risk 
   expect_equal(sort(get_diff(mc)[i]), sort(unname(stats::coef(g))[-1]), tolerance = 1e-6)
 })
 
-test_that("measure = 'ratio' on a continuous outcome is the ratio of adjusted means", {
-  skip_if_not_installed("broom")
-  skip_if_not_installed("survey")
+test_that("link = 'ratio' on a continuous outcome is the ratio of adjusted means", {
+  skip_if_not_installed("broom"); skip_if_not_installed("survey")
   d  <- est_data()
-  t  <- suppressMessages(tab_reg(d, "tvhours", "race", family = "gaussian",
-                                 measure = "ratio", empirical = TRUE, cleannames = FALSE))
-  mc <- t[[grep("^Model", names(t), value = TRUE)[1]]]
+  t  <- suppressMessages(tab_reg(d, "tvhours", "race", family = "gaussian", link = "ratio",
+                                 empirical = TRUE, cleannames = FALSE))
+  mc <- modcol(t)
   expect_identical(get_scale(mc), "mean_ratio")        # the ratio field, not `or`
   expect_true("Obs_RoM" %in% names(t))
   dd <- stats::na.omit(d[, c("tvhours", "race")])
@@ -240,45 +324,89 @@ test_that("measure = 'ratio' on a continuous outcome is the ratio of adjusted me
   expect_equal(sort(get_ratio(mc)[i]), sort(exp(unname(stats::coef(g)))[-1]), tolerance = 1e-6)
   # a negative outcome has no ratio of means, and says so rather than fitting nonsense
   d2 <- d; d2$neg <- d2$tvhours - 5
-  expect_error(suppressMessages(tab_reg(d2, "neg", "race", family = "gaussian", measure = "ratio")),
+  expect_error(suppressMessages(tab_reg(d2, "neg", "race", family = "gaussian", link = "ratio")),
                "non-negative")
 })
 
-test_that("a count outcome's ratio is the coefficient, at the reference profile or refused", {
+test_that("effect = 'marginal' + measure = 'ratio' is the exponentiated lnratioavg", {
   skip_if_not_installed("marginaleffects")
   d <- est_data()
-  # the log link is collapsible, so the MARGINAL rate ratio would be the IRR under a second name
-  expect_error(tab_reg(d, "tvhours", "race", family = "poisson", effect = "marginal",
-                       measure = "ratio"),
-               "returns the coefficient itself")
-  # at the reference profile it is a different table (its own adjusted prediction), so it builds
-  t <- suppressMessages(suppressWarnings(
-    tab_reg(d, "tvhours", "race", family = "poisson", effect = "at_reference",
-            measure = "ratio", cleannames = FALSE)))
-  mc <- t[[grep("^Model", names(t), value = TRUE)[1]]]
-  expect_identical(get_scale(mc), "mean_ratio")
+  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial",
+                                effect = "marginal", measure = "ratio", cleannames = FALSE))
+  col <- modcol(t)
+  # a RISK ratio is a ratio of percentages, so it sits on `pct_ratio` and prints "x2" like every
+  # other ratio -- `odds_ratio` and its "1/x" notation are the odds ratio's alone.
+  expect_identical(get_scale(col), "pct_ratio")
+  g  <- stats::glm(married ~ race, data = d, family = stats::binomial())
+  m  <- marginaleffects::avg_comparisons(g, variables = "race", comparison = "lnratioavg")
+  i  <- which(as.character(t$var) == "race" & !is_refrow(col))
+  expect_equal(sort(tabxplor:::fmt_est_of(col)[i]), sort(exp(m$estimate)), tolerance = 1e-8)
+})
+
+# The one estimand the generalised marginal engine ADDS (Karlson & Jann 2023): the odds ratio of the
+# two adjusted predictions, which is the odds-flavoured measure that behaves under adjustment.
+test_that("the MARGINAL odds ratio matches marginaleffects' own lnoravg", {
+  skip_if_not_installed("marginaleffects")
+  d  <- est_data()
+  dd <- stats::na.omit(d[, c("married", "race", "age")])
+  for (fm in c("married ~ race + age", "married ~ race * age")) {
+    g  <- stats::glm(stats::as.formula(fm), data = dd, family = stats::binomial())
+    me <- marginaleffects::avg_comparisons(g, variables = "race", comparison = "lnoravg")
+    gc <- tabxplor:::reg_gcomp_maker(g, dd, NULL, "logit")
+    lv <- levels(dd$race)
+    est <- vapply(lv[-1], function(l) gc("race", l, lv[[1]])$est, numeric(1))
+    se  <- vapply(lv[-1], function(l)
+      tabxplor:::reg_delta_se(gc("race", l, lv[[1]])$G, stats::vcov(g)), numeric(1))
+    expect_equal(sort(unname(est)), sort(me$estimate),  tolerance = 1e-8, info = fm)
+    expect_equal(sort(unname(se)),  sort(me$std.error), tolerance = 1e-6, info = fm)
+  }
+  t <- suppressMessages(tab_reg(dd, "married", c("race", "age"), family = "binomial",
+                                effect = "marginal", measure = "odds_ratio", cleannames = FALSE))
+  expect_true("Model_mOR" %in% names(t))
+  expect_identical(get_scale(modcol(t)), "odds_ratio")
+})
+
+# What the deleted redundancy refusal used to hide, now demonstrable rather than asserted.
+test_that("a linear model's marginal effect IS its coefficient -- until the shape is not linear", {
+  skip_if_not_installed("broom")
+  d <- stats::na.omit(est_data()[, c("tvhours", "race", "age")])
+  co <- suppressMessages(tab_reg(d, "tvhours", c("race", "age"), family = "gaussian",
+                                 cleannames = FALSE))
+  ma <- suppressMessages(tab_reg(d, "tvhours", c("race", "age"), family = "gaussian",
+                                 effect = "marginal", measure = "difference", cleannames = FALSE))
+  expect_equal(get_diff(co$Model_diff), get_diff(ma$Model_mdiff), tolerance = 1e-10)
+  # a non-linear shape breaks the identity: the coefficient is the linear term, the AME the average
+  ci <- suppressMessages(tab_reg(d, "tvhours", c("race", "age"), family = "gaussian",
+                                 shape = c(age = "quadratic"), cleannames = FALSE))
+  mi <- suppressMessages(tab_reg(d, "tvhours", c("race", "age"), family = "gaussian",
+                                 shape = c(age = "quadratic"), effect = "marginal", measure = "difference",
+                                 cleannames = FALSE))
+  age_of <- function(t, nm) get_diff(t[[nm]])[as.character(t$var) == "age"][[1]]
+  expect_false(isTRUE(all.equal(age_of(ci, "Model_diff"), age_of(mi, "Model_mdiff"))))
 })
 
 
-# --- 4. the retired surface, D25 and D6 -----------------------------------------------------------
+# --- 5. the retired surface -----------------------------------------------------------------------
 
-# Phase 20j deleted the retired-name table: a removed argument now aborts as an unknown one (the
-# shared tab_check_dots() guard), a removed `effect` VALUE as an unknown effect value. No silent no-op.
-test_that("a retired estimand argument or effect value aborts (no silent no-op)", {
+test_that("a retired estimand argument, effect value or family spelling aborts (no silent no-op)", {
   d <- est_data()
   expect_error(tab_reg(d, "married", "race", family = "binomial", exponentiate = FALSE),
                "[Uu]nknown argument")
   expect_error(tab_reg(d, "married", "race", family = "binomial", at = "reference"),
                "[Uu]nknown argument")
-  expect_error(tab_reg(d, "married", "race", family = "binomial", estimate_display = "ci"),
-               "[Uu]nknown argument")
   expect_error(tab_reg(d, "married", "race", family = "binomial", effect = "ame"),
                "[Uu]nknown .*effect")
-  expect_error(tab_reg(d, "married", "race", family = "binomial", effect = "ame_ratio"),
-               "[Uu]nknown .*effect")
-  # an unknown measure enumerates the legal ones (measure validation is untouched)
+  # `effect = "coefficient"` named the artefact; the value names the quantity now
+  expect_error(tab_reg(d, "married", "race", family = "binomial", effect = "coefficient"),
+               "conditional")
+  # `family` answers ONE question, and never secretly picks a link
+  expect_error(suppressMessages(tab_reg(d, "married", "race", family = "poisson")),
+               'link = "ratio"', fixed = TRUE)
+  # an unknown measure or link enumerates the legal ones
   expect_error(tab_reg(d, "married", "race", family = "binomial", measure = "nonsense"),
                "odds_ratio")
+  expect_error(tab_reg(d, "married", "race", family = "binomial", link = "nonsense"),
+               "[Uu]nknown .*link")
 })
 
 test_that("D25: a reg colour cannot contradict what the column estimates", {
@@ -309,11 +437,13 @@ test_that("D6: the multi-dependent x model-list recursion forwards every argumen
 test_that("the estimand is stored in the table's recipe, per dependent", {
   skip_if_not_installed("broom")
   d <- est_data()
-  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", measure = "ratio",
+  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio",
                                 cleannames = FALSE))
   rc <- reg_call(t)
+  expect_identical(rc$link,    "ratio")
   expect_identical(rc$measure, "ratio")
-  expect_identical(rc$effect,  "coefficient")
+  expect_identical(rc$effect,  "conditional")
+  expect_identical(unname(rc$links[["married"]]),    "ratio")
   expect_identical(unname(rc$measures[["married"]]), "ratio")
   # ... and the footer sentence is generated from it
   expect_match(reg_model_lines(t)[[1]], "risk ratio|rapports de risque")

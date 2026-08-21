@@ -394,10 +394,10 @@ test_that("trials=TRUE uses the observed max score; measure = log gives the coef
   expect_identical(get_scale(b), "log_coef")
 })
 
-test_that("trials= reaches the rr / rd links too (measure = ratio / difference)", {
+test_that("trials= reaches the rr / rd links too (link = ratio / difference)", {
   skip_if_not_installed("broom")
-  # The regression this guards: `measure = "ratio"` / `"difference"` resolve the fit to the internal
-  # links `rr` / `rd`, which reg_is_grouped_binomial() used to miss (it tested the FIT key against
+  # The regression this guards: `link = "ratio"` / `"difference"` resolve the fit to the internal
+  # keys `rr` / `rd`, which reg_is_grouped_binomial() used to miss (it tested the FIT key against
   # "binomial"), so both dropped `trials` and met the raw 0..q score -- an abort on an estimand
   # reg_measures() reports as available.
   d  <- gb_data()
@@ -409,7 +409,7 @@ test_that("trials= reaches the rr / rd links too (measure = ratio / difference)"
   # rr: the modified Poisson models the success COUNT with log(trials) as offset, so exp(coef) is a
   # PER-ITEM risk ratio (and the intercept a per-item risk, not an expected count).
   rr <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
-                                 measure = "ratio", cleannames = FALSE))[["Model_RR"]]
+                                 link = "ratio", cleannames = FALSE))[["Model_RR"]]
   g_rr <- stats::glm(score ~ race + offset(log(tr)), data = dm, family = stats::quasipoisson("log"))
   # the Constant row is kept in the comparison: exp(intercept) is the per-item risk at the reference
   # profile, and it is the value that proves the offset was applied (without it the intercept would
@@ -424,7 +424,7 @@ test_that("trials= reaches the rr / rd links too (measure = ratio / difference)"
 
   # rd: the identity link takes the two-column response directly.
   rd <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
-                                 measure = "difference", cleannames = FALSE))[["Model_RD"]]
+                                 link = "difference", cleannames = FALSE))[["Model_RD"]]
   g_rd <- stats::glm(cbind(score, fail) ~ race, data = dm, family = stats::binomial("identity"),
                      start = stats::coef(stats::lm(I(score / 10) ~ race, data = dm)))
   # a SUMMED SCORE's additive effect is a difference of mean SCORES, not of per-item probabilities:
@@ -755,6 +755,11 @@ test_that("multinomial + ordinal tab_reg output exports without error", {
 # Parity is checked against marginaleffects run on the SAME model tab_reg fits (binomial: fct_rev to
 # model the positive level; factor predictors fct_drop'd), aligning the AME by the "Level - Reference"
 # contrast label. The composed cell is AME-first ("-8%*** (16%)") with the prediction in parentheses.
+#
+# ⚠ every block below NAMES `measure = "difference"`: since the cascade (22b-xv-1) a bare
+# `effect = "marginal"` reports the level's own measure -- a RATIO on a probability -- because
+# `"auto"` never predicts an odds ratio and never guesses which side of it to fall back to. These
+# assertions are about the ADDITIVE marginal effect, so they ask for it.
 
 test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed cell", {
   skip_if_not_installed("broom")
@@ -762,7 +767,7 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
   d   <- reg_data()
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
-  t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "marginal", multiplier = 1,
+  t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "marginal", measure = "difference", multiplier = 1,
                  cleannames = FALSE)
   col <- t1[["Model_mRD"]]
 
@@ -805,11 +810,17 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
   expect_match(trimws(bs[blk]), "^-[0-9.]+%\\*+ \\([0-9.]+%\\)$")
 })
 
-test_that("a gaussian marginal difference is refused as the coefficient itself", {
-  # The identity link is collapsible, so the AME IS the coefficient -- one quantity, one name.
-  expect_error(tab_reg(reg_data(), "tvhours", c("age", "race"), family = "gaussian",
-                       effect = "marginal"),
-               "returns the coefficient itself")
+test_that("a gaussian marginal difference builds, and IS the coefficient", {
+  skip_if_not_installed("broom")
+  # The identity link is collapsible, so averaging changes nothing -- which used to be a REFUSAL and
+  # is now a demonstrable fact: two routes, two headers, one number.
+  d  <- reg_data()
+  co <- suppressMessages(tab_reg(d, "tvhours", c("age", "race"), family = "gaussian",
+                                 multiplier = 1, cleannames = FALSE))
+  ma <- suppressMessages(tab_reg(d, "tvhours", c("age", "race"), family = "gaussian",
+                                 effect = "marginal", measure = "difference", multiplier = 1,
+                                 cleannames = FALSE))
+  expect_equal(get_diff(co[["Model_diff"]]), get_diff(ma[["Model_mdiff"]]), tolerance = 1e-8)
 })
 
 test_that("the gaussian coefficient matches marginaleffects' AME", {
@@ -845,7 +856,7 @@ test_that("poisson AME is a raw count-change and matches marginaleffects", {
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   col <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson", multiplier = 1,
-                                  effect = "marginal", cleannames = FALSE))[["Model_mdiff"]]
+                                  effect = "marginal", measure = "difference", cleannames = FALSE))[["Model_mdiff"]]
   expect_identical(tabxplor:::fmt_var_kind(col), "coef")
 
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
@@ -862,7 +873,7 @@ test_that("multinomial AME: one column per outcome category, matches marginaleff
   skip_if_not_installed("nnet")
   skip_if_not_installed("marginaleffects")
   d  <- mnl_data()
-  t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", effect = "marginal",
+  t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", effect = "marginal", measure = "difference",
                 cleannames = FALSE, multiplier = 1, ref = c(age = 0))   # per-unit, raw origin
   expect_true(all(c("Ind", "Dem", "Rep") %in% names(t1)))   # every outcome category
 
@@ -886,7 +897,7 @@ test_that("ordinal AME: one column per outcome category, matches marginaleffects
   skip_if_not_installed("MASS")
   skip_if_not_installed("marginaleffects")
   d  <- ord_data()
-  t1 <- suppressWarnings(tab_reg(d, "spectrum", "race", family = "ordinal", effect = "marginal",
+  t1 <- suppressWarnings(tab_reg(d, "spectrum", "race", family = "ordinal", effect = "marginal", measure = "difference",
                                  cleannames = FALSE))
   expect_true(all(c("Rep", "Ind", "Dem") %in% names(t1)))
 
@@ -911,7 +922,7 @@ test_that("weighted binomial AME (svyglm) is population-weighted and matches mar
   # svyglm() warns ("observations with zero weight not used for calculating dispersion"). That is
   # upstream (survey/stats), not tabxplor, and it fires identically on the hand-run oracle below.
   col <- suppressWarnings(tab_reg(d, "married", "race", family = "binomial", wt = "tvhours",
-                                  effect = "marginal", cleannames = FALSE))[["Model_mRD"]]
+                                  effect = "marginal", measure = "difference", cleannames = FALSE))[["Model_mRD"]]
 
   dm <- d |> dplyr::filter(!is.na(married), !is.na(race))
   dm$race    <- forcats::fct_drop(dm$race)
@@ -928,7 +939,7 @@ test_that("weighted binomial AME (svyglm) is population-weighted and matches mar
 test_that("AME tables export through every backend without error", {
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
-  t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial", effect = "marginal")
+  t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial", effect = "marginal", measure = "difference")
   expect_no_error(tab_kable(t1))
   expect_no_error(tab_md(t1))
   skip_if_not_installed("openxlsx2")
@@ -942,11 +953,11 @@ test_that("AME tables export through every backend without error", {
 # first level / mean); MNL coefficient + at="reference": the "j vs rest" OR at that profile. Parity is
 # checked against marginaleffects comparisons()/predictions() at a datagrid built the same way.
 
-test_that("MER-at-reference (binomial): effect/prediction/CI match marginaleffects at the profile", {
+test_that("at the reference profile (binomial): effect/prediction/CI match marginaleffects there", {
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
-  t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "at_reference",
+  t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "at_reference", measure = "difference",
                  multiplier = 1, ref = c(age = 0), cleannames = FALSE)
   col <- t1[["Model_refRD"]]                         # the marker switches m -> ref at the profile
   expect_identical(get_pct_type(col), "row")
@@ -970,11 +981,14 @@ test_that("MER-at-reference (binomial): effect/prediction/CI match marginaleffec
 })
 
 test_that("MNL 'j vs rest' OR at the reference profile matches marginaleffects (comparison='lnor')", {
+  # ⚠ `measure = "odds_ratio"` is NAMED: a 3+ category outcome has to be asked "versus what?" before
+  # a predicted odds ratio means anything, so the cascade never resolves to one on its own.
   skip_if_not_installed("broom")
   skip_if_not_installed("nnet")
   skip_if_not_installed("marginaleffects")
   d  <- mnl_data()
-  t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", effect = "at_reference",
+  t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial",
+                effect = "at_reference", measure = "odds_ratio",
                 cleannames = FALSE, ref = c(age = 0))
   expect_true(all(c("Ind vs rest", "Dem vs rest", "Rep vs rest") %in% names(t1)))
   expect_identical(get_scale(t1[["Dem vs rest"]]), "odds_ratio")
@@ -1016,14 +1030,16 @@ test_that("a removed argument or effect value aborts (no silent no-op)", {
   )
 })
 
-test_that("MER-at-reference exports through every backend without error", {
+test_that("an at-reference table exports through every backend without error", {
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
-  t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial", effect = "at_reference")
+  t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial", effect = "at_reference", measure = "difference")
   expect_no_error(tab_kable(t1))
   expect_no_error(tab_md(t1))
   skip_if_not_installed("nnet")
-  t2 <- tab_reg(mnl_data(), "party3", "race", family = "multinomial", effect = "at_reference")
+  # the vs-rest builder is the one a 3+ category outcome reaches by NAMING the odds ratio
+  t2 <- tab_reg(mnl_data(), "party3", "race", family = "multinomial",
+                effect = "at_reference", measure = "odds_ratio")
   expect_no_error(tab_kable(t2))
   expect_no_error(tab_md(t2))
 })
@@ -1048,7 +1064,7 @@ test_that("per-spec obs: a mixed-effect multi-outcome table keeps `obs` on the c
   d <- reg_2dep_data()
   r <- suppressWarnings(tab_reg(
     d, outcome = c("married", "widowed"), predictors = c("race", "age"),
-    family = "binomial", effect = c(married = "at_reference", widowed = "coefficient"),
+    family = "binomial", effect = c(married = "at_reference", widowed = "conditional"),
     empirical = TRUE, cleannames = FALSE))
   expect_s3_class(r, "tabxplor_tab")   # ONE table (n_outcomes > 1, bracketed columns), not a list
   model_cols <- names(r)[purrr::map_lgl(

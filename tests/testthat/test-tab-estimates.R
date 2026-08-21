@@ -213,7 +213,7 @@ test_that("the plotted estimate IS the number the table stores and prints", {
     xt_o = tab(d, race, party3, pct = "row", display = "{or}", ref = "first", color = "OR", stars = TRUE))
   if (requireNamespace("marginaleffects", quietly = TRUE))
     tabs$ame <- suppressMessages(tab_reg(d, "married", "race", family = "binomial",
-                                         effect = "marginal", empirical = TRUE))
+                                         effect = "marginal", measure = "difference", empirical = TRUE))
   n_checked <- 0L
   for (t in tabs) {
     e <- est(t, observed = "ci")
@@ -242,7 +242,7 @@ test_that("the plotted estimate IS the number the table stores and prints", {
 test_that("the gap band's containment IS the gap test", {
   skip_if_not_installed("survey")
   d <- te_data()
-  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "poisson",
+  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "binomial", link = "ratio",
                                 empirical = TRUE, color = c(TRUE, "adjustment")))
   e <- est(t)
   ok <- is.finite(e$gap_se)
@@ -257,7 +257,7 @@ test_that("the gap band's containment IS the gap test", {
 
 test_that("z17 D2: the gap band needs no colour argument", {
   d <- te_data()
-  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "poisson",
+  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "binomial", link = "ratio",
                                 empirical = TRUE))              # no `color = "adjustment"`
   e <- est(t)
   expect_true(any(is.finite(e$gap_se)))
@@ -295,7 +295,7 @@ test_that("the colours are the table's own slots and hexes", {
 
 test_that("the gap slot comes from whichever channel carries the gap measure", {
   d <- te_data()
-  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "poisson",
+  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "binomial", link = "ratio",
                                 empirical = TRUE, color = c(TRUE, "adjustment")))
   e <- est(t)
   cd <- fmt_channel_codes(t[["Model_RR"]], tabxplor:::tx_plot_colors(NULL)$theme)
@@ -312,7 +312,7 @@ test_that("what = 'level' pairs the observed and adjusted percentages", {
   skip_if_not_installed("marginaleffects")
   d <- te_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "binomial",
-                                effect = "marginal", empirical = TRUE))
+                                effect = "marginal", measure = "difference", empirical = TRUE))
   e <- est(t, what = "level")
   expect_setequal(unique(e$series), c("observed", "modelled"))
   expect_identical(unique(e$kind), "level")

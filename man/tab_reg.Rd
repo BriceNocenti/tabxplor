@@ -11,8 +11,9 @@ tab_reg(
   tab_vars = NULL,
   wt = NULL,
   family = "auto",
-  effect = "coefficient",
+  link = "auto",
   measure = "auto",
+  effect = "auto",
   trials = NULL,
   empirical = FALSE,
   n = NULL,
@@ -92,7 +93,7 @@ tables are stacked into one grouped table sharing the variable / level stub --- 
 Two readings of "does this effect hold in every subgroup?" come with it:
 \code{color = "between_groups"} colours and tests each effect against the first group's, row by row,
 and \code{stats = c(..., "group_interaction")} adds the aggregated test, once per predictor. For an
-interaction between two PREDICTORS of one model, write it in \code{predictors} as \code{a:b} instead.}
+interaction between two PREDICTORS of one model, write it in \code{predictors} as \code{a*b} instead.}
 
 \item{wt}{<\code{\link[tidyr:tidyr_tidy_select]{tidy-select}}> Optional. One weight column. Switches to design-based survey
 estimation (\code{\link[survey:svyglm]{survey::svyglm()}}): the sandwich standard errors are scale-invariant, so raw
@@ -112,63 +113,86 @@ fits --- with the message naming \code{"poisson"} for a genuine count. Set it ex
 \code{outcome}, or a \strong{named} vector keyed by outcome (e.g. \code{c(income = "poisson", satisfied = "binomial")}), sets one family per outcome. Mixed families work only with a character
 \code{predictors}; a \code{predictors} list is single-outcome, hence single-family.
 
-\code{family = "poisson"} on a \strong{binary} outcome is neither a mistake nor a count model: it fits the
-\strong{modified Poisson} (Zou 2004), whose exponentiated coefficient is a \strong{risk ratio}. It is the
-same table as \code{measure = "ratio"}, which names the measure rather than the distribution --- see
-there. It is strictly opt-in: a binary outcome still auto-detects as \code{"binomial"}.
+\code{family} answers \strong{one} question --- what kind of number the outcome is --- and never picks a
+link behind your back. On a binary outcome \code{family = "poisson"} is therefore refused, naming the
+two things it could have meant: \code{link = "ratio"} (the \strong{modified Poisson}, Zou 2004, whose
+coefficient is a \emph{conditional} risk ratio) or \code{measure = "ratio"} (the \emph{marginal} one, from the
+logistic fit).
 
 An unweighted \code{"poisson"} fit auto-scales its standard errors by the square root of the Pearson
 dispersion, so with an \strong{over-dispersed} outcome its intervals and p-values are identical to
 \code{"quasipoisson"}, and it warns to say so (the footer reports the dispersion). At equidispersion
 the scaling is a no-op and the result matches a plain \code{glm(family = poisson)}.}
 
-\item{effect}{\strong{Which contrast} the table shows --- one of the two questions an estimand asks.
-\code{"coefficient"} (default) is the model's own conditional effect ("holding the other predictors
-constant"). \code{"marginal"} is the \strong{average marginal effect}: the model's effect averaged over
-the observed covariate distribution --- a probability-scale, cross-model-comparable summary
-(Mood 2010) for logistic / multinomial / ordinal outcomes, and the expected-count change for
-poisson. Where the link is collapsible the averaging changes nothing --- a linear model's
-marginal effect \emph{is} its coefficient --- so that combination is refused and names the
-coefficient call instead. \code{"at_reference"} evaluates the same quantity \strong{at
-the reference profile} (every other predictor at its reference level or its mean), and for a
-\strong{multinomial} outcome the odds ratio of each category \emph{versus the rest} there. Resolved \strong{per
-outcome} like \code{family} (scalar / vector / named vector).
+\item{link}{\strong{Which measure the model estimates} --- the only argument that changes the model.
+A link \emph{is} a measure (the one a model gives you directly), so it takes \code{measure}'s own words
+and the statistician's vocabulary never surfaces:
+\itemize{
+\item \code{"auto"} (default) --- the family's own: a logistic fit for a binary outcome, a linear one for
+a quantity, a Poisson one for a count.
+\item \code{"odds_ratio"} --- the logit fit (binomial, multinomial, ordinal).
+\item \code{"ratio"} --- the log link: the \strong{modified Poisson} on a binary outcome (Zou 2004, a
+conditional risk ratio), Poisson on a count, and Poisson pseudo-maximum-likelihood on a
+continuous one (a ratio of adjusted means; Santos Silva & Tenreyro 2006).
+\item \code{"difference"} --- the identity link: on a binary outcome the \strong{risk difference}, with robust
+standard errors. That link is unbounded and can fail to converge; the linear probability model
+then takes over, with a message, and the footer says which one ran.
+}
+
+Reach for it when you want the model's \emph{coefficient} to be that measure. To report a measure
+without changing the model, set \code{measure} instead. A link the outcome cannot be fitted on says
+so and names the ones it can; resolved \strong{per outcome} like \code{family}.}
+
+\item{measure}{\strong{Which measure is reported} --- the one argument most readers ever set, and the
+one that never changes the model. \code{"auto"} (default) is the model's own measure: follow from
+the left. The full word is the canonical spelling and the discipline's acronym an accepted
+synonym, so the argument teaches the concept while the column header keeps the acronym:
+\itemize{
+\item \code{"odds_ratio"} (\code{"OR"}) --- the odds of the outcome, times what. Needs a percentage \strong{and its
+complement}, so a 3+ category outcome has to be asked "versus what?" first.
+\item \code{"ratio"} (\code{"RR"}, \code{"IRR"}, \code{"RoM"}) --- how many times as likely, as frequent, as large.
+Reach for it when the outcome is \strong{common}: an odds ratio is then much further from 1 than
+the risk ratio and is almost always narrated as if it were one ("twice as likely"), and unlike
+an odds ratio a risk ratio stays comparable \strong{across nested models}.
+\item \code{"difference"} (\code{"RD"}, \code{"diff"}) --- how much more, in the outcome's own units (percentage
+points on a probability).
+\item \code{"log"} (\code{"log_odds"}, \code{"log_risk"}, \code{"log_rate"}) --- the same estimand, \strong{un-exponentiated}.
+Bare \code{"log"} logs whatever the cascade would report; the precise spellings pin which base. The
+header names what it logs (\code{Model_log(OR)}), never one greek letter for five quantities.
+}
+
+Where it IS the model's own measure it is read off the coefficients; where it is not, it is
+worked out from the model's predictions --- so it is available whichever model you fit, and
+what \code{link} changes is which measure has a \emph{coefficient}. ⚠ one clause qualifies \code{"auto"}: it
+never lands on a \strong{predicted odds ratio}, which is a specialist quantity (Karlson & Jann 2023)
+and must be asked for by name; on a prediction route it steps back to the outcome's own measure
+("x times as likely" for a percentage). Resolved \strong{per outcome} like \code{family}. Call
+\code{\link[=reg_measures]{reg_measures()}} on your outcome to see what it offers, with the reason wherever it does not.}
+
+\item{effect}{\strong{Where the reported number comes from}, once the model and the measure are fixed.
+\code{"auto"} (default) needs no thought: the model's own coefficients when the reported measure is
+the model's, its predictions otherwise. The other values name a reading:
+\itemize{
+\item \code{"conditional"} --- read off the model's own coefficients ("holding the other predictors
+constant"). Only available where \code{measure} is the model's own measure; otherwise the abort
+names the two cures.
+\item \code{"marginal"} --- the \strong{average marginal effect}: worked out from the model's prediction for
+every observed person, then averaged. A probability-scale, cross-model-comparable summary
+(Mood 2010), and the route that always exists.
+\item \code{"at_reference"} --- the same, at \strong{one profile} (every other predictor at its reference
+level or its mean); for a \strong{multinomial} outcome with \code{measure = "odds_ratio"}, the odds
+ratio of each category \emph{versus the rest} there.
+}
+
+⚠ a prediction route runs on the model \code{link} names, so \verb{link = "ratio", measure = "difference"}
+is a marginal risk difference computed from the modified-Poisson fit. \code{\link[=reg_formulas]{reg_formulas()}} reports
+what was actually fitted. Resolved \strong{per outcome} like \code{family}.
 
 The contrast is a \strong{marker on the measure} in the column header, so the acronym stays the one
 thing to look up: \code{Model_OR}, \code{Model_mRR}, \code{Model_refRD} (see \emph{The header acronyms} below). The
 observed companion carries the measure alone (\code{Obs_RR}), a univariable effect having no
 adjustment to be marginal over. A marginal quantity is standardized to the covariate
 distribution at hand, so under \code{tab_vars} each group standardizes to its own subpopulation.}
-
-\item{measure}{\strong{Which effect measure} --- the other question. \code{"auto"} (default) takes the
-family's usual one (odds ratios for a logit, incidence-rate ratios for a count, a mean
-difference for a linear model; a difference for a marginal contrast). The full word is the
-canonical spelling and the discipline's acronym an accepted synonym, so the argument teaches the
-concept while the column header keeps the acronym:
-\itemize{
-\item \code{"odds_ratio"} (\code{"OR"}) --- the odds ratio of a logit / multinomial / ordinal fit.
-\item \code{"ratio"} (\code{"RR"}, \code{"IRR"}, \code{"RoM"}) --- a \strong{risk} ratio on a binary outcome (the modified
-Poisson, Zou 2004), an \strong{incidence-rate} ratio on a count, a \strong{ratio of adjusted means} on a
-continuous one (Poisson pseudo-maximum-likelihood, Santos Silva & Tenreyro 2006). Reach for it
-when the outcome is \strong{common}: an odds ratio is then much further from 1 than the risk ratio
-and is almost always narrated as if it were one ("twice as likely"), and unlike an odds ratio
-a risk ratio stays comparable \strong{across nested models}.
-\item \code{"difference"} (\code{"RD"}, \code{"diff"}) --- a linear coefficient on a continuous outcome; on a
-\strong{binary} one the \strong{risk difference} in percentage points, from an identity-link fit with
-robust standard errors. That link is unbounded and can fail to converge: the linear
-probability model then takes over, with a message, and the footer says which one ran.
-\item \code{"log"} (\code{"log_odds"}, \code{"log_risk"}, \code{"log_rate"}) --- the same fit, \strong{un-exponentiated}.
-Bare \code{"log"} logs the family's default measure; the precise spellings pin which one. The
-header names what it logs (\code{Model_log(OR)}), never one greek letter for five quantities.
-}
-
-Resolved \strong{per outcome} like \code{family}. \code{effect} and \code{measure} are orthogonal: a \emph{conditional}
-ratio is a different \strong{fit}, a \emph{marginal} one a different \strong{estimator}, and both land on the
-same stored scale. Call \code{\link[=reg_measures]{reg_measures()}} on your outcome to see what it offers, with the reason
-wherever it does not; \code{vignette("tabxplor-reg")} discusses what each route assumes. Elsewhere,
-\code{measure = "ratio"} on a binary outcome is Stata's \verb{binreg y x, rr}; \code{measure = "log"} is
-\code{exponentiate = FALSE} in broom / parameters / gtsummary; \code{effect = "marginal"} is
-\code{marginaleffects::avg_comparisons()}.}
 
 \item{trials}{Grouped-binomial (summed-score) outcomes only. The number of items behind the score,
 fitting \code{cbind(score, trials - score)} as a binomial. \code{NULL} (default) fits an ordinary binary
@@ -196,9 +220,12 @@ two effects end up adjacent. Ask for another layout with \code{display}.
 
 Where the univariable model is \strong{saturated} (a categorical predictor under every family except
 ordinal) the crude effect has a closed form; otherwise it is a real fit, so the crude column
-shares the model's family, link, interval method and \code{multiplier} by construction. A
-\strong{continuous} predictor has no levels, so its cell shows the univariable slope alone, which
-assumes linearity on the model's scale --- check that with \code{shape} before trusting it.
+shares the model's family, link, interval method and \code{multiplier} by construction. Under a
+survey design carrying clusters, strata or calibration it is always a real fit, because a
+closed form assumes the two compared groups are independent and a shared sampling unit makes
+them anything but. A \strong{continuous} predictor has no levels, so its cell shows the univariable
+slope alone, which assumes linearity on the model's scale --- check that with \code{shape} before
+trusting it.
 
 Every crude quantity is computed on \strong{exactly the same complete-case population as the model},
 so the two are not confounded by differing missingness; under \code{na = "drop_by_model"} a model
@@ -459,7 +486,7 @@ A cell that cannot fill an aside leaves it \strong{blank but padded}, so the eff
 an aside no cell of the column can fill is dropped, padding and all.
 
 The \strong{Constant} row is the baseline the rest of the column is read against, at the very point
-that column's effects are read at: under \code{effect = "coefficient"} the model's intercept ---
+that column's effects are read at: under \code{effect = "conditional"} the model's intercept ---
 every factor at its reference level and every continuous predictor at its \code{ref} anchor, the
 mean by default; under \code{"at_reference"} the outcome the model predicts at that same profile;
 under \code{"marginal"} the \strong{population average} the sample-averaged effects sit on, which is what
@@ -471,7 +498,7 @@ probability beside it (\verb{(40\%)}); a risk or rate ratio multiplies the level
 to it, so those show the \strong{level itself} --- \verb{39\%}, \code{40.8}, \code{2.9}; and \code{measure = "log"} shows
 the intercept on the link scale. It is a baseline, not a comparison, so it never carries a \code{+}
 or a \code{x} sign. It carries its confidence interval, and a \strong{star} only where what it prints has
-a null to be tested against (the odds and link scales, under \code{effect = "coefficient"}): a
+a null to be tested against (the odds and link scales, under \code{effect = "conditional"}): a
 predicted 48.7 \% is not "different from zero". An ordinal outcome leaves it empty (a cumulative
 logit has thresholds, not one intercept).
 
@@ -491,9 +518,9 @@ Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
 \item{...}{Not a user argument. It carries the internal \code{.fit_cache} (the jamovi live UI's fit
 cache environment), and it is what makes every argument removed or renamed while \code{tab_reg()} was
 in development --- \code{exponentiate}, \code{at}, \code{estimate_display}, \code{dependent}, \code{split_var},
-\code{reference}, \code{method}, \code{compare}, \code{baseline}, \code{inverse_two_level_factors}, and the \code{effect}
-values \code{"ame"} / \code{"ame_ratio"} --- give an error naming its replacement, rather than R's bare
-"unused argument".}
+\code{reference}, \code{method}, \code{compare}, \code{baseline}, \code{inverse_two_level_factors}, \code{parallel}, and the
+\code{effect} values \code{"ame"} / \code{"ame_ratio"} / \code{"coefficient"} --- give an error naming its
+replacement, rather than R's bare "unused argument".}
 }
 \value{
 A \code{tabxplor_grouped_tab} (grouped by predictor), one effect column per model / outcome.
@@ -515,11 +542,23 @@ factor multinomial or ordinal odds ratios --- so you rarely set \code{family} by
 \code{empirical = TRUE} to put the crude (unadjusted) effect beside each adjusted one. See
 \code{vignette("tabxplor-reg")} for a guided tour.
 
+\strong{The estimand is a cascade}: \code{family} -> \code{link} -> \code{measure} -> \code{effect}, where \code{"auto"} means
+\emph{follow from the left}. \code{family} says what kind of number the outcome is; \code{link} \strong{which measure
+the model estimates} (a link \emph{is} a measure, so it takes the same words); \code{measure} \strong{which one
+is reported}; \code{effect} where that number comes from. Set any one and everything to its right
+re-derives, so most tables set none of them --- and the one most people ever set is \code{measure}.
+
+A \strong{coefficient} exists only where the reported measure IS the model's own. Ask for another and
+it is worked out from the model's predictions instead, averaged over the sample. So
+\code{measure = "ratio"} on a binary outcome gives a \emph{marginal} risk ratio from the logistic fit, while
+\code{link = "ratio"} fits the modified Poisson and gives its \emph{conditional} one --- two different
+quantities, and now two different arguments.
+
 The arguments fall into groups:
 \itemize{
 \item \strong{The model}: \code{data}, \code{outcome}, \code{predictors} (a character vector = one model, a named
-list = several models to compare), \code{family}, \code{wt} (survey weights).
-\item \strong{What each cell shows}: \code{effect} x \code{measure} (which contrast, which effect measure),
+list = several models to compare), \code{family}, \code{link}, \code{wt} (survey weights).
+\item \strong{What each cell shows}: \code{measure} x \code{effect} (which measure, where it comes from),
 \code{display} (the layout), \code{empirical} (the crude effect beside the adjusted one).
 \item \strong{Colours & significance}: \code{color}, \code{color_signif}, \code{stars}, \code{conf_level}, as in \code{\link[=tab]{tab()}}.
 \item \strong{Comparisons & structure}: \code{ref} (baseline levels), \code{outcome_level} (the level
@@ -589,7 +628,7 @@ those with their own packages.
 \section{The header acronyms}{
 
 A column header names the \strong{measure}; the \strong{contrast} is a marker on it ---
-no marker for a coefficient, \code{m} for a marginal effect, \code{ref} at the reference
+no marker for a conditional effect, \code{m} for a marginal one, \code{ref} at the reference
 profile --- and \code{measure = "log"} wraps it (\code{Model_mRR}, \code{Model_refRD},
 \code{Model_log(OR)}). The observed companion carries the measure alone (\code{Obs_RR}).
 \itemize{
@@ -603,17 +642,19 @@ profile --- and \code{measure = "log"} wraps it (\code{Model_mRR}, \code{Model_r
 }
 }
 
-\section{Which estimands each outcome offers}{
+\section{Which models each outcome offers, and which measures}{
 
 Generated from the package's own resolution table, so it cannot drift from what
-\code{tab_reg()} builds. Call \code{\link{reg_measures}()} on your outcome for the same
+\code{tab_reg()} builds. A measure that IS the model's own is read off its coefficients;
+any other is computed from its predictions (\code{effect = "marginal"} or
+\code{"at_reference"}). Call \code{\link{reg_measures}()} on your outcome for the same
 table with its per-cell status.
 \itemize{
-\item \strong{gaussian} --- \code{effect = "coefficient", measure = "difference"} (\code{Model_diff}); \code{effect = "coefficient", measure = "ratio"} (\code{Model_RoM}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(RoM)}); \code{effect = "marginal", measure = "ratio"} (\code{Model_mRoM}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refdiff}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refRoM})
-\item \strong{binomial} --- \code{effect = "coefficient", measure = "odds_ratio"} (\code{Model_OR}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(OR)}); \code{effect = "coefficient", measure = "ratio"} (\code{Model_RR}); \code{effect = "coefficient", measure = "difference"} (\code{Model_RD}); \code{effect = "marginal", measure = "difference"} (\code{Model_mRD}); \code{effect = "marginal", measure = "ratio"} (\code{Model_mRR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refRD}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refRR})
-\item \strong{poisson} --- \code{effect = "coefficient", measure = "ratio"} (\code{Model_IRR}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(IRR)}); \code{effect = "marginal", measure = "difference"} (\code{Model_mdiff}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refdiff}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refIRR})
-\item \strong{multinomial} --- \code{effect = "coefficient", measure = "odds_ratio"} (\code{Model_OR}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(OR)}); \code{effect = "marginal", measure = "difference"} (\code{Model_mRD}); \code{effect = "marginal", measure = "ratio"} (\code{Model_mRR}); \code{effect = "at_reference", measure = "odds_ratio"} (\code{Model_refOR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refRD}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refRR})
-\item \strong{ordinal} --- \code{effect = "coefficient", measure = "odds_ratio"} (\code{Model_cumOR}); \code{effect = "coefficient", measure = "log"} (\code{Model_log(cumOR)}); \code{effect = "marginal", measure = "difference"} (\code{Model_mRD}); \code{effect = "marginal", measure = "ratio"} (\code{Model_mRR}); \code{effect = "at_reference", measure = "difference"} (\code{Model_refRD}); \code{effect = "at_reference", measure = "ratio"} (\code{Model_refRR})
+\item \strong{gaussian} --- a cell is a mean. Models: \code{link = "difference"}, the default (linear regression); \code{link = "ratio"} (log-link mean regression (Poisson pseudo-likelihood, robust standard errors)). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"log"}.
+\item \strong{binomial} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (logistic regression); \code{link = "ratio"} (modified Poisson regression); \code{link = "difference"} (additive-risk regression (identity link, robust standard errors)). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"log"}.
+\item \strong{poisson} --- a cell is a count. Models: \code{link = "ratio"}, the default (Poisson regression). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"log"}.
+\item \strong{multinomial} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (multinomial logistic regression). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"log"}.
+\item \strong{ordinal} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (ordinal logistic regression). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"log"}.
 }
 }
 

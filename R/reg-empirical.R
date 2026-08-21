@@ -17,8 +17,11 @@
 #   - A SHAPE'S DECLARATION IS THE ARITHMETIC. Which closed form runs is read off the shape's own
 #     scale geometry and `ci_method`, never off the family in hand: a shape is routinely BORROWED
 #     across blocks (a binary marginal ratio's crude twin is REG_EMPIRICAL$rr$rr), so the two can
-#     differ. And a shape a block does not declare means NO crude column, never another estimand's --
-#     every reachable key is a foreign key checked at load (R/zzz-fact-keys.R).
+#     differ. The borrow is COMPOSED, not declared: REG_EMP_BY_LINK indexes this table by
+#     (block, link, logged) and the estimand library picks each row's crude shape through it, which
+#     is what makes "a model row and its observed twin state one estimand" true by construction.
+#     And a shape a block does not declare means NO crude column, never another estimand's -- every
+#     reachable key is a foreign key checked at load (R/zzz-fact-keys.R).
 #   - TWO SOURCES, ONE SHAPE. A CLOSED FORM off reg_empirical()'s per-(var, level, category) grid
 #     wherever the univariable model is saturated AND the closed form's own assumption holds
 #     (reg_crude_saturated) -- there the crude odds ratio IS the Woolf 2x2 ratio. Otherwise a
@@ -357,7 +360,7 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
                               want_fit = FALSE, marginal = FALSE, trials = NULL,
                               shape_terms = NULL, crosses = list()) {
   if (length(preds) == 0L) return(list(est = list(), fits = list(), degf = NA_real_))
-  ratio  <- !is.null(est) && identical(est$comparison, "lnratioavg")
+  mlink  <- if (is.null(est)) "identity" else est$measure_link %||% "identity"
   skey   <- reg_skel_key(skeleton$var, skeleton$level)
   rows   <- list()
   fits   <- list()
@@ -398,7 +401,7 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
       # reg_fit_overlay() exp()s back where the shape's scale is multiplicative.
       m <- tryCatch(suppressMessages(reg_marginal(
         f$fit, f$data, v, conf_level, wt, at = "average",
-        comparison = if (ratio) "lnratioavg" else NULL, want_pred = FALSE,
+        link = mlink, comparison = if (is.null(est)) NULL else est$comparison, want_pred = FALSE,
         exponentiate = FALSE, multiplier = multiplier, crosses = crosses,
         engine = if (is.null(est)) "marginaleffects" else reg_marginal_engine(est),
         disp_known = f$disp_known, df_residual = f$df_residual)),
@@ -528,6 +531,29 @@ REG_EMPIRICAL <- list(
     ame_ratio_log = list(word = "RR", scale = "log_coef",  ref = NA_character_, ci_method = "wald_log", link = "log",      per_category = TRUE))
 )
 
+# REG_EMP_BY_LINK -- (block, link, logged) -> the shape name, read off the table's OWN `link` column
+# and its `log_coef` scale. The estimand library composes every crude companion through it
+# (reg_compose_crude(), R/reg-estimand.R), which is what makes "a model row and its observed twin
+# state one estimand" true by construction rather than by two declarations agreeing.
+#' @keywords internal
+#' @noRd
+REG_EMP_BY_LINK <- lapply(REG_EMPIRICAL, function(blk) {
+  sh   <- Filter(is.list, blk)
+  keys <- vapply(sh, function(s)
+    paste0(s$link, if (identical(s$scale, "log_coef")) ".log" else ""), character(1))
+  stopifnot("a block declares two shapes on one link" = !anyDuplicated(keys))
+  stats::setNames(as.list(names(sh)), keys)
+})
+
+#' @keywords internal
+#' @noRd
+reg_emp_shape_on <- function(block, link, logged = FALSE) {
+  if (is.null(block) || length(block) != 1L || is.na(block)) return(NULL)
+  idx <- REG_EMP_BY_LINK[[block]]
+  k   <- paste0(link, if (isTRUE(logged)) ".log" else "")
+  if (is.null(idx) || !k %in% names(idx)) NULL else idx[[k]]
+}
+
 #' @keywords internal
 shape_per_category <- function(shape) isTRUE(shape$per_category)
 
@@ -555,13 +581,22 @@ reg_crude_col_name <- function(shape) {
 # shape, which would print another estimand under this one's name. Every reachable key is checked at
 # load (R/zzz-fact-keys.R), so the NULL is a statement of intent rather than a reachable path.
 #' @keywords internal
+# WHICH BLOCK a run-time crude key and an estimand row land on. ⚠ the SUMMED-SCORE block wins over
+# the estimand's borrow (load-bearing order): `rr` is an INDIVIDUAL-level block, while a score's
+# crude effect sits on the mean SCORE. One rule, two readers -- reg_crude_shape() and the load-time
+# reachability check (R/zzz-fact-keys.R).
+#' @keywords internal
+#' @noRd
+reg_emp_block_of <- function(crude_key, est = NULL) {
+  if (identical(crude_key, "grouped_binomial")) return(crude_key)
+  fam <- (est %||% list())$crude_fam %||% "auto"
+  if (!identical(fam, "auto")) fam else crude_key
+}
+
+#' @keywords internal
 reg_crude_shape <- function(crude_key, est = NULL) {
   if (is.null(est)) est <- list(crude_fam = "auto", crude_shape = NA_character_)
-  # ⚠ the SUMMED-SCORE block wins over the estimand's borrow (load-bearing order): `rr` is an
-  # INDIVIDUAL-level block, while a score's crude effect sits on the mean SCORE.
-  key <- if (identical(crude_key, "grouped_binomial")) crude_key
-         else if (!identical(est$crude_fam %||% "auto", "auto")) est$crude_fam
-         else crude_key
+  key <- reg_emp_block_of(crude_key, est)
   fam <- if (is.null(key) || is.na(key)) NULL else REG_EMPIRICAL[[key]]
   if (is.null(fam)) return(NULL)
   sh <- est$crude_shape
@@ -589,7 +624,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   if (is.null(REG_EMPIRICAL[[crude_key]]))
     return(list(cols = list(), cat_cols = list(), effect = NULL, shape = NULL))
   # read off the ESTIMAND row, never (effect, do_exp).
-  marginal   <- !identical(est$effect, "coefficient")
+  marginal   <- !identical(est$effect, "conditional")
   # THE crude shape, resolved ONCE (reg_crude_shape) and read by every arm below.
   shape      <- reg_crude_shape(crude_key, est)
   if (is.null(shape)) return(list(cols = list(), cat_cols = list(), effect = NULL, shape = NULL))
@@ -842,8 +877,8 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
                                saturated = TRUE) {
   # the estimand ROW carries both the profile axis (`at_reference`) and the marginal ratio.
   effect   <- est$effect
-  marginal <- !identical(effect, "coefficient")
-  ratio_m  <- marginal && identical(est$comparison, "lnratioavg")
+  marginal <- !identical(effect, "conditional")
+  mlink    <- est$measure_link %||% "identity"
   if (is.null(shape) || is.null(f$fit) || is.null(f$data))      return(NULL)
   if (isTRUE(sp$compound) || identical(effect, "at_reference")) return(NULL)
   if (!reg_same_estimand(shape, get_scale(model_col), est))     return(NULL)
@@ -859,9 +894,9 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
   # a 3+ level outcome's marginal influence function is per CATEGORY too (family()$mu.eta lacks it).
   per_cat  <- inherits(f$fit, "multinom") || inherits(f$fit, "polr")
   model_if <- if (marginal && per_cat)
-    reg_ame_if_cat_maker(f$fit, f$data, wt, ratio = ratio_m, category = category)
+    reg_ame_if_cat_maker(f$fit, f$data, wt, link = mlink, category = category)
   else if (marginal)
-    reg_ame_if_maker(f$fit, f$data, wt, ratio = ratio_m, coef_if = coef_if)
+    reg_ame_if_maker(f$fit, f$data, wt, link = mlink, coef_if = coef_if)
   else coef_if
   # the crude leg must be built around the SAME indicator the crude estimate was.
   crude_if <- reg_crude_if_maker(mdata, sp$outcome, sp$crude_key, f$positive_level, wt, shape$link,
@@ -917,10 +952,10 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
       if (marginal) {
         im <- model_if(v, cl[[1]], cl[[2]])
         ic <- if (inherits(nv$fit, "multinom") || inherits(nv$fit, "polr"))
-          reg_ame_if_cat_maker(nv$fit, nv$data, wt, ratio = ratio_m,
+          reg_ame_if_cat_maker(nv$fit, nv$data, wt, link = mlink,
                                category = category)
         else
-          reg_ame_if_maker(nv$fit, nv$data, wt, ratio = ratio_m,
+          reg_ame_if_maker(nv$fit, nv$data, wt, link = mlink,
                            coef_if = cif_v)
         ic <- if (is.null(ic)) NULL else ic(v, cl[[1]], cl[[2]])
         # the AME contrast already carries k, so no |k| rescale on this branch

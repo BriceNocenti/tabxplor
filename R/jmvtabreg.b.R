@@ -131,8 +131,9 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # Phase 19k: tab_reg()'s OWN estimand pair -- `effect` names the CONTRAST, `measure` the
         # MEASURE. The retired `exponentiate` / `at` / `estimate_display` options (and the
         # jmv_reg_estimand_opts() translator that mapped them) are gone.
-        effect       = self$options$effect  %||% "coefficient",
+        link         = self$options$link    %||% "auto",
         measure      = self$options$measure %||% "auto",
+        effect       = self$options$effect  %||% "auto",
         display      = self$options$display %||% "auto",
         empirical    = self$options$empirical,
         # the reference-level picker (ref_levels) -> tab_reg's `ref` named vector (NULL = default)

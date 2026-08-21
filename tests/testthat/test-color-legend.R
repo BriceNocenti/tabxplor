@@ -234,7 +234,7 @@ test_that("the stars sentence names the Constant's null only where that row is p
   testthat::expect_match(tabxplor:::tab_stars_legend(co), "from 1 for the Constant", fixed = TRUE)
   # a marginal table has a Constant ROW but no intercept to show -> no aside
   mg <- suppressMessages(tab_reg(d, "married", c("race", "relig"), family = "binomial",
-                                 effect = "marginal"))
+                                 effect = "marginal", measure = "difference"))
   testthat::expect_false(grepl("Constant", tabxplor:::tab_stars_legend(mg), fixed = TRUE))
 })
 

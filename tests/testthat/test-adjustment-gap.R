@@ -15,7 +15,7 @@
 #     mode), when the fitted object was distilled away (jamovi's digest path), or at a profile.
 #   - `color_signif = "ignore"` must be BYTE-IDENTICAL to z5 wherever a gap_se now exists.
 #   - The crude and model columns must be the SAME estimand -- this closes a z5 defect where
-#     effect = "marginal" + family = "poisson" wrote a rate RATIO into an additive AME column's `obs`.
+#     effect = "marginal" on a count outcome wrote a rate RATIO into an additive AME column's `obs`.
 # See: dev/model_vs_observed_gap_test.md (SS2 the estimator side, SS3 the variance side, SS4 what the
 #      test rejects and why the OR path is off, SS7 the architecture).
 
@@ -31,12 +31,14 @@ gapb_data <- function() {
   tibble::as_tibble(d)
 }
 
-# the canonical builder: a COLLAPSIBLE binary-outcome table (modified Poisson -> risk ratios), which is
-# the estimand the ruling points users at. `relig` is in the default predictor set because it is what
+# the canonical builder: a COLLAPSIBLE binary-outcome table -- `link = "ratio"` is the modified
+# Poisson, whose coefficient is a CONDITIONAL risk ratio, which is the estimand the ruling points
+# users at. `relig` is in the default predictor set because it is what
 # makes some gaps actually REACH the first adj_ratio break (x1.1) -- a fixture that colours nothing
 # would let the policy tests pass vacuously.
 gapb_tab <- function(d, policy = "ignore", preds = c("race", "party3", "relig"), ...)
-  suppressMessages(tab_reg(d, outcome = "married", predictors = preds, family = "poisson",
+  suppressMessages(tab_reg(d, outcome = "married", predictors = preds, family = "binomial",
+                           link = "ratio",
                            empirical = TRUE, color = c(TRUE, "adjustment"),
                            color_signif = policy, ...))
 
@@ -96,11 +98,13 @@ test_that("the marginal influence function reproduces marginaleffects' own stand
   f   <- stats::glm(y ~ race + party3, stats::binomial, data = dd)
   mk  <- tabxplor:::reg_coef_if_maker(f)
   ref <- levels(dd$race)[1]; lv <- levels(dd$race)[2]
-  for (ratio in c(FALSE, TRUE)) {
-    am <- tabxplor:::reg_ame_if_maker(f, dd, NULL, ratio = ratio, coef_if = mk)
+  # the three REPORTED links, each its own contrast from the one sweep (22b-xv-1)
+  for (lk in c("identity", "log", "logit")) {
+    am <- tabxplor:::reg_ame_if_maker(f, dd, NULL, link = lk, coef_if = mk)
     me <- as.data.frame(do.call(marginaleffects::avg_comparisons, c(
       list(f, variables = "race", newdata = dd),
-      if (ratio) list(comparison = "lnratioavg") else list())))
+      switch(lk, log = list(comparison = "lnratioavg"),
+             logit = list(comparison = "lnoravg"), list()))))
     got <- tabxplor:::reg_if_se(am("race", lv, ref))
     # marginaleffects reports the DELTA term (covariates held fixed); the full influence function adds
     # the empirical-averaging term, worth ~0.1 %. Agreement to 2 % is the honest assertion.
@@ -175,7 +179,7 @@ test_that("no gap_se where the gap has no honest test", {
   # (2) at the reference profile the model cell is a different estimand (a z5 defect z8-A fixed)
   skip_if_not_installed("marginaleffects")
   testthat::expect_true(none(suppressMessages(tab_reg(
-    d, "married", c("race", "party3"), family = "binomial", effect = "at_reference",
+    d, "married", c("race", "party3"), family = "binomial", effect = "at_reference", measure = "difference",
     empirical = TRUE, color = c(TRUE, "adjustment")))))
   # (3) no crude twin at all: multinomial
   m <- suppressMessages(tab_reg(d, "party3", "race", family = "multinomial", empirical = TRUE,
@@ -191,8 +195,8 @@ test_that("no gap_se where the gap has no honest test", {
 # stored value), which is why the goldens do not move.
 test_that("z17 D2: gap_se is written without asking for the colour", {
   d <- gapb_data()
-  plain  <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", empirical = TRUE))
-  asked  <- suppressMessages(tab_reg(d, "married", "race", family = "poisson", empirical = TRUE,
+  plain  <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio", empirical = TRUE))
+  asked  <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio", empirical = TRUE,
                                      color = c(TRUE, "adjustment")))
   gp <- get_gap_se(gapb_model_col(plain))
   ga <- get_gap_se(gapb_model_col(asked))
@@ -222,7 +226,8 @@ test_that("D1: every compared model shares its outcome's population, so every co
   d <- adjgap_inc_data()
   testthat::expect_true(any(is.na(d$inc)))                       # the fixture must actually bite
   t <- suppressMessages(tab_reg(d, "married", predictors = adjgap_mods,
-                                family = "poisson", empirical = TRUE, color = c(TRUE, "adjustment")))
+                                family = "binomial", link = "ratio",
+                                empirical = TRUE, color = c(TRUE, "adjustment")))
   fc <- grep("^m1|^m2", names(t), value = TRUE)
   testthat::expect_length(fc, 2L)
   # both models now solve their equations on the crude block's rows -> both carry a real gap SE (D5:
@@ -244,7 +249,8 @@ test_that("D1: every compared model shares its outcome's population, so every co
 test_that("D1: under the opt-in per-model drop, a model on other rows gets NO obs at all", {
   d <- adjgap_inc_data()
   t <- suppressMessages(tab_reg(d, "married", predictors = adjgap_mods, na = "drop_by_model",
-                                family = "poisson", empirical = TRUE, color = c(TRUE, "adjustment")))
+                                family = "binomial", link = "ratio",
+                                empirical = TRUE, color = c(TRUE, "adjustment")))
   fc <- grep("^m1|^m2", names(t), value = TRUE)
   # m1 is fitted on more rows than the observed block -> no observed value, hence no colour and no
   # test. It used to keep the colour while losing only the test.
@@ -255,7 +261,8 @@ test_that("D1: under the opt-in per-model drop, a model on other rows gets NO ob
   # ... and the choice is named
   testthat::expect_message(
     tab_reg(d, "married", predictors = adjgap_mods, na = "drop_by_model",
-            family = "poisson", empirical = TRUE, color = c(TRUE, "adjustment")),
+            family = "binomial", link = "ratio", empirical = TRUE,
+            color = c(TRUE, "adjustment")),
     "drop_by_model")
 })
 
@@ -269,7 +276,8 @@ test_that("a crude companion on another scale writes neither obs nor a gap SE (a
   # (tvhours is over-dispersed -> reg_fit warns and phi-scales; irrelevant here, and suppressed so the
   #  assertion is about the estimand mismatch alone)
   t <- suppressWarnings(suppressMessages(tab_reg(d, "tvhours", "race", family = "poisson",
-                                                 effect = "marginal", empirical = TRUE,
+                                                 effect = "marginal", measure = "difference",
+                                                 empirical = TRUE,
                                                  color = c(TRUE, "adjustment"))))
   x <- gapb_model_col(t)
   testthat::expect_identical(get_scale(x), "raw_diff")   # a count AME, in the outcome's own units
@@ -278,7 +286,7 @@ test_that("a crude companion on another scale writes neither obs nor a gap SE (a
   # the gate itself: a crude shape on another scale -- or on the same scale under another MEASURE,
   # which every logged one shares -- is still refused, so no future fall-back can silently write one
   # estimand into another's `obs`.
-  est <- tabxplor:::reg_estimand("poisson", "marginal", "difference")
+  est <- tabxplor:::reg_estimand("poisson", measure = "difference", effect = "marginal")
   sc  <- get_scale(x)
   testthat::expect_false(tabxplor:::reg_same_estimand(list(scale = "mean_ratio", word = "diff"),
                                                       sc, est))
@@ -287,7 +295,7 @@ test_that("a crude companion on another scale writes neither obs nor a gap SE (a
   testthat::expect_true(tabxplor:::reg_same_estimand(list(scale = "raw_diff", word = "diff"),
                                                      sc, est))
   # two log_coef columns are told apart by the WORD alone: log(OR) is not log(RR).
-  lg <- tabxplor:::reg_estimand("binomial", "coefficient", "log_odds")
+  lg <- tabxplor:::reg_estimand("binomial", measure = "log_odds", effect = "conditional")
   testthat::expect_true(tabxplor:::reg_same_estimand(list(scale = "log_coef", word = "OR"),
                                                      "log_coef", lg))
   testthat::expect_false(tabxplor:::reg_same_estimand(list(scale = "log_coef", word = "RR"),
@@ -419,7 +427,8 @@ test_that("D3: conf_level reaches the gap interval, not only the printed one", {
   skip_if_not_installed("broom")
   d <- gapb_data()
   w <- function(cl) {
-    t <- suppressMessages(tab_reg(d, "married", c("race", "party3"), family = "poisson",
+    t <- suppressMessages(tab_reg(d, "married", c("race", "party3"),
+                                  family = "binomial", link = "ratio",
                                   empirical = TRUE, color = c(TRUE, "adjustment"),
                                   color_signif = "grey_non_signif", conf_level = cl,
                                   cleannames = FALSE))

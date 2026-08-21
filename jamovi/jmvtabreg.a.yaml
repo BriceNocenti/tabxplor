@@ -108,22 +108,52 @@ options:
       title: effect
       type: List
       options:
-        - title: "coefficient <i>(the model's own effect)</i>"
-          name:  coefficient
-        - title: "marginal <i>(average marginal effect)</i>"
+        - title: "auto <i>(follow from the measure)</i>"
+          name:  auto
+        - title: "conditional <i>(the model's own coefficients)</i>"
+          name:  conditional
+        - title: "marginal <i>(averaged over the sample)</i>"
           name:  marginal
         - title: "at the reference profile"
           name:  at_reference
-      default: coefficient
+      default: auto
       description:
           R: >
-           WHICH CONTRAST the table reports.
+           WHERE THE NUMBER COMES FROM, once the model and the reported measure are fixed.
             \itemize{
-             \item \code{"coefficient"}: the model's native per-family effect.
-             \item \code{"marginal"}: the average marginal effect on the response scale, averaged
-             over the sample (needs the marginaleffects package).
-             \item \code{"at_reference"}: the same, evaluated at the reference profile (other
-             predictors at their reference level / mean).
+             \item \code{"auto"}: the coefficients when the reported measure IS the model's own,
+             the model's predictions otherwise. Nobody needs to change this.
+             \item \code{"conditional"}: read off the model's own coefficients.
+             \item \code{"marginal"}: worked out from the model's predictions for every observed
+             person, then averaged.
+             \item \code{"at_reference"}: the same, at one profile (every other predictor at its
+             reference level / mean).
+            }
+
+    - name: link
+      title: link
+      type: List
+      options:
+        - title: "auto <i>(the family's own model)</i>"
+          name:  auto
+        - title: "odds ratio <i>(logit)</i>"
+          name:  odds_ratio
+        - title: "ratio <i>(log link)</i>"
+          name:  ratio
+        - title: "difference <i>(identity link)</i>"
+          name:  difference
+      default: auto
+      description:
+          R: >
+           WHICH MEASURE THE MODEL ESTIMATES -- the only argument that changes the model. A link IS
+            a measure, so it takes the same words as \code{measure}.
+            \itemize{
+             \item \code{"auto"}: the family's own (a logistic regression for a binary outcome, a
+             linear one for a quantity, a Poisson one for a count).
+             \item \code{"odds_ratio"} / \code{"ratio"} / \code{"difference"}: the model whose
+             coefficient IS that measure -- on a binary outcome, the logistic fit, the modified
+             Poisson (Zou 2004) and the identity-link additive-risk one. A link the outcome cannot
+             be fitted on says so, and names the ones it can.
             }
 
     - name: measure
@@ -143,16 +173,16 @@ options:
       default: auto
       description:
           R: >
-           WHICH MEASURE the contrast is expressed in -- the second half of the estimand, and the
-            only argument that changes the MODEL (a risk ratio, a risk difference and an odds ratio
-            are three fits, not three displays of one).
+           WHICH MEASURE IS REPORTED. It never changes the model: where it is not the measure the
+            model estimates (see \code{link}), it is worked out from the model's predictions.
             \itemize{
-             \item \code{"auto"}: the usual measure of the outcome's family (OR for binomial /
-             ordinal / multinomial, IRR for poisson, beta for gaussian).
+             \item \code{"auto"}: the model's own measure -- follow from the left. On a prediction
+             route it steps back to the outcome's own (a percentage reads as "x times as likely"),
+             because a marginal odds ratio is a specialist quantity, asked for by name.
              \item \code{"odds_ratio"} / \code{"ratio"} / \code{"difference"}: the named measure,
-             when the outcome offers it. A combination the outcome does not offer says so, and lists
-             what it does offer.
-             \item \code{"log"}: the family's usual estimand, left un-exponentiated.
+             when the outcome's level can carry it. One it cannot says so, and lists what it does
+             offer.
+             \item \code{"log"}: the same estimand, left un-exponentiated.
             }
 
     - name: empirical

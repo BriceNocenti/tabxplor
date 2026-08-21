@@ -1,35 +1,39 @@
-# PURPOSE: WHAT A REGRESSION COLUMN ESTIMATES -- one declared library answering the user's two
+# PURPOSE: WHAT A REGRESSION COLUMN ESTIMATES -- one COMPOSED library answering the user's three
 #   questions at once.
 #
-#     effect  = which CONTRAST   ("coefficient" | "marginal" | "at_reference")
-#     measure = which MEASURE    ("odds_ratio" | "ratio" | "difference" | "log")
+#     link    = which measure the MODEL estimates   ("odds_ratio" | "ratio" | "difference")
+#     measure = which measure is REPORTED           (the same words, plus "log")
+#     effect  = where the number comes from         ("conditional" | "marginal" | "at_reference")
 #
-#   One row per (family, effect, measure) names the model to FIT, whether to exponentiate, the
-#   header word, the EST_SCALES row stamped on the column, the crude companion that pairs with it,
-#   the marginaleffects contrast, and the estimand phrase of the "Model:" footer line.
+# THE RULE EVERYTHING HERE DERIVES FROM. A LINK IS A MEASURE -- the one a model estimates directly --
+# so the argument that names the model takes the same words as the argument that names the report,
+# and the statistician's vocabulary never surfaces:
 #
-# THE DIVERGENCE THIS FILE ENCODES, never to be re-collapsed. On a crosstab every geometry is a
-# function of the SAME sufficient statistics, so tab(color =) asking for one is a SELECTION. On a
-# regression a geometry is a different FIT or a different ESTIMATOR -- an odds ratio is a logit fit,
-# a conditional risk ratio a log-link one, a risk difference an identity-link one, a marginal risk
-# ratio a g-computation over the logit fit. So here it is a MODELLING DECISION and lives in an
-# argument: changing `display` must never change the model.
+#     difference <-> identity        ratio <-> log        odds_ratio <-> logit
 #
-# THE VOCABULARY IS SHARED WITH tab(). `measure`'s values ARE EST_SCALES$geometry ("ratio" /
-# "difference" / "log"), which is what tab(color =) resolves into as well, so the argument that
-# asks, the attribute that stores, the legend that names and the forest-plot axis that draws are one
-# vocabulary end to end (R/fmt_class.R, SECTION "the ESTIMATE's scale"):
+# and a COEFFICIENT exists only where the two agree. Otherwise the measure is applied to the model's
+# PREDICTIONS, averaged over the sample or read at one profile. Those are the only glm links whose
+# coefficient names a measure of deviation -- probit, cauchit, sqrt and inverse name none, which is
+# exactly why such models are reported through marginal effects.
 #
-#     the argument names the GEOMETRY; the attribute names the ROW.
+# THE CASCADE. `"auto"` means FOLLOW FROM THE LEFT: family -> link -> measure -> effect. Set any one
+# and everything to its right re-derives. ONE clause qualifies it, and it is the only place an
+# argument reads one to its right: `"auto"` never resolves to a PREDICTED odds ratio. A marginal
+# odds ratio is a specialist quantity (Karlson & Jann 2023), so it is asked for by name; auto falls
+# back to the LEVEL's own measure, which for a percentage is "x times as likely".
 #
-# THE FOUR STATES, which a user must be able to tell apart. Status "ok" -> build it. Status
-# "impossible" -> abort with the row's own `why` (an odds ratio of a continuous outcome is not a
-# thing, whatever anyone implements). Status "redundant" -> abort naming the coefficient: where the
-# link is collapsible, a marginal contrast IS the coefficient, and one quantity may not have two
-# names (stamped by reg_mark_redundant(), DERIVED so a new family cannot forget it). NO ROW -> "not
-# offered", and the message ENUMERATES what this outcome does offer, generated from the table
-# itself. A fifth exists only at run time: the fit that did not converge (reg_fit()), which names
-# the alternatives.
+# THE LIBRARY IS COMPOSED, NEVER WRITTEN. reg_compose_library() emits one row per BUILDABLE
+# (link, effect, measure) from four facts a family declares -- `level`, `fits`, `words`, `note` --
+# and two shared maps (REG_MEASURE_LINK, REG_LEVEL_MEASURES). So adding a family is one REG_FAMILIES
+# row and adding a link one map entry, and a family CANNOT declare a scale, a header word and a
+# crude shape that disagree with each other, because it no longer declares them.
+#
+# THE STATES a user must be able to tell apart. A row in the table -> build it. No row -> one of four
+# refusals, DERIVED from the clause that failed rather than declared: `impossible` (the level has no
+# such measure -- an odds ratio of a continuous outcome is not a thing, whatever anyone implements),
+# `no_link` (tabxplor fits no such model here), `no_coefficient` (the model estimates something else,
+# so name the two cures), `not_offered` (a hole, with what IS offered enumerated from the table). A
+# fifth exists only at run time: the fit that did not converge (reg_fit()).
 #
 # THE HEADER VOCABULARY is here too (REG_WORDS + REG_CONTRASTS). One name per quantity: a header
 # names the MEASURE and the CONTRAST is a marker on it, so the varying part of a column name is one
@@ -42,14 +46,14 @@
 # generated ?tab_reg sections and jamovi's eligibility rule (reg_estimands_for() / reg_words_rd()),
 # and the "Model:" footer line (reg_estimand_note()).
 #
-# ALSO HERE: REG_FAMILIES -- what each model family is CALLED and where it may be named, so the
-# footer sentence, the Excel filename tag and the two jamovi picker labels cannot disagree; `ui = NA`
-# IS the fact "not offered in the picker". REG_FIT_FAMILY and REG_FAMILY_MULT_WORD are DERIVED from
-# it and from REG_ESTIMANDS, the latter with a build-time singleton assert.
+# ALSO HERE: REG_FAMILIES -- what each model family is CALLED, what it fits and where it may be
+# named, so the footer sentence, the Excel filename tag and the two jamovi picker labels cannot
+# disagree; `ui = NA` IS the fact "not offered in the picker", and declaring no `fits` IS the fact
+# "not a user family".
 #
-# WARNING -- i18n: every user-visible string in these tables (`long`, `why`, `note`, `display`) is a
-# BARE MSGID, gettext()'d by its reader at render. A top-level gettext() would evaluate once at load
-# and freeze the build locale, making the language switch a no-op.
+# WARNING -- i18n: every user-visible string in these tables (`long`, `why`, `note`) is a BARE MSGID,
+# gettext()'d by its reader at render. A top-level gettext() would evaluate once at load and freeze
+# the build locale, making the language switch a no-op.
 # See: CLAUDE.md section "tabxplor architecture" (the regression subsystem).
 
 
@@ -151,7 +155,81 @@ reg_pct_type <- function(scale)
 REG_MEASURES_VALUES <- c("auto", "odds_ratio", "ratio", "difference", "log")
 #' @keywords internal
 #' @noRd
-REG_EFFECTS_VALUES  <- c("coefficient", "marginal", "at_reference")
+REG_EFFECTS_VALUES  <- c("auto", "conditional", "marginal", "at_reference")
+# The three CONTRASTS themselves -- the value set minus the cascade's sentinel.
+#' @keywords internal
+#' @noRd
+REG_CONTRAST_VALUES <- setdiff(REG_EFFECTS_VALUES, "auto")
+
+# --- a link IS a measure ------------------------------------------------------------------------------
+#
+# THE ONE PLACE THE STATISTICIAN'S WORD APPEARS. Adding a link is one row here plus one `fits` entry
+# on the families that can fit it; the availability rule, the scale, the header word and the crude
+# companion all derive (cloglog -> hazard ratio is the one credible candidate, and after it the well
+# runs dry).
+#' @keywords internal
+#' @noRd
+REG_MEASURE_LINK <- c(odds_ratio = "logit", ratio = "log", difference = "identity")
+
+#' @keywords internal
+#' @noRd
+REG_LINKS_VALUES <- c("auto", names(REG_MEASURE_LINK))
+
+# The glm spellings, accepted silently and never taught. ⚠ NOT folded into REG_MEASURE_ALIASES: on
+# `link` the word "log" means the LOG LINK, while on `measure` it means "un-exponentiated" -- the one
+# word the two vocabularies do not share.
+#' @keywords internal
+#' @noRd
+REG_LINK_ALIASES <- c(identity = "difference", log = "ratio", logit = "odds_ratio")
+
+# reg_link_key() -- one spelling -> a link, NULL for an unknown one (so the caller aborts naming the
+# argument). A link takes `measure`'s own values, which is what keeps four arguments feeling like two.
+#' @keywords internal
+#' @noRd
+reg_link_key <- function(x) {
+  if (is.null(x) || length(x) != 1L || is.na(x)) return("auto")
+  x <- as.character(x)[[1L]]
+  a <- unname(REG_LINK_ALIASES[x])
+  if (!is.na(a)) return(a)
+  k <- reg_measure_key(x)
+  if (is.null(k) || identical(k$measure, "log")) return(NULL)
+  k$measure
+}
+
+# The marginaleffects contrast a REPORTED link asks for. NA = the additive default.
+#' @keywords internal
+#' @noRd
+REG_MARGINAL_COMPARISON <- c(identity = NA_character_, log = "lnratioavg", logit = "lnoravg")
+
+
+# --- what a LEVEL can be compared by ------------------------------------------------------------------
+#
+# A measure exists for an outcome when the outcome's LEVEL can be transformed by that measure's link:
+# a PERCENTAGE has an identity, a log and a logit, so all three; a MEAN or a COUNT has no odds, so no
+# odds ratio. The level kinds are EST_SCALES$var_kind's own words.
+#
+# Each cell names the EST_SCALES row the column is stamped with and the base acronym its header
+# prints. ⚠ ORDER IS LOAD-BEARING: the first entry is the LEVEL'S OWN measure, which is what the
+# cascade's one clause falls back to rather than marginalise a non-collapsible link.
+#' @keywords internal
+#' @noRd
+REG_LEVEL_MEASURES <- list(
+  pct   = list(ratio      = c(scale = "pct_ratio",  word = "RR"),
+               difference = c(scale = "points",     word = "RD"),
+               odds_ratio = c(scale = "odds_ratio", word = "OR")),
+  mean  = list(difference = c(scale = "raw_diff",   word = "diff"),
+               ratio      = c(scale = "mean_ratio", word = "RoM")),
+  count = list(difference = c(scale = "raw_diff",   word = "diff"),
+               ratio      = c(scale = "mean_ratio", word = "IRR"))
+)
+
+#' @keywords internal
+#' @noRd
+reg_level_measures <- function(level) {
+  if (is.null(level) || !length(level) || is.na(level[[1]]) ||
+      !level[[1]] %in% names(REG_LEVEL_MEASURES)) return(character(0))
+  names(REG_LEVEL_MEASURES[[level[[1]]]])
+}
 
 
 # --- the header vocabulary ---------------------------------------------------------------------------
@@ -180,7 +258,7 @@ REG_WORDS <- list(
 
 # REG_CONTRASTS -- how each `effect` marks the measure it rides on. `mark` is a PREFIX on the acronym
 # (unmarked = conditional, as the literature reads an unqualified odds ratio), `long` wraps the
-# expansion the same way. One row per REG_EFFECTS_VALUES entry, asserted at load.
+# expansion the same way. One row per contrast, asserted at load.
 #
 # The markers are prefixes rather than suffixes so the measure stays the last token of every header,
 # and they are plain letters so the name remains a syntactic R name -- `t$Model_refRR` works without
@@ -188,12 +266,13 @@ REG_WORDS <- list(
 #' @keywords internal
 #' @noRd
 REG_CONTRASTS <- list(
-  coefficient  = list(mark = "",    long = function(l) l),
+  conditional  = list(mark = "",    long = function(l) l),
   marginal     = list(mark = "m",   long = function(l) gettextf("marginal %s", l)),
   at_reference = list(mark = "ref", long = function(l) gettextf("%s at the reference profile", l))
 )
 
-stopifnot("every contrast declares its marker" = setequal(names(REG_CONTRASTS), REG_EFFECTS_VALUES))
+stopifnot("every contrast declares its marker" =
+            setequal(names(REG_CONTRASTS), REG_CONTRAST_VALUES))
 
 # reg_word() -- THE column header word.
 #' @keywords internal
@@ -255,324 +334,35 @@ reg_word_noncollapsible <- function(word) {
 }
 
 
-# --- the library -------------------------------------------------------------------------------------
+# REG_FAMILIES -- WHAT EACH MODEL FAMILY IS, what it can FIT and where it may be NAMED. Every other
+# name table (reg_family_display_name(), reg_family_short(), the UI labels) is DERIVED from this one,
+# and so is the whole estimand library -- so adding a family is one row.
 #
-# ONE ROW per (family, effect, measure) the package can answer, plus the rows that state why a
-# combination CANNOT be answered. Columns:
+# The estimand columns, which are what the library composes from:
+#   level      what a cell of this outcome IS: "pct" | "mean" | "count", EST_SCALES$var_kind's own
+#              words. It decides which measures exist (REG_LEVEL_MEASURES) and which is the level's
+#              own. Declaring it (with `fits`) IS the fact "a user family".
+#   fits       THE VALUE SET OF `link`, measure-keyed, mapping to the internal fit key reg_fit()
+#              takes. ⚠ ORDER IS LOAD-BEARING: the first entry is the family's own link, which is
+#              what `link = "auto"` resolves to and what the default table shows.
+#   words      per-measure header override, or NULL. Only ordinal declares one: a cumulative odds
+#              ratio is not a plain one, and the header says so.
+#   note       the QUALIFIER clause of the "Model:" footer line on a COEFFICIENT row -- what the
+#              estimand is measured against. The prediction routes generate their own.
+#   odds_pred  HOW a PREDICTED odds ratio is defined here, or NA. "complement" = the level and its
+#              complement, so both prediction routes offer it (a binary outcome). "vsrest" = only at
+#              a profile, each category versus the rest -- the `vsrest` builder, which is the one
+#              answer a 3+ category outcome has to "versus what?".
+#   crude      the REG_EMPIRICAL block this family's observed cells come from, when it is not its
+#              own name. Only quasipoisson needs it: it differs from poisson in the VARIANCE
+#              assumption, not in what it estimates.
 #
-#   builder      which of reg_build()'s three column builders runs: "coef" | "ame" | "vsrest".
-#   fit          the internal family key handed to reg_fit(). It is where a geometry becomes a
-#                different MODEL: "rr" = modified Poisson (a conditional risk ratio), "rd" =
-#                identity link (a risk difference), "mr" = log-link pseudo-ML (a ratio of means).
-#   exp          exponentiate the tidy estimate.
-#   word         the BASE measure acronym, a key into REG_WORDS. The contrast marker and the log
-#                wrapper are composed onto it by reg_word(), never declared -- see "the header
-#                vocabulary" above.
-#   scale        the EST_SCALES key stamped on the column. Its `est_field` says which fmt
-#                field the estimate is written into, so a scale change needs no builder change.
-#   crude_fam    which REG_EMPIRICAL block the observed companion comes from; "auto" =
-#                reg_crude_key(fit, trials), which is what carries `trials` -> grouped_binomial.
-#   crude_shape  which shape row inside it. `reg_crude_shape()`'s dispatch -- including its
-#                cross-family borrow (a binary marginal RATIO reuses REG_EMPIRICAL$rr$rr) -- IS
-#                these two columns.
-#   comparison   the marginaleffects `comparison =` value (NA = the additive default).
-#   engine       WHICH ENGINE computes this row's marginal quantities:
-#                "gcomp"          -- tabxplor's own g-computation: one counterfactual sweep giving the
-#                                    estimate, the adjusted predictions and an ANALYTIC jacobian, whose
-#                                    delta-method interval reproduces marginaleffects to 1e-8 (measured,
-#                                    glm and weighted svyglm alike) at ~25x the speed;
-#                "marginaleffects"-- the numerical-jacobian route;
-#                "auto"           -- resolve by the rule below (the `crude_fam = "auto"` idiom).
-#                THE RULE, stated once in reg_marginal_engine(): everything but `at_reference`, whose
-#                contrast lives on a one-row profile grid that g-computation does not build (and which
-#                costs 2.4 s, not 45). It is a PERMISSION, not a promise: the producer returns NULL
-#                rather than a wrong number, and reg_marginal() then falls back for the WHOLE call --
-#                never a per-contrast mix, so one column always carries one convention.
-#                It is ALSO the dependency rule: `marginaleffects` is a hard requirement exactly where
-#                this resolves to it, which is why no row declares that package separately. Every
-#                other row runs dependency-free, so a table may always populate its marginal
-#                quantities (the fallback checks for the package where it actually falls back).
-#   obs          may an `obs` (crude) value be attached cell by cell? FALSE at the reference profile,
-#                where the model is conditional and the observed columns stay marginal.
-#   status       "ok" | "impossible"; ABSENT from the table = "not offered". A fourth value,
-#                "redundant", is STAMPED after the table is built (reg_mark_redundant(), below).
-#   why          for "impossible" / "redundant": a closure returning the reason (gettext at render,
-#                statically
-#                extractable -- the MEASURES$word pattern; a top-level gettext() would freeze the
-#                build locale).
-#   note         a closure returning the QUALIFIER clause of the "Model:" footer line -- what the
-#                estimand is measured against, and any assumption worth one phrase. The measure
-#                itself is not repeated here: the footer composes "<word> = <long> (<note>)" from
-#                REG_WORDS, so the acronym in the header and its expansion are one fact.
-#
-# Two members exist only on a SYNTHESIZED logged row (reg_estimand()'s `measure = "log_*"` branch,
-# where a family declares no explicit log twin): `display`, the token the cell renders, and `log_of`,
-# the scale the column is the log OF -- read by reg_exp_scale_of() for the baseline row.
-#
-# WARNING: the msgids in `why` / `note` are the ones `po/R-fr.po` carries -- do not re-word them in
-# passing, or the French footer silently reverts to English.
-# `builder` and `engine` are the two closed vocabularies the columns above are keyed on, each
-# checked at load via a foreign key (R/zzz-fact-keys.R).
-#' @keywords internal
-#' @noRd
-REG_BUILDERS <- c("coef", "ame", "vsrest")
-
-#' @keywords internal
-#' @noRd
-REG_MARGINAL_ENGINES <- c("gcomp", "marginaleffects")
-
-# ⚠ a new column goes in the DEFAULTED TAIL: the first eight arguments are passed positionally at
-# every one of the 36 call sites below, so a column inserted earlier shifts all of them in silence.
-#' @keywords internal
-#' @noRd
-est_row <- function(effect, measure, builder, fit, exp, word, scale,
-                    crude_fam = "auto", crude_shape = NA_character_, comparison = NA_character_,
-                    obs = TRUE, engine = "auto", status = "ok", why = NULL, note = NULL) {
-  list(effect = effect, measure = measure, builder = builder, fit = fit, exp = exp, word = word,
-       scale = scale, crude_fam = crude_fam, crude_shape = crude_shape,
-       comparison = comparison, obs = obs, engine = engine,
-       status = status, why = why, note = note)
-}
-
-# reg_marginal_engine() -- THE rule `engine = "auto"` resolves to, and the ONE reader of the column.
-#' @keywords internal
-#' @noRd
-reg_marginal_engine <- function(est) {
-  e <- est$engine %||% "auto"
-  if (!identical(e, "auto")) return(e)
-  if (identical(est$effect, "at_reference")) "marginaleffects" else "gcomp"
-}
-
-# The three MARGINAL-row phrases, generated once rather than written per row.
-#' @keywords internal
-#' @noRd
-est_note_marginal <- function(kind, at_ref = FALSE, ratio = FALSE) {
-  function() {
-    where <- if (at_ref)
-      gettext("other predictors held at their reference level / mean")
-    else gettext("sample-averaged")
-    what <- if (ratio && identical(kind, "prob"))
-      gettext("the ratio of adjusted predicted probabilities")
-    else if (ratio)
-      gettext("the ratio of adjusted predicted values")
-    else if (identical(kind, "prob"))
-      gettext("on the probability scale, in percentage points")
-    else gettext("on the response scale")
-    gettextf("%s; %s", what, where)   # the separator is the TRANSLATION's (French: " ; ")
-  }
-}
-
-# The per-family estimand library. Read it as: "for THIS outcome family, what can each
-# (contrast x measure) pair be?". `default` names the measure `measure = "auto"` resolves to, and is
-# also the base `measure = "log"` logs.
-#' @keywords internal
-#' @noRd
-REG_ESTIMANDS <- list(
-
-  # ---- gaussian ---------------------------------------------------------------------------------
-  gaussian = list(
-    default = c(coefficient = "difference", marginal = "difference", at_reference = "difference"),
-    rows = list(
-      est_row("coefficient", "difference", "coef", "gaussian", FALSE, "diff", "raw_diff",
-              crude_shape = "diff",
-              note = function() gettext("vs the reference category")),
-      # ratio of means: Poisson pseudo-ML, robust SEs (Santos Silva & Tenreyro 2006).
-      est_row("coefficient", "ratio", "coef", "mr", TRUE, "RoM", "mean_ratio",
-              crude_fam = "mr", crude_shape = "mr",
-              note = function() gettext("vs the reference category")),
-      est_row("coefficient", "log", "coef", "mr", FALSE, "RoM", "log_coef",
-              crude_fam = "mr", crude_shape = "mr_log",
-              note = function() gettext("vs the reference category")),
-      est_row("coefficient", "odds_ratio", "coef", "gaussian", TRUE, "OR", "odds_ratio",
-              status = "impossible",
-              why = function() gettext("an odds ratio needs a probability to take the odds of; this outcome is continuous")),
-      est_row("marginal", "difference", "ame", "gaussian", FALSE, "diff", "raw_diff",
-              crude_shape = "diff",
-              note = est_note_marginal("raw")),
-      est_row("marginal", "ratio", "ame", "gaussian", TRUE, "RoM", "mean_ratio",
-              crude_fam = "mr", crude_shape = "mr", comparison = "lnratioavg",
-              note = est_note_marginal("raw", ratio = TRUE)),
-      est_row("at_reference", "difference", "ame", "gaussian", FALSE, "diff", "raw_diff",
-              crude_shape = "diff", obs = FALSE,
-              note = est_note_marginal("raw", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "gaussian", TRUE, "RoM", "mean_ratio",
-              crude_fam = "mr", crude_shape = "mr", comparison = "lnratioavg",
-              obs = FALSE,
-              note = est_note_marginal("raw", at_ref = TRUE, ratio = TRUE))
-    )),
-
-  # ---- binomial ---------------------------------------------------------------------------------
-  binomial = list(
-    default = c(coefficient = "odds_ratio", marginal = "difference", at_reference = "difference"),
-    rows = list(
-      est_row("coefficient", "odds_ratio", "coef", "binomial", TRUE, "OR", "odds_ratio",
-              crude_shape = "or",
-              note = function() gettext("vs the reference category")),
-      est_row("coefficient", "log", "coef", "binomial", FALSE, "OR", "log_coef",
-              crude_shape = "or_log",
-              note = function() gettext("vs the reference category")),
-      # modified Poisson (Zou 2004): a genuine conditional risk ratio, not derived from the odds ratio.
-      est_row("coefficient", "ratio", "coef", "rr", TRUE, "RR", "pct_ratio",
-              crude_fam = "rr", crude_shape = "rr",
-              note = function() gettext("vs the reference category")),
-      est_row("coefficient", "difference", "coef", "rd", FALSE, "RD", "points",
-              crude_shape = "ame",
-              note = function() gettext("in percentage points, vs the reference category")),
-      est_row("marginal", "difference", "ame", "binomial", FALSE, "RD", "points",
-              crude_shape = "ame",
-              note = est_note_marginal("prob")),
-      est_row("marginal", "ratio", "ame", "binomial", TRUE, "RR", "pct_ratio",
-              crude_fam = "rr", crude_shape = "rr", comparison = "lnratioavg",
-              note = est_note_marginal("prob", ratio = TRUE)),
-      est_row("at_reference", "difference", "ame", "binomial", FALSE, "RD", "points",
-              crude_shape = "ame", obs = FALSE,
-              note = est_note_marginal("prob", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "binomial", TRUE, "RR", "pct_ratio",
-              crude_fam = "rr", crude_shape = "rr", comparison = "lnratioavg",
-              obs = FALSE,
-              note = est_note_marginal("prob", at_ref = TRUE, ratio = TRUE))
-    )),
-
-  # ---- poisson / quasipoisson (counts) ----------------------------------------------------------
-  poisson = list(
-    default = c(coefficient = "ratio", marginal = "difference", at_reference = "difference"),
-    rows = list(
-      # an incidence-rate ratio IS a ratio of means, so it takes `mean_ratio`, printing like any
-      # other ratio of means, in a regression and a crosstab alike.
-      est_row("coefficient", "ratio", "coef", "poisson", TRUE, "IRR", "mean_ratio",
-              crude_shape = "irr",
-              note = function() gettext("vs the reference category")),
-      est_row("coefficient", "log", "coef", "poisson", FALSE, "IRR", "log_coef",
-              crude_shape = "irr_log",
-              note = function() gettext("vs the reference category")),
-      est_row("coefficient", "odds_ratio", "coef", "poisson", TRUE, "OR", "odds_ratio",
-              status = "impossible",
-              why = function() gettext("an odds ratio needs a probability to take the odds of; this outcome is a count")),
-      est_row("marginal", "difference", "ame", "poisson", FALSE, "diff", "raw_diff",
-              crude_shape = "diff", note = est_note_marginal("raw")),
-      # word "IRR" (not "RoM"): a count outcome has ONE ratio acronym.
-      est_row("marginal", "ratio", "ame", "poisson", TRUE, "IRR", "mean_ratio",
-              crude_shape = "irr", comparison = "lnratioavg",
-              note = est_note_marginal("raw", ratio = TRUE)),
-      est_row("at_reference", "difference", "ame", "poisson", FALSE, "diff", "raw_diff",
-              crude_shape = "diff", obs = FALSE,
-              note = est_note_marginal("raw", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "poisson", TRUE, "IRR", "mean_ratio",
-              crude_shape = "irr", comparison = "lnratioavg", obs = FALSE,
-              note = est_note_marginal("raw", at_ref = TRUE, ratio = TRUE))
-    )),
-
-  # ---- multinomial ------------------------------------------------------------------------------
-  multinomial = list(
-    default = c(coefficient = "odds_ratio", marginal = "difference", at_reference = "odds_ratio"),
-    rows = list(
-      est_row("coefficient", "odds_ratio", "coef", "multinomial", TRUE, "OR", "odds_ratio",
-              crude_shape = "or",
-              note = function() gettext("each category vs the reference")),
-      est_row("coefficient", "log", "coef", "multinomial", FALSE, "OR", "log_coef",
-              crude_shape = "or_log",
-              note = function() gettext("each category vs the reference")),
-      est_row("marginal", "difference", "ame", "multinomial", FALSE, "RD", "points",
-              crude_shape = "ame", note = est_note_marginal("prob")),
-      est_row("marginal", "ratio", "ame", "multinomial", TRUE, "RR", "pct_ratio",
-              crude_shape = "ame_ratio", comparison = "lnratioavg",
-              note = est_note_marginal("prob", ratio = TRUE)),
-      # the one row whose BUILDER is "vsrest": at the reference profile the coefficient becomes the
-      # odds ratio of each category versus the rest.
-      est_row("at_reference", "odds_ratio", "vsrest", "multinomial", TRUE, "OR", "odds_ratio",
-              crude_shape = "or", comparison = "lnor", obs = FALSE,
-              note = function() gettext("each outcome category versus the rest; other predictors held at their reference level / mean; profile-conditional")),
-      est_row("at_reference", "difference", "ame", "multinomial", FALSE, "RD", "points",
-              crude_shape = "ame", obs = FALSE,
-              note = est_note_marginal("prob", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "multinomial", TRUE, "RR", "pct_ratio",
-              crude_shape = "ame_ratio", comparison = "lnratioavg",
-              obs = FALSE, note = est_note_marginal("prob", at_ref = TRUE, ratio = TRUE))
-    )),
-
-  # ---- ordinal ----------------------------------------------------------------------------------
-  ordinal = list(
-    default = c(coefficient = "odds_ratio", marginal = "difference", at_reference = "difference"),
-    rows = list(
-      est_row("coefficient", "odds_ratio", "coef", "ordinal", TRUE, "cumOR", "odds_ratio",
-              crude_shape = "cumor",
-              note = function() gettext("proportional-odds model")),
-      est_row("coefficient", "log", "coef", "ordinal", FALSE, "cumOR", "log_coef",
-              crude_shape = "cumor_log",
-              note = function() gettext("proportional-odds model")),
-      est_row("marginal", "difference", "ame", "ordinal", FALSE, "RD", "points",
-              crude_shape = "ame", note = est_note_marginal("prob")),
-      est_row("marginal", "ratio", "ame", "ordinal", TRUE, "RR", "pct_ratio",
-              crude_shape = "ame_ratio", comparison = "lnratioavg",
-              note = est_note_marginal("prob", ratio = TRUE)),
-      est_row("at_reference", "difference", "ame", "ordinal", FALSE, "RD", "points",
-              crude_shape = "ame", obs = FALSE,
-              note = est_note_marginal("prob", at_ref = TRUE)),
-      est_row("at_reference", "ratio", "ame", "ordinal", TRUE, "RR", "pct_ratio",
-              crude_shape = "ame_ratio", comparison = "lnratioavg",
-              obs = FALSE, note = est_note_marginal("prob", at_ref = TRUE, ratio = TRUE))
-    ))
-)
-
-# `quasipoisson` is the same estimand grid as `poisson` -- it differs in the VARIANCE assumption, not
-# in what it estimates -- so it inherits the rows and only swaps the fitter. Declared, not copied.
-REG_ESTIMANDS$quasipoisson <- list(
-  default = REG_ESTIMANDS$poisson$default,
-  rows = lapply(REG_ESTIMANDS$poisson$rows, function(r) {
-    if (identical(r$fit, "poisson")) r$fit <- "quasipoisson"
-    r
-  }))
-
-# --- the REDUNDANT cells, derived ---------------------------------------------------------------
-# A marginal contrast IS the coefficient wherever the two run on the same fit and target the same
-# measure and the link is collapsible: averaging exp(xb) over the sample divides the exposure factor
-# out (log link), averaging a constant slope changes nothing (identity). So the sweep would return
-# the coefficient under a second header and a second name -- which is what the one-name-per-quantity
-# rule forbids. Those cells are REFUSED, with reg_estimand_abort() naming the coefficient call.
-#
-# DERIVED rather than declared row by row, so a family added later cannot forget the rule; the test
-# suite pins the resulting set. It reads only this file's own facts, all defined above.
-# ⚠ `at_reference` is NOT redundant: the estimate is the same, but the adjusted prediction beside it
-# comes from the column's OWN reference-profile sweep, not the sample-averaged one -- a different
-# table. And an odds ratio never qualifies (REG_WORDS' declared `noncollapsible`).
-#' @keywords internal
-#' @noRd
-reg_mark_redundant <- function(tbl) {
-  lapply(tbl, function(fr) {
-    coefs <- Filter(function(r) identical(r$effect, "coefficient") && identical(r$status, "ok"),
-                    fr$rows)
-    fr$rows <- lapply(fr$rows, function(r) {
-      if (!identical(r$effect, "marginal") || !identical(r$builder, "ame") ||
-          !identical(r$status, "ok") || reg_word_noncollapsible(r$word)) return(r)
-      same <- any(vapply(coefs, function(c)
-        identical(c$fit, r$fit) && identical(c$measure, r$measure), logical(1)))
-      if (!same) return(r)
-      r$status <- "redundant"
-      # the measure names the link, exactly because the pair only matches on the link's own contrast
-      r$why    <- if (identical(r$measure, "difference"))
-        function() gettext("the identity link is collapsible, so averaging changes nothing")
-      else
-        function() gettext("the log link is collapsible, so averaging changes nothing")
-      r
-    })
-    fr
-  })
-}
-REG_ESTIMANDS <- reg_mark_redundant(REG_ESTIMANDS)
-
-# REG_FAMILIES -- WHAT EACH MODEL FAMILY IS CALLED, and where it may be named. Every other name
-# table (reg_family_display_name(), reg_family_short(), the UI labels) is DERIVED from this one, so
-# adding a family is one row.
-#
-# The columns:
+# The naming columns:
 #   display    a CLOSURE -- gettext() at render (so the footer follows options(tabxplor.lang)) while
 #              staying statically extractable by potools. The CI_METHOD_LABELS precedent.
 #   short      the filename tag (Excel sheet names).
 #   ui         the PICKER label, or NA. ⚠ `NA` IS THE FACT "not offered in the picker".
-#   ui_binary  the picker label OVERRIDE on a 2-level outcome, where family = "poisson" is not a
-#              count model: R resolves it to the modified Poisson (Zou 2004), whose exp(coef) is a
-#              RISK ratio. Same stored value, different words -- so the dropdown never says "counts"
-#              beside a yes/no variable.
+#   ui_binary  the picker label OVERRIDE on a 2-level outcome.
 #   outcome    NA on a user family; on an internal LINK key (rr / rd / mr), the OUTCOME family it
 #              belongs to. REG_FIT_FAMILY is derived from this column.
 #   outcome_level  WHAT `outcome_level = c(<outcome> = "<level>")` MEANS FOR THIS FAMILY, and the one
@@ -596,27 +386,45 @@ REG_ESTIMANDS <- reg_mark_redundant(REG_ESTIMANDS)
 REG_FAMILIES <- list(
   gaussian     = list(display = function() gettext("linear regression"),
                       short = "linear",   ui = "gaussian (linear)",    ui_binary = NA_character_,
-                      outcome = NA_character_, outcome_level = NA_character_),
+                      outcome = NA_character_, outcome_level = NA_character_,
+                      level = "mean",  fits = c(difference = "gaussian", ratio = "mr"),
+                      note = function() gettext("vs the reference category")),
   binomial     = list(display = function() gettext("logistic regression"),
                       short = "logit",    ui = "binomial (logistic)",  ui_binary = "binomial (logistic)",
-                      outcome = NA_character_, outcome_level = "modelled"),
+                      outcome = NA_character_, outcome_level = "modelled",
+                      level = "pct",
+                      fits = c(odds_ratio = "binomial", ratio = "rr", difference = "rd"),
+                      odds_pred = "complement",
+                      note = function() gettext("vs the reference category")),
   poisson      = list(display = function() gettext("Poisson regression"),
-                      short = "poisson",  ui = "poisson (counts)",     ui_binary = "poisson (risk ratio)",
-                      outcome = NA_character_, outcome_level = NA_character_),
+                      short = "poisson",  ui = "poisson (counts)",     ui_binary = NA_character_,
+                      outcome = NA_character_, outcome_level = NA_character_,
+                      level = "count", fits = c(ratio = "poisson"),
+                      note = function() gettext("vs the reference category")),
   multinomial  = list(display = function() gettext("multinomial logistic regression"),
                       short = "mlogit",   ui = "multinomial (nominal)", ui_binary = NA_character_,
-                      outcome = NA_character_, outcome_level = "baseline"),
+                      outcome = NA_character_, outcome_level = "baseline",
+                      level = "pct",   fits = c(odds_ratio = "multinomial"),
+                      odds_pred = "vsrest",
+                      note = function() gettext("each category vs the reference")),
   ordinal      = list(display = function() gettext("ordinal logistic regression"),
                       short = "ologit",   ui = "ordinal (ordered)",    ui_binary = NA_character_,
                       outcome = NA_character_, outcome_level = NA_character_,
+                      level = "pct",   fits = c(odds_ratio = "ordinal"),
+                      words = list(odds_ratio = "cumOR"),
+                      note = function() gettext("proportional-odds model"),
                       why = function() gettext(
                         "an ordinal outcome must keep the order of its levels, so none can be singled out")),
   # a USER family the picker does not offer (the checkbox route is `family = "poisson"` + a
-  # dispersion warning): `ui = NA` says so once, where the label lives.
+  # dispersion warning): `ui = NA` says so once, where the label lives. It differs from poisson in
+  # the VARIANCE assumption, not in what it estimates, so it borrows poisson's crude cells.
   quasipoisson = list(display = function() gettext("quasi-Poisson regression"),
                       short = "qpoisson", ui = NA_character_,          ui_binary = NA_character_,
-                      outcome = NA_character_),
-  # the three internal LINK keys: never named by a user, never offered by a picker.
+                      outcome = NA_character_,
+                      level = "count", fits = c(ratio = "quasipoisson"), crude = "poisson",
+                      note = function() gettext("vs the reference category")),
+  # the three internal LINK keys: never named by a user, never offered by a picker, and declaring no
+  # `fits` -- which IS what makes them internal. `link` is how they are reached.
   rr           = list(display = function() gettext("modified Poisson regression"),
                       short = "rr",       ui = NA_character_,          ui_binary = NA_character_,
                       outcome = "binomial"),
@@ -711,23 +519,107 @@ reg_outcome_levels <- function(y, outcome) {
   levels(forcats::fct_drop(as.factor(y)))
 }
 
-# REG_FAMILY_MULT_WORD -- the MULTIPLICATIVE effect word of a fit key: what exp(coef) is CALLED for
-# this link (OR / RR / IRR / RoM; NA where there is no exponentiated coefficient estimand).
+
+# --- the library, COMPOSED ----------------------------------------------------------------------------
 #
-# DERIVED from REG_ESTIMANDS' own exponentiated coefficient row: an ambiguous or missing row fails to
-# LOAD (a build-time assert) rather than silently defaulting to "OR".
+# ONE ROW per (link, effect, measure) the package can BUILD. A refusal is NOT a row: reg_estimand()
+# derives it from the clause that failed, so a hole and its reason cannot drift apart.
+#
+# The composed members, and where each comes from:
+#
+#   link          which measure the MODEL estimates -- the key into the family's `fits`.
+#   effect        the contrast: "conditional" | "marginal" | "at_reference".
+#   measure       what is REPORTED; "log" on a logged row, whose base is `base_measure`.
+#   base_measure  the measure a logged row is the log OF (itself, on every other row). It is the
+#                 LOOKUP key: under one (link, effect) a ratio and an odds ratio both log, so
+#                 "log" alone would name two rows.
+#   measure_link  the link the REPORTED comparison is taken on -- REG_EMPIRICAL$*$link's own
+#                 vocabulary, and what the g-computation sweep and the crude leg both read. It
+#                 EQUALS the model's link exactly on a coefficient row.
+#   builder       which of reg_build()'s three column builders runs: "coef" | "ame" | "vsrest".
+#   fit           the internal family key handed to reg_fit(), i.e. `fits[[link]]`. It is where a
+#                 link becomes a different MODEL: "rr" = modified Poisson (a conditional risk
+#                 ratio), "rd" = identity link (a risk difference), "mr" = log-link pseudo-ML.
+#   exp           exponentiate the tidy estimate: multiplicative, and not logged.
+#   word          the BASE measure acronym, a key into REG_WORDS. The contrast marker and the log
+#                 wrapper are composed onto it by reg_word(), never declared.
+#   scale         the EST_SCALES key stamped on the column. Its `est_field` says which fmt field
+#                 the estimate is written into, so a scale change needs no builder change.
+#   crude_fam     which REG_EMPIRICAL block the observed companion comes from; "auto" =
+#                 reg_crude_key(fit, trials), which is what carries `trials` -> grouped_binomial.
+#   crude_shape   which shape row inside it: the block's shape on `measure_link`.
+#   comparison    the marginaleffects `comparison =` value (NA = the additive default).
+#   note          a closure returning the QUALIFIER clause of the "Model:" footer line -- what the
+#                 estimand is measured against, and any assumption worth one phrase. The measure
+#                 itself is not repeated: the footer composes "<word> = <long> (<note>)".
+#   log_of        on a logged row, the scale it is the log OF. `log_coef` is one row shared by every
+#                 logged measure, so a link-scale column cannot say on its own whether its
+#                 exponential is an odds or a level -- and its baseline row differs by exactly that.
+#   status        "ok". Every row in this table builds; that is what makes it a table of rows.
+#
+# `builder` and `engine` are the two closed vocabularies the columns above are keyed on, each
+# checked at load via a foreign key (R/zzz-fact-keys.R).
+#' @keywords internal
+#' @noRd
+REG_BUILDERS <- c("coef", "ame", "vsrest")
+
+#' @keywords internal
+#' @noRd
+REG_MARGINAL_ENGINES <- c("gcomp", "marginaleffects")
+
+# reg_marginal_engine() -- WHICH ENGINE computes a row's marginal quantities. Stated once, DERIVED
+# rather than declared, because every row answers it the same way:
+#   "gcomp"           tabxplor's own g-computation -- one counterfactual sweep giving the estimate,
+#                     the adjusted predictions and an ANALYTIC jacobian, whose delta-method interval
+#                     reproduces marginaleffects to 1e-8 (glm and weighted svyglm alike) at ~25x the
+#                     speed;
+#   "marginaleffects" the numerical-jacobian route -- everything at `at_reference`, whose contrast
+#                     lives on a one-row profile grid that g-computation does not build.
+# It is a PERMISSION, not a promise: the producer returns NULL rather than a wrong number and
+# reg_marginal() then falls back for the WHOLE call, so one column always carries one convention. It
+# is ALSO the dependency rule: `marginaleffects` is a hard requirement exactly where this resolves to
+# it, and every other row runs dependency-free.
+#' @keywords internal
+#' @noRd
+reg_marginal_engine <- function(est)
+  if (identical(est$effect, "at_reference")) "marginaleffects" else "gcomp"
+
+# May an `obs` (crude) value be attached cell by cell? Not at the reference profile, where the model
+# is conditional while the observed columns stay marginal.
+#' @keywords internal
+#' @noRd
+reg_estimand_obs <- function(est) !identical(est$effect, "at_reference")
+
+# The scale + acronym one (level, measure) pair carries. A family may override the WORD -- an
+# ordinal model's cumulative odds ratio is not a plain one, and its header says so.
+#' @keywords internal
+#' @noRd
+reg_measure_cell <- function(family, measure) {
+  fam  <- REG_FAMILIES[[family]]
+  cell <- REG_LEVEL_MEASURES[[fam$level %||% ""]][[measure]]
+  if (is.null(fam$level) || is.null(cell)) return(NULL)
+  w <- if (measure %in% names(fam$words)) fam$words[[measure]] else unname(cell[["word"]])
+  list(scale = unname(cell[["scale"]]), word = w)
+}
+
+# REG_FAMILY_MULT_WORD -- the MULTIPLICATIVE effect word of a fit key: what exp(coef) is CALLED for
+# this link (OR / RR / IRR / RoM / cumOR; NA where the link's coefficient is additive).
+#
+# ⚠ keyed on the FIT, not on the family that declares it: a binomial outcome fits BOTH the logit
+# ("OR") and the modified Poisson ("RR"), so "the binomial family's word" is ambiguous where "the fit
+# key's" is not. Two families claiming one fit with two words fails to LOAD.
 #' @keywords internal
 #' @noRd
 REG_FAMILY_MULT_WORD <- local({
-  # ⚠ keyed on the row's `fit`, NOT on the family bucket it is declared under: a binomial outcome
-  # holds BOTH the logit row (word "OR") and the modified-Poisson one (word "RR"), so "the binomial
-  # family's word" is ambiguous where "the fit key's" is not.
-  all_rows <- unlist(lapply(REG_ESTIMANDS, function(fr) fr$rows), recursive = FALSE)
-  keys <- unique(c(names(REG_ESTIMANDS), names(REG_FIT_FAMILY)))
-  vapply(keys, function(k) {
-    w <- unique(vapply(Filter(function(r)
-      identical(r$fit, k) && identical(r$effect, "coefficient") && isTRUE(r$exp) &&
-        identical(r$status, "ok"), all_rows), function(r) r$word, character(1)))
+  pairs <- Filter(Negate(is.null), unlist(lapply(names(REG_FAMILIES), function(f) {
+    fits <- REG_FAMILIES[[f]]$fits
+    lapply(names(fits), function(m)
+      if (identical(unname(REG_MEASURE_LINK[m]), "identity")) NULL
+      else list(fit = unname(fits[[m]]), word = reg_measure_cell(f, m)$word))
+  }), recursive = FALSE))
+  vapply(stats::setNames(nm = names(REG_FAMILIES)), function(k) {
+    w <- unique(vapply(Filter(function(p) identical(p$fit, k), pairs),
+                       function(p) p$word, character(1)))
     stopifnot(length(w) <= 1L)
     if (length(w)) w else NA_character_
   }, character(1))
@@ -739,147 +631,341 @@ reg_family_mult_word <- function(family) {
   if (length(w) != 1L) NA_character_ else unname(w)
 }
 
-# The PUBLIC family vocabulary -- what `tab_reg(family =)` accepts: the complement of
-# REG_FIT_ONLY_FAMILIES. The internal link keys (rr / rd / mr) are reached by naming a MEASURE.
+# The PUBLIC family vocabulary -- what `tab_reg(family =)` accepts. Declaring `fits` IS the fact "a
+# user family": the internal link keys (rr / rd / mr) declare none and are reached through `link`.
 #' @keywords internal
 #' @noRd
-REG_USER_FAMILIES <- setdiff(names(REG_ESTIMANDS), REG_FIT_ONLY_FAMILIES)
+REG_USER_FAMILIES <- Filter(function(f) !is.null(REG_FAMILIES[[f]]$fits), names(REG_FAMILIES))
 
-# Build-time integrity: checked here is this table's own SELF-consistency (does it cover its own
-# key set). Cross-table foreign keys against EST_SCALES / reg_fit() / etc. are declared separately,
-# in R/zzz-fact-keys.R.
+# reg_emp_block() -- the REG_EMPIRICAL block a family-or-fit key resolves to: its own if it has
+# one, else the outcome family it belongs to. ONE rule with TWO readers -- the library composes each
+# row's crude companion through it, and reg_crude_key() (R/tab_reg.R) answers the same question at
+# run time, where `trials` may move the block to grouped_binomial first.
+#' @keywords internal
+#' @noRd
+reg_emp_block <- function(key) {
+  if (is.null(key) || length(key) != 1L || is.na(key)) return(NA_character_)
+  if (!is.null(REG_EMPIRICAL[[key]])) return(key)
+  out <- REG_FAMILIES[[key]]$crude %||% unname(REG_FIT_FAMILY[key])
+  if (is.null(out) || is.na(out) || is.null(REG_EMPIRICAL[[out]])) NA_character_ else out
+}
+
+# The observed companion, derived. It is the block's shape on the REPORTED link -- and where the
+# outcome's own block has none, the block named by the `fits` entry for that measure, which IS the
+# two cross-family borrows (a binary RATIO reuses REG_EMPIRICAL$rr, a gaussian one REG_EMPIRICAL$mr).
+# ⚠ `crude_fam = "auto"` is kept wherever the own block suffices, so `trials` can still move it.
+#' @keywords internal
+#' @noRd
+reg_compose_crude <- function(family, fit, measure, measure_link, logged) {
+  none <- list(fam = "auto", shape = NA_character_)
+  sh   <- reg_emp_shape_on(reg_emp_block(fit), measure_link, logged)
+  if (!is.null(sh)) return(list(fam = "auto", shape = sh))
+  borrow <- REG_FAMILIES[[family]]$fits[measure]
+  if (is.na(borrow[[1]])) return(none)
+  blk <- reg_emp_block(unname(borrow[[1]]))
+  sh  <- reg_emp_shape_on(blk, measure_link, logged)
+  if (is.null(sh)) return(none)
+  list(fam = blk, shape = sh)
+}
+
+# The three PREDICTION-route phrases, generated once rather than written per row.
+#' @keywords internal
+#' @noRd
+est_note_marginal <- function(kind, at_ref = FALSE, measure = "difference") {
+  function() {
+    where <- if (at_ref)
+      gettext("other predictors held at their reference level / mean")
+    else gettext("sample-averaged")
+    prob <- identical(kind, "prob")
+    what <- if (identical(measure, "odds_ratio"))
+      gettext("the odds ratio of adjusted predicted probabilities")
+    else if (identical(measure, "ratio") && prob)
+      gettext("the ratio of adjusted predicted probabilities")
+    else if (identical(measure, "ratio"))
+      gettext("the ratio of adjusted predicted values")
+    else if (prob)
+      gettext("on the probability scale, in percentage points")
+    else gettext("on the response scale")
+    gettextf("%s; %s", what, where)   # the separator is the TRANSLATION's (French: " ; ")
+  }
+}
+
+# The estimand phrase of one composed row: the family's own qualifier on a coefficient (saying so
+# when the scale is percentage points), the generated prediction phrase otherwise.
+#' @keywords internal
+#' @noRd
+reg_compose_note <- function(family, effect, measure, scale, vsrest) {
+  if (vsrest) return(function() gettext(
+    "each outcome category versus the rest; other predictors held at their reference level / mean; profile-conditional"))
+  if (identical(effect, "conditional")) {
+    own <- REG_FAMILIES[[family]]$note
+    return(if (identical(scale, "points"))
+      function() gettextf("in percentage points, %s", own()) else own)
+  }
+  est_note_marginal(if (identical(REG_FAMILIES[[family]]$level, "pct")) "prob" else "raw",
+                    at_ref = identical(effect, "at_reference"), measure = measure)
+}
+
+# reg_compose_row() -- ONE cell, or NULL where the cell does not build. The three clauses that can
+# return NULL are exactly the three refusals reg_estimand() words.
+#' @keywords internal
+#' @noRd
+reg_compose_row <- function(family, link, effect, measure) {
+  fam  <- REG_FAMILIES[[family]]
+  cell <- reg_measure_cell(family, measure)
+  if (is.null(cell)) return(NULL)                                  # the level has no such measure
+  pred <- !identical(effect, "conditional")
+  if (!pred && !identical(measure, link)) return(NULL)              # a coefficient IS the link's
+  vsrest <- FALSE
+  if (pred && identical(measure, "odds_ratio")) {
+    # an odds ratio needs a percentage AND its complement, which only a binary outcome has; a 3+
+    # category one must be asked "versus what?", and the profile builder is the one answer to it.
+    op <- fam$odds_pred %||% NA_character_
+    if (identical(op, "vsrest")) {
+      if (!identical(effect, "at_reference")) return(NULL)
+      vsrest <- TRUE
+    } else if (!identical(op, "complement")) return(NULL)
+  }
+  mlink <- unname(REG_MEASURE_LINK[[measure]])
+  fit   <- unname(fam$fits[[link]])
+  crude <- reg_compose_crude(family, fit, measure, mlink, FALSE)
+  list(link = link, effect = effect, measure = measure, base_measure = measure,
+       measure_link = mlink, builder = if (!pred) "coef" else if (vsrest) "vsrest" else "ame",
+       fit = fit, exp = !identical(mlink, "identity"),
+       word = cell$word, scale = cell$scale,
+       crude_fam = crude$fam, crude_shape = crude$shape,
+       comparison = if (!pred) NA_character_ else if (vsrest) "lnor"
+                    else unname(REG_MARGINAL_COMPARISON[[mlink]]),
+       note = reg_compose_note(family, effect, measure, cell$scale, vsrest),
+       status = "ok")
+}
+
+# The LOG twin of a multiplicative row: the same fit and the same contrast, un-exponentiated, on the
+# link-scale ladder. An additive row has no ratio to take the log of and gets none.
+#' @keywords internal
+#' @noRd
+reg_compose_log <- function(family, r) {
+  if (!isTRUE(r$exp)) return(NULL)
+  crude <- reg_compose_crude(family, r$fit, r$base_measure, r$measure_link, TRUE)
+  r$log_of      <- r$scale
+  r$measure     <- "log"
+  r$exp         <- FALSE
+  r$scale       <- "log_coef"
+  r$crude_fam   <- crude$fam
+  r$crude_shape <- crude$shape
+  r
+}
+
+#' @keywords internal
+#' @noRd
+reg_compose_rows <- function(family) {
+  fam  <- REG_FAMILIES[[family]]
+  meas <- reg_level_measures(fam$level)
+  out  <- list()
+  for (lk in names(fam$fits)) for (ef in REG_CONTRAST_VALUES) for (m in meas) {
+    r <- reg_compose_row(family, lk, ef, m)
+    if (is.null(r)) next
+    out <- c(out, list(r), list(reg_compose_log(family, r)))
+  }
+  Filter(Negate(is.null), out)
+}
+
+#' @keywords internal
+#' @noRd
+reg_compose_library <- function()
+  stats::setNames(lapply(REG_USER_FAMILIES, function(f) list(rows = reg_compose_rows(f))),
+                  REG_USER_FAMILIES)
+
+#' @keywords internal
+#' @noRd
+REG_ESTIMANDS <- reg_compose_library()
+
+# Build-time integrity: this table's own SELF-consistency. Cross-table foreign keys (EST_SCALES,
+# REG_EMPIRICAL, reg_fit()) are declared separately, in R/zzz-fact-keys.R.
 local({
   for (fam in names(REG_ESTIMANDS)) {
-    fr <- REG_ESTIMANDS[[fam]]
-    keys <- vapply(fr$rows, function(r) paste(r$effect, r$measure), character(1))
+    rows <- REG_ESTIMANDS[[fam]]$rows
+    keys <- vapply(rows, function(r) paste(r$link, r$effect, r$base_measure, r$measure), character(1))
     stopifnot(
-      "every family declares a default measure per contrast" =
-        setequal(names(fr$default), REG_EFFECTS_VALUES),
-      "every declared default has a row"                     =
-        all(paste(names(fr$default), fr$default) %in% keys),
-      "no (effect, measure) cell is declared twice" = !anyDuplicated(keys),
-      "every row's effect is a declared value"      =
-        all(vapply(fr$rows, function(r) r$effect %in% REG_EFFECTS_VALUES, logical(1))),
-      "every row's engine is a declared value or auto" =
-        all(vapply(fr$rows, function(r)
-          (r$engine %||% "auto") %in% c(REG_MARGINAL_ENGINES, "auto"), logical(1))),
-      "every impossible row says why"               =
-        all(vapply(fr$rows, function(r) r$status == "ok" || is.function(r$why), logical(1))),
-      "every buildable row has an estimand phrase"  =
-        all(vapply(fr$rows, function(r) r$status != "ok" || is.function(r$note), logical(1))),
-      # `obs` is withheld exactly at the reference profile -- asserted here so the day an estimand
-      # needs `obs = FALSE` for another reason, this line is what must be relaxed, deliberately.
-      "obs is withheld exactly at the reference profile" =
-        all(vapply(fr$rows, function(r)
-          isTRUE(r$obs) == !identical(r$effect, "at_reference"), logical(1)))
+      "every family composes at least one row"     = length(rows) > 0L,
+      "no (link, effect, measure) cell is composed twice" = !anyDuplicated(keys),
+      "every row's contrast is a declared value"   =
+        all(vapply(rows, function(r) r$effect %in% REG_CONTRAST_VALUES, logical(1))),
+      "every row's link is one the family fits"    =
+        all(vapply(rows, function(r) r$link %in% names(REG_FAMILIES[[fam]]$fits), logical(1))),
+      "every row carries an estimand phrase"       =
+        all(vapply(rows, function(r) is.function(r$note), logical(1))),
+      "a coefficient row reports the model's own measure" =
+        all(vapply(rows, function(r) !identical(r$effect, "conditional") ||
+                     identical(r$base_measure, r$link), logical(1))),
+      "a logged row is the log of a multiplicative one" =
+        all(vapply(rows, function(r) !identical(r$measure, "log") ||
+                     !identical(r$measure_link, "identity"), logical(1)))
     )
   }
 })
 
-
 # --- the resolvers (the ONLY readers) ----------------------------------------------------------------
 
-# One family's rows, in the shape the lister / help / error message all read.
+# One family's rows, at ONE link -- the shape the lister, the help and the error messages all read.
+# `link = NULL` means the family's own, which is the table a user sees unless they name another model.
 #' @keywords internal
 #' @noRd
-reg_estimands_for <- function(family) {
+reg_estimands_for <- function(family, link = NULL) {
   fr <- REG_ESTIMANDS[[family]]
   if (is.null(fr)) return(NULL)
-  fr$rows
+  lk <- link %||% reg_family_link(family)
+  Filter(function(r) identical(r$link, lk), fr$rows)
 }
 
-# The default measure of an outcome family: what `measure = "auto"` (or a bare `"log"`) resolves to.
+# The family's OWN link -- what `link = "auto"` resolves to. The first `fits` entry; the order there
+# is load-bearing for exactly this reason.
 #' @keywords internal
 #' @noRd
-reg_default_measure <- function(family, effect = "coefficient") {
-  d <- REG_ESTIMANDS[[family]]$default
-  if (is.null(d)) return("difference")
-  v <- unname(d[effect])
-  if (is.na(v)) unname(d[["coefficient"]]) else v
+reg_family_link <- function(family) {
+  f <- REG_FAMILIES[[family]]$fits
+  if (is.null(f) || !length(f)) NA_character_ else names(f)[[1L]]
 }
 
-# reg_estimand() -- THE row for one (family, effect, measure), or a typed refusal (`status` in
-# c("impossible", "not_offered", "unknown_family")).
+# The `link = "..."` calls a family accepts, as literal strings -- cli collapses a vector INSIDE a
+# {.code} span, so the spellings are built before they are inlined.
 #' @keywords internal
 #' @noRd
-reg_estimand <- function(family, effect = "coefficient", measure = "auto") {
-  fr <- REG_ESTIMANDS[[family]]
-  if (is.null(fr)) return(list(status = "unknown_family", family = family))
+reg_link_calls <- function(family, exclude = character(0)) {
+  lk <- setdiff(names(REG_FAMILIES[[family]]$fits), exclude)
+  if (!length(lk)) character(0) else paste0('link = "', lk, '"')
+}
+
+# What `measure = "auto"` resolves to: THE LINK'S OWN MEASURE -- follow from the left. The one clause
+# that reads an argument to its RIGHT, and its reason: a marginal odds ratio is a specialist quantity
+# and must be asked for by name, so on a PREDICTION route auto falls back to the level's own measure.
+#' @keywords internal
+#' @noRd
+reg_auto_measure <- function(family, link, effect) {
+  if (identical(effect, "auto") || identical(effect, "conditional")) return(link)
+  cell <- reg_measure_cell(family, link)
+  if (is.null(cell) || !reg_word_noncollapsible(cell$word)) return(link)
+  reg_level_measures(REG_FAMILIES[[family]]$level)[[1L]]
+}
+
+# reg_estimand() -- THE cascade, and THE row it lands on. Formals are in CASCADE order, so a call
+# reads the way the arguments resolve; every one is validated against its own vocabulary, so a stale
+# positional call aborts rather than silently meaning something else.
+#
+# Returns one composed row, or a typed refusal (`status` in "unknown_family" / "unknown_link" /
+# "unknown_measure" / "impossible" / "no_link" / "no_coefficient" / "not_offered"), which
+# reg_estimand_abort() turns into a message naming the cure.
+#' @keywords internal
+#' @noRd
+reg_estimand <- function(family, link = "auto", measure = "auto", effect = "auto") {
+  fam <- REG_FAMILIES[[family]]
+  fr  <- REG_ESTIMANDS[[family]]
+  if (is.null(fr) || is.null(fam$fits)) return(list(status = "unknown_family", family = family))
+
+  ef <- reg_effect_key(effect)
+
+  lk <- reg_link_key(link)
+  if (is.null(lk)) return(list(status = "unknown_link", family = family, link = link))
+  if (identical(lk, "auto")) lk <- reg_family_link(family)
+  if (!lk %in% names(fam$fits))
+    return(list(status = "no_link", family = family, link = lk, effect = ef))
+
   mk <- if (is.list(measure)) measure else reg_measure_key(measure)
   if (is.null(mk)) return(list(status = "unknown_measure", family = family, measure = measure))
-  meas <- mk$measure
-  logged <- identical(meas, "log")
-  # "log" is the family's default estimand un-exponentiated; a `log_*` spelling pins another base.
-  # The default is PER CONTRAST: a coefficient's is the family's ratio, a marginal effect's a
-  # difference (the usual AME).
-  if (logged) meas <- if (nzchar(mk$log_base)) mk$log_base else reg_default_measure(family, effect)
-  if (identical(meas, "auto")) meas <- reg_default_measure(family, effect)
+  logged <- identical(mk$measure, "log")
+  # "log" logs the measure the cascade would otherwise report; a `log_*` spelling pins another base.
+  base <- if (logged && nzchar(mk$log_base)) mk$log_base
+          else if (logged || identical(mk$measure, "auto")) reg_auto_measure(family, lk, effect)
+          else mk$measure
 
-  hit <- Filter(function(r) identical(r$effect, effect) && identical(r$measure, meas), fr$rows)
-  if (!length(hit)) {
-    # a logged spelling of a measure this family cannot fit is a miss on the BASE, said as such
-    return(list(status = "not_offered", family = family, effect = effect,
-                measure = if (logged) mk$measure else meas, base = meas))
-  }
-  row <- hit[[1L]]
-  if (row$status %in% c("impossible", "redundant"))
-    return(c(row, list(family = family, asked = meas)))
-  if (logged) {
-    # A LOG is only meaningful over a multiplicative estimand: an additive coefficient already lives
-    # on the scale a log would take it to, so this is refused explicitly rather than silently
-    # returning the difference.
-    if (!isTRUE(row$exp))
-      return(list(status = "impossible", family = family, effect = effect, measure = "log",
-                  why = function() gettext(
-                    "this outcome's coefficient is already additive, so there is no ratio to take the log of")))
-    # the log twin of a multiplicative row: same fit, same contrast, no exp(), the link-scale ladder.
-    lrow <- Filter(function(r) identical(r$effect, effect) && identical(r$measure, "log") &&
-                     identical(r$fit, row$fit), fr$rows)
-    if (length(lrow)) row <- lrow[[1L]]
-    else {
-      # `word` is deliberately KEPT: reg_word() composes the log wrapper onto it, so a pinned
-      # `log_risk` on a binomial outcome reads "log(RR)" with nothing to declare here.
-      # `log_of` records WHAT is being logged: `log_coef` is one shared row, so it cannot say whether
-      # the exponential is an odds (baseline = odds) or a ratio (baseline = level). Read only by
-      # reg_exp_scale_of(), for the marginal builders' baseline row.
-      row$log_of  <- row$scale
-      row$exp     <- FALSE
-      row$scale   <- "log_coef"
-      row$display <- "coef"
-      row$crude_shape <- paste0(row$crude_shape, "_log")
-      row$note    <- function() gettext("on the model's own link scale")
-    }
-    row$measure <- "log"
-  }
-  c(row, list(family = family))
+  if (identical(ef, "auto")) ef <- if (identical(base, lk)) "conditional" else "marginal"
+
+  hit <- Filter(function(r) identical(r$link, lk) && identical(r$effect, ef) &&
+                  identical(r$base_measure, base) &&
+                  identical(identical(r$measure, "log"), logged), fr$rows)
+  if (length(hit)) return(c(hit[[1L]], list(family = family)))
+
+  # --- no row: which clause failed, said in the user's own terms -------------------------------
+  if (is.null(reg_measure_cell(family, base)))
+    return(list(status = "impossible", family = family, effect = ef, link = lk, measure = base,
+                why = reg_no_measure_why(family)))
+  if (logged && identical(unname(REG_MEASURE_LINK[[base]]), "identity"))
+    return(list(status = "impossible", family = family, effect = ef, link = lk, measure = "log",
+                why = function() gettext(
+                  "this outcome's coefficient is already additive, so there is no ratio to take the log of")))
+  if (identical(ef, "conditional"))
+    return(list(status = "no_coefficient", family = family, link = lk, effect = ef, measure = base,
+                why = reg_no_coefficient_why(lk)))
+  if (identical(base, "odds_ratio"))
+    return(list(status = "not_offered", family = family, link = lk, effect = ef, measure = base,
+                why = function() gettext(
+                  "an odds ratio needs a percentage and its complement, so a 3+ category outcome has to be asked \"versus what?\" first")))
+  list(status = "not_offered", family = family, link = lk, effect = ef, measure = base)
 }
 
-# The enumerated refusal, generated from the table so it cannot go stale: it names which state
-# applies, then lists what IS available.
+# Why a measure has no COEFFICIENT here: it is not the one the model estimates. Carried on the
+# refusal so reg_measures()' note column says it too, not only the abort.
+#' @keywords internal
+#' @noRd
+reg_no_coefficient_why <- function(link)
+  function() gettextf("the model estimates %s, so this measure has no coefficient here", link)
+
+# Why a LEVEL has no such measure -- one sentence per kind of level, so the two `impossible` cells
+# gaussian and poisson used to declare are generated instead.
+#' @keywords internal
+#' @noRd
+reg_no_measure_why <- function(family) {
+  what <- switch(REG_FAMILIES[[family]]$level %||% "",
+                 mean = gettext("continuous"), count = gettext("a count"), NULL)
+  if (is.null(what)) return(function() gettext("this outcome does not support that measure"))
+  function() gettextf(
+    "an odds ratio needs a probability to take the odds of; this outcome is %s", what)
+}
+
+# The enumerated refusal, generated from the table so it cannot go stale: it names which clause
+# applies, then the cure, then what IS available.
 #' @keywords internal
 #' @noRd
 reg_estimand_abort <- function(res, outcome = NULL) {
   who <- if (is.null(outcome)) "" else cli::format_inline(" for {.val {outcome}}")
   fam <- res$family
   if (identical(res$status, "unknown_family"))
-    cli::cli_abort("Unknown {.arg family} {.val {fam}}.")
+    cli::cli_abort(c("Unknown {.arg family} {.val {fam}}.",
+                     "i" = "Valid: {.or {.val {REG_USER_FAMILIES}}}."))
+  if (identical(res$status, "unknown_link"))
+    cli::cli_abort(c("Unknown {.arg link} {.val {res$link}}.",
+                     "i" = "Valid: {.or {.val {REG_LINKS_VALUES}}}."))
   if (identical(res$status, "unknown_measure"))
     cli::cli_abort(c("Unknown {.arg measure} {.val {res$measure}}.",
                      "i" = "Valid: {.or {.val {REG_MEASURES_VALUES}}}."))
-  # A REDUNDANT cell has exactly one right call, so it gets the pointer rather than a menu.
-  if (identical(res$status, "redundant"))
+  fits <- reg_link_calls(fam)
+  if (identical(res$status, "no_link"))
     cli::cli_abort(c(
-      "{.code effect = {.val {res$effect}}, measure = {.val {res$measure}}} returns the coefficient itself{who}: {res$why()}.",
-      "i" = 'Use {.code effect = "coefficient"} (the default).'))
-  offered <- reg_estimand_offer_lines(fam, res$effect)
-  if (identical(res$status, "impossible")) {
+      "tabxplor fits no {.val {res$link}} model for a {.val {fam}} outcome{who}.",
+      "i" = "It fits: {.or {.code {fits}}}.",
+      "i" = paste0("Any measure can still be REPORTED from those, through the model's predictions ",
+                   "({.code effect = \"marginal\"}).")))
+  # A COEFFICIENT is the model's own measure, so the two cures are: report it from the predictions,
+  # or fit the model that estimates it -- named only where the family can actually fit it.
+  if (identical(res$status, "no_coefficient")) {
+    cure <- if (res$measure %in% names(REG_FAMILIES[[fam]]$fits))
+      cli::format_inline("Or fit the model that estimates it: {.code link = \"{res$measure}\"}.")
+    else cli::format_inline(
+      "tabxplor fits no {.val {res$measure}}-link model for a {.val {fam}} outcome, so the predictions are the only route.")
     cli::cli_abort(c(
-      "{.code measure = {.val {res$measure}}} is not defined{who}: {res$why()}.",
-      stats::setNames(offered, rep("i", length(offered)))))
+      "The model estimates {.val {res$link}}, so {.val {res$measure}} cannot be read off its coefficients{who}.",
+      "i" = "Drop {.arg effect} to report it from the model's predictions instead.",
+      "i" = cure))
   }
-  cli::cli_abort(c(
-    "tabxplor does not offer {.code effect = {.val {res$effect}}, measure = {.val {res$measure}}}{who}.",
-    stats::setNames(offered, rep("i", length(offered)))))
+  offered <- reg_estimand_offer_lines(fam, res$link, res$effect)
+  if (identical(res$status, "impossible"))
+    cli::cli_abort(c("{.code measure = {.val {res$measure}}} is not defined{who}: {res$why()}.",
+                     stats::setNames(offered, rep("i", length(offered)))))
+  head <- if (is.function(res$why))
+    cli::format_inline("tabxplor does not offer {.code effect = {.val {res$effect}}, measure = {.val {res$measure}}}{who}: {res$why()}.")
+  else
+    cli::format_inline("tabxplor does not offer {.code effect = {.val {res$effect}}, measure = {.val {res$measure}}}{who}.")
+  cli::cli_abort(c(head, stats::setNames(offered, rep("i", length(offered)))))
 }
 
 # REG_ASIDE_NOTE -- what a model cell's PARENTHETICAL holds, keyed by the token the display resolves
@@ -1004,35 +1090,49 @@ reg_per_outcome <- function(x, d, i, default) {
   if (is.null(v) || (length(v) == 1L && is.na(v))) default else v
 }
 
-# reg_effect_key() -- validate ONE `effect` value: WHICH CONTRAST, orthogonal to `measure` (WHICH
-# MEASURE). The measure slot stays empty here -- unpicking the two is the whole point.
+# reg_effect_key() -- validate ONE `effect` value: WHERE THE NUMBER COMES FROM, the third question.
+# "auto" is a value here, resolved by reg_estimand() once the measure is known.
 #' @keywords internal
 #' @noRd
 reg_effect_key <- function(x) {
-  if (is.null(x) || length(x) != 1L || is.na(x)) return(list(effect = "coefficient", measure = ""))
+  if (is.null(x) || length(x) != 1L || is.na(x)) return("auto")
   x <- as.character(x)
-  if (x %in% REG_EFFECTS_VALUES) return(list(effect = x, measure = ""))
+  if (x %in% REG_EFFECTS_VALUES) return(x)
+  if (identical(x, "coefficient"))
+    cli::cli_abort(c(
+      '{.arg effect} = {.val coefficient} is now {.val conditional}.',
+      "i" = paste0("It names the quantity -- the conditional effect, the one the model's own ",
+                   "coefficient carries -- rather than the artefact it is read off.")))
   cli::cli_abort(c("Unknown {.arg effect} value {.val {x}}.",
                    "i" = "Valid: {.or {.val {REG_EFFECTS_VALUES}}}.",
-                   "i" = "{.arg effect} says WHICH CONTRAST, {.arg measure} says WHICH MEASURE: {.or {.val {REG_EFFECTS_VALUES}}} x {.or {.val {REG_MEASURES_VALUES}}}."))
+                   "i" = paste0("{.arg link} says which measure the MODEL estimates, {.arg measure} ",
+                                "which one is REPORTED, and {.arg effect} where the number comes from.")))
 }
 
-# "here is what this outcome DOES offer" -- shared by the abort and by reg_measures().
+# "here is what this outcome DOES offer" -- shared by the abort and by reg_measures(), and read at
+# ONE link, because that is what the user asked about.
 #' @keywords internal
 #' @noRd
-reg_estimand_offer_lines <- function(family, effect = NULL) {
-  rows <- reg_estimands_for(family)
-  if (is.null(rows)) return(character(0))
-  ok <- Filter(function(r) identical(r$status, "ok") &&
-                 (is.null(effect) || identical(r$effect, effect)), rows)
-  if (!length(ok)) ok <- Filter(function(r) identical(r$status, "ok"), rows)
+reg_estimand_offer_lines <- function(family, link = NULL, effect = NULL) {
+  lk   <- link %||% reg_family_link(family)
+  rows <- reg_estimands_for(family, lk)
+  if (is.null(rows) || !length(rows)) return(character(0))
+  ok <- Filter(function(r) is.null(effect) || identical(r$effect, effect), rows)
+  if (!length(ok)) ok <- rows
+  # ⚠ SPELLINGS, not rows: under one (link, effect) a ratio and an odds ratio BOTH log, so listing
+  # every log row would offer `measure = "log"` twice. Bare "log" reaches the one the cascade picks;
+  # the pinned `log_odds` / `log_risk` spellings are expert and stay in ?tab_reg.
+  ok <- Filter(function(r) !identical(r$measure, "log") ||
+                 identical(r$base_measure, reg_auto_measure(family, lk, r$effect)), ok)
   lines <- vapply(ok, function(r) cli::format_inline(
     "{.code measure = \"{r$measure}\"} -> {.val {reg_word(r)}}, the {reg_word_long(r)}"), character(1))
   head <- if (is.null(effect) || !length(ok) || !identical(ok[[1]]$effect, effect))
-    cli::format_inline("A {.val {family}} outcome offers:")
+    cli::format_inline("A {.val {family}} outcome offers, with {.code link = \"{lk}\"}:")
   else cli::format_inline(
-    "A {.val {family}} outcome offers, with {.code effect = \"{effect}\"}:")
+    "A {.val {family}} outcome offers, with {.code link = \"{lk}\", effect = \"{effect}\"}:")
+  other <- reg_link_calls(family, exclude = lk)
   c(head, unique(lines),
+    if (length(other)) cli::format_inline("Other models: {.or {.code {other}}}."),
     cli::format_inline("Call {.fn reg_measures} on your outcome to see this table with its status."))
 }
 
@@ -1052,15 +1152,19 @@ reg_estimand_offer_lines <- function(family, effect = NULL) {
 #'   probability to take the odds of), whatever anyone implements;
 #' * **not offered** — tabxplor does not build it (yet).
 #'
-#' A combination that would return the coefficient under another name — a marginal effect where the
-#' link is collapsible, as in a linear model — is **not listed**: it is refused, with the coefficient
-#' call named. And one state exists only at run time: a link that does not converge on your data.
-#' `tab_reg()` says so and, for the risk difference, falls back to the linear probability model.
+#' The table is read at **one model**. `link` names which one: `"auto"` is the family's own (a
+#' logistic regression for a binary outcome), and the message lists the others. A measure that is
+#' not the model's own is reported from its predictions, so it is available whichever model you
+#' pick — what changes with `link` is which measure has a *coefficient*.
+#'
+#' One state exists only at run time: a link that does not converge on your data. `tab_reg()` says
+#' so and, for the risk difference, falls back to the linear probability model.
 #'
 #' @param data A data frame (or a `survey` design), as for [tab_reg()].
 #' @param outcome The outcome column name.
 #' @param family The model family. `"auto"` (default) detects it and says so, exactly as
 #'   [tab_reg()] does.
+#' @param link Which measure the model estimates. `"auto"` (default) is the family's own.
 #'
 #' @return A tibble of `effect`, `measure`, `status`, `header` (the column name it would produce),
 #'   `long` (what that header's acronym means) and `note` (why, when it is not available).
@@ -1069,19 +1173,17 @@ reg_estimand_offer_lines <- function(family, effect = NULL) {
 #' d <- forcats::gss_cat
 #' d$married <- as.integer(d$marital == "Married")
 #' reg_measures(d, "married")
-reg_measures <- function(data, outcome, family = "auto") {
+reg_measures <- function(data, outcome, family = "auto", link = "auto") {
   svy <- svy_unwrap_data(data, "reg_measures")
   if (!is.null(svy)) data <- svy$data
   fam <- if (identical(family, "auto")) reg_detect_family(data, outcome) else family
-  rows <- reg_estimands_for(fam)
-  if (is.null(rows)) cli::cli_abort("Unknown {.arg family} {.val {fam}}.")
-  # every declared measure, not a hand-picked pair -- "log" is not a peer (it is any multiplicative
-  # row un-exponentiated), so it gets its own line below.
-  # a REDUNDANT cell is dropped, not shown as a status: it is the coefficient under another name, so
-  # listing it would offer two names for one quantity -- which is what the refusal exists to stop.
+  if (is.null(REG_ESTIMANDS[[fam]])) cli::cli_abort("Unknown {.arg family} {.val {fam}}.")
+  lk <- reg_link_key(link)
+  if (is.null(lk) || (!identical(lk, "auto") && !lk %in% names(REG_FAMILIES[[fam]]$fits)))
+    reg_estimand_abort(reg_estimand(fam, link = link), outcome = outcome)
+  if (identical(lk, "auto")) lk <- reg_family_link(fam)
   row_of <- function(effect, measure) {
-    r <- reg_estimand(fam, effect, measure)
-    if (identical(r$status, "redundant")) return(NULL)
+    r <- reg_estimand(fam, link = lk, measure = measure, effect = effect)
     tibble::tibble(
       effect = effect, measure = measure,
       status = switch(r$status, ok = "available", impossible = "not defined", "not offered"),
@@ -1089,14 +1191,18 @@ reg_measures <- function(data, outcome, family = "auto") {
       long   = if (identical(r$status, "ok")) reg_word_long(r) else NA_character_,
       note   = if (is.function(r$why)) r$why() else NA_character_)
   }
-  grid <- expand.grid(effect = REG_EFFECTS_VALUES,
-                      measure = setdiff(REG_MEASURES_VALUES, c("auto", "log")),
+  # EVERY declared measure, not just the ones this level carries: a measure the level cannot carry is
+  # the "not defined" state, and showing it with its reason is the point of the third status.
+  grid <- expand.grid(effect = REG_CONTRAST_VALUES,
+                      measure = setdiff(REG_MEASURES_VALUES, "auto"),
                       stringsAsFactors = FALSE)
-  out <- dplyr::bind_rows(purrr::map(seq_len(nrow(grid)),
-                                     function(i) row_of(grid$effect[[i]], grid$measure[[i]])))
-  out <- dplyr::bind_rows(out, row_of("coefficient", "log"))
-  cli::cli_inform(c("i" = "{.val {outcome}}: {.code family = \"{fam}\"}.",
-                    "i" = 'The default is {.code measure = "{reg_default_measure(fam)}"}.'))
+  out   <- dplyr::bind_rows(purrr::map(seq_len(nrow(grid)),
+                                       function(i) row_of(grid$effect[[i]], grid$measure[[i]])))
+  other <- setdiff(names(REG_FAMILIES[[fam]]$fits), lk)
+  cli::cli_inform(c(
+    "i" = "{.val {outcome}}: {.code family = \"{fam}\"}, {.code link = \"{lk}\"} ({reg_family_display_name(REG_FAMILIES[[fam]]$fits[[lk]])}).",
+    if (length(other))
+      c("i" = "Other models: {.or {.code link = \"{other}\"}}.")))
   out
 }
 
@@ -1106,18 +1212,25 @@ reg_measures <- function(data, outcome, family = "auto") {
 #' @keywords internal
 #' @noRd
 reg_measures_rd <- function() {
-  fams <- setdiff(names(REG_ESTIMANDS), "quasipoisson")
   line <- function(fam) {
-    ok <- Filter(function(r) identical(r$status, "ok"), reg_estimands_for(fam))
-    it <- vapply(ok, function(r) sprintf("\\code{effect = \"%s\", measure = \"%s\"} (\\code{Model_%s})",
-                                         r$effect, r$measure, reg_word(r)), character(1))
-    paste0("  \\item \\strong{", fam, "} --- ", paste(unique(it), collapse = "; "))
+    fits <- REG_FAMILIES[[fam]]$fits
+    mods <- vapply(names(fits), function(m) sprintf(
+      "\\code{link = \"%s\"}%s (%s)", m, if (identical(m, names(fits)[[1]])) ", the default" else "",
+      reg_family_display_name(fits[[m]])), character(1))
+    meas <- vapply(c(reg_level_measures(REG_FAMILIES[[fam]]$level), "log"),
+                   function(m) sprintf("\\code{\"%s\"}", m), character(1))
+    lvl <- c(pct = "a percentage", mean = "a mean", count = "a count")[[REG_FAMILIES[[fam]]$level]]
+    paste0("  \\item \\strong{", fam, "} --- a cell is ", lvl, ". Models: ",
+           paste(mods, collapse = "; "),
+           ". Reported: \\code{measure = }", paste(meas, collapse = ", "), ".")
   }
-  c("@section Which estimands each outcome offers:",
+  c("@section Which models each outcome offers, and which measures:",
     "Generated from the package's own resolution table, so it cannot drift from what",
-    "\\code{tab_reg()} builds. Call \\code{\\link{reg_measures}()} on your outcome for the same",
+    "\\code{tab_reg()} builds. A measure that IS the model's own is read off its coefficients;",
+    "any other is computed from its predictions (\\code{effect = \"marginal\"} or",
+    "\\code{\"at_reference\"}). Call \\code{\\link{reg_measures}()} on your outcome for the same",
     "table with its per-cell status.",
-    "\\itemize{", vapply(fams, line, character(1)), "}")
+    "\\itemize{", vapply(setdiff(names(REG_ESTIMANDS), "quasipoisson"), line, character(1)), "}")
 }
 
 # --- consumer 5: the generated acronym grid ----------------------------------------------------
@@ -1127,17 +1240,17 @@ reg_measures_rd <- function() {
 #' @noRd
 reg_words_rd <- function() {
   rows <- unlist(lapply(setdiff(names(REG_ESTIMANDS), "quasipoisson"),
-                        function(f) lapply(reg_estimands_for(f),
-                                           function(r) c(f = f, w = r$word, s = r$status))),
+                        function(f) lapply(REG_ESTIMANDS[[f]]$rows,
+                                           function(r) c(f = f, w = r$word))),
                  recursive = FALSE)
-  fams_of <- function(w) unique(vapply(Filter(function(r)
-    identical(r[["w"]], w) && identical(r[["s"]], "ok"), rows), function(r) r[["f"]], character(1)))
+  fams_of <- function(w) unique(vapply(Filter(function(r) identical(r[["w"]], w), rows),
+                                       function(r) r[["f"]], character(1)))
   used <- Filter(function(w) length(fams_of(w)) > 0L, names(REG_WORDS))
   item <- function(w) sprintf("  \\item \\code{%s} --- %s (%s)", w, REG_WORDS[[w]]$long(),
                               paste(fams_of(w), collapse = ", "))
   c("@section The header acronyms:",
     "A column header names the \\strong{measure}; the \\strong{contrast} is a marker on it ---",
-    "no marker for a coefficient, \\code{m} for a marginal effect, \\code{ref} at the reference",
+    "no marker for a conditional effect, \\code{m} for a marginal one, \\code{ref} at the reference",
     "profile --- and \\code{measure = \"log\"} wraps it (\\code{Model_mRR}, \\code{Model_refRD},",
     "\\code{Model_log(OR)}). The observed companion carries the measure alone (\\code{Obs_RR}).",
     "\\itemize{", vapply(used, item, character(1)), "}")
@@ -1146,4 +1259,3 @@ reg_words_rd <- function() {
 
 # The "every link key is answerable by the assumption checks" assertion lives in
 # R/zzz-fact-keys.R, checked at REG_ESTIMANDS$fit grain so no family's fit is missed.
-

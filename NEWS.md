@@ -247,31 +247,37 @@
   `stats = "compare_baseline"` for the first model. A comparison key *adds* a row and restricts
   nothing. Note `stats = FALSE` / `"none"` now hides the comparison too, which `compare` did not.
 * **`tab_reg()` no longer documents `.fit_cache`** (jamovi-internal; it rides `...`).
-* **`tab_reg()` asks two questions instead of four.** An estimand is *which contrast* × *which effect
-  measure*, so that is what the arguments are: **`effect = c("coefficient", "marginal",
-  "at_reference")`** and **`measure = c("auto", "odds_ratio", "ratio", "difference", "log")`**, both
-  resolved per dependent like `family`. `measure` takes the full word or the discipline's acronym
-  (`"RR"` / `"IRR"` / `"RD"` / `"OR"`); the column header keeps the acronym and marks the contrast on
-  it (`Model_OR`, `Model_mRR` for a marginal one, `Model_refRD` at the reference profile,
-  `Model_log(OR)` un-exponentiated). This **replaces**
-  `exponentiate` (→ `measure = "log"`), `at` (→ `effect = "at_reference"`), `effect = "ame"` /
-  `"ame_ratio"` (→ `"marginal"`, with `measure = "ratio"`) and `estimate_display` (→ `display`,
-  which also takes a `"{or} ({pct})"` template). The retired names abort with the new spelling.
-* **Risk ratios, risk differences and ratios of means, through the front door.** `measure = "ratio"`
-  on a **binary** outcome fits the **modified Poisson** (robust standard errors) — it used to require
-  naming the wrong distribution, `family = "poisson"`, which still works; on a **continuous** outcome
-  it gives a **ratio of adjusted means** (Poisson pseudo-likelihood), which `tab_reg()` refused
-  outright although `tab()` has given one for years. `measure = "difference"` on a binary outcome
-  gives the **risk difference** from an identity-link fit (falling back to the linear probability
-  model, with a message, if it does not converge). `effect = "marginal", measure = "ratio"` is the
-  **marginal** risk ratio from the usual logistic fit, and is now available for every outcome.
-  `empirical = TRUE` gives the matching crude companion in every case.
-* **New `reg_measures(data, dependent)`** lists what an outcome can be modelled as: every
-  `effect` × `measure` cell with its status — *available*, *not defined* (an odds ratio needs a
-  probability), or *not offered* — and the header it would produce. It is the same runtime table
-  the argument validator, the error messages and `?tab_reg`'s own generated section read. A
-  combination that would return the coefficient under another name — `effect = "marginal"` on a
-  linear model, or on a Poisson rate ratio — is refused, naming the coefficient call instead.
+* **`tab_reg()`'s estimand is a cascade**: `family` → `link` → `measure` → `effect`, where `"auto"`
+  means *follow from the left*, so setting one re-derives everything to its right and most tables set
+  none of them. **A link is a measure** — the one the model estimates directly — so `link` takes
+  `measure`'s own words (`"odds_ratio"` / `"ratio"` / `"difference"`) and the statistician's
+  vocabulary never surfaces. `family` says what kind of number the outcome is, `link` **which measure
+  the model estimates**, `measure` **which one is reported**, `effect` where that number comes from
+  (`"conditional"` — renamed from `"coefficient"` — `"marginal"`, `"at_reference"`). A coefficient
+  exists only where the reported measure IS the model's; any other measure is worked out from the
+  model's predictions, so it is available whichever model you fit. All four are resolved per outcome
+  like `family`, and `measure` still takes the discipline's acronym (`"RR"` / `"IRR"` / `"RD"` /
+  `"OR"`) while the header marks the contrast on it (`Model_OR`, `Model_mRR`, `Model_refRD`,
+  `Model_log(OR)`). This **replaces** `exponentiate` (→ `measure = "log"`), `at`
+  (→ `effect = "at_reference"`), `effect = "ame"` / `"ame_ratio"` (→ `"marginal"`) and
+  `estimate_display` (→ `display`). The retired names abort with the new spelling.
+* **Two risk ratios, two arguments.** `link = "ratio"` on a **binary** outcome fits the **modified
+  Poisson** (robust standard errors) and reports its *conditional* risk ratio; `measure = "ratio"`
+  reports the *marginal* one from the ordinary logistic fit. They are different quantities, and now
+  different arguments — `family = "poisson"` on a binary outcome is refused, naming both.
+  `link = "difference"` gives the **risk difference** from an identity-link fit (falling back to the
+  linear probability model, with a message, if it does not converge), and `link = "ratio"` on a
+  **continuous** outcome a **ratio of adjusted means** (Poisson pseudo-likelihood). Because the two
+  axes are separate, a measure may now be reported from a model that does not estimate it —
+  `link = "ratio", measure = "difference"` is a marginal risk difference computed from the
+  modified-Poisson fit. `empirical = TRUE` gives the matching crude companion in every case.
+* **A marginal odds ratio** (`effect = "marginal", measure = "odds_ratio"`) is available on a binary
+  outcome: the odds ratio of the two adjusted predictions, which unlike a conditional one is not
+  moved by covariates it does not confound (Karlson & Jann 2023). It must be asked for by name.
+* **New `reg_measures(data, outcome, link =)`** lists what an outcome can be modelled as at one
+  model: every `effect` × `measure` cell with its status — *available*, *not defined* (an odds ratio
+  needs a probability), or *not offered* — and the header it would produce. It is the same runtime
+  table the argument validator, the error messages and `?tab_reg`'s own generated section read.
 * **New `reg_formulas()`** shows the formula behind every column of a `tab_reg()` table: exactly what
   reached `glm()`, `svyglm()`, `multinom()` or `polr()`.
 * **`tab_reg()` selects its variables like `tab()`** — `outcome`, `predictors`, `tab_vars` and `wt`
@@ -467,8 +473,8 @@
   `x` unchanged, with no warning, on display values `?fmt` documents — so `mutate()` over the fmt
   columns of a table showing confidence intervals quietly left them alone. They now write back to the
   field they display, like every other token.
-* **The two `tab_reg()` estimands added in 2.0.0 got no model checks at all.** `measure = "difference"`
-  on a binary outcome and `measure = "ratio"` on a continuous one are fitted through a different
+* **The two `tab_reg()` estimands added in 2.0.0 got no model checks at all.** `link = "difference"`
+  on a binary outcome and `link = "ratio"` on a continuous one are fitted through a different
   *link*, and the assumption checks (`stats =`, `reg_check_plots()`) were keyed on that link rather
   than on the distribution behind it — so those two tables silently reported no linearity, dispersion,
   influence or collinearity row and drew no diagnostic panel.

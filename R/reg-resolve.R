@@ -13,8 +13,9 @@
 #     S2 reg_prepare_data()       design unwrap / formula / predictors dispatch / the interactions'
 #                                 parents / labelled / the level merge / shape / all_predictors /
 #                                 tab_vars -- every rewrite of `data`
-#     S3 reg_resolve_estimands()  the PER-OUTCOME TABLE (family / estimand / trials / outcome level
-#                                 / crude key)
+#     S3 reg_resolve_estimands()  the PER-OUTCOME TABLE: THE CASCADE (family -> link -> measure ->
+#                                 effect) resolved into one estimand row, plus trials / outcome
+#                                 level / crude key
 #     S4 reg_resolve_output()     display / colour / the empirical mode -- and the notes, LAST
 #     S5 reg_resolve_fit_plan()   na / reref / the reference relevel / multiplier / shape terms /
 #                                 the interactions MATERIALISED, last of all
@@ -34,14 +35,18 @@
 #   - S0 RUNS IN tab_reg(), AND SELECTS AGAINST svy_select_frame(), never svy_unwrap_data(): the
 #     unwrap informs, adds the reserved columns and computes degf, so S2 must stay its ONE caller.
 #     An empty selection becomes NULL, not character(0) -- every guard below tests is.null().
+#   - ONE PER-OUTCOME GRAMMAR, four arguments. `family` / `link` / `measure` / `effect` share
+#     reg_per_outcome() and are resolved together, in cascade order, by reg_estimand(): the boundary
+#     slices them and never interprets them, so "what does auto mean" has ONE home.
 #   - ONE PER-PREDICTOR GRAMMAR, three arguments. `multiplier` / `shape` / `ref` share
 #     reg_per_predictor() (below): an unnamed value -- or one named `default` -- is the fallback, a
 #     named one overrides that variable. Each argument keeps its own VOCABULARY; only the parsing is
 #     shared, which is why this is a resolver and not a fourth fact table.
 #   - There is deliberately no REG_ARG_VALUES table. TAB_ARG_VALUES exists because five crosstab
 #     producers had each written one boundary and drifted; tab_reg() is one producer, its
-#     vocabularies are already declared once each (REG_USER_FAMILIES / REG_EFFECTS_VALUES /
-#     REG_MEASURES_VALUES / REG_SHAPES / reg_stat_keys() / REG_MULTIPLIER_KEYWORDS), and an argument
+#     vocabularies are already declared once each (REG_USER_FAMILIES / REG_LINKS_VALUES /
+#     REG_MEASURES_VALUES / REG_EFFECTS_VALUES / REG_SHAPES / reg_stat_keys() /
+#     REG_MULTIPLIER_KEYWORDS), and an argument
 #     that REWRITES what it validates belongs to its own resolver -- one validator, in the one place
 #     that can also rewrite the value.
 # See: CLAUDE.md section "tabxplor architecture" (the regression subsystem).
@@ -389,11 +394,11 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
 #
 #   outcome     the outcome name
 #   family      the USER-facing outcome family, "auto" resolved by reg_detect_family()
-#   rr_promoted did `family = "poisson"` on a binary outcome mean `measure = "ratio"`
 #   est         the resolved ESTIMAND row (R/reg-estimand.R) -- the single answer to which model to
 #               fit, whether to exponentiate, the header word, the stored `scale`, the crude
 #               companion and the marginaleffects contrast
-#   fit_family  est$fit -- the internal LINK key ("rr" / "rd" / "mr" included)
+#   fit_family  est$fit -- the internal LINK key ("rr" / "rd" / "mr" included), which is what
+#               `link` selects
 #   trials      the resolved grouped-binomial item count, NA = "not a grouped binomial"
 #   outcome_level  the level of the outcome the user singled out: MODELLED on a binomial, the
 #               BASELINE category on a multinomial (REG_FAMILIES declares which). NA = the family's
@@ -404,48 +409,42 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
 # the count on "is any outcome binomial?"), and before the survey-feasibility refusal.
 #' @keywords internal
 #' @noRd
-reg_resolve_estimands <- function(data, outcome, family = "auto", effect = "coefficient",
-                                  measure = "auto", trials = NULL,
+reg_resolve_estimands <- function(data, outcome, family = "auto", link = "auto",
+                                  measure = "auto", effect = "auto", trials = NULL,
                                   outcome_level = NULL,
                                   formula_mode = FALSE, weighted = FALSE) {
   n <- length(outcome)
 
   # --- H: `family`, per outcome -- several outcomes may have DIFFERENT families, through
   # reg_per_outcome(); an ambiguous count aborts for THAT outcome only.
-  rr_promoted <- rep(FALSE, n)
-  families    <- vapply(seq_len(n), function(i) {
+  families <- vapply(seq_len(n), function(i) {
     d <- outcome[[i]]
     f <- reg_per_outcome(family, d, i, "auto")
     if (identical(f, "auto")) f <- reg_detect_family(data, d)
     if (!f %in% REG_USER_FAMILIES)
       cli::cli_abort(c("{.arg family} for {.val {d}} must be one of {.or {.val {REG_USER_FAMILIES}}}.",
                        "x" = "Got {.val {f}}."), call = NULL)
-    # THE resolution site for the modified-Poisson path: poisson/quasipoisson on a BINARY outcome
-    # is Zou (2004)'s modified Poisson (a RISK RATIO), reached only through family = "poisson".
-    if (reg_fam_count(f) && reg_is_binary_outcome(data[[d]])) {
-      cli::cli_inform(c("i" = paste0(
-        "{.val {d}} is binary: fitting a modified Poisson regression (robust standard errors) -> ",
-        "{.strong risk ratios}, not incidence-rate ratios."),
-        "i" = paste0("The same table is {.code family = \"binomial\", measure = \"ratio\"}, ",
-                     "which names the measure rather than the distribution.")))
-      rr_promoted[[i]] <<- TRUE   # the promotion sets the MEASURE, not the family
-      f <- "binomial"
-    }
+    # `family` answers ONE question -- what kind of number the outcome is -- and never secretly
+    # picks a link. The modified Poisson is a BINOMIAL fit under the log link, so it is `link`'s.
+    if (reg_fam_count(f) && reg_is_binary_outcome(data[[d]]))
+      cli::cli_abort(c(
+        "{.val {d}} is binary, so {.code family = \"poisson\"} is not a count model.",
+        "i" = paste0("For risk ratios use {.code link = \"ratio\"} (the modified Poisson, ",
+                     "Zou 2004: a CONDITIONAL risk ratio), or {.code measure = \"ratio\"} ",
+                     "(the MARGINAL one, from the logistic fit).")), call = NULL)
     f
   }, character(1))
 
   # --- I: THE ESTIMAND -----------------------------------------------------------------------
-  # `effect` x `measure` resolve PER DEPENDENT into ONE row of the declared library: legal, status
-  # "impossible", or no row at all (not offered) -- the abort enumerates the table's alternatives.
+  # THE CASCADE, per outcome: `link` (which model) -> `measure` (which measure is reported) ->
+  # `effect` (where the number comes from), each "auto" following from the left. It lands on ONE
+  # composed row, or on a typed refusal whose abort names the cure (R/reg-estimand.R).
   ests <- lapply(seq_len(n), function(i) {
     d   <- outcome[[i]]
-    ekv <- reg_effect_key(reg_per_outcome(effect, d, i, "coefficient"))
-    # a retired `effect` value could carry a measure inside it; an explicit `measure` still wins
-    mv  <- reg_per_outcome(measure, d, i, "auto")
-    if (identical(mv, "auto") && nzchar(ekv$measure))  mv <- ekv$measure
-    # `family = "poisson"` on a binary outcome IS `measure = "ratio"` (see the promotion above)
-    if (identical(mv, "auto") && isTRUE(rr_promoted[[i]])) mv <- "ratio"
-    res <- reg_estimand(families[[i]], ekv$effect, mv)
+    res <- reg_estimand(families[[i]],
+                        link    = reg_per_outcome(link,    d, i, "auto"),
+                        measure = reg_per_outcome(measure, d, i, "auto"),
+                        effect  = reg_per_outcome(effect,  d, i, "auto"))
     if (!identical(res$status, "ok")) reg_estimand_abort(res, outcome = d)
     res
   })
@@ -455,8 +454,11 @@ reg_resolve_estimands <- function(data, outcome, family = "auto", effect = "coef
   if (weighted && any(reg_fam_percategory(families)) &&
       any(vapply(ests, function(e) !identical(e$builder, "coef"), logical(1)))) {
     cli::cli_abort(c(
-      "Marginal-effects output is not available for survey-weighted {.val multinomial}/{.val ordinal} models.",
-      "i" = "Use the default {.code effect = \"coefficient\"}, or drop the weights."), call = NULL)
+      "A survey-weighted {.val multinomial}/{.val ordinal} outcome can only be read on its coefficients.",
+      "i" = paste0("Its marginal quantities have no method here, so a measure other than the ",
+                   "model's own cannot be reported."),
+      "i" = "Use {.code effect = \"conditional\"} with the model's own measure, or drop the weights."),
+      call = NULL)
   }
 
   # --- M: `trials` -> grouped binomial -----------------------------------------------------------
@@ -469,7 +471,6 @@ reg_resolve_estimands <- function(data, outcome, family = "auto", effect = "coef
   tibble::tibble(
     outcome     = outcome,
     family      = families,
-    rr_promoted = rr_promoted,
     est         = ests,
     fit_family  = vapply(ests, function(e) e$fit, character(1)),
     # gated on the family HERE, so the column means "this outcome IS a grouped binomial" and every
@@ -878,7 +879,7 @@ utils::globalVariables(names(formals(new_reg_args)))
 #' @keywords internal
 #' @noRd
 reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NULL,
-                             family = "auto", effect = "coefficient", measure = "auto",
+                             family = "auto", link = "auto", measure = "auto", effect = "auto",
                              trials = NULL, empirical = FALSE, n = NULL,
                              color = TRUE, color_signif = NULL, stars = TRUE,
                              conf_level = NULL, method = "wald",
@@ -920,8 +921,8 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                                   "key to get one column block per outcome.")), call = NULL)
 
   # S3 -- the per-outcome table.
-  deps <- reg_resolve_estimands(prep$data, prep$outcome, family = family, effect = effect,
-                                measure = measure, trials = trials,
+  deps <- reg_resolve_estimands(prep$data, prep$outcome, family = family, link = link,
+                                measure = measure, effect = effect, trials = trials,
                                 outcome_level = outcome_level,
                                 formula_mode = prep$formula_mode, weighted = prep$weighted)
 

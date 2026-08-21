@@ -177,7 +177,9 @@ test_that("19m-i G4: the four family name tables are one, and REG_FIT_FAMILY der
   expect_false("quasipoisson" %in% names(reg_family_ui_labels()))
   expect_setequal(names(reg_family_ui_labels()),
                   c("gaussian", "binomial", "poisson", "multinomial", "ordinal"))
-  expect_setequal(names(reg_family_ui_labels(binary = TRUE)), c("binomial", "poisson"))
+  # a BINARY outcome offers one family: the modified Poisson is a LINK of the binomial
+  # (`link = "ratio"`), not a count model, so the picker no longer names it twice.
+  expect_setequal(names(reg_family_ui_labels(binary = TRUE)), "binomial")
   # REG_FIT_FAMILY is now the `outcome` column
   expect_identical(REG_FIT_FAMILY, c(rr = "binomial", rd = "binomial", mr = "gaussian"))
 })

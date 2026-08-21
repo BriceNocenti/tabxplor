@@ -226,7 +226,7 @@ test_that("a calibrated design with incomplete cases keeps its adjustment gap te
   cal <- suppressMessages(survey::calibrate(
     svc_des(d), ~aux, c(`(Intercept)` = nrow(d), aux = sum(d$aux))))
   tt <- suppressWarnings(suppressMessages(
-    tab_reg(cal, "y", c("x", "z"), family = "binomial", empirical = TRUE, effect = "marginal",
+    tab_reg(cal, "y", c("x", "z"), family = "binomial", empirical = TRUE, effect = "marginal", measure = "difference",
             color = c(TRUE, "adjustment"))))
   mc <- names(tt)[vapply(tt, function(cc) is_fmt(cc) && identical(get_role(cc), "model"),
                          logical(1))]
@@ -237,7 +237,7 @@ test_that("a calibrated design with incomplete cases keeps its adjustment gap te
   sv <- suppressMessages(svy_unwrap_data(cal, "tab_reg"))
   ds <- list(design = cal, wt = ".svy_weights")
   fm <- suppressWarnings(reg_fit(sv$data, "y", c("x", "z"), "binomial", ds, TRUE, FALSE, .95, "wald"))
-  im <- reg_ame_if_maker(fm$fit, fm$data, ".svy_weights", FALSE,
+  im <- reg_ame_if_maker(fm$fit, fm$data, ".svy_weights", "identity",
                          reg_coef_if_maker(fm$fit))("x", "b", "a")
   ic <- reg_if_align(
     reg_crude_if_maker(fm$data, "y", "binomial", fm$positive_level, ".svy_weights",

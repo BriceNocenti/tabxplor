@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tabxplor 2.0.0\n"
-"POT-Creation-Date: 2026-08-20 17:03\n"
+"POT-Creation-Date: 2026-08-21 11:18\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -514,55 +514,10 @@ msgstr ""
 msgid "log %s"
 msgstr ""
 
-msgid "other predictors held at their reference level / mean"
-msgstr ""
-
-msgid "sample-averaged"
-msgstr ""
-
-msgid "the ratio of adjusted predicted probabilities"
-msgstr ""
-
-msgid "the ratio of adjusted predicted values"
-msgstr ""
-
-msgid "on the probability scale, in percentage points"
-msgstr ""
-
-msgid "on the response scale"
-msgstr ""
-
-msgid "%s; %s"
+msgid "linear regression"
 msgstr ""
 
 msgid "vs the reference category"
-msgstr ""
-
-msgid "an odds ratio needs a probability to take the odds of; this outcome is continuous"
-msgstr ""
-
-msgid "in percentage points, vs the reference category"
-msgstr ""
-
-msgid "an odds ratio needs a probability to take the odds of; this outcome is a count"
-msgstr ""
-
-msgid "each category vs the reference"
-msgstr ""
-
-msgid "each outcome category versus the rest; other predictors held at their reference level / mean; profile-conditional"
-msgstr ""
-
-msgid "proportional-odds model"
-msgstr ""
-
-msgid "the identity link is collapsible, so averaging changes nothing"
-msgstr ""
-
-msgid "the log link is collapsible, so averaging changes nothing"
-msgstr ""
-
-msgid "linear regression"
 msgstr ""
 
 msgid "logistic regression"
@@ -574,7 +529,13 @@ msgstr ""
 msgid "multinomial logistic regression"
 msgstr ""
 
+msgid "each category vs the reference"
+msgstr ""
+
 msgid "ordinal logistic regression"
+msgstr ""
+
+msgid "proportional-odds model"
 msgstr ""
 
 msgid "an ordinal outcome must keep the order of its levels, so none can be singled out"
@@ -598,10 +559,55 @@ msgstr ""
 msgid "this family models no single level of the outcome"
 msgstr ""
 
+msgid "other predictors held at their reference level / mean"
+msgstr ""
+
+msgid "sample-averaged"
+msgstr ""
+
+msgid "the odds ratio of adjusted predicted probabilities"
+msgstr ""
+
+msgid "the ratio of adjusted predicted probabilities"
+msgstr ""
+
+msgid "the ratio of adjusted predicted values"
+msgstr ""
+
+msgid "on the probability scale, in percentage points"
+msgstr ""
+
+msgid "on the response scale"
+msgstr ""
+
+msgid "%s; %s"
+msgstr ""
+
+msgid "each outcome category versus the rest; other predictors held at their reference level / mean; profile-conditional"
+msgstr ""
+
+msgid "in percentage points, %s"
+msgstr ""
+
 msgid "this outcome's coefficient is already additive, so there is no ratio to take the log of"
 msgstr ""
 
-msgid "on the model's own link scale"
+msgid "an odds ratio needs a percentage and its complement, so a 3+ category outcome has to be asked \"versus what?\" first"
+msgstr ""
+
+msgid "the model estimates %s, so this measure has no coefficient here"
+msgstr ""
+
+msgid "continuous"
+msgstr ""
+
+msgid "a count"
+msgstr ""
+
+msgid "this outcome does not support that measure"
+msgstr ""
+
+msgid "an odds ratio needs a probability to take the odds of; this outcome is %s"
 msgstr ""
 
 msgid "the observed (crude) one"
@@ -995,6 +1001,12 @@ msgid "Package 'clipr' is needed to copy to clipboard."
 msgstr ""
 
 msgid "Install it with install.packages('clipr')."
+msgstr ""
+
+msgid "t(%s) on %s design df"
+msgstr ""
+
+msgid "%s design df"
 msgstr ""
 
 msgid "of %s ('%s')"

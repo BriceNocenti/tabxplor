@@ -57,30 +57,28 @@ reg_block <- function() {
   detect <- vapply(kinds, function(k) k$detect, character(1))
   offers <- lapply(kinds, function(k) k$offers)
 
-  # (2) the estimand grid: per family, per effect, the measures that BUILD. `reg_estimand()` is the
-  #     authority (it also knows the "impossible" and the "not offered" states); the UI only needs
-  #     to know what to enable, so the grid stores the available set.
+  # (2) the estimand grid, per family: which LINKS it fits, and per (link, effect) which measures
+  #     BUILD. `reg_estimand()` is the authority -- it also knows the "impossible" and "not offered"
+  #     states -- and the UI only needs to know what to enable.
   # Phase 19m-i: "which families the picker offers" is a DECLARED fact -- REG_FAMILIES$ui is NA on
   # the ones it does not (quasipoisson, and the internal link keys). It used to be a hardcoded
   # setdiff() here AND an omission from REG_FAMILY_UI_LABEL: one fact, two encodings.
   fams  <- names(tabxplor:::reg_family_ui_labels())
   effs  <- tabxplor:::REG_EFFECTS_VALUES
   meas  <- setdiff(tabxplor:::REG_MEASURES_VALUES, "auto")
-  grid  <- lapply(fams, function(f) {
-    lapply(stats::setNames(effs, effs), function(e) {
-      ok <- vapply(meas, function(m) {
-        r <- tabxplor:::reg_estimand(f, e, m)
-        identical(r$status, "ok")
-      }, logical(1))
-      c("auto", meas[ok])                       # "auto" always resolves (it IS the family default)
+  links <- lapply(stats::setNames(fams, fams),
+                  function(f) c("auto", names(tabxplor:::REG_FAMILIES[[f]]$fits)))
+  # Phase 22b-xv: the grid gained the LINK axis, so a picker can never claim a measure the chosen
+  # model cannot report -- nor grey one it can. "auto" always resolves: it IS the cascade.
+  grid  <- lapply(stats::setNames(fams, fams), function(f) {
+    lapply(stats::setNames(nm = links[[f]]), function(lk) {
+      lapply(stats::setNames(effs, effs), function(e) {
+        ok <- vapply(meas, function(m) identical(
+          tabxplor:::reg_estimand(f, link = lk, measure = m, effect = e)$status, "ok"), logical(1))
+        c("auto", meas[ok])
+      })
     })
   })
-  names(grid) <- fams
-
-  # (3) what "auto" resolves to, so the picker can SHOW the default it will get.
-  defaults <- lapply(stats::setNames(fams, fams), function(f)
-    vapply(stats::setNames(effs, effs), function(e) tabxplor:::reg_default_measure(f, e),
-           character(1)))
 
   c(
     BEGIN,
@@ -91,13 +89,12 @@ reg_block <- function() {
     paste0("var TABX_FAMILY_LABEL_BINARY = ", js_obj(tabxplor:::reg_family_ui_labels(binary = TRUE)), ";"),
     paste0("var TABX_OUTCOME_DETECT = ", js_obj(detect), ";"),
     paste0("var TABX_OUTCOME_OFFERS = ", js_obj(offers, js_arr), ";"),
+    paste0("var TABX_LINKS = ", js_obj(links, js_arr), ";"),
     paste0("var TABX_ESTIMANDS = ",
            paste0("{ ", paste0(js_str(fams), ": ",
-                               vapply(grid, function(g) js_obj(g, js_arr), character(1)),
+                               vapply(grid, function(g)
+                                 js_obj(g, function(x) js_obj(x, js_arr)), character(1)),
                                collapse = ", "), " }"), ";"),
-    paste0("var TABX_DEFAULT_MEASURE = ",
-           paste0("{ ", paste0(js_str(fams), ": ",
-                               vapply(defaults, js_obj, character(1)), collapse = ", "), " }"), ";"),
     # the per-predictor functional forms (REG_SHAPES, R/reg-assumptions.R)
     paste0("var TABX_SHAPES = ", js_arr(tabxplor:::REG_SHAPES), ";"),
     END

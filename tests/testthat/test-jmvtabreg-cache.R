@@ -17,7 +17,7 @@ reg_opts <- function(...) {
   o <- utils::modifyList(list(
     outcome = "married", predictors = c("race", "age"), wt = character(),
     tab_vars = NULL, ..family = "binomial",
-    effect = "coefficient", display = "auto",
+    effect = "conditional", display = "auto",
     empirical = FALSE, ref = NULL, conf_level = 0.95,
     ci_method = "wald", stars = TRUE, color = NULL, color_signif = "grey_non_signif",
     na = "drop_by_outcome", cleannames = TRUE, add_n = TRUE, subtext = "",
@@ -459,11 +459,11 @@ test_that("Phase 19k: the shape picker folds into tab_reg(shape =)", {
 test_that("Phase 19k: effect x measure x display pass straight through", {
   gss <- gss_reg()
   o <- reg_opts(outcome = "married", predictors = c("race", "age"), ..family = "binomial",
-                effect = "coefficient", measure = "log", display = "auto")
+                effect = "conditional", measure = "log", display = "auto")
   expect_equal(
     reg_render(quiet(jmvtab_reg_build(gss, o, NULL))$tabs),
     reg_render(quiet(tab_reg(gss, "married", c("race", "age"), family = "binomial",
-                             effect = "coefficient", measure = "log",
+                             effect = "conditional", measure = "log",
                              cleannames = TRUE, color_signif = "grey_non_signif"))))
   # a reg colour MEASURE (D25's surviving allow-list), not a checkbox
   o2 <- reg_opts(outcome = "married", predictors = c("race", "age"), ..family = "binomial",

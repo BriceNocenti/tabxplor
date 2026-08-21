@@ -87,7 +87,7 @@ test_that("the folds reach EVERY family: a gaussian cell folds an adjusted MEAN"
 test_that("display reaches the marginal path too -- one grammar, both builders", {
   skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
   t <- suppressMessages(
-    tab_reg(reg_data(), "married", "race", family = "binomial", effect = "marginal",
+    tab_reg(reg_data(), "married", "race", family = "binomial", effect = "marginal", measure = "difference",
             display = "est_ci"))
   col <- t[[grep("^Model", names(t))[[1]]]]
   expect_true(any(get_display(col) == tabxplor:::DISPLAY_PRESETS[["est_ci"]]))
@@ -153,7 +153,7 @@ test_that("an ordered-factor predictor's AME is non-NA on every non-reference le
   skip_if_not_installed("marginaleffects")
   d <- ame_data()
   suppressWarnings(t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial",
-                                effect = "marginal", cleannames = FALSE))
+                                effect = "marginal", measure = "difference", cleannames = FALSE))
   col  <- first_fmt(t)
   rin  <- as.character(t[[2]]) %in% levels(d$rincome)   # rincome level rows
   # the '-' levels ($20000 - 24999, $15000 - 19999, $10000 - 14999) used to be NA; only the reference is
@@ -249,7 +249,7 @@ test_that("`base_est_mdiff` gives each ROLE its own arm, and never prints one fi
   expect_identical(unique(get_display(t[["Obs_OR"]])[!is_refrow(t[["Obs_OR"]])]),
                    "({base}) {est}")
   # on a risk-DIFFERENCE column `{est}` IS `{diff}`: the aside collapses instead of doubling
-  rd <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", measure = "difference",
+  rd <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "difference",
                                  display = "base_est_mdiff"))
   # ... and what is left is the pipeline's own bare token, `{est}` resolved by the column's scale
   expect_identical(unique(get_display(rd[["Model_RD"]])[!is_refrow(rd[["Model_RD"]])]), "est")

@@ -117,8 +117,8 @@ test_that("the Constant row holds the baseline THIS contrast is read against", {
   d  <- anc_data()
   p  <- c("race", "age")
   tc <- tab_reg(d, "married", p, family = "binomial", stats = FALSE)
-  ta <- tab_reg(d, "married", p, family = "binomial", effect = "at_reference", stats = FALSE)
-  tm <- tab_reg(d, "married", p, family = "binomial", effect = "marginal", stats = FALSE)
+  ta <- tab_reg(d, "married", p, family = "binomial", effect = "at_reference", measure = "difference", stats = FALSE)
+  tm <- tab_reg(d, "married", p, family = "binomial", effect = "marginal", measure = "difference", stats = FALSE)
 
   # the anchored intercept IS the prediction at the reference profile (the study's section 3.2)
   odds <- cst(tc, "Model_OR")
@@ -156,7 +156,7 @@ test_that("the Constant row is written on the column's own geometry, and labelle
   expect_true(cst(tp, "Model_refIRR") > 1)                            # a baseline RATE, not a ratio
   expect_identical(lab(tp), "Reference profile")
 
-  ta <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "at_reference",
+  ta <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "at_reference", measure = "difference",
                 stats = FALSE)
   expect_identical(lab(ta), "Reference profile")
   expect_identical(lab(tab_reg(d, "married", c("race", "age"), family = "binomial",

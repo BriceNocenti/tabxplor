@@ -58,17 +58,16 @@ expect_engines_agree <- function(fit, data, predictors, ..., tol = 1e-6, want_pr
 # --- the declaration -------------------------------------------------------------------------------
 
 testthat::test_that("the estimand table declares which engine computes each marginal quantity", {
-  eng <- function(...) tabxplor:::reg_marginal_engine(tabxplor:::reg_estimand(...))
+  eng <- function(fam, eff, m)
+    tabxplor:::reg_marginal_engine(tabxplor:::reg_estimand(fam, measure = m, effect = eff))
   for (fam in c("gaussian", "binomial", "poisson", "multinomial", "ordinal")) {
     testthat::expect_equal(eng(fam, "marginal", "difference"), "gcomp")
     # a one-row profile grid is not something g-computation builds: declared numeric, on purpose.
     testthat::expect_equal(eng(fam, "at_reference", "difference"), "marginaleffects")
   }
   testthat::expect_equal(eng("multinomial", "at_reference", "odds_ratio"), "marginaleffects")
-  # an explicit value overrides the rule, which is what makes a row opt-out-able
-  testthat::expect_equal(
-    tabxplor:::reg_marginal_engine(list(effect = "marginal", engine = "marginaleffects")),
-    "marginaleffects")
+  # the rule is DERIVED from the contrast alone -- there is no per-row override to forget to set
+  testthat::expect_equal(tabxplor:::reg_marginal_engine(list(effect = "marginal")), "gcomp")
   testthat::expect_true(all(c("gcomp", "marginaleffects") %in% tabxplor:::REG_MARGINAL_ENGINES))
 })
 
@@ -88,13 +87,13 @@ testthat::test_that("gaussian / binomial / poisson marginal effects match margin
   }
 })
 
-testthat::test_that("the RATIO contrast (comparison = 'lnratioavg') matches too", {
+testthat::test_that("the RATIO contrast (the log link) matches too", {
   skip_if_no_me()
   d <- mg_data()
   f <- stats::glm(married ~ race + party3 + age, data = d, family = stats::binomial())
-  expect_engines_agree(f, f$model, c("race", "party3", "age"), comparison = "lnratioavg")
+  expect_engines_agree(f, f$model, c("race", "party3", "age"), link = "log")
   g <- stats::glm(hours ~ race + age, data = d, family = stats::poisson())
-  expect_engines_agree(g, g$model, c("race", "age"), comparison = "lnratioavg")
+  expect_engines_agree(g, g$model, c("race", "age"), link = "log")
 })
 
 testthat::test_that("a numeric predictor's `multiplier` is the same k-unit forward difference", {
@@ -129,7 +128,7 @@ testthat::test_that("multinomial and ordinal marginal effects match, every outco
   d <- mg_data()
   m <- nnet::multinom(party3 ~ race + age, data = d, trace = FALSE)
   expect_engines_agree(m, d, c("race", "age"))
-  expect_engines_agree(m, d, c("race", "age"), comparison = "lnratioavg")
+  expect_engines_agree(m, d, c("race", "age"), link = "log")
 
   d$inc3 <- factor(dplyr::ntile(d$age, 3), labels = c("low", "mid", "high"))
   p <- MASS::polr(inc3 ~ race + hours, data = d, Hess = TRUE)
@@ -146,7 +145,7 @@ testthat::test_that("the fast route refuses rather than guessing, and the call f
   testthat::expect_null(
     tabxplor:::reg_marginal_gcomp(f, f$model, c("race", "party3"), 0.95))
   # an absent factor level is no answer, not an NA column
-  g <- tabxplor:::reg_gcomp_maker(f, f$model, NULL, FALSE)
+  g <- tabxplor:::reg_gcomp_maker(f, f$model, NULL, "identity")
   testthat::expect_null(g("race", "Martian", "White"))
   testthat::expect_false(is.null(g("race", "Black", "White")))
   # `at = "reference"` never takes the fast route even when asked
@@ -197,11 +196,11 @@ testthat::test_that("the printed delta-method SE is not the influence-function S
   f <- stats::glm(married ~ race + party3 + age, data = d, family = stats::binomial())
   dd  <- f$model
   ref <- levels(dd$race)[1]                                   # the fit's own baseline, not a guess
-  g   <- tabxplor:::reg_gcomp_maker(f, dd, NULL, FALSE)
+  g   <- tabxplor:::reg_gcomp_maker(f, dd, NULL, "identity")
   p   <- g("race", "Black", ref)
   se_print <- tabxplor:::reg_delta_se(p$G, stats::vcov(f))
   se_gap   <- tabxplor:::reg_if_se(tabxplor:::reg_ame_if_maker(
-    f, dd, NULL, FALSE, tabxplor:::reg_coef_if_maker(f))("race", "Black", ref))
+    f, dd, NULL, "identity", tabxplor:::reg_coef_if_maker(f))("race", "Black", ref))
   me <- as.data.frame(marginaleffects::avg_comparisons(f, newdata = dd, variables = "race"))
   me <- me[me$contrast == paste("Black", "-", ref), ]
   # the printed one IS marginaleffects'; the gap one is a sandwich variance plus the
@@ -225,7 +224,7 @@ testthat::test_that("every predictor keeps its crude twin, not just the first", 
   d$inc3 <- factor(dplyr::ntile(d$age, 3), labels = c("low", "mid", "high"), ordered = TRUE)
   x <- suppressMessages(suppressWarnings(
     tab_reg(d, outcome = "inc3", predictors = c("race", "party3"),
-            effect = "marginal", empirical = TRUE)))
+            effect = "marginal", measure = "difference", empirical = TRUE)))
   mods <- names(x)[purrr::map_lgl(x, is_fmt) & grepl("[^n]", names(x))]
   obs  <- get_obs(x[[utils::tail(mods, 1)]])
   keep <- !is_totrow(x[[utils::tail(mods, 1)]]) & as.character(x$var) %in% c("race", "party3")
@@ -239,7 +238,7 @@ testthat::test_that("a built AME table carries the analytic interval and its sta
   d <- mg_data()
   d$married <- factor(d$married, labels = c("no", "yes"))
   x <- suppressMessages(tab_reg(d, outcome = "married", predictors = c("race", "age"),
-                                effect = "marginal"))
+                                effect = "marginal", measure = "difference"))
   col <- x[[grep("^Model", names(x))[1]]]
   fin <- !is.na(get_pvalue(col))   # a reference cell carries the neutral, and no interval
   testthat::expect_true(any(fin))

@@ -23,6 +23,12 @@
 #   - ONE SWEEP, TWO VARIANCES, never swapped: a g-computation maker returns both the delta-method
 #     variance (the interval the marginal effect PRINTS) and the influence-function one (the colour's
 #     test). reg_gcomp_maker()'s own note says why they differ.
+#   - ONE LINK TABLE, THREE READERS. A marginal contrast is h(M1) - h(M0), so a link contributes the
+#     transform and its derivative and nothing else (REG_LINK_FUNS). Both g-computation makers and
+#     the crude leg read it, which is why the engines never knew which measure they were computing
+#     and a new link costs no arm here. ⚠ it is the REPORTED measure's link, never the fit's: a
+#     logistic model shows an additive AME by default, a marginal risk ratio or a marginal odds ratio
+#     on request, all three from one sweep.
 #   - TWO CRUDE PATHS, by predictor kind. A FACTOR's crude effect is a saturated one-factor GLM, so
 #     it has a closed form and needs no fit; a CONTINUOUS predictor has no cells, so its crude leg is
 #     reg_coef_if_maker() over the univariable fit R/reg-empirical.R built. Both legs are then the
@@ -99,6 +105,28 @@ reg_coef_if_maker <- function(fit, V = NULL) {
   reg_if_from_parts(X, W, r)
 }
 
+# REG_LINK_FUNS -- a MARGINAL contrast is h(M1) - h(M0), so a link contributes exactly two things:
+# the transform h and its derivative h'(M), the delta-method factor. ONE declaration, three readers
+# (both g-computation makers and the crude leg below), which is why the engines are link-agnostic
+# and a new link costs no arm here.
+#
+# `ok` is the DOMAIN, and it is not decoration: a log has no answer at a 0 % cell and a logit none at
+# 0 % or 100 %, so the maker returns NULL -- "no test here" -- rather than an Inf.
+#' @keywords internal
+#' @noRd
+REG_LINK_FUNS <- list(
+  identity = list(h = function(m) m,                dh = function(m) 1,
+                  ok = function(m) TRUE),
+  log      = list(h = function(m) log(m),           dh = function(m) 1 / m,
+                  ok = function(m) all(m > 0)),
+  logit    = list(h = function(m) log(m / (1 - m)), dh = function(m) 1 / (m * (1 - m)),
+                  ok = function(m) all(m > 0 & m < 1))
+)
+
+#' @keywords internal
+#' @noRd
+reg_link_funs <- function(link) REG_LINK_FUNS[[as.character(link)[1]]]
+
 # reg_crude_if_maker() -- the OBSERVED side, in closed form: every `Obs_*` effect is exactly the
 # coefficient of a saturated one-factor GLM at the matching link, so its influence function is
 #
@@ -128,12 +156,9 @@ reg_coef_if_maker <- function(fit, V = NULL) {
 #' @keywords internal
 reg_crude_if_maker <- function(data, outcome, crude_key, positive_level, wt, link,
                                trials = NULL, category = "", ref_category = NULL) {
-  gp <- switch(as.character(link)[1],
-               "logit"    = function(m) 1 / (m * (1 - m)),
-               "log"      = function(m) 1 / m,
-               "identity" = function(m) 1,
-               NULL)
-  if (is.null(gp)) return(NULL)
+  lf <- reg_link_funs(link)
+  if (is.null(lf)) return(NULL)
+  gp <- lf$dh
   yw <- tryCatch(reg_crude_yw(data, outcome, crude_key, positive_level, wt, trials, ref_category),
                  error = function(e) NULL)
   if (is.null(yw)) return(NULL)
@@ -211,14 +236,18 @@ reg_counterfactual <- function(data, var, lv) {
 #   * the GAP test needs the INFLUENCE FUNCTION, `emp + IF^beta %*% G` (reg_ame_if_maker below), the
 #     only quantity that carries the covariance between the model effect and its crude twin:
 #
-#       additive (marginal difference):  IF_i = wt_i (g_i - AME)       + IF^beta_i %*% G
-#       ratio    (marginal ratio):       IF_i = wt_i (mu1_i - M1)/M1 - wt_i (mu0_i - M0)/M0
-#                                              + IF^beta_i %*% (G1/M1 - G0/M0)
+#       IF_i = wt_i (mu1_i - M1) h'(M1) - wt_i (mu0_i - M0) h'(M0) + IF^beta_i %*% G
 #
-#     with g_i = mu1_i - mu0_i and wt_i = w_i / sum(w) -- a SANDWICH variance, the right answer to
-#     "is this different from that", the wrong one for "what interval does this AME print".
+#     with wt_i = w_i / sum(w) -- a SANDWICH variance, the right answer to "is this different from
+#     that", the wrong one for "what interval does this AME print". At the identity link h' is 1 and
+#     it collapses to the familiar wt_i (g_i - AME).
+#
+# `link` is the REPORTED comparison's, never the fit's: a logistic model shows an additive AME by
+# default and a marginal risk ratio or odds ratio on request, all three from this one sweep.
 #' @keywords internal
-reg_gcomp_maker <- function(fit, data, wt, ratio) {
+reg_gcomp_maker <- function(fit, data, wt, link = "identity") {
+  lf  <- reg_link_funs(link)
+  if (is.null(lf)) return(NULL)
   tt  <- tryCatch(stats::delete.response(stats::terms(fit)), error = function(e) NULL)
   fam <- tryCatch(stats::family(fit), error = function(e) NULL)
   if (is.null(tt) || is.null(fam) || is.null(fam$linkinv) || is.null(fam$mu.eta)) return(NULL)
@@ -248,25 +277,29 @@ reg_gcomp_maker <- function(fit, data, wt, ratio) {
     d1 <- fam$mu.eta(e1);        d0 <- fam$mu.eta(e0)
     if (!all(is.finite(m1)) || !all(is.finite(m0))) return(NULL)
     M1 <- sum(w * m1) / sw; M0 <- sum(w * m0) / sw
-    if (ratio) {
-      if (!isTRUE(M1 > 0) || !isTRUE(M0 > 0)) return(NULL)
-      est <- log(M1 / M0)
-      emp <- w * (m1 - M1) / (sw * M1) - w * (m0 - M0) / (sw * M0)
-      G   <- colSums(w * X1 * d1) / (sw * M1) - colSums(w * X0 * d0) / (sw * M0)
-    } else {
+    if (!isTRUE(lf$ok(c(M1, M0)))) return(NULL)
+    if (identical(link, "identity")) {
+      # written out at the identity link so the AME and its influence keep the exact arithmetic the
+      # parity tests pin; it IS the general form below with h' = 1.
       est <- sum(w * (m1 - m0)) / sw
       emp <- w * ((m1 - m0) - est) / sw
       G   <- colSums(w * (X1 * d1 - X0 * d0)) / sw
+    } else {
+      k1 <- lf$dh(M1); k0 <- lf$dh(M0)
+      est <- lf$h(M1) - lf$h(M0)
+      emp <- w * (m1 - M1) * k1 / sw - w * (m0 - M0) * k0 / sw
+      G   <- colSums(w * X1 * d1) * k1 / sw - colSums(w * X0 * d0) * k0 / sw
     }
+    if (!is.finite(est)) return(NULL)
     list(est = est, G = G, emp = emp, mean1 = M1, mean0 = M0)
   }
 }
 
 # reg_ame_if_maker() -- the g-computation above wearing its influence-function hat.
 #' @keywords internal
-reg_ame_if_maker <- function(fit, data, wt, ratio, coef_if) {
+reg_ame_if_maker <- function(fit, data, wt, link, coef_if) {
   if (is.null(coef_if)) return(NULL)
-  g <- reg_gcomp_maker(fit, data, wt, ratio)
+  g <- reg_gcomp_maker(fit, data, wt, link)
   if (is.null(g)) return(NULL)
   function(var, level, ref, mask = NULL) {
     p <- g(var, level, ref, mask)
@@ -494,9 +527,10 @@ reg_gcomp_baseline <- function(fit, data, wt = NULL, newdata = NULL) {
 # model shows ONE COLUMN PER CATEGORY, so the closure answers for ALL of them at once from the same
 # two counterfactual probability matrices.
 #' @keywords internal
-reg_gcomp_cat_maker <- function(fit, data, wt, ratio) {
+reg_gcomp_cat_maker <- function(fit, data, wt, link = "identity") {
   eng <- reg_prob_engine(fit)
-  if (is.null(eng)) return(NULL)
+  lf  <- reg_link_funs(link)
+  if (is.null(eng) || is.null(lf)) return(NULL)
   w0 <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
   if (length(w0) != nrow(data) || !all(is.finite(w0))) return(NULL)
   cf <- function(lv, var) {
@@ -520,15 +554,16 @@ reg_gcomp_cat_maker <- function(fit, data, wt, ratio) {
       p1 <- P1[, j]; p0 <- P0[, j]
       M1[j] <- sum(w * p1) / sw; M0[j] <- sum(w * p0) / sw
       g1 <- eng$dmean(X1, P1, j, w); g0 <- eng$dmean(X0, P0, j, w)
-      if (ratio) {
-        if (!isTRUE(M1[j] > 0) || !isTRUE(M0[j] > 0)) return(NULL)
-        est[j]   <- log(sum(w * p1) / sum(w * p0))
-        emp[[j]] <- w * (p1 - M1[j]) / (sw * M1[j]) - w * (p0 - M0[j]) / (sw * M0[j])
-        G[[j]]   <- g1 / (sw * M1[j]) - g0 / (sw * M0[j])
-      } else {
+      if (!isTRUE(lf$ok(c(M1[j], M0[j])))) return(NULL)
+      if (identical(link, "identity")) {
         est[j]   <- sum(w * (p1 - p0)) / sw
         emp[[j]] <- w * ((p1 - p0) - est[j]) / sw
         G[[j]]   <- (g1 - g0) / sw
+      } else {
+        k1 <- lf$dh(M1[j]); k0 <- lf$dh(M0[j])
+        est[j]   <- lf$h(M1[j]) - lf$h(M0[j])
+        emp[[j]] <- w * (p1 - M1[j]) * k1 / sw - w * (p0 - M0[j]) * k0 / sw
+        G[[j]]   <- g1 * k1 / sw - g0 * k0 / sw
       }
       if (!is.finite(est[j])) return(NULL)
     }
@@ -540,7 +575,7 @@ reg_gcomp_cat_maker <- function(fit, data, wt, ratio) {
 # time: the g-computation above plus the score-based coefficient influence, same shape as
 # reg_ame_if_maker().
 #' @keywords internal
-reg_ame_if_cat_maker <- function(fit, data, wt, ratio, category) {
+reg_ame_if_cat_maker <- function(fit, data, wt, link, category) {
   eng <- reg_prob_engine(fit)
   sc  <- if (inherits(fit, "multinom")) reg_score_multinom(fit) else reg_score_polr(fit)
   if (is.null(eng) || is.null(sc)) return(NULL)
@@ -548,7 +583,7 @@ reg_ame_if_cat_maker <- function(fit, data, wt, ratio, category) {
   if (is.null(cif)) return(NULL)
   j <- match(as.character(category), eng$levels)
   if (is.na(j)) return(NULL)
-  g <- reg_gcomp_cat_maker(fit, data, wt, ratio)
+  g <- reg_gcomp_cat_maker(fit, data, wt, link)
   if (is.null(g)) return(NULL)
   function(var, level, ref, mask = NULL) {
     p <- g(var, level, ref, mask)

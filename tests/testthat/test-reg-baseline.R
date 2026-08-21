@@ -73,7 +73,7 @@ test_that("a summed score's RISK ratio has its own scale, not the odds ratio's",
   or <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
                                  stats = FALSE))[["Model_OR"]]
   rr <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
-                                 measure = "ratio", stats = FALSE))[["Model_RR"]]
+                                 link = "ratio", stats = FALSE))[["Model_RR"]]
   expect_identical(get_scale(or), "score_odds_ratio")
   expect_identical(get_scale(rr), "score_ratio")
   expect_identical(fmt_center_field(or), "or")
@@ -106,7 +106,7 @@ test_that("the baseline's own base is the profile's count, or the population, or
   # ...and under `marginal` the row IS the population
   skip_if_not_installed("marginaleffects")
   t3 <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
-                                 effect = "marginal", stats = FALSE))
+                                 effect = "marginal", measure = "difference", stats = FALSE))
   expect_equal(nn(t3), nrow(tidyr::drop_na(d[, c("married", "race", "age")])))
 })
 

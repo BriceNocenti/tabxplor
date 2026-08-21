@@ -7,11 +7,11 @@
 // REG_ESTIMANDS) and R/reg-assumptions.R (REG_SHAPES). Re-run dev/generate_jamovi_js.R after
 // changing any of them; the suite checks this block (test-jamovi-vocabulary.R).
 var TABX_FAMILY_LABEL = { "gaussian": "gaussian (linear)", "binomial": "binomial (logistic)", "poisson": "poisson (counts)", "multinomial": "multinomial (nominal)", "ordinal": "ordinal (ordered)" };
-var TABX_FAMILY_LABEL_BINARY = { "binomial": "binomial (logistic)", "poisson": "poisson (risk ratio)" };
+var TABX_FAMILY_LABEL_BINARY = { "binomial": "binomial (logistic)" };
 var TABX_OUTCOME_DETECT = { "binary": "binomial", "ordered": "ordinal", "nominal": "multinomial", "numeric": "gaussian" };
-var TABX_OUTCOME_OFFERS = { "binary": ["binomial", "poisson"], "ordered": ["ordinal", "multinomial"], "nominal": ["multinomial", "ordinal"], "numeric": ["gaussian", "binomial", "poisson"] };
-var TABX_ESTIMANDS = { "gaussian": { "coefficient": ["auto", "ratio", "difference"], "marginal": ["auto", "ratio"], "at_reference": ["auto", "ratio", "difference"] }, "binomial": { "coefficient": ["auto", "odds_ratio", "ratio", "difference", "log"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto", "ratio", "difference"] }, "poisson": { "coefficient": ["auto", "ratio", "log"], "marginal": ["auto", "difference"], "at_reference": ["auto", "ratio", "difference"] }, "multinomial": { "coefficient": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] }, "ordinal": { "coefficient": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto", "ratio", "difference"] } };
-var TABX_DEFAULT_MEASURE = { "gaussian": { "coefficient": "difference", "marginal": "difference", "at_reference": "difference" }, "binomial": { "coefficient": "odds_ratio", "marginal": "difference", "at_reference": "difference" }, "poisson": { "coefficient": "ratio", "marginal": "difference", "at_reference": "difference" }, "multinomial": { "coefficient": "odds_ratio", "marginal": "difference", "at_reference": "odds_ratio" }, "ordinal": { "coefficient": "odds_ratio", "marginal": "difference", "at_reference": "difference" } };
+var TABX_OUTCOME_OFFERS = { "binary": ["binomial"], "ordered": ["ordinal", "multinomial"], "nominal": ["multinomial", "ordinal"], "numeric": ["gaussian", "binomial", "poisson"] };
+var TABX_LINKS = { "gaussian": ["auto", "difference", "ratio"], "binomial": ["auto", "odds_ratio", "ratio", "difference"], "poisson": ["auto", "ratio"], "multinomial": ["auto", "odds_ratio"], "ordinal": ["auto", "odds_ratio"] };
+var TABX_ESTIMANDS = { "gaussian": { "auto": { "auto": ["auto", "ratio", "difference"], "conditional": ["auto", "difference"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto", "ratio", "difference"] }, "difference": { "auto": ["auto", "ratio", "difference"], "conditional": ["auto", "difference"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto", "ratio", "difference"] }, "ratio": { "auto": ["auto", "ratio", "difference", "log"], "conditional": ["auto", "ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "ratio", "difference", "log"] } }, "binomial": { "auto": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "odds_ratio", "ratio", "difference", "log"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] }, "odds_ratio": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "odds_ratio", "ratio", "difference", "log"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] }, "ratio": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "ratio", "log"], "marginal": ["auto", "odds_ratio", "ratio", "difference", "log"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] }, "difference": { "auto": ["auto", "odds_ratio", "ratio", "difference"], "conditional": ["auto", "difference"], "marginal": ["auto", "odds_ratio", "ratio", "difference"], "at_reference": ["auto", "odds_ratio", "ratio", "difference"] } }, "poisson": { "auto": { "auto": ["auto", "ratio", "difference", "log"], "conditional": ["auto", "ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "ratio", "difference", "log"] }, "ratio": { "auto": ["auto", "ratio", "difference", "log"], "conditional": ["auto", "ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "ratio", "difference", "log"] } }, "multinomial": { "auto": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] }, "odds_ratio": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] } }, "ordinal": { "auto": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "ratio", "difference", "log"] }, "odds_ratio": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "ratio", "difference", "log"] } } };
 var TABX_SHAPES = ["linear", "quadratic", "log", "sqrt", "quartiles", "quintiles", "sd_bands"];
 // --- END GENERATED ---
 
@@ -899,34 +899,54 @@ var selectedFamilies = function(ui) {
 // whole estimand row for a gaussian outcome (an AME on a linear model is a real, if equal, estimand)
 // and the second encoded "a marginal ratio needs a probability scale", which 19e made false when it
 // opened `measure = "ratio"` to every family.
-var measureOffered = function(ui, effect, measure) {
+// Phase 22b-xv: the grid gained the LINK axis, so every question is asked of the CHOSEN model.
+var linkOffered = function(ui, link) {
     var fams = selectedFamilies(ui);
     if (fams.length === 0) return true;                      // nothing selected yet -> leave enabled
     for (var i = 0; i < fams.length; i++) {
-        var g = TABX_ESTIMANDS[fams[i]];
-        if (!g || !g[effect]) return false;
-        if (g[effect].indexOf(measure) < 0) return false;     // every outcome must offer it
+        var l = TABX_LINKS[fams[i]];
+        if (!l || l.indexOf(link) < 0) return false;          // every outcome must fit it
     }
     return true;
 };
 
-var EFFECT_OF_RADIO  = { effect_1: "coefficient", effect_2: "marginal", effect_3: "at_reference" };
+var measureOffered = function(ui, link, effect, measure) {
+    var fams = selectedFamilies(ui);
+    if (fams.length === 0) return true;
+    for (var i = 0; i < fams.length; i++) {
+        var g = TABX_ESTIMANDS[fams[i]];
+        if (!g || !g[link] || !g[link][effect]) return false;
+        if (g[link][effect].indexOf(measure) < 0) return false;   // every outcome must offer it
+    }
+    return true;
+};
+
+var LINK_OF_RADIO    = { link_1: "auto", link_2: "odds_ratio", link_3: "ratio",
+                         link_4: "difference" };
+var EFFECT_OF_RADIO  = { effect_1: "auto", effect_2: "conditional", effect_3: "marginal",
+                         effect_4: "at_reference" };
 var MEASURE_OF_RADIO = { measure_1: "auto", measure_2: "odds_ratio", measure_3: "ratio",
                          measure_4: "difference", measure_5: "log" };
 
 var applyModelEnables = function(ui) {
-    var eff = ui.effect ? ui.effect.value() : "coefficient";
-    // an effect is offered when SOME measure of it is
+    var lk  = ui.link   ? ui.link.value()   : "auto";
+    var eff = ui.effect ? ui.effect.value() : "auto";
+    // a link is offered when the chosen outcomes can be FITTED on it
+    Object.keys(LINK_OF_RADIO).forEach(function(nm) {
+        if (ui[nm] && ui[nm].setEnabled) ui[nm].setEnabled(linkOffered(ui, LINK_OF_RADIO[nm]));
+    });
+    if (!linkOffered(ui, lk)) lk = "auto";                    // a stale pick greys the rest wholesale
+    // an effect is offered when SOME measure of it is, on the chosen model
     Object.keys(EFFECT_OF_RADIO).forEach(function(nm) {
         if (!ui[nm] || !ui[nm].setEnabled) return;
         var e = EFFECT_OF_RADIO[nm];
         ui[nm].setEnabled(Object.keys(MEASURE_OF_RADIO).some(function(mn) {
-            return measureOffered(ui, e, MEASURE_OF_RADIO[mn]);
+            return measureOffered(ui, lk, e, MEASURE_OF_RADIO[mn]);
         }));
     });
     Object.keys(MEASURE_OF_RADIO).forEach(function(nm) {
         if (ui[nm] && ui[nm].setEnabled)
-            ui[nm].setEnabled(measureOffered(ui, eff, MEASURE_OF_RADIO[nm]));
+            ui[nm].setEnabled(measureOffered(ui, lk, eff, MEASURE_OF_RADIO[nm]));
     });
 };
 

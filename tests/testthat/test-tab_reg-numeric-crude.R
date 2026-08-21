@@ -161,7 +161,7 @@ test_that("gaussian / poisson / rr numeric crude effects match their univariable
   gp <- stats::glm(tvhours ~ age, data = dm, family = stats::quasipoisson())
   expect_equal(get_ratio(tp[["Obs_IRR"]])[ip], unname(exp(stats::coef(gp)["age"])), tolerance = 1e-10)
 
-  tr <- tab_reg(d, "married", c("age", "race"), family = "poisson",   # binary -> modified Poisson
+  tr <- tab_reg(d, "married", c("age", "race"), family = "binomial", link = "ratio",   # binary -> modified Poisson
                 empirical = TRUE, cleannames = FALSE)
   ir <- which(as.character(tr$var) == "age")
   expect_true(!is.na(tabxplor:::fmt_est_of(tr[["Obs_RR"]])[ir]))
@@ -192,7 +192,7 @@ test_that("a model with ONLY numeric predictors builds its crude columns", {
 
 # --- 4. the crude AME arm --------------------------------------------------------------------------
 
-test_that("effect = 'ame' / 'ame_ratio': the numeric crude cell is the UNIVARIABLE marginal effect", {
+test_that("a marginal effect, additive or ratio: the numeric crude cell is the UNIVARIABLE one", {
   skip_if_not_installed("marginaleffects")
   d  <- num_data()
   dm <- tidyr::drop_na(d, "married", "age", "race")
@@ -225,14 +225,14 @@ test_that("effect = 'ame' / 'ame_ratio': the numeric crude cell is the UNIVARIAB
   }
 })
 
-test_that("poisson + effect='ame' pairs with the observed mean DIFFERENCE, numeric rows included", {
+test_that("a poisson marginal difference pairs with the observed mean DIFFERENCE, numeric rows included", {
   # a poisson marginal effect is a difference of expected COUNTS, so its crude counterpart is the
   # observed difference of means -- REG_EMPIRICAL$poisson$diff. It used to fall back to the rate-ratio
   # shape, which reg_same_estimand() then rightly refused to pair, leaving the column unusable.
   skip_if_not_installed("marginaleffects")
   d <- num_data()
   t <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson",
-                                effect = "marginal", empirical = TRUE, cleannames = FALSE))
+                                effect = "marginal", measure = "difference", empirical = TRUE, cleannames = FALSE))
   i  <- which(as.character(t$var) == "age")
   mc <- names(t)[purrr::map_lgl(t, is_fmt)]
   expect_true("Obs_diff" %in% names(t))
@@ -244,7 +244,7 @@ test_that("at = 'reference' writes no obs on a numeric row either", {
   skip_if_not_installed("marginaleffects")
   d <- num_data()
   t <- suppressWarnings(tab_reg(d, "married", c("age", "race"), family = "binomial",
-                                effect = "at_reference", empirical = TRUE,
+                                effect = "at_reference", measure = "difference", empirical = TRUE,
                                 cleannames = FALSE))
   i  <- which(as.character(t$var) == "age")
   mc <- names(t)[purrr::map_lgl(t, is_fmt)]
@@ -349,7 +349,7 @@ test_that("the numeric coefficient gap SE == a hand-stacked influence-function c
   d <- num_data()
   # `rr` (modified Poisson on a binary outcome) is collapsible, so the COEFFICIENT gap test fires
   # (a conditional OR is not -- reg_estimand_collapsible()).
-  t <- tab_reg(d, "married", c("age", "tvhours", "race"), family = "poisson", empirical = TRUE,
+  t <- tab_reg(d, "married", c("age", "tvhours", "race"), family = "binomial", link = "ratio", empirical = TRUE,
                color = c(TRUE, "adjustment"), multiplier = 1, cleannames = FALSE)
   i  <- which(as.character(t$var) == "age")
   se <- get_gap_se(t[["Model_RR"]])[i]
@@ -367,7 +367,7 @@ test_that("the numeric coefficient gap SE == a hand-stacked influence-function c
 
 test_that("multiplier scales the numeric gap SE by |k| (so the z is invariant)", {
   d <- num_data()
-  mk <- function(k) tab_reg(d, "married", c("age", "tvhours", "race"), family = "poisson",
+  mk <- function(k) tab_reg(d, "married", c("age", "tvhours", "race"), family = "binomial", link = "ratio",
                             empirical = TRUE, color = c(TRUE, "adjustment"),
                             multiplier = if (identical(k, 1)) 1 else c(age = k), cleannames = FALSE)
   i   <- which(as.character(mk(1)$var) == "age")
@@ -381,7 +381,7 @@ test_that("multiplier scales the numeric gap SE by |k| (so the z is invariant)",
   expect_equal(z(t10), z(t1), tolerance = 1e-8)
 })
 
-test_that("effect = 'ame' / 'ame_ratio': numeric rows get a gap SE too (the IF numeric arm)", {
+test_that("a marginal effect, additive or ratio: numeric rows get a gap SE too (the IF numeric arm)", {
   skip_if_not_installed("marginaleffects")
   d <- num_data()
   for (eff in c("difference", "ratio")) {

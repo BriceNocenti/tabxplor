@@ -120,6 +120,8 @@ test_that("jmvtab.a.yaml speaks tab()'s vocabularies", {
 test_that("jmvtabreg.a.yaml speaks tab_reg()'s vocabularies", {
   o <- yaml_opts("jmvtabreg.a.yaml")
 
+  # the cascade, in cascade order: each option's value set IS the R vocabulary it names
+  expect_identical(opt_values(o, "link"),    REG_LINKS_VALUES)
   expect_identical(opt_values(o, "effect"),  REG_EFFECTS_VALUES)
   expect_identical(opt_values(o, "measure"), REG_MEASURES_VALUES)
   expect_identical(opt_values(o, "na"),      eval(formals(tab_reg)$na))

@@ -276,7 +276,7 @@ test_that("at = 'reference' writes no `obs`: the two columns are different estim
   d <- gap_data()
   testthat::expect_message(
     t <- tab_reg(d, outcome = "married", predictors = c("race", "party3"), family = "binomial",
-                 effect = "at_reference", empirical = TRUE),
+                 effect = "at_reference", measure = "difference", empirical = TRUE),
     "reference profile")
   mcol <- reg_fmt_cols(t)[[1]]
   testthat::expect_true(all(is.na(get_obs(t[[mcol]]))))
@@ -306,7 +306,7 @@ test_that("D11: obs / gap_se are written only where a gap measure reads them", {
   skip_if_not_installed("broom")
   d  <- gap_data()
   sp <- suppressMessages(tab_reg(d, "married", list(m1 = "race", m2 = "race"),
-                                 tab_vars = "party3", family = "poisson",
+                                 tab_vars = "party3", family = "binomial", link = "ratio",
                                  empirical = TRUE, color = c(TRUE, "between_groups")))
   fc <- reg_fmt_cols(sp)
   mdl <- fc[get_role(sp[fc]) == "model"]

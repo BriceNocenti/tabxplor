@@ -244,8 +244,9 @@ variance when the weighted basis is asked for (\code{tab(design_effect = TRUE)})
 (the CI falls back to the raw unweighted base). It records \emph{the base that was used}: a finite
 value where the design or weights corrected it, \code{NA} where nothing did, and the \strong{raw
 count} where a correction was asked for but this cell could not carry one. Populated for
-descriptive cells (a crosstab/mean cell, a \code{tab_reg} \code{Obs_*} column); a coefficient
-column carries none. A double vector the length of \code{n}. Non-displayed.}
+descriptive cells (a crosstab/mean cell, a \code{tab_reg} \code{Obs_*} column whose interval came
+from a closed form); a coefficient column, and any column whose interval came from a fit instead,
+carry none. A double vector the length of \code{n}. Non-displayed.}
 
 \item{obs}{The value this cell's estimate is COMPARED TO by the \code{tab_reg} colour measures
 \code{"adjustment"} / \code{"between_groups"}, on the cell's own scale: the observed (crude)
@@ -323,8 +324,10 @@ a single number in (0, 1). \code{NA} (default) means "unknown" --- the colour en
 back to \code{options("tabxplor.conf_level")}. Stored per COLUMN, because colours are resolved per
 column at print time and cannot see the table's \code{conf_level} argument.}
 
-\item{degf}{The degrees of freedom this column's interval is referred to (a survey design's
-\code{#PSU - #strata}, which matters below ~30 primary sampling units). \code{NA} (default) means
+\item{degf}{The degrees of freedom this column's interval is referred to. On a cross-table that is
+the survey design's \code{#PSU - #strata}, which matters below ~30 primary sampling units; on a
+regression it is the fitted model's own residual df (for an \code{svyglm}, \code{degf + 1 - p}),
+so a model column and its observed companion legitimately differ. \code{NA} (default) means
 "refer to the normal quantile".}
 
 \item{basis}{How this column's interval and significance were computed --- \code{"n"} (the raw

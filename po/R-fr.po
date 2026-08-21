@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tabxplor 2.0.0\n"
-"POT-Creation-Date: 2026-08-20 17:03\n"
+"POT-Creation-Date: 2026-08-21 11:18\n"
 "PO-Revision-Date: 2024-07-31 18:51+0200\n"
 "Last-Translator: tabxplor (Phase 18w draft)\n"
 "Language-Team: none\n"
@@ -614,69 +614,11 @@ msgstr "%s au profil de référence"
 msgid "log %s"
 msgstr "log du %s"
 
-msgid "other predictors held at their reference level / mean"
-msgstr "les autres prédicteurs fixés à leur modalité de référence / moyenne"
-
-msgid "sample-averaged"
-msgstr "moyenne sur l'échantillon"
-
-msgid "the ratio of adjusted predicted probabilities"
-msgstr "rapport des probabilités prédites ajustées"
-
-msgid "the ratio of adjusted predicted values"
-msgstr "rapport des valeurs prédites ajustées"
-
-msgid "on the probability scale, in percentage points"
-msgstr "sur l'échelle de probabilité, en points de pourcentage"
-
-msgid "on the response scale"
-msgstr "sur l'échelle de la réponse"
-
-msgid "%s; %s"
-msgstr "%s ; %s"
+msgid "linear regression"
+msgstr "régression linéaire"
 
 msgid "vs the reference category"
 msgstr "par rapport à la modalité de référence"
-
-msgid ""
-"an odds ratio needs a probability to take the odds of; this outcome is "
-"continuous"
-msgstr ""
-"un rapport de cotes suppose une probabilité dont prendre la cote ; cette "
-"variable à expliquer est continue"
-
-msgid "in percentage points, vs the reference category"
-msgstr "en points de pourcentage, par rapport à la modalité de référence"
-
-msgid ""
-"an odds ratio needs a probability to take the odds of; this outcome is a "
-"count"
-msgstr ""
-"un rapport de cotes suppose une probabilité dont prendre la cote ; cette "
-"variable à expliquer est un comptage"
-
-msgid "each category vs the reference"
-msgstr "chaque modalité par rapport à la référence"
-
-msgid ""
-"each outcome category versus the rest; other predictors held at their "
-"reference level / mean; profile-conditional"
-msgstr ""
-"chaque modalité de la variable expliquée par rapport aux autres ; les autres "
-"prédicteurs fixés à leur modalité de référence / moyenne ; conditionnel au "
-"profil"
-
-msgid "proportional-odds model"
-msgstr "modèle à cotes proportionnelles"
-
-msgid "the identity link is collapsible, so averaging changes nothing"
-msgstr ""
-
-msgid "the log link is collapsible, so averaging changes nothing"
-msgstr ""
-
-msgid "linear regression"
-msgstr "régression linéaire"
 
 msgid "logistic regression"
 msgstr "régression logistique"
@@ -687,8 +629,14 @@ msgstr "régression de Poisson"
 msgid "multinomial logistic regression"
 msgstr "régression logistique multinomiale"
 
+msgid "each category vs the reference"
+msgstr "chaque modalité par rapport à la référence"
+
 msgid "ordinal logistic regression"
 msgstr "régression logistique ordinale"
+
+msgid "proportional-odds model"
+msgstr "modèle à cotes proportionnelles"
 
 msgid ""
 "an ordinal outcome must keep the order of its levels, so none can be singled "
@@ -716,6 +664,41 @@ msgstr "régression"
 msgid "this family models no single level of the outcome"
 msgstr ""
 
+msgid "other predictors held at their reference level / mean"
+msgstr "les autres prédicteurs fixés à leur modalité de référence / moyenne"
+
+msgid "sample-averaged"
+msgstr "moyenne sur l'échantillon"
+
+msgid "the odds ratio of adjusted predicted probabilities"
+msgstr "rapport de cotes des probabilités prédites ajustées"
+
+msgid "the ratio of adjusted predicted probabilities"
+msgstr "rapport des probabilités prédites ajustées"
+
+msgid "the ratio of adjusted predicted values"
+msgstr "rapport des valeurs prédites ajustées"
+
+msgid "on the probability scale, in percentage points"
+msgstr "sur l'échelle de probabilité, en points de pourcentage"
+
+msgid "on the response scale"
+msgstr "sur l'échelle de la réponse"
+
+msgid "%s; %s"
+msgstr "%s ; %s"
+
+msgid ""
+"each outcome category versus the rest; other predictors held at their "
+"reference level / mean; profile-conditional"
+msgstr ""
+"chaque modalité de la variable expliquée par rapport aux autres ; les autres "
+"prédicteurs fixés à leur modalité de référence / moyenne ; conditionnel au "
+"profil"
+
+msgid "in percentage points, %s"
+msgstr "en points de pourcentage, %s"
+
 msgid ""
 "this outcome's coefficient is already additive, so there is no ratio to take "
 "the log of"
@@ -723,8 +706,31 @@ msgstr ""
 "le coefficient de cette variable à expliquer est déjà additif : il n'y a pas "
 "de rapport dont prendre le log"
 
-msgid "on the model's own link scale"
-msgstr "sur l'échelle de lien propre au modèle"
+msgid ""
+"an odds ratio needs a percentage and its complement, so a 3+ category "
+"outcome has to be asked \"versus what?\" first"
+msgstr ""
+"un rapport de cotes suppose un pourcentage et son complément : une variable "
+"expliquée à 3 modalités ou plus doit d'abord répondre à \"par rapport à "
+"quoi ?\""
+
+msgid "the model estimates %s, so this measure has no coefficient here"
+msgstr "le modèle estime %s : cette mesure n'a pas de coefficient ici"
+
+msgid "continuous"
+msgstr "continue"
+
+msgid "a count"
+msgstr "un décompte"
+
+msgid "this outcome does not support that measure"
+msgstr "cette variable à expliquer ne peut pas porter cette mesure"
+
+msgid ""
+"an odds ratio needs a probability to take the odds of; this outcome is %s"
+msgstr ""
+"un rapport de cotes suppose une probabilité dont prendre la cote ; cette "
+"variable à expliquer est %s"
 
 #, fuzzy
 msgid "the observed (crude) one"
@@ -746,7 +752,7 @@ msgid "the same effect as a ratio"
 msgstr ""
 
 msgid "the same effect as an odds ratio"
-msgstr ""
+msgstr "le même effet en rapport de cotes"
 
 #, fuzzy
 msgid "the coefficient on the model's own link scale"
@@ -1140,6 +1146,12 @@ msgstr ""
 msgid "Install it with install.packages('clipr')."
 msgstr ""
 
+msgid "t(%s) on %s design df"
+msgstr ""
+
+msgid "%s design df"
+msgstr ""
+
 msgid "of %s ('%s')"
 msgstr "de %1$s ('%2$s')"
 
@@ -1242,6 +1254,19 @@ msgstr ""
 
 msgid "tabxplor: new_reg_ctx() and new_reg_shared() both declare:"
 msgstr ""
+
+#~ msgid ""
+#~ "an odds ratio needs a probability to take the odds of; this outcome is "
+#~ "continuous"
+#~ msgstr ""
+#~ "un rapport de cotes suppose une probabilité dont prendre la cote ; cette "
+#~ "variable à expliquer est continue"
+
+#~ msgid "in percentage points, vs the reference category"
+#~ msgstr "en points de pourcentage, par rapport à la modalité de référence"
+
+#~ msgid "on the model's own link scale"
+#~ msgstr "sur l'échelle de lien propre au modèle"
 
 #~ msgid ""
 #~ "%s: significantly different from the reference category (in bold) — from "

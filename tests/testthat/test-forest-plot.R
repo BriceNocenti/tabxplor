@@ -102,7 +102,7 @@ test_that("the gap band is drawn exactly where the model says", {
   skip_if_not_installed("survey")
   fp_dev()
   d <- fp_data()
-  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "poisson",
+  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "binomial", link = "ratio",
                                 empirical = TRUE, color = c(TRUE, "adjustment")))
   e <- forest_plot(t, return_data = TRUE)
   bd <- e[is.finite(e$gap_lo), , drop = FALSE]

@@ -90,17 +90,14 @@ tx_fk_emp_shape_keys <- function()
 tx_fk_emp_reachable <- function() {
   out <- character(0)
   for (f in names(REG_ESTIMANDS)) for (r in REG_ESTIMANDS[[f]]$rows) {
-    if (!identical(r$status, "ok")) next
     # `trials = ` is the one caller-supplied fact that moves a block, so both states are enumerated.
     for (tr in list(NULL, 1)) {
       key <- reg_crude_key(r$fit, tr)
       if (is.na(key)) next
-      blk <- if (identical(key, "grouped_binomial")) key
-             else if (!identical(r$crude_fam %||% "auto", "auto")) r$crude_fam else key
+      blk <- reg_emp_block_of(key, r)          # the resolver's own rule, never a second copy
+      if (is.na(blk)) next
       base <- if (is.na(r$crude_shape)) REG_EMPIRICAL[[blk]]$coef else r$crude_shape
-      # only a multiplicative row has a log twin: reg_estimand() refuses to log an additive one.
-      out <- c(out, paste0(blk, ".", base),
-               if (isTRUE(r$exp)) paste0(blk, ".", base, "_log"))
+      out  <- c(out, paste0(blk, ".", base))
     }
   }
   unique(out)
@@ -165,6 +162,11 @@ TAB_FOREIGN_KEYS <- list(
   #   named in the legend instead.
   tx_fk("REG_EMPIRICAL$*$ci_method", function() tx_fk_scalar(tx_fk_emp_shapes(), "ci_method"),
         function() unlist(CI_METHODS, use.names = FALSE), allow = c("woolf", "katz", "wald_log")),
+  # the crude leg's own link -- read by reg_crude_if_maker()'s delta factor and by the estimand
+  # library's composition of every crude companion. An undeclared one would silently drop the gap
+  # test rather than fail, which is why this edge exists.
+  tx_fk("REG_EMPIRICAL$*$link", function() tx_fk_scalar(tx_fk_emp_shapes(), "link"),
+        function() names(REG_LINK_FUNS)),
   tx_fk("REG_EMPIRICAL$*$ci_method_design",
         function() tx_fk_scalar(tx_fk_emp_shapes(), "ci_method_design"),
         function() unlist(CI_METHODS, use.names = FALSE)),
@@ -227,11 +229,9 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("REG_OUTCOME_KINDS$offers", function() tx_fk_all(REG_OUTCOME_KINDS, "offers"),
         function() names(REG_FAMILIES)),
 
-  # --- into the two vocabularies reg_build() dispatches on -----------------------------------
+  # --- into the vocabulary reg_build() dispatches on ------------------------------------------
   tx_fk("REG_ESTIMANDS$rows$builder", function() tx_fk_scalar(tx_fk_reg_rows(), "builder"),
         function() REG_BUILDERS),
-  tx_fk("REG_ESTIMANDS$rows$engine", function() tx_fk_scalar(tx_fk_reg_rows(), "engine"),
-        function() REG_MARGINAL_ENGINES, allow = "auto"),
 
   # --- into REG_EMPIRICAL (which crude column pairs with which estimand) ----------------------
   tx_fk("REG_ESTIMANDS$rows$crude_fam", function() tx_fk_scalar(tx_fk_reg_rows(), "crude_fam"),
