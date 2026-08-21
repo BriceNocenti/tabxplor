@@ -620,7 +620,7 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
     all(vapply(deps$est, function(e) identical(e$builder, "coef"), logical(1))) &&
     !any(vapply(deps$est, function(e) identical(e$builder, "vsrest"), logical(1))) &&
     (is.null(display) ||
-       identical(display_resolve(display), DISPLAY_PRESETS[["est_ci"]])) && method == "wald" &&
+       identical(display_resolve(display), DISPLAY_PRESETS[["est_ci"]]$template)) && method == "wald" &&
     all(reg_fam_glm(families)) &&
     !formula_mode && is.null(tab_vars) && all(is.na(deps$trials)) &&
     compare == "none" && !is_comparison && !("adjustment" %in% color) &&

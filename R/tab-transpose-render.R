@@ -4,6 +4,10 @@
 # ROLE: The `transpose = TRUE` seam for every exporter. tab_export_prep() builds the normal per-table
 #   model, then calls tx_transpose_render() on it; the backends render the flipped model.
 # KEY CONSTRAINTS:
+#   - THE UNIT LINE TURNS WITH THE AXES: a transposed data column holds one original ROW across every
+#     original column, so it is named only where those columns agreed on one name -- and row% becomes
+#     col% (tx_flip_pct_label), which is what keeps a transposed row% table rendering EXACTLY like a
+#     native col% one. The original Total columns are excluded: after the flip they are the Total ROW.
 #   - A transposed column is HETEROGENEOUS (a %, a mean, an n stacked), so it cannot be a tabxplor_fmt
 #     column and cannot be re-format()ted. The cell STRINGS (and, for Excel, values + numFmt) are
 #     produced here, per ORIGINAL homogeneous column, then flipped as plain data. This is why the
@@ -250,7 +254,25 @@ tx_transpose_render <- function(rd, backend) {
   cvh_label[data_pos] <- src_name
   cvh_clean[data_pos] <- row_lvl
   cvh_clean[seq_len(n_lead)] <- lead_clean
-  col_var_header <- list(label = cvh_label, clean = cvh_clean)
+  # THE UNIT LINE AFTER A FLIP. A transposed data column holds one original ROW across every original
+  # column, so it has a name only where those columns agreed on one -- and the reading direction turns
+  # with the axes, which is what makes a transposed row% table read exactly like a native col% one.
+  # The original TOTAL columns are excluded: after the flip they are the Total ROW, and a native col%
+  # table's column names do not know about it either.
+  cvh_unit <- character(length(all_names))
+  src_cols <- names(tab)[purrr::map_lgl(tab, ~ is_fmt(.) && !is_totcol(.) &&
+                                          !get_role(.) %in% c("n", "pct", "sd", "aside"))]
+  if (length(src_cols)) {
+    su <- unique(vapply(tab[src_cols], fmt_display_label, character(1), style = "tag"))
+    if (length(su) == 1L && nzchar(su)) {
+      cvh_unit[data_pos] <- tx_flip_pct_label(su)
+      # ONE label, at the leftmost data column: every transposed data column carries the same `su`
+      # by construction (that is the condition above), Total included -- after the flip it is the
+      # Total ROW, exactly as in a native table of the same orientation.
+      cvh_unit <- tab_units_once(cvh_unit, replace(character(length(all_names)), data_pos, "d"))
+    }
+  }
+  col_var_header <- list(label = cvh_label, clean = cvh_clean, unit = cvh_unit)
 
   has_stars <- isTRUE(roles$has_stars)
 
@@ -327,4 +349,14 @@ tx_format_source_cols <- function(tab, ann, order_i, backend) {
     }
   }
   list(txt = txt)
+}
+
+# row% <-> col%: the ONE thing a transposed unit label must say differently, because a percentage
+# names the axis it sums on and the flip turns that axis. Everything else in the label ("mean",
+# "(n)", "OR") is axis-free.
+#' @keywords internal
+#' @noRd
+tx_flip_pct_label <- function(x) {
+  if (grepl("row%", x, fixed = TRUE)) return(gsub("row%", "col%", x, fixed = TRUE))
+  gsub("col%", "row%", x, fixed = TRUE)
 }

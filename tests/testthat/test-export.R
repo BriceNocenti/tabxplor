@@ -21,8 +21,11 @@ testthat::test_that("tab_export() dispatches to each format", {
 testthat::test_that("color = FALSE renders monochrome (no colour spans)", {
   col <- tab_md(t_row, color = TRUE,  print = FALSE)
   mon <- tab_md(t_row, color = FALSE, print = FALSE)
-  testthat::expect_true(grepl("]{.", col, fixed = TRUE))   # coloured pandoc spans present
-  testthat::expect_false(grepl("]{.", mon, fixed = TRUE))  # none when monochrome
+  # the COLOUR-slot spans (.p1/.m2/.o3/.u4), not the chrome ones a monochrome table still carries
+  # (`.tx-unit`, the header's unit line -- Phase 22c-ii).
+  slot <- "\\]\\{\\.[pmou][0-9]"
+  testthat::expect_true(grepl(slot, col))                  # coloured pandoc spans present
+  testthat::expect_false(grepl(slot, mon))                 # none when monochrome
 })
 
 testthat::test_that("transpose swaps the table axes at export", {

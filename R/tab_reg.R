@@ -4378,6 +4378,7 @@ reg_stage_finalize <- function(ctx) {
 #'   `reference`, `method`, `compare`, `baseline`, `inverse_two_level_factors`, `parallel`, and the
 #'   `effect` values `"ame"` / `"ame_ratio"` / `"coefficient"` --- give an error naming its
 #'   replacement, rather than R's bare "unused argument".
+#' @eval display_presets_rd()
 #' @eval reg_words_rd()
 #' @eval reg_measures_rd()
 #' @export

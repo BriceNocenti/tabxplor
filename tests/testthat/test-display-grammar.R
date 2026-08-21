@@ -155,8 +155,9 @@ testthat::test_that("no template the package writes has TOP-LEVEL literal conten
   src <- unlist(lapply(rfiles, readLines, warn = FALSE))
   src <- src[!grepl("^\\s*#", src)]                    # a comment may QUOTE a template it does not write
   lit <- gsub('^"|"$', "", unlist(regmatches(src, gregexpr('"[^"\\\\]*\\{[a-z_]+\\}[^"\\\\]*"', src))))
-  cand <- unique(c(unlist(DISPLAY_PRESETS, use.names = FALSE), lit,
+  cand <- unique(c(unlist(lapply(DISPLAY_PRESETS, function(r) r$template), use.names = FALSE), lit,
                    "{pvalue} (Chi2)", "{pvalue} (F, Welch)", "{pvalue} (Rao-Scott Chi2)"))
+  cand <- cand[!is.na(cand)]
   keep <- vapply(cand, function(t) {
     if (nchar(t) > 40 || grepl("[.]code|cli::|\\\\", t)) return(FALSE)
     f <- trimws(gsub("[{}]", "", regmatches(t, gregexpr("\\{[^{}]+\\}", t))[[1]]))
@@ -326,7 +327,8 @@ testthat::test_that("the preset table is ONE table, resolved the same way by bot
   testthat::expect_identical(
     names(tabxplor:::DISPLAY_PRESETS),
     c("est", "est_ci", "est_base", "est_coef", "base_est_mdiff", "base_est_mratio",
-      "base_est", "base", "base_ci", "base_moe"))
+      "base_est", "base", "base_ci", "base_moe", "base_ratio", "base_or", "or_base",
+      "or_pct", "OR_pct"))
   # a preset may declare one arm per column ROLE; an unknown role takes `default`.
   testthat::expect_identical(tabxplor:::display_resolve("est_base"), "{est} ({base})")
   testthat::expect_identical(tabxplor:::display_resolve("est_base", "model"), "{est} ({base})")
@@ -473,4 +475,104 @@ testthat::test_that("the aside's colour is the theme's own chrome, resolved PER 
   # the expert opt-out emits no rule at all: the aside then inherits the cell's own shade
   withr::local_options(tabxplor.color_whole_cell = TRUE)
   testthat::expect_false(grepl("tx-sec", tab_css(theme = "light"), fixed = TRUE))
+})
+
+# === Phase 22c-ii: naming what a column holds ======================================================
+
+testthat::test_that("a column's NAME is its own template, token by token", {
+  g <- gss_cat_data_formatting()
+  tag <- function(...) {
+    t <- suppressMessages(tab(g, race, party3, pct = "row", na = "drop_all", color = TRUE, ...))
+    c(vctrs::vec_ptype_abbr(t[[2]]), vctrs::vec_ptype_abbr(t$Total))
+  }
+  # the aside is NAMED, in the bracket form the cell itself uses
+  testthat::expect_identical(tag(display = "pct"),           c("row%", "row%"))
+  testthat::expect_identical(tag(display = "{pct} ({n})"),   c("row% (n)", "row% (n)"))
+  # ... and it drops where the field is void: the row-% Total has no odds ratio (degenerate 2x2)
+  testthat::expect_identical(tag(display = "{pct} ({or})"),  c("row% (OR)", "row%"))
+  # a percentage names its own direction; the prefix is only for a column that prints NO level
+  testthat::expect_identical(tag(display = "{or} ({pct})")[[1]], "OR (row%)")
+  testthat::expect_identical(tag(display = "or")[[1]],          "row%-OR")
+  testthat::expect_identical(tag(display = "ratio")[[1]],       "row%-ratio")
+  # a numeric column names the sd tail format() folds into it
+  testthat::expect_identical(
+    vctrs::vec_ptype_abbr(tab(g, race, tvhours, na = "drop_all", color = TRUE)[[2]]),
+    "mean (sd)")
+  # a REGRESSION column never takes the pct-type prefix: its estimate is not a percentage. What its
+  # LEVEL says instead is WHOSE it is -- the observed one, or the model's adjusted prediction.
+  m <- tab_reg(g, outcome = "married", predictors = "race", empirical = TRUE, family = "binomial")
+  testthat::expect_identical(vctrs::vec_ptype_abbr(m$Obs_OR),   "(obs%) OR")
+  testthat::expect_identical(vctrs::vec_ptype_abbr(m$Model_OR), "OR (adj%)")
+  # ... on a mean as much as on a percentage, and the fallback is the crosstab reading
+  gm <- suppressMessages(tab_reg(g, outcome = "tvhours", predictors = "race", empirical = TRUE))
+  testthat::expect_identical(vctrs::vec_ptype_abbr(gm$Obs_diff),   "(obs mean) coef")
+  testthat::expect_identical(vctrs::vec_ptype_abbr(gm$Model_diff), "coef (adj mean)")
+})
+
+testthat::test_that("a template is stamped wherever it renders ANYTHING, so a column is one layout", {
+  g <- gss_cat_data_formatting()
+  # the crude column of a NUMERIC predictor has an odds ratio and no risk difference: gating the
+  # stamping on the primary left that one row showing a bare estimate while every other row showed
+  # the requested layout -- two quantities in one column, and a "<mixed>" name over them.
+  m <- suppressMessages(tab_reg(
+    g, outcome = "married", predictors = c("race", "age"), empirical = TRUE, family = "binomial",
+    display = "{diff} [{OR}] ({base})"))
+  d <- get_display(m$Obs_OR)
+  age <- which(!is.na(get_or(m$Obs_OR)) & is.na(get_diff(m$Obs_OR)))
+  testthat::expect_gt(length(age), 0L)
+  testthat::expect_true(all(d[age] == "{diff} [{OR}] ({base})"))
+  testthat::expect_match(format(m$Obs_OR)[age[[1]]], "1/|[0-9]")      # the aside still renders
+  # a cell with NOTHING of the template keeps its own token -- and does not make the column "mixed"
+  testthat::expect_identical(vctrs::vec_ptype_abbr(m$Obs_OR),   "diff [OR] (obs%)")
+  testthat::expect_identical(vctrs::vec_ptype_abbr(m$Model_OR), "diff [OR] (adj%)")
+})
+
+testthat::test_that("the name survives a column torn out of its table, and a statistic row", {
+  g <- gss_cat_data_formatting()
+  col <- tab(g, race, party3, pct = "row", na = "drop_all", color = TRUE)[[2]]
+  # an fmt column keeps its fields and its attributes and nothing else -- and is still named
+  testthat::expect_no_error(vctrs::vec_ptype_abbr(col))
+  testthat::expect_identical(vctrs::vec_ptype_abbr(col), "row%")
+  # a column IS NAMED BY ITS DATA: the chi2 p-value row and the base-count row `pct = "col"` appends
+  # carry their own token, and letting them vote turned a percentage column into "mixed".
+  x <- fmt(n = c(10L, 20L, 30L), pct = c(.4, .6, .02), scale = "level_pct", pct_type = "col",
+           display = c("pct", "pct", "pvalue"), row_kind = c("data", "total", "pvalue"))
+  testthat::expect_identical(vctrs::vec_ptype_abbr(x), "col%")
+  y <- fmt(n = c(10L, 20L, 30L), pct = c(.4, .6, NA), scale = "level_pct", pct_type = "col",
+           display = c("pct", "pct", "n"), row_kind = c("data", "total", "n"))
+  testthat::expect_identical(vctrs::vec_ptype_abbr(y), "col%")
+})
+
+testthat::test_that("the three new layouts, and the acronym spelling", {
+  g <- gss_cat_data_formatting()
+  cell <- function(d) format(suppressMessages(
+    tab(g, race, party3, pct = "row", na = "drop_all", color = TRUE, ref = 1,
+        display = d))[[3]])[[2]]
+  testthat::expect_identical(cell("base_ratio"), cell("{base} ({ratio})"))
+  testthat::expect_identical(cell("base_or"),    cell("{base} ({or})"))
+  testthat::expect_identical(cell("or_base"),    cell("{or} ({base})"))
+  # the acronym is the same token, on its own and inside a template
+  testthat::expect_identical(cell("OR"),   cell("or"))
+  testthat::expect_identical(cell("{OR}"), cell("{or}"))
+  # the 1.x layout spelling still resolves, to the preset that replaced it
+  testthat::expect_identical(cell("or_pct"), cell("or_base"))
+  testthat::expect_identical(cell("OR_pct"), cell("or_base"))
+})
+
+testthat::test_that("the Total's 100 % goes when the cells stop showing a level", {
+  g   <- gss_cat_data_formatting()
+  tot <- function(...) {
+    t <- suppressMessages(tab(g, race, party3, pct = "row", na = "drop_all", color = TRUE, ...))
+    format(tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE)$Total)[[1]]
+  }
+  # a level is shown -> the block sums to the Total, and says so
+  testthat::expect_match(tot(display = "pct"),      "^100%")
+  testthat::expect_match(tot(ci = "cell"),          "^100%")   # an interval is still ABOUT its share
+  testthat::expect_match(tot(ci = "ref"),           "^100%")
+  testthat::expect_match(tot(display = "base_ratio"), "^100%") # the primary is the level
+  # a deviation is shown -> nothing sums, and only the base count is printed
+  testthat::expect_false(grepl("100%", tot(display = "ratio")))
+  testthat::expect_false(grepl("100%", tot(display = "{ratio} ({pct})")))
+  testthat::expect_false(grepl("100%", tot(display = "or")))
+  testthat::expect_false(grepl("100%", tot(display = "or_base")))
 })

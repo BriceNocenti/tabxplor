@@ -4,6 +4,10 @@
 #   md_css_rules()/md_css_block()/md_break_class()/md_slot_class_map() (tab_md.R) and the static,
 #   hard-coded html_style_block() (tab-render-html.R).
 # KEY CONSTRAINTS:
+#   - The header block is THREE rows: `.tx-span` (the variable names), the level headers, and
+#     `.tx-unit` (what each column HOLDS -- "row% (n)", "OR (row%)"). The unit row is deliberately
+#     quiet: small, regular weight, the ASIDE ink (the same theme-resolved grey `.tx-sec` wears), and
+#     NO border and no top padding, so it reads as a continuation of the header above it.
 #   - The CSS is TABLE-INDEPENDENT: a pure function of (palette, theme). That is the whole
 #     point of naming classes by palette SLOT rather than by break value -- it is what lets a document
 #     emit the stylesheet ONCE (tab_css()) and reuse it for every table, and what makes class collisions
@@ -259,6 +263,8 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
     if (!color_whole_cell_opt()) {
       add(".tabxplor-tab .tx-sec", "color", color_secondary_hex("light"),
           color_secondary_hex("dark"), color_secondary_hex(print_theme))
+    add(".tabxplor-tab .tx-unit", "color", color_secondary_hex("light"),
+        color_secondary_hex("dark"), color_secondary_hex(print_theme))
       # ... and the same for the FACE, which only the print palette has: the aside is not what any
       # measure grades, so the direction/magnitude typography stops at the primary exactly as the colour
       # does. Print-only values, so the light/dark layers stay byte-identical.
@@ -466,6 +472,13 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
            "border-top-style:solid;border-top-width:1px;}"),
     paste0(".tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;",
            "border-bottom-style:solid;border-bottom-width:1px;}"),
+    # Phase 22c-ii: the UNIT row under the level headers -- what each column HOLDS ("row% (n)",
+    # "OR (row%)"), the exports' answer to a composite cell whose aside was shown everywhere and named
+    # nowhere. Discrete BY DESIGN: small, regular weight, and no border and no top padding of its own,
+    # so it reads as a continuation of the header above rather than a second header row. Its INK is
+    # the aside's, set with the theme-aware add() beside .tx-sec.
+    paste0(".tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;",
+           "border-top-width:0;padding-top:0;}"),
     ".tabxplor-tab .tx-r{text-align:right;}",
     ".tabxplor-tab .tx-l{text-align:left;}",
     # thead th's `text-align:center` must beat the column's own alignment: same specificity (0,2,0)

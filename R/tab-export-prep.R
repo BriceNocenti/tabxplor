@@ -11,6 +11,16 @@
 #   - Genuinely medium-specific quirks stay LOCAL to each exporter (glyph/colour application,
 #     NA-hiding, the new_col_var transition index). The prep factors only the shared, expensive,
 #     derive-once quantities -- and, from 14i, the shared MODEL the backends' markup differs over.
+#   - THE HEADER IS THREE ROWS, decided here for every backend: the variable-NAME span, the level
+#     names, and the UNIT row -- what each column HOLDS ("row%", "row% (n)", "OR (row%)"), built by
+#     fmt_display_label() from the column's own display template. It exists because a composite cell
+#     showed an aside in every row and named it nowhere. Two rules keep it quiet: it is written ONCE
+#     per (variable, unit) run, in that run's leftmost column, and it repeats nothing the level
+#     header already says (`unit == clean` -> blank), which is what leaves an `n` / `sd` / Excel
+#     `aside` column named exactly once.
+#   - A WHOLE-TABLE HELPER IS NOT A VARIABLE: a base-count or col% column (`role`) takes no name on
+#     the variable-name row. The `sd` twin and the Excel `aside` columns are NOT helpers in that
+#     sense -- they are the second half of their col_var's block and keep its span.
 #   - Phase 14i: the variable-NAME annotations are decided here, once, for all four backends:
 #     `roles$label_cols` / `label_runs` (name each block once: md blanks, html rowspans, Excel
 #     merges), `roles$var_name_col` (the merged table's name column), and the `var_names` argument,
@@ -587,6 +597,10 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
       # A numeric col_var contributes a column bearing the VARIABLE's own name, so under its own span
       # the name was said twice ("tvhours" over "tvhours") -- three times in Excel, which also splits
       # off a "<var>_sd" sibling. The span says which variable; the level header says which STATISTIC.
+      # ⚠ It stays HERE rather than moving to the unit line, although the unit line would say the same
+      # thing: a TRANSPOSED render turns this header into the ROW LABEL and carries no unit row, so
+      # blanking it would leave that row unnamed. The unit line simply says nothing where the header
+      # already does (the `unit == clean` rule below).
       # NB a different question from `j %in% roles$sd_cols` below: this asks whether THIS mean has an
       # sd sibling to hand its "(sd)" tail to, not whether j is one.
       clean[j] <- if (cvm[[j]] %in% sd_of) {
@@ -598,6 +612,9 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
       }
     } else if (isTRUE(name_cols) && j %in% roles$sd_cols) {
       clean[j] <- "sd"
+    } else if (isTRUE(name_cols) && is_fmt(tab[[j]]) && identical(get_role(tab[[j]]), "aside")) {
+      # an Excel aside column (mat_aside_cols): headed by the token it holds -- "OR", "n", "ratio"
+      clean[j] <- fmt_display_label(tab[[j]], "plain")
     }
   }
   # Phase g: a regression column disambiguated across several outcomes carries a trailing " [dep]"
@@ -646,11 +663,53 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
   # model / outcome ("Married: OR" over "Married: OR") is the case this targets. Compare the CLEAN
   # header, not the raw name, so a numeric col_var (header "mean (sd)", col_var "tvhours") is NOT
   # dropped; a crosstab (level "Black" != col_var "race") is never affected.
+  # A WHOLE-TABLE HELPER IS NOT A VARIABLE: a base-count or col% column belongs to no col_var, so it
+  # takes no name on the variable-name row -- its own header says what it is. Without this,
+  # tab_reg()'s `n` column was headed "n" over "n". ⚠ The `sd` twin and the Excel `aside` columns are
+  # NOT helpers in this sense: they are the second half of their col_var's block and keep its span.
+  helper <- vapply(seq_along(nms),
+                   function(k) is_fmt(tab[[k]]) && get_role(tab[[k]]) %in% c("n", "pct"),
+                   logical(1))
+  label[helper] <- ""
   lvl <- which(is_level)
   if (length(lvl) > 0 && all(clean[lvl] == unname(cvm)[lvl])) label <- rep("", length(nms))
   # a blanked span row carries no sub-population either: `group` only ever qualifies a `label`.
   grp[!nzchar(label)] <- ""
-  list(label = label, group = grp, clean = clean)
+  unit <- tab_col_units(tab, cvm, sd_of)
+  # THE UNIT LINE REPEATS NOTHING THE HEADER ALREADY SAYS: an "n" / "sd" / "OR" column is named by its
+  # own header, so it takes no unit -- the line exists for what a header CANNOT say.
+  unit[unit == clean] <- ""
+  list(label = label, group = grp, clean = clean, unit = unit)
+}
+
+# THE UNIT LINE -- what each column HOLDS, in the same words the console type tag uses
+# (fmt_display_label()): "row%", "row% (n)", "OR (row%)", "mean (sd)". It is the exports' answer to
+# the problem that a composite cell shows an aside in every row and names it nowhere.
+# Written ONCE per col_var, in its LEFTMOST column, so a five-level block does not repeat itself --
+# and per column wherever the block's columns disagree, which is the only case a reader must be told
+# about. Non-fmt (index) columns hold no unit.
+#' @keywords internal
+tab_col_units <- function(tab, cvm, sd_of = character(0)) {
+  u <- vapply(seq_along(tab), function(j) {
+    col <- tab[[j]]
+    if (!is_fmt(col)) return("")
+    # where the sd has MOVED OUT into a twin column (Excel), the mean cell renders no "(sigma sd)"
+    # tail, so its name must not promise one -- the same fact `sd_of` states for the level header.
+    if (cvm[[j]] %in% sd_of && identical(fmt_var_kind(col), "mean")) col <- set_var(col, NA_real_)
+    fmt_display_label(col, "tag")
+  }, character(1))
+  tab_units_once(u, unname(cvm))
+}
+
+# ... written ONCE per (variable, unit) RUN, in its leftmost column. Shared with the transposed render,
+# which groups by the spanning name instead of the col_var map.
+#' @keywords internal
+tab_units_once <- function(unit, group) {
+  r     <- rle(paste0(group, "\r", unit))
+  first <- c(1L, utils::head(cumsum(r$lengths), -1L) + 1L)
+  out   <- rep("", length(unit))
+  out[first] <- unit[first]
+  out
 }
 
 # Does this mean column actually render a "(sigma sd)" tail? THE SAME predicate format() uses for its

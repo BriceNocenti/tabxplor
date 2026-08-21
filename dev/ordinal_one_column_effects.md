@@ -69,7 +69,7 @@ From that one pair, three readings — the same difference/ratio duality the pac
 
 | Reading | Formula | Neutral | Literature name |
 |---|---|---|---|
-| the probability | `gamma = win + tie/2` | `0.5` | ordinal superiority · probability of superiority · concordance `c` · AUC |
+| the probability | `gamma = win + tie/2` | `0.5` | ordinal superiority · probability of superiority · AUC |
 | the difference | `delta = win - loss = 2*gamma - 1` | `0` | Somers' D · Cliff's delta |
 | the ratio | `WR = win / loss` | `1` | win ratio · Agresti's generalised odds ratio (alpha) |
 
@@ -271,7 +271,7 @@ So the clean framing is a new `level` kind, say `superiority`, alongside `pct` /
 | `REG_FAMILIES$ordinal` | a `level` that varies by effect route, or a second declared level kind |
 | `REG_ESTIMANDS` | `coefficient` → cumOR unchanged; `marginal` → `delta` / `WR`; same two at `at_reference` |
 | `EST_SCALES` | one scale, field `diff` or `ratio`, `var_kind = "superiority"`, null 0 / 1, base field = `gamma` |
-| `REG_WORDS` | `PS` for the base, `D` or `PSD` for `delta`, `genOR` for `WR`; the `m` marker composes → `mD`, `mgenOR` |
+| `REG_WORDS` | `PS` for the base, `D` for `delta`, `genOR` for `WR`; the `m` marker composes → `mD`, `mgenOR` |
 | `DISPLAY_TOKENS` | `{est}`/`{base}` already scale-relative; a `{gamma}` alias is optional |
 | `COLOR_SCALES` | the `delta` ladder below |
 | `REG_EMPIRICAL` | one closed-form entry: the same formula on the cross-table's row percentages |

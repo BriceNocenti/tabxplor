@@ -134,8 +134,8 @@ xlb_add_data <- function(wb, ...) {
 
 # raw numbers written; blank cells for NA; apply_cell_style = FALSE -> no openxlsx2 auto-styling
 # (tab_xl controls every style itself).
-xlb_write_data <- function(wb, sheet, x, row, col)
-  xlb_add_data(wb, sheet = sheet, x = x, start_row = row, start_col = col, col_names = TRUE)
+xlb_write_data <- function(wb, sheet, x, row, col, col_names = TRUE)
+  xlb_add_data(wb, sheet = sheet, x = x, start_row = row, start_col = col, col_names = col_names)
 
 xlb_write_cell <- function(wb, sheet, dims, x)
   xlb_add_data(wb, sheet = sheet, x = x, dims = dims, col_names = FALSE)

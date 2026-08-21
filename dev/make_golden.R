@@ -10,6 +10,16 @@
 # See: CLAUDE.md > 2.0.0 roadmap > Golden regeneration protocol.
 #
 # LEDGER
+#   Phase 22c-ii: 26 fixtures move, on TWO members and nothing else (verified field by field against
+#   `git archive HEAD` on all 36 cases): `or` and, on the two odds-ratio cases, `display`. An odds
+#   ratio needs a 2x2, and on the DEGENERATE MARGIN -- the Total column under pct = "row", the Total
+#   row under pct = "col" -- one cell of it is the whole block, so the number the sweep divided
+#   compared nothing. It is `NA` there now (tab_apply_reference), which is what stops the html render
+#   colouring a 100 % Total column, printing a bogus `OR: 1/1.16 [...]` on hover and naming it in the
+#   OR legend; the `display` move is the same cell falling back to its column's own token, having no
+#   odds ratio left to show. `_color_golden/c_or.rds` moves for the same reason, on its last row only.
+#   The `golden.md` and `render-html.md` snapshots are PURELY ADDITIVE (no line removed, none
+#   changed): the exports' new unit header row and its two CSS rules.
 #   Phase 22c-i: FOUR fixtures move, on the row INDEX COLUMN's level set and nothing else -- an
 #   unused "NA" level disappears from the tables whose row axis has no missing value. num_core()
 #   appended it whenever `na = "keep"`, gated on nothing, while plain_core() gated on an actual NA;

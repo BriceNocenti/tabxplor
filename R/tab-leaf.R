@@ -1025,8 +1025,9 @@ finalize_total_rows <- function(tabs, extra, cols_get_total, tab_row_names) {
 # (cell - ref), ratio (cell / ref), rr / or and the ref-row / ref-col markers; what a
 # given `pct` does not compute comes back NULL. Shared verbatim with the jamovi tier-3 re-reference.
 # DESIGN: the odds ratio is computed UNCONDITIONALLY on a row / col % table -- its 2x2 is four
-#   numbers this sweep already holds. `or_compare` says whether it IS the comparison the table is
-#   tested on, which is what gates the BASELINE markers. `ref2` picks the 2x2.
+#   numbers this sweep already holds -- EXCEPT on the degenerate margin, which has no 2x2 at all (see
+#   `degen_or` below). `or_compare` says whether it IS the comparison the table is tested on, which is
+#   what gates the BASELINE markers. `ref2` picks the 2x2.
 #' @keywords internal
 #' @noRd
 tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct,
@@ -1216,6 +1217,24 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
     }
   }
 
+  # DESIGN: THE DEGENERATE MARGIN HAS NO ODDS RATIO. An odds ratio needs a 2x2, and on the margin the
+  #   percentage sums TO -- the Total column under pct = "row", the Total row under pct = "col" -- one
+  #   cell of it is the whole block: the odds are 1/0 and what the sweep would divide compares nothing.
+  #   Blanked at the one place it is written, so the colour engine, the tooltip, the legend and the
+  #   honest-total test all see an empty field rather than a number that means nothing. (The
+  #   `ref2 == "cumulative"` arm never filled it, so the three arms now agree.)
+  degen_or <- matrix(FALSE, n, k)
+  if (identical(pct, "row")) degen_or[, is_tot_col] <- TRUE
+  if (identical(pct, "col")) {
+    tr <- as.logical(totrow_vector)
+    if (length(tr) == n) degen_or[!is.na(tr) & tr, ] <- TRUE
+  }
+  if (!is.null(tabs_or) && any(degen_or)) {
+    O <- as.matrix(tabs_or[, nm, with = FALSE]) * 1.0
+    O[degen_or] <- NA_real_
+    set_cols(tabs_or, O)
+  }
+
   # Woolf log-OR Wald interval for the empirical odds ratio, only when a colour policy or stars asks
   # for it. Its 2x2 is WEIGHTED P x UNWEIGHTED base N, so the totals cancel; ci_or() is the engine.
   or_ci_inf <- or_ci_sup <- or_pvalue <- NULL
@@ -1238,6 +1257,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
     if (!is.null(refcols_vector) && any(refcols_vector)) {
       OINF[, refcols_vector] <- NA_real_; OSUP[, refcols_vector] <- NA_real_; OPV[, refcols_vector] <- NA_real_
     }
+    OINF[degen_or] <- NA_real_; OSUP[degen_or] <- NA_real_; OPV[degen_or] <- NA_real_
     or_ci_inf <- data.table::copy(tabs_pct); set_cols(or_ci_inf, OINF)
     or_ci_sup <- data.table::copy(tabs_pct); set_cols(or_ci_sup, OSUP)
     or_pvalue <- data.table::copy(tabs_pct); set_cols(or_pvalue, OPV)

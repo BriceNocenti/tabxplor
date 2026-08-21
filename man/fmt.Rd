@@ -581,14 +581,34 @@ the last few are not meant to be typed:
 \item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only.
 \item \code{coef} --- the estimate on the model's LINK scale --- the coefficient a linear or log-link model fitted. The same number as \code{est} where the column is already additive, its logarithm where the column shows a ratio.
 \item \code{gap} --- how far adjustment moved the effect: the gap between the modelled estimate and its observed counterpart, on the estimate's own scale. What \code{color = "adjustment"} grades --- readable in print and Excel, not only in an html tooltip.
-\item \code{or_pct} --- the odds ratio, with its percentage.
-\item \code{OR} --- a legacy spelling of \code{or}, rendered identically.
-\item \code{OR_pct} --- a legacy spelling of \code{or_pct}, rendered identically.
 \item \code{gof} --- a model-fit statistic (N, R2, AIC, BIC, dispersion).
 \item \code{gof_warn} --- a model-fit statistic past the threshold its check is read against.
 \item \code{n_range} --- the unweighted base: one count, or a \code{min-max} range over the table.
 \item \code{blank} --- nothing: a cell masked by \code{n_min}.
 \item \code{rr} --- the legacy synonym of \code{ratio}, still accepted.
+\item \code{OR} --- the acronym spelling of \code{or}, still accepted.
+}
+}
+
+\section{Display layouts}{
+
+The named layouts \code{display} accepts. They are spelt with the scale-relative
+\code{\{est\}} / \code{\{base\}} fields, so one name means the same thing on a crosstab
+and on a \code{\link{tab_reg}} table:
+\itemize{
+\item \code{"est"} (\code{\{est\}}) --- the estimate alone.
+\item \code{"est_ci"} (\code{\{est\} \{ci\}}) --- the estimate with its confidence interval.
+\item \code{"est_base"} (\code{\{est\} (\{base\})}) --- the estimate and, in parentheses, the level it sits on.
+\item \code{"est_coef"} (\code{\{est\} (\{coef\})}) --- the estimate and, in parentheses, the model's own coefficient.
+\item \code{"base_est_mdiff"} (\code{\{est\} (\{diff\})}) --- the estimate and, in parentheses, the same comparison as a difference.
+\item \code{"base_est_mratio"} (\code{\{est\} (\{ratio\})}) --- the estimate and, in parentheses, the same comparison as a ratio.
+\item \code{"base_est"} (\code{(\{base\}) \{est\}}) --- the level, then the estimate --- the mirror of \code{est_base}, which sets a crude and a modelled effect side by side.
+\item \code{"base"} (\code{\{base\}}) --- the level alone: the percentage, the mean or the count.
+\item \code{"base_ci"} (\code{\{base\} \{ci\}}) --- the level with its confidence interval.
+\item \code{"base_moe"} (\code{\{base\} \{moe\}}) --- the level with its margin of error.
+\item \code{"base_ratio"} (\code{\{base\} (\{ratio\})}) --- the level and, in parentheses, its ratio to the reference.
+\item \code{"base_or"} (\code{\{base\} (\{or\})}) --- the level and, in parentheses, its odds ratio.
+\item \code{"or_base"} (\code{\{or\} (\{base\})}) --- the odds ratio and, in parentheses, the percentage it rests on.
 }
 }
 

@@ -22,6 +22,13 @@
 #     sit outside `special_formatting`, or the composite recursion would disagree with the bare token.
 #   - FORMAT() NEVER PASTES A STRING IT DID NOT RENDER (fmt_rendered()): a void field is BLANK, never
 #     the literal "NA", and takes no significance star.
+#   - fmt_display_label() IS THE ONE SOURCE OF A COLUMN'S NAME, as format() is of its cells': it walks
+#     the column's own template and substitutes each token's declared short `label`
+#     (DISPLAY_TOKENS, R/tab-display.R), so the console type tag, the exports' unit header row and an
+#     Excel aside column's header cannot name a layout three different ways. It keeps the template's
+#     STRUCTURE, not its wording -- of every literal only the brackets survive -- and a column is
+#     named by its DATA rows (`row_kind`), never by a p-value or base-count row sharing its column,
+#     nor by a template that renders nothing wherever it sits.
 #   - Adding a FIELD touches ~9 sites here (follow the /vctrs-field skill); adding an ATTRIBUTE is a
 #     new_fmt() formal + one `fmt_attr_rules` row (a build-time stopifnot refuses a missing row).
 #   - Display glyph constants (mult_sign, div_sign, unbrk, sigma_sign, fig_space) live in utils.R.
@@ -227,6 +234,7 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 #' built with.
 #' @eval fmt_fields_rd()
 #' @eval display_tokens_rd(user_only = FALSE)
+#' @eval display_presets_rd()
 #'
 #' @return A vector of class \code{tabxplor_fmt}.
 #' @export
@@ -381,6 +389,15 @@ fmt <- function(n         = integer(),
     purrr::map_int(length) |> max()
 
   display <- vctrs::vec_recycle(vctrs::vec_cast(display, character()), size = max_size)
+  # A LEGACY LAYOUT SPELLING IS NORMALISED AT THE BOUNDARY, once: "or_pct" / "OR_pct" were tokens with
+  # a rendering branch of their own; they are the preset `or_base` now, so a value stored by 1.x code
+  # (or written verbatim by the jamovi ComboBox) becomes the {} template it always meant, and nothing
+  # downstream keeps a legacy arm. Only the ALIAS rows are resolved -- `est` / `base` are both a token
+  # and a preset name, and the pipeline means the TOKEN.
+  if (any(display %in% names(DISPLAY_PRESET_ALIASES))) {
+    for (v in intersect(unique(display), names(DISPLAY_PRESET_ALIASES)))
+      display[display == v] <- display_resolve(v)
+  }
   n       <- vctrs::vec_recycle(vctrs::vec_cast(n      , integer())  , size = max_size)
   wn      <- vctrs::vec_recycle(vctrs::vec_cast(wn     , double())   , size = max_size) #anything coercible as a double
   pct     <- vctrs::vec_recycle(vctrs::vec_cast(pct    , double())   , size = max_size)
@@ -505,7 +522,7 @@ get_num <- function(x) {
   # DESIGN: get_num() is the authoritative `display` -> underlying-field map. Allowed display values
   # and the field each reads: n/(default)->n, wn->wn, pct/pvalue->pct, diff->diff, ctr->ctr,
   # mean->mean, var->var, ci/moe->get_ci() (the CI half-width from the ci_sup bound),
-  # ratio (rr aliased to it)->ratio, or/OR/or_pct/OR_pct->or, obs->obs. When adding a display value,
+  # ratio (rr aliased to it)->ratio, or (OR aliased to it)->or, obs->obs. When adding a display value,
   # keep this map, set_num() and format() in sync (see the /vctrs-field skill).
   out     <- get_n(x)
   # resolve composite templates ("{pct} (n={n})") to their PRIMARY field, then the scale-relative
@@ -540,9 +557,7 @@ get_num <- function(x) {
   moe_m <- !nas & display == "moe"
   if (any(moe_m)) out[moe_m] <- if (isTRUE(fmt_scale_row(x)$mult)) NA_real_ else get_ci(x)[moe_m]
   out[!nas & display == "ratio"] <- get_ratio(x)[!nas & display == "ratio"]
-  out[!nas & display %in% c("or", "OR")] <- get_or(x)[!nas & display %in% c("or", "OR")     ]
-  # BOTH spellings: "OR_pct" is written verbatim by the jamovi display ComboBox.
-  out[!nas & display %in% c("or_pct", "OR_pct")] <- get_or(x)[!nas & display %in% c("or_pct", "OR_pct")]
+  out[!nas & display == "or"     ] <- get_or  (x)[!nas & display == "or"     ]
   # the value this cell is compared to (observed/crude effect, or the reference group's estimate);
   # a real stored field, so it round-trips (set_num() has a matching arm).
   out[!nas & display == "obs"    ] <- get_obs (x)[!nas & display == "obs"    ]
@@ -591,9 +606,7 @@ set_num <- function(x, value) {
   out[!nas & display == "mean"] <- set_mean(x[!nas & display == "mean"], value[!nas & display == "mean"])
   out[!nas & display == "pvalue"] <- set_pvalue(x[!nas & display == "pvalue"],
                                                 value[!nas & display == "pvalue"])
-  # ONE mask for target and value, plus the or_pct/OR_pct arms -- the three maps (get_num/set_num/
-  # format) stay in sync (see the /vctrs-field skill).
-  or_m <- !nas & display %in% c("or", "OR", "or_pct", "OR_pct")
+  or_m <- !nas & display == "or"
   out[or_m] <- set_or(x[or_m], value[or_m])
   out[!nas & display == "obs" ] <- set_obs(x[!nas & display == "obs" ], value[!nas & display == "obs" ])
   out
@@ -862,7 +875,8 @@ set_display.tabxplor_fmt <- function(x, value) {
   # {} template is written verbatim: the producers set per-cell tokens that way and must keep doing so.
   # the column's own `role` picks the preset's arm, so `across()`-ing one preset over a regression
   # table gives the crude and the model columns their mirrored layouts in one call.
-  if (length(value) == 1L && !is.na(value) && as.character(value) %in% names(DISPLAY_PRESETS)) {
+  if (length(value) == 1L && !is.na(value) &&
+      as.character(value) %in% c(names(DISPLAY_PRESETS), names(DISPLAY_PRESET_ALIASES))) {
     tmpl <- display_resolve(value, get_role(x))
     if (grepl("{", tmpl, fixed = TRUE)) return(display_write_col(x, tmpl)$col)
     value <- tmpl
@@ -1637,10 +1651,10 @@ display_template_keep <- function(seg, empty) {
 display_prune_template <- function(seg, empty)
   trimws(paste0(seg$pieces[display_template_keep(seg, empty)], collapse = ""))
 
-# WRITE-time: VALIDATE a `display=` {} template and return it. Composites use the {} grammar ONLY
-# (no curated recipes -- one consistent syntax; the internal or_pct / OR_pct tokens are pipeline-set
-# rendering modes, never user-typed, so they are unaffected). Checks balanced non-empty braces and
-# known field names. The ONLY place a bad `display=` value aborts.
+# WRITE-time: VALIDATE a `display=` {} template and return it. Composites use the {} grammar ONLY --
+# one consistent syntax, no curated recipes; the named LAYOUTS are DISPLAY_PRESETS, resolved to a
+# template before they get here. Checks balanced non-empty braces and known field names (aliases
+# included, so "{OR}" passes). The ONLY place a bad `display=` value aborts.
 #' @keywords internal
 validate_display_template <- function(recipe) {
   recipe <- recipe[[1]]
@@ -1960,6 +1974,111 @@ fmt_resolve_scale_tokens <- function(display, row) {
   display[hit & display == "est" ] <- void(row$est_display)
   display[hit & display == "base"] <- void(row$base_display)
   display
+}
+
+# =====================================================================================================
+# fmt_display_label() -- THE NAME OF WHAT A COLUMN HOLDS, built from the column's own display template:
+# each {token} replaced by the token's declared `label` (DISPLAY_TOKENS), the literals kept. So the
+# name mimics the cell -- "row% (n)", "OR (row%)", "(row%) OR" -- and a layout can never be named two
+# different ways: the console type tag, the exports' unit line and an Excel aside column's header all
+# read this one builder.
+#
+# DESIGN: THE PCT TYPE IS PRINTED BY THE `pct` TOKEN'S OWN LABEL, and by nothing else. A crosstab
+# whose template prints no percentage keeps the old prefixed form ("row%-diff", "row%-OR"), because
+# there the direction of reading is the only thing that says what the deviation is a deviation OF;
+# a regression column never takes it (its `role` is the declared fact that separates them), which is
+# what turns tab_reg()'s misleading "row%-or" into "OR (row%)".
+#
+# WARNING: it must never error -- an fmt column extracted from its table keeps its fields and its
+# attributes but nothing else, and the tag is asked for on print.
+#' @keywords internal
+#' @noRd
+display_token_label <- function(token, x) {
+  lab <- DISPLAY_TOKEN_LABELS[[token]]
+  if (is.null(lab)) return(token)
+  if (is.function(lab)) lab <- tryCatch(lab(x), error = function(e) token)
+  if (length(lab) != 1L || is.na(lab)) return(token)
+  as.character(lab)
+}
+
+# One template -> its tokens, scale-resolved and in order. A bare token (no braces) is the one-token
+# case, which is most columns.
+#' @keywords internal
+#' @noRd
+display_template_tokens <- function(tmpl, scl) {
+  if (!grepl("{", tmpl, fixed = TRUE)) return(fmt_resolve_scale_tokens(display_primary(tmpl), scl))
+  fmt_resolve_scale_tokens(parse_display_template(tmpl)$fields, scl)
+}
+
+# One template -> its name.
+# ⚠ A LABEL KEEPS THE TEMPLATE'S STRUCTURE, NOT ITS WORDING: of every literal only its brackets and
+# one space survive, so "{pct} (n={n})" reads "row% (n)" and the sparkline glyph run mat_reg_spark()
+# appends to a base-count template stays out of the name entirely.
+# ⚠ THE PRIMARY'S OWN BRACKETS ARE DROPPED: in a label a bracket marks an ASIDE, and the primary is
+# never one -- a Total cell reduced to "({n_range})" is a count column, and reads "n", not "(n)".
+#' @keywords internal
+#' @noRd
+display_template_label <- function(tmpl, x, scl) {
+  if (!grepl("{", tmpl, fixed = TRUE))
+    return(display_token_label(fmt_resolve_scale_tokens(display_primary(tmpl), scl), x))
+  seg <- parse_display_template(tmpl)
+  if (!length(seg$fields)) return(tmpl)
+  out <- seg$pieces
+  out[!seg$is_tok] <- gsub("[[:space:]]+", " ", gsub("[^][(){}[:space:]]", "", out[!seg$is_tok]))
+  out[seg$is_tok]  <- vapply(fmt_resolve_scale_tokens(seg$fields, scl),
+                             display_token_label, character(1), x = x)
+  prim_g <- seg$field_group[[seg$primary]]
+  if (prim_g > 0L) {                                # the whole cell is one bracket group
+    j <- which(seg$group == prim_g & !seg$is_tok)
+    out[j] <- gsub("[][()]", "", out[j])
+  }
+  trimws(paste0(out, collapse = ""))
+}
+
+#' @keywords internal
+#' @noRd
+fmt_display_label <- function(x, style = c("tag", "plain"), footer_collapse = TRUE) {
+  style <- match.arg(style)
+  d     <- get_display(x)
+  # A COLUMN IS NAMED BY ITS DATA, not by the statistic rows it shares its column with. The chi2
+  # p-value row, the base-count row `pct = "col"` appends and a model-fit footer all carry their own
+  # token, and letting them vote turned an ordinary percentage column into "mixed". `row_kind` is the
+  # declared fact (ROW_KINDS); the FULL ptype (footer_collapse = FALSE) still sees every row.
+  ok <- rep(TRUE, length(d))
+  if (footer_collapse) {
+    rk <- vctrs::field(x, "row_kind")
+    dr <- !is.na(rk) & rk %in% c("data", "total")
+    if (any(dr)) ok <- dr
+  }
+  d <- unique(d[ok & !is.na(d)])
+  if (!length(d)) return("")
+  scl  <- fmt_scale_row(x)
+  # ... nor by a template that renders NOTHING on any cell that carries it: a regression's Constant
+  # row keeps the column's own token where a `display =` has no field to show there, and that empty
+  # cell must not make the column "mixed".
+  if (footer_collapse && length(d) > 1L) {
+    disp  <- get_display(x)
+    shown <- vapply(d, function(t) {
+      sel <- ok & !is.na(disp) & disp == t
+      any(sel) && any(!is.na(get_num(fmt_set_display(x, t))[sel]))
+    }, logical(1))
+    if (any(shown)) d <- d[shown]
+  }
+  prim <- fmt_resolve_scale_tokens(display_primary(d), scl)
+  if (length(unique(prim)) > 1L) return("mixed")
+  # the FULLEST template showing that primary: a Total column carries "pct" on the rows the base
+  # count could not be folded into and "{pct} ({n_range})" on the others, and the name is the aside's.
+  tmpl <- d[[which.max(vapply(d, function(t) length(parse_display_template(t)$fields), integer(1)))]]
+  out  <- display_template_label(tmpl, x, scl)
+  if (identical(style, "plain") || !nzchar(out)) return(out)
+  # THE PREFIX: only where the cell prints no LEVEL at all -- a column of bare deviations, where the
+  # direction of reading is the only thing saying what they are deviations OF. A level names itself
+  # ("row%", "mean", "n"), and a regression column never takes the prefix (`role` is the fact that
+  # separates the two producers).
+  if (!identical(get_role(x) %||% "", "")) return(out)
+  geo <- DISPLAY_TOKEN_GEOMETRY[display_template_tokens(tmpl, scl)]
+  if (any(!is.na(geo) & geo == "level")) return(out)
+  paste0(fmt_kind_label(x), "-", out)
 }
 
 # `breaks` are AXIS POSITIONS (both sides + the neutral), NOT the positive magnitudes the colour engine
@@ -3151,7 +3270,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # statistic, not an estimate -- neither is ever signed.
   diff_signed   <- ok & (display %in% c("diff", "coef", "resid") | (obs_m & !obs_mult))
   n_wn          <- ok & (display %in% c("n", "n_range", "wn", "mean", "var", "ratio",
-                                        "or", "or_pct", "OR", "OR_pct", "resid") |
+                                        "or", "resid") |
                            display %in% DISPLAY_GOF_TOKENS |
                            (display %in% c("ci", "moe") & !is_pct) )
   n_wn          <- n_wn | (obs_m & obs_mult)
@@ -3228,8 +3347,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # recursion (special_formatting = FALSE) that dropped the inverse, so "{or} ({obs})" printed a raw
   # "0.37" beside a "1/2.67" in the same table. Text syntax only (Excel keeps a real number).
   # Opt out with options(tabxplor.ratio_print = "raw") for the journal convention.
-  mult_tok   <- c(ratio = "ratio", or = "odds_ratio", OR = "odds_ratio",
-                  or_pct = "odds_ratio", OR_pct = "odds_ratio")
+  mult_tok   <- c(ratio = "ratio", or = "odds_ratio")
   # the scale-relative cells take the COLUMN's measure (EST_SCALES$label_meas): `{est}` on a
   # mean-ratio column reads "/2", on an odds-ratio one "1/2".
   mult_cells <- ok & (display %in% names(mult_tok) |
@@ -3373,8 +3491,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     disp_diff   <- display == "diff" & !nas
     # the "ref:x-" annotation belongs to the +/- notation, so it fires exactly where `{moe}` renders
     disp_ctr    <- display == "ctr" & !nas
-    disp_or     <- display %in% c("or", "OR") & !nas
-    disp_or_pct <- display %in% c("or_pct", "OR_pct") & !nas
+    disp_or     <- display == "or" & !nas
     # get_var() (the field accessor), NOT x$var (the dplyr `$` method) -- the latter ran for every
     # column and dominated format() self-time.
     # `var >= 0` guards the sqrt: a negative variance (a design-based estimate can be) would render
@@ -3472,7 +3589,9 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       or_val <- get_or(x)[disp_or]
       vals   <- out[disp_or]
 
-      if (any(!is.na(get_pct(x)[disp_or]))) {                # empirical-OR crosstab: annotate ref %
+      # ⚠ NOT on an Excel ASIDE column (mat_aside_cols): it exists to hold ONE field beside the column
+      # it was split out of, so re-composing the pair there would print the bracket twice.
+      if (any(!is.na(get_pct(x)[disp_or])) && !identical(get_role(x), "aside")) {  # annotate ref %
         reffmt <- set_display(x[disp_or], "pct") |> set_digits(0L) |> format()
         reffmt <- suppressWarnings(
           stringi::stri_pad(reffmt, suppressWarnings(max(stringi::stri_length(reffmt), na.rm = TRUE)),
@@ -3483,14 +3602,6 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
         out[disp_or] <- ifelse(refer & !is.na(or_val) & fmt_rendered(reffmt),
                                paste0(vals, " (", reffmt, ")"), vals)
       }
-    }
-
-
-    if (any(disp_or_pct)) {
-      reffmt  <- set_display(x[disp_or_pct], "pct") |> set_digits(0L) |> format()
-      out[disp_or_pct] <- ifelse(fmt_rendered(reffmt),
-                                 paste0(out[disp_or_pct], " (", reffmt, ")"),
-                                 out[disp_or_pct])
     }
 
   }
@@ -3582,7 +3693,12 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
         for (j in which(seg$group == g & !seg$is_tok & keep))
           strs[[j]][spent] <- strrep(pad, nchar(strs[[j]][spent]))
       }
-      ok_c <- !void[[seg$primary]] | lit0
+      # A COMPOSITE RENDERS WHEREVER ANY OF ITS PIECES DID -- not only where the primary did. A cell
+      # whose primary is void but whose aside is not still has something to say, and the brackets say
+      # which it is: a numeric predictor's OBSERVED cell prints "[1.46]", the odds ratio it has,
+      # aligned under the rows that also have a risk difference. A cell with nothing at all, and a
+      # template whose only top-level literal is whitespace, still blank (`lit0`).
+      ok_c <- purrr::reduce(lapply(void, `!`), `|`) | lit0
       asm  <- do.call(paste0, strs)
       out[cells[ok_c]] <- asm[ok_c]
       wrote[cells[ok_c]] <- TRUE
@@ -5405,11 +5521,34 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
 
 # ---- build the per col_var specs -------------------------------------------------------------------
 #' @keywords internal
+# Does any cell of this column carry a value the colour measures in force could grade? Reads the same
+# per-measure `raw` getter fmt_color_plan() does, so "coloured nowhere" and "named in no legend" are
+# the one fact.
+#' @keywords internal
+#' @noRd
+fmt_has_color_source <- function(col) {
+  ks <- unique(c(get_color(col), get_color_bg(col)))
+  ks <- ks[!is.na(ks) & !ks %in% c("no", "")]
+  if (!length(ks)) return(FALSE)
+  any(vapply(ks, function(k) {
+    m <- MEASURES[[measure_key(k)]]
+    is.null(m) || any(!is.na(m$raw(col)))
+  }, logical(1)))
+}
+
 legend_specs <- function(x, theme = "light") {
   is_f <- purrr::map_lgl(x, is_fmt)
   ct   <- get_color(x); cbg <- get_color_bg(x)
   keep <- is_f & ((!is.na(ct)  & !ct  %in% c("no", "")) |
                   (!is.na(cbg) & !cbg %in% c("no", "")))
+  # ... and a CROSSTAB column must have something for that measure to GRADE. A ladder names the columns
+  # it reads, and a column whose measure is void everywhere can never wear a shade -- the row-% Total
+  # of an odds-ratio table, whose 2x2 is degenerate (tab_apply_reference), is the case this exists for.
+  # ⚠ REGRESSION columns are exempt (`role`): a crude column under `color = "adjustment"` is void by
+  # construction -- it IS the baseline the gap is measured from -- and must still be named beside its
+  # model column, which is what legend_reg_adapter() folds into one line.
+  if (any(keep)) keep[keep] <- purrr::map_lgl(x[keep], function(col)
+    nzchar(get_role(col) %||% "") || fmt_has_color_source(col))
   if (!any(keep)) return(list())
 
   col_vars_levels <- tab_get_vars(x)$col_vars_levels
@@ -5984,34 +6123,12 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
 
 
 
-# Shared body of vec_ptype_abbr/vec_ptype_full. The two differ only by the label `prefix` ("" for abbr,
-# "fmt-" for full) and by `pct_pvalue_collapse` (a pct/pvalue composite shows as "pct" in the abbr only).
-# A composite column shows its PRIMARY type.
+# Shared body of vec_ptype_abbr/vec_ptype_full: the column's own name (fmt_display_label()), which
+# names the asides as well as the primary -- "<row% (n)>", "<OR (row%)>". The two callers differ only
+# by the `prefix` ("" for abbr, "fmt-" for full) and by `footer_collapse` (a column whose data cells
+# and footer row disagree shows the DATA cells' name in the abbr, "mixed" in the full type).
 fmt_ptype_label <- function(x, prefix, pct_pvalue_collapse) {
-  display <- fmt_resolve_scale_tokens(display_primary(get_display(x)), fmt_scale_row(x)) |> unique()
-  if (pct_pvalue_collapse && identical(sort(display), c("pct", "pvalue"))) display <- "pct"
-  display <- ifelse(length(display) > 1, "mixed", display)
-  type    <- fmt_kind_label(x)
-  # the interval's KIND, for this label only -- a level scale with bounds is a "cell" interval, an
-  # effect scale's additive one a "diff". Rendered LABELS, not facts (the fact is the column's scale).
-  if (display == "ci" && fmt_has_interval(x)) {
-    scl <- fmt_scale_row(x)
-    ci  <- if (identical(scl$kind, "level")) "cell"
-           else if (scl$geometry %in% c("difference", "log")) "diff" else ""
-    if (nzchar(ci)) display <- paste0("ci_", ci)
-  }
-
-  pat_anchor <- if (nzchar(prefix)) "-" else "^"   # boundary before a doubled "<t>-<t>"
-  rep_anchor <- if (nzchar(prefix)) "-" else ""
-  out <- paste0(prefix, type, "-", display)
-  for (t in c("n", "mean", "coef", "mixed")) {
-    out <- stringi::stri_replace_first_regex(out, paste0(pat_anchor, t, "-", t),
-                                             paste0(rep_anchor, t))
-  }
-  out |>
-    stringi::stri_replace_first_regex("([^%]+%)-pct", "$1") |>
-    stringi::stri_replace_first_regex(paste0(pat_anchor, "NA"), "") |>
-    stringi::stri_replace_first_regex("_ci$", "")
+  paste0(prefix, fmt_display_label(x, "tag", footer_collapse = pct_pvalue_collapse))
 }
 
 #' Abbreviated display name for class fmt in tibbles

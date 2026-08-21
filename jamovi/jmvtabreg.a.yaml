@@ -453,6 +453,8 @@ options:
           name:  base_est
         - title: "base <i>(adjusted predictions alone)</i>"
           name:  base
+        - title: "base_ratio <i>(the level, its ratio to the reference in bracket)</i>"
+          name:  base_ratio
       default: auto
       description:
           R: >

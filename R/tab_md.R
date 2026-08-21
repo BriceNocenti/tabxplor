@@ -1,6 +1,11 @@
 # PURPOSE: Export tabxplor tables to simple, human-readable markdown, colours as pandoc spans.
 # ROLE: Parallel to tab_kable() (HTML) and tab_xl() (Excel); consumes the shared tab_export_prep().
 # KEY CONSTRAINTS:
+#   - THE HEADER BLOCK IS THREE ROWS but a pandoc pipe table takes ONE, so the col_var-name row and
+#     the UNIT row (what each column holds -- "row%", "row% (n)") are BODY rows under the delimiter,
+#     styled with emphasis. ⚠ Emphasis, never a `.tx-unit` class span: a span costs 13 characters of
+#     raw line width md's fixed-width grid cannot absorb, and a monochrome table must carry no
+#     pandoc span at all.
 #   - Padding must be monospace-precise: numbers right-aligned, pipes aligned (raw text stays readable).
 #   - Bold rows (**...**) can touch pipes; normal cells have 1-space margins.
 #   - Phase 10f: a COLOURED table (any fmt column with a colour measure) wraps EVERY fmt cell in a
@@ -516,6 +521,25 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     col_var_header_line <- md_insert_col_sep(span_cells, sep_after, n_cols, has_sep)
   }
 
+  # THE UNIT ROW (Phase 22c-ii) -- what each column HOLDS ("row%", "row% (n)", "OR (row%)"), the one
+  # place an export names the ASIDE of a composite cell. Like the col_var-name row it is a BODY row
+  # (a pandoc pipe table takes one header row only) and italic, which is md's own way of saying
+  # "supporting text" -- NOT a `.tx-unit` span: a class span costs 13 characters of raw line width
+  # that md's fixed-width grid cannot absorb, and a monochrome table must carry no pandoc span at all.
+  # It sits directly under the name row, inside the header block the blank underline closes.
+  unit_line <- NULL
+  if (!is.null(cvh$unit) && any(nzchar(cvh$unit))) {
+    unit_cells <- md_pad_blank(col_width, styled)
+    for (j in which(nzchar(cvh$unit))) {
+      txt <- paste0("*", cvh$unit[j], "*")
+      unit_cells[j] <- if (is_right[j])
+        paste0(stringi::stri_pad(txt, col_width[j] - 2L, side = "left"), "  ")
+      else
+        paste0(" ", stringi::stri_pad(txt, col_width[j] - 2L, side = "right"), " ")
+    }
+    unit_line <- md_insert_col_sep(unit_cells, sep_after, n_cols, has_sep)
+  }
+
   # --- Step 9: Build level-names header row ---
   header_cells <- character(n_cols)
   for (j in seq_len(n_cols)) {
@@ -598,10 +622,10 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # Phase 14m-iii: on the styled path, follow the col_var-name row with a blank row -> tab_css() draws a
   # 1px border-top under it (the "rule under the name" the maintainer asked for), theme-aware, with no
   # dash in the raw markdown. Only when the name row exists (var_names may have dropped it).
-  name_underline <- if (styled && !is.null(col_var_header_line)) {
+  name_underline <- if (styled && (!is.null(col_var_header_line) || !is.null(unit_line))) {
     md_blank_row(col_width, sep_after, n_cols, has_sep)
   } else NULL
-  all_lines <- c(header_line, sep_line, col_var_header_line, name_underline, body_lines)
+  all_lines <- c(header_line, sep_line, col_var_header_line, unit_line, name_underline, body_lines)
 
   # Optional caption -- a pandoc table caption line (numbered/cross-referenceable in Quarto).
   if (!is.null(title)) {

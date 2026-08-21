@@ -407,17 +407,16 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
   out <- format(out, width = width, ..., n = n, max_extra_cols = max_extra_cols,
                 max_footer_lines = max_footer_lines)
 
-  # DESIGN: pillar::char(min_chars=) above forces a minimum width on the row_var column, but makes
-  # pillar print its type as <char>. Rewrite it back to <fct> in the header line. The type-tag line is
-  # out[3] for a plain tab, out[4] for a grouped_tab (one extra header line) -- so this ONE method
-  # serves both classes (print.tabxplor_grouped_tab is an alias below).
-  if (length(n_row_var) != 0) {
-    regular_ex <-
-      paste0("^(", paste0(rep("[^<]+<", n_row_var), collapse = ""), ")<char>") |>
-      stringi::stri_replace_first_regex("<\\)<", ")<")
-
-    hdr <- 3L + inherits(x, "grouped_df")
-    out[hdr] <- out[hdr] |> stringi::stri_replace_first_regex(regular_ex, "$1<fct> ")
+  # DESIGN: THE TYPE-TAG LINE NAMES WHAT EACH COLUMN HOLDS, so the INDEX columns are blanked out of
+  # it: "<fct>" says nothing a reader of a crosstab needs, while every fmt column's tag now names its
+  # whole cell layout ("<row% (n)>", "<OR (row%)>" -- fmt_display_label()). Blanked in place, keeping
+  # the width, so the columns stay aligned. The tag line is out[3] for a plain tab, out[4] for a
+  # grouped_tab (one extra header line) -- so this ONE method serves both classes
+  # (print.tabxplor_grouped_tab is an alias below).
+  hdr <- 3L + inherits(x, "grouped_df")
+  if (length(out) >= hdr) {
+    for (tg in c("<char>", "<list>", "<fct>", "<ord>", "<chr>"))
+      out[hdr] <- stringi::stri_replace_all_fixed(out[hdr], tg, strrep(" ", nchar(tg)))
   }
 
 
@@ -920,6 +919,13 @@ materialize_specs <- function() list(
   total_col = list(
     when  = function(tab, backend, ctx) TRUE,
     apply = function(tab, backend, ctx) tab_drop_totcol(tab, backend, ctx$base_n)),
+  # Excel-only: a composite cell's ASIDES, each split into a column of its own. Excel writes ONE raw
+  # value + a numFmt per cell, so a bracket cannot survive -- the aside was simply LOST on export.
+  # Runs after base_n (whose column must exist first) and before sd_twin (the same shape, for the one
+  # aside that is not a {} token).
+  aside_cols = list(
+    when  = function(tab, backend, ctx) identical(backend, "xl"),
+    apply = function(tab, backend, ctx) mat_aside_cols(tab)),
   # Excel-only mean + sd twin column: console/md/kable show sd inline as "mean (sigma sd)".
   sd_twin = list(
     when  = function(tab, backend, ctx) identical(backend, "xl"),
@@ -1007,6 +1013,45 @@ mat_reg_spark <- function(tab) {
     tab[[nm]] <- fmt_set_display(col, d)
   }
   tab
+}
+
+# mat_aside_cols() -- Excel cannot print a composite cell, so every ASIDE becomes a column of its own,
+# directly after the one it belonged to: the shape the base count and the sd twin already had, now the
+# rule for every secondary token. The source column keeps its PRIMARY alone, which is what its cell
+# was already exporting -- so nothing a reader saw on screen is missing from the workbook, and the
+# unit row names each half exactly once.
+# WARNING: display writes -- EPHEMERAL materialised copy only.
+#' @keywords internal
+#' @noRd
+mat_aside_cols <- function(tab) {
+  splittable <- function(col) is_fmt(col) && !get_role(col) %in% c("n", "pct", "sd", "aside")
+  added <- list()                                   # source name -> the new columns, in cell order
+  for (nm in names(tab)[purrr::map_lgl(tab, splittable)]) {
+    col <- tab[[nm]]
+    d   <- unique(get_display(col))
+    d   <- d[!is.na(d) & grepl("{", d, fixed = TRUE)]
+    if (!length(d)) next
+    # the FULLEST template of the column, the same one its name is built from (fmt_display_label)
+    tmpl <- d[[which.max(vapply(d, function(t) length(parse_display_template(t)$fields), integer(1)))]]
+    seg  <- parse_display_template(tmpl)
+    tok  <- fmt_resolve_scale_tokens(seg$fields, fmt_scale_row(col))
+    keep <- setdiff(seq_along(tok)[-seg$primary],
+                    which(tok %in% c("blank", tok[[seg$primary]])))
+    if (!length(keep)) next
+    for (i in keep) {
+      new <- set_display(col, tok[[i]]) |> set_color("no") |> set_role("aside")
+      if (all(is.na(get_num(new)))) next            # nothing to export: no column for it
+      added[[nm]] <- c(added[[nm]], stats::setNames(list(new), paste0(nm, "_", tok[[i]])))
+    }
+    if (length(added[[nm]])) tab[[nm]] <- fmt_set_display(col, tok[[seg$primary]])
+  }
+  if (!length(added)) return(tab)
+  ord <- names(tab)
+  for (nm in names(added)) {
+    for (k in names(added[[nm]])) tab[[k]] <- added[[nm]][[k]]
+    ord <- append(ord, names(added[[nm]]), after = which(ord == nm))
+  }
+  tab[ord]
 }
 
 # Excel-only sd twin: for each numeric mean column insert an uncoloured sibling "<var>_sd" holding
@@ -1750,7 +1795,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL, .note = NULL) {
     # own field and its own bracket, inverted bounds included, so a hovered odds ratio reads like a
     # printed one. The exact p-value joins it: the cell shows only stars.
     pv <- test_fmt_pvalue(get_pvalue(x))
-    est <- stringi::stri_trim(format(set_display(x, DISPLAY_PRESETS[["est_ci"]])))
+    est <- stringi::stri_trim(format(set_display(x, DISPLAY_PRESETS[["est_ci"]]$template)))
     dplyr::if_else(cond_est,
                    paste0(est, dplyr::if_else(is.na(pv), "", paste0(", p = ", pv))),
                    "")
@@ -1790,7 +1835,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL, .note = NULL) {
   # compares on it. On a REGRESSION column the OR is the model's own estimate (attached beside an AME),
   # which `role` distinguishes.
   cond_or <- (get_scale(x) == "odds_ratio" | nzchar(get_role(x))) & !is.na(get_or(x)) &
-    !shows("or") & !disp %in% c("or_pct", "OR_pct")
+    !shows("or")
   out_or <- if (any(cond_or)) {
     dplyr::if_else(cond_or, paste0("OR: ", tip_num(set_display(x, "or")) ), "")
   } else blank

@@ -132,6 +132,7 @@ NULL
 #' \code{options("tabxplor.design_effect" = TRUE)}.
 #'
 #' @eval display_tokens_rd(user_only = TRUE)
+#' @eval display_presets_rd()
 #'
 #' @return A \code{tibble} of class \code{tab}, possibly with colored reading helpers.
 #' All non-text columns are of class \code{\link{fmt}}, storing all

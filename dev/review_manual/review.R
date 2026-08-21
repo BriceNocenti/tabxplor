@@ -77,7 +77,7 @@ tab_reg(gss_simple, outcome = "married", tab_vars = "race",
 ## effect = "conditional"
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
         empirical = TRUE, family = "binomial" #, measure = "odds_ratio", 
-) |> reg_check_plots(data = gss_simple)
+)
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", empirical = TRUE, measure = "log"
 )
@@ -227,54 +227,148 @@ tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "reli
 #### reg_check_plots()
 
 # binomial
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
-        empirical = TRUE, family = "binomial" #, measure = "odds_ratio", 
-) |> reg_check_plots(data = gss_simple)
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age", "tvhours"), 
+        empirical = TRUE, family = "binomial") |> 
+  reg_check_plots(data = gss_simple)
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, link = "ratio"
-) |> reg_check_plots(data = gss_simple)
+        family = "binomial", empirical = TRUE, link = "ratio") |> 
+  reg_check_plots(data = gss_simple)
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, link = "difference"
-) |> reg_check_plots(data = gss_simple)
+        family = "binomial", empirical = TRUE, link = "difference") |> 
+  reg_check_plots(data = gss_simple)
 # gaussian
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical = TRUE
-) |> reg_check_plots(data = gss_simple)
+        family = "gaussian", empirical = TRUE) |> 
+  reg_check_plots(data = gss_simple)
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical = TRUE, link = "ratio"
-) |> reg_check_plots(data = gss_simple)
+        family = "gaussian", empirical = TRUE, link = "ratio") |> 
+  reg_check_plots(data = gss_simple)
 # poisson
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE
-) |> reg_check_plots(data = gss_simple)
+        family = "poisson", empirical = TRUE) |> 
+  reg_check_plots(data = gss_simple)
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE, measure = "log"
-) |> reg_check_plots(data = gss_simple)
+        family = "poisson", empirical = TRUE, measure = "log") |> 
+  reg_check_plots(data = gss_simple)
 # summed-score binomial
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"),  empirical = TRUE
-) |> reg_check_plots(data = gss_simple)
+        predictors = c("sex", "SPC", "Sport"),  empirical = TRUE) |> 
+  reg_check_plots(data = gss_simple)
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, link = "ratio"
-) |> reg_check_plots(data = gss_simple)
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, link = "ratio") |> 
+  reg_check_plots(data = gss_simple)
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, link = "difference"
-) |> reg_check_plots(data = gss_simple)
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, link = "difference") |> 
+  reg_check_plots(data = gss_simple)
 # multinomial:
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = TRUE
-) |> reg_check_plots(data = gss_simple)
+        family = "multinomial", empirical = TRUE) |> 
+  reg_check_plots(data = gss_simple)
 # ordinal: 
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", empirical = TRUE #, shape = c(age = "quadratic")
-) |> reg_check_plots(data = gss_simple)
+        family = "ordinal", empirical = TRUE) |> 
+  reg_check_plots(data = gss_simple)
 
-# - Please give me a trick to not have to pass `data =` argument twice. 
+# - Please give me a trick to not have to pass `data =` argument twice.
 #   Maybe it’s a table-level metadata with the code that was passe to `tab_reg()` `data =` argument, maybe 
 #   it’s something else, you try and if it fails you just give the current normal error message.
+# - The black red formatting is good, but the text grey is to light for white background and difficult to read.
+#   Make it "#555555" to keep it lighter than the titles themselves. Also, the text is cut: only the start is showns,
+#   you should make it wrap on several line (max around 3 short lines + the title, 2 would be great, 1 even greater). 
+#   Please synthetise the text a lot: do not try to explain everything, there’s no space for that here, 
+#   just briefly say what it is, and point the student to what it should look at.
+#   For example for "Linearity" : "Do the observed curve matches the straight line ?" 
+#   (or something better? and another line if needed ?) Also, titles are all one-word 
+#   short, good, so there is a little space to convey something more in this line, 
+#   like "Linearity: observed curves ... (10 bins, ±2SE)" (complete and improve, or do better, 
+#   keep very concise; second part in plain fontface, to keep "Linearity" striking alone in bold)
+#   All text must stay clear, simple, pedagogical, with only few expressions for experts assessing what it is.
+# - Remove the "Dispersion" and the "Collinearity" panels from the default (often useless, 
+#   the table footer is often enough here). Add an expert argument to customise what is plotted 
+#   (not really to choose because some models can’t draw some plots, but to choose the list of what it’s plotted
+#   when it’s available to the model ; add an "all" option to restore Collinearity and Dispersion ; max 6 plots ?).
+#   In Collinearity, ensure the name of the age^2 variable, which contains a math operation in it, is simplified
+#   to not waste horizontal space.
+# - Linearity checks for numeric predictors: if not already done, ensure the facets spread on max 2 col, 
+#   then are splitted by rows. Name of the numeric variable in bold, and a bit bigger. 
+#   Ensure the `shape` transformation are applied here, and reflected in the facet name (ex: "age²"). 
+#   The "empirical logit: " axis label should also give the math formula of the plot, ex for logit link something like 
+#   "log(married%/1(married%)) = ..." (correct this, it may be mistaken; display in beautiful mathjax, etc.)
+# - Residuals: the goal is not to look if ~95% are inside the banner, but to look if ~<5% are outside 
+#   (be concrete to point the student towards what is to be done) ?
+# - With several outcomes or models there would be one plot result per each of them, so a global title must 
+#   state what the outcome name is, the family, the link, the `reg_formula`, and "assumption checks" (compose 
+#   that in a meaningful, readable, concise way).
+# - The plot should be tranlated in French in French locale (matching the way the footer terms are translated).
+# - In ordinal Proportionality panel, the color legend at the right lose half horizontal space (put it at the bottom of the plot)
+#   Facets with maximum 4 columns, then fill the rows.
+#   Is the Linearity plot ok enough for ordinal assumption check here, what is the standard 
+#   one (same for multinomial) ?
+
+# Errors
+# - tab_reg(gss_simple, outcome = c("married", "rincome"), predictors = c("race", "relig", "age", "tvhours"), 
+#         empirical = TRUE, family = c("binomial", "ordinal"), shape = c(age = "quadratic")) |> 
+#   reg_check_plots(data = gss_simple)
+# Error in `ggplot2::geom_hline()`:
+# ! Problem while setting up geom aesthetics.
+# ℹ Error occurred in the 2nd layer.
+# Caused by error in `check_aesthetics()`:
+# ! Aesthetics must be either length 1 or the same as the data (4).
+# ✖ Fix the following mappings: `linetype`.
+# 
+# - tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+#          predictors = c("sex", "SPC", "Sport"),  empirical = TRUE) |> 
+#   reg_check_plots(data = gss_simple)
+# Error in `reg_check_plots()` at dev/review_manual/review.R:254:1:
+# ! No model could be refitted from `x`.
 
 
 
+#### forest_plot() 
+# effect="conditional"
+regressions <- tab_reg(gss_simple, outcome = c("married", "age", "marital"), predictors = c("race", "rincome", "relig", "tvhours"), 
+        empirical = TRUE, family = c("binomial", "gaussian", "multinomial"))
+regressions |> forest_plot()
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, link = "ratio") |> 
+  forest_plot()
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, link = "difference") |> 
+  forest_plot()
+# gaussian
+tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+        family = "gaussian", empirical = TRUE) |> 
+  forest_plot()
+tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
+        family = "gaussian", empirical = TRUE, link = "ratio") |> 
+  forest_plot()
+# poisson
+tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
+        family = "poisson", empirical = TRUE) |> 
+  forest_plot()
+tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
+        family = "poisson", empirical = TRUE, measure = "log") |> 
+  forest_plot()
+# summed-score binomial
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"),  empirical = TRUE) |> 
+  forest_plot()
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, link = "ratio") |> 
+  forest_plot()
+tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, link = "difference") |> 
+  forest_plot()
+# multinomial:
+tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
+        family = "multinomial", empirical = TRUE) |> 
+  forest_plot()
+# ordinal: 
+tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
+        family = "ordinal", empirical = TRUE) |> 
+  forest_plot()
+
+# - Plot title, and other tab_reg() export titles:
 
 
 #### the different families × effects × measure: custom displays
@@ -549,7 +643,34 @@ tab(gss_simple, c(race, rincome, relig), c(age, tvhours), color = TRUE)
 # - In this case the "mean (sd)" column headers on exporters should be changed to "mean", since "mean (cv)" would be useless because it would repeat the acronym already on each cell.
 
 
+# pillar abbreviations tests
+tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all",
+   color = TRUE, color_signif = "grey_non_signif", ref = 1
+) |> tab_export()
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
+        empirical = TRUE, family = "binomial", display = "{diff} [{OR}] ({base})"
+)
 
+tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all",
+   color = TRUE, color_signif = "grey_non_signif", ref = 1
+) |> tab_export()
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
+        empirical = TRUE, family = "binomial", display = "{diff} [{OR}] ({base})"
+) |> tab_export()
+
+tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all",
+   color = TRUE, color_signif = "grey_non_signif", ref = 1
+) |> tab_export("xl", path = "~/Excel_test.xlsx")
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
+        empirical = TRUE, family = "binomial", display = "{diff} [{OR}] ({base})"
+) |> tab_export("xl", path = "~/Excel_test.xlsx")
+
+tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all",
+   color = TRUE, color_signif = "grey_non_signif", ref = 1
+) |> tab_export("md")
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
+        empirical = TRUE, family = "binomial", display = "{diff} [{OR}] ({base})"
+) |> tab_export("md")
 
 
 ### exports and display tests  ---- 

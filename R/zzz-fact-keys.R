@@ -185,10 +185,16 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("REG_CELL_DIGITS", function() names(REG_CELL_DIGITS), function() names(EST_SCALES)),
   tx_fk("DISPLAY_TOKENS$alias",    function() tx_fk_scalar(DISPLAY_TOKENS, "alias"),
         function() names(DISPLAY_TOKENS)),
+  # every {token} a named layout is spelt with, so a preset can never name a token that went away
   tx_fk("DISPLAY_PRESETS",
-        function() { v <- unlist(DISPLAY_PRESETS, use.names = FALSE)
-                     v[!grepl("{", v, fixed = TRUE)] },
+        function() {
+          v <- unlist(lapply(DISPLAY_PRESETS, function(r) r$template), use.names = FALSE)
+          v <- v[!is.na(v)]
+          unique(trimws(gsub("[{}]", "", unlist(regmatches(v, gregexpr("\\{[^{}]+\\}", v))))))
+        },
         function() names(DISPLAY_TOKENS)),
+  tx_fk("DISPLAY_PRESETS$alias", function() unname(DISPLAY_PRESET_ALIASES),
+        function() names(DISPLAY_PRESETS)),
 
   # --- into fmt_field_names (the record) -----------------------------------------------------
   tx_fk("DISPLAY_TOKENS$field",    function() tx_fk_scalar(DISPLAY_TOKENS, "field"),

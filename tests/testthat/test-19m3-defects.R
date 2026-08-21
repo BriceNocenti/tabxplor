@@ -38,11 +38,11 @@ testthat::test_that("the derived vocabularies reproduce what they replaced", {
   testthat::expect_identical(
     tabxplor:::DISPLAY_BARE_TOKENS,
     c("pct", "n", "wn", "mean", "est", "base", "diff", "ratio", "ci", "moe", "or"))
-  testthat::expect_identical(tabxplor:::DISPLAY_ALIASES, c(rr = "ratio"))
+  testthat::expect_identical(tabxplor:::DISPLAY_ALIASES, c(rr = "ratio", OR = "or"))
   # every token carrying a VALUE of the table is re-templatable; only the four that carry none are not
   testthat::expect_setequal(
     setdiff(names(tabxplor:::DISPLAY_TOKENS), tabxplor:::DISPLAY_VALUE_CELLS),
-    c("pvalue", "gof", "gof_warn", "n_range", "blank", "rr"))
+    c("pvalue", "gof", "gof_warn", "n_range", "blank", "rr", "OR"))
   testthat::expect_setequal(tabxplor:::DISPLAY_FOOTER_TOKENS, c("gof", "gof_warn", "pvalue", "blank"))
   # `pvalue` is a footer token that IS coloured (a significance warning) -- the one disagreement
   # that makes these two facts two columns rather than one "numberless" flag.
@@ -73,16 +73,20 @@ testthat::test_that("the build-time guard ties get_num()/set_num() to the table,
   testthat::expect_true(all(tabxplor:::DISPLAY_SETTABLE %in% written))
 })
 
-testthat::test_that("`OR` / `OR_pct` are rows, not aliases of `or` / `or_pct`", {
-  # aliasing them would change what display_primary() returns, and fmt_display_shows() compares
-  # against the RAW display -- so a stored "OR" must come back "OR".
-  testthat::expect_identical(tabxplor:::display_primary(c("OR", "OR_pct")), c("OR", "OR_pct"))
-  testthat::expect_true(all(is.na(vapply(tabxplor:::DISPLAY_TOKENS[c("OR", "OR_pct")],
-                                         function(r) r$alias, character(1)))))
-  # but they read the same field, which is why they render identically
+testthat::test_that("the acronym spellings resolve, and the legacy OR layout is a preset", {
+  # Phase 22c-ii: `OR` is an ALIAS ROW of `or`, resolved on read, so "{OR}" and display = "OR" are the
+  # acronym spelling of the one token -- and `or_pct` / `OR_pct` are the preset `or_base`, normalised
+  # to its template by fmt() so no legacy rendering branch survives anywhere.
+  testthat::expect_identical(tabxplor:::display_primary(c("OR", "{OR}")), c("or", "or"))
   testthat::expect_identical(
     get_num(fmt(n = 10, or = 2.5, display = "OR")),
     get_num(fmt(n = 10, or = 2.5, display = "or")))
+  testthat::expect_identical(tabxplor:::display_resolve("OR_pct"), "{or} ({base})")
+  testthat::expect_identical(tabxplor:::display_resolve("or_pct"),
+                             tabxplor:::display_resolve("or_base"))
+  x <- fmt(n = 10L, or = 2.5, pct = 0.4, display = "or_pct", scale = "level_pct", pct_type = "row")
+  testthat::expect_identical(unique(get_display(x)), "{or} ({base})")
+  testthat::expect_equal(get_num(x), 2.5)
 })
 
 testthat::test_that("the generated help sections are built from the table", {

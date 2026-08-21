@@ -855,3 +855,28 @@ test_that('ref = "last" picks the last level on both axes, and is not "tot" (D27
   same_cells(cl, tab(d, marital, race, pct = "col", ref = 3L))
   expect_true(all(get_diff(cl[["White"]]) == 0, na.rm = TRUE))    # White references itself
 })
+
+# === Phase 22c-ii: the degenerate margin has no odds ratio ==========================================
+
+testthat::test_that("no odds ratio on the margin the percentage sums to", {
+  g <- gss_cat_data_formatting()
+  # an odds ratio needs a 2x2; on the row-% Total column every cell IS the whole block, so the number
+  # the sweep divided compared nothing -- and it was colouring that column, and printing a bogus
+  # interval in its tooltip.
+  t <- tab(g, race, party3, pct = "row", na = "drop_all", color = "OR",
+           color_signif = "grey_non_signif")
+  tot <- t$Total
+  testthat::expect_true(all(is.na(get_or(tot))))
+  testthat::expect_true(all(is.na(get_ci_inf(tot))) && all(is.na(get_ci_sup(tot))))
+  testthat::expect_true(all(is.na(get_pvalue(tot))))
+  testthat::expect_true(all(unlist(tabxplor:::fmt_color_channels(tot)) == 0L))
+  # ... and it is out of the colour legend, which names the columns a ladder actually reads
+  testthat::expect_false(grepl("Total", paste(tab_color_legend(t, medium = "plain"), collapse = " ")))
+  # the DATA columns keep theirs
+  testthat::expect_false(all(is.na(get_or(t[[2]]))))
+  # symmetric under pct = "col": there the degenerate margin is the Total ROW
+  t2 <- tab(g, race, party3, pct = "col", na = "drop_all", color = "OR")
+  tr <- is_totrow(t2[[2]])
+  testthat::expect_true(all(is.na(get_or(t2[[2]])[tr])))
+  testthat::expect_false(all(is.na(get_or(t2[[2]])[!tr])))
+})

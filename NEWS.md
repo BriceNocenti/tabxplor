@@ -3,6 +3,15 @@
 
 ## New features
 
+* **Every column now says what it holds.** A cell showing a secondary number in brackets
+  (`100% (9 838)`, `1/1.63*** (31%)`) named it nowhere: the console type tag reads `<row% (n)>` /
+  `<OR (row%)>` now, and html, Markdown and Excel exports gain a discrete third header row saying
+  the same, once per variable. In Excel, where a cell cannot hold a bracket, each secondary number
+  becomes a column of its own instead of being dropped.
+
+* **New `display` layouts** `"base_ratio"`, `"base_or"` and `"or_base"`, and `"OR"` / `"{OR}"`
+  accepted as spellings of `"or"`. The full list of named layouts is now in `?tab`.
+
 * **`spread_vars` gives the most compact table**: each level of a sub-table variable becomes a block
   of columns, the whole table keeps ONE `Total` row, and the base count takes one `n` column per
   block at the right (instead of a `Total` column per block, repeating 100%). A variable named in
@@ -477,6 +486,14 @@
   (`multiplier = "sd"`, see above). Pass `multiplier = 1` for the previous per-one-unit reading.
 
 ## Bug fixes
+
+* **No odds ratio on a Total column that is 100 % by construction.** An odds ratio needs a 2x2, and
+  on the margin the percentages sum to there is none; the number computed there was meaningless, and
+  it was colouring the `Total` column of an odds-ratio table and showing a confidence interval on
+  hover. It is empty now, in the cell, the tooltip and the colour legend.
+
+* **The `Total` column drops its `100 %` when the cells stop showing a percentage**, e.g. under
+  `display = "ratio"`, printing only the base count. It already did so on odds ratios.
 
 * **`pct = "col"` failed on an `ordered` row variable**, with `Can't combine <ordered> and <factor>`,
   whenever the base count or `add_pct` row was added --- that is, on printing or exporting.

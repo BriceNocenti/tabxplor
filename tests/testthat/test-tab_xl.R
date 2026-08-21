@@ -291,19 +291,20 @@ testthat::test_that("tab_xl: a merged table names each row-variable once, merged
   wb <- openxlsx2::wb_load(tmp)
   d  <- openxlsx2::wb_to_df(wb, col_names = FALSE)
 
-  # row 1 = title, row 2 = the col_var span, row 3 = level headers, data from row 4 (Phase 13c-iii)
+  # row 1 = title, row 2 = the col_var span, row 3 = level headers, row 4 = the UNIT row
+  # (Phase 22c-ii), data from row 5
   # Phase 14i: the title names the SOURCE row_vars -- it read "levels by relig" (the merge's own
   # scaffolding column) because the prep dropped `vars$row_vars`.
   # Phase 14l: and the DEPENDENT axis leads -- this is pct="row", so the col_var comes first.
   testthat::expect_equal(as.character(d[1, 1]), "relig by race, marital")
   # one merge per block, in column A. Phase 18m: common_totrow defaults FALSE, so each block keeps its
-  # OWN Total row -> race spans A4:A7 (3 data + Total) and marital spans A8:A14 (6 data + Total).
+  # OWN Total row -> race spans A5:A8 (3 data + Total) and marital spans A9:A15 (6 data + Total).
   merges <- paste(wb$worksheets[[1]]$mergeCells, collapse = " ")
-  testthat::expect_match(merges, 'ref="A4:A7"', fixed = TRUE)
-  testthat::expect_match(merges, 'ref="A8:A14"', fixed = TRUE)
+  testthat::expect_match(merges, 'ref="A5:A8"', fixed = TRUE)
+  testthat::expect_match(merges, 'ref="A9:A15"', fixed = TRUE)
   # the name is written once per block, not on every row (Excel keeps only a merge's top-left value,
   # so a repeat below it would be an invisible ghost the user finds again on unmerging)
-  testthat::expect_equal(as.character(d[4:13, 1]),
+  testthat::expect_equal(as.character(d[5:14, 1]),
                          c("race", rep(NA, 3), "marital", rep(NA, 5)))
   # rotated 90 degrees, and the column narrowed to match (that is what the rotation buys)
   testthat::expect_true(any(grepl('textRotation="90"', wb$styles_mgr$styles$cellXfs)))
@@ -326,7 +327,7 @@ testthat::test_that("tab_xl: a one-row block falls back to horizontal, with no m
   testthat::expect_no_match(paste(wb$worksheets[[1]]$mergeCells, collapse = " "), "A", fixed = TRUE)
   testthat::expect_false(any(grepl('textRotation="90"', wb$styles_mgr$styles$cellXfs)))
   # each block is its own run, so both names are still written
-  testthat::expect_equal(as.character(openxlsx2::wb_to_df(wb, col_names = FALSE)[4:5, 1]),
+  testthat::expect_equal(as.character(openxlsx2::wb_to_df(wb, col_names = FALSE)[5:6, 1]),
                          c("race", "marital"))
 })
 
@@ -359,4 +360,26 @@ testthat::test_that("tab_xl(open = TRUE) never errors when no spreadsheet app is
     testthat::expect_message(tab_xl(t, path = p, open = TRUE), "[Cc]ould not open")
   )
   testthat::expect_true(file.exists(p))   # the write still succeeded
+})
+
+# === Phase 22c-ii: Excel cannot print a composite, so every aside gets a column ====================
+
+testthat::test_that("tab_xl: a composite cell's aside becomes its own column, headed by the token", {
+  testthat::skip_if_not_installed("openxlsx2")
+  t   <- tab(forcats::gss_cat, race, marital, pct = "row", ref = 1, display = "{pct} ({or})")
+  tmp <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(t, path = tmp, open = FALSE, replace = TRUE))
+  d <- openxlsx2::wb_to_df(openxlsx2::wb_load(tmp), col_names = FALSE)
+  # row 3 = the level headers, row 4 = the unit row (Phase 22c-ii)
+  hdr <- as.character(unlist(d[3, ]))
+  unt <- as.character(unlist(d[4, ]))
+  testthat::expect_true("OR" %in% hdr)                       # the aside is a real column now
+  testthat::expect_identical(sum(hdr == "OR", na.rm = TRUE), sum(hdr == "Married", na.rm = TRUE) *
+                               length(levels(droplevels(forcats::gss_cat$marital))))
+  # ... and the unit row says what the source column holds, without repeating the aside's own header
+  testthat::expect_true("row%" %in% unt)
+  testthat::expect_false(any(unt == "OR", na.rm = TRUE))
+  # the aside column holds ONE field: no re-composed "1 (39%)" on the reference row
+  or_col <- which(hdr == "OR")[[1]]
+  testthat::expect_false(any(grepl("(", as.character(d[5:7, or_col]), fixed = TRUE)))
 })

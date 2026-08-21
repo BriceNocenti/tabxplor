@@ -625,6 +625,28 @@ Cox} models, \strong{mixed / multilevel} models, and pooling over \strong{multip
 those with their own packages.
 }
 
+\section{Display layouts}{
+
+The named layouts \code{display} accepts. They are spelt with the scale-relative
+\code{\{est\}} / \code{\{base\}} fields, so one name means the same thing on a crosstab
+and on a \code{\link{tab_reg}} table:
+\itemize{
+\item \code{"est"} (\code{\{est\}}) --- the estimate alone.
+\item \code{"est_ci"} (\code{\{est\} \{ci\}}) --- the estimate with its confidence interval.
+\item \code{"est_base"} (\code{\{est\} (\{base\})}) --- the estimate and, in parentheses, the level it sits on.
+\item \code{"est_coef"} (\code{\{est\} (\{coef\})}) --- the estimate and, in parentheses, the model's own coefficient.
+\item \code{"base_est_mdiff"} (\code{\{est\} (\{diff\})}) --- the estimate and, in parentheses, the same comparison as a difference.
+\item \code{"base_est_mratio"} (\code{\{est\} (\{ratio\})}) --- the estimate and, in parentheses, the same comparison as a ratio.
+\item \code{"base_est"} (\code{(\{base\}) \{est\}}) --- the level, then the estimate --- the mirror of \code{est_base}, which sets a crude and a modelled effect side by side.
+\item \code{"base"} (\code{\{base\}}) --- the level alone: the percentage, the mean or the count.
+\item \code{"base_ci"} (\code{\{base\} \{ci\}}) --- the level with its confidence interval.
+\item \code{"base_moe"} (\code{\{base\} \{moe\}}) --- the level with its margin of error.
+\item \code{"base_ratio"} (\code{\{base\} (\{ratio\})}) --- the level and, in parentheses, its ratio to the reference.
+\item \code{"base_or"} (\code{\{base\} (\{or\})}) --- the level and, in parentheses, its odds ratio.
+\item \code{"or_base"} (\code{\{or\} (\{base\})}) --- the odds ratio and, in parentheses, the percentage it rests on.
+}
+}
+
 \section{The header acronyms}{
 
 A column header names the \strong{measure}; the \strong{contrast} is a marker on it ---

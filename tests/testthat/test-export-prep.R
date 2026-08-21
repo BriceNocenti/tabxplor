@@ -424,3 +424,32 @@ test_that("the outcome bracket is stripped in EVERY backend, wrapped names inclu
   h <- as.character(tab_html(t, print = FALSE))
   testthat::expect_false(grepl("[married]", substr(h, 1L, regexpr("</thead>", h)), fixed = TRUE))
 })
+
+# === Phase 22c-ii: the unit header row =============================================================
+
+testthat::test_that("the unit row names what each column holds, once per col_var", {
+  t   <- tab(gss, race, c(marital, tvhours), pct = "row", color = "diff")
+  rd  <- tabxplor:::tab_export_prep(t, backend = "kable", wrap = NULL)$tables[[1]]
+  u   <- stats::setNames(rd$col_var_header$unit, names(rd$tab))
+  # once per (variable, unit) RUN, in its LEFTMOST column
+  testthat::expect_identical(unname(u[["No answer"]]), "row%")
+  testthat::expect_true(all(!nzchar(u[c("Never married", "Separated", "Married")])))
+  # the Total says what its cell shows -- the base count the reader had no name for
+  testthat::expect_identical(unname(u[["Total"]]), "row% (n_range)")
+  # ... and nothing the header ALREADY says is repeated (a numeric col_var is headed "mean (sd)")
+  testthat::expect_identical(unname(rd$col_var_header$clean[[which(names(rd$tab) == "tvhours")]]),
+                             "mean (sd)")
+  testthat::expect_identical(unname(u[["tvhours"]]), "")
+})
+
+testthat::test_that("a whole-table helper column takes no variable name", {
+  # tab_reg()'s base-count column was headed "n" on the variable-name row AND on its own header.
+  d <- dplyr::mutate(gss, married = factor(.data$marital == "Married"))
+  m <- tab_reg(d, outcome = "married", predictors = "race", family = "binomial")
+  rd  <- tabxplor:::tab_export_prep(m, backend = "kable", wrap = NULL)$tables[[1]]
+  cvh <- rd$col_var_header
+  j   <- which(names(rd$tab) == "n")
+  testthat::expect_identical(cvh$clean[[j]], "n")
+  testthat::expect_identical(cvh$label[[j]], "")     # not a variable
+  testthat::expect_identical(cvh$unit[[j]],  "")     # ... and the header already says it
+})

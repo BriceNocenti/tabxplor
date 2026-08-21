@@ -581,7 +581,11 @@ options:
         - title: "or <i>(odds ratios or relative risks ratios)</i>"
           name:  or
         - title: "odds ratio, percentage in bracket"
-          name:  "{or} ({pct})"
+          name:  or_base
+        - title: "percentage, odds ratio in bracket"
+          name:  base_or
+        - title: "value, ratio to the reference in bracket"
+          name:  base_ratio
         - title: "ctr <i>(relative contributions to variance)</i>"
           name:  ctr
         - title: "mean <i>(mean, for numeric variables)</i>"

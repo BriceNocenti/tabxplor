@@ -339,11 +339,9 @@ same length as \code{col_vars}.}
 and \code{\link{tab_md}}; Excel falls back to the primary field). \code{NULL} (default)
 keeps each cell's plain value. Three ways to ask, from the shortest:
 \itemize{
-\item a \strong{named layout}: \code{"est"} (the estimate), \code{"est_ci"} (with a
-visible interval), \code{"base_ci"} (each value with its interval), \code{"est_base"}
-/ \code{"base_est"} (the two together, in the order the words are written),
-\code{"est_coef"} (with the model's own coefficient), \code{"base"} (the level
-alone). The same names work on \code{\link{tab_reg}}.
+\item a \strong{named layout}, e.g. \code{"est_ci"} or \code{"base_ratio"} ---
+the whole list is in \emph{Display layouts} below, and every name works on
+\code{\link{tab_reg}} too.
 \item a \strong{single field}, e.g. \code{display = "ci"} or \code{"diff"}. Valid
 fields are listed in \emph{Display fields} below.
 \item a \strong{\{\} template} combining several, e.g. \code{"\{pct\} (n=\{n\})"}
@@ -351,6 +349,8 @@ fields are listed in \emph{Display fields} below.
 the standardized residual that says whether it departs from independence --- the
 SPSS cell layout).
 }
+An acronym spells the field of the same name: \code{"OR"} is \code{"or"} and
+\code{"rr"} is \code{"ratio"}, in a template as much as on their own.
 Two fields are \strong{scale-relative}, and are what makes one layout work on every
 table: \code{\{est\}} is whatever the column estimates (a percentage, a difference, an
 odds ratio) and \code{\{base\}} the level it sits on (a percentage, a mean, a count).
@@ -502,6 +502,28 @@ it is what Excel shows and what the colours read.
 \item \code{obs} --- the OBSERVED (crude) effect a modelled one is compared to. \code{tab_reg()} tables only. Needs tab_reg(empirical = TRUE)  (an observed effect to compare the model to).
 \item \code{coef} --- the estimate on the model's LINK scale --- the coefficient a linear or log-link model fitted. The same number as \code{est} where the column is already additive, its logarithm where the column shows a ratio. Needs a \code{tab_reg()} column (a crosstab estimates no coefficient).
 \item \code{gap} --- how far adjustment moved the effect: the gap between the modelled estimate and its observed counterpart, on the estimate's own scale. What \code{color = "adjustment"} grades --- readable in print and Excel, not only in an html tooltip. Needs tab_reg(empirical = TRUE)  (a model effect and its observed counterpart).
+}
+}
+
+\section{Display layouts}{
+
+The named layouts \code{display} accepts. They are spelt with the scale-relative
+\code{\{est\}} / \code{\{base\}} fields, so one name means the same thing on a crosstab
+and on a \code{\link{tab_reg}} table:
+\itemize{
+\item \code{"est"} (\code{\{est\}}) --- the estimate alone.
+\item \code{"est_ci"} (\code{\{est\} \{ci\}}) --- the estimate with its confidence interval.
+\item \code{"est_base"} (\code{\{est\} (\{base\})}) --- the estimate and, in parentheses, the level it sits on.
+\item \code{"est_coef"} (\code{\{est\} (\{coef\})}) --- the estimate and, in parentheses, the model's own coefficient.
+\item \code{"base_est_mdiff"} (\code{\{est\} (\{diff\})}) --- the estimate and, in parentheses, the same comparison as a difference.
+\item \code{"base_est_mratio"} (\code{\{est\} (\{ratio\})}) --- the estimate and, in parentheses, the same comparison as a ratio.
+\item \code{"base_est"} (\code{(\{base\}) \{est\}}) --- the level, then the estimate --- the mirror of \code{est_base}, which sets a crude and a modelled effect side by side.
+\item \code{"base"} (\code{\{base\}}) --- the level alone: the percentage, the mean or the count.
+\item \code{"base_ci"} (\code{\{base\} \{ci\}}) --- the level with its confidence interval.
+\item \code{"base_moe"} (\code{\{base\} \{moe\}}) --- the level with its margin of error.
+\item \code{"base_ratio"} (\code{\{base\} (\{ratio\})}) --- the level and, in parentheses, its ratio to the reference.
+\item \code{"base_or"} (\code{\{base\} (\{or\})}) --- the level and, in parentheses, its odds ratio.
+\item \code{"or_base"} (\code{\{or\} (\{base\})}) --- the odds ratio and, in parentheses, the percentage it rests on.
 }
 }
 

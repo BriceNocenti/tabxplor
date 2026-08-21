@@ -1280,8 +1280,8 @@ jmvtab_build <- function(data, opts, store) {
   tabs <- finalize_color_spec(tabs, spec)              # colour / policy (measure diff<->ratio, grey<->all)
   tabs <- jmv_reapply_anova(tabs, opts$anova)          # which stored F the p-value line shows
   # display combobox -- tab()'s own writer. WARNING (19k): a SAVED analysis, or one running against a
-  # `.h.R` older than the `.a.yaml`, can still carry a display value tab() retired (`pct_ci`,
-  # `OR_pct`...), and validate_display_template() ABORTS on those. A generated layer that lags is a
+  # `.h.R` older than the `.a.yaml`, can still carry a display value tab() retired (`pct_ci`...), and
+  # validate_display_template() ABORTS on those. A generated layer that lags is a
   # fact of this module (see .opts()'s `%||%` discipline), so an unusable value degrades to "the
   # display the table was built with" instead of blanking the results panel. This is robustness
   # about a stale artefact, NOT a second vocabulary: nothing is translated, the value is dropped.

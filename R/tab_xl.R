@@ -9,6 +9,12 @@
 # KEY CONSTRAINTS:
 #   - openxlsx2 is Suggests-only -- the ONE requireNamespace() guard is in tab_xl(); every engine call
 #     goes through the unguarded xlb_* wrappers or xl_apply_styles' create_*/set_cell_style compose.
+#   - EXCEL CANNOT PRINT A COMPOSITE CELL -- one raw value + one numFmt, so a bracket cannot survive.
+#     Every ASIDE therefore becomes a COLUMN of its own (mat_aside_cols, R/tab_classes.R), the shape
+#     the base count and the sd twin already had, and the source column keeps its primary alone. The
+#     header block is three rows here too: the col_var span, the level names, and the UNIT row -- so
+#     the data block is written HEADERLESS one row lower when there is one (`unit_row`), and the
+#     header's bottom rule moves down to close it.
 #   - Export-Parity: tab_xl writes the RAW get_num() value; Excel formats it via the per-cell codes
 #     from format(x, syntax = "excel") (fmt_class.R excel_numfmt_code) -- the single display source of
 #     truth. Significance stars are folded into the numFmt code (0.0%\*\*\*), gated by the SAME option
@@ -430,7 +436,14 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   span_off   <- if (has_span) 1L else 0L
   span_row   <- start + 1L                       # the spanning-name row (used only if has_span)
   header_row <- start + 1L + span_off
-  data_row0  <- header_row                       # data row i -> i + data_row0
+  # Phase 22c-ii: the UNIT row, directly UNDER the level header -- what each column holds. Excel gives
+  # every aside a column of its own (mat_aside_cols), so this row says the reading direction and the
+  # statistic ("row%", "mean (sd)"), which is also what a numeric col_var's now-blank level header no
+  # longer says. Sits INSIDE the header block, so the header's bottom rule moves down to it.
+  has_unit   <- !is.null(cvh) && !is.null(cvh$unit) && any(nzchar(cvh$unit))
+  unit_off   <- if (has_unit) 1L else 0L
+  unit_row   <- header_row + 1L                  # used only if has_unit
+  data_row0  <- header_row + unit_off            # data row i -> i + data_row0
   data_rows  <- seq_len(n) + data_row0
   last_row   <- data_row0 + n
 
@@ -471,11 +484,10 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   # WARNING: resolve the scale-relative tokens first -- a regression cell displays `{est}`, which IS
   # the odds ratio on an odds-ratio column, and matching the raw token would silently export the
   # numbers where the console prints "1/2.67".
-  or_family <- c("or", "OR", "or_pct", "OR_pct")
   xl_code   <- function(col) {
     code <- format(col, syntax = "excel")
     disp <- fmt_resolve_scale_tokens(display_primary(get_display(col)), fmt_scale_row(col))
-    if (!isTRUE(o$or_numeric)) code[disp %in% or_family] <- "TEXT"
+    if (!isTRUE(o$or_numeric)) code[!is.na(disp) & disp == "or"] <- "TEXT"
     code
   }
   # Phase 14o: a transposed column is heterogeneous character (pre-formatted display strings, editable
@@ -595,16 +607,22 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   # descriptor applied with update = FALSE (a full replace) -- cross-aspect merge keeps numFmt / fill /
   # border / alignment intact. Base name/size are filled by the writer. See R/tab-xl-backend.R.
   mk_src <- function(rows, cols, name = NA_character_, size = NA_real_, bold = FALSE,
-                     color = NA_character_) {
+                     color = NA_character_, italic = FALSE) {
     if (!length(rows) || !length(cols)) return(NULL)
     g <- tidyr::expand_grid(row = as.integer(rows), col = as.integer(cols))
-    dplyr::mutate(g, name = name, size = size, bold = bold, italic = FALSE, underline = "",
+    dplyr::mutate(g, name = name, size = size, bold = bold, italic = italic, underline = "",
                   color = color)
   }
   txt_colour <- dplyr::filter(colour, .data$channel == "text")
   fonts <- dplyr::bind_rows(
     mk_src(data_rows, fmt_cols, name = font_num),                                # numeric font
     mk_src(header_row, seq_len(ncl), bold = TRUE, size = o$text_size_headers),   # headers
+    # the unit row: the header's size, not bold, and in the ASIDE ink -- the same "set slightly back"
+    # the composite cell's own aside wears, so the two say "supporting text" the same way.
+    # ⚠ NOT italic: under a COLOUR palette typography carries no meaning at all, and a stray italic
+    # font in the workbook is exactly what test-print-palette.R checks for.
+    if (has_unit) mk_src(unit_row, seq_len(ncl), size = o$text_size_headers,
+                         color = color_secondary_hex("light")),
     mk_src(c(header_row, data_rows), ref_cols, bold = TRUE),                     # reference cols
     mk_src(ref_rows, ref_row_cols, bold = TRUE),                                 # reference rows
     mk_src(start, 1L, bold = TRUE, size = 12),                                   # title
@@ -641,7 +659,8 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   # Precompose the ENTIRE per-cell style (font + fill + border + alignment) into the fewest distinct
   # styles, each with its coalesced dims -- the openxlsx2 "shared styles, applied by id" fast path.
   styles <- xl_build_styles(
-    header_row = header_row, data_rows = data_rows, last_row = last_row, ncl = ncl,
+    header_row = header_row, unit_row = if (has_unit) unit_row else NA_integer_,
+    data_rows = data_rows, last_row = last_row, ncl = ncl,
     fmt_cols = fmt_cols, txt_cols = txt_cols, totcols = totcols, start_col_var = start_col_var,
     tot_rows      = roles$totrows         + data_row0,
     tot_rows_1    = roles$totblock_top    + data_row0,
@@ -665,6 +684,8 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     # on it (above), so a merged range holds no ghost value under its top-left cell.
     data = xl_data,
     header_row = header_row, ncl = ncl,
+    unit_row = if (has_unit) unit_row else NA_integer_,
+    unit_names = if (has_unit) cvh$unit else NULL,
     # Phase 13c-iii: the level header shows the suffix-stripped labels; the writer overwrites the header
     # cells with them and (when has_span) writes the merged col_var spanning-name row above.
     clean_names = if (!is.null(cvh)) cvh$clean else names(tab),
@@ -692,7 +713,8 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
 # by the writer as a separate merging pass). Borders are painted onto 4 side matrices (0 none / 1 thin
 # / 2 double), alignment onto zone matrices (base -> header -> total cols -> total rows, last wins).
 #' @keywords internal
-xl_build_styles <- function(header_row, data_rows, last_row, ncl, fmt_cols, txt_cols, totcols,
+xl_build_styles <- function(header_row, unit_row = NA_integer_,
+                            data_rows, last_row, ncl, fmt_cols, txt_cols, totcols,
                             start_col_var, tot_rows, tot_rows_1, tot_rows_last, end_group,
                             vname_col = integer(0), vname_runs = NULL,
                             fonts, bg_fill, title_row, subtext_rows, o) {
@@ -706,7 +728,10 @@ xl_build_styles <- function(header_row, data_rows, last_row, ncl, fmt_cols, txt_
   prow <- function(M, rows, v) { i <- idx(rows); if (length(i)) M[i, ] <- v; M }
   pcol <- function(M, cols, v) { c <- ci(cols); if (length(c)) M[, c] <- v; M }
   bt <- prow(bt, c(header_row, tot_rows_1), 1L)                           # surround/header top + block top
-  bb <- prow(bb, c(header_row, last_row, tot_rows_last), 1L)             # header/surround/bottomline/block bottom
+  # the header block's bottom rule closes the UNIT row when there is one: no line separates a column's
+  # name from what it holds (the maintainer's rule -- the unit reads as part of the header).
+  head_bottom <- if (is.na(unit_row)) header_row else unit_row
+  bb <- prow(bb, c(head_bottom, last_row, tot_rows_last), 1L)            # header/surround/bottomline/block bottom
   bl <- pcol(bl, c(1L, totcols, start_col_var), 1L)                       # first col / total cols / col_var starts
   br <- pcol(br, c(ncl, totcols), 1L)                                     # last col / total cols
   bb <- prow(bb, end_group, 2L)                                           # between-group double (wins)
@@ -718,6 +743,8 @@ xl_build_styles <- function(header_row, data_rows, last_row, ncl, fmt_cols, txt_
   hi <- idx(header_row)                                                   # header
   if (o$colnames_rotation == 0) { ah[hi, ] <- "center" } else { ah[hi, ] <- "left"; ar[hi, ] <- o$colnames_rotation }
   av[hi, ] <- "bottom"; aw[hi, ] <- TRUE
+  ui <- idx(unit_row)                                    # the unit row: centred, never rotated
+  if (length(ui)) { ah[ui, ] <- "center"; av[ui, ] <- "bottom"; aw[ui, ] <- FALSE; ar[ui, ] <- 0L }
   tc <- ci(totcols)                                                       # total cols (header + data): left/top
   if (length(tc)) { ah[, tc] <- "left"; av[, tc] <- "top"; aw[, tc] <- FALSE; ar[, tc] <- 0L }
   tri <- idx(tot_rows)                                                    # total rows
@@ -903,8 +930,11 @@ xl_write_table <- function(wb, plan, o, reg) {
   s   <- plan$sheet
   hdr <- plan$header_row
 
-  # values: raw numbers + header, title, subtext (styles applied below)
-  xlb_write_data(wb, s, plan$data, hdr, 1L)
+  # values: raw numbers + header, title, subtext (styles applied below). With a UNIT row between the
+  # header and the data, the block is written headerless one row lower -- the header cells are
+  # overwritten from `clean_names` below in either case.
+  if (is.na(plan$unit_row)) xlb_write_data(wb, s, plan$data, hdr, 1L)
+  else                      xlb_write_data(wb, s, plan$data, plan$unit_row + 1L, 1L, col_names = FALSE)
   # ... then the row sparklines, one cell at a time: openxlsx2 types per CELL, so a text glyph run
   # drops into an otherwise numeric count column without turning the whole column into text.
   if (!is.null(plan$spark_cells) && nrow(plan$spark_cells))
@@ -917,6 +947,10 @@ xl_write_table <- function(wb, plan, o, reg) {
   # written in the spanning row above), then the merged col_var spanning-name row (a variable name over
   # its contiguous level columns; blank over the row var / total / count columns).
   for (j in seq_len(plan$ncl)) xlb_write_cell(wb, s, xl_cell(hdr, j), plan$clean_names[j])
+  # ... and the unit row below it: what each column HOLDS, written once per col_var (tab_col_units()).
+  if (!is.na(plan$unit_row))
+    for (j in which(nzchar(plan$unit_names)))
+      xlb_write_cell(wb, s, xl_cell(plan$unit_row, j), plan$unit_names[j])
   if (!is.na(plan$span_row)) {
     runs <- plan$header_runs
     col0 <- 1L

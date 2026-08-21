@@ -168,8 +168,10 @@ testthat::test_that("a composite cell resolves to its PRIMARY (get_num / Excel /
   # get_num() and the Excel bypass show the primary field -- byte-identical to the plain column.
   testthat::expect_identical(get_num(xs), get_num(x0))
   testthat::expect_identical(format(xs, syntax = "excel"), format(x0, syntax = "excel"))
-  # the tibble header abbreviates to the primary type, not the raw template.
-  testthat::expect_identical(vctrs::vec_ptype_abbr(xs), vctrs::vec_ptype_abbr(x0))
+  # the tibble header NAMES the layout: the primary's type, then each aside in its own brackets
+  # (Phase 22c-ii -- an aside was shown in every cell and named nowhere).
+  testthat::expect_identical(vctrs::vec_ptype_abbr(x0), "row%")
+  testthat::expect_identical(vctrs::vec_ptype_abbr(xs), "row% (n)")
 })
 
 testthat::test_that("format() is byte-identical when no cell is a composite", {

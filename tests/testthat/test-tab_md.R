@@ -614,3 +614,20 @@ testthat::test_that("format = \"html\" carries the md-only rules; format = \"md\
   testthat::expect_no_match(bare, reset, fixed = TRUE)
   testthat::expect_no_match(bare, "tr:not(:has", fixed = TRUE)
 })
+
+# === Phase 22c-ii: the unit header row ==============================================================
+
+testthat::test_that("md carries the unit row, italic and span-free", {
+  t  <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
+  md <- tab_md(t, print = FALSE)
+  ln <- grep("^[|]", strsplit(md, "\n")[[1]], value = TRUE)
+  # header, delimiter, the col_var-name row, then the unit row -- all inside the header block
+  testthat::expect_match(ln[[3]], "*marital*", fixed = TRUE)
+  testthat::expect_match(ln[[4]], "*row%*",    fixed = TRUE)
+  testthat::expect_match(ln[[4]], "*row% (n)*", fixed = TRUE)
+  # md styles with emphasis, never a class span: a span costs raw line width the grid cannot absorb
+  # (the stylesheet still carries the `.tx-unit` rule -- that is the html render's, not the grid's)
+  testthat::expect_false(any(grepl("tx-unit", ln, fixed = TRUE)))
+  # ... and the grid stays square
+  testthat::expect_length(unique(nchar(ln)), 1L)
+})
