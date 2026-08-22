@@ -87,15 +87,25 @@ set_reg_call <- function(x, call) {
   x
 }
 
-# reg_spec() -- the identity a regression table carries out of reg_build(): its kind, plus the one
-# thing no column of it can carry (the variable-label map for the opt-in name swap). The `call`
-# recipe is attached at the tail of tab_reg(), where the whole model record is known.
+# reg_spec() -- the identity a regression table carries out of reg_build(): its kind, plus the two
+# things no column of it can carry -- the variable-label map for the opt-in name swap, and WHAT THE
+# TABLE IS ABOUT (its outcomes). The `call` recipe is attached at the tail of tab_reg(), where the
+# whole model record is known.
+# `outcomes` is stored rather than re-derived from the columns because `col_var` legitimately names
+# something else (a model label, on a comparison of several models on one outcome).
 #' @keywords internal
 #' @noRd
-reg_spec <- function(var_labels = character(0)) {
-  new_spec("regression",
-           vars = if (length(var_labels)) new_vars_attr(var_labels = var_labels) else NULL)
+reg_spec <- function(var_labels = character(0), outcomes = character(0)) {
+  v <- new_vars_attr(var_labels = var_labels)
+  if (length(outcomes)) v$outcomes <- as.character(outcomes)
+  new_spec("regression", vars = if (length(v)) v else NULL)
 }
+
+# The outcome(s) a regression table is about, in call order; character(0) on a crosstab or a table
+# that lost its `meta`.
+#' @keywords internal
+#' @noRd
+reg_outcomes <- function(x) as.character(get_spec(x)[["vars"]][["outcomes"]] %||% character(0))
 
 # spec_bind() -- the bind reconcile of two specs (the `meta_bind_rules` entry): slot by slot, first
 # non-NULL wins, so a bind cannot drop one side's recipe while keeping the other's vars.

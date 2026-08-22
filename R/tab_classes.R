@@ -28,17 +28,18 @@
 #'   rather than baked into the table.
 #'   \item \code{spec} -- the table's identity, \code{list(kind =, vars =, call =)}: its \code{kind}
 #'   (\code{"crosstab"} or \code{"regression"}); \code{vars}, what no column can carry
-#'   (\code{list(wt =, caption =, var_labels =)} -- see \code{\link{set_caption}}), the rest of the
+#'   (\code{list(wt =, caption =, outcomes =, var_labels =)} -- see \code{\link{set_caption}}), the rest of the
 #'   variable model being derived from the declared index columns and from the columns' own
 #'   \code{col_var}; and \code{call}, the producer's own recipe (a regression's model record --
 #'   family, outcome, predictors, reference level, and the \code{fit_spec}
 #'   \code{\link{reg_check_plots}} refits from).
 #'   \item \code{empirical_tips} -- multinomial crude-companion tooltip data (a \code{tibble} keyed by
 #'   column, predictor and level), set by \code{tab_reg(empirical = TRUE)}.
-#'   \item \code{assumptions} -- the observed curve of each continuous predictor (weighted quantile
-#'   bins of the outcome on the family's link scale, one block per \code{tab_vars} group), set by
-#'   \code{\link{tab_reg}}: the data behind the sparkline drawn in a continuous predictor's
-#'   \code{n} cell, and behind \code{\link{reg_check_plots}}'s linearity panel.
+#'   \item \code{assumptions} -- one record PER OUTCOME, keyed by it, each holding the observed curve
+#'   of every continuous predictor (weighted quantile bins of the outcome on the family's link
+#'   scale, one block per \code{tab_vars} group), set by \code{\link{tab_reg}}: the data behind the
+#'   sparkline -- drawn in a continuous predictor's \code{n} cell, or in the shape table below the
+#'   footer -- and behind \code{\link{reg_check_plots}}'s linearity panel.
 #'   \item \code{color_breaks} -- a per-table override of the colour break scales (see
 #'   \code{\link{set_color_breaks}}), merged over the global option at render time.
 #' }
@@ -391,9 +392,12 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
     return(invisible(x))
   }
 
-  x <- tab_materialize_extras(x, backend = "text", pvalue = FALSE)
+  x <- tab_materialize_extras(x, backend = "text", pvalue = FALSE, medium = "console")
 
   test_render_console(test_summary_grid(x))
+  # the observed curves, in a table of their own: the console never puts them in a cell (see
+  # tab_wants_shape_table). One blank line separates the two grids.
+  if (tab_wants_shape_table(x, "console")) shape_render_console(x)
 
   rv        <- tab_render_vars(x)
   row_var   <- if (isTRUE(rv$degrade)) character(0) else rv$row_var
@@ -410,12 +414,17 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
   # DESIGN: THE TYPE-TAG LINE NAMES WHAT EACH COLUMN HOLDS, so the INDEX columns are blanked out of
   # it: "<fct>" says nothing a reader of a crosstab needs, while every fmt column's tag now names its
   # whole cell layout ("<row% (n)>", "<OR (row%)>" -- fmt_display_label()). Blanked in place, keeping
-  # the width, so the columns stay aligned. The tag line is out[3] for a plain tab, out[4] for a
-  # grouped_tab (one extra header line) -- so this ONE method serves both classes
-  # (print.tabxplor_grouped_tab is an alias below).
-  hdr <- 3L + inherits(x, "grouped_df")
-  if (length(out) >= hdr) {
-    for (tg in c("<char>", "<list>", "<fct>", "<ord>", "<chr>"))
+  # the width, so the columns stay aligned.
+  # ⚠ FOUND, not counted: the header is a variable number of lines (grouped, and the regression's
+  # `Outcome:` line), and a positional guess silently blanks nothing -- or the wrong line -- the day
+  # one is added. The tags themselves are plain text, so this survives the ANSI styling too.
+  tags <- c("<char>", "<list>", "<fct>", "<ord>", "<chr>")
+  head_n <- min(length(out), 8L)
+  hdr <- which(vapply(out[seq_len(head_n)],
+                      function(l) any(stringi::stri_detect_fixed(l, tags)), logical(1)))
+  if (length(hdr)) {
+    hdr <- hdr[[1L]]
+    for (tg in tags)
       out[hdr] <- stringi::stri_replace_all_fixed(out[hdr], tg, strrep(" ", nchar(tg)))
   }
 
@@ -518,7 +527,21 @@ knit_print.tabxplor_grouped_tab <- function(x, ...) {
 tbl_sum.tabxplor_tab <- function(x, ...) {
   tbl_header <- NextMethod()
   names(tbl_header)[1] <- "A tabxplor tab"
-  tbl_header
+  tab_sum_outcome(x, tbl_header)
+}
+
+# THE OUTCOME, folded exactly as the base count is: named ONCE above the table where the table rests
+# on one, and per COLUMN (the `[outcome]` suffix reg_model_col_name() writes, stripped by every
+# exporter) where it rests on several. A reader of a regression table on console had nowhere to find
+# what was being modelled -- the footer grid names it, but a column header never did.
+#' @keywords internal
+#' @noRd
+tab_sum_outcome <- function(x, header) {
+  lab <- gettext("Outcome")
+  out <- reg_outcomes(x)
+  # ⚠ the grouped method's NextMethod() reaches the plain one, so both would append it.
+  if (length(out) != 1L || lab %in% names(header)) return(header)
+  c(header, stats::setNames(out, lab))
 }
 #' Table headers for class grouped tab
 #' @return A table header
@@ -530,7 +553,7 @@ tbl_sum.tabxplor_tab <- function(x, ...) {
 tbl_sum.tabxplor_grouped_tab <- function(x, ...) {
   grouped_tbl_header <- NextMethod()
   names(grouped_tbl_header)[1] <- "A tabxplor tab"
-  grouped_tbl_header
+  tab_sum_outcome(x, grouped_tbl_header)
 }
 
 
@@ -692,6 +715,12 @@ tab_html <- function(tabs,
   })
 
   if (get_data) return(if (length(parts) == 1L) parts[[1]] else parts)
+
+  # the observed curves, in a table of their own: html keeps them in the base-count cell wherever
+  # that works and takes this route only where it cannot (see tab_wants_shape_table).
+  # tab_kable_join() already stacks the parts with a blank line between them.
+  if (is_tab(tabs) && tab_wants_shape_table(tabs, "kable"))
+    parts <- c(parts, list(shape_html_table(tabs)))
 
   # The cells carry slot CLASSES, so the theme lives entirely here. The stylesheet is table-independent
   # (see tab_css()), built once per call -- or not at all when a document emitted tab_css() itself.
@@ -876,13 +905,17 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 # this is the ONE place every DISPLAY path hydrates it. IDEMPOTENT: each spec clears what it consumed.
 #' @keywords internal
 #' @noRd
+# ⚠ `backend` is a LAYOUT discriminator ("does the count stay a column?"), not a medium: html, md and
+# plot all materialise as "text". `medium` is the real destination, for the one spec that needs it
+# (reg_spark: whether a glyph run may go in a cell). NULL = unknown, and keeps the permissive route.
 tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE,
-                                   transposed = FALSE) {
+                                   transposed = FALSE, medium = NULL) {
   backend <- match.arg(backend)
 
   # `ctx` reads the display intent ONCE (a spec cannot re-read it after mat_base_n clears it).
   re  <- get_render_extras(tab)
   ctx <- list(base_n = re$n %||% tx_option("n"),
+              medium = medium,
               transposed = isTRUE(transposed),
               add_pct = isTRUE(re$add_pct), pvalue = isTRUE(pvalue),
               common_totrow = isTRUE(re$common_totrow), common_totrow_ref = isTRUE(re$common_totrow_ref))
@@ -913,8 +946,17 @@ materialize_specs <- function() list(
   # A continuous predictor has no level population, so its base-count cell is empty by construction
   # -- that is where its OBSERVED SHAPE goes, as a glyph run in the cell's own display template. Runs
   # right after base_n (the columns must exist) and before the footer rows.
+  # ⚠ WHERE A CURVE IS DRAWN IS A MEDIUM QUESTION, and this is the one place it is answered:
+  #   * CONSOLE never takes this route. The glyphs are East-Asian-width-ambiguous, so a terminal font
+  #     that draws them wide breaks the padding of every column to their right -- and the console
+  #     cannot be given a font. The shape table below the footer carries them instead.
+  #   * a table with SEVERAL OUTCOMES has one `n` column for all of them, so a cell of it could only
+  #     ever show one outcome's curve. They go to the shape table too.
+  # tab_wants_shape_table() is the same rule read the other way round, so the two cannot drift.
   reg_spark = list(
-    when  = function(tab, backend, ctx) tab_is_reg(tab) && !is.null(get_assumptions(tab)) &&
+    when  = function(tab, backend, ctx) tab_is_reg(tab) &&
+      !tab_wants_shape_table(tab, ctx$medium %||% "html") &&
+      !is.null(get_assumptions(tab)) &&
       !isFALSE(tx_option("spark")) && any(purrr::map_lgl(tab, ~ is_fmt(.) && get_role(.) == "n")),
     apply = function(tab, backend, ctx) mat_reg_spark(tab)),
   # A Total column whose content has moved: the count into its own column (Excel, or one per block
@@ -980,9 +1022,9 @@ mat_base_n <- function(tab, backend, ctx) {
 #' @keywords internal
 #' @noRd
 mat_reg_spark <- function(tab) {
-  a  <- get_assumptions(tab)
+  a  <- get_assumptions(tab)[[1L]]                 # this route is only ever taken with one outcome
   dv <- tab_declared_vars(tab)
-  if (is.null(dv$var_col) || !dv$var_col %in% names(tab)) return(tab)
+  if (is.null(a) || is.null(dv$var_col) || !dv$var_col %in% names(tab)) return(tab)
   vc  <- as.character(tab[[dv$var_col]])
   lv  <- if (length(dv$row_var) && dv$row_var %in% names(tab))
     as.character(tab[[dv$row_var]]) else rep(NA_character_, nrow(tab))

@@ -942,7 +942,8 @@ tab_export_prep <- function(tabs,
   # the single Total row flips to a single Total column. This supersedes 14d's transpose-before-
   # materialise: the flip is now a render-model transform (below), oriented for free.
   mat_backend <- if (identical(backend, "xl") || isTRUE(transpose)) "xl" else "text"
-  resolved <- purrr::map(resolved, tab_materialize_extras, backend = mat_backend, pvalue = TRUE,
+  resolved <- purrr::map(resolved, tab_materialize_extras, backend = mat_backend, medium = backend,
+                         pvalue = TRUE,
                          transposed = isTRUE(transpose))
 
   tables <- purrr::map(

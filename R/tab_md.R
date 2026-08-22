@@ -135,6 +135,17 @@ tab_md <- function(tabs,
   })
   md_text <- paste(parts, collapse = "\n\n")
 
+  # the observed curves, in a pipe table of their own below the footer -- the same lines the console
+  # prints, since a GFM table IS what tab_md() emits. Taken only where the base-count cell cannot
+  # carry them (see tab_wants_shape_table).
+  if (is_tab(tabs) && tab_wants_shape_table(tabs, "md")) {
+    st <- reg_shape_table(tabs)
+    if (!is.null(st))
+      md_text <- paste(c(md_text, "",
+                         tx_pipe_table(st, attr(st, "headers"), attr(st, "align")),
+                         "", paste0("*", attr(st, "note"), "*")), collapse = "\n")
+  }
+
   # Phase 14f/14m-iii: a STYLED table is wrapped in a pandoc fenced div, and (with `css = TRUE`) the
   # stylesheet is prepended. Pandoc emits a BARE `<table>` for a pipe table, which none of tab_css()'s
   # `.tabxplor-tab ...` rules can reach -- so a rendered markdown table got the colours but none of the

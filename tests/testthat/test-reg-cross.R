@@ -145,10 +145,11 @@ test_that("`shape = \"sd_bands\"` bands at the mean and one SD either side", {
   lv <- as.character(t$levels)[cx(t) == "age"]
   expect_length(lv, 4L)
   # every label carries BOTH facts: the real cut points, and IN WORDS where the band sits
-  expect_match(lv[[1]], "^\\[.*\\) low$")
-  expect_match(lv[[2]], "below average$")
-  expect_match(lv[[3]], "above average$")
-  expect_match(lv[[4]], "high$")
+  sg <- stringi::stri_unescape_unicode("\\u03c3")
+  expect_match(lv[[1]], paste0("^\\[.*\\) ; < mean - ", sg, "$"))
+  expect_match(lv[[2]], "; < mean$")
+  expect_match(lv[[3]], "; > mean$")
+  expect_match(lv[[4]], paste0("; > mean \\+ ", sg, "$"))
   # the cuts really are the landmarks -- snapped UP to the whole number on a whole-numbered variable,
   # which with `right = FALSE` is the identical cut and a far shorter label.
   m <- mean(d$age); s <- stats::sd(d$age)
@@ -219,7 +220,8 @@ test_that("a crossed slope has a subgroup AME, and it is marginaleffects'", {
 
 test_that("the interaction test is the additive-vs-crossed model comparison", {
   d  <- cr_data()
-  t  <- quiet(tab_reg(d, "married", c("race*age4", "relig"), family = "binomial"))
+  t  <- quiet(tab_reg(d, "married", c("race*age4", "relig"), family = "binomial",
+                      stats = c("n", "global", "interaction")))
   tt <- get_test(t)
   r  <- tt[tt$test == "cross_lr", ]
   expect_equal(nrow(r), 1L)

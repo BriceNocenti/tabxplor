@@ -429,10 +429,6 @@ tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "reli
 # ! No model could be refitted from `x`.
 
 
-# Round 2 : 
-# - One problem remaining, in the "Linearity" panel, the math formula in the x axis title doesn’t appear right,
-#   there seem to be many empty characters, it may be an encoding problem. Study and propose me fixes. 
-#   Make web searches if needed.
 
 
 
@@ -572,7 +568,7 @@ ordinal |> forest_plot()
 # - add a display argument here too, accepting {} display tokens, etc., for the user to choose what to print 
 #   in the model text/label, but keep the same defaults than now.
 
-# Round 4.
+# Round 5
 # Actually, in adjustement mode, reput the empirical point with acceptance bracket on the same line than
 #  the arrow, but in the foreground : since the acceptance bracket is much thinner, it won’t remove the color.
 # Add a bit more linewidth for the arrow line, an a bit bigger closed arrow head.
@@ -582,6 +578,11 @@ ordinal |> forest_plot()
 # Footer legend only takes half horizontal space, isn’t there a way to take all the horizontal text 
 # available but wrap when there is not enough space in one line to avoid the text being cut
 #  (if too complitaced, do nothing) ?
+
+
+
+
+
 
 #### the different families × effects × measure: custom displays
 

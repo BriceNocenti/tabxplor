@@ -46,17 +46,18 @@ companion, \code{list(n =, add_pct =)}, materialised at print/export time from t
 rather than baked into the table.
 \item \code{spec} -- the table's identity, \code{list(kind =, vars =, call =)}: its \code{kind}
 (\code{"crosstab"} or \code{"regression"}); \code{vars}, what no column can carry
-(\code{list(wt =, caption =, var_labels =)} -- see \code{\link{set_caption}}), the rest of the
+(\code{list(wt =, caption =, outcomes =, var_labels =)} -- see \code{\link{set_caption}}), the rest of the
 variable model being derived from the declared index columns and from the columns' own
 \code{col_var}; and \code{call}, the producer's own recipe (a regression's model record --
 family, outcome, predictors, reference level, and the \code{fit_spec}
 \code{\link{reg_check_plots}} refits from).
 \item \code{empirical_tips} -- multinomial crude-companion tooltip data (a \code{tibble} keyed by
 column, predictor and level), set by \code{tab_reg(empirical = TRUE)}.
-\item \code{assumptions} -- the observed curve of each continuous predictor (weighted quantile
-bins of the outcome on the family's link scale, one block per \code{tab_vars} group), set by
-\code{\link{tab_reg}}: the data behind the sparkline drawn in a continuous predictor's
-\code{n} cell, and behind \code{\link{reg_check_plots}}'s linearity panel.
+\item \code{assumptions} -- one record PER OUTCOME, keyed by it, each holding the observed curve
+of every continuous predictor (weighted quantile bins of the outcome on the family's link
+scale, one block per \code{tab_vars} group), set by \code{\link{tab_reg}}: the data behind the
+sparkline -- drawn in a continuous predictor's \code{n} cell, or in the shape table below the
+footer -- and behind \code{\link{reg_check_plots}}'s linearity panel.
 \item \code{color_breaks} -- a per-table override of the colour break scales (see
 \code{\link{set_color_breaks}}), merged over the global option at render time.
 }

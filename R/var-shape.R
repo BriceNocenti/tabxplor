@@ -58,11 +58,12 @@ VAR_SHAPES <- list(
     doc = "five groups of equal size."),
   sd_bands = .vshape(
     "bands", "factor", c("tab", "tab_reg"),
-    doc = paste("four bands cut at the mean and one standard deviation either side --- low, below",
-                "average, above average, high. The cut points mean the same thing across",
-                "sub-samples of one variable, where quantile breaks move with each one; but the",
-                "bands are NOT balanced, and on a skewed variable a landmark falling outside the",
-                "data is dropped (an exponential variable gets three bands, not four).")),
+    doc = paste("four bands cut at the mean and one standard deviation either side. Each level",
+                "names its own cut (`[30,48) ; < mean`), so the label can be checked against the",
+                "interval beside it. The cut points mean the same thing across sub-samples of one",
+                "variable, where quantile breaks move with each one; but the bands are NOT",
+                "balanced, and on a skewed variable a landmark falling outside the data is dropped",
+                "(an exponential variable gets three bands, not four).")),
   log = .vshape(
     "log", "numeric", c("tab", "tab_reg"), mark = "log(x)",
     doc = paste("replace the variable by its logarithm --- diminishing returns. Needs strictly",
@@ -311,10 +312,12 @@ shape_bounds <- function(x, breaks) {
 # THE label rule, one function for every cut. Bounds first (the real cut points), then in words where
 # the group sits, then -- on the FIRST level only -- the variable's own name, because a table whose
 # leading text columns are stripped may name the row variable nowhere else.
+# `sep`: a TAG appends ("[18,30) Q1"), a PHRASE is separated ("[18,30) ; < mean - sigma"), because a
+# side made of several words run against the bounds reads as one long string.
 #' @keywords internal
 #' @noRd
-shape_labels <- function(bounds, side, name = NULL) {
-  labs <- if (is.null(side)) bounds else paste0(bounds, " ", side)
+shape_labels <- function(bounds, side, name = NULL, sep = " ") {
+  labs <- if (is.null(side)) bounds else paste0(bounds, sep, side)
   if (!is.null(name) && nzchar(name) && length(labs) > 0L)
     labs[[1L]] <- paste0(name, ": ", labs[[1L]])
   labs
@@ -322,12 +325,19 @@ shape_labels <- function(bounds, side, name = NULL) {
 
 # The word a band gets: where it sits relative to the mean and the SD landmarks it was cut at. Read
 # off the surviving landmarks, so a skewed variable that lost one still names its bands correctly.
-# The mean is always inside the range of a variable that varies, so "average" is always the pivot.
+# The mean is always inside the range of a variable that varies, so the mean is always the pivot.
+# The band SAYS ITS OWN CUT ("< mean - sigma") instead of grading it ("low"): the reader can then
+# check the label against the interval beside it, and the words survive a skewed variable that lost
+# a landmark without lying about which one it lost.
+# WARNING: the sigma NEVER enters a string literal -- it is a %s, so the source stays ASCII AND the
+# msgid stays ASCII. potools extracts a "\uXXXX" escape verbatim while gettext() looks the EVALUATED
+# string up, which silently fuzzies every accented entry (the Phase 22e-i trap).
 #' @keywords internal
 #' @noRd
 shape_band_words <- function(tag) {
-  low <- gettext("low"); below <- gettext("below average")
-  above <- gettext("above average"); high <- gettext("high")
+  sg <- stringi::stri_unescape_unicode("\\u03c3")
+  low <- gettextf("< mean - %s", sg); below <- gettext("< mean")
+  above <- gettext("> mean"); high <- gettextf("> mean + %s", sg)
   # one word per BAND: n_tag landmarks cut the range into n_tag + 1 bands, and each band is named by
   # the landmark it starts at (the first by the one it ends at).
   starts <- c(NA_character_, tag)
@@ -405,7 +415,7 @@ shape_cut_bands <- function(x, w = NULL, var = "x", breaks = NULL, labels = NULL
       "i" = 'Use {.val levels} to keep one level per value, or pass it as a factor.'), call = NULL)
   br   <- unique(shape_snap_breaks(x, c(rg[[1L]], land, rg[[2L]])))
   b    <- shape_bounds(x, br)
-  labs <- shape_labels(b$bounds, shape_band_words(tag), name)
+  labs <- shape_labels(b$bounds, shape_band_words(tag), name, sep = " ; ")
   structure(factor(labs[b$idx], levels = labs, ordered = ordered),
             tabxplor_breaks = br, tabxplor_labels = labs)
 }

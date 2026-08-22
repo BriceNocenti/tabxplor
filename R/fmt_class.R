@@ -1797,6 +1797,11 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", ...) {  # ... 
 #   base_display  the token `{base}` borrows: the LEVEL beside the estimate (a percentage, a mean, a
 #              count). NA where the level is ambiguous -- on a link scale a coefficient may sit over a
 #              probability or over a mean, and guessing would be a lie; `{base}` renders void there.
+#   base_digits  the LEVEL's own precision, absent = the cell's. One `digits` per cell serves every
+#              token of it, so an estimate needing a decimal (a risk difference in points) used to
+#              drag its percentage aside to "50.8 %". Declared only on the EFFECT scales, where
+#              `{base}` really is an aside -- on a LEVEL scale `{base}` IS the estimate and the
+#              column's own `digits` is the user's answer.
 #   const_display the token a regression's BASELINE row renders: the quantity this column's effects
 #              OPERATE ON. Odds ratios multiply odds, so an odds column shows the baseline odds; risk
 #              and rate ratios multiply the level, and differences add to it, so those show the level
@@ -1819,7 +1824,7 @@ EST_SCALES <- list(
   odds_ratio = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "or",    unit = "or",    default_display = "pct",
-                    est_display = "or", base_display = "pct", const_display = "or",
+                    est_display = "or", base_display = "pct", base_digits = 0L, const_display = "or",
                     break_key = "odds_ratio", gap_key = "adj_ratio",
                     label_meas = "odds_ratio", sec = NULL),
   # THE TWO SUMMED-SCORE ROWS (`tab_reg(trials =)`): a multiplicative effect on the PER-ITEM
@@ -1846,7 +1851,7 @@ EST_SCALES <- list(
   pct_ratio  = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "ratio", unit = "ratio", default_display = "pct",
-                    est_display = "ratio", base_display = "pct", const_display = "pct",
+                    est_display = "ratio", base_display = "pct", base_digits = 0L, const_display = "pct",
                     break_key = "pct_ratio",  gap_key = "adj_ratio",
                     label_meas = "ratio", sec = NULL),
   mean_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "std",
@@ -1885,7 +1890,7 @@ EST_SCALES <- list(
   points     = list(kind = "effect", geometry = "difference", var_kind = "pct", ladder = "pct",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = TRUE,
                     est_field = "diff",  unit = "points", default_display = "pct",
-                    est_display = "diff", base_display = "pct", const_display = "pct",
+                    est_display = "diff", base_display = "pct", base_digits = 0L, const_display = "pct",
                     break_key = "pct_diff",   gap_key = "adj_diff",
                     label_meas = "difference", sec = NULL),
   # the three LEVEL scales: a cell percentage / a mean / a count. No null to draw (the reference is a
@@ -2861,7 +2866,25 @@ fmt_gap_parts <- function(x) {
     flip <- ok & est * obs < 0
   }
   s[flip] <- -1
-  list(mult = mult, est = est, obs = obs, ok = ok, sign = s)
+  list(mult = mult, est = est, obs = obs, ok = ok & !fmt_gap_degenerate(x, mult, est, obs), sign = s)
+}
+
+# ⚠ A MODEL THAT IS ITS OWN CRUDE TWIN HAS NO GAP. With one predictor -- or any predictor set the
+# crude fit already contains -- the two estimators coincide exactly, so both the gap and its standard
+# error are floating-point dust; dividing one by the other yields z = -20 and "p < 0.01 %", and
+# `color = "adjustment"` then paints the column at full strength on nothing at all.
+# The tolerance is RELATIVE TO THE ESTIMATE, never absolute: a gap of 1e-4 is dust beside an odds
+# ratio of 3 and a real finding beside a coefficient of 1e-3. Both halves must be dust -- a genuinely
+# tiny gap with an honest SE is a real "adjustment changed nothing" and keeps its interval.
+#' @keywords internal
+fmt_gap_degenerate <- function(x, mult, est, obs) {
+  se  <- get_gap_se(x)
+  # on the TEST scale, which is the log for a multiplicative column -- that is what `gap_se` is the
+  # standard error of, so the gap and the scale it is judged against must be read there too.
+  a   <- if (mult) suppressWarnings(log(est)) else est
+  b   <- if (mult) suppressWarnings(log(obs)) else obs
+  tol <- .Machine$double.eps^0.5 * pmax(abs(a), abs(b), 1, na.rm = TRUE)
+  !is.na(a) & !is.na(b) & abs(a - b) <= tol & !is.na(se) & se <= tol
 }
 
 # fmt_adjustment_score() -- how far a model estimate sits from `obs`. ONE helper behind both
@@ -2924,20 +2947,20 @@ fmt_gap_bounds <- function(x) {
   list(lo = pmin(lo, hi), hi = pmax(lo, hi))
 }
 
-# fmt_gap_render() -- a gap VALUE as text, in the units the cell itself prints. The three-way rule is
-# format()'s own (the `obs` / `gap` mask): multiplicative -> "x1.23"; a link-scale coefficient ->
-# plain; anything else -> the probability scale, x100 and signed. Written once here because the gap's
-# interval bounds are not fields and so cannot go through format(); a printed gap and a hovered one
-# must not disagree about their unit -- which is exactly how a -23 % gap came to read "-0.01".
+# fmt_gap_text() -- the gap and its interval as text, through format() and nothing else. THE gap is
+# already a display token (`{gap}` carries the adjustment score), so the estimate needs no renderer of
+# its own; the BOUNDS are manufactured rather than stored, so they are written into `ci_inf`/`ci_sup`
+# on a throwaway copy and rendered as the `{ci}` token every other interval in the package uses.
+# WARNING: do NOT re-introduce a second renderer here. The one this replaced hard-coded "%+.1f" and a
+# " pts" suffix nothing else in the package writes, so a hovered gap and a printed one disagreed
+# about both their precision and their unit.
 #' @keywords internal
-fmt_gap_render <- function(x, v) {
-  scl <- fmt_scale_row(x)
-  if (isTRUE(scl$mult)) return(paste0("\u00d7", formatC(v, format = "f", digits = 2)))
-  if (identical(scl$var_kind, "coef")) return(sprintf("%+.2f", v))
-  sc  <- if (isTRUE(measure_facts("adjustment", "ignore", fmt_gap_scale_key(x))$break_scale)) 100 else 1
-  unit <- switch(measure_facts("adjustment", "ignore", fmt_gap_scale_key(x))$unit_kind %||% "none",
-                 points = " pts", std = " SD", "")
-  paste0(sprintf("%+.1f", v * sc), unit)
+fmt_gap_text <- function(x) {
+  bd  <- fmt_gap_bounds(x)
+  est <- format(fmt_set_display(x, "gap"), stars = FALSE, na = "")
+  ci  <- format(fmt_set_display(set_ci_sup(set_ci_inf(x, bd$lo), bd$hi), "ci"),
+                stars = FALSE, na = "")
+  list(est = trimws(est), ci = trimws(ci))
 }
 
 # fmt_gap_p() -- the two-sided p of the gap (z on the test scale). Display only: the colour reads the
@@ -2959,8 +2982,15 @@ fmt_gap_p <- function(x) {
 # `method = "profile"`, whose asymmetric bounds yield no SE.
 #
 # Byte-identical wherever a `gap_se` exists: NULL leaves the column's own `color_signif` in place.
+# It also UPGRADES `ignore` wherever a test does exist: there is no meaningful "colour every movement
+# without testing it" for a comparison of two estimates, and `ignore` (the package default) would
+# make a gap fill a description rather than the test the design says it is. ⚠ ONLY `ignore` is
+# upgraded -- `guaranteed_effect` is the stricter policy and a user who asked for it keeps it.
 #' @keywords internal
-fmt_gap_force_policy <- function(x) if (all(is.na(get_gap_se(x)))) "ignore" else NULL
+fmt_gap_force_policy <- function(x) {
+  if (all(is.na(get_gap_se(x)))) return("ignore")
+  if (identical(get_color_signif(x), "ignore")) "grey_non_signif" else NULL
+}
 
 # fmt_broadcast_last() -- broadcast the LAST value of each group to every row, where each TRUE in
 # `boundary` closes a group. Groups are contiguous, so a group's max row index is its last row.
@@ -3264,6 +3294,11 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # stored on the cell; it belongs where what is being SHOWN is known, which is here.
   md <- unname(DISPLAY_MIN_DIGITS[display])
   digits[!nas & !is.na(md) & digits == 0L] <- md[!nas & !is.na(md) & digits == 0L]
+  # THE LEVEL HAS ITS OWN PRECISION (EST_SCALES$base_digits). Keyed on the RAW token, so it reaches a
+  # `{base}` aside (the composite loop below re-enters with the unresolved name) and a bare
+  # `display = "base"` column alike, and never a `{pct}` a user wrote themselves.
+  if (!is.null(scl$base_digits))
+    digits[!nas & raw_display == "base"] <- scl$base_digits
 
 
   ok <- !na_out & !nas

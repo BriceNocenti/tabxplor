@@ -63,7 +63,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 - `reg-estimand.R` — the estimand cascade (family → link → measure → effect) and the library it composes; `REG_FAMILIES` / `REG_ESTIMANDS` / `REG_WORDS`; `reg_measures()`.
 - `reg-empirical.R` — the observed (crude) companion columns; `REG_EMPIRICAL` / `REG_EMP_BY_LINK`.
 - `reg-influence.R` — the marginal engine (g-computation over `REG_LINK_FUNS`) + the gap-SE influence functions.
-- `reg-assumptions.R` — model checks + `shape=` cures; `REG_CHECKS`; the plot primitives.
+- `reg-assumptions.R` — model checks + `shape=` cures; `REG_CHECKS`; the plot primitives; the observed curves and their sparkline.
 - `reg-cross.R` — interactions: the `a*b` entries of `predictors`, prepared as a variable; `REG_CROSS_ARMS`.
 - `reg-spec-build.R` — the per-model product builder (`reg_spec_build`).
 
@@ -282,7 +282,7 @@ The measure's behaviour — raw getter, scale keys, significance source, gating 
 
 **The boundary and the build** (`reg-resolve.R`, `tab_reg.R` + `reg-spec-build.R`). `reg_resolve_args()` is the crosstab boundary's twin, with `data` *inside* it — `family = "auto"`, `multiplier = "sd"` and `shape` are answered by the data — and one grammar per axis: the four estimand arguments per outcome, `multiplier` / `shape` / `ref` per predictor (unnamed = the fallback, named = that variable). `reg_build()` then runs over a typed `new_reg_ctx`, its per-model half a declared product (`reg_spec_build()`), the three nesting axes — `tab_vars` groups × models × outcomes — dispatching through the shared parallel seam.
 
-**Effects and model checks.** A marginal quantity comes from tabxplor's own analytic g-computation, or from `marginaleffects` at a reference profile — derived from the contrast, never declared per row. `REG_CHECKS` catalogues the checks (linearity, dispersion, influence, proportionality, collinearity), each with the `shape =` cure that fixes what it flags — the check and its cure are one object — and each priced (`free` runs by default, `refit`-cost checks are opt-in).
+**Effects and model checks.** A marginal quantity comes from tabxplor's own analytic g-computation, or from `marginaleffects` at a reference profile — derived from the contrast, never declared per row. `REG_CHECKS` catalogues the checks (linearity, dispersion, influence, proportionality, collinearity), each with the `shape =` cure that fixes what it flags — the check and its cure are one object — each priced (`cost`) and each declaring whether it runs by default (`footer_default`), because what a table must say and what it costs are two questions. The **observed shape** of a numeric predictor is the free half of the linearity check: one curve per outcome, binned with no fit at all, drawn as a sparkline in a window floored by the data's own sampling noise and by the first colour rung — so a flat run means flat. It goes in the predictor's own `n` cell where the table has one outcome and the medium can hold it, and otherwise in a small **shape table** below the footer.
 
 ### Exports and rendering
 
@@ -594,61 +594,56 @@ Below are the results of the maintainer’s manual reviews of different features
 
 #### Phase 22b — `tab_reg()` manual review (suite)
 
-##### Phase 22b-xviii — new round of tab_reg() manual review
+##### Phase 22b-xviii — new round of `tab_reg()` manual review
 
-```r
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, link = "difference"
-) 
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, measure = "difference"
-)
-tab_reg(gss_simple, outcome = c("married", "income25k"), predictors = c("race", "relig", "age", "tvhours"), empirical = TRUE, shape = c(age = "quadratic))
+**DONE.** Sixteen reported defects across five subsystems. Every one was reproduced before it was fixed, and each turned out to have its root in a *shared* mechanism rather than in an ad-hoc branch — so each fix is a change to a declared fact or to a single renderer, never a new arm. Four cut across the package and are the substance of the phase.
+
+**1. One `digits` per cell served every token of it.** `measure = "difference"` puts a binomial column on the `points` scale, whose `REG_CELL_DIGITS` entry is `1L` — right for the estimate (a 2.4-point risk difference is not a 2-point one), noise for the `{base}` percentage riding beside it, which came out `(50.8 %)` where every other measure gives `(51 %)`. `EST_SCALES` gains **`base_digits`** beside its existing `base_display`: the precision the LEVEL prints at, absent = the cell's own. Declared `0L` on the three EFFECT scales whose base is a percentage (`odds_ratio`, `pct_ratio`, `points`) and deliberately NOT on the LEVEL scales, where `{base}` IS the estimate and the column's `digits` is the user's own answer. Applied in one line of `format()` beside the `DISPLAY_MIN_DIGITS` floor, keyed on the RAW token — the composite loop re-enters `format()` with the unresolved name, so a `{base}` aside and a bare `display = "base"` column are both covered.
+
+**2. The sparkline always spent all eight glyph levels.** A pure min–max rescale per curve is the standing objection to sparklines ([Few](https://www.perceptualedge.com/articles/visual_business_intelligence/best_practices_for_scaling_sparklines.pdf)): a flat curve and a strong one draw the same picture. The window now has a **floor**, `max(curve range, 8 × median bin SE, the first colour rung)`:
+
+- **8 × the median bin SE** — the range of k independent bins is ≈ 3.1 SE at k = 10 whatever the data says, so an 8 SE window leaves pure noise under half the height. **Measured, not chosen**: at 4 SE a noise curve still spent ~78 % of the run. Verified on a 400-row random fixture (`▅▅▅▅▄▄▄▄▅▆▅▅▅▅▅▅▅▄▃▃`) against the same shape on 4 000 rows with a real logit slope (`███▇▇▆▅▅▅▅▄▄▃▃▂▂▂▁▁▁`).
+- **the first colour rung on the curve's own scale**, so "uses the full height" means "reaches a deviation this package would colour". The conversion is exact rather than a convention: every ladder in `COLOR_SCALES` is the same ladder written at a 50 % reference (their declared `anchor`s), so `log(1.2)` on a logit curve, `log(1.1)` on a log-risk or log-mean one, and `0.1 × SD` on the identity scale — where a probability needs no row of its own, since SD = 0.5 at p = 0.5 makes 0.1 SD exactly 5 points.
+
+`RD_LINK_SCALES` declares it: one row per reading of the outcome (`rd_link_y()`'s own five `kind`s), carrying the rung and how a span on it is read back. `rd_bin()` writes the rung as a curve COLUMN beside `xlo`/`xhi` (the same rationale: a per-curve constant that must survive `bind_rows`). ⚠ computed BEFORE the `tibble()` call — tibble masks sequentially, and a `y` inside it is the binned column, not the outcome.
+
+**3. `meta$assumptions` held one record for one outcome.** `reg_curves()` returned `NULL` above one, so a two-outcome table lost its curves entirely. It now returns **one record per outcome, keyed by it**, each taking that outcome's own family, trials and modelled level (the first spec of each outcome — every fact read is an outcome fact, so a comparison of several models on one outcome still draws one curve). `reg_bind_assumptions()` binds outcome-first, group-second. Four read sites, all small.
+
+**4. Where a curve is drawn is a MEDIUM question, and there was nowhere to ask it.** The `n`-column cell is the better reading — the curve sits beside its coefficient — and is kept wherever it works. Two cases break it, and `tab_wants_shape_table()` is the one place they are named: the **console**, whose block glyphs are East-Asian-width-ambiguous (a terminal font that draws them wide shifts every column to their right, and a package cannot choose its reader's font — the reported padding bug), and **several outcomes**, which share one base-count column, so a cell of it could show only one of them. Both get a small **shape table** below the footer:
+
+```text
+| outcome   | numeric predictor | span | observed shape       |
+|:----------|:------------------|-----:|:---------------------|
+| married   | age               | ×8.7 | ▁▃▆▇████████████▇▇▆▆ |
+|           | tvhours           | ×2.6 | ▃▆████▇▆▅▅▄▃▃▃▂▂▂▁▁▁ |
+| income25k | age               |  ×34 | ▃▅▇██████████▇▆▅▄▃▂▁ |
 ```
-- Compared to `link = "ratio"` or nearly all other configurations, where observed proportion and adjusted proportions have 0 digit (percentage default, good), in a a model with `measure = "difference"` they get 1 digit, which is pure noise and make the table less readable while losing horizontal space.
-- `tab_reg()` sparklines miss some kind of absolute vertical scale: currently, they may actualy amplify noise on a near flat curve, and render hard to distinguish between flat and bad shape. Would there be a way, meaningful accross different numeric variables, to get closer to an absolute vertical scale, in a reliable way ? Make web searches if needed.
-- `tab_reg()` numeric predictors sparklines break the padding and alignement of the whole table in console, due to non-ascii characters`▁▅▇▇▇███▇▅` (but it prints ok in a .md script in Positron). I don’t know what to do, because I could change the console font for me but not for all users. 
-- The sparkline disappear with several outcomes and "n_range", because one `n` column per model would be needed for that and that’s not the default option. 
-- The solution to implement for console: make the "sparkline in n column" feature dormant for console, add a second small sparkline table below the footer table (one empty line between the two different pipe tables). It should be something like that (improve it), with the sparklines in the last column so we don’t really care anymore about broken padding :
-| outcomes        | numeric predictors | <meaningful_name> |
-|:----------------|:-------------------|:------------------|
-| married         | age²               | ▁▅▇▇▇███▇▅        |
-|                 | tvhours            | ▁▅▇▇▇███▇▅        |
-| income25k       | age²               | ▁▅▇▇▇███▇▅        |
-|                 | tvhours            | ▁▅▇▇▇███▇▅        |
-- The solution to implement for html and Excel: keep the sparklines in the n column when there is only one outcome, it’s actually good. With several outcomes, create another small table below the main one (below it’s footer too ; with an empty line between the footer of the first and the sparkline table ; in this specific case, use two times more vertical space, and two times more horizontal space, than in the case where the sparkline is inside the n column, since there is more space.)
 
+`reg_shape_table()` is the one producer (already rendered, headers and note as attributes); `tx_pipe_table()` the one GFM emitter the console and Markdown share; HTML re-uses `tx_spark_svg()` at double size (`h = 44, dx = 10`), Excel writes plain cells whose rows join the sheet-stacking offset. 20 glyphs rather than 10 — a table of its own has the room a cell has not. The **span** column is the direct answer to the literature's complaint about an unlabelled scale: the curve's own range on the measure (`×2.4`, `+12 %`, `+0.4 SD`), or `<` + the window where the floor set it, so "reads flat" is checkable rather than a guess. The predictor column names the **variable**, never its parametrisation: the curve is fit-free, so a `shape = "quadratic"` model does not change what was observed.
 
-- On console, the thing difficult to find while reading a regression table is... the outcome. I think the only good solution may be to add the col_var name like with several outcomes, `Obs_OR [married]`, but to remove it automatically at export (since it will already be printed in the first header row). 
+⚠ **`tab_materialize_extras(backend =)` is a LAYOUT discriminator, not a medium** — html, md and plot all materialise as `"text"`, so gating on it silently took the console's route for every one of them. It gains a `medium` argument (NULL = unknown, keeps the permissive route) and `tab_export_prep()` passes its own backend through.
 
-Model footer: 
-- Pearson dispersion should always come afetr Dispersion (robust/model SE).
-- "Overall association (LR)": do you think these ones are really needed as default, with all the informations there is already in the regression tables + footers ?
-- Please find a logical order for the footer, based on real-world model check use cases. N is a right first row ? Then put together everything that is about assumptions checks, in their order of importance (stats that can be a no-go first, then more informative stuff) ? Then put together everything that is about (homogeneous) model comparison ? It should be thought. 
-- I want to re-add Brant as a default for ordinal models, it’s too important even if it’s long (even if the rule here, would be use `reg_check_plots()`).
+**The outcome, folded like the base count.** A reader of a regression table on the console had nowhere to find what was being modelled. It is now named ONCE above the table (`# Outcome: married`) where the table rests on one, and per column (the `[outcome]` suffix, which every exporter already strips) where it rests on several — the base count's own rule. Stored on `meta$spec$vars$outcomes` rather than re-derived from `col_var`, which legitimately names something else on a comparison of several models. ⚠ two consequences: `tbl_sum.tabxplor_grouped_tab` calls `NextMethod()`, so the line had to be guarded against being appended twice; and `print.tabxplor_tab` blanked the type-tag line by COUNTING header lines, which the new one broke — it now FINDS the line by its tags, which is ANSI-proof and cannot silently blank the wrong one.
 
-```r
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", measure = "difference", color = "adjustment")
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", measure = "difference", color = c(TRUE, "adjustment"))
-```
-- html tooltips "gap" still speaks in pts like "-1.9pts [-2.9 pts; -0.9pts]", which is done nowhere else in the package (or should not be). Please use the standard "diff" formatting: something like "-1.9% [-2.9;-0.9]%"
-- background colors still color not only the primary display token (like text colors does, keeping the stars out of the color, etc.), but also the whole cell text with secondary display tokens. I noticed this in html. It is an html specific problem, or something more general ? 
-- Also, there a strange cases where the model (and sometimes the obs too) have no stars, but the gap comparison gives background colors: is this wanted (what is the meaning and interpretation then ?), or is it a statistical error ? 
-- background color keep to misalign just a bit their cells text with the other rows: it looks like a margins problem, fix it (even if the hack is to set a cell background with the overall background color so that they are hidden ; but if you think of a better solution, do it).
+**The footer reads outward from the data.** `TEST_ROWS`' declaration order IS the display order, so this is a block reshuffle plus a rewritten ordering note: **N** → **the checks, worst first** (proportionality and linearity break what the number *means*; dispersion breaks every star in the table; collinearity and influence only say how fragile it is) → **the content** (overall association, interaction) → **the comparison** (LR vs null, the R²s, AIC, BIC, the model-comparison rows). The exact **Pearson dispersion** moves out of the glance block to sit directly under the Dispersion check it refines. That needed one mechanism: a slot is a position in the reading order and `block` is who WRITES the row, and the two are not one-to-one, so the stamp comes from a `producer_of` map and `test_rows_from_checks()` takes a `keys` argument. Assertion S8 (every check reaches exactly one slot) already refuses a check forgotten there.
 
-```r
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", measure = "difference", color = c(TRUE, "adjustment"), shape = c(age = "sd_bands"))
-tab(gss_simple, age, married, pct = "row", color = TRUE)
-```
-- I want sd_bands levels to look something like that (with french translation "moy.")
-| current                | proposition (improve it) |
-| age: [18,30) low       | age: [18,30) ; < mean - σ|
-| [30,48) below average  | [30,48) ; < mean         |
-| [48,65) above average  | [48,65) ; > mean         |
-| [65,89] high           | [65,89] ; > mean + σ     |
+**Two footer defaults changed.** `"global"` (the per-predictor joint test) **leaves the default set**: one row per multi-level predictor and a `drop1()` refit each, and on a table whose every block is strongly associated it only repeats what the stars said. `stats = "global"` / `"all"` ask for it — and `"all"` genuinely includes it now, which it did not (`want_global` and `reg_footer_stats()` disagreed about what `"all"` meant; the gate is now derived from the same rule). **Brant returns as an ordinal default**: `REG_CHECKS` gains **`footer_default`** (the twin of 22e-i's `panel_default`), replacing the derivation from `cost` — what a table must say and what it costs are two questions, and proportionality is the case where they disagree. Two UX guards came with it: the "install brant" hint now fires only for a user who NAMED the check, and brant's own sparsity warning is re-worded once in the package's own words (a default check must speak about the reading, not about a contingency table the caller never built).
+
+**The tooltip's `gap` line was a second renderer.** `fmt_gap_render()` hard-coded `%+.1f` and a `" pts"` suffix nothing else in the package writes (not even gettext'd, while the legend says `points`), so the hover read `gap: -1.4 pts [-2.1 pts; -0.6 pts]` beside `diff: [-23.5;-18.9]%`. It is **deleted**. `fmt_gap_text()` renders both halves through `format()`: the estimate as the `{gap}` token it already is, the bounds by writing them into `ci_inf`/`ci_sup` on a throwaway copy and rendering the `{ci}` token — so the bracket is the same bracket as every other interval, `gap: -1.4% [-2.1;-0.6]%, p = 0.021%`. The IEEE-negative-zero guard the old renderer's test pinned is still pinned, now on the rendered bracket.
+
+**The HTML background flooded the whole cell.** The console stops it at the primary token and says why (*"THE BACKGROUND IS A COLOUR MEASURE, NOT THE CELL'S GROUND"*); HTML wrapped the ASSEMBLED cell, so the pill swallowed the stars and both asides. **It is HTML-specific**: the console splits both channels, Excel splits neither (internally symmetric, but the grey aside is lost — logged to Phase 22f, it needs per-cell rich-text runs). The pill moves into `html_cell_text()`, the one place the three pieces are known and already where the face is applied to the primary alone; the whole-cell wrap survives only where it is correct (`color_whole_cell`, a degraded column, a cell with no recorded range). And the **4px drift**: `.tx-pill`'s horizontal padding is real layout on an inline box, so a filled number sat ~4px left of the same number on an unfilled row — `margin:0 -4px` makes the fill bleed around the glyphs instead of moving them.
+
+**A gap fill was a description, not a test.** `color_signif` defaults to `"ignore"`, whose arm colours every non-`NA` score with no test at all — which is why cells with no star anywhere carried a fill, and which contradicted the architecture's own claim that the gap SE is what makes `color = "adjustment"` a test. `fmt_gap_force_policy()` now upgrades `"ignore"` to `"grey_non_signif"` wherever a gap SE exists: there is no meaningful "colour every movement without testing it" for a comparison of two estimates. ⚠ only `"ignore"` is upgraded — `"guaranteed_effect"` is stricter and a user who asked for it keeps it. **The remaining "no stars but coloured" cells are correct and worth keeping**, and `?tab_reg` now says so: both estimators are fitted on the same rows, so the gap's SE uses the difference of their influence functions and can be far smaller than either estimate's — two individually non-significant numbers can differ from each other beyond doubt.
+
+**Phase 22x's degenerate gap, pulled forward.** A univariable model IS its own crude twin, so its gap and its SE are both floating-point dust and their ratio was `z = -20`, `p = 8.6e-92`. The guard sits in `fmt_gap_parts()`, the one decomposition the score, the raw gap, the bounds and the p all read, so they go `NA` **together** and the colour goes with them. **Scale-relative, never an absolute epsilon** (`tol = .Machine$double.eps^0.5 × max(|est|, |obs|, 1)`, on the TEST scale — the log where the column is multiplicative, which is what `gap_se` is the SE of), and BOTH halves must be dust: a genuinely tiny gap with an honest SE is a real "adjustment changed nothing" and keeps its interval. The 22x entry is deleted.
+
+**`sd_bands` levels say their own cut.** `[18,30) low` → `age: [18,30) ; < mean - σ`, so the label can be checked against the interval beside it, and a skewed variable that lost a landmark still names the ones it kept. `shape_labels()` gains `sep` (a tag like `Q1` appends, a phrase is separated) — quantile labels are untouched. ⚠ **the σ never enters a string literal or a msgid**: the four msgids are `"< mean - %s"`, `"< mean"`, `"> mean"`, `"> mean + %s"`, filled by `stringi::stri_unescape_unicode()`, so the source stays ASCII AND `po_extract()` has nothing to mangle. French: `< moy. - σ`.
+
+⚠ **A THIRD i18n trap, found here and worth the rule.** 22e-i documented the `\uXXXX` normalisation; this one is its sibling. **potools extracts each string LITERAL it sees, while `gettext()` looks the EVALUATED string up** — so a message built with `paste0()` INSIDE the call is extracted in pieces and can never be found at run time. The shape table's note was written that way and would have shipped untranslatable. The rule: **one string literal per `gettext()` / `gettextf()` call**; join afterwards. The 22e-i normalisation pass was also re-run (2 escapes in each file, 2 identical-msgid fuzzies cleared — `Cramér's V` again, caught by `test-i18n-fr.R:85` exactly as before).
+
+**Verified**: every call of the review block, read on console, HTML, Markdown and Excel; the full suite **FAIL 0 / WARN 0 / SKIP 4 / PASS 9674**; goldens regenerated for the one intentional CSS line and reviewed (nothing else moved). New tests: the `{base}` precision and the folded outcome (`test-tab_reg-display.R`), the noise floor and the rung conversion, the per-outcome records and the media rule (`test-reg-shape.R`), the degenerate gap (`test-between-groups-gap.R`), the pill's scope and the hover's units (`test-render-html.R`), the footer order and the two default changes (`test-tab_reg-footer.R`).
+
+**Reported, not fixed:** Excel applies BOTH colour channels whole-cell — logged to Phase 22f, where the exporters are reviewed.
 
 
 #### Phase 22e — plots manual review
@@ -935,6 +930,8 @@ such a table is drawn at, against the 1.8 mm two linewidths come to.
 
 #### Phase 22f — exports review
 
+⚠ **Open, found in 22b-xviii: Excel applies BOTH colour channels to the whole cell.** `tab_xl.R` writes one font colour and one fill per CELL, so a composite's asides and its stars wear the measure's colour too — internally symmetric (unlike the html defect 22b-xviii fixed), but the grey aside is simply lost, and a reader cannot tell the number from what sits beside it. The cure is per-cell **rich-text runs**, whose machinery `tab-xl-backend.R` already has (used today only for the footer legend), driven by the `primary_from` / `primary_nchar` range `format(bold_split = TRUE)` hands back — the same fact `html_cell_text()` and the console's `paint_split()` both read.
+
 pillar abbreviation in exports: keep the "<>" formatting of the pillar version ; always *italics* for all exports ; aligned left in html and Excel (right on markdown, like the whole column).
 - In html export, remove the horizontal border between the normal header row (levels names) and the pillar abbreviations row. The grey should be more grey,`tx_chrome_hex()$grey` for consistency with all themes.
 
@@ -997,15 +994,6 @@ Add a direct Word export ? No, teach to go through Excel: it’s recommended to 
 
 ⚠ **Open, found in 22e-i, reported not planned: a declared panel that cannot be drawn.** `REG_CHECKS$residuals$families` includes `"ordinal"`, so `check = "auto"` asks for a residual panel on a `polr` / `svyolr` fit — and `rd_resid()` has no ordinal arm, so it returns `NULL` and the grid silently loses a panel it declared. Two honest cures, pick one: give `rd_resid()` the ordinal randomised-quantile arm (a cumulative-probability draw between the two cut points, which is well defined), or drop `"ordinal"` from that row's `families` and from `normality`'s. ⚠ Whichever is chosen, the fact table and what can be drawn must agree — a family listed in a row is a promise `reg_panel_keys()` makes to the user.
 
-
-⚠ **Open, found in 22c-iv, reported not planned: a UNIVARIABLE model claims a highly significant adjustment.** With one predictor the model IS its own crude twin, so there is no adjustment to test — but the gap is floating-point noise divided by a floating-point SE, and the test believes it. Measured on `tab_reg(gss_simple, outcome = "age", predictors = "race", family = "gaussian", empirical = TRUE)`, `Model_diff`:
-
-```text
-est    = -4.827654   obs    = -4.827654        (equal to the last digit, by construction)
-score  = -4.44e-15   gap_se =  2.19e-16   ->   z = -20, p = 8.6e-92   ("p = <0.01%" on hover)
-```
-
-So the hover reads `gap: -0.00 [-0.00; -0.00], p = <0.01%`, and `color = "adjustment"` would paint the column at full strength. The cure belongs to the gap engine (`fmt_gap_bounds()` / `fmt_gap_p()` in `fmt_class.R`, fed by `reg-influence.R`), not to the hover, which renders faithfully what it is given: a gap whose size AND standard error are both at machine precision relative to the estimate is **not a gap**, and must yield NA rather than a z of 20. ⚠ Pick the guard against the estimate's own scale, not an absolute epsilon — and check the same clause covers the general case of a model whose predictors are all in the crude fit.
 
 ---
 

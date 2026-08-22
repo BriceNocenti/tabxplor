@@ -211,7 +211,9 @@ test_that("between_groups carries the reference group's estimate, stacked AND sp
   testthat::expect_equal(get_obs(sp[[fmt_cols[[3]]]]), ref)
   testthat::expect_identical(fmt_color_channels(sp[[fmt_cols[[1]]]])$bg_slot,
                              integer(length(ref)))                 # the baseline stays uncoloured
-  testthat::expect_true(any(fmt_color_channels(sp[[fmt_cols[[3]]]])$bg_slot > 0L))
+  # a non-baseline group HAS a gap to grade; whether it is painted is the policy's business, and a
+  # gap measure always tests its own interval (22b-xviii), which this fixture's gaps do not clear.
+  testthat::expect_true(any(!is.na(tabxplor:::fmt_adjustment_score(sp[[fmt_cols[[3]]]]))))
 
   # the STACKED shape (several models per group, so no side-by-side layout): each group is a block
   # of rows, and `obs` is filled from the first group's block.

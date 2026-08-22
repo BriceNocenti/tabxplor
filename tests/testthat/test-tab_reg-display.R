@@ -284,3 +284,38 @@ test_that("choosing a display changes no number (D11), presets included", {
     }
   }
 })
+
+# ---- Phase 22b-xviii: the LEVEL has its own precision, and the outcome is named once -------------
+
+test_that("a `{base}` aside prints its own decimals, never the estimate's", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  # `measure = "difference"` puts the column on the `points` scale, whose ESTIMATE wants a decimal
+  # (a 2.4-point risk difference is not a 2-point one) while its LEVEL is an ordinary percentage.
+  rd <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
+                                 measure = "difference", empirical = TRUE, stats = FALSE))
+  txt <- format(rd[["Model_mRD"]], na = "")
+  expect_true(any(grepl("[0-9]\\.[0-9]%", txt)))          # the estimate keeps its decimal
+  expect_false(any(grepl("\\([0-9]+\\.[0-9]+%\\)", txt))) # the base does not
+  expect_true(any(grepl("\\([0-9]+%\\)", txt)))
+  # and the observed twin, whose base is the same percentage, agrees with it
+  expect_false(any(grepl("\\([0-9]+\\.[0-9]+%\\)", format(rd[["Obs_RD"]], na = ""))))
+  # a scale that declares no base_digits is untouched: an odds-ratio column already printed 0
+  or <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", stats = FALSE))
+  expect_false(any(grepl("\\([0-9]+\\.[0-9]+%\\)", format(or[["Model_OR"]], na = ""))))
+})
+
+test_that("the outcome is named once above the table, and only where there is one", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  one <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", stats = FALSE))
+  expect_identical(unname(pillar::tbl_sum(one)[["Outcome"]]), "married")
+  # ⚠ the grouped method calls NextMethod(), so the line must not be appended twice
+  expect_equal(sum(names(pillar::tbl_sum(one)) == "Outcome"), 1L)
+  # several outcomes: no line -- each column already carries its own "[outcome]" suffix
+  two <- suppressMessages(tab_reg(d, c("married", "tvhours"), "race", stats = FALSE))
+  expect_false("Outcome" %in% names(pillar::tbl_sum(two)))
+  expect_true(any(grepl("[married]", names(two), fixed = TRUE)))
+  # a crosstab is untouched
+  expect_false("Outcome" %in% names(pillar::tbl_sum(tab(d, race, married))))
+})

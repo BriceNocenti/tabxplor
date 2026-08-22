@@ -24,14 +24,22 @@
 #   Influence       reg_check_influence_pass()                -- the SAME sweep, read the other way
 #   Collinearity    car::vif()                                -- the one new Suggest
 #
-# EACH COSTS WHAT IT SAYS. Two of the five need a model fit -- Linearity one per numeric predictor,
-# Proportionality the Brant test's auxiliary logits -- and REG_CHECKS$cost declares that, which is
-# what keeps them out of the default `stats` set and reachable by name. The other three are
-# arithmetic on the fit already in hand, and the two influence-based ones share one sweep. What is
-# opt-in is the p-value, not the diagnostic: reg_curves() bins the observed shape with no fit at all,
-# and the base-count-cell sparkline and the reg_check_plots() panels draw it for free. Two of the
-# three free checks also declare a `flag` -- the conventional value past which their footer cell is
-# marked -- which is a rule of thumb wearing the faintest shade, never a test.
+# EACH COSTS WHAT IT SAYS, AND EACH DECLARES ITS OWN DEFAULT. Two of the five need a model fit --
+# Linearity one per numeric predictor, Proportionality the Brant test's auxiliary logits -- and
+# REG_CHECKS$cost declares that; the other three are arithmetic on the fit in hand, and the two
+# influence-based ones share one sweep. ⚠ COST DOES NOT DECIDE THE DEFAULT SET: `footer_default`
+# does, because what a table must say and what it costs are two questions. Proportionality is the
+# case that proves it -- a refit, and a default on every ordinal outcome, because a cumulative odds
+# ratio that fails it is not one number but a fiction. Linearity is the one left to `stats =`.
+# What is opt-in is the p-value, not the diagnostic: reg_curves() bins the observed shape with no fit
+# at all, and the sparkline and the reg_check_plots() panels draw it for free. Two of the three free
+# checks also declare a `flag` -- the conventional value past which their footer cell is marked --
+# which is a rule of thumb wearing the faintest shade, never a test.
+#
+# THE OBSERVED SHAPE HAS THREE PIECES, at the file tail: reg_curves() (one record PER OUTCOME, each
+# binning its predictors with no fit), rd_spark() (the glyph run, drawn in a window with a FLOOR so
+# noise cannot read as a shape) and reg_shape_table() (where the runs go when a cell cannot hold
+# them -- the console always, several outcomes everywhere).
 #
 # THE CURE IS PART OF THE CHECK. `shape =` is how a user fixes a non-linearity without leaving the
 # framework, and its design rule keeps it small: a shape either RECODES THE COLUMN or ADDS ONE TERM,
@@ -97,6 +105,9 @@ reg_check_family_of <- function(f) {
 #   panel         the reg_check_plots() panel this check draws (NA = no panel), and the `check =`
 #                 vocabulary. ⚠ INDEPENDENT of `cost`: a panel is always free, which is why
 #                 reg_check_plots() never filters on it.
+#   footer_default TRUE = printed by the default `stats =`. DECLARED, not derived from `cost`: what a
+#                 table must say and what it costs are two questions, and proportionality is the case
+#                 where they disagree. `stats = "<key>"` reaches any check, default or not.
 #   panel_default TRUE = drawn by `check = "auto"`. FALSE = reachable, but left out of the default
 #                 grid because its footer row already says the whole thing; `check = "all"` restores it.
 #   panel_marks   the reference line(s) that panel draws. DESIGN: a panel and a footer row are one
@@ -109,14 +120,14 @@ REG_CHECKS <- list(
     types = c(linearity_lr = "LR", linearity_f = "F", linearity_wald = "Wald"),
     kind = "pvalue", digits = NA_integer_,
     families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = TRUE,
-    cost = "refit", panel = "linearity", panel_default = TRUE),
+    cost = "refit", footer_default = FALSE, panel = "linearity", panel_default = TRUE),
   # 2. what the estimate MEANS: is one odds ratio enough for every cut?
   proportionality = list(
     noun = "Proportionality",
     types = c(proportionality = "Brant"),
     kind = "pvalue", digits = NA_integer_,
     families = "ordinal", weighted_ok = FALSE, per_predictor = FALSE,
-    cost = "refit", panel = "proportionality", panel_default = TRUE),
+    cost = "refit", footer_default = TRUE, panel = "proportionality", panel_default = TRUE),
   # 3. the INTERVAL: are the standard errors wide enough?
   dispersion = list(
     noun = "Dispersion",
@@ -124,7 +135,7 @@ REG_CHECKS <- list(
     kind = "gof", digits = 2L,
     families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = FALSE,
     # one number against one number: the footer row says it all, so the panel is opt-in.
-    cost = "free", panel = "dispersion", panel_default = FALSE),
+    cost = "free", footer_default = TRUE, panel = "dispersion", panel_default = FALSE),
   # 4. is it REAL: does one respondent carry the result?
   influence = list(
     noun = "Influence",
@@ -134,7 +145,7 @@ REG_CHECKS <- list(
     # flags thousands of points.
     kind = "gof", digits = 2L, flag = 1,
     families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = FALSE,
-    cost = "free", panel = "influence", panel_default = TRUE, panel_marks = 1),
+    cost = "free", footer_default = TRUE, panel = "influence", panel_default = TRUE, panel_marks = 1),
   # 5. why is it WIDE: can the data tell these predictors apart?
   collinearity = list(
     noun = "Collinearity",
@@ -144,7 +155,7 @@ REG_CHECKS <- list(
     kind = "gof", digits = 2L, flag = 10,
     families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
     # a design property that biases nothing: the footer number is the decision, the bars are colour.
-    per_predictor = FALSE, cost = "free", panel = "collinearity", panel_default = FALSE,
+    per_predictor = FALSE, cost = "free", footer_default = TRUE, panel = "collinearity", panel_default = FALSE,
     panel_marks = c(5, 10)),
   # TAUGHT, NEVER SCORED. Both were measured not to discriminate as verdicts, but both are the
   # canonical lessons, so they keep their panel and give up their row -- an empty `types` IS that
@@ -152,11 +163,11 @@ REG_CHECKS <- list(
   residuals = list(
     noun = "Residuals", types = character(0), kind = NA_character_, digits = NA_integer_,
     families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
-    per_predictor = FALSE, cost = "free", panel = "residuals", panel_default = TRUE),
+    per_predictor = FALSE, cost = "free", footer_default = FALSE, panel = "residuals", panel_default = TRUE),
   normality = list(
     noun = "Normality", types = character(0), kind = NA_character_, digits = NA_integer_,
     families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
-    per_predictor = FALSE, cost = "free", panel = "normality", panel_default = TRUE)
+    per_predictor = FALSE, cost = "free", footer_default = FALSE, panel = "normality", panel_default = TRUE)
 )
 
 # Every discriminator the checks can emit (the `test` values that are check rows).
@@ -180,12 +191,15 @@ reg_checks_for <- function(family, weighted = FALSE, has_fit = TRUE,
   }, logical(1))]
 }
 
-# The DEFAULT footer set: the applicable checks that cost no model fit. A check named explicitly in
-# `stats =` is still computed and shown -- default set vs vocabulary, not vocabulary vs nothing.
+# The DEFAULT footer set, DECLARED (`footer_default`) rather than derived from `cost`: what a table
+# must say is not the same question as what it costs. Proportionality is the case that proves it --
+# a refit, and still a default, because a cumulative odds ratio that fails it is not one number but
+# a fiction. A check named explicitly in `stats =` is still computed and shown -- default set vs
+# vocabulary, not vocabulary vs nothing.
 #' @keywords internal
 reg_checks_default <- function(family, weighted = FALSE, has_fit = TRUE) {
   keys <- reg_checks_for(family, weighted, has_fit, what = "footer")
-  keys[vapply(keys, function(k) identical(REG_CHECKS[[k]]$cost, "free"), logical(1))]
+  keys[vapply(keys, function(k) isTRUE(REG_CHECKS[[k]]$footer_default), logical(1))]
 }
 
 # The DEFAULT panel set: the applicable panels their row opts into. `check = "all"` restores the
@@ -237,9 +251,9 @@ reg_check_expand <- function(stats) {
 # ⚠ `digits` is emitted only for a "gof" check. See the `digits` note in R/tab-test-display.R.
 #' @keywords internal
 #' @noRd
-test_rows_from_checks <- function() {
+test_rows_from_checks <- function(keys = names(REG_CHECKS)) {
   out <- list()
-  for (ck in REG_CHECKS) for (d in names(ck$types)) {
+  for (ck in REG_CHECKS[keys]) for (d in names(ck$types)) {
     # ⚠ NA, never NULL: TEST_ROWS defaults its members through utils::modifyList(), which REMOVES an
     # entry whose value is NULL instead of setting it -- so a check whose instrument names a quantity
     # ("max VIF") rather than a term test would lose the member outright.
@@ -516,7 +530,8 @@ reg_check_rows <- function(data, f, sp, shared, stats, col_var, grouped) {
     # the Brant test runs HERE, where its row is built, and nowhere else -- one producer, one
     # consumer, one warning.
     if ("proportionality" %in% keys) {
-      bp <- reg_ordinal_diagnostic(fit)
+      bp <- reg_ordinal_diagnostic(
+        fit, asked = is.character(stats) && any(c("proportionality", "all") %in% stats))
       if (!is.null(bp) && !is.na(bp))
         out <- c(out, list(reg_test_row("proportionality", cv, "", NA_real_, NA_real_,
                                        NA_real_, bp, f$nobs, outcome = sp$outcome)))
@@ -687,7 +702,7 @@ rd_link_y <- function(y, family, trials = NULL, positive_level = NULL, outcome =
   fit    <- family                               # the LINK key itself, before it reads as a family
   family <- reg_check_family_of(family)          # a LINK key (rd/rr/mr) reads as its distribution
   out <- function(y, link, kind, lab)
-    list(y = y, link = link, lab = lab,
+    list(y = y, link = link, kind = kind, lab = lab,
          expr = rd_link_expr(kind, lab, outcome, positive_level))
   # WARNING: the curve belongs on the scale the MODEL fits, which is the LINK and not the
   # distribution -- an empirical logit beside a modified-Poisson fit would answer a question that
@@ -811,9 +826,32 @@ rd_bin_neff <- function(sw, num, w, y, g, design = NULL, des_rows = NULL) {
   flat()
 }
 
+# RD_LINK_SCALES -- per reading of the outcome (rd_link_y()'s `kind`, the same five the axis label is
+# built from): the FIRST COLOUR RUNG expressed on that reading's own scale, and how a span on it is
+# read back. The conversion is exact rather than a convention: every ladder in COLOR_SCALES is the
+# same ladder written at a 50 % reference (their declared `anchor`s), so x1.2 on the odds scale, x1.1
+# on a ratio and 5 points on a probability ARE one rung -- and 0.1 SD is that same rung on a mean,
+# which is why a probability needs no row of its own on the identity scale (SD = 0.5 at p = 0.5,
+# so 0.1 SD = 5 points).
+# `rung = NA` means "0.1 x the outcome's own SD", the one rung that cannot be a constant.
+#' @keywords internal
+RD_LINK_SCALES <- list(
+  logit   = list(rung = log(1.2), span = "mult"),
+  logmean = list(rung = log(1.1), span = "mult"),
+  logrisk = list(rung = log(1.1), span = "mult"),
+  risk    = list(rung = NA_real_, span = "points"),
+  mean    = list(rung = NA_real_, span = "sd")
+)
+
+#' @keywords internal
+rd_link_rung <- function(kind, y, w) {
+  r <- (RD_LINK_SCALES[[kind %||% "mean"]] %||% RD_LINK_SCALES$mean)$rung
+  if (is.na(r)) 0.1 * wtd_sd(y, w) else r
+}
+
 #' @keywords internal
 rd_bin <- function(x, y, w = NULL, nbins = 10L, link = "identity",
-                   design = NULL, des_rows = NULL) {
+                   design = NULL, des_rows = NULL, kind = NULL) {
   x <- as.numeric(x); y <- as.numeric(y)
   wtd <- !is.null(w)
   w <- if (is.null(w)) rep(1, length(x)) else as.numeric(w)
@@ -859,14 +897,28 @@ rd_bin <- function(x, y, w = NULL, nbins = 10L, link = "identity",
   # ⚠ COLUMNS, not an attribute: the curve is mutate()d, bound per tab_vars group and sliced again
   # before it is drawn, and only a column survives all three.
   q95 <- tryCatch(shape_wquantile(x, c(0.025, 0.975), w), error = function(e) range(x))
+  # ⚠ BEFORE the tibble: tibble() masks sequentially, so a `y` inside it would be the binned COLUMN
+  # (one value per bin) rather than the outcome this rung is 0.1 SD of.
+  rung <- rd_link_rung(kind, y, w)
   tibble::tibble(x = mx, y = out$y, n = sw, se = out$se,
-                 xlo = min(q95), xhi = max(q95))
+                 xlo = min(q95), xhi = max(q95), rung = rung)
 }
 
 # THE SPARKLINE: the binned curve DRAWN TO SCALE on the predictor's own axis, then flattened to 8
-# block levels, min-max rescaled WITHIN the predictor -- so it answers "is it a line?" and never
-# "is the effect big?". There is no plain-text ladder: eight ASCII ranks (". , - ~ + = * #") do not
-# read as a CURVE at all, and a reader who cannot see the shape is better served by no sparkline.
+# block levels. There is no plain-text ladder: eight ASCII ranks (". , - ~ + = * #") do not read as a
+# CURVE at all, and a reader who cannot see the shape is better served by no sparkline.
+#
+# ⚠ THE VERTICAL WINDOW HAS A FLOOR, and that is what makes a flat curve LOOK flat. A pure min-max
+# rescale always spends all eight levels, so noise on a near-constant outcome came out as a dramatic
+# shape -- the standing objection to sparklines (Few, "Best Practices for Scaling Sparklines"). The
+# window is the curve's own range, but never narrower than:
+#   * 8 x the median bin SE. The range of k independent bins is ~3.1 SE for k = 10 whatever the data
+#     says, so a window of 8 SE leaves pure noise under half the height -- visibly a line. Measured,
+#     not chosen: at 4 SE a noise curve still spent ~78 % of the run. Self-calibrating, no ladder.
+#   * the first COLOUR RUNG on this reading's scale (rd_link_rung) -- so "uses the full height" means
+#     "reaches a deviation this package would colour", the same threshold everywhere in the table.
+# Centred on the curve's midrange, so a sub-floor curve sits in the middle glyphs and reads as a line.
+# It still answers "is it a line?" first; the floor is what stops it answering it wrongly.
 #
 # WHY IT IS RESAMPLED. The bins are equal-COUNT (robust: every point rests on the same amount of
 # data), so drawing one glyph per bin plots the curve against RANK, not against x -- and a monotone
@@ -900,10 +952,25 @@ tx_spark_pattern <- function(sep = TRUE) {
 #' @keywords internal
 tx_has_spark <- function(x) !is.na(x) & grepl(tx_spark_pattern(FALSE), x)
 
+# The window a curve is drawn in, and whether the FLOOR set it (which is what "this reads flat"
+# means). One producer for the glyph run and for the shape table's `span` column, so the picture and
+# the number beside it cannot state two scales.
+#' @keywords internal
+rd_spark_window <- function(curve) {
+  y <- if (is.data.frame(curve)) curve$y else curve
+  span <- if (length(y) < 2L) 0 else diff(range(y))
+  se   <- if (is.data.frame(curve) && !is.null(curve$se)) stats::median(curve$se, na.rm = TRUE) else NA
+  rung <- if (is.data.frame(curve) && !is.null(curve$rung)) curve$rung[[1L]] else NA_real_
+  flr  <- suppressWarnings(max(c(8 * se, rung)[is.finite(c(8 * se, rung))]))
+  if (!is.finite(flr)) flr <- 0
+  list(span = span, floor = flr, window = max(span, flr), flat = span < flr)
+}
+
 #' @keywords internal
 rd_spark <- function(curve, on = TRUE, n = 10L) {
   y <- if (is.data.frame(curve)) curve$y else curve
   if (isFALSE(on) || is.null(y) || length(y) < 3L || !all(is.finite(y))) return(NA_character_)
+  win <- rd_spark_window(curve)
   if (is.data.frame(curve) && !is.null(curve$x) && all(is.finite(curve$x)) &&
       diff(range(curve$x)) > 0) {
     lo <- max(min(curve$x), min(curve$xlo %||% curve$x))
@@ -911,11 +978,34 @@ rd_spark <- function(curve, on = TRUE, n = 10L) {
     if (!(is.finite(lo) && is.finite(hi) && hi > lo)) { lo <- min(curve$x); hi <- max(curve$x) }
     y  <- stats::approx(curve$x, y, xout = seq(lo, hi, length.out = n), rule = 2)$y
   }
-  r <- range(y)
-  gl <- rd_spark_glyphs()
-  i  <- if (diff(r) <= 0) rep(ceiling(length(gl) / 2), length(y))
-        else 1L + floor((y - r[[1L]]) / diff(r) * (length(gl) - 1e-9))
+  gl  <- rd_spark_glyphs()
+  mid <- mean(range(y))
+  lo  <- mid - win$window / 2
+  i   <- if (win$window <= 0) rep(ceiling(length(gl) / 2), length(y))
+         else 1L + floor((y - lo) / win$window * (length(gl) - 1e-9))
   paste(gl[pmax(pmin(i, length(gl)), 1L)], collapse = "")
+}
+
+# The window as a NUMBER a reader can check the picture against: the curve's own range on the
+# reading's own measure, or "< <floor>" where the floor is what is drawn (the curve is smaller than
+# anything this package would colour, so it reads flat BY CONSTRUCTION rather than by luck).
+#' @keywords internal
+rd_span_label <- function(curve, kind) {
+  win <- rd_spark_window(curve)
+  v   <- if (isTRUE(win$flat)) win$floor else win$span
+  if (!is.finite(v)) return("")
+  sp  <- (RD_LINK_SCALES[[kind %||% "mean"]] %||% RD_LINK_SCALES$mean)$span
+  # ⚠ a MEAN is read in SD, like its own colour ladder (COLOR_SCALES$mean_diff is standardized), and
+  # the SD is recovered from the stored rung rather than re-derived: the rung IS 0.1 SD.
+  sd  <- if (is.data.frame(curve)) 10 * (curve$rung[[1L]] %||% NA_real_) else NA_real_
+  lab <- switch(sp,
+                mult   = paste0(stringi::stri_unescape_unicode("\\u00d7"),
+                                formatC(exp(v), format = "f", digits = if (exp(v) < 10) 1 else 0)),
+                points = paste0("+", formatC(100 * v, format = "f", digits = 0), "%"),
+                if (is.finite(sd) && sd > 0)
+                  paste0("+", formatC(v / sd, format = "f", digits = 1), " ", gettext("SD"))
+                else paste0("+", formatC(v, format = "f", digits = 1)))
+  if (isTRUE(win$flat)) paste0("<", lab) else lab
 }
 
 # ONE residual per family, for the teaching panels: a raw residual takes exactly two values for a
@@ -1009,9 +1099,10 @@ rd_with_seed <- function(seed, expr) {
 # fit: a 5-model comparison stores five references to one tibble, and it survives the jamovi digest
 # path, where no fit exists.
 #
-# WITH SEVERAL OUTCOMES there is no single observed shape, so the whole thing is NULL rather than the
-# first outcome's silently: a sparkline describing only one of several outcomes would be a lie the
-# reader cannot see.
+# ONE RECORD PER OUTCOME, keyed by it: with several outcomes there is no single observed shape, and
+# a sparkline describing only one of them would be a lie the reader cannot see -- so each gets its
+# own, and the display decides where they go (a base-count cell where the table has one, the shape
+# table where it has several).
 #
 # THE CURVE IS THE STORED FACT, never the glyph run: the sparkline is drawn from it at display time
 # (materialize_specs()$reg_spark), which is what makes `options(tabxplor.spark = )` a display option
@@ -1022,24 +1113,31 @@ rd_with_seed <- function(seed, expr) {
 reg_curves <- function(data, specs, numeric_preds, wt = NULL, positive_level = NULL, nbins = 10L,
                        design = NULL) {
   if (length(numeric_preds) == 0L || length(specs) == 0L) return(NULL)
-  deps <- unique(vapply(specs, function(s) s$outcome, character(1)))
-  if (length(deps) != 1L) return(NULL)
-  sp <- specs[[1L]]
-  if (isTRUE(sp$compound) || is.null(data[[deps]])) return(NULL)
-  # WARNING: the MODELLED level, taken from the fit, never the factor's first level -- reading the
-  # level order instead draws the curve of the COMPLEMENT (an upside-down sparkline).
-  ly <- rd_link_y(data[[deps]], sp$fit_family, sp$trials, positive_level)
   w  <- if (!is.null(wt) && is.character(wt) && length(wt) == 1L && wt %in% names(data))
           data[[wt]] else NULL
   # under a survey design the bands take the DESIGN variance, reached through `.svy_row`, as every
   # other design quantity in the package.
   dr <- if (!is.null(design)) data[[svy_row_col]] else NULL
-  curves <- purrr::compact(stats::setNames(
-    purrr::map(numeric_preds, function(v)
-      rd_bin(data[[v]], ly$y, w, nbins, ly$link, design = design, des_rows = dr)),
-    numeric_preds))
-  if (length(curves) == 0L) return(NULL)
-  list(outcome = deps, family = sp$fit_family, link = ly$link, ylab = ly$lab, curves = curves)
+  # the first spec of each outcome: everything read below (family, trials, the modelled level) is an
+  # outcome fact, so a comparison of several models on one outcome draws one curve, not one per model.
+  deps <- unique(vapply(specs, function(s) s$outcome, character(1)))
+  pos  <- if (length(positive_level) == length(deps)) as.list(positive_level)
+          else stats::setNames(rep(list(positive_level), length(deps)), deps)
+  out <- purrr::compact(stats::setNames(purrr::map(deps, function(dep) {
+    sp <- specs[[which(vapply(specs, function(s) s$outcome, character(1)) == dep)[[1L]]]]
+    if (isTRUE(sp$compound) || is.null(data[[dep]])) return(NULL)
+    # WARNING: the MODELLED level, taken from the fit, never the factor's first level -- reading the
+    # level order instead draws the curve of the COMPLEMENT (an upside-down sparkline).
+    ly <- rd_link_y(data[[dep]], sp$fit_family, sp$trials, pos[[dep]])
+    curves <- purrr::compact(stats::setNames(
+      purrr::map(numeric_preds, function(v)
+        rd_bin(data[[v]], ly$y, w, nbins, ly$link, design = design, des_rows = dr, kind = ly$kind)),
+      numeric_preds))
+    if (length(curves) == 0L) return(NULL)
+    list(outcome = dep, family = sp$fit_family, link = ly$link, kind = ly$kind, ylab = ly$lab,
+         curves = curves)
+  }), deps))
+  if (length(out) == 0L) NULL else out
 }
 
 
@@ -1055,5 +1153,100 @@ reg_check_msgid_anchor <- function() {
     gettext("LR"), gettext("F"), gettext("Wald"), gettext("Brant"),
     gettext("robust/model SE"), gettext("max dfbetas"), gettext("max VIF"), gettext("phi")
   )
+  invisible(NULL)
+}
+
+
+# === SECTION: the shape table =======================================================================
+#
+# WHERE A CURVE GOES is a medium question, decided once (tab_wants_shape_table) and answered in two
+# ways -- inside the base-count cell of the row it belongs to, or in a small table of its own below
+# the footer. The cell is the better reading (the curve sits beside its coefficient) and is kept
+# wherever it works; the table is what the two cases that break it get:
+#   * the CONSOLE, whose block glyphs are East-Asian-width-ambiguous. A terminal that draws them wide
+#     shifts every column to their right, and a package cannot choose its reader's font. In a table of
+#     its own the run is the LAST column, so a wide glyph costs nothing.
+#   * SEVERAL OUTCOMES, which share one base-count column: a cell of it could show only one of them.
+#
+# The curve is FIT-FREE (rd_bin bins the observed outcome), so the predictor column names the variable
+# and never its parametrisation -- `shape = "quadratic"` changes the model, not what was observed.
+#' @keywords internal
+#' @noRd
+tab_wants_shape_table <- function(tab, medium = "console") {
+  if (!tab_is_reg(tab) || isFALSE(tx_option("spark")) || identical(medium, "plot")) return(FALSE)
+  a <- get_assumptions(tab)
+  if (is.null(a) || length(a) == 0L) return(FALSE)
+  identical(medium, "console") || length(a) > 1L
+}
+
+# THE producer: one row per (outcome, group, numeric predictor), already rendered. Returns NULL when
+# there is nothing to draw. `headers` and `note` ride as attributes -- one producer, and every medium
+# renders the same four columns in the same order.
+#' @keywords internal
+#' @noRd
+reg_shape_table <- function(tab, n = 20L) {
+  a <- get_assumptions(tab)
+  if (is.null(a) || length(a) == 0L) return(NULL)
+  rows <- purrr::list_rbind(purrr::map(a, function(rec) {
+    purrr::list_rbind(purrr::imap(rec$curves, function(cu, v) {
+      grp <- unique(as.character(cu$group %||% ""))
+      purrr::list_rbind(purrr::map(grp, function(g) {
+        cg <- cu[(cu$group %||% "") == g, , drop = FALSE]
+        gl <- rd_spark(cg, n = n)
+        if (is.na(gl)) return(NULL)
+        tibble::tibble(outcome = rec$outcome, group = g, var = v,
+                       span = rd_span_label(cg, rec$kind), shape = gl,
+                       ylab = rec$ylab %||% "")
+      }))
+    }))
+  }))
+  if (is.null(rows) || nrow(rows) == 0L) return(NULL)
+  keep_group <- length(unique(rows$group)) > 1L
+  out <- rows[, c("outcome", if (keep_group) "group", "var", "span", "shape"), drop = FALSE]
+  # the outcome (and the group) named ONCE per run, like the row-variable block of a table
+  out$outcome[duplicated(out$outcome)] <- ""
+  if (keep_group) out$group[duplicated(rows[, c("outcome", "group")])] <- ""
+  structure(
+    out,
+    headers = c(gettext("outcome"), if (keep_group) gettext("group"),
+                gettext("numeric predictor"), gettext("span"), gettext("observed shape")),
+    align   = c("left", if (keep_group) "left", "left", "right", "left"),
+    # ⚠ ONE STRING LITERAL PER gettext() CALL. potools extracts each literal it sees, while gettext()
+    # looks the EVALUATED string up -- so a message built with paste0() INSIDE the call is extracted
+    # in pieces and can never be found at run time. Two sentences, two calls, joined after.
+    note    = paste(
+      gettextf("the outcome's observed shape across the central 95%% of each predictor, on the model's own scale (%s);",
+               paste(unique(rows$ylab), collapse = ", ")),
+      gettext("span = the curve's whole range; \"<\" = smaller than the window it is drawn in, so it reads flat.")))
+}
+
+# A GFM pipe table from already-rendered character columns -- the console's shape table and the
+# Markdown exporter's are the same lines, so they are built once. Widths are counted in CHARACTERS,
+# exact in a monospace medium and near enough in a proportional one.
+#' @keywords internal
+#' @noRd
+tx_pipe_table <- function(df, headers, align) {
+  cols <- lapply(seq_along(df), function(j) c(headers[[j]], as.character(df[[j]])))
+  w    <- vapply(cols, function(c) max(nchar(c, type = "chars")), integer(1))
+  pad  <- function(s, j) formatC(s, width = w[[j]], flag = if (align[[j]] == "right") "" else "-")
+  emit <- function(cells) paste0("| ", paste(cells, collapse = " | "), " |")
+  c(emit(vapply(seq_along(df), function(j) pad(headers[[j]], j), character(1))),
+    paste0("|", paste(vapply(seq_along(df), function(j) mk_align(w[[j]], align[[j]]), character(1)),
+                      collapse = "|"), "|"),
+    vapply(seq_len(nrow(df)), function(i)
+      emit(vapply(seq_along(df), function(j) pad(as.character(df[[j]])[[i]], j), character(1))),
+      character(1)))
+}
+
+# The console rendering: the pipe table, one blank line under the footer grid, then the note.
+#' @keywords internal
+#' @noRd
+shape_render_console <- function(tab) {
+  st <- reg_shape_table(tab)
+  if (is.null(st)) return(invisible(NULL))
+  # the footer grid already closes with a blank line -- one separates the two tables, never two.
+  cli::cat_line(tx_pipe_table(st, attr(st, "headers"), attr(st, "align")))
+  cli::cat_line(cli::col_grey(paste0("# ", attr(st, "note"))))
+  cli::cat_line()
   invisible(NULL)
 }

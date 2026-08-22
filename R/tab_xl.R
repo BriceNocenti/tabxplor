@@ -285,9 +285,15 @@ tab_xl <-
     # Sheet-stacking offsets: within a sheet each stacked table starts below the previous one
     # (rows + subtext + 6 blank -- Phase 13c-iii: +1 for the col_var spanning-name header row).
     # Absolute geometry is derived from `start` in the plan builder.
+    # the observed curves, in a small table of their own below the footer -- taken only where the
+    # base-count cell cannot carry them (see tab_wants_shape_table). Its rows join the stacking
+    # offset, or a second table on the same sheet would land on top of it.
+    shapes <- purrr::map(tabs_src, function(t)
+      if (is_tab(t) && tab_wants_shape_table(t, "xl")) reg_shape_table(t) else NULL)
+    shape_n <- purrr::map_int(shapes, function(st) if (is.null(st)) 0L else nrow(st) + 3L)
     newsheet <- sheet != dplyr::lag(sheet, default = -1L)
     start <- tibble::tibble(newsheet, rows = purrr::map_int(tabs, nrow),
-                            sub = purrr::map_int(subtext, length)) |>
+                            sub = purrr::map_int(subtext, length) + shape_n) |>
       dplyr::group_by(gr = cumsum(as.integer(.data$newsheet))) |>
       dplyr::mutate(start = dplyr::lag(cumsum(.data$rows + .data$sub + 6L), default = 0L) + 1L) |>
       dplyr::pull(.data$start)
@@ -333,7 +339,7 @@ tab_xl <-
       list(tab = tabs, roles = roles, ann = purrr::map(rd, "ann"),
            bold_rows = purrr::map(rd, "bold_rows"),
            col_var_header = purrr::map(rd, "col_var_header"),
-           start = start, sheet = sheet, title = titles, subtext = subtext,
+           start = start, sheet = sheet, title = titles, subtext = subtext, shape = shapes,
            legend_runs = legend_runs, colwidth = colwidth, transposed = transposed),
       tab_xl_plan_one, o = opts
     )
@@ -424,8 +430,22 @@ xl_materialize_data <- function(tab, fmt_cols, text_fmt_cols, transposed = FALSE
   tibble::as_tibble(tab)
 }
 
+# The shape table as (row, col, text) cells: a header row, one row per curve, then the note -- the
+# same four columns every other medium prints, in the order reg_shape_table() declares.
+#' @keywords internal
+xl_shape_cells <- function(shape, row0) {
+  if (is.null(shape) || nrow(shape) == 0L) return(NULL)
+  hd <- attr(shape, "headers")
+  purrr::list_rbind(c(
+    list(tibble::tibble(row = row0, col = seq_along(hd), text = hd)),
+    purrr::map(seq_len(nrow(shape)), function(i)
+      tibble::tibble(row = row0 + i, col = seq_along(shape),
+                     text = vapply(shape, function(cl) as.character(cl)[[i]], character(1)))),
+    list(tibble::tibble(row = row0 + nrow(shape) + 1L, col = 1L, text = attr(shape, "note")))))
+}
+
 tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, sheet, title, subtext,
-                            legend_runs = list(), colwidth, o, transposed = FALSE) {
+                            shape = NULL, legend_runs = list(), colwidth, o, transposed = FALSE) {
   n   <- nrow(tab)
   ncl <- ncol(tab)
   # Phase 13c-iii: a col_var spanning-NAME header row sits above the level-name header (whenever the
@@ -674,6 +694,9 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     sheet = sheet,
     title = title, title_row = start,
     subtext = subtext_clean, subtext_row = last_row + 1L,
+    # the shape table: a header row, its rows, then the note -- one blank line under the subtext
+    # block. Plain cells, like the row sparklines already written into the count column.
+    shape_cells = xl_shape_cells(shape, last_row + length(subtext_clean) + 2L),
     # Phase 13b: the coloured legend runs occupy the FIRST rows of the subtext block (legend merged
     # first, above), overwritten with rich text by the writer.
     legend_runs = legend_runs, legend_row = last_row + 1L,
@@ -942,6 +965,9 @@ xl_write_table <- function(wb, plan, o, reg) {
       xlb_write_cell(wb, s, xl_cell(row, col), text))
   xlb_write_cell(wb, s, xl_cell(plan$title_row, 1L), plan$title)
   if (length(plan$subtext)) xlb_write_cell(wb, s, xl_cell(plan$subtext_row, 1L), plan$subtext)
+  if (!is.null(plan$shape_cells) && nrow(plan$shape_cells))
+    purrr::pwalk(plan$shape_cells, function(row, col, text)
+      xlb_write_cell(wb, s, xl_cell(row, col), text))
 
   # Phase 13c-iii: overwrite the level-header cells with the suffix-stripped labels (the col_var name is
   # written in the spanning row above), then the merged col_var spanning-name row (a variable name over

@@ -153,18 +153,31 @@ test_pvalue_label <- function(test, min_e = NA_real_) {
 #   word        the same test's name inside the p-value ROW name ("Chi2", "Welch F", "ANOVA F").
 #               Two columns because they genuinely differ: the cell is cramped, the row name is prose.
 #
-# ⚠ THE ORDER IS THE CONTRACT: rows 1-31 in this order ARE reg_footer_spec()'s display order, which
-#   is also its fallback order. REG_GOF_KEYS is derived from it, so it took this order too (its only
-#   reader is an "Available: ..." message; one table, one order, never a second order column).
+# ⚠ THE ORDER IS THE CONTRACT: this order IS reg_footer_spec()'s display order, which is also its
+#   fallback order. REG_GOF_KEYS is derived from it, so it took this order too (its only reader is an
+#   "Available: ..." message; one table, one order, never a second order column).
+#   A reader travels OUTWARD FROM THE DATA, in four movements:
+#     1. N                  -- what was fitted on.
+#     2. the CHECKS         -- can the table be read as printed? Worst first: proportionality and
+#                              linearity break what the number MEANS, dispersion breaks every star in
+#                              the table, collinearity and influence only say how fragile it is.
+#     3. the CONTENT        -- what the table's own rows say jointly (overall association,
+#                              interaction): a question the per-level stars cannot answer.
+#     4. the COMPARISON     -- how good is this model, and against what.
+#   The slots below are that order. `block` (the PRODUCER) is stamped from BLOCK_PRODUCER rather than
+#   from the slot name, because one producer legitimately writes rows in two movements: `n` opens the
+#   footer and `phi` sits with the check it refines, while both come out of reg_glance().
 # ⚠ WHAT IS NOT A ROW: Fisher's exact p and the weak-chi2 " !" flag are CONDITIONS ON the chi2 row
 #   (`pvalue_exact` and `min_e` columns of it), which is what keeps the tidy shape and the row count
 #   stable. They stay in test_cell_label_weak() / test_pvalue_descriptor()'s bodies.
 # ⚠ THE SCHEMA STAYS DECLARED IN new_test_tibble(): test_group_cols() reads every UNdeclared column
 #   as a grouping variable. This table declares the ROWS; that one declares the COLUMNS.
 
-# The five literal blocks. The sixth (model checks) is GENERATED from REG_CHECKS below, because that
-# table owns facts this one must not (`families`, `weighted_ok`, `panel`, and the two taught-but-
-# never-scored checks that have a panel and NO row here at all).
+# The literal blocks. The model checks are GENERATED from REG_CHECKS below, because that table owns
+# facts this one must not (`families`, `weighted_ok`, `panel`, and the two taught-but-never-scored
+# checks that have a panel and NO row here at all) -- in three slots, because the exact Pearson
+# dispersion belongs BETWEEN two of them. Assertion S8 refuses a check that reaches no slot, so a new
+# REG_CHECKS row cannot go missing from the footer by being forgotten here.
 #
 # `block` = WHICH PRODUCER WRITES THIS ROW, stamped per block rather than per row. It is the column
 # that makes the union type readable ("who emits a `dispersion` row?") and it is what REG_GOF_KEYS is
@@ -194,9 +207,33 @@ TEST_ROWS <- local({
          cell_label = cell_label, word = word)
 
   blocks <- list(
-    # --- goodness of fit, one per model column (reg_glance) --------------------------------------
+    # --- 1. what was fitted on -------------------------------------------------------------------
+    size = list(
+      n             = reg_gof("N",              0L, stat = "n")),
+    # --- 2. the checks: can the table be read as printed? ----------------------------------------
+    # what the number MEANS, then whether the standard errors are trustworthy, then how fragile it is
+    check_meaning = test_rows_from_checks(c("proportionality", "linearity")),
+    check_se      = test_rows_from_checks("dispersion"),
+    # `phi` is the EXACT Pearson dispersion; `dispersion` names the CHECK (max robust/model SE). Two
+    # readings of one question, so they are adjacent -- and this one is reg_glance()'s row.
+    disp_exact = list(
+      phi           = reg_gof("Pearson dispersion", 2L, stat = "phi", instrument = "phi")),
+    check_fragile = test_rows_from_checks(c("collinearity", "influence")),
+    # --- 3. the content: what the table's rows say jointly ---------------------------------------
+    # --- the per-predictor overall-association test ----------------------------------------------
+    global = list(
+      global_lr   = reg_p("Overall association", stat = "global", instrument = "LR",   method = "lr"),
+      global_f    = reg_p("Overall association", stat = "global", instrument = "F",    method = "f"),
+      global_wald = reg_p("Overall association", stat = "global", instrument = "Wald", method = "wald")),
+    # --- the interaction between two PREDICTORS: one row per crossed pair, keyed to its model
+    # column. The test is a model COMPARISON with the additive counterpart (R/reg-cross.R), so a
+    # combined factor -- which has no interaction TERM to drop -- is tested like any other.
+    interaction = list(
+      cross_lr   = reg_p("Interaction", stat = "interaction", instrument = "LR",   method = "lr"),
+      cross_f    = reg_p("Interaction", stat = "interaction", instrument = "F",    method = "f"),
+      cross_wald = reg_p("Interaction", stat = "interaction", instrument = "Wald", method = "wald")),
+    # --- 4. goodness of fit and model comparison (reg_glance) ------------------------------------
     glance = list(
-      n             = reg_gof("N",              0L, stat = "n"),
       lr_null       = reg_p  ("LR vs null",         stat = "lr_null"),
       wald_null     = reg_p  ("Wald vs null",       stat = "wald_null"),
       f_model       = reg_p  ("F",                  stat = "f_model"),
@@ -207,9 +244,7 @@ TEST_ROWS <- local({
       cox_snell_r2  = reg_gof("Cox-Snell R2",   3L, stat = "cox_snell_r2"),
       sigma         = reg_gof("Residual SD",    2L, stat = "sigma"),
       aic           = reg_gof("AIC",            0L, stat = "aic"),
-      bic           = reg_gof("BIC",            0L, stat = "bic"),
-      # `phi` is the EXACT Pearson dispersion; `dispersion` names the CHECK (max robust/model SE).
-      phi           = reg_gof("Pearson dispersion", 2L, stat = "phi", instrument = "phi")),
+      bic           = reg_gof("BIC",            0L, stat = "bic")),
     # --- model comparison ------------------------------------------------------------------------
     # Four instruments x two modes. The USER key is the `stat` (`compare_baseline` /
     # `compare_sequential`); which of the four rows is written is the model's business, and
@@ -225,13 +260,6 @@ TEST_ROWS <- local({
       compare_seq_wald      = reg_p("Wald vs previous", stat = "compare_sequential", method = "wald"),
       compare_seq_aic       = reg_gof("Delta-AIC vs previous", 0L,
                                       stat = "compare_sequential", method = "aic")),
-    # --- the per-predictor overall-association test ----------------------------------------------
-    global = list(
-      global_lr   = reg_p("Overall association", stat = "global", instrument = "LR",   method = "lr"),
-      global_f    = reg_p("Overall association", stat = "global", instrument = "F",    method = "f"),
-      global_wald = reg_p("Overall association", stat = "global", instrument = "Wald", method = "wald")),
-    # --- the five model checks, GENERATED from REG_CHECKS ----------------------------------------
-    check = test_rows_from_checks(),
     # --- the aggregated effect-modification test ACROSS tab_vars GROUPS: a footer LINE, not rows --
     # Its `instrument` is the phrase reg_interaction_lines() prints ("a likelihood ratio test"), the
     # only label these rows have -- they carry no footer row, so `noun` is free.
@@ -241,14 +269,6 @@ TEST_ROWS <- local({
       group_interact_lr   = reg_line("likelihood ratio", stat = "group_interaction", method = "lr"),
       group_interact_f    = reg_line("F test",           stat = "group_interaction", method = "f"),
       group_interact_wald = reg_line("Wald test",        stat = "group_interaction", method = "wald")),
-
-    # --- the interaction between two PREDICTORS: one row per crossed pair, keyed to its model
-    # column. The test is a model COMPARISON with the additive counterpart (R/reg-cross.R), so a
-    # combined factor -- which has no interaction TERM to drop -- is tested like any other.
-    interaction = list(
-      cross_lr   = reg_p("Interaction", stat = "interaction", instrument = "LR",   method = "lr"),
-      cross_f    = reg_p("Interaction", stat = "interaction", instrument = "F",    method = "f"),
-      cross_wald = reg_p("Interaction", stat = "interaction", instrument = "Wald", method = "wald")),
     # --- the crosstab omnibus tests ---------------------------------------------------------------
     # ⚠ exactly one row per (var_kind x anova x design) -- asserted below. That invariant is what
     # lets a third ANOVA F be added as one row, with no code change anywhere.
@@ -261,12 +281,20 @@ TEST_ROWS <- local({
       # Wald), so there is one design row, and its `word` must not claim a Welch F.
       F_design    = tab_p("mean", "F, survey", "F", design = TRUE))
   )
+  # SLOT -> PRODUCER. A slot is a position in the reading order; `block` is who writes the row, and
+  # the two are not one-to-one (see the ordering note above).
+  producer_of <- c(size = "glance", check_meaning = "check", check_se = "check",
+                   disp_exact = "glance", check_fragile = "check", global = "global",
+                   interaction = "interaction", glance = "glance", compare = "compare",
+                   group_interaction = "group_interaction", omnibus = "omnibus")
+  stopifnot(setequal(names(blocks), names(producer_of)))
   # the members a block did not set, defaulted once rather than repeated on every row
   defaults <- list(digits = NA_integer_, design = FALSE, var_kind = NA_character_,
                    anova = NA_character_, cell_label = NA_character_, word = NA_character_,
                    stat = NA_character_, method = NA_character_)
   unlist(lapply(names(blocks), function(b)
-    lapply(blocks[[b]], function(r) utils::modifyList(defaults, c(r, list(block = b))))),
+    lapply(blocks[[b]], function(r)
+      utils::modifyList(defaults, c(r, list(block = unname(producer_of[[b]])))))),
     recursive = FALSE)
 })
 

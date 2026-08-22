@@ -137,8 +137,15 @@ test_that("gap_se is the influence-function SE of the difference, and its p its 
     seen <- seen + 1L
   }
   testthat::expect_gt(seen, 0L)
-  g <- log(tabxplor:::fmt_est_of(x)) - log(get_obs(x))
-  testthat::expect_equal(fmt_gap_p(x), 2 * stats::pnorm(-abs(g / get_gap_se(x))))
+  # ⚠ the p is asserted on a MULTIVARIABLE table: with one predictor the model IS its own crude twin,
+  # so the gap and its SE are both floating-point dust and 22b-xviii's guard yields NA rather than a
+  # z of 20. The SE assertion above needs the univariable fixture (that is what the closed form is);
+  # the z test needs a gap that exists.
+  t2 <- gapb_tab(d, preds = c("race", "party3"))
+  x2 <- gapb_model_col(t2)
+  g  <- log(tabxplor:::fmt_est_of(x2)) - log(get_obs(x2))
+  testthat::expect_equal(fmt_gap_p(x2), 2 * stats::pnorm(-abs(g / get_gap_se(x2))))
+  testthat::expect_true(any(!is.na(fmt_gap_p(x2))))
 })
 
 test_that("the covariance is real: the gap SE sits strictly inside the two naive bounds", {
@@ -241,8 +248,10 @@ test_that("D1: every compared model shares its outcome's population, so every co
   testthat::expect_gt(length(i), 0L)
   testthat::expect_equal(tabxplor:::fmt_est_of(t[[fc[[1]]]])[i], get_obs(t[[fc[[1]]]])[i],
                          tolerance = 1e-8)
-  testthat::expect_equal(tabxplor:::fmt_adjustment_score(t[[fc[[1]]]])[i], rep(1, length(i)),
-                         tolerance = 1e-8)
+  # ⚠ 22b-xviii: a model that IS its own crude twin has NO gap -- the score, its interval and its p
+  # go NA together, rather than a score of 1 and a z of 20 built out of floating-point dust.
+  testthat::expect_true(all(is.na(tabxplor:::fmt_adjustment_score(t[[fc[[1]]]])[i])))
+  testthat::expect_true(all(is.na(fmt_gap_p(t[[fc[[1]]]])[i])))
   testthat::expect_true(all(fmt_color_channels(t[[fc[[1]]]])$bg_slot == 0L))
 })
 

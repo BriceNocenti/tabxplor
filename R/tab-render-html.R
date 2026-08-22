@@ -22,9 +22,12 @@
 #     tab_kable_join() stamps `kableExtra` so print.kableExtra()/knit_print.kableExtra() route the
 #     fragment to the Viewer and bind the bootstrap tooltips. We produce what they expect (an HTML
 #     fragment); do not "clean up" that class because the engine is gone.
-#   - A cell's rendering stops at its PRIMARY token: the colour AND, under a typographic palette, the
-#     face (bold / italic / underline). html_cell_text() is the one place the three pieces are known,
-#     so it applies both; the aside gets the `tx-sec` class and the stylesheet sets it back. The face
+#   - A cell's rendering stops at its PRIMARY token: the text colour, the BACKGROUND fill, and under
+#     a typographic palette the face (bold / italic / underline). html_cell_text() is the one place
+#     the three pieces are known, so it applies all three; the aside gets the `tx-sec` class and the
+#     stylesheet sets it back. A background is a colour MEASURE, not the cell's ground -- it grades
+#     the number, so flooding the asides and the stars with it says the measure grades those too.
+#     The face
 #     is written as <b>/<i>/<u> markup rather than only as CSS, because the destinations that matter
 #     for a publication table (GitHub, a Word paste) strip class AND style but keep tags.
 #   - Phase 14k: the html result is classed `tabxplor_kable` and carries the render intent in a
@@ -184,13 +187,23 @@ tx_spark_svg <- function(x, h = 22L, dx = 5L, lwd = 2.4) {
 # `face` (a palette whose typography must survive without a stylesheet -- see html_face_wrap) is
 # applied HERE, and only to the primary piece: the aside is not what any measure grades, so the
 # direction/magnitude face stops where the colour stops. NULL = no semantic face (the colour palettes).
+# `pill` (a per-cell background slot class, "" = none) is applied HERE for the same reason and by the
+# same rule -- ⚠ THE BACKGROUND IS A COLOUR MEASURE, NOT THE CELL'S GROUND, exactly as the console
+# says (fmt_class.R, paint_split): it grades the number, so it must stop where the number does.
+# Cells it could not split come back in `attr(out, "pill_left")` for the caller to flood whole.
 #' @keywords internal
-html_cell_text <- function(raw, from, pn, bold, esc = htmltools::htmlEscape, face = NULL) {
-  out <- esc(raw)
+html_cell_text <- function(raw, from, pn, bold, esc = htmltools::htmlEscape, face = NULL,
+                           pill = NULL) {
+  out  <- esc(raw)
+  left <- if (is.null(pill)) rep(FALSE, length(raw)) else nzchar(pill)
+  wrap_pill <- function(s, i) {
+    if (is.null(pill)) return(s)
+    ifelse(nzchar(pill[i]), paste0('<span class="tx-pill ', pill[i], '">', s, "</span>"), s)
+  }
   wrap_face <- function(s, i)
     if (is.null(face)) s
     else html_face_wrap(s, bold[i], face$italic[i], face$underline[i])
-  if (is.null(pn)) return(wrap_face(out, seq_along(out)))
+  if (is.null(pn)) return(structure(wrap_face(out, seq_along(out)), pill_left = left))
   from <- if (is.null(from)) rep(1L, length(raw)) else from
   hit  <- !is.na(pn) & !is.na(from) & pn >= 1L & (from > 1L | pn < nchar(raw))
   if (any(hit)) {
@@ -202,11 +215,13 @@ html_cell_text <- function(raw, from, pn, bold, esc = htmltools::htmlEscape, fac
     wrap <- function(s) ifelse(nzchar(s),
                                paste0("<span class=\"tx-sec\"", wt, ">", esc(s), "</span>"), "")
     out[hit] <- paste0(wrap(substr(raw[hit], 1L, from[hit] - 1L)),
-                       wrap_face(esc(substr(raw[hit], from[hit], to)), which(hit)),
+                       wrap_pill(wrap_face(esc(substr(raw[hit], from[hit], to)), which(hit)),
+                                 which(hit)),
                        wrap(substr(raw[hit], to + 1L, nchar(raw[hit]))))
+    left[hit] <- FALSE
   }
   if (any(!hit)) out[!hit] <- wrap_face(out[!hit], which(!hit))
-  out
+  structure(out, pill_left = left)
 }
 
 # Wrap a cell's html in the palette's TYPOGRAPHY as real MARKUP, Phase 18z11.
@@ -384,8 +399,13 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     # were not. A transposed table's columns are heterogeneous and pre-rendered, so they keep the
     # raw path.
     esc_cell <- if (is_fmt(tab[[name]]) || isTRUE(rd$transposed)) identity else html_escape_br
+    # the PILL rides the primary token unless the cell opted out of the split (color_whole_cell,
+    # a degraded model with no `ann`) or has no recorded range -- those come back in `pill_left`.
+    split_pill <- if (color_whole_cell_opt() || is.null(a)) NULL else bgc
     cell_html <- html_cell_text(cell, attr(cell, "primary_from"), attr(cell, "primary_nchar"),
-                                bold_cell, esc = esc_cell, face = face)
+                                bold_cell, esc = esc_cell, face = face, pill = split_pill)
+    bg_left   <- attr(cell_html, "pill_left") %||% bg
+    cell_html <- as.character(cell_html)
     # THE one place a row sparkline becomes an inline <svg>. It sits here, on the GENERIC cell path,
     # which is what lets the run arrive in an FMT cell -- a regression's base-count column carries it
     # as a literal in its own display template. ⚠ it must stay off the rowspanned label path (c2),
@@ -406,8 +426,11 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     # the text) instead of flooding the whole <td>. Full-cell fills read as a heavy blocky grid, and
     # they also swallow the row-hover highlight (a child's background always paints over its row's).
     # The colour class moves onto the span; the text class stays on the <td> so `.p*` still cascades.
-    if (any(bg)) {
-      cell_html[bg] <- paste0('<span class="tx-pill ', bgc[bg], '">', cell_html[bg], '</span>')
+    # Only what html_cell_text() could NOT split reaches here -- a one-piece cell, or one that opted
+    # out of the split altogether.
+    if (any(bg_left)) {
+      cell_html[bg_left] <- paste0('<span class="tx-pill ', bgc[bg_left], '">',
+                                   cell_html[bg_left], '</span>')
     }
     paste0('<td class="', trimws(paste(cls_col[j], cls)), '"', tip, '>', cell_html, '</td>')
   })
@@ -541,6 +564,32 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     tfoot,
     '</table>'
   )
+}
+
+
+# The SHAPE TABLE as html: the same four columns the console prints, in the table's own chrome, with
+# the glyph run upgraded to an <svg> at DOUBLE size -- a table of its own has the room a base-count
+# cell has not. Cells are escaped (they are data), then the run is put back as markup.
+#' @keywords internal
+shape_html_table <- function(tab) {
+  st <- reg_shape_table(tab)
+  if (is.null(st)) return(NULL)
+  hd <- attr(st, "headers"); al <- attr(st, "align")
+  cls <- vapply(al, function(a) if (a == "right") "tx-r tx-num" else "tx-l", character(1))
+  thead <- paste0('<tr>', paste0('<th class="', cls, '">', htmltools::htmlEscape(hd), '</th>',
+                                 collapse = ""), '</tr>')
+  cells <- lapply(seq_along(st), function(j) {
+    v <- htmltools::htmlEscape(as.character(st[[j]]))
+    k <- cls[[j]]
+    if (names(st)[[j]] == "shape") { v <- tx_spark_svg(v, h = 44L, dx = 10L, lwd = 2.6)
+                                     k <- paste(k, "tx-sparkcell") }
+    paste0('<td class="', k, '">', v, '</td>')
+  })
+  body <- paste0('<tr>', do.call(paste0, cells), '</tr>', collapse = "")
+  tfoot <- paste0('<tfoot><tr><td colspan="', length(st), '"><div class="tx-foot">',
+                  htmltools::htmlEscape(attr(st, "note")), '</div></td></tr></tfoot>')
+  paste0('<table class="tabxplor-tab">', '<thead>', thead, '</thead>',
+         '<tbody>', body, '</tbody>', tfoot, '</table>')
 }
 
 

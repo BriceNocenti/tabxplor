@@ -549,7 +549,10 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # a background HUGS its text (rounded, inline) rather than flooding the cell: a full-cell fill
     # reads as a blocky grid AND swallows the row hover (a child's background always paints over its
     # row's, whatever the specificity).
-    ".tabxplor-tab .tx-pill{border-radius:4px;padding:1px 4px;}",
+    # ⚠ the negative margin CANCELS the padding's layout. An inline box's horizontal padding is real
+    # layout, so without it a filled number sits ~4px left of the same number on an unfilled row in a
+    # right-aligned column -- the fill must bleed around the glyphs, never move them.
+    ".tabxplor-tab .tx-pill{border-radius:4px;padding:1px 4px;margin:0 -4px;}",
     # a row sparkline is a PLOT and gets the whole cell: block + auto margins centre it horizontally
     # whatever the column's text-align, and its own cell drops the numeric right/top geometry for
     # middle/centre and trims the vertical padding to a hairline. NO border of its own -- the cell's

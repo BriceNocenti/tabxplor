@@ -297,7 +297,7 @@ test_that("stats_checks folds into `stats = \"all\"`, comparison or not", {
     gss, reg_opts(predictors = c("race", "age"), stats_checks = TRUE), NULL))$tabs
   expect_false("linearity_lr" %in% get_test(off)$test)
   expect_true("linearity_lr"  %in% get_test(on)$test)
-  expect_true(all(c("global_lr", "dispersion", "influence") %in% get_test(on)$test))
+  expect_true(all(c("dispersion", "influence") %in% get_test(on)$test))
 })
 
 test_that("a comparison list with several dependents yields a NULL table (guarded)", {

@@ -276,7 +276,7 @@ test_that("stats='global' IS drop1() on the fit already in hand, as per-predicto
   skip_if_not_installed("broom")
   d <- reg_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "binomial",
-                                cleannames = FALSE))
+                                cleannames = FALSE, stats = c("n", "global")))
   tt <- get_test(t)
   g  <- tt[tt$test %in% tabxplor:::reg_global_types(), , drop = FALSE]
   # Phase 19g: the predictor rides `var`, the same dimension a crosstab test row uses; a split-group
@@ -308,7 +308,7 @@ test_that("the global test skips 1-df terms, unsupported engines and stats = FAL
   d <- reg_data()
   # a numeric predictor's overall p IS its single cell's p -- a row for it would be noise
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
-                                cleannames = FALSE))
+                                cleannames = FALSE, stats = c("n", "global")))
   g <- get_test(t); g <- g[g$test %in% tabxplor:::reg_global_types(), ]
   expect_setequal(g$var, "race")
   # opt out
@@ -318,7 +318,8 @@ test_that("the global test skips 1-df terms, unsupported engines and stats = FAL
   # an engine with no drop1/regTermTest degrades to no row, never to an error (the z8 contract)
   skip_if_not_installed("nnet")
   tm <- suppressMessages(suppressWarnings(
-    tab_reg(d, "marital", "race", family = "multinomial", cleannames = FALSE)))
+    tab_reg(d, "marital", "race", family = "multinomial", cleannames = FALSE,
+            stats = c("n", "global"))))
   expect_false(any(tabxplor:::reg_global_types() %in% get_test(tm)$test))
 })
 
@@ -330,7 +331,8 @@ test_that("on a split table the per-predictor rows name the predictors, not the 
   d$grp <- factor(ifelse(d$year < 2006, "early", "late"))
   t <- suppressMessages(tab_reg(d, "married",
                                 list(m1 = c("race", "rincome"), m2 = c("race", "rincome")),
-                                tab_vars = "grp", family = "binomial", cleannames = FALSE))
+                                tab_vars = "grp", family = "binomial", cleannames = FALSE,
+                                stats = c("n", "global")))
   tt <- get_test(t)
   g  <- tt[tt$test %in% tabxplor:::reg_global_types(), , drop = FALSE]
   expect_true(nrow(g) > 0)
@@ -347,7 +349,8 @@ test_that("on a split table the per-predictor rows name the predictors, not the 
 
 test_that("per-predictor footer rows keep the model's term order, not the alphabet", {
   d <- suppressWarnings(gss_cat_data_formatting())
-  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome", "relig"), family = "binomial"))
+  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome", "relig"), family = "binomial",
+                                stats = c("n", "global")))
   lab <- tabxplor:::reg_footer_plan(get_test(t))$label
   glob <- sub("^.*: ", "", grep("^Overall association", lab, value = TRUE))
   testthat::expect_equal(glob, c("race", "rincome", "relig"))
@@ -363,4 +366,40 @@ test_that("the footer and the crude tooltips key onto the MODEL column, never th
   tips <- attr(t, "meta")$empirical_tips
   testthat::expect_gt(nrow(tips), 0L)
   testthat::expect_true(all(unique(tips$col) %in% mdl))
+})
+
+# --- Phase 22b-xviii: the footer reads outward from the data -------------------------------------
+
+test_that("the footer is N, then the checks worst-first, then the content, then the comparison", {
+  skip_if_not_installed("broom")
+  d <- suppressWarnings(gss_cat_data_formatting())
+  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome", "age"), family = "binomial",
+                                stats = "all"))
+  k <- tabxplor:::reg_footer_plan(get_test(t))$test
+  pos <- function(x) which(k == x)[[1]]
+  expect_identical(k[[1]], "n")
+  # what the number MEANS, then whether the standard errors are trustworthy, then how fragile it is
+  expect_lt(pos("linearity_lr"), pos("dispersion"))
+  expect_lt(pos("dispersion"), pos("collinearity"))
+  expect_lt(pos("collinearity"), pos("influence"))
+  # the two readings of ONE question sit together, wherever the family emits both (the declared
+  # order is the display order, and `phi` is only produced where dispersion can be estimated)
+  fk <- tabxplor:::TEST_FOOTER_KEYS
+  expect_identical(which(fk == "phi"), which(fk == "dispersion") + 1L)
+  # then the content, then the comparison
+  expect_lt(pos("influence"), pos("global_lr"))
+  expect_lt(pos("global_lr"), pos("lr_null"))
+  expect_lt(pos("lr_null"), pos("aic"))
+})
+
+test_that("the joint test is opt-in and Brant is an ordinal default", {
+  skip_if_not_installed("broom")
+  expect_false("global" %in% reg_footer_stats("binomial", FALSE, FALSE, NULL))
+  expect_true ("global" %in% reg_footer_stats("binomial", FALSE, FALSE, "all"))
+  expect_true ("global" %in% reg_footer_stats("binomial", FALSE, FALSE, c("n", "global")))
+  # a refit, and still a default: a cumulative OR that fails it is not one number but a fiction
+  expect_true ("proportionality" %in% reg_footer_stats("ordinal", FALSE, FALSE, NULL))
+  expect_false("proportionality" %in% reg_footer_stats("binomial", FALSE, FALSE, NULL))
+  # ... but never on a weighted fit, where the Brant test has no meaning
+  expect_false("proportionality" %in% reg_footer_stats("ordinal", TRUE, FALSE, NULL))
 })

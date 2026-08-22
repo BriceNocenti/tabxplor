@@ -80,16 +80,22 @@ test_that("the gap p-value is the z test of the quadrature SE", {
 
 # --- A. the three policies ------------------------------------------------------------------------
 
-test_that("`ignore` is byte-identical to the descriptive z5 reading", {
+test_that("a gap measure gates on its OWN interval -- `ignore` cannot turn the test off", {
   d  <- gap_data()
   sp <- gap_tab(d, "ignore")
-  # the score, hence the slot, uses only `obs` -- gap_se cannot move it
+  # ⚠ 22b-xviii: there is no meaningful "ignore" for a COMPARISON of two estimates. Stripping the
+  # gap SE removes the test, and only then does the column fall back to colouring every movement --
+  # so a column WITH standard errors must colour strictly fewer cells than the same one without.
+  seen <- 0L
   for (nm in reg_fmt_cols(sp)) {
     col  <- sp[[reg_group_col(sp, nm)]]
     bare <- set_gap_se(col, rep(NA_real_, length(col)))
-    testthat::expect_identical(fmt_color_channels(col)$bg_slot,
-                               fmt_color_channels(bare)$bg_slot)
+    tested   <- fmt_color_channels(col)$bg_slot
+    describe <- fmt_color_channels(bare)$bg_slot
+    testthat::expect_true(all(tested == 0L | tested == describe))
+    seen <- seen + sum(describe != 0L & tested == 0L)
   }
+  testthat::expect_gt(seen, 0L)   # at least one non-significant movement really is greyed
 })
 
 test_that("`grey_non_signif` greys exactly the non-significant gaps", {
@@ -393,12 +399,35 @@ test_that("a pinned gap bound renders as the null, never as a negative zero", {
   testthat::expect_gt(pv[[1]], 0.05); testthat::expect_lt(pv[[2]], 0.05)
   pinned <- c(bd$lo, bd$hi)[c(bd$lo, bd$hi) == 0]
   testthat::expect_length(pinned, 1L)                       # cell 1 pins, cell 2 does not
-  rendered <- vapply(pinned, function(v) tabxplor:::fmt_gap_render(x, v), character(1))
-  testthat::expect_false(any(grepl("^-", rendered)))
-  testthat::expect_identical(unname(rendered), "+0.0 pts")
+  # rendered through format(), like every other interval in the package: the pinned bound must be a
+  # bare "0", never "-0".
+  ci <- tabxplor:::fmt_gap_text(x)$ci
+  testthat::expect_identical(ci[[1]], "[-12;0]%")
+  testthat::expect_false(any(grepl("-0[];]", ci)))
   # the multiplicative branch pins at exp(0) == 1, where a signed zero never showed.
   m  <- fmt(n = c(10L, 10L), or = c(1.10, 2.00), obs = c(1.20, 1.10),
             gap_se = c(0.30, 0.05), scale = "odds_ratio", color = "adjustment")
   mb <- tabxplor:::fmt_gap_bounds(m)
   testthat::expect_true(any(c(mb$lo, mb$hi) == 1))
+})
+
+# --- Phase 22b-xviii: a model that IS its own crude twin has no gap ------------------------------
+
+test_that("a gap at machine precision is NA, not a z of 20", {
+  # a UNIVARIABLE model equals its own crude fit exactly, so both the gap and its SE are floating-
+  # point dust -- and their ratio was a p of 1e-92 that painted the column at full strength.
+  skip_if_not_installed("broom")
+  d <- gap_data()
+  t <- suppressMessages(tab_reg(d, "age", "race", family = "gaussian", empirical = TRUE,
+                                stats = FALSE))
+  col <- t[["Model_diff"]]
+  eff <- !is_refrow(col) & !is.na(get_obs(col))
+  testthat::expect_true(any(eff))
+  testthat::expect_true(all(is.na(fmt_gap_p(col)[eff])))
+  testthat::expect_true(all(is.na(fmt_adjustment_score(col)[eff])))
+  testthat::expect_true(all(fmt_color_channels(set_color(col, "adjustment"))$bg_slot == 0L))
+  # the tolerance is RELATIVE: a genuinely tiny gap with an honest SE keeps its interval
+  x <- fmt(n = c(10L, 10L), diff = c(1e-6, 1e-6), obs = c(0, 0), gap_se = c(1e-7, 1e-7),
+           scale = "points", color = "adjustment")
+  testthat::expect_false(any(is.na(fmt_gap_p(x))))
 })

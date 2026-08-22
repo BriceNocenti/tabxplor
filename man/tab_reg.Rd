@@ -297,8 +297,13 @@ the aggregated interaction test to the footer (see \code{stats}).
 The two are mutually exclusive (they share one per-cell slot). The gap is readable as a number
 with \code{display = "{est} ({gap})"}, and the HTML tooltip adds its interval and p-value.
 
-\strong{Significance.} Each measure tests its own gap, and \code{color_signif} then applies as usual. The
-two standard errors differ because they compare different things: two \code{tab_vars} groups are
+\strong{Significance.} Each measure tests its own gap, and it always does: there is no meaningful
+"colour every movement without testing it" for a comparison of two estimates, so a gap whose
+own interval covers zero is greyed whatever \code{color_signif} says. A cell can therefore be filled
+while \strong{neither} the modelled effect nor the observed one carries a star --- and that is
+correct rather than odd: the two are fitted on the same rows, so the gap's standard error can be
+far smaller than either estimate's, and two individually non-significant numbers can differ from
+each other beyond doubt. The two standard errors differ because they compare different things: two \code{tab_vars} groups are
 \strong{different people}, so that gap's error comes from the two intervals the table already prints,
 while an adjustment compares two estimates fitted on the \strong{same rows}, which are correlated, so
 its error comes from the difference of their influence functions (Weesie 1999; Mize, Doan & Long
@@ -418,8 +423,9 @@ predictor becomes an ordinary \strong{factor}: one estimate per group, its own o
 companion, counts and colours per group --- the non-linearity becomes visible in the printed
 numbers. Start here; it is the most readable answer.}
 \item{\code{"sd_bands"}}{cut at the \strong{mean and one standard deviation either side} --- four
-bands, whose labels carry both the real cut points and, in words, where each sits on that
-scale (\verb{[30,47) below average}). It is the low / average / high reading of moderated
+bands, whose labels carry both the real cut points and the cut each band names
+(\verb{[30,47) ; < mean}), so a reader can check one against the other. It is the classic
+low / average / high reading of moderated
 regression, and its cut points mean the same thing across sub-samples of one variable, where
 quantiles move with each one. \emph{Unlike quantile groups the bands are not balanced}: on a
 skewed variable the bottom one can be small, and a landmark falling outside the data is
@@ -442,8 +448,8 @@ It is the same vocabulary \code{\link[=tab]{tab()}} takes, on one vector in \cod
 (default) uses the per-family set: linear models show R square, adjusted R square, the
 overall F-test and the residual SD; other models show the likelihood-ratio test versus the
 null model, McFadden's pseudo-R square, AIC and BIC (count and grouped-binomial models also show
-the Pearson dispersion, \code{"phi"}). Every default set also carries the overall-association test
-\code{"global"} and the \strong{model checks that cost nothing} (see below). Pass a character vector to
+the Pearson dispersion, \code{"phi"}). Every default set also carries the \strong{default model checks}
+(see below). Pass a character vector to
 pick the statistics (\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"phi"}, \code{"r2"},
 \code{"r2_adj"}, \code{"f_model"}, \code{"sigma"}, \code{"global"}, \code{"interaction"}, \code{"group_interaction"},
 \code{"linearity"},
@@ -460,8 +466,9 @@ falling back to the AIC difference with a message when the models are not nested
 different N. A comparison key \strong{adds} a row and restricts nothing.
 
 \code{"global"} adds one \strong{overall test per predictor} --- "is this variable associated with the
-outcome at all?", the question a block of stars against a reference category cannot answer. It
-costs no extra fit and is shown for predictors carrying two or more coefficients.
+outcome at all?", the question a block of stars against a reference category cannot answer.
+Ask for it by name: it is one row per multi-level predictor and a refit each, which on a table
+whose every block is strongly associated only repeats what the stars already said.
 \code{"interaction"} tests each \strong{crossed pair} written in \code{predictors} (\code{race:age4}): is the
 interaction real, or is the additive model enough? It compares the two models directly, so it
 costs one extra fit --- about 20 ms on a linear or logistic model, which is why it is already in
@@ -471,7 +478,12 @@ outcome, where you ask for it by name. It produces nothing unless \code{predicto
 effect-modification test per predictor}, asked once for all its levels together, so it carries
 none of the multiplicity of the per-cell \code{color = "between_groups"} colours --- which turns it
 on for you. It also costs one extra fit, and is not available for multinomial or ordinal
-outcomes (nor is \code{"global"}).}
+outcomes (nor is \code{"global"}).
+
+The footer reads \strong{outward from the data}: the N first, then the checks --- worst first, since
+proportionality and linearity break what the number \emph{means} while dispersion breaks every star
+in the table and collinearity and influence only say how fragile it is --- then what the
+table's own rows say jointly, then how good the model is and against what.}
 
 \item{na}{Which rows each model is fitted on --- the grain at which missing values are dropped.
 \code{"drop_by_outcome"} (default) gives every model \strong{of one outcome} the same complete-case
@@ -604,6 +616,12 @@ Five checks, in the order of what each one threatens --- the estimate, what the 
 its interval, whether it is real at all, and why it is wide. Each is a footer row, so it travels
 into every export, and each is named in \code{stats}.
 
+Four of them are \strong{shown by default}: dispersion, influence, collinearity, and --- on an ordinal
+outcome --- proportionality, which is a refit and a default anyway, because a cumulative odds
+ratio that fails it is not one number but a fiction. \strong{Linearity} is the one you ask for by
+name (\code{stats = "linearity"}), or draw with \code{\link[=reg_check_plots]{reg_check_plots()}}, which shows the shape instead of
+scoring it.
+
 \describe{
 \item{\strong{Linearity} (p-value, per numeric predictor)}{Is this predictor's effect really one
 straight line? The model is refitted with that predictor's centred squared term and the two
@@ -633,10 +651,15 @@ VIF one. So a marked cell wears the \emph{faintest} shade, a warning --- "look a
 non-significant test wears the deepest. Read the number, not the mark.
 
 Dispersion, Influence and Collinearity are arithmetic on the model already fitted, so they ride
-the default footer and cost nothing; Linearity and Proportionality fit a model and are therefore
-\strong{asked for by name} (\code{stats = c("n", "aic", "linearity")}, or \code{stats = "all"}). The cheap answer
-is on screen either way: each numeric predictor's observed shape is binned with no fit at all and
-drawn as the row's sparkline, and \code{\link[=reg_check_plots]{reg_check_plots()}} draws the full panel for \strong{every} check.
+the default footer and cost nothing; \strong{Proportionality} fits J-1 binary logits and is a default
+anyway on an ordinal outcome, because a cumulative odds ratio that fails it is not one number but
+a fiction. \strong{Linearity} is the one asked for by name (\code{stats = c("n", "aic", "linearity")}, or
+\code{stats = "all"}). The cheap answer is on screen either way: each numeric predictor's observed
+shape is binned with no fit at all and drawn as a \strong{sparkline} --- in that predictor's own
+\code{n} cell where the table has one outcome and the medium can hold it, and otherwise in a small
+table below the footer, with the vertical range it is drawn against beside it. The curve is drawn
+in a window at least as tall as the data's own sampling noise, so a flat run really means flat.
+\code{\link[=reg_check_plots]{reg_check_plots()}} draws the full panel for \strong{every} check.
 At survey sample sizes a diagnostic p-value rejects almost anything, which is why three of the
 five report a \emph{magnitude} instead.
 }

@@ -1164,17 +1164,29 @@ reg_selfheal_call <- function(fit, data) {
 
 # The Brant test (`brant`, a Suggests): a missing package skips it with a hint and a failing test is
 # swallowed -- a diagnostic must never break a table.
-reg_ordinal_diagnostic <- function(fit) {
+# `asked`: the check is now an ordinal DEFAULT, so "install brant" would greet every ordinal table of
+# a user who never asked for it. The hint is for the user who NAMED the check in `stats =`.
+# ⚠ brant's own sparsity warning is re-worded rather than passed through: a default check must speak
+# about the READING ("take this p-value with care"), not about a contingency table the caller never
+# built -- and R would repeat it verbatim on every table.
+reg_ordinal_diagnostic <- function(fit, asked = FALSE) {
   if (!requireNamespace("brant", quietly = TRUE)) {
-    cli::cli_inform(c("i" = paste0(
+    if (isTRUE(asked)) cli::cli_inform(c("i" = paste0(
       "Proportional-odds (parallel-lines) assumption not tested: install {.pkg brant} to run the ",
       "Brant test."
     )))
     return(invisible(NA_real_))
   }
   fit <- reg_selfheal_call(fit, fit$model)
-  bt <- tryCatch({ utils::capture.output(res <- brant::brant(fit)); res },
-                 error = function(e) NULL)
+  sparse <- FALSE
+  bt <- tryCatch(withCallingHandlers(
+    { utils::capture.output(res <- brant::brant(fit)); res },
+    warning = function(w) { sparse <<- TRUE; invokeRestart("muffleWarning") }),
+    error = function(e) NULL)
+  if (sparse)
+    cli::cli_inform(c("i" = paste0(
+      "The Brant test could not use every combination of the outcome and the predictors ",
+      "(too few cases in some); read its p-value with care.")))
   if (is.null(bt) || !is.matrix(bt) ||
       !"Omnibus" %in% rownames(bt) || !"probability" %in% colnames(bt)) {
     return(invisible(NA_real_))                             # unexpected shape -> stay silent
@@ -2456,15 +2468,19 @@ reg_footer_stats <- function(family, weighted, grouped, stats) {
     else { s <- c("n", "lr_null", "mcfadden_r2", "aic", "bic")
            # `phi` is the EXACT Pearson dispersion; the key `dispersion` names the CHECK.
            if (reg_fam_overdispersed(family, grouped)) s <- c(s, "phi"); s }
-  # the per-predictor global test is in the DEFAULT set -- the question a multi-level factor block
-  # leaves unanswered -- and so are the checks that cost no fit.
+  # ⚠ the per-predictor global test is NOT in the default set. It answers a real question the stars
+  # cannot -- does this predictor matter as a whole -- but it is one row per multi-level factor, it
+  # costs a drop1() refit each on the unweighted path, and on a table where every block is strongly
+  # associated it repeats what the reader has already read. `stats = "global"` asks for it.
   checks  <- reg_checks_for(family, weighted)
   # the crossed-pair interaction test costs ONE extra fit, and only where a cross was asked for. On
   # a glm that is ~20 ms, so it joins the default set; on multinomial / ordinal it roughly DOUBLES
   # the fitting time, so it is opt-in -- the free/refit rule REG_CHECKS already states for a check.
-  default <- c(default, "global", if (reg_fam_glm(family)) "interaction",
+  default <- c(default, if (reg_fam_glm(family)) "interaction",
                reg_checks_default(family, weighted))
-  if (identical(stats, "all")) return(reg_check_expand(unique(c(default, checks))))
+  # "all" = every statistic AND check, the per-predictor joint test included (want_global reads the
+  # same word, and the two must not disagree about what "all" means).
+  if (identical(stats, "all")) return(reg_check_expand(unique(c(default, "global", checks))))
   if (is.null(stats) || isTRUE(stats)) return(reg_check_expand(default))
   if (isFALSE(stats) || identical(stats, "none")) return(character(0))
   reg_check_expand(stats[stats %in% reg_stat_keys()])
@@ -2926,13 +2942,13 @@ reg_mark_ref_group <- function(tab, ref_level, color) {
 # the critical value that built the interval. Stamping a table-wide one would overwrite all of them
 # with the design's df -- a number no column used.
 #' @keywords internal
-reg_finalize <- function(tab, tests, conf_level, var_labels, group_vars,
+reg_finalize <- function(tab, tests, conf_level, var_labels, group_vars, outcomes = character(0),
                          basis = NULL, meta_extra = list()) {
   tab |>
     tab_stamp_inference(conf_level, degf = NULL, basis) |>
     new_tab(subtext = meta_extra$subtext, test = tests,
             meta = c(meta_extra[setdiff(names(meta_extra), "subtext")],
-                     list(spec = reg_spec(var_labels)))) |>
+                     list(spec = reg_spec(var_labels, outcomes)))) |>
     dplyr::group_by(!!!rlang::syms(group_vars))
 }
 
@@ -3081,15 +3097,23 @@ reg_build <- function(data, specs, shared, tab_vars = NULL, .fit_cache = NULL, r
 #' @keywords internal
 #' @noRd
 reg_bind_assumptions <- function(parts, sl) {
-  aa   <- stats::setNames(purrr::map(parts, "assumptions"), as.character(sl))
-  aa   <- purrr::compact(aa)
+  aa <- stats::setNames(purrr::map(parts, "assumptions"), as.character(sl))
+  aa <- purrr::compact(aa)
   if (length(aa) == 0L) return(NULL)
-  vars <- unique(unlist(purrr::map(aa, ~ names(.x$curves))))
-  out  <- aa[[1]]
-  out$curves <- purrr::map(stats::setNames(nm = vars), function(v)
-    purrr::list_rbind(purrr::imap(aa, function(a, g)
-      if (is.null(a$curves[[v]])) NULL else dplyr::mutate(a$curves[[v]], group = g))))
-  out
+  # OUTCOME first, group second: `assumptions` is one record per outcome, and each of them stacks
+  # its groups' curves.
+  deps <- unique(unlist(purrr::map(aa, names)))
+  out  <- purrr::compact(stats::setNames(purrr::map(deps, function(dep) {
+    ad   <- purrr::compact(purrr::map(aa, dep))
+    if (length(ad) == 0L) return(NULL)
+    vars <- unique(unlist(purrr::map(ad, ~ names(.x$curves))))
+    rec  <- ad[[1]]
+    rec$curves <- purrr::map(stats::setNames(nm = vars), function(v)
+      purrr::list_rbind(purrr::imap(ad, function(a, g)
+        if (is.null(a$curves[[v]])) NULL else dplyr::mutate(a$curves[[v]], group = g))))
+    rec
+  }), deps))
+  if (length(out) == 0L) NULL else out
 }
 
 #' @keywords internal
@@ -3129,6 +3153,7 @@ reg_stage_split <- function(ctx) {
   # base-count cell that belongs to it.
   grouped <- reg_finalize(combined, tests, conf_level, var_labels,
                           group_vars = c(tab_vars, "var"),
+                          outcomes = unique(purrr::map_chr(specs, "outcome")),
                           meta_extra = list(subtext = subtext,
                                             assumptions = reg_bind_assumptions(parts, sl)))
   # the groups go side by side whenever that is unambiguous -- ONE model, not multinomial. An
@@ -3178,8 +3203,9 @@ reg_stage_setup <- function(ctx) {
   numeric_preds <- reg_numeric_preds(skeleton_data, union_predictors)
   factor_preds  <- reg_factor_preds(skeleton_data, union_predictors)
 
-  want_global <- is.null(stats) || identical(stats, "all") || isTRUE(stats) ||
-    (is.character(stats) && "global" %in% stats)
+  # by NAME or by "all", never by default -- the same rule reg_footer_stats() states, and the reason
+  # this gate exists at all is that the drop1() sweep must be skipped before it is paid for.
+  want_global <- identical(stats, "all") || (is.character(stats) && "global" %in% stats)
 
   outcomes <- purrr::map_chr(specs, "outcome")
   # THE CRUDE BLOCK BELONGS TO THE OUTCOME: every input is table-wide or per-OUTCOME, so ONE outcome
@@ -3656,16 +3682,22 @@ reg_stage_rows <- function(ctx) {
   # differed would double the pivot's rows and break the gap match. Out of the label, out of the key.
   # `linear_level` is the row each curve belongs to: `shape = "quadratic"` gives a predictor TWO rows
   # and `skeleton$term` does not exist at display time, so the linear one must be named here.
+  # the modelled level PER OUTCOME (each product carries its own), so a two-outcome table draws each
+  # curve of the level its own column reports.
+  pos_lv <- stats::setNames(purrr::map(products, "positive_level"),
+                            purrr::map_chr(specs, "outcome"))
+  pos_lv <- pos_lv[!duplicated(names(pos_lv))]
   assumptions <- reg_curves(data, specs, numeric_preds, design_spec$wt,
-                            positive_level = products[[1]]$positive_level,
-                            design = design_spec$design)
-  if (!is.null(assumptions)) {
-    assumptions$curves <- purrr::map(assumptions$curves, ~ dplyr::mutate(.x, group = ""))
-    assumptions$linear_level <- purrr::map_chr(
-      stats::setNames(nm = names(assumptions$curves)),
+                            positive_level = pos_lv, design = design_spec$design)
+  assumptions <- purrr::map(assumptions %||% list(), function(a) {
+    a$curves <- purrr::map(a$curves, ~ dplyr::mutate(.x, group = ""))
+    a$linear_level <- purrr::map_chr(
+      stats::setNames(nm = names(a$curves)),
       function(v) { hit <- lin & skeleton$var == v
                     if (any(hit)) disp_levels[which(hit)[[1]]] else NA_character_ })
-  }
+    a
+  })
+  if (length(assumptions) == 0L) assumptions <- NULL
 
   tab <- tibble::tibble(
     var    = new_lvl(forcats::fct_inorder(skeleton$var), "var"),
@@ -3799,6 +3831,7 @@ reg_stage_finalize <- function(ctx) {
   # column and cannot read a table attribute. The df is NOT: every column already carries its own.
   reg_inf <- reg_inference(shared, emp_degraded)
   out <- reg_finalize(tab, test, conf_level, var_labels, group_vars = "var",
+                      outcomes = unique(purrr::map_chr(specs, "outcome")),
                       basis = reg_inf$basis,
                       meta_extra = list(subtext = subtext, empirical_tips = empirical_tips,
                                         assumptions = assumptions))
@@ -4126,8 +4159,9 @@ reg_stage_finalize <- function(ctx) {
 #'       companion, counts and colours per group --- the non-linearity becomes visible in the printed
 #'       numbers. Start here; it is the most readable answer.}
 #'     \item{`"sd_bands"`}{cut at the **mean and one standard deviation either side** --- four
-#'       bands, whose labels carry both the real cut points and, in words, where each sits on that
-#'       scale (`[30,47) below average`). It is the low / average / high reading of moderated
+#'       bands, whose labels carry both the real cut points and the cut each band names
+#'       (`[30,47) ; < mean`), so a reader can check one against the other. It is the classic
+#'       low / average / high reading of moderated
 #'       regression, and its cut points mean the same thing across sub-samples of one variable, where
 #'       quantiles move with each one. \emph{Unlike quantile groups the bands are not balanced}: on a
 #'       skewed variable the bottom one can be small, and a landmark falling outside the data is
@@ -4192,8 +4226,8 @@ reg_stage_finalize <- function(ctx) {
 #'   (default) uses the per-family set: linear models show R square, adjusted R square, the
 #'   overall F-test and the residual SD; other models show the likelihood-ratio test versus the
 #'   null model, McFadden's pseudo-R square, AIC and BIC (count and grouped-binomial models also show
-#'   the Pearson dispersion, `"phi"`). Every default set also carries the overall-association test
-#'   `"global"` and the **model checks that cost nothing** (see below). Pass a character vector to
+#'   the Pearson dispersion, `"phi"`). Every default set also carries the **default model checks**
+#'   (see below). Pass a character vector to
 #'   pick the statistics (`"n"`, `"lr_null"`, `"mcfadden_r2"`, `"aic"`, `"bic"`, `"phi"`, `"r2"`,
 #'   `"r2_adj"`, `"f_model"`, `"sigma"`, `"global"`, `"interaction"`, `"group_interaction"`,
 #'   `"linearity"`,
@@ -4210,8 +4244,9 @@ reg_stage_finalize <- function(ctx) {
 #'   different N. A comparison key **adds** a row and restricts nothing.
 #'
 #'   `"global"` adds one **overall test per predictor** --- "is this variable associated with the
-#'   outcome at all?", the question a block of stars against a reference category cannot answer. It
-#'   costs no extra fit and is shown for predictors carrying two or more coefficients.
+#'   outcome at all?", the question a block of stars against a reference category cannot answer.
+#'   Ask for it by name: it is one row per multi-level predictor and a refit each, which on a table
+#'   whose every block is strongly associated only repeats what the stars already said.
 #'   `"interaction"` tests each **crossed pair** written in `predictors` (`race:age4`): is the
 #'   interaction real, or is the additive model enough? It compares the two models directly, so it
 #'   costs one extra fit --- about 20 ms on a linear or logistic model, which is why it is already in
@@ -4223,11 +4258,22 @@ reg_stage_finalize <- function(ctx) {
 #'   on for you. It also costs one extra fit, and is not available for multinomial or ordinal
 #'   outcomes (nor is `"global"`).
 #'
+#'   The footer reads **outward from the data**: the N first, then the checks --- worst first, since
+#'   proportionality and linearity break what the number *means* while dispersion breaks every star
+#'   in the table and collinearity and influence only say how fragile it is --- then what the
+#'   table's own rows say jointly, then how good the model is and against what.
+#'
 #' @section Model checks:
 #'
 #' Five checks, in the order of what each one threatens --- the estimate, what the estimate means,
 #' its interval, whether it is real at all, and why it is wide. Each is a footer row, so it travels
 #' into every export, and each is named in `stats`.
+#'
+#' Four of them are **shown by default**: dispersion, influence, collinearity, and --- on an ordinal
+#' outcome --- proportionality, which is a refit and a default anyway, because a cumulative odds
+#' ratio that fails it is not one number but a fiction. **Linearity** is the one you ask for by
+#' name (`stats = "linearity"`), or draw with [reg_check_plots()], which shows the shape instead of
+#' scoring it.
 #'
 #' \describe{
 #'   \item{**Linearity** (p-value, per numeric predictor)}{Is this predictor's effect really one
@@ -4258,10 +4304,15 @@ reg_stage_finalize <- function(ctx) {
 #' non-significant test wears the deepest. Read the number, not the mark.
 #'
 #' Dispersion, Influence and Collinearity are arithmetic on the model already fitted, so they ride
-#' the default footer and cost nothing; Linearity and Proportionality fit a model and are therefore
-#' **asked for by name** (`stats = c("n", "aic", "linearity")`, or `stats = "all"`). The cheap answer
-#' is on screen either way: each numeric predictor's observed shape is binned with no fit at all and
-#' drawn as the row's sparkline, and [reg_check_plots()] draws the full panel for **every** check.
+#' the default footer and cost nothing; **Proportionality** fits J-1 binary logits and is a default
+#' anyway on an ordinal outcome, because a cumulative odds ratio that fails it is not one number but
+#' a fiction. **Linearity** is the one asked for by name (`stats = c("n", "aic", "linearity")`, or
+#' `stats = "all"`). The cheap answer is on screen either way: each numeric predictor's observed
+#' shape is binned with no fit at all and drawn as a **sparkline** --- in that predictor's own
+#' `n` cell where the table has one outcome and the medium can hold it, and otherwise in a small
+#' table below the footer, with the vertical range it is drawn against beside it. The curve is drawn
+#' in a window at least as tall as the data's own sampling noise, so a flat run really means flat.
+#' [reg_check_plots()] draws the full panel for **every** check.
 #' At survey sample sizes a diagnostic p-value rejects almost anything, which is why three of the
 #' five report a *magnitude* instead.
 #'
@@ -4342,8 +4393,13 @@ reg_stage_finalize <- function(ctx) {
 #'   The two are mutually exclusive (they share one per-cell slot). The gap is readable as a number
 #'   with `display = "{est} ({gap})"`, and the HTML tooltip adds its interval and p-value.
 #'
-#'   **Significance.** Each measure tests its own gap, and `color_signif` then applies as usual. The
-#'   two standard errors differ because they compare different things: two `tab_vars` groups are
+#'   **Significance.** Each measure tests its own gap, and it always does: there is no meaningful
+#'   "colour every movement without testing it" for a comparison of two estimates, so a gap whose
+#'   own interval covers zero is greyed whatever `color_signif` says. A cell can therefore be filled
+#'   while **neither** the modelled effect nor the observed one carries a star --- and that is
+#'   correct rather than odd: the two are fitted on the same rows, so the gap's standard error can be
+#'   far smaller than either estimate's, and two individually non-significant numbers can differ from
+#'   each other beyond doubt. The two standard errors differ because they compare different things: two `tab_vars` groups are
 #'   **different people**, so that gap's error comes from the two intervals the table already prints,
 #'   while an adjustment compares two estimates fitted on the **same rows**, which are correlated, so
 #'   its error comes from the difference of their influence functions (Weesie 1999; Mize, Doan & Long

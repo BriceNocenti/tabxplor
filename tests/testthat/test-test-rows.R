@@ -34,9 +34,11 @@ test_that("the derived vocabularies keep their contents and their order", {
   expect_identical(tabxplor:::reg_global_types(),      c("global_lr", "global_f", "global_wald"))
   expect_identical(tabxplor:::reg_interaction_types(), c("group_interact_lr", "group_interact_f", "group_interact_wald"))
   # the goodness-of-fit block is reg_glance()'s, not "every row whose stat is its own name"
+  # ⚠ `phi` sits with the CHECK it refines (right under Dispersion), so the display order is not
+  # the producer's -- it is still one of reg_glance()'s rows.
   expect_identical(tabxplor:::REG_GOF_KEYS,
-                   c("n", "lr_null", "wald_null", "f_model", "r2", "r2_adj", "mcfadden_r2",
-                     "nagelkerke_r2", "cox_snell_r2", "sigma", "aic", "bic", "phi"))
+                   c("n", "phi", "lr_null", "wald_null", "f_model", "r2", "r2_adj", "mcfadden_r2",
+                     "nagelkerke_r2", "cox_snell_r2", "sigma", "aic", "bic"))
   # ⚠ the `stats =` vocabulary is a UNION: `residuals` / `normality` are panel-only checks with no
   # test row at all, so deriving from TEST_ROWS alone would silently delete two `check =` values.
   expect_true(all(c("residuals", "normality") %in% tabxplor:::reg_stat_keys()))

@@ -297,7 +297,8 @@ test_that("the curve is the MODELLED level's, not the factor's first level", {
   skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", "age", family = "binomial", stats = FALSE))
-  a <- get_assumptions(t)
+  # ⚠ ONE RECORD PER OUTCOME, keyed by it (22b-xviii)
+  a <- get_assumptions(t)[["married"]]
   expect_identical(a$outcome, "married")
   expect_identical(a$link, "logit")
   # P(married) RISES with age over most of the range; reading the complement would invert it
@@ -309,14 +310,41 @@ test_that("the curve is the MODELLED level's, not the factor's first level", {
   expect_true(grepl(tabxplor:::rd_spark(a$curves$age), nprint(t, "age"), fixed = TRUE))
 })
 
-test_that("with several outcomes there is no single observed shape, so there is no sparkline", {
+test_that("several outcomes get one curve EACH, and the shape table rather than a cell", {
   skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, c("married", "tvhours"), "age",
                                 family = c(married = "binomial", tvhours = "gaussian"),
                                 stats = FALSE))
-  expect_null(get_assumptions(t))
+  a <- get_assumptions(t)
+  expect_identical(names(a), c("married", "tvhours"))
+  expect_identical(a$married$kind,  "logit")
+  expect_identical(a$tvhours$kind,  "mean")
+  # the base-count column is shared by both outcomes, so no cell of it could carry either curve
+  expect_true(tab_wants_shape_table(t, "html"))
+  m <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE, medium = "html")
+  disp <- unlist(purrr::map(m[purrr::map_lgl(m, is_fmt)], get_display))
+  expect_false(any(grepl("[\u2581-\u2588]", disp)))
+  st <- tabxplor:::reg_shape_table(t)
+  expect_identical(nrow(st), 2L)
+  expect_identical(st$outcome, c("married", "tvhours"))
+  expect_true(all(grepl("[\u2581-\u2588]{3,}", st$shape)))
   expect_false(any(grepl("[\u2581-\u2588]", as.character(t$levels))))
+})
+
+test_that("the console never puts a glyph run in a cell; every other medium may", {
+  skip_if_not_installed("broom")
+  d <- shp_data()
+  t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE))
+  expect_true(tab_wants_shape_table(t, "console"))
+  expect_false(tab_wants_shape_table(t, "kable"))
+  cons <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE, medium = "console")
+  expect_false(any(grepl("[\u2581-\u2588]", get_display(cons[["n"]]))))
+  # and the option still turns the whole feature off, table and cell alike -- ONE gate for both
+  withr::with_options(list(tabxplor.spark = FALSE), {
+    expect_false(tab_wants_shape_table(t, "console"))
+    expect_false(tab_wants_shape_table(t, "kable"))
+  })
 })
 
 test_that("the html engine upgrades the glyph run to an inline <svg>; the plot medium drops it", {
@@ -371,4 +399,41 @@ test_that("the sparkline is drawn on the model's own x axis: one width, and the 
                                  shape = c(age = "log"), stats = FALSE))
   expect_false(identical(gl(t0, "age"), gl(tl, "age")))
   expect_identical(gl(t0, "tvhours"), gl(tl, "tvhours"))   # the untouched predictor does not move
+})
+
+# ---- Phase 22b-xviii: the vertical window has a floor ------------------------------------------
+
+test_that("a curve smaller than its own noise reads FLAT, and a real one uses the height", {
+  skip_if_not_installed("broom")
+  set.seed(20260822)
+  n     <- 400
+  noise <- data.frame(x = stats::rnorm(n), g = factor(sample(c("a", "b"), n, TRUE)))
+  noise$y <- factor(sample(c("yes", "no"), n, TRUE))
+  tn <- suppressMessages(tab_reg(noise, "y", c("g", "x"), family = "binomial", stats = FALSE))
+  gn <- tabxplor:::reg_shape_table(tn)
+  lv <- function(run) match(strsplit(run, "")[[1]], tabxplor:::rd_spark_glyphs())
+  # pure noise stays in the middle of the run: it never reaches both ends
+  expect_lt(diff(range(lv(gn$shape[[1]]))), 7L)
+  # ... and the span column SAYS the window is the floor, not the curve
+  expect_match(gn$span[[1]], "^<")
+
+  m <- 4000
+  real <- data.frame(x = stats::rnorm(m), g = factor(sample(c("a", "b"), m, TRUE)))
+  real$y <- factor(ifelse(stats::rbinom(m, 1, stats::plogis(real$x)) == 1, "yes", "no"))
+  tr <- suppressMessages(tab_reg(real, "y", c("g", "x"), family = "binomial", stats = FALSE))
+  gr <- tabxplor:::reg_shape_table(tr)
+  expect_identical(diff(range(lv(gr$shape[[1]]))), 7L)   # a real effect spends every level
+  expect_false(startsWith(gr$span[[1]], "<"))
+})
+
+test_that("the window's floor is the first colour rung, read on the curve's own scale", {
+  # every ladder is the SAME ladder at a 50 % reference, so the rung converts exactly
+  expect_equal(tabxplor:::rd_link_rung("logit",   c(0, 1), NULL), log(1.2))
+  expect_equal(tabxplor:::rd_link_rung("logrisk", c(0, 1), NULL), log(1.1))
+  expect_equal(tabxplor:::rd_link_rung("logmean", c(0, 1), NULL), log(1.1))
+  # a probability and a mean share ONE rule -- 0.1 SD, which at p = 0.5 IS 5 points
+  y <- rep(c(0, 1), 500)
+  expect_equal(tabxplor:::rd_link_rung("risk", y, NULL), 0.05, tolerance = 1e-3)
+  expect_equal(tabxplor:::rd_link_rung("mean", c(rep(0, 500), rep(10, 500)), NULL), 0.5,
+               tolerance = 1e-3)
 })

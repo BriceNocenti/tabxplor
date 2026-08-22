@@ -54,12 +54,14 @@ testthat::test_that("quantile groups are balanced, weighted when asked, and froz
 })
 
 testthat::test_that("sd_bands sit at the mean +/- 1 SD, in words, and degrade rather than abort", {
+  sg <- stringi::stri_unescape_unicode("\\u03c3")
   b <- shape_numeric_var(gsh$age, "sd_bands")
   testthat::expect_length(levels(b), 4L)
-  testthat::expect_match(levels(b)[[1]], "low$")
-  testthat::expect_match(levels(b)[[2]], "below average$")
-  testthat::expect_match(levels(b)[[3]], "above average$")
-  testthat::expect_match(levels(b)[[4]], "high$")
+  # the band says its OWN cut, so the label can be checked against the interval beside it
+  testthat::expect_match(levels(b)[[1]], paste0("; < mean - ", sg, "$"))
+  testthat::expect_match(levels(b)[[2]], "; < mean$")
+  testthat::expect_match(levels(b)[[3]], "; > mean$")
+  testthat::expect_match(levels(b)[[4]], paste0("; > mean \\+ ", sg, "$"))
   # every label carries the real cut points too
   testthat::expect_true(all(grepl("^\\[", levels(b))))
   # ⚠ a skewed variable loses a landmark rather than asking cut() for an empty band

@@ -756,3 +756,35 @@ testthat::test_that("a rotated interaction name breaks before its operator", {
   testthat::expect_match(h, "age<br>*race", fixed = TRUE)
   testthat::expect_no_match(h, "age*race", fixed = TRUE)   # never left on one long vertical line
 })
+
+# --- Phase 22b-xviii: the background is a colour MEASURE, so it stops at the primary token --------
+
+test_that("the pill wraps the primary token alone, and does not move it", {
+  skip_if_not_installed("broom")
+  d <- suppressWarnings(gss_cat_data_formatting())
+  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome", "relig", "age"),
+                                family = "binomial", measure = "difference",
+                                color = c(TRUE, "adjustment"), stats = FALSE))
+  h <- paste(as.character(tab_html(t)), collapse = "\n")
+  tds <- regmatches(h, gregexpr("<td[^>]*>.*?</td>", h))[[1]]
+  pill <- grep("tx-pill", tds, value = TRUE)
+  expect_gt(length(pill), 0L)
+  # the aside spans sit OUTSIDE the pill: it opens after any leading one and closes before the stars
+  expect_true(all(grepl('<span class="tx-pill [a-z0-9]+">[^<]*</span>', pill)))
+  expect_false(any(grepl('<span class="tx-pill [^"]*">[^<]*<span class="tx-sec"', pill)))
+  # ... and the fill bleeds around the glyphs instead of shifting them (the 4px drift)
+  expect_true(grepl(".tx-pill{border-radius:4px;padding:1px 4px;margin:0 -4px;}", h, fixed = TRUE))
+})
+
+test_that("the hover gap reads like every other interval in the package", {
+  skip_if_not_installed("broom")
+  d <- suppressWarnings(gss_cat_data_formatting())
+  t <- suppressMessages(tab_reg(d, "married", c("race", "rincome", "relig", "age"),
+                                family = "binomial", measure = "difference",
+                                color = c(TRUE, "adjustment"), stats = FALSE))
+  h <- paste(as.character(tab_html(t)), collapse = "\n")
+  tips <- unlist(regmatches(h, gregexpr('title="[^"]*gap:[^"]*"', h)))
+  expect_gt(length(tips), 0L)
+  expect_false(any(grepl(" pts", tips, fixed = TRUE)))   # a unit the cell itself never prints
+  expect_true(any(grepl("gap: [-+][0-9.]+% \\[[^]]*\\]%", tips)))
+})

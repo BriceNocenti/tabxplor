@@ -261,14 +261,17 @@ test_that("the FREE checks are the default set, the costly ones are opt-in, and 
   expect_false(any(tabxplor:::reg_check_types() %in% none$test))
 })
 
-test_that("REG_CHECKS$cost declares which checks fit a model, and the readers agree with it", {
-  # the declared fact, and the two derived sets
+test_that("REG_CHECKS declares its cost AND its default, and the readers agree with them", {
+  # the declared facts, and the derived sets. ⚠ the default set is DECLARED (footer_default), not
+  # "the applicable checks minus the costly ones": Proportionality is a refit AND a default, because
+  # a cumulative odds ratio that fails it is not one number but a fiction.
   expect_setequal(tabxplor:::reg_checks_costly(), c("linearity", "proportionality"))
-  free <- tabxplor:::reg_checks_default("ordinal")
-  expect_false(any(tabxplor:::reg_checks_costly() %in% free))
-  expect_true(all(free %in% tabxplor:::reg_checks_for("ordinal")))
-  # the default set is exactly the applicable checks minus the costly ones -- no third rule
-  expect_setequal(free, setdiff(tabxplor:::reg_checks_for("ordinal"), tabxplor:::reg_checks_costly()))
+  dflt <- tabxplor:::reg_checks_default("ordinal")
+  expect_true(all(dflt %in% tabxplor:::reg_checks_for("ordinal")))
+  expect_setequal(dflt, c("proportionality", "dispersion", "influence", "collinearity"))
+  # linearity is the costly check that is NOT a default -- `stats =` reaches it by name
+  expect_false("linearity" %in% dflt)
+  expect_true("linearity" %in% tabxplor:::reg_checks_for("ordinal"))
   # a panel is always free: reg_check_plots() keeps every panel whatever `cost` says
   expect_true(all(c("linearity", "proportionality") %in%
                     tabxplor:::reg_checks_for("ordinal", what = "panel")))

@@ -178,8 +178,8 @@ tip_render_resid <- function(x, ctx, tok) {
 
 # the GAP (size, interval, p) wherever tab_reg wrote a `gap_se`: too much for a cell, and the colour
 # IS its display. Read through the helpers the colour engine reads, so hover and fill cannot
-# disagree; the bounds are not fields, so they cannot go through format() and are rendered in the
-# cell's own units by fmt_gap_render().
+# disagree, and RENDERED through format() (fmt_gap_text()), so the line reads exactly like the `diff`
+# line above it -- "-1.4% [-2.1;-0.6]%", never a unit the cell itself never prints.
 #' @keywords internal
 #' @noRd
 tip_render_gap <- function(x, ctx, tok) {
@@ -188,9 +188,9 @@ tip_render_gap <- function(x, ctx, tok) {
   sc  <- fmt_adjustment_score(x)
   bd  <- fmt_gap_bounds(x)
   pv  <- test_fmt_pvalue(fmt_gap_p(x))
-  num <- function(v) fmt_gap_render(x, v)
+  txt <- fmt_gap_text(x)
   out <- dplyr::if_else(ok & is.finite(sc) & is.finite(bd$lo) & !is.na(pv),
-                        paste0(num(sc), " [", num(bd$lo), "; ", num(bd$hi), "], p = ", pv), "")
+                        paste0(txt$est, " ", txt$ci, ", p = ", pv), "")
   out[is.na(out)] <- ""
   out
 }

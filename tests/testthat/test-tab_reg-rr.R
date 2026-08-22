@@ -154,18 +154,20 @@ test_that("the footer reports n + Wald-vs-null only (no AIC/BIC/McFadden/dispers
   # a quasi-likelihood has no AIC/BIC/McFadden; binary Pearson dispersion (`phi`, z15) is just
   # mean(1-mu), so it is not reported either.
   expect_false(any(c("aic", "bic", "mcfadden_r2", "lr_null", "phi") %in% tt$test))
-  # z13's "global" and the FREE checks join every default set (20f: the ones that refit are opt-in);
-  # neither brings a quasi-likelihood statistic with it.
+  # the DEFAULT checks join every default set (22b-xviii: `footer_default`, a declared fact, not
+  # "the free ones"); none brings a quasi-likelihood statistic with it.
   # 22b-ix: the crossed-pair interaction test joins every glm default set (it produces no row
   # unless `predictors` actually declares an `a:b` pair).
+  # ⚠ 22b-xviii: "global" is NOT a default -- one row per multi-level predictor, a drop1() refit each.
   expect_equal(reg_footer_stats("rr", weighted = FALSE, grouped = FALSE, stats = NULL),
-               c("n", "wald_null", "global", "interaction",
+               c("n", "wald_null", "interaction",
                  tabxplor:::reg_check_expand(tabxplor:::reg_checks_default("rr"))))
-  # and `stats = "all"` adds exactly the costly ones on top -- nothing else
+  # and `stats = "all"` adds exactly the opt-in ones on top -- nothing else
   expect_setequal(setdiff(reg_footer_stats("rr", FALSE, FALSE, "all"),
                           reg_footer_stats("rr", FALSE, FALSE, NULL)),
-                  tabxplor:::reg_check_expand(intersect(tabxplor:::reg_checks_costly(),
-                                                        tabxplor:::reg_checks_for("rr"))))
+                  c("global",
+                    tabxplor:::reg_check_expand(setdiff(tabxplor:::reg_checks_for("rr"),
+                                                        tabxplor:::reg_checks_default("rr")))))
 })
 
 test_that("method='profile' is refused for a modified Poisson and degrades to the robust Wald", {
