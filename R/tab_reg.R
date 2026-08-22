@@ -4462,7 +4462,10 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
                     multiplier = "sd", shape = NULL, stats = NULL,
                     na = c("drop_by_outcome", "drop_by_model", "drop_all"),
                     display = NULL, cleannames = NULL, subtext = "", ...) {
-  # ⚠ FIRST: capture the four variable roles before anything can force their promises.
+  # ⚠ FIRST: capture the four variable roles before anything can force their promises -- and the
+  # EXPRESSION `data` was written as, which is how reg_check_plots() finds the microdata again
+  # without the user naming it twice (only a bare name is ever re-resolved; see reg_plot_fits()).
+  data_expr      <- paste(deparse(substitute(data), width.cutoff = 500L), collapse = "")
   outcome_quo    <- rlang::enquo(outcome)
   predictors_quo <- rlang::enquo(predictors)
   tab_vars_quo   <- rlang::enquo(tab_vars)
@@ -4602,7 +4605,7 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
                     crosses = a$crosses,
                     # THE preparation recipe (the column recodes + the anchors), so a refit from the
                     # user's raw data reproduces the very model the table shows.
-                    prep = a$prep,
+                    prep = a$prep, data_expr = data_expr,
                     multiplier = a$multiplier, link = a$est$link,
                     effect = a$est$effect, measure = a$est$measure,
                     wt = a$wt_disp, design_vars = reg_design_vars(a$design_spec)),

@@ -445,15 +445,16 @@ It stays (interactions have no other route). Two measured defects to fix in the 
    whether `insight` can recover the data. Guard exactly: compare against
    `mean(predict(x + k)) − mean(predict(x))`, two lines, refuse on disagreement.
 
-## 13. `reg_assumptions_plots()` — the teaching function
+## 13. `reg_check_plots()` — the teaching function
 
 ```r
-reg_assumptions_plots(
+reg_check_plots(
   x,                     # a tab_reg() table, OR a fitted model (secondary form)
-  data       = NULL,     # the data frame or survey.design the table was built from
-  check      = "auto",   # "auto" | the check nouns | "all"
+  data       = NULL,     # usually unnecessary: found again from the name the table was built with
+  check      = "auto",   # "auto" (the default set) | "all" | the check nouns
   predictors = NULL,     # which numeric predictors get a linearity facet (default: all)
-  ncol = NULL, theme = NULL, lang = NULL, max_points = 2000, seed = 20260810, ...
+  ncol = NULL, facet_ncol = NULL, theme = NULL, lang = NULL,
+  max_points = 2000, nbins = 10, conf = 0.95, seed = 20260810, ...
 )
 ```
 
@@ -461,42 +462,61 @@ reg_assumptions_plots(
 is already in the table, for every model column; this function exists to *show a class what a violation
 looks like*, and to let a careful user look closer. Nothing in the workflow requires calling it.
 
-**Faceted across models (R10).** One call diagnoses every model / outcome / split group in the table.
-When that is a wall, the user passes fewer models — a wall is a legible failure mode, a silent "first
-model only" is not.
+**One titled grid per model (R10).** One call diagnoses every model / outcome / split group in the
+table, each as its own grid with its own heading — the outcome, the model's formula (terms named as the
+table names them, so a curvature term reads `age²`), the family and the N, in the footer's own words.
+The panel set comes from **that model's** family, which is what a table mixing a binomial and an
+ordinal outcome needs; faceting several models into one panel could only ever apply the first model's
+family to all of them. When several grids is a wall, the user passes fewer models — a wall is a legible
+failure mode, a silent "first model only" is not.
 
-**The panel set, per family.** Generous, because it costs nothing at build time:
+**The panel set is `REG_CHECKS`.** `reg_checks_for(what = "panel")` says which panels a family allows;
+`panel_default` says which of them `check = "auto"` draws. **Dispersion** and **collinearity** are
+declared `panel_default = FALSE` — one number against one number, and their footer row says it all —
+so the default grid is 4 panels (gaussian / binomial / poisson), 5 (ordinal), 2 (multinomial), and
+`check = "all"` restores the rest. `panel_marks` declares the reference line(s) a panel draws, and
+where the check has a `flag` the mark **is** that flag: a panel and a footer row cannot show two
+thresholds for one check.
 
-| family           | panels                                                                                               |
-|------------------|------------------------------------------------------------------------------------------------------|
-| gaussian         | residuals vs fitted · Q-Q · scale–location · residuals vs leverage (LINE, the four `plot.lm` panels) |
-| binomial, `rr`   | empirical logit per predictor · binned residuals · calibration · Q-Q of quantile residuals           |
-| poisson          | log empirical means per predictor · mean–variance · observed vs expected counts                      |
-| grouped binomial | as binomial, plus the deviance GOF (valid only when mᵢ is large)                                     |
-| ordinal          | parallel lines (empirical cumulative logits, one line per cut) · Q-Q of quantile residuals           |
-| multinomial      | calibration per category · baseline-category empirical logits — **no residual panel** (§18.2)        |
-| all              | influence (‖IF‖, design-aware)                                                                       |
+**Linearity draws the shape the model fits.** The dashed comparator is an `lm` through the observed
+bins — `y ~ x`, or `y ~ x + I(x^2)` for a predictor `shape = "quadratic"` has cured — never a smoother
+(the assumption IS the shape). The facet is named by the model's own terms for that predictor
+(`age + age²`, `log(age)`). The y axis is the **link the model fits**, not the family's canonical one,
+with its formula in plotmath: an `rr` fit reads `log(risk)`, an `rd` fit reads `risk`.
+
+**An ordinal or multinomial outcome gives one curve per reading** (`rd_link_cuts`): one per cut,
+`y = 1{Y > k}`, for an ordinal — non-parallel curves are the proportional-odds departure that the
+factor-only Proportionality panel cannot show for a continuous predictor; one per non-reference
+category, on the rows in `{ref, k}`, for a multinomial, where `log(p/(1-p))` on that subset *is* the
+empirical generalised logit.
 
 **Facets within a check, grid across checks**: the per-predictor linearity panels are homogeneous, so
-they are one `ggplot` + `facet_wrap()`; heterogeneous panels go in a `gridExtra::arrangeGrob()` grid
-(already a Suggest, already what `or_plot()` returns, and it returns a `gtable`, so the existing test
-idiom carries over).
+they are one `ggplot` + `facet_wrap()` (2 columns; proportionality takes 4); the heterogeneous panels
+go in a `gridExtra::grid.arrange()` grid, which returns a `gtable`.
 
-### 13.1 How it gets a fit
+**The headline is plotmath.** `bquote(bold(<noun>) * ": <question>")` — one bold assumption word, one
+plain question — and the subtitle is one wrapped sentence in `cols$subtle`. No third Suggests package;
+the price is that the title theme element must stay `face = "plain"`.
 
-`reg_meta` gains **one field, `fit_spec`** (4.3 KB against a 23.9 KB table **[M]**): the `specs` list,
-the design *names*, `method`, `conf_level`, `na`, `inverse_two_level_factors`. The function then calls
+### 13.1 How it gets a fit, and its data
+
+`reg_meta$fit_spec` (4.3 KB against a 23.9 KB table **[M]**) carries the `specs` list, the design
+*names*, `method`, `conf_level`, `na`, the preparation recipe, and `data_expr`. The function then calls
 **`reg_fit()` itself** — the same fitter the table came from — so there is no second fitting path to
 keep in sync. Refit cost **60 ms** **[M]**, and it is now a *teaching* cost, which changes nothing.
 
-**A guard is required, not optional**: if `nrow(reg_complete_frame(data, drop_vars))` differs from the
-fit's stored `nobs`, abort naming the discrepancy. A diagnostic plot of the wrong model is worse than no
-plot.
+`data_expr` is the expression `tab_reg()`'s `data =` was written as. A **bare name** is re-resolved in
+the caller (cheap, side-effect-free, and re-runnable), with one `cli_inform()` saying which; anything
+else — a pipeline, a subset, `.` — is never re-run behind the user's back, and the abort names it.
+
+**A guard is required, not optional**: if the refit's `nobs` differs from the model's stored N, abort
+naming the discrepancy. A diagnostic plot of the wrong model is worse than no plot — and it is what
+makes re-resolving a name safe.
 
 ### 13.2 The secondary form
 
 A bare `lm`/`glm`/`svyglm`/`polr`/`multinom`/`svyolr` as `x` is diagnosed directly — ~10 lines, because
-both forms reduce to the same internal quadruple `(fit, frame, family, weights)`.
+both forms reduce to the same internal context `(fit, frame, family, weights, shapes)`.
 
 ---
 

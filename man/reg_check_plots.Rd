@@ -24,19 +24,27 @@ reg_check_plots(
 \item{x}{A \code{\link[=tab_reg]{tab_reg()}} table, or a fitted model (\code{lm} / \code{glm} / \code{svyglm} / \code{polr} / \code{multinom} /
 \code{svyolr}).}
 
-\item{data}{The data frame or \code{survey::svydesign} the table was built from. Required with a table
-(the table stores a ~4 KB recipe, never the fitted models); ignored with a bare model.}
+\item{data}{The data frame or \code{survey::svydesign} the table was built from. \strong{Usually unnecessary}:
+a table records the name it was called with, and when that name still holds a data set the same
+size, it is used --- otherwise the call stops rather than draw the wrong model. Give \code{data}
+explicitly when the table was built from an expression rather than a named object
+(\code{tab_reg(gss |> dplyr::filter(...), ...)}), or when the name has since changed. Ignored with a
+bare model. (A table stores a ~4 KB recipe and refits from it; it never keeps the fitted models.)}
 
-\item{check}{Which panels to draw. \code{"auto"} (default) draws every check that applies to the
-model's family; \code{"all"} is a synonym; or name them: any of \code{"linearity"}, \code{"residuals"},
-\code{"normality"}, \code{"dispersion"}, \code{"influence"}, \code{"collinearity"}, \code{"proportionality"} --- the same
-words the footer rows and \code{\link[=tab_reg]{tab_reg()}}'s \code{stats} argument use.}
+\item{check}{Which panels to draw. \code{"auto"} (default) draws the panels that \emph{decide} something the
+footer cannot say in one number --- linearity, residuals, normality, influence, and
+proportionality for an ordinal outcome. \code{"all"} adds dispersion and collinearity, whose footer
+row is normally enough. Or name them: any of \code{"linearity"}, \code{"residuals"}, \code{"normality"},
+\code{"dispersion"}, \code{"influence"}, \code{"collinearity"}, \code{"proportionality"} --- the same words the
+footer rows and \code{\link[=tab_reg]{tab_reg()}}'s \code{stats} argument use.}
 
 \item{predictors}{Optional: restrict the linearity panel to these continuous predictors.}
 
-\item{ncol}{Number of panel columns in the assembled grid (default: 3, or fewer with few panels).}
+\item{ncol}{Number of panel columns in the assembled grid (default: as square as it can be, 3 at
+most).}
 
-\item{facet_ncol}{Number of facet columns \emph{inside} a panel (default: let \pkg{ggplot2} choose).}
+\item{facet_ncol}{Number of facet columns \emph{inside} a panel (default: 2 for linearity, 4 for
+proportionality).}
 
 \item{theme}{\code{"light"}, \code{"dark"}, or a black-and-white publication palette (\code{"print_ready"} and
 friends -- greyscale, for a thesis appendix). Defaults to
@@ -58,7 +66,8 @@ way to check that a pattern is not a randomisation artefact).}
 \item{...}{Unused, for future extension.}
 }
 \value{
-Invisibly, the assembled \code{gtable} (drawn on the current graphics device).
+Invisibly, the assembled \code{gtable} --- or, with several models, the named list of them, one
+per model, all drawn on the current graphics device.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
@@ -68,8 +77,9 @@ row in the table's own footer --- for every model column, in every export, with 
 installed (see the \code{stats} argument of \code{\link[=tab_reg]{tab_reg()}}). This function exists to \emph{show what a violation
 looks like}, and to let a careful reader look closer.
 
-One call diagnoses \strong{every model} in the table (each outcome, each compared model), drawn as
-facets. Pass a \code{\link[=tab_reg]{tab_reg()}} table plus the data it was built from, or a fitted model directly.
+One call diagnoses \strong{every model} in the table (each outcome, each compared model): one titled
+grid per model, each drawing the panels its own family allows. Pass a \code{\link[=tab_reg]{tab_reg()}} table --- the
+data it was built from is usually found on its own --- or a fitted model directly.
 }
 \examples{
 # \donttest: building a multi-panel ggplot grid costs a few seconds of CPU.
@@ -80,7 +90,7 @@ d <- forcats::gss_cat |>
 if (requireNamespace("ggplot2", quietly = TRUE) &&
     requireNamespace("gridExtra", quietly = TRUE)) {
   t <- tab_reg(d, "married", c("race", "age"), family = "binomial")
-  reg_check_plots(t, d)
+  reg_check_plots(t)
 }
 }
 }

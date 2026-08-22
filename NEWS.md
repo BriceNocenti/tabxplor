@@ -183,9 +183,10 @@
   colour per group); `"quadratic"` adds a curvature term, giving the predictor two rows; `"log"` /
   `"sqrt"` fit the transformed column. The observed `Obs_*` companion is fitted with the same shape, so
   the model-versus-observed comparison still compares like with like.
-* **`reg_check_plots()`** draws those five checks — one panel each, faceted across every model in the
-  table, in the light / dark / print themes. A teaching companion: every verdict it illustrates is
-  already a footer row. It takes a `tab_reg()` table plus its data, or a fitted model directly.
+* **`reg_check_plots()`** draws those checks — one panel each, one titled grid per model, in the
+  light / dark / print themes. A teaching companion: every verdict it illustrates is already a footer
+  row. It takes a `tab_reg()` table (finding the data it was built from on its own), or a fitted
+  model directly; `check = "all"` adds the two panels the default grid leaves to the footer.
 * **One observed column beside one model column.** `tab_reg(empirical = TRUE)` used to draw a
   descriptive column *and* a crude-effect column on two different colour ladders. The two are one
   estimand computed twice --- with a single predictor, and with all of them --- so they are now one
@@ -409,7 +410,7 @@
   200 000-row, 6-predictor logit went from 12.3 s to 3.4 s). Ask for them by name —
   `stats = c("n", "aic", "linearity")` — or take everything with `stats = "all"`, which previously
   meant only the default set. Dispersion, Influence and Collinearity are unchanged and still shown
-  by default, `reg_check_plots()` still draws **every** panel, and the observed curve in each
+  by default, `reg_check_plots()` draws any panel on request, and the observed curve in each
   continuous predictor's own row label needs no model at all. One consequence: an ordinal table no
   longer warns about a rejected proportional-odds assumption unless you asked for the check.
 * **Everything past the variable roles must now be named.** `tab()`, `tab_plain()`, `tab_num()` and

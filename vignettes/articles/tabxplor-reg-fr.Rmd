@@ -1272,11 +1272,16 @@ Un trait pointillé sans crochet signifie que l'écart n'a pas pu être testé �
 ### Les vérifications du modèle : `reg_check_plots()`
 
 ```{r, eval = FALSE}
-reg_check_plots(t, gss_simple)                       # tous les panneaux permis par la famille
-reg_check_plots(t, gss_simple, check = "linearity")  # un seul
+reg_check_plots(t)                       # les panneaux par défaut, une grille titrée par modèle
+reg_check_plots(t, check = "all")        # avec en plus la dispersion et la colinéarité
+reg_check_plots(t, check = "linearity")  # un seul
 ```
 
-Les mêmes cinq noms que les lignes de bas de tableau, un panneau chacun, en facettes sur tous les modèles du tableau. Ce sont des compagnons **pédagogiques**, pas un outil de décision : chaque verdict qu'ils illustrent est déjà une ligne de bas de tableau, dans tous les exports, sans aucun package graphique installé. Ils existent pour montrer à quoi ressemble une violation. `theme = "print_ready"` en donne une version en niveaux de gris pour une annexe de mémoire ; vous pouvez aussi passer directement un modèle ajusté au lieu d'un tableau.
+Les mêmes noms que les lignes de bas de tableau, un panneau chacun, et **une grille titrée par modèle** — chacune avec les panneaux permis par sa propre famille, si bien qu'un tableau mêlant une variable expliquée binaire et une variable ordinale est vérifié correctement. Les données sont normalement retrouvées toutes seules, à partir du nom avec lequel le tableau a été construit ; ne passez `data =` que si le tableau vient d'une expression plutôt que d'un objet nommé. `check = "auto"` laisse de côté la **dispersion** et la **colinéarité**, dont la ligne de bas de tableau dit déjà tout ; `check = "all"` les rétablit.
+
+Ce sont des compagnons **pédagogiques**, pas un outil de décision : chaque verdict qu'ils illustrent est déjà une ligne de bas de tableau, dans tous les exports, sans aucun package graphique installé. Ils existent pour montrer à quoi ressemble une violation. `theme = "print_ready"` en donne une version en niveaux de gris pour une annexe de mémoire ; vous pouvez aussi passer directement un modèle ajusté au lieu d'un tableau.
+
+Deux panneaux méritent un second regard. La **linéarité** compare la courbe observée à *la forme que le modèle ajuste* — une droite d'ordinaire, une parabole dès que `shape = "quadratic"` a ajouté un terme de courbure — et reste ainsi honnête sur un prédicteur déjà corrigé. Avec une variable expliquée ordinale ou nominale, elle trace **une courbe par seuil** (par modalité, face à la référence, pour une multinomiale) : des courbes parallèles, c'est l'hypothèse des cotes proportionnelles qui tient — ce que le test de Brant chiffre en bas de tableau, mais que le panneau *Proportionnalité*, qui porte sur les facteurs, ne peut pas montrer pour un prédicteur continu.
 
 Notez les contrats opposés : `forest_plot()` ne réajuste jamais (les résultats sont dans le tableau), `reg_check_plots()` réajuste toujours (les résidus, eux, n'y sont pas).
 

@@ -1248,11 +1248,16 @@ A dotted connector with no bracket means the gap could not be tested — most of
 ### The model checks: `reg_check_plots()`
 
 ```{r, eval = FALSE}
-reg_check_plots(t, gss_simple)                       # every panel the family allows
-reg_check_plots(t, gss_simple, check = "linearity")  # just one
+reg_check_plots(t)                       # the default panels, one titled grid per model
+reg_check_plots(t, check = "all")        # plus dispersion and collinearity
+reg_check_plots(t, check = "linearity")  # just one
 ```
 
-The same five nouns as the footer rows, one panel each, faceted across every model in the table. These are a **teaching** companion, not a decision tool: every verdict they illustrate is already a footer row, in every export, with no plotting package installed. They exist to show what a violation looks like. `theme = "print_ready"` gives a greyscale version for a thesis appendix; you can also pass a plain fitted model instead of a table.
+The same nouns as the footer rows, one panel each, and **one titled grid per model** — each drawing the panels its own family allows, so a table mixing a binomial and an ordinal outcome is diagnosed correctly. The data is normally found on its own, from the name the table was built with; pass `data =` when the table came from an expression rather than a named object. `check = "auto"` leaves out **dispersion** and **collinearity**, whose footer row already says the whole thing; `check = "all"` restores them.
+
+These are a **teaching** companion, not a decision tool: every verdict they illustrate is already a footer row, in every export, with no plotting package installed. They exist to show what a violation looks like. `theme = "print_ready"` gives a greyscale version for a thesis appendix; you can also pass a plain fitted model instead of a table.
+
+Two panels repay a second look. **Linearity** compares the observed curve to *the shape the model fits* — a straight line normally, a parabola once `shape = "quadratic"` put a curvature term in — so it stays honest about a predictor you have already cured. With an ordinal or a multinomial outcome it draws **one curve per cut of the outcome** (per category, against the reference, for a multinomial): parallel curves are the proportional-odds assumption holding, which the Brant test in the footer scores but the *Proportionality* panel, being about factors, cannot show for a continuous predictor.
 
 Note the opposite contracts: `forest_plot()` never re-fits (the results are in the table), `reg_check_plots()` always does (residuals are not).
 

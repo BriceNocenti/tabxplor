@@ -94,9 +94,13 @@ reg_check_family_of <- function(f) {
 #                 (the faintest under-shade, a warning -- never the p-value's deep red). ⚠ these are
 #                 CONVENTIONS, not tests: no threshold on a VIF or a dfbeta has a null distribution
 #                 behind it, so the mark says "look at this", never "this is significant".
-#   panel         the reg_check_plots() panel this check draws (NA = no panel), and the `check =
-#                 vocabulary. `auto` draws every panel the family allows. ⚠ INDEPENDENT of `cost`:
-#                 a panel is always free, which is why reg_check_plots() never filters on it.
+#   panel         the reg_check_plots() panel this check draws (NA = no panel), and the `check =`
+#                 vocabulary. ⚠ INDEPENDENT of `cost`: a panel is always free, which is why
+#                 reg_check_plots() never filters on it.
+#   panel_default TRUE = drawn by `check = "auto"`. FALSE = reachable, but left out of the default
+#                 grid because its footer row already says the whole thing; `check = "all"` restores it.
+#   panel_marks   the reference line(s) that panel draws. DESIGN: a panel and a footer row are one
+#                 check, so they must read one threshold -- `flag` where the check declares one.
 #' @keywords internal
 REG_CHECKS <- list(
   # 1. the ESTIMATE: is this predictor's effect really one straight line?
@@ -105,21 +109,22 @@ REG_CHECKS <- list(
     types = c(linearity_lr = "LR", linearity_f = "F", linearity_wald = "Wald"),
     kind = "pvalue", digits = NA_integer_,
     families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = TRUE,
-    cost = "refit", panel = "linearity"),
+    cost = "refit", panel = "linearity", panel_default = TRUE),
   # 2. what the estimate MEANS: is one odds ratio enough for every cut?
   proportionality = list(
     noun = "Proportionality",
     types = c(proportionality = "Brant"),
     kind = "pvalue", digits = NA_integer_,
     families = "ordinal", weighted_ok = FALSE, per_predictor = FALSE,
-    cost = "refit", panel = "proportionality"),
+    cost = "refit", panel = "proportionality", panel_default = TRUE),
   # 3. the INTERVAL: are the standard errors wide enough?
   dispersion = list(
     noun = "Dispersion",
     types = c(dispersion = "robust/model SE"),
     kind = "gof", digits = 2L,
     families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = FALSE,
-    cost = "free", panel = "dispersion"),
+    # one number against one number: the footer row says it all, so the panel is opt-in.
+    cost = "free", panel = "dispersion", panel_default = FALSE),
   # 4. is it REAL: does one respondent carry the result?
   influence = list(
     noun = "Influence",
@@ -129,7 +134,7 @@ REG_CHECKS <- list(
     # flags thousands of points.
     kind = "gof", digits = 2L, flag = 1,
     families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = FALSE,
-    cost = "free", panel = "influence"),
+    cost = "free", panel = "influence", panel_default = TRUE, panel_marks = 1),
   # 5. why is it WIDE: can the data tell these predictors apart?
   collinearity = list(
     noun = "Collinearity",
@@ -138,18 +143,20 @@ REG_CHECKS <- list(
     # any such cut-off -- hence a warning shade and a documented rule of thumb, not a verdict.
     kind = "gof", digits = 2L, flag = 10,
     families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
-    per_predictor = FALSE, cost = "free", panel = "collinearity"),
+    # a design property that biases nothing: the footer number is the decision, the bars are colour.
+    per_predictor = FALSE, cost = "free", panel = "collinearity", panel_default = FALSE,
+    panel_marks = c(5, 10)),
   # TAUGHT, NEVER SCORED. Both were measured not to discriminate as verdicts, but both are the
   # canonical lessons, so they keep their panel and give up their row -- an empty `types` IS that
   # statement.
   residuals = list(
     noun = "Residuals", types = character(0), kind = NA_character_, digits = NA_integer_,
     families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
-    per_predictor = FALSE, cost = "free", panel = "residuals"),
+    per_predictor = FALSE, cost = "free", panel = "residuals", panel_default = TRUE),
   normality = list(
     noun = "Normality", types = character(0), kind = NA_character_, digits = NA_integer_,
     families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
-    per_predictor = FALSE, cost = "free", panel = "normality")
+    per_predictor = FALSE, cost = "free", panel = "normality", panel_default = TRUE)
 )
 
 # Every discriminator the checks can emit (the `test` values that are check rows).
@@ -181,6 +188,18 @@ reg_checks_default <- function(family, weighted = FALSE, has_fit = TRUE) {
   keys[vapply(keys, function(k) identical(REG_CHECKS[[k]]$cost, "free"), logical(1))]
 }
 
+# The DEFAULT panel set: the applicable panels their row opts into. `check = "all"` restores the
+# others -- default grid vs vocabulary, exactly as reg_checks_default() is to `stats =`.
+#' @keywords internal
+reg_panels_default <- function(family, weighted = FALSE) {
+  keys <- reg_checks_for(family, weighted, has_fit = TRUE, what = "panel")
+  keys[vapply(keys, function(k) isTRUE(REG_CHECKS[[k]]$panel_default), logical(1))]
+}
+
+# The reference line(s) a panel draws, from the row that declares them (numeric(0) = none).
+#' @keywords internal
+reg_panel_marks <- function(key) as.numeric(REG_CHECKS[[key]]$panel_marks %||% numeric(0))
+
 # The checks that cost a model fit, as a sentence -- read by ?tab_reg's generated `stats` prose, so
 # the argument names them from the table rather than from a hand-kept list.
 #' @keywords internal
@@ -193,7 +212,12 @@ stopifnot(
   all(vapply(REG_CHECKS, function(ck) isTRUE(ck$cost %in% c("free", "refit")), logical(1))),
   # a taught-but-never-scored row has no footer row to opt into, so it can only be free
   all(vapply(REG_CHECKS, function(ck) length(ck$types) > 0L || identical(ck$cost, "free"),
-             logical(1)))
+             logical(1))),
+  # every panel says whether it is drawn by default, and no row without a panel pretends to
+  all(vapply(REG_CHECKS, function(ck) is.na(ck$panel) || is.logical(ck$panel_default), logical(1))),
+  # a declared mark that also has a `flag` must BE that flag: one check, one threshold
+  all(vapply(REG_CHECKS, function(ck)
+    is.null(ck$panel_marks) || is.null(ck$flag) || ck$flag %in% ck$panel_marks, logical(1)))
 )
 
 # A `stats =` value the user writes is a check KEY ("linearity"); a `test` row carries a
@@ -586,38 +610,145 @@ reg_shape_add <- function(shape_terms, predictors) {
   unname(shape_terms[keep])
 }
 
+# A model TERM as a reader should see it. A quadratic term is a scaled square carrying a frozen
+# literal (`I((\`age\`/12.34)^2)`); nothing but noise reaches the eye from that, so the stored
+# `shape_terms` is inverted back to the display level the table already uses ("age²"). Everything
+# else keeps its own name, minus the backticks the formula needed.
+# WARNING: invert the STORED vector, never parse the string -- the literal scale is data-dependent.
+#' @keywords internal
+reg_term_label <- function(term, shape_terms = NULL) {
+  if (!length(term)) return(character(0))
+  out <- gsub("`", "", as.character(term), fixed = TRUE)
+  if (length(shape_terms)) {
+    hit <- match(as.character(term), unname(shape_terms))
+    sq  <- !is.na(hit)
+    out[sq] <- reg_shape_sq_level(names(shape_terms)[hit[sq]])
+  }
+  out
+}
+
 
 # === SECTION: the plot primitives ===================================================================
 #
 # Five base-R functions, no dependency. They are the ONLY producers of the numbers every panel and
 # the row sparkline draw.
 #
-# WARNING for whoever adds a panel later: never `geom_smooth(method = "auto")`. It switches loess -> gam
-# at 1000 observations in the largest GROUP, so a facetted 50 000-row plot gets loess and an unfacetted
-# 1200-row one gets gam -- and its message is assembled dynamically, so it cannot be regex-suppressed.
-# Nothing here smooths: the comparator of a linearity panel must be the STRAIGHT line the model assumes.
+# WARNING for whoever adds a panel later: never `geom_smooth()`. Its `method = "auto"` switches
+# loess -> gam at 1000 observations in the largest GROUP, so a facetted 50 000-row plot gets loess and
+# an unfacetted 1200-row one gets gam -- and its message is assembled dynamically, so it cannot be
+# regex-suppressed. Nothing here smooths: the comparator of a linearity panel is the shape the MODEL
+# fits (rd_comparator), which is the whole point of the panel.
 
-# The per-observation outcome a check reads, on the family's own LINK scale, plus that scale's label.
-# An ordinal / multinomial outcome has no single curve, so it is read as "beyond the first category"
-# -- stated in the axis label, never implied.
+# The MATH a link scale is, as plotmath -- the second half of every linearity y axis, so the word and
+# the formula come from one place. A character element renders verbatim in plotmath, which is why the
+# outcome's name is interpolated as a string and never as a name (a name with a space would break).
 #' @keywords internal
-rd_link_y <- function(y, family, trials = NULL, positive_level = NULL) {
-  family <- reg_check_family_of(family)          # a LINK key (rd/rr/mr) reads as its distribution
-  if (family == "gaussian")
-    return(list(y = as.numeric(y), link = "identity", lab = gettext("mean")))
-  if (reg_fam_count(family))
-    return(list(y = as.numeric(y), link = "log", lab = gettext("log(mean)")))
-  if (reg_fam_binary(family) && !is.null(trials))
-    return(list(y = as.numeric(y) / trials, link = "logit", lab = gettext("empirical logit")))
-  if (reg_fam_binary(family)) {
-    yy <- if (!is.null(positive_level)) as.numeric(as.character(y) == positive_level)
-          else                          as.numeric(as.factor(y)) - 1
-    return(list(y = yy, link = "logit", lab = gettext("empirical logit")))
-  }
-  # ordinal / multinomial: the one cut every K-category outcome has.
-  list(y = as.numeric(as.numeric(as.factor(y)) > 1), link = "logit",
-       lab = gettext("empirical logit (beyond the first category)"))
+rd_link_expr <- function(kind, lab, outcome = NULL) {
+  nm <- if (!is.null(outcome) && nzchar(outcome)) outcome else "y"
+  f <- switch(kind,
+              mean    = bquote(bar(.(nm))),
+              logmean = bquote(log(bar(.(nm)))),
+              logit   = bquote(log(frac(p, 1 - p)) * "," ~~ p == P(.(nm))),
+              risk    = bquote(p == P(.(nm))),
+              logrisk = bquote(log(p) * "," ~~ p == P(.(nm))),
+              NULL)
+  if (is.null(f)) return(lab)
+  bquote(.(lab) * ":" ~~ .(f))
 }
+
+# The per-observation outcome a check reads, on the family's own LINK scale, plus that scale's label
+# and its formula. An ordinal / multinomial outcome has no single curve, so it is read as "beyond the
+# first category" -- stated in the axis label, never implied. (rd_link_cuts() is the plots' richer
+# read of the same fact; this one is what the row sparkline needs, and one curve is all it can draw.)
+#' @keywords internal
+rd_link_y <- function(y, family, trials = NULL, positive_level = NULL, outcome = NULL) {
+  fit    <- family                               # the LINK key itself, before it reads as a family
+  family <- reg_check_family_of(family)          # a LINK key (rd/rr/mr) reads as its distribution
+  out <- function(y, link, kind, lab)
+    list(y = y, link = link, lab = lab, expr = rd_link_expr(kind, lab, outcome))
+  # WARNING: the curve belongs on the scale the MODEL fits, which is the LINK and not the
+  # distribution -- an empirical logit beside a modified-Poisson fit would answer a question that
+  # model never asked. `link = ` is a measure, and this is where the plots read it.
+  risk <- function() {
+    if (!is.null(trials))         return(as.numeric(y) / trials)
+    if (!is.null(positive_level)) return(as.numeric(as.character(y) == positive_level))
+    as.numeric(as.factor(y)) - 1
+  }
+  if (fit == "rr") return(out(risk(), "logrisk",  "logrisk", gettext("log(risk)")))
+  if (fit == "rd") return(out(risk(), "identity", "risk",    gettext("risk")))
+  if (fit == "mr") return(out(as.numeric(y), "log", "logmean", gettext("log(mean)")))
+  if (family == "gaussian")
+    return(out(as.numeric(y), "identity", "mean", gettext("mean")))
+  if (reg_fam_count(family))
+    return(out(as.numeric(y), "log", "logmean", gettext("log(mean)")))
+  if (reg_fam_binary(family))
+    return(out(risk(), "logit", "logit", gettext("empirical logit")))
+  # ordinal / multinomial: the one cut every K-category outcome has.
+  out(as.numeric(as.numeric(as.factor(y)) > 1), "logit", "logit",
+      gettext("empirical logit (beyond the first category)"))
+}
+
+# THE curves a linearity panel draws, one per reading of the outcome. Everything but an ordered or an
+# unordered factor has exactly one, and it is rd_link_y()'s -- so the ordinary panel is unchanged.
+#   ordinal      one per CUT, y = 1{Y > k}: the observed cumulative logit. Non-parallel curves are a
+#                proportional-odds departure for a NUMERIC predictor, which the Brant test scores but
+#                the factor-only Proportionality panel cannot show.
+#   multinomial  one per non-reference category, on the rows in {ref, k} only: log(p/(1-p)) there IS
+#                the empirical generalised logit the model estimates.
+# `keep` is the rows a curve is measured on, so the caller subsets x, the weights and the design rows
+# with one index and rd_bin() stays untouched.
+#' @keywords internal
+rd_link_cuts <- function(y, family, trials = NULL, positive_level = NULL, outcome = NULL) {
+  fam <- reg_check_family_of(family)
+  n   <- length(y)
+  if (!fam %in% c("ordinal", "multinomial")) {
+    ly <- rd_link_y(y, family, trials, positive_level, outcome)
+    return(list(link = ly$link, lab = ly$lab, expr = ly$expr,
+                curves = list(list(keep = seq_len(n), y = ly$y, cut = NA_character_))))
+  }
+  f  <- as.factor(y)
+  lv <- levels(f)
+  i  <- as.integer(f)
+  if (length(lv) < 2L) return(NULL)
+  if (fam == "ordinal") {
+    lab <- gettext("empirical cumulative logit")
+    return(list(link = "logit", lab = lab,
+                expr = bquote(.(lab) * ":" ~~ log(frac(P(Y > k), P(Y <= k)))),
+                curves = lapply(seq_len(length(lv) - 1L), function(k)
+                  list(keep = seq_len(n), y = as.numeric(i > k),
+                       cut = gettextf("> %s", lv[[k]])))))
+  }
+  ref <- lv[[1L]]
+  lab <- gettextf("empirical logit vs %s", ref)
+  list(link = "logit", lab = lab,
+       expr = bquote(.(lab) * ":" ~~ log(frac(P(Y == k), P(Y == .(ref))))),
+       curves = lapply(seq_along(lv)[-1L], function(k) {
+         keep <- which(i %in% c(1L, k))
+         list(keep = keep, y = as.numeric(i[keep] == k), cut = lv[[k]])
+       }))
+}
+
+# The comparator of a linearity panel: the shape the MODEL fits, drawn through the observed bins.
+# Not a smoother -- the assumption IS the shape, so a smoother would trace the very departure the
+# panel exists to show. A predictor cured by `shape = "quadratic"` is fitted as a parabola, because
+# that is what the model now assumes; every other predictor is fitted as the straight line it assumes.
+#' @keywords internal
+rd_comparator <- function(x, y, quadratic = FALSE) {
+  ok <- is.finite(x) & is.finite(y)
+  if (sum(ok) < (if (quadratic) 3L else 2L)) return(rep(NA_real_, length(x)))
+  d   <- data.frame(x = x[ok], y = y[ok])
+  fml <- if (quadratic) y ~ x + I(x^2) else y ~ x
+  fit <- tryCatch(stats::lm(fml, data = d), error = function(e) NULL)
+  if (is.null(fit)) return(rep(NA_real_, length(x)))
+  out <- rep(NA_real_, length(x))
+  out[ok] <- as.numeric(stats::predict(fit, newdata = d))
+  out
+}
+
+# Wrap a panel subtitle so a longer translation still fits above the plot. `strwrap` is base R, and
+# the width is what a 3-across grid can hold at size 8.5.
+#' @keywords internal
+rd_wrap <- function(txt, width = 68L) paste(strwrap(txt, width = width), collapse = "\n")
 
 # Weighted quantile bins of y against x, on the link scale: the OBSERVED shape, with no fit in it.
 # The band is the theoretical one, 2*sqrt(p(1-p)/n) as ROS SS14.5 p.253 specifies -- not
@@ -674,7 +805,8 @@ rd_bin <- function(x, y, w = NULL, nbins = 10L, link = "identity",
   vy <- as.numeric(rowsum(w * (y - my[g])^2, g)) / sw   # the bin's own (weighted) variance
   # the EFFECTIVE base of each bin, so a weighted band is not a sample-size fiction. `num` = the
   # numerator of Korn-Graubard's device for THIS link (see rd_bin_neff).
-  num <- switch(link, "logit" = my * (1 - my), "log" = pmax(my, 0), vy)
+  num <- switch(link, "logit" = my * (1 - my), "log" = pmax(my, 0),
+                "logrisk" = pmax(my * (1 - my), 0), vy)
   ne  <- if (wtd || !is.null(design)) rd_bin_neff(sw, num, w, y, g, design, des_rows) else sw
   out <- switch(
     link,
@@ -685,6 +817,12 @@ rd_bin <- function(x, y, w = NULL, nbins = 10L, link = "identity",
     "log" = {
       m <- pmax(my, 0.5 / ne)
       list(y = log(m), se = sqrt(1 / (ne * m)))
+    },
+    # a log-link RISK is not a log-link count: Var(log p-hat) = (1 - p) / (n p), which the Poisson
+    # form above overstates by 1 / (1 - p).
+    "logrisk" = {
+      p <- (my * ne + 0.5) / (ne + 1)
+      list(y = log(p), se = sqrt((1 - p) / (ne * p)))
     },
     list(y = my, se = sqrt(vy / ne))
   )

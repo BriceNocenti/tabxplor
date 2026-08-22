@@ -17,16 +17,27 @@
 #   (R/reg-assumptions.R). This function exists to show a class what a violation LOOKS like, and to let
 #   a careful reader look closer. Nothing in the workflow requires calling it.
 #
-# ONE ENGINE, TWO ENTRY FORMS (ruling R1). A tab_reg() table + its data, or a bare fit. Both reduce to
-#   the same quadruple (fit, frame, family, weights), so the panel builders never branch on the form.
+# ONE ENGINE, TWO ENTRY FORMS (ruling R1). A tab_reg() table, or a bare fit. Both reduce to the same
+#   context (fit, frame, family, weights, shapes), so the panel builders never branch on the form.
 #   The table form REFITS through reg_fit() itself, from the ~4 KB recipe stored in reg_meta$fit_spec:
 #   a 60 ms teaching cost, against the ~10 MB per retained fit that was the measured cause of the
-#   Phase-o jamovi freeze. There is no second fitting path to keep in sync.
+#   Phase-o jamovi freeze. There is no second fitting path to keep in sync. The microdata it refits on
+#   is normally found from the NAME the table was built with (fit_spec$data_expr), so `data =` is
+#   written once; the N guard is what makes that safe.
+#
+# ONE GRID PER MODEL (ruling R10, revised in 22e-i). A grid carries one model's heading and the panel
+#   set of ITS OWN family -- faceting several models into one panel could only ever apply the first
+#   model's family to all of them, which is wrong the moment a table mixes outcomes.
 #
 # THE PANEL SET IS REG_CHECKS. A panel and a footer row are the same check, so their titles, their
-#   applicable families and the `check =` vocabulary all come from that one table; two of its rows are
+#   applicable families, their thresholds (`panel_marks`), whether the default grid draws them
+#   (`panel_default`) and the `check =` vocabulary all come from that one table; two of its rows are
 #   TAUGHT BUT NEVER SCORED (residuals, normality -- measured non-discriminating as verdicts, canonical
 #   as lessons) and say so by carrying no discriminator.
+#
+# THE PANEL HEADLINE IS PLOTMATH. One bold assumption word, one plain question, one line -- and the
+#   linearity y axis is a real formula. bquote() buys both without a third Suggests package; the cost
+#   is that the title THEME element must stay plain, or bold() would spread over the whole line.
 #
 # KEY CONSTRAINTS:
 #   - ggplot2 + gridExtra are Suggests -> every entry point guards with requireNamespace().
@@ -58,6 +69,11 @@ tx_plot_colors <- function(theme = NULL) {
   th <- tx_theme_resolve(theme)          # ggplot bakes its colours: "auto" cannot be honoured
   ch <- tx_chrome_hex(th)
   list(theme = th, text = ch$text, grey = ch$grey, bg = ch$bg,
+       # `grey` is the INK of a band or a gridline; `subtle` is the ink of WORDS that must stay
+       # readable while sitting back from the title -- the table's own grey is too light for that on
+       # white, and axis labels are as hard to read as a subtitle.
+       subtle = if (identical(th, "dark")) "#BEBEBE"
+                else if (tx_is_print(th))  ch$grey2 %||% "#3F3F3F" else "#555555",
        # the accent: a hue under colour themes, pure black under `print` (a greyscale panel leans on
        # line TYPE, not on a hue that photocopies to the same grey as the data)
        accent = if (tx_is_print(th)) "#000000" else "#c00000",
@@ -70,9 +86,9 @@ tx_plot_theme <- function(cols) {
   ggplot2::theme_bw(base_size = 10) +
     ggplot2::theme(
       plot.title    = ggplot2::element_text(face = "bold", size = 10, colour = cols$text),
-      plot.subtitle = ggplot2::element_text(size = 8.5, colour = cols$grey),
+      plot.subtitle = ggplot2::element_text(size = 8.5, colour = cols$subtle, lineheight = 1.15),
       text          = ggplot2::element_text(colour = cols$text),
-      axis.text     = ggplot2::element_text(colour = cols$grey),
+      axis.text     = ggplot2::element_text(colour = cols$subtle),
       plot.background   = ggplot2::element_rect(fill = cols$bg, colour = NA),
       panel.background  = ggplot2::element_rect(fill = cols$bg, colour = NA),
       legend.background = ggplot2::element_rect(fill = cols$bg, colour = NA),
@@ -358,18 +374,19 @@ tab_estimates <- function(x, columns = NULL, what = c("auto", "effect", "level")
 
 # === SECTION: getting a fit ==========================================================================
 
-# The (fit, frame, family, label, ...) quadruples a call is about. A bare model gives one; a tab_reg()
-# table gives one PER MODEL COLUMN (ruling R10: one call diagnoses every model / outcome, faceted --
-# when that is a wall, the user passes fewer models, which is a legible failure mode where a silent
-# "first model only" is not).
+# The (fit, frame, family, label, ...) contexts a call is about. A bare model gives one; a tab_reg()
+# table gives one PER MODEL COLUMN, and each becomes its own titled grid (ruling R10, revised in
+# 22e-i: faceting by model could only ever draw ONE family's panel set, which is wrong the moment a
+# table mixes outcomes).
 #' @keywords internal
-reg_plot_fits <- function(x, data = NULL) {
+reg_plot_fits <- function(x, data = NULL, caller = parent.frame()) {
   if (!inherits(x, "tbl_df") && !is.data.frame(x)) {
     # the secondary form: a bare lm / glm / svyglm / polr / multinom / svyolr
     fr <- tryCatch(stats::model.frame(x), error = function(e) NULL)
     return(list(list(fit = x, data = if (is.null(data)) fr else data,
                      family = reg_plot_family_of(x), outcome = reg_plot_dep_of(x),
                      predictors = reg_plot_preds_of(x), trials = NULL, wt = NULL, design = NULL,
+                     nobs = tryCatch(stats::nobs(x), error = function(e) NA_integer_),
                      label = gettext("Model"))))
   }
   # Phase 19m-i: TWO questions, so two messages. "Is this a regression table" is the STORED kind
@@ -385,11 +402,7 @@ reg_plot_fits <- function(x, data = NULL) {
     cli::cli_abort(c("This {.fn tab_reg} table no longer carries its model record.",
                      "i" = "Rebuild it with {.fn tab_reg}, or pass the fitted model directly."))
   }
-  if (is.null(data)) {
-    cli::cli_abort(c("{.arg data} is required with a {.fn tab_reg} table.",
-                     "i" = "Diagnostics need the microdata; the table stores only the recipe.",
-                     "x" = "e.g. {.code reg_check_plots(t, gss_simple)}."))
-  }
+  if (is.null(data)) data <- reg_plot_recover_data(fs$data_expr, caller)
   svy  <- svy_unwrap_data(data, "reg_check_plots")
   if (!is.null(svy)) data <- svy$data
   ds   <- list(design = if (is.null(svy)) NULL else svy$spec$design,
@@ -401,7 +414,8 @@ reg_plot_fits <- function(x, data = NULL) {
   data <- reg_prepare_replay(data, fs$prep)
   if (!is.null(ds$design)) ds$design$variables <- data
   nobs_tab <- reg_plot_nobs(x)
-  purrr::imap(fs$specs, function(sp, i) {
+  why <- NULL                        # the first refit's own error, kept to explain an empty result
+  out <- purrr::imap(fs$specs, function(sp, i) {
     f <- tryCatch(suppressMessages(suppressWarnings(reg_fit(
       data, sp$outcome, sp$predictors, sp$fit_family, ds, isTRUE(sp$est$exp),
       reg_outcome_level_of(sp$outcome_level) %||% fs$outcome_level,
@@ -409,7 +423,7 @@ reg_plot_fits <- function(x, data = NULL) {
       multiplier = fs$multiplier, drop_extra = fs$na_shared_vars,
       add_terms = c(reg_shape_add(fs$shape_terms, sp$predictors),
                     reg_cross_add(fs$crosses, sp$cross))))),
-      error = function(e) NULL)
+      error = function(e) { if (is.null(why)) why <<- conditionMessage(e); NULL })
     if (is.null(f)) return(NULL)
     # THE guard, and it is required rather than optional: a diagnostic plot of the wrong model is
     # worse than no plot. The table already carries each model's N (the `n` footer row), so this needs
@@ -422,8 +436,47 @@ reg_plot_fits <- function(x, data = NULL) {
     }
     list(fit = f$fit, data = f$data, family = sp$fit_family, outcome = sp$outcome,
          predictors = sp$predictors, trials = sp$trials, wt = ds$wt, design = ds$design,
-         positive_level = f$positive_level, label = sp$label, anchors = fs$prep$anchors)
+         positive_level = f$positive_level, label = sp$label, nobs = f$nobs,
+         # a model COMPARISON is the only case where the label says something the outcome does not
+         compare = sum(vapply(fs$specs, function(z) z$outcome, character(1)) == sp$outcome) > 1L,
+         anchors = fs$prep$anchors, shapes = fs$prep$shapes,
+         shape_terms = reg_shape_keep(fs$shape_terms, sp$predictors))
   }) |> purrr::compact()
+  if (!length(out))
+    cli::cli_abort(c("No model could be refitted from {.arg x}.",
+                     if (!is.null(why)) c("x" = why),
+                     "i" = "Check that {.arg data} is the data the table was built from."))
+  out
+}
+
+# The quadratic terms of ONE model, keyed by variable -- reg_shape_add()'s named twin, which the
+# panels need in order to name a term and to know which predictor is fitted as a curve.
+#' @keywords internal
+reg_shape_keep <- function(shape_terms, predictors) {
+  if (is.null(shape_terms) || !length(shape_terms)) return(character(0))
+  shape_terms[intersect(names(shape_terms), predictors)]
+}
+
+# The data a table was built from, found again. A tab_reg() table records the EXPRESSION its `data`
+# argument was written as; a bare NAME is re-resolvable (cheap, side-effect-free, and the guard below
+# catches a name that now holds something else), so it is the only form followed. Anything else --
+# a pipeline, a subset, `.` -- is not re-run behind the user's back.
+#' @keywords internal
+reg_plot_recover_data <- function(expr, caller) {
+  hint <- c("i" = "Diagnostics need the microdata; the table stores only the recipe.",
+            "x" = "e.g. {.code reg_check_plots(t, gss_simple)}.")
+  ok   <- !is.null(expr) && nzchar(expr) && expr != "." && make.names(expr) == expr
+  if (!ok)
+    cli::cli_abort(c("{.arg data} is required with a {.fn tab_reg} table.",
+                     if (!is.null(expr) && nzchar(expr))
+                       c("i" = "It was built from {.code {expr}}, which is not a name to look up."),
+                     hint))
+  d <- tryCatch(get(expr, envir = caller), error = function(e) NULL)
+  if (!is.data.frame(d) && !inherits(d, "survey.design"))
+    cli::cli_abort(c("{.arg data} is required with a {.fn tab_reg} table.",
+                     "i" = "{.code {expr}}, the data it was built from, is not here any more.", hint))
+  cli::cli_inform("Using {.code {expr}}, the data {.fn tab_reg} was called with.")
+  d
 }
 
 # The N of each fit, off the table's own `n` footer rows (NA where `stats = FALSE` stored none).
@@ -454,106 +507,151 @@ reg_plot_preds_of <- function(fit)
 # === SECTION: the panels ============================================================================
 
 # ONE builder per panel key, dispatched here. The table (REG_CHECKS) says WHICH panels exist and for
-# which families; this switch says HOW each is drawn. Every builder takes the list of contexts and
-# returns a ggplot (or NULL when the data cannot support it).
+# which families; this switch says HOW each is drawn. Every builder takes ONE context -- a grid
+# belongs to one model (ruling R10, revised in 22e-i) -- and returns a ggplot, or NULL when the data
+# cannot support it.
 #' @keywords internal
-reg_panel_build <- function(key, ctxs, cols, opts) {
+reg_panel_build <- function(key, cx, cols, opts) {
   switch(key,
-         linearity       = reg_panel_linearity(ctxs, cols, opts),
-         residuals       = reg_panel_residuals(ctxs, cols, opts),
-         normality       = reg_panel_normality(ctxs, cols, opts),
-         dispersion      = reg_panel_dispersion(ctxs, cols, opts),
-         influence       = reg_panel_influence(ctxs, cols, opts),
-         collinearity    = reg_panel_collinearity(ctxs, cols, opts),
-         proportionality = reg_panel_proportionality(ctxs, cols, opts),
+         linearity       = reg_panel_linearity(cx, cols, opts),
+         residuals       = reg_panel_residuals(cx, cols, opts),
+         normality       = reg_panel_normality(cx, cols, opts),
+         dispersion      = reg_panel_dispersion(cx, cols, opts),
+         influence       = reg_panel_influence(cx, cols, opts),
+         collinearity    = reg_panel_collinearity(cx, cols, opts),
+         proportionality = reg_panel_proportionality(cx, cols, opts),
          NULL)
 }
 
-# The title / subtitle of a panel: the ASSUMPTION from REG_CHECKS, never the plot type (SS25) -- the
-# student meets the same word in the footer row, in the argument and here.
+# The headline of a panel: the ASSUMPTION word from REG_CHECKS in bold, then the question the reader
+# should ask, plain, on the same line -- so the word the footer row and `check =` use stays striking
+# and the panel still says what to look at. plotmath keeps this dependency-free; the element's own
+# face must therefore be plain, or the whole line would embolden.
 #' @keywords internal
-reg_panel_title <- function(key) gettext(REG_CHECKS[[key]]$noun)
+reg_panel_head <- function(key, question)
+  bquote(bold(.(gettext(REG_CHECKS[[key]]$noun))) * .(paste0(": ", question)))
 
-# multi-model faceting: only when there IS more than one, so a single model keeps a clean panel.
+# The shared skin: the theme, the plain title face plotmath needs, and the wrapped subtitle.
 #' @keywords internal
-reg_panel_facet <- function(g, df, ncol = NULL) {
-  if (length(unique(df$model)) < 2L) return(g)
-  g + ggplot2::facet_wrap(~ model, ncol = ncol)
+reg_panel_skin <- function(g, key, question, subtitle, cols)
+  g + ggplot2::labs(title = reg_panel_head(key, question), subtitle = rd_wrap(subtitle)) +
+    tx_plot_theme(cols) +
+    ggplot2::theme(plot.title = ggplot2::element_text(face = "plain"))
+
+# The reference line(s) a panel draws, as a LAYER: one row per declared mark (REG_CHECKS$panel_marks),
+# the linetype carried in the data through an identity scale.
+# WARNING: never pass a vector `linetype =` as a geom PARAM. ggplot2 replicates a layer's data across
+# facets but not its params, so `geom_hline(yintercept = c(5, 10), linetype = c(...))` aborts the
+# moment the panel is facetted (measured on ggplot2 4.0.3).
+#' @keywords internal
+reg_panel_mark_layers <- function(key, cols) {
+  m <- reg_panel_marks(key)
+  if (!length(m)) return(NULL)
+  d <- data.frame(mark = m, lt = c("dashed", "dotted")[pmin(seq_along(m), 2L)])
+  list(ggplot2::geom_hline(data = d,
+                           ggplot2::aes(yintercept = .data$mark, linetype = .data$lt),
+                           colour = cols$accent, linewidth = 0.6, inherit.aes = FALSE),
+       ggplot2::scale_linetype_identity())
 }
 
-# 1. LINEARITY -- the observed binned curve of each continuous predictor against the STRAIGHT line the
-# model assumes. The comparator must be a straight lm, never a loess: the assumption IS linearity, so a
-# smoother would trace the curvature and hide the very departure the panel exists to show.
-reg_panel_linearity <- function(ctxs, cols, opts) {
-  rows <- purrr::list_rbind(purrr::map(ctxs, function(cx) {
-    num <- reg_numeric_preds(cx$data, cx$predictors)
-    if (!is.null(opts$predictors)) num <- intersect(num, opts$predictors)
-    if (!length(num)) return(NULL)
-    ly <- rd_link_y(cx$data[[cx$outcome]], cx$family, cx$trials, cx$positive_level)
-    w  <- if (!is.null(cx$wt) && cx$wt %in% names(cx$data)) cx$data[[cx$wt]] else NULL
-    purrr::list_rbind(purrr::map(num, function(v) {
+# 1. LINEARITY -- the observed binned curve of each continuous predictor against the shape the MODEL
+# fits (rd_comparator: a straight line, a parabola where `shape = "quadratic"` put a curvature term
+# in). Never a smoother: the assumption IS the shape, so a smoother would trace the very departure
+# the panel exists to show. An ordinal or multinomial outcome gives one curve per cut / per category
+# (rd_link_cuts), which is the standard reading and the only one that shows a proportional-odds
+# departure for a NUMERIC predictor.
+reg_panel_linearity <- function(cx, cols, opts) {
+  num <- reg_numeric_preds(cx$data, cx$predictors)
+  if (!is.null(opts$predictors)) num <- intersect(num, opts$predictors)
+  if (!length(num)) return(NULL)
+  ly <- rd_link_cuts(cx$data[[cx$outcome]], cx$family, cx$trials, cx$positive_level, cx$outcome)
+  if (is.null(ly)) return(NULL)
+  w   <- if (!is.null(cx$wt) && cx$wt %in% names(cx$data)) cx$data[[cx$wt]] else NULL
+  drw <- cx$data[[svy_row_col]]
+  sq  <- names(cx$shape_terms %||% character(0))
+  rows <- purrr::list_rbind(purrr::map(num, function(v) {
+    # the x axis is the ONE reading of a predictor's own values a plot makes, so it is the second
+    # place a `ref` anchor must be added back (the first is reg_spec_tips_num()'s tooltip). The
+    # curve's SHAPE is invariant under a location shift; only the axis labels are not.
+    x <- cx$data[[v]] + reg_anchor_of(cx$anchors, v)
+    purrr::list_rbind(purrr::map(ly$curves, function(cu) {
       # Phase 18z16-iv (W-G.4): the band takes the DESIGN variance when the user handed a
       # svydesign to reg_check_plots(), the exact flat closed form on a plain weight column, and is
       # unchanged (n) unweighted.
-      # the x axis is the ONE reading of a predictor's own values a plot makes, so it is the second
-      # place a `ref` anchor must be added back (the first is reg_spec_tips_num()'s tooltip). The
-      # curve's SHAPE is invariant under a location shift; only the axis labels are not.
-      b <- rd_bin(cx$data[[v]] + reg_anchor_of(cx$anchors, v), ly$y, w, opts$nbins, ly$link,
-                  design = cx$design, des_rows = cx$data[[svy_row_col]])
+      b <- rd_bin(x[cu$keep], cu$y, w[cu$keep], opts$nbins, ly$link,
+                  design = cx$design, des_rows = drw[cu$keep])
       if (is.null(b)) return(NULL)
-      dplyr::mutate(b, predictor = v, model = cx$label, ylab = ly$lab)
+      dplyr::mutate(b, fit = rd_comparator(b$x, b$y, v %in% sq),
+                    predictor = reg_pred_facet(v, cx), cut = cu$cut)
     }))
   }))
   if (is.null(rows) || !nrow(rows)) return(NULL)
-  g <- ggplot2::ggplot(rows, ggplot2::aes(x = .data$x, y = .data$y)) +
+  # one curve = the panel's own blue; several = the cut is what the colour says.
+  many <- !all(is.na(rows$cut))
+  if (!many) rows$cut <- ""
+  curve <- if (many)
+    list(ggplot2::geom_line(ggplot2::aes(colour = .data$cut), linewidth = 0.7, na.rm = TRUE),
+         ggplot2::geom_point(ggplot2::aes(colour = .data$cut, size = .data$n), na.rm = TRUE))
+  else
+    list(ggplot2::geom_line(colour = cols$point, linewidth = 0.7, na.rm = TRUE),
+         ggplot2::geom_point(ggplot2::aes(size = .data$n), colour = cols$point, na.rm = TRUE))
+  g <- ggplot2::ggplot(rows, ggplot2::aes(x = .data$x, y = .data$y, group = .data$cut)) +
     ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$y - 2 * .data$se, ymax = .data$y + 2 * .data$se),
-                         fill = cols$grey, alpha = 0.25, na.rm = TRUE) +
-    ggplot2::geom_smooth(method = "lm", formula = y ~ x, se = FALSE,
-                         colour = cols$accent, linetype = "dashed", linewidth = 0.6, na.rm = TRUE) +
-    ggplot2::geom_line(colour = cols$point, linewidth = 0.7, na.rm = TRUE) +
-    ggplot2::geom_point(ggplot2::aes(size = .data$n), colour = cols$point, na.rm = TRUE) +
+                         fill = cols$grey, alpha = 0.25, colour = NA, na.rm = TRUE) +
+    ggplot2::geom_line(ggplot2::aes(y = .data$fit), colour = cols$accent,
+                       linetype = "dashed", linewidth = 0.6, na.rm = TRUE) +
+    curve +
     ggplot2::scale_size(range = c(0.6, 2.4), guide = "none") +
-    ggplot2::labs(title = reg_panel_title("linearity"),
-                  subtitle = gettext("Observed curve (10 bins, +/-2 SE) against the straight line the model fits."),
-                  x = NULL, y = rows$ylab[[1L]]) +
-    tx_plot_theme(cols)
-  facets <- if (length(unique(rows$model)) > 1L) ~ model + predictor else ~ predictor
-  g + ggplot2::facet_wrap(facets, scales = "free_x", ncol = opts$facet_ncol)
+    ggplot2::labs(x = NULL, y = ly$expr, colour = NULL) +
+    ggplot2::facet_wrap(~ predictor, scales = "free_x",
+                        ncol = opts$facet_ncol %||% min(2L, length(num)))
+  reg_panel_skin(
+    g, "linearity",
+    gettext("does the observed curve follow the model's shape?"),
+    gettextf("%d bins, +/-2 SE. The dashed line is what the model fits; a bending curve asks for shape=\"quadratic\".", opts$nbins),
+    cols) +
+    ggplot2::theme(legend.position = if (many) "bottom" else "none",
+                   strip.text = ggplot2::element_text(face = "bold", size = 9))
+}
+
+# The facet label of a numeric predictor: the terms the MODEL carries for it, so a cured predictor is
+# not read against a line the model no longer fits. `log`/`sqrt` recoded the column itself
+# (reg_prepare_replay), so their mark IS the label; a quadratic added a second term beside it.
+#' @keywords internal
+reg_pred_facet <- function(v, cx) {
+  mk <- shape_mark(cx$shapes[[v]]$kind %||% NA_character_, v)
+  if (!is.na(mk)) return(mk)
+  if (v %in% names(cx$shape_terms %||% character(0)))
+    return(paste0(v, " + ", reg_shape_sq_level(v)))
+  v
 }
 
 # 2. RESIDUALS -- binned residuals against the fitted value. The classic lesson about why a RAW
 # residual is useless for a binary outcome (it takes exactly two values given p-hat), and the reason
 # every non-gaussian family here uses a randomised quantile residual instead.
-reg_panel_residuals <- function(ctxs, cols, opts) {
-  rows <- purrr::list_rbind(purrr::map(ctxs, function(cx) {
-    r <- rd_resid(cx$fit, cx$family, cx$data[[cx$outcome]], cx$trials, opts$seed)
-    f <- tryCatch(as.numeric(stats::fitted(cx$fit)), error = function(e) NULL)
-    if (is.null(r) || is.null(f) || length(f) != length(r)) return(NULL)
-    b <- rd_bin(f, r, NULL, max(5L, min(60L, floor(sqrt(length(r))))), "identity")
-    if (is.null(b)) return(NULL)
-    dplyr::mutate(b, model = cx$label)
-  }))
+reg_panel_residuals <- function(cx, cols, opts) {
+  r <- rd_resid(cx$fit, cx$family, cx$data[[cx$outcome]], cx$trials, opts$seed)
+  f <- tryCatch(as.numeric(stats::fitted(cx$fit)), error = function(e) NULL)
+  if (is.null(r) || is.null(f) || length(f) != length(r)) return(NULL)
+  rows <- rd_bin(f, r, NULL, max(5L, min(60L, floor(sqrt(length(r))))), "identity")
   if (is.null(rows) || !nrow(rows)) return(NULL)
   g <- ggplot2::ggplot(rows, ggplot2::aes(x = .data$x, y = .data$y)) +
     ggplot2::geom_hline(yintercept = 0, linetype = "dashed", colour = cols$grey) +
     ggplot2::geom_ribbon(ggplot2::aes(ymin = -2 * .data$se, ymax = 2 * .data$se),
                          fill = cols$grey, alpha = 0.2, na.rm = TRUE) +
     ggplot2::geom_point(colour = cols$point, size = 1.2, na.rm = TRUE) +
-    ggplot2::labs(title = reg_panel_title("residuals"),
-                  subtitle = gettext("Binned residuals against the fitted value; ~95 % should sit in the band."),
-                  x = gettext("Fitted value"), y = gettext("Mean residual")) +
-    tx_plot_theme(cols)
-  reg_panel_facet(g, rows, opts$facet_ncol)
+    ggplot2::labs(x = gettext("Fitted value"), y = gettext("Mean residual"))
+  reg_panel_skin(
+    g, "residuals",
+    gettext("are fewer than 5 % of the points outside the band?"),
+    gettext("Mean residual per bin of the fitted value: a trend, or many points out, means the model is missing something."),
+    cols)
 }
 
 # 3. NORMALITY -- the Q-Q plot of the dispatched residual, against the ANALYTIC pointwise band.
-reg_panel_normality <- function(ctxs, cols, opts) {
-  rows <- purrr::list_rbind(purrr::map(ctxs, function(cx) {
-    r <- rd_resid(cx$fit, cx$family, cx$data[[cx$outcome]], cx$trials, opts$seed)
-    q <- if (is.null(r)) NULL else rd_qq(r, opts$conf, min(opts$max_points, 400L))
-    if (is.null(q)) return(NULL)
-    dplyr::mutate(q, model = cx$label)
-  }))
+reg_panel_normality <- function(cx, cols, opts) {
+  r <- rd_resid(cx$fit, cx$family, cx$data[[cx$outcome]], cx$trials, opts$seed)
+  rows <- if (is.null(r)) NULL else rd_qq(r, opts$conf, min(opts$max_points, 400L))
   if (is.null(rows) || !nrow(rows)) return(NULL)
   g <- ggplot2::ggplot(rows, ggplot2::aes(x = .data$theoretical, y = .data$sample)) +
     ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$lo, ymax = .data$hi),
@@ -561,18 +659,19 @@ reg_panel_normality <- function(ctxs, cols, opts) {
     ggplot2::geom_abline(slope = 1, intercept = 0, colour = cols$accent,
                          linetype = "dashed", linewidth = 0.6) +
     ggplot2::geom_point(colour = cols$point, size = 0.7, alpha = 0.6, na.rm = TRUE) +
-    ggplot2::labs(title = reg_panel_title("normality"),
-                  subtitle = gettext("Quantile residuals against the normal. The band is POINTWISE: about 5 % of points fall outside it under a correct model."),
-                  x = gettext("Theoretical quantiles"), y = gettext("Quantile residuals")) +
-    tx_plot_theme(cols)
-  reg_panel_facet(g, rows, opts$facet_ncol)
+    ggplot2::labs(x = gettext("Theoretical quantiles"), y = gettext("Quantile residuals"))
+  reg_panel_skin(
+    g, "normality",
+    gettext("do the points follow the diagonal?"),
+    gettext("The band is pointwise: about 5 % of points fall outside it even when the model is right."),
+    cols)
 }
 
 # 4. DISPERSION -- the model's own standard errors against the robust (sandwich) ones, coefficient by
 # coefficient. It is exactly the footer row, un-maximised: the row prints the largest of these points'
 # distance from the diagonal.
-reg_panel_dispersion <- function(ctxs, cols, opts) {
-  rows <- purrr::list_rbind(purrr::map(ctxs, function(cx) {
+reg_panel_dispersion <- function(cx, cols, opts) {
+  rows <- local({
     se <- reg_check_model_se(cx$fit)
     cif <- reg_coef_if_maker(cx$fit)
     if (is.null(se) || is.null(cif)) return(NULL)
@@ -596,24 +695,25 @@ reg_panel_dispersion <- function(ctxs, cols, opts) {
     # it is keyed on the NAMES being absent, not on two lengths happening to differ.
     nm <- names(se)
     tibble::tibble(term = if (length(nm)) nm else as.character(seq_along(se)),
-                   model_se = se, robust_se = rb, model = cx$label)
-  }))
+                   model_se = se, robust_se = rb)
+  })
   if (is.null(rows) || !nrow(rows) || all(is.na(rows$robust_se))) return(NULL)
   g <- ggplot2::ggplot(rows, ggplot2::aes(x = .data$model_se, y = .data$robust_se)) +
     ggplot2::geom_abline(slope = 1, intercept = 0, colour = cols$accent,
                          linetype = "dashed", linewidth = 0.6) +
     ggplot2::geom_point(colour = cols$point, size = 1.6, na.rm = TRUE) +
-    ggplot2::labs(title = reg_panel_title("dispersion"),
-                  subtitle = gettext("Robust against model standard errors, one point per coefficient. On the line = the family's variance assumption holds."),
-                  x = gettext("Model SE"), y = gettext("Robust SE")) +
-    tx_plot_theme(cols)
-  reg_panel_facet(g, rows, opts$facet_ncol)
+    ggplot2::labs(x = gettext("Model SE"), y = gettext("Robust SE"))
+  reg_panel_skin(
+    g, "dispersion",
+    gettext("do the two standard errors agree?"),
+    gettext("One point per coefficient: off the line, the family's variance assumption fails."),
+    cols)
 }
 
 # 5. INFLUENCE -- the per-observation version of the footer row: max_j |dfbeta_ij| / SE_j, i.e. how far
 # one respondent moves the coefficient it moves most, in that coefficient's own standard errors.
-reg_panel_influence <- function(ctxs, cols, opts) {
-  rows <- purrr::list_rbind(purrr::map(ctxs, function(cx) {
+reg_panel_influence <- function(cx, cols, opts) {
+  rows <- local({
     se  <- reg_check_model_se(cx$fit)
     cif <- reg_coef_if_maker(cx$fit)
     if (is.null(se) || is.null(cif)) return(NULL)
@@ -626,78 +726,81 @@ reg_panel_influence <- function(ctxs, cols, opts) {
       m <- if (is.null(m)) v else pmax(m, v)
     }
     keep <- rd_thin(m, opts$max_points, opts$seed)
-    tibble::tibble(index = keep, dfbeta = m[keep], model = cx$label)
-  }))
+    tibble::tibble(index = keep, dfbeta = m[keep])
+  })
   if (is.null(rows) || !nrow(rows)) return(NULL)
   g <- ggplot2::ggplot(rows, ggplot2::aes(x = .data$index, y = .data$dfbeta)) +
-    ggplot2::geom_hline(yintercept = 0.25, colour = cols$accent, linetype = "dashed",
-                        linewidth = 0.6) +
+    reg_panel_mark_layers("influence", cols) +
     ggplot2::geom_point(colour = cols$point, size = 0.7, alpha = 0.5, na.rm = TRUE) +
-    ggplot2::labs(title = reg_panel_title("influence"),
-                  subtitle = gettext("How far one respondent moves a coefficient, in its own standard errors. Influence is leverage x outlyingness, not outlyingness."),
-                  x = gettext("Observation"), y = gettext("max |dfbetas|")) +
-    tx_plot_theme(cols)
-  reg_panel_facet(g, rows, opts$facet_ncol)
+    ggplot2::labs(x = gettext("Observation"), y = gettext("max |dfbetas|"))
+  reg_panel_skin(
+    g, "influence",
+    gettext("does one respondent carry a result?"),
+    gettext("How far each respondent moves the coefficient it moves most, in that coefficient's standard errors."),
+    cols)
 }
 
 # 6. COLLINEARITY -- the VIF of every term, on the 5 / 10 ladder every textbook uses.
-reg_panel_collinearity <- function(ctxs, cols, opts) {
+reg_panel_collinearity <- function(cx, cols, opts) {
   if (!requireNamespace("car", quietly = TRUE)) return(NULL)
-  rows <- purrr::list_rbind(purrr::map(ctxs, function(cx) {
+  rows <- local({
     v <- tryCatch(suppressWarnings(car::vif(cx$fit)), error = function(e) NULL)
     if (is.null(v) || !length(v)) return(NULL)
     val <- if (is.matrix(v)) { if (ncol(v) >= 3L) v[, 3]^2 else v[, 1] } else as.numeric(v)
     nm  <- if (is.matrix(v)) rownames(v) else names(v)
-    tibble::tibble(term = if (is.null(nm)) as.character(seq_along(val)) else nm,
-                   vif = as.numeric(val), model = cx$label)
-  }))
+    tibble::tibble(term = if (is.null(nm)) as.character(seq_along(val))
+                          else reg_term_label(nm, cx$shape_terms),
+                   vif = as.numeric(val))
+  })
   if (is.null(rows) || !nrow(rows)) return(NULL)
   g <- ggplot2::ggplot(rows, ggplot2::aes(x = stats::reorder(.data$term, .data$vif), y = .data$vif)) +
     ggplot2::geom_col(fill = cols$point, width = 0.6) +
-    ggplot2::geom_hline(yintercept = c(5, 10), colour = cols$accent,
-                        linetype = c("dashed", "dotted"), linewidth = 0.6) +
+    reg_panel_mark_layers("collinearity", cols) +
     ggplot2::coord_flip() +
-    ggplot2::labs(title = reg_panel_title("collinearity"),
-                  subtitle = gettext("Variance inflation per term (5 and 10 are the usual thresholds). It biases nothing -- it widens intervals."),
-                  x = NULL, y = gettext("VIF")) +
-    tx_plot_theme(cols)
-  reg_panel_facet(g, rows, opts$facet_ncol)
+    ggplot2::labs(x = NULL, y = gettext("VIF"))
+  reg_panel_skin(
+    g, "collinearity",
+    gettext("can the data tell the predictors apart?"),
+    gettext("Variance inflation per term (5 and 10 are the usual thresholds). It widens intervals; it biases nothing."),
+    cols)
 }
 
 # 7. PROPORTIONALITY (ordinal) -- the empirical cumulative logit of each cut, per predictor level. The
 # proportional-odds assumption says these lines are PARALLEL; the Brant p in the footer tests it.
-reg_panel_proportionality <- function(ctxs, cols, opts) {
-  rows <- purrr::list_rbind(purrr::map(ctxs, function(cx) {
-    if (cx$family != "ordinal") return(NULL)
-    y  <- as.factor(cx$data[[cx$outcome]])
-    lv <- levels(y)
-    if (length(lv) < 3L) return(NULL)
-    fp <- reg_factor_preds(cx$data, cx$predictors)
-    if (!length(fp)) return(NULL)
-    w  <- if (!is.null(cx$wt) && cx$wt %in% names(cx$data)) cx$data[[cx$wt]] else rep(1, nrow(cx$data))
-    purrr::list_rbind(purrr::map(fp, function(v) {
-      g <- as.factor(cx$data[[v]])
-      purrr::list_rbind(purrr::map(seq_len(length(lv) - 1L), function(k) {
-        above <- as.integer(as.integer(y) > k)
-        num <- as.numeric(tapply(w * above, g, sum))
-        den <- as.numeric(tapply(w, g, sum))
-        p   <- (num + 0.5) / (den + 1)
-        tibble::tibble(level = levels(g), logit = log(p / (1 - p)),
-                       cut = paste0("> ", lv[[k]]), predictor = v, model = cx$label)
-      }))
+reg_panel_proportionality <- function(cx, cols, opts) {
+  if (cx$family != "ordinal") return(NULL)
+  y  <- as.factor(cx$data[[cx$outcome]])
+  lv <- levels(y)
+  if (length(lv) < 3L) return(NULL)
+  fp <- reg_factor_preds(cx$data, cx$predictors)
+  if (!length(fp)) return(NULL)
+  w  <- if (!is.null(cx$wt) && cx$wt %in% names(cx$data)) cx$data[[cx$wt]] else rep(1, nrow(cx$data))
+  rows <- purrr::list_rbind(purrr::map(fp, function(v) {
+    g <- as.factor(cx$data[[v]])
+    purrr::list_rbind(purrr::map(seq_len(length(lv) - 1L), function(k) {
+      above <- as.integer(as.integer(y) > k)
+      num <- as.numeric(tapply(w * above, g, sum))
+      den <- as.numeric(tapply(w, g, sum))
+      p   <- (num + 0.5) / (den + 1)
+      tibble::tibble(level = levels(g), logit = log(p / (1 - p)),
+                     cut = gettextf("> %s", lv[[k]]), predictor = v)
     }))
   }))
   if (is.null(rows) || !nrow(rows)) return(NULL)
   g <- ggplot2::ggplot(rows, ggplot2::aes(x = .data$level, y = .data$logit,
                                           group = .data$cut, colour = .data$cut)) +
     ggplot2::geom_line(na.rm = TRUE) + ggplot2::geom_point(size = 1.2, na.rm = TRUE) +
-    ggplot2::labs(title = reg_panel_title("proportionality"),
-                  subtitle = gettext("One line per cut of the outcome. Proportional odds means they are parallel."),
-                  x = NULL, y = gettext("Empirical cumulative logit"), colour = NULL) +
-    tx_plot_theme(cols) +
-    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, hjust = 1))
-  facets <- if (length(unique(rows$model)) > 1L) ~ model + predictor else ~ predictor
-  g + ggplot2::facet_wrap(facets, scales = "free_x", ncol = opts$facet_ncol)
+    ggplot2::labs(x = NULL, y = gettext("Empirical cumulative logit"), colour = NULL) +
+    ggplot2::facet_wrap(~ predictor, scales = "free_x",
+                        ncol = opts$facet_ncol %||% min(4L, length(fp)))
+  reg_panel_skin(
+    g, "proportionality",
+    gettext("are the lines parallel?"),
+    gettext("One line per cut of the outcome: parallel means one odds ratio fits every cut."),
+    cols) +
+    # the legend takes half the panel's width at the right, and it is one short row of words
+    ggplot2::theme(legend.position = "bottom",
+                   axis.text.x = ggplot2::element_text(angle = 30, hjust = 1))
 }
 
 
@@ -713,20 +816,29 @@ reg_panel_proportionality <- function(ctxs, cols, opts) {
 #' installed (see the `stats` argument of [tab_reg()]). This function exists to *show what a violation
 #' looks like*, and to let a careful reader look closer.
 #'
-#' One call diagnoses **every model** in the table (each outcome, each compared model), drawn as
-#' facets. Pass a [tab_reg()] table plus the data it was built from, or a fitted model directly.
+#' One call diagnoses **every model** in the table (each outcome, each compared model): one titled
+#' grid per model, each drawing the panels its own family allows. Pass a [tab_reg()] table --- the
+#' data it was built from is usually found on its own --- or a fitted model directly.
 #'
 #' @param x A [tab_reg()] table, or a fitted model (`lm` / `glm` / `svyglm` / `polr` / `multinom` /
 #'   `svyolr`).
-#' @param data The data frame or `survey::svydesign` the table was built from. Required with a table
-#'   (the table stores a ~4 KB recipe, never the fitted models); ignored with a bare model.
-#' @param check Which panels to draw. `"auto"` (default) draws every check that applies to the
-#'   model's family; `"all"` is a synonym; or name them: any of `"linearity"`, `"residuals"`,
-#'   `"normality"`, `"dispersion"`, `"influence"`, `"collinearity"`, `"proportionality"` --- the same
-#'   words the footer rows and [tab_reg()]'s `stats` argument use.
+#' @param data The data frame or `survey::svydesign` the table was built from. **Usually unnecessary**:
+#'   a table records the name it was called with, and when that name still holds a data set the same
+#'   size, it is used --- otherwise the call stops rather than draw the wrong model. Give `data`
+#'   explicitly when the table was built from an expression rather than a named object
+#'   (`tab_reg(gss |> dplyr::filter(...), ...)`), or when the name has since changed. Ignored with a
+#'   bare model. (A table stores a ~4 KB recipe and refits from it; it never keeps the fitted models.)
+#' @param check Which panels to draw. `"auto"` (default) draws the panels that *decide* something the
+#'   footer cannot say in one number --- linearity, residuals, normality, influence, and
+#'   proportionality for an ordinal outcome. `"all"` adds dispersion and collinearity, whose footer
+#'   row is normally enough. Or name them: any of `"linearity"`, `"residuals"`, `"normality"`,
+#'   `"dispersion"`, `"influence"`, `"collinearity"`, `"proportionality"` --- the same words the
+#'   footer rows and [tab_reg()]'s `stats` argument use.
 #' @param predictors Optional: restrict the linearity panel to these continuous predictors.
-#' @param ncol Number of panel columns in the assembled grid (default: 3, or fewer with few panels).
-#' @param facet_ncol Number of facet columns *inside* a panel (default: let \pkg{ggplot2} choose).
+#' @param ncol Number of panel columns in the assembled grid (default: as square as it can be, 3 at
+#'   most).
+#' @param facet_ncol Number of facet columns *inside* a panel (default: 2 for linearity, 4 for
+#'   proportionality).
 #' @param theme `"light"`, `"dark"`, or a black-and-white publication palette (`"print_ready"` and
 #'   friends -- greyscale, for a thesis appendix). Defaults to
 #'   `options("tabxplor.theme")`, like the table exporters.
@@ -740,7 +852,8 @@ reg_panel_proportionality <- function(ctxs, cols, opts) {
 #'   way to check that a pattern is not a randomisation artefact).
 #' @param ... Unused, for future extension.
 #'
-#' @return Invisibly, the assembled `gtable` (drawn on the current graphics device).
+#' @return Invisibly, the assembled `gtable` --- or, with several models, the named list of them, one
+#'   per model, all drawn on the current graphics device.
 #'
 #' @seealso [tab_reg()] and its `stats` argument (the same checks as footer rows), and
 #'   [forest_plot()] for the RESULTS -- its opposite contract: it reads the finished table and never
@@ -755,7 +868,7 @@ reg_panel_proportionality <- function(ctxs, cols, opts) {
 #' if (requireNamespace("ggplot2", quietly = TRUE) &&
 #'     requireNamespace("gridExtra", quietly = TRUE)) {
 #'   t <- tab_reg(d, "married", c("race", "age"), family = "binomial")
-#'   reg_check_plots(t, d)
+#'   reg_check_plots(t)
 #' }
 #' }
 #' @export
@@ -764,33 +877,67 @@ reg_check_plots <- function(x, data = NULL, check = "auto", predictors = NULL,
                             max_points = 2000L, nbins = 10L, conf = 0.95,
                             seed = 20260810, ...) {
   tx_plot_deps()
-  ctxs <- reg_plot_fits(x, data)
-  if (!length(ctxs)) cli::cli_abort("No model could be refitted from {.arg x}.")
-  fam  <- ctxs[[1L]]$family
-  weighted <- !is.null(ctxs[[1L]]$wt)
-  keys <- reg_checks_for(fam, weighted, has_fit = TRUE, what = "panel")
-  if (!identical(check, "auto") && !identical(check, "all")) {
-    # Phase 19g (KEY 6): ONE vocabulary and ONE validator, shared with tab_reg(stats =) -- narrowed
-    # here to the model CHECKS, which are the only things a panel can be drawn for.
-    reg_validate_stat_keys(check, arg = "check", allowed = names(REG_CHECKS))
-    keys <- intersect(check, keys)
-    if (!length(keys)) {
-      cli::cli_abort(c("None of those checks can be drawn for a {.val {fam}} model.",
-                       "i" = "Available here: {.val {reg_checks_for(fam, weighted, what = 'panel')}}."))
-    }
-  }
+  ctxs <- reg_plot_fits(x, data, caller = parent.frame())
   cols <- tx_plot_colors(theme)
   opts <- list(predictors = predictors, max_points = max_points, nbins = nbins, conf = conf,
                seed = seed, facet_ncol = facet_ncol)
+  # ONE GRID PER MODEL. A grid carries one model's title, and its panel set comes from THAT model's
+  # own family -- which is what a table mixing a binomial and an ordinal outcome needs, and what
+  # faceting by model could never give.
   # i18n: the WHOLE label-building block under one language, as reg_model_lines() does.
-  grobs <- with_legend_lang(lang, function(lg)
-    purrr::compact(purrr::map(keys, function(k) reg_panel_build(k, ctxs, cols, opts))))
-  if (!length(grobs)) {
+  out <- with_legend_lang(lang, function(lg) purrr::map(ctxs, function(cx) {
+    keys <- reg_panel_keys(cx, check)
+    grobs <- purrr::compact(purrr::map(keys, function(k) reg_panel_build(k, cx, cols, opts)))
+    if (!length(grobs)) return(NULL)
+    gridExtra::grid.arrange(grobs = grobs, top = reg_check_top(cx, cols),
+                            ncol = ncol %||% min(3L, ceiling(sqrt(length(grobs)))))
+  }))
+  names(out) <- vapply(ctxs, function(cx) cx$label %||% "", character(1))
+  out <- purrr::compact(out)
+  if (!length(out)) {
     cli::cli_abort(c("Nothing could be drawn for this model.",
                      "i" = "A multinomial outcome has no residual panel (its residuals depend on the category order)."))
   }
-  if (is.null(ncol)) ncol <- min(3L, length(grobs))
-  gridExtra::grid.arrange(grobs = grobs, ncol = ncol)
+  invisible(if (length(out) == 1L) out[[1L]] else out)
+}
+
+# The panels ONE model gets: its own family's, narrowed to the default set, to everything, or to what
+# the user named. Phase 19g (KEY 6): ONE vocabulary and ONE validator, shared with tab_reg(stats =)
+# -- narrowed here to the model CHECKS, which are the only things a panel can be drawn for.
+#' @keywords internal
+reg_panel_keys <- function(cx, check = "auto") {
+  weighted <- !is.null(cx$wt)
+  all_keys <- reg_checks_for(cx$family, weighted, has_fit = TRUE, what = "panel")
+  if (identical(check, "all")) return(all_keys)
+  if (identical(check, "auto")) return(reg_panels_default(cx$family, weighted))
+  reg_validate_stat_keys(check, arg = "check", allowed = names(REG_CHECKS))
+  keys <- intersect(check, all_keys)
+  if (!length(keys))
+    cli::cli_abort(c("None of those checks can be drawn for a {.val {cx$family}} model.",
+                     "i" = "Available here: {.val {all_keys}}."))
+  keys
+}
+
+# The heading of one model's grid: what was fitted, then how. The formula is the model's OWN, with its
+# terms passed through reg_term_label() so a curvature term reads "age2" and not its frozen literal;
+# the second line takes the family's name from the footer's own vocabulary, so a plot and a table
+# cannot name one model two ways.
+#' @keywords internal
+reg_check_top <- function(cx, cols) {
+  terms <- reg_term_label(attr(stats::terms(stats::formula(cx$fit)), "term.labels"),
+                          cx$shape_terms)
+  head  <- gettextf("Assumption checks: %s ~ %s", cx$outcome,
+                    paste(terms, collapse = " + "))
+  fam   <- tryCatch(reg_family_display_name(cx$family), error = function(e) cx$family)
+  # a plain space, not the table's narrow no-break one: a graphics device may be single-byte, and
+  # U+202F then fails conversion with a warning (measured on the pdf device under testthat).
+  sub   <- gettextf("%s, n = %s", fam, format(cx$nobs %||% NA_integer_, big.mark = " "))
+  if (isTRUE(cx$compare) && !is.null(cx$label) && nzchar(cx$label))
+    sub <- gettextf("%s - %s", cx$label, sub)
+  gridExtra::arrangeGrob(
+    grid::textGrob(head, gp = grid::gpar(fontface = "bold", fontsize = 11, col = cols$text)),
+    grid::textGrob(sub,  gp = grid::gpar(fontsize = 9, col = cols$subtle)),
+    ncol = 1, heights = grid::unit(c(1.3, 1), "lines"))
 }
 
 

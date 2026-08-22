@@ -25,12 +25,27 @@ test_that("reg_check_plots() draws the check panels of a tab_reg table and of a 
   expect_s3_class(reg_check_plots(t, d, check = "linearity"), "gtable")
 })
 
+test_that("reg_check_plots() finds its data again, and `auto` is not `all`", {
+  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra"); skip_if_not_installed("broom")
+  d <- reg_plot_data()
+  grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())
+  t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial"))
+  # the table records the NAME `data =` was written as, so it needs no second `data =`
+  expect_message(expect_s3_class(reg_check_plots(t), "gtable"), "\\bd\\b")
+  # `auto` leaves out the two panels whose footer row says the whole thing; `all` restores them
+  cx <- suppressMessages(tabxplor:::reg_plot_fits(t, d))[[1L]]
+  expect_false(any(c("dispersion", "collinearity") %in% tabxplor:::reg_panel_keys(cx, "auto")))
+  expect_true(all(c("dispersion", "collinearity") %in% tabxplor:::reg_panel_keys(cx, "all")))
+})
+
 test_that("reg_check_plots() refuses a table without its data, and a wrong data set", {
   skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra"); skip_if_not_installed("broom")
   d <- reg_plot_data()
   grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial"))
+  rm(d)                                    # the recorded name must no longer resolve
   expect_error(reg_check_plots(t), "data.+required|required.+data")
+  d <- reg_plot_data()
   # THE guard: a diagnostic plot of the wrong model is worse than no plot
   expect_error(reg_check_plots(t, d[1:500, ]), "does not reproduce")
   expect_error(reg_check_plots(tab(d, race, marital), d), "not a")
@@ -55,9 +70,32 @@ test_that("reg_check_plots() draws every family, and facets a model comparison",
   # a multinomial keeps its linearity / influence panels and refuses the residual ones
   expect_s3_class(q(reg_check_plots(q(tab_reg(ds, "partyid", c("race", "age"),
                                               family = "multinomial", stats = FALSE)), ds)), "gtable")
-  # a comparison diagnoses EVERY model in one call (ruling R10), as facets
-  expect_s3_class(q(reg_check_plots(q(tab_reg(ds, "married", list(m1 = "race", m2 = c("race", "age")),
-                                              family = "binomial", stats = FALSE)), ds)), "gtable")
+  # a comparison diagnoses EVERY model in one call (ruling R10): ONE TITLED GRID PER MODEL
+  cmp <- q(reg_check_plots(q(tab_reg(ds, "married", list(m1 = "race", m2 = c("race", "age")),
+                                     family = "binomial", stats = FALSE)), ds))
+  expect_length(cmp, 2L)
+  expect_s3_class(cmp[[1L]], "gtable")
+  # and each grid takes the panel set of ITS OWN family, so a mixed-family table is diagnosed right
+  mix <- q(tab_reg(ds, c("married", "inc3"), c("race", "age"),
+                   family = c("binomial", "ordinal"), stats = FALSE))
+  ctxs <- q(tabxplor:::reg_plot_fits(mix, ds))
+  expect_false("proportionality" %in% tabxplor:::reg_panel_keys(ctxs[[1L]], "auto"))
+  expect_true("proportionality"  %in% tabxplor:::reg_panel_keys(ctxs[[2L]], "auto"))
+  expect_length(q(reg_check_plots(mix, ds)), 2L)
+})
+
+test_that("an ordinal linearity panel draws one observed curve per cut", {
+  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra"); skip_if_not_installed("MASS")
+  y <- factor(rep(c("1-low", "2-mid", "3-high"), each = 200L), ordered = TRUE)
+  cu <- tabxplor:::rd_link_cuts(y, "ordinal", outcome = "inc3")
+  expect_length(cu$curves, 2L)                                  # K - 1 cumulative cuts
+  expect_identical(cu$curves[[1L]]$y, as.numeric(as.integer(y) > 1L))
+  # a multinomial reads each category against the REFERENCE, on those rows only
+  mn <- tabxplor:::rd_link_cuts(factor(as.character(y)), "multinomial", outcome = "party")
+  expect_length(mn$curves, 2L)
+  expect_length(mn$curves[[1L]]$keep, 400L)
+  # everything else keeps exactly one curve, and it is rd_link_y()'s own
+  expect_length(tabxplor:::rd_link_cuts(rnorm(50), "gaussian")$curves, 1L)
 })
 
 test_that("the randomised quantile residual is reproducible, and `seed = NULL` is a fresh draw", {
@@ -88,6 +126,11 @@ test_that("reg_check_plots() panel set follows REG_CHECKS, family by family", {
   expect_false("proportionality" %in% reg_checks_for("ordinal", weighted = TRUE, what = "panel"))
   # the two taught-but-unscored checks contribute a panel and NO footer row
   expect_false(any(c("residuals", "normality") %in% reg_checks_for("binomial", what = "footer")))
+  # the DEFAULT grid is a declared subset of the same list
+  expect_true(all(tabxplor:::reg_panels_default("binomial") %in%
+                    reg_checks_for("binomial", what = "panel")))
+  # a panel's reference line IS the check's own flag, where it declares one
+  expect_identical(tabxplor:::reg_panel_marks("influence"), REG_CHECKS$influence$flag)
 })
 
 

@@ -325,50 +325,70 @@ tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "reli
 
 
 #### forest_plot() 
-# effect="conditional"
-regressions <- tab_reg(gss_simple, outcome = c("married", "age", "marital"), predictors = c("race", "rincome", "relig", "tvhours"), 
-        empirical = TRUE, family = c("binomial", "gaussian", "multinomial"))
+regressions <- tab_reg(gss_simple, outcome = c("married", "age", "tvhours"), 
+                       predictors = c("race", "rincome", "relig"), 
+                       empirical = TRUE, family = c("binomial", "gaussian", "poisson"))
 regressions |> forest_plot()
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, link = "ratio") |> 
-  forest_plot()
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, link = "difference") |> 
-  forest_plot()
-# gaussian
-tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical = TRUE) |> 
-  forest_plot()
-tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical = TRUE, link = "ratio") |> 
-  forest_plot()
-# poisson
-tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE) |> 
-  forest_plot()
-tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE, measure = "log") |> 
-  forest_plot()
-# summed-score binomial
-tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"),  empirical = TRUE) |> 
-  forest_plot()
-tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, link = "ratio") |> 
-  forest_plot()
-tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, link = "difference") |> 
-  forest_plot()
-# multinomial:
-tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = TRUE) |> 
-  forest_plot()
-# ordinal: 
-tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", empirical = TRUE) |> 
-  forest_plot()
+summed_score <- tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
+        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "ratio") 
+summed_score|> forest_plot()
+multinom_ordinal <- tab_reg(gss_simple, outcome = c("party3", "rincome"), predictors = c("race", "marital", "relig", "age"),
+        family = c("multinomial", "ordinal"), empirical = TRUE, measure = "ratio") 
+multinom_ordinal |> forest_plot()
+
+
+# I don’t love the current default theme at all, too gray, unreadable, not enough colors, etc. Screen attached.
+#  I want to redo it. I want you to improve this default, starting from two other forest plot (to not copy them entirely, 
+#  just take some good elements): 
+# - one old, from my package ggfacto (the only package with tabxplor in Imports), with many obvious flaws, 
+#   (logistic reg only, one outcome at a time, black and white, the column width were sometimes 
+#   quite unpredictable, not using the break scales we want here, etc.), 
+#   but some good formatting and theme elements that may be useful here: black lines with whiskers 
+#   and error bars, good dotted null line)
+#  `/home/dev1/github/ggfacto/R/geometrical_data_analysis.R` `ggfacto::pers_or_plot`, who use `ggfacto::theme_facto`
+gss_simple |> 
+  mutate(rincome = factor(rincome, ordered = FALSE)) |> # "ordered" not working
+  ggfacto::pers_or_plot(dependent = "married", explanatory = c("race", "rincome", "relig", "tvhours"))
+# - one newer, with strong visual things, but that would need a bit of polish, 
+#   I used to teach confidence intervals to students. 
+#   It’s stronger points are: tabxplor colors used to color the whole whisker (not only the point), 
+#   making it as easy as in the table ; also please, like in the second plot of the section
+#   add an option to color the whole breaks with background colors (using the relevant palette), 
+#   that could be used to teach tabxplor color_signif policies in a visually striking way (this one should be opt-in)
+# `/home/dev1/github/formations_stat/M1S1_02.Rmd`, section "## Commenter un tableau à faibles effectifs", 
+#   "### Méthode 2 : différences après marge d'erreur"
+
+# Also : 
+# - I want to keep the current minimal layout with variables names vertically at left, 
+#   levels in breaks/ticks (but all pure black, not unreadable grey ; references in bold)
+# - Like in the examples, start from theme_minimal and build from there
+# - I want to print the actual estimate at the center of the whisker (since we don’t use a column for 
+#   that like in pers_or_plot()). The point indicating the center is bad, 
+# - All footer lines aligned left. Three options here : hort footer (like console ; default) ; 
+#   full footer (but some lines are long and cut, they should be wrapped somehow) ; no footer 
+# - outcomes names in facets in bold.
+# - the displayed range should not be fixed on the breaks, but adapted to the real minimum and maximum of each facet
+#   (currently age outcome "relig" only show one whisker, all the others at out of the range)
+# - no signif stars in the plot at all (the goal is to read significance directly on the whiskers)
+# - start from the real colors breaks to always print them, but continue the breaks (on a multiplicative scale,
+#   just double the last break each time, if the last break is ×2, then ×4, ×8, etc. ; on an additive scale I don’t know, find a rule)
+# - legend position in the arguments, default to where it would lose the less space.
+
+
+
+
+
+# Round 2
 
 # - Plot title, and other tab_reg() export titles:
+
+
+
+
+
+
+
+
 
 
 #### the different families × effects × measure: custom displays
