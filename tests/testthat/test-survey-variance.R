@@ -359,6 +359,6 @@ test_that("the French design-based footer is translated", {
   d <- svv_fixture(800); des <- svv_des(d)
   tt <- suppressMessages(tab(des, g, col, pct = "row"))
   fr <- tabxplor:::tab_weight_line(tt, lang = "fr")
-  expect_true(grepl("plan de sondage", fr, fixed = TRUE))
+  expect_true(grepl("plan d'\u00e9chantillonnage", fr, fixed = TRUE))
   expect_false(grepl("Design-based", fr, fixed = TRUE))
 })

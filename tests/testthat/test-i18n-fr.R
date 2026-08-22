@@ -31,8 +31,8 @@ test_that("crosstab colour legend stays English when asked in English", {
   en <- footer_txt(ct, "en")
 
   # English legend words present, French ones absent (guards against an accidental global switch).
-  expect_match(en, "Shades of blue")
-  expect_no_match(en, "Nuances de bleu")
+  expect_match(en, "Percentage points (risk) difference", fixed = TRUE)
+  expect_no_match(en, "Diff\u00e9rence de points de pourcentage")
 })
 
 test_that("crosstab colour legend translates to French", {
@@ -41,9 +41,9 @@ test_that("crosstab colour legend translates to French", {
   fr <- footer_txt(ct, "fr")
 
   # French legend words present, English ones gone.
-  expect_match(fr, "Nuances de bleu")
+  expect_match(fr, "Diff\u00e9rence de points de pourcentage")
   expect_match(fr, "Couleur de fond")
-  expect_no_match(fr, "Shades of blue")
+  expect_no_match(fr, "Percentage points")
 })
 
 test_that("French typography: multiply sign + decimal comma (locale-independent)", {
@@ -60,14 +60,14 @@ reg_fit <- function() {
 test_that("regression 'Model:' footer + estimand stay English when asked in English", {
   en <- reg_model_lines(reg_fit(), "en")
   expect_match(en, "^Model: logistic regression")
-  expect_match(en, "OR = odds ratio \\(vs the reference category\\)")
+  expect_match(en, "OR: odds ratio \\(vs the reference category\\)")
 })
 
 test_that("regression 'Model:' footer + estimand translate", {
   skip_if_no_gettext()
   fr <- reg_model_lines(reg_fit(), "fr")
   expect_match(fr, "^Mod\u00e8le : r\u00e9gression logistique")
-  expect_match(fr, "OR = rapport de cotes \\(par rapport \u00e0 la modalit\u00e9 de r\u00e9f\u00e9rence\\)")
+  expect_match(fr, "OR : rapport de cotes \\(par rapport \u00e0 la modalit\u00e9 de r\u00e9f\u00e9rence\\)")
   expect_no_match(fr, "logistic regression")
 })
 
@@ -103,9 +103,8 @@ test_that("the survey-design weight line translates", {
   skip_if_no_gettext()
   with_legend_lang("fr", function(lg) {
     expect_equal(gettext(svy_footer_en),
-                 paste("Fond\u00e9 sur le plan de sondage (survey) : estimations, intervalles",
-                       "et tests pond\u00e9r\u00e9s tiennent compte du plan",
-                       "d'\u00e9chantillonnage."))
+                 paste("Estimations, intervalles et tests pond\u00e9r\u00e9s tiennent compte",
+                       "du plan d'\u00e9chantillonnage (survey-design)."))
   })
 })
 
@@ -189,7 +188,7 @@ test_that("20h: tab_md(lang =) reaches the colour legend (English, runs everywhe
   t <- tab(d, race, party3, pct = "row", ci = "ref", color = "difference")
   en <- tab_md(t, lang = "en")
   # the legend is rendered, in English, whatever the ambient locale
-  expect_match(en, "Shades of blue", fixed = TRUE, all = FALSE)
+  expect_match(en, "Percentage points (risk) difference", fixed = TRUE, all = FALSE)
 })
 
 test_that("20h: tab_md(lang = 'fr') renders the French legend", {
@@ -197,7 +196,7 @@ test_that("20h: tab_md(lang = 'fr') renders the French legend", {
   d <- gss_cat_data_formatting()
   t <- tab(d, race, party3, pct = "row", ci = "ref", color = "difference")
   fr <- tab_md(t, lang = "fr")
-  expect_match(fr, "Nuances de bleu", fixed = TRUE, all = FALSE)
+  expect_match(fr, "Diff\u00e9rence de points de pourcentage", all = FALSE)
   # ...and it is genuinely the argument, not the ambient locale
   expect_false(identical(fr, tab_md(t, lang = "en")))
 })
@@ -212,7 +211,7 @@ test_that("20h: tab_xl(lang =) reaches the Excel colour legend", {
     paste(unlist(openxlsx2::read_xlsx(p, col_names = FALSE, skip_empty_rows = FALSE)),
           collapse = " ")
   }
-  expect_match(sub_of("en"), "Shades of blue", fixed = TRUE)
+  expect_match(sub_of("en"), "Percentage points (risk) difference", fixed = TRUE)
   skip_if_no_gettext()
-  expect_match(sub_of("fr"), "Nuances de bleu", fixed = TRUE)
+  expect_match(sub_of("fr"), "Diff\u00e9rence de points de pourcentage")
 })

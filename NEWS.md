@@ -150,7 +150,10 @@
   (`display = "{pct} ({resid})"`) and appears in html tooltips. New `zscore` colour-break scale and
   `conf_level_to_z()` to write it in confidence levels.
 * **Readable colour legends and footers**, fully translatable to **French**
-  (`options(tabxplor.lang = "fr")`, a `lang =` argument, or the R/OS locale).
+  (`options(tabxplor.lang = "fr")`, a `lang =` argument, or the R/OS locale). A legend states the
+  **measure in words** ("Percentage points (risk) difference: cell >= the Total row +5; ..."), then
+  what an uncoloured cell means; a regression's `Model:` line names each part of the cell by the
+  abbreviation the table prints above it (`obs%`, `adj%`).
 * **Labelled-data (`haven`) support.** Value labels become the factor levels;
   `options(tabxplor.var_labels = TRUE)` shows variable labels instead of names in exports.
 * **New arguments on `tab()`**: `na` gains `"common_base"` /,
@@ -529,6 +532,12 @@
   (`multiplier = "sd"`, see above). Pass `multiplier = 1` for the previous per-one-unit reading.
 
 ## Bug fixes
+
+* **The colour legend under the table named the Total row even when `ref` was not the total.** It now
+  says "the reference category (in bold)" for any non-total reference.
+
+* **Rendering a table in one language then another kept the first one.** `lang = "fr"` followed by
+  `lang = "en"` returned French, because the gettext cache was never actually invalidated.
 
 * **A regression coefficient is no longer printed as a percentage.** On the two scales whose level is
   neither a percentage nor a mean --- a gaussian beta, a `measure = "log"` estimate --- a difference

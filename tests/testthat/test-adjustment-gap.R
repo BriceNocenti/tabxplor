@@ -399,7 +399,7 @@ test_that("the legend names the gap's own test, and only caveats a non-collapsib
   leg <- function(t) tab_color_legend(t, medium = "plain", style = "prose", lang = "en")
   l   <- leg(gapb_tab(d, "grey_non_signif"))
   testthat::expect_true(any(grepl("two estimates fitted on the same sample", l, fixed = TRUE)))
-  testthat::expect_true(any(grepl("observed (crude) effect", l, fixed = TRUE)))
+  testthat::expect_true(any(grepl("than the observed column", l, fixed = TRUE)))
   testthat::expect_false(any(grepl("non-collapsibility", l, fixed = TRUE)))
   # the OR path: the caveat fires, and the background clause must NOT claim a greying that never
   # happened (the text channel is greyed by its Wald interval, the background is not gated at all)

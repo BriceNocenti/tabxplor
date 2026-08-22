@@ -444,11 +444,44 @@ reg_model_df_clause <- function(x, meta, lang = NULL) {
   else                  gettextf("%s design df", legend_num(dg, lang))
 }
 
-reg_model_line <- function(meta, df_clause = "") {
+# ONE representative column per ROLE, for the family a "Model:" line speaks for -- all
+# display_token_label() needs to name the cell's parts by the abbreviations the table prints
+# ("obs%" / "adj%" / "sup%"). A role with no column simply gets no gloss.
+#' @keywords internal
+#' @noRd
+reg_role_cols <- function(x, family = NULL) {
+  cols <- purrr::keep(x, ~ is_fmt(.) && (get_role(.) %||% "") %in% c("emp", "model"))
+  if (!is.null(family) && length(family) == 1L && nzchar(family)) {
+    fk  <- unname(REG_FIT_FAMILY[family]); if (is.na(fk)) fk <- family
+    hit <- purrr::keep(cols, ~ get_model_family(.) %in% c(family, fk))
+    if (length(hit)) cols <- hit
+  }
+  # reading order: the observed column sits left of its model twin.
+  out <- list()
+  for (r in c("emp", "model")) {
+    i <- purrr::detect(cols, ~ identical(get_role(.), r))
+    if (!is.null(i)) out[[r]] <- i
+  }
+  out
+}
+
+# Does this model hold a NUMBER? The one fact the `at_reference` phrase needs and the estimand
+# cascade cannot know: a reference PROFILE holds a factor at its reference level and a number at its
+# mean, so with no number there is no mean to mention. `predictor_types` is stored per table.
+#' @keywords internal
+#' @noRd
+reg_has_numeric_predictor <- function(meta) {
+  pt <- meta$predictor_types
+  if (is.null(pt) || !length(pt)) return(NA)
+  any(as.character(pt) %in% c("numeric", "integer", "double"))
+}
+
+reg_model_line <- function(meta, df_clause = "", role_cols = list()) {
   if (is.null(meta)) return(NULL)
   fam <- reg_family_display_name(reg_meta_estimand(meta)$fit %||% meta$family)
   e   <- reg_meta_estimand(meta)
-  est <- reg_estimand_note(e, aside = reg_meta_aside(meta, e))
+  est <- reg_estimand_note(e, aside = reg_meta_aside(meta, e), role_cols = role_cols,
+                           has_num = reg_has_numeric_predictor(meta))
   if (nzchar(df_clause))
     est <- if (nzchar(est)) gettextf("%s; %s", est, df_clause) else df_clause
   # `who` carries no leading space: xgettext strips edge whitespace from a msgid, so the space and
@@ -507,14 +540,16 @@ reg_model_lines <- function(x, lang = NULL) {
     uf   <- unique(fams)
     dfc  <- reg_model_df_clause(x, meta, lg)
     scl <- reg_scale_lines(meta)
-    if (length(uf) <= 1L) { rl <- reg_model_line(meta, dfc)
+    if (length(uf) <= 1L) { rl <- reg_model_line(meta, dfc, reg_role_cols(x))
                             return(c(if (is.null(rl)) character(0) else rl, scl)) }
     deps <- meta$outcome
     c(vapply(uf, function(fm) {
       grp   <- deps[fams == fm]
       e     <- reg_meta_estimand(meta, grp[[1]])
       fname <- reg_family_display_name(e$fit %||% fm)
-      est   <- reg_estimand_note(e, aside = reg_meta_aside(meta, e, grp))
+      est   <- reg_estimand_note(e, aside = reg_meta_aside(meta, e, grp),
+                                 role_cols = reg_role_cols(x, fm),
+                                 has_num = reg_has_numeric_predictor(meta))
       if (nzchar(dfc)) est <- if (nzchar(est)) gettextf("%s; %s", est, dfc) else dfc
       enc2utf8(if (nzchar(est)) gettextf("Model (%s): %s; %s.", legend_name_list(grp), fname, est)
                else            gettextf("Model (%s): %s.", legend_name_list(grp), fname))

@@ -119,7 +119,7 @@ test_that("the 'Model:' line renders BEFORE the colour legend (md footer)", {
   md <- tab_md(tab_reg(w14_data(), "married", "race", family = "binomial", cleannames = FALSE))
   lines <- strsplit(md, "\n")[[1]]
   model_at  <- grep("^Model: logistic regression", lines)[1]
-  colour_at <- grep("Shades of (blue|yellow)", lines)[1]
+  colour_at <- grep("OR \u2265", lines)[1]
   expect_true(!is.na(model_at) && !is.na(colour_at) && model_at < colour_at)
 })
 

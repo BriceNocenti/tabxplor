@@ -459,7 +459,7 @@
       | Married       | |    9%       |    [9%]{.m1} |   [82%]{.p1} | |      100% (10 117)  |
       |**Total**      | |  **9%**     |  **15%**     |  **76%**     | |  **100%** (21 483)  |
       
-      Shades of blue: cells ≥ the Total row **[+5]{.p1}**; **[+10]{.p2}**; **[+20]{.p3}**; **[+30]{.p4}** points. Shades of yellow to red: cells ≤ the Total row **[-5]{.m1}**; **[-10]{.m2}**; **[-20]{.m3}**; **[-30]{.m4}** points.
+      Percentage points (risk) difference: cell ≥ the Total row **[+5]{.p1}**; **[+10]{.p2}**; **[+20]{.p3}**; **[+30]{.p4}** points; cell ≤ the Total row **[-5]{.m1}**; **[-10]{.m2}**; **[-20]{.m3}**; **[-30]{.m4}** points.
       :::
 
 # golden display (tab_md) unchanged: n_mean
@@ -600,7 +600,7 @@
       |               |                     | |                          | |                          |
       | Ensemble      |**Total Ensemble**   | |  **47.2** (cv 37%)       | |  **3.0** (cv  87%)       |
       
-      Shades of blue: cells ≥ the Total Ensemble row **[×1.1]{.p1}**; **[×1.2]{.p2}**; **[×1.5]{.p3}**; **[×2]{.p4}**. Shades of yellow to red: cells ≤ the Total Ensemble row **[÷1.1]{.m1}**; **[÷1.2]{.m2}**; **[÷1.5]{.m3}**; **[÷2]{.m4}**.
+      Ratio of means: cell ≥ the Total Ensemble row **[×1.1]{.p1}**; **[×1.2]{.p2}**; **[×1.5]{.p3}**; **[×2]{.p4}**; cell ≤ the Total Ensemble row **[÷1.1]{.m1}**; **[÷1.2]{.m2}**; **[÷1.5]{.m3}**; **[÷2]{.m4}**.
       :::
 
 # golden display (tab_md) unchanged: n_mean_ci
@@ -1053,7 +1053,7 @@
       |**Total**| |  **10** (cv 29%)  |
       
       Weighted by w; confidence intervals and tests use the unweighted sample size.
-      Shades of blue: cells ≥ the Total row **[×1.1]{.p1}**; **[×1.2]{.p2}**; **[×1.5]{.p3}**; **[×2]{.p4}**. Shades of yellow to red: cells ≤ the Total row **[÷1.1]{.m1}**; **[÷1.2]{.m2}**; **[÷1.5]{.m3}**; **[÷2]{.m4}**.
+      Ratio of means: cell ≥ the Total row **[×1.1]{.p1}**; **[×1.2]{.p2}**; **[×1.5]{.p3}**; **[×2]{.p4}**; cell ≤ the Total row **[÷1.1]{.m1}**; **[÷1.2]{.m2}**; **[÷1.5]{.m3}**; **[÷2]{.m4}**.
       :::
 
 # golden display (tab_md) unchanged: n_mean_sparse
@@ -1167,7 +1167,7 @@
       | C       | |                         |
       |**Total**| |  **3.0** (cv 53%)       |
       
-      Shades of blue: cells ≥ the Total row **[×1.1]{.p1}**; **[×1.2]{.p2}**; **[×1.5]{.p3}**; **[×2]{.p4}**. Shades of yellow to red: cells ≤ the Total row **[÷1.1]{.m1}**; **[÷1.2]{.m2}**; **[÷1.5]{.m3}**; **[÷2]{.m4}**.
+      Ratio of means: cell ≥ the Total row **[×1.1]{.p1}**; **[×1.2]{.p2}**; **[×1.5]{.p3}**; **[×2]{.p4}**; cell ≤ the Total row **[÷1.1]{.m1}**; **[÷1.2]{.m2}**; **[÷1.5]{.m3}**; **[÷2]{.m4}**.
       :::
 
 # golden display (tab_md) unchanged: totn_row_drop
@@ -1393,7 +1393,7 @@
       | White   | |      48.7 (cv 36%)       | |      2.8 (cv 84%)       |
       |**Total**| |  **47.2** (cv 37%)       | |  **3.0** (cv 87%)       |
       
-      Shades of blue: cells ≥ the Total row **[+0.1]{.p1}**; **[+0.2]{.p2}**; **[+0.4]{.p3}**; **[+0.8]{.p4}** SD. Shades of yellow to red: cells ≤ the Total row **[-0.1]{.m1}**; **[-0.2]{.m2}**; **[-0.4]{.m3}**; **[-0.8]{.m4}** SD.
+      Standardized mean difference: cell ≥ the Total row **[+0.1]{.p1}**; **[+0.2]{.p2}**; **[+0.4]{.p3}**; **[+0.8]{.p4}** SD; cell ≤ the Total row **[-0.1]{.m1}**; **[-0.2]{.m2}**; **[-0.4]{.m3}**; **[-0.8]{.m4}** SD.
       :::
 
 # golden display (tab_md) unchanged: n_mean_tottab
@@ -1537,7 +1537,7 @@
       |               | White               | |      48.7 (cv 36%)       | |      2.8 (cv  84%)       |
       |               |**Total Ensemble**   | |  **47.2** (cv 37%)       | |  **3.0** (cv  87%)       |
       
-      Shades of blue: cells ≥ the Total Ensemble row **[×1.1]{.p1}**; **[×1.2]{.p2}**; **[×1.5]{.p3}**; **[×2]{.p4}**. Shades of yellow to red: cells ≤ the Total Ensemble row **[÷1.1]{.m1}**; **[÷1.2]{.m2}**; **[÷1.5]{.m3}**; **[÷2]{.m4}**.
+      Ratio of means: cell ≥ the Total Ensemble row **[×1.1]{.p1}**; **[×1.2]{.p2}**; **[×1.5]{.p3}**; **[×2]{.p4}**; cell ≤ the Total Ensemble row **[÷1.1]{.m1}**; **[÷1.2]{.m2}**; **[÷1.5]{.m3}**; **[÷2]{.m4}**.
       :::
 
 # golden display (tab_md) unchanged: f_col_ref_lvl
@@ -1655,7 +1655,7 @@
       |**Total**      | |  **100%**     |  **100%**|  **100%**     | |  **100%**     |
       | n             | |   1 959       |   3 129  |  16 395       | |  21 483       |
       
-      Shades of blue: cells ≥ the Black column **[+5]{.p1}**; **[+10]{.p2}**; **[+20]{.p3}**; **[+30]{.p4}** points. Shades of yellow to red: cells ≤ the Black column **[-5]{.m1}**; **[-10]{.m2}**; **[-20]{.m3}**; **[-30]{.m4}** points.
+      Percentage points (risk) difference: cell ≥ the reference category (in bold) **[+5]{.p1}**; **[+10]{.p2}**; **[+20]{.p3}**; **[+30]{.p4}** points; cell ≤ ref **[-5]{.m1}**; **[-10]{.m2}**; **[-20]{.m3}**; **[-30]{.m4}** points.
       :::
 
 # golden display (tab_md) unchanged: f_col_ref_multi
@@ -1773,7 +1773,7 @@
       |**Total**      | |  **100%**     |  **100%**|  **100%**     | |  **100%**     |  **100%**     |  **100%**               |  **100%**       |  **100%**     |  **100%**          |  **100%**     |  **100%**     |  **100%**     |  **100%**     |  **100%**|  **100%**|  **100%**     |  **100%**     |  **100%**     | |  **100%**     |
       | n             | |   1 959       |   3 129  |  16 395       | |      93       |      15       |     109                 |      23         |     689       |      95            |     104       |      32       |      71       |     147       |     224  |   3 523  |     388       |   5 124       |  10 846       | |  21 483       |
       
-      Shades of blue: cells ≥ the Black column **[+5]{.p1}**; **[+10]{.p2}**; **[+20]{.p3}**; **[+30]{.p4}** points. Shades of yellow to red: cells ≤ the Black column **[-5]{.m1}**; **[-10]{.m2}**; **[-20]{.m3}**; **[-30]{.m4}** points.
+      Percentage points (risk) difference: cell ≥ the reference category (in bold) **[+5]{.p1}**; **[+10]{.p2}**; **[+20]{.p3}**; **[+30]{.p4}** points; cell ≤ ref **[-5]{.m1}**; **[-10]{.m2}**; **[-20]{.m3}**; **[-30]{.m4}** points.
       :::
 
 # golden display (tab_md) unchanged: f_col_ref_ci

@@ -157,7 +157,7 @@ test_that("the colour legend is the guide, and never printed twice", {
   # ...so for a plain coloured crosstab the footer has nothing left to say at all
   cap <- p$labels$caption %||% ""
   expect_false(grepl("Newcombe", cap))
-  expect_false(grepl("Shades of", cap))
+  expect_false(grepl("difference:", cap))
 
   # a crude column and its model twin are ONE ladder since the merge, so the guide can describe them
   # both -- the case that used to need the prose fallback
@@ -165,7 +165,7 @@ test_that("the colour legend is the guide, and never printed twice", {
   p2 <- forest_plot(r, observed = "ci", lang = "en")
   expect_false(is.null(tabxplor:::legend_guide_spec(
     r, c("Obs_OR", "Model_OR"), "text", "light", "en")))
-  expect_false(grepl("Shades of", p2$labels$caption %||% ""))
+  expect_false(grepl("OR \u2265", p2$labels$caption %||% ""))
 })
 
 test_that("what = 'level' draws the observed and adjusted levels, which every model column now has", {

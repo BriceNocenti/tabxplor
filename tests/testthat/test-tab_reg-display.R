@@ -260,14 +260,17 @@ test_that("the Model: footer names the aside the cell actually prints", {
   d <- reg_data()
   line <- function(...) tabxplor:::reg_model_lines(
     suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE, ...)))
-  expect_match(line(display = "est_base"),        "adjusted predicted probability")
+  # Phase 22f-i: the aside is glossed under the abbreviation the table itself prints, per ROLE --
+  # so the crude column's own share is named too, and the model's is no longer claimed for both.
+  expect_match(line(display = "est_base"),        "adj%: adjusted/predicted proportion", fixed = TRUE)
+  expect_match(line(display = "est_base"),        "obs%: observed proportion", fixed = TRUE)
   expect_match(line(display = "base_est_mdiff"),  "as a difference")
   expect_match(line(display = "base_est_mratio"), "as a ratio")
-  expect_false(grepl("in parentheses", line(display = "est")))
+  expect_false(grepl("adjusted predicted", line(display = "est")))
   # a gaussian outcome answers `{base}` with a mean, so the same clause words itself
   expect_match(tabxplor:::reg_model_lines(
     suppressMessages(tab_reg(d, "tvhours", "race", family = "gaussian", empirical = TRUE))),
-    "adjusted predicted mean")
+    "adj mean: adjusted/predicted mean", fixed = TRUE)
 })
 
 test_that("choosing a display changes no number (D11), presets included", {

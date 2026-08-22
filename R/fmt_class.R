@@ -4437,6 +4437,20 @@ fmt_face_semantic <- function(theme = "light") {
 #                                           excel fmt_txt runs / plain.
 # The break-word colours come from the engine's per-side slots (over 1:4, under 5:8) indexed into the
 # 8-hex palette -- the exact path fmt_channel_codes() / tx_slot_class() use for the cells.
+#
+# THE PROSE GRAMMAR, one shape for every case (see legend_tokens_prose):
+#   [<col names> -- ]<HEAD><LADDER> <NOTE>
+#     HEAD    the measure NAMED IN WORDS ("Percentage points (risk) difference:"), which is what a
+#             reader needs first. Dropped where the subject already IS the measure (a regression's
+#             effect word) or where the measure writes its own lead (the gap measures). Under
+#             `guaranteed_effect` it carries the guarantee and names the interval ONCE, both channels.
+#     LADDER  per side "<subject> >= <ref> <breaks> <unit>", the two sides joined by ";" -- ONE
+#             sentence. Under `guaranteed_effect` they merge into one list after "from <ref>".
+#     NOTE    what an UNCOLOURED (or, on a publication palette, UNMARKED) cell means. Only that:
+#             "coloured => significant" is a tautology the cells already show.
+# THE MEASURE IS NAMED IN TWO REGISTERS, both facts on the MEASURES row: `word` (short) for the
+# console and a plot guide, `word_long` (per SCALE, via by_scale) for the export footers -- a
+# difference of proportions, of means and of log odds are three quantities, not one word.
 
 # fixed (non-translated) symbols, kept as \uXXXX so R source stays ASCII.
 .lg_ge    <- "\u2265"   # >=
@@ -4475,12 +4489,25 @@ fmt_face_semantic <- function(theme = "light") {
 #   method       how the legend names this measure's TEST when it is not the column's stored interval:
 #                NA = no interval (contrib), a closure = its own sentence (the gap measures). Absent =
 #                the column's `ci_method` names it.
-#   subject      the legend's noun for what is compared, when not the column's effect word. NA = default.
 #   caveat       optional closure(spec) -> one sentence of honesty, or NULL.
 # Legend fields:
-#   word               the measure word, as a CLOSURE so gettext() runs at RENDER (a top-level gettext()
-#                      would freeze the build locale; potools extracts the literal statically). A
-#                      non-translated word is function() "OR".
+#   word               the SHORT measure word, as a CLOSURE so gettext() runs at RENDER (a top-level
+#                      gettext() would freeze the build locale; potools extracts the literal
+#                      statically). A non-translated word is function() "OR". Used by the console.
+#   word_long          the measure NAMED IN WORDS, for the export footers -- the discipline's term and
+#                      the base measure together ("percentage points (risk) difference"). Mostly a
+#                      `by_scale` fact, because what a difference IS depends on the ladder it is read
+#                      on; row-level where it does not vary. `word_std` / `word_long_std` are the SD
+#                      twins, so the standardized reading is a field rather than a branch. Absent =
+#                      fall back leftwards (word_long_std -> word_long -> word_std -> word).
+#   word_guar          closure(conf_pct) -> the `guaranteed_effect` head, as ONE msgid per measure
+#                      (`word_guar_std` its SD twin). ⚠ NOT a shared "%s-guaranteed %s" template: in
+#                      French the participle agrees with the measure (*differance garantie* vs
+#                      *rapport garanti*), which no single format string can do. Absent = that
+#                      generic template, which is right wherever no catalogue needs agreement.
+#   subject            the legend's noun for what is GRADED, when that is not the cell itself. A
+#                      column may be coloured on a quantity it does not print -- an odds ratio behind
+#                      a percentage -- and "cell >= 1.2" would then be false.
 #   break_over/under   the break-label glyph per side; break_scale = TRUE means a factor pct diff x100.
 #   ref_kind           the baseline concept: "category" | "indep" (independence) | NA = the column's own ref.
 #   threshold_mult     the grey-note first-break glyph is x (TRUE) or the symmetric +/- (FALSE).
@@ -4515,9 +4542,35 @@ fmt_face_semantic <- function(theme = "light") {
 # two disagree outright -- a crude 0.92 adjusted to 0.74 is a strengthening, and the generic lead
 # called it a fall. Declared per measure so the sentence and the shade cannot drift apart again.
 #' @keywords internal
-fmt_gap_lead <- function(subject, ref, dir) {
-  if (dir > 0) gettextf("%s further from no effect than %s, by", subject, ref)
-  else         gettextf("%s closer to no effect than %s, by", subject, ref)
+fmt_gap_lead <- function(subject, ref, dir, neutral = NA_character_) {
+  # name the null the distance is measured from (1 on a ratio, 0 on a difference): "no effect" is the
+  # concept, the number is what the reader sees in the column. EST_SCALES$neutral, so it cannot drift.
+  # ⚠ the UNDER side also holds a SIGN FLIP: an estimate that crossed the null is "closer" to it in
+  # this measure's arithmetic (it compares DISTANCES), so the sentence has to admit that reading.
+  if (is.na(neutral)) {
+    if (dir > 0) gettextf("%s further from no effect than %s, by", subject, ref)
+    else         gettextf("%s closer to no effect than %s (or inversed effect), by", subject, ref)
+  } else {
+    if (dir > 0) gettextf("%s further from no effect (%s) than %s, by", subject, neutral, ref)
+    else         gettextf("%s closer to no effect (%s) than %s (or inversed effect), by", subject, neutral, ref)
+  }
+}
+
+# fmt_contrib_lead() -- the legend lead of `contrib`. The contribution to chi2 is SIGNED, and the
+# generic "<subject> >= <breaks>" said the same thing on both sides (the glyph is x on each), leaving
+# the sign to the colour alone. Positive means the cell holds MORE cases than independence predicts;
+# the discipline's words for that are over- / under-represented, which is also what the French
+# glossary settled. The reference is named on the FIRST side only (legend_tokens_prose's
+# first-then-short rule gives `indep` an empty short form), so it is stated once.
+#' @keywords internal
+fmt_contrib_lead <- function(subject, ref, dir, neutral = NA_character_) {
+  if (is.null(ref) || is.na(ref) || !nzchar(ref)) {
+    if (dir > 0) gettextf("%s over-represented, by",  subject)
+    else         gettextf("%s under-represented, by", subject)
+  } else {
+    if (dir > 0) gettextf("%s over-represented vs %s, by",  subject, ref)
+    else         gettextf("%s under-represented vs %s, by", subject, ref)
+  }
 }
 
 #' @keywords internal
@@ -4541,7 +4594,19 @@ MEASURES <- list(
                  auto_for = list(text = c("pct", "reg_diff")),
                  raw = function(x) get_diff(x),
                  scale = c(pct = "pct_diff", std = "mean_diff", log = "log_odds"),
-                 sig_source = "bounds", gate_row = "refrow"),
+                 sig_source = "bounds", gate_row = "refrow",
+                 # WHAT a difference is depends on the ladder, so the export name is a per-scale fact:
+                 # a difference of proportions, of means, or of log odds are three quantities.
+                 by_scale = list(
+                   pct_diff  = list(word_long = function() gettext("percentage points (risk) difference"),
+                                    word_guar = function(p) gettextf("%s%%-guaranteed percentage points (risk) difference", p)),
+                   mean_diff = list(word_long     = function() gettext("mean difference"),
+                                    word_std      = function() gettext("standardized difference"),
+                                    word_long_std = function() gettext("standardized mean difference"),
+                                    word_guar     = function(p) gettextf("%s%%-guaranteed mean difference", p),
+                                    word_guar_std = function(p) gettextf("%s%%-guaranteed standardized mean difference", p)),
+                   log_odds  = list(word_long = function() gettext("log-odds difference"),
+                                    word_guar = function(p) gettextf("%s%%-guaranteed log-odds difference", p)))),
   ratio      = list(word = function() gettext("ratio"),                break_over = .lg_times, break_under = .lg_div,
                  doc = "relative risk (factors) or mean ratio (numerics) vs the reference.",
                  break_scale = FALSE, ref_kind = NA_character_, threshold_mult = TRUE,  unit_kind = "none",
@@ -4554,8 +4619,18 @@ MEASURES <- list(
                  auto_for = list(text = "num", bg = "pct"),
                  raw = function(x) get_ratio(x),
                  scale = c(pct = "pct_ratio", std = "mean_ratio", log = "mean_ratio"),
-                 sig_source = "bounds", gate_row = "refrow"),
-  odds_ratio = list(word = function() "OR",                            break_over = "",        break_under = "1/",
+                 sig_source = "bounds", gate_row = "refrow",
+                 by_scale = list(
+                   pct_ratio  = list(word_long = function() gettext("relative risk (ratio)"),
+                                     word_guar = function(p) gettextf("%s%%-guaranteed relative risk (ratio)", p)),
+                   mean_ratio = list(word_long = function() gettext("ratio of means"),
+                                     word_guar = function(p) gettextf("%s%%-guaranteed ratio of means", p)))),
+  odds_ratio = list(word = function() "OR", word_long = function() gettext("odds ratio"),
+                 word_guar = function(p) gettextf("%s%%-guaranteed odds ratio", p),
+                 # the graded quantity is NOT the cell: `color = "or"` colours a percentage table on
+                 # its odds ratios, so "cell >= 1.2" would compare a percentage to an odds ratio.
+                 subject = "OR",
+                 break_over = "",        break_under = "1/",
                  doc = "the empirical odds ratio (for \\code{pct = \"row\"}/\\code{\"col\"}), coloured on its own symmetric \\code{odds_ratio} scale (so \\code{pct_ratio} stays free for \\code{\"ratio\"}).",
                  break_scale = FALSE, ref_kind = "category",    threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = FALSE,
@@ -4567,14 +4642,13 @@ MEASURES <- list(
                  requires = c(ref = "always", ci = "gated"),
                  # ⚠ tab() NEVER auto-resolves to the odds ratio (it is asked for by name) -> reg-only context.
                  auto_for = list(text = "reg_ratio"),
-                 subject = "OR",
                  raw = function(x) get_or(x),
                  scale = c(pct = "odds_ratio", std = "odds_ratio", log = "odds_ratio"),
                  sig_source = "bounds", gate_row = "refrow"),
   contrib    = list(word = function() gettext("contribution to Chi2"), break_over = .lg_times, break_under = .lg_times,
                  doc = "signed contribution to the chi-squared (reference-free).",
                  break_scale = FALSE, ref_kind = "indep",       threshold_mult = TRUE,  unit_kind = "contrib",
-                 has_ref_lead = FALSE,
+                 has_ref_lead = FALSE, lead = fmt_contrib_lead,
                  # the ONE measure the test step computes and stamps: the signed chi2 residual needs the
                  # whole table and stores each cell's mean contribution ON the total row (both forced).
                  # `method = NA` = no interval to name.
@@ -4965,11 +5039,19 @@ legend_resolve_lang <- function(lang = NULL) {
 # Flush gettext's cache of already-translated strings, so a mid-session LANGUAGE change is honoured.
 # glibc caches per (domain, msgid) and only invalidates on setlocale()/bindtextdomain()/textdomain();
 # without this, LANGUAGE changes silently no-op on Linux (they happen to work on Windows/macOS).
-# Binding a throwaway domain is the portable flush (what withr::local_language() does since 3.0.0);
-# the older Sys.setlocale(LC_MESSAGES) trick fails on musl/Alpine (withr#213).
+# The older Sys.setlocale(LC_MESSAGES) trick fails on musl/Alpine (withr#213).
+#
+# ⚠ IT MUST RE-BIND OUR OWN DOMAIN, not a throwaway one: glibc keys the cache on (domain, msgid), so
+# binding some other name leaves "R-tabxplor" cached and the SECOND language switch of a session
+# silently no-ops -- one `lang = "fr"` render used to make every later `lang = "en"` one French.
+# Rebinding to tempdir() and back to the real catalogue is the invalidation.
 #' @keywords internal
 flush_gettext_cache <- function() {
-  try(invisible(bindtextdomain("tabxplor_reset", tempdir())), silent = TRUE)
+  try({
+    po <- system.file("po", package = "tabxplor")
+    bindtextdomain("R-tabxplor", tempdir())
+    if (nzchar(po)) bindtextdomain("R-tabxplor", po)
+  }, silent = TRUE)
   invisible(NULL)
 }
 
@@ -5081,29 +5163,24 @@ legend_join <- function(toks, sep) {
   out
 }
 
-# default palette -> baked shade names; a custom palette -> NA (the coloured break-words carry the
-# meaning). One pair PER CHANNEL: a publication palette's text side names the DIRECTION face, if it
-# has one -- its magnitude ladder is what the break-words already show -- and its background side a
-# grey fill, so a background-only column must not announce "Underlined:" about fills. NA on a side the
-# palette does not name typographically (the emphasis palette's over side, both sides of the marks
-# one): the legend then leads with the threshold instead of promising a distinction that is not there.
+# The word a palette gives each DIRECTION, or NA where it gives none.
+#
+# DESIGN: a COLOUR palette names none. Its two directions are a diverging ramp, and every medium now
+# renders it -- the break-words in the legend are themselves blue and red, so "Shades of blue:" said
+# in words what the words already looked like. A PUBLICATION palette is the opposite case: greyscale
+# collapses the diverging ramp, direction lives in the face alone, and the two sides genuinely need
+# naming ("Underlined:" / "Italic:") -- which is why those are the only legends still built as two
+# sentences. NA on a side the palette does not name typographically (the emphasis palette's over
+# side, both sides of the marks one).
+# One pair PER CHANNEL: the background side is a grey fill in every publication palette, so a
+# background-only column must not announce "Underlined:" about fills.
 legend_shade_names <- function(theme = "light") {
   pal <- print_palette_of(tx_palette_theme(theme))
-  if (!is.null(pal)) {
-    nm <- function(f) if (is.null(f)) NA_character_ else f()
-    return(list(text = c(over = nm(pal$shade$over), under = nm(pal$shade$under)),
-                bg   = c(over = gettext("Grey fill"), under = gettext("Grey fill"))))
-  }
-  is_default <- tryCatch({
-    b <- get0("base", envir = tabxplor_palette_env)
-    is.null(b) || (identical(b$text_colors,     default_text_colors) &&
-                   identical(b$text_colors_neg, default_text_colors_neg))
-  }, error = function(e) FALSE)
-  pair <- if (isTRUE(is_default))
-    c(over = gettext("Shades of blue"), under = gettext("Shades of yellow to red"))
-  else
-    c(over = NA_character_, under = NA_character_)
-  list(text = pair, bg = pair)
+  if (is.null(pal)) return(list(text = c(over = NA_character_, under = NA_character_),
+                                bg   = c(over = NA_character_, under = NA_character_)))
+  nm <- function(f) if (is.null(f)) NA_character_ else f()
+  list(text = c(over = nm(pal$shade$over), under = nm(pal$shade$under)),
+       bg   = c(over = gettext("Grey fill"), under = gettext("Grey fill")))
 }
 
 # THE word the colour legend names a regression column by.
@@ -5205,17 +5282,36 @@ legend_ref_info <- function(x, col, measure, orientation, is_coef = FALSE, is_re
     list(kind = "level", label = legend_ref_label(x, col, orientation), orientation = orientation)
 }
 
-legend_ref_phrase <- function(spec) {
+# THE reference, in the FORM the sentence position needs. A legend line names its baseline three or
+# four times, so a long phrase said in full each time buries the numbers:
+#   "full"   the first naming in a line -- everything the reader must be told once
+#   "short"  every later naming in the same line
+#   "plain"  inside the NOTE, where a parenthetical follows: a phrase ending in "(...)" would give
+#            two brackets in a row ("...the reference category (in bold) (Newcombe...)")
+# A short reference that is already short (a Total row) is the same string in all three.
+LEGEND_REF_FORMS <- c("full", "short", "plain")
+legend_ref_phrase <- function(spec, form = "full") {
   ref <- spec$ref
   lab <- ref$label
-  if (identical(ref$kind, "indep")) return(gettext("independence"))
-  if (identical(ref$kind, "observed")) return(gettext("the observed (crude) effect"))
+  # "" as the short form: a second naming would only repeat what the first side already said.
+  if (identical(ref$kind, "indep"))
+    return(if (identical(form, "short")) "" else gettext("independence"))
+  # the gap LEAD points at the column beside this one; the grey NOTE names the quantity tested.
+  if (identical(ref$kind, "observed"))
+    return(if (identical(form, "plain")) gettext("the observed effect")
+           else gettext("the observed column"))
   # "...'s effect", not just "the reference group": what differs is the EFFECT, not the group.
   if (identical(ref$kind, "group"))    return(gettext("the reference group's effect"))
-  if (identical(ref$kind, "category")) {
-    if (!is.na(lab) && nzchar(lab)) return(gettextf("the reference category (%s)", lab))
-    return(gettext("the reference category"))
-  }
+  # DESIGN: `ref != "tot"` says ONE thing, whatever level was picked and whether or not it resolves.
+  # A merged table has one reference row PER sub-table, so legend_ref_label() returns NA there and the
+  # phrase used to fall back to the literal "Total" -- describing a comparison the table never made.
+  # The level is already visible (it is the bold row), and "the reference category (in bold)" is word
+  # for word what tab_stars_legend() says, so the two footer lines name one thing once.
+  if (ref$kind %in% c("category", "level"))
+    return(switch(form,
+                  short = gettext("ref"),
+                  plain = gettext("the reference category"),
+                  gettext("the reference category (in bold)")))
   base <- if (identical(ref$orientation, "col")) gettext("column") else gettext("row")
   if (is.na(lab) || !nzchar(lab)) lab <- gettext("Total")
   gettextf("the %s %s", lab, base)                 # EN "the Total row"; FR "la %2$s %1$s" -> "la ligne Total"
@@ -5317,19 +5413,29 @@ legend_method_phrase <- function(spec, lang, measure = spec$measure_text) {
   if (is.na(m)) conf else gettextf("%s, %s", m, conf)
 }
 
-legend_measure_word <- function(measure, is_std, eff_word, policy = "ignore") {
+# THE measure's name, in the register the medium can afford: `long = TRUE` (the export footers) gives
+# the discipline's term and the base measure together, `long = FALSE` (the console, a plot guide) the
+# short word. Both are read through measure_facts(), so the SCALE the ladder is on chooses the name --
+# a difference of proportions, of means and of log odds are three quantities, not one word.
+legend_measure_word <- function(measure, is_std, eff_word, policy = "ignore",
+                                scale_key = NULL, long = FALSE) {
   # an SD-scaled ladder prints bare numbers (`-0.8 -0.4 -0.2 -0.1`) that are not in the outcome's own
   # units, so the name has to carry the unit -- once, before any of them, rather than only in the
   # trailing grey clause where a reader meets it after the numbers.
   if (!is.na(eff_word) && !measure_own_ref(measure))
     return(if (isTRUE(is_std) && identical(measure, "difference")) gettextf("%s in SD", eff_word)
            else eff_word)
-  if (identical(measure, "difference") && isTRUE(is_std)) return(gettext("standardized difference"))
-  m <- measure_facts(measure, policy)
+  m <- measure_facts(measure, policy, scale_key)
   if (is.null(m)) return(measure)
+  # fall back leftwards, so a scale that declares nothing still answers with the measure's own word.
+  w <- NULL
+  if (isTRUE(long) && isTRUE(is_std)) w <- m$word_long_std
+  if (is.null(w) && isTRUE(long))     w <- m$word_long
+  if (is.null(w) && isTRUE(is_std))   w <- m$word_std
+  if (is.null(w))                     w <- m$word
   # `word` is a CLOSURE, so gettext() runs at render (never at build, which would freeze the locale)
   # AND its literal is visible to potools' static extraction. A non-translated word is function() "OR".
-  m$word()
+  w()
 }
 
 legend_ucfirst <- function(s) {
@@ -5348,16 +5454,24 @@ legend_resolve_spec <- function(spec, lang) {
     if (is.null(policy)) policy <- spec$policy
     md   <- measure_facts(measure, policy, scale_key)
     subj <- if (!is.na(spec$eff_word)) spec$eff_word
-            else if (!is.null(md$subject)) md$subject else gettext("cells")
+            else if (!is.null(md$subject)) md$subject else gettext("cell")
     u    <- legend_unit_word(md, spec$is_pct, spec$is_std)
     unit <- if (nzchar(u)) paste0(" ", u) else ""
     # `adjustment` / `between_groups` compare to ANOTHER COLUMN's estimate, so the reference is a
     # per-CHANNEL fact -- the scalar spec$ref_phrase would describe the wrong comparison on the background.
     own_ref <- measure_own_ref(measure)
+    own_ref_phrase <- function(form) if (!own_ref) NA_character_ else
+      legend_ref_phrase(list(ref = list(kind = md$ref_kind, label = NA_character_)), form)
     list(subject      = subj,
-         ref_lead     = if (own_ref)
-           legend_ref_phrase(list(ref = list(kind = md$ref_kind, label = NA_character_)))
-           else NA_character_,
+         ref_lead     = own_ref_phrase("full"),
+         ref_short    = own_ref_phrase("short"),
+         ref_note     = own_ref_phrase("plain"),
+         # the measure NAMED IN WORDS, and the interval's bare name -- what the prose head is built of.
+         word_long    = legend_measure_word(measure, spec$is_std, spec$eff_word, policy,
+                                            scale_key, long = TRUE),
+         word_guar    = if (isTRUE(spec$is_std) && is.function(md$word_guar_std)) md$word_guar_std
+                        else md$word_guar,
+         method_name  = legend_method_name(spec, measure),
          has_ref_lead = own_ref ||
            (isTRUE(md$has_ref_lead) && !isTRUE(spec$is_coef) && !isTRUE(spec$is_reg)),
          # under `guaranteed_effect` this measure's breaks are ABSOLUTE thresholds (contrib's residual),
@@ -5370,12 +5484,20 @@ legend_resolve_spec <- function(spec, lang) {
          method_phrase = legend_method_phrase(spec, lang, measure),
          # a measure the generic "<subject> >= <reference>" lead would mis-state writes its own.
          lead_fn      = MEASURES[[measure]]$lead,
+         policy       = policy,
          unit         = unit)
   }
   spec$txt <- chan(spec$measure_text, spec$plan_txt$policy, spec$plan_txt$scale_key)
   spec$bg  <- chan(spec$measure_bg,   spec$plan_bg$policy,  spec$plan_bg$scale_key)
-  spec$ref_phrase       <- legend_ref_phrase(spec)
+  spec$ref_phrase       <- legend_ref_phrase(spec, "full")
+  spec$ref_short        <- legend_ref_phrase(spec, "short")
+  spec$ref_plain        <- legend_ref_phrase(spec, "plain")
   spec$method_phrase    <- legend_method_phrase(spec, lang)
+  spec$conf_pct         <- legend_num(spec$conf_level * 100, lang)
+  # the null a GAP is measured from, as the reader sees it in the column (1 on a ratio, 0 on a
+  # difference). NA where the scale declares none -- fmt_gap_lead() then says "no effect" alone.
+  nt <- EST_SCALES[[spec$scale %||% ""]]$neutral
+  spec$neutral          <- if (is.null(nt) || is.na(nt)) NA_character_ else legend_num(nt, lang)
   primary <- if (is.null(spec$plan_txt)) spec$plan_bg else spec$plan_txt
   spec$threshold_phrase <- legend_threshold_phrase(primary, spec$is_pct, spec$is_std, lang)
   spec
@@ -5395,9 +5517,9 @@ legend_tokens_terse <- function(spec, lang, show_names) {
     if (legend_gap_baseline(plan, spec$no_obs))
       return(list(.lg_tok(paste0(prefix,
                                  legend_measure_word(plan$measure, spec$is_std, spec$eff_word,
-                                                     plan$policy),
+                                                     plan$policy, plan$scale_key),
                                  colon, legend_gap_baseline_word(plan, spec)))))
-    mw <- legend_measure_word(plan$measure, spec$is_std, spec$eff_word, plan$policy)
+    mw <- legend_measure_word(plan$measure, spec$is_std, spec$eff_word, plan$policy, plan$scale_key)
     bt <- legend_break_tokens(plan, spec$is_pct, if (is_bg) "bg" else "text", lang,
                              spec$theme %||% "light")
     seq_toks <- c(rev(bt$under), bt$over)
@@ -5426,39 +5548,128 @@ legend_tokens_terse <- function(spec, lang, show_names) {
   toks
 }
 
+# THE export legend, one grammar for every case:
+#
+#   [<col names> -- ]<HEAD><LADDER> <NOTE>
+#
+#   HEAD    "<Measure>: "  -- the measure NAMED IN WORDS, which is what a reader needs first and what
+#           the old palette-led form ("Shades of blue:") never said. Dropped where the subject IS the
+#           measure (a regression column's own effect word) or where the measure writes its own lead
+#           (the two gap measures), so no line names one thing twice. Under `guaranteed_effect` it
+#           carries the guarantee and names the interval ONCE, for both channels.
+#   LADDER  per side "<subject> >= <ref> <breaks> <unit>", the two sides joined by ";" -- one
+#           sentence, not two. Under `guaranteed_effect` they merge into ONE list after "from <ref>",
+#           since both sides then read off the same interval floor.
+#   NOTE    what an UNCOLOURED cell means. Only that: "coloured => significant" is a tautology the
+#           reader can see. A publication palette says "Unmarked" for the same fact.
+#
+# A palette that NAMES its directions (the publication ones -- greyscale has no diverging ramp) is the
+# one exception: its two sides stay two sentences, led by the face word.
 legend_tokens_prose <- function(spec, lang, show_names) {
   # French typography: a (thin) space before the high punctuation ; : (matches the user's examples).
   semi  <- if (identical(lang, "fr")) " ; " else "; "
   colon <- if (identical(lang, "fr")) " : " else ": "
+  mark  <- tx_is_print(tx_palette_theme(spec$theme))
 
-  one_side <- function(plan, dir, is_bg, no_shade = FALSE) {
-    if (is.null(plan)) return(NULL)
-    # the baseline column itself: one clause, over side only (no ladder). The measure is named by the
-    # caller, so this states only WHAT the column is.
-    if (legend_gap_baseline(plan, spec$no_obs)) {
-      if (dir < 0) return(NULL)
-      return(list(.lg_tok(paste0(legend_ucfirst(legend_gap_baseline_word(plan, spec)), "."))))
-    }
+  # ---- one side of one ladder: "<lead> <b1>; <b2>; ... <unit>" --------------------------------
+  side_tokens <- function(plan, dir, is_bg, lead) {
     bt   <- legend_break_tokens(plan, spec$is_pct, if (is_bg) "bg" else "text", lang,
                                 spec$theme %||% "light")
     side <- if (dir > 0) bt$over else bt$under
     if (length(side) == 0) return(NULL)
-    cf    <- if (is_bg) spec$bg else spec$txt
-    cmp   <- if (dir > 0) .lg_ge else .lg_le
-    sh    <- spec$shades[[if (is_bg) "bg" else "text"]]
-    shade <- if (no_shade) NA_character_ else if (dir > 0) sh[["over"]] else sh[["under"]]
-    rp    <- if (!is.na(cf$ref_lead)) cf$ref_lead else spec$ref_phrase   # per channel
-    lead  <- if (!is.null(cf$lead_fn))  cf$lead_fn(cf$subject, rp, dir)
-             else if (cf$has_ref_lead) gettextf("%s %s %s", cf$subject, cmp, rp)
-             else                      gettextf("%s %s", cf$subject, cmp)
-    head_toks <- if (!is.na(shade)) list(.lg_tok(paste0(shade, colon, lead, " ")))
-                 else               list(.lg_tok(paste0(legend_ucfirst(lead), " ")))
-    # guaranteed_effect: the coloured thresholds are the CI floor -> annotate the OVER sentence
-    # ("..., after subtracting the margin of error (<method>).") instead of a bare ".".
-    tail <- if (dir > 0 && identical(spec$policy, "guaranteed_effect") && !isTRUE(cf$guar_abs))
-              paste0(cf$unit, ", ", gettextf("after subtracting the margin of error (%s)", cf$method_phrase), ".")
-            else paste0(cf$unit, ".")
-    c(head_toks, legend_join(side, semi), list(.lg_tok(tail)))
+    cf <- if (is_bg) spec$bg else spec$txt
+    c(list(.lg_tok(paste0(lead, " "))), legend_join(side, semi), list(.lg_tok(cf$unit)))
+  }
+
+  # THE REFERENCE IS NAMED IN FULL ONCE PER LINE, then short. A line names its baseline three or four
+  # times, and "the reference category (in bold)" said four times buries the thresholds it is there to
+  # frame. Line-level, not channel-level: the background channel continues the same sentence.
+  named_ref <- FALSE
+  ref_of <- function(cf) {
+    out <- if (named_ref) { if (!is.na(cf$ref_short)) cf$ref_short else spec$ref_short }
+           else           { if (!is.na(cf$ref_lead))  cf$ref_lead  else spec$ref_phrase }
+    named_ref <<- TRUE
+    out
+  }
+
+  # ---- one channel: head + ladder ---------------------------------------------------------------
+  channel_tokens <- function(plan, is_bg, with_shades) {
+    if (is.null(plan)) return(NULL)
+    cf   <- if (is_bg) spec$bg else spec$txt
+    guar <- identical(cf$policy, "guaranteed_effect")
+    # the baseline column of a gap measure: one clause, no ladder. The measure is named by the ladder
+    # beside it, so this states only WHAT the column is -- but on the background channel it must still
+    # say which channel it is talking about.
+    if (legend_gap_baseline(plan, spec$no_obs)) {
+      w <- legend_gap_baseline_word(plan, spec)
+      return(list(.lg_tok(if (is_bg) paste0(gettext("Background colour"), colon, w, ".")
+                          else       paste0(legend_ucfirst(w), "."))))
+    }
+    # merge the two sides into one list only where they differ by the SIGN alone: a measure with its
+    # own lead says something different on each side ("further from" / "closer to"), and one without
+    # a reference has no "from <ref>" to hang the merged list on.
+    merged <- guar && !isTRUE(cf$guar_abs) && isTRUE(cf$has_ref_lead) && is.null(cf$lead_fn)
+    sh     <- if (with_shades) spec$shades[[if (is_bg) "bg" else "text"]]
+              else c(over = NA_character_, under = NA_character_)
+
+    # -- head
+    head_txt <- ""
+    # a REGRESSION column already names its measure in the subject -- its effect word IS the acronym
+    # the header prints -- so a head would say the same thing twice. Everything else takes one,
+    # including a measure that writes its own lead: `contrib`'s lead states a DIRECTION, not a name.
+    if (is.na(spec$eff_word)) {
+      w <- cf$word_long
+      if (guar && !isTRUE(cf$guar_abs)) {
+        # ONE msgid per measure, not "%s-guaranteed %s": in French the participle agrees with the
+        # measure (*differance garantie* vs *rapport garanti*), which a shared template cannot do.
+        w <- if (is.function(cf$word_guar)) cf$word_guar(spec$conf_pct)
+             else gettextf("%s%%-guaranteed %s", spec$conf_pct, w)
+        if (!is_bg && !is.na(cf$method_name)) w <- gettextf("%s (%s floor)", w, cf$method_name)
+      }
+      head_txt <- if (is_bg) gettextf("Background colour, %s", w) else legend_ucfirst(w)
+    } else if (is_bg) {
+      head_txt <- gettext("Background colour")
+    }
+
+    # -- ladder
+    if (merged) {
+      # NO colon between this head and its ladder: the guarantee reads as ONE sentence
+      # ("95%-guaranteed <measure> (<method> floor) from the Total row +0; ..."); a colon cuts it in
+      # two. Everywhere else the head is a LABEL and keeps its colon.
+      lead <- gettextf("from %s", ref_of(cf))
+      if (!nzchar(head_txt)) lead <- legend_ucfirst(lead)
+      bt   <- legend_break_tokens(plan, spec$is_pct, if (is_bg) "bg" else "text", lang,
+                                  spec$theme %||% "light")
+      both <- c(bt$over, bt$under)
+      if (length(both) == 0) return(NULL)
+      body <- c(list(.lg_tok(paste0(lead, " "))), legend_join(both, semi), list(.lg_tok(cf$unit)))
+      return(c(if (nzchar(head_txt)) list(.lg_tok(paste0(head_txt, " "))), body, list(.lg_tok("."))))
+    }
+    # a named face makes the two sides two SENTENCES (the face is what tells them apart); otherwise
+    # they are one sentence with a ";". A palette may name ONE side only (print_emphasis): the other
+    # then opens its own sentence and must be capitalised like one.
+    named <- !is.na(sh[["over"]]) || !is.na(sh[["under"]])
+    one <- function(dir) {
+      cmp   <- if (dir > 0) .lg_ge else .lg_le
+      rp    <- ref_of(cf)
+      lead  <- if (!is.null(cf$lead_fn)) cf$lead_fn(cf$subject, rp, dir, spec$neutral)
+               else if (cf$has_ref_lead) gettextf("%s %s %s", cf$subject, cmp, rp)
+               else                      gettextf("%s %s", cf$subject, cmp)
+      shade <- if (dir > 0) sh[["over"]] else sh[["under"]]
+      if (!is.na(shade)) lead <- paste0(shade, colon, lead)
+      # ⚠ AN ACRONYM IS DATA, NEVER PROSE: capitalising it printed "CumOR" / "Diff" where the header
+      # says `cumOR` / `diff`. Only the generic subject ("cell") ever opens a sentence.
+      else if (is.na(spec$eff_word) && (named || !nzchar(head_txt))) lead <- legend_ucfirst(lead)
+      side_tokens(plan, dir, is_bg, lead)
+    }
+    ov <- one(+1L); un <- one(-1L)
+    if (is.null(ov) && is.null(un)) return(NULL)
+    sep   <- if (named) list(.lg_tok(". ")) else list(.lg_tok(semi))
+    body  <- if (is.null(ov)) un else if (is.null(un)) ov else c(ov, sep, un)
+    head_tok <- if (!nzchar(head_txt)) NULL
+                else if (named) list(.lg_tok(paste0(head_txt, ". ")))
+                else            list(.lg_tok(paste0(head_txt, colon)))
+    c(head_tok, body, list(.lg_tok(".")))
   }
 
   toks <- list()
@@ -5474,72 +5685,72 @@ legend_tokens_prose <- function(spec, lang, show_names) {
     if (!is.null(cv)) { spec$caveat <- cv; break }
   }
 
+  # ... but a line that shows no ladder at all (a gap measure's baseline column) says nothing the
+  # caveat could qualify, and the ladder line beside it already carries it.
+  if (legend_gap_baseline(spec$plan_txt %||% spec$plan_bg, spec$no_obs)) spec$caveat <- NULL
+
   is_bg_only <- is.null(spec$plan_txt)
   primary    <- if (is_bg_only) spec$plan_bg else spec$plan_txt
-  ov <- one_side(primary, +1L, is_bg_only); un <- one_side(primary, -1L, is_bg_only)
-  if (!is.null(ov)) toks <- c(toks, ov)
-  if (!is.null(un)) toks <- c(toks, list(.lg_tok(" ")), un)
-
-  # a second measure on the background channel (e.g. color = c("diff","ratio")).
+  toks <- c(toks, channel_tokens(primary, is_bg_only, with_shades = TRUE))
+  # a second measure on the background channel (e.g. color = c("diff","ratio")): it takes no face
+  # word (the fills carry magnitude only) but names its own measure.
   if (!is.null(spec$plan_txt) && !is.null(spec$plan_bg)) {
-    bgw <- legend_measure_word(spec$measure_bg, spec$is_std, NA_character_, spec$policy)
-    toks <- c(toks, list(.lg_tok(paste0(" ", gettextf("Background colour (%s):", bgw)))))
-    bov <- one_side(spec$plan_bg, +1L, TRUE, no_shade = TRUE)
-    bun <- one_side(spec$plan_bg, -1L, TRUE, no_shade = TRUE)
-    if (!is.null(bov)) toks <- c(toks, list(.lg_tok(" ")), bov)
-    if (!is.null(bun)) toks <- c(toks, list(.lg_tok(" ")), bun)
+    bg <- channel_tokens(spec$plan_bg, TRUE, with_shades = FALSE)
+    if (!is.null(bg)) toks <- c(toks, list(.lg_tok(" ")), bg)
   }
 
-  # the grey-cells note (guaranteed_effect already annotated the over sentence). Under grey_non_signif
-  # an UNCOLOURED cell may be significant-but-small, so the only guarantee is coloured => significant --
-  # state that, and name the first threshold concretely.
-  # NB: the format string is ONE literal, not paste0(...): xgettext extracts each constant separately,
-  # so a paste0-split message never matches the joined string gettextf looks up -> translation silently
-  # fails. Keep it on one line.
+  # ---- the note: what an UNCOLOURED cell means --------------------------------------------------
+  # NB: each format string is ONE literal, not paste0(...): xgettext extracts each constant
+  # separately, so a paste0-split message never matches the joined string gettextf looks up ->
+  # translation silently fails. And ONE WHOLE SENTENCE per variant, never a %s for the verb: a single
+  # word carries gender and number in French, which only a full-sentence msgid can get right.
+  note <- NULL
   if (identical(spec$policy, "grey_non_signif")) {
-    thr  <- spec$threshold_phrase
-    # A publication palette colours nothing -- it underlines, emphasises or marks -- so it says the
-    # same thing in its own vocabulary. One WHOLE sentence per variant, never a %s for the verb: a
-    # single word carries gender and number in French, which only a full-sentence msgid can get right.
-    mark <- tx_is_print(tx_palette_theme(spec$theme))
+    thr <- spec$threshold_phrase
     note <- if (!is.na(thr)) {
       if (mark)
-        gettextf("Marked: significantly different from %s (%s), by at least the first threshold. Unmarked: either not significant, or a difference under %s.",
-                 spec$ref_phrase, spec$method_phrase, thr)
+        gettextf("Unmarked: not significantly different from %s (%s) or under the first threshold (%s).",
+                 spec$ref_plain, spec$method_phrase, thr)
       else
-        gettextf("Coloured: significantly different from %s (%s), by at least the first colour threshold. Uncoloured: either not significant, or a difference under %s.",
-                 spec$ref_phrase, spec$method_phrase, thr)
+        gettextf("Uncoloured: not significantly different from %s (%s) or under the first colour threshold (%s).",
+                 spec$ref_plain, spec$method_phrase, thr)
     } else {
       if (mark)
-        gettextf("Marked: significantly different from %s (%s), by at least the first threshold. Unmarked: either not significant, or too small a difference to mark.",
-                 spec$ref_phrase, spec$method_phrase)
+        gettextf("Unmarked: not significantly different from %s (%s).", spec$ref_plain, spec$method_phrase)
       else
-        gettextf("Coloured: significantly different from %s (%s), by at least the first colour threshold. Uncoloured: either not significant, or too small a difference to colour.",
-                 spec$ref_phrase, spec$method_phrase)
+        gettextf("Uncoloured: not significantly different from %s (%s).", spec$ref_plain, spec$method_phrase)
     }
-    # where only SOME rows carry a test, grey means a third thing -- say so, or a reader takes an
-    # untested cell for a tested-and-null one.
-    if (isTRUE(spec$partial_test))
-      note <- paste0(note, " ", if (mark) gettext("Some rows carry no test and are left unmarked.")
-                               else      gettext("Some rows carry no test and are left uncoloured."))
-    toks <- c(toks, list(.lg_tok(paste0(" ", note))))
+  } else if (identical(spec$policy, "guaranteed_effect")) {
+    # the absolute-threshold reading (contrib's residual) grades the quantity itself, so its note
+    # names the significance threshold rather than a guarantee subtracted from a deviation.
+    note <- if (isTRUE(spec$txt$guar_abs)) {
+      if (mark)
+        gettextf("Unmarked: below the significance threshold (%s). The thresholds above are comparable between tables.",
+                 spec$method_phrase)
+      else
+        gettextf("Uncoloured: below the significance threshold (%s). The thresholds above are comparable between tables.",
+                 spec$method_phrase)
+    } else {
+      if (mark) gettextf("Unmarked: not significantly different from %s.", spec$ref_plain)
+      else      gettextf("Uncoloured: not significantly different from %s.", spec$ref_plain)
+    }
   }
-  else if (identical(spec$policy, "guaranteed_effect"))
-    # the absolute-threshold reading (contrib's residual) grades the quantity itself, so its note names
-    # the significance threshold rather than a subtracted margin.
-    toks <- c(toks, list(.lg_tok(paste0(" ", if (isTRUE(spec$txt$guar_abs)) gettextf(
-      "Grey: below the significance threshold (%s). The thresholds above are comparable between tables.",
-      spec$method_phrase) else gettextf(
-      "Grey: not significantly different from %s after the margin of error.", spec$ref_phrase)))))
+  # where only SOME rows carry a test, uncoloured means a third thing -- say so, or a reader takes an
+  # untested cell for a tested-and-null one.
+  if (!is.null(note) && isTRUE(spec$partial_test))
+    note <- paste0(note, " ", if (mark) gettext("Some rows carry no test and are left unmarked.")
+                              else      gettext("Some rows carry no test and are left uncoloured."))
+  if (!is.null(note)) toks <- c(toks, list(.lg_tok(paste0(" ", note))))
+
   # the note above states ONE comparison (the text channel's). A gap measure on the background compares
   # something else, by a test of its own, so it needs one clause -- gated on the BACKGROUND's own
   # resolved policy, not spec$policy (the TEXT channel's).
   if (!identical(spec$plan_bg$policy, "ignore") &&
       !is.null(spec$plan_txt) && !is.null(spec$plan_bg) &&
-      !is.null(spec$bg) && !is.na(spec$bg$ref_lead)) {
+      !is.null(spec$bg) && !is.na(spec$bg$ref_note)) {
     toks <- c(toks, list(.lg_tok(paste0(" ", gettextf(
       "Background: the same rule, applied to the gap with %s (%s).",
-      spec$bg$ref_lead, spec$bg$method_phrase)))))
+      spec$bg$ref_note, spec$bg$method_phrase)))))
   }
   if (!is.null(spec$caveat)) toks <- c(toks, list(.lg_tok(paste0(" ", spec$caveat))))
   toks
@@ -5866,8 +6077,8 @@ legend_streams <- function(x, style, lang, theme = "light") {
           unname(CI_METHOD_CLOSED_FORM[o$ci_method %||% ""]), character(1))))
         if (length(cf) == 1L)
           spec$method_phrase <- if (mixed)
-            gettextf("%s; %s closed form on the observed column", spec$method_phrase, cf)
-          else gettextf("%s (%s closed form)", spec$method_phrase, cf)
+            gettextf("%s; matching %s interval on the observed column", spec$method_phrase, cf)
+          else gettextf("%s; %s closed form", spec$method_phrase, cf)
       }
       if (identical(style, "prose")) legend_tokens_prose(spec, lg, show_this)
       else                           legend_tokens_terse(spec, lg, show_this)
@@ -5935,7 +6146,7 @@ legend_guide_spec <- function(x, cols, channel = c("text", "bg"), theme = "light
     # the MEASURE names the guide, not the subject word (a two-channel table would say "Cells vs the
     # Total row" twice). legend_measure_word is the namer: an effect word on a reg column, the measure elsewhere.
     meas <- if (identical(channel, "text")) spec$measure_text else spec$measure_bg
-    word <- legend_measure_word(meas, spec$is_std, spec$eff_word, plan$policy)
+    word <- legend_measure_word(meas, spec$is_std, spec$eff_word, plan$policy, plan$scale_key)
     # the baseline this measure is read against: its OWN, when it has one (the two gap measures name
     # another column), else the column's -- the same two-step legend_tokens_prose() makes.
     rw  <- if (isTRUE(ch$has_ref_lead) && !is.na(ch$ref_lead)) ch$ref_lead else spec$ref_phrase

@@ -287,7 +287,7 @@ test_that("the legend names each channel's own baseline, and warns only on a non
   t <- tab_reg(d, outcome = "married", predictors = c("race", "party3"), family = "binomial",
                empirical = TRUE, color = c(TRUE, "adjustment"))
   l <- leg(t)
-  testthat::expect_true(any(grepl("observed (crude) effect", l, fixed = TRUE)))
+  testthat::expect_true(any(grepl("than the observed column", l, fixed = TRUE)))
   testthat::expect_true(any(grepl("non-collapsibility", l, fixed = TRUE)))
   # a COLLAPSIBLE estimand earns no caveat -- that contrast is the point of the sentence
   t2 <- suppressMessages(tab_reg(d, outcome = "married", predictors = c("race", "party3"),

@@ -12250,6 +12250,67 @@ Implement `dev/color_ladders_balance.md`.
 Implement `dev/reg_profiles_ideal_types.md`.
 
 
+#### Phase 22b — `tab_reg()` manual review (suite)
+
+##### Phase 22b-xviii — new round of `tab_reg()` manual review
+
+**DONE.** Sixteen reported defects across five subsystems. Every one was reproduced before it was fixed, and each turned out to have its root in a *shared* mechanism rather than in an ad-hoc branch — so each fix is a change to a declared fact or to a single renderer, never a new arm. Four cut across the package and are the substance of the phase.
+
+**1. One `digits` per cell served every token of it.** `measure = "difference"` puts a binomial column on the `points` scale, whose `REG_CELL_DIGITS` entry is `1L` — right for the estimate (a 2.4-point risk difference is not a 2-point one), noise for the `{base}` percentage riding beside it, which came out `(50.8 %)` where every other measure gives `(51 %)`. `EST_SCALES` gains **`base_digits`** beside its existing `base_display`: the precision the LEVEL prints at, absent = the cell's own. Declared `0L` on the three EFFECT scales whose base is a percentage (`odds_ratio`, `pct_ratio`, `points`) and deliberately NOT on the LEVEL scales, where `{base}` IS the estimate and the column's `digits` is the user's own answer. Applied in one line of `format()` beside the `DISPLAY_MIN_DIGITS` floor, keyed on the RAW token — the composite loop re-enters `format()` with the unresolved name, so a `{base}` aside and a bare `display = "base"` column are both covered.
+
+**2. The sparkline always spent all eight glyph levels.** A pure min–max rescale per curve is the standing objection to sparklines ([Few](https://www.perceptualedge.com/articles/visual_business_intelligence/best_practices_for_scaling_sparklines.pdf)): a flat curve and a strong one draw the same picture. The window now has a **floor**, `max(curve range, 8 × median bin SE, the first colour rung)`:
+
+- **8 × the median bin SE** — the range of k independent bins is ≈ 3.1 SE at k = 10 whatever the data says, so an 8 SE window leaves pure noise under half the height. **Measured, not chosen**: at 4 SE a noise curve still spent ~78 % of the run. Verified on a 400-row random fixture (`▅▅▅▅▄▄▄▄▅▆▅▅▅▅▅▅▅▄▃▃`) against the same shape on 4 000 rows with a real logit slope (`███▇▇▆▅▅▅▅▄▄▃▃▂▂▂▁▁▁`).
+- **the first colour rung on the curve's own scale**, so "uses the full height" means "reaches a deviation this package would colour". The conversion is exact rather than a convention: every ladder in `COLOR_SCALES` is the same ladder written at a 50 % reference (their declared `anchor`s), so `log(1.2)` on a logit curve, `log(1.1)` on a log-risk or log-mean one, and `0.1 × SD` on the identity scale — where a probability needs no row of its own, since SD = 0.5 at p = 0.5 makes 0.1 SD exactly 5 points.
+
+`RD_LINK_SCALES` declares it: one row per reading of the outcome (`rd_link_y()`'s own five `kind`s), carrying the rung and how a span on it is read back. `rd_bin()` writes the rung as a curve COLUMN beside `xlo`/`xhi` (the same rationale: a per-curve constant that must survive `bind_rows`). ⚠ computed BEFORE the `tibble()` call — tibble masks sequentially, and a `y` inside it is the binned column, not the outcome.
+
+**3. `meta$assumptions` held one record for one outcome.** `reg_curves()` returned `NULL` above one, so a two-outcome table lost its curves entirely. It now returns **one record per outcome, keyed by it**, each taking that outcome's own family, trials and modelled level (the first spec of each outcome — every fact read is an outcome fact, so a comparison of several models on one outcome still draws one curve). `reg_bind_assumptions()` binds outcome-first, group-second. Four read sites, all small.
+
+**4. Where a curve is drawn is a MEDIUM question, and there was nowhere to ask it.** The `n`-column cell is the better reading — the curve sits beside its coefficient — and is kept wherever it works. Two cases break it, and `tab_wants_shape_table()` is the one place they are named: the **console**, whose block glyphs are East-Asian-width-ambiguous (a terminal font that draws them wide shifts every column to their right, and a package cannot choose its reader's font — the reported padding bug), and **several outcomes**, which share one base-count column, so a cell of it could show only one of them. Both get a small **shape table** below the footer:
+
+```text
+| outcome   | numeric predictor | span | observed shape       |
+|:----------|:------------------|-----:|:---------------------|
+| married   | age               | ×8.7 | ▁▃▆▇████████████▇▇▆▆ |
+|           | tvhours           | ×2.6 | ▃▆████▇▆▅▅▄▃▃▃▂▂▂▁▁▁ |
+| income25k | age               |  ×34 | ▃▅▇██████████▇▆▅▄▃▂▁ |
+```
+
+`reg_shape_table()` is the one producer (already rendered, headers and note as attributes); `tx_pipe_table()` the one GFM emitter the console and Markdown share; HTML re-uses `tx_spark_svg()` at double size (`h = 44, dx = 10`), Excel writes plain cells whose rows join the sheet-stacking offset. 20 glyphs rather than 10 — a table of its own has the room a cell has not. The **span** column is the direct answer to the literature's complaint about an unlabelled scale: the curve's own range on the measure (`×2.4`, `+12 %`, `+0.4 SD`), or `<` + the window where the floor set it, so "reads flat" is checkable rather than a guess. The predictor column names the **variable**, never its parametrisation: the curve is fit-free, so a `shape = "quadratic"` model does not change what was observed.
+
+⚠ **`tab_materialize_extras(backend =)` is a LAYOUT discriminator, not a medium** — html, md and plot all materialise as `"text"`, so gating on it silently took the console's route for every one of them. It gains a `medium` argument (NULL = unknown, keeps the permissive route) and `tab_export_prep()` passes its own backend through.
+
+**The outcome, folded like the base count.** A reader of a regression table on the console had nowhere to find what was being modelled. It is now named ONCE above the table (`# Outcome: married`) where the table rests on one, and per column (the `[outcome]` suffix, which every exporter already strips) where it rests on several — the base count's own rule. Stored on `meta$spec$vars$outcomes` rather than re-derived from `col_var`, which legitimately names something else on a comparison of several models. ⚠ two consequences: `tbl_sum.tabxplor_grouped_tab` calls `NextMethod()`, so the line had to be guarded against being appended twice; and `print.tabxplor_tab` blanked the type-tag line by COUNTING header lines, which the new one broke — it now FINDS the line by its tags, which is ANSI-proof and cannot silently blank the wrong one.
+
+**The footer reads outward from the data.** `TEST_ROWS`' declaration order IS the display order, so this is a block reshuffle plus a rewritten ordering note: **N** → **the checks, worst first** (proportionality and linearity break what the number *means*; dispersion breaks every star in the table; collinearity and influence only say how fragile it is) → **the content** (overall association, interaction) → **the comparison** (LR vs null, the R²s, AIC, BIC, the model-comparison rows). The exact **Pearson dispersion** moves out of the glance block to sit directly under the Dispersion check it refines. That needed one mechanism: a slot is a position in the reading order and `block` is who WRITES the row, and the two are not one-to-one, so the stamp comes from a `producer_of` map and `test_rows_from_checks()` takes a `keys` argument. Assertion S8 (every check reaches exactly one slot) already refuses a check forgotten there.
+
+**Two footer defaults changed.** `"global"` (the per-predictor joint test) **leaves the default set**: one row per multi-level predictor and a `drop1()` refit each, and on a table whose every block is strongly associated it only repeats what the stars said. `stats = "global"` / `"all"` ask for it — and `"all"` genuinely includes it now, which it did not (`want_global` and `reg_footer_stats()` disagreed about what `"all"` meant; the gate is now derived from the same rule). **Brant returns as an ordinal default**: `REG_CHECKS` gains **`footer_default`** (the twin of 22e-i's `panel_default`), replacing the derivation from `cost` — what a table must say and what it costs are two questions, and proportionality is the case where they disagree. Two UX guards came with it: the "install brant" hint now fires only for a user who NAMED the check, and brant's own sparsity warning is re-worded once in the package's own words (a default check must speak about the reading, not about a contingency table the caller never built).
+
+**The tooltip's `gap` line was a second renderer.** `fmt_gap_render()` hard-coded `%+.1f` and a `" pts"` suffix nothing else in the package writes (not even gettext'd, while the legend says `points`), so the hover read `gap: -1.4 pts [-2.1 pts; -0.6 pts]` beside `diff: [-23.5;-18.9]%`. It is **deleted**. `fmt_gap_text()` renders both halves through `format()`: the estimate as the `{gap}` token it already is, the bounds by writing them into `ci_inf`/`ci_sup` on a throwaway copy and rendering the `{ci}` token — so the bracket is the same bracket as every other interval, `gap: -1.4% [-2.1;-0.6]%, p = 0.021%`. The IEEE-negative-zero guard the old renderer's test pinned is still pinned, now on the rendered bracket.
+
+**The HTML background flooded the whole cell.** The console stops it at the primary token and says why (*"THE BACKGROUND IS A COLOUR MEASURE, NOT THE CELL'S GROUND"*); HTML wrapped the ASSEMBLED cell, so the pill swallowed the stars and both asides. **It is HTML-specific**: the console splits both channels, Excel splits neither (internally symmetric, but the grey aside is lost — logged to Phase 22f, it needs per-cell rich-text runs). The pill moves into `html_cell_text()`, the one place the three pieces are known and already where the face is applied to the primary alone; the whole-cell wrap survives only where it is correct (`color_whole_cell`, a degraded column, a cell with no recorded range). And the **4px drift**: `.tx-pill`'s horizontal padding is real layout on an inline box, so a filled number sat ~4px left of the same number on an unfilled row — `margin:0 -4px` makes the fill bleed around the glyphs instead of moving them.
+
+**A gap fill was a description, not a test.** `color_signif` defaults to `"ignore"`, whose arm colours every non-`NA` score with no test at all — which is why cells with no star anywhere carried a fill, and which contradicted the architecture's own claim that the gap SE is what makes `color = "adjustment"` a test. `fmt_gap_force_policy()` now upgrades `"ignore"` to `"grey_non_signif"` wherever a gap SE exists: there is no meaningful "colour every movement without testing it" for a comparison of two estimates. ⚠ only `"ignore"` is upgraded — `"guaranteed_effect"` is stricter and a user who asked for it keeps it. **The remaining "no stars but coloured" cells are correct and worth keeping**, and `?tab_reg` now says so: both estimators are fitted on the same rows, so the gap's SE uses the difference of their influence functions and can be far smaller than either estimate's — two individually non-significant numbers can differ from each other beyond doubt.
+
+**Phase 22x's degenerate gap, pulled forward.** A univariable model IS its own crude twin, so its gap and its SE are both floating-point dust and their ratio was `z = -20`, `p = 8.6e-92`. The guard sits in `fmt_gap_parts()`, the one decomposition the score, the raw gap, the bounds and the p all read, so they go `NA` **together** and the colour goes with them. **Scale-relative, never an absolute epsilon** (`tol = .Machine$double.eps^0.5 × max(|est|, |obs|, 1)`, on the TEST scale — the log where the column is multiplicative, which is what `gap_se` is the SE of), and BOTH halves must be dust: a genuinely tiny gap with an honest SE is a real "adjustment changed nothing" and keeps its interval. The 22x entry is deleted.
+
+**`sd_bands` levels say their own cut.** `[18,30) low` → `age: [18,30) ; < mean - σ`, so the label can be checked against the interval beside it, and a skewed variable that lost a landmark still names the ones it kept. `shape_labels()` gains `sep` (a tag like `Q1` appends, a phrase is separated) — quantile labels are untouched. ⚠ **the σ never enters a string literal or a msgid**: the four msgids are `"< mean - %s"`, `"< mean"`, `"> mean"`, `"> mean + %s"`, filled by `stringi::stri_unescape_unicode()`, so the source stays ASCII AND `po_extract()` has nothing to mangle. French: `< moy. - σ`.
+
+⚠ **A THIRD i18n trap, found here and worth the rule.** 22e-i documented the `\uXXXX` normalisation; this one is its sibling. **potools extracts each string LITERAL it sees, while `gettext()` looks the EVALUATED string up** — so a message built with `paste0()` INSIDE the call is extracted in pieces and can never be found at run time. The shape table's note was written that way and would have shipped untranslatable. The rule: **one string literal per `gettext()` / `gettextf()` call**; join afterwards. The 22e-i normalisation pass was also re-run (2 escapes in each file, 2 identical-msgid fuzzies cleared — `Cramér's V` again, caught by `test-i18n-fr.R:85` exactly as before).
+
+**Verified**: every call of the review block, read on console, HTML, Markdown and Excel; the full suite **FAIL 0 / WARN 0 / SKIP 4 / PASS 9674**; goldens regenerated for the one intentional CSS line and reviewed (nothing else moved). New tests: the `{base}` precision and the folded outcome (`test-tab_reg-display.R`), the noise floor and the rung conversion, the per-outcome records and the media rule (`test-reg-shape.R`), the degenerate gap (`test-between-groups-gap.R`), the pill's scope and the hover's units (`test-render-html.R`), the footer order and the two default changes (`test-tab_reg-footer.R`).
+
+**Reported, not fixed:** Excel applies BOTH colour channels whole-cell — logged to Phase 22f, where the exporters are reviewed.
+
+
+
+
+
+
+
+
+
 
 
 
@@ -12602,6 +12663,288 @@ There should be a user-friendly way to decide which palette to use, global optio
 
 
 
+
+
+#### Phase 22e — plots manual review
+
+##### Phase 22e-i — assumptions plots
+
+**DONE.** `reg_check_plots()` rewritten around three changes: **one titled grid per model**, **`data =` written once**, and a panel text a first-year student can act on. The two reported errors are fixed, and two structural defects found while reproducing them are fixed with them.
+
+**The two reported errors.** (1) `geom_hline()` aborting on any multi-model call was reproduced on **ggplot2 4.0.3**: `reg_panel_collinearity()` passed `yintercept = c(5, 10)` with `linetype = c("dashed", "dotted")` as geom *params*, and faceting replicates a layer's data across panels but not its params — 2 models × 2 marks = 4 rows against a length-2 param. Reference lines are now a data frame read through `aes(yintercept =, linetype =)` + `scale_linetype_identity()`, which is facet-proof by construction; the rule is a `# WARNING:` on `reg_panel_mark_layers()`. (2) `"No model could be refitted from x"` on the `tea` example was `data = gss_simple` passed to a table built from `tea` — the slip the API invited. Both the cause and the message are gone: the abort now carries the first refit's own error and says to check `data`.
+
+**`data =` is written once.** `tab_reg()` stores `deparse(substitute(data))` as `fit_spec$data_expr` (captured beside the four `enquo()`s, before any promise is forced). `reg_plot_fits()` re-resolves it **only when it is a bare name** — cheap, side-effect-free, re-runnable — in the caller's frame, with one `cli_inform()` naming what it used; a pipeline, a subset or `.` keeps the abort, which now names the expression. The safety was already built: the existing N guard aborts when a rebound name does not reproduce the model.
+
+**One grid per model (ruling R10 revised).** Faceting by model could only ever apply `ctxs[[1]]$family` to every model — measured: a `binomial + ordinal` call drew binomial panels for the ordinal model. Every builder now takes ONE context, `reg_panel_facet()` is deleted, and each grid gets `reg_check_top()`: the outcome and the model's own formula in bold (terms through the new `reg_term_label()`, so `I((\`age\`/12.3)^2)` reads `age²`), then the family and the N in the footer's own words (`reg_family_display_name()`). Returns one `gtable`, or an invisible named list of them. Grid shape is `min(3, ceiling(sqrt(n)))` — 4 panels are 2×2, not 3+1.
+
+**The default panel set is declared, not coded.** `REG_CHECKS` gains two columns: `panel_default` (FALSE on **dispersion** and **collinearity** — one number against one number, their footer row says it all) and `panel_marks` (the reference line(s) a panel draws). A build-time `stopifnot` now also refuses a `panel_marks` that is not the check's own `flag` — which caught a real drift: the influence panel drew `0.25` while `REG_CHECKS$influence$flag` is `1`. `reg_panels_default()` is `reg_checks_default()`'s twin for panels. `"auto"` = 4 panels (gaussian / binomial / poisson), 5 (ordinal), 2 (multinomial); `"all"` = every applicable one, at most 7. **No silent truncation**: dropping a panel the user named would be worse than a taller grid, so the "max 6" is answered by the default set and the `ncol` rule.
+
+**Linearity now shows the shape the model fits.** `geom_smooth()` is gone entirely (which retires the `method = "auto"` hazard the file header warns about): `rd_comparator()` fits an `lm` through the observed bins — `y ~ x`, or `y ~ x + I(x^2)` for a predictor `shape = "quadratic"` has cured — so a cured predictor is no longer read against a line the model no longer fits. The facet is named by the model's own terms (`age + age²`, `log(age)` via `shape_mark()`), bold, 2 columns.
+
+**A link is a measure, and the panel now reads it.** `rd_link_y()` branched on `reg_check_family_of()`, so an `rr` (modified Poisson) or `rd` (identity risk) fit got an *empirical logit* axis — a scale that model never uses. It now branches on the fit key first: `rr` → `log(risk)`, `rd` → `risk`, `mr` → `log(mean)`, with a new exact `"logrisk"` arm in `rd_bin()` (`Var(log p̂) = (1-p)/(np)`, which the Poisson arm overstates by `1/(1-p)`). The row sparkline reads the same producer, so it moved with it.
+
+**Ordinal and multinomial linearity: one curve per reading** (the maintainer's own question, answered with the standard diagnostic). `rd_link_cuts()` gives one curve per cut for an ordinal (`y = 1{Y > k}` — non-parallel curves are the proportional-odds departure the factor-only Proportionality panel cannot show for a *continuous* predictor) and one per non-reference category for a multinomial (on the rows in `{ref, k}`, where `log(p/(1-p))` **is** the empirical generalised logit). Everything else keeps exactly one curve and the ordinary panel is unchanged. Verified on `rincome`: three cumulative-logit curves whose spread against age is visible by eye.
+
+**Text and layout.** The headline is `bquote(bold(<noun>) * ": <question>")` — one bold assumption word, one plain question, one line — chosen over a `ggtext` dependency because the linearity y axis wanted real maths anyway (`empirical logit: log(p/(1−p)), p = P(married)`, built in `rd_link_expr()` beside the word, so one place produces both). The price is that `plot.title` must be `face = "plain"`, or `bold()` would spread over the whole line: that is a `# WARNING` on `reg_panel_skin()`.
+
+**The formula speaks the table's units, not the statistician's.** `p` and `P(married)` name nothing a reader of this package has met, so the axis is written the way a tabxplor table writes a percentage: **a `%` sign qualified in subscript by what it is a percentage of** — and the qualifier is the **modelled level**, run through `cleannames_condition()` like every table header, because that is what the curve actually plots (`log(%ₓₘ / (1 - %ₓₘ))` with `Married` in subscript, from a raw level of `1-Married`). A subscript costs almost nothing in width, so a long level (`$25000 or more`) is affordable where `4-$25000 or more%` inline was not. The two multi-curve panels follow the same grammar: `log(%above the cut / %up to the cut)` for an ordinal, `log(%this category / %Democrat)` for a multinomial — the reference names itself in the denominator, so the axis WORD no longer repeats it. A gaussian or a count needs no gloss at all and the formula IS the word (`mean of age`, `log(mean of tvhours)`).
+
+⚠⚠ **THE PLOTMATH TRAP, root-caused after the maintainer saw "empty characters in an empty rectangle".** R draws a math-mode **space** (`~` — `RenderSpace()` is literally `RenderSymbolChar(' ')`), a **call's parentheses**, and `=` / `<` / `>` from the **Adobe Symbol font**. Only cairo does per-glyph fallback: **`ragg`, which is what Positron and RStudio draw with** ([ark's `graphics-devices.md`](https://github.com/posit-dev/ark/blob/main/doc/graphics-devices.md): *"We prefer using the ragg device if it is available"*), resolves ONE font for `"symbol"` through `systemfonts` and draws a **missing-glyph box** for anything it lacks. Measured on this box, same R and ggplot2: `png(type = "cairo")` perfect, `ragg::agg_png()` tofu on every `~`, `(`, `)`, `=`, `>`, and `group()`. **`frac()` and `bar()` are safe** — plotmath draws them as `GEPolyline` rules, not glyphs — which is what let the fraction survive the rewrite. Every expression is now built from **plain strings plus `frac` / `bar` / a subscript**: `":  "` for the space, `"log("` / `")"` for the parentheses, and `"%"[level]` for the qualified percentage. Verified identical on ragg, cairo and pdf. `test-tab_reg-plots.R` locks it by walking every label expression and refusing any call head outside `* - + [ frac bar bold`; the rule and its measurements are the `⚠⚠ WARNING` on `rd_link_expr()`.
+
+⚠ **The machine-side half, worth fixing on this box** (it breaks *every* R package's plotmath, not tabxplor's): `systemfonts::match_fonts("symbol")` resolves to **`/usr/local/share/fonts/windows/symbol.ttf`** — a Windows font copied in with the rest of `C:\Windows\Fonts`, owned by no package, whose cmap covers only the legacy U+F020–U+F0FF range, so `(`, `)`, `=` and space all shape to glyph **0 = `.notdef`**. `/usr/local/share/fonts` outranks `/usr/share/fonts` in fontconfig, so it beats the good URW font that is already installed. The decisive one-liner is `textshaping::shape_text("()= ", path = systemfonts::match_fonts("symbol")$path)$shape$index` — all zeros here, `9 10 30 1` for URW. Cure, in `.Rprofile`: `systemfonts::register_font("symbol", plain = "/usr/share/fonts/opentype/urw-base35/StandardSymbolsPS.otf")` (verified: it repairs even the old symbol-heavy expression on ragg). Subtitles are one short directive sentence, wrapped by `rd_wrap()` (`strwrap`, width 68) so a longer French translation still fits, in a new `cols$subtle` (`#555555` light, `grey2` dark/print) which also drives `axis.text` — the table's own `grey` is too light for words on white, and Phase 22f has its own claim on it. Proportionality's legend moved to the bottom (it was taking half the panel's width) with 4 facet columns.
+
+**French.** ⚠ `potools::po_extract()` had not been run for several phases: the `.pot` was stale, so `po_update()` alone merged nothing. Re-extracted (321 msgids), 22 new strings translated, `po_compile()` rebuilt `inst/po/fr/LC_MESSAGES/R-tabxplor.mo` — the whole grid, heading included, is now French under `lang = "fr"` (verified visually). ⚠ The same extraction surfaced **~20 msgids from Phases 22a–22c that were never in the po at all** (the ordinal superiority vocabulary — `Somers' D`, `win ratio`, the sd-band words, `Cramér's V`): left untranslated for the French pass, but now visible in `po/R-fr.po`.
+
+⚠⚠ **THE i18n TRAP, root-caused here — `po_extract()` must be followed by a `\uXXXX` normalisation pass.** The ASCII-source rule means a msgid is written `"Cram\u00e9r's V"` in R, and potools extracts it **as that literal escape** — while `gettext()` at run time looks up the *evaluated* string. So a bare `po_extract()` silently invalidates every entry with an accent or a dash: it fuzzies `Cramér's V` (`test-i18n-fr.R:85` caught it, the only failure of the first full run) and would have shipped a French build missing them. **Always, after `po_extract()`: replace `\\uXXXX` by its character in BOTH `po/R-tabxplor.pot` and `po/R-fr.po`, re-merge, then drop the `#, fuzzy` flag on every entry whose `#| msgid` is identical to its new one** — 3 entries here. This is what the Phase-18y note about "escapes normalised" meant; it is now written where it can be found.
+
+⚠ **Two characters were removed after measurement**: `U+202F` (the narrow no-break space the tables use as `big.mark`) and `U+2014` in the heading both raise `conversion failure ... in 'mbcsToSbcs'` on a single-byte graphics device — 4 warnings under `testthat`'s reproducible output. A plot label is not a table cell: a plain space and a plain hyphen. `age²` (Latin-1) is fine.
+
+**Verified**: every family of the review block's script (binomial + its `rr` / `rd` links, gaussian, `mr`, poisson, summed-score binomial, multinomial, ordinal, the mixed-family call, a model comparison) draws; the **full suite is FAIL 0 / WARN 0 / PASS 9612**; PNGs reviewed in English and French, on **both** `ragg` and cairo.
+
+**Open, reported not fixed**: an ordinal `residuals` panel returns NULL (`rd_resid()` has no `polr` arm) although `REG_CHECKS` declares it applicable — the grid silently loses a declared panel. Either give `rd_resid()` an ordinal arm or drop `"ordinal"` from that row's `families`; noted for Phase 22x.
+
+
+
+
+
+##### Phase 22e-ii — `forest_plot`
+
+**DONE.** `forest_plot()` redrawn around one structural fix and one new skin. The review's complaint
+("too gray, unreadable, not enough colors") was real, but reproducing it surfaced a **defect that was
+losing data**, and that is what most of the phase went on.
+
+**The defect: a mixed-unit table was plotting `log10` of a signed difference.** `forest_plot()` picked
+the **modal** `scale_key` and applied its transform to the whole plot. On `family = c("binomial",
+"gaussian", "poisson")` the modal transform is `log10`, so the gaussian panel plotted
+`log10(<a difference in years>)`: **every negative estimate became `NaN` and was silently dropped**
+(35 warnings), and the ratio ladder `÷1.5 / ×2` was drawn on an axis measured in years. That is the
+reported *"age outcome relig only shows one whisker, all the others out of the range"* — a transform
+bug, not a range one. The range was also computed **once for the whole table** and included the gap
+band, which on the `tea` summed score stretched the axis to `÷4` while every whisker sat near 1.
+
+**One axis per panel, in one ggplot** (the maintainer's own instruction: trick ggplot rather than
+split the object). ggplot has ONE scale per aesthetic, so x is pre-transformed into each scale's own
+space and the plot's scale is identity; `breaks` and `labels` are **functions**, and with free scales
+ggplot calls them **once per panel**, so a lookup keyed on that panel's limits dispatches them
+exactly. Verified on ggplot2 4.0.3 before a line was written. ⚠ The limits ARE the key, so they are
+forced (a `geom_blank` frame + `expand = expansion(0)`) and **no layer may reach past them** — the gap
+band is clamped in data space instead. ⚠ That frame is added **last**: the first layer to touch a
+discrete scale fixes its level order, and it carries one level (measured: adding it first reordered
+every y axis). `sec_axis()` is the one casualty — it is per scale, not per panel, so the secondary
+axis survives only on a single-scale plot; the unit otherwise moves into the strip, through a
+`labeller`, never by relabelling the data.
+
+**One range per scale KEY, not per facet** — a deliberate revision of the review's wording. Panels
+measuring the same thing must be directly comparable (that is what small multiples are for), while
+panels on different units keep their own axis, which is the whole point of a per-panel scale.
+
+**The ladder is trimmed, continued and thinned.** It **continues** past its last rung as
+`mag[k+1] = 2 * mag[k]`, mirrored, at most 4 extra rungs — one rule for both geometries, because every
+ladder already steps ≈×2 per rung in its own metric (`COLOR_SCALES`' K2 check), so `×2 → ×4 → ×8` and
+`+0.3 → +0.6 → +1.2` are the same rule; a colour rung stays exact (a gridline IS a threshold) while a
+continuation rung is rounded. The **first rung on each side is always in view**: a plot where every
+whisker sits inside the first colour threshold must say so. Lines and labels are **decoupled** — every
+in-range rung is drawn, at most 9 are labelled, thinned from the outside in in **whole pairs** (a first
+attempt thinned "by roundness" and degenerated into keeping only the negative side — measured). A
+scale with no ladder (a level panel) falls back to `pretty()`, the only case where the axis is not the
+colour ladder.
+
+**The skin.** `theme_minimal`; the ladder drawn as one dashed rule per rung **in that rung's own
+colour** (the `formations_stat` device — the direct answer to "not enough colors"), with the theme's
+own x grid off so nothing doubles; the whisker one capped `geom_segment`
+(`arrow(angle = 90, ends = "both")`) wholly in the cell's colour, so significance is read off the
+whisker and **the stars are gone**; level labels in the table's ink with the reference **bold**
+(plotmath, per break, so it survives free facets); strips bold, no panel border, panels spaced.
+
+**`center` replaces `labels`, `stars` and `size`.** `"n"` (default) a square whose area is the level's
+base **with the value just above the whisker**; `"estimate"` the value alone; `"none"` a constant
+square and no value, for a plot with many panels. The value rides above rather than on the whisker (a
+square sized by the base can swallow it), over a translucent rounded halo, and it is the cell's **own
+primary token** — the effect on a model column, the level for a crosstab — so the number says what the
+position cannot. `format()` stays the one string producer; only the display is swapped first.
+
+**A crosstab is plotted on its measure of deviation**, never on the level: the axis is what `color =`
+grades, the reference is a dotted line, and the percentage or mean is the number above the whisker.
+The observed value is offset **below** the model whisker, filled black where no band is drawn and
+hollow where one is; a crude *series* gets a thin black whisker with very small caps. A band that
+fills its panel is **not drawn** — it locates nothing — so a band on the page always means the
+estimate is inside it or outside it.
+
+**The layout rule was measured, and the maintainer's hypothesis (`pct`) is wrong.** Both orientations
+show the same numbers — a cell's deviation is a stored field, not a property of where it is drawn — so
+this is legibility alone. Two shapes, **both `pct = "row"`**, want opposite orientations:
+
+| table                   | keep                                   | transpose                            | better    |
+|-------------------------|----------------------------------------|--------------------------------------|-----------|
+| 3 races × 6 marital     | 6 panels of 3 rows, strips truncated   | 2 panels of 6 rows, one profile each | transpose |
+| 7 classes × 3 tea types | 3 panels of 7 rows, a readable ranking | 6 panels of 3 rows, strips truncated | keep      |
+
+The rule that fits both: **more levels down the side, fewer panels across** — transpose iff the column
+axis has more levels. `layout = "keep" (default) | "auto" | "transpose"`: the rule is **opt-in**, on
+the maintainer's call — a plot whose rows are the table's rows is the one a reader can check against
+the table in front of them, and silently swapping the two axes costs more than a cramped panel. A
+regression table is never transposed. The **reference** falls out of it: on the panel axis it would be an all-neutral panel, so
+it is dropped and the K−1 panels left are each one group's whole profile — which IS the
+`formations_stat` teaching plot, at K = 2; on the reading axis it stays, as the anchor row at the
+neutral, drawn as the black-filled square the table's bold reference cell deserves.
+
+**`footer` and `legend`.** `footer = "short"` (default, the console's own `terse` streams) /
+`"full"` (the exports' `prose`) / `"none"`, wrapped and flush left. One producer, one renderer, only
+the style differs — so a figure and its table cannot state the method differently; and they are
+identical whenever a guide carries the ladder, which neither may print twice (D6). `legend` is now a
+**position** (`"auto"` → the bottom, matching `reg_check_plots()`; `TRUE`/`FALSE` still accepted).
+`return_data` now returns the model **after** the layout, so it describes what is drawn.
+
+**Two more defects found in the final visual pass, both fixed.** (1) A cross-table's figure was headed
+**`NA`** — `reg_title()` names a MODEL and returns `NA` on a crosstab, and `NA` is not `NULL`, so it
+went straight through `fp_caption()`'s guard (pre-existing, since z17). (2) The **axis title spoke for
+a panel it did not describe**: a multinomial risk ratio beside an ordinal win ratio shares one ladder
+but is two quantities, and the shared title said "Risk ratio" over the win-ratio panel. The rule is
+now that a title may exist only where every panel measures the same thing AND calls it the same
+thing; otherwise the word moves into the strip and the title goes. ⚠ The fix needed a second one: the
+per-facet scale record was built with `c(recs[[key]], list(col = ...))`, and `c()` **appends** a
+duplicate name rather than overriding it, so `$col` kept reading the scale's first column.
+
+**Verified**: the three review calls plus a crosstab in both orientations, rendered and read; the
+mixed-family table draws **every** estimate with no warning; suite **FAIL 0 / WARN 0 / SKIP 4 /
+PASS 9584**. `test-tab-estimates.R` needed no change (the model is untouched); `test-forest-plot.R`
+gained five tests — nothing dropped on a mixed table, per-panel breaks, shared range within a scale,
+the band never setting the range, and the layout rule with its reference handling.
+
+⚠ **Reported, not fixed (1)**: `tab(..., color = "diff")` alone stores **no interval**, so a crosstab
+forest plot then has points and no whiskers. `forest_plot()` now says so once and names `ci = "ref"`,
+but the honest question is whether `ci = "auto"` should give a comparison interval whenever the table
+makes a comparison — a `tab()` default, not a plot one. For Phase 22x.
+
+⚠ **Reported, not fixed (2) — the axis ladder and the legend ladder can be two ladders.** The
+gridlines come from `fmt_scale_of()$breaks` (the ESTIMATE scale's `break_key`) while the legend keys
+come from the colour plan (the MEASURE's scale), and on a ratio-coloured percentage column those are
+`mean_ratio` and `pct_ratio` — measured on the `tea` summed score: the axis reads `÷1.2` where the
+legend key reads `≤ +1.25`. Pre-existing since z17, and small, but it breaks the design's own claim
+that *the gridlines ARE the colour ladder*. The cure belongs to `EST_SCALES` / `fmt_scale_of()` (one
+`break_key`, read by both), not to the plot. For Phase 22x.
+
+
+
+###### Phase 22e-ii-B — `forest_plot` round 2
+
+**DONE.** Second manual review, twelve items. Three were latent defects rather than styling.
+
+**The reading axis had no fixed order.** A discrete scale takes its order from the layer that trains
+it FIRST, and two layers carried a single level — the limits frame and, once it existed, the coloured
+row band. Measured: a six-row block came out `Total, [30,48), [48,65), [65,89], NA, [18,30) low`. The
+cure is one `geom_blank` over the WHOLE model as the first layer, so every panel is trained in the
+table's own order whatever else is drawn later; the note that the limits frame must come last is now
+a consequence of it rather than a rule on its own.
+
+**A row band must be a tile on the factor, never a rect on a row number.** `as.numeric(ypos)` is a
+coordinate on the FULL level set, which in a panel showing four of eighteen levels is a continuous
+value far outside its range: ggplot stretched the panel to reach it (a third of the height lost) and
+drew the band nowhere near its row. Fixed, then removed entirely — see below.
+
+**A rule frame must carry the ROW-facet variables.** `rule_y` had only `facet`, so `facet_grid`
+replicated every block's rules into every panel, and a `yend` from a nine-level block stretched a
+three-level one to reach it.
+
+**The second colour channel is no longer drawn** (maintainer's ruling). `color = TRUE` on a crosstab
+gives two measures — `difference` on the text, `ratio` on the background — and rendering the second
+one as a band behind every row flooded the figure ("blue and red bands hell") without adding a
+comparison: it has no interval, no neutral, and nowhere positional to go. The plot shows the main
+measure. The gap under `color = "adjustment"` is not an exception: there the adjustment IS the main
+measure. Undocumented on purpose — it is not a limitation to explain, it is what a forest plot is.
+
+**The block separation is now real.** Every rule stops short of the panel edge (`0.62` to
+`n_blk + 0.38`, drawn as segments rather than `geom_vline`), a grey rule sits above each block, and
+the discrete expansion is tightened to `0.55` — so a predictor reads as a block instead of the grid
+running through it.
+
+**The observed row is one thing now**: a filled black point at the crude value, with the gap as a
+**thin black capped whisker** at the same offset below the model's. The wide coloured band is gone —
+it was the biggest ink on the page and located nothing — and the point no longer changes shape with
+whether the gap was testable, which had made the same table look like two conventions.
+
+**The guide.** One row, in the axis's own left-to-right order (deepest UNDER first, the grey where the
+ladder is silent, then the OVER side deepening) — ggplot was filling by column, which put the ladder
+in an order nothing on the page had. Its keys come from a **frame of their own** drawn at `alpha = 0`:
+keyed off the data, a rung no cell happens to fall in got a label with no glyph, measured on both ends
+of a `guaranteed_effect` ladder. Under that policy the title now names the quantity it actually
+grades — *Guaranteed (95%) difference vs the Total row* — and the **cap nearest the neutral is drawn
+twice the size**, because that bound IS the score the colour reads: the policy becomes visible instead
+of explained.
+
+**The reference Total row is back.** With `ref = "tot"` the baseline is the Total row, which
+`totals = FALSE` was dropping — so the plot lost the one number the panel is about. It is kept
+whenever it is the reference, bold, as the black square at the neutral. The `1` / `0` label above a
+reference row is gone with it: the neutral line already says it, and the two glyphs landed on each
+other.
+
+**Smaller things.** Axis tick labels carry one decimal, rounded in the scale they are READ in (a
+percentage-point ladder is stored as `0.05` and printed as `5`, so rounding the stored value would
+turn `+5` into `+10`). The axis title absorbs the interval's name where there IS one axis to say it on
+— `Percentage points (95% CI, Newcombe score interval)` — and the footer drops the method line it
+would have repeated; a many-outcome regression keeps it in the footer, since no single axis can speak
+for every panel there.
+
+**One shared-producer change, on the maintainer's call:** an SD-scaled ladder now names its unit
+before its numbers, in `legend_measure_word()` — `diff in SD (ref.): -0.8 -0.4 …` — so the console and
+every export gain it too. Bare numbers that are not in the outcome's own units had stated their scale
+only in the trailing grey clause, after the reader had already met them. ⚠ The clause is gated on the
+MEASURE, not on `is_std` alone: that flag is a per-column fact and the first cut labelled a ratio
+ladder `IRR in SD`. Zero golden churn (no golden covers an SD-scaled ladder); one i18n assertion moved
+with the axis title, which also learned to keep quiet when a column colours without an interval (it
+was printing `(95% CI, 95% confidence)`).
+
+**Answered, not implemented.** *Colour in the footer's prose legend* is not available without a new
+Suggests (`ggtext` for markup, or `ggnewscale` for a second colour guide): a ggplot caption is
+single-styled. It costs nothing today — the ladder is coloured twice already, in the guide and in the
+gridlines — and the prose ladder only appears at all when several ladders make a guide impossible.
+*The missing whiskers* on `c(age, rincome, party3) x marital` are drawn and correct: measured at
+0.16 to 21 percentage points wide (median 3) on an axis spanning 120, with n = 21 483 — a real
+interval, smaller than its own marker. `center = "none"` or fewer `columns` is the cure, not code.
+
+**Round 4 — the adjustment reads as two rows**, on the maintainer's layout. The estimate keeps its
+own: a **light grey** whisker (`cols$grey`, the table's own uncoloured-cell ink) under a square **in
+the arrow's colour**, so the mark and the movement it made are one statement. One `offset` below, the
+arrow (linewidth 1.3, closed head), then the **very thin black** acceptance bracket over it, then the
+observed point — each thinner or smaller than the last, so sharing one row costs no colour. The
+**guide now describes the arrows** (`legend_guide_spec()` is asked for whichever channel carries the
+gap): the gridlines still show the MAIN measure's ladder, and would otherwise be the only colour key
+on a figure whose colours mean something else.
+
+**Five arguments the viewport decides**: `offset` (how far below the estimate the observed row sits)
+and `label_offset` (how far above its value is printed), both fractions of a row because ggplot has no
+absolute-unit nudge; `max_size`, the area of the largest marker; `footer_width`, because a ggplot
+caption does not wrap and the plot cannot measure the device at build time; and `display`, a `{}`
+template passed to `set_display()` for what the label prints (`NULL` = the cell's own primary token,
+unchanged). The label's halo is less translucent.
+
+**Answered**: the `married` panel has no acceptance bracket because `gap_se` is **not computed at
+all** there (measured: 0/12 finite, against 12/12 on the gaussian and poisson panels) -- an odds ratio
+is non-collapsible, so the package refuses the test rather than reporting a small error.
+
+**Round 3 — the adjustment gets its own geometry.** `color = "adjustment"` used only to repaint the
+model whisker, so the whisker's POSITION said the effect and its COLOUR said something else. Now the
+gap is drawn: an **arrow** from the observed value to the model's, in the gap's own colour, with a very
+small closed head, over the **acceptance bracket** `[gap_lo, gap_hi]` around the observed point — the
+model estimate falls outside it exactly when the gap test rejects, so the arrow head clearing the
+bracket IS the verdict. The bracket is drawn **only where the gap is testable**: on a non-collapsible
+measure (the binomial panel: 15/15 `gap_tested = FALSE`) the movement is real arithmetic but no test
+exists, and a bracket would claim one. The arrow's length is the adjustment TO SCALE — measured, the
+gap runs 0.13 to 1.04 where the effects span -5 to +5, so a small adjustment is meant to look small and
+the colour is what says whether the move is real. Two consequences: the **model whisker gives up its
+ink** when the adjustment is the main colour (`cols$grey2`, added to `tx_plot_colors()` — `cols$point`
+is a muted blue and would read as a rung of the ladder it stands outside of), so colour still grades
+exactly one thing; and when the arrows grade a different measure from the whiskers, **two ladders are
+drawn**, so no guide is built and the caption carries both in prose. ⚠ Under an adjustment colour the
+axis title stops absorbing the method phrase: the spec then names the GAP's test, which is not the
+interval the axis draws.
+
+**The observed row moved up**, from `0.24` of a row to `0.15`. ggplot has no absolute-unit nudge — a
+position is data space, and a millimetre needs the panel height, known only at draw time — so "two
+whisker linewidths" cannot be exact everywhere; measured, `0.15` is 1.3-2.4 mm across the viewports
+such a table is drawn at, against the 1.8 mm two linewidths come to.
+
+**Verified**: the review's calls rendered and read at several sizes; forest tests **FAIL 0 / PASS 112**.
 
 
 

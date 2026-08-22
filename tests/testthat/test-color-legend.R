@@ -13,22 +13,26 @@ leg_en <- function(tab, ...) {
   suppressWarnings(tab_color_legend(tab, medium = "plain", style = "prose", lang = "en", ...))
 }
 
-testthat::test_that("pct diff prose names the shade, reference and thresholds", {
+testthat::test_that("pct diff prose names the MEASURE, the reference and the thresholds", {
   tb <- tab(gss, marital, race, pct = "row", color = "diff")
   l  <- leg_en(tb)
   testthat::expect_length(l, 1)
-  testthat::expect_match(l, "Shades of blue")
-  testthat::expect_match(l, "Shades of yellow to red")
-  testthat::expect_match(l, "the Total row")
+  # Phase 22f-i: the line leads with the measure in words, not with the palette ("Shades of blue"),
+  # and the two sides are ONE sentence.
+  testthat::expect_match(l, "Percentage points (risk) difference:", fixed = TRUE)
+  testthat::expect_no_match(l, "Shades of")
+  testthat::expect_match(l, "cell \u2265 the Total row")
+  testthat::expect_match(l, "cell \u2264 the Total row")
   testthat::expect_match(l, "\\+5;.*\\+30 points", perl = TRUE)
   testthat::expect_match(l, "points\\.")
-  testthat::expect_no_match(l, "Grey")            # ignore policy -> no significance note
+  testthat::expect_no_match(l, "Uncoloured")      # ignore policy -> no significance note
 })
 
 testthat::test_that("ratio prose uses the Total column and the x/1 operators", {
   tb <- tab(gss, marital, race, pct = "col", color = "ratio")
   l  <- leg_en(tb)
   testthat::expect_match(l, "the Total column")
+  testthat::expect_match(l, "Relative risk (ratio):", fixed = TRUE)
   testthat::expect_match(l, "\u00d72")            # x2 (the over-only default)
 })
 
@@ -37,14 +41,12 @@ testthat::test_that("the CI method + confidence level come from the column store
   tb1 <- tab(gss, marital, race, pct = "row", color = "diff",
              color_signif = "grey_non_signif", ci = "ref")
   l1  <- leg_en(tb1)
-  # Phase 14q: the note states the true guarantee (coloured => significant), not the false
-  # "grey => non-significant" (a grey cell may be significant-but-small). Phase 14x names the first
-  # threshold concretely ("or a difference under +-5 points") instead of "too small a difference".
-  testthat::expect_match(l1, "Coloured: significantly different from the Total row")
-  testthat::expect_match(l1, "Uncoloured: either not significant, or a difference under ")
-  testthat::expect_match(l1, "difference under \u00b15 points")  # generalised threshold (pct)
-  testthat::expect_no_match(l1, "too small a difference")
-  testthat::expect_no_match(l1, "Grey: not significantly different")
+  # Phase 22f-i: the note says the ONE thing a reader needs -- what an uncoloured cell means -- and
+  # names the first threshold concretely. "Coloured => significant" was a tautology the cells show.
+  testthat::expect_match(l1, "Uncoloured: not significantly different from the Total row")
+  testthat::expect_match(l1, "under the first colour threshold (\u00b15 points)", fixed = TRUE)
+  testthat::expect_no_match(l1, "Coloured: significantly")   # the tautology is gone
+  testthat::expect_no_match(l1, "Grey:")
   testthat::expect_match(l1, "Newcombe score interval, 95% confidence")
 
   # an explicit diff method + a non-default conf_level must be reflected
@@ -55,12 +57,26 @@ testthat::test_that("the CI method + confidence level come from the column store
   testthat::expect_match(l2, "Wald interval with Agresti-Caffo adjustment, 90% confidence")
 })
 
-testthat::test_that("guaranteed_effect annotates the margin of error on the over sentence", {
+testthat::test_that("guaranteed_effect carries the guarantee in the head, and names the interval once", {
   tb <- tab(gss, marital, race, pct = "row", color = "diff",
             color_signif = "guaranteed_effect", ci = "ref")
   l  <- leg_en(tb)
-  testthat::expect_match(l, "after subtracting the margin of error \\(Newcombe", perl = TRUE)
-  testthat::expect_match(l, "Grey: not significantly different from the Total row after the margin of error")
+  testthat::expect_match(l, "95%-guaranteed percentage points (risk) difference", fixed = TRUE)
+  testthat::expect_match(l, "(Newcombe score interval floor)", fixed = TRUE)
+  testthat::expect_match(l, "from the Total row", fixed = TRUE)   # ONE merged ladder, both sides
+  testthat::expect_equal(lengths(regmatches(l, gregexpr("Newcombe", l))), 1L)
+  testthat::expect_match(l, "Uncoloured: not significantly different from the Total row.", fixed = TRUE)
+  testthat::expect_no_match(l, "margin of error")
+})
+
+testthat::test_that("a publication palette says Unmarked, and keeps its two face words", {
+  tb <- tab(gss, marital, race, pct = "row", color = "diff",
+            color_signif = "grey_non_signif", ci = "ref")
+  l  <- leg_en(tb, theme = "print_minimalistic")
+  testthat::expect_match(l, "Underlined: cell \u2265 the Total row")
+  testthat::expect_match(l, "Italic: cell \u2264 the Total row")
+  testthat::expect_match(l, "Unmarked: not significantly different")
+  testthat::expect_no_match(l, "Uncoloured")
 })
 
 testthat::test_that("a column with no stored method names no method (Phase 19b, D8)", {
@@ -88,7 +104,10 @@ testthat::test_that("tab_reg: a mean difference shows SD, IRR says IRR, OR says 
   skip_if_not_installed("broom")
   b <- suppressWarnings(tab_reg(gss, "tvhours", c("marital", "race"), family = "gaussian"))
   lb <- leg_en(b)
-  testthat::expect_match(lb, "diff \u2265")        # the legend names the header's own acronym
+  # the acronym is DATA: printed exactly as the header spells it, never capitalised as prose
+  testthat::expect_match(lb, "diff \u2265")
+  testthat::expect_no_match(lb, "Diff \u2265")
+  testthat::expect_no_match(lb, "mean difference:")   # ... and not repeated as a head either
   testthat::expect_match(lb, "SD")
   testthat::expect_no_match(lb, "\\+20%", perl = TRUE)   # the old beta-shows-percent bug (0.2 -> +20%)
 
@@ -120,7 +139,8 @@ testthat::test_that("terse console form is compact and coloured-word based", {
   testthat::expect_length(l, 1)
   testthat::expect_match(l, "difference")
   testthat::expect_match(l, "Total")
-  testthat::expect_no_match(l, "Shades of blue")  # terse omits the prose shade names
+  # the console keeps the SHORT measure word; the long one belongs to the export footers
+  testthat::expect_no_match(l, "Percentage points")
 })
 
 testthat::test_that("runs medium returns rich-text runs with hex + bold on the break-words", {
@@ -198,7 +218,7 @@ testthat::test_that("a custom palette drops the baked colour-shade names", {
   set_color_palette(text_colors = c("#111111", "#222222", "#333333", "#444444"))
   tb <- tab(gss, marital, race, pct = "row", color = "diff")
   l  <- leg_en(tb)
-  testthat::expect_no_match(l, "Shades of blue")
+  testthat::expect_no_match(l, "Shades of")
   testthat::expect_match(l, "the Total row")      # still describes the reference + thresholds
 })
 
@@ -216,12 +236,12 @@ testthat::test_that("French catalog translates the prose when the .mo is availab
   tb <- tab(gss, marital, race, pct = "row", color = "diff",
             color_signif = "grey_non_signif", ci = "ref")
   l  <- suppressWarnings(tab_color_legend(tb, medium = "plain", style = "prose", lang = "fr"))
-  testthat::expect_match(l, "Nuances de bleu")
+  testthat::expect_match(l, "Diff\u00e9rence de points de pourcentage")
   testthat::expect_match(l, "la ligne Total")
   testthat::expect_match(l, "seuil de confiance \u00e0 95 %")
-  # Phase 14q: the corrected grey_non_signif note, translated
-  testthat::expect_match(l, "Color\u00e9 : significativement diff\u00e9rent")
-  testthat::expect_no_match(l, "Gris\u00e9 : chiffre non significativement")
+  # Phase 22f-i: the note states only what an UNCOLOURED cell means, translated
+  testthat::expect_match(l, "Non color\u00e9 : pas significativement diff\u00e9rent")
+  testthat::expect_no_match(l, "Gris\u00e9")
 })
 
 # --- Phase 22b-iv: the stars sentence, and the gap lead that matches its own shades ----------------
@@ -243,8 +263,8 @@ test_that("a gap measure's legend states distance-from-the-null, which is what i
   t <- suppressMessages(tab_reg(d, "married", c("race", "relig"), family = "binomial",
                                 empirical = TRUE, color = "adjustment"))
   lg <- paste(tab_md(t, print = FALSE), collapse = " ")
-  testthat::expect_match(lg, "further from no effect than the observed (crude) effect", fixed = TRUE)
-  testthat::expect_match(lg, "closer to no effect than the observed (crude) effect",  fixed = TRUE)
+  testthat::expect_match(lg, "further from no effect (1) than the observed column", fixed = TRUE)
+  testthat::expect_match(lg, "closer to no effect (1) than the observed column",  fixed = TRUE)
   # the generic signed-move lead is exactly what the score does NOT compute
   testthat::expect_false(grepl("OR \u2265 the observed", lg))
 })

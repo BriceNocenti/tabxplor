@@ -28,12 +28,18 @@ testthat::test_that("common_totrow: the shared Total is bold when ref = 'tot' fo
 testthat::test_that("pct='col' ref is positional over col_vars (factor->column, numeric->row)", {
   t <- tab(gss5, race, c(party3, marital, tvhours), pct = "col", na = "drop",
            color = "diff", ref = c("tot", 1, 1))
-  # the legend names each col_var's reference: party3 (factor) -> reference COLUMN "Total"; marital
-  # (factor) -> column 1 "Married"; tvhours (numeric, orthogonal) -> reference ROW 1 "White".
-  st <- gsub("\u00a0", " ", paste(tab_md(t, print = FALSE), collapse = " "))
-  testthat::expect_match(st, "party3.*Total")
-  testthat::expect_match(st, "marital.*Married")
-  testthat::expect_match(st, "tvhours.*White")
+  # each col_var takes ITS OWN `ref`, and the axis follows the kind: party3 (factor) -> the total
+  # COLUMN; marital (factor) -> its column 1 "Married"; tvhours (numeric, orthogonal) -> row 1
+  # "White". Asserted on the stored facts rather than on the legend prose, which since Phase 22f-i
+  # names a non-total reference generically ("the reference category (in bold)").
+  f  <- purrr::keep(t, is_fmt)
+  cv <- purrr::map_chr(f, get_col_var)
+  testthat::expect_true(all(purrr::map_chr(f[cv == "party3"],
+                                           ~ as.character(get_ref_type(.))[1]) == "tot"))
+  testthat::expect_identical(
+    names(f)[cv == "marital" & purrr::map_lgl(f, ~ isTRUE(is_refcol(.)))], "Married")
+  testthat::expect_identical(which(is_refrow(f[[which(cv == "tvhours")[1]]])), 1L)
+  testthat::expect_identical(as.character(t[[1]])[1], "White")
 })
 
 # ---- Item 2b: the pct='col' "n" row renders plain, not bold ------------------------------------------

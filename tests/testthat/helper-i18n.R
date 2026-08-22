@@ -31,7 +31,10 @@ skip_if_no_gettext <- function() {
     tabxplor:::flush_gettext_cache()
     Sys.setenv(LANGUAGE = "fr")
     tabxplor:::flush_gettext_cache()
-    !identical(gettext("Shades of blue", domain = "R-tabxplor"), "Shades of blue")
+    # ⚠ the probe msgid must be one the package actually still emits: a retired msgid would make
+    # every French test SKIP instead of fail. "the reference category" is named by the stars line too.
+    sentinel <- "the reference category (in bold)"
+    !identical(gettext(sentinel, domain = "R-tabxplor"), sentinel)
   }
   testthat::skip_if_not(can_translate(), "gettext cannot honour LANGUAGE here (locale is C)")
 }

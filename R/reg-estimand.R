@@ -754,22 +754,29 @@ reg_compose_crude <- function(family, fit, measure, measure_link, logged) {
 # The three PREDICTION-route phrases, generated once rather than written per row.
 #' @keywords internal
 #' @noRd
+# `has_num` is the ONE fact the phrase cannot know at composition time: whether the model holds a
+# NUMBER, which decides whether the reference profile is "their reference level" alone or also a
+# "mean". reg_estimand_note() reads it off meta$predictor_types and passes it in; every other caller
+# leaves it NA and gets the honest both-ways wording.
 est_note_marginal <- function(kind, at_ref = FALSE, measure = "difference") {
-  function() {
-    where <- if (at_ref)
-      gettext("other predictors held at their reference level / mean")
-    else gettext("sample-averaged")
+  function(has_num = NA) {
+    where <- if (!at_ref) gettext("sample-averaged")
+      else if (isTRUE(has_num))  gettext("other predictors held at their reference level or mean")
+      else if (isFALSE(has_num)) gettext("other predictors held at their reference level")
+      else gettext("other predictors held at their reference level / mean")
     prob <- identical(kind, "prob")
     what <- if (identical(measure, "odds_ratio"))
-      gettext("the odds ratio of adjusted predicted probabilities")
+      gettext("the odds ratio of adjusted proportions")
     else if (identical(measure, "ratio") && prob)
-      gettext("the ratio of adjusted predicted probabilities")
+      gettext("the ratio of adjusted proportions")
     else if (identical(measure, "ratio"))
       gettext("the ratio of adjusted predicted values")
     else if (prob)
-      gettext("on the probability scale, in percentage points")
+      gettext("on adjusted proportions, in percentage points")
     else gettext("on the response scale")
-    gettextf("%s; %s", what, where)   # the separator is the TRANSLATION's (French: " ; ")
+    # the separator is the TRANSLATION's (French: " ; "). A COMMA on the sample-averaged route: one
+    # qualifier, not two clauses.
+    if (at_ref) gettextf("%s; %s", what, where) else gettextf("%s, %s", what, where)
   }
 }
 
@@ -1089,26 +1096,40 @@ reg_estimand_abort <- function(res, outcome = NULL) {
   cli::cli_abort(c(head, stats::setNames(offered, rep("i", length(offered)))))
 }
 
-# REG_ASIDE_NOTE -- what a model cell's PARENTHETICAL holds, keyed by the token the display resolves
-# to. This is the one clause of the "Model:" line that depends on the LAYOUT rather than on the
-# estimand, so it is read off the display itself and cannot claim a prediction where the cell prints
-# a difference. `{ci}`, `{n}` and `{n_range}` name themselves and get no clause.
-# ⚠ the sentence describes the MODEL cell: on the mirrored crude column the same slot holds the
-# OBSERVED level, which its `Obs_` header already says. (Naming an aside in every backend and in the
-# legend is Phase 22c-ii's general problem; this is the existing clause made true.)
+# REG_ASIDE_NOTE -- what a cell's PARENTHETICAL holds, keyed by the token the display resolves to and
+# then by the column ROLE. This is the one clause of the "Model:" line that depends on the LAYOUT
+# rather than on the estimand, so it is read off the display itself and cannot claim a prediction
+# where the cell prints a difference. `{ci}`, `{n}` and `{n_range}` name themselves and get no clause.
+#
+# DESIGN: the gloss is per ROLE because the same slot holds two different quantities -- an adjusted
+# prediction on the model column, the counted one on its crude twin -- and the footer names each by
+# the abbreviation the table itself prints (`adj%` / `obs%`, through display_token_label()). A role
+# with no entry gets no gloss, so a table without `empirical` says nothing about a column it lacks.
 #' @keywords internal
 REG_ASIDE_NOTE <- list(
-  obs   = function() gettext("the observed (crude) one"),
-  pct   = function() gettext("the adjusted predicted probability"),
+  obs   = list(model = function() gettext("observed (crude) effect")),
+  pct   = list(model = function() gettext("adjusted/predicted proportion"),
+               emp   = function() gettext("observed proportion")),
   # the same token on a RANK column is a different quantity: 50 % there means "no difference".
-  rank_pct = function() gettext("the probability of superiority itself, 50 % being a coin flip"),
-  mean  = function() gettext("the adjusted predicted mean"),
-  diff  = function() gettext("the same effect as a difference"),
-  ratio = function() gettext("the same effect as a ratio"),
-  or    = function() gettext("the same effect as an odds ratio"),
-  coef  = function() gettext("the coefficient on the model's own link scale"),
-  gap   = function() gettext("its distance to the observed effect")
+  rank_pct = list(model = function() gettext("probability of superiority, 50 % being a coin flip"),
+                  emp   = function() gettext("observed probability of superiority")),
+  mean  = list(model = function() gettext("adjusted/predicted mean"),
+               emp   = function() gettext("observed mean")),
+  diff  = list(model = function() gettext("the same effect as a difference"),
+               emp   = function() gettext("the observed effect as a difference")),
+  ratio = list(model = function() gettext("the same effect as a ratio"),
+               emp   = function() gettext("the observed effect as a ratio")),
+  or    = list(model = function() gettext("the same effect as an odds ratio"),
+               emp   = function() gettext("the observed effect as an odds ratio")),
+  coef  = list(model = function() gettext("coefficient on the model's own link scale")),
+  gap   = list(model = function() gettext("distance to the observed effect"))
 )
+
+# The REG_ASIDE_NOTE key of a display token, on a given estimand: one token can name two quantities.
+#' @keywords internal
+#' @noRd
+reg_aside_key <- function(aside, est)
+  if (identical(aside, "pct") && identical(est$level, "rank")) "rank_pct" else aside
 
 # The aside a model cell prints, as a RESOLVED token ("" = none). The scale-relative tokens are
 # resolved through the estimand's own scale, which is what makes one map serve every family.
@@ -1126,19 +1147,33 @@ reg_aside_token <- function(display, scale = NULL) {
   if (!length(tok)) "" else tok[[1]]
 }
 
-# reg_estimand_note() -- the estimand phrase of the "Model:" footer line, plus that layout clause.
+# reg_estimand_note() -- the estimand phrase of the "Model:" footer line, plus one gloss per part of
+# the cell. It is a LIST OF "<abbreviation>: <what it is>" items, the abbreviations being exactly the
+# strings the table prints above its columns, so the footer reads as the key to the cell rather than
+# as a sentence about it. `role_cols` is one representative column per role (reg_role_cols()).
 #' @keywords internal
 #' @noRd
-reg_estimand_note <- function(est, aside = "") {
+reg_estimand_note <- function(est, aside = "", role_cols = list(), has_num = NA) {
   if (is.null(est) || !is.function(est$note)) return("")
-  if (identical(aside, "pct") && identical(est$level, "rank")) aside <- "rank_pct"
-  note  <- if (aside %in% names(REG_ASIDE_NOTE)) REG_ASIDE_NOTE[[aside]] else NULL
-  paren <- if (is.null(note)) NULL else
-    paste0(gettext("; each cell shows the effect vs the reference level and, in parentheses, "),
-           note())
-  # "OR = odds ratio (vs the reference category)": the acronym the header prints, its expansion and
+  # a family's own `note` takes no argument; only the generated prediction phrases ask about the data.
+  qual <- if (length(formals(est$note))) est$note(has_num) else est$note()
+  # "OR: odds ratio (vs the reference category)": the acronym the header prints, its expansion and
   # the qualifier, composed from one declaration each so the three cannot drift apart.
-  paste0(reg_word(est), " = ", reg_word_long(est), " (", est$note(), ")", paren)
+  # the two templates carry their own punctuation, so French can put its space before ":" and ";".
+  out  <- gettextf("%s: %s (%s)", reg_word(est), reg_word_long(est), qual)
+  gl   <- REG_ASIDE_NOTE[[reg_aside_key(aside, est)]]
+  if (is.null(gl) || !length(role_cols)) return(out)
+  # ⚠ ONE ITEM PER LABEL, not per role. On a rank family BOTH roles print `sup%` (the crude twin
+  # measures the same thing), and glossing one label twice with two different sentences reads as two
+  # quantities. The model's reading wins -- that is the column the estimand line describes.
+  rs   <- names(role_cols)
+  labs <- vapply(rs, function(r) if (is.null(gl[[r]])) NA_character_
+                                 else display_token_label(aside, role_cols[[r]]), character(1))
+  # `fromLast` drops the EARLIER of two identical labels, so the MODEL's reading survives while the
+  # reading order (the crude column sits left of its twin) is kept.
+  for (i in which(!is.na(labs) & !duplicated(labs, fromLast = TRUE)))
+    out <- paste0(out, gettextf("; %s: %s", labs[[i]], gl[[rs[[i]]]]()))
+  out
 }
 
 # reg_normalize_color() -- THE `tab_reg(color =)` boundary. What is left to CHOOSE is "compared to

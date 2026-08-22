@@ -121,6 +121,54 @@ The argument names themselves are code and stay English; what is translated is t
 ⚠ A **quoted cell value** keeps the decimal point the table actually prints (`1/2.43`, `÷1.7`), never
 a French comma — it is a quotation of the output. Ordinary prose numbers stay French (`19,8 points`).
 
+### The footer legend's measure names
+
+The colour legend names its measure in words, per (measure × ladder scale). These are the **legend's**
+names — a crosstab has no acronym header to lean on — while `REG_WORDS` keeps the discipline's own
+short names for the regression headers (`RD`, `RR`, `mRR`, …) and their expansions.
+
+| measure × scale         | English                             | French                                          |
+|-------------------------|-------------------------------------|-------------------------------------------------|
+| difference × pct_diff   | percentage points (risk) difference | différence de points de pourcentage (de risques) |
+| difference × mean_diff  | mean difference                     | différence de moyennes                          |
+| … standardized          | standardized mean difference        | différence de moyennes standardisée             |
+| difference × log_odds   | log-odds difference                 | différence de log-cotes                         |
+| ratio × pct_ratio       | relative risk (ratio)               | risque relatif (ratio)                          |
+| ratio × mean_ratio      | ratio of means                      | rapport de moyennes                             |
+| odds_ratio              | odds ratio                          | rapport de cotes                                |
+| contrib                 | contribution to Chi2                | contribution au Chi2                            |
+| contrib (guaranteed)    | standardized residual               | résidu standardisé                              |
+
+Each name carries **both** the discipline's term and the base measure, so a reader meeting either word
+lands on the same quantity. « rapport de cotes » is the settled term for the odds ratio (not « rapport
+de chances »); « différence de risques » is avoided in favour of « différence de proportion ».
+
+⚠ **The `guaranteed_effect` head is ONE msgid PER MEASURE**, not a shared `"%s-guaranteed %s"`
+template: *garanti* agrees with the measure (*différence … garantie* vs *rapport … garanti* vs
+*risque relatif … garanti*), which no single format string can do. `MEASURES$<m>$by_scale$<scale>$word_guar`
+declares each one; French then writes the agreement out in full.
+
+⚠ **The legend uses ordinary spaces before `;` and `:`**, not non-breaking ones: that is what the
+assemblers emit (`colon <- " : "`) and what every existing msgstr uses, and the tests match on it.
+
+### Settled by the Phase 22f-i review
+
+| English                                | French                                                |
+|----------------------------------------|-------------------------------------------------------|
+| risk ratio (`REG_WORDS$RR`)            | risque relatif *(not « rapport de risques »)*         |
+| risk difference (`REG_WORDS$RD`)       | différence de risque                                  |
+| over-/under-represented                | sur-représentée / sous-représentée *(agrees with « case »)* |
+| ref (the short reference, 2nd use on)  | réf                                                   |
+| adjusted/predicted proportion          | proportion prédite/ajustée                            |
+| on adjusted proportions                | sur les proportions ajustées                          |
+| other predictors held at their reference level (or mean) | les autres prédicteurs fixés à leur modalité de référence (ou à leur moyenne) |
+| or under the first colour threshold    | ou en-dessous du premier seuil de couleur             |
+| Design-based (survey): …               | Estimations, intervalles et tests pondérés tiennent compte du plan d'échantillonnage (survey-design). |
+
+⚠ « odds ratio » is **one msgid** shared by the crosstab legend and the regression `Model:` line, so
+it cannot be glossed « rapport de cotes (odds) » in one and not the other: it stays
+**« rapport de cotes »** everywhere. The acronym `OR` is the legend's subject anyway.
+
 ## Known first-draft rough spots (for maintainer review)
 
 - **Reg caption** (`reg_title`): the `": "` after the family name keeps an English colon

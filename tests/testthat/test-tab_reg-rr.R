@@ -43,7 +43,7 @@ test_that("link='ratio' on a binary outcome fits the modified Poisson, and is na
   expect_true("Model_RR" %in% names(t))
   expect_false(any(grepl("IRR", names(t))))
   note <- reg_estimand_note(reg_estimand("binomial", link = "ratio"))
-  expect_match(note, "RR = risk ratio")
+  expect_match(note, "RR: risk ratio")
   expect_no_match(note, "incidence-rate")
   # Sociology terminology trap: "log-linear model" means Goodman's contingency-table models.
   expect_no_match(reg_family_display_name("rr"), "log-linear")

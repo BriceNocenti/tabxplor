@@ -409,9 +409,10 @@ testthat::test_that("the legend names the face, not a colour, and never promises
   pl <- tab_color_legend(zz_tab(), medium = "plain", theme = "print_minimalistic")
   testthat::expect_match(pl, "Underlined")
   testthat::expect_match(pl, "Italic")
-  testthat::expect_no_match(pl, "Shades of blue")
-  testthat::expect_match(tab_color_legend(zz_tab(), medium = "plain", theme = "light"),
-                         "Shades of blue")
+  # a COLOUR palette names no direction at all since 22f-i (the break-words are coloured); the
+  # publication ones keep theirs, which is the whole point of this test.
+  testthat::expect_no_match(tab_color_legend(zz_tab(), medium = "plain", theme = "light"),
+                            "Underlined")
 
   # The ink ladder has 3 rungs and the break scale 4 slots, so slots 3&4 share a rendering and the
   # legend drops the repeated break-word -- keeping the LOWER threshold of the pair.
