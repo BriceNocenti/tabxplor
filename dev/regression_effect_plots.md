@@ -278,17 +278,26 @@ from 1, and the reciprocal spelling makes that symmetry *readable* — which is 
 axis is logarithmic. `or_plot()` already does this (`R/tab_reg_plots.R:248-249`); the convention is
 simply promoted from a private helper to the shared `legend_break_label()`.
 
-### 7.3 Overlap: three cheap devices, in order
+### 7.3 The ladder is trimmed, continued, and thinned
 
-1. **Trim to the data range** (`range(c(estimate, ci_inf, ci_sup))` extended 20 %), as `or_plot()`
-   does. Typically leaves 4-6 breaks.
-2. **Cap at 7 labels per panel**, dropping the least round first (keep the neutral, then integer
-   powers, then the rest). Deterministic, no measurement of text extents needed.
-3. **`guide_axis(check.overlap = TRUE)`** as the safety net — ggplot2's own device, which drops
-   overlapping labels at render time keeping first, last and middle. This is the only mechanism that
-   can react to the actual panel width, and it costs one line.
-   `n.dodge = 2` is the fallback for very narrow facets; do **not** rotate labels (unreadable at 45°
-   for `1/1.5`).
+The ladder is bounded by the data, not the reverse. `fp_scale_records()`:
+
+1. **Continues the ladder** where the data runs past its last rung — `mag[k+1] = 2 * mag[k]`,
+   mirrored, at most 4 extra rungs. One rule for both geometries, because every ladder already steps
+   ≈×2 per rung in its own metric (`COLOR_SCALES`' K2 check): `×2 → ×4 → ×8` and
+   `+0.3 → +0.6 → +1.2` are the same rule. A colour rung is exact (a gridline **is** a threshold); a
+   continuation rung is not, so it is rounded to a readable number.
+2. **Keeps the first rung on each side in view**, always: a plot where every whisker sits inside the
+   first colour threshold must *say* so, and a lone neutral line cannot.
+3. **Draws every in-range rung, but labels at most 9**, thinned from the outside in in whole pairs —
+   a log ladder crowds near the neutral, and a one-sided ladder would misread as an asymmetric
+   scale. Lines and labels are therefore decoupled: the scale stays complete where its text cannot
+   fit.
+4. **`guide_axis(check.overlap = TRUE)`** as the safety net — the only mechanism that can react to
+   the real panel width. Do **not** rotate labels (unreadable at 45° for `1/1.5`).
+
+A scale with **no ladder** (a level panel: a percentage, a mean) falls back to `pretty()`. It is the
+only case where the axis is not the colour ladder.
 
 ### 7.4 Secondary axes — where a scale otherwise loses its meaning
 
@@ -565,29 +574,27 @@ cell is that colour becomes visible rather than explained. Costs one `geom_rect`
 Risk: clutter, and it doubles the ink when a bg channel is already painting rows. Default
 `"gridlines"`; `"bands"` opt-in and documented as the teaching mode. Open decision **D5**.
 
-## 13. Where the legend goes
+## 13. The legend and the footer
 
-`rd_footer(src, medium, theme, want_legend, subtext, lang)` (`R/tab-export-prep.R:681`) is the one
-footer producer every backend shares. Its media are `console` / `html` / `md` / `runs` / `plain` —
-**there is no `plot` medium**, and none is needed:
+The **colour ladder is a real ggplot guide** (ruling D6): a `scale_colour_identity(guide = "legend")`
+whose keys come from `legend_guide_spec()`, so its keys are whiskers in the ladder's own colours.
+`legend =` is a **position** — `"auto"` (the bottom, where six keys cost one line instead of a column
+of width, and where `reg_check_plots()` puts its own), `"right"`, `"left"`, `"top"`, `"none"`;
+`TRUE` / `FALSE` still work. When the plotted columns form several legend body-groups the guide
+cannot describe them and returns `NULL`; the prose ladder then goes to the caption instead. It is
+never printed twice.
 
-* `medium = "plain"` → a character vector → `labs(caption = paste(., collapse = "\n"))`. One line of
-  code, loses colour. **The default.**
-* `medium = "runs"` → `list(text, color, bold, italic, underline)` per token — what `tab_plot()`
-  already consumes (`R/tab_classes.R:2024-2036`) and what a coloured caption would need. Only worth
-  it if the coloured ladder in the caption is judged important; it costs a manual layout pass since
-  ggplot2 captions are single-styled.
-* a real ggplot **guide** (a discrete `scale_*_manual` with the break labels as keys) is buildable
-  from `legend_break_tokens(plan, …)` (`R/fmt_class.R:3795`), whose tokens already carry the label
-  and the slot. This is the most "ggplot-native" answer and the most work.
+The **footer** is the table's own, in one of three lengths — `footer = "short"` (the default, the
+console's `style = "terse"` streams), `"full"` (the exports' `"prose"`), `"none"`. One producer
+(`tab_footer_streams()`), one renderer (`render_footer(medium = "plain")`); only the style differs,
+so a figure and its table cannot state the method differently. Both are wrapped (`rd_wrap()`) and set
+flush left (`plot.caption.position = "plot"`, `hjust = 0`), because a centred multi-line caption
+under a wide plot is unreadable.
 
-**Recommendation:** caption via `"plain"` for v1; the ladder is on the axis anyway (§7.1), which is
-better than a legend key. Open decision **D6**.
-
-The caption then automatically carries, in order: the weight line, the `Model:` line, the
-interaction line, the colour legend, the stars legend, the user's `subtext` — including the
-non-collapsibility sentence (§9.6) and the "or not tested" clause (§9.4), because they are already
-in the legend. Nothing is written twice.
+What the guide cannot say and the prose legend did — **which interval was computed** — comes back as
+one line, from the legend's own producers (`fp_method_line()`). The caption then carries, in order:
+the method line, the weight line, the `Model:` line, the interaction line, the stars legend and the
+user's `subtext`.
 
 ---
 
@@ -643,15 +650,60 @@ table↔plot link immediate.
 `facet = FALSE` collapses to a single panel with `var: level` on the y axis (right for a
 one-predictor table, and for `ggsave` at small sizes).
 
-### 14.4 Heterogeneous scales, without splitting the object
+### 14.4 Heterogeneous scales: one axis per panel
 
-A mixed-family table (possible since 15e) can hold an OR column and a β column. `facet_grid` has one
-axis title for the whole plot, and ggplot2 cannot give per-facet axis titles.
+A mixed-family table can hold an OR column (log axis) and a β column (identity). ggplot has **one
+scale per aesthetic**, so a single `scale_x_continuous()` cannot carry both transforms — and applying
+the modal one to every panel silently turns every negative mean difference into `NaN`.
 
-**Solution: when the columns do not share a `scale_key`, the unit moves into the strip label** —
-`"married — odds ratio"`, `"tvhours — hours"` — and the axis title is dropped. One `ggplot` is still
-returned (A5). Rejected alternatives: `ggh4x` (a new Suggest, forbidden by z15 R4), and returning a
-`gtable` from `gridExtra` (breaks A5 for a rare case).
+**The mechanism.** x is pre-transformed into each scale's own space (`log10` where `mult`), the
+plot's scale is identity, and both `breaks` and `labels` are **functions**: with free scales ggplot
+calls them once per panel, so a lookup keyed on that panel's limits dispatches them exactly. The
+limits are *forced* — a `geom_blank` frame plus `expand = expansion(0)` — which is what makes the key
+exact.
+
+⚠ **No layer may reach past a panel's forced limits**, or its range changes and the lookup misses.
+The gap band is therefore clamped in data space (which is also what stops it stealing the axis), and
+the forcing frame is added **last**: the first layer to touch a discrete scale fixes its level order,
+and that frame carries one level.
+
+**One range per scale KEY, not per panel.** Panels measuring the same thing must be directly
+comparable — that is what small multiples are for — while panels on different units keep their own
+axis, which is the whole point of resolving the scale per panel.
+
+The **unit** then moves into the strip label (`"married - odds ratio"`, `"age - mean difference"`,
+through a `labeller`, never by relabelling the data) and the axis title is dropped. ⚠ The trigger is
+the WORD, not the scale key: a multinomial risk ratio and an ordinal win ratio share one ladder but
+are two quantities, so a single title would name the other panel's. The record's `col` is therefore
+per facet, while its scale is per key. One `ggplot` is
+still returned (A5). The one casualty is `sec_axis()`, which is per scale rather than per panel: the
+secondary axis (§7.4) survives only where the whole plot is on one scale.
+
+Rejected: `ggh4x::facetted_pos_scales()` (a new Suggest, forbidden by z15 R4) and a `cowplot` gtable
+per scale group (breaks A5, and splits a table whose rows must stay aligned).
+
+### 14.4b Which axis is read, and which is faceted
+
+`layout = "keep" | "auto" | "transpose"`, **`"keep"` by default**. Both orientations show the **same
+numbers** — a cell's deviation is a stored field, not a property of where it is drawn — so this is a
+legibility choice, and **`pct` does not decide it**. Measured on two opposite shapes, both
+`pct = "row"`:
+
+| table                    | keep                                     | transpose                                | better    |
+|--------------------------|------------------------------------------|------------------------------------------|-----------|
+| 3 races × 6 marital      | 6 panels of 3 rows, strips truncated     | 2 panels of 6 rows, one profile each     | transpose |
+| 7 classes × 3 tea types  | 3 panels of 7 rows, a readable ranking   | 6 panels of 3 rows, strips truncated     | keep      |
+
+The rule that fits both: **more levels down the side, fewer panels across** — transpose iff the
+column axis has more levels than the row axis. That is what `"auto"` applies. It is **not** the
+default: a plot whose rows are the table's rows is the one a reader can check against the table in
+front of them, and silently swapping the two axes costs more than a cramped panel. A regression table
+is never transposed (it is already in that shape).
+
+The **reference** falls out of it. On the panel axis it would be an all-neutral panel, so it is
+dropped and the K−1 panels left are each one group's whole profile (which is exactly the
+`formations_stat` teaching plot, at K = 2). On the reading axis it stays, as the anchor row at the
+neutral — the table's own bold reference cell, drawn as a black-filled square.
 
 ### 14.5 Size, and the wall
 
@@ -675,22 +727,29 @@ matching the table's `1` / `0` cell and its bold.
 Within a panel: crude vs model (§9.3), and several model columns when `facet = FALSE`. Encoded by
 **vertical dodge + shape**, never colour (A3).
 
-### 15.3 Labels
+### 15.3 What marks an estimate: `center`
 
-`labels = "estimate"` prints the formatted estimate at the right edge of each panel, inside the
-plot, via `geom_text` at a per-panel x position. This gives `finalfit`'s readability without the
-second gtable panel that makes `or_plot()` un-modifiable. **Default `"none"`** — the numbers are in
-the table the user already has, and a tabxplor plot exists to show the pattern, not to re-print the
-table. (`or_plot()`'s whole left panel is a table the user printed two lines earlier.)
+One argument, three layouts — `labels` and `size` are gone into it.
 
-The formatted string must come from `format()` on the fmt column — the export-parity contract makes
-`format()` the only string producer, and it already renders `1/2.45***`.
+* `"n"` (default) — a **square whose area is the level's own base**, with the value printed just
+  above the whisker. A small base and a wide interval then say the same thing twice, which is what
+  makes a fragile estimate impossible to overlook.
+* `"estimate"` — the value alone, no square.
+* `"none"` — a constant square and no value, for a plot with many panels.
 
-### 15.4 Point size
+The value **rides above** the whisker, never on it: a square sized by the base can be wide enough to
+swallow it. The translucent rounded halo is the fallback for where they still meet.
 
-`size = NULL` (constant) by default. `size = "n"` maps the `add_n = TRUE` column when present.
-See §19.1: `or_plot()`'s size-by-n is inert, and reviving it silently would be worse than leaving
-it off.
+It is the cell's **own primary token** — the effect on a model column, the level it sits on for a
+crosstab (whose axis is already the deviation) — so the number says what the position cannot. It
+comes from `format()` on the fmt column with the display swapped to that token: the export-parity
+contract makes `format()` the only string producer.
+
+### 15.4 The observed value
+
+Offset **below** the model whisker, so the two never sit on each other. Filled black where there is
+no gap band, hollow where a band is drawn behind it (it must read against the band). A crude
+**series** (`observed = "ci"`) carries its own interval: a thin black whisker with very small caps.
 
 ---
 

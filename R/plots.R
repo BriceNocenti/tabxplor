@@ -12,6 +12,19 @@
 # TWO CHARTS, OPPOSITE CONTRACTS. forest_plot() reads the TABLE and never refits; reg_check_plots()
 #   ALWAYS refits (diagnostics are about residuals, which no table carries). Both help pages say so.
 #
+# ONE AXIS PER PANEL (Phase 22e-ii). A table may hold an odds ratio (log axis) beside a mean
+#   difference (identity), and ggplot has ONE scale per aesthetic. So x is pre-transformed into each
+#   scale's own space, the plot's scale is identity, and breaks AND labels are resolved per panel
+#   through a lookup keyed on that panel's forced limits -- which ggplot resolves once per panel under
+#   free scales. The forcing frame (a geom_blank + expand = 0) is what makes the key exact, so no layer
+#   may reach past it: the gap band is clamped in data space instead. One RANGE per scale key, not per
+#   panel -- panels measuring the same thing must stay comparable.
+#
+# WHAT A FOREST PLOT DRAWS IS A DEVIATION. The position is the effect (or, on a crosstab, whatever
+#   `color =` grades); the LEVEL it sits on is printed above the whisker, so position and number say
+#   two different things. The whisker takes the cell's colour whole -- significance is read off it,
+#   which is why the figure has no stars.
+#
 # ROLE. reg_check_plots() is TEACHING ONLY, and its documentation says so in the first sentence: every
 #   decision-grade number is already a footer row of the table, for every model column, in every export
 #   (R/reg-assumptions.R). This function exists to show a class what a violation LOOKS like, and to let
@@ -959,31 +972,198 @@ reg_check_top <- function(cx, cols) {
 #     whisker crosses the null line; `guaranteed_effect` = how far the near end of the whisker is from
 #     it. One figure explains all three, which is the strongest reason to have it.
 
-# The axis ladder for one scale: its own breaks, trimmed to the data and capped, plus the neutral.
-# Cheap devices only, in order (SS7.3): trim -> cap, keeping the neutral then the roundest -> ggplot2's
-# own check.overlap at the end, which is the only one that can see the panel width.
+# === SECTION: the forest plot's axis =================================================================
+#
+# DESIGN: ggplot has ONE scale per aesthetic, so one `scale_x_continuous()` cannot carry two
+# transforms -- and a table may hold an odds ratio (log) beside a mean difference (identity). The
+# resolution: x is pre-transformed into each scale's own space and the plot's scale is identity, while
+# breaks AND labels are resolved PER PANEL. With free scales ggplot calls both functions once per
+# panel, so a lookup keyed on the panel's own limits dispatches them exactly.
+# WARNING: the key is the limits, so they are forced (a `geom_blank` frame + `expand = expansion(0)`)
+# and NO layer may reach past them -- the gap band is clamped in data space rather than allowed to
+# widen a panel.
+
+# The ladder, continued as far as the data goes. The colour rungs are exact (a gridline IS a
+# threshold); a CONTINUATION rung is not, so it is rounded to a readable number. One rule for both
+# geometries -- every ladder steps ~x2 per rung in its own metric (COLOR_SCALES' K2 check) -- so
+# x2 -> x4 -> x8 and +0.3 -> +0.6 -> +1.2 are the same rule.
 #' @keywords internal
-fp_axis_breaks <- function(scl, rng, max_n = 7L) {
-  b <- scl$breaks
-  if (!length(b) || !all(is.finite(rng))) return(NULL)
-  pad  <- if (isTRUE(scl$mult)) c(rng[1] / 1.2, rng[2] * 1.2) else rng + c(-1, 1) * 0.2 * diff(rng)
-  keep <- is.finite(b) & b >= pad[1] & b <= pad[2]
-  i    <- which(keep)
-  if (length(i) < 2L) return(NULL)
-  if (length(i) > max_n) {                       # keep the neutral, then the roundest magnitudes
-    ntr  <- which(scl$break_dir[i] == 0L)
-    ord  <- order(nchar(sub("0+$", "", format(scl$break_mag[i], trim = TRUE))))
-    i    <- i[sort(unique(c(ntr, utils::head(ord, max_n - length(ntr)))))]
+fp_ladder <- function(scl, need, extra_max = 4L) {
+  mag <- sort(unique(scl$break_mag[scl$break_dir > 0L]))
+  if (!length(mag)) return(numeric(0))
+  k <- 0L
+  while (is.finite(need) && max(mag) < need && k < extra_max) {
+    mag <- c(mag, signif(max(mag) * 2, 2)); k <- k + 1L
   }
-  list(at = scl$breaks[i], dir = scl$break_dir[i], mag = scl$break_mag[i])
+  mag
+}
+
+# One record per FACET, but ONE RANGE PER SCALE KEY: panels measuring the same thing must be directly
+# comparable -- that is what small multiples are for -- while panels on different units keep their own
+# axis, which is the whole point of resolving the scale per panel.
+#' @keywords internal
+fp_scale_records <- function(e, x, what = "auto", lang = NULL, pad = 0.04, max_n = 9L) {
+  recs <- list()
+  for (key in unique(as.character(e$scale_key))) {
+    d    <- e[as.character(e$scale_key) == key, , drop = FALSE]
+    col  <- as.character(d$column[1])
+    scl  <- fmt_scale_of(x[[col]], what)
+    mult <- isTRUE(scl$mult); ntr <- scl$neutral
+    tr   <- if (mult) function(v) log10(v) else function(v) v
+
+    # the range the reader must see: the estimates, their intervals and the observed point. NOT the
+    # gap band, which is background and would otherwise decide the axis.
+    rng <- range(c(d$estimate, d$ci_inf, d$ci_sup, d$obs), na.rm = TRUE, finite = TRUE)
+    if (!all(is.finite(rng))) rng <- if (is.finite(ntr)) c(ntr, ntr) else c(0, 1)
+    need <- if (mult) max(rng[2] / ntr, ntr / rng[1], na.rm = TRUE) else max(abs(rng - ntr))
+    mag  <- fp_ladder(scl, need)
+    if (length(mag)) {
+      pos <- if (mult) c(rev(ntr / mag), ntr, ntr * mag) else c(rev(ntr - mag), ntr, ntr + mag)
+      dir <- c(rep(-1L, length(mag)), 0L, rep(1L, length(mag)))
+      mg  <- c(rev(mag), 0, mag)
+      # the first rung on each side is always in view: a plot where every whisker sits inside the
+      # first colour threshold must SAY so, and a lone neutral line cannot.
+      rng <- range(c(rng, max(pos[dir < 0L]), min(pos[dir > 0L])), na.rm = TRUE, finite = TRUE)
+    } else { pos <- if (is.finite(ntr)) ntr else numeric(0); dir <- integer(0); mg <- numeric(0) }
+
+    lim <- tr(rng)
+    if (!all(is.finite(lim)) || diff(lim) <= 0) lim <- c(min(lim), max(lim)) + c(-0.5, 0.5)
+    lim  <- lim + c(-1, 1) * pad * diff(lim)
+    at   <- tr(pos)
+    keep <- which(is.finite(at) & at >= lim[1] & at <= lim[2])
+    all_ <- keep
+    if (!length(mag)) {
+      # a LEVEL panel grades no deviation, so it has no ladder: round numbers are the only case where
+      # the axis is not the colour ladder.
+      pos  <- pretty(rng, n = 5L); at <- tr(pos)
+      k    <- at >= lim[1] & at <= lim[2]
+      pos  <- pos[k]; at <- at[k]
+      keep <- seq_along(at); all_ <- integer(0); dir <- rep(0L, length(at)); mg <- pos
+    } else if (length(keep) > max_n) {
+      # thin the LABELS from the outside in, whole pairs at a time: a log ladder crowds near the
+      # neutral, and a one-sided ladder would misread as an asymmetric scale.
+      lab_i <- keep[dir[keep] == 0L]
+      for (m in sort(unique(mg[keep][dir[keep] != 0L]), decreasing = TRUE)) {
+        pair <- keep[dir[keep] != 0L & mg[keep] == m]
+        if (length(lab_i) + length(pair) > max_n) break
+        lab_i <- c(lab_i, pair)
+      }
+      keep <- sort(lab_i)
+    }
+    labs <- vapply(keep, function(k)
+      if (dir[k] == 0L) legend_num(pos[k] * if (isTRUE(scl$is_pct)) 100 else 1, lang)
+      else legend_break_label(scl$label_meas, signif(mg[k], 3), dir[k], isTRUE(scl$is_pct), lang),
+      character(1))
+    if (isTRUE(scl$is_pct)) labs <- paste0(labs, "%")
+    rv <- unique(d$ref_value[is.finite(d$ref_value)])
+    recs[[key]] <- list(col = col, scl = scl, mult = mult, tr = tr, neutral = ntr, key = key,
+                        ref = if (length(rv) == 1L) tr(rv) else NA_real_, lim = lim,
+                        at = at[keep], dir = dir[keep], mag = mg[keep], labels = labs,
+                        at_all = at[all_], dir_all = dir[all_], mag_all = mg[all_], unit = scl$unit)
+  }
+  # the limits ARE the lookup key, so two SCALES must never share them (two facets on one scale do)
+  ks <- vapply(recs, function(z) paste(format(z$lim, digits = 15), collapse = "|"), character(1))
+  while (anyDuplicated(ks)) {
+    i <- anyDuplicated(ks)
+    recs[[i]]$lim[2] <- recs[[i]]$lim[2] * (1 + 1e-9) + 1e-12
+    ks <- vapply(recs, function(z) paste(format(z$lim, digits = 15), collapse = "|"), character(1))
+  }
+  out <- list()
+  for (f in levels(droplevels(e$facet))) {
+    i   <- which(e$facet == f)
+    key <- names(sort(table(as.character(e$scale_key[i])), decreasing = TRUE))[1]
+    # the SCALE is shared, the COLUMN is not: a multinomial risk ratio and an ordinal win ratio live
+    # on one ladder but are two quantities, and the strip word comes from the facet's own column.
+    # (assigned, not c()'d -- `c()` would append a second `col` and `$` would read the scale's.)
+    r <- recs[[key]]; r$facet <- f; r$col <- as.character(e$column[i][1])
+    out[[f]] <- r
+  }
+  out
+}
+
+# The two closures ggplot calls once per panel.
+#' @keywords internal
+fp_axis_fns <- function(scales) {
+  kb <- function(v) paste(format(v, digits = 15), collapse = "|")
+  s  <- scales[!duplicated(vapply(scales, function(z) z$key, character(1)))]
+  bmap <- stats::setNames(lapply(s, `[[`, "at"),     vapply(s, function(z) kb(z$lim), character(1)))
+  lmap <- stats::setNames(lapply(s, `[[`, "labels"), vapply(s, function(z) kb(z$at),  character(1)))
+  list(breaks = function(lim) bmap[[kb(lim)]] %||% numeric(0),
+       labels = function(br)  lmap[[kb(br)]]  %||% rep("", length(br)))
+}
+
+# fp_layout() -- which axis is READ and which is faceted.
+#
+# DESIGN: both orientations show the same numbers -- a cell's deviation is a stored field, not a
+# property of where it is drawn -- so this is a legibility choice, and `pct` does not decide it
+# (measured: a 3x6 table and a 7x3 table, both `pct = "row"`, want opposite orientations). The legible
+# one is MORE levels down the side and FEWER panels across, which is what `"auto"` picks. It is NOT
+# the default: a plot whose rows are the table's rows is the one a reader can check against the table
+# in front of them, and silently swapping the two axes costs more than a cramped panel. The reference
+# level of the panel axis carries no deviation, so it would be an empty panel: it is dropped, and the
+# K-1 panels left are each one group's whole profile. On the reading axis it stays, as the anchor row
+# at the neutral.
+#' @keywords internal
+fp_layout <- function(e, x, layout) {
+  if (identical(layout, "keep") || !nrow(e)) return(e)
+  if (identical(layout, "auto")) {
+    if (tab_is_reg(x)) return(e)
+    n_row <- length(unique(e$row[!e$is_ref]))
+    n_col <- length(unique(as.character(e$facet)))
+    if (n_col <= n_row) return(e)
+  }
+  e <- e[!e$is_ref, , drop = FALSE]
+  if (!nrow(e)) return(e)
+  new_var <- droplevels(factor(as.character(e$col_var)))
+  new_lvl <- factor(as.character(e$column), levels = levels(e$facet))
+  e$facet <- if (nlevels(droplevels(e$var)) <= 1L)
+    droplevels(factor(as.character(e$level), levels = levels(e$level)))
+  else droplevels(interaction(e$var, e$level, sep = ": ", drop = TRUE, lex.order = TRUE))
+  e$var <- new_var; e$level <- new_lvl
+  e$row <- as.integer(new_lvl)
+  e
+}
+
+# The strip suffix and the axis title name the measure the SAME way, so a single-scale plot and a
+# mixed one cannot disagree about what a column measures. `fp_unit_word("units")` names the OUTCOME,
+# which the strip already carries, so a regression column is named by its own header word instead.
+#' @keywords internal
+fp_unit_strip <- function(x, s) {
+  ew <- reg_eff_word_of(x, s$col)
+  b  <- reg_word_base(ew)
+  if (!is.na(b) && !is.null(REG_WORDS[[b]])) REG_WORDS[[b]]$long() else fp_unit_word(s$unit, ew)
 }
 
 #' @keywords internal
-fp_axis_labels <- function(scl, br, lang) {
-  vapply(seq_along(br$at), function(k)
-    if (br$dir[k] == 0L) legend_num(br$at[k] * if (isTRUE(scl$is_pct)) 100 else 1, lang)
-    else legend_break_label(scl$label_meas, br$mag[k], br$dir[k], scl$is_pct, lang),
-    character(1))
+fp_axis_title <- function(x, s) {
+  base <- legend_ucfirst(fp_unit_strip(x, s))
+  cf   <- get_conf_level(x[[s$col]])[1]
+  if (!nzchar(base) || !is.finite(cf)) base else gettextf("%s (%s%% CI)", base, format(100 * cf))
+}
+
+# The number printed above a whisker is the cell's OWN primary token -- the effect on a model column,
+# the level it sits on for a crosstab (whose axis is already the deviation). `format()` stays the one
+# string producer; only the display is swapped to that token first.
+#' @keywords internal
+fp_primary_text <- function(x, d) {
+  out <- rep(NA_character_, nrow(d))
+  for (nm in unique(as.character(d$column))) {
+    i   <- which(as.character(d$column) == nm)
+    txt <- trimws(format(set_display(x[[nm]], display_primary(get_display(x[[nm]])))))
+    out[i] <- txt[d$trow[i]]
+  }
+  out
+}
+
+# The slot a break stands for: rung 1..4 out from the neutral, 5..8 below it (the fmt slot map).
+#' @keywords internal
+fp_break_slots <- function(dir, mag) {
+  o <- integer(length(dir))
+  for (s in c(-1L, 1L)) {
+    i <- which(dir == s); if (!length(i)) next
+    o[i] <- pmin(as.integer(rank(abs(mag[i]), ties.method = "first")), 4L) + if (s < 0L) 4L else 0L
+  }
+  o
 }
 
 # The axis title. The unit is a KEY on the scale record; the words are gettext()'d HERE, at render, so
@@ -1016,13 +1196,20 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
 #' they are about residuals, which no table carries.)
 #'
 #' @details
-#' **What is drawn.** By default, whatever the table's own \code{ci =} produced: cell percentages with
-#' their intervals for \code{ci = "cell"}, differences from the reference with a zero line for
-#' \code{ci = "ref"}, odds ratios on a log axis for \code{display = "{or}"}, and the model's effects for a
-#' \code{\link{tab_reg}} table. \code{what = "level"} / \code{"effect"} override it.
+#' **What is drawn.** Always a \strong{deviation}: the effect a regression estimates, or, for a
+#' cross-table, the comparison its \code{color =} grades -- a difference from the reference in
+#' percentage points, a ratio or an odds ratio on a log axis. The \strong{level} the deviation sits on
+#' (the percentage, the mean, the adjusted probability) is printed above each whisker instead, so the
+#' position and the number say two different things. \code{what = "level"} swaps them.
 #'
-#' **The gridlines are the table's colour ladder** (\code{\link{set_color_breaks}}), labelled with the
-#' same glyphs the footer uses, and the colour of each point is the colour of its cell.
+#' **The gridlines are the table's colour ladder** (\code{\link{set_color_breaks}}), one dashed rule
+#' per rung in that rung's own colour, labelled with the same glyphs the footer uses -- and continued
+#' beyond the last rung (each step twice the one before) as far as the data goes. The whisker takes
+#' the colour of its cell, whole: significance is read off the whisker, so there are no stars.
+#'
+#' **A table that mixes units** (an odds ratio beside a mean difference) gets one axis per panel, each
+#' in its own transform, and the unit moves into the strip. Panels that measure the SAME thing share
+#' one range, so their effect sizes stay comparable.
 #'
 #' **The observed comparison.** With \code{empirical = TRUE}, a regression estimate carries its crude
 #' counterpart. \code{observed = "band"} (the default when the gap was testable) draws a bracket around
@@ -1040,20 +1227,29 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
 #' @param observed For a regression table with \code{empirical = TRUE}: \code{"auto"}, \code{"band"}
 #'   (the observed value with the margin of error of the gap), \code{"point"}, \code{"ci"} (the classic
 #'   two-interval figure) or \code{"none"}.
+#' @param center What marks the estimate: \code{"n"} (the default) a square whose area is the level's
+#'   own base, with the value printed just above it; \code{"estimate"} the value alone; \code{"none"}
+#'   a constant square and no value, for a plot with many panels.
+#' @param layout Which axis is read and which is faceted: \code{"keep"} (the default) reads the
+#'   table's rows, \code{"transpose"} reads its columns, and \code{"auto"} picks whichever has more
+#'   levels -- more levels down the side, fewer panels across, which is the more legible of the two
+#'   whenever the table is much wider than it is tall. A regression table is never transposed.
 #' @param facet \code{NULL} for one panel per estimate column, \code{FALSE} for a single panel.
 #' @param guide \code{"gridlines"} (the default), \code{"bands"} (shade the panel between the colour
-#'   breaks -- the teaching mode) or \code{"none"}.
-#' @param labels Print the formatted estimate beside each point: \code{"none"}, \code{"estimate"}.
-#' @param stars Show significance stars. \code{NULL} follows the table.
+#'   breaks -- the teaching mode, which makes a cell's colour and its position one statement) or
+#'   \code{"none"}.
 #' @param intercept Draw the regression \code{Constant} row.
 #' @param totals Draw total rows and total columns.
-#' @param size \code{NULL} for constant point size, or \code{"n"} to map the sample size.
+#' @param footer \code{"short"} (the default) the console's own footer, \code{"full"} the exports'
+#'   longer one, or \code{"none"}. Both are wrapped and set flush left.
 #' @param theme \code{"light"}, \code{"dark"} or one of the black-and-white publication palettes
 #'   (\code{"print_ready"} and friends; a plotted mark then reads its
 #'   magnitude off a grey ramp, since a point has no typography).
 #'   \code{NULL} follows \code{getOption("tabxplor.export_theme")}.
 #' @param caption A caption. \code{NULL} keeps the table's own.
-#' @param legend Print the colour legend (as a guide, or in the caption when several ladders apply).
+#' @param legend Where the colour legend goes: \code{"auto"} (the bottom), \code{"right"},
+#'   \code{"left"}, \code{"top"} or \code{"none"}. When several ladders apply it cannot be a guide and
+#'   goes to the caption instead.
 #' @param subtext Include the table's subtext and footer lines in the caption.
 #' @param return_data Return the long estimate tibble instead of the plot.
 #' @param ... Unused.
@@ -1067,218 +1263,230 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
 #' if (requireNamespace("ggplot2", quietly = TRUE)) {
 #'   t <- tab(forcats::gss_cat, race, marital, pct = "row", ci = "ref", color = TRUE)
 #'   forest_plot(t)
+#'   forest_plot(t, guide = "bands")          # the teaching mode
 #' }
 forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
                         observed = c("auto", "band", "point", "ci", "none"),
+                        center = c("n", "estimate", "none"), layout = c("keep", "auto", "transpose"),
                         facet = NULL, color = TRUE, guide = c("gridlines", "bands", "none"),
-                        labels = c("none", "estimate"), stars = NULL,
-                        intercept = FALSE, totals = FALSE, size = NULL,
-                        theme = NULL, lang = NULL, caption = NULL, legend = TRUE, subtext = TRUE,
+                        intercept = FALSE, totals = FALSE,
+                        footer = c("short", "full", "none"), legend = "auto",
+                        theme = NULL, lang = NULL, caption = NULL, subtext = TRUE,
                         return_data = FALSE, ...) {
-  what <- match.arg(what); observed <- match.arg(observed)
-  guide <- match.arg(guide); labels <- match.arg(labels)
+  what   <- match.arg(what);   observed <- match.arg(observed)
+  guide  <- match.arg(guide);  center   <- match.arg(center)
+  layout <- match.arg(layout); footer   <- match.arg(footer)
   if (!is.data.frame(x) && is.list(x))
     return(purrr::map(x, forest_plot, columns = columns, what = what, observed = observed,
-                      facet = facet, color = color, guide = guide, labels = labels, stars = stars,
-                      intercept = intercept, totals = totals, size = size, theme = theme,
-                      lang = lang, caption = caption, legend = legend, subtext = subtext,
+                      center = center, layout = layout, facet = facet, color = color, guide = guide,
+                      intercept = intercept, totals = totals, footer = footer, legend = legend,
+                      theme = theme, lang = lang, caption = caption, subtext = subtext,
                       return_data = return_data))
   tx_plot_deps("ggplot2")
-  cols  <- tx_plot_colors(theme)
-  th    <- cols$theme
+  cols <- tx_plot_colors(theme)
+  th   <- cols$theme
+  lgd  <- fp_legend_position(legend)
 
+  # DESIGN: a crosstab is plotted on the DEVIATION its `color =` grades -- the quantity the reference
+  # line is the neutral of. The level it sits on is printed above the whisker instead, so the position
+  # and the number say two different things.
+  if (identical(what, "auto") && !tab_is_reg(x)) what <- "effect"
   e <- tab_estimates(x, columns = columns, what = what, observed = observed,
                      intercept = intercept, totals = totals, theme = th)
   if (identical(observed, "auto"))
     observed <- if (any(is.finite(e$gap_se))) "band"
                 else if (any(is.finite(e$obs))) "point" else "none"
+  if (!any(is.finite(e$ci_inf)) && !tab_is_reg(x))
+    cli::cli_inform(c("i" = "No confidence interval in this table: the plot shows points only.",
+                      "i" = "Build it with {.code ci = \"ref\"} to get whiskers."))
+
+  e$trow <- e$row
+  e <- fp_layout(e, x, layout)     # `return_data` comes AFTER: it must describe what is DRAWN
   if (return_data) return(e)
+  sc <- fp_scale_records(e, x, what, lang, pad = if (identical(center, "none")) 0.04 else 0.10)
+  fn <- fp_axis_fns(sc)
+  keys <- unique(vapply(sc, function(z) z$key, character(1)))
+  # the axis title speaks for every panel, so it may only exist where they all measure the same thing
+  # AND call it the same thing: a multinomial risk ratio beside an ordinal win ratio shares the scale
+  # but not the word, and one title would name the other panel's quantity.
+  wrds <- with_legend_lang(lang, function(lg) vapply(sc, function(z) fp_unit_strip(x, z), character(1)))
+  one_word <- length(unique(wrds)) == 1L && length(keys) == 1L
 
-  # --- the y axis: table order, read top to bottom ---------------------------------------------------
-  rows <- unique(e[c("row", "level")])
-  e$ypos <- factor(e$row, levels = rev(sort(unique(e$row))))
-  ylab   <- stats::setNames(as.character(rows$level), as.character(rows$row))
-
-  # --- point size: constant, or the base. A model column carries its level's own `n`, so the area
-  # of a point says how many people are behind it -- a small base and a wide interval then say the
-  # same thing twice, which is what makes a fragile estimate impossible to overlook.
-  e$psize <- 1.9
-  if (identical(size, "n")) {
-    nv <- e$n
-    if (any(is.finite(nv))) {
-      r <- range(sqrt(nv), na.rm = TRUE, finite = TRUE)
-      e$psize <- if (diff(r) > 0) 1.2 + 3.3 * (sqrt(nv) - r[1]) / diff(r) else 1.9
-      e$psize[!is.finite(e$psize)] <- 1.2
-    } else {
-      cli::cli_inform(c("i" = "{.code size = \"n\"}: this table carries no per-level base."))
-    }
+  # --- into the common space ------------------------------------------------------------------------
+  trf <- function(v) {
+    o <- rep(NA_real_, length(v))
+    for (f in names(sc)) { i <- which(as.character(e$facet) == f); o[i] <- sc[[f]]$tr(v[i]) }
+    o
   }
+  for (nm in c("estimate", "ci_inf", "ci_sup", "obs", "gap_lo", "gap_hi"))
+    e[[paste0("x_", nm)]] <- trf(e[[nm]])
+  lo <- vapply(as.character(e$facet), function(f) sc[[f]]$lim[1], numeric(1))
+  hi <- vapply(as.character(e$facet), function(f) sc[[f]]$lim[2], numeric(1))
+  e$x_gap_lo <- pmax(e$x_gap_lo, lo); e$x_gap_hi <- pmin(e$x_gap_hi, hi)
 
-  # --- the x scale ----------------------------------------------------------------------------------
-  scls  <- unique(e$scale_key)
-  one   <- length(scls) == 1L
-  ref   <- e[!duplicated(e$facet), c("facet", "neutral", "scale_key", "unit"), drop = FALSE]
-  # the reference LINE of a level panel: only where it is one value for the whole panel (it is under
-  # `pct = "row"` with `ref = "tot"`; under `pct = "col"` the reference is a COLUMN, i.e. a panel of
-  # its own, and there is nothing to draw)
-  rl <- do.call(rbind, lapply(split(e, e$facet), function(d) {
-    v <- unique(d$ref_value[is.finite(d$ref_value)])
-    if (length(v) == 1L) data.frame(facet = d$facet[1], at = v) else NULL
-  }))
-  nl <- ref[is.finite(ref$neutral), c("facet", "neutral"), drop = FALSE]
+  # --- the y axis: table order, read top to bottom, the reference row in bold -----------------------
+  e$ypos <- factor(e$row, levels = rev(sort(unique(e$row))))
+  rows   <- unique(e[c("row", "level", "is_ref")])
+  ylab   <- stats::setNames(as.character(rows$level), as.character(rows$row))
+  yref   <- stats::setNames(rows$is_ref, as.character(rows$row))
+  ylab_fn <- function(b) {
+    lv <- unname(ylab[b]); lv[is.na(lv)] <- ""
+    if (!any(yref[b], na.rm = TRUE)) return(lv)
+    lapply(seq_along(b), function(k) if (isTRUE(yref[[b[k]]])) bquote(bold(.(lv[k]))) else lv[k])
+  }
+  e$psize <- fp_point_sizes(e, center)
+  mods <- if (any(e$series == "modelled")) e[e$series == "modelled", , drop = FALSE] else e
+  wsk  <- mods[is.finite(mods$x_ci_inf) & is.finite(mods$x_ci_sup) & !mods$is_ref, , drop = FALSE]
 
-  # the axis follows the scale MOST of the plotted columns are on, not the first one's -- a reference
-  # column carries no interval and would otherwise decide the axis for its whole panel row.
-  main <- names(sort(table(e$scale_key), decreasing = TRUE))[1]
-  mcol <- as.character(e$column[e$scale_key == main][1])
-  scl  <- fmt_scale_of(x[[mcol]], what)
-  conf <- get_conf_level(x[[mcol]])[1]
-  rng  <- range(c(e$estimate, e$ci_inf, e$ci_sup, e$gap_lo, e$gap_hi, e$obs), na.rm = TRUE, finite = TRUE)
-  br   <- fp_axis_breaks(scl, rng)
+  pal_bg <- fmt_point_palette(th, "bg")
+  pal_tx <- fmt_point_palette(th, "text")
+  ink    <- function(v) if (isTRUE(color)) v else cols$point
 
+  # --- layers, back to front -----------------------------------------------------------------------
   p <- ggplot2::ggplot(e)
-
-  # --- layers, back to front ------------------------------------------------------------------------
-  if (identical(guide, "bands") && !is.null(br) && isTRUE(color)) {
-    pal  <- fmt_point_palette(th, "bg")
-    at   <- sort(unique(c(br$at, rng)))
-    band <- data.frame(xmin = utils::head(at, -1), xmax = utils::tail(at, -1))
-    mid  <- if (isTRUE(scl$mult)) sqrt(band$xmin * band$xmax) else (band$xmin + band$xmax) / 2
-    lvl  <- vapply(seq_len(nrow(band)), function(k) {
-      m <- if (isTRUE(scl$mult)) ifelse(mid[k] >= 1, mid[k], 1 / mid[k]) else abs(mid[k])
-      s <- findInterval(m, sort(unique(scl$break_mag[scl$break_dir != 0L])))
-      if (s == 0L) NA_integer_ else if (mid[k] >= scl$neutral) s else s + 4L
-    }, integer(1))
-    band$fill <- ifelse(is.na(lvl), NA_character_, pal[pmax(lvl, 1L)])
-    band <- band[!is.na(band$fill), , drop = FALSE]
-    if (nrow(band))
-      p <- p + ggplot2::geom_rect(
-        data = band, ggplot2::aes(xmin = .data$xmin, xmax = .data$xmax, fill = .data$fill),
-        ymin = -Inf, ymax = Inf, inherit.aes = FALSE, alpha = 0.55)
+  if (identical(guide, "bands") && isTRUE(color)) {
+    bd <- do.call(rbind, lapply(sc, function(s) {
+      if (length(s$at_all) < 2L) return(NULL)
+      sl <- fp_break_slots(s$dir_all, s$mag_all)
+      at <- c(-Inf, s$at_all, Inf); sl <- c(sl[1], sl, sl[length(sl)])
+      k  <- seq_len(length(at) - 1L)
+      ms <- ifelse(sl[k] == 0L, sl[k + 1L], sl[k])
+      data.frame(facet = factor(s$facet, levels = levels(e$facet)),
+                 xmin = at[k], xmax = at[k + 1L],
+                 fill = ifelse(ms > 0L, pal_bg[pmax(ms, 1L)], NA_character_))
+    }))
+    bd <- if (is.null(bd)) NULL else bd[!is.na(bd$fill), , drop = FALSE]
+    if (!is.null(bd) && nrow(bd))
+      p <- p + ggplot2::geom_rect(data = bd, ggplot2::aes(xmin = .data$xmin, xmax = .data$xmax,
+                                                          fill = .data$fill),
+                                  ymin = -Inf, ymax = Inf, alpha = 0.55, inherit.aes = FALSE)
   }
   # the background colour channel: a band behind the row, the literal translation of a painted cell
-  if (isTRUE(color) && any(!is.na(e$hex_bg))) {
-    bg <- e[!is.na(e$hex_bg), , drop = FALSE]
-    p <- p + ggplot2::geom_rect(
-      data = bg, ggplot2::aes(ymin = as.numeric(.data$ypos) - 0.45,
-                              ymax = as.numeric(.data$ypos) + 0.45, fill = .data$hex_bg),
-      xmin = -Inf, xmax = Inf, inherit.aes = FALSE)
-  }
-  if (nrow(nl))
-    p <- p + ggplot2::geom_vline(data = nl, ggplot2::aes(xintercept = .data$neutral),
-                                 linetype = "longdash", colour = cols$grey, linewidth = 0.4)
+  if (isTRUE(color) && any(!is.na(e$hex_bg)))
+    p <- p + ggplot2::geom_rect(data = e[!is.na(e$hex_bg), , drop = FALSE],
+      ggplot2::aes(ymin = as.numeric(.data$ypos) - 0.45, ymax = as.numeric(.data$ypos) + 0.45,
+                   fill = .data$hex_bg), xmin = -Inf, xmax = Inf, inherit.aes = FALSE)
+
+  # the ladder: one dashed rule per rung, IN ITS OWN COLOUR. Drawn for every in-range rung, while the
+  # axis labels are thinned -- so the scale stays complete even where its text cannot fit.
+  rl <- if (guide != "none" && isTRUE(color)) do.call(rbind, lapply(sc, function(s) {
+    sl <- fp_break_slots(s$dir_all, s$mag_all); i <- which(sl > 0L)
+    if (!length(i)) return(NULL)
+    data.frame(facet = factor(s$facet, levels = levels(e$facet)), at = s$at_all[i], col = pal_tx[sl[i]])
+  }))
   if (!is.null(rl) && nrow(rl))
-    p <- p + ggplot2::geom_vline(data = rl, ggplot2::aes(xintercept = .data$at),
-                                 linetype = "dotted", colour = cols$grey, linewidth = 0.4)
+    p <- p + ggplot2::geom_vline(data = rl, ggplot2::aes(xintercept = .data$at, colour = .data$col),
+                                 linetype = "dashed", linewidth = 0.4, alpha = 0.5)
+  nl <- do.call(rbind, lapply(sc, function(s) if (!is.finite(s$neutral)) NULL else
+    data.frame(facet = factor(s$facet, levels = levels(e$facet)), at = s$tr(s$neutral))))
+  if (!is.null(nl) && nrow(nl))
+    p <- p + ggplot2::geom_vline(data = nl, ggplot2::aes(xintercept = .data$at),
+                                 linetype = "longdash", colour = cols$text, linewidth = 0.45)
+  rf <- do.call(rbind, lapply(sc, function(s) if (!is.finite(s$ref)) NULL else
+    data.frame(facet = factor(s$facet, levels = levels(e$facet)), at = s$ref)))
+  if (!is.null(rf) && nrow(rf))
+    p <- p + ggplot2::geom_vline(data = rf, ggplot2::aes(xintercept = .data$at),
+                                 linetype = "dotted", colour = cols$text, linewidth = 0.45)
 
-  mods <- e[e$series == "modelled", , drop = FALSE]
-  crd  <- e[e$series == "observed", , drop = FALSE]
-  dodge <- if (nrow(crd) && identical(observed, "ci")) ggplot2::position_dodge(width = 0.5)
-           else ggplot2::position_identity()
-
-  if (observed %in% c("band", "point")) {
-    ob <- mods[is.finite(mods$obs), , drop = FALSE]
-    if (nrow(ob)) {
-      if (identical(observed, "band")) {
-        bd <- ob[is.finite(ob$gap_lo), , drop = FALSE]
-        if (nrow(bd))
-          p <- p + ggplot2::geom_linerange(
-            data = bd, ggplot2::aes(y = .data$ypos, xmin = .data$gap_lo, xmax = .data$gap_hi),
-            linewidth = 2.4, alpha = 0.30, colour = cols$grey)
-      }
-      # solid where the gap was tested, dotted where it could not be (a conditional odds ratio, a
-      # digest-path fit): the same predicate the colour engine reads, never a fourth encoding
-      p <- p +
-        ggplot2::geom_segment(
-          data = ob, ggplot2::aes(x = .data$obs, xend = .data$estimate,
-                                  y = .data$ypos, yend = .data$ypos,
-                                  linetype = .data$gap_tested),
-          colour = cols$grey, linewidth = 0.4) +
-        ggplot2::geom_point(data = ob, ggplot2::aes(x = .data$obs, y = .data$ypos),
-                            shape = 21, fill = cols$bg, colour = cols$grey, size = 1.8)
+  if (identical(observed, "band")) {
+    bd <- mods[is.finite(mods$x_gap_lo) & is.finite(mods$x_gap_hi), , drop = FALSE]
+    if (nrow(bd)) {
+      # a band that fills its panel locates nothing, so it is not drawn: a band on the page always
+      # means the estimate is inside it or outside it.
+      span <- vapply(as.character(bd$facet), function(f) diff(sc[[f]]$lim), numeric(1))
+      bd   <- bd[(bd$x_gap_hi - bd$x_gap_lo) < 0.97 * span, , drop = FALSE]
+    }
+    if (nrow(bd)) {
+      bd$band <- ifelse(isTRUE(color) & !is.na(bd$gap_slot) & bd$gap_slot > 0L & bd$gap_tested,
+                        pal_bg[pmax(bd$gap_slot, 1L)], cols$grey)
+      p <- p + ggplot2::geom_linerange(data = bd,
+        ggplot2::aes(y = .data$ypos, xmin = .data$x_gap_lo, xmax = .data$x_gap_hi,
+                     colour = .data$band), linewidth = 4.5, alpha = 0.45)
     }
   }
-  if (nrow(crd) && identical(observed, "ci")) {
-    p <- p +
-      ggplot2::geom_linerange(
-        data = crd, ggplot2::aes(y = .data$ypos, xmin = .data$ci_inf, xmax = .data$ci_sup,
-                                 group = .data$series),
-        colour = cols$grey, position = dodge) +
-      ggplot2::geom_point(
-        data = crd, ggplot2::aes(x = .data$estimate, y = .data$ypos, group = .data$series),
-        shape = 21, fill = cols$bg, colour = cols$grey, size = 1.8, position = dodge)
+  # the observed value, offset BELOW the model whisker so the two never sit on each other. Hollow only
+  # where a band is drawn behind it (it must read against the band); filled black otherwise.
+  if (observed %in% c("band", "point")) {
+    ob <- mods[is.finite(mods$x_obs) & !mods$is_ref, , drop = FALSE]
+    if (nrow(ob)) p <- p + ggplot2::geom_point(data = ob,
+      ggplot2::aes(x = .data$x_obs, y = .data$ypos,
+                   fill = ifelse(.data$gap_tested, cols$bg, cols$text)),
+      shape = 21, colour = cols$text, size = 1.7, stroke = 0.5,
+      position = ggplot2::position_nudge(y = -0.24))
+  }
+  # a crude SERIES carries its own interval: a thin black whisker with very small caps
+  oci <- e[e$series == "observed" & is.finite(e$x_ci_inf) & is.finite(e$x_ci_sup), , drop = FALSE]
+  if (nrow(oci)) p <- p +
+    ggplot2::geom_segment(data = oci,
+      ggplot2::aes(x = .data$x_ci_inf, xend = .data$x_ci_sup, y = .data$ypos, yend = .data$ypos),
+      colour = cols$text, linewidth = 0.35, position = ggplot2::position_nudge(y = -0.24),
+      arrow = grid::arrow(angle = 90, ends = "both", length = grid::unit(0.02, "inches"))) +
+    ggplot2::geom_point(data = oci, ggplot2::aes(x = .data$x_estimate, y = .data$ypos),
+      colour = cols$text, fill = cols$text, shape = 21, size = 1.7, stroke = 0.5,
+      position = ggplot2::position_nudge(y = -0.24))
+
+  # the whisker: ONE segment, capped, wholly in the cell's colour -- significance is read off it,
+  # which is why there are no stars.
+  if (nrow(wsk)) p <- p + ggplot2::geom_segment(data = wsk,
+    ggplot2::aes(x = .data$x_ci_inf, xend = .data$x_ci_sup, y = .data$ypos, yend = .data$ypos,
+                 colour = ink(.data$point_hex)), linewidth = 0.9,
+    arrow = grid::arrow(angle = 90, ends = "both", length = grid::unit(0.045, "inches")))
+  if (!identical(center, "estimate")) p <- p + ggplot2::geom_point(data = mods,
+    ggplot2::aes(x = .data$x_estimate, y = .data$ypos, size = .data$psize,
+                 fill = ifelse(.data$is_ref, cols$text, ink(.data$point_hex))),
+    shape = 22, colour = cols$text, stroke = 0.35)
+  if (!identical(center, "none")) {
+    mods$lab <- fp_primary_text(x, mods)
+    p <- p + ggplot2::geom_label(data = mods[!is.na(mods$lab), , drop = FALSE],
+      ggplot2::aes(x = .data$x_estimate, y = .data$ypos, label = .data$lab), size = 2.6,
+      colour = cols$text, fill = paste0(substr(cols$bg, 1, 7), "AA"), nudge_y = 0.30,
+      linewidth = 0, label.r = grid::unit(0.12, "lines"),
+      label.padding = grid::unit(0.10, "lines"))
   }
 
-  # the model estimates: whisker, then the point in the cell's own colour
-  p <- p + ggplot2::geom_linerange(
-    data = mods, ggplot2::aes(y = .data$ypos, xmin = .data$ci_inf, xmax = .data$ci_sup,
-                              group = .data$series),
-    colour = cols$grey, position = dodge)
-  p <- p + if (isTRUE(color))
-    ggplot2::geom_point(data = mods,
-                        ggplot2::aes(x = .data$estimate, y = .data$ypos, colour = .data$point_hex,
-                                     shape = .data$is_ref, size = .data$psize, group = .data$series),
-                        position = dodge)
-  else
-    ggplot2::geom_point(data = mods,
-                        ggplot2::aes(x = .data$estimate, y = .data$ypos, shape = .data$is_ref,
-                                     size = .data$psize, group = .data$series),
-                        colour = cols$point, position = dodge)
-
-  want_stars <- (is.null(stars) || isTRUE(stars)) && any(nzchar(mods$stars))
-  if (want_stars)
-    p <- p + ggplot2::geom_text(
-      data = mods[nzchar(mods$stars), , drop = FALSE],
-      ggplot2::aes(x = .data$ci_sup, y = .data$ypos, label = .data$stars),
-      hjust = -0.2, vjust = 0.75, size = 2.6, colour = cols$text)
-  if (identical(labels, "estimate"))
-    p <- p + ggplot2::geom_text(
-      data = mods, ggplot2::aes(x = Inf, y = .data$ypos, label = .data$text),
-      hjust = 1.05, size = 2.6, colour = cols$grey)
+  # WARNING: this frame FORCES each panel's limits, which is what makes the break/label lookup exact.
+  # It is added LAST, never first: the first layer to touch a discrete scale fixes its level order,
+  # and this frame carries one level.
+  blank <- do.call(rbind, lapply(sc, function(z)
+    data.frame(facet = factor(z$facet, levels = levels(e$facet)), x = z$lim,
+               ypos = e$ypos[1], var = e$var[1], group = e$group[1])))
+  p <- p + ggplot2::geom_blank(data = blank, ggplot2::aes(x = .data$x, y = .data$ypos))
 
   # --- scales ---------------------------------------------------------------------------------------
+  # a secondary axis is per SCALE, not per panel: it survives only where the whole plot is on one.
   sec <- ggplot2::waiver()
-  if (identical(scl$sec, "exp"))
-    sec <- ggplot2::sec_axis(transform = exp, name = gettext("Odds ratio"))
-  else if (identical(scl$sec, "sd") && is.finite(scl$sd_y)) {
-    sd_y <- scl$sd_y
-    sec  <- ggplot2::sec_axis(transform = ~ . / sd_y, name = gettext("SD of the outcome"))
+  if (length(keys) == 1L) {
+    scl <- sc[[1]]$scl
+    if (identical(scl$sec, "exp"))
+      sec <- ggplot2::sec_axis(transform = exp, name = gettext("Odds ratio"))
+    else if (identical(scl$sec, "sd") && is.finite(scl$sd_y)) {
+      sd_y <- scl$sd_y
+      sec  <- ggplot2::sec_axis(transform = ~ . / sd_y, name = gettext("SD of the outcome"))
+    }
   }
-  lab_fun <- if (isTRUE(scl$is_pct)) function(v) paste0(round(100 * v), "%") else ggplot2::waiver()
-  xsc <- if (!is.null(br))
-    ggplot2::scale_x_continuous(transform = scl$trans, breaks = br$at,
-                                labels = fp_axis_labels(scl, br, lang), sec.axis = sec,
-                                guide = ggplot2::guide_axis(check.overlap = TRUE))
-  else
-    ggplot2::scale_x_continuous(transform = scl$trans, labels = lab_fun, sec.axis = sec,
-                                guide = ggplot2::guide_axis(check.overlap = TRUE))
-  p <- p + xsc +
-    ggplot2::scale_y_discrete(labels = ylab) +
-    ggplot2::scale_linetype_manual(values = c("TRUE" = "solid", "FALSE" = "dotted"), guide = "none") +
-    ggplot2::scale_shape_manual(values = c("FALSE" = 16, "TRUE" = 5), guide = "none") +
-    ggplot2::scale_size_identity(guide = "none")
+  p <- p +
+    ggplot2::scale_x_continuous(breaks = fn$breaks, labels = fn$labels, sec.axis = sec,
+                                expand = ggplot2::expansion(0),
+                                guide = ggplot2::guide_axis(check.overlap = TRUE)) +
+    ggplot2::scale_y_discrete(labels = ylab_fn) +
+    ggplot2::scale_size_identity(guide = "none") +
+    ggplot2::scale_fill_identity(guide = "none")
 
-  # --- the colour guides ----------------------------------------------------------------------------
-  gtxt <- if (isTRUE(color) && isTRUE(legend))
+  gtxt <- if (isTRUE(color) && !identical(lgd, "none"))
     legend_guide_spec(x, unique(as.character(e$column)), "text", th, lang) else NULL
-  gbg  <- if (isTRUE(color) && isTRUE(legend) && any(!is.na(e$hex_bg)))
-    legend_guide_spec(x, unique(as.character(e$column)), "bg", th, lang) else NULL
-  if (isTRUE(color)) {
-    p <- p + if (!is.null(gtxt))
-      ggplot2::scale_colour_identity(
-        name = gtxt$title, guide = "legend",
-        breaks = c(gtxt$keys$hex, gtxt$grey_hex), labels = c(gtxt$keys$label, gtxt$grey_label))
-    else ggplot2::scale_colour_identity()
-    p <- p + if (!is.null(gbg))
-      ggplot2::scale_fill_identity(
-        name = gbg$title, guide = "legend",
-        breaks = gbg$keys$hex, labels = gbg$keys$label)
-    else ggplot2::scale_fill_identity()
-  }
+  p <- p + if (!is.null(gtxt))
+    ggplot2::scale_colour_identity(name = gtxt$title, guide = "legend",
+                                   breaks = c(gtxt$keys$hex, gtxt$grey_hex),
+                                   labels = c(gtxt$keys$label, gtxt$grey_label))
+  else ggplot2::scale_colour_identity(guide = "none")
 
   # --- facets ---------------------------------------------------------------------------------------
-  nvar <- nlevels(e$var); nfac <- nlevels(e$facet)
-  ngrp <- length(unique(e$group[nzchar(e$group)]))            # sub-tables (tab_vars / a tab_vars)
+  nvar <- nlevels(droplevels(e$var)); nfac <- nlevels(droplevels(e$facet))
+  ngrp <- length(unique(e$group[nzchar(e$group)]))
+  if (identical(facet, FALSE) && length(keys) > 1L) {
+    cli::cli_inform(c("!" = "{length(keys)} different units in this table: it cannot share one panel."))
+    facet <- NULL
+  }
   if (!identical(facet, FALSE) && (nvar > 1L || nfac > 1L || ngrp > 1L)) {
     if (max(nvar, 1L) * max(nfac, 1L) * max(ngrp, 1L) > 12L)
       cli::cli_inform(c("!" = "{max(nvar, 1L) * max(nfac, 1L) * max(ngrp, 1L)} panels.",
@@ -1286,26 +1494,74 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
     rw <- if (ngrp > 1L && nvar > 1L) ggplot2::vars(.data$group, .data$var)
           else if (ngrp > 1L) ggplot2::vars(.data$group)
           else if (nvar > 1L) ggplot2::vars(.data$var) else NULL
-    p <- p + ggplot2::facet_grid(
-      rows = rw, cols = if (nfac > 1L) ggplot2::vars(.data$facet) else NULL,
-      scales = if (one) "free_y" else "free", space = "free_y", switch = "y")
+    # the unit cannot be an axis title when the panels do not share one: it moves into the strip,
+    # through a labeller -- never by relabelling the data, which is every layer's facet key.
+    lbl <- ggplot2::label_value
+    if (!one_word)
+      lbl <- ggplot2::labeller(facet = function(v)
+        ifelse(v %in% names(wrds), paste0(v, " - ", wrds[v]), v))
+    p <- p + ggplot2::facet_grid(rows = rw, cols = if (nfac > 1L) ggplot2::vars(.data$facet) else NULL,
+                                 scales = "free", space = "free_y", switch = "y", labeller = lbl)
   }
 
   # --- labels ---------------------------------------------------------------------------------------
-  # when the columns do not share a scale, the unit moves into the strip and the axis title goes: one
-  # ggplot object still comes back (no ggh4x, no gtable), which is what keeps `+ theme()` working.
-  rm_  <- reg_call(x)
-  outn <- if (!is.null(rm_)) paste(unique(rm_$outcome), collapse = " / ")
-          else as.character(e$col_var[1])
-  xt <- if (one) with_legend_lang(lang, function(lg)
-    fp_unit_word(scl$unit, reg_eff_word_of(x, mcol), conf, outn)) else NULL
-  cap <- fp_caption(x, unique(as.character(e$column)), caption, subtext,
-                    isTRUE(legend) && is.null(gtxt), th, lang)
-  p + tx_plot_theme(cols) +
+  xt  <- if (one_word) with_legend_lang(lang, function(lg) fp_axis_title(x, sc[[1]])) else NULL
+  cap <- fp_caption(x, unique(as.character(e$column)), caption, subtext, footer,
+                    isTRUE(color) && is.null(gtxt), th, lang)
+  p + fp_plot_theme(cols) +
     ggplot2::labs(x = xt, y = NULL, title = cap$title, caption = cap$caption) +
-    ggplot2::theme(panel.grid.minor = ggplot2::element_blank(),
-                   strip.placement = "outside",
-                   legend.key = ggplot2::element_rect(fill = cols$bg, colour = NA))
+    ggplot2::theme(legend.position = lgd)
+}
+
+# `legend =` is a POSITION; TRUE / FALSE are still accepted. "auto" is the bottom, where a ladder of
+# six keys costs one line instead of a column of width -- and where reg_check_plots() puts its own.
+#' @keywords internal
+fp_legend_position <- function(legend) {
+  if (isTRUE(legend))  return("bottom")
+  if (isFALSE(legend)) return("none")
+  legend <- match.arg(as.character(legend),
+                      c("auto", "bottom", "right", "left", "top", "none"))
+  if (identical(legend, "auto")) "bottom" else legend
+}
+
+# The area of a marker is the level's own base, so a small base and a wide interval say the same thing
+# twice -- which is what makes a fragile estimate impossible to overlook.
+#' @keywords internal
+fp_point_sizes <- function(e, center) {
+  if (!identical(center, "n") || !any(is.finite(e$n))) return(rep(2.2, nrow(e)))
+  r <- range(sqrt(e$n), na.rm = TRUE, finite = TRUE)
+  s <- if (diff(r) > 0) 1.5 + 2.6 * (sqrt(e$n) - r[1]) / diff(r) else 2.4
+  s[!is.finite(s)] <- 1.5
+  s
+}
+
+# The forest plot's own skin: theme_minimal, the table's ink for every word, dashed rules, bold strips.
+# The assumption panels keep tx_plot_theme()'s theme_bw -- a chart of the RESULTS and a chart of the
+# DIAGNOSTICS are read differently, and only this one has to sit beside the table it comes from.
+#' @keywords internal
+fp_plot_theme <- function(cols) {
+  ggplot2::theme_minimal(base_size = 10) +
+    ggplot2::theme(
+      plot.title    = ggplot2::element_text(face = "bold", size = 11, colour = cols$text),
+      text          = ggplot2::element_text(colour = cols$text),
+      axis.text     = ggplot2::element_text(colour = cols$text),
+      axis.text.y   = ggplot2::element_text(colour = cols$text, hjust = 0),
+      panel.grid.major.y = ggplot2::element_blank(),
+      panel.grid.major.x = ggplot2::element_blank(),
+      panel.grid.minor   = ggplot2::element_blank(),
+      panel.spacing.x    = grid::unit(0.9, "lines"),
+      panel.spacing.y    = grid::unit(0.35, "lines"),
+      plot.background   = ggplot2::element_rect(fill = cols$bg, colour = NA),
+      panel.background  = ggplot2::element_rect(fill = cols$bg, colour = NA),
+      legend.background = ggplot2::element_rect(fill = cols$bg, colour = NA),
+      legend.key        = ggplot2::element_rect(fill = cols$bg, colour = NA),
+      strip.background  = ggplot2::element_blank(),
+      strip.text        = ggplot2::element_text(colour = cols$text, size = 9, face = "bold"),
+      strip.text.y.left = ggplot2::element_text(angle = 90),
+      strip.placement   = "outside",
+      plot.caption          = ggplot2::element_text(hjust = 0, size = 7.5, colour = cols$subtle),
+      plot.caption.position = "plot",
+      plot.title.position   = "plot")
 }
 
 # the effect word a regression column's own legend uses (OR / IRR / RR / AME / beta), so the axis title
@@ -1327,16 +1583,24 @@ reg_eff_word_of <- function(x, col_nm) {
 # measure carries. Those come back as one line each, from the legend's own producers -- so the figure
 # still names its method, in the same words the table would.
 #' @keywords internal
-fp_caption <- function(x, cols, caption, subtext, want_legend, theme, lang) {
-  ttl  <- caption %||% get_caption(x) %||%
+fp_caption <- function(x, cols, caption, subtext, footer, want_legend, theme, lang,
+                       width = 130L) {
+  # reg_title() is NA on a cross-table (it names a MODEL), and NA is not NULL: without the is.na()
+  # guard a crosstab's figure is headed "NA".
+  ttl <- caption %||% get_caption(x) %||%
     with_legend_lang(lang, function(lg) reg_title(reg_call(x)))
-  sub  <- if (isTRUE(subtext)) get_subtext(x) else character(0)
-  foot <- suppressWarnings(rd_footer(x, "plain", theme = theme, want_legend = want_legend,
-                                     subtext = if (length(sub)) sub else character(0), lang = lang))
+  ttl <- if (is.null(ttl) || is.na(ttl) || !nzchar(ttl)) NULL else ttl
+  if (identical(footer, "none")) return(list(title = ttl, caption = NULL))
+  sub  <- if (isTRUE(subtext)) purrr::discard(get_subtext(x), \(s) s == "") else character(0)
+  st   <- suppressWarnings(tab_footer_streams(
+    x, style = if (identical(footer, "short")) "terse" else "prose", lang = lang,
+    subtext = sub, legend = want_legend, theme = theme))
+  foot <- render_footer(st, medium = "plain", theme = theme)
   meth <- if (want_legend) character(0) else fp_method_line(x, cols, lang)
   out  <- c(meth, foot)
-  list(title = if (is.null(ttl) || !nzchar(ttl)) NULL else ttl,
-       caption = if (!length(out)) NULL else paste(out, collapse = "\n"))
+  list(title = ttl,
+       caption = if (!length(out)) NULL
+                 else paste(vapply(out, rd_wrap, character(1), width = width), collapse = "\n"))
 }
 
 #' @keywords internal

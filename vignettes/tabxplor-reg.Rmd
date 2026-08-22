@@ -1212,14 +1212,14 @@ tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",
 
 ### The results: `forest_plot()`
 
-`forest_plot()` draws the finished table — every effect with its confidence interval, its stars and its colour, one panel per model column:
+`forest_plot()` draws the finished table — every effect with its confidence interval and its colour, one panel per model column:
 
 ```{r, eval = FALSE}
 t <- tab_reg(gss_simple, "married", c("race", "rincome"), family = "binomial")
 forest_plot(t)
 ```
 
-It **reads the table and never re-fits anything**, so the figure cannot disagree with the numbers you printed: each point is the value in the cell, each gridline is one of your colour breaks (move them with `set_color_breaks()` and the axis moves too), and each point's colour is the cell's colour. It returns an ordinary `ggplot`, so `+ ggplot2::labs(...)` and `ggsave()` work as usual.
+It **reads the table and never re-fits anything**, so the figure cannot disagree with the numbers you printed: each whisker spans the interval in the cell, each gridline is one of your colour breaks (move them with `set_color_breaks()` and the axis moves too), and the whisker takes the cell's colour whole — which is why the plot needs no stars. The value is printed just above it, and the square at its centre is as big as the number of people behind it (`center = "estimate"` prints the value alone). A table that mixes families gets one axis per panel, each in its own unit. It returns an ordinary `ggplot`, so `+ ggplot2::labs(...)` and `ggsave()` work as usual.
 
 The three ways of reading significance become three things you can see:
 

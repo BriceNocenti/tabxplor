@@ -1236,14 +1236,14 @@ tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",
 
 ### Les résultats : `forest_plot()`
 
-`forest_plot()` trace le tableau fini — chaque effet avec son intervalle de confiance, ses étoiles et sa couleur, un panneau par colonne de modèle :
+`forest_plot()` trace le tableau fini — chaque effet avec son intervalle de confiance et sa couleur, un panneau par colonne de modèle :
 
 ```{r, eval = FALSE}
 t <- tab_reg(gss_simple, "married", c("race", "rincome"), family = "binomial")
 forest_plot(t)
 ```
 
-Il **lit le tableau et ne réajuste jamais rien** : le graphique ne peut donc pas contredire les nombres que vous avez imprimés. Chaque point est la valeur de la cellule, chaque ligne de grille est l'un de vos seuils de couleur (déplacez-les avec `set_color_breaks()` et l'axe suit), et la couleur de chaque point est celle de sa cellule. La fonction renvoie un `ggplot` ordinaire : `+ ggplot2::labs(...)` et `ggsave()` fonctionnent comme d'habitude.
+Il **lit le tableau et ne réajuste jamais rien** : le graphique ne peut donc pas contredire les nombres que vous avez imprimés. Chaque moustache couvre l'intervalle de la cellule, chaque ligne de grille est l'un de vos seuils de couleur (déplacez-les avec `set_color_breaks()` et l'axe suit), et la moustache prend la couleur de la cellule en entier — c'est pourquoi le graphique n'a pas besoin d'étoiles. La valeur est imprimée juste au-dessus, et le carré en son centre est d'autant plus grand qu'il y a de personnes derrière (`center = "estimate"` n'imprime que la valeur). Un tableau qui mélange plusieurs familles reçoit un axe par panneau, chacun dans son unité. La fonction renvoie un `ggplot` ordinaire : `+ ggplot2::labs(...)` et `ggsave()` fonctionnent comme d'habitude.
 
 Les trois façons de lire la significativité deviennent trois choses qui se voient :
 

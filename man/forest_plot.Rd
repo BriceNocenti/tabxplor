@@ -9,18 +9,18 @@ forest_plot(
   columns = NULL,
   what = c("auto", "effect", "level"),
   observed = c("auto", "band", "point", "ci", "none"),
+  center = c("n", "estimate", "none"),
+  layout = c("keep", "auto", "transpose"),
   facet = NULL,
   color = TRUE,
   guide = c("gridlines", "bands", "none"),
-  labels = c("none", "estimate"),
-  stars = NULL,
   intercept = FALSE,
   totals = FALSE,
-  size = NULL,
+  footer = c("short", "full", "none"),
+  legend = "auto",
   theme = NULL,
   lang = NULL,
   caption = NULL,
-  legend = TRUE,
   subtext = TRUE,
   return_data = FALSE,
   ...
@@ -43,22 +43,33 @@ for a regression table this needs \code{effect = "marginal"}).}
 (the observed value with the margin of error of the gap), \code{"point"}, \code{"ci"} (the classic
 two-interval figure) or \code{"none"}.}
 
+\item{center}{What marks the estimate: \code{"n"} (the default) a square whose area is the level's
+own base, with the value printed just above it; \code{"estimate"} the value alone; \code{"none"}
+a constant square and no value, for a plot with many panels.}
+
+\item{layout}{Which axis is read and which is faceted: \code{"keep"} (the default) reads the
+table's rows, \code{"transpose"} reads its columns, and \code{"auto"} picks whichever has more
+levels -- more levels down the side, fewer panels across, which is the more legible of the two
+whenever the table is much wider than it is tall. A regression table is never transposed.}
+
 \item{facet}{\code{NULL} for one panel per estimate column, \code{FALSE} for a single panel.}
 
 \item{color}{Set to \code{FALSE} for a plain plot with no colour measure.}
 
 \item{guide}{\code{"gridlines"} (the default), \code{"bands"} (shade the panel between the colour
-breaks -- the teaching mode) or \code{"none"}.}
-
-\item{labels}{Print the formatted estimate beside each point: \code{"none"}, \code{"estimate"}.}
-
-\item{stars}{Show significance stars. \code{NULL} follows the table.}
+breaks -- the teaching mode, which makes a cell's colour and its position one statement) or
+\code{"none"}.}
 
 \item{intercept}{Draw the regression \code{Constant} row.}
 
 \item{totals}{Draw total rows and total columns.}
 
-\item{size}{\code{NULL} for constant point size, or \code{"n"} to map the sample size.}
+\item{footer}{\code{"short"} (the default) the console's own footer, \code{"full"} the exports'
+longer one, or \code{"none"}. Both are wrapped and set flush left.}
+
+\item{legend}{Where the colour legend goes: \code{"auto"} (the bottom), \code{"right"},
+\code{"left"}, \code{"top"} or \code{"none"}. When several ladders apply it cannot be a guide and
+goes to the caption instead.}
 
 \item{theme}{\code{"light"}, \code{"dark"} or one of the black-and-white publication palettes
 (\code{"print_ready"} and friends; a plotted mark then reads its
@@ -69,8 +80,6 @@ magnitude off a grey ramp, since a point has no typography).
 \code{"en"} or \code{"fr"}.}
 
 \item{caption}{A caption. \code{NULL} keeps the table's own.}
-
-\item{legend}{Print the colour legend (as a guide, or in the caption when several ladders apply).}
 
 \item{subtext}{Include the table's subtext and footer lines in the caption.}
 
@@ -90,13 +99,20 @@ colour comes from the cell it was printed from, so the figure and the table cann
 they are about residuals, which no table carries.)
 }
 \details{
-\strong{What is drawn.} By default, whatever the table's own \code{ci =} produced: cell percentages with
-their intervals for \code{ci = "cell"}, differences from the reference with a zero line for
-\code{ci = "ref"}, odds ratios on a log axis for \code{display = "{or}"}, and the model's effects for a
-\code{\link{tab_reg}} table. \code{what = "level"} / \code{"effect"} override it.
+\strong{What is drawn.} Always a \strong{deviation}: the effect a regression estimates, or, for a
+cross-table, the comparison its \code{color =} grades -- a difference from the reference in
+percentage points, a ratio or an odds ratio on a log axis. The \strong{level} the deviation sits on
+(the percentage, the mean, the adjusted probability) is printed above each whisker instead, so the
+position and the number say two different things. \code{what = "level"} swaps them.
 
-\strong{The gridlines are the table's colour ladder} (\code{\link{set_color_breaks}}), labelled with the
-same glyphs the footer uses, and the colour of each point is the colour of its cell.
+\strong{The gridlines are the table's colour ladder} (\code{\link{set_color_breaks}}), one dashed rule
+per rung in that rung's own colour, labelled with the same glyphs the footer uses -- and continued
+beyond the last rung (each step twice the one before) as far as the data goes. The whisker takes
+the colour of its cell, whole: significance is read off the whisker, so there are no stars.
+
+\strong{A table that mixes units} (an odds ratio beside a mean difference) gets one axis per panel, each
+in its own transform, and the unit moves into the strip. Panels that measure the SAME thing share
+one range, so their effect sizes stay comparable.
 
 \strong{The observed comparison.} With \code{empirical = TRUE}, a regression estimate carries its crude
 counterpart. \code{observed = "band"} (the default when the gap was testable) draws a bracket around
@@ -109,6 +125,7 @@ when the estimators are correlated, which is why the crude interval is not drawn
 if (requireNamespace("ggplot2", quietly = TRUE)) {
   t <- tab(forcats::gss_cat, race, marital, pct = "row", ci = "ref", color = TRUE)
   forest_plot(t)
+  forest_plot(t, guide = "bands")          # the teaching mode
 }
 }
 \seealso{

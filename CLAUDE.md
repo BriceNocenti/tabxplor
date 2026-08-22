@@ -624,59 +624,131 @@ Below are the results of the maintainer’s manual reviews of different features
 
 **Open, reported not fixed**: an ordinal `residuals` panel returns NULL (`rd_resid()` has no `polr` arm) although `REG_CHECKS` declares it applicable — the grid silently loses a declared panel. Either give `rd_resid()` an ordinal arm or drop `"ordinal"` from that row's `families`; noted for Phase 22x.
 
+###### Phase 22e-i-B — assumptions plots round 2
+
+- One problem remaining: in the "Linearity" panel, the math formula in the x axis title doesn’t appear right,
+  there seem to be many empty characters in an empty rectangle, it may be a character encoding problem. Study and propose me fixes. Make web searches if needed.
+
+
+
 ##### Phase 22e-ii — `forest_plot`
 
-```r
-regressions <- tab_reg(gss_simple, outcome = c("married", "age", "tvhours"), 
-                       predictors = c("race", "rincome", "relig"), 
-                       empirical = TRUE, family = c("binomial", "gaussian", "poisson"))
-regressions |> forest_plot()
-summed_score <- tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "ratio") 
-summed_score|> forest_plot()
-multinom_ordinal <- tab_reg(gss_simple, outcome = c("party3", "rincome"), predictors = c("race", "marital", "relig", "age"),
-        family = c("multinomial", "ordinal"), empirical = TRUE, measure = "ratio") 
-multinom_ordinal |> forest_plot()
-```
+**DONE.** `forest_plot()` redrawn around one structural fix and one new skin. The review's complaint
+("too gray, unreadable, not enough colors") was real, but reproducing it surfaced a **defect that was
+losing data**, and that is what most of the phase went on.
 
-I don’t love the current default theme at all, too gray, unreadable, not enough colors, etc. Screenattached.
- I want to redo it. I want you to improve this default, starting from two other forest plot (to not copythem entirely, just take some good elements):
-- one old, from my package ggfacto (the only package with tabxplor in Imports), with many obvious flaws, 
-  (logistic reg only, one outcome at a time, black and white, the column width were sometimes 
-  quite unpredictable, not using the break scales we want here, etc.), 
-  but some good formatting and theme elements that may be useful here: black lines with whiskers
-  and error bars, good dotted null line ; reimplement `point_size`, since the model columns now store the factor predictors levels `n` in `n` field, in `tab()` the raw `pct` ?. Adapt is to different cases.)
- `/home/dev1/github/ggfacto/R/geometrical_data_analysis.R` `ggfacto::pers_or_plot`, who use `ggfacto::theme_facto`
-```r
-gss_simple |> 
-  mutate(rincome = factor(rincome, ordered = FALSE)) |> # "ordered" not working
-  ggfacto::pers_or_plot(dependent = "married", explanatory = c("race", "rincome", "relig", "tvhours"))
-```
-- one newer, with strong visual things, but that would need a bit of polish, 
-  I used to teach confidence intervals to students. 
-  It’s stronger points are: tabxplor colors used to color the whole whisker (not only the point), 
-  making it as easy as in the table ; also please, like in the second plot of the section
-  add an option to color the whole breaks with background colors (using the relevant palette), 
-  that could be used to teach tabxplor color_signif policies in a visually striking way (this one shouldbe opt-in)
-`/home/dev1/github/formations_stat/M1S1_02.Rmd`, section "## Commenter un tableau à faibles effectifs", 
-  "### Méthode 2 : différences après marge d'erreur"
+**The defect: a mixed-unit table was plotting `log10` of a signed difference.** `forest_plot()` picked
+the **modal** `scale_key` and applied its transform to the whole plot. On `family = c("binomial",
+"gaussian", "poisson")` the modal transform is `log10`, so the gaussian panel plotted
+`log10(<a difference in years>)`: **every negative estimate became `NaN` and was silently dropped**
+(35 warnings), and the ratio ladder `÷1.5 / ×2` was drawn on an axis measured in years. That is the
+reported *"age outcome relig only shows one whisker, all the others out of the range"* — a transform
+bug, not a range one. The range was also computed **once for the whole table** and included the gap
+band, which on the `tea` summed score stretched the axis to `÷4` while every whisker sat near 1.
 
-Also:
-- I want to keep the current minimal layout with variables names vertically at left, 
-  levels in breaks/ticks (but all pure black, not unreadable grey ; references in bold)
-- Like in the examples, start from theme_minimal and build from there
-- I want to print the actual estimate at the center of the whisker (since we don’t use a column for 
-  that like in pers_or_plot()). The point indicating the center is bad, 
-- All footer lines aligned left. Three options here : hort footer (like console ; default) ; 
-  full footer (but some lines are long and cut, they should be wrapped somehow) ; no footer 
-- outcomes names in facets in bold.
-- the displayed range should not be fixed on the breaks, but adapted to the real minimum and maximum ofeach facet
-  (currently age outcome "relig" only show one whisker, all the others at out of the range)
-- no signif stars in the plot at all (the goal is to read significance directly on the whiskers)
-- start from the real colors breaks to always print them, but continue the breaks (on a multiplicativescale,
-  just double the last break each time, if the last break is ×2, then ×4, ×8, etc. ; on an additive scaleI don’t know, find a rule)
-- legend position in the arguments, default to where it would lose the less space.
+**One axis per panel, in one ggplot** (the maintainer's own instruction: trick ggplot rather than
+split the object). ggplot has ONE scale per aesthetic, so x is pre-transformed into each scale's own
+space and the plot's scale is identity; `breaks` and `labels` are **functions**, and with free scales
+ggplot calls them **once per panel**, so a lookup keyed on that panel's limits dispatches them
+exactly. Verified on ggplot2 4.0.3 before a line was written. ⚠ The limits ARE the key, so they are
+forced (a `geom_blank` frame + `expand = expansion(0)`) and **no layer may reach past them** — the gap
+band is clamped in data space instead. ⚠ That frame is added **last**: the first layer to touch a
+discrete scale fixes its level order, and it carries one level (measured: adding it first reordered
+every y axis). `sec_axis()` is the one casualty — it is per scale, not per panel, so the secondary
+axis survives only on a single-scale plot; the unit otherwise moves into the strip, through a
+`labeller`, never by relabelling the data.
 
+**One range per scale KEY, not per facet** — a deliberate revision of the review's wording. Panels
+measuring the same thing must be directly comparable (that is what small multiples are for), while
+panels on different units keep their own axis, which is the whole point of a per-panel scale.
+
+**The ladder is trimmed, continued and thinned.** It **continues** past its last rung as
+`mag[k+1] = 2 * mag[k]`, mirrored, at most 4 extra rungs — one rule for both geometries, because every
+ladder already steps ≈×2 per rung in its own metric (`COLOR_SCALES`' K2 check), so `×2 → ×4 → ×8` and
+`+0.3 → +0.6 → +1.2` are the same rule; a colour rung stays exact (a gridline IS a threshold) while a
+continuation rung is rounded. The **first rung on each side is always in view**: a plot where every
+whisker sits inside the first colour threshold must say so. Lines and labels are **decoupled** — every
+in-range rung is drawn, at most 9 are labelled, thinned from the outside in in **whole pairs** (a first
+attempt thinned "by roundness" and degenerated into keeping only the negative side — measured). A
+scale with no ladder (a level panel) falls back to `pretty()`, the only case where the axis is not the
+colour ladder.
+
+**The skin.** `theme_minimal`; the ladder drawn as one dashed rule per rung **in that rung's own
+colour** (the `formations_stat` device — the direct answer to "not enough colors"), with the theme's
+own x grid off so nothing doubles; the whisker one capped `geom_segment`
+(`arrow(angle = 90, ends = "both")`) wholly in the cell's colour, so significance is read off the
+whisker and **the stars are gone**; level labels in the table's ink with the reference **bold**
+(plotmath, per break, so it survives free facets); strips bold, no panel border, panels spaced.
+
+**`center` replaces `labels`, `stars` and `size`.** `"n"` (default) a square whose area is the level's
+base **with the value just above the whisker**; `"estimate"` the value alone; `"none"` a constant
+square and no value, for a plot with many panels. The value rides above rather than on the whisker (a
+square sized by the base can swallow it), over a translucent rounded halo, and it is the cell's **own
+primary token** — the effect on a model column, the level for a crosstab — so the number says what the
+position cannot. `format()` stays the one string producer; only the display is swapped first.
+
+**A crosstab is plotted on its measure of deviation**, never on the level: the axis is what `color =`
+grades, the reference is a dotted line, and the percentage or mean is the number above the whisker.
+The observed value is offset **below** the model whisker, filled black where no band is drawn and
+hollow where one is; a crude *series* gets a thin black whisker with very small caps. A band that
+fills its panel is **not drawn** — it locates nothing — so a band on the page always means the
+estimate is inside it or outside it.
+
+**The layout rule was measured, and the maintainer's hypothesis (`pct`) is wrong.** Both orientations
+show the same numbers — a cell's deviation is a stored field, not a property of where it is drawn — so
+this is legibility alone. Two shapes, **both `pct = "row"`**, want opposite orientations:
+
+| table                   | keep                                   | transpose                            | better    |
+|-------------------------|----------------------------------------|--------------------------------------|-----------|
+| 3 races × 6 marital     | 6 panels of 3 rows, strips truncated   | 2 panels of 6 rows, one profile each | transpose |
+| 7 classes × 3 tea types | 3 panels of 7 rows, a readable ranking | 6 panels of 3 rows, strips truncated | keep      |
+
+The rule that fits both: **more levels down the side, fewer panels across** — transpose iff the column
+axis has more levels. `layout = "keep" (default) | "auto" | "transpose"`: the rule is **opt-in**, on
+the maintainer's call — a plot whose rows are the table's rows is the one a reader can check against
+the table in front of them, and silently swapping the two axes costs more than a cramped panel. A
+regression table is never transposed. The **reference** falls out of it: on the panel axis it would be an all-neutral panel, so
+it is dropped and the K−1 panels left are each one group's whole profile — which IS the
+`formations_stat` teaching plot, at K = 2; on the reading axis it stays, as the anchor row at the
+neutral, drawn as the black-filled square the table's bold reference cell deserves.
+
+**`footer` and `legend`.** `footer = "short"` (default, the console's own `terse` streams) /
+`"full"` (the exports' `prose`) / `"none"`, wrapped and flush left. One producer, one renderer, only
+the style differs — so a figure and its table cannot state the method differently; and they are
+identical whenever a guide carries the ladder, which neither may print twice (D6). `legend` is now a
+**position** (`"auto"` → the bottom, matching `reg_check_plots()`; `TRUE`/`FALSE` still accepted).
+`return_data` now returns the model **after** the layout, so it describes what is drawn.
+
+**Two more defects found in the final visual pass, both fixed.** (1) A cross-table's figure was headed
+**`NA`** — `reg_title()` names a MODEL and returns `NA` on a crosstab, and `NA` is not `NULL`, so it
+went straight through `fp_caption()`'s guard (pre-existing, since z17). (2) The **axis title spoke for
+a panel it did not describe**: a multinomial risk ratio beside an ordinal win ratio shares one ladder
+but is two quantities, and the shared title said "Risk ratio" over the win-ratio panel. The rule is
+now that a title may exist only where every panel measures the same thing AND calls it the same
+thing; otherwise the word moves into the strip and the title goes. ⚠ The fix needed a second one: the
+per-facet scale record was built with `c(recs[[key]], list(col = ...))`, and `c()` **appends** a
+duplicate name rather than overriding it, so `$col` kept reading the scale's first column.
+
+**Verified**: the three review calls plus a crosstab in both orientations, rendered and read; the
+mixed-family table draws **every** estimate with no warning; suite **FAIL 0 / WARN 0 / SKIP 4 /
+PASS 9584**. `test-tab-estimates.R` needed no change (the model is untouched); `test-forest-plot.R`
+gained five tests — nothing dropped on a mixed table, per-panel breaks, shared range within a scale,
+the band never setting the range, and the layout rule with its reference handling.
+
+⚠ **Reported, not fixed (1)**: `tab(..., color = "diff")` alone stores **no interval**, so a crosstab
+forest plot then has points and no whiskers. `forest_plot()` now says so once and names `ci = "ref"`,
+but the honest question is whether `ci = "auto"` should give a comparison interval whenever the table
+makes a comparison — a `tab()` default, not a plot one. For Phase 22x.
+
+⚠ **Reported, not fixed (2) — the axis ladder and the legend ladder can be two ladders.** The
+gridlines come from `fmt_scale_of()$breaks` (the ESTIMATE scale's `break_key`) while the legend keys
+come from the colour plan (the MEASURE's scale), and on a ratio-coloured percentage column those are
+`mean_ratio` and `pct_ratio` — measured on the `tea` summed score: the axis reads `÷1.2` where the
+legend key reads `≤ +1.25`. Pre-existing since z17, and small, but it breaks the design's own claim
+that *the gridlines ARE the colour ladder*. The cure belongs to `EST_SCALES` / `fmt_scale_of()` (one
+`break_key`, read by both), not to the plot. For Phase 22x.
+
+###### Phase 22e-ii-B — `forest_plot` round 2
 
 
 

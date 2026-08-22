@@ -547,19 +547,20 @@ This is not merely a taste: converted to lightness, the two directions of the co
 
 ## A chart of the table: `forest_plot()`
 
-A colored table already reads at a glance. When the pattern is what matters, `forest_plot()` draws the same numbers: one point per cell, its confidence interval as a whisker, its colour as the table's colour.
+A colored table already reads at a glance. When the pattern is what matters, `forest_plot()` draws the same numbers: one whisker per cell, in the cell's own colour, with the percentage or mean printed just above it.
 
 ```{r, echo = TRUE, eval = FALSE}
-tab(gss_simple, race, party3, pct = "row", ci = "cell") |>
+tab(gss_simple, race, party3, pct = "row", ci = "ref", color = "diff") |>
   forest_plot()
 ```
 
-It draws **whatever the table computed** — no argument to learn: with `ci = "cell"` each cell's percentage with its interval, with `ci = "ref"` the difference from the reference with a zero line, with `display = "{or}"` the odds ratios on a log axis. `what = "level"` and `what = "effect"` override it.
+What the position shows is the **deviation** — the comparison your `color =` grades: a difference from the reference in percentage points, a ratio or an odds ratio on a log axis. The **level** it sits on is the number above the whisker, so the two say different things. Ask for `ci = "ref"` when you build the table, or there is no interval to draw. `what = "level"` swaps them.
 
-Two things are worth knowing:
+Three things are worth knowing:
 
-* **The gridlines are your colour breaks.** Change them with `set_color_breaks()` and the axis moves with the table. The colour key beside the plot is the table's own legend, with the same thresholds and the same shades.
-* **It reads the table, and computes nothing.** It returns a plain `ggplot`, so `+ ggplot2::labs(...)`, `+ ggplot2::theme(...)` and `ggsave()` work; `theme = "print_minimalistic"` gives the greyscale version, `guide = "bands"` shades the panel behind the points with the colour scale itself (a good way to *show* a class what the colours mean).
+* **The gridlines are your colour breaks** — one dashed rule per threshold, in that threshold's own colour, continued beyond the last one (each step twice the one before) as far as your data goes. Change them with `set_color_breaks()` and the axis moves with the table.
+* **Significance is the whisker.** It is coloured whole, so an interval that crosses the reference line is visible without stars — and there are none.
+* **It reads the table, and computes nothing.** It returns a plain `ggplot`, so `+ ggplot2::labs(...)`, `+ ggplot2::theme(...)` and `ggsave()` work; `theme = "print_minimalistic"` gives the greyscale version, `guide = "bands"` shades the panel behind the whiskers with the colour scale itself (a good way to *show* a class what the colours mean).
 
 Do not confuse it with `tab_plot()`, which makes a picture *of the table* (useful to paste a coloured table where nothing else renders). `forest_plot()` is the chart; it also draws regression tables — see `vignette("tabxplor-reg")`.
 

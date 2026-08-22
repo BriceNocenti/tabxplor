@@ -539,18 +539,19 @@ Ce n'est pas qu'une affaire de goût : converties en clarté, les deux direction
 
 ## Un graphique du tableau : `forest_plot()`
 
-Un tableau coloré se lit déjà d'un coup d'œil. Quand c'est la structure qui compte, `forest_plot()` trace les mêmes nombres : un point par cellule, son intervalle de confiance en moustache, sa couleur en couleur.
+Un tableau coloré se lit déjà d'un coup d'œil. Quand c'est la structure qui compte, `forest_plot()` trace les mêmes nombres : une moustache par cellule, dans la couleur de la cellule, avec le pourcentage ou la moyenne imprimé juste au-dessus.
 
 ```{r, echo = TRUE, eval = FALSE}
-tab(gss_simple, race, party3, pct = "row", ci = "cell") |>
+tab(gss_simple, race, party3, pct = "row", ci = "ref", color = "diff") |>
   forest_plot()
 ```
 
-Il trace **ce que le tableau a calculé** — aucun argument à apprendre : avec `ci = "cell"` le pourcentage de chaque cellule et son intervalle, avec `ci = "ref"` l'écart à la référence et une ligne à zéro, avec `display = "{or}"` les rapports de cotes sur un axe logarithmique. `what = "level"` et `what = "effect"` permettent de forcer l'un ou l'autre.
+Ce que la position montre est l'**écart** — la comparaison que votre `color =` gradue : un écart à la référence en points de pourcentage, un rapport ou un rapport de cotes sur un axe logarithmique. Le **niveau** sur lequel il repose est le nombre au-dessus de la moustache : les deux disent des choses différentes. Demandez `ci = "ref"` en construisant le tableau, sans quoi il n'y a pas d'intervalle à tracer. `what = "level"` échange les deux.
 
-Deux choses à savoir :
+Trois choses à savoir :
 
-* **Les lignes de grille sont vos seuils de couleur.** Changez-les avec `set_color_breaks()` et l'axe suit le tableau. La légende de couleur à côté du graphique est celle du tableau, avec les mêmes seuils et les mêmes nuances.
+* **Les lignes de grille sont vos seuils de couleur** — un trait pointillé par seuil, dans la couleur de ce seuil, prolongés au-delà du dernier (chaque cran double le précédent) aussi loin que vont vos données. Changez-les avec `set_color_breaks()` et l'axe suit le tableau.
+* **La significativité, c'est la moustache.** Elle est colorée en entier : un intervalle qui traverse la ligne de référence se voit sans étoiles — et il n'y en a pas.
 * **Il lit le tableau et ne calcule rien.** Il renvoie un `ggplot` ordinaire : `+ ggplot2::labs(...)`, `+ ggplot2::theme(...)` et `ggsave()` fonctionnent ; `theme = "print_minimalistic"` en donne la version en niveaux de gris, et `guide = "bands"` colore le fond du panneau avec l'échelle elle-même (une bonne façon de *montrer* à une classe ce que les couleurs veulent dire).
 
 À ne pas confondre avec `tab_plot()`, qui fabrique une image *du tableau* (pratique pour coller un tableau coloré là où rien d'autre ne s'affiche). `forest_plot()` est le graphique ; il trace aussi les tableaux de régression — voir `vignette("tabxplor-reg")`.
