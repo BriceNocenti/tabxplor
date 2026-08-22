@@ -592,6 +592,65 @@ Below are the results of the maintainer’s manual reviews of different features
 
 ---
 
+#### Phase 22b — `tab_reg()` manual review (suite)
+
+##### Phase 22b-xviii — new round of tab_reg() manual review
+
+```r
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, link = "difference"
+) 
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", empirical = TRUE, measure = "difference"
+)
+tab_reg(gss_simple, outcome = c("married", "income25k"), predictors = c("race", "relig", "age", "tvhours"), empirical = TRUE, shape = c(age = "quadratic))
+```
+- Compared to `link = "ratio"` or nearly all other configurations, where observed proportion and adjusted proportions have 0 digit (percentage default, good), in a a model with `measure = "difference"` they get 1 digit, which is pure noise and make the table less readable while losing horizontal space.
+- `tab_reg()` sparklines miss some kind of absolute vertical scale: currently, they may actualy amplify noise on a near flat curve, and render hard to distinguish between flat and bad shape. Would there be a way, meaningful accross different numeric variables, to get closer to an absolute vertical scale, in a reliable way ? Make web searches if needed.
+- `tab_reg()` numeric predictors sparklines break the padding and alignement of the whole table in console, due to non-ascii characters`▁▅▇▇▇███▇▅` (but it prints ok in a .md script in Positron). I don’t know what to do, because I could change the console font for me but not for all users. 
+- The sparkline disappear with several outcomes and "n_range", because one `n` column per model would be needed for that and that’s not the default option. 
+- The solution to implement for console: make the "sparkline in n column" feature dormant for console, add a second small sparkline table below the footer table (one empty line between the two different pipe tables). It should be something like that (improve it), with the sparklines in the last column so we don’t really care anymore about broken padding :
+| outcomes        | numeric predictors | <meaningful_name> |
+|:----------------|:-------------------|:------------------|
+| married         | age²               | ▁▅▇▇▇███▇▅        |
+|                 | tvhours            | ▁▅▇▇▇███▇▅        |
+| income25k       | age²               | ▁▅▇▇▇███▇▅        |
+|                 | tvhours            | ▁▅▇▇▇███▇▅        |
+- The solution to implement for html and Excel: keep the sparklines in the n column when there is only one outcome, it’s actually good. With several outcomes, create another small table below the main one (below it’s footer too ; with an empty line between the footer of the first and the sparkline table ; in this specific case, use two times more vertical space, and two times more horizontal space, than in the case where the sparkline is inside the n column, since there is more space.)
+
+
+- On console, the thing difficult to find while reading a regression table is... the outcome. I think the only good solution may be to add the col_var name like with several outcomes, `Obs_OR [married]`, but to remove it automatically at export (since it will already be printed in the first header row). 
+
+Model footer: 
+- Pearson dispersion should always come afetr Dispersion (robust/model SE).
+- "Overall association (LR)": do you think these ones are really needed as default, with all the informations there is already in the regression tables + footers ?
+- Please find a logical order for the footer, based on real-world model check use cases. N is a right first row ? Then put together everything that is about assumptions checks, in their order of importance (stats that can be a no-go first, then more informative stuff) ? Then put together everything that is about (homogeneous) model comparison ? It should be thought. 
+- I want to re-add Brant as a default for ordinal models, it’s too important even if it’s long (even if the rule here, would be use `reg_check_plots()`).
+
+```r
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", measure = "difference", color = "adjustment")
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", measure = "difference", color = c(TRUE, "adjustment"))
+```
+- html tooltips "gap" still speaks in pts like "-1.9pts [-2.9 pts; -0.9pts]", which is done nowhere else in the package (or should not be). Please use the standard "diff" formatting: something like "-1.9% [-2.9;-0.9]%"
+- background colors still color not only the primary display token (like text colors does, keeping the stars out of the color, etc.), but also the whole cell text with secondary display tokens. I noticed this in html. It is an html specific problem, or something more general ? 
+- Also, there a strange cases where the model (and sometimes the obs too) have no stars, but the gap comparison gives background colors: is this wanted (what is the meaning and interpretation then ?), or is it a statistical error ? 
+- background color keep to misalign just a bit their cells text with the other rows: it looks like a margins problem, fix it (even if the hack is to set a cell background with the overall background color so that they are hidden ; but if you think of a better solution, do it).
+
+```r
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+        family = "binomial", measure = "difference", color = c(TRUE, "adjustment"), shape = c(age = "sd_bands"))
+tab(gss_simple, age, married, pct = "row", color = TRUE)
+```
+- I want sd_bands levels to look something like that (with french translation "moy.")
+| current                | proposition (improve it) |
+| age: [18,30) low       | age: [18,30) ; < mean - σ|
+| [30,48) below average  | [30,48) ; < mean         |
+| [48,65) above average  | [48,65) ; > mean         |
+| [65,89] high           | [65,89] ; > mean + σ     |
+
+
 #### Phase 22e — plots manual review
 
 ##### Phase 22e-i — assumptions plots
@@ -624,10 +683,7 @@ Below are the results of the maintainer’s manual reviews of different features
 
 **Open, reported not fixed**: an ordinal `residuals` panel returns NULL (`rd_resid()` has no `polr` arm) although `REG_CHECKS` declares it applicable — the grid silently loses a declared panel. Either give `rd_resid()` an ordinal arm or drop `"ordinal"` from that row's `families`; noted for Phase 22x.
 
-###### Phase 22e-i-B — assumptions plots round 2
 
-- One problem remaining: in the "Linearity" panel, the math formula in the x axis title doesn’t appear right,
-  there seem to be many empty characters in an empty rectangle, it may be a character encoding problem. Study and propose me fixes. Make web searches if needed.
 
 
 
@@ -748,8 +804,127 @@ legend key reads `≤ +1.25`. Pre-existing since z17, and small, but it breaks t
 that *the gridlines ARE the colour ladder*. The cure belongs to `EST_SCALES` / `fmt_scale_of()` (one
 `break_key`, read by both), not to the plot. For Phase 22x.
 
+
+
 ###### Phase 22e-ii-B — `forest_plot` round 2
 
+**DONE.** Second manual review, twelve items. Three were latent defects rather than styling.
+
+**The reading axis had no fixed order.** A discrete scale takes its order from the layer that trains
+it FIRST, and two layers carried a single level — the limits frame and, once it existed, the coloured
+row band. Measured: a six-row block came out `Total, [30,48), [48,65), [65,89], NA, [18,30) low`. The
+cure is one `geom_blank` over the WHOLE model as the first layer, so every panel is trained in the
+table's own order whatever else is drawn later; the note that the limits frame must come last is now
+a consequence of it rather than a rule on its own.
+
+**A row band must be a tile on the factor, never a rect on a row number.** `as.numeric(ypos)` is a
+coordinate on the FULL level set, which in a panel showing four of eighteen levels is a continuous
+value far outside its range: ggplot stretched the panel to reach it (a third of the height lost) and
+drew the band nowhere near its row. Fixed, then removed entirely — see below.
+
+**A rule frame must carry the ROW-facet variables.** `rule_y` had only `facet`, so `facet_grid`
+replicated every block's rules into every panel, and a `yend` from a nine-level block stretched a
+three-level one to reach it.
+
+**The second colour channel is no longer drawn** (maintainer's ruling). `color = TRUE` on a crosstab
+gives two measures — `difference` on the text, `ratio` on the background — and rendering the second
+one as a band behind every row flooded the figure ("blue and red bands hell") without adding a
+comparison: it has no interval, no neutral, and nowhere positional to go. The plot shows the main
+measure. The gap under `color = "adjustment"` is not an exception: there the adjustment IS the main
+measure. Undocumented on purpose — it is not a limitation to explain, it is what a forest plot is.
+
+**The block separation is now real.** Every rule stops short of the panel edge (`0.62` to
+`n_blk + 0.38`, drawn as segments rather than `geom_vline`), a grey rule sits above each block, and
+the discrete expansion is tightened to `0.55` — so a predictor reads as a block instead of the grid
+running through it.
+
+**The observed row is one thing now**: a filled black point at the crude value, with the gap as a
+**thin black capped whisker** at the same offset below the model's. The wide coloured band is gone —
+it was the biggest ink on the page and located nothing — and the point no longer changes shape with
+whether the gap was testable, which had made the same table look like two conventions.
+
+**The guide.** One row, in the axis's own left-to-right order (deepest UNDER first, the grey where the
+ladder is silent, then the OVER side deepening) — ggplot was filling by column, which put the ladder
+in an order nothing on the page had. Its keys come from a **frame of their own** drawn at `alpha = 0`:
+keyed off the data, a rung no cell happens to fall in got a label with no glyph, measured on both ends
+of a `guaranteed_effect` ladder. Under that policy the title now names the quantity it actually
+grades — *Guaranteed (95%) difference vs the Total row* — and the **cap nearest the neutral is drawn
+twice the size**, because that bound IS the score the colour reads: the policy becomes visible instead
+of explained.
+
+**The reference Total row is back.** With `ref = "tot"` the baseline is the Total row, which
+`totals = FALSE` was dropping — so the plot lost the one number the panel is about. It is kept
+whenever it is the reference, bold, as the black square at the neutral. The `1` / `0` label above a
+reference row is gone with it: the neutral line already says it, and the two glyphs landed on each
+other.
+
+**Smaller things.** Axis tick labels carry one decimal, rounded in the scale they are READ in (a
+percentage-point ladder is stored as `0.05` and printed as `5`, so rounding the stored value would
+turn `+5` into `+10`). The axis title absorbs the interval's name where there IS one axis to say it on
+— `Percentage points (95% CI, Newcombe score interval)` — and the footer drops the method line it
+would have repeated; a many-outcome regression keeps it in the footer, since no single axis can speak
+for every panel there.
+
+**One shared-producer change, on the maintainer's call:** an SD-scaled ladder now names its unit
+before its numbers, in `legend_measure_word()` — `diff in SD (ref.): -0.8 -0.4 …` — so the console and
+every export gain it too. Bare numbers that are not in the outcome's own units had stated their scale
+only in the trailing grey clause, after the reader had already met them. ⚠ The clause is gated on the
+MEASURE, not on `is_std` alone: that flag is a per-column fact and the first cut labelled a ratio
+ladder `IRR in SD`. Zero golden churn (no golden covers an SD-scaled ladder); one i18n assertion moved
+with the axis title, which also learned to keep quiet when a column colours without an interval (it
+was printing `(95% CI, 95% confidence)`).
+
+**Answered, not implemented.** *Colour in the footer's prose legend* is not available without a new
+Suggests (`ggtext` for markup, or `ggnewscale` for a second colour guide): a ggplot caption is
+single-styled. It costs nothing today — the ladder is coloured twice already, in the guide and in the
+gridlines — and the prose ladder only appears at all when several ladders make a guide impossible.
+*The missing whiskers* on `c(age, rincome, party3) x marital` are drawn and correct: measured at
+0.16 to 21 percentage points wide (median 3) on an axis spanning 120, with n = 21 483 — a real
+interval, smaller than its own marker. `center = "none"` or fewer `columns` is the cure, not code.
+
+**Round 4 — the adjustment reads as two rows**, on the maintainer's layout. The estimate keeps its
+own: a **light grey** whisker (`cols$grey`, the table's own uncoloured-cell ink) under a square **in
+the arrow's colour**, so the mark and the movement it made are one statement. One `offset` below, the
+arrow (linewidth 1.3, closed head), then the **very thin black** acceptance bracket over it, then the
+observed point — each thinner or smaller than the last, so sharing one row costs no colour. The
+**guide now describes the arrows** (`legend_guide_spec()` is asked for whichever channel carries the
+gap): the gridlines still show the MAIN measure's ladder, and would otherwise be the only colour key
+on a figure whose colours mean something else.
+
+**Five arguments the viewport decides**: `offset` (how far below the estimate the observed row sits)
+and `label_offset` (how far above its value is printed), both fractions of a row because ggplot has no
+absolute-unit nudge; `max_size`, the area of the largest marker; `footer_width`, because a ggplot
+caption does not wrap and the plot cannot measure the device at build time; and `display`, a `{}`
+template passed to `set_display()` for what the label prints (`NULL` = the cell's own primary token,
+unchanged). The label's halo is less translucent.
+
+**Answered**: the `married` panel has no acceptance bracket because `gap_se` is **not computed at
+all** there (measured: 0/12 finite, against 12/12 on the gaussian and poisson panels) -- an odds ratio
+is non-collapsible, so the package refuses the test rather than reporting a small error.
+
+**Round 3 — the adjustment gets its own geometry.** `color = "adjustment"` used only to repaint the
+model whisker, so the whisker's POSITION said the effect and its COLOUR said something else. Now the
+gap is drawn: an **arrow** from the observed value to the model's, in the gap's own colour, with a very
+small closed head, over the **acceptance bracket** `[gap_lo, gap_hi]` around the observed point — the
+model estimate falls outside it exactly when the gap test rejects, so the arrow head clearing the
+bracket IS the verdict. The bracket is drawn **only where the gap is testable**: on a non-collapsible
+measure (the binomial panel: 15/15 `gap_tested = FALSE`) the movement is real arithmetic but no test
+exists, and a bracket would claim one. The arrow's length is the adjustment TO SCALE — measured, the
+gap runs 0.13 to 1.04 where the effects span -5 to +5, so a small adjustment is meant to look small and
+the colour is what says whether the move is real. Two consequences: the **model whisker gives up its
+ink** when the adjustment is the main colour (`cols$grey2`, added to `tx_plot_colors()` — `cols$point`
+is a muted blue and would read as a rung of the ladder it stands outside of), so colour still grades
+exactly one thing; and when the arrows grade a different measure from the whiskers, **two ladders are
+drawn**, so no guide is built and the caption carries both in prose. ⚠ Under an adjustment colour the
+axis title stops absorbing the method phrase: the spec then names the GAP's test, which is not the
+interval the axis draws.
+
+**The observed row moved up**, from `0.24` of a row to `0.15`. ggplot has no absolute-unit nudge — a
+position is data space, and a millimetre needs the panel height, known only at draw time — so "two
+whisker linewidths" cannot be exact everywhere; measured, `0.15` is 1.3-2.4 mm across the viewports
+such a table is drawn at, against the 1.8 mm two linewidths come to.
+
+**Verified**: the review's calls rendered and read at several sizes; forest tests **FAIL 0 / PASS 112**.
 
 
 #### Phase 22f — exports review

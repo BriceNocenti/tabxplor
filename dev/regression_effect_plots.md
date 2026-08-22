@@ -747,9 +747,56 @@ contract makes `format()` the only string producer.
 
 ### 15.4 The observed value
 
-Offset **below** the model whisker, so the two never sit on each other. Filled black where there is
-no gap band, hollow where a band is drawn behind it (it must read against the band). A crude
-**series** (`observed = "ci"`) carries its own interval: a thin black whisker with very small caps.
+One row, offset **below** the model's, so the two never sit on each other: a **filled black point** at
+
+the crude value and the gap as a **thin black capped whisker** at the same offset. Not a wide band —
+it was the biggest ink on the page and located nothing — and not a shape that changes with whether the
+gap was testable, which made one table look like two conventions. A crude **series**
+(`observed = "ci"`) carries its own interval in exactly the same glyph.
+
+The offset is `0.15` of a row. ggplot has no absolute-unit nudge — a position is data space, and a
+millimetre needs the panel height, known only at draw time — so it cannot be exactly two whisker
+linewidths everywhere. Measured, `0.15` is 1.3 to 2.4 mm across the viewports such a table is drawn
+at, against the 1.8 mm that two linewidths of the main whisker come to.
+
+### 15.4b What adjustment DID: the arrow and the acceptance bracket
+
+When a channel grades `adjustment` (or `between_groups`), the gap stops being a colour on someone
+else's whisker and gets its own geometry, on the observed row:
+
+Two rows. The estimate keeps its own: a **light grey whisker** (`cols$grey`, the table's own
+"uncoloured cell" — not `cols$point`, a muted blue that would read as a rung of the very ladder it
+stands outside of, and not `grey2`, too dark to recede) under a **square in the arrow's own colour**,
+so the mark and the movement it made are one statement.
+
+One `offset` below, three things share a row, drawn in this order because each is thinner or smaller
+than the last:
+
+* the **arrow**, from the observed value to the model's, in the gap's colour, closed head. Its length
+  IS the adjustment, to scale — measured on a three-family table the gap runs 0.13 to 1.04 where the
+  effects span −5 to +5, so a small adjustment is *meant* to look small and the colour is what says
+  whether the move is a real one;
+* the **acceptance bracket** `[gap_lo, gap_hi]` over it, in very thin black. The model estimate falls
+  outside it exactly when the gap test rejects, so the arrow clearing the bracket IS the verdict. It
+  is drawn **only where the gap is testable**: on a non-collapsible measure (an odds ratio) `gap_se`
+  is not computed at all, because the estimate moves when any strong predictor is added — arithmetic,
+  not confounding — so there is nothing to test and a bracket would claim otherwise;
+* the **observed point**, last, at the arrow's tail.
+
+The **guide describes the arrows**, not the whiskers — `legend_guide_spec()` is asked for whichever
+channel carries the gap. The gridlines keep the main measure's ladder and its colours, but they were
+never keys; without the guide the arrows would be a colour with nothing to read it by.
+
+⚠ This is the single exception to §15.5. The adjustment is not an unrelated second measure: it is the
+gap between the two marks already on the row, and it has an interval.
+
+### 15.5 The second colour channel is not drawn
+
+`color = TRUE` on a cross-table grades two measures (`difference` on the text, `ratio` on the
+background). Only the first is plotted. The second has no interval, no neutral and nowhere positional
+to go, and a band behind every row floods the figure without adding a comparison. The gap under
+`color = "adjustment"` is not an exception: there the adjustment IS the main measure. This is not
+documented as a limitation — it is what a forest plot is.
 
 ---
 

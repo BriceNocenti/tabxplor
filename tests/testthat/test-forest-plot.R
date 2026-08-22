@@ -26,6 +26,16 @@ fp_on_ladder <- function(v, lad, tol = 1e-8) {
   (v > mx || v < mn) && v > 0
 }
 
+# the segment layers are several (the model whisker, the gap's acceptance bracket, the adjustment
+# arrow, the crude's, the guide's key frame) and can share a row count: pick by LINEWIDTH, which is
+# what actually distinguishes them (0.9 whisker, 1.3 arrow, 0.25 acceptance bracket).
+fp_seg <- function(b, lw) {
+  d <- Filter(function(z) isTRUE(all(abs(z$linewidth - lw) < 1e-8)), fp_layer(b, "GeomSegment"))
+  expect_gt(length(d), 0L)
+  d[[1]]
+}
+fp_wsk <- function(b, e) fp_seg(b, 0.9)
+
 fp_layer <- function(b, geom) {
   cls <- vapply(b$plot$layers, function(l) class(l$geom)[1], character(1))
   b$data[cls == geom]
@@ -101,9 +111,7 @@ test_that("the points are painted the cell's own colour", {
            color_signif = "grey_non_signif")
   e <- forest_plot(t, theme = "light", return_data = TRUE)
   b <- fp_build(forest_plot(t, theme = "light"))
-  seg <- fp_layer(b, "GeomSegment")
-  expect_gt(length(seg), 0L)
-  expect_setequal(unique(stats::na.omit(seg[[1]]$colour)),
+  expect_setequal(unique(stats::na.omit(fp_wsk(b, e)$colour)),
                   unique(stats::na.omit(e$point_hex[is.finite(e$ci_inf) & !e$is_ref])))
   pts <- fp_layer(b, "GeomPoint")                             # the square is FILLED with it
   expect_true(all(unique(stats::na.omit(e$point_hex)) %in%
@@ -122,11 +130,12 @@ test_that("the gap band is drawn exactly where the model says", {
   bd <- e[is.finite(e$gap_lo), , drop = FALSE]
   expect_gt(nrow(bd), 3L)
   b   <- fp_build(forest_plot(t, observed = "band"))
-  hit <- Filter(function(l) nrow(l) == nrow(bd), fp_layer(b, "GeomLinerange"))
-  expect_gt(length(hit), 0L)
+  # the gap is a thin capped bracket at the observed's own offset, not a band
+  hit <- fp_seg(b, 0.25)
+  expect_identical(nrow(hit), nrow(bd))
   # a log10 axis stores its layer data transformed
-  expect_equal(sort(10^hit[[1]]$xmin), sort(bd$gap_lo), tolerance = 1e-10)
-  expect_equal(sort(10^hit[[1]]$xmax), sort(bd$gap_hi), tolerance = 1e-10)
+  expect_equal(sort(10^hit$x),    sort(bd$gap_lo), tolerance = 1e-10)
+  expect_equal(sort(10^hit$xend), sort(bd$gap_hi), tolerance = 1e-10)
 })
 
 test_that("the colour legend is the guide, and never printed twice", {
@@ -142,9 +151,12 @@ test_that("the colour legend is the guide, and never printed twice", {
     forest_plot(t, return_data = TRUE)$column)), "text", "light", "en")
   expect_identical(sc[[1]]$name, gs$title)
   expect_true(all(gs$keys$label %in% unlist(lapply(sc, `[[`, "labels"))))
-  # the caption keeps the method and the stars, and drops the ladder the guide now carries
-  cap <- p$labels$caption
-  expect_true(grepl("Newcombe", cap))
+  # the method moved to the axis title -- there is one axis here, so it can speak for every panel --
+  # and the ladder is the guide's, so the caption carries neither
+  expect_true(grepl("Newcombe", p$labels$x))
+  # ...so for a plain coloured crosstab the footer has nothing left to say at all
+  cap <- p$labels$caption %||% ""
+  expect_false(grepl("Newcombe", cap))
   expect_false(grepl("Shades of", cap))
 
   # a crude column and its model twin are ONE ladder since the merge, so the guide can describe them
@@ -194,8 +206,7 @@ test_that("a table that mixes units draws every estimate, each panel in its own 
   # the whole point: NOTHING is dropped. A single log10 scale used to turn every negative mean
   # difference into NaN and silently remove it.
   expect_no_warning(b <- fp_build(forest_plot(t)))
-  wsk <- fp_layer(b, "GeomSegment")[[1]]
-  expect_identical(sum(!is.na(wsk$x)),
+  expect_identical(sum(!is.na(fp_wsk(b, e)$x)),
                    sum(is.finite(e$ci_inf) & is.finite(e$ci_sup) & !e$is_ref &
                          e$series == "modelled"))
   # each panel resolves its OWN breaks, from its own scale
@@ -303,4 +314,57 @@ test_that("`center` and `footer` are the two layouts and the three footers", {
   expect_identical(forest_plot(t, footer = "short")$labels$caption,
                    forest_plot(t, footer = "full")$labels$caption)
   expect_null(forest_plot(t, footer = "none")$labels$caption)
+})
+
+test_that("`color = \"adjustment\"` gives the gap its own geometry, and the whisker gives up its ink", {
+  skip_if_not_installed("ggplot2")
+  skip_if_not_installed("survey")
+  fp_dev()
+  d <- fp_data()
+  t <- suppressMessages(tab_reg(d, "age", c("race", "rincome"), family = "gaussian",
+                                color = "adjustment", empirical = TRUE))
+  e <- forest_plot(t, return_data = TRUE)
+  b <- fp_build(forest_plot(t))
+  # the arrow: one per non-reference row, running FROM the observed value TO the model's
+  keep <- is.finite(e$obs) & is.finite(e$estimate) & !e$is_ref & e$obs != e$estimate &
+    e$series == "modelled"
+  ar <- fp_seg(b, 1.3)
+  expect_identical(nrow(ar), sum(keep))
+  expect_equal(sort(ar$x),    sort(e$obs[keep]),      tolerance = 1e-8)
+  expect_equal(sort(ar$xend), sort(e$estimate[keep]), tolerance = 1e-8)
+  # and the acceptance bracket, around the observed value, is a layer of its own
+  bk <- fp_seg(b, 0.25)
+  expect_equal(sort(bk$x),    sort(e$gap_lo[keep]), tolerance = 1e-8)
+  # the whisker recedes to neutral and the SQUARE carries the gap's colour: one statement, one ink
+  cols <- tabxplor:::tx_plot_colors("light")
+  expect_setequal(unique(stats::na.omit(fp_wsk(b, e)$colour)), cols$grey)
+  sq <- Filter(function(z) nrow(z) == sum(e$series == "modelled"), fp_layer(b, "GeomPoint"))
+  expect_gt(length(sq), 0L)
+  expect_setequal(setdiff(unique(sq[[1]]$fill), cols$text),
+                  setdiff(unique(ar$colour), cols$text))
+  # the acceptance bracket exists only where the gap IS testable
+  t2 <- suppressMessages(tab_reg(d, "married", "race", family = "binomial",
+                                 color = "adjustment", empirical = TRUE))
+  e2 <- forest_plot(t2, return_data = TRUE)
+  expect_false(any(e2$gap_tested))                    # a non-collapsible measure: no test exists
+  b2  <- fp_build(forest_plot(t2))
+  # ...so no layer holds the acceptance region, while the arrows are still drawn
+  lws <- unlist(lapply(fp_layer(b2, "GeomSegment"), function(z) unique(round(z$linewidth, 2))))
+  expect_false(0.25 %in% lws)                         # no acceptance region anywhere
+  expect_true(1.3 %in% lws)                           # the arrows are still drawn
+})
+
+test_that("`display`, `offset` and `label_offset` are the caller's, and the defaults do not move", {
+  skip_if_not_installed("ggplot2")
+  fp_dev()
+  d <- fp_data()
+  t <- tab(d, race, party3, pct = "row", ci = "ref", color = TRUE)
+  lab <- function(...) fp_layer(fp_build(forest_plot(t, ...)), "GeomLabel")[[1]]
+  # the default is the cell's own primary token; a template swaps it, through set_display()
+  expect_false(any(grepl("(", lab()$label, fixed = TRUE)))
+  expect_true(all(grepl("(", lab(display = "{est} ({base})")$label, fixed = TRUE)))
+  # the offsets move the rows they name, and nothing else
+  o1 <- fp_layer(fp_build(forest_plot(t, offset = 0.15)), "GeomLabel")[[1]]$y
+  o2 <- fp_layer(fp_build(forest_plot(t, label_offset = 0.5)), "GeomLabel")[[1]]$y
+  expect_equal(o2 - o1, rep(0.2, length(o1)), tolerance = 1e-8)
 })

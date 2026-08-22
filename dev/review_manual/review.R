@@ -444,10 +444,12 @@ regressions |> forest_plot()
 summed_score <- tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
         predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "ratio") 
 summed_score|> forest_plot()
-multinom_ordinal <- tab_reg(gss_simple, outcome = c("party3", "rincome"), predictors = c("race", "marital", "relig", "age"),
-        family = c("multinomial", "ordinal"), empirical = TRUE, measure = "ratio") 
-multinom_ordinal |> forest_plot()
-
+multinom <- tab_reg(gss_simple, outcome = "party3", predictors = c("race", "marital", "relig", "age", "tvhours"),
+        family = "multinomial", empirical = TRUE, measure = "ratio") 
+multinom |> forest_plot()
+ordinal <- tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age", "tvhours"),
+        family = "ordinal", empirical = TRUE, measure = "ratio") 
+ordinal |> forest_plot()
 
 # I don’t love the current default theme at all, too gray, unreadable, not enough colors, etc. Screen attached.
 #  I want to redo it. I want you to improve this default, starting from two other forest plot (to not copy them entirely, 
@@ -491,17 +493,95 @@ gss_simple |>
 
 
 # Round 2
+regressions <- tab_reg(gss_simple, outcome = c("married", "age", "tvhours"), 
+                       predictors = c("race", "rincome", "relig"), 
+                       empirical = TRUE, family = c("binomial", "gaussian", "poisson"))
+regressions |> forest_plot()
+# - Add horizontal lines between predictors, or between row_vars/tab_vars. 
+# - The breaks dotted lines stop a bit to indicate separation between predictors, but it’s a bit to faint, 
+#   please make the gap bigger if you can (if you need to, use a workaround, like background color rectangle
+#   over it), like it should only start just above the reference line square (same for the null dotted line).
+# - Strangely, for empirical counterparts, "married" have filled black points, but "age" and "tvhours" 
+#   have points with black line and white fill (should be filled black too). Also "married" have no whisker,
+#   but "age" and "tvhours" models have the grey band not on the point (not offsetted from the model whisker, 
+#   so it’s). Just offset it, and replace it with a whisker 
+#   (with smaller linewidth and error bars length than the main one; pure black.)
+# - By the way, the footer of "age - mean difference" doesn’t say the unit is SD (it shoul mention it briefly, 
+#   like in the first break only ! Here or in every short color legend ?
+#   Here in the forest plot, use 1 digit in the breaks ticks text too (currently 2).
+# - No possibility to use colors in footers color legends too, like everywhere else (without Suggests ?) ? 
+# - Remove the text ("1", "0") above reference lines (unreadable with the null vline, and useless).  
 
-# - Plot title, and other tab_reg() export titles:
+tab(gss_simple, c(age, rincome, party3), married, pct = "row", color = TRUE, color_signif = "ignore") |> forest_plot()
+tab(gss_simple, c(age, rincome, party3), married, pct = "row", color = TRUE, color_signif = "grey_non_signif") |> forest_plot()
+tab(gss_simple, c(age, rincome, party3), married, pct = "row", color = TRUE, color_signif = "guaranteed_effect") |> forest_plot()
+# - the "guaranteed_effect" one have 1/3 vertical space lost at the top, and strange red/blue bands there.
+#   `tab(gss_simple, c(age, rincome, party3), married, pct = "row", color = TRUE, color_signif = "grey_non_signif", ref =1)` also does this, blue bands on Married.
+# - grey_non_signif" legend/guide is ok, but displays in an unreadable order because it may fill by columns on two rows 
+#   (I want the legend on only one line, with breaks on the same order than in the plot, "under" then "over" the not significant)
+# - the "guaranteed_effect" legend/guide is a bit strange, the >=+20 break miss it’s dark blue dotted line (same for <= -20), 
+#   the >=10 blue dotted line miss it’s whisker (same for <=-10 dotted line). Also, it prints "Difference vs the Total row", 
+#   but should’nt it say something like "guaranteed (95%) difference vs the Total row" ?
+# - Would there be a way to show the inward error bar of the whisker, which **IS** the guaranteed effect, 
+#    bigger than the outward error bar of the whisker ?
+#   The reference rows hade dissapear because `ref="tot"`, please add the right Total, it’s the reference for comparison, it’s important.
+
+tab(gss_simple, c(age, rincome, party3), marital, pct = "row", color = TRUE, color_signif = "grey_non_signif", ref = 1) |> forest_plot()
+# - Here, many points have no whiskers at all, normal (too thin for real ?), or ?
+# - in color guide/legend "<-5" break have dotted line but no whisker.
+# - blue and red bands hell destroys the plot.
+# - Could the "Newcombe score interval, 95% confidence" stuff could appear in "Percentage points (95% CI)"
+#   as "Percentage points (95% CI, Newcombe score interval)" ? It should not clutter the many outcomes/many scales
+#  regression forest plot with statistical stuff, though, so it may not be a good idea.
 
 
+# Round 3
 
+# - empirical = TRUE with no adjustment : I want the empirical point and wisker to be only
+#   two linewidths of the main whisker below the main whisker, would it be possible (on all viewports or close to it ?) ? 
+# - (Would it work also for the adjustement case below, of would adjustement need more space to be more readable ?)
 
+regressions_adj <- tab_reg(gss_simple, outcome = c("married", "age", "tvhours"),  predictors = c("race", "rincome", "relig"), 
+                           family = c("binomial", "gaussian", "poisson"), 
+                           color = "adjustment", empirical = TRUE)
+regressions_adj |> forest_plot()
+ordinal <- tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age", "tvhours"),
+        family = "ordinal", measure = "ratio", empirical = TRUE, color = "adjustment") 
+ordinal |> forest_plot()
+# - empirical = TRUE with color = "adjustment" currently does nothing different, it just colors the main whisker and CI
+#   I want a true user-friendly and readable way to color **the adjustement only**, with its own color and it’s own CI.
+#   What would be the right geometrical way to do this ? Should it be an arrow, or a band between the empirical point and the model point ? 
+#   How to represent the CI of the adjustment ? 
+#   Please study this, and make me a well-designed proposition.
 
+# Round 4
+# - In adjustement, mode, please do the following display : 
+#    - main model whiskers in "grey2" color to put them a bit less in focus.
+#    - main model square colored the same color as the arrow
+#    - arrow stay on the same line as now, but the point and the acceptance brackets goes on a line just below,
+#      from the same y offset than used between the model whisker and the empirical point.
+#    - acceptance bracket always in very thin linewidth black.
+#    - arrow with a bit more linewidth to put it more in focus.
+#    - There is no ggplot2 color legend/guide just adjustement right now, but one is needed because the breaks
+#      and dotted-line, that act as a good legend in the normal regression case, are not what the colors are here 
+#      (so keep their current color but do not add them in the legend/guide like they are for crosstables,
+#      just the arrows in legend/guide ?)
+# - The y offset between the model square and the empirical point should be in a forest_plot(), 
+#   and the y offset between the model square and the measure label too, because the visually good result 
+#   depends on the viewport. Make the measure label background a bit less tranlucent, a bit more opaque.
+# - add a display argument here too, accepting {} display tokens, etc., for the user to choose what to print 
+#   in the model text/label, but keep the same defaults than now.
 
-
-
-
+# Round 4.
+# Actually, in adjustement mode, reput the empirical point with acceptance bracket on the same line than
+#  the arrow, but in the foreground : since the acceptance bracket is much thinner, it won’t remove the color.
+# Add a bit more linewidth for the arrow line, an a bit bigger closed arrow head.
+# "grey2" is not light enough for the main model whiskers colors, put a lighter grey
+# Maximum area size of the main models square 1.5 times bigger than now. Put the max size in an argument for tweakability.
+# There are not acceptance brackets in the "married" plot, is it normal (very small error for binomial / odds ratio is normal here ?)
+# Footer legend only takes half horizontal space, isn’t there a way to take all the horizontal text 
+# available but wrap when there is not enough space in one line to avoid the text being cut
+#  (if too complitaced, do nothing) ?
 
 #### the different families × effects × measure: custom displays
 

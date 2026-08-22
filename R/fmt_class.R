@@ -5283,7 +5283,12 @@ legend_method_phrase <- function(spec, lang, measure = spec$measure_text) {
 }
 
 legend_measure_word <- function(measure, is_std, eff_word, policy = "ignore") {
-  if (!is.na(eff_word) && !measure_own_ref(measure)) return(eff_word)
+  # an SD-scaled ladder prints bare numbers (`-0.8 -0.4 -0.2 -0.1`) that are not in the outcome's own
+  # units, so the name has to carry the unit -- once, before any of them, rather than only in the
+  # trailing grey clause where a reader meets it after the numbers.
+  if (!is.na(eff_word) && !measure_own_ref(measure))
+    return(if (isTRUE(is_std) && identical(measure, "difference")) gettextf("%s in SD", eff_word)
+           else eff_word)
   if (identical(measure, "difference") && isTRUE(is_std)) return(gettext("standardized difference"))
   m <- measure_facts(measure, policy)
   if (is.null(m)) return(measure)
@@ -5899,6 +5904,13 @@ legend_guide_spec <- function(x, cols, channel = c("text", "bg"), theme = "light
     # the baseline this measure is read against: its OWN, when it has one (the two gap measures name
     # another column), else the column's -- the same two-step legend_tokens_prose() makes.
     rw  <- if (isTRUE(ch$has_ref_lead) && !is.na(ch$ref_lead)) ch$ref_lead else spec$ref_phrase
+    # under `guaranteed_effect` the coloured quantity is not the deviation but the part of it the
+    # interval guarantees, so the title has to say so -- the grey key ("not guaranteed") already does.
+    if (identical(plan$policy, "guaranteed_effect")) {
+      cf   <- suppressWarnings(get_conf_level(x[[spec$col_name]])[1])
+      word <- if (is.finite(cf)) gettextf("guaranteed (%s%%) %s", format(100 * cf), word)
+              else gettextf("guaranteed %s", word)
+    }
     list(title = trimws(paste(legend_ucfirst(word),
                               if (is.na(rw) || !nzchar(rw)) "" else gettextf("vs %s", rw))),
          keys = keys, grey_hex = tx_chrome_hex(theme)$grey,

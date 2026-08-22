@@ -169,8 +169,9 @@ test_that("a forest plot's axis and guide follow lang =", {
            color_signif = "grey_non_signif")
   p_en <- forest_plot(t, lang = "en")
   p_fr <- forest_plot(t, lang = "fr")
-  expect_equal(p_en$labels$x, "Percentage points (95% CI)")
-  expect_match(p_fr$labels$x, "^Points de pourcentage")
+  # the axis title carries the interval's own name too, where there is one axis to say it on
+  expect_equal(p_en$labels$x, "Percentage points (95% CI, Newcombe score interval)")
+  expect_match(p_fr$labels$x, "^Points de pourcentage \\(IC \u00e0 95")
   nm <- function(p) Filter(function(s) !inherits(s$name, "waiver") && !is.null(s$name),
                            p$scales$scales)[[1]]$name
   expect_match(nm(p_en), "^Difference vs ")

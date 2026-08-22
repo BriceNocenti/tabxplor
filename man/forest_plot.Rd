@@ -10,13 +10,18 @@ forest_plot(
   what = c("auto", "effect", "level"),
   observed = c("auto", "band", "point", "ci", "none"),
   center = c("n", "estimate", "none"),
+  display = NULL,
   layout = c("keep", "auto", "transpose"),
   facet = NULL,
   color = TRUE,
   guide = c("gridlines", "bands", "none"),
   intercept = FALSE,
   totals = FALSE,
+  offset = 0.15,
+  label_offset = 0.3,
+  max_size = 6,
   footer = c("short", "full", "none"),
+  footer_width = 130L,
   legend = "auto",
   theme = NULL,
   lang = NULL,
@@ -47,6 +52,10 @@ two-interval figure) or \code{"none"}.}
 own base, with the value printed just above it; \code{"estimate"} the value alone; \code{"none"}
 a constant square and no value, for a plot with many panels.}
 
+\item{display}{What that value prints -- a \code{\{\}} display template, as
+\code{\link{set_display}} takes (\code{"\{est\} (\{base\})"}, \code{"est_ci"}, ...).
+\code{NULL} (the default) prints the cell's own primary token.}
+
 \item{layout}{Which axis is read and which is faceted: \code{"keep"} (the default) reads the
 table's rows, \code{"transpose"} reads its columns, and \code{"auto"} picks whichever has more
 levels -- more levels down the side, fewer panels across, which is the more legible of the two
@@ -64,8 +73,21 @@ breaks -- the teaching mode, which makes a cell's colour and its position one st
 
 \item{totals}{Draw total rows and total columns.}
 
+\item{offset}{How far below the estimate the observed value sits, as a fraction of a row. ggplot
+has no absolute-unit nudge, so what reads well depends on the viewport: raise it for a tall
+figure with few rows. Under an adjustment colour the arrow takes this row and the observed value
+drops one further.}
+
+\item{label_offset}{How far above the estimate its value is printed, as a fraction of a row.}
+
+\item{max_size}{Area of the largest marker, when \code{center = "n"} maps the base to it.}
+
 \item{footer}{\code{"short"} (the default) the console's own footer, \code{"full"} the exports'
 longer one, or \code{"none"}. Both are wrapped and set flush left.}
+
+\item{footer_width}{Characters per footer line. A ggplot caption does not wrap, and the plot
+cannot measure the device at build time, so a wide figure wants a larger number and a narrow one
+a smaller.}
 
 \item{legend}{Where the colour legend goes: \code{"auto"} (the bottom), \code{"right"},
 \code{"left"}, \code{"top"} or \code{"none"}. When several ladders apply it cannot be a guide and
