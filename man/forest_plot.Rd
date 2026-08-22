@@ -17,7 +17,7 @@ forest_plot(
   guide = c("gridlines", "bands", "none"),
   intercept = FALSE,
   totals = FALSE,
-  offset = 0.15,
+  offset = 0.25,
   label_offset = 0.3,
   max_size = 6,
   footer = c("short", "full", "none"),

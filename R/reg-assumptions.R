@@ -642,19 +642,41 @@ reg_term_label <- function(term, shape_terms = NULL) {
 # The MATH a link scale is, as plotmath -- the second half of every linearity y axis, so the word and
 # the formula come from one place. A character element renders verbatim in plotmath, which is why the
 # outcome's name is interpolated as a string and never as a name (a name with a space would break).
+#
+# ⚠⚠ WARNING -- THE PLOTMATH GLYPHS THAT MUST NEVER BE USED HERE. R draws a math-mode SPACE (`~`),
+# PARENTHESES from a function call or `group()`, and the operators `=` (`==`), `<`, `>` from the Adobe
+# SYMBOL font. Only cairo resolves that font reliably: on `ragg` -- which is what Positron and RStudio
+# draw with -- each of them comes out as a MISSING-GLYPH BOX, and the whole formula reads as a row of
+# empty rectangles (measured: `~`, `~~`, `P(Y)`, `Y == k`, `Y > k`, `group()` all tofu; the same
+# expression is perfect on `png(type = "cairo")`). So every one of them is written as a plain string
+# instead -- `":  "` for the space, `"log("` / `")"` for the parentheses, `"p = P(x)"` for the
+# relation. What IS safe is anything plotmath draws with a RULE, or as ordinary text at another size:
+# `frac()`, `bar()` and a SUBSCRIPT (`"%"[level]`) render identically on both devices, which is why
+# the fraction and the qualified percentage survive. test-tab_reg-plots.R locks the safe list.
 #' @keywords internal
-rd_link_expr <- function(kind, lab, outcome = NULL) {
-  nm <- if (!is.null(outcome) && nzchar(outcome)) outcome else "y"
-  f <- switch(kind,
-              mean    = bquote(bar(.(nm))),
-              logmean = bquote(log(bar(.(nm)))),
-              logit   = bquote(log(frac(p, 1 - p)) * "," ~~ p == P(.(nm))),
-              risk    = bquote(p == P(.(nm))),
-              logrisk = bquote(log(p) * "," ~~ p == P(.(nm))),
-              NULL)
-  if (is.null(f)) return(lab)
-  bquote(.(lab) * ":" ~~ .(f))
+rd_link_expr <- function(kind, lab, outcome = NULL, level = NULL) {
+  # THE UNITS THE TABLE PRINTS, not the statistician's: `p` and `P(y)` name nothing a reader of this
+  # package has met, and a literary student cannot act on them. A percentage is written the way the
+  # table writes one -- a `%` sign qualified by WHAT it is a percentage of, in subscript -- and the
+  # qualifier is the MODELLED LEVEL where there is one ("% of Married", not of the variable), because
+  # that is what the curve actually plots. Long level labels cost little: a subscript is small.
+  nm  <- rd_label_of(level %||% outcome %||% "y")
+  pct <- bquote("%"[.(nm)])
+  switch(kind,
+         # a number needs no gloss -- the formula IS the word, so it takes no prefix
+         mean    = gettextf("mean of %s", rd_label_of(outcome %||% "y")),
+         logmean = gettextf("log(mean of %s)", rd_label_of(outcome %||% "y")),
+         # a percentage does: the technical name, then what it is in the table's own units
+         logit   = bquote(.(lab) * ":  log(" * frac(.(pct), "1 - " * .(pct)) * ")"),
+         risk    = bquote(.(lab) * ":  " * .(pct)),
+         logrisk = bquote(.(lab) * ":  log(" * .(pct) * ")"),
+         lab)
 }
+
+# A level or a variable as a LABEL: always through the package's one cleaner, so an axis reads
+# "$25000 or more" where the data says "4-$25000 or more", exactly as every table header does.
+#' @keywords internal
+rd_label_of <- function(x) reg_cleanup(as.character(x)[[1L]], TRUE)
 
 # The per-observation outcome a check reads, on the family's own LINK scale, plus that scale's label
 # and its formula. An ordinal / multinomial outcome has no single curve, so it is read as "beyond the
@@ -665,7 +687,8 @@ rd_link_y <- function(y, family, trials = NULL, positive_level = NULL, outcome =
   fit    <- family                               # the LINK key itself, before it reads as a family
   family <- reg_check_family_of(family)          # a LINK key (rd/rr/mr) reads as its distribution
   out <- function(y, link, kind, lab)
-    list(y = y, link = link, lab = lab, expr = rd_link_expr(kind, lab, outcome))
+    list(y = y, link = link, lab = lab,
+         expr = rd_link_expr(kind, lab, outcome, positive_level))
   # WARNING: the curve belongs on the scale the MODEL fits, which is the LINK and not the
   # distribution -- an empirical logit beside a modified-Poisson fit would answer a question that
   # model never asked. `link = ` is a measure, and this is where the plots read it.
@@ -712,16 +735,20 @@ rd_link_cuts <- function(y, family, trials = NULL, positive_level = NULL, outcom
   if (length(lv) < 2L) return(NULL)
   if (fam == "ordinal") {
     lab <- gettext("empirical cumulative logit")
+    hi <- gettext("above the cut"); lo <- gettext("up to the cut")
     return(list(link = "logit", lab = lab,
-                expr = bquote(.(lab) * ":" ~~ log(frac(P(Y > k), P(Y <= k)))),
+                expr = bquote(.(lab) * ":  log(" * frac("%"[.(hi)], "%"[.(lo)]) * ")"),
                 curves = lapply(seq_len(length(lv) - 1L), function(k)
                   list(keep = seq_len(n), y = as.numeric(i > k),
                        cut = gettextf("> %s", lv[[k]])))))
   }
   ref <- lv[[1L]]
-  lab <- gettextf("empirical logit vs %s", ref)
+  # the fraction names the reference, so the WORD must not: "empirical logit vs 1-Democrat:
+  # log(% of the category / % of 1-Democrat)" said it twice on one axis.
+  lab <- gettext("empirical logit")
+  num <- gettext("this category"); den <- rd_label_of(ref)
   list(link = "logit", lab = lab,
-       expr = bquote(.(lab) * ":" ~~ log(frac(P(Y == k), P(Y == .(ref))))),
+       expr = bquote(.(lab) * ":  log(" * frac("%"[.(num)], "%"[.(den)]) * ")"),
        curves = lapply(seq_along(lv)[-1L], function(k) {
          keep <- which(i %in% c(1L, k))
          list(keep = keep, y = as.numeric(i[keep] == k), cut = lv[[k]])

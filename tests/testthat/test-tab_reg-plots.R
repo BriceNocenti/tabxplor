@@ -84,6 +84,36 @@ test_that("reg_check_plots() draws every family, and facets a model comparison",
   expect_length(q(reg_check_plots(mix, ds)), 2L)
 })
 
+# ⚠ THE LOCK for the plotmath rule in rd_link_expr()'s WARNING: R draws a math-mode space (`~`),
+# a function call's PARENTHESES and the operators `=` / `<` / `>` from the Adobe Symbol font, which
+# `ragg` (Positron's and RStudio's device) renders as MISSING-GLYPH BOXES. Only calls plotmath draws
+# with a RULE, or as ordinary text, are allowed in a label. Adding a construct outside this list
+# means a formula that is perfect on cairo and a row of empty rectangles in the user's IDE.
+plotmath_calls_ok <- function(e) {
+  safe <- c("*", "-", "+", "[", "frac", "bar", "bold")   # `[` is a subscript: text, not a glyph
+  bad  <- character(0)
+  walk <- function(x) {
+    if (!is.call(x)) return(invisible())
+    h <- deparse(x[[1L]])
+    if (!h %in% safe) bad <<- c(bad, h)
+    for (i in seq_along(x)[-1L]) walk(x[[i]])
+  }
+  walk(e)
+  unique(bad)
+}
+
+test_that("no linearity label reaches for a glyph the Symbol font owns", {
+  exprs <- c(
+    lapply(c("mean", "logmean", "logit", "risk", "logrisk"),
+           function(k) tabxplor:::rd_link_expr(k, k, "married", "1-Married")),
+    list(tabxplor:::rd_link_cuts(factor(rep(c("a", "b", "c"), 4), ordered = TRUE),
+                                 "ordinal", outcome = "inc")$expr,
+         tabxplor:::rd_link_cuts(factor(rep(c("a", "b", "c"), 4)),
+                                 "multinomial", outcome = "party")$expr,
+         tabxplor:::reg_panel_head("linearity", "a question?")))
+  for (e in exprs) expect_identical(plotmath_calls_ok(e), character(0))
+})
+
 test_that("an ordinal linearity panel draws one observed curve per cut", {
   skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra"); skip_if_not_installed("MASS")
   y <- factor(rep(c("1-low", "2-mid", "3-high"), each = 200L), ordered = TRUE)

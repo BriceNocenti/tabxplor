@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tabxplor 2.0.0\n"
-"POT-Creation-Date: 2026-08-22 08:47+0200\n"
+"POT-Creation-Date: 2026-08-22 15:26+0200\n"
 "PO-Revision-Date: 2024-07-31 18:51+0200\n"
 "Last-Translator: tabxplor (Phase 18w draft)\n"
 "Language-Team: none\n"
@@ -85,7 +85,7 @@ msgstr "Total"
 msgid "ref."
 msgstr "réf."
 
-#: fmt_class.R:4957 fmt_class.R:5326
+#: fmt_class.R:4957 fmt_class.R:5331
 msgid "vs the mean"
 msgstr "p. r. à la moyenne"
 
@@ -230,64 +230,69 @@ msgstr ""
 msgid "%s, %s"
 msgstr "%s, %s"
 
-#: fmt_class.R:5287
+#: fmt_class.R:5290
+#, c-format
+msgid "%s in SD"
+msgstr ""
+
+#: fmt_class.R:5292
 msgid "standardized difference"
 msgstr "différence standardisée"
 
-#: fmt_class.R:5311
+#: fmt_class.R:5316
 msgid "cells"
 msgstr "cases"
 
-#: fmt_class.R:5327
+#: fmt_class.R:5332
 msgid "vs independence"
 msgstr "p. r. à l'indépendance"
 
-#: fmt_class.R:5369
+#: fmt_class.R:5374
 msgid "bg"
 msgstr "fond"
 
-#: fmt_class.R:5374
+#: fmt_class.R:5379
 msgid "or not tested"
 msgstr "ou non testé"
 
-#: fmt_class.R:5377
+#: fmt_class.R:5382
 #, c-format
 msgid "grey: non-significant or under %s"
 msgstr "gris : non significatif ou sous %s"
 
-#: fmt_class.R:5378
+#: fmt_class.R:5383
 msgid "grey: non-significant or small"
 msgstr "gris : non significatif ou faible"
 
-#: fmt_class.R:5382
+#: fmt_class.R:5387
 msgid "all that is significant is colored"
 msgstr "tout ce qui est significatif est coloré"
 
-#: fmt_class.R:5383
+#: fmt_class.R:5388
 msgid "all that is significant is colored, error-adjusted"
 msgstr "tout ce qui est significatif est coloré, marge d'erreur déduite"
 
-#: fmt_class.R:5412
+#: fmt_class.R:5417
 #, c-format
 msgid "%s %s %s"
 msgstr "%s %s à %s"
 
-#: fmt_class.R:5413
+#: fmt_class.R:5418
 #, c-format
 msgid "%s %s"
 msgstr "%s %s"
 
-#: fmt_class.R:5419
+#: fmt_class.R:5424
 #, c-format
 msgid "after subtracting the margin of error (%s)"
 msgstr "après soustraction de la marge d'erreur (%s)"
 
-#: fmt_class.R:5446
+#: fmt_class.R:5451
 #, c-format
 msgid "Background colour (%s):"
 msgstr "Couleur de fond (%s) :"
 
-#: fmt_class.R:5467
+#: fmt_class.R:5472
 #, c-format
 msgid ""
 "Marked: significantly different from %s (%s), by at least the first "
@@ -297,7 +302,7 @@ msgstr ""
 "seuil. Non marqué : soit non significatif, soit une différence inférieure à "
 "%s."
 
-#: fmt_class.R:5470
+#: fmt_class.R:5475
 #, c-format
 msgid ""
 "Coloured: significantly different from %s (%s), by at least the first colour "
@@ -307,7 +312,7 @@ msgstr ""
 "de couleur. Non coloré : soit non significatif, soit une différence "
 "inférieure à %s."
 
-#: fmt_class.R:5474
+#: fmt_class.R:5479
 #, c-format
 msgid ""
 "Marked: significantly different from %s (%s), by at least the first "
@@ -318,7 +323,7 @@ msgstr ""
 "seuil. Non marqué : soit non significatif, soit une différence trop petite "
 "pour être marquée."
 
-#: fmt_class.R:5477
+#: fmt_class.R:5482
 #, c-format
 msgid ""
 "Coloured: significantly different from %s (%s), by at least the first colour "
@@ -329,15 +334,15 @@ msgstr ""
 "de couleur. Non coloré : soit non significatif, soit une différence trop "
 "petite pour être colorée."
 
-#: fmt_class.R:5483
+#: fmt_class.R:5488
 msgid "Some rows carry no test and are left unmarked."
 msgstr "Certaines lignes ne portent aucun test et restent non marquées."
 
-#: fmt_class.R:5484
+#: fmt_class.R:5489
 msgid "Some rows carry no test and are left uncoloured."
 msgstr "Certaines lignes ne portent aucun test et restent non colorées."
 
-#: fmt_class.R:5491
+#: fmt_class.R:5496
 #, c-format
 msgid ""
 "Grey: below the significance threshold (%s). The thresholds above are "
@@ -346,51 +351,62 @@ msgstr ""
 "Grisé : en deçà du seuil de significativité (%s). Les seuils ci-dessus sont "
 "comparables d'un tableau à l'autre."
 
-#: fmt_class.R:5493
+#: fmt_class.R:5498
 #, c-format
 msgid "Grey: not significantly different from %s after the margin of error."
 msgstr ""
 "Grisé : chiffre non significativement différent de %s après la marge "
 "d'erreur."
 
-#: fmt_class.R:5501
+#: fmt_class.R:5506
 #, c-format
 msgid "Background: the same rule, applied to the gap with %s (%s)."
 msgstr "Fond : la même règle, appliquée à l'écart avec %s (%s)."
 
-#: fmt_class.R:5791
+#: fmt_class.R:5796
 #, c-format
 msgid "… +%d vars"
 msgstr "… +%d var."
 
-#: fmt_class.R:5829
+#: fmt_class.R:5834
 #, c-format
 msgid "%s; %s closed form on the observed column"
 msgstr ""
 
-#: fmt_class.R:5830
+#: fmt_class.R:5835
 #, c-format
 msgid "%s (%s closed form)"
 msgstr ""
 
-#: fmt_class.R:5903
+#: fmt_class.R:5911
+#, c-format
+msgid "guaranteed (%s%%) %s"
+msgstr ""
+
+#: fmt_class.R:5912
+#, fuzzy, c-format
+#| msgid "not guaranteed"
+msgid "guaranteed %s"
+msgstr "non garanti"
+
+#: fmt_class.R:5915
 #, c-format
 msgid "vs %s"
 msgstr "p. r. à %s"
 
-#: fmt_class.R:5906
+#: fmt_class.R:5918
 msgid "not significant"
 msgstr "non significatif"
 
-#: fmt_class.R:5907
+#: fmt_class.R:5919
 msgid "not guaranteed"
 msgstr "non garanti"
 
-#: fmt_class.R:5908
+#: fmt_class.R:5920
 msgid "below the first threshold"
 msgstr "sous le premier seuil"
 
-#: fmt_class.R:6064
+#: fmt_class.R:6076
 #, c-format
 msgid ""
 "%s: significantly different from the reference category (in bold) at the "
@@ -399,7 +415,7 @@ msgstr ""
 "%s : chiffre significativement différent de celui de la modalité de "
 "référence (en gras), au seuil de confiance de %s %%"
 
-#: fmt_class.R:6067
+#: fmt_class.R:6079
 #, fuzzy, c-format
 msgid ""
 "%s: significantly different from the reference category (in bold) at the "
@@ -408,18 +424,18 @@ msgstr ""
 "%s : chiffre significativement différent de celui de la modalité de "
 "référence (en gras), au seuil de confiance de %s %%"
 
-#: fmt_class.R:6070
+#: fmt_class.R:6082
 #, c-format
 msgid "%s: at the %s%% level"
 msgstr "%s : au seuil de %s %%"
 
-#: fmt_class.R:6073
+#: fmt_class.R:6085
 msgid "no star: not significant"
 msgstr "aucune étoile : non significatif"
 
 # Phase 18z14-ii -- the design-based footer sentence (ruling Q7), replacing z14-i's
 # "Weighted by the survey design." now that the intervals account for the design too.
-#: fmt_class.R:6097
+#: fmt_class.R:6109
 msgid ""
 "Design-based (survey): weighted estimates, intervals and tests account for "
 "the sample design."
@@ -427,7 +443,7 @@ msgstr ""
 "Fondé sur le plan de sondage (survey) : estimations, intervalles et tests "
 "pondérés tiennent compte du plan d'échantillonnage."
 
-#: fmt_class.R:6099
+#: fmt_class.R:6111
 msgid ""
 "Design-based (survey) estimates; this table's design variance could not be "
 "computed, so its intervals account for the weighting only."
@@ -438,7 +454,7 @@ msgstr ""
 
 # Phase 18z14-ii -- the design-based footer sentence (ruling Q7), replacing z14-i's
 # "Weighted by the survey design." now that the intervals account for the design too.
-#: fmt_class.R:6101
+#: fmt_class.R:6113
 #, c-format
 msgid ""
 "Weighted by %s; confidence intervals and tests account for the weighting."
@@ -446,7 +462,7 @@ msgstr ""
 "Pondéré par %s ; les intervalles de confiance et les tests tiennent compte "
 "de la pondération."
 
-#: fmt_class.R:6102
+#: fmt_class.R:6114
 #, c-format
 msgid ""
 "Weighted by %s; confidence intervals and tests use the unweighted sample "
@@ -463,15 +479,15 @@ msgstr "Ensemble"
 msgid "Others"
 msgstr "Autres"
 
-#: plots.R:390
+#: plots.R:419
 msgid "Model"
 msgstr "Modèle"
 
-#: plots.R:610
+#: plots.R:639
 msgid "does the observed curve follow the model's shape?"
 msgstr "la courbe observée suit-elle la forme du modèle ?"
 
-#: plots.R:611
+#: plots.R:640
 #, c-format
 msgid ""
 "%d bins, +/-2 SE. The dashed line is what the model fits; a bending curve "
@@ -480,19 +496,19 @@ msgstr ""
 "%d classes, +/-2 ET. La ligne en pointillés est ce que le modèle ajuste ; "
 "une courbe qui s'infléchit appelle shape=\"quadratic\"."
 
-#: plots.R:643
+#: plots.R:672
 msgid "Fitted value"
 msgstr "Valeur prédite"
 
-#: plots.R:643
+#: plots.R:672
 msgid "Mean residual"
 msgstr "Résidu moyen"
 
-#: plots.R:646
+#: plots.R:675
 msgid "are fewer than 5 % of the points outside the band?"
 msgstr "moins de 5 % des points sortent-ils de la bande ?"
 
-#: plots.R:647
+#: plots.R:676
 msgid ""
 "Mean residual per bin of the fitted value: a trend, or many points out, "
 "means the model is missing something."
@@ -500,19 +516,19 @@ msgstr ""
 "Résidu moyen par classe de valeur prédite : une tendance, ou beaucoup de "
 "points dehors, signale que le modèle oublie quelque chose."
 
-#: plots.R:662
+#: plots.R:691
 msgid "Theoretical quantiles"
 msgstr "Quantiles théoriques"
 
-#: plots.R:662
+#: plots.R:691
 msgid "Quantile residuals"
 msgstr "Résidus quantiles"
 
-#: plots.R:665
+#: plots.R:694
 msgid "do the points follow the diagonal?"
 msgstr "les points suivent-ils la diagonale ?"
 
-#: plots.R:666
+#: plots.R:695
 msgid ""
 "The band is pointwise: about 5 % of points fall outside it even when the "
 "model is right."
@@ -520,19 +536,19 @@ msgstr ""
 "La bande est ponctuelle : environ 5 % des points en sortent même quand le "
 "modèle est juste."
 
-#: plots.R:705
+#: plots.R:734
 msgid "Model SE"
 msgstr "ET du modèle"
 
-#: plots.R:705
+#: plots.R:734
 msgid "Robust SE"
 msgstr "ET robuste"
 
-#: plots.R:708
+#: plots.R:737
 msgid "do the two standard errors agree?"
 msgstr "les deux erreurs types concordent-elles ?"
 
-#: plots.R:709
+#: plots.R:738
 msgid ""
 "One point per coefficient: off the line, the family's variance assumption "
 "fails."
@@ -540,19 +556,19 @@ msgstr ""
 "Un point par coefficient : hors de la droite, l'hypothèse de variance de la "
 "famille ne tient pas."
 
-#: plots.R:735
+#: plots.R:764
 msgid "Observation"
 msgstr "Observation"
 
-#: plots.R:735
+#: plots.R:764
 msgid "max |dfbetas|"
 msgstr "max |dfbetas|"
 
-#: plots.R:738
+#: plots.R:767
 msgid "does one respondent carry a result?"
 msgstr "un seul enquêté porte-t-il un résultat ?"
 
-#: plots.R:739
+#: plots.R:768
 msgid ""
 "How far each respondent moves the coefficient it moves most, in that "
 "coefficient's standard errors."
@@ -560,15 +576,15 @@ msgstr ""
 "De combien chaque enquêté déplace le coefficient qu'il déplace le plus, en "
 "erreurs types de ce coefficient."
 
-#: plots.R:760
+#: plots.R:789
 msgid "VIF"
 msgstr "VIF"
 
-#: plots.R:763
+#: plots.R:792
 msgid "can the data tell the predictors apart?"
 msgstr "les données distinguent-elles les prédicteurs ?"
 
-#: plots.R:764
+#: plots.R:793
 msgid ""
 "Variance inflation per term (5 and 10 are the usual thresholds). It widens "
 "intervals; it biases nothing."
@@ -576,20 +592,20 @@ msgstr ""
 "Inflation de la variance par terme (5 et 10 sont les seuils usuels). Elle "
 "élargit les intervalles ; elle ne biaise rien."
 
-#: plots.R:786 reg-assumptions.R:719
+#: plots.R:815 reg-assumptions.R:742
 #, c-format
 msgid "> %s"
 msgstr "> %s"
 
-#: plots.R:793
+#: plots.R:822
 msgid "Empirical cumulative logit"
 msgstr "Logit cumulé empirique"
 
-#: plots.R:798
+#: plots.R:827
 msgid "are the lines parallel?"
 msgstr "les lignes sont-elles parallèles ?"
 
-#: plots.R:799
+#: plots.R:828
 msgid ""
 "One line per cut of the outcome: parallel means one odds ratio fits every "
 "cut."
@@ -597,164 +613,190 @@ msgstr ""
 "Une ligne par seuil de la variable expliquée : parallèles = un même rapport "
 "de cotes à chaque seuil."
 
-#: plots.R:929
+#: plots.R:958
 #, c-format
 msgid "Assumption checks: %s ~ %s"
 msgstr "Vérification des hypothèses : %s ~ %s"
 
-#: plots.R:934
+#: plots.R:963
 #, c-format
 msgid "%s, n = %s"
 msgstr "%s, n = %s"
 
-#: plots.R:936
+#: plots.R:965
 #, c-format
 msgid "%s - %s"
 msgstr "%s - %s"
 
-#: plots.R:994 plots.R:1242
-msgid "Odds ratio"
-msgstr "Rapport de cotes"
-
-#: plots.R:995
-msgid "Ratio"
-msgstr "Rapport"
-
-#: plots.R:996
-msgid "Rate ratio"
-msgstr "Rapport de taux"
-
-#: plots.R:997
-msgid "Percentage points"
-msgstr "Points de pourcentage"
-
-#: plots.R:998
-msgid "Percentage"
-msgstr "Pourcentage"
-
-#: plots.R:999
-msgid "Coefficient (log scale)"
-msgstr "Coefficient (échelle logarithmique)"
-
-#: plots.R:1003
-msgid "Units of the outcome"
-msgstr "Unités de la variable expliquée"
-
-#: plots.R:1006
+#: plots.R:1168 plots.R:1231
 #, c-format
 msgid "%s (%s%% CI)"
 msgstr "%s (IC à %s %%)"
 
-#: plots.R:1245
+#: plots.R:1219 plots.R:1597
+msgid "Odds ratio"
+msgstr "Rapport de cotes"
+
+#: plots.R:1220
+msgid "Ratio"
+msgstr "Rapport"
+
+#: plots.R:1221
+msgid "Rate ratio"
+msgstr "Rapport de taux"
+
+#: plots.R:1222
+msgid "Percentage points"
+msgstr "Points de pourcentage"
+
+#: plots.R:1223
+msgid "Percentage"
+msgstr "Pourcentage"
+
+#: plots.R:1224
+msgid "Coefficient (log scale)"
+msgstr "Coefficient (échelle logarithmique)"
+
+#: plots.R:1228
+msgid "Units of the outcome"
+msgstr "Unités de la variable expliquée"
+
+#: plots.R:1600
 msgid "SD of the outcome"
 msgstr "Écart-type de la variable expliquée"
+
+#: plots.R:1680
+#, fuzzy, c-format
+#| msgid "%s, %s"
+msgid ", %s)"
+msgstr "%s, %s"
 
 #: reg-assumptions.R:280
 #, c-format
 msgid "%s (%s)"
 msgstr "%s (%s)"
 
-#: reg-assumptions.R:677
+#: reg-assumptions.R:666
+#, c-format
+msgid "mean of %s"
+msgstr "moyenne de %s"
+
+#: reg-assumptions.R:667
+#, c-format
+msgid "log(mean of %s)"
+msgstr "log(moyenne de %s)"
+
+#: reg-assumptions.R:699
 msgid "log(risk)"
 msgstr "log(risque)"
 
-#: reg-assumptions.R:678
+#: reg-assumptions.R:700
 msgid "risk"
 msgstr "risque"
 
-#: reg-assumptions.R:679 reg-assumptions.R:683
+#: reg-assumptions.R:701 reg-assumptions.R:705
 msgid "log(mean)"
 msgstr "log(moyenne)"
 
-#: reg-assumptions.R:681 tab_reg.R:746
+#: reg-assumptions.R:703 tab_reg.R:746
 msgid "mean"
 msgstr "moyenne"
 
-#: reg-assumptions.R:685
+#: reg-assumptions.R:707 reg-assumptions.R:747
 msgid "empirical logit"
 msgstr "logit empirique"
 
-#: reg-assumptions.R:688
+#: reg-assumptions.R:710
 msgid "empirical logit (beyond the first category)"
 msgstr "logit empirique (au-delà de la première modalité)"
 
-#: reg-assumptions.R:714
+#: reg-assumptions.R:736
 msgid "empirical cumulative logit"
 msgstr "logit cumulé empirique"
 
-#: reg-assumptions.R:722
-#, c-format
-msgid "empirical logit vs %s"
-msgstr "logit empirique vs %s"
+#: reg-assumptions.R:737
 
-#: reg-assumptions.R:1025
+msgid "above the cut"
+msgstr "au-dessus du seuil"
+
+#: reg-assumptions.R:737
+
+msgid "up to the cut"
+msgstr "jusqu'au seuil"
+
+#: reg-assumptions.R:748
+
+msgid "this category"
+msgstr "cette modalité"
+
+#: reg-assumptions.R:1051
 msgid "Linearity"
 msgstr "Linéarité"
 
-#: reg-assumptions.R:1025
+#: reg-assumptions.R:1051
 msgid "Proportionality"
 msgstr "Proportionnalité"
 
-#: reg-assumptions.R:1025
+#: reg-assumptions.R:1051
 msgid "Dispersion"
 msgstr "Dispersion"
 
-#: reg-assumptions.R:1026
+#: reg-assumptions.R:1052
 msgid "Influence"
 msgstr "Influence"
 
-#: reg-assumptions.R:1026
+#: reg-assumptions.R:1052
 msgid "Collinearity"
 msgstr "Colinéarité"
 
 #
-#: reg-assumptions.R:1026
+#: reg-assumptions.R:1052
 msgid "Overall association"
 msgstr "Association globale"
 
 #
-#: reg-assumptions.R:1027
+#: reg-assumptions.R:1053
 msgid "Pearson dispersion"
 msgstr "Dispersion de Pearson"
 
-#: reg-assumptions.R:1027
+#: reg-assumptions.R:1053
 msgid "Residuals"
 msgstr "Résidus"
 
-#: reg-assumptions.R:1027
+#: reg-assumptions.R:1053
 msgid "Normality"
 msgstr "Normalité"
 
-#: reg-assumptions.R:1028
+#: reg-assumptions.R:1054
 msgid "LR"
 msgstr "LR"
 
-#: reg-assumptions.R:1028 tab-test-display.R:1044
+#: reg-assumptions.R:1054 tab-test-display.R:1044
 msgid "F"
 msgstr "F"
 
 #
-#: reg-assumptions.R:1028
+#: reg-assumptions.R:1054
 msgid "Wald"
 msgstr "Wald"
 
-#: reg-assumptions.R:1028
+#: reg-assumptions.R:1054
 msgid "Brant"
 msgstr "Brant"
 
-#: reg-assumptions.R:1029
+#: reg-assumptions.R:1055
 msgid "robust/model SE"
 msgstr "ET robuste/du modèle"
 
-#: reg-assumptions.R:1029
+#: reg-assumptions.R:1055
 msgid "max dfbetas"
 msgstr "max dfbetas"
 
-#: reg-assumptions.R:1029
+#: reg-assumptions.R:1055
 msgid "max VIF"
 msgstr "max VIF"
 
-#: reg-assumptions.R:1029
+#: reg-assumptions.R:1055
 msgid "phi"
 msgstr "phi"
 
@@ -1414,6 +1456,14 @@ msgstr ""
 msgid ""
 "%s: cut into four bands, at its mean and one standard deviation either side."
 msgstr ""
+
+#, c-format
+#~ msgid "%% of %s"
+#~ msgstr "%% de %s"
+
+#, c-format
+#~ msgid "empirical logit vs %s"
+#~ msgstr "logit empirique vs %s"
 
 #, c-format
 #~ msgid "%s — %s"

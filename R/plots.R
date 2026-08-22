@@ -57,6 +57,11 @@
 # THE PANEL HEADLINE IS PLOTMATH. One bold assumption word, one plain question, one line -- and the
 #   linearity y axis is a real formula. bquote() buys both without a third Suggests package; the cost
 #   is that the title THEME element must stay plain, or bold() would spread over the whole line.
+#   ⚠ AND that a label may use only what plotmath draws with a RULE or as ordinary text: a math-mode
+#   space, a call's parentheses and `=` / `<` / `>` come from the Adobe SYMBOL font, which `ragg` --
+#   Positron's and RStudio's device -- draws as missing-glyph boxes. The rule, its measurements and
+#   the safe substitutes are in rd_link_expr()'s WARNING (R/reg-assumptions.R); it is locked by
+#   test-tab_reg-plots.R.
 #
 # KEY CONSTRAINTS:
 #   - ggplot2 + gridExtra are Suggests -> every entry point guards with requireNamespace().

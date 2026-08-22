@@ -478,6 +478,12 @@ so the default grid is 4 panels (gaussian / binomial / poisson), 5 (ordinal), 2 
 where the check has a `flag` the mark **is** that flag: a panel and a footer row cannot show two
 thresholds for one check.
 
+**The y axis is the link, written in the table's units.** A `%` sign qualified in subscript by what
+it is a percentage of — the **modelled level**, cleaned by `cleannames_condition()` as every table
+header is — never `p` or `P(y)`: `log(%Married / (1 - %Married))`. The two multi-curve panels keep the
+grammar (`%above the cut / %up to the cut`, `%this category / %Democrat`), and a gaussian or a count
+needs no gloss (`mean of age`).
+
 **Linearity draws the shape the model fits.** The dashed comparator is an `lm` through the observed
 bins — `y ~ x`, or `y ~ x + I(x^2)` for a predictor `shape = "quadratic"` has cured — never a smoother
 (the assumption IS the shape). The facet is named by the model's own terms for that predictor
@@ -497,6 +503,14 @@ go in a `gridExtra::grid.arrange()` grid, which returns a `gtable`.
 **The headline is plotmath.** `bquote(bold(<noun>) * ": <question>")` — one bold assumption word, one
 plain question — and the subtitle is one wrapped sentence in `cols$subtle`. No third Suggests package;
 the price is that the title theme element must stay `face = "plain"`.
+
+⚠⚠ **A label may use only what plotmath draws with a RULE, or as ordinary text.** A math-mode space
+(`~`), a call's parentheses and `=` / `<` / `>` are glyphs of the **Adobe Symbol font**; `ragg` —
+Positron's and RStudio's device — resolves one font for it and draws a **missing-glyph box** for what
+that font lacks, where cairo falls back per glyph. `frac()`, `bar()` and a subscript are rules or
+ordinary text and always render, which is why the fraction and the qualified percentage survive;
+everything else is a plain string (`":  "`, `"log("`). Locked by `test-tab_reg-plots.R` (safe call
+heads: `* - + [ frac bar bold`), measured in `rd_link_expr()`'s WARNING.
 
 ### 13.1 How it gets a fit, and its data
 
