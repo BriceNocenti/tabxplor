@@ -318,9 +318,11 @@ TAB_OPTIONS <- list(
     "Cascadia Mono", "excel", arg = "font_num_stars",
     doc = "number font with stars (monospace, so stars align)."),
 
-  xl_or_numeric = tx_opt(
-    FALSE, "excel", arg = "or_numeric",
-    doc = "keep odds ratios as numbers rather than `1/x` text."),
+  xl_ratio_cells = tx_opt(
+    "fold", "excel", arg = "ratio_cells",
+    doc = c("what a ratio / odds-ratio cell HOLDS in the workbook: `\"fold\"` (the default) the",
+            "signed fold, so Excel prints what the console prints and the cell stays a number;",
+            "`\"raw\"` the untransformed ratio; `\"text\"` the exact display string.")),
 
   # --- plot, paths and language ------------------------------------------------------------------
   plot_num_font = tx_opt(

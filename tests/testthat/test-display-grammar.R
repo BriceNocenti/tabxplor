@@ -508,10 +508,32 @@ testthat::test_that("a column's NAME is its own template, token by token", {
   m <- tab_reg(g, outcome = "married", predictors = "race", empirical = TRUE, family = "binomial")
   testthat::expect_identical(vctrs::vec_ptype_abbr(m$Obs_OR),   "(obs%) OR")
   testthat::expect_identical(vctrs::vec_ptype_abbr(m$Model_OR), "OR (adj%)")
-  # ... on a mean as much as on a percentage, and the fallback is the crosstab reading
+  # ... on a mean as much as on a percentage, and the fallback is the crosstab reading. The tag says
+  # `diff`, the same word the COLUMN NAME does: an identity-link beta is a mean difference, and only
+  # a logged scale earns the word "coefficient" (next block).
   gm <- suppressMessages(tab_reg(g, outcome = "tvhours", predictors = "race", empirical = TRUE))
-  testthat::expect_identical(vctrs::vec_ptype_abbr(gm$Obs_diff),   "(obs mean) coef")
-  testthat::expect_identical(vctrs::vec_ptype_abbr(gm$Model_diff), "coef (adj mean)")
+  testthat::expect_identical(vctrs::vec_ptype_abbr(gm$Obs_diff),   "(obs mean) diff")
+  testthat::expect_identical(vctrs::vec_ptype_abbr(gm$Model_diff), "diff (adj mean)")
+})
+
+testthat::test_that("the `coef` token names the quantity, not the artefact", {
+  g <- gss_cat_data_formatting()
+  # ONE name per quantity: the header composes "log(OR)" (reg_word_logged) and the type tag says the
+  # same thing, so a reader never meets two words for one number.
+  lg <- suppressMessages(tab_reg(g, outcome = "married", predictors = "race",
+                                 family = "binomial", measure = "log", empirical = TRUE))
+  testthat::expect_identical(vctrs::vec_ptype_abbr(lg[["Model_log(OR)"]]), "log(OR)")
+  testthat::expect_identical(vctrs::vec_ptype_abbr(lg[["Obs_log(OR)"]]),   "log(OR)")
+  # the acronym is the FAMILY's own measure, derived from REG_FAMILIES -- not a literal
+  testthat::expect_identical(reg_own_word("binomial"), "OR")
+  testthat::expect_identical(reg_own_word("poisson"),  "IRR")
+  testthat::expect_identical(reg_own_word("ordinal"),  "cumOR")
+  testthat::expect_identical(reg_own_word("gaussian"), "diff")
+  # a `{coef}` asked for by hand on a multiplicative column is log(OR) and says so; on an additive
+  # one it IS the difference
+  m <- suppressMessages(tab_reg(g, outcome = "married", predictors = "race", family = "binomial"))
+  testthat::expect_identical(fmt_coef_label(m$Model_OR), "log(OR)")
+  testthat::expect_identical(fmt_coef_label(fmt(diff = 1, scale = "raw_diff")), "diff")
 })
 
 testthat::test_that("a template is stamped wherever it renders ANYTHING, so a column is one layout", {

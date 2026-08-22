@@ -125,11 +125,17 @@ testthat::test_that("format(syntax = 'excel') emits the expected numFmt codes", 
   ccol <- fmt(n = 1L, ctr = 0.05, scale = "level_pct", pct_type = "row", display = "ctr", digits = 1L)
   testthat::expect_equal(format(ccol, syntax = "excel")[[1]], "+0.0%;-0.0%")
   rcol <- set_digits(set_ratio(set_display(dcol, "rr"), 1.5), 2L)
-  # Phase q: the leading multiply sign is BACKSLASH-escaped (\×#,##0.0), not double-quote-wrapped -- a raw
-  # " in a formatCode crashes the older jamovi-bundled openxlsx2 ("xml import unsuccessful").
+  # A MULTIPLICATIVE CELL HOLDS ITS READING VALUE, so the code has one section per side of the
+  # neutral: the positive one prints the over glyph, the negative one the under glyph, and Excel drops
+  # the minus it was not asked for. The glyphs are BACKSLASH-escaped (\×#,##0.0), never
+  # double-quote-wrapped -- a raw " in a formatCode crashes the older jamovi-bundled openxlsx2.
   rr <- format(rcol, syntax = "excel")[[1]]
   testthat::expect_false(grepl('"', rr, fixed = TRUE))
-  testthat::expect_match(rr, "^\\\\.#,##0\\.00$")
+  testthat::expect_match(rr, "^\\\\.#,##0\\.00;\\\\.#,##0\\.00$")
+  # the value the workbook holds: above the neutral as it stands, below it the signed fold
+  testthat::expect_equal(fmt_excel_value(rcol)[[1]], 1.5)
+  testthat::expect_equal(fmt_excel_value(set_ratio(rcol, 0.5))[[1]], -2)
+  testthat::expect_equal(fmt_excel_value(set_ratio(rcol, 0.5), fold = FALSE)[[1]], 0.5)
 
   # pct_ci (ci = "cell") -> TEXT (the value+CI string is pre-formatted; a documented limitation)
   ci <- tab(gss, marital, race, pct = "row", ci = "cell")

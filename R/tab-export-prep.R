@@ -12,12 +12,21 @@
 #     NA-hiding, the new_col_var transition index). The prep factors only the shared, expensive,
 #     derive-once quantities -- and, from 14i, the shared MODEL the backends' markup differs over.
 #   - THE HEADER IS THREE ROWS, decided here for every backend: the variable-NAME span, the level
-#     names, and the UNIT row -- what each column HOLDS ("row%", "row% (n)", "OR (row%)"), built by
-#     fmt_display_label() from the column's own display template. It exists because a composite cell
-#     showed an aside in every row and named it nowhere. Two rules keep it quiet: it is written ONCE
-#     per (variable, unit) run, in that run's leftmost column, and it repeats nothing the level
-#     header already says (`unit == clean` -> blank), which is what leaves an `n` / `sd` / Excel
-#     `aside` column named exactly once.
+#     names, and the UNIT row -- what each column HOLDS ("<row%>", "<row% (n)>", "<OR (row%)>"),
+#     built by fmt_display_label() from the column's own display template and written in the console
+#     type tag's own angle brackets. It exists because a composite cell showed an aside in every row
+#     and named it nowhere.
+#   - ONE UNIT PER BLOCK. `tab_col_block_ids()` is the one definition of a column BLOCK -- a col_var
+#     run within one sub-population, with a Total column its own and every col_var-less helper joined
+#     to whatever it was carved from. Two consumers: the unit line (a block restates its unit, so a
+#     Total says "<row%>" and the count beside it "<n>") and tab_xl's vertical rules (a block is
+#     boxed, so no line falls between a Total and its own count).
+#   - WHICH ROW A COLUMN SAYS ITS NAME IN: the level header names what the TABLE has, the unit line
+#     what it HOLDS. A column the RENDER carved out of another -- a split-off aside, the base count
+#     taken out of a Total cell -- has no level to name and is named by its unit alone. A helper the
+#     table already had (a regression's `n`) keeps both, as the console prints a name over a type tag.
+#     ⚠ NOT under a transpose, which turns the level header into the ROW LABEL and carries no unit
+#     line to say it instead.
 #   - A WHOLE-TABLE HELPER IS NOT A VARIABLE: a base-count or col% column (`role`) takes no name on
 #     the variable-name row. The `sd` twin and the Excel `aside` columns are NOT helpers in that
 #     sense -- they are the second half of their col_var's block and keep its span.
@@ -248,7 +257,7 @@ tab_resolve_tables <- function(tabs, list_method = FALSE, what,
 # Build the render-model for ONE resolved table (already compacted / single). See the file header.
 #' @keywords internal
 prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
-                           theme_cols, var_names = "both") {
+                           theme_cols, var_names = "both", transposed = FALSE) {
   rv <- tab_render_vars(tab)
   if (isTRUE(rv$degrade)) {
     return(list(tab = tab, vars = list(degrade = TRUE, reason = rv$reason)))
@@ -389,7 +398,7 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
   # WARNING: ungated by `var_names`, unlike the header rewrite. A width is not a naming decision, so
   # `var_names = "none"` must still get a narrow sd column.
   sd_cols <- fmt_cols[vapply(tab[fmt_cols], \(col)
-    identical(get_role(col), "aside") &&
+    fmt_is_aside(col) &&
       identical(display_primary(get_display(col))[[1]], "sd"), logical(1))]
 
   # Total-BLOCK border rows (block D borders), lifted verbatim from tab_kable (derive-once, shared by
@@ -479,10 +488,11 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
   # tab_xl's `has_span` (which also drives its geometry offset). So no backend knows it exists.
   # Phase 14j moved the decision INTO the header builder, which also owns the level labels: dropping
   # the span changes what the level header must say (see tab_col_var_header()).
+  col_blocks <- tab_col_block_ids(col_var_map, tab_col_groups(tab), other_cols, totcols)
   col_var_header <- tab_col_var_header(
     tab, list(col_var_map = col_var_map, real_col_vars = real_col_vars, totcols = totcols,
-              var_name_col = var_name_col, sd_cols = sd_cols),
-    name_cols = var_names %in% c("both", "cols"))
+              var_name_col = var_name_col, sd_cols = sd_cols, col_blocks = col_blocks),
+    name_cols = var_names %in% c("both", "cols"), transposed = transposed)
   # Phase k: a single-row_var table heads the row-label column with the variable name -- swap it for the
   # variable label (display only) when tabxplor.var_labels is on. The merged case has no such header
   # (blanked at var_name_col); "levels" is not a variable name, so it never matches a recorded label.
@@ -502,7 +512,7 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
                  row_var_col = row_var_col, totcols = totcols, totrows = totrows,
                  totblock_top = totblock_top,
                  totblock_bottom = totblock_bottom, real_col_vars = real_col_vars,
-                 col_var_map = col_var_map, new_col_var = new_col_var,
+                 col_var_map = col_var_map, new_col_var = new_col_var, col_blocks = col_blocks,
                  new_group = new_group, align = align,
                  label_cols = label_cols, var_name_col = var_name_col,
                  label_runs = label_runs, sd_cols = sd_cols,
@@ -560,7 +570,7 @@ var_label_display <- function(x, tab) {
 # variable's name nowhere. Both `var_names` drops still live in the prep, so Phase 14i's property
 # holds: no backend knows the argument exists.
 #' @keywords internal
-tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
+tab_col_var_header <- function(tab, roles, name_cols = TRUE, transposed = FALSE) {
   nms   <- names(tab)
   cvm   <- roles$col_var_map
   real  <- roles$real_col_vars
@@ -603,9 +613,6 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
       # It reads the column's OWN template (fmt_header_label): "mean", "mean (sd)" where the cell
       # folds one in, and just "mean" where the aside names itself in the cell ("cv 36 %").
       clean[j] <- fmt_header_label(tab[[j]])
-    } else if (isTRUE(name_cols) && is_fmt(tab[[j]]) && identical(get_role(tab[[j]]), "aside")) {
-      # an Excel aside column (mat_aside_cols): headed by the token it holds -- "OR", "n", "ratio"
-      clean[j] <- fmt_display_label(tab[[j]], "plain")
     }
   }
   # Phase g: a regression column disambiguated across several outcomes carries a trailing " [dep]"
@@ -662,14 +669,26 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
                    function(k) is_fmt(tab[[k]]) && get_role(tab[[k]]) %in% c("n", "pct"),
                    logical(1))
   label[helper] <- ""
+  # WHICH ROW A COLUMN SAYS ITS NAME IN. The level header names what the TABLE has; the unit line
+  # names what it HOLDS. A column the RENDER carved out of another has no level to name -- a split-off
+  # aside (mat_aside_cols) and the base count taken out of a Total cell (tab_base_n_pct, whose
+  # col_var is "" because it belongs to no variable) -- so it is named once, by its unit: "<n>",
+  # "<sd>", "<OR>". A helper the table already had (a regression's or a spread's `n`, col_var "n")
+  # keeps both, exactly as the console prints a name over a type tag.
+  # ⚠ NOT under a transpose: it turns this header into the ROW LABEL and carries no unit line to say
+  # it instead, so blanking it would leave that row unnamed -- the same clause the numeric col_var's
+  # header carries above.
+  carved <- !transposed & vapply(seq_along(nms), function(k) {
+    if (!is_fmt(tab[[k]])) return(FALSE)
+    r <- get_role(tab[[k]])
+    fmt_is_aside(tab[[k]]) || (identical(r, "n") && !nzchar(unname(cvm)[[k]]))
+  }, logical(1))
+  clean[carved] <- ""
   lvl <- which(is_level)
   if (length(lvl) > 0 && all(clean[lvl] == unname(cvm)[lvl])) label <- rep("", length(nms))
   # a blanked span row carries no sub-population either: `group` only ever qualifies a `label`.
   grp[!nzchar(label)] <- ""
-  unit <- tab_col_units(tab, cvm)
-  # THE UNIT LINE REPEATS NOTHING THE HEADER ALREADY SAYS: an "n" / "sd" / "OR" column is named by its
-  # own header, so it takes no unit -- the line exists for what a header CANNOT say.
-  unit[unit == clean] <- ""
+  unit <- tab_col_units(tab, roles$col_blocks %||% unname(cvm))
   list(label = label, group = grp, clean = clean, unit = unit)
 }
 
@@ -680,7 +699,7 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
 # and per column wherever the block's columns disagree, which is the only case a reader must be told
 # about. Non-fmt (index) columns hold no unit.
 #' @keywords internal
-tab_col_units <- function(tab, cvm) {
+tab_col_units <- function(tab, blocks) {
   # a column whose aside has MOVED OUT into a column of its own (mat_aside_cols) has already had its
   # display reduced to the primary, so its name promises nothing the cell no longer shows.
   u <- vapply(seq_along(tab), function(j) {
@@ -688,17 +707,21 @@ tab_col_units <- function(tab, cvm) {
     if (!is_fmt(col)) return("")
     fmt_display_label(col, "tag")
   }, character(1))
-  tab_units_once(u, unname(cvm))
+  tab_units_once(u, blocks)
 }
 
-# ... written ONCE per (variable, unit) RUN, in its leftmost column. Shared with the transposed render,
-# which groups by the spanning name instead of the col_var map.
+# ... written ONCE per (BLOCK, unit) RUN, in its leftmost column -- so a five-level block does not
+# repeat itself, while a Total column and the count carved out of it, one block but two units, each
+# say their own. Shared with the transposed render, which groups by the spanning name instead.
+# The angle brackets are the CONSOLE's own type tag (pillar wraps `vec_ptype_abbr()` in them): one
+# notation for "what this column holds", on screen and in every export.
 #' @keywords internal
 tab_units_once <- function(unit, group) {
   r     <- rle(paste0(group, "\r", unit))
   first <- c(1L, utils::head(cumsum(r$lengths), -1L) + 1L)
   out   <- rep("", length(unit))
   out[first] <- unit[first]
+  out[nzchar(out)] <- paste0("<", out[nzchar(out)], ">")
   out
 }
 
@@ -747,6 +770,52 @@ rd_caption <- function(rd, user_caption = NULL, fallback = NULL) {
   if (is.null(cap) && !is.null(rd$reg_title) && !is.na(rd$reg_title)) cap <- rd$reg_title
   if (is.null(cap) && is.function(fallback)) cap <- fallback()
   cap
+}
+
+# tab_col_block_ids() -- THE COLUMN BLOCK: the run of columns a reader takes as ONE thing. A block is a
+# col_var run within one sub-population, with two clauses:
+#   * a TOTAL column is a block of its own -- it is the margin, not a level of the variable;
+#   * a col_var-LESS helper belongs to the block on its left. That is the base count carved out of a
+#     Total cell (tab_base_n_pct) and every aside split off a column (mat_aside_cols): they come from
+#     one fmt column, so no rule may separate them and each states its own unit inside the block.
+# The index columns at the left are one block.
+# ONE definition, two consumers: tab_units_once() (a block restates its unit) and tab_xl's vertical
+# rules (a block is boxed) -- so the line a reader sees and the unit they read cannot disagree.
+# ⚠ NOT tab_col_blocks() (fmt_class.R), which lists the DISTINCT (col_var, col_group) pairs a test
+# grid needs one p-value column for. This is the per-COLUMN index, and a Total column opens a block
+# of its own here precisely because it is not a value block there.
+# The per-column sub-population ("" on a non-fmt column), read once.
+#' @keywords internal
+tab_col_groups <- function(tab)
+  vapply(tab, function(col) if (is_fmt(col)) get_col_group(col) else "", character(1))
+
+#' @keywords internal
+tab_col_block_ids <- function(col_var, col_group = NULL, other_cols = integer(0),
+                              totcols = integer(0)) {
+  n <- length(col_var)
+  if (!n) return(integer(0))
+  cv  <- unname(col_var)
+  grp <- if (is.null(col_group)) rep("", n) else unname(col_group)
+  idx <- seq_len(n) %in% unname(other_cols)
+  tot <- seq_len(n) %in% unname(totcols)
+  key <- ifelse(idx, "\rindex", paste(cv, grp, tot, sep = "\r"))
+  out <- integer(n); b <- 0L; prev <- NA_character_
+  for (j in seq_len(n)) {
+    # a col_var-less HELPER joins its source; a Total never does -- it is the margin, and a transposed
+    # render gives it no col_var at all (its own came from a row).
+    if (!idx[j] && !tot[j] && !nzchar(cv[j]) && b > 0L) { out[j] <- b; next }
+    if (is.na(prev) || !identical(key[[j]], prev)) { b <- b + 1L; prev <- key[[j]] }
+    out[j] <- b
+  }
+  out
+}
+
+# The FIRST column of each block -- where a vertical rule is drawn, and the only edge a backend needs
+# (the next block's left rule is what separates two blocks; the table's own right edge closes it).
+#' @keywords internal
+tab_block_starts <- function(blocks) {
+  if (!length(blocks)) return(integer(0))
+  which(blocks != dplyr::lag(blocks, default = 0L))
 }
 
 # roles_col_var_edges() -- Phase 19h: THE col_var transition index, in the roles_totblock_edges()
@@ -950,7 +1019,7 @@ tab_export_prep <- function(tabs,
     resolved,
     ~ prep_one_table(.x, drop_tab_vars = drop_tab_vars,
                      wrap = wrap, compute = compute, theme_cols = theme_cols,
-                     var_names = var_names)
+                     var_names = var_names, transposed = isTRUE(transpose))
   )
 
   # Phase 14o: opt-in transpose-at-export (all four exporters share this seam; console never transposes).

@@ -1210,6 +1210,14 @@ fmt_has_role <- function(x, roles) {
   is_fmt(x) && as.character(get_role(x))[1] %in% roles
 }
 
+# fmt_is_aside() -- IS THIS A SPLIT-OFF ASIDE? (mat_aside_cols, the Excel columns a composite cell
+# becomes). The role keeps what the column was carved FROM -- "aside:emp" / "aside:model" on a
+# regression column, plain "aside" on a crosstab one -- because the qualifier a percentage prints
+# ("obs%" / "adj%") is read off that role, and overwriting it made a crude aside read "row%".
+# THE ONE TEST, so no consumer re-derives it from a literal.
+#' @keywords internal
+fmt_is_aside <- function(x) startsWith(get_role(x) %||% "", "aside")
+
 fmt_is_helper_col <- function(x) fmt_has_role(x, c("n", "pct"))
 
 # the per-column `conf_level` attribute -- the level this column's interval and thresholds were
@@ -1861,6 +1869,10 @@ EST_SCALES <- list(
                     break_key = "mean_ratio", gap_key = "adj_ratio",
                     label_meas = "ratio", sec = NULL),
   # a beta / a count AME: printed in the OUTCOME's units, coloured on the SD-standardized ladder.
+  # DESIGN: `est_display = "diff"`, like the crosstab row below it -- an identity-link beta IS a mean
+  # difference, and naming it "coef" gave one quantity two names (the header already says `diff`).
+  # `coef` survives only where the model's own scale is logged, and there it says log(OR) -- see
+  # fmt_coef_label().
   # WARNING: raw_diff and mean_diff are NOT one row with two `sd_from` values -- their `gap_key`
   # differs too (adj_diff_std vs adj_diff), and folding them would mean re-deriving both from
   # `model_family`, i.e. re-introducing the dispatch this key exists to delete. Every stamping site
@@ -1868,7 +1880,7 @@ EST_SCALES <- list(
   raw_diff   = list(kind = "effect", geometry = "difference", var_kind = "coef", ladder = "std",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
                     est_field = "diff",  unit = "units", default_display = "n",
-                    est_display = "coef", base_display = "mean", const_display = "mean",
+                    est_display = "diff", base_display = "mean", const_display = "mean",
                     break_key = "mean_diff",  gap_key = "adj_diff_std",
                     label_meas = "difference", sec = "sd", sd_from = "var"),
   # a crosstab MEAN difference: the same ladder, standardized by the REFERENCE cell's SD rather than
@@ -1959,6 +1971,90 @@ rm(.k)
 
 #' @keywords internal
 fmt_scale_row <- function(x) EST_SCALES[[fmt_scale_key(x)]] %||% EST_SCALES[["mixed"]]
+
+# The journal-convention opt-out: print a ratio raw ("0.83") rather than inverted ("/1.2").
+#' @keywords internal
+tx_ratio_print_raw <- function() identical(getOption("tabxplor.ratio_print", "inverse"), "raw")
+
+# display_segment_of() -- the TEMPLATE of one field, with the literals that belong to it: field `i` of
+# "{pct} (n={n})" is "(n={n})", of "{mean} (sigma{sd})" is "(sigma{sd})". A bracket group is taken
+# whole (that is what a group IS, and its pieces are contiguous); a top-level field is taken bare.
+# ⚠ Only where the group holds ONE field: with two, the group's text belongs to neither alone.
+# Read by mat_aside_cols(), so a split-off aside prints what it printed inside the composite cell.
+#' @keywords internal
+display_segment_of <- function(seg, i) {
+  pj <- which(seg$is_tok)[[i]]
+  g  <- seg$group[[pj]]
+  if (g == 0L || sum(seg$is_tok & seg$group == g) != 1L) return(seg$pieces[[pj]])
+  trimws(paste0(seg$pieces[seg$group == g], collapse = ""))
+}
+
+# fmt_mult_plan() -- WHICH CELLS PRINT A MULTIPLICATIVE DISTANCE, and under which measure's glyphs.
+# A multiplicative cell shows its DISTANCE from the neutral, not its raw value: below the neutral it
+# reads the inverse, so "half" reads as strongly as "double". THE ONE definition, read three times --
+# the text rendering (format()), the Excel number-format sections, and the Excel reading VALUE
+# (fmt_excel_value) -- so a cell, its format code and the number under it cannot disagree.
+#' @keywords internal
+fmt_mult_plan <- function(x, display = NULL, scl = NULL) {
+  scl     <- scl %||% fmt_scale_row(x)
+  display <- display %||% fmt_resolve_scale_tokens(display_primary(get_display(x)), scl)
+  tok     <- c(ratio = "ratio", or = "odds_ratio")
+  cells   <- !is.na(display) & (display %in% names(tok) |
+                                  (isTRUE(scl$mult) & display %in% c("obs", "gap")))
+  # a scale-relative cell takes the COLUMN's measure (EST_SCALES$label_meas): `{est}` on a mean-ratio
+  # column reads "/2", on an odds-ratio one "1/2".
+  meas <- rep(NA_character_, length(display))
+  meas[cells] <- unname(ifelse(display[cells] %in% names(tok), tok[display[cells]],
+                               scl$label_meas %||% NA_character_))
+  list(cells = cells, measure = meas)
+}
+
+# ... and the two glyphs that measure prints on each side of its neutral (MEASURES' own pair, the one
+# the legend ladder and the forest axis also print).
+#' @keywords internal
+fmt_mult_glyphs <- function(measure) {
+  g <- function(side) vapply(measure, function(k)
+    if (is.na(k)) "" else MEASURES[[k]][[side]] %||% "", character(1), USE.NAMES = FALSE)
+  list(over = g("break_over"), under = g("break_under"))
+}
+
+# fmt_excel_value() -- THE NUMBER A WORKBOOK CELL HOLDS.
+# Excel cannot compute inside a number format, so "1/2.11" cannot be shown from a stored 0.474 the way
+# the console shows it. The cell holds the READING VALUE instead: the fold, signed by its direction --
+# `x` at or above the neutral, `-1/x` below it -- which an unconditional two-section code prints as
+# "2.11" and "1/2.11" (Excel drops the minus in a section it was not written into). So the workbook
+# says exactly what the screen says, and stays a real number: it sorts and filters in the direction a
+# reader reads, and takes the reader's own decimal separator. ?tab_xl says how to get the raw ratio
+# back (=IF(A2<0, -1/A2, A2)); `ratio_cells = "raw"` stores it untransformed instead.
+#' @keywords internal
+fmt_excel_value <- function(x, fold = TRUE) {
+  v <- get_num(x)
+  if (!fold || tx_ratio_print_raw()) return(v)
+  scl  <- fmt_scale_row(x)
+  disp <- fmt_resolve_scale_tokens(display_primary(get_display(x)), scl)
+  mp   <- fmt_mult_plan(x, disp, scl)
+  dg   <- get_digits(x)
+  md   <- unname(DISPLAY_MIN_DIGITS[disp]); hit <- !is.na(md) & dg == 0L; dg[hit] <- md[hit]
+  # a value ROUNDING to the neutral keeps the over side, never "1/1.00" -- format()'s own `one` rule
+  sel  <- mp$cells & !is.na(v) & v > 0 & v < 1 & round(1 / v, dg) > 1
+  v[sel] <- -1 / v[sel]
+  v
+}
+
+# fmt_coef_label() -- THE NAME of the `coef` token, composed the way the header is
+# (reg_word_logged): a coefficient is only worth calling one where the model's own scale is LOGGED,
+# and there the truth is log(OR) / log(IRR) / log(cumOR). On an additive column the coefficient IS
+# the difference and says so, which is why an identity-link beta never prints "coef".
+# The acronym comes from the family (reg_own_word); a crosstab, which has none, reads its scale.
+#' @keywords internal
+fmt_coef_label <- function(x) {
+  scl <- fmt_scale_row(x)
+  if (!isTRUE(scl$mult) && !identical(scl$geometry, "log")) return("diff")
+  w <- reg_own_word(get_model_family(x))
+  if (is.na(w) && isTRUE(scl$mult))
+    w <- switch(scl$label_meas %||% "", odds_ratio = "OR", ratio = "ratio", NA_character_)
+  if (is.na(w)) "coef" else paste0("log(", w, ")")
+}
 
 # THE LEVEL a column sits on: the field its scale names for `{base}`, or NA where the scale names
 # none. One read, shared by the display grammar and by the plot's `what = "level"`.
@@ -3178,7 +3274,8 @@ xl_numfmt_literal <- function(s) gsub("(.)", "\\\\\\1", s, perl = TRUE)
 #   text  a rendered string with no number format of its own (a `{ci}` bracket, an n RANGE).
 # WARNING: a negative digit count rounds to a power of ten (Excel thousands mask); a percentage so
 # rounded yields no code -> Excel "General".
-excel_numfmt_code <- function(digits, pct, ci, text, signed = FALSE, ratio = FALSE) {
+excel_numfmt_code <- function(digits, pct, ci, text, signed = FALSE, mult = FALSE,
+                              mult_over = "", mult_under = "") {
   out <- rep(NA_character_, length(digits))
   ok  <- !is.na(digits)
   if (!any(ok)) return(out)
@@ -3188,7 +3285,9 @@ excel_numfmt_code <- function(digits, pct, ci, text, signed = FALSE, ratio = FAL
   isci <- ci[ok]
   txt  <- text[ok]
   sgn  <- if (length(signed) == 1L) rep(signed, sum(ok)) else signed[ok]
-  rat  <- if (length(ratio)  == 1L) rep(ratio,  sum(ok)) else ratio[ok]
+  rat  <- if (length(mult)   == 1L) rep(mult,   sum(ok)) else mult[ok]
+  m_ov <- if (length(mult_over)  == 1L) rep(mult_over,  sum(ok)) else mult_over[ok]
+  m_un <- if (length(mult_under) == 1L) rep(mult_under, sum(ok)) else mult_under[ok]
   n_inf <- n < 0
   n_0   <- n == 0
   rep0_n <- vapply(abs(n), function(k) paste0(rep("0", k), collapse = ""), character(1))
@@ -3213,10 +3312,34 @@ excel_numfmt_code <- function(digits, pct, ci, text, signed = FALSE, ratio = FAL
   can <- !is.na(res) & res != "TEXT"
   s2  <- can & sgn
   res[s2] <- paste0("+", res[s2], ";-", res[s2])
+  # THE MULTIPLICATIVE PAIR, one section per side of the neutral: the cell holds the SIGNED FOLD
+  # (fmt_excel_value), so the positive section prints the over glyph and the negative one the under
+  # glyph -- "x1.20" and "/1.20", "2.11" and "1/2.11". The second section is unconditional, which is
+  # what makes Excel drop the minus: a `[<0]` condition would print it.
   r2  <- can & rat
-  res[r2] <- paste0(xl_numfmt_literal(mult_sign), res[r2])
+  res[r2] <- paste0(xl_numfmt_literal(m_ov[r2]), res[r2], ";",
+                    xl_numfmt_literal(m_un[r2]), res[r2])
   out[ok] <- res
   out
+}
+
+# xl_numfmt_affix() -- put a literal before and/or after a number in EVERY SECTION of its format
+# code. A code may have two sections (a signed difference, a multiplicative pair), and a suffix
+# pasted onto the whole string lands on the last one alone -- which is why a NEGATIVE difference used
+# to wear the significance stars while its positive twin went bare.
+# WARNING: the literal is backslash-escaped (xl_numfmt_literal), NEVER double-quote-wrapped -- a raw
+# " in a formatCode crashes the older jamovi-bundled openxlsx2 ("xml import unsuccessful").
+#' @keywords internal
+xl_numfmt_affix <- function(code, prefix = "", suffix = "") {
+  n   <- length(code)
+  pre <- if (length(prefix) == 1L) rep(prefix, n) else prefix
+  suf <- if (length(suffix) == 1L) rep(suffix, n) else suffix
+  vapply(seq_len(n), function(i) {
+    if (is.na(code[i])) return(NA_character_)
+    if (!nzchar(pre[i]) && !nzchar(suf[i])) return(code[i])
+    parts <- strsplit(code[i], ";", fixed = TRUE)[[1]]
+    paste(paste0(xl_numfmt_literal(pre[i]), parts, xl_numfmt_literal(suf[i])), collapse = ";")
+  }, character(1))
 }
 
 
@@ -3311,7 +3434,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
   # the multiplicative rendering's column-level facts, resolved once (the block after print_num and
   # the `{ci}` bracket both read them). `mult_under` is the MEASURE's own glyph -- see that block.
-  ratio_raw    <- identical(getOption("tabxplor.ratio_print", "inverse"), "raw")
+  ratio_raw    <- tx_ratio_print_raw()
   mult_inverse <- ci_mult && !ratio_raw
   mult_under   <- MEASURES[[scl$label_meas]]$break_under
 
@@ -3377,11 +3500,11 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # A ratio carries a multiply glyph instead, and `gof` shares the `diff` FIELD but is a model-fit
   # statistic, not an estimate -- neither is ever signed.
   diff_signed   <- ok & (display %in% c("diff", "coef", "resid") | (obs_m & !obs_mult))
-  n_wn          <- ok & (display %in% c("n", "n_range", "wn", "mean", "var", "ratio",
-                                        "or", "resid") |
-                           display %in% DISPLAY_GOF_TOKENS |
-                           (display %in% c("ci", "moe") & !is_pct) )
-  n_wn          <- n_wn | (obs_m & obs_mult)
+  # A THOUSANDS MARK IS A PROPERTY OF THE NUMBER, NOT OF THE TOKEN THAT CARRIES IT. It used to be a
+  # list of tokens, which left `diff` / `coef` / `gap` out -- so one gaussian column printed its
+  # Constant row "101 002.4" (token `mean`) beside its effects "+14088.0" (token `coef`). Every
+  # rendered value takes it now; a value under 1000 is unchanged, so only the omissions moved.
+  n_wn          <- ok
   pvalue        <- ok & display == "pvalue"
   # a base count is a genuine RANGE only where a larger `tot_n` sits beside the `n`; otherwise the
   # token prints one number, and Excel keeps it an editable count instead of text.
@@ -3403,11 +3526,17 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     # (so the bypass matches format()'s "+1.2").
     # `moe` IS the +/- numFmt; the BRACKET form has no number format at all, so it exports as the
     # rendered string like every other composite-looking cell.
+    mp <- fmt_mult_plan(x, display, scl)
+    gl <- fmt_mult_glyphs(mp$measure)
+    # under `ratio_print = "raw"` the workbook keeps the raw number, so it prints ONE section with the
+    # over glyph -- the same thing the console does there.
+    if (ratio_raw) gl$under <- gl$over
     return(excel_numfmt_code(digits, pct = excel_pct,
                              ci = !nas & display == "moe",
                              text = n_range_hi | (!nas & display == "ci"),
                              signed = (!nas & display %in% c("ctr", "diff", "resid")) | obs_as_pct,
-                             ratio  = !nas & display == "ratio"))
+                             mult = !nas & mp$cells,
+                             mult_over = gl$over, mult_under = gl$under))
   }
 
 
@@ -3455,16 +3584,12 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # recursion (special_formatting = FALSE) that dropped the inverse, so "{or} ({obs})" printed a raw
   # "0.37" beside a "1/2.67" in the same table. Text syntax only (Excel keeps a real number).
   # Opt out with options(tabxplor.ratio_print = "raw") for the journal convention.
-  mult_tok   <- c(ratio = "ratio", or = "odds_ratio")
-  # the scale-relative cells take the COLUMN's measure (EST_SCALES$label_meas): `{est}` on a
-  # mean-ratio column reads "/2", on an odds-ratio one "1/2".
-  mult_cells <- ok & (display %in% names(mult_tok) |
-                        (ci_mult & display %in% c("obs", "gap")))
+  mult_plan  <- fmt_mult_plan(x, display, scl)
+  mult_cells <- ok & mult_plan$cells
   if (any(mult_cells) && !ratio_raw) {
     v    <- num_out[mult_cells]
     dg   <- digits[mult_cells]
-    d    <- display[mult_cells]
-    meas <- unname(ifelse(d %in% names(mult_tok), mult_tok[d], scl$label_meas))
+    meas <- mult_plan$measure[mult_cells]
     inv  <- !is.na(v) & v > 0 & v < 1
     mag  <- ifelse(inv, 1 / v, v)
     num  <- prettyNum(print_num(mag, dg), big.mark = pad, preserve.width = "individual")
@@ -3651,7 +3776,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
       # ⚠ NOT on an Excel ASIDE column (mat_aside_cols): it exists to hold ONE field beside the column
       # it was split out of, so re-composing the pair there would print the bracket twice.
-      if (any(!is.na(get_pct(x)[disp_or])) && !identical(get_role(x), "aside")) {  # annotate ref %
+      if (any(!is.na(get_pct(x)[disp_or])) && !fmt_is_aside(x)) {  # annotate ref %
         reffmt <- set_display(x[disp_or], "pct") |> set_digits(0L) |> format()
         reffmt <- suppressWarnings(
           stringi::stri_pad(reffmt, suppressWarnings(max(stringi::stri_length(reffmt), na.rm = TRUE)),
@@ -5083,7 +5208,7 @@ legend_break_label <- function(measure, brk, dir, is_pct, lang, policy = "ignore
   # the way the cells write it -- the plain number, and the inverse below the neutral. Only where the
   # two sides have DIFFERENT glyphs: a contribution is direction-free and reads "x2" on both sides.
   if (isTRUE(m$threshold_mult) && !identical(m$break_under, m$break_over) &&
-      identical(getOption("tabxplor.ratio_print", "inverse"), "raw")) {
+      tx_ratio_print_raw()) {
     v <- abs(brk) * scale
     return(legend_num(if (dir < 0L) 1 / v else v, lang))
   }

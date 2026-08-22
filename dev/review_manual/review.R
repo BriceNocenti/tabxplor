@@ -887,6 +887,25 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "reli
 
 
 ### exports and display tests  ---- 
+list(
+  tab(gss_simple, c("rincome", "age"), "marital", pct = "row", color = TRUE),
+  tab(gss_simple, c("rincome", "age"), "marital", pct = "row", color = TRUE, color_signif = "grey_non_signif"),
+  tab(gss_simple, c("rincome", "age"), "marital", pct = "row", color = TRUE, color_signif = "guaranteed_effect"),
+  tab(gss_simple, c("rincome", "age"), "marital", pct = "row", color = TRUE, ref = 1),
+  tab(gss_simple, c("rincome", "age"), "marital", pct = "row", color = TRUE, ref = 1, color_signif = "grey_non_signif"),
+  tab(gss_simple, c("rincome", "age"), "marital", pct = "row", color = TRUE, ref = 1, color_signif = "guaranteed_effect")
+) |> 
+  tab_export("xl", path = "~/Excel_test.xlsx", replace = TRUE)
+
+list(
+  tab_reg(gss_simple, outcome = "married", predictors = c("rincome", "race", "age"), family = "binomial", empirical = TRUE), 
+  tab_reg(gss_simple, outcome = "tvhours", predictors = c("rincome", "race", "age"), family = "poisson", empirical = TRUE),
+  tab_reg(gss_simple, outcome = "tvhours", predictors = c("rincome", "race", "age"), family = "poisson", color="adjustment"),
+  tab_reg(gss_simple, outcome = "age", predictors = c("rincome", "race", "tvhours"), family = "gaussian", empirical = TRUE)
+) |> 
+  tab_export("xl", path = "~/Excel_test_reg.xlsx", replace = TRUE)
+
+
 
 # "md"
 tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
@@ -909,6 +928,10 @@ tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "
 #   Strange thing is that it seems to be caused not by bold anymore, but by the colored background 
 #   (do it adds a margin ? Would it be more reliable and more visually good if we remove the margin, 
 #   or add it in cells with no specific color background ?)
+
+
+
+
 
 
 

@@ -67,7 +67,7 @@ relevant function, which always wins over the option.
 \item{\code{tabxplor.xl_font_text}}{\code{"DejaVu Sans Condensed"} (default): text (labels/headers) font. Per-call \verb{font_text =}.}
 \item{\code{tabxplor.xl_font_num}}{\code{"DejaVu Sans"} (default): number font without stars. xlsx records ONE name (no fallback list), so set a font installed where the workbook is opened. Per-call \verb{font_num =}.}
 \item{\code{tabxplor.xl_font_num_stars}}{\code{"Cascadia Mono"} (default): number font with stars (monospace, so stars align). Per-call \verb{font_num_stars =}.}
-\item{\code{tabxplor.xl_or_numeric}}{\code{FALSE} (default): keep odds ratios as numbers rather than \code{1/x} text. Per-call \verb{or_numeric =}.}
+\item{\code{tabxplor.xl_ratio_cells}}{\code{"fold"} (default): what a ratio / odds-ratio cell HOLDS in the workbook: \code{"fold"} (the default) the signed fold, so Excel prints what the console prints and the cell stays a number; \code{"raw"} the untransformed ratio; \code{"text"} the exact display string. Per-call \verb{ratio_cells =}.}
 }
 }
 

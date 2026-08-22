@@ -708,7 +708,9 @@ EXPORT_ARGS <- list(
   tooltips = list(producers = "tab_html", option = "tooltips", doc_in_producer = TRUE),
   popover  = list(producers = "tab_html", option = "popover",  doc_in_producer = TRUE),
   print_rules = list(producers = "tab_css", option = "print_rules", doc_in_producer = TRUE),
-  or_numeric  = list(producers = "tab_xl",  option = "or_numeric",  doc_in_producer = TRUE),
+  ratio_cells = list(producers = "tab_xl",  option = "ratio_cells", doc_in_producer = TRUE),
+  check       = list(producers = "tab_xl",  doc_in_producer = TRUE),
+  data        = list(producers = "tab_xl",  doc_in_producer = TRUE),
   font_text = list(producers = "tab_xl", option = "font_text", doc_in_producer = TRUE),
   font_num  = list(producers = "tab_xl", option = "font_num",  doc_in_producer = TRUE),
   font_num_stars = list(producers = "tab_xl", option = "font_num_stars", doc_in_producer = TRUE)

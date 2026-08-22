@@ -313,8 +313,10 @@ test_that("{obs} renders bare and in a composite, and round-trips through get_nu
   testthat::expect_equal(get_num(set_display(x, "obs")), get_obs(x))
   v <- seq_along(x) + 0
   testthat::expect_equal(get_obs(set_num(set_display(x, "obs"), v)), v)
-  # Excel shows the PRIMARY token only, and its code matches the OR mask (bare, 2 decimals)
-  testthat::expect_equal(unique(format(set_display(x, "obs"), syntax = "excel")), "#,##0.00")
+  # Excel shows the PRIMARY token only, and its code matches the OR mask (bare, 2 decimals) -- with
+  # the second section an odds ratio takes on every medium, so a cell below the neutral reads "1/x"
+  testthat::expect_equal(unique(format(set_display(x, "obs"), syntax = "excel")),
+                         "#,##0.00;\\1\\/#,##0.00")
   # an AME column's obs is a probability difference -> x100, signed, "%" (both media agree)
   a <- tab_reg(d, outcome = "married", predictors = c("race", "party3"), family = "binomial",
                effect = "marginal", measure = "difference", empirical = TRUE)

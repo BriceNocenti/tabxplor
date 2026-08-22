@@ -484,7 +484,8 @@ testthat::test_that("html engine: a merged table names each row-variable once, v
   testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="4">race</td>')
   testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="7">marital</td>')
   testthat::expect_length(gregexpr(">race</td>", h, fixed = TRUE)[[1]], 1L)
-  testthat::expect_length(gregexpr("rowspan", h)[[1]], 2L)
+  # two label merges + the two index columns' headers over the unit row below them
+  testthat::expect_length(gregexpr("rowspan", h)[[1]], 4L)
   # the literal "row_var" header is gone (a bug fix, not a var_names setting)
   testthat::expect_no_match(h, ">row_var<", fixed = TRUE)
   # a rowspan must not desync the column-wise assembly: every row still closes
@@ -511,7 +512,9 @@ testthat::test_that("html engine: var_names drops the row-name column / the col_
   testthat::expect_no_match(h_of("cols"), ">race</td>")
   testthat::expect_match(h_of("cols"), "tx-span", fixed = TRUE)
   testthat::expect_no_match(h_of("none"), "tx-span", fixed = TRUE)
-  testthat::expect_no_match(h_of("none"), "rowspan", fixed = TRUE)
+  # no LABEL merge (there is no name column left to merge); the index column's header still takes
+  # the unit row below it, which is a header decision, not a variable name
+  testthat::expect_no_match(h_of("none"), "tx-lbl[^\"]*\" rowspan")
 })
 
 testthat::test_that("tab_css() carries the label / vertical-name role classes", {

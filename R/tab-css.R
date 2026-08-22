@@ -5,9 +5,13 @@
 #   hard-coded html_style_block() (tab-render-html.R).
 # KEY CONSTRAINTS:
 #   - The header block is THREE rows: `.tx-span` (the variable names), the level headers, and
-#     `.tx-unit` (what each column HOLDS -- "row% (n)", "OR (row%)"). The unit row is deliberately
-#     quiet: small, regular weight, the ASIDE ink (the same theme-resolved grey `.tx-sec` wears), and
-#     NO border and no top padding, so it reads as a continuation of the header above it.
+#     `.tx-unit` (what each column HOLDS -- "<row% (n)>", "<OR (row%)>"). The unit row is deliberately
+#     quiet: small, regular weight, ITALIC like the console type tag it is, left-aligned (the tag
+#     names its column, it does not label its numbers), in the chrome's `grey` -- set further back
+#     than any cell -- and with NO rule of its own. The row ABOVE it drops its bottom rule too, so
+#     the two read as one header band closed by a single line underneath.
+#     ⚠ SPECIFICITY: `thead .tx-unit` is (0,2,1), like the `thead .tx-r/.tx-l` pair, so it must be
+#     emitted AFTER that pair or the row centres itself again.
 #   - The CSS is TABLE-INDEPENDENT: a pure function of (palette, theme). That is the whole
 #     point of naming classes by palette SLOT rather than by break value -- it is what lets a document
 #     emit the stylesheet ONCE (tab_css()) and reuse it for every table, and what makes class collisions
@@ -250,6 +254,11 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
     add(".tabxplor-tab tbody tr:hover", "background", cl$hover, cd$hover, cp$hover)
     add(tx_cell_sel("g1"), "color", cl$grey,  cd$grey,  cp$grey)
     add(tx_cell_sel("g2"), "color", cl$grey2, cd$grey2, cp$grey2)
+    # THE UNIT ROW takes the chrome's `grey`, not the aside's `grey2`: it is a line of the header
+    # saying what a column holds, set further back than any cell, and it says so in every theme --
+    # unlike the aside's ink it is NOT gated on `color_whole_cell`, having nothing to do with where a
+    # colour stops inside a cell.
+    add(".tabxplor-tab .tx-unit", "color", cl$grey, cd$grey, cp$grey)
     # Phase 15d: the table title -- FULL-contrast in both themes (pure black in light, white in dark), not
     # the softened body grey. Theme-aware so a dark-mode page keeps it legible; jamovi results are light,
     # where it is the maintainer's requested pure black.
@@ -263,8 +272,6 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
     if (!color_whole_cell_opt()) {
       add(".tabxplor-tab .tx-sec", "color", color_secondary_hex("light"),
           color_secondary_hex("dark"), color_secondary_hex(print_theme))
-    add(".tabxplor-tab .tx-unit", "color", color_secondary_hex("light"),
-        color_secondary_hex("dark"), color_secondary_hex(print_theme))
       # ... and the same for the FACE, which only the print palette has: the aside is not what any
       # measure grades, so the direction/magnitude typography stops at the primary exactly as the colour
       # does. Print-only values, so the light/dark layers stay byte-identical.
@@ -472,18 +479,29 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
            "border-top-style:solid;border-top-width:1px;}"),
     paste0(".tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;",
            "border-bottom-style:solid;border-bottom-width:1px;}"),
-    # Phase 22c-ii: the UNIT row under the level headers -- what each column HOLDS ("row% (n)",
-    # "OR (row%)"), the exports' answer to a composite cell whose aside was shown everywhere and named
-    # nowhere. Discrete BY DESIGN: small, regular weight, and no border and no top padding of its own,
-    # so it reads as a continuation of the header above rather than a second header row. Its INK is
-    # the aside's, set with the theme-aware add() beside .tx-sec.
-    paste0(".tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;",
-           "border-top-width:0;padding-top:0;}"),
     ".tabxplor-tab .tx-r{text-align:right;}",
     ".tabxplor-tab .tx-l{text-align:left;}",
     # thead th's `text-align:center` must beat the column's own alignment: same specificity (0,2,0)
     # vs (0,2,0), so SOURCE ORDER decides -- this pair must stay after .tx-r/.tx-l.
     ".tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}",
+    # THE UNIT ROW -- the console's own type tag ("<row%>", "<n>"), carried into every export. It says
+    # what a column HOLDS, which is the exports' answer to a composite cell whose aside is shown in
+    # every row and named nowhere. Discrete BY DESIGN: small, regular weight, italic like a pillar
+    # tag, in the chrome grey, and NO rule of its own -- it reads as the second line of the header,
+    # not as a second header row.
+    # ⚠ SPECIFICITY: `thead .tx-unit` is (0,2,1), the same as the `thead .tx-r/.tx-l` pair above, so
+    # this must stay AFTER it or the row centres itself again. Left, because the tag names the column
+    # rather than labelling its numbers (markdown cannot: a pipe column is aligned once, for the whole
+    # column).
+    paste0(".tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;",
+           "text-align:left;border-top-width:0;padding-top:0;}"),
+    # ... and NO horizontal rule between the level names and it: `thead th` gives every header cell a
+    # bottom rule, which drew a line through the middle of one header block. The block is closed by
+    # the unit row's own bottom rule instead.
+    # ⚠ `:not([rowspan])` is load-bearing. An INDEX column's header spans BOTH rows, so it is itself
+    # the bottom of the header block in its column -- there is no unit cell under it to close it, and
+    # dropping its rule left the levels column open onto the first data row.
+    ".tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}",
     # Phase g: numbers are MONOSPACE by default (was: proportional unless the table showed stars).
     # Proportional digits drift out of column alignment -- worse under the bold references / significant
     # cells the html render adds -- so the monospace stack keeps every figure column-locked. The size

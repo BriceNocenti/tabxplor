@@ -421,6 +421,11 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     cell_widths[, j] <- nchar(cell_data[[j]])
   }
   header_widths <- nchar(col_names)
+  # THE UNIT ROW IS A HEADER ROW, so it sizes its column like one: its text is written between two
+  # emphasis markers, and a "<row% (n)>" tag is regularly wider than the level name above it. Without
+  # this the unit cell simply overflowed its column and every pipe below it stepped right.
+  if (!is.null(cvh$unit))
+    header_widths <- pmax(header_widths, ifelse(nzchar(cvh$unit), nchar(cvh$unit) + 2L, 0L))
 
   # Phase 14i: `bold_rows` is a pure ROW set, applied to every column -- so a bold row bolded the LABEL
   # cell too (`**DIPLOM**`). The label columns opt out, here at the consumer (the prep cannot know a

@@ -3,8 +3,10 @@
 #       render_kable_html() isolates the engine so the render-model (rd, meta) stays engine-agnostic.
 # KEY CONSTRAINTS:
 #   - The `<thead>` is THREE rows: the `tx-span` variable names, the level headers, and the `tx-unit`
-#     row -- what each column HOLDS ("row% (n)", "OR (row%)"), which is the one place an export names
-#     the ASIDE of a composite cell. Its look is a CLASS, like every other: R/tab-css.R owns it.
+#     row -- what each column HOLDS ("<row% (n)>", "<OR (row%)>"), which is the one place an export
+#     names the ASIDE of a composite cell. Its look is a CLASS, like every other: R/tab-css.R owns
+#     it. An INDEX column has no unit, so its header takes both rows (`rowspan`) and is bottom-
+#     aligned, putting "levels" on the same line as the "<row%>" beside it; Excel merges the same two.
 #   - ONE engine since Phase 19l: the home-built renderer. Geometry and colour are role CLASSES
 #     resolved by tab_css() -- it emits NO inline style at all -- assembled in ~O(n_col+n_row) paste0
 #     calls (Phase 9 idiom: base masks, vectorised assembly, NO case_when/if_else over fmt).
@@ -503,16 +505,22 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   # "Telе:<br>occasionnel". kableExtra never hit this: it passes col.names through knitr::kable(escape
   # = FALSE). Escape, then restore the tag we ourselves injected -- so a `<` a USER put in a level name
   # is still escaped.
-  head_cells <- paste0('<th class="', cls_col, '">', html_escape_br(cvh$clean), '</th>')
+  # THE UNIT ROW: what each column HOLDS, in the console type tag's own words and its own notation --
+  # "<row%>", "<n>", "<OR (row%)>". It is what names the ASIDE of a composite cell, which every
+  # backend showed and none named. `tx-unit` keeps it discreet: grey, small, italic and with no rule
+  # of its own, so it reads as the header's second line rather than a second header row.
+  has_unit <- !is.null(cvh$unit) && any(nzchar(cvh$unit))
+  # AN INDEX COLUMN HAS NO UNIT, so its header takes both rows instead of floating above a blank
+  # cell: one `rowspan`ned `<th>`, bottom-aligned by `thead th`, which puts "levels" on the same
+  # line as the "<row%>" beside it. Excel does the same with a merge.
+  span2 <- has_unit & seq_along(cls_col) %in% unname(roles$other_cols)
+  head_cells <- paste0('<th class="', cls_col, '"', ifelse(span2, ' rowspan="2"', ''), '>',
+                       html_escape_br(cvh$clean), '</th>')
   thead <- paste0('<tr>', paste0(head_cells, collapse = ""), '</tr>')
 
-  # THE UNIT ROW (Phase 22c-ii): what each column HOLDS, in the console type tag's own words --
-  # "row%", "row% (n)", "OR (row%)". It is what names the ASIDE of a composite cell, which every
-  # backend showed and none named. Discrete by design: `tx-unit` gives it grey, smaller text and NO
-  # rule of its own, so it reads as a continuation of the header above rather than a second row.
-  unit_thead <- if (!is.null(cvh$unit) && any(nzchar(cvh$unit))) {
-    paste0('<tr>', paste0('<th class="', cls_col, ' tx-unit">',
-                          htmltools::htmlEscape(cvh$unit), '</th>', collapse = ""), '</tr>')
+  unit_thead <- if (has_unit) {
+    paste0('<tr>', paste0('<th class="', cls_col[!span2], ' tx-unit">',
+                          htmltools::htmlEscape(cvh$unit[!span2]), '</th>', collapse = ""), '</tr>')
   } else ""
 
   # Phase 13c-iii: the col_var spanning-name header row -- each variable name centred (colspan) over its

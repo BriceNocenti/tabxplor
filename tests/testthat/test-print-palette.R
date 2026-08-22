@@ -378,10 +378,15 @@ testthat::test_that("markdown needs no code of its own: the stylesheet carries p
 
 testthat::test_that("Excel writes the face as real font attributes", {
   skip_if_not_installed("openxlsx2")
+  # ⚠ the NUMBER font only. The unit row is header chrome and is italic in every theme (it is the
+  # console's own type tag); what must not happen under a COLOUR palette is a cell wearing a FACE,
+  # and a cell is written in `font_num` ("DejaVu Sans"), the header in `font_text` (its Condensed
+  # sibling). Matching on the number font is what makes this assertion about the palette.
   fonts_of <- function(theme) {
     p <- withr::local_tempfile(fileext = ".xlsx")
     tab_xl(zz_deep(), path = p, theme = theme, replace = TRUE)
-    paste(as.character(openxlsx2::wb_load(p)$styles_mgr$styles$fonts), collapse = " ")
+    f <- as.character(openxlsx2::wb_load(p)$styles_mgr$styles$fonts)
+    paste(grep('name val="DejaVu Sans"', f, fixed = TRUE, value = TRUE), collapse = " ")
   }
   testthat::expect_match(fonts_of("print_minimalistic"), "<i/>|<i />|<i val")
   testthat::expect_match(fonts_of("print_minimalistic"), "<u/>|<u />|<u val")

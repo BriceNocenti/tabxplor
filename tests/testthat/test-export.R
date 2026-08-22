@@ -105,7 +105,11 @@ testthat::test_that("var_names is honoured by every exporter, and defaults to th
   tmp <- withr::local_tempfile(fileext = ".xlsx")
   suppressMessages(tab_export(merged, "xl", path = tmp, open = FALSE, replace = TRUE,
                               var_names = "none"))
-  testthat::expect_length(openxlsx2::wb_load(tmp)$worksheets[[1]]$mergeCells, 0L)
+  # `var_names = "none"` drops the name COLUMN and the span row; what is left is the prose merges
+  # (the title, each footer line) and the index column's header over the unit row -- none of them a
+  # variable name.
+  mg <- sub('".*$', "", sub('^.*ref="', "", unlist(openxlsx2::wb_load(tmp)$worksheets[[1]]$mergeCells)))
+  testthat::expect_length(grep("^A[0-9]+:A", mg, value = TRUE), 1L)   # the header/unit one only
 
   # plot (soft-deprecated, but it takes the same arg -- the drop happens in the shared prep)
   testthat::skip_if_not_installed("ggpubr")

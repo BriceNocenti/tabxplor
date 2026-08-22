@@ -97,10 +97,14 @@ test_that("numFmt literals are backslash-escaped, never double-quote-wrapped (Ph
   expect_identical(xl_numfmt_literal(""), "")                  # empty passes through
   expect_false(grepl('"', xl_numfmt_literal(" (Chi2)")))       # never emits a quote
 
-  # the ratio code path (excel_numfmt_code ratio = TRUE) folds the multiply sign -> no raw quote
-  code <- excel_numfmt_code(digits = 1L, pct = FALSE, ci = FALSE, text = FALSE, ratio = TRUE)
+  # the multiplicative code path folds BOTH glyphs -> one section per side of the neutral, no raw quote
+  code <- excel_numfmt_code(digits = 1L, pct = FALSE, ci = FALSE, text = FALSE,
+                            mult = TRUE, mult_over = mult, mult_under = "\u00f7")
   expect_false(grepl('"', code))
   expect_true(grepl(mult, code, fixed = TRUE))
+  expect_identical(length(strsplit(code, ";", fixed = TRUE)[[1]]), 2L)
+  # ... and an affix lands on EVERY section, which is what puts the stars on both signs
+  expect_identical(xl_numfmt_affix("+0.0%;-0.0%", suffix = "*"), "+0.0%\\*;-0.0%\\*")
 })
 
 

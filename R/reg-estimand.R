@@ -341,6 +341,19 @@ REG_CONTRASTS <- list(
 stopifnot("every contrast declares its marker" =
             setequal(names(REG_CONTRASTS), REG_CONTRAST_VALUES))
 
+# reg_own_word() -- the acronym a family's OWN measure is named by ("OR", "IRR", "cumOR"), DERIVED
+# from the three facts the family already declares: `level`, the first entry of `fits` (its own
+# link), and any `words` override. Read by fmt_coef_label(), so a new family names its coefficient
+# with no row of its own. NA on the internal link keys, which declare no `fits`.
+#' @keywords internal
+#' @noRd
+reg_own_word <- function(family) {
+  r <- REG_FAMILIES[[family %||% ""]]
+  if (is.null(r) || !length(r$fits)) return(NA_character_)
+  m <- names(r$fits)[[1]]
+  r$words[[m]] %||% REG_LEVEL_MEASURES[[r$level]][[m]][["word"]] %||% NA_character_
+}
+
 # reg_word() -- THE column header word.
 #' @keywords internal
 #' @noRd

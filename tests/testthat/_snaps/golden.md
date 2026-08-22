@@ -21,10 +21,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -50,9 +51,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -76,9 +77,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -99,18 +100,18 @@
       </style>
       
       ::: {.tabxplor-tab}
-      | marital       | |Other  |Black  |White  | |          Total  |
-      |:--------------|-|------:|------:|------:|-|----------------:|
-      |               | | *race*|       |       | |                 |
-      |               | |*row%*  |       |       | |     *row% (n)*  |
-      |               | |       |       |       | |                 |
-      | No answer     | |  12%  |  12%  |  76%  | |  100% (    17)  |
-      | Never married | |  12%  |  24%  |  64%  | |  100% ( 5 416)  |
-      | Separated     | |  15%  |  26%  |  59%  | |  100% (   743)  |
-      | Divorced      | |   6%  |  15%  |  79%  | |  100% ( 3 383)  |
-      | Widowed       | |   4%  |  14%  |  82%  | |  100% ( 1 807)  |
-      | Married       | |   9%  |   9%  |  82%  | |  100% (10 117)  |
-      |**Total**      | | **9%**|**15%**|**76%**| |**100%** (21 483)|
+      | marital       | |   Other  |Black  |White  | |          Total  |
+      |:--------------|-|---------:|------:|------:|-|----------------:|
+      |               | | *race*   |       |       | |                 |
+      |               | |*<row%>*  |       |       | |   *<row% (n)>*  |
+      |               | |          |       |       | |                 |
+      | No answer     | |     12%  |  12%  |  76%  | |  100% (    17)  |
+      | Never married | |     12%  |  24%  |  64%  | |  100% ( 5 416)  |
+      | Separated     | |     15%  |  26%  |  59%  | |  100% (   743)  |
+      | Divorced      | |      6%  |  15%  |  79%  | |  100% ( 3 383)  |
+      | Widowed       | |      4%  |  14%  |  82%  | |  100% ( 1 807)  |
+      | Married       | |      9%  |   9%  |  82%  | |  100% (10 117)  |
+      |**Total**      | |    **9%**|**15%**|**76%**| |**100%** (21 483)|
       :::
 
 # golden display (tab_md) unchanged: f_ci_cell
@@ -136,10 +137,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -165,9 +167,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -191,9 +193,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -214,18 +216,18 @@
       </style>
       
       ::: {.tabxplor-tab}
-      | marital       | |    Other  |     Black  |     White  | |          Total  |
-      |:--------------|-|----------:|-----------:|-----------:|-|----------------:|
-      |               | | *race*    |            |            | |                 |
-      |               | |*row%-ci*  |            |            | |     *row% (n)*  |
-      |               | |           |            |            | |                 |
-      | No answer     | |  [3;34]%  |   [3;34]%  |  [53;90]%  | |  100% (    17)  |
-      | Never married | | [11;13]%  |  [23;25]%  |  [63;65]%  | |  100% ( 5 416)  |
-      | Separated     | | [12;18]%  |  [23;30]%  |  [55;62]%  | |  100% (   743)  |
-      | Divorced      | |   [5;7]%  |  [13;16]%  |  [78;80]%  | |  100% ( 3 383)  |
-      | Widowed       | |   [3;5]%  |  [13;16]%  |  [80;83]%  | |  100% ( 1 807)  |
-      | Married       | |  [9;10]%  |    [8;9]%  |  [81;83]%  | |  100% (10 117)  |
-      |**Total**      | |**[9;10]%**|**[14;15]%**|**[76;77]%**| |**100%** (21 483)|
+      | marital       | |      Other  |     Black  |     White  | |          Total  |
+      |:--------------|-|------------:|-----------:|-----------:|-|----------------:|
+      |               | | *race*      |            |            | |                 |
+      |               | |*<row%-ci>*  |            |            | |   *<row% (n)>*  |
+      |               | |             |            |            | |                 |
+      | No answer     | |    [3;34]%  |   [3;34]%  |  [53;90]%  | |  100% (    17)  |
+      | Never married | |   [11;13]%  |  [23;25]%  |  [63;65]%  | |  100% ( 5 416)  |
+      | Separated     | |   [12;18]%  |  [23;30]%  |  [55;62]%  | |  100% (   743)  |
+      | Divorced      | |     [5;7]%  |  [13;16]%  |  [78;80]%  | |  100% ( 3 383)  |
+      | Widowed       | |     [3;5]%  |  [13;16]%  |  [80;83]%  | |  100% ( 1 807)  |
+      | Married       | |    [9;10]%  |    [8;9]%  |  [81;83]%  | |  100% (10 117)  |
+      |**Total**      | |  **[9;10]%**|**[14;15]%**|**[76;77]%**| |**100%** (21 483)|
       :::
 
 # golden display (tab_md) unchanged: f_ci_diff
@@ -251,10 +253,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -280,9 +283,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -306,9 +309,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -329,18 +332,18 @@
       </style>
       
       ::: {.tabxplor-tab}
-      | marital       | |  Other  |   Black  |   White  | |          Total  |
-      |:--------------|-|--------:|---------:|---------:|-|----------------:|
-      |               | | *race*  |          |          | |                 |
-      |               | | *row%*  |          |          | |     *row% (n)*  |
-      |               | |         |          |          | |                 |
-      | No answer     | | 12%     |  12%     |  76%     | |  100% (    17)  |
-      | Never married | | 12%***  |  24%***  |  64%***  | |  100% ( 5 416)  |
-      | Separated     | | 15%***  |  26%***  |  59%***  | |  100% (   743)  |
-      | Divorced      | |  6%***  |  15%     |  79%***  | |  100% ( 3 383)  |
-      | Widowed       | |  4%***  |  14%     |  82%***  | |  100% ( 1 807)  |
-      | Married       | |  9%     |   9%***  |  82%***  | |  100% (10 117)  |
-      |**Total**      | |**9%**   |**15%**   |**76%**   | |**100%** (21 483)|
+      | marital       | |   Other  |   Black  |   White  | |          Total  |
+      |:--------------|-|---------:|---------:|---------:|-|----------------:|
+      |               | | *race*   |          |          | |                 |
+      |               | |*<row%>*  |          |          | |   *<row% (n)>*  |
+      |               | |          |          |          | |                 |
+      | No answer     | |  12%     |  12%     |  76%     | |  100% (    17)  |
+      | Never married | |  12%***  |  24%***  |  64%***  | |  100% ( 5 416)  |
+      | Separated     | |  15%***  |  26%***  |  59%***  | |  100% (   743)  |
+      | Divorced      | |   6%***  |  15%     |  79%***  | |  100% ( 3 383)  |
+      | Widowed       | |   4%***  |  14%     |  82%***  | |  100% ( 1 807)  |
+      | Married       | |   9%     |   9%***  |  82%***  | |  100% (10 117)  |
+      |**Total**      | | **9%**   |**15%**   |**76%**   | |**100%** (21 483)|
       
       \*\*\*: significantly different from the reference category (in bold) at the 99% confidence level; \*\*: at the 95% level; \*: at the 90% level; no star: not significant.
       :::
@@ -368,10 +371,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -397,9 +401,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -423,9 +427,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -449,7 +453,7 @@
       | marital       | |      Other  |       Black  |       White  | |              Total  |
       |:--------------|-|------------:|-------------:|-------------:|-|--------------------:|
       |               | | *race*      |              |              | |                     |
-      |               | |     *row%*  |              |              | |         *row% (n)*  |
+      |               | |   *<row%>*  |              |              | |       *<row% (n)>*  |
       |               | |             |              |              | |                     |
       | No answer     | |   12%       |    12%       |    76%       | |      100% (    17)  |
       | Never married | |   12%       |   [24%]{.p1} |   [64%]{.m2} | |      100% ( 5 416)  |
@@ -485,10 +489,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -514,9 +519,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -540,9 +545,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -566,7 +571,7 @@
       |               | race                | |                    mean  | |                    mean  |
       |:--------------|:--------------------|-|-------------------------:|-|-------------------------:|
       |               |                     | | *age*                    | | *tvhours*                |
-      |               |                     | |             *mean (cv)*  | |             *mean (cv)*  |
+      |               |                     | |           *<mean (cv)>*  | |           *<mean (cv)>*  |
       |               |                     | |                          | |                          |
       | No answer     | Other               | |     [34.0 (cv 25%)]{.m2} | |     [2.0          ]{.m2} |
       |               | Black               | |     [64.0         ]{.p2} | |                          |
@@ -626,10 +631,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -655,9 +661,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -681,9 +687,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -704,13 +710,14 @@
       </style>
       
       ::: {.tabxplor-tab}
-      | race  | |     mean-ci  | |   mean-ci  |
-      |:------|-|-------------:|-|-----------:|
-      |       | | *age*        | | *tvhours*  |
-      |       | |              | |            |
-      | Other | | [38.8;40.1]  | | [2.6;2.9]  |
-      | Black | | [43.3;44.5]  | | [4.0;4.3]  |
-      | White | | [48.5;49.0]  | | [2.7;2.8]  |
+      | race  | |     mean-ci  | |    mean-ci  |
+      |:------|-|-------------:|-|------------:|
+      |       | | *age*        | | *tvhours*   |
+      |       | | *<mean-ci>*  | |*<mean-ci>*  |
+      |       | |              | |             |
+      | Other | | [38.8;40.1]  | |  [2.6;2.9]  |
+      | Black | | [43.3;44.5]  | |  [4.0;4.3]  |
+      | White | | [48.5;49.0]  | |  [2.7;2.8]  |
       :::
 
 # golden display (tab_md) unchanged: totn_drop
@@ -736,10 +743,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -765,9 +773,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -791,9 +799,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -814,16 +822,16 @@
       </style>
       
       ::: {.tabxplor-tab}
-      | g       | |     x  |     y  | |     p  |     q  |     r  | | Total  |
-      |:--------|-|-------:|-------:|-|-------:|-------:|-------:|-|-------:|
-      |         | | *h*    |        | | *k*    |        |        | |        |
-      |         | |*col%*  |        | |*col%*  |        |        | |        |
-      |         | |        |        | |        |        |        | |        |
-      | A       | |   35%  |   29%  | |   30%  |   37%  |   36%  | |   34%  |
-      | B       | |   36%  |   38%  | |   36%  |   37%  |   35%  | |   36%  |
-      | C       | |   29%  |   33%  | |   34%  |   26%  |   29%  | |   30%  |
-      |**Total**| |**100%**|**100%**| |**100%**|**100%**|**100%**| |**100%**|
-      | n       | |   244  |   270  | |   183  |   169  |   193  | |   545  |
+      | g       | |       x  |     y  | |       p  |     q  |     r  | |   Total  |
+      |:--------|-|---------:|-------:|-|---------:|-------:|-------:|-|---------:|
+      |         | | *h*      |        | | *k*      |        |        | |          |
+      |         | |*<col%>*  |        | |*<col%>*  |        |        | |*<col%>*  |
+      |         | |          |        | |          |        |        | |          |
+      | A       | |     35%  |   29%  | |     30%  |   37%  |   36%  | |     34%  |
+      | B       | |     36%  |   38%  | |     36%  |   37%  |   35%  | |     36%  |
+      | C       | |     29%  |   33%  | |     34%  |   26%  |   29%  | |     30%  |
+      |**Total**| |  **100%**|**100%**| |  **100%**|**100%**|**100%**| |  **100%**|
+      | n       | |     244  |   270  | |     183  |   169  |   193  | |     545  |
       :::
 
 # golden display (tab_md) unchanged: f_selfcross
@@ -849,10 +857,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -878,9 +887,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -904,9 +913,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -930,7 +939,7 @@
       | marital       | |No answer  |Never married  |Separated  |Divorced  |Widowed  |Married  | |          Total  |
       |:--------------|-|----------:|--------------:|----------:|---------:|--------:|--------:|-|----------------:|
       |               | | *marital* |               |           |          |         |         | |                 |
-      |               | |   *row%*  |               |           |          |         |         | |     *row% (n)*  |
+      |               | | *<row%>*  |               |           |          |         |         | |   *<row% (n)>*  |
       |               | |           |               |           |          |         |         | |                 |
       | No answer     | |     100%  |           0%  |       0%  |      0%  |     0%  |     0%  | |  100% (    17)  |
       | Never married | |       0%  |         100%  |       0%  |      0%  |     0%  |     0%  | |  100% ( 5 416)  |
@@ -964,10 +973,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -993,9 +1003,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -1019,9 +1029,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -1045,7 +1055,7 @@
       | g       | |             mean  |
       |:--------|-|------------------:|
       |         | | *v*               |
-      |         | |      *mean (cv)*  |
+      |         | |    *<mean (cv)>*  |
       |         | |                   |
       | A       | |      10 (cv 28%)  |
       | B       | |      10 (cv 28%)  |
@@ -1079,10 +1089,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -1108,9 +1119,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -1134,9 +1145,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -1160,7 +1171,7 @@
       | grp     | |                   mean  |
       |:--------|-|------------------------:|
       |         | | *v*                     |
-      |         | |            *mean (cv)*  |
+      |         | |          *<mean (cv)>*  |
       |         | |                         |
       | A       | |     [2.5 (cv 52%)]{.m1} |
       | B       | |     [5.0         ]{.p3} |
@@ -1193,10 +1204,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -1222,9 +1234,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -1248,9 +1260,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -1271,15 +1283,15 @@
       </style>
       
       ::: {.tabxplor-tab}
-      | g       | |    x  |    y  | |    p  |    q  |    r  | |           Total  |
-      |:--------|-|------:|------:|-|------:|------:|------:|-|-----------------:|
-      |         | | *h*   |       | | *k*   |       |       | |                  |
-      |         | |*row%*  |       | |*row%*  |       |       | |*row% (n_range)*  |
-      |         | |       |       | |       |       |       | |                  |
-      | A       | |  52%  |  48%  | |  29%  |  34%  |  37%  | |  100% (165-187)  |
-      | B       | |  46%  |  54%  | |  34%  |  32%  |  34%  | |  100% (191-195)  |
-      | C       | |  44%  |  56%  | |  39%  |  27%  |  34%  | |  100% (158-163)  |
-      |**Total**| |**47%**|**53%**| |**34%**|**31%**|**35%**| |**100%** (514-545)|
+      | g       | |       x  |    y  | |       p  |    q  |    r  | |             Total  |
+      |:--------|-|---------:|------:|-|---------:|------:|------:|-|-------------------:|
+      |         | | *h*      |       | | *k*      |       |       | |                    |
+      |         | |*<row%>*  |       | |*<row%>*  |       |       | |*<row% (n_range)>*  |
+      |         | |          |       | |          |       |       | |                    |
+      | A       | |     52%  |  48%  | |     29%  |  34%  |  37%  | |    100% (165-187)  |
+      | B       | |     46%  |  54%  | |     34%  |  32%  |  34%  | |    100% (191-195)  |
+      | C       | |     44%  |  56%  | |     39%  |  27%  |  34%  | |    100% (158-163)  |
+      |**Total**| |   **47%**|**53%**| |   **34%**|**31%**|**35%**| |  **100%** (514-545)|
       :::
 
 # golden display (tab_md) unchanged: n_mean_color
@@ -1305,10 +1317,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -1334,9 +1347,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -1360,9 +1373,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -1386,7 +1399,7 @@
       | race    | |                    mean  | |                   mean  |
       |:--------|-|-------------------------:|-|------------------------:|
       |         | | *age*                    | | *tvhours*               |
-      |         | |             *mean (cv)*  | |            *mean (cv)*  |
+      |         | |           *<mean (cv)>*  | |          *<mean (cv)>*  |
       |         | |                          | |                         |
       | Other   | |     [39.5 (cv 36%)]{.m3} | |      2.8 (cv 87%)       |
       | Black   | |     [43.9 (cv 37%)]{.m1} | |     [4.2 (cv 84%)]{.p3} |
@@ -1419,10 +1432,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -1448,9 +1462,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -1474,9 +1488,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -1500,7 +1514,7 @@
       |               | race                | |                    mean  | |                    mean  |
       |:--------------|:--------------------|-|-------------------------:|-|-------------------------:|
       |               |                     | | *age*                    | | *tvhours*                |
-      |               |                     | |             *mean (cv)*  | |             *mean (cv)*  |
+      |               |                     | |           *<mean (cv)>*  | |           *<mean (cv)>*  |
       |               |                     | |                          | |                          |
       | No answer     | Other               | |     [34.0 (cv 25%)]{.m2} | |     [2.0          ]{.m2} |
       |               | Black               | |     [64.0         ]{.p2} | |                          |
@@ -1563,10 +1577,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -1592,9 +1607,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -1618,9 +1633,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -1644,7 +1659,7 @@
       | marital       | |        Other  |   Black  |        White  | |        Total  |
       |:--------------|-|--------------:|---------:|--------------:|-|--------------:|
       |               | | *race*        |          |               | |               |
-      |               | |       *col%*  |          |               | |               |
+      |               | |     *<col%>*  |          |               | |     *<col%>*  |
       |               | |               |          |               | |               |
       | No answer     | |      0%       |      0%  |      0%       | |      0%       |
       | Never married | |    [32%]{.m1} |     42%  |    [21%]{.m3} | |    [25%]{.m2} |
@@ -1681,10 +1696,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -1710,9 +1726,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -1736,9 +1752,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -1762,7 +1778,7 @@
       | marital       | |        Other  |   Black  |        White  | |    No answer  |   Don't know  |Inter-nondenominational  |Native american  |    Christian  |Orthodox-christian  | Moslem/islam  |Other eastern  |     Hinduism  |     Buddhism  |   Other  |    None  |       Jewish  |     Catholic  |   Protestant  | |        Total  |
       |:--------------|-|--------------:|---------:|--------------:|-|--------------:|--------------:|------------------------:|----------------:|--------------:|-------------------:|--------------:|--------------:|--------------:|--------------:|---------:|---------:|--------------:|--------------:|--------------:|-|--------------:|
       |               | | *race*        |          |               | | *relig*       |               |                         |                 |               |                    |               |               |               |               |          |          |               |               |               | |               |
-      |               | |       *col%*  |          |               | |       *col%*  |               |                         |                 |               |                    |               |               |               |               |          |          |               |               |               | |               |
+      |               | |     *<col%>*  |          |               | |     *<col%>*  |               |                         |                 |               |                    |               |               |               |               |          |          |               |               |               | |     *<col%>*  |
       |               | |               |          |               | |               |               |                         |                 |               |                    |               |               |               |               |          |          |               |               |               | |               |
       | No answer     | |      0%       |      0%  |      0%       | |      4%       |      0%       |      0%                 |      0%         |      0%       |      0%            |      0%       |      0%       |      0%       |      1%       |      0%  |      0%  |      0%       |      0%       |      0%       | |      0%       |
       | Never married | |    [32%]{.m1} |     42%  |    [21%]{.m3} | |    [24%]{.m2} |     40%       |    [28%]{.m2}           |    [35%]{.m1}   |    [32%]{.m1} |    [14%]{.m3}      |    [30%]{.m2} |    [31%]{.m1} |    [31%]{.m1} |    [33%]{.m1} |     38%  |     40%  |    [24%]{.m2} |    [25%]{.m2} |    [20%]{.m3} | |    [25%]{.m2} |
@@ -1799,10 +1815,11 @@
       .tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;vertical-align:bottom;line-height:1;border-top-width:0;border-bottom-style:solid;border-bottom-width:1px;}
       .tabxplor-tab > thead > tr:first-child > *:not(.tx-span){border-top-style:solid;border-top-width:1px;}
       .tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom-style:solid;border-bottom-width:1px;}
-      .tabxplor-tab .tx-unit{font-weight:normal;font-size:80%;text-align:center;border-top-width:0;padding-top:0;}
       .tabxplor-tab .tx-r{text-align:right;}
       .tabxplor-tab .tx-l{text-align:left;}
       .tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}
+      .tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;text-align:left;border-top-width:0;padding-top:0;}
+      .tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}
       .tabxplor-tab .tx-num{white-space:nowrap;}
       .tabxplor-tab td.tx-num{font-family:"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;font-size:1.1em;line-height:1;}
       .tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}
@@ -1828,9 +1845,9 @@
       .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
       .g1,.tabxplor-tab .g1{color:#949494;}
       .g2,.tabxplor-tab .g2{color:#444444;}
+      .tabxplor-tab .tx-unit{color:#949494;}
       .tabxplor-caption{color:#000000;}
       .tabxplor-tab .tx-sec{color:#444444;}
-      .tabxplor-tab .tx-unit{color:#444444;}
       .p1,.tabxplor-tab .p1{color:#02A5B3;}
       .p2,.tabxplor-tab .p2{color:#0891C9;}
       .p3,.tabxplor-tab .p3{color:#0267C7;}
@@ -1854,9 +1871,9 @@
         .tabxplor-tab tbody tr:hover{background:transparent;}
         .g1,.tabxplor-tab .g1{color:#949494;}
         .g2,.tabxplor-tab .g2{color:#444444;}
+        .tabxplor-tab .tx-unit{color:#949494;}
         .tabxplor-caption{color:#000000;}
         .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
-        .tabxplor-tab .tx-unit{color:#444444;}
         .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
         .p2,.tabxplor-tab .p2{color:#000000;font-weight:normal;text-decoration:underline;}
         .p3,.tabxplor-tab .p3{color:#000000;text-decoration:underline;}
@@ -1880,7 +1897,7 @@
       | marital       | |    Other  | Black  |     White  | |     Total  |
       |:--------------|-|----------:|-------:|-----------:|-|-----------:|
       |               | | *race*    |        |            | |            |
-      |               | |   *col%*  |        |            | |            |
+      |               | | *<col%>*  |        |            | |  *<col%>*  |
       |               | |           |        |            | |            |
       | No answer     | |    0%     |    0%  |     0%     | |     0%     |
       | Never married | |   32%***  |   42%  |    21%***  | |    25%***  |

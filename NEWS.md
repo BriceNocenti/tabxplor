@@ -3,6 +3,13 @@
 
 ## New features
 
+
+* Excel export: ratios and odds ratios are now readable **and** computable --- a cell holds its
+  reading value, so Excel prints `1/2.11` while the cell stays a real number that sorts, filters and
+  takes the reader's own decimal separator (`?tab_xl` gives the formula that recovers the raw ratio).
+  `tab_xl(check = "auto")` draws the model-check plots under each `tab_reg()` table.
+* Every export names each column with the console's own type tag (`<row%>`, `<n>`), and long footer
+  legends are wrapped in a merged cell so an Excel-to-Word paste keeps the table's column widths.
 * **A numeric row or tab variable is now grouped, not exploded.** `tab(data, age, y)` used to make
   one row per distinct value; it now cuts `age` into four bands at its mean and one standard
   deviation either side (one row per value is kept for a counted number or a short scale), and says

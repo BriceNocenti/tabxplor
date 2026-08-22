@@ -54,7 +54,7 @@ tx_transpose_render <- function(rd, backend) {
   # here, so the composite survives in the cell -- but a stray one would duplicate its source row).
   # Order the survivors as the review asks: factor col_var levels, then Total, then n, then means.
   aside_i <- unname(roles$fmt_cols)[vapply(tab[unname(roles$fmt_cols)],
-                                           function(c) identical(get_role(c), "aside"), logical(1))]
+                                           function(c) fmt_is_aside(c), logical(1))]
   data_i  <- setdiff(unname(roles$fmt_cols), aside_i)
   is_tot  <- data_i %in% roles$totcols
   is_n    <- fmt_is_helper_col(tab[data_i])
@@ -265,15 +265,19 @@ tx_transpose_render <- function(rd, backend) {
   # table's column names do not know about it either.
   cvh_unit <- character(length(all_names))
   src_cols <- names(tab)[purrr::map_lgl(tab, ~ is_fmt(.) && !is_totcol(.) &&
-                                          !get_role(.) %in% c("n", "pct", "sd", "aside"))]
+                                          !get_role(.) %in% c("n", "pct", "sd") && !fmt_is_aside(.))]
   if (length(src_cols)) {
     su <- unique(vapply(tab[src_cols], fmt_display_label, character(1), style = "tag"))
     if (length(su) == 1L && nzchar(su)) {
-      cvh_unit[data_pos] <- tx_flip_pct_label(su)
-      # ONE label, at the leftmost data column: every transposed data column carries the same `su`
-      # by construction (that is the condition above), Total included -- after the flip it is the
-      # Total ROW, exactly as in a native table of the same orientation.
-      cvh_unit <- tab_units_once(cvh_unit, replace(character(length(all_names)), data_pos, "d"))
+      # every transposed data column carries the same `su` by construction (that is the condition
+      # above), and so does the Total column the flip created -- it is one more column of the same
+      # kind here, whatever it was before the flip.
+      cvh_unit[union(data_pos, new_totcols)] <- tx_flip_pct_label(su)
+      # ONE PER BLOCK, like the native render: written at the leftmost column of each, so the levels
+      # say it once and the Total -- a block of its own -- restates it. Grouping every data column
+      # together instead is what made a transposed table and its native twin differ by a column width.
+      cvh_unit <- tab_units_once(
+        cvh_unit, tab_col_block_ids(col_grp, other_cols = other_cols, totcols = new_totcols))
     }
   }
   col_var_header <- list(label = cvh_label, clean = cvh_clean, unit = cvh_unit)
@@ -304,6 +308,7 @@ tx_transpose_render <- function(rd, backend) {
     totblock_top = totblock_top, totblock_bottom = totblock_bottom,
     real_col_vars = unique(src_name[nzchar(src_name)]),
     col_var_map = stats::setNames(col_grp, all_names),
+    col_blocks = tab_col_block_ids(col_grp, other_cols = other_cols, totcols = new_totcols),
     new_col_var = new_col_var, new_group = new_group, align = align,
     label_cols = label_cols, var_name_col = var_name_col, label_runs = label_runs,
     sd_cols = integer(0), has_stars = has_stars)

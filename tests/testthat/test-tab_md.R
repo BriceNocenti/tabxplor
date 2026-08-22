@@ -623,8 +623,9 @@ testthat::test_that("md carries the unit row, italic and span-free", {
   ln <- grep("^[|]", strsplit(md, "\n")[[1]], value = TRUE)
   # header, delimiter, the col_var-name row, then the unit row -- all inside the header block
   testthat::expect_match(ln[[3]], "*marital*", fixed = TRUE)
-  testthat::expect_match(ln[[4]], "*row%*",    fixed = TRUE)
-  testthat::expect_match(ln[[4]], "*row% (n)*", fixed = TRUE)
+  # ... in the console type tag's own notation, and per BLOCK -- so the Total restates its own
+  testthat::expect_match(ln[[4]], "*<row%>*",    fixed = TRUE)
+  testthat::expect_match(ln[[4]], "*<row% (n)>*", fixed = TRUE)
   # md styles with emphasis, never a class span: a span costs raw line width the grid cannot absorb
   # (the stylesheet still carries the `.tx-unit` rule -- that is the html render's, not the grid's)
   testthat::expect_false(any(grepl("tx-unit", ln, fixed = TRUE)))

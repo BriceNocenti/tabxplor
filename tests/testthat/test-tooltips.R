@@ -163,7 +163,7 @@ testthat::test_that("a coefficient is never printed as a percentage, on hover or
                                    fixed = TRUE)))
   tt <- tabxplor:::tab_tooltip_text(col)
   # the line is the estimate's own, so it is named by the token the scale renders `est` as
-  testthat::expect_true(any(grepl("coef: ", tt, fixed = TRUE)))
+  testthat::expect_true(any(grepl("diff: ", tt, fixed = TRUE)))
   testthat::expect_false(any(grepl("%", sub(", p = .*$", "", tt), fixed = TRUE)))
 })
 

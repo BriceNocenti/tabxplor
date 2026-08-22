@@ -1007,7 +1007,13 @@ mat_base_n <- function(tab, backend, ctx) {
   #   Total cell that could hold it: it takes one column per block, the same shape a regression
   #   table has always had, and the per-block Total columns go (tab_drop_totcol).
   if (on) {
-    if (tab_base_blocks(tab) > 1L)       tab <- tab_base_n_cols(tab, ctx$base_n)
+    # ... and a PERCENTAGE table with no Total column has no cell to fold into either. That is
+    # `levels = "first"` -- a battery of binary items, whose other levels were dropped after the tests
+    # -- where the base count simply vanished, on every medium. It takes the column shape instead, the
+    # one a regression and a spread table already use. Percentages only: a column of means never had a
+    # Total column and never showed a count, so nothing is added there.
+    if (tab_base_blocks(tab) > 1L || (!length(tab_row_totcols(tab)) && tab_is_pct(tab)))
+      tab <- tab_base_n_cols(tab, ctx$base_n)
     else if (identical(backend, "text")) tab <- tab_fold_base_n(tab, ctx$base_n)
   }
   set_render_extras(tab, NULL)
@@ -1064,11 +1070,24 @@ mat_reg_spark <- function(tab) {
 # rule for every secondary token. The source column keeps its PRIMARY alone, which is what its cell
 # was already exporting -- so nothing a reader saw on screen is missing from the workbook, and the
 # unit row names each half exactly once.
+# THIS IS EXCEL'S paint_split(). The console splits a composite cell in place -- primary in the
+# measure's colour with the stars, aside set back in grey -- and Excel splits it into columns, so the
+# same three rules must hold on the new one:
+#   * it carries ITS SEGMENT, brackets and all ("(n={n})", "(sigma{sd})"), which xl_fold_literals()
+#     folds into the number format, so the workbook shows what the screen shows;
+#   * IT KEEPS THE CELL'S READING ORDER: an aside written BEFORE the primary becomes the column
+#     before it, one written after becomes the column after. A crude column's template is
+#     "({base}) {est}" and the model's "{est} ({base})", so the two ESTIMATES end up side by side --
+#     which is the whole point of printing them together, and what the console already shows;
+#   * it takes no colour (set_color("no") -> the aside's own grey, applied in tab_xl);
+#   * it takes NO SIGNIFICANCE STARS -- set_pvalue(NA), the same clearing the composite renderer does
+#     for a non-primary token, with the same `resid` exception (a residual IS derived from the
+#     p-value, so clearing it would blank the cell).
 # WARNING: display writes -- EPHEMERAL materialised copy only.
 #' @keywords internal
 #' @noRd
 mat_aside_cols <- function(tab) {
-  splittable <- function(col) is_fmt(col) && !get_role(col) %in% c("n", "pct", "aside")
+  splittable <- function(col) is_fmt(col) && !get_role(col) %in% c("n", "pct") && !fmt_is_aside(col)
   added <- list()                                   # source name -> the new columns, in cell order
   for (nm in names(tab)[purrr::map_lgl(tab, splittable)]) {
     col <- tab[[nm]]
@@ -1083,17 +1102,25 @@ mat_aside_cols <- function(tab) {
                     which(tok %in% c("blank", tok[[seg$primary]])))
     if (!length(keep)) next
     for (i in keep) {
-      new <- set_display(col, tok[[i]]) |> set_color("no") |> set_role("aside")
+      r_src <- get_role(col) %||% ""
+      new   <- set_display(col, display_segment_of(seg, i)) |> set_color("no") |>
+        set_role(if (nzchar(r_src)) paste0("aside:", r_src) else "aside")
+      if (!identical(tok[[i]], "resid")) new <- set_pvalue(new, NA_real_)
       if (all(is.na(get_num(new)))) next            # nothing to export: no column for it
-      added[[nm]] <- c(added[[nm]], stats::setNames(list(new), paste0(nm, "_", tok[[i]])))
+      side <- if (i < seg$primary) "pre" else "post"
+      added[[nm]][[side]] <- c(added[[nm]][[side]],
+                               stats::setNames(list(new), paste0(nm, "_", tok[[i]])))
     }
     if (length(added[[nm]])) tab[[nm]] <- fmt_set_display(col, tok[[seg$primary]])
   }
   if (!length(added)) return(tab)
   ord <- names(tab)
   for (nm in names(added)) {
-    for (k in names(added[[nm]])) tab[[k]] <- added[[nm]][[k]]
-    ord <- append(ord, names(added[[nm]]), after = which(ord == nm))
+    for (side in c("pre", "post"))
+      for (k in names(added[[nm]][[side]])) tab[[k]] <- added[[nm]][[side]][[k]]
+    at  <- which(ord == nm)
+    ord <- append(ord, names(added[[nm]]$post), after = at)
+    ord <- append(ord, names(added[[nm]]$pre),  after = at - 1L)
   }
   tab[ord]
 }

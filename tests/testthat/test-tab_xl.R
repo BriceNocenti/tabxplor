@@ -1,3 +1,13 @@
+# --- shared readers: what a workbook will actually PRINT -------------------------------------------
+# every formatCode in the workbook (the literals a cell shows beside its number)
+xl_numfmt_codes <- function(f) {
+  st <- openxlsx2::wb_load(f)$styles_mgr$styles$numFmts
+  if (!length(st)) return(character(0))
+  sub('".*$', "", sub('^.*formatCode="', "", st))
+}
+# the merged ranges, as plain A1 strings
+xl_merges <- function(wb) sub('".*$', "", sub('^.*ref="', "", unlist(wb$worksheets[[1]]$mergeCells)))
+
 testthat::test_that("Phase h: xlb_add_data resolves the openxlsx2 NA arg name (no partial-match crash)", {
   testthat::skip_if_not_installed("openxlsx2")
   wb <- openxlsx2::wb_workbook()$add_worksheet("s")
@@ -247,12 +257,23 @@ testthat::test_that("OR exports as 1/x text by default, numbers with or_numeric 
     df <- openxlsx2::wb_to_df(openxlsx2::wb_load(f), col_names = FALSE)
     df[[ncol(df)]]
   }
-  or_col <- xl_col(tmp)
-  testthat::expect_true(any(grepl("1/", or_col, fixed = TRUE)))             # reciprocal text present
-  tmp2 <- tempfile(fileext = ".xlsx"); tab_xl(tl, path = tmp2, open = FALSE, replace = TRUE, or_numeric = TRUE)
-  or_col2 <- xl_col(tmp2)
-  num <- suppressWarnings(as.numeric(or_col2))
-  testthat::expect_true(any(!is.na(num) & num > 0))                        # real numbers now
+  # THE CELL IS A NUMBER AND STILL READS "1/x": it holds the signed fold, and a two-section number
+  # format prints the "1/" on the negative side (Excel drops the minus).
+  or_col <- suppressWarnings(as.numeric(xl_col(tmp)))
+  testthat::expect_true(any(!is.na(or_col) & or_col >  0))
+  testthat::expect_true(any(!is.na(or_col) & or_col < -1))                 # a fold below the neutral
+  codes <- xl_numfmt_codes(tmp)
+  testthat::expect_true(any(grepl("1\\/", codes, fixed = TRUE)))            # ... printed by the code
+  # `ratio_cells = "raw"` keeps the untransformed ratio instead: every value strictly positive
+  tmp2 <- tempfile(fileext = ".xlsx")
+  tab_xl(tl, path = tmp2, open = FALSE, replace = TRUE, ratio_cells = "raw")
+  raw <- suppressWarnings(as.numeric(xl_col(tmp2)))
+  testthat::expect_true(any(!is.na(raw) & raw > 0))
+  testthat::expect_false(any(!is.na(raw) & raw < 0))
+  # ... and "text" restores the exact console string
+  tmp3 <- tempfile(fileext = ".xlsx")
+  tab_xl(tl, path = tmp3, open = FALSE, replace = TRUE, ratio_cells = "text")
+  testthat::expect_true(any(grepl("1/", xl_col(tmp3), fixed = TRUE)))
 })
 
 testthat::test_that("numeric vars export a mean + separate sd column, named by the statistic", {
@@ -263,12 +284,17 @@ testthat::test_that("numeric vars export a mean + separate sd column, named by t
   df   <- openxlsx2::wb_to_df(openxlsx2::wb_load(tmp), col_names = FALSE)
   span <- as.character(df[2, ])   # Phase 13c-iii col_var spanning-name row (row 1 = the title)
   hdr  <- as.character(df[3, ])   # level-header row
+  unt  <- as.character(df[4, ])   # the unit row
   # Phase 14d: the variable name is said ONCE, by the span; the level headers say which statistic
   # (they used to repeat it: "age" / "age_sd" under an "age" span).
   testthat::expect_true(all(c("age", "tvhours") %in% span))
   testthat::expect_equal(sum(hdr == "mean", na.rm = TRUE), 2L)
-  testthat::expect_equal(sum(hdr == "sd",   na.rm = TRUE), 2L)
+  # THE sd COLUMN IS CARVED OUT BY THE RENDER, so it has no level to name: it is named once, by its
+  # unit, and its cells carry the console's own sigma folded into the number format.
+  testthat::expect_equal(sum(hdr == "sd", na.rm = TRUE), 0L)
+  testthat::expect_equal(sum(unt == "<sd>", na.rm = TRUE), 2L)
   testthat::expect_false(any(c("age_sd", "tvhours_sd") %in% hdr))
+  testthat::expect_true(any(grepl("\u03c3", xl_numfmt_codes(tmp), fixed = TRUE)))
 })
 
 testthat::test_that("Excel gets a col_var spanning-name row + suffix-stripped level labels", {
@@ -329,7 +355,11 @@ testthat::test_that("tab_xl: a one-row block falls back to horizontal, with no m
   tmp <- withr::local_tempfile(fileext = ".xlsx")
   suppressMessages(tab_xl(one, path = tmp, open = FALSE, replace = TRUE))
   wb <- openxlsx2::wb_load(tmp)
-  testthat::expect_no_match(paste(wb$worksheets[[1]]$mergeCells, collapse = " "), "A", fixed = TRUE)
+  # no DATA merge in column A (a 1-cell "merge" is rejected by Excel); the header/unit merge above the
+  # data is a different thing and is expected -- see "an index column's header takes both rows".
+  # ⚠ the index column's HEADER is merged over the unit row below it, and that is also a
+  # within-column merge -- so what this asserts is that no DATA block was merged: exactly one.
+  testthat::expect_length(grep("^A[0-9]+:A", xl_merges(wb), value = TRUE), 1L)
   testthat::expect_false(any(grepl('textRotation="90"', wb$styles_mgr$styles$cellXfs)))
   # each block is its own run, so both names are still written
   testthat::expect_equal(as.character(openxlsx2::wb_to_df(wb, col_names = FALSE)[5:6, 1]),
@@ -345,8 +375,9 @@ testthat::test_that("tab_xl: var_names = 'none' drops both name annotations", {
   )
   wb <- openxlsx2::wb_load(tmp)
   d  <- openxlsx2::wb_to_df(wb, col_names = FALSE)
-  # no name column -> no merge at all; and no span row, so the header climbs to row 2
-  testthat::expect_length(wb$worksheets[[1]]$mergeCells, 0L)
+  # no name column -> no DATA merge; and no span row, so the header climbs to row 2. The one merge
+  # left is the index column's header over the unit row below it.
+  testthat::expect_length(grep("^A[0-9]+:A", xl_merges(wb), value = TRUE), 1L)
   testthat::expect_equal(as.character(d[2, 1]), "levels")
   testthat::expect_false(any(grepl('textRotation="90"', wb$styles_mgr$styles$cellXfs)))
 })
@@ -378,13 +409,88 @@ testthat::test_that("tab_xl: a composite cell's aside becomes its own column, he
   # row 3 = the level headers, row 4 = the unit row (Phase 22c-ii)
   hdr <- as.character(unlist(d[3, ]))
   unt <- as.character(unlist(d[4, ]))
-  testthat::expect_true("OR" %in% hdr)                       # the aside is a real column now
-  testthat::expect_identical(sum(hdr == "OR", na.rm = TRUE), sum(hdr == "Married", na.rm = TRUE) *
+  # AN ASIDE COLUMN IS NAMED BY ITS UNIT, not by a level header: the render carved it out, so it has
+  # no level of the column variable to name.
+  testthat::expect_false("OR" %in% hdr)
+  testthat::expect_identical(sum(unt == "<OR>", na.rm = TRUE), sum(hdr == "Married", na.rm = TRUE) *
                                length(levels(droplevels(forcats::gss_cat$marital))))
-  # ... and the unit row says what the source column holds, without repeating the aside's own header
-  testthat::expect_true("row%" %in% unt)
-  testthat::expect_false(any(unt == "OR", na.rm = TRUE))
+  testthat::expect_true("<row%>" %in% unt)
   # the aside column holds ONE field: no re-composed "1 (39%)" on the reference row
-  or_col <- which(hdr == "OR")[[1]]
+  or_col <- which(unt == "<OR>")[[1]]
   testthat::expect_false(any(grepl("(", as.character(d[5:7, or_col]), fixed = TRUE)))
+  # ... and it keeps the console's own brackets, folded into the number format rather than pasted
+  # into the value, so the cell is still a number
+  testthat::expect_true(any(grepl("\\(", xl_numfmt_codes(tmp), fixed = TRUE)))
+  testthat::expect_true(is.numeric(suppressWarnings(as.numeric(d[[or_col]][5]))))
+})
+
+
+testthat::test_that("a split-off aside keeps the CELL's reading order, so the estimates pair up", {
+  testthat::skip_if_not_installed("openxlsx2")
+  testthat::skip_if_not_installed("broom")
+  d <- dplyr::mutate(forcats::gss_cat, married = factor(.data$marital == "Married"))
+  t <- suppressMessages(tab_reg(d, outcome = "married", predictors = "race",
+                                family = "binomial", empirical = TRUE))
+  tmp <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(t, path = tmp, open = FALSE, replace = TRUE))
+  df  <- openxlsx2::wb_to_df(openxlsx2::wb_load(tmp), col_names = FALSE)
+  hdr <- as.character(unlist(df[3, ])); unt <- as.character(unlist(df[4, ]))
+  # the crude column's template is "({base}) {est}" and the model's "{est} ({base})", so the aside
+  # goes BEFORE one and AFTER the other -- which is what puts the two ODDS RATIOS side by side, the
+  # whole point of printing a crude column beside its model. The console reads the same way.
+  i_obs <- which(hdr == "Obs_OR"); i_mod <- which(hdr == "Model_OR")
+  testthat::expect_length(i_obs, 1L)
+  testthat::expect_identical(i_mod, i_obs + 1L)
+  # ... and each aside still says WHOSE level it is: the split keeps the role it was carved from
+  testthat::expect_identical(unt[[i_obs - 1L]], "<obs%>")   # the crude level, before its estimate
+  testthat::expect_identical(unt[[i_mod + 1L]], "<adj%>")   # the adjusted one, after its estimate
+})
+
+testthat::test_that("the variable-name column is thin when rotated, and fits a horizontal name", {
+  testthat::skip_if_not_installed("openxlsx2")
+  testthat::skip_if_not_installed("broom")
+  w_of <- function(f) {
+    a <- paste(unlist(openxlsx2::wb_load(f)$worksheets[[1]]$cols_attr), collapse = " ")
+    as.numeric(sub('^.*<col min="1" max="1"[^/]*width="([0-9.]+)".*$', "\\1", a))
+  }
+  # every name rotated (a merged block each) -> the narrow width the rotation buys
+  t1 <- tab(forcats::gss_cat, c(race, marital), relig, pct = "row")
+  p1 <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(t1, path = p1, open = FALSE, replace = TRUE))
+  testthat::expect_lt(w_of(p1), 5)
+  # a regression writes "Constant" horizontally (a one-row block): the column widens to fit it,
+  # deterministically and within the cap
+  d  <- dplyr::mutate(forcats::gss_cat, married = factor(.data$marital == "Married"))
+  t2 <- suppressMessages(tab_reg(d, outcome = "married", predictors = "race", family = "binomial"))
+  p2 <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(t2, path = p2, open = FALSE, replace = TRUE))
+  testthat::expect_gt(w_of(p2), nchar("Constant"))
+  testthat::expect_lte(w_of(p2), XL_VNAME_MAX)
+})
+
+# === Phase 22f-ii: model-check plots under the model they check ====================================
+
+testthat::test_that("tab_xl(check =) writes one picture per model, and none for a crosstab", {
+  testthat::skip_if_not_installed("openxlsx2")
+  testthat::skip_if_not_installed("ggplot2")
+  testthat::skip_if_not_installed("gridExtra")
+  d <- dplyr::mutate(forcats::gss_cat, married = factor(.data$marital == "Married"))
+  t <- suppressMessages(tab_reg(d, outcome = "married", predictors = c("race", "age"),
+                                family = "binomial"))
+  tmp <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(t, path = tmp, open = FALSE, replace = TRUE, check = "auto", data = d))
+  # the picture reached the workbook (⚠ `unzip(list=)` lists the DIRECTORY entry too)
+  png_of <- function(f) grep("^xl/media/.+[.]png$", utils::unzip(f, list = TRUE)$Name, value = TRUE)
+  testthat::expect_length(png_of(tmp), 1L)
+  # ... sized from its own panel grid rather than a fixed guess, and anchored BELOW the table so the
+  # sheet's stacking offsets counted it
+  drw <- paste(readLines(unz(tmp, "xl/drawings/drawing1.xml"), warn = FALSE), collapse = "")
+  testthat::expect_match(drw, 'cx="[0-9]+" cy="[0-9]+"')
+  row <- as.integer(sub('^.*<xdr:row>([0-9]+)</xdr:row>.*$', "\\1", drw))
+  testthat::expect_gt(row, nrow(t))
+  # a crosstab has no model to check, and takes no picture without complaining
+  tmp2 <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(tab(forcats::gss_cat, race, marital, pct = "row"), path = tmp2,
+                          open = FALSE, replace = TRUE, check = "auto"))
+  testthat::expect_length(png_of(tmp2), 0L)
 })

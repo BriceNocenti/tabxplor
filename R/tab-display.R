@@ -162,8 +162,10 @@ fmt_blank_fields <- function(col, pct = FALSE) {
 #' @keywords internal
 #' @noRd
 reg_role_qualifier <- function(x, sep = "") {
-  r <- tryCatch(get_role(x) %||% "", error = function(e) "")
-  if (!nzchar(r)) return("")
+  # a split-off aside keeps what it was carved from ("aside:emp"), so it prints the same qualifier
+  # its source does -- a crude column's level is an "obs%" whichever column of the pair it sits in.
+  r <- sub("^aside:", "", tryCatch(get_role(x) %||% "", error = function(e) ""))
+  if (!nzchar(r) || identical(r, "aside")) return("")
   # a RANK column's percentage is a probability of SUPERIORITY, not an adjusted prediction of a
   # category -- 50 % means "no difference" there, so the abbreviation must not read "adj%". Both
   # roles take it: the crude twin measures the same thing, and its header already says whose it is.
@@ -352,9 +354,10 @@ DISPLAY_TOKENS <- list(
                               '`tab_reg()` tables only')),
   # DERIVED where the column is multiplicative: log(estimate) IS the coefficient the model fitted, so
   # nothing needs storing. Settable all the same -- the write mirrors the read through exp().
+  # Its LABEL names the quantity rather than the artefact -- "log(OR)", never "coef" (fmt_coef_label).
   coef    = .dtok("diff"  , user = TRUE, value_cell = TRUE, min_digits = 2L,
                   source = 'a `tab_reg()` column (a crosstab estimates no coefficient)',
-                  label = "coef",
+                  label = function(x) fmt_coef_label(x),
                   doc = paste('the estimate on the model\'s LINK scale --- the coefficient a linear',
                               'or log-link model fitted. The same number as `est` where the column',
                               'is already additive, its logarithm where the column shows a ratio')),
@@ -1081,6 +1084,16 @@ tab_base_cols <- function(tab, group = NULL) {
   nms <- nms[keep]
   if (is.null(group)) return(nms)
   nms[purrr::map_chr(tab[nms], get_col_group) == group]
+}
+
+# Does this table show PERCENTAGES? (any value column resting on a percentage base). The one test
+# behind "row percentages that do not sum to 100 %", read by mat_base_n().
+#' @keywords internal
+#' @noRd
+tab_is_pct <- function(tab) {
+  cols <- tab_base_cols(tab)
+  length(cols) > 0L &&
+    any(purrr::map_chr(tab[cols], get_pct_type) %in% c("row", "col", "all", "all_tabs"))
 }
 
 # tab_base_range() -- per ROW, the smallest and the largest base among `cols`. They coincide whenever

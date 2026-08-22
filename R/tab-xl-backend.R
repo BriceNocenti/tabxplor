@@ -106,8 +106,12 @@ xl_clean_sheet_name <- function(x) {
 xlb_add_sheet <- function(wb, title)
   wb$add_worksheet(sheet = title, grid_lines = FALSE)
 
-xlb_freeze <- function(wb, sheet, active_row = 3L)
-  wb$freeze_pane(sheet = sheet, first_active_row = active_row, first_col = TRUE)
+# WARNING: `first_col = TRUE` and `first_active_row` are ALTERNATIVES in openxlsx2, not a pair -- the
+# shorthand wins and the row split is silently dropped, which is why the header used to scroll away
+# while the first column stayed put (measured: the sheet XML carried an xSplit and no ySplit). Give
+# both axes as ACTIVE cell coordinates, never mix a shorthand with one.
+xlb_freeze <- function(wb, sheet, active_row = 3L, active_col = 2L)
+  wb$freeze_pane(sheet = sheet, first_active_row = active_row, first_active_col = active_col)
 
 # DESIGN: openxlsx2 renamed the NA-handling arg across versions: `na.strings` (oldest, dot form) ->
 # `na_strings` -> `na` (current). Resolve the EXACT formal name from the method itself and pass by name.
@@ -188,6 +192,11 @@ xlb_set_cell_style <- function(wb, sheet, dims, style)
   xlb_dims_each(dims, function(d) wb$set_cell_style(sheet = sheet, dims = d, style = style))
 
 # Phase 13c-iii: merge a horizontal cell range (the col_var spanning-name header).
+# a picture anchored at one cell, sized in inches (openxlsx2 places it over the grid, not in a cell)
+xlb_add_image <- function(wb, sheet, dims, file, width, height)
+  wb$add_image(sheet = sheet, dims = dims, file = file, width = width, height = height,
+               units = "in")
+
 xlb_merge <- function(wb, sheet, dims)
   wb$merge_cells(sheet = sheet, dims = dims)
 

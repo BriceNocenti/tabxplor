@@ -27,7 +27,9 @@ tab_xl(
   color = TRUE,
   transpose = FALSE,
   var_names = NULL,
-  or_numeric = NULL,
+  ratio_cells = NULL,
+  check = FALSE,
+  data = NULL,
   print_color_legend = lifecycle::deprecated(),
   ...
 )
@@ -104,9 +106,24 @@ the col-percentages-with-several-row-variables use case.}
 \code{row_vars} uses to name each block (written once per block); the column-variable names
 are the spanning row above their level columns. Level headers always keep their name.}
 
-\item{or_numeric}{Odds ratios export as text ("1/x" reciprocal for OR < 1) by default so an OR
-below 1 reads symmetrically to an OR above 1. Set to \code{TRUE} (or the option
-\code{tabxplor.xl_or_numeric}) to keep them as real, editable numbers instead.}
+\item{ratio_cells}{What a ratio / odds-ratio cell holds in the workbook. Excel cannot compute
+inside a number format, so a cell storing \code{0.83} cannot be made to print \verb{\\u00f71.2} the way the
+console does. \code{"fold"} (the default) stores the \strong{reading value} instead --- the fold, signed by
+its direction (\code{x} at or above the neutral, \code{-1/x} below it) --- which a two-section number
+format prints as \verb{\\u00d71.20} and \verb{\\u00f71.20}, \code{2.11} and \code{1/2.11}. The cell stays a real
+number: it sorts and filters in the direction it is read, and takes the reader's own decimal
+separator. \code{"raw"} stores the untransformed ratio (printed \verb{\\u00d70.83}); \code{"text"} writes the
+exact display string, which reads perfectly but is no longer a number. Option twin:
+\code{tabxplor.xl_ratio_cells}.}
+
+\item{check}{Model-check plots to draw under each \code{tab_reg()} table: \code{FALSE} (the default),
+\code{"auto"}, or a vector of check keys --- the same values \code{\link{reg_check_plots}} takes,
+which is what draws them. Each grid is written as a picture below the table it belongs to.
+Needs \code{ggplot2} and \code{gridExtra}; a crosstab takes none.}
+
+\item{data}{The data frame the models were fitted on. Only needed when \code{check} is on AND the
+\code{\link{tab_reg}} call cannot be replayed from the name it was written with (a \verb{\%>\%}
+pipeline, a subset expression) --- an ordinary \code{tab_reg(gss, ...)} recovers it by itself.}
 
 \item{print_color_legend}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{color_legend}.}
 
@@ -122,6 +139,21 @@ The Excel exporter behind \code{\link{tab_export}}: \code{tab_export(x, format =
 calls this. To modify the colors used into the Excel table, you can change the
 global options with \code{\link{set_color_style}} and \code{\link{set_color_breaks}}.
 }
+\section{Recovering the raw ratio in Excel}{
+
+A ratio or odds-ratio cell holds its \strong{reading value}: the fold, signed by its direction. The sign
+IS the marker --- negative means the cell reads \verb{\\u00f7} (or \verb{1/}) --- so one formula gives the raw
+ratio back, with no macro and no add-in:
+
+\preformatted{  =IF(A2<0, -1/A2, A2)     the ratio itself
+  =ABS(A2)                how many times, whichever way it goes
+}
+
+Sorting and filtering need neither: the stored value is monotone in the direction it is read, so
+"at least twice as likely" is \verb{>2} and "at least twice as unlikely" is \verb{<-2}. Use
+\code{ratio_cells = "raw"} when the untransformed ratio matters more than the reading.
+}
+
 \examples{
 \donttest{
 # openxlsx2 is Suggests-only and tab_xl() stops without it, so guard the example: \donttest{}
