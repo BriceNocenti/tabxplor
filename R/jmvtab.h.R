@@ -28,7 +28,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             comp = "tab",
             ci = "auto",
             conf_level = 0.95,
-            ci_print = "ci",
             stars = FALSE,
             ci_method_cell = "wilson",
             ci_method_diff = "newcombe",
@@ -38,7 +37,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             wrap_rows = 35,
             wrap_cols = 15,
             display = "auto",
-            add_n = TRUE,
+            n = "range",
             add_pct = FALSE,
             subtext = "",
             digits = "0",
@@ -250,13 +249,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 min=0,
                 max=1,
                 default=0.95)
-            private$..ci_print <- jmvcore::OptionList$new(
-                "ci_print",
-                ci_print,
-                options=list(
-                    "ci",
-                    "moe"),
-                default="ci")
             private$..stars <- jmvcore::OptionBool$new(
                 "stars",
                 stars,
@@ -282,7 +274,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 ci_method_mean_diff,
                 options=list(
                     "welch",
-                    "student"),
+                    "student",
+                    "ols"),
                 default="welch")
             private$..ci_method_mean_ratio <- jmvcore::OptionList$new(
                 "ci_method_mean_ratio",
@@ -318,20 +311,26 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "n",
                     "wn",
                     "pct",
-                    "num_ci",
+                    "base_ci",
                     "ci",
                     "diff",
                     "ratio",
                     "or",
-                    "{or} ({pct})",
+                    "or_base",
+                    "base_or",
+                    "base_ratio",
                     "ctr",
                     "mean",
                     "var"),
                 default="auto")
-            private$..add_n <- jmvcore::OptionBool$new(
-                "add_n",
-                add_n,
-                default=TRUE)
+            private$..n <- jmvcore::OptionList$new(
+                "n",
+                n,
+                options=list(
+                    "range",
+                    "min",
+                    "no"),
+                default="range")
             private$..add_pct <- jmvcore::OptionBool$new(
                 "add_pct",
                 add_pct,
@@ -407,7 +406,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..comp)
             self$.addOption(private$..ci)
             self$.addOption(private$..conf_level)
-            self$.addOption(private$..ci_print)
             self$.addOption(private$..stars)
             self$.addOption(private$..ci_method_cell)
             self$.addOption(private$..ci_method_diff)
@@ -417,7 +415,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..wrap_rows)
             self$.addOption(private$..wrap_cols)
             self$.addOption(private$..display)
-            self$.addOption(private$..add_n)
+            self$.addOption(private$..n)
             self$.addOption(private$..add_pct)
             self$.addOption(private$..subtext)
             self$.addOption(private$..digits)
@@ -452,7 +450,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         comp = function() private$..comp$value,
         ci = function() private$..ci$value,
         conf_level = function() private$..conf_level$value,
-        ci_print = function() private$..ci_print$value,
         stars = function() private$..stars$value,
         ci_method_cell = function() private$..ci_method_cell$value,
         ci_method_diff = function() private$..ci_method_diff$value,
@@ -462,7 +459,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         wrap_rows = function() private$..wrap_rows$value,
         wrap_cols = function() private$..wrap_cols$value,
         display = function() private$..display$value,
-        add_n = function() private$..add_n$value,
+        n = function() private$..n$value,
         add_pct = function() private$..add_pct$value,
         subtext = function() private$..subtext$value,
         digits = function() private$..digits$value,
@@ -496,7 +493,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..comp = NA,
         ..ci = NA,
         ..conf_level = NA,
-        ..ci_print = NA,
         ..stars = NA,
         ..ci_method_cell = NA,
         ..ci_method_diff = NA,
@@ -506,7 +502,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..wrap_rows = NA,
         ..wrap_cols = NA,
         ..display = NA,
-        ..add_n = NA,
+        ..n = NA,
         ..add_pct = NA,
         ..subtext = NA,
         ..digits = NA,
@@ -678,8 +674,6 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   -- what   \code{stars} and \code{color_signif} read.  }
 #' @param conf_level The confidence level, as a single numeric between 0 and
 #'   1. Default to 0.95 (95\%).
-#' @param ci_print By default confidence interval are printed with the
-#'   interval display. Set to "moe" to use pct +- moe instead.
 #' @param stars With \code{ci = "diff"}, print significance stars (\code{*}
 #'   \code{**} \code{***}) for the difference of each cell from its reference.
 #'   Read from the same confidence interval that is displayed, so stars and
@@ -693,7 +687,8 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   always agree.
 #' @param ci_method_mean_diff The confidence-interval method for the
 #'   difference of numeric means (means with \code{ci = "diff"}): Welch
-#'   (default) or Student (pooled variance).
+#'   (default), Student (the two groups pooled) or OLS (pooled over every level
+#'   of the variable, i.e. the interval a linear model gives that coefficient).
 #' @param ci_method_mean_ratio The confidence-interval method for a ratio of
 #'   numeric means (means with \code{ci = "ratio"}).
 #' @param totaltab The total table, if there are subtables/groups   (i.e. when
@@ -707,14 +702,15 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param wrap_cols By default, colnames are wrapped when larger than 12
 #'   characters.
 #' @param display What each cell shows. Every value here is a
-#'   \code{tab(display =)} value: a bare field  name, the type-adaptive
-#'   \code{"num_ci"} (a percentage or a mean, with its interval), or  a
-#'   \code{\{\}} template combining fields. \code{"auto"} keeps whatever the
-#'   table was  built with. A template naming a field the table does not carry
-#'   renders empty and says  which argument would fill it.
-#' @param add_n For \code{pct = "row"} or \code{pct = "col"}, set to
-#'   \code{FALSE} not to add another column or row with unweighted counts
-#'   (\code{n}).
+#'   \code{tab(display =)} value: a bare field  name, a named layout such as
+#'   \code{"base_ci"} (each value with its interval), or a  \code{\{\}} template
+#'   combining fields. \code{"auto"} keeps whatever the table was  built with. A
+#'   template naming a field the table does not carry renders empty and says
+#'   which argument would fill it.
+#' @param n How many people the table is about: \code{"range"} prints the
+#'   unweighted base beside the Total cell (as \code{min-max} when the column
+#'   variables rest on different people), \code{"min"} the smallest base only,
+#'   \code{"no"} no count at all.
 #' @param add_pct Set to \code{TRUE} to add a column with the frequencies of
 #'   the row variable (for \code{pct = "row"}) or a row with the frequencies of
 #'   the column variable (for  \code{pct = "col"})
@@ -772,7 +768,6 @@ jmvtab <- function(
     comp = "tab",
     ci = "auto",
     conf_level = 0.95,
-    ci_print = "ci",
     stars = FALSE,
     ci_method_cell = "wilson",
     ci_method_diff = "newcombe",
@@ -782,7 +777,7 @@ jmvtab <- function(
     wrap_rows = 35,
     wrap_cols = 15,
     display = "auto",
-    add_n = TRUE,
+    n = "range",
     add_pct = FALSE,
     subtext = "",
     digits = "0",
@@ -834,7 +829,6 @@ jmvtab <- function(
         comp = comp,
         ci = ci,
         conf_level = conf_level,
-        ci_print = ci_print,
         stars = stars,
         ci_method_cell = ci_method_cell,
         ci_method_diff = ci_method_diff,
@@ -844,7 +838,7 @@ jmvtab <- function(
         wrap_rows = wrap_rows,
         wrap_cols = wrap_cols,
         display = display,
-        add_n = add_n,
+        n = n,
         add_pct = add_pct,
         subtext = subtext,
         digits = digits,

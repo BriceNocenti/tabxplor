@@ -143,7 +143,8 @@ tab_md <- function(tabs,
     if (!is.null(st))
       md_text <- paste(c(md_text, "",
                          tx_pipe_table(st, attr(st, "headers"), attr(st, "align")),
-                         "", paste0("*", attr(st, "note"), "*")), collapse = "\n")
+                         "", paste0("*", paste(attr(st, "note"), collapse = " "), "*")),
+                       collapse = "\n")
   }
 
   # Phase 14f/14m-iii: a STYLED table is wrapped in a pandoc fenced div, and (with `css = TRUE`) the

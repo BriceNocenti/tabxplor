@@ -1166,31 +1166,65 @@ For weighted models a reduced set is reported (a Wald test against the null, Nag
 
 ## Checking the model
 
-The same footer carries five **model checks**, and there is nothing to learn beyond the five nouns: each names an assumption, and the parenthesis names the instrument that measured it. Three of them cost nothing and are printed by default; the two that fit a model — **Linearity** and **Proportionality** — are asked for by name, or all at once with `stats = "all"`.
+The same footer carries five **model checks**, and there is nothing to learn beyond the five nouns: each names an assumption, and the parenthesis names the instrument that measured it. Four are printed by default. **Linearity** is the one you ask for by name, or with `stats = "all"` — because it refits the model once per continuous predictor, and because the free half of it is on screen anyway (see the shape table below).
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), stats = c("n", "linearity", "dispersion", "influence", "collinearity"))
 ```
 
-Read them in the order they print, which is the order of what each one threatens:
+Read them in the order they print, which is the order of what each one threatens — first what the number *means*, then whether its interval can be trusted, then how fragile it is:
 
-- **Linearity** — *is this predictor's effect really one straight line?* One row per continuous predictor. This is the one to look at first, because a wrong shape does not stay in its own row. In the model above, letting `age` curve instead of run straight moves the top income category's odds ratio by about a quarter, and flips another income level's verdict at the 5 % threshold — while nothing in the table hints at it.
-- **Proportionality (Brant)** — for an ordinal outcome, *is one cumulative odds ratio enough for every cut?* When it fails, `measure = "difference"` is the robust way to keep reading the same fit (Somers' `D` barely moves when the assumption breaks); `family = "multinomial"` is the way to stop assuming it at all.
+- **Proportionality (Brant)** — for an ordinal outcome, *is one cumulative odds ratio enough for every cut?* Printed by default there, and a refit anyway, because a cumulative odds ratio that fails it is not one number but a fiction. When it fails, `measure = "difference"` is the robust way to keep reading the same fit (Somers' `D` barely moves when the assumption breaks); `family = "multinomial"` is the way to stop assuming it at all.
+- **Linearity** — *is this predictor's effect really one straight line?* One row per continuous predictor. A wrong shape does not stay in its own row: in the model above, letting `age` curve instead of run straight moves the top income category's odds ratio by about a quarter, and flips another income level's verdict at the 5 % threshold — while nothing in the table hints at it.
 - **Dispersion (robust/model SE)** — *are the standard errors wide enough?* About 1 means the family's variance assumption holds; 1.4 means the intervals should be about 40 % wider than they are. For a count outcome, `family = "quasipoisson"` fixes exactly that, and the row then returns to about 1 (while the Pearson dispersion φ still reports the over-dispersion itself). Under a survey design it simply says how much the design mattered — the intervals are already the design's.
-- **Influence (max dfbetas)** — *does one respondent carry the result?* The largest amount, in standard errors, by which dropping a single respondent moves any coefficient. With thousands of respondents this is normally reassuringly small, and that reassurance is the point. Careful: influence is not the same as being an outlier — a surprising answer from an otherwise ordinary respondent moves nothing.
 - **Collinearity (max VIF)** — *can the data tell these predictors apart?* Above about 5, two predictors are measuring much the same thing and their intervals are inflated. Collinearity biases nothing, so this is the one check that is a caution rather than a problem. (It needs the `car` package.)
+- **Influence (max dfbetas)** — *does one respondent carry the result?* The largest amount, in standard errors, by which dropping a single respondent moves any coefficient. With thousands of respondents this is normally reassuringly small, and that reassurance is the point. Careful: influence is not the same as being an outlier — a surprising answer from an otherwise ordinary respondent moves nothing.
 
 Two things worth knowing. A curvature test on one predictor can pick up **another** predictor's wrong shape when the two are strongly correlated — one more reason to read the collinearity row beside it. And with a large survey sample almost any diagnostic *p*-value ends up significant, which is why three of the five report a magnitude instead.
 
-### The shape a continuous predictor is fitted with
+### The shape table: what a continuous predictor's effect actually looks like
 
-The linearity row tells you *whether* one straight line is enough. The little curve drawn in a continuous predictor's otherwise-empty `n` cell tells you *what shape the data actually has* — ten bins of the outcome against the predictor, on the model's own scale, with no model in it:
+The linearity row tells you *whether* one straight line is enough. The small **shape table** printed under the footer tells you *what shape the data has* — and it costs nothing, because no model is involved: the outcome is simply cut into ten equal-sized slices of the predictor, and the average is taken in each.
 
 ```{r}
-tab_reg(gss_simple, "married", c("race", "age"), family = "binomial")
+tab_reg(gss_simple, "married", c("race", "age", "tvhours"), family = "binomial")
 ```
 
-`age` climbs steeply and then flattens: one slope is a poor summary of that. `shape =` is how you fix it, without leaving the table. The most readable answer is usually to cut the predictor into groups — it then becomes an ordinary factor, so it gets one odds ratio per group, its own observed companion, counts and colours, and the shape becomes visible in the printed numbers themselves:
+One row per continuous predictor. Read it in three steps.
+
+**1. Read the range first, not the picture.** `13-57%` is the plainest sentence in the whole table: *in the slice of `age` where marriage is rarest, 13 % are married; in the slice where it is commonest, 57 % are*. Those are real percentages of real people, counted, with no model in them. The figure in brackets is the same distance written as the model's own comparison — `(OR 8.7)`, an odds ratio of nearly nine — so you can hold it against the colour ladder you already use for the cells (`1.2`, `1.5`, `2`, `4`). Nine is far past the last rung: `age` matters a great deal.
+
+The range always speaks the outcome's own language — a percentage of people for a yes/no outcome, an average for a numeric one — and it does not change when you change `measure` or `link`, because it is what was counted. Only the bracket does.
+
+This is the one number a continuous predictor never has in the table itself. A cell like `1/2.35*** (28 %)` shows an effect *and* the percentage it sits on — but `age` has no categories, so there is no single percentage to put there. The curve has one for every slice, and the observed range is simply its two ends.
+
+**2. Then read the shape, and only for its shape.** The horizontal axis is the predictor as the model sees it, and every point rests on the same number of people, so what you see is where things happen. Three readings matter:
+
+- a **straight** rise or fall — one number describes it, nothing to do;
+- a **bend** or a **plateau** — the effect is not the same everywhere, and the cures below fix it;
+- a **reversal**, up then down, like `age` here — the one a single coefficient cannot express at all, because it reports one direction for a variable that has two. `age` climbs steeply, levels off, then falls: the single `1.22` per standard deviation printed in its row is the average of a rise and a fall.
+
+⚠ **Do not compare two pictures by eye.** Each curve is drawn at its own scale and fills the height whatever its size — that is what makes small shapes visible at all. `age` and `tvhours` look about equally dramatic above; the ranges say one is a nine-fold change and the other closer to two and a half. **The picture answers *what shape*, the range answers *how big*.** Only the numbers compare.
+
+**3. Check for grey and `ns` before believing any of it.** A curve smaller than its own sampling noise is greyed and marked `ns`: read it as a flat line, however convincing it looks. The same two predictors, on a 200-row sample of the same data:
+
+```{r}
+set.seed(20260823)
+small <- gss_simple[sample(nrow(gss_simple), 200), ]
+tab_reg(small, "married", c("race", "age", "tvhours"), family = "binomial")
+```
+
+Still curves, to the eye. They are not: on so few people the slices wobble by that much on their own — and the ranges, `11-69 %` and `16-72 %`, are wider than the ones measured on the whole sample, which is the giveaway.
+
+⚠ `ns` is about the **shape**, not about the predictor. Ten slices carry ten averages, not two hundred respondents, so a real effect can be perfectly significant in the table and still unreadable as a shape. The stars in the predictor's own row judge the effect; the shape table judges only whether the picture can be trusted.
+
+For an **ordinal** or **multinomial** outcome the table draws only the first cut or category — use `reg_check_plots()` there, which draws them all, and which is also where a proportional-odds departure becomes visible.
+
+`options(tabxplor.spark = "console")` keeps the shape table where you are working and out of your exports; `"no"` removes it everywhere.
+
+### Curing a shape
+
+`shape =` is how you fix what the table just showed you, without leaving the table. The most readable answer is usually to cut the predictor into groups — it then becomes an ordinary factor, so it gets one odds ratio per group, its own observed companion, counts and colours, and the shape becomes visible in the printed numbers themselves:
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",

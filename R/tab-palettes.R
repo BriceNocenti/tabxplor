@@ -160,7 +160,7 @@ tx_chrome_hex <- function(theme = "light") {
                                  bg = "#ffffff", border = "#000000", hover = "transparent"))
   switch(
     tx_palette_theme(theme),
-    dark = list(text = "#CECDC3", grey = "#707070", grey2 = "#bebebe", #"#afaea5", # "#EEEEEE",
+    dark = list(text = "#f0efe5", grey = "#707070", grey2 = "#CECDC3", # text = "#CECDC3", grey = "#707070", grey2 = "#bebebe", 
                 bg = "#222222", border = "#CECDC3", hover = "rgba(255,242,204,.10)"),
     list(text = "#000000", grey = "#949494", grey2 = "#444444",
          bg = "#ffffff", border = "#000000", hover = "#FFFCE5")

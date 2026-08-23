@@ -655,11 +655,17 @@ the default footer and cost nothing; \strong{Proportionality} fits J-1 binary lo
 anyway on an ordinal outcome, because a cumulative odds ratio that fails it is not one number but
 a fiction. \strong{Linearity} is the one asked for by name (\code{stats = c("n", "aic", "linearity")}, or
 \code{stats = "all"}). The cheap answer is on screen either way: each numeric predictor's observed
-shape is binned with no fit at all and drawn as a \strong{sparkline} --- in that predictor's own
-\code{n} cell where the table has one outcome and the medium can hold it, and otherwise in a small
-table below the footer, with the vertical range it is drawn against beside it. The curve is drawn
-in a window at least as tall as the data's own sampling noise, so a flat run really means flat.
-\code{\link[=reg_check_plots]{reg_check_plots()}} draws the full panel for \strong{every} check.
+shape is binned with no fit at all and drawn as a \strong{sparkline}, always beside the \strong{observed
+range} it is a picture of --- \verb{13-57\% (OR 8.7)}: the curve's lowest and highest point, back on
+the outcome's own scale, with the climb between them in the measure the \emph{link} estimates. The
+picture answers \emph{what shape}, the range answers \emph{how big}, and a curve smaller than its own
+sampling noise is greyed and marked \code{ns} --- read that one as a flat line whatever it looks like.
+Both go in the predictor's own \code{n} cell where the table has one outcome and the medium can hold
+them, and otherwise in a small \strong{shape table} below the footer.
+
+⚠ an \strong{ordinal} or \strong{multinomial} outcome has one curve per cut or per category and the
+sparkline draws only the first: use \code{\link[=reg_check_plots]{reg_check_plots()}} there, which shows them all --- and which
+draws the full panel for \strong{every} check.
 At survey sample sizes a diagnostic p-value rejects almost anything, which is why three of the
 five report a \emph{magnitude} instead.
 }

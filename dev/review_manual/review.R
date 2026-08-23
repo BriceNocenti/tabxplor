@@ -886,6 +886,11 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "reli
 ) |> tab_export("md")
 
 
+
+
+
+
+
 ### exports and display tests  ---- 
 list(
   tab(gss_simple, c("rincome", "age"), "marital", pct = "row", color = TRUE),
@@ -936,6 +941,7 @@ tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "
 
 
 #### the different main use cases ----
+# options(tabxplor.print = "console")
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", empirical = TRUE) |> 
   tab_export()
@@ -946,7 +952,7 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "reli
 # several outcomes
 tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
         family = c("binomial", "poisson"), empirical = TRUE) |> 
-  tab_export()
+  tab_export(theme = "dark")
 # predictor’s list
 tab_reg(gss_simple, outcome = "married", 
         predictors = list(race  = "race", 
@@ -966,7 +972,7 @@ tab_reg(gss_simple, outcome = "married", tab_vars = "race",
 # black and white publication ready tables ----
 load_all()
 
-# options(tabxplor.theme = "light", tabxplor.print = "html", tabxplor.parallel = 8, tabxplor.cleannames = TRUE)
+# options(tabxplor.theme = "light", tabxplor.print = "html", tabxplor.parallel = 8, tabxplor.cleannames = TRUE) 
 # tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
 #         family = "gaussian", empirical=TRUE
 # )

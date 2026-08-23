@@ -329,7 +329,8 @@ tab_xl <-
     # offset, or a second table on the same sheet would land on top of it.
     shapes <- purrr::map(tabs_src, function(t)
       if (is_tab(t) && tab_wants_shape_table(t, "xl")) reg_shape_table(t) else NULL)
-    shape_n <- purrr::map_int(shapes, function(st) if (is.null(st)) 0L else nrow(st) + 3L)
+    shape_n <- purrr::map_int(shapes, function(st)
+    if (is.null(st)) 0L else nrow(st) + length(attr(st, "note")) + 2L)
     # ... and the model-check pictures, for the same reason: they are drawn BEFORE the geometry so
     # their height joins the stacking offset instead of landing on the next table.
     check_imgs <- xl_check_images(tabs_src, check, data, theme = theme, lang = lang)
@@ -614,13 +615,13 @@ xl_prose_height <- function(text, span_px, size = 9) {
 #' @keywords internal
 xl_shape_cells <- function(shape, row0) {
   if (is.null(shape) || nrow(shape) == 0L) return(NULL)
-  hd <- attr(shape, "headers")
+  hd <- attr(shape, "headers"); nt <- attr(shape, "note")
   purrr::list_rbind(c(
     list(tibble::tibble(row = row0, col = seq_along(hd), text = hd)),
     purrr::map(seq_len(nrow(shape)), function(i)
       tibble::tibble(row = row0 + i, col = seq_along(shape),
                      text = vapply(shape, function(cl) as.character(cl)[[i]], character(1)))),
-    list(tibble::tibble(row = row0 + nrow(shape) + 1L, col = 1L, text = attr(shape, "note")))))
+    list(tibble::tibble(row = row0 + nrow(shape) + seq_along(nt), col = 1L, text = nt))))
 }
 
 tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, sheet, title, subtext,

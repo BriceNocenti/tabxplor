@@ -946,18 +946,15 @@ materialize_specs <- function() list(
   # A continuous predictor has no level population, so its base-count cell is empty by construction
   # -- that is where its OBSERVED SHAPE goes, as a glyph run in the cell's own display template. Runs
   # right after base_n (the columns must exist) and before the footer rows.
-  # ⚠ WHERE A CURVE IS DRAWN IS A MEDIUM QUESTION, and this is the one place it is answered:
-  #   * CONSOLE never takes this route. The glyphs are East-Asian-width-ambiguous, so a terminal font
-  #     that draws them wide breaks the padding of every column to their right -- and the console
-  #     cannot be given a font. The shape table below the footer carries them instead.
-  #   * a table with SEVERAL OUTCOMES has one `n` column for all of them, so a cell of it could only
-  #     ever show one outcome's curve. They go to the shape table too.
-  # tab_wants_shape_table() is the same rule read the other way round, so the two cannot drift.
+  # ⚠ DORMANT (22b-xviii, second round). Every curve goes to the shape table below the footer now
+  # (reg_shape_table): a curve plus the range it is read against is ~26 characters, and the count
+  # column paid them on every row of every medium that took this route. The writer and its spec are
+  # kept whole, so putting the curve back in the cell is this one constant.
   reg_spark = list(
-    when  = function(tab, backend, ctx) tab_is_reg(tab) &&
-      !tab_wants_shape_table(tab, ctx$medium %||% "html") &&
+    when  = function(tab, backend, ctx) SPARK_IN_CELL && tab_is_reg(tab) &&
       !is.null(get_assumptions(tab)) &&
-      !isFALSE(tx_option("spark")) && any(purrr::map_lgl(tab, ~ is_fmt(.) && get_role(.) == "n")),
+      !identical(tx_spark_mode(), "no") &&
+      any(purrr::map_lgl(tab, ~ is_fmt(.) && get_role(.) == "n")),
     apply = function(tab, backend, ctx) mat_reg_spark(tab)),
   # A Total column whose content has moved: the count into its own column (Excel, or one per block
   # on a spread table) or nowhere at all (n = "no"), leaving a constant behind.
@@ -1019,6 +1016,11 @@ mat_base_n <- function(tab, backend, ctx) {
   set_render_extras(tab, NULL)
 }
 
+# The `n`-cell route's one switch. See materialize_specs()$reg_spark for why it is off.
+#' @keywords internal
+#' @noRd
+SPARK_IN_CELL <- FALSE
+
 # mat_reg_spark() -- the observed shape of each continuous predictor, drawn into the base-count cell
 # its row leaves empty, as a literal in that cell's display template. ONE writer for every medium:
 # format() renders the run, the console pads it, Markdown prints it and the html engine upgrades it
@@ -1055,9 +1057,13 @@ mat_reg_spark <- function(tab) {
         if (nrow(cg2) == 0L) cg2 <- cu[cu$group == "", , drop = FALSE]
         gl  <- if (nrow(cg2) == 0L) NA_character_ else rd_spark(cg2)
         if (is.na(gl)) next
+        # the picture is read against the RANGE it is a picture of, so the two travel together
+        # wherever they go -- here, and in the shape table (reg_shape_table).
+        rlab <- rd_range_label(cg2, a$kind, a$family)
         # no separator on an empty cell -- there is nothing to separate it from; a non-breaking one
         # where a count is actually printed beside it.
-        d[[i]] <- paste0("{n_range}", if (!is.na(get_n(col)[[i]])) "\u00a0", gl)
+        d[[i]] <- paste0("{n_range}", if (!is.na(get_n(col)[[i]])) "\u00a0",
+                         if (nzchar(rlab)) paste0(rlab, "\u00a0"), gl)
       }
     }
     tab[[nm]] <- fmt_set_display(col, d)

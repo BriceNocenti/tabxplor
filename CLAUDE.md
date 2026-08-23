@@ -687,8 +687,15 @@ Requested: the **`guaranteed_effect` head no longer takes a colon** (it is one s
 
 **Still open, deliberately:** the maintainer's visual review of that set, which is what this phase's layout decisions ultimately rest on.
 
+⚠ **Open, found in 22b-xviii: Excel applies BOTH colour channels to the whole cell.** `tab_xl.R` writes one font colour and one fill per CELL, so a composite's asides and its stars wear the measure's colour too — internally symmetric (unlike the html defect 22b-xviii fixed, where the background flooded a cell whose text colour already stopped at the primary token), but the grey aside is simply lost, and a reader cannot tell the number from what sits beside it. The cure is per-cell **rich-text runs**, whose machinery `tab-xl-backend.R` already has (used today only for the footer legend), driven by the `primary_from` / `primary_nchar` range `format(bold_split = TRUE)` hands back — the same fact `html_cell_text()` and the console's `paint_split()` both read.
+
 
 #### Phase 22g — Jamovi UIs manual reviews and final modifications
+
+#### Phase 22g-i — update jamovi UIs
+
+Now that the package API is final, I want to manual review jamovi `jmvtab` and `jmvtabreg` UIs one last time, both English (WSL2) and French (Windows-side). For that, we first need to update the UIs to the current version of the code, look at new or changed arguments, and 
+- `jmvtabreg` main Model arguments should respect the outcome --> family --> link --> measure --> effect argument cascade, and we shall find the best to reflect the new model choice philosophy of the package. Outcome `family` selector: the box should now be it’s own table with `family` and `link`, and to be able to teach R they should make "family =" and "link=" the box columns names. Old `effect` and `at`: replaced with `measure` and `effect` radio buttons (not vectorised over `outcome`, scalar is ok).
 
 ⚠ **The stale `R/jmvtabreg.h.R` is now BROKEN, not merely out of date** — measured in 22b-xv-2, not inferred: `tabxplor::jmvtabreg(data, outcome, predictors)` aborts with *"options$crosses does not exist"*, the option 22b-ix declared in the YAML. Two of its defaults also name values that have since been retired (`effect = "coefficient"` → `"conditional"`, `display = "value"`), so they would abort in turn once the first is fixed. The `.h.R` is never hand-edited, so `prepare()` clears all three at once — but until it runs the Regressions analysis does not work at all.
 

@@ -834,14 +834,21 @@ rd_bin_neff <- function(sw, num, w, y, g, design = NULL, des_rows = NULL) {
 # which is why a probability needs no row of its own on the identity scale (SD = 0.5 at p = 0.5,
 # so 0.1 SD = 5 points).
 # `rung = NA` means "0.1 x the outcome's own SD", the one rung that cannot be a constant.
+# `inv` takes the curve BACK to the level a reader can name -- a percentage of people, a mean in the
+# data's own units -- which is what the shape table reports; `level` says which of the two it is.
+# The three multiplicative readings share one `inv` per shape because the binning already applied the
+# link (rd_bin), so undoing it is the link's plain inverse and nothing else.
 #' @keywords internal
 RD_LINK_SCALES <- list(
-  logit   = list(rung = log(1.2), span = "mult"),
-  logmean = list(rung = log(1.1), span = "mult"),
-  logrisk = list(rung = log(1.1), span = "mult"),
-  risk    = list(rung = NA_real_, span = "points"),
-  mean    = list(rung = NA_real_, span = "sd")
+  logit   = list(rung = log(1.2), span = "mult",   inv = stats::plogis, level = "pct"),
+  logmean = list(rung = log(1.1), span = "mult",   inv = exp,           level = "num"),
+  logrisk = list(rung = log(1.1), span = "mult",   inv = exp,           level = "pct"),
+  risk    = list(rung = NA_real_, span = "points", inv = identity,      level = "pct"),
+  mean    = list(rung = NA_real_, span = "sd",     inv = identity,      level = "num")
 )
+
+#' @keywords internal
+rd_link_scale <- function(kind) RD_LINK_SCALES[[kind %||% "mean"]] %||% RD_LINK_SCALES$mean
 
 #' @keywords internal
 rd_link_rung <- function(kind, y, w) {
@@ -963,7 +970,12 @@ rd_spark_window <- function(curve) {
   rung <- if (is.data.frame(curve) && !is.null(curve$rung)) curve$rung[[1L]] else NA_real_
   flr  <- suppressWarnings(max(c(8 * se, rung)[is.finite(c(8 * se, rung))]))
   if (!is.finite(flr)) flr <- 0
-  list(span = span, floor = flr, window = max(span, flr), flat = span < flr)
+  # ⚠ TWO VERDICTS, deliberately separate. The DRAWING is damped by either clause -- a curve under
+  # the first colour rung is negligible and must not fill the height. Only the SE clause is a
+  # statement about EVIDENCE, and only that one earns the "ns" mark: a precisely measured but tiny
+  # curve is not noise, and its own range already says it is nothing.
+  list(span = span, floor = flr, window = max(span, flr), flat = span < flr,
+       noisy = is.finite(se) && span < 8 * se)
 }
 
 #' @keywords internal
@@ -986,26 +998,74 @@ rd_spark <- function(curve, on = TRUE, n = 10L) {
   paste(gl[pmax(pmin(i, length(gl)), 1L)], collapse = "")
 }
 
-# The window as a NUMBER a reader can check the picture against: the curve's own range on the
-# reading's own measure, or "< <floor>" where the floor is what is drawn (the curve is smaller than
-# anything this package would colour, so it reads flat BY CONSTRUCTION rather than by luck).
+# THE OBSERVED RANGE: what the picture beside it is a picture OF, as two numbers a reader can name --
+# "13-57%", the lowest and the highest point of the curve, back on the outcome's own scale -- with the
+# effect between them, in the measure the LINK estimates, in parentheses: "13-57% (OR 8.7)".
+#
+# WHY THE ENDS AND NOT THE TWO EXTREMES OF X. Measured, on gss: `tvhours` reads 37% -> 31% end to end
+# (a mild decrease) beside a picture that climbs to a peak and falls a long way. The number must label
+# the AXIS of the drawing, so it is the curve's own low and high; the direction stays in the picture,
+# which is why the two are joined by a dash and never by an arrow.
+#
+# WHY THE MEASURE IS THE LINK'S, not the column's: `link` and `measure` may disagree (a logit fit
+# reported as a risk ratio), and the curve is binned on the LINK's scale. The word is printed for an
+# ODDS RATIO alone -- the one measure tabxplor renders with no glyph of its own, hence the only one a
+# bare number leaves ambiguous. "x" / "+" / "SD" already name themselves, everywhere in the package.
 #' @keywords internal
-rd_span_label <- function(curve, kind) {
-  win <- rd_spark_window(curve)
-  v   <- if (isTRUE(win$flat)) win$floor else win$span
-  if (!is.finite(v)) return("")
-  sp  <- (RD_LINK_SCALES[[kind %||% "mean"]] %||% RD_LINK_SCALES$mean)$span
-  # ⚠ a MEAN is read in SD, like its own colour ladder (COLOR_SCALES$mean_diff is standardized), and
-  # the SD is recovered from the stored rung rather than re-derived: the rung IS 0.1 SD.
-  sd  <- if (is.data.frame(curve)) 10 * (curve$rung[[1L]] %||% NA_real_) else NA_real_
-  lab <- switch(sp,
-                mult   = paste0(stringi::stri_unescape_unicode("\\u00d7"),
-                                formatC(exp(v), format = "f", digits = if (exp(v) < 10) 1 else 0)),
-                points = paste0("+", formatC(100 * v, format = "f", digits = 0), "%"),
-                if (is.finite(sd) && sd > 0)
-                  paste0("+", formatC(v / sd, format = "f", digits = 1), " ", gettext("SD"))
-                else paste0("+", formatC(v, format = "f", digits = 1)))
-  if (isTRUE(win$flat)) paste0("<", lab) else lab
+rd_range_label <- function(curve, kind, family = NULL) {
+  if (!is.data.frame(curve) || !all(is.finite(curve$y))) return("")
+  sc  <- rd_link_scale(kind)
+  r   <- range(curve$y)
+  lv  <- sc$inv(r)                                   # every `inv` is increasing, so lo stays lo
+  txt <- rd_level_range(lv, sc$level)
+  eff <- rd_effect_label(diff(r), kind, curve$rung[[1L]], family)
+  paste0(txt, if (nzchar(eff)) paste0(" (", eff, ")"),
+         if (isTRUE(rd_spark_window(curve)$noisy)) paste0(" ", gettext("ns")))
+}
+
+# One value through the package's own display engine, so a level in the shape table and the same
+# level in a cell cannot be written two ways (digits, thousands mark, the "%", the "1/x" fold).
+#' @keywords internal
+rd_fmt1 <- function(field, value, scale, display, digits) {
+  a <- list(n = c(1L, 1L), scale = scale, display = display, digits = as.integer(digits))
+  a[[field]] <- rep(as.double(value), 2L)
+  trimws(format(do.call(fmt, a), na = "")[[1L]])
+}
+
+# The pair as ONE range: the unit written once, at the end ("13-57%", never "13%-57%"), and the "-"
+# separator the base count's own min-max already uses.
+#' @keywords internal
+rd_level_range <- function(lv, level) {
+  if (!all(is.finite(lv))) return("")
+  one <- function(v, dg) if (identical(level, "pct"))
+    rd_fmt1("pct", v, "level_pct", "pct", 0L) else rd_fmt1("mean", v, "level_mean", "mean", dg)
+  dg  <- if (max(abs(lv)) < 100) 1L else 0L
+  lo  <- one(lv[[1L]], dg); hi <- one(lv[[2L]], dg)
+  paste0(sub("%$", "", lo), "-", hi)
+}
+
+# The climb from the bottom of the curve to the top, in the measure the link estimates.
+#' @keywords internal
+rd_effect_label <- function(rng, kind, rung, family = NULL) {
+  sc <- rd_link_scale(kind)
+  if (!is.finite(rng)) return("")
+  v <- switch(
+    sc$span,
+    # ⚠ the "1/x" fold cannot arise -- a range is a magnitude, so exp(range) >= 1 -- but the
+    # rendering goes through the shared engine anyway, so it would be right if it ever did.
+    mult   = if (identical(kind, "logit"))
+               rd_fmt1("or", exp(rng), "odds_ratio", "or", 1L)
+             else rd_fmt1("ratio", exp(rng),
+                          if (identical(sc$level, "pct")) "pct_ratio" else "mean_ratio", "ratio", 1L),
+    points = rd_fmt1("diff", rng, "points", "diff", 0L),
+    # a MEAN is read in SD, like its own colour ladder (COLOR_SCALES$mean_diff is standardized), and
+    # the SD is recovered from the stored rung rather than re-derived: the rung IS 0.1 SD.
+    { sd <- 10 * (rung %||% NA_real_)
+      if (is.finite(sd) && sd > 0)
+        paste0("+", formatC(rng / sd, format = "f", digits = 1), " ", gettext("SD"))
+      else paste0("+", formatC(rng, format = "f", digits = 1)) })
+  w <- if (identical(kind, "logit")) reg_family_mult_word(family) else NA_character_
+  if (is.na(w) || !nzchar(w)) v else paste(w, v)
 }
 
 # ONE residual per family, for the teaching panels: a raw residual takes exactly two values for a
@@ -1163,20 +1223,36 @@ reg_check_msgid_anchor <- function() {
 # ways -- inside the base-count cell of the row it belongs to, or in a small table of its own below
 # the footer. The cell is the better reading (the curve sits beside its coefficient) and is kept
 # wherever it works; the table is what the two cases that break it get:
-#   * the CONSOLE, whose block glyphs are East-Asian-width-ambiguous. A terminal that draws them wide
-#     shifts every column to their right, and a package cannot choose its reader's font. In a table of
-#     its own the run is the LAST column, so a wide glyph costs nothing.
-#   * SEVERAL OUTCOMES, which share one base-count column: a cell of it could show only one of them.
+# THE SHAPE TABLE IS THE ONLY ROUTE (22b-xviii, second round). The cell route was dropped for width:
+# a curve plus the range it is read against is ~26 characters, and the count column paid them on every
+# row of every medium that took it. It also never worked everywhere -- the console's block glyphs are
+# East-Asian-width-ambiguous (a terminal that draws them wide shifts every column to their right, and
+# a package cannot choose its reader's font), and several outcomes share ONE count column, so a cell
+# of it could show only one of them. `options(tabxplor.spark =)` chooses where the table is drawn.
 #
 # The curve is FIT-FREE (rd_bin bins the observed outcome), so the predictor column names the variable
 # and never its parametrisation -- `shape = "quadratic"` changes the model, not what was observed.
 #' @keywords internal
 #' @noRd
 tab_wants_shape_table <- function(tab, medium = "console") {
-  if (!tab_is_reg(tab) || isFALSE(tx_option("spark")) || identical(medium, "plot")) return(FALSE)
+  mode <- tx_spark_mode()
+  if (identical(mode, "no") || !tab_is_reg(tab) || identical(medium, "plot")) return(FALSE)
   a <- get_assumptions(tab)
   if (is.null(a) || length(a) == 0L) return(FALSE)
-  identical(medium, "console") || length(a) > 1L
+  !identical(mode, "console") || identical(medium, "console")
+}
+
+# `options(tabxplor.spark =)` as one of the three words the rest of the package reads. TRUE / FALSE
+# are the historical spelling of "all" / "no" and keep working; anything unrecognised is "all", since
+# a mistyped display option must never silently remove content.
+#' @keywords internal
+#' @noRd
+tx_spark_mode <- function() {
+  v <- tx_option("spark")
+  if (isTRUE(v))  return("all")
+  if (isFALSE(v)) return("no")
+  v <- as.character(v)[[1L]]
+  if (v %in% c("all", "console", "no")) v else "all"
 }
 
 # THE producer: one row per (outcome, group, numeric predictor), already rendered. Returns NULL when
@@ -1195,47 +1271,59 @@ reg_shape_table <- function(tab, n = 20L) {
         gl <- rd_spark(cg, n = n)
         if (is.na(gl)) return(NULL)
         tibble::tibble(outcome = rec$outcome, group = g, var = v,
-                       span = rd_span_label(cg, rec$kind), shape = gl,
-                       ylab = rec$ylab %||% "")
+                       range = rd_range_label(cg, rec$kind, rec$family), shape = gl,
+                       noisy = isTRUE(rd_spark_window(cg)$noisy),
+                       ylab = rec$ylab %||% "", family = rec$family %||% "")
       }))
     }))
   }))
   if (is.null(rows) || nrow(rows) == 0L) return(NULL)
   keep_group <- length(unique(rows$group)) > 1L
-  out <- rows[, c("outcome", if (keep_group) "group", "var", "span", "shape"), drop = FALSE]
+  out <- rows[, c("outcome", if (keep_group) "group", "var", "range", "shape"), drop = FALSE]
   # the outcome (and the group) named ONCE per run, like the row-variable block of a table
   out$outcome[duplicated(out$outcome)] <- ""
   if (keep_group) out$group[duplicated(rows[, c("outcome", "group")])] <- ""
+  # ⚠ ONE STRING LITERAL PER gettext() CALL, and one NOTE LINE per call. potools extracts each
+  # literal it sees, while gettext() looks the EVALUATED string up -- so a message built with
+  # paste0() INSIDE the call is extracted in pieces and can never be found at run time.
+  note <- c(
+    gettextf("the outcome's observed shape across the central 95%% of each predictor, on the model's own scale (%s).",
+             paste(unique(rows$ylab), collapse = ", ")),
+    gettext("Observed range: the curve's lowest and highest point, with the climb between them in parentheses."),
+    gettext("Grey and \"ns\": the curve is inside its own sampling noise -- read it as a flat line whatever its shape (the row's own stars judge the effect, this does not)."))
+  # an ordinal or multinomial outcome has one curve per cut / per category and this draws only the
+  # first: the honest reading is the full panel, so the note says where it is.
+  if (any(reg_check_family_of(rows$family) %in% c("ordinal", "multinomial")))
+    note <- c(note, gettext("An ordinal or multinomial outcome has one curve per cut or per category, and this is only the first: use reg_check_plots() to see them all."))
   structure(
     out,
     headers = c(gettext("outcome"), if (keep_group) gettext("group"),
-                gettext("numeric predictor"), gettext("span"), gettext("observed shape")),
-    align   = c("left", if (keep_group) "left", "left", "right", "left"),
-    # ⚠ ONE STRING LITERAL PER gettext() CALL. potools extracts each literal it sees, while gettext()
-    # looks the EVALUATED string up -- so a message built with paste0() INSIDE the call is extracted
-    # in pieces and can never be found at run time. Two sentences, two calls, joined after.
-    note    = paste(
-      gettextf("the outcome's observed shape across the central 95%% of each predictor, on the model's own scale (%s);",
-               paste(unique(rows$ylab), collapse = ", ")),
-      gettext("span = the curve's whole range; \"<\" = smaller than the window it is drawn in, so it reads flat.")))
+                gettext("numeric predictor"), gettext("observed range"), gettext("observed shape")),
+    align   = c("left", if (keep_group) "left", "left", "left", "left"),
+    noisy   = rows$noisy,
+    note    = note)
 }
 
 # A GFM pipe table from already-rendered character columns -- the console's shape table and the
 # Markdown exporter's are the same lines, so they are built once. Widths are counted in CHARACTERS,
 # exact in a monospace medium and near enough in a proportional one.
+# `grey`: one logical per row, styled AFTER the padding (an ANSI sequence has no width, but nchar()
+# would count it). NULL in a medium that has no colour, where the "ns" mark carries the same verdict.
 #' @keywords internal
 #' @noRd
-tx_pipe_table <- function(df, headers, align) {
+tx_pipe_table <- function(df, headers, align, grey = NULL) {
   cols <- lapply(seq_along(df), function(j) c(headers[[j]], as.character(df[[j]])))
   w    <- vapply(cols, function(c) max(nchar(c, type = "chars")), integer(1))
   pad  <- function(s, j) formatC(s, width = w[[j]], flag = if (align[[j]] == "right") "" else "-")
   emit <- function(cells) paste0("| ", paste(cells, collapse = " | "), " |")
+  body <- vapply(seq_len(nrow(df)), function(i)
+    emit(vapply(seq_along(df), function(j) pad(as.character(df[[j]])[[i]], j), character(1))),
+    character(1))
+  if (!is.null(grey) && any(grey)) body[grey] <- cli::col_grey(body[grey])
   c(emit(vapply(seq_along(df), function(j) pad(headers[[j]], j), character(1))),
     paste0("|", paste(vapply(seq_along(df), function(j) mk_align(w[[j]], align[[j]]), character(1)),
                       collapse = "|"), "|"),
-    vapply(seq_len(nrow(df)), function(i)
-      emit(vapply(seq_along(df), function(j) pad(as.character(df[[j]])[[i]], j), character(1))),
-      character(1)))
+    body)
 }
 
 # The console rendering: the pipe table, one blank line under the footer grid, then the note.
@@ -1245,7 +1333,7 @@ shape_render_console <- function(tab) {
   st <- reg_shape_table(tab)
   if (is.null(st)) return(invisible(NULL))
   # the footer grid already closes with a blank line -- one separates the two tables, never two.
-  cli::cat_line(tx_pipe_table(st, attr(st, "headers"), attr(st, "align")))
+  cli::cat_line(tx_pipe_table(st, attr(st, "headers"), attr(st, "align"), attr(st, "noisy")))
   cli::cat_line(cli::col_grey(paste0("# ", attr(st, "note"))))
   cli::cat_line()
   invisible(NULL)

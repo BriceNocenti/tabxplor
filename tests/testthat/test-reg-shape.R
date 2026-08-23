@@ -277,20 +277,41 @@ nprint <- function(t, v) {
          character(1))
 }
 
-test_that("a continuous predictor's row carries its observed shape, and the option turns it off", {
+test_that("a continuous predictor gets its observed shape, in a table of its own", {
   skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE))
-  # it is the base-count cell that carries it -- NOT the row label, which states the unit alone
-  expect_match(nprint(t, "age"), "[\u2581-\u2588]{3,}")
+  st <- tabxplor:::reg_shape_table(t)
+  # ⚠ ONE row per CONTINUOUS predictor: a factor has a real count and a level of its own to read
+  expect_identical(st$var, "age")
+  expect_match(st$shape, "[\u2581-\u2588]{3,}")
+  # ... and NOTHING in the table itself -- neither the row label nor the count cell (22b-xviii-ii)
   expect_false(grepl("[\u2581-\u2588]", lv(t, "age")))
-  # a factor row never gets one (it has a real count there)
+  expect_false(any(grepl("[\u2581-\u2588]", nprint(t, "age"))))
   expect_false(any(grepl("[\u2581-\u2588]", nprint(t, "race"))))
-  withr::with_options(list(tabxplor.spark = FALSE), {
-    t0 <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
-                                   stats = FALSE))
-    expect_false(any(grepl("[\u2581-\u2588]", nprint(t0, "age"))))
-  })
+})
+
+test_that("`options(tabxplor.spark =)` chooses where the shape table is drawn", {
+  skip_if_not_installed("broom")
+  d <- shp_data()
+  t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE))
+  want <- function(...) c(console = tab_wants_shape_table(t, "console"),
+                          kable   = tab_wants_shape_table(t, "kable"))
+  expect_identical(want(), c(console = TRUE, kable = TRUE))                       # the default
+  withr::with_options(list(tabxplor.spark = "console"),
+                      expect_identical(want(), c(console = TRUE,  kable = FALSE)))
+  withr::with_options(list(tabxplor.spark = "no"),
+                      expect_identical(want(), c(console = FALSE, kable = FALSE)))
+  # TRUE / FALSE are the historical spelling of "all" / "no" and keep working
+  withr::with_options(list(tabxplor.spark = TRUE),
+                      expect_identical(want(), c(console = TRUE,  kable = TRUE)))
+  withr::with_options(list(tabxplor.spark = FALSE),
+                      expect_identical(want(), c(console = FALSE, kable = FALSE)))
+  # ⚠ a mistyped display option must never silently remove content
+  withr::with_options(list(tabxplor.spark = "yes please"),
+                      expect_identical(want(), c(console = TRUE,  kable = TRUE)))
+  # a plot never draws block glyphs, whatever the option says
+  expect_false(tab_wants_shape_table(t, "plot"))
 })
 
 test_that("the curve is the MODELLED level's, not the factor's first level", {
@@ -306,8 +327,8 @@ test_that("the curve is the MODELLED level's, not the factor's first level", {
   expect_gt(y[[length(y)]], y[[1]])
   # ten bins, and the sparkline printed is this curve
   expect_equal(nrow(a$curves$age), 10L)
-  # the printed run is the curve RESAMPLED onto its own x axis, so it is read from the curve
-  expect_true(grepl(tabxplor:::rd_spark(a$curves$age), nprint(t, "age"), fixed = TRUE))
+  # the drawn run is the curve RESAMPLED onto its own x axis, so it is read from the curve
+  expect_identical(tabxplor:::reg_shape_table(t)$shape, tabxplor:::rd_spark(a$curves$age, n = 20L))
 })
 
 test_that("several outcomes get one curve EACH, and the shape table rather than a cell", {
@@ -332,19 +353,16 @@ test_that("several outcomes get one curve EACH, and the shape table rather than 
   expect_false(any(grepl("[\u2581-\u2588]", as.character(t$levels))))
 })
 
-test_that("the console never puts a glyph run in a cell; every other medium may", {
+test_that("NO medium puts a glyph run in a cell -- the cell route is dormant", {
   skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE))
-  expect_true(tab_wants_shape_table(t, "console"))
-  expect_false(tab_wants_shape_table(t, "kable"))
-  cons <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE, medium = "console")
-  expect_false(any(grepl("[\u2581-\u2588]", get_display(cons[["n"]]))))
-  # and the option still turns the whole feature off, table and cell alike -- ONE gate for both
-  withr::with_options(list(tabxplor.spark = FALSE), {
-    expect_false(tab_wants_shape_table(t, "console"))
-    expect_false(tab_wants_shape_table(t, "kable"))
-  })
+  expect_false(tabxplor:::SPARK_IN_CELL)
+  for (md in c("console", "kable", "md", "xl")) {
+    m <- tabxplor:::tab_materialize_extras(t, backend = if (md == "xl") "xl" else "text",
+                                           pvalue = FALSE, medium = md)
+    expect_false(any(grepl("[\u2581-\u2588]", get_display(m[["n"]]))), label = md)
+  }
 })
 
 test_that("the html engine upgrades the glyph run to an inline <svg>; the plot medium drops it", {
@@ -383,17 +401,14 @@ test_that("the sparkline is drawn on the model's own x axis: one width, and the 
   skip_if_not_installed("broom")
   d  <- shp_data()
   gl <- function(t, v) {
-    r <- regmatches(as.character(t$levels)[as.character(t$var) == v],
-                    regexpr("[\u2581-\u2588]+", as.character(t$levels)[as.character(t$var) == v]))
-    m <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE)
-    dd <- get_display(m[["n"]])[as.character(m$var) == v]
-    regmatches(dd, regexpr("[\u2581-\u2588]+", dd))
+    st <- tabxplor:::reg_shape_table(t)
+    st$shape[st$var == v]
   }
   t0 <- suppressMessages(tab_reg(d, "married", c("age", "tvhours"), family = "binomial",
                                  stats = FALSE))
   # EVERY predictor gets the same number of glyphs -- the run's length is the grid's, not the data's
   expect_identical(nchar(gl(t0, "age")), nchar(gl(t0, "tvhours")))
-  expect_identical(nchar(gl(t0, "age")), 10L)
+  expect_identical(nchar(gl(t0, "age")), 20L)   # the shape table's own width
   # ...and a monotone shape CHANGES the curve, which is the whole point of drawing it to scale
   tl <- suppressMessages(tab_reg(d, "married", c("age", "tvhours"), family = "binomial",
                                  shape = c(age = "log"), stats = FALSE))
@@ -414,8 +429,9 @@ test_that("a curve smaller than its own noise reads FLAT, and a real one uses th
   lv <- function(run) match(strsplit(run, "")[[1]], tabxplor:::rd_spark_glyphs())
   # pure noise stays in the middle of the run: it never reaches both ends
   expect_lt(diff(range(lv(gn$shape[[1]]))), 7L)
-  # ... and the span column SAYS the window is the floor, not the curve
-  expect_match(gn$span[[1]], "^<")
+  # ... and the range column MARKS it: grey plus "ns", the package's own non-significant pair
+  expect_match(gn$range[[1]], " ns$")
+  expect_true(attr(gn, "noisy")[[1]])
 
   m <- 4000
   real <- data.frame(x = stats::rnorm(m), g = factor(sample(c("a", "b"), m, TRUE)))
@@ -423,7 +439,8 @@ test_that("a curve smaller than its own noise reads FLAT, and a real one uses th
   tr <- suppressMessages(tab_reg(real, "y", c("g", "x"), family = "binomial", stats = FALSE))
   gr <- tabxplor:::reg_shape_table(tr)
   expect_identical(diff(range(lv(gr$shape[[1]]))), 7L)   # a real effect spends every level
-  expect_false(startsWith(gr$span[[1]], "<"))
+  expect_false(grepl(" ns$", gr$range[[1]]))
+  expect_false(attr(gr, "noisy")[[1]])
 })
 
 test_that("the window's floor is the first colour rung, read on the curve's own scale", {
@@ -436,4 +453,66 @@ test_that("the window's floor is the first colour rung, read on the curve's own 
   expect_equal(tabxplor:::rd_link_rung("risk", y, NULL), 0.05, tolerance = 1e-3)
   expect_equal(tabxplor:::rd_link_rung("mean", c(rep(0, 500), rep(10, 500)), NULL), 0.5,
                tolerance = 1e-3)
+})
+
+# ---- Phase 22b-xviii (ii): the observed range beside the picture --------------------------------
+
+test_that("the observed range is the curve's own low and high, back on the outcome's scale", {
+  skip_if_not_installed("broom")
+  d <- suppressWarnings(gss_cat_data_formatting())
+  rg <- function(...) tabxplor:::reg_shape_table(
+    suppressMessages(suppressWarnings(tab_reg(d, ..., stats = FALSE))))$range
+  # a LEVEL a reader can name, whatever measure the analyst asked for: the same curve, three links
+  expect_match(rg("married", "age", family = "binomial"),                    "^13-57% ")
+  expect_match(rg("married", "age", family = "binomial", link = "ratio"),    "^13-57% ")
+  expect_match(rg("married", "age", family = "binomial", link = "difference"), "^13-57% ")
+  # the unit is written ONCE, at the end -- it reads as a range, not as two numbers
+  expect_false(any(grepl("%-", rg("married", "age", family = "binomial"))))
+  # the effect in parentheses is the LINK's own measure, not the reported one
+  expect_match(rg("married", "age", family = "binomial"),                     "\\(OR [0-9.]+\\)$")
+  expect_match(rg("married", "age", family = "binomial", link = "ratio"),     "\\(\u00d7[0-9.]+\\)$")
+  expect_match(rg("married", "age", family = "binomial", link = "difference"), "\\(\\+[0-9]+%\\)$")
+  expect_match(rg("tvhours", "age", family = "poisson"),                      "\\(\u00d7[0-9.]+\\)$")
+  expect_match(rg("age", "tvhours", family = "gaussian"),                     "\\(\\+[0-9.]+ SD\\)$")
+  # ⚠ an ODDS RATIO is the one measure rendered with no glyph, so it is the only one NAMED
+  expect_match(rg("rincome", "age"), "\\(cumOR [0-9.]+\\)$")
+})
+
+test_that("the range travels with the picture, in the same row of the shape table", {
+  skip_if_not_installed("broom")
+  d <- suppressWarnings(gss_cat_data_formatting())
+  t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE))
+  st <- tabxplor:::reg_shape_table(t)
+  expect_match(st$range, "^13-57% \\(OR [0-9.]+\\)$")
+  expect_match(st$shape, "^[\u2581-\u2588]{20}$")
+  # the table itself carries neither, in any medium
+  for (md in c("console", "kable")) {
+    m <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE, medium = md)
+    expect_false(any(grepl("[\u2581-\u2588]|13-57%", get_display(m[["n"]]))), label = md)
+  }
+})
+
+test_that("an ordinal outcome's note sends the reader to the full panel", {
+  skip_if_not_installed("MASS")
+  d  <- suppressWarnings(gss_cat_data_formatting())
+  st <- tabxplor:::reg_shape_table(
+    suppressMessages(suppressWarnings(tab_reg(d, "rincome", "age", stats = FALSE))))
+  expect_true(any(grepl("reg_check_plots", attr(st, "note"), fixed = TRUE)))
+  # a binomial one does not: its single curve IS the whole reading
+  st2 <- tabxplor:::reg_shape_table(
+    suppressMessages(tab_reg(d, "married", "age", family = "binomial", stats = FALSE)))
+  expect_false(any(grepl("reg_check_plots", attr(st2, "note"), fixed = TRUE)))
+})
+
+test_that("the drawing floor and the noise mark are two different verdicts", {
+  # a precisely measured but negligible curve is damped, and is NOT marked: it is not noise, and
+  # its own range says it is nothing.
+  cu <- tibble::tibble(x = 1:10, y = seq(-0.05, 0.05, length.out = 10), n = 4000,
+                       se = rep(0.001, 10), xlo = 1, xhi = 10, rung = log(1.2))
+  w  <- tabxplor:::rd_spark_window(cu)
+  expect_true(w$flat)                       # under the first colour rung -> drawn damped
+  expect_false(w$noisy)                     # but far outside its own standard errors
+  # the same curve measured on very little data IS noise
+  cu$se <- rep(0.05, 10)
+  expect_true(tabxplor:::rd_spark_window(cu)$noisy)
 })

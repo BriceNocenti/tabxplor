@@ -586,16 +586,20 @@ shape_html_table <- function(tab) {
   cls <- vapply(al, function(a) if (a == "right") "tx-r tx-num" else "tx-l", character(1))
   thead <- paste0('<tr>', paste0('<th class="', cls, '">', htmltools::htmlEscape(hd), '</th>',
                                  collapse = ""), '</tr>')
+  # a curve inside its own sampling noise wears the ASIDE ink, the same grey a non-significant cell
+  # wears -- one convention, and the "ns" mark in the range cell says it again where colour cannot.
+  ns <- attr(st, "noisy") %||% rep(FALSE, nrow(st))
   cells <- lapply(seq_along(st), function(j) {
     v <- htmltools::htmlEscape(as.character(st[[j]]))
-    k <- cls[[j]]
+    k <- ifelse(ns, paste(cls[[j]], "tx-sec"), cls[[j]])
     if (names(st)[[j]] == "shape") { v <- tx_spark_svg(v, h = 44L, dx = 10L, lwd = 2.6)
                                      k <- paste(k, "tx-sparkcell") }
     paste0('<td class="', k, '">', v, '</td>')
   })
   body <- paste0('<tr>', do.call(paste0, cells), '</tr>', collapse = "")
   tfoot <- paste0('<tfoot><tr><td colspan="', length(st), '"><div class="tx-foot">',
-                  htmltools::htmlEscape(attr(st, "note")), '</div></td></tr></tfoot>')
+                  paste(htmltools::htmlEscape(attr(st, "note")), collapse = "<br>"),
+                  '</div></td></tr></tfoot>')
   paste0('<table class="tabxplor-tab">', '<thead>', thead, '</thead>',
          '<tbody>', body, '</tbody>', tfoot, '</table>')
 }

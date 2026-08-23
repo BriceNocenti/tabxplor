@@ -28,7 +28,6 @@ jmvtab(
   comp = "tab",
   ci = "auto",
   conf_level = 0.95,
-  ci_print = "ci",
   stars = FALSE,
   ci_method_cell = "wilson",
   ci_method_diff = "newcombe",
@@ -38,7 +37,7 @@ jmvtab(
   wrap_rows = 35,
   wrap_cols = 15,
   display = "auto",
-  add_n = TRUE,
+  n = "range",
   add_pct = FALSE,
   subtext = "",
   digits = "0",
@@ -187,9 +186,6 @@ so \code{stars} and \code{color_signif} are   informed and switched off.
 \item Default to 0.95 (95\\%).
 }}
 
-\item{ci_print}{By default confidence interval are printed with the
-interval display. Set to "moe" to use pct +- moe instead.}
-
 \item{stars}{With \code{ci = "diff"}, print significance stars (\code{*}
 \code{**} \code{***}) for the difference of each cell from its reference.
 Read from the same confidence interval that is displayed, so stars and
@@ -206,7 +202,8 @@ always agree.}
 
 \item{ci_method_mean_diff}{The confidence-interval method for the
 difference of numeric means (means with \code{ci = "diff"}): Welch
-(default) or Student (pooled variance).}
+(default), Student (the two groups pooled) or OLS (pooled over every level
+of the variable, i.e. the interval a linear model gives that coefficient).}
 
 \item{ci_method_mean_ratio}{The confidence-interval method for a ratio of
 numeric means (means with \code{ci = "ratio"}).}
@@ -225,15 +222,16 @@ characters.}
 characters.}
 
 \item{display}{What each cell shows. Every value here is a
-\code{tab(display =)} value: a bare field  name, the type-adaptive
-\code{"num_ci"} (a percentage or a mean, with its interval), or  a
-\code{\{\}} template combining fields. \code{"auto"} keeps whatever the
-table was  built with. A template naming a field the table does not carry
-renders empty and says  which argument would fill it.}
+\code{tab(display =)} value: a bare field  name, a named layout such as
+\code{"base_ci"} (each value with its interval), or a  \code{\{\}} template
+combining fields. \code{"auto"} keeps whatever the table was  built with. A
+template naming a field the table does not carry renders empty and says
+which argument would fill it.}
 
-\item{add_n}{For \code{pct = "row"} or \code{pct = "col"}, set to
-\code{FALSE} not to add another column or row with unweighted counts
-(\code{n}).}
+\item{n}{How many people the table is about: \code{"range"} prints the
+unweighted base beside the Total cell (as \code{min-max} when the column
+variables rest on different people), \code{"min"} the smallest base only,
+\code{"no"} no count at all.}
 
 \item{add_pct}{Set to \code{TRUE} to add a column with the frequencies of
 the row variable (for \code{pct = "row"}) or a row with the frequencies of

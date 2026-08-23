@@ -4343,11 +4343,17 @@ reg_stage_finalize <- function(ctx) {
 #' anyway on an ordinal outcome, because a cumulative odds ratio that fails it is not one number but
 #' a fiction. **Linearity** is the one asked for by name (`stats = c("n", "aic", "linearity")`, or
 #' `stats = "all"`). The cheap answer is on screen either way: each numeric predictor's observed
-#' shape is binned with no fit at all and drawn as a **sparkline** --- in that predictor's own
-#' `n` cell where the table has one outcome and the medium can hold it, and otherwise in a small
-#' table below the footer, with the vertical range it is drawn against beside it. The curve is drawn
-#' in a window at least as tall as the data's own sampling noise, so a flat run really means flat.
-#' [reg_check_plots()] draws the full panel for **every** check.
+#' shape is binned with no fit at all and drawn as a **sparkline**, always beside the **observed
+#' range** it is a picture of --- `13-57% (OR 8.7)`: the curve's lowest and highest point, back on
+#' the outcome's own scale, with the climb between them in the measure the *link* estimates. The
+#' picture answers *what shape*, the range answers *how big*, and a curve smaller than its own
+#' sampling noise is greyed and marked `ns` --- read that one as a flat line whatever it looks like.
+#' Both go in the predictor's own `n` cell where the table has one outcome and the medium can hold
+#' them, and otherwise in a small **shape table** below the footer.
+#'
+#' ⚠ an **ordinal** or **multinomial** outcome has one curve per cut or per category and the
+#' sparkline draws only the first: use [reg_check_plots()] there, which shows them all --- and which
+#' draws the full panel for **every** check.
 #' At survey sample sizes a diagnostic p-value rejects almost anything, which is why three of the
 #' five report a *magnitude* instead.
 #'
