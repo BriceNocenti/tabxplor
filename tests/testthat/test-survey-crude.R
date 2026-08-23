@@ -237,8 +237,8 @@ test_that("a calibrated design with incomplete cases keeps its adjustment gap te
   sv <- suppressMessages(svy_unwrap_data(cal, "tab_reg"))
   ds <- list(design = cal, wt = ".svy_weights")
   fm <- suppressWarnings(reg_fit(sv$data, "y", c("x", "z"), "binomial", ds, TRUE, FALSE, .95, "wald"))
-  im <- reg_ame_if_maker(fm$fit, fm$data, ".svy_weights", "identity",
-                         reg_coef_if_maker(fm$fit))("x", "b", "a")
+  im <- reg_ame_if_maker(fm$digest, fm$data, ".svy_weights", "identity",
+                         reg_coef_if_maker(fm$digest, fm$data))("x", "b", "a")
   ic <- reg_if_align(
     reg_crude_if_maker(fm$data, "y", "binomial", fm$positive_level, ".svy_weights",
                        "identity")("x", "b", "a"), length(im), fm$data[[".svy_row"]])
@@ -292,7 +292,7 @@ test_that("a lonely-PSU design still gets a gap SE -- one lonely.psu policy, eve
     o <- options(survey.lonely.psu = "adjust"); on.exit(options(o), add = TRUE)
     suppressWarnings(reg_fit(sv$data, "y", "x", "binomial", ds, TRUE, FALSE, .95, "wald"))
   })
-  d_if <- reg_coef_if_maker(fm$fit)(stats::setNames(1, "xb"))
+  d_if <- reg_coef_if_maker(fm$digest, fm$data)(stats::setNames(1, "xb"))
   expect_error(survey::svyrecvar(as.matrix(d_if), des$cluster, des$strata, des$fpc,   # the old call
                                  postStrata = des$postStrata), "one PSU")
   se <- suppressWarnings(reg_if_se(d_if, fm$fit$survey.design))                       # the new one

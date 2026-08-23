@@ -60,8 +60,11 @@ test_that("the model influence function reproduces the fit's own design-based st
   testthat::expect_false(is.null(mk))
   for (tm in c("raceBlack", "raceWhite", "party3Dem")) {
     L <- stats::setNames(1, tm)
+    # 1e-5, not 1e-10: the influence function is rebuilt from (terms, coef, family, frame), while
+    # glm stores the IRLS weights of the PREVIOUS iteration -- a lag by construction, of the order
+    # of the fit's own convergence tolerance (measured ~2e-6 on this quasipoisson).
     testthat::expect_equal(tabxplor:::reg_if_se(mk(L), f$survey.design),
-                           unname(survey::SE(f)[tm]), tolerance = 1e-10)
+                           unname(survey::SE(f)[tm]), tolerance = 1e-5)
   }
   # without a design it is the plain sum of squares
   testthat::expect_equal(tabxplor:::reg_if_se(mk(stats::setNames(1, "raceBlack"))),

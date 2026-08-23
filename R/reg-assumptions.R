@@ -176,13 +176,12 @@ reg_check_types <- function() unlist(lapply(REG_CHECKS, function(ck) names(ck$ty
                                      use.names = FALSE)
 
 # THE selection rule: which checks apply to this fit? Read by reg_footer_stats(), reg_check_rows()
-# and reg_check_plots(). `has_fit` is FALSE on the jamovi digest path (no model frame kept) -- checks
-# degrade to absent there rather than to a wrong number.
+# and reg_check_plots(). Every check runs in the EAGER STAGE, while the fitted object is alive
+# (R/reg-spec-build.R), so a cached table carries its checks like any other -- there is no
+# fit-less degradation left to declare.
 #' @keywords internal
-reg_checks_for <- function(family, weighted = FALSE, has_fit = TRUE,
-                           what = c("footer", "panel")) {
+reg_checks_for <- function(family, weighted = FALSE, what = c("footer", "panel")) {
   what <- match.arg(what)
-  if (!isTRUE(has_fit)) return(character(0))
   keys <- names(REG_CHECKS)
   keys[vapply(keys, function(k) {
     ck <- REG_CHECKS[[k]]
@@ -197,8 +196,8 @@ reg_checks_for <- function(family, weighted = FALSE, has_fit = TRUE,
 # a fiction. A check named explicitly in `stats =` is still computed and shown -- default set vs
 # vocabulary, not vocabulary vs nothing.
 #' @keywords internal
-reg_checks_default <- function(family, weighted = FALSE, has_fit = TRUE) {
-  keys <- reg_checks_for(family, weighted, has_fit, what = "footer")
+reg_checks_default <- function(family, weighted = FALSE) {
+  keys <- reg_checks_for(family, weighted, what = "footer")
   keys[vapply(keys, function(k) isTRUE(REG_CHECKS[[k]]$footer_default), logical(1))]
 }
 
@@ -206,7 +205,7 @@ reg_checks_default <- function(family, weighted = FALSE, has_fit = TRUE) {
 # others -- default grid vs vocabulary, exactly as reg_checks_default() is to `stats =`.
 #' @keywords internal
 reg_panels_default <- function(family, weighted = FALSE) {
-  keys <- reg_checks_for(family, weighted, has_fit = TRUE, what = "panel")
+  keys <- reg_checks_for(family, weighted, what = "panel")
   keys[vapply(keys, function(k) isTRUE(REG_CHECKS[[k]]$panel_default), logical(1))]
 }
 
@@ -335,16 +334,16 @@ reg_check_model_se <- function(fit, V = NULL) {
 # heteroscedasticity or clustering. It never touches df.residual, so it works on a clustered design
 # where the Pearson phi does not (df.residual of an svyglm is the DESIGN df).
 #' @keywords internal
-reg_check_dispersion <- function(fit, V = NULL)
-  reg_check_influence_pass(fit, "dispersion", V)[["dispersion"]]
+reg_check_dispersion <- function(fit, frame = NULL, V = NULL)
+  reg_check_influence_pass(fit, frame, "dispersion", V)[["dispersion"]]
 
 # Check 4 -- INFLUENCE, as max_j max_i |dfbetas_ij|: no single respondent moves any coefficient by
 # more than X of its own SE. dfbetas rather than Cook's distance (unreadable at survey n). The
 # one-step dfbeta IS the influence function the package already computes, so it exists for
 # polr / multinom (unlike base R) and is design-aware.
 #' @keywords internal
-reg_check_influence <- function(fit, V = NULL)
-  reg_check_influence_pass(fit, "influence", V)[["influence"]]
+reg_check_influence <- function(fit, frame = NULL, V = NULL)
+  reg_check_influence_pass(fit, frame, "influence", V)[["influence"]]
 
 # THE pass both checks 3 and 4 are: ONE decomposition read two ways -- the same vcov, the same
 # influence closure, the same p unit contrasts. Dispersion keeps `reg_if_se(d)`, influence keeps
@@ -353,12 +352,13 @@ reg_check_influence <- function(fit, V = NULL)
 # WARNING: never materialise the n x p matrix (the memory contract R/reg-influence.R states). The
 # loop keeps two running maxima and discards each length-n vector.
 #' @keywords internal
-reg_check_influence_pass <- function(fit, want = c("dispersion", "influence"), V = NULL) {
+reg_check_influence_pass <- function(fit, frame = NULL, want = c("dispersion", "influence"),
+                                     V = NULL) {
   none <- c(dispersion = NA_real_, influence = NA_real_)
   if (is.null(V)) V <- reg_fit_vcov(fit)
   se_mod <- reg_check_model_se(fit, V)
   if (is.null(se_mod)) return(none)
-  cif <- reg_coef_if_maker(fit, V)
+  cif <- reg_coef_if_maker(fit, frame, V = V)
   if (is.null(cif)) return(none)
   do_d <- "dispersion" %in% want
   do_i <- "influence"  %in% want
@@ -519,7 +519,7 @@ reg_check_rows <- function(data, f, sp, shared, stats, col_var, grouped) {
   rows <- (function() {
     if (is.null(f)) return(NULL)
     keep <- reg_footer_stats(sp$fit_family, weighted, grouped, stats)
-    keys <- reg_checks_for(sp$fit_family, weighted, has_fit = !is.null(f$fit))
+    keys <- reg_checks_for(sp$fit_family, weighted)
     keys <- keys[vapply(keys, function(k) any(names(REG_CHECKS[[k]]$types) %in% keep), logical(1))]
     if (length(keys) == 0L) return(NULL)
     cv  <- col_var
@@ -538,7 +538,7 @@ reg_check_rows <- function(data, f, sp, shared, stats, col_var, grouped) {
     }
     # ONE vcov and ONE influence sweep for both checks, computed only if either is wanted.
     if (any(c("dispersion", "influence") %in% keys)) {
-      di <- reg_check_influence_pass(fit, intersect(c("dispersion", "influence"), keys))
+      di <- reg_check_influence_pass(fit, f$data, intersect(c("dispersion", "influence"), keys))
       if ("dispersion" %in% keys) out <- c(out, list(gof("dispersion", cv, di[["dispersion"]], f$nobs, sp$outcome)))
       if ("influence"  %in% keys) out <- c(out, list(gof("influence",  cv, di[["influence"]],  f$nobs, sp$outcome)))
     }

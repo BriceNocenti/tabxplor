@@ -851,6 +851,15 @@ So your instinct is right for the regressions and wrong for the crosstabs, and t
 
 Concretely, and this wants its own phase rather than a change here: keep the regression cache **only for the cheap re-apply path** — the reference-invariant digest the code already knows how to build ("a KB digest instead of a 10 MB fit") — and stop persisting raw fits at all. If that turns out to be most of the machinery, removing the regression cache outright is defensible: at ×1.1 on a changed option it is close to free to lose, and 16 MB per round-trip is a real cost paid on every click.
 
+> **RESOLVED — Phase 22j.** The cache was kept and its *payload* replaced: one tier of distilled
+> `tabxplor_fitdigest` records, keyed on the model alone. Measured after: **3.3 KB per record**,
+> **29.3 KB** for a binomial store and **92.4 KB** for a multinomial one, against the 6.28 / 15.89 MB
+> above. Because the estimand left the key, the ×1.1 row became a hit: a `measure` / `effect` change
+> on a **multinomial is 14.35 s → 1.90 s (×7.6)**. A reference change is now an honest refit
+> (0.295 s vs 0.203 s served), which is what paid for deleting the 13-clause reparametrisation gate.
+> jamovi also stopped silently losing its model checks, its global tests and its `adjustment` gap SE
+> on that path. See CLAUDE.md > Phase 22j.
+
 ## 9. What this phase changed
 
 **Fixes**
@@ -894,7 +903,7 @@ Full suite: **FAIL 1 | PASS 9817**. The one failure is `test-jamovi-vocabulary.R
 | # | question                                                                                               | where |
 |---|--------------------------------------------------------------------------------------------------------|-------|
 | 7 | Keep the **Crosstables** cache untouched — 0.19 MB buys ×18–34 on a re-apply                           | §8.5  |
-| 8 | Cut the **Regressions** fit cache to the KB digest, or remove it: ×2.3 at best, 6–16 MB per round-trip | §8.5  |
+| 8 | ~~Cut the **Regressions** fit cache to the KB digest~~ — **DONE, Phase 22j**: 6–16 MB → 29–92 KB | §8.5  |
 
 **Documentation**
 
@@ -904,4 +913,4 @@ Full suite: **FAIL 1 | PASS 9817**. The one failure is `test-jamovi-vocabulary.R
 | 10 | Teach `options(tabxplor.parallel = "auto")` in the intro vignette — one line, ×2.4–2.8      | §7.5  |
 | 11 | Size-gated `setDTthreads(1L)` in `tab_build()` — a trade, not a win; a later phase          | §6.3  |
 
-Nothing here blocks the release. **(8) is the one with a user-visible payoff** — it is the freeze `jmvtabreg-cache.R`'s own comment describes — and (1) and (2) are the two real defaults questions the measurements turned up.
+Nothing here blocks the release. **(8) had the user-visible payoff, and Phase 22j took it** — it is the freeze `jmvtabreg-cache.R`'s own comment describes — and (1) and (2) are the two real defaults questions the measurements turned up.

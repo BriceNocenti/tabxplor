@@ -1,11 +1,12 @@
-# PURPOSE: The jmvtabreg live-UI fit cache (Phase 15b) + the engine-free build core jmvtab_reg_build().
+# PURPOSE: The jmvtabreg live-UI fit cache + the engine-free build core jmvtab_reg_build().
 # ROLE: Drives tab_reg() with a mutable cache environment injected via its internal `.fit_cache` arg.
-#       reg_build() (R/tab_reg.R) fetches through jmvreg_cached(): on the single-equation GLM
-#       coefficient path a KB-sized "digest" (coef + vcov + reference-invariant glance) whose key is
-#       reference-INDEPENDENT (a reference change is reparametrized live, no refit); on the heavy paths
-#       (ame / profile / mnl-vs-rest / compound / multinomial / ordinal / split) the raw reg_fit result
-#       keyed on the (already display-referenced) data + transform settings. Content-addressed,
-#       schema-versioned, byte-bounded LRU, persisted to the hidden `cache_state` Image $state.
+#       reg_spec_build() (R/reg-spec-build.R) fetches through jmvreg_cached(): ONE tier, holding the
+#       DISTILLED fit record -- the `tabxplor_fitdigest` (R/reg-digest.R) plus everything the eager
+#       stage computed off the live fit, with the fitted object and the model frame thrown away.
+#       So the key carries NO ESTIMAND: `measure` / `effect` / `display` / `color` / `conf_level`
+#       change without a refit, and the store holds kilobytes where it used to hold ~10 MB fits.
+#       Content-addressed, schema-versioned, byte-bounded LRU, persisted to the hidden `cache_state`
+#       Image $state.
 # ROLE (build core): jmvtab_reg_build() is the pure, engine-free entry the R6 backend (R/jmvtabreg.b.R)
 #       calls -- it maps the plain options list onto tab_reg(..., .fit_cache = cache_env) and returns
 #       list(tabs, store, hits). Kept engine-free so it is unit-testable without a live jamovi session.
@@ -16,42 +17,42 @@
 #       own jmvtab_reg_link_vector() (per-outcome link) beside its family / level / trials readers.
 # KEY CONSTRAINTS:
 #   - jmvtabreg.h.R is GENERATED from jmvtabreg.a.yaml (jmvtools::prepare()); never hand-edit it.
-#   - Persist plain lists (coef vectors, vcov matrices, tibbles) -- NEVER a live object bound to an env.
-#   - The digest key is reference-INDEPENDENT so a reference change is a HIT; the `na` mode + weights are
-#     captured through the per-column fingerprint of the (already prepared) data, not as extra key parts.
-#   - Rides the SHARED cache kernel (R/jmvtab-cache.R: jmv_cache_config + jmv_store_*) with its own
-#     2-tier config (digest / fit); only the store stays decoupled (its tiers + $state differ from the
-#     crosstab store). Phase 17i replaced this file's duplicated + O(n^2)-evicting store lifecycle.
+#   - Persist plain lists -- NEVER a live object bound to an env. A digest is one by construction
+#     (reg_digest_terms() rebases the terms object's environment for exactly this reason).
+#   - The REFERENCE is in the key for free: reg_resolve_fit_plan() relevels the data before the fit,
+#     and jmv_col_fp() fingerprints a column's levels -- so a reference change is an honest refit.
+#   - Rides the SHARED cache kernel (R/jmvtab-cache.R: jmv_cache_config + jmv_store_*); only the
+#     store stays decoupled (its tier + $state differ from the crosstab store).
 #   - INHERITS jmv_col_fp()'s value-edit blind spot (a same-shape edit preserving class / factor levels /
 #     NA-count is NOT caught -> can serve a STALE fit after a data edit; best-effort, self-heals on the
 #     next structural change). Escape hatch: the JMV_FULL_HASH constant in R/jmvtab-cache.R.
 #     forces a full-value column hash (slower, exact) in BOTH modules -- see ?tabxplor-options.
-# See: dev/tabxplor_2.0.0_jamovi_dev.md ; CLAUDE.md > 2.0.0 roadmap > Phase 15b/17i.
+# See: dev/tabxplor_2.0.0_jamovi_dev.md ; CLAUDE.md > 2.0.0 roadmap > Phase 22j.
 
 
 # === Constants + config ====================================================================
 # The reg store rides the shared cache kernel (R/jmvtab-cache.R: jmv_cache_config + jmv_store_*) with
 # its own 2-tier config; only the store is decoupled (its tiers + $state differ from the crosstab store).
-JMVREG_CACHE_SCHEMA <- 7L   # bump on any store-shape change -> discard stale stores
+JMVREG_CACHE_SCHEMA <- 8L   # bump on any store-shape change -> discard stale stores
+# 8 (Phase 22j): ONE tier, holding the DISTILLED fit record (digest + the eager footer rows, no fit
+#   and no frame). The key drops the estimand -- `sp_dox`, `conf_level`, `effect`, `measure`,
+#   `display` all leave it -- and gains `stats` (which decides which eager rows exist) and
+#   `na_shared_vars` (which changes the complete-case set without touching `data`).
+#   ⚠ dropping `measure` is safe only because `family` is already a key member: `sp$fit_family` IS
+#   the link key, so `rr` / `rd` / `mr` are distinct families here, not one family reported three
+#   ways.
 # 7 (Phase 22b-ix): `crosses` joins jmvreg_fit_key()'s `extra`. A nested cross is a formula TERM,
 #   not a column, so jmv_col_fp() cannot see it and a stale hit would be a wrong table.
-# 6 (Phase 20g-i): jmvreg_fit_key()'s element for the singled-out outcome level is named
-#   `outcome_level` (it was `inverse`, the retired `inverse_two_level_factors` spelling). The key's
-#   VALUE is unchanged, but a member name is part of the hash, so every key moves.
-# 5 (Phase 19k): `shape` and the measure-valued `color` reach the build from the UI, so a stale store
-#   could serve a fit made under a different model.
-# 4 (Phase 19e): the raw-fit key's `extra` carries the ESTIMAND (effect, measure, display) instead of
-# (effect, at, estimate_display) -- a stale store would key a different estimand to the same digest.
-  #   history: 2 = Phase 17b table attrs merged into one `meta` list
-  #            3 = Phase 17i unified kernel entry shape list(value, bytes, seq)
-# 2 tiers: KB-sized `digest` (reference-invariant fast path) + raw `fit`. A raw reg_fit (glm + model
-# frame + tidy) is ~9-11 MB on survey-scale data and MODEL COMPARISON forces the fit tier (the digest
-# fast-path is single-model only), so the fit ceiling MUST clear a realistic fit or comparison never
-# caches -> every display / reference toggle refits. The store budget holds a handful of such fits.
+# 6 (Phase 20g-i): the singled-out outcome level's key member is named `outcome_level`.
+# 5 (Phase 19k): `shape` and the measure-valued `color` reach the build from the UI.
+# 4 (Phase 19e): the raw-fit key's `extra` carried the ESTIMAND. 3: unified kernel entry shape.
+#   2: table attrs merged into one `meta` list.
+# A DISTILLED record is kilobytes (a 21k-row binomial glm serialises at 2.4 MB, its digest at
+# 0.03 MB), so one modest ceiling holds a whole panel's worth.
 JMVREG_CFG <- jmv_cache_config(
   schema      = JMVREG_CACHE_SCHEMA,
-  entry_bytes = c(digest = 512L * 1024L, fit = 24L * 1024L * 1024L),
-  store_bytes = 96L * 1024L * 1024L   # whole-store budget (serialized to $state every run -> LRU-bounded)
+  entry_bytes = c(fit = 2L * 1024L * 1024L),
+  store_bytes = 32L * 1024L * 1024L   # whole-store budget (serialized to $state every run -> LRU-bounded)
 )
 
 
@@ -73,17 +74,15 @@ jmvreg_cache_env <- function(store = NULL) jmv_store_env(JMVREG_CFG, store)
 #' @noRd
 jmvreg_cache_evict <- function(store) jmv_store_evict(JMVREG_CFG, store)
 
-# Fetch-or-compute-and-put on the reg store; the tier ceiling + LRU come from JMVREG_CFG. Reference-
-# INDEPENDENT digest keys mean a reference change is a HIT (recomputed live, no refit).
+# Fetch-or-compute-and-put on the reg store; the tier ceiling + LRU come from JMVREG_CFG.
 #' @keywords internal
 #' @noRd
 jmvreg_cached <- function(cache_env, tier, key, compute_fn)
   jmv_store_cached(JMVREG_CFG, cache_env, tier, key, compute_fn)
 
-# The content key for one model spec. Reference-INDEPENDENT on the digest path (reference is applied at
-# reparametrization time), so a reference change is a cache HIT. The per-column fingerprint (jmv_col_fp)
-# of the model + design variables captures a weight / population (`na`) change; `extra` carries the
-# transform settings the RAW-fit path additionally keys on (method / effect / display / ...).
+# The content key for one model spec: everything that decides WHICH MODEL IS FITTED, and nothing
+# that decides how it is reported. The per-column fingerprint (jmv_col_fp) of the model + design
+# variables captures a weight change and the reference relevel; `extra` carries the rest.
 #' @keywords internal
 #' @noRd
 jmvreg_fit_key <- function(sp, data, family, design_spec, extra = NULL) {
@@ -189,10 +188,11 @@ jmvtab_reg_models <- function(models, pool, cross_keys = character(0)) {
 #   stats_baseline : the baseline model POSITION, carried in the key's NAME when it is not the first
 #                    (`c(compare_baseline = "2")` -- the grammar `ref = c(var = "level")` also uses).
 #   stats_checks   : Phase 20f made the two checks that REFIT the model (linearity, proportional
-#                    odds) opt-in, because they were 80-90 % of a build and the panel rebuilds on
-#                    every option change. `"all"` is the one value that asks for everything, and it
-#                    COMPOSES with a comparison key -- reg_resolve_stats() strips the comparison and
-#                    hands the rest on, so c("all", "compare_baseline") is a full footer plus a test.
+#                    odds) opt-in, because they were 80-90 % of a build. `"all"` is the one value
+#                    that asks for everything, and it COMPOSES with a comparison key --
+#                    reg_resolve_stats() strips the comparison and hands the rest on, so
+#                    c("all", "compare_baseline") is a full footer plus a test. ⚠ it is part of the
+#                    cache KEY (Phase 22j), because it decides which eager rows the record holds.
 #' @keywords internal
 #' @noRd
 jmvtab_reg_stats <- function(compare, baseline, checks = FALSE) {
@@ -347,20 +347,9 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
   # dispatches; it is the interactive path.
   .old_par <- options(tabxplor.parallel = FALSE)
   on.exit(options(.old_par), add = TRUE)
-  # DESIGN (Phase o): in a model COMPARISON the cache is worthless -- the reref digest fast-path is off
-  # for comparisons (tab_reg's `reref` needs compare=="none"), so it only ever holds the RAW fits
-  # (~10 MB each). Once persisted into cache_state$state they re-serialize on every UI round-trip -> the
-  # freeze at 4 models (~40 MB). use_cache=FALSE (set by the backend in staged mode) fits without a cache
-  # env and returns store=NULL, so nothing heavy is stored/serialized. Single-model use keeps the cache.
-  #
-  # ⚠ AND `stats_checks` TURNS IT OFF TOO (Phase 20g-i), because the digest fast path DISTILS THE FIT
-  # AWAY: reg_check_rows() asks reg_checks_for(has_fit = !is.null(f$fit)), so with a live cache a
-  # single-model table carries only the reference-invariant glance rows (n / lr_null / mcfadden_r2 /
-  # aic / bic) and never the per-predictor global test or the model checks. That is the cache working
-  # as designed -- a KB digest instead of a 10 MB fit -- but it makes "ask for the slow checks" a
-  # promise the module could not keep. So the tick-box means what it says: the fit is kept, at the
-  # price of a refit per edit. Default off = today's fast behaviour, byte-unchanged.
-  use_cache <- use_cache && !isTRUE(opts$stats_checks)
+  # DESIGN: a model COMPARISON is a test BETWEEN the fitted objects (reg_compare_rows), so its
+  # specs cannot be served from a distilled record -- reg_fit_cacheable() refuses them, and the
+  # backend's staged mode drops the store entirely so nothing heavy is serialized either.
   cache_env <- jmvreg_cache_env(if (use_cache) store else NULL)
 
   nz  <- function(x) if (length(x) && nzchar(as.character(x)[[1]])) as.character(x) else NULL

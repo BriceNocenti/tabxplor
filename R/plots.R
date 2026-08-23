@@ -463,7 +463,7 @@ reg_plot_fits <- function(x, data = NULL, caller = parent.frame()) {
                        "x" = "Model {.val {sp$label}} was fitted on {n_i} rows; this data gives {f$nobs}.",
                        "i" = "Pass the same data (and the same weights / design) the table was built from."))
     }
-    list(fit = f$fit, data = f$data, family = sp$fit_family, outcome = sp$outcome,
+    list(fit = f$fit, digest = f$digest, data = f$data, family = sp$fit_family, outcome = sp$outcome,
          predictors = sp$predictors, trials = sp$trials, wt = ds$wt, design = ds$design,
          positive_level = f$positive_level, label = sp$label, nobs = f$nobs,
          # a model COMPARISON is the only case where the label says something the outcome does not
@@ -702,7 +702,7 @@ reg_panel_normality <- function(cx, cols, opts) {
 reg_panel_dispersion <- function(cx, cols, opts) {
   rows <- local({
     se <- reg_check_model_se(cx$fit)
-    cif <- reg_coef_if_maker(cx$fit)
+    cif <- reg_coef_if_maker(reg_model_of(cx), cx$data)
     if (is.null(se) || is.null(cif)) return(NULL)
     des <- reg_check_design(cx$fit)
     rb <- vapply(seq_along(se), function(j) {
@@ -744,7 +744,7 @@ reg_panel_dispersion <- function(cx, cols, opts) {
 reg_panel_influence <- function(cx, cols, opts) {
   rows <- local({
     se  <- reg_check_model_se(cx$fit)
-    cif <- reg_coef_if_maker(cx$fit)
+    cif <- reg_coef_if_maker(reg_model_of(cx), cx$data)
     if (is.null(se) || is.null(cif)) return(NULL)
     m <- NULL
     for (j in seq_along(se)) {
@@ -936,7 +936,7 @@ reg_check_plots <- function(x, data = NULL, check = "auto", predictors = NULL,
 #' @keywords internal
 reg_panel_keys <- function(cx, check = "auto") {
   weighted <- !is.null(cx$wt)
-  all_keys <- reg_checks_for(cx$family, weighted, has_fit = TRUE, what = "panel")
+  all_keys <- reg_checks_for(cx$family, weighted, what = "panel")
   if (identical(check, "all")) return(all_keys)
   if (identical(check, "auto")) return(reg_panels_default(cx$family, weighted))
   reg_validate_stat_keys(check, arg = "check", allowed = names(REG_CHECKS))

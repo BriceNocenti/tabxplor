@@ -11,7 +11,12 @@
 #   which is seemingly-unrelated estimation (Stata's `suest`; Weesie 1999; Mize, Doan & Long 2019).
 # KEY CONSTRAINTS:
 #   - Pure matrix maths over `stats` + `survey`. No fmt types, no tabxplor classes: every function
-#     takes vectors, matrices and fits, and returns a number or a closure.
+#     takes vectors, matrices and a MODEL, and returns a number or a closure.
+#   - THE MODEL IS A DIGEST, never a fitted object: every entry point normalises its first argument
+#     through reg_digest() (R/reg-digest.R), and the working weights, the working residuals and the
+#     per-observation scores are RECONSTRUCTED from (terms, coef, family) against the model frame.
+#     So the whole gap test survives a distilled fit -- and a digest and its own fit give the same
+#     answer, up to glm's one-step lag in the IRLS weights it stores (~1e-8 relative).
 #   - EVERY FUNCTION RETURNS NULL RATHER THAN A WRONG NUMBER when its inputs do not support the
 #     computation (singular information matrix, absent term, empty cell, unknown link). The caller
 #     reads NULL as "no test here" and writes no `gap_se`; MEASURES' force_policy closure then makes
@@ -36,8 +41,8 @@
 #     logistic model shows an additive AME by default, a marginal risk ratio or a marginal odds ratio
 #     on request, all three from one sweep.
 #   - TWO CRUDE PATHS, by predictor kind. A FACTOR's crude effect is a saturated one-factor GLM, so
-#     it has a closed form and needs no fit; a CONTINUOUS predictor has no cells, so its crude leg is
-#     reg_coef_if_maker() over the univariable fit R/reg-empirical.R built. Both legs are then the
+#     it has a closed form and needs no model; a CONTINUOUS predictor has no cells, so its crude leg
+#     is reg_coef_if_maker() over the univariable fit R/reg-empirical.R built. Both legs are then the
 #     same machinery over two fits solved on the same rows -- which is why the counterfactual takes
 #     SHIFTS rather than levels for a numeric column.
 #   - EVERY quantity the g-computation sweep produces is a WEIGHTED MEAN, which is why a subgroup
@@ -61,7 +66,7 @@
 # holding X, W*r and A^-1 gives every contrast for one length-n allocation, without ever building U
 # or IF as an n x p matrix.
 #
-# WARNING: peak memory is ONE n x p matrix -- `model.matrix(fit)`. At n = 5M, p = 50 that is ~2 GB.
+# WARNING: peak memory is ONE n x p matrix -- the model matrix. At n = 5M, p = 50 that is ~2 GB.
 #' @keywords internal
 reg_if_from_parts <- function(X, W, r) {
   if (is.null(X) || !is.matrix(X) || nrow(X) == 0L || ncol(X) == 0L) return(NULL)
@@ -81,34 +86,38 @@ reg_if_from_parts <- function(X, W, r) {
   }
 }
 
-# reg_coef_if_maker() -- the fit adapter. ONE formula for stats::lm, stats::glm and survey::svyglm:
-# `fit$weights` are the IRLS working weights and `residuals(type = "working")` is (y-mu)/mu'(eta), so
-# X'Wr is the score and X'WX the information -- verified bit-identical to
-# `attr(svyglm(..., influence = TRUE), "influence")`.
+# reg_coef_if_maker() -- ONE formula for stats::lm, stats::glm and survey::svyglm, read off a
+# `tabxplor_fitdigest` and the model frame (R/reg-digest.R): X'Wr is the score and X'WX the
+# information, with W the IRLS working weights and r = (y-mu)/mu'(eta), both RECONSTRUCTED rather
+# than taken off a fitted object -- so the whole gap test survives a distilled fit.
 #
 # NB the SE this implies is the HUBER-WHITE SANDWICH: what svyglm prints, but a plain unweighted glm
 # prints the model-based SE instead (they agree only up to O(1/n)).
 #
-# Backticks are stripped from column names as reg_fit() strips them from `td$term`, so a contrast can
-# be keyed by `skeleton$term` with no second naming rule. Rank-deficient coefficients are dropped.
+# `x` is a digest, or a fit to take one of; `frame` defaults to the fit's own model frame, which is
+# the design's row space where those differ. Backticks are stripped from column names as reg_fit()
+# strips them from `td$term`, so a contrast can be keyed by `skeleton$term` with no second naming
+# rule. Rank-deficient coefficients are dropped.
 #' @keywords internal
-reg_coef_if_maker <- function(fit, V = NULL) {
+reg_coef_if_maker <- function(x, frame = NULL, V = NULL) {
+  d <- reg_digest(x)
+  if (is.null(d)) return(NULL)
+  if (is.null(frame)) frame <- tryCatch(stats::model.frame(x), error = function(e) NULL)
+  if (is.null(frame)) return(NULL)
   # a 3+ level fit has no working residuals / IRLS weights, so it goes through the score core instead.
   # `V` is the fit's vcov when a caller already holds it; the GLM path below builds its own, unused.
-  if (inherits(fit, "multinom") || inherits(fit, "polr")) {
-    sc <- if (inherits(fit, "multinom")) reg_score_multinom(fit, V) else reg_score_polr(fit, V)
+  eng <- REG_FIT_KINDS[[d$kind]]$score
+  if (is.na(eng)) return(NULL)
+  if (!identical(eng, "irls")) {
+    sc <- if (identical(eng, "multinom")) reg_score_multinom(d, frame, V) else reg_score_polr(d, frame, V)
     return(if (is.null(sc)) NULL else reg_if_from_score(sc$S, sc$bread))
   }
-  X <- tryCatch(stats::model.matrix(fit), error = function(e) NULL)
-  if (is.null(X) || !nrow(X)) return(NULL)
-  b <- stats::coef(fit)
-  if (length(b) == ncol(X) && anyNA(b)) X <- X[, !is.na(b), drop = FALSE]
-  colnames(X) <- stringi::stri_replace_all_regex(colnames(X), "`", "")
-  W <- fit$weights
-  if (is.null(W)) W <- rep(1, nrow(X))
-  r <- tryCatch(stats::residuals(fit, type = "working"), error = function(e) NULL)
-  if (is.null(r)) return(NULL)
-  reg_if_from_parts(X, W, r)
+  w <- reg_digest_working(d, frame)
+  if (is.null(w)) return(NULL)
+  cif <- reg_if_from_parts(w$X, w$W, w$r)
+  if (is.null(cif)) return(NULL)
+  pad <- reg_digest_pad(d, frame)
+  function(L) pad(cif(L))
 }
 
 # REG_LINK_FUNS -- a MARGINAL contrast is h(M1) - h(M0), so a link contributes exactly two things:
@@ -254,10 +263,10 @@ reg_counterfactual <- function(data, var, lv) {
 reg_gcomp_maker <- function(fit, data, wt, link = "identity") {
   lf  <- reg_link_funs(link)
   if (is.null(lf)) return(NULL)
-  tt  <- tryCatch(stats::delete.response(stats::terms(fit)), error = function(e) NULL)
-  fam <- tryCatch(stats::family(fit), error = function(e) NULL)
-  if (is.null(tt) || is.null(fam) || is.null(fam$linkinv) || is.null(fam$mu.eta)) return(NULL)
-  b    <- stats::coef(fit)
+  dg  <- reg_digest(fit)
+  fam <- tryCatch(stats::family(dg), error = function(e) NULL)
+  if (is.null(dg) || is.null(fam) || is.null(fam$linkinv) || is.null(fam$mu.eta)) return(NULL)
+  b    <- stats::coef(dg)
   keep <- !is.na(b)
   bk   <- b[keep]
   w0   <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
@@ -265,9 +274,9 @@ reg_gcomp_maker <- function(fit, data, wt, link = "identity") {
   cf <- function(lv, var) {                       # the counterfactual model matrix at one level/shift
     d <- reg_counterfactual(data, var, lv)
     if (is.null(d)) return(NULL)
-    X <- tryCatch(stats::model.matrix(tt, d), error = function(e) NULL)
-    if (is.null(X) || ncol(X) != length(b)) return(NULL)
-    X[, keep, drop = FALSE]
+    m <- reg_digest_mm(dg, d, response = FALSE)
+    if (is.null(m) || ncol(m$X) != length(b)) return(NULL)
+    m$X[, keep, drop = FALSE]
   }
   # `mask` restricts the AVERAGING to a subgroup -- a crossed slope's effect within one level of its
   # moderator. Every quantity below is a weighted mean, so a subgroup is the same sweep under a
@@ -323,8 +332,8 @@ reg_ame_if_maker <- function(fit, data, wt, link, coef_if, g = NULL) {
 
 # === 3+ LEVEL OUTCOMES ===========================================================================
 #
-# reg_coef_if_maker() above needs model.matrix() + residuals(type = "working") + fit$weights, none of
-# which nnet::multinom or MASS::polr provides. Every M-estimator's influence is still
+# reg_coef_if_maker() above needs a model matrix plus IRLS working weights and residuals, which a
+# multinomial / cumulative logit has none of. Every M-estimator's influence is still
 #
 #     IF = (per-observation score) %*% (bread)
 #
@@ -353,13 +362,20 @@ reg_if_from_score <- function(S, bread) {
 # that matrix is category-MINOR -- backwards, the SE is ~2.7x too large with no warning. The defence
 # is structural: columns are NAMED, so a mismatch is a NULL, never a wrong number.
 #' @keywords internal
-reg_score_multinom <- function(fit, V = NULL) {
-  if (is.null(V)) V <- tryCatch(stats::vcov(fit), error = function(e) NULL)
-  X <- tryCatch(stats::model.matrix(fit), error = function(e) NULL)
-  P <- tryCatch(stats::predict(fit, type = "probs"), error = function(e) NULL)
-  if (is.null(V) || is.null(X) || is.null(P) || !is.matrix(P) || ncol(P) < 2L) return(NULL)
-  y <- tryCatch(as.character(stats::model.frame(fit)[[1L]]), error = function(e) NULL)
-  if (is.null(y) || length(y) != nrow(X)) return(NULL)
+reg_score_multinom <- function(x, frame = NULL, V = NULL) {
+  d <- reg_digest(x)
+  frame <- frame %||% tryCatch(stats::model.frame(x), error = function(e) NULL)
+  if (is.null(d) || is.null(frame)) return(NULL)
+  if (is.null(V)) V <- tryCatch(stats::vcov(d), error = function(e) NULL)
+  eng <- reg_prob_engine(d)
+  mm  <- reg_digest_mm(d, frame)
+  if (is.null(V) || is.null(eng) || is.null(mm)) return(NULL)
+  X <- eng$mm(frame)
+  if (is.null(X) || !nrow(X)) return(NULL)
+  P <- eng$probs(eng$theta, X)
+  if (!is.matrix(P) || ncol(P) < 2L) return(NULL)
+  y <- as.character(mm$y)
+  if (length(y) != nrow(X)) return(NULL)
   lev <- colnames(P)
   S <- do.call(cbind, lapply(lev[-1], function(j) X * ((y == j) - P[, j])))
   colnames(S) <- as.vector(t(outer(lev[-1], colnames(X), function(a, b) paste0(a, ":", b))))
@@ -376,17 +392,18 @@ reg_score_multinom <- function(fit, V = NULL) {
 # fit$var is the SANDWICH, not the bread, and is unreachable: tab_reg() refuses a weighted 3+ level
 # outcome under `effect = "marginal"`.)
 #' @keywords internal
-reg_score_polr <- function(fit, V = NULL) {
-  if (inherits(fit, "svyolr")) return(NULL)
-  if (is.null(V)) V <- tryCatch(stats::vcov(fit), error = function(e) NULL)
-  b <- tryCatch(stats::coef(fit), error = function(e) NULL)
-  z <- fit$zeta
+reg_score_polr <- function(x, frame = NULL, V = NULL) {
+  d <- reg_digest(x)
+  frame <- frame %||% tryCatch(stats::model.frame(x), error = function(e) NULL)
+  if (is.null(d) || is.null(frame) || !identical(d$kind, "polr")) return(NULL)
+  if (is.null(V)) V <- tryCatch(stats::vcov(d), error = function(e) NULL)
+  b <- tryCatch(stats::coef(d), error = function(e) NULL)
+  z <- d$zeta
   if (is.null(V) || is.null(b) || is.null(z) || !length(b)) return(NULL)
-  mf <- tryCatch(stats::model.frame(fit), error = function(e) NULL)
-  X  <- tryCatch(stats::model.matrix(fit), error = function(e) NULL)
-  if (is.null(mf) || is.null(X) || !all(names(b) %in% colnames(X))) return(NULL)
-  X  <- X[, names(b), drop = FALSE]
-  yv <- as.integer(mf[[1L]]); K <- length(z) + 1L
+  mm <- reg_digest_mm(d, frame)
+  if (is.null(mm) || !all(names(b) %in% colnames(mm$X))) return(NULL)
+  X  <- mm$X[, names(b), drop = FALSE]
+  yv <- as.integer(mm$y); K <- length(z) + 1L
   if (anyNA(yv) || length(yv) != nrow(X)) return(NULL)
   eta <- as.vector(X %*% b)
   zhi <- ifelse(yv == K, Inf , z[pmin(yv    , K - 1L)])
@@ -417,18 +434,23 @@ reg_score_polr <- function(fit, V = NULL) {
 # `vcov(fit)`, so both the printed interval and the gap test read one jacobian.
 #' @keywords internal
 reg_prob_engine <- function(fit) {
-  tt <- tryCatch(stats::delete.response(stats::terms(fit)), error = function(e) NULL)
+  dg <- reg_digest(fit)
+  if (is.null(dg)) return(NULL)
+  tt <- tryCatch(stats::delete.response(stats::terms(dg)), error = function(e) NULL)
   if (is.null(tt)) return(NULL)
-  if (inherits(fit, "multinom")) {
-    B <- tryCatch(stats::coef(fit), error = function(e) NULL)
+  # ⚠ the model matrix goes through reg_digest_mm(): the fit's own xlevels / contrasts are what make
+  # a counterfactual frame produce the SAME columns, and an unused level would otherwise add an
+  # all-zero one and make every consumer refuse.
+  mmf <- function(d) { m <- reg_digest_mm(dg, d, response = FALSE); if (is.null(m)) NULL else m$X }
+  if (identical(dg$kind, "multinom")) {
+    B <- tryCatch(stats::coef(dg), error = function(e) NULL)
     if (is.null(B) || !is.matrix(B)) return(NULL)
-    lev <- c(setdiff(colnames(tryCatch(stats::predict(fit, type = "probs"), error = function(e) NULL)),
-                     rownames(B)), rownames(B))
-    if (length(lev) != nrow(B) + 1L) return(NULL)
+    lev <- dg$y_levels
+    if (is.null(lev) || length(lev) != nrow(B) + 1L) return(NULL)
     return(list(
       theta = as.vector(t(B)),                     # CATEGORY-MAJOR, matching vcov / the score
       levels = lev,
-      mm    = function(d) tryCatch(stats::model.matrix(tt, d), error = function(e) NULL),
+      mm    = mmf,
       probs = function(th, X) {
         Bm <- matrix(th, nrow = nrow(B), byrow = TRUE)
         E  <- cbind(0, X %*% t(Bm))
@@ -450,23 +472,21 @@ reg_prob_engine <- function(fit) {
   # branch -- but its coef() returns the THRESHOLDS TOO, which is the one difference. What it does
   # not carry is per-observation scores, so a gap SE is unavailable there, which makes
   # `color = "adjustment"` descriptive under a design rather than falsely significant.
-  if (inherits(fit, "polr") || inherits(fit, "svyolr")) {
-    b <- tryCatch(stats::coef(fit), error = function(e) NULL)
-    z <- fit$zeta
+  if (dg$kind %in% c("polr", "svyolr")) {
+    b <- tryCatch(stats::coef(dg), error = function(e) NULL)
+    z <- dg$zeta
     if (is.null(b) || is.null(z) || !length(z)) return(NULL)
-    # ⚠ by CLASS and by NAME, never by length: polr's own coef() is already the betas alone, and a
+    # ⚠ by KIND and by NAME, never by length: polr's own coef() is already the betas alone, and a
     # length rule would silently truncate it.
-    if (inherits(fit, "svyolr")) b <- b[!names(b) %in% names(z)]
-    if (!length(b) || length(b) + length(z) != length(stats::coef(fit)) +
-        (if (inherits(fit, "svyolr")) 0L else length(z))) return(NULL)
-    lev <- levels(tryCatch(stats::model.frame(fit)[[1L]], error = function(e) NULL))
-    if (length(lev) != length(z) + 1L) return(NULL)
+    if (identical(dg$kind, "svyolr")) b <- b[!names(b) %in% names(z)]
+    lev <- dg$y_levels
+    if (!length(b) || is.null(lev) || length(lev) != length(z) + 1L) return(NULL)
     nb <- length(b)
     return(list(
       theta = c(unname(b), unname(z)),
       levels = lev,
       mm    = function(d) {
-        X <- tryCatch(stats::model.matrix(tt, d), error = function(e) NULL)
+        X <- mmf(d)
         if (is.null(X) || !all(names(b) %in% colnames(X))) return(NULL)
         X[, names(b), drop = FALSE]
       },
@@ -513,8 +533,10 @@ reg_gcomp_baseline <- function(fit, data, wt = NULL, newdata = NULL) {
   w  <- if (!is.null(newdata) || is.null(wt)) rep(1, nrow(d)) else as.numeric(data[[wt]])
   if (length(w) != nrow(d) || !all(is.finite(w)) || sum(w) <= 0) return(NULL)
   sw <- sum(w)
-  if (inherits(fit, "multinom") || inherits(fit, "polr")) {
-    eng <- reg_prob_engine(fit)
+  dg <- reg_digest(fit)
+  if (is.null(dg)) return(NULL)
+  if (identical(REG_FIT_KINDS[[dg$kind]]$equations, "categorical")) {
+    eng <- reg_prob_engine(dg)
     if (is.null(eng)) return(NULL)
     X <- tryCatch(eng$mm(d), error = function(e) NULL)
     P <- if (is.null(X)) NULL else tryCatch(eng$probs(eng$theta, X), error = function(e) NULL)
@@ -524,15 +546,15 @@ reg_gcomp_baseline <- function(fit, data, wt = NULL, newdata = NULL) {
                 est = vapply(seq_len(K), function(j) sum(w * P[, j]) / sw, numeric(1)),
                 G   = lapply(seq_len(K), function(j) eng$dmean(X, P, j, w) / sw)))
   }
-  tt  <- tryCatch(stats::delete.response(stats::terms(fit)), error = function(e) NULL)
-  fam <- tryCatch(stats::family(fit), error = function(e) NULL)
+  tt  <- tryCatch(stats::delete.response(stats::terms(dg)), error = function(e) NULL)
+  fam <- tryCatch(stats::family(dg), error = function(e) NULL)
   if (is.null(tt) || is.null(fam) || is.null(fam$linkinv) || is.null(fam$mu.eta)) return(NULL)
   if (length(attr(tt, "offset")) > 0L) return(NULL)
-  b    <- stats::coef(fit)
+  b    <- stats::coef(dg)
   keep <- !is.na(b)
-  X <- tryCatch(stats::model.matrix(tt, d), error = function(e) NULL)
-  if (is.null(X) || ncol(X) != length(b)) return(NULL)
-  X   <- X[, keep, drop = FALSE]
+  m <- reg_digest_mm(dg, d, response = FALSE)
+  if (is.null(m) || ncol(m$X) != length(b)) return(NULL)
+  X   <- m$X[, keep, drop = FALSE]
   eta <- as.vector(X %*% b[keep])
   mu  <- fam$linkinv(eta)
   dd  <- fam$mu.eta(eta)
@@ -735,8 +757,10 @@ reg_gcomp_rank_maker <- function(fit, data, wt, link = "identity") {
 # reg_ame_if_maker().
 #' @keywords internal
 reg_ame_if_cat_maker <- function(fit, data, wt, link, category) {
-  eng <- reg_prob_engine(fit)
-  sc  <- if (inherits(fit, "multinom")) reg_score_multinom(fit) else reg_score_polr(fit)
+  dg  <- reg_digest(fit)
+  eng <- reg_prob_engine(dg)
+  sc  <- if (identical(reg_model_kind(dg), "multinom")) reg_score_multinom(dg, data)
+         else                                           reg_score_polr(dg, data)
   if (is.null(eng) || is.null(sc)) return(NULL)
   cif <- reg_if_from_score(sc$S, sc$bread)
   if (is.null(cif)) return(NULL)

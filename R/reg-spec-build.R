@@ -10,9 +10,14 @@
 #     process boundary. Two DECLARED exceptions, each matching a shape that is serial anyway
 #     (reg_specs_independent) -- `fit`, because a model comparison is a test BETWEEN the fit objects,
 #     and the crude block's heavy frame / fits, kept only for the block SHARED with other specs.
-#   - ⚠ THE ORDER INSIDE THE BUILDER IS PART OF THE OUTPUT: fit -> columns -> footer rows ->
-#     the crude block -> obs/gap_se -> tooltips. Three of those can emit a message, and the message
-#     stream is compared in order.
+#   - THE EAGER STAGE IS WHY A FIT MAY LEAVE: everything only a fitted object can compute -- the
+#     model-fit statistics, the global tests, the assumption checks, each crossed pair's test -- is
+#     computed while it lives, so the record the jamovi cache stores is fit-free AND complete
+#     (reg_fit_distil / reg_fit_rehydrate, R/reg-digest.R).
+#   - ⚠ THE ORDER INSIDE THE BUILDER IS PART OF THE OUTPUT: fit + its eager rows -> columns ->
+#     footer rows -> the crude block -> obs/gap_se -> tooltips. Three of those can emit a message,
+#     and the message stream is compared in order. ⚠ ON A CACHE HIT THE EAGER MESSAGES DO NOT
+#     REPLAY, which is what a served table costs and why nothing downstream depends on them.
 #   - THE LEVEL COUNTS ARE STAMPED ON THE COLUMNS, not given a column of their own: every column of
 #     a fit rests on the same complete cases, so `n` is a property of the estimate. The base-count
 #     COLUMN is then synthesised at display time (tab_base_n_cols, R/tab-display.R), which is what
@@ -86,6 +91,43 @@ reg_specs_independent <- function(ctx) {
 }
 
 
+# === SECTION: THE EAGER STAGE ===================================================================
+#
+# EVERYTHING THAT NEEDS THE FITTED OBJECT, COMPUTED WHILE IT LIVES. All four are facts about the
+# FIT, not about the estimand -- the model-fit statistics, the per-predictor global tests, the
+# assumption checks and each crossed pair's test -- so they survive a `measure` / `effect` change
+# and the cached record can carry them with the fit thrown away -- which is what makes a distilled
+# record carry its checks, where it used to lose them silently.
+#
+# ⚠ THE COLUMN LABEL IS A PLACEHOLDER: it is not known yet (the columns are built after the fit),
+# and reg_stage_footer() rewrites `col` wholesale for all four slots anyway. reg_rows_keyed() writes
+# this spec's own label back in when the record is read.
+#' @keywords internal
+#' @noRd
+REG_EAGER_COL <- "\r eager"
+
+#' @keywords internal
+#' @noRd
+reg_fit_eager <- function(f, sp, ctx, grouped) {
+  list2env(reg_ctx_locals(ctx), environment())
+  cv <- REG_EAGER_COL
+  f$gof_rows    <- reg_gof_rows(f, sp, cv, weighted = weighted, grouped = grouped, stats = stats)
+  f$global_rows <- if (isTRUE(want_global)) reg_global_rows(f, sp, shared, cv) else NULL
+  f$check_rows  <- reg_check_rows(data, f, sp, shared, stats, cv, grouped)
+  # is each crossed pair real? one extra ADDITIVE fit per cross (R/reg-cross.R).
+  f$cross_rows  <- reg_cross_rows(f, sp, ctx, cv)
+  f
+}
+
+#' @keywords internal
+#' @noRd
+reg_rows_keyed <- function(rows, col) {
+  if (is.null(rows) || nrow(rows) == 0L) return(NULL)
+  rows$col <- col
+  rows
+}
+
+
 # === SECTION: THE BUILDER =======================================================================
 #
 # Everything ONE spec contributes, in the order it contributes it. The wrapper exists to NAME THE
@@ -113,37 +155,33 @@ reg_spec_build_one <- function(i, ctx) {
   inv_sp <- reg_outcome_level_of(sp$outcome_level) %||% outcome_level
   sp_fam <- sp$fit_family
   sp_dox <- isTRUE(sp$est$exp)      # a one-token view of the estimand, not a field
-  if (isTRUE(reref)) {
-    # jamovi live reref: the digest is fitted on the CANONICAL frame (`data_canon`) and
-    # reparametrized.
-    digest <- jmvreg_cached(
-      fit_cache, "digest",
-      # ⚠ `anchors` is IN the key, and must be: jmv_col_fp() fingerprints a column's class, levels
-      # and NA count -- never its values -- so a `ref` anchor shifting it is invisible there. Unlike
-      # a factor reference, an anchor is not a reparametrization reg_reref_fit_res() can apply.
-      jmvreg_fit_key(sp, data_canon, sp_fam, design_spec,
-                     extra = list(multiplier, anchors, crosses)),
-      function() reg_build_digest(data_canon, sp, sp_fam, design_spec, sp_dox,
-                                  inv_sp, conf_level, weighted, multiplier = multiplier))
-    f <- reg_reref_fit_res(digest, skeleton, conf_level, multiplier = multiplier)
-  } else {
-    thunk <- function() reg_fit(data, sp$outcome, sp$predictors, sp_fam, design_spec, sp_dox,
-                                inv_sp, conf_level, method,
-                                trials = sp$trials, formula = sp$formula, multiplier = multiplier,
-                                drop_extra = na_shared_vars,
-                                add_terms = c(reg_shape_add(shape_terms, sp$predictors),
-                                              reg_cross_add(crosses, sp$cross)))
-    f <- if (is.null(fit_cache)) thunk()
-         else jmvreg_cached(fit_cache, "fit",
-                            jmvreg_fit_key(sp, data, sp_fam, design_spec,
-                                           extra = list(method, sp_dox, conf_level, sp$est$link,
-                                                        sp$est$effect, sp$est$measure, display,
-                                                        multiplier, shape_terms, anchors, crosses)),
-                            thunk)
+  grouped <- reg_is_grouped_binomial(sp_fam, sp$trials, sp$compound)
+  # ONE cached object, and it is fit-FREE: the fit and its frame are distilled away
+  # (reg_fit_distil), the digest and everything only a live fit could compute stay. So the KEY holds
+  # no estimand -- `measure` / `effect` / `display` / `color` / `conf_level` all change without a
+  # refit, and reg_fit_rehydrate() rebuilds the frame and rewrites `tidy` on the way out.
+  # ⚠ the FIT's own arguments must stay in it: `sp_fam` IS the link key (`rr` / `rd` / `mr` are
+  # binomial fits under another link), so dropping `measure` is safe only because `family` is a key
+  # member already. `stats` is in because it decides which of the eager rows below are computed.
+  thunk <- function() {
+    f0 <- reg_fit(data, sp$outcome, sp$predictors, sp_fam, design_spec, sp_dox,
+                  inv_sp, conf_level, method,
+                  trials = sp$trials, formula = sp$formula, multiplier = multiplier,
+                  drop_extra = na_shared_vars,
+                  add_terms = c(reg_shape_add(shape_terms, sp$predictors),
+                                reg_cross_add(crosses, sp$cross)))
+    reg_fit_eager(f0, sp, ctx, grouped)
   }
+  f <- if (is.null(fit_cache) || !reg_fit_cacheable(sp, method, compare)) thunk()
+       else jmvreg_cached(fit_cache, "fit",
+                          jmvreg_fit_key(sp, data, sp_fam, design_spec,
+                                         extra = list(method, multiplier, shape_terms, anchors,
+                                                      crosses, stats, na_shared_vars)),
+                          function() reg_fit_distil(thunk()))
+  f <- reg_fit_rehydrate(f, data, sp_dox, conf_level)
   skel_out <- NULL
   if (isTRUE(skeleton_deferred) && is.null(skeleton)) {
-    skeleton <- reg_skeleton_from_fit(f$fit)
+    skeleton <- reg_skeleton_from_fit(reg_digest_revive(f, data)$fit)
     skel_out <- skeleton
     ctx      <- ctx_update(ctx, list(skeleton = skeleton))
   }
@@ -168,14 +206,13 @@ reg_spec_build_one <- function(i, ctx) {
   cols <- purrr::map(cols, function(cc) { cc$col <- set_n(set_wn(cc$col, cnt$wn), cnt$n); cc })
 
   # --- 3. THE FOOTER ROWS ------------------------------------------------------------------------
-  # ⚠ the DECLARED predicate, never an inline `sp_fam == "binomial"`: `sp_fam` is the LINK key, and
-  # `rr` / `rd` are binomial fits under another link (see reg_is_grouped_binomial()).
-  grouped <- reg_is_grouped_binomial(sp_fam, sp$trials, sp$compound)
-  gof_rows <- reg_gof_rows(f, sp, cv0, weighted = weighted, grouped = grouped, stats = stats)
-  global_rows <- if (isTRUE(want_global)) reg_global_rows(f, sp, shared, cv0) else NULL
-  check_rows <- reg_check_rows(data, f, sp, shared, stats, cv0, grouped)
-  # is each crossed pair real? one extra ADDITIVE fit per cross (R/reg-cross.R).
-  cross_rows <- reg_cross_rows(f, sp, ctx, cv0)
+  # Computed by the EAGER STAGE while the fit was alive (reg_fit_eager, below); read back here and
+  # keyed onto this spec's first column. Their `col` is a placeholder either way -- reg_stage_footer()
+  # rewrites it wholesale for all four slots.
+  gof_rows    <- reg_rows_keyed(f$gof_rows, cv0)
+  global_rows <- reg_rows_keyed(f$global_rows, cv0)
+  check_rows  <- reg_rows_keyed(f$check_rows, cv0)
+  cross_rows  <- reg_rows_keyed(f$cross_rows, cv0)
 
   # --- 4. THE OBSERVED (CRUDE) BLOCK -------------------------------------------------------------
   # ONLY where this spec IS an outcome of its own; a one-outcome table's block was built before any
@@ -352,7 +389,7 @@ reg_build_group <- function(g, sl, tab_vars, specs, fit_cache, shared, data) {
   # THE NESTING RULE needs nothing here: tab_pmap() turns the option off around its whole map, so a
   # group's model axis cannot become a second place to dispatch.
   tg <- reg_build(sub, specs, shared, tab_vars = NULL, .fit_cache = fit_cache,
-                  ref = NULL, reref = FALSE, skeleton_data = data)
+                  skeleton_data = data)
   tst <- get_test(tg); if (!is.null(tst) && nrow(tst) > 0) tst[[tab_vars]] <- as.character(g)
   # the group's OWN observed curves ride up beside its data: reg_stage_split() binds them into one
   # group-keyed `meta$assumptions`, so each group's base-count cell draws its own sparkline.

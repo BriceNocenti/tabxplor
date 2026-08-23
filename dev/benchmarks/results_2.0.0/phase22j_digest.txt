@@ -1,0 +1,23 @@
+Phase 22j -- the fit digest, measured (dev/benchmarks/phase22j_digest.R)
+WSL2 / Ubuntu 26.04, 12 cores, R 4.6.1, gss_cat (21 407 rows), OMP_NUM_THREADS=1
+
+Binomial, predictors = race + age + relig
+  store                            29.3 KB     (Phase 22h: 6.28 MB)
+  one distilled record              3.3 KB     (a raw glm serialises at ~2 417 KB)
+
+  interaction                       s     hits
+  re-apply                      0.203        1
+  display                       0.207        1
+  colour                        0.202        1
+  conf_level                    0.205        1
+  measure + effect              0.219        1     <- was a refit (the estimand left the key)
+  reference                     0.295        0     <- an honest refit (the relevel moves the key)
+  cold (no store)               0.275        -
+
+Multinomial (partyid, 8 categories), predictors = race + age + relig
+  store                            92.4 KB     (Phase 22h: up to 15.89 MB)
+  cold                            14.351 s
+  measure + effect                 1.901 s  hits=1   -> x7.6
+
+effect = "at_reference" served from a hit: the record is revived through reg_fit() and the table
+builds (the one estimand whose engine is marginaleffects, which needs a fitted object).

@@ -1301,15 +1301,20 @@ no `ref2`), CI/`method`/`stars`, colours, `na`/`cleannames`/footer, survey `wt` 
 survey-design** collapse (a 2nd `VariableSupplier` for `ids`/`strata`/`fpc` + `nest`, greyed by JS
 when `wt` is empty), and Excel/HTML/MD export (reuses `R/jmvtab-export.R` verbatim).
 
-**The live cache (the maintainer's headline requirement) — a fit cache, not an aggregate cache.**
-`jmvtab_reg_build()` drives `tab_reg(..., .fit_cache = cache_env)`. The store (hidden `cache_state`
-Image `$state`) memoizes fitted models so display / colour / reference toggles avoid a refit. A
-factor-predictor **reference change is reparametrized live from a cached fit — no refit** (the reg
-analogue of jmvtab's `jmv_tab3_reref`): `reg_build_digest()` caches `coef`+`vcov`+`glance` (KB), and
-`reg_reref_fit_res()` builds the display-reference tidy by coefficient contrasts (byte-identical to a
-real refit; `test-jmvtabreg-cache.R`). Decided with the maintainer over serializing megabyte model
-objects. Heavy paths (ame/profile/mnl-vs-rest/compound/MNL/ordinal/split) cache the raw fit and refit
-on a reference change.
+**The live cache — a fit-DIGEST cache, not an aggregate cache** (rewritten in Phase 22j; what
+follows is the current design, not its history). `jmvtab_reg_build()` drives
+`tab_reg(..., .fit_cache = cache_env)`. The store (hidden `cache_state` Image `$state`) holds **one
+tier** of DISTILLED fit records: a `tabxplor_fitdigest` (`R/reg-digest.R`) plus everything the eager
+stage computed off the live fit, with the fitted object and the model frame thrown away. So the key
+carries **no estimand** — `measure` / `effect` / `display` / `colour` / `conf_level` / `stars` are
+all hits — and the store is kilobytes (3.3 KB per record; 29 KB for a binomial panel, 92 KB for a
+multinomial one) where it used to be 6–16 MB serialised on every round-trip. What IS in the key is
+the model: outcome, predictors, family/link, trials, `multiplier`, `shape`, anchors, crosses,
+`stats`, the data fingerprint — and the **reference for free**, since the relevel happens before the
+fit and `jmv_col_fp()` fingerprints a column's levels. Two shapes refuse the store
+(`reg_fit_cacheable()`): `method = "profile"` (its bounds are a likelihood output) and a model
+comparison (a test between the fit objects). Measured: a multinomial `measure` change 14.35 s →
+1.90 s.
 
 **Scope (15b-ii, done) — the model-comparison "+" builder.** A **Model comparison** CollapseBox holds
 a `compare` combo (`none`/`baseline`/`sequential`), the `modelBuilderCtrl` CustomControl, and a `trials`
@@ -1516,7 +1521,7 @@ openxlsx2 versions, and is ONE package-level fix — no jamovi-only branch, no n
 
 ### Model-comparison freeze — the raw-fit store in `$state`
 
-Confirmed cache/state. In comparison mode the reref digest fast-path is off (`tab_reg`'s `reref` needs
+Confirmed cache/state. In comparison mode the store is off (a comparison is a test between the fits; historically: `tab_reg`'s `reref` needed
 `compare == "none"`), so the cache holds only the raw fits (~10 MB each: model frame + qr). Once
 persisted into `cache_state$state` they re-serialize on **every** UI round-trip — 4 models ≈ 40 MB →
 freeze; the staged early-return never cleared them. Fix: `jmvtab_reg_build(..., use_cache = TRUE)`
@@ -1666,15 +1671,18 @@ never swept: `ids`, `strata`, `fpc`, `at`, `exponentiate`…) and **23 from thes
 were restored by hand: the French had always kept the English argument name and translated only the
 parenthetical, so carrying it across is mechanical. Compiled `inst/i18n/fr.json`: 203 → 172.
 
-### The digest fast path hides footer rows
+### The digest fast path hid footer rows — FIXED in Phase 22j
 
-Not a defect, a declared consequence, but it decides UI design: with a live `.fit_cache` the
-single-model reref path stores a **digest**, not a fit, so `reg_check_rows()` sees
-`reg_checks_for(has_fit = FALSE)` and every fit-based row disappears. Measured: **9 footer rows
-without the cache, 5 with it** — a jamovi table has never shown `global_lr` / `dispersion` /
-`influence` / `collinearity`. So the `stats_checks` control turns the cache off for its build
-(`jmvtab_reg_build(use_cache =)`, the lever staged mode already uses). Any future control that needs
-the fit object must do the same.
+Recorded because it decided UI design for two phases: the old reref digest stored a **digest and no
+fit**, so `reg_check_rows()` saw `reg_checks_for(has_fit = FALSE)` and every fit-based row
+disappeared — **9 footer rows without the cache, 5 with it**, and a jamovi table had never shown
+`global_lr` / `dispersion` / `influence` / `collinearity`. The workaround was the `stats_checks`
+control turning the cache off for its build.
+
+Phase 22j removed the cause: the **eager stage** (`reg_fit_eager()`) computes every fit-based row
+while the fitted object is alive, so a distilled record carries them and `has_fit` is gone. The
+`stats_checks` control keeps the cache on; `stats` is in the key instead, because it decides which
+eager rows the record holds.
 
 ### Maintainer step
 

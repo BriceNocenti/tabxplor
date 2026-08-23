@@ -41,7 +41,8 @@ test_that("Dispersion is max(robust/model SE), equal to a hand-written HC0 sandw
   f  <- chk_fit()$fit
   se_mod <- sqrt(diag(stats::vcov(f)))
   ref    <- max(chk_sandwich_se(f) / se_mod)
-  expect_equal(tabxplor:::reg_check_dispersion(f), ref, tolerance = 1e-8)
+  # 1e-6: the sandwich is rebuilt from the digest, and glm's stored IRLS weights lag by one step
+  expect_equal(tabxplor:::reg_check_dispersion(f), ref, tolerance = 1e-6)
   # a correctly-specified binomial: the two variance estimators agree to O(1/n)
   expect_lt(abs(ref - 1), 0.15)
 })
@@ -292,7 +293,9 @@ test_that("a check absent for a family produces no row, never a wrong number", {
   expect_true( "proportionality" %in% tabxplor:::reg_checks_for("ordinal"))
   expect_false("proportionality" %in% tabxplor:::reg_checks_for("ordinal", weighted = TRUE))
   # the jamovi digest path keeps no model frame -> every check degrades to absent
-  expect_length(tabxplor:::reg_checks_for("binomial", has_fit = FALSE), 0L)
+  # every check is computed in the eager stage, while the fit lives, so a distilled record keeps
+  # them: there is no fit-less degradation to assert any more (Phase 22j).
+  expect_gt(length(tabxplor:::reg_checks_for("binomial")), 0L)
 })
 
 # ---- the fact table is the one source ---------------------------------------------------------

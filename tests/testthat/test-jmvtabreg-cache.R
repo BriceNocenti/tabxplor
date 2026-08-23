@@ -1,9 +1,9 @@
-# Phase 15b: the jmvtab_reg live-UI fit cache + the reference-reparametrization engine. Tests drive the
-# engine-free jmvtab_reg_build() core (no live jamovi session needed) and lock: (1) parity with a direct
-# tab_reg() call; (2) the digest fast path is byte-identical (at display precision) to a real
-# refit-at-a-new-reference; (3) cache behaviour -- a display / reference toggle reuses the fit (a HIT,
-# no refit), a predictor / family change refits (a MISS). The NULL-path identity for ordinary tab_reg()
-# callers is locked by test-tab_reg.R. See CLAUDE.md > roadmap > Phase 15b.
+# The jmvtab_reg live-UI fit cache. Tests drive the engine-free jmvtab_reg_build() core (no live
+# jamovi session needed) and lock: (1) parity with a direct tab_reg() call; (2) what is and is not in
+# the key -- every ESTIMAND argument is a HIT, the model's own arguments (predictors, family, the
+# reference relevel) are a MISS; (3) what the store HOLDS -- a distilled record, kilobytes, with no
+# fit and no frame, and its footer checks intact. The NULL-path identity for ordinary tab_reg()
+# callers is locked by test-tab_reg.R. See CLAUDE.md > roadmap > Phase 22j.
 
 skip_if_not_installed("broom")
 
@@ -44,8 +44,7 @@ gss_reg <- function() gss_cat_data_formatting()
 quiet <- function(expr) suppressWarnings(suppressMessages(expr))
 
 # The user-visible content: the formatted display strings of every fmt column + the row labels. Two
-# builds are "the same table" iff these match exactly (rounding swamps the ~1e-14 reparametrization
-# round-off, so display equality is the right byte-identity notion here).
+# builds are "the same table" iff these match exactly.
 reg_render <- function(tab) {
   tab      <- dplyr::ungroup(tab)
   fmt_cols <- names(tab)[vapply(tab, is_fmt, logical(1))]
@@ -88,7 +87,7 @@ test_that("Phase 15e: mixed-family outcomes build ONE table (not a tabxplor_tabs
   expect_false(inherits(built, "tabxplor_tabs"))       # merged, not stacked
   mf <- get_model_family(dplyr::ungroup(built))
   expect_true("binomial" %in% mf && "gaussian" %in% mf)
-  # the cached-reref build (.fit_cache present) matches a direct refit mixed tab_reg()
+  # the cached build (.fit_cache present) matches a direct mixed tab_reg()
   direct <- quiet(tab_reg(gss, c("married", "tvhours"), c("race", "age"),
                           family = c("binomial", "gaussian"), cleannames = TRUE))
   expect_identical(reg_render(built), reg_render(direct))
@@ -114,42 +113,67 @@ test_that("empirical + weighted builds run and match tab_reg()", {
 })
 
 
-# --- 2. the reference-reparametrization engine is byte-identical to a real refit ----------
-test_that("digest reref == refit-at-new-reference (display + fields)", {
+# --- 2. a distilled record serves every ESTIMAND, and only the model is keyed ---------------
+# Phase 22j retired the reference-reparametrization engine: a reference change relevels the data
+# before the fit, so it moves jmv_col_fp()'s fingerprint and is an honest refit. What is cached
+# instead is the FIT, distilled -- so the estimand arguments are the ones that must not move the key.
+test_that("a reference change is a miss, and equals a direct tab_reg()", {
   gss <- gss_reg()
   grid <- list(
     list(dep = "married", preds = c("race", "age"),   fam = "binomial", ref = c(race = "Black")),
-    list(dep = "married", preds = c("race", "age"),   fam = "binomial", ref = c(race = "Other")),
     list(dep = "tvhours", preds = c("race", "relig"), fam = "gaussian", ref = c(race = "Black")),
     list(dep = "tvhours", preds = c("race", "relig"), fam = "poisson",  ref = c(relig = "8-None")),
-    list(dep = "married", preds = c("race", "relig", "age"), fam = "binomial",
-         ref = c(race = "Black", relig = "8-None")),
-    # Phase 18z9: `multiplier` left the reref gate (the digest is native-scale, so it is
-    # multiplier-independent). reg_reref_fit_res() must therefore reproduce reg_fit()'s own
-    # `est * k, se * |k|` -- applied in reg_fit's order, before the phi scaling and the Wald finalize.
     list(dep = "married", preds = c("race", "age"), fam = "binomial",
-         ref = c(race = "Black"), mult = c(age = 10)),
-    list(dep = "tvhours", preds = c("race", "age"), fam = "poisson",
-         ref = c(race = "Black"), mult = c(age = 5))
+         ref = c(race = "Black"), mult = c(age = 10))
   )
   for (g in grid) {
     o     <- reg_opts(outcome = g$dep, predictors = g$preds, ..family = g$fam, ref = g$ref,
                       ..multiplier = g$mult)
-    reref <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs                    # digest fast path
+    built <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
     refit <- quiet(tab_reg(gss, g$dep, g$preds, family = g$fam, ref = g$ref,
                            multiplier = g$mult, cleannames = TRUE))
-    expect_identical(reg_render(reref), reg_render(refit),
+    expect_identical(reg_render(built), reg_render(refit),
                      info = paste(g$fam, paste(names(g$ref), collapse = "+")))
-    for (f in c("or", "diff", "ci_inf", "ci_sup", "pvalue")) {
-      expect_equal(reg_field(reref, f), reg_field(refit, f), tolerance = 1e-6,
-                   info = paste(g$fam, f))
-    }
   }
 })
 
+test_that("the estimand is NOT in the key: measure / effect / display / colour are hits", {
+  gss <- gss_reg()
+  o   <- reg_opts(outcome = "married", predictors = c("race", "age"), ..family = "binomial")
+  b1  <- jmvtab_reg_build(gss, o, NULL)
+  expect_equal(b1$hits, 0L)
+  st  <- b1$store
+  for (opts in list(reg_opts(display = "est_ci"), reg_opts(color = "no"),
+                    reg_opts(conf_level = 0.90), reg_opts(stars = FALSE),
+                    reg_opts(effect = "marginal", measure = "difference"))) {
+    b  <- jmvtab_reg_build(gss, opts, st)
+    expect_gte(b$hits, 1L)
+    st <- b$store
+  }
+})
 
-# --- 3. cache behaviour: reuse the fit on display / reference toggles, refit on a real change ---
-test_that("a repeat build and a reference change reuse the fit (no refit)", {
+# THE POINT OF THE PHASE: kilobytes, not megabytes, and the footer survives the distillation.
+test_that("the store holds a distilled record: KB, no fit, and the checks still there", {
+  gss <- gss_reg()
+  b   <- jmvtab_reg_build(gss, reg_opts(outcome = "married", predictors = c("race", "age"),
+                                        ..family = "binomial"), NULL)
+  expect_lt(as.numeric(utils::object.size(b$store)), 1024L * 1024L)   # < 1 MB, was 6-16 MB
+  recs    <- purrr::map(b$store[["fit"]], "value")
+  expect_gt(length(recs), 0L)
+  for (r in recs) {
+    expect_null(r[["fit"]]); expect_null(r[["data"]]); expect_null(r[["tidy"]])
+    expect_s3_class(r$digest, "tabxplor_fitdigest")
+  }
+  # the model checks are computed while the fit lives, so a served record still carries them
+  tst <- get_test(jmvtab_reg_build(gss, reg_opts(outcome = "married",
+                                                 predictors = c("race", "age"),
+                                                 ..family = "binomial"), b$store)$tabs)
+  expect_true(all(c("dispersion", "collinearity") %in% tst$test))
+})
+
+
+# --- 3. cache behaviour: reuse the fit on estimand toggles, refit on a real change ---
+test_that("a repeat build reuses the fit, and a reference change does not", {
   gss <- gss_reg()
   o   <- reg_opts(outcome = "married", predictors = c("race", "age"), ..family = "binomial")
 
@@ -159,32 +183,19 @@ test_that("a repeat build and a reference change reuse the fit (no refit)", {
   b2 <- jmvtab_reg_build(gss, o, b1$store)                    # identical opts -> hit
   expect_gte(b2$hits, 1L)
 
-  b3 <- jmvtab_reg_build(gss, reg_opts(ref = c(race = "Black")), b2$store)   # reref -> hit
-  expect_gte(b3$hits, 1L)
+  b3 <- jmvtab_reg_build(gss, reg_opts(ref = c(race = "Black")), b2$store)   # relevel -> miss
+  expect_equal(b3$hits, 0L)
 
-  b4 <- jmvtab_reg_build(gss, reg_opts(color = "no"), b3$store)                    # display -> hit
+  b4 <- jmvtab_reg_build(gss, reg_opts(color = "no"), b3$store)              # estimand -> hit
   expect_gte(b4$hits, 1L)
-
-  # `display = "est_ci"` is the ONE layout the digest can serve without the fitted object, and the
-  # gate compares the RESOLVED template -- a stale literal there costs the fast path silently.
-  b5 <- jmvtab_reg_build(gss, reg_opts(display = "est_ci"), b4$store)
-  expect_gte(b5$hits, 1L)
-  b6 <- jmvtab_reg_build(gss, reg_opts(display = "est_ci", ref = c(race = "Black")), b5$store)
-  expect_gte(b6$hits, 1L)
 })
 
-test_that("a NUMERIC reference is a miss, a factor one stays a hit (Phase 22b-viii)", {
-  # a factor reference is a REPARAMETRIZATION of one canonical fit; a numeric one is an ANCHOR, i.e.
-  # part of the prepared data -- so jmvreg_fit_key()'s per-column fingerprint misses by construction.
+test_that("a NUMERIC reference is a miss too, and its anchor really lands", {
   gss <- gss_reg()
   b1  <- jmvtab_reg_build(gss, reg_opts(predictors = c("race", "age")), NULL)
-  b2  <- jmvtab_reg_build(gss, reg_opts(predictors = c("race", "age"),
-                                        ref = c(race = "Black")), b1$store)
-  expect_gte(b2$hits, 1L)
   b3  <- jmvtab_reg_build(gss, reg_opts(predictors = c("race", "age"),
-                                        ref = c(age = "40")), b2$store)
+                                        ref = c(age = "40")), b1$store)
   expect_equal(b3$hits, 0L)
-  # and the anchor really landed: its Constant row is the one a direct call gives
   direct <- quiet(tab_reg(gss, "married", c("race", "age"), family = "binomial",
                           ref = c(age = 40), cleannames = TRUE))
   expect_equal(reg_field(b3$tabs, "or")[[1]], reg_field(direct, "or")[[1]], tolerance = 1e-8)
@@ -321,17 +332,25 @@ test_that("stats_checks folds into `stats = \"all\"`, comparison or not", {
   expect_identical(r$compare, "baseline")
   expect_identical(r$baseline, 2)
 
-  # ... and the tick-box really produces them. ⚠ It also has to turn the live fit cache OFF: the
-  # digest fast path distils the fit away, so reg_check_rows() sees has_fit = FALSE and every
-  # fit-based row (the checks AND the per-predictor global test) silently disappears. Without that,
-  # the control would be inert on exactly the single-model path it is for.
+  # ... and the tick-box really produces them, WITH the cache on: the eager stage computes every
+  # check while the fit lives, so a served record carries them (Phase 22j retired the gate that
+  # used to turn the cache off for exactly this reason). `stats` is in the key instead, because it
+  # decides which eager rows the record holds.
   gss <- gss_reg()
-  off <- quiet(jmvtab_reg_build(gss, reg_opts(predictors = c("race", "age")), NULL))$tabs
-  on  <- quiet(jmvtab_reg_build(
-    gss, reg_opts(predictors = c("race", "age"), stats_checks = TRUE), NULL))$tabs
+  b   <- quiet(jmvtab_reg_build(gss, reg_opts(predictors = c("race", "age")), NULL))
+  off <- b$tabs
+  bon <- quiet(jmvtab_reg_build(
+    gss, reg_opts(predictors = c("race", "age"), stats_checks = TRUE), b$store))
+  on  <- bon$tabs
+  expect_equal(bon$hits, 0L)                       # `stats` moved the key
   expect_false("linearity_lr" %in% get_test(off)$test)
   expect_true("linearity_lr"  %in% get_test(on)$test)
   expect_true(all(c("dispersion", "influence") %in% get_test(on)$test))
+  # and they survive being SERVED from the store
+  again <- quiet(jmvtab_reg_build(
+    gss, reg_opts(predictors = c("race", "age"), stats_checks = TRUE), bon$store))
+  expect_gte(again$hits, 1L)
+  expect_true("linearity_lr" %in% get_test(again$tabs)$test)
 })
 
 test_that("a comparison list with several dependents yields a NULL table (guarded)", {

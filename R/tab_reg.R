@@ -24,7 +24,7 @@
 #     table fact and reg_finalize() stamps none: a model column and its crude twin are fitted on
 #     different numbers of parameters. The DESIGN's own df is a table fact and lives in the model
 #     record, where the "Model:" footer line reads it. The 3+ level engines refer to z throughout,
-#     deliberately -- they define no residual df (reg_wald_from_tidy).
+#     deliberately -- they define no residual df (reg_tidy_native_z).
 #   - THE CASCADE IS RESOLVED BEFORE THIS FILE RUNS. `link` picked the fit (`sp$fit_family`),
 #     `measure` what is reported and `effect` where it comes from, all in R/reg-estimand.R; here a
 #     COEFFICIENT route reads the tidy and a PREDICTION route sweeps the model -- on whichever fit
@@ -59,7 +59,13 @@
 #   - A 3+ LEVEL OUTCOME becomes several COLUMNS, not several tables: one multinomial fit gives one
 #     odds-ratio column per non-reference category, one proportional-odds fit one cumulative-OR
 #     column (its cut-point rows are dropped, so the Constant cell is empty). Both reuse the ordinary
-#     column shape and share reg_wald_from_tidy(), so the duality above holds there too.
+#     column shape and share reg_tidy_native_z(), so the duality above holds there too.
+#   - THE FIT LEAVES, THE DIGEST STAYS. reg_fit() returns a RECORD (reg_fit_record) whose `tidy` is
+#     the only estimand-dependent member: the estimate and its SE are stored on the model's NATIVE
+#     scale and reg_tidy_finalize() writes the interval, the exponentiation and the p per
+#     (do_exp, conf_level). Everything else a column needs comes from the `tabxplor_fitdigest`
+#     (R/reg-digest.R), which is why the jamovi cache can key on the MODEL alone and serve every
+#     estimand from one fit. Only `method = "profile"` cannot: its bounds are a likelihood output.
 # See: CLAUDE.md section "tabxplor architecture" (the regression subsystem).
 
 # === SECTION: Internal engine ===================================================================
@@ -985,15 +991,16 @@ reg_tidy_rescale <- function(td, multiplier) {
   list(td = td, mult_vec = mult_vec)
 }
 
-# The 3+ level engines' Wald assembly. ⚠ z, deliberately and for all four of them: multinom, polr,
-# svy_vglm and svyolr define no residual-df convention (there is no single equation to count against),
-# and their own summaries report z. So a multinomial or ordinal table is internally consistent on z --
-# its coefficient columns, its marginal columns and its crude twin all refer the same way.
-reg_wald_from_tidy <- function(td, conf_level, do_exp) {
-  res <- reg_wald_finalize(td$estimate, do_exp, se = td$std.error,
-                           crit = stats::qnorm(1 - (1 - conf_level) / 2))
-  td$estimate <- res$estimate; td$conf.low <- res$conf.low
-  td$conf.high <- res$conf.high; td$p.value <- res$p.value
+# The 3+ level engines' NATIVE tidy: rescaled estimate / std.error plus the fit's own p, everything
+# reg_tidy_finalize() needs and nothing the estimand decides.
+# ⚠ z, deliberately and for all four of them: multinom, polr, svy_vglm and svyolr define no
+# residual-df convention (there is no single equation to count against), and their own summaries
+# report z. So a multinomial or ordinal table is internally consistent on z -- its coefficient
+# columns, its marginal columns and its crude twin all refer the same way. Their records therefore
+# carry `disp_known = TRUE` and `df_residual = NA`, which is what makes reg_wald_crit() give qnorm.
+reg_tidy_native_z <- function(td, multiplier) {
+  td <- reg_tidy_rescale(td, multiplier)$td
+  td$p.value <- 2 * stats::pnorm(-abs(td$estimate / td$std.error))
   td
 }
 
@@ -1086,12 +1093,11 @@ reg_formulas <- function(x) {
 
 reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, method,
                              weighted = FALSE, make_design = NULL, add_terms = NULL,
-                             formula = NULL, multiplier = NULL) {
+                             formula = NULL, multiplier = NULL, rec = NULL) {
   if (method == "profile") {
     cli::cli_inform(c("!" = "Profile intervals are not defined for multinomial models; using Wald."))
   }
-  mdata[[outcome]] <- forcats::fct_drop(as.factor(mdata[[outcome]]))
-  y_levels <- levels(mdata[[outcome]])
+  y_levels <- levels(mdata[[outcome]])            # reg_fit_frame() dropped the unused ones
   # ⚠ re-home the formula to THIS frame: nnet::multinom and MASS::polr store their call and
   # re-evaluate it, so a formula carrying the user's environment resolves `fml` nowhere.
   fml <- reg_fit_formula(outcome, predictors, add_terms, formula)
@@ -1115,19 +1121,19 @@ reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, met
     ylev <- y_levels[-1]                               # non-reference categories, in level order
     td   <- tibble::tibble(y.level = ylev[k], term = stringi::stri_replace_all_regex(trm, "`", ""),
                            estimate = unname(cf), std.error = unname(se[nm]))
-    td   <- reg_wald_from_tidy(reg_tidy_rescale(td, multiplier)$td, conf_level, do_exp)
-    return(list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL,
-                fit = fit, data = mdata, y_ref = y_levels[1], y_levels = y_levels[-1],
-                disp_known = TRUE, df_residual = NA_real_))
+    return(reg_fit_record(tidy_native = reg_tidy_native_z(td, multiplier), nobs = nrow(mdata),
+                          fit = fit, data = mdata, digest = reg_digest(fit, rec),
+                          y_ref = y_levels[1], y_levels = y_levels[-1],
+                          do_exp = do_exp, conf_level = conf_level))
   }
 
   fit <- nnet::multinom(fml, data = mdata, trace = FALSE)
   td  <- broom::tidy(fit)                              # y.level, term, estimate, std.error, ...
   td$term <- stringi::stri_replace_all_regex(td$term, "`", "")     # strip formula backticks -> match skeleton
-  td  <- reg_wald_from_tidy(reg_tidy_rescale(td, multiplier)$td, conf_level, do_exp)
-  list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL,
-       fit = fit, data = mdata, y_ref = y_levels[1], y_levels = y_levels[-1],
-       disp_known = TRUE, df_residual = NA_real_)
+  reg_fit_record(tidy_native = reg_tidy_native_z(td, multiplier), nobs = nrow(mdata),
+                 fit = fit, data = mdata, digest = reg_digest(fit, rec),
+                 y_ref = y_levels[1], y_levels = y_levels[-1],
+                 do_exp = do_exp, conf_level = conf_level)
 }
 
 # Ordered 3+ level outcome: proportional-odds cumulative logit -- MASS::polr unweighted,
@@ -1135,19 +1141,11 @@ reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, met
 # "Constant" stays NA.
 reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, method,
                             weighted = FALSE, make_design = NULL, add_terms = NULL,
-                            formula = NULL, multiplier = NULL) {
+                            formula = NULL, multiplier = NULL, rec = NULL) {
   if (method == "profile") {
     cli::cli_inform(c("!" = "Profile intervals are not defined for proportional-odds models; using Wald."))
   }
-  y <- mdata[[outcome]]
-  if (!is.ordered(y)) {
-    y <- as.ordered(forcats::fct_drop(as.factor(y)))
-    lv_str <- paste(levels(y), collapse = " < ")
-    cli::cli_inform(c("i" = "{.val {outcome}}: treated as ordered ({lv_str})."))
-  } else {
-    y <- forcats::fct_drop(y)
-  }
-  mdata[[outcome]] <- y
+  # reg_fit_frame() made the outcome an ordered factor and said so once.
   # ⚠ re-home the formula to THIS frame -- see reg_fit_multinom().
   fml <- reg_fit_formula(outcome, predictors, add_terms, formula)
   environment(fml) <- environment()
@@ -1167,22 +1165,22 @@ reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, meth
     se  <- sqrt(diag(stats::vcov(fit)))[names(cf)]
     td  <- tibble::tibble(term = stringi::stri_replace_all_regex(names(cf), "`", ""),
                           estimate = unname(cf), std.error = unname(se))
-    td  <- reg_wald_from_tidy(reg_tidy_rescale(td, multiplier)$td, conf_level, do_exp)
     cli::cli_inform(c("i" = paste0("The proportional-odds (parallel-lines) assumption is not tested for ",
                                    "survey-weighted ordinal models (the Brant test needs an unweighted fit).")))
-    return(list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL, fit = fit,
-                data = mdata, disp_known = TRUE, df_residual = NA_real_))
+    return(reg_fit_record(tidy_native = reg_tidy_native_z(td, multiplier), nobs = nrow(mdata),
+                          fit = fit, data = mdata, digest = reg_digest(fit, rec),
+                          do_exp = do_exp, conf_level = conf_level))
   }
 
   fit <- MASS::polr(fml, data = mdata, Hess = TRUE, method = "logistic")
   td  <- broom::tidy(fit)
   td  <- td[td$coef.type == "coefficient", , drop = FALSE]   # drop cut-point ("scale") intercepts
   td$term <- stringi::stri_replace_all_regex(td$term, "`", "")
-  td  <- reg_wald_from_tidy(reg_tidy_rescale(td, multiplier)$td, conf_level, do_exp)
   # The Brant test is NOT run here: it is a footer ROW's statistic costing J-1 extra fits, so it is
   # built where that row is -- else every diagnostic and crude polr fit would pay for it.
-  list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL, fit = fit,
-       data = mdata, disp_known = TRUE, df_residual = NA_real_)
+  reg_fit_record(tidy_native = reg_tidy_native_z(td, multiplier), nobs = nrow(mdata),
+                 fit = fit, data = mdata, digest = reg_digest(fit, rec),
+                 do_exp = do_exp, conf_level = conf_level)
 }
 
 # Make a fit SELF-CONTAINED: nnet::multinom / MASS::polr store `data = mdata`, a local of reg_fit(),
@@ -1246,7 +1244,7 @@ reg_ordinal_diagnostic <- function(fit, asked = FALSE) {
 reg_design_vars <- function(design_spec) svy_design_vars(design_spec)
 
 # The model's complete-case frame -- the ONE definition of "the same population as the model". The
-# empirical blocks recompute it from raw `data`, `f$data` being NULL on the reref / digest path.
+# empirical blocks recompute it from raw `data` rather than reading a fit's own frame.
 reg_complete_frame <- function(data, vars)
   tidyr::drop_na(data, tidyselect::all_of(intersect(unique(vars), names(data))))
 
@@ -1275,20 +1273,23 @@ reg_svyglm_env <- function(fit) {
   }
   fit
 }
-# === SECTION: reg_fit() -- one model, one tidy ===================================================
-# Fit ONE model on complete cases -> a tidy of the effect measure + CI + p + n. `do_exp` chooses the
-# estimate scale: exp(coef) multiplicative, raw coef additive.
-reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
-                    outcome_level, conf_level, method,
-                    trials = NULL, formula = NULL, multiplier = NULL, cross = NULL,
-                    drop_extra = NULL, add_terms = NULL) {
-  # Three siblings that cannot go through the `formula =` escape hatch, because they must inherit
-  # the binary prep, the grouped-binomial cbind, the "rr" route and the design resolution:
-  # `add_terms` adds RHS terms naming no new variable; `cross` is a tab_vars, making the POOLED
-  # interaction fit; and `drop_extra` joins drop_vars but NOT the formula -- variables the fit must
-  # be COMPLETE ON without modelling, which is how a crude univariable fit lands on exactly the
-  # model's population. ⚠ a pre-filtered frame passed as `data` is NOT equivalent: a PREBUILT
-  # design's keep mask is computed from `data` itself, and a shorter one recycles silently.
+# === SECTION: reg_fit_frame() -- the model frame, and the one prep that builds it =================
+# THE POPULATION AND THE CODING A FIT SEES, as a pure function of the data plus a few strings -- so
+# reg_digest_frame() (R/reg-digest.R) rebuilds exactly what was fitted and no frame is ever cached.
+# Three siblings cannot go through the `formula =` escape hatch, because they must inherit the binary
+# prep, the grouped-binomial cbind, the "rr" route and the design resolution: `add_terms` adds RHS
+# terms naming no new variable; `cross` is a tab_vars, making the POOLED interaction fit; and
+# `drop_extra` joins drop_vars but NOT the formula -- variables the fit must be COMPLETE ON without
+# modelling, which is how a crude univariable fit lands on exactly the model's population.
+# ⚠ a pre-filtered frame passed as `data` is NOT equivalent: a PREBUILT design's keep mask is
+# computed from `data` itself, and a shorter one recycles silently.
+# ⚠ `positive_level` is a RETURN VALUE, not the attribute reg_prep_binary() leaves behind: any
+# dplyr verb downstream would drop it.
+#' @keywords internal
+#' @noRd
+reg_fit_frame <- function(data, outcome, predictors, family, design_spec,
+                          outcome_level = NULL, trials = NULL, formula = NULL, cross = NULL,
+                          drop_extra = NULL, add_terms = NULL, quiet = FALSE) {
   # `add_terms` may name a variable the main effects do not -- a crossed slope's modified predictor
   # -- and the model's population is what the formula uses, not what `predictors` lists.
   add_vars  <- if (length(add_terms))
@@ -1307,22 +1308,15 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
     ))
   }
 
-  weighted <- svy_weighted(design_spec, design_spec$wt)
-  make_design <- function(recoded_mdata) reg_resolve_design(design_spec, recoded_mdata, data, drop_vars)
-
-  if (family == "multinomial") {
-    return(reg_fit_multinom(mdata, outcome, predictors, do_exp, conf_level, method,
-                            weighted, make_design, add_terms = add_terms, formula = formula,
-                            multiplier = multiplier))
-  }
-  if (family == "ordinal") {
-    return(reg_fit_ordinal(mdata, outcome, predictors, do_exp, conf_level, method,
-                           weighted, make_design, add_terms = add_terms, formula = formula,
-                           multiplier = multiplier))
-  }
-
+  grouped        <- reg_is_grouped_binomial(family, trials, !is.null(formula))
   positive_level <- NULL
-  grouped <- reg_is_grouped_binomial(family, trials, !is.null(formula))
+  binary_prep    <- function(d) {
+    d <- reg_prep_binary(d, outcome, outcome_level)
+    positive_level <<- attr(d, "positive_level")
+    attr(d, "positive_level") <- NULL
+    d
+  }
+
   if (grouped) {
     s <- mdata[[outcome]]
     if (!is.numeric(s) || any(s %% 1 != 0, na.rm = TRUE)) {
@@ -1342,54 +1336,99 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
     mdata[[".gb_prop"]]   <- s / trials
   }
 
-  fam_obj <- switch(
+  switch(
     family,
-    "binomial" = {
-      if (is.null(trials) && is.null(formula)) {
-        mdata <- reg_prep_binary(mdata, outcome, outcome_level)
-        positive_level <- attr(mdata, "positive_level")
+    "multinomial" = { mdata[[outcome]] <- forcats::fct_drop(as.factor(mdata[[outcome]])) },
+    "ordinal" = {
+      y <- mdata[[outcome]]
+      if (!is.ordered(y)) {
+        y <- as.ordered(forcats::fct_drop(as.factor(y)))
+        lv_str <- paste(levels(y), collapse = " < ")
+        if (!quiet) cli::cli_inform(c("i" = "{.val {outcome}}: treated as ordered ({lv_str})."))
+      } else {
+        y <- forcats::fct_drop(y)
       }
-      if (weighted) stats::quasibinomial("logit") else stats::binomial("logit")
+      mdata[[outcome]] <- y
     },
-    "poisson" = if (weighted) stats::quasipoisson("log") else stats::poisson("log"),
-    "quasipoisson" = stats::quasipoisson("log"),
+    "binomial" = if (is.null(trials) && is.null(formula)) mdata <- binary_prep(mdata),
     # modified Poisson on a binary outcome (Zou 2004): the logistic arm's binary prep, then the 0/1
-    # NUMERIC a log-link Poisson needs. quasipoisson in BOTH bases -- the fit goes through svyglm
-    # either way, and AIC / BIC then return NA, the honest answer for a quasi-likelihood.
-    "rr" = {
-      if (!grouped) {
-        mdata <- reg_prep_binary(mdata, outcome, outcome_level)
-        positive_level <- attr(mdata, "positive_level")
-        mdata[[outcome]] <- as.numeric(mdata[[outcome]] == positive_level)
-      }
-      stats::quasipoisson("log")
+    # NUMERIC a log-link Poisson needs. The identity-link risk difference takes the same route.
+    "rr" = , "rd" = if (!grouped) {
+      mdata <- binary_prep(mdata)
+      mdata[[outcome]] <- as.numeric(mdata[[outcome]] == positive_level)
     },
-    "rd" = {
-      if (!grouped) {
-        mdata <- reg_prep_binary(mdata, outcome, outcome_level)
-        positive_level <- attr(mdata, "positive_level")
-        mdata[[outcome]] <- as.numeric(mdata[[outcome]] == positive_level)
-      }
-      stats::binomial("identity")
-    },
-    # the RATIO OF MEANS: Poisson pseudo-maximum-likelihood with robust SEs -- the log link is the
-    # point, not a claim about counts.
     "mr" = {
       y <- suppressWarnings(as.numeric(mdata[[outcome]]))
       if (any(is.finite(y) & y < 0)) cli::cli_abort(c(
         '{.code measure = "ratio"} needs a non-negative outcome: a ratio of means is not defined when {.val {outcome}} can be negative.',
         "i" = 'Model {.code log()} of a positive outcome instead, or use {.code measure = "difference"}.'))
-      stats::quasipoisson("log")
     },
-    "gaussian" = stats::gaussian(),
+    "poisson" = , "quasipoisson" = , "gaussian" = NULL,
     cli::cli_abort("Unsupported {.arg family}: {.val {family}}.")
   )
-  if (is.null(formula) && !grouped && !reg_fam_binary(family) && !is.numeric(mdata[[outcome]])) {
+  if (is.null(formula) && !grouped && !reg_fam_binary(family) &&
+      !family %in% c("multinomial", "ordinal") && !is.numeric(mdata[[outcome]])) {
     cli::cli_abort(c(
       "A {.val {family}} outcome must be numeric.",
       "x" = "{.val {outcome}} is {.cls {class(mdata[[outcome]])}}."
     ))
   }
+  y_levels <- if (is.factor(mdata[[outcome]])) levels(mdata[[outcome]]) else NULL
+  list(frame = mdata, positive_level = positive_level, grouped = grouped,
+       drop_vars = drop_vars, y_levels = y_levels)
+}
+
+# === SECTION: reg_fit() -- one model, one tidy ===================================================
+# Fit ONE model on complete cases -> a tidy of the effect measure + CI + p + n. `do_exp` chooses the
+# estimate scale: exp(coef) multiplicative, raw coef additive.
+reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
+                    outcome_level, conf_level, method,
+                    trials = NULL, formula = NULL, multiplier = NULL, cross = NULL,
+                    drop_extra = NULL, add_terms = NULL) {
+  prep      <- reg_fit_frame(data, outcome, predictors, family, design_spec,
+                             outcome_level = outcome_level, trials = trials, formula = formula,
+                             cross = cross, drop_extra = drop_extra, add_terms = add_terms)
+  mdata     <- prep$frame
+  drop_vars <- prep$drop_vars
+  grouped   <- prep$grouped
+  positive_level <- prep$positive_level
+  # THE REFIT RECIPE, assembled once and carried by the digest: a few strings that rebuild the frame
+  # (reg_digest_frame) and, where a digest cannot answer, the fit itself (reg_digest_revive).
+  rec <- new_reg_recipe(outcome = outcome, predictors = predictors, family = family,
+                        outcome_level = outcome_level, trials = trials, formula = formula,
+                        cross = cross, drop_extra = drop_extra, add_terms = add_terms,
+                        design_spec = design_spec, conf_level = conf_level, method = method,
+                        multiplier = multiplier, y_levels = prep$y_levels,
+                        positive_level = positive_level, grouped = grouped, drop_vars = drop_vars)
+
+  weighted <- svy_weighted(design_spec, design_spec$wt)
+  make_design <- function(recoded_mdata) reg_resolve_design(design_spec, recoded_mdata, data, drop_vars)
+
+  if (family == "multinomial") {
+    return(reg_fit_multinom(mdata, outcome, predictors, do_exp, conf_level, method,
+                            weighted, make_design, add_terms = add_terms, formula = formula,
+                            multiplier = multiplier, rec = rec))
+  }
+  if (family == "ordinal") {
+    return(reg_fit_ordinal(mdata, outcome, predictors, do_exp, conf_level, method,
+                           weighted, make_design, add_terms = add_terms, formula = formula,
+                           multiplier = multiplier, rec = rec))
+  }
+
+  fam_obj <- switch(
+    family,
+    "binomial"     = if (weighted) stats::quasibinomial("logit") else stats::binomial("logit"),
+    "poisson"      = if (weighted) stats::quasipoisson("log") else stats::poisson("log"),
+    "quasipoisson" = stats::quasipoisson("log"),
+    # quasipoisson in BOTH bases -- the "rr" fit goes through svyglm either way, and AIC / BIC then
+    # return NA, the honest answer for a quasi-likelihood.
+    "rr"           = stats::quasipoisson("log"),
+    "rd"           = stats::binomial("identity"),
+    # the RATIO OF MEANS: Poisson pseudo-maximum-likelihood with robust SEs -- the log link is the
+    # point, not a claim about counts.
+    "mr"           = stats::quasipoisson("log"),
+    "gaussian"     = stats::gaussian()
+  )
 
   # ONE assembly for every fitter (reg_fit_formula), so reg_formulas() reports what really ran.
   # A Poisson likelihood has no two-column response: the grouped modified Poisson models the success
@@ -1405,8 +1444,8 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
 
   # ⚠ "rr" ALWAYS fits through svyglm, weighted or not: a Poisson likelihood on a 0/1 outcome is
   # deliberately misspecified, so its naive SEs must become the Huber-White SANDWICH -- which
-  # svyglm's design-based variance IS, so reg_build_digest() stores a vcov already sandwiched and
-  # the jamovi reref contract needs no special case. `weighted` stays FALSE here: it means "the USER
+  # svyglm's design-based variance IS, so the digest stores a vcov already sandwiched and
+  # a distilled digest needs no special case. `weighted` stays FALSE here: it means "the USER
   # gave a design".
   use_svy <- reg_fam_svy_fitted(family, weighted)
   fit <- if (family == "gaussian" && !weighted) {
@@ -1480,32 +1519,76 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
   disp_known <- !weighted && reg_fam_disp_known(family) && !scaled
   df_res     <- reg_df_residual(fit)
 
+  # THE NATIVE TIDY: estimate and std.error on the model's own scale, `p.value` already the fit's
+  # own (both are functions of the FIT alone). The interval and the exponentiation belong to the
+  # ESTIMAND and are written by reg_tidy_finalize(), which is what lets `measure` / `effect` /
+  # `conf_level` change without refitting.
   if (use_profile) {
     ci   <- suppressMessages(stats::confint(fit, level = conf_level))   # log/native scale
     idx  <- match(td$term, stringi::stri_replace_all_regex(rownames(ci), "`", ""))
-    lo   <- unname(ci[idx, 1]) * mult_vec; hi <- unname(ci[idx, 2]) * mult_vec  # scale profile bounds
+    # ⚠ the profile bounds are an OUTPUT of the likelihood at THIS conf_level, so they are the one
+    # thing that cannot be rebuilt from (estimate, std.error) -- hence `method = "profile"` is not
+    # cacheable, and its bounds ride natively on the record.
+    td$conf.low  <- unname(ci[idx, 1]) * mult_vec
+    td$conf.high <- unname(ci[idx, 2]) * mult_vec
     lrp  <- reg_lr_pvalues(fit)
-    p_in <- unname(lrp[match(td$term, names(lrp))])
-  } else {
-    crit <- reg_wald_crit(disp_known, df_res, conf_level)   # shared with reg_reref (15b)
-    lo <- td$estimate - crit * td$std.error
-    hi <- td$estimate + crit * td$std.error
+    td$p.value <- unname(lrp[match(td$term, names(lrp))])
+  } else if (scaled) {
     # with the SE scaled and the t reference, p is recomputed from est / se so p, CI and stars stay
     # duals (broom's own p belongs to the un-scaled model).
-    p_in <- if (scaled) 2 * stats::pt(-abs(td$estimate / td$std.error), df = df_res)
-            else        td$p.value
+    td$p.value <- 2 * stats::pt(-abs(td$estimate / td$std.error), df = df_res)
   }
-  res <- reg_wald_finalize(td$estimate, do_exp, lo = lo, hi = hi, p = p_in)   # shared exp assembly
-  td$estimate <- res$estimate; td$conf.low <- res$conf.low
-  td$conf.high <- res$conf.high; td$p.value <- res$p.value
 
   # var(Y) is the standardised ladder's divisor. A summed score needs it too: its additive effect is
-  # a difference of mean SCORES, graded against the score's own spread.
-  var_y <- if (!do_exp && (family == "gaussian" || !is.na(trials %||% NA)))
+  # a difference of mean SCORES, graded against the score's own spread. ⚠ computed unconditionally:
+  # it is a fact about the DATA, and gating it on `do_exp` would put the estimand back on the record.
+  var_y <- if (family == "gaussian" || !is.na(trials %||% NA))
     stats::var(as.numeric(mdata[[outcome]])) else NA_real_
 
-  list(tidy = td, nobs = nrow(mdata), var_y = var_y, positive_level = positive_level, fit = fit,
-       data = mdata, disp_known = disp_known, df_residual = df_res)
+  reg_fit_record(tidy_native = td, nobs = nrow(mdata), var_y = var_y,
+                 positive_level = positive_level, fit = fit, data = mdata,
+                 digest = reg_digest(fit, rec), profile = use_profile,
+                 disp_known = disp_known, df_residual = df_res,
+                 do_exp = do_exp, conf_level = conf_level)
+}
+
+
+# THE FIT RECORD -- what one fit contributes, and the one object the jamovi cache stores (minus its
+# `fit` and `data`, which reg_fit_distil() strips). The FORMALS ARE THE CONTRACT, as in
+# new_reg_ctx() / new_reg_spec_product().
+# ⚠ `tidy` is DERIVED, never stored by a cache: it is the only estimand-dependent member, and
+# reg_tidy_finalize() rewrites it per (do_exp, conf_level) from `tidy_native`.
+#' @keywords internal
+#' @noRd
+reg_fit_record <- function(tidy_native = NULL, nobs = NA_integer_, var_y = NA_real_,
+                           positive_level = NULL, fit = NULL, data = NULL, digest = NULL,
+                           profile = FALSE, disp_known = TRUE, df_residual = NA_real_,
+                           y_ref = NULL, y_levels = NULL, glance = NULL,
+                           do_exp = FALSE, conf_level = 0.95) {
+  f <- list(tidy = NULL, tidy_native = tidy_native, nobs = nobs, var_y = var_y,
+            positive_level = positive_level, fit = fit, data = data, digest = digest,
+            profile = profile, disp_known = disp_known, df_residual = df_residual,
+            y_ref = y_ref, y_levels = y_levels, glance = glance)
+  f$tidy <- reg_tidy_finalize(f, do_exp, conf_level)
+  f
+}
+
+# The tidy a COLUMN prints: the native estimate wearing this estimand's interval, exponentiation and
+# reference distribution. One writer for every family and both interval methods.
+#' @keywords internal
+#' @noRd
+reg_tidy_finalize <- function(f, do_exp, conf_level) {
+  td <- f$tidy_native
+  if (is.null(td)) return(NULL)
+  res <- if (isTRUE(f$profile))
+    reg_wald_finalize(td$estimate, do_exp, lo = td$conf.low, hi = td$conf.high, p = td$p.value)
+  else
+    reg_wald_finalize(td$estimate, do_exp, se = td$std.error,
+                      crit = reg_wald_crit(f$disp_known, f$df_residual, conf_level),
+                      p = td$p.value)
+  td$estimate  <- res$estimate;  td$conf.low <- res$conf.low
+  td$conf.high <- res$conf.high; td$p.value  <- res$p.value
+  td
 }
 
 # === SECTION: The column builders ================================================================
@@ -1777,7 +1860,7 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
                          exponentiate = TRUE,
                          multiplier = NULL, engine = "marginaleffects", want_se = TRUE,
                          anchors = NULL, crosses = list(), rank = FALSE,
-                         disp_known = TRUE, df_residual = NA_real_) {
+                         disp_known = TRUE, df_residual = NA_real_, refit = NULL) {
   # `link` is the REPORTED comparison's, and it is what decides both questions: the contrast the
   # sweep computes, and whether the result comes back on a log scale that `exponentiate` may undo.
   # `comparison` is the marginaleffects spelling of that same contrast, so it FOLLOWS the link unless
@@ -1807,6 +1890,16 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
       call = NULL)
     if (!requireNamespace("marginaleffects", quietly = TRUE))
       reg_abort_marginaleffects("this contrast, which has no closed form on this model")
+    # ⚠ marginaleffects works on a FITTED object and knows nothing of a digest, so this is where a
+    # distilled record buys its fit back (R/reg-digest.R). The refusal below is the honest one: no
+    # fit, no fallback engine, rather than a wrong number.
+    if (is_reg_digest(fit)) {
+      fit <- if (is.null(refit)) NULL else refit()
+      if (is.null(fit)) cli::cli_abort(c(
+        "This contrast needs the fitted model, which could not be rebuilt.",
+        "i" = "It has no closed form here, so {.pkg marginaleffects} must read the fit itself."),
+        call = NULL)
+    }
     out <- reg_marginal_me(fit, data, predictors, conf_level, wt, at = at, link = link,
                            comparison = comparison,
                            want_pred = want_pred, exponentiate = exponentiate,
@@ -1825,6 +1918,10 @@ reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, lin
                                want_pred = TRUE, want_se = TRUE, multiplier = NULL,
                                crosses = list(), rank = FALSE,
                                disp_known = TRUE, df_residual = NA_real_) {
+  # ⚠ a poly() / ns() basis is the one shape whose marginal effect can be silently 0, and the check
+  # for it (reg_marginal_basis_ok) needs predict(): refuse here so the fallback engine runs on a
+  # revived fit instead.
+  if (is_reg_digest(fit) && length(reg_basis_vars(fit, predictors))) return(NULL)
   tvars <- tryCatch(all.vars(stats::delete.response(stats::terms(fit))), error = function(e) NULL)
   # a nested cross block is named by its BLOCK, whose parents are the formula's own variables.
   need  <- unlist(lapply(predictors, function(v) {
@@ -1836,7 +1933,7 @@ reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, lin
   # THE THREE SWEEPS, chosen once: a rank contrast reads the whole predicted distribution and answers
   # with ONE number, so it takes the single-equation path from here on -- `per_cat` is what fans a
   # sweep out over the outcome's categories, and a rank has none to fan out over.
-  per_cat <- !isTRUE(rank) && (inherits(fit, "multinom") || inherits(fit, "polr"))
+  per_cat <- !isTRUE(rank) && reg_model_categorical(fit)
   g <- if (isTRUE(rank)) reg_gcomp_rank_maker(fit, data, wt, link)
        else if (per_cat) reg_gcomp_cat_maker(fit, data, wt, link)
        else              reg_gcomp_maker(fit, data, wt, link)
@@ -1898,7 +1995,9 @@ reg_marginal_gcomp <- function(fit, data, predictors, conf_level, wt = NULL, lin
 reg_marginal_basis_warn <- function(fit, data, predictors, multiplier, ame, ratio,
                                     do_exp = ratio) {
   bv <- reg_basis_vars(fit, predictors)
-  if (!length(bv) || is.null(ame) || !nrow(ame)) return(invisible(NULL))
+  # a digest has no predict() to compare against, and `reg_marginal_gcomp()` refused it upstream, so
+  # whatever ran here was the fitted object's own answer.
+  if (!length(bv) || is.null(ame) || !nrow(ame) || is_reg_digest(fit)) return(invisible(NULL))
   for (v in bv) {
     if (reg_is_factor_var(data[[v]])) next
     est <- ame$ame[ame$var == v]
@@ -2759,7 +2858,7 @@ reg_global_types <- function() unname(test_row_types("global"))
 #' @keywords internal
 reg_global_rows <- function(f, sp, shared, col_var) {
   if (!reg_fam_glm(sp$fit_family) || isTRUE(sp$compound)) return(NULL)
-  if (is.null(f) || is.null(f$fit)) return(NULL)              # the jamovi digest path keeps no fit
+  if (is.null(f) || is.null(f$fit)) return(NULL)    # the eager stage always has one; a caller may not
   fit  <- f$fit
   have <- tryCatch(attr(stats::terms(fit), "term.labels"), error = function(e) character(0))
   asg  <- tryCatch(stats::coef(fit), error = function(e) NULL)
@@ -2785,105 +2884,6 @@ reg_global_rows <- function(f, sp, shared, col_var) {
   dplyr::bind_rows(rows)
 }
 
-
-# === SECTION: jamovi live-UI fit cache -- digest + reference reparametrization ===================
-# A factor-reference change is a LINEAR REPARAMETRIZATION of the SAME fit (likelihood, fitted values
-# and dispersion all invariant), so the whole table at any reference is recomputable from the
-# coefficients + covariance with NO refit. reg_build_digest() fits ONCE at the canonical
-# (natural-first-level) reference and returns a small, reference-INDEPENDENT digest, discarding the
-# raw fit; reg_reref_fit_res() reparametrizes it to any display reference, a drop-in for
-# reg_column() / reg_gof_rows(). Reached ONLY with `.fit_cache` present, on the single-equation GLM
-# coefficient path, and locked byte-identical to a real refit by a test.
-
-# reg_fit() de-orders factor predictors and drops NA rows deterministically, so the canonical basis
-# does not depend on `reference`. Only kilobytes are kept -- never the model object.
-reg_build_digest <- function(data, sp, family, design_spec, do_exp, outcome_level,
-                             conf_level, weighted, multiplier = NULL) {
-  f   <- reg_fit(data, sp$outcome, sp$predictors, family, design_spec, do_exp,
-                 outcome_level, conf_level, method = "wald",
-                 trials = sp$trials, formula = sp$formula, multiplier = NULL)
-  fit <- f$fit
-  coef_v <- stats::coef(fit)
-  V      <- stats::vcov(fit)
-  names(coef_v) <- stringi::stri_replace_all_regex(names(coef_v), "`", "")   # match skeleton terms (as reg_fit does)
-  dn <- stringi::stri_replace_all_regex(rownames(V), "`", "")
-  dimnames(V) <- list(dn, dn)
-  grouped    <- reg_is_grouped_binomial(family, sp$trials, sp$compound)
-  over_disp  <- !weighted && reg_fam_overdispersed(family, grouped)
-  phi        <- if (over_disp) reg_dispersion(fit) else NA_real_
-  scaled     <- over_disp && !is.na(phi) && phi > 0
-  disp_known <- !weighted && reg_fam_disp_known(family) && !scaled
-  # DESIGN: the adjusted predictions and the numeric slopes travel WITH the digest, computed while
-  # the fitted object still exists: a counterfactual sweep is not a reparametrization, so it cannot
-  # be recovered from `coef` later. They ARE reference-invariant, which keeps a reference change a
-  # cache HIT. ⚠ they are NOT multiplier-invariant -- a k-unit contrast on a non-identity link is
-  # not k times the one-unit one -- so `multiplier` is part of the digest KEY.
-  marg <- reg_fill_sweep(fit, f$data, sp$predictors, conf_level, design_spec$wt, multiplier)
-  list(coef = coef_v, vcov = V, df_residual = stats::df.residual(fit),
-       phi = phi, scaled = scaled, disp_known = disp_known, do_exp = do_exp,
-       var_y = f$var_y, positive_level = f$positive_level, nobs = f$nobs, marg = marg,
-       glance = reg_glance(fit, family, grouped, weighted, f$nobs), family = family)
-}
-
-# Reparametrize a canonical digest to the DISPLAY reference encoded in `skeleton`: each display term
-# is a linear contrast L over the canonical coefficients, so estimate = L'b and se = sqrt(L' V L),
-# then the SAME Wald finalize reg_fit() uses.
-reg_reref_fit_res <- function(digest, skeleton, conf_level, multiplier = NULL) {
-  coef_v <- digest$coef
-  V      <- digest$vcov
-  cn     <- names(coef_v)
-  preds  <- setdiff(unique(skeleton$var), "Constant")
-  ref_of <- stats::setNames(vapply(preds, function(p) {
-    r <- skeleton$level[skeleton$var == p & skeleton$is_ref]
-    if (length(r)) as.character(r[[1]]) else NA_character_
-  }, character(1)), preds)
-
-  rows <- skeleton[!is.na(skeleton$term), , drop = FALSE]        # (Intercept) + non-reference terms
-  n    <- nrow(rows)
-  est  <- numeric(n); se <- numeric(n)
-  for (i in seq_len(n)) {
-    p <- rows$var[i]; t <- rows$term[i]
-    L <- stats::setNames(numeric(length(cn)), cn)
-    if (identical(t, "(Intercept)")) {
-      if ("(Intercept)" %in% cn) L["(Intercept)"] <- 1
-      for (pp in preds) {
-        if (is.na(ref_of[[pp]])) next
-        rn <- paste0(pp, ref_of[[pp]])
-        if (rn %in% cn) L[rn] <- L[rn] + 1
-      }
-    } else if (p %in% preds && !is.na(ref_of[[p]])) {            # factor level j vs display ref r_p
-      rn <- paste0(p, ref_of[[p]])
-      if (t  %in% cn) L[t]  <- L[t]  + 1
-      if (rn %in% cn) L[rn] <- L[rn] - 1
-    } else if (t %in% cn) {                                      # numeric predictor: identity
-      L[t] <- 1
-    }
-    est[i] <- sum(L * coef_v)
-    se[i]  <- sqrt(as.numeric(t(L) %*% V %*% L))
-  }
-  # applied with reg_fit()'s OWN expressions in its OWN order, so the reref stays byte-identical by
-  # construction: folding k into the contrast gives sqrt(k^2 V) where reg_fit gives |k| sqrt(V) --
-  # equal in exact arithmetic, not in IEEE754.
-  if (!is.null(multiplier)) {
-    mult_vec <- rep(1, n)
-    for (v in names(multiplier)) {
-      mi <- !is.na(rows$term) & rows$term == v
-      if (any(mi)) mult_vec[mi] <- as.numeric(multiplier[[v]])
-    }
-    est <- est * mult_vec
-    se  <- se  * abs(mult_vec)
-  }
-
-  if (isTRUE(digest$scaled)) se <- se * sqrt(digest$phi)                 # caller pre-scales the SE
-  crit <- reg_wald_crit(digest$disp_known, digest$df_residual, conf_level)
-  res  <- reg_wald_finalize(est, isTRUE(digest$do_exp), se = se, crit = crit,
-                            disp_known = digest$disp_known, df = digest$df_residual)
-  list(tidy = tibble::tibble(term = rows$term, estimate = res$estimate,
-                             conf.low = res$conf.low, conf.high = res$conf.high, p.value = res$p.value),
-       nobs = digest$nobs, var_y = digest$var_y, positive_level = digest$positive_level,
-       glance = digest$glance, fit = NULL, data = NULL, marg = digest$marg,
-       disp_known = digest$disp_known, df_residual = digest$df_residual)
-}
 
 
 # Recover a column's per-cell SE, on the estimate's own TEST scale, from the Wald interval it
@@ -3054,17 +3054,14 @@ reg_inference <- function(shared, degraded = FALSE) {
 #' @noRd
 new_reg_ctx <- function(
     # --- INPUTS: reg_build()'s own formals ------------------------------------------------------
-    # ⚠ `skeleton_data` is FORCED here, before reg_stage_setup() may relevel `data` on the reref
-    # path: it means the FULL data, so every split group shares one skeleton.
+    # ⚠ `skeleton_data` is FORCED here: it means the FULL data, so every split group shares one
+    # skeleton.
     # ⚠ `fit_cache` is NOT `.fit_cache`: `as.list(environment())` defaults to all.names = FALSE, so a
     # dot-prefixed key is SILENTLY DROPPED. No ctx key may start with a dot.
     data = NULL, specs = list(), shared = list(), tab_vars = NULL, fit_cache = NULL,
-    # `ref` here is the RESOLVED factor-level map, the reref path's only deferred rewrite.
-    ref = NULL, reref = FALSE, skeleton_data = NULL,
+    skeleton_data = NULL,
     # --- reg_stage_setup: the skeleton, the table's SHAPE facts and the per-spec PLAN ------------
-    # ⚠ `data` is REWRITTEN here on the reref path and read afterwards by four consumers: a declared
-    # PRODUCT as well as an input. `data_canon` is the PRE-relevel frame the digest is fitted on.
-    family = NA_character_, skeleton = NULL, skeleton_deferred = FALSE, data_canon = NULL,
+    family = NA_character_, skeleton = NULL, skeleton_deferred = FALSE,
     compound = logical(0), builders = character(0),
     prefix_dep = FALSE, n_outcomes = 0L, is_comparison = FALSE,
     numeric_preds = character(0), factor_preds = character(0),
@@ -3098,12 +3095,12 @@ utils::globalVariables(names(formals(new_reg_ctx)))
 #' @noRd
 reg_ctx_locals <- function(ctx) c(ctx, ctx$shared)
 
-reg_build <- function(data, specs, shared, tab_vars = NULL, .fit_cache = NULL, ref = NULL,
-                      reref = FALSE, skeleton_data = data) {
+reg_build <- function(data, specs, shared, tab_vars = NULL, .fit_cache = NULL,
+                      skeleton_data = data) {
   shared <- do.call(new_reg_shared, shared[intersect(names(shared), names(formals(new_reg_shared)))])
   ctx <- new_reg_ctx(
     data = data, specs = specs, shared = shared, tab_vars = tab_vars, fit_cache = .fit_cache,
-    ref = ref, reref = reref, skeleton_data = skeleton_data,
+    skeleton_data = skeleton_data,
     family = specs[[1]]$fit_family)
   list2env(reg_ctx_locals(ctx), environment())
 
@@ -3201,8 +3198,8 @@ reg_stage_split <- function(ctx) {
 
 
 # THE TABLE'S SHAPE, before any model exists: the SKELETON every column is aligned to, the
-# whole-table facts, and the PER-SPEC PLAN reg_spec_build() reads. ⚠ it REWRITES `data` on the reref
-# path. The fits could leave this stage because the skeleton is fit-FREE in every shape but one --
+# whole-table facts, and the PER-SPEC PLAN reg_spec_build() reads.
+# The fits could leave this stage because the skeleton is fit-FREE in every shape but one --
 # the cascade below, whose ORDER is the contract: only an all-coefficient table with a compound
 # formula must read it back off the first fit, which is what `skeleton_deferred` names.
 #' @keywords internal
@@ -3210,17 +3207,7 @@ reg_stage_split <- function(ctx) {
 reg_stage_setup <- function(ctx) {
   list2env(reg_ctx_locals(ctx), environment())
 
-  # jamovi live reref: `data` arrives at the CANONICAL reference the digest was fitted on, while the
-  # display `reference` is baked into the skeleton -- so `data` is releveled here and the canonical
-  # frame travels as `data_canon`. ⚠ off that path `data_canon` stays NULL, not a second name for it.
-  data_canon <- NULL
   skeleton   <- NULL
-  if (isTRUE(reref)) {
-    data_canon <- data
-    if (length(ref) > 0L) data <- reg_relevel_data(data, ref)
-    skeleton <- reg_skeleton(data, union_predictors)   # an INPUT to reg_reref_fit_res(), not an output
-  }
-
   compound   <- purrr::map_lgl(specs, ~ isTRUE(.$compound))
   builders   <- purrr::map_chr(specs, ~ .$est$builder %||% "coef")
   skeleton_deferred <- FALSE
@@ -3271,7 +3258,7 @@ reg_stage_setup <- function(ctx) {
   }
   stopifnot(!skeleton_deferred || !emp_on(empirical))
 
-  ctx_update(ctx, list(data = data, data_canon = data_canon, skeleton = skeleton,
+  ctx_update(ctx, list(data = data, skeleton = skeleton,
                         skeleton_deferred = skeleton_deferred,
                         compound = compound, builders = builders,
                         prefix_dep = prefix_dep, n_outcomes = n_outcomes,
@@ -3404,14 +3391,17 @@ reg_cols_ame <- function(f, sp, ctx) {
   sp_link      <- sp_est$measure_link                  # the REPORTED comparison's, not the fit's
   ratio_ame    <- !identical(sp_link, "identity")
   sp_scale     <- reg_scale_of(sp_est, sp$trials)
-  marg  <- reg_marginal(f$fit, f$data, sp$row_vars, conf_level, design_spec$wt,
+  m      <- reg_model_of(f)
+  # the way back to a fitted object, for the one engine that needs one (see reg_marginal()).
+  refit  <- function() reg_digest_revive(f, data)$fit
+  marg  <- reg_marginal(m, f$data, sp$row_vars, conf_level, design_spec$wt,
                         at = if (identical(sp_est$effect, "at_reference")) "reference" else "average",
                         link = sp_link, want_pred = TRUE,
                         comparison = sp_est$comparison,
                         exponentiate = isTRUE(sp_est$exp),
                         multiplier = multiplier, engine = reg_marginal_engine(sp_est),
                         anchors = anchors, crosses = crosses, rank = rank_est,
-                        disp_known = f$disp_known, df_residual = f$df_residual)
+                        disp_known = f$disp_known, df_residual = f$df_residual, refit = refit)
   marg     <- reg_scale_pred(marg, sp$trials)
   marg_degf <- reg_wald_degf("wald", f$disp_known, f$df_residual)
   # the Constant row: this contrast has no intercept in its tidy, so the baseline is the model's own
@@ -3425,14 +3415,14 @@ reg_cols_ame <- function(f, sp, ctx) {
   # flip, and the reference row already prints it. The distribution goes to the footer instead
   # (reg_model_lines()), where it names a scale rather than pretending to be an intercept.
   const <- if (rank_est) NULL else reg_constant_baseline(
-    f$fit, f$data, sp$predictors,
+    m, f$data, sp$predictors,
     at = if (identical(sp_est$effect, "at_reference")) "reference" else "average",
     wt = design_spec$wt, conf_level = conf_level,
     scale_key = if (is.na(exp_sc)) sp_scale else exp_sc, log = !is.na(exp_sc),
     anchors = anchors, disp_known = f$disp_known, df_residual = f$df_residual)
   marg_add <- if (!ratio_ame) marg
-    else if (is.null(f$fit)) NULL
-    else reg_scale_pred(reg_fill_sweep(f$fit, f$data, sp$row_vars, conf_level,
+    else if (is.null(m)) NULL
+    else reg_scale_pred(reg_fill_sweep(m, f$data, sp$row_vars, conf_level,
                                        design_spec$wt, multiplier, crosses = crosses), sp$trials)
   disp  <- reg_display_of(display, empirical)
   # ⚠ the LEVELS come from this column's own sweep (`marg`, at its own profile); `marg_add` only
@@ -3460,7 +3450,8 @@ reg_cols_ame <- function(f, sp, ctx) {
     })
   } else {
     or_tip <- if (sp_fam == "binomial" && !ratio_ame) {
-      td <- broom::tidy(f$fit); td$term <- stringi::stri_replace_all_regex(td$term, "`", "")
+      # the fit's own coefficients, which the record already holds on its NATIVE scale
+      td <- f$tidy_native
       exp(td$estimate[match(skeleton$term, td$term)])
     } else NULL
     cv <- if (is_comparison) sp$label
@@ -3484,17 +3475,19 @@ reg_cols_vsrest <- function(f, sp, ctx) {
   sp_col <- sp$color
   sp_scale <- reg_scale_of(sp$est, sp$trials)
   exp_sc   <- reg_exp_scale_of(sp$est, sp$trials)
-  marg   <- reg_marginal(f$fit, f$data, sp$row_vars, conf_level, design_spec$wt,
+  m      <- reg_model_of(f)
+  refit  <- function() reg_digest_revive(f, data)$fit
+  marg   <- reg_marginal(m, f$data, sp$row_vars, conf_level, design_spec$wt,
                          at = "reference", link = sp$est$measure_link,
                          comparison = sp$est$comparison, want_pred = FALSE,
                          exponentiate = isTRUE(sp$est$exp),
                          engine = reg_marginal_engine(sp$est), anchors = anchors,
                          crosses = crosses,
-                         disp_known = f$disp_known, df_residual = f$df_residual)
-  marg_add <- if (is.null(f$fit)) NULL else
-    reg_scale_pred(reg_fill_sweep(f$fit, f$data, sp$row_vars, conf_level, design_spec$wt,
+                         disp_known = f$disp_known, df_residual = f$df_residual, refit = refit)
+  marg_add <- if (is.null(m)) NULL else
+    reg_scale_pred(reg_fill_sweep(m, f$data, sp$row_vars, conf_level, design_spec$wt,
                                   crosses = crosses), sp$trials)
-  const  <- reg_constant_baseline(f$fit, f$data, sp$predictors, at = "reference",
+  const  <- reg_constant_baseline(m, f$data, sp$predictors, at = "reference",
                                   wt = design_spec$wt, conf_level = conf_level,
                                   scale_key = if (is.na(exp_sc)) sp_scale else exp_sc,
                                   log = !is.na(exp_sc), anchors = anchors,
@@ -3522,13 +3515,10 @@ reg_cols_coef <- function(f, sp, ctx) {
   sp_eff   <- reg_word(sp$est)                  # composed from the estimand, see cols_ame above
   sp_col   <- sp$color
   # the coefficient path runs no marginal sweep of its own, so it runs the one reg_fill_base() needs.
-  # WARNING: a cached fit may have been DROPPED (`want_fit = FALSE`, the jamovi repaint path).
   model_predictors <- if (isTRUE(sp$compound)) unique(skeleton$var)
                      else unique(c(sp$predictors, sp$row_vars))
-  marg <- if (!is.null(f$marg)) f$marg               # the digest path already ran the sweep
-          else if (is.null(f$fit)) NULL
-          else reg_fill_sweep(f$fit, f$data, sp$row_vars, conf_level, design_spec$wt, multiplier,
-                              crosses = crosses)
+  marg <- reg_fill_sweep(reg_model_of(f), f$data, sp$row_vars, conf_level, design_spec$wt,
+                         multiplier, crosses = crosses)
   marg <- reg_scale_pred(marg, sp$trials)
   disp  <- reg_display_of(display, empirical)
   dress <- function(col, group = NULL)
@@ -3747,7 +3737,7 @@ reg_stage_rows <- function(ctx) {
 
 
 # The per-outcome complete-case frame the crude companions and the tooltips share with the model,
-# RECOMPUTED from `data` since `fits[[i]]$data` is NULL on the reref / digest path. `na_shared_vars`
+# RECOMPUTED from `data` rather than read off a fit's own frame. `na_shared_vars`
 # is the same extra-completeness set reg_fit() receives, so under the default it IS the model's own.
 #' @keywords internal
 #' @noRd
@@ -4667,7 +4657,7 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
     subtext = subtext, .fit_cache = .fit_cache, levels_collapse = .levels_collapse)
 
   res <- reg_build(a$data, a$specs, a$shared, tab_vars = tab_vars,
-                   .fit_cache = .fit_cache, ref = a$ref_levels, reref = a$reref)
+                   .fit_cache = .fit_cache)
 
   # The p-value is stars-only -- colours read the CI bounds -- so `stars = FALSE` just drops it.
   if (!isTRUE(stars)) {

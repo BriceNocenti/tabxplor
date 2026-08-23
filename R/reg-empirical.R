@@ -381,7 +381,9 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
                                add_terms = add)),
       error = function(e) NULL)
     if (is.null(f)) next
-    if (want_fit) fits[[v]] <- list(fit = f$fit, data = f$data)
+    # ⚠ the DIGEST rides along: it is what reg_coef_if_maker() reads, and only it carries the
+    # recipe that names this fit's sampling weights.
+    if (want_fit) fits[[v]] <- list(fit = f$fit, digest = f$digest, data = f$data)
     # a MARGINAL crude row is always Wald; a coefficient one follows the table's own `method`.
     dfs <- c(dfs, reg_wald_degf(if (marginal) "wald" else method, f$disp_known, f$df_residual))
     if (!marginal) {
@@ -906,7 +908,7 @@ reg_same_frame <- function(mdata, f) {
 # (the maths is R/reg-influence.R's). The gate is FIVE correctness facts; NULL unless all five hold,
 # regardless of whether `color = "adjustment"` was asked -- forest_plot()'s gap band reads the same.
 #   * `shape`       the crude twin's REG_EMPIRICAL row: absent = no observed effect at all.
-#   * `f$fit`       NULL on the jamovi digest path, where the fitted object was distilled away.
+#   * a model       the fit or its digest, and the frame the digest rebuilds.
 #   * same estimand reg_same_estimand() -- the scale AND the measure word.
 #   * same frame    reg_same_frame().
 #   * collapsible   a conditional odds ratio moves under adjustment even with zero confounding.
@@ -920,29 +922,30 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
   effect   <- est$effect
   marginal <- !identical(effect, "conditional")
   mlink    <- est$measure_link %||% "identity"
-  if (is.null(shape) || is.null(f$fit) || is.null(f$data))      return(NULL)
+  if (is.null(shape) || is.null(reg_model_of(f)) || is.null(f$data)) return(NULL)
   if (isTRUE(sp$compound) || identical(effect, "at_reference")) return(NULL)
   if (!reg_same_estimand(shape, get_scale(model_col), est))     return(NULL)
   if (!reg_same_frame(mdata, f))                                return(NULL)
   # only a conditional (coefficient) odds ratio is non-collapsible.
   if (!reg_estimand_collapsible(sp$fit_family, effect))             return(NULL)
   # a REPLICATE-weights design needs withReplicates, not svyrecvar's linearization.
-  des <- if (inherits(f$fit, "svyglm")) f$fit$survey.design else NULL
+  des <- reg_model_design(f)
   if (inherits(des, "svyrep.design"))                           return(NULL)
 
-  coef_if <- reg_coef_if_maker(f$fit)
+  coef_if <- reg_coef_if_maker(reg_model_of(f), f$data)
   if (is.null(coef_if)) return(NULL)
   # a 3+ level outcome's marginal influence function is per CATEGORY too (family()$mu.eta lacks it) --
   # unless the estimand is a RANK, which reads the whole distribution and answers once.
   rank_est <- identical(est$level, "rank")
-  per_cat  <- !rank_est && (inherits(f$fit, "multinom") || inherits(f$fit, "polr"))
+  per_cat  <- !rank_est && reg_model_categorical(reg_model_of(f))
+  m  <- reg_model_of(f)
   model_if <- if (marginal && rank_est)
-    reg_ame_if_maker(f$fit, f$data, wt, link = mlink, coef_if = coef_if,
-                     g = reg_gcomp_rank_maker(f$fit, f$data, wt, mlink))
+    reg_ame_if_maker(m, f$data, wt, link = mlink, coef_if = coef_if,
+                     g = reg_gcomp_rank_maker(m, f$data, wt, mlink))
   else if (marginal && per_cat)
-    reg_ame_if_cat_maker(f$fit, f$data, wt, link = mlink, category = category)
+    reg_ame_if_cat_maker(m, f$data, wt, link = mlink, category = category)
   else if (marginal)
-    reg_ame_if_maker(f$fit, f$data, wt, link = mlink, coef_if = coef_if)
+    reg_ame_if_maker(m, f$data, wt, link = mlink, coef_if = coef_if)
   else coef_if
   # the crude leg must be built around the SAME quantity the crude estimate was: one category's
   # indicator, or -- on a rank column -- the pair's own gradient read over every category.
@@ -991,7 +994,7 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
       mv <- reg_cross_of(crosses, v)$modified %||% v
       kk <- if (!is.null(multiplier) && mv %in% names(multiplier)) as.numeric(multiplier[[mv]]) else 1
       if (!is.finite(kk) || kk == 0) next
-      cif_v <- reg_coef_if_maker(nv$fit)
+      cif_v <- reg_coef_if_maker(reg_model_of(nv), nv$data)
       if (is.null(cif_v)) next
       # covers FACTOR predictors too: (level, reference level) vs a numeric's k-unit difference.
       is_fac_k <- v %in% fac_preds
@@ -999,7 +1002,7 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
       if (is_fac_k && is.na(cl[[2]])) next
       if (marginal) {
         im <- model_if(v, cl[[1]], cl[[2]])
-        ic <- if (inherits(nv$fit, "multinom") || inherits(nv$fit, "polr"))
+        ic <- if (reg_model_categorical(reg_model_of(nv)))
           reg_ame_if_cat_maker(nv$fit, nv$data, wt, link = mlink,
                                category = category)
         else

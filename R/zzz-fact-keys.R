@@ -249,6 +249,16 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("REG_OUTCOME_KINDS$offers", function() tx_fk_all(REG_OUTCOME_KINDS, "offers"),
         function() names(REG_FAMILIES)),
 
+  # --- the fit digest: a new model backend is one REG_FIT_KINDS row, and its edges are these ---
+  tx_fk("REG_FIT_KINDS$score", function() unlist(lapply(REG_FIT_KINDS, function(k) k$score)),
+        function() REG_SCORE_ENGINES, allow = NA_character_),
+  tx_fk("REG_FIT_KINDS$parts", function() unlist(lapply(REG_FIT_KINDS, function(k) k$parts)),
+        function() names(REG_DIGEST_PARTS)),
+  tx_fk("REG_DIGEST_PARTS$kinds",
+        function() unlist(lapply(REG_DIGEST_PARTS, function(p)
+          if (identical(p$kinds, "all")) character(0) else p$kinds)),
+        function() names(REG_FIT_KINDS)),
+
   # --- into the vocabulary reg_build() dispatches on ------------------------------------------
   tx_fk("REG_ESTIMANDS$rows$builder", function() tx_fk_scalar(tx_fk_reg_rows(), "builder"),
         function() REG_BUILDERS),

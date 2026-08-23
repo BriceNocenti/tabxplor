@@ -360,8 +360,8 @@ test_that("the numeric coefficient gap SE == a hand-stacked influence-function c
   des  <- suppressWarnings(survey::svydesign(ids = ~1, data = dm))
   fm   <- survey::svyglm(y ~ age + tvhours + race, design = des, family = stats::quasipoisson())
   fc   <- survey::svyglm(y ~ age,                  design = des, family = stats::quasipoisson())
-  ifm  <- reg_coef_if_maker(fm)(stats::setNames(1, "age"))
-  ifc  <- reg_coef_if_maker(fc)(stats::setNames(1, "age"))
+  ifm  <- reg_coef_if_maker(fm, dm)(stats::setNames(1, "age"))
+  ifc  <- reg_coef_if_maker(fc, dm)(stats::setNames(1, "age"))
   expect_equal(se, reg_if_se(ifm - ifc, fm$survey.design), tolerance = 1e-12)
 })
 

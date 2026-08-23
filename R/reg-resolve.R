@@ -17,7 +17,7 @@
 #                                 effect) resolved into one estimand row, plus trials / outcome
 #                                 level / crude key
 #     S4 reg_resolve_output()     display / colour / the empirical mode -- and the notes, LAST
-#     S5 reg_resolve_fit_plan()   na / reref / the reference relevel / multiplier / shape terms /
+#     S5 reg_resolve_fit_plan()   na / the reference relevel / multiplier / shape terms /
 #                                 the interactions MATERIALISED, last of all
 #     S6 reg_resolve_specs()      the labels, the positive levels, the one new_reg_spec() call site
 #
@@ -543,24 +543,21 @@ reg_emp_mode <- function(empirical, crude_key, ests) {
 
 
 # === S5: the fit plan ============================================================================
-# Which rows every model is fitted on, the cached-digest fast path, and the ORIGIN of every
-# predictor: a factor's reference level, a continuous predictor's anchor, its unit, its curvature.
+# Which rows every model is fitted on, and the ORIGIN of every predictor: a factor's reference
+# level, a continuous predictor's anchor, its unit, its curvature.
 #
 # S2 defines the model's VARIABLES (labels -> merge -> shape); S5 fixes their ORIGIN. The order
 # inside is the design: `ref` parsed once (U0) -> the frozen frame (X) -> the anchor SHIFT (Y) ->
 # the multiplier's SD and the quadratic terms, on the shifted frame -> the factor relevel (U), last
-# because it is the one step the reref fast path defers, and before S6 (reg_positive_level() reads
-# the factor's FIRST level).
+# because it must come before S6 (reg_positive_level() reads the factor's FIRST level).
 #' @keywords internal
 #' @noRd
 reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NULL,
-                                 .fit_cache = NULL, all_predictors = character(0),
+                                 all_predictors = character(0),
                                  outcome = character(0), tab_vars = NULL, wt = NULL,
                                  multiplier = "sd", reg_shapes = list(), na = "drop_by_outcome",
                                  cross_keys = character(0),
-                                 formula_mode = FALSE, raw_formula = NULL,
-                                 is_comparison = FALSE, compare = "none",
-                                 method = "wald", display = NULL, color = NA_character_) {
+                                 formula_mode = FALSE, raw_formula = NULL) {
   families <- deps$family
 
   # --- S: which rows every model is fitted on -----------------------------------------------------
@@ -572,26 +569,6 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
                             "drop_by_outcome" = all_predictors,
                             "drop_all"        = c(all_predictors, outcome))),
               names(data))
-
-  # --- T: the cached-digest fast path (jamovi live reref) ---------------------------------------
-  # With a `.fit_cache`, a GLM coefficient table can be recomputed at any factor-predictor reference
-  # from ONE canonical fit (reg_build_digest); the body does NOT relevel, reg_build reparametrizes.
-  #
-  # ⚠ THIS IS THE ONE CLAUSE WHERE A WRONG `TRUE` IS A WRONG NUMBER, NOT AN ERROR. Each condition
-  # protects one fact the digest cannot serve: `builder`/`vsrest` (COEFFICIENTS only, not a marginal
-  # effect); `display`/`method` (a fold needs the fitted object); `families` (multinomial/ordinal
-  # degrades the table); `trials` (the RESOLVED value); `color "adjustment"` (the gap test needs the
-  # FITTED object); `reg_shapes` (⚠ a DIFFERENT MODEL, not a reparametrization like `ref`).
-  # `multiplier` stays OUT: the digest is fitted natively, so a scaling change is a cache HIT.
-  reref <- !is.null(.fit_cache) &&
-    all(vapply(deps$est, function(e) identical(e$builder, "coef"), logical(1))) &&
-    !any(vapply(deps$est, function(e) identical(e$builder, "vsrest"), logical(1))) &&
-    (is.null(display) ||
-       identical(display_resolve(display), DISPLAY_PRESETS[["est_ci"]]$template)) && method == "wald" &&
-    all(reg_fam_glm(families)) &&
-    !formula_mode && is.null(tab_vars) && all(is.na(deps$trials)) &&
-    compare == "none" && !is_comparison && !("adjustment" %in% color) &&
-    length(reg_shapes) == 0L && length(cross_keys) == 0L
 
   # --- U0: `ref`, parsed ONCE for both kinds of variable: the LEVEL a factor is compared against,
   # and the raw anchor VALUE a continuous predictor is shifted to (turned into a number in block Y).
@@ -646,10 +623,11 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
   shape_terms <- if (length(reg_shapes) > 0L) reg_shape_terms(frozen, reg_shapes, w = wt)
                  else stats::setNames(character(0), character(0))
 
-  # --- U: the FACTOR relevel, LAST -- the one step the reref fast path defers, reg_build()
-  # reparametrizing the canonical digest instead. `between_groups` reads it too: it compares every
-  # effect to the FIRST level of the split variable.
-  if (length(refs$levels) > 0L && !reref) {
+  # --- U: the FACTOR relevel, LAST. `between_groups` reads it too: it compares every effect to the
+  # FIRST level of the split variable.
+  # ⚠ IT IS ALSO WHAT PUTS THE REFERENCE IN THE CACHE KEY, for free: jmv_col_fp() fingerprints a
+  # column's levels, so a relevel moves the key and a reference change is an honest refit.
+  if (length(refs$levels) > 0L) {
     data <- reg_relevel_data(data, refs$levels)
     if (!is.null(design_obj)) design_obj$variables <- data
   }
@@ -664,7 +642,7 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
     if (!is.null(design_obj)) design_obj$variables <- data
   }
 
-  list(data = data, design_obj = design_obj, na_shared_vars = na_shared_vars, reref = reref,
+  list(data = data, design_obj = design_obj, na_shared_vars = na_shared_vars,
        ref_levels = refs$levels, anchors = anchors, anchor_keyword = anch$keyword,
        multiplier = mult_res$k, multiplier_label = mult_res$label, shape_terms = shape_terms,
        crosses = crosses)
@@ -827,7 +805,7 @@ reg_resolve_specs <- function(data, deps, predictors, is_comparison = FALSE, for
 # Over-declares beyond what reg_build() needs: as.list(environment()) guarantees every formal is
 # PRESENT, so tab_reg()'s post-build tail cannot hit a silently absent binding.
 #' @keywords internal
-new_reg_args <- function(data = NULL, specs = list(), shared = list(), reref = FALSE,
+new_reg_args <- function(data = NULL, specs = list(), shared = list(),
                          deps = NULL, outcome = character(0),
                          union_predictors = character(0), positive_levels = character(0),
                          families = character(0), ests = list(), est = NULL, eff_word = "",
@@ -900,18 +878,15 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                             formula_mode = prep$formula_mode)
 
   # S5 -- the fit plan. `color` here is the FILLED spec: `adjustment` is never an auto-fill answer,
-  # so the reref gate reads the same thing either way, but the filled one is what the columns carry.
+  # so both readings agree, but the filled one is what the columns carry.
   color_filled <- reg_color_for(out$color_arg, deps$est[[1]])
   plan <- reg_resolve_fit_plan(prep$data, design_obj = prep$design_obj, deps = deps,
-                               ref = ref, .fit_cache = .fit_cache,
+                               ref = ref,
                                all_predictors = prep$all_predictors, outcome = prep$outcome,
                                tab_vars = tab_vars, wt = prep$wt, multiplier = multiplier,
                                reg_shapes = prep$reg_shapes, na = na,
                                cross_keys = prep$cross_keys,
-                               formula_mode = prep$formula_mode, raw_formula = prep$raw_formula,
-                               is_comparison = prep$is_comparison,
-                               compare = compare, method = method, display = out$display,
-                               color = color_filled)
+                               formula_mode = prep$formula_mode, raw_formula = prep$raw_formula)
 
   # S6 -- the specs, on the POST-relevel data.
   sp <- reg_resolve_specs(plan$data, deps, prep$predictors, is_comparison = prep$is_comparison,
@@ -949,7 +924,7 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
              else as.character(prep$wt)[1]
 
   new_reg_args(
-    data = plan$data, specs = sp$specs, shared = shared, reref = plan$reref, deps = deps,
+    data = plan$data, specs = sp$specs, shared = shared, deps = deps,
     outcome = prep$outcome, union_predictors = sp$union_predictors,
     positive_levels = sp$positive_levels,
     families = stats::setNames(deps$family, deps$outcome),

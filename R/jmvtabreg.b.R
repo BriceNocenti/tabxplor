@@ -53,7 +53,7 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       cur_sig <- jmvtab_reg_compare_sig(opts)
       cst     <- self$results$compare_state$state       # list(sig=, html=) or NULL
 
-      # Phase o: the fit cache is only useful for a SINGLE model (the reref digest fast-path). In staged
+      # The fit cache is only useful for a SINGLE model: a comparison is a test between the fits. In staged
       # comparison mode it just holds raw fits (~10 MB each) that re-serialize into $state on every UI
       # round-trip -> the freeze. Drop it entirely here (the single most important line) so it stops
       # persisting; the trigger path below then builds without a cache. Reverting to one model starts a
