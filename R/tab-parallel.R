@@ -29,16 +29,74 @@
 tabxplor_compute <- "tabxplor"
 
 
+# WARNING: `parallel::detectCores()` IS NOT the number of cores this R may use, and the gap is not
+# academic -- measured on this box, it returns 12 under `taskset -c 0,1` and 12 under
+# `_R_CHECK_LIMIT_CORES_`, where the true answer is 2 both times. Left uncorrected, `parallel = TRUE`
+# spawns a full pool onto two allocated cores in every container, HPC job and CI runner, which suite
+# C measured as a 25 % LOSS (Phase 22h). The cascade below is one rung per case it gets wrong:
+#   1. `_R_CHECK_LIMIT_CORES_` -- CRAN's 2-core rule for examples / tests / vignettes.
+#   2. `options(mc.cores)`     -- base R's own convention: a user who set it has already answered.
+#   3. parallelly::availableCores() -- cgroups v1/v2, affinity masks, SLURM / PBS / SGE / LSF.
+#      Suggests-only, and the reason it is not simply required: mirai imports `nanonext` alone and
+#      offers no core count of its own, so gating on mirai would not buy this.
+#   4. `nproc`                 -- affinity-aware on Unix, and the fallback when (3) is absent.
+#   5. detectCores()           -- the last resort, and on Windows usually the right answer anyway.
+# DESIGN: only the MACHINE rungs (3-5) are memoised. They cost a subprocess and cannot change in a
+# session; rungs 1-2 are options and are re-read every call, so a user can still change their mind.
+tab_cores_cache <- new.env(parent = emptyenv())
+
+#' @keywords internal
+#' @noRd
+tab_available_cores <- function() {
+  if (nzchar(Sys.getenv("_R_CHECK_LIMIT_CORES_"))) return(2L)
+  mc <- suppressWarnings(as.integer(getOption("mc.cores") %||% NA))
+  if (!is.na(mc) && mc >= 1L) return(mc)
+  if (!is.null(tab_cores_cache$n)) return(tab_cores_cache$n)
+
+  n <- NA_integer_
+  if (requireNamespace("parallelly", quietly = TRUE))
+    n <- suppressWarnings(tryCatch(as.integer(parallelly::availableCores()),
+                                   error = function(e) NA_integer_))[1L]
+  if ((is.na(n) || n < 1L) && identical(.Platform$OS.type, "unix"))
+    n <- suppressWarnings(tryCatch(as.integer(system2("nproc", stdout = TRUE, stderr = FALSE)),
+                                   error = function(e) NA_integer_, warning = function(e) NA_integer_))[1L]
+  if (is.na(n) || n < 1L) n <- parallel::detectCores(logical = FALSE)
+  if (is.na(n)) n <- parallel::detectCores()
+  if (is.na(n)) n <- 2L
+  tab_cores_cache$n <- max(1L, as.integer(n))
+  tab_cores_cache$n
+}
+
+# THE auto worker count: half the cores this R may actually use, floored at 2 and capped at 4.
+# Every clause is measured (Phase 22h, the tables x workers grid):
+#   - CAP AT 4 because the whole rest of the machine buys little: 8 workers is +38 % over 4 at 24
+#     tables and NOTHING below 8 tables, for four more processes and ~530 MB.
+#   - HALF the cores because a build must not saturate the machine it runs on. It costs real speed
+#     (on 4 cores, 4 workers give x2.8 against x1.7 for 2) and buys a usable UI, which matters most
+#     on the machine where it costs most.
+#   - FLOOR OF 2 because `%/% 2` gives 1 on a 2-core machine -- and 1 worker is serial, while 2
+#     cores is exactly where 2 workers give x1.75 with no penalty. A 2-core box has no headroom to
+#     protect, so there is nothing to spend the halving on.
+#' @keywords internal
+#' @noRd
+tab_auto_workers <- function(avail = tab_available_cores()) {
+  if (avail <= 1L) return(1L)                # a single core: 1 is serial, and 2 would oversubscribe
+  min(4L, max(2L, avail %/% 2L))
+}
+
+
 # DESIGN: `options(tabxplor.parallel =)` is the ONE switch -- there is no argument, so a nested build
-# cannot forget to pass FALSE (tab_pmap() turns the option off around its map). TRUE = auto (physical
-# cores - 1, capped at 8), an integer verbatim. The _R_CHECK_LIMIT_CORES_ cap of 2 keeps
-# examples/tests inside CRAN's 2-core rule.
+# cannot forget to pass FALSE (tab_pmap() turns the option off around its map). It stays OPT-IN:
+# FALSE by default, because the pool spawn (0.9-2.0 s, blocking -- mirai::daemons() returns only once
+# the daemons have connected) makes the FIRST parallel table slower than serial, always. `TRUE` /
+# `"auto"` = tab_auto_workers(), an integer verbatim. The _R_CHECK_LIMIT_CORES_ cap of 2 keeps
+# examples/tests inside CRAN's 2-core rule even when a user asked for more.
 #' @keywords internal
 #' @noRd
 tab_parallel_workers <- function(cache_env = NULL) {
   if (!is.null(cache_env)) return(0L)                       # jmvtab live cache: always serial
   p <- tx_option("parallel")
-  if (is.null(p) || isFALSE(p)) return(0L)
+  if (is.null(p) || isFALSE(p) || identical(p, "no")) return(0L)
   if (!requireNamespace("mirai", quietly = TRUE)) {
     rlang::warn(
       paste0("`parallel` was requested but the {mirai} package is not installed; ",
@@ -48,16 +106,40 @@ tab_parallel_workers <- function(cache_env = NULL) {
     return(0L)
   }
   cap <- if (nzchar(Sys.getenv("_R_CHECK_LIMIT_CORES_"))) 2L else Inf
-  if (isTRUE(p)) {
-    nc <- parallel::detectCores(logical = FALSE)
-    if (is.na(nc)) nc <- parallel::detectCores()
-    if (is.na(nc)) nc <- 2L
-    n <- min(max(1L, nc - 1L), 8L)
+  if (isTRUE(p) || identical(p, "auto")) {
+    n <- tab_auto_workers()
   } else {
-    n <- as.integer(p)
+    n <- suppressWarnings(as.integer(p))
     if (is.na(n) || n < 1L) return(0L)
   }
   as.integer(min(n, cap))
+}
+
+
+# WARNING: THE BYTE-IDENTITY CONTRACT NEEDS THIS, and it is not obvious. A daemon must pin its BLAS
+# (see the everywhere() block below) or a glm-bound map thrashes -- but pinning only the WORKERS
+# makes them disagree with a main process whose BLAS is still multi-threaded, in the last bits of
+# every coefficient. Measured (Phase 22h, 2 outcomes, this box's OpenBLAS-pthread at 12 threads):
+#   main 12 / workers 1 -> parallel != serial     main 1 / workers 1 -> parallel == serial
+# and, the fact that explains it, a SERIAL build at 1 vs 12 BLAS threads already differed. So the
+# thread count is part of the answer, and the two branches must agree on it. Pinning to 1 for the
+# duration of a build is what makes them agree -- and it makes a result reproducible across machines
+# with different BLAS builds, which the test suite already assumes (setup.R pins it there).
+# DESIGN: restore on exit, never a global set: a package must not silently reconfigure a user's BLAS.
+#' @keywords internal
+#' @noRd
+local_blas_threads <- function(n = 1L, frame = parent.frame()) {
+  if (!requireNamespace("RhpcBLASctl", quietly = TRUE)) return(invisible(NULL))
+  old <- tryCatch(RhpcBLASctl::blas_get_num_procs(), error = function(e) NULL)
+  if (is.null(old) || is.na(old)) return(invisible(NULL))
+  try(RhpcBLASctl::blas_set_num_threads(n), silent = TRUE)
+  # base on.exit in the CALLER's frame -- withr is Suggests-only, so it cannot be used here, and the
+  # old count is baked into the expression by value rather than looked up when the frame unwinds.
+  do.call(base::on.exit,
+          list(bquote(try(RhpcBLASctl::blas_set_num_threads(.(old)), silent = TRUE)),
+               add = TRUE, after = FALSE),
+          envir = frame)
+  invisible(old)
 }
 
 
@@ -193,6 +275,8 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(), .names = NULL
   # a daemon (the `^tabxplor\.` snapshot below carries it) -- reads FALSE.
   old_par <- options(tabxplor.parallel = FALSE)
   on.exit(options(old_par), add = TRUE)
+  # BOTH branches, so the two agree bit for bit -- see local_blas_threads().
+  local_blas_threads(1L)
 
   serial <- workers <= 1L ||
     length(rows) < tx_option("parallel_min") ||
@@ -214,12 +298,27 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(), .names = NULL
   # does NOT change results). `cli.*` / `crayon.*` / `width` must ride along because a worker's message
   # is RELAYED here and cli renders its text at signal time -- otherwise a daemon would format with its
   # own glyphs and wrap width, and the relayed message would not match the serial one.
+  #
+  # WARNING: A WORKER MUST PIN ITS BLAS TOO, and for the same reason -- pinning data.table alone is
+  # only half the rule. A daemon is a fresh R process, so a threaded BLAS (Debian/Ubuntu's default
+  # OpenBLAS-pthread) opens one thread PER CORE the first time a worker calls glm(): W workers x
+  # C cores of spinning threads on C cores. `tab()`'s units are data.table-bound and never noticed;
+  # `tab_reg()`'s units are glm-bound, and the contention is catastrophic rather than marginal.
+  # Measured (Phase 22h, 3 outcomes x 3 workers, 12 cores): serial 0.81 s, parallel 56.91 s
+  # UNPINNED, parallel 0.29 s pinned. RhpcBLASctl's RUNTIME call is the only lever that works on an
+  # already-running worker -- OpenBLAS-pthread fixes its count from the environment at process
+  # start, so setting OMP_NUM_THREADS here would be too late. Suggests-only, hence the guard: a
+  # worker without it is no worse than before this line existed.
   keep <- "^tabxplor\\.|^datatable\\.|^cli\\.|^crayon\\.|^width$|^useFancyQuotes$"
   opts <- options()[grepl(keep, names(options()))]
   mirai::everywhere(
     {
       options(tabx_opts)
       data.table::setDTthreads(1L)
+      if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
+        try(RhpcBLASctl::blas_set_num_threads(1L), silent = TRUE)
+        try(RhpcBLASctl::omp_set_num_threads(1L),  silent = TRUE)
+      }
       list2env(tabx_ship, envir = .GlobalEnv)
     },
     tabx_opts = opts,

@@ -104,7 +104,7 @@ children:
                 cell: { column: 1, row: 0 }
                 children:
                   - type: Label
-                    label: effect = <i>(where it comes from)</i>
+                    label: effect = <i>(where the numbers come from)</i>
                     children:
                       - type: RadioButton
                         name: effect_1
@@ -124,7 +124,7 @@ children:
                         optionPart: at_reference
           - type: ComboBox
             name: empirical
-            label: empirical = <i>(show the observed effect beside the modelled one)</i>
+            label: empirical = <i>(show observed effect)</i>
 
   - type: CollapseBox
     label: <b>Interactions</b>

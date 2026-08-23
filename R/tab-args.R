@@ -369,7 +369,7 @@ TAB_ARGS <- list(
     default = "no", default_for = list(tab_reg = TRUE, tab_num = "auto"),
     producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
     values_from = "MEASURES", values_rd = "color_measures_rd",
-    doc = c("Which measure(s) to color, on which visual channel. \\code{FALSE} (default)",
+    doc = c("Which measure(s) of deviation to color, on which visual channel. \\code{FALSE} (default)",
             "prints no color; \\code{TRUE} uses the smart per-column-type scheme (factors: the",
             "\\code{difference} on the text + the \\code{ratio} on the background; numerics: the",
             "\\code{ratio}; counts: \\code{contrib}). Otherwise a measure name, on the \\strong{text} channel:",

@@ -5,6 +5,9 @@
 # ROLE: Standalone; NOT part of the test suite and NEVER run by R CMD check (dev/benchmarks/ is
 #        .Rbuildignore'd). The small fixture is covered in-suite by test-benchmark.R; THIS script
 #        is only for the heavy 8M-row run.
+#        For the BROAD review -- every default's marginal cost, several machine profiles, the 1.3.1
+#        A/B -- use phase22h_perf_review.R beside it; this script stays the narrow, frozen 8M grid
+#        that baseline.csv is comparable against.
 #
 # USAGE (from package root, e.g. in a dev R session):
 #   source("dev/benchmarks/run_bench.R", encoding = "UTF-8")

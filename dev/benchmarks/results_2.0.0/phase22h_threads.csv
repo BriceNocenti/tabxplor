@@ -1,0 +1,29 @@
+"case","threads","min_s","median_s","round","asked"
+"gss 21k  pct=row",1,0.037,0.038,1,1
+"gss 21k  pct+test+color",1,0.069,0.07,1,1
+"gss 21k  15 tables",1,0.4,0.408,1,1
+"8M  counts",1,0.113,0.113,1,1
+"8M  pct=row",1,0.118,0.119,1,1
+"8M  weighted pct=col",1,0.247,0.25,1,1
+"8M  numeric means x2",1,0.341,0.342,1,1
+"gss 21k  pct=row",12,0.04,0.042,1,0
+"gss 21k  pct+test+color",12,0.075,0.09,1,0
+"gss 21k  15 tables",12,0.517,0.684,1,0
+"8M  counts",12,0.071,0.098,1,0
+"8M  pct=row",12,0.102,0.11,1,0
+"8M  weighted pct=col",12,0.216,0.344,1,0
+"8M  numeric means x2",12,0.561,0.618,1,0
+"gss 21k  pct=row",1,0.04,0.041,2,1
+"gss 21k  pct+test+color",1,0.073,0.074,2,1
+"gss 21k  15 tables",1,0.425,0.44,2,1
+"8M  counts",1,0.115,0.118,2,1
+"8M  pct=row",1,0.12,0.122,2,1
+"8M  weighted pct=col",1,0.251,0.268,2,1
+"8M  numeric means x2",1,0.356,0.365,2,1
+"gss 21k  pct=row",12,0.061,0.068,2,0
+"gss 21k  pct+test+color",12,0.114,0.116,2,0
+"gss 21k  15 tables",12,0.709,0.723,2,0
+"8M  counts",12,0.101,0.105,2,0
+"8M  pct=row",12,0.108,0.114,2,0
+"8M  weighted pct=col",12,0.331,0.353,2,0
+"8M  numeric means x2",12,0.617,0.639,2,0

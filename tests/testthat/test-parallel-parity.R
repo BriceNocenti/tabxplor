@@ -98,6 +98,24 @@ test_that("below the parallel_min threshold, a parallel request stays serial (an
   expect_identical(as.integer(mirai::status(.compute = "tabxplor")$connections), 2L)
 })
 
+test_that("a worker pins its BLAS, not only data.table (Phase 22h)", {
+  # ⚠ THE regression guard for a 70x slowdown. A daemon is a fresh R process, so a threaded BLAS
+  # opens one thread per core the first time a worker calls glm() -- W workers x C cores of spinning
+  # threads on C cores. `tab()` never noticed (its units are data.table-bound, and data.table was
+  # already pinned); `tab_reg()`'s units are glm-bound, and 3 outcomes x 3 workers measured 56.91 s
+  # against 0.81 s serial. Byte-identity is NOT the check: a thread-thrashed worker still delivers
+  # it, which is exactly why every other test in this file passed throughout.
+  skip_if_not_installed("RhpcBLASctl")
+  warm_pool(2L)
+  suppressMessages(tab_par(pct = "row"))                       # any parallel build runs everywhere()
+  # ⚠ everywhere() runs FOR SIDE EFFECTS and returns no values -- ask through mirai_map(), with more
+  # tasks than workers so every daemon is certain to answer at least once.
+  got <- mirai::mirai_map(seq_len(6L), function(i)
+    c(dt = data.table::getDTthreads(), blas = RhpcBLASctl::blas_get_num_procs()),
+    .compute = "tabxplor")[]
+  for (w in got) expect_identical(as.integer(w), c(1L, 1L))
+})
+
 test_that("the tabxplor pool does not touch the user's default daemon profile", {
   mirai::daemons(1)                                  # user's own default-compute pool
   withr::defer(mirai::daemons(0))
@@ -166,6 +184,26 @@ reg_fx <- local({
   d$party3  <- forcats::fct_lump_n(d$partyid, 2)
   d$year_f  <- factor(d$year)
   d
+})
+
+test_that("parallel == serial even when the CALLER's BLAS is multi-threaded (Phase 22h)", {
+  # ⚠ The guard the other parity tests structurally cannot be: setup.R pins BLAS to 1 for the whole
+  # suite, so every branch already agrees and a worker-only pin looks fine. A real user session has
+  # a multi-threaded BLAS, and there main at N threads and a worker at 1 disagreed in the last bits
+  # of every coefficient -- glm() through a threaded BLAS is not thread-count invariant. This test
+  # puts BLAS back where a user has it, and is the only place the local_blas_threads() pin is
+  # exercised for what it is FOR. Uses tab_reg(): the crosstab path never touches BLAS.
+  skip_if_not_installed("RhpcBLASctl")
+  nproc <- tryCatch(RhpcBLASctl::get_num_procs(), error = function(e) NA_integer_)
+  skip_if(is.na(nproc) || nproc < 2L, "a single core: there is nothing to unpin")
+  warm_pool(2L)
+  old <- RhpcBLASctl::blas_get_num_procs()
+  on.exit(try(RhpcBLASctl::blas_set_num_threads(old), silent = TRUE), add = TRUE)
+  RhpcBLASctl::blas_set_num_threads(nproc)              # the state a user's own session is in
+  args <- list(reg_fx, c("married", "tvhours"), c("race", "age"), stats = FALSE)
+  expect_identical(
+    suppressMessages(with_par(2L, do.call(tab_reg, args))),
+    suppressMessages(with_par(FALSE, do.call(tab_reg, args))))
 })
 
 test_that("tab_reg parallel: the S axis (several outcomes in one table) is byte-identical", {

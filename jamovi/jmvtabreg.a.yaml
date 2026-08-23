@@ -139,7 +139,7 @@ options:
           name:  conditional
         - title: "marginal <i>(averaged over the sample)</i>"
           name:  marginal
-        - title: "at the reference profile"
+        - title: "at_reference <i>(at the reference profile)</i>"
           name:  at_reference
       default: auto
       description:
@@ -163,9 +163,9 @@ options:
           name:  auto
         - title: "odds ratio (OR)"
           name:  odds_ratio
-        - title: "ratio (RR / IRR / RoM)"
+        - title: "ratio"
           name:  ratio
-        - title: "difference (RD / diff)"
+        - title: "difference"
           name:  difference
         - title: "log <i>(un-exponentiated coefficient)</i>"
           name:  log

@@ -3575,6 +3575,9 @@ reg_stage_specs <- function(ctx) {
                          .ship = list(ctx = ctx), .names = purrr::map_chr(specs, "label"),
                          workers = workers)
   } else {
+    # ⚠ the ONE serial unit-loop that does not go through tab_pmap(), so it needs the BLAS pin here
+    # or a serial specs build would not match the parallel one bit for bit (see local_blas_threads).
+    local_blas_threads(1L)
     products <- vector("list", length(specs))
     for (k in seq_along(specs)) {
       products[[k]] <- reg_spec_build(k, ctx)

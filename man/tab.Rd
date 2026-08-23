@@ -101,7 +101,7 @@ table of \emph{counts}, which is what a first look at the data should be. Say
 everything else in the package --- the reference, the interval, the colour --- follows
 from that choice.}
 
-\item{color}{Which measure(s) to color, on which visual channel. \code{FALSE} (default)
+\item{color}{Which measure(s) of deviation to color, on which visual channel. \code{FALSE} (default)
 prints no color; \code{TRUE} uses the smart per-column-type scheme (factors: the
 \code{difference} on the text + the \code{ratio} on the background; numerics: the
 \code{ratio}; counts: \code{contrib}). Otherwise a measure name, on the \strong{text} channel:
