@@ -16,11 +16,8 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             trials = NULL,
             effect = "auto",
             measure = "auto",
-            empirical = "no",
+            empirical = TRUE,
             models = NULL,
-            stats_baseline = 1,
-            stats_compare = "none",
-            stats_checks = FALSE,
             na = "drop_by_outcome",
             run_compare = FALSE,
             levels_collapse = NULL,
@@ -37,6 +34,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             n = "range",
             cleannames = TRUE,
             subtext = "",
+            theme = "light",
             wrap_rows = 35,
             wrap_cols = 15,
             export_format = "excel",
@@ -44,7 +42,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             export_dir = "~/Documents",
             export_filename = "Reg_model",
             resetPath = FALSE,
-            xl_check = "no",
+            xl_check = FALSE,
             xl_replace = FALSE, ...) {
 
             super$initialize(
@@ -158,19 +156,15 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 measure,
                 options=list(
                     "auto",
-                    "odds_ratio",
-                    "ratio",
                     "difference",
-                    "log"),
+                    "ratio",
+                    "odds_ratio",
+                    "coefficient"),
                 default="auto")
-            private$..empirical <- jmvcore::OptionList$new(
+            private$..empirical <- jmvcore::OptionBool$new(
                 "empirical",
                 empirical,
-                options=list(
-                    "no",
-                    "column",
-                    "cell"),
-                default="no")
+                default=TRUE)
             private$..models <- jmvcore::OptionArray$new(
                 "models",
                 models,
@@ -189,24 +183,6 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                             template=jmvcore::OptionVariable$new(
                                 "vars",
                                 NULL)))))
-            private$..stats_baseline <- jmvcore::OptionInteger$new(
-                "stats_baseline",
-                stats_baseline,
-                hidden=TRUE,
-                min=1,
-                default=1)
-            private$..stats_compare <- jmvcore::OptionList$new(
-                "stats_compare",
-                stats_compare,
-                options=list(
-                    "none",
-                    "compare_baseline",
-                    "compare_sequential"),
-                default="none")
-            private$..stats_checks <- jmvcore::OptionBool$new(
-                "stats_checks",
-                stats_checks,
-                default=FALSE)
             private$..na <- jmvcore::OptionList$new(
                 "na",
                 na,
@@ -365,6 +341,13 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 subtext,
                 default="",
                 hidden=TRUE)
+            private$..theme <- jmvcore::OptionList$new(
+                "theme",
+                theme,
+                options=list(
+                    "light",
+                    "print_ready"),
+                default="light")
             private$..wrap_rows <- jmvcore::OptionNumber$new(
                 "wrap_rows",
                 wrap_rows,
@@ -397,14 +380,10 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..resetPath <- jmvcore::OptionAction$new(
                 "resetPath",
                 resetPath)
-            private$..xl_check <- jmvcore::OptionList$new(
+            private$..xl_check <- jmvcore::OptionBool$new(
                 "xl_check",
                 xl_check,
-                options=list(
-                    "no",
-                    "auto",
-                    "all"),
-                default="no")
+                default=FALSE)
             private$..xl_replace <- jmvcore::OptionBool$new(
                 "xl_replace",
                 xl_replace,
@@ -422,9 +401,6 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..measure)
             self$.addOption(private$..empirical)
             self$.addOption(private$..models)
-            self$.addOption(private$..stats_baseline)
-            self$.addOption(private$..stats_compare)
-            self$.addOption(private$..stats_checks)
             self$.addOption(private$..na)
             self$.addOption(private$..run_compare)
             self$.addOption(private$..levels_collapse)
@@ -441,6 +417,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..n)
             self$.addOption(private$..cleannames)
             self$.addOption(private$..subtext)
+            self$.addOption(private$..theme)
             self$.addOption(private$..wrap_rows)
             self$.addOption(private$..wrap_cols)
             self$.addOption(private$..export_format)
@@ -464,9 +441,6 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         measure = function() private$..measure$value,
         empirical = function() private$..empirical$value,
         models = function() private$..models$value,
-        stats_baseline = function() private$..stats_baseline$value,
-        stats_compare = function() private$..stats_compare$value,
-        stats_checks = function() private$..stats_checks$value,
         na = function() private$..na$value,
         run_compare = function() private$..run_compare$value,
         levels_collapse = function() private$..levels_collapse$value,
@@ -483,6 +457,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         n = function() private$..n$value,
         cleannames = function() private$..cleannames$value,
         subtext = function() private$..subtext$value,
+        theme = function() private$..theme$value,
         wrap_rows = function() private$..wrap_rows$value,
         wrap_cols = function() private$..wrap_cols$value,
         export_format = function() private$..export_format$value,
@@ -505,9 +480,6 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..measure = NA,
         ..empirical = NA,
         ..models = NA,
-        ..stats_baseline = NA,
-        ..stats_compare = NA,
-        ..stats_checks = NA,
         ..na = NA,
         ..run_compare = NA,
         ..levels_collapse = NA,
@@ -524,6 +496,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..n = NA,
         ..cleannames = NA,
         ..subtext = NA,
+        ..theme = NA,
         ..wrap_rows = NA,
         ..wrap_cols = NA,
         ..export_format = NA,
@@ -559,14 +532,16 @@ jmvtabregResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 title="",
                 width=1080,
                 height=1,
-                renderFun=".plot"))
+                renderFun=".plot",
+                visible=FALSE))
             self$add(jmvcore::Image$new(
                 options=options,
                 name="compare_state",
                 title="",
                 width=1080,
                 height=1,
-                renderFun=".plot"))}))
+                renderFun=".plot",
+                visible=FALSE))}))
 
 jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     "jmvtabregBase",
@@ -634,24 +609,14 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   for by name.   \item \code{"odds_ratio"} / \code{"ratio"} /
 #'   \code{"difference"}: the named measure,   when the outcome's level can
 #'   carry it. One it cannot says so, and lists what it does   offer.   \item
-#'   \code{"log"}: the same estimand, left un-exponentiated.  }
+#'   \code{"coefficient"}: the model's own coefficient, un-transformed --- the
+#'   log   of the reported measure wherever that measure is multiplicative, and
+#'   the additive   estimate itself on a model that is already additive.  }
 #' @param empirical Show the crude, unadjusted, single-predictor effect beside
 #'   each model effect --- the bivariate association that IS the modelised
 #'   quantity when there is a single predictor, so the gap between the two is
-#'   what adjustment changed. \code{"column"} draws it as its own column;
-#'   \code{"cell"} folds it into the model cell instead, which is the default
-#'   for a 3+ level outcome, where one model column would otherwise need one
-#'   crude column per category.
+#'   what adjustment changed.
 #' @param models .
-#' @param stats_baseline .
-#' @param stats_compare With several models (a predictor-subset list), add a
-#'   likelihood-ratio / F / Wald comparison-test footer row: "compare_baseline"
-#'   tests each model against the chosen baseline model, "sequential" against
-#'   the previous one (an AIC difference when not nested).
-#' @param stats_checks Also run the model checks that have to refit the model
-#'   (linearity of a numeric predictor, proportional odds). They are off by
-#'   default because they dominate the cost of a table; everything else in the
-#'   model-summary footer is always shown.
 #' @param na "drop_by_outcome" (default) fits every model OF ONE OUTCOME on
 #'   the same complete cases, which is what makes the observed columns
 #'   comparable to the model beside them and lets the likelihood-ratio
@@ -695,6 +660,11 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   column at all.
 #' @param cleannames Strip numeric prefixes from factor level labels.
 #' @param subtext A free note printed below the table.
+#' @param theme How the table is painted, in the results panel and in every
+#'   export.  \code{"light"} is the colour palette; \code{"print_ready"} says
+#'   the same thing  typographically --- bold, italics, underlines and marks
+#'   instead of blue and red ---  for a page that has no colour. See
+#'   \code{\link{tab_css}}.
 #' @param wrap_rows .
 #' @param wrap_cols .
 #' @param export_format .
@@ -709,10 +679,10 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param resetPath Reset the folder and file name to their defaults (your
 #'   Documents folder and "Regression").
 #' @param xl_check Excel export only: draw the model-check plots
-#'   (\code{reg_check_plots()}) under each table in the workbook. \code{"auto"}
-#'   takes the panels that apply to the fitted family, \code{"all"} adds
-#'   dispersion and collinearity. Needs \code{ggplot2} and \code{gridExtra};
-#'   without them the export says so and writes the table alone.
+#'   (\code{reg_check_plots()}) under each table in the workbook --- the panels
+#'   that apply to the fitted family (\code{tab_xl(check = "auto")}). Needs
+#'   \code{ggplot2} and \code{gridExtra}; without them the export says so and
+#'   writes the table alone.
 #' @param xl_replace "Set to \code{TRUE} to overwrite an existing file."
 #' @return A results object containing:
 #' \tabular{llllll}{
@@ -734,11 +704,8 @@ jmvtabreg <- function(
     trials = NULL,
     effect = "auto",
     measure = "auto",
-    empirical = "no",
+    empirical = TRUE,
     models = NULL,
-    stats_baseline = 1,
-    stats_compare = "none",
-    stats_checks = FALSE,
     na = "drop_by_outcome",
     run_compare = FALSE,
     levels_collapse = NULL,
@@ -755,6 +722,7 @@ jmvtabreg <- function(
     n = "range",
     cleannames = TRUE,
     subtext = "",
+    theme = "light",
     wrap_rows = 35,
     wrap_cols = 15,
     export_format = "excel",
@@ -762,7 +730,7 @@ jmvtabreg <- function(
     export_dir = "~/Documents",
     export_filename = "Reg_model",
     resetPath = FALSE,
-    xl_check = "no",
+    xl_check = FALSE,
     xl_replace = FALSE) {
 
     if ( ! requireNamespace("jmvcore", quietly=TRUE))
@@ -795,9 +763,6 @@ jmvtabreg <- function(
         measure = measure,
         empirical = empirical,
         models = models,
-        stats_baseline = stats_baseline,
-        stats_compare = stats_compare,
-        stats_checks = stats_checks,
         na = na,
         run_compare = run_compare,
         levels_collapse = levels_collapse,
@@ -814,6 +779,7 @@ jmvtabreg <- function(
         n = n,
         cleannames = cleannames,
         subtext = subtext,
+        theme = theme,
         wrap_rows = wrap_rows,
         wrap_cols = wrap_cols,
         export_format = export_format,

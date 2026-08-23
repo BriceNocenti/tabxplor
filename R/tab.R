@@ -316,6 +316,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
   # names: see shape_rename_transformed() (R/var-shape.R) for why a display label will not do.
   .rn      <- shape_rename_transformed(data, col_var, shape)
   data     <- .rn$data ; col_var <- .rn$vars ; shape <- .rn$shape
+  shape_renames <- .rn$renames
 
   sup_cols_quo <- .dots$sup_cols
   if (is.null(sup_cols_quo) || quo_miss_na_null_empty_no(sup_cols_quo)) {
@@ -426,7 +427,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
            base_n = base_n, add_pct = add_pct,
            subtext = subtext, n_min = n_min,
            spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
-           shape = shape, shape_name = shape_name,
+           shape = shape, shape_name = shape_name, .shape_renames = shape_renames,
            .cache = .cache, .defer_level_merge = .defer_level_merge,
            .levels_order = .levels_order, .levels_collapse = .levels_collapse)
 
@@ -745,6 +746,9 @@ new_ctx <- function(...) {
     subtext = "", n_min = 0, by_table = FALSE,
     spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
     shape = NULL, shape_name = TRUE,
+    # a numeric-keeping shape RENAMES its column (`log_age`); this is the new name -> its source, so
+    # anything fingerprinting a column BY NAME (the jamovi cache keys) can find what it came from.
+    shape_renames = character(0),
     cache_env = NULL, defer_level_merge = FALSE, levels_order = NULL,
 
     # --- STAGE PRODUCTS: written by one stage, read by a later one -----------------------------
@@ -821,7 +825,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       digits = 0, subtext = "", n_min = 0,
                       .by_table = FALSE,
                       spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
-                      shape = NULL, shape_name = TRUE,
+                      shape = NULL, shape_name = TRUE, .shape_renames = character(0),
                       .cache = NULL, .defer_level_merge = FALSE,
                       .levels_order = NULL, .levels_collapse = NULL,
 
@@ -868,7 +872,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     digits = digits,
     subtext = subtext, n_min = n_min, by_table = .by_table,
     spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
-    shape = shape, shape_name = shape_name,
+    shape = shape, shape_name = shape_name, shape_renames = .shape_renames,
     cache_env = .cache, defer_level_merge = .defer_level_merge,
     levels_order = .levels_order
   )

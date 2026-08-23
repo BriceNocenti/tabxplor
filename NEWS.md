@@ -23,8 +23,9 @@
 * **A numeric row or tab variable is now grouped, not exploded.** `tab(data, age, y)` used to make
   one row per distinct value; it now cuts `age` into four bands at its mean and one standard
   deviation either side (one row per value is kept for a counted number or a short scale), and says
-  which it chose. The new `shape` argument decides it explicitly --- `"quartiles"`, `"quintiles"`, a
-  number of groups, `"sd_bands"`, `"levels"`, or `"log"` / `"sqrt"` for a column variable --- and is
+  which it chose. The new `shape` argument decides it explicitly --- `"median"`, `"terciles"`,
+  `"quartiles"`, `"quintiles"`, `"deciles"`, a number of groups, `"sd_bands"`, `"levels"`, or
+  `"log"` / `"sqrt"` for a column variable --- and is
   the same vocabulary [tab_reg()] already took. The new `shape_numeric_var()` applies it to one
   vector.
 
@@ -66,6 +67,12 @@
 
 * `tab_reg(shape =)` gains `"sd_bands"`: cut a continuous predictor at the mean and one standard
   deviation either side, with labels carrying both the real cut points and the mean/SD scale.
+
+* `tab_reg(measure =)`'s fourth value is `"coefficient"` --- the model's own coefficient,
+  un-transformed. It replaces `"log"` (still accepted as a spelling, with `"log_odds"` /
+  `"log_risk"` / `"log_rate"`) and, unlike it, answers for every family: on a model that is already
+  additive there is nothing to un-exponentiate, so it is the additive estimate itself. One table
+  mixing a logistic and a linear outcome can therefore be asked for its coefficients.
 
 * `tab_html()` now escapes row labels, so an ordinary level like `Arts & Humanities` no longer emits
   invalid HTML (column headers were already escaped).

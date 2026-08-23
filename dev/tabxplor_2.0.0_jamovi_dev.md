@@ -1783,3 +1783,90 @@ and the 37 new French strings are filled in (199/228 translated; the rest are ar
 English on purpose). What remains is the **live click-through** — the Model table's two headed
 columns, the greying of `measure` / `effect` against a mixed-family outcome set, the Interactions
 box, the crosstab `display` ComboBox, and an Excel export with `check = "auto"`.
+
+---
+
+## Phase 22g-iii — the panels ask what the API asks (2026-08-23)
+
+The maintainer's click-through of the 22g-i build. Everything below is a fact that cost time to
+establish; the layout itself is in the `.u.yaml` files and needs no second telling.
+
+### `visible: false` is the way to hide a state carrier
+
+Both analyses persist their live-UI store in a 0-size `Image` result element, because only an Image's
+`$state` survives the engine reset. `height: 1` still reserved a slot, and two of them under a table
+is a visible band of nothing. `visible: false` removes it, and it is **safe for the store**:
+`jmvcore`'s `ResultsElement$asProtoBuf()` writes `state` in a branch of its own, independent of the
+`visible` field it computes just above — so the round-trip is untouched. The compiler agrees: the
+`Image` schema (`jmvtools/node_modules/jamovi-compiler/schemas/resultelementschemas.yaml`) lists
+`visible: boolean | string`. ⚠ The schema also claims `height` has `min: 32`, which is not a
+JSON-Schema keyword and is not enforced — `height: 1` has always compiled.
+
+### A pre-aggregate recode MUST be in the tier-1 keys, and a rename hides its fingerprint
+
+`shape` is the second thing jamovi can change that recodes a column **before** it is counted (the
+level merge was the first). `ce$fp_map` fingerprints the **raw** columns in `jmvtab_build()`, so
+without a key entry a cut would be served the un-cut aggregate. Both now travel as ONE per-variable
+slot (`jmv_cache_aggregate()`'s `recode()`), in the tier-1a, tier-1b and tier-2 keys.
+
+⚠ **The trap is the rename, and it is silent.** A numeric-keeping shape (`log` / `sqrt`) on a column
+variable renames its column to `log_age`, so the tier-1b key's `msr` is `log_age` while
+`fp[["log_age"]]` is `NULL` — and `list(a = 1)[["b"]]` returns **NULL, not an error**, so the source
+column's fingerprint drops silently out of the key and an edit to `age` would not move it.
+`shape_rename_transformed()` therefore returns its `renames` map, `tab()` puts it on the ctx, and
+every fingerprint lookup in the aggregate goes through it.
+
+### `"auto"` is not a `shape` value
+
+`shape_value()` aborts on it: `"auto"` is the *filling rule* for a numeric row/tab variable the user
+did not name, i.e. the **absence** of an entry. Both pickers lead with it and store nothing for it,
+exactly as the regression picker has always stored nothing for `"linear"`.
+
+### The two shape lists are derived, not written
+
+`dev/generate_jamovi_js.R` emits `TABX_SHAPES_INDEX` (a row/tab variable can only be CUT) and
+`TABX_SHAPES_COL` (a column variable may also keep a number) from `VAR_SHAPES$produces` — the same
+fact `shape_refuse_numeric_index()` enforces R-side. Adding a shape row is still one line.
+
+### What a widget's width moves with
+
+The level box changed width on nearly every click, and all three causes were in one style string:
+`grid-template-columns: 1fr auto minmax(96px,1fr)` sized column 2 to the tick-box (so it moved the
+moment one appeared) and grew column 3 with whatever was typed in it, while `overflow-y: auto` took
+width away when the list got long enough to scroll. The cure is fixed pixels on the two right
+columns, `width: 100%`, and **`scrollbar-gutter: stable`** (Chromium 94+, which jamovi's Electron
+is well past).
+
+### `stats =` had to go, not be relabelled
+
+Phase 22g-ii made the model comparison automatic, so `stats_compare = "none"` produced a comparison —
+a picker naming the opposite of what it did. All three controls are deleted (`stats_compare`,
+`stats_baseline`, `stats_checks`) and `jmvtab_reg_stats()` with them; the panel sends `stats = NULL`,
+which is `tab_reg()`'s own default. `stats_checks` was only ever needed because the old digest hid
+the fit-based footer rows, and Phase 22j's eager stage removed that reason.
+⚠ **`forceNaForCompare()` had to be re-keyed, not deleted**: it watched `stats_compare`, and without
+it a user comparing under `na = "drop_by_model"` silently gets a bare ΔAIC instead of an LR test. It
+reads the model-card COUNT now.
+
+### One predictor list with several outcomes is a per-outcome table
+
+`is_comparison <- is.list(predictors)` (`R/reg-resolve.R`), and a comparison must have ONE outcome —
+so a single model card beside two outcomes had to arrive as a character VECTOR, not a one-element
+list. `jmvtab_reg_models(..., flatten =)` does that; the card's typed name is what it costs. Two
+cards and two outcomes is still refused, and the message now names both cures.
+
+### The `.js` gained a shared column fetch
+
+Three near-identical `requestData("column", …)` blocks per file (the level tree, the reference
+picker, the ref2 section) are one `fetchLevels(ui, ctrlName, v)`. It caches `measureType` beside the
+labels, which is what an ordinal predictor's greyed ▲/▼ and a continuous one's `shape` row both read.
+
+### A `*_OF_RADIO` map is a third place a value lives
+
+`jmvtabreg.js` maps a radio's **control name** to the value it sets (`MEASURE_OF_RADIO`,
+`EFFECT_OF_RADIO`), which is what `applyModelEnables()` greys against. Re-ordering `measure` moved
+every pair, and **nothing could see it**: the `.a.yaml` still declared five values, the `.u.yaml`
+still offered five buttons, so the coverage rule stayed green while the wrong buttons greyed.
+`test-jamovi-vocabulary.R` now reads those object literals out of the source and compares them
+against the `(name, optionPart)` pairs the `.u.yaml` declares. **Reordering a List is not a
+cosmetic change** while a map keys on `<option>_<n>`.

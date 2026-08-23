@@ -23,6 +23,9 @@
 #     stripped table may name the row variable nowhere else.
 #   - `cut()` is always called `right = FALSE, include.lowest = TRUE`, so every label is the
 #     paren-free `[a,b)` form: cleannames_condition() (R/utils.R) strips any balanced ` (...)` group.
+#   - A TRANSFORM RENAMES ITS COLUMN, and shape_rename_transformed() returns that map (`renames`)
+#     BECAUSE a fingerprint keyed on a column name would otherwise lose the source it came from --
+#     which is exactly what the jamovi cache keys do (R/jmvtab-cache.R, via ctx$shape_renames).
 # See: CLAUDE.md § tabxplor architecture; R/reg-assumptions.R (the quadratic term and the checks
 #   whose cure `shape` is).
 
@@ -49,6 +52,12 @@ VAR_SHAPES <- list(
     "levels", "factor", "tab",
     doc = paste("one level per distinct value, in numeric order. Right for a counted number or a",
                 "1-7 scale; unreadable for a continuous one, which is what `\"auto\"` decides.")),
+  median = .vshape(
+    "quantiles", "factor", c("tab", "tab_reg"), k = 2L,
+    doc = "two groups of equal size, cut at the median --- the coarsest reading of a number."),
+  terciles = .vshape(
+    "quantiles", "factor", c("tab", "tab_reg"), k = 3L,
+    doc = "three groups of equal size."),
   quartiles = .vshape(
     "quantiles", "factor", c("tab", "tab_reg"), k = 4L,
     doc = paste("four groups of equal size. The counts are balanced, so every group answers on a",
@@ -56,6 +65,10 @@ VAR_SHAPES <- list(
   quintiles = .vshape(
     "quantiles", "factor", c("tab", "tab_reg"), k = 5L,
     doc = "five groups of equal size."),
+  deciles = .vshape(
+    "quantiles", "factor", c("tab", "tab_reg"), k = 10L,
+    doc = paste("ten groups of equal size. Reads a gradient, but ten rows need a large sample to",
+                "keep each base usable.")),
   sd_bands = .vshape(
     "bands", "factor", c("tab", "tab_reg"),
     doc = paste("four bands cut at the mean and one standard deviation either side. Each level",
@@ -642,19 +655,24 @@ shape_var_labels <- function(var_labels, shapes) {
 #' @keywords internal
 #' @noRd
 shape_rename_transformed <- function(data, vars, shape) {
-  if (is.null(shape) || length(shape) == 0L || length(vars) == 0L) return(list(data = data, vars = vars, shape = shape))
+  none <- list(data = data, vars = vars, shape = shape, renames = character(0))
+  if (is.null(shape) || length(shape) == 0L || length(vars) == 0L) return(none)
   specs <- tryCatch(shape_resolve(shape, data, vars, "tab"), error = function(e) list())
   ren   <- character(0)
   for (v in intersect(names(specs), vars)) {
     mk <- shape_colname(specs[[v]]$kind, v)
     if (!is.na(mk) && !mk %in% names(data)) ren[[v]] <- mk
   }
-  if (length(ren) == 0L) return(list(data = data, vars = vars, shape = shape))
+  if (length(ren) == 0L) return(none)
   names(data)[match(names(ren), names(data))] <- unname(ren)
   vars[match(names(ren), vars)] <- unname(ren)
   nm <- names(shape)
   if (!is.null(nm)) names(shape)[nm %in% names(ren)] <- unname(ren[nm[nm %in% names(ren)]])
-  list(data = data, vars = vars, shape = shape)
+  # WARNING: the NEW name -> the source column it came from. Anything that fingerprints a column by
+  # name (the jamovi cache keys) must look the source up through this, or `log_age` would carry no
+  # fingerprint at all and an edit to `age` would not move the key.
+  list(data = data, vars = vars, shape = shape,
+       renames = stats::setNames(names(ren), unname(ren)))
 }
 
 # `log` / `sqrt` keep the column a NUMBER, and a number on the row or tab axis has no reading -- it

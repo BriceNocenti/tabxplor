@@ -23,6 +23,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             ref_levels = NULL,
             levels_order = NULL,
             levels_collapse = NULL,
+            shape = NULL,
             ref = "auto",
             ref2 = "first",
             comp = "tab",
@@ -33,6 +34,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             ci_method_diff = "newcombe",
             ci_method_mean_diff = "welch",
             ci_method_mean_ratio = "robust",
+            theme = "light",
             totaltab = "line",
             wrap_rows = 35,
             wrap_cols = 15,
@@ -217,6 +219,21 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                             template=jmvcore::OptionString$new(
                                 "levels",
                                 NULL)))))
+            private$..shape <- jmvcore::OptionArray$new(
+                "shape",
+                shape,
+                hidden=TRUE,
+                default=NULL,
+                template=jmvcore::OptionGroup$new(
+                    "shape",
+                    NULL,
+                    elements=list(
+                        jmvcore::OptionVariable$new(
+                            "var",
+                            NULL),
+                        jmvcore::OptionString$new(
+                            "shape",
+                            NULL))))
             private$..ref <- jmvcore::OptionString$new(
                 "ref",
                 ref,
@@ -285,6 +302,13 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "quasipoisson",
                     "poisson"),
                 default="robust")
+            private$..theme <- jmvcore::OptionList$new(
+                "theme",
+                theme,
+                options=list(
+                    "light",
+                    "print_ready"),
+                default="light")
             private$..totaltab <- jmvcore::OptionList$new(
                 "totaltab",
                 totaltab,
@@ -403,6 +427,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..ref_levels)
             self$.addOption(private$..levels_order)
             self$.addOption(private$..levels_collapse)
+            self$.addOption(private$..shape)
             self$.addOption(private$..ref)
             self$.addOption(private$..ref2)
             self$.addOption(private$..comp)
@@ -413,6 +438,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..ci_method_diff)
             self$.addOption(private$..ci_method_mean_diff)
             self$.addOption(private$..ci_method_mean_ratio)
+            self$.addOption(private$..theme)
             self$.addOption(private$..totaltab)
             self$.addOption(private$..wrap_rows)
             self$.addOption(private$..wrap_cols)
@@ -447,6 +473,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ref_levels = function() private$..ref_levels$value,
         levels_order = function() private$..levels_order$value,
         levels_collapse = function() private$..levels_collapse$value,
+        shape = function() private$..shape$value,
         ref = function() private$..ref$value,
         ref2 = function() private$..ref2$value,
         comp = function() private$..comp$value,
@@ -457,6 +484,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ci_method_diff = function() private$..ci_method_diff$value,
         ci_method_mean_diff = function() private$..ci_method_mean_diff$value,
         ci_method_mean_ratio = function() private$..ci_method_mean_ratio$value,
+        theme = function() private$..theme$value,
         totaltab = function() private$..totaltab$value,
         wrap_rows = function() private$..wrap_rows$value,
         wrap_cols = function() private$..wrap_cols$value,
@@ -490,6 +518,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..ref_levels = NA,
         ..levels_order = NA,
         ..levels_collapse = NA,
+        ..shape = NA,
         ..ref = NA,
         ..ref2 = NA,
         ..comp = NA,
@@ -500,6 +529,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..ci_method_diff = NA,
         ..ci_method_mean_diff = NA,
         ..ci_method_mean_ratio = NA,
+        ..theme = NA,
         ..totaltab = NA,
         ..wrap_rows = NA,
         ..wrap_cols = NA,
@@ -540,7 +570,8 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 title="",
                 width=1080,
                 height=1,
-                renderFun=".plot"))}))
+                renderFun=".plot",
+                visible=FALSE))}))
 
 jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     "jmvtabBase",
@@ -643,6 +674,7 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param ref_levels .
 #' @param levels_order .
 #' @param levels_collapse .
+#' @param shape .
 #' @param ref The reference cell to calculate differences and ratios   (used
 #'   to print \code{colors}) :   \itemize{    \item \code{"auto"}: by default,
 #'   cell difference from the corresponding total    (rows or cols depending on
@@ -693,6 +725,11 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   of the variable, i.e. the interval a linear model gives that coefficient).
 #' @param ci_method_mean_ratio The confidence-interval method for a ratio of
 #'   numeric means (means with \code{ci = "ratio"}).
+#' @param theme How the table is painted, in the results panel and in every
+#'   export.  \code{"light"} is the colour palette; \code{"print_ready"} says
+#'   the same thing  typographically --- bold, italics, underlines and marks
+#'   instead of blue and red ---  for a page that has no colour. See
+#'   \code{\link{tab_css}}.
 #' @param totaltab The total table, if there are subtables/groups   (i.e. when
 #'   \code{tab_vars} is provided). Vectorised over \code{row_vars}.  \itemize{
 #'   \item \code{"line"}: by default, add a general total line (necessary for
@@ -765,6 +802,7 @@ jmvtab <- function(
     ref_levels = NULL,
     levels_order = NULL,
     levels_collapse = NULL,
+    shape = NULL,
     ref = "auto",
     ref2 = "first",
     comp = "tab",
@@ -775,6 +813,7 @@ jmvtab <- function(
     ci_method_diff = "newcombe",
     ci_method_mean_diff = "welch",
     ci_method_mean_ratio = "robust",
+    theme = "light",
     totaltab = "line",
     wrap_rows = 35,
     wrap_cols = 15,
@@ -826,6 +865,7 @@ jmvtab <- function(
         ref_levels = ref_levels,
         levels_order = levels_order,
         levels_collapse = levels_collapse,
+        shape = shape,
         ref = ref,
         ref2 = ref2,
         comp = comp,
@@ -836,6 +876,7 @@ jmvtab <- function(
         ci_method_diff = ci_method_diff,
         ci_method_mean_diff = ci_method_mean_diff,
         ci_method_mean_ratio = ci_method_mean_ratio,
+        theme = theme,
         totaltab = totaltab,
         wrap_rows = wrap_rows,
         wrap_cols = wrap_cols,

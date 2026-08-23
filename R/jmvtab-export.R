@@ -336,7 +336,7 @@ tab_html_string <- function(tabs, wrap_rows = 35, wrap_cols = 15, standalone = T
 #' @keywords internal
 #' @noRd
 jmvtab_export <- function(tabs, format = c("excel", "html", "md"), path, replace = FALSE,
-                          check = FALSE, data = NULL, ...) {
+                          check = FALSE, data = NULL, theme = NULL, ...) {
   format <- match.arg(format)
 
   # Pre-flight, friendly checks (concise, non-expert). These run BEFORE the writer so the common
@@ -373,10 +373,10 @@ jmvtab_export <- function(tabs, format = c("excel", "html", "md"), path, replace
     # `check` / `data` are the model-check plots: Excel only, and a crosstab silently takes none.
     # tab_xl() owns the ggplot2 / gridExtra guard, so nothing is tested twice here.
     excel = tab_xl(tabs, path = path, sheets = "unique", open = FALSE, replace = TRUE,
-                   check = check, data = data),
+                   check = check, data = data, theme = theme),
     # Phase 10e: html export is self-contained (one <table> + one <style>).
-    html  = writeLines(tab_html_string(tabs, ...), path),
-    md    = tab_md(tabs, file = path, print = FALSE)
+    html  = writeLines(tab_html_string(tabs, theme = theme, ...), path),
+    md    = tab_md(tabs, file = path, print = FALSE, theme = theme)
   )
   invisible(path)          # the path REALLY written (auto-numbered), for the caller's status message
 }
@@ -420,16 +420,26 @@ jmv_backend_export <- function(self, tabs) {
   # The model-check plots (Regressions only -- jmvtab declares no `check`, so it reads back NULL and
   # the export takes none). `data` is what tab_xl() would otherwise have to recover from the call
   # that built the table; here the module already holds it.
-  chk <- self$options$xl_check %||% "no"
-  chk <- if (identical(chk, "no")) FALSE else chk
+  chk <- self$options$xl_check
+  chk <- if (isTRUE(chk)) "auto" else FALSE
   tryCatch({
     actual <- jmvtab_export(tabs, format = fmt, path = p, replace = self$options$xl_replace,
-                            check = chk, data = if (isFALSE(chk)) NULL else self$data)
+                            check = chk, data = if (isFALSE(chk)) NULL else self$data,
+                            theme = jmv_backend_theme(self))
     export_status_html(actual, ok = TRUE)
   }, error = function(err) {
     export_status_html(conditionMessage(err), ok = FALSE)
   })
 }
+
+# The palette the panel asks for. ⚠ DELIBERATELY read here and not in `.opts()`: a theme is applied
+# at RENDER, never at build, and `.opts()` IS the tier-3 cache key's complement (JMV_TAB3_REAPPLIED
+# is a negative set), so putting it there would make a palette flip rebuild the whole table.
+# `"print_ready"` is resolved per table by tx_theme_for_table() -- print_marks for a crosstab,
+# print_emphasis for a regression -- so the one value is right for both analyses.
+#' @keywords internal
+#' @noRd
+jmv_backend_theme <- function(self) self$options$theme %||% "light"
 
 # Render a built tab (or list of tabs) to standalone HTML for the jamovi results iframe: the Phase 10e
 # dependency-free html engine (inline CSS) wrapped in a scroll box.
@@ -446,7 +456,8 @@ jmv_backend_render_html <- function(self, tabs) {
   tab_html(
     tabs,
     wrap_rows = self$options$wrap_rows,
-    wrap_cols = self$options$wrap_cols
+    wrap_cols = self$options$wrap_cols,
+    theme     = jmv_backend_theme(self)
   ) |>
     tab_render_scrollbox()
 }

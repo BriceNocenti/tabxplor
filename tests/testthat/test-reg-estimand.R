@@ -239,13 +239,17 @@ test_that("the measure aliases work both ways and `log` pins its base", {
   expect_null(reg_measure_key("MR"))          # a fit key names a MODEL: it belongs to `link`
   expect_null(reg_measure_key("risk_ratio"))  # the taught long form is the concept word
   expect_null(reg_measure_key("d"))           # a one-letter acronym gets no lowercase twin
-  # bare "log" logs whatever the cascade would report; log_risk pins the risk-ratio base
-  expect_identical(reg_estimand("binomial", measure = "log")$word,      "OR")
-  expect_identical(reg_estimand("binomial", measure = "log_risk")$word, "RR")
-  expect_identical(reg_estimand("binomial", link = "ratio", measure = "log")$fit, "rr")
-  # a log of an additive coefficient is not a thing, and says so rather than silently answering
-  expect_identical(reg_estimand("gaussian", measure = "log", effect = "conditional")$status,
-                   "impossible")
+  # bare "coefficient" takes whatever the cascade would report; log_risk pins the risk-ratio base
+  expect_identical(reg_estimand("binomial", measure = "coefficient")$word,  "OR")
+  expect_identical(reg_estimand("binomial", measure = "log")$word,          "OR")   # a spelling
+  expect_identical(reg_estimand("binomial", measure = "log_risk")$word,     "RR")
+  expect_identical(reg_estimand("binomial", link = "ratio", measure = "coefficient")$fit, "rr")
+  # Phase 22g-iii: `coefficient` is TOTAL. On a link that is ALREADY additive there is nothing to
+  # un-exponentiate, so it falls through to the additive row itself rather than refusing -- which is
+  # what lets one table mixing a logistic and a linear outcome be asked for its coefficients.
+  g <- reg_estimand("gaussian", measure = "coefficient", effect = "conditional")
+  expect_identical(g$status, "ok")
+  expect_identical(g, reg_estimand("gaussian", measure = "difference", effect = "conditional"))
 })
 
 test_that("reg_measures() lists an outcome's estimands at ONE link, with a status for each", {

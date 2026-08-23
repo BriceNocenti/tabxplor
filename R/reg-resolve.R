@@ -288,8 +288,12 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   # a named list -> model-comparison ; a character vector -> one model per outcome
   is_comparison <- is.list(predictors)
   if (is_comparison && length(outcome) != 1L) {
-    cli::cli_abort(c("With a list of models in {.arg predictors}, {.arg outcome} must be a single name.",
-                     "i" = "A vector of outcomes is for the one-model-per-outcome mode."), call = NULL)
+    cli::cli_abort(c(
+      "A model comparison is one {.arg outcome}, but {length(outcome)} were named.",
+      "x" = "{.arg predictors} lists {length(predictors)} model{?s} to compare, and {.arg outcome} \
+             names {.val {outcome}}.",
+      "i" = "Keep ONE outcome to compare the models, or ONE list of predictors to get one model \
+             per outcome."), call = NULL)
   }
   if (!is_comparison && !is.character(predictors)) {
     cli::cli_abort("{.arg predictors} must be a character vector or a named list of character vectors.",

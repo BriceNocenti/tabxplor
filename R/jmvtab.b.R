@@ -15,7 +15,10 @@
 #     `ref` + `ref_levels` -> `ref`). `.opts()` is therefore a pass-through, not a translation
 #     table, and test-jamovi-vocabulary.R checks the rule (names, control names and `ui.<name>` in
 #     the .js alike). The declared exceptions are `lvs` (jmvcore::Options already has a levels()
-#     method) and the UI-only controls (export, wrap, models/run_compare).
+#     method) and the UI-only controls (export, wrap, theme, models/run_compare).
+#   - `theme` and the two `wrap_*` are read STRAIGHT off self$options, never through `.opts()`: they
+#     are applied at RENDER, and `.opts()` is the tier-3 cache key's complement, so a palette flip
+#     there would rebuild the whole table (R/jmvtab-export.R: jmv_backend_theme()).
 #   - The module runs in Jamovi's bundled R -- keep dependencies to what the package Imports/Suggests.
 #   - The cache lives ONLY in $state (survives the engine reset); never rely on R globals (§5.2).
 #   - Export (Excel / HTML / Markdown; Phase 7g) resolves a typed path (Documents default) and
@@ -124,6 +127,10 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # `.levels_collapse`; applied PRE-aggregate in tab_prepare(), so it changes the cells, the
         # bases and the test (a tier-1 cache miss, by design).
         levels_collapse = lvl_collapse,
+        # Phase 22g-iii: how a NUMERIC variable becomes rows / columns, from the same control ->
+        # tab()'s `shape`. Like the merge it is a PRE-aggregate recode, so it sits in the tier-1
+        # keys and a change misses them (jmv_cache_aggregate()); "auto" is stored as no entry.
+        shape        = jmvtab_shape_vector(self$options$shape),
         comp         = self$options$comp,
         ci           = self$options$ci %||% "auto",
         conf_level   = self$options$conf_level,

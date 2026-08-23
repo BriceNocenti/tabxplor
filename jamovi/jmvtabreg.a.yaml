@@ -161,14 +161,14 @@ options:
       options:
         - title: "auto <i>(the family's usual measure)</i>"
           name:  auto
-        - title: "odds ratio (OR)"
-          name:  odds_ratio
-        - title: "ratio"
-          name:  ratio
         - title: "difference"
           name:  difference
-        - title: "log <i>(un-exponentiated coefficient)</i>"
-          name:  log
+        - title: "ratio"
+          name:  ratio
+        - title: "odds_ratio (OR)"
+          name:  odds_ratio
+        - title: "coefficient <i>(the model's own, un-transformed)</i>"
+          name:  coefficient
       default: auto
       description:
           R: >
@@ -181,28 +181,24 @@ options:
              \item \code{"odds_ratio"} / \code{"ratio"} / \code{"difference"}: the named measure,
              when the outcome's level can carry it. One it cannot says so, and lists what it does
              offer.
-             \item \code{"log"}: the same estimand, left un-exponentiated.
+             \item \code{"coefficient"}: the model's own coefficient, un-transformed --- the log
+             of the reported measure wherever that measure is multiplicative, and the additive
+             estimate itself on a model that is already additive.
             }
 
+    # ⚠ A Bool, not the four-value List `tab_reg()` takes: TRUE is the argument's own default and
+    # R decides WHERE the crude effect goes -- a column beside the model one, or the hover where a
+    # column would double an already wide table. Naming the place is expert work, and the one case
+    # jamovi can then not express (a multinomial with `"column"`) is expert work too.
     - name: empirical
-      title: empirical
-      type: List
-      options:
-        - title: "no <i>(the model effect alone)</i>"
-          name:  'no'
-        - title: "column <i>(a crude column beside the model one)</i>"
-          name:  column
-        - title: "cell <i>(the crude effect inside the model cell)</i>"
-          name:  cell
-      default: 'no'
+      title: empirical = <i>(show the observed effect)</i>
+      type: Bool
+      default: true
       description:
           R: >
            Show the crude, unadjusted, single-predictor effect beside each model effect --- the
            bivariate association that IS the modelised quantity when there is a single predictor, so
-           the gap between the two is what adjustment changed. \code{"column"} draws it as its own
-           column; \code{"cell"} folds it into the model cell instead, which is the default for a
-           3+ level outcome, where one model column would otherwise need one crude column per
-           category.
+           the gap between the two is what adjustment changed.
 
 # ================= Model comparison (+ predictor subsets) =================
     - name: models
@@ -220,39 +216,10 @@ options:
                 template:
                     type: Variable
 
-    - name: stats_baseline
-      title: "stats_baseline (model position)"
-      type: Integer
-      hidden: true
-      min: 1
-      default: 1
-
-    - name: stats_compare
-      title: stats_compare
-      type: List
-      options:
-        - { title: "none",                      name: none }
-        - { title: "vs a baseline model",       name: compare_baseline }
-        - { title: "sequential (vs prev.)",     name: compare_sequential }
-      default: none
-      description:
-          R: >
-           With several models (a predictor-subset list), add a likelihood-ratio / F / Wald
-           comparison-test footer row: "compare_baseline" tests each model against the chosen baseline
-           model, "sequential" against the previous one (an AIC difference when not nested).
-
-    # Phase 20f made the two model checks that REFIT the model (linearity, proportional odds) opt-in:
-    # they were 81-94% of a default call. `stats = "all"` is the one value that asks for everything,
-    # and it composes with a comparison key -- reg_resolve_stats(c("all", "compare_baseline")).
-    - name: stats_checks
-      title: 'stats = <i>"all"</i> (slow model checks)'
-      type: Bool
-      default: false
-      description:
-          R: >
-           Also run the model checks that have to refit the model (linearity of a numeric
-           predictor, proportional odds). They are off by default because they dominate the cost
-           of a table; everything else in the model-summary footer is always shown.
+    # ⚠ `stats =` HAS NO CONTROL, deliberately (Phase 22g-iii). Since 22g-ii tab_reg()'s own default
+    # already compares several predictor subsets against each other -- sequential where they nest,
+    # against the first otherwise -- so a picker offering "none" would have named the opposite of
+    # what it did. Naming the footer statistics one by one is R work; the panel asks nothing.
 
     - name: na
       title: na
@@ -500,6 +467,23 @@ options:
           R: >
            A free note printed below the table.
 
+# Other formatting
+    - name: theme
+      title: theme
+      type: List
+      options:
+        - title: "light <i>(colours)</i>"
+          name:  light
+        - title: "print_ready <i>(black and white, for publication)</i>"
+          name:  print_ready
+      default: light
+      description:
+          R: >
+           How the table is painted, in the results panel and in every export.
+            \code{"light"} is the colour palette; \code{"print_ready"} says the same thing
+            typographically --- bold, italics, underlines and marks instead of blue and red ---
+            for a page that has no colour. See \code{\link{tab_css}}.
+
     - name: wrap_rows
       title: "Wrap row labels at"
       type: Number
@@ -559,22 +543,15 @@ options:
     # collides with it ("symbol already has a regular binding") and the analysis cannot be built at
     # all -- the same trap that made `levels` become `lvs`. It sits beside `xl_replace` instead.
     - name: xl_check
-      title: "Model-check plots"
-      type: List
-      options:
-        - title: "no"
-          name:  "no"       # quoted: YAML 1.1 reads a bare `no` as the boolean FALSE
-        - title: "auto <i>(the usual panels)</i>"
-          name:  auto
-        - title: "all <i>(every applicable check)</i>"
-          name:  all
-      default: "no"
+      title: "assumption checks plots"
+      type: Bool
+      default: false
       description:
           R: >
            Excel export only: draw the model-check plots (\code{reg_check_plots()}) under each
-           table in the workbook. \code{"auto"} takes the panels that apply to the fitted family,
-           \code{"all"} adds dispersion and collinearity. Needs \code{ggplot2} and
-           \code{gridExtra}; without them the export says so and writes the table alone.
+           table in the workbook --- the panels that apply to the fitted family
+           (\code{tab_xl(check = "auto")}). Needs \code{ggplot2} and \code{gridExtra}; without
+           them the export says so and writes the table alone.
 
     - name: xl_replace
       title: ""

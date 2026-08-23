@@ -12,9 +12,13 @@
 #       list(tabs, store, hits). Kept engine-free so it is unit-testable without a live jamovi session.
 #       Picker folders map the hidden Array UI options into tab_reg() args: jmvtab_reg_ref_vector()
 #       (references), jmvtab_reg_models() (the model-comparison "+" builder -> `predictors` list or the
-#       flat pool), jmvtab_reg_mult_vector() (numeric-predictor scaling -> `multiplier`),
-#       jmvtab_reg_shape_vector() (per-predictor functional form -> `shape`), and the Model table's
-#       own jmvtab_reg_link_vector() (per-outcome link) beside its family / level / trials readers.
+#       flat pool -- and, with several outcomes, the FLAT pool even from one card, because a
+#       comparison is one outcome), jmvtab_reg_mult_vector() (numeric-predictor scaling ->
+#       `multiplier`), jmvtab_shape_vector() (the per-variable cut -> `shape`, SHARED with jmvtab),
+#       and the Model table's own jmvtab_reg_link_vector() (per-outcome link) beside its family /
+#       level / trials readers.
+#       ⚠ `stats =` has NO folder and no control: since Phase 22g-ii tab_reg()'s own default already
+#       compares several predictor subsets, so the panel asks nothing and NULL is what it sends.
 # KEY CONSTRAINTS:
 #   - jmvtabreg.h.R is GENERATED from jmvtabreg.a.yaml (jmvtools::prepare()); never hand-edit it.
 #   - Persist plain lists -- NEVER a live object bound to an env. A digest is one by construction
@@ -164,7 +168,12 @@ jmvtab_reg_cross_fold <- function(vars, keys) {
   vars
 }
 
-jmvtab_reg_models <- function(models, pool, cross_keys = character(0)) {
+# ⚠ `flatten` is the SEVERAL-OUTCOMES rule. `is_comparison <- is.list(predictors)` (R/reg-resolve.R),
+# and a comparison must have ONE outcome -- so a single card beside two outcomes has to arrive as a
+# character vector, i.e. as the ordinary per-outcome table it is. Its typed NAME is what that costs;
+# the column is named by its outcome there anyway. TWO cards and two outcomes is still refused, which
+# is right: there is no such table.
+jmvtab_reg_models <- function(models, pool, cross_keys = character(0), flatten = FALSE) {
   pool <- if (length(pool)) as.character(pool) else character()
   flat <- if (length(pool)) jmvtab_reg_cross_fold(pool, cross_keys) else NULL
   if (length(models) == 0L) return(flat)
@@ -176,42 +185,10 @@ jmvtab_reg_models <- function(models, pool, cross_keys = character(0)) {
   keep   <- vapply(built, length, integer(1)) > 0L
   built  <- built[keep]; labels <- labels[keep]
   if (length(built) == 0L) return(flat)
+  if (isTRUE(flatten) && length(built) == 1L) return(built[[1L]])
   blank  <- !nzchar(labels)
   labels[blank] <- paste0("model", seq_along(labels))[blank]
   stats::setNames(built, labels)
-}
-
-# THE `stats =` folder -- three controls, one argument (Phase 20c made the footer set, the model
-# comparison and its baseline ONE `tab_reg(stats =)`; Phase 20g-i named the controls after it).
-#   stats_compare  : the comparison KEY the user picks; the ComboBox values ARE the R keys, so
-#                    "none" -> NULL = tab_reg()'s own default footer set, untouched.
-#                    ⚠ SINCE 22g-ii THAT DEFAULT COMPARES: several `predictors` sets are tested
-#                    against each other automatically (sequential where the models nest, else vs the
-#                    first), so the ComboBox's "none" no longer says what it does. Phase 22g-iii
-#                    deletes this control outright, which is the fix -- do not paper over it here.
-#   stats_baseline : the baseline model POSITION, carried in the key's NAME when it is not the first
-#                    (`c(compare_baseline = "2")` -- the grammar `ref = c(var = "level")` also uses).
-#   stats_checks   : Phase 20f made the two checks that REFIT the model (linearity, proportional
-#                    odds) opt-in, because they were 80-90 % of a build. `"all"` is the one value
-#                    that asks for everything, and it COMPOSES with a comparison key --
-#                    reg_resolve_stats() strips the comparison and hands the rest on, so
-#                    c("all", "compare_baseline") is a full footer plus a test. ⚠ it is part of the
-#                    cache KEY (Phase 22j), because it decides which eager rows the record holds.
-#' @keywords internal
-#' @noRd
-jmvtab_reg_stats <- function(compare, baseline, checks = FALSE) {
-  cmp <- compare %||% "none"
-  key <- if (!nzchar(cmp) || identical(cmp, "none")) {
-    NULL
-  } else if (identical(cmp, "compare_sequential")) {
-    "compare_sequential"
-  } else {
-    # the spinner is a COLUMN POSITION; 1 is the default, and an unnamed key already means "the first"
-    bl <- suppressWarnings(as.integer(baseline %||% NA))
-    if (is.na(bl) || bl <= 1L) "compare_baseline" else c(compare_baseline = as.character(bl))
-  }
-  if (!isTRUE(checks)) return(key)
-  if (is.null(key)) "all" else c("all", key)
 }
 
 # Phase h: the staged-comparison gate. A model comparison (>=2 folded models) is heavy -- refitting
@@ -231,18 +208,20 @@ jmvtab_reg_staged <- function(models, predictors) {
 #' @noRd
 jmvtab_reg_compare_sig <- function(opts) jmv_hash(opts)
 
-# Fold the per-numeric-predictor shape picker (the jamovi `shape` Array of Group{var, shape}) into
-# tab_reg()'s `shape`. Blank / "linear" entries are dropped (linear is the default and needs no
-# entry); NULL when nothing was picked. Values come from VAR_SHAPES (R/var-shape.R), which is
-# also what the .a.yaml offers -- one vocabulary, checked by test-jamovi-vocabulary.R.
+# Fold the per-numeric-variable shape picker (the jamovi `shape` Array of Group{var, shape}) into
+# `shape =`. Blank / "linear" / "auto" entries are dropped -- "linear" is a col_var's default and
+# "auto" is not a value the parser accepts at all, it is the ABSENCE of one; NULL when nothing was
+# picked. Values come from VAR_SHAPES (R/var-shape.R), so the picker and the argument share one
+# vocabulary. ⚠ Producer-agnostic on purpose: BOTH backends call it (jmvtab since 22g-iii).
 #' @keywords internal
 #' @noRd
-jmvtab_reg_shape_vector <- function(shape) {
+jmvtab_shape_vector <- function(shape) {
   if (length(shape) == 0L) return(NULL)
   get1 <- function(e, k) { v <- e[[k]]; if (is.null(v)) NA_character_ else as.character(v) }
   vars <- vapply(shape, get1, character(1), k = "var")
   shp  <- vapply(shape, get1, character(1), k = "shape")
-  keep <- !is.na(vars) & nzchar(vars) & !is.na(shp) & nzchar(shp) & shp != "linear"
+  keep <- !is.na(vars) & nzchar(vars) & !is.na(shp) & nzchar(shp) &
+    !shp %in% c("linear", "auto")
   if (!any(keep)) return(NULL)
   stats::setNames(shp[keep], vars[keep])
 }
@@ -288,7 +267,7 @@ jmvtab_reg_dep_family <- function(family, dep, data) {
 
 # The link the user picked for this outcome, as tab_reg()'s own named vector. "auto" and blank
 # entries are DROPPED: "auto" is the default, so an entry for it would only make the fit key move.
-# Mirrors jmvtab_reg_shape_vector(), which drops "linear" for the same reason.
+# Mirrors jmvtab_shape_vector(), which drops "linear" for the same reason.
 #' @keywords internal
 #' @noRd
 jmvtab_reg_link_vector <- function(link) {
@@ -428,15 +407,19 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     tab_vars     = !!nz(opts$tab_vars),
     # a pass-through: the option's values ARE the argument's ("no" / "column" / "cell"), and an older
     # stored state may still carry the logical the checkbox used to send.
-    empirical    = if (is.logical(opts$empirical)) isTRUE(opts$empirical)
-                   else opts$empirical %||% "no",
-    # Phase 20c: `stats` IS what the module sends now, because the model comparison is one of its
-    # keys. NULL keeps its old meaning -- "the model-fit statistics that make sense for this family",
-    # which is what the picker wants and what tab_reg() computes by default -- so an unset comparison
-    # sends NULL exactly as before, and only a chosen one adds a key.
-    stats        = jmvtab_reg_stats(opts$stats_compare, opts$stats_baseline, opts$stats_checks),
+    # ⚠ Phase 22g-iii: a TICK-BOX, so TRUE is tab_reg()'s own default and R decides WHERE the crude
+    # effect goes. A character still passes through (the R API's four modes, and any `.omv` saved
+    # while the option was a List); NULL -- the generated .h.R lagging a .a.yaml edit -- takes the
+    # argument's default, which is TRUE.
+    empirical    = if (is.null(opts$empirical)) TRUE
+                   else if (is.logical(opts$empirical)) isTRUE(opts$empirical)
+                   else opts$empirical,
+    # ⚠ NO `stats =`: Phase 22g-iii deleted the three controls that folded into it. NULL is
+    # tab_reg()'s own default -- the model-fit statistics that make sense for this family, PLUS the
+    # automatic comparison 22g-ii installed (sequential where the subsets nest, else against the
+    # first). A picker offering "none" would have named the opposite of what it did.
     display      = opts$display %||% "auto",
-    shape        = jmvtab_reg_shape_vector(opts$shape),
+    shape        = jmvtab_shape_vector(opts$shape),
     color        = opts$color,
     color_signif = opts$color_signif,
     stars        = isTRUE(opts$stars),

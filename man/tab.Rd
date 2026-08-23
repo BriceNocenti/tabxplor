@@ -70,7 +70,8 @@ columns.
 }
 \strong{\code{shape}} How a \strong{numeric} variable enters the table. Cut it into groups and it
 becomes an ordinary factor --- one row (or one column) per group:
-\code{"quartiles"}, \code{"quintiles"}, an integer number of groups,
+\code{"median"}, \code{"terciles"}, \code{"quartiles"},
+\code{"quintiles"}, \code{"deciles"}, an integer number of groups,
 \code{"sd_bands"} (four bands at the mean and one standard deviation either
 side) or \code{"levels"} (one level per distinct value). \code{"log"} /
 \code{"sqrt"} keep it a number and are for \code{col_vars} only.

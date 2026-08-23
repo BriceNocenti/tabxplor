@@ -145,8 +145,8 @@ so and names the ones it can; resolved \strong{per outcome} like \code{family}.
 It takes \code{measure}'s spellings, acronyms included, plus the glm words (\code{"identity"}, \code{"log"},
 \code{"logit"}) and the internal fit keys \code{\link[=reg_formulas]{reg_formulas()}} reports in its \code{fit} column (\code{"rr"},
 \code{"rd"}, \code{"mr"}) --- so what the package printed can be typed straight back. ⚠ \code{"log"} is the one
-word the two arguments do not share: here it is the \strong{log link}, on \code{measure} it means
-\emph{un-exponentiated}.}
+word the two arguments do not share: here it is the \strong{log link}, on \code{measure} it is a spelling
+of \code{"coefficient"}.}
 
 \item{measure}{\strong{Which measure is reported} --- the one argument most readers ever set, and the
 one that never changes the model. \code{"auto"} (default) is the model's own measure: follow from
@@ -170,9 +170,13 @@ group, how often does the one from this group end up higher on the scale} --- wi
 probability itself in brackets, 50 \% being a coin flip. For a number per outcome category, use
 \code{family = "multinomial"}.
 \itemize{
-\item \code{"log"} (\code{"log_odds"}, \code{"log_risk"}, \code{"log_rate"}) --- the same estimand, \strong{un-exponentiated}.
-Bare \code{"log"} logs whatever the cascade would report; the precise spellings pin which base. The
-header names what it logs (\code{Model_log(OR)}), never one greek letter for five quantities.
+\item \code{"coefficient"} (\code{"coef"}, \code{"log"}, \code{"log_odds"}, \code{"log_risk"}, \code{"log_rate"}) --- \strong{the
+model's own coefficient, un-transformed}. Where the reported measure is multiplicative that
+is its log, and the header names what it logs (\code{Model_log(OR)}), never one greek letter for
+five quantities; where the model is already additive there is nothing to un-exponentiate and
+it IS the additive estimate. So it answers for every family --- which is what lets one table
+mixing a logistic and a linear outcome be asked for its coefficients at all. Bare
+\code{"coefficient"} takes whatever the cascade would report; the \verb{log_*} spellings pin which base.
 }
 
 \strong{Every acronym a header can print is an accepted spelling here} --- the list under \emph{The header
@@ -530,7 +534,7 @@ its label then says.
 It holds \strong{the quantity the column's effects operate on}, so it is read in one step: an odds
 ratio multiplies odds, so an odds column shows the baseline \emph{odds} (\code{1/1.51}) with the
 probability beside it (\verb{(40\%)}); a risk or rate ratio multiplies the level and a difference adds
-to it, so those show the \strong{level itself} --- \verb{39\%}, \code{40.8}, \code{2.9}; and \code{measure = "log"} shows
+to it, so those show the \strong{level itself} --- \verb{39\%}, \code{40.8}, \code{2.9}; and \code{measure = "coefficient"} shows
 the intercept on the link scale. It is a baseline, not a comparison, so it never carries a \code{+}
 or a \code{x} sign. It carries its confidence interval, and a \strong{star} only where what it prints has
 a null to be tested against (the odds and link scales, under \code{effect = "conditional"}): a
@@ -740,11 +744,11 @@ any other is computed from its predictions (\code{effect = "marginal"} or
 \code{"at_reference"}). Call \code{\link{reg_measures}()} on your outcome for the same
 table with its per-cell status.
 \itemize{
-\item \strong{gaussian} --- a cell is a mean. Models: \code{link = "difference"}, the default (linear regression); \code{link = "ratio"} (log-link mean regression (Poisson pseudo-likelihood, robust standard errors)). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"log"}.
-\item \strong{binomial} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (logistic regression); \code{link = "ratio"} (modified Poisson regression); \code{link = "difference"} (additive-risk regression (identity link, robust standard errors)). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"log"}.
-\item \strong{poisson} --- a cell is a count. Models: \code{link = "ratio"}, the default (Poisson regression). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"log"}.
-\item \strong{multinomial} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (multinomial logistic regression). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"log"}.
-\item \strong{ordinal} --- a cell is a position on an ordered scale. Models: \code{link = "odds_ratio"}, the default (ordinal logistic regression). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"odds_ratio"}, \code{"log"}.
+\item \strong{gaussian} --- a cell is a mean. Models: \code{link = "difference"}, the default (linear regression); \code{link = "ratio"} (log-link mean regression (Poisson pseudo-likelihood, robust standard errors)). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"coefficient"}.
+\item \strong{binomial} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (logistic regression); \code{link = "ratio"} (modified Poisson regression); \code{link = "difference"} (additive-risk regression (identity link, robust standard errors)). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"coefficient"}.
+\item \strong{poisson} --- a cell is a count. Models: \code{link = "ratio"}, the default (Poisson regression). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"coefficient"}.
+\item \strong{multinomial} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (multinomial logistic regression). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"coefficient"}.
+\item \strong{ordinal} --- a cell is a position on an ordered scale. Models: \code{link = "odds_ratio"}, the default (ordinal logistic regression). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"odds_ratio"}, \code{"coefficient"}.
 }
 }
 

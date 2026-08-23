@@ -4053,8 +4053,8 @@ reg_stage_finalize <- function(ctx) {
 #'   It takes `measure`'s spellings, acronyms included, plus the glm words (`"identity"`, `"log"`,
 #'   `"logit"`) and the internal fit keys [reg_formulas()] reports in its `fit` column (`"rr"`,
 #'   `"rd"`, `"mr"`) --- so what the package printed can be typed straight back. ⚠ `"log"` is the one
-#'   word the two arguments do not share: here it is the **log link**, on `measure` it means
-#'   *un-exponentiated*.
+#'   word the two arguments do not share: here it is the **log link**, on `measure` it is a spelling
+#'   of `"coefficient"`.
 #' @param measure **Which measure is reported** --- the one argument most readers ever set, and the
 #'   one that never changes the model. `"auto"` (default) is the model's own measure: follow from
 #'   the left. The full word is the canonical spelling and the discipline's acronym an accepted
@@ -4075,9 +4075,13 @@ reg_stage_finalize <- function(ctx) {
 #'   group, how often does the one from this group end up higher on the scale* --- with that
 #'   probability itself in brackets, 50 % being a coin flip. For a number per outcome category, use
 #'   `family = "multinomial"`.
-#'   * `"log"` (`"log_odds"`, `"log_risk"`, `"log_rate"`) --- the same estimand, **un-exponentiated**.
-#'     Bare `"log"` logs whatever the cascade would report; the precise spellings pin which base. The
-#'     header names what it logs (`Model_log(OR)`), never one greek letter for five quantities.
+#'   * `"coefficient"` (`"coef"`, `"log"`, `"log_odds"`, `"log_risk"`, `"log_rate"`) --- **the
+#'     model's own coefficient, un-transformed**. Where the reported measure is multiplicative that
+#'     is its log, and the header names what it logs (`Model_log(OR)`), never one greek letter for
+#'     five quantities; where the model is already additive there is nothing to un-exponentiate and
+#'     it IS the additive estimate. So it answers for every family --- which is what lets one table
+#'     mixing a logistic and a linear outcome be asked for its coefficients at all. Bare
+#'     `"coefficient"` takes whatever the cascade would report; the `log_*` spellings pin which base.
 #'
 #'   **Every acronym a header can print is an accepted spelling here** --- the list under *The header
 #'   acronyms* below is the same table this argument reads, so `"cumOR"`, `"D"` and `"WR"` work too,
@@ -4429,7 +4433,7 @@ reg_stage_finalize <- function(ctx) {
 #'   It holds **the quantity the column's effects operate on**, so it is read in one step: an odds
 #'   ratio multiplies odds, so an odds column shows the baseline *odds* (`1/1.51`) with the
 #'   probability beside it (`(40%)`); a risk or rate ratio multiplies the level and a difference adds
-#'   to it, so those show the **level itself** --- `39%`, `40.8`, `2.9`; and `measure = "log"` shows
+#'   to it, so those show the **level itself** --- `39%`, `40.8`, `2.9`; and `measure = "coefficient"` shows
 #'   the intercept on the link scale. It is a baseline, not a comparison, so it never carries a `+`
 #'   or a `x` sign. It carries its confidence interval, and a **star** only where what it prints has
 #'   a null to be tested against (the odds and link scales, under `effect = "conditional"`): a

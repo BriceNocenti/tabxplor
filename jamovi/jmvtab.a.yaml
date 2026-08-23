@@ -342,6 +342,23 @@ options:
                 template:
                     type: String
 
+    # The per-NUMERIC-variable cut, driven by the same levelsCtrl control: a number has no levels to
+    # reorder or merge, so its row in that box asks the one question it does raise -- how it becomes
+    # rows. Folded by jmvtab_shape_vector() -> tab(shape =). "auto" is stored as NO entry, because
+    # `shape = "auto"` is not a value the parser accepts: it is the absence of one.
+    - name: shape
+      title: "shape (per numeric variable)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: shape
+                type: String
+
     # Phase 7g-iii: the reference picker (refPickerCtrl) replaced the visible `ref` text box; this
     # option is kept `hidden` as the expert free-text fallback / read target of jmvtab_ref_vector().
     - name: ref
@@ -515,6 +532,22 @@ options:
 
 
 # Other formatting
+    - name: theme
+      title: theme
+      type: List
+      options:
+        - title: "light <i>(colours)</i>"
+          name:  light
+        - title: "print_ready <i>(black and white, for publication)</i>"
+          name:  print_ready
+      default: light
+      description:
+          R: >
+           How the table is painted, in the results panel and in every export.
+            \code{"light"} is the colour palette; \code{"print_ready"} says the same thing
+            typographically --- bold, italics, underlines and marks instead of blue and red ---
+            for a page that has no colour. See \code{\link{tab_css}}.
+
     - name: totaltab
       title: totaltab
       type: List
@@ -564,35 +597,35 @@ options:
       options:
         - title: "auto"
           name:  auto
-        - title: "n <i>(unweighted counts)</i>"
+        - title: "n <i>(counts)</i>"
           name:  "n"
         - title: "wn <i>(weighted counts)</i>"
           name:  wn
         - title: "pct <i>(percentages)</i>"
           name:  pct
-        - title: "value with its confidence interval"
+        - title: "base_ci <i>(value + interval)</i>"
           name:  base_ci
-        - title: "ci <i>(the interval alone)</i>"
+        - title: "ci <i>(interval alone)</i>"
           name:  ci
-        - title: "diff <i>(difference from the reference)</i>"
+        - title: "diff <i>(gap to the reference)</i>"
           name:  diff
         - title: "ratio <i>(ratio to the reference)</i>"
           name:  ratio
-        - title: "or <i>(odds ratios or relative risks ratios)</i>"
+        - title: "or <i>(odds ratios)</i>"
           name:  or
-        - title: "odds ratio, percentage in bracket"
+        - title: "or_base <i>(OR, % in bracket)</i>"
           name:  or_base
-        - title: "percentage, odds ratio in bracket"
+        - title: "base_or <i>(%, OR in bracket)</i>"
           name:  base_or
-        - title: "value, ratio to the reference in bracket"
+        - title: "base_ratio <i>(value, ratio in bracket)</i>"
           name:  base_ratio
-        - title: "ctr <i>(relative contributions to variance)</i>"
+        - title: "ctr <i>(contributions to variance)</i>"
           name:  ctr
-        - title: "mean <i>(mean, for numeric variables)</i>"
+        - title: "mean <i>(numeric variables)</i>"
           name:  mean
-        - title: "mean, standard deviation in bracket"
+        - title: "mean_sd <i>(mean, sd in bracket)</i>"
           name:  mean_sd
-        - title: "mean, coefficient of variation in bracket"
+        - title: "mean_cv <i>(mean, cv in bracket)</i>"
           name:  mean_cv
         - title: "var <i>(variance)</i>"
           name:  var

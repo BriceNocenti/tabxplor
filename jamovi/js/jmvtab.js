@@ -4,11 +4,13 @@
 // jus 3.0: use the GLOBAL `utils.clone` (the events `this` has no `.clone`, unlike jus 2.0).
 
 // --- BEGIN GENERATED (dev/generate_jamovi_js.R) -- do not edit ---
-// Generated from R/fmt_class.R (MEASURES) and R/tab-display.R (DISPLAY_TOKENS).
-// Re-run dev/generate_jamovi_js.R after changing them; the suite checks this block
-// (test-jamovi-vocabulary.R).
+// Generated from R/fmt_class.R (MEASURES), R/tab-display.R (DISPLAY_TOKENS) and
+// R/var-shape.R (VAR_SHAPES). Re-run dev/generate_jamovi_js.R after changing them;
+// the suite checks this block (test-jamovi-vocabulary.R).
 var TABX_MEASURE_ODDS_RATIO = "odds_ratio";
 var TABX_DISPLAY_ODDS_RATIO_FIELDS = ["or"];
+var TABX_SHAPES_INDEX = ["auto", "levels", "median", "terciles", "quartiles", "quintiles", "deciles", "sd_bands"];
+var TABX_SHAPES_COL = ["linear", "log", "sqrt", "levels", "median", "terciles", "quartiles", "quintiles", "deciles", "sd_bands"];
 // --- END GENERATED ---
 
 // The file extension shown after the file name on the path line -- follows the chosen format. Rendered
@@ -190,6 +192,10 @@ var TABX = {
     refName: "font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
     refSel:  "width:100%;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
     refNote: "opacity:0.6;font-style:italic;",
+    // a NUMERIC variable's row in the level box: name, ": numeric", and its `shape` drop-down. Same
+    // tint and border as a factor's <details>, so the two read as one list.
+    numRow:  "display:grid;grid-template-columns:max-content max-content 1fr;align-items:center;gap:8px;margin:4px 6px;padding:4px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
+    shapeSel:"width:100%;max-width:220px;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
     refHint: "padding:6px 8px 2px 8px;opacity:0.7;font-style:italic;"
 };
 
@@ -199,9 +205,10 @@ var TABX = {
 // rebuild during in-place reorder moves.
 var openState = {};       // "<axis|var>:<key>" -> open bool
 var levelsCache = {};     // var -> [labels] natural order | null (numeric/no-levels) | FETCHING sentinel
+var mtypeCache = {};      // var -> jamovi measureType ("nominal" | "ordinal" | "continuous" | "id")
 var FETCHING = {};
 var lastVarSig = null;    // reorder-tree variable signature
-var lastRefSig = null;    // ref-picker signature (vars + pct + color + OR + levels_order)
+var lastRefSig = null;    // ref-picker signature (vars + pct + color + shape + levels + OR)
 
 // A shared level-fetch completed (either control): re-render BOTH the reorder tree and the ref
 // picker, since they share `levelsCache` -- so a var whose levels one control fetched is not left
@@ -209,6 +216,30 @@ var lastRefSig = null;    // ref-picker signature (vars + pct + color + OR + lev
 var afterFetch = function(ui) {
     if (ui.levelsCtrl && ui.levelsCtrl.$el) renderTree(ui);
     if (ui.refPickerCtrl  && ui.refPickerCtrl.$el)  renderRefPicker(ui);
+};
+
+// THE column fetch, written once: the three renderers that need a column's levels all asked for the
+// same two properties with the same guard and the same catch. `measureType` is kept beside the
+// labels because an ORDERED factor may be merged but not reordered, and a CONTINUOUS one is offered
+// a `shape` instead of a level list -- both are facts about the column, not about the caller.
+var fetchLevels = function(ui, ctrlName, v) {
+    if (!v || (v in levelsCache) || !ui[ctrlName]) return;
+    levelsCache[v] = FETCHING;                       // guard against duplicate in-flight fetches
+    ui[ctrlName].requestData("column", { columnName: v, properties: ["measureType", "levels"] })
+        .then(function(col) {
+            mtypeCache[v]  = col ? col.measureType : "continuous";
+            levelsCache[v] = (!col || col.measureType === "continuous")
+                ? null : col.levels.map(function(l) { return l.label; });
+            afterFetch(ui);
+        })
+        .catch(function() {
+            mtypeCache[v] = "continuous"; levelsCache[v] = null; afterFetch(ui);
+        });
+};
+// The cached labels, or `undefined` while the fetch is in flight (which is what draws a placeholder).
+var cachedLevels = function(v) {
+    var c = (v in levelsCache) ? levelsCache[v] : undefined;
+    return (c === FETCHING) ? undefined : c;
 };
 
 // Phase 15c: a NON-collapsible titled box for the AXIS level of the reorder tree ("Row variables" /
@@ -257,6 +288,33 @@ var storedOrder = function(ui, v, natural) {
     return natural;
 };
 
+// --- the per-numeric-variable `shape` (the level box's numeric rows) --------------------------
+// Same get / write / reconcile idiom as levels_order above. ⚠ The DEFAULT is stored as NO entry:
+// on an index axis that default is `"auto"`, which `shape =` does not accept as a value at all (it
+// is the absence of one), and on a column axis it is `"linear"`. One rule, `defaultShape` being
+// whichever the axis leads with.
+var shapeSelected = function(ui, v) {
+    if (!ui.shape) return "";
+    var arr = utils.clone(ui.shape.value(), []);
+    for (var i = 0; i < arr.length; i++)
+        if (arr[i].var === v) return (arr[i].shape == null ? "" : String(arr[i].shape));
+    return "";
+};
+var writeShape = function(ui, v, sval, defaultShape) {
+    if (!ui.shape) return;
+    var arr = utils.clone(ui.shape.value(), []), kept = [];
+    for (var i = 0; i < arr.length; i++) if (arr[i].var !== v) kept.push(arr[i]);
+    if (sval && sval !== defaultShape) kept.push({ var: v, shape: String(sval) });
+    ui.shape.setValue(kept);
+};
+var reconcileShapes = function(ui, selected) {
+    if (!ui.shape) return;
+    var cur = utils.clone(ui.shape.value(), []), kept = [];
+    for (var i = 0; i < cur.length; i++)
+        if (selected.indexOf(cur[i].var) >= 0) kept.push(cur[i]);
+    if (kept.length !== cur.length) ui.shape.setValue(kept);
+};
+
 // Write the full ordered levels of `v` back to the levels_order option (create/replace its entry). Store a
 // COPY of `lv` -- never the caller's live working array, else later in-place swaps would alias the option
 // value and setValue() could miss the change.
@@ -289,17 +347,22 @@ var writeOrder = function(ui, v, lv) {
 // the joined level labels as a PLACEHOLDER -- the default itself lives in R (new_lvl_collapse), once.
 var TABXM_SEL = "#b5caef";       // jamovi's list-selection blue (.selected in analysisui.css)
 var TABXM = {
-    body:  "padding:2px 8px 8px 8px;",
+    body:  "padding:2px 8px 8px 8px;width:100%;box-sizing:border-box;",
     // 3 columns: level | merge tick | merged name. The name cell spans its run with grid-row/span,
     // which is why this is a grid and not the <ul> it replaced.
-    grid:  "display:grid;grid-template-columns:1fr auto minmax(96px,1fr);align-items:stretch;margin:4px 0;border:1px solid rgba(0,0,0,0.25);border-radius:3px;background:#fff;color:#000;max-height:220px;overflow-y:auto;outline:none;",
-    head:  "padding:2px 8px;font-size:0.9em;color:#555;background:rgba(0,0,0,0.04);border-bottom:1px solid rgba(0,0,0,0.12);white-space:nowrap;",
+    // ⚠ THE TWO RIGHT COLUMNS ARE FIXED IN PIXELS, AND THE BOX IS width:100%. Everything else made
+    // the widget resize under the pointer: `auto` sized column 2 to the tick-box (so it changed the
+    // moment one appeared), `minmax(96px,1fr)` grew column 3 with whatever was typed in it, and the
+    // overflow scrollbar took width away on expand -- `scrollbar-gutter:stable` reserves it always.
+    grid:  "display:grid;grid-template-columns:minmax(0,1fr) 72px 200px;align-items:stretch;margin:4px 0;border:1px solid rgba(0,0,0,0.25);border-radius:3px;background:#fff;color:#000;max-height:220px;overflow-y:auto;scrollbar-gutter:stable;outline:none;width:100%;box-sizing:border-box;",
+    head:  "padding:2px 8px;font-size:0.9em;color:#000;background:rgba(0,0,0,0.04);border-bottom:1px solid rgba(0,0,0,0.12);white-space:nowrap;",
     lab:   "padding:2px 8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;",
     tick:  "padding:2px 6px;display:flex;align-items:center;justify-content:center;cursor:pointer;",
-    cell:  "padding:2px 4px;display:flex;align-items:center;border-left:1px solid rgba(0,0,0,0.10);",
+    cell:  "padding:2px 4px;display:flex;align-items:center;",
     input: "width:100%;min-width:0;box-sizing:border-box;padding:1px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;",
     bar:   "display:flex;gap:6px;",
-    btn:   "width:30px;height:22px;line-height:1;padding:0;cursor:pointer;"
+    btn:   "width:30px;height:22px;line-height:1;padding:0;cursor:pointer;",
+    btnOff:"width:30px;height:22px;line-height:1;padding:0;opacity:0.4;cursor:default;"
 };
 var tabxmSel = {};      // var -> selected level label (persists across rebuilds)
 
@@ -384,8 +447,13 @@ var tabxmDisplayOrder = function(order, groups) {
 
 // --- the widget ----------------------------------------------------------------------------
 // `onOrder(newOrder)` is supplied by a host that also offers reordering (jmvtab) and is null
-// otherwise (jmvtabreg); the ▲/▼ bar and the arrow keys appear only when it is given.
-var tabxmBuildList = function(ui, v, initialOrder, onOrder) {
+// otherwise (jmvtabreg, whose producer has no `levels_order` argument to write to); the ▲/▼ bar and
+// the arrow keys appear only when it is given.
+// `canOrder = false` keeps the bar but GREYS it: an ORDERED factor already has the order its levels
+// mean, so moving one is meaningless -- while merging two contiguous ordinal levels is not, and its
+// tick-boxes stay live.
+var tabxmBuildList = function(ui, v, initialOrder, onOrder, canOrder) {
+    if (canOrder === undefined) canOrder = true;
     var wrap = document.createElement("div");
     wrap.style.cssText = TABXM.body;
     var order  = initialOrder.slice();
@@ -451,8 +519,8 @@ var tabxmBuildList = function(ui, v, initialOrder, onOrder) {
             grid.appendChild(t);
         });
         if (!canMerge) { paint(); return; }
-        // the merged-name boxes: one per run, spanning it with grid-row/span. Runs of one get an
-        // empty cell, so the column's left border stays continuous.
+        // the merged-name boxes: one per run, spanning it with grid-row/span. Runs of one still get
+        // an empty cell: the grid needs every row of column 3 occupied, or the spans below it slide.
         var cur = tabxmFromTicks(order, ticks, groups);
         var i = 0;
         while (i < order.length) {
@@ -501,7 +569,7 @@ var tabxmBuildList = function(ui, v, initialOrder, onOrder) {
         onOrder(order);
         renderRows();
     };
-    if (onOrder) {
+    if (onOrder && canOrder) {
         // ⚠ ignore the arrow keys while a tick-box or the name box has focus, or typing a merged
         // label would reorder the levels underneath it.
         grid.addEventListener("keydown", function(e) {
@@ -518,7 +586,13 @@ var tabxmBuildList = function(ui, v, initialOrder, onOrder) {
         bar.style.cssText = TABXM.bar;
         var mk = function(sym, dir) {
             var b = document.createElement("button");
-            b.type = "button"; b.style.cssText = TABXM.btn; b.textContent = sym;
+            b.type = "button"; b.textContent = sym;
+            b.style.cssText = canOrder ? TABXM.btn : TABXM.btnOff;
+            if (!canOrder) {
+                b.disabled = true;
+                b.title = "an ordered variable already has the order its levels mean";
+                return b;
+            }
             b.addEventListener("click", function(e) { e.preventDefault(); grid.focus(); move(dir); });
             return b;
         };
@@ -534,14 +608,47 @@ var tabxmBuildList = function(ui, v, initialOrder, onOrder) {
 // `levels_order` exactly as before. R maps that raw order through the merge spec
 // (jmv_order_after_collapse), which is why the list can go on showing the SOURCE levels: that is
 // what a tick-box UI must show, or a merge could not be undone.
-var buildVarBody = function(ui, v, initialOrder) {
-    return tabxmBuildList(ui, v, initialOrder, function(order) { writeOrder(ui, v, order); });
+var buildVarBody = function(ui, v, initialOrder, canOrder) {
+    return tabxmBuildList(ui, v, initialOrder, function(order) { writeOrder(ui, v, order); },
+                          canOrder);
+};
+
+// A NUMBER has no levels to reorder or merge, so its row is not a collapsible at all: it asks the
+// one question a number does raise -- how it becomes rows (or columns), i.e. `tab(shape =)`. The
+// value list depends on the AXIS: an index variable can only be CUT, a column variable may also keep
+// a number (log / sqrt), which is the same rule shape_refuse_numeric_index() enforces R-side. Both
+// lists are generated from VAR_SHAPES (the block at the top of this file).
+var makeNumericNode = function(ui, v, isCol) {
+    var row = document.createElement("div");
+    row.style.cssText = TABX.numRow;
+    var name = document.createElement("b");
+    name.textContent = v;
+    row.appendChild(name);
+    var note = document.createElement("span");
+    note.style.cssText = TABX.note; note.textContent = ": numeric";
+    row.appendChild(note);
+    if (!ui.shape) return row;      // the generated .h.R lags a .a.yaml edit -- show no dead control
+    var offered = isCol ? TABX_SHAPES_COL : TABX_SHAPES_INDEX;
+    var cur = shapeSelected(ui, v);
+    if (!cur || offered.indexOf(cur) < 0) cur = offered[0];
+    var sel = document.createElement("select");
+    sel.style.cssText = TABX.shapeSel;
+    offered.forEach(function(sh) {
+        var o = document.createElement("option");
+        o.value = sh; o.textContent = sh;
+        if (sh === cur) o.selected = true;
+        sel.appendChild(o);
+    });
+    sel.addEventListener("change", function() { writeShape(ui, v, sel.value, offered[0]); });
+    row.appendChild(sel);
+    return row;
 };
 
 // Build ONE merged, collapsed-by-default variable node: summary "<var> : N levels - reorder" (BOLD var
 // name) -> one click opens the level list. `natural` is the column's level labels (from levelsCache):
 // undefined = still loading, null = numeric/no-levels, array = factor levels (-> a buildVarBody list).
-var makeVarNode = function(ui, v, axisLabel, natural) {
+var makeVarNode = function(ui, v, axisLabel, natural, isCol) {
+    if (natural === null) return makeNumericNode(ui, v, isCol);
     var vKey = "var:" + axisLabel + ":" + v;
     var varD = document.createElement("details");
     varD.style.cssText = TABX.varD;
@@ -555,16 +662,18 @@ var makeVarNode = function(ui, v, axisLabel, natural) {
     name.textContent = v;
     var rest = document.createTextNode(
         natural === undefined ? " ..." :
-        natural === null      ? " — numeric (no levels)" :
                                 (" : " + storedOrder(ui, v, natural).length +
-                                 " levels – reorder / merge"));
+                                 " levels – click to reorder / merge"));
     sum.appendChild(caret); sum.appendChild(name); sum.appendChild(rest);
     varD.appendChild(sum);
     varD.addEventListener("toggle", function() {
         openState[vKey] = varD.open;
         caret.textContent = varD.open ? "▾" : "▸";
     });
-    if (natural && natural.length) varD.appendChild(buildVarBody(ui, v, storedOrder(ui, v, natural)));
+    // An ORDERED factor keeps its merge tick-boxes and loses its arrows: see tabxmBuildList.
+    if (natural && natural.length)
+        varD.appendChild(buildVarBody(ui, v, storedOrder(ui, v, natural),
+                                      mtypeCache[v] !== "ordinal"));
     return varD;
 };
 
@@ -582,32 +691,25 @@ var renderTree = function(ui) {
     var all = rowV.concat(colV).concat(tabV);
     reconcileLevelOrder(ui, all);
     tabxmReconcile(ui, all);
+    reconcileShapes(ui, all);
 
     var frag = document.createElement("div");
     frag.setAttribute("data-tabx-tree", "1");
     // Phase 20g-ii: ONE FULL-WIDTH ROW PER AXIS. It used to be a two-column grid (Row | Column, with
     // Table below Row), which halved the width available to each level list -- and a list that now
     // carries a merged-NAME text box beside every run needs the whole pane.
-    var axes = [["Row variables", rowV], ["Column variables", colV], ["Table variables", tabV]];
+    // the 3rd slot is the AXIS rule a numeric variable's `shape` picker reads: only a COLUMN
+    // variable may keep a number (see makeNumericNode).
+    var axes = [["Row variables", rowV, false], ["Column variables", colV, true],
+                ["Table variables", tabV, false]];
     axes.forEach(function(ax) {
         var label = ax[0], vars = ax[1];
         if (vars.length === 0) return;
         var axD = makeTitledBox(TABX.axis, TABX.axisTitle, label);
         frag.appendChild(axD);
         vars.forEach(function(v) {
-            var cached = (v in levelsCache) ? levelsCache[v] : undefined;
-            axD.appendChild(makeVarNode(ui, v, label, cached === FETCHING ? undefined : cached));
-            if (!(v in levelsCache)) {
-                levelsCache[v] = FETCHING;                 // guard against duplicate in-flight fetches
-                ui.levelsCtrl.requestData("column",
-                    { columnName: v, properties: ["measureType", "levels"] })
-                    .then(function(col) {
-                        levelsCache[v] = (!col || col.measureType === "continuous")
-                            ? null : col.levels.map(function(l) { return l.label; });
-                        afterFetch(ui);
-                    })
-                    .catch(function() { levelsCache[v] = null; afterFetch(ui); });
-            }
+            axD.appendChild(makeVarNode(ui, v, label, cachedLevels(v), ax[2]));
+            fetchLevels(ui, "levelsCtrl", v);
         });
     });
     if (all.length === 0) {
@@ -641,7 +743,10 @@ var refSig = function(ui) {
     // 20g-ii: a MERGE changes which levels exist, so the drop-downs must be rebuilt on it too --
     // more sharply than on a reorder, which only re-sorts them.
     var lc     = ui.levels_collapse ? utils.clone(ui.levels_collapse.value(), []) : [];
-    return JSON.stringify([rowV, colV, tabV, pct, colorV, dispV, lo, lc]);
+    // 22g-iii: a CUT decides whether a numeric variable has a reference row at all, so it belongs
+    // here for the same reason a merge does.
+    var sh     = ui.shape ? utils.clone(ui.shape.value(), []) : [];
+    return JSON.stringify([rowV, colV, tabV, pct, colorV, dispV, lo, lc, sh]);
 };
 
 // Is an ODDS RATIO the comparison this table makes? That is what switches the reference picker to a
@@ -716,34 +821,29 @@ var refLineControl = function(nameText, choices, selectedRef, onPick) {
 // Render one axis variable as a single line "<var> [ current ref level v ]" (fetching its levels if
 // needed, like renderTree).
 var renderRefVarCard = function(ui, frag, v, orActive) {
-    var cached = (v in levelsCache) ? levelsCache[v] : undefined;
-    if (cached === FETCHING) cached = undefined;
+    var cached = cachedLevels(v);
+    fetchLevels(ui, "refPickerCtrl", v);
     if (cached === undefined) {
         var ph = document.createElement("div"); ph.style.cssText = TABX.refRow;
         var b0 = document.createElement("b"); b0.style.cssText = TABX.refName; b0.textContent = v;
         var d0 = document.createElement("span"); d0.style.cssText = TABX.refNote; d0.textContent = "…";
         ph.appendChild(b0); ph.appendChild(d0);
         frag.appendChild(ph);
-        if (!(v in levelsCache)) {
-            levelsCache[v] = FETCHING;
-            ui.refPickerCtrl.requestData("column",
-                { columnName: v, properties: ["measureType", "levels"] })
-                .then(function(col) {
-                    levelsCache[v] = (!col || col.measureType === "continuous")
-                        ? null : col.levels.map(function(l) { return l.label; });
-                    afterFetch(ui);
-                })
-                .catch(function() { levelsCache[v] = null; afterFetch(ui); });
-        }
         return;
     }
-    if (cached === null) {   // numeric col_var: reference is its own total, no drop-down
-        var row = document.createElement("div"); row.style.cssText = TABX.refRow;
-        var b1 = document.createElement("b"); b1.style.cssText = TABX.refName; b1.textContent = v;
-        var nt = document.createElement("span"); nt.style.cssText = TABX.refNote;
-        nt.textContent = "numeric — compared with its total";
-        row.appendChild(b1); row.appendChild(nt);
-        frag.appendChild(row);
+    if (cached === null) {
+        // A NUMBER left as a number has no reference to choose -- `tab()` offers none, so the row
+        // that used to say "compared with its total" named a choice that did not exist. CUT into
+        // groups it does have one; but the group LABELS are computed R-side from the data's own
+        // quantiles, so the only references nameable here are the positional ones `ref =` accepts.
+        var sh = shapeSelected(ui, v);
+        if (!sh || sh === "auto" || sh === "linear" || sh === "log" || sh === "sqrt") return;
+        var numChoices = [{ ref: "tot", label: "Total" }, { ref: "first", label: "First group" },
+                          { ref: "last", label: "Last group" }];
+        var st0 = refSelected(ui, v);
+        frag.appendChild(refLineControl(
+            v, numChoices, choicesHasRef(numChoices, st0) ? st0 : "tot",
+            function(r) { writeRef(ui, v, r); }));
         return;
     }
     // 20g-ii: the choices are the levels the TABLE will show -- a merged run is ONE level, under its
@@ -760,19 +860,8 @@ var renderRefVarCard = function(ui, frag, v, orActive) {
 // Render the ref2 (odds-ratio 2nd reference) section: one GLOBAL drop-down over the OTHER axis's
 // levels + First/Total, with a one-line explanation. Shown only when OR is active.
 var renderRef2Section = function(ui, frag, pct, ref2var) {
-    var levels = (ref2var && (ref2var in levelsCache)) ? levelsCache[ref2var] : undefined;
-    if (levels === FETCHING) levels = undefined;
-    if (ref2var && !(ref2var in levelsCache)) {
-        levelsCache[ref2var] = FETCHING;
-        ui.refPickerCtrl.requestData("column",
-            { columnName: ref2var, properties: ["measureType", "levels"] })
-            .then(function(col) {
-                levelsCache[ref2var] = (!col || col.measureType === "continuous")
-                    ? null : col.levels.map(function(l) { return l.label; });
-                afterFetch(ui);
-            })
-            .catch(function() { levelsCache[ref2var] = null; afterFetch(ui); });
-    }
+    var levels = ref2var ? cachedLevels(ref2var) : undefined;
+    fetchLevels(ui, "refPickerCtrl", ref2var);
     var lvlChoices = (levels && levels.length)
         ? tabxmDisplayOrder(storedOrder(ui, ref2var, levels), tabxmGroups(ui, ref2var))
               .map(function(l) { return { ref: l, label: l }; })

@@ -48,8 +48,11 @@ do the same if you shape a column by hand.
 \itemize{
 \item \code{"linear"}: the number as it is --- one slope in a model, one mean in a crosstab. The default for a column variable, and what \code{shape} is spelled out as when nothing is done.
 \item \code{"levels"}: one level per distinct value, in numeric order. Right for a counted number or a 1-7 scale; unreadable for a continuous one, which is what \code{"auto"} decides.
+\item \code{"median"}: two groups of equal size, cut at the median --- the coarsest reading of a number.
+\item \code{"terciles"}: three groups of equal size.
 \item \code{"quartiles"}: four groups of equal size. The counts are balanced, so every group answers on a comparable base.
 \item \code{"quintiles"}: five groups of equal size.
+\item \code{"deciles"}: ten groups of equal size. Reads a gradient, but ten rows need a large sample to keep each base usable.
 \item \code{"sd_bands"}: four bands cut at the mean and one standard deviation either side. Each level names its own cut (\verb{[30,48) ; < mean}), so the label can be checked against the interval beside it. The cut points mean the same thing across sub-samples of one variable, where quantile breaks move with each one; but the bands are NOT balanced, and on a skewed variable a landmark falling outside the data is dropped (an exponential variable gets three bands, not four).
 \item \code{"log"}: replace the variable by its logarithm --- diminishing returns. Needs strictly positive values.
 \item \code{"sqrt"}: replace the variable by its square root. Needs non-negative values.

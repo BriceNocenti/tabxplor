@@ -14,12 +14,16 @@ items:
       type: Html
 
     # Phase 7e: hidden state carrier for the multi-tier live cache. Only Image elements persist a
-    # `$state` across the engine reset, so this 0-size Image hosts the (gzip-RDS'd) store. It renders
+    # `$state` across the engine reset, so this Image hosts the (gzip-RDS'd) store. It renders
     # nothing (.plot returns TRUE); `.run()` reads/writes self$results$cache_state$state.
+    # ⚠ `visible: false` is what makes it take NO vertical space (height: 1 still reserved a slot).
+    # It is safe for the store: ResultsElement$asProtoBuf() serialises `state` independently of
+    # `visible`, so the round-trip is untouched.
     - name: cache_state
       title: ""
       type: Image
       width: 1080
       height: 1
       renderFun: .plot
+      visible: false
 ...

@@ -20,6 +20,10 @@
 #   - Level reordering (Phase 7g-ii): the STORED aggregate blob stays at RAW level order; a reorder
 #     relevels only the in-memory aggregate + ctx$data POST-fetch (jmv_relevel_cols), so it is a
 #     tier-3 input (tiers 1-2 reused). Never bake a reorder into the persisted blob.
+#   - The PRE-AGGREGATE RECODES -- the level merge and the numeric cut (`shape`) -- are the opposite:
+#     they change what is counted, and `fp_map` fingerprints the RAW columns, so both must be IN the
+#     tier-1 and tier-2 keys. They travel as ONE slot (jmv_cache_aggregate's `recode()`), and a cut
+#     that renames its column reaches its source fingerprint through ctx$shape_renames.
 #   - Tier-4 (always re-applied, never baked into the carrier): digits, colour, display, cleannames,
 #     n_min and -- since 19k -- `anova`, because both one-way F rows are stored in `test` and the
 #     p-value line is materialised at DISPLAY. What the RE-REF recomputes may differ between two
@@ -171,7 +175,11 @@ jmv_store_cached <- function(cfg, cache_env, tier, key, compute_fn) {
 
 
 # === Constants + config (jmvtab crosstab store) ============================================
-JMVTAB_CACHE_SCHEMA <- 19L   # bump on any store-shape change -> discard stale stores
+JMVTAB_CACHE_SCHEMA <- 20L   # bump on any store-shape change -> discard stale stores
+# 20 (Phase 22g-iii): the tier-1 and tier-2 keys carry ONE per-variable pre-aggregate RECODE slot
+#   (the level merge AND the numeric cut) where they carried the merge alone, so every key names a
+#   different aggregate than the same key did before -- and a pre-20 entry would be served for a cut
+#   table.
 # 19 (Phase 20g-ii): the tier-1 and tier-2 keys gained the level-MERGE spec, so every key computed by
 #   an older version names a different aggregate than the same key does now. The stored VALUES are
 #   still readable, which is exactly why the stale entries must be discarded rather than left to be
@@ -325,14 +333,27 @@ jmv_cache_aggregate <- function(ctx) {
   pop_tag       <- jmv_pop_tag(ctx$cache_keys$tier0$population, fp, ce$nrow)
   grain_fp      <- lapply(grain, function(g) fp[[g]])
   wt_fp         <- if (weighted) fp[[wt_chr]] else NULL
-  # Phase 20g-ii: the level-MERGE spec. ⚠ It must be in the tier-1 keys, and this is the whole
-  # reason: `fp` is fingerprinted in jmvtab_build() BEFORE tab() runs, on the raw columns, while the
-  # merge is a PRE-aggregate recode in tab_prepare() -- so `data` here is already merged and no
-  # fingerprint moved. Without these entries a merge would serve the un-merged aggregate. It is the
-  # exact opposite of `levels_order`, which is post-aggregate and deliberately absent from every key.
-  # The consequence is declared and tested: a merge MISSES tier 1 (one O(N) re-scan per edit).
+  # WARNING: THE PRE-AGGREGATE RECODES MUST BE IN THE TIER-1 KEYS, and this is the whole reason:
+  # `fp` is fingerprinted in jmvtab_build() BEFORE tab() runs, on the RAW columns, while a recode
+  # happens inside tab_prepare() / tab_prepare_pop() -- so `data` here is already recoded and no
+  # fingerprint moved. Without these entries a merge would serve the un-merged aggregate, and a cut
+  # the un-cut one. They are the exact opposite of `levels_order`, which is post-aggregate and
+  # deliberately absent from every key. The consequence is declared and tested: a merge or a cut
+  # MISSES tier 1 (one O(N) re-scan per edit).
+  # Phase 22g-iii: `shape` joined `levels_collapse` here, and the two travel as ONE slot -- they are
+  # one question ("what happens to this variable's values before it is counted"), asked once.
   cl            <- ctx$levels_collapse
-  grain_cl      <- lapply(grain, function(g) cl[[g]])
+  sh            <- ctx$shapes
+  recode        <- function(v) list(cl[[v]], sh[[v]])
+  grain_recode  <- lapply(grain, recode)
+  # WARNING: a numeric-keeping shape (log / sqrt) RENAMES its column (`log_age`), so `fp[["log_age"]]`
+  # does not exist -- the source column's fingerprint would silently drop out of the key and a data
+  # edit would not move it. `ctx$shape_renames` (written where the rename happens, R/tab.R) is what
+  # sends every fingerprint lookup back to the column it came from.
+  fp_of         <- function(v) {
+    src <- unname(ctx$shape_renames[v])                  # `[` not `[[`: an unknown name gives NA
+    fp[[if (length(src) && !is.na(src)) src else v]]
+  }
 
   agg_hits  <- logical(0)
   test_hits <- logical(0)
@@ -347,9 +368,9 @@ jmv_cache_aggregate <- function(ctx) {
         # Self-crosstab (col_var is also a row/tab var): skip caching -> fine_for_pair() returns
         # NULL -> tab_plain() raw-scans (the _colvarbis machinery only runs on the raw path).
         if (cv %in% c(rv, tab_vars)) next
-        key <- jmv_hash(list("fct", pop_tag, rv, fp[[rv]], cv, fp[[cv]],
+        key <- jmv_hash(list("fct", pop_tag, rv, fp_of(rv), cv, fp_of(cv),
                              grain, grain_fp, wt_chr, wt_fp, other,
-                             cl[[rv]], cl[[cv]], grain_cl))
+                             recode(rv), recode(cv), grain_recode))
         fct_keys_by_rv[[rv]] <- c(fct_keys_by_rv[[rv]], key)
         got <- jmv_cache_fetch(store, "agg", key)
         store <- got$store
@@ -392,10 +413,10 @@ jmv_cache_aggregate <- function(ctx) {
       rv     <- row_vars[[i]]
       na_rv  <- ctx$settings$rows$na_num[[i]]
       msr    <- sort(num_cols)
-      msr_fp <- lapply(msr, function(v) fp[[v]])
-      key    <- jmv_hash(list("num", pop_tag, rv, fp[[rv]], msr, msr_fp,
+      msr_fp <- lapply(msr, fp_of)
+      key    <- jmv_hash(list("num", pop_tag, rv, fp_of(rv), msr, msr_fp,
                               grain, grain_fp, wt_chr, wt_fp, na_rv,
-                              cl[[rv]], grain_cl))   # a numeric measure has no levels to merge
+                              recode(rv), lapply(msr, recode), grain_recode))
       num_keys_by_rv[[rv]] <- key
       got <- jmv_cache_fetch(store, "agg", key)
       store <- got$store
@@ -439,12 +460,13 @@ jmv_cache_aggregate <- function(ctx) {
     # is a numeric-only table, whose test is the ANOVA computed outside this path.
     if (!isTRUE(chi2[[i]]) || identical(color[[i]], "auto") ||
         identical(measure_builds(color[[i]]), "contrib")) next
-    # Phase 20g-ii: the merge spec is named EXPLICITLY, not left to ride the tier-1 keys. It would
-    # ride them in every ordinary shape -- but not when every col_var is a self-crosstab (no tier-1
-    # key is generated at all), and a merge changes the chi2's df and p where a reorder does not.
+    # Phase 20g-ii / 22g-iii: the recode spec is named EXPLICITLY, not left to ride the tier-1 keys.
+    # It would ride them in every ordinary case -- but not when every col_var is a self-crosstab (no
+    # tier-1 key is generated at all), and a merge or a cut changes the chi2's df and p where a
+    # reorder does not.
     tkey <- jmv_hash(list("test", comp[[i]], na_scalar,
                           sort(unlist(fct_keys_by_rv[[rv]])), num_keys_by_rv[[rv]],
-                          cl[unique(c(rv, col_vars, tab_vars))]))
+                          lapply(unique(c(rv, col_vars, tab_vars)), recode)))
     tier2_keys[[rv]] <- tkey
     got <- jmv_cache_fetch(store, "test", tkey)
     store <- got$store
@@ -1097,7 +1119,8 @@ jmv_tab3_build_armed <- function(data, opts, color, color_signif, ci, wt_sym,
     output_list   = isTRUE(opts$output_list),
     .cache = ce, .defer_level_merge = TRUE, .return_armed = TRUE,
     .levels_order = opts$levels_order,         # Phase 7g-ii: post-aggregate reorder (jmv_cache_aggregate)
-    .levels_collapse = opts$levels_collapse    # Phase 20g-ii: pre-aggregate merge (tab_prepare)
+    .levels_collapse = opts$levels_collapse,   # Phase 20g-ii: pre-aggregate merge (tab_prepare)
+    shape = opts$shape                         # Phase 22g-iii: pre-aggregate cut  (tab_prepare_pop)
   ))
 }
 

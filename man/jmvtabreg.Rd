@@ -16,11 +16,8 @@ jmvtabreg(
   trials = NULL,
   effect = "auto",
   measure = "auto",
-  empirical = "no",
+  empirical = TRUE,
   models = NULL,
-  stats_baseline = 1,
-  stats_compare = "none",
-  stats_checks = FALSE,
   na = "drop_by_outcome",
   run_compare = FALSE,
   levels_collapse = NULL,
@@ -37,6 +34,7 @@ jmvtabreg(
   n = "range",
   cleannames = TRUE,
   subtext = "",
+  theme = "light",
   wrap_rows = 35,
   wrap_cols = 15,
   export_format = "excel",
@@ -44,7 +42,7 @@ jmvtabreg(
   export_dir = "~/Documents",
   export_filename = "Reg_model",
   resetPath = FALSE,
-  xl_check = "no",
+  xl_check = FALSE,
   xl_replace = FALSE
 )
 }
@@ -101,29 +99,16 @@ likely"),   because a marginal odds ratio is a specialist quantity, asked
 for by name.   \item \code{"odds_ratio"} / \code{"ratio"} /
 \code{"difference"}: the named measure,   when the outcome's level can
 carry it. One it cannot says so, and lists what it does   offer.   \item
-\code{"log"}: the same estimand, left un-exponentiated.  }}
+\code{"coefficient"}: the model's own coefficient, un-transformed --- the
+log   of the reported measure wherever that measure is multiplicative, and
+the additive   estimate itself on a model that is already additive.  }}
 
 \item{empirical}{Show the crude, unadjusted, single-predictor effect beside
 each model effect --- the bivariate association that IS the modelised
 quantity when there is a single predictor, so the gap between the two is
-what adjustment changed. \code{"column"} draws it as its own column;
-\code{"cell"} folds it into the model cell instead, which is the default
-for a 3+ level outcome, where one model column would otherwise need one
-crude column per category.}
+what adjustment changed.}
 
 \item{models}{.}
-
-\item{stats_baseline}{.}
-
-\item{stats_compare}{With several models (a predictor-subset list), add a
-likelihood-ratio / F / Wald comparison-test footer row: "compare_baseline"
-tests each model against the chosen baseline model, "sequential" against
-the previous one (an AIC difference when not nested).}
-
-\item{stats_checks}{Also run the model checks that have to refit the model
-(linearity of a numeric predictor, proportional odds). They are off by
-default because they dominate the cost of a table; everything else in the
-model-summary footer is always shown.}
 
 \item{na}{"drop_by_outcome" (default) fits every model OF ONE OUTCOME on
 the same complete cases, which is what makes the observed columns
@@ -184,6 +169,12 @@ column at all.}
 
 \item{subtext}{A free note printed below the table.}
 
+\item{theme}{How the table is painted, in the results panel and in every
+export.  \code{"light"} is the colour palette; \code{"print_ready"} says
+the same thing  typographically --- bold, italics, underlines and marks
+instead of blue and red ---  for a page that has no colour. See
+\code{\link{tab_css}}.}
+
 \item{wrap_rows}{.}
 
 \item{wrap_cols}{.}
@@ -205,10 +196,10 @@ format adds it).}
 Documents folder and "Regression").}
 
 \item{xl_check}{Excel export only: draw the model-check plots
-(\code{reg_check_plots()}) under each table in the workbook. \code{"auto"}
-takes the panels that apply to the fitted family, \code{"all"} adds
-dispersion and collinearity. Needs \code{ggplot2} and \code{gridExtra};
-without them the export says so and writes the table alone.}
+(\code{reg_check_plots()}) under each table in the workbook --- the panels
+that apply to the fitted family (\code{tab_xl(check = "auto")}). Needs
+\code{ggplot2} and \code{gridExtra}; without them the export says so and
+writes the table alone.}
 
 \item{xl_replace}{"Set to \code{TRUE} to overwrite an existing file."}
 }

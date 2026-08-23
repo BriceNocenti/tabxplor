@@ -6,14 +6,14 @@
 // Generated from R/tab_reg.R (REG_OUTCOME_KINDS), R/reg-estimand.R (REG_FAMILIES,
 // REG_ESTIMANDS) and R/var-shape.R (VAR_SHAPES). Re-run dev/generate_jamovi_js.R after
 // changing any of them; the suite checks this block (test-jamovi-vocabulary.R).
-var TABX_FAMILY_LABEL = { "gaussian": "gaussian (linear)", "binomial": "binomial (logistic)", "poisson": "poisson (counts)", "multinomial": "multinomial", "ordinal": "ordinal" };
+var TABX_FAMILY_LABEL = { "gaussian": "gaussian (linear)", "binomial": "binomial (logistic)", "poisson": "poisson (counts)", "multinomial": "multinomial (nominal)", "ordinal": "ordinal (ordered)" };
 var TABX_FAMILY_LABEL_BINARY = { "binomial": "binomial (logistic)" };
 var TABX_OUTCOME_DETECT = { "binary": "binomial", "ordered": "ordinal", "nominal": "multinomial", "numeric": "gaussian" };
 var TABX_OUTCOME_OFFERS = { "binary": ["binomial"], "ordered": ["ordinal", "multinomial"], "nominal": ["multinomial", "ordinal"], "numeric": ["gaussian", "binomial", "poisson"] };
 var TABX_LINKS = { "gaussian": ["auto", "difference", "ratio"], "binomial": ["auto", "odds_ratio", "ratio", "difference"], "poisson": ["auto", "ratio"], "multinomial": ["auto", "odds_ratio"], "ordinal": ["auto", "odds_ratio"] };
-var TABX_LINK_LABEL = { "auto": "auto", "odds_ratio": "odds ratio", "ratio": "ratio", "difference": "difference" };
-var TABX_ESTIMANDS = { "gaussian": { "auto": { "auto": ["auto", "ratio", "difference"], "conditional": ["auto", "difference"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto", "ratio", "difference"] }, "difference": { "auto": ["auto", "ratio", "difference"], "conditional": ["auto", "difference"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto", "ratio", "difference"] }, "ratio": { "auto": ["auto", "ratio", "difference", "log"], "conditional": ["auto", "ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "ratio", "difference", "log"] } }, "binomial": { "auto": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "odds_ratio", "ratio", "difference", "log"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] }, "odds_ratio": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "odds_ratio", "ratio", "difference", "log"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] }, "ratio": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "ratio", "log"], "marginal": ["auto", "odds_ratio", "ratio", "difference", "log"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] }, "difference": { "auto": ["auto", "odds_ratio", "ratio", "difference"], "conditional": ["auto", "difference"], "marginal": ["auto", "odds_ratio", "ratio", "difference"], "at_reference": ["auto", "odds_ratio", "ratio", "difference"] } }, "poisson": { "auto": { "auto": ["auto", "ratio", "difference", "log"], "conditional": ["auto", "ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "ratio", "difference", "log"] }, "ratio": { "auto": ["auto", "ratio", "difference", "log"], "conditional": ["auto", "ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "ratio", "difference", "log"] } }, "multinomial": { "auto": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] }, "odds_ratio": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] } }, "ordinal": { "auto": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto"] }, "odds_ratio": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto"] } } };
-var TABX_SHAPES = ["linear", "quartiles", "quintiles", "sd_bands", "log", "sqrt", "quadratic"];
+var TABX_LINK_LABEL = { "auto": "auto (the family's own)", "difference": "difference (identity)", "ratio": "ratio (log)", "odds_ratio": "odds ratio (logit)" };
+var TABX_ESTIMANDS = { "gaussian": { "auto": { "auto": ["auto", "difference", "ratio", "coefficient"], "conditional": ["auto", "difference", "coefficient"], "marginal": ["auto", "difference", "ratio", "coefficient"], "at_reference": ["auto", "difference", "ratio", "coefficient"] }, "difference": { "auto": ["auto", "difference", "ratio", "coefficient"], "conditional": ["auto", "difference", "coefficient"], "marginal": ["auto", "difference", "ratio", "coefficient"], "at_reference": ["auto", "difference", "ratio", "coefficient"] }, "ratio": { "auto": ["auto", "difference", "ratio", "coefficient"], "conditional": ["auto", "ratio", "coefficient"], "marginal": ["auto", "difference", "ratio", "coefficient"], "at_reference": ["auto", "difference", "ratio", "coefficient"] } }, "binomial": { "auto": { "auto": ["auto", "difference", "ratio", "odds_ratio", "coefficient"], "conditional": ["auto", "odds_ratio", "coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio", "coefficient"], "at_reference": ["auto", "difference", "ratio", "odds_ratio", "coefficient"] }, "odds_ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "coefficient"], "conditional": ["auto", "odds_ratio", "coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio", "coefficient"], "at_reference": ["auto", "difference", "ratio", "odds_ratio", "coefficient"] }, "ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "coefficient"], "conditional": ["auto", "ratio", "coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio", "coefficient"], "at_reference": ["auto", "difference", "ratio", "odds_ratio", "coefficient"] }, "difference": { "auto": ["auto", "difference", "ratio", "odds_ratio", "coefficient"], "conditional": ["auto", "difference", "coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio", "coefficient"], "at_reference": ["auto", "difference", "ratio", "odds_ratio", "coefficient"] } }, "poisson": { "auto": { "auto": ["auto", "difference", "ratio", "coefficient"], "conditional": ["auto", "ratio", "coefficient"], "marginal": ["auto", "difference", "ratio", "coefficient"], "at_reference": ["auto", "difference", "ratio", "coefficient"] }, "ratio": { "auto": ["auto", "difference", "ratio", "coefficient"], "conditional": ["auto", "ratio", "coefficient"], "marginal": ["auto", "difference", "ratio", "coefficient"], "at_reference": ["auto", "difference", "ratio", "coefficient"] } }, "multinomial": { "auto": { "auto": ["auto", "difference", "ratio", "odds_ratio", "coefficient"], "conditional": ["auto", "odds_ratio", "coefficient"], "marginal": ["auto", "difference", "ratio", "coefficient"], "at_reference": ["auto", "difference", "ratio", "odds_ratio", "coefficient"] }, "odds_ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "coefficient"], "conditional": ["auto", "odds_ratio", "coefficient"], "marginal": ["auto", "difference", "ratio", "coefficient"], "at_reference": ["auto", "difference", "ratio", "odds_ratio", "coefficient"] } }, "ordinal": { "auto": { "auto": ["auto", "difference", "ratio", "odds_ratio", "coefficient"], "conditional": ["auto", "odds_ratio", "coefficient"], "marginal": ["auto", "difference", "ratio", "coefficient"], "at_reference": ["auto"] }, "odds_ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "coefficient"], "conditional": ["auto", "odds_ratio", "coefficient"], "marginal": ["auto", "difference", "ratio", "coefficient"], "at_reference": ["auto"] } } };
+var TABX_SHAPES = ["linear", "median", "terciles", "quartiles", "quintiles", "deciles", "sd_bands", "log", "sqrt", "quadratic"];
 // --- END GENERATED ---
 
 // The file extension shown after the file name on the path line -- follows the chosen format. Rendered
@@ -160,23 +160,23 @@ var onUpdate = function(ui) {
     bottomAlignInRow(ui, "export_format");   // Format combo -> bottom of row 1 (aligns with Export button)
     bottomAlignInRow(ui, "extCtrl");         // ".ext" text -> bottom of the path row
     renderModelTable(ui);
+    renderLevelTree(ui);
     renderRefPicker(ui);
     renderCrossPicker(ui);
     renderModelBuilder(ui);
-    applyCompareEnables(ui);
 };
 
 // Phase 15d: a valid model-comparison test needs every model fit on the SAME cases -- so only
-// `drop_by_model` (each model on its own complete cases) breaks it, and choosing a comparison pushes
+// `drop_by_model` (each model on its own complete cases) breaks it, and having a comparison pushes
 // back to the default `drop_by_outcome`, which already fits every model of ONE outcome on one
 // population (a comparison has a single outcome). Guarded setValue -> idempotent, no update loop.
-// Phase 19k: this used to write `na = "drop_all_models"`, a value REMOVED from the vocabulary in
-// z13 -- so every `stats_compare` change fired a setValue the List option rejects.
+// ⚠ Phase 22g-iii re-keyed it on the CARD COUNT: the `stats_compare` picker it used to watch is
+// gone, and since 22g-ii two or more subsets are compared automatically -- so without this the
+// comparison would silently fall back to a bare AIC difference under `drop_by_model`.
 var forceNaForCompare = function(ui) {
-    if (!ui.stats_compare || !ui.na) return;
-    var c = ui.stats_compare.value();
-    if ((c === "compare_baseline" || c === "compare_sequential") && ui.na.value() === "drop_by_model")
-        ui.na.setValue("drop_by_outcome");
+    if (!ui.models || !ui.na) return;
+    var n = utils.clone(ui.models.value(), []).length;
+    if (n >= 2 && ui.na.value() === "drop_by_model") ui.na.setValue("drop_by_outcome");
 };
 
 // --- BEGIN SHARED (dev/generate_jamovi_js.R: copied from jamovi/js/jmvtab.js) -- do not edit ---
@@ -197,17 +197,22 @@ var forceNaForCompare = function(ui) {
 // the joined level labels as a PLACEHOLDER -- the default itself lives in R (new_lvl_collapse), once.
 var TABXM_SEL = "#b5caef";       // jamovi's list-selection blue (.selected in analysisui.css)
 var TABXM = {
-    body:  "padding:2px 8px 8px 8px;",
+    body:  "padding:2px 8px 8px 8px;width:100%;box-sizing:border-box;",
     // 3 columns: level | merge tick | merged name. The name cell spans its run with grid-row/span,
     // which is why this is a grid and not the <ul> it replaced.
-    grid:  "display:grid;grid-template-columns:1fr auto minmax(96px,1fr);align-items:stretch;margin:4px 0;border:1px solid rgba(0,0,0,0.25);border-radius:3px;background:#fff;color:#000;max-height:220px;overflow-y:auto;outline:none;",
-    head:  "padding:2px 8px;font-size:0.9em;color:#555;background:rgba(0,0,0,0.04);border-bottom:1px solid rgba(0,0,0,0.12);white-space:nowrap;",
+    // ⚠ THE TWO RIGHT COLUMNS ARE FIXED IN PIXELS, AND THE BOX IS width:100%. Everything else made
+    // the widget resize under the pointer: `auto` sized column 2 to the tick-box (so it changed the
+    // moment one appeared), `minmax(96px,1fr)` grew column 3 with whatever was typed in it, and the
+    // overflow scrollbar took width away on expand -- `scrollbar-gutter:stable` reserves it always.
+    grid:  "display:grid;grid-template-columns:minmax(0,1fr) 72px 200px;align-items:stretch;margin:4px 0;border:1px solid rgba(0,0,0,0.25);border-radius:3px;background:#fff;color:#000;max-height:220px;overflow-y:auto;scrollbar-gutter:stable;outline:none;width:100%;box-sizing:border-box;",
+    head:  "padding:2px 8px;font-size:0.9em;color:#000;background:rgba(0,0,0,0.04);border-bottom:1px solid rgba(0,0,0,0.12);white-space:nowrap;",
     lab:   "padding:2px 8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;",
     tick:  "padding:2px 6px;display:flex;align-items:center;justify-content:center;cursor:pointer;",
-    cell:  "padding:2px 4px;display:flex;align-items:center;border-left:1px solid rgba(0,0,0,0.10);",
+    cell:  "padding:2px 4px;display:flex;align-items:center;",
     input: "width:100%;min-width:0;box-sizing:border-box;padding:1px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;",
     bar:   "display:flex;gap:6px;",
-    btn:   "width:30px;height:22px;line-height:1;padding:0;cursor:pointer;"
+    btn:   "width:30px;height:22px;line-height:1;padding:0;cursor:pointer;",
+    btnOff:"width:30px;height:22px;line-height:1;padding:0;opacity:0.4;cursor:default;"
 };
 var tabxmSel = {};      // var -> selected level label (persists across rebuilds)
 
@@ -292,8 +297,13 @@ var tabxmDisplayOrder = function(order, groups) {
 
 // --- the widget ----------------------------------------------------------------------------
 // `onOrder(newOrder)` is supplied by a host that also offers reordering (jmvtab) and is null
-// otherwise (jmvtabreg); the ▲/▼ bar and the arrow keys appear only when it is given.
-var tabxmBuildList = function(ui, v, initialOrder, onOrder) {
+// otherwise (jmvtabreg, whose producer has no `levels_order` argument to write to); the ▲/▼ bar and
+// the arrow keys appear only when it is given.
+// `canOrder = false` keeps the bar but GREYS it: an ORDERED factor already has the order its levels
+// mean, so moving one is meaningless -- while merging two contiguous ordinal levels is not, and its
+// tick-boxes stay live.
+var tabxmBuildList = function(ui, v, initialOrder, onOrder, canOrder) {
+    if (canOrder === undefined) canOrder = true;
     var wrap = document.createElement("div");
     wrap.style.cssText = TABXM.body;
     var order  = initialOrder.slice();
@@ -359,8 +369,8 @@ var tabxmBuildList = function(ui, v, initialOrder, onOrder) {
             grid.appendChild(t);
         });
         if (!canMerge) { paint(); return; }
-        // the merged-name boxes: one per run, spanning it with grid-row/span. Runs of one get an
-        // empty cell, so the column's left border stays continuous.
+        // the merged-name boxes: one per run, spanning it with grid-row/span. Runs of one still get
+        // an empty cell: the grid needs every row of column 3 occupied, or the spans below it slide.
         var cur = tabxmFromTicks(order, ticks, groups);
         var i = 0;
         while (i < order.length) {
@@ -409,7 +419,7 @@ var tabxmBuildList = function(ui, v, initialOrder, onOrder) {
         onOrder(order);
         renderRows();
     };
-    if (onOrder) {
+    if (onOrder && canOrder) {
         // ⚠ ignore the arrow keys while a tick-box or the name box has focus, or typing a merged
         // label would reorder the levels underneath it.
         grid.addEventListener("keydown", function(e) {
@@ -426,7 +436,13 @@ var tabxmBuildList = function(ui, v, initialOrder, onOrder) {
         bar.style.cssText = TABXM.bar;
         var mk = function(sym, dir) {
             var b = document.createElement("button");
-            b.type = "button"; b.style.cssText = TABXM.btn; b.textContent = sym;
+            b.type = "button"; b.textContent = sym;
+            b.style.cssText = canOrder ? TABXM.btn : TABXM.btnOff;
+            if (!canOrder) {
+                b.disabled = true;
+                b.title = "an ordered variable already has the order its levels mean";
+                return b;
+            }
             b.addEventListener("click", function(e) { e.preventDefault(); grid.focus(); move(dir); });
             return b;
         };
@@ -456,6 +472,11 @@ var TABX = {
     // under it, same width, so the two read as one block.
     mergeBox: "width:74%;min-width:360px;box-sizing:border-box;margin:-2px 6px 6px 18px;border:1px solid rgba(0,0,0,0.10);border-radius:4px;background:rgba(0,0,0,0.02);",
     mergeSum: "display:block;list-style:none;padding:3px 8px;cursor:pointer;font-size:0.9em;opacity:0.8;",
+    // the level box's per-predictor rows -- jmvtab's own recipe, so the two panels' boxes match.
+    varD:    "margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
+    varSum:  "display:block;list-style:none;padding:4px 8px;cursor:pointer;",
+    numRow:  "display:grid;grid-template-columns:max-content max-content 1fr;align-items:center;gap:8px;margin:4px 6px;padding:4px 8px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
+    shapeSel:"width:100%;max-width:220px;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
     // model-builder cards (one per model) + the numeric-predictor scaling input
     cardBox:  "border:1px solid rgba(0,0,0,0.14);border-radius:5px;background:rgba(0,0,0,0.02);margin:6px;padding:6px 8px;width:100%;min-width:320px;box-sizing:border-box;",
     cardHead: "display:flex;align-items:center;gap:8px;margin-bottom:4px;",
@@ -475,27 +496,58 @@ var TABX = {
     // stretching last column so long level labels stay readable. The first three columns are HEADED
     // (mtHead) with the argument names, so the panel teaches the two questions it asks per outcome;
     // the 4th is not, because which of outcome_level / trials it holds depends on the row.
+    // ⚠ mtRow and mtHead repeat the SAME grid-template-columns: edit them together or the header
+    // drifts from the rows it names.
     mtRow:   "display:grid;grid-template-columns:150px 190px 165px 1fr;align-items:center;gap:10px;width:100%;min-width:0;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
-    mtHead:  "display:grid;grid-template-columns:150px 190px 165px 1fr;align-items:center;gap:10px;width:100%;min-width:0;box-sizing:border-box;padding:0 8px;margin:2px 6px 0;color:#555;font-size:0.85em;",
+    mtHead:  "display:grid;grid-template-columns:150px 190px 165px 1fr;align-items:center;gap:10px;width:100%;min-width:0;box-sizing:border-box;padding:0 8px;margin:2px 6px 0;color:#000;font-weight:600;",
+    // the card the whole per-outcome table sits in -- jmvtab's own axis-box recipe, so the two
+    // panels' grouped widgets read as one material.
+    mtCard:  "margin:2px 0 6px 0;padding:2px 0 6px 0;border:1px solid rgba(0,0,0,0.16);border-radius:4px;background:rgba(0,0,0,0.06);",
     mtSel:   "width:100%;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
     mtTrials:"width:90px;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;"
 };
 
 var levelsCache = {};     // var -> [labels] | null (numeric/no-levels) | FETCHING sentinel
+var mtypeCache = {};      // var -> jamovi measureType ("nominal" | "ordinal" | "continuous" | "id")
 var FETCHING = {};
-var lastRefSig = null;    // ref-picker signature (predictors)
-
-var mergeOpen = {};       // "<var>" -> is its "merge levels" expander open (persists across rebuilds)
+var lastRefSig = null;    // ref-picker signature (predictors + merges + cuts)
+var lastLvlSig = null;    // level-tree signature (predictors)
+var mergeOpen = {};       // "<var>" -> is its merge list open (persists across rebuilds)
 
 var refSig = function(ui) {
     var preds = utils.clone(ui.predictors.value(), []);
     // 20g-ii: a merge changes which levels exist, so the reference drop-downs must be rebuilt on it.
     var lc = ui.levels_collapse ? utils.clone(ui.levels_collapse.value(), []) : [];
-    return JSON.stringify([preds, lc]);
+    // 22g-iii: and a CUT decides whether a numeric predictor is a factor at all.
+    var sh = ui.shape ? utils.clone(ui.shape.value(), []) : [];
+    return JSON.stringify([preds, lc, sh]);
 };
 
 var afterFetch = function(ui) {
+    if (ui.levelsCtrl && ui.levelsCtrl.$el) renderLevelTree(ui);
     if (ui.refPickerCtrl && ui.refPickerCtrl.$el) renderRefPicker(ui);
+};
+
+// THE column fetch, written once -- the twin of jmvtab.js's. `measureType` rides beside the labels
+// because an ORDERED predictor may be merged but not reordered, and a CONTINUOUS one is offered a
+// `shape` instead of a level list.
+var fetchLevels = function(ui, ctrlName, v) {
+    if (!v || (v in levelsCache) || !ui[ctrlName]) return;
+    levelsCache[v] = FETCHING;
+    ui[ctrlName].requestData("column", { columnName: v, properties: ["measureType", "levels"] })
+        .then(function(col) {
+            mtypeCache[v]  = col ? col.measureType : "continuous";
+            levelsCache[v] = (!col || col.measureType === "continuous")
+                ? null : col.levels.map(function(l) { return l.label; });
+            afterFetch(ui);
+        })
+        .catch(function() {
+            mtypeCache[v] = "continuous"; levelsCache[v] = null; afterFetch(ui);
+        });
+};
+var cachedLevels = function(v) {
+    var c = (v in levelsCache) ? levelsCache[v] : undefined;
+    return (c === FETCHING) ? undefined : c;
 };
 
 // ⚠ Each helper below GUARDS on its option existing. A hidden, control-less option only resolves
@@ -611,38 +663,49 @@ var refLineControl = function(nameText, levels, selectedRef, onPick) {
     return row;
 };
 
+// ONE row per predictor. A FACTOR gets the baseline drop-down; a NUMBER gets the two questions a
+// continuous predictor raises here -- where its zero sits (`ref`, an anchor) and in what unit its
+// effect is read (`multiplier`). Its `shape` is NOT here: how a variable is cut is a question about
+// its levels, and it is asked in the level box, exactly as in jmvtab.
 var renderRefVarCard = function(ui, frag, v) {
-    var cached = (v in levelsCache) ? levelsCache[v] : undefined;
-    if (cached === FETCHING) cached = undefined;
+    var cached = cachedLevels(v);
+    fetchLevels(ui, "refPickerCtrl", v);
     if (cached === undefined) {
         var ph = document.createElement("div"); ph.style.cssText = TABX.refRow;
         var b0 = document.createElement("b"); b0.style.cssText = TABX.refName; b0.textContent = v;
         var d0 = document.createElement("span"); d0.style.cssText = TABX.refNote; d0.textContent = "…";
         ph.appendChild(b0); ph.appendChild(d0);
         frag.appendChild(ph);
-        if (!(v in levelsCache)) {
-            levelsCache[v] = FETCHING;
-            ui.refPickerCtrl.requestData("column",
-                { columnName: v, properties: ["measureType", "levels"] })
-                .then(function(col) {
-                    levelsCache[v] = (!col || col.measureType === "continuous")
-                        ? null : col.levels.map(function(l) { return l.label; });
-                    afterFetch(ui);
-                })
-                .catch(function() { levelsCache[v] = null; afterFetch(ui); });
-        }
         return;
     }
-    if (cached === null) {   // numeric predictor: no reference level -> a "x k per unit" scaling input
-        var row = document.createElement("div"); row.style.cssText = TABX.refRow;
+    if (cached === null) {
+        // A CUT number is a factor by the time the model sees it, but its group LABELS are computed
+        // R-side from the data's own quantiles -- so the only baselines nameable here are positional.
+        var sh = shapeSelected(ui, v);
+        var isCut = sh && sh !== "linear" && sh !== "log" && sh !== "sqrt" && sh !== "quadratic";
+        var row = document.createElement("div"); row.style.cssText = TABX.numRow;
         var b1 = document.createElement("b"); b1.style.cssText = TABX.refName; b1.textContent = v;
         row.appendChild(b1);
-        var wrap = document.createElement("span"); wrap.style.cssText = TABX.multWrap;
-        var pre = document.createElement("span"); pre.textContent = "× ";
+        // `ref` on a NUMBER is an ANCHOR: the value its effect is read from. tab_reg() takes the
+        // four keywords or a number; blank = the model's own default (no entry stored).
+        var anchor = document.createElement("select"); anchor.style.cssText = TABX.refSel;
+        var anchors = ["", "mean", "median", "min", "max"];
+        var curA = refSelected(ui, v);
+        if (curA && anchors.indexOf(curA) < 0) anchors.push(curA);   // a typed number stays offered
+        anchors.forEach(function(a) {
+            var o = document.createElement("option");
+            o.value = a; o.textContent = (a === "" ? "ref = (model default)" : "ref = " + a);
+            if (a === curA) o.selected = true;
+            anchor.appendChild(o);
+        });
+        anchor.addEventListener("change", function() { writeRef(ui, v, anchor.value); });
+        row.appendChild(anchor);
         // Phase 18z9: a TEXT input, because the scaling accepts the same three things tab_reg()'s
         // `multiplier` does -- "sd" (the default), "2sd", or a number of units. A number input could
         // not express the keywords, and the per-1-unit effect of a continuous predictor is usually
         // too small to colour at all.
+        var wrap = document.createElement("span"); wrap.style.cssText = TABX.multWrap;
+        var pre = document.createElement("span"); pre.textContent = "\u00d7 ";
         var inp = document.createElement("input");
         inp.type = "text"; inp.style.cssText = TABX.multInp;
         inp.placeholder = "sd"; inp.value = multSelected(ui, v);
@@ -651,52 +714,95 @@ var renderRefVarCard = function(ui, frag, v) {
         suf.textContent = " per sd / 2sd / n units";
         wrap.appendChild(pre); wrap.appendChild(inp); wrap.appendChild(suf);
         row.appendChild(wrap);
-        // Phase 19k: the functional form. A shape either RECODES the predictor (log / sqrt /
-        // quantile groups) or ADDS one term (quadratic) -- tab_reg() owns which; the picker only
-        // states the intent.
-        var shSel = document.createElement("select"); shSel.style.cssText = TABX.refSel;
-        var shCur = shapeSelected(ui, v) || "linear";
-        TABX_SHAPES.forEach(function(sh) {
-            var o = document.createElement("option");
-            o.value = sh; o.textContent = sh;
-            if (sh === shCur) o.selected = true;
-            shSel.appendChild(o);
-        });
-        shSel.addEventListener("change", function() { writeShape(ui, v, shSel.value); });
-        row.appendChild(shSel);
+        if (isCut) {
+            var nt = document.createElement("span"); nt.style.cssText = TABX.refNote;
+            nt.textContent = "cut into groups: the first is the baseline";
+            row.appendChild(nt);
+        }
         frag.appendChild(row);
         return;
     }
     if (cached.length === 0) return;
     // 20g-ii: the reference is chosen among the levels the MODEL will see -- a merged run is one
     // level, under its merged name -- so the choices go through the same display-order rule the
-    // crosstab picker uses.
+    // crosstab picker uses. The MERGE itself lives in the level box now, not on this row.
     var levels = tabxmDisplayOrder(cached, tabxmGroups(ui, v));
     var stored = refSelected(ui, v);
     var selRef = (stored && levels.indexOf(stored) >= 0) ? stored : levels[0];   // default = first level
     frag.appendChild(refLineControl(v, levels, selRef, function(r) { writeRef(ui, v, r); }));
-    // ... and, hanging off that row, the merge tick-boxes (collapsed by default: a predictor's
-    // levels are usually taken as they are, and the row must stay one line until asked).
-    // ⚠ absent until the maintainer's next jmvtools::prepare() regenerates the .h.R -- show nothing
-    // rather than an expander whose ticks write nowhere.
-    if (!ui.levels_collapse) return;
+};
+
+// ---- The level box (levelsCtrl) ----------------------------------------------------------
+// jmvtab's own box, over `predictors`: a FACTOR predictor gets the merge tick-list, a NUMBER gets
+// the `shape` drop-down that says how it is cut. ⚠ ONE deliberate difference from jmvtab: there is
+// no ▲/▼ bar at all, because tab_reg() has no `levels_order` argument -- a move would write nowhere
+// (`onOrder = null`). What DOES change the row order here is `ref`, in the box below.
+var makeRegVarNode = function(ui, v, cached) {
+    var open = !!mergeOpen[v];
+    if (cached === null) {                       // a NUMBER: ": numeric" + its `shape`
+        var row = document.createElement("div");
+        row.style.cssText = TABX.numRow;
+        var nm = document.createElement("b"); nm.textContent = v;
+        row.appendChild(nm);
+        var nt = document.createElement("span");
+        nt.style.cssText = TABX.refNote; nt.textContent = ": numeric";
+        row.appendChild(nt);
+        if (ui.shape) {
+            var shSel = document.createElement("select"); shSel.style.cssText = TABX.shapeSel;
+            var shCur = shapeSelected(ui, v) || "linear";
+            TABX_SHAPES.forEach(function(sh) {
+                var o = document.createElement("option");
+                o.value = sh; o.textContent = sh;
+                if (sh === shCur) o.selected = true;
+                shSel.appendChild(o);
+            });
+            shSel.addEventListener("change", function() { writeShape(ui, v, shSel.value); });
+            row.appendChild(shSel);
+        }
+        return row;
+    }
     var det = document.createElement("details");
-    det.style.cssText = TABX.mergeBox;
-    det.open = !!mergeOpen[v];
+    det.style.cssText = TABX.varD;
+    det.open = open;
     var sum = document.createElement("summary");
-    sum.style.cssText = TABX.mergeSum;
+    sum.style.cssText = TABX.varSum;
     var caret = document.createElement("span");
     caret.style.cssText = "display:inline-block;width:1.1em;";
-    caret.textContent = det.open ? "▾" : "▸";
-    sum.appendChild(caret);
-    sum.appendChild(document.createTextNode("merge levels"));
+    caret.textContent = open ? "▾" : "▸";
+    var nm2 = document.createElement("b"); nm2.textContent = v;
+    sum.appendChild(caret); sum.appendChild(nm2);
+    sum.appendChild(document.createTextNode(
+        cached === undefined ? " ..." : (" : " + cached.length + " levels – click to merge")));
     det.appendChild(sum);
     det.addEventListener("toggle", function() {
         mergeOpen[v] = det.open;
         caret.textContent = det.open ? "▾" : "▸";
     });
-    det.appendChild(tabxmBuildList(ui, v, cached, null));   // null = no reordering here
-    frag.appendChild(det);
+    if (cached && cached.length) det.appendChild(tabxmBuildList(ui, v, cached, null));
+    return det;
+};
+
+var renderLevelTree = function(ui) {
+    if (!ui.levelsCtrl || !ui.predictors) return;
+    var preds = utils.clone(ui.predictors.value(), []);
+    lastLvlSig = JSON.stringify(preds);
+    tabxmReconcile(ui, preds);
+    reconcileShapes(ui, preds);
+
+    var frag = document.createElement("div");
+    frag.setAttribute("data-tabx-lvltree", "1");
+    if (preds.length === 0) {
+        var h = document.createElement("div"); h.style.cssText = TABX.hint;
+        h.textContent = "Select predictors to merge their levels, or to cut a number into groups.";
+        frag.appendChild(h);
+    } else {
+        preds.forEach(function(v) {
+            frag.appendChild(makeRegVarNode(ui, v, cachedLevels(v)));
+            fetchLevels(ui, "levelsCtrl", v);
+        });
+    }
+    var root = ui.levelsCtrl.$el[0];
+    root.innerHTML = ""; root.appendChild(frag);
 };
 
 var renderRefPicker = function(ui) {
@@ -705,8 +811,6 @@ var renderRefPicker = function(ui) {
     var preds = utils.clone(ui.predictors.value(), []);
     reconcileRefLevels(ui, preds);
     reconcileMult(ui, preds);
-    reconcileShapes(ui, preds);
-    tabxmReconcile(ui, preds);
 
     var frag = document.createElement("div");
     frag.setAttribute("data-tabx-refpick", "1");
@@ -894,6 +998,7 @@ var renderModelTable = function(ui) {
 
     var frag = document.createElement("div");
     frag.setAttribute("data-tabx-model", "1");
+    frag.style.cssText = TABX.mtCard;
     if (deps.length === 0) {
         var hint = document.createElement("div"); hint.style.cssText = TABX.hint;
         hint.textContent =
@@ -951,8 +1056,11 @@ var measureOffered = function(ui, effect, measure) {
 
 var EFFECT_OF_RADIO  = { effect_1: "auto", effect_2: "conditional", effect_3: "marginal",
                          effect_4: "at_reference" };
-var MEASURE_OF_RADIO = { measure_1: "auto", measure_2: "odds_ratio", measure_3: "ratio",
-                         measure_4: "difference", measure_5: "log" };
+// ⚠ radio NAME -> the value it sets, and it must follow the .u.yaml's ORDER, not just its values:
+// Phase 22g-iii re-ordered `measure` simple -> complex AND renamed "log" to "coefficient", so every
+// pair here moved. A stale entry greys the wrong button, silently.
+var MEASURE_OF_RADIO = { measure_1: "auto", measure_2: "difference", measure_3: "ratio",
+                         measure_4: "odds_ratio", measure_5: "coefficient" };
 
 var applyModelEnables = function(ui) {
     var eff = ui.effect ? ui.effect.value() : "auto";
@@ -1079,19 +1187,20 @@ var renderCrossPicker = function(ui) {
 // slot) + a delete button; a "+ Add model" button appends a card defaulting to the FULL pool.
 // The cards are stored in the hidden `models` Array (Group{label, vars}); jmvtab_reg_models()
 // folds them into tab_reg()'s `predictors` (an EMPTY builder -> the flat pool = single model; >=1
-// card -> a named list = model comparison). When stats_compare == "compare_baseline", each card shows a
-// radio marker writing its 1-based position to the hidden `baseline` option.
+// card -> a named list = model comparison, which since 22g-ii is TESTED automatically -- sequential
+// where the models nest, against the first otherwise -- so there is no comparison picker to show.
 //
-// The signature deliberately EXCLUDES `models`/`stats_baseline` (like refSig excludes ref_levels): a
-// checkbox / name / marker edit writes those and is SKIPPED by `updated`, so the in-place DOM edit
-// stands; add / delete change the card COUNT and re-render synchronously in their own handlers.
+// The signature deliberately EXCLUDES `models` (like refSig excludes ref_levels): a checkbox or name
+// edit writes it and is SKIPPED by `updated`, so the in-place DOM edit stands; add / delete change
+// the card COUNT and re-render synchronously in their own handlers. It DOES carry the outcome count,
+// because a second outcome closes the door on a second card (below).
 
 var lastModelsSig = null;
 
 var modelsSig = function(ui) {
     var pool    = utils.clone(ui.predictors.value(), []);
-    var compare = ui.stats_compare ? ui.stats_compare.value() : "none";
-    return JSON.stringify([pool, compare]);
+    var deps = ui.outcome ? utils.clone(ui.outcome.value(), []) : [];
+    return JSON.stringify([pool, deps.length]);
 };
 
 var modelsGet = function(ui) { return utils.clone(ui.models.value(), []); };
@@ -1122,7 +1231,6 @@ var deleteCard = function(ui, i) {
     var arr = modelsGet(ui);
     arr.splice(i, 1);
     ui.models.setValue(arr);
-    reconcileBaseline(ui);
     renderModelBuilder(ui);
 };
 
@@ -1138,34 +1246,9 @@ var reconcileModels = function(ui, pool) {
     if (changed) ui.models.setValue(arr);
 };
 
-// Keep the stored baseline position within 1..n after add / delete.
-var reconcileBaseline = function(ui) {
-    if (!ui.stats_baseline) return;
-    var n = modelsGet(ui).length;
-    var b = ui.stats_baseline.value() || 1;
-    var clamped = Math.min(Math.max(b, 1), Math.max(n, 1));
-    if (clamped !== b) ui.stats_baseline.setValue(clamped);
-};
-
-// `stats_compare` needs >=2 models; the card COUNT is invisible to the declarative enable: DSL, so grey
-// it imperatively.
-var applyCompareEnables = function(ui) {
-    var n = (ui.models ? utils.clone(ui.models.value(), []) : []).length;
-    if (ui.stats_compare && ui.stats_compare.setEnabled) ui.stats_compare.setEnabled(n >= 2);
-};
-
-var renderModelCard = function(ui, frag, card, i, pool, showBaseline, basePos) {
+var renderModelCard = function(ui, frag, card, i, pool) {
     var box  = document.createElement("div"); box.style.cssText = TABX.cardBox;
     var head = document.createElement("div"); head.style.cssText = TABX.cardHead;
-
-    if (showBaseline) {
-        var rl = document.createElement("label"); rl.style.cssText = TABX.cardBase;
-        var radio = document.createElement("input");
-        radio.type = "radio"; radio.name = "tabx-baseline"; radio.checked = (i + 1 === basePos);
-        radio.addEventListener("change", function() { if (ui.stats_baseline) ui.stats_baseline.setValue(i + 1); });
-        rl.appendChild(radio); rl.appendChild(document.createTextNode(" baseline"));
-        head.appendChild(rl);
-    }
 
     var name = document.createElement("input");
     name.type = "text"; name.style.cssText = TABX.cardName;
@@ -1206,6 +1289,7 @@ var renderModelBuilder = function(ui) {
     lastModelsSig = modelsSig(ui);
     var pool = utils.clone(ui.predictors.value(), []);
     reconcileModels(ui, pool);
+    forceNaForCompare(ui);          // >=2 cards -> the models must share one complete-case population
 
     var frag = document.createElement("div");
     frag.setAttribute("data-tabx-models", "1");
@@ -1215,28 +1299,32 @@ var renderModelBuilder = function(ui) {
         h0.textContent = "Select predictors first: they form the pool each model draws from.";
         frag.appendChild(h0);
     } else {
-        var cards   = modelsGet(ui);
-        var compare = ui.stats_compare ? ui.stats_compare.value() : "none";
-        var showBaseline = (compare === "compare_baseline" && cards.length >= 2);
-        var basePos = ui.stats_baseline ? (ui.stats_baseline.value() || 1) : 1;
-        cards.forEach(function(card, i) {
-            renderModelCard(ui, frag, card, i, pool, showBaseline, basePos);
-        });
+        var cards = modelsGet(ui);
+        // ⚠ A comparison tests two models OF THE SAME OUTCOME, so a SECOND card is refused while a
+        // second outcome is selected -- and only then. One card and several outcomes is a plain
+        // per-outcome table (jmvtab_reg_models() flattens it), which is why the door closes on the
+        // second card rather than on the second outcome.
+        var nDeps = ui.outcome ? utils.clone(ui.outcome.value(), []).length : 0;
+        var canAdd = (nDeps <= 1) || cards.length < 1;
+        cards.forEach(function(card, i) { renderModelCard(ui, frag, card, i, pool); });
         var note = document.createElement("div"); note.style.cssText = TABX.hint;
-        note.textContent = (cards.length === 0)
-            ? "Add two or more models to compare specifications; leave empty to fit one model on all predictors."
-            : "Each model draws from the predictors above; untick to leave a predictor out.";
+        note.textContent = !canAdd
+            ? "One predictor list only: a comparison tests two models of the SAME outcome, and several outcomes are selected."
+            : (cards.length === 0
+               ? "Add two or more models to compare specifications; leave empty to fit one model on all predictors."
+               : "Each model draws from the predictors above; untick to leave a predictor out.");
         frag.appendChild(note);
 
         var add = document.createElement("button");
         add.type = "button"; add.style.cssText = TABX.addBtn; add.textContent = "+ Add model";
-        add.addEventListener("click", function() { addCard(ui, pool); });
+        add.disabled = !canAdd;
+        if (!canAdd) add.style.opacity = "0.45";
+        else add.addEventListener("click", function() { addCard(ui, pool); });
         frag.appendChild(add);
     }
 
     var root = ui.modelBuilderCtrl.$el[0];
     root.innerHTML = ""; root.appendChild(frag);
-    applyCompareEnables(ui);
 };
 
 module.exports = {
@@ -1249,17 +1337,9 @@ module.exports = {
     // may have changed -> reconcile cards / scaling).
     onChange_vars: function(ui) {
         renderModelTable(ui);
+        renderLevelTree(ui);
         renderRefPicker(ui);
         renderModelBuilder(ui);
-        applyCompareEnables(ui);
-    },
-
-    // `compare` changed: force the shared complete-case population for a valid test, re-render the
-    // builder (baseline markers show only when stats_compare == "compare_baseline"), re-apply the greying.
-    onChange_compare: function(ui) {
-        forceNaForCompare(ui);
-        renderModelBuilder(ui);
-        applyCompareEnables(ui);
     },
 
     // modelBuilderCtrl: build on create. On `updated`, re-render ONLY when the pool / compare changed OR
@@ -1293,6 +1373,20 @@ module.exports = {
     // refPickerCtrl: build on create. On `updated`, re-render ONLY when the predictor set changed OR
     // jamovi replaced our $el subtree (marker gone) -- a reference PICK writes ref_levels (not in the
     // signature), so it is SKIPPED and the in-place repaint stands.
+    // levelsCtrl: the merge / cut box. Same rule as everywhere here -- re-render only when the
+    // PREDICTOR SET changed or jamovi replaced our subtree; a tick or a `shape` pick writes an
+    // option that is not in the signature, so the in-place edit stands.
+    levelsCtrl_creating: function(ui) { renderLevelTree(ui); },
+    levelsCtrl_updated:  function(ui) {
+        if (!ui.levelsCtrl || !ui.predictors) return;
+        var sig  = JSON.stringify(utils.clone(ui.predictors.value(), []));
+        var root = ui.levelsCtrl.$el[0];
+        var present = !!(root && root.firstChild && root.firstChild.getAttribute &&
+                         root.firstChild.getAttribute("data-tabx-lvltree") === "1");
+        if (sig === lastLvlSig && present) return;
+        renderLevelTree(ui);
+    },
+
     refPickerCtrl_creating: function(ui) { renderRefPicker(ui); },
     refPickerCtrl_updated:  function(ui) {
         if (!ui.refPickerCtrl || !ui.predictors) return;

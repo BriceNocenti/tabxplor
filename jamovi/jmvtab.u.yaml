@@ -176,43 +176,46 @@ children:
                     optionName: color_signif
                     optionPart: guaranteed_effect
                     enable: (!(color:no))
+      # Two equal columns, and EVERY control carries its own label: the bold `test = ...` title used
+      # to sit above all three, so it read as naming the ComboBox and the second tick-box too.
       - type: LayoutBox
         margin: large
         children:
-          - type: Label
-            label: >-
-              <b>test = <i>(Chi2 and Cramer’V for categorical; ANOVA F and eta2 for
-              numeric)</i></b>
           - type: LayoutBox
             margin: none
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 1
             children:
-              - type: LayoutBox
-                cell:
-                  column: 0
-                  row: 0
-                stretchFactor: 1
-                children:
-                  - type: CheckBox
-                    name: test
-              - type: LayoutBox
-                cell:
-                  column: 1
-                  row: 0
-                stretchFactor: 1
+              - type: CheckBox
+                name: test
+                label: >-
+                  <b>test = <i>(Chi2 and Cramer’V for categorical; ANOVA F and eta2 for
+                  numeric)</i></b>
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 1
+              row: 0
+            stretchFactor: 1
+            children:
+              - type: Label
+                label: anova = <i>(which F statistic)</i>
                 children:
                   - type: ComboBox
                     name: anova
-                    label: ANOVA F
                     enable: (test)
-              - type: LayoutBox
-                cell:
-                  column: 0
-                  row: 1
-                stretchFactor: 0
-                children:
-                  - type: CheckBox
-                    name: design_effect
-                    label: "design_effect = <i>(design effect of the weights)</i>"
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 0
+              row: 1
+            stretchFactor: 1
+            children:
+              - type: CheckBox
+                name: design_effect
+                label: "design_effect = <i>(design effect of the weights)</i>"
   - type: CollapseBox
     label: <b>Levels and missing values</b>
     stretchFactor: 1
@@ -300,7 +303,7 @@ children:
         children:
           - type: Label
             label: >-
-              <b>Reorder and merge levels:</b>
+              <b>Reorder, merge and cut levels:</b>
             children:
               - type: CustomControl
                 name: levelsCtrl
@@ -377,12 +380,14 @@ children:
           # of skipping it -- which made `jmvtools::prepare()` abort outright. A grid is
           # cell-addressed, so a missing cell simply stays blank. Never write `children: []` either:
           # the compiler splices an empty container out and rewrites this file, comments and all.
+          # conf_level | stars: TWO EQUAL COLUMNS (stretch 1 each), so the box has one grid the eye
+          # can follow rather than two controls sized by their own text.
           - type: LayoutBox
             margin: none
             cell:
               column: 0
               row: 1
-            stretchFactor: 0
+            stretchFactor: 1
             children:
               - type: Label
                 label: conf_level = <i>(confidence level)</i>
@@ -396,7 +401,7 @@ children:
             cell:
               column: 1
               row: 1
-            stretchFactor: 0
+            stretchFactor: 1
             children:
               - type: Label
                 label: stars = <i>(significance stars)</i>
@@ -404,100 +409,102 @@ children:
                   - type: CheckBox
                     name: stars
                     enable: (ci:ref || ci:auto)
-      - type: CollapseBox
-        label: <b>Confidence-interval methods (advanced)</b>
-        stretchFactor: 1
-        collapsed: true
+      # The interval METHODS were a nested CollapseBox inside a CollapseBox -- two clicks to reach
+      # four drop-downs. They are in the parent now, behind a bold heading; the `margin: large` on
+      # this block IS the blank line above it (a spacer node would be an empty container, which the
+      # ui compiler splices out and then rewrites this file over, comments and all).
+      - type: LayoutBox
+        margin: large
+        children:
+          - type: Label
+            label: <b>Confidence-interval methods (advanced)</b>
+      - type: LayoutBox
+        margin: none
         children:
           - type: LayoutBox
             margin: none
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 1
             children:
-              - type: LayoutBox
-                margin: none
-                cell:
-                  column: 0
-                  row: 0
-                stretchFactor: 0
-                children:
-                  - type: Label
-                    label: ci_method = c(cell = )
-              - type: LayoutBox
-                margin: none
-                cell:
-                  column: 1
-                  row: 0
-                stretchFactor: 1
+              - type: Label
+                label: ci_method = c(cell = )
                 children:
                   - type: ComboBox
                     name: ci_method_cell
                     enable: (ci:cell || ci:auto)
-              - type: LayoutBox
-                margin: none
-                cell:
-                  column: 0
-                  row: 1
-                stretchFactor: 0
-                children:
-                  - type: Label
-                    label: ci_method = c(diff = )
-              - type: LayoutBox
-                margin: none
-                cell:
-                  column: 1
-                  row: 1
-                stretchFactor: 1
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 1
+              row: 0
+            stretchFactor: 1
+            children:
+              - type: Label
+                label: ci_method = c(diff = )
                 children:
                   - type: ComboBox
                     name: ci_method_diff
                     enable: (ci:ref || ci:auto)
-              - type: LayoutBox
-                margin: none
-                cell:
-                  column: 0
-                  row: 2
-                stretchFactor: 0
-                children:
-                  - type: Label
-                    label: ci_method = c(mean_diff = )
-              - type: LayoutBox
-                margin: none
-                cell:
-                  column: 1
-                  row: 2
-                stretchFactor: 1
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 0
+              row: 1
+            stretchFactor: 1
+            children:
+              - type: Label
+                label: ci_method = c(mean_diff = )
                 children:
                   - type: ComboBox
                     name: ci_method_mean_diff
                     enable: (ci:ref || ci:auto)
-              - type: LayoutBox
-                margin: none
-                cell:
-                  column: 0
-                  row: 3
-                stretchFactor: 0
-                children:
-                  - type: Label
-                    label: ci_method = c(mean_ratio = )
-              - type: LayoutBox
-                margin: none
-                cell:
-                  column: 1
-                  row: 3
-                stretchFactor: 1
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 1
+              row: 1
+            stretchFactor: 1
+            children:
+              - type: Label
+                label: ci_method = c(mean_ratio = )
                 children:
                   - type: ComboBox
                     name: ci_method_mean_ratio
                     enable: (ci:ref || ci:auto)
+  # TWO EQUAL COLUMNS throughout, general to specific: the whole-table look first (`theme`), then the
+  # table's structure, then the wrapping, then the numbers.
   - type: CollapseBox
     label: <b>Other formatting</b>
     stretchFactor: 1
     collapsed: true
     children:
       - type: LayoutBox
+        margin: none
         cell:
           column: 0
           row: 0
-        stretchFactor: 0
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: theme = <i>(colours, or black and white)</i>
+            fitToGrid: true
+            children:
+              - type: RadioButton
+                name: theme_1
+                optionName: theme
+                optionPart: light
+              - type: RadioButton
+                name: theme_2
+                optionName: theme
+                optionPart: print_ready
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 1
+        stretchFactor: 1
         children:
           - type: Label
             label: totaltab = <i>(with tab_vars, add a total table)</i>
@@ -518,8 +525,21 @@ children:
       - type: LayoutBox
         margin: none
         cell:
-          column: 0
+          column: 1
           row: 1
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: add_pct = <i>(see frequencies of 100% total)</i>
+            children:
+              - type: CheckBox
+                name: add_pct
+                enable: (pct:row || pct:col)
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 2
         stretchFactor: 1
         children:
           - type: Label
@@ -532,7 +552,7 @@ children:
         margin: none
         cell:
           column: 1
-          row: 1
+          row: 2
         stretchFactor: 1
         children:
           - type: Label
@@ -559,19 +579,6 @@ children:
         cell:
           column: 1
           row: 3
-        stretchFactor: 1
-        children:
-          - type: Label
-            label: add_pct = <i>(see frequencies of 100% total)</i>
-            children:
-              - type: CheckBox
-                name: add_pct
-                enable: (pct:row || pct:col)
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 0
-          row: 4
         stretchFactor: 1
         children:
           - type: Label

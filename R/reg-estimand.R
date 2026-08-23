@@ -2,7 +2,7 @@
 #   questions at once.
 #
 #     link    = which measure the MODEL estimates   ("odds_ratio" | "ratio" | "difference")
-#     measure = which measure is REPORTED           (the same words, plus "log")
+#     measure = which measure is REPORTED           (the same words, plus "coefficient")
 #     effect  = where the number comes from         ("conditional" | "marginal" | "at_reference")
 #
 # THE RULE EVERYTHING HERE DERIVES FROM. A LINK IS A MEASURE -- the one a model estimates directly --
@@ -63,8 +63,10 @@
 
 # --- the measure vocabulary --------------------------------------------------------------------------
 #
-# THREE base geometries + `log`, which is NOT a peer: it is the same fit, un-exponentiated. A precise
-# spelling (`log_odds` / `log_risk` / `log_rate`) additionally PINS which base.
+# THREE base geometries + `coefficient`, which is NOT a peer: it is the model's own coefficient, the
+# fit un-transformed. A precise spelling (`log_odds` / `log_risk` / `log_rate`) additionally PINS
+# which base. ⚠ It is TOTAL: on a link that already is additive (identity) there is nothing to
+# un-exponentiate, so it resolves to the additive row itself -- see reg_estimand()'s fall-through.
 #
 # THE ACRONYMS ARE NOT DECLARED HERE. They are MEASURE_ACRONYMS (R/fmt_class.R), the one table every
 # argument that names a measure reads, so `tab(color = "RR")` and `tab_reg(measure = "RR")` cannot
@@ -76,20 +78,22 @@
 # The canonical values of `measure` -- what the argument is TAUGHT, and what every acronym resolves to.
 #' @keywords internal
 #' @noRd
-REG_MEASURES_VALUES <- c("auto", "odds_ratio", "ratio", "difference", "log")
+REG_MEASURES_VALUES <- c("auto", "difference", "ratio", "odds_ratio", "coefficient")
 
-# The BASE a `log_*` spelling pins ("" = the family's default estimand, i.e. bare "log").
+# The BASE a `log_*` spelling pins ("" = the family's default estimand, i.e. bare "coefficient").
+# ⚠ These ARE the spellings of `measure = "coefficient"`: on a logit or a log link the model's own
+# coefficient IS the log of the reported measure, which is what a user typing "log_odds" means.
 #' @keywords internal
 #' @noRd
-REG_LOG_BASE <- c(log = "", log_odds = "odds_ratio", log_risk = "ratio",
-                  log_rate = "ratio", log_ratio = "ratio")
+REG_LOG_BASE <- c(coefficient = "", coef = "", coeff = "", log = "", log_odds = "odds_ratio",
+                  log_risk = "ratio", log_rate = "ratio", log_ratio = "ratio")
 
 #' @keywords internal
 #' @noRd
 REG_MEASURE_SPELLINGS <- {
   v <- c(stats::setNames(REG_MEASURES_VALUES, REG_MEASURES_VALUES),
          measure_twins(c(MEASURE_ACRONYMS, MEASURE_ACRONYMS_REG)),
-         stats::setNames(rep("log", length(REG_LOG_BASE)), names(REG_LOG_BASE)))
+         stats::setNames(rep("coefficient", length(REG_LOG_BASE)), names(REG_LOG_BASE)))
   v[!duplicated(names(v))]
 }
 
@@ -102,7 +106,7 @@ reg_measure_key <- function(x) {
   x   <- as.character(x)
   key <- unname(REG_MEASURE_SPELLINGS[x])
   if (is.na(key)) return(NULL)
-  base <- if (identical(key, "log")) unname(REG_LOG_BASE[x]) else ""
+  base <- if (identical(key, "coefficient")) unname(REG_LOG_BASE[x]) else ""
   list(measure = key, log_base = if (is.na(base)) "" else base)
 }
 
@@ -146,7 +150,7 @@ reg_scale_of <- function(est, trials = NA) {
 # The scale a LOGGED estimand is the log OF, `NA` on any other column. `log_coef` is one row shared
 # by every logged measure, so a link-scale column cannot say on its own whether its exponential is an
 # odds or a level -- and its baseline row differs by exactly that. Set by reg_estimand()'s logged
-# branch; the declared `measure = "log"` COEFFICIENT rows carry no `log_of` and need none (their
+# branch; the declared `measure = "coefficient"` rows carry no `log_of` and need none (their
 # baseline is the fit's own intercept, already on the link scale).
 #' @keywords internal
 #' @noRd
@@ -178,7 +182,7 @@ REG_CONTRAST_VALUES <- setdiff(REG_EFFECTS_VALUES, "auto")
 # runs dry).
 #' @keywords internal
 #' @noRd
-REG_MEASURE_LINK <- c(odds_ratio = "logit", ratio = "log", difference = "identity")
+REG_MEASURE_LINK <- c(difference = "identity", ratio = "log", odds_ratio = "logit")
 
 #' @keywords internal
 #' @noRd
@@ -186,7 +190,7 @@ REG_LINKS_VALUES <- c("auto", names(REG_MEASURE_LINK))
 
 # The glm spellings, accepted silently and never taught. ⚠ THE ONE VOCABULARY NOT SHARED, and the
 # reason it stays a table of its own: on `link` the word "log" means the LOG LINK, while on `measure`
-# it means "un-exponentiated". Consulted FIRST by reg_link_key() for exactly that reason.
+# it is a SPELLING of "coefficient". Consulted FIRST by reg_link_key() for exactly that reason.
 #' @keywords internal
 #' @noRd
 REG_LINK_ALIASES <- c(identity = "difference", log = "ratio", logit = "odds_ratio")
@@ -205,7 +209,7 @@ reg_link_key <- function(x) {
   f <- unname(REG_FIT_SPELLINGS[x])
   if (!is.na(f)) return(f)
   k <- reg_measure_key(x)
-  if (is.null(k) || identical(k$measure, "log")) return(NULL)
+  if (is.null(k) || identical(k$measure, "coefficient")) return(NULL)
   k$measure
 }
 
@@ -370,16 +374,18 @@ reg_word <- function(est) {
 reg_word_long <- function(est) {
   if (is.null(est) || is.null(est$word)) return("")
   base <- REG_WORDS[[est$word]]$long()
-  if (identical(est$measure, "log")) base <- gettextf("log %s", base)
+  if (identical(est$measure, "coefficient")) base <- gettextf("log %s", base)
   REG_CONTRASTS[[est$effect]]$long(base)
 }
 
-# The log wrapper, shared by the header and by the crude column: `measure = "log"` shows the SAME
-# estimand un-exponentiated, so it names what it logs rather than collapsing to one greek letter.
+# The log wrapper, shared by the header and by the crude column: on an exponentiated link
+# `measure = "coefficient"` shows the SAME estimand un-exponentiated, so it names what it logs rather
+# than collapsing to one greek letter. On an identity link there is nothing to wrap -- the fall-through
+# in reg_estimand() means the row is the additive one, which keeps its own word.
 #' @keywords internal
 #' @noRd
 reg_word_logged <- function(word, measure)
-  if (identical(measure, "log")) paste0("log(", word, ")") else word
+  if (identical(measure, "coefficient")) paste0("log(", word, ")") else word
 
 # The acronym a composed header was built from -- "log(OR)" -> "OR", "mRR" -> "RR".
 #' @keywords internal
@@ -638,10 +644,10 @@ reg_outcome_levels <- function(y, outcome) {
 #
 #   link          which measure the MODEL estimates -- the key into the family's `fits`.
 #   effect        the contrast: "conditional" | "marginal" | "at_reference".
-#   measure       what is REPORTED; "log" on a logged row, whose base is `base_measure`.
+#   measure       what is REPORTED; "coefficient" on a logged row, whose base is `base_measure`.
 #   base_measure  the measure a logged row is the log OF (itself, on every other row). It is the
 #                 LOOKUP key: under one (link, effect) a ratio and an odds ratio both log, so
-#                 "log" alone would name two rows.
+#                 "coefficient" alone would name two rows.
 #   measure_link  the link the REPORTED comparison is taken on -- REG_EMPIRICAL$*$link's own
 #                 vocabulary, and what the g-computation sweep and the crude leg both read. It
 #                 EQUALS the model's link exactly on a coefficient row.
@@ -896,7 +902,7 @@ reg_compose_log <- function(family, r) {
   if (!isTRUE(r$exp)) return(NULL)
   crude <- reg_compose_crude(family, r$fit, r$base_measure, r$measure_link, TRUE)
   r$log_of      <- r$scale
-  r$measure     <- "log"
+  r$measure     <- "coefficient"
   r$exp         <- FALSE
   r$scale       <- "log_coef"
   r$crude_fam   <- crude$fam
@@ -947,7 +953,7 @@ local({
         all(vapply(rows, function(r) !identical(r$effect, "conditional") ||
                      identical(r$base_measure, r$link), logical(1))),
       "a logged row is the log of a multiplicative one" =
-        all(vapply(rows, function(r) !identical(r$measure, "log") ||
+        all(vapply(rows, function(r) !identical(r$measure, "coefficient") ||
                      !identical(r$measure_link, "identity"), logical(1)))
     )
   }
@@ -1020,27 +1026,30 @@ reg_estimand <- function(family, link = "auto", measure = "auto", effect = "auto
 
   mk <- if (is.list(measure)) measure else reg_measure_key(measure)
   if (is.null(mk)) return(list(status = "unknown_measure", family = family, measure = measure))
-  logged <- identical(mk$measure, "log")
-  # "log" logs the measure the cascade would otherwise report; a `log_*` spelling pins another base.
+  logged <- identical(mk$measure, "coefficient")
+  # "coefficient" reports the model's own coefficient, i.e. the measure the cascade would otherwise
+  # report, un-transformed; a `log_*` spelling pins another base.
   base <- if (logged && nzchar(mk$log_base)) mk$log_base
           else if (logged || identical(mk$measure, "auto")) reg_auto_measure(family, lk, effect)
           else mk$measure
+
+  # DESIGN: `coefficient` is TOTAL. On a link that is already additive there is nothing to
+  # un-exponentiate -- the model's own coefficient IS the additive row -- so the request falls
+  # through to it rather than being refused. That is what lets one mixed-family table (a logistic
+  # outcome beside a gaussian one) be asked for its coefficients at all.
+  if (logged && identical(unname(REG_MEASURE_LINK[[base]]), "identity")) logged <- FALSE
 
   if (identical(ef, "auto")) ef <- if (identical(base, lk)) "conditional" else "marginal"
 
   hit <- Filter(function(r) identical(r$link, lk) && identical(r$effect, ef) &&
                   identical(r$base_measure, base) &&
-                  identical(identical(r$measure, "log"), logged), fr$rows)
+                  identical(identical(r$measure, "coefficient"), logged), fr$rows)
   if (length(hit)) return(c(hit[[1L]], list(family = family)))
 
   # --- no row: which clause failed, said in the user's own terms -------------------------------
   if (is.null(reg_measure_cell(family, base)))
     return(list(status = "impossible", family = family, effect = ef, link = lk, measure = base,
                 why = reg_no_measure_why(family)))
-  if (logged && identical(unname(REG_MEASURE_LINK[[base]]), "identity"))
-    return(list(status = "impossible", family = family, effect = ef, link = lk, measure = "log",
-                why = function() gettext(
-                  "this outcome's coefficient is already additive, so there is no ratio to take the log of")))
   if (identical(ef, "conditional"))
     return(list(status = "no_coefficient", family = family, link = lk, effect = ef, measure = base,
                 why = reg_no_coefficient_why(lk)))
@@ -1306,9 +1315,9 @@ reg_estimand_offer_lines <- function(family, link = NULL, effect = NULL) {
   ok <- Filter(function(r) is.null(effect) || identical(r$effect, effect), rows)
   if (!length(ok)) ok <- rows
   # ⚠ SPELLINGS, not rows: under one (link, effect) a ratio and an odds ratio BOTH log, so listing
-  # every log row would offer `measure = "log"` twice. Bare "log" reaches the one the cascade picks;
-  # the pinned `log_odds` / `log_risk` spellings are expert and stay in ?tab_reg.
-  ok <- Filter(function(r) !identical(r$measure, "log") ||
+  # every logged row would offer `measure = "coefficient"` twice. Bare "coefficient" reaches the one
+  # the cascade picks; the pinned `log_odds` / `log_risk` spellings are expert and stay in ?tab_reg.
+  ok <- Filter(function(r) !identical(r$measure, "coefficient") ||
                  identical(r$base_measure, reg_auto_measure(family, lk, r$effect)), ok)
   lines <- vapply(ok, function(r) cli::format_inline(
     "{.code measure = \"{r$measure}\"} -> {.val {reg_word(r)}}, the {reg_word_long(r)}"), character(1))
@@ -1405,7 +1414,7 @@ reg_measures_rd <- function() {
     mods <- vapply(names(fits), function(m) sprintf(
       "\\code{link = \"%s\"}%s (%s)", m, if (identical(m, names(fits)[[1]])) ", the default" else "",
       reg_family_display_name(fits[[m]])), character(1))
-    meas <- vapply(c(reg_level_measures(REG_FAMILIES[[fam]]$level), "log"),
+    meas <- vapply(c(reg_level_measures(REG_FAMILIES[[fam]]$level), "coefficient"),
                    function(m) sprintf("\\code{\"%s\"}", m), character(1))
     lvl <- c(pct = "a percentage", mean = "a mean", count = "a count",
              rank = "a position on an ordered scale")[[REG_FAMILIES[[fam]]$level]]

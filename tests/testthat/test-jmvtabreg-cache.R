@@ -25,7 +25,6 @@ reg_opts <- function(...) {
     empirical = FALSE, ref = NULL, conf_level = 0.95,
     ci_method = "wald", stars = TRUE, color = NULL, color_signif = "grey_non_signif",
     na = "drop_by_outcome", cleannames = TRUE, n = "range", subtext = "",
-    stats_compare = "none", stats_baseline = 1L, stats_checks = FALSE,
     ..multiplier = NULL, ..trials = NULL, ..link = NULL
   ), list(...))
   # derive the Model-table arrays from the convenience fields
@@ -309,55 +308,28 @@ test_that("Phase o: use_cache = FALSE builds the same table but persists NO stor
   expect_false(is.null(cached$store))
 })
 
-test_that("stats_compare = compare_baseline adds a comparison footer row", {
+# Phase 22g-iii: the panel asks NOTHING about `stats`. Two predictor subsets are compared because
+# that is tab_reg()'s own default since 22g-ii -- which is exactly why the picker had to go.
+test_that("two predictor subsets are compared with no control at all", {
   gss <- gss_reg()
   o   <- reg_opts(predictors = list(small = c("race", "age"),
                                     full  = c("race", "age", "rincome")),
-                  # Phase 20g-i: the three `stats_*` controls fold into tab_reg()'s ONE `stats =`
-                  # key, and the ComboBox values ARE the R keys.
-                  ..family = "binomial", stats_compare = "compare_baseline",
-                  stats_baseline = 2L, na = "drop_all")
+                  ..family = "binomial", na = "drop_all")
   t   <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
   cmp <- get_test(t) |> dplyr::filter(grepl("^compare", test))
   expect_gte(nrow(cmp), 1L)
 })
 
-# Phase 20g-i: the control 20f owed. `stats = "all"` is the one value that asks for the checks that
-# refit the model, and reg_resolve_stats() lets it COMPOSE with a comparison key -- so the tick-box
-# and the comparison ComboBox are independent, which is what the panel promises.
-test_that("stats_checks folds into `stats = \"all\"`, comparison or not", {
-  expect_null(jmvtab_reg_stats("none", 1L, FALSE))
-  expect_identical(jmvtab_reg_stats("none", 1L, TRUE), "all")
-  expect_identical(jmvtab_reg_stats("compare_sequential", 1L, FALSE), "compare_sequential")
-  expect_identical(jmvtab_reg_stats("compare_sequential", 1L, TRUE),
-                   c("all", "compare_sequential"))
-  expect_identical(jmvtab_reg_stats("compare_baseline", 2L, TRUE),
-                   c("all", compare_baseline = "2"))
-  # ... and tab_reg()'s own resolver reads that pair as "everything, plus this test"
-  r <- reg_resolve_stats(c("all", compare_baseline = "2"))
-  expect_identical(r$stats, "all")
-  expect_identical(r$compare, "baseline")
-  expect_identical(r$baseline, 2)
-
-  # ... and the tick-box really produces them, WITH the cache on: the eager stage computes every
-  # check while the fit lives, so a served record carries them (Phase 22j retired the gate that
-  # used to turn the cache off for exactly this reason). `stats` is in the key instead, because it
-  # decides which eager rows the record holds.
+# Phase 22j: the eager stage computes every fit-based footer row WHILE the fit lives, so a served
+# digest carries them -- which is what let Phase 22g-iii delete the `stats_checks` tick-box (it only
+# ever existed to turn the cache off). The rows must therefore survive a cache HIT.
+test_that("the fit-based footer rows survive being served from the store", {
   gss <- gss_reg()
   b   <- quiet(jmvtab_reg_build(gss, reg_opts(predictors = c("race", "age")), NULL))
-  off <- b$tabs
-  bon <- quiet(jmvtab_reg_build(
-    gss, reg_opts(predictors = c("race", "age"), stats_checks = TRUE), b$store))
-  on  <- bon$tabs
-  expect_equal(bon$hits, 0L)                       # `stats` moved the key
-  expect_false("linearity_lr" %in% get_test(off)$test)
-  expect_true("linearity_lr"  %in% get_test(on)$test)
-  expect_true(all(c("dispersion", "influence") %in% get_test(on)$test))
-  # and they survive being SERVED from the store
-  again <- quiet(jmvtab_reg_build(
-    gss, reg_opts(predictors = c("race", "age"), stats_checks = TRUE), bon$store))
+  expect_true(all(c("dispersion", "influence") %in% get_test(b$tabs)$test))
+  again <- quiet(jmvtab_reg_build(gss, reg_opts(predictors = c("race", "age")), b$store))
   expect_gte(again$hits, 1L)
-  expect_true("linearity_lr" %in% get_test(again$tabs)$test)
+  expect_true(all(c("dispersion", "influence") %in% get_test(again$tabs)$test))
 })
 
 test_that("a comparison list with several dependents yields a NULL table (guarded)", {
@@ -504,9 +476,9 @@ test_that("Phase 19k: the trials picker == tab_reg(trials =), explicit and autom
 
 # `shape`: the per-predictor functional-form picker folds into tab_reg(shape =).
 test_that("Phase 19k: the shape picker folds into tab_reg(shape =)", {
-  expect_null(jmvtab_reg_shape_vector(list()))
-  expect_null(jmvtab_reg_shape_vector(list(list(var = "age", shape = "linear"))))  # the default
-  expect_identical(jmvtab_reg_shape_vector(list(list(var = "age", shape = "quadratic"),
+  expect_null(jmvtab_shape_vector(list()))
+  expect_null(jmvtab_shape_vector(list(list(var = "age", shape = "linear"))))  # the default
+  expect_identical(jmvtab_shape_vector(list(list(var = "age", shape = "quadratic"),
                                                 list(var = "tvhours", shape = ""),
                                                 list(var = "educ", shape = "log"))),
                    c(age = "quadratic", educ = "log"))
@@ -594,4 +566,37 @@ test_that("Phase 20g-ii: a merge changes the fit key, so the cached fit is not r
   # jmvreg_fit_key() fingerprints the PREPARED frame's levels, and the merge runs before any fit --
   # so it invalidates by construction, with no cache code of its own.
   expect_equal(r$hits, 0L)
+})
+
+
+# --- Phase 22g-iii ------------------------------------------------------------------------------
+# ONE predictor subset beside several outcomes is a per-outcome table, not a comparison -- and
+# `is_comparison <- is.list(predictors)` would refuse the second outcome if the card still arrived
+# as a list. TWO subsets and two outcomes is still refused: there is no such table.
+test_that("one predictor subset builds with several outcomes; two subsets still refuse", {
+  cards <- list(list(label = "m1", vars = c("race", "age")))
+  expect_identical(jmvtab_reg_models(cards, c("race", "age"), flatten = TRUE), c("race", "age"))
+  expect_true(is.list(jmvtab_reg_models(cards, c("race", "age"), flatten = FALSE)))
+  two <- c(cards, list(list(label = "m2", vars = "race")))
+  expect_true(is.list(jmvtab_reg_models(two, c("race", "age"), flatten = TRUE)))
+
+  gss <- gss_reg()
+  o   <- reg_opts(outcome = c("married", "black"), ..family = "binomial",
+                  predictors = c("race", "age"))
+  o$models <- cards
+  o$predictors <- jmvtab_reg_models(cards, c("race", "age"), flatten = TRUE)
+  t <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
+  expect_false(is.null(t))
+  expect_gte(sum(grepl("^Model", names(t))), 2L)     # one model column block per outcome
+})
+
+# `measure = "coefficient"` is TOTAL: it answers for a gaussian outcome too, where "log" was refused.
+test_that("`measure = \"coefficient\"` builds on a mixed-family table", {
+  gss <- gss_reg()
+  o   <- reg_opts(outcome = c("married", "tvhours"), ..family = "auto",
+                  predictors = "race", measure = "coefficient", effect = "auto",
+                  empirical = FALSE)
+  t <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
+  expect_false(is.null(t))
+  expect_gte(sum(grepl("^Model", names(t))), 2L)
 })

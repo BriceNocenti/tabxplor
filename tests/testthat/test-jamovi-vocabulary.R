@@ -109,11 +109,6 @@ test_that("jmvtab.a.yaml speaks tab()'s vocabularies", {
     expect_no_error(suppressMessages(tab_apply_display(tb, d)),
                     message = paste("display value refused:", d))
   }
-
-  # the retired options are GONE (19d retired `OR` onto display/ref2; `chi2` is `test`)
-  expect_false("OR"   %in% names(o))
-  expect_false("chi2" %in% names(o))
-  expect_true("test"  %in% names(o))
 })
 
 
@@ -140,10 +135,11 @@ test_that("jmvtabreg.a.yaml speaks tab_reg()'s vocabularies", {
   # stricter single source than the formal's own default vector was. Phase 20g-i renamed the option.
   expect_identical(opt_values(o, "ci_method"), CI_METHODS$model)
 
-  # `stats_compare` offers the model-comparison KEYS of `stats =` verbatim (plus the "none" sentinel),
-  # so what the picker shows is what a user would type. reg_resolve_stats() reads exactly these.
-  expect_identical(opt_values(o, "stats_compare"),
-                   c("none", "compare_baseline", "compare_sequential"))
+  # ⚠ There is NO `stats` control: Phase 22g-iii deleted all three, because tab_reg()'s own default
+  # already compares several predictor subsets (22g-ii) and a picker offering "none" named the
+  # opposite of what it did.
+  for (nm in c("stats_compare", "stats_baseline", "stats_checks"))
+    expect_false(nm %in% names(o), info = nm)
 
   # `color` on a reg table: off / the column's own geometry / the own-reference measures. The last
   # two are DERIVED (measure_own_ref), so the yaml cannot offer a measure D25 refuses.
@@ -153,13 +149,6 @@ test_that("jmvtabreg.a.yaml speaks tab_reg()'s vocabularies", {
   # the significance policy is spelled the SAME way, and in the same order, as in jmvtab
   expect_identical(opt_values(o, "color_signif"),
                    opt_values(yaml_opts("jmvtab.a.yaml"), "color_signif"))
-
-  # the retired estimand options are GONE (19e); `display` replaced `estimate_display`
-  expect_false("exponentiate"     %in% names(o))
-  expect_false("at"               %in% names(o))
-  expect_false("estimate_display" %in% names(o))
-  expect_true("display"           %in% names(o))
-  expect_true("shape"             %in% names(o))   # the per-predictor functional-form picker
 })
 
 
@@ -173,6 +162,7 @@ JMV_UI_ONLY <- c(
   data            = "the jamovi dataset, not an argument",
   wrap_rows       = "tab_html() / the renderer, not the producer",
   wrap_cols       = "tab_html() / the renderer, not the producer",
+  theme           = "tab_html() / tab_xl() -- the renderer, not the producer",
   export_format   = "the export block (R/jmvtab-export.R)",
   export_dir      = "the export block",
   export_filename = "the export block",
@@ -263,6 +253,44 @@ test_that("the .u.yaml controls and the .js name declared options", {
       expect_true(nm %in% known,
                   info = paste0("jamovi/js/", an, ".js: `", nm,
                                 "` names neither an option nor a control (a stale rename?)"))
+  }
+})
+
+
+# ⚠ A `.js` map from a RADIO NAME to the value it sets must agree with the `.u.yaml` that names those
+# radios -- and nothing else can see it. Phase 22g-iii re-ordered `measure` AND renamed one of its
+# values, which moved every pair in `MEASURE_OF_RADIO`; the value-coverage test above stayed green
+# (the yaml still declares five values and offers five buttons) while `applyModelEnables()` greyed
+# the wrong button. The maps are the JS's own object literals, read here rather than listed.
+test_that("the .js radio maps agree with the .u.yaml that names those radios", {
+  skip_if_not_installed("yaml")
+  for (an in c("jmvtab", "jmvtabreg")) {
+    ui <- yaml::read_yaml(testthat::test_path("..", "..", "jamovi", paste0(an, ".u.yaml")))
+    js <- paste(readLines(testthat::test_path("..", "..", "jamovi", "js", paste0(an, ".js")),
+                          warn = FALSE), collapse = "\n")
+    # every RadioButton, as control-name -> the value it sets
+    declared <- list()
+    walk <- function(node) {
+      if (!is.list(node)) return(invisible(NULL))
+      if (identical(node$type, "RadioButton") && !is.null(node$name) && !is.null(node$optionPart))
+        declared[[as.character(node$name)]] <<- as.character(node$optionPart)
+      for (el in node) if (is.list(el)) walk(el)
+      invisible(NULL)
+    }
+    walk(ui)
+    # `var NAME_OF_RADIO = { ctrl: "value", ... };` -- the convention both files follow
+    for (m in regmatches(js, gregexpr("var\\s+\\w+_OF_RADIO\\s*=\\s*\\{[^}]*\\}", js, perl = TRUE))[[1]]) {
+      nm <- sub("^var\\s+(\\w+)\\s*=.*$", "\\1", m)
+      kv <- regmatches(m, gregexpr("(\\w+)\\s*:\\s*\"([^\"]*)\"", m, perl = TRUE))[[1]]
+      for (p in kv) {
+        ctrl <- trimws(sub(":.*$", "", p))
+        val  <- sub("^.*\"([^\"]*)\"$", "\\1", p)
+        expect_identical(declared[[ctrl]], val, info = paste0(
+          "jamovi/js/", an, ".js: ", nm, "$", ctrl, " = \"", val,
+          "\", but ", an, ".u.yaml gives that radio optionPart \"",
+          declared[[ctrl]] %||% "<no such control>", "\""))
+      }
+    }
   }
 })
 

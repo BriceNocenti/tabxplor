@@ -13,11 +13,16 @@ quiet <- function(e) suppressMessages(e)
 
 testthat::test_that("the two producers read ONE table, and a refusal is derived from it", {
   # every shape is offered to whoever declares it; nothing is listed twice
+  quant <- c("median", "terciles", "quartiles", "quintiles", "deciles")
   testthat::expect_setequal(tabxplor:::shape_vocab("tab"),
-                            c("linear", "levels", "quartiles", "quintiles", "sd_bands", "log", "sqrt"))
+                            c("linear", "levels", quant, "sd_bands", "log", "sqrt"))
   testthat::expect_setequal(tabxplor:::shape_vocab("tab_reg"),
-                            c("linear", "quartiles", "quintiles", "sd_bands", "log", "sqrt",
-                              "quadratic"))
+                            c("linear", quant, "sd_bands", "log", "sqrt", "quadratic"))
+  # ...and a named quantile cut and its integer twin cannot mean two different things: `k` is read
+  # off the row, once (Phase 22g-iii added the three the jamovi drop-down needed to be able to name).
+  testthat::expect_identical(vapply(quant, tabxplor:::shape_k, integer(1)),
+                             c(median = 2L, terciles = 3L, quartiles = 4L, quintiles = 5L,
+                               deciles = 10L))
   # the refusal names the producer that DOES have it, and the cure -- read off the row, not written
   testthat::expect_error(shape_numeric_var(1:10, "quadratic"), "tab_reg")
   testthat::expect_error(shape_numeric_var(1:10, "quadratic"), "quintiles")

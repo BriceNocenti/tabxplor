@@ -113,13 +113,28 @@ tab_block <- function() {
   # are R facts: the measure key, and DISPLAY_COMPARISON's mapping from a display token.
   or_displays <- names(Filter(function(x) identical(x, "odds_ratio"),
                               as.list(tabxplor:::DISPLAY_COMPARISON)))
+  # The `shape` picker's two value lists, DERIVED from VAR_SHAPES rather than declared again: a cut
+  # yields a factor and is legal on every axis, while a transform keeps the column a NUMBER and is
+  # for col_vars alone (shape_refuse_numeric_index() is the R half of the same rule). "auto" leads
+  # both -- it is the ABSENCE of an entry, not a value `shape =` accepts.
+  tab_shapes <- tabxplor:::shape_vocab("tab")
+  produces   <- vapply(tab_shapes,
+                       function(k) tabxplor:::VAR_SHAPES[[k]]$produces, character(1))
+  cuts       <- tab_shapes[produces == "factor"]
+  # A row / tab variable can only be CUT, and its default is the `"auto"` RULE (no entry at all).
+  # A column variable keeps its mean unless told otherwise, so its default is the declared
+  # `"linear"`, then the transforms that keep it a number, then the same cuts.
+  idx_shapes <- c("auto", cuts)
+  col_shapes <- c("linear", setdiff(tab_shapes[produces == "numeric"], "linear"), cuts)
   c(
     BEGIN,
-    "// Generated from R/fmt_class.R (MEASURES) and R/tab-display.R (DISPLAY_TOKENS).",
-    "// Re-run dev/generate_jamovi_js.R after changing them; the suite checks this block",
-    "// (test-jamovi-vocabulary.R).",
+    "// Generated from R/fmt_class.R (MEASURES), R/tab-display.R (DISPLAY_TOKENS) and",
+    "// R/var-shape.R (VAR_SHAPES). Re-run dev/generate_jamovi_js.R after changing them;",
+    "// the suite checks this block (test-jamovi-vocabulary.R).",
     paste0("var TABX_MEASURE_ODDS_RATIO = ", js_str("odds_ratio"), ";"),
     paste0("var TABX_DISPLAY_ODDS_RATIO_FIELDS = ", js_arr(or_displays), ";"),
+    paste0("var TABX_SHAPES_INDEX = ", js_arr(idx_shapes), ";"),
+    paste0("var TABX_SHAPES_COL = ", js_arr(col_shapes), ";"),
     END
   )
 }

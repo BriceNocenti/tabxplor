@@ -30,6 +30,9 @@ jmv_opts <- function(...) {
             n_min = 0,
             subtext = "", output_list = FALSE, cleannames = FALSE, display = "auto",
             anova = "welch",
+            # 22g-iii: the per-numeric-variable cut. Like `levels_collapse` it is a PRE-aggregate
+            # recode and therefore sits in the tier-1 keys, so the oracle must pass it too.
+            shape = NULL,
             # 20g-i: ONE key of the option's own shape (it was three constants mirroring three
             # arguments that no longer exist). `.opts()` fills it with the module's translations.
             total_names = c(row = "Total", col = "Total", tab = "Ensemble", other = "Others"))
@@ -70,7 +73,7 @@ jmv_oracle <- function(opts, data) {
     ci_method = c(cell = opts$ci_method_cell, diff = opts$ci_method_diff),
     cleannames = FALSE, totaltab = opts$totaltab, digits = opts$digits,
     other_if_less_than = opts$other_if_less_than, n = opts[["n"]], add_pct = opts$add_pct,
-    subtext = opts$subtext, output_list = isTRUE(opts$output_list)
+    subtext = opts$subtext, output_list = isTRUE(opts$output_list), shape = opts$shape
   ))
 }
 
@@ -772,4 +775,36 @@ test_that("Phase 19k (D13): the filter reaches the cache keys", {
   n_of <- function(x) sum(as.numeric(get_n(x[[2]])), na.rm = TRUE)
   expect_false(identical(n_of(tab(gss, marital, race, filter = year == 2000)),
                          n_of(tab(gss, marital, race, filter = year == 2006))))
+})
+
+
+# --- Phase 22g-iii: `shape`, the second PRE-aggregate recode -----------------------------------
+# It changes what is COUNTED while `fp_map` fingerprints the raw columns, so it has to be in the
+# tier-1 / tier-2 keys or a cut would be served the un-cut aggregate. Both halves are asserted: the
+# table is right, and the aggregate was genuinely rebuilt.
+test_that("a `shape` cut equals tab() and MISSES tier 1", {
+  o1 <- jmv_opts(row_vars = "age", col_vars = "marital", pct = "row",
+                 shape = c(age = "terciles"))
+  o2 <- utils::modifyList(o1, list(shape = c(age = "quintiles")))
+  b1 <- suppressMessages(jmvtab_build(gss, o1, NULL))
+  expect_identical(as.character(b1$tabs[[1]]), as.character(suppressMessages(jmv_oracle(o1, gss))[[1]]))
+  # 3 groups + NA + Total, then 5 + NA + Total: the cut really reached tab_prepare_pop()
+  expect_identical(nrow(b1$tabs), 5L)
+  b2 <- suppressMessages(jmvtab_build(gss, o2, b1$store))
+  expect_identical(nrow(b2$tabs), 7L)
+  expect_false(any(unlist(b2$hits)))                 # a different cut is a different aggregate
+  expect_identical(as.character(b2$tabs[[1]]), as.character(suppressMessages(jmv_oracle(o2, gss))[[1]]))
+})
+
+# ⚠ A numeric-KEEPING shape renames its column (`sqrt_tvhours`), and `fp[["sqrt_tvhours"]]` is NULL
+# -- silently, because `[[` on a list returns NULL for an unknown name. Without ctx$shape_renames the
+# SOURCE column's fingerprint would drop out of the key and a data edit would not move it.
+test_that("a transformed col_var still carries its SOURCE column's fingerprint", {
+  o  <- jmv_opts(row_vars = "marital", col_vars = "tvhours", pct = "no", digits = 2,
+                 shape = c(tvhours = "sqrt"))
+  b1 <- suppressMessages(jmvtab_build(gss, o, NULL))
+  d2 <- dplyr::mutate(gss, tvhours = tvhours * 4)    # same NAME, different DATA
+  b2 <- suppressMessages(jmvtab_build(d2, o, b1$store))
+  expect_false(any(unlist(b2$hits)))
+  expect_equal(get_num(b2$tabs[[2]])[[1]], 2 * get_num(b1$tabs[[2]])[[1]])
 })

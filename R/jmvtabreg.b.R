@@ -14,11 +14,13 @@
 #   - Phase 19k: `.opts()` speaks tab_reg()'s OWN vocabulary end to end (effect / measure / display /
 #     shape / a measure-valued colour). No translator sits between a control and its argument.
 #   - Phase 20g-i finished that: an OPTION IS NAMED AFTER THE tab_reg() ARGUMENT it drives (or
-#     `<argument>_<slot>` where several fold into one -- `stats_compare` / `stats_baseline` /
-#     `stats_checks` -> `stats`). The six names 20c retired (`dependent`, `split_var`, `method`,
-#     `multiplicator`, `shapes`, `refLevels`) are gone, together with the `# ⚠ 20g` translation
-#     lines; test-jamovi-vocabulary.R checks the rule. ⚠ renaming an option DISCARDS its value in
+#     `<argument>_<slot>` where several fold into one -- `ci_method`, `ref` + `ref_levels`).
+#     test-jamovi-vocabulary.R checks the rule. ⚠ renaming an option DISCARDS its value in
 #     already-saved .omv files -- accepted, this module carries no back-compat promise.
+#   - Phase 22g-iii: `stats =` has NO control. Since 22g-ii tab_reg()'s own default compares several
+#     predictor subsets against each other, so a picker offering "none" named the opposite of what it
+#     did; `empirical` became a tick-box for the same reason (TRUE is the argument's default, and R
+#     decides WHERE the crude effect goes).
 #   - The module runs in Jamovi's bundled R -- keep dependencies to what the package Imports/Suggests.
 #   - The cache lives ONLY in $state (survives the engine reset); never rely on R globals.
 #   - Export (Excel / HTML / Markdown) reuses R/jmvtab-export.R (resolveExportPath / jmvtab_export).
@@ -105,15 +107,16 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # ...and the interaction picker folds INTO it too, as `a*b` keys -- so there is one
         # `predictors` argument here exactly as there is in tab_reg(), and no second one to keep in
         # step.
+        # ⚠ `flatten` is the several-outcomes rule: ONE predictor subset with several outcomes is a
+        # per-outcome table, not a comparison, so the card must not make `predictors` a LIST there --
+        # `is_comparison <- is.list(predictors)` would then refuse the second outcome.
         predictors   = jmvtab_reg_models(
           self$options$models, self$options$predictors,
-          jmvtab_reg_cross_keys(self$options$crosses, self$options$predictors)),
-        # `stats =` is ONE argument (Phase 20c) and three controls: the comparison key, the baseline
-        # model position it may carry, and the opt-in slow checks. jmvtab_reg_stats() is the one
-        # place that folds them, and the ComboBox values ARE the R keys (`compare_baseline`, ...).
-        stats_compare  = self$options$stats_compare,
-        stats_baseline = self$options$stats_baseline,
-        stats_checks   = self$options$stats_checks,
+          jmvtab_reg_cross_keys(self$options$crosses, self$options$predictors),
+          flatten = length(self$options$outcome) > 1L),
+        # ⚠ `stats =` HAS NO CONTROL since Phase 22g-iii: tab_reg()'s own default already compares
+        # several predictor subsets against each other (22g-ii), so the panel asks nothing and the
+        # build core passes NULL.
         # The per-outcome Model table drives family / link / outcome_level / trials -- the left
         # half of tab_reg()'s estimand cascade, which is a question about each OUTCOME. All four
         # pass through RAW and are resolved together by jmvtab_reg_build(), which then makes ONE
@@ -135,7 +138,7 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         measure      = self$options$measure %||% "auto",
         effect       = self$options$effect  %||% "auto",
         display      = self$options$display %||% "auto",
-        empirical    = self$options$empirical,
+        empirical    = self$options$empirical,   # a Bool since 22g-iii; NULL -> tab_reg()'s TRUE
         # the reference-level picker (ref_levels) -> tab_reg's `ref` named vector (NULL = default)
         ref          = jmvtab_reg_ref_vector(self$options$ref_levels),
         # Phase 20g-ii: the per-predictor level-merge tick-boxes (raw Array; folded by

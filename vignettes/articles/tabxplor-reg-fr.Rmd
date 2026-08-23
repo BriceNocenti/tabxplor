@@ -772,9 +772,15 @@ Les trois états sont ceux qu'affiche `reg_measures()`, et ce ne sont pas les m�
 Un état de plus n'existe qu'à l'exécution : un lien qui ne converge pas sur *vos* données. L'appel le
 dit, et pour la différence de risques il bascule sur le modèle de probabilité linéaire.
 
-`measure = "log"` n'est pas une quatrième colonne : c'est la même quantité estimée montrée non
-exponentiée, sur l'échelle de son propre lien, et l'en-tête dit laquelle il logarithme
-(`Model_log(OR)`, `Model_log(IRR)`, `Model_log(RoM)`, `Model_log(mRR)`).
+`measure = "coefficient"` n'est pas une quatrième colonne : c'est **le coefficient du modèle
+lui-même**, la quantité estimée montrée non transformée. Là où la mesure rapportée est
+multiplicative, c'est son logarithme, et l'en-tête dit laquelle il logarithme (`Model_log(OR)`,
+`Model_log(IRR)`, `Model_log(RoM)`, `Model_log(mRR)`) ; là où le modèle est déjà additif, il n'y a
+rien à dé-exponentier et le coefficient EST l'estimation additive que la colonne montre déjà. Il
+répond donc pour toutes les familles — ce qui permet de demander ses coefficients à un tableau
+mêlant une variable expliquée logistique et une variable expliquée linéaire. (`"log"`, `"log_odds"`,
+`"log_risk"` et `"log_rate"` sont des orthographes acceptées ; les trois dernières désignent
+laquelle.)
 
 ### Ce que veulent dire les en-têtes
 
@@ -871,9 +877,6 @@ quel modèle a tourné.
   nombre.** `Model_RD` est une différence de risques conditionnelle issue d'un ajustement à lien
   identité (`link = "difference"`), `Model_mRD` une différence marginale standardisée sur
   l'ajustement logistique (`measure = "difference"`) — ce que dit la marque `m`.
-- **`measure = "log"` a besoin de quelque chose dont prendre le log.** Il logarithme ce que la cascade
-  rapporterait, il est donc refusé là où c'est déjà additif (un coefficient linéaire, un effet
-  marginal en points). Écrivez `"log_odds"`, `"log_risk"` ou `"log_rate"` pour désigner lequel.
 - **Les rapports de cotes conditionnels ne sont pas collapsibles** : `color = "adjustment"` colore donc
   l'écart sur une telle colonne mais ne le teste jamais (voir *Comment le lire — et comment ne pas le
   lire*, plus haut). Demandez `measure = "difference"` ou `measure = "ratio"` — ou, s'il vous faut

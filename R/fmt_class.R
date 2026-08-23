@@ -1891,7 +1891,7 @@ EST_SCALES <- list(
                     est_display = "diff", base_display = "mean", const_display = "mean",
                     break_key = "mean_diff",  gap_key = "adj_diff",
                     label_meas = "difference", sec = "sd", sd_from = "ref_var"),
-  # measure = "log": printed on the link scale, coloured on the logged odds_ratio ladder (what
+  # measure = "coefficient": printed on the link scale, coloured on the logged odds_ratio ladder (what
   # `ladder = "log"` selects).
   log_coef   = list(kind = "effect", geometry = "log", var_kind = "coef", ladder = "log",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
@@ -6085,7 +6085,7 @@ legend_specs <- function(x, theme = "light") {
     # three diff "kinds": factor pct (x100, "points"), numeric/coef STANDARDIZED (SD), numeric/coef RAW.
     # is_pct drives the x100; is_std drives the "SD" wording.
     is_pct   <- identical(scl$ladder, "pct")
-    # a NON-gaussian coefficient (measure = "log") colours on the LOGGED odds_ratio scale, NOT the
+    # a NON-gaussian coefficient (measure = "coefficient") colours on the LOGGED odds_ratio scale, NOT the
     # SD-standardized one, so its legend must NOT say "SD". That three-way distinction IS `ladder`.
     is_std   <- identical(scl$ladder, "std") && mean_diff_std
     policy   <- if (!is.null(plan_txt)) plan_txt$policy else plan_bg$policy

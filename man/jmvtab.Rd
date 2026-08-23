@@ -23,6 +23,7 @@ jmvtab(
   ref_levels = NULL,
   levels_order = NULL,
   levels_collapse = NULL,
+  shape = NULL,
   ref = "auto",
   ref2 = "first",
   comp = "tab",
@@ -33,6 +34,7 @@ jmvtab(
   ci_method_diff = "newcombe",
   ci_method_mean_diff = "welch",
   ci_method_mean_ratio = "robust",
+  theme = "light",
   totaltab = "line",
   wrap_rows = 35,
   wrap_cols = 15,
@@ -146,6 +148,8 @@ this behaviour.}
 
 \item{levels_collapse}{.}
 
+\item{shape}{.}
+
 \item{ref}{The reference cell to calculate differences and ratios   (used
 to print \code{colors}) :   \itemize{    \item \code{"auto"}: by default,
 cell difference from the corresponding total    (rows or cols depending on
@@ -207,6 +211,12 @@ of the variable, i.e. the interval a linear model gives that coefficient).}
 
 \item{ci_method_mean_ratio}{The confidence-interval method for a ratio of
 numeric means (means with \code{ci = "ratio"}).}
+
+\item{theme}{How the table is painted, in the results panel and in every
+export.  \code{"light"} is the colour palette; \code{"print_ready"} says
+the same thing  typographically --- bold, italics, underlines and marks
+instead of blue and red ---  for a page that has no colour. See
+\code{\link{tab_css}}.}
 
 \item{totaltab}{The total table, if there are subtables/groups   (i.e. when
 \code{tab_vars} is provided). Vectorised over \code{row_vars}.  \itemize{
