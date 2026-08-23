@@ -14,19 +14,18 @@ tab_reg(
   link = "auto",
   measure = "auto",
   effect = "auto",
+  outcome_level = NULL,
   trials = NULL,
-  empirical = FALSE,
+  empirical = TRUE,
   n = NULL,
   color = TRUE,
   color_signif = NULL,
   stars = TRUE,
-  conf_level = NULL,
-  ci_method = NULL,
-  outcome_level = NULL,
   ref = NULL,
   multiplier = "sd",
   shape = NULL,
   stats = NULL,
+  conf_level = NULL,
   na = c("drop_by_outcome", "drop_by_model", "drop_all"),
   display = NULL,
   cleannames = NULL,
@@ -215,6 +214,23 @@ observed companion carries the measure alone (\code{Obs_RR}), a univariable effe
 adjustment to be marginal over. A marginal quantity is standardized to the covariate
 distribution at hand, so under \code{tab_vars} each group standardizes to its own subpopulation.}
 
+\item{outcome_level}{Which level of the \strong{outcome} to single out, as a named vector keyed by
+outcome name --- \code{outcome_level = c(married = "Married")} --- so several outcomes each get their
+own. It is the twin of \code{ref}: \strong{\code{ref} names the level you compare AGAINST, \code{outcome_level} the
+one you MODEL.}
+\itemize{
+\item \strong{binomial}: the level whose probability is estimated. It becomes the column header,
+and every odds ratio is the odds of \emph{that} level. Defaults to the outcome's \strong{first} level
+(so a coded factor like \code{"1-Married"} / \code{"2-Not married"} models "1-Married"). A 0/1 numeric
+outcome is labelled \code{"Not <outcome>"} / \code{"<outcome>"}, and either spelling --- or the raw
+\code{"0"} / \code{"1"} --- may be named.
+\item \strong{multinomial}: the baseline category every other category's column is compared to.
+With more than two levels you cannot choose what is modelled (all of them are), only the
+pivot --- which is why the same argument means the opposite thing here.
+\item \strong{ordinal, and any numeric outcome}: refused, with the reason. An ordinal outcome must
+keep the order of its levels, so none of them can be singled out.
+}}
+
 \item{trials}{Grouped-binomial (summed-score) outcomes only. The number of items behind the score,
 fitting \code{cbind(score, trials - score)} as a binomial. \code{NULL} (default) fits an ordinary binary
 logit; a single integer (or a vector named by outcome) sets the item count; \code{TRUE}, or an \code{NA}
@@ -225,14 +241,19 @@ never a column name; for a per-row item count, write \code{cbind()} in a compoun
 \item{empirical}{Show the \strong{observed, unadjusted (crude)} effect beside each modelled one ---
 the same quantity fitted with a single predictor. It IS the modelled quantity when there is only
 one predictor, so the distance between the two is exactly what adjustment changed, read left to
-right. \code{FALSE} (default) or \code{TRUE}; two expert spellings say \emph{where} the crude effect goes:
+right. \code{TRUE} (\strong{the default}) or \code{FALSE}; three expert spellings say \emph{where} the crude effect
+goes, and in every one of them except \code{"no"} it is computed, stored in the \code{obs} field, and
+read with \verb{$obs} or \code{get_obs()}, by \code{color = "adjustment"} and by the hover tooltip:
 \itemize{
-\item \code{TRUE} --- a crude \strong{column} beside the model one, except on a 3+ level outcome
-(multinomial, or an ordinal marginal effect), where one model column would need one crude
-column per outcome category: there the crude value rides \strong{inside} the model cell instead,
-as \verb{1/1.63*** (1/1.69)}.
+\item \code{TRUE} --- a crude \strong{column} beside the model one; except where drawing one would
+double a table already wide --- \code{tab_vars} groups, or a 3+ level outcome (multinomial, or an
+ordinal marginal effect) where one model column would need one crude column per category ---
+and there it is computed and read from the \strong{hover tooltip} alone.
 \item \code{"column"} --- always the column, per outcome category if that is what it takes.
-\item \code{"cell"} --- always in the cell, however few columns it would have taken.
+\item \code{"tooltip"} --- computed, printed nowhere. The narrowest table, and still enough for
+\code{color = "adjustment"}, \code{\link[=forest_plot]{forest_plot()}} and \verb{$obs}.
+\item \code{"cell"} --- \strong{inside} the model cell, as \verb{(1/1.69) 1/1.63***}: the \code{est_obs} layout,
+the crude number first as everywhere else the two sit together. \code{display} overrides it.
 }
 The two columns are the same column twice: same estimand, same colour ladder, same layout, one
 legend block. Each cell prints the effect with the level it sits on beside it --- the observed
@@ -324,37 +345,6 @@ reading.}
 \item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are
 standard). When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still
 read the interval).}
-
-\item{conf_level}{Confidence level for the intervals. Default \code{0.95}. It drives every interval in
-the table, the significance stars, the greying under \code{color_signif} and the
-model-versus-observed gap interval, and is stored on each column, so it follows this argument
-rather than \code{options("tabxplor.conf_level")}.}
-
-\item{ci_method}{How the interval and p-value are computed --- the same argument, and the same
-named-vector grammar, as in \code{\link[=tab]{tab()}}, whose fifth slot is this producer's:
-\code{ci_method = c(model = "profile")}. On a regression there is only one interval to choose a
-method for, so a bare \code{"profile"} means that slot. \code{"wald"} (default) uses the Wald interval and
-the Wald z / t test: fast, matching standard software output, and the only option for weighted
-models. \code{"profile"} uses the profile-likelihood interval (\code{\link[stats:confint]{stats::confint()}}, needs \code{MASS}) and
-the likelihood-ratio test: more accurate near separation, unweighted binomial / poisson only
-(otherwise it falls back to Wald with a message; gaussian always uses the exact-t interval).}
-
-\item{outcome_level}{Which level of the \strong{outcome} to single out, as a named vector keyed by
-outcome name --- \code{outcome_level = c(married = "Married")} --- so several outcomes each get their
-own. It is the twin of \code{ref}: \strong{\code{ref} names the level you compare AGAINST, \code{outcome_level} the
-one you MODEL.}
-\itemize{
-\item \strong{binomial}: the level whose probability is estimated. It becomes the column header,
-and every odds ratio is the odds of \emph{that} level. Defaults to the outcome's \strong{first} level
-(so a coded factor like \code{"1-Married"} / \code{"2-Not married"} models "1-Married"). A 0/1 numeric
-outcome is labelled \code{"Not <outcome>"} / \code{"<outcome>"}, and either spelling --- or the raw
-\code{"0"} / \code{"1"} --- may be named.
-\item \strong{multinomial}: the baseline category every other category's column is compared to.
-With more than two levels you cannot choose what is modelled (all of them are), only the
-pivot --- which is why the same argument means the opposite thing here.
-\item \strong{ordinal, and any numeric outcome}: refused, with the reason. An ordinal outcome must
-keep the order of its levels, so none of them can be singled out.
-}}
 
 \item{ref}{The reference every effect is measured \strong{from} --- one argument, one meaning per kind
 of predictor.
@@ -457,13 +447,17 @@ pick the statistics (\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"
 this model can report, or \code{FALSE} / \code{"none"} to hide the footer. Weighted models show a reduced,
 survey-appropriate set (design-based Wald test, Nagelkerke pseudo-R square, AIC).
 
-\strong{Model comparison} (several models / outcomes only) is two more keys, so it needs no separate
-argument: \code{"compare_sequential"} tests each model against the previous one, and
-\code{"compare_baseline"} each against one reference model --- the first by default, or the one you
-name as the key's value, \code{stats = c("n", "aic", compare_baseline = "Model 1")}. Both use a
-likelihood-ratio test (F for linear / quasi models, a design-based Wald test for weighted ones),
-falling back to the AIC difference with a message when the models are not nested or have
-different N. A comparison key \strong{adds} a row and restricts nothing.
+\strong{Model comparison happens by default} wherever it means anything --- when \code{predictors} is a
+list of several models. Which one it is, is read off the models: where each nests in the next
+(a chain a reader builds on purpose) every model is tested against the \strong{previous} one,
+otherwise each against the \strong{first}. Both use a likelihood-ratio test (F for linear / quasi
+models, a design-based Wald test for weighted ones), falling back to the AIC difference where
+the models are not nested or have different N.
+
+Two keys override it: \code{"compare_sequential"}, and \code{"compare_baseline"} --- against the first
+model, or the one you name as the key's value, \code{stats = c("n", "aic", compare_baseline = "Model 1")}. A comparison key \strong{adds} a row and restricts nothing. And naming any footer
+statistic drops the automatic comparison, the way naming any argument's values drops the rest:
+\code{stats = c("n", "aic")} is a footer with no comparison in it.
 
 \code{"global"} adds one \strong{overall test per predictor} --- "is this variable associated with the
 outcome at all?", the question a block of stars against a reference category cannot answer.
@@ -484,6 +478,11 @@ The footer reads \strong{outward from the data}: the N first, then the checks --
 proportionality and linearity break what the number \emph{means} while dispersion breaks every star
 in the table and collinearity and influence only say how fragile it is --- then what the
 table's own rows say jointly, then how good the model is and against what.}
+
+\item{conf_level}{Confidence level for the intervals. Default \code{0.95}. It drives every interval in
+the table, the significance stars, the greying under \code{color_signif} and the
+model-versus-observed gap interval, and is stored on each column, so it follows this argument
+rather than \code{options("tabxplor.conf_level")}.}
 
 \item{na}{Which rows each model is fitted on --- the grain at which missing values are dropped.
 \code{"drop_by_outcome"} (default) gives every model \strong{of one outcome} the same complete-case
@@ -551,7 +550,18 @@ Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
 
 \item{subtext}{Optional character. A note shown below the table.}
 
-\item{...}{Not a user argument. It carries the internal \code{.fit_cache} (the jamovi live UI's fit
+\item{...}{One rarely-typed argument, plus internal plumbing.
+
+\code{ci_method} --- how the interval and p-value are computed: the same argument, and the same
+named-vector grammar, as in \code{\link[=tab]{tab()}}, whose fifth slot is this producer's:
+\code{ci_method = c(model = "profile")}. On a regression there is only one interval to choose a
+method for, so a bare \code{"profile"} means that slot. \code{"wald"} (default) uses the Wald interval and
+the Wald z / t test: fast, matching standard software output, and the only option for weighted
+models. \code{"profile"} uses the profile-likelihood interval (\code{\link[stats:confint]{stats::confint()}}, needs \code{MASS}) and
+the likelihood-ratio test: more accurate near separation, unweighted binomial / poisson only
+(otherwise it falls back to Wald with a message; gaussian always uses the exact-t interval).
+
+\code{...} also carries the internal \code{.fit_cache} (the jamovi live UI's fit
 cache environment), and it is what makes every argument removed or renamed while \code{tab_reg()} was
 in development --- \code{exponentiate}, \code{at}, \code{estimate_display}, \code{dependent}, \code{split_var},
 \code{reference}, \code{method}, \code{compare}, \code{baseline}, \code{inverse_two_level_factors}, \code{parallel}, and the
@@ -690,6 +700,7 @@ and on a \code{\link{tab_reg}} table:
 \item \code{"est_coef"} (\code{\{est\} (\{coef\})}) --- the estimate and, in parentheses, the model's own coefficient.
 \item \code{"base_est_mdiff"} (\code{\{est\} (\{diff\})}) --- the estimate and, in parentheses, the same comparison as a difference.
 \item \code{"base_est_mratio"} (\code{\{est\} (\{ratio\})}) --- the estimate and, in parentheses, the same comparison as a ratio.
+\item \code{"est_obs"} (\code{(\{obs\}) \{est\}}) --- the estimate and, before it in parentheses, the observed (crude) effect it is compared to.
 \item \code{"base_est"} (\code{(\{base\}) \{est\}}) --- the level, then the estimate --- the mirror of \code{est_base}, which sets a crude and a modelled effect side by side.
 \item \code{"base"} (\code{\{base\}}) --- the level alone: the percentage, the mean or the count.
 \item \code{"base_ci"} (\code{\{base\} \{ci\}}) --- the level with its confidence interval.

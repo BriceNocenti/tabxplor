@@ -585,7 +585,11 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # other bootstrap tooltip on the host page. Accepted: a one-line tooltip is what every bootstrap
     # tooltip wants, the rule is unprefixed so a host stylesheet loaded later still wins, and it ships
     # only with chrome = TRUE (never from tab_md()'s colour-only stylesheet).
-    ".tooltip-inner{max-width:none;white-space:nowrap;}",
+    # `pre`, not `nowrap`: a regression cell's tooltip is TWO lines (its own numbers, then the
+    # observed comparison -- TOOLTIP_LINES$group), and `pre` is `nowrap` plus honouring the newline,
+    # so every one-line tooltip renders exactly as before. It does extend the warning above: a host
+    # page's own tooltips now keep their newlines too, which is what a tooltip author intended.
+    ".tooltip-inner{max-width:none;white-space:pre;}",
     # Phase 14j: the same for a POPOVER (tab_kable(popover = TRUE)), which the html engine has emitted
     # since 10e with no styling at all -- bootstrap caps .popover at max-width:276px, so our one-line
     # prose wrapped. `.popover-body` is bootstrap 4/5, `.popover-content` bootstrap 3 (rmarkdown's
@@ -596,7 +600,7 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # bootstrap popover wants; a black background is our taste, imposed on someone else's page. Left
     # unstyled, the popover simply inherits the host's own theme.
     ".popover{max-width:none;}",
-    ".popover-body,.popover-content{padding:6px;white-space:nowrap;}"
+    ".popover-body,.popover-content{padding:6px;white-space:pre;}"
   ) else character(0))
 
   body <- if (identical(theme, "auto")) {

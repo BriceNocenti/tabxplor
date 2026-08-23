@@ -328,6 +328,9 @@ TAB_ARGS <- list(
   ci_method = list(
     default_for = list(tab_reg = NULL),
     default = NULL,
+    # on tab_reg it rides `...`: one binary choice (wald / profile) does not earn a place in a
+    # signature a user reads to learn the producer.
+    dots = "tab_reg",
     producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), values_from = "CI_METHODS",
     doc = c("The confidence-interval method of each kind of interval, as ONE named vector --",
             "partial, like \\code{ref} or \\code{pct}, so an unnamed kind keeps its default.",
@@ -592,8 +595,8 @@ TAB_ARGS <- list(
   effect = list(producers = "tab_reg", default = "auto", values_from = "REG_ESTIMANDS",
                 doc_in_producer = TRUE),
   trials = list(producers = "tab_reg", default = NULL, doc_in_producer = TRUE),
-  empirical = list(producers = "tab_reg", default = FALSE, size = 1L, validate = FALSE,
-                   values = c("no", "cell", "column"), doc_in_producer = TRUE),
+  empirical = list(producers = "tab_reg", default = TRUE, size = 1L, validate = FALSE,
+                   values = c("no", "tooltip", "cell", "column"), doc_in_producer = TRUE),
   outcome_level = list(producers = "tab_reg", default = NULL, values_from = "REG_FAMILIES",
                        doc_in_producer = TRUE),
   multiplier = list(producers = "tab_reg", default = "sd", doc_in_producer = TRUE),

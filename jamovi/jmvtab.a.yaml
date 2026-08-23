@@ -446,7 +446,7 @@ options:
            that is displayed, so stars and bracket always agree.
 
     - name: ci_method_cell
-      title: "ci_method = c(cell = )"
+      title: ""
       type: List
       options:
         - title: "wilson <i>(score, default)</i>"
@@ -462,7 +462,7 @@ options:
            (the score interval, default) or \code{"wald"} (the normal approximation).
 
     - name: ci_method_diff
-      title: "ci_method = c(diff = )"
+      title: ""
       type: List
       options:
         - title: "newcombe <i>(hybrid score)</i>"
@@ -479,7 +479,7 @@ options:
            significance stars always agree.
 
     - name: ci_method_mean_diff
-      title: "ci_method = c(mean_diff = )"
+      title: ""
       type: List
       options:
         - title: "welch <i>(unequal variances, default)</i>"
@@ -497,7 +497,7 @@ options:
            that coefficient).
 
     - name: ci_method_mean_ratio
-      title: "ci_method = c(mean_ratio = )"
+      title: ""
       type: List
       options:
         - title: "robust <i>(each group's variance, default)</i>"

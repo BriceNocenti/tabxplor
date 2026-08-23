@@ -350,9 +350,14 @@ test_that("the two producers now ask the shared questions with the shared word",
   d <- rr_data()
   # `tab_vars`, `ref` and `ci_method` are the SAME argument on both producers -- declared, so
   # tx_check_tab_args() polices tab_reg()'s signature against TAB_ARGS like a crosstab's.
+  # ⚠ REACHABLE, not necessarily a formal: 22g-ii moved `ci_method` onto `...` (its TAB_ARGS row
+  # says so, `dots = "tab_reg"`), which tx_check_tab_args() accepts and tab_dots_expand() refills.
   for (k in c("tab_vars", "ref", "ci_method", "na", "color", "color_signif", "display",
               "conf_level", "stars", "wt", "n", "cleannames", "subtext")) {
-    expect_true(k %in% names(formals(tab_reg)), info = k)
+    fm <- names(formals(tab_reg))
+    expect_true(k %in% fm ||
+                  ("..." %in% fm &&
+                     "tab_reg" %in% (tabxplor:::TAB_ARGS[[k]][["dots"]] %||% character())), info = k)
     expect_true("tab_reg" %in% tabxplor:::TAB_ARGS[[k]][["producers"]], info = k)
     expect_true("tab"     %in% tabxplor:::TAB_ARGS[[k]][["producers"]], info = k)
   }

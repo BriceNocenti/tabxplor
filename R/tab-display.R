@@ -137,7 +137,16 @@ display_write_col <- function(col, tmpl) {
   # left it showing a bare `est` while every other row showed `{diff} [{or}] ({base})`, i.e. two
   # different quantities in one column. A cell with NOTHING of the template keeps its own token,
   # which is the half that matters: never blank a cell that had something to say.
-  elig <- elig & purrr::reduce(have, `|`)
+  # ⚠ ...AND NEITHER IS A TOKEN A CELL WAS DELIBERATELY GIVEN. Where the primary is void, a cell
+  # keeps its OWN token if that token is not the column's ESTIMATE, i.e. it was stamped with
+  # something else on purpose: a regression's baseline row holds the level its column's effects
+  # operate on (EST_SCALES$const_display), a real number in another field, and a template gated on
+  # the asides alone printed it "(51%)" -- an aside with nothing in front of it. The counter-example
+  # above still takes the template, because there the cell's own token IS the estimate.
+  own_tok  <- fmt_resolve_scale_tokens(display_primary(d), fmt_scale_row(col))
+  keep_own <- !have[[seg$primary]] & !is.na(own_tok) &
+    own_tok != fmt_resolve_scale_tokens("est", fmt_scale_row(col))[[1]] & !is.na(get_num(col))
+  elig <- elig & purrr::reduce(have, `|`) & !keep_own
   d[elig] <- bare
   list(col = fmt_set_display(col, d), missing = seg$fields[empty])
 }
@@ -544,6 +553,11 @@ DISPLAY_PRESETS <- list(
                              doc = 'the estimate and, in parentheses, the same comparison as a difference'),
   base_est_mratio = .dpreset(c(default = "{est} ({ratio})", emp = "({base}) {est}"),
                              doc = 'the estimate and, in parentheses, the same comparison as a ratio'),
+  # the crude effect INSIDE the model cell (`empirical = "cell"`): the aside comes FIRST, like every
+  # other observed-then-modelled layout here, so the two comparable numbers read left to right.
+  est_obs         = .dpreset("({obs}) {est}",
+                             doc = paste('the estimate and, before it in parentheses, the observed',
+                                         '(crude) effect it is compared to')),
   base_est        = .dpreset("({base}) {est}",
                              doc = paste('the level, then the estimate --- the mirror of `est_base`,',
                                          'which sets a crude and a modelled effect side by side')),

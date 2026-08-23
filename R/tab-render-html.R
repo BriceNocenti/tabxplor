@@ -597,9 +597,10 @@ shape_html_table <- function(tab) {
     paste0('<td class="', k, '">', v, '</td>')
   })
   body <- paste0('<tr>', do.call(paste0, cells), '</tr>', collapse = "")
-  tfoot <- paste0('<tfoot><tr><td colspan="', length(st), '"><div class="tx-foot">',
-                  paste(htmltools::htmlEscape(attr(st, "note")), collapse = "<br>"),
-                  '</div></td></tr></tfoot>')
+  nt    <- attr(st, "note")                        # empty wherever no row wears the "ns" mark
+  tfoot <- if (!length(nt)) "" else
+    paste0('<tfoot><tr><td colspan="', length(st), '"><div class="tx-foot">',
+           paste(htmltools::htmlEscape(nt), collapse = "<br>"), '</div></td></tr></tfoot>')
   paste0('<table class="tabxplor-tab">', '<thead>', thead, '</thead>',
          '<tbody>', body, '</tbody>', tfoot, '</table>')
 }

@@ -311,9 +311,11 @@ test_that("D7: `reference` picks the split_var baseline instead of the first lev
 test_that("D11: obs / gap_se are written only where a gap measure reads them", {
   skip_if_not_installed("broom")
   d  <- gap_data()
+  # ⚠ `empirical = "column"`, not TRUE: since 22g-ii `tab_vars` resolve TRUE to "tooltip" (the
+  # crude value computed, no column), and the crude COLUMNS are what this asserts about.
   sp <- suppressMessages(tab_reg(d, "married", list(m1 = "race", m2 = "race"),
                                  tab_vars = "party3", family = "binomial", link = "ratio",
-                                 empirical = TRUE, color = c(TRUE, "between_groups")))
+                                 empirical = "column", color = c(TRUE, "between_groups")))
   fc <- reg_fmt_cols(sp)
   mdl <- fc[get_role(sp[fc]) == "model"]
   emp <- fc[get_role(sp[fc]) == "emp"]

@@ -228,8 +228,10 @@ test_that("between_groups carries the reference group's estimate, stacked AND sp
 
 test_that("between_groups is off by default and needs no empirical companion", {
   d <- adj_data()
+  # ⚠ `empirical = FALSE`: the crude companion is the DEFAULT since 22g-ii, so what is under test --
+  # that `between_groups` does not turn it on by itself -- has to start from off.
   t <- tab_reg(d, outcome = "married", predictors = "race", tab_vars = "party3",
-               family = "binomial")                                 # no `color` -> auto
+               family = "binomial", empirical = FALSE)              # no `color` -> auto
   testthat::expect_true(all(vapply(t[reg_fmt_cols(t)],
                                    function(c) all(is.na(get_obs(c))), logical(1))))
 })
@@ -239,7 +241,9 @@ test_that("between_groups is off by default and needs no empirical companion", {
 test_that("color = 'adjustment' turns empirical on, and the two measures are exclusive", {
   d <- adj_data()
   testthat::expect_message(
-    t <- tab_reg(d, outcome = "married", predictors = c("race", "party3"),
+    # the note fires where it says something: `empirical` was turned OFF and the colour turns it
+    # back on. It is silent on the default, which already has the companion.
+    t <- tab_reg(d, outcome = "married", predictors = c("race", "party3"), empirical = FALSE,
                  family = "binomial", color = c(TRUE, "adjustment")),
     "empirical")
   testthat::expect_true("Obs_OR" %in% names(t))

@@ -4,6 +4,12 @@
 #   computed with one predictor instead of all of them, so "what did adjustment change" is read
 #   across the table. The gap is what `color = "adjustment"` grades and what `{obs}` / `{gap}` print.
 # KEY CONSTRAINTS:
+#   - COMPUTED BY DEFAULT, DRAWN ON REQUEST. `empirical` is TRUE by default and resolves to ONE of
+#     four modes (reg_emp_mode, R/reg-resolve.R): `no` / `tooltip` / `cell` / `column`. Only
+#     `column` draws a column here -- `cell` is the `est_obs` display preset and `tooltip` prints
+#     nothing at all -- but all three still compute `obs` and `gap_se`, which is what
+#     `color = "adjustment"`, forest_plot() and the hover read. So the mode is a LAYOUT decision:
+#     nothing in this file's arithmetic branches on it.
 #   - ONE COLUMN SHAPE, BUILT TWICE. The crude and the modelled effect are the same estimand, so the
 #     crude column is the model column's mirror: same stored scale, same colour measure (both
 #     channels), same display, same digits, same reference. Only the estimation differs. It carries
@@ -683,13 +689,15 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   neff_of <- function(v)
     if (isTRUE(weighted) && isTRUE(saturated)) as.double(v) else rep(NA_real_, n_rows)
   # emit() -- the finished column, plus the EFFECT VECTOR + SHAPE that become `obs`. A per-category
-  # shape returns its column under `cat_cols`; `emp_mode = "cell"` draws no column at all.
+  # shape returns its column under `cat_cols`; only `emp_mode = "column"` draws a column at all --
+  # `"cell"` folds the value into the model cell's own layout and `"tooltip"` prints it nowhere, but
+  # BOTH still need the effect vector, which is what becomes `obs`.
   emit <- function(eff, cat = "") {
     if (is.null(eff)) return(list(cols = list(), cat_cols = list(), effect = NULL, shape = NULL))
     per_cat <- shape_per_category(eff$shape)
     key  <- if (per_cat) cat else ""
     o    <- reg_fit_overlay(eff$col, eff$vec, cat_get(fit_est$est, key), eff$shape)
-    draw <- !identical(emp_mode, "cell")
+    draw <- identical(emp_mode, "column")
     list(cols     = if (draw && !per_cat) stats::setNames(list(o$col), reg_crude_col_name(eff$shape)) else list(),
          cat_cols = if (draw &&  per_cat) stats::setNames(list(o$col), key) else list(),
          effect   = stats::setNames(list(o$eff), key), shape = eff$shape)

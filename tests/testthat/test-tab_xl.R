@@ -250,7 +250,9 @@ testthat::test_that("OR exports as 1/x text by default, numbers with or_numeric 
   testthat::skip_if_not_installed("broom")
   d  <- forcats::gss_cat
   d$married <- factor(ifelse(d$marital == "Married", "yes", "no"))
-  tl <- tab_reg(d, "married", c("race", "relig"))
+  # ⚠ `empirical = FALSE`: what is under test is the multiplicative READING VALUE, and it is read
+  # off the sheet's last column -- which the default crude companion turns into the `adj%` aside.
+  tl <- tab_reg(d, "married", c("race", "relig"), empirical = FALSE)
   tmp <- tempfile(fileext = ".xlsx"); tab_xl(tl, path = tmp, open = FALSE, replace = TRUE)
   # Phase 18z13: column 2 is the per-level `n` (add_n = TRUE by default); the OR column follows it.
   xl_col <- function(f) {

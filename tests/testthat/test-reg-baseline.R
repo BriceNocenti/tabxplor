@@ -30,8 +30,11 @@ test_that("the baseline row renders a level, never an effect", {
   )
   for (cs in cases) {
     y <- if (cs$a$family == "gaussian") "age" else if (cs$a$family == "poisson") "tvhours" else "married"
+    # ⚠ `empirical = FALSE`: what is under test is the token the BASELINE row is stamped with, and
+    # the default crude companion puts a layout (`est_base`) over every cell of the column.
     t <- suppressWarnings(do.call(
-      tab_reg, c(list(d, y, c("race", "rincome")), cs$a, list(stats = FALSE))))
+      tab_reg, c(list(d, y, c("race", "rincome")), cs$a,
+                 list(empirical = FALSE, stats = FALSE))))
     col <- bl_first(t); i <- bl_cst(t)
     expect_identical(get_display(col)[i], cs$tok, info = cs$a$family)
     expect_match(format(col)[i] |> trimws(), cs$pat)

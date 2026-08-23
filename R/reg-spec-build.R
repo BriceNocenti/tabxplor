@@ -81,6 +81,10 @@ reg_emp_slim <- function(e) {
 #' @keywords internal
 #' @noRd
 reg_specs_independent <- function(ctx) {
+  # WARNING: `compare` is a DEFAULT now ("auto", from an unnamed `stats`), so a table that asked for
+  # no comparison must not land here with anything but "none" -- reg_resolve_args() degrades "auto"
+  # before the shared record is built. Getting that wrong costs every table its parallelism AND makes
+  # reg_spec_build() keep the fit objects Phase 22j stopped keeping.
   if (length(ctx$specs) < 2L) return(NULL)
   s <- ctx$shared
   if (!identical(s$compare, "none"))
@@ -239,6 +243,14 @@ reg_spec_build_one <- function(i, ctx) {
   # outcome.
   e    <- own %||% crude
   cols <- purrr::map(cols, function(bi) { bi$col <- reg_set_obs(bi, e, f, sp, ctx); bi })
+  # ⚠ AND THE DISPLAY IS WRITTEN AGAIN HERE, which is the first point every field a model cell can
+  # print exists. display_write_col() drops a bracket group whose field is void on every row, so a
+  # template naming `obs` or `gap` -- the `est_obs` preset, or a user's own "{est} ({obs})" -- was
+  # silently pruned back to "{est}" when the column builders wrote it, before step 5 filled them.
+  # The columns spliced in at 6b are crude ones, which keep the layout their own builder gave them.
+  disp <- reg_display_of(display, empirical)
+  if (!is.null(disp))
+    cols <- purrr::map(cols, function(bi) { bi$col <- reg_apply_display(bi$col, disp); bi })
 
   # --- 6. THE TOOLTIPS ---------------------------------------------------------------------------
   # ⚠ the MULTINOMIAL fragment is the SPEC's, the NUMERIC one the BLOCK's -- see the section below.

@@ -13,7 +13,7 @@ logit_data <- function() {
 
 test_that("tab_reg() returns a grouped odds-ratio tab with the right structure", {
   skip_if_not_installed("broom")
-  t1 <- tab_reg(logit_data(), "married", c("race", "rincome"))
+  t1 <- tab_reg(logit_data(), "married", c("race", "rincome"), empirical = FALSE)
 
   expect_s3_class(t1, "tabxplor_grouped_tab")
   expect_identical(dplyr::group_vars(t1), "var")

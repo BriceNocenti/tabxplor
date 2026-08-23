@@ -38,6 +38,12 @@
 #   - ONE PER-OUTCOME GRAMMAR, four arguments. `family` / `link` / `measure` / `effect` share
 #     reg_per_outcome() and are resolved together, in cascade order, by reg_estimand(): the boundary
 #     slices them and never interprets them, so "what does auto mean" has ONE home.
+#   - A DEFAULT MUST NEVER REFUSE, AND NEVER RESTRICT. Two arguments are now on by default, so the
+#     boundary answers for them silently: `empirical` leaves as one of four MODES (reg_emp_mode) and
+#     explains its degrade only where a word asked for it; and `stats`' automatic comparison, which
+#     arrives as `compare = "auto"`, is degraded to "none" wherever a between-model test has no
+#     meaning -- because `compare != "none"` is also what costs a build its parallelism and its
+#     dropped fits (reg_specs_independent, R/reg-spec-build.R). An EXPLICIT key keeps its refusal.
 #   - ONE PER-PREDICTOR GRAMMAR, three arguments. `multiplier` / `shape` / `ref` share
 #     per_variable() (below): an unnamed value -- or one named `default` -- is the fallback, a
 #     named one overrides that variable. Each argument keeps its own VOCABULARY; only the parsing is
@@ -198,8 +204,8 @@ reg_validate_args <- function(conf_level = NULL, stats = NULL, color_signif = NU
       cli::cli_abort(c("{.arg {nm}} must be a single {.code TRUE} or {.code FALSE}.",
                        "x" = "Got {.val {v}}."), call = NULL)
   }
-  # `empirical` is logical-primary with three word spellings: "no" (the twin of FALSE, and the word
-  # every other tabxplor argument uses for off) and the two that say WHERE the crude effect goes.
+  # `empirical` is logical-primary with four word spellings: "no" (the twin of FALSE, and the word
+  # every other tabxplor argument uses for off) and the three that say WHERE the crude effect goes.
   # ⚠ the set is READ from TAB_ARGS, not written again: it already declared "no", `emp_on()` already
   # accepted it, and only this literal refused it -- which made the jamovi picker's own off value an
   # abort.
@@ -211,9 +217,10 @@ reg_validate_args <- function(conf_level = NULL, stats = NULL, color_signif = NU
     cli::cli_abort(c(
       "{.arg empirical} must be {.code TRUE}, {.code FALSE}, or {.or {.val {emp_words}}}.",
       "x" = "Got {.val {empirical}}.",
-      "i" = paste("{.code TRUE} draws a crude column, except where one model column would need",
-                  "several of them (a 3+ level outcome) -- there the crude value rides inside the",
-                  "model cell. {.val cell} and {.val column} force one or the other.")), call = NULL)
+      "i" = paste("{.code TRUE} (the default) draws a crude column, except where that would double a",
+                  "table already wide ({.arg tab_vars} groups, a 3+ level outcome) -- there the crude",
+                  "value is computed and read from the hover tooltip. {.val tooltip}, {.val cell}",
+                  "(inside the model cell) and {.val column} force one outright.")), call = NULL)
   invisible(TRUE)
 }
 
@@ -491,8 +498,11 @@ reg_resolve_output <- function(display = NULL, color = TRUE, color_signif = NULL
   # Kept ON whenever ANY outcome supports a crude companion; dropped only when NONE is eligible.
   # Reads the SPEC's own stored answer (`deps$crude_key`), never re-derived from the outcome family.
   if (emp_on(empirical) && all(is.na(deps$crude_key))) {
+    # ⚠ EXPLAINED ONLY WHERE IT WAS ASKED FOR BY NAME. `empirical` is on by default now, so a note
+    # about it on every compound formula and every crude-less family would lecture a reader about an
+    # argument they never typed. A word is a request; `TRUE` is "do the sensible thing".
     # name the REAL cause: a compound formula has no predictor structure to be crude about.
-    cli::cli_inform(if (formula_mode) c("i" = paste0(
+    if (is.character(empirical)) cli::cli_inform(if (formula_mode) c("i" = paste0(
       "{.arg empirical} (crude descriptive companion) needs one predictor per row; a compound formula ",
       "({.code poly()} / interactions / {.code I()}) has none, so it is ignored here."),
       "i" = 'Use {.arg predictors} with {.arg shape} for a curved term, e.g. {.code shape = c(age = "quadratic")}.')
@@ -513,15 +523,24 @@ reg_resolve_output <- function(display = NULL, color = TRUE, color_signif = NULL
     cli::cli_inform(c("i" = "{note}"))
   }
 
-  # `empirical` leaves the boundary RESOLVED to its mode -- "no"/"cell"/"column".
+  # `empirical` leaves the boundary RESOLVED to its mode -- "no"/"tooltip"/"cell"/"column".
   list(display = display, color_arg = color_arg, color_signif = color_signif,
-       empirical = reg_emp_mode(empirical, deps$crude_key, ests))
+       empirical = reg_emp_mode(empirical, deps$crude_key, ests, tab_vars))
 }
 
 
-# emp_on() / reg_emp_mode() -- `empirical` asked, and WHERE the crude effect goes. The auto rule
-# (`TRUE`): a crude COLUMN, except a 3+ level outcome (per-CATEGORY), which rides in the model cell
-# instead. `"cell"`/`"column"` force one or the other.
+# emp_on() / reg_emp_mode() -- `empirical` asked, and WHERE the crude effect goes. ONE value decides
+# all three behaviours, and nothing downstream needs a second flag:
+#
+#   no       nothing computed
+#   tooltip  computed and stored (`obs` / `gap_se`), printed nowhere -- it rides the hover tooltip
+#            and `color = "adjustment"`, and is read with get_obs()
+#   cell     ... plus the `est_obs` layout, "({obs}) {est}", in the model cell
+#   column   ... plus a crude column of its own beside each model one
+#
+# THE AUTO RULE (`TRUE`, the default): a crude COLUMN, except where drawing one would double a table
+# already wide -- `tab_vars` groups, and a 3+ level outcome (per-CATEGORY, one crude value per
+# column) -- which take `tooltip`. `"tooltip"`/`"cell"`/`"column"` force one outright.
 #' @keywords internal
 #' @noRd
 emp_on <- function(empirical)
@@ -529,7 +548,7 @@ emp_on <- function(empirical)
 
 #' @keywords internal
 #' @noRd
-reg_emp_mode <- function(empirical, crude_key, ests) {
+reg_emp_mode <- function(empirical, crude_key, ests, tab_vars = NULL) {
   if (!emp_on(empirical)) return("no")
   if (is.character(empirical)) return(empirical)
   per_cat <- any(purrr::map_lgl(seq_along(ests), function(i) {
@@ -538,7 +557,7 @@ reg_emp_mode <- function(empirical, crude_key, ests) {
     sh <- reg_crude_shape(k, ests[[i]])
     !is.null(sh) && shape_per_category(sh)
   }))
-  if (per_cat) "cell" else "column"
+  if (per_cat || length(tab_vars)) "tooltip" else "column"
 }
 
 
@@ -854,8 +873,17 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                            shape = shape, family = family,
                            levels_collapse = levels_collapse)
 
+  # ⚠ THE DEFAULT COMPARISON DEGRADES, IT NEVER REFUSES. `"auto"` is what an unnamed `stats` asks
+  # for, so it must not abort a table, and it must not turn on the two things `compare != "none"`
+  # switches: reg_specs_independent() refuses parallelism on it, and reg_spec_build() then KEEPS the
+  # fit object (which is exactly what Phase 22j stopped doing). Several `predictors` sets is the one
+  # shape where a between-model test means anything -- and reg_prepare_data() has already refused
+  # such a list with several outcomes, so after this line "auto" implies one outcome too.
+  if (identical(compare, "auto") &&
+      !(isTRUE(prep$is_comparison) && length(prep$predictors) >= 2L)) compare <- "none"
+
   # ⚠ a between-model test compares two fits OF THE SAME OUTCOME -- refused HERE, the first point
-  # both `compare` and the resolved outcome vector are known.
+  # both `compare` and the resolved outcome vector are known. Only an EXPLICIT key reaches it.
   if (!identical(compare, "none") && length(prep$outcome) > 1L)
     cli::cli_abort(c("A model comparison needs the models to share one {.arg outcome}.",
                      "x" = paste0("{.arg stats} asks for {.val {paste0('compare_', compare)}}, but ",
@@ -870,6 +898,11 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                                 measure = measure, effect = effect, trials = trials,
                                 outcome_level = outcome_level,
                                 formula_mode = prep$formula_mode, weighted = prep$weighted)
+  # ⚠ the one estimand refusal that must be raised HERE and not by the fitter: the crude block runs
+  # before any model, and on a negative outcome a ratio of means makes it warn before it can abort.
+  for (i in seq_along(deps$outcome))
+    if (identical(deps$est[[i]]$fit %||% "", "mr") && deps$outcome[[i]] %in% names(prep$data))
+      reg_check_ratio_outcome(prep$data[[deps$outcome[[i]]]], deps$outcome[[i]])
 
   # S4 -- what the table shows.
   out <- reg_resolve_output(display = display, color = color, color_signif = color_signif,

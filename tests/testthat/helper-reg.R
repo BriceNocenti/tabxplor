@@ -10,7 +10,23 @@ reg_fmt_cols <- function(t) {
   nm[vapply(nm, function(n) !identical(get_role(t[[n]]), "n"), logical(1))]
 }
 
-reg_first_fmt <- function(t) t[[reg_fmt_cols(t)[[1]]]]
+# ⚠ SELECT BY THE STORED ROLE, never by position. Since 22g-ii `empirical = TRUE` is the default, so
+# the first non-`n` fmt column of an ordinary table is the OBSERVED (crude) one -- a test asking for
+# "the model's first estimate" by position would keep passing against the wrong numbers.
+reg_model_cols <- function(t) {
+  nm <- names(t)[vapply(t, is_fmt, logical(1))]
+  nm[vapply(nm, function(n) identical(get_role(t[[n]]), "model"), logical(1))]
+}
+reg_emp_cols <- function(t) {
+  nm <- names(t)[vapply(t, is_fmt, logical(1))]
+  nm[vapply(nm, function(n) identical(get_role(t[[n]]), "emp"), logical(1))]
+}
+
+reg_first_fmt <- function(t) {
+  nm <- reg_model_cols(t)
+  t[[if (length(nm)) nm[[1]] else reg_fmt_cols(t)[[1]]]]
+}
+reg_first_emp <- function(t) t[[reg_emp_cols(t)[[1]]]]
 
 # The MODEL column of one `split_var` group in a spread table. With add_n the spread carries two fmt
 # columns per group (`n_<g>` and `<measure>_<g>`), so tab_spread suffixes both and the model column is

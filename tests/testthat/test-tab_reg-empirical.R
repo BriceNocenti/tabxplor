@@ -621,11 +621,62 @@ test_that("`empirical` takes the word its fact table declares, not only TRUE/FAL
   d <- emp_data()
   # "no" is the twin of FALSE and the word every other tabxplor argument uses for off. It was
   # DECLARED in TAB_ARGS and understood by emp_on() all along; only the validator refused it, which
-  # made the jamovi picker's own off value an abort.
-  expect_identical(tab_arg("empirical")$values, c("no", "cell", "column"))
+  # made the jamovi picker's own off value an abort. 22g-ii added "tooltip" -- computed, printed
+  # nowhere -- which is what `TRUE` resolves to with tab_vars or a per-category outcome.
+  expect_identical(tab_arg("empirical")$values, c("no", "tooltip", "cell", "column"))
   expect_identical(
     suppressMessages(tab_reg(d, "married", "race", family = "binomial",
                              empirical = "no",  stats = FALSE)),
     suppressMessages(tab_reg(d, "married", "race", family = "binomial",
                              empirical = FALSE, stats = FALSE)))
+})
+
+# --- Phase 22g-ii: the mode is one value, and `TRUE` is the default ------------------------------
+
+test_that("`TRUE` draws a crude column, except where a table is already wide", {
+  skip_if_not_installed("broom")
+  d <- emp_data()
+  mode <- function(t) {
+    r <- vapply(t[vapply(t, is_fmt, logical(1))], function(c) get_role(c), character(1))
+    if (any(r == "emp")) "column" else "tooltip"
+  }
+  # the ordinary case: the crude effect gets a column of its own, beside the model's
+  b <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "binomial"))
+  expect_identical(mode(b), "column")
+  # `tab_vars` groups and a per-category outcome would double an already wide table, so the crude
+  # value is computed and read on hover instead -- printed nowhere, silently
+  g <- suppressMessages(tab_reg(d, "married", "race", tab_vars = "rincome", family = "binomial"))
+  expect_identical(mode(g), "tooltip")
+  skip_if_not_installed("nnet")
+  m <- suppressMessages(tab_reg(d, "marital", "race", family = "multinomial"))
+  expect_identical(mode(m), "tooltip")
+})
+
+test_that("`tooltip` computes everything `column` does, and draws nothing", {
+  skip_if_not_installed("broom")
+  d  <- emp_data()
+  mc <- function(t) t[[names(t)[vapply(t, function(x)
+    is_fmt(x) && identical(get_role(x), "model"), logical(1))][[1]]]]
+  a <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "binomial",
+                                measure = "difference", empirical = "column"))
+  b <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "binomial",
+                                measure = "difference", empirical = "tooltip"))
+  expect_true(any(grepl("^Obs_", names(a))))
+  expect_false(any(grepl("^Obs_", names(b))))
+  # the two fields `color = "adjustment"` and the hover read are identical
+  expect_identical(get_obs(mc(a)),    get_obs(mc(b)))
+  expect_identical(get_gap_se(mc(a)), get_gap_se(mc(b)))
+})
+
+test_that("`cell` is the `est_obs` LAYOUT, not a per-cell rewrite", {
+  skip_if_not_installed("broom")
+  d <- emp_data()
+  t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = "cell"))
+  x <- t[[names(t)[vapply(t, function(z)
+    is_fmt(z) && identical(get_role(z), "model"), logical(1))][[1]]]]
+  # ONE template for every cell that has a crude counterpart, and the aside comes FIRST
+  expect_true(all(get_display(x)[!is.na(get_obs(x))] == "({obs}) {est}"))
+  expect_identical(tabxplor:::display_resolve("est_obs", "model"), "({obs}) {est}")
+  # a cell with no counterpart prunes the bracket rather than printing an empty one
+  expect_false(any(grepl("()", format(x), fixed = TRUE)))
 })

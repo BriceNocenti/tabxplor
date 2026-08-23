@@ -10,6 +10,11 @@
 #     collision that had `diff` and `gap` both printing "ecart", the package's umbrella word for a
 #     deviation.
 #   - ONE GATE for every value line, so no line can drift into an exception of its own.
+#   - TWO ROWS, declared (TOOLTIP_LINES$group): the cell's own numbers, then the observed
+#     comparison -- `obs` and the gap to it, which is a statement about ANOTHER column. Lines join
+#     with " ; " inside a row and with a newline between them, which the bootstrap stylesheet
+#     honours (tab-css.R writes `white-space: pre`). Group 2 is the LAST row, and that is checked at
+#     load: reg_append_empirical_tip() appends onto a finished string and lands there by position.
 # See: CLAUDE.md § tabxplor architecture > The display grammar.
 
 
@@ -236,6 +241,10 @@ tip_render_note <- function(x, ctx, tok) {
 #             not_emitted drop where an earlier line already printed that field
 #   when    optional function(x, ctx) -> TRUE/FALSE: the column-level condition.
 #   render  NULL = format(set_display(x, token)); else the line's own renderer(x, ctx, token).
+#   group   which ROW of the tooltip the line lands on. Lines within a group join with " ; ",
+#           groups with a newline. Group 1 is the cell's own numbers; group 2 is the observed
+#           comparison -- the crude effect and the gap to it -- which is a statement about ANOTHER
+#           column and reads as its own sentence.
 #
 # ⚠ `not_ref` / `not_base` apply only where the line names a DEVIATION: a level (a percentage, a
 # mean, a count) is a fact about the cell, and a reference cell has one like any other.
@@ -243,8 +252,16 @@ tip_render_note <- function(x, ctx, tok) {
 #' @noRd
 .ttip <- function(token = NA_character_, label = NA_character_,
                   gates = c("comparable", "not_ref", "not_base", "not_shown", "not_emitted"),
-                  when = NULL, render = NULL)
-  list(token = token, label = label, gates = gates, when = when, render = render)
+                  when = NULL, render = NULL, group = 1L)
+  list(token = token, label = label, gates = gates, when = when, render = render,
+       group = as.integer(group))
+
+# THE OBSERVED COMPARISON'S row, and the LAST one -- which is what lets reg_append_empirical_tip()
+# (R/tab-render-html.R) go on appending the multinomial crude level with " ; " to a finished string
+# and still land on the right line. Asserted at load beside the other cross-table checks.
+#' @keywords internal
+#' @noRd
+TOOLTIP_GROUP_OBS <- 2L
 
 #' @keywords internal
 #' @noRd
@@ -280,8 +297,9 @@ TOOLTIP_LINES <- list(
   ctr   = .ttip("ctr", label = tip_label_ctr, gates = c("comparable", "not_shown"),
                 render = tip_render_ctr),
   resid = .ttip("resid", gates = c("comparable", "not_shown"), render = tip_render_resid),
-  obs   = .ttip("obs", label = tip_label_obs),
-  gap   = .ttip("gap", gates = character(), render = tip_render_gap),
+  # THE OBSERVED COMPARISON, on its own line: the crude effect, then how far the model moved from it.
+  obs   = .ttip("obs", label = tip_label_obs, group = TOOLTIP_GROUP_OBS),
+  gap   = .ttip("gap", gates = character(), render = tip_render_gap, group = TOOLTIP_GROUP_OBS),
   n     = .ttip("n", gates = c("not_shown", "not_emitted"), render = tip_render_n),
   note  = .ttip(label = "", gates = character(), render = tip_render_note)
 )
@@ -301,8 +319,10 @@ tab_tooltip_text <- function(x, .ref = NULL, .note = NULL, .base_n = NULL) {
   ctx$note <- .note
 
   # two slots per line: the "ref" word takes the one just before the first DEVIATION line, which is
-  # where the comparison it replaces would have been read.
+  # where the comparison it replaces would have been read. `rep(each = 2L)` gives a line and its own
+  # "ref" slot the same group, so the word lands on the row of the line it replaces.
   frags   <- vector("list", 2L * length(TOOLTIP_LINES))
+  grp     <- rep(vapply(TOOLTIP_LINES, function(l) l$group %||% 1L, integer(1)), each = 2L)
   ref_any <- rep(FALSE, n)
   ref_pos <- NA_integer_
   emitted <- character()
@@ -360,12 +380,18 @@ tab_tooltip_text <- function(x, .ref = NULL, .note = NULL, .base_n = NULL) {
   if (any(ref_any))
     frags[[if (is.na(ref_pos)) 1L else ref_pos]] <- ifelse(ref_any, "ref", "")
 
+  # ONE ROW PER GROUP, so a cell with nothing to say in group 2 gets no trailing newline.
   out <- rep("", n)
-  for (f in frags) {
-    if (is.null(f)) next
-    k <- !is.na(f) & nzchar(f)
-    if (!any(k)) next
-    out[k] <- paste0(out[k], ifelse(nzchar(out[k]), " ; ", ""), f[k])
+  for (g in sort(unique(grp))) {
+    og <- rep("", n)
+    for (f in frags[grp == g]) {
+      if (is.null(f)) next
+      k <- !is.na(f) & nzchar(f)
+      if (!any(k)) next
+      og[k] <- paste0(og[k], ifelse(nzchar(og[k]), " ; ", ""), f[k])
+    }
+    k <- nzchar(og)
+    out[k] <- paste0(out[k], ifelse(nzchar(out[k]), "\n", ""), og[k])
   }
 
   # A STATISTICAL ROW IS NOT A CELL OF THE TABLE: a model-fit number, a chi-squared p-value or a

@@ -185,6 +185,10 @@ jmvtab_reg_models <- function(models, pool, cross_keys = character(0)) {
 # comparison and its baseline ONE `tab_reg(stats =)`; Phase 20g-i named the controls after it).
 #   stats_compare  : the comparison KEY the user picks; the ComboBox values ARE the R keys, so
 #                    "none" -> NULL = tab_reg()'s own default footer set, untouched.
+#                    ⚠ SINCE 22g-ii THAT DEFAULT COMPARES: several `predictors` sets are tested
+#                    against each other automatically (sequential where the models nest, else vs the
+#                    first), so the ComboBox's "none" no longer says what it does. Phase 22g-iii
+#                    deletes this control outright, which is the fix -- do not paper over it here.
 #   stats_baseline : the baseline model POSITION, carried in the key's NAME when it is not the first
 #                    (`c(compare_baseline = "2")` -- the grammar `ref = c(var = "level")` also uses).
 #   stats_checks   : Phase 20f made the two checks that REFIT the model (linearity, proportional

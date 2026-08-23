@@ -538,6 +538,7 @@ and on a \code{\link{tab_reg}} table:
 \item \code{"est_coef"} (\code{\{est\} (\{coef\})}) --- the estimate and, in parentheses, the model's own coefficient.
 \item \code{"base_est_mdiff"} (\code{\{est\} (\{diff\})}) --- the estimate and, in parentheses, the same comparison as a difference.
 \item \code{"base_est_mratio"} (\code{\{est\} (\{ratio\})}) --- the estimate and, in parentheses, the same comparison as a ratio.
+\item \code{"est_obs"} (\code{(\{obs\}) \{est\}}) --- the estimate and, before it in parentheses, the observed (crude) effect it is compared to.
 \item \code{"base_est"} (\code{(\{base\}) \{est\}}) --- the level, then the estimate --- the mirror of \code{est_base}, which sets a crude and a modelled effect side by side.
 \item \code{"base"} (\code{\{base\}}) --- the level alone: the percentage, the mean or the count.
 \item \code{"base_ci"} (\code{\{base\} \{ci\}}) --- the level with its confidence interval.

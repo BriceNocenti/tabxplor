@@ -249,8 +249,11 @@ test_that("a split tab_reg()'s columns name the same interval methods as an unsp
     s = factor(sample(c("north", "south"), n, TRUE)),
     y = stats::rnorm(n)
   )
+  # ⚠ `empirical = "column"` on both sides: since 22g-ii `tab_vars` resolve the default TRUE to
+  # "tooltip", so the split table would carry no crude column and the two method sets could not be
+  # compared at all -- which is not what is under test.
   mk <- function(...) suppressMessages(
-    tab_reg(d, outcome = "y", predictors = "g", family = "gaussian", ...))
+    tab_reg(d, outcome = "y", predictors = "g", family = "gaussian", empirical = "column", ...))
   # the split branch used to write a THREE-key reduction of the six the unsplit branch writes, so a
   # split gaussian/poisson table's legend could not name the interval its Obs_* columns print.
   # Phase 19b: the methods ride the COLUMNS, so a rebuild site cannot lose them at all.

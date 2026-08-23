@@ -403,3 +403,61 @@ test_that("the joint test is opt-in and Brant is an ordinal default", {
   # ... but never on a weighted fit, where the Brant test has no meaning
   expect_false("proportionality" %in% reg_footer_stats("ordinal", TRUE, FALSE, NULL))
 })
+
+# --- Phase 22g-ii: the comparison is the DEFAULT -------------------------------------------------
+# Writing several `predictors` sets is something a reader does on purpose, and the row saying whether
+# the added variables bought anything is the point of writing them. Which comparison is read off the
+# models: a chain where each nests in the next is tested against the PREVIOUS, anything else against
+# the first. Naming any footer statistic drops it, as naming any other argument value does.
+
+cmp_rows <- function(t) {
+  tt <- get_test(t)
+  if (is.null(tt)) character(0) else unique(tt$test[grepl("compare", tt$test)])
+}
+cmp_msgs <- function(expr) {
+  m <- character(0)
+  withCallingHandlers(expr, message = function(e) {
+    m <<- c(m, conditionMessage(e)); invokeRestart("muffleMessage") })
+  m
+}
+
+test_that("several predictor sets compare by default, sequential where they nest", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  chain <- list(m1 = "race", m2 = c("race", "rincome"), m3 = c("race", "rincome", "relig"))
+  expect_true(any(grepl("compare_seq", cmp_rows(
+    suppressMessages(tab_reg(d, "married", chain, family = "binomial"))))))
+  # not a chain -> each model against the first
+  loose <- list(a = "race", b = "rincome")
+  expect_true(any(grepl("compare_baseline", cmp_rows(
+    suppressMessages(tab_reg(d, "married", loose, family = "binomial"))))))
+  # naming the footer statistics drops the comparison, the way naming any value drops the rest
+  expect_length(cmp_rows(suppressMessages(
+    tab_reg(d, "married", chain, family = "binomial", stats = c("n", "aic")))), 0L)
+})
+
+test_that("the default comparison never speaks up, and never refuses a table", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  # one model: nothing to compare, and no lecture about it
+  expect_length(cmp_rows(suppressMessages(tab_reg(d, "married", "race", family = "binomial"))), 0L)
+  expect_false(any(grepl("compare", cmp_msgs(
+    tab_reg(d, "married", "race", family = "binomial")), fixed = TRUE)))
+  # several outcomes: a between-model test has no meaning, so it degrades rather than aborting
+  # (an EXPLICIT key still refuses -- that message names `stats`)
+  expect_length(cmp_rows(suppressMessages(
+    tab_reg(d, c("married", "age"), "race", family = c("binomial", "gaussian")))), 0L)
+  expect_error(suppressMessages(
+    tab_reg(d, c("married", "age"), "race", family = c("binomial", "gaussian"),
+            stats = "compare_baseline")), "share one")
+})
+
+test_that("an ordinary table keeps its parallelism and drops its fits", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  # ⚠ `compare != "none"` is what turns BOTH off (reg_specs_independent, and the fit kept on the
+  # product), so a default that left "auto" live would cost every table both.
+  sh <- suppressMessages(tab_reg(d, c("married", "age"), c("race", "rincome"),
+                                 family = c("binomial", "gaussian")))
+  expect_identical(tabxplor:::reg_call(sh)$compare %||% "none", "none")
+})

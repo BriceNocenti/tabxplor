@@ -66,6 +66,13 @@
 #     (do_exp, conf_level). Everything else a column needs comes from the `tabxplor_fitdigest`
 #     (R/reg-digest.R), which is why the jamovi cache can key on the MODEL alone and serve every
 #     estimand from one fit. Only `method = "profile"` cannot: its bounds are a likelihood output.
+#   - THE MODEL COMPARISON IS A DEFAULT. Several `predictors` sets are tested against each other
+#     without being asked (`stats = NULL` resolves `compare = "auto"`), sequential where every model
+#     nests in the next and against the first otherwise -- decided in reg_compare_rows(), the first
+#     place the fits exist. ⚠ `compare != "none"` is what makes reg_specs_independent() refuse
+#     parallelism AND makes the product KEEP its fit, so the boundary degrades "auto" to "none"
+#     wherever a comparison has no meaning (reg_resolve_args): an ordinary table must not pay for a
+#     row it will not print.
 # See: CLAUDE.md section "tabxplor architecture" (the regression subsystem).
 
 # === SECTION: Internal engine ===================================================================
@@ -391,21 +398,11 @@ reg_detect_family <- function(data, outcome) {
   fam
 }
 
-# Does the observed effect ride INSIDE the model cell? One fact, resolved at the argument boundary.
+# What a model cell's parenthetical holds. EVERY mode's aside is now a property of the table's own
+# display -- the in-cell crude fold is the `est_obs` preset, not a per-cell rewrite -- so there is
+# one reader and no mode to special-case.
 #' @keywords internal
-reg_meta_obs_in_cell <- function(meta, deps = NULL) {
-  if (!identical(meta$emp_mode, "cell")) return(FALSE)
-  ck <- meta$crude_keys
-  if (is.null(ck)) return(FALSE)
-  if (!is.null(deps)) ck <- ck[intersect(names(ck), deps)]
-  any(!is.na(unlist(ck)))
-}
-
-# What a model cell's parenthetical holds. The in-cell crude fold is written per CELL by
-# reg_set_obs(), not by the table's display, so it is the one aside the layout cannot report.
-#' @keywords internal
-reg_meta_aside <- function(meta, est = NULL, deps = NULL) {
-  if (reg_meta_obs_in_cell(meta, deps)) return("obs")
+reg_meta_aside <- function(meta, est = NULL) {
   display <- meta$display %||% reg_display_of(NULL, meta$emp_mode %||% "no")
   reg_aside_token(display, est$scale)
 }
@@ -553,7 +550,7 @@ reg_model_lines <- function(x, lang = NULL) {
       grp   <- deps[fams == fm]
       e     <- reg_meta_estimand(meta, grp[[1]])
       fname <- reg_family_display_name(e$fit %||% fm)
-      est   <- reg_estimand_note(e, aside = reg_meta_aside(meta, e, grp),
+      est   <- reg_estimand_note(e, aside = reg_meta_aside(meta, e),
                                  role_cols = reg_role_cols(x, fm),
                                  has_num = reg_has_numeric_predictor(meta))
       if (nzchar(dfc)) est <- if (nzchar(est)) gettextf("%s; %s", est, dfc) else dfc
@@ -1285,6 +1282,20 @@ reg_svyglm_env <- function(fit) {
 # computed from `data` itself, and a shorter one recycles silently.
 # ⚠ `positive_level` is a RETURN VALUE, not the attribute reg_prep_binary() leaves behind: any
 # dplyr verb downstream would drop it.
+# A RATIO OF MEANS NEEDS A NON-NEGATIVE OUTCOME, refused ONCE. ⚠ raised at the argument boundary,
+# not only in the fitter: since the observed companion is on by default the crude block runs first,
+# and it would take the log of a negative mean and warn "NaNs produced" before the honest abort.
+#' @keywords internal
+#' @noRd
+reg_check_ratio_outcome <- function(y, outcome) {
+  y <- suppressWarnings(as.numeric(y))
+  if (any(is.finite(y) & y < 0)) cli::cli_abort(c(
+    '{.code measure = "ratio"} needs a non-negative outcome: a ratio of means is not defined when {.val {outcome}} can be negative.',
+    "i" = 'Model {.code log()} of a positive outcome instead, or use {.code measure = "difference"}.'),
+    call = NULL)
+  invisible(TRUE)
+}
+
 #' @keywords internal
 #' @noRd
 reg_fit_frame <- function(data, outcome, predictors, family, design_spec,
@@ -1357,12 +1368,7 @@ reg_fit_frame <- function(data, outcome, predictors, family, design_spec,
       mdata <- binary_prep(mdata)
       mdata[[outcome]] <- as.numeric(mdata[[outcome]] == positive_level)
     },
-    "mr" = {
-      y <- suppressWarnings(as.numeric(mdata[[outcome]]))
-      if (any(is.finite(y) & y < 0)) cli::cli_abort(c(
-        '{.code measure = "ratio"} needs a non-negative outcome: a ratio of means is not defined when {.val {outcome}} can be negative.',
-        "i" = 'Model {.code log()} of a positive outcome instead, or use {.code measure = "difference"}.'))
-    },
+    "mr" = reg_check_ratio_outcome(mdata[[outcome]], outcome),
     "poisson" = , "quasipoisson" = , "gaussian" = NULL,
     cli::cli_abort("Unsupported {.arg family}: {.val {family}}.")
   )
@@ -1791,15 +1797,19 @@ reg_apply_display <- function(col, display) {
   display_write_col(col, tmpl)$col
 }
 
-# The display every cell of the table takes: the user's, else the default LAYOUT. That default is
-# `est_base`, whose `emp` arm mirrors it -- "({base}) {est}" against "{est} ({base})" -- so the two
-# ESTIMATES end up adjacent, each with its level on the outside, the order of the modelling itself.
-# Where the crude effect rides IN the cell there is no pair to mirror, and reg_set_obs() folds it in.
+# The display every cell of the table takes: the user's, else the default LAYOUT the `empirical` mode
+# implies. `est_base`'s `emp` arm mirrors it -- "({base}) {est}" against "{est} ({base})" -- so the
+# two ESTIMATES end up adjacent, each with its level on the outside, the order of the modelling
+# itself. `"cell"` has no pair to mirror and takes `est_obs`, which puts the crude effect where every
+# other observed-then-modelled layout puts it: before the estimate.
+# DESIGN: the in-cell fold is a PRESET, not a per-cell rewrite -- so the layout can report its own
+# aside (reg_meta_aside), and one boundary still decides what every cell shows.
 #' @keywords internal
 #' @noRd
 reg_display_of <- function(display, empirical) {
   if (!is.null(display)) return(display)
-  if (emp_on(empirical) && !identical(empirical, "cell")) "est_base" else NULL
+  if (!emp_on(empirical)) return(NULL)
+  if (identical(empirical, "cell")) "est_obs" else "est_base"
 }
 
 # === SECTION: Marginal effects and adjusted predictions (the `at` profile axis) ==================
@@ -2553,11 +2563,21 @@ reg_stats_keys_of <- function(stats) {
 reg_resolve_stats <- function(stats) {
   none <- list(stats = stats, compare = "none", baseline = NULL)
   # ⚠ FALSE / "none" hides the comparison too: one argument means one list of what the footer shows.
-  if (!is.character(stats) || !length(stats) ||
-      identical(stats, "all") || identical(stats, "none")) return(none)
+  if (isFALSE(stats) || identical(stats, "none")) return(none)
+  # THE DEFAULT COMPARES. Writing several `predictors` sets is something a reader does on purpose,
+  # and the row that says whether the added variables bought anything is the point of writing them
+  # -- so "auto" is what the unnamed footer asks for, and reg_compare_rows() then picks BETWEEN the
+  # two comparisons from the models themselves (nested chain -> sequential, else vs the first).
+  # ⚠ it must NEVER abort or restrict, being a default: reg_resolve_args() degrades it to "none"
+  # wherever a between-model test has no meaning, before anything reads it.
+  auto <- list(stats = if (is.character(stats) && length(stats)) stats else NULL,
+               compare = "auto", baseline = NULL)
+  if (is.null(stats) || isTRUE(stats) || identical(stats, "all")) return(auto)
+  if (!is.character(stats) || !length(stats)) return(none)
 
   keys  <- reg_stats_keys_of(stats)
   is_cmp <- keys %in% c("compare_baseline", "compare_sequential")
+  # a NAMED footer set that does not name a comparison has dropped it on purpose.
   if (!any(is_cmp)) return(none)
   cmp <- keys[is_cmp]
   if (length(cmp) > 1L)
@@ -2648,6 +2668,17 @@ reg_compare_guard <- function(m_ref, m_full, crosses = list()) {
   0L
 }
 
+# Is this a SEQUENCE -- every model's terms a subset of the next one's? The question the automatic
+# comparison asks, and the one a reader answers by writing the `predictors` list they wrote. Term
+# sets only, so the answer is the same in every tab_vars group (see reg_compare_rows).
+reg_compare_chained <- function(fits, crosses = list()) {
+  terms_of <- function(m) tryCatch(
+    reg_cross_expand_terms(attr(stats::terms(m), "term.labels"), crosses), error = function(e) NULL)
+  tl <- lapply(purrr::map(fits, "fit"), terms_of)
+  if (length(tl) < 2L || any(vapply(tl, is.null, logical(1)))) return(FALSE)
+  all(vapply(seq_along(tl)[-1L], function(i) all(tl[[i - 1L]] %in% tl[[i]]), logical(1)))
+}
+
 reg_order_union <- function(models) {
   sets  <- purrr::map(models, unique)
   all_u <- unique(purrr::flatten_chr(sets))
@@ -2674,9 +2705,24 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
   if (identical(compare, "none")) return(reg_gof)
   n <- length(fits)
   if (n < 2L) {
-    cli::cli_inform(c("i" = paste0("{.arg compare} needs at least two models (a {.arg predictors} list ",
-                                   "or several outcomes); ignored.")))
+    # ⚠ silent under "auto": that is the DEFAULT, and a one-model table is not a mistake.
+    if (!identical(compare, "auto"))
+      cli::cli_inform(c("i" = paste0("{.arg compare} needs at least two models (a {.arg predictors} ",
+                                     "list or several outcomes); ignored.")))
     return(reg_gof)
+  }
+  # WHICH comparison, decided from the models themselves: a chain where each one nests in the next is
+  # something a reader built on purpose, and the honest test there is each vs the PREVIOUS. Anything
+  # else is read against the first.
+  # ⚠ TERM SETS ONLY, not reg_compare_guard(): the guard also requires an equal N, which is a
+  # property of one tab_vars GROUP's missing data -- so it would pick sequential in one group and
+  # baseline in the next, and one table would carry two kinds of comparison row. Nesting is
+  # structural and group-invariant; a differing N is still caught per pair below, where it falls
+  # back to Delta-AIC on that column alone.
+  auto <- identical(compare, "auto")
+  if (auto) {
+    compare  <- if (reg_compare_chained(fits, crosses)) "sequential" else "baseline"
+    baseline <- NULL
   }
   use_f  <- reg_fam_disp_estimated(family)
   # an "rr" fit is an svyglm, so it takes the Wald branch either way: an LR between two
@@ -2732,7 +2778,9 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
       }
     }
     daic <- tryCatch(reg_aic_value(m_full) - reg_aic_value(m_ref), error = function(e) NA_real_)
-    cli::cli_inform(c(
+    # ⚠ the ROW still appears -- Delta-AIC names itself and is a legitimate answer -- but a table
+    # that never asked for a comparison must not take two bullets to explain the one it got.
+    if (!auto) cli::cli_inform(c(
       "i" = paste0(
         "Column {.val {col}}: models are not nested or N differs -> showing the AIC difference vs the ",
         "{if (compare == 'sequential') 'previous' else 'baseline'} model instead of a likelihood-ratio test."),
@@ -3766,15 +3814,10 @@ reg_set_obs <- function(bi, e, f, sp, ctx) {
   key <- if (is.null(bi$emp_key)) "" else as.character(bi$emp_key)
   ev  <- cat_get(e$effect, key)
   if (is.null(ev)) return(col)
+  # `obs` is on the CELL'S OWN SCALE, so it is the same kind of quantity as the estimate and IS what
+  # `color = "adjustment"` scores. WHERE it is shown is the display's business, never this function's
+  # (`empirical = "cell"` resolves to the `est_obs` preset in reg_display_of).
   col <- set_obs(col, ev)
-  # Where the crude effect draws NO column of its own it is folded into the model cell as
-  # "{est} ({obs})": `obs` is on the CELL'S OWN SCALE, so the bracket is the same kind of quantity as
-  # the estimate and IS what `color = "adjustment"` scores. An explicit `display` wins outright.
-  if (identical(empirical, "cell") && is.null(display)) {
-    d   <- get_display(col)
-    hit <- is.finite(ev) & d %in% DISPLAY_VALUE_CELLS
-    if (any(hit)) col <- set_display(col, dplyr::if_else(hit, "{est} ({obs})", d))
-  }
   g <- reg_gap_se_columns(f, sp, col, skeleton, e$shape, e$frame,
                           e$fac_preds, sp$est, design_spec$wt,
                           fits_crude = e$fits, fit_preds = e$fit_preds, multiplier = multiplier,
@@ -4088,14 +4131,6 @@ reg_stage_finalize <- function(ctx) {
 #'   the table, the significance stars, the greying under `color_signif` and the
 #'   model-versus-observed gap interval, and is stored on each column, so it follows this argument
 #'   rather than `options("tabxplor.conf_level")`.
-#' @param ci_method How the interval and p-value are computed --- the same argument, and the same
-#'   named-vector grammar, as in [tab()], whose fifth slot is this producer's:
-#'   `ci_method = c(model = "profile")`. On a regression there is only one interval to choose a
-#'   method for, so a bare `"profile"` means that slot. `"wald"` (default) uses the Wald interval and
-#'   the Wald z / t test: fast, matching standard software output, and the only option for weighted
-#'   models. `"profile"` uses the profile-likelihood interval ([stats::confint()], needs `MASS`) and
-#'   the likelihood-ratio test: more accurate near separation, unweighted binomial / poisson only
-#'   (otherwise it falls back to Wald with a message; gaussian always uses the exact-t interval).
 #' @param ref The reference every effect is measured **from** --- one argument, one meaning per kind
 #'   of predictor.
 #'   \itemize{
@@ -4210,14 +4245,19 @@ reg_stage_finalize <- function(ctx) {
 #' @param empirical Show the **observed, unadjusted (crude)** effect beside each modelled one ---
 #'   the same quantity fitted with a single predictor. It IS the modelled quantity when there is only
 #'   one predictor, so the distance between the two is exactly what adjustment changed, read left to
-#'   right. `FALSE` (default) or `TRUE`; two expert spellings say *where* the crude effect goes:
+#'   right. `TRUE` (**the default**) or `FALSE`; three expert spellings say *where* the crude effect
+#'   goes, and in every one of them except `"no"` it is computed, stored in the `obs` field, and
+#'   read with `$obs` or `get_obs()`, by `color = "adjustment"` and by the hover tooltip:
 #'   \itemize{
-#'     \item `TRUE` --- a crude **column** beside the model one, except on a 3+ level outcome
-#'       (multinomial, or an ordinal marginal effect), where one model column would need one crude
-#'       column per outcome category: there the crude value rides **inside** the model cell instead,
-#'       as `1/1.63*** (1/1.69)`.
+#'     \item `TRUE` --- a crude **column** beside the model one; except where drawing one would
+#'       double a table already wide --- `tab_vars` groups, or a 3+ level outcome (multinomial, or an
+#'       ordinal marginal effect) where one model column would need one crude column per category ---
+#'       and there it is computed and read from the **hover tooltip** alone.
 #'     \item `"column"` --- always the column, per outcome category if that is what it takes.
-#'     \item `"cell"` --- always in the cell, however few columns it would have taken.
+#'     \item `"tooltip"` --- computed, printed nowhere. The narrowest table, and still enough for
+#'       `color = "adjustment"`, [forest_plot()] and `$obs`.
+#'     \item `"cell"` --- **inside** the model cell, as `(1/1.69) 1/1.63***`: the `est_obs` layout,
+#'       the crude number first as everywhere else the two sit together. `display` overrides it.
 #'   }
 #'   The two columns are the same column twice: same estimand, same colour ladder, same layout, one
 #'   legend block. Each cell prints the effect with the level it sits on beside it --- the observed
@@ -4263,13 +4303,18 @@ reg_stage_finalize <- function(ctx) {
 #'   this model can report, or `FALSE` / `"none"` to hide the footer. Weighted models show a reduced,
 #'   survey-appropriate set (design-based Wald test, Nagelkerke pseudo-R square, AIC).
 #'
-#'   **Model comparison** (several models / outcomes only) is two more keys, so it needs no separate
-#'   argument: `"compare_sequential"` tests each model against the previous one, and
-#'   `"compare_baseline"` each against one reference model --- the first by default, or the one you
-#'   name as the key's value, `stats = c("n", "aic", compare_baseline = "Model 1")`. Both use a
-#'   likelihood-ratio test (F for linear / quasi models, a design-based Wald test for weighted ones),
-#'   falling back to the AIC difference with a message when the models are not nested or have
-#'   different N. A comparison key **adds** a row and restricts nothing.
+#'   **Model comparison happens by default** wherever it means anything --- when `predictors` is a
+#'   list of several models. Which one it is, is read off the models: where each nests in the next
+#'   (a chain a reader builds on purpose) every model is tested against the **previous** one,
+#'   otherwise each against the **first**. Both use a likelihood-ratio test (F for linear / quasi
+#'   models, a design-based Wald test for weighted ones), falling back to the AIC difference where
+#'   the models are not nested or have different N.
+#'
+#'   Two keys override it: `"compare_sequential"`, and `"compare_baseline"` --- against the first
+#'   model, or the one you name as the key's value, `stats = c("n", "aic", compare_baseline =
+#'   "Model 1")`. A comparison key **adds** a row and restricts nothing. And naming any footer
+#'   statistic drops the automatic comparison, the way naming any argument's values drops the rest:
+#'   `stats = c("n", "aic")` is a footer with no comparison in it.
 #'
 #'   `"global"` adds one **overall test per predictor** --- "is this variable associated with the
 #'   outcome at all?", the question a block of stars against a reference category cannot answer.
@@ -4533,7 +4578,18 @@ reg_stage_finalize <- function(ctx) {
 #' Santos Silva, J. M. C. & Tenreyro, S. (2006). The log of gravity. *The Review of Economics and
 #' Statistics*, 88(4), 641-658 --- `measure = "ratio"` on a continuous outcome.
 #'
-#' @param ... Not a user argument. It carries the internal `.fit_cache` (the jamovi live UI's fit
+#' @param ... One rarely-typed argument, plus internal plumbing.
+#'
+#'   `ci_method` --- how the interval and p-value are computed: the same argument, and the same
+#'   named-vector grammar, as in [tab()], whose fifth slot is this producer's:
+#'   `ci_method = c(model = "profile")`. On a regression there is only one interval to choose a
+#'   method for, so a bare `"profile"` means that slot. `"wald"` (default) uses the Wald interval and
+#'   the Wald z / t test: fast, matching standard software output, and the only option for weighted
+#'   models. `"profile"` uses the profile-likelihood interval ([stats::confint()], needs `MASS`) and
+#'   the likelihood-ratio test: more accurate near separation, unweighted binomial / poisson only
+#'   (otherwise it falls back to Wald with a message; gaussian always uses the exact-t interval).
+#'
+#'   `...` also carries the internal `.fit_cache` (the jamovi live UI's fit
 #'   cache environment), and it is what makes every argument removed or renamed while `tab_reg()` was
 #'   in development --- `exponentiate`, `at`, `estimate_display`, `dependent`, `split_var`,
 #'   `reference`, `method`, `compare`, `baseline`, `inverse_two_level_factors`, `parallel`, and the
@@ -4545,11 +4601,10 @@ reg_stage_finalize <- function(ctx) {
 #' @export
 tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL,
                     family = "auto", link = "auto", measure = "auto", effect = "auto",
-                    trials = NULL, empirical = FALSE, n = NULL,
+                    outcome_level = NULL, trials = NULL, empirical = TRUE, n = NULL,
                     color = TRUE, color_signif = NULL, stars = TRUE,
-                    conf_level = NULL, ci_method = NULL,
-                    outcome_level = NULL, ref = NULL,
-                    multiplier = "sd", shape = NULL, stats = NULL,
+                    ref = NULL, multiplier = "sd", shape = NULL, stats = NULL,
+                    conf_level = NULL,
                     na = c("drop_by_outcome", "drop_by_model", "drop_all"),
                     display = NULL, cleannames = NULL, subtext = "", ...) {
   # ⚠ FIRST: capture the four variable roles before anything can force their promises -- and the
@@ -4566,6 +4621,9 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
   .fit_cache <- .dots[[".fit_cache"]]
   .levels_collapse <- new_lvl_collapse(.dots[[".levels_collapse"]])
   tab_check_dots(.dots, "tab_reg")
+  # the declared arguments that ride `...` rather than the signature, refilled from their own
+  # TAB_ARGS default when absent (`dots = "tab_reg"` is where that is stated).
+  ci_method <- tab_dots_expand(.dots, "tab_reg")[["ci_method"]]
   # ONE `ci_method` grammar for both producers: the named vector tab() takes, whose fifth slot is
   # this one's. A bare "profile" means that slot -- a regression has only one interval to choose for.
   if (is.character(ci_method) && is.null(names(ci_method)) && length(ci_method) == 1L)

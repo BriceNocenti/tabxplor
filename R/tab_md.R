@@ -140,11 +140,13 @@ tab_md <- function(tabs,
   # carry them (see tab_wants_shape_table).
   if (is_tab(tabs) && tab_wants_shape_table(tabs, "md")) {
     st <- reg_shape_table(tabs)
-    if (!is.null(st))
+    if (!is.null(st)) {
+      nt <- attr(st, "note")                       # empty wherever no row wears the "ns" mark
       md_text <- paste(c(md_text, "",
                          tx_pipe_table(st, attr(st, "headers"), attr(st, "align")),
-                         "", paste0("*", paste(attr(st, "note"), collapse = " "), "*")),
+                         if (length(nt)) c("", paste0("*", paste(nt, collapse = " "), "*"))),
                        collapse = "\n")
+    }
   }
 
   # Phase 14f/14m-iii: a STYLED table is wrapped in a pandoc fenced div, and (with `css = TRUE`) the

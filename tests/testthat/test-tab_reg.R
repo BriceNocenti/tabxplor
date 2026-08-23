@@ -54,7 +54,7 @@ test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the addit
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   t1  <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", multiplier = 1,
-                 ref = c(age = 0), cleannames = FALSE)
+                 ref = c(age = 0), empirical = FALSE, cleannames = FALSE)
   col <- t1[["Model_diff"]]
 
   expect_identical(tabxplor:::fmt_var_kind(col), "coef")
@@ -93,7 +93,8 @@ test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the addit
 
 test_that("gaussian beta renders raw (no % / x glyph), reference shows 0", {
   skip_if_not_installed("broom")
-  t1  <- tab_reg(reg_data(), "tvhours", "race", family = "gaussian", cleannames = FALSE)
+  t1  <- tab_reg(reg_data(), "tvhours", "race", family = "gaussian", empirical = FALSE,
+                 cleannames = FALSE)
   col <- t1[["Model_diff"]]
   txt <- format(col, special_formatting = TRUE)
   expect_false(any(grepl("%", txt)))                 # no percentage suffix
@@ -111,7 +112,7 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   t1  <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson", multiplier = 1,
-                                  ref = c(age = 0), cleannames = FALSE))
+                                  ref = c(age = 0), empirical = FALSE, cleannames = FALSE))
   col <- t1[["Model_IRR"]]
 
   # a rate ratio's own scale: odds_ratio's ladder and glyphs, a MEAN as the level it sits on
@@ -257,7 +258,8 @@ test_that("mixed-family 'Model:' footer = one line per family; homogeneous = one
   mlh <- tabxplor:::reg_model_lines(hom)
   expect_length(mlh, 1L)
   expect_false(grepl("^Model \\(", mlh))                       # no per-family prefix when homogeneous
-  expect_identical(mlh, tabxplor:::reg_model_line(reg_call(hom)))
+  expect_identical(mlh, tabxplor:::reg_model_line(reg_call(hom), "",
+                                                  tabxplor:::reg_role_cols(hom)))
 })
 
 test_that("mixed-family caption is generic; homogeneous keeps its family name", {
@@ -346,7 +348,7 @@ test_that("grouped binomial (trials=) matches glm(cbind(s, q-s)); OR fmt shape",
   # suppressWarnings: the grouped-binomial fixture is over-dispersed -> the Phase 12f dispersion
   # flag fires (correct; asserted in test-tab_reg-footer.R). This test is about the OR/CI/p parity.
   t1  <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
-                                  cleannames = FALSE))
+                                  empirical = FALSE, cleannames = FALSE))
   col <- t1[["Model_OR"]]
 
   # a summed score's odds ratio sits on the mean SCORE, which is a mean and not a percentage
@@ -584,7 +586,7 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
   # the default scales a continuous predictor per SD on every family, multinomial included -- which
   # the block after this one checks.
   t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", cleannames = FALSE,
-                multiplier = 1, ref = c(age = 0))
+                empirical = FALSE, multiplier = 1, ref = c(age = 0))
 
   # one OR column per non-reference outcome category, "vs <ref>" in the label
   expect_true(all(c("Dem vs Ind", "Rep vs Ind") %in% names(t1)))
@@ -774,7 +776,7 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "marginal", measure = "difference", multiplier = 1,
-                 cleannames = FALSE)
+                 empirical = FALSE, cleannames = FALSE)
   col <- t1[["Model_mRD"]]
 
   expect_identical(get_pct_type(col), "row")

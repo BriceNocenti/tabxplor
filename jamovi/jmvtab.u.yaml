@@ -300,8 +300,7 @@ children:
         children:
           - type: Label
             label: >-
-              <b>Reorder and merge levels</b> <i>(click on a level, then move it
-              up/down; tick a level to merge it into the one above)</i>
+              <b>Reorder and merge levels:</b>
             children:
               - type: CustomControl
                 name: levelsCtrl
@@ -421,7 +420,7 @@ children:
                 stretchFactor: 0
                 children:
                   - type: Label
-                    label: ci_method = c(<b>cell</b> = ) <i>(a cell proportion)</i>
+                    label: ci_method = c(cell = )
               - type: LayoutBox
                 margin: none
                 cell:
@@ -440,7 +439,7 @@ children:
                 stretchFactor: 0
                 children:
                   - type: Label
-                    label: ci_method = c(<b>diff</b> = ) <i>(a difference in proportion)</i>
+                    label: ci_method = c(diff = )
               - type: LayoutBox
                 margin: none
                 cell:
@@ -459,7 +458,7 @@ children:
                 stretchFactor: 0
                 children:
                   - type: Label
-                    label: ci_method = c(<b>mean_diff</b> = ) <i>(a mean difference)</i>
+                    label: ci_method = c(mean_diff = )
               - type: LayoutBox
                 margin: none
                 cell:
@@ -478,7 +477,7 @@ children:
                 stretchFactor: 0
                 children:
                   - type: Label
-                    label: ci_method = c(<b>mean_ratio</b> = ) <i>(a mean ratio)</i>
+                    label: ci_method = c(mean_ratio = )
               - type: LayoutBox
                 margin: none
                 cell:

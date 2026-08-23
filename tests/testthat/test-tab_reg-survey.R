@@ -213,8 +213,10 @@ test_that("Phase g: split_var + a single model auto-spreads to side-by-side colu
   expect_false(any(grepl("<br>", cv)))          # the weld is gone from the stored name
   expect_true(all(nzchar(cg)))
   expect_setequal(unique(cg), c("north", "south"))
-  # works with empirical = TRUE (crude companions spread too, level-suffixed)
-  te <- suppressWarnings(tab_reg(d, "y", "x1", tab_vars = "g", empirical = TRUE))
+  # works with a crude COLUMN (they spread too, level-suffixed). ⚠ `empirical = "column"`, not
+  # TRUE: since 22g-ii `tab_vars` resolve TRUE to "tooltip" -- computed, no column -- so drawing one
+  # is what has to be asked for here.
+  te <- suppressWarnings(tab_reg(d, "y", "x1", tab_vars = "g", empirical = "column"))
   expect_true(any(grepl("^Obs_", names(te))))
   # several models per group cannot go side by side, so they stay stacked
   expect_true("g" %in% names(

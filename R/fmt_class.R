@@ -2224,6 +2224,15 @@ fmt_display_label <- function(x, style = c("tag", "plain"), footer_collapse = TR
     if (any(shown)) d <- d[shown]
   }
   prim <- fmt_resolve_scale_tokens(display_primary(d), scl)
+  # ... nor by its BASELINE ROW. A column is named by what it ESTIMATES, and a regression's Constant
+  # row prints the level those effects operate on (EST_SCALES$const_display) -- a ratio sits on a
+  # percentage, a beta on a mean -- so on every scale where the two tokens differ the vote saw two
+  # primaries and named the column "mixed". Only an EFFECT scale has a baseline row to ignore; a
+  # level scale (every crosstab column) never reaches this.
+  if (footer_collapse && length(unique(prim)) > 1L && identical(scl$kind, "effect")) {
+    own <- prim == fmt_resolve_scale_tokens("est", scl)
+    if (any(own)) { d <- d[own]; prim <- prim[own] }
+  }
   if (length(unique(prim)) > 1L) return("mixed")
   # the FULLEST template showing that primary: a Total column carries "pct" on the rows the base
   # count could not be folded into and "{pct} ({n_range})" on the others, and the name is the aside's.
@@ -5140,11 +5149,12 @@ measure_policy <- function(measure, policy = "ignore", x = NULL) {
 
 # a legend token: plain text (c = NA) or a coloured break-word (c = palette slot 1:8). The CSS class is
 # derived at render (tx_slot_class), not stored, so a break-word and the cells it describes name the
-# same class. `b` = bold flag on a PLAIN token (variable names); `esc` = escape markdown-active `*` in
-# the md medium. Coloured tokens decide weight in legend_render_line (text = bold, bg = plain).
-.lg_tok  <- function(t, bold = FALSE, esc = FALSE)
-  list(t = t, c = NA_integer_, ch = NA_character_, b = isTRUE(bold), esc = isTRUE(esc))
-.lg_ctok <- function(t, slot, ch) list(t = t, c = as.integer(slot), ch = ch, b = FALSE, esc = FALSE)
+# same class. `esc` = escape markdown-active `*` in the md medium.
+# DESIGN: a PLAIN token has no face of its own -- weight in a legend comes from the palette and from
+# nothing else, so a legend never puts more emphasis on itself than the cells it describes carry.
+.lg_tok  <- function(t, esc = FALSE)
+  list(t = t, c = NA_integer_, ch = NA_character_, esc = isTRUE(esc))
+.lg_ctok <- function(t, slot, ch) list(t = t, c = as.integer(slot), ch = ch, esc = FALSE)
 
 #' @keywords internal
 legend_resolve_lang <- function(lang = NULL) {
@@ -5636,7 +5646,7 @@ legend_tokens_terse <- function(spec, lang, show_names) {
   # `esc = TRUE`: a COLUMN NAME is data -- a money level ("1-Lt $10000") or a starred one would
   # otherwise reach pandoc as inline math / emphasis.
   if (show_names) toks <- c(toks, list(.lg_tok(paste0(legend_name_list(spec$col_names),
-                                                      colon), bold = TRUE, esc = TRUE)))
+                                                      colon), esc = TRUE)))
   rs <- legend_ref_short(spec)
   add_channel <- function(plan, prefix, is_bg) {
     if (legend_gap_baseline(plan, spec$no_obs))
@@ -5798,9 +5808,8 @@ legend_tokens_prose <- function(spec, lang, show_names) {
   }
 
   toks <- list()
-  if (show_names)  # variable names are bold in every medium; `esc` keeps them DATA (see terse).
-    toks <- c(toks, list(.lg_tok(paste0(legend_name_list(spec$col_names), " \u2014 "),
-                                 bold = TRUE, esc = TRUE)))
+  if (show_names)  # `esc` keeps a variable name DATA (see terse); its face is plain (see .lg_tok).
+    toks <- c(toks, list(.lg_tok(paste0(legend_name_list(spec$col_names), " \u2014 "), esc = TRUE)))
 
   # a measure may declare ONE sentence of honesty about itself (MEASURES$<m>$caveat). Only `adjustment`
   # has one -- see fmt_noncollapsible_caveat().
@@ -5884,8 +5893,9 @@ legend_tokens_prose <- function(spec, lang, show_names) {
 # ---- render a token stream for one medium ----------------------------------------------------------
 # "runs" -> a list of runs list(text=, color=, bold=); every other medium -> a single string.
 # Coloured break-words carry the visual weight of the numbers they describe: TEXT-colour ones stay
-# BOLD, BACKGROUND-colour ones are PLAIN (a fill bolds nothing), variable NAMES (b = TRUE) are BOLD in
-# every medium. The md branch backslash-escapes `*` in plain-token text so pandoc does not read emphasis.
+# BOLD, BACKGROUND-colour ones are PLAIN (a fill bolds nothing). A PLAIN token is always plain -- the
+# palette is the only source of weight here.
+# The md branch backslash-escapes `*` in plain-token text so pandoc does not read emphasis.
 legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) {
   # `theme` may be the render intent "auto"; a palette is always light/dark -- resolve it or
   # get_color_style() errors on a length-0 vector.
@@ -5904,7 +5914,7 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
     if (!is_colored_tok(tk)) return(FALSE)
     isTRUE(get_color_style("face", type = fam(tk$ch), theme = pal)[[k]][tk$c])
   }
-  is_bold_tok  <- function(tk) tok_face(tk, "bold") || isTRUE(tk$b)
+  is_bold_tok  <- function(tk) tok_face(tk, "bold")
   semantic     <- fmt_face_semantic(pal)
   is_ital_tok  <- function(tk) tok_face(tk, "italic")
   # `underline` is the three-value vocabulary, so it has its own reader.

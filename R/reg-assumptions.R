@@ -1283,22 +1283,24 @@ reg_shape_table <- function(tab, n = 20L) {
   # the outcome (and the group) named ONCE per run, like the row-variable block of a table
   out$outcome[duplicated(out$outcome)] <- ""
   if (keep_group) out$group[duplicated(rows[, c("outcome", "group")])] <- ""
-  # ⚠ ONE STRING LITERAL PER gettext() CALL, and one NOTE LINE per call. potools extracts each
-  # literal it sees, while gettext() looks the EVALUATED string up -- so a message built with
-  # paste0() INSIDE the call is extracted in pieces and can never be found at run time.
-  note <- c(
-    gettextf("the outcome's observed shape across the central 95%% of each predictor, on the model's own scale (%s).",
-             paste(unique(rows$ylab), collapse = ", ")),
-    gettext("Observed range: the curve's lowest and highest point, with the climb between them in parentheses."),
-    gettext("Grey and \"ns\": the curve is inside its own sampling noise -- read it as a flat line whatever its shape (the row's own stars judge the effect, this does not)."))
+  # THE TABLE SAYS IT, NOT A FOOTER. The window is in the header, the units are in each `range` cell,
+  # and the only thing left that a mark cannot say for itself is what "ns" means -- so that is the one
+  # line, and only where a row actually wears it.
+  # ⚠ ONE STRING LITERAL PER gettext() CALL. potools extracts each literal it sees, while gettext()
+  # looks the EVALUATED string up -- so a message built with paste0() INSIDE the call is extracted in
+  # pieces and can never be found at run time.
+  note <- if (any(rows$noisy))
+    gettext("\"ns\": the curve is inside its own sampling noise -- read it as flat.") else character(0)
   # an ordinal or multinomial outcome has one curve per cut / per category and this draws only the
-  # first: the honest reading is the full panel, so the note says where it is.
-  if (any(reg_check_family_of(rows$family) %in% c("ordinal", "multinomial")))
-    note <- c(note, gettext("An ordinal or multinomial outcome has one curve per cut or per category, and this is only the first: use reg_check_plots() to see them all."))
+  # first: said in the outcome's own cell, where it is read, rather than in a footer line.
+  per_cut <- reg_check_family_of(rows$family) %in% c("ordinal", "multinomial")
+  if (any(per_cut)) out$outcome[per_cut & nzchar(out$outcome)] <-
+    paste0(out$outcome[per_cut & nzchar(out$outcome)], gettext(" (1st curve)"))
   structure(
     out,
     headers = c(gettext("outcome"), if (keep_group) gettext("group"),
-                gettext("numeric predictor"), gettext("observed range"), gettext("observed shape")),
+                gettext("numeric predictor"), gettext("observed range"),
+                gettext("observed shape (central 95%)")),
     align   = c("left", if (keep_group) "left", "left", "left", "left"),
     noisy   = rows$noisy,
     note    = note)
@@ -1334,7 +1336,8 @@ shape_render_console <- function(tab) {
   if (is.null(st)) return(invisible(NULL))
   # the footer grid already closes with a blank line -- one separates the two tables, never two.
   cli::cat_line(tx_pipe_table(st, attr(st, "headers"), attr(st, "align"), attr(st, "noisy")))
-  cli::cat_line(cli::col_grey(paste0("# ", attr(st, "note"))))
+  nt <- attr(st, "note")                           # empty wherever no row wears the "ns" mark
+  if (length(nt)) cli::cat_line(cli::col_grey(paste0("# ", nt)))
   cli::cat_line()
   invisible(NULL)
 }

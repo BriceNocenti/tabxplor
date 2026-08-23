@@ -13,6 +13,10 @@ skip_if_not_installed("broom")
 # argument it drives, so an ARRAY option and this helper's scalar convenience field would now share a
 # name -- the convenience ones (which the tests use to build the direct tab_reg() comparison call) are
 # `..`-prefixed, which also marks them as "not a jamovi option".
+# ⚠ `empirical = FALSE` here is the JAMOVI picker's default, which since 22g-ii is no longer
+# tab_reg()'s (that is TRUE). Every parity check therefore passes `empirical = o$empirical` to the
+# direct call too: what these tests lock is that the two BUILDS agree, never that the two DEFAULTS
+# happen to coincide.
 reg_opts <- function(...) {
   o <- utils::modifyList(list(
     outcome = "married", predictors = c("race", "age"), wt = character(),
@@ -73,7 +77,7 @@ test_that("jmvtab_reg_build == tab_reg(), each GLM family", {
     o      <- cases[[nm]]
     built  <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
     direct <- quiet(tab_reg(gss, o$outcome, o$predictors, family = o$..family,
-                            cleannames = TRUE))
+                            empirical = o$empirical, cleannames = TRUE))
     expect_identical(reg_render(built), reg_render(direct), info = nm)
   }
 })
@@ -89,7 +93,8 @@ test_that("Phase 15e: mixed-family outcomes build ONE table (not a tabxplor_tabs
   expect_true("binomial" %in% mf && "gaussian" %in% mf)
   # the cached build (.fit_cache present) matches a direct mixed tab_reg()
   direct <- quiet(tab_reg(gss, c("married", "tvhours"), c("race", "age"),
-                          family = c("binomial", "gaussian"), cleannames = TRUE))
+                          family = c("binomial", "gaussian"), empirical = o$empirical,
+                          cleannames = TRUE))
   expect_identical(reg_render(built), reg_render(direct))
 })
 
@@ -108,7 +113,7 @@ test_that("empirical + weighted builds run and match tab_reg()", {
                     ..family = "binomial", wt = "w")
   bw    <- jmvtab_reg_build(gss, ow, NULL)$tabs
   dw    <- suppressMessages(tab_reg(gss, "married", c("race", "age"), family = "binomial",
-                                    wt = "w", cleannames = TRUE))
+                                    wt = "w", empirical = ow$empirical, cleannames = TRUE))
   expect_identical(reg_render(bw), reg_render(dw))
 })
 
@@ -131,7 +136,7 @@ test_that("a reference change is a miss, and equals a direct tab_reg()", {
                       ..multiplier = g$mult)
     built <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
     refit <- quiet(tab_reg(gss, g$dep, g$preds, family = g$fam, ref = g$ref,
-                           multiplier = g$mult, cleannames = TRUE))
+                           multiplier = g$mult, empirical = o$empirical, cleannames = TRUE))
     expect_identical(reg_render(built), reg_render(refit),
                      info = paste(g$fam, paste(names(g$ref), collapse = "+")))
   }
@@ -197,7 +202,7 @@ test_that("a NUMERIC reference is a miss too, and its anchor really lands", {
                                         ref = c(age = "40")), b1$store)
   expect_equal(b3$hits, 0L)
   direct <- quiet(tab_reg(gss, "married", c("race", "age"), family = "binomial",
-                          ref = c(age = 40), cleannames = TRUE))
+                          ref = c(age = 40), empirical = FALSE, cleannames = TRUE))
   expect_equal(reg_field(b3$tabs, "or")[[1]], reg_field(direct, "or")[[1]], tolerance = 1e-8)
 })
 
@@ -253,6 +258,7 @@ test_that("the per-outcome link reaches the fit, and two outcomes may differ", {
                                             family = c(married = "binomial"),
                                             link = c(married = "ratio"),
                                             effect = "conditional", ci_method = "wald",
+                                            empirical = FALSE,
                                             color_signif = "grey_non_signif"))))
   # ...and the point of putting the link IN the per-outcome table: one table, two links.
   o <- reg_opts(outcome = c("married", "income25k"), predictors = "race")
@@ -283,7 +289,8 @@ test_that("a predictor-subset list == tab_reg() model comparison", {
   mods  <- list(demo = c("race", "age"), full = c("race", "age", "rincome"))
   o     <- reg_opts(outcome = "married", predictors = mods, ..family = "binomial")
   built <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
-  direct <- quiet(tab_reg(gss, "married", mods, family = "binomial", cleannames = TRUE))
+  direct <- quiet(tab_reg(gss, "married", mods, family = "binomial",
+                          empirical = o$empirical, cleannames = TRUE))
   expect_identical(reg_render(built), reg_render(direct))
 })
 
@@ -360,27 +367,30 @@ test_that("a comparison list with several dependents yields a NULL table (guarde
   expect_null(jmvtab_reg_build(gss, o, NULL)$tabs)
 })
 
-test_that("model-comparison fits are cached and reused (only fit new subsets)", {
+# THE PRICE OF THE DEFAULT COMPARISON, locked so it cannot change unnoticed (Phase 22g-ii): several
+# `predictors` sets now compare automatically, an LR / F / Wald test is a test BETWEEN two fitted
+# objects, and reg_fit_cacheable() therefore refuses the store. So a comparison panel re-fits on every
+# live edit -- which is what the staged Run button (jmvtab_reg_staged) already exists for -- while an
+# ordinary single-model panel, the one the store was built for, keeps every hit (tests above).
+test_that("a model comparison keeps its fits, so nothing is cached", {
   gss  <- gss_reg()
   mods <- list(demo = c("race", "age"), full = c("race", "age", "rincome"))
   o    <- reg_opts(outcome = "married", predictors = mods, ..family = "binomial")
 
   b1 <- quiet(jmvtab_reg_build(gss, o, NULL))
-  expect_equal(b1$hits, 0L)                                   # first build: both models fit
+  expect_equal(b1$hits, 0L)
+  b2 <- quiet(jmvtab_reg_build(gss, o, b1$store))
+  expect_equal(b2$hits, 0L)
+  # ...and the footer does carry the comparison it paid for
+  expect_true(any(grepl("compare", get_test(b2$tabs)$test)))
 
-  b2 <- quiet(jmvtab_reg_build(gss, o, b1$store))             # identical -> both fits reused
-  expect_gte(b2$hits, 2L)
-
-  # a display toggle (colour off) reuses both fits (no refit)
-  b3 <- quiet(jmvtab_reg_build(gss, reg_opts(outcome = "married", predictors = mods,
-                                             ..family = "binomial", color = "no"), b2$store))
-  expect_gte(b3$hits, 2L)
-
-  # add a model: the two existing fits are reused, only the new subset is fit
+  # adding a model still builds every one of them, and the table grows by one block
   mods3 <- c(mods, list(age_only = "age"))
-  b4    <- quiet(jmvtab_reg_build(gss, reg_opts(outcome = "married", predictors = mods3,
-                                                ..family = "binomial"), b2$store))
-  expect_gte(b4$hits, 2L)
+  b3 <- quiet(jmvtab_reg_build(gss, reg_opts(outcome = "married", predictors = mods3,
+                                             ..family = "binomial"), b2$store))
+  expect_equal(b3$hits, 0L)
+  expect_gt(sum(vapply(b3$tabs, is_fmt, logical(1))),
+            sum(vapply(b2$tabs, is_fmt, logical(1))))
 })
 
 test_that("jmvtab_reg_models folds the builder into predictors (list or flat pool)", {
@@ -418,7 +428,8 @@ test_that("a multiplier change is keyed (not stale) and matches tab_reg()", {
   b05  <- quiet(jmvtab_reg_build(gss, o05, b10$store))       # a different scaling -> a fresh fit, not stale
   expect_false(identical(reg_render(b10$tabs), reg_render(b05$tabs)))
   d10  <- quiet(tab_reg(gss, "married", c("race", "age"),
-                        family = "binomial", multiplier = c(age = 10), cleannames = TRUE))
+                        family = "binomial", multiplier = c(age = 10),
+                        empirical = o10$empirical, cleannames = TRUE))
   expect_identical(reg_render(b10$tabs), reg_render(d10))
 })
 
@@ -471,7 +482,8 @@ test_that("Phase 19k: the trials picker == tab_reg(trials =), explicit and autom
   b  <- quiet(jmvtab_reg_build(gss, o, NULL))
   expect_equal(reg_render(b$tabs),
                reg_render(quiet(tab_reg(gss, "married", c("race", "age"), family = "binomial",
-                                        cleannames = TRUE, color_signif = "grey_non_signif"))))
+                                        empirical = o$empirical, cleannames = TRUE,
+                                        color_signif = "grey_non_signif"))))
   # (b) a numeric SCORE outcome: TRUE / NA / the observed max are the same table.
   d  <- gss
   d$score <- as.integer(pmin(pmax(round(d$tvhours), 0), 8))
@@ -504,8 +516,8 @@ test_that("Phase 19k: the shape picker folds into tab_reg(shape =)", {
   expect_equal(
     reg_render(quiet(jmvtab_reg_build(gss, o, NULL))$tabs),
     reg_render(quiet(tab_reg(gss, "married", c("race", "age"), family = "binomial",
-                             shape = c(age = "quadratic"), cleannames = TRUE,
-                             color_signif = "grey_non_signif"))))
+                             shape = c(age = "quadratic"), empirical = o$empirical,
+                             cleannames = TRUE, color_signif = "grey_non_signif"))))
 })
 
 # the estimand pair reaches tab_reg() untranslated (jmv_reg_estimand_opts() is deleted)
@@ -516,7 +528,7 @@ test_that("Phase 19k: effect x measure x display pass straight through", {
   expect_equal(
     reg_render(quiet(jmvtab_reg_build(gss, o, NULL))$tabs),
     reg_render(quiet(tab_reg(gss, "married", c("race", "age"), family = "binomial",
-                             effect = "conditional", measure = "log",
+                             effect = "conditional", measure = "log", empirical = o$empirical,
                              cleannames = TRUE, color_signif = "grey_non_signif"))))
   # a reg colour MEASURE (D25's surviving allow-list), not a checkbox
   o2 <- reg_opts(outcome = "married", predictors = c("race", "age"), ..family = "binomial",

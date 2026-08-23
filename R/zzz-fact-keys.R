@@ -424,8 +424,22 @@ tx_check_reg_ctx <- function() {
   invisible(TRUE)
 }
 
+# The observed comparison must be the LAST tooltip row, because reg_append_empirical_tip() appends
+# the multinomial crude level to an already-joined string with " ; " and therefore lands on whatever
+# row came last. A new group beyond it would silently move that fragment onto the wrong line.
+#' @keywords internal
+#' @noRd
+tx_check_tooltip_groups <- function() {
+  g <- vapply(TOOLTIP_LINES, function(l) l$group %||% 1L, integer(1))
+  if (max(g) != TOOLTIP_GROUP_OBS)
+    stop("tabxplor: TOOLTIP_GROUP_OBS must be the last TOOLTIP_LINES group; got ", max(g),
+         call. = FALSE)
+  invisible(TRUE)
+}
+
 # Runs at namespace load (R CMD INSTALL / pkgload::load_all()), so a broken reference fails the
 # build, at the moment it is made.
 tx_check_foreign_keys()
 tx_check_tab_args()
 tx_check_reg_ctx()
+tx_check_tooltip_groups()

@@ -4,6 +4,16 @@
 ## New features
 
 
+* **`tab_reg()` shows the observed (crude) effect by default.** Every modelled effect now sits beside
+  the same quantity fitted with one predictor, so what adjustment changed is read across the table.
+  `empirical` says where it goes --- a column of its own, inside the model cell, or (where a table is
+  already wide: `tab_vars` groups, a 3+ level outcome) computed and read from the hover tooltip.
+  `empirical = FALSE` turns it off.
+* **`tab_reg()` compares your models by default.** Give `predictors` a list of several models and the
+  footer tests them: each against the previous one where they nest, otherwise each against the first.
+  Naming your own footer statistics (`stats = c("n", "aic")`) drops it.
+* A cell's hover tooltip now has two lines: the cell's own numbers, then the observed comparison.
+
 * Excel export: ratios and odds ratios are now readable **and** computable --- a cell holds its
   reading value, so Excel prints `1/2.11` while the cell stays a real number that sorts, filters and
   takes the reader's own decimal separator (`?tab_xl` gives the formula that recovers the raw ratio).
@@ -368,6 +378,11 @@
   values of the renamed options** and falls back to their defaults.
 
 ## Changes that may affect existing code
+
+* **`tab_reg()`'s two new defaults change what a table holds**: `empirical = TRUE` adds an observed
+  column (so a table has more columns, and each cell prints the level it sits on beside the effect),
+  and several `predictors` sets add a comparison row. Pass `empirical = FALSE` / `stats = ` for the
+  old shape. `tab_reg(ci_method =)` moved into `...`; it is passed by name exactly as before.
 
 * **One vocabulary for measure names.** Every argument that names a measure --- `tab(color =)`,
   `fmt(color =)`, `tab_reg(measure =)`, `tab_reg(link =)` --- now reads one table, so the

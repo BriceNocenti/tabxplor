@@ -216,3 +216,37 @@ testthat::test_that("a total row's contribution is named as the MEAN it is", {
             color_signif = "guaranteed_effect")
   testthat::expect_false(any(grepl("mean ctr", tip_of(t2, "Married"), fixed = TRUE)))
 })
+
+# --- Phase 22g-ii: the tooltip has TWO rows --------------------------------------------------------
+# The cell's own numbers, then the observed comparison -- the crude effect and the gap to it, which
+# is a statement about ANOTHER column and reads as its own sentence. TOOLTIP_LINES$group declares it.
+
+testthat::test_that("obs and gap take a line of their own, in that order", {
+  testthat::skip_if_not_installed("broom")
+  g <- gss_cat_data_formatting()
+  g$married <- factor(ifelse(g$marital == "Married", "yes", "no"))
+  t  <- suppressMessages(tab_reg(g, "married", c("race", "rincome"), family = "binomial",
+                                 measure = "difference"))
+  mc <- t[[names(t)[vapply(t, function(x)
+    is_fmt(x) && identical(get_role(x), "model"), logical(1))][[1]]]]
+  tt <- tabxplor:::tab_tooltip_text(mc)
+  hit <- grep("obs: ", tt, fixed = TRUE)
+  testthat::expect_gt(length(hit), 0L)
+  for (k in hit) {
+    parts <- strsplit(tt[[k]], "\n", fixed = TRUE)[[1]]
+    testthat::expect_length(parts, 2L)                       # exactly two rows
+    testthat::expect_false(grepl("obs: ", parts[[1]], fixed = TRUE))
+    testthat::expect_lt(regexpr("obs: ", parts[[2]], fixed = TRUE),
+                        regexpr("gap: ", parts[[2]], fixed = TRUE))
+  }
+})
+
+testthat::test_that("a cell with no observed comparison stays one line", {
+  t  <- tab(forcats::gss_cat, race, marital, pct = "row")
+  tt <- tabxplor:::tab_tooltip_text(t[["Married"]])
+  testthat::expect_false(any(grepl("\n", tt, fixed = TRUE)))
+  # and the declared invariant the html appender rests on: group 2 is the LAST row
+  testthat::expect_identical(
+    max(vapply(tabxplor:::TOOLTIP_LINES, function(l) l$group, integer(1))),
+    tabxplor:::TOOLTIP_GROUP_OBS)
+})

@@ -492,16 +492,21 @@ test_that("the range travels with the picture, in the same row of the shape tabl
   }
 })
 
-test_that("an ordinal outcome's note sends the reader to the full panel", {
+# 22g-ii retired the shape table's footer prose (the window is in the header, the units are in the
+# `range` cell). The one caveat that is not verbosity -- an ordinal or multinomial outcome has one
+# curve per cut and this draws the first -- moved into the OUTCOME cell, where it is read.
+test_that("an ordinal outcome says which curve it is drawing", {
   skip_if_not_installed("MASS")
   d  <- suppressWarnings(gss_cat_data_formatting())
   st <- tabxplor:::reg_shape_table(
     suppressMessages(suppressWarnings(tab_reg(d, "rincome", "age", stats = FALSE))))
-  expect_true(any(grepl("reg_check_plots", attr(st, "note"), fixed = TRUE)))
+  expect_true(any(grepl("1st curve", st$outcome, fixed = TRUE)))
   # a binomial one does not: its single curve IS the whole reading
   st2 <- tabxplor:::reg_shape_table(
     suppressMessages(tab_reg(d, "married", "age", family = "binomial", stats = FALSE)))
-  expect_false(any(grepl("reg_check_plots", attr(st2, "note"), fixed = TRUE)))
+  expect_false(any(grepl("1st curve", st2$outcome, fixed = TRUE)))
+  # ...and the only note left is the "ns" one, on the tables that actually wear the mark
+  expect_true(all(grepl("ns", attr(st, "note"), fixed = TRUE)))
 })
 
 test_that("the drawing floor and the noise mark are two different verdicts", {

@@ -327,7 +327,7 @@ testthat::test_that("{est} / {base} resolve to the token each COLUMN renders the
 testthat::test_that("the preset table is ONE table, resolved the same way by both producers", {
   testthat::expect_identical(
     names(tabxplor:::DISPLAY_PRESETS),
-    c("est", "est_ci", "est_base", "est_coef", "base_est_mdiff", "base_est_mratio",
+    c("est", "est_ci", "est_base", "est_coef", "base_est_mdiff", "base_est_mratio", "est_obs",
       "base_est", "base", "base_ci", "base_moe", "base_ratio", "base_or", "or_base",
       "mean_sd", "mean_cv", "or_pct", "OR_pct"))
   # a preset may declare one arm per column ROLE; an unknown role takes `default`.
@@ -534,6 +534,27 @@ testthat::test_that("the `coef` token names the quantity, not the artefact", {
   m <- suppressMessages(tab_reg(g, outcome = "married", predictors = "race", family = "binomial"))
   testthat::expect_identical(fmt_coef_label(m$Model_OR), "log(OR)")
   testthat::expect_identical(fmt_coef_label(fmt(diff = 1, scale = "raw_diff")), "diff")
+})
+
+# Phase 22g-ii: A COLUMN IS NAMED BY WHAT IT ESTIMATES. A regression's baseline row prints the level
+# its column's effects operate on (EST_SCALES$const_display) -- a percentage under a ratio, a mean
+# under a beta -- and that second primary token used to name the whole column "mixed".
+testthat::test_that("a baseline row does not rename its column, nor make it 'mixed'", {
+  g <- gss_cat_data_formatting()
+  g$married <- factor(ifelse(g$marital == "Married", "yes", "no"))
+  ab <- function(...) vctrs::vec_ptype_abbr(
+    (function(t) t[[names(t)[vapply(t, function(x)
+      is_fmt(x) && identical(get_role(x), "model"), logical(1))][[1]]]])(
+        suppressMessages(tab_reg(g, ..., empirical = FALSE, stats = FALSE))))
+  testthat::expect_identical(ab("age", c("race", "rincome")), "diff")            # const "mean"
+  testthat::expect_identical(ab("married", c("race", "rincome"), measure = "ratio"), "ratio")
+  testthat::expect_identical(ab("married", c("race", "rincome")), "OR")          # const == est
+  # ...and the baseline cell keeps its own number rather than printing an empty primary
+  t <- suppressMessages(tab_reg(g, "age", c("race", "rincome"), stats = FALSE))
+  mc <- t[[names(t)[vapply(t, function(x)
+    is_fmt(x) && identical(get_role(x), "model"), logical(1))][[1]]]]
+  testthat::expect_identical(get_display(mc)[[1]], "mean")
+  testthat::expect_true(is.finite(get_num(mc)[[1]]))
 })
 
 testthat::test_that("a template is stamped wherever it renders ANYTHING, so a column is one layout", {

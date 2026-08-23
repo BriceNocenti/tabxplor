@@ -110,28 +110,40 @@ test_that("the multinomial crude OR is the one tab(pct = 'row', OR = 'OR') print
   expect_gt(seen, 1L)
 })
 
-test_that("multinomial draws NO Obs_* column: the crude number rides in-cell", {
+# 22g-ii: a per-category outcome draws no crude column either way -- one model column would need
+# several of them. What changed is WHERE the number goes by default: `TRUE` now resolves to
+# "tooltip" (computed, printed nowhere, read on hover), and `"cell"` is what folds it into the cell.
+test_that("multinomial: the default computes the crude number and prints it nowhere", {
   skip_if_not_installed("nnet")
   d <- z10_data()
   t <- suppressMessages(tab_reg(d, "party3", "race", family = "multinomial", empirical = TRUE,
                                 cleannames = FALSE))
   expect_false(any(grepl("^Obs_", names(t))))
   x <- t[[reg_fmt_cols(t)[[1]]]]
-  expect_true(any(grepl("{obs}", get_display(x), fixed = TRUE)))
-  # ... and the rendered cell really shows two numbers
+  expect_false(any(grepl("{obs}", get_display(x), fixed = TRUE)))
+  expect_true(any(!is.na(get_obs(x))))                     # ...computed all the same
+  # ...and the hover is where it is read, on its own line, which is the point of the mode
+  tips <- tabxplor:::tab_tooltip_text(x)
+  expect_true(any(grepl("obs:", tips, fixed = TRUE)))
+  expect_true(any(grepl("\n", tips, fixed = TRUE)))
+})
+
+test_that("multinomial, `empirical = \"cell\"`: the crude number rides IN the cell", {
+  skip_if_not_installed("nnet")
+  d <- z10_data()
+  t <- suppressMessages(tab_reg(d, "party3", "race", family = "multinomial", empirical = "cell",
+                                cleannames = FALSE))
+  expect_false(any(grepl("^Obs_", names(t))))
+  x <- t[[reg_fmt_cols(t)[[1]]]]
+  # ONE layout for the whole column (the `est_obs` preset), the aside FIRST as everywhere else
+  expect_true(all(get_display(x)[!is.na(get_obs(x))] == "({obs}) {est}"))
   expect_true(any(grepl("(", format(x), fixed = TRUE)))
   # the footer names the bracket, so the reader is told what it is
   expect_match(paste(tabxplor:::reg_model_lines(t, lang = "en"), collapse = " "),
                "observed", fixed = TRUE)
-})
-
-test_that("the in-cell fold does not duplicate itself in the html tooltip", {
-  skip_if_not_installed("nnet")
-  d <- z10_data()
-  t <- suppressMessages(tab_reg(d, "party3", "race", family = "multinomial", empirical = TRUE,
-                                cleannames = FALSE))
-  tips <- tabxplor:::tab_tooltip_text(t[[reg_fmt_cols(t)[[1]]]])
-  expect_false(any(grepl("obs:", tips, fixed = TRUE)))     # already in the cell
+  # ...and the tooltip does not repeat what the cell already shows
+  tips <- tabxplor:::tab_tooltip_text(x)
+  expect_false(any(grepl("obs:", tips, fixed = TRUE)))
 })
 
 test_that("fmt_display_shows reads the WHOLE template, not just the first token", {

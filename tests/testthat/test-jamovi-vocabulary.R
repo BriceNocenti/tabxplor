@@ -204,8 +204,13 @@ test_that("every jamovi option is named after the argument it drives", {
     # happens to have a `levels` formal, i.e. by coincidence, and `levels_collapse` on tab_reg()
     # (which has no such formal) is what exposed it. Reading the declaration makes both pass by
     # INTENT, and makes a rename of `tab(levels =)` unable to silently remove the justification.
+    # ⚠ ...and so do the PUBLIC arguments that ride `...`, which the same table declares
+    # (`dots = <producer>`): 22g-ii moved `ci_method` off tab_reg()'s signature onto its dots, and it
+    # is no less reachable for it.
     declared <- tabxplor:::tab_args_for(pname)
-    args     <- unique(c(setdiff(names(formals(producer)), c("...", "")),
+    on_dots  <- declared[vapply(declared, function(k)
+      pname %in% (tabxplor:::TAB_ARGS[[k]][["dots"]] %||% character()), logical(1))]
+    args     <- unique(c(setdiff(names(formals(producer)), c("...", "")), on_dots,
                          sub("^\\.", "", grep("^\\.", declared, value = TRUE))))
     allowed  <- c(names(JMV_UI_ONLY), names(JMV_UI_ONLY_EXTRA[[an]]))
     for (nm in names(o)) {
