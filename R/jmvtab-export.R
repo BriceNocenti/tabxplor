@@ -9,7 +9,9 @@
 # ROLE: Engine-free, session-free helpers so the export logic is unit-testable without a live
 #       jamovi session. jmvtab.b.R detects the export click, resolves the path, and calls
 #       jmvtab_export(); the click is a boolean read (§5.3) and the result (the path REALLY written) is
-#       reported as a bold green / red status line prepended above the results table.
+#       reported as a bold green / red status line prepended above the results table. The Excel arm
+#       also carries `check` / `data` -- the Regressions panel's model-check plots, drawn inside the
+#       workbook; the module already holds the data tab_xl() would otherwise have to recover.
 # KEY CONSTRAINTS:
 #   - No native file/folder picker exists for a module (dev guide §14) -- typed strings are the only
 #     route. Phase 15c splits the old single `path` into a FOLDER box + a bare FILENAME box (the
@@ -333,7 +335,8 @@ tab_html_string <- function(tabs, wrap_rows = 35, wrap_cols = 15, standalone = T
 # The single dispatch point shared by the jamovi backend and its tests.
 #' @keywords internal
 #' @noRd
-jmvtab_export <- function(tabs, format = c("excel", "html", "md"), path, replace = FALSE, ...) {
+jmvtab_export <- function(tabs, format = c("excel", "html", "md"), path, replace = FALSE,
+                          check = FALSE, data = NULL, ...) {
   format <- match.arg(format)
 
   # Pre-flight, friendly checks (concise, non-expert). These run BEFORE the writer so the common
@@ -367,7 +370,10 @@ jmvtab_export <- function(tabs, format = c("excel", "html", "md"), path, replace
   # the backend surfaces via conditionMessage() (Phase 15c un-masking) -- not the bare "In index: 1."
   switch(
     format,
-    excel = tab_xl(tabs, path = path, sheets = "unique", open = FALSE, replace = TRUE),
+    # `check` / `data` are the model-check plots: Excel only, and a crosstab silently takes none.
+    # tab_xl() owns the ggplot2 / gridExtra guard, so nothing is tested twice here.
+    excel = tab_xl(tabs, path = path, sheets = "unique", open = FALSE, replace = TRUE,
+                   check = check, data = data),
     # Phase 10e: html export is self-contained (one <table> + one <style>).
     html  = writeLines(tab_html_string(tabs, ...), path),
     md    = tab_md(tabs, file = path, print = FALSE)
@@ -411,8 +417,14 @@ jmv_backend_export <- function(self, tabs) {
   fmt <- self$options$export_format
   ext <- switch(fmt, "excel" = "xlsx", "html" = "html", "md" = "md", "xlsx")
   p   <- resolveExportPath(self$options$export_dir, self$options$export_filename, ext)
+  # The model-check plots (Regressions only -- jmvtab declares no `check`, so it reads back NULL and
+  # the export takes none). `data` is what tab_xl() would otherwise have to recover from the call
+  # that built the table; here the module already holds it.
+  chk <- self$options$xl_check %||% "no"
+  chk <- if (identical(chk, "no")) FALSE else chk
   tryCatch({
-    actual <- jmvtab_export(tabs, format = fmt, path = p, replace = self$options$xl_replace)
+    actual <- jmvtab_export(tabs, format = fmt, path = p, replace = self$options$xl_replace,
+                            check = chk, data = if (isFALSE(chk)) NULL else self$data)
     export_status_html(actual, ok = TRUE)
   }, error = function(err) {
     export_status_html(conditionMessage(err), ok = FALSE)

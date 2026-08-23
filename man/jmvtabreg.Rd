@@ -11,11 +11,12 @@ jmvtabreg(
   tab_vars = NULL,
   wt = NULL,
   family = NULL,
+  link = NULL,
   outcome_level = NULL,
   trials = NULL,
-  effect = "coefficient",
+  effect = "auto",
   measure = "auto",
-  empirical = FALSE,
+  empirical = "no",
   models = NULL,
   stats_baseline = 1,
   stats_compare = "none",
@@ -23,6 +24,7 @@ jmvtabreg(
   na = "drop_by_outcome",
   run_compare = FALSE,
   levels_collapse = NULL,
+  crosses = NULL,
   ref_levels = NULL,
   shape = NULL,
   multiplier = NULL,
@@ -31,8 +33,8 @@ jmvtabreg(
   stars = TRUE,
   color = "auto",
   color_signif = "grey_non_signif",
-  display = "value",
-  add_n = TRUE,
+  display = "auto",
+  n = "range",
   cleannames = TRUE,
   subtext = "",
   wrap_rows = 35,
@@ -42,6 +44,7 @@ jmvtabreg(
   export_dir = "~/Documents",
   export_filename = "Reg_model",
   resetPath = FALSE,
+  xl_check = "no",
   xl_replace = FALSE
 )
 }
@@ -65,32 +68,48 @@ results.}
 
 \item{family}{.}
 
+\item{link}{WHICH MEASURE THE MODEL ESTIMATES -- the only argument that
+changes the model. A link IS  a measure, so it takes the same words as
+\code{measure}. Chosen per outcome, in the  Model table beside
+\code{family}: \code{"auto"} is the family's own (a logistic  regression
+for a binary outcome, a linear one for a quantity, a Poisson one for a
+count), and \code{"odds_ratio"} / \code{"ratio"} / \code{"difference"} name
+the model  whose coefficient IS that measure -- on a binary outcome, the
+logistic fit, the modified  Poisson (Zou 2004) and the identity-link
+additive-risk one. The picker only ever offers  the links the chosen family
+can be fitted on.}
+
 \item{outcome_level}{.}
 
 \item{trials}{.}
 
-\item{effect}{WHICH CONTRAST the table reports.  \itemize{   \item
-\code{"coefficient"}: the model's native per-family effect.   \item
-\code{"marginal"}: the average marginal effect on the response scale,
-averaged   over the sample (needs the marginaleffects package).   \item
-\code{"at_reference"}: the same, evaluated at the reference profile (other
-predictors at their reference level / mean).  }}
+\item{effect}{WHERE THE NUMBER COMES FROM, once the model and the reported
+measure are fixed.  \itemize{   \item \code{"auto"}: the coefficients when
+the reported measure IS the model's own,   the model's predictions
+otherwise. Nobody needs to change this.   \item \code{"conditional"}: read
+off the model's own coefficients.   \item \code{"marginal"}: worked out
+from the model's predictions for every observed   person, then averaged.
+\item \code{"at_reference"}: the same, at one profile (every other
+predictor at its   reference level / mean).  }}
 
-\item{measure}{WHICH MEASURE the contrast is expressed in -- the second
-half of the estimand, and the  only argument that changes the MODEL (a risk
-ratio, a risk difference and an odds ratio  are three fits, not three
-displays of one).  \itemize{   \item \code{"auto"}: the usual measure of
-the outcome's family (OR for binomial /   ordinal / multinomial, IRR for
-poisson, beta for gaussian).   \item \code{"odds_ratio"} / \code{"ratio"} /
-\code{"difference"}: the named measure,   when the outcome offers it. A
-combination the outcome does not offer says so, and lists   what it does
-offer.   \item \code{"log"}: the family's usual estimand, left
-un-exponentiated.  }}
+\item{measure}{WHICH MEASURE IS REPORTED. It never changes the model: where
+it is not the measure the  model estimates (see \code{link}), it is worked
+out from the model's predictions.  \itemize{   \item \code{"auto"}: the
+model's own measure -- follow from the left. On a prediction   route it
+steps back to the outcome's own (a percentage reads as "x times as
+likely"),   because a marginal odds ratio is a specialist quantity, asked
+for by name.   \item \code{"odds_ratio"} / \code{"ratio"} /
+\code{"difference"}: the named measure,   when the outcome's level can
+carry it. One it cannot says so, and lists what it does   offer.   \item
+\code{"log"}: the same estimand, left un-exponentiated.  }}
 
-\item{empirical}{Add the crude, unadjusted, single-predictor companion
-columns beside the model effect (the bivariate association that IS the
-modelised quantity with a single predictor). Binomial / gaussian / poisson
-only.}
+\item{empirical}{Show the crude, unadjusted, single-predictor effect beside
+each model effect --- the bivariate association that IS the modelised
+quantity when there is a single predictor, so the gap between the two is
+what adjustment changed. \code{"column"} draws it as its own column;
+\code{"cell"} folds it into the model cell instead, which is the default
+for a 3+ level outcome, where one model column would otherwise need one
+crude column per category.}
 
 \item{models}{.}
 
@@ -116,6 +135,8 @@ shares one population across every outcome as well.}
 \item{run_compare}{.}
 
 \item{levels_collapse}{.}
+
+\item{crosses}{.}
 
 \item{ref_levels}{.}
 
@@ -148,14 +169,16 @@ size + grey out non-significant cells, colour only the guaranteed
 (error-adjusted) effect, ignore significance.}
 
 \item{display}{The estimate-cell LAYOUT (never the estimand: a display may
-fold in another quantity of the SAME fit, it can never change the fit).
-"ci" shows a visible interval; "prob" / "ame" fold the adjusted predicted
-probability / marginal effect into the OR cell (binomial coefficient models
-only). These four are shorthands over \code{tab_reg()}'s \code{\{\}}
-display grammar.}
+fold in another quantity of the SAME fit, it can never change the fit). The
+same named layouts \code{tab()} offers, written in the same \code{\{\}}
+grammar: \code{est} is whatever the column estimates and \code{base} the
+level it sits on (an adjusted probability, an adjusted mean). \code{"auto"}
+keeps the built-in layout.}
 
-\item{add_n}{Add a column giving the number of observations behind each
-predictor level.}
+\item{n}{The column giving the number of observations behind each predictor
+level: \code{"range"} prints \code{min-max} when several models were fitted
+on different people, \code{"min"} the smallest count only, \code{"no"} no
+column at all.}
 
 \item{cleannames}{Strip numeric prefixes from factor level labels.}
 
@@ -180,6 +203,12 @@ format adds it).}
 
 \item{resetPath}{Reset the folder and file name to their defaults (your
 Documents folder and "Regression").}
+
+\item{xl_check}{Excel export only: draw the model-check plots
+(\code{reg_check_plots()}) under each table in the workbook. \code{"auto"}
+takes the panels that apply to the fitted family, \code{"all"} adds
+dispersion and collinearity. Needs \code{ggplot2} and \code{gridExtra};
+without them the export says so and writes the table alone.}
 
 \item{xl_replace}{"Set to \code{TRUE} to overwrite an existing file."}
 }

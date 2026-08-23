@@ -114,10 +114,13 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         stats_compare  = self$options$stats_compare,
         stats_baseline = self$options$stats_baseline,
         stats_checks   = self$options$stats_checks,
-        # Phase 15d: the per-outcome Model table drives family / outcome_level / trials. The raw
-        # arrays are passed through; jmvtab_reg_build() resolves each outcome's family (auto-detect for
-        # a blank pick), groups the outcomes by family, and calls tab_reg() once per family group.
+        # The per-outcome Model table drives family / link / outcome_level / trials -- the left
+        # half of tab_reg()'s estimand cascade, which is a question about each OUTCOME. All four
+        # pass through RAW and are resolved together by jmvtab_reg_build(), which then makes ONE
+        # tab_reg() call with per-outcome vectors: several outcomes with different families (and now
+        # different links) render as one mixed table.
         family        = self$options$family,
+        link          = self$options$link,
         outcome_level = self$options$outcome_level,
         trials        = self$options$trials,
         # numeric-predictor scaling (raw array; the build core drops it for multinomial / ordinal
@@ -128,10 +131,7 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         shape        = self$options$shape,
         wt           = wt,
         tab_vars     = self$options$tab_vars,
-        # Phase 19k: tab_reg()'s OWN estimand pair -- `effect` names the CONTRAST, `measure` the
-        # MEASURE. The retired `exponentiate` / `at` / `estimate_display` options (and the
-        # jmv_reg_estimand_opts() translator that mapped them) are gone.
-        link         = self$options$link    %||% "auto",
+        # ...and its right half stays scalar: which measure is REPORTED, and where it comes from.
         measure      = self$options$measure %||% "auto",
         effect       = self$options$effect  %||% "auto",
         display      = self$options$display %||% "auto",

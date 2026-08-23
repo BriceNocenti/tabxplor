@@ -1682,3 +1682,96 @@ Already run on the dev box for this phase (`prepare()` → `i18nUpdate("fr")` �
 "flatpak")`), so the committed `.h.R` / `0000.yaml` / `inst/i18n/fr.json` are the compiler's own.
 What remains is the **live click-through**: both collapse-box trees, the model / reference / shape
 pickers, the new `stats = "all"` box and `add_n`, and export.
+
+---
+
+## Phase 22g-i — the UIs state the final API (2026-08-23)
+
+The panels now say what `tab()` / `tab_reg()` say, and `jmvtools::prepare()` runs again. Four rules
+below were learned by hitting them; they are the reason this section exists.
+
+### Two compiler traps that abort or silently rewrite the `.u.yaml`
+
+Both are in `jamovi-compiler/uicompiler.js` and neither produces a usable error.
+
+- **A bare `children:` is a YAML null, and the compiler dereferences it.** `removeMissingOptions`
+  guards with `ctrl.children !== undefined` (line 209), not truthiness, so it recurses into the null
+  and line 205 evaluates `null.length` → `TypeError: Cannot read properties of null (reading
+  'length')`, with no file or line. One empty spacer `LayoutBox` — left behind when Phase 22b-ii
+  retired the `ci_print` radios — blocked **every** `prepare()` for two phases. **Remove the node.**
+  ⚠ `children: []` is *not* the fix: an empty container is spliced out (line 213), which makes the
+  compiler **rewrite the whole file with `yaml.dump()`**, comments and all.
+- **A `optionPart` radio group must cover EVERY value of its List.** `insertMissingControls` appends
+  a loose control for each missing value and rewrites the file — measured here: `jmvtabreg`'s
+  `display` offered 7 of 10, and one `prepare()` cost the file all 24 of its comments. The three
+  orphans (`est`, `est_coef`, `base_ratio`) had been declared by 22a-i / 22b-iii / 22c-ii and never
+  given a button. Guard it the way the suite now does: walk both files and compare each
+  `(optionName, optionPart)` set against the `.a.yaml`'s values.
+
+**Checksum the `.u.yaml` files before `prepare()` and verify after.** A silent rewrite is the one
+failure that costs work rather than time.
+
+### `check` is reserved, exactly as `levels` is
+
+`jmvcore::Options` defines a `check()` method, so an option named `check` collides with it and the
+analysis cannot be instantiated at all: `makeActiveBinding: symbol already has a regular binding`,
+raised from the generated `.h.R`, naming nothing. The full reserved set is
+`asProtoBuf · check · clone · compProtoBuf · eval · fromJSON · fromProtoBuf · get · has ·
+initialize · levels · option · read · translate · values`. The model-check control is `xl_check`,
+beside `xl_replace`; `levels` is `lvs` for the same reason.
+
+### The Model table is the cascade's left half
+
+`family` and `link` are questions about each OUTCOME, so both are per-outcome hidden Arrays driven
+by `modelTableCtrl`, which now renders a header row naming them (`outcome | family = | link =`); the
+4th cell stays unheaded because it holds whichever of `outcome_level` / `trials` applies. `measure`
+and `effect` — the right half — stay scalar radios. The link drop-down offers exactly
+`TABX_LINKS[family]`, so an unfittable link is *unreachable* rather than greyed, which deleted
+`linkOffered()` and the whole link branch of `applyModelEnables()`; `measureOffered()` now asks each
+outcome with its own link. One table can carry two links (measured: `Model_RR [married]` beside
+`Model_diff [tv]`).
+
+⚠ **Moving a List into the table costs its translation.** A JS-rendered label is outside
+`catalog.pot`, so the four link labels are English-only — the property `TABX_FAMILY_LABEL` has had
+since Phase h. jamovi's options UI has no gettext; the alternative is keeping a scalar List.
+The labels themselves are still generated, not hand-written: `reg_link_ui_labels()` composes them
+from `REG_MEASURE_LINK` (the measure, then the glm spelling that map already carries).
+
+### Three defects the wiring exposed, all reproduced
+
+1. **`rlang::inject()` + `!!` hid every interaction.** `reg_cross_slots_quo()` fell back to
+   `quo_peek_extern()`, which only reads a bare **symbol** — but `!!` splices a *literal* vector, so
+   `a*b` was never seen and tidyselect tried to select a column of that name. `jmvtab_reg_build()`
+   builds its call that way on purpose (an injected value cannot be hijacked by a same-named
+   column), so the `crosses` fold could never have worked end to end. Fixed in `reg-cross.R`, where
+   crosses are read.
+2. **`empirical = "no"` was a declared value the validator refused.** `TAB_ARGS` declared
+   `c("no", "cell", "column")` and `emp_on()` accepted `"no"`; only `reg_validate_args()` held a
+   literal `c("cell", "column")`. It reads the fact table now.
+3. **The per-outcome arrays must be folded in ONE place.** `family` / `outcome_level` / `trials`
+   resolve inside `jmvtab_reg_build()`; putting `link`'s fold in `.b.R` instead meant the raw array
+   reached `tab_reg()` and the pick did nothing. All four resolve together in the build core, which
+   is also what keeps it testable from the raw jamovi arrays.
+
+### The interaction picker
+
+`crosses` had been declared and folded since 22b-ix with **no control anywhere**. `crossPickerCtrl`
+(its own *Interactions* CollapseBox, after Model) is a row per pair — two drop-downs over the
+predictor pool and a delete — writing the hidden array `jmvtab_reg_cross_keys()` folds into
+`predictors` as `a*b`. Picking the variable already on the other side steps that side to the first
+free one, because `a*a` is a refusal. Signature = the pool alone, so a pick repaints in place.
+
+### The `.js` now has a syntax gate
+
+`node --check` on both files, skipped where `node` is absent (`test-jamovi-vocabulary.R`). Declined
+in 19n for want of an interpreter; the box has one. It is the only thing standing between a typo and
+an options panel that renders inert with no R-side symptom.
+
+### Maintainer step
+
+`prepare()` → `i18nUpdate("catalog")` → `i18nUpdate("fr")` → `install(home = "flatpak")` all run
+here, so the committed `.h.R` / `0000.yaml` / `fr.po` / `inst/i18n/fr.json` are the compiler's own,
+and the 37 new French strings are filled in (199/228 translated; the rest are argument VALUES kept
+English on purpose). What remains is the **live click-through** — the Model table's two headed
+columns, the greying of `measure` / `effect` against a mixed-family outcome set, the Interactions
+box, the crosstab `display` ComboBox, and an Excel export with `check = "auto"`.

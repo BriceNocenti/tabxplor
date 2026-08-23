@@ -60,6 +60,18 @@ test_that("`a*b` is an interaction in `predictors`, bare or quoted", {
   expect_match(reg_formulas(t1)$formula, "race*age4", fixed = TRUE)
 })
 
+test_that("an INJECTED `a*b` is an interaction too (the jamovi bridge's own call shape)", {
+  d  <- cr_data()
+  pv <- c("race*age4", "relig")
+  # ⚠ `rlang::inject()` + `!!` splices the VALUE into the expression, so it is neither a bare symbol
+  # nor a `c()` call -- the two forms the cross reader used to look at. jmvtab_reg_build() builds its
+  # tab_reg() call exactly this way (an injected value cannot be mistaken for a dataset column), so
+  # without this the interaction picker selected a column named `race*age4` and aborted.
+  expect_identical(
+    quiet(rlang::inject(tab_reg(d, "married", !!pv, family = "binomial", stats = FALSE))),
+    quiet(tab_reg(d, "married", pv, family = "binomial", stats = FALSE)))
+})
+
 test_that("`:` is refused by name: it is a different model in R, not a synonym", {
   d <- cr_data()
   # `a:b` is the interaction term WITHOUT its main effects -- which for a continuous parent is a

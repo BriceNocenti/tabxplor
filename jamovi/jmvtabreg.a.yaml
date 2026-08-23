@@ -63,8 +63,10 @@ options:
            sandwich standard errors). Leave empty for unweighted results.
 
 # ============================ Model ============================
-# Per-outcome Model table (family / outcome_level / trials) -> the hidden arrays below,
-# driven by the `modelTableCtrl` CustomControl (one row per outcome).
+# Per-outcome Model table (family / link / outcome_level / trials) -> the hidden arrays below,
+# driven by the `modelTableCtrl` CustomControl (one row per outcome). `family` and `link` are the
+# table's two headed columns; the 4th cell holds whichever of outcome_level / trials applies.
+# What stays SCALAR is the right half of the cascade -- `measure` and `effect`, radios below.
     - name: family
       title: "family (per outcome)"
       type: Array
@@ -77,6 +79,29 @@ options:
                 type: Variable
               - name: family
                 type: String
+
+    - name: link
+      title: "link (per outcome)"
+      type: Array
+      hidden: true      # driven by the Model table (modelTableCtrl), beside `family`
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: link
+                type: String
+      description:
+          R: >
+           WHICH MEASURE THE MODEL ESTIMATES -- the only argument that changes the model. A link IS
+            a measure, so it takes the same words as \code{measure}. Chosen per outcome, in the
+            Model table beside \code{family}: \code{"auto"} is the family's own (a logistic
+            regression for a binary outcome, a linear one for a quantity, a Poisson one for a
+            count), and \code{"odds_ratio"} / \code{"ratio"} / \code{"difference"} name the model
+            whose coefficient IS that measure -- on a binary outcome, the logistic fit, the modified
+            Poisson (Zou 2004) and the identity-link additive-risk one. The picker only ever offers
+            the links the chosen family can be fitted on.
 
     - name: outcome_level
       title: "outcome_level (per outcome)"
@@ -130,32 +155,6 @@ options:
              reference level / mean).
             }
 
-    - name: link
-      title: link
-      type: List
-      options:
-        - title: "auto <i>(the family's own model)</i>"
-          name:  auto
-        - title: "odds ratio <i>(logit)</i>"
-          name:  odds_ratio
-        - title: "ratio <i>(log link)</i>"
-          name:  ratio
-        - title: "difference <i>(identity link)</i>"
-          name:  difference
-      default: auto
-      description:
-          R: >
-           WHICH MEASURE THE MODEL ESTIMATES -- the only argument that changes the model. A link IS
-            a measure, so it takes the same words as \code{measure}.
-            \itemize{
-             \item \code{"auto"}: the family's own (a logistic regression for a binary outcome, a
-             linear one for a quantity, a Poisson one for a count).
-             \item \code{"odds_ratio"} / \code{"ratio"} / \code{"difference"}: the model whose
-             coefficient IS that measure -- on a binary outcome, the logistic fit, the modified
-             Poisson (Zou 2004) and the identity-link additive-risk one. A link the outcome cannot
-             be fitted on says so, and names the ones it can.
-            }
-
     - name: measure
       title: measure
       type: List
@@ -189,9 +188,12 @@ options:
       title: empirical
       type: List
       options:
-        - name: 'no'
-        - name: column
-        - name: cell
+        - title: "no <i>(the model effect alone)</i>"
+          name:  'no'
+        - title: "column <i>(a crude column beside the model one)</i>"
+          name:  column
+        - title: "cell <i>(the crude effect inside the model cell)</i>"
+          name:  cell
       default: 'no'
       description:
           R: >
@@ -552,6 +554,27 @@ options:
       type: Action
       description:
         R: "Reset the folder and file name to their defaults (your Documents folder and \"Regression\")."
+
+    # ⚠ NOT `check`: jmvcore::Options already defines a check() method, so an option of that name
+    # collides with it ("symbol already has a regular binding") and the analysis cannot be built at
+    # all -- the same trap that made `levels` become `lvs`. It sits beside `xl_replace` instead.
+    - name: xl_check
+      title: "Model-check plots"
+      type: List
+      options:
+        - title: "no"
+          name:  "no"       # quoted: YAML 1.1 reads a bare `no` as the boolean FALSE
+        - title: "auto <i>(the usual panels)</i>"
+          name:  auto
+        - title: "all <i>(every applicable check)</i>"
+          name:  all
+      default: "no"
+      description:
+          R: >
+           Excel export only: draw the model-check plots (\code{reg_check_plots()}) under each
+           table in the workbook. \code{"auto"} takes the panels that apply to the fitted family,
+           \code{"all"} adds dispersion and collinearity. Needs \code{ggplot2} and
+           \code{gridExtra}; without them the export says so and writes the table alone.
 
     - name: xl_replace
       title: ""

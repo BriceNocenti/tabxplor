@@ -20,13 +20,15 @@ reg_opts <- function(...) {
     effect = "conditional", display = "auto",
     empirical = FALSE, ref = NULL, conf_level = 0.95,
     ci_method = "wald", stars = TRUE, color = NULL, color_signif = "grey_non_signif",
-    na = "drop_by_outcome", cleannames = TRUE, add_n = TRUE, subtext = "",
+    na = "drop_by_outcome", cleannames = TRUE, n = "range", subtext = "",
     stats_compare = "none", stats_baseline = 1L, stats_checks = FALSE,
-    ..multiplier = NULL, ..trials = NULL
+    ..multiplier = NULL, ..trials = NULL, ..link = NULL
   ), list(...))
   # derive the Model-table arrays from the convenience fields
   o$family        <- if (identical(o$..family, "auto")) list()
                      else lapply(o$outcome, function(d) list(var = d, family = o$..family))
+  o$link          <- if (is.null(o$..link)) list()
+                     else lapply(o$outcome, function(d) list(var = d, link = o$..link))
   o$outcome_level <- list()
   o$trials        <- if (is.null(o$..trials)) list()
                      else lapply(o$outcome, function(d) list(var = d, n = as.character(o$..trials)))
@@ -214,6 +216,38 @@ test_that("jmvtab_reg_ref_vector folds the picker into a named reference vector"
                               list(var = "relig", ref = ""))),
     c(race = "Black")
   )
+})
+
+test_that("jmvtab_reg_link_vector folds the Model table's link column", {
+  expect_null(jmvtab_reg_link_vector(list()))
+  # "auto" IS the default, so an entry for it must NOT reach the argument (it would only move the
+  # fit key); a blank one is the same statement.
+  expect_null(jmvtab_reg_link_vector(list(list(var = "y", link = "auto"),
+                                          list(var = "z", link = ""))))
+  expect_identical(
+    jmvtab_reg_link_vector(list(list(var = "y", link = "ratio"),
+                                list(var = "z", link = "auto"))),
+    c(y = "ratio"))
+})
+
+test_that("the per-outcome link reaches the fit, and two outcomes may differ", {
+  d <- gss_reg()
+  # one outcome on the log link: the modified Poisson, so the column IS a risk ratio
+  t1 <- quiet(jmvtab_reg_build(d, reg_opts(predictors = "race"))$tabs)
+  t2 <- quiet(jmvtab_reg_build(d, reg_opts(predictors = "race", ..link = "ratio"))$tabs)
+  expect_true(any(grepl("_OR", names(t1))))
+  expect_true(any(grepl("_RR", names(t2))))
+  expect_identical(reg_render(t2),
+                   reg_render(quiet(tab_reg(d, outcome = "married", predictors = "race",
+                                            family = c(married = "binomial"),
+                                            link = c(married = "ratio"),
+                                            effect = "conditional", ci_method = "wald",
+                                            color_signif = "grey_non_signif"))))
+  # ...and the point of putting the link IN the per-outcome table: one table, two links.
+  o <- reg_opts(outcome = c("married", "income25k"), predictors = "race")
+  o$link <- list(list(var = "married", link = "ratio"))
+  t3 <- quiet(jmvtab_reg_build(d, o)$tabs)
+  expect_true(any(grepl("_RR", names(t3))) && any(grepl("_OR", names(t3))))
 })
 
 test_that("the store migrates on a NULL / schema mismatch", {

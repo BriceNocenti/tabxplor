@@ -198,13 +198,18 @@ reg_validate_args <- function(conf_level = NULL, stats = NULL, color_signif = NU
       cli::cli_abort(c("{.arg {nm}} must be a single {.code TRUE} or {.code FALSE}.",
                        "x" = "Got {.val {v}}."), call = NULL)
   }
-  # `empirical` is logical-primary with two expert spellings that say WHERE the crude effect goes.
+  # `empirical` is logical-primary with three word spellings: "no" (the twin of FALSE, and the word
+  # every other tabxplor argument uses for off) and the two that say WHERE the crude effect goes.
+  # ⚠ the set is READ from TAB_ARGS, not written again: it already declared "no", `emp_on()` already
+  # accepted it, and only this literal refused it -- which made the jamovi picker's own off value an
+  # abort.
+  emp_words <- tab_arg("empirical")$values
   if (!is.null(empirical) &&
       (length(empirical) != 1L || is.na(empirical) ||
        !(isTRUE(empirical) || isFALSE(empirical) ||
-         (is.character(empirical) && empirical %in% c("cell", "column")))))
+         (is.character(empirical) && empirical %in% emp_words))))
     cli::cli_abort(c(
-      "{.arg empirical} must be {.code TRUE}, {.code FALSE}, {.val cell} or {.val column}.",
+      "{.arg empirical} must be {.code TRUE}, {.code FALSE}, or {.or {.val {emp_words}}}.",
       "x" = "Got {.val {empirical}}.",
       "i" = paste("{.code TRUE} draws a crude column, except where one model column would need",
                   "several of them (a 3+ level outcome) -- there the crude value rides inside the",

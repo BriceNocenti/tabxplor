@@ -11,11 +11,12 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             tab_vars = NULL,
             wt = NULL,
             family = NULL,
+            link = NULL,
             outcome_level = NULL,
             trials = NULL,
-            effect = "coefficient",
+            effect = "auto",
             measure = "auto",
-            empirical = FALSE,
+            empirical = "no",
             models = NULL,
             stats_baseline = 1,
             stats_compare = "none",
@@ -23,6 +24,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             na = "drop_by_outcome",
             run_compare = FALSE,
             levels_collapse = NULL,
+            crosses = NULL,
             ref_levels = NULL,
             shape = NULL,
             multiplier = NULL,
@@ -31,8 +33,8 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             stars = TRUE,
             color = "auto",
             color_signif = "grey_non_signif",
-            display = "value",
-            add_n = TRUE,
+            display = "auto",
+            n = "range",
             cleannames = TRUE,
             subtext = "",
             wrap_rows = 35,
@@ -42,6 +44,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             export_dir = "~/Documents",
             export_filename = "Reg_model",
             resetPath = FALSE,
+            xl_check = "no",
             xl_replace = FALSE, ...) {
 
             super$initialize(
@@ -96,6 +99,21 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                         jmvcore::OptionString$new(
                             "family",
                             NULL))))
+            private$..link <- jmvcore::OptionArray$new(
+                "link",
+                link,
+                hidden=TRUE,
+                default=NULL,
+                template=jmvcore::OptionGroup$new(
+                    "link",
+                    NULL,
+                    elements=list(
+                        jmvcore::OptionVariable$new(
+                            "var",
+                            NULL),
+                        jmvcore::OptionString$new(
+                            "link",
+                            NULL))))
             private$..outcome_level <- jmvcore::OptionArray$new(
                 "outcome_level",
                 outcome_level,
@@ -130,10 +148,11 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "effect",
                 effect,
                 options=list(
-                    "coefficient",
+                    "auto",
+                    "conditional",
                     "marginal",
                     "at_reference"),
-                default="coefficient")
+                default="auto")
             private$..measure <- jmvcore::OptionList$new(
                 "measure",
                 measure,
@@ -144,10 +163,14 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "difference",
                     "log"),
                 default="auto")
-            private$..empirical <- jmvcore::OptionBool$new(
+            private$..empirical <- jmvcore::OptionList$new(
                 "empirical",
                 empirical,
-                default=FALSE)
+                options=list(
+                    "no",
+                    "column",
+                    "cell"),
+                default="no")
             private$..models <- jmvcore::OptionArray$new(
                 "models",
                 models,
@@ -216,6 +239,21 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                             template=jmvcore::OptionString$new(
                                 "levels",
                                 NULL)))))
+            private$..crosses <- jmvcore::OptionArray$new(
+                "crosses",
+                crosses,
+                hidden=TRUE,
+                default=NULL,
+                template=jmvcore::OptionGroup$new(
+                    "crosses",
+                    NULL,
+                    elements=list(
+                        jmvcore::OptionVariable$new(
+                            "var1",
+                            NULL),
+                        jmvcore::OptionVariable$new(
+                            "var2",
+                            NULL))))
             private$..ref_levels <- jmvcore::OptionArray$new(
                 "ref_levels",
                 ref_levels,
@@ -299,15 +337,25 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "display",
                 display,
                 options=list(
-                    "value",
-                    "ci",
-                    "prob",
-                    "ame"),
-                default="value")
-            private$..add_n <- jmvcore::OptionBool$new(
-                "add_n",
-                add_n,
-                default=TRUE)
+                    "auto",
+                    "est",
+                    "est_ci",
+                    "est_base",
+                    "est_coef",
+                    "base_est_mdiff",
+                    "base_est_mratio",
+                    "base_est",
+                    "base",
+                    "base_ratio"),
+                default="auto")
+            private$..n <- jmvcore::OptionList$new(
+                "n",
+                n,
+                options=list(
+                    "range",
+                    "min",
+                    "no"),
+                default="range")
             private$..cleannames <- jmvcore::OptionBool$new(
                 "cleannames",
                 cleannames,
@@ -349,6 +397,14 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..resetPath <- jmvcore::OptionAction$new(
                 "resetPath",
                 resetPath)
+            private$..xl_check <- jmvcore::OptionList$new(
+                "xl_check",
+                xl_check,
+                options=list(
+                    "no",
+                    "auto",
+                    "all"),
+                default="no")
             private$..xl_replace <- jmvcore::OptionBool$new(
                 "xl_replace",
                 xl_replace,
@@ -359,6 +415,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..tab_vars)
             self$.addOption(private$..wt)
             self$.addOption(private$..family)
+            self$.addOption(private$..link)
             self$.addOption(private$..outcome_level)
             self$.addOption(private$..trials)
             self$.addOption(private$..effect)
@@ -371,6 +428,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..na)
             self$.addOption(private$..run_compare)
             self$.addOption(private$..levels_collapse)
+            self$.addOption(private$..crosses)
             self$.addOption(private$..ref_levels)
             self$.addOption(private$..shape)
             self$.addOption(private$..multiplier)
@@ -380,7 +438,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..color)
             self$.addOption(private$..color_signif)
             self$.addOption(private$..display)
-            self$.addOption(private$..add_n)
+            self$.addOption(private$..n)
             self$.addOption(private$..cleannames)
             self$.addOption(private$..subtext)
             self$.addOption(private$..wrap_rows)
@@ -390,6 +448,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..export_dir)
             self$.addOption(private$..export_filename)
             self$.addOption(private$..resetPath)
+            self$.addOption(private$..xl_check)
             self$.addOption(private$..xl_replace)
         }),
     active = list(
@@ -398,6 +457,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         tab_vars = function() private$..tab_vars$value,
         wt = function() private$..wt$value,
         family = function() private$..family$value,
+        link = function() private$..link$value,
         outcome_level = function() private$..outcome_level$value,
         trials = function() private$..trials$value,
         effect = function() private$..effect$value,
@@ -410,6 +470,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         na = function() private$..na$value,
         run_compare = function() private$..run_compare$value,
         levels_collapse = function() private$..levels_collapse$value,
+        crosses = function() private$..crosses$value,
         ref_levels = function() private$..ref_levels$value,
         shape = function() private$..shape$value,
         multiplier = function() private$..multiplier$value,
@@ -419,7 +480,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         color = function() private$..color$value,
         color_signif = function() private$..color_signif$value,
         display = function() private$..display$value,
-        add_n = function() private$..add_n$value,
+        n = function() private$..n$value,
         cleannames = function() private$..cleannames$value,
         subtext = function() private$..subtext$value,
         wrap_rows = function() private$..wrap_rows$value,
@@ -429,6 +490,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         export_dir = function() private$..export_dir$value,
         export_filename = function() private$..export_filename$value,
         resetPath = function() private$..resetPath$value,
+        xl_check = function() private$..xl_check$value,
         xl_replace = function() private$..xl_replace$value),
     private = list(
         ..outcome = NA,
@@ -436,6 +498,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..tab_vars = NA,
         ..wt = NA,
         ..family = NA,
+        ..link = NA,
         ..outcome_level = NA,
         ..trials = NA,
         ..effect = NA,
@@ -448,6 +511,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..na = NA,
         ..run_compare = NA,
         ..levels_collapse = NA,
+        ..crosses = NA,
         ..ref_levels = NA,
         ..shape = NA,
         ..multiplier = NA,
@@ -457,7 +521,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..color = NA,
         ..color_signif = NA,
         ..display = NA,
-        ..add_n = NA,
+        ..n = NA,
         ..cleannames = NA,
         ..subtext = NA,
         ..wrap_rows = NA,
@@ -467,6 +531,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..export_dir = NA,
         ..export_filename = NA,
         ..resetPath = NA,
+        ..xl_check = NA,
         ..xl_replace = NA)
 )
 
@@ -540,28 +605,43 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   (scale-invariant sandwich standard errors). Leave empty for unweighted
 #'   results.
 #' @param family .
+#' @param link WHICH MEASURE THE MODEL ESTIMATES -- the only argument that
+#'   changes the model. A link IS  a measure, so it takes the same words as
+#'   \code{measure}. Chosen per outcome, in the  Model table beside
+#'   \code{family}: \code{"auto"} is the family's own (a logistic  regression
+#'   for a binary outcome, a linear one for a quantity, a Poisson one for a
+#'   count), and \code{"odds_ratio"} / \code{"ratio"} / \code{"difference"} name
+#'   the model  whose coefficient IS that measure -- on a binary outcome, the
+#'   logistic fit, the modified  Poisson (Zou 2004) and the identity-link
+#'   additive-risk one. The picker only ever offers  the links the chosen family
+#'   can be fitted on.
 #' @param outcome_level .
 #' @param trials .
-#' @param effect WHICH CONTRAST the table reports.  \itemize{   \item
-#'   \code{"coefficient"}: the model's native per-family effect.   \item
-#'   \code{"marginal"}: the average marginal effect on the response scale,
-#'   averaged   over the sample (needs the marginaleffects package).   \item
-#'   \code{"at_reference"}: the same, evaluated at the reference profile (other
-#'   predictors at their reference level / mean).  }
-#' @param measure WHICH MEASURE the contrast is expressed in -- the second
-#'   half of the estimand, and the  only argument that changes the MODEL (a risk
-#'   ratio, a risk difference and an odds ratio  are three fits, not three
-#'   displays of one).  \itemize{   \item \code{"auto"}: the usual measure of
-#'   the outcome's family (OR for binomial /   ordinal / multinomial, IRR for
-#'   poisson, beta for gaussian).   \item \code{"odds_ratio"} / \code{"ratio"} /
-#'   \code{"difference"}: the named measure,   when the outcome offers it. A
-#'   combination the outcome does not offer says so, and lists   what it does
-#'   offer.   \item \code{"log"}: the family's usual estimand, left
-#'   un-exponentiated.  }
-#' @param empirical Add the crude, unadjusted, single-predictor companion
-#'   columns beside the model effect (the bivariate association that IS the
-#'   modelised quantity with a single predictor). Binomial / gaussian / poisson
-#'   only.
+#' @param effect WHERE THE NUMBER COMES FROM, once the model and the reported
+#'   measure are fixed.  \itemize{   \item \code{"auto"}: the coefficients when
+#'   the reported measure IS the model's own,   the model's predictions
+#'   otherwise. Nobody needs to change this.   \item \code{"conditional"}: read
+#'   off the model's own coefficients.   \item \code{"marginal"}: worked out
+#'   from the model's predictions for every observed   person, then averaged.
+#'   \item \code{"at_reference"}: the same, at one profile (every other
+#'   predictor at its   reference level / mean).  }
+#' @param measure WHICH MEASURE IS REPORTED. It never changes the model: where
+#'   it is not the measure the  model estimates (see \code{link}), it is worked
+#'   out from the model's predictions.  \itemize{   \item \code{"auto"}: the
+#'   model's own measure -- follow from the left. On a prediction   route it
+#'   steps back to the outcome's own (a percentage reads as "x times as
+#'   likely"),   because a marginal odds ratio is a specialist quantity, asked
+#'   for by name.   \item \code{"odds_ratio"} / \code{"ratio"} /
+#'   \code{"difference"}: the named measure,   when the outcome's level can
+#'   carry it. One it cannot says so, and lists what it does   offer.   \item
+#'   \code{"log"}: the same estimand, left un-exponentiated.  }
+#' @param empirical Show the crude, unadjusted, single-predictor effect beside
+#'   each model effect --- the bivariate association that IS the modelised
+#'   quantity when there is a single predictor, so the gap between the two is
+#'   what adjustment changed. \code{"column"} draws it as its own column;
+#'   \code{"cell"} folds it into the model cell instead, which is the default
+#'   for a 3+ level outcome, where one model column would otherwise need one
+#'   crude column per category.
 #' @param models .
 #' @param stats_baseline .
 #' @param stats_compare With several models (a predictor-subset list), add a
@@ -580,6 +660,7 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   shares one population across every outcome as well.
 #' @param run_compare .
 #' @param levels_collapse .
+#' @param crosses .
 #' @param ref_levels .
 #' @param shape .
 #' @param multiplier .
@@ -603,13 +684,15 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   size + grey out non-significant cells, colour only the guaranteed
 #'   (error-adjusted) effect, ignore significance.
 #' @param display The estimate-cell LAYOUT (never the estimand: a display may
-#'   fold in another quantity of the SAME fit, it can never change the fit).
-#'   "ci" shows a visible interval; "prob" / "ame" fold the adjusted predicted
-#'   probability / marginal effect into the OR cell (binomial coefficient models
-#'   only). These four are shorthands over \code{tab_reg()}'s \code{\{\}}
-#'   display grammar.
-#' @param add_n Add a column giving the number of observations behind each
-#'   predictor level.
+#'   fold in another quantity of the SAME fit, it can never change the fit). The
+#'   same named layouts \code{tab()} offers, written in the same \code{\{\}}
+#'   grammar: \code{est} is whatever the column estimates and \code{base} the
+#'   level it sits on (an adjusted probability, an adjusted mean). \code{"auto"}
+#'   keeps the built-in layout.
+#' @param n The column giving the number of observations behind each predictor
+#'   level: \code{"range"} prints \code{min-max} when several models were fitted
+#'   on different people, \code{"min"} the smallest count only, \code{"no"} no
+#'   column at all.
 #' @param cleannames Strip numeric prefixes from factor level labels.
 #' @param subtext A free note printed below the table.
 #' @param wrap_rows .
@@ -625,6 +708,11 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   format adds it).
 #' @param resetPath Reset the folder and file name to their defaults (your
 #'   Documents folder and "Regression").
+#' @param xl_check Excel export only: draw the model-check plots
+#'   (\code{reg_check_plots()}) under each table in the workbook. \code{"auto"}
+#'   takes the panels that apply to the fitted family, \code{"all"} adds
+#'   dispersion and collinearity. Needs \code{ggplot2} and \code{gridExtra};
+#'   without them the export says so and writes the table alone.
 #' @param xl_replace "Set to \code{TRUE} to overwrite an existing file."
 #' @return A results object containing:
 #' \tabular{llllll}{
@@ -641,11 +729,12 @@ jmvtabreg <- function(
     tab_vars = NULL,
     wt = NULL,
     family = NULL,
+    link = NULL,
     outcome_level = NULL,
     trials = NULL,
-    effect = "coefficient",
+    effect = "auto",
     measure = "auto",
-    empirical = FALSE,
+    empirical = "no",
     models = NULL,
     stats_baseline = 1,
     stats_compare = "none",
@@ -653,6 +742,7 @@ jmvtabreg <- function(
     na = "drop_by_outcome",
     run_compare = FALSE,
     levels_collapse = NULL,
+    crosses = NULL,
     ref_levels = NULL,
     shape = NULL,
     multiplier = NULL,
@@ -661,8 +751,8 @@ jmvtabreg <- function(
     stars = TRUE,
     color = "auto",
     color_signif = "grey_non_signif",
-    display = "value",
-    add_n = TRUE,
+    display = "auto",
+    n = "range",
     cleannames = TRUE,
     subtext = "",
     wrap_rows = 35,
@@ -672,6 +762,7 @@ jmvtabreg <- function(
     export_dir = "~/Documents",
     export_filename = "Reg_model",
     resetPath = FALSE,
+    xl_check = "no",
     xl_replace = FALSE) {
 
     if ( ! requireNamespace("jmvcore", quietly=TRUE))
@@ -697,6 +788,7 @@ jmvtabreg <- function(
         tab_vars = tab_vars,
         wt = wt,
         family = family,
+        link = link,
         outcome_level = outcome_level,
         trials = trials,
         effect = effect,
@@ -709,6 +801,7 @@ jmvtabreg <- function(
         na = na,
         run_compare = run_compare,
         levels_collapse = levels_collapse,
+        crosses = crosses,
         ref_levels = ref_levels,
         shape = shape,
         multiplier = multiplier,
@@ -718,7 +811,7 @@ jmvtabreg <- function(
         color = color,
         color_signif = color_signif,
         display = display,
-        add_n = add_n,
+        n = n,
         cleannames = cleannames,
         subtext = subtext,
         wrap_rows = wrap_rows,
@@ -728,6 +821,7 @@ jmvtabreg <- function(
         export_dir = export_dir,
         export_filename = export_filename,
         resetPath = resetPath,
+        xl_check = xl_check,
         xl_replace = xl_replace)
 
     analysis <- jmvtabregClass$new(

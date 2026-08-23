@@ -321,6 +321,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "base_ratio",
                     "ctr",
                     "mean",
+                    "mean_sd",
+                    "mean_cv",
                     "var"),
                 default="auto")
             private$..n <- jmvcore::OptionList$new(

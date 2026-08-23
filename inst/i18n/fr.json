@@ -22,6 +22,9 @@
             "<b>Display</b>": [
                 "<b>Affichage</b>"
             ],
+            "<b>Interactions</b>": [
+                "<b>Interactions</b>"
+            ],
             "<b>Levels and missing values</b>": [
                 "<b>Valeurs manquantes et modalités</b>"
             ],
@@ -94,15 +97,6 @@
             "Add statistical test/effect size": [
                 "Ajouter test / taille d'effet"
             ],
-            "add_n": [
-                "add_n"
-            ],
-            "add_n = <i>(N per predictor level)</i>": [
-                "add_n = <i>(N par modalité de prédicteur)</i>"
-            ],
-            "add_n = <i>(see unweighted counts)</i>": [
-                "add_n = <i>(voir effectifs non pondérés)</i>"
-            ],
             "add_pct = <i>(see frequencies of 100% total)</i>": [
                 "add_pct = <i>(voir freq. des totaux à 100%)</i>"
             ],
@@ -114,6 +108,9 @@
             ],
             "all <i>(compare with the total subtable)</i>": [
                 "all <i>(comparer avec le total général)</i>"
+            ],
+            "all <i>(every applicable check)</i>": [
+                "all <i>(tous les diagnostics applicables)</i>"
             ],
             "all_tabs": [
                 "all_tabs"
@@ -133,6 +130,9 @@
             "auto <i>(first level if binary)</i>": [
                 "auto <i>(1re modalité si binaire)</i>"
             ],
+            "auto <i>(follow from the measure)</i>": [
+                "auto <i>(découle de la mesure)</i>"
+            ],
             "auto <i>(smart default: difference + ratio)</i>": [
                 "auto <i>(défaut : différence + ratio)</i>"
             ],
@@ -142,8 +142,26 @@
             "auto <i>(the family's usual measure)</i>": [
                 ""
             ],
+            "auto <i>(the usual panels)</i>": [
+                "auto <i>(les graphiques habituels)</i>"
+            ],
             "auto/tot/<i>{row_number}</i>/<i>{row_name}</i>": [
                 "auto/tot/<i>{num_ligne}</i>/<i>{nom_ligne}</i>"
+            ],
+            "base <i>(adjusted predictions alone)</i>": [
+                "base <i>(les prédictions ajustées seules)</i>"
+            ],
+            "base_est <i>(the adjusted prediction, estimate in bracket)</i>": [
+                "base_est <i>(la prédiction ajustée, estimation entre parenthèses)</i>"
+            ],
+            "base_est_mdiff <i>(the estimate, its difference form in bracket)</i>": [
+                "base_est_mdiff <i>(l'estimation, sa forme différence entre parenthèses)</i>"
+            ],
+            "base_est_mratio <i>(the estimate, its ratio form in bracket)</i>": [
+                "base_est_mratio <i>(l'estimation, sa forme ratio entre parenthèses)</i>"
+            ],
+            "base_ratio <i>(the level, its ratio to the reference in bracket)</i>": [
+                "base_ratio <i>(le niveau, son ratio à la référence entre parenthèses)</i>"
             ],
             "beta <i>(Clopper-Pearson exact)</i>": [
                 ""
@@ -154,11 +172,14 @@
             "cell <i>(each cell's own interval)</i>": [
                 ""
             ],
+            "cell <i>(the crude effect inside the model cell)</i>": [
+                "cell <i>(l'effet brut dans la case du modèle)</i>"
+            ],
+            "check =": [
+                "check ="
+            ],
             "ci": [
                 "ci"
-            ],
-            "ci <i>(interval display: [inf;sup])</i>": [
-                "ci <i>(format: [inf;sup])</i>"
             ],
             "ci <i>(the interval alone)</i>": [
                 ""
@@ -205,9 +226,6 @@
             "cleannames = <i>(tidy level names)</i>": [
                 "cleannames = <i>(noms de modalités nettoyés)</i>"
             ],
-            "coefficient <i>(the model's own effect)</i>": [
-                ""
-            ],
             "col (column)": [
                 "col (colonne)"
             ],
@@ -226,6 +244,9 @@
             "color_signif = <i>(significance policy)</i>": [
                 "color_signif = <i>(gestion de la significativité)</i>"
             ],
+            "column <i>(a crude column beside the model one)</i>": [
+                "column <i>(une colonne brute à côté du modèle)</i>"
+            ],
             "common_base <i>(complete cases of 1st col_var)</i>": [
                 "common_base <i>(cas complets du 1er col_var)</i>"
             ],
@@ -234,6 +255,9 @@
             ],
             "comp = <i>(reference table with tab_vars)</i>": [
                 "comp = <i>(tableau de référence, avec tab_vars)</i>"
+            ],
+            "conditional <i>(the model's own coefficients)</i>": [
+                "conditional <i>(les coefficients du modèle)</i>"
             ],
             "conf_level =": [
                 "conf_level ="
@@ -262,8 +286,8 @@
             "diff <i>(difference from the reference)</i>": [
                 ""
             ],
-            "difference (RD / AME / beta)": [
-                ""
+            "difference (RD / diff)": [
+                "difference (différence de proportion / diff)"
             ],
             "difference <i>(from the total, or the reference cell)</i>": [
                 ""
@@ -292,14 +316,26 @@
             "effect": [
                 "effect"
             ],
-            "effect = <i>(which contrast)</i>": [
-                ""
+            "effect = <i>(where it comes from)</i>": [
+                "effect = <i>(d'où vient le nombre)</i>"
             ],
             "empirical": [
                 "empirical"
             ],
-            "empirical = <i>(compare model estimates with observed values)</i>": [
-                "empirical = <i>(comparer estimations et valeurs observées)</i>"
+            "empirical = <i>(show the observed effect beside the modelled one)</i>": [
+                "empirical = <i>(l'effet observé à côté de l'effet modélisé)</i>"
+            ],
+            "est <i>(the estimate)</i>": [
+                "est <i>(l'estimation)</i>"
+            ],
+            "est_base <i>(the estimate, adjusted prediction in bracket)</i>": [
+                "est_base <i>(l'estimation, prédiction ajustée entre parenthèses)</i>"
+            ],
+            "est_ci <i>(the estimate with its interval)</i>": [
+                "est_ci <i>(l'estimation et son intervalle)</i>"
+            ],
+            "est_coef <i>(the estimate, coefficient in bracket)</i>": [
+                "est_coef <i>(l'estimation, coefficient entre parenthèses)</i>"
             ],
             "Excel": [
                 "Excel"
@@ -343,6 +379,9 @@
             "ignore <i>(color effect size only, ignore significance)</i>": [
                 "ignore <i>(taille d'effet seule, ignorer signif.)</i>"
             ],
+            "interactions (predictors)": [
+                "interactions (predictors)"
+            ],
             "keep <i>(NA as a normal level)</i>": [
                 "keep <i>(NA comme modalité)</i>"
             ],
@@ -358,14 +397,17 @@
             "line": [
                 "line (seulement une ligne)"
             ],
+            "link (per outcome)": [
+                "link (par variable à expliquer)"
+            ],
             "log <i>(un-exponentiated coefficient)</i>": [
                 ""
             ],
             "Make it easy to deal with multiple cross-tables in data exploration, by creating them, manipulating them, and adding color helpers to highlight deviations  (differences from totals, comparisons between lines or columns, contributions to  variance, odds ratios, etc.) and significance (confidence intervals, stars, etc.). Create the same kind of tables for regression models, with a framework to compare modelised quantities with their observed/empirical counterpart systematically. Tables can be exported to 'Excel', plot and html with formats and colors.": [
                 ""
             ],
-            "marginal <i>(average marginal effect)</i>": [
-                ""
+            "marginal <i>(averaged over the sample)</i>": [
+                "marginal <i>(moyenné sur l'échantillon)</i>"
             ],
             "Markdown": [
                 "Markdown"
@@ -373,11 +415,17 @@
             "mean <i>(mean, for numeric variables)</i>": [
                 "mean <i>(moyenne, pour les variables numériques)</i>"
             ],
+            "mean, coefficient of variation in bracket": [
+                "moyenne, coefficient de variation entre parenthèses"
+            ],
+            "mean, standard deviation in bracket": [
+                "moyenne, écart-type entre parenthèses"
+            ],
             "measure": [
                 ""
             ],
-            "measure = <i>(which measure)</i>": [
-                ""
+            "measure = <i>(which measure is reported)</i>": [
+                "measure = <i>(quelle mesure de l'écart est rapportée)</i>"
             ],
             "Merged levels (per predictor)": [
                 "Modalités fusionnées (par prédicteur)"
@@ -385,14 +433,23 @@
             "Merged levels (per variable)": [
                 "Modalités fusionnées (par variable)"
             ],
-            "moe <i>(display: pct±margin of error)</i>": [
-                "moe <i>(format: pct±marge d'ereur)</i>"
+            "min": [
+                "min"
+            ],
+            "Model-check plots": [
+                "Graphiques de diagnostic du modèle"
             ],
             "multiplier (per numeric predictor)": [
                 "multiplier (échelle, par prédicteur numérique)"
             ],
             "n <i>(unweighted counts)</i>": [
                 "n <i>(effectifs non pondérés)</i>"
+            ],
+            "n = <i>(N per predictor level)</i>": [
+                "n = <i>(N par modalité de prédicteur)</i>"
+            ],
+            "n = <i>(see unweighted counts)</i>": [
+                "n = <i>(voir les effectifs bruts)</i>"
             ],
             "na": [
                 "na"
@@ -415,6 +472,9 @@
             "no <i>(no confidence interval)</i>": [
                 ""
             ],
+            "no <i>(the model effect alone)</i>": [
+                "no <i>(l'effet modélisé seul)</i>"
+            ],
             "none": [
                 "aucune"
             ],
@@ -430,14 +490,14 @@
             "odds_ratio <i>(odds ratios)</i>": [
                 ""
             ],
+            "ols <i>(pooled over all levels, as a linear model)</i>": [
+                "ols <i>(variance commune à toutes les modalités, modèle linéaire)</i>"
+            ],
             "one population for the whole analysis": [
                 ""
             ],
             "one population per outcome (recommended)": [
                 ""
-            ],
-            "options('tabxplor.ci_print' = ...)": [
-                "options('tabxplor.ci_print' = ...)"
             ],
             "or <i>(odds ratios or relative risks ratios)</i>": [
                 ""
@@ -457,6 +517,9 @@
             "pct = <i>(type of percentages)</i>": [
                 "pct = <i>(type de pourcentages)</i>"
             ],
+            "percentage, odds ratio in bracket": [
+                "pourcentage, rapport de cotes entre parenthèses"
+            ],
             "poisson <i>(naive counts)</i>": [
                 "poisson <i>(effectifs bruts)</i>"
             ],
@@ -469,8 +532,11 @@
             "quasipoisson <i>(dispersion-scaled)</i>": [
                 "quasipoisson <i>(ajusté à la dispersion)</i>"
             ],
-            "ratio (RR / IRR / MR)": [
-                ""
+            "range": [
+                "range"
+            ],
+            "ratio (RR / IRR / RoM)": [
+                "ratio (risque relatif / IRR / RoM)"
             ],
             "ratio <i>(ratio to the reference)</i>": [
                 ""
@@ -538,8 +604,8 @@
             "stats_compare": [
                 "stats_compare"
             ],
-            "student <i>(pooled variance)</i>": [
-                "student <i>(variance commune)</i>"
+            "student <i>(pooled variance, the two groups)</i>": [
+                "student <i>(variance commune aux deux groupes)</i>"
             ],
             "subtext = <i>(note below the table)</i>": [
                 "subtext = <i>(note sous le tableau)</i>"
@@ -571,11 +637,11 @@
             "trials (per outcome)": [
                 "trials (nombre de questions, par variable)"
             ],
-            "value (plain estimate)": [
-                "value (estimation simple)"
-            ],
             "value with its confidence interval": [
                 ""
+            ],
+            "value, ratio to the reference in bracket": [
+                "valeur, ratio à la référence entre parenthèses"
             ],
             "var <i>(variance)</i>": [
                 "var <i>(variance)</i>"
@@ -600,15 +666,6 @@
             ],
             "wilson <i>(score, default)</i>": [
                 "wilson <i>(score, défaut)</i>"
-            ],
-            "with confidence interval": [
-                "avec intervalle de confiance"
-            ],
-            "with marginal effect": [
-                "avec effet marginal"
-            ],
-            "with predicted probability": [
-                "avec probabilité prédite"
             ],
             "wn <i>(weighted counts)</i>": [
                 "wn <i>(effectifs pondérés)</i>"

@@ -11,6 +11,7 @@ var TABX_FAMILY_LABEL_BINARY = { "binomial": "binomial (logistic)" };
 var TABX_OUTCOME_DETECT = { "binary": "binomial", "ordered": "ordinal", "nominal": "multinomial", "numeric": "gaussian" };
 var TABX_OUTCOME_OFFERS = { "binary": ["binomial"], "ordered": ["ordinal", "multinomial"], "nominal": ["multinomial", "ordinal"], "numeric": ["gaussian", "binomial", "poisson"] };
 var TABX_LINKS = { "gaussian": ["auto", "difference", "ratio"], "binomial": ["auto", "odds_ratio", "ratio", "difference"], "poisson": ["auto", "ratio"], "multinomial": ["auto", "odds_ratio"], "ordinal": ["auto", "odds_ratio"] };
+var TABX_LINK_LABEL = { "auto": "auto (the family's own)", "odds_ratio": "odds ratio (logit)", "ratio": "ratio (log)", "difference": "difference (identity)" };
 var TABX_ESTIMANDS = { "gaussian": { "auto": { "auto": ["auto", "ratio", "difference"], "conditional": ["auto", "difference"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto", "ratio", "difference"] }, "difference": { "auto": ["auto", "ratio", "difference"], "conditional": ["auto", "difference"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto", "ratio", "difference"] }, "ratio": { "auto": ["auto", "ratio", "difference", "log"], "conditional": ["auto", "ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "ratio", "difference", "log"] } }, "binomial": { "auto": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "odds_ratio", "ratio", "difference", "log"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] }, "odds_ratio": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "odds_ratio", "ratio", "difference", "log"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] }, "ratio": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "ratio", "log"], "marginal": ["auto", "odds_ratio", "ratio", "difference", "log"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] }, "difference": { "auto": ["auto", "odds_ratio", "ratio", "difference"], "conditional": ["auto", "difference"], "marginal": ["auto", "odds_ratio", "ratio", "difference"], "at_reference": ["auto", "odds_ratio", "ratio", "difference"] } }, "poisson": { "auto": { "auto": ["auto", "ratio", "difference", "log"], "conditional": ["auto", "ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "ratio", "difference", "log"] }, "ratio": { "auto": ["auto", "ratio", "difference", "log"], "conditional": ["auto", "ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "ratio", "difference", "log"] } }, "multinomial": { "auto": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] }, "odds_ratio": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference", "log"], "at_reference": ["auto", "odds_ratio", "ratio", "difference", "log"] } }, "ordinal": { "auto": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto"] }, "odds_ratio": { "auto": ["auto", "odds_ratio", "ratio", "difference", "log"], "conditional": ["auto", "odds_ratio", "log"], "marginal": ["auto", "ratio", "difference"], "at_reference": ["auto"] } } };
 var TABX_SHAPES = ["linear", "quartiles", "quintiles", "sd_bands", "log", "sqrt", "quadratic"];
 // --- END GENERATED ---
@@ -160,6 +161,7 @@ var onUpdate = function(ui) {
     bottomAlignInRow(ui, "extCtrl");         // ".ext" text -> bottom of the path row
     renderModelTable(ui);
     renderRefPicker(ui);
+    renderCrossPicker(ui);
     renderModelBuilder(ui);
     applyCompareEnables(ui);
 };
@@ -461,15 +463,20 @@ var TABX = {
     cardName: "flex:1 1 auto;min-width:0;box-sizing:border-box;padding:2px 6px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;font-weight:600;",
     cardDel:  "flex:0 0 auto;border:none;background:transparent;cursor:pointer;font-size:1.1em;line-height:1;color:rgba(0,0,0,0.55);padding:2px 6px;",
     cardVars: "display:flex;flex-wrap:wrap;gap:4px 14px;",
+    // the interaction rows: [var1] x [var2] [x], the two selects equal-width and the operator bare
+    crossRow: "display:grid;grid-template-columns:1fr auto 1fr auto;align-items:center;gap:8px;width:74%;min-width:360px;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
+    crossOp:  "font-weight:700;opacity:0.7;",
     cardChk:  "display:inline-flex;align-items:center;gap:3px;white-space:nowrap;cursor:pointer;",
     addBtn:   "margin:4px 6px 8px;padding:4px 12px;border:1px dashed rgba(0,0,0,0.35);border-radius:4px;background:rgba(0,0,0,0.03);color:#000;cursor:pointer;font-weight:600;",
     // Phase 15d: `white-space:nowrap` keeps "x [k] per unit (numeric)" on ONE line (it used to wrap).
     multWrap: "display:flex;align-items:center;gap:2px;min-width:0;white-space:nowrap;",
     multInp:  "width:70px;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;",
-    // per-outcome Model table: [name] [family select] [outcome_level / trials]. Phase h: full width
-    // (3 columns spanning all the space to the right), a wider family column + a stretching col-3 so long
-    // level labels stay readable.
-    mtRow:   "display:grid;grid-template-columns:150px 210px 1fr;align-items:center;gap:10px;width:100%;min-width:0;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
+    // per-outcome Model table: [name] [family =] [link =] [outcome_level / trials]. Full width, a
+    // stretching last column so long level labels stay readable. The first three columns are HEADED
+    // (mtHead) with the argument names, so the panel teaches the two questions it asks per outcome;
+    // the 4th is not, because which of outcome_level / trials it holds depends on the row.
+    mtRow:   "display:grid;grid-template-columns:150px 190px 165px 1fr;align-items:center;gap:10px;width:100%;min-width:0;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
+    mtHead:  "display:grid;grid-template-columns:150px 190px 165px 1fr;align-items:center;gap:10px;width:100%;min-width:0;box-sizing:border-box;padding:0 8px;margin:2px 6px 0;color:#555;font-size:0.85em;",
     mtSel:   "width:100%;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
     mtTrials:"width:90px;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;"
 };
@@ -491,8 +498,13 @@ var afterFetch = function(ui) {
     if (ui.refPickerCtrl && ui.refPickerCtrl.$el) renderRefPicker(ui);
 };
 
+// ⚠ Each helper below GUARDS on its option existing. A hidden, control-less option only resolves
+// through `ui.<name>` once the generated .h.R declares it, and that file LAGS a .a.yaml edit until
+// the maintainer's next prepare() -- an unguarded read there throws and takes the whole `update`
+// handler with it, so the panel goes inert rather than degrading.
 // The stored reference for predictor `v` in ref_levels ("" if not picked).
 var refSelected = function(ui, v) {
+    if (!ui.ref_levels) return "";
     var arr = utils.clone(ui.ref_levels.value(), []);
     for (var i = 0; i < arr.length; i++)
         if (arr[i].var === v) return (arr[i].ref == null ? "" : String(arr[i].ref));
@@ -501,6 +513,7 @@ var refSelected = function(ui, v) {
 
 // Set/replace predictor `v`'s reference entry in ref_levels.
 var writeRef = function(ui, v, refval) {
+    if (!ui.ref_levels) return;
     var arr = utils.clone(ui.ref_levels.value(), []);
     var found = false;
     for (var k = 0; k < arr.length; k++)
@@ -511,6 +524,7 @@ var writeRef = function(ui, v, refval) {
 
 // Drop ref_levels entries whose var is no longer a predictor (guarded setValue -> no loop).
 var reconcileRefLevels = function(ui, preds) {
+    if (!ui.ref_levels) return;
     var cur = utils.clone(ui.ref_levels.value(), []);
     var kept = [];
     for (var i = 0; i < cur.length; i++)
@@ -831,12 +845,25 @@ var renderModelRow = function(ui, frag, v) {
     if (opts.length <= 1) famSelEl.disabled = true;
     row.appendChild(famSelEl);
 
-    // col-3: a 2-level factor -> modelled-level picker; a numeric outcome set to binomial -> trials.
+    // The LINK: which measure this outcome's model estimates -- the only choice that changes the
+    // model. The drop-down offers exactly TABX_LINKS[family], so it can never claim a fit the family
+    // has no arm for, and a stored pick the newly-chosen family cannot fit is cleared rather than
+    // left to abort R-side (the same self-healing the family select does against familyOptionsFor).
+    var links    = TABX_LINKS[famSel] || ["auto"];
+    var storedLk = arrGet(ui, "link", v, "link");
+    if (storedLk && links.indexOf(storedLk) < 0) { arrWrite(ui, "link", v, "link", ""); storedLk = ""; }
+    row.appendChild(makeSelect(TABX.mtSel, links, TABX_LINK_LABEL, storedLk || "auto",
+        function(lk) {
+            arrWrite(ui, "link", v, "link", lk === "auto" ? "" : lk);
+            applyModelEnables(ui);            // the measure/effect radios ask THIS outcome's link
+        }));
+
+    // col-4: a 2-level factor -> modelled-level picker; a numeric outcome set to binomial -> trials.
     var isBinFactor = c.levels && c.levels.length === 2;
     var isNumBinom  = (c.levels === null) && (famSel === "binomial");
     if (isBinFactor) {
-        // Phase h: the level dropdown alone (no "model " label -- the user sees it lists the outcome's
-        // levels, so it reads as the modelled-level picker) and it stretches to fill col-3.
+        // The level drop-down alone (no "model " label -- the user sees it lists the outcome's own
+        // levels, so it reads as the modelled-level picker) and it stretches to fill the last column.
         var storedL = arrGet(ui, "outcome_level", v, "level");
         var selL = (storedL && c.levels.indexOf(storedL) >= 0) ? storedL : c.levels[0];  // default first
         row.appendChild(makeSelect(TABX.mtSel, c.levels, null, selL,
@@ -851,7 +878,7 @@ var renderModelRow = function(ui, frag, v) {
         wrapT.appendChild(inp); wrapT.appendChild(sufT);
         row.appendChild(wrapT);
     } else {
-        row.appendChild(document.createElement("span"));       // keep the 3-column grid aligned
+        row.appendChild(document.createElement("span"));       // keep the 4-column grid aligned
     }
     frag.appendChild(row);
 };
@@ -861,6 +888,7 @@ var renderModelTable = function(ui) {
     lastModelSig = modelTableSig(ui);
     var deps = utils.clone(ui.outcome.value(), []);
     reconcileArr(ui, "family", deps);
+    reconcileArr(ui, "link", deps);
     reconcileArr(ui, "outcome_level", deps);
     reconcileArr(ui, "trials", deps);
 
@@ -868,9 +896,17 @@ var renderModelTable = function(ui) {
     frag.setAttribute("data-tabx-model", "1");
     if (deps.length === 0) {
         var hint = document.createElement("div"); hint.style.cssText = TABX.hint;
-        hint.textContent = "Add one or more outcome variables to choose each one's model family.";
+        hint.textContent =
+            "Add one or more outcome variables to choose each one's model family and link.";
         frag.appendChild(hint);
     } else {
+        // The header names the two ARGUMENTS the table sets, so a user learns them by clicking --
+        // the same reason every other control in this panel is labelled `<argument> =`.
+        var head = document.createElement("div"); head.style.cssText = TABX.mtHead;
+        ["outcome", "family =", "link ="].forEach(function(t) {
+            var h = document.createElement("span"); h.textContent = t; head.appendChild(h);
+        });
+        frag.appendChild(head);
         deps.forEach(function(v) { renderModelRow(ui, frag, v); });
     }
     var root = ui.modelTableCtrl.$el[0];
@@ -878,77 +914,165 @@ var renderModelTable = function(ui) {
     applyModelEnables(ui);
 };
 
-// The families of the currently selected outcomes (skipping the ones whose metadata is still being
-// fetched). Everything the Model box greys out is a question about THESE.
-var selectedFamilies = function(ui) {
+// The (family, link) pair of each currently selected outcome -- read off the Model table, skipping
+// the outcomes whose column metadata is still being fetched. Everything the Model box greys out is a
+// question about THESE, and since Phase 22g-i each outcome answers it with its OWN link.
+var selectedFamilyLinks = function(ui) {
     var out = [];
     if (!ui.outcome) return out;
     var deps = utils.clone(ui.outcome.value(), []);
     for (var i = 0; i < deps.length; i++) {
         var c = mtCache[deps[i]];
         if (!c || c === FETCHING) continue;
-        var storedF = arrGet(ui, "family", deps[i], "family");
-        out.push((storedF && TABX_FAMILY_LABEL[storedF]) ? storedF : detectFamily(c));
+        var f  = arrGet(ui, "family", deps[i], "family");
+        f = (f && TABX_FAMILY_LABEL[f]) ? f : detectFamily(c);
+        var lk = arrGet(ui, "link", deps[i], "link");
+        var ok = TABX_LINKS[f] || ["auto"];
+        out.push({ family: f, link: (lk && ok.indexOf(lk) >= 0) ? lk : "auto" });
     }
     return out;
 };
 
-// Phase 19k: WHICH (effect x measure) combinations the selected outcomes offer, straight off the
-// generated grid -- so the UI cannot claim a combination tab_reg() refuses, nor grey one it accepts.
-// It replaces `anyNonGaussian` + `anyProbScale`, two hand-written predicates: the first greyed the
-// whole estimand row for a gaussian outcome (an AME on a linear model is a real, if equal, estimand)
-// and the second encoded "a marginal ratio needs a probability scale", which 19e made false when it
-// opened `measure = "ratio"` to every family.
-// Phase 22b-xv: the grid gained the LINK axis, so every question is asked of the CHOSEN model.
-var linkOffered = function(ui, link) {
-    var fams = selectedFamilies(ui);
-    if (fams.length === 0) return true;                      // nothing selected yet -> leave enabled
-    for (var i = 0; i < fams.length; i++) {
-        var l = TABX_LINKS[fams[i]];
-        if (!l || l.indexOf(link) < 0) return false;          // every outcome must fit it
+// WHICH (effect x measure) combinations the selected outcomes offer, straight off the generated grid
+// -- so the UI cannot claim a combination tab_reg() refuses, nor grey one it accepts. The LINK axis
+// is no longer a question asked here: the table's own drop-down lists exactly TABX_LINKS[family], so
+// a link that cannot be fitted is unreachable rather than greyed.
+var measureOffered = function(ui, effect, measure) {
+    var pairs = selectedFamilyLinks(ui);
+    if (pairs.length === 0) return true;                 // nothing selected yet -> leave enabled
+    for (var i = 0; i < pairs.length; i++) {
+        var g = TABX_ESTIMANDS[pairs[i].family];
+        if (!g) return false;
+        g = g[pairs[i].link];
+        if (!g || !g[effect] || g[effect].indexOf(measure) < 0) return false;  // ALL must offer it
     }
     return true;
 };
 
-var measureOffered = function(ui, link, effect, measure) {
-    var fams = selectedFamilies(ui);
-    if (fams.length === 0) return true;
-    for (var i = 0; i < fams.length; i++) {
-        var g = TABX_ESTIMANDS[fams[i]];
-        if (!g || !g[link] || !g[link][effect]) return false;
-        if (g[link][effect].indexOf(measure) < 0) return false;   // every outcome must offer it
-    }
-    return true;
-};
-
-var LINK_OF_RADIO    = { link_1: "auto", link_2: "odds_ratio", link_3: "ratio",
-                         link_4: "difference" };
 var EFFECT_OF_RADIO  = { effect_1: "auto", effect_2: "conditional", effect_3: "marginal",
                          effect_4: "at_reference" };
 var MEASURE_OF_RADIO = { measure_1: "auto", measure_2: "odds_ratio", measure_3: "ratio",
                          measure_4: "difference", measure_5: "log" };
 
 var applyModelEnables = function(ui) {
-    var lk  = ui.link   ? ui.link.value()   : "auto";
     var eff = ui.effect ? ui.effect.value() : "auto";
-    // a link is offered when the chosen outcomes can be FITTED on it
-    Object.keys(LINK_OF_RADIO).forEach(function(nm) {
-        if (ui[nm] && ui[nm].setEnabled) ui[nm].setEnabled(linkOffered(ui, LINK_OF_RADIO[nm]));
-    });
-    if (!linkOffered(ui, lk)) lk = "auto";                    // a stale pick greys the rest wholesale
-    // an effect is offered when SOME measure of it is, on the chosen model
+    // an effect is offered when SOME measure of it is, on the chosen models
     Object.keys(EFFECT_OF_RADIO).forEach(function(nm) {
         if (!ui[nm] || !ui[nm].setEnabled) return;
         var e = EFFECT_OF_RADIO[nm];
         ui[nm].setEnabled(Object.keys(MEASURE_OF_RADIO).some(function(mn) {
-            return measureOffered(ui, lk, e, MEASURE_OF_RADIO[mn]);
+            return measureOffered(ui, e, MEASURE_OF_RADIO[mn]);
         }));
     });
     Object.keys(MEASURE_OF_RADIO).forEach(function(nm) {
         if (ui[nm] && ui[nm].setEnabled)
-            ui[nm].setEnabled(measureOffered(ui, lk, eff, MEASURE_OF_RADIO[nm]));
+            ui[nm].setEnabled(measureOffered(ui, eff, MEASURE_OF_RADIO[nm]));
     });
 };
+
+// ---- Interaction picker CustomControl (crossPickerCtrl) ----------------------------------
+// One row per interaction = [var1] x [var2] [x delete], plus a "+ Add interaction" button. An
+// interaction is a PREDICTOR whose levels are combinations, so tab_reg() takes it INSIDE
+// `predictors` as the key `a*b`; the rows are stored in the hidden `crosses` array and
+// jmvtab_reg_cross_keys() folds them into that one argument (there is no second one). The FIRST
+// variable is the modified one -- the grammar's own reading of `a*b` -- which the note states.
+//
+// Like the model builder, the signature is the POOL alone: picking a variable writes `crosses`,
+// which is not in it, so `updated` skips and the in-place <select> change stands; add / delete
+// change the row count and re-render synchronously in their own handlers.
+
+var lastCrossSig = null;
+
+var crossSig = function(ui) { return JSON.stringify(utils.clone(ui.predictors.value(), [])); };
+
+var crossesGet = function(ui) { return utils.clone(ui.crosses.value(), []); };
+
+// Drop rows whose variables have left the pool, or that name the same variable twice (tab_reg
+// refuses `a*a`, so the UI must never send one). Guarded: an unchanged array is not re-set.
+var reconcileCrosses = function(ui, pool) {
+    var cur  = crossesGet(ui);
+    var kept = cur.filter(function(e) {
+        return e && pool.indexOf(e.var1) >= 0 && pool.indexOf(e.var2) >= 0 && e.var1 !== e.var2;
+    });
+    if (JSON.stringify(kept) !== JSON.stringify(cur)) ui.crosses.setValue(kept);
+};
+
+// Set one side of row `i`. Picking the variable already on the other side would make `a*a`, so the
+// other side steps to the first free variable instead of leaving an invalid pair on screen.
+var setCrossVar = function(ui, i, side, val, pool) {
+    var arr = crossesGet(ui);
+    if (!arr[i]) return;
+    var other = (side === "var1") ? "var2" : "var1";
+    var e = { var1: arr[i].var1, var2: arr[i].var2 };
+    e[side] = val;
+    if (e[other] === val) {
+        var free = pool.filter(function(v) { return v !== val; });
+        if (free.length === 0) return;
+        e[other] = free[0];
+    }
+    arr[i] = e;
+    ui.crosses.setValue(arr);
+};
+
+var addCross = function(ui, pool) {
+    var arr = crossesGet(ui);
+    arr.push({ var1: pool[0], var2: pool[1] });
+    ui.crosses.setValue(arr);
+    renderCrossPicker(ui);                    // count changed -> synchronous re-render
+};
+
+var deleteCross = function(ui, i) {
+    var arr = crossesGet(ui);
+    arr.splice(i, 1);
+    ui.crosses.setValue(arr);
+    renderCrossPicker(ui);
+};
+
+var renderCrossRow = function(ui, frag, e, i, pool) {
+    var row = document.createElement("div"); row.style.cssText = TABX.crossRow;
+    row.appendChild(makeSelect(TABX.mtSel, pool, null, e.var1,
+        function(v) { setCrossVar(ui, i, "var1", v, pool); }));
+    var x = document.createElement("span"); x.style.cssText = TABX.crossOp; x.textContent = "\u00d7";
+    row.appendChild(x);
+    row.appendChild(makeSelect(TABX.mtSel, pool, null, e.var2,
+        function(v) { setCrossVar(ui, i, "var2", v, pool); }));
+    var del = document.createElement("button");
+    del.type = "button"; del.style.cssText = TABX.cardDel; del.textContent = "\u00d7";
+    del.title = "Remove this interaction";
+    del.addEventListener("click", function() { deleteCross(ui, i); });
+    row.appendChild(del);
+    frag.appendChild(row);
+};
+
+var renderCrossPicker = function(ui) {
+    if (!ui.crossPickerCtrl || !ui.crosses || !ui.predictors) return;
+    lastCrossSig = crossSig(ui);
+    var pool = utils.clone(ui.predictors.value(), []);
+    reconcileCrosses(ui, pool);
+
+    var frag = document.createElement("div");
+    frag.setAttribute("data-tabx-cross", "1");
+
+    if (pool.length < 2) {
+        var h0 = document.createElement("div"); h0.style.cssText = TABX.hint;
+        h0.textContent = "Select at least two predictors: an interaction crosses two of them.";
+        frag.appendChild(h0);
+    } else {
+        crossesGet(ui).forEach(function(e, i) { renderCrossRow(ui, frag, e, i, pool); });
+        var note = document.createElement("div"); note.style.cssText = TABX.hint;
+        note.textContent = "The effect of the FIRST variable is read within each level of the second."
+                         + " Both are dropped as separate predictors: the pair replaces them.";
+        frag.appendChild(note);
+        var add = document.createElement("button");
+        add.type = "button"; add.style.cssText = TABX.addBtn; add.textContent = "+ Add interaction";
+        add.addEventListener("click", function() { addCross(ui, pool); });
+        frag.appendChild(add);
+    }
+
+    var root = ui.crossPickerCtrl.$el[0];
+    root.innerHTML = ""; root.appendChild(frag);
+};
+
 
 // ---- Model-comparison builder CustomControl (modelBuilderCtrl) ---------------------------
 // One card per model = an editable name + a checkbox per predictor in the pool (the `predictors`
@@ -1141,6 +1265,20 @@ module.exports = {
     // modelBuilderCtrl: build on create. On `updated`, re-render ONLY when the pool / compare changed OR
     // jamovi replaced our $el subtree (marker gone) -- a card / name / marker edit writes models/baseline
     // (NOT in the signature), so it is SKIPPED and the in-place repaint stands.
+    // crossPickerCtrl: the interaction rows. Same rule as the model builder -- a variable PICK
+    // writes `crosses`, which is not in the signature (the predictor pool is), so it is skipped and
+    // the in-place <select> change stands; add / delete re-render in their own handlers.
+    crossPickerCtrl_creating: function(ui) { renderCrossPicker(ui); },
+    crossPickerCtrl_updated:  function(ui) {
+        if (!ui.crossPickerCtrl || !ui.predictors) return;
+        var sig  = crossSig(ui);
+        var root = ui.crossPickerCtrl.$el[0];
+        var present = !!(root && root.firstChild && root.firstChild.getAttribute &&
+                         root.firstChild.getAttribute("data-tabx-cross") === "1");
+        if (sig === lastCrossSig && present) return;
+        renderCrossPicker(ui);
+    },
+
     modelBuilderCtrl_creating: function(ui) { renderModelBuilder(ui); },
     modelBuilderCtrl_updated:  function(ui) {
         if (!ui.modelBuilderCtrl || !ui.predictors) return;

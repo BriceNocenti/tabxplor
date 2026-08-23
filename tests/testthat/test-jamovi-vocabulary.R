@@ -120,10 +120,21 @@ test_that("jmvtab.a.yaml speaks tab()'s vocabularies", {
 test_that("jmvtabreg.a.yaml speaks tab_reg()'s vocabularies", {
   o <- yaml_opts("jmvtabreg.a.yaml")
 
-  # the cascade, in cascade order: each option's value set IS the R vocabulary it names
-  expect_identical(opt_values(o, "link"),    REG_LINKS_VALUES)
+  # The cascade's RIGHT half is scalar, and each option's value set IS the R vocabulary it names.
   expect_identical(opt_values(o, "effect"),  REG_EFFECTS_VALUES)
   expect_identical(opt_values(o, "measure"), REG_MEASURES_VALUES)
+
+  # Its LEFT half -- `family` and `link` -- is a question about each OUTCOME, so both are hidden
+  # per-outcome Arrays driven by the Model table. There is no value set to compare here: what the
+  # link drop-down offers is TABX_LINKS, emitted from REG_FAMILIES$fits by dev/generate_jamovi_js.R
+  # and checked by the generated-block test below. What IS checkable here is the shape the backend
+  # folder reads (jmvtab_reg_link_vector() indexes `var` and `link`).
+  for (nm in c("family", "link")) {
+    expect_true(isTRUE(o[[nm]]$hidden), info = nm)
+    expect_identical(o[[nm]]$type, "Array", info = nm)
+    expect_identical(vapply(o[[nm]]$template$elements, function(e) e$name, character(1)),
+                     c("var", nm), info = nm)
+  }
   expect_identical(opt_values(o, "na"),      eval(formals(tab_reg)$na))
   # Phase 20c: `method` became `ci_method`'s `model` slot, so the vocabulary is CI_METHODS' -- a
   # stricter single source than the formal's own default vector was. Phase 20g-i renamed the option.
@@ -171,13 +182,15 @@ JMV_UI_ONLY <- c(
 )
 JMV_UI_ONLY_EXTRA <- list(
   jmvtab = c(
-    lvs      = "`levels`, renamed: jmvcore::Options already defines a levels() method",
-    ci_print = "options(tabxplor.ci_print) -- read inside format(), i.e. at RENDER time"
+    lvs = "`levels`, renamed: jmvcore::Options already defines a levels() method"
   ),
   jmvtabreg = c(
     models      = "the model-comparison builder; folded into `predictors` by jmvtab_reg_models()",
-    crosses     = "the interaction picker; folded into `predictors` as `a:b` keys (22b-ix)",
-    run_compare = "an Action button: the staged-comparison trigger"
+    crosses     = "the interaction picker; folded into `predictors` as `a*b` keys (22b-ix)",
+    run_compare = "an Action button: the staged-comparison trigger",
+    xl_check    = paste("tab_xl(check =): the model-check plots, an EXPORT argument -- and it",
+                        "cannot be named `check`, a jmvcore::Options method (as `lvs` cannot be",
+                        "`levels`)")
   )
 )
 
@@ -249,6 +262,22 @@ test_that("the .u.yaml controls and the .js name declared options", {
 })
 
 
+# The hand-written .js PARSES. It ships verbatim to every user and a syntax error makes the whole
+# options panel inert with no R-side symptom, so this is worth the 40 ms -- and it is now possible:
+# the box has node (it was declined in 19n only because there was none). Skipped where there is not.
+test_that("the jamovi .js files are syntactically valid", {
+  skip_on_cran()
+  node <- Sys.which("node")
+  skip_if(!nzchar(node), "node is not on the PATH")
+  for (an in c("jmvtab", "jmvtabreg")) {
+    f <- testthat::test_path("..", "..", "jamovi", "js", paste0(an, ".js"))
+    skip_if_not(file.exists(f), "jamovi/ is not shipped in a built package")
+    out <- suppressWarnings(system2(node, c("--check", shQuote(f)), stdout = TRUE, stderr = TRUE))
+    expect_identical(attr(out, "status") %||% 0L, 0L, info = paste(c(an, out), collapse = "\n"))
+  }
+})
+
+
 test_that("the generated .js rule blocks are up to date", {
   skip_on_cran()
   gen <- testthat::test_path("..", "..", "dev", "generate_jamovi_js.R")
@@ -282,6 +311,16 @@ test_that("the .u.yaml controls name values their option declares", {
       expect_true(p[[2]] %in% vals,
                   info = paste0(an, ".u.yaml: ", p[[1]], " = ", p[[2]],
                                 " is not a declared value (", paste(vals, collapse = "/"), ")"))
+    }
+
+    # ...AND covers every one of them. ⚠ this is not tidiness: the ui compiler APPENDS a control for
+    # each value a radio group leaves out and then REWRITES the .u.yaml with yaml.dump(), which
+    # deletes every comment in it. Measured on `jmvtabreg`'s `display` (7 of 10 offered), whose three
+    # orphans had been declared three phases earlier and never given a button.
+    for (nm in unique(vapply(pairs, `[[`, character(1), 1L))) {
+      offered <- unlist(lapply(pairs[vapply(pairs, function(p) p[[1]] == nm, logical(1))],
+                               `[[`, 2L))
+      expect_setequal(offered, opt_values(opts, nm))
     }
   }
 })

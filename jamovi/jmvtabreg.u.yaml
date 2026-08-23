@@ -51,7 +51,9 @@ children:
     stretchFactor: 1
     collapsed: false
     children:
-      # Per-outcome Model table: one row per outcome -> [name] [family] [outcome_level / trials].
+      # Per-outcome Model table: a header row (outcome | family = | link =), then one row per
+      # outcome -> [name] [family] [link] [outcome_level / trials]. The 4th cell is unheaded: it
+      # shows a level drop-down or a `n trials` box, which read for themselves.
       - type: LayoutBox
         margin: none
         children:
@@ -64,36 +66,16 @@ children:
       - type: LayoutBox
         margin: large
         children:
-          # Phase 22b-xv: THE CASCADE, left to right -- `link` (which measure the MODEL estimates),
-          # `measure` (which one is REPORTED), `effect` (where the number comes from). "auto" means
-          # follow from the left, so an ordinary user touches the middle column only.
+          # THE CASCADE. Its left half -- `family` (what kind of number the outcome is) and `link`
+          # (which measure the MODEL estimates) -- is a question about each OUTCOME, so it lives in
+          # the per-outcome table above, one headed column each. What is left here is scalar:
+          # `measure` (which measure is REPORTED) then `effect` (where the number comes from).
+          # "auto" everywhere means follow from the left, so an ordinary user touches nothing.
           - type: LayoutBox
             margin: none
             children:
               - type: LayoutBox
                 cell: { column: 0, row: 0 }
-                children:
-                  - type: Label
-                    label: link = <i>(which model)</i>
-                    children:
-                      - type: RadioButton
-                        name: link_1
-                        optionName: link
-                        optionPart: auto
-                      - type: RadioButton
-                        name: link_2
-                        optionName: link
-                        optionPart: odds_ratio
-                      - type: RadioButton
-                        name: link_3
-                        optionName: link
-                        optionPart: ratio
-                      - type: RadioButton
-                        name: link_4
-                        optionName: link
-                        optionPart: difference
-              - type: LayoutBox
-                cell: { column: 1, row: 0 }
                 children:
                   - type: Label
                     label: measure = <i>(which measure is reported)</i>
@@ -119,7 +101,7 @@ children:
                         optionName: measure
                         optionPart: log
               - type: LayoutBox
-                cell: { column: 2, row: 0 }
+                cell: { column: 1, row: 0 }
                 children:
                   - type: Label
                     label: effect = <i>(where it comes from)</i>
@@ -143,6 +125,24 @@ children:
           - type: ComboBox
             name: empirical
             label: empirical = <i>(show the observed effect beside the modelled one)</i>
+
+  - type: CollapseBox
+    label: <b>Interactions</b>
+    stretchFactor: 1
+    collapsed: true
+    children:
+      # An interaction is a PREDICTOR whose levels are combinations, so it is written INTO
+      # `predictors` as `a*b` -- there is no second argument. This picker fills the hidden
+      # `crosses` array, which jmvtab_reg_cross_keys() folds into that one argument.
+      - type: LayoutBox
+        margin: none
+        children:
+          - type: CustomControl
+            name: crossPickerCtrl
+            stretchFactor: 1
+            events:
+              creating: ./jmvtabreg::crossPickerCtrl_creating
+              updated:  ./jmvtabreg::crossPickerCtrl_updated
 
   - type: CollapseBox
     label: <b>Model comparison (+ predictor subsets)</b>
@@ -329,25 +329,37 @@ children:
                   - type: RadioButton
                     name: display_2
                     optionName: display
-                    optionPart: est_ci
+                    optionPart: est
                   - type: RadioButton
                     name: display_3
                     optionName: display
-                    optionPart: est_base
+                    optionPart: est_ci
                   - type: RadioButton
                     name: display_4
                     optionName: display
-                    optionPart: base_est
+                    optionPart: est_coef
                   - type: RadioButton
                     name: display_5
                     optionName: display
-                    optionPart: base_est_mdiff
+                    optionPart: est_base
                   - type: RadioButton
                     name: display_6
                     optionName: display
-                    optionPart: base_est_mratio
+                    optionPart: base_est
                   - type: RadioButton
                     name: display_7
+                    optionName: display
+                    optionPart: base_est_mdiff
+                  - type: RadioButton
+                    name: display_8
+                    optionName: display
+                    optionPart: base_est_mratio
+                  - type: RadioButton
+                    name: display_9
+                    optionName: display
+                    optionPart: base_ratio
+                  - type: RadioButton
+                    name: display_10
                     optionName: display
                     optionPart: base
           - type: LayoutBox
@@ -466,9 +478,26 @@ children:
       - type: LayoutBox
         margin: none
         children:
-          - type: CheckBox
-            name: xl_replace
-            label: Replace existing file
+          - type: LayoutBox
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 0
+            children:
+              - type: CheckBox
+                name: xl_replace
+                label: Replace existing file
+          # Excel only: reg_check_plots() drawn under each table (tab_xl(check =)).
+          - type: LayoutBox
+            cell:
+              column: 1
+              row: 0
+            stretchFactor: 1
+            children:
+              - type: ComboBox
+                name: xl_check
+                label: "check ="
+                enable: (export_format:excel)
        # Row 4: a discreet, right-aligned "default path" reset.
       - type: LayoutBox
         margin: none

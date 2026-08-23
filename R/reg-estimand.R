@@ -562,6 +562,19 @@ reg_family_ui_labels <- function(binary = FALSE) {
   v[!is.na(v)]
 }
 
+# The link picker's labels, COMPOSED from REG_MEASURE_LINK rather than declared a second time: the
+# measure the link estimates, then the glm spelling that map already carries. `reg_family_ui_labels()`
+# is its sibling -- both feed the jamovi Model table through dev/generate_jamovi_js.R, which is why
+# the words live here and not in a .yaml (a jamovi CustomControl renders them from JS).
+#' @keywords internal
+#' @noRd
+reg_link_ui_labels <- function() {
+  c(auto = "auto (the family's own)",
+    stats::setNames(paste0(gsub("_", " ", names(REG_MEASURE_LINK)),
+                           " (", unname(REG_MEASURE_LINK), ")"),
+                    names(REG_MEASURE_LINK)))
+}
+
 # THE reader of a STORED outcome level: NA (not NULL -- a tibble column can't hold NULL) means "the
 # family's own default"; reg_prep_binary() and reg_positive_level() want that NA back as NULL.
 #' @keywords internal

@@ -613,3 +613,19 @@ test_that("a multinomial crude column answers for its NUMERIC predictors too", {
     expect_true(is.finite(get_ci_inf(t[[cn]])[i]))
   }
 })
+
+
+# --- the argument boundary --------------------------------------------------------------------
+
+test_that("`empirical` takes the word its fact table declares, not only TRUE/FALSE", {
+  d <- emp_data()
+  # "no" is the twin of FALSE and the word every other tabxplor argument uses for off. It was
+  # DECLARED in TAB_ARGS and understood by emp_on() all along; only the validator refused it, which
+  # made the jamovi picker's own off value an abort.
+  expect_identical(tab_arg("empirical")$values, c("no", "cell", "column"))
+  expect_identical(
+    suppressMessages(tab_reg(d, "married", "race", family = "binomial",
+                             empirical = "no",  stats = FALSE)),
+    suppressMessages(tab_reg(d, "married", "race", family = "binomial",
+                             empirical = FALSE, stats = FALSE)))
+})

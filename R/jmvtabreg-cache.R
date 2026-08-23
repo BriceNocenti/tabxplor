@@ -12,7 +12,8 @@
 #       Picker folders map the hidden Array UI options into tab_reg() args: jmvtab_reg_ref_vector()
 #       (references), jmvtab_reg_models() (the model-comparison "+" builder -> `predictors` list or the
 #       flat pool), jmvtab_reg_mult_vector() (numeric-predictor scaling -> `multiplier`),
-#       jmvtab_reg_shape_vector() (per-predictor functional form -> `shape`).
+#       jmvtab_reg_shape_vector() (per-predictor functional form -> `shape`), and the Model table's
+#       own jmvtab_reg_link_vector() (per-outcome link) beside its family / level / trials readers.
 # KEY CONSTRAINTS:
 #   - jmvtabreg.h.R is GENERATED from jmvtabreg.a.yaml (jmvtools::prepare()); never hand-edit it.
 #   - Persist plain lists (coef vectors, vcov matrices, tibbles) -- NEVER a live object bound to an env.
@@ -281,6 +282,21 @@ jmvtab_reg_dep_family <- function(family, dep, data) {
   reg_detect_family(data, dep)
 }
 
+# The link the user picked for this outcome, as tab_reg()'s own named vector. "auto" and blank
+# entries are DROPPED: "auto" is the default, so an entry for it would only make the fit key move.
+# Mirrors jmvtab_reg_shape_vector(), which drops "linear" for the same reason.
+#' @keywords internal
+#' @noRd
+jmvtab_reg_link_vector <- function(link) {
+  if (length(link) == 0L) return(NULL)
+  get1 <- function(e, k) { v <- e[[k]]; if (is.null(v)) NA_character_ else as.character(v) }
+  vars <- vapply(link, get1, character(1), k = "var")
+  lks  <- vapply(link, get1, character(1), k = "link")
+  keep <- !is.na(vars) & nzchar(vars) & !is.na(lks) & nzchar(lks) & lks != "auto"
+  if (!any(keep)) return(NULL)
+  stats::setNames(lks[keep], vars[keep])
+}
+
 # The level the user singled out for this outcome, or NA = the family's own default. What the level
 # MEANS is the family's business (REG_FAMILIES$outcome_level: the MODELLED level for a binomial
 # outcome, the BASELINE category for a multinomial one), which is why it travels as a level and not
@@ -367,9 +383,9 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     return(list(tabs = NULL, store = cache_env$store, hits = 0L))
   }
 
-  # Phase 15e: resolve each outcome's family / modelled level / trials from the Model table, then pass them
-  # to ONE tab_reg() call as per-outcome vectors -- so several outcomes with DIFFERENT families render as
-  # one mixed table (tab_reg builds one column-group per outcome). No more family-grouping / stacking.
+  # Resolve each outcome's family / link / modelled level / trials from the Model table, then pass
+  # them to ONE tab_reg() call as per-outcome vectors -- so several outcomes with DIFFERENT families
+  # (and links) render as one mixed table, tab_reg building one column-group per outcome.
   fams <- vapply(dep, function(d) jmvtab_reg_dep_family(opts$family, d, data), character(1))
   # Phase 20c: the picker asks for a LEVEL and tab_reg() now takes one, so it travels intact.
   # ⚠ it used to be folded into a logical ("did the user pick anything?"), which meant ANY pick
@@ -380,6 +396,10 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     if (identical(fams[i], "binomial")) jmvtab_reg_dep_trials(opts$trials, dep[i])
     else NA_integer_
   }, integer(1))
+
+  # ...and the link the same way. It is the only one of the four with a value that must NOT reach
+  # the argument ("auto" IS the default), so the folder drops those entries instead of sending them.
+  lnk_arg <- jmvtab_reg_link_vector(opts$link)
 
   fam_arg <- stats::setNames(fams, dep)
   lvl_arg <- if (all(is.na(lvls))) NULL else stats::setNames(lvls, dep)[!is.na(lvls)]
@@ -403,7 +423,9 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     predictors   = !!preds,
     family       = fam_arg,
     wt           = !!nz(opts$wt),
-    link         = opts$link    %||% "auto",
+    # `link` is per outcome (the Model table's second headed column): a named vector, or NULL
+    # where every outcome is on "auto" -- which IS what "auto everywhere" means.
+    link         = lnk_arg %||% "auto",
     measure      = opts$measure %||% "auto",
     effect       = opts$effect  %||% "auto",
     conf_level   = opts$conf_level,

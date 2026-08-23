@@ -373,13 +373,11 @@ children:
                     optionName: ci
                     optionPart: ref
                     enable: (pct:row || pct:col || pct:all || pct:all_tabs)
-          - type: LayoutBox
-            margin: none
-            cell:
-              column: 1
-              row: 0
-            stretchFactor: 1
-            children:
+          # ⚠ cell (1,0) is deliberately ABSENT, not an empty box: a `.u.yaml` node with a bare
+          # `children:` is a YAML null, and the ui compiler dereferences it (`null.length`) instead
+          # of skipping it -- which made `jmvtools::prepare()` abort outright. A grid is
+          # cell-addressed, so a missing cell simply stays blank. Never write `children: []` either:
+          # the compiler splices an empty container out and rewrites this file, comments and all.
           - type: LayoutBox
             margin: none
             cell:

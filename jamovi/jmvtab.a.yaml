@@ -590,6 +590,10 @@ options:
           name:  ctr
         - title: "mean <i>(mean, for numeric variables)</i>"
           name:  mean
+        - title: "mean, standard deviation in bracket"
+          name:  mean_sd
+        - title: "mean, coefficient of variation in bracket"
+          name:  mean_cv
         - title: "var <i>(variance)</i>"
           name:  var
       default: auto

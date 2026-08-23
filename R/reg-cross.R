@@ -7,6 +7,9 @@
 #     ordinary predictor;
 #   - the two arms are declared in REG_CROSS_ARMS, never re-derived from a pair of kinds;
 #   - a parent may not also be a plain predictor;
+#   - `a*b` must be read from an INJECTED literal as well as from an inline call or a variable:
+#     the jamovi bridge builds its tab_reg() call with rlang::inject(), and quo_peek_extern() sees
+#     only a bare symbol -- so reg_cross_slots_quo() reads the expression's own value;
 #   - the block is NAMED AS IT WAS TYPED (`age*tvhours`), so the var column, the footer rows and
 #     reg_formulas() all read the string the user wrote in `predictors`.
 # See: CLAUDE.md section "tabxplor architecture" (the regression subsystem).
@@ -152,6 +155,12 @@ reg_cross_slots_quo <- function(quo, data) {
     return(lapply(seq_along(els), function(i)
       if (hit[[i]]) list(key = TRUE, value = reg_cross_key(els[[i]]))
       else list(key = FALSE, quo = rlang::new_quosure(els[[i]], env))))
+  # ⚠ an INJECTED literal: `rlang::inject(predictors = !!p)` splices the VALUE into the expression,
+  # so it is neither a bare symbol (all quo_peek_extern() looks at) nor a `c()` call, and the peek
+  # below returns NULL. The jamovi bridge builds its call exactly that way on purpose -- an injected
+  # value cannot be mistaken for a dataset column -- so without this line every interaction picked
+  # there tried to SELECT a column named `a*b`, and the fold could never work end to end.
+  if (is.character(expr) && any(reg_cross_has_op(expr))) return(reg_cross_slots_chr(expr))
   # a variable holding the names: the interaction is in its VALUE, which tidyselect never sees.
   pk <- quo_peek_extern(quo, data)
   if (is.character(pk) && any(reg_cross_has_op(pk))) return(reg_cross_slots_chr(pk))

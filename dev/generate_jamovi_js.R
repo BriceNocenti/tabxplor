@@ -1,7 +1,8 @@
 # PURPOSE: GENERATE the jamovi `.js` rule blocks from the R fact tables (Phase 19k).
 # ROLE: The two `jamovi/js/*.js` files hold real UI code (DOM building, pickers, styling) that stays
 #   hand-written. What must NOT be hand-written is the RULES they encode -- which family an outcome
-#   gets, which families it offers, which (effect x measure) estimands exist for it -- because those
+#   gets, which families it offers, which links each can be fitted on (and how they are LABELLED,
+#   since the Model table renders them from JS), which (effect x measure) estimands exist -- those
 #   are R facts, and a hand-mirror in a language with no test harness here is exactly the class of
 #   duplication Phase 19 exists to delete. This script rewrites, IN PLACE, the block between
 #     // --- BEGIN GENERATED (dev/generate_jamovi_js.R) -- do not edit ---
@@ -48,7 +49,7 @@ js_obj  <- function(x, val = js_str) {                    # named vector/list ->
 
 
 # =============================================================================================
-# jmvtabreg.js -- the family rules + the three-state estimand grid
+# jmvtabreg.js -- the family/link rules + the three-state estimand grid
 # =============================================================================================
 reg_block <- function() {
   kinds <- tabxplor:::REG_OUTCOME_KINDS
@@ -90,6 +91,7 @@ reg_block <- function() {
     paste0("var TABX_OUTCOME_DETECT = ", js_obj(detect), ";"),
     paste0("var TABX_OUTCOME_OFFERS = ", js_obj(offers, js_arr), ";"),
     paste0("var TABX_LINKS = ", js_obj(links, js_arr), ";"),
+    paste0("var TABX_LINK_LABEL = ", js_obj(tabxplor:::reg_link_ui_labels()), ";"),
     paste0("var TABX_ESTIMANDS = ",
            paste0("{ ", paste0(js_str(fams), ": ",
                                vapply(grid, function(g)

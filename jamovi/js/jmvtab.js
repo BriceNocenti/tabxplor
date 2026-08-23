@@ -225,8 +225,13 @@ var makeTitledBox = function(boxStyle, titleStyle, titleText) {
     return d;
 };
 
+// ⚠ Each helper below GUARDS on its option existing. A hidden, control-less option only
+// resolves through `ui.<name>` once the generated .h.R declares it, and that file LAGS a
+// .a.yaml edit until the maintainer's next prepare() -- an unguarded read there throws and
+// takes the whole `update` handler with it, so the panel goes inert rather than degrading.
 // Drop levels_order entries whose variable is no longer selected (guarded setValue -> no loop).
 var reconcileLevelOrder = function(ui, selected) {
+    if (!ui.levels_order) return;
     var cur = utils.clone(ui.levels_order.value(), []);
     var kept = [];
     for (var i = 0; i < cur.length; i++)
@@ -237,6 +242,7 @@ var reconcileLevelOrder = function(ui, selected) {
 // The order to display for `v`: the stored entry (kept for still-present levels, new levels
 // appended) if any, else the column's natural level order.
 var storedOrder = function(ui, v, natural) {
+    if (!ui.levels_order) return natural;
     var arr = utils.clone(ui.levels_order.value(), []);
     for (var i = 0; i < arr.length; i++) {
         if (arr[i].var === v && arr[i].levels && arr[i].levels.length) {
@@ -255,6 +261,7 @@ var storedOrder = function(ui, v, natural) {
 // COPY of `lv` -- never the caller's live working array, else later in-place swaps would alias the option
 // value and setValue() could miss the change.
 var writeOrder = function(ui, v, lv) {
+    if (!ui.levels_order) return;
     var copy = lv.slice();
     var arr = utils.clone(ui.levels_order.value(), []);
     var found = false;
@@ -654,6 +661,7 @@ var orIsActive = function(ui) {
 
 // The stored reference for variable `v` in ref_levels ("" if the user has not picked one).
 var refSelected = function(ui, v) {
+    if (!ui.ref_levels) return "";
     var arr = utils.clone(ui.ref_levels.value(), []);
     for (var i = 0; i < arr.length; i++)
         if (arr[i].var === v) return (arr[i].ref == null ? "" : String(arr[i].ref));
@@ -662,6 +670,7 @@ var refSelected = function(ui, v) {
 
 // Set/replace variable `v`'s reference entry in ref_levels.
 var writeRef = function(ui, v, refval) {
+    if (!ui.ref_levels) return;
     var arr = utils.clone(ui.ref_levels.value(), []);
     var found = false;
     for (var k = 0; k < arr.length; k++)
@@ -673,6 +682,7 @@ var writeRef = function(ui, v, refval) {
 // Drop ref_levels entries whose var is not in the active axis (guarded setValue -> no loop): clears
 // stale entries after a pct row<->col switch or a removed variable.
 var reconcileRefLevels = function(ui, activeVars) {
+    if (!ui.ref_levels) return;
     var cur = utils.clone(ui.ref_levels.value(), []);
     var kept = [];
     for (var i = 0; i < cur.length; i++)
