@@ -1968,3 +1968,22 @@ plot-styling preference) into every analysis, so a module option of that name ne
 no radio ticks, a click reverts, and the backend reads the app's word. Renamed `tab_theme`. The
 reserved set now known: **`levels`** (a `jmvcore::Options` method), **`check`** (likewise), and
 **`theme`** (injected by the client). None of the three raises anything anywhere.
+
+### Round 3: two ordering traps, and the gate `node --check` cannot be
+
+⚠ **Write the option BEFORE firing the callback that reads it.** `tabxmBuildList`'s `move()` called
+`commit()` (→ `onCommit`) before `onOrder(order)`, so any host deriving state from the stored order
+was one move behind. A host callback fired from inside a widget must see the world the widget has
+already written.
+
+⚠ **A change made OUTSIDE the level list must rebuild it; a change made INSIDE must not.**
+`tabxvRebuildList()` exists for the first (jmvtabreg's `ref =` cell reorders the levels); calling it
+from `onCommit` would detach the grid that handler is about to repaint in place.
+
+⚠ **A `.js` that parses can still be dead.** Deleting a top-level helper that is still called leaves
+the jamovi options pane loading forever — no exception reaches R, no test sees it, `node --check`
+passes. The suite now asserts that every identifier a `.js` calls is declared somewhere in it. It is
+permissive about scope on purpose: the failure worth catching is a helper that is simply gone.
+
+⚠ **`width: 100%` plus a horizontal margin overflows.** It cost the Model table a few millimetres
+past its card. A block-level grid already fills its container; give it margins OR a width, never both.

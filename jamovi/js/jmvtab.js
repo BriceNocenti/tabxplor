@@ -427,6 +427,16 @@ var tabxvFillRest = function (ui, host, v, kind) {
     if (kind.isNumber && host.unitCell) host.unitCell(ui, c.act, v, kind);
 };
 
+// Rebuild `v`'s OPEN level list from the stored order. ⚠ Only for a change made OUTSIDE the list
+// (jmvtabreg's `ref =` cell reorders): calling it from the list's own onCommit would detach the
+// grid that handler is about to repaint.
+var tabxvRebuildList = function (ui, host, v) {
+    var c = tabxvCells[v];
+    if (!c || !c.exp || !tabxvOpen[v] || !c.setOpen) return;
+    c.exp.innerHTML = "";
+    c.setOpen(true);
+};
+
 // Repaint everything about ONE variable that a merge, a reorder or a `shape` pick can change --
 // without rebuilding the table, which is what keeps the in-place edit that triggered it alive.
 var tabxvRefreshVar = function (ui, host, v) {
@@ -784,8 +794,12 @@ var tabxmBuildList = function (ui, v, initialOrder, onOrder, canOrder, onCommit,
         // ticks disappear where the user can see them, rather than a non-contiguous group being
         // kept behind a display that shows it as separate levels.
         ticks = tabxmTicks(order, groups);
-        commit();
+        // ⚠ THE ORDER IS WRITTEN FIRST. `commit()` fires `onCommit`, and a host that derives
+        // something FROM the order (jmvtabreg: its reference IS the first level) reads the option
+        // back -- so writing it after left every such read one move behind, which is exactly what
+        // the bold first level and the `ref =` cell disagreeing looked like.
         onOrder(order);
+        commit();
         renderRows();
     };
     if (onOrder && canOrder) {
@@ -926,6 +940,35 @@ var VAR_TABLE_HOST = {
                                     choices.indexOf(stored) >= 0 ? stored : def,
                                     function (r) { arrWrite(ui, "ref_levels", v, "ref", r); }));
     }
+};
+
+// The axis a reference is chosen on: col_vars under col%, row_vars otherwise (row% and means).
+var tabAxisVars = function (ui) {
+    var pct = ui.pct ? ui.pct.value() : "no";
+    return tabVarsOf(ui, (pct === "col") ? "col_vars" : "row_vars");
+};
+
+// The odds ratio's SECOND reference. It is a statement about the OTHER axis, and it exists only
+// while an odds ratio is in force -- so rather than a control of its own it borrows the reference
+// cell of the first variable of that axis, and says what it is in a tooltip. Every other off-axis
+// cell stays empty: a reference the table does not use must not be offered as though it did.
+var tabRef2Cell = function (ui, cell, v, pct) {
+    if (!ui.ref2 || !orIsActive(ui)) return;
+    var other = tabVarsOf(ui, (pct === "col") ? "row_vars" : "col_vars");
+    if (other.length === 0 || other[0] !== v) return;
+    var lv = cachedLevels(v);
+    var levels = (lv && lv.length) ? tabxvLevels(ui, VAR_TABLE_HOST, v, lv) : [];
+    var choices = ["first", "tot"].concat(levels);
+    var stored  = String(ui.ref2.value() || "first");
+    var labs = function (o) {
+        return (o === "first") ? "First" : (o === "tot") ? "Total" : tabxvClean(ui, o);
+    };
+    var sel = makeSelect(TABXV.sel, choices, labs,
+                         choices.indexOf(stored) >= 0 ? stored : "first",
+                         function (r) { ui.ref2.setValue(r); });
+    sel.title = "odds ratios \u2013 the " + ((pct === "col") ? "row" : "column") +
+                " each odds ratio is compared to (ref2 =)";
+    cell.appendChild(sel);
 };
 
 var renderVarTable = function (ui) { tabxvRender(ui, VAR_TABLE_HOST); };

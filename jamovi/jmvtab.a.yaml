@@ -248,7 +248,7 @@ options:
            than that will be merged into an "Others" level.
 
     - name: cleannames
-      title: "<b>cleannames =</b>"
+      title: "<b>cleannames = <i>(tidy level names)</i></b>"
       type: Bool
       default: true
       description:

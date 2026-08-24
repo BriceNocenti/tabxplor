@@ -46,7 +46,7 @@ children:
             events:
               change: ./jmvtabreg::onChange_vars
   - type: CollapseBox
-    label: <b>Model</b>
+    label: <b>Models and references</b>
     stretchFactor: 1
     collapsed: false
     children:
@@ -98,55 +98,7 @@ children:
                 cell:
                   column: 1
                   row: 0
-                stretchFactor: 1
-                children:
-                  - type: Label
-                    label: effect = <i>(where the numbers come from)</i>
-                    children:
-                      - type: RadioButton
-                        name: effect_1
-                        optionName: effect
-                        optionPart: auto
-                      - type: RadioButton
-                        name: effect_2
-                        optionName: effect
-                        optionPart: conditional
-                      - type: RadioButton
-                        name: effect_3
-                        optionName: effect
-                        optionPart: marginal
-                      - type: RadioButton
-                        name: effect_4
-                        optionName: effect
-                        optionPart: at_reference
-          - type: LayoutBox
-            margin: none
-            children:
-              - type: LayoutBox
-                cell:
-                  column: 0
-                  row: 0
-                stretchFactor: 1
-                children:
-                  - type: Label
-                    label: display = <i>(what numbers the cell show)</i>
-                    children:
-                      - type: ComboBox
-                        name: display
-              - type: LayoutBox
-                cell:
-                  column: 1
-                  row: 0
-                stretchFactor: 1
-                children:
-                  - type: CheckBox
-                    name: empirical
-                    label: empirical = <i>(show the observed effect)</i>
-              - type: LayoutBox
-                cell:
-                  column: 0
-                  row: 1
-                stretchFactor: 1
+                stretchFactor: 2
                 children:
                   - type: Label
                     label: color = <i>(what the color shows)</i>
@@ -169,6 +121,80 @@ children:
                         optionPart: no
                       # - type: ComboBox
                       #   name: color
+  # Phase 22g-iv: ONE per-variable table -- merge a factor's levels, cut a number into groups, pick
+  # the baseline and the unit -- replacing the two boxes that listed the same predictors twice. The
+  # same widget jmvtab shows; only its columns differ (jmvtabreg.js, VAR_TABLE_HOST).
+      - type: LayoutBox
+        margin: large
+        children:
+          - type: LayoutBox
+            margin: large
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 1
+            children:
+              - type: Label
+                label: "<i>Choose reference categories, merge and reorder levels, reshape numeric variables:</i>"
+                margin: large
+                children:
+                  - type: LayoutBox
+                    margin: none
+                    children:
+                      - type: CustomControl
+                        name: varTableCtrl
+                        stretchFactor: 1
+                        events:
+                          creating: ./jmvtabreg::varTableCtrl_creating
+                          updated: ./jmvtabreg::varTableCtrl_updated
+          - type: LayoutBox
+            margin: none
+            children:
+              - type: LayoutBox
+                cell:
+                  column: 0
+                  row: 1
+                stretchFactor: 1
+                children:
+                  - type: Label
+                    label: display = <i>(what numbers the cell show)</i>
+                    children:
+                      - type: ComboBox
+                        name: display
+              - type: LayoutBox
+                cell:
+                  column: 1
+                  row: 1
+                stretchFactor: 1
+                children:
+                  - type: CheckBox
+                    name: empirical
+                    label: empirical = <i>(show the observed effect)</i>
+              - type: LayoutBox
+                cell:
+                  column: 0
+                  row: 2
+                stretchFactor: 1
+                children:
+                  - type: Label
+                    label: effect = <i>(where the numbers come from)</i>
+                    children:
+                      - type: RadioButton
+                        name: effect_1
+                        optionName: effect
+                        optionPart: auto
+                      - type: RadioButton
+                        name: effect_2
+                        optionName: effect
+                        optionPart: conditional
+                      - type: RadioButton
+                        name: effect_3
+                        optionName: effect
+                        optionPart: marginal
+                      - type: RadioButton
+                        name: effect_4
+                        optionName: effect
+                        optionPart: at_reference
   - type: CollapseBox
     label: <b>Interactions</b>
     stretchFactor: 1
@@ -233,23 +259,6 @@ children:
             label: Run comparison
             events:
               change: ./jmvtabreg::run_compare_changed
-  # Phase 22g-iv: ONE per-variable table -- merge a factor's levels, cut a number into groups, pick
-  # the baseline and the unit -- replacing the two boxes that listed the same predictors twice. The
-  # same widget jmvtab shows; only its columns differ (jmvtabreg.js, VAR_TABLE_HOST).
-  - type: CollapseBox
-    label: <b>References (points of comparison) and levels</b>
-    stretchFactor: 1
-    collapsed: true
-    children:
-      - type: LayoutBox
-        margin: none
-        children:
-          - type: CustomControl
-            name: varTableCtrl
-            stretchFactor: 1
-            events:
-              creating: ./jmvtabreg::varTableCtrl_creating
-              updated: ./jmvtabreg::varTableCtrl_updated
   - type: CollapseBox
     label: <b>Significance</b>
     stretchFactor: 1
@@ -264,12 +273,9 @@ children:
               row: 0
             stretchFactor: 1
             children:
-              - type: Label
-                label: conf_level = <i>(confidence level)</i>
-                children:
-                  - type: TextBox
-                    name: conf_level
-                    format: number
+              - type: TextBox
+                name: conf_level
+                format: number
           - type: LayoutBox
             cell:
               column: 1
@@ -278,7 +284,7 @@ children:
             children:
               - type: CheckBox
                 name: stars
-                label: stars = <i>(significance stars)</i>
+                label: "<b>stars = <i>(significance stars)</i></b>"
           - type: LayoutBox
             cell:
               column: 0
@@ -332,7 +338,7 @@ children:
             stretchFactor: 1
             children:
               - type: Label
-                label: theme =
+                label: "theme = <i>(display and colors theme)</i>"
                 fitToGrid: true
                 children:
                   - type: RadioButton
@@ -386,7 +392,7 @@ children:
             children:
               - type: CheckBox
                 name: cleannames
-                label: cleannames = <i>(tidy level names)</i>
+                label: "<b>cleannames = <i>(tidy level names)</i></b>"
       - type: LayoutBox
         margin: large
         stretchFactor: 1

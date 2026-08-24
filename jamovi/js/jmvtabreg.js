@@ -442,6 +442,16 @@ var tabxvFillRest = function (ui, host, v, kind) {
     if (kind.isNumber && host.unitCell) host.unitCell(ui, c.act, v, kind);
 };
 
+// Rebuild `v`'s OPEN level list from the stored order. ⚠ Only for a change made OUTSIDE the list
+// (jmvtabreg's `ref =` cell reorders): calling it from the list's own onCommit would detach the
+// grid that handler is about to repaint.
+var tabxvRebuildList = function (ui, host, v) {
+    var c = tabxvCells[v];
+    if (!c || !c.exp || !tabxvOpen[v] || !c.setOpen) return;
+    c.exp.innerHTML = "";
+    c.setOpen(true);
+};
+
 // Repaint everything about ONE variable that a merge, a reorder or a `shape` pick can change --
 // without rebuilding the table, which is what keeps the in-place edit that triggered it alive.
 var tabxvRefreshVar = function (ui, host, v) {
@@ -799,8 +809,12 @@ var tabxmBuildList = function (ui, v, initialOrder, onOrder, canOrder, onCommit,
         // ticks disappear where the user can see them, rather than a non-contiguous group being
         // kept behind a display that shows it as separate levels.
         ticks = tabxmTicks(order, groups);
-        commit();
+        // ⚠ THE ORDER IS WRITTEN FIRST. `commit()` fires `onCommit`, and a host that derives
+        // something FROM the order (jmvtabreg: its reference IS the first level) reads the option
+        // back -- so writing it after left every such read one move behind, which is exactly what
+        // the bold first level and the `ref =` cell disagreeing looked like.
         onOrder(order);
+        commit();
         renderRows();
     };
     if (onOrder && canOrder) {
@@ -869,8 +883,8 @@ var TABX = {
     // the 4th is not, because which of outcome_level / trials it holds depends on the row.
     // ⚠ mtRow and mtHead repeat the SAME grid-template-columns: edit them together or the header
     // drifts from the rows it names.
-    mtRow:   "display:grid;grid-template-columns:minmax(70px,1fr) 150px 120px 105px;align-items:center;gap:10px;width:100%;min-width:0;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
-    mtHead:  "display:grid;grid-template-columns:minmax(70px,1fr) 150px 120px 105px;align-items:center;gap:10px;width:100%;min-width:0;box-sizing:border-box;padding:0 8px;margin:2px 6px 0;color:#000;font-weight:600;",
+    mtRow:   "display:grid;grid-template-columns:minmax(70px,1fr) 150px 120px 105px;align-items:center;gap:10px;min-width:0;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
+    mtHead:  "display:grid;grid-template-columns:minmax(70px,1fr) 150px 120px 105px;align-items:center;gap:10px;min-width:0;box-sizing:border-box;padding:0 8px;margin:2px 6px 0;color:#000;font-weight:600;",
     // the card the whole per-outcome table sits in -- the same material as the per-variable table.
     mtCard:  "margin:2px 0 6px 0;padding:2px 0 6px 0;border:1px solid rgba(0,0,0,0.16);border-radius:4px;background:rgba(0,0,0,0.06);",
     mtSel:   "width:100%;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
@@ -1014,6 +1028,7 @@ var regRefToFirst = function (ui, v, kind, r) {
     var rest = order.filter(function (l) { return runOf(l) !== r; });
     tabxvWriteOrder(ui, VAR_TABLE_HOST, v, head.concat(rest));
     arrWrite(ui, "ref_levels", v, "ref", r);
+    tabxvRebuildList(ui, VAR_TABLE_HOST, v);   // the open list must show the order it just got
     tabxvRefreshVar(ui, VAR_TABLE_HOST, v);
 };
 

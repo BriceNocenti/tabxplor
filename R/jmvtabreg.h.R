@@ -299,7 +299,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "conf_level",
                 conf_level,
                 min=0.5,
-                max=0.999,
+                max=0.9999999999,
                 default=0.95)
             private$..ci_method <- jmvcore::OptionList$new(
                 "ci_method",

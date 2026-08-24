@@ -97,7 +97,7 @@ children:
             stretchFactor: 3
             children:
               - type: Label
-                label: color = <i>(what to measure for colors)</i>
+                label: color = <i>(what measure of deviation the colors shows)</i>
                 fitToGrid: true
                 children:
                   - type: RadioButton
@@ -302,6 +302,15 @@ children:
           row: 1
         stretchFactor: 1
         children:
+          - type: Label
+            label: "<b><i>Choose reference categories, merge and reorder levels, cut numeric variables:</i></b>"
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 2
+        stretchFactor: 1
+        children:
           - type: CustomControl
             name: varTableCtrl
             stretchFactor: 1
@@ -312,7 +321,7 @@ children:
         margin: none
         cell:
           column: 0
-          row: 2
+          row: 3
         stretchFactor: 1
         children:
           - type: ComboBox
@@ -481,7 +490,7 @@ children:
         stretchFactor: 1
         children:
           - type: Label
-            label: theme = <i>(colours, or black and white)</i>
+            label: "theme = <i>(display and colors theme)</i>"
             fitToGrid: true
             children:
               - type: RadioButton

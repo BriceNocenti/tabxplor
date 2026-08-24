@@ -349,8 +349,8 @@ shape_labels <- function(bounds, side, name = NULL, sep = " ") {
 #' @noRd
 shape_band_words <- function(tag) {
   sg <- stringi::stri_unescape_unicode("\\u03c3")
-  low <- gettextf("< mean - %s", sg); below <- gettext("< mean")
-  above <- gettext("> mean"); high <- gettextf("> mean + %s", sg)
+  low <- gettextf("< -1%s", sg); below <- gettext("below mean")
+  above <- gettext("above mean"); high <- gettextf("> +1%s", sg)
   # one word per BAND: n_tag landmarks cut the range into n_tag + 1 bands, and each band is named by
   # the landmark it starts at (the first by the one it ends at).
   starts <- c(NA_character_, tag)

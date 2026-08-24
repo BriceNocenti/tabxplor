@@ -302,12 +302,12 @@ PRINT_PALETTES <- list(
       ~dir,     ~rung, ~ink,      ~bold, ~italic, ~underline, ~marks,
       "over",   1L,    "#000000", FALSE, FALSE,   "",         1L,
       "over",   2L,    "#000000", FALSE, FALSE,   "",         2L,
-      "over",   3L,    "#000000",  TRUE, FALSE,   "",         3L,
-      "over",   4L,    "#000000",  TRUE, FALSE,   "",         4L,
+      "over",   3L,    "#000000", FALSE, FALSE,   "single",   3L,
+      "over",   4L,    "#000000", FALSE, FALSE,   "single",   4L,
       "under",  1L,    "#000000", FALSE, FALSE,   "",         1L,
       "under",  2L,    "#000000", FALSE, FALSE,   "",         2L,
-      "under",  3L,    "#000000",  TRUE, FALSE,   "",         3L,
-      "under",  4L,    "#000000",  TRUE, FALSE,   "",         4L))
+      "under",  3L,    "#000000", FALSE, FALSE,   "single",   3L,
+      "under",  4L,    "#000000", FALSE, FALSE,   "single",   4L))
 )
 
 # --- print_ready: the palette a table should wear, chosen from what the table IS ---

@@ -133,7 +133,7 @@ options:
       title: effect
       type: List
       options:
-        - title: "auto <i>(follow from the measure)</i>"
+        - title: "auto <i>(follow from the measure of deviation)</i>"
           name:  auto
         - title: "conditional <i>(the model's own coefficients)</i>"
           name:  conditional
@@ -159,13 +159,13 @@ options:
       title: measure
       type: List
       options:
-        - title: "auto <i>(the family's usual measure)</i>"
+        - title: "auto <i>(the link's own measure)</i>"
           name:  auto
-        - title: "difference"
+        - title: "difference <i>(RD, diff)</i>"
           name:  difference
-        - title: "ratio"
+        - title: "ratio <i>(RR, IRR, RoM)</i>"
           name:  ratio
-        - title: "odds_ratio (OR)"
+        - title: "odds_ratio <i>(OR)</i>"
           name:  odds_ratio
         - title: "raw_coefficient <i>(log, etc.)</i>"
           name:  coefficient
@@ -191,7 +191,7 @@ options:
     # column would double an already wide table. Naming the place is expert work, and the one case
     # jamovi can then not express (a multinomial with `"column"`) is expert work too.
     - name: empirical
-      title: empirical = <i>(show the observed effect)</i>
+      title: <b>empirical = <i>(show the observed effect)</i></b>
       type: Bool
       default: true
       description:
@@ -345,10 +345,10 @@ options:
 
 # ============================ Significance ============================
     - name: conf_level
-      title: "Confidence level"
+      title: "<b>conf_level = <i>(confidence level)</i></b>"
       type: Number
       min: 0.5
-      max: 0.999
+      max: 0.9999999999
       default: 0.95
       description:
           R: >
@@ -381,11 +381,11 @@ options:
       title: ""
       type: List
       options:
-        - title: "auto <i>(the column's measure of deviation/effect)</i>"
+        - title: "measure <i>(the chosen measure of deviation)</i>"
           name:  auto
-        - title: "adjustment <i>(gap between model and observed effect)</i>"
+        - title: "adjustment <i>(gap between model/observed)</i>"
           name:  adjustment
-        - title: "between_groups <i>(gap between tab_vars groups)</i>"
+        - title: "between_groups <i>(gap between tab_vars)</i>"
           name:  between_groups
         - title: "no <i>(no colors)</i>"
           name:  "no"
@@ -567,7 +567,7 @@ options:
     # collides with it ("symbol already has a regular binding") and the analysis cannot be built at
     # all -- the same trap that made `levels` become `lvs`. It sits beside `xl_replace` instead.
     - name: xl_check
-      title: "assumption checks plots"
+      title: "assumption checks plots in Excel"
       type: Bool
       default: false
       description:

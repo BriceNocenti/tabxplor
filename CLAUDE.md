@@ -738,14 +738,30 @@ Below are the results of the maintainer’s manual reviews of different features
 
 ⚠ **`theme` is a RESERVED jamovi option name, and that was the whole bug.** jamovi injects its own global `theme` (the app's plot-styling preference) into every analysis, so ours never held a value: no radio matched, a click reverted, and `jmv_backend_theme()` read the app's word and fell through to colour. Renamed **`tab_theme`** in both panels — the same cure as `levels` → `lvs` and `check` → `xl_check`, and the third member of a class worth remembering: *a jamovi option name can be taken with no error raised anywhere.*
 
-**STILL OPEN — the maintainer's own list.**
+**A third round fixed the sync itself, and the two defects it exposed were both mine.**
 
-- **`shape =`**: rename `levels` to `all_values_to_levels` and move it last (it is the one that explodes the level count); put `sd_bands` above the quantiles (it is the row-axis default).
-- **`jmvtab` `display`**: the maintainer added `base` and `base_diff` to the `.a.yaml` — check the presets exist (`base_diff` currently FAILS `validate_display_template()`); and make `mean_sd` / `mean_cv` apply to numeric `col_vars` only, keeping the default elsewhere (they render empty on a pct column, whose `mean` is `NA`).
-- **Grey-outs**: `design_effect` with no `wt`; `color = "between_groups"` with no `tab_vars`; `color = "adjustment"` under `empirical = FALSE`.
-- **Drop-downs are slow to close** on a pick — a `.js` cost, or the panel's overall complexity?
-- **A staged comparison flickered and vanished** after a long session: the result printed for a moment, then reverted to "Model comparison staged. Click Run comparison to compute the table."
-- **Cheaper paths, unanswered**: a `jmvtabreg` reorder that does not change the reference still REFITS, where an `arrange()` on the cached table would do; and is there anything cheaper than a refit for a reference change, or for merged levels (estimate / CI)?
+⚠ **The sync was one move behind because the ORDER was written last.** `tabxmBuildList`'s `move()`
+did `commit()` (which fires `onCommit`) and only then `onOrder(order)` — so a host that DERIVES
+something from the order read the option back before it had been written. In `jmvtabreg`, whose
+reference IS the first level, that is exactly "click ▲ three times: the bold moves, the `ref =` cell
+and the table keep the old one; click ▼ and the previous state finally lands". The order is written
+FIRST now, with the reason stated where it will be read.
+
+**And the reference cell had no way back into the list.** `regRefToFirst()` wrote the new order but
+the OPEN level list was never rebuilt, so picking a baseline moved the model and left the list
+showing the old order. `tabxvRebuildList()` does it — ⚠ only for a change made OUTSIDE the list:
+calling it from the list's own `onCommit` would detach the grid that handler is about to repaint.
+
+⚠ **`jmvtab` froze at startup on `ReferenceError: tabAxisVars is not defined`, and `node --check`
+could not see it**: rewriting the host block took two helpers out with it (`tabAxisVars`,
+`tabRef2Cell`), and a `.js` that PARSES but calls a function that is gone leaves the options pane
+loading forever, with no R-side symptom at all. Both are restored, and the suite gained the cheap
+static half of what a linter would do: **every identifier a `.js` CALLS must be declared somewhere
+in it** (or be a known global). Verified by re-breaking it — the gate names the file and the missing
+function. It is deliberately permissive about scope; the one thing worth catching is a top-level
+helper that has vanished.
+
+**The Model table overflowed its own right margin** — `width: 100%` PLUS `margin: 4px 6px` is 100% of the container plus 12px. Both `mtRow` and `mtHead` drop the width and let the block fill what the margins leave, so the row now ends where the card does.
 
 
 #### Phase 22g-v — the interactions picker, folded into the model builder

@@ -317,3 +317,49 @@ test_that("every CustomControl is wired to handlers its .js exports", {
                                 " but no CustomControl of that name is declared"))
   }
 })
+
+
+# Phase 22g-iv: `node --check` proves the .js PARSES; it cannot see a function that is CALLED and
+# never declared -- and that is the failure a refactor produces (a rewritten span silently took two
+# helpers with it, and the panel froze on `ReferenceError: tabAxisVars is not defined` with the whole
+# options pane stuck loading, i.e. no R-side symptom at all). This is the cheap static half:
+# every identifier the file CALLS must be declared somewhere in it, or be a known global.
+# ⚠ Deliberately permissive -- it collects `var` names anywhere, so a local satisfies a call from
+# another function. It is aimed at the one thing worth catching: a top-level helper that is gone.
+JS_GLOBALS <- c("utils", "document", "window", "setTimeout", "clearTimeout", "require", "module",
+                "console", "Array", "Object", "String", "Number", "Boolean", "Math", "JSON",
+                "RegExp", "Date", "isNaN", "parseInt", "parseFloat", "Promise", "Error",
+                "encodeURIComponent", "decodeURIComponent")
+JS_KEYWORDS <- c("function", "if", "for", "while", "switch", "catch", "return", "typeof", "new",
+                 "else", "do", "try", "in", "of", "delete", "void", "instanceof", "throw")
+
+test_that("every function the jamovi .js calls is declared in it", {
+  for (an in c("jmvtab", "jmvtabreg")) {
+    f <- testthat::test_path("..", "..", "jamovi", "js", paste0(an, ".js"))
+    skip_if_not(file.exists(f), "jamovi/ is not shipped in a built package")
+    src <- paste(readLines(f, warn = FALSE), collapse = "\n")
+    # strip line comments and strings, so a word inside prose or a literal is not a "call"
+    code <- gsub("//[^\n]*", "", src)
+    code <- gsub('"(\\\\.|[^"\\\\])*"|\'(\\\\.|[^\'\\\\])*\'', '""', code, perl = TRUE)
+
+    declared <- c(
+      gsub("^var\\s+", "", regmatches(code, gregexpr("var\\s+[A-Za-z_$][A-Za-z0-9_$]*",
+                                                     code, perl = TRUE))[[1]]),
+      # function parameters: everything inside each `function (...)` head
+      unlist(lapply(regmatches(code, gregexpr("function\\s*\\([^)]*\\)", code, perl = TRUE))[[1]],
+                    function(h) {
+                      hh <- sub("^function", "", h)      # ⚠ match ON the substring, not on `h`
+                      regmatches(hh, gregexpr("[A-Za-z_$][A-Za-z0-9_$]*", hh, perl = TRUE))[[1]]
+                    }))
+    )
+    declared <- unique(trimws(declared))
+
+    calls <- regmatches(code, gregexpr("(^|[^.\\w$])[A-Za-z_$][A-Za-z0-9_$]*\\s*\\(",
+                                       code, perl = TRUE))[[1]]
+    calls <- unique(gsub("[^A-Za-z0-9_$]", "", calls))
+    calls <- setdiff(calls, c(JS_KEYWORDS, JS_GLOBALS, declared, ""))
+    expect_identical(calls, character(0),
+                     info = paste0(an, ".js calls but never declares: ",
+                                   paste(calls, collapse = ", ")))
+  }
+})
