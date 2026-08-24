@@ -167,7 +167,7 @@ options:
           name:  ratio
         - title: "odds_ratio (OR)"
           name:  odds_ratio
-        - title: "coefficient <i>(the model's own, un-transformed)</i>"
+        - title: "raw_coefficient <i>(log, etc.)</i>"
           name:  coefficient
       default: auto
       description:
@@ -225,12 +225,16 @@ options:
       title: na
       type: List
       options:
-        - title: "one population per outcome (recommended)"
+        - title: "drop_by_outcome <i>(one population per outcome)</i>"
           name:  drop_by_outcome
-        - title: "each model on its own complete cases"
+        - title: "drop_by_model <i>(each model on its own complete cases)</i>"
           name:  drop_by_model
-        - title: "one population for the whole analysis"
+        - title: "drop_all <i>(one population for the whole analysis)</i>"
           name:  drop_all
+        - title: "keep_for_predictors <i>(predictors NA to real levels)</i>"
+          name:  "keep_for_predictors"
+
+
       default: drop_by_outcome
       description:
           R: >
@@ -336,9 +340,9 @@ options:
       title: ci_method
       type: List
       options:
-        - title: "Wald"
+        - title: "wald = <i>(Wald)</i>"
           name:  wald
-        - title: "profile-likelihood"
+        - title: "profile =  <i>(profile-likelihood)</i>"
           name:  profile
       default: wald
       description:
@@ -356,17 +360,17 @@ options:
            either way).
 
     - name: color
-      title: color
+      title: ""
       type: List
       options:
-        - title: "auto <i>(the column's own effect size)</i>"
+        - title: "auto <i>(the column's measure of deviation/effect)</i>"
           name:  auto
+        - title: "adjustment <i>(gap between model and observed effect)</i>"
+          name:  adjustment
+        - title: "between_groups <i>(gap between tab_vars groups)</i>"
+          name:  between_groups
         - title: "no <i>(no colors)</i>"
           name:  "no"
-        - title: "adjustment <i>(the gap between the model and the crude effect)</i>"
-          name:  adjustment
-        - title: "between_groups <i>(the gap between the split groups)</i>"
-          name:  between_groups
       default: auto
       description:
           R: >
@@ -401,29 +405,27 @@ options:
 
 # ==================== Missing values and display ====================
     - name: display
-      title: display
+      title: ""
       type: List
       options:
         - title: "auto"
           name:  auto
         - title: "est <i>(the estimate)</i>"
           name:  est
-        - title: "est_ci <i>(the estimate with its interval)</i>"
+        - title: "est_ci <i>(estimate + interval)</i>"
           name:  est_ci
-        - title: "est_base <i>(the estimate, adjusted prediction in bracket)</i>"
-          name:  est_base
-        - title: "est_coef <i>(the estimate, coefficient in bracket)</i>"
+        - title: "est_coef <i>(est. + raw coeff)</i>"
           name:  est_coef
-        - title: "base_est_mdiff <i>(the estimate, its difference form in bracket)</i>"
-          name:  base_est_mdiff
-        - title: "base_est_mratio <i>(the estimate, its ratio form in bracket)</i>"
-          name:  base_est_mratio
-        - title: "base_est <i>(the adjusted prediction, estimate in bracket)</i>"
-          name:  base_est
-        - title: "base <i>(adjusted predictions alone)</i>"
+        - title: "base <i>(adjusted pct/mean, alone)</i>"
           name:  base
-        - title: "base_ratio <i>(the level, its ratio to the reference in bracket)</i>"
-          name:  base_ratio
+        - title: "est_base <i>(est. + adj. pct/mean)</i>"
+          name:  est_base
+        - title: "base_est <i>(adj. pct/mean + est.)</i>"
+          name:  base_est
+        - title: "base_est_mdiff <i>(+ marg. diff)</i>"
+          name:  base_est_mdiff
+        - title: "base_est_mratio <i>(+ marg ratio)</i>"
+          name:  base_est_mratio
       default: auto
       description:
           R: >
@@ -434,7 +436,7 @@ options:
            \code{"auto"} keeps the built-in layout.
 
     - name: "n"   # quoted: YAML 1.1 reads a bare `n` as the boolean FALSE
-      title: n
+      title: ""
       type: List
       options:
         - name: range
@@ -472,7 +474,7 @@ options:
       title: theme
       type: List
       options:
-        - title: "light <i>(colours)</i>"
+        - title: "light <i>(colors)</i>"
           name:  light
         - title: "print_ready <i>(black and white, for publication)</i>"
           name:  print_ready

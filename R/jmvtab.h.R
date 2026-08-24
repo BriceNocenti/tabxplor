@@ -15,7 +15,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             color_signif = "ignore",
             test = FALSE,
             anova = "welch",
-            design_effect = FALSE,
             na = "keep",
             lvs = "all",
             other_if_less_than = 0,
@@ -30,6 +29,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             ci = "auto",
             conf_level = 0.95,
             stars = FALSE,
+            design_effect = FALSE,
             ci_method_cell = "wilson",
             ci_method_diff = "newcombe",
             ci_method_mean_diff = "welch",
@@ -135,10 +135,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "welch",
                     "classic"),
                 default="welch")
-            private$..design_effect <- jmvcore::OptionBool$new(
-                "design_effect",
-                design_effect,
-                default=FALSE)
             private$..na <- jmvcore::OptionList$new(
                 "na",
                 na,
@@ -270,6 +266,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "stars",
                 stars,
                 default=FALSE)
+            private$..design_effect <- jmvcore::OptionBool$new(
+                "design_effect",
+                design_effect,
+                default=FALSE)
             private$..ci_method_cell <- jmvcore::OptionList$new(
                 "ci_method_cell",
                 ci_method_cell,
@@ -332,21 +332,23 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 display,
                 options=list(
                     "auto",
-                    "n",
-                    "wn",
-                    "pct",
+                    "base",
                     "base_ci",
                     "ci",
                     "diff",
                     "ratio",
                     "or",
+                    "base_diff",
+                    "base_ratio",
                     "or_base",
                     "base_or",
-                    "base_ratio",
-                    "ctr",
+                    "n",
+                    "wn",
+                    "pct",
                     "mean",
                     "mean_sd",
                     "mean_cv",
+                    "ctr",
                     "var"),
                 default="auto")
             private$..n <- jmvcore::OptionList$new(
@@ -419,7 +421,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..color_signif)
             self$.addOption(private$..test)
             self$.addOption(private$..anova)
-            self$.addOption(private$..design_effect)
             self$.addOption(private$..na)
             self$.addOption(private$..lvs)
             self$.addOption(private$..other_if_less_than)
@@ -434,6 +435,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..ci)
             self$.addOption(private$..conf_level)
             self$.addOption(private$..stars)
+            self$.addOption(private$..design_effect)
             self$.addOption(private$..ci_method_cell)
             self$.addOption(private$..ci_method_diff)
             self$.addOption(private$..ci_method_mean_diff)
@@ -465,7 +467,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         color_signif = function() private$..color_signif$value,
         test = function() private$..test$value,
         anova = function() private$..anova$value,
-        design_effect = function() private$..design_effect$value,
         na = function() private$..na$value,
         lvs = function() private$..lvs$value,
         other_if_less_than = function() private$..other_if_less_than$value,
@@ -480,6 +481,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ci = function() private$..ci$value,
         conf_level = function() private$..conf_level$value,
         stars = function() private$..stars$value,
+        design_effect = function() private$..design_effect$value,
         ci_method_cell = function() private$..ci_method_cell$value,
         ci_method_diff = function() private$..ci_method_diff$value,
         ci_method_mean_diff = function() private$..ci_method_mean_diff$value,
@@ -510,7 +512,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..color_signif = NA,
         ..test = NA,
         ..anova = NA,
-        ..design_effect = NA,
         ..na = NA,
         ..lvs = NA,
         ..other_if_less_than = NA,
@@ -525,6 +526,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..ci = NA,
         ..conf_level = NA,
         ..stars = NA,
+        ..design_effect = NA,
         ..ci_method_cell = NA,
         ..ci_method_diff = NA,
         ..ci_method_mean_diff = NA,
@@ -570,8 +572,7 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 title="",
                 width=1080,
                 height=1,
-                renderFun=".plot",
-                visible=FALSE))}))
+                renderFun=".plot"))}))
 
 jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     "jmvtabBase",
@@ -645,11 +646,6 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param anova Which F statistic to display for numeric column variables when
 #'   the test is on: Welch's F (default, does not assume equal variances) or the
 #'   classic pooled F.
-#' @param design_effect For a WEIGHTED table, make the confidence intervals,
-#'   the significance stars, the colour thresholds AND the p-values account for
-#'   the unequal weighting (the exact flat survey-design variance) instead of
-#'   using the raw number of respondents. Sets options(tabxplor.design_effect).
-#'   Off by default; it moves every interval in the table, not only the p-value.
 #' @param na The policy to adopt with missing values. It must be a single
 #'   string.  \itemize{    \item \code{na = "keep"}: by default, prints
 #'   \code{NA}'s as explicit \code{"NA"} level.    \item \code{na = "drop"}:
@@ -712,6 +708,11 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   \code{**} \code{***}) for the difference of each cell from its reference.
 #'   Read from the same confidence interval that is displayed, so stars and
 #'   bracket always agree.
+#' @param design_effect For a WEIGHTED table, make the confidence intervals,
+#'   the significance stars, the colour thresholds AND the p-values account for
+#'   the unequal weighting (the exact flat survey-design variance) instead of
+#'   using the raw number of respondents. Sets options(tabxplor.design_effect).
+#'   Off by default; it moves every interval in the table, not only the p-value.
 #' @param ci_method_cell The proportion confidence-interval method for
 #'   \code{ci = "cell"}: \code{"wilson"} (the score interval, default) or
 #'   \code{"wald"} (the normal approximation).
@@ -794,7 +795,6 @@ jmvtab <- function(
     color_signif = "ignore",
     test = FALSE,
     anova = "welch",
-    design_effect = FALSE,
     na = "keep",
     lvs = "all",
     other_if_less_than = 0,
@@ -809,6 +809,7 @@ jmvtab <- function(
     ci = "auto",
     conf_level = 0.95,
     stars = FALSE,
+    design_effect = FALSE,
     ci_method_cell = "wilson",
     ci_method_diff = "newcombe",
     ci_method_mean_diff = "welch",
@@ -857,7 +858,6 @@ jmvtab <- function(
         color_signif = color_signif,
         test = test,
         anova = anova,
-        design_effect = design_effect,
         na = na,
         lvs = lvs,
         other_if_less_than = other_if_less_than,
@@ -872,6 +872,7 @@ jmvtab <- function(
         ci = ci,
         conf_level = conf_level,
         stars = stars,
+        design_effect = design_effect,
         ci_method_cell = ci_method_cell,
         ci_method_diff = ci_method_diff,
         ci_method_mean_diff = ci_method_mean_diff,

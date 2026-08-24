@@ -189,7 +189,8 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 options=list(
                     "drop_by_outcome",
                     "drop_by_model",
-                    "drop_all"),
+                    "drop_all",
+                    "keep_for_predictors"),
                 default="drop_by_outcome")
             private$..run_compare <- jmvcore::OptionAction$new(
                 "run_compare",
@@ -297,9 +298,9 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 color,
                 options=list(
                     "auto",
-                    "no",
                     "adjustment",
-                    "between_groups"),
+                    "between_groups",
+                    "no"),
                 default="auto")
             private$..color_signif <- jmvcore::OptionList$new(
                 "color_signif",
@@ -316,13 +317,12 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "auto",
                     "est",
                     "est_ci",
-                    "est_base",
                     "est_coef",
-                    "base_est_mdiff",
-                    "base_est_mratio",
-                    "base_est",
                     "base",
-                    "base_ratio"),
+                    "est_base",
+                    "base_est",
+                    "base_est_mdiff",
+                    "base_est_mratio"),
                 default="auto")
             private$..n <- jmvcore::OptionList$new(
                 "n",
@@ -540,8 +540,7 @@ jmvtabregResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 title="",
                 width=1080,
                 height=1,
-                renderFun=".plot",
-                visible=FALSE))}))
+                renderFun=".plot"))}))
 
 jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     "jmvtabregBase",

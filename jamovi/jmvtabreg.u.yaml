@@ -45,15 +45,11 @@ children:
             isTarget: true
             events:
               change: ./jmvtabreg::onChange_vars
-
   - type: CollapseBox
     label: <b>Model</b>
     stretchFactor: 1
     collapsed: false
     children:
-      # Per-outcome Model table: a header row (outcome | family = | link =), then one row per
-      # outcome -> [name] [family] [link] [outcome_level / trials]. The 4th cell is unheaded: it
-      # shows a level drop-down or a `n trials` box, which read for themselves.
       - type: LayoutBox
         margin: none
         children:
@@ -62,20 +58,17 @@ children:
             stretchFactor: 1
             events:
               creating: ./jmvtabreg::modelTableCtrl_creating
-              updated:  ./jmvtabreg::modelTableCtrl_updated
+              updated: ./jmvtabreg::modelTableCtrl_updated
       - type: LayoutBox
         margin: large
         children:
-          # THE CASCADE. Its left half -- `family` (what kind of number the outcome is) and `link`
-          # (which measure the MODEL estimates) -- is a question about each OUTCOME, so it lives in
-          # the per-outcome table above, one headed column each. What is left here is scalar:
-          # `measure` (which measure is REPORTED) then `effect` (where the number comes from).
-          # "auto" everywhere means follow from the left, so an ordinary user touches nothing.
           - type: LayoutBox
             margin: none
             children:
               - type: LayoutBox
-                cell: { column: 0, row: 0 }
+                cell:
+                  column: 0
+                  row: 0
                 stretchFactor: 1
                 children:
                   - type: Label
@@ -102,7 +95,9 @@ children:
                         optionName: measure
                         optionPart: coefficient
               - type: LayoutBox
-                cell: { column: 1, row: 0 }
+                cell:
+                  column: 1
+                  row: 0
                 stretchFactor: 1
                 children:
                   - type: Label
@@ -124,47 +119,61 @@ children:
                         name: effect_4
                         optionName: effect
                         optionPart: at_reference
-          # `display` and `empirical` share the cascade's two columns above, so the box reads as one
-          # grid: what the cell shows, and whether the observed effect stands beside it.
           - type: LayoutBox
             margin: none
             children:
               - type: LayoutBox
-                cell: { column: 0, row: 0 }
+                cell:
+                  column: 0
+                  row: 0
                 stretchFactor: 1
                 children:
                   - type: Label
-                    label: display = <i>(cell layout)</i>
+                    label: display = <i>(what numbers the cell show)</i>
                     children:
                       - type: ComboBox
                         name: display
               - type: LayoutBox
-                cell: { column: 1, row: 0 }
+                cell:
+                  column: 1
+                  row: 0
                 stretchFactor: 1
                 children:
                   - type: CheckBox
                     name: empirical
                     label: empirical = <i>(show the observed effect)</i>
-              # `color` comes last because its main use -- "adjustment" -- is a statement ABOUT the
-              # observed effect above it.
               - type: LayoutBox
-                cell: { column: 0, row: 1 }
+                cell:
+                  column: 0
+                  row: 1
                 stretchFactor: 1
                 children:
                   - type: Label
-                    label: color = <i>(what the colours measure)</i>
+                    label: color = <i>(what the color shows)</i>
                     children:
-                      - type: ComboBox
-                        name: color
-
+                      - type: RadioButton
+                        name: color_1
+                        optionName: color
+                        optionPart: auto
+                      - type: RadioButton
+                        name: color_2
+                        optionName: color
+                        optionPart: adjustment
+                      - type: RadioButton
+                        name: color_3
+                        optionName: color
+                        optionPart: between_groups
+                      - type: RadioButton
+                        name: color_4
+                        optionName: color
+                        optionPart: no
+                      # - type: ComboBox
+                      #   name: color
   - type: CollapseBox
     label: <b>Interactions</b>
     stretchFactor: 1
     collapsed: true
     children:
-      # An interaction is a PREDICTOR whose levels are combinations, so it is written INTO
-      # `predictors` as `a*b` -- there is no second argument. This picker fills the hidden
-      # `crosses` array, which jmvtab_reg_cross_keys() folds into that one argument.
       - type: LayoutBox
         margin: none
         children:
@@ -173,14 +182,12 @@ children:
             stretchFactor: 1
             events:
               creating: ./jmvtabreg::crossPickerCtrl_creating
-              updated:  ./jmvtabreg::crossPickerCtrl_updated
-
+              updated: ./jmvtabreg::crossPickerCtrl_updated
   - type: CollapseBox
     label: <b>Model comparison (+ predictor subsets)</b>
     stretchFactor: 1
     collapsed: true
     children:
-      # The model-builder "+" cards first, then the comparison test, then how missing values are dropped.
       - type: LayoutBox
         margin: none
         children:
@@ -189,15 +196,14 @@ children:
             stretchFactor: 1
             events:
               creating: ./jmvtabreg::modelBuilderCtrl_creating
-              updated:  ./jmvtabreg::modelBuilderCtrl_updated
-      # `stats =` has no control any more: the comparison test is tab_reg()'s own default with two
-      # or more subsets (22g-ii). What is left to ask is how missing values are dropped, which is
-      # what decides whether the models share a population and can be tested at all.
+              updated: ./jmvtabreg::modelBuilderCtrl_updated
       - type: LayoutBox
         margin: large
         children:
           - type: LayoutBox
-            cell: { column: 0, row: 0 }
+            cell:
+              column: 0
+              row: 0
             stretchFactor: 1
             children:
               - type: Label
@@ -215,7 +221,10 @@ children:
                     name: na_3
                     optionName: na
                     optionPart: drop_all
-      # Phase h: with >=2 models the table computes only on this click (no live refit while picking).
+                  - type: RadioButton
+                    name: na_4
+                    optionName: na
+                    optionPart: keep_for_predictors
       - type: LayoutBox
         margin: large
         children:
@@ -224,10 +233,6 @@ children:
             label: Run comparison
             events:
               change: ./jmvtabreg::run_compare_changed
-
-  # The two questions a predictor raises were one box; they are the SAME TWO BOXES jmvtab has now,
-  # driven by the same widgets. ⚠ One deliberate difference: the level list here has no reorder bar,
-  # because tab_reg() has no `levels_order` argument -- a move would write nowhere.
   - type: CollapseBox
     label: <b>Reorder, merge and cut levels</b>
     stretchFactor: 1
@@ -242,7 +247,6 @@ children:
             events:
               creating: ./jmvtabreg::levelsCtrl_creating
               updated: ./jmvtabreg::levelsCtrl_updated
-
   - type: CollapseBox
     label: <b>References (points of comparison)</b>
     stretchFactor: 1
@@ -257,40 +261,43 @@ children:
             events:
               creating: ./jmvtabreg::refPickerCtrl_creating
               updated: ./jmvtabreg::refPickerCtrl_updated
-
   - type: CollapseBox
     label: <b>Significance</b>
     stretchFactor: 1
     collapsed: true
     children:
-      # `color` moved to the Model box (its main use, "adjustment", is a statement about the
-      # observed effect declared there). Two equal columns, as in jmvtab's own interval box.
       - type: LayoutBox
         margin: large
         children:
           - type: LayoutBox
-            cell: { column: 0, row: 0 }
+            cell:
+              column: 0
+              row: 0
             stretchFactor: 1
             children:
               - type: Label
-                label: "conf_level = <i>(confidence level)</i>"
+                label: conf_level = <i>(confidence level)</i>
                 children:
                   - type: TextBox
                     name: conf_level
                     format: number
           - type: LayoutBox
-            cell: { column: 1, row: 0 }
+            cell:
+              column: 1
+              row: 0
             stretchFactor: 1
             children:
               - type: CheckBox
                 name: stars
                 label: stars = <i>(significance stars)</i>
           - type: LayoutBox
-            cell: { column: 0, row: 1 }
+            cell:
+              column: 0
+              row: 1
             stretchFactor: 1
             children:
               - type: Label
-                label: ci_method = <i>(conf. interval)</i>
+                label: ci_method = <i>(confidence intervals)</i>
                 children:
                   - type: RadioButton
                     name: ci_method_1
@@ -300,9 +307,8 @@ children:
                     name: ci_method_2
                     optionName: ci_method
                     optionPart: profile
-      # Row 3: the significance policy across the full width (greyed out when colours are off).
       - type: LayoutBox
-        margin: large
+        margin: none
         children:
           - type: Label
             label: color_signif = <i>(significance policy)</i>
@@ -322,10 +328,6 @@ children:
                 optionName: color_signif
                 optionPart: guaranteed_effect
                 enable: (!(color:no))
-
-  # The same two-column grid as jmvtab's own "Other formatting" box, and in the same order: the
-  # whole-table look, then the wrapping, then the labels. `display` and `color` left for the Model
-  # box, where the questions they answer are asked.
   - type: CollapseBox
     label: <b>Other formatting</b>
     stretchFactor: 1
@@ -335,11 +337,13 @@ children:
         margin: large
         children:
           - type: LayoutBox
-            cell: { column: 0, row: 0 }
+            cell:
+              column: 0
+              row: 0
             stretchFactor: 1
             children:
               - type: Label
-                label: theme = <i>(colours, or black and white)</i>
+                label: theme =
                 fitToGrid: true
                 children:
                   - type: RadioButton
@@ -351,43 +355,49 @@ children:
                     optionName: theme
                     optionPart: print_ready
           - type: LayoutBox
-            cell: { column: 0, row: 1 }
+            cell:
+              column: 0
+              row: 1
             stretchFactor: 1
             children:
               - type: Label
-                label: "wrap_rows = <i>(nb chars for line break)</i>"
+                label: wrap_rows = <i>(nb chars for line break)</i>
                 children:
                   - type: TextBox
                     name: wrap_rows
                     format: number
           - type: LayoutBox
-            cell: { column: 1, row: 1 }
+            cell:
+              column: 1
+              row: 1
             stretchFactor: 1
             children:
               - type: Label
-                label: "wrap_cols = <i>(nb chars for line break)</i>"
+                label: wrap_cols = <i>(nb chars for line break)</i>
                 children:
                   - type: TextBox
                     name: wrap_cols
                     format: number
           - type: LayoutBox
-            cell: { column: 0, row: 2 }
+            cell:
+              column: 0
+              row: 2
             stretchFactor: 1
             children:
               - type: Label
-                label: n = <i>(N per predictor level)</i>
+                label: n = <i>(counts per predictor level)</i>
                 children:
                   - type: ComboBox
-                    name: "n"
+                    name: 'n'
           - type: LayoutBox
-            cell: { column: 1, row: 2 }
+            cell:
+              column: 1
+              row: 2
             stretchFactor: 1
             children:
               - type: CheckBox
                 name: cleannames
                 label: cleannames = <i>(tidy level names)</i>
-      # Phase 15c / h: the below-table note is a full-width, auto-grow <textarea> (CustomControl driving
-      # the hidden `subtext`). stretchFactor on the row so the box fills the width to its right.
       - type: LayoutBox
         margin: large
         stretchFactor: 1
@@ -402,14 +412,10 @@ children:
                 events:
                   creating: ./jmvtabreg::subtextCtrl_creating
                   updated: ./jmvtabreg::subtextCtrl_updated
-
-  # Phase o: the rule that sets the (outside-the-collapse-hierarchy) Export block apart is drawn by
-  # js/jmvtab.js styleExportSep() (a border-top on this block) -- a former <hr> Label showed as raw text.
   - type: LayoutBox
     margin: large
     stretchFactor: 1
     children:
-      # Row 1: the Export action, the Format selector, the Replace-existing toggle.
       - type: LayoutBox
         margin: none
         children:
@@ -434,7 +440,6 @@ children:
                 name: export_format
                 events:
                   change: ./jmvtabreg::export_format_changed
-          # Excel only: reg_check_plots() drawn under each table (tab_xl(check = "auto")).
           - type: LayoutBox
             cell:
               column: 2
@@ -445,10 +450,6 @@ children:
                 name: xl_check
                 label: assumption checks plots
                 enable: (export_format:excel)
-      # Row 2: ONE full-width path line -- "Path:" <folder> " / " <filename> <.ext>.
-      #   folder : filename width = 3 : 2. This ratio only holds because js injectExportCss() collapses
-      #   the TextBoxes' ~200px max-content floor -- otherwise both cells bottom out at 200px (see the js).
-      #   The label / separator / extension cells are stretch 0, so they take only their text width.
       - type: LayoutBox
         margin: none
         children:
@@ -483,14 +484,12 @@ children:
                 events:
                   creating: ./jmvtabreg::extCtrl_creating
                   updated: ./jmvtabreg::extCtrl_updated
-      # Row 3: the overwrite rule.
       - type: LayoutBox
         margin: none
         children:
           - type: CheckBox
             name: xl_replace
             label: Replace existing file
-       # Row 4: a discreet, right-aligned "default path" reset.
       - type: LayoutBox
         margin: none
         children:
@@ -499,5 +498,3 @@ children:
             label: Reset default path
             events:
               change: ./jmvtabreg::resetPath_changed
-
-

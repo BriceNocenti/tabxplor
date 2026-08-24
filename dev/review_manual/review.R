@@ -3,7 +3,7 @@
 
 library(devtools)
 load_all()
-options(tabxplor.parallel = 8, tabxplor.cleannames = TRUE, tabxplor.print = "html") # options(tabxplor.print = "console")
+options(tabxplor.parallel = "auto", tabxplor.cleannames = TRUE, tabxplor.print = "html") # options(tabxplor.print = "console")
 
 gss_simple <- gss_cat_data_formatting() # gss_simple with merged levels, and first levels chosen for reference (colors, regressions)
 
@@ -972,16 +972,16 @@ tab_reg(gss_simple, outcome = "married", tab_vars = "race",
 # black and white publication ready tables ----
 load_all()
 
-# options(tabxplor.theme = "light", tabxplor.print = "html", tabxplor.parallel = 8, tabxplor.cleannames = TRUE) 
+# options(tabxplor.theme = "light", tabxplor.print = "html", tabxplor.parallel = 8, tabxplor.cleannames = TRUE) # options(tabxplor.print = "console")
 # tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
 #         family = "gaussian", empirical=TRUE
 # )
 
 options(tabxplor.theme = "print_ready", tabxplor.print = "html", tabxplor.parallel = 8, tabxplor.cleannames = TRUE)
-tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all", 
+tab(gss_simple, c(relig, age), c(party3, tvhours), pct = "row", na = "drop", 
    color = "difference", color_signif = "grey_non_signif",
 )
-tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all", 
+tab(gss_simple, c(relig, age), c(party3, tvhours), pct = "row", na = "drop", 
    color = TRUE, color_signif = "grey_non_signif",
 )
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),

@@ -29,5 +29,5 @@ items:
       width: 1080
       height: 1
       renderFun: .plot
-      visible: false
+      # visible: false
 ...

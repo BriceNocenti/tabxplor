@@ -196,26 +196,13 @@ children:
           - type: LayoutBox
             margin: none
             cell:
-              column: 1
-              row: 0
-            stretchFactor: 1
-            children:
-              - type: Label
-                label: anova = <i>(which F statistic)</i>
-                children:
-                  - type: ComboBox
-                    name: anova
-                    enable: (test)
-          - type: LayoutBox
-            margin: none
-            cell:
               column: 0
               row: 1
             stretchFactor: 1
             children:
-              - type: CheckBox
-                name: design_effect
-                label: "design_effect = <i>(design effect of the weights)</i>"
+              - type: ComboBox
+                name: anova
+                enable: (test)
   - type: CollapseBox
     label: <b>Levels and missing values</b>
     stretchFactor: 1
@@ -283,7 +270,7 @@ children:
             stretchFactor: 1
             children:
               - type: TextBox
-                name: n_min
+                name: other_if_less_than
                 format: number
           - type: LayoutBox
             margin: none
@@ -294,8 +281,18 @@ children:
             children:
               - type: CheckBox
                 name: cleannames
-
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 0
+              row: 2
+            stretchFactor: 1
+            children:
+              - type: TextBox
+                name: n_min
+                format: number
       - type: LayoutBox
+        margin: large
         cell:
           column: 0
           row: 1
@@ -311,12 +308,7 @@ children:
                 events:
                   creating: ./jmvtab::levelsCtrl_creating
                   updated: ./jmvtab::levelsCtrl_updated
-      - type: LayoutBox
-        margin: none
-        children:
-          - type: TextBox
-            name: other_if_less_than
-            format: number
+
   - type: CollapseBox
     label: <b>References (points of comparison)</b>
     stretchFactor: 1
@@ -336,7 +328,7 @@ children:
         children:
           - type: ComboBox
             name: comp
-            label: comp = <i>(reference table with tab_vars)</i>
+            label: comp = <i>(reference table, with tab_vars)</i>
   - type: CollapseBox
     label: <b>Confidence intervals</b>
     stretchFactor: 1
@@ -409,6 +401,17 @@ children:
                   - type: CheckBox
                     name: stars
                     enable: (ci:ref || ci:auto)
+          - type: LayoutBox
+            margin: large
+            cell:
+              column: 0
+              row: 2
+            stretchFactor: 1
+            children:
+              - type: CheckBox
+                name: design_effect
+                label: "<b>design_effect = <i>(design effect of the weights)</i></b>"
+
       # The interval METHODS were a nested CollapseBox inside a CollapseBox -- two clicks to reach
       # four drop-downs. They are in the parent now, behind a bold heading; the `margin: large` on
       # this block IS the blank line above it (a spacer node would be an empty container, which the

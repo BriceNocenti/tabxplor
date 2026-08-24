@@ -84,7 +84,7 @@ options:
           name:  col
         - title: all
           name:  all
-        - title: all_tabs
+        - title: "all_tabs (with tab_vars)"
           name:  all_tabs
       default: "no"
       description:
@@ -105,7 +105,7 @@ options:
           name:  "no"
         - title: "auto <i>(smart default: difference + ratio)</i>"
           name:  auto
-        - title: "difference <i>(from the total, or the reference cell)</i>"
+        - title: "difference <i>(from total, or reference cell)</i>"
           name:  difference
         - title: "ratio <i>(relative risk, or mean ratio)</i>"
           name:  ratio
@@ -171,7 +171,7 @@ options:
            Also enables colouring cells by their contribution to variance.
 
     - name: anova
-      title: "ANOVA F (numeric)"
+      title: "anova = <i>(which test for numeric variables ?)</i>"
       type: List
       options:
         - title: "Welch <i>(unequal variances)</i>"
@@ -183,18 +183,6 @@ options:
           R: >
            Which F statistic to display for numeric column variables when the test is on:
            Welch's F (default, does not assume equal variances) or the classic pooled F.
-
-    - name: design_effect
-      title: design_effect
-      type: Bool
-      default: false
-      description:
-          R: >
-           For a WEIGHTED table, make the confidence intervals, the significance stars, the colour
-           thresholds AND the p-values account for the unequal weighting (the exact flat survey-design
-           variance) instead of using the raw number of respondents. Sets
-           options(tabxplor.design_effect). Off by default; it moves every interval in the table, not
-           only the p-value.
 
 
 # Missing values and levels
@@ -462,6 +450,18 @@ options:
            the difference of each cell from its reference. Read from the same confidence interval
            that is displayed, so stars and bracket always agree.
 
+    - name: design_effect
+      title: design_effect
+      type: Bool
+      default: false
+      description:
+          R: >
+           For a WEIGHTED table, make the confidence intervals, the significance stars, the colour
+           thresholds AND the p-values account for the unequal weighting (the exact flat survey-design
+           variance) instead of using the raw number of respondents. Sets
+           options(tabxplor.design_effect). Off by default; it moves every interval in the table, not
+           only the p-value.
+
     - name: ci_method_cell
       title: ""
       type: List
@@ -499,11 +499,11 @@ options:
       title: ""
       type: List
       options:
-        - title: "welch <i>(unequal variances, default)</i>"
+        - title: "welch <i>(unequal variances)</i>"
           name:  welch
-        - title: "student <i>(pooled variance, the two groups)</i>"
+        - title: "student <i>(pooled variance, 2 groups)</i>"
           name:  student
-        - title: "ols <i>(pooled over all levels, as a linear model)</i>"
+        - title: "ols <i>(pooled over all levels)</i>"
           name:  ols
       default: welch
       description:
@@ -517,7 +517,7 @@ options:
       title: ""
       type: List
       options:
-        - title: "robust <i>(each group's variance, default)</i>"
+        - title: "robust <i>(each group's variance)</i>"
           name:  robust
         - title: "quasipoisson <i>(dispersion-scaled)</i>"
           name:  quasipoisson
@@ -597,36 +597,40 @@ options:
       options:
         - title: "auto"
           name:  auto
+        - title: "base <i>(pct or mean)</i>"
+          name:  base
+        - title: "base_ci <i>(base + interval)</i>"
+          name:  base_ci
+        - title: "ci <i>(interval alone)</i>"
+          name:  ci
+        - title: "diff <i>(difference to ref)</i>"
+          name:  diff
+        - title: "ratio <i>(ratio to ref)</i>"
+          name:  ratio
+        - title: "or <i>(odds ratios)</i>"
+          name:  or
+        - title: "base_diff <i>(base + diff)</i>"
+          name:  base_diff
+        - title: "base_ratio <i>(base + ratio)</i>"
+          name:  base_ratio
+        - title: "or_base <i>(OR + pct)</i>"
+          name:  or_base
+        - title: "base_or <i>(pct + OR)</i>"
+          name:  base_or
         - title: "n <i>(counts)</i>"
           name:  "n"
         - title: "wn <i>(weighted counts)</i>"
           name:  wn
         - title: "pct <i>(percentages)</i>"
           name:  pct
-        - title: "base_ci <i>(value + interval)</i>"
-          name:  base_ci
-        - title: "ci <i>(interval alone)</i>"
-          name:  ci
-        - title: "diff <i>(gap to the reference)</i>"
-          name:  diff
-        - title: "ratio <i>(ratio to the reference)</i>"
-          name:  ratio
-        - title: "or <i>(odds ratios)</i>"
-          name:  or
-        - title: "or_base <i>(OR, % in bracket)</i>"
-          name:  or_base
-        - title: "base_or <i>(%, OR in bracket)</i>"
-          name:  base_or
-        - title: "base_ratio <i>(value, ratio in bracket)</i>"
-          name:  base_ratio
-        - title: "ctr <i>(contributions to variance)</i>"
-          name:  ctr
         - title: "mean <i>(numeric variables)</i>"
           name:  mean
-        - title: "mean_sd <i>(mean, sd in bracket)</i>"
+        - title: "mean_sd <i>(mean + sd)</i>"
           name:  mean_sd
-        - title: "mean_cv <i>(mean, cv in bracket)</i>"
+        - title: "mean_cv <i>(mean + cv)</i>"
           name:  mean_cv
+        - title: "ctr <i>(contribs to var.)</i>"
+          name:  ctr
         - title: "var <i>(variance)</i>"
           name:  var
       default: auto
