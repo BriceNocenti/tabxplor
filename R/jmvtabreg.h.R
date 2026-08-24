@@ -20,6 +20,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             models = NULL,
             na = "drop_by_outcome",
             run_compare = FALSE,
+            levels_order = NULL,
             levels_collapse = NULL,
             crosses = NULL,
             ref_levels = NULL,
@@ -34,7 +35,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             n = "range",
             cleannames = TRUE,
             subtext = "",
-            theme = "light",
+            tab_theme = "light",
             wrap_rows = 35,
             wrap_cols = 15,
             export_format = "excel",
@@ -195,6 +196,24 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..run_compare <- jmvcore::OptionAction$new(
                 "run_compare",
                 run_compare)
+            private$..levels_order <- jmvcore::OptionArray$new(
+                "levels_order",
+                levels_order,
+                hidden=TRUE,
+                default=NULL,
+                template=jmvcore::OptionGroup$new(
+                    "levels_order",
+                    NULL,
+                    elements=list(
+                        jmvcore::OptionVariable$new(
+                            "var",
+                            NULL),
+                        jmvcore::OptionArray$new(
+                            "levels",
+                            NULL,
+                            template=jmvcore::OptionString$new(
+                                "levels",
+                                NULL)))))
             private$..levels_collapse <- jmvcore::OptionArray$new(
                 "levels_collapse",
                 levels_collapse,
@@ -341,9 +360,9 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 subtext,
                 default="",
                 hidden=TRUE)
-            private$..theme <- jmvcore::OptionList$new(
-                "theme",
-                theme,
+            private$..tab_theme <- jmvcore::OptionList$new(
+                "tab_theme",
+                tab_theme,
                 options=list(
                     "light",
                     "print_ready"),
@@ -403,6 +422,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..models)
             self$.addOption(private$..na)
             self$.addOption(private$..run_compare)
+            self$.addOption(private$..levels_order)
             self$.addOption(private$..levels_collapse)
             self$.addOption(private$..crosses)
             self$.addOption(private$..ref_levels)
@@ -417,7 +437,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..n)
             self$.addOption(private$..cleannames)
             self$.addOption(private$..subtext)
-            self$.addOption(private$..theme)
+            self$.addOption(private$..tab_theme)
             self$.addOption(private$..wrap_rows)
             self$.addOption(private$..wrap_cols)
             self$.addOption(private$..export_format)
@@ -443,6 +463,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         models = function() private$..models$value,
         na = function() private$..na$value,
         run_compare = function() private$..run_compare$value,
+        levels_order = function() private$..levels_order$value,
         levels_collapse = function() private$..levels_collapse$value,
         crosses = function() private$..crosses$value,
         ref_levels = function() private$..ref_levels$value,
@@ -457,7 +478,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         n = function() private$..n$value,
         cleannames = function() private$..cleannames$value,
         subtext = function() private$..subtext$value,
-        theme = function() private$..theme$value,
+        tab_theme = function() private$..tab_theme$value,
         wrap_rows = function() private$..wrap_rows$value,
         wrap_cols = function() private$..wrap_cols$value,
         export_format = function() private$..export_format$value,
@@ -482,6 +503,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..models = NA,
         ..na = NA,
         ..run_compare = NA,
+        ..levels_order = NA,
         ..levels_collapse = NA,
         ..crosses = NA,
         ..ref_levels = NA,
@@ -496,7 +518,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..n = NA,
         ..cleannames = NA,
         ..subtext = NA,
-        ..theme = NA,
+        ..tab_theme = NA,
         ..wrap_rows = NA,
         ..wrap_cols = NA,
         ..export_format = NA,
@@ -623,6 +645,7 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   model on a different population then gets no observed effect); "drop_all"
 #'   shares one population across every outcome as well.
 #' @param run_compare .
+#' @param levels_order .
 #' @param levels_collapse .
 #' @param crosses .
 #' @param ref_levels .
@@ -659,10 +682,10 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   column at all.
 #' @param cleannames Strip numeric prefixes from factor level labels.
 #' @param subtext A free note printed below the table.
-#' @param theme How the table is painted, in the results panel and in every
-#'   export.  \code{"light"} is the colour palette; \code{"print_ready"} says
-#'   the same thing  typographically --- bold, italics, underlines and marks
-#'   instead of blue and red ---  for a page that has no colour. See
+#' @param tab_theme How the table is painted, in the results panel and in
+#'   every export.  \code{"light"} is the colour palette; \code{"print_ready"}
+#'   says the same thing  typographically --- bold, italics, underlines and
+#'   marks instead of blue and red ---  for a page that has no colour. See
 #'   \code{\link{tab_css}}.
 #' @param wrap_rows .
 #' @param wrap_cols .
@@ -707,6 +730,7 @@ jmvtabreg <- function(
     models = NULL,
     na = "drop_by_outcome",
     run_compare = FALSE,
+    levels_order = NULL,
     levels_collapse = NULL,
     crosses = NULL,
     ref_levels = NULL,
@@ -721,7 +745,7 @@ jmvtabreg <- function(
     n = "range",
     cleannames = TRUE,
     subtext = "",
-    theme = "light",
+    tab_theme = "light",
     wrap_rows = 35,
     wrap_cols = 15,
     export_format = "excel",
@@ -764,6 +788,7 @@ jmvtabreg <- function(
         models = models,
         na = na,
         run_compare = run_compare,
+        levels_order = levels_order,
         levels_collapse = levels_collapse,
         crosses = crosses,
         ref_levels = ref_levels,
@@ -778,7 +803,7 @@ jmvtabreg <- function(
         n = n,
         cleannames = cleannames,
         subtext = subtext,
-        theme = theme,
+        tab_theme = tab_theme,
         wrap_rows = wrap_rows,
         wrap_cols = wrap_cols,
         export_format = export_format,

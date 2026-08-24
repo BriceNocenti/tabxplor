@@ -281,8 +281,12 @@ new_lvl_collapse <- function(spec) {
       lv <- as.character(unlist(groups[[i]], use.names = FALSE))
       lv <- unique(lv[!is.na(lv) & nzchar(lv)])
       if (length(lv) < 2L) next                      # a collapse never RENAMES: < 2 levels is a no-op
+      # DESIGN: the default name of a merged run keeps the FIRST level whole and cleans the
+      # followers (`1-Protestant, Catholic`), so an ordering prefix never lands mid-name -- and
+      # `cleannames = TRUE` then strips the one remaining prefix, giving `Protestant, Catholic`.
       lab <- if (i <= length(labs) && !is.na(labs[[i]]) && nzchar(labs[[i]])) labs[[i]]
-             else paste(lv, collapse = ", ")
+             else paste(c(lv[[1]], stringi::stri_replace_all_regex(lv[-1], cleannames_condition(), "")),
+                        collapse = ", ")
       if (lab %in% reserved)
         cli::cli_abort(c("{.val {lab}} cannot name a merged level of {.var {v}}.",
                          "x" = "It is one of the labels {.fn tab} mints itself.",

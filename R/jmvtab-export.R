@@ -439,7 +439,9 @@ jmv_backend_export <- function(self, tabs) {
 # print_emphasis for a regression -- so the one value is right for both analyses.
 #' @keywords internal
 #' @noRd
-jmv_backend_theme <- function(self) self$options$theme %||% "light"
+# ⚠ `tab_theme`, not `theme`: jamovi injects its own global `theme` option into every analysis
+# (the app's plot-styling preference), which shadows a module option of that name.
+jmv_backend_theme <- function(self) self$options$tab_theme %||% "light"
 
 # Render a built tab (or list of tabs) to standalone HTML for the jamovi results iframe: the Phase 10e
 # dependency-free html engine (inline CSS) wrapped in a scroll box.

@@ -204,7 +204,7 @@ children:
                 name: anova
                 enable: (test)
   - type: CollapseBox
-    label: <b>Levels and missing values</b>
+    label: <b>References (points of comparison), levels and missing values</b>
     stretchFactor: 1
     collapsed: true
     children:
@@ -291,6 +291,10 @@ children:
               - type: TextBox
                 name: n_min
                 format: number
+      # Phase 22g-iv: ONE per-variable table -- order / merge / cut a variable's levels and pick what
+      # it is compared to -- replacing the level tree and the reference picker, which listed the same
+      # variables twice, in two boxes, in two shapes. Its columns are drawn by jmvtab.js
+      # (VAR_TABLE_HOST); `comp` sits under it because it is the other half of "compared to what".
       - type: LayoutBox
         margin: large
         cell:
@@ -298,37 +302,23 @@ children:
           row: 1
         stretchFactor: 1
         children:
-          - type: Label
-            label: >-
-              <b>Reorder, merge and cut levels:</b>
-            children:
-              - type: CustomControl
-                name: levelsCtrl
-                stretchFactor: 1
-                events:
-                  creating: ./jmvtab::levelsCtrl_creating
-                  updated: ./jmvtab::levelsCtrl_updated
-
-  - type: CollapseBox
-    label: <b>References (points of comparison)</b>
-    stretchFactor: 1
-    collapsed: true
-    children:
-      - type: LayoutBox
-        margin: none
-        children:
           - type: CustomControl
-            name: refPickerCtrl
+            name: varTableCtrl
             stretchFactor: 1
             events:
-              creating: ./jmvtab::refPickerCtrl_creating
-              updated: ./jmvtab::refPickerCtrl_updated
+              creating: ./jmvtab::varTableCtrl_creating
+              updated: ./jmvtab::varTableCtrl_updated
       - type: LayoutBox
         margin: none
+        cell:
+          column: 0
+          row: 2
+        stretchFactor: 1
         children:
           - type: ComboBox
             name: comp
             label: comp = <i>(reference table, with tab_vars)</i>
+
   - type: CollapseBox
     label: <b>Confidence intervals</b>
     stretchFactor: 1
@@ -495,12 +485,12 @@ children:
             fitToGrid: true
             children:
               - type: RadioButton
-                name: theme_1
-                optionName: theme
+                name: tab_theme_1
+                optionName: tab_theme
                 optionPart: light
               - type: RadioButton
-                name: theme_2
-                optionName: theme
+                name: tab_theme_2
+                optionName: tab_theme
                 optionPart: print_ready
       - type: LayoutBox
         margin: none

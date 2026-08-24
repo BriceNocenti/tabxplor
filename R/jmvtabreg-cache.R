@@ -346,6 +346,14 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     preds <- if (length(preds)) as.character(preds) else NULL
   }
 
+  # Phase 22g-iv: the ▲/▼ bar. `tab_reg()` has no `levels_order`, so the order is applied HERE, to
+  # the data, before any fit -- in the RAW level names, because `.levels_collapse` merges afterwards
+  # and fct_collapse() keeps the order of first appearance. It needs no cache entry: jmvreg_fit_key()
+  # fingerprints the prepared frame's levels, so a relevel moves the key by construction.
+  ord <- jmvtab_levels_order(opts$levels_order)
+  if (length(ord))
+    data <- jmv_relevel_cols(data, ord, intersect(names(ord), names(data)))
+
   if (is.null(dep) || is.null(preds)) {
     return(list(tabs = NULL, store = cache_env$store, hits = 0L))
   }

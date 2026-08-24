@@ -233,8 +233,11 @@ children:
             label: Run comparison
             events:
               change: ./jmvtabreg::run_compare_changed
+  # Phase 22g-iv: ONE per-variable table -- merge a factor's levels, cut a number into groups, pick
+  # the baseline and the unit -- replacing the two boxes that listed the same predictors twice. The
+  # same widget jmvtab shows; only its columns differ (jmvtabreg.js, VAR_TABLE_HOST).
   - type: CollapseBox
-    label: <b>Reorder, merge and cut levels</b>
+    label: <b>References (points of comparison) and levels</b>
     stretchFactor: 1
     collapsed: true
     children:
@@ -242,25 +245,11 @@ children:
         margin: none
         children:
           - type: CustomControl
-            name: levelsCtrl
+            name: varTableCtrl
             stretchFactor: 1
             events:
-              creating: ./jmvtabreg::levelsCtrl_creating
-              updated: ./jmvtabreg::levelsCtrl_updated
-  - type: CollapseBox
-    label: <b>References (points of comparison)</b>
-    stretchFactor: 1
-    collapsed: true
-    children:
-      - type: LayoutBox
-        margin: none
-        children:
-          - type: CustomControl
-            name: refPickerCtrl
-            stretchFactor: 1
-            events:
-              creating: ./jmvtabreg::refPickerCtrl_creating
-              updated: ./jmvtabreg::refPickerCtrl_updated
+              creating: ./jmvtabreg::varTableCtrl_creating
+              updated: ./jmvtabreg::varTableCtrl_updated
   - type: CollapseBox
     label: <b>Significance</b>
     stretchFactor: 1
@@ -347,12 +336,12 @@ children:
                 fitToGrid: true
                 children:
                   - type: RadioButton
-                    name: theme_1
-                    optionName: theme
+                    name: tab_theme_1
+                    optionName: tab_theme
                     optionPart: light
                   - type: RadioButton
-                    name: theme_2
-                    optionName: theme
+                    name: tab_theme_2
+                    optionName: tab_theme
                     optionPart: print_ready
           - type: LayoutBox
             cell:

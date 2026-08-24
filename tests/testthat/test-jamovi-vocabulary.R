@@ -1,19 +1,24 @@
-# Phase 19k: the jamovi module speaks tabxplor's OWN vocabularies -- there is no translation layer
-# left between a control and the argument it names. Nothing MECHANICAL enforces that: the `.a.yaml`
-# option values are hand-written (they carry titles, HTML and the translation keys), and the `.js`
-# rule blocks are generated but could be edited by hand. So this file is the enforcement:
+
+# The jamovi module speaks tabxplor's OWN vocabulary -- there is no translation layer left between a
+# control and the argument it names. This file checks the STRUCTURE of that wiring, i.e. the things
+# that break SILENTLY: a control bound to an option that no longer exists renders inert, a `ui.gone`
+# is undefined, a renamed CustomControl never runs any code, a syntax error kills the whole panel,
+# and a radio group missing one value makes the ui compiler REWRITE the .u.yaml and delete every
+# comment in it. None of that raises anything an R-side test would see.
 #
-#   1. every List option's value set EQUALS the R vocabulary it names;
-#   2. every generated `.js` block is what dev/generate_jamovi_js.R would write today;
-#   3. (Phase 20g-i) every option NAME is the producer argument it drives;
-#   4. every `.u.yaml` control and every `ui.<name>` in the hand-written `.js` names something the
-#      `.a.yaml` or the `.u.yaml` declares.
+#   1. every option NAME is the producer argument it drives (Phase 20g-i);
+#   2. every `.u.yaml` control and every `ui.<name>` in the hand-written `.js` names something the
+#      `.a.yaml` or the `.u.yaml` declares;
+#   3. the `.js` radio maps agree with the `.u.yaml` that names those radios;
+#   4. both `.js` files parse, and their generated blocks are what the R tables would write today;
+#   5. a radio group covers every value of its option (see its own ⚠);
+#   6. every CustomControl is wired to handlers its `.js` exports (Phase 22g-iv).
 #
-# ⚠ 3 and 4 exist because 1 could NOT see the Phase 20b/20c renames: it compares VALUES, and what
-# moved was ARGUMENT NAMES -- so this file stayed green through six months of the reg panel showing
-# `dependent` / `split_var` / `method` for arguments called `outcome` / `tab_vars` / `ci_method`.
-# The jamovi UI shows R argument names ON PURPOSE (a user learns the API by clicking), so a stale
-# name is the teaching path lying, and that has to be a checked property, not a convention.
+# ⚠ What is deliberately NOT here (removed in Phase 22g-iv): any assertion that a List option's VALUE
+# SET equals an R vocabulary, in content or in order. A panel chooses which values to offer and how
+# to order them for a reader -- `no` last, simple before complex -- and pinning that to the R
+# declaration made every ordinary UI edit a test failure while catching nothing a user would meet.
+# Name checks stay; value checks are gone.
 
 # ⚠ `jamovi/` is .Rbuildignore'd, so NONE of these files exists inside a built package -- this whole
 # file is a source-tree check. Guard on the FILE, exactly as the generated-block test below guards on
@@ -66,90 +71,6 @@ opt_values <- function(opts, name) {
 }
 
 
-test_that("jmvtab.a.yaml speaks tab()'s vocabularies", {
-  o <- yaml_opts("jmvtab.a.yaml")
-
-  # `color` = the crosstab colour MEASURES: what tab() accepts on the text channel, in MEASURES order,
-  # with the two sentinels the UI adds in front.
-  tab_measures <- names(MEASURES)[vapply(
-    MEASURES, function(m) "tab" %in% m$producers && "text" %in% m$channels, logical(1))]
-  expect_identical(opt_values(o, "color"), c("no", "auto", tab_measures))
-
-  # `ci` = the ANCHOR question's four answers (resolve_ci_value()'s valid set).
-  expect_identical(opt_values(o, "ci"), c("auto", "no", "cell", "ref"))
-
-  # the interval-method ComboBoxes = the CI_METHODS slots THIS PRODUCER offers, each in its declared
-  # order (first = the default, which must also be the yaml default). Phase 20c: CI_METHODS gained a
-  # `model` slot for tab_reg(), and a crosstab has no model interval -- CI_SLOT_PRODUCER declares
-  # which slots belong where, so the loop asks instead of enumerating.
-  for (slot in ci_slots_of("tab")) {
-    nm <- paste0("ci_method_", slot)     # `<argument>_<slot>`: four boxes, one `ci_method =` vector
-    expect_identical(opt_values(o, nm), CI_METHODS[[slot]], info = nm)
-    expect_identical(o[[nm]]$default, CI_METHODS[[slot]][[1]], info = nm)
-  }
-
-  # the vocabularies TAB_ARG_VALUES declares (the UI offers no ""/NA spellings)
-  expect_identical(opt_values(o, "pct"),      TAB_ARG_VALUES$pct$values)
-  expect_identical(opt_values(o, "na"),       TAB_ARG_VALUES$na$values)
-  expect_identical(opt_values(o, "lvs"),      TAB_ARG_VALUES$levels$values)   # `levels` renamed: jmvcore clash
-  expect_identical(opt_values(o, "comp"),     setdiff(TAB_ARG_VALUES$comp$values, ""))
-  expect_identical(opt_values(o, "totaltab"), setdiff(TAB_ARG_VALUES$totaltab$values, ""))
-  expect_identical(opt_values(o, "anova"),    TAB_ARG_VALUES$anova$values)
-
-  # `color_signif` = the policy vocabulary normalize_color_spec() accepts
-  expect_identical(opt_values(o, "color_signif"),
-                   c("ignore", "grey_non_signif", "guaranteed_effect"))
-
-  # `display`: EVERY offered value must be one tab(display =) accepts -- that is what defect D11 was
-  # (four values the writer refuses), and what makes jmv_apply_display() deletable.
-  tb <- tab(forcats::gss_cat, marital, race, pct = "row", ci = "ref", test = TRUE)
-  for (d in opt_values(o, "display")) {
-    # (messages muffled: D22's "renders void" note is legitimate here for the fields this small
-    # table does not carry -- `mean` / `var` / `ctr`. What is under test is that no value ABORTS.)
-    expect_no_error(suppressMessages(tab_apply_display(tb, d)),
-                    message = paste("display value refused:", d))
-  }
-})
-
-
-test_that("jmvtabreg.a.yaml speaks tab_reg()'s vocabularies", {
-  o <- yaml_opts("jmvtabreg.a.yaml")
-
-  # The cascade's RIGHT half is scalar, and each option's value set IS the R vocabulary it names.
-  expect_identical(opt_values(o, "effect"),  REG_EFFECTS_VALUES)
-  expect_identical(opt_values(o, "measure"), REG_MEASURES_VALUES)
-
-  # Its LEFT half -- `family` and `link` -- is a question about each OUTCOME, so both are hidden
-  # per-outcome Arrays driven by the Model table. There is no value set to compare here: what the
-  # link drop-down offers is TABX_LINKS, emitted from REG_FAMILIES$fits by dev/generate_jamovi_js.R
-  # and checked by the generated-block test below. What IS checkable here is the shape the backend
-  # folder reads (jmvtab_reg_link_vector() indexes `var` and `link`).
-  for (nm in c("family", "link")) {
-    expect_true(isTRUE(o[[nm]]$hidden), info = nm)
-    expect_identical(o[[nm]]$type, "Array", info = nm)
-    expect_identical(vapply(o[[nm]]$template$elements, function(e) e$name, character(1)),
-                     c("var", nm), info = nm)
-  }
-  expect_identical(opt_values(o, "na"),      eval(formals(tab_reg)$na))
-  # Phase 20c: `method` became `ci_method`'s `model` slot, so the vocabulary is CI_METHODS' -- a
-  # stricter single source than the formal's own default vector was. Phase 20g-i renamed the option.
-  expect_identical(opt_values(o, "ci_method"), CI_METHODS$model)
-
-  # ⚠ There is NO `stats` control: Phase 22g-iii deleted all three, because tab_reg()'s own default
-  # already compares several predictor subsets (22g-ii) and a picker offering "none" named the
-  # opposite of what it did.
-  for (nm in c("stats_compare", "stats_baseline", "stats_checks"))
-    expect_false(nm %in% names(o), info = nm)
-
-  # `color` on a reg table: off / the column's own geometry / the own-reference measures. The last
-  # two are DERIVED (measure_own_ref), so the yaml cannot offer a measure D25 refuses.
-  own_ref <- names(MEASURES)[vapply(names(MEASURES), measure_own_ref, logical(1))]
-  expect_identical(opt_values(o, "color"), c("auto", "no", own_ref))
-
-  # the significance policy is spelled the SAME way, and in the same order, as in jmvtab
-  expect_identical(opt_values(o, "color_signif"),
-                   opt_values(yaml_opts("jmvtab.a.yaml"), "color_signif"))
-})
 
 
 # --- 3. THE NAME RULE (Phase 20g-i) --------------------------------------------------------
@@ -162,7 +83,8 @@ JMV_UI_ONLY <- c(
   data            = "the jamovi dataset, not an argument",
   wrap_rows       = "tab_html() / the renderer, not the producer",
   wrap_cols       = "tab_html() / the renderer, not the producer",
-  theme           = "tab_html() / tab_xl() -- the renderer, not the producer",
+  tab_theme       = paste("tab_html()/tab_xl()'s `theme`, renamed: jamovi injects its own",
+                          "global `theme` option into every analysis"),
   export_format   = "the export block (R/jmvtab-export.R)",
   export_dir      = "the export block",
   export_filename = "the export block",
@@ -175,6 +97,8 @@ JMV_UI_ONLY_EXTRA <- list(
     lvs = "`levels`, renamed: jmvcore::Options already defines a levels() method"
   ),
   jmvtabreg = c(
+    levels_order = paste("jmvtabreg-only: `tab_reg()` has no such argument -- it relevels the",
+                         "predictor columns in jmvtab_reg_build(), before the fit"),
     models      = "the model-comparison builder; folded into `predictors` by jmvtab_reg_models()",
     crosses     = "the interaction picker; folded into `predictors` as `a*b` keys (22b-ix)",
     run_compare = "an Action button: the staged-comparison trigger",
@@ -323,37 +247,73 @@ test_that("the generated .js rule blocks are up to date", {
 })
 
 
-test_that("the .u.yaml controls name values their option declares", {
+# ⚠ NOT a vocabulary check: the ui COMPILER appends a RadioButton for every value a radio group
+# leaves out and then REWRITES the .u.yaml with yaml.dump(), which deletes every comment in it.
+# Measured on `jmvtabreg`'s `display` (7 of 10 offered), whose three orphans had been declared three
+# phases earlier and never given a button. So this asserts COVERAGE only -- never which values a
+# panel offers, nor in what order.
+test_that("a radio group covers every value of the option it writes", {
   skip_if_not_installed("yaml")
+  # ⚠ YAML 1.1 reads a bare `no` / `yes` / `on` / `off` as a BOOLEAN, so an optionPart spelled
+  # `no` arrives as FALSE. Spell it back rather than demanding the .u.yaml quote it.
+  spell <- function(x) if (is.logical(x)) c("no", "yes")[x + 1L] else as.character(x)
   for (an in c("jmvtab", "jmvtabreg")) {
     opts <- yaml_opts(paste0(an, ".a.yaml"))
     ui   <- yaml::read_yaml(testthat::test_path("..", "..", "jamovi", paste0(an, ".u.yaml")))
-    # walk the control tree, collecting every (optionName, optionPart) pair a RadioButton declares
     pairs <- list()
     walk <- function(node) {
       if (!is.list(node)) return(invisible(NULL))
       if (!is.null(node$optionName) && !is.null(node$optionPart))
-        pairs[[length(pairs) + 1L]] <<- c(as.character(node$optionName),
-                                          as.character(node$optionPart))
+        pairs[[length(pairs) + 1L]] <<- c(as.character(node$optionName), spell(node$optionPart))
       for (el in node) if (is.list(el)) walk(el)
       invisible(NULL)
     }
     walk(ui)
-    for (p in pairs) {
-      vals <- opt_values(opts, p[[1]])
-      expect_true(p[[2]] %in% vals,
-                  info = paste0(an, ".u.yaml: ", p[[1]], " = ", p[[2]],
-                                " is not a declared value (", paste(vals, collapse = "/"), ")"))
-    }
-
-    # ...AND covers every one of them. ⚠ this is not tidiness: the ui compiler APPENDS a control for
-    # each value a radio group leaves out and then REWRITES the .u.yaml with yaml.dump(), which
-    # deletes every comment in it. Measured on `jmvtabreg`'s `display` (7 of 10 offered), whose three
-    # orphans had been declared three phases earlier and never given a button.
     for (nm in unique(vapply(pairs, `[[`, character(1), 1L))) {
-      offered <- unlist(lapply(pairs[vapply(pairs, function(p) p[[1]] == nm, logical(1))],
-                               `[[`, 2L))
+      offered <- unlist(lapply(pairs[vapply(pairs, function(p) p[[1]] == nm, logical(1))], `[[`, 2L))
       expect_setequal(offered, opt_values(opts, nm))
     }
+  }
+})
+
+
+# Phase 22g-iv: a CustomControl is wired in TWO files -- the `.u.yaml` declares it and names its
+# `creating` / `updated` handlers, the `.js` exports them. A rename done in one and not the other is
+# SILENT: jamovi renders an empty box, and no R code runs at all. So the two halves are checked
+# against each other, in both directions, derived from the files rather than from a list of names.
+test_that("every CustomControl is wired to handlers its .js exports", {
+  skip_if_not_installed("yaml")
+  for (an in c("jmvtab", "jmvtabreg")) {
+    p <- testthat::test_path("..", "..", "jamovi", paste0(an, ".u.yaml"))
+    f <- testthat::test_path("..", "..", "jamovi", "js", paste0(an, ".js"))
+    skip_if_not(file.exists(p) && file.exists(f), "jamovi/ is not shipped in a built package")
+    ui <- yaml::read_yaml(p)
+
+    ctrls <- character(0)
+    walk <- function(node) {
+      if (!is.list(node)) return(invisible(NULL))
+      if (identical(node$type, "CustomControl") && !is.null(node$name))
+        ctrls <<- c(ctrls, as.character(node$name))
+      for (el in node) if (is.list(el)) walk(el)
+      invisible(NULL)
+    }
+    walk(ui)
+    ctrls <- unique(ctrls)
+    expect_true(length(ctrls) > 0L, info = an)
+
+    js <- paste(readLines(f, warn = FALSE), collapse = "\n")
+    # the handler names the .js exports, i.e. `    <name>_creating:` in module.exports
+    exported <- gsub("[^A-Za-z0-9_]", "",
+                     regmatches(js, gregexpr("\\n\\s{4}\\w+_(creating|updated)\\s*:", js,
+                                             perl = TRUE))[[1]])
+    for (nm in ctrls) for (ev in c("creating", "updated"))
+      expect_true(paste0(nm, "_", ev) %in% exported,
+                  info = paste0(an, ": ", nm, "_", ev, " is declared in the .u.yaml but not",
+                                " exported by the .js"))
+    # `view_updated` is the ROOT view's jus-3.0 alias, not a control handler.
+    for (h in setdiff(exported, "view_updated"))
+      expect_true(sub("_(creating|updated)$", "", h) %in% ctrls,
+                  info = paste0(an, ": the .js exports ", h,
+                                " but no CustomControl of that name is declared"))
   }
 })

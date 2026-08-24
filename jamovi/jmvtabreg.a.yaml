@@ -256,6 +256,24 @@ options:
     # here, `ref` picks the baseline explicitly). Same shape and same folder as jmvtab's, and applied
     # by the same tab_collapse_levels() in reg_prepare_data()'s stage G0, before family detection and
     # the reference relevel -- so a merged level is simply a level.
+    # Phase 22g-iv: the level ORDER, written by the same control. `tab_reg()` has no `levels_order`
+    # argument -- this drives a jmvtabreg-only prep step (jmvtab_reg_build() relevels the predictor
+    # columns before the fit), which is also what makes "the baseline IS the first level" true.
+    - name: levels_order
+      title: "Level order (per predictor)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: levels
+                type: Array
+                template:
+                    type: String
+
     - name: levels_collapse
       title: "Merged levels (per predictor)"
       type: Array
@@ -470,7 +488,11 @@ options:
            A free note printed below the table.
 
 # Other formatting
-    - name: theme
+    # ⚠ NOT `theme`: jamovi injects its OWN global `theme` option (the app's plot
+    # styling preference) into every analysis, which shadowed this one -- no radio
+    # ticked, a click reverted, and the render kept the app's value. Same reserved-name
+    # class as `levels` (-> `lvs`) and `check` (-> `xl_check`).
+    - name: tab_theme
       title: theme
       type: List
       options:

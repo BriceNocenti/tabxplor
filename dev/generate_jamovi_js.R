@@ -53,6 +53,10 @@ js_obj  <- function(x, val = js_str) {                    # named vector/list ->
 # =============================================================================================
 reg_block <- function() {
   kinds <- tabxplor:::REG_OUTCOME_KINDS
+  reg_shapes <- tabxplor:::shape_vocab("tab_reg")
+  reg_cuts   <- reg_shapes[vapply(reg_shapes,
+                                  function(k) tabxplor:::VAR_SHAPES[[k]]$produces,
+                                  character(1)) == "factor"]
 
   # (1) the outcome-kind rule: detected family + offered families, per kind.
   detect <- vapply(kinds, function(k) k$detect, character(1))
@@ -97,8 +101,11 @@ reg_block <- function() {
                                vapply(grid, function(g)
                                  js_obj(g, function(x) js_obj(x, js_arr)), character(1)),
                                collapse = ", "), " }"), ";"),
-    # the per-predictor functional forms (VAR_SHAPES, R/var-shape.R)
-    paste0("var TABX_SHAPES = ", js_arr(tabxplor:::shape_vocab("tab_reg")), ";"),
+    # the per-predictor functional forms (VAR_SHAPES, R/var-shape.R), and which of them make the
+    # predictor a FACTOR -- the one fact the table's reference cell branches on, so it is derived
+    # from `produces` rather than spelled out again as a list of exceptions in the .js.
+    paste0("var TABX_SHAPES = ", js_arr(reg_shapes), ";"),
+    paste0("var TABX_SHAPES_CUT = ", js_arr(reg_cuts), ";"),
     END
   )
 }
@@ -135,6 +142,7 @@ tab_block <- function() {
     paste0("var TABX_DISPLAY_ODDS_RATIO_FIELDS = ", js_arr(or_displays), ";"),
     paste0("var TABX_SHAPES_INDEX = ", js_arr(idx_shapes), ";"),
     paste0("var TABX_SHAPES_COL = ", js_arr(col_shapes), ";"),
+    paste0("var TABX_SHAPES_CUT = ", js_arr(cuts), ";"),
     END
   )
 }

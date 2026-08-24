@@ -1870,3 +1870,101 @@ still offered five buttons, so the coverage rule stayed green while the wrong bu
 `test-jamovi-vocabulary.R` now reads those object literals out of the source and compares them
 against the `(name, optionPart)` pairs the `.u.yaml` declares. **Reordering a List is not a
 cosmetic change** while a map keys on `<option>_<n>`.
+
+---
+
+## Phase 22g-iv — the per-variable table (2026-08-24)
+
+One `varTableCtrl` replaces `levelsCtrl` + `refPickerCtrl` in BOTH panels: one row per variable, four
+aligned columns, the level list opening inline. Read this before changing it — two of the three rules
+below were paid for with bugs.
+
+### The contract: a HOST descriptor, not a branch
+
+The widget lives in the `BEGIN/END SHARED` span of `jamovi/js/jmvtab.js` and is copied verbatim into
+`jmvtabreg.js` by `dev/generate_jamovi_js.R` (`check` mode fails on drift, asserted by the suite).
+It has no per-panel branch. Everything a panel differs by is one declared object outside the markers:
+
+| field | what it says |
+|---|---|
+| `ctrl` | the CustomControl's name — the shared code reaches it as `ui[host.ctrl]` |
+| `cols` | `[{key, head, width, tip}]`; `key` is one of `name` / `levels` / `ref` / `act`. The grid template is built from `width`, so ONE grid carries the head row and every data row |
+| `groups(ui)` | `[{label, vars, numericMayKeep}]`; `label: ""` prints no group head. `numericMayKeep` is the AXIS rule — only a column variable (or a predictor) may stay a number |
+| `sig(ui)` | the rebuild signature — see below, this is the load-bearing one |
+| `shapes(g)` / `isCut(sh)` | the `shape` drop-down's values, and which of them make the variable a FACTOR (both derived from `VAR_SHAPES`, emitted as `TABX_SHAPES*` by the generator) |
+| `orderOpt` | the level-ORDER option, or `null`. ⚠ Reached only through this field: `tab_reg()` has no `levels_order`, so naming it in the shared code would claim an option one panel cannot declare |
+| `canOrder` | whether the ▲/▼ bar exists at all |
+| `refCell` / `unitCell` | the two genuinely divergent cells |
+| `varSync(ui, v, kind)` | drop a stored option a `shape` change invalidated — see below |
+| `reconcile(ui, all)` | the panel's own stale-entry sweep (`jmvtab` reconciles `ref_levels` to the ACTIVE axis, which is what stops a cross-axis reference reaching R) |
+
+`kind` is computed once, by the shared code, so the two hosts cannot disagree about what a variable
+IS: `{cached, mtype, offered, defShape, shape, loading, isNumber, isCut}`.
+
+### ⚠ The signature rule
+
+`host.sig()` names ONLY what the table does not itself write: the variable boxes, plus `pct` /
+`color` / `display` in `jmvtab`. **`levels_order`, `levels_collapse`, `shape`, `ref_levels`, `ref2`
+and `multiplier` are OUT of it**, and each repaints in place through `tabxvRefreshVar()`.
+
+This is not an optimisation. With two controls the signatures could include each other's writes,
+because a rebuild of the OTHER control clobbered nothing. With one control, a merge tick that
+rebuilt the table would destroy the list the tick was made in — the "2nd click does nothing, then
+all changes appear later" bug the older headers warn about. So: a tick or a ▲/▼ move calls
+`renderRows()` (in place) plus `tabxvRefreshVar()`, which repaints that variable's `levels` count
+and its `ref` cell, because the post-merge levels ARE the reference choices.
+
+### ⚠ A `shape` pick can leave an option that ABORTS the build
+
+`reg_check_continuous_names()` aborts on a `multiplier` naming a factor, and an anchor keyword cannot
+name a level — so when a `shape` pick turns a number into a cut factor, `host.varSync()` drops the
+stored `multiplier` and any `ref` from the wrong vocabulary. A picker must not be able to write a
+combination the producer refuses.
+
+### `ref2` has no control of its own
+
+While an odds ratio is in force (`orIsActive()`), the second reference borrows the reference cell of
+the **first variable of the other axis**, with a `title=` tooltip. Every other off-axis cell is
+EMPTY: a reference the table does not use must not be offered as though it did.
+
+### What the wiring test now checks, and what it deliberately does not
+
+`test-jamovi-vocabulary.R` gained: *every `CustomControl` declared in a `.u.yaml` has
+`<name>_creating` / `<name>_updated` exported by its `.js`, and every such export names a declared
+control* — the failure a rename across two files produces, and it is silent (an empty box, no R code
+run). It LOST both value-set-equality blocks: a panel chooses which values to offer and in what
+order, and pinning that to the R declaration made every UI edit a test failure while catching
+nothing a user meets. The value-COVERAGE assertion stays — it is not a vocabulary check but the
+guard against the ui compiler appending controls and rewriting the `.u.yaml` with `yaml.dump()`.
+⚠ It now spells YAML booleans back: **`optionPart: no` parses as FALSE** under YAML 1.1.
+
+### Round 2: the layout, the greys, and three reserved-name / collapse traps
+
+**One grid per GROUP, one header row, the group's name as its first column head.** `host.cols[0].head`
+is only a fallback; `g.label` wins. ⚠ **Every name column needs a minmax FLOOR**: with
+`minmax(0,1fr)` behind 510px of fixed columns the name column collapsed to zero width in a narrow
+options pane and the variable names were rendered but invisible. The Model table had the same defect
+in its 4th column.
+
+**Colours**: the table `#E4E4E4`, its head `#CCCCCC`, an open level list `#F0F0F0` in an `#E4E4E4`
+well. Pure white is reserved for inputs (selects, text boxes, buttons) — it is what makes them read
+as inputs inside a grey pane.
+
+**`cleannames` in the widget.** `TABXV_CLEAN` is `cleannames_condition()` transcribed, and
+`tabxvClean()` is applied to every label a human reads. ⚠ Stored values stay RAW everywhere
+(`data-lab`, `<option value>`, all three options). ⚠ The regex is built by `new RegExp` in a `try`:
+its lookbehind is a PARSE error on an old engine, which would kill the whole file. The merged-run
+default label rule (first level whole, followers cleaned) lives in R, in `new_lvl_collapse()`, so a
+jamovi user and an R user get the same name.
+
+**`jmvtabreg`'s level order is a jmvtabreg-only prep step.** The panel declares its own hidden
+`levels_order`; `jmvtab_reg_build()` relevels the predictor columns before the fit, in RAW names
+(the merge runs afterwards and `fct_collapse()` keeps first-appearance order). No cache entry is
+needed — `jmvreg_fit_key()` fingerprints the prepared frame's levels. `host.varSync()` is the single
+place the "baseline IS the first level" invariant is repaired, in both directions.
+
+⚠ **`theme` is a reserved jamovi option name.** jamovi injects its own global `theme` (the app's
+plot-styling preference) into every analysis, so a module option of that name never holds a value:
+no radio ticks, a click reverts, and the backend reads the app's word. Renamed `tab_theme`. The
+reserved set now known: **`levels`** (a `jmvcore::Options` method), **`check`** (likewise), and
+**`theme`** (injected by the client). None of the three raises anything anywhere.

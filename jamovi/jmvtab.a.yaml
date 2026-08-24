@@ -532,7 +532,11 @@ options:
 
 
 # Other formatting
-    - name: theme
+    # ⚠ NOT `theme`: jamovi injects its OWN global `theme` option (the app's plot
+    # styling preference) into every analysis, which shadowed this one -- no radio
+    # ticked, a click reverted, and the render kept the app's value. Same reserved-name
+    # class as `levels` (-> `lvs`) and `check` (-> `xl_check`).
+    - name: tab_theme
       title: theme
       type: List
       options:
