@@ -61,11 +61,14 @@
 #     column (its cut-point rows are dropped, so the Constant cell is empty). Both reuse the ordinary
 #     column shape and share reg_tidy_native_z(), so the duality above holds there too.
 #   - THE FIT LEAVES, THE DIGEST STAYS. reg_fit() returns a RECORD (reg_fit_record) whose `tidy` is
-#     the only estimand-dependent member: the estimate and its SE are stored on the model's NATIVE
-#     scale and reg_tidy_finalize() writes the interval, the exponentiation and the p per
-#     (do_exp, conf_level). Everything else a column needs comes from the `tabxplor_fitdigest`
-#     (R/reg-digest.R), which is why the jamovi cache can key on the MODEL alone and serve every
-#     estimand from one fit. Only `method = "profile"` cannot: its bounds are a likelihood output.
+#     the only REPORTING-dependent member: the estimate and its SE are stored on the model's NATIVE
+#     scale -- per ONE unit, unexponentiated -- and reg_tidy_finalize() writes the interval, the
+#     exponentiation, the p and the `multiplier` scaling per (do_exp, conf_level, multiplier).
+#     ⚠ EVERY reporting choice is applied THERE and nowhere earlier: that is the whole reason the
+#     jamovi cache can key on the MODEL alone (jmvreg_fit_key) and serve each of them as a hit.
+#     Everything else a column needs comes from the `tabxplor_fitdigest` (R/reg-digest.R).
+#     Only `method = "profile"` cannot be served: its bounds are a likelihood output, so they ride
+#     natively on the record and are scaled with the estimate they belong to.
 #   - THE MODEL COMPARISON IS A DEFAULT. Several `predictors` sets are tested against each other
 #     without being asked (`stats = NULL` resolves `compare = "auto"`), sequential where every model
 #     nests in the next and against the first otherwise -- decided in reg_compare_rows(), the first
@@ -752,10 +755,15 @@ reg_ref_level <- function(value, x, var) {
   # will actually see -- otherwise the reference silently lands on the next one.
   lv <- levels(forcats::fct_drop(as.factor(x)))
   s  <- as.character(value)[[1]]
-  if (s %in% lv) return(s)
+  if (s %in% lv) return(s)                # a NAMED level wins, the missing-value one included
   k <- trimws(tolower(s))
-  if (identical(k, "first")) return(lv[[1L]])
-  if (identical(k, "last"))  return(lv[[length(lv)]])
+  # ⚠ A POSITIONAL keyword names a substantive GROUP, so it skips the level `na =
+  # "keep_for_predictors"` gave the missing values -- which sorts LAST, and so was what "last"
+  # selected. tab()'s two axes read the same rule (diff_index() / calculate_refrows()).
+  grp <- setdiff(lv, TAB_NA_LEVEL)
+  if (!length(grp)) grp <- lv             # a predictor that is nothing but missing
+  if (identical(k, "first")) return(grp[[1L]])
+  if (identical(k, "last"))  return(grp[[length(grp)]])
   cli::cli_abort(c("{.arg ref} level {.val {s}} not found in {.val {var}}.",
                    "i" = "Levels: {.val {lv}}."), call = NULL)
 }
@@ -1032,10 +1040,16 @@ reg_wald_finalize <- function(est, do_exp, se = NULL, crit = NULL,
 }
 
 # A k-unit change multiplies the native-scale coefficient by k (se by |k|); the p is scale-invariant.
-# ONE writer for every family: the glm path needs `mult_vec` back for its profile bounds, the 3+ level
-# fitters call it on their hand-built tidy just before the Wald assembly. `td$term == v` is an exact
-# match, so a shape-generated squared term is never scaled -- and a multinomial tidy's `term x y.level`
-# rows all scale together, which is what a per-category coefficient wants.
+# ONE writer for every family, called at FINALIZE, beside the exponentiation and the interval --
+# because `multiplier` is a REPORTING choice like them and nothing in the fit reads it. That is what
+# keeps `tidy_native` genuinely native, and what lets the scaling leave the jamovi fit-cache key
+# (jmvreg_fit_key): a scaling pick is then a cache hit rather than a refit.
+# WARNING: it also carries the PROFILE bounds, which ride natively on the record. They are scaled by
+#   the SIGNED k and so must be re-ordered -- a negative multiplier would otherwise hand back an
+#   inverted bracket (lo > hi).
+# `td$term == v` is an exact match, so a shape-generated squared term is never scaled -- and a
+# multinomial tidy's `term x y.level` rows all scale together, which is what a per-category
+# coefficient wants.
 #' @keywords internal
 #' @noRd
 reg_tidy_rescale <- function(td, multiplier) {
@@ -1051,19 +1065,25 @@ reg_tidy_rescale <- function(td, multiplier) {
     }
     td$estimate  <- td$estimate  * mult_vec
     td$std.error <- td$std.error * abs(mult_vec)
+    # ⚠ names(), not `$`: a tibble WARNS on an unknown column, and a Wald tidy has no bounds yet.
+    if (all(c("conf.low", "conf.high") %in% names(td))) {
+      lo <- td$conf.low * mult_vec; hi <- td$conf.high * mult_vec
+      td$conf.low <- pmin(lo, hi);  td$conf.high <- pmax(lo, hi)
+    }
   }
-  list(td = td, mult_vec = mult_vec)
+  td
 }
 
-# The 3+ level engines' NATIVE tidy: rescaled estimate / std.error plus the fit's own p, everything
-# reg_tidy_finalize() needs and nothing the estimand decides.
+# The 3+ level engines' NATIVE tidy: the fit's own estimate / std.error plus its p, everything
+# reg_tidy_finalize() needs and nothing the estimand -- or the scaling -- decides.
+# ⚠ the p is computed BEFORE any `multiplier`, and is the same number after it: the estimate scales
+# by k and the SE by |k|, so |est/se| does not move. No test statistic depends on the scaling.
 # ⚠ z, deliberately and for all four of them: multinom, polr, svy_vglm and svyolr define no
 # residual-df convention (there is no single equation to count against), and their own summaries
 # report z. So a multinomial or ordinal table is internally consistent on z -- its coefficient
 # columns, its marginal columns and its crude twin all refer the same way. Their records therefore
 # carry `disp_known = TRUE` and `df_residual = NA`, which is what makes reg_wald_crit() give qnorm.
-reg_tidy_native_z <- function(td, multiplier) {
-  td <- reg_tidy_rescale(td, multiplier)$td
+reg_tidy_native_z <- function(td) {
   td$p.value <- 2 * stats::pnorm(-abs(td$estimate / td$std.error))
   td
 }
@@ -1185,19 +1205,19 @@ reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, met
     ylev <- y_levels[-1]                               # non-reference categories, in level order
     td   <- tibble::tibble(y.level = ylev[k], term = stringi::stri_replace_all_regex(trm, "`", ""),
                            estimate = unname(cf), std.error = unname(se[nm]))
-    return(reg_fit_record(tidy_native = reg_tidy_native_z(td, multiplier), nobs = nrow(mdata),
+    return(reg_fit_record(tidy_native = reg_tidy_native_z(td), nobs = nrow(mdata),
                           fit = fit, data = mdata, digest = reg_digest(fit, rec),
                           y_ref = y_levels[1], y_levels = y_levels[-1],
-                          do_exp = do_exp, conf_level = conf_level))
+                          do_exp = do_exp, conf_level = conf_level, multiplier = multiplier))
   }
 
   fit <- nnet::multinom(fml, data = mdata, trace = FALSE)
   td  <- broom::tidy(fit)                              # y.level, term, estimate, std.error, ...
   td$term <- stringi::stri_replace_all_regex(td$term, "`", "")     # strip formula backticks -> match skeleton
-  reg_fit_record(tidy_native = reg_tidy_native_z(td, multiplier), nobs = nrow(mdata),
+  reg_fit_record(tidy_native = reg_tidy_native_z(td), nobs = nrow(mdata),
                  fit = fit, data = mdata, digest = reg_digest(fit, rec),
                  y_ref = y_levels[1], y_levels = y_levels[-1],
-                 do_exp = do_exp, conf_level = conf_level)
+                 do_exp = do_exp, conf_level = conf_level, multiplier = multiplier)
 }
 
 # Ordered 3+ level outcome: proportional-odds cumulative logit -- MASS::polr unweighted,
@@ -1231,9 +1251,9 @@ reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, meth
                           estimate = unname(cf), std.error = unname(se))
     cli::cli_inform(c("i" = paste0("The proportional-odds (parallel-lines) assumption is not tested for ",
                                    "survey-weighted ordinal models (the Brant test needs an unweighted fit).")))
-    return(reg_fit_record(tidy_native = reg_tidy_native_z(td, multiplier), nobs = nrow(mdata),
+    return(reg_fit_record(tidy_native = reg_tidy_native_z(td), nobs = nrow(mdata),
                           fit = fit, data = mdata, digest = reg_digest(fit, rec),
-                          do_exp = do_exp, conf_level = conf_level))
+                          do_exp = do_exp, conf_level = conf_level, multiplier = multiplier))
   }
 
   fit <- MASS::polr(fml, data = mdata, Hess = TRUE, method = "logistic")
@@ -1242,9 +1262,9 @@ reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, meth
   td$term <- stringi::stri_replace_all_regex(td$term, "`", "")
   # The Brant test is NOT run here: it is a footer ROW's statistic costing J-1 extra fits, so it is
   # built where that row is -- else every diagnostic and crude polr fit would pay for it.
-  reg_fit_record(tidy_native = reg_tidy_native_z(td, multiplier), nobs = nrow(mdata),
+  reg_fit_record(tidy_native = reg_tidy_native_z(td), nobs = nrow(mdata),
                  fit = fit, data = mdata, digest = reg_digest(fit, rec),
-                 do_exp = do_exp, conf_level = conf_level)
+                 do_exp = do_exp, conf_level = conf_level, multiplier = multiplier)
 }
 
 # Make a fit SELF-CONTAINED: nnet::multinom / MASS::polr store `data = mdata`, a local of reg_fit(),
@@ -1553,10 +1573,9 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
   td <- broom::tidy(fit)                            # native scale: estimate, std.error, p.value
   td$term <- stringi::stri_replace_all_regex(td$term, "`", "")  # strip formula backticks -> match skeleton
 
-  # BEFORE the CI, so the Wald interval and the profile bounds scale with it.
-  rs       <- reg_tidy_rescale(td, multiplier)
-  td       <- rs$td
-  mult_vec <- rs$mult_vec
+  # `multiplier` is NOT applied here: it is a reporting choice, so it belongs to
+  # reg_tidy_finalize() beside the interval and the exponentiation -- which is what keeps this tidy
+  # NATIVE and keeps the scaling out of the fit-cache key.
 
   # An unweighted Poisson / grouped-binomial MLE reports naive SEs: scale them by sqrt(phi) so the
   # CI and stars match a quasi fit, while the MLE keeps its likelihood for the AIC / LR footer.
@@ -1601,9 +1620,10 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
     idx  <- match(td$term, stringi::stri_replace_all_regex(rownames(ci), "`", ""))
     # ⚠ the profile bounds are an OUTPUT of the likelihood at THIS conf_level, so they are the one
     # thing that cannot be rebuilt from (estimate, std.error) -- hence `method = "profile"` is not
-    # cacheable, and its bounds ride natively on the record.
-    td$conf.low  <- unname(ci[idx, 1]) * mult_vec
-    td$conf.high <- unname(ci[idx, 2]) * mult_vec
+    # cacheable, and its bounds ride NATIVELY on the record. reg_tidy_rescale() scales them at
+    # finalize, with the estimate they belong to.
+    td$conf.low  <- unname(ci[idx, 1])
+    td$conf.high <- unname(ci[idx, 2])
     lrp  <- reg_lr_pvalues(fit)
     td$p.value <- unname(lrp[match(td$term, names(lrp))])
   } else if (scaled) {
@@ -1622,7 +1642,7 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
                  positive_level = positive_level, fit = fit, data = mdata,
                  digest = reg_digest(fit, rec), profile = use_profile,
                  disp_known = disp_known, df_residual = df_res,
-                 do_exp = do_exp, conf_level = conf_level)
+                 do_exp = do_exp, conf_level = conf_level, multiplier = multiplier)
 }
 
 
@@ -1637,22 +1657,25 @@ reg_fit_record <- function(tidy_native = NULL, nobs = NA_integer_, var_y = NA_re
                            positive_level = NULL, fit = NULL, data = NULL, digest = NULL,
                            profile = FALSE, disp_known = TRUE, df_residual = NA_real_,
                            y_ref = NULL, y_levels = NULL, glance = NULL,
-                           do_exp = FALSE, conf_level = 0.95) {
+                           do_exp = FALSE, conf_level = 0.95, multiplier = NULL) {
   f <- list(tidy = NULL, tidy_native = tidy_native, nobs = nobs, var_y = var_y,
             positive_level = positive_level, fit = fit, data = data, digest = digest,
             profile = profile, disp_known = disp_known, df_residual = df_residual,
             y_ref = y_ref, y_levels = y_levels, glance = glance)
-  f$tidy <- reg_tidy_finalize(f, do_exp, conf_level)
+  f$tidy <- reg_tidy_finalize(f, do_exp, conf_level, multiplier)
   f
 }
 
-# The tidy a COLUMN prints: the native estimate wearing this estimand's interval, exponentiation and
-# reference distribution. One writer for every family and both interval methods.
+# The tidy a COLUMN prints: the native estimate wearing this estimand's interval, exponentiation,
+# reference distribution AND its `multiplier` scaling. One writer for every family and both interval
+# methods -- and the one place every REPORTING choice is applied, which is what lets each of them
+# change without refitting (reg_fit_cached serves the record; only these four arguments move).
 #' @keywords internal
 #' @noRd
-reg_tidy_finalize <- function(f, do_exp, conf_level) {
+reg_tidy_finalize <- function(f, do_exp, conf_level, multiplier = NULL) {
   td <- f$tidy_native
   if (is.null(td)) return(NULL)
+  td  <- reg_tidy_rescale(td, multiplier)      # a k-unit change, before the interval is built
   res <- if (isTRUE(f$profile))
     reg_wald_finalize(td$estimate, do_exp, lo = td$conf.low, hi = td$conf.high, p = td$p.value)
   else
@@ -3663,8 +3686,10 @@ reg_cols_ame <- function(f, sp, ctx) {
     })
   } else {
     or_tip <- if (sp_fam == "binomial" && !ratio_ame) {
-      # the fit's own coefficients, which the record already holds on its NATIVE scale
-      td <- f$tidy_native
+      # The fit's own coefficients, exponentiated. ⚠ `tidy_native` is NATIVE -- per ONE unit -- so
+      # the scaling is applied here: without it this hover would read a per-unit odds ratio beside a
+      # row labelled "per 3.08 (2SD)". reg_tidy_finalize() does the same for every printed column.
+      td <- reg_tidy_rescale(f$tidy_native, multiplier)
       exp(td$estimate[match(skeleton$term, td$term)])
     } else NULL
     cv <- if (is_comparison) sp$label

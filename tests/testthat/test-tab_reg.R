@@ -1299,3 +1299,40 @@ test_that(".levels_order names a level the table does not have without effect", 
   expect_equal(as.character(t1$levels), c(lv[[1]], lv[[2]], lv[[4]], lv[[3]]))
   expect_equal(sort(get_or(t1[[ncol(t1)]])), sort(get_or(t0[[ncol(t0)]])))
 })
+
+# === Phase 22i: the same rule in tab_reg() ========================================================
+# `na = "keep_for_predictors"` gives each predictor an NA level, which sorts LAST -- so `ref =
+# "last"` made the missing values the baseline every effect was measured from.
+test_that("reg ref = 'last' skips the NA level, and ref = 'NA' still names it", {
+  d <- forcats::gss_cat
+  d$age[1:400] <- NA
+  baseline <- function(rf) {
+    r  <- suppressMessages(tab_reg(d, "marital", c("age", "race"), family = "binomial",
+                                   na = "keep_for_predictors", ref = rf,
+                                   shape = c(age = "quartiles"), empirical = FALSE))
+    rv <- tabxplor:::tab_render_vars(r)
+    fm <- r[[which(vapply(r, is_fmt, logical(1)))[1]]]
+    as.character(r[[rv$row_var]])[as.character(r[[rv$var_col]]) == "age" & is_refrow(fm)]
+  }
+  expect_equal(baseline(c(age = "last")),  "60 to 89")
+  expect_equal(baseline(c(age = "first")), "18 to 32")
+  expect_equal(baseline(c(age = "NA")),    "NA")
+})
+
+# ⚠ Phase 22i: a RESOLVED shape spec carries the CANONICAL kind ("quantiles" / "bands"), not the
+# VAR_SHAPES key ("quartiles" / "sd_bands"), so reg_na_cut_shapes() indexing the table by it was
+# NULL for every cut and refused them ALL -- including the `sd_bands` its own message recommends.
+test_that("na = 'keep_for_predictors' accepts every CUT shape and still refuses a numeric one", {
+  d <- forcats::gss_cat
+  d$age[1:400] <- NA
+  for (sh in c("sd_bands", "quartiles", "median")) {
+    r <- suppressMessages(tab_reg(d, "marital", c("age", "race"), family = "binomial",
+                                  na = "keep_for_predictors", shape = stats::setNames(sh, "age"),
+                                  empirical = FALSE))
+    expect_s3_class(r, "tabxplor_tab")
+  }
+  expect_error(suppressMessages(
+    tab_reg(d, "marital", c("age", "race"), family = "binomial",
+            na = "keep_for_predictors", shape = c(age = "log"), empirical = FALSE)),
+    "cannot keep the missing values")
+})

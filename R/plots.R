@@ -655,13 +655,17 @@ reg_pred_facet <- function(v, cx) {
   v
 }
 
-# 2. RESIDUALS -- binned residuals against the fitted value. The classic lesson about why a RAW
-# residual is useless for a binary outcome (it takes exactly two values given p-hat), and the reason
-# every non-gaussian family here uses a randomised quantile residual instead.
+# 2. RESIDUALS -- binned residuals against the fitted value, or against the expected CATEGORY where
+# the fit has one per level rather than one per row (rd_fitted_1d()). The classic lesson about why a
+# RAW residual is useless for a binary outcome (it takes exactly two values given p-hat), and the
+# reason every non-gaussian family here uses a randomised quantile residual instead.
 reg_panel_residuals <- function(cx, cols, opts) {
   r <- rd_resid(cx$fit, cx$family, cx$data[[cx$outcome]], cx$trials, opts$seed)
-  f <- tryCatch(as.numeric(stats::fitted(cx$fit)), error = function(e) NULL)
+  # WARNING: NOT `as.numeric(fitted())` -- an ordinal fit's is the n x K probability matrix, so that
+  # gave n*K values, the length guard fired, and a panel REG_CHECKS DECLARES was silently dropped.
+  f <- rd_fitted_1d(cx$fit, cx$family)
   if (is.null(r) || is.null(f) || length(f) != length(r)) return(NULL)
+  ordinal <- identical(reg_check_family_of(cx$family), "ordinal")
   rows <- rd_bin(f, r, NULL, max(5L, min(60L, floor(sqrt(length(r))))), "identity")
   if (is.null(rows) || !nrow(rows)) return(NULL)
   g <- ggplot2::ggplot(rows, ggplot2::aes(x = .data$x, y = .data$y)) +
@@ -669,7 +673,8 @@ reg_panel_residuals <- function(cx, cols, opts) {
     ggplot2::geom_ribbon(ggplot2::aes(ymin = -2 * .data$se, ymax = 2 * .data$se),
                          fill = cols$grey, alpha = 0.2, na.rm = TRUE) +
     ggplot2::geom_point(colour = cols$point, size = 1.2, na.rm = TRUE) +
-    ggplot2::labs(x = gettext("Fitted value"), y = gettext("Mean residual"))
+    ggplot2::labs(x = if (ordinal) gettext("Expected category") else gettext("Fitted value"),
+                  y = gettext("Mean residual"))
   reg_panel_skin(
     g, "residuals",
     gettext("are fewer than 5 % of the points outside the band?"),

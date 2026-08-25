@@ -231,7 +231,7 @@ score_from_lv1 <- function (data, name, vars_list) {
   purrr::reduce(
     vars_list,
     .init = dplyr::mutate(new_data, dplyr::across(
-      tidyselect::all_of(vars_list), ~ forcats::fct_na_value_to_level(., "NA"))),
+      tidyselect::all_of(vars_list), ~ forcats::fct_na_value_to_level(., TAB_NA_LEVEL))),
 
     .f = ~ dplyr::mutate(.x, !!name := dplyr::if_else(
       condition = !!rlang::sym(.y) == levels(as.factor(!!rlang::sym(.y)))[1],

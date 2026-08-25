@@ -563,7 +563,11 @@ var tabxvRender = function (ui, host) {
             grid.style.gridTemplateColumns = tmpl;
             host.cols.forEach(function (col, k) {
                 var hd = document.createElement("div"); hd.style.cssText = TABXV.head;
-                hd.innerHTML = (k === 0) ? (g.label || col.head) : col.head;   // our own strings only
+                // A group may RE-HEAD a column, because the same cell can hold a different argument
+                // on a different group (jmvtab's `ref` column holds `ref2` off the percentage axis).
+                // "" IS a head -- "this column holds nothing here" -- while undefined keeps col.head.
+                var txt = (g.heads && g.heads[col.key] !== undefined) ? g.heads[col.key] : col.head;
+                hd.innerHTML = (k === 0) ? (g.label || txt) : txt;             // our own strings only
                 if (col.tip) hd.title = col.tip;
                 grid.appendChild(hd);
             });

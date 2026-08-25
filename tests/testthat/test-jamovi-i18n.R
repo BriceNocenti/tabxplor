@@ -63,6 +63,7 @@ JMV_WIDTH_BUDGET <- c(
   "variable" = 16, "predictor" = 16,
   "Row variables" = 16, "Column variables" = 16, "Table variables" = 16, "Predictors" = 16,
   "levels / shape =" = 27, "ref = <i>(reference)</i>" = 30, "multiplier =" = 14,   # 165 / 180 / 85px
+  "ref2 = <i>(reference)</i>" = 30,        # the same 180px column, off the percentage axis
   "merge" = 12,                                            # TABXM.grid's 72px tick column
   # the `shape =` select, in the 165px levels cell
   "linear (numeric)" = 27, "log (numeric)" = 27, "sqrt (numeric)" = 27, "quadratic (num.)" = 27,
@@ -98,7 +99,7 @@ test_that("no translation overflows the fixed-width cell it is painted in", {
 # ⚠ the glyphs are \uXXXX-escaped, per the package's ASCII-source rule -- R evaluates them to the
 # very characters the .js holds. `\\u2014` is different: it is the LITERAL backslash sequence the .js
 # source spells, and this gate reads that source as text.
-JS_TEXT_EXEMPT <- c("2sd", "max", "\u2026", "ref2 =", "family =", "link =",
+JS_TEXT_EXEMPT <- c("2sd", "max", "\u2026", "family =", "link =",
                     "\u00d7", "*", "\u2502", "\u25b2", "\u25bc", "\u25b8", "\u25be",
                     " \\u2014 ")   # the dash that JOINS two already-translated tips
 

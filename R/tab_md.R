@@ -123,10 +123,14 @@ tab_md <- function(tabs,
                           theme = theme, var_names = o$var_names, list_method = TRUE,
                           what = "tab_md()")
 
-  parts   <- purrr::imap_chr(prep$tables, function(rd, i) {
+  # WARNING: the POSITION, never imap()'s `i` -- tab_resolve_tables() passes a user's list through
+  # untouched, so a NAMED list makes `i` the name and `i == 1` silently FALSE on every table (no
+  # error): the caption was dropped. Same trap as xl_check_images().
+  parts   <- purrr::map_chr(seq_along(prep$tables), function(i) {
+    rd <- prep$tables[[i]]
     # Phase 14w (item 1) / 17b / 17g: user caption= (FIRST table only) -> stored set_caption() ->
     # reg auto-title, via the shared rd_caption().
-    cap <- rd_caption(rd, if (i == 1) caption else NULL)
+    cap <- rd_caption(rd, if (i == 1L) caption else NULL)
     md_render_one(rd, special_formatting = special_formatting, wrap_rows = wrap_rows,
                   subtext = subtext, color = color, css = css,
                   color_legend = color_legend, lang = lang,

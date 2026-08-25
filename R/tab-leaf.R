@@ -441,7 +441,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
     } else {
       data.table::setorderv(
         tabs, tab_row_names, na.last = TRUE
-      )[, paste0(tab_row_names) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"),
+      )[, paste0(tab_row_names) := lapply(.SD, forcats::fct_na_value_to_level, level = TAB_NA_LEVEL),
         .SDcols = tab_row_names]
     }
   }
@@ -612,8 +612,13 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
         tabs = tabs, tabs_pct = tabs_pct, ref = ref, ref2 = ref2, comp = comp,
         or_compare = or_compare, pct = pct, tab_row_names = tab_row_names, tab_vars = tab_vars,
         row_var = row_var, tottab_vector = tottab_vector, totrow_vector = totrow_vector, cols = cols,
-        # the leaf MINTS this column above, so here the literal IS the declaration.
+        # the leaf MINTS this column above, so here the literal IS the declaration. Same for the
+        # missing-value level, which `na = "keep"` minted with the one declared name: it is a level
+        # but not a GROUP, so a positional reference must skip it (`ref = "NA"` still names it).
         totcol_vector = names(cols) == "Total",
+        nacol_vector  = na == "keep" & names(cols) == TAB_NA_LEVEL,
+        narow_vector  = na == "keep" &
+          as.character(dplyr::pull(tabs_pct, !!row_var)) == TAB_NA_LEVEL,
         tabs_totn = if (or_want_ci) tabs_totn else NULL,
         tabs_neff = if (or_want_ci && !is.null(tabs_neff)) tabs_neff else NULL,
         conf_level = conf_level, stars = stars, degf = inference$degf,
@@ -919,7 +924,7 @@ num_total_postprocess <- function(dt, keys, na, tab_row_names) {
   keys <- keys[purrr::map_lgl(keys, ~ anyNA(dt[[.x]]))]
   if (identical(na, "keep") && length(keys) != 0) {
     data.table::setorderv(dt, keys, na.last = TRUE
-    )[, (keys) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"), .SDcols = keys]
+    )[, (keys) := lapply(.SD, forcats::fct_na_value_to_level, level = TAB_NA_LEVEL), .SDcols = keys]
   }
   invisible(dt)
 }
@@ -1060,6 +1065,7 @@ finalize_total_rows <- function(tabs, extra, cols_get_total, tab_row_names) {
 tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct,
                                 tab_row_names, tab_vars, row_var, tottab_vector, totrow_vector, cols,
                                 totcol_vector = names(cols) == "Total",
+                                nacol_vector = FALSE, narow_vector = FALSE,
                                 tabs_totn = NULL, tabs_neff = NULL, conf_level = 0.95, stars = FALSE,
                                 degf = Inf, dichotomise = FALSE) {
   nm <- names(cols)
@@ -1070,6 +1076,11 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
   # "Total"` -- the leaf's pre-rename convention, wrong for the jamovi re-reference's names.
   is_tot_col <- as.logical(totcol_vector)
   if (length(is_tot_col) != k) is_tot_col <- rep_len(FALSE, k)
+  # Which positions a POSITIONAL reference may land on: a substantive GROUP of the variable, i.e.
+  # neither a total nor the level a missing value was given. Both minted by the leaf, both declared
+  # by the caller for the same reason `totcol_vector` is. See diff_index() / calculate_refrows().
+  is_grp_col <- !is_tot_col & !rep_len(as.logical(nacol_vector), k)
+  is_grp_row <- !as.logical(totrow_vector) & !rep_len(as.logical(narow_vector), n)
 
   tabs_diff <- data.table::copy(tabs_pct)
   tabs_mean <- data.table::copy(tabs_pct)
@@ -1102,7 +1113,8 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
                         row_var       = row_var,
                         tottab_vector = tottab_vector,
                         totrow_vector = totrow_vector,
-                        num_names     = names(cols)
+                        num_names     = names(cols),
+                        grouprow_vector = is_grp_row
       )
 
     ra   <- ref_abs(refrows)
@@ -1140,7 +1152,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
       # PER-COLUMN reference index: a BINARY col_var takes each level against the OTHER (reciprocals,
       # ref2 unused); with 3+ levels every column references ref2, which then shows OR = 1.
       ridx0   <- diff_index(ref2, row_var = dplyr::pull(tabs_pct, !!row_var),
-                            num_names = nm, pct = "col", is_total = is_tot_col)
+                            num_names = nm, pct = "col", is_group = is_grp_col)
       ok_ref2 <- length(ridx0) != 0 && !is.na(ridx0) && ridx0 >= 1L && ridx0 <= k
       lv      <- which(!is_tot_col)
       binary  <- length(lv) == 2L
@@ -1191,7 +1203,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
     refcols <- dplyr::nth(names(cols), diff_index(ref,
                                                   num_names = nm,
                                                   pct       = pct,
-                                                  is_total  = is_tot_col))
+                                                  is_group  = is_grp_col))
     refcols_vector <- names(cols) == refcols
 
     if (length(refcols) != 0 & !is.na(refcols)) {
@@ -1220,7 +1232,8 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
                           row_var       = row_var,
                           tottab_vector = tottab_vector,
                           totrow_vector = totrow_vector,
-                          num_names     = names(cols)
+                          num_names     = names(cols),
+                          grouprow_vector = is_grp_row
         )
       if (or_compare) refrows <- or_refrows
       ra <- ref_abs(or_refrows)
@@ -1648,7 +1661,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
       any(purrr::map_lgl(dplyr::select(tabs, tidyselect::any_of(tab_row_names)), anyNA))) {
     data.table::setorderv(
       tabs, tab_row_names, na.last = TRUE
-    )[, paste0(tab_row_names) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"),
+    )[, paste0(tab_row_names) := lapply(.SD, forcats::fct_na_value_to_level, level = TAB_NA_LEVEL),
       .SDcols = tab_row_names]
   }
 
@@ -1768,7 +1781,10 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
     refrows <- calculate_refrows(
       tabs, ref = ref, comp = comp, tab_row_names = tab_row_names, tab_vars = tab_vars,
       row_var = row_var, tottab_vector = tottab_vector, totrow_vector = totrow_vector,
-      num_names = col_vars
+      num_names = col_vars,
+      # the numeric leaf mints the same missing-value level, and skips it the same way
+      grouprow_vector = !totrow_vector &
+        !(na == "keep" & as.character(dplyr::pull(tabs, !!row_var)) == TAB_NA_LEVEL)
     )
 
     tabs[, "ref_rows___" := refrows]

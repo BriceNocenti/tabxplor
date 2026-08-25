@@ -902,3 +902,29 @@ testthat::test_that('an odds ratio silently reads `ref = "tot"` as its own first
   testthat::expect_identical(get_diff(d[[2]]),
                              get_diff(or(color = "difference")[[2]]))
 })
+
+# === Phase 22i: a positional reference names a GROUP, never the missing-value level ===============
+# ⚠ `na = "keep"` appends the level TAB_NA_LEVEL last (fct_na_value_to_level sorts na.last), so
+# `ref = "last"` selected it -- the missing values became the thing every other row was compared to.
+# It is a level but not a GROUP; naming it explicitly still selects it.
+test_that("ref = 'last' skips the NA level on both axes, and ref = 'NA' still names it", {
+  d <- forcats::gss_cat
+  d$age[1:400] <- NA
+  refrow <- function(t) {
+    rv <- tabxplor:::tab_render_vars(t)
+    fm <- t[[which(vapply(t, is_fmt, logical(1)))[1]]]
+    as.character(t[[rv$row_var]])[which(is_refrow(fm))[1]]
+  }
+  # the ROW axis (row %)
+  t <- tab(d, age, marital, pct = "row", ref = "last", na = "keep", shape = c(age = "quartiles"))
+  expect_true("NA" %in% levels(droplevels(t[[1]])))     # the level IS there
+  expect_false(refrow(t) == "NA")                       # it is simply not the reference
+  expect_equal(refrow(t), "60 to 89")                   # the last BAND is
+  # naming it is still the way to get it
+  t2 <- tab(d, age, marital, pct = "row", ref = "NA", na = "keep", shape = c(age = "quartiles"))
+  expect_equal(refrow(t2), "NA")
+  # the COLUMN axis (col %)
+  t3 <- tab(d, marital, age, pct = "col", ref = "last", na = "keep", shape = c(age = "quartiles"))
+  refcol <- names(t3)[vapply(t3, function(x) is_fmt(x) && isTRUE(is_refcol(x)), logical(1))]
+  expect_equal(refcol, "60 to 89")
+})

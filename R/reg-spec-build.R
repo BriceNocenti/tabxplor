@@ -181,9 +181,11 @@ reg_spec_build_one <- function(i, ctx) {
   # columns, not merely name them (jmvreg_fit_key).
   key <- if (reg_fit_cacheable(sp, method, compare))
     jmvreg_fit_key(sp, data, sp_fam, design_spec,
-                   extra = list(method, multiplier, shape_terms, anchors, crosses, stats),
+                   extra = list(method, shape_terms, anchors, crosses, stats),
                    drop_extra = na_shared_vars %||% character(0)) else NULL
-  f <- reg_fit_cached(fit_cache, key, thunk, data, sp_dox, conf_level)
+  # ⚠ `multiplier` is NOT a key member: it scales the tidy at finalize and cannot move the fit, so a
+  # scaling pick is a HIT that re-reports rather than a refit. It is passed to the SEAM instead.
+  f <- reg_fit_cached(fit_cache, key, thunk, data, sp_dox, conf_level, multiplier)
   skel_out <- NULL
   if (isTRUE(skeleton_deferred) && is.null(skeleton)) {
     skeleton <- reg_skeleton_reorder(reg_skeleton_from_fit(reg_digest_revive(f, data)$fit),

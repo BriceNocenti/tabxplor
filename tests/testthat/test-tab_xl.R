@@ -513,6 +513,27 @@ testthat::test_that("tab_xl(check =) writes one picture per model, and none for 
   testthat::expect_length(png_of(tmp2), 0L)
 })
 
+# ⚠ Phase 22i: TWO models, which is the case the single-model test above cannot reach.
+# reg_check_plots() returns a bare gtable for one model and a list NAMED by model for two or more --
+# and purrr::imap() then hands the NAME, not the index. Indexing a parallel unnamed `labs` vector by
+# it ERRORED ("subscript out of bounds"), so every multi-model check export aborted.
+testthat::test_that("tab_xl(check =) labels one picture per model when there are several", {
+  testthat::skip_if_not_installed("openxlsx2")
+  testthat::skip_if_not_installed("ggplot2")
+  testthat::skip_if_not_installed("gridExtra")
+  d <- dplyr::mutate(forcats::gss_cat, married = factor(.data$marital == "Married"))
+  t <- suppressMessages(tab_reg(d, outcome = c("age", "married"),
+                                predictors = c("race", "tvhours")))
+  tmp <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(t, path = tmp, open = FALSE, replace = TRUE, check = "auto", data = d))
+  png_of <- function(f) grep("^xl/media/.+[.]png$", utils::unzip(f, list = TRUE)$Name, value = TRUE)
+  testthat::expect_length(png_of(tmp), 2L)
+  # each picture is captioned by the model it checks -- the NAME reg_check_plots() gave it
+  sheet <- paste(readLines(unz(tmp, "xl/worksheets/sheet1.xml"), warn = FALSE), collapse = "")
+  testthat::expect_match(sheet, "age", fixed = TRUE)
+  testthat::expect_match(sheet, "married", fixed = TRUE)
+})
+
 
 # === Phase 22g-vii: widths measured from the content, per SHEET ====================================
 

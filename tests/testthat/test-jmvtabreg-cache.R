@@ -528,17 +528,52 @@ test_that("jmvtab_reg_mult_vector folds the scaling picker into a named numeric"
   )
 })
 
-test_that("a multiplier change is keyed (not stale) and matches tab_reg()", {
+# Phase 22i: `multiplier` LEFT the key. It scales the tidy at reg_tidy_finalize(), beside the
+# interval and the exponentiation, and cannot move a fit -- so a scaling pick must be a HIT that
+# re-reports, exactly as an estimand change is. ⚠ a hit that served a STALE table would pass the
+# "matches tab_reg()" half alone, so the two halves are asserted together.
+test_that("multiplier is NOT in the key: a scaling pick is a hit that still re-reports", {
   gss  <- gss_reg()
   o10  <- reg_opts(predictors = c("race", "age"), ..family = "binomial", ..multiplier = c(age = 10))
   o05  <- reg_opts(predictors = c("race", "age"), ..family = "binomial", ..multiplier = c(age = 5))
   b10  <- quiet(jmvtab_reg_build(gss, o10, NULL))
-  b05  <- quiet(jmvtab_reg_build(gss, o05, b10$store))       # a different scaling -> a fresh fit, not stale
-  expect_false(identical(reg_render(b10$tabs), reg_render(b05$tabs)))
+  expect_equal(b10$hits, 0L)
+  b05  <- quiet(jmvtab_reg_build(gss, o05, b10$store))
+  expect_gte(b05$hits, 1L)                                   # served, not refitted
+  expect_false(identical(reg_render(b10$tabs), reg_render(b05$tabs)))   # and re-reported
   d10  <- quiet(tab_reg(gss, "married", c("race", "age"),
                         family = "binomial", multiplier = c(age = 10),
                         empirical = o10$empirical, cleannames = TRUE))
   expect_identical(reg_render(b10$tabs), reg_render(d10))
+  # the SERVED one is the cold one too -- a hit may not cost a number
+  d05  <- quiet(tab_reg(gss, "married", c("race", "age"),
+                        family = "binomial", multiplier = c(age = 5),
+                        empirical = o10$empirical, cleannames = TRUE))
+  expect_identical(reg_render(b05$tabs), reg_render(d05))
+})
+
+# The scaling is a change of UNITS, not of evidence: the estimate scales by k and the SE by |k|, so
+# every p-value and every star is untouched. That is why relocating the rescale could move no test.
+test_that("a multiplier changes the estimate's units and no p-value", {
+  gss <- gss_reg()
+  p <- function(k) {
+    t <- quiet(tab_reg(gss, "married", c("race", "age"), family = "binomial",
+                       multiplier = c(age = k), empirical = FALSE))
+    reg_field(t, "pvalue")
+  }
+  expect_equal(p(1), p(7))
+  expect_equal(p(1), p(-3))                       # a negative k too: |est/se| is unsigned
+})
+
+# ⚠ A NEGATIVE multiplier must not hand back an inverted bracket. The bounds scale by the SIGNED k,
+# so reg_tidy_rescale() re-orders them; before Phase 22i the profile branch did not and could not.
+test_that("a negative multiplier keeps the interval the right way round", {
+  gss <- gss_reg()
+  t   <- quiet(tab_reg(gss, "married", c("race", "age"), family = "binomial",
+                       multiplier = c(age = -2), empirical = FALSE))
+  lo  <- reg_field(t, "ci_inf"); hi <- reg_field(t, "ci_sup")
+  ok  <- !is.na(lo) & !is.na(hi)
+  expect_true(all(lo[ok] <= hi[ok]))
 })
 
 # --- Phase h: the staged-comparison gate helpers --------------------------------------------

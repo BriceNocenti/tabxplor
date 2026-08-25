@@ -53,7 +53,11 @@
 # === Constants + config ====================================================================
 # The reg store rides the shared cache kernel (R/jmvtab-cache.R: jmv_cache_config + jmv_store_*) with
 # its own 2-tier config; only the store is decoupled (its tiers + $state differ from the crosstab store).
-JMVREG_CACHE_SCHEMA <- 9L   # bump on any store-shape change -> discard stale stores
+JMVREG_CACHE_SCHEMA <- 10L  # bump on any store-shape change -> discard stale stores
+# 10 (Phase 22i): `multiplier` LEAVES the key. It scales the tidy at reg_tidy_finalize(), beside the
+#   interval and the exponentiation, so it cannot move a fit -- and a scaling pick is now a HIT that
+#   re-reports rather than a refit. The stored record's `tidy_native` is genuinely native, which is
+#   why a store written before this must be discarded.
 # 9 (Phase 22g-x): the CRUDE fits share the tier, under a synthetic one-predictor spec key -- so the
 #   `"fit"` tier now holds two kinds of record of the same shape, told apart by the key alone. And
 #   `drop_extra` becomes a NAMED, FINGERPRINTED key member where `na_shared_vars` rode in `extra` as

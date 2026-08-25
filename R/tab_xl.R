@@ -559,7 +559,10 @@ xl_check_images <- function(tabs, check, data, theme = NULL, lang = NULL, dpi = 
       if (inherits(g, "gtable")) list(g) else g
     }, error = function(e) { cli::cli_inform(c("!" = "{.arg check}: {conditionMessage(e)}")); NULL })
     if (!length(grids)) return(NULL)
-    labs <- names(grids) %||% rep("", length(grids))
+    # WARNING: imap() hands the NAME when its input is named and the INDEX when it is not, so a
+    # parallel vector indexed by `i` errors the moment the list gains names. reg_check_plots()
+    # returns a bare gtable for ONE model (wrapped here, unnamed -> `i` is an integer) and a list
+    # NAMED by model for two or more (-> `i` is "age: diff"). The label IS that name: read `i`.
     imgs <- purrr::imap(grids, function(gt, i) {
       # the PANEL grid, read off the arrangement: `top` (the model's title) occupies the first
       # layout row and spans every column, so it is one row of the layout and none of the panels.
@@ -573,7 +576,7 @@ xl_check_images <- function(tabs, check, data, theme = NULL, lang = NULL, dpi = 
       grDevices::png(f, width = w, height = h, units = "in", res = dpi)
       on.exit(grDevices::dev.off(), add = TRUE)
       grid::grid.newpage(); grid::grid.draw(gt)
-      list(file = f, width = w, height = h, label = labs[[i]] %||% "")
+      list(file = f, width = w, height = h, label = if (is.character(i)) i else "")
     })
     imgs
   })

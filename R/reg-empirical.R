@@ -399,15 +399,15 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
                                trials = trials, formula = NULL, multiplier = multiplier,
                                drop_extra = drop_v, add_terms = add))
     # ⚠ `"crude"` leads `extra` so a univariable model can never collide with a one-predictor MODEL
-    # spec's key; `est` / `marginal` are absent from it, the whole point being that the estimand is
-    # answered from the record.
+    # spec's key; `est` / `marginal` / `multiplier` are absent from it, the whole point being that
+    # the estimand AND the scaling are answered from the record.
     key <- if (cacheable)
       jmvreg_fit_key(list(outcome = outcome, predictors = fp, trials = trials,
                           outcome_level = outcome_level, formula = NULL),
                      data, family, design_spec,
-                     extra = list("crude", method, multiplier, add),
+                     extra = list("crude", method, add),
                      drop_extra = drop_v) else NULL
-    f <- tryCatch(reg_fit_cached(fit_cache, key, thunk, data, FALSE, conf_level),
+    f <- tryCatch(reg_fit_cached(fit_cache, key, thunk, data, FALSE, conf_level, multiplier),
                   error = function(e) NULL)
     if (is.null(f)) next
     # ⚠ the DIGEST rides along: it is what reg_coef_if_maker() reads, and only it carries the

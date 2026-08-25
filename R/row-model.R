@@ -30,6 +30,20 @@
 ROW_KINDS <- c("data", "total", "n", "pct", "pvalue", "gof", "blank")
 
 
+# --- the missing-value level --------------------------------------------------------------------------
+# The name a missing value is given when `na = "keep"` turns it into an ordinary level, stated ONCE
+# and read by every site that mints one (both leaves, the rollups, tab_reg()'s boundary) and by
+# every site that must tell it apart from a real group.
+#
+# DESIGN: it is a level, so it gets a row and a percentage -- but it is NOT a GROUP of the variable,
+#   which is why a POSITIONAL reference (`ref = "first"` / `"last"`) skips it and lands on the last
+#   substantive group instead. Naming it (`ref = "NA"`) still selects it.
+# WARNING: the name is reserved in practice, not merely by convention: fct_na_value_to_level() MERGES
+#   a genuine level of this name into the missing one, so under `na = "keep"` the two cannot be told
+#   apart by any means. That is what makes matching on the name exact rather than a heuristic.
+#' @keywords internal
+TAB_NA_LEVEL <- "NA"
+
 # --- the declared label-column roles -----------------------------------------------------------------
 # "level"    the column holding the row LEVELS (`marital`, or the literal `levels` when merged)
 # "var"      the column naming, per row, WHICH variable that row's level belongs to (merged tables,

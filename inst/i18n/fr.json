@@ -682,6 +682,9 @@
             "ref = <i>(reference)</i>": [
                 "ref = <i>(référence)</i>"
             ],
+            "ref2 = <i>(reference)</i>": [
+                "ref2 = <i>(référence)</i>"
+            ],
             "Reference levels (per variable)": [
                 "Modalités de référence (par variable)"
             ],

@@ -632,3 +632,20 @@ testthat::test_that("md carries the unit row, italic and span-free", {
   # ... and the grid stays square
   testthat::expect_length(unique(nchar(ln)), 1L)
 })
+
+# ⚠ Phase 22i: tab_resolve_tables() passes a user's list through untouched, so a NAMED list made
+# imap()'s `i` the NAME -- and `i == 1` is silently FALSE for a string (no error), so the caption
+# was dropped from every table. Same trap as xl_check_images(); the position is what is meant.
+test_that("a caption reaches the first table of a NAMED list", {
+  t1 <- tab(forcats::gss_cat, race, marital, pct = "row")
+  t2 <- tab(forcats::gss_cat, race, relig,   pct = "row")
+  for (tabs in list(list(t1, t2), list(a = t1, b = t2))) {
+    md <- suppressMessages(tab_md(tabs, caption = "MY CAPTION"))
+    expect_match(paste(md, collapse = "\n"), "MY CAPTION", fixed = TRUE)
+  }
+  # and only the FIRST one carries it
+  md <- suppressMessages(tab_md(list(a = t1, b = t2), caption = "MY CAPTION"))
+  expect_equal(lengths(regmatches(paste(md, collapse = "\n"),
+                                  gregexpr("MY CAPTION", paste(md, collapse = "\n"),
+                                           fixed = TRUE))), 1L)
+})

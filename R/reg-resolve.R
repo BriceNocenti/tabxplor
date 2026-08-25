@@ -799,7 +799,11 @@ reg_na_cut_shapes <- function(data, preds, shapes) {
     if (!shape_is_numeric(data[[v]]) || !anyNA(data[[v]])) next
     sp <- shapes[[v]]
     if (!is.null(sp)) {
-      if (identical(VAR_SHAPES[[sp$kind]]$produces, "factor")) next
+      # WARNING: shape_is_factor(), never VAR_SHAPES[[sp$kind]] -- a RESOLVED spec carries the
+      # CANONICAL kind ("quantiles" / "bands"), not the user-facing VAR_SHAPES key ("quartiles" /
+      # "sd_bands"), so indexing the table by it is NULL for every cut and this refused them all,
+      # including the `sd_bands` its own message recommends. The accessor does that mapping.
+      if (shape_is_factor(sp)) next
       cli::cli_abort(c(
         '{.code na = "keep_for_predictors"} cannot keep the missing values of {.val {v}}.',
         "x" = "{.code shape = c({v} = \"{sp$kind}\")} keeps it a number, and a number has no level to put them in.",
@@ -835,7 +839,7 @@ reg_na_level_vars <- function(data, preds)
 #' @noRd
 reg_na_to_level <- function(data, vars) {
   for (v in intersect(vars, names(data)))
-    data[[v]] <- forcats::fct_na_value_to_level(as.factor(data[[v]]), level = "NA")
+    data[[v]] <- forcats::fct_na_value_to_level(as.factor(data[[v]]), level = TAB_NA_LEVEL)
   data
 }
 

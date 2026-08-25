@@ -1154,6 +1154,26 @@ rd_resid <- function(fit, family, y, trials = NULL, seed = 20260810) {
   out
 }
 
+# The other half of the residual panel: the ONE number per row a residual is plotted against.
+# Every family has a scalar fitted value except an ORDINAL one, whose fitted() is the n x K
+# category-probability matrix -- there the single number is the EXPECTED CATEGORY, the
+# probability-weighted mean category index, which is what such a fit predicts for a row.
+# WARNING: rd_resid()'s families and this one's must agree, or a panel REG_CHECKS declares cannot
+# be drawn -- a silent hole, since the grid compacts a NULL away. A test walks every declared
+# (family x panel) pair for exactly that reason.
+#' @keywords internal
+rd_fitted_1d <- function(fit, family) {
+  family <- reg_check_family_of(family)
+  f <- tryCatch(stats::fitted(fit), error = function(e) NULL)
+  if (is.null(f)) return(NULL)
+  if (identical(family, "ordinal")) {
+    if (is.null(dim(f)) || !ncol(f)) return(NULL)
+    return(as.numeric(f %*% seq_len(ncol(f))))
+  }
+  if (!is.null(dim(f))) return(NULL)      # a multinomial: K columns and no single fitted value
+  as.numeric(f)
+}
+
 # The ANALYTIC pointwise Q-Q band: the i-th of n uniform order statistics is Beta(i, n-i+1), so the
 # band is qnorm(qbeta(alpha/2, i, n-i+1)) .. qnorm(qbeta(1-alpha/2, ...)) -- no simulated envelope
 # needed.

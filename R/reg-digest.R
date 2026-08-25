@@ -21,6 +21,9 @@
 #     reg_empirical_fit() (each observed/crude one) both go through, so a record cannot be fetched,
 #     distilled or rehydrated two ways. Its gate is two predicates because its two clauses are about
 #     two different things: `profile` refuses ANY fit, a model comparison only the model ones.
+#   - ⚠ WHAT IS IN THE KEY IS WHAT CAN MOVE A FIT, and nothing else. The estimand left it in Phase
+#     22j and `multiplier` in 22i: both are REPORTING choices applied by reg_tidy_finalize(), which
+#     the seam calls on the way out -- so each of them is a hit that re-reports, never a refit.
 #   - ⚠ this file sorts BEFORE R/reg-empirical.R, R/reg-influence.R, R/reg-spec-build.R and
 #     R/tab_reg.R, so no top-level code here may read one of their objects (function bodies run
 #     after the namespace is built, and are fine).
@@ -313,16 +316,17 @@ reg_fit_cacheable <- function(sp, method, compare = "none")
 # downstream as "no gap SE" / "no marginal sweep" rather than as an error.
 #' @keywords internal
 #' @noRd
-reg_fit_cached <- function(fit_cache, key, thunk, data, do_exp, conf_level) {
+reg_fit_cached <- function(fit_cache, key, thunk, data, do_exp, conf_level, multiplier = NULL) {
   f <- if (is.null(fit_cache) || is.null(key)) thunk()
        else jmvreg_cached(fit_cache, "fit", key, function() reg_fit_distil(thunk()))
-  f <- reg_fit_rehydrate(f, data, do_exp, conf_level)
+  f <- reg_fit_rehydrate(f, data, do_exp, conf_level, multiplier)
   if (is.null(f$data)) thunk() else f
 }
 
 # reg_fit_distil() -- the cache boundary: what the store holds. The fitted object and the frame go,
 # the digest and everything the eager stage computed off the fit stay. `tidy` goes too -- it is the
-# one estimand-dependent member, and reg_tidy_finalize() rewrites it on the way out.
+# one estimand-dependent member, and reg_tidy_finalize() rewrites it on the way out -- with the
+# `multiplier` scaling, which is likewise a reporting choice and so likewise out of the KEY.
 #' @keywords internal
 #' @noRd
 reg_fit_distil <- function(f) {
@@ -337,11 +341,11 @@ reg_fit_distil <- function(f) {
 # record that still has its fit.
 #' @keywords internal
 #' @noRd
-reg_fit_rehydrate <- function(f, data, do_exp, conf_level) {
+reg_fit_rehydrate <- function(f, data, do_exp, conf_level, multiplier = NULL) {
   if (is.null(f$data)) f$data <- reg_digest_frame(f$digest, data)
   if (is.null(f$fit) && is.null(f$design))
     f$design <- reg_digest_design(f$digest, f$data, data)
-  f$tidy <- reg_tidy_finalize(f, do_exp, conf_level)
+  f$tidy <- reg_tidy_finalize(f, do_exp, conf_level, multiplier)
   f
 }
 

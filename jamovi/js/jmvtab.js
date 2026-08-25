@@ -8,7 +8,7 @@
 // ⚠ EVERY user-visible string goes through `_()` -- jamovi's own gettext, which the analysis UI
 // defines (`window._`) before it evaluates this file, and which the compiler extracts from
 // jamovi/js/**/*.js. A literal left unwrapped ships English in every locale and reports nothing;
-// test-jamovi-i18n.R is the gate. Argument NAMES and VALUES (`ref2 =`, `2sd`, `max`) stay English
+// test-jamovi-i18n.R is the gate. Argument NAMES and VALUES (`2sd`, `max`, `family =`) stay English
 // on purpose. No edge whitespace inside `_()` (the lookup trims, the catalogue does not), no
 // plural and no context (only `_` exists at runtime): a branch is TWO FULL msgids.
 // ⚠ A string inside the SHARED span is edited HERE and copied by dev/generate_jamovi_js.R.
@@ -557,7 +557,11 @@ var tabxvRender = function (ui, host) {
             grid.style.gridTemplateColumns = tmpl;
             host.cols.forEach(function (col, k) {
                 var hd = document.createElement("div"); hd.style.cssText = TABXV.head;
-                hd.innerHTML = (k === 0) ? (g.label || col.head) : col.head;   // our own strings only
+                // A group may RE-HEAD a column, because the same cell can hold a different argument
+                // on a different group (jmvtab's `ref` column holds `ref2` off the percentage axis).
+                // "" IS a head -- "this column holds nothing here" -- while undefined keeps col.head.
+                var txt = (g.heads && g.heads[col.key] !== undefined) ? g.heads[col.key] : col.head;
+                hd.innerHTML = (k === 0) ? (g.label || txt) : txt;             // our own strings only
                 if (col.tip) hd.title = col.tip;
                 grid.appendChild(hd);
             });
@@ -885,6 +889,14 @@ var orIsActive = function (ui) {
 
 var tabVarsOf = function (ui, nm) { return ui[nm] ? utils.clone(ui[nm].value(), []) : []; };
 
+// ⚠ THE REFERENCE COLUMN IS HEADED PER GROUP, because off the percentage axis it holds a DIFFERENT
+// ARGUMENT. `ref` is chosen on the axis the percentages run along (tabAxisVars); the other axis's
+// one writable cell is `ref2 =`, the odds ratio's SECOND reference, which exists only while an odds
+// ratio is in force. Same wording as the `ref` head, only the argument name changes -- and a column
+// that can hold nothing at all (that axis without an odds ratio, and every table variable) is not
+// headed, because naming an empty column offers a choice the table does not have.
+var TABX_REF2_HEAD = _("ref2 = <i>(reference)</i>");
+
 var VAR_TABLE_HOST = {
     ctrl: "varTableCtrl",
     // THREE columns: `tab()` has no per-variable scaling, so a 4th would be dead width in a pane
@@ -905,10 +917,18 @@ var VAR_TABLE_HOST = {
 
     // the 3rd slot is the AXIS rule a number reads: only a COLUMN variable may stay a number (its
     // reading is its mean), which is the same rule shape_refuse_numeric_index() enforces R-side.
+    // The 4th is the ref column's own head (see TABX_REF2_HEAD): the axis group keeps the column's,
+    // the other axis is headed by the argument it actually writes, and a dead column is not headed.
     groups: function (ui) {
-        return [{ label: _("Row variables"),    vars: tabVarsOf(ui, "row_vars"), numericMayKeep: false },
-                { label: _("Column variables"), vars: tabVarsOf(ui, "col_vars"), numericMayKeep: true  },
-                { label: _("Table variables"),  vars: tabVarsOf(ui, "tab_vars"), numericMayKeep: false }];
+        var onCol = (ui.pct ? ui.pct.value() : "no") === "col";
+        var off   = { ref: orIsActive(ui) ? TABX_REF2_HEAD : "" };
+        var dead  = { ref: "" };
+        return [{ label: _("Row variables"),    vars: tabVarsOf(ui, "row_vars"), numericMayKeep: false,
+                  heads: onCol ? off : undefined },
+                { label: _("Column variables"), vars: tabVarsOf(ui, "col_vars"), numericMayKeep: true,
+                  heads: onCol ? undefined : off },
+                { label: _("Table variables"),  vars: tabVarsOf(ui, "tab_vars"), numericMayKeep: false,
+                  heads: dead }];
     },
 
     // ⚠ ONLY what the table does not itself write (see the SHARED header). `pct` decides which axis
@@ -983,8 +1003,9 @@ var tabAxisVars = function (ui) {
 
 // The odds ratio's SECOND reference. It is a statement about the OTHER axis, and it exists only
 // while an odds ratio is in force -- so rather than a control of its own it borrows the reference
-// cell of the first variable of that axis, and says what it is in a tooltip. Every other off-axis
-// cell stays empty: a reference the table does not use must not be offered as though it did.
+// cell of the first variable of that axis, under that group's own `ref2 =` head (TABX_REF2_HEAD),
+// and says which axis it names in a tooltip. Every other off-axis cell stays empty: a reference
+// the table does not use must not be offered as though it did.
 var tabRef2Cell = function (ui, cell, v, pct) {
     if (!ui.ref2 || !orIsActive(ui)) return;
     var other = tabVarsOf(ui, (pct === "col") ? "row_vars" : "col_vars");
@@ -1003,11 +1024,8 @@ var tabRef2Cell = function (ui, cell, v, pct) {
     sel.title = (pct === "col")
         ? _("odds ratios \u2013 the row each odds ratio is compared to (ref2 =)")
         : _("odds ratios \u2013 the column each odds ratio is compared to (ref2 =)");
-    // this ONE cell sits in the column headed `ref =` but writes the OTHER argument, so it says so.
-    var tag = document.createElement("span");
-    tag.style.cssText = TABXV.lvlHow + "white-space:nowrap;flex:0 0 auto;margin-right:4px;";
-    tag.textContent = "ref2 =";
-    cell.appendChild(tag);
+    // No in-cell tag naming the argument: this group's COLUMN HEAD says `ref2 =` (TABX_REF2_HEAD),
+    // which names it once instead of once per row and leaves the select its full width.
     cell.appendChild(sel);
 };
 

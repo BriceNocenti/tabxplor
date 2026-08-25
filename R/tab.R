@@ -2727,7 +2727,7 @@ relabel_levels_in_varnames <- function(data, col_vars) {
 }
 
 #' @keywords internal
-diff_index <-  function(ref, row_var, num_names, pct, is_total = FALSE) {
+diff_index <-  function(ref, row_var, num_names, pct, is_group = TRUE) {
   if (ref == "tot"   ) return(-1L)
   if (ref == "first" ) return(1L )
   if (is.numeric(ref) | !is.na(suppressWarnings(as.integer(ref)))
@@ -2745,10 +2745,14 @@ diff_index <-  function(ref, row_var, num_names, pct, is_total = FALSE) {
   #   Falling through to the regex matcher matched nothing, and first(integer(0)) -> replace_na(0)
   #   gave index 0 -- the "no columns were found as reference" warning.
   # WARNING: like "tot" / "first", the sentinel wins over a level LITERALLY named "last" -- select
-  #   such a level by its integer index. `is_total` is the leaf's OWN naming, never a user label.
+  #   such a level by its integer index. `is_group` is the leaf's OWN naming, never a user label.
+  # DESIGN: a positional sentinel names a substantive GROUP of the variable -- neither a total nor
+  #   the level a missing value was given (`na = "keep"`), which is a level but not a group. Both
+  #   exclusions ride ONE vector composed by the caller, which is the only place that knows which
+  #   columns it minted; `ref = "NA"` still names the missing level, through the matcher below.
   if (identical(ref, "last")) {
     if (identical(pct, "row")) return(-1L)
-    keep <- which(!vctrs::vec_recycle(is_total, length(targets)))
+    keep <- which(vctrs::vec_recycle(is_group, length(targets)))
     return(if (length(keep)) max(keep) else length(targets))
   }
 
@@ -2779,28 +2783,34 @@ diff_index <-  function(ref, row_var, num_names, pct, is_total = FALSE) {
 }
 
 #' @keywords internal
+#
+# `grouprow_vector` says which rows are a substantive GROUP of the row variable, and it is a
+# COMPANION to `totrow_vector` rather than its negation: `ref = "tot"` reads the latter, because a
+# total row IS what that reference names, while `ref = "last"` reads the former, which additionally
+# excludes the level a missing value was given (`na = "keep"`). The caller composes it: it is the
+# one that knows which rows it minted.
 calculate_refrows <- function(tabs, ref, comp, tab_row_names, tab_vars,
                               row_var, tottab_vector, totrow_vector, # pct,
-                              num_names) {
+                              num_names, grouprow_vector = !totrow_vector) {
   if (ref != "tot") {
     # WARNING: diff_index() stays INSIDE the transmute. `!!row_var` is tidy-eval, so each grouped call
     #   sees its OWN sub-table's labels; hoisting it out makes `!!row_var` an invalid argument.
     # -1L is `ref = "last"`: the last LEVEL of each sub-table, not its last ROW, hence last_lvl().
-    last_lvl <- function(is_tot) {
-      keep <- which(!is_tot)
-      if (length(keep)) max(keep) else length(is_tot)   # a sub-table of nothing but totals
+    last_lvl <- function(is_group) {
+      keep <- which(is_group)
+      if (length(keep)) max(keep) else length(is_group)   # a sub-table with no group in it
     }
     refrows <-
       if(comp == "tab") {
         tibble::as_tibble(tabs[, tab_row_names, with = FALSE]) |>
-          dplyr::mutate(totrow_vector = totrow_vector) |>
+          dplyr::mutate(grouprow_vector = grouprow_vector) |>
           dplyr::group_by(!!!tab_vars) |>
           dplyr::transmute(
             var =
               dplyr::row_number() == if (diff_index(ref, !!row_var,
                                                     num_names = num_names,
                                                     pct = "row") == -1) {
-                last_lvl(.data$totrow_vector)
+                last_lvl(.data$grouprow_vector)
               } else {
                 diff_index(ref, !!row_var, num_names = num_names, pct = "row")
               }
@@ -2809,7 +2819,7 @@ calculate_refrows <- function(tabs, ref, comp, tab_row_names, tab_vars,
 
       } else {
         tibble::as_tibble(tabs[, tab_row_names, with = FALSE]) |>
-          dplyr::mutate(tottab_vector = tottab_vector, totrow_vector = totrow_vector) |>
+          dplyr::mutate(tottab_vector = tottab_vector, grouprow_vector = grouprow_vector) |>
           dplyr::group_by(!!!tab_vars) |>
           dplyr::transmute(
             var = dplyr::if_else(
@@ -2817,7 +2827,7 @@ calculate_refrows <- function(tabs, ref, comp, tab_row_names, tab_vars,
               true  = dplyr::row_number() == if (diff_index(ref, !!row_var,
                                                             num_names = num_names,
                                                             pct = "row") == -1) {
-                last_lvl(.data$totrow_vector)
+                last_lvl(.data$grouprow_vector)
               } else {
                 diff_index(ref, !!row_var, num_names = num_names, pct = "row")
               },

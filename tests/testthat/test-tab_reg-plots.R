@@ -188,3 +188,36 @@ test_that("Phase 18z13: a model column is told from its observed twin by ROLE", 
   testthat::expect_identical(unique(as.character(forest_plot(t, return_data = TRUE)$column)),
                              "Model_OR")
 })
+
+# === Phase 22i: a declared panel must be a drawable panel =========================================
+# ⚠ THE INVARIANT. `REG_CHECKS$<check>$families` is a PROMISE reg_panel_keys() makes to the user:
+# ask for `check = "all"` and every key it returns must produce a grob. Nothing enforced it, and
+# reg_check_plots() COMPACTS a NULL away -- so an ordinal residual panel was declared and silently
+# dropped for ~94 commits (the fit's fitted() is the n x K probability matrix, not one number per
+# row). This walks the promise instead of trusting it.
+test_that("every panel a family DECLARES actually builds", {
+  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra"); skip_if_not_installed("broom")
+  skip_if_not_installed("nnet"); skip_if_not_installed("MASS")
+  d <- reg_plot_data()[1:1500, ]
+  grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())
+  cols <- tabxplor:::tx_plot_colors(NULL)
+  opts <- list(predictors = NULL, max_points = 400L, nbins = 10L, conf = 0.95,
+               seed = 1L, facet_ncol = NULL)
+  cases <- list(
+    list(outcome = "married",  family = "binomial"),
+    list(outcome = "tvhours",  family = "gaussian"),
+    list(outcome = "tvhours",  family = "poisson"),
+    list(outcome = "marital",  family = "multinomial"),
+    list(outcome = "rincome",  family = "ordinal")
+  )
+  for (cs in cases) {
+    t  <- suppressMessages(suppressWarnings(
+      tab_reg(d, cs$outcome, c("race", "age"), family = cs$family)))
+    cx <- suppressMessages(tabxplor:::reg_plot_fits(t, d))[[1L]]
+    keys <- tabxplor:::reg_panel_keys(cx, "all")
+    for (k in keys) {
+      g <- suppressWarnings(tabxplor:::reg_panel_build(k, cx, cols, opts))
+      expect_false(is.null(g), info = paste0(cs$family, " declares '", k, "' and draws nothing"))
+    }
+  }
+})
