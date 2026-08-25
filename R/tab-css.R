@@ -283,6 +283,17 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
                     "display" = "inline-block")
       for (k in names(sec_face)) add(".tabxplor-tab .tx-sec", k, "", "", sec_face[[k]])
     }
+    # THE EFFECT-SIZE MARKS, which sit where the stars sit and are NOT an aside: they replace the
+    # colour, so they carry the deviation itself and read in the chrome's own `mark` ink. They take
+    # the same face reset as `.tx-sec` for the same reason (an inline-block is left out of an
+    # ancestor's text-decoration), so a rung-3 underline does not run through the glyphs.
+    # PRINT-ONLY, like the `.tx-sec` face rules above and for the same reason: only a publication
+    # palette writes marks, so a colour layer needs no rule at all and stays byte-identical.
+    add(".tabxplor-tab .tx-mark", "color", "", "", tx_chrome_hex(print_theme)$mark)
+    for (k in c("font-style", "text-decoration", "display"))
+      add(".tabxplor-tab .tx-mark", k,
+          "", "", c("font-style" = "normal", "text-decoration" = "none",
+                    "display" = "inline-block")[[k]])
   }
 
   # Phase 14l: the text channel uses the text family and the bg channel the bg family -- the loop

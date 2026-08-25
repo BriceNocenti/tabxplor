@@ -908,7 +908,38 @@ set_display.tabxplor_fmt <- function(x, value) {
     if (grepl("{", tmpl, fixed = TRUE)) return(display_write_col(x, tmpl)$col)
     value <- tmpl
   }
-  fmt_set_display(x, value)
+  fmt_set_display(x, display_canonical(value))
+}
+
+# THE PUBLIC SETTER'S GATE. Every value is answered by the declared vocabulary, so an unknown word
+# aborts here instead of reaching format() and rendering whatever field happens to sit in that slot
+# (`set_display(x, "difference")` printed the COUNT). It also stores the CANONICAL spelling, which is
+# what the pipeline's own writes already hold: an alias becomes its token, a colour MEASURE's name
+# becomes the token rendering it.
+# ⚠ per ELEMENT: a per-cell display is a character vector, and each element must be legal.
+# ⚠ the vocabulary is EVERY declared token, not the ?tab subset: the pipeline sets `n_range`, `blank`
+# and the footer tokens through this same setter, and they are declared rows like any other.
+#' @keywords internal
+#' @noRd
+display_canonical <- function(value) {
+  v  <- vctrs::vec_cast(value, character())
+  ok <- !is.na(v)
+  u  <- unique(v[ok])
+  if (!length(u)) return(v)
+  v[ok] <- vapply(u, display_canonical_one, character(1), USE.NAMES = FALSE)[match(v[ok], u)]
+  v
+}
+
+#' @keywords internal
+#' @noRd
+display_canonical_one <- function(d) {
+  if (d %in% c("", "no", "auto")) return(d)                     # "leave this cell's token alone"
+  if (d %in% names(DISPLAY_PRESET_ALIASES)) d <- unname(DISPLAY_PRESET_ALIASES[[d]])
+  if (d %in% names(DISPLAY_PRESETS))        return(d)           # already resolved by the caller
+  if (d %in% names(DISPLAY_ALIASES))        d <- unname(DISPLAY_ALIASES[[d]])
+  if (d %in% names(DISPLAY_TOKENS))         return(d)
+  if (d %in% names(DISPLAY_MEASURE_TOKENS)) return(unname(DISPLAY_MEASURE_TOKENS[[d]]))
+  validate_display_template(d, fields = names(DISPLAY_TOKENS))
 }
 
 # The RAW display write, with no preset routing. `est` and `base` are both TOKENS and preset NAMES;
@@ -1724,20 +1755,21 @@ display_prune_template <- function(seg, empty)
 # template before they get here. Checks balanced non-empty braces and known field names (aliases
 # included, so "{OR}" passes). The ONLY place a bad `display=` value aborts.
 #' @keywords internal
-validate_display_template <- function(recipe) {
+validate_display_template <- function(recipe, fields = DISPLAY_USER_FIELDS) {
   recipe <- recipe[[1]]
+  known  <- c(fields, names(DISPLAY_ALIASES))
   # Ergonomics / back-compat: a bare field name (no braces) that is a known display field is treated as
   # the single-field template "{field}", so e.g. display = "ci" == display = "{ci}" (and "diff"/"pct"/...).
   # One general rule, not an ad-hoc "ci" case. A genuinely unknown bare value still hits the abort below.
-  if (!grepl("[{}]", recipe) &&
-      recipe %in% c(DISPLAY_USER_FIELDS, names(DISPLAY_ALIASES))) {
+  if (!grepl("[{}]", recipe) && recipe %in% known) {
     recipe <- paste0("{", recipe, "}")
   }
   if (!grepl("[{}]", recipe)) {
     cli::cli_abort(c(
       "Invalid {.arg display} value {.val {recipe}}.",
-      "i" = "Composite display uses a {{}} template listing the fields to combine,
-             e.g. {.code {{pct}} (n={{n}})} or {.code {{diff}} {{ci}}}."
+      "i" = "Name one field, or combine several in a {{}} template,
+             e.g. {.code {{pct}} (n={{n}})} or {.code {{diff}} {{ci}}}.",
+      "i" = "Valid fields: {.val {DISPLAY_USER_FIELDS}}."
     ))
   }
   opens  <- stringi::stri_count_regex(recipe, "\\{")
@@ -1756,7 +1788,7 @@ validate_display_template <- function(recipe) {
     cli::cli_abort(c("Malformed {.arg display} template {.val {recipe}}.",
                      "i" = "Use balanced, non-empty tokens, e.g. {.code {{pct}} (n={{n}})}."))
   }
-  unknown <- setdiff(fields_used, c(DISPLAY_USER_FIELDS, names(DISPLAY_ALIASES)))
+  unknown <- setdiff(fields_used, known)
   if (length(unknown)) {
     cli::cli_abort(c("Unknown field{?s} {.val {unknown}} in {.arg display} template.",
                      "i" = "Valid fields: {.val {DISPLAY_USER_FIELDS}}."))
@@ -2899,7 +2931,11 @@ fmt_cell_suffix <- function(x, stars = FALSE, theme = NULL) {
   if (!is.null(marks) && any(nzchar(marks))) {
     out <- c("", marks)[fmt_color_channels(x)$text_slot + 1L]
     out[display_primary(get_display(x)) %in% DISPLAY_FOOTER_TOKENS] <- ""
-    return(out)
+    # ⚠ THE ONE place the two suffixes are told apart, so no backend has to re-derive it from the
+    # theme: a mark says how big the deviation is and is the cell's own signal (it stands in for the
+    # colour), while a star says how sure it is and stays an aside. format() carries the flag on to
+    # `mark_nchar`, which is what lets a renderer paint the marks in the chrome's `mark` ink.
+    return(structure(out, marks = TRUE))
   }
   if (isTRUE(stars) && fmt_stars_applicable(x)) get_stars(x) else rep("", length(x))
 }
@@ -4003,6 +4039,15 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # how wide the cell suffix is -- read by the composite expander above, which calls this on its own
   # primary token and must subtract it from the range it records.
   if (isTRUE(bold_split) && st_w > 0L) attr(out, "suffix_nchar") <- st_w
+  # ... and, where that suffix is a publication palette's MARKS, how many of those trailing characters
+  # they are. The run always sits immediately after the primary range (both branches stop the range
+  # before it), so a backend reads it as `primary_from + primary_nchar` for `mark_nchar` characters
+  # and paints it with the chrome's `mark` ink instead of the aside grey -- the marks ARE the cell's
+  # signal, they only sit where the stars would. NULL for stars, which stay an aside.
+  if (isTRUE(bold_split) && st_w > 0L && isTRUE(attr(st, "marks")) && !is.null(prim_nchar)) {
+    mk <- ifelse(!is.na(prim_from) & !is.na(prim_nchar) & nzchar(st), nchar(st), NA_integer_)
+    if (any(!is.na(mk))) attr(out, "mark_nchar") <- as.integer(mk)
+  }
 
   out
 }
@@ -4043,7 +4088,7 @@ color_secondary_hex <- function(theme = "light") tx_chrome_hex(theme)$grey2
 # A cell with no recorded range (a simple token, or an NA) is painted whole -- there is no aside.
 #' @keywords internal
 #' @noRd
-paint_split <- function(txt, style, from, n, sec = identity) {
+paint_split <- function(txt, style, from, n, sec = identity, mk = NULL, mark = sec) {
   if (!length(txt)) return(txt)
   whole <- is.na(from) | is.na(n) | from <= 1L & n >= nchar(txt)
   out <- txt
@@ -4051,10 +4096,15 @@ paint_split <- function(txt, style, from, n, sec = identity) {
   k <- !whole & !is.na(txt)
   if (any(k)) {
     to  <- from[k] + n[k] - 1L
+    # a publication palette's MARKS sit immediately after the primary range and are not an aside:
+    # they replace the colour, so they take their own ink (`mark`). `mk` is format()'s `mark_nchar`.
+    mw  <- if (is.null(mk)) rep(0L, length(txt))[k] else ifelse(is.na(mk[k]), 0L, mk[k])
     pre <- substr(txt[k], 1L, from[k] - 1L)
     mid <- substr(txt[k], from[k], to)
-    post <- substr(txt[k], to + 1L, nchar(txt[k]))
+    mrn <- substr(txt[k], to + 1L, to + mw)
+    post <- substr(txt[k], to + mw + 1L, nchar(txt[k]))
     out[k] <- paste0(ifelse(nzchar(pre), sec(pre), pre), style(mid),
+                     ifelse(nzchar(mrn), mark(mrn), mrn),
                      ifelse(nzchar(post), sec(post), post))
   }
   out
@@ -4087,11 +4137,15 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
   # the CONSOLE's own theme (tabxplor.color_style_theme, best-effort detected), so a dark terminal
   # gets the light grey and a light one the dark grey -- never a colour baked for the other.
   sec_hex <- if (is.null(prim_f)) NULL else color_secondary_hex(tx_theme_option("console"))
-  sec_sty <- if (is.null(sec_hex)) identity
-             else tryCatch(cli::make_ansi_style(sec_hex), error = function(e) identity)
+  ansi    <- function(hex) if (is.null(hex)) identity
+                           else tryCatch(cli::make_ansi_style(hex), error = function(e) identity)
+  sec_sty <- ansi(sec_hex)
+  mk_n    <- attr(out, "mark_nchar")
+  mk_sty  <- ansi(if (is.null(mk_n)) NULL else tx_chrome_hex(tx_theme_option("console"))$mark)
   paint   <- function(txt, style, cells)
     if (is.null(prim_f)) style(txt)
-    else paint_split(txt, style, prim_f[cells], prim_n[cells], sec_sty)
+    else paint_split(txt, style, prim_f[cells], prim_n[cells], sec_sty,
+                     mk = mk_n[cells], mark = mk_sty)
   # THE one styling write: paint the cells of `mask` and put them back. `bolded` rides the PRIMARY,
   # so it is composed into the style rather than wrapped around the finished string.
   paint_cells <- function(mask, style, bolded) {

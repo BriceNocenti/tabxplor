@@ -145,6 +145,10 @@ palette_8bit <- list(
 #   grey2 : an uncoloured cell in a column with no colour measure -- and, by the same logic, the
 #           SECONDARY tokens of a composite cell (color_secondary_hex()): both mean
 #           "present, but nothing is being said about it"
+#   mark  : a publication palette's effect-size MARKS, which sit where the stars sit but are not an
+#           aside: they REPLACE the colour, so they carry the deviation itself and must read as
+#           strongly as the number. Pure black under every print palette (a superscript glyph at
+#           grey2 is too faint to be seen at all); `grey2` elsewhere, where nothing writes a mark.
 # Phase 14e: `hover` is kableExtra's lightable yellow (its `tbody tr:hover` -- more visible and more
 # familiar than the grey wash we had). DARK: pure #FFFFFF on #111111 is a harsh, glare-y contrast for
 # body text; #CECDC3 on #222222 is the (softer, warmer) pairing the maintainer asked for. The border
@@ -157,12 +161,14 @@ tx_chrome_hex <- function(theme = "light") {
   # for an aside. It owns those two because they must sit beside ITS ink ladder (a palette whose first
   # rung is pure black can use the ordinary grey; one whose first rung is already grey cannot).
   if (!is.null(pal)) return(list(text = "#000000", grey = pal$grey, grey2 = pal$grey2,
+                                 mark = "#000000",
                                  bg = "#ffffff", border = "#000000", hover = "transparent"))
   switch(
     tx_palette_theme(theme),
-    dark = list(text = "#f0efe5", grey = "#707070", grey2 = "#CECDC3", # text = "#CECDC3", grey = "#707070", grey2 = "#bebebe", 
+    dark = list(text = "#f0efe5", grey = "#707070", grey2 = "#CECDC3", # text = "#CECDC3", grey = "#707070", grey2 = "#bebebe",
+                mark = "#CECDC3",
                 bg = "#222222", border = "#CECDC3", hover = "rgba(255,242,204,.10)"),
-    list(text = "#000000", grey = "#949494", grey2 = "#444444",
+    list(text = "#000000", grey = "#949494", grey2 = "#444444", mark = "#444444",
          bg = "#ffffff", border = "#000000", hover = "#FFFCE5")
   )
 }

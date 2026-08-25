@@ -193,7 +193,13 @@ testthat::test_that("a top-level literal renders even when the primary token is 
 # === consumer safety: a hand-injected bad template must not crash any consumer =====
 
 testthat::test_that("every display consumer survives a hand-injected malformed template", {
-  x <- set_display(fmt(n = c(10L, 20L), scale = "level_pct", pct_type = "row", pct = c(0.4, 0.6), display = "pct"), "{bad")
+  # ⚠ written through the RAW setter: since 22g-vii the PUBLIC set_display() refuses this at the door
+  # (asserted below). What is locked here is that a field already holding one -- a hand-mutate(), an
+  # object saved by an older version -- still renders rather than erroring.
+  x <- tabxplor:::fmt_set_display(
+    fmt(n = c(10L, 20L), scale = "level_pct", pct_type = "row", pct = c(0.4, 0.6), display = "pct"),
+    "{bad")
+  testthat::expect_error(set_display(x, "{bad"), "Malformed")
   testthat::expect_no_error(format(x))
   testthat::expect_no_error(get_num(x))
   testthat::expect_no_error(set_num(x, c(1, 2)))
@@ -639,4 +645,27 @@ testthat::test_that("`base_diff` is a preset, beside its ratio and odds-ratio si
   vals <- Filter(function(o) identical(o$name, "display"), vals)[[1]]$options
   for (v in vapply(vals, function(o) as.character(o$name), character(1)))
     testthat::expect_no_error(tabxplor:::display_resolve(v))
+})
+
+
+# === Phase 22g-vii: set_display() goes through THE display boundary ================================
+
+testthat::test_that("set_display() takes a measure's own name, and refuses an unknown word", {
+  g <- gss_cat_data_formatting()
+  t <- suppressMessages(tab(g, race, party3, pct = "row", ref = "first", na = "drop_all"))
+  col <- t[[2]]
+  # a colour MEASURE's name reaches the token that renders it: one spelling, one quantity, whichever
+  # argument it is typed in (`display = "difference"` used to write the COUNT, silently)
+  testthat::expect_identical(get_display(set_display(col, "difference"))[[1]], "diff")
+  testthat::expect_identical(get_display(set_display(col, "odds_ratio"))[[1]], "or")
+  testthat::expect_identical(get_display(set_display(col, "ratio"))[[1]], "ratio")
+  testthat::expect_identical(format(set_display(col, "difference")),
+                             format(set_display(col, "diff")))
+  # an alias is stored canonically, so a column carries one spelling of its token
+  testthat::expect_identical(get_display(set_display(col, "OR"))[[1]], "or")
+  # ... and a word that names nothing aborts instead of rendering some other field
+  testthat::expect_error(set_display(col, "od_ratio"), "display")
+  testthat::expect_error(set_display(col, "{nonsense}"), "Unknown field")
+  # a {} template still passes through, validated
+  testthat::expect_identical(get_display(set_display(col, "{pct} (n={n})"))[[1]], "{pct} (n={n})")
 })

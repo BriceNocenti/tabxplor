@@ -749,15 +749,23 @@ testthat::test_that("a row_var separator stops at the name column; the model-fit
   testthat::expect_true(any(grepl("tx-bb2", nm[grepl(">Model", nm, fixed = TRUE)], fixed = TRUE)))
 })
 
-testthat::test_that("a rotated interaction name breaks before its operator", {
+testthat::test_that("a rotated name wraps to its block's height, breaking before the operator", {
   testthat::skip_if_not_installed("broom")
   d <- forcats::gss_cat |>
     dplyr::mutate(married = factor(dplyr::if_else(marital == "Married", "Married", "Not married")))
-  t <- suppressMessages(tab_reg(d, "married", c("relig", "age*race"), family = "binomial",
+  # `tvhours*marital` (15 chars over a 6-row block) is longer than the floor "Constant" sets, so it
+  # rotates; two vertical lines then fit, and the break falls before the cross operator.
+  t <- suppressMessages(tab_reg(d, "married", c("relig", "tvhours*marital"), family = "binomial",
                                 stats = FALSE))
   h <- as.character(tab_html(t))
-  testthat::expect_match(h, "age<br>*race", fixed = TRUE)
-  testthat::expect_no_match(h, "age*race", fixed = TRUE)   # never left on one long vertical line
+  testthat::expect_match(h, "tvhours<br>", fixed = TRUE)
+  testthat::expect_match(h, "*marital", fixed = TRUE)
+  # ... and a name no longer than that floor stays horizontal, whole: rotating it would save nothing
+  t2 <- suppressMessages(tab_reg(d, "married", c("relig", "age*race"), family = "binomial",
+                                 stats = FALSE))
+  h2 <- as.character(tab_html(t2))
+  testthat::expect_match(h2, ">age*race</td>", fixed = TRUE)
+  testthat::expect_no_match(h2, "tx-vname[^\"]*\" rowspan=\"3\">age", perl = TRUE)
 })
 
 # --- Phase 22b-xviii: the background is a colour MEASURE, so it stops at the primary token --------
@@ -790,4 +798,58 @@ test_that("the hover gap reads like every other interval in the package", {
   expect_gt(length(tips), 0L)
   expect_false(any(grepl(" pts", tips, fixed = TRUE)))   # a unit the cell itself never prints
   expect_true(any(grepl("gap: [-+][0-9.]+% \\[[^]]*\\]%", tips)))
+})
+
+
+# === Phase 22g-vii: the name column, the doubled span, and the publication marks ===================
+
+testthat::test_that("a name rotates only when it saves width, and a compound name wraps", {
+  testthat::skip_if_not_installed("broom")
+  names_of <- function(x) {
+    b <- sub("^.*</style>", "", as.character(tab_html(x)))
+    regmatches(b, gregexpr('<td class="[^"]*tx-lbl[^"]*"[^>]*>[^<]*(<br>[^<]*)*</td>', b))[[1]]
+  }
+  a <- carData::Arrests
+  t <- suppressMessages(tab_reg(a, "checks", c("colour", "employed", "citizen"),
+                                family = "gaussian", stats = FALSE))
+  nm <- names_of(t)
+  # "Constant" is a one-row block: it cannot turn, so it sets the floor and every name no longer
+  # than it stays horizontal too -- rotating them would save nothing
+  testthat::expect_false(any(grepl("tx-vname", nm[grepl(">employed<", nm, fixed = TRUE)])))
+  testthat::expect_false(any(grepl("tx-vname", nm[grepl(">Constant<", nm, fixed = TRUE)])))
+  # a name far longer than that floor is written horizontally too -- but WRAPPED, which nothing
+  # could do before (stri_wrap breaks on whitespace, and a snake_case name has none)
+  long <- dplyr::rename(a, shenaniganing_colorous_property_of_the_skin = "colour")
+  t2 <- suppressMessages(tab_reg(long, "checks",
+                                 c("shenaniganing_colorous_property_of_the_skin", "employed"),
+                                 family = "gaussian", stats = FALSE))
+  cell <- grep("shenaniganing", names_of(t2), value = TRUE)
+  testthat::expect_length(cell, 1L)
+  testthat::expect_match(cell, "<br>", fixed = TRUE)
+  lines <- gsub("<[^>]*>", "", strsplit(sub("^<td[^>]*>", "", cell), "<br>", fixed = TRUE)[[1]])
+  testthat::expect_gt(length(lines), 1L)
+  testthat::expect_true(all(nchar(lines) <= tabxplor:::TX_VNAME_MAX + 1L))
+})
+
+testthat::test_that("a col_var is named once in the span row", {
+  a <- carData::Arrests
+  t <- tab(a, colour, released, pct = "row", ref = "first") |>
+    dplyr::mutate(difference = set_display(.data$Yes, "difference"),
+                  odds_ratio = set_display(.data$Yes, "odds_ratio"))
+  h <- as.character(tab_html(t))
+  span <- regmatches(h, regexpr("<thead><tr>.*?</tr>", h))
+  # the Total column carries no label of its own, so the variable used to open a SECOND labelled run
+  # and print its name twice
+  testthat::expect_equal(lengths(regmatches(span, gregexpr("released", span))), 1L)
+})
+
+testthat::test_that("a publication palette's marks are ink, not aside grey", {
+  tc <- tab(forcats::gss_cat, race, marital, pct = "row", color = "difference")
+  h  <- as.character(tab_html(tc, theme = "print_marks"))
+  testthat::expect_match(h, ".tabxplor-tab .tx-mark{color:#000000", fixed = TRUE)
+  testthat::expect_match(h, ".tabxplor-tab .tx-sec{color:#444444", fixed = TRUE)
+  testthat::expect_match(h, '<span class="tx-mark">', fixed = TRUE)
+  # the stars stay an aside: a colour theme writes no mark span at all
+  testthat::expect_no_match(sub("^.*</style>", "", as.character(tab_html(tc))),
+                            "tx-mark", fixed = TRUE)
 })

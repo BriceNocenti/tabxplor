@@ -492,6 +492,19 @@ DISPLAY_FIELD_TOKENS <- {
 #' @keywords internal
 #' @noRd
 DISPLAY_COMPARISON     <- .dtok_map("comparison")
+# ... and its INVERSE: the token that renders each colour measure. A measure NAME is therefore a legal
+# `display` value ("difference" -> "{diff}", "odds_ratio" -> "{or}"), which is what lets one word mean
+# the same quantity in `color =` and in `display =` instead of one of them silently meaning a third
+# thing. Derived from the same `comparison` column, so a new measure needs no second declaration.
+# A token spelling that is ALSO a measure name ("ratio") is caught by DISPLAY_BARE_TOKENS first and
+# resolves identically, so the two vocabularies cannot disagree.
+#' @keywords internal
+#' @noRd
+DISPLAY_MEASURE_TOKENS <- {
+  m <- DISPLAY_COMPARISON[names(DISPLAY_COMPARISON) %in% .dtok_which("bare")]
+  stopifnot(!anyDuplicated(unname(m)))          # a measure must name ONE token, or it names none
+  stats::setNames(names(m), unname(m))
+}
 #' @keywords internal
 #' @noRd
 DISPLAY_FIELD_SOURCE   <- .dtok_map("source")
@@ -614,6 +627,9 @@ display_resolve <- function(display, role = NULL) {
   if (d %in% names(DISPLAY_PRESET_ALIASES)) d <- unname(DISPLAY_PRESET_ALIASES[[d]])
   if (d %in% names(DISPLAY_PRESETS)) return(display_preset_arm(DISPLAY_PRESETS[[d]]$template, role))
   if (d %in% DISPLAY_BARE_TOKENS) return(paste0("{", d, "}"))
+  # a colour MEASURE's own name reaches the token that renders it, so `color` and `display` share one
+  # spelling for one quantity. After the bare-token test, so a word that is both stays the token.
+  if (d %in% names(DISPLAY_MEASURE_TOKENS)) return(paste0("{", DISPLAY_MEASURE_TOKENS[[d]], "}"))
   validate_display_template(d)
 }
 

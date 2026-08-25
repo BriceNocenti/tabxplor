@@ -20,6 +20,10 @@
   `tab_xl(check = "auto")` draws the model-check plots under each `tab_reg()` table.
 * Every export names each column with the console's own type tag (`<row%>`, `<n>`), and long footer
   legends are wrapped in a merged cell so an Excel-to-Word paste keeps the table's column widths.
+* Excel column widths now fit their content: each column is measured from what its cells will
+  actually show, instead of one fixed width for every number. `tab_xl(colwidth = 10)` still forces a
+  fixed one. Long variable names wrap at their own seams (`long_snake_case`) in HTML and Excel alike,
+  and a variable name is written vertically only where that actually saves width.
 * **A numeric row or tab variable is now grouped, not exploded.** `tab(data, age, y)` used to make
   one row per distinct value; it now cuts `age` into four bands at its mean and one standard
   deviation either side (one row per value is kept for a counted number or a short scale), and says
@@ -561,6 +565,14 @@
   (`multiplier = "sd"`, see above). Pass `multiplier = 1` for the previous per-one-unit reading.
 
 ## Bug fixes
+
+* **`set_display()` silently rendered another field when given a word it did not know.**
+  `set_display(x, "difference")` printed the count. Every value is now checked against the package's
+  own vocabulary, and a measure's own name (`"difference"`, `"odds_ratio"`) reaches the field that
+  shows it, so one word means one quantity in `color =` and in `display =` alike.
+
+* **A table that lost its class kept fewer of its properties than it needed to.** The rules between
+  `row_vars` blocks, and a `tab_reg()` table's base-count column, survive `as_tibble()`.
 
 * **The colour legend under the table named the Total row even when `ref` was not the total.** It now
   says "the reference category (in bold)" for any non-total reference.

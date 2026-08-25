@@ -195,3 +195,33 @@ test_that("a table stripped of `meta` still refers its intervals to the design d
   ok   <- is.finite(hw(ci_bare[["yes"]])) & is.finite(hw(ci_z[["yes"]]))
   expect_gt(sum(hw(ci_bare[["yes"]])[ok] > hw(ci_z[["yes"]])[ok] + 1e-9), 0L)
 })
+
+
+# === Phase 22g-vii: what a downgraded table still knows about itself ===============================
+
+testthat::test_that("a regression is recognised by its COLUMNS once meta and test are gone", {
+  testthat::skip_if_not_installed("broom")
+  d <- forcats::gss_cat |>
+    dplyr::mutate(married = factor(dplyr::if_else(marital == "Married", "Married", "Not married")))
+  t <- suppressMessages(tab_reg(d, "married", c("race", "relig"), family = "binomial"))
+  bare <- tibble::as_tibble(t)
+  # `role` is a per-COLUMN fmt attribute, so it outlives every table attribute dplyr drops
+  testthat::expect_identical(tabxplor:::tab_kind(bare), "regression")
+  testthat::expect_identical(tabxplor:::tab_kind(tibble::as_tibble(
+    tab(forcats::gss_cat, race, marital, pct = "row"))), "crosstab")
+  # ... which is what keeps its base-count column on export
+  testthat::expect_match(as.character(tab_html(bare)), ">n</th>", fixed = TRUE)
+})
+
+testthat::test_that("the rules between row_var blocks survive a class strip", {
+  tc  <- tab(forcats::gss_cat, c(race, marital), partyid, pct = "row")
+  bare <- tc
+  class(bare) <- c("tbl_df", "tbl", "data.frame")
+  n_rule <- function(x) {
+    h <- sub("^.*</style>", "", as.character(tab_html(x)))
+    lengths(regmatches(h, gregexpr("tx-bb2", h)))
+  }
+  # they used to ride the dplyr grouping, which a strip silently flattens to one group
+  testthat::expect_gt(n_rule(tc), 1L)
+  testthat::expect_identical(n_rule(bare), n_rule(tc))
+})

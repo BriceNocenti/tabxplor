@@ -29,9 +29,12 @@
 #     the three pieces are known, so it applies all three; the aside gets the `tx-sec` class and the
 #     stylesheet sets it back. A background is a colour MEASURE, not the cell's ground -- it grades
 #     the number, so flooding the asides and the stars with it says the measure grades those too.
-#     The face
-#     is written as <b>/<i>/<u> markup rather than only as CSS, because the destinations that matter
-#     for a publication table (GitHub, a Word paste) strip class AND style but keep tags.
+#     The face is written as <b>/<i>/<u> markup rather than only as CSS, because the destinations
+#     that matter for a publication table (GitHub, a Word paste) strip class AND style but keep tags.
+#     ⚠ ONE piece after the primary is NOT an aside: a publication palette's effect-size MARKS. They
+#     sit where the stars sit but they REPLACE the colour, so they carry the deviation itself and take
+#     `tx-mark` (the chrome's own ink) instead of the aside grey. format() hands back their character
+#     range as `mark_nchar`, the way it hands back the primary's.
 #   - Phase 14k: the html result is classed `tabxplor_kable` and carries the render intent in a
 #     `tabxplor_theme` attribute -- but ONLY when our stylesheet ships with it (tab_kable_join()).
 #     print.tabxplor_kable() is the one place a theme is resolved in R rather than by the browser: the
@@ -134,18 +137,6 @@ html_escape_br <- function(x) {
 # `inset` is half the stroke: without it the extreme bins are clipped by the viewBox edge.
 # The run's LENGTH is fixed (rd_spark() resamples onto one grid), so `dx` alone sets the width and
 # every predictor's plot is the same size -- which is what a reader compares them by.
-# A rotated variable name may be long, and an interaction block's is the longest ("age*tvhours").
-# Break it BEFORE the operator so it reads as two short vertical columns instead of one tall one.
-# ⚠ reliable because `*` is not a legal character in an R name: in a variable-name cell it can only be
-# the cross operator. tab_wrap_text() cannot do this -- it breaks on spaces, and turns the ones it
-# keeps into NARROW NO-BREAK spaces, which `white-space:normal` may never break.
-#' @keywords internal
-html_break_cross <- function(x, vert) {
-  if (!any(vert)) return(x)
-  ifelse(vert & grepl("*", x, fixed = TRUE),
-         gsub("[\u202f ]?[*]", "<br>*", x), x)
-}
-
 #' @keywords internal
 tx_spark_svg <- function(x, h = 22L, dx = 5L, lwd = 2.4) {
   gl  <- rd_spark_glyphs()
@@ -195,7 +186,7 @@ tx_spark_svg <- function(x, h = 22L, dx = 5L, lwd = 2.4) {
 # Cells it could not split come back in `attr(out, "pill_left")` for the caller to flood whole.
 #' @keywords internal
 html_cell_text <- function(raw, from, pn, bold, esc = htmltools::htmlEscape, face = NULL,
-                           pill = NULL) {
+                           pill = NULL, mk = NULL) {
   out  <- esc(raw)
   left <- if (is.null(pill)) rep(FALSE, length(raw)) else nzchar(pill)
   wrap_pill <- function(s, i) {
@@ -216,10 +207,20 @@ html_cell_text <- function(raw, from, pn, bold, esc = htmltools::htmlEscape, fac
     wt  <- ifelse(bold[hit], " style=\"font-weight:normal;\"", "")
     wrap <- function(s) ifelse(nzchar(s),
                                paste0("<span class=\"tx-sec\"", wt, ">", esc(s), "</span>"), "")
+    # A PUBLICATION PALETTE'S MARKS ARE NOT AN ASIDE. They sit exactly where the stars sit -- right
+    # after the primary range -- but they carry the deviation itself (they stand in for the colour),
+    # so they take `.tx-mark` (the chrome's own ink) while everything else after the primary stays
+    # `.tx-sec`. `mk` is format()'s `mark_nchar`, NULL for stars.
+    # ⚠ the run sits immediately AFTER the primary range, not at the end of the cell: under
+    # "{est} ({base})" the primary is written first and its aside follows the marks.
+    mw   <- if (is.null(mk)) rep(0L, length(raw)) else ifelse(is.na(mk), 0L, mk)
+    mrun <- ifelse(mw[hit] > 0L, substr(raw[hit], to + 1L, to + mw[hit]), "")
     out[hit] <- paste0(wrap(substr(raw[hit], 1L, from[hit] - 1L)),
                        wrap_pill(wrap_face(esc(substr(raw[hit], from[hit], to)), which(hit)),
                                  which(hit)),
-                       wrap(substr(raw[hit], to + 1L, nchar(raw[hit]))))
+                       ifelse(nzchar(mrun),
+                              paste0("<span class=\"tx-mark\"", wt, ">", esc(mrun), "</span>"), ""),
+                       wrap(substr(raw[hit], to + mw[hit] + 1L, nchar(raw[hit]))))
     left[hit] <- FALSE
   }
   if (any(!hit)) out[!hit] <- wrap_face(out[!hit], which(!hit))
@@ -405,7 +406,8 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     # a degraded model with no `ann`) or has no recorded range -- those come back in `pill_left`.
     split_pill <- if (color_whole_cell_opt() || is.null(a)) NULL else bgc
     cell_html <- html_cell_text(cell, attr(cell, "primary_from"), attr(cell, "primary_nchar"),
-                                bold_cell, esc = esc_cell, face = face, pill = split_pill)
+                                bold_cell, esc = esc_cell, face = face, pill = split_pill,
+                                mk = attr(cell, "mark_nchar"))
     bg_left   <- attr(cell_html, "pill_left") %||% bg
     cell_html <- as.character(cell_html)
     # THE one place a row sparkline becomes an inline <svg>. It sits here, on the GENERIC cell path,
@@ -450,7 +452,10 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     # accident -- through `tr.tx-b` when its block's first row happened to be the reference row --
     # which left a one-row block (a continuous predictor) plain beside a bold neighbour.
     named <- cl %in% names(roles$var_name_col)
-    vert  <- named & run$span > 1L      # a rotated single-row cell only makes that row tall
+    # WHICH names rotate is the prep's own decision (tab_vname_plan): a rotation must SAVE width, so
+    # it weighs the name's length against the block's height and against the names that cannot turn
+    # at all. Read here, never re-derived -- Excel reads the same vector for its 90-degree rotation.
+    vert  <- named & (roles$vname_plans[[cl]]$vert %||% (run$span > 1L))
     # THE BOTTOM RULE OF A NAME CELL IS DECIDED HERE, never by the row it happens to sit in. A
     # rowspanned cell is anchored in its block's FIRST row, so `tr.tx-bb2>*` never reaches it while a
     # ONE-ROW block's cell is a direct child of the closing row and did draw one -- a rule under
@@ -469,7 +474,7 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
                                    ifelse(named, "tx-b", ""),
                                    ifelse(named & !nzchar(bot), "tx-nb", ""), bot))
     td   <- paste0('<td class="', trimws(cls), '" rowspan="', run$span, '">',
-                   html_escape_br(html_break_cross(cells[[j]], vert)), '</td>')
+                   html_escape_br(cells[[j]]), '</td>')
     td[!run$show] <- ""
     td_html[[j]]  <- td
   }

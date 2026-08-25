@@ -17,7 +17,6 @@ jmvtab(
   anova = "welch",
   na = "keep",
   lvs = "all",
-  other_if_less_than = 0,
   cleannames = TRUE,
   ref_levels = NULL,
   levels_order = NULL,
@@ -128,9 +127,6 @@ historical \code{tab()} behaviour.    }}
 only keep the first level of each \code{col_vars}    \item \code{"auto"}:
 keep the first level when \code{col_var} is only two levels,    keep all
 levels otherwise.    }}
-
-\item{other_if_less_than}{When set to a positive integer, levels with less
-count than that will be merged into an "Others" level.}
 
 \item{cleannames}{By default, clean levels names, by removing prefix
 numbers like "1-", and text in parenthesis. Set to \code{FALSE} to avoid

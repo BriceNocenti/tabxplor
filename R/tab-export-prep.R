@@ -21,9 +21,12 @@
 #     to whatever it was carved from. Two consumers: the unit line (a block restates its unit, so a
 #     Total says "<row%>" and the count beside it "<n>") and tab_xl's vertical rules (a block is
 #     boxed, so no line falls between a Total and its own count).
-#   - A NAME IS PRINTED ONCE. Where every level column already prints its own col_var -- a
-#     `predictors` comparison, whose columns ARE the models -- the variable-NAME span row is dropped.
-#     ⚠ that comparison runs through tx_unwrap_text(): tab_wrap_text() rewrites the column NAMES
+#   - A NAME IS PRINTED ONCE, on BOTH axes. Down the rows, tab_label_runs() blanks a repeated
+#     row_var; along the header, a col_var that opens a second labelled run (a Total column sits
+#     between its levels and anything appended after them) is blanked the same way -- and where every
+#     level column already prints its own col_var, a `predictors` comparison whose columns ARE the
+#     models, the whole span row goes.
+#     ⚠ that last comparison runs through tx_unwrap_text(): tab_wrap_text() rewrites the column NAMES
 #     (U+202F for each space) before the header is built and leaves the col_var attribute raw, so a
 #     literal == silently stopped matching in html and kable alone. Same trap as
 #     tx_strip_outcome_suffix()'s, which is why both now share one un-wrapper.
@@ -40,6 +43,14 @@
 #     `roles$label_cols` / `label_runs` (name each block once: md blanks, html rowspans, Excel
 #     merges), `roles$var_name_col` (the merged table's name column), and the `var_names` argument,
 #     whose two drops happen in prep_one_table() so no backend needs to know it exists.
+#   - WHICH NAMES ROTATE is one decision too (`roles$vname_plans`, tab_vname_plan): a rotation must
+#     SAVE width, so it weighs each name's length against its block's height and against the names
+#     that CANNOT turn (a one-row block), which set the column's floor. html reads it as the
+#     `tx-vname` class, Excel as a 90-degree rotation and as that column's width. A rotated name then
+#     wraps to its block's own height -- derived, which is why no `wrap_rows_vertical` exists.
+#   - THE BLOCK BOUNDARIES (`roles$new_group`, the thicker rule between row_var blocks) are read off
+#     the label columns' VALUES, never off the dplyr grouping: `group_indices()` answers 1 for every
+#     row of a table that lost its `grouped_df` class, and the separators vanished with no error.
 # See: dev/tabxplor_phase10_exporters.md (Sec 1-2, 5), CLAUDE.md Phase 10d + 14i, decisions.md Sec 33.
 
 
@@ -208,6 +219,18 @@ tab_bold_rows <- function(anchor_list) {
 # is a hardening, not a behaviour change.
 # NA = a continuation, reproducing md's rule verbatim: a materialised p-value row carries NA in the
 # label column and belongs to the block above it.
+# ⚠ ORDER IS THE NESTING, and the nesting is the TABLE's own: the runs are scanned outer -> inner, so
+# the columns must be listed in the order they sit in. A regression split by `tab_vars` has BOTH kinds
+# of label column at once -- the kept tab_var FIRST, then the predictor-name column -- which the
+# "mutually exclusive" note above did not anticipate; listing the name column first cut the tab_var's
+# run at every predictor change, so its level was repeated instead of spanning its own block.
+#' @keywords internal
+#' @noRd
+tab_label_order <- function(tab, nms) {
+  nms <- intersect(nms, names(tab))
+  nms[order(match(nms, names(tab)))]
+}
+
 #' @keywords internal
 tab_label_runs <- function(tab, label_names) {
   n <- nrow(tab)
@@ -236,6 +259,88 @@ tab_label_runs <- function(tab, label_names) {
   res
 }
 
+
+# === SECTION: the variable-NAME column -- rotate, or stay horizontal? ==============================
+#
+# A row-variable NAME is written vertically so a long one costs one narrow column instead of a wide
+# one. That is only worth doing when the rotation actually SAVES width, and the old rule -- "the block
+# spans more than one row" -- could not know: it never looked at the name. It is decided ONCE here and
+# read by the html engine (the `tx-vname` class) and by tab_xl (a 90-degree text rotation), so the two
+# media cannot drift.
+#
+# THE RULE, read off what the table IS:
+#   - a ONE-ROW block cannot rotate: turning a single cell only makes that row tall. "Constant" and
+#     every numeric predictor are such blocks;
+#   - those FORCED-horizontal names set the FLOOR, because the column is already as wide as the
+#     longest of them: rotating a name no longer than that saves nothing. `employed` beside
+#     `Constant` therefore stays horizontal although it is narrower -- which is the point;
+#   - a name rotates only if it is longer than the floor AND its block is tall enough to hold it, at
+#     TX_VERT_CHARS_PER_ROW characters of rotated text per row over at most TX_VERT_MAX_LINES lines;
+#   - the floor is capped at TX_VNAME_MAX (or at `wrap_rows`, when the user set it lower). A NAME
+#     column exists to name blocks, not to be read as prose: past ~13 characters a wider column costs
+#     the data more than a second line costs the name, so the name wraps instead.
+# A name that DOES rotate wraps to its block's own height -- one vertical line holds as many turned
+# characters as the block is tall -- which is why no `wrap_rows_vertical` argument exists: the
+# renderer knows that height and a user preference could not be better informed.
+
+#' @keywords internal
+#' @noRd
+TX_VNAME_MAX          <- 13L   # the widest a name column may be before the name wraps instead
+#' @keywords internal
+#' @noRd
+TX_VNAME_MIN          <- 4L    # ... and the narrowest: a shorter name never earns a rotation
+#' @keywords internal
+#' @noRd
+TX_VERT_CHARS_PER_ROW <- 2L    # rotated characters one table row is tall enough to hold
+#' @keywords internal
+#' @noRd
+TX_VERT_MAX_LINES     <- 2L    # vertical lines a name may use; each costs ~1 character of width
+
+# One name column's plan: `vert` per ROW (TRUE on the run starts that rotate), `chars` the horizontal
+# width the column needs, `width` per ROW the wrap width that row's name takes.
+#' @keywords internal
+#' @noRd
+tab_vname_plan <- function(vals, run, wrap_rows = Inf) {
+  nm <- as.character(vals); nm[is.na(nm)] <- ""
+  n  <- length(nm)
+  if (is.null(run)) run <- list(show = rep(TRUE, n), span = rep(1L, n))
+  w    <- nchar(nm)
+  cap  <- max(TX_VNAME_MIN,
+              min(TX_VNAME_MAX, if (is.finite(wrap_rows)) as.integer(wrap_rows) else TX_VNAME_MAX))
+  # can this block hold its name, turned?
+  fits <- run$show & nzchar(nm) & run$span > 1L &
+    w <= run$span * TX_VERT_CHARS_PER_ROW * TX_VERT_MAX_LINES
+  forced <- run$show & nzchar(nm) & !fits
+  # ⚠ stable without iterating: a name that fits but loses to the floor becomes horizontal at a width
+  # already <= the floor, so it can never raise it.
+  chars <- max(TX_VNAME_MIN, min(cap, if (any(forced)) max(w[forced]) else 0L))
+  vert  <- fits & w > chars
+  # A ROTATED NAME'S WRAP WIDTH IS ITS BLOCK'S OWN HEIGHT: how many turned characters one vertical
+  # line can hold here. Derived, which is why there is no `wrap_rows_vertical` -- the renderer knows
+  # the height and a user preference could not. (`fits` already caps the lines at TX_VERT_MAX_LINES.)
+  width <- ifelse(vert, pmax(1L, run$span * TX_VERT_CHARS_PER_ROW), chars)
+  # ⚠ CARRIED DOWN THE RUN, never left per row. A block's continuation rows hold the same name, and a
+  # width that differed there would wrap them differently -- which changes the VALUE, and the label
+  # runs are read off the values, so one block would split into two and the name print twice.
+  at   <- which(run$show)
+  if (!length(at)) at <- 1L
+  idx  <- pmax(1L, cumsum(run$show))
+  list(vert = vert[at][idx], chars = chars, width = width[at][idx])
+}
+
+# Put a per-ROW rewritten label vector back into its column, keeping the column's type: a
+# `tabxplor_lvl` factor stays one (its `role` / `var` declaration is what every variable detection
+# reads), a character column stays character. The map is level -> new text, so a level that appears
+# on several rows cannot end up with two spellings.
+#' @keywords internal
+#' @noRd
+tx_recolumn_labels <- function(col, new) {
+  if (!is.factor(col)) return(new)
+  old <- as.character(col)
+  map <- new[!duplicated(old)]
+  names(map) <- old[!duplicated(old)]
+  forcats::fct_relabel(col, function(l) unname(ifelse(l %in% names(map), map[l], l)))
+}
 
 # === SECTION: the render-model builder ==============================================
 
@@ -296,9 +401,25 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
       sub$tip[match(key0, paste(sub$var, sub$level, sep = "\r"))])
   }
 
-  # group boundaries -- computed BEFORE ungroup (needs the grouping)
-  gi        <- dplyr::group_indices(tab)
-  new_group <- which(gi != dplyr::lead(gi, default = max(gi) + 1L))
+  # BLOCK BOUNDARIES -- the rows that CLOSE a row_var block, where the thicker rule falls.
+  # DESIGN: read off the label columns' VALUES, never off the dplyr grouping. `group_indices()`
+  # answers 1 for every row of a table that lost its `grouped_df` class, so a downgraded merged table
+  # silently lost every separator -- while the values survive an ungroup(), an as_tibble() and any
+  # verb that kept the columns. tab_label_runs() nests outer -> inner, so the LAST column's run starts
+  # are the full group COMBINATION: exactly what the grouping marked, order-independently.
+  # Computed here, before `var_names` may drop the name column below -- a rule is not a naming choice.
+  bound_runs <- tab_label_runs(tab, tab_label_order(tab, c(rv$var_col, tab_vars)))
+  new_group  <-
+    if (length(bound_runs)) which(dplyr::lead(bound_runs[[length(bound_runs)]]$show, default = TRUE))
+    else nrow(tab)
+
+  # ... and, from the SAME raw values, which variable names rotate and how wide their column must be
+  # (tab_vname_plan). Read here, before tab_wrap_text() rewrites the values and before `var_names` may
+  # drop the column: the decision is about the NAME, so it must see the name as the user wrote it.
+  vname_cols  <- tab_label_order(tab, c(rv$var_col, reg_grp_col))
+  vname_runs0 <- tab_label_runs(tab, vname_cols)
+  vname_plans <- purrr::imap(vname_runs0, function(run, cl)
+    tab_vname_plan(tab[[cl]], run, wrap_rows = wrap$rows %||% Inf))
 
   tab <- dplyr::ungroup(tab)
   if (drop_tab_vars && length(tab_vars) > 0) {
@@ -345,6 +466,20 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
       renamed <- stats::setNames(names(tab), pre_wrap_names)[names(emp_tips)]
       names(emp_tips) <- ifelse(is.na(renamed), names(emp_tips), renamed)
     }
+    # THE NAME COLUMNS ARE RE-WRAPPED TO THEIR OWN WIDTH, not to `wrap_rows`. tab_wrap_text() treats
+    # every character column as prose, so a snake_case name met no break opportunity and came back
+    # untouched at any width. Here each name is wrapped by tx_wrap_name() -- at the block's own height
+    # when it rotates, at the column's width when it does not -- so a long one costs lines instead of
+    # columns. Run AFTER the generic wrap and over tx_unwrap_text(), because that is what undoes it.
+    for (cl in intersect(names(vname_plans), names(tab))) {
+      p   <- vname_plans[[cl]]
+      raw <- tx_unwrap_text(as.character(tab[[cl]]))
+      new <- unlist(purrr::map2(raw, p$width, function(s, w)
+        tx_wrap_name(s, width = w, exdent = 1L, brk = wrap$brk %||% "\n")), use.names = FALSE)
+      if (isTRUE(wrap$unbreakable_spaces))
+        new <- stringi::stri_replace_all_regex(new, " ", unbrk)
+      tab[[cl]] <- tx_recolumn_labels(tab[[cl]], new)
+    }
   }
 
   # --- role detection on the FINAL (ungrouped / dropped / wrapped) tab ---
@@ -390,7 +525,7 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
   # rowspan / merge set (the synthetic name column OR the kept tab_vars, never both); `var_name_col`
   # is the name-valued subset, the only one `var_names` drops, the header always blanks, and the html
   # / Excel backends rotate. Both are named-int, indexed on the FINAL tab like every role above.
-  label_names <- intersect(c(name_col, tab_vars), names(tab))
+  label_names <- tab_label_order(tab, c(name_col, tab_vars))
   label_cols  <- stats::setNames(match(label_names, names(tab)), label_names)
   # Phase 16a: a kept reg tab_vars also rotates vertical (via var_name_col), but is NOT added to
   # `name_col` so `var_names` never drops it (its levels are data, not a variable name).
@@ -521,6 +656,10 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
                  col_var_map = col_var_map, new_col_var = new_col_var, col_blocks = col_blocks,
                  new_group = new_group, align = align,
                  label_cols = label_cols, var_name_col = var_name_col,
+                 # THE rotation decision and the width it leaves the name column, one per name
+                 # column: computed above from the RAW names, read by the html engine (the `tx-vname`
+                 # class) and by tab_xl (a 90-degree rotation + that width). See tab_vname_plan().
+                 vname_plans = vname_plans[intersect(names(vname_plans), names(tab))],
                  label_runs = label_runs, sd_cols = sd_cols,
                  color_cols = color_flags$color_cols, any_bg = color_flags$any_bg,
                  has_color = color_flags$has_color, has_stars = has_stars),
@@ -643,8 +782,12 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE, transposed = FALSE)
     cv_lab <- var_label_display(unname(cvm), tab)
     # the level WITHOUT its sub-population suffix -- the pivot appends "_<group>" to every name, and
     # only the "_<col_var>" disambiguator was stripped above.
-    lvl0 <- ifelse(nzchar(spread_grp) & endsWith(clean, paste0("_", spread_grp)),
-                   substr(clean, 1L, nchar(clean) - nchar(spread_grp) - 1L), clean)
+    # ⚠ compared through tx_unwrap_text(): the column NAMES are wrapped before this runs while
+    # `spread_grp` is the raw `col_group` attribute, so a literal endsWith() stops matching the
+    # moment a name is long enough to break. Same trap as the span-row dedup below, same cure.
+    cl0  <- tx_unwrap_text(clean)
+    lvl0 <- ifelse(nzchar(spread_grp) & endsWith(cl0, paste0("_", spread_grp)),
+                   substr(cl0, 1L, nchar(cl0) - nchar(spread_grp) - 1L), cl0)
     for (j in which(is_level)) {
       many <- length(unique(lvl0[is_level & unname(cvm) == cvm[[j]]])) > 1L
       clean[j] <- spread_grp[[j]]
@@ -698,6 +841,23 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE, transposed = FALSE)
   # in html and kable alone. Same blind spot as tx_strip_outcome_suffix(), same cure.
   if (length(lvl) > 0 &&
       all(tx_unwrap_text(clean[lvl]) == tx_unwrap_text(unname(cvm)[lvl]))) label <- rep("", length(nms))
+  # ... and the ROW AXIS's own rule, applied along this row: A COL_VAR IS NAMED ONCE. A Total column
+  # sits between its variable's levels and anything appended after them, and -- carrying no label of
+  # its own -- it opens a SECOND labelled run, so the span row printed `released` twice while nothing
+  # in the table says there are two of them. The repeat is blanked, exactly as tab_label_runs() blanks
+  # a repeated row_var down the rows and tab_col_units() writes each unit in its leftmost column only.
+  # ⚠ Keyed on (label, its qualifier, THE SUB-POPULATION): a spread names the same variable -- or the
+  # same level -- once per group, and must. `gvec` is the col_group, which a spread puts in the column
+  # HEADER rather than in `grp`, so leaving it out of the key blanked every block after the first.
+  key <- ifelse(nzchar(label), paste(label, grp, gvec, sep = "\r"), "")
+  rl  <- rle(key)
+  at  <- cumsum(c(1L, utils::head(rl$lengths, -1L)))
+  seen <- character(0)
+  for (k in seq_along(rl$values)) {
+    v <- rl$values[[k]]
+    if (!nzchar(v)) next
+    if (v %in% seen) label[at[[k]] + seq_len(rl$lengths[[k]]) - 1L] <- "" else seen <- c(seen, v)
+  }
   # a blanked span row carries no sub-population either: `group` only ever qualifies a `label`.
   grp[!nzchar(label)] <- ""
   unit <- tab_col_units(tab, roles$col_blocks %||% unname(cvm))
@@ -876,8 +1036,17 @@ tx_strip_outcome_suffix <- function(x)
 # attribute the wrap never touched. The non-breaking spaces become spaces again and a break becomes
 # one; nothing else moves, so a name that was never wrapped is returned unchanged.
 #' @keywords internal
-tx_unwrap_text <- function(x)
+tx_unwrap_text <- function(x) {
+  # ⚠ A BREAK tx_wrap_name() PUT AT A SEAM IS REMOVED, NOT TURNED INTO A SPACE: it broke a compound
+  # name at a separator the name itself carries (`name_<br>suffix`), so replacing it with a space
+  # would invent one and the comparison against the raw name would fail -- the same class of blind
+  # spot this helper exists to close. The three rules mirror tx_name_atoms()'s own break set.
+  br <- "(?:<br>|\\n)[\u00a0 ]*"
+  x <- gsub(paste0("(?<=[_.])", br), "", x, perl = TRUE)                    # broken after a seam
+  x <- gsub(paste0(br, "(?=[*])"), "", x, perl = TRUE)                      # ... before the operator
+  x <- gsub(paste0("(?<=[a-z0-9])", br, "(?=[A-Z])"), "", x, perl = TRUE)   # ... at a camelCase seam
   gsub("[[:space:]]+", " ", gsub("<br>|\\n", " ", gsub("[\u202f\u00a0]", " ", x)))
+}
 
 # tx_num_font() -- Phase 19h: THE number-font rule, which is one DECISION written twice.
 #

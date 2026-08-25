@@ -1771,10 +1771,13 @@ tab_plot <- function(tabs,
 
 #' Wrap column names and character/factor variables.
 #' @param tabs A `tabxplor_tab` or a `tibble` .
-#' @param wrap_rows By default, rownames are wrapped when larger than 30 characters.
-#' @param wrap_cols By default, colnames are wrapped when larger than 12 characters.
+#' @param wrap_rows Row labels are wrapped past this width (35 by default), as prose --- on
+#'   whitespace.
+#' @param wrap_cols Column NAMES are wrapped past this width (15 by default). A name is a compound
+#'   word, not prose, so it breaks at the seams a name is built from (`_`, `.`, `*`, and a camelCase
+#'   boundary) as well as at spaces.
 #' @param exdent On the second lines or more, the number or characters to use for indentation.
-#' @param whitespace_only Set to `FALSE` to wrap also on non whitespace characters.
+#' @param whitespace_only Set to `FALSE` to wrap row labels also on non whitespace characters.
 #' @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
 #' @param brk The string to use for linebreak : `\n` in text, but `<br>` in html.
 
@@ -1794,8 +1797,11 @@ tab_wrap_text <- function(tabs, wrap_rows = 35L, wrap_cols = 15L, exdent = 1,
 
   tabs <- tabs |>
     dplyr::rename_with(
-      ~ tx_str_wrap(., wrap_cols, exdent = 0, whitespace_only = whitespace_only) |>
-        stringi::stri_replace_all_regex("\n", brk)
+      # a column name is a NAME, not prose: tx_wrap_name() knows the seams a compound one is built
+      # from (`_`, `.`, camelCase), which stri_wrap() -- whitespace only -- could never find. Values
+      # below stay on the prose wrapper; only the variable-NAME column is re-wrapped, by the exporter
+      # prep, which alone knows the width its block leaves it.
+      ~ tx_wrap_name(., wrap_cols, exdent = 0L, brk = brk)
     ) |>
     dplyr::mutate(
       dplyr::across(

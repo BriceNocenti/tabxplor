@@ -162,7 +162,10 @@ testthat::test_that("tab_xl narrows the sd column", {
   # declared for it alone (its numbers are short under a two-letter header).
   tb <- tab(forcats::gss_cat, marital, c(race, tvhours), pct = "row", display = "mean_sd")
   p  <- withr::local_tempfile(fileext = ".xlsx")
-  suppressMessages(tab_xl(tb, path = p, sheets = "unique", replace = TRUE, open = FALSE))
+  # `colwidth` as a NUMBER is what the narrow-sd rule qualifies; the default "auto" measures each
+  # column's own content instead (asserted below).
+  suppressMessages(tab_xl(tb, path = p, sheets = "unique", replace = TRUE, open = FALSE,
+                          colwidth = 10))
   cols <- openxlsx2::wb_load(p)$worksheets[[1]]$cols_attr
   wid  <- function(i) {                      # width of the col_attr entry covering column i
     lo <- as.integer(sub('.*min="(\\d+)".*', "\\1", cols))
@@ -178,6 +181,16 @@ testthat::test_that("tab_xl narrows the sd column", {
                           colwidth = 20))
   cols <- openxlsx2::wb_load(p2)$worksheets[[1]]$cols_attr
   testthat::expect_equal(wid(7), wid(6) - 8)               # 20 -> 12
+  # ... and under the default "auto" there is no per-column rule at all: every column is measured
+  # from what its own cells will show, which is strictly more compact than one width for all of them.
+  p3 <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(tb, path = p3, sheets = "unique", replace = TRUE, open = FALSE))
+  cols <- openxlsx2::wb_load(p3)$worksheets[[1]]$cols_attr
+  auto_total <- sum(vapply(1:8, wid, double(1)))
+  suppressMessages(tab_xl(tb, path = p, sheets = "unique", replace = TRUE, open = FALSE,
+                          colwidth = 10))
+  cols <- openxlsx2::wb_load(p)$worksheets[[1]]$cols_attr
+  testthat::expect_lt(auto_total, sum(vapply(1:8, wid, double(1))))
 })
 
 testthat::test_that("tab_xl fonts are settable by option (plain vs starred)", {
@@ -341,8 +354,10 @@ testthat::test_that("tab_xl: a merged table names each row-variable once, merged
                          c("race", rep(NA, 3), "marital", rep(NA, 5)))
   # rotated 90 degrees, and the column narrowed to match (that is what the rotation buys)
   testthat::expect_true(any(grepl('textRotation="90"', wb$styles_mgr$styles$cellXfs)))
+  # `race` (4 characters) is no wider than the narrowest a name column ever is, so it stays
+  # horizontal and sizes the column; `marital` is longer, so it turns. See tab_vname_plan().
   testthat::expect_match(paste(unlist(wb$worksheets[[1]]$cols_attr), collapse = " "),
-                         '<col min="1" max="1"[^/]*width="4', perl = TRUE)
+                         '<col min="1" max="1"[^/]*width="5', perl = TRUE)
   # the literal "row_var" header is gone
   testthat::expect_true(is.na(d[3, 1]) || !nzchar(as.character(d[3, 1])))
 })
@@ -455,11 +470,12 @@ testthat::test_that("the variable-name column is thin when rotated, and fits a h
     a <- paste(unlist(openxlsx2::wb_load(f)$worksheets[[1]]$cols_attr), collapse = " ")
     as.numeric(sub('^.*<col min="1" max="1"[^/]*width="([0-9.]+)".*$', "\\1", a))
   }
-  # every name rotated (a merged block each) -> the narrow width the rotation buys
-  t1 <- tab(forcats::gss_cat, c(race, marital), relig, pct = "row")
+  # every name rotated (each block is tall, and no name is forced horizontal) -> the narrow width
+  # the rotation buys
+  t1 <- tab(forcats::gss_cat, c(marital, partyid), relig, pct = "row")
   p1 <- withr::local_tempfile(fileext = ".xlsx")
   suppressMessages(tab_xl(t1, path = p1, open = FALSE, replace = TRUE))
-  testthat::expect_lt(w_of(p1), 5)
+  testthat::expect_lt(w_of(p1), 6)
   # a regression writes "Constant" horizontally (a one-row block): the column widens to fit it,
   # deterministically and within the cap
   d  <- dplyr::mutate(forcats::gss_cat, married = factor(.data$marital == "Married"))
@@ -467,7 +483,7 @@ testthat::test_that("the variable-name column is thin when rotated, and fits a h
   p2 <- withr::local_tempfile(fileext = ".xlsx")
   suppressMessages(tab_xl(t2, path = p2, open = FALSE, replace = TRUE))
   testthat::expect_gt(w_of(p2), nchar("Constant"))
-  testthat::expect_lte(w_of(p2), XL_VNAME_MAX)
+  testthat::expect_lte(w_of(p2), TX_VNAME_MAX + XL_PAD)
 })
 
 # === Phase 22f-ii: model-check plots under the model they check ====================================
@@ -495,4 +511,39 @@ testthat::test_that("tab_xl(check =) writes one picture per model, and none for 
   suppressMessages(tab_xl(tab(forcats::gss_cat, race, marital, pct = "row"), path = tmp2,
                           open = FALSE, replace = TRUE, check = "auto"))
   testthat::expect_length(png_of(tmp2), 0L)
+})
+
+
+# === Phase 22g-vii: widths measured from the content, per SHEET ====================================
+
+testthat::test_that("tab_xl fits each column to what its cells show, and per sheet", {
+  testthat::skip_if_not_installed("openxlsx2")
+  wids <- function(f) {
+    cols <- openxlsx2::wb_load(f)$worksheets[[1]]$cols_attr
+    lo <- as.integer(sub('.*min="(\\d+)".*', "\\1", cols))
+    hi <- as.integer(sub('.*max="(\\d+)".*', "\\1", cols))
+    w  <- as.double(sub('.*width="([0-9.]+)".*', "\\1", cols))
+    vapply(seq_len(max(hi)), function(i) w[which(lo <= i & hi >= i)][1], double(1))
+  }
+  a <- carData::Arrests
+  t <- tab(a, colour, released, pct = "row", ref = "first") |>
+    dplyr::mutate(odds_ratio = set_display(.data$Yes, "odds_ratio"))
+  p <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(t, path = p, open = FALSE, replace = TRUE))
+  w <- wids(p)
+  # the row-label column used to be a hard-coded 30 whatever it held ("colour" is six characters)
+  testthat::expect_lt(w[[1]], 10)
+  # ... and a column showing "1/2.11" is wider than one showing "26%"
+  testthat::expect_gt(w[[length(w) - 1L]], w[[2]])
+
+  # A COLUMN BELONGS TO THE SHEET: two tables stacked must both fit, where the last used to win
+  narrow <- tab(a, colour, released, pct = "row")
+  wide   <- tab(dplyr::rename(a, a_deliberately_long_row_variable = "colour"),
+                a_deliberately_long_row_variable, released, pct = "row")
+  p2 <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(list(wide, narrow), path = p2, sheets = "unique", open = FALSE,
+                          replace = TRUE))
+  p3 <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(wide, path = p3, open = FALSE, replace = TRUE))
+  testthat::expect_equal(wids(p2)[[1]], wids(p3)[[1]])
 })

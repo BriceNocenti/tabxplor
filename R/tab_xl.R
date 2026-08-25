@@ -40,6 +40,14 @@
 #     legend left in one narrow column is a paragraph in one cell, and an Excel -> Word paste then
 #     sizes that column to the paragraph. ⚠ Excel does not auto-fit a MERGED cell's height, so the
 #     row height is computed (xl_prose_height) or the legend is clipped to one line.
+#   - COLUMN WIDTHS ARE MEASURED, NOT AUTO-FITTED: ONE vector per SHEET (xl_col_widths ->
+#     xl_sheet_widths), computed from what each cell will show -- format() renders the very strings
+#     Excel displays. A column is as wide as the widest thing in it that CANNOT wrap (a figure), and
+#     everything that can (the level header, the unit tag, a long text value) contributes its width
+#     divided by the lines it may use. `colwidth = "auto"`, the default, IS that fit; a number forces
+#     one fixed width on the numeric columns. openxlsx2's `bestFit` is not used: it blanks merged
+#     ranges, ignores wrapText / rotation / the per-cell font, and is sheet-scoped, so with several
+#     tables stacked the last one silently overwrote the others.
 #   - The plan builder is pure; the workbook is assembled serially (the openxlsx2 write dominates and
 #     is inherently serial -- parallelising it was measured not worth it).
 
@@ -59,8 +67,12 @@
 #' @param colnames_rotation Rotate the names of columns to an angle (in degrees).
 #' @param remove_tab_vars By default, \code{tab_vars} columns are removed to gain space.
 #' Set to \code{FALSE} to keep them.
-#' @param colwidth The standard width for numeric columns, as a number.
-#' Set to \code{"auto"} to let Excel choose.
+#' @param colwidth Column widths. \code{"auto"} (the default) fits every column to what its cells
+#'   will actually show --- measured by tabxplor itself from the rendered values, the level headers
+#'   and the unit tags, so a number column is exactly as wide as its widest figure and a text column
+#'   wraps instead of growing past a cap. Give a number instead to force that fixed width on every
+#'   numeric column (a mean's \code{sd} sibling then takes a proportionally narrower one).
+#'   Widths are set per \emph{sheet}: several tables written to one sheet all fit.
 #' @param check Model-check plots to draw under each `tab_reg()` table: `FALSE` (the default),
 #'   `"auto"`, or a vector of check keys --- the same values \code{\link{reg_check_plots}} takes,
 #'   which is what draws them. Each grid is written as a picture below the table it belongs to.
@@ -139,13 +151,14 @@ tab_xl <-
   function(tabs, path = NULL, replace = FALSE, open = rlang::is_interactive(),
            lang = NULL,
            colnames_rotation = 0, remove_tab_vars = TRUE,
-           colwidth = 10, color_legend = TRUE,
+           colwidth = "auto", color_legend = TRUE,
            sheets = "auto", titles, caption = NULL,
            font_text = NULL, font_num = NULL, font_num_stars = NULL,
            text_size = 10, text_size_headers = 9, text_size_subtext = 9,
            theme = NULL,
            color = TRUE,
            transpose = FALSE, var_names = NULL,
+           wrap_rows = 35, wrap_cols = 15,
            ratio_cells = NULL, check = FALSE, data = NULL,
            print_color_legend = lifecycle::deprecated(), ...) {
 
@@ -223,6 +236,12 @@ tab_xl <-
       tabs, backend = "xl", drop_tab_vars = remove_tab_vars,
       list_method = TRUE, compute = compute, transpose = transpose,
       theme = theme, var_names = o$var_names,
+      # Excel joins the ONE wrap system: it used to pass no spec at all, so a long level label and a
+      # long variable name reached the sheet whole and only Excel's own mid-word break could hold
+      # them. `brk = "\n"` is what a wrapped cell honours; the spaces stay ordinary spaces (the
+      # U+202F substitution exists to stop a BROWSER re-breaking what we wrapped, and Excel does not).
+      wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 1,
+                  whitespace_only = TRUE, unbreakable_spaces = FALSE, brk = "\n"),
       color_legend = color_legend, what = "tab_xl()"
     )
     rd <- prep$tables
@@ -365,6 +384,7 @@ tab_xl <-
       font_text         = font_text,
       text_size         = text_size,
       colnames_rotation = colnames_rotation,
+      wrap_rows         = wrap_rows,            # a text column's width cap: see xl_col_widths()
       text_size_headers = text_size_headers,
       text_size_subtext = text_size_subtext,
       # Phase 17g: no private palette -- slot->hex is single-sourced through ann (fmt_channel_codes),
@@ -401,7 +421,11 @@ tab_xl <-
     # ONE style registrar for the whole workbook -> globally-unique style names (Phase 11a: per-table
     # name reuse silently applied table 1's styles to every later table).
     reg <- xl_style_registrar(wb)
-    purrr::walk(plans, ~ xl_write_table(wb, ., opts, reg))
+    # ⚠ A COLUMN BELONGS TO THE SHEET, NOT TO THE TABLE. Several tables stacked on one sheet each set
+    # widths on the same indices, and the last one silently won -- so a narrow table below a wide one
+    # squeezed it. Reduced with pmax per sheet, which is the only answer that fits every table on it.
+    sheet_w <- xl_sheet_widths(plans, sheet)
+    purrr::walk2(plans, sheet, ~ xl_write_table(wb, .x, opts, reg, widths = sheet_w[[.y]]))
 
     xl_finish(function(p) xlb_save(wb, p), path, replace, open)
     invisible(tabs_base)
@@ -562,24 +586,119 @@ xl_check_rows <- function(imgs)
   if (!length(imgs)) 0L else
     sum(vapply(imgs, function(im) as.integer(ceiling(im$height * 72 / 15)) + 2L, integer(1)))
 
-# xl_vname_width() -- how wide the variable-NAME column must be. Excel's width unit is one character
-# of the default font, so the name's own length is the measure: `nchar * 1.05 + 1.5` is a plain,
-# deterministic estimate (no auto-fit, which is what makes it reliable), floored at the narrow 3.5 a
-# rotated column wants and capped at XL_VNAME_MAX so one long name cannot eat the sheet -- past that
-# the cell wraps, and a one-row block is unmerged so Excel fits its height by itself.
+# === SECTION: column widths -- ONE vector, measured from what the cell will show ===================
+#
+# Excel's width unit is one character of the WORKBOOK BASE FONT (xlb_base_font), so a width is a
+# character count plus the cell's padding. Everything needed to measure one is already in R:
+# format() renders the very strings Excel will show (it is also where the numFmt codes come from), the
+# level headers and the unit tags are in the render model, and tab_vname_plan() has already decided
+# how wide the variable-name column may be.
+#
+# WHY NOT openxlsx2's `bestFit`: it counts characters of cells ALREADY on the sheet, blanks every
+# merged range before measuring, and is blind to wrapText, to text rotation and to the per-cell font.
+# It is also SHEET-scoped and runs at the end of each table, so with several tables stacked the last
+# one silently overwrote the others' widths. Measured here instead, per SHEET (xl_sheet_widths), and
+# `colwidth = "auto"` -- the default -- means THIS fit.
+#
+# DESIGN: a NUMBER column never wraps (a wrapped figure is unreadable), so its width is simply its
+# widest cell. A TEXT column may wrap, so it is capped: past the cap the cell wraps and Excel fits the
+# row height itself (⚠ except a MERGED cell, whose height it never fits -- see xl_row_lines below).
+
+# One character count -> one Excel column width. `ratio` is the cell font's size relative to the base
+# font the width unit is defined by; XL_PAD is the cell's left+right padding, ~5px = 0.7 characters,
+# rounded up to a comfortable 1.
 #' @keywords internal
-XL_VNAME_MAX <- 13
+XL_PAD <- 1.0
 #' @keywords internal
-xl_vname_width <- function(tab, roles) {
-  vc <- unname(roles$var_name_col)
-  if (length(vc) != 1L || vc > ncol(tab)) return(3.5)
-  run  <- roles$label_runs[[names(tab)[[vc]]]]
-  vals <- as.character(tab[[vc]])
-  # HORIZONTAL = a run of one row: label_merges skips those, so they are the cells that must fit
-  horiz <- if (is.null(run)) rep(TRUE, length(vals)) else (run$show & run$span == 1L)
-  hv <- vals[horiz & !is.na(vals) & nzchar(vals)]
-  if (!length(hv)) return(3.5)
-  max(3.5, min(XL_VNAME_MAX, max(nchar(hv)) * 1.05 + 1.5))
+xl_width_of <- function(nchars, ratio = 1) max(2.5, nchars * ratio + XL_PAD)
+
+# ... and the one ratio there is. Numbers are written at the base SIZE but in the number font, and a
+# table showing stars or marks switches that to a MONOSPACE stack (tx_num_font) so the suffixes align
+# -- whose digit is about a tenth wider than the condensed sans the width unit is defined by.
+#' @keywords internal
+XL_MONO_RATIO <- 1.1
+
+# The widest LINE of each value: a wrapped cell (item 4d gives Excel the same `\n` breaks html gets)
+# is as wide as its longest line, not as its whole text.
+#' @keywords internal
+xl_text_width <- function(x) {
+  x <- x[!is.na(x) & nzchar(x)]
+  if (!length(x)) return(0L)
+  max(nchar(unlist(strsplit(x, "[\n\r]"), use.names = FALSE)), 0L)
+}
+
+# THE width vector for one table: one entry per sheet column.
+#   fmt columns   -- the widest rendered cell, against the level header and the unit tag; no wrap.
+#   the name col  -- tab_vname_plan()'s own `chars` (a rotated run costs one vertical line, so only
+#                    the horizontal names size it); the plan already capped it.
+#   other text    -- the widest value against the header, capped at `wrap_rows`; wraps past that.
+# `colwidth` as a NUMBER keeps the old fixed behaviour for the fmt columns (and the narrow sd twin).
+# The lines a HEADER may use. THE rule the whole vector rests on: a column is as wide as the widest
+# thing in it that CANNOT wrap, and everything that can contributes its width divided by the lines it
+# may use. A figure must never wrap (a broken number is unreadable), so the data cells set the floor;
+# the level header and the unit tag both wrap and Excel fits their row's height itself.
+#' @keywords internal
+XL_HEAD_LINES <- 2L
+#' @keywords internal
+xl_col_widths <- function(tab, roles, cvh, o, colwidth, theme = "light") {
+  ncl    <- ncol(tab)
+  ratio  <- if (isTRUE(roles$has_stars)) XL_MONO_RATIO else 1
+  hratio <- as.double(o$text_size_headers %||% o$text_size) / as.double(o$text_size)
+  cap_text <- if (is.finite(o$wrap_rows %||% Inf)) as.integer(o$wrap_rows) else 40L
+  head_w <- function(j) {
+    h <- c(if (!is.null(cvh)) cvh$clean[[j]] else names(tab)[[j]],
+           if (!is.null(cvh) && !is.null(cvh$unit)) cvh$unit[[j]] else "")
+    ceiling(xl_text_width(h) * hratio / XL_HEAD_LINES)
+  }
+  vname_chars <- purrr::map(roles$vname_plans %||% list(), ~ .$chars)
+  vapply(seq_len(ncl), function(j) {
+    col <- tab[[j]]
+    nm  <- names(tab)[[j]]
+    if (is_fmt(col)) {
+      if (!identical(colwidth, "auto")) {
+        cw <- as.double(colwidth)
+        return(if (j %in% roles$sd_cols) max(5, cw * 0.6) else cw)
+      }
+      body <- tryCatch(format(col, special_formatting = FALSE, na = "", stars = TRUE, theme = theme),
+                       error = function(e) as.character(col))
+      return(xl_width_of(max(xl_text_width(body) * ratio, head_w(j))))
+    }
+    # the variable-NAME column takes the width tab_vname_plan() left it (a rotated run costs one
+    # vertical line, so only the names that stayed horizontal size it); it is already capped there.
+    if (nm %in% names(vname_chars)) return(xl_width_of(vname_chars[[nm]]))
+    # a text column is capped by `wrap_rows` -- the one argument that says how wide a row label may
+    # be. tab_wrap_text() has already broken the values there, so this only ever holds an unbreakable
+    # run, and Excel wraps it (the cell has wrap_text; its row is unmerged, so Excel fits the height).
+    xl_width_of(max(min(cap_text, xl_text_width(as.character(col))), head_w(j)))
+  }, double(1))
+}
+
+# The width vector PER SHEET: the element-wise max over every table stacked on it, padded to the
+# widest. Named by sheet, so the writer looks its own up.
+#' @keywords internal
+xl_sheet_widths <- function(plans, sheet) {
+  by <- split(purrr::map(plans, ~ .$col_widths %||% double(0)), sheet)
+  purrr::map(by, function(ws) {
+    n <- max(0L, vapply(ws, length, integer(1)))
+    if (!n) return(double(0))
+    purrr::reduce(purrr::map(ws, ~ c(., rep(0, n - length(.)))), pmax)
+  })
+}
+
+# How many wrapped LINES a text of `n` characters needs in a column `w` wide -- the one estimator both
+# the prose rows and the merged label / span cells use.
+# ⚠ Excel auto-fits the height of an ordinary wrapped cell but NEVER of a merged one, so a merged
+# label or a two-line span row would be clipped to one line without an explicit height.
+#' @keywords internal
+xl_row_lines <- function(text, width) {
+  text  <- text %||% ""
+  width <- rep_len(pmax(1, as.double(width)), length(text))
+  out   <- vapply(seq_along(text), function(i) {
+    parts <- strsplit(text[[i]], "[\n\r]")[[1L]]
+    if (!length(parts)) return(1L)
+    as.integer(sum(pmax(1, ceiling(nchar(parts) / floor(width[[i]])))))
+  }, integer(1))
+  pmax(1L, out)
 }
 
 # xl_prose_span() -- HOW FAR A LINE OF PROSE IS MERGED: from column 1 up to roughly an A4 portrait
@@ -587,16 +706,14 @@ xl_vname_width <- function(tab, roles) {
 # an Excel -> Word paste then sizes that column to the paragraph, which is what blew the table's
 # geometry apart. Merged and wrapped, the prose sizes nothing.
 # Excel's width unit is one character of the default font, ~7 px plus 5 px of cell padding; A4
-# portrait text width is ~17 cm = ~642 px at 96 dpi. The widths are the ones the writer sets below --
-# one definition would be better still, but they are set on the workbook, not computed into the plan.
+# portrait text width is ~17 cm = ~642 px at 96 dpi. It reads THE width vector (xl_col_widths), the
+# same one the writer sets on the sheet -- it used to re-derive its own copy of the old literals, and
+# the two could disagree.
 #' @keywords internal
 XL_A4_PX <- 642
 #' @keywords internal
-xl_prose_span <- function(colwidth, roles, ncl) {
-  w <- rep(if (identical(colwidth, "auto")) 10 else as.double(colwidth), ncl)
-  if (length(roles$row_var_col))  w[roles$row_var_col]  <- 30
-  if (length(roles$var_name_col)) w[roles$var_name_col] <- 3.5
-  px <- cumsum(w * 7 + 5)
+xl_prose_span <- function(widths, ncl) {
+  px <- cumsum(widths * 7 + 5)
   max(1L, min(ncl, sum(px <= XL_A4_PX) + 1L))
 }
 
@@ -666,6 +783,11 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   # box a Total column away from the count carved out of it.
   block_start   <- tab_block_starts(roles$col_blocks %||% integer(0))
 
+  # THE WIDTH VECTOR, measured once from what each cell will show (xl_col_widths). Every consumer
+  # reads it: the writer sets it on the sheet, xl_prose_span() decides how far a footer line merges,
+  # and the merged-cell row heights are computed against it.
+  col_widths <- xl_col_widths(tab, roles, col_var_header, o, colwidth, theme = o$theme)
+
   # Phase 14i: the label columns' runs, lifted to ABSOLUTE sheet rows. `label_merges` is one merge per
   # run (skipping length-1 runs -- Excel rejects a 1-cell "merge", and a rotated 1-row cell would only
   # force a tall row); `vname_runs` are the name column's, the only ones that also get the rotation.
@@ -676,7 +798,19 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   })
   label_merges <- if (length(label_merges)) dplyr::bind_rows(label_merges)
                   else tibble::tibble(col = integer(), row1 = integer(), row2 = integer())
-  vname_runs   <- label_merges[label_merges$col %in% roles$var_name_col, , drop = FALSE]
+  # ... and, among those, the ones that ROTATE. Which names turn is the prep's shared decision
+  # (tab_vname_plan): a rotation must SAVE width, so it weighs the name's length against its block's
+  # height and against the names that cannot turn at all. The html engine reads the same vector for
+  # its `tx-vname` class, which is what keeps the two media saying the same thing.
+  vname_runs   <- purrr::imap(roles$vname_plans %||% list(), function(p, cl) {
+    j   <- match(cl, names(tab))
+    run <- roles$label_runs[[cl]]
+    at  <- if (is.null(run) || is.na(j)) integer(0) else which(run$show & run$span > 1L & p$vert)
+    tibble::tibble(col = rep(j, length(at)), row1 = at + data_row0,
+                   row2 = at + run$span[at] - 1L + data_row0)
+  })
+  vname_runs   <- if (length(vname_runs)) dplyr::bind_rows(vname_runs)
+                  else tibble::tibble(col = integer(), row1 = integer(), row2 = integer())
 
   # A MULTIPLICATIVE CELL KEEPS A REAL NUMBER. It holds the READING VALUE (fmt_excel_value: the
   # signed fold) and prints through a two-section code, so "1/2.11" and "\u00f71.20" reach the
@@ -923,7 +1057,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     # column to its widest cell, and the legend is a paragraph. Merged and wrapped, it sizes nothing.
     # Capped at roughly an A4 PORTRAIT text width rather than the table's own, so a very wide table
     # does not stretch the legend into one unreadable line.
-    prose_cols = xl_prose_span(colwidth, roles, ncl),
+    prose_cols = xl_prose_span(col_widths, ncl),
     unit_row = if (has_unit) unit_row else NA_integer_,
     unit_names = if (has_unit) cvh$unit else NULL,
     # AN INDEX COLUMN HAS NO UNIT, so its header takes both header rows rather than floating above a
@@ -944,12 +1078,9 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     # (values ARE variable names): merged AND rotated 90 degrees, so a long name costs one narrow
     # column. A kept tab_var is merged but never rotated -- its values are levels the user reads.
     label_merges = label_merges, vname_col = unname(roles$var_name_col),
-    # ... and the width that column needs. A MERGED run is rotated, so it costs one line of vertical
-    # text whatever the name is; a ONE-ROW block is written horizontally and was cut off at that width
-    # ("Constant" in a regression table). The width is COMPUTED from the horizontal names alone --
-    # never auto-fitted, which openxlsx2 cannot do reliably -- and capped, the cells wrapping beyond
-    # it. A table whose name column is all rotated keeps the narrow 3.5.
-    vname_width = xl_vname_width(tab, roles),
+    # ... and THE width vector, one entry per sheet column: measured from the rendered content, never
+    # auto-fitted (see xl_col_widths for why openxlsx2's `bestFit` cannot be trusted).
+    col_widths = col_widths,
     # the few base-count cells that hold a row sparkline instead of a count: written individually,
     # as text, after the numeric column (see xl_materialize_data above).
     spark_cells = spark_cells,
@@ -1001,14 +1132,21 @@ xl_build_styles <- function(header_row, unit_row = NA_integer_,
   av[hi, ] <- "bottom"; aw[hi, ] <- TRUE
   # the unit row: LEFT (the tag names its column, it does not label its numbers), never rotated
   ui <- idx(unit_row)
-  if (length(ui)) { ah[ui, ] <- "left"; av[ui, ] <- "bottom"; aw[ui, ] <- FALSE; ar[ui, ] <- 0L }
+  # the unit row WRAPS, like the level header above it: both are headers, Excel fits an unmerged
+  # wrapped cell's height itself, and xl_col_widths() counts on it (a header contributes its width
+  # divided by the lines it may use, so a long "<row%-diff>" no longer widens the whole column).
+  if (length(ui)) { ah[ui, ] <- "left"; av[ui, ] <- "bottom"; aw[ui, ] <- TRUE; ar[ui, ] <- 0L }
   # numbers read RIGHT. Excel lands a numeric cell there by itself, but a TEXT-written one (a `{ci}`
   # bracket, an `{n_range}`) landed left, so one column read against the next.
   fcd <- ci(fmt_cols); if (length(fcd) && length(di)) ah[di, fcd] <- "right"
   # a LABEL column reads from the left, header included -- a variable name is a heading, not a number
-  xcd <- ci(txt_cols); if (length(xcd)) ah[, xcd] <- "left"
-  # the NAME column wraps: its width is capped (xl_vname_width), so a long name takes a second line
-  # instead of widening the whole table
+  # ... and WRAPS: xl_col_widths() caps a text column at `wrap_rows`, and the prep has already broken
+  # the values there, so the cell must be allowed to show the second line (its row is unmerged, so
+  # Excel fits the height itself).
+  xcd <- ci(txt_cols)
+  if (length(xcd)) { ah[, xcd] <- "left"; if (length(di)) aw[di, xcd] <- TRUE }
+  # the NAME column wraps: tab_vname_plan() capped its width, and the prep already broke the names at
+  # their own seams -- this only lets Excel honour the breaks (and hold a name it did not expect)
   vcw <- ci(vname_col); if (length(vcw)) aw[, vcw] <- TRUE
   # THE TOTAL COLUMN's own zone is the DATA, not the header: painting the whole column made its name
   # float at the top of a header row whose every other cell sits at the bottom.
@@ -1201,7 +1339,7 @@ xl_apply_styles <- function(wb, s, styles, reg) {
 # column widths / row heights. `reg` is the workbook-scoped style registrar (Phase 11a) shared across
 # every table, so style NAMES never collide across the workbook.
 #' @keywords internal
-xl_write_table <- function(wb, plan, o, reg) {
+xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
   s   <- plan$sheet
   hdr <- plan$header_row
 
@@ -1314,28 +1452,28 @@ xl_write_table <- function(wb, plan, o, reg) {
   }
 
   # --- column widths / row heights ---
-  if (length(plan$row_var_col)) xlb_col_widths(wb, s, plan$row_var_col, 30)
-  # Phase 14i: the rotated name column is one line of vertical text wide -- the whole point of turning
-  # it. Left at the sheet default it would waste the width the rotation was meant to save.
-  if (length(plan$vname_col)) xlb_col_widths(wb, s, plan$vname_col, plan$vname_width %||% 3.5)
+  # ONE vector, measured in the plan (xl_col_widths) and set here. ⚠ set per SHEET, not per table:
+  # `widths` is the pmax over every table stacked on this sheet (xl_sheet_widths), because a column
+  # index belongs to the sheet and the last writer used to silently overwrite the earlier ones.
+  w <- widths %||% plan$col_widths
+  # a ROTATED column header needs width for its turned line rather than for its text
   rot <- o$colnames_rotation
-  if (length(plan$fmt_cols)) {
-    if (identical(plan$colwidth, "auto")) {
-      w <- if (rot > 30 && rot < 60) 8
-      else if (rot >= 60) 6 + 8 * cos(rot / 90 * pi / 2)
-      else "auto"
-      xlb_col_widths(wb, s, plan$fmt_cols, w)   # "auto" already sizes an sd column to its content
-    } else {
-      # Phase 14l: an sd sibling holds "s2.1" under a header of "sd" -- it never needs the width its
-      # mean does. Scaled rather than fixed, so a user who widens `colwidth` for long numbers widens
-      # the sd column too; floored so a wide sigma value still fits.
-      cw     <- as.double(plan$colwidth)
-      sd_cls <- intersect(plan$fmt_cols, plan$sd_cols)
-      xlb_col_widths(wb, s, setdiff(plan$fmt_cols, sd_cls), cw)
-      if (length(sd_cls)) xlb_col_widths(wb, s, sd_cls, max(5, cw * 0.6))
-    }
-  }
+  if (rot > 0 && length(plan$fmt_cols))
+    w[plan$fmt_cols] <- if (rot < 60) 8 else 6 + 8 * cos(rot / 90 * pi / 2)
+  if (length(w)) xlb_col_widths(wb, s, seq_along(w), w)
   if (rot > 0) xlb_row_heights(wb, s, plan$header_row, 13.8 + 105 * sin(rot / 90 * pi / 2))
+  # ⚠ EXCEL NEVER AUTO-FITS A MERGED CELL'S HEIGHT. The col_var span row can hold two lines (a
+  # sub-population under a variable name) and a merged label run can wrap, so both are given the
+  # height their content needs; every other wrapped cell is unmerged and Excel fits it itself.
+  if (!is.na(plan$span_row) && !is.null(plan$header_runs)) {
+    hr   <- plan$header_runs
+    at   <- cumsum(c(1L, utils::head(hr$spans, -1L)))
+    span_w <- vapply(seq_along(at), function(k)
+      sum(w[at[[k]]:min(length(w), at[[k]] + hr$spans[[k]] - 1L)]), double(1))
+    ln <- max(xl_row_lines(hr$labels, pmax(1, span_w)) +
+                as.integer(nzchar(hr$groups)))
+    if (ln > 1L) xlb_row_heights(wb, s, plan$span_row, ln * (as.double(o$text_size_headers) * 1.35))
+  }
 
   invisible(wb)
 }

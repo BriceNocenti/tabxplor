@@ -29,10 +29,11 @@ jmvtabreg(
   conf_level = 0.95,
   ci_method = "wald",
   stars = TRUE,
-  color = "auto",
+  color = "measure",
   color_signif = "grey_non_signif",
   display = "auto",
   n = "range",
+  digits = "0",
   cleannames = TRUE,
   subtext = "",
   tab_theme = "light",
@@ -100,9 +101,9 @@ likely"),   because a marginal odds ratio is a specialist quantity, asked
 for by name.   \item \code{"odds_ratio"} / \code{"ratio"} /
 \code{"difference"}: the named measure,   when the outcome's level can
 carry it. One it cannot says so, and lists what it does   offer.   \item
-\code{"coefficient"}: the model's own coefficient, un-transformed --- the
-log   of the reported measure wherever that measure is multiplicative, and
-the additive   estimate itself on a model that is already additive.  }}
+\code{"raw_coefficient"}: the model's own coefficient, un-transformed ---
+the log   of the reported measure wherever that measure is multiplicative,
+and the additive   estimate itself on a model that is already additive.  }}
 
 \item{empirical}{Show the crude, unadjusted, single-predictor effect beside
 each model effect --- the bivariate association that IS the modelised
@@ -146,7 +147,7 @@ confidence interval either way).}
 always comes from what the  column estimates (an odds ratio is read on the
 odds-ratio scale, a beta on the  standardized-difference one), so what is
 left to choose is what the estimate is compared  TO.  \itemize{   \item
-\code{"auto"}: the effect's own size (compared to no effect).   \item
+\code{"measure"}: the effect's own size (compared to no effect).   \item
 \code{"no"}: no colours.   \item \code{"adjustment"}: how far the ADJUSTED
 effect moved from the crude one --   needs \code{empirical}.   \item
 \code{"between_groups"}: how far each group's effect is from the first
@@ -167,6 +168,11 @@ keeps the built-in layout.}
 level: \code{"range"} prints \code{min-max} when several models were fitted
 on different people, \code{"min"} the smallest count only, \code{"no"} no
 column at all.}
+
+\item{digits}{The minimum number of digits to print, as a single integer
+(0-6): each measure keeps its  own precision where that is finer (an odds
+ratio reads at two decimals, a mean score at  one). In R, \code{tab_reg()}
+also names one display field at a time,  \code{digits = c(ratio = 3)}.}
 
 \item{cleannames}{Strip numeric prefixes from factor level labels.}
 

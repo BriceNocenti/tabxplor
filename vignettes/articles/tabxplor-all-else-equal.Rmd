@@ -453,7 +453,7 @@ The Constant row is the quickest of the three, and it is not decoration: a coeff
 **The odds ratio** — the default, because a logistic model works in odds ratios. Comparable with the published literature, hard to say aloud.
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"))
+tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"), stats=NULL)
 ```
 
 > Black arrestees had **1/1.48** the odds of release of white arrestees, all else equal.
@@ -464,7 +464,7 @@ tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks")
 
 ```{r}
 tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
-        measure = "ratio")
+        measure = "ratio", stats=NULL)
 ```
 
 > Comparing people alike in sex, employment, citizenship and record, black arrestees were about **1.1 times less likely** to be released than while arrestees.
@@ -473,7 +473,7 @@ tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks")
 
 ```{r}
 tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
-        measure = "difference")
+        measure = "difference", stats=NULL)
 ```
 
 > Comparing people alike in sex, employment, citizenship and record, black arrestees were released **5.2 percentage points less often** than white arrestees.
@@ -482,7 +482,7 @@ tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks")
 
 ```{r}
 tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
-        measure = "difference", display = "base")
+        measure = "difference", display = "base", stats=NULL)
 ```
 
 > Keeping the actual distribution of sex, employment, citizenship and record as it is, if everyone in the file had been white, an estimated **84 %** would have been released; if everyone had been black, only **79 %**.
@@ -512,17 +512,17 @@ If you report one number, report the **percentage points**: it is the one your r
 | `"marginal"`     | the people you actually surveyed, averaged       |
 | `"at_reference"` | one **ideal-typical** profile, built on purpose  |
 
-**The third row is the one to reach for, and "reference profile" undersells it.** That profile is not an average and not an accident: it is a **figure you construct**, one level of every predictor, chosen because it is worth thinking about. They are Max Weber's **ideal type**: a deliberate simplification, built to think with rather than to describe anyone in particular. `ref` is what builds it, so *the young male senior manager* and *the older woman in an unskilled job* are both one argument away, and the model will tell you what it expects of each. Section 2's warning applies with full force, though: an ideal type is built, not found, so check how many people it actually fits before you let it speak for them.
+**The third row is the one to reach for, and "reference profile" undersells it.** That profile is not an average and not an accident: it is a **figure you construct**, one level of every predictor, chosen because it is worth thinking about. They are Max Weber's **ideal type**: a deliberate simplification, built to think with rather than to describe anyone in particular. `ref` is what builds it, so *the young male senior manager* and *the older woman in an unskilled job* are both one argument away, and the model will tell you what it expects of each. Section 2's warning applies with full force, though: an ideal type is built, not found, so even if the combination is matched by only a few number of real people, it’s sociological meaning must be well-thougth.
 
 ## The expert knob: `link`, and the two risk ratios
 
-Everything above changed what was **reported**, never what was **fitted**. One argument changes the model itself, and it is the one you will most likely never touch: `link` says which kind of deviation the model *works in*.
+Everything above changed what was **reported**, never what was **fitted** / **modelised**. One argument changes the model itself, and it is the one most users will most likely never touch: `link` says which kind of deviation the model *works in*.
 
 It matters exactly once, and it is worth seeing because both spellings are called a risk ratio:
 
 ```{r}
 tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
-        link = "ratio")
+        link = "ratio", stats=NULL)
 ```
 
 `Model_RR` — unmarked, so a coefficient. This is the **modified Poisson** model epidemiologists use, which works in risk ratios directly. Compare it with the `Model_mRR` above, and you will find they nearly agree here (`0.930` against `0.938` for the `colour` row). What differs is the claim each makes, and which model ran:
@@ -532,15 +532,7 @@ reg_formulas(tab_reg(arrests, "released", c("colour", "checks"), measure = "rati
 reg_formulas(tab_reg(arrests, "released", c("colour", "checks"), link    = "ratio", empirical = FALSE))
 ```
 
-The `fit` column is the answer: `binomial` for the first — the ordinary logistic model, with the ratio worked out from its predictions — and `rr` for the second, a different model altogether.
-
-**Which to use.** Prefer **`measure = "ratio"`**, the marginal one, in almost every case: the logistic model always converges, can never predict a probability above 100 %, and the number it gives describes the people you surveyed. Reach for **`link = "ratio"`** when you need the *conditional* risk ratio — the one that assumes the same ratio holds for everybody, which is what a reader coming from epidemiology will expect, and what you must use to line up with a published modified-Poisson estimate. The full grid of what each family can fit and report is in `vignette("tabxplor-reg")`.
-
-**A note on `display` and `set_display()`.** Named layouts (`"est_ci"`, `"est_base"`, `"base"`, `"base_ci"`) and `{}` templates both work in `display =`, and `set_display()` applies the same thing to a finished table. Two of the tokens — `{obs}`, the observed effect, and `{gap}`, its distance from the modelled one — are only filled in *after* the columns are built, so reach them with `set_display()` on the finished table rather than with `display =` in the call:
-
-```{r}
-model |> set_display("{est} ({obs})")
-```
+**Which to use.** Prefer **`measure = "ratio"`**, the marginal path, in almost every case: the logistic model always converges, can never predict a probability above 100 %, and the number it gives describes the people you surveyed. Reach for **`link = "ratio"`** when you need the *conditional* risk ratio — the one that assumes the same ratio holds for everybody, which is what a reader coming from epidemiology will expect, and what you must use to line up with a published modified-Poisson estimate. The full grid of what each family can fit and report is in `vignette("tabxplor-reg")`.
 
 # 5. What the model cannot settle
 
@@ -552,9 +544,9 @@ The adjusted number depends entirely on which variables you listed. Not a little
 
 ```{r}
 tab_reg(arrests, "released",
-        list("with prior record"    = c("colour", "employed", "citizen", "checks"),
-             "without prior record" = c("colour", "employed", "citizen")),
-        measure = "difference", empirical = FALSE)
+        list("without prior record" = c("colour", "employed", "citizen"),
+             "with prior record"    = c("colour", "employed", "citizen", "checks") ),
+        measure = "difference", display="est")
 ```
 
 The same race gap is **&minus;5.2 points** in one column and **&minus;7.9** in the other. Both are "all else equal". They differ by half again, and the only difference is one variable.
@@ -568,7 +560,7 @@ Should `checks` be in the model at all?
 The case for is obvious: someone with a long record is treated differently, and it would be naive to compare a first offender with a repeat one. The case against needs one more table. `checks` counts police databases — of previous arrests, previous convictions, parole status. So ask the question the model cannot ask itself: **is prior record itself patterned by race?**
 
 ```{r}
-tab(arrests, colour, checks, pct = "row", color = "difference")
+tab(arrests, colour, checks, pct = "row", color = "difference", ref = 1)
 ```
 
 ```{r}
@@ -580,9 +572,9 @@ Black arrestees appear in **2.1 databases on average against 1.5**, and the patt
 
 If some of those earlier encounters happened for the same reasons the present one is being examined, then "controlling for prior record" removes part of the very phenomenon you are trying to measure. The five points that survive in the adjusted model are then not "the race effect purged of confounding" but **the race effect at this arrest, over and above everything the police already recorded about this person** — a narrower and more defensible claim, and a different one.
 
-This has a name — **overcontrol bias**, or conditioning on a mediator — and Cinelli, Forney and Pearl state the rule in one line: block the spurious paths between your variables, and do not disturb the causal ones. A variable that lies *between* the thing you study and the outcome is on a causal path, and adjusting for it blocks the effect you were looking for.
+This has a name — **overcontrol bias**, or conditioning on a mediator — and Cinelli, Forney and Pearl state the rule in one line: block the spurious paths between your variables, and do not disturb the causal ones. **A variable that lies *between* the thing you study and the outcome is on a causal path, and adjusting for it blocks the effect you were looking for**.
 
-**Nothing in the output tells you which case you are in.** The table looks identical either way. This is a question about policing, not about statistics, and it is why this article began by saying no amount of adjustment turns survey data into an experiment.
+**Nothing in the output tells you which case you are in.** The table looks identical either way. This is a question about sociology, not about statistics, and it is why this article began by saying no amount of adjustment turns survey data into a controlled experiment.
 
 **The same problem, in a different discipline.** These are academic salaries, from a data set the college collected precisely to monitor a pay gap:
 
@@ -591,7 +583,7 @@ tab_reg(salaries, "salary",
         list("sex alone"      = "sex",
              "+ field, years" = c("sex", "discipline", "yrs.service"),
              "+ rank"         = c("sex", "discipline", "yrs.service", "rank")),
-        family = "gaussian", stats = "compare_sequential", empirical = FALSE)
+        family = "gaussian", empirical = FALSE, display="{est:0}")
 ```
 
 The raw gap is **$14 088** in favour of men. Adding field and seniority takes it to **$8 423**; adding academic rank takes it to **$4 771**, and the stars disappear. A careless reading would be "two thirds of the pay gap is explained, and the rest is not significant". Both halves of that sentence are traps.
@@ -599,7 +591,7 @@ The raw gap is **$14 088** in favour of men. Adding field and seniority takes it
 **On the rank column**, ask the same question as before:
 
 ```{r}
-tab(salaries, sex, is_prof, pct = "row", color = "difference", color_signif = "grey_non_signif")
+tab(salaries, sex, is_prof, pct = "row", color = "difference", ref = 1, color_signif = "grey_non_signif")
 ```
 
 **46 % of the women are full professors, against 69 % of the men.** If promotion is itself unequal, then controlling for rank compares women with the men who were promoted at the same rate — and adjusts away precisely the mechanism through which a pay gap would operate. The $4 771 is the gap *within rank*: a real quantity, a narrower question, and not "the pay gap corrected".
@@ -611,7 +603,7 @@ tab_reg(salaries, "salary", c("sex", "discipline", "yrs.service", "rank"),
         family = "gaussian", display = "est_ci", empirical = FALSE)
 ```
 
-The gap is compatible with anything from **$2 853 in favour of women to $12 396 in favour of men**. That is not "no difference"; it is a sample too small to tell the difference. With ten times as many people and the same estimate, the very same $4 771 would come out highly significant. Absence of evidence, on 39 women, is very weak evidence of absence — and this is exactly why `display = "est_ci"` is worth reaching for whenever a star goes missing.
+The gap is compatible with anything from **$2 853 in favour of women to $12 396 in favour of men**. That is not "no difference"; it is a sample too small to tell the difference. With ten times as many people and the same estimate, the very same $4 771 would come out highly significant. Absence of evidence, on 39 women, is very weak evidence of absence — and this is exactly why `display = "est_ci"` is worth reaching for whenever an important star goes missing.
 
 **And there is a reversal hiding in that table**, worth a glance: `yrs.service` goes from **+$10 823** crude to **&minus;$1 155** adjusted. Seniority strongly predicts salary — until you hold rank equal, at which point extra years are worth nothing at all. Long service pays through promotion, and not otherwise.
 
@@ -623,7 +615,7 @@ The most famous table in the discipline. Berkeley graduate admissions, autumn 19
 tab(ucb, Gender, Admit, pct = "row", color = "difference", color_signif = "grey_non_signif")
 ```
 
-**45 % of men were admitted against 30 % of women** — a gap of fourteen points, on 4 526 applications. Now hold the department equal:
+**45 % of men were admitted against 30 % of women** — a gap of fourteen points, on 4 526 applications. Now hold the departments inside the university equal:
 
 ```{r}
 tab_reg(ucb, "Admit", c("Gender", "Dept"), measure = "difference")
@@ -632,7 +624,7 @@ tab_reg(ucb, "Admit", c("Gender", "Dept"), measure = "difference")
 **&minus;14.2 points becomes +1.9**, and no longer significant. Not reduced — **reversed in sign**. And the mechanism is entirely visible in a cross-table, which is the point:
 
 ```{r}
-tab(ucb, Gender, Dept, pct = "row", color = "difference")
+tab(ucb, Gender, Dept, pct = "row", color = "difference", ref = 1)
 ```
 
 Read the two rows against the departments' admission rates in the previous table (A 64 %, B 63 %, C 35 %, D 34 %, E 25 %, F 6 %). **31 % of the men applied to department A, the easiest, against 6 % of the women; 21 % of the women applied to E and 19 % to F, the two hardest, against 7 % and 14 % of the men.** Women applied to departments that admitted fewer people. Within departments, the differences are small and go both ways.
@@ -656,7 +648,7 @@ tab_reg(hdv, "cinema", c("qualif", "age"))
 It is not a finding. Look at the mean ages:
 
 ```{r}
-tab(hdv, qualif, c(cinema, age), pct = "row", na = "drop", color = "difference")
+tab(hdv, qualif, c(cinema, age), pct = "row", na = "drop", color = "difference", ref = 1)
 ```
 
 The classes are **all the same age** — between 46 and 50. There is almost nothing for age to confound. So where did the extra gap come from?
@@ -689,11 +681,11 @@ Epidemiologists call this the **Table 2 fallacy**, after the table in a paper wh
 
 ## Three ways to get this wrong
 
-**"The adjusted number is the true one."** It is not more true; it answers a different question. Crude says *how much do these groups differ*, adjusted says *how much do they differ among people alike on my list*. Both are facts about the world, and the interesting object is the distance between them. This is why the two columns are printed side by side and neither is hidden.
+**"The adjusted number is the true one."** It is not more true; it answers a different question. Crude says *how much do these groups differ*, adjusted says *how much do they differ among people alike on my list*. Both are facts about the world, and the interesting object is the distance between them. This is why the two columns are printed side by side.
 
-**"Not significant means no effect."** It means this sample cannot tell it apart from zero. On 39 women, that is a statement about the sample. Look at the confidence interval — `display = "est_ci"` prints it — before concluding anything from an absence.
+**"Not significant means no effect."** It means this sample cannot tell it apart from zero. On 39 women in the university example, that is a statement about the sample. Look at the confidence interval — `display = "est_ci"` prints it — before concluding anything from an absence.
 
-**"Each coloured cell is a finding."** Every cell is tested on its own, with no correction for how many tests are on the page. In a table with a dozen comparisons, one or two will look notable by chance. Read the **pattern** — a whole block of rows moving the same way — and quote the footer's per-variable test rather than a single cell.
+**"Each coloured cell is a finding."** Every cell is tested on its own, with no correction for how many tests are on the page. In a table with a dozen comparisons, one or two will look notable by chance, 95% confidence level is wrong one time over 20. Read the **pattern** — a whole block of rows moving the same way — and quote the footer's per-variable test rather than a single cell.
 
 # Where to go next
 
@@ -703,6 +695,8 @@ Epidemiologists call this the **Table 2 fallacy**, after the table in a paper wh
 - `?tab_reg` documents every argument, grouped by purpose.
 
 ## Where these ideas come from
+
+<!-- Make a proper bibliography instead, with all papers and authors cited above, but stating in parenthesis what idea they developped. -->
 
 Nothing in this article is original; the arrangement is.
 

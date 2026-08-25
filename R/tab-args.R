@@ -690,14 +690,14 @@ EXPORT_ARGS <- list(
             "`row_vars` uses to name each block (written once per block); the column-variable names",
             "are the spanning row above their level columns. Level headers always keep their name.")),
   wrap_rows = list(
-    producers = c("tab_html", "tab_md", "tab_plot"),
+    producers = c("tab_html", "tab_md", "tab_plot", "tab_xl"),
     doc = "By default, rownames are wrapped when larger than 30 characters.",
     doc_for = list(
       tab_md = c("Max width for row labels before truncation. `NULL` (default) never truncates",
                  "(lossless -- the column grows); set a number to cap the label width. A markdown pipe",
                  "cell cannot hold a raw newline, so md \"wrapping\" means \"do not truncate\"."))),
   wrap_cols = list(
-    producers = c("tab_html", "tab_plot"),
+    producers = c("tab_html", "tab_plot", "tab_xl"),
     doc = "By default, colnames are wrapped when larger than 12 characters."),
   whitespace_only = list(
     producers = c("tab_html", "tab_plot"),

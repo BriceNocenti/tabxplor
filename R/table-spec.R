@@ -53,17 +53,24 @@ set_spec_field <- function(x, field, value) {
   set_meta_field(x, "spec", if (length(sp)) sp else NULL)
 }
 
-# tab_kind() -- what kind of table this is: the stored fact first; the degraded fallback (a table that
-# lost its `meta`) reads whether the `test` tibble carries a reg-producer discriminator (TEST_REG_KEYS,
-# declared in TEST_ROWS).
+# tab_kind() -- what kind of table this is, in three stages, each surviving the loss of the one above:
+# the stored fact; then the `test` tibble's reg-producer discriminator (TEST_REG_KEYS, declared in
+# TEST_ROWS); then THE COLUMNS THEMSELVES -- a `role` of "model" or "emp" is a per-column fmt
+# attribute, and only tab_reg() writes one.
+# DESIGN: the third stage is what makes `as_tibble()` on a regression keep its base-count column, its
+# footer branch and its publication palette. A table attribute is dropped by any dplyr verb that
+# rebuilds the frame; a column attribute is not, so the identity is read from the most durable carrier
+# that can still answer.
 #' @keywords internal
 #' @noRd
 tab_kind <- function(x) {
   k <- get_spec(x)[["kind"]]
   if (!is.null(k)) return(k)
   tt <- get_test(x)
-  if (!is.null(tt) && nrow(tt) > 0 && any(tt$test %in% TEST_REG_KEYS)) "regression"
-  else "crosstab"
+  if (!is.null(tt) && nrow(tt) > 0 && any(tt$test %in% TEST_REG_KEYS)) return("regression")
+  if (is.data.frame(x) && any(purrr::map_lgl(x, ~ is_fmt(.) && get_role(.) %in% c("model", "emp"))))
+    return("regression")
+  "crosstab"
 }
 
 #' @keywords internal

@@ -1,12 +1,16 @@
 # PURPOSE: package initialization plus the shared factor / list / string utilities.
 # ROLE: .onLoad() SEEDS the package options and the colour palette; everything else here is a small
 #   helper with no home of its own -- the two stringi-based replacements for str_wrap/str_trunc, the
-#   retired-export-argument catcher, and the three exported user helpers (score_from_lv1(),
-#   gss_cat_data_formatting(), and the deprecated fct_recode_helper()).
+#   NAME wrapper beside them, the retired-export-argument catcher, and the three exported user helpers
+#   (score_from_lv1(), gss_cat_data_formatting(), and the deprecated fct_recode_helper()).
 # KEY CONSTRAINTS:
 #   - TAB_OPTIONS (R/tab-options.R) is the single source of truth for option names and defaults;
 #     .onLoad() only seeds them, through tx_seed_options().
 #   - set_color_style() and set_color_breaks() are defined in tab_classes.R but called from here.
+#   - A LEVEL LABEL IS PROSE, A VARIABLE NAME IS A COMPOUND WORD: tx_str_wrap() breaks the first on
+#     whitespace, tx_wrap_name() breaks the second at the seams a name is actually built from
+#     (`_`, `.`, `*`, camelCase). One of them was missing, so a snake_case name met no break
+#     opportunity and no width could ever hold it.
 #   - This file sorts second-to-last in C collation (only zzz-fact-keys.R follows), so nothing in
 #     the package may depend on it at SOURCE time.
 # See: CLAUDE.md § tabxplor architecture.
@@ -25,6 +29,68 @@ tx_str_wrap <- function(string, width = 80, exdent = 0, whitespace_only = TRUE) 
   wrapped <- stringi::stri_wrap(string, width = width, exdent = exdent,
                                 whitespace_only = whitespace_only, simplify = FALSE)
   vapply(wrapped, function(lines) stringi::stri_c(lines, collapse = "\n"), character(1))
+}
+
+# === SECTION: wrapping a NAME, as opposed to prose =================================================
+#
+# tx_str_wrap() above breaks on whitespace, which is right for a level LABEL ("Never married") and
+# useless for a variable NAME: `shenaniganing_colorous_property_of_the_skin` holds no whitespace, so
+# no `wrap_rows`, no column cap and no rotation could ever hold it -- the defect the export review
+# reported. A name is a COMPOUND WORD, and its parts are separated by declared characters.
+#
+# THE BREAK OPPORTUNITIES, stated once and read by every medium:
+#   after   a space (consumed at the break), `_` and `.` -- the separator stays at the end of its
+#           line, where it reads as "this continues below";
+#   before  `*` (the interaction operator: `age` / `*tvhours` says which side the operator belongs
+#           to) and a lowercase -> uppercase camelCase seam.
+# `-` and `/` are deliberately NOT opportunities: they are far more often a range ("25-34") or a date
+# than a compound-name seam, and breaking those reads as a typo.
+#' @keywords internal
+tx_name_atoms <- function(s) {
+  s <- gsub("([_. ])", "\\1\u0001", s, perl = TRUE)
+  s <- gsub("(?=[*])|(?<=[a-z0-9])(?=[A-Z])", "\u0001", s, perl = TRUE)
+  a <- strsplit(s, "\u0001", fixed = TRUE)[[1L]]
+  a[nzchar(a)]
+}
+
+# Wrap a NAME to `width`, greedily, at those opportunities. `exdent` indents every line after the
+# first, so a reader sees at a glance that it is one name and not two.
+# `hard = TRUE` also splits a run with NO opportunity inside it, so the cap is ALWAYS honoured -- what
+# a fixed-width column needs, and what prose does not.
+#' @keywords internal
+tx_wrap_name <- function(string, width = 12L, exdent = 1L, hard = TRUE, brk = "\n") {
+  width <- max(1L, as.integer(width))
+  ex    <- max(0L, as.integer(exdent))
+  avail <- max(1L, width - ex)
+  one <- function(s) {
+    if (is.na(s) || !nzchar(s) || nchar(s) <= width) return(s)
+    lines <- character(0)
+    cur   <- ""
+    push  <- function(x) lines <<- c(lines, sub(" +$", "", x))
+    for (a in tx_name_atoms(s)) {
+      r <- if (length(lines)) avail else width          # ⚠ read ONCE: `lines` grows below
+      if (nzchar(cur) && nchar(cur) + nchar(a) > r) {
+        push(cur); cur <- ""
+        r <- avail
+        a <- sub("^ +", "", a)                          # a space that became a break is consumed
+      }
+      while (hard && !nzchar(cur) && nchar(a) > r) {
+        push(substr(a, 1L, r))
+        a <- substr(a, r + 1L, nchar(a))
+        r <- avail
+      }
+      cur <- paste0(cur, a)
+    }
+    if (nzchar(cur)) push(cur)
+    if (length(lines) < 2L) return(s)
+    # DESIGN: the indent is a NO-BREAK space (U+00A0), not an ordinary one. The html path rewrites
+    # every remaining space into U+202F so the browser cannot re-break what we already wrapped; an
+    # indent written with a plain space would be caught by that blanket rule and shrink to a fifth of
+    # its width. U+00A0 renders at full width in every medium and tx_unwrap_text() already undoes it.
+    paste0(lines[[1L]], brk,
+           paste(paste0(strrep("\u00a0", ex), lines[-1L]), collapse = brk))
+  }
+  vapply(string, one, character(1), USE.NAMES = FALSE)
 }
 
 # str_trunc(): truncate to `width` with a trailing ellipsis (right side only, the sole use).

@@ -12,7 +12,7 @@ tab_xl(
   lang = NULL,
   colnames_rotation = 0,
   remove_tab_vars = TRUE,
-  colwidth = 10,
+  colwidth = "auto",
   color_legend = TRUE,
   sheets = "auto",
   titles,
@@ -27,6 +27,8 @@ tab_xl(
   color = TRUE,
   transpose = FALSE,
   var_names = NULL,
+  wrap_rows = 35,
+  wrap_cols = 15,
   ratio_cells = NULL,
   check = FALSE,
   data = NULL,
@@ -57,8 +59,12 @@ software associated with .xlsx files).}
 \item{remove_tab_vars}{By default, \code{tab_vars} columns are removed to gain space.
 Set to \code{FALSE} to keep them.}
 
-\item{colwidth}{The standard width for numeric columns, as a number.
-Set to \code{"auto"} to let Excel choose.}
+\item{colwidth}{Column widths. \code{"auto"} (the default) fits every column to what its cells
+will actually show --- measured by tabxplor itself from the rendered values, the level headers
+and the unit tags, so a number column is exactly as wide as its widest figure and a text column
+wraps instead of growing past a cap. Give a number instead to force that fixed width on every
+numeric column (a mean's \code{sd} sibling then takes a proportionally narrower one).
+Widths are set per \emph{sheet}: several tables written to one sheet all fit.}
 
 \item{color_legend}{Print the colour legend below the table (with the subtext). \code{TRUE} by default, and a
 no-op on a table that carries no colours.}
@@ -105,6 +111,10 @@ the col-percentages-with-several-row-variables use case.}
 \code{"cols"} or \code{"none"}. The row-variable name is the leading column a table with several
 \code{row_vars} uses to name each block (written once per block); the column-variable names
 are the spanning row above their level columns. Level headers always keep their name.}
+
+\item{wrap_rows}{By default, rownames are wrapped when larger than 30 characters.}
+
+\item{wrap_cols}{By default, colnames are wrapped when larger than 12 characters.}
 
 \item{ratio_cells}{What a ratio / odds-ratio cell holds in the workbook. Excel cannot compute
 inside a number format, so a cell storing \code{0.83} cannot be made to print \verb{\\u00f71.2} the way the

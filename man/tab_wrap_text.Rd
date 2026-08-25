@@ -17,13 +17,16 @@ tab_wrap_text(
 \arguments{
 \item{tabs}{A \code{tabxplor_tab} or a \code{tibble} .}
 
-\item{wrap_rows}{By default, rownames are wrapped when larger than 30 characters.}
+\item{wrap_rows}{Row labels are wrapped past this width (35 by default), as prose --- on
+whitespace.}
 
-\item{wrap_cols}{By default, colnames are wrapped when larger than 12 characters.}
+\item{wrap_cols}{Column NAMES are wrapped past this width (15 by default). A name is a compound
+word, not prose, so it breaks at the seams a name is built from (\verb{_}, \code{.}, \code{*}, and a camelCase
+boundary) as well as at spaces.}
 
 \item{exdent}{On the second lines or more, the number or characters to use for indentation.}
 
-\item{whitespace_only}{Set to \code{FALSE} to wrap also on non whitespace characters.}
+\item{whitespace_only}{Set to \code{FALSE} to wrap row labels also on non whitespace characters.}
 
 \item{unbreakable_spaces}{Set to \code{FALSE} to keep normal spaces in text (auto-break).}
 
