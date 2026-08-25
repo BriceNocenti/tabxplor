@@ -2218,3 +2218,38 @@ else if (status == ANALYSIS_COMPLETE && (!is.null(self$state)) && path == "")
 so hiding the carrier could not have stopped a render round-trip. It is still worth keeping (no
 vertical space, and `state` is serialised in a branch of `ResultsElement$asProtoBuf()` that ignores
 `visible`), but the flicker it was credited with fixing was this.
+
+---
+
+## Phase 22g-x — what a level reorder is, and what the fit cache holds (2026-08-25)
+
+### The ▲/▼ bar writes a DISPLAY order, and `ref` is the only half the fit sees
+
+`reg_fit_frame()` strips the `ordered` class from every factor **predictor** before the fit — its own comment says why: polynomial contrasts that no per-level skeleton can align. So every predictor is fitted under **treatment contrasts**, in every family, and its level order decides exactly one thing: which level the others are compared to.
+
+That splits the panel's one control into the two facts it always was:
+
+| the widget writes | what it is | what it costs |
+|---|---|---|
+| `ref_levels` (= `order[0]`, kept in sync by `varSync`) | the model's baseline | a relevel of the data → an honest refit |
+| `levels_order` (the rest) | the row order | `tab_reg(.levels_order =)` → a permutation of the row skeleton → **a cache hit** |
+
+`jmvtab_reg_build()` therefore no longer calls `jmv_relevel_cols()`. It hands the order to `tab_reg()` after translating it to merged names through `jmv_order_after_collapse()` — the skeleton is built *after* `.levels_collapse` has run, so an untranslated order would name levels the table does not have.
+
+**Nothing in the `.js` changed.** `varSync` still writes `ref := order[0]` and `regRefToFirst()` still moves a picked reference to the front, so `order[0] == ref` stays true and `boldFirst` stays right.
+
+⚠ **One narrow consequence**: the data relevel used to reach `reg_cross_column()`, which bakes both parents' level orders into a materialised combined factor — so a ▲/▼ move also permuted an interaction block's rows. It no longer does; that block's row order is `expand.grid`'s.
+
+⚠ **The greying of the arrows on an ordered factor was already there, in the shared block** (`tabxmBuildList(..., canOrder = mtypeCache[v] !== "ordinal", ...)`), so both panels have it. It is keyed on jamovi's own **`measureType`**, the only signal `requestData("column", …)` gives the JS — an R `ordered` factor whose jamovi measure type is *Nominal* will show live arrows, and no `.js` change can see past that. After this phase the greying states MEANING only: a reorder could not move a number even if it were allowed.
+
+### The `"fit"` tier holds two kinds of record
+
+The observed (crude) univariable fits now ride the same store, tier and seam as the model fit — `reg_fit_cached()` (`R/reg-digest.R`), used by `reg_spec_build_one()` and `reg_empirical_fit()` alike. They are told apart by the key alone: a crude key is a synthetic one-predictor spec whose `extra` leads with `"crude"`.
+
+⚠ **`drop_extra` is a key member, and its columns are FINGERPRINTED.** It names the variables whose missing values narrow a fit's complete-case population without appearing in its formula — the other models' predictors under `na = "drop_all"`, and, for a crude fit, the whole predictor set minus this one. `jmvreg_fit_key()` used to hash only the outcome, this spec's predictors and the design variables, with `na_shared_vars` riding in `extra` as names: a value edit to one of those columns moved the domain and not the key.
+
+⚠ **With a cache present, a record is distilled on the MISS too** (`jmv_store_cached()` returns the value it stored), so *every* consumer of a crude record must read `reg_model_of()`, never `$fit` — the cold path is a digest path as well. Three sites demanded a fitted object and were fixed here; the one that bites hardest is `reg_gap_se_columns()`'s numeric arm, where `$fit` silently drops `color = "adjustment"` for every numeric predictor.
+
+### Where the drop-down latency actually is
+
+`fetchLevels()` caches per variable and never repeats, and a `ref` pick's own handler is a bare option write — so the widget does nothing heavy. Every var-table control writes an option that is in `.opts()`, so **a pick re-runs the analysis, and that re-run is the latency**. Measured on a warm store, multinomial (`dev/benchmarks/results_2.0.0/phase22gx_crude.txt`): a re-apply 1.85 s, a reorder 1.85 s (was 14.8), a `ref` pick 14.7 s, a `multiplier` pick 14.8 s. The last of those is the one that need not be slow — see the `multiplier` item under Phase 22x.

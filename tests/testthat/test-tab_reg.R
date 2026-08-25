@@ -1256,3 +1256,46 @@ test_that("ci_method = 'profile' really builds a profile-likelihood interval", {
   expect_false(identical(get_ci_inf(reg_first_fmt(w)), get_ci_inf(reg_first_fmt(p))))
   expect_equal(get_or(reg_first_fmt(w)), get_or(reg_first_fmt(p)), tolerance = 1e-8)
 })
+
+
+# ---- `.levels_order`: a predictor's level order is DISPLAY (Phase 22g-x) ---------------------
+# Every factor PREDICTOR is fitted under treatment contrasts -- reg_fit_frame() strips `ordered` for
+# exactly that reason -- so its order decides ONE thing, which level the others are compared to, and
+# that one thing is `ref =`. The rest permutes the row skeleton and must move no number, in any
+# family, an ORDERED predictor and an ORDINAL outcome included.
+test_that(".levels_order permutes the rows and changes no estimate", {
+  skip_if_not_installed("broom")
+  d  <- reg_data()
+  lv <- levels(d$rincome)
+  ord <- list(rincome = c(lv[[1]], rev(lv[-1])))
+  cases <- list(
+    binomial = function(...) tab_reg(d, "married", c("race", "rincome"), stats = "no",
+                                     empirical = FALSE, cleannames = FALSE, ...),
+    ordinal  = function(...) tab_reg(d, "partyid", c("race", "rincome"), family = "ordinal",
+                                     stats = "no", empirical = FALSE, cleannames = FALSE, ...))
+  for (nm in names(cases)) {
+    f  <- cases[[nm]]
+    t0 <- suppressWarnings(suppressMessages(f()))
+    t1 <- suppressWarnings(suppressMessages(f(.levels_order = ord)))
+    k  <- as.character(t0$var) == "rincome"
+    expect_equal(as.character(t1$levels)[k], c(lv[[1]], rev(lv[-1])), info = nm)  # ref still first
+    # the same numbers under the same labels: match one block onto the other by level
+    col <- names(t0)[vapply(t0, is_fmt, logical(1))]
+    col <- col[[length(col)]]
+    m   <- match(as.character(t1$levels)[k], as.character(t0$levels)[k])
+    expect_equal(get_num(t1[[col]][k]), get_num(t0[[col]][k])[m], info = nm)
+  }
+})
+
+test_that(".levels_order names a level the table does not have without effect", {
+  skip_if_not_installed("broom")
+  d  <- reg_data()
+  t0 <- suppressMessages(tab_reg(d, "married", "race", stats = "no", empirical = FALSE))
+  lv <- as.character(t0$levels)                       # Constant, then race's own level order
+  t1 <- suppressMessages(tab_reg(d, "married", "race", stats = "no", empirical = FALSE,
+    .levels_order = list(race = c("nope", lv[[4]]), absent_var = c("a", "b"))))
+  # the LAST level is named and moves to the front of the NON-reference rows; the reference stays
+  # first, the unlisted level trails, and the unknown name and the unknown variable do nothing
+  expect_equal(as.character(t1$levels), c(lv[[1]], lv[[2]], lv[[4]], lv[[3]]))
+  expect_equal(sort(get_or(t1[[ncol(t1)]])), sort(get_or(t0[[ncol(t0)]])))
+})

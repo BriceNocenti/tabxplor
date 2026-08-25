@@ -154,9 +154,10 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # Phase 20g-ii: the per-predictor level-merge tick-boxes (raw Array; folded by
         # jmvtab_levels_collapse() in jmvtab_reg_build, the SAME folder jmvtab uses).
         levels_collapse = self$options$levels_collapse,
-        # Phase 22g-iv: the per-predictor level ORDER. `tab_reg()` has no `levels_order` argument --
-        # jmvtab_reg_build() relevels the predictor columns before the fit instead, which is what
-        # makes the panel's "the baseline IS the first level" rule true of the model too.
+        # The per-predictor level ORDER, a DISPLAY order: jmvtab_reg_build() hands it to
+        # `tab_reg(.levels_order =)`, which permutes the row skeleton and never the data -- so a
+        # reorder is a cache HIT. The panel's "the baseline IS the first level" rule is carried by
+        # `ref` alone, which the widget writes off the order's first entry.
         levels_order    = self$options$levels_order,
         conf_level   = self$options$conf_level,
         ci_method    = self$options$ci_method,

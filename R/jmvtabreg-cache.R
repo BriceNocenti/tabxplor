@@ -1,10 +1,15 @@
 # PURPOSE: The jmvtabreg live-UI fit cache + the engine-free build core jmvtab_reg_build().
 # ROLE: Drives tab_reg() with a mutable cache environment injected via its internal `.fit_cache` arg.
-#       reg_spec_build() (R/reg-spec-build.R) fetches through jmvreg_cached(): ONE tier, holding the
-#       DISTILLED fit record -- the `tabxplor_fitdigest` (R/reg-digest.R) plus everything the eager
-#       stage computed off the live fit, with the fitted object and the model frame thrown away.
-#       So the key carries NO ESTIMAND: `measure` / `effect` / `display` / `color` / `conf_level`
-#       change without a refit, and the store holds kilobytes where it used to hold ~10 MB fits.
+#       Both fit paths fetch through reg_fit_cached() (R/reg-digest.R) -> jmvreg_cached(): ONE tier,
+#       holding the DISTILLED fit record -- the `tabxplor_fitdigest` (R/reg-digest.R) plus everything
+#       the eager stage computed off the live fit, with the fitted object and the model frame thrown
+#       away. So the key carries NO ESTIMAND: `measure` / `effect` / `display` / `color` /
+#       `conf_level` change without a refit, and the store holds kilobytes where it used to hold
+#       ~10 MB fits.
+#       ⚠ THE TIER HOLDS TWO KINDS OF RECORD OF ONE SHAPE: a MODEL fit, and each observed (crude)
+#       univariable one (R/reg-empirical.R). They are told apart by the key alone -- a crude key is a
+#       synthetic one-predictor spec whose `drop_extra` names the rest of the predictor set, since
+#       that is what lands it on the model's own complete cases.
 #       Content-addressed, schema-versioned, byte-bounded LRU, persisted to the hidden `cache_state`
 #       Image $state.
 # ROLE (build core): jmvtab_reg_build() is the pure, engine-free entry the R6 backend (R/jmvtabreg.b.R)
@@ -31,6 +36,8 @@
 #     (reg_digest_terms() rebases the terms object's environment for exactly this reason).
 #   - The REFERENCE is in the key for free: reg_resolve_fit_plan() relevels the data before the fit,
 #     and jmv_col_fp() fingerprints a column's levels -- so a reference change is an honest refit.
+#     The level ORDER is NOT: it reaches tab_reg() as `.levels_order`, a display permutation of the
+#     row skeleton, so a ▲/▼ move touches no column and cannot move a key.
 #   - Rides the SHARED cache kernel (R/jmvtab-cache.R: jmv_cache_config + jmv_store_*); only the
 #     store stays decoupled (its tier + $state differ from the crosstab store).
 #   - INHERITS jmv_col_fp()'s value-edit blind spot (a same-shape edit preserving class / factor levels /
@@ -40,13 +47,18 @@
 #   - THE STAGED COMPARISON'S RENDER IS KEPT TWICE, and both copies earn it: jmvcore's `$state`
 #     survives an engine reset but warns past 5e5 compressed bytes, while JMVREG_RENDERS (below)
 #     survives only the process. The state carries the signature always and the HTML while it fits.
-# See: dev/tabxplor_2.0.0_jamovi_dev.md (§ Phase 22g-vi) ; CLAUDE.md > 2.0.0 roadmap > Phase 22j.
+# See: dev/tabxplor_2.0.0_jamovi_dev.md (§ Phase 22g-x) ; CLAUDE.md > 2.0.0 roadmap > Phase 22g-x.
 
 
 # === Constants + config ====================================================================
 # The reg store rides the shared cache kernel (R/jmvtab-cache.R: jmv_cache_config + jmv_store_*) with
 # its own 2-tier config; only the store is decoupled (its tiers + $state differ from the crosstab store).
-JMVREG_CACHE_SCHEMA <- 8L   # bump on any store-shape change -> discard stale stores
+JMVREG_CACHE_SCHEMA <- 9L   # bump on any store-shape change -> discard stale stores
+# 9 (Phase 22g-x): the CRUDE fits share the tier, under a synthetic one-predictor spec key -- so the
+#   `"fit"` tier now holds two kinds of record of the same shape, told apart by the key alone. And
+#   `drop_extra` becomes a NAMED, FINGERPRINTED key member where `na_shared_vars` rode in `extra` as
+#   names only: it decides the complete-case population, so a value edit to one of those columns
+#   must move the key.
 # 8 (Phase 22j): ONE tier, holding the DISTILLED fit record (digest + the eager footer rows, no fit
 #   and no frame). The key drops the estimand -- `sp_dox`, `conf_level`, `effect`, `measure`,
 #   `display` all leave it -- and gains `stats` (which decides which eager rows exist) and
@@ -93,13 +105,21 @@ jmvreg_cache_evict <- function(store) jmv_store_evict(JMVREG_CFG, store)
 jmvreg_cached <- function(cache_env, tier, key, compute_fn)
   jmv_store_cached(JMVREG_CFG, cache_env, tier, key, compute_fn)
 
-# The content key for one model spec: everything that decides WHICH MODEL IS FITTED, and nothing
-# that decides how it is reported. The per-column fingerprint (jmv_col_fp) of the model + design
-# variables captures a weight change and the reference relevel; `extra` carries the rest.
+# The content key for one fit -- a model spec, or the synthetic one-predictor spec a CRUDE refit is:
+# everything that decides WHICH MODEL IS FITTED, and nothing that decides how it is reported. The
+# per-column fingerprint (jmv_col_fp) of the model + design variables captures a weight change and
+# the reference relevel; `extra` carries the rest.
+# ⚠ `drop_extra` IS A KEY MEMBER, AND ITS COLUMNS ARE FINGERPRINTED. It names the variables whose
+# missing values narrow this fit's complete-case population without appearing in its formula -- the
+# other models' predictors under `na = "drop_all"`, and, for a crude fit, the WHOLE predictor set
+# minus this one. Naming them is not enough: a value edit to one of those columns moves the domain,
+# so they join `used` and are hashed like any other.
 #' @keywords internal
 #' @noRd
-jmvreg_fit_key <- function(sp, data, family, design_spec, extra = NULL) {
-  used <- intersect(unique(c(sp$outcome, sp$predictors, reg_design_vars(design_spec))), names(data))
+jmvreg_fit_key <- function(sp, data, family, design_spec, extra = NULL,
+                           drop_extra = character(0)) {
+  used <- intersect(unique(c(sp$outcome, sp$predictors, drop_extra,
+                             reg_design_vars(design_spec))), names(data))
   jmv_hash(list(
     kind       = "jmvreg",
     outcome    = sp$outcome,
@@ -111,6 +131,7 @@ jmvreg_fit_key <- function(sp, data, family, design_spec, extra = NULL) {
     nrow       = nrow(data),
     fp         = lapply(data[used], jmv_col_fp),
     design     = list(wt = design_spec$wt, has_design = !is.null(design_spec$design)),
+    drop_extra = drop_extra,
     extra      = extra
   ))
 }
@@ -416,13 +437,16 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     preds <- if (length(preds)) as.character(preds) else NULL
   }
 
-  # Phase 22g-iv: the ▲/▼ bar. `tab_reg()` has no `levels_order`, so the order is applied HERE, to
-  # the data, before any fit -- in the RAW level names, because `.levels_collapse` merges afterwards
-  # and fct_collapse() keeps the order of first appearance. It needs no cache entry: jmvreg_fit_key()
-  # fingerprints the prepared frame's levels, so a relevel moves the key by construction.
-  ord <- jmvtab_levels_order(opts$levels_order)
-  if (length(ord))
-    data <- jmv_relevel_cols(data, ord, intersect(names(ord), names(data)))
+  # The ▲/▼ bar. It is a DISPLAY order and reaches `tab_reg()` as such (`.levels_order` -> the row
+  # skeleton), never as a relevel of the data: a predictor is fitted under treatment contrasts, so
+  # its order decides ONLY which level is the reference -- and that is `ref =`, which the panel writes
+  # off the order's first entry and which relevels the data on its own. So a reorder no longer moves
+  # the fit key, i.e. it is a cache HIT, while choosing a baseline is still an honest refit.
+  # ⚠ TRANSLATED TO MERGED NAMES HERE, through the same jmv_order_after_collapse() jmvtab uses: the
+  # skeleton is built after `.levels_collapse` has run, so a raw level's row IS the merged run that
+  # swallowed it, and an untranslated order would silently name levels the table does not have.
+  collapse <- jmvtab_levels_collapse(opts$levels_collapse)
+  ord      <- jmv_order_after_collapse(jmvtab_levels_order(opts$levels_order), collapse)
 
   if (is.null(dep) || is.null(preds)) {
     return(list(tabs = NULL, store = cache_env$store, hits = 0L))
@@ -515,7 +539,10 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     # uses. It needs no cache entry of its own: jmvreg_fit_key() fingerprints the PREPARED frame's
     # levels, and reg_prepare_data() merges before any fit -- so a merge changes the key by
     # construction.
-    .levels_collapse = jmvtab_levels_collapse(opts$levels_collapse)
+    .levels_collapse = collapse,
+    # the ▲/▼ order, as DISPLAY: it permutes the row skeleton and never the data, so it is out of the
+    # fit key by construction (see the fold above).
+    .levels_order    = ord
   ))
 
   cache_env$store <- jmvreg_cache_evict(cache_env$store)

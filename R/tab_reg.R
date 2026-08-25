@@ -875,6 +875,35 @@ reg_skeleton <- function(data, predictors, shape_terms = NULL, crosses = list())
 reg_constant_row <- function()
   tibble::tibble(var = "Constant", level = "Constant", term = "(Intercept)", is_ref = TRUE)
 
+# reg_skeleton_reorder() -- A PREDICTOR'S LEVEL ORDER IS DISPLAY, AND ONLY THE REFERENCE IS NOT.
+# Every factor predictor is fitted under TREATMENT contrasts (reg_fit_frame() strips `ordered`
+# precisely so that it is), so the order decides one thing -- which level the others are compared to
+# -- and that one thing is `ref =`, which relevels the DATA and is an honest refit. Everything else
+# is a permutation of rows, applied here, to the skeleton, where it costs nothing and moves no
+# number: the fit never sees it, so a reorder is a cache HIT in every family, ordinal included.
+#
+# ⚠ THE REFERENCE ROW STAYS FIRST, and only the rest are permuted -- `is_ref` and `term` were built
+# positionally by reg_skeleton() (`term = paste0(p, lv[-1])`), and every later stage reads them as
+# flags. Unlisted levels keep their relative position, trailing, which is fct_relevel()'s own
+# contract and therefore the panel's.
+# ⚠ `levels_order` names MERGED levels: `.levels_collapse` has already run when the skeleton is
+# built, so a caller holding raw names translates them first (jmvtab_reg_build).
+#' @keywords internal
+#' @noRd
+reg_skeleton_reorder <- function(skeleton, levels_order) {
+  if (is.null(skeleton) || !length(levels_order)) return(skeleton)
+  vars <- intersect(names(levels_order), as.character(skeleton$var))
+  for (v in vars) {
+    k <- which(as.character(skeleton$var) == v & !skeleton$is_ref)
+    if (length(k) < 2L) next
+    pos <- match(as.character(skeleton$level[k]), levels_order[[v]])
+    # an unlisted level sorts after every listed one, keeping its own relative position (stable sort)
+    pos[is.na(pos)] <- length(levels_order[[v]]) + seq_len(sum(is.na(pos)))
+    skeleton[k, ] <- skeleton[k[order(pos)], ]
+  }
+  skeleton
+}
+
 reg_skeleton_from_fit <- function(fit) {
   tt      <- stats::terms(fit)
   labels  <- attr(tt, "term.labels")
@@ -3175,7 +3204,7 @@ new_reg_shared <- function(union_predictors = character(0), design_spec = list()
                            shape_terms = NULL, shape_kinds = character(0), crosses = list(),
                            empirical = FALSE, display = NULL, digits = NULL,
                            var_labels = character(0), na_shared_vars = character(0),
-                           base_n = "range") {
+                           levels_order = NULL, base_n = "range") {
   as.list(environment())
 }
 # ...and THE globalVariables mirror, DERIVED from those formals: reg_build() binds them with
@@ -3388,6 +3417,9 @@ reg_stage_setup <- function(ctx) {
     else                          skeleton <- reg_skeleton(skeleton_data, union_predictors,
                                                             shape_terms, crosses)
   }
+  # the DISPLAY order, applied to the rows and never to the data (reg_skeleton_reorder). The deferred
+  # branch is reordered where its skeleton is born instead, in reg_spec_build_one().
+  skeleton <- reg_skeleton_reorder(skeleton, levels_order)
 
   prefix_dep    <- length(specs) > 1L
   n_outcomes    <- length(unique(purrr::map_chr(specs, "outcome")))
@@ -3505,7 +3537,7 @@ reg_crude_block <- function(sp, sp_fam, inv_sp, key, mdata, pos, y_ref, var_y, c
     other_preds = c(union_predictors, reg_cross_parents(crosses)), est = sp$est,
     wt = design_spec$wt,
     want_fit = TRUE, trials = sp$trials,
-    shape_terms = shape_terms, crosses = crosses,
+    shape_terms = shape_terms, crosses = crosses, fit_cache = fit_cache,
     marginal = !identical(sp$est$effect, "conditional") &&
       (reg_fam_binary(sp_fam) || reg_fam_prob(sp_fam)))
   out <- reg_empirical_columns(skeleton, emp, fac_preds_e, key, sp_fam, sp$est, var_y,
@@ -3525,6 +3557,8 @@ reg_crude_block <- function(sp, sp_fam, inv_sp, key, mdata, pos, y_ref, var_y, c
   out$fac_preds <- fac_preds_e          # ⚠ live: reg_set_obs() -> reg_gap_se_columns(fac_preds =)
   out$fit_preds <- fit_preds_e
   out$saturated <- saturated
+  # ⚠ a served record here has a DIGEST and no `$fit` (reg_empirical_fit -> reg_fit_cached), so
+  # reg_gap_se_columns() reads every one of them through reg_model_of().
   out$fits      <- fit_e$fits
   out$grid      <- emp
   out$degraded  <- isTRUE(attr(emp, "degrade"))
@@ -4739,8 +4773,10 @@ reg_stage_finalize <- function(ctx) {
 #'   the likelihood-ratio test: more accurate near separation, unweighted binomial / poisson only
 #'   (otherwise it falls back to Wald with a message; gaussian always uses the exact-t interval).
 #'
-#'   `...` also carries the internal `.fit_cache` (the jamovi live UI's fit
-#'   cache environment), and it is what makes every argument removed or renamed while `tab_reg()` was
+#'   `...` also carries the internal jamovi plumbing --- `.fit_cache` (the live UI's fit cache
+#'   environment), `.levels_collapse` (merged levels) and `.levels_order` (a predictor's row order,
+#'   which is display: only `ref` reaches the fit) --- and it is what makes every argument removed
+#'   or renamed while `tab_reg()` was
 #'   in development --- `exponentiate`, `at`, `estimate_display`, `dependent`, `split_var`,
 #'   `reference`, `method`, `compare`, `baseline`, `inverse_two_level_factors`, `parallel`, and the
 #'   `effect` values `"ame"` / `"ame_ratio"` / `"coefficient"` --- give an error naming its
@@ -4765,11 +4801,14 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
   predictors_quo <- rlang::enquo(predictors)
   tab_vars_quo   <- rlang::enquo(tab_vars)
   wt_quo         <- rlang::enquo(wt)
-  # `.fit_cache` (the jamovi live-UI cache env) and `.levels_collapse` (the level-merge spec shared
-  # with tab()) are jamovi-internal plumbing riding `...`; neither is a user argument.
+  # `.fit_cache` (the jamovi live-UI cache env), `.levels_collapse` (the level-merge spec) and
+  # `.levels_order` (the per-predictor DISPLAY order) are jamovi-internal plumbing riding `...`; none
+  # is a user argument. ⚠ `.levels_order` reorders the ROWS, never the data: see
+  # reg_skeleton_reorder().
   .dots      <- list(...)
   .fit_cache <- .dots[[".fit_cache"]]
   .levels_collapse <- new_lvl_collapse(.dots[[".levels_collapse"]])
+  .levels_order    <- .dots[[".levels_order"]]
   tab_check_dots(.dots, "tab_reg")
   # the declared arguments that ride `...` rather than the signature, refilled from their own
   # TAB_ARGS default when absent (`dots = "tab_reg"` is where that is stated).
@@ -4843,7 +4882,7 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
            display = display, color = color, color_signif = color_signif,
            stars = stars, na = na, cleannames = cleannames, subtext = subtext,
            .fit_cache = .fit_cache,
-           .levels_collapse = .levels_collapse)
+           .levels_collapse = .levels_collapse, .levels_order = .levels_order)
     })
     tabs <- tab_pmap(list(args = args), "reg_build_outcome", .ship = list(data = data),
                      .names = outcome,
@@ -4862,7 +4901,7 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
     outcome_level = outcome_level, multiplier = multiplier,
     shape = shape, stats = stats,
     na = na, na_explicit = na_explicit, display = display, digits = digits, cleannames = cleannames,
-    subtext = subtext, .fit_cache = .fit_cache, levels_collapse = .levels_collapse)
+    subtext = subtext, levels_collapse = .levels_collapse, levels_order = .levels_order)
 
   res <- reg_build(a$data, a$specs, a$shared, tab_vars = tab_vars,
                    .fit_cache = .fit_cache)

@@ -142,3 +142,37 @@ test_that("a part a kind does not declare is simply absent", {
   expect_true(all(c("zeta", "y_levels") %in% o$digest$parts))
   expect_equal(o$digest$zeta, o$fit$zeta)
 })
+
+
+# --- 5. the one cache seam (Phase 22g-x) ------------------------------------------------------
+# reg_fit_cached() is what the model path and the crude one now share; the gate is two functions
+# because its two clauses are about two different things.
+test_that("the cache gate splits: profile refuses any fit, a comparison only the model ones", {
+  expect_false(reg_crude_cacheable("profile"))
+  expect_true (reg_crude_cacheable("wald"))
+  sp <- list(outcome = "married", predictors = "race")
+  expect_false(reg_fit_cacheable(sp, "wald", compare = "seq"))   # a test BETWEEN fit objects
+  expect_true (reg_fit_cacheable(sp, "wald", compare = "none"))
+})
+
+test_that("reg_fit_cached() is the bare thunk with no store, and distils with one", {
+  data <- dg_data()
+  n    <- 0L
+  thunk <- function() { n <<- n + 1L; dg_fit() }
+  # no cache env, or no key: computed, and never distilled
+  f0 <- reg_fit_cached(NULL, "k", thunk, data, TRUE, .95)
+  expect_false(is.null(f0$fit))
+  expect_equal(n, 1L)
+  env <- jmvreg_cache_env(NULL)
+  f1  <- reg_fit_cached(env, NULL, thunk, data, TRUE, .95)       # not cacheable
+  expect_false(is.null(f1$fit))
+  expect_equal(env$hits, 0L)
+  # with both, the record is stored distilled and the second call is served
+  f2 <- reg_fit_cached(env, "k", thunk, data, TRUE, .95)
+  f3 <- reg_fit_cached(env, "k", thunk, data, TRUE, .95)
+  expect_equal(env$hits, 1L)
+  expect_null(f3$fit)                       # served: a digest and the frame rebuilt around it
+  expect_false(is.null(f3$data))
+  expect_equal(stats::coef(reg_model_of(f3)), stats::coef(reg_model_of(f2)))
+  expect_equal(f3$tidy$estimate, f2$tidy$estimate)
+})

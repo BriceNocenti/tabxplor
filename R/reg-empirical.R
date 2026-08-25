@@ -58,6 +58,14 @@
 # scores the distance to the model column (the maths is R/reg-influence.R's; this is the gate and
 # the loop). The stage driving them is reg_stage_crude() (R/tab_reg.R).
 #
+# ⚠ A CRUDE FIT IS A CACHEABLE FIT. reg_empirical_fit() goes through reg_fit_cached()
+# (R/reg-digest.R), the same seam the model path uses, on the same store and the same tier -- so a
+# served record carries a DIGEST and no fitted object, and every consumer here reads reg_model_of(),
+# never `$fit`. The one thing a digest cannot serve is the marginaleffects fallback, which buys its
+# fit back through the `refit` callback. Its key is a synthetic one-predictor spec whose
+# `drop_extra` -- the whole predictor set minus this one -- is a key member, because it is what
+# lands each crude fit on the model's own complete cases.
+#
 # WARNING: this file sorts BEFORE R/tab_reg.R, so its top-level code (the REG_EMPIRICAL literal) may
 # not read anything defined there. Every cross-file call below is made at RUN time, which is why the
 # split is free.
@@ -338,8 +346,12 @@ reg_empirical <- function(data, fac_preds, outcome, crude_key, positive_level, w
 # always on the NATIVE (link) scale.
 #
 # Returns list(est = <named by outcome category, "" when none> of tibble(row, est, lo, hi, p),
-#              fits = <named by predictor> of list(fit, data),
+#              fits = <named by predictor> of list(fit, digest, data),
 #              degf = the WEAKEST reference these fits used) -- `row` is the SKELETON row index.
+# ⚠ EACH FIT GOES THROUGH THE SHARED CACHE SEAM (reg_fit_cached), on the SAME store and the SAME
+# tier as a model fit: a crude fit IS a fit record, told apart by its key alone -- a synthetic
+# one-predictor spec whose `drop_extra` is a function of the WHOLE predictor set, hence a key member.
+# So `$fits[[v]]$fit` may be NULL where the record was served; every consumer reads reg_model_of().
 # ⚠ `degf` is one number for a column whose rows come from k different univariable fits, so it is the
 # weakest claim among them (the smallest positive df, hence the widest critical value) -- which is
 # exactly what `degf`'s own merge rule declares the attribute to mean.
@@ -365,27 +377,38 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
                               conf_level, method, skeleton, multiplier = NULL,
                               other_preds = character(0), est = NULL, wt = NULL,
                               want_fit = FALSE, marginal = FALSE, trials = NULL,
-                              shape_terms = NULL, crosses = list()) {
+                              shape_terms = NULL, crosses = list(), fit_cache = NULL) {
   if (length(preds) == 0L) return(list(est = list(), fits = list(), degf = NA_real_))
   mlink  <- if (is.null(est)) "identity" else est$measure_link %||% "identity"
   skey   <- reg_skel_key(skeleton$var, skeleton$level)
   rows   <- list()
   fits   <- list()
   dfs    <- numeric(0)
+  cacheable <- reg_crude_cacheable(method)
   for (v in preds) {
     # a nested cross block's univariable model is `y ~ M/X` -- the moderator plus the crossed term,
     # through this same producer, so estimand, link and CI rule are shared by construction.
     rec <- reg_cross_of(crosses, v)
     fp  <- if (is.null(rec)) v else rec$moderator
     add <- if (is.null(rec)) reg_shape_add(shape_terms, v) else rec$term
-    f <- tryCatch(
-      # the crude fit takes the SAME shape as the model's (`add_terms`), so term names match.
+    drop_v <- setdiff(other_preds, c(v, fp))
+    # the crude fit takes the SAME shape as the model's (`add_terms`), so term names match.
+    thunk <- function()
       suppressMessages(reg_fit(data, outcome, fp, family, design_spec, do_exp = FALSE,
                                outcome_level, conf_level, method,
                                trials = trials, formula = NULL, multiplier = multiplier,
-                               drop_extra = setdiff(other_preds, c(v, fp)),
-                               add_terms = add)),
-      error = function(e) NULL)
+                               drop_extra = drop_v, add_terms = add))
+    # ⚠ `"crude"` leads `extra` so a univariable model can never collide with a one-predictor MODEL
+    # spec's key; `est` / `marginal` are absent from it, the whole point being that the estimand is
+    # answered from the record.
+    key <- if (cacheable)
+      jmvreg_fit_key(list(outcome = outcome, predictors = fp, trials = trials,
+                          outcome_level = outcome_level, formula = NULL),
+                     data, family, design_spec,
+                     extra = list("crude", method, multiplier, add),
+                     drop_extra = drop_v) else NULL
+    f <- tryCatch(reg_fit_cached(fit_cache, key, thunk, data, FALSE, conf_level),
+                  error = function(e) NULL)
     if (is.null(f)) next
     # ⚠ the DIGEST rides along: it is what reg_coef_if_maker() reads, and only it carries the
     # recipe that names this fit's sampling weights.
@@ -408,15 +431,19 @@ reg_empirical_fit <- function(data, preds, outcome, family, design_spec, outcome
       # `at = "average"` always: the crude effect is a whole-sample quantity, like the factor arm's.
       # `exponentiate = FALSE`: this function's contract is the NATIVE (link) scale, and
       # reg_fit_overlay() exp()s back where the shape's scale is multiplicative.
+      # ⚠ reg_model_of() + `refit`, exactly as reg_cols_ame() does it: a SERVED record has no fitted
+      # object, and marginaleffects -- the fallback engine -- needs one. Without the callback
+      # reg_marginal() aborts, and this loop's tryCatch would turn that into a MISSING crude row.
       m <- tryCatch(suppressMessages(reg_marginal(
-        f$fit, f$data, v, conf_level, wt, at = "average",
+        reg_model_of(f), f$data, v, conf_level, wt, at = "average",
         link = mlink, comparison = if (is.null(est)) NULL else est$comparison, want_pred = FALSE,
         exponentiate = FALSE, multiplier = multiplier, crosses = crosses,
         # ⚠ the crude sweep must compute the SAME contrast as the model's: a rank estimand asks for
         # the superiority pair here too, or the fallback quietly returns a per-category AME.
         rank = identical((est %||% list())$level, "rank"),
         engine = if (is.null(est)) "marginaleffects" else reg_marginal_engine(est),
-        disp_known = f$disp_known, df_residual = f$df_residual)),
+        disp_known = f$disp_known, df_residual = f$df_residual,
+        refit = function() reg_digest_revive(f, data)$fit)),
         error = function(e) NULL)
       if (is.null(m) || !nrow(m$ame)) next
       a <- m$ame[m$ame$var == v, , drop = FALSE]
@@ -997,7 +1024,10 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
     for (k in which(in_mod & skeleton$var %in% fit_preds & !skeleton$is_ref)) {
       v  <- as.character(skeleton$var[k])
       nv <- fits_crude[[v]]
-      if (is.null(nv) || is.null(nv$fit)) next
+      # ⚠ reg_model_of(), NEVER `nv$fit`: a crude record SERVED from the store carries a digest and
+      # no fitted object, and demanding the fit here would silently drop the gap SE -- i.e. the whole
+      # of `color = "adjustment"` -- on every cache hit.
+      if (is.null(nv) || is.null(reg_model_of(nv))) next
       # a crossed slope's unit is its MODIFIED variable's, so the |k| rescale is looked up there.
       mv <- reg_cross_of(crosses, v)$modified %||% v
       kk <- if (!is.null(multiplier) && mv %in% names(multiplier)) as.numeric(multiplier[[mv]]) else 1
@@ -1011,10 +1041,10 @@ reg_gap_se_columns <- function(f, sp, model_col, skeleton, shape, mdata, fac_pre
       if (marginal) {
         im <- model_if(v, cl[[1]], cl[[2]])
         ic <- if (reg_model_categorical(reg_model_of(nv)))
-          reg_ame_if_cat_maker(nv$fit, nv$data, wt, link = mlink,
+          reg_ame_if_cat_maker(reg_model_of(nv), nv$data, wt, link = mlink,
                                category = category)
         else
-          reg_ame_if_maker(nv$fit, nv$data, wt, link = mlink,
+          reg_ame_if_maker(reg_model_of(nv), nv$data, wt, link = mlink,
                            coef_if = cif_v)
         ic <- if (is.null(ic)) NULL else ic(v, cl[[1]], cl[[2]])
         # the AME contrast already carries k, so no |k| rescale on this branch

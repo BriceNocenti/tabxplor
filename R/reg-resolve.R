@@ -954,7 +954,7 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                              multiplier = "2sd", shape = NULL, stats = "auto",
                              na = "drop_by_outcome", na_explicit = FALSE,
                              display = NULL, digits = NULL, cleannames = TRUE, subtext = "",
-                             .fit_cache = NULL, levels_collapse = NULL) {
+                             levels_collapse = NULL, levels_order = NULL) {
   # S1 -- the pure checks.
   # ⚠ the `stats` SPLIT runs FIRST: `stats` is one argument at the surface, the triple (stats,
   # compare, baseline) everywhere below.
@@ -1051,7 +1051,8 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
     crosses = plan$crosses,
     shape_kinds = vapply(prep$reg_shapes, function(z) z$kind, character(1)),
     empirical = out$empirical, display = out$display, digits = reg_resolve_digits(digits),
-    var_labels = prep$var_labels, na_shared_vars = plan$na_shared_vars, base_n = base_n)
+    var_labels = prep$var_labels, na_shared_vars = plan$na_shared_vars,
+    levels_order = levels_order, base_n = base_n)
 
   # the weight column NAME (or NA) drives the footer "Weighted by <wt>." line; a prebuilt design
   # cannot be named -> NA.

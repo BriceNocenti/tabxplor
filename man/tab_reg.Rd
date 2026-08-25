@@ -588,8 +588,10 @@ models. \code{"profile"} uses the profile-likelihood interval (\code{\link[stats
 the likelihood-ratio test: more accurate near separation, unweighted binomial / poisson only
 (otherwise it falls back to Wald with a message; gaussian always uses the exact-t interval).
 
-\code{...} also carries the internal \code{.fit_cache} (the jamovi live UI's fit
-cache environment), and it is what makes every argument removed or renamed while \code{tab_reg()} was
+\code{...} also carries the internal jamovi plumbing --- \code{.fit_cache} (the live UI's fit cache
+environment), \code{.levels_collapse} (merged levels) and \code{.levels_order} (a predictor's row order,
+which is display: only \code{ref} reaches the fit) --- and it is what makes every argument removed
+or renamed while \code{tab_reg()} was
 in development --- \code{exponentiate}, \code{at}, \code{estimate_display}, \code{dependent}, \code{split_var},
 \code{reference}, \code{method}, \code{compare}, \code{baseline}, \code{inverse_two_level_factors}, \code{parallel}, and the
 \code{effect} values \code{"ame"} / \code{"ame_ratio"} / \code{"coefficient"} --- give an error naming its

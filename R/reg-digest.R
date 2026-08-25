@@ -17,6 +17,10 @@
 #     whole fitting scope across the cache and the process boundary.
 #   - ⚠ A PART A KIND DOES NOT DECLARE IS ABSENT, and a consumer handed one it was not given gets
 #     NULL -- the refuse-rather-than-guess contract reg_gcomp_maker() already keeps.
+#   - ONE CACHE SEAM, TWO CALLERS. reg_fit_cached() is what reg_spec_build_one() (the model fit) and
+#     reg_empirical_fit() (each observed/crude one) both go through, so a record cannot be fetched,
+#     distilled or rehydrated two ways. Its gate is two predicates because its two clauses are about
+#     two different things: `profile` refuses ANY fit, a model comparison only the model ones.
 #   - ⚠ this file sorts BEFORE R/reg-empirical.R, R/reg-influence.R, R/reg-spec-build.R and
 #     R/tab_reg.R, so no top-level code here may read one of their objects (function bodies run
 #     after the namespace is built, and are fine).
@@ -284,16 +288,37 @@ reg_model_design <- function(f) {
   d %||% f$design
 }
 
-# CAN THIS SPEC'S RECORD BE SERVED FROM A STORE? Two clauses, each naming one thing a distilled
-# record cannot carry -- and, unlike the gate this replaces, a wrong TRUE here is a missing footer
-# row, never a wrong number, because everything else is recomputed from the digest.
+# CAN A RECORD BE SERVED FROM A STORE? Two clauses, each naming one thing a distilled record cannot
+# carry -- and a wrong TRUE here is a missing footer row, never a wrong number, because everything
+# else is recomputed from the digest.
 #   profile     the bounds are an OUTPUT of the likelihood at one confidence level, so they are the
-#               one quantity not rebuildable from (estimate, std.error).
-#   comparison  an LR / F test between models is a test between the FIT OBJECTS.
+#               one quantity not rebuildable from (estimate, std.error). TRUE OF ANY FIT.
+#   comparison  an LR / F test between models is a test between the FIT OBJECTS. A fact about the
+#               MODEL fits alone: a CRUDE fit is univariable and takes part in no comparison, which
+#               is why the two clauses are two functions and the profile one keeps a single home.
+#' @keywords internal
+#' @noRd
+reg_crude_cacheable <- function(method) !identical(method, "profile")
+
 #' @keywords internal
 #' @noRd
 reg_fit_cacheable <- function(sp, method, compare = "none")
-  !identical(method, "profile") && identical(compare, "none")
+  reg_crude_cacheable(method) && identical(compare, "none")
+
+# reg_fit_cached() -- THE ONE CACHE SEAM, shared by the model path (reg_spec_build_one) and the
+# crude one (reg_empirical_fit). `key = NULL` means "this fit is not cacheable"; `fit_cache = NULL`
+# means "there is no store", and both fall through to the thunk.
+# ⚠ A RECORD WHOSE FRAME COULD NOT BE REBUILT IS RECOMPUTED, NEVER SERVED: reg_digest_frame()
+# returning NULL is a refusal (the fit's domain moved under the key), and a NULL frame reads
+# downstream as "no gap SE" / "no marginal sweep" rather than as an error.
+#' @keywords internal
+#' @noRd
+reg_fit_cached <- function(fit_cache, key, thunk, data, do_exp, conf_level) {
+  f <- if (is.null(fit_cache) || is.null(key)) thunk()
+       else jmvreg_cached(fit_cache, "fit", key, function() reg_fit_distil(thunk()))
+  f <- reg_fit_rehydrate(f, data, do_exp, conf_level)
+  if (is.null(f$data)) thunk() else f
+}
 
 # reg_fit_distil() -- the cache boundary: what the store holds. The fitted object and the frame go,
 # the digest and everything the eager stage computed off the fit stay. `tidy` goes too -- it is the

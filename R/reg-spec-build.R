@@ -13,7 +13,8 @@
 #   - THE EAGER STAGE IS WHY A FIT MAY LEAVE: everything only a fitted object can compute -- the
 #     model-fit statistics, the global tests, the assumption checks, each crossed pair's test -- is
 #     computed while it lives, so the record the jamovi cache stores is fit-free AND complete
-#     (reg_fit_distil / reg_fit_rehydrate, R/reg-digest.R).
+#     (reg_fit_distil / reg_fit_rehydrate, R/reg-digest.R). The fetch itself is reg_fit_cached(),
+#     the ONE seam this file shares with the crude fits in R/reg-empirical.R.
 #   - ⚠ THE ORDER INSIDE THE BUILDER IS PART OF THE OUTPUT: fit + its eager rows -> columns ->
 #     footer rows -> the crude block -> obs/gap_se -> tooltips. Three of those can emit a message,
 #     and the message stream is compared in order. ⚠ ON A CACHE HIT THE EAGER MESSAGES DO NOT
@@ -176,16 +177,17 @@ reg_spec_build_one <- function(i, ctx) {
                                 reg_cross_add(crosses, sp$cross)))
     reg_fit_eager(f0, sp, ctx, grouped)
   }
-  f <- if (is.null(fit_cache) || !reg_fit_cacheable(sp, method, compare)) thunk()
-       else jmvreg_cached(fit_cache, "fit",
-                          jmvreg_fit_key(sp, data, sp_fam, design_spec,
-                                         extra = list(method, multiplier, shape_terms, anchors,
-                                                      crosses, stats, na_shared_vars)),
-                          function() reg_fit_distil(thunk()))
-  f <- reg_fit_rehydrate(f, data, sp_dox, conf_level)
+  # ⚠ `na_shared_vars` travels as `drop_extra =`, not inside `extra`: the key must FINGERPRINT those
+  # columns, not merely name them (jmvreg_fit_key).
+  key <- if (reg_fit_cacheable(sp, method, compare))
+    jmvreg_fit_key(sp, data, sp_fam, design_spec,
+                   extra = list(method, multiplier, shape_terms, anchors, crosses, stats),
+                   drop_extra = na_shared_vars %||% character(0)) else NULL
+  f <- reg_fit_cached(fit_cache, key, thunk, data, sp_dox, conf_level)
   skel_out <- NULL
   if (isTRUE(skeleton_deferred) && is.null(skeleton)) {
-    skeleton <- reg_skeleton_from_fit(reg_digest_revive(f, data)$fit)
+    skeleton <- reg_skeleton_reorder(reg_skeleton_from_fit(reg_digest_revive(f, data)$fit),
+                                     levels_order)
     skel_out <- skeleton
     ctx      <- ctx_update(ctx, list(skeleton = skeleton))
   }

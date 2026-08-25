@@ -1,0 +1,294 @@
+---
+
+title: "The shape of a number: reading a curve, and straightening it"
+output: rmarkdown::html_vignette
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+
+# Pin the legend language: it defaults to "auto" = the ambient locale, so building this English
+# article on a French machine silently renders French legends and captions.
+options(tabxplor.lang = "en")
+Sys.setenv(LANGUAGE = "en")   # the model-fit row labels go through gettext, not this option
+```
+
+```{r setup, message=FALSE}
+library(tabxplor)
+library(dplyr)
+
+options(tabxplor.print = "html")
+```
+
+```{r setup-hidden, include=FALSE, messages=FALSE}
+if (!interactive()) {
+options(tabxplor.tab_kable_css = FALSE)
+options(cli.num_colors = 256)
+options(tabxplor.tab_kable_tooltips = FALSE)
+}
+```
+
+```{r, echo = FALSE, results = "asis"}
+cat(tab_css(theme = "light"))
+```
+
+```{r, echo = FALSE, include = FALSE}
+default_output_hook <- knitr::knit_hooks$get("output")
+knitr::knit_hooks$set(output = function(x, options) {
+  if (grepl("KNITR_ASIS_OUTPUT_TOKEN", x, fixed = TRUE)) return(default_output_hook(x, options))
+  paste0('<pre class="r-output"><code>',
+         fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+         '</code></pre>')
+})
+```
+
+When you put a **category** into a regression — a religion, a sex, a social class — the table gives you one line per category, and you can see the whole shape of the variable at a glance. When you put a **number** in — an age, an income, a count of hours — the table gives you *one line for the whole variable*. One number, one arrow, and the arrow points one way.
+
+That single line is not a summary. It is a **promise**: that the relationship is a straight climb, the same at every point of the scale. The tenth year of schooling worth exactly as much as the twentieth. The step from 20 to 30 years old worth exactly the step from 60 to 70.
+
+Very often that promise is false, and in a way that matters for what you want to say. This article is about how to see it, and what to do about it. It needs no mathematics — only the ability to look at a small picture and say "that bends".
+
+**This is the short companion to [*All else equal: reading a regression without losing the data*](tabxplor-all-else-equal.html)**, which teaches how to read a regression table at all. Read that one first if the words *observed*, *adjusted* and *reference* are not yet familiar. `vignette("tabxplor-reg")` is the reference manual for everything used here.
+
+## The data
+
+Two data sets, each chosen because it makes one shape visible.
+
+```{r}
+gss <- gss_cat_data_formatting()      # US General Social Survey, from forcats::gss_cat
+
+data("Prestige", package = "carData") # 102 Canadian occupations, Census of 1971
+prestige <- tibble::as_tibble(Prestige)
+```
+
+`gss` holds 21 483 respondents to the American General Social Survey: their marital status, race, income band, religion, hours of television a day, and their **age**.
+
+`prestige` is the data set John Fox has used to teach exactly this problem for forty years: for each of 102 Canadian occupations, its average **income**, the average years of **education** it requires, the percentage of **women** in it, and its **prestige score** out of 100, from a survey asking Canadians to rate occupations.
+
+## The one number, and what it promises
+
+Start with the ordinary table: does being married go with age?
+
+```{r}
+tab_reg(gss, "married", c("race", "age"), stats = NULL)
+```
+
+The `age` row reads **`per 34.6 (2SD), at 47.2 (mean)`**, and the effect is about `1.34`. In words: two people who differ by 34.6 years of age — twice the standard deviation, which is tabxplor's default step, chosen so that a numeric row is roughly comparable with a yes/no one — differ by a factor 1.34 in the odds of being married, and that factor is the same wherever on the scale you take the two people.
+
+Is it? Between 18 and 52, marriage becomes much more common. Between 55 and 89, it becomes *less* common — people are widowed. A single arrow pointing up cannot say both things. What it does instead is **average them**, and report something in between that describes nobody.
+
+## Where tabxplor shows you the shape
+
+Look under the table you just printed. Every `tab_reg()` with a numeric predictor adds a small **shape table**, with a tiny drawing in its last column. That drawing is the picture the model does not draw. Read it like this:
+
+- the drawing runs across the **whole range of the variable**, left to right: the youngest people on the left, the oldest on the right;
+- its **height** is the outcome at that point — here, how often people of that age are married;
+- **`13-57%`**, in the column beside it, is the same picture in words: at the low point of the curve 13 % of people are married, at the high point 57 %. `(OR 8.7)` is the distance between those two ends, as an odds ratio;
+- there is **no model in this picture**. It is the observed data, counted in twenty slices. Nothing has been fitted, straightened or assumed.
+
+And the picture says plainly what the single number could not: marriage rises steeply through the twenties, stays high across the middle of life, and **comes back down** at the end. A hill, not a slope.
+
+*(In the console, where there are no graphics, the same curve is drawn as a run of twenty little blocks. It says exactly the same thing, and everything below applies to it unchanged.)*
+
+Two extra marks are worth knowing. If a row carries **`ns`**, the whole curve fits inside its own sampling noise: read it as flat, and do not try to fix it. And the header says **central 95 %** — the picture ignores the extreme 2.5 % at each end, so one 105-year-old cannot squash everything else into a line.
+
+## A five-letter alphabet
+
+There are only a few shapes you will actually meet. Here they are drawn from data where the answer is *known*, because it was built in — five outcomes, one predictor `x` running from 1 to 100.
+
+```{r}
+set.seed(1)
+n <- 4000
+x <- runif(n, 1, 100)
+
+shapes <- tibble::tibble(
+  x            = x,
+  straight     = 20 + 0.4   * x                 + rnorm(n, 0, 6),
+  bends_over   = 20 + 12    * log(x)            + rnorm(n, 0, 6),
+  accelerates  = 20 + 0.004 * x^2               + rnorm(n, 0, 6),
+  hump         = 20 + 1.2   * x - 0.012 * x^2   + rnorm(n, 0, 6),
+  flat         = 40                             + rnorm(n, 0, 6)
+)
+```
+
+```{r}
+tab_reg(shapes, c("straight", "bends_over", "accelerates", "hump", "flat"), "x",
+        stats = NULL, empirical = FALSE)
+```
+
+The five drawings in that shape table are your alphabet:
+
+| the row       | what its drawing shows                     | what it means in words                            | the cure          |
+|:--------------|:-------------------------------------------|:--------------------------------------------------|:------------------|
+| `straight`    | an even climb, left to right               | each extra unit is worth the same as the last     | nothing to do     |
+| `bends_over`  | a fast start, then it levels off           | diminishing returns — the first units matter most | `"log"`, `"sqrt"` |
+| `accelerates` | flat at first, then it takes off           | the opposite — only the high end does anything    | `"quadratic"`     |
+| `hump`        | up, then down again                        | there is a best point — a peak, or a bottom       | `"quadratic"`     |
+| `flat`        | a ripple around nothing                    | nothing to see, or too few people to see it       | leave it alone    |
+
+**Keep the `straight` row as your ruler**, and come back to it. It is what a genuinely straight relationship looks like *in this drawing*, on this many slices, with this much noise. Every judgement below is "is this curve more bent than that one?", and having the straight one to compare against makes the question answerable rather than a matter of taste.
+
+Note also the `flat` row: its range is small and it carries the `ns` mark. That is the drawing telling you not to bother — the ripple you can see is smaller than what this many people can measure.
+
+## The one idea: a transform re-rules the axis
+
+Here is the whole mechanism, and it is worth ten minutes because everything else follows from it.
+
+The `shape =` argument does **not** change your data, and it does **not** change the outcome. What it changes is **the ruler along the bottom of the picture** — how far apart two values of the predictor are considered to be.
+
+On an ordinary ruler, the step from \$1 000 to \$2 000 and the step from \$50 000 to \$51 000 are the same size: a thousand dollars. On a **logarithmic** ruler they are not: the first is a *doubling*, the second is a rounding error. Logging a variable is exactly the decision that **what matters is the proportion, not the amount** — that going from 1 000 to 2 000 is the same social event as going from 50 000 to 100 000.
+
+So when you set `shape = c(income = "log")`, the points of the curve do not move up or down at all. They **slide sideways**: the low values spread apart, the high values bunch together. And that is why the check is so simple:
+
+> Set a shape, look at the shape table again, and ask one question: **is the curve straighter than it was?** If yes, the ruler now matches the variable, and the single number in the table has become an honest summary. If it bent the other way, you went too far.
+
+This is an old and well-tested habit. Mosteller and Tukey called it the **ladder of re-expression**, and their *bulging rule* is precisely this: the direction in which the curve bulges tells you which way to move. Nothing here is new; tabxplor only puts the picture where you cannot miss it.
+
+## The cures, one at a time
+
+### A hill or a valley: `"quadratic"`
+
+This is the commonest shape in social data, because so many things in a life peak: earnings, marriage, health, mobility.
+
+```{r}
+tab_reg(gss, "married", c("race", "age"), shape = c(age = "quadratic"), stats = NULL)
+```
+
+`age` now takes **two rows**, and they are read together:
+
+- the **first** row is the slope *at the middle of the scale* — the climb, where the climb is steepest. It has gone from `1.34` to about `1.96`: the straight-line model was understating the rise, because it was averaging it with the fall at the end;
+- the **second** row, `age²`, is the **bend**. Below 1 it says the curve *comes back down*; above 1 that it *accelerates away*. Here it is `1/1.61`, strongly significant, and starred — which is your answer: the hill is real, and it is not a trick of the eye.
+
+**Read the second row as a yes/no question, never as a quantity.** "Is there a bend, and which way?" — nothing more. Nobody, including the people who write the software, can say in words what "an odds ratio of 1/1.61 per squared standard deviation of age" means, and you should not pretend otherwise in a paper. What you write is: *marriage rises through early adulthood, peaks around the fifties and declines after, and the curvature is significant.*
+
+⚠ **The shape table does not change when you set `"quadratic"`** — and that is deliberate, not a bug. The picture is what was **observed**; the observed data is the same data whatever model you then fit to it. `"quadratic"` changes only the model. To see the fitted parabola drawn *through* the observed points, ask for the plot:
+
+```{r, eval = FALSE}
+reg_check_plots(tab_reg(gss, "married", c("race", "age"), shape = c(age = "quadratic")),
+                checks = "linearity")
+```
+
+### Diminishing returns: `"log"`
+
+Use `log` when the variable spans **orders of magnitude** and when what matters about it is proportional: income, wealth, city or firm size, number of employees, wages. The test in words: *would you rather describe a change in this variable as "+ 1 000" or as "twice as much"?* If the second, log it.
+
+Fox's occupational prestige data is the textbook case. First the plain model:
+
+```{r}
+tab_reg(prestige, "prestige", c("education", "income", "women"), stats = NULL)
+```
+
+The `income` row of the shape table climbs and then eases off — the well-known fact that money buys a great deal of social standing at the bottom of the scale and much less at the top. Now the log ruler:
+
+```{r}
+tab_reg(prestige, "prestige", c("education", "income", "women"),
+        shape = c(income = "log"), stats = NULL)
+```
+
+`income` is now labelled **`log(x)`** in the table, so a reader can see which ruler was used.
+
+**Make the coefficient readable.** By default the step is two standard deviations *of the logged variable*, which nobody can picture. Set the step to `log(2)` and the row becomes "per doubling of income", which is a sentence:
+
+```{r}
+tab_reg(prestige, "prestige", c("education", "income", "women"),
+        shape = c(income = "log"), multiplier = c(income = log(2)), stats = NULL)
+```
+
+About **+9 prestige points for every doubling of income**, education being equal. From \$5 000 to \$10 000, nine points. From \$10 000 to \$20 000, another nine. That is what a log ruler asserts, and here it is close to what the data shows.
+
+⚠ `"log"` refuses a variable with zeros or negative values, because the logarithm of zero does not exist. It says so and points you at `"sqrt"`.
+
+### The gentler log: `"sqrt"`
+
+`"sqrt"` bends the ruler the same way as `log`, but **less**, and it accepts zeros. It is the right first try whenever a curve eases off only mildly, and the only one of the two available for counts that include 0.
+
+On the prestige data it is in fact the better fit of the two:
+
+```{r}
+tab_reg(prestige, "prestige", c("education", "income", "women"),
+        shape = c(income = "sqrt"), stats = NULL)
+```
+
+Compare the `income` drawing with the `straight` row of the alphabet above: it now sits almost on top of it. The log version overshot slightly and bent the curve the other way, which is the ladder telling you that you went one rung too far. Two tries, one look each — that is the entire workflow, and it took less time to do than to read about.
+
+### Cutting it into groups
+
+The fourth answer is to stop treating the variable as a number at all: `shape = c(age = "quartiles")` (or `"quintiles"`, `"terciles"`, `"median"`, `"deciles"`, `"sd_bands"`) turns it into an ordinary categorical variable, with one row per group and no assumption about the shape whatsoever.
+
+This is the honest fallback, and often the best choice for a paper: it draws whatever shape is really there, it reads like every other block of the table, and no reader needs to know what a coefficient on a squared term is. Its costs are that you lose the detail inside each group, you spend more rows, and each group has a smaller base. Once cut, the variable is a factor like any other and everything in the other articles applies; `vignette("tabxplor-reg")` covers it.
+
+## Choosing, in one table
+
+| your situation                                                    | try                        |
+|:-------------------------------------------------------------------|:---------------------------|
+| the run already looks like the straight ruler                     | nothing                    |
+| a hill or a valley — there is a peak                              | `"quadratic"`              |
+| levels off, and the variable spans orders of magnitude (money)    | `"log"`                    |
+| levels off mildly, or the variable contains zeros                 | `"sqrt"`                   |
+| takes off only at the high end                                    | `"quadratic"`              |
+| the shape is complicated, or the audience is not statistical      | `"quartiles"`, `"quintiles"` |
+| the row is marked `ns`                                            | nothing                    |
+
+And the workflow, in three steps: **look at the run → set one `shape =` → look again.** If it is straighter, keep it. If it now bends the other way, go back one rung — `log` to `sqrt`, `sqrt` to nothing. If two tries have not helped, cut it into quantiles and describe what you see.
+
+## Five ways to get this wrong
+
+**Trying to straighten a hill.** A transform slides the points *sideways*; it can never lift one end and lower the other. So no amount of `log` or `sqrt` will turn a rise-then-fall into a rise — all it does is move the peak along the picture. Hours of television is the case: marriage is commonest among people who watch an hour or two a day, and rarer at both ends.
+
+```{r}
+tab_reg(gss, "married", c("race", "tvhours"), stats = NULL)
+```
+
+```{r}
+tab_reg(gss, "married", c("race", "tvhours"), shape = c(tvhours = "sqrt"), stats = NULL)
+```
+
+The peak has shifted towards the middle and the curve is no straighter, because it was never the ruler that was wrong. A hill needs `"quadratic"` or a cut — and `"log"` would not even have been allowed here, since a third of respondents answer 0 and the logarithm of zero does not exist.
+
+**Believing the `age²` row when it says nothing.** Set `"quadratic"` on that same variable and the curvature row comes back at `1.00`, with no star at all:
+
+```{r}
+tab_reg(gss, "married", c("race", "tvhours"), shape = c(tvhours = "quadratic"), stats = NULL)
+```
+
+The picture bends and the test says it does not. There is no contradiction: `"quadratic"` can only fit **one particular bend**, a symmetric parabola, and this shape is not one. Cut the variable instead and the real shape appears immediately:
+
+```{r}
+tab_reg(gss, "married", c("race", "tvhours"), shape = c(tvhours = "quartiles"), stats = NULL)
+```
+
+People who watch **no television at all** are the odd group — 37 % married, like the heaviest viewers, while the one-hour group is at 53 %. That is not a curve, it is a category: not watching television at all describes a particular sort of life. No smooth shape was ever going to catch it, and this is the honest reason to reach for a cut rather than a transform.
+
+**Expecting log to do something on a narrow variable.** Age runs from 18 to 89 — a ratio of five. Income in the prestige data runs from \$1 656 to \$25 879 — a ratio of sixteen. A log ruler only re-spaces things *in proportion*, so on a variable whose largest value is five times its smallest it barely moves anything. If you set `"log"` and the picture does not budge, that is the reason, and the cure you need is a different one.
+
+**Reading a transformed coefficient in the original units.** Once you have set `"log"` or `"sqrt"`, the number in the table is per unit of the *transformed* variable — tabxplor says so in the row (`log(x)`, `√(x)`) precisely so you cannot forget. Never write "+9 points per dollar". Either set `multiplier` to something namable, as above, or read the adjusted percentages instead, which are always in the original units.
+
+**Chasing every wiggle.** A curve drawn from ten slices of data will always ripple a little. Only act on a bend you can describe in a sentence about the world — "it peaks in the fifties", "the first thousand dollars matter most" — and never on one you can only describe as "it goes up a bit there". The `ns` mark is doing exactly this job for you.
+
+## What tabxplor does not do yet
+
+Four things are standard in the literature and are not in `shape =` today. They are worth knowing so you recognise them in a paper, and so you know what to reach for if you need one.
+
+- **Splines** (natural or restricted cubic splines) are the modern default in epidemiology and increasingly in demography: instead of one bend, the curve is allowed to bend freely, smoothly, several times. They are strictly more flexible than a squared term and are what to use when the shape is genuinely complicated. Today's nearest equivalent in tabxplor is a quantile cut, which is less smooth but more readable.
+- **`log(x + 1)`** and the *inverse hyperbolic sine* are the usual repairs for logging a variable that contains zeros. Both are contested — the answer depends on the constant you add, which is an arbitrary choice with real consequences — but both are common. You can build the column yourself with `mutate()` and pass it as an ordinary predictor.
+- **Cubic and higher polynomials** allow two bends rather than one. They are easy to fit and hard to defend: the ends of a high-degree polynomial swing wildly where the data is thin.
+- **Piecewise (or broken-stick) slopes**, where the line is allowed to change direction at a chosen point — a school-leaving age, a retirement age, a legal threshold. When the break has a real-world meaning, this reads better than any smooth curve.
+
+For any of these today: compute the column yourself and hand it to `tab_reg()` as a predictor, or cut the variable into quantiles and let the table draw the shape.
+
+## Where to go next
+
+- [*All else equal: reading a regression without losing the data*](tabxplor-all-else-equal.html) — the slow walk through a whole analysis, from cross-table to sentence.
+- `vignette("tabxplor-reg")` — the reference: every family, every argument, model checks, plots.
+- `?shape_numeric_var` lists every value `shape =` accepts, with what each one does.
+- `reg_formulas(model)` shows what was actually fitted; `reg_check_plots(model)` draws the observed points with the fitted curve through them.
+
+## Where these ideas come from
+
+The habit of choosing a transformation *by looking at the direction the curve bulges*, rather than by testing, is Mosteller and Tukey's, in *Data Analysis and Regression* (1977) — the **ladder of re-expression** and the **bulging rule**. John Fox's *Applied Regression Analysis* teaches it on the very occupational-prestige data used above, and his chapter on nonlinearity is the standard treatment for social scientists.
+
+On not defaulting to a squared term, and on reading nonlinear effects from a plot rather than from coefficients, Rönkkö, Aalto, Tenhunen and Aguirre-Urreta's ["Eight Simple Guidelines for Improved Understanding of Transformations and Nonlinear Effects"](https://journals.sagepub.com/doi/10.1177/1094428121991907) (*Organizational Research Methods*, 2022) is short and directly usable; their guidelines 6 and 7 are the two rules this article is built on.
+
+On why a log ruler is usually the right one for money and for anything else measured in proportions, and on its trap near zero, Andrew Gelman's ["You should (usually) log transform your positive data"](https://statmodeling.stat.columbia.edu/2019/08/21/you-should-usually-log-transform-your-positive-data/) is the shortest statement of both halves.
+
+On splines as the alternative to polynomials, and on why flexibility beats a single bend when the shape is unknown, see the applied introduction in [*Frontiers in Epidemiology*](https://www.frontiersin.org/journals/epidemiology/articles/10.3389/fepid.2022.975380/full) (2022).

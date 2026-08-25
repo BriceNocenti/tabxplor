@@ -176,6 +176,125 @@ test_that("the store holds a distilled record: KB, no fit, and the checks still 
 })
 
 
+# --- 2b. the CRUDE block's own records (Phase 22g-x) ---------------------------------------
+# The observed companion's univariable refits ride the SAME store and the SAME tier as the model
+# fit -- a crude fit IS a fit record, told apart by its key alone. Only a NON-SATURATED predictor
+# is fitted at all (a numeric one, or any under a structured design / an ordinal shape), so an
+# all-factor block on a flat design adds no record and costs nothing.
+test_that("a crude fit is served from the store, and the served table is the cold one", {
+  gss <- gss_reg()
+  o   <- reg_opts(outcome = "married", predictors = c("race", "age"), empirical = TRUE)
+  b1  <- quiet(jmvtab_reg_build(gss, o, NULL))
+  expect_equal(b1$hits, 0L)
+  # one record for the model, one for `age` -- `race` is saturated, so it is a closed form
+  expect_equal(length(b1$store[["fit"]]), 2L)
+  b2 <- quiet(jmvtab_reg_build(gss, o, b1$store))
+  expect_gte(b2$hits, 2L)
+  expect_equal(reg_render(b2$tabs), reg_render(b1$tabs))
+})
+
+test_that("an all-factor crude block on a flat design stores no crude record", {
+  gss <- gss_reg()
+  b <- quiet(jmvtab_reg_build(gss, reg_opts(outcome = "married",
+                                            predictors = c("race", "relig"), empirical = TRUE),
+                              NULL))
+  expect_equal(length(b$store[["fit"]]), 1L)     # the model's, and nothing else
+})
+
+# ⚠ THE REGRESSION THIS PHASE HAD TO AVOID: a served crude record carries a DIGEST and no fitted
+# object, so every consumer must read reg_model_of(). The gap SE is where it bites -- demanding
+# `$fit` there drops `color = "adjustment"` silently, on every hit and for numeric predictors only.
+test_that("a served crude record keeps its gap SE, weighted or not", {
+  gss <- gss_reg()
+  gss$.w <- stats::runif(nrow(gss), 0.5, 2)
+  for (w in list(character(), ".w")) {
+    o  <- reg_opts(outcome = "married", predictors = c("race", "age"), empirical = TRUE,
+                   effect = "marginal", measure = "difference", color = "adjustment", wt = w)
+    b1 <- quiet(jmvtab_reg_build(gss, o, NULL))
+    b2 <- quiet(jmvtab_reg_build(gss, o, b1$store))
+    g1 <- reg_field(b1$tabs, "gap_se"); g2 <- reg_field(b2$tabs, "gap_se")
+    expect_gt(sum(!is.na(g1)), 0L)                       # the gate really opened
+    expect_equal(g2, g1)
+    # the NUMERIC predictor's own row is the one a `$fit` guard would lose
+    num <- which(as.character(b2$tabs$var) == "age")
+    expect_true(any(!is.na(reg_field(dplyr::slice(dplyr::ungroup(b2$tabs), num), "gap_se"))))
+  }
+})
+
+test_that("a marginal crude sweep is the same served as cold (the refit callback)", {
+  gss <- gss_reg()
+  o   <- reg_opts(outcome = "married", predictors = c("race", "age"), empirical = TRUE,
+                  effect = "marginal", measure = "difference")
+  b1  <- quiet(jmvtab_reg_build(gss, o, NULL))
+  b2  <- quiet(jmvtab_reg_build(gss, o, b1$store))
+  expect_gte(b2$hits, 2L)
+  expect_equal(reg_render(b2$tabs), reg_render(b1$tabs))
+  expect_equal(reg_field(b2$tabs, "diff"), reg_field(b1$tabs, "diff"))
+})
+
+# `drop_extra` decides the complete-case population without appearing in the formula, so it is a key
+# member AND its columns are fingerprinted. For a crude fit it is the whole predictor set minus this
+# predictor -- so the same (outcome, predictor) under another model is a DIFFERENT fit.
+test_that("drop_extra is in the key, by name and by value", {
+  gss <- gss_reg()
+  sp  <- list(outcome = "married", predictors = "age", trials = NULL,
+              outcome_level = NULL, formula = NULL)
+  ds  <- list(wt = NULL, design = NULL)
+  k0 <- jmvreg_fit_key(sp, gss, "binomial", ds)
+  k1 <- jmvreg_fit_key(sp, gss, "binomial", ds, drop_extra = "relig")
+  k2 <- jmvreg_fit_key(sp, gss, "binomial", ds, drop_extra = c("relig", "race"))
+  expect_false(k0 == k1); expect_false(k1 == k2)
+  # ...and a VALUE edit to one of those columns moves it: naming them was never enough
+  edited <- gss; edited$relig[1:50] <- NA
+  expect_false(k1 == jmvreg_fit_key(sp, edited, "binomial", ds, drop_extra = "relig"))
+})
+
+test_that("profile bounds are never served, crude fits included", {
+  gss <- gss_reg()
+  o   <- reg_opts(outcome = "married", predictors = c("race", "age"), empirical = TRUE,
+                  ci_method = "profile")
+  b1 <- quiet(jmvtab_reg_build(gss, o, NULL))
+  b2 <- quiet(jmvtab_reg_build(gss, o, b1$store))
+  expect_equal(b2$hits, 0L)
+  expect_equal(length(b2$store[["fit"]]), 0L)
+})
+
+# --- 2c. a reorder is DISPLAY, not a refit (Phase 22g-x) -----------------------------------
+# Every factor PREDICTOR is fitted under treatment contrasts (reg_fit_frame strips `ordered`), so its
+# level order decides one thing -- the reference -- and that one thing is `ref =`. The rest permutes
+# the row skeleton, which the fit never sees.
+test_that("reordering below the first level is a HIT, and only permutes the rows", {
+  gss <- gss_reg()
+  o   <- reg_opts(outcome = "married", predictors = c("race", "age"))
+  b1  <- quiet(jmvtab_reg_build(gss, o, NULL))
+  o2  <- o; o2$levels_order <- list(list(var = "race", levels = c("White", "Other", "Black")))
+  b2  <- quiet(jmvtab_reg_build(gss, o2, b1$store))
+  expect_gte(b2$hits, 1L)
+  lv1 <- as.character(b1$tabs$levels); lv2 <- as.character(b2$tabs$levels)
+  expect_equal(lv1[2:4], c("White", "Black", "Other"))
+  expect_equal(lv2[2:4], c("White", "Other", "Black"))          # the reference still first
+  # the same numbers, in the new order: sort both blocks by their level
+  key <- function(t) { t <- dplyr::ungroup(t); k <- as.character(t$var) == "race"
+                       o <- order(as.character(t$levels)[k])
+                       reg_field(dplyr::slice(t, which(k)[o]), "or") }
+  expect_equal(key(b2$tabs), key(b1$tabs))
+})
+
+test_that("reordering ONTO the first level is the reference, and refits", {
+  gss <- gss_reg()
+  b1  <- quiet(jmvtab_reg_build(gss, reg_opts(outcome = "married",
+                                              predictors = c("race", "age")), NULL))
+  o2  <- reg_opts(outcome = "married", predictors = c("race", "age"), ref = c(race = "Black"))
+  o2$levels_order <- list(list(var = "race", levels = c("Black", "White", "Other")))
+  b2  <- quiet(jmvtab_reg_build(gss, o2, b1$store))
+  expect_equal(b2$hits, 0L)
+  expect_equal(as.character(b2$tabs$levels)[2:4], c("Black", "White", "Other"))
+  direct <- quiet(tab_reg(gss, "married", c("race", "age"), family = "binomial",
+                          empirical = FALSE, ref = c(race = "Black")))
+  expect_equal(reg_field(b2$tabs, "or"), reg_field(direct, "or"))
+})
+
+
 # --- 3. cache behaviour: reuse the fit on estimand toggles, refit on a real change ---
 test_that("a repeat build reuses the fit, and a reference change does not", {
   gss <- gss_reg()
@@ -363,6 +482,14 @@ test_that("a model comparison keeps its fits, so nothing is cached", {
   expect_equal(b3$hits, 0L)
   expect_gt(sum(vapply(b3$tabs, is_fmt, logical(1))),
             sum(vapply(b2$tabs, is_fmt, logical(1))))
+
+  # ...but its CRUDE block is served (Phase 22g-x): a univariable fit takes part in no comparison,
+  # so only the profile clause can refuse it -- which is the whole reason the gate is two functions.
+  oe <- reg_opts(outcome = "married", predictors = mods, ..family = "binomial", empirical = TRUE)
+  e1 <- quiet(jmvtab_reg_build(gss, oe, NULL))
+  e2 <- quiet(jmvtab_reg_build(gss, oe, e1$store))
+  expect_gte(e2$hits, 1L)
+  expect_equal(reg_render(e2$tabs), reg_render(e1$tabs))
 })
 
 test_that("jmvtab_reg_models folds the builder into predictors (list or flat pool)", {
