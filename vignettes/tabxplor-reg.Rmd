@@ -47,6 +47,8 @@ knitr::knit_hooks$set(output = function(x, options) {
 })
 ```
 
+*Une version française de ce document est disponible : [Tableaux de régression avec tab_reg()](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg-fr.html).*
+
 For the most common regression models, `tab_reg()` builds a **regression table** that looks and behaves like a `tabxplor` cross-table: one row per predictor level, significance stars, colours that grey out non-significant effects, and the same Excel, html or markdown exports. You give it a data frame, an **outcome** and some **predictors**, and it works out the right kind of model from the outcome's type. Its distinctive feature is `empirical = TRUE`, which shows the **observed / crude / empirical effect right next to the model's adjusted one**, so you can see what "controlling for the other variables" actually changed.
 
 **There are two articles on regression, and this is the reference one.** It is organised by feature: one section per family, the full grid of what each model can report, weighted data, interactions, model checks and plots. If you are learning rather than looking something up, start with [*All else equal: reading a regression without losing the data*](tabxplor-all-else-equal.html), which walks a single analysis from a first cross-table to a finished sentence and sends you back here for the details.

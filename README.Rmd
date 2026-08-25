@@ -118,6 +118,7 @@ A colored html table also *prints*, or saves to PDF, in that black-and-white sch
 
 - [Introduction to tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor.html) — the place to start (*aussi disponible [en français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-fr.html)*).
 - [Regression tables with tab_reg()](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.html) (*aussi disponible [en français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg-fr.html)*).
+- [All else equal: reading a regression without losing the data](https://bricenocenti.github.io/tabxplor/articles/tabxplor-all-else-equal.html) — a single analysis walked from a first cross-table to a finished sentence (*aussi disponible [en français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-all-else-equal-fr.html)*).
 - [Programming with tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming.html) — many tables at once, custom workflows, options (*aussi disponible [en français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming-fr.html)*).
 
 No code needed: the tabxplor modules for the free statistical spreadsheet [jamovi](https://www.jamovi.org/) offer the same tables (Crosstables and Regressions) in a point-and-click interface.

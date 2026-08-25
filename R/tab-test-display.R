@@ -736,7 +736,7 @@ test_grid_reg <- function(x, test_tbl) {
   # predictors that a row-dimension column cannot hold -> omit it (columns already name the models).
   show_preds <- !is.null(meta) && !isTRUE(meta$comparison) && length(meta$predictors) > 0
 
-  label_headers <- c(if (is_split) "" else NULL, if (show_preds) "predictors" else NULL)
+  label_headers <- c(if (is_split) "" else NULL, if (show_preds) gettext("predictors") else NULL)
 
   n_rows <- nrow(plan)
   pred_lines <- if (show_preds) test_wrap_items(meta$predictors, n_rows) else NULL
@@ -769,7 +769,7 @@ test_grid_reg <- function(x, test_tbl) {
     list(label_lines = label_lines, rows = rows)
   })
 
-  list(label_headers = label_headers, stat_header = "Model fit",
+  list(label_headers = label_headers, stat_header = gettext("Model fit"),
        value_headers = value_headers, groups = groups)
 }
 

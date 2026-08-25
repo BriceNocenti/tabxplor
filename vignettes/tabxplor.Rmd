@@ -39,6 +39,8 @@ set_color_palette(theme = "light") # type = "text"
 cat(tab_css(theme = "light"))
 ```
 
+*Une version française de ce document est disponible : [Introduction à tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-fr.html).*
+
 The first time only, install the package : 
 
 ```{r, eval = FALSE}

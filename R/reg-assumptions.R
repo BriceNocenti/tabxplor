@@ -39,7 +39,10 @@
 # THE OBSERVED SHAPE HAS THREE PIECES, at the file tail: reg_curves() (one record PER OUTCOME, each
 # binning its predictors with no fit), rd_spark() (the glyph run, drawn in a window with a FLOOR so
 # noise cannot read as a shape) and reg_shape_table() (where the runs go when a cell cannot hold
-# them -- the console always, several outcomes everywhere).
+# them -- the console always, several outcomes everywhere). Its two label columns each name one axis
+# of the drawing: the predictor as it was DRAWN (marked by its `shape`) and the outcome on the scale
+# the MODEL fits, spelled out by rd_link_text() -- the plain-text twin of the y axis rd_link_expr()
+# builds for the plots, so a table and a linearity panel state the same quantity.
 # ⚠ A CURVE IS NEVER FINER THAN ITS DATA. rd_bin() gives a variable with a handful of distinct values
 # ONE BIN PER VALUE, and rd_spark() draws at most one glyph per bin: quantile breaks on a discrete
 # column collapse unevenly and the interpolation then drew slopes between values nobody observed.
@@ -48,9 +51,11 @@
 #
 # THE CURE IS PART OF THE CHECK. `shape =` is how a user fixes a non-linearity without leaving the
 # framework, and its design rule keeps it small: a shape either RECODES THE COLUMN or ADDS ONE TERM,
-# nothing else. A quantile-cut predictor genuinely IS a factor, so it inherits the saturated crude
-# twin, the per-level counts, colours and gap tests for free. It reads the package's shared
-# per-predictor grammar (per_variable(), R/reg-resolve.R), so `shape = "quintiles"` cuts every
+# nothing else. That split is also what the shape table's predictor column reports -- a recode is
+# part of the drawn curve and is marked (`log(age)`), a term is not and leaves the name bare (see
+# the section at the file tail). A quantile-cut predictor genuinely IS a factor, so it inherits the
+# saturated crude twin, the per-level counts, colours and gap tests for free. It reads the package's
+# shared per-predictor grammar (per_variable(), R/reg-resolve.R), so `shape = "quintiles"` cuts every
 # continuous predictor and a named value overrides one. ⚠ ORDER: a shape recodes the column FIRST --
 # it defines what the model's variable is -- and `ref`'s anchor then applies to the result, which is
 # why the quadratic term below takes its square around 0 rather than measuring a centre of its own.
@@ -693,6 +698,33 @@ rd_link_expr <- function(kind, lab, outcome = NULL, level = NULL) {
          lab)
 }
 
+# THE SAME FORMULA IN PLAIN TEXT -- the shape table's first column, where a plot has an axis. It is
+# rd_link_expr()'s twin, not a second answer: same five kinds, and the SUBJECT comes from the one
+# declared fact both read, RD_LINK_SCALES$level (`pct` = a percentage OF THE MODELLED LEVEL, `num` =
+# a mean of the outcome). A reader who has seen `log(%Married / (1 - %Married))` in the table meets
+# the identical quantity on reg_check_plots()'s y axis.
+# ⚠ ONE STRING LITERAL PER gettextf() CALL (the rule stated at reg_shape_table()): potools extracts
+# what it SEES, so a formula assembled with paste0() inside the call could never be looked up.
+# ⚠ Called at RENDER, never stored: gettext() must run under with_legend_lang()'s language, not the
+# one that happened to be current when the table was built.
+#' @keywords internal
+rd_link_text <- function(kind, outcome, level = NULL) {
+  kind <- kind %||% "mean"
+  # ⚠ An ordinal / multinomial outcome has NO single modelled level: rd_link_y() reads it as
+  # `Y != first`, so the subject says so AND still names the outcome -- without the name a
+  # several-outcome table would show two rows nothing distinguishes. "not 1st" is right for both
+  # families at once: on an ordered outcome `Y > 1st` and `Y != 1st` are the same set.
+  sub <- if (identical(rd_link_scale(kind)$level, "pct")) {
+    if (is.null(level) || is.na(level)) gettextf("%%%s not 1st", rd_label_of(outcome %||% "y"))
+    else paste0("%", rd_label_of(level))
+  } else gettextf("mean %s", rd_label_of(outcome %||% "y"))
+  switch(kind,
+         logit   = gettextf("log(%s / (1 - %s))", sub, sub),
+         logrisk = ,
+         logmean = gettextf("log(%s)", sub),
+         sub)
+}
+
 # A level or a variable as a LABEL: always through the package's one cleaner, so an axis reads
 # "$25000 or more" where the data says "4-$25000 or more", exactly as every table header does.
 #' @keywords internal
@@ -1209,8 +1241,10 @@ reg_curves <- function(data, specs, numeric_preds, wt = NULL, positive_level = N
         rd_bin(data[[v]], ly$y, w, nbins, ly$link, design = design, des_rows = dr, kind = ly$kind)),
       numeric_preds))
     if (length(curves) == 0L) return(NULL)
+    # `level` is the MODELLED level (binary families only; NULL everywhere else) -- stored, not the
+    # rendered text, so rd_link_text() can run at render under the right language.
     list(outcome = dep, family = sp$fit_family, link = ly$link, kind = ly$kind, ylab = ly$lab,
-         curves = curves)
+         level = pos[[dep]] %||% NA_character_, curves = curves)
   }), deps))
   if (length(out) == 0L) NULL else out
 }
@@ -1245,8 +1279,14 @@ reg_check_msgid_anchor <- function() {
 # a package cannot choose its reader's font), and several outcomes share ONE count column, so a cell
 # of it could show only one of them. `options(tabxplor.spark =)` chooses where the table is drawn.
 #
-# The curve is FIT-FREE (rd_bin bins the observed outcome), so the predictor column names the variable
-# and never its parametrisation -- `shape = "quadratic"` changes the model, not what was observed.
+# THE PREDICTOR COLUMN NAMES THE CURVE THAT WAS ACTUALLY DRAWN, which splits `shape` in two. A
+# `log`/`sqrt` RECODED the column in place (shape_apply), so the curve is a curve of log(age) and the
+# column says so -- `log(age)`, `√(age)`, from the one SHAPE_MARKS row. A `quadratic` added a model
+# TERM and recoded nothing, so the curve is unchanged and the column stays bare: marking it would
+# promise a comparison this drawing cannot support (binning y against age² leaves a hill a hill, so
+# "is it straighter?" would reject a parametrisation that in fact fits). A quadratic is judged by
+# reg_check_plots(check = "linearity"), which draws the fitted parabola THROUGH these observed points.
+# The curve itself stays FIT-FREE either way: rd_bin bins the observed outcome, with no model in it.
 #' @keywords internal
 #' @noRd
 tab_wants_shape_table <- function(tab, medium = "console") {
@@ -1285,9 +1325,19 @@ reg_shape_table <- function(tab, n = 20L) {
         cg <- cu[(cu$group %||% "") == g, , drop = FALSE]
         gl <- rd_spark(cg, n = n)
         if (is.na(gl)) return(NULL)
-        tibble::tibble(outcome = rec$outcome, group = g, var = v,
+        # ⚠ THE MARK IS APPLIED HERE AND NOWHERE UPSTREAM. names(rec$curves) are load-bearing KEYS --
+        # reg_bind_assumptions() unions them across tab_vars groups, `linear_level` matches them
+        # against skeleton$var, and mat_reg_spark() matches them against the tab's own var column.
+        # Marking the names would break all three silently; only this display cell may carry it.
+        # ⚠ `rec$mark[v]`, single bracket: `[["nope"]]` ERRORS on a named vector while `["nope"]` is
+        # NA, and a group that lacks a variable group 1 had must fall back, not abort.
+        mk <- if (is.null(rec$mark)) NA_character_ else unname(rec$mark[v])
+        tibble::tibble(outcome = rec$outcome, group = g, var = if (is.na(mk)) v else mk,
                        range = rd_range_label(cg, rec$kind, rec$family), shape = gl,
                        noisy = isTRUE(rd_spark_window(cg)$noisy),
+                       # WHAT THE CURVE'S HEIGHT IS, spelled out: the outcome on the scale the MODEL
+                       # fits, which is the same quantity reg_check_plots() puts on its y axis.
+                       ycell = rd_link_text(rec$kind, rec$outcome, rec$level),
                        ylab = rec$ylab %||% "", family = rec$family %||% "")
       }))
     }))
@@ -1298,7 +1348,10 @@ reg_shape_table <- function(tab, n = 20L) {
   # group is NOT a run until they are sorted. Sorted here, once, so the group reads as the block it
   # is -- every numeric variable of one group under its name -- exactly like a row-variable block.
   if (keep_group) rows <- rows[order(rows$outcome, rows$group), , drop = FALSE]
-  out <- rows[, c("outcome", if (keep_group) "group", "var", "range", "shape"), drop = FALSE]
+  # the FIRST column shows the link-scale formula, but every key stays the raw outcome NAME: the sort
+  # above, the run-blanking below and the per-cut test are all about which outcome a row belongs to.
+  out <- rows[, c("ycell", if (keep_group) "group", "var", "range", "shape"), drop = FALSE]
+  names(out)[[1L]] <- "outcome"
   # the outcome (and the group) named ONCE per run, like the row-variable block of a table.
   # ⚠ A RUN, not a value: duplicated() over the whole column blanked the SECOND variable's group in
   # every case, leaving two rows that named no group at all.
@@ -1310,7 +1363,7 @@ reg_shape_table <- function(tab, n = 20L) {
     x[same] <- ""
     x
   }
-  keys <- out$outcome
+  keys <- rows$outcome
   out$outcome <- blank_repeats(out$outcome)
   if (keep_group) out$group <- blank_repeats(out$group, within = keys)
   # THE TABLE SAYS IT, NOT A FOOTER. The window is in the header, the units are in each `range` cell,
@@ -1321,14 +1374,11 @@ reg_shape_table <- function(tab, n = 20L) {
   # pieces and can never be found at run time.
   note <- if (any(rows$noisy))
     gettext("\"ns\": the curve is inside its own sampling noise -- read it as flat.") else character(0)
-  # an ordinal or multinomial outcome has one curve per cut / per category and this draws only the
-  # first: said in the outcome's own cell, where it is read, rather than in a footer line.
-  per_cut <- reg_check_family_of(rows$family) %in% c("ordinal", "multinomial")
-  if (any(per_cut)) out$outcome[per_cut & nzchar(out$outcome)] <-
-    paste0(out$outcome[per_cut & nzchar(out$outcome)], gettext(" (1st curve)"))
+  # ⚠ NO "(1st curve)" suffix any more: an ordinal / multinomial cell now READS `%x not 1st`, which
+  # already says which of the several curves this is. The suffix beside it said the same thing twice.
   structure(
     out,
-    headers = c(gettext("outcome"), if (keep_group) gettext("group"),
+    headers = c(gettext("outcome (model scale)"), if (keep_group) gettext("group"),
                 gettext("numeric predictor"), gettext("observed range"),
                 gettext("observed shape (central 95%)")),
     align   = c("left", if (keep_group) "left", "left", "left", "left"),

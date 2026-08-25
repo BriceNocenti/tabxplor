@@ -11,11 +11,23 @@ colonne* (row / column variable), *variable expliquée* (outcome / dependent), *
 template). Column labels (`Obs_%`, `Model_OR`, …) and argument names stay English. The three rough
 spots below are runtime-string issues (not vignette prose) and still await maintainer review.
 
+**Phase 23f-i** added *Le vocabulaire d'enseignement* below, for the French twin of the *All else
+equal* article. Its primary source is the maintainer's own logit séance
+(`~/github/formations_stat/M2_06_07.Rmd`) rather than a dictionary: these are the words the target
+readership already has. It is the section to read before writing any French teaching prose about
+regression — and it records, deliberately, the two places where one concept keeps **several** French
+words on purpose (crude/adjusted, and the reference).
+
 ## Rules
 
 - **Argument names stay English** (`pct`, `ref`, `color`, `tab_vars`, …): the jamovi package teaches R
   progressively to French-speaking students, so only the *legend / help text* of an argument is French,
   never the argument itself. This glossary is for the *rendered* strings (legends, footers, summaries).
+- ⚠ **In teaching prose, a French term that names an argument is given WITH its English code name**
+  (« la **variable à expliquer** — `outcome` »), at the point where the French word is coined and
+  nowhere else. The reader thinks in French and types in English, and an argument that is only ever
+  named in French cannot be used. The same names serve jamovi, whose options mirror the arguments.
+  Settled in Phase 23f-i; applied to both *All else equal* twins.
 - **Notation and international abbreviations stay as-is**: `OR`, `IRR`, `β`, `AME`, `MER`, `AIC`, `BIC`,
   `Chi2`, `phi`, `eta2`, `R2`, `%`, `N`. A French statistics reader uses these directly.
 - **French typography** (handled in code by `legend_num()` + the `lang == "fr"` branches): thin space
@@ -168,6 +180,129 @@ assemblers emit (`colon <- " : "`) and what every existing msgstr uses, and the 
 ⚠ « odds ratio » is **one msgid** shared by the crosstab legend and the regression `Model:` line, so
 it cannot be glossed « rapport de cotes (odds) » in one and not the other: it stays
 **« rapport de cotes »** everywhere. The acronym `OR` is the legend's subject anyway.
+
+## Le vocabulaire d'enseignement (article « Toutes choses égales par ailleurs »)
+
+Settled in Phase 23f-i, for the French twin of `vignettes/articles/tabxplor-all-else-equal.Rmd`. The
+readership is "literary" social-science students, so the primary source is **the maintainer's own
+logit séance** (`~/github/formations_stat/M2_06_07.Rmd:310-2100`) — those are the words these
+students already have — checked against Cibois (*Les méthodes d'analyse d'enquêtes*, ch. V),
+Deauvieau (*BMS* 2010), Larmarange's *guide-R*, INSEE and the OQLF.
+
+**The register**: « on » for the generic rule, « nous » for the shared analytic move, no *vous* and no
+*tu*. That is the séance's own register (measured: on ≈ 73, nous ≈ 36, vous ≈ 18, tu = 0) minus its
+classroom half — an article gives no TD instructions, so *vous* drops out on its own.
+
+**Four devices taken from the séance**: « **Lecture : …** » (the INSEE reading-key, which is what the
+English article's blockquotes are) · « Rappel : » / « Attention : » / « Note : » as callout registers ·
+reading a table in order (source, champ, variables, Total, l'intérieur) · median-dot inclusive forms
+(« enquêté·es »).
+
+### Les mots du raisonnement
+
+| English                  | French                                                        | note                                              |
+|--------------------------|---------------------------------------------------------------|---------------------------------------------------|
+| outcome                  | variable à expliquer *(aussi : variable dépendante)*          | ⚠ the printed label stays « Variable expliquée »  |
+| predictor                | prédicteur / variable explicative                             | his own gloss: « on s'en sert pour prédire »      |
+| the modelled level       | la modalité étudiée                                           | « placée en premier »                             |
+| reference                | modalité de référence / catégorie de référence / la référence | a family, per context                             |
+| reference profile        | profil de référence                                           | printed                                           |
+| anchor value             | valeur d'ancrage                                              |                                                   |
+| deviation                | écart                                                         | continuous with his « écart à la moyenne »        |
+| measure of deviation     | mesure de l'écart                                             |                                                   |
+| crude / observed         | effet brut · effet observé · effet empirique                  | family; the column is « la colonne observée »     |
+| adjusted                 | effet ajusté · effet modélisé                                 | family; « la colonne du modèle »                  |
+| *(effet net)*            | mentioned once only                                           | canonical in French sociology, too abstract       |
+| adjustment (the move)    | l'ajustement                                                  | printed (`ajustement : …`)                        |
+| all else equal           | « toutes choses égales par ailleurs », always in guillemets   | see the pair below                                |
+| all else *un*equal       | « toutes choses *inégales* par ailleurs », *inégales* italic  | his own; names the observed column                |
+| the honest long form     | « toutes les autres variables explicatives choisies étant égales » | his own, `M2_06_07:517`                      |
+| composition effect       | effet de structure                                            | INSEE                                             |
+| holding composition      | à structure constante                                         | INSEE                                             |
+| the base                 | le socle                                                      | ⚠ « base » is taken — see faux amis               |
+| the round trip           | l'aller-retour · « redescendre au pourcentage »               |                                                   |
+| untangling correlations  | démêler les corrélations cachées                              | his own, `M2_06_07:452`                           |
+| significance-as-permission | une autorisation · « le droit de généraliser »              | *mot d'excuse* does not travel                    |
+| confounding              | facteur de confusion                                          | preferred over *confondant* (Inserm)              |
+| mediator                 | variable médiatrice                                           |                                                   |
+| collider                 | facteur de collision                                          | by analogy; *collisionneur* reads as physics      |
+| overcontrol bias         | le surajustement                                              | French epidemiology's one-word term               |
+| Table 2 fallacy          | le « piège du tableau 2 »                                     | English name once, it is the searchable term      |
+| ideal type               | l'idéal-type                                                  | Weber; first-year vocabulary in France            |
+
+**The pair that names the two columns.** `M2_06_07:1830-1834` already uses it as a column legend, and
+it is the French name of this whole article's subject: an **observed** effect is read *toutes choses
+inégales par ailleurs*, a **modelled** one *toutes les autres variables choisies étant égales*.
+
+### Les mots du modèle
+
+| English                | French                                                      | note                                            |
+|------------------------|-------------------------------------------------------------|-------------------------------------------------|
+| to fit a model         | ajuster · estimer · réaliser · calculer · faire tourner      | rotate; see the rule below                      |
+| a fitted model         | le modèle ajusté / le modèle réalisé                        |                                                 |
+| model fit (the block)  | bilan du modèle *(métaphore : bilan de santé)*              | ⚠ NOT « ajustement du modèle »                  |
+| to hold equal          | maintenir constant · raisonner à variables constantes       | his own, `M2_06_07:452`                         |
+| held equal (short)     | « à emploi égal », « à âge et CSP égales »                  | his own refrain                                 |
+| "controlling for X"    | comparer des personnes qui se ressemblent sur X             | ⚠ « contrôler » also means *vérifier*           |
+| predicting (refused)   | pronostiquer                                                | ⚠ the footer prints « proportion prédite »      |
+| marginal effect        | effet marginal · effet moyenné · effet moyenné sur l'échantillon | alternate; see faux amis                   |
+| conditional effect     | effet conditionnel                                          |                                                 |
+| risk difference        | différence de proportion · différence de points de pourcentage | « différence de risque » is medical-flavoured |
+| effect persists        | son effet persiste                                          | his own, `M2_06_07:1858`                        |
+| explained away         | en partie / totalement expliquée par d'autres variables     | his own, idem                                   |
+| effect grows           | son effet avait été dilué dans le tableau croisé            | his own, idem                                   |
+| bundles                | elles vont par paquets                                      | ⚠ never *par grappes* (cluster sampling)        |
+| different bookkeeping  | les mêmes personnes, une autre manière de les compter       |                                                 |
+
+⚠ **« ajusté » carries two senses and both are kept** — a fitted *model* and an adjusted *percentage*.
+The single guard: **never both senses in one sentence.** The séance itself avoids the problem by using
+« réaliser un modèle » / « faire tourner un modèle » and reserving « calculer » for the odds
+arithmetic; « réaliser » is therefore the safest of the five when a sentence is already about
+adjustment.
+
+### L'odds ratio : deux routes vers la même distinction
+
+The hard case, and the reason this section exists. In ordinary French « **n fois moins de chances** »
+reads as a *risk ratio*, so an odds ratio needs disambiguating. There are two routes and the article
+teaches both:
+
+- **La clause** — « 1,48 fois moins de chances d'avoir été relâché *plutôt que de ne pas l'avoir
+  été* ». Sans la clause finale, la même phrase énonce un risque relatif.
+- **Le nom** — « sa *cote* est 1,48 fois plus faible ». Le mot *cote* porte à lui seul la distinction,
+  et la phrase se raccourcit.
+- **Le risque relatif**, lui, s'énonce sans rien : « 1,1 fois moins de chances d'être relâché ».
+
+**The clause is primary** — it is the séance's own template (`M2_06_07:515`), and the more striking of
+the two. **The noun is the fallback and the disambiguator.** The rule: *the clause may be dropped only
+when « cote » carries the distinction instead* — never neither, never both at once.
+
+**« cote » is taught once, from the racetrack**, as the séance already does (`:682-717`, quoting
+Cibois on the etymology of *odd*): « tel cheval est coté à 3 contre 1 » = sa probabilité de gagner est
+3 fois plus grande que sa probabilité de perdre. And the inversion rule (`:717`): below 1 one takes
+the inverse *and* inverts the wording — « X fois **moins** de chances ».
+
+⚠ **Terminology stays « rapport de cotes »**, the OQLF's preferred term and one shared msgid (see the
+warning above). The séance prefers « **rapport de chances** » (`:821`) and the article says once that
+this is the commoner spoken form — but the table prints « rapport de cotes », so that is what the
+prose works with.
+
+### Faux amis et mots déjà pris
+
+1. ⚠ **« effet marginal » is a false friend for exactly this readership.** Cibois uses it for *an
+   effect expressed in percentage points*; tabxplor's `effect = "marginal"` means *averaged over the
+   sample*. Defuse at first use. The compensation: the etymology (« la même *marge* que les marges
+   d'un tableau croisé ») is **stronger in French**, since « marge » is literally a Total row's margin.
+2. ⚠ **« écart » is locked as *deviation*** — so Deauvieau's « écart pur / écart net / écart
+   expérimental » are **cited, not adopted**: using them would make *écart* mean the adjusted effect.
+3. ⚠ **« significatif » means *important* in ordinary French.** Say so out loud — English has the same
+   trap and no French teacher has ever had to name it.
+4. ⚠ **« base » is taken** by *les bases de données policières*, the running variable of the article
+   itself → **« socle »**. `display = "base"` stays English, as every argument value does.
+5. ⚠ **« grappe » is taken** by cluster sampling (see the weights section) → « paquets ».
+6. ⚠ **« contrôler » is worse in French than in English** — it also means *vérifier*. The article says
+   so; it is a point the English version cannot make.
+7. ⚠ **A quoted cell value keeps the printed decimal point** (`1/1.48`, `par 1.54 (SD)`); prose numbers
+   take the comma (« 5,2 points »). Same rule as the warning after the estimand cascade.
 
 ## Known first-draft rough spots (for maintainer review)
 

@@ -1371,7 +1371,7 @@ reg_footer_lines <- function(tabs) {
   nonfmt_val <- function(nm, g)
     if (nm == row_lab_col)             footer_labels
     else if (identical(nm, split_col)) rep(g, K)
-    else                               rep("Model fit", K)
+    else                               rep(gettext("Model fit"), K)
 
   # `test` is dropped for idempotency, but the pooled interaction rows are NOT rendered as rows -- they
   # feed the table-wide footer LINE that every backend builds AFTER materialisation, so they are the one

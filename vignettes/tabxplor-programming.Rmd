@@ -48,6 +48,8 @@ knitr::knit_hooks$set(output = function(x, options) {
 })
 ```
 
+*Une version française de ce document est disponible : [Programmer avec tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming-fr.html).*
+
 This vignette is for users who want to **program with** `tabxplor` — write their own helpers, pull the underlying numbers out, or reshape a table cell by cell. If you only want to make and read tables, `vignette("tabxplor")` is the place to start.
 
 Every numeric column of a `tabxplor` table is a single vector of class **`tabxplor_fmt`** ("formatted number"). It is a [`vctrs` record](https://vctrs.r-lib.org/reference/new_rcrd.html): behind the one value you see printed, each cell stores **all the data needed to compute the displayed number, its format and its colour** — counts, percentages, differences, relative risks, confidence-interval bounds, odds-ratios, and so on. Because it is a proper vector, it survives every `dplyr` verb, and you can read or rewrite any of its fields.

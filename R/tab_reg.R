@@ -3927,6 +3927,13 @@ reg_stage_rows <- function(ctx) {
       stats::setNames(nm = names(a$curves)),
       function(v) { hit <- lin & skeleton$var == v
                     if (any(hit)) disp_levels[which(hit)[[1]]] else NA_character_ })
+    # HOW THE SHAPE TABLE NAMES THE CURVE. A `log`/`sqrt` shape recoded the column IN PLACE, so the
+    # curve drawn below is a curve of log(age) labelled `age` unless the mark travels with it. NA for
+    # every other kind, straight from VAR_SHAPES$mark -- which is what makes `quadratic` unmarked a
+    # DERIVED fact and not a clause: it adds a term, so the observed curve is genuinely unchanged.
+    # Stored beside the curves, never ON them: names(a$curves) are keys (see reg_shape_table()).
+    a$mark <- purrr::map_chr(stats::setNames(nm = names(a$curves)),
+                             function(v) shape_mark(unname(shape_kinds[v]), v))
     a
   })
   if (length(assumptions) == 0L) assumptions <- NULL

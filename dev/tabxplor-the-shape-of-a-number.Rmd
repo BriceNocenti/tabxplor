@@ -82,13 +82,15 @@ Is it? Between 18 and 52, marriage becomes much more common. Between 55 and 89, 
 Look under the table you just printed. Every `tab_reg()` with a numeric predictor adds a small **shape table**, with a tiny drawing in its last column. That drawing is the picture the model does not draw. Read it like this:
 
 - the drawing runs across the **whole range of the variable**, left to right: the youngest people on the left, the oldest on the right;
-- its **height** is the outcome at that point — here, how often people of that age are married;
-- **`13-57%`**, in the column beside it, is the same picture in words: at the low point of the curve 13 % of people are married, at the high point 57 %. `(OR 8.7)` is the distance between those two ends, as an odds ratio;
+- its **height** is what the first column names — here `log(%Married / (1 - %Married))`, the outcome written the way this model reads it. Do not be put off by the formula: it is only "how often people of that age are married", stretched so that equal steps mean equally important steps. Whatever it says, taller means more;
+- **`13-57%`** is that same height in plain units: at the low point of the curve 13 % of people are married, at the high point 57 %. `(OR 8.7)` is the distance between those two ends, as an odds ratio;
 - there is **no model in this picture**. It is the observed data, counted in twenty slices. Nothing has been fitted, straightened or assumed.
 
 And the picture says plainly what the single number could not: marriage rises steeply through the twenties, stays high across the middle of life, and **comes back down** at the end. A hill, not a slope.
 
 *(In the console, where there are no graphics, the same curve is drawn as a run of twenty little blocks. It says exactly the same thing, and everything below applies to it unchanged.)*
+
+The first column changes with the outcome, because each kind of outcome has its own natural scale: a yes/no answer gives `log(%Married / (1 - %Married))`, a count gives `log(mean tvhours)`, an ordinary number gives `mean prestige`. It is the same quantity `reg_check_plots()` puts on its vertical axis, so the two pictures can be read against each other.
 
 Two extra marks are worth knowing. If a row carries **`ns`**, the whole curve fits inside its own sampling noise: read it as flat, and do not try to fix it. And the header says **central 95 %** — the picture ignores the extreme 2.5 % at each end, so one 105-year-old cannot squash everything else into a line.
 
@@ -142,7 +144,11 @@ So when you set `shape = c(income = "log")`, the points of the curve do not move
 
 > Set a shape, look at the shape table again, and ask one question: **is the curve straighter than it was?** If yes, the ruler now matches the variable, and the single number in the table has become an honest summary. If it bent the other way, you went too far.
 
+You can always see which ruler a drawing was made with, because the shape table renames the predictor to say so: `log(income)`, `√(income)`. A predictor with no mark is drawn on its own plain scale.
+
 This is an old and well-tested habit. Mosteller and Tukey called it the **ladder of re-expression**, and their *bulging rule* is precisely this: the direction in which the curve bulges tells you which way to move. Nothing here is new; tabxplor only puts the picture where you cannot miss it.
+
+⚠ **This applies to `"log"` and `"sqrt"`, and not to `"quadratic"`.** Those two *replace* the variable, so there is a new ruler to draw against. `"quadratic"` replaces nothing — it leaves the variable alone and hands the model a second term to play with — so there is no new ruler, the drawing is unchanged, and "is it straighter?" is not a question you can ask of it. Its own check is a different one, below.
 
 ## The cures, one at a time
 
@@ -161,12 +167,21 @@ tab_reg(gss, "married", c("race", "age"), shape = c(age = "quadratic"), stats = 
 
 **Read the second row as a yes/no question, never as a quantity.** "Is there a bend, and which way?" — nothing more. Nobody, including the people who write the software, can say in words what "an odds ratio of 1/1.61 per squared standard deviation of age" means, and you should not pretend otherwise in a paper. What you write is: *marriage rises through early adulthood, peaks around the fifties and declines after, and the curvature is significant.*
 
-⚠ **The shape table does not change when you set `"quadratic"`** — and that is deliberate, not a bug. The picture is what was **observed**; the observed data is the same data whatever model you then fit to it. `"quadratic"` changes only the model. To see the fitted parabola drawn *through* the observed points, ask for the plot:
+⚠ **The shape table does not change when you set `"quadratic"`**, and its predictor keeps its plain name — deliberately, not by oversight. The picture is what was **observed**, and the observed data is the same data whatever model you afterwards fit to it. So for this one cure you cannot check your work by looking again at the drawing.
 
-```{r, eval = FALSE}
-reg_check_plots(tab_reg(gss, "married", c("race", "age"), shape = c(age = "quadratic")),
-                checks = "linearity")
+**Check it with the plot instead.** `reg_check_plots(check = "linearity")` draws the observed points *and*, through them, the shape the model now assumes — a straight line normally, a parabola once `"quadratic"` has put a curvature term in. That comparison is the reliable one, and it is the only place you can actually see whether the bend was caught:
+
+```{r, fig.width = 7, fig.height = 4.2, results = "hide", message = FALSE}
+age_model <- tab_reg(gss, "married", c("race", "age"), shape = c(age = "quadratic"))
+
+reg_check_plots(age_model, check = "linearity")
 ```
+
+The **solid line with the grey band** is the observed curve and its margin of error — the same thing the shape table drew, with an axis on it. The **dashed line is what the model now assumes**. The panel says so itself, in its own subtitle.
+
+Read the two against each other. Here the parabola gets the big fact right — up, then down, peaking in the fifties — and it visibly misses the detail: the real rise between 20 and 35 is far steeper than any parabola can be while still coming back down at the far end. A parabola is symmetric, and this hill is not.
+
+That is worth knowing rather than hiding, and it is the general lesson of this whole article: **a cure is an improvement, not a fit.** `"quadratic"` took a single misleading arrow and turned it into a shape you can describe in a sentence, which is most of the distance. If the remaining mismatch matters for what you want to say — if the exact age of the peak is your finding — then stop curve-fitting and cut the variable into groups, which assumes nothing at all.
 
 ### Diminishing returns: `"log"`
 
@@ -185,7 +200,7 @@ tab_reg(prestige, "prestige", c("education", "income", "women"),
         shape = c(income = "log"), stats = NULL)
 ```
 
-`income` is now labelled **`log(x)`** in the table, so a reader can see which ruler was used.
+`income` is now labelled **`log(x)`** in its row, and **`log(income)`** in the shape table below — so both the coefficient and the drawing say which ruler was used, and the drawing is the one that has visibly changed.
 
 **Make the coefficient readable.** By default the step is two standard deviations *of the logged variable*, which nobody can picture. Set the step to `log(2)` and the row becomes "per doubling of income", which is a sentence:
 
@@ -229,7 +244,9 @@ This is the honest fallback, and often the best choice for a paper: it draws wha
 | the shape is complicated, or the audience is not statistical      | `"quartiles"`, `"quintiles"` |
 | the row is marked `ns`                                            | nothing                    |
 
-And the workflow, in three steps: **look at the run → set one `shape =` → look again.** If it is straighter, keep it. If it now bends the other way, go back one rung — `log` to `sqrt`, `sqrt` to nothing. If two tries have not helped, cut it into quantiles and describe what you see.
+And the workflow, in three steps: **look at the curve → set one `shape =` → look again.** If it is straighter, keep it. If it now bends the other way, go back one rung — `log` to `sqrt`, `sqrt` to nothing. If two tries have not helped, cut it into quantiles and describe what you see.
+
+⚠ The third step is *look at the drawing again* for `"log"` and `"sqrt"` only. For `"quadratic"` the third step is `reg_check_plots(check = "linearity")`, because that cure leaves the drawing alone.
 
 ## Five ways to get this wrong
 

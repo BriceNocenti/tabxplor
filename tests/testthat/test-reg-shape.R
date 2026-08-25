@@ -349,7 +349,10 @@ test_that("several outcomes get one curve EACH, and the shape table rather than 
   expect_false(any(grepl("[\u2581-\u2588]", disp)))
   st <- tabxplor:::reg_shape_table(t)
   expect_identical(nrow(st), 2L)
-  expect_identical(st$outcome, c("married", "tvhours"))
+  # ONE ROW PER OUTCOME, each naming its own -- on the scale its own family fits, so the two rows
+  # are not even in the same units (a log-odds and a mean).
+  expect_match(st$outcome[[1L]], "Married", fixed = TRUE)
+  expect_match(st$outcome[[2L]], "tvhours", fixed = TRUE)
   expect_true(all(grepl("[\u2581-\u2588]{3,}", st$shape)))
   expect_false(any(grepl("[\u2581-\u2588]", as.character(t$levels))))
 })
@@ -401,9 +404,14 @@ test_that("a continuous row's level is COMPOSED: shape, unit, anchor -- and none
 test_that("the sparkline is drawn on the model's own x axis: one width, and the shape moves it", {
   skip_if_not_installed("broom")
   d  <- shp_data()
+  # ⚠ `gl()` looks the curve up BY ITS `var` CELL, which a transform now marks (`log(age)`). It
+  # therefore asserts nothing unless the row is found: without the expect_length() below, a lookup
+  # that silently returns character(0) makes every expect_false(identical(...)) here pass VACUOUSLY.
   gl <- function(t, v) {
     st <- tabxplor:::reg_shape_table(t)
-    st$shape[st$var == v]
+    out <- st$shape[st$var == v]
+    expect_length(out, 1L)
+    out
   }
   t0 <- suppressMessages(tab_reg(d, "married", c("age", "tvhours"), family = "binomial",
                                  stats = FALSE))
@@ -413,8 +421,42 @@ test_that("the sparkline is drawn on the model's own x axis: one width, and the 
   # ...and a monotone shape CHANGES the curve, which is the whole point of drawing it to scale
   tl <- suppressMessages(tab_reg(d, "married", c("age", "tvhours"), family = "binomial",
                                  shape = c(age = "log"), stats = FALSE))
-  expect_false(identical(gl(t0, "age"), gl(tl, "age")))
+  expect_false(identical(gl(t0, "age"), gl(tl, "log(age)")))
   expect_identical(gl(t0, "tvhours"), gl(tl, "tvhours"))   # the untouched predictor does not move
+})
+
+test_that("the shape table names the transform it DREW, and only that", {
+  skip_if_not_installed("broom")
+  d  <- shp_data()
+  f  <- function(...) suppressMessages(
+    tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE, ...))
+  sv <- function(t) tabxplor:::reg_shape_table(t)$var
+  gl <- function(t) tabxplor:::reg_shape_table(t)$shape
+
+  expect_identical(sv(f()), "age")                              # nothing done, nothing said
+  expect_identical(sv(f(shape = c(age = "log"))),  "log(age)")   # a RECODE is part of the curve
+  expect_identical(sv(f(shape = c(age = "sqrt"))), "\u221a(age)")
+  # ⚠ A QUADRATIC IS A MODEL TERM, NOT A RECODE: it must leave the column bare AND the curve
+  # untouched. Marking it would promise a "is it straighter?" reading the drawing cannot support --
+  # judge a quadratic with reg_check_plots(check = "linearity") instead. Do not "fix" this.
+  expect_identical(sv(f(shape = c(age = "quadratic"))), "age")
+  expect_identical(gl(f(shape = c(age = "quadratic"))), gl(f()))
+  # a CUT leaves no numeric predictor at all, so it has no row here
+  expect_null(tabxplor:::reg_shape_table(f(shape = c(age = "quartiles"))))
+})
+
+test_that("the mark survives the tab_vars merge, and the curve keys stay bare", {
+  skip_if_not_installed("broom")
+  d  <- shp_data()
+  t  <- suppressMessages(tab_reg(d, "married", c("rincome", "age"), tab_vars = "race",
+                                 family = "binomial", shape = c(age = "log"), stats = FALSE))
+  st <- tabxplor:::reg_shape_table(t)
+  expect_gt(nrow(st), 1L)                       # one row per group (reg_bind_assumptions path)
+  expect_true(all(st$var == "log(age)"))
+  # ⚠ the MARK is a display cell; names(curves) are the keys reg_bind_assumptions(), linear_level
+  # and mat_reg_spark() all match on, so they must stay the raw column name.
+  a <- get_assumptions(t)
+  expect_identical(names(a[[1]]$curves), "age")
 })
 
 # ---- Phase 22b-xviii: the vertical window has a floor ------------------------------------------
@@ -495,19 +537,43 @@ test_that("the range travels with the picture, in the same row of the shape tabl
 
 # 22g-ii retired the shape table's footer prose (the window is in the header, the units are in the
 # `range` cell). The one caveat that is not verbosity -- an ordinal or multinomial outcome has one
-# curve per cut and this draws the first -- moved into the OUTCOME cell, where it is read.
+# curve per cut and this draws the first -- lives in the OUTCOME cell, where it is read. 22g-xii made
+# that cell the link-scale FORMULA, and `%x not 1st` now says it inside the formula itself.
 test_that("an ordinal outcome says which curve it is drawing", {
   skip_if_not_installed("MASS")
   d  <- suppressWarnings(gss_cat_data_formatting())
   st <- tabxplor:::reg_shape_table(
     suppressMessages(suppressWarnings(tab_reg(d, "rincome", "age", stats = FALSE))))
-  expect_true(any(grepl("1st curve", st$outcome, fixed = TRUE)))
-  # a binomial one does not: its single curve IS the whole reading
+  # ⚠ it must ALSO name the outcome: with several of them, two "not 1st" rows would be identical
+  expect_true(any(grepl("not 1st", st$outcome, fixed = TRUE)))
+  expect_true(any(grepl("rincome", st$outcome, fixed = TRUE)))
+  # a binomial one does not: its single curve IS the whole reading, so it names its modelled level
   st2 <- tabxplor:::reg_shape_table(
     suppressMessages(tab_reg(d, "married", "age", family = "binomial", stats = FALSE)))
-  expect_false(any(grepl("1st curve", st2$outcome, fixed = TRUE)))
+  expect_false(any(grepl("not 1st", st2$outcome, fixed = TRUE)))
+  expect_true(any(grepl("Married", st2$outcome, fixed = TRUE)))
   # ...and the only note left is the "ns" one, on the tables that actually wear the mark
   expect_true(all(grepl("ns", attr(st, "note"), fixed = TRUE)))
+})
+
+test_that("the first column is the outcome on the model's own scale, one form per link", {
+  skip_if_not_installed("broom")
+  d  <- suppressWarnings(gss_cat_data_formatting())
+  y  <- function(t) tabxplor:::reg_shape_table(t)$outcome[[1L]]
+  b  <- function(...) suppressMessages(tab_reg(d, "married", "age", family = "binomial",
+                                               stats = FALSE, ...))
+  # the three readings of ONE binary outcome, each on the scale its own link fits
+  expect_identical(y(b()),                     "log(%Married / (1 - %Married))")
+  expect_identical(y(b(link = "ratio")),       "log(%Married)")
+  expect_identical(y(b(link = "difference")),  "%Married")
+  # a number is a mean, logged exactly where its link logs it
+  expect_identical(y(suppressMessages(tab_reg(d, "age", "tvhours", stats = FALSE))),
+                   "mean age")
+  expect_identical(y(suppressWarnings(suppressMessages(
+    tab_reg(d, "tvhours", "age", family = "poisson", stats = FALSE)))), "log(mean tvhours)")
+  # ⚠ the same quantity the linearity panel puts on its y axis -- one fact, two renderings
+  expect_identical(tabxplor:::rd_link_text("logit", "married", "01-Married"),
+                   "log(%Married / (1 - %Married))")
 })
 
 test_that("the drawing floor and the noise mark are two different verdicts", {

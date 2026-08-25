@@ -32,6 +32,8 @@ navbar:
         href: articles/tabxplor-fr.html
       - text: Tableaux de régression avec tab_reg()
         href: articles/tabxplor-reg-fr.html
+      - text: Toutes choses égales par ailleurs
+        href: articles/tabxplor-all-else-equal-fr.html
       - text: Programmer avec tabxplor
         href: articles/tabxplor-programming-fr.html
 
@@ -171,7 +173,7 @@ reference:
   - tab_wrap_text
   - tab_parallel_stop
 
-# An incomplete `articles:` index is a hard pkgdown error, so all six articles are listed here.
+# An incomplete `articles:` index is a hard pkgdown error, so all eight articles are listed here.
 # The French translations (vignettes/articles/*-fr) sit in the secondary "En français" group.
 articles:
 - title: Get started
@@ -186,4 +188,5 @@ articles:
   contents:
   - articles/tabxplor-fr
   - articles/tabxplor-reg-fr
+  - articles/tabxplor-all-else-equal-fr
   - articles/tabxplor-programming-fr
