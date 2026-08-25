@@ -11,6 +11,9 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 # les libelles du bilan du modele passent par gettext, que seul LANGUAGE atteint. Par defaut la
 # langue vaut "auto" = la locale ambiante : la sortie ne doit pas dependre de la machine.
 options(tabxplor.lang = "fr")
+# Le tableau des formes qu'un prédicteur continu dessine sous le pied de tableau n'est pas le
+# sujet de cet article.
+options(tabxplor.shape_table = "no")
 Sys.setenv(LANGUAGE = "fr")   # les libelles du bilan du modele passent par gettext, pas par l'option
 
 ```

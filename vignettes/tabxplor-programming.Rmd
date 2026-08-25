@@ -18,6 +18,8 @@ library(tabxplor)
 # vignette on a French machine silently renders French legends and captions (the -fr articles pin
 # "fr" for the same reason). Output must not depend on where it is built.
 options(tabxplor.lang = "en")
+# The shape table a continuous predictor draws under the footer is not this vignette's subject.
+options(tabxplor.shape_table = "no")
 Sys.setenv(LANGUAGE = "en")   # the test-summary / model-fit row labels go through gettext, not this option
 library(dplyr)
 

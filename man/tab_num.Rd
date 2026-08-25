@@ -23,11 +23,13 @@ tab_num(
 \item{row_var}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Singular aliases of
 \code{row_vars}/\code{col_vars} (which now accept several variables). Kept working.}
 
-\item{col_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> The row variable(s),
-printed with one level per line, and the column variable(s), printed with one level per
-column. For numeric variables means are calculated, in a single column. Each accepts one
-variable or several (e.g. \code{c(var1, var2)}); with several \code{row_vars} the mirror
-tables are merged into one by default (see \code{output_list}).}
+\item{col_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> The column variable(s) --- see
+\code{row_vars}. \strong{An interaction} is written \code{a*b}, as in
+\code{\link{tab_reg}()}: two categorical variables give one column per observed
+CELL of the pair, and a numeric one crossed with a factor gives one mean column per
+level of the factor, beside the factor's own columns. Two numeric variables have no
+cells to cross, so the second is cut into quartiles (say otherwise with
+\code{shape}). Only \code{col_vars} takes one.}
 
 \item{tab_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :
 a subtable is made for each combination of levels of the selected variables.

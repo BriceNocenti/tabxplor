@@ -198,7 +198,9 @@ html_cell_text <- function(raw, from, pn, bold, esc = htmltools::htmlEscape, fac
     else html_face_wrap(s, bold[i], face$italic[i], face$underline[i])
   if (is.null(pn)) return(structure(wrap_face(out, seq_along(out)), pill_left = left))
   from <- if (is.null(from)) rep(1L, length(raw)) else from
-  hit  <- !is.na(pn) & !is.na(from) & pn >= 1L & (from > 1L | pn < nchar(raw))
+  # `pn == 0` is a template with no token outside brackets: no primary at all, so the whole cell is
+  # the aside. NA is the other thing entirely -- one plain piece.
+  hit  <- !is.na(pn) & !is.na(from) & pn >= 0L & (from > 1L | pn < nchar(raw))
   if (any(hit)) {
     to  <- from[hit] + pn[hit] - 1L
     # the primary keeps the cell's own weight; an aside is never bold (bold glyphs are wider, and

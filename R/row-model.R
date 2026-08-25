@@ -353,7 +353,7 @@ tab_declared_vars <- function(tabs) {
   list(row_var   = lvl_col,
        tab_vars  = idx$name[idx$role == "tab_var"],
        var_col   = if (length(var_col) == 1L) var_col[1] else character(0),
-       row_vars  = as.character(row_vars),
+       row_vars  = vars_chr(row_vars),
        compacted = length(var_col) == 1L)
 }
 
@@ -374,7 +374,7 @@ tab_stamp_index <- function(tabs, level = NULL, var = NA_character_, tab_vars = 
     tabs[[level]] <- new_lvl(tabs[[level]], "level", var, ordered)
   if (!is.null(var_col) && length(var_col) == 1L && var_col %in% nms)
     tabs[[var_col]] <- new_lvl(tabs[[var_col]], "var", NA_character_, logical(0))
-  for (tv in intersect(as.character(tab_vars), nms))
+  for (tv in intersect(vars_chr(tab_vars), nms))
     tabs[[tv]] <- new_lvl(tabs[[tv]], "tab_var", tv, stats::setNames(is.ordered(tabs[[tv]]), tv))
   tabs
 }

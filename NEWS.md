@@ -4,6 +4,11 @@
 ## New features
 
 
+* **`tab(col_vars = a*b)` crosses two column variables**, spelt exactly as `tab_reg(predictors =)`
+  spells it. Two categorical variables give one column per observed cell of the pair; a numeric one
+  crossed with a factor gives one mean column per level of the factor, beside the factor's own
+  columns; two numeric ones cut the second into quartiles and say so. Only `col_vars` takes one.
+
 * **`tab_reg()` shows the observed (crude) effect by default.** Every modelled effect now sits beside
   the same quantity fitted with one predictor, so what adjustment changed is read across the table.
   `empirical` says where it goes --- a column of its own, inside the model cell, or (where a table is
@@ -206,7 +211,7 @@
   overall-association test (`stats = "global"`) moved from a footer sentence to footer rows for the
   same reason.
 * **A continuous predictor's row shows the shape of its effect**, as a small curve in its own label —
-  ten bins of the outcome against the predictor, with no model in it (`options(tabxplor.spark = FALSE)`
+  ten bins of the outcome against the predictor, with no model in it (`options(tabxplor.shape_table = FALSE)`
   to switch it off, `"ascii"` for a font without block characters). In HTML it becomes an inline SVG.
 * **`tab_reg(shape =)` fits a continuous predictor as something other than a line** — the cure for what
   the linearity row finds. A named vector: `"quintiles"` / `"quartiles"` / an integer cuts it into
@@ -395,6 +400,12 @@
   and several `predictors` sets add a comparison row. Pass `empirical = FALSE` / `stats = ` for the
   old shape. `tab_reg(ci_method =)` moved into `...`; it is passed by name exactly as before.
 
+* **`tab(shape =)` no longer writes the variable's name onto the first level.** It was useful only
+  for a table whose leading text columns are stripped: ask for it with `tab(shape_name = TRUE)`.
+
+* **`options(tabxplor.spark =)` is `options(tabxplor.shape_table =)`**, named for what it governs ---
+  the shape table under a `tab_reg()` footer. The old name still works.
+
 * **One vocabulary for measure names.** Every argument that names a measure --- `tab(color =)`,
   `fmt(color =)`, `tab_reg(measure =)`, `tab_reg(link =)` --- now reads one table, so the
   discipline's acronyms work everywhere the measure does: `"RD"` / `"diff"`, `"RR"` / `"IRR"` /
@@ -565,6 +576,24 @@
   (`multiplier = "sd"`, see above). Pass `multiplier = 1` for the previous per-one-unit reading.
 
 ## Bug fixes
+
+* **`tab()` could not use a column whose name was not syntactic.** `tab(data, x, \`my var\`)` aborted
+  saying the column did not exist. Any name works now.
+
+* **The Total column's "100 %" disappeared under `color = "ratio"`** as soon as significance was
+  shown (`color_signif`, `stars`, `ci = "ref"`), although the cells were still percentages.
+
+* **A Total cell showing only its base count was printed as the table's own figure**, in bold and in
+  the table's ink. It reads as an aside, like every other bracketed value.
+
+* **`display = "estimate"` aborted** where `"est"` worked. Both are accepted.
+
+* **A quantile cut's levels carried a redundant rank** (`"4 to 24 Q4"`): the bounds already say where
+  the group sits, so the tag is gone.
+
+* **Excel: a `tab_reg()` model column lost its unit tag** (`<diff>`) where its observed twin kept
+  one, and a long tag (`<obs mean>`) could wrap badly and widen its column. Unit tags are now written
+  at 8pt, on one line, and never set a column's width.
 
 * **`set_display()` silently rendered another field when given a word it did not know.**
   `set_display(x, "difference")` printed the count. Every value is now checked against the package's

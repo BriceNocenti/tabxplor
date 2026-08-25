@@ -257,16 +257,18 @@ TAB_OPTIONS <- list(
       "eta2\"). N is never added -- it is already shown by the `n` column. The console block always",
       "shows N + p-value + effect size.")),
 
-  spark = tx_opt(
-    "all", "stats",
-    c("in a [tab_reg()] table, each continuous predictor's OBSERVED SHAPE --- the outcome binned",
+  # named for what it draws, not for how: the sparkline stopped printing inside the `n` cell, and
+  # what the option governs is the SHAPE TABLE. `spark` is the 2.0.0-development spelling, kept.
+  shape_table = tx_opt(
+    "all", "stats", alias = "spark",
+    doc = c("in a [tab_reg()] table, each continuous predictor's OBSERVED SHAPE --- the outcome binned",
       "against the predictor, on the model's scale, with no model in it --- drawn as a small curve",
       "in a **shape table** below the footer, beside the range it is a picture of",
       "(`13-57% (OR 8.7)`). It is the eye-half of the `Linearity` footer row, and the free one: no",
       "fit is involved. With `tab_vars`, one curve per group; with several outcomes, one per",
       "outcome.",
       "",
-      "`\"all\"` (default) draws it in every medium; `\"console\"` only where you are working, so",
+      "`\"all\"` draws it in every medium; `\"console\"` only where you are working, so",
       "exported tables stay unchanged; `\"no\"` never. `TRUE` / `FALSE` are accepted for the first",
       "and the last.",
       "",

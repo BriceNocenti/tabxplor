@@ -413,7 +413,12 @@ reg_detect_family <- function(data, outcome) {
 # one reader and no mode to special-case.
 #' @keywords internal
 reg_meta_aside <- function(meta, est = NULL) {
-  display <- meta$display %||% reg_display_of(NULL, meta$emp_mode %||% "no")
+  # ⚠ the comparison too: the default layout differs there (the model columns print no aside at
+  # all), so a footer that skipped it would gloss a bracket the cells never write. It is the BUILD's
+  # own test -- `predictors` given as a list AND more than one model -- because a one-model list
+  # takes the ordinary layout.
+  cmp     <- isTRUE(meta$comparison) && length(meta$fit_spec$specs) > 1L
+  display <- meta$display %||% reg_display_of(NULL, meta$emp_mode %||% "no", cmp)
   reg_aside_token(display, est$scale)
 }
 
@@ -1866,12 +1871,16 @@ reg_apply_display <- function(col, display) {
 # other observed-then-modelled layout puts it: before the estimate.
 # DESIGN: the in-cell fold is a PRESET, not a per-cell rewrite -- so the layout can report its own
 # aside (reg_meta_aside), and one boundary still decides what every cell shows.
+# DESIGN: COMPARING PREDICTOR SUBSETS, the level is stated ONCE -- there is one observed column for
+# the whole set, and it carries it (`est_base_once`). Repeating it in every model column puts a
+# bracket between the very numbers the spelling exists to set side by side.
 #' @keywords internal
 #' @noRd
-reg_display_of <- function(display, empirical) {
+reg_display_of <- function(display, empirical, comparison = FALSE) {
   if (!is.null(display)) return(display)
   if (!emp_on(empirical)) return(NULL)
-  if (identical(empirical, "cell")) "est_obs" else "est_base"
+  if (identical(empirical, "cell")) return("est_obs")
+  if (isTRUE(comparison)) "est_base_once" else "est_base"
 }
 
 # === SECTION: Marginal effects and adjusted predictions (the `at` profile axis) ==================
@@ -3548,7 +3557,7 @@ reg_crude_block <- function(sp, sp_fam, inv_sp, key, mdata, pos, y_ref, var_y, c
                                emp_mode = empirical,
                                saturated = saturated, method = method)
   # the crude columns take the table's own display -- one grammar, and by default the MIRROR layout.
-  disp  <- reg_display_of(display, empirical)
+  disp  <- reg_display_of(display, empirical, is_comparison)
   dress <- function(cl) purrr::map(cl, function(col) reg_apply_display(col, disp))
   out$cols     <- dress(out$cols)
   out$cat_cols <- dress(out$cat_cols)
@@ -3628,7 +3637,7 @@ reg_cols_ame <- function(f, sp, ctx) {
     else if (is.null(m)) NULL
     else reg_scale_pred(reg_fill_sweep(m, f$data, sp$row_vars, conf_level,
                                        design_spec$wt, multiplier, crosses = crosses), sp$trials)
-  disp  <- reg_display_of(display, empirical)
+  disp  <- reg_display_of(display, empirical, is_comparison)
   # ⚠ the LEVELS come from this column's own sweep (`marg`, at its own profile); `marg_add` only
   # supplies the additive fallback where the column reports a ratio and a numeric predictor has no
   # level pair. Reading the levels off `marg_add` would put the sample-averaged prediction beside an
@@ -3706,7 +3715,7 @@ reg_cols_vsrest <- function(f, sp, ctx) {
                                model_family = sp_fam, const = const,
                                degf = reg_wald_degf("wald", f$disp_known, f$df_residual))
     col <- reg_fill_base(col, marg_add, skeleton, sp$row_vars, group = g, crosses = crosses)
-    list(label = lab, col = reg_apply_display(col, reg_display_of(display, empirical)))
+    list(label = lab, col = reg_apply_display(col, reg_display_of(display, empirical, is_comparison)))
   })
 }
 
@@ -3724,7 +3733,7 @@ reg_cols_coef <- function(f, sp, ctx) {
   marg <- reg_fill_sweep(reg_model_of(f), f$data, sp$row_vars, conf_level, design_spec$wt,
                          multiplier, crosses = crosses)
   marg <- reg_scale_pred(marg, sp$trials)
-  disp  <- reg_display_of(display, empirical)
+  disp  <- reg_display_of(display, empirical, is_comparison)
   dress <- function(col, group = NULL)
     reg_apply_display(reg_fill_base(col, marg, skeleton, model_predictors, group = group,
                                     crosses = crosses), disp)
@@ -4714,6 +4723,9 @@ reg_stage_finalize <- function(ctx) {
 #'   # a subset keeps the examples fast: fitting these models on all 21,483 rows costs well over
 #'   # CRAN's 5-second-per-topic budget. Use the full `data` in real analyses.
 #'   reg_data <- head(data, 3000)
+#'   # these examples are about the MODELS, so the shape table a continuous predictor draws under
+#'   # the footer is switched off: see `?tabxplor-options` and `vignette("tabxplor-reg")`.
+#'   .opt <- options(tabxplor.shape_table = "no")
 #'
 #'   # logistic (odds ratios):
 #'   tab_reg(reg_data, outcome = "married", predictors = c("race", "rincome"),
@@ -4744,6 +4756,7 @@ reg_stage_finalize <- function(ctx) {
 #' # ordinal (proportional-odds): one cumulative-OR column
 #'   tab_reg(reg_data, outcome = "rincome", predictors = c("race", "age"), family = "ordinal")
 #' }
+#'   options(.opt)
 #'
 #' @section Out of scope:
 #' `tab_reg()` covers linear, logistic, Poisson, multinomial and ordinal models, with survey designs.

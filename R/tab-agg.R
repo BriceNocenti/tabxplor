@@ -23,7 +23,7 @@
 #   so is each branch's degenerate group: unweighted var is NA at n <= 1 (hence the NaN -> NA map),
 #   weighted var 0 for a single observation, NaN for an all-NA group.
 num_derive_stats <- function(tabs, col_vars, weighted) {
-  col_vars <- as.character(col_vars)
+  col_vars <- vars_chr(col_vars)
   for (v in col_vars) {
     n  <- tabs[[paste0(v, "_n")]]
     s1 <- tabs[[paste0(v, "_s1")]]
@@ -77,7 +77,7 @@ num_rollup <- function(agg, by, drop_keys, moment_cols, index_keys) {
 #   OUTSIDE the call, where the argument is un-shadowed), NEVER the bare symbol `wt`: data.table exposes
 #   every column in `j` scope, so a column named "wt" shadows it.
 num_moment_scan <- function(data, tab_row_names, col_vars, wt) {
-  col_vars <- as.character(col_vars)
+  col_vars <- vars_chr(col_vars)
   wt_name  <- as.character(wt)     # captured here (un-shadowed) -- see the WARNING above
   if (length(wt) == 0) {
     data[,
@@ -159,7 +159,7 @@ tab_aggregate_num <- function(data, row_var, col_vars, tab_vars, wt,
 
   data <- data |>
     dplyr::select(!!!tab_vars, !!row_var, !!!col_vars, !!wt) |>
-    dplyr::mutate(dplyr::across((!!wt | tidyselect::all_of(as.character(col_vars))) &
+    dplyr::mutate(dplyr::across((!!wt | tidyselect::all_of(vars_chr(col_vars))) &
                                   !where(is.numeric), as.numeric)
     )
 

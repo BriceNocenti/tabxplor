@@ -107,8 +107,7 @@ testthat::test_that("the variable's name is written on the FIRST level only", {
 testthat::test_that("shape_numeric_var() builds exactly the column tab(shape =) builds", {
   t <- quiet(tab(gsh, age, party3, pct = "row", na = "drop", shape = "quintiles"))
   testthat::expect_identical(
-    levels(shape_numeric_var(gsh$age[!is.na(gsh$age) & !is.na(gsh$party3)], "quintiles",
-                             name = "age")),
+    levels(shape_numeric_var(gsh$age[!is.na(gsh$age) & !is.na(gsh$party3)], "quintiles")),
     setdiff(levels(t$age), "Total"))
 })
 
@@ -216,8 +215,10 @@ testthat::test_that("a tied variable still gets k quantile groups, and says so w
 testthat::test_that("a whole-numbered cut names its VALUES, a fractional one its interval", {
   x <- c(rep(0, 100), rep(1, 60), rep(2, 40), rep(3, 20), 4:6)
   lv <- levels(shape_numeric_var(x, "quartiles"))
-  testthat::expect_true(all(grepl("^([0-9]+|[0-9]+ (or|to) [0-9]+)( Q[0-9]+)?$", lv)))
-  testthat::expect_identical(lv[[1]], "0 Q1")           # [0,1) holds exactly the value 0
+  testthat::expect_true(all(grepl("^([0-9]+|[0-9]+ (or|to) [0-9]+)$", lv)))
+  testthat::expect_identical(lv[[1]], "0")              # [0,1) holds exactly the value 0
+  # NO rank tag: the bounds already say where the group sits, read as values or as an interval
+  testthat::expect_false(any(grepl("Q[0-9]", c(lv, levels(shape_numeric_var(x + 0.5, "quartiles"))))))
   # the same column shifted off the integers keeps cut()'s own interval literal
   testthat::expect_true(all(grepl("^\\[", levels(shape_numeric_var(x + 0.5, "quartiles")))))
   # a cut is still a cut: the groups hold the same rows either way

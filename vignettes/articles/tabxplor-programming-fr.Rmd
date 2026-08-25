@@ -22,6 +22,9 @@ options(tabxplor.tab_kable_tooltips = FALSE)
 # fansi. options(tabxplor.lang = "fr") affiche les legendes et les notes en francais.
 options(cli.num_colors = 256)
 options(tabxplor.lang = "fr")
+# Le tableau des formes qu'un predicteur continu dessine sous le pied de tableau n'est pas le
+# sujet de cette vignette.
+options(tabxplor.shape_table = "no")
 Sys.setenv(LANGUAGE = "fr")   # idem : les libelles de resume de test / ajustement passent par gettext
 set_color_palette(theme = "light")
 ```

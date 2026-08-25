@@ -333,9 +333,15 @@ testthat::test_that("{est} / {base} resolve to the token each COLUMN renders the
 testthat::test_that("the preset table is ONE table, resolved the same way by both producers", {
   testthat::expect_identical(
     names(tabxplor:::DISPLAY_PRESETS),
-    c("est", "est_ci", "est_base", "est_coef", "base_est_mdiff", "base_est_mratio", "est_obs",
-      "base_est", "base", "base_ci", "base_moe", "base_diff", "base_ratio", "base_or", "or_base",
-      "mean_sd", "mean_cv", "or_pct", "OR_pct"))
+    c("est", "est_ci", "est_base", "est_base_once", "est_coef", "base_est_mdiff",
+      "base_est_mratio", "est_obs", "base_est", "base", "base_ci", "base_moe", "base_diff",
+      "base_ratio", "base_or", "or_base", "mean_sd", "mean_cv", "or_pct", "OR_pct", "estimate"))
+  # `est_base` with the level stated once, by the observed column: the comparison default.
+  testthat::expect_identical(tabxplor:::display_resolve("est_base_once", "model"), "{est}")
+  testthat::expect_identical(tabxplor:::display_resolve("est_base_once", "emp"), "({base}) {est}")
+  # the word spelt out is an ALIAS: it resolves before anything is stored.
+  testthat::expect_identical(tabxplor:::display_resolve("estimate"),
+                             tabxplor:::display_resolve("est"))
   # a preset may declare one arm per column ROLE; an unknown role takes `default`.
   testthat::expect_identical(tabxplor:::display_resolve("est_base"), "{est} ({base})")
   testthat::expect_identical(tabxplor:::display_resolve("est_base", "model"), "{est} ({base})")
@@ -629,6 +635,37 @@ testthat::test_that("the Total's 100 % goes when the cells stop showing a level"
   testthat::expect_false(grepl("100%", tot(display = "{ratio} ({pct})")))
   testthat::expect_false(grepl("100%", tot(display = "or")))
   testthat::expect_false(grepl("100%", tot(display = "or_base")))
+  # ... and a COLOUR never removes it. `color = "ratio"` plus a reference interval stamps the
+  # interval's own scale (`pct_ratio`) on every column, the Total included; the sum test asks its
+  # question on the LEVEL twin, so a ratio and a difference behave alike.
+  totc <- function(...) {
+    t <- suppressMessages(tab(g, race, party3, pct = "row", na = "drop_all", ...))
+    format(tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE)$Total)[[1]]
+  }
+  testthat::expect_match(totc(color = "ratio", ci = "ref"),                       "^100%")
+  testthat::expect_match(totc(color = "ratio", color_signif = "grey_non_signif"), "^100%")
+  testthat::expect_match(totc(color = "ratio", stars = TRUE),                     "^100%")
+  testthat::expect_match(totc(color = "difference", ci = "ref"),                  "^100%")
+})
+
+# Phase 22h: a bracket marks an ASIDE, so a template with no token outside brackets has no primary
+# at all -- and the Total cell reduced to "({n_range})" is exactly that: a base count, not the
+# number the table is about. Its type tag still reads `n`; the CELL reads as an aside.
+testthat::test_that("a cell that is nothing but brackets is nothing but aside", {
+  g <- gss_cat_data_formatting()
+  t <- suppressMessages(tab(g, race, party3, pct = "row", na = "drop_all", display = "ratio"))
+  m <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE)
+  testthat::expect_identical(unique(get_display(m$Total)), "({n_range})")
+  f <- format(m$Total, bold_split = TRUE)
+  testthat::expect_true(all(attr(f, "primary_from")  == 1L))
+  testthat::expect_true(all(attr(f, "primary_nchar") == 0L))
+  # every backend then paints the whole cell in the aside: html wraps it in one `tx-sec` span,
+  # markdown leaves it unbolded on the bold Total row.
+  h <- tab_html(t)
+  testthat::expect_match(h, '<span class="tx-sec"[^>]*>\\([ 0-9\u2007-]+\\)</span>')
+  testthat::expect_false(grepl('tx-sec[^>]*>\\(</span>', h))
+  # the column still SAYS it holds a count -- the type tag drops the primary's own brackets
+  testthat::expect_identical(tabxplor:::fmt_display_label(m$Total, "tag"), "n")
 })
 
 

@@ -250,7 +250,7 @@ reg_spec_build_one <- function(i, ctx) {
   # template naming `obs` or `gap` -- the `est_obs` preset, or a user's own "{est} ({obs})" -- was
   # silently pruned back to "{est}" when the column builders wrote it, before step 5 filled them.
   # The columns spliced in at 6b are crude ones, which keep the layout their own builder gave them.
-  disp <- reg_display_of(display, empirical)
+  disp <- reg_display_of(display, empirical, is_comparison)
   if (!is.null(disp))
     cols <- purrr::map(cols, function(bi) { bi$col <- reg_apply_display(bi$col, disp); bi })
 

@@ -360,3 +360,23 @@ test_that("a display token may carry its own precision, and Excel follows it", {
   expect_true(any(grepl("0\\.0000", format(oc, syntax = "excel"))))
   expect_error(tab_reg(d, "married", "race", display = "{est:9}"), "Invalid precision")
 })
+
+# Phase 22h: comparing predictor subsets, the level is stated ONCE -- by the single observed column
+# beside them -- so the model columns sit side by side with nothing between the numbers being
+# compared.
+test_that("several predictor subsets: the model columns drop the level, the observed keeps it", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  t <- suppressMessages(tab_reg(d, "married", list(a = "race", b = c("race", "rincome")),
+                                stats = "no"))
+  mods <- reg_model_cols(t)
+  expect_gt(length(mods), 1L)
+  for (m in mods) expect_identical(unique(get_display(t[[m]])), "est")
+  emp <- names(t)[purrr::map_lgl(t, ~ is_fmt(.) && identical(as.character(get_role(.))[1], "emp"))]
+  expect_true(any(grepl("{base}", get_display(t[[emp[[1]]]]), fixed = TRUE)))
+  # the footer's `Model:` gloss follows the cells: it names no aside the model columns never print
+  expect_false(grepl("adjusted/predicted", paste(get_subtext(t), collapse = " "), fixed = TRUE))
+  # ONE subset is not a comparison: the ordinary layout stands
+  t1 <- suppressMessages(tab_reg(d, "married", "race", stats = "no"))
+  expect_true(any(grepl("{base}", get_display(t1[[reg_model_cols(t1)[[1]]]]), fixed = TRUE)))
+})

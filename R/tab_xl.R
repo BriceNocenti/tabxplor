@@ -636,19 +636,30 @@ xl_text_width <- function(x) {
 # The lines a HEADER may use. THE rule the whole vector rests on: a column is as wide as the widest
 # thing in it that CANNOT wrap, and everything that can contributes its width divided by the lines it
 # may use. A figure must never wrap (a broken number is unreadable), so the data cells set the floor;
-# the level header and the unit tag both wrap and Excel fits their row's height itself.
+# the level header wraps and Excel fits its row's height itself.
 #' @keywords internal
 XL_HEAD_LINES <- 2L
+
+# THE UNIT TAG IS THE ONE HEADER PIECE THAT DOES NOT WRAP. It is a compound word, not prose --
+# "<obs mean>", "<row%-diff>" -- so a break lands mid-name and reads as two tags; and it names its
+# column rather than labelling its numbers, so it must never be what sets the column's width. Hence
+# a size of its own, small enough that a long tag stays inside the figures above it (8pt against a
+# body of 10), and its ANGLE BRACKETS left out of the count: they are the console's own notation,
+# narrower than a figure, and counting them is what tipped a tag past its column.
+#' @keywords internal
+XL_UNIT_SIZE <- 8
 #' @keywords internal
 xl_col_widths <- function(tab, roles, cvh, o, colwidth, theme = "light") {
   ncl    <- ncol(tab)
   ratio  <- if (isTRUE(roles$has_stars)) XL_MONO_RATIO else 1
   hratio <- as.double(o$text_size_headers %||% o$text_size) / as.double(o$text_size)
   cap_text <- if (is.finite(o$wrap_rows %||% Inf)) as.integer(o$wrap_rows) else 40L
+  uratio <- XL_UNIT_SIZE / as.double(o$text_size)
   head_w <- function(j) {
-    h <- c(if (!is.null(cvh)) cvh$clean[[j]] else names(tab)[[j]],
-           if (!is.null(cvh) && !is.null(cvh$unit)) cvh$unit[[j]] else "")
-    ceiling(xl_text_width(h) * hratio / XL_HEAD_LINES)
+    lab <- if (!is.null(cvh)) cvh$clean[[j]] else names(tab)[[j]]
+    un  <- if (!is.null(cvh) && !is.null(cvh$unit)) cvh$unit[[j]] else ""
+    max(ceiling(xl_text_width(lab) * hratio / XL_HEAD_LINES),
+        ceiling(max(0L, xl_text_width(un) - 2L) * uratio))
   }
   vname_chars <- purrr::map(roles$vname_plans %||% list(), ~ .$chars)
   vapply(seq_len(ncl), function(j) {
@@ -978,7 +989,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     # further back than any cell, because it is a line of the header rather than a value.
     # ⚠ theme-aware: this used to hard-code the light grey, so a dark or a publication workbook
     # printed a light-theme ink.
-    if (has_unit) mk_src(unit_row, seq_len(ncl), size = o$text_size_headers, italic = TRUE,
+    if (has_unit) mk_src(unit_row, seq_len(ncl), size = XL_UNIT_SIZE, italic = TRUE,
                          color = tx_chrome_hex(o$theme)$grey),
     # A VARIABLE NAME IS A HEADING, so the name column is bold throughout -- the rule html has always
     # applied (`tx-b` on a `tx-vname` cell) and Excel never did.
@@ -1132,10 +1143,11 @@ xl_build_styles <- function(header_row, unit_row = NA_integer_,
   av[hi, ] <- "bottom"; aw[hi, ] <- TRUE
   # the unit row: LEFT (the tag names its column, it does not label its numbers), never rotated
   ui <- idx(unit_row)
-  # the unit row WRAPS, like the level header above it: both are headers, Excel fits an unmerged
-  # wrapped cell's height itself, and xl_col_widths() counts on it (a header contributes its width
-  # divided by the lines it may use, so a long "<row%-diff>" no longer widens the whole column).
-  if (length(ui)) { ah[ui, ] <- "left"; av[ui, ] <- "bottom"; aw[ui, ] <- TRUE; ar[ui, ] <- 0L }
+  # ⚠ AND IT DOES NOT WRAP, unlike the level header above it. A tag is a compound word ("<obs mean>",
+  # "<row%-diff>"), so Excel's own mid-word break reads as two tags; xl_col_widths() therefore counts
+  # it on ONE line, at its own smaller size and without its angle brackets, so it stays inside the
+  # figures rather than setting the column's width.
+  if (length(ui)) { ah[ui, ] <- "left"; av[ui, ] <- "bottom"; aw[ui, ] <- FALSE; ar[ui, ] <- 0L }
   # numbers read RIGHT. Excel lands a numeric cell there by itself, but a TEXT-written one (a `{ci}`
   # bracket, an `{n_range}`) landed left, so one column read against the next.
   fcd <- ci(fmt_cols); if (length(fcd) && length(di)) ah[di, fcd] <- "right"

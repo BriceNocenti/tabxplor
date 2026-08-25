@@ -726,6 +726,7 @@ and on a \code{\link{tab_reg}} table:
 \item \code{"est"} (\code{\{est\}}) --- the estimate alone.
 \item \code{"est_ci"} (\code{\{est\} \{ci\}}) --- the estimate with its confidence interval.
 \item \code{"est_base"} (\code{\{est\} (\{base\})}) --- the estimate and, in parentheses, the level it sits on.
+\item \code{"est_base_once"} (\code{\{est\}}) --- the estimate alone --- the level is stated once, by the observed column beside it.
 \item \code{"est_coef"} (\code{\{est\} (\{coef\})}) --- the estimate and, in parentheses, the model's own coefficient.
 \item \code{"base_est_mdiff"} (\code{\{est\} (\{diff\})}) --- the estimate and, in parentheses, the same comparison as a difference.
 \item \code{"base_est_mratio"} (\code{\{est\} (\{ratio\})}) --- the estimate and, in parentheses, the same comparison as a ratio.
@@ -783,6 +784,9 @@ table read on your own data, one row per model and the prediction-based measures
   # a subset keeps the examples fast: fitting these models on all 21,483 rows costs well over
   # CRAN's 5-second-per-topic budget. Use the full `data` in real analyses.
   reg_data <- head(data, 3000)
+  # these examples are about the MODELS, so the shape table a continuous predictor draws under
+  # the footer is switched off: see `?tabxplor-options` and `vignette("tabxplor-reg")`.
+  .opt <- options(tabxplor.shape_table = "no")
 
   # logistic (odds ratios):
   tab_reg(reg_data, outcome = "married", predictors = c("race", "rincome"),
@@ -813,6 +817,7 @@ if (requireNamespace("marginaleffects", quietly = TRUE)) {
 # ordinal (proportional-odds): one cumulative-OR column
   tab_reg(reg_data, outcome = "rincome", predictors = c("race", "age"), family = "ordinal")
 }
+  options(.opt)
 
 }
 \references{

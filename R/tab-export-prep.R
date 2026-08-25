@@ -879,17 +879,27 @@ tab_col_units <- function(tab, blocks) {
     if (!is_fmt(col)) return("")
     fmt_display_label(col, "tag")
   }, character(1))
-  tab_units_once(u, blocks)
+  # ⚠ the column's ROLE goes into the run key. Excel alone splits a composite cell into its primary
+  # and its asides (mat_aside_cols), and an observed/model pair whose layouts are MIRRORS ends up as
+  # four columns of one block -- `aside:emp | emp | model | aside:model` -- where the two estimate
+  # columns now carry the same tag string. Without the role the run swallowed the second, and the
+  # second is always the MODEL column, since the crude companion is written first. Two columns of
+  # different roles are different columns whatever they hold.
+  r <- vapply(tab, function(col) if (is_fmt(col)) as.character(get_role(col))[1] else "",
+              character(1), USE.NAMES = FALSE)
+  tab_units_once(u, blocks, r)
 }
 
-# ... written ONCE per (BLOCK, unit) RUN, in its leftmost column -- so a five-level block does not
-# repeat itself, while a Total column and the count carved out of it, one block but two units, each
-# say their own. Shared with the transposed render, which groups by the spanning name instead.
+# ... written ONCE per (BLOCK, role, unit) RUN, in its leftmost column -- so a five-level block does
+# not repeat itself, while a Total column and the count carved out of it, one block but two units,
+# each say their own, and so do an observed column and its model twin, one block and one unit but
+# two roles. Shared with the transposed render, which groups by the spanning name instead.
 # The angle brackets are the CONSOLE's own type tag (pillar wraps `vec_ptype_abbr()` in them): one
 # notation for "what this column holds", on screen and in every export.
 #' @keywords internal
-tab_units_once <- function(unit, group) {
-  r     <- rle(paste0(group, "\r", unit))
+tab_units_once <- function(unit, group, role = NULL) {
+  if (is.null(role)) role <- rep("", length(unit))
+  r     <- rle(paste0(group, "\r", role, "\r", unit))
   first <- c(1L, utils::head(cumsum(r$lengths), -1L) + 1L)
   out   <- rep("", length(unit))
   out[first] <- unit[first]

@@ -431,7 +431,7 @@ jmv_cache_aggregate <- function(ctx) {
         # mirrors tab_aggregate()'s own call at tab.R ~L1709. Do NOT `!!`-inject the value instead:
         # a literal would make quo_miss_na_null_empty_no() read a column named "no" as "no column".
         agg <- rlang::inject(tab_aggregate_num(
-          data, !!rv_sym, as.character(num_cols), as.character(tab_vars),
+          data, !!rv_sym, as.character(num_cols), vars_chr(tab_vars),
           wt = !!wt_part, na = na_rv
         ))
         fine_num[[i]] <- agg

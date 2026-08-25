@@ -317,7 +317,7 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   # value-label factors. `var_labels` rides `shared` into meta$vars for the opt-in display-swap.
   reg_lbl_vars   <- intersect(unique(c(as.character(outcome),
                                        unlist(predictors, use.names = FALSE), cross$parents,
-                                       as.character(tab_vars))), names(data))
+                                       vars_chr(tab_vars))), names(data))
   var_labels <- capture_var_labels(data, reg_lbl_vars)
   data       <- tab_apply_val_labels(data, reg_lbl_vars)
   if (!is.null(design_obj)) design_obj$variables <- data
@@ -736,12 +736,12 @@ reg_resolve_references <- function(ref, data, all_predictors, tab_vars = NULL,
 
   vals <- per_variable(
     ref, elig, "ref", kinds = kinds, fallback_kind = reg_ref_fallback_kind,
-    also = intersect(as.character(tab_vars), names(data)),
+    also = intersect(vars_chr(tab_vars), names(data)),
     vocab = paste0("A default says which kind of predictor it is for: a number or ",
                    "{.or {.val {REG_ANCHOR_KEYWORDS}}} for the continuous ones, ",
                    "{.or {.val {REG_LEVEL_KEYWORDS}}} for the factors."),
     example = 'ref = c(race = "Black")', what = "predictor")
-  lv <- intersect(names(vals), c(fac, as.character(tab_vars)))
+  lv <- intersect(names(vals), c(fac, vars_chr(tab_vars)))
   list(levels  = vapply(stats::setNames(lv, lv),
                         function(v) reg_ref_level(vals[[v]], data[[v]], v), character(1)),
        anchors = vals[intersect(names(vals), num)])

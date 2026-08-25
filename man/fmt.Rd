@@ -608,6 +608,7 @@ and on a \code{\link{tab_reg}} table:
 \item \code{"est"} (\code{\{est\}}) --- the estimate alone.
 \item \code{"est_ci"} (\code{\{est\} \{ci\}}) --- the estimate with its confidence interval.
 \item \code{"est_base"} (\code{\{est\} (\{base\})}) --- the estimate and, in parentheses, the level it sits on.
+\item \code{"est_base_once"} (\code{\{est\}}) --- the estimate alone --- the level is stated once, by the observed column beside it.
 \item \code{"est_coef"} (\code{\{est\} (\{coef\})}) --- the estimate and, in parentheses, the model's own coefficient.
 \item \code{"base_est_mdiff"} (\code{\{est\} (\{diff\})}) --- the estimate and, in parentheses, the same comparison as a difference.
 \item \code{"base_est_mratio"} (\code{\{est\} (\{ratio\})}) --- the estimate and, in parentheses, the same comparison as a ratio.

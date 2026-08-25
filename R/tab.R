@@ -26,7 +26,11 @@
 #     `ref` is a named, ordered per-row_var vector; the col_var axis stays flexible.
 #   - ONE VARIABLE-SELECTION GRAMMAR for both producers: tidy_select_chr() (SECTION "shared leaf and
 #     reference helpers") is what tab() and tab_reg() both resolve their roles with, so a bare name,
-#     a helper and a variable holding names mean the same thing in either.
+#     a helper and a variable holding names mean the same thing in either. `a*b` is peeled out of
+#     `col_vars` BEFORE it, and refused by name on every other axis (R/tab-cross.R).
+#   - ⚠ A VARIABLE LIST IS A LIST OF SYMBOLS, and `as.character()` on one DEPARSES: read it with
+#     vars_chr() (R/utils.R), or a column whose name is not syntactic comes back backticked and
+#     every later selection misses it.
 #   - All public signatures are CRAN API -- soft-deprecate before changing one.
 #   - tab.R sorts AFTER every tab-*.R in R's C collation, so those files may read tab.R's top-level
 #     objects, never the reverse.
@@ -252,7 +256,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
   add_n        <- dots_value(.dots, "add_n")
   tot          <- dots_value(.dots, "tot", TAB_ARGS$tot$default)
   shape        <- dots_value(.dots, "shape")
-  shape_name   <- dots_value(.dots, "shape_name", TRUE)
+  shape_name   <- dots_value(.dots, "shape_name", TAB_ARGS$shape_name$default)
   .cache             <- dots_value(.dots, ".cache")
   .defer_level_merge <- dots_value(.dots, ".defer_level_merge", FALSE)
   .return_armed      <- dots_value(.dots, ".return_armed", FALSE)
@@ -296,6 +300,16 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
   if (!is.null(svy)) data <- svy$data
 
 
+  # AN INTERACTION IS A COLUMN AXIS FACT. `a*b` is peeled out of `col_vars` BEFORE tidyselect -- to
+  # tidyselect an operator between two names is arithmetic on positions -- and refused BY NAME on the
+  # other three axes, before tidyselect can turn it into "column `a * b` does not exist"
+  # (R/tab-cross.R).
+  tab_var_quo <- rlang::enquo(tab_vars)
+  spread_quo  <- rlang::enquo(spread_vars)
+  tab_cross_refuse_axis(row_var_quo, data, "row_vars")
+  tab_cross_refuse_axis(tab_var_quo, data, "tab_vars")
+  tab_cross_refuse_axis(spread_quo,  data, "spread_vars")
+
   if (quo_miss_na_null_empty_no(row_var_quo)) {
     data <- data |> dplyr::mutate(no_row_var = factor("no_row_var")) # "n"
     row_var <- "no_row_var"
@@ -303,14 +317,32 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
     row_var <- tidy_select_chr(row_var_quo, data)
   }
 
+  cross_keys <- character(0)
   if (quo_miss_na_null_empty_no(col_var_quo)) {
     data <- data |> dplyr::mutate(no_col_var = factor("n"))
     col_var <- "no_col_var"
   } else {
-    col_var <- tidy_select_chr(col_var_quo, data)
+    .cx        <- tab_cross_peel(col_var_quo, data)
+    col_var    <- .cx$vars
+    cross_keys <- .cx$keys
   }
 
-  tab_vars <- tidy_select_chr(rlang::enquo(tab_vars), data)
+  tab_vars    <- tidy_select_chr(tab_var_quo, data)
+  spread_vars <- tidy_select_chr(spread_quo, data)
+
+  # THE CROSSES, decided here so both parents are ordinary variables from this line on: the arm, any
+  # autocut of two continuous parents, and one placeholder column per pair. The nested arm's own
+  # columns wait for tab_prepare_pop(), where the moderator's levels first exist.
+  crosses <- list()
+  if (length(cross_keys)) {
+    .cp     <- tab_cross_plan(cross_keys, col_var, data, shape,
+                              tab_vars = unique(c(tab_vars, spread_vars)))
+    shape   <- .cp$shape
+    crosses <- .cp$crosses
+    .cx     <- tab_cross_placeholders(data, crosses, col_var)
+    data    <- .cx$data
+    col_var <- .cx$col_var
+  }
 
   # A `shape` that keeps the column a NUMBER renames it, here, where the variables are still just
   # names: see shape_rename_transformed() (R/var-shape.R) for why a display label will not do.
@@ -330,7 +362,6 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
     sup_cols <- tidy_select_chr(sup_cols_quo, data)
   }
 
-  spread_vars <- tidy_select_chr(rlang::enquo(spread_vars), data)
   if (length(spread_vars)) {
     # DESIGN: a spread variable IS a tab variable -- it splits the population, it just shows the
     #   split across the page instead of down it. One named in `spread_vars` alone is APPENDED to
@@ -428,6 +459,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
            subtext = subtext, n_min = n_min,
            spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
            shape = shape, shape_name = shape_name, .shape_renames = shape_renames,
+           .crosses = crosses,
            .cache = .cache, .defer_level_merge = .defer_level_merge,
            .levels_order = .levels_order, .levels_collapse = .levels_collapse)
 
@@ -746,6 +778,9 @@ new_ctx <- function(...) {
     subtext = "", n_min = 0, by_table = FALSE,
     spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
     shape = NULL, shape_name = TRUE,
+    # THE CROSSES, resolved at the boundary (R/tab-cross.R): one record per `a*b` in `col_vars`, with
+    # its arm. tab_prepare_pop() materialises what each arm makes and adds the moderator's levels.
+    crosses = list(),
     # a numeric-keeping shape RENAMES its column (`log_age`); this is the new name -> its source, so
     # anything fingerprinting a column BY NAME (the jamovi cache keys) can find what it came from.
     shape_renames = character(0),
@@ -826,6 +861,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       .by_table = FALSE,
                       spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
                       shape = NULL, shape_name = TRUE, .shape_renames = character(0),
+                      .crosses = list(),
                       .cache = NULL, .defer_level_merge = FALSE,
                       .levels_order = NULL, .levels_collapse = NULL,
 
@@ -873,6 +909,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     subtext = subtext, n_min = n_min, by_table = .by_table,
     spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
     shape = shape, shape_name = shape_name, shape_renames = .shape_renames,
+    crosses = .crosses,
     cache_env = .cache, defer_level_merge = .defer_level_merge,
     levels_order = .levels_order
   )
@@ -921,7 +958,7 @@ tab_rowvar_ctxs <- function(ctx) {
     keep <- pairs$row_var == rv
     u <- list()
     u$row_vars      <- ctx$row_vars[i]                             # keep as a length-1 sym list
-    u$tab_row_names <- as.character(c(ctx$tab_vars, ctx$row_vars[i]))
+    u$tab_row_names <- vars_chr(c(ctx$tab_vars, ctx$row_vars[i]))
     u$settings      <- list(rows = rows[i, ], cols = ctx$settings$cols, pairs = pairs[keep, ])
     u$fine_num      <- ctx$fine_num[[rv]]                          # by NAME (NULL when no numeric cols)
     c(shared, u)
@@ -1004,7 +1041,11 @@ tab_setup <- function(ctx) {
 
   # WARNING: capture the variable labels BEFORE the labelled conversion, which strips them. Both run
   #   before the numeric / text classification, so a labelled categorical reads as a factor.
-  sel_vars   <- unique(c(as.character(row_vars), as.character(col_vars), as.character(tab_vars)))
+  # ⚠ THE CROSS PARENTS TOO. A `cells` pair absorbs both of them, so neither is a col_var any more --
+  # but each is still a real variable that must reach the value labels, the NA-level scrub and, above
+  # all, `shape`: a combination of raw values is not a combination of groups.
+  sel_vars   <- unique(c(vars_chr(row_vars), vars_chr(col_vars), vars_chr(tab_vars),
+                         reg_cross_parents(crosses)))
   var_labels <- capture_var_labels(data, sel_vars)
   data       <- data |> tab_apply_val_labels(sel_vars)
 
@@ -1038,16 +1079,16 @@ tab_setup <- function(ctx) {
   #   fact about the population, so the cutting itself waits until the filter and the NA policy have
   #   run. Deciding "auto" here is what makes both true at once: it needs the data, which is present.
   shapes <- shape_resolve(shape, data, sel_vars, "tab")
-  shape_refuse_numeric_index(shapes, unique(c(as.character(row_vars), as.character(tab_vars))))
+  shape_refuse_numeric_index(shapes, unique(c(vars_chr(row_vars), vars_chr(tab_vars))))
   .auto  <- shape_fill_auto(shapes, data,
-                            unique(c(as.character(row_vars), as.character(tab_vars))))
+                            unique(c(vars_chr(row_vars), vars_chr(tab_vars))))
   shapes <- .auto$shapes
   shape_report(shapes, .auto$auto)
   # `shape_name` writes the variable's name onto the first level of a ROW or COLUMN variable, the two
   # axes where a level may reach the reader with nothing else naming it. A tab_var always sits in a
   # column headed by its own name, and its total rows already read "Total <level>".
   shape_named <- if (isTRUE(shape_name))
-    intersect(names(shapes), c(as.character(row_vars), as.character(col_vars))) else character(0)
+    intersect(names(shapes), c(vars_chr(row_vars), vars_chr(col_vars))) else character(0)
 
   # WARNING: extract by POSITION with `[[`, never `data[<int vector>]` -- that is column-subsetting on
   #   a data.frame but ROW-subsetting on a data.table, which silently mis-classified the col_vars.
@@ -1067,14 +1108,14 @@ tab_setup <- function(ctx) {
   inference <- new_inference(wt, design_spec, conf_level, ci_method, agg_only,
                              design_effect = design_effect)
   if (length(wt) != 0L &&
-      as.character(wt) %in% c(as.character(row_vars), as.character(col_vars), as.character(tab_vars))) {
+      as.character(wt) %in% c(vars_chr(row_vars), vars_chr(col_vars), vars_chr(tab_vars))) {
     cli::cli_abort(c(
       "The weight variable {.val {as.character(wt)}} is also used as a row, column or tab variable.",
       "i" = "A weight cannot be a table variable at the same time \u2014 pick a different weight column."
     ))
   }
-  tab_dup <- intersect(as.character(tab_vars),
-                       c(as.character(row_vars), as.character(col_vars)))
+  tab_dup <- intersect(vars_chr(tab_vars),
+                       c(vars_chr(row_vars), vars_chr(col_vars)))
   if (length(tab_dup) != 0L) {
     cli::cli_abort(c(
       "{cli::qty(tab_dup)}The variable{?s} {.val {tab_dup}} {?is/are} used both as a tab variable \\
@@ -1090,7 +1131,7 @@ tab_setup <- function(ctx) {
     na_drop_all <- names(tidyselect::eval_select(na_drop_all_quo, data))
   }
 
-  tab_row_names  <- as.character(c(tab_vars, row_vars))
+  tab_row_names  <- vars_chr(c(tab_vars, row_vars))
 
 
 
@@ -1105,15 +1146,15 @@ tab_setup <- function(ctx) {
   col_regime    <- any(pct_flat == "col") && !any(pct_flat == "row")
   ref_by_colvar <- NULL
   named_colvar   <- !is.null(names(ref)) && any(nzchar(names(ref))) &&
-                    any(names(ref) %in% as.character(col_vars))
+                    any(names(ref) %in% vars_chr(col_vars))
   positional_colvar <- col_regime && is.null(names(ref)) && length(ref) > 1 &&
                        length(ref) == length(col_vars)
   if (col_regime && (named_colvar || positional_colvar)) {
-    ref_by_colvar <- resolve_ref_vector(ref, as.character(col_vars), what = "col_var")
+    ref_by_colvar <- resolve_ref_vector(ref, vars_chr(col_vars), what = "col_var")
     ref <- "auto"   # scalar unset: tab_num / settings / the row% path behave as no per-row ref
   }
   ref_is_vector <- length(ref) > 1
-  ref         <- resolve_ref_vector(ref, as.character(row_vars))
+  ref         <- resolve_ref_vector(ref, vars_chr(row_vars))
   if (ref_is_vector && col_regime) {
     cli::cli_inform(c("i" = paste0("With {.code pct = \"col\"}, {.arg ref} is vectorised over the ",
                                    "col_vars (length {length(col_vars)}); this ref did not match, so it ",
@@ -1205,9 +1246,9 @@ tab_setup <- function(ctx) {
                                          color_ratio_ci = color_ratio_ci, stars = stars,
                                          na = na, wt_name = as.character(wt),
                                          other_if_less_than = other_if_less_than, comp = comp,
-                                         tab_vars = as.character(tab_vars),
-                                         row_vars = as.character(row_vars),
-                                         col_vars = as.character(col_vars),
+                                         tab_vars = vars_chr(tab_vars),
+                                         row_vars = vars_chr(row_vars),
+                                         col_vars = vars_chr(col_vars),
                                          filter_expr = filter_expr)
   color         <- .settings$color         # ONE resolved measure
   chi2          <- .settings$chi2
@@ -1224,7 +1265,7 @@ tab_setup <- function(ctx) {
   #   rows = one per row_var, cols = one per col_var, pairs = one per (row_var x col_var), carrying
   #   pct + ref + ref2 plus the `na` policy tab_prepare_pop adds. Expansion is ROW-MAJOR.
   # It carries SETTINGS only, never built OBJECTS: those ride the ctx.
-  rv_chr <- as.character(row_vars) ; cv_chr <- as.character(col_vars)
+  rv_chr <- vars_chr(row_vars) ; cv_chr <- vars_chr(col_vars)
   settings <- list(
     rows = tibble::tibble(
       row_var = rv_chr, color = color, comparison = comparison, or_ci = or_ci, chi2 = chi2,
@@ -1282,16 +1323,17 @@ tab_prepare_pop <- function(ctx) {
   list2env(ctx, environment())
   list2env(ctx_settings_locals(ctx), environment())   # lvs / col_vars_text, from the spine
 
+  cross_parents <- reg_cross_parents(crosses)
   data <- data |> dplyr::select(!!!tab_vars, !!!row_vars, !!wt, !!!col_vars,
-                                 tidyselect::any_of(c(svy_row_col, ".filter"))) |>
-    relabel_levels_in_varnames(as.character(col_vars))
+                                 tidyselect::any_of(c(cross_parents, svy_row_col, ".filter"))) |>
+    relabel_levels_in_varnames(vars_chr(col_vars))
 
 
   if (!is.na(filter_expr)) data <- data |> dplyr::filter(.data$.filter) |>
     dplyr::select(-".filter")
 
   if (na == "drop_all") {
-    na_drop_all <- as.character(c(row_vars, col_vars, tab_vars))
+    na_drop_all <- vars_chr(c(row_vars, col_vars, tab_vars))
     na_text <- rep(list(rep("keep", sum(col_vars_text))), length(row_vars))
     na_num  <- rep(list("keep"), length(row_vars))
 
@@ -1299,22 +1341,22 @@ tab_prepare_pop <- function(ctx) {
     na_drop_all <- names(tidyselect::eval_select(rlang::enquo(na_drop_all), data))
 
     na_text <-
-      purrr::map(as.character(row_vars),
-                 ~ purrr::map2_lgl(., as.character(col_vars[col_vars_text]),
-                                   ~ all(c(.x, .y, as.character(tab_vars)) %in% na_drop_all)
+      purrr::map(vars_chr(row_vars),
+                 ~ purrr::map2_lgl(., vars_chr(col_vars[col_vars_text]),
+                                   ~ all(c(.x, .y, vars_chr(tab_vars)) %in% na_drop_all)
                  ) ) |>
       purrr::map(~ dplyr::if_else(., "keep", na))
 
     na_num <-
-      purrr::map(as.character(row_vars),
-                 ~ all(c(., as.character(tab_vars)) %in% na_drop_all)
+      purrr::map(vars_chr(row_vars),
+                 ~ all(c(., vars_chr(tab_vars)) %in% na_drop_all)
       ) |>
       purrr::map(~ dplyr::if_else(., "keep", na))
   }
 
   data <- data |>
     tab_prepare(
-      as.character(c(row_vars, col_vars, tab_vars)),
+      unique(c(vars_chr(c(row_vars, col_vars, tab_vars)), cross_parents)),
       na_drop_all = tidyselect::all_of(na_drop_all),
       cleannames = cleannames,
       other_if_less_than = other_if_less_than, other_level = other_level,
@@ -1335,10 +1377,34 @@ tab_prepare_pop <- function(ctx) {
     lvl_check_reserved(data, names(shapes))
   }
 
+  # THE CROSSES' OWN COLUMNS, here and only here: a `cells` block is rebuilt on the parents the shape
+  # has just cut, and a `nested` one becomes its K mean columns -- which is the first point the
+  # moderator's levels exist. The settings spine is COMPLETED with them, exactly as it is below with
+  # `lv1` and `na`, so every stage after this reads ordinary col_vars.
+  if (length(crosses)) {
+    .m           <- tab_cross_materialise(data, crosses, col_vars, ctx$settings, shapes)
+    data         <- .m$data
+    col_vars     <- .m$col_vars
+    crosses      <- .m$crosses
+    ctx$settings <- .m$settings
+    # ⚠ the COLUMN-grain locals only. `na_text` / `na_num` were computed just above and are not in
+    # the spine yet (they are written into it at the end of this stage), so a blanket re-projection
+    # would clobber them with an empty one. Their own length is `sum(col_vars_text)`, which a nested
+    # expansion leaves alone -- it adds numeric columns.
+    .loc          <- ctx_settings_locals(ctx)
+    lvs           <- .loc$lvs
+    digits        <- .loc$digits
+    col_vars_num  <- .loc$col_vars_num
+    col_vars_text <- .loc$col_vars_text
+    pct_vect      <- .loc$pct_vect
+    ref_vect      <- .loc$ref_vect
+    ref2_vect     <- .loc$ref2_vect
+  }
+
   # WARNING: factor columns only. A numeric row_var reaches this with no levels to lump, and
   #   fct_lump_min() aborts on a double; a SHAPED one is a factor by now, but lumping its bands
   #   would undo the cut the user asked for, so it is excluded by name.
-  lumpable <- as.character(row_vars)
+  lumpable <- vars_chr(row_vars)
   lumpable <- setdiff(lumpable[purrr::map_lgl(lumpable, ~ is.factor(data[[.x]]))], names(shapes))
   if (other_if_less_than > 0 & length(tab_vars) != 0 & length(lumpable) != 0) {
     data <- data |>
@@ -1401,7 +1467,7 @@ tab_prepare_pop <- function(ctx) {
 
         data <- data |>
           dplyr::mutate(dplyr::across(
-            tidyselect::all_of(as.character(col_vars[col_vars_3levels])),
+            tidyselect::all_of(vars_chr(col_vars[col_vars_3levels])),
             ~ suppressWarnings(forcats::fct_recode(., rlang::splice(rm_levels_by_col_vars[[dplyr::cur_column()]] )))
           ))
       }
@@ -1422,7 +1488,7 @@ tab_prepare_pop <- function(ctx) {
       v
     }), use.names = FALSE)
   ctx_update(ctx, list(
-    data = data,
+    data = data, col_vars = col_vars, crosses = crosses,
     remove_levels = if (any(lv1)) remove_levels else NULL
   ))
 }
@@ -1448,12 +1514,12 @@ tab_aggregate <- function(ctx) {
     } else {
       purrr::map2(row_vars, na_num, ~ tab_aggregate_num(
         data, !!.x,
-        as.character(col_vars)[col_vars_num],
-        as.character(tab_vars),
+        vars_chr(col_vars)[col_vars_num],
+        vars_chr(tab_vars),
         wt = !!wt, na = .y
       ))
     }
-    fine_num <- purrr::set_names(fine_num, as.character(row_vars))
+    fine_num <- purrr::set_names(fine_num, vars_chr(row_vars))
   }
 
   # Factor tier-1: NONE on the tab() path -- the `.fine` / fine_for_pair() seam in tab_plain() is
@@ -1467,7 +1533,7 @@ tab_aggregate <- function(ctx) {
 #' @noRd
 fine_for_pair <- function(fine, row_var, col_var) {
   if (is.null(fine) || data.table::is.data.table(fine)) return(fine)
-  fine[[paste(as.character(row_var), as.character(col_var), sep = "\r")]]
+  fine[[paste(vars_chr(row_var), vars_chr(col_var), sep = "\r")]]
 }
 
 
@@ -1482,7 +1548,7 @@ tab_transform <- function(ctx) {
   list2env(ctx_settings_locals(ctx), environment())
   .by_table <- by_table
   .fine     <- fine_fused
-  row_var   <- as.character(row_vars)                 # this ctx describes exactly ONE row_var
+  row_var   <- vars_chr(row_vars)                 # this ctx describes exactly ONE row_var
   rv        <- rlang::sym(row_var)
   wt_sym    <- if (length(wt) == 0L) wt else rlang::sym(as.character(wt))
 
@@ -1494,18 +1560,18 @@ tab_transform <- function(ctx) {
   robust_tests <- NULL
   if (!identical(inference$basis, "n") && isTRUE(chi2)) {
     robust_tests <- svy_omnibus_grid(
-      data, row_var, as.character(col_vars),
-      stats::setNames(as.logical(col_vars_num), as.character(col_vars)),
-      as.character(tab_vars), wt, inference$basis, inference$design, comp[1],
+      data, row_var, vars_chr(col_vars),
+      stats::setNames(as.logical(col_vars_num), vars_chr(col_vars)),
+      vars_chr(tab_vars), wt, inference$basis, inference$design, comp[1],
       totaltab_name = if (identical(totaltab, "table")) totaltab_name else NULL)
   }
 
-  tv_syms <- rlang::syms(as.character(tab_vars))
+  tv_syms <- rlang::syms(vars_chr(tab_vars))
 
   tabs_num <- NULL
   chi2_num <- NULL
   if (sum(col_vars_num) != 0) {
-    num_col_syms <- rlang::syms(as.character(col_vars)[col_vars_num])
+    num_col_syms <- rlang::syms(vars_chr(col_vars)[col_vars_num])
     num_digits   <- vctrs::vec_recycle(vctrs::vec_cast(digits[col_vars_num], integer()),
                                        length(num_col_syms))
     total_names2 <- vctrs::vec_recycle(total_names, 2)
@@ -1557,10 +1623,10 @@ tab_transform <- function(ctx) {
           .by_table = .by_table, inference = inference
         )
       }
-    ) |> purrr::set_names(as.character(col_vars[col_vars_text]))
+    ) |> purrr::set_names(vars_chr(col_vars[col_vars_text]))
 
     lvl_names <- text |>
-      purrr::map(~ purrr::discard(names(.), names(.) %in% c(row_var, as.character(tab_vars)))) |>
+      purrr::map(~ purrr::discard(names(.), names(.) %in% c(row_var, vars_chr(tab_vars)))) |>
       purrr::flatten_chr()
     duplicated_levels <- unique(lvl_names[duplicated(lvl_names)])
     if (length(duplicated_levels) != 0) {
@@ -1571,7 +1637,7 @@ tab_transform <- function(ctx) {
     leaf_tests <- purrr::map(text, get_test) |> purrr::compact()
     text       <- purrr::map(text, ~ set_test(.x, NULL))
 
-    tabs_text <- purrr::reduce(text, dplyr::full_join, by = c(as.character(tab_vars), row_var))
+    tabs_text <- purrr::reduce(text, dplyr::full_join, by = c(vars_chr(tab_vars), row_var))
 
     tests <- if (!isTRUE(chi2)) chi2
              else if (!is.null(cached_test) && !want_ctr) cached_test           # tier-2 hit
@@ -1580,7 +1646,7 @@ tab_transform <- function(ctx) {
                tt <- vctrs::vec_rbind(!!!leaf_tests)
                if (nrow(tt) == 0L) new_test_tibble() else
                  dplyr::arrange(tt, dplyr::across(tidyselect::any_of(
-                   c(as.character(tab_vars), "col", "test"))))
+                   c(vars_chr(tab_vars), "col", "test"))))
              }
     if (isTRUE(chi2)) tabs_text <- set_test(tabs_text, tests)
   }
@@ -1601,7 +1667,7 @@ tab_transform <- function(ctx) {
 tab_assemble_tables <- function(ctx) {
   list2env(ctx, environment())
   list2env(ctx_settings_locals(ctx), environment())   # lv1 / col_vars_* / totrow / ref
-  row_var <- as.character(row_vars)
+  row_var <- vars_chr(row_vars)
 
   if (sum(col_vars_text) != 0) {
 
@@ -1627,10 +1693,10 @@ tab_assemble_tables <- function(ctx) {
   }
 
   if (sum(col_vars_num) != 0 & sum(col_vars_text) != 0) {
-    tab <- dplyr::full_join(tabs_text, tabs_num, by = c(as.character(tab_vars), row_var))
+    tab <- dplyr::full_join(tabs_text, tabs_num, by = c(vars_chr(tab_vars), row_var))
 
     col_vars_order <- tab |>
-      purrr::map(~ purrr::map(get_col_var(.), ~ which(as.character(col_vars) == .))) |>
+      purrr::map(~ purrr::map(get_col_var(.), ~ which(vars_chr(col_vars) == .))) |>
       purrr::flatten()
     col_vars_order <- col_vars_order |>
       purrr::map_if(names(col_vars_order) %in% tab_row_names, ~ 0L) |>
@@ -1644,6 +1710,11 @@ tab_assemble_tables <- function(ctx) {
   } else {
     tab <- tabs_text
   }
+
+  # THE CROSS BLOCK'S DISPLAY IDENTITY, once the columns are in their final order: the typed key as
+  # `col_var` (so the block reads as one block, headed `age*race`) and, for a nested block, the
+  # moderator's level as each column's own name (R/tab-cross.R).
+  tab <- tab_cross_stamp(tab, crosses)
 
   no_totrow <- (totrow == FALSE)
   if (no_totrow) {
@@ -1660,7 +1731,7 @@ tab_assemble_tables <- function(ctx) {
   if (!is.null(chi2_num)) tests <- dplyr::bind_rows(tests, chi2_num)
 
   if (!is.null(robust_tests) && nrow(tests) > 0) {
-    tests <- tab_robust_overlay(tests, robust_tests, as.character(tab_vars))
+    tests <- tab_robust_overlay(tests, robust_tests, vars_chr(tab_vars))
   }
 
   # store the base-count / add_pct DISPLAY intent.
@@ -2566,7 +2637,7 @@ leaf_totrow_tottab <- function(tabs, row_var, tab_vars) {
     rep(FALSE, nrow(tabs))
   } else {
     dplyr::transmute(tabs, tottab = dplyr::if_all(
-      tidyselect::all_of(as.character(tab_vars)),
+      tidyselect::all_of(vars_chr(tab_vars)),
       ~ . %in% "Total"
     )) |>
       tibble::deframe()
@@ -2585,7 +2656,7 @@ leaf_rename_totals <- function(tabs, row_var, tab_vars, tot, total_names, totalt
   #   factor() sort the labels alphabetically, and dropping it reorders every grouped table's totals.
   if (totaltab %in% c("line", "table") &  totaltab_name != "Total") {
     tabs <- tabs |> dplyr::mutate(dplyr::across(
-      tidyselect::all_of(as.character(tab_vars)),
+      tidyselect::all_of(vars_chr(tab_vars)),
       ~ {
         z <- forcats::fct_expand(., totaltab_name)
         z[tottab_vector] <- totaltab_name

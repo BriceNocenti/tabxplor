@@ -25,6 +25,10 @@ options(tabxplor.print = "html")
 options(tabxplor.tab_kable_css = FALSE)
 options(tabxplor.tab_kable_tooltips = FALSE)
 
+# Le tableau des formes qu'un prédicteur continu dessine sous le pied de tableau fait
+# l'objet d'une section ci-dessous, et n'est que du bruit ailleurs : activé là, coupé ici.
+options(tabxplor.shape_table = "no")
+
 options(cli.num_colors = 256)
 options(tabxplor.lang = "fr")
 Sys.setenv(LANGUAGE = "fr")
@@ -1218,6 +1222,10 @@ Deux choses à savoir. Un test de courbure sur un prédicteur peut capter la mau
 
 ### La forme sous laquelle un prédicteur continu est ajusté
 
+```{r, include = FALSE}
+options(tabxplor.shape_table = "all")   # cette section porte dessus
+```
+
 La ligne de linéarité dit *si* une seule droite suffit. La petite courbe dessinée dans la cellule `n` — vide — d'un prédicteur continu dit *quelle forme les données ont réellement* — dix classes de la variable expliquée face au prédicteur, sur l'échelle du modèle, sans aucun modèle dedans :
 
 ```{r}
@@ -1241,6 +1249,10 @@ tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",
 `shape = c(x = "log")` et `"sqrt"` sont les deux autres — des rendements décroissants, la forme qu'ont d'ordinaire les données de revenu. Tout le reste continue de fonctionner : le compagnon observé `Obs_*` est ajusté avec la même forme, donc la comparaison modèle-observé compare toujours des grandeurs de même nature, et la ligne de linéarité disparaît pour un prédicteur déjà corrigé.
 
 (Une base `poly()` ou de splines n'est délibérément jamais émise : le moteur d'effets marginaux y renvoie zéro en silence. Si vous en atteignez une via une `formula`, un avertissement le signale.)
+
+```{r, include = FALSE}
+options(tabxplor.shape_table = "no")    # retour au réglage de la vignette
+```
 
 ## Graphiques
 

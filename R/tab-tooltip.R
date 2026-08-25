@@ -283,14 +283,15 @@ TOOLTIP_LINES <- list(
   # AN ODDS RATIO IS COMPUTED ON EVERY ROW/COL-% COLUMN, so it is shown on every one of them: it
   # used to appear only where the table was coloured by it. On a regression column it is the model's
   # own estimate attached beside an AME, which `role` marks.
-  # ⚠ and never on the column the odds ratio takes as its BASELINE (a whole column of 1s: under
-  # pct = "row" the first column IS the complementary category, under pct = "col" the reference
-  # column is). A cell has nothing to say about the comparison it defines.
+  # ⚠ INCLUDING the column the odds ratio takes as its BASELINE, a whole column of 1s (under
+  # pct = "row" the first column IS the complementary category, under pct = "col" the `ref2` column
+  # is). "OR: 1" is how a reader finds which column the ratio is read against -- the one thing the
+  # cells themselves cannot show -- and it costs no emphasis: a tooltip is plain text, and the
+  # `not_ref` collapse belongs to the pct axis's own reference, not to this one.
   or    = .ttip("or",
                 when = function(x, ctx) {
                   if (!(ctx$pct_type %in% c("row", "col") || nzchar(ctx$role))) return(FALSE)
-                  o <- get_or(x)[is.finite(get_or(x))]
-                  length(o) > 0L && !all(o == 1)
+                  any(is.finite(get_or(x)))
                 }),
   std   = .ttip(label = "std diff", gates = c("comparable", "not_ref", "not_base"),
                 when = function(x, ctx) identical(ctx$vkind, "mean"), render = tip_render_std),

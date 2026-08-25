@@ -1212,7 +1212,7 @@ rd_with_seed <- function(seed, expr) {
 # table where it has several).
 #
 # THE CURVE IS THE STORED FACT, never the glyph run: the sparkline is drawn from it at display time
-# (materialize_specs()$reg_spark), which is what makes `options(tabxplor.spark = )` a display option
+# (materialize_specs()$reg_spark), which is what makes `options(tabxplor.shape_table = )` a display option
 # and what lets each `tab_vars` group carry its own curve -- measured on the group's own data, into
 # the group's own base-count cell. Keyed by (variable, group), and `linear_level` names the row it
 # belongs to, since `shape = "quadratic"` gives a predictor two of them.
@@ -1277,7 +1277,7 @@ reg_check_msgid_anchor <- function() {
 # row of every medium that took it. It also never worked everywhere -- the console's block glyphs are
 # East-Asian-width-ambiguous (a terminal that draws them wide shifts every column to their right, and
 # a package cannot choose its reader's font), and several outcomes share ONE count column, so a cell
-# of it could show only one of them. `options(tabxplor.spark =)` chooses where the table is drawn.
+# of it could show only one of them. `options(tabxplor.shape_table =)` chooses where the table is drawn.
 #
 # THE PREDICTOR COLUMN NAMES THE CURVE THAT WAS ACTUALLY DRAWN, which splits `shape` in two. A
 # `log`/`sqrt` RECODED the column in place (shape_apply), so the curve is a curve of log(age) and the
@@ -1290,20 +1290,20 @@ reg_check_msgid_anchor <- function() {
 #' @keywords internal
 #' @noRd
 tab_wants_shape_table <- function(tab, medium = "console") {
-  mode <- tx_spark_mode()
+  mode <- tx_shape_table_mode()
   if (identical(mode, "no") || !tab_is_reg(tab) || identical(medium, "plot")) return(FALSE)
   a <- get_assumptions(tab)
   if (is.null(a) || length(a) == 0L) return(FALSE)
   !identical(mode, "console") || identical(medium, "console")
 }
 
-# `options(tabxplor.spark =)` as one of the three words the rest of the package reads. TRUE / FALSE
-# are the historical spelling of "all" / "no" and keep working; anything unrecognised is "all", since
-# a mistyped display option must never silently remove content.
+# `options(tabxplor.shape_table =)` as one of the three words the rest of the package reads.
+# TRUE / FALSE are the historical spelling of "all" / "no" and keep working; anything unrecognised
+# is "all", since a mistyped display option must never silently remove content.
 #' @keywords internal
 #' @noRd
-tx_spark_mode <- function() {
-  v <- tx_option("spark")
+tx_shape_table_mode <- function() {
+  v <- tx_option("shape_table")
   if (isTRUE(v))  return("all")
   if (isFALSE(v)) return("no")
   v <- as.character(v)[[1L]]

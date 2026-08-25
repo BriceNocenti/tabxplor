@@ -3,8 +3,8 @@
 #
 # The fixtures are the ones that would fail if a decision were quietly reverted, per the design's SS20:
 # the crude twin's term names must be IDENTICAL to the model's, centring must keep the pair's VIF low,
-# `shape = "linear"` must be byte-identical to no shape at all, and `spark = FALSE` must restore the
-# old label byte-for-byte.
+# `shape = "linear"` must be byte-identical to no shape at all, and `shape_table = FALSE` must
+# restore the old label byte-for-byte.
 #
 # CRAN time: several model fits per test. skip_on_cran() trims the CRAN check without weakening our own
 # CI (devtools / covr / r-lib-actions all set NOT_CRAN=true).
@@ -292,27 +292,30 @@ test_that("a continuous predictor gets its observed shape, in a table of its own
   expect_false(any(grepl("[\u2581-\u2588]", nprint(t, "race"))))
 })
 
-test_that("`options(tabxplor.spark =)` chooses where the shape table is drawn", {
+test_that("`options(tabxplor.shape_table =)` chooses where the shape table is drawn", {
   skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE))
   want <- function(...) c(console = tab_wants_shape_table(t, "console"),
                           kable   = tab_wants_shape_table(t, "kable"))
   expect_identical(want(), c(console = TRUE, kable = TRUE))                       # the default
-  withr::with_options(list(tabxplor.spark = "console"),
+  withr::with_options(list(tabxplor.shape_table = "console"),
                       expect_identical(want(), c(console = TRUE,  kable = FALSE)))
-  withr::with_options(list(tabxplor.spark = "no"),
+  withr::with_options(list(tabxplor.shape_table = "no"),
                       expect_identical(want(), c(console = FALSE, kable = FALSE)))
   # TRUE / FALSE are the historical spelling of "all" / "no" and keep working
-  withr::with_options(list(tabxplor.spark = TRUE),
+  withr::with_options(list(tabxplor.shape_table = TRUE),
                       expect_identical(want(), c(console = TRUE,  kable = TRUE)))
-  withr::with_options(list(tabxplor.spark = FALSE),
+  withr::with_options(list(tabxplor.shape_table = FALSE),
                       expect_identical(want(), c(console = FALSE, kable = FALSE)))
   # ⚠ a mistyped display option must never silently remove content
-  withr::with_options(list(tabxplor.spark = "yes please"),
+  withr::with_options(list(tabxplor.shape_table = "yes please"),
                       expect_identical(want(), c(console = TRUE,  kable = TRUE)))
   # a plot never draws block glyphs, whatever the option says
   expect_false(tab_wants_shape_table(t, "plot"))
+  # the development spelling is kept as an alias, and an alias is read FIRST
+  withr::with_options(list(tabxplor.spark = "no"),
+                      expect_identical(want(), c(console = FALSE, kable = FALSE)))
 })
 
 test_that("the curve is the MODELLED level's, not the factor's first level", {

@@ -18,11 +18,14 @@
 #   - `ordered` DIFFERS BY PRODUCER, and it is not taste: `tab()` wants an ordered index (bands have
 #     a real order), a fit wants treatment contrasts (an ordered factor gets polynomial ones). It is
 #     an argument, defaulting to the fit's answer.
-#   - THE LABEL IS THE ONLY THING A READER GETS. It carries the real cut points AND, in words, where
-#     the band sits -- and, on the crosstab side, the variable's name on the FIRST level, because a
-#     stripped table may name the row variable nowhere else. On a WHOLE-NUMBERED column it names the
-#     VALUES instead of the interval holding them ("0", "1 or 2", "3 to 6"): the breaks are already
-#     snapped to integers, so the two say the same thing and one of them is readable.
+#   - THE LABEL IS THE ONLY THING A READER GETS, and it says NOTHING THE BOUNDS ALREADY SAY. It
+#     carries the real cut points, and for a BAND the landmark it sits at ("[30,48) ; < mean"),
+#     which no interval states; a quantile group's rank is readable off its own interval, so it
+#     carries no tag. On a WHOLE-NUMBERED column it names the VALUES instead of the interval holding
+#     them ("0", "1 or 2", "3 to 6"): the breaks are already snapped to integers, so the two say the
+#     same thing and one of them is readable. The variable's own name goes on the FIRST level only
+#     when `tab(shape_name = TRUE)` asks -- the one case that earns it is a table whose leading text
+#     columns are stripped.
 #   - A QUANTILE CUT GIVES k GROUPS WHENEVER THE VALUES ALLOW IT. Ties make two quantiles land on
 #     one value, and deduplicating the breaks used to lose a group silently -- `quartiles` giving 3
 #     where `quintiles` gave 4, on one column. shape_fill_breaks() fills back up at the distinct
@@ -360,10 +363,13 @@ shape_bound_labels <- function(x, breaks, bounds) {
 }
 
 # THE label rule, one function for every cut. Bounds first (the real cut points), then in words where
-# the group sits, then -- on the FIRST level only -- the variable's own name, because a table whose
-# leading text columns are stripped may name the row variable nowhere else.
-# `sep`: a TAG appends ("[18,30) Q1"), a PHRASE is separated ("[18,30) ; < mean - sigma"), because a
-# side made of several words run against the bounds reads as one long string.
+# the group sits, then -- on the FIRST level only, and only when ASKED (`tab(shape_name = TRUE)`,
+# off by default) -- the variable's own name, for the one case that earns it: a table whose leading
+# text columns are stripped and which would then name the variable nowhere.
+# ⚠ A `side` is written only where the bounds do not already say it: a quantile group's rank is
+# readable off the interval it names, so a cut carries NO side; a band's landmark is not, so
+# sd_bands does. `sep`: a PHRASE is separated ("[18,30) ; < mean - sigma"), because a side made of
+# several words run against the bounds reads as one long string.
 #' @keywords internal
 #' @noRd
 shape_labels <- function(bounds, side, name = NULL, sep = " ") {
@@ -469,8 +475,9 @@ shape_cut_quantiles <- function(x, k, w = NULL, var = "x", breaks = NULL, labels
       "%s: cut into %s groups rather than %s, having too few distinct values.",
       var, length(br) - 1L, k)))
   b    <- shape_bounds(x, br)
-  # Q1..Qk: the group's rank, three characters, so a reader knows `[29,38)` is the second fifth.
-  labs <- shape_labels(b$bounds, paste0("Q", seq_along(b$bounds)), name)
+  # NO rank tag: the bounds already state where the group sits, whether they are read as an interval
+  # ("[29,38)") or, on a whole-numbered column, as the values themselves ("4 to 24").
+  labs <- shape_labels(b$bounds, NULL, name)
   # ⚠ the BREAKS AND LABELS ride out with the factor: a replay must cut a refit's frame at exactly
   # the same places, and a weighted quantile of a different frame would not land there.
   structure(factor(labs[b$idx], levels = labs, ordered = ordered),

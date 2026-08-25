@@ -186,13 +186,15 @@ testthat::test_that("the baseline row is the reference for nothing, and names no
   testthat::expect_match(tt, "n: ")                          # its own base still names itself
 })
 
-testthat::test_that("the odds ratio is shown on every percentage column, but not on its baseline", {
+testthat::test_that("the odds ratio is shown on every percentage column, its baseline included", {
   t  <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
   tt <- tip_of(t, "Separated")
   testthat::expect_true(any(grepl("OR: ", tt, fixed = TRUE)))
-  # the FIRST column is the odds ratio's complementary category: a column of 1s says nothing
+  # the FIRST column is the odds ratio's complementary category -- a whole column of 1s, and that
+  # IS the point: "OR: 1" is how a reader finds the column the ratio is read against.
   first <- names(t)[purrr::map_lgl(t, is_fmt)][[1]]
-  testthat::expect_false(any(grepl("OR: ", tip_of(t, first), fixed = TRUE)))
+  ft <- tip_of(t, first)
+  testthat::expect_true(all(grepl("OR: 1", ft[!grepl("^ref ", ft)], fixed = TRUE)))
   # and a reference cell still collapses to one "ref"
   r <- which(get_reference(t$Separated, mode = "cells"))
   testthat::expect_match(tt[r], "^ref ; n: ")

@@ -953,7 +953,7 @@ materialize_specs <- function() list(
   reg_spark = list(
     when  = function(tab, backend, ctx) SPARK_IN_CELL && tab_is_reg(tab) &&
       !is.null(get_assumptions(tab)) &&
-      !identical(tx_spark_mode(), "no") &&
+      !identical(tx_shape_table_mode(), "no") &&
       any(purrr::map_lgl(tab, ~ is_fmt(.) && get_role(.) == "n")),
     apply = function(tab, backend, ctx) mat_reg_spark(tab)),
   # A Total column whose content has moved: the count into its own column (Excel, or one per block
@@ -1025,7 +1025,7 @@ SPARK_IN_CELL <- FALSE
 # its row leaves empty, as a literal in that cell's display template. ONE writer for every medium:
 # format() renders the run, the console pads it, Markdown prints it and the html engine upgrades it
 # to an inline <svg>. Nothing rendered is ever stored -- the CURVE is the fact, so
-# `options(tabxplor.spark = )` is a display option like every other.
+# `options(tabxplor.shape_table = )` is a display option like every other.
 # WARNING: writes a display, so it may only ever run on the EPHEMERAL materialised copy.
 #' @keywords internal
 #' @noRd

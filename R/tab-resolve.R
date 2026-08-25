@@ -243,9 +243,9 @@ tab_leaf_comparison <- function(color, display, pct, ref) {
 tab_cache_keys <- function(na = "keep", wt_name = character(), other_if_less_than = 0,
                            comp = "tab", tab_vars = character(), row_vars = character(),
                            col_vars = character(), filter_expr = NA_character_) {
-  row_vars <- as.character(row_vars)
-  col_vars <- as.character(col_vars)
-  tab_vars <- as.character(tab_vars)
+  row_vars <- vars_chr(row_vars)
+  col_vars <- vars_chr(col_vars)
+  tab_vars <- vars_chr(tab_vars)
   wt_key   <- if (length(wt_name) == 0) "" else as.character(wt_name)[1]
   grain    <- sort(tab_vars)
 

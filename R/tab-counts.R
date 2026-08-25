@@ -94,6 +94,18 @@ tab_counts_reshape <- function(data, row_var, col_var, tab_vars, counts, wt_coun
     cli::cli_abort("For long counts, {.arg counts} must name the column of counts.")
   if (quo_miss_na_null_empty_no(row_var) || quo_miss_na_null_empty_no(col_var))
     cli::cli_abort("{.arg row_var} and {.arg col_var} must be provided.")
+  # ⚠ AN INTERACTION HAS NO PARENTS HERE. tab_counts() starts from aggregated counts, so the two
+  # columns a cross would combine are gone; a pair must be crossed while the microdata still exists.
+  for (q in list(row_var, col_var, tab_vars)) {
+    if (quo_miss_na_null_empty_no(q)) next
+    e <- rlang::quo_get_expr(q)
+    if (reg_cross_is_term(e) || (is.character(e) && any(reg_cross_has_op(e))))
+      cli::cli_abort(c(
+        "{.fn tab_counts} takes no interaction: it starts from counts already aggregated.",
+        "i" = paste("Cross the pair in {.fn tab}, on the microdata --",
+                    "{.code tab(data, rows, a*b)} -- or count the two variables together first.")),
+        call = NULL)
+  }
   rv     <- rlang::as_name(row_var)
   cv     <- rlang::as_name(col_var)
   tv     <- if (quo_miss_na_null_empty_no(tab_vars)) character()

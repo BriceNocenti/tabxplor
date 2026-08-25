@@ -129,7 +129,7 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
     mean_calc <-
       purrr::reduce(mean_calc,
                     ~ dplyr::full_join(.x, .y, by = switch(totaltab[1],
-                                                           "table" = as.character(row_var),
+                                                           "table" = vars_chr(row_var),
                                                            "line"  =  "no_row_var") ) ) |>
       dplyr::select(-tidyselect::starts_with("no_row_var")) |>
       dplyr::mutate(dplyr::across(where(is_fmt), ~ as_tottab(.)))
@@ -141,7 +141,7 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
       totaltab[1],
       "table" = dplyr::left_join(dplyr::select(totaltable,
                                                -tidyselect::all_of(mean_vars)),
-                                 mean_calc, by = as.character(row_var)),
+                                 mean_calc, by = vars_chr(row_var)),
       "line"  = dplyr::left_join(dplyr::select(totaltable,
                                                -tidyselect::all_of(mean_vars)),
                                  mean_calc, by = character())

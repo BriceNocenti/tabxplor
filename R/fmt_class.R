@@ -3034,8 +3034,16 @@ fmt_resid <- function(x) {
 # `sign` could come out 0 with a large magnitude (a perfect mirror, x2 -> /2), which fell into the
 # "strengthened" arm and painted the deepest blue.
 
+# The number a column is centred on. `kind` is fmt_scale_key()'s own override: `"level"` reads the
+# LEVEL twin's field, which is what a question about levels must ask -- a total column's `ratio` is 1
+# by construction whatever the block it totals holds, so summing it answers nothing.
 #' @keywords internal
-fmt_est_of <- function(x) as.double(vctrs::field(x, fmt_center_field(x)))
+fmt_est_of <- function(x, kind = c("auto", "effect", "level")) {
+  kind <- match.arg(kind)
+  fld  <- if (identical(kind, "auto")) fmt_center_field(x)
+          else (EST_SCALES[[fmt_scale_key(x, kind)]] %||% EST_SCALES[["mixed"]])$est_field
+  as.double(vctrs::field(x, fld))
+}
 
 #' @keywords internal
 fmt_gap_parts <- function(x) {
@@ -4010,15 +4018,28 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       # ⚠ NOT `ok_c`: a cell carried by its literal alone has no primary to bold or colour, and a
       # recorded zero-width range would wrap the whole string in the grey aside span. NA = one plain
       # piece, which is what paint_split() and html_cell_text() both read it as.
+      # ⚠ A TEMPLATE WITH NO TOKEN OUTSIDE BRACKETS HAS NO PRIMARY. A bracket marks an aside, so a
+      # cell that is nothing but brackets is nothing but aside -- and the range recorded for it is
+      # deliberately ZERO-WIDTH, the one case where that is right: every backend then paints the
+      # whole cell in the secondary ink and never in bold. This is the Total cell reduced to
+      # "({n_range})" where its block does not sum: a base count, not the number the table is about.
+      # Its TYPE TAG still reads "n" (display_template_label drops the primary's own brackets) --
+      # the column HOLDS a count, and the cell reads it as an aside; those are two questions.
       if (bold_split) {
-        pj    <- which(seg$is_tok)[seg$primary]
-        prim  <- ok_c & !void[[seg$primary]]
-        head  <- if (pj > 1L) do.call(paste0, strs[seq_len(pj - 1L)]) else rep("", length(cells))
-        prim_from [cells[prim]] <- nchar(head)[prim] + 1L
-        # minus the suffix the primary token wears: the stars / marks are a supporting piece and fall
-        # OUTSIDE the range, beside the asides. The token's own pad is leading, so the range still
-        # ends on the value.
-        prim_nchar[cells[prim]] <- nchar(strs[[pj]])[prim] - sfx_w
+        prim_g <- seg$field_group[[seg$primary]]
+        if (prim_g > 0L) {
+          prim_from [cells[ok_c]] <- 1L
+          prim_nchar[cells[ok_c]] <- 0L
+        } else {
+          pj    <- which(seg$is_tok)[seg$primary]
+          prim  <- ok_c & !void[[seg$primary]]
+          head  <- if (pj > 1L) do.call(paste0, strs[seq_len(pj - 1L)]) else rep("", length(cells))
+          prim_from [cells[prim]] <- nchar(head)[prim] + 1L
+          # minus the suffix the primary token wears: the stars / marks are a supporting piece and
+          # fall OUTSIDE the range, beside the asides. The token's own pad is leading, so the range
+          # still ends on the value.
+          prim_nchar[cells[prim]] <- nchar(strs[[pj]])[prim] - sfx_w
+        }
       }
     }
   }

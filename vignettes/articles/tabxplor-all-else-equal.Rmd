@@ -11,6 +11,8 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 # article on a French machine silently renders French legends and captions. Output must not
 # depend on where it is built.
 options(tabxplor.lang = "en")
+# The shape table a continuous predictor draws under the footer is not this article's subject.
+options(tabxplor.shape_table = "no")
 Sys.setenv(LANGUAGE = "en")   # the model-fit row labels go through gettext, not this option
 
 ```

@@ -31,7 +31,7 @@ CFG <- list(
   # --- source to build ---------------------------------------------------------------
   repo_url = "https://github.com/BriceNocenti/tabxplor.git",
   # Branch: CLI arg 1 > env TABXPLOR_BRANCH > this default.
-  branch   = "v2.0.0",
+  branch   = "dev",
 
   # --- target jamovi -----------------------------------------------------------------
   # Windows jamovi install folder. Auto-detected under C:/Program Files/jamovi*, preferring

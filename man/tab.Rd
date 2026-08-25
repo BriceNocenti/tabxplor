@@ -45,11 +45,19 @@ tab(
 \arguments{
 \item{data}{A data frame.}
 
-\item{row_vars, col_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> The row variable(s),
+\item{row_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> The row variable(s),
 printed with one level per line, and the column variable(s), printed with one level per
 column. For numeric variables means are calculated, in a single column. Each accepts one
 variable or several (e.g. \code{c(var1, var2)}); with several \code{row_vars} the mirror
 tables are merged into one by default (see \code{output_list}).}
+
+\item{col_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> The column variable(s) --- see
+\code{row_vars}. \strong{An interaction} is written \code{a*b}, as in
+\code{\link{tab_reg}()}: two categorical variables give one column per observed
+CELL of the pair, and a numeric one crossed with a factor gives one mean column per
+level of the factor, beside the factor's own columns. Two numeric variables have no
+cells to cross, so the second is cut into quartiles (say otherwise with
+\code{shape}). Only \code{col_vars} takes one.}
 
 \item{tab_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :
 a subtable is made for each combination of levels of the selected variables.
@@ -84,7 +92,8 @@ and a numeric \code{col_vars} keeps its means. See
 \strong{\code{shape_name}} Whether a shaped variable writes its own name onto its
 \strong{first} level (\code{"age: [18,30) low"}), so a table whose
 leading text columns are stripped still says what the levels are levels
-of. \code{TRUE} by default.
+of. \code{FALSE} by default: the row variable's own column names it
+already, so the prefix is for that one case.
 \strong{Retired in 2.0.0}, still taken by name, each warning once and saying what to use instead: \code{row_var}, \code{col_var}, \code{sup_cols}, \code{totaltab_name}, \code{total_names}, \code{OR}, \code{chi2}, \code{method_cell}, \code{method_diff}, \code{add_n}, \code{names_prefix}, \code{names_sort}, \code{other_level}.
 The dot-prefixed names (\code{.cache}, \code{.defer_level_merge}, \code{.return_armed}, \code{.levels_order}, \code{.levels_collapse}) are internal plumbing, not user arguments.}
 
@@ -536,6 +545,7 @@ and on a \code{\link{tab_reg}} table:
 \item \code{"est"} (\code{\{est\}}) --- the estimate alone.
 \item \code{"est_ci"} (\code{\{est\} \{ci\}}) --- the estimate with its confidence interval.
 \item \code{"est_base"} (\code{\{est\} (\{base\})}) --- the estimate and, in parentheses, the level it sits on.
+\item \code{"est_base_once"} (\code{\{est\}}) --- the estimate alone --- the level is stated once, by the observed column beside it.
 \item \code{"est_coef"} (\code{\{est\} (\{coef\})}) --- the estimate and, in parentheses, the model's own coefficient.
 \item \code{"base_est_mdiff"} (\code{\{est\} (\{diff\})}) --- the estimate and, in parentheses, the same comparison as a difference.
 \item \code{"base_est_mratio"} (\code{\{est\} (\{ratio\})}) --- the estimate and, in parentheses, the same comparison as a ratio.

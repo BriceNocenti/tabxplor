@@ -547,3 +547,57 @@ testthat::test_that("tab_xl fits each column to what its cells show, and per she
   suppressMessages(tab_xl(wide, path = p3, open = FALSE, replace = TRUE))
   testthat::expect_equal(wids(p2)[[1]], wids(p3)[[1]])
 })
+
+# Phase 22h: the unit tag names its column; it must never be what sets the column's width, and it
+# must not wrap (a compound word broken mid-name reads as two tags).
+testthat::test_that("the unit row is small, unwrapped, and does not widen its column", {
+  testthat::skip_if_not_installed("openxlsx2")
+  a <- carData::Arrests
+  t <- tab(a, colour, released, pct = "row")
+  p <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(t, path = p, open = FALSE, replace = TRUE))
+  wb  <- openxlsx2::wb_load(p)
+  cc  <- wb$worksheets[[1]]$sheet_data$cc
+  xf  <- wb$styles_mgr$styles$cellXfs
+  fnt <- wb$styles_mgr$styles$fonts
+  sty <- function(row) {
+    k <- cc$c_s[cc$row_r == row & nzchar(cc$c_s)]
+    xf[as.integer(unique(k)) + 1L]
+  }
+  fnt_of <- function(x) fnt[as.integer(sub('.*fontId="([0-9]+)".*', "\\1", x)) + 1L]
+  urow <- as.character(min(as.integer(cc$row_r[grepl("&lt;", cc$is)])))
+  ustyle <- sty(urow)
+  testthat::expect_gt(length(ustyle), 0L)
+  # 8pt, against a body of 10 and headers of 9 -- XL_UNIT_SIZE
+  testthat::expect_true(all(grepl(paste0('sz val="', tabxplor:::XL_UNIT_SIZE, '"'),
+                                  fnt_of(ustyle), fixed = TRUE)))
+  # ... and it does NOT wrap, while the level header above it still does
+  testthat::expect_false(any(grepl("wrapText", ustyle, fixed = TRUE)))
+  testthat::expect_true(any(grepl("wrapText", sty(as.character(as.integer(urow) - 1L)),
+                                  fixed = TRUE)))
+
+  # the tag is measured on ONE line, at its own size, brackets excluded -- so a column whose figures
+  # are narrow is not stretched by a long tag
+  o  <- list(text_size = 10, text_size_headers = 9, wrap_rows = 35)
+  rd <- tab_export_prep(t, backend = "xl")$tables[[1]]
+  w  <- tabxplor:::xl_col_widths(rd$tab, rd$roles, rd$col_var_header, o, "auto")
+  j  <- which(nzchar(rd$col_var_header$unit))[[1]]
+  tag <- rd$col_var_header$unit[[j]]
+  testthat::expect_gt(nchar(tag), 4L)
+  testthat::expect_lt(w[[j]], nchar(tag) + tabxplor:::XL_PAD)   # never the tag's own full width
+})
+
+# Phase 22h: Excel alone splits a composite cell into its primary and its asides, which puts an
+# observed column and its model twin side by side with the SAME tag. The run key carries the role,
+# so the model column keeps its own -- it used to be swallowed, silently.
+testthat::test_that("an observed column and its model twin each say their unit", {
+  testthat::skip_if_not_installed("broom")
+  d <- forcats::gss_cat
+  d$married <- d$marital == "Married"
+  r <- suppressMessages(tab_reg(d, "married", c("race", "age"), stats = "no"))
+  u <- tab_export_prep(r, backend = "xl")$tables[[1]]$col_var_header$unit
+  rl <- purrr::map_chr(tab_export_prep(r, backend = "xl")$tables[[1]]$tab,
+                       ~ if (is_fmt(.)) as.character(get_role(.))[1] else "")
+  testthat::expect_true(all(nzchar(u[rl %in% c("emp", "model")])))
+  testthat::expect_identical(u[rl == "emp"], u[rl == "model"])   # same quantity, said twice
+})

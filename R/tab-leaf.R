@@ -299,12 +299,12 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # 2. DIRECT-ENTRY PREP -> `data` fit for the scan (labelled -> factor, select, weight coercion).
   if (use_raw) {
     # labelled columns -> value-label factors, for the DIRECT leaf entry; a no-op on the tab() path.
-    data <- data |> tab_apply_val_labels(as.character(c(tab_vars, row_var, col_var)))
+    data <- data |> tab_apply_val_labels(vars_chr(c(tab_vars, row_var, col_var)))
     data <- data |>
       dplyr::select(!!!tab_vars, !!row_var, !!col_var, !!wt,
                     tidyselect::any_of(if (design_on) svy_row_col else character())) |>
       dplyr::mutate(dplyr::across(!!wt & !where(is.numeric), as.numeric)) |>
-      relabel_levels_in_varnames(as.character(col_var))
+      relabel_levels_in_varnames(vars_chr(col_var))
   }
 
 
@@ -313,7 +313,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 
 
   # 3. THE data.table NAME ROUND-TRIP -> internal names (see the sentinel note below).
-  tab_row_names  <- as.character(c(tab_vars, row_var))
+  tab_row_names  <- vars_chr(c(tab_vars, row_var))
 
   # DESIGN: the data.table name round-trip. The col_var becomes the fixed internal "col_var" so the
   # dcast formula is stable, and a col_var that ALSO appears among the row / tab vars is duplicated
@@ -322,7 +322,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # column, read as such by leaf_wide_pct(), num_rollup() and the survey variance producers, and
   # swapped for `total_names` only in leaf_rename_totals(); a consumer running after that rename
   # must be handed `totcol_vector` / `totrow_vector` / `tottab_vector` instead.
-  col_var_in_row_var <- tab_row_names %in% as.character(col_var)
+  col_var_in_row_var <- tab_row_names %in% vars_chr(col_var)
   if (any(col_var_in_row_var)) {
     in_col_vars <- tab_row_names[col_var_in_row_var]
 
@@ -330,14 +330,14 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
       dplyr::mutate(dplyr::across(tidyselect::all_of(in_col_vars), ~ ., .names = "{.col}_colvarbis"))
     tabs_vars2 <-
       if (length(tab_vars) != 0) {
-        dplyr::recode(as.character(tab_vars),
+        dplyr::recode(vars_chr(tab_vars),
                       !!!purrr::set_names(paste0(in_col_vars, "_colvarbis"),
                                           in_col_vars))
       } else {
         character()
       }
 
-    row_var2 <- dplyr::recode(as.character(row_var),
+    row_var2 <- dplyr::recode(vars_chr(row_var),
                               !!!purrr::set_names(paste0(in_col_vars, "_colvarbis"),
                                                   in_col_vars))
     tab_row_names2 <- c(tabs_vars2, row_var2)
@@ -353,7 +353,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
     if (design_on) { des_rows <- data[[svy_row_col]]; data[[svy_row_col]] <- NULL }
 
     data.table::setDT(data)
-    data.table::setnames(data, as.character(col_var), "col_var", skip_absent = TRUE)
+    data.table::setnames(data, vars_chr(col_var), "col_var", skip_absent = TRUE)
 
     if (nrow(data) == 0) stop("data is of length 0 (possibly after filter or na = 'drop_all')")
   } else if (nrow(.fine) == 0) {
@@ -370,7 +370,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
                         w2 = if(weighted) { sum(eval(wt)^2, na.rm = TRUE) } else {double()}),
                  keyby = eval(c(tab_row_names2, "col_var"))]
   } else {
-    ocv  <- as.character(col_var)
+    ocv  <- vars_chr(col_var)
     keep_w2 <- weighted && "w2" %in% names(.fine)
     long <- if (keep_w2) {
       .fine[, list(n = as.integer(sum(n)), wn = sum(wn), w2 = sum(w2)),
@@ -452,7 +452,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 
   # "table" = one total row per row_var level (tab_vars set to "Total"); "line" = one grand total row.
   if (totaltab %in% c("table", "line")) {
-    if (totaltab[1] == "table") { bt_keys <- as.character(row_var); bt_totvars <- as.character(tab_vars) }
+    if (totaltab[1] == "table") { bt_keys <- vars_chr(row_var); bt_totvars <- vars_chr(tab_vars) }
     else                        { bt_keys <- character();           bt_totvars <- tab_row_names }
     tabs_totaltab <- build_total_rows(tabs, bt_keys, tab_row_names, num_cols)
     tabs <- finalize_total_rows(tabs, tabs_totaltab, bt_totvars, tab_row_names)
@@ -462,13 +462,13 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 
   if ("row" %in% tot) {
     if (length(tab_vars) != 0) {
-      group_vars <- rev(purrr::accumulate(as.character(tab_vars) , ~ c(.x, .y)))
+      group_vars <- rev(purrr::accumulate(vars_chr(tab_vars) , ~ c(.x, .y)))
       total_vars <- purrr::map(group_vars,
-                               ~ c(as.character(tab_vars)[!as.character(tab_vars) %in% .],
-                                   as.character(row_var)))
+                               ~ c(vars_chr(tab_vars)[!vars_chr(tab_vars) %in% .],
+                                   vars_chr(row_var)))
     } else {
       group_vars <- list(character())
-      total_vars <- list(as.character(row_var))
+      total_vars <- list(vars_chr(row_var))
     }
 
     parts    <- purrr::map(group_vars,
@@ -587,7 +587,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   }
 
   if (pct == "no" && want_neff && can_neff) {
-    res_0 <- leaf_wide_pct(tabs_n, tabs_wn, "all", as.character(tab_vars), cols)
+    res_0 <- leaf_wide_pct(tabs_n, tabs_wn, "all", vars_chr(tab_vars), cols)
     ne_0  <- leaf_neff(res_0, "all")
     if (!is.null(ne_0)) tabs_neff <- ne_0
   }
@@ -596,7 +596,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   if (pct != "no") {
     # `tot_n` = each cell's OWN unweighted percentage base, broadcast from tabs_n per `pct`.
     res_e     <- leaf_wide_pct(tabs_n, if (length(wt) == 0) NULL else tabs_wn,
-                               pct, as.character(tab_vars), cols)
+                               pct, vars_chr(tab_vars), cols)
     tabs_pct  <- res_e$pct
     tabs_totn <- res_e$tot_n
     if (want_neff && can_neff) {
@@ -665,7 +665,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
     ci = ci, pct = pct, ci_scale = ci_scale,
     # a ROW contrast under comp = "all" is computed ungrouped; a column or cell interval is not.
     grp = if (identical(comp, "all") || length(tab_vars) == 0L) rep(1L, nrow(tabs_n)) else
-      do.call(paste, c(lapply(as.character(tab_vars), function(v) as.character(tabs_text[[v]])),
+      do.call(paste, c(lapply(vars_chr(tab_vars), function(v) as.character(tabs_text[[v]])),
                        sep = "\r")),
     ref_row = if (identical(as.character(ref), "tot")) totrow_vector else refrows,
     totrow  = totrow_vector,
@@ -840,7 +840,7 @@ leaf_chi2 <- function(tabs, test, comp, row_var, col_var, tab_vars, deff = NULL)
 #' @keywords internal
 #' @noRd
 leaf_test_view <- function(tabs, comp, tab_vars) {
-  gv <- as.character(tab_vars)
+  gv <- vars_chr(tab_vars)
   if (identical(comp, "all") || length(gv) == 0L) dplyr::ungroup(tabs)
   else dplyr::group_by(tabs, dplyr::across(dplyr::all_of(gv)))
 }
@@ -851,7 +851,7 @@ leaf_test_view <- function(tabs, comp, tab_vars) {
 #' @keywords internal
 #' @noRd
 leaf_chi2_num <- function(tabs, comp, row_var, col_vars, tab_vars) {
-  cvs <- as.character(col_vars)
+  cvs <- vars_chr(col_vars)
   cvs <- cvs[cvs %in% names(tabs)]
   if (length(cvs) == 0L) return(new_test_tibble())
   cvl <- stats::setNames(lapply(cvs, function(v) rlang::syms(v)), cvs)
@@ -1079,7 +1079,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
   set_cols <- function(dt, M2) dt[, (nm) := lapply(seq_len(k), function(j) M2[, j])]
 
   # per-comp-group FIRST reference-row absolute index (NA -> P[NA, ] is an all-NA row).
-  comp_group <- if (comp == "tab") as.character(tab_vars) else character()
+  comp_group <- if (comp == "tab") vars_chr(tab_vars) else character()
   grp_comp   <- if (length(comp_group) != 0) {
     do.call(paste, c(lapply(comp_group, function(v) as.character(tabs[[v]])), sep = "\r"))
   } else rep(1L, n)
@@ -1603,7 +1603,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
     data <- data |>
       dplyr::select(!!!tab_vars, !!row_var, !!!col_vars, !!wt,
                     tidyselect::any_of(if (design_on) svy_row_col else character())) |>
-      dplyr::mutate(dplyr::across((!!wt | tidyselect::all_of(as.character(col_vars))) &
+      dplyr::mutate(dplyr::across((!!wt | tidyselect::all_of(vars_chr(col_vars))) &
                                     !where(is.numeric), as.numeric)
       )
 
@@ -1631,7 +1631,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
   # the flat design's nPSU PER col_var, read off the AGGREGATE rather than nrow(data), so the raw
   # scan and an adopted `.fine` give the same number.
-  n_obs_v <- vapply(as.character(col_vars),
+  n_obs_v <- vapply(vars_chr(col_vars),
                     function(v) sum(as.double(tabs[[paste0(v, "_n")]]), na.rm = TRUE), numeric(1))
 
   not_fct <- !purrr::map_lgl(dplyr::select(tabs, tidyselect::any_of(tab_row_names)), is.factor)
@@ -1663,7 +1663,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
   if ("row" %in% tot | totaltab %in% c("line", "table")) {
     if (length(tab_vars) != 0) {
-      group_vars <- c(as.character(tab_vars)) |> purrr::accumulate(~ c(.x, .y))
+      group_vars <- c(vars_chr(tab_vars)) |> purrr::accumulate(~ c(.x, .y))
       group_vars <- c(rev(group_vars), list(character()))
     } else {
       group_vars <- list(character())
@@ -1683,13 +1683,13 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
       ~ num_rollup(
         main_agg,
         by           = .,
-        drop_keys    = as.character(c(tab_vars[!tab_vars %in% .], row_var)),
+        drop_keys    = vars_chr(c(tab_vars[!tab_vars %in% .], row_var)),
         moment_cols  = moment_cols,
         index_keys   = tab_row_names
       )
     )
 
-    num_total_postprocess(tabs_tot, intersect(as.character(tab_vars), names(tabs_tot)),
+    num_total_postprocess(tabs_tot, intersect(vars_chr(tab_vars), names(tabs_tot)),
                           na, tab_row_names)
 
     tabs <- rbind(tabs, tabs_tot)
@@ -1702,13 +1702,13 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
     tabs_totaltab <- num_rollup(
       main_agg,
-      by           = as.character(row_var),
-      drop_keys    = as.character(tab_vars),
+      by           = vars_chr(row_var),
+      drop_keys    = vars_chr(tab_vars),
       moment_cols  = moment_cols,
       index_keys   = tab_row_names
     )
 
-    num_total_postprocess(tabs_totaltab, as.character(row_var), na, tab_row_names)
+    num_total_postprocess(tabs_totaltab, vars_chr(row_var), na, tab_row_names)
 
     tabs <- rbind(tabs, tabs_totaltab)
     data.table::setorderv(tabs, tab_row_names)
@@ -1723,7 +1723,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   # inside the `ci` branch -- gating it there once made tab_num(design) |> tab_ci("cell") disagree
   # with its factor twin. Basis "design" -> s^2 / Var_design(mean); "weights" -> the Sigma w^2
   # closed form; "n" -> nothing written.
-  cvs_all <- as.character(col_vars)
+  cvs_all <- vars_chr(col_vars)
   # what the table can actually carry: a hand-supplied `.fine` without the moment sums cannot climb.
   num_served <- design_on ||
     (want_neff && all(paste0(rep(cvs_all, each = 3L), c("_w2", "_w2s1", "_w2s2")) %in% names(tabs)))
@@ -1761,7 +1761,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
   tt <- leaf_totrow_tottab(tabs, row_var, tab_vars)
   totrow_vector <- tt$totrow; tottab_vector <- tt$tottab; kind_vector <- tt$kind
-  comp_group <- if (comp == "tab") { as.character(tab_vars) } else { character() }
+  comp_group <- if (comp == "tab") { vars_chr(tab_vars) } else { character() }
 
   if (!ref %in% c("no", "") | ci %in% c("cell", "diff")) {
 
@@ -1775,13 +1775,13 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
     # `diff` is a real DIFFERENCE (cell mean - reference mean); the colour engine reads `ratio`.
     if (!ref %in% c("no", "") ) {
-      tabs[, paste0(col_vars, "_diff") := purrr::map(
-        rlang::syms(paste0(col_vars, "_mean")),
+      tabs[, paste0(cvs_all, "_diff") := purrr::map(
+        rlang::syms(paste0(cvs_all, "_mean")),
         ~ eval(.) - dplyr::nth(eval(.), tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
       ),
       by = eval(comp_group)]
-      tabs[, paste0(col_vars, "_ratio") := purrr::map(
-        rlang::syms(paste0(col_vars, "_mean")),
+      tabs[, paste0(cvs_all, "_ratio") := purrr::map(
+        rlang::syms(paste0(cvs_all, "_mean")),
         ~ eval(.) / dplyr::nth(eval(.), tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
       ),
       by = eval(comp_group)]
@@ -1794,7 +1794,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
     if (ci %in% c("cell", "diff")) {
       stars_on <- resolve_stars(stars)
       want_p   <- isTRUE(stars_on) && ci == "diff"
-      cvs      <- as.character(col_vars)
+      cvs      <- vars_chr(col_vars)
 
       # `_en` is written ABOVE, once, as a property of the cell; on basis "n" the raw count stands in.
       if (!all(paste0(cvs, "_en") %in% names(tabs)))
@@ -1951,9 +1951,9 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   # surface the kept effective n into `n_eff`, by EXACT scratch names to dodge the
   # reshape-by-suffix collision the WARNING above flags, then dropped.
   tabs_neff <-
-    if (want_neff && all(paste0(as.character(col_vars), "_en") %in% names(tabs))) {
-      data.table::setnames(tabs[, paste0(as.character(col_vars), "_en"), with = FALSE],
-                           as.character(col_vars))
+    if (want_neff && all(paste0(vars_chr(col_vars), "_en") %in% names(tabs))) {
+      data.table::setnames(tabs[, paste0(vars_chr(col_vars), "_en"), with = FALSE],
+                           vars_chr(col_vars))
     } else { list(NA_reals) }
 
   tabs_text <- tabs[, text_vars, with = FALSE]
@@ -1974,7 +1974,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   NA_reals  <- rep(NA_real_, nrow(tabs_n))
 
   tabs <-
-    list(tabs_n, tabs_wn, tabs_mean, tabs_var, tabs_diff, tabs_ci_sup, as.character(col_vars),
+    list(tabs_n, tabs_wn, tabs_mean, tabs_var, tabs_diff, tabs_ci_sup, vars_chr(col_vars),
          digits, tabs_ratio, tabs_ci_inf, tabs_pvalue, tabs_neff) |>
     purrr::pmap_dfc(function(...) {
       a <- list(...)

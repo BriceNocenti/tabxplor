@@ -27,6 +27,10 @@ options(tabxplor.print = "html")
 options(tabxplor.tab_kable_css = FALSE)
 options(tabxplor.tab_kable_tooltips = FALSE)
 
+# The shape table a continuous predictor draws under the footer is the subject of one
+# section below, and noise everywhere else: it is switched on there and off here.
+options(tabxplor.shape_table = "no")
+
 options(cli.num_colors = 256)
 set_color_palette(theme = "light")
 ```
@@ -1193,6 +1197,10 @@ Two things worth knowing. A curvature test on one predictor can pick up **anothe
 
 ### The shape table: what a continuous predictor's effect actually looks like
 
+```{r, include = FALSE}
+options(tabxplor.shape_table = "all")   # this section is about it
+```
+
 The linearity row tells you *whether* one straight line is enough. The small **shape table** printed under the footer tells you *what shape the data has* — and it costs nothing, because no model is involved: the outcome is simply cut into ten equal-sized slices of the predictor, and the average is taken in each.
 
 ```{r}
@@ -1229,7 +1237,7 @@ Still curves, to the eye. They are not: on so few people the slices wobble by th
 
 For an **ordinal** or **multinomial** outcome the table draws only the first cut or category — use `reg_check_plots()` there, which draws them all, and which is also where a proportional-odds departure becomes visible.
 
-`options(tabxplor.spark = "console")` keeps the shape table where you are working and out of your exports; `"no"` removes it everywhere.
+`options(tabxplor.shape_table = "console")` keeps the shape table where you are working and out of your exports; `"no"` removes it everywhere.
 
 ### Curing a shape
 
@@ -1252,6 +1260,10 @@ tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",
 (A `poly()` or spline basis is deliberately never emitted: the marginal-effects engine silently returns zero for those. If you reach one through a `formula`, a warning says so.)
 
 ## Plots
+
+```{r, include = FALSE}
+options(tabxplor.shape_table = "no")    # back to the vignette's own setting
+```
 
 ### The results: `forest_plot()`
 

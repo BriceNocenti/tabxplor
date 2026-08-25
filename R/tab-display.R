@@ -17,6 +17,10 @@
 #     FIRST ("({base}) {est}") without ceasing to be an aside. It is what carries the stars, what
 #     get_num() and Excel return, and the only part the colour paints by default. The rule lives in
 #     parse_display_template() (R/fmt_class.R); the presets below are spelt to obey it.
+#     ⚠ ITS CONVERSE: a template with NO token outside brackets has no primary at all, and the whole
+#     cell renders as an aside -- the Total cell reduced to "({n_range})" where its block does not
+#     sum. Its type TAG still names the count (a label drops the primary's own brackets): the column
+#     holds a count, and the cell reads it as an aside, which are two questions.
 #   - DISPLAY_PRESETS + display_resolve() are the ONE named-layout table, read by tab() and by
 #     tab_reg() alike, so a display learnt on a crosstab means the same on a regression. A preset may
 #     declare one arm per column ROLE, which is where the crude/model mirror is stated -- so it holds
@@ -565,6 +569,11 @@ DISPLAY_PRESETS <- list(
                              doc = 'the estimate with its confidence interval'),
   est_base        = .dpreset(c(default = "{est} ({base})",  emp = "({base}) {est}"),
                              doc = 'the estimate and, in parentheses, the level it sits on'),
+  # `est_base` with the level stated ONCE, by the observed column: the default where several
+  # predictor subsets are compared, so the model columns sit side by side with nothing between them.
+  est_base_once   = .dpreset(c(default = "{est}",            emp = "({base}) {est}"),
+                             doc = paste('the estimate alone --- the level is stated once, by the',
+                                         'observed column beside it')),
   est_coef        = .dpreset("{est} ({coef})",
                              doc = "the estimate and, in parentheses, the model's own coefficient"),
   base_est_mdiff  = .dpreset(c(default = "{est} ({diff})",  emp = "({base}) {est}"),
@@ -603,7 +612,10 @@ DISPLAY_PRESETS <- list(
                                          '(the default where every mean is positive)')),
   # legacy SPELLINGS: the 1.x `OR = "or_pct"` layout, and the value the jamovi display ComboBox writes
   or_pct          = .dpreset(alias = "or_base"),
-  OR_pct          = .dpreset(alias = "or_base")
+  OR_pct          = .dpreset(alias = "or_base"),
+  # the word spelt out. `est` stays canonical -- an alias resolves before anything is stored, so no
+  # `display` field ever holds "estimate".
+  estimate        = .dpreset(alias = "est")
 )
 
 #' @keywords internal
@@ -962,6 +974,12 @@ tab_row_totcols <- function(tab) {
 # via fmt_est_of()), never what it happens to PRINT: reading the display there made `ci = "cell"` drop
 # the "100%". And the pair is a CONJUNCTION on purpose: a `display =` change can REMOVE a "100 %" that
 # the cells no longer show, and can never ADD one the estimates do not support.
+# ⚠ ... AND IT ASKS ON THE LEVEL TWIN. "Do the parts add up to the whole" is a question about LEVELS
+# and about nothing else. A reference interval stamps the INTERVAL's scale on every column of the
+# block, the Total included (tab-leaf.R, `scale_1` is column-invariant) -- so under
+# `color = "ratio"` gate 2 was summing `ratio`: 3.04 against the Total's 1, and the 100 % vanished
+# from a table still printing percentages. A difference only ever passed because it happens to be
+# additive (0 against 0). The level twin is declared (EST_SCALES$level_twin), so both read `pct`.
 #' @keywords internal
 #' @noRd
 tab_totcol_sums <- function(tab, tot_nm) {
@@ -971,8 +989,8 @@ tab_totcol_sums <- function(tab, tot_nm) {
                                        get_col_group(.) == get_col_group(col))]
   if (!length(block)) return(FALSE)
   if (!all(purrr::map_lgl(tab[block], fmt_shows_level))) return(FALSE)
-  s   <- purrr::reduce(purrr::map(tab[block], fmt_est_of), `+`)
-  tot <- fmt_est_of(col)
+  s   <- purrr::reduce(purrr::map(tab[block], fmt_est_of, "level"), `+`)
+  tot <- fmt_est_of(col, "level")
   ok  <- !is.na(s) & !is.na(tot)
   if (!any(ok)) return(TRUE)                       # nothing to judge on: keep today's "100%"
   all(abs(s[ok] - tot[ok]) < 1e-6)

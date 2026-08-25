@@ -1,11 +1,15 @@
-# PURPOSE: interactions -- a crossed pair of predictors, prepared as a VARIABLE before the fit.
-# ROLE: the `a*b` entries of `tab_reg(predictors =)`: parsed at the argument boundary, materialised at
-#   the end of the preparation, and read back by the skeleton, the counts, the crude block and the
-#   footer test.
+# PURPOSE: interactions -- a crossed pair, prepared as a VARIABLE before anything reads it.
+# ROLE: the SHARED surface, for both producers. The `a*b` entries of `tab_reg(predictors =)` are
+#   parsed at the argument boundary, materialised at the end of the preparation, and read back by the
+#   skeleton, the counts, the crude block and the footer test; `tab(col_vars =)` reuses the peel, the
+#   validation, the autocut and the two arms, and R/tab-cross.R says what each arm means as COLUMNS.
+#   Every message names its own argument (`arg =`).
 # KEY CONSTRAINTS:
 #   - a cross is prepared, never special-cased downstream: every subsystem must keep reading an
-#     ordinary predictor;
-#   - the two arms are declared in REG_CROSS_ARMS, never re-derived from a pair of kinds;
+#     ordinary predictor (or, in tab(), an ordinary col_var);
+#   - the two arms are declared in REG_CROSS_ARMS, never re-derived from a pair of kinds -- and the
+#     kind a parent WILL have is what decides, `shape` included: reg_cross_resolve() runs after the
+#     recode in tab_reg() and before it in tab(), and must answer the same either way;
 #   - a parent may not also be a plain predictor;
 #   - `a*b` must be read from an INJECTED literal as well as from an inline call or a variable:
 #     the jamovi bridge builds its tab_reg() call with rlang::inject(), and quo_peek_extern() sees
@@ -185,7 +189,8 @@ reg_cross_slots_select <- function(slots, data) {
 # kinds AFTER `shape`, which has not run yet.
 #' @keywords internal
 #' @noRd
-reg_parse_crosses <- function(predictors, data, outcome, tab_vars = NULL) {
+reg_parse_crosses <- function(predictors, data, outcome, tab_vars = NULL,
+                              arg = "predictors") {
   keys <- unique(unlist(lapply(if (is.list(predictors)) predictors else list(predictors),
                                function(p) reg_cross_peel_chr(p)$keys), use.names = FALSE))
   if (length(keys) == 0L) return(list(keys = character(0), parents = character(0)))
@@ -195,7 +200,7 @@ reg_parse_crosses <- function(predictors, data, outcome, tab_vars = NULL) {
   if (length(colon) > 0L) {
     star <- gsub(":", "*", colon[[1]], fixed = TRUE)
     cli::cli_abort(c(
-      "{.arg predictors}: {.val {colon}} -- {.code :} is not how an interaction is written here.",
+      "{.arg {arg}}: {.val {colon}} -- {.code :} is not how an interaction is written here.",
       "i" = paste("Write {.code {star}}. In R {.code a:b} is the interaction term WITHOUT its main",
                   "effects, which is a different model and depends on where each variable's zero",
                   "is; {.code a*b} is {.code a + b + a:b}, which is what this table fits."),
@@ -205,22 +210,24 @@ reg_parse_crosses <- function(predictors, data, outcome, tab_vars = NULL) {
   for (i in seq_along(keys)) {
     p <- parts[[i]]
     if (length(p) != 2L || !all(nzchar(p)))
-      cli::cli_abort(c("{.arg predictors}: {.val {keys[[i]]}} is not a pair of variables.",
+      cli::cli_abort(c("{.arg {arg}}: {.val {keys[[i]]}} is not a pair of variables.",
                        "i" = "An interaction crosses exactly two: {.code a*b}."), call = NULL)
     bad <- setdiff(p, names(data))
     if (length(bad) > 0L)
-      cli::cli_abort(c("{.arg predictors}: {.val {keys[[i]]}} names {?a column/columns} that {?does/do} not exist.",
+      cli::cli_abort(c("{.arg {arg}}: {.val {keys[[i]]}} names {?a column/columns} that {?does/do} not exist.",
                        "x" = "Not {?a column/columns} of {.arg data}: {.val {bad}}.",
                        "i" = "An interaction is written {.code a*b} with both variables named."),
                      call = NULL)
     if (p[[1]] == p[[2]])
-      cli::cli_abort("{.arg predictors}: {.val {keys[[i]]}} crosses {.val {p[[1]]}} with itself.",
+      cli::cli_abort("{.arg {arg}}: {.val {keys[[i]]}} crosses {.val {p[[1]]}} with itself.",
                      call = NULL)
-    clash <- intersect(p, c(as.character(outcome), as.character(tab_vars)))
-    if (length(clash) > 0L)
-      cli::cli_abort(c("{.arg predictors}: {.val {keys[[i]]}} crosses a variable with another role.",
-                       "x" = "{.val {clash}} {?is/are} already the outcome or {.arg tab_vars}."),
+    clash <- intersect(p, c(as.character(outcome), vars_chr(tab_vars)))
+    if (length(clash) > 0L) {
+      role <- if (is.null(outcome)) "{.arg tab_vars}" else "the outcome or {.arg tab_vars}"
+      cli::cli_abort(c("{.arg {arg}}: {.val {keys[[i]]}} crosses a variable with another role.",
+                       "x" = paste0("{.val {clash}} {?is/are} already ", role, ".")),
                      call = NULL)
+    }
   }
   parents <- unique(unlist(parts, use.names = FALSE))
   # THE PARENT RULE, one for both arms: the cross supplies its parents. It refuses no model a user
@@ -237,12 +244,18 @@ reg_parse_crosses <- function(predictors, data, outcome, tab_vars = NULL) {
     dup <- intersect(pl$plain, own)
     if (length(dup) > 0L)
       cli::cli_abort(c(
-        "{.arg predictors} lists {.val {dup}} beside an interaction it is part of.",
-        "i" = paste("The MODEL is the same either way: {.code a*b} IS {.code a + b + a:b}, so an",
-                    "interaction already carries both its variables."),
-        "i" = paste("Drop {.val {dup}}. What changes is only which ROWS are printed -- one per cell",
-                    "of the pair, or one slope per group, instead of a main effect plus",
-                    "differences.")), call = NULL)
+        "{.arg {arg}} lists {.val {dup}} beside an interaction it is part of.",
+        "i" = if (is.null(outcome))
+          paste("A CROSS SUPPLIES ITS VARIABLES: two factors become one block of cells, and a",
+                "number crossed with a factor already prints the factor's own block beside its",
+                "means.")
+        else paste("The MODEL is the same either way: {.code a*b} IS {.code a + b + a:b}, so an",
+                   "interaction already carries both its variables."),
+        "i" = if (is.null(outcome))
+          "Drop {.val {dup}}. What changes is only which COLUMNS are printed."
+        else paste("Drop {.val {dup}}. What changes is only which ROWS are printed -- one per cell",
+                   "of the pair, or one slope per group, instead of a main effect plus",
+                   "differences.")), call = NULL)
   }
   list(keys = keys, parents = parents)
 }
@@ -283,14 +296,19 @@ reg_cross_autocut <- function(keys, data, reg_shapes) {
 # S5, last of all. Decide each cross's arm from the FINAL columns, then build what the arm makes.
 #' @keywords internal
 #' @noRd
-reg_cross_resolve <- function(keys, data, reg_shapes = NULL) {
+reg_cross_resolve <- function(keys, data, reg_shapes = NULL, arg = "predictors") {
   if (length(keys) == 0L) return(list())
   out <- stats::setNames(vector("list", length(keys)), keys)
   for (i in seq_along(keys)) {
     k  <- keys[[i]]
     p  <- strsplit(k, "*", fixed = TRUE)[[1]]
     md <- p[[1]]; mr <- p[[2]]
-    kind <- function(v) if (reg_is_factor_var(data[[v]])) "factor" else "numeric"
+    # ⚠ the kind a variable WILL HAVE, not the one it has. In tab_reg() this runs after the shape
+    # recode and the two answers agree; in tab() it runs at the boundary, where a column about to be
+    # cut is already a factor as far as every classification is concerned -- the same prediction
+    # tab_setup()'s own col_var classification makes.
+    kind <- function(v)
+      if (reg_is_factor_var(data[[v]]) || shape_is_factor(reg_shapes[[v]])) "factor" else "numeric"
     # ⚠ THE SWAP. `*` is symmetric in the MODEL -- `a*b` and `b*a` are one fit -- so where only the
     # ORDER is wrong there is exactly one table that can exist, and refusing it would make the user
     # retype for no information. Swap to it and say so in one line; the block is then named as the
@@ -304,15 +322,17 @@ reg_cross_resolve <- function(keys, data, reg_shapes = NULL) {
     }
     if (kind(mr) != "factor")
       cli::cli_abort(c(
-        "{.arg predictors}: {.val {k}} needs a categorical moderator.",
+        "{.arg {arg}}: {.val {k}} needs a categorical moderator.",
         "x" = "{.val {mr}} is continuous.",
         "i" = paste0('Cut it: {.code shape = c(', mr, ' = "quartiles")} -- one slope per group, ',
                      "each with its own count and observed effect."),
-        "i" = paste0("For the classical coefficient instead, write the model as a formula: ",
-                     "{.code outcome = y ~ ... + ", md, " * ", mr, "}.")), call = NULL)
+        "i" = if (identical(arg, "predictors"))
+          paste0("For the classical coefficient instead, write the model as a formula: ",
+                 "{.code outcome = y ~ ... + ", md, " * ", mr, "}.")
+        else NULL), call = NULL)
     arm <- if (kind(md) == "factor") "cells" else "nested"
     if (arm == "nested" && identical(reg_shapes[[md]]$kind %||% "", "quadratic"))
-      cli::cli_abort(c("{.arg predictors}: {.val {k}} cannot cross a squared predictor.",
+      cli::cli_abort(c("{.arg {arg}}: {.val {k}} cannot cross a squared predictor.",
                        "x" = paste("{.code shape = c({md} = \"quadratic\")} adds a term that would",
                                    "sit outside the interaction."),
                        "i" = 'Cut it instead: {.code shape = c({md} = "quartiles")}.'), call = NULL)

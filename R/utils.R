@@ -11,6 +11,8 @@
 #     whitespace, tx_wrap_name() breaks the second at the seams a name is actually built from
 #     (`_`, `.`, `*`, camelCase). One of them was missing, so a snake_case name met no break
 #     opportunity and no width could ever hold it.
+#   - A VARIABLE LIST IS A LIST OF SYMBOLS: vars_chr(), never as.character(), which deparses a
+#     non-syntactic name back into backticks.
 #   - This file sorts second-to-last in C collation (only zzz-fact-keys.R follows), so nothing in
 #     the package may depend on it at SOURCE time.
 # See: CLAUDE.md § tabxplor architecture.
@@ -19,6 +21,24 @@
 #' @keywords internal
 #' @importFrom rlang .data
 NULL
+
+
+# THE variable-list -> character conversion, and the reason it needs a name of its own.
+# `row_vars` / `col_vars` / `tab_vars` travel as LISTS of symbols, and `as.character()` on a list
+# DEPARSES each element -- so a non-syntactic name comes back wrapped in backticks
+# (`as.character(rlang::syms("my age"))` is "`my age`") and every later tidyselect misses it. A bare
+# symbol is fine, which is why this went unseen: `tab(d, marital, `my age`)` aborted on a column
+# that plainly exists. rlang::as_name() reads the symbol instead of printing it.
+# ⚠ the same trap the shape subsystem already documents (shape_colname(), R/var-shape.R).
+#' @keywords internal
+#' @noRd
+vars_chr <- function(x) {
+  if (is.null(x)) return(character(0))
+  if (is.character(x)) return(unname(x))
+  if (rlang::is_symbol(x)) return(rlang::as_name(x))
+  vapply(x, function(v) if (rlang::is_symbol(v)) rlang::as_name(v) else as.character(v),
+         character(1), USE.NAMES = FALSE)
+}
 
 
 # Internal stringi replacements for two stringr functions with no direct stringi equivalent.
