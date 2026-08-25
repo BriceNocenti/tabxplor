@@ -13,10 +13,16 @@
 #       Picker folders map the hidden Array UI options into tab_reg() args: jmvtab_reg_ref_vector()
 #       (references), jmvtab_reg_models() (the model-comparison "+" builder -> `predictors` list or the
 #       flat pool -- and, with several outcomes, the FLAT pool even from one card, because a
-#       comparison is one outcome), jmvtab_reg_mult_vector() (numeric-predictor scaling ->
-#       `multiplier`), jmvtab_shape_vector() (the per-variable cut -> `shape`, SHARED with jmvtab),
-#       and the Model table's own jmvtab_reg_link_vector() (per-outcome link) beside its family /
-#       level / trials readers.
+#       comparison is one outcome), jmvtab_reg_cross_keys() (the interaction picker -> the `a*b`
+#       keys `predictors` itself takes: an interaction IS a predictor, so there is no second
+#       argument), jmvtab_reg_mult_vector() (numeric-predictor scaling -> `multiplier`),
+#       jmvtab_shape_vector() (the per-variable cut -> `shape`, SHARED with jmvtab), and the Model
+#       table's own jmvtab_reg_link_vector() (per-outcome link) beside its family / level / trials
+#       readers.
+#       ⚠ An interaction is DEFINED once (the `crosses` option) and TICKED per model (each card's own
+#       `crosses` field), which is what makes an additive model expressible beside a crossed one --
+#       the one comparison defining an interaction exists for. Only with NO card does a defined pair
+#       apply on its own (jmvtab_reg_cross_fold), because there is then nowhere to tick it.
 #       ⚠ `stats =` has NO folder and no control: since Phase 22g-ii tab_reg()'s own default already
 #       compares several predictor subsets, so the panel asks nothing and NULL is what it sends.
 # KEY CONSTRAINTS:
@@ -132,17 +138,12 @@ jmvtab_reg_ref_vector <- function(ref_levels) {
 
 # === Model-comparison builder + predictor scaling -> tab_reg() args =========================
 
-# Fold the model-builder (`models` Array of Group{label, vars}) + the flat predictor pool into
-# tab_reg()'s `predictors`. An EMPTY builder -> the flat pool = single model (a character vector, or
-# NULL when the pool is empty too -> a NULL table + hint). >=1 card -> a NAMED LIST of character
-# vectors = model-comparison mode (one effect column per model). Each card is intersected with the
-# pool (pool order, dropping stale vars); a blank label becomes "model{i}" (friendlier than
-# tab_reg()'s all-or-nothing rename); empty-var cards are dropped; if nothing survives -> the pool.
-#' @keywords internal
-#' @noRd
 # Fold the interaction picker (the `crosses` Array of Group{var1, var2}) into the `a*b` keys
 # tab_reg()'s `predictors` takes. Both variables must be in the pool; the FIRST is the modified
 # one, which is the grammar's own reading of `a*b`.
+# ⚠ `a != b` is the LAST of three defences against `race*race`, which tab_reg() refuses as
+# meaningless: the picker's second drop-down does not offer side 1's variable, reconcileCrosses()
+# drops a colliding stored pair, and this line is what keeps the R boundary from trusting either.
 #' @keywords internal
 #' @noRd
 jmvtab_reg_cross_keys <- function(crosses, pool) {
@@ -155,9 +156,20 @@ jmvtab_reg_cross_keys <- function(crosses, pool) {
   unique(paste(a[keep], b[keep], sep = "*"))
 }
 
-# One model's variables, with every applicable pair REPLACED by its key: an interaction supplies
-# both parents, so listing them beside it is what tab_reg() refuses. A model that does not hold both
-# is left alone, which is what makes a with/without comparison expressible from the "+" builder.
+# The two parents a set of `a*b` keys names. An interaction SUPPLIES both, so listing one beside its
+# own key is what reg_parse_crosses() refuses -- which is why every caller subtracts these.
+#' @keywords internal
+#' @noRd
+jmvtab_reg_cross_parents <- function(keys) {
+  if (length(keys) == 0L) return(character(0))
+  unique(unlist(strsplit(keys, "*", fixed = TRUE), use.names = FALSE))
+}
+
+# The ZERO-CARD fold: with no model card there is nowhere to tick an interaction, so every DEFINED
+# pair applies to the single live model and replaces its two parents in place.
+# ⚠ A card does NOT go through this: since Phase 22g-viii it states its own interactions (its
+# `crosses` field), which is what makes an additive model expressible beside a crossed one. Folding
+# a card here is what made every card holding both parents BECOME the interaction model.
 #' @keywords internal
 #' @noRd
 jmvtab_reg_cross_fold <- function(vars, keys) {
@@ -171,6 +183,14 @@ jmvtab_reg_cross_fold <- function(vars, keys) {
   vars
 }
 
+# Fold the model-builder (`models` Array of Group{label, vars, crosses}) + the flat predictor pool
+# into tab_reg()'s `predictors`. An EMPTY builder -> the flat pool, cross-folded = single model (a
+# character vector, or NULL when the pool is empty too -> a NULL table + hint). >=1 card -> a NAMED
+# LIST of character vectors = model-comparison mode (one effect column per model). Each card is its
+# `vars` intersected with the pool (pool order, dropping stale vars), then its OWN `crosses` keys
+# appended; a blank label becomes "model{i}" (friendlier than tab_reg()'s all-or-nothing rename);
+# empty cards are dropped; if nothing survives -> the pool.
+#
 # ⚠ `flatten` is the SEVERAL-OUTCOMES rule. `is_comparison <- is.list(predictors)` (R/reg-resolve.R),
 # and a comparison must have ONE outcome -- so a single card beside two outcomes has to arrive as a
 # character vector, i.e. as the ordinary per-outcome table it is. Its typed NAME is what that costs;
@@ -180,9 +200,13 @@ jmvtab_reg_models <- function(models, pool, cross_keys = character(0), flatten =
   pool <- if (length(pool)) as.character(pool) else character()
   flat <- if (length(pool)) jmvtab_reg_cross_fold(pool, cross_keys) else NULL
   if (length(models) == 0L) return(flat)
-  built  <- lapply(models, function(e)
-    jmvtab_reg_cross_fold(intersect(pool, as.character(unlist(e$vars, use.names = FALSE))),
-                          cross_keys))
+  built  <- lapply(models, function(e) {
+    v <- intersect(pool, as.character(unlist(e$vars, use.names = FALSE)))
+    # only a key still DEFINED in `crosses` counts, so a deleted pair cannot survive in a card...
+    k <- intersect(cross_keys, as.character(unlist(e$crosses, use.names = FALSE)))
+    # ...and a parent named beside its own key is dropped, because the producer refuses that pair.
+    c(setdiff(v, jmvtab_reg_cross_parents(k)), k)
+  })
   labels <- vapply(models, function(e) { v <- e$label; if (is.null(v)) "" else as.character(v) },
                    character(1))
   keep   <- vapply(built, length, integer(1)) > 0L
@@ -202,8 +226,11 @@ jmvtab_reg_models <- function(models, pool, cross_keys = character(0), flatten =
 # tell an unchanged/just-computed table (re-serve) from an outdated one (banner + Run prompt).
 #' @keywords internal
 #' @noRd
-jmvtab_reg_staged <- function(models, predictors) {
-  preds <- jmvtab_reg_models(models, predictors)
+# ⚠ `cross_keys` is not decoration: a card holding ONLY an interaction has an empty `vars`, and
+# without the keys it would be dropped as empty -- so the predicate and `.opts()` must be given the
+# same ones, or a two-model comparison would run live instead of staged.
+jmvtab_reg_staged <- function(models, predictors, cross_keys = character(0)) {
+  preds <- jmvtab_reg_models(models, predictors, cross_keys)
   is.list(preds) && length(preds) >= 2L
 }
 

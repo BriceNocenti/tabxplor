@@ -31,14 +31,11 @@
             "<b>empirical = <i>(show the observed effect)</i></b>": [
                 "<b>empirical = <i>(afficher l'effet observé)</i></b>"
             ],
-            "<b>Interactions</b>": [
-                "<b>Interactions</b>"
-            ],
-            "<b>Model comparison (+ predictor subsets)</b>": [
-                "<b>Comparaison de modèles</b>"
-            ],
             "<b>Models and references</b>": [
                 "<b>Modèles et références</b>"
+            ],
+            "<b>Models comparison and interactions</b>": [
+                "<b>Comparaison de modèles et interactions</b>"
             ],
             "<b>n_min = <i>(hide rows/cols with small n)</i></b>": [
                 "<b>n_min = <i>(masquer lignes/col. à petit n)</i></b>"
@@ -285,9 +282,6 @@
             ],
             "drop_by_outcome <i>(one population per outcome)</i>": [
                 "drop_by_outcome <i>(une population par variable à expliquer)</i>"
-            ],
-            "effect": [
-                "effect"
             ],
             "effect = <i>(where the numbers come from)</i>": [
                 "effect = <i>(d'où les nombres sont tirés)</i>"

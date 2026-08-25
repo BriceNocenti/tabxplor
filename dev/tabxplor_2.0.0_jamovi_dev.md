@@ -2056,3 +2056,155 @@ alone; the suite asserts both halves.
 `outcome_level` and what it IS to them — `modelled` (binomial: one level against the rest) or
 `baseline` (multinomial). The old gate was "the outcome has exactly 2 levels", which hid the picker
 on both families that need it most.
+
+---
+
+## Phase 22g-viii — the interactions picker, folded into the model builder (2026-08-25)
+
+`crossPickerCtrl` and its *Interactions* CollapseBox are gone; `modelBuilderCtrl` renders both
+halves — an interaction is a PREDICTOR, so it is defined where a model says which predictors it
+holds. Two facts below cost time to establish.
+
+### ⚠ A card's `vars` cannot hold an `a*b` key
+
+The obvious design — put the key straight into `models[].vars` — does not work. `vars` is
+`type: Variable`, and `jmvtab_reg_models()` does `intersect(pool, card$vars)` against the real
+column pool, so the key is dropped on the R side. Retyping `vars` to `String` would fix that at the
+cost of the cards' **rename-safety**: jamovi rewrites a `Variable` option when a column is renamed,
+and a card silently losing a predictor is a wrong model.
+
+So a card carries a SECOND list, `crosses: Array of String`, holding the keys it ticked. The nested
+`Array{Group{String, Array{Variable}, Array{String}}}` compiles cleanly (verified against the
+generated `.h.R`). Two sweeps keep it honest, both in `reconcileModels()`: a key no longer in the
+`crosses` option is dropped, and so is any parent of a key the card still holds — because
+`reg_parse_crosses()` refuses a pair named beside its own parents, and a picker must never write a
+combination the producer refuses.
+
+### ⚠ The old fold made a with/without comparison IMPOSSIBLE
+
+`jmvtab_reg_cross_fold()` replaced both parents by the key in **every** card that held them, so once
+`age*race` was defined, a card holding `age` and `race` *became* the interaction model. The comment
+claiming this is what made with/without expressible had it backwards. The fold now runs on the
+ZERO-CARD path only (no card → nowhere to tick → every defined pair applies to the single live
+model), and a card states its own interactions.
+
+Measured on `gss_cat`, two cards over `race + age + relig`, the second ticking `race × relig`: the
+footer carries **`compare_seq` χ² = 36.42, df = 14, p = 9.0e-4**, exactly equal to that model's own
+`cross_lr` row. So it is a real sequential LR, not a ΔAIC fallback — `reg_cross_expand_terms()`
+expands the combined factor back to its parents, which is what lets `reg_compare_chained()` see the
+nesting between two models whose term labels share no name.
+
+### ⚠ `jmvtab_reg_staged()` needs the keys too
+
+A card holding ONLY an interaction has an empty `vars`; without `cross_keys` it reads as an empty
+card, is dropped, and a two-model comparison would run LIVE instead of behind the Run button. The
+predicate and `.opts()` must be handed the same keys.
+
+### Three pairs the picker cannot express, all unreachable rather than repaired
+
+The rule that deleted `linkOffered()` in 22g-i, applied three times. `syncCrosses()` and
+`jmvtab_reg_cross_keys()` keep their own guards behind them, because a pair stored by an older build
+must not reach R either.
+
+| refused | why | how |
+|---|---|---|
+| `a*a` | meaningless | picking the variable already on the other side **swaps** the pair — which is what the user meant, and it keeps the flip one click away |
+| `a*b` beside `b*c` | a three-way interaction, which tabxplor does not fit — the second pair simply would not apply | a variable another row uses is not offered (`crossClaimed`); `+ Add interaction` seeds the first two FREE variables and greys out below two |
+| `race*age` | `reg_cross_resolve()` reads it as `age*race` and says so — the rows are about the FIRST variable, and only a continuous one has slopes within groups | `crossOrder()` puts the pair in that order here, so the two column heads stay honest and R has nothing to announce |
+
+⚠ **`crossOrder()` must mirror R's `kind()`, which reads the column AFTER `shape`**: a number cut
+into groups IS a factor there, so `crossKind()` checks `cachedLevels(v)` *and* the stored `shape`
+against `TABX_SHAPES_CUT`. While a column is still being fetched the kind is unknown and nothing
+moves — a wrong guess would flip a pair the user typed on purpose.
+
+⚠ **A swap renames the key, and a card stores the key it ticked.** `syncCrosses()` therefore returns
+`{keys, renames}` and `reconcileModels()` applies the renames FIRST — otherwise the card finds its
+key undefined and silently drops the interaction.
+
+### What re-renders, and what must not
+
+`modelsSig` stays `[pool, outcome.length]`, so `models` and `crosses` are outside it. Add / delete /
+a `<select>` pick change what the OTHER half shows — a card's chip labels, a row's own option list —
+so those three call `renderModelBuilder()` synchronously in their handlers (a `<select>` has already
+committed and lost focus when `change` fires, so this is safe under 22g-iv's rule). A tick and a
+name keystroke repaint in place, or the edit that caused the rebuild is clobbered.
+
+### `effect` became a ComboBox, and that deleted `EFFECT_OF_RADIO`
+
+With no `effect_1..4` radios in the `.u.yaml`, the map named four controls that do not exist —
+which `test-jamovi-vocabulary.R`'s `*_OF_RADIO` gate and `ui_bracket_names()` both catch.
+`applyModelEnables()` now greys `measure` only; a ComboBox cannot grey one of its own items, the
+same price `display` paid in 22g-iii, and an unavailable combination is refused R-side by name.
+
+### The greyscale is one declared ladder, in literal hex
+
+The `TABX` boxes used `rgba(0,0,0,0.0x)` overlays, so the same key rendered two shades depending on
+what it sat on. They are literal hex now, the same ladder the shared per-variable table already used,
+recessed → raised (material reads elevation as lightness in a light theme):
+
+| | |
+|---|---|
+| `#CCCCCC` | a header row in the SHARED per-variable table, whose heads label a grid of cells |
+| `#DCDCDC` | a **well**: the box holding a list of rows AND the `+ Add` button that grows it |
+| `#ECECEC` | a **card** raised on that well: one interaction row, one model, one outcome |
+| `#FFFFFF` | an **input**: a `<select>`, a text box, a button — reserved for them, and what makes them read as inputs inside a grey pane |
+
+The `+ Add` button lives INSIDE its well, so a list and the control that grows it are one object,
+and `TABX.sectionHead`'s top margin is the blank line between two wells.
+
+⚠ **A head standing over CARDS takes no fill at all.** Both `mtHead` (`outcome` / `family =` /
+`link =`) and `crossHead` sit directly on the well: a filled bar there reads as one more row of the
+list rather than as its heading. `crossHead` is additionally in italic at the row's own type size,
+because it is a plain **caption** — it describes the column, it does not name an option.
+
+### ⚠ A `<button>` in a grid track overflows the row
+
+A grid item defaults to `min-width:auto`, so a button's intrinsic width widens its own track past the
+declared `24px` and pushes the whole row off the right edge of a narrow options pane — which is why
+the delete `×` could not be reached. `TABX.xDel` sets `min-width:0; width:100%; padding:0`. The two
+`<select>`s were narrowed to `minmax(48px,1fr)` with `gap:6px` for the same reason: the pane is
+~340px at its narrowest, and the row must fit there.
+
+---
+
+## ⚠ `clearWith` — why a `$state` carrier lost its state on every option change (2026-08-25)
+
+**The symptom.** Clicking *Run comparison* left the "Model comparison staged. Click **Run
+comparison** to compute the table" banner in place, apparently forever.
+
+**The cause, read out of jmvcore's own source.** `jmvcore::Image$new()` defaults `clearWith` to
+`"*"`, and `ResultsElement$fromProtoBuf()` opens with
+
+```r
+someChanges <- length(oChanges) > 0 || length(vChanges) > 0
+if (someChanges && base::identical("*", private$.clearWith)) return()
+if (base::any(oChanges %in% private$.clearWith))            return()
+```
+
+so with the default the state is **not restored the moment ANY option changes** — and an option
+change is the only thing that makes an analysis re-run. The staged flow is exactly that: clicking Run
+writes `run_compare = TRUE`, the `.js` writes it back to `FALSE` 2 s later, and on that second run
+`compare_state$state` is `NULL`, so `.run()` takes the `is.null(last)` branch and paints the banner
+over the table the trigger run had just computed.
+
+**The fix is one line per carrier**: `clearWith: []` in the `.r.yaml`, on `jmvtab`'s `cache_state`
+and on `jmvtabreg`'s `cache_state` *and* `compare_state`. The compiler emits `clearWith=list()`;
+an empty vector fails both guards, so the state is restored. These stores are the module's own and
+are invalidated by SIGNATURE (`jmvtab_reg_compare_sig()`, the cache keys), never by jamovi's option
+diff — clearing them on an option change is precisely wrong.
+
+⚠ **It also silently degraded both live caches**, for the same reason and since they were written:
+a store that is dropped whenever an option changes can only ever hit when nothing changed.
+
+⚠ **`visible: false` was NOT the cure, and Phase 22g-vi's reasoning for it was wrong.**
+`Image$asProtoBuf()` reports a state-holding image that wrote no file as `ANALYSIS_RENDERING`
+*whatever* `visible` says — the branch never reads it:
+
+```r
+else if (status == ANALYSIS_COMPLETE && (!is.null(self$state)) && path == "")
+    result$status <- ANALYSIS_RENDERING
+```
+
+so hiding the carrier could not have stopped a render round-trip. It is still worth keeping (no
+vertical space, and `state` is serialised in a branch of `ResultsElement$asProtoBuf()` that ignores
+`visible`), but the flicker it was credited with fixing was this.

@@ -21,6 +21,12 @@ items:
     # independently of `visible`, and Image$asProtoBuf() reports a state-holding image that rendered
     # no file as ANALYSIS_RENDERING -- so a VISIBLE carrier makes the client ask for a render whose
     # round-trip can overwrite the run's own results (Phase 22g-vi, jmvtabreg.r.yaml).
+    # ⚠ `clearWith: []` IS LOAD-BEARING. jmvcore's Image$new() defaults `clearWith` to "*", and
+    # ResultsElement$fromProtoBuf() opens with
+    #     if (someChanges && identical("*", private$.clearWith)) return()
+    # -- so with the default the state is NOT restored the moment ANY option changes, which is
+    # precisely when a cache is supposed to hit. An empty vector clears with nothing; the state is
+    # this module's own and `.run()` invalidates it by SIGNATURE, never by jamovi's option diff.
     - name: cache_state
       title: ""
       type: Image
@@ -28,4 +34,5 @@ items:
       height: 1
       renderFun: .plot
       visible: false
+      clearWith: []
 ...

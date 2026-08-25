@@ -378,6 +378,15 @@ test_that("jmvtab_reg_models folds the builder into predictors (list or flat poo
   # an all-empty card set -> the flat pool
   expect_identical(jmvtab_reg_models(list(list(label = "x", vars = list())), c("race", "age")),
                    c("race", "age"))
+  # a card with no `crosses` field at all still folds (the shape every card had before 22g-viii)
+  expect_identical(jmvtab_reg_models(list(list(label = "x", vars = list("race"))),
+                                     c("race", "age"), "race*age"),
+                   list(x = "race"))
+  # ...and a card holding ONLY an interaction is not empty
+  expect_identical(jmvtab_reg_models(list(list(label = "x", vars = list(),
+                                               crosses = list("race*age"))),
+                                     c("race", "age"), "race*age"),
+                   list(x = "race*age"))
 })
 
 
@@ -415,6 +424,12 @@ test_that("Phase h: jmvtab_reg_staged() flags >=2-model comparisons only", {
   # two cards -> a comparison -> staged (Run-button gated)
   expect_true(jmvtab_reg_staged(
     list(list(label = "a", vars = "race"), list(label = "b", vars = c("race", "age"))), pool))
+  # ⚠ a card holding ONLY an interaction has an empty `vars`: without the keys it reads as empty and
+  # is dropped, so the predicate and .opts() must be given the SAME ones or a comparison runs live.
+  cards <- list(list(label = "a", vars = c("race", "age")),
+                list(label = "b", vars = list(), crosses = list("race*age")))
+  expect_false(jmvtab_reg_staged(cards, pool))
+  expect_true(jmvtab_reg_staged(cards, pool, "race*age"))
 })
 
 test_that("Phase h: jmvtab_reg_compare_sig() changes with the options, is stable otherwise", {

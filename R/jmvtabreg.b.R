@@ -50,7 +50,9 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       # the last render. Single-model use stays fully live. compare_state persists sig + HTML across resets.
       # Phase 19k: THE predicate, jmvtab_reg_staged() -- which exists for exactly this and whose own
       # caller inlined it instead, so only the tests reached it and the two copies could drift.
-      staged  <- jmvtab_reg_staged(self$options$models, self$options$predictors)
+      staged  <- jmvtab_reg_staged(
+        self$options$models, self$options$predictors,
+        jmvtab_reg_cross_keys(self$options$crosses, self$options$predictors))
       trigger <- isTRUE(self$options$run_compare) || isTRUE(self$options$exportExcel)
       cur_sig <- jmvtab_reg_compare_sig(opts)
       cst     <- self$results$compare_state$state       # list(sig=, html=) or NULL
@@ -110,7 +112,9 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # model); >=1 card -> a named list of predictor subsets (model comparison).
         # ...and the interaction picker folds INTO it too, as `a*b` keys -- so there is one
         # `predictors` argument here exactly as there is in tab_reg(), and no second one to keep in
-        # step.
+        # step. Since 22g-viii a pair is DEFINED once (`crosses`) and TICKED per card (each card's
+        # own `crosses` field), which is what makes an additive model expressible beside a crossed
+        # one; with no card at all, every defined pair applies to the single live model.
         # ⚠ `flatten` is the several-outcomes rule: ONE predictor subset with several outcomes is a
         # per-outcome table, not a comparison, so the card must not make `predictors` a LIST there --
         # `is_comparison <- is.list(predictors)` would then refuse the second outcome.

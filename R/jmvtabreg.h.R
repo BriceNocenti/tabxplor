@@ -184,6 +184,12 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                             NULL,
                             template=jmvcore::OptionVariable$new(
                                 "vars",
+                                NULL)),
+                        jmvcore::OptionArray$new(
+                            "crosses",
+                            NULL,
+                            template=jmvcore::OptionString$new(
+                                "crosses",
                                 NULL)))))
             private$..na <- jmvcore::OptionList$new(
                 "na",
@@ -571,7 +577,8 @@ jmvtabregResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 width=1080,
                 height=1,
                 renderFun=".plot",
-                visible=FALSE))
+                visible=FALSE,
+                clearWith=list()))
             self$add(jmvcore::Image$new(
                 options=options,
                 name="compare_state",
@@ -579,7 +586,8 @@ jmvtabregResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 width=1080,
                 height=1,
                 renderFun=".plot",
-                visible=FALSE))}))
+                visible=FALSE,
+                clearWith=list()))}))
 
 jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     "jmvtabregBase",

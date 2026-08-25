@@ -130,7 +130,7 @@ options:
                 type: String
 
     - name: effect
-      title: effect
+      title: ""
       type: List
       options:
         - title: "auto <i>(follow from the measure of deviation)</i>"
@@ -201,6 +201,9 @@ options:
            the gap between the two is what adjustment changed.
 
 # ================= Model comparison (+ predictor subsets) =================
+    # ⚠ `vars` is Variable-typed so a column RENAME follows the card; `crosses` cannot be, because
+    # an `a*b` key names no column -- a String array is what lets a card state which of the DEFINED
+    # interactions it holds. Both are swept against the pool / the `crosses` option on every render.
     - name: models
       title: "Predictor subsets (model comparison)"
       type: Array
@@ -215,6 +218,10 @@ options:
                 type: Array
                 template:
                     type: Variable
+              - name: crosses
+                type: Array
+                template:
+                    type: String
 
     # ⚠ `stats =` HAS NO CONTROL, deliberately (Phase 22g-iii). Since 22g-ii tab_reg()'s own default
     # already compares several predictor subsets against each other -- sequential where they nest,

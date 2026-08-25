@@ -167,8 +167,7 @@ var onUpdate = function(ui) {
     bottomAlignInRow(ui, "extCtrl");         // ".ext" text -> bottom of the path row
     renderModelTable(ui);
     renderVarTable(ui);
-    renderCrossPicker(ui);
-    renderModelBuilder(ui);
+    renderModelBuilder(ui);        // ...and the interactions, which live inside it since 22g-viii
 };
 
 // Phase 15d: a valid model-comparison test needs every model fit on the SAME cases -- so only
@@ -876,20 +875,48 @@ var tabxmBuildList = function (ui, v, initialOrder, onOrder, canOrder, onCommit,
 // sees it -- so it takes a factor's baseline vocabulary and loses the scaling entirely.
 
 var TABX = {
-    hint:    "padding:8px;opacity:0.65;font-style:italic;",
+    hint:    "padding:4px 6px 2px;opacity:0.65;font-style:italic;",
     refName: "font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
     refNote: "opacity:0.6;font-style:italic;",
-    // model-builder cards (one per model)
-    cardBox:  "border:1px solid rgba(0,0,0,0.14);border-radius:5px;background:rgba(0,0,0,0.02);margin:6px;padding:6px 8px;width:100%;min-width:320px;box-sizing:border-box;",
+    // ONE GREYSCALE LADDER for every box this panel draws, recessed -> raised, the same one the
+    // shared per-variable table already uses (#E4E4E4 body / #CCCCCC head). Material reads
+    // elevation as lightness in a light theme, so a WELL is darker than the CARDS sitting on it,
+    // and each step is ~16 levels -- enough to separate at a glance, little enough not to stripe:
+    //   #CCCCCC  a header row in the SHARED per-variable table (TABXV.head), whose heads label a
+    //            grid of cells. ⚠ a head standing over CARDS takes no fill at all -- mtHead and
+    //            crossHead sit on the well itself, because a filled bar there reads as one more
+    //            row of the list rather than as its heading.
+    //   #DCDCDC  a WELL: the box holding a list of rows and the "+ Add" button that grows it
+    //   #ECECEC  a CARD raised on that well: one interaction row, one model, one outcome
+    //   #FFFFFF  an INPUT: a <select>, a text box, a button. Reserved for them, and it is what
+    //            makes them read as inputs inside a grey pane.
+    // ⚠ keep them as literal hex, not rgba() overlays: an overlay's result depends on whatever it
+    // sits on, so the same key rendered two shades in two containers.
+    well:     "margin:2px 6px 2px;padding:6px;border:1px solid rgba(0,0,0,0.20);border-radius:4px;background:#DCDCDC;box-sizing:border-box;",
+    // model cards (one per model), raised on the well
+    cardBox:  "border:1px solid rgba(0,0,0,0.16);border-radius:4px;background:#ECECEC;margin:4px 0;padding:6px 8px;min-width:0;box-sizing:border-box;",
     cardHead: "display:flex;align-items:center;gap:8px;margin-bottom:4px;",
     cardName: "flex:1 1 auto;min-width:0;box-sizing:border-box;padding:2px 6px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;font-weight:600;",
     cardDel:  "flex:0 0 auto;border:none;background:transparent;cursor:pointer;font-size:1.1em;line-height:1;color:rgba(0,0,0,0.55);padding:2px 6px;",
-    cardVars: "display:flex;flex-wrap:wrap;gap:4px 14px;",
+    cardVars: "display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;",
     cardChk:  "display:inline-flex;align-items:center;gap:3px;white-space:nowrap;cursor:pointer;",
-    // the interaction rows: [var1] x [var2] [x], the two selects equal-width and the operator bare
-    crossRow: "display:grid;grid-template-columns:1fr auto 1fr auto;align-items:center;gap:8px;width:74%;min-width:360px;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
-    crossOp:  "font-weight:700;opacity:0.7;",
-    addBtn:   "margin:4px 6px 8px;padding:4px 12px;border:1px dashed rgba(0,0,0,0.35);border-radius:4px;background:rgba(0,0,0,0.03);color:#000;cursor:pointer;font-weight:600;",
+    chkSep:   "opacity:0.35;",                 // between a card's plain predictors and its pairs
+    // the heading above each well (Interactions / Models)
+    sectionHead: "font-weight:700;color:#000;margin:16px 6px 0;",
+    // The interaction rows: [var1] * [var2] [x], raised on the well, headed by what each column IS.
+    // ⚠ crossRow and crossHead repeat the SAME grid-template-columns: edit them together or the
+    // header drifts from the rows it names. ⚠ NEVER a width beside a horizontal margin (22g-iv);
+    // the well supplies the inset, so a row takes none. The two selects are kept NARROW on purpose:
+    // the options pane is ~340px at its narrowest, and anything wider clips the delete button off
+    // the right edge -- which is also why xDel has `min-width:0` (a <button>'s intrinsic width
+    // otherwise blows its own grid track open and overflows the row).
+    crossRow: "display:grid;grid-template-columns:minmax(48px,1fr) 8px minmax(48px,1fr) 18px;align-items:center;gap:6px;min-width:0;box-sizing:border-box;padding:4px 6px;margin:4px 0;border:1px solid rgba(0,0,0,0.16);border-radius:4px;background:#ECECEC;",
+    crossHead:"display:grid;grid-template-columns:minmax(48px,1fr) 8px minmax(48px,1fr) 18px;align-items:end;gap:6px;min-width:0;box-sizing:border-box;padding:2px 6px 0;margin:0;color:#000;font-weight:600;font-style:italic;line-height:1.15;",
+    crossOp:  "font-weight:700;opacity:0.7;text-align:center;",
+    // ⚠ min-width:0 + width:100%: a grid item defaults to min-width:auto, so a button's intrinsic
+    // width widens its track and pushes the row past the pane. This is what made it unreachable.
+    xDel:     "min-width:0;width:100%;border:none;background:transparent;cursor:pointer;font-size:1.05em;line-height:1;color:rgba(0,0,0,0.55);padding:0;",
+    addBtn:   "margin:4px 0 0;padding:3px 10px;border:1px dashed rgba(0,0,0,0.35);border-radius:4px;background:#fff;color:#000;cursor:pointer;font-weight:600;",
     // Phase 15d: `white-space:nowrap` keeps the trials input and its suffix on ONE line.
     multWrap: "display:flex;align-items:center;gap:2px;min-width:0;white-space:nowrap;",
     // per-outcome Model table: [name] [family =] [link =] [outcome_level / trials]. Full width, a
@@ -898,17 +925,20 @@ var TABX = {
     // the 4th is not, because which of outcome_level / trials it holds depends on the row.
     // ⚠ mtRow and mtHead repeat the SAME grid-template-columns: edit them together or the header
     // drifts from the rows it names.
-    mtRow:   "display:grid;grid-template-columns:minmax(70px,1fr) 150px 145px 105px;align-items:center;gap:10px;min-width:0;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
-    mtHead:  "display:grid;grid-template-columns:minmax(70px,1fr) 150px 145px 105px;align-items:center;gap:10px;min-width:0;box-sizing:border-box;padding:0 8px;margin:2px 6px 0;color:#000;font-weight:600;",
-    // the card the whole per-outcome table sits in -- the same material as the per-variable table.
-    mtCard:  "margin:2px 0 6px 0;padding:2px 0 6px 0;border:1px solid rgba(0,0,0,0.16);border-radius:4px;background:rgba(0,0,0,0.06);",
+    mtRow:   "display:grid;grid-template-columns:minmax(70px,1fr) 150px 145px 105px;align-items:center;gap:10px;min-width:0;box-sizing:border-box;padding:5px 8px;margin:4px 0;border:1px solid rgba(0,0,0,0.16);border-radius:4px;background:#ECECEC;",
+    mtHead:  "display:grid;grid-template-columns:minmax(70px,1fr) 150px 145px 105px;align-items:end;gap:10px;min-width:0;box-sizing:border-box;padding:2px 8px 0;margin:0;color:#000;font-weight:600;",
+    // the well the whole per-outcome table sits in -- the same material as every other list here.
+    mtCard:  "margin:2px 0 6px;padding:6px;border:1px solid rgba(0,0,0,0.20);border-radius:4px;background:#DCDCDC;box-sizing:border-box;",
     mtSel:   "width:100%;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
     mtTrials:"width:70px;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;"
 };
 
 // `ref` on a still-numeric predictor is an ANCHOR -- the value its effect is read from. tab_reg()
-// takes these four keywords or a number; blank = the model's own default (no entry stored).
-var REG_ANCHORS = ["", "mean", "median", "min", "max"];
+// takes four keywords or a number; blank = the model's own default, which IS the mean.
+// ⚠ so `"mean"` is NOT offered beside it: the two write different options and produce the same
+// table, and a list reading "mean (default)" then "mean" only asks the user to tell them apart.
+// The blank is the one kept, because it stores nothing and lets tab_reg() own its own default.
+var REG_ANCHORS = ["", "median", "min", "max"];
 var REG_ANCHOR_LABELS = { "": "mean (default)" };
 
 var VAR_TABLE_HOST = {
@@ -922,7 +952,7 @@ var VAR_TABLE_HOST = {
         { key: "act",    head: "multiplier =",     width: "85px",
           tip: "a number's effect is read per k units" }
     ],
-    emptyHint: "Select predictors to merge their levels, cut a number into groups, or choose a baseline.",
+    emptyHint: "Select predictors to choose their baseline and and shape.",
     mergeTip:  "click to relevel",
     closeTip:  "click to close",
     // Phase 22g-iv: the ▲/▼ bar DOES belong here. `tab_reg()` has no `levels_order` argument, so the
@@ -986,6 +1016,7 @@ var VAR_TABLE_HOST = {
             return;
         }
         if (kind.isNumber) {
+            if (stored === "mean") stored = "";      // a synonym of the default -- show the one entry
             var anchors = REG_ANCHORS.slice();
             if (stored && anchors.indexOf(stored) < 0) anchors.push(stored);   // a typed number stays
             var a = makeSelect(TABXV.sel, anchors, REG_ANCHOR_LABELS, stored,
@@ -1016,8 +1047,8 @@ var VAR_TABLE_HOST = {
         var pre  = document.createElement("span"); pre.textContent = "×";
         var inp  = document.createElement("input");
         inp.type = "text"; inp.style.cssText = TABXV.inp;
-        inp.placeholder = "sd"; inp.value = arrGet(ui, "multiplier", v, "k");
-        inp.title = 'the effect per k units: "sd" (the default), "2sd", or a number';
+        inp.placeholder = "2sd"; inp.value = arrGet(ui, "multiplier", v, "k");
+        inp.title = 'the effect per k units: "2sd" (the default), "sd", or a number';
         inp.addEventListener("change", function () {
             arrWrite(ui, "multiplier", v, "k", inp.value);
         });
@@ -1247,8 +1278,6 @@ var measureOffered = function(ui, effect, measure) {
     return true;
 };
 
-var EFFECT_OF_RADIO  = { effect_1: "auto", effect_2: "conditional", effect_3: "marginal",
-                         effect_4: "at_reference" };
 // ⚠ radio NAME -> the value it sets, and it must follow the .u.yaml's ORDER, not just its values:
 // a re-order or a value rename moves every pair here, and a stale entry greys the WRONG button,
 // silently. test-jamovi-vocabulary.R walks this map against the .u.yaml for exactly that reason.
@@ -1264,167 +1293,261 @@ var applyVarEnables = function(ui) {
     if (ui.color_3) ui.color_3.setEnabled(!!(tv && tv.length > 0));
 };
 
+// Only `measure` is greyed here. `effect` became a ComboBox, and a ComboBox cannot grey one of its
+// own items -- the same price `display` paid in 22g-iii; a combination the outcomes do not offer is
+// refused R-side, by name, with its cures listed.
 var applyModelEnables = function(ui) {
     var eff = ui.effect ? ui.effect.value() : "auto";
-    // an effect is offered when SOME measure of it is, on the chosen models
-    Object.keys(EFFECT_OF_RADIO).forEach(function(nm) {
-        if (!ui[nm] || !ui[nm].setEnabled) return;
-        var e = EFFECT_OF_RADIO[nm];
-        ui[nm].setEnabled(Object.keys(MEASURE_OF_RADIO).some(function(mn) {
-            return measureOffered(ui, e, MEASURE_OF_RADIO[mn]);
-        }));
-    });
     Object.keys(MEASURE_OF_RADIO).forEach(function(nm) {
         if (ui[nm] && ui[nm].setEnabled)
             ui[nm].setEnabled(measureOffered(ui, eff, MEASURE_OF_RADIO[nm]));
     });
 };
 
-// ---- Interaction picker CustomControl (crossPickerCtrl) ----------------------------------
-// One row per interaction = [var1] x [var2] [x delete], plus a "+ Add interaction" button. An
-// interaction is a PREDICTOR whose levels are combinations, so tab_reg() takes it INSIDE
-// `predictors` as the key `a*b`; the rows are stored in the hidden `crosses` array and
-// jmvtab_reg_cross_keys() folds them into that one argument (there is no second one). The FIRST
-// variable is the modified one -- the grammar's own reading of `a*b` -- which the note states.
+// ---- Interactions + model-comparison builder CustomControl (modelBuilderCtrl) ------------
+// ONE control, two halves, in the order a model is built:
 //
-// Like the model builder, the signature is the POOL alone: picking a variable writes `crosses`,
-// which is not in it, so `updated` skips and the in-place <select> change stands; add / delete
-// change the row count and re-render synchronously in their own handlers.
+//   Interactions   a row per pair = [var1] x [var2] [x delete], plus "+ Add interaction". An
+//                  interaction is a PREDICTOR whose levels are combinations, so tab_reg() takes it
+//                  INSIDE `predictors` as the key `a*b`; the rows are the hidden `crosses` array,
+//                  and jmvtab_reg_cross_keys() turns them into those keys. The FIRST variable is
+//                  the modified one -- the grammar's own reading of `a*b`.
+//   Models         a card per model = an editable name + a checkbox per pool variable AND per
+//                  defined interaction + a delete button; "+ Add model" appends a card holding the
+//                  full pool and NO interaction. Cards are the hidden `models` Array
+//                  (Group{label, vars, crosses}); jmvtab_reg_models() folds them into `predictors`
+//                  (EMPTY builder -> the flat pool, every pair applied = one model; >=1 card -> a
+//                  named list = model comparison, TESTED automatically since 22g-ii -- sequential
+//                  where the models nest, against the first otherwise, so there is no picker).
+//
+// ⚠ Phase 22g-viii: a pair is DEFINED once and TICKED per model. Before that, jmvtab_reg_cross_fold()
+// replaced both parents in EVERY card that held them, so an additive model could not be asked for
+// beside a crossed one -- which is the one comparison defining an interaction exists for.
+//
+// ⚠ THREE things the picker cannot express, all made UNREACHABLE rather than repaired afterwards --
+// the rule that deleted linkOffered() in 22g-i. `syncCrosses()` and `jmvtab_reg_cross_keys()` keep
+// their own guards behind them, because a pair stored by an older build must not reach R either.
+//   `a*a`         meaningless: picking the variable already on the other side SWAPS the pair
+//   `a*b` + `b*c` a three-way interaction, which tabxplor does not fit -- so a variable another row
+//                 already uses simply is not offered (crossClaimed)
+//   `race*age`    where `age` is the continuous one: reg_cross_resolve() reads it as `age*race`,
+//                 so crossOrder() puts the pair in that order here (crossOrder)
+//
+// The signature EXCLUDES `models` and `crosses` (as the per-variable table excludes ref_levels): a
+// name edit and a tick write them and are SKIPPED by `updated`, so the in-place DOM edit stands. It
+// DOES carry the outcome count, because a second outcome closes the door on a second card (below).
+// ⚠ add / delete / a <select> pick change what the OTHER half shows -- the card chips' labels, the
+// row's own options -- so those three re-render synchronously in their handlers. A tick and a name
+// keystroke must NOT: they repaint in place, or the edit that caused the rebuild is clobbered.
 
-var lastCrossSig = null;
+var lastModelsSig = null;
 
-var crossSig = function(ui) { return JSON.stringify(utils.clone(ui.predictors.value(), [])); };
+var modelsSig = function(ui) {
+    var pool = utils.clone(ui.predictors.value(), []);
+    var deps = ui.outcome ? utils.clone(ui.outcome.value(), []) : [];
+    return JSON.stringify([pool, deps.length]);
+};
+
+// ---- the interactions half ---------------------------------------------------------------
 
 var crossesGet = function(ui) { return utils.clone(ui.crosses.value(), []); };
 
-// Drop rows whose variables have left the pool, or that name the same variable twice (tab_reg
-// refuses `a*a`, so the UI must never send one). Guarded: an unchanged array is not re-set.
-var reconcileCrosses = function(ui, pool) {
-    var cur  = crossesGet(ui);
-    var kept = cur.filter(function(e) {
-        return e && pool.indexOf(e.var1) >= 0 && pool.indexOf(e.var2) >= 0 && e.var1 !== e.var2;
-    });
-    if (JSON.stringify(kept) !== JSON.stringify(cur)) ui.crosses.setValue(kept);
+// ⚠ `a*b` is `tab_reg()`'s OWN spelling -- the key it takes inside `predictors`, and the name the
+// var column, the footer rows and reg_formulas() all print. It is what a card's tick-box is
+// labelled with, so a jamovi user reads the R syntax rather than a prettified twin of it.
+var crossKey = function(e) { return e.var1 + "*" + e.var2; };
+
+// What reg_cross_resolve() will see: a column is CATEGORICAL if it is a factor, or if its `shape`
+// cuts it into groups. `null` while the column is still being fetched -- an unknown kind must not
+// move anything.
+var crossKind = function(ui, v) {
+    var cached = cachedLevels(v);
+    if (cached === undefined) return null;
+    if (cached !== null) return "factor";
+    var sh = arrGet(ui, "shape", v, "shape");
+    return (sh && TABX_SHAPES_CUT.indexOf(sh) >= 0) ? "factor" : "numeric";
 };
 
-// Set one side of row `i`. Picking the variable already on the other side would make `a*a`, so the
-// other side steps to the first free variable instead of leaving an invalid pair on screen.
-var setCrossVar = function(ui, i, side, val, pool) {
+// ⚠ THE SWAP, mirroring reg_cross_resolve(). `*` is symmetric in the MODEL -- `a*b` and `b*a` are
+// one fit -- but the ROWS are about the FIRST variable, and only a continuous one has slopes to
+// show within groups. So R silently reads `race*age` as `age*race`, and the picker would otherwise
+// keep saying "effect of race within each level of age" about a table that says the opposite.
+// Applied where the two column heads already explain which is which, so it needs no message.
+var crossOrder = function(ui, e) {
+    return (crossKind(ui, e.var1) === "factor" && crossKind(ui, e.var2) === "numeric")
+        ? { var1: e.var2, var2: e.var1 } : e;
+};
+
+// The parents a set of keys names -- the mirror of jmvtab_reg_cross_parents(): a pair SUPPLIES both,
+// so a card holding the key must not also hold them.
+var crossParents = function(keys) {
+    var out = [];
+    keys.forEach(function(k) {
+        k.split("*").forEach(function(p) { if (out.indexOf(p) < 0) out.push(p); });
+    });
+    return out;
+};
+
+// The one sweep over `crosses`: drop rows whose variables have left the pool, that name the same
+// variable twice, or that reuse a variable an earlier row already took (one interaction per
+// variable -- see crossClaimed) -- then put every survivor in the order R will read it.
+// Returns { keys, renames }: `renames` is old-key -> new-key for the pairs the swap moved, because
+// a card stores the KEY it ticked and must follow it rather than silently lose the interaction.
+// Guarded: an unchanged array is not re-set.
+var syncCrosses = function(ui, pool) {
+    var cur = crossesGet(ui), used = {}, kept = [], renames = {};
+    cur.forEach(function(e) {
+        if (!e || e.var1 === e.var2) return;
+        if (pool.indexOf(e.var1) < 0 || pool.indexOf(e.var2) < 0) return;
+        if (used[e.var1] || used[e.var2]) return;
+        var was = crossKey(e), now = crossOrder(ui, e);
+        used[now.var1] = true; used[now.var2] = true;
+        if (crossKey(now) !== was) renames[was] = crossKey(now);
+        kept.push(now);
+    });
+    if (JSON.stringify(kept) !== JSON.stringify(cur)) ui.crosses.setValue(kept);
+    return { keys: kept.map(crossKey), renames: renames };
+};
+
+// What picking `v` on one side of row `e` yields. Picking the variable already on the other side
+// SWAPS the pair instead of making `a*a`.
+var crossPick = function(e, side, v) {
+    if ((side === "var1" ? e.var2 : e.var1) === v) return { var1: e.var2, var2: e.var1 };
+    return (side === "var1") ? { var1: v, var2: e.var2 } : { var1: e.var1, var2: v };
+};
+
+// ⚠ ONE INTERACTION PER VARIABLE. `a*b` beside `b*c` is a three-way interaction, which tabxplor
+// does not fit -- the second pair would simply not apply. So a variable another row already uses is
+// unreachable here, rather than pickable and then silently dropped. `exceptI` is the row asking.
+var crossClaimed = function(ui, exceptI) {
+    var out = {};
+    crossesGet(ui).forEach(function(e, j) {
+        if (j === exceptI || !e) return;
+        out[e.var1] = true; out[e.var2] = true;
+    });
+    return out;
+};
+
+// What either side of row `i` may offer: everything not claimed by ANOTHER row -- the other side of
+// THIS row included, because picking it swaps the pair rather than repeating a variable.
+var crossOptions = function(ui, i, pool) {
+    var claimed = crossClaimed(ui, i);
+    return pool.filter(function(v) { return !claimed[v]; });
+};
+
+// The first pair of variables no row uses -- so "+ Add" cannot seed a variable that is spoken for.
+var crossFreePair = function(ui, pool) {
+    var claimed = crossClaimed(ui, -1);
+    var free = pool.filter(function(v) { return !claimed[v]; });
+    return (free.length < 2) ? null : { var1: free[0], var2: free[1] };
+};
+
+var setCrossVar = function(ui, i, side, val) {
     var arr = crossesGet(ui);
     if (!arr[i]) return;
-    var other = (side === "var1") ? "var2" : "var1";
-    var e = { var1: arr[i].var1, var2: arr[i].var2 };
-    e[side] = val;
-    if (e[other] === val) {
-        var free = pool.filter(function(v) { return v !== val; });
-        if (free.length === 0) return;
-        e[other] = free[0];
-    }
-    arr[i] = e;
+    arr[i] = crossPick(arr[i], side, val);
     ui.crosses.setValue(arr);
+    renderModelBuilder(ui);        // syncCrosses() then orders it; the cards' labels follow
 };
 
 var addCross = function(ui, pool) {
+    var e = crossFreePair(ui, pool);
+    if (!e) return;
     var arr = crossesGet(ui);
-    arr.push({ var1: pool[0], var2: pool[1] });
+    arr.push(e);
     ui.crosses.setValue(arr);
-    renderCrossPicker(ui);                    // count changed -> synchronous re-render
+    renderModelBuilder(ui);
 };
 
 var deleteCross = function(ui, i) {
     var arr = crossesGet(ui);
     arr.splice(i, 1);
     ui.crosses.setValue(arr);
-    renderCrossPicker(ui);
+    renderModelBuilder(ui);        // the cards lose that chip (reconcileModels sweeps it)
 };
 
 var renderCrossRow = function(ui, frag, e, i, pool) {
     var row = document.createElement("div"); row.style.cssText = TABX.crossRow;
-    row.appendChild(makeSelect(TABX.mtSel, pool, null, e.var1,
-        function(v) { setCrossVar(ui, i, "var1", v, pool); }));
-    var x = document.createElement("span"); x.style.cssText = TABX.crossOp; x.textContent = "\u00d7";
+    row.appendChild(makeSelect(TABX.mtSel, crossOptions(ui, i, pool), null, e.var1,
+        function(v) { setCrossVar(ui, i, "var1", v); }));
+    // the operator is `*`, the spelling `predictors` itself takes -- the row teaches the R syntax
+    var x = document.createElement("span"); x.style.cssText = TABX.crossOp; x.textContent = "*";
     row.appendChild(x);
-    row.appendChild(makeSelect(TABX.mtSel, pool, null, e.var2,
-        function(v) { setCrossVar(ui, i, "var2", v, pool); }));
+    row.appendChild(makeSelect(TABX.mtSel, crossOptions(ui, i, pool), null, e.var2,
+        function(v) { setCrossVar(ui, i, "var2", v); }));
     var del = document.createElement("button");
-    del.type = "button"; del.style.cssText = TABX.cardDel; del.textContent = "\u00d7";
+    del.type = "button"; del.style.cssText = TABX.xDel; del.textContent = "×";
     del.title = "Remove this interaction";
     del.addEventListener("click", function() { deleteCross(ui, i); });
     row.appendChild(del);
     frag.appendChild(row);
 };
 
-var renderCrossPicker = function(ui) {
-    if (!ui.crossPickerCtrl || !ui.crosses || !ui.predictors) return;
-    lastCrossSig = crossSig(ui);
-    var pool = utils.clone(ui.predictors.value(), []);
-    reconcileCrosses(ui, pool);
-
-    var frag = document.createElement("div");
-    frag.setAttribute("data-tabx-cross", "1");
+var renderCrossBlock = function(ui, frag, pool, keys) {
+    var h = document.createElement("div"); h.style.cssText = TABX.sectionHead;
+    h.textContent = "Interactions";
+    frag.appendChild(h);
 
     if (pool.length < 2) {
         var h0 = document.createElement("div"); h0.style.cssText = TABX.hint;
         h0.textContent = "Select at least two predictors: an interaction crosses two of them.";
         frag.appendChild(h0);
-    } else {
-        crossesGet(ui).forEach(function(e, i) { renderCrossRow(ui, frag, e, i, pool); });
-        var note = document.createElement("div"); note.style.cssText = TABX.hint;
-        note.textContent = "The effect of the FIRST variable is read within each level of the second."
-                         + " Both are dropped as separate predictors: the pair replaces them.";
-        frag.appendChild(note);
-        var add = document.createElement("button");
-        add.type = "button"; add.style.cssText = TABX.addBtn; add.textContent = "+ Add interaction";
-        add.addEventListener("click", function() { addCross(ui, pool); });
-        frag.appendChild(add);
+        return;
     }
 
-    var root = ui.crossPickerCtrl.$el[0];
-    root.innerHTML = ""; root.appendChild(frag);
+    // one WELL holding the rows AND the button that grows them, so a list reads as one object
+    var well = document.createElement("div"); well.style.cssText = TABX.well;
+    if (keys.length > 0) {
+        var head = document.createElement("div"); head.style.cssText = TABX.crossHead;
+        ["effect of", "", "within each level of", ""].forEach(function(t) {
+            var s = document.createElement("span"); s.textContent = t; head.appendChild(s);
+        });
+        well.appendChild(head);
+        crossesGet(ui).forEach(function(e, i) { renderCrossRow(ui, well, e, i, pool); });
+    }
+    var add = document.createElement("button");
+    add.type = "button"; add.style.cssText = TABX.addBtn; add.textContent = "+ Add interaction";
+    if (crossFreePair(ui, pool) === null) { add.disabled = true; add.style.opacity = "0.45"; }
+    else add.addEventListener("click", function() { addCross(ui, pool); });
+    well.appendChild(add);
+    frag.appendChild(well);
+
+    // Only the EMPTY state gets a line, and only because there is nothing else to read there: with
+    // rows on screen the two column heads already say what the pair means.
+    if (keys.length === 0) {
+        var note = document.createElement("div"); note.style.cssText = TABX.hint;
+        note.textContent = "Cross two predictors to read the effect of the first within each level of the second.";
+        frag.appendChild(note);
+    }
 };
 
-
-// ---- Model-comparison builder CustomControl (modelBuilderCtrl) ---------------------------
-// One card per model = an editable name + a checkbox per predictor in the pool (the `predictors`
-// slot) + a delete button; a "+ Add model" button appends a card defaulting to the FULL pool.
-// The cards are stored in the hidden `models` Array (Group{label, vars}); jmvtab_reg_models()
-// folds them into tab_reg()'s `predictors` (an EMPTY builder -> the flat pool = single model; >=1
-// card -> a named list = model comparison, which since 22g-ii is TESTED automatically -- sequential
-// where the models nest, against the first otherwise -- so there is no comparison picker to show.
-//
-// The signature deliberately EXCLUDES `models` (as the per-variable table excludes ref_levels): a name
-// edit writes it and is SKIPPED by `updated`, so the in-place DOM edit stands; add / delete change
-// the card COUNT and re-render synchronously in their own handlers. It DOES carry the outcome count,
-// because a second outcome closes the door on a second card (below).
-
-var lastModelsSig = null;
-
-var modelsSig = function(ui) {
-    var pool    = utils.clone(ui.predictors.value(), []);
-    var deps = ui.outcome ? utils.clone(ui.outcome.value(), []) : [];
-    return JSON.stringify([pool, deps.length]);
-};
+// ---- the models half ----------------------------------------------------------------------
 
 var modelsGet = function(ui) { return utils.clone(ui.models.value(), []); };
 
-// Store card `i`'s checked vars in POOL ORDER (drop anything not in the pool). Guarded setValue.
-var setCardVars = function(ui, i, checkedSet, pool) {
+// Store card `i` in POOL order then KEY order (dropping anything neither offers). Guarded setValue.
+var setCard = function(ui, i, vars, crs, pool, keys) {
     var arr = modelsGet(ui);
     if (!arr[i]) return;
-    arr[i] = { label: arr[i].label || "", vars: pool.filter(function(v) { return checkedSet[v]; }) };
+    arr[i] = { label:   arr[i].label || "",
+               vars:    pool.filter(function(v) { return vars.indexOf(v) >= 0; }),
+               crosses: keys.filter(function(k) { return crs.indexOf(k)  >= 0; }) };
     ui.models.setValue(arr);
 };
 
 var setCardLabel = function(ui, i, label) {
     var arr = modelsGet(ui);
     if (!arr[i]) return;
-    arr[i] = { label: label, vars: (arr[i].vars || []).slice() };
+    arr[i] = { label: label, vars: (arr[i].vars || []).slice(),
+               crosses: (arr[i].crosses || []).slice() };
     ui.models.setValue(arr);
 };
 
-var addCard = function(ui, pool) {                       // a new card defaults to the full pool
+// A new card holds the full pool and NO interaction: the additive model is the one a with/without
+// comparison starts from, and it is what the panel showed before any card existed.
+var addCard = function(ui, pool) {
     var arr = modelsGet(ui);
-    arr.push({ label: "", vars: pool.slice() });
+    arr.push({ label: "", vars: pool.slice(), crosses: [] });
     ui.models.setValue(arr);
     renderModelBuilder(ui);                              // count changed -> synchronous re-render
 };
@@ -1436,19 +1559,31 @@ var deleteCard = function(ui, i) {
     renderModelBuilder(ui);
 };
 
-// Drop vars no longer in the pool; keep the card + its name (a growing pool does NOT retro-add a
-// new predictor to existing cards -- correct model-comparison semantics). Guarded setValue.
-var reconcileModels = function(ui, pool) {
+// Drop vars no longer in the pool, keys no longer defined, and any parent of a key the card still
+// holds; keep the card + its name (a growing pool does NOT retro-add a new predictor to existing
+// cards -- correct model-comparison semantics). ⚠ `renames` first: a card stores the KEY it ticked,
+// so when syncCrosses() puts a pair in R's own order the card must FOLLOW it rather than find its
+// key undefined and silently drop the interaction. ⚠ the kept sets are SUBSETS, so comparing
+// lengths is comparing contents. Guarded setValue.
+var reconcileModels = function(ui, pool, keys, renames) {
     var arr = modelsGet(ui), changed = false;
     for (var i = 0; i < arr.length; i++) {
         var vars = arr[i].vars || [];
-        var kept = pool.filter(function(v) { return vars.indexOf(v) >= 0; });
-        if (kept.length !== vars.length) { arr[i] = { label: arr[i].label || "", vars: kept }; changed = true; }
+        var crs  = (arr[i].crosses || []).map(function(k) { return renames[k] || k; });
+        var keptK = keys.filter(function(k) { return crs.indexOf(k) >= 0; });
+        var par   = crossParents(keptK);
+        var keptV = pool.filter(function(v) {
+            return vars.indexOf(v) >= 0 && par.indexOf(v) < 0;
+        });
+        if (keptV.length !== vars.length || keptK.length !== crs.length) {
+            arr[i] = { label: arr[i].label || "", vars: keptV, crosses: keptK };
+            changed = true;
+        }
     }
     if (changed) ui.models.setValue(arr);
 };
 
-var renderModelCard = function(ui, frag, card, i, pool) {
+var renderModelCard = function(ui, frag, card, i, pool, keys) {
     var box  = document.createElement("div"); box.style.cssText = TABX.cardBox;
     var head = document.createElement("div"); head.style.cssText = TABX.cardHead;
 
@@ -1467,30 +1602,101 @@ var renderModelCard = function(ui, frag, card, i, pool) {
 
     var vbox = document.createElement("div"); vbox.style.cssText = TABX.cardVars;
     var checks = [];
-    var checkedNow = {};
-    (card.vars || []).forEach(function(v) { checkedNow[v] = true; });
-    pool.forEach(function(v) {
-        var lab = document.createElement("label"); lab.style.cssText = TABX.cardChk;
-        var cb  = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!checkedNow[v];
-        cb.addEventListener("change", function() {
-            var set = {};
-            checks.forEach(function(c) { if (c.cb.checked) set[c.v] = true; });
-            if (Object.keys(set).length === 0) { cb.checked = true; return; }  // keep >=1 per card
-            setCardVars(ui, i, set, pool);
+    var onNow  = {};
+    (card.vars || []).forEach(function(v) { onNow[v] = true; });
+    (card.crosses || []).forEach(function(k) { onNow[k] = true; });
+
+    // A ticked interaction OWNS its two variables: they are unticked and greyed, and come back when
+    // it is unticked. `locked` is what remembers which ones to restore, so the DOM alone carries it.
+    var relock = function(first) {
+        var by = {};
+        checks.forEach(function(c) {
+            if (!c.key || !c.cb.checked) return;
+            c.v.split("*").forEach(function(p) { by[p] = c.v; });
         });
-        checks.push({ v: v, cb: cb });
-        lab.appendChild(cb); lab.appendChild(document.createTextNode(" " + v));
+        checks.forEach(function(c) {
+            if (c.key) return;
+            var owner = by[c.v] || null;
+            if (owner) c.cb.checked = false;
+            else if (!first && c.locked) c.cb.checked = true;
+            c.cb.disabled = !!owner;
+            c.lab.style.opacity = owner ? "0.5" : "";
+            c.lab.title = owner ? ("included in " + owner) : "";
+            c.locked = !!owner;
+        });
+    };
+
+    var commit = function(cb) {
+        relock(false);
+        var vars = [], crs = [];
+        checks.forEach(function(c) { if (c.cb.checked) (c.key ? crs : vars).push(c.v); });
+        if (vars.length + crs.length === 0) { cb.checked = true; relock(false); return; }
+        setCard(ui, i, vars, crs, pool, keys);
+    };
+
+    var addCheck = function(v, text, isKey) {
+        var lab = document.createElement("label"); lab.style.cssText = TABX.cardChk;
+        var cb  = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!onNow[v];
+        cb.addEventListener("change", function() { commit(cb); });
+        checks.push({ v: v, cb: cb, lab: lab, key: isKey, locked: false });
+        lab.appendChild(cb); lab.appendChild(document.createTextNode(" " + text));
         vbox.appendChild(lab);
-    });
+    };
+
+    pool.forEach(function(v) { addCheck(v, v, false); });
+    if (keys.length > 0) {
+        var sep = document.createElement("span"); sep.style.cssText = TABX.chkSep;
+        sep.textContent = "│";
+        vbox.appendChild(sep);
+        // labelled with the KEY itself: a jamovi user reads `age*race`, the R spelling
+        keys.forEach(function(k) { addCheck(k, k, true); });
+    }
+    relock(true);
+
     box.appendChild(vbox);
     frag.appendChild(box);
 };
 
+var renderCardsBlock = function(ui, frag, pool, keys) {
+    var h = document.createElement("div"); h.style.cssText = TABX.sectionHead;
+    h.textContent = "Models comparison: choose predictors subsets";
+    frag.appendChild(h);
+
+    var cards = modelsGet(ui);
+    // ⚠ A comparison tests two models OF THE SAME OUTCOME, so a SECOND card is refused while a
+    // second outcome is selected -- and only then. One card and several outcomes is a plain
+    // per-outcome table (jmvtab_reg_models() flattens it), which is why the door closes on the
+    // second card rather than on the second outcome.
+    var nDeps  = ui.outcome ? utils.clone(ui.outcome.value(), []).length : 0;
+    var canAdd = (nDeps <= 1) || cards.length < 1;
+
+    // one WELL holding the cards AND the button that grows them, as the interactions list has
+    var well = document.createElement("div"); well.style.cssText = TABX.well;
+    cards.forEach(function(card, i) { renderModelCard(ui, well, card, i, pool, keys); });
+    var add = document.createElement("button");
+    add.type = "button"; add.style.cssText = TABX.addBtn; add.textContent = "+ Add model";
+    add.disabled = !canAdd;
+    if (!canAdd) add.style.opacity = "0.45";
+    else add.addEventListener("click", function() { addCard(ui, pool); });
+    well.appendChild(add);
+    frag.appendChild(well);
+
+    var note = document.createElement("div"); note.style.cssText = TABX.hint;
+    note.textContent = !canAdd
+        ? "One predictor list only: a comparison tests two models of the SAME outcome, and several outcomes are selected."
+        : (cards.length === 0
+           ? "Add two or more models to compare them; leave empty to fit the full model."
+           : "Each model draws from the predictors above; untick to leave one out.");
+    frag.appendChild(note);
+};
+
 var renderModelBuilder = function(ui) {
-    if (!ui.modelBuilderCtrl || !ui.models || !ui.predictors) return;
+    if (!ui.modelBuilderCtrl || !ui.models || !ui.predictors || !ui.crosses) return;
     lastModelsSig = modelsSig(ui);
     var pool = utils.clone(ui.predictors.value(), []);
-    reconcileModels(ui, pool);
+    var cr   = syncCrosses(ui, pool);        // filter + order the pairs; `renames` the cards follow
+    var keys = cr.keys;
+    reconcileModels(ui, pool, keys, cr.renames);
     forceNaForCompare(ui);          // >=2 cards -> the models must share one complete-case population
 
     var frag = document.createElement("div");
@@ -1501,28 +1707,8 @@ var renderModelBuilder = function(ui) {
         h0.textContent = "Select predictors first: they form the pool each model draws from.";
         frag.appendChild(h0);
     } else {
-        var cards = modelsGet(ui);
-        // ⚠ A comparison tests two models OF THE SAME OUTCOME, so a SECOND card is refused while a
-        // second outcome is selected -- and only then. One card and several outcomes is a plain
-        // per-outcome table (jmvtab_reg_models() flattens it), which is why the door closes on the
-        // second card rather than on the second outcome.
-        var nDeps = ui.outcome ? utils.clone(ui.outcome.value(), []).length : 0;
-        var canAdd = (nDeps <= 1) || cards.length < 1;
-        cards.forEach(function(card, i) { renderModelCard(ui, frag, card, i, pool); });
-        var note = document.createElement("div"); note.style.cssText = TABX.hint;
-        note.textContent = !canAdd
-            ? "One predictor list only: a comparison tests two models of the SAME outcome, and several outcomes are selected."
-            : (cards.length === 0
-               ? "Add two or more models to compare specifications; leave empty to fit one model on all predictors."
-               : "Each model draws from the predictors above; untick to leave a predictor out.");
-        frag.appendChild(note);
-
-        var add = document.createElement("button");
-        add.type = "button"; add.style.cssText = TABX.addBtn; add.textContent = "+ Add model";
-        add.disabled = !canAdd;
-        if (!canAdd) add.style.opacity = "0.45";
-        else add.addEventListener("click", function() { addCard(ui, pool); });
-        frag.appendChild(add);
+        renderCrossBlock(ui, frag, pool, keys);
+        renderCardsBlock(ui, frag, pool, keys);
     }
 
     var root = ui.modelBuilderCtrl.$el[0];
@@ -1535,7 +1721,8 @@ module.exports = {
     update:       onUpdate,
     view_updated: onUpdate,
 
-    // A variable box changed: every per-variable widget lists them, so all four rebuild.
+    // A variable box changed: every per-variable widget lists them, so all three rebuild -- and
+    // since 22g-viii the interactions ride inside the builder, so nothing is left out of this list.
     onChange_vars: function(ui) {
         applyVarEnables(ui);
         renderModelTable(ui);
@@ -1543,23 +1730,10 @@ module.exports = {
         renderModelBuilder(ui);
     },
 
-    // modelBuilderCtrl: build on create. On `updated`, re-render ONLY when the pool / compare changed OR
-    // jamovi replaced our $el subtree (marker gone) -- a card / name / marker edit writes models/baseline
-    // (NOT in the signature), so it is SKIPPED and the in-place repaint stands.
-    // crossPickerCtrl: the interaction rows. Same rule as the model builder -- a variable PICK
-    // writes `crosses`, which is not in the signature (the predictor pool is), so it is skipped and
-    // the in-place <select> change stands; add / delete re-render in their own handlers.
-    crossPickerCtrl_creating: function(ui) { renderCrossPicker(ui); },
-    crossPickerCtrl_updated:  function(ui) {
-        if (!ui.crossPickerCtrl || !ui.predictors) return;
-        var sig  = crossSig(ui);
-        var root = ui.crossPickerCtrl.$el[0];
-        var present = !!(root && root.firstChild && root.firstChild.getAttribute &&
-                         root.firstChild.getAttribute("data-tabx-cross") === "1");
-        if (sig === lastCrossSig && present) return;
-        renderCrossPicker(ui);
-    },
-
+    // modelBuilderCtrl: build on create. On `updated`, re-render ONLY when the pool / outcome count
+    // changed OR jamovi replaced our $el subtree (marker gone) -- a card name, a tick, an
+    // interaction pick all write `models` / `crosses`, which are NOT in the signature, so they are
+    // SKIPPED and whatever the handler painted stands.
     modelBuilderCtrl_creating: function(ui) { renderModelBuilder(ui); },
     modelBuilderCtrl_updated:  function(ui) {
         if (!ui.modelBuilderCtrl || !ui.predictors) return;

@@ -263,16 +263,43 @@ test_that("the interaction row is free on a glm and opt-in where it costs a seco
 
 # ---- jamovi ---------------------------------------------------------------------------------
 
-test_that("the jamovi picker folds a pair into `predictors`, replacing its parents", {
+test_that("the jamovi picker turns a pair into an `a*b` key, and refuses `a*a`", {
   pool <- c("race", "age4", "relig")
-  k <- jmvtab_reg_cross_keys(list(list(var1 = "race", var2 = "age4")), pool)
-  expect_identical(k, "race*age4")
+  expect_identical(jmvtab_reg_cross_keys(list(list(var1 = "race", var2 = "age4")), pool),
+                   "race*age4")
+  # both parents must be in the pool
   expect_identical(jmvtab_reg_cross_keys(list(list(var1 = "race", var2 = "nope")), pool),
                    character(0))
+  # ⚠ `race*race` is meaningless: the picker cannot express it (a pick equal to the other side
+  # swaps the pair) and this is the boundary's own refusal, which must not trust the UI.
+  expect_identical(jmvtab_reg_cross_keys(list(list(var1 = "race", var2 = "race")), pool),
+                   character(0))
+  # an exact repeat contributes one key; `a*b` and `b*a` are DIFFERENT (the first is the modified one)
+  expect_identical(
+    jmvtab_reg_cross_keys(list(list(var1 = "race", var2 = "age4"),
+                               list(var1 = "race", var2 = "age4"),
+                               list(var1 = "age4", var2 = "race")), pool),
+    c("race*age4", "age4*race"))
+})
+
+test_that("with NO card the pair replaces its parents; with cards, each card states its own", {
+  pool <- c("race", "age4", "relig")
+  k <- jmvtab_reg_cross_keys(list(list(var1 = "race", var2 = "age4")), pool)
+  # no card -> nowhere to tick, so every defined pair applies to the single live model
   expect_identical(jmvtab_reg_models(list(), pool, k), c("race*age4", "relig"))
-  # a model card that does not hold both parents is untouched -- what makes with/without expressible
-  m <- jmvtab_reg_models(list(list(label = "a", vars = c("race", "age4")),
-                              list(label = "b", vars = c("race", "relig"))), pool, k)
-  expect_identical(m$a, "race*age4")
-  expect_identical(m$b, c("race", "relig"))
+  # Phase 22g-viii: a card holds the pair only when it TICKED it -- which is what makes an additive
+  # model expressible beside a crossed one, the comparison defining an interaction exists for.
+  m <- jmvtab_reg_models(list(list(label = "additive", vars = c("race", "age4")),
+                              list(label = "crossed",  vars = c("race", "age4"),
+                                   crosses = "race*age4")), pool, k)
+  expect_identical(m$additive, c("race", "age4"))
+  expect_identical(m$crossed,  "race*age4")
+  # a parent named BESIDE its own key is dropped: reg_parse_crosses() refuses that pair
+  m2 <- jmvtab_reg_models(list(list(label = "a", vars = c("race", "age4", "relig"),
+                                    crosses = "race*age4")), pool, k)
+  expect_identical(m2$a, c("relig", "race*age4"))
+  # a key no longer DEFINED cannot survive in a card
+  m3 <- jmvtab_reg_models(list(list(label = "a", vars = "relig", crosses = "race*relig")),
+                          pool, k)
+  expect_identical(m3$a, "relig")
 })

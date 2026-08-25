@@ -12,6 +12,12 @@ items:
     # Hidden state carrier for the live fit cache. Only Image elements persist a `$state` across the
     # engine reset, so this 0-size Image hosts the (gzip-RDS'd) store of fit digests / raw fits. It
     # renders nothing (.plot returns TRUE); `.run()` reads/writes self$results$cache_state$state.
+    # ⚠ `clearWith: []` IS LOAD-BEARING. jmvcore's Image$new() defaults `clearWith` to "*", and
+    # ResultsElement$fromProtoBuf() opens with
+    #     if (someChanges && identical("*", private$.clearWith)) return()
+    # -- so with the default the state is NOT restored the moment ANY option changes, which is
+    # precisely when a cache is supposed to hit. An empty vector clears with nothing; the state is
+    # this module's own and `.run()` invalidates it by SIGNATURE, never by jamovi's option diff.
     - name: cache_state
       title: ""
       type: Image
@@ -19,16 +25,20 @@ items:
       height: 1
       renderFun: .plot
       visible: false
+      clearWith: []
 
     # Phase h: persists the last COMPUTED comparison (signature + rendered HTML) across engine resets,
     # so that in staged model-comparison mode `.run()` can re-serve the last table (or flag it outdated)
     # without recomputing until the Run button is clicked. Same 0-size hidden-Image mechanism.
-    # ⚠ `visible: false` IS LOAD-BEARING, and it is why this differs from a plain results image.
-    # jmvcore's Image$asProtoBuf() reports an image that HOLDS A STATE and has rendered no file as
-    # ANALYSIS_RENDERING -- and `.plot` writes no file, by design. Left visible, the client then asks
-    # for a render, and that round-trip overwrote the run's own results: the comparison appeared and
-    # was replaced a moment later by the "staged" banner. State itself is serialized in
-    # ResultsElement$asProtoBuf() INDEPENDENTLY of `visible`, so hiding it costs nothing.
+    # `visible: false` keeps it out of the results panel and costs the store nothing:
+    # ResultsElement$asProtoBuf() serialises `state` in a branch that never reads `visible`.
+    # ⚠ it is NOT what stops the client asking for a render -- Image$asProtoBuf() reports a
+    # state-holding image that wrote no file as ANALYSIS_RENDERING whatever `visible` says, and
+    # `.plot` writes no file by design. Phase 22g-vi blamed that round-trip for the comparison being
+    # replaced by the "staged" banner; the real cause was `clearWith` (below), and hiding the
+    # carrier did not fix it.
+    # ⚠ `clearWith: []` -- see cache_state above; without it the state is dropped on
+    # every option change, which is every time this carrier is meant to be read.
     - name: compare_state
       title: ""
       type: Image
@@ -36,4 +46,5 @@ items:
       height: 1
       renderFun: .plot
       visible: false
+      clearWith: []
 ...

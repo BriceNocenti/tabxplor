@@ -180,38 +180,13 @@ children:
                   - type: Label
                     label: effect = <i>(where the numbers come from)</i>
                     children:
-                      - type: RadioButton
-                        name: effect_1
-                        optionName: effect
-                        optionPart: auto
-                      - type: RadioButton
-                        name: effect_2
-                        optionName: effect
-                        optionPart: conditional
-                      - type: RadioButton
-                        name: effect_3
-                        optionName: effect
-                        optionPart: marginal
-                      - type: RadioButton
-                        name: effect_4
-                        optionName: effect
-                        optionPart: at_reference
+                      - type: ComboBox
+                        name: effect
+  # Phase 22g-viii: the interaction picker lost its own CollapseBox and lives at the TOP of the next
+  # one, inside modelBuilderCtrl -- an interaction IS a predictor, so it is defined where a model
+  # says which predictors it holds, and each card then ticks it like any other (jmvtabreg.js).
   - type: CollapseBox
-    label: <b>Interactions</b>
-    stretchFactor: 1
-    collapsed: true
-    children:
-      - type: LayoutBox
-        margin: none
-        children:
-          - type: CustomControl
-            name: crossPickerCtrl
-            stretchFactor: 1
-            events:
-              creating: ./jmvtabreg::crossPickerCtrl_creating
-              updated: ./jmvtabreg::crossPickerCtrl_updated
-  - type: CollapseBox
-    label: <b>Model comparison (+ predictor subsets)</b>
+    label: <b>Models comparison and interactions</b>
     stretchFactor: 1
     collapsed: true
     children:
@@ -352,6 +327,15 @@ children:
                     optionPart: print_ready
           - type: LayoutBox
             cell:
+              column: 1
+              row: 0
+            stretchFactor: 1
+            children:
+              - type: CheckBox
+                name: cleannames
+                label: "<b>cleannames = <i>(tidy level names)</i></b>"
+          - type: LayoutBox
+            cell:
               column: 0
               row: 1
             stretchFactor: 1
@@ -396,15 +380,6 @@ children:
                 children:
                   - type: ComboBox
                     name: digits
-          - type: LayoutBox
-            cell:
-              column: 0
-              row: 3
-            stretchFactor: 1
-            children:
-              - type: CheckBox
-                name: cleannames
-                label: "<b>cleannames = <i>(tidy level names)</i></b>"
       - type: LayoutBox
         margin: large
         stretchFactor: 1

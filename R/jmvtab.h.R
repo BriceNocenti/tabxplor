@@ -564,7 +564,8 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 width=1080,
                 height=1,
                 renderFun=".plot",
-                visible=FALSE))}))
+                visible=FALSE,
+                clearWith=list()))}))
 
 jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     "jmvtabBase",
