@@ -139,7 +139,8 @@ test_that("weighted multinomial (svyVGAM) matches a hand svy_vglm OR", {
                             family = VGAM::multinomial(refLevel = 1))
   hand_or <- exp(stats::coef(hand))
 
-  tab <- tab_reg(d, "yn", c("x1", "x2"), family = "multinomial", wt = "w", ref = c(x2 = 0))
+  tab <- tab_reg(d, "yn", c("x1", "x2"), family = "multinomial", wt = "w", ref = c(x2 = 0),
+                 multiplier = 1)
   # one OR column per non-reference outcome category ("B", "C"); 14w strips the trailing ": OR"
   or_cols <- grep(" vs ", names(tab), value = TRUE)
   expect_length(or_cols, 2L)

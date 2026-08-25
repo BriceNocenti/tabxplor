@@ -116,13 +116,26 @@ test_that("tab_reg() puts one OR column per model, blank where a predictor is ab
   expect_false(all(is.na(get_or(t2[["full"]])[rincome_rows])))
 })
 
-test_that("a 3+ level outcome forced to binomial errors cleanly", {
+test_that("a 3+ level outcome forced to binomial is ONE LEVEL against the rest", {
   skip_if_not_installed("broom")
-  # Phase 20a: tab_logit() forced the family, so this used to be an unqualified refusal. tab_reg()
-  # DETECTS a 6-level nominal outcome and builds a multinomial table instead -- which is exactly the
-  # capability the wrapper hid. What must still refuse is the FORCED family.
-  expect_error(tab_reg(logit_data(), "marital", "race", family = "binomial"), "binary|2 level")
-  expect_no_error(suppressMessages(tab_reg(logit_data(), "marital", "race")))
+  d <- logit_data()
+  # Phase 22g-v: the forced family used to be refused. It now collapses the outcome -- the chosen
+  # level (the first, by default) against every other one merged -- which is the ordinary way of
+  # asking "what predicts being X rather than anything else". The default is still multinomial.
+  lv <- levels(forcats::fct_drop(as.factor(d$marital)))[[2]]
+  t  <- suppressMessages(tab_reg(d, "marital", "race", family = "binomial",
+                                 outcome_level = lv, stats = "no", multiplier = 1,
+                                 empirical = FALSE, cleannames = FALSE))
+  hand <- stats::glm(
+    forcats::fct_rev(factor(ifelse(d$marital == lv, "y", "n"), levels = c("y", "n"))) ~ race,
+    data = d, family = stats::binomial())
+  or   <- get_or(reg_first_fmt(t))[as.character(t$var) != "Constant"]
+  expect_equal(unname(or[!is.na(or) & or != 1]),
+               unname(exp(stats::coef(hand))[-1]), tolerance = 1e-6)
+  # ...and the collapse is ANNOUNCED: it changes what the table is about
+  expect_message(tab_reg(d, "marital", "race", family = "binomial", outcome_level = lv,
+                         stats = "no", empirical = FALSE), "against the")
+  expect_no_error(suppressMessages(tab_reg(d, "marital", "race")))
 })
 
 test_that("tab_reg() output exports through every backend without error", {

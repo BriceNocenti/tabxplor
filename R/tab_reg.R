@@ -315,7 +315,10 @@ reg_multiplier_value <- function(value, sd, digits = 3L) {
   }
   k <- suppressWarnings(as.numeric(v))
   if (!is.finite(k)) return(list(k = NA_real_, label = NA_character_))
-  list(k = k, label = if (k == 1) NA_character_ else format(k))
+  # DESIGN: the LABEL is descriptive, the factor is arithmetic, and 1 is the value where the two
+  # disagree -- scaling by 1 is a no-op, but "per 1" is exactly what a user who typed it asked to
+  # read. So every finite k gets a label, and only the SCALING drops the ones that do nothing.
+  list(k = k, label = format(k))
 }
 
 #' @keywords internal
@@ -336,9 +339,13 @@ reg_resolve_multiplier <- function(multiplier, default, data, num_preds, wt = NU
     reg_multiplier_value(vals[[v]] %||% default, sds[[v]]))
   k   <- vapply(res, function(z) z$k,     numeric(1))
   lab <- vapply(res, function(z) z$label, character(1))
+  # the two vectors are filtered SEPARATELY, per the rule in reg_multiplier_value(): `k` carries the
+  # scaling (a factor of 1 changes no number, so it is dropped), `label` carries what the level row
+  # says (a scaling of 1 is still a statement about the unit).
   keep <- is.finite(k) & k != 1
-  if (!any(keep)) return(list(k = NULL, label = NULL))
-  list(k = k[keep], label = lab[keep])
+  said <- is.finite(k) & !is.na(lab)
+  if (!any(said)) return(list(k = NULL, label = NULL))
+  list(k = if (any(keep)) k[keep] else NULL, label = lab[said])
 }
 
 # === SECTION: Naming -- the outcome kind, the family, the column headers and labels =============
@@ -358,9 +365,12 @@ REG_OUTCOME_KINDS <- list(
   # (`link = "ratio"`), not a count model, and naming it twice is what the cascade deletes.
   binary   = list(detect = "binomial",    offers = "binomial",
                   said = "binary outcome detected"),
-  ordered  = list(detect = "ordinal",     offers = c("ordinal", "multinomial"),
+  # a 3+ level outcome also offers BINOMIAL: one level against all the others merged, which is the
+  # ordinary way of asking "what predicts being X rather than anything else". Never the default --
+  # collapsing categories is a choice, and `outcome_level` is where it is made.
+  ordered  = list(detect = "ordinal",     offers = c("ordinal", "multinomial", "binomial"),
                   said = "ordered outcome detected"),
-  nominal  = list(detect = "multinomial", offers = c("multinomial", "ordinal"),
+  nominal  = list(detect = "multinomial", offers = c("multinomial", "ordinal", "binomial"),
                   said = "nominal outcome detected"),
   numeric  = list(detect = "gaussian",    offers = c("gaussian", "binomial", "poisson"),
                   said = "continuous outcome detected")
@@ -666,6 +676,29 @@ reg_prep_binary <- function(data, outcome, outcome_level = NULL) {
   }
   data[[outcome]] <- y
   attr(data, "positive_level") <- levels(y)[[2L]]
+  data
+}
+
+# ONE LEVEL AGAINST THE REST -- `family = "binomial"` on a 3+ level outcome. Done at the ARGUMENT
+# BOUNDARY, with the anchors, the relevels and the crosses, and NOT in reg_fit_frame(): the crude
+# block and reg_check_plots()' replay rebuild the model frame independently, and all three must be
+# looking at the same column. After it, every engine sees an ordinary binary outcome.
+# ⚠ said once, because it changes what the table IS: a reader must know which categories were merged.
+#' @keywords internal
+#' @noRd
+reg_binarise_outcome <- function(data, outcome, outcome_level = NULL, announce = TRUE) {
+  y <- data[[outcome]]
+  if (!(is.factor(y) || is.character(y))) return(data)
+  y  <- forcats::fct_drop(as.factor(y))
+  if (nlevels(y) <= 2L) return(data)
+  lv <- if (!is.null(outcome_level) && outcome_level %in% levels(y)) outcome_level
+        else levels(y)[[1L]]
+  rest <- gettextf("Not %s", lv)
+  if (announce)
+    cli::cli_inform(c("i" = paste0(
+      "{.val {outcome}}: {.code family = \"binomial\"} models {.val {lv}} against the ",
+      "{nlevels(y) - 1L} other categories, merged.")))
+  data[[outcome]] <- factor(ifelse(as.character(y) == lv, lv, rest), levels = c(lv, rest))
   data
 }
 
@@ -2561,19 +2594,28 @@ reg_stats_keys_of <- function(stats) {
 #' @keywords internal
 #' @noRd
 reg_resolve_stats <- function(stats) {
-  none <- list(stats = stats, compare = "none", baseline = NULL)
-  # ⚠ FALSE / "none" hides the comparison too: one argument means one list of what the footer shows.
-  if (isFALSE(stats) || identical(stats, "none")) return(none)
+  # `none` = keep what was ASKED FOR, drop only the comparison (the named-footer-set branch below);
+  # `nothing` = no footer at all.
+  none    <- list(stats = stats, compare = "none", baseline = NULL)
+  nothing <- list(stats = FALSE, compare = "none", baseline = NULL)
+  # NOTHING IS NOTHING. `NULL` / `FALSE` / "no" / "none" all hide the WHOLE footer, the comparison
+  # included: one argument means one list of what the footer shows, and a user who writes NULL is
+  # asking for no statistics, not for the default set. That is why the signature's default is the
+  # word "auto" -- R cannot tell a missing argument from an explicit NULL.
+  if (is.null(stats) || isFALSE(stats) ||
+      (is.character(stats) && length(stats) == 1L && stats %in% c("no", "none"))) return(nothing)
   # THE DEFAULT COMPARES. Writing several `predictors` sets is something a reader does on purpose,
   # and the row that says whether the added variables bought anything is the point of writing them
   # -- so "auto" is what the unnamed footer asks for, and reg_compare_rows() then picks BETWEEN the
   # two comparisons from the models themselves (nested chain -> sequential, else vs the first).
   # ⚠ it must NEVER abort or restrict, being a default: reg_resolve_args() degrades it to "none"
   # wherever a between-model test has no meaning, before anything reads it.
-  auto <- list(stats = if (is.character(stats) && length(stats)) stats else NULL,
-               compare = "auto", baseline = NULL)
-  if (is.null(stats) || isTRUE(stats) || identical(stats, "all")) return(auto)
-  if (!is.character(stats) || !length(stats)) return(none)
+  # ⚠ "all" travels on, because reg_footer_stats() reads that word itself (every statistic AND every
+  # check); "auto" / TRUE ask for the per-family default set, which it spells NULL.
+  auto <- function(keep) list(stats = keep, compare = "auto", baseline = NULL)
+  if (identical(stats, "all")) return(auto("all"))
+  if (isTRUE(stats) || identical(stats, "auto")) return(auto(NULL))
+  if (!is.character(stats) || !length(stats)) return(nothing)
 
   keys  <- reg_stats_keys_of(stats)
   is_cmp <- keys %in% c("compare_baseline", "compare_sequential")
@@ -2601,6 +2643,86 @@ reg_resolve_stats <- function(stats) {
   list(stats    = if (!length(rest)) NULL else rest,
        compare  = if (identical(cmp, "compare_sequential")) "sequential" else "baseline",
        baseline = bl)
+}
+
+# === SECTION: `digits =` -- a FLOOR, and a per-token override ====================================
+# DIGITS ARE A DISPLAY PROPERTY, so `digits` writes where the display lives and nowhere else:
+#   digits = 2                  a floor on every cell -- the stored per-column `digits` field
+#   digits = c(base = 1)        one token, at that precision -- the "{base:1}" template suffix
+#   digits = c(2, ratio = 3)    both
+# The two halves are not interchangeable: the FIELD is one number for a whole cell (so it can only
+# raise the estimate and the tokens that declare a minimum), while only the TEMPLATE can say that an
+# aside reads at one decimal beside an estimate reading at three. Neither adds a field or an
+# attribute -- the record already carries both.
+#' @keywords internal
+#' @noRd
+reg_resolve_digits <- function(digits) {
+  none <- list(floor = 0L, tokens = integer(0))
+  if (is.null(digits) || !length(digits)) return(none)
+  if (!is.numeric(digits) && !is.character(digits))
+    cli::cli_abort("{.arg digits} must be a number, or a named vector of them.", call = NULL)
+  d  <- suppressWarnings(as.integer(digits))
+  nm <- names(digits) %||% rep("", length(d))
+  if (anyNA(d) || any(d < 0L | d > 6L))
+    cli::cli_abort(c("{.arg digits} must be whole numbers between 0 and 6.",
+                     "x" = "Got {.val {as.character(digits)}}."), call = NULL)
+  known <- c(DISPLAY_USER_FIELDS, names(DISPLAY_ALIASES))
+  bad   <- setdiff(nm[nzchar(nm)], known)
+  if (length(bad))
+    cli::cli_abort(c("{.arg digits} names {?a field/fields} no cell can print: {.val {bad}}.",
+                     "i" = "Valid: {.or {.val {DISPLAY_USER_FIELDS}}}.",
+                     "i" = "An unnamed value is the floor for the whole table."), call = NULL)
+  if (sum(!nzchar(nm)) > 1L)
+    cli::cli_abort(c("{.arg digits} takes ONE unnamed value, the floor for the whole table.",
+                     "i" = 'Name the others: {.code digits = c(2, ratio = 3)}.'), call = NULL)
+  list(floor  = if (any(!nzchar(nm))) d[[which(!nzchar(nm))[[1]]]] else 0L,
+       tokens = stats::setNames(d[nzchar(nm)], nm[nzchar(nm)]))
+}
+
+# The per-token half, applied POST-HOC over the finished table -- one pass, the way set_display() is
+# post-hoc: it rewrites each fmt column's template, naming the precision on the tokens the user
+# named. ⚠ `est` / `base` are scale-relative, so a column is matched on the token its scale resolves
+# them to as well as on the written word -- `digits = c(ratio = 3)` finds a column whose template
+# says `{est}` and whose estimate IS a ratio.
+#' @keywords internal
+#' @noRd
+reg_digits_write <- function(tab, floor = 0L, tokens = integer(0)) {
+  if (floor <= 0L && !length(tokens)) return(tab)
+  for (j in which(vapply(tab, is_fmt, logical(1)))) {
+    col <- tab[[j]]
+    # THE FLOOR, on the stored field. A count is not raised: format() pins the `n` tokens at 0
+    # decimals before any floor is read, which is where that rule belongs and already lives.
+    if (floor > 0L) col <- set_digits(col, pmax(get_digits(col), floor))
+    tab[[j]] <- col
+    if (!length(tokens)) next
+    scl <- fmt_scale_row(col)
+    d   <- get_display(col)
+    # ⚠ `est` / `base` are scale-relative, so a token is matched BOTH as written and as this column's
+    # scale resolves it: `digits = c(ratio = 3)` must find a column whose template says `{est}`.
+    named <- function(tok) {
+      h <- match(tok, names(tokens))
+      ifelse(is.na(h), match(fmt_resolve_scale_tokens(tok, scl), names(tokens)), h)
+    }
+    for (tmpl in unique(d[!is.na(d) & nzchar(d)])) {
+      # a BARE token is a one-token template; writing it braced is what gives it a precision
+      if (!grepl("{", tmpl, fixed = TRUE)) {
+        h <- named(display_primary(tmpl))
+        if (is.na(h)) next
+        d[!is.na(d) & d == tmpl] <- paste0("{", tmpl, ":", tokens[[h]], "}")
+        next
+      }
+      seg <- parse_display_template(tmpl)
+      hit <- named(seg$fields)
+      if (all(is.na(hit))) next
+      pieces <- seg$pieces
+      ti     <- which(seg$is_tok)
+      for (i in which(!is.na(hit)))
+        pieces[[ti[[i]]]] <- paste0("{", seg$fields[[i]], ":", tokens[[hit[[i]]]], "}")
+      d[!is.na(d) & d == tmpl] <- paste0(pieces, collapse = "")
+    }
+    tab[[j]] <- set_display(col, d)
+  }
+  tab
 }
 
 #' @keywords internal
@@ -2636,7 +2758,7 @@ reg_footer_stats <- function(family, weighted, grouped, stats) {
   # same word, and the two must not disagree about what "all" means).
   if (identical(stats, "all")) return(reg_check_expand(unique(c(default, "global", checks))))
   if (is.null(stats) || isTRUE(stats)) return(reg_check_expand(default))
-  if (isFALSE(stats) || identical(stats, "none")) return(character(0))
+  if (isFALSE(stats)) return(character(0))
   reg_check_expand(stats[stats %in% reg_stat_keys()])
 }
 
@@ -3051,7 +3173,7 @@ new_reg_shared <- function(union_predictors = character(0), design_spec = list()
                            multiplier = NULL, multiplier_label = NULL,
                            anchors = NULL, anchor_keyword = NULL,
                            shape_terms = NULL, shape_kinds = character(0), crosses = list(),
-                           empirical = FALSE, display = NULL,
+                           empirical = FALSE, display = NULL, digits = NULL,
                            var_labels = character(0), na_shared_vars = character(0),
                            base_n = "range") {
   as.list(environment())
@@ -3901,6 +4023,9 @@ reg_stage_finalize <- function(ctx) {
   # The confidence level and the basis are stamped on EACH fmt column -- the colour engine is per
   # column and cannot read a table attribute. The df is NOT: every column already carries its own.
   reg_inf <- reg_inference(shared, emp_degraded)
+  # the per-token half of `digits`, post-hoc over every fmt column at once (see reg_resolve_digits)
+  dg  <- digits %||% list(floor = 0L, tokens = integer(0))
+  tab <- reg_digits_write(tab, dg$floor %||% 0L, dg$tokens %||% integer(0))
   out <- reg_finalize(tab, test, conf_level, var_labels, group_vars = "var",
                       outcomes = unique(purrr::map_chr(specs, "outcome")),
                       basis = reg_inf$basis,
@@ -4054,7 +4179,7 @@ reg_stage_finalize <- function(ctx) {
 #'   `"logit"`) and the internal fit keys [reg_formulas()] reports in its `fit` column (`"rr"`,
 #'   `"rd"`, `"mr"`) --- so what the package printed can be typed straight back. ⚠ `"log"` is the one
 #'   word the two arguments do not share: here it is the **log link**, on `measure` it is a spelling
-#'   of `"coefficient"`.
+#'   of `"raw_coefficient"`.
 #' @param measure **Which measure is reported** --- the one argument most readers ever set, and the
 #'   one that never changes the model. `"auto"` (default) is the model's own measure: follow from
 #'   the left. The full word is the canonical spelling and the discipline's acronym an accepted
@@ -4075,13 +4200,15 @@ reg_stage_finalize <- function(ctx) {
 #'   group, how often does the one from this group end up higher on the scale* --- with that
 #'   probability itself in brackets, 50 % being a coin flip. For a number per outcome category, use
 #'   `family = "multinomial"`.
-#'   * `"coefficient"` (`"coef"`, `"log"`, `"log_odds"`, `"log_risk"`, `"log_rate"`) --- **the
-#'     model's own coefficient, un-transformed**. Where the reported measure is multiplicative that
-#'     is its log, and the header names what it logs (`Model_log(OR)`), never one greek letter for
-#'     five quantities; where the model is already additive there is nothing to un-exponentiate and
-#'     it IS the additive estimate. So it answers for every family --- which is what lets one table
-#'     mixing a logistic and a linear outcome be asked for its coefficients at all. Bare
-#'     `"coefficient"` takes whatever the cascade would report; the `log_*` spellings pin which base.
+#'   * `"raw_coefficient"` (`"raw_coef"`, `"coefficient"`, `"coef"`, `"log"`, `"log_odds"`,
+#'     `"log_risk"`, `"log_rate"`) --- **the model's own coefficient, un-transformed**. Where the
+#'     reported measure is multiplicative that is its log, and the header names what it logs
+#'     (`Model_log(OR)`), never one greek letter for five quantities; where the model is already
+#'     additive there is nothing to un-exponentiate and it IS the additive estimate. So it answers
+#'     for every family --- which is what lets one table mixing a logistic and a linear outcome be
+#'     asked for its coefficients at all. Bare `"raw_coefficient"` takes whatever the cascade would
+#'     report; the `log_*` spellings pin which base. It is the model's **own** number, so it is
+#'     always the conditional one: asked with `effect = "marginal"` it says so and names the cure.
 #'
 #'   **Every acronym a header can print is an accepted spelling here** --- the list under *The header
 #'   acronyms* below is the same table this argument reads, so `"cumOR"`, `"D"` and `"WR"` work too,
@@ -4194,8 +4321,10 @@ reg_stage_finalize <- function(ctx) {
 #' @param multiplier How a **continuous** predictor's effect is scaled --- the unit its row reports.
 #'   One unit of a continuous variable is rarely a readable amount (a one-year change in `age` barely
 #'   moves the odds, so its odds ratio sits inside the first colour break and the row reads as "no
-#'   effect"), so the default is **one standard deviation**. Values: `"sd"` (the default), `"2sd"`
-#'   (roughly bottom to top of the distribution), or a number of units (`10` = per decade of age);
+#'   effect"), so the default is **two standard deviations** --- roughly the span a binary
+#'   predictor's own contrast covers, which is what makes a continuous row and a factor row
+#'   comparable at a glance (Gelman 2008). Values: `"2sd"` (the default), `"sd"`, or a number of
+#'   units (`10` = per decade of age);
 #'   `multiplier = 1` restores the per-one-unit reading. The row's level states every fact that
 #'   places it --- the transform `shape` fitted it through, the unit its effect is per, and the `ref`
 #'   anchor the Constant row sits at: `log(x), per 0.39 (SD), at 3.78 (mean)`. The variable itself is
@@ -4203,7 +4332,7 @@ reg_stage_finalize <- function(ctx) {
 #'
 #'   `multiplier`, `shape` and `ref` share one grammar: a **value on its own** applies to every
 #'   continuous predictor, a **named** one overrides that variable, and `default =` spells the first
-#'   out --- so `multiplier = c("2sd", age = 10)` reads "per two standard deviations, except `age`,
+#'   out --- so `multiplier = c("sd", age = 10)` reads "per one standard deviation, except `age`,
 #'   per decade".
 #'
 #'   Everything scales together --- the estimate, its interval, the crude `Obs_*` companion and the
@@ -4294,8 +4423,8 @@ reg_stage_finalize <- function(ctx) {
 #'   (`5 139-9 862`), so an unequal base can never pass unnoticed; `"min"` shows the smallest count
 #'   only, `"no"` no count at all. Continuous predictors are left blank: on a listwise-complete frame
 #'   their count is the model N. With `tab_vars`, one column per group, to the right of the models.
-#' @param stats The statistics shown in the model-summary **footer** (one block per model). `NULL`
-#'   (default) uses the per-family set: linear models show R square, adjusted R square, the
+#' @param stats The statistics shown in the model-summary **footer** (one block per model).
+#'   `"auto"` (default) uses the per-family set: linear models show R square, adjusted R square, the
 #'   overall F-test and the residual SD; other models show the likelihood-ratio test versus the
 #'   null model, McFadden's pseudo-R square, AIC and BIC (count and grouped-binomial models also show
 #'   the Pearson dispersion, `"phi"`). Every default set also carries the **default model checks**
@@ -4304,7 +4433,8 @@ reg_stage_finalize <- function(ctx) {
 #'   `"r2_adj"`, `"f_model"`, `"sigma"`, `"global"`, `"interaction"`, `"group_interaction"`,
 #'   `"linearity"`,
 #'   `"proportionality"`, `"dispersion"`, `"influence"`, `"collinearity"`), `"all"` for everything
-#'   this model can report, or `FALSE` / `"none"` to hide the footer. Weighted models show a reduced,
+#'   this model can report, or `NULL` / `FALSE` / `"no"` / `"none"` to hide the footer entirely.
+#'   Weighted models show a reduced,
 #'   survey-appropriate set (design-based Wald test, Nagelkerke pseudo-R square, AIC).
 #'
 #'   **Model comparison happens by default** wherever it means anything --- when `predictors` is a
@@ -4423,6 +4553,10 @@ reg_stage_finalize <- function(ctx) {
 #'   A cell that cannot fill an aside leaves it **blank but padded**, so the effects still line up;
 #'   an aside no cell of the column can fill is dropped, padding and all.
 #'
+#'   A hand-written template may give any token **its own precision**, `"{est:3} ({base:1})"` ---
+#'   the same thing `digits` writes when a field is named, and the only way to set an aside's
+#'   decimals independently of the estimate's.
+#'
 #'   The **Constant** row is the baseline the rest of the column is read against, at the very point
 #'   that column's effects are read at: under `effect = "conditional"` the model's intercept ---
 #'   every factor at its reference level and every continuous predictor at its `ref` anchor, the
@@ -4433,7 +4567,8 @@ reg_stage_finalize <- function(ctx) {
 #'   It holds **the quantity the column's effects operate on**, so it is read in one step: an odds
 #'   ratio multiplies odds, so an odds column shows the baseline *odds* (`1/1.51`) with the
 #'   probability beside it (`(40%)`); a risk or rate ratio multiplies the level and a difference adds
-#'   to it, so those show the **level itself** --- `39%`, `40.8`, `2.9`; and `measure = "coefficient"` shows
+#'   to it, so those show the **level itself** --- `39%`, `40.8`, `2.9`; and
+#'   `measure = "raw_coefficient"` shows
 #'   the intercept on the link scale. It is a baseline, not a comparison, so it never carries a `+`
 #'   or a `x` sign. It carries its confidence interval, and a **star** only where what it prints has
 #'   a null to be tested against (the odds and link scales, under `effect = "conditional"`): a
@@ -4447,16 +4582,15 @@ reg_stage_finalize <- function(ctx) {
 #'   a layout never triggers a computation and never changes a number --- [set_display()] on a built
 #'   table gives the same result as asking for it here. It never changes the fit or the estimand,
 #'   which is `measure`'s job alone.
-#' @param color,color_signif Colouring of the effect cells. `color = TRUE` (default) grades each cell
-#'   on **its own scale** --- the ladder follows what the column estimates (`measure`), so it is
-#'   never asked for separately; `color = FALSE` turns colouring off. `color_signif` is the
+#' @param color,color_signif Colouring of the effect cells. `color = "measure"` (default, `TRUE`
+#'   equivalently) grades each cell on **its own measure** --- the ladder follows what the column
+#'   estimates, so it is never asked for separately; `color = FALSE` turns colouring off. `color_signif` is the
 #'   significance policy (default `"grey_non_signif"`). See [tab()].
 #'
 #'   What is left to choose is what each effect is compared **to**. Both such measures are meant for
 #'   the *background* channel so the text keeps showing the effect size: `color` is positional,
-#'   `c(text, background)`, and `TRUE` in the text slot means "the column's own scale", so
-#'   `color = c(TRUE, "adjustment")` answers "how strong is this effect?" and "how much did the model
-#'   change it?" in one glance.
+#'   `c(text, background)`, so `color = c("measure", "adjustment")` answers "how strong is this
+#'   effect?" and "how much did the model change it?" in one glance.
 #'
 #'   * `"adjustment"` --- how far each **modelled** effect sits from its **observed** (crude)
 #'     counterpart, i.e. what adjusting for the other predictors did to it. It turns
@@ -4511,6 +4645,18 @@ reg_stage_finalize <- function(ctx) {
 #'   `"drop_by_model"` lets each model use its own complete cases --- more rows, at the price of
 #'   comparability: models fitted on different people get no observed effect at all. `"drop_all"`
 #'   shares one population across the whole call, all outcomes included.
+#'
+#'   `"keep_for_predictors"` drops nothing but a missing **outcome**: every predictor keeps its
+#'   missing values as an ordinary `NA` level, with its own row, its own count and its own effect ---
+#'   which is often the fastest way to find out whether non-response is itself patterned. A number
+#'   has no level to put them in, so a numeric predictor that has any is cut into bands
+#'   (`shape = c(age = "quartiles")` chooses otherwise; a `shape` that keeps it a number is refused).
+#' @param digits The number of decimals. A single integer sets every cell (`0`, the default, means
+#'   "each measure's own"), and where a measure is **finer than the level it sits on** it keeps that:
+#'   a per-item odds ratio reads at two decimals beside a mean score at one, whatever is asked. Name a display field to set just that one, an aside included ---
+#'   `digits = c(ratio = 3)`, `digits = c(base = 2)`, `digits = c(1, or = 3)`. The names are
+#'   `display`'s own tokens, so what a cell shows and how precisely it shows it are asked in the same
+#'   words; a template may also carry its own, `display = "{est:3} ({base:1})"`.
 #' @param cleannames Logical. If `TRUE`, strips numeric prefixes from factor levels for display.
 #'   Uses `getOption("tabxplor.cleannames")` when `NULL`.
 #' @param subtext Optional character. A note shown below the table.
@@ -4606,11 +4752,11 @@ reg_stage_finalize <- function(ctx) {
 tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL,
                     family = "auto", link = "auto", measure = "auto", effect = "auto",
                     outcome_level = NULL, trials = NULL, empirical = TRUE, n = NULL,
-                    color = TRUE, color_signif = NULL, stars = TRUE,
-                    ref = NULL, multiplier = "sd", shape = NULL, stats = NULL,
+                    color = "measure", color_signif = NULL, stars = TRUE,
+                    ref = NULL, multiplier = "2sd", shape = NULL, stats = "auto",
                     conf_level = NULL,
-                    na = c("drop_by_outcome", "drop_by_model", "drop_all"),
-                    display = NULL, cleannames = NULL, subtext = "", ...) {
+                    na = c("drop_by_outcome", "drop_by_model", "drop_all", "keep_for_predictors"),
+                    display = NULL, digits = 0, cleannames = NULL, subtext = "", ...) {
   # ⚠ FIRST: capture the four variable roles before anything can force their promises -- and the
   # EXPRESSION `data` was written as, which is how reg_check_plots() finds the microdata again
   # without the user naming it twice (only a bare name is ever re-resolved; see reg_plot_fits()).
@@ -4715,7 +4861,7 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
     stars = stars, conf_level = conf_level, method = method, ref = ref,
     outcome_level = outcome_level, multiplier = multiplier,
     shape = shape, stats = stats,
-    na = na, na_explicit = na_explicit, display = display, cleannames = cleannames,
+    na = na, na_explicit = na_explicit, display = display, digits = digits, cleannames = cleannames,
     subtext = subtext, .fit_cache = .fit_cache, levels_collapse = .levels_collapse)
 
   res <- reg_build(a$data, a$specs, a$shared, tab_vars = tab_vars,

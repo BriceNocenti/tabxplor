@@ -276,9 +276,9 @@ test_that("a NAMED vector overrides per variable; unnamed predictors keep the sc
   t1 <- tab_reg(d, "married", p, family = "binomial", multiplier = 1, cleannames = FALSE)
   tn <- tab_reg(d, "married", p, family = "binomial", multiplier = c(age = 10),
                 cleannames = FALSE)
-  ts <- tab_reg(d, "married", p, family = "binomial", multiplier = "sd", cleannames = FALSE)
+  ts <- tab_reg(d, "married", p, family = "binomial", cleannames = FALSE)
   expect_equal(or_of(tn, "age"), or_of(t1, "age")^10, tolerance = 1e-8)
-  # tvhours is NOT named -> it keeps the SCALAR DEFAULT ("sd"), not per 1 unit
+  # tvhours is NOT named -> it keeps the SCALAR DEFAULT ("2sd"), not per 1 unit
   expect_equal(or_of(tn, "tvhours"), or_of(ts, "tvhours"), tolerance = 1e-12)
 
   tm <- tab_reg(d, "married", p, family = "binomial",
@@ -288,12 +288,14 @@ test_that("a NAMED vector overrides per variable; unnamed predictors keep the sc
   expect_equal(or_of(tm, "tvhours"), or_of(t1, "tvhours")^5, tolerance = 1e-8)
 })
 
-test_that("multiplier = 1 is per-1-unit everywhere (and stores nothing)", {
+test_that("multiplier = 1 is per-1-unit everywhere -- scaling nothing, and SAYING so", {
   d <- num_data()
   t <- tab_reg(d, "married", c("age", "race"), family = "binomial", multiplier = 1,
                cleannames = FALSE)
+  # the scaling factor is dropped (multiplying by 1 changes no number)...
   expect_null(reg_call(t)$multiplier)
-  expect_false(any(grepl("per ", as.character(t$levels), fixed = TRUE)))
+  # ...but the LABEL is descriptive, and "per 1" is what the user asked to read (Phase 22g-v)
+  expect_true(any(grepl("per 1", as.character(t$levels), fixed = TRUE)))
 })
 
 test_that("the numeric row's label names its unit AND its anchor", {

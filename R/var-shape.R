@@ -20,7 +20,13 @@
 #     an argument, defaulting to the fit's answer.
 #   - THE LABEL IS THE ONLY THING A READER GETS. It carries the real cut points AND, in words, where
 #     the band sits -- and, on the crosstab side, the variable's name on the FIRST level, because a
-#     stripped table may name the row variable nowhere else.
+#     stripped table may name the row variable nowhere else. On a WHOLE-NUMBERED column it names the
+#     VALUES instead of the interval holding them ("0", "1 or 2", "3 to 6"): the breaks are already
+#     snapped to integers, so the two say the same thing and one of them is readable.
+#   - A QUANTILE CUT GIVES k GROUPS WHENEVER THE VALUES ALLOW IT. Ties make two quantiles land on
+#     one value, and deduplicating the breaks used to lose a group silently -- `quartiles` giving 3
+#     where `quintiles` gave 4, on one column. shape_fill_breaks() fills back up at the distinct
+#     values the quantiles missed; a genuine shortfall is stated, once.
 #   - `cut()` is always called `right = FALSE, include.lowest = TRUE`, so every label is the
 #     paren-free `[a,b)` form: cleannames_condition() (R/utils.R) strips any balanced ` (...)` group.
 #   - A TRANSFORM RENAMES ITS COLUMN, and shape_rename_transformed() returns that map (`renames`)
@@ -313,13 +319,39 @@ shape_snap_breaks <- function(x, br) {
   br
 }
 
-# The interval a cut() level names, kept as cut() writes it. A LITERAL, not a rebuild: the label is
-# what a replay re-cuts against, and re-formatting it would drift.
+# The interval a cut() level names. A LITERAL, not a rebuild: the label is what a replay re-cuts
+# against, and re-formatting it would drift -- with ONE exception, below.
+#
+# DESIGN: A WHOLE-NUMBERED VARIABLE NAMES ITS VALUES, not its interval. `[0,1)` holds exactly the
+# value 0 and `[1,3)` exactly 1 and 2, so "0" and "1 or 2" say the same thing in the reader's own
+# words. It is safe precisely where it applies: the breaks are already snapped to whole numbers
+# (shape_snap_breaks), so the interval and the value set are the same statement.
+# ⚠ the labels become factor LEVELS -- unique, no trailing parenthetical (cleannames_condition()
+# strips one), and they are frozen into the spec, which the jamovi cache key hashes.
 #' @keywords internal
 #' @noRd
 shape_bounds <- function(x, breaks) {
   f <- cut(x, breaks = breaks, include.lowest = TRUE, right = FALSE, dig.lab = 4L)
-  list(idx = as.integer(f), bounds = levels(f))
+  list(idx = as.integer(f), bounds = shape_bound_labels(x, breaks, levels(f)))
+}
+
+# The value-set spelling of each [a, b) interval, on a whole-numbered column only.
+#' @keywords internal
+#' @noRd
+shape_bound_labels <- function(x, breaks, bounds) {
+  u <- x[is.finite(x)]
+  if (!length(u) || !all(abs(u - round(u)) < 1e-8)) return(bounds)
+  b <- round(breaks)
+  if (length(b) != length(bounds) + 1L || any(abs(breaks - b) > 1e-8)) return(bounds)
+  lo <- b[-length(b)]
+  # every interval is [a, b) but the LAST, which cut(include.lowest =) closes on its upper bound
+  hi <- c(b[-c(1L, length(b))] - 1L, b[[length(b)]])
+  # ⚠ ONE STRING LITERAL PER gettextf() CALL -- potools extracts what it sees, gettext() looks up
+  # what was evaluated, so a message pasted together inside the call can never be found again.
+  labs <- ifelse(lo == hi, as.character(lo),
+                 ifelse(hi == lo + 1L, gettextf("%s or %s", lo, hi),
+                        gettextf("%s to %s", lo, hi)))
+  if (anyDuplicated(labs)) bounds else labs
 }
 
 # THE label rule, one function for every cut. Bounds first (the real cut points), then in words where
@@ -361,6 +393,41 @@ shape_band_words <- function(tag) {
   }, character(1))
 }
 
+# Fill a collapsed quantile cut back up to k groups, at the distinct values the quantiles missed.
+# Greedy and weight-aware: each pass takes the WIDEST group by population and splits it at the
+# distinct value that leaves its two halves closest to equal -- which is what an equal-frequency cut
+# was asking for in the first place. Returns as many breaks as the values allow, never more than k+1.
+#' @keywords internal
+#' @noRd
+shape_fill_breaks <- function(x, br, k, w = NULL) {
+  x  <- as.numeric(x); ok <- is.finite(x)
+  w  <- if (is.null(w)) rep(1, length(x)) else as.numeric(w)
+  ok <- ok & is.finite(w) & w > 0
+  if (!any(ok)) return(br)
+  x <- x[ok]; w <- w[ok]
+  u <- sort(unique(x))
+  while (length(br) < k + 1L) {
+    # candidate cut points: every value that opens a new group, i.e. every one not already a break
+    cand <- setdiff(u[-1L], br)
+    if (!length(cand)) break
+    g  <- findInterval(x, br, rightmost.closed = TRUE)
+    sw <- vapply(seq_len(length(br) - 1L), function(i) sum(w[g == i]), numeric(1))
+    pick <- NA_real_
+    # heaviest group first; a group holding one distinct value cannot be split, so try the next
+    for (i in order(sw, decreasing = TRUE)) {
+      in_i <- cand > br[[i]] & cand < br[[i + 1L]]
+      if (!any(in_i)) next
+      # the split of THIS group that leaves its two sides most even
+      pick <- cand[in_i][which.min(vapply(cand[in_i], function(cp)
+        abs(sum(w[g == i & x >= cp]) - sum(w[g == i & x < cp])), numeric(1)))]
+      break
+    }
+    if (is.na(pick)) break
+    br <- sort(c(br, pick))
+  }
+  br
+}
+
 # k quantile groups of a numeric column, as a factor. Breaks are WEIGHTED quantiles when the call
 # carries weights (equal share of the POPULATION, not of the sample), with the extremes forced to the
 # observed range so no value falls out.
@@ -384,6 +451,18 @@ shape_cut_quantiles <- function(x, k, w = NULL, var = "x", breaks = NULL, labels
                      "x" = "Its distribution has too few distinct values.",
                      "i" = 'Use fewer groups, or {.val levels} to keep one level per value.'),
                    call = NULL)
+  # THE ARGUMENT MEANS WHAT IT SAYS. On a tied variable two quantiles land on the same value and the
+  # `unique()` above silently drops one, so `quartiles` gave 3 groups where `quintiles` gave 4 -- on
+  # the same column, which reads as a bug because it is one. Fill back up to k at the distinct values
+  # the quantiles missed, taking each time the split that leaves the two sides most even, and stop
+  # when the values run out: a genuine shortfall is a fact about the data, an uneven one was not.
+  br <- shape_fill_breaks(x, br, k, w)
+  # A SHORTFALL IS NOW A FACT ABOUT THE DATA, so it is said -- and only then. ⚠ one string literal
+  # per gettextf() call (see shape_band_words).
+  if (length(br) - 1L < k)
+    cli::cli_inform(c("i" = gettextf(
+      "%s: cut into %s groups rather than %s, having too few distinct values.",
+      var, length(br) - 1L, k)))
   b    <- shape_bounds(x, br)
   # Q1..Qk: the group's rank, three characters, so a reader knows `[29,38)` is the second fifth.
   labs <- shape_labels(b$bounds, paste0("Q", seq_along(b$bounds)), name)

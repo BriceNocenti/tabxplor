@@ -680,7 +680,7 @@ test_that("multiplier reaches the 3+ level engines: per-SD by DEFAULT on ordinal
   expect_gt(k, 1)
   expect_equal(get_or(t1[["Model_cumOR"]])[i], get_or(tk[["Model_cumOR"]])[i]^k, tolerance = 1e-8)
   expect_equal(get_pvalue(t1[["Model_cumOR"]])[i], get_pvalue(tk[["Model_cumOR"]])[i])
-  expect_match(as.character(t1$levels)[i], "^per [0-9.]+ \\(SD\\)")
+  expect_match(as.character(t1$levels)[i], "^per [0-9.]+ \\(2SD\\)")
   # a factor level is untouched by the rescale
   j <- which(as.character(t1$var) == "race" & !is_refrow(t1[["Model_cumOR"]]))
   expect_equal(get_or(t1[["Model_cumOR"]])[j], get_or(tk[["Model_cumOR"]])[j])
@@ -1218,4 +1218,41 @@ test_that("the `n` column does not disturb the reference-row bold", {
   expect_identical(is_refrow(m[["n"]]), is_refrow(m[["Model_OR"]]))
   md <- tab_md(t, print = FALSE)
   expect_true(grepl("\\*\\*Other\\*\\*", md))          # the reference level, still bold
+})
+
+# ---- Phase 22g-v: keeping the missing values, and the profile interval --------------------------
+
+test_that("na = 'keep_for_predictors' gives every predictor an NA level, cutting a number for it", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  d$race[1:200]    <- NA                      # a factor: the level is kept as it stands
+  d$tvhours[1:300] <- NA                      # a number: it has no level to put them in
+  keep <- suppressMessages(
+    tab_reg(d, "married", c("race", "tvhours"), stats = "no", empirical = FALSE,
+            na = "keep_for_predictors", cleannames = FALSE))
+  drop <- suppressMessages(
+    tab_reg(d, "married", c("race", "tvhours"), stats = "no", empirical = FALSE,
+            cleannames = FALSE))
+  lv <- as.character(keep$levels)
+  expect_true(sum(lv == "NA") >= 2L)          # one per predictor, each with its own row
+  # the number was CUT so that it could hold one, and the rows it kept are real rows
+  expect_gt(sum(as.character(keep$var) == "tvhours"), 1L)
+  expect_gt(max(get_n(reg_first_fmt(keep)), na.rm = TRUE),
+            max(get_n(reg_first_fmt(drop)), na.rm = TRUE))
+  # ⚠ a shape that keeps it a NUMBER cannot hold the level, and says so rather than dropping them
+  expect_error(tab_reg(d, "married", c("race", "tvhours"), na = "keep_for_predictors",
+                       shape = c(tvhours = "log")), "no level to put them in")
+})
+
+test_that("ci_method = 'profile' really builds a profile-likelihood interval", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("MASS")
+  d <- reg_data()
+  w <- tab_reg(d, "married", "race", stats = "no", empirical = FALSE)
+  p <- tab_reg(d, "married", "race", stats = "no", empirical = FALSE, ci_method = "profile")
+  expect_identical(get_ci_method(reg_first_fmt(w)), "wald_log")
+  expect_identical(get_ci_method(reg_first_fmt(p)), "profile")
+  # the bounds MOVE (they are close on a large clean sample, which is why the stars often do not)
+  expect_false(identical(get_ci_inf(reg_first_fmt(w)), get_ci_inf(reg_first_fmt(p))))
+  expect_equal(get_or(reg_first_fmt(w)), get_or(reg_first_fmt(p)), tolerance = 1e-8)
 })

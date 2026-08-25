@@ -68,7 +68,7 @@ TAB_ARGS <- list(
             "only the first level printed. Deprecated in 2.0.0: pass these columns in \\code{col_vars} and",
             "set \\code{levels = \"first\"} instead (\\code{col_vars} already accepts several variables).")),
   na = list(
-    default = "keep", default_for = list(tab_reg = c("drop_by_outcome", "drop_by_model", "drop_all"), tab_num = c("keep", "drop")),
+    default = "keep", default_for = list(tab_reg = c("drop_by_outcome", "drop_by_model", "drop_all", "keep_for_predictors"), tab_num = c("keep", "drop")),
     producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), values = c("keep", "drop", "drop_all", "common_base"), leaf = c("keep", "drop"), size = 1L,
     doc = c("The policy to adopt for missing values, as a single string :",
             " \\itemize{",
@@ -103,9 +103,14 @@ TAB_ARGS <- list(
             "  }")),
   digits = list(
     default = 0,
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts"),
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
     doc = c("The number of digits to print, as a single integer, or an integer vector the",
-            "same length as \\code{col_vars}.")),
+            "same length as \\code{col_vars}."),
+    doc_for = list(tab_reg = c(
+      "The number of digits to print, as a single integer --- a \\strong{minimum}: each measure",
+      "  keeps its own precision where that is finer (an odds ratio reads at two decimals, a mean",
+      "  score at one). Name a display field to set just that one, including an aside:",
+      "  \\code{digits = c(ratio = 3)}, \\code{digits = c(base = 2)}, \\code{digits = c(1, or = 3)}."))),
   n_min = list(
     default = 0,
     producers = c("tab", "tab_counts"), check = "count",
@@ -369,7 +374,7 @@ TAB_ARGS <- list(
             "\\code{ci_method = c(cell = , diff = )} instead.")),
   method_diff = list(producers = c("tab"), status = "deprecated", doc_with = "method_cell"),
   color = list(
-    default = "no", default_for = list(tab_reg = TRUE, tab_num = "auto"),
+    default = "no", default_for = list(tab_reg = "measure", tab_num = "auto"),
     producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
     values_from = "MEASURES", values_rd = "color_measures_rd",
     doc = c("Which measure(s) of deviation to color, on which visual channel. \\code{FALSE} (default)",
@@ -599,7 +604,7 @@ TAB_ARGS <- list(
                    values = c("no", "tooltip", "cell", "column"), doc_in_producer = TRUE),
   outcome_level = list(producers = "tab_reg", default = NULL, values_from = "REG_FAMILIES",
                        doc_in_producer = TRUE),
-  multiplier = list(producers = "tab_reg", default = "sd", doc_in_producer = TRUE),
+  multiplier = list(producers = "tab_reg", default = "2sd", doc_in_producer = TRUE),
   # `dots` on tab(): the whole vocabulary is one help page of its own (?shape_numeric_var), and a
   # crowded signature is the wrong place to teach it. tab_reg() keeps its own prose -- there `shape`
   # is about FITTING, and a quadratic is a model term tab() cannot take.
@@ -624,7 +629,7 @@ TAB_ARGS <- list(
                             "  \\strong{first} level (\\code{\"age: [18,30) low\"}), so a table whose",
                             "  leading text columns are stripped still says what the levels are levels",
                             "  of. \\code{TRUE} by default.")),
-  stats = list(producers = "tab_reg", default = NULL, values_from = "TEST_ROWS",
+  stats = list(producers = "tab_reg", default = "auto", values_from = "TEST_ROWS",
                doc_in_producer = TRUE),
   output = list(
     producers = c("tab_build"), status = "internal",

@@ -752,6 +752,9 @@ le préfixe constant `Model_`.
 | un comptage   | `"difference"` | —                       | `mdiff`      | `refdiff`        |
 | un comptage   | `"odds_ratio"` | non défini              | non défini   | non défini       |
 
+La colonne `"conditional"` est celle que `reg_measures()` donne par **lien** ; les deux autres sont les
+mêmes pour tous les liens que la famille ajuste, et c'est pourquoi elle ne les liste qu'une fois.
+
 \* un coefficient n'existe **que là où cette mesure est le `link`** — voir le tableau précédent. En
 demander un qui ne l'est pas fait refuser l'appel, en nommant ses deux remèdes : retirer `effect`, ou
 ajuster le modèle qui l'estime.
@@ -761,26 +764,26 @@ catégories ou plus doit donc d'abord répondre à « contre quoi ? ». Sur une 
 n'existe que comme contraste *contre le reste* avec `effect = "at_reference"`, et sur une variable
 ordinale pas du tout.
 
-Les trois états sont ceux qu'affiche `reg_measures()`, et ce ne sont pas les mêmes refus :
-
-- un en-tête — **available** : l'appel le construit ;
-- **not defined** — la quantité n'existe pas pour cette variable expliquée, quoi qu'on implémente (un
-  rapport de cotes a besoin d'une probabilité dont prendre les cotes, un comptage n'en a pas) ;
-- **not offered** — tabxplor ne le construit pas, et le message d'erreur liste ce que cette variable
-  expliquée offre, sur ce modèle et sur les autres.
+`reg_measures(data, outcome)` affiche cette grille pour **votre** variable expliquée, et n'affiche
+que ce qui est constructible : une combinaison *not defined* n'a pas de ligne, et le message
+au-dessus du tableau dit pourquoi. Ses deux refus ne sont pas le même — un comptage n'a pas de cotes
+dont prendre le rapport, quoi qu'on implémente, tandis que *not offered* signifie que tabxplor ne le
+construit pas et que l'erreur liste ce que cette variable expliquée offre, sur ce modèle et sur les
+autres.
 
 Un état de plus n'existe qu'à l'exécution : un lien qui ne converge pas sur *vos* données. L'appel le
 dit, et pour la différence de risques il bascule sur le modèle de probabilité linéaire.
 
-`measure = "coefficient"` n'est pas une quatrième colonne : c'est **le coefficient du modèle
+`measure = "raw_coefficient"` n'est pas une quatrième colonne : c'est **le coefficient du modèle
 lui-même**, la quantité estimée montrée non transformée. Là où la mesure rapportée est
 multiplicative, c'est son logarithme, et l'en-tête dit laquelle il logarithme (`Model_log(OR)`,
-`Model_log(IRR)`, `Model_log(RoM)`, `Model_log(mRR)`) ; là où le modèle est déjà additif, il n'y a
-rien à dé-exponentier et le coefficient EST l'estimation additive que la colonne montre déjà. Il
-répond donc pour toutes les familles — ce qui permet de demander ses coefficients à un tableau
-mêlant une variable expliquée logistique et une variable expliquée linéaire. (`"log"`, `"log_odds"`,
-`"log_risk"` et `"log_rate"` sont des orthographes acceptées ; les trois dernières désignent
-laquelle.)
+`Model_log(IRR)`, `Model_log(RoM)`) ; là où le modèle est déjà additif, il n'y a rien à
+dé-exponentier et le coefficient EST l'estimation additive que la colonne montre déjà. Il répond
+donc pour toutes les familles — ce qui permet de demander ses coefficients à un tableau mêlant une
+variable expliquée logistique et une variable expliquée linéaire. Étant le nombre *propre* de
+l'ajustement, c'est toujours le coefficient conditionnel : demandé avec `effect = "marginal"`,
+l'appel le dit et nomme le remède. (`"coefficient"`, `"coef"`, `"log"`, `"log_odds"`, `"log_risk"` et
+`"log_rate"` sont des orthographes acceptées ; les trois dernières désignent laquelle.)
 
 ### Ce que veulent dire les en-têtes
 
@@ -892,17 +895,21 @@ quel modèle a tourné.
 
 ### Interroger votre propre variable expliquée
 
-`reg_measures()` affiche cette grille pour une variable expliquée de vos propres données, avec son
-statut case par case — elle lit la table même contre laquelle `tab_reg()` se résout, donc ce qu'elle
-affiche est ce que la fonction fait :
+`reg_measures()` affiche cette grille pour une variable expliquée de vos propres données — elle lit la
+table même contre laquelle `tab_reg()` se résout, donc ce qu'elle affiche est ce que la fonction fait :
 
 ```{r}
 reg_measures(gss_simple, "married")
 ```
 
-Elle lit à **un seul modèle** — celui propre à la famille, sauf si vous en nommez un autre avec
-`link =` — et le message liste les autres. Ce qui change de l'un à l'autre, c'est quelle mesure a un
-*coefficient* ; toute mesure reste rapportable depuis n'importe lequel.
+Elle vient en **deux blocs**. Le premier donne une ligne par modèle ajustable : son `link`, et la
+mesure que portent les coefficients de ce modèle. Le second donne ce qui se lit sur les *prédictions*
+du modèle — les mêmes quel que soit le lien ajusté, d'où le `link = "(any)"` de ces lignes. Ce que
+change `link`, c'est donc seulement quelle mesure a un **coefficient** ; toute mesure reste
+rapportable depuis n'importe lequel.
+
+Nommez un lien pour ne lire la table qu'à ce modèle, et une famille pour la lire comme cette sorte de
+variable expliquée :
 
 ```{r}
 reg_measures(gss_simple, "married", link = "ratio")

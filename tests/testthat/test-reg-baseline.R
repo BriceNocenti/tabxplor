@@ -132,13 +132,15 @@ test_that("a model check past its convention is MARKED, at the faintest shade", 
 })
 
 
-test_that("a logged MARGINAL column's baseline is the log of what its twin shows", {
+test_that("a logged RISK-scale column's baseline is the log of what its twin shows", {
   # `log_coef` is one row shared by every logged measure, so the column cannot say on its own whether
   # its exponential is an odds or a level -- and the baseline differs by exactly that. The estimand
   # records what it is the log OF (`log_of`), and the baseline is built on that scale, then logged.
+  # ⚠ Phase 22g-v: read at the model that ESTIMATES a risk ratio (the modified Poisson), since a raw
+  # coefficient is the model's own and has no marginal form.
   skip_if_not_installed("marginaleffects")
   d <- bl_data()
-  arg <- list(d, "married", c("race", "rincome"), family = "binomial", effect = "marginal",
+  arg <- list(d, "married", c("race", "rincome"), family = "binomial", link = "ratio",
               stats = FALSE)
   lg <- suppressMessages(do.call(tab_reg, c(arg, list(measure = "log_risk"))))
   rr <- suppressMessages(do.call(tab_reg, c(arg, list(measure = "ratio"))))
@@ -150,8 +152,12 @@ test_that("a logged MARGINAL column's baseline is the log of what its twin shows
   expect_equal(get_diff(lc)[i], log(get_pct(rc)[i]), tolerance = 1e-10)
   expect_true(is.finite(get_ci_inf(lc)[i]) && is.finite(get_ci_sup(lc)[i]))
   expect_true(get_ci_inf(lc)[i] <= get_diff(lc)[i] && get_diff(lc)[i] <= get_ci_sup(lc)[i])
-  # ...and it is still a baseline, so it carries no test.
-  expect_true(is.na(get_pvalue(lc)[i]))
+  # ⚠ WHICH baseline carries a test depends on what it IS: a conditional one is the fit's own
+  # intercept and carries the intercept's (the footer says "from 1 for the Constant"), while a
+  # marginal one is a population average and carries none.
+  expect_false(is.na(get_pvalue(lc)[i]))
+  mg <- suppressMessages(do.call(tab_reg, c(arg, list(measure = "ratio", effect = "marginal"))))
+  expect_true(is.na(get_pvalue(bl_first(mg))[bl_cst(mg)]))
 })
 
 test_that("an odds-scale baseline logs to the log(OR) column's own Constant", {
@@ -162,10 +168,11 @@ test_that("an odds-scale baseline logs to the log(OR) column's own Constant", {
   d$p3 <- factor(dplyr::case_when(grepl("dem", d$partyid, ignore.case = TRUE) ~ "Dem",
                                   grepl("rep", d$partyid, ignore.case = TRUE) ~ "Rep",
                                   TRUE ~ "Ind"), levels = c("Ind", "Dem", "Rep"))
+  # ⚠ Phase 22g-v: on the model's OWN coefficients, `at_reference` having no logged form
   or <- suppressMessages(tab_reg(d, "p3", "race", family = "multinomial",
-                                 effect = "at_reference", measure = "odds_ratio", stats = FALSE))
+                                 measure = "odds_ratio", stats = FALSE))
   lg <- suppressMessages(tab_reg(d, "p3", "race", family = "multinomial",
-                                 effect = "at_reference", measure = "log_odds", stats = FALSE))
+                                 measure = "log_odds", stats = FALSE))
   i  <- bl_cst(or)
   oc <- or[[names(or)[vapply(or, is_fmt, logical(1))][[1]]]]
   lc <- lg[[names(lg)[vapply(lg, is_fmt, logical(1))][[1]]]]

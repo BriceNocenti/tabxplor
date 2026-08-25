@@ -322,3 +322,41 @@ test_that("the outcome is named once above the table, and only where there is on
   # a crosstab is untouched
   expect_false("Outcome" %in% names(pillar::tbl_sum(tab(d, race, married))))
 })
+
+# ---- Phase 22g-v: `digits` -- a floor on the cell, a suffix on one token ------------------------
+
+test_that("digits sets every cell, and a named field sets just that one", {
+  skip_if_not_installed("broom")
+  d  <- reg_data()
+  f  <- function(...) format(first_fmt(
+    tab_reg(d, "married", "race", stats = "no", empirical = FALSE, ...)))[-1]
+  # unset, an odds ratio takes the `or` token's own default of two decimals...
+  expect_true(all(grepl("\\.[0-9]{2}$|^ *1 *$", trimws(f()))))
+  # ...which a request overrides in EITHER direction, because that default is a default
+  expect_true(any(grepl("\\.[0-9]{4}", f(digits = 4))))
+  expect_true(all(grepl("\\.[0-9]$|^ *1 *$", trimws(f(digits = 1)))))
+  # a SCALE's own statement (EST_SCALES$est_digits) is a floor instead: a per-item odds ratio reads
+  # at two decimals beside a mean score at one, and a coarser request cannot flatten the pair
+  sc <- format(first_fmt(tab_reg(d, "tvhours", "race", family = "binomial", trials = 24,
+                                 stats = "no", digits = 1)))
+  expect_true(any(grepl("\\.[0-9]{2} \\([0-9]+\\.[0-9]\\)", sc)))
+  # a name targets one display field -- including an ASIDE, which no scalar can reach
+  g <- format(first_fmt(tab_reg(d, "married", "race", stats = "no",
+                                display = "est_base", digits = c(base = 3))))
+  expect_true(any(grepl("\\([0-9]+\\.[0-9]{3}%\\)", g)))
+  expect_error(tab_reg(d, "married", "race", digits = c(nope = 2)), "no cell can print")
+  expect_error(tab_reg(d, "married", "race", digits = 9), "between 0 and 6")
+})
+
+test_that("a display token may carry its own precision, and Excel follows it", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  # the grammar is the same one `digits = c(base = 1)` writes
+  oc <- first_fmt(tab_reg(d, "married", "race", stats = "no", empirical = FALSE,
+                          display = "{est:4} ({base:1})"))
+  expect_true(any(grepl("\\.[0-9]{4} \\([0-9]+\\.[0-9]%\\)", format(oc))))
+  # ⚠ the Excel number format is finalized BEFORE the composite expander, so the PRIMARY's own
+  # suffix has to be read there too -- it used to be dropped, silently
+  expect_true(any(grepl("0\\.0000", format(oc, syntax = "excel"))))
+  expect_error(tab_reg(d, "married", "race", display = "{est:9}"), "Invalid precision")
+})

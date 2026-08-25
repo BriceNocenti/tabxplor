@@ -15,7 +15,6 @@ jmvtab(
   color_signif = "ignore",
   test = FALSE,
   anova = "welch",
-  design_effect = FALSE,
   na = "keep",
   lvs = "all",
   other_if_less_than = 0,
@@ -30,11 +29,12 @@ jmvtab(
   ci = "auto",
   conf_level = 0.95,
   stars = FALSE,
+  design_effect = FALSE,
   ci_method_cell = "wilson",
   ci_method_diff = "newcombe",
   ci_method_mean_diff = "welch",
   ci_method_mean_ratio = "robust",
-  theme = "light",
+  tab_theme = "light",
   totaltab = "line",
   wrap_rows = 35,
   wrap_cols = 15,
@@ -110,12 +110,6 @@ their contribution to variance.}
 \item{anova}{Which F statistic to display for numeric column variables when
 the test is on: Welch's F (default, does not assume equal variances) or the
 classic pooled F.}
-
-\item{design_effect}{For a WEIGHTED table, make the confidence intervals,
-the significance stars, the colour thresholds AND the p-values account for
-the unequal weighting (the exact flat survey-design variance) instead of
-using the raw number of respondents. Sets options(tabxplor.design_effect).
-Off by default; it moves every interval in the table, not only the p-value.}
 
 \item{na}{The policy to adopt with missing values. It must be a single
 string.  \itemize{    \item \code{na = "keep"}: by default, prints
@@ -195,6 +189,12 @@ so \code{stars} and \code{color_signif} are   informed and switched off.
 Read from the same confidence interval that is displayed, so stars and
 bracket always agree.}
 
+\item{design_effect}{For a WEIGHTED table, make the confidence intervals,
+the significance stars, the colour thresholds AND the p-values account for
+the unequal weighting (the exact flat survey-design variance) instead of
+using the raw number of respondents. Sets options(tabxplor.design_effect).
+Off by default; it moves every interval in the table, not only the p-value.}
+
 \item{ci_method_cell}{The proportion confidence-interval method for
 \code{ci = "cell"}: \code{"wilson"} (the score interval, default) or
 \code{"wald"} (the normal approximation).}
@@ -212,10 +212,10 @@ of the variable, i.e. the interval a linear model gives that coefficient).}
 \item{ci_method_mean_ratio}{The confidence-interval method for a ratio of
 numeric means (means with \code{ci = "ratio"}).}
 
-\item{theme}{How the table is painted, in the results panel and in every
-export.  \code{"light"} is the colour palette; \code{"print_ready"} says
-the same thing  typographically --- bold, italics, underlines and marks
-instead of blue and red ---  for a page that has no colour. See
+\item{tab_theme}{How the table is painted, in the results panel and in
+every export.  \code{"light"} is the colour palette; \code{"print_ready"}
+says the same thing  typographically --- bold, italics, underlines and
+marks instead of blue and red ---  for a page that has no colour. See
 \code{\link{tab_css}}.}
 
 \item{totaltab}{The total table, if there are subtables/groups   (i.e. when

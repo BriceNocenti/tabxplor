@@ -601,10 +601,10 @@ test_that("a multinomial crude column answers for its NUMERIC predictors too", {
   expect_length(i, 1L)
   cols <- names(t)[vapply(t, function(x) is_fmt(x) && identical(get_role(x), "emp"), logical(1))]
   expect_gt(length(cols), 1L)
-  # the univariable multinom, per SD -- tab_reg's own default multiplier. ⚠ loose tolerance: two
+  # the univariable multinom, per 2 SD -- tab_reg's own default multiplier. ⚠ loose tolerance: two
   # independent nnet::multinom runs agree only to its optimiser's own convergence tolerance.
   m  <- nnet::multinom(party3 ~ tvhours, data = dm, trace = FALSE)
-  k  <- stats::sd(dm$tvhours)
+  k  <- 2 * stats::sd(dm$tvhours)
   hand <- exp(summary(m)$coefficients[, "tvhours"] * k)
   for (cn in cols) {
     cat_j <- sub(" vs .*$", "", sub("^Obs_", "", cn))

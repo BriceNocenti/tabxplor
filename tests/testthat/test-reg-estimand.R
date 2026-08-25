@@ -145,8 +145,8 @@ test_that("the marker rides the measure, and the log wraps the whole token", {
   expect_identical(w("ordinal",  "conditional",  "odds_ratio"), "cumOR")   # cumulative, and it says so
   expect_identical(w("gaussian", "conditional",  "difference"), "diff")    # never a bare greek letter
   expect_identical(w("poisson",  "at_reference", "ratio"),      "refIRR")  # ONE ratio word per family
-  # the log wraps the MARKED token; `log_odds` pins the odds base auto would not reach at a profile
-  expect_identical(w("multinomial", "at_reference", "log_odds"), "log(refOR)")
+  # Phase 22g-v: a raw coefficient is the model's OWN, so there is no marginal or at-reference one
+  expect_identical(w("multinomial", "at_reference", "log_odds"), "")
   # the expansion is one declared string per acronym, wrapped the way each form is spoken
   expect_identical(reg_word_long(reg_estimand("binomial", measure = "ratio", effect = "marginal")),
                    "marginal risk ratio")
@@ -242,7 +242,10 @@ test_that("the measure aliases work both ways and `log` pins its base", {
   # bare "coefficient" takes whatever the cascade would report; log_risk pins the risk-ratio base
   expect_identical(reg_estimand("binomial", measure = "coefficient")$word,  "OR")
   expect_identical(reg_estimand("binomial", measure = "log")$word,          "OR")   # a spelling
-  expect_identical(reg_estimand("binomial", measure = "log_risk")$word,     "RR")
+  # Phase 22g-v: `log_risk` pins the RISK-ratio base, which a logit model does not estimate -- so it
+  # is refused, naming the model that does rather than logging a marginal ratio
+  expect_identical(reg_estimand("binomial", measure = "log_risk")$status, "no_raw_coefficient")
+  expect_identical(reg_estimand("binomial", link = "ratio", measure = "log_risk")$word, "RR")
   expect_identical(reg_estimand("binomial", link = "ratio", measure = "coefficient")$fit, "rr")
   # Phase 22g-iii: `coefficient` is TOTAL. On a link that is ALREADY additive there is nothing to
   # un-exponentiate, so it falls through to the additive row itself rather than refusing -- which is
@@ -252,19 +255,25 @@ test_that("the measure aliases work both ways and `log` pins its base", {
   expect_identical(g, reg_estimand("gaussian", measure = "difference", effect = "conditional"))
 })
 
-test_that("reg_measures() lists an outcome's estimands at ONE link, with a status for each", {
+test_that("reg_measures() factors the grid: one row per model, then the predictions once", {
   skip_if_not_installed("broom")
   m <- suppressMessages(reg_measures(est_data(), "married"))
-  expect_true(all(c("effect", "measure", "status", "header") %in% names(m)))
+  expect_true(all(c("link", "measure", "effect", "header", "reads_as") %in% names(m)))
+  # ONE family -> no `family` column; the conditional block is one row per fittable link
+  expect_false("family" %in% names(m))
+  expect_identical(m$link[m$effect == "conditional"], names(REG_FAMILIES$binomial$fits))
   expect_identical(m$header[m$effect == "conditional" & m$measure == "odds_ratio"], "Model_OR")
-  # the SAME grid at another model: the measure that had no coefficient now has one
-  r <- suppressMessages(reg_measures(est_data(), "married", link = "ratio"))
-  expect_identical(r$header[r$effect == "conditional" & r$measure == "ratio"], "Model_RR")
-  expect_identical(m$status[m$effect == "conditional" & m$measure == "ratio"], "not offered")
-  # a continuous outcome is where "not defined" shows: an odds ratio of a mean is not a thing
-  g <- suppressMessages(reg_measures(est_data(), "tvhours"))
-  expect_identical(g$status[g$effect == "conditional" & g$measure == "odds_ratio"], "not defined")
-  expect_match(g$note[g$effect == "conditional" & g$measure == "odds_ratio"], "odds")
+  # ...and the prediction block is listed ONCE, at no link in particular
+  expect_true(all(m$link[m$effect != "conditional"] == "(any)"))
+  expect_false(any(duplicated(m[m$link == "(any)", c("measure")])))
+  # a measure this outcome cannot carry has NO row (the old "not defined" status): a mean has no odds
+  g <- suppressMessages(reg_measures(est_data(), "tvhours", family = "gaussian"))
+  expect_false("odds_ratio" %in% g$measure)
+  # `family = "auto"` lists every family the outcome KIND offers, the detected one first
+  a <- suppressMessages(reg_measures(est_data(), "tvhours"))
+  expect_identical(unique(a$family), REG_OUTCOME_KINDS$numeric$offers)
+  # a raw coefficient is not a row: it is a reading of any conditional one (Phase 22g-v)
+  expect_false("raw_coefficient" %in% m$measure)
   # the generated ?tab_reg section reads the same table
   expect_true(any(grepl("link = ", reg_measures_rd(), fixed = TRUE)))
 })

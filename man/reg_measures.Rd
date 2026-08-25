@@ -4,44 +4,44 @@
 \alias{reg_measures}
 \title{What can this outcome be modelled as?}
 \usage{
-reg_measures(data, outcome, family = "auto", link = "auto")
+reg_measures(data, outcome, family = "auto", link = "all")
 }
 \arguments{
 \item{data}{A data frame (or a \code{survey} design), as for \code{\link[=tab_reg]{tab_reg()}}.}
 
 \item{outcome}{The outcome column name.}
 
-\item{family}{The model family. \code{"auto"} (default) detects it and says so, exactly as
-\code{\link[=tab_reg]{tab_reg()}} does.}
+\item{family}{The model family. \code{"auto"} (default) lists every family this kind of outcome can
+take, the detected one first — which is the choice to make before the others.}
 
-\item{link}{Which measure the model estimates. \code{"auto"} (default) is the family's own.}
+\item{link}{Which measure the model estimates. \code{"all"} (default) lists every link the family
+fits; name one to read the table at that model alone.}
 }
 \value{
-A tibble of \code{effect}, \code{measure}, \code{status}, \code{header} (the column name it would produce),
-\code{long} (what that header's acronym means) and \code{note} (why, when it is not available).
+A tibble of \code{family} (only when several are listed), \code{link}, \code{measure}, \code{effect},
+\code{header} (the column name it would produce) and \code{reads_as} (what that header's acronym means).
 }
 \description{
-Lists every \code{effect} × \code{measure} combination \code{\link[=tab_reg]{tab_reg()}} can build for one outcome, with its
-status and the column header it would produce. It is the same runtime table the argument
-validator, the error messages and \code{?tab_reg}'s own section read, so what it prints is what the
-function does.
+Lists what \code{\link[=tab_reg]{tab_reg()}} can report for one outcome: which models it could fit, and which measure
+of deviation each of them yields. It reads the same runtime table the argument validator, the
+error messages and \code{?tab_reg}'s own section read, so what it prints is what the function does.
 }
 \details{
-Three statuses, and the distinction matters:
+\strong{The table has two blocks}, because the grid factors:
 \itemize{
-\item \strong{available} — a call would build it;
-\item \strong{not defined} — the quantity is not a thing for this outcome (an odds ratio needs a
-probability to take the odds of), whatever anyone implements;
-\item \strong{not offered} — tabxplor does not build it (yet).
+\item one row per model you could fit — its \strong{\code{link}}, and the measure that model's own coefficients
+carry (\code{effect = "conditional"});
+\item then the measures read off the model's \strong{predictions}, which are the same whichever model you
+fit — \code{link} reads \code{"(any)"} there.
 }
 
-The table is read at \strong{one model}. \code{link} names which one: \code{"auto"} is the family's own (a
-logistic regression for a binary outcome), and the message lists the others. A measure that is
-not the model's own is reported from its predictions, so it is available whichever model you
-pick — what changes with \code{link} is which measure has a \emph{coefficient}.
+So \code{link} is the choice that matters, and it decides only which measure comes with a
+\emph{coefficient}: everything else is available from any of them.
 
-One state exists only at run time: a link that does not converge on your data. \code{tab_reg()} says
-so and, for the risk difference, falls back to the linear probability model.
+Only what can be built is listed. A measure this kind of outcome does not have simply has no row,
+and the message says why (an odds ratio needs a probability to take the odds of). One state exists
+only at run time: a link that does not converge on your data. \code{tab_reg()} says so and, for the
+risk difference, falls back to the linear probability model.
 }
 \examples{
 d <- forcats::gss_cat

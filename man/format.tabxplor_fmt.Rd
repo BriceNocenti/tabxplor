@@ -15,7 +15,8 @@
   bold_split = FALSE,
   pad = if (isTRUE(html)) fig_space else " ",
   syntax = c("text", "excel"),
-  .ref = NULL
+  .ref = NULL,
+  .digits = NULL
 )
 }
 \arguments{
@@ -60,6 +61,9 @@ per-cell Excel number-format codes used by \code{\link[=tab_xl]{tab_xl()}} (the 
 
 \item{.ref}{Internal: precomputed reference masks \code{list(cells=, all_totals=)} (derive-once
 speed-up passed by the exporter prep); computed internally when \code{NULL}.}
+
+\item{.digits}{Internal: the precision one token was named at in a composite template
+(\code{"{base:1}"}), passed by the composite expander; overrides every declared default.}
 }
 \value{
 The fmt printed in a character vector.

@@ -56,7 +56,7 @@ test_that('shape = "quadratic" gives the predictor two rows, both fitted and bot
                                 shape = c(age = "quadratic"), stats = FALSE))
   labs <- lv(t, "age")
   expect_length(labs, 2L)
-  expect_match(labs[[1]], "^per [0-9.]+ \\(SD\\)")
+  expect_match(labs[[1]], "^per [0-9.]+ \\(2SD\\)")
   expect_match(labs[[2]], "^age\u00b2")               # the curvature row, "age" + SUPERSCRIPT TWO
   or <- get_or(t[["Model_OR"]])[as.character(t$var) == "age"]
   expect_true(all(is.finite(or)))
@@ -129,7 +129,8 @@ test_that("quantile groups turn the predictor into a factor, with the whole fact
                                 shape = c(age = "quintiles"), empirical = TRUE, stats = FALSE))
   labs <- lv(t, "age")
   expect_length(labs, 5L)                            # one row per group...
-  expect_match(labs[[1]], "^\\[")                    # ...labelled by its own interval
+  # ...labelled by its own values (`age` is whole-numbered: Phase 22g-v) or by its interval
+  expect_match(labs[[1]], "^([0-9]+( (to|or) [0-9]+)?|\\[)")
   # a factor's crude twin is SATURATED, so the observed level is filled per group
   expect_true(all(is.finite(get_pct(t[["Obs_OR"]])[as.character(t$var) == "age"])))
   # and the predictor kind is STORED as what it now is
@@ -388,8 +389,8 @@ test_that("a continuous row's level is COMPOSED: shape, unit, anchor -- and none
   d <- shp_data()
   f <- function(...) suppressMessages(
     tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE, ...))
-  expect_match(lv(f(), "age"), "^per [0-9.]+ \\(SD\\), at [0-9.]+ \\(mean\\)$")
-  expect_match(lv(f(multiplier = c(age = "2sd")), "age"), "^per [0-9.]+ \\(2SD\\),")
+  expect_match(lv(f(), "age"), "^per [0-9.]+ \\(2SD\\), at [0-9.]+ \\(mean\\)$")
+  expect_match(lv(f(multiplier = c(age = "sd")), "age"), "^per [0-9.]+ \\(SD\\),")
   expect_match(lv(f(multiplier = c(age = 10), ref = c(age = 0)), "age"), "^per 10, at 0$")
   # the shape used to be written first and then OVERWRITTEN by the unit, so it was invisible under
   # the default multiplier -- reachable only with multiplier = 1
@@ -520,4 +521,26 @@ test_that("the drawing floor and the noise mark are two different verdicts", {
   # the same curve measured on very little data IS noise
   cu$se <- rep(0.05, 10)
   expect_true(tabxplor:::rd_spark_window(cu)$noisy)
+})
+
+# ---- Phase 22g-v ------------------------------------------------------------------------------
+
+test_that("the shape table names EVERY group, not only the first variable's", {
+  skip_if_not_installed("broom")
+  d  <- shp_data()
+  t  <- suppressMessages(tab_reg(d, "married", c("race", "age", "tvhours"), tab_vars = "relig",
+                                 family = "binomial", empirical = FALSE, stats = "no"))
+  st <- tabxplor:::reg_shape_table(t)
+  testthat::skip_if(is.null(st) || !"group" %in% names(st))
+  # ⚠ the rows arrive VARIABLE-major, so a group is not a run until they are sorted: blanking with
+  # duplicated() over the whole column sent every row of the SECOND variable into the last group's
+  # block, and both `age` rows came out naming no group at all. Read the table as a reader does --
+  # a blank means "same as above" -- and every (group, variable) pair must appear exactly once.
+  filled <- st$group
+  for (i in seq_along(filled)) if (!nzchar(filled[[i]]) && i > 1L) filled[[i]] <- filled[[i - 1L]]
+  expect_true(all(nzchar(filled)))
+  expect_false(anyDuplicated(paste(filled, st$var)) > 0L)
+  expect_setequal(unique(filled), unique(as.character(stats::na.omit(d$relig))))
+  # ...and each group holds all of its numeric predictors
+  expect_true(all(table(filled) == length(unique(st$var))))
 })

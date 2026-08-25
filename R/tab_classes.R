@@ -1117,7 +1117,11 @@ mat_aside_cols <- function(tab) {
       added[[nm]][[side]] <- c(added[[nm]][[side]],
                                stats::setNames(list(new), paste0(nm, "_", tok[[i]])))
     }
-    if (length(added[[nm]])) tab[[nm]] <- fmt_set_display(col, tok[[seg$primary]])
+    # ⚠ the primary keeps ITS OWN precision if the template named one ("{est:3}"): written braced,
+    # since a bare token has nowhere to carry it.
+    pdg <- seg$field_digits[[seg$primary]]
+    if (length(added[[nm]])) tab[[nm]] <- fmt_set_display(
+      col, if (is.na(pdg)) tok[[seg$primary]] else paste0("{", tok[[seg$primary]], ":", pdg, "}"))
   }
   if (!length(added)) return(tab)
   ord <- names(tab)

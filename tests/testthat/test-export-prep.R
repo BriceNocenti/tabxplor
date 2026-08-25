@@ -478,3 +478,28 @@ testthat::test_that("a whole-table helper column takes no variable name", {
   # the console prints a name over a type tag. Only a render-carved one drops its header.
   testthat::expect_identical(cvh$unit[[j]],  "<n>")
 })
+
+# === Phase 22g-v: a name is printed once ==========================================================
+
+testthat::test_that("a predictor-subset comparison names its models once, in every backend", {
+  skip_if_not_installed("broom")
+  d <- suppressWarnings(gss_cat_data_formatting())
+  t <- suppressMessages(tab_reg(
+    d, "married",
+    list("+ who they are" = c("race", "relig"), "+ and where" = c("race", "relig", "partyid")),
+    measure = "difference", display = "est", stats = "no"))
+  # the model label IS the col_var here, so the span row above the level row would print it twice
+  for (b in c("kable", "md", "xl")) {
+    cvh <- tabxplor:::tab_export_prep(t, backend = b)$tables[[1]]$col_var_header
+    testthat::expect_false(any(nzchar(cvh$label)), info = b)
+  }
+  # ⚠ html WRAPS the column NAMES before the header is built and leaves the col_var attribute raw,
+  # so the guard compared a wrapped string to an unwrapped one and silently stopped firing there
+  h    <- as.character(tab_html(t, print = FALSE))
+  head <- substr(h, 1L, regexpr("</thead>", h))
+  testthat::expect_identical(lengths(regmatches(head, gregexpr("who", head, fixed = TRUE)))[[1]], 1L)
+  # ...and the two models remain two BLOCKS: the vertical rule reads the col_var attribute, which
+  # the dropped span row never touched
+  testthat::expect_identical(unname(get_col_var(t)[c("+ who they are", "+ and where")]),
+                             c("+ who they are", "+ and where"))
+})

@@ -17,8 +17,8 @@
 #                                 effect) resolved into one estimand row, plus trials / outcome
 #                                 level / crude key
 #     S4 reg_resolve_output()     display / colour / the empirical mode -- and the notes, LAST
-#     S5 reg_resolve_fit_plan()   na / the reference relevel / multiplier / shape terms /
-#                                 the interactions MATERIALISED, last of all
+#     S5 reg_resolve_fit_plan()   na / the outcome's one-vs-rest collapse / the reference relevel /
+#                                 multiplier / shape terms / the interactions MATERIALISED, last
 #     S6 reg_resolve_specs()      the labels, the positive levels, the one new_reg_spec() call site
 #
 # KEY CONSTRAINTS:
@@ -27,9 +27,15 @@
 #     buys.
 #   - `data` IS INSIDE THE BOUNDARY, not lifted out of it. tab()'s arguments are answerable without
 #     the data frame; tab_reg()'s are not -- `family = "auto"` is ANSWERED by the data, `trials =
-#     TRUE` is, `multiplier = "sd"` IS a number measured from it, `shape` recodes it, `ref` relevels
+#     TRUE` is, `multiplier = "2sd"` IS a number measured from it, `shape` recodes it, `ref` relevels
 #     a factor and SHIFTS a continuous predictor to its anchor, and that relevel needs the
-#     multinomial outcomes the family stage resolved. A preparation
+#     multinomial outcomes the family stage resolved.
+#   - THE BOUNDARY DEFINES THE MODEL'S VARIABLES, THEN FIXES THEIR ORIGIN -- and every recode obeys
+#     it, so the fitter never decides what it is fitting. `family = "binomial"` on a 3+ level
+#     outcome collapses it to the chosen level against the rest (reg_binarise_outcome);
+#     `na = "keep_for_predictors"` turns each predictor's missing values into a level, cutting a
+#     numeric one because a number cannot hold one. ⚠ BOTH must also be replayed
+#     (reg_prepare_replay), or reg_check_plots() refits a different model with the same row count. A preparation
 #     the caller invoked separately would move the ordering into the caller: a second place to get
 #     it wrong. The prepared `data` and `design_obj` are declared FIELDS of the returned record.
 #   - S0 RUNS IN tab_reg(), AND SELECTS AGAINST svy_select_frame(), never svy_unwrap_data(): the
@@ -182,7 +188,7 @@ reg_validate_args <- function(conf_level = NULL, stats = NULL, color_signif = NU
   tab_validate_args("tab_reg", conf_level = conf_level)
 
   # `stats`: the KEYS are validated -- a named entry carries its key in the NAME (e.g. "M1").
-  if (is.character(stats) && !identical(stats, "all") && !identical(stats, "none"))
+  if (is.character(stats) && !(length(stats) == 1L && stats %in% c("auto", "all", "no", "none")))
     reg_validate_stat_keys(reg_stats_keys_of(stats), arg = "stats")
 
   # `color_signif`: ONE vocabulary (R/fmt_class.R). Checked HERE so the abort names {.arg color_signif}
@@ -236,7 +242,8 @@ reg_validate_args <- function(conf_level = NULL, stats = NULL, color_signif = NU
 #' @keywords internal
 #' @noRd
 reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NULL,
-                             shape = NULL, family = "auto", levels_collapse = NULL) {
+                             shape = NULL, family = "auto", levels_collapse = NULL,
+                             na = "drop_by_outcome") {
   # --- C: a PREBUILT survey design as `data` --------------------------------------------------
   # THE shared boundary (R/survey-design.R) extracts its model frame and materialises the design's
   # weights as a column; the design itself still drives every fit.
@@ -336,10 +343,25 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
     reg_shapes,
     purrr::imap(reg_cross_autocut(cross$keys, data, reg_shapes),
                 function(v, nm) shape_value(v, nm, "tab_reg")))
+  # `na = "keep_for_predictors"`: a number cannot hold an "NA" level, so a numeric predictor that has
+  # missing values is CUT -- decided here, where a shape is resolved and before it is applied, the
+  # one point that can answer "will this still be continuous?" (the same slot the crossed-pair
+  # autocut uses, for the same reason).
+  keep_na  <- identical(na, "keep_for_predictors")
+  preds_na <- unique(c(unlist(predictors, use.names = FALSE), cross$parents))
+  if (keep_na) reg_shapes <- reg_na_cut_shapes(data, preds_na, reg_shapes)
   if (length(reg_shapes) > 0L) {
     sh   <- shape_apply(data, reg_shapes, w = wt)
     data <- sh$data
     reg_shapes   <- sh$shapes                    # with each quantile shape's breaks frozen
+    if (!is.null(design_obj)) design_obj$variables <- data
+  }
+  # ...and only THEN does the missing value become a level: after the cut, so a banded number gets
+  # its own "NA" row, and after tab_collapse_levels(), so a merge cannot swallow it.
+  na_levels <- character(0)
+  if (keep_na) {
+    na_levels <- reg_na_level_vars(data, preds_na)
+    data <- reg_na_to_level(data, na_levels)
     if (!is.null(design_obj)) design_obj$variables <- data
   }
 
@@ -357,7 +379,7 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
        outcome = outcome, predictors = predictors, all_predictors = all_predictors,
        is_comparison = is_comparison, formula_mode = formula_mode, raw_formula = raw_formula,
        reg_shapes = reg_shapes, var_labels = var_labels, degf = degf,
-       cross_keys = cross$keys)
+       cross_keys = cross$keys, na_levels = na_levels)
 }
 
 # === S3: the per-outcome TABLE =================================================================
@@ -586,11 +608,15 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
   # --- S: which rows every model is fitted on -----------------------------------------------------
   # Resolved ONCE via reg_fit(drop_extra=) -- pre-filtering `data` would break a PREBUILT design's
   # keep_mask. "drop_by_outcome" makes every model OF ONE OUTCOME share a population.
+  # ⚠ "keep_for_predictors" shares NOTHING: every predictor's missing values are already a level by
+  # the time this runs (reg_na_to_level), so there is nothing left to drop them on -- and each
+  # model's own complete-case frame then differs only by its OUTCOME, which is the point.
   na_shared_vars <- if (formula_mode) character(0) else
     intersect(unique(switch(na,
-                            "drop_by_model"   = character(0),
-                            "drop_by_outcome" = all_predictors,
-                            "drop_all"        = c(all_predictors, outcome))),
+                            "drop_by_model"       = character(0),
+                            "keep_for_predictors" = character(0),
+                            "drop_by_outcome"     = all_predictors,
+                            "drop_all"            = c(all_predictors, outcome))),
               names(data))
 
   # --- U0: `ref`, parsed ONCE for both kinds of variable: the LEVEL a factor is compared against,
@@ -608,6 +634,17 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
   if (length(mnl))
     refs$levels <- c(refs$levels,
                      stats::setNames(deps$outcome_level[match(mnl, deps$outcome)], mnl))
+
+  # --- W: THE OUTCOME'S OWN RECODES, before the frozen frame and before anything counts a row.
+  # `family = "binomial"` on a 3+ level outcome is one level against the rest (reg_binarise_outcome);
+  # both the crude block and the plot replay rebuild the frame from THIS data, so the collapse has
+  # to be here and not in the fitter.
+  for (i in which(families == "binomial")) {
+    o <- deps$outcome[[i]]
+    if (!o %in% names(data)) next
+    data <- reg_binarise_outcome(data, o, reg_outcome_level_of(deps$outcome_level[[i]]))
+  }
+  if (!is.null(design_obj)) design_obj$variables <- data
 
   # --- X: the frozen frame, PREDICTORS + design variables, never the outcome. Computed ONCE: the
   # anchor, the multiplier's SD and the quadratic terms' centre are three readings of one
@@ -640,7 +677,7 @@ reg_resolve_fit_plan <- function(data, design_obj = NULL, deps = NULL, ref = NUL
   # scale only the main effect). "sd" is the default, landing a numeric predictor on the same visual
   # scale as the factor contrasts.
   mult_res <- if (!need_mult) list(k = NULL, label = NULL) else
-    reg_resolve_multiplier(multiplier, "sd", frozen, num_preds, wt = wt)
+    reg_resolve_multiplier(multiplier, TAB_ARGS$multiplier$default, frozen, num_preds, wt = wt)
 
   # the quadratic terms, on the SAME frozen frame. Empty unless a shape asked for one.
   shape_terms <- if (length(reg_shapes) > 0L) reg_shape_terms(frozen, reg_shapes, w = wt)
@@ -746,6 +783,63 @@ reg_resolve_anchors <- function(anchors, data, num_preds, wt = NULL, reg_shapes 
 }
 
 
+# === `na = "keep_for_predictors"` ================================================================
+# A MISSING VALUE IS AN ANSWER. Kept, it becomes an ordinary level of its predictor -- the same
+# `forcats::fct_na_value_to_level(., "NA")` and the same level NAME tab() uses at its three leaves,
+# so a crosstab row and a model row are the same row. Two consequences follow, and both are stated
+# where they are decided rather than left for the fitter to discover:
+#   * a NUMBER cannot hold that level, so a numeric predictor with missing values is cut (sd_bands
+#     by default, any cut `shape` overriding it, a numeric-KEEPING shape refused);
+#   * the OUTCOME still drops its own NA -- there is no modelling a missing outcome.
+#' @keywords internal
+#' @noRd
+reg_na_cut_shapes <- function(data, preds, shapes) {
+  auto <- character(0)
+  for (v in intersect(preds, names(data))) {
+    if (!shape_is_numeric(data[[v]]) || !anyNA(data[[v]])) next
+    sp <- shapes[[v]]
+    if (!is.null(sp)) {
+      if (identical(VAR_SHAPES[[sp$kind]]$produces, "factor")) next
+      cli::cli_abort(c(
+        '{.code na = "keep_for_predictors"} cannot keep the missing values of {.val {v}}.',
+        "x" = "{.code shape = c({v} = \"{sp$kind}\")} keeps it a number, and a number has no level to put them in.",
+        "i" = 'Cut it instead: {.code shape = c({v} = "sd_bands")} (or "quartiles", "median", ...).'),
+        call = NULL)
+    }
+    shapes[[v]] <- shape_value("sd_bands", v, "tab_reg")
+    auto <- c(auto, v)
+  }
+  if (length(auto))
+    cli::cli_inform(c("i" = paste0(
+      "{.val {auto}}: cut into bands so the missing values can be kept as a level ",
+      "({.code shape = } chooses otherwise).")))
+  shapes
+}
+
+# outcome -> the level it was collapsed to, for every binomial: what a replay must redo.
+#' @keywords internal
+#' @noRd
+reg_binarised_map <- function(deps) {
+  i <- which(deps$family == "binomial")
+  if (!length(i)) return(list())
+  stats::setNames(lapply(i, function(k) reg_outcome_level_of(deps$outcome_level[[k]])),
+                  deps$outcome[i])
+}
+
+#' @keywords internal
+#' @noRd
+reg_na_level_vars <- function(data, preds)
+  Filter(function(v) anyNA(data[[v]]), intersect(preds, names(data)))
+
+#' @keywords internal
+#' @noRd
+reg_na_to_level <- function(data, vars) {
+  for (v in intersect(vars, names(data)))
+    data[[v]] <- forcats::fct_na_value_to_level(as.factor(data[[v]]), level = "NA")
+  data
+}
+
+
 # Replay the PREPARATION on a fresh frame: the column recodes a `shape` applied, then the anchors.
 # ⚠ reg_check_plots() refits from the USER's raw data, so without this the diagnostic would be a
 # different model from the one the table shows -- silently, since the row count is unchanged. The
@@ -765,6 +859,11 @@ reg_prepare_replay <- function(data, prep) {
                                                      labels = sp$labels),
                         data[[v]])
   }
+  # the outcome's own collapse and the predictors' "NA" level are preparation too -- a replay that
+  # skipped them would refit a DIFFERENT model with the same row count, silently.
+  for (o in names(prep$binarised %||% character(0)))
+    data <- reg_binarise_outcome(data, o, prep$binarised[[o]], announce = FALSE)
+  data <- reg_na_to_level(data, prep$na_levels %||% character(0))
   data <- reg_anchor_apply(data, prep$anchors %||% stats::setNames(numeric(0), character(0)))
   reg_cross_apply(data, prep$crosses %||% list())
 }
@@ -852,9 +951,9 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
                              color = TRUE, color_signif = NULL, stars = TRUE,
                              conf_level = NULL, method = "wald",
                              ref = NULL, outcome_level = NULL,
-                             multiplier = "sd", shape = NULL, stats = NULL,
+                             multiplier = "2sd", shape = NULL, stats = "auto",
                              na = "drop_by_outcome", na_explicit = FALSE,
-                             display = NULL, cleannames = TRUE, subtext = "",
+                             display = NULL, digits = NULL, cleannames = TRUE, subtext = "",
                              .fit_cache = NULL, levels_collapse = NULL) {
   # S1 -- the pure checks.
   # ⚠ the `stats` SPLIT runs FIRST: `stats` is one argument at the surface, the triple (stats,
@@ -875,7 +974,7 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   # S2 -- everything that touches `data`.
   prep <- reg_prepare_data(data, outcome, predictors, tab_vars = tab_vars, wt = wt,
                            shape = shape, family = family,
-                           levels_collapse = levels_collapse)
+                           levels_collapse = levels_collapse, na = na)
 
   # ⚠ THE DEFAULT COMPARISON DEGRADES, IT NEVER REFUSES. `"auto"` is what an unnamed `stats` asks
   # for, so it must not abort a table, and it must not turn on the two things `compare != "none"`
@@ -951,7 +1050,7 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
     anchor_keyword = plan$anchor_keyword, shape_terms = plan$shape_terms,
     crosses = plan$crosses,
     shape_kinds = vapply(prep$reg_shapes, function(z) z$kind, character(1)),
-    empirical = out$empirical, display = out$display,
+    empirical = out$empirical, display = out$display, digits = reg_resolve_digits(digits),
     var_labels = prep$var_labels, na_shared_vars = plan$na_shared_vars, base_n = base_n)
 
   # the weight column NAME (or NA) drives the footer "Weighted by <wt>." line; a prebuilt design
@@ -967,7 +1066,9 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
     families = stats::setNames(deps$family, deps$outcome),
     # `est`/`eff_word` are the table's REPRESENTATIVE estimand (first outcome), feeding the
     # reg_call SUMMARY; the per-outcome facts live in `ests` and the specs.
-    prep = list(shapes = prep$reg_shapes, anchors = plan$anchors, crosses = plan$crosses),
+    prep = list(shapes = prep$reg_shapes, anchors = plan$anchors, crosses = plan$crosses,
+                na_levels = prep$na_levels,
+                binarised = reg_binarised_map(deps)),
     ests = stats::setNames(deps$est, deps$outcome), est = deps$est[[1]],
     eff_word = reg_word(deps$est[[1]]),
     is_comparison = prep$is_comparison, formula_mode = prep$formula_mode,

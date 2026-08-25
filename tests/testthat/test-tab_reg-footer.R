@@ -461,3 +461,19 @@ test_that("an ordinary table keeps its parallelism and drops its fits", {
                                  family = c("binomial", "gaussian")))
   expect_identical(tabxplor:::reg_call(sh)$compare %||% "none", "none")
 })
+
+# ---- Phase 22g-v: NOTHING IS NOTHING -----------------------------------------------------------
+
+test_that("stats = NULL / FALSE / \"no\" / \"none\" all hide the footer; \"auto\" is the default", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  f <- function(...) nrow(get_test(tab_reg(d, "married", "race", family = "binomial",
+                                          empirical = FALSE, ...)))
+  # R cannot tell a missing argument from an explicit NULL, which is why the default is a WORD
+  for (v in list(NULL, FALSE, "no", "none")) expect_identical(f(stats = v), 0L)
+  expect_gt(f(), 0L)
+  expect_identical(f(stats = "auto"), f())
+  # ⚠ a NAMED footer set keeps what it names -- it drops only the comparison
+  expect_setequal(unique(get_test(tab_reg(d, "married", "race", family = "binomial",
+                                          stats = c("n", "aic")))$test), c("n", "aic"))
+})

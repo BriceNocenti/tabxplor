@@ -2,7 +2,7 @@
 #   questions at once.
 #
 #     link    = which measure the MODEL estimates   ("odds_ratio" | "ratio" | "difference")
-#     measure = which measure is REPORTED           (the same words, plus "coefficient")
+#     measure = which measure is REPORTED           (the same words, plus "raw_coefficient")
 #     effect  = where the number comes from         ("conditional" | "marginal" | "at_reference")
 #
 # THE RULE EVERYTHING HERE DERIVES FROM. A LINK IS A MEASURE -- the one a model estimates directly --
@@ -11,7 +11,8 @@
 #
 #     difference <-> identity        ratio <-> log        odds_ratio <-> logit
 #
-# and a COEFFICIENT exists only where the two agree. Otherwise the measure is applied to the model's
+# and a RAW COEFFICIENT exists only where the two agree -- and only as the model's OWN number, i.e.
+# `effect = "conditional"`: there is no marginal coefficient, and asking for one says so. Otherwise the measure is applied to the model's
 # PREDICTIONS, averaged over the sample or read at one profile. Those are the only glm links whose
 # coefficient names a measure of deviation -- probit, cauchit, sqrt and inverse name none, which is
 # exactly why such models are reported through marginal effects.
@@ -63,10 +64,12 @@
 
 # --- the measure vocabulary --------------------------------------------------------------------------
 #
-# THREE base geometries + `coefficient`, which is NOT a peer: it is the model's own coefficient, the
-# fit un-transformed. A precise spelling (`log_odds` / `log_risk` / `log_rate`) additionally PINS
+# THREE base geometries + `raw_coefficient`, which is NOT a peer: it is the model's own coefficient,
+# the fit un-transformed. A precise spelling (`log_odds` / `log_risk` / `log_rate`) additionally PINS
 # which base. ⚠ It is TOTAL: on a link that already is additive (identity) there is nothing to
 # un-exponentiate, so it resolves to the additive row itself -- see reg_estimand()'s fall-through.
+# ⚠ And it is CONDITIONAL-ONLY: a raw coefficient is the fit's own, so there is no such thing as a
+# marginal one -- reg_compose_log() emits a log twin of the conditional rows alone.
 #
 # THE ACRONYMS ARE NOT DECLARED HERE. They are MEASURE_ACRONYMS (R/fmt_class.R), the one table every
 # argument that names a measure reads, so `tab(color = "RR")` and `tab_reg(measure = "RR")` cannot
@@ -78,14 +81,17 @@
 # The canonical values of `measure` -- what the argument is TAUGHT, and what every acronym resolves to.
 #' @keywords internal
 #' @noRd
-REG_MEASURES_VALUES <- c("auto", "difference", "ratio", "odds_ratio", "coefficient")
+REG_MEASURES_VALUES <- c("auto", "difference", "ratio", "odds_ratio", "raw_coefficient")
 
-# The BASE a `log_*` spelling pins ("" = the family's default estimand, i.e. bare "coefficient").
-# ⚠ These ARE the spellings of `measure = "coefficient"`: on a logit or a log link the model's own
-# coefficient IS the log of the reported measure, which is what a user typing "log_odds" means.
+# The BASE a `log_*` spelling pins ("" = the family's default estimand, i.e. bare "raw_coefficient").
+# ⚠ These ARE the spellings of `measure = "raw_coefficient"`: on a logit or a log link the model's own
+# coefficient IS the log of the reported measure, which is what a user typing "log_odds" means. The
+# short forms are permanent aliases -- the argument teaches the complete word, and every spelling a
+# user already knows keeps resolving to it silently.
 #' @keywords internal
 #' @noRd
-REG_LOG_BASE <- c(coefficient = "", coef = "", coeff = "", log = "", log_odds = "odds_ratio",
+REG_LOG_BASE <- c(raw_coefficient = "", raw_coef = "", raw_coeff = "",
+                  coefficient = "", coef = "", coeff = "", log = "", log_odds = "odds_ratio",
                   log_risk = "ratio", log_rate = "ratio", log_ratio = "ratio")
 
 #' @keywords internal
@@ -93,7 +99,7 @@ REG_LOG_BASE <- c(coefficient = "", coef = "", coeff = "", log = "", log_odds = 
 REG_MEASURE_SPELLINGS <- {
   v <- c(stats::setNames(REG_MEASURES_VALUES, REG_MEASURES_VALUES),
          measure_twins(c(MEASURE_ACRONYMS, MEASURE_ACRONYMS_REG)),
-         stats::setNames(rep("coefficient", length(REG_LOG_BASE)), names(REG_LOG_BASE)))
+         stats::setNames(rep("raw_coefficient", length(REG_LOG_BASE)), names(REG_LOG_BASE)))
   v[!duplicated(names(v))]
 }
 
@@ -106,7 +112,7 @@ reg_measure_key <- function(x) {
   x   <- as.character(x)
   key <- unname(REG_MEASURE_SPELLINGS[x])
   if (is.na(key)) return(NULL)
-  base <- if (identical(key, "coefficient")) unname(REG_LOG_BASE[x]) else ""
+  base <- if (identical(key, "raw_coefficient")) unname(REG_LOG_BASE[x]) else ""
   list(measure = key, log_base = if (is.na(base)) "" else base)
 }
 
@@ -116,10 +122,15 @@ reg_measure_key <- function(x) {
 #
 # It is the LEVEL's precision, not the estimate's: a token too coarse at 0 raises itself through
 # DISPLAY_TOKENS$min_digits.
+# ⚠ IT IS THE LEVEL'S, so on a scale whose ESTIMATE needs more than its level does it must not be
+# read as the estimate's: in format() a 0 means "unset" and is what lets a token's own minimum
+# apply, while a 1 SILENCES it -- which is how `score_ratio` printed x1.4 where the `ratio` token
+# asks for x1.44. Those scales state the estimate's precision separately (EST_SCALES$est_digits),
+# and this stays the number a mean score, a baseline and an aside are all read at.
 # WARNING: a crosstab's digits are its own (tab(digits =)); this is the regression side only.
 #' @keywords internal
 #' @noRd
-REG_CELL_DIGITS <- c(odds_ratio = 0L, score_odds_ratio = 2L, pct_ratio = 0L, score_ratio = 1L,
+REG_CELL_DIGITS <- c(odds_ratio = 0L, score_odds_ratio = 1L, pct_ratio = 0L, score_ratio = 1L,
                      mean_ratio = 1L, raw_diff = 1L, mean_diff = 1L, log_coef = 2L, points = 1L)
 
 #' @keywords internal
@@ -150,7 +161,7 @@ reg_scale_of <- function(est, trials = NA) {
 # The scale a LOGGED estimand is the log OF, `NA` on any other column. `log_coef` is one row shared
 # by every logged measure, so a link-scale column cannot say on its own whether its exponential is an
 # odds or a level -- and its baseline row differs by exactly that. Set by reg_estimand()'s logged
-# branch; the declared `measure = "coefficient"` rows carry no `log_of` and need none (their
+# branch; the declared `measure = "raw_coefficient"` rows carry no `log_of` and need none (their
 # baseline is the fit's own intercept, already on the link scale).
 #' @keywords internal
 #' @noRd
@@ -190,7 +201,7 @@ REG_LINKS_VALUES <- c("auto", names(REG_MEASURE_LINK))
 
 # The glm spellings, accepted silently and never taught. ⚠ THE ONE VOCABULARY NOT SHARED, and the
 # reason it stays a table of its own: on `link` the word "log" means the LOG LINK, while on `measure`
-# it is a SPELLING of "coefficient". Consulted FIRST by reg_link_key() for exactly that reason.
+# it is a SPELLING of "raw_coefficient". Consulted FIRST by reg_link_key() for exactly that reason.
 #' @keywords internal
 #' @noRd
 REG_LINK_ALIASES <- c(identity = "difference", log = "ratio", logit = "odds_ratio")
@@ -209,7 +220,7 @@ reg_link_key <- function(x) {
   f <- unname(REG_FIT_SPELLINGS[x])
   if (!is.na(f)) return(f)
   k <- reg_measure_key(x)
-  if (is.null(k) || identical(k$measure, "coefficient")) return(NULL)
+  if (is.null(k) || identical(k$measure, "raw_coefficient")) return(NULL)
   k$measure
 }
 
@@ -374,18 +385,18 @@ reg_word <- function(est) {
 reg_word_long <- function(est) {
   if (is.null(est) || is.null(est$word)) return("")
   base <- REG_WORDS[[est$word]]$long()
-  if (identical(est$measure, "coefficient")) base <- gettextf("log %s", base)
+  if (identical(est$measure, "raw_coefficient")) base <- gettextf("log %s", base)
   REG_CONTRASTS[[est$effect]]$long(base)
 }
 
 # The log wrapper, shared by the header and by the crude column: on an exponentiated link
-# `measure = "coefficient"` shows the SAME estimand un-exponentiated, so it names what it logs rather
+# `measure = "raw_coefficient"` shows the SAME estimand un-exponentiated, so it names what it logs rather
 # than collapsing to one greek letter. On an identity link there is nothing to wrap -- the fall-through
 # in reg_estimand() means the row is the additive one, which keeps its own word.
 #' @keywords internal
 #' @noRd
 reg_word_logged <- function(word, measure)
-  if (identical(measure, "coefficient")) paste0("log(", word, ")") else word
+  if (identical(measure, "raw_coefficient")) paste0("log(", word, ")") else word
 
 # The acronym a composed header was built from -- "log(OR)" -> "OR", "mRR" -> "RR".
 #' @keywords internal
@@ -644,10 +655,10 @@ reg_outcome_levels <- function(y, outcome) {
 #
 #   link          which measure the MODEL estimates -- the key into the family's `fits`.
 #   effect        the contrast: "conditional" | "marginal" | "at_reference".
-#   measure       what is REPORTED; "coefficient" on a logged row, whose base is `base_measure`.
+#   measure       what is REPORTED; "raw_coefficient" on a logged row, whose base is `base_measure`.
 #   base_measure  the measure a logged row is the log OF (itself, on every other row). It is the
 #                 LOOKUP key: under one (link, effect) a ratio and an odds ratio both log, so
-#                 "coefficient" alone would name two rows.
+#                 "raw_coefficient" alone would name two rows.
 #   measure_link  the link the REPORTED comparison is taken on -- REG_EMPIRICAL$*$link's own
 #                 vocabulary, and what the g-computation sweep and the crude leg both read. It
 #                 EQUALS the model's link exactly on a coefficient row.
@@ -894,15 +905,18 @@ reg_compose_row <- function(family, link, effect, measure) {
        status = "ok")
 }
 
-# The LOG twin of a multiplicative row: the same fit and the same contrast, un-exponentiated, on the
-# link-scale ladder. An additive row has no ratio to take the log of and gets none.
+# The LOG twin of a multiplicative row: the same fit, un-exponentiated, on the link-scale ladder. An
+# additive row has no ratio to take the log of and gets none.
+# DESIGN: CONDITIONAL ONLY. `raw_coefficient` names the MODEL'S OWN coefficient, and a model has no
+# marginal one -- the log of a sample-averaged ratio is a quantity nobody reports. Asking for it is
+# refused by reg_estimand()'s ladder, which names the cure, rather than composed as 12 exotic rows.
 #' @keywords internal
 #' @noRd
 reg_compose_log <- function(family, r) {
-  if (!isTRUE(r$exp)) return(NULL)
+  if (!isTRUE(r$exp) || !identical(r$effect, "conditional")) return(NULL)
   crude <- reg_compose_crude(family, r$fit, r$base_measure, r$measure_link, TRUE)
   r$log_of      <- r$scale
-  r$measure     <- "coefficient"
+  r$measure     <- "raw_coefficient"
   r$exp         <- FALSE
   r$scale       <- "log_coef"
   r$crude_fam   <- crude$fam
@@ -953,7 +967,7 @@ local({
         all(vapply(rows, function(r) !identical(r$effect, "conditional") ||
                      identical(r$base_measure, r$link), logical(1))),
       "a logged row is the log of a multiplicative one" =
-        all(vapply(rows, function(r) !identical(r$measure, "coefficient") ||
+        all(vapply(rows, function(r) !identical(r$measure, "raw_coefficient") ||
                      !identical(r$measure_link, "identity"), logical(1)))
     )
   }
@@ -1026,27 +1040,38 @@ reg_estimand <- function(family, link = "auto", measure = "auto", effect = "auto
 
   mk <- if (is.list(measure)) measure else reg_measure_key(measure)
   if (is.null(mk)) return(list(status = "unknown_measure", family = family, measure = measure))
-  logged <- identical(mk$measure, "coefficient")
-  # "coefficient" reports the model's own coefficient, i.e. the measure the cascade would otherwise
+  logged <- identical(mk$measure, "raw_coefficient")
+  # "raw_coefficient" reports the model's own coefficient, i.e. the measure the cascade would otherwise
   # report, un-transformed; a `log_*` spelling pins another base.
   base <- if (logged && nzchar(mk$log_base)) mk$log_base
           else if (logged || identical(mk$measure, "auto")) reg_auto_measure(family, lk, effect)
           else mk$measure
 
-  # DESIGN: `coefficient` is TOTAL. On a link that is already additive there is nothing to
+  # DESIGN: `raw_coefficient` is TOTAL. On a link that is already additive there is nothing to
   # un-exponentiate -- the model's own coefficient IS the additive row -- so the request falls
   # through to it rather than being refused. That is what lets one mixed-family table (a logistic
   # outcome beside a gaussian one) be asked for its coefficients at all.
+  # ⚠ `asked_raw` outlives the fall-through, because the CONDITIONAL-ONLY rule is about the word the
+  # user typed, not about the row it lands on: without it a marginal raw coefficient would be
+  # refused on a logit link and silently answered with a marginal difference on an identity one.
+  asked_raw <- logged
   if (logged && identical(unname(REG_MEASURE_LINK[[base]]), "identity")) logged <- FALSE
 
   if (identical(ef, "auto")) ef <- if (identical(base, lk)) "conditional" else "marginal"
 
-  hit <- Filter(function(r) identical(r$link, lk) && identical(r$effect, ef) &&
-                  identical(r$base_measure, base) &&
-                  identical(identical(r$measure, "coefficient"), logged), fr$rows)
+  hit <- if (asked_raw && !identical(ef, "conditional")) list() else
+    Filter(function(r) identical(r$link, lk) && identical(r$effect, ef) &&
+             identical(r$base_measure, base) &&
+             identical(identical(r$measure, "raw_coefficient"), logged), fr$rows)
   if (length(hit)) return(c(hit[[1L]], list(family = family)))
 
   # --- no row: which clause failed, said in the user's own terms -------------------------------
+  # A RAW COEFFICIENT IS THE FIT'S OWN, so it is asked of the model and never of its predictions.
+  # Said before the measure clauses below, which would otherwise blame the base measure.
+  if (asked_raw && !identical(ef, "conditional"))
+    return(list(status = "no_raw_coefficient", family = family, link = lk, effect = ef,
+                measure = base, why = function() gettext(
+                  "a raw coefficient is the model's own, so it has no marginal or at-reference form")))
   if (is.null(reg_measure_cell(family, base)))
     return(list(status = "impossible", family = family, effect = ef, link = lk, measure = base,
                 why = reg_no_measure_why(family)))
@@ -1119,6 +1144,18 @@ reg_estimand_abort <- function(res, outcome = NULL) {
       "The model estimates {.val {res$link}}, so {.val {res$measure}} cannot be read off its coefficients{who}.",
       "i" = "Drop {.arg effect} to report it from the model's predictions instead.",
       "i" = cure))
+  }
+  # A RAW COEFFICIENT IS CONDITIONAL, and the cure depends on WHY this one is not: an `effect` the
+  # user wrote (drop it), or a `log_*` spelling pinning a base the model does not estimate (fit it).
+  if (identical(res$status, "no_raw_coefficient")) {
+    link_cure <- if (!identical(res$measure, res$link) &&
+                     res$measure %in% names(REG_FAMILIES[[fam]]$fits))
+      cli::format_inline("Or fit the model whose own coefficient it is: {.code link = \"{res$measure}\"}.")
+    cli::cli_abort(c(
+      "{.code measure = \"raw_coefficient\"} has no {.val {res$effect}} form{who}: {res$why()}.",
+      "i" = "Drop {.arg effect} to read the model's own coefficient.",
+      "i" = "Or ask for the measure itself: {.code measure = {.val {res$measure}}}.",
+      if (!is.null(link_cure)) c("i" = link_cure)))
   }
   offered <- reg_estimand_offer_lines(fam, res$link, res$effect)
   if (identical(res$status, "impossible"))
@@ -1217,21 +1254,27 @@ reg_estimand_note <- function(est, aside = "", role_cols = list(), has_num = NA)
 # @param read, so the three cannot state three different rules.
 #
 # Grammar (positional c(text, background)):
-#   TRUE / NULL / "auto"  the column's own geometry           (the sentinel NA_character_)
+#   "measure" (default) / TRUE / NULL / "auto"   the column's own measure  (sentinel NA_character_)
 #   FALSE / "no"          no colour anywhere
 #   "adjustment" / "between_groups" (either channel)
-#   c(TRUE, "adjustment") the headline: effect size in the text, adjustment behind it
+#   c("measure", "adjustment")  the headline: effect size in the text, adjustment behind it
+# DESIGN: "measure" is the DEFAULT spelling because a regression column states what it estimates, so
+# naming its own measure is the whole of the choice -- and it makes the two-channel headline one
+# plain character vector instead of the c(TRUE, "adjustment") that c() coerced anyway. It is NOT a
+# MEASURES row: measure_nameable("reg") is what the refusal below enumerates, and it must keep
+# naming only the two measures whose baseline is another column.
 #' @keywords internal
 #' @noRd
 reg_normalize_color <- function(color) {
-  if (is.null(color) || isTRUE(color))  return(NA_character_)
+  if (is.null(color) || isTRUE(color) || identical(color, "measure")) return(NA_character_)
   if (isFALSE(color))                   return("no")
   out <- vapply(seq_along(color), function(i) {
     v <- color[[i]]
     # WARNING: `c(TRUE, "adjustment")` is COERCED by c() to strings, so string spellings must be
     # accepted too; `is.na()` is the sentinel throughout. A background slot has no geometry of its
     # own, so an auto/TRUE there means "no background colour".
-    if (isTRUE(v)  || identical(v, "auto") || identical(v, "TRUE") || is.na(v))
+    if (isTRUE(v)  || identical(v, "auto") || identical(v, "TRUE") || identical(v, "measure") ||
+        is.na(v))
       return(if (i == 1L) NA_character_ else "no")
     if (isFALSE(v) || identical(v, "no")   || identical(v, "FALSE") || identical(v, "")) return("no")
     v <- as.character(v)
@@ -1293,7 +1336,7 @@ reg_effect_key <- function(x) {
   if (is.null(x) || length(x) != 1L || is.na(x)) return("auto")
   x <- as.character(x)
   if (x %in% REG_EFFECTS_VALUES) return(x)
-  if (identical(x, "coefficient"))
+  if (identical(x, "raw_coefficient"))
     cli::cli_abort(c(
       '{.arg effect} = {.val coefficient} is now {.val conditional}.',
       "i" = paste0("It names the quantity -- the conditional effect, the one the model's own ",
@@ -1315,9 +1358,9 @@ reg_estimand_offer_lines <- function(family, link = NULL, effect = NULL) {
   ok <- Filter(function(r) is.null(effect) || identical(r$effect, effect), rows)
   if (!length(ok)) ok <- rows
   # ⚠ SPELLINGS, not rows: under one (link, effect) a ratio and an odds ratio BOTH log, so listing
-  # every logged row would offer `measure = "coefficient"` twice. Bare "coefficient" reaches the one
+  # every logged row would offer `measure = "raw_coefficient"` twice. Bare "raw_coefficient" reaches the one
   # the cascade picks; the pinned `log_odds` / `log_risk` spellings are expert and stay in ?tab_reg.
-  ok <- Filter(function(r) !identical(r$measure, "coefficient") ||
+  ok <- Filter(function(r) !identical(r$measure, "raw_coefficient") ||
                  identical(r$base_measure, reg_auto_measure(family, lk, r$effect)), ok)
   lines <- vapply(ok, function(r) cli::format_inline(
     "{.code measure = \"{r$measure}\"} -> {.val {reg_word(r)}}, the {reg_word_long(r)}"), character(1))
@@ -1328,7 +1371,7 @@ reg_estimand_offer_lines <- function(family, link = NULL, effect = NULL) {
   other <- reg_link_calls(family, exclude = lk)
   c(head, unique(lines),
     if (length(other)) cli::format_inline("Other models: {.or {.code {other}}}."),
-    cli::format_inline("Call {.fn reg_measures} on your outcome to see this table with its status."))
+    cli::format_inline("Call {.fn reg_measures} on your outcome for every model it can take."))
 }
 
 
@@ -1336,71 +1379,113 @@ reg_estimand_offer_lines <- function(family, link = NULL, effect = NULL) {
 
 #' What can this outcome be modelled as?
 #'
-#' Lists every `effect` × `measure` combination [tab_reg()] can build for one outcome, with its
-#' status and the column header it would produce. It is the same runtime table the argument
-#' validator, the error messages and `?tab_reg`'s own section read, so what it prints is what the
-#' function does.
+#' Lists what [tab_reg()] can report for one outcome: which models it could fit, and which measure
+#' of deviation each of them yields. It reads the same runtime table the argument validator, the
+#' error messages and `?tab_reg`'s own section read, so what it prints is what the function does.
 #'
-#' Three statuses, and the distinction matters:
-#' * **available** — a call would build it;
-#' * **not defined** — the quantity is not a thing for this outcome (an odds ratio needs a
-#'   probability to take the odds of), whatever anyone implements;
-#' * **not offered** — tabxplor does not build it (yet).
+#' **The table has two blocks**, because the grid factors:
+#' * one row per model you could fit — its **`link`**, and the measure that model's own coefficients
+#'   carry (`effect = "conditional"`);
+#' * then the measures read off the model's **predictions**, which are the same whichever model you
+#'   fit — `link` reads `"(any)"` there.
 #'
-#' The table is read at **one model**. `link` names which one: `"auto"` is the family's own (a
-#' logistic regression for a binary outcome), and the message lists the others. A measure that is
-#' not the model's own is reported from its predictions, so it is available whichever model you
-#' pick — what changes with `link` is which measure has a *coefficient*.
+#' So `link` is the choice that matters, and it decides only which measure comes with a
+#' *coefficient*: everything else is available from any of them.
 #'
-#' One state exists only at run time: a link that does not converge on your data. `tab_reg()` says
-#' so and, for the risk difference, falls back to the linear probability model.
+#' Only what can be built is listed. A measure this kind of outcome does not have simply has no row,
+#' and the message says why (an odds ratio needs a probability to take the odds of). One state exists
+#' only at run time: a link that does not converge on your data. `tab_reg()` says so and, for the
+#' risk difference, falls back to the linear probability model.
 #'
 #' @param data A data frame (or a `survey` design), as for [tab_reg()].
 #' @param outcome The outcome column name.
-#' @param family The model family. `"auto"` (default) detects it and says so, exactly as
-#'   [tab_reg()] does.
-#' @param link Which measure the model estimates. `"auto"` (default) is the family's own.
+#' @param family The model family. `"auto"` (default) lists every family this kind of outcome can
+#'   take, the detected one first — which is the choice to make before the others.
+#' @param link Which measure the model estimates. `"all"` (default) lists every link the family
+#'   fits; name one to read the table at that model alone.
 #'
-#' @return A tibble of `effect`, `measure`, `status`, `header` (the column name it would produce),
-#'   `long` (what that header's acronym means) and `note` (why, when it is not available).
+#' @return A tibble of `family` (only when several are listed), `link`, `measure`, `effect`,
+#'   `header` (the column name it would produce) and `reads_as` (what that header's acronym means).
 #' @export
 #' @examples
 #' d <- forcats::gss_cat
 #' d$married <- as.integer(d$marital == "Married")
 #' reg_measures(d, "married")
-reg_measures <- function(data, outcome, family = "auto", link = "auto") {
+reg_measures <- function(data, outcome, family = "auto", link = "all") {
   svy <- svy_unwrap_data(data, "reg_measures")
   if (!is.null(svy)) data <- svy$data
-  fam <- if (identical(family, "auto")) reg_detect_family(data, outcome) else family
-  if (is.null(REG_ESTIMANDS[[fam]])) cli::cli_abort("Unknown {.arg family} {.val {fam}}.")
-  lk <- reg_link_key(link)
-  if (is.null(lk) || (!identical(lk, "auto") && !lk %in% names(REG_FAMILIES[[fam]]$fits)))
-    reg_estimand_abort(reg_estimand(fam, link = link), outcome = outcome)
-  if (identical(lk, "auto")) lk <- reg_family_link(fam)
-  row_of <- function(effect, measure) {
-    r <- reg_estimand(fam, link = lk, measure = measure, effect = effect)
-    tibble::tibble(
-      effect = effect, measure = measure,
-      status = switch(r$status, ok = "available", impossible = "not defined", "not offered"),
-      header = if (identical(r$status, "ok")) paste0("Model_", reg_word(r)) else NA_character_,
-      long   = if (identical(r$status, "ok")) reg_word_long(r) else NA_character_,
-      note   = if (is.function(r$why)) r$why() else NA_character_)
+  auto_fam <- identical(family, "auto")
+  fams <- if (!auto_fam) family else {
+    kind <- reg_outcome_kind(data[[outcome]])
+    if (!nzchar(kind)) reg_detect_family(data, outcome) else REG_OUTCOME_KINDS[[kind]]$offers
   }
-  # EVERY declared measure, not just the ones this level carries: a measure the level cannot carry is
-  # the "not defined" state, and showing it with its reason is the point of the third status.
-  grid <- expand.grid(effect = REG_CONTRAST_VALUES,
-                      measure = setdiff(REG_MEASURES_VALUES, "auto"),
-                      stringsAsFactors = FALSE)
-  out   <- dplyr::bind_rows(purrr::map(seq_len(nrow(grid)),
-                                       function(i) row_of(grid$effect[[i]], grid$measure[[i]])))
-  # the other models, spelled by reg_link_calls() -- the same producer the abort reads, so one call
-  # cannot be worded differently from the other (and a bare {.code link = "{other}"} would collapse a
-  # two-element vector INSIDE one code span).
-  other <- reg_link_calls(fam, exclude = lk)
+  for (f in fams)
+    if (is.null(REG_ESTIMANDS[[f]])) cli::cli_abort("Unknown {.arg family} {.val {f}}.")
+
+  out <- purrr::list_rbind(purrr::map(fams, function(f) reg_measures_one(f, link, outcome)))
+  if (!nrow(out))
+    reg_estimand_abort(reg_estimand(fams[[1]], link = link), outcome = outcome)
+  if (length(fams) == 1L) out$family <- NULL
+
+  # ⚠ the family alone, never its short name: reg_family_short() names the family's OWN link
+  # ("logit"), which would read as a claim about this table whenever a different `link` was asked
+  # for -- and the `link` column now says which model each row belongs to, once per row.
+  head <- if (auto_fam)
+    cli::format_inline("{.val {outcome}} is a {.code family = \"{fams[[1]]}\"} outcome.")
+  else cli::format_inline("{.val {outcome}}, as a {.code family = \"{fams[[1]]}\"} outcome.")
+  others <- if (auto_fam && length(fams) > 1L)
+    cli::format_inline("It can also be asked as {.or {.code {paste0('family = \"', fams[-1], '\"')}}}.")
+  # a binomial on a NUMBER is the grouped-binomial route and needs to be told out of how many
+  trials <- if ("binomial" %in% fams && identical(REG_FAMILIES[[fams[[1]]]]$level, "mean"))
+    cli::format_inline(
+      "{.code family = \"binomial\"} reads it as a score out of q items: pass {.arg trials}.")
   cli::cli_inform(c(
-    "i" = "{.val {outcome}}: {.code family = \"{fam}\"}, {.code link = \"{lk}\"} ({reg_family_display_name(REG_FAMILIES[[fam]]$fits[[lk]])}).",
-    if (length(other)) c("i" = "Other models: {.or {.code {other}}}.")))
+    "i" = head,
+    if (!is.null(others)) c("i" = others),
+    if (!is.null(trials)) c("i" = trials),
+    "i" = "Any of these also reads on the model's own scale: {.code measure = \"raw_coefficient\"}."))
   out
+}
+
+# ONE family's block. THE FACTORISATION: a conditional row is a property of the LINK (a model's
+# coefficients carry exactly one measure), while a prediction-based row is a property of the FAMILY
+# -- g-computation averages the fitted probabilities, and averaging them does not care which link
+# produced them. Listing the second block once per link is what made this table 35 rows long.
+#' @keywords internal
+#' @noRd
+reg_measures_one <- function(fam, link = "all", outcome = NULL) {
+  fits <- names(REG_FAMILIES[[fam]]$fits)
+  lks  <- if (identical(link, "all")) fits else {
+    lk <- reg_link_key(link)
+    if (is.null(lk)) reg_estimand_abort(reg_estimand(fam, link = link), outcome = outcome)
+    if (identical(lk, "auto")) reg_family_link(fam) else lk
+  }
+  lks <- intersect(lks, fits)                       # a link this family does not fit has no row
+  row <- function(r, lk_shown) tibble::tibble(
+    family = fam, link = lk_shown, measure = r$base_measure, effect = r$effect,
+    header = paste0("Model_", reg_word(r)), reads_as = reg_word_long(r))
+
+  cond <- purrr::list_rbind(purrr::map(lks, function(lk) {
+    r <- reg_estimand(fam, link = lk, measure = "auto", effect = "conditional")
+    if (!identical(r$status, "ok")) return(NULL)
+    row(r, lk)
+  }))
+  # the prediction block, read at ONE link (any of them) and shown once
+  base <- if (length(lks)) lks[[1L]] else reg_family_link(fam)
+  pred <- purrr::list_rbind(purrr::map(
+    setdiff(REG_MEASURES_VALUES, c("auto", "raw_coefficient")), function(m) {
+      hits <- purrr::keep(purrr::map(c("marginal", "at_reference"), function(ef)
+        reg_estimand(fam, link = base, measure = m, effect = ef)),
+        function(r) identical(r$status, "ok"))
+      if (!length(hits)) return(NULL)
+      # BOTH forms of one measure are ONE row: `effect` is an override knob, not a third axis, and
+      # a reader choosing a measure does not want to choose it twice.
+      # the HEADER is the one `effect = "auto"` produces, i.e. the first form; naming both would
+      # double the column's width to say what the `ref` marker already says.
+      dplyr::mutate(row(hits[[1L]], gettext("(any)")),
+                    effect = paste(purrr::map_chr(hits, "effect"), collapse = "|"))
+    }))
+  dplyr::bind_rows(cond, pred)
 }
 
 # --- consumer 4: the generated `?tab_reg` section ----------------------------------------------------
@@ -1414,7 +1499,7 @@ reg_measures_rd <- function() {
     mods <- vapply(names(fits), function(m) sprintf(
       "\\code{link = \"%s\"}%s (%s)", m, if (identical(m, names(fits)[[1]])) ", the default" else "",
       reg_family_display_name(fits[[m]])), character(1))
-    meas <- vapply(c(reg_level_measures(REG_FAMILIES[[fam]]$level), "coefficient"),
+    meas <- vapply(c(reg_level_measures(REG_FAMILIES[[fam]]$level), "raw_coefficient"),
                    function(m) sprintf("\\code{\"%s\"}", m), character(1))
     lvl <- c(pct = "a percentage", mean = "a mean", count = "a count",
              rank = "a position on an ordered scale")[[REG_FAMILIES[[fam]]$level]]
@@ -1427,7 +1512,7 @@ reg_measures_rd <- function() {
     "\\code{tab_reg()} builds. A measure that IS the model's own is read off its coefficients;",
     "any other is computed from its predictions (\\code{effect = \"marginal\"} or",
     "\\code{\"at_reference\"}). Call \\code{\\link{reg_measures}()} on your outcome for the same",
-    "table with its per-cell status.",
+    "table read on your own data, one row per model and the prediction-based measures once.",
     "\\itemize{", vapply(setdiff(names(REG_ESTIMANDS), "quasipoisson"), line, character(1)), "}")
 }
 

@@ -21,6 +21,12 @@
 #     to whatever it was carved from. Two consumers: the unit line (a block restates its unit, so a
 #     Total says "<row%>" and the count beside it "<n>") and tab_xl's vertical rules (a block is
 #     boxed, so no line falls between a Total and its own count).
+#   - A NAME IS PRINTED ONCE. Where every level column already prints its own col_var -- a
+#     `predictors` comparison, whose columns ARE the models -- the variable-NAME span row is dropped.
+#     ⚠ that comparison runs through tx_unwrap_text(): tab_wrap_text() rewrites the column NAMES
+#     (U+202F for each space) before the header is built and leaves the col_var attribute raw, so a
+#     literal == silently stopped matching in html and kable alone. Same trap as
+#     tx_strip_outcome_suffix()'s, which is why both now share one un-wrapper.
 #   - WHICH ROW A COLUMN SAYS ITS NAME IN: the level header names what the TABLE has, the unit line
 #     what it HOLDS. A column the RENDER carved out of another -- a split-off aside, the base count
 #     taken out of a Total cell -- has no level to name and is named by its unit alone. A helper the
@@ -685,7 +691,13 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE, transposed = FALSE)
   }, logical(1))
   clean[carved] <- ""
   lvl <- which(is_level)
-  if (length(lvl) > 0 && all(clean[lvl] == unname(cvm)[lvl])) label <- rep("", length(nms))
+  # A NAME PRINTED TWICE IS A NAME PRINTED ONCE TOO MANY: where every level column already prints its
+  # own col_var -- a `predictors` comparison, whose columns ARE the models -- the span row above them
+  # says nothing new and goes. ⚠ compared through tx_unwrap_text(): tab_export_prep() wraps the NAMES
+  # before this runs and leaves the col_var attribute raw, so a literal == silently stopped matching
+  # in html and kable alone. Same blind spot as tx_strip_outcome_suffix(), same cure.
+  if (length(lvl) > 0 &&
+      all(tx_unwrap_text(clean[lvl]) == tx_unwrap_text(unname(cvm)[lvl]))) label <- rep("", length(nms))
   # a blanked span row carries no sub-population either: `group` only ever qualifies a `label`.
   grp[!nzchar(label)] <- ""
   unit <- tab_col_units(tab, roles$col_blocks %||% unname(cvm))
@@ -859,6 +871,13 @@ roles_col_var_edges <- function(col_var_map, other_cols = NULL, real_col_vars = 
 #' @keywords internal
 tx_strip_outcome_suffix <- function(x)
   sub("([[:space:]\u202f\u00a0]|<br>)*\\[[^]]*\\]$", "", x)
+
+# tx_unwrap_text() -- undo what tab_wrap_text() did to a NAME, so it can be compared against a stored
+# attribute the wrap never touched. The non-breaking spaces become spaces again and a break becomes
+# one; nothing else moves, so a name that was never wrapped is returned unchanged.
+#' @keywords internal
+tx_unwrap_text <- function(x)
+  gsub("[[:space:]]+", " ", gsub("<br>|\\n", " ", gsub("[\u202f\u00a0]", " ", x)))
 
 # tx_num_font() -- Phase 19h: THE number-font rule, which is one DECISION written twice.
 #

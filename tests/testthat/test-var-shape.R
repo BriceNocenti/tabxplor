@@ -63,12 +63,14 @@ testthat::test_that("sd_bands sit at the mean +/- 1 SD, in words, and degrade ra
   b <- shape_numeric_var(gsh$age, "sd_bands")
   testthat::expect_length(levels(b), 4L)
   # the band says its OWN cut, so the label can be checked against the interval beside it
-  testthat::expect_match(levels(b)[[1]], paste0("; < mean - ", sg, "$"))
-  testthat::expect_match(levels(b)[[2]], "; < mean$")
-  testthat::expect_match(levels(b)[[3]], "; > mean$")
-  testthat::expect_match(levels(b)[[4]], paste0("; > mean \\+ ", sg, "$"))
-  # every label carries the real cut points too
-  testthat::expect_true(all(grepl("^\\[", levels(b))))
+  testthat::expect_match(levels(b)[[1]], paste0("; < -1", sg, "$"))
+  testthat::expect_match(levels(b)[[2]], "; below mean$")
+  testthat::expect_match(levels(b)[[3]], "; above mean$")
+  testthat::expect_match(levels(b)[[4]], paste0("; > \\+1", sg, "$"))
+  # every label carries the real cut points too -- and `age` is whole-numbered, so it names its
+  # VALUES ("18 to 29") rather than the interval they sit in (Phase 22g-v)
+  testthat::expect_true(all(grepl("^[0-9]+( (to|or) [0-9]+)? ;", levels(b))))
+  testthat::expect_true(all(grepl("^\\[", levels(shape_numeric_var(gsh$age + 0.5, "sd_bands")))))
   # ⚠ a skewed variable loses a landmark rather than asking cut() for an empty band
   set.seed(1)
   testthat::expect_length(levels(shape_numeric_var(stats::rexp(5000, 1 / 3e4), "sd_bands")), 3L)
@@ -196,4 +198,29 @@ testthat::test_that("a self-naming aside is named once: in the cell, not again i
   testthat::expect_identical(unname(hdr(quiet(tab(gsh, race, age, na = "drop")))["clean"]), "mean")
   testthat::expect_identical(unname(hdr(quiet(tab(gsh, race, age, na = "drop",
                                                   display = "mean_sd")))["clean"]), "mean (sd)")
+})
+
+# --- Phase 22g-v: a quantile cut gives k groups, and a whole number names its values -------------
+
+testthat::test_that("a tied variable still gets k quantile groups, and says so when it cannot", {
+  # `checks`-like: 7 distinct values, very uneven. Two quantiles landing on one value used to drop a
+  # break silently, so `quartiles` gave 3 groups where `quintiles` gave 4 -- on the same column.
+  x <- c(rep(0, 1800), rep(1, 1600), rep(2, 950), rep(3, 500), rep(4, 250), rep(5, 90), rep(6, 36))
+  testthat::expect_length(levels(shape_numeric_var(x, "quartiles")), 4L)
+  testthat::expect_length(levels(shape_numeric_var(x, "quintiles")), 5L)
+  # ...and a genuine shortfall is a fact about the data, so it is stated -- once, naming both counts
+  testthat::expect_message(shape_numeric_var(x, "deciles"), "rather than 10")
+  testthat::expect_no_message(shape_numeric_var(x, "quartiles"))
+})
+
+testthat::test_that("a whole-numbered cut names its VALUES, a fractional one its interval", {
+  x <- c(rep(0, 100), rep(1, 60), rep(2, 40), rep(3, 20), 4:6)
+  lv <- levels(shape_numeric_var(x, "quartiles"))
+  testthat::expect_true(all(grepl("^([0-9]+|[0-9]+ (or|to) [0-9]+)( Q[0-9]+)?$", lv)))
+  testthat::expect_identical(lv[[1]], "0 Q1")           # [0,1) holds exactly the value 0
+  # the same column shifted off the integers keeps cut()'s own interval literal
+  testthat::expect_true(all(grepl("^\\[", levels(shape_numeric_var(x + 0.5, "quartiles")))))
+  # a cut is still a cut: the groups hold the same rows either way
+  testthat::expect_identical(as.integer(shape_numeric_var(x, "quartiles")),
+                             as.integer(shape_numeric_var(x + 0.5, "quartiles")))
 })

@@ -158,10 +158,12 @@ test_that("`shape = \"sd_bands\"` bands at the mean and one SD either side", {
   expect_length(lv, 4L)
   # every label carries BOTH facts: the real cut points, and IN WORDS where the band sits
   sg <- stringi::stri_unescape_unicode("\\u03c3")
-  expect_match(lv[[1]], paste0("^\\[.*\\) ; < mean - ", sg, "$"))
-  expect_match(lv[[2]], "; < mean$")
-  expect_match(lv[[3]], "; > mean$")
-  expect_match(lv[[4]], paste0("; > mean \\+ ", sg, "$"))
+  # ⚠ `age` is whole-numbered, so a band names its VALUES ("18 to 29") rather than the interval
+  # holding them (Phase 22g-v); the band WORDS are shape_band_words()' own.
+  expect_match(lv[[1]], paste0("^[0-9]+ to [0-9]+ ; < -1", sg, "$"))
+  expect_match(lv[[2]], "; below mean$")
+  expect_match(lv[[3]], "; above mean$")
+  expect_match(lv[[4]], paste0("; > \\+1", sg, "$"))
   # the cuts really are the landmarks -- snapped UP to the whole number on a whole-numbered variable,
   # which with `right = FALSE` is the identical cut and a far shorter label.
   m <- mean(d$age); s <- stats::sd(d$age)
@@ -201,13 +203,13 @@ test_that("a crossed continuous predictor gives the fit's own slope per moderato
   i <- cx(t) == "age*race"
   expect_equal(sum(i), nlevels(d$race))
   nest <- stats::glm(married ~ race + relig + race:age, d, family = stats::binomial())
-  k    <- tabxplor:::wtd_sd(d$age)
+  k    <- 2 * tabxplor:::wtd_sd(d$age)                 # multiplier = "2sd", tab_reg's own default
   b    <- stats::coef(nest)[paste0("race", as.character(t$levels[i]) |>
                                      sub(pattern = "^.*\u2014 ", replacement = ""), ":age")]
   # C4-2: `multiplier` reaches a crossed slope -- it was left at one raw unit before this phase.
   # ⚠ tab_reg models the FIRST outcome level and glm() the second, so the two are reciprocals.
   expect_equal(unname(get_or(t$Model_OR[i])), unname(exp(-b * k)), tolerance = 1e-9)
-  expect_match(as.character(t$levels[i])[[1]], "^age per [0-9.]+ \\(SD\\)")
+  expect_match(as.character(t$levels[i])[[1]], "^age per [0-9.]+ \\(2SD\\)")
   # its `n` is the moderator level's, and the moderator keeps a row block of its own
   expect_equal(unname(get_n(t$Model_OR[i])), as.integer(as.vector(table(d$race))))
   expect_true("race" %in% cx(t))
@@ -220,7 +222,7 @@ test_that("a crossed slope has a subgroup AME, and it is marginaleffects'", {
                      effect = "marginal", measure = "difference", stats = FALSE))
   i <- cx(t) == "age*race"
   nest <- stats::glm(married ~ race + relig + race:age, d, family = stats::binomial())
-  k    <- tabxplor:::wtd_sd(d$age)
+  k    <- 2 * tabxplor:::wtd_sd(d$age)                 # the default multiplier
   ref  <- marginaleffects::avg_comparisons(nest, variables = list(age = k), by = "race")
   # tab_reg models the FIRST outcome level, glm() the second, so the two differ by sign only
   expect_equal(sort(abs(get_diff(t$Model_mRD[i]))), sort(abs(ref$estimate)), tolerance = 1e-8)

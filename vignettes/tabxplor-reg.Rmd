@@ -747,6 +747,9 @@ header, after the constant `Model_` prefix.
 | a rank     | `"ratio"`      | —                       | `mWR`        | not offered ²    |
 | a rank     | `"odds_ratio"` | `cumOR`                 | not offered ¹| not offered ¹    |
 
+The `"conditional"` column is the one `reg_measures()` shows per **link**; the other two are the same
+for every link the family fits, which is why it lists them once.
+
 \* a coefficient exists **only where that measure is the `link`** — see the previous table. Ask for
 one that is not, and the call is refused naming its two cures: drop `effect`, or fit the model that
 estimates it.
@@ -757,24 +760,24 @@ contrast at `effect = "at_reference"`, and on an ordinal one not at all.
 
 ² a rank's measures compare two people **drawn from the population**, and one profile holds only one.
 
-The three states are the ones `reg_measures()` prints, and they are not the same refusal:
-
-- a header — **available**: the call builds it;
-- **not defined** — the quantity is not a thing for that outcome, whatever anyone implements (an odds
-  ratio needs a probability to take the odds of, and a count has none);
-- **not offered** — tabxplor does not build it, and the error message lists what this outcome does
-  offer, at this model and at the others.
+`reg_measures(data, outcome)` prints this grid for **your** outcome, and prints only what can be
+built: a *not defined* combination has no row, and the message above the table says why. Its two
+refusals are not the same one — a quantity has no odds to take a ratio of, whatever anyone
+implements, while *not offered* means tabxplor does not build it and the error lists what this
+outcome does offer, at this model and at the others.
 
 A further state exists only at run time: a link that does not converge on *your* data. The call says
 so, and for the risk difference it falls back to the linear probability model.
 
-`measure = "coefficient"` is not a fourth column: it is **the model's own coefficient**, the estimand
-shown un-transformed. Where the reported measure is multiplicative that is its log, and the header
-says which one it logs (`Model_log(OR)`, `Model_log(IRR)`, `Model_log(RoM)`, `Model_log(mRR)`); where
-the model is already additive there is nothing to un-exponentiate, and the coefficient IS the
-additive estimate the column already shows. So it answers for every family — which is what lets a
-table mixing a logistic outcome and a linear one be asked for its coefficients at all. (`"log"`,
-`"log_odds"`, `"log_risk"` and `"log_rate"` are accepted spellings; the last three pin which base.)
+`measure = "raw_coefficient"` is not a fourth column: it is **the model's own coefficient**, the
+estimand shown un-transformed. Where the reported measure is multiplicative that is its log, and the
+header says which one it logs (`Model_log(OR)`, `Model_log(IRR)`, `Model_log(RoM)`); where the model
+is already additive there is nothing to un-exponentiate, and the coefficient IS the additive estimate
+the column already shows. So it answers for every family — which is what lets a table mixing a
+logistic outcome and a linear one be asked for its coefficients at all. Being the fit's *own* number
+it is always the conditional one; ask it with `effect = "marginal"` and the call says so and names
+the cure. (`"coefficient"`, `"coef"`, `"log"`, `"log_odds"`, `"log_risk"` and `"log_rate"` are
+accepted spellings; the last three pin which base.)
 
 ### What the header words mean
 
@@ -878,16 +881,19 @@ is the claim you actually mean to make. `reg_formulas()` tells you which model r
 
 ### Asking your own outcome
 
-`reg_measures()` prints this grid for one outcome of your own data, with its per-cell status — it
-reads the very table `tab_reg()` resolves against, so what it prints is what the function does:
+`reg_measures()` prints this grid for one outcome of your own data — it reads the very table
+`tab_reg()` resolves against, so what it prints is what the function does:
 
 ```{r}
 reg_measures(gss_simple, "married")
 ```
 
-It reads at **one model** — the family's own, unless you name another with `link =` — and the message
-lists the others. What changes between them is which measure has a *coefficient*; every measure stays
-reportable from any of them.
+It comes in **two blocks**. The first is one row per model you could fit: its `link`, and the measure
+that model's own coefficients carry. The second is what is read off the model's *predictions* — the
+same whichever link you fit, which is why those rows say `link = "(any)"`. So what `link` changes is
+only which measure has a **coefficient**; every measure stays reportable from any of them.
+
+Name a link to read the table at that model alone, and a family to read it as that kind of outcome:
 
 ```{r}
 reg_measures(gss_simple, "married", link = "ratio")

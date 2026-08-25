@@ -18,16 +18,17 @@ tab_reg(
   trials = NULL,
   empirical = TRUE,
   n = NULL,
-  color = TRUE,
+  color = "measure",
   color_signif = NULL,
   stars = TRUE,
   ref = NULL,
-  multiplier = "sd",
+  multiplier = "2sd",
   shape = NULL,
-  stats = NULL,
+  stats = "auto",
   conf_level = NULL,
-  na = c("drop_by_outcome", "drop_by_model", "drop_all"),
+  na = c("drop_by_outcome", "drop_by_model", "drop_all", "keep_for_predictors"),
   display = NULL,
+  digits = 0,
   cleannames = NULL,
   subtext = "",
   ...
@@ -146,7 +147,7 @@ It takes \code{measure}'s spellings, acronyms included, plus the glm words (\cod
 \code{"logit"}) and the internal fit keys \code{\link[=reg_formulas]{reg_formulas()}} reports in its \code{fit} column (\code{"rr"},
 \code{"rd"}, \code{"mr"}) --- so what the package printed can be typed straight back. ⚠ \code{"log"} is the one
 word the two arguments do not share: here it is the \strong{log link}, on \code{measure} it is a spelling
-of \code{"coefficient"}.}
+of \code{"raw_coefficient"}.}
 
 \item{measure}{\strong{Which measure is reported} --- the one argument most readers ever set, and the
 one that never changes the model. \code{"auto"} (default) is the model's own measure: follow from
@@ -170,13 +171,15 @@ group, how often does the one from this group end up higher on the scale} --- wi
 probability itself in brackets, 50 \% being a coin flip. For a number per outcome category, use
 \code{family = "multinomial"}.
 \itemize{
-\item \code{"coefficient"} (\code{"coef"}, \code{"log"}, \code{"log_odds"}, \code{"log_risk"}, \code{"log_rate"}) --- \strong{the
-model's own coefficient, un-transformed}. Where the reported measure is multiplicative that
-is its log, and the header names what it logs (\code{Model_log(OR)}), never one greek letter for
-five quantities; where the model is already additive there is nothing to un-exponentiate and
-it IS the additive estimate. So it answers for every family --- which is what lets one table
-mixing a logistic and a linear outcome be asked for its coefficients at all. Bare
-\code{"coefficient"} takes whatever the cascade would report; the \verb{log_*} spellings pin which base.
+\item \code{"raw_coefficient"} (\code{"raw_coef"}, \code{"coefficient"}, \code{"coef"}, \code{"log"}, \code{"log_odds"},
+\code{"log_risk"}, \code{"log_rate"}) --- \strong{the model's own coefficient, un-transformed}. Where the
+reported measure is multiplicative that is its log, and the header names what it logs
+(\code{Model_log(OR)}), never one greek letter for five quantities; where the model is already
+additive there is nothing to un-exponentiate and it IS the additive estimate. So it answers
+for every family --- which is what lets one table mixing a logistic and a linear outcome be
+asked for its coefficients at all. Bare \code{"raw_coefficient"} takes whatever the cascade would
+report; the \verb{log_*} spellings pin which base. It is the model's \strong{own} number, so it is
+always the conditional one: asked with \code{effect = "marginal"} it says so and names the cure.
 }
 
 \strong{Every acronym a header can print is an accepted spelling here} --- the list under \emph{The header
@@ -292,16 +295,15 @@ When several models were fitted on different people it prints the whole range
 only, \code{"no"} no count at all. Continuous predictors are left blank: on a listwise-complete frame
 their count is the model N. With \code{tab_vars}, one column per group, to the right of the models.}
 
-\item{color, color_signif}{Colouring of the effect cells. \code{color = TRUE} (default) grades each cell
-on \strong{its own scale} --- the ladder follows what the column estimates (\code{measure}), so it is
-never asked for separately; \code{color = FALSE} turns colouring off. \code{color_signif} is the
+\item{color, color_signif}{Colouring of the effect cells. \code{color = "measure"} (default, \code{TRUE}
+equivalently) grades each cell on \strong{its own measure} --- the ladder follows what the column
+estimates, so it is never asked for separately; \code{color = FALSE} turns colouring off. \code{color_signif} is the
 significance policy (default \code{"grey_non_signif"}). See \code{\link[=tab]{tab()}}.
 
 What is left to choose is what each effect is compared \strong{to}. Both such measures are meant for
 the \emph{background} channel so the text keeps showing the effect size: \code{color} is positional,
-\code{c(text, background)}, and \code{TRUE} in the text slot means "the column's own scale", so
-\code{color = c(TRUE, "adjustment")} answers "how strong is this effect?" and "how much did the model
-change it?" in one glance.
+\code{c(text, background)}, so \code{color = c("measure", "adjustment")} answers "how strong is this
+effect?" and "how much did the model change it?" in one glance.
 \itemize{
 \item \code{"adjustment"} --- how far each \strong{modelled} effect sits from its \strong{observed} (crude)
 counterpart, i.e. what adjusting for the other predictors did to it. It turns
@@ -384,8 +386,10 @@ AGAINST, \code{outcome_level} the one you MODEL.}
 \item{multiplier}{How a \strong{continuous} predictor's effect is scaled --- the unit its row reports.
 One unit of a continuous variable is rarely a readable amount (a one-year change in \code{age} barely
 moves the odds, so its odds ratio sits inside the first colour break and the row reads as "no
-effect"), so the default is \strong{one standard deviation}. Values: \code{"sd"} (the default), \code{"2sd"}
-(roughly bottom to top of the distribution), or a number of units (\code{10} = per decade of age);
+effect"), so the default is \strong{two standard deviations} --- roughly the span a binary
+predictor's own contrast covers, which is what makes a continuous row and a factor row
+comparable at a glance (Gelman 2008). Values: \code{"2sd"} (the default), \code{"sd"}, or a number of
+units (\code{10} = per decade of age);
 \code{multiplier = 1} restores the per-one-unit reading. The row's level states every fact that
 places it --- the transform \code{shape} fitted it through, the unit its effect is per, and the \code{ref}
 anchor the Constant row sits at: \verb{log(x), per 0.39 (SD), at 3.78 (mean)}. The variable itself is
@@ -393,7 +397,7 @@ named in the \code{var} column beside it.
 
 \code{multiplier}, \code{shape} and \code{ref} share one grammar: a \strong{value on its own} applies to every
 continuous predictor, a \strong{named} one overrides that variable, and \verb{default =} spells the first
-out --- so \code{multiplier = c("2sd", age = 10)} reads "per two standard deviations, except \code{age},
+out --- so \code{multiplier = c("sd", age = 10)} reads "per one standard deviation, except \code{age},
 per decade".
 
 Everything scales together --- the estimate, its interval, the crude \verb{Obs_*} companion and the
@@ -438,8 +442,8 @@ the marginal-effects engine silently returns zero for those.
 It is the same vocabulary \code{\link[=tab]{tab()}} takes, on one vector in \code{\link[=shape_numeric_var]{shape_numeric_var()}} --- minus
 \code{"quadratic"}, which is a model term and so belongs to this function alone.}
 
-\item{stats}{The statistics shown in the model-summary \strong{footer} (one block per model). \code{NULL}
-(default) uses the per-family set: linear models show R square, adjusted R square, the
+\item{stats}{The statistics shown in the model-summary \strong{footer} (one block per model).
+\code{"auto"} (default) uses the per-family set: linear models show R square, adjusted R square, the
 overall F-test and the residual SD; other models show the likelihood-ratio test versus the
 null model, McFadden's pseudo-R square, AIC and BIC (count and grouped-binomial models also show
 the Pearson dispersion, \code{"phi"}). Every default set also carries the \strong{default model checks}
@@ -448,7 +452,8 @@ pick the statistics (\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"
 \code{"r2_adj"}, \code{"f_model"}, \code{"sigma"}, \code{"global"}, \code{"interaction"}, \code{"group_interaction"},
 \code{"linearity"},
 \code{"proportionality"}, \code{"dispersion"}, \code{"influence"}, \code{"collinearity"}), \code{"all"} for everything
-this model can report, or \code{FALSE} / \code{"none"} to hide the footer. Weighted models show a reduced,
+this model can report, or \code{NULL} / \code{FALSE} / \code{"no"} / \code{"none"} to hide the footer entirely.
+Weighted models show a reduced,
 survey-appropriate set (design-based Wald test, Nagelkerke pseudo-R square, AIC).
 
 \strong{Model comparison happens by default} wherever it means anything --- when \code{predictors} is a
@@ -496,7 +501,13 @@ observed columns are computed on exactly the model's rows, and nested models get
 likelihood-ratio comparison can run instead of degrading to an AIC difference.
 \code{"drop_by_model"} lets each model use its own complete cases --- more rows, at the price of
 comparability: models fitted on different people get no observed effect at all. \code{"drop_all"}
-shares one population across the whole call, all outcomes included.}
+shares one population across the whole call, all outcomes included.
+
+\code{"keep_for_predictors"} drops nothing but a missing \strong{outcome}: every predictor keeps its
+missing values as an ordinary \code{NA} level, with its own row, its own count and its own effect ---
+which is often the fastest way to find out whether non-response is itself patterned. A number
+has no level to put them in, so a numeric predictor that has any is cut into bands
+(\code{shape = c(age = "quartiles")} chooses otherwise; a \code{shape} that keeps it a number is refused).}
 
 \item{display}{What each effect cell shows --- \code{\link[=tab]{tab()}}'s display grammar, same names, same
 meaning, on every family and on the crude column as well as the model one. \code{NULL} (default)
@@ -524,6 +535,10 @@ difference under \code{"base_est_mdiff"} --- the aside would repeat the number a
 A cell that cannot fill an aside leaves it \strong{blank but padded}, so the effects still line up;
 an aside no cell of the column can fill is dropped, padding and all.
 
+A hand-written template may give any token \strong{its own precision}, \code{"{est:3} ({base:1})"} ---
+the same thing \code{digits} writes when a field is named, and the only way to set an aside's
+decimals independently of the estimate's.
+
 The \strong{Constant} row is the baseline the rest of the column is read against, at the very point
 that column's effects are read at: under \code{effect = "conditional"} the model's intercept ---
 every factor at its reference level and every continuous predictor at its \code{ref} anchor, the
@@ -534,7 +549,8 @@ its label then says.
 It holds \strong{the quantity the column's effects operate on}, so it is read in one step: an odds
 ratio multiplies odds, so an odds column shows the baseline \emph{odds} (\code{1/1.51}) with the
 probability beside it (\verb{(40\%)}); a risk or rate ratio multiplies the level and a difference adds
-to it, so those show the \strong{level itself} --- \verb{39\%}, \code{40.8}, \code{2.9}; and \code{measure = "coefficient"} shows
+to it, so those show the \strong{level itself} --- \verb{39\%}, \code{40.8}, \code{2.9}; and
+\code{measure = "raw_coefficient"} shows
 the intercept on the link scale. It is a baseline, not a comparison, so it never carries a \code{+}
 or a \code{x} sign. It carries its confidence interval, and a \strong{star} only where what it prints has
 a null to be tested against (the odds and link scales, under \code{effect = "conditional"}): a
@@ -548,6 +564,13 @@ unadjusted one, \code{"{est} ({gap})"} next to how far adjustment moved it.
 a layout never triggers a computation and never changes a number --- \code{\link[=set_display]{set_display()}} on a built
 table gives the same result as asking for it here. It never changes the fit or the estimand,
 which is \code{measure}'s job alone.}
+
+\item{digits}{The number of decimals. A single integer sets every cell (\code{0}, the default, means
+"each measure's own"), and where a measure is \strong{finer than the level it sits on} it keeps that:
+a per-item odds ratio reads at two decimals beside a mean score at one, whatever is asked. Name a display field to set just that one, an aside included ---
+\code{digits = c(ratio = 3)}, \code{digits = c(base = 2)}, \code{digits = c(1, or = 3)}. The names are
+\code{display}'s own tokens, so what a cell shows and how precisely it shows it are asked in the same
+words; a template may also carry its own, \code{display = "{est:3} ({base:1})"}.}
 
 \item{cleannames}{Logical. If \code{TRUE}, strips numeric prefixes from factor levels for display.
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
@@ -742,13 +765,13 @@ Generated from the package's own resolution table, so it cannot drift from what
 \code{tab_reg()} builds. A measure that IS the model's own is read off its coefficients;
 any other is computed from its predictions (\code{effect = "marginal"} or
 \code{"at_reference"}). Call \code{\link{reg_measures}()} on your outcome for the same
-table with its per-cell status.
+table read on your own data, one row per model and the prediction-based measures once.
 \itemize{
-\item \strong{gaussian} --- a cell is a mean. Models: \code{link = "difference"}, the default (linear regression); \code{link = "ratio"} (log-link mean regression (Poisson pseudo-likelihood, robust standard errors)). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"coefficient"}.
-\item \strong{binomial} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (logistic regression); \code{link = "ratio"} (modified Poisson regression); \code{link = "difference"} (additive-risk regression (identity link, robust standard errors)). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"coefficient"}.
-\item \strong{poisson} --- a cell is a count. Models: \code{link = "ratio"}, the default (Poisson regression). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"coefficient"}.
-\item \strong{multinomial} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (multinomial logistic regression). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"coefficient"}.
-\item \strong{ordinal} --- a cell is a position on an ordered scale. Models: \code{link = "odds_ratio"}, the default (ordinal logistic regression). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"odds_ratio"}, \code{"coefficient"}.
+\item \strong{gaussian} --- a cell is a mean. Models: \code{link = "difference"}, the default (linear regression); \code{link = "ratio"} (log-link mean regression (Poisson pseudo-likelihood, robust standard errors)). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"raw_coefficient"}.
+\item \strong{binomial} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (logistic regression); \code{link = "ratio"} (modified Poisson regression); \code{link = "difference"} (additive-risk regression (identity link, robust standard errors)). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"raw_coefficient"}.
+\item \strong{poisson} --- a cell is a count. Models: \code{link = "ratio"}, the default (Poisson regression). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"raw_coefficient"}.
+\item \strong{multinomial} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (multinomial logistic regression). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"raw_coefficient"}.
+\item \strong{ordinal} --- a cell is a position on an ordered scale. Models: \code{link = "odds_ratio"}, the default (ordinal logistic regression). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"odds_ratio"}, \code{"raw_coefficient"}.
 }
 }
 

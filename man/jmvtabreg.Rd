@@ -20,6 +20,7 @@ jmvtabreg(
   models = NULL,
   na = "drop_by_outcome",
   run_compare = FALSE,
+  levels_order = NULL,
   levels_collapse = NULL,
   crosses = NULL,
   ref_levels = NULL,
@@ -34,7 +35,7 @@ jmvtabreg(
   n = "range",
   cleannames = TRUE,
   subtext = "",
-  theme = "light",
+  tab_theme = "light",
   wrap_rows = 35,
   wrap_cols = 15,
   export_format = "excel",
@@ -119,6 +120,8 @@ shares one population across every outcome as well.}
 
 \item{run_compare}{.}
 
+\item{levels_order}{.}
+
 \item{levels_collapse}{.}
 
 \item{crosses}{.}
@@ -169,10 +172,10 @@ column at all.}
 
 \item{subtext}{A free note printed below the table.}
 
-\item{theme}{How the table is painted, in the results panel and in every
-export.  \code{"light"} is the colour palette; \code{"print_ready"} says
-the same thing  typographically --- bold, italics, underlines and marks
-instead of blue and red ---  for a page that has no colour. See
+\item{tab_theme}{How the table is painted, in the results panel and in
+every export.  \code{"light"} is the colour palette; \code{"print_ready"}
+says the same thing  typographically --- bold, italics, underlines and
+marks instead of blue and red ---  for a page that has no colour. See
 \code{\link{tab_css}}.}
 
 \item{wrap_rows}{.}

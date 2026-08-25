@@ -8,6 +8,11 @@
 #     and post-hoc `set_display(col, "base_ci")`. It refuses to print one geometry's estimate beside
 #     another's bracket, but a LEVEL names no comparison and so constrains the bracket not at all --
 #     "48% [-3;+4]" is tabxplor's flagship cell, not a mismatch.
+#   - A TOKEN MAY CARRY ITS OWN PRECISION, "{base:1}" / "{est:3}", which beats every declared
+#     default (DISPLAY_TOKENS$min_digits, EST_SCALES$base_digits, the interval floor). Digits ARE a
+#     display property, and the cell's `digits` field is one number for a whole cell, so the template
+#     is the only place that can say "the estimate at three decimals, its aside at one". Parsed in
+#     parse_display_template(), applied by the composite expander (R/fmt_class.R).
 #   - A composite has a PRIMARY token -- the first one outside brackets, so an aside may be written
 #     FIRST ("({base}) {est}") without ceasing to be an aside. It is what carries the stars, what
 #     get_num() and Excel return, and the only part the colour paints by default. The rule lives in

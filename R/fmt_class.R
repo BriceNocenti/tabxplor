@@ -1573,6 +1573,25 @@ display_primary <- function(display) {
   display
 }
 
+# display_primary_digits() -- the precision the PRIMARY token of a template declared ("{est:3}"), NA
+# where it declared none. The sibling of display_primary(), read for the same reason: the top-level
+# format() dispatches on the primary, and the Excel number format is finalized there, before the
+# composite expander that reads every other token's suffix.
+#' @keywords internal
+#' @noRd
+display_primary_digits <- function(display) {
+  out  <- rep(NA_integer_, length(display))
+  comp <- !is.na(display) & grepl("{", display, fixed = TRUE)
+  if (!any(comp)) return(out)
+  u <- unique(display[comp])
+  p <- vapply(u, function(tmpl) {
+    seg <- parse_display_template(tmpl)
+    if (!length(seg$fields)) NA_integer_ else seg$field_digits[[seg$primary]]
+  }, integer(1), USE.NAMES = FALSE)
+  out[comp] <- p[match(display[comp], u)]
+  out
+}
+
 # fmt_display_shows() -- does a cell's display ALREADY show this field, ANYWHERE in its template?
 # (tests the whole composite, not just the primary token -- e.g. the html tooltip uses it to suppress
 # a line the cell already shows.) `row` (optional, lazy) resolves the scale-relative `est` / `base`
@@ -1636,16 +1655,24 @@ parse_display_template <- function(tmpl) {
     add(paste0(cur, collapse = ""), FALSE, cur_g)
   }
   fields <- character(0); primary <- 1L; field_group <- integer(0)
+  field_digits <- integer(0)
   if (any(is_tok)) {
     rw  <- trimws(gsub("[{}]", "", pieces[is_tok]))
+    # A TOKEN MAY CARRY ITS OWN PRECISION -- "{base:1}", "{est:3}". Digits ARE a display property, so
+    # this is where they belong: the cell's `digits` field is one number for a whole cell, and only
+    # the template can say that the aside reads at one decimal while the estimate reads at three.
+    dg  <- suppressWarnings(as.integer(sub("^[^:]*:", "", rw)))
+    dg[!grepl(":", rw, fixed = TRUE)] <- NA_integer_
+    rw  <- sub(":.*$", "", rw)
     hit <- rw %in% names(DISPLAY_ALIASES)
     rw[hit] <- unname(DISPLAY_ALIASES[rw[hit]])
-    fields      <- rw
-    field_group <- group[is_tok]
+    fields       <- rw
+    field_digits <- dg
+    field_group  <- group[is_tok]
     if (any(field_group == 0L)) primary <- which(field_group == 0L)[[1]]
   }
   list(pieces = pieces, is_tok = is_tok, group = group, fields = fields,
-       field_group = field_group, primary = primary)
+       field_digits = field_digits, field_group = field_group, primary = primary)
 }
 
 # WHICH PIECES SURVIVE when some fields render nothing, over the WHOLE column. ONE rule, read by both
@@ -1717,6 +1744,14 @@ validate_display_template <- function(recipe) {
   closes <- stringi::stri_count_regex(recipe, "\\}")
   toks   <- regmatches(recipe, gregexpr("\\{[^{}]+\\}", recipe))[[1]]
   fields_used <- trimws(gsub("[{}]", "", toks))
+  # the optional per-token precision -- "{base:1}" -- validated here and stripped before the
+  # known-field check below, so a token spelling exists in exactly one place (parse_display_template).
+  dg_used     <- fields_used[grepl(":", fields_used, fixed = TRUE)]
+  fields_used <- sub(":.*$", "", fields_used)
+  bad_dg <- dg_used[!grepl("^[^:]+:[0-6]$", dg_used)]
+  if (length(bad_dg))
+    cli::cli_abort(c("Invalid precision in {.arg display} token{?s} {.val {bad_dg}}.",
+                     "i" = "Write {.code {{token}}:{{digits}}}, digits 0-6, e.g. {.code {{base}}:1}."))
   if (opens != closes || length(toks) != opens || any(!nzchar(fields_used))) {
     cli::cli_abort(c("Malformed {.arg display} template {.val {recipe}}.",
                      "i" = "Use balanced, non-empty tokens, e.g. {.code {{pct}} (n={{n}})}."))
@@ -1805,11 +1840,17 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", ...) {  # ... 
 #   base_display  the token `{base}` borrows: the LEVEL beside the estimate (a percentage, a mean, a
 #              count). NA where the level is ambiguous -- on a link scale a coefficient may sit over a
 #              probability or over a mean, and guessing would be a lie; `{base}` renders void there.
+#   est_digits   the ESTIMATE token's own precision, a FLOOR (absent = the cell's). The mirror of base_digits,
+#              for the scales where the estimate is FINER than the level it sits on: a per-item odds
+#              ratio wants two decimals while the mean score under it wants one, and one `digits`
+#              per cell cannot say both. ⚠ it is not DISPLAY_TOKENS$min_digits: that one is a
+#              default a cell overrides by asking, this one is the scale's own statement.
 #   base_digits  the LEVEL's own precision, absent = the cell's. One `digits` per cell serves every
 #              token of it, so an estimate needing a decimal (a risk difference in points) used to
 #              drag its percentage aside to "50.8 %". Declared only on the EFFECT scales, where
 #              `{base}` really is an aside -- on a LEVEL scale `{base}` IS the estimate and the
-#              column's own `digits` is the user's answer.
+#              column's own `digits` is the user's answer. A template may override it per token,
+#              "{base:2}", which is how `tab_reg(digits = c(base = 2))` is written.
 #   const_display the token a regression's BASELINE row renders: the quantity this column's effects
 #              OPERATE ON. Odds ratios multiply odds, so an odds column shows the baseline odds; risk
 #              and rate ratios multiply the level, and differences add to it, so those show the level
@@ -1847,13 +1888,16 @@ EST_SCALES <- list(
   score_odds_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "pct",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "or",    unit = "or", default_display = "mean",
-                    est_display = "or", base_display = "mean", const_display = "or",
+                    # the aside is a mean SCORE out of `trials` -- one decimal, whatever precision
+                    # the odds ratio beside it is read at (`or` declares a minimum of 2).
+                    est_display = "or", est_digits = 2L, base_display = "mean", const_display = "or",
                     break_key = "odds_ratio", gap_key = "adj_ratio",
                     label_meas = "odds_ratio", sec = NULL),
   score_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "pct",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "ratio", unit = "ratio", default_display = "mean",
-                    est_display = "ratio", base_display = "mean", const_display = "mean",
+                    est_display = "ratio", est_digits = 2L, base_display = "mean",
+                    const_display = "mean",
                     break_key = "pct_ratio", gap_key = "adj_ratio",
                     label_meas = "ratio", sec = NULL),
   pct_ratio  = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
@@ -1865,7 +1909,8 @@ EST_SCALES <- list(
   mean_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "std",
                     neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
                     est_field = "ratio", unit = "rate_ratio", default_display = "mean",
-                    est_display = "ratio", base_display = "mean", const_display = "mean",
+                    est_display = "ratio", est_digits = 2L, base_display = "mean",
+                    const_display = "mean",
                     break_key = "mean_ratio", gap_key = "adj_ratio",
                     label_meas = "ratio", sec = NULL),
   # a beta / a count AME: printed in the OUTCOME's units, coloured on the SD-standardized ladder.
@@ -1891,7 +1936,7 @@ EST_SCALES <- list(
                     est_display = "diff", base_display = "mean", const_display = "mean",
                     break_key = "mean_diff",  gap_key = "adj_diff",
                     label_meas = "difference", sec = "sd", sd_from = "ref_var"),
-  # measure = "coefficient": printed on the link scale, coloured on the logged odds_ratio ladder (what
+  # measure = "raw_coefficient": printed on the link scale, coloured on the logged odds_ratio ladder (what
   # `ladder = "log"` selects).
   log_coef   = list(kind = "effect", geometry = "log", var_kind = "coef", ladder = "log",
                     neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
@@ -3398,6 +3443,8 @@ xl_numfmt_affix <- function(code, prefix = "", suffix = "") {
 #' per-cell Excel number-format codes used by [tab_xl()] (the raw value is written unchanged).
 #' @param .ref Internal: precomputed reference masks `list(cells=, all_totals=)` (derive-once
 #' speed-up passed by the exporter prep); computed internally when `NULL`.
+#' @param .digits Internal: the precision one token was named at in a composite template
+#' (`"{base:1}"`), passed by the composite expander; overrides every declared default.
 #'
 #' @return The fmt printed in a character vector.
 #' @export
@@ -3405,7 +3452,7 @@ xl_numfmt_affix <- function(code, prefix = "", suffix = "") {
 format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
                                 special_formatting = FALSE, stars = FALSE, theme = NULL,
                                 bold_split = FALSE, pad = if (isTRUE(html)) fig_space else " ",
-                                syntax = c("text", "excel"), .ref = NULL) {
+                                syntax = c("text", "excel"), .ref = NULL, .digits = NULL) {
   syntax <- match.arg(syntax)
 
   out    <- get_num(x)
@@ -3424,6 +3471,9 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # cell asking for 1 or 3 decimals gets them. `digits` is per-cell but ONE value serves every
   # display of that cell -- a percentage wants 0 and its own ratio wants 2 -- so the floor cannot be
   # stored on the cell; it belongs where what is being SHOWN is known, which is here.
+  # ⚠ 0 MEANS "UNSET", which is why a SCALE must not declare a precision its own estimate token
+  # already declares (REG_CELL_DIGITS): a 1 there does not raise the token's 2, it SILENCES it --
+  # which is how a grouped-binomial ratio printed x1.4 where x1.44 was meant.
   md <- unname(DISPLAY_MIN_DIGITS[display])
   digits[!nas & !is.na(md) & digits == 0L] <- md[!nas & !is.na(md) & digits == 0L]
   # THE LEVEL HAS ITS OWN PRECISION (EST_SCALES$base_digits). Keyed on the RAW token, so it reaches a
@@ -3431,6 +3481,14 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # `display = "base"` column alike, and never a `{pct}` a user wrote themselves.
   if (!is.null(scl$base_digits))
     digits[!nas & raw_display == "base"] <- scl$base_digits
+  # ...and THE ESTIMATE has its own where the scale says so: `{est}` as written, or the token it
+  # resolves to, so a bare `display = "or"` column reads at the same precision as `{est}` does.
+  # ⚠ a FLOOR, unlike base_digits: the level's precision may be coarser than the cell's and the
+  # estimate's may not, so a user asking for more decimals must still get them.
+  if (!is.null(scl$est_digits)) {
+    e <- !nas & (raw_display == "est" | display == (scl$est_display %||% ""))
+    digits[e] <- pmax(digits[e], scl$est_digits)
+  }
 
 
   ok <- !na_out & !nas
@@ -3524,6 +3582,15 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   pct_or_ci <- pct_or_ci | obs_as_pct
   out[pct_or_ci] <- out[pct_or_ci] * 100
   digits[diff_mean] <- ifelse(digits[diff_mean] == 0, 1, digits[diff_mean])
+  # `.digits`: THIS TOKEN'S OWN PRECISION, named in the template ("{base:1}"). Applied last, so it
+  # beats every declared default above -- the token's minimum, the level's `base_digits`, the
+  # interval floor. Internal: the composite expander passes it, no user calls format() with it.
+  # Where it does NOT, the PRIMARY token's own suffix is read off the template here, because this
+  # call renders the primary -- and the Excel number format returns just below, never reaching the
+  # expander.
+  pdg <- if (is.null(.digits)) display_primary_digits(raw_display)
+         else rep(as.integer(.digits)[[1L]], length(digits))
+  digits[!nas & !is.na(pdg)] <- pdg[!nas & !is.na(pdg)]
 
   # Excel number-format codes reuse format()'s OWN finalized masks + adjusted digits, so the tab_xl
   # bypass can never drift from the console display. Return here, before any string building.
@@ -3850,6 +3917,8 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
               else set_pvalue(xc, NA_real_)
         # fmt_set_display(): the RAW write. `est` / `base` are tokens here, never preset names.
         format(fmt_set_display(xi, seg$fields[i]), na = na, special_formatting = FALSE,
+               # the token's own precision, if the template named one ("{base:1}")
+               .digits = seg$field_digits[[i]],
                stars = isTRUE(stars) && i == seg$primary,
                theme = if (i == seg$primary) theme else NULL,
                # `bold_split` on the primary ONLY to learn how wide the suffix it added is, so the
@@ -6085,7 +6154,7 @@ legend_specs <- function(x, theme = "light") {
     # three diff "kinds": factor pct (x100, "points"), numeric/coef STANDARDIZED (SD), numeric/coef RAW.
     # is_pct drives the x100; is_std drives the "SD" wording.
     is_pct   <- identical(scl$ladder, "pct")
-    # a NON-gaussian coefficient (measure = "coefficient") colours on the LOGGED odds_ratio scale, NOT the
+    # a NON-gaussian coefficient (measure = "raw_coefficient") colours on the LOGGED odds_ratio scale, NOT the
     # SD-standardized one, so its legend must NOT say "SD". That three-way distinction IS `ladder`.
     is_std   <- identical(scl$ladder, "std") && mean_diff_std
     policy   <- if (!is.null(plan_txt)) plan_txt$policy else plan_bg$policy

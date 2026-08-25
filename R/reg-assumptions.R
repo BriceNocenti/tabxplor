@@ -40,6 +40,11 @@
 # binning its predictors with no fit), rd_spark() (the glyph run, drawn in a window with a FLOOR so
 # noise cannot read as a shape) and reg_shape_table() (where the runs go when a cell cannot hold
 # them -- the console always, several outcomes everywhere).
+# ⚠ A CURVE IS NEVER FINER THAN ITS DATA. rd_bin() gives a variable with a handful of distinct values
+# ONE BIN PER VALUE, and rd_spark() draws at most one glyph per bin: quantile breaks on a discrete
+# column collapse unevenly and the interpolation then drew slopes between values nobody observed.
+# ⚠ reg_shape_table() blanks a repeated outcome / group only within its own RUN, and sorts by group
+# first so that a run is what the eye reads -- the rows arrive variable-major from the curves.
 #
 # THE CURE IS PART OF THE CHECK. `shape =` is how a user fixes a non-linearity without leaving the
 # framework, and its design rule keeps it small: a shape either RECODES THE COLUMN or ADDS ONE TERM,
@@ -866,7 +871,14 @@ rd_bin <- function(x, y, w = NULL, nbins = 10L, link = "identity",
   if (sum(ok) < 2L) return(NULL)
   x <- x[ok]; y <- y[ok]; w <- w[ok]
   if (!is.null(des_rows)) des_rows <- des_rows[ok]
-  br <- unique(shape_wquantile(x, seq(0, 1, length.out = nbins + 1L), w))
+  # DESIGN: A CURVE IS NEVER BINNED FINER THAN ITS DATA. A variable with a handful of distinct values
+  # -- a count of items, a 0-10 scale -- gets ONE BIN PER VALUE: quantile breaks on it collapse
+  # unevenly (`unique()` below) and smear each value over several glyphs, which reads as a shape the
+  # data does not have. Above that many values the quantile breaks are the right answer.
+  u  <- sort(unique(x))
+  br <- if (length(u) <= nbins)
+          c(u[[1L]], (u[-1L] + u[-length(u)]) / 2, u[[length(u)]])   # one bin per value
+        else unique(shape_wquantile(x, seq(0, 1, length.out = nbins + 1L), w))
   br[[1L]] <- min(x) - 1e-9; br[[length(br)]] <- max(x) + 1e-9
   if (length(br) < 3L) return(NULL)
   g  <- findInterval(x, br, rightmost.closed = TRUE)
@@ -988,6 +1000,9 @@ rd_spark <- function(curve, on = TRUE, n = 10L) {
     lo <- max(min(curve$x), min(curve$xlo %||% curve$x))
     hi <- min(max(curve$x), max(curve$xhi %||% curve$x))
     if (!(is.finite(lo) && is.finite(hi) && hi > lo)) { lo <- min(curve$x); hi <- max(curve$x) }
+    # ⚠ THE RUN'S LENGTH IS THE GRID'S, NOT THE DATA'S -- every predictor's curve is drawn at the
+    # same width, so two of them can be compared. A discrete variable is honest anyway: rd_bin()
+    # gives it one bin per VALUE, so what this resamples is a step function and not invented detail.
     y  <- stats::approx(curve$x, y, xout = seq(lo, hi, length.out = n), rule = 2)$y
   }
   gl  <- rd_spark_glyphs()
@@ -1279,10 +1294,25 @@ reg_shape_table <- function(tab, n = 20L) {
   }))
   if (is.null(rows) || nrow(rows) == 0L) return(NULL)
   keep_group <- length(unique(rows$group)) > 1L
+  # ⚠ THE ROWS ARE BUILT VARIABLE-MAJOR (one curve per variable, each carrying its groups), so a
+  # group is NOT a run until they are sorted. Sorted here, once, so the group reads as the block it
+  # is -- every numeric variable of one group under its name -- exactly like a row-variable block.
+  if (keep_group) rows <- rows[order(rows$outcome, rows$group), , drop = FALSE]
   out <- rows[, c("outcome", if (keep_group) "group", "var", "range", "shape"), drop = FALSE]
-  # the outcome (and the group) named ONCE per run, like the row-variable block of a table
-  out$outcome[duplicated(out$outcome)] <- ""
-  if (keep_group) out$group[duplicated(rows[, c("outcome", "group")])] <- ""
+  # the outcome (and the group) named ONCE per run, like the row-variable block of a table.
+  # ⚠ A RUN, not a value: duplicated() over the whole column blanked the SECOND variable's group in
+  # every case, leaving two rows that named no group at all.
+  # `within`: a group repeats only inside one outcome -- a new outcome opens a new block, and its
+  # first row names its group again even when the word is the same.
+  blank_repeats <- function(x, within = NULL) {
+    same <- c(FALSE, x[-1L] == x[-length(x)])
+    if (!is.null(within)) same <- same & c(FALSE, within[-1L] == within[-length(within)])
+    x[same] <- ""
+    x
+  }
+  keys <- out$outcome
+  out$outcome <- blank_repeats(out$outcome)
+  if (keep_group) out$group <- blank_repeats(out$group, within = keys)
   # THE TABLE SAYS IT, NOT A FOOTER. The window is in the header, the units are in each `range` cell,
   # and the only thing left that a mark cannot say for itself is what "ns" means -- so that is the one
   # line, and only where a row actually wears it.

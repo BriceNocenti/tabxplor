@@ -70,7 +70,12 @@ reg_block <- function() {
   # setdiff() here AND an omission from REG_FAMILY_UI_LABEL: one fact, two encodings.
   fams  <- names(tabxplor:::reg_family_ui_labels())
   effs  <- tabxplor:::REG_EFFECTS_VALUES
+  # ⚠ THE PANEL SPEAKS ITS OWN SPELLING. `measure = "raw_coefficient"` is the canonical word since
+  # Phase 22g-v, but `jmvtabreg.a.yaml` still declares the option VALUE `coefficient` (a permanent
+  # alias R resolves), and renaming it needs a jmvtools::prepare() -- Phase 22g-vi's, which runs the
+  # build chain once for all of its UI items. So the grid is emitted in BOTH spellings until then.
   meas  <- setdiff(tabxplor:::REG_MEASURES_VALUES, "auto")
+  alias <- c(raw_coefficient = "coefficient")
   links <- lapply(stats::setNames(fams, fams),
                   function(f) c("auto", names(tabxplor:::REG_FAMILIES[[f]]$fits)))
   # Phase 22b-xv: the grid gained the LINK axis, so a picker can never claim a measure the chosen
@@ -80,7 +85,8 @@ reg_block <- function() {
       lapply(stats::setNames(effs, effs), function(e) {
         ok <- vapply(meas, function(m) identical(
           tabxplor:::reg_estimand(f, link = lk, measure = m, effect = e)$status, "ok"), logical(1))
-        c("auto", meas[ok])
+        got <- meas[ok]
+        c("auto", got, unname(alias[intersect(got, names(alias))]))
       })
     })
   })

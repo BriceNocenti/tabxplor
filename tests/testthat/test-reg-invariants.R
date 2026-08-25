@@ -101,8 +101,10 @@ test_that("every family's cells hold one estimand: interval, neutral and star ag
     # the two LOGGED contrasts: `log_coef` is one shared scale, so a wrong twin lands here
     list(tag = "binomial coef log(OR)", a = list(d, "married", c("race", "age"),
                                                  family = "binomial", measure = "log")),
-    list(tag = "binomial marg log(RR)", a = list(d, "married", c("race", "age"),
-                                                 family = "binomial", effect = "marginal",
+    # ⚠ a raw coefficient is the model's OWN (Phase 22g-v), so the log of a RISK ratio is asked of
+    # the model that estimates one -- the modified Poisson -- and not of a logit model's predictions
+    list(tag = "binomial coef log(RR)", a = list(d, "married", c("race", "age"),
+                                                 family = "binomial", link = "ratio",
                                                  measure = "log_risk")),
     # a SUMMED SCORE, whose crude effect sits on the mean score rather than a share
     list(tag = "grouped binomial RR",   a = list(inv_tea(), "tea_where", c("sex", "SPC"),
@@ -120,9 +122,11 @@ test_that("a logged column is the log of its exponentiated twin, cell for cell",
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d <- inv_data()
-  # the marginal path derives its contrast from `comparison` but its SCALE from the estimand: the two
-  # were one flag, which printed ratios on a column stamped `log_coef`.
-  arg <- list(d, "married", c("race", "age"), family = "binomial", effect = "marginal",
+  # the path derives its contrast from `comparison` but its SCALE from the estimand: the two were one
+  # flag, which printed ratios on a column stamped `log_coef`.
+  # ⚠ Phase 22g-v: at the model that ESTIMATES a risk ratio, a raw coefficient having no marginal
+  # form -- which leaves the pair (log column, exponentiated twin) exactly as it was.
+  arg <- list(d, "married", c("race", "age"), family = "binomial", link = "ratio",
               empirical = "column", stats = FALSE)
   lg <- suppressMessages(do.call(tab_reg, c(arg, list(measure = "log_risk"))))
   rr <- suppressMessages(do.call(tab_reg, c(arg, list(measure = "ratio"))))
@@ -136,7 +140,10 @@ test_that("a logged column is the log of its exponentiated twin, cell for cell",
     fin <- is.finite(get_ratio(rc)) & is.finite(get_diff(lc))
     expect_equal(get_diff(lc)[fin], log(get_ratio(rc))[fin], tolerance = 1e-12)
     expect_equal(get_ci_inf(lc), log(get_ci_inf(rc)), tolerance = 1e-12)
-    expect_equal(get_pvalue(lc), get_pvalue(rc), tolerance = 1e-12)
+    # ⚠ the EFFECT rows only: the two Constant rows are different quantities -- a log column's is the
+    # fit's own intercept and carries its test, a ratio column's is the baseline LEVEL and carries
+    # none (see test-reg-baseline.R).
+    expect_equal(get_pvalue(lc)[fin], get_pvalue(rc)[fin], tolerance = 1e-12)
   }
 })
 

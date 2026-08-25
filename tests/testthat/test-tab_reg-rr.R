@@ -349,16 +349,19 @@ test_that("a logged crude column is the log of ITS measure, never of the family'
   tea$tea_where <- rowSums(vapply(items, function(v) as.integer(tea[[v]] == v),
                                   integer(nrow(tea))))
   tea$sex <- factor(tea$sex)
-  obs <- function(m) {
+  # ⚠ each logged measure is asked of the model whose own coefficient it is (Phase 22g-v): the
+  # log RR of the modified Poisson, the log OR of the logistic. What is under test is the CRUDE
+  # twin's arithmetic, which is per-measure either way.
+  obs <- function(m, lk = "auto") {
     t <- suppressMessages(tab_reg(tea, "tea_where", "sex", family = "binomial", trials = 6,
-                                  measure = m, empirical = "column", stats = FALSE))
+                                  link = lk, measure = m, empirical = "column", stats = FALSE))
     t[[grep("^Obs_", names(t))[[1]]]]
   }
   a  <- sum(tea$tea_where[tea$sex == "M"]);      b  <- sum(6 - tea$tea_where[tea$sex == "M"])
   cc <- sum(tea$tea_where[tea$sex == "F"]);      dd <- sum(6 - tea$tea_where[tea$sex == "F"])
   p1 <- a / (a + b); p0 <- cc / (cc + dd)
   i  <- 3L                                         # the non-reference level's row
-  lrr <- obs("log_risk"); lor <- obs("log_odds")
+  lrr <- obs("log_risk", lk = "ratio"); lor <- obs("log_odds")
   kz  <- ci_katz_rr(p1, a + b, p0, cc + dd)
   wf  <- ci_or(a, b, cc, dd)
   expect_identical(get_ci_method(lrr), "katz")
@@ -371,19 +374,24 @@ test_that("a logged crude column is the log of ITS measure, never of the family'
   expect_gt(abs(get_diff(lrr)[i] - get_diff(lor)[i]), 0.05)
 })
 
-test_that("a binary MARGINAL log risk ratio takes the borrowed block's Katz arm", {
+test_that("a binary MARGINAL risk ratio takes the borrowed block's Katz arm", {
   # `crude_fam = "rr"` while `crude_key` is "binomial": the shape is borrowed across blocks, so the
   # family in hand is the wrong place to look up which arithmetic to run.
+  # ⚠ Phase 22g-v: this used to be asked as `measure = "log_risk"`, i.e. the LOG of a marginal risk
+  # ratio. A raw coefficient is the model's own and has no marginal form, so the borrowed block is
+  # exercised through the ratio itself -- the same lookup, one exponential later.
   skip_if_not_installed("marginaleffects")
   d <- rr_data()
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", effect = "marginal",
-                                measure = "log_risk", empirical = "column", stats = FALSE))
+                                measure = "ratio", empirical = "column", stats = FALSE))
   o <- t[[grep("^Obs_", names(t))[[1]]]]
-  expect_identical(get_scale(o), "log_coef")
+  expect_identical(get_scale(o), "pct_ratio")
   expect_identical(get_ci_method(o), "katz")
+  expect_error(tab_reg(d, "married", "race", family = "binomial", effect = "marginal",
+                       measure = "log_risk"), "no \"marginal\" form")
   # ⚠ the modelled level is the outcome's FIRST, which is `tab_reg()`'s documented default.
   tb <- table(d$race, d$married)
   p  <- tb[, levels(d$married)[[1]]] / rowSums(tb)
   i  <- which(as.character(t$levels) == names(p)[[2]])
-  expect_equal(get_diff(o)[i], log(p[[2]] / p[[1]]), tolerance = 1e-10)
+  expect_equal(get_ratio(o)[i], p[[2]] / p[[1]], tolerance = 1e-10)
 })

@@ -584,7 +584,7 @@ shape_per_category <- function(shape) isTRUE(shape$per_category)
 #' @keywords internal
 reg_crude_word <- function(shape) {
   if (is.null(shape) || is.null(shape$word)) return(NA_character_)
-  reg_word_logged(shape$word, if (identical(shape$scale, "log_coef")) "coefficient" else "")
+  reg_word_logged(shape$word, if (identical(shape$scale, "log_coef")) "raw_coefficient" else "")
 }
 
 #' @keywords internal
