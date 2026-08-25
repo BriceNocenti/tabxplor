@@ -29,10 +29,11 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             conf_level = 0.95,
             ci_method = "wald",
             stars = TRUE,
-            color = "auto",
+            color = "measure",
             color_signif = "grey_non_signif",
             display = "auto",
             n = "range",
+            digits = "0",
             cleannames = TRUE,
             subtext = "",
             tab_theme = "light",
@@ -160,7 +161,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "difference",
                     "ratio",
                     "odds_ratio",
-                    "coefficient"),
+                    "raw_coefficient"),
                 default="auto")
             private$..empirical <- jmvcore::OptionBool$new(
                 "empirical",
@@ -316,11 +317,11 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "color",
                 color,
                 options=list(
-                    "auto",
+                    "measure",
                     "adjustment",
                     "between_groups",
                     "no"),
-                default="auto")
+                default="measure")
             private$..color_signif <- jmvcore::OptionList$new(
                 "color_signif",
                 color_signif,
@@ -351,6 +352,18 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "min",
                     "no"),
                 default="range")
+            private$..digits <- jmvcore::OptionList$new(
+                "digits",
+                digits,
+                options=list(
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6"),
+                default="0")
             private$..cleannames <- jmvcore::OptionBool$new(
                 "cleannames",
                 cleannames,
@@ -435,6 +448,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..color_signif)
             self$.addOption(private$..display)
             self$.addOption(private$..n)
+            self$.addOption(private$..digits)
             self$.addOption(private$..cleannames)
             self$.addOption(private$..subtext)
             self$.addOption(private$..tab_theme)
@@ -476,6 +490,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         color_signif = function() private$..color_signif$value,
         display = function() private$..display$value,
         n = function() private$..n$value,
+        digits = function() private$..digits$value,
         cleannames = function() private$..cleannames$value,
         subtext = function() private$..subtext$value,
         tab_theme = function() private$..tab_theme$value,
@@ -516,6 +531,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..color_signif = NA,
         ..display = NA,
         ..n = NA,
+        ..digits = NA,
         ..cleannames = NA,
         ..subtext = NA,
         ..tab_theme = NA,
@@ -562,7 +578,8 @@ jmvtabregResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 title="",
                 width=1080,
                 height=1,
-                renderFun=".plot"))}))
+                renderFun=".plot",
+                visible=FALSE))}))
 
 jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     "jmvtabregBase",
@@ -630,9 +647,9 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   for by name.   \item \code{"odds_ratio"} / \code{"ratio"} /
 #'   \code{"difference"}: the named measure,   when the outcome's level can
 #'   carry it. One it cannot says so, and lists what it does   offer.   \item
-#'   \code{"coefficient"}: the model's own coefficient, un-transformed --- the
-#'   log   of the reported measure wherever that measure is multiplicative, and
-#'   the additive   estimate itself on a model that is already additive.  }
+#'   \code{"raw_coefficient"}: the model's own coefficient, un-transformed ---
+#'   the log   of the reported measure wherever that measure is multiplicative,
+#'   and the additive   estimate itself on a model that is already additive.  }
 #' @param empirical Show the crude, unadjusted, single-predictor effect beside
 #'   each model effect --- the bivariate association that IS the modelised
 #'   quantity when there is a single predictor, so the gap between the two is
@@ -662,7 +679,7 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   always comes from what the  column estimates (an odds ratio is read on the
 #'   odds-ratio scale, a beta on the  standardized-difference one), so what is
 #'   left to choose is what the estimate is compared  TO.  \itemize{   \item
-#'   \code{"auto"}: the effect's own size (compared to no effect).   \item
+#'   \code{"measure"}: the effect's own size (compared to no effect).   \item
 #'   \code{"no"}: no colours.   \item \code{"adjustment"}: how far the ADJUSTED
 #'   effect moved from the crude one --   needs \code{empirical}.   \item
 #'   \code{"between_groups"}: how far each group's effect is from the first
@@ -680,6 +697,10 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   level: \code{"range"} prints \code{min-max} when several models were fitted
 #'   on different people, \code{"min"} the smallest count only, \code{"no"} no
 #'   column at all.
+#' @param digits The minimum number of digits to print, as a single integer
+#'   (0-6): each measure keeps its  own precision where that is finer (an odds
+#'   ratio reads at two decimals, a mean score at  one). In R, \code{tab_reg()}
+#'   also names one display field at a time,  \code{digits = c(ratio = 3)}.
 #' @param cleannames Strip numeric prefixes from factor level labels.
 #' @param subtext A free note printed below the table.
 #' @param tab_theme How the table is painted, in the results panel and in
@@ -739,10 +760,11 @@ jmvtabreg <- function(
     conf_level = 0.95,
     ci_method = "wald",
     stars = TRUE,
-    color = "auto",
+    color = "measure",
     color_signif = "grey_non_signif",
     display = "auto",
     n = "range",
+    digits = "0",
     cleannames = TRUE,
     subtext = "",
     tab_theme = "light",
@@ -801,6 +823,7 @@ jmvtabreg <- function(
         color_signif = color_signif,
         display = display,
         n = n,
+        digits = digits,
         cleannames = cleannames,
         subtext = subtext,
         tab_theme = tab_theme,

@@ -93,7 +93,7 @@ children:
                       - type: RadioButton
                         name: measure_5
                         optionName: measure
-                        optionPart: coefficient
+                        optionPart: raw_coefficient
               - type: LayoutBox
                 cell:
                   column: 1
@@ -106,11 +106,12 @@ children:
                       - type: RadioButton
                         name: color_1
                         optionName: color
-                        optionPart: auto
+                        optionPart: measure
                       - type: RadioButton
                         name: color_2
                         optionName: color
                         optionPart: adjustment
+                        enable: (empirical)
                       - type: RadioButton
                         name: color_3
                         optionName: color
@@ -388,6 +389,17 @@ children:
             cell:
               column: 1
               row: 2
+            stretchFactor: 1
+            children:
+              - type: Label
+                label: digits = <i>(number of digits)</i>
+                children:
+                  - type: ComboBox
+                    name: digits
+          - type: LayoutBox
+            cell:
+              column: 0
+              row: 3
             stretchFactor: 1
             children:
               - type: CheckBox

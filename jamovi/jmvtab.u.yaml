@@ -42,6 +42,10 @@ children:
             name: wt
             maxItemCount: 1
             isTarget: true
+            # `design_effect` is a no-op without weights, and applyVarEnables() greys it -- so the
+            # weight box has to announce its own changes like the three variable boxes above.
+            events:
+              change: ./jmvtab::onChange_vars
   - type: CollapseBox
     label: <b>Percentages, colors and tests</b>
     stretchFactor: 1
@@ -270,7 +274,7 @@ children:
             stretchFactor: 1
             children:
               - type: TextBox
-                name: other_if_less_than
+                name: n_min
                 format: number
           - type: LayoutBox
             margin: none
@@ -281,16 +285,6 @@ children:
             children:
               - type: CheckBox
                 name: cleannames
-          - type: LayoutBox
-            margin: none
-            cell:
-              column: 0
-              row: 2
-            stretchFactor: 1
-            children:
-              - type: TextBox
-                name: n_min
-                format: number
       # Phase 22g-iv: ONE per-variable table -- order / merge / cut a variable's levels and pick what
       # it is compared to -- replacing the level tree and the reference picker, which listed the same
       # variables twice, in two boxes, in two shapes. Its columns are drawn by jmvtab.js

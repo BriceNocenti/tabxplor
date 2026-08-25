@@ -572,6 +572,8 @@ DISPLAY_PRESETS <- list(
                              doc = 'the level with its confidence interval'),
   base_moe        = .dpreset("{base} {moe}",
                              doc = 'the level with its margin of error'),
+  base_diff       = .dpreset("{base} ({diff})",
+                             doc = 'the level and, in parentheses, its difference to the reference'),
   base_ratio      = .dpreset("{base} ({ratio})",
                              doc = 'the level and, in parentheses, its ratio to the reference'),
   base_or         = .dpreset("{base} ({or})",

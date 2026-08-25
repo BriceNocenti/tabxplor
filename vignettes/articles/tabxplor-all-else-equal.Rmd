@@ -432,28 +432,21 @@ And one rule ties `measure` to everything else:
 
 > **If the measure you ask for is the one the model already works in, you read the model's own coefficient. If it is not, the model works your measure out from its predictions, for every person in the sample, and averages them.**
 
-This operation is what statisticians call **marginal effects**, and is worth learning now because **it is what you may mostly be doing for logistic regressions**. For a Yes/No factor, a binomial family generally fits best with a logit link. But even if your model modelises better when it works with odds ratios, you may want to interpret it by reading risk ratios instead: in fact, it’s the only way you will be able to legitimately phrase something like "men are 1.4 more likely to have done `x` than women". 
+This operation is what statisticians call **marginal effects**, and is worth learning because **it is what you may mostly be doing with logistic regressions**. For a Yes/No factor, a binomial family generally fits best with a logit link. But even if your model modelises better when it works with odds ratios, you may want to interpret it by reading risk ratios instead: in fact, it’s the only way you will be able to legitimately phrase something like "men are 1.4 more likely to have done `x` than women". 
 
+It’s called "marginal" because it is the same *margin* as the **margins of a cross-table**. A Total row is what you get when you stop splitting people into groups and look at everybody at once,and that is exactly the operation: work the effect out for each respondent, at their own combination of characteristics, then average, the way a Total row averages over the rows above it to get their weighted mean. (The difference between both is, of course, that the Total is observed/unadjusted, while the marginal effect is adjusted from the model: the number for every person is computed with the other predictors held at that person's own values.)
 
-**That second operation has a name, and it is worth learning now because it is what you will mostly be doing.** Working an effect out for every person and averaging is what statisticians call a **marginal** effect — the `m` of the header. 
+Since `measure =` left alone gives you the model's own coefficient (exponentiated when needed), *every other measure you ask for is a marginal effect*. Every table in Section 3 that showed percentage points or risk ratios  was one. 
 
-`Model_mRD`
+And you never have to remember which you asked for, because the table says so in three places.
 
-Since `measure` left alone gives you the model's own coefficient, *every other measure you ask for is a marginal effect*. You have already read several without being told: every table in Section 3 that showed percentage points or risk ratios was one.
-
-**And "marginal" does not mean *slight*.** It is the same *margin* as the **margins of a cross-table** — the Total row you have been reading since the first page. A total is what you get when you stop splitting people into groups and look at everybody at once, and that is exactly the operation: work the effect out for each respondent, at their own combination of characteristics, then average, the way a Total row averages over the rows above it.
-
-⚠ **What it does *not* mean is "unadjusted".** The Total row of a cross-table is both marginal and unadjusted, which makes the trap an easy one. A marginal effect is still fully adjusted: every one of those per-person figures is computed with the other predictors held at that person's own values. What is averaged away is not the adjustment — it is the fact that the effect is a different size for different people.
-
-**And you never have to remember which you asked for, because the table says so — in three places.**
-
-| where to look             | you are reading a coefficient            | you are reading a marginal effect     |
-|:--------------------------|:-----------------------------------------|:--------------------------------------|
-| the column header         | `Model_OR` — no marker                   | `Model_mRR` — the **`m`**             |
-| the **Constant** row      | *Reference profile*                      | *Population average*                  |
+| where to look              | you are reading a coefficient            | you are reading a marginal effect     |
+|:---------------------------|:-----------------------------------------|:--------------------------------------|
+| the column header          | `Model_OR` — no marker                   | `Model_mRR` — the **`m`**             |
+| the **Constant** row       | *Reference profile*                      | *Population average*                  |
 | the footer's `Model:` line | "odds ratio (vs the reference category)" | "…sample-averaged"                    |
 
-The Constant row is the quickest of the three, and it is not decoration: a coefficient is measured *from* a starting point, so the table shows you that point — one level of every predictor. A marginal effect is averaged over everybody, so there is no starting point to show, and the row gives the population's own figure instead. The two labels are the two halves of the rule, printed. (A fourth check, `reg_formulas()`, tells you which model was *fitted* rather than what was reported; it appears at the end of this section, where that finally differs.)
+The Constant row is the quickest of the three, and it is not decoration: a coefficient is measured *from* a starting point, so the table shows you that point — one level of every predictor. A marginal effect is averaged over everybody, so there is no starting point to show, and the row gives the whole sample's own figure instead. 
 
 ## One model, four readings
 
@@ -465,6 +458,8 @@ tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks")
 
 > Black arrestees had **1/1.48** the odds of release of white arrestees, all else equal.
 
+<!-- French translation, c’est encore plus difficile en français : "parmi les personnes arrêtées, les personnes noires ont 1.48 fois moins de chances que les personnes blanches d’avoir été relachées *plutôt que de ne pas l’avoir été*". Seule la fin de la phrase permet de faire la difference entre un rapport de cotes et un risque relatif. Le terme de cote lui-même est peu parlant en français. French translation here requires real web searches across French quantitative social sciences literature and papers, to find meaningful and *specific* ways to speak about regressions, without a bad word-by-word translation from english. -->
+
 **The risk ratio** — `measure = "ratio"`. Not the model's own measure, so it is worked out and averaged, and the header says so: `Model_mRR`. Now it *is* "how many times as likely".
 
 ```{r}
@@ -472,36 +467,36 @@ tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks")
         measure = "ratio")
 ```
 
-> Comparing people alike in sex, employment, citizenship and record, black arrestees were about **1.1 times less likely** to be released.
+> Comparing people alike in sex, employment, citizenship and record, black arrestees were about **1.1 times less likely** to be released than while arrestees.
 
-**The difference in percentage points** — `measure = "difference"`. Usually the most useful of all, because points are the unit people already think in.
+**The difference in percentage points** — `measure = "difference"`. Usually the most useful of all, because points are the unit people already mostly think in.
 
 ```{r}
 tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
         measure = "difference")
 ```
 
-> Comparing people alike in sex, employment, citizenship and record, black arrestees were released **5.2 percentage points less often**.
+> Comparing people alike in sex, employment, citizenship and record, black arrestees were released **5.2 percentage points less often** than white arrestees.
 
-**The adjusted percentages themselves** — `display = "base"`, the far end of the round trip.
+**The adjusted percentages themselves**, the far end of the round trip, but given in all default `display` in parentheses. We can keep these only with `display = "base"`, here colored with marginal differences (in percentage points).
 
 ```{r}
 tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
-        display = "base", empirical = FALSE)
+        measure = "difference", display = "base")
 ```
 
-> If everyone in the file had been white, an estimated **84 %** would have been released; if everyone had been black, **79 %** — keeping the actual distribution of sex, employment, citizenship and record as it is.
+> Keeping the actual distribution of sex, employment, citizenship and record as it is, if everyone in the file had been white, an estimated **84 %** would have been released; if everyone had been black, only **79 %**.
 
 That last sentence is worth dwelling on, because it is what an adjusted percentage *is*. It is not the percentage for some average person. It is the whole sample, counted twice: once as if everybody were in one group, once as if everybody were in the other, with everything else left as it actually is. That is why it can be compared with the observed 86 % and 74 % on the same row — same people, different bookkeeping.
 
-**Two things worth knowing about that last table.** The `checks` row still shows an odds ratio, because a number has no categories, so there is no base percentage to predict — there is no "percentage of being one standard deviation of prior record". And the column is still headed `Model_OR` even though it now prints percentages: `display` changes what a cell *shows*, never what the column *is*.
+**Two things worth knowing about that last table.** The `checks` row still shows a difference, because a numeric variable has no categories, so there is no base percentage to predict. And the column is still headed `Model_mRD` even though it now prints percentages: `display` changes what a cell *shows*, never what the column *is*. This is why this is generally simpler to stick with the default `display`: `measure` in color and adjusted percentages in parentheses.
 
 ## Which one to report
 
 | you want to                   | ask for                  | you can then write      |
 |:------------------------------|:-------------------------|:------------------------|
 | compare with published models | the default              | "odds ratio 1.48"       |
-| say "times more likely"       | `measure = "ratio"`      | "1.1 times less likely" |
+| say "x times more likely"     | `measure = "ratio"`      | "1.1 times less likely" |
 | say "how many points"         | `measure = "difference"` | "5.2 points less often" |
 | show the percentages          | `display = "base"`       | "84 % against 79 %"     |
 
@@ -511,13 +506,13 @@ If you report one number, report the **percentage points**: it is the one your r
 
 `measure` says *which* deviation; `effect` says **whose**. You will rarely set it, because the rule above already picks well — the model's own coefficient when you ask for its own measure, a marginal effect when you ask for another. What it is for is the third possibility.
 
-| `effect`         | the number describes&hellip;                   |
-|:-----------------|:------------------------------------------------|
+| `effect`         | the number describes&hellip;                     |
+|:-----------------|:-------------------------------------------------|
 | `"conditional"`  | anybody — the model assumes one answer fits all  |
 | `"marginal"`     | the people you actually surveyed, averaged       |
 | `"at_reference"` | one **ideal-typical** profile, built on purpose  |
 
-**The third row is the one to reach for, and "reference profile" undersells it.** That profile is not an average and not an accident: it is a **figure you construct**, one level of every predictor, chosen because it is worth thinking about. Sociologists have a name for that move — Weber's **ideal type**: a deliberate simplification, built to think with rather than to describe anyone in particular. `ref` is what builds it, so *the young male senior manager* and *the older woman in an unskilled job* are both one argument away, and the model will tell you what it expects of each. Section 2's warning applies with full force, though: an ideal type is built, not found, so check how many people it actually fits before you let it speak for them.
+**The third row is the one to reach for, and "reference profile" undersells it.** That profile is not an average and not an accident: it is a **figure you construct**, one level of every predictor, chosen because it is worth thinking about. They are Max Weber's **ideal type**: a deliberate simplification, built to think with rather than to describe anyone in particular. `ref` is what builds it, so *the young male senior manager* and *the older woman in an unskilled job* are both one argument away, and the model will tell you what it expects of each. Section 2's warning applies with full force, though: an ideal type is built, not found, so check how many people it actually fits before you let it speak for them.
 
 ## The expert knob: `link`, and the two risk ratios
 

@@ -23,11 +23,17 @@ items:
     # Phase h: persists the last COMPUTED comparison (signature + rendered HTML) across engine resets,
     # so that in staged model-comparison mode `.run()` can re-serve the last table (or flag it outdated)
     # without recomputing until the Run button is clicked. Same 0-size hidden-Image mechanism.
+    # ⚠ `visible: false` IS LOAD-BEARING, and it is why this differs from a plain results image.
+    # jmvcore's Image$asProtoBuf() reports an image that HOLDS A STATE and has rendered no file as
+    # ANALYSIS_RENDERING -- and `.plot` writes no file, by design. Left visible, the client then asks
+    # for a render, and that round-trip overwrote the run's own results: the comparison appeared and
+    # was replaced a moment later by the "staged" banner. State itself is serialized in
+    # ResultsElement$asProtoBuf() INDEPENDENTLY of `visible`, so hiding it costs nothing.
     - name: compare_state
       title: ""
       type: Image
       width: 1080
       height: 1
       renderFun: .plot
-      # visible: false
+      visible: false
 ...

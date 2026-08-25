@@ -880,3 +880,25 @@ testthat::test_that("no odds ratio on the margin the percentage sums to", {
   testthat::expect_true(all(is.na(get_or(t2[[2]])[tr])))
   testthat::expect_false(all(is.na(get_or(t2[[2]])[!tr])))
 })
+
+# Phase 22g-vi: an odds ratio is read against a CATEGORY, never against the marginal percentage --
+# which includes the cell itself. `ref = "tot"` there was not a choice but a leftover from the table
+# the user was reading a moment ago, and it also left the reference row computed yet never MARKED
+# (plain_core() wipes `refrows` under "tot").
+testthat::test_that('an odds ratio silently reads `ref = "tot"` as its own first level', {
+  g  <- gss_cat_data_formatting()
+  or <- function(...) tab(g, race, party3, pct = "row", na = "drop_all", ...)
+  a  <- or(color = "odds_ratio", ref = "tot")
+  b  <- or(color = "odds_ratio", ref = "first")
+  testthat::expect_identical(get_or(a[[2]]), get_or(b[[2]]))
+  # ...and the row it fell back to is marked as the reference, which "tot" used to erase
+  testthat::expect_identical(which(is_refrow(a[[2]])), 1L)
+  # the DISPLAY names the measure just as `color` does, and gets the same answer
+  testthat::expect_identical(get_or(or(display = "or", ref = "tot")[[2]]),
+                             get_or(b[[2]]))
+  # ⚠ no other measure moves: only one that DECLARES a reference of its own overrides "tot"
+  d <- or(color = "difference", ref = "tot")
+  testthat::expect_true(!any(is_refrow(d[[2]])))
+  testthat::expect_identical(get_diff(d[[2]]),
+                             get_diff(or(color = "difference")[[2]]))
+})

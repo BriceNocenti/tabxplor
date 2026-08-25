@@ -29,6 +29,10 @@
 #     values the quantiles missed; a genuine shortfall is stated, once.
 #   - `cut()` is always called `right = FALSE, include.lowest = TRUE`, so every label is the
 #     paren-free `[a,b)` form: cleannames_condition() (R/utils.R) strips any balanced ` (...)` group.
+#   - THE DECLARATION ORDER IS THE OFFER ORDER, numeric first then the cuts coarse-to-fine, and
+#     `values_to_levels` last because it is the one that explodes the level count. Both jamovi
+#     pickers are emitted from it verbatim (dev/generate_jamovi_js.R), so reordering here reorders
+#     them -- and the FIRST entry of a list is what that picker treats as "nothing stored".
 #   - A TRANSFORM RENAMES ITS COLUMN, and shape_rename_transformed() returns that map (`renames`)
 #     BECAUSE a fingerprint keyed on a column name would otherwise lose the source it came from --
 #     which is exactly what the jamovi cache keys do (R/jmvtab-cache.R, via ctx$shape_renames).
@@ -54,10 +58,26 @@ VAR_SHAPES <- list(
     "none", "numeric", c("tab", "tab_reg"),
     doc = paste("the number as it is --- one slope in a model, one mean in a crosstab. The default",
                 "for a column variable, and what `shape` is spelled out as when nothing is done.")),
-  levels = .vshape(
-    "levels", "factor", "tab",
-    doc = paste("one level per distinct value, in numeric order. Right for a counted number or a",
-                "1-7 scale; unreadable for a continuous one, which is what `\"auto\"` decides.")),
+  log = .vshape(
+    "log", "numeric", c("tab", "tab_reg"), mark = "log(x)",
+    doc = paste("replace the variable by its logarithm --- diminishing returns. Needs strictly",
+                "positive values.")),
+  sqrt = .vshape(
+    "sqrt", "numeric", c("tab", "tab_reg"), mark = "\u221a(x)",
+    doc = "replace the variable by its square root. Needs non-negative values."),
+  quadratic = .vshape(
+    "quadratic", "term", "tab_reg",
+    doc = paste("add a curvature term, so the predictor takes two rows --- the slope at the mean,",
+                "and the squared term saying whether the slope flattens or accelerates away from",
+                "it. A model term, so [tab()] cannot take it.")),
+  sd_bands = .vshape(
+    "bands", "factor", c("tab", "tab_reg"),
+    doc = paste("four bands cut at the mean and one standard deviation either side. Each level",
+                "names its own cut (`[30,48) ; < mean`), so the label can be checked against the",
+                "interval beside it. The cut points mean the same thing across sub-samples of one",
+                "variable, where quantile breaks move with each one; but the bands are NOT",
+                "balanced, and on a skewed variable a landmark falling outside the data is dropped",
+                "(an exponential variable gets three bands, not four).")),
   median = .vshape(
     "quantiles", "factor", c("tab", "tab_reg"), k = 2L,
     doc = "two groups of equal size, cut at the median --- the coarsest reading of a number."),
@@ -75,26 +95,11 @@ VAR_SHAPES <- list(
     "quantiles", "factor", c("tab", "tab_reg"), k = 10L,
     doc = paste("ten groups of equal size. Reads a gradient, but ten rows need a large sample to",
                 "keep each base usable.")),
-  sd_bands = .vshape(
-    "bands", "factor", c("tab", "tab_reg"),
-    doc = paste("four bands cut at the mean and one standard deviation either side. Each level",
-                "names its own cut (`[30,48) ; < mean`), so the label can be checked against the",
-                "interval beside it. The cut points mean the same thing across sub-samples of one",
-                "variable, where quantile breaks move with each one; but the bands are NOT",
-                "balanced, and on a skewed variable a landmark falling outside the data is dropped",
-                "(an exponential variable gets three bands, not four).")),
-  log = .vshape(
-    "log", "numeric", c("tab", "tab_reg"), mark = "log(x)",
-    doc = paste("replace the variable by its logarithm --- diminishing returns. Needs strictly",
-                "positive values.")),
-  sqrt = .vshape(
-    "sqrt", "numeric", c("tab", "tab_reg"), mark = "\u221a(x)",
-    doc = "replace the variable by its square root. Needs non-negative values."),
-  quadratic = .vshape(
-    "quadratic", "term", "tab_reg",
-    doc = paste("add a curvature term, so the predictor takes two rows --- the slope at the mean,",
-                "and the squared term saying whether the slope flattens or accelerates away from",
-                "it. A model term, so [tab()] cannot take it."))
+  # LAST because it is the one that explodes the level count: a level per distinct value.
+  values_to_levels = .vshape(
+    "levels", "factor", "tab",
+    doc = paste("one level per distinct value, in numeric order. Right for a counted number or a",
+                "1-7 scale; unreadable for a continuous one, which is what `\"auto\"` decides."))
 )
 
 # The value set one producer accepts, in the order it is offered. THE one list; there is no second.
@@ -449,7 +454,7 @@ shape_cut_quantiles <- function(x, k, w = NULL, var = "x", breaks = NULL, labels
   if (length(br) < 3L)
     cli::cli_abort(c("{.arg shape} cannot cut {.val {var}} into {k} groups.",
                      "x" = "Its distribution has too few distinct values.",
-                     "i" = 'Use fewer groups, or {.val levels} to keep one level per value.'),
+                     "i" = 'Use fewer groups, or {.val values_to_levels} to keep one level per value.'),
                    call = NULL)
   # THE ARGUMENT MEANS WHAT IT SAYS. On a tied variable two quantiles land on the same value and the
   # `unique()` above silently drops one, so `quartiles` gave 3 groups where `quintiles` gave 4 -- on
@@ -504,7 +509,7 @@ shape_cut_bands <- function(x, w = NULL, var = "x", breaks = NULL, labels = NULL
     cli::cli_abort(c(
       '{.code shape = "sd_bands"} needs {.val {var}} to vary.',
       "x" = "Its standard deviation is zero, so there are no bands to cut.",
-      "i" = 'Use {.val levels} to keep one level per value, or pass it as a factor.'), call = NULL)
+      "i" = 'Use {.val values_to_levels} to keep one level per value, or pass it as a factor.'), call = NULL)
   br   <- unique(shape_snap_breaks(x, c(rg[[1L]], land, rg[[2L]])))
   b    <- shape_bounds(x, br)
   labs <- shape_labels(b$bounds, shape_band_words(tag), name, sep = " ; ")
@@ -608,7 +613,7 @@ shape_one <- function(x, spec, w = NULL, var = "x", ordered = FALSE, name = NULL
 #' @param name The variable's name, written onto the **first level only** (`"age: [18,35) low"`), so
 #'   a table that names the variable nowhere else still says what the levels are levels *of*. `NULL`
 #'   (the default here) writes nothing. It applies to the two CUTS, whose levels are intervals and
-#'   band words; `"levels"` keeps the raw values, which name themselves.
+#'   band words; `"values_to_levels"` keeps the raw values, which name themselves.
 #' @param ordered Whether the resulting factor is `ordered`. Bands and quantile groups do have a
 #'   real order; a model fit does not want one (an ordered factor takes polynomial contrasts instead
 #'   of contrasts against a reference), which is why [tab_reg()] cuts unordered.
@@ -670,9 +675,9 @@ shape_values_rd <- function(producer = "tab", section = TRUE) {
 #' @noRd
 shape_auto <- function(x) {
   u <- unique(x[!is.na(x)])
-  if (length(u) == 0L) return("levels")
+  if (length(u) == 0L) return("values_to_levels")
   whole <- all(is.finite(u)) && all(abs(u - round(u)) < 1e-8)
-  if (whole && length(u) <= as.integer(tx_option("shape_auto_max"))) "levels" else "sd_bands"
+  if (whole && length(u) <= as.integer(tx_option("shape_auto_max"))) "values_to_levels" else "sd_bands"
 }
 
 # The row and tab axes have no raw form worth printing, so every numeric one there gets a shape --

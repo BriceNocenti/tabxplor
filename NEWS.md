@@ -24,8 +24,8 @@
   one row per distinct value; it now cuts `age` into four bands at its mean and one standard
   deviation either side (one row per value is kept for a counted number or a short scale), and says
   which it chose. The new `shape` argument decides it explicitly --- `"median"`, `"terciles"`,
-  `"quartiles"`, `"quintiles"`, `"deciles"`, a number of groups, `"sd_bands"`, `"levels"`, or
-  `"log"` / `"sqrt"` for a column variable --- and is
+  `"quartiles"`, `"quintiles"`, `"deciles"`, a number of groups, `"sd_bands"`,
+  `"values_to_levels"`, or `"log"` / `"sqrt"` for a column variable --- and is
   the same vocabulary [tab_reg()] already took. The new `shape_numeric_var()` applies it to one
   vector.
 
@@ -41,7 +41,7 @@
   the same, once per variable. In Excel, where a cell cannot hold a bracket, each secondary number
   becomes a column of its own instead of being dropped.
 
-* **New `display` layouts** `"base_ratio"`, `"base_or"` and `"or_base"`, and `"OR"` / `"{OR}"`
+* **New `display` layouts** `"base_diff"`, `"base_ratio"`, `"base_or"` and `"or_base"`, and `"OR"` / `"{OR}"`
   accepted as spellings of `"or"`. The full list of named layouts is now in `?tab`.
 
 * **An ordinal regression now reports in one column, readably.** `tab_reg(family = "ordinal")`
@@ -409,7 +409,7 @@
 
 * **A numeric `row_vars` / `tab_vars` is grouped rather than given one row per value**, and a
   numeric column's cell shows a coefficient of variation instead of a standard deviation (see *New
-  features*). `shape = "levels"` and `display = "mean_sd"` restore the old output exactly.
+  features*). `shape = "values_to_levels"` and `display = "mean_sd"` restore the old output exactly.
 
 * **The colour thresholds moved.** `pct_ratio` is now `×1.1 / ×1.2 / ×1.5 / ×2` above the reference
   and `÷1.1 / ÷1.25 / ÷2 / ÷4` below it (a percentage ratio is capped at `1 / base`, so a cell reaches

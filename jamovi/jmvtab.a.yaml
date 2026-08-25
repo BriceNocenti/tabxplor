@@ -237,16 +237,10 @@ options:
               keep all levels otherwise.
               }
 
-    - name: other_if_less_than
-      title: <b>other_if_less_than = <i>("Other" level)</i></b>
-      type: Number
-      min: 0
-      default: 0
-      description:
-          R: >
-           When set to a positive integer, levels with less count
-           than that will be merged into an "Others" level.
-
+    # NO `other_if_less_than` CONTROL, deliberately (Phase 22g-vi): the per-variable table merges
+    # levels by hand, which is both more powerful and the thing a user actually looks at -- and the
+    # two fought each other, one lumping what the other had just merged. `tab(other_if_less_than =)`
+    # is untouched in R.
     - name: cleannames
       title: "<b>cleannames = <i>(tidy level names)</i></b>"
       type: Bool

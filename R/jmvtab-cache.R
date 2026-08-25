@@ -328,7 +328,6 @@ jmv_cache_aggregate <- function(ctx) {
   weighted      <- length(wt) != 0L
   wt_chr        <- if (weighted) as.character(wt) else ""
   grain         <- sort(tab_vars)
-  other         <- ctx$other_if_less_than
   fp            <- ce$fp_map                    # per-column fingerprints (built in jmvtab_build)
   pop_tag       <- jmv_pop_tag(ctx$cache_keys$tier0$population, fp, ce$nrow)
   grain_fp      <- lapply(grain, function(g) fp[[g]])
@@ -369,7 +368,7 @@ jmv_cache_aggregate <- function(ctx) {
         # NULL -> tab_plain() raw-scans (the _colvarbis machinery only runs on the raw path).
         if (cv %in% c(rv, tab_vars)) next
         key <- jmv_hash(list("fct", pop_tag, rv, fp_of(rv), cv, fp_of(cv),
-                             grain, grain_fp, wt_chr, wt_fp, other,
+                             grain, grain_fp, wt_chr, wt_fp,
                              recode(rv), recode(cv), grain_recode))
         fct_keys_by_rv[[rv]] <- c(fct_keys_by_rv[[rv]], key)
         got <- jmv_cache_fetch(store, "agg", key)
@@ -762,7 +761,7 @@ JMV_TAB3_REAPPLIED <- c("digits", "display", "cleannames", "color", "color_signi
                         "stars", "n_min", "anova")
 
 # The tier-3 BASE key: identifies the ref-INDEPENDENT base fields {n, wn, pct, tot_n, mean, var}. It
-# hashes the aggregate identity (population tag + per-variable fingerprint + grain + wt + other) plus
+# hashes the aggregate identity (population tag + per-variable fingerprint + grain + wt) plus
 # every remaining opt EXCEPT the ones re-applied post-cache (the tier-4 paint: digits/display/
 # cleannames/color/color_signif) and the transform-tuple items (ref/ref2/comp/OR/ci-params) -- so pct,
 # na, levels, n, totaltab, subtext ... any structural/display-baked arg invalidates the entry.
@@ -780,8 +779,7 @@ jmv_tab3_base_key <- function(opts, ce, row_vars, col_vars, tab_vars, wt_chr) {
     pop   = jmv_pop_tag(pop, fp, ce$nrow),
     vars  = lapply(used, function(v) list(v, fp[[v]])),
     wt    = wt_chr,
-    grain = sort(tab_vars),
-    other = opts$other_if_less_than
+    grain = sort(tab_vars)
   )
   # Phase 19k (D12): the four interval-method keys are named by their REAL option names. The list
   # used to say `"ci_method"`, which is not a key of `opts` (the UI keeps one ComboBox per interval
@@ -1111,7 +1109,6 @@ jmv_tab3_build_armed <- function(data, opts, color, color_signif, ci, wt_sym,
     cleannames   = FALSE,                        # cleannames applied at display (jmvtab_build)
     totaltab     = opts$totaltab,
     digits       = opts$digits,
-    other_if_less_than = opts$other_if_less_than,
     # ⚠ [["n"]], never $n: `$` PARTIAL-MATCHES on a list, so `opts$n` would return `opts$na`.
     n            = opts[["n"]],
     add_pct      = opts$add_pct,

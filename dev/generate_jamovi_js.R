@@ -22,7 +22,13 @@
 # is deliberate: jamovi bundles `jamovi/js/*.js` itself, and whether it would resolve a `require()`
 # of a second module is not something this repo can test.
 #
-# See: CLAUDE.md > Phase 19k ; dev/tabxplor_2.0.0_jamovi_dev.md.
+# ⚠ TWO ORDERS THAT MUST NOT BORROW EACH OTHER. `REG_FAMILIES[[f]]$fits` is ordered so its FIRST
+# entry is the family's own link, which is what `link = "auto"` resolves to; the Model table's
+# drop-down is ordered like `measure`'s own radios, because a link IS a measure and one order down
+# the cascade is what a reader can carry. The sort lives here, on the emitted TABX_LINKS alone.
+# `VAR_SHAPES`' declaration order, by contrast, IS the offer order and is simply filtered.
+#
+# See: CLAUDE.md > Phase 19k ; dev/tabxplor_2.0.0_jamovi_dev.md (§ Phase 22g-vi).
 
 # Locate the package root from THIS script's own path, so it runs identically from the root, from
 # tests/testthat (the drift check) and from anywhere else.
@@ -48,6 +54,20 @@ js_obj  <- function(x, val = js_str) {                    # named vector/list ->
 }
 
 
+# The shape picker's labels: the value, then what it MAKES OF the column -- which is the one thing
+# a reader has to know before picking, and it is `produces`, so it is derived and not written.
+# ⚠ PLAIN TEXT, no markup: a native <option> paints textContent, and an <i> would show literally.
+# `values_to_levels` is the one exception, on width alone: it says "levels" in its own name.
+shape_ui_labels <- function(keys) {
+  ann <- c(numeric = " (numeric)", term = " (num.)", factor = " (cut)")
+  lab <- vapply(keys, function(k) {
+    p <- tabxplor:::VAR_SHAPES[[k]]$produces
+    if (is.null(p) || identical(k, "values_to_levels")) k else paste0(k, ann[[p]])
+  }, character(1))
+  stats::setNames(lab, keys)
+}
+
+
 # =============================================================================================
 # jmvtabreg.js -- the family/link rules + the three-state estimand grid
 # =============================================================================================
@@ -70,14 +90,16 @@ reg_block <- function() {
   # setdiff() here AND an omission from REG_FAMILY_UI_LABEL: one fact, two encodings.
   fams  <- names(tabxplor:::reg_family_ui_labels())
   effs  <- tabxplor:::REG_EFFECTS_VALUES
-  # ⚠ THE PANEL SPEAKS ITS OWN SPELLING. `measure = "raw_coefficient"` is the canonical word since
-  # Phase 22g-v, but `jmvtabreg.a.yaml` still declares the option VALUE `coefficient` (a permanent
-  # alias R resolves), and renaming it needs a jmvtools::prepare() -- Phase 22g-vi's, which runs the
-  # build chain once for all of its UI items. So the grid is emitted in BOTH spellings until then.
   meas  <- setdiff(tabxplor:::REG_MEASURES_VALUES, "auto")
-  alias <- c(raw_coefficient = "coefficient")
-  links <- lapply(stats::setNames(fams, fams),
-                  function(f) c("auto", names(tabxplor:::REG_FAMILIES[[f]]$fits)))
+  # ⚠ THE UI ORDER IS NOT THE `fits` ORDER, and neither is free. `REG_FAMILIES[[f]]$fits` is ordered
+  # so that its FIRST entry is the family's own link, which is what `link = "auto"` resolves to; the
+  # picker is ordered like `measure`'s own radios (a link IS a measure), so a reader carries one
+  # order down the cascade. Two facts, one sort here -- and "auto" leads, being the absence of a pick.
+  ui_order <- names(tabxplor:::REG_MEASURE_LINK)
+  links <- lapply(stats::setNames(fams, fams), function(f) {
+    lk <- names(tabxplor:::REG_FAMILIES[[f]]$fits)
+    c("auto", lk[order(match(lk, ui_order))])
+  })
   # Phase 22b-xv: the grid gained the LINK axis, so a picker can never claim a measure the chosen
   # model cannot report -- nor grey one it can. "auto" always resolves: it IS the cascade.
   grid  <- lapply(stats::setNames(fams, fams), function(f) {
@@ -85,8 +107,7 @@ reg_block <- function() {
       lapply(stats::setNames(effs, effs), function(e) {
         ok <- vapply(meas, function(m) identical(
           tabxplor:::reg_estimand(f, link = lk, measure = m, effect = e)$status, "ok"), logical(1))
-        got <- meas[ok]
-        c("auto", got, unname(alias[intersect(got, names(alias))]))
+        c("auto", meas[ok])
       })
     })
   })
@@ -102,6 +123,15 @@ reg_block <- function() {
     paste0("var TABX_OUTCOME_OFFERS = ", js_obj(offers, js_arr), ";"),
     paste0("var TABX_LINKS = ", js_obj(links, js_arr), ";"),
     paste0("var TABX_LINK_LABEL = ", js_obj(tabxplor:::reg_link_ui_labels()), ";"),
+    # WHICH FAMILIES TAKE AN `outcome_level`, and what that level IS to them -- "modelled" (binomial:
+    # one level against the rest) or "baseline" (multinomial: the category everything is read
+    # against). NA elsewhere, and a family with no role gets no picker: the gate used to be "the
+    # outcome has exactly 2 levels", which hid the picker on both of the families that need it most.
+    paste0("var TABX_OUTCOME_LEVEL_ROLE = ",
+           js_obj(vapply(tabxplor:::REG_FAMILIES, function(r) r$outcome_level %||% NA_character_,
+                         character(1))[!is.na(vapply(tabxplor:::REG_FAMILIES,
+                                                     function(r) r$outcome_level %||% NA_character_,
+                                                     character(1)))]), ";"),
     paste0("var TABX_ESTIMANDS = ",
            paste0("{ ", paste0(js_str(fams), ": ",
                                vapply(grid, function(g)
@@ -112,6 +142,7 @@ reg_block <- function() {
     # from `produces` rather than spelled out again as a list of exceptions in the .js.
     paste0("var TABX_SHAPES = ", js_arr(reg_shapes), ";"),
     paste0("var TABX_SHAPES_CUT = ", js_arr(reg_cuts), ";"),
+    paste0("var TABX_SHAPE_LABEL = ", js_obj(shape_ui_labels(reg_shapes)), ";"),
     END
   )
 }
@@ -135,10 +166,11 @@ tab_block <- function() {
                        function(k) tabxplor:::VAR_SHAPES[[k]]$produces, character(1))
   cuts       <- tab_shapes[produces == "factor"]
   # A row / tab variable can only be CUT, and its default is the `"auto"` RULE (no entry at all).
-  # A column variable keeps its mean unless told otherwise, so its default is the declared
-  # `"linear"`, then the transforms that keep it a number, then the same cuts.
+  # A column variable keeps its mean unless told otherwise, so its default is `"linear"` -- which is
+  # VAR_SHAPES' own first row. Both lists are the declared ORDER, filtered: since 22g-vi that order
+  # is already numeric-then-cuts, so there is nothing left here to re-group.
   idx_shapes <- c("auto", cuts)
-  col_shapes <- c("linear", setdiff(tab_shapes[produces == "numeric"], "linear"), cuts)
+  col_shapes <- tab_shapes
   c(
     BEGIN,
     "// Generated from R/fmt_class.R (MEASURES), R/tab-display.R (DISPLAY_TOKENS) and",
@@ -149,6 +181,7 @@ tab_block <- function() {
     paste0("var TABX_SHAPES_INDEX = ", js_arr(idx_shapes), ";"),
     paste0("var TABX_SHAPES_COL = ", js_arr(col_shapes), ";"),
     paste0("var TABX_SHAPES_CUT = ", js_arr(cuts), ";"),
+    paste0("var TABX_SHAPE_LABEL = ", js_obj(shape_ui_labels(tab_shapes)), ";"),
     END
   )
 }

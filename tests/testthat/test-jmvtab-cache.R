@@ -23,7 +23,7 @@ jmv_opts <- function(...) {
             # the jamovi UI keeps one ComboBox per interval kind; jmv_ci_method() folds them
             ci_method_cell = "wilson", ci_method_diff = "newcombe",
             ci_method_mean_diff = "welch", ci_method_mean_ratio = "robust",
-            totaltab = "line", digits = 0, other_if_less_than = 0, add_pct = FALSE,
+            totaltab = "line", digits = 0, add_pct = FALSE,
             # 20g-ii: `n_min` was MISSING here although .opts() sets it and it is in the tier-3
             # `reapplied` set -- the fixture must carry every key that vector names, or the D12
             # assertion below cannot see the real invariant.
@@ -72,7 +72,7 @@ jmv_oracle <- function(opts, data) {
     conf_level = opts$conf_level, stars = opts$stars, anova = opts$anova,
     ci_method = c(cell = opts$ci_method_cell, diff = opts$ci_method_diff),
     cleannames = FALSE, totaltab = opts$totaltab, digits = opts$digits,
-    other_if_less_than = opts$other_if_less_than, n = opts[["n"]], add_pct = opts$add_pct,
+    n = opts[["n"]], add_pct = opts$add_pct,
     subtext = opts$subtext, output_list = isTRUE(opts$output_list), shape = opts$shape
   ))
 }
@@ -681,11 +681,11 @@ test_that("a merge is byte-identical to tab() on pre-collapsed microdata", {
     list(o = jmv_opts(row_vars = "relig", col_vars = "race", tab_vars = "marital", pct = "row"),
          spec = mar_merge),                                                     # merged sub-table
     list(o = jmv_opts(row_vars = "marital", col_vars = "race", pct = "col"),
-         spec = list(race = list("Non-white" = c("Black", "Other")))),          # a COLUMN merge
-    # a merged level's COMBINED count faces other_if_less_than: merge, THEN lump
-    list(o = jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
-                      other_if_less_than = 2000L),
-         spec = mar_merge)
+         spec = list(race = list("Non-white" = c("Black", "Other"))))           # a COLUMN merge
+    # ⚠ the "merge, THEN lump" case left with the control: Phase 22g-vi retired the panel's
+    # `other_if_less_than` (the per-variable table merges by hand, and the two fought each other),
+    # so jamovi can no longer produce it. The ORDERING itself is tab()'s and is locked in
+    # test-row-model.R.
   )
   for (cs in cases) {
     built <- jmvtab_build(gss, utils::modifyList(cs$o, list(levels_collapse = cs$spec)), NULL)

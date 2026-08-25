@@ -11,9 +11,10 @@
 // the suite checks this block (test-jamovi-vocabulary.R).
 var TABX_MEASURE_ODDS_RATIO = "odds_ratio";
 var TABX_DISPLAY_ODDS_RATIO_FIELDS = ["or"];
-var TABX_SHAPES_INDEX = ["auto", "levels", "median", "terciles", "quartiles", "quintiles", "deciles", "sd_bands"];
-var TABX_SHAPES_COL = ["linear", "log", "sqrt", "levels", "median", "terciles", "quartiles", "quintiles", "deciles", "sd_bands"];
-var TABX_SHAPES_CUT = ["levels", "median", "terciles", "quartiles", "quintiles", "deciles", "sd_bands"];
+var TABX_SHAPES_INDEX = ["auto", "sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles", "values_to_levels"];
+var TABX_SHAPES_COL = ["linear", "log", "sqrt", "sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles", "values_to_levels"];
+var TABX_SHAPES_CUT = ["sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles", "values_to_levels"];
+var TABX_SHAPE_LABEL = { "linear": "linear (numeric)", "log": "log (numeric)", "sqrt": "sqrt (numeric)", "sd_bands": "sd_bands (cut)", "median": "median (cut)", "terciles": "terciles (cut)", "quartiles": "quartiles (cut)", "quintiles": "quintiles (cut)", "deciles": "deciles (cut)", "values_to_levels": "values_to_levels" };
 // --- END GENERATED ---
 
 // The file extension shown after the file name on the path line -- follows the chosen format. Rendered
@@ -51,6 +52,9 @@ var applyVarEnables = function(ui) {
     ["totaltab_1", "totaltab_2", "totaltab_3", "comp"].forEach(function(nm) {
         if (ui[nm]) ui[nm].setEnabled(hasTab);
     });
+    // ...and the design effect is a statement ABOUT the weights: with none there is nothing to say.
+    var w = ui.wt ? ui.wt.value() : null;
+    if (ui.design_effect) ui.design_effect.setEnabled(!!(w && w.length > 0));
 };
 
 // Phase 15c: the `subtext` note is a full-width, auto-grow <textarea> (a CustomControl driving the
@@ -209,7 +213,13 @@ var TABXV = {
     sel:    "width:100%;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
     unit:   "display:flex;align-items:center;gap:3px;min-width:0;white-space:nowrap;",
     inp:    "width:52px;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;",
-    exp:    "padding:0 6px 4px 6px;background:#E4E4E4;border-top:1px solid rgba(0,0,0,0.10);",
+    // ⚠ the LEFT padding is not decoration: it is what says the open list belongs to the row
+    // above it rather than to the group. Kept modest -- the options pane is the narrowest thing
+    // jamovi shows, and a real 1cm would eat the merged-name box.
+    exp:    "padding:0 6px 4px 26px;background:#E4E4E4;border-top:1px solid rgba(0,0,0,0.10);",
+    // the "click to ..." half of the level opener: an instruction, not a fact, so it is set back
+    // to the chrome's own aside grey (tx_chrome_hex()$grey2 in the light theme).
+    lvlHow: "font-style:italic;color:#444444;",
     hint:   "padding:8px;opacity:0.65;font-style:italic;"
 };
 
@@ -401,7 +411,7 @@ var tabxvFillLevels = function (ui, host, v, kind) {
     }
     if (kind.isNumber) {                       // a NUMBER: the one question it raises is how it is cut
         if (!ui.shape) return;                 // the generated .h.R lags -- show no dead control
-        var sel = makeSelect(TABXV.sel, kind.offered, null, kind.shape, function (val) {
+        var sel = makeSelect(TABXV.sel, kind.offered, TABX_SHAPE_LABEL, kind.shape, function (val) {
             arrWrite(ui, "shape", v, "shape", (val === kind.defShape) ? "" : val);
             if (host.varSync) host.varSync(ui, v, tabxvKind(ui, host, kind.group, v));
             tabxvRefreshVar(ui, host, v);
@@ -411,9 +421,13 @@ var tabxvFillLevels = function (ui, host, v, kind) {
     }
     var natural = kind.cached || [];
     if (natural.length === 0) return;
+    // the COUNT is the original one -- a merge is a statement about those levels, not a new set of
+    // them -- and the instruction beside it says which way the click goes.
     var b = document.createElement("span"); b.style.cssText = TABXV.lvlBtn + TABXV.dotted;
-    b.textContent = String(natural.length) + " levels" +
-                    (tabxvOpen[v] ? "" : ": " + host.mergeTip);
+    var n = document.createElement("span"); n.textContent = String(natural.length) + " levels";
+    var h = document.createElement("span"); h.style.cssText = TABXV.lvlHow;
+    h.textContent = " \u2014 " + (tabxvOpen[v] ? host.closeTip : host.mergeTip);
+    b.appendChild(n); b.appendChild(h);
     b.addEventListener("click", function () { c.setOpen(!tabxvOpen[v]); });
     c.levels.appendChild(b);
 };
@@ -577,7 +591,10 @@ var TABXM = {
     // moment one appeared), `minmax(96px,1fr)` grew column 3 with whatever was typed in it, and the
     // overflow scrollbar took width away on expand -- `scrollbar-gutter:stable` reserves it always.
     grid:  "display:grid;grid-template-columns:minmax(0,1fr) 72px 200px;align-items:stretch;margin:4px 0;border:1px solid rgba(0,0,0,0.25);border-radius:3px;background:#F0F0F0;color:#000;max-height:220px;overflow-y:auto;scrollbar-gutter:stable;outline:none;width:100%;box-sizing:border-box;",
-    head:  "padding:2px 8px;font-size:0.9em;color:#000;background:#DDDDDD;border-bottom:1px solid rgba(0,0,0,0.14);white-space:nowrap;",
+    // NOT a header row -- there is none. This is the word "merge" written into the ONE tick cell
+    // the grid leaves empty by construction (the first level has nothing above it to merge into),
+    // so the column names itself where it starts instead of costing a row.
+    head:  "padding:2px 6px;font-size:0.9em;font-style:italic;color:#444444;display:flex;align-items:center;justify-content:center;white-space:nowrap;",
     lab:   "padding:2px 8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;",
     tick:  "padding:2px 6px;display:flex;align-items:center;justify-content:center;cursor:pointer;",
     cell:  "padding:2px 4px;display:flex;align-items:center;",
@@ -717,15 +734,13 @@ var tabxmBuildList = function (ui, v, initialOrder, onOrder, canOrder, onCommit,
         d.style.gridRow = span ? (String(row) + " / span " + String(span)) : String(row);
         return d;
     };
+    // ⚠ NO HEADER ROW: the three heads cost a row of a box that is already tall, and each column
+    // says what it is anyway -- the levels are levels, the name box shows its default as a
+    // placeholder, and "merge" is written into the first tick cell, which is empty by construction.
     var renderRows = function () {
         grid.innerHTML = "";
-        (canMerge ? ["level", "merge", "merged name"] : ["level"]).forEach(function (t, k) {
-            var h = cell(TABXM.head, k + 1, 1);
-            h.textContent = t;
-            grid.appendChild(h);
-        });
         order.forEach(function (lab, i) {
-            var row = i + 2;
+            var row = i + 1;
             var l = cell(TABXM.lab, 1, row);
             l.setAttribute("data-lab", lab);              // the RAW name: it is what is stored
             l.textContent = tabxvClean(ui, lab);
@@ -734,7 +749,8 @@ var tabxmBuildList = function (ui, v, initialOrder, onOrder, canOrder, onCommit,
             grid.appendChild(l);
             if (!canMerge) return;
 
-            var t = cell(TABXM.tick, 2, row);
+            var t = cell(i > 0 ? TABXM.tick : TABXM.head, 2, row);
+            if (i === 0) t.textContent = "merge";   // the column names itself in its empty cell
             if (i > 0) {                      // the first level has nothing above to merge into
                 var cb = document.createElement("input");
                 cb.type = "checkbox"; cb.checked = !!ticks[i];
@@ -754,7 +770,7 @@ var tabxmBuildList = function (ui, v, initialOrder, onOrder, canOrder, onCommit,
         while (i < order.length) {
             var j = i + 1;
             while (j < order.length && ticks[j]) j++;
-            var len = j - i, c = cell(TABXM.cell, 3, i + 2, len);
+            var len = j - i, c = cell(TABXM.cell, 3, i + 1, len);
             if (len > 1) {
                 var levels = order.slice(i, j);
                 var box = document.createElement("input");
@@ -873,6 +889,7 @@ var VAR_TABLE_HOST = {
     ],
     emptyHint: "Select row, column or table variables to order, merge or cut their levels.",
     mergeTip:  "click to relevel",
+    closeTip:  "click to close",
     orderOpt:  "levels_order",
     isCut:     function (sh) { return TABX_SHAPES_CUT.indexOf(sh) >= 0; },
 
@@ -920,20 +937,26 @@ var VAR_TABLE_HOST = {
         if (kind.loading) return;
         if (kind.isNumber && !kind.isCut) return;     // a number left a number has no reference
         var choices, labels, def;
+        // ⚠ AN ODDS RATIO IS NEVER READ AGAINST A TOTAL -- a marginal percentage that includes the
+        // cell itself is not a category -- so under one "tot" is not offered at all, not merely
+        // demoted from the default. A value STORED before the switch is deliberately left alone:
+        // tab()'s own leaf falls back to the first level silently (plain_resolve), so turning the
+        // odds ratio off gives the user their own choice back.
+        var or = orIsActive(ui);
         if (kind.isCut) {
             // A cut number DOES have groups, but their labels are computed R-side from the data's
             // own quantiles -- so the only references nameable here are the positional ones.
-            choices = ["tot", "first", "last"];
+            choices = or ? ["first", "last"] : ["tot", "first", "last"];
             labels  = { tot: "Total", first: "First group", last: "Last group" };
-            def     = "tot";
+            def     = or ? "first" : "tot";
         } else {
             // The choices are the levels the TABLE will show -- a merged run is ONE level, under its
             // merged name -- because a reference naming a level the merge dissolved does not exist.
             var levels = tabxvLevels(ui, VAR_TABLE_HOST, v, kind.cached);
             if (levels.length === 0) return;
-            choices = ["tot"].concat(levels);
+            choices = or ? levels : ["tot"].concat(levels);
             labels  = function (o) { return (o === "tot") ? "Total" : tabxvClean(ui, o); };
-            def     = orIsActive(ui) ? levels[0] : "tot";   // ref="auto" -> "first" under OR
+            def     = or ? levels[0] : "tot";
         }
         var stored = arrGet(ui, "ref_levels", v, "ref");
         cell.appendChild(makeSelect(TABXV.sel, choices, labels,
@@ -958,16 +981,20 @@ var tabRef2Cell = function (ui, cell, v, pct) {
     if (other.length === 0 || other[0] !== v) return;
     var lv = cachedLevels(v);
     var levels = (lv && lv.length) ? tabxvLevels(ui, VAR_TABLE_HOST, v, lv) : [];
-    var choices = ["first", "tot"].concat(levels);
+    // no "tot": the second reference of an odds ratio is a CATEGORY, like the first.
+    var choices = ["first"].concat(levels);
     var stored  = String(ui.ref2.value() || "first");
-    var labs = function (o) {
-        return (o === "first") ? "First" : (o === "tot") ? "Total" : tabxvClean(ui, o);
-    };
+    var labs = function (o) { return (o === "first") ? "First" : tabxvClean(ui, o); };
     var sel = makeSelect(TABXV.sel, choices, labs,
                          choices.indexOf(stored) >= 0 ? stored : "first",
                          function (r) { ui.ref2.setValue(r); });
     sel.title = "odds ratios \u2013 the " + ((pct === "col") ? "row" : "column") +
                 " each odds ratio is compared to (ref2 =)";
+    // this ONE cell sits in the column headed `ref =` but writes the OTHER argument, so it says so.
+    var tag = document.createElement("span");
+    tag.style.cssText = TABXV.lvlHow + "white-space:nowrap;flex:0 0 auto;margin-right:4px;";
+    tag.textContent = "ref2 =";
+    cell.appendChild(tag);
     cell.appendChild(sel);
 };
 

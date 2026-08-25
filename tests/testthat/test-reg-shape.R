@@ -544,3 +544,22 @@ test_that("the shape table names EVERY group, not only the first variable's", {
   # ...and each group holds all of its numeric predictors
   expect_true(all(table(filled) == length(unique(st$var))))
 })
+
+
+# Phase 22g-vi: the shape table under a PUBLICATION palette. tab_css() gives `.tx-sec` a
+# `display:inline-block` there (load-bearing: it is what takes an aside out of an ancestor's
+# text-decoration), and that on a <td> destroys `display:table-cell` -- the cell drops out of the
+# row and reflows, which is how a curve ended up under the "outcome" header.
+testthat::test_that("the shape table's grey never lands on a <td>", {
+  d <- shp_data()
+  t <- suppressMessages(tab_reg(d, "married", c("age", "tvhours"), family = "binomial",
+                                empirical = FALSE, stats = "no"))
+  h <- tabxplor:::shape_html_table(t)
+  testthat::skip_if(is.null(h))
+  tds <- regmatches(h, gregexpr("<td[^>]*>", h))[[1]]
+  expect_false(any(grepl("tx-sec", tds)))
+  # ...and the print stylesheet is what makes it matter, so the rule is asserted where it lives
+  expect_match(tab_css(theme = "print_marks"), "\\.tx-sec\\{[^}]*display:inline-block")
+  # the curve is still in the shape column, and it is the only <svg> in the table
+  expect_match(h, "tx-sparkcell")
+})

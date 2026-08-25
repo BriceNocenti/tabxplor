@@ -8,15 +8,17 @@
 // Generated from R/tab_reg.R (REG_OUTCOME_KINDS), R/reg-estimand.R (REG_FAMILIES,
 // REG_ESTIMANDS) and R/var-shape.R (VAR_SHAPES). Re-run dev/generate_jamovi_js.R after
 // changing any of them; the suite checks this block (test-jamovi-vocabulary.R).
-var TABX_FAMILY_LABEL = { "gaussian": "gaussian (linear)", "binomial": "binomial (logistic)", "poisson": "poisson (counts)", "multinomial": "multinomial (nominal)", "ordinal": "ordinal (ordered)" };
+var TABX_FAMILY_LABEL = { "gaussian": "gaussian (linear)", "binomial": "binomial (logistic)", "poisson": "poisson (counts)", "multinomial": "multinomial", "ordinal": "ordinal" };
 var TABX_FAMILY_LABEL_BINARY = { "binomial": "binomial (logistic)" };
 var TABX_OUTCOME_DETECT = { "binary": "binomial", "ordered": "ordinal", "nominal": "multinomial", "numeric": "gaussian" };
 var TABX_OUTCOME_OFFERS = { "binary": ["binomial"], "ordered": ["ordinal", "multinomial", "binomial"], "nominal": ["multinomial", "ordinal", "binomial"], "numeric": ["gaussian", "binomial", "poisson"] };
-var TABX_LINKS = { "gaussian": ["auto", "difference", "ratio"], "binomial": ["auto", "odds_ratio", "ratio", "difference"], "poisson": ["auto", "ratio"], "multinomial": ["auto", "odds_ratio"], "ordinal": ["auto", "odds_ratio"] };
-var TABX_LINK_LABEL = { "auto": "auto (the family's own)", "difference": "difference (identity)", "ratio": "ratio (log)", "odds_ratio": "odds ratio (logit)" };
-var TABX_ESTIMANDS = { "gaussian": { "auto": { "auto": ["auto", "difference", "ratio", "raw_coefficient", "coefficient"], "conditional": ["auto", "difference", "raw_coefficient", "coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio"] }, "difference": { "auto": ["auto", "difference", "ratio", "raw_coefficient", "coefficient"], "conditional": ["auto", "difference", "raw_coefficient", "coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio"] }, "ratio": { "auto": ["auto", "difference", "ratio", "raw_coefficient", "coefficient"], "conditional": ["auto", "ratio", "raw_coefficient", "coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio"] } }, "binomial": { "auto": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient", "coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient", "coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] }, "odds_ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient", "coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient", "coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] }, "ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient", "coefficient"], "conditional": ["auto", "ratio", "raw_coefficient", "coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] }, "difference": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient", "coefficient"], "conditional": ["auto", "difference", "raw_coefficient", "coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] } }, "poisson": { "auto": { "auto": ["auto", "difference", "ratio", "raw_coefficient", "coefficient"], "conditional": ["auto", "ratio", "raw_coefficient", "coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio"] }, "ratio": { "auto": ["auto", "difference", "ratio", "raw_coefficient", "coefficient"], "conditional": ["auto", "ratio", "raw_coefficient", "coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio"] } }, "multinomial": { "auto": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient", "coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient", "coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] }, "odds_ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient", "coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient", "coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] } }, "ordinal": { "auto": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient", "coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient", "coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto"] }, "odds_ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient", "coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient", "coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto"] } } };
-var TABX_SHAPES = ["linear", "median", "terciles", "quartiles", "quintiles", "deciles", "sd_bands", "log", "sqrt", "quadratic"];
-var TABX_SHAPES_CUT = ["median", "terciles", "quartiles", "quintiles", "deciles", "sd_bands"];
+var TABX_LINKS = { "gaussian": ["auto", "difference", "ratio"], "binomial": ["auto", "difference", "ratio", "odds_ratio"], "poisson": ["auto", "ratio"], "multinomial": ["auto", "odds_ratio"], "ordinal": ["auto", "odds_ratio"] };
+var TABX_LINK_LABEL = { "auto": "auto (family based)", "difference": "difference", "ratio": "ratio", "odds_ratio": "odds_ratio" };
+var TABX_OUTCOME_LEVEL_ROLE = { "binomial": "modelled", "multinomial": "baseline" };
+var TABX_ESTIMANDS = { "gaussian": { "auto": { "auto": ["auto", "difference", "ratio", "raw_coefficient"], "conditional": ["auto", "difference", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio"] }, "difference": { "auto": ["auto", "difference", "ratio", "raw_coefficient"], "conditional": ["auto", "difference", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio"] }, "ratio": { "auto": ["auto", "difference", "ratio", "raw_coefficient"], "conditional": ["auto", "ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio"] } }, "binomial": { "auto": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] }, "difference": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "difference", "raw_coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] }, "ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] }, "odds_ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] } }, "poisson": { "auto": { "auto": ["auto", "difference", "ratio", "raw_coefficient"], "conditional": ["auto", "ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio"] }, "ratio": { "auto": ["auto", "difference", "ratio", "raw_coefficient"], "conditional": ["auto", "ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio"] } }, "multinomial": { "auto": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] }, "odds_ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] } }, "ordinal": { "auto": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto"] }, "odds_ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto"] } } };
+var TABX_SHAPES = ["linear", "log", "sqrt", "quadratic", "sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles"];
+var TABX_SHAPES_CUT = ["sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles"];
+var TABX_SHAPE_LABEL = { "linear": "linear (numeric)", "log": "log (numeric)", "sqrt": "sqrt (numeric)", "quadratic": "quadratic (num.)", "sd_bands": "sd_bands (cut)", "median": "median (cut)", "terciles": "terciles (cut)", "quartiles": "quartiles (cut)", "quintiles": "quintiles (cut)", "deciles": "deciles (cut)" };
 // --- END GENERATED ---
 
 // The file extension shown after the file name on the path line -- follows the chosen format. Rendered
@@ -155,6 +157,7 @@ var bottomAlignInRow = function(ui, name) {
 
 var onUpdate = function(ui) {
     injectTabxCss();
+    applyVarEnables(ui);
     renderSubtext(ui);
     renderExt(ui);
     styleResetBtn(ui);
@@ -224,7 +227,13 @@ var TABXV = {
     sel:    "width:100%;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
     unit:   "display:flex;align-items:center;gap:3px;min-width:0;white-space:nowrap;",
     inp:    "width:52px;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;",
-    exp:    "padding:0 6px 4px 6px;background:#E4E4E4;border-top:1px solid rgba(0,0,0,0.10);",
+    // ⚠ the LEFT padding is not decoration: it is what says the open list belongs to the row
+    // above it rather than to the group. Kept modest -- the options pane is the narrowest thing
+    // jamovi shows, and a real 1cm would eat the merged-name box.
+    exp:    "padding:0 6px 4px 26px;background:#E4E4E4;border-top:1px solid rgba(0,0,0,0.10);",
+    // the "click to ..." half of the level opener: an instruction, not a fact, so it is set back
+    // to the chrome's own aside grey (tx_chrome_hex()$grey2 in the light theme).
+    lvlHow: "font-style:italic;color:#444444;",
     hint:   "padding:8px;opacity:0.65;font-style:italic;"
 };
 
@@ -416,7 +425,7 @@ var tabxvFillLevels = function (ui, host, v, kind) {
     }
     if (kind.isNumber) {                       // a NUMBER: the one question it raises is how it is cut
         if (!ui.shape) return;                 // the generated .h.R lags -- show no dead control
-        var sel = makeSelect(TABXV.sel, kind.offered, null, kind.shape, function (val) {
+        var sel = makeSelect(TABXV.sel, kind.offered, TABX_SHAPE_LABEL, kind.shape, function (val) {
             arrWrite(ui, "shape", v, "shape", (val === kind.defShape) ? "" : val);
             if (host.varSync) host.varSync(ui, v, tabxvKind(ui, host, kind.group, v));
             tabxvRefreshVar(ui, host, v);
@@ -426,9 +435,13 @@ var tabxvFillLevels = function (ui, host, v, kind) {
     }
     var natural = kind.cached || [];
     if (natural.length === 0) return;
+    // the COUNT is the original one -- a merge is a statement about those levels, not a new set of
+    // them -- and the instruction beside it says which way the click goes.
     var b = document.createElement("span"); b.style.cssText = TABXV.lvlBtn + TABXV.dotted;
-    b.textContent = String(natural.length) + " levels" +
-                    (tabxvOpen[v] ? "" : ": " + host.mergeTip);
+    var n = document.createElement("span"); n.textContent = String(natural.length) + " levels";
+    var h = document.createElement("span"); h.style.cssText = TABXV.lvlHow;
+    h.textContent = " \u2014 " + (tabxvOpen[v] ? host.closeTip : host.mergeTip);
+    b.appendChild(n); b.appendChild(h);
     b.addEventListener("click", function () { c.setOpen(!tabxvOpen[v]); });
     c.levels.appendChild(b);
 };
@@ -592,7 +605,10 @@ var TABXM = {
     // moment one appeared), `minmax(96px,1fr)` grew column 3 with whatever was typed in it, and the
     // overflow scrollbar took width away on expand -- `scrollbar-gutter:stable` reserves it always.
     grid:  "display:grid;grid-template-columns:minmax(0,1fr) 72px 200px;align-items:stretch;margin:4px 0;border:1px solid rgba(0,0,0,0.25);border-radius:3px;background:#F0F0F0;color:#000;max-height:220px;overflow-y:auto;scrollbar-gutter:stable;outline:none;width:100%;box-sizing:border-box;",
-    head:  "padding:2px 8px;font-size:0.9em;color:#000;background:#DDDDDD;border-bottom:1px solid rgba(0,0,0,0.14);white-space:nowrap;",
+    // NOT a header row -- there is none. This is the word "merge" written into the ONE tick cell
+    // the grid leaves empty by construction (the first level has nothing above it to merge into),
+    // so the column names itself where it starts instead of costing a row.
+    head:  "padding:2px 6px;font-size:0.9em;font-style:italic;color:#444444;display:flex;align-items:center;justify-content:center;white-space:nowrap;",
     lab:   "padding:2px 8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;",
     tick:  "padding:2px 6px;display:flex;align-items:center;justify-content:center;cursor:pointer;",
     cell:  "padding:2px 4px;display:flex;align-items:center;",
@@ -732,15 +748,13 @@ var tabxmBuildList = function (ui, v, initialOrder, onOrder, canOrder, onCommit,
         d.style.gridRow = span ? (String(row) + " / span " + String(span)) : String(row);
         return d;
     };
+    // ⚠ NO HEADER ROW: the three heads cost a row of a box that is already tall, and each column
+    // says what it is anyway -- the levels are levels, the name box shows its default as a
+    // placeholder, and "merge" is written into the first tick cell, which is empty by construction.
     var renderRows = function () {
         grid.innerHTML = "";
-        (canMerge ? ["level", "merge", "merged name"] : ["level"]).forEach(function (t, k) {
-            var h = cell(TABXM.head, k + 1, 1);
-            h.textContent = t;
-            grid.appendChild(h);
-        });
         order.forEach(function (lab, i) {
-            var row = i + 2;
+            var row = i + 1;
             var l = cell(TABXM.lab, 1, row);
             l.setAttribute("data-lab", lab);              // the RAW name: it is what is stored
             l.textContent = tabxvClean(ui, lab);
@@ -749,7 +763,8 @@ var tabxmBuildList = function (ui, v, initialOrder, onOrder, canOrder, onCommit,
             grid.appendChild(l);
             if (!canMerge) return;
 
-            var t = cell(TABXM.tick, 2, row);
+            var t = cell(i > 0 ? TABXM.tick : TABXM.head, 2, row);
+            if (i === 0) t.textContent = "merge";   // the column names itself in its empty cell
             if (i > 0) {                      // the first level has nothing above to merge into
                 var cb = document.createElement("input");
                 cb.type = "checkbox"; cb.checked = !!ticks[i];
@@ -769,7 +784,7 @@ var tabxmBuildList = function (ui, v, initialOrder, onOrder, canOrder, onCommit,
         while (i < order.length) {
             var j = i + 1;
             while (j < order.length && ticks[j]) j++;
-            var len = j - i, c = cell(TABXM.cell, 3, i + 2, len);
+            var len = j - i, c = cell(TABXM.cell, 3, i + 1, len);
             if (len > 1) {
                 var levels = order.slice(i, j);
                 var box = document.createElement("input");
@@ -883,8 +898,8 @@ var TABX = {
     // the 4th is not, because which of outcome_level / trials it holds depends on the row.
     // ⚠ mtRow and mtHead repeat the SAME grid-template-columns: edit them together or the header
     // drifts from the rows it names.
-    mtRow:   "display:grid;grid-template-columns:minmax(70px,1fr) 150px 120px 105px;align-items:center;gap:10px;min-width:0;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
-    mtHead:  "display:grid;grid-template-columns:minmax(70px,1fr) 150px 120px 105px;align-items:center;gap:10px;min-width:0;box-sizing:border-box;padding:0 8px;margin:2px 6px 0;color:#000;font-weight:600;",
+    mtRow:   "display:grid;grid-template-columns:minmax(70px,1fr) 150px 145px 105px;align-items:center;gap:10px;min-width:0;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
+    mtHead:  "display:grid;grid-template-columns:minmax(70px,1fr) 150px 145px 105px;align-items:center;gap:10px;min-width:0;box-sizing:border-box;padding:0 8px;margin:2px 6px 0;color:#000;font-weight:600;",
     // the card the whole per-outcome table sits in -- the same material as the per-variable table.
     mtCard:  "margin:2px 0 6px 0;padding:2px 0 6px 0;border:1px solid rgba(0,0,0,0.16);border-radius:4px;background:rgba(0,0,0,0.06);",
     mtSel:   "width:100%;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
@@ -894,7 +909,7 @@ var TABX = {
 // `ref` on a still-numeric predictor is an ANCHOR -- the value its effect is read from. tab_reg()
 // takes these four keywords or a number; blank = the model's own default (no entry stored).
 var REG_ANCHORS = ["", "mean", "median", "min", "max"];
-var REG_ANCHOR_LABELS = { "": "(model default)" };
+var REG_ANCHOR_LABELS = { "": "mean (default)" };
 
 var VAR_TABLE_HOST = {
     ctrl: "varTableCtrl",
@@ -909,6 +924,7 @@ var VAR_TABLE_HOST = {
     ],
     emptyHint: "Select predictors to merge their levels, cut a number into groups, or choose a baseline.",
     mergeTip:  "click to relevel",
+    closeTip:  "click to close",
     // Phase 22g-iv: the ▲/▼ bar DOES belong here. `tab_reg()` has no `levels_order` argument, so the
     // option drives a jmvtabreg-only prep step instead: jmvtab_reg_build() relevels the predictor
     // columns before the fit. That is also what makes the reference rule below true by construction.
@@ -1131,16 +1147,24 @@ var renderModelRow = function(ui, frag, v) {
             applyModelEnables(ui);            // the measure/effect radios ask THIS outcome's link
         }));
 
-    // col-4: a 2-level factor -> modelled-level picker; a numeric outcome set to binomial -> trials.
-    var isBinFactor = c.levels && c.levels.length === 2;
+    // col-4: an outcome level where the FAMILY takes one; a numeric outcome set to binomial -> trials.
+    // ⚠ the gate is TABX_OUTCOME_LEVEL_ROLE, i.e. REG_FAMILIES$<f>$outcome_level, NOT "the outcome
+    // has exactly 2 levels" -- which hid the picker on both families that most need it: a binomial
+    // on a 3+ level outcome (one level against the rest) and a multinomial (whose level is the
+    // BASELINE everything is read against). The role also says which of the two it is.
+    var role        = TABX_OUTCOME_LEVEL_ROLE[famSel];
+    var hasLevels   = c.levels && c.levels.length >= 2;
     var isNumBinom  = (c.levels === null) && (famSel === "binomial");
-    if (isBinFactor) {
-        // The level drop-down alone (no "model " label -- the user sees it lists the outcome's own
-        // levels, so it reads as the modelled-level picker) and it stretches to fill the last column.
+    if (role && hasLevels) {
         var storedL = arrGet(ui, "outcome_level", v, "level");
         var selL = (storedL && c.levels.indexOf(storedL) >= 0) ? storedL : c.levels[0];  // default first
-        row.appendChild(makeSelect(TABX.mtSel, c.levels, null, selL,
-            function(l) { arrWrite(ui, "outcome_level", v, "level", l === c.levels[0] ? "" : l); }));
+        var lvSel = makeSelect(TABX.mtSel, c.levels,
+            function(l) { return tabxvClean(ui, l); }, selL,
+            function(l) { arrWrite(ui, "outcome_level", v, "level", l === c.levels[0] ? "" : l); });
+        lvSel.title = (role === "modelled")
+            ? "outcome_level = the level modelled, against every other one merged"
+            : "outcome_level = the baseline category the others are read against";
+        row.appendChild(lvSel);
     } else if (isNumBinom) {
         var wrapT = document.createElement("div"); wrapT.style.cssText = TABX.multWrap;
         var inp = document.createElement("input");
@@ -1226,10 +1250,19 @@ var measureOffered = function(ui, effect, measure) {
 var EFFECT_OF_RADIO  = { effect_1: "auto", effect_2: "conditional", effect_3: "marginal",
                          effect_4: "at_reference" };
 // ⚠ radio NAME -> the value it sets, and it must follow the .u.yaml's ORDER, not just its values:
-// Phase 22g-iii re-ordered `measure` simple -> complex AND renamed "log" to "coefficient", so every
-// pair here moved. A stale entry greys the wrong button, silently.
+// a re-order or a value rename moves every pair here, and a stale entry greys the WRONG button,
+// silently. test-jamovi-vocabulary.R walks this map against the .u.yaml for exactly that reason.
 var MEASURE_OF_RADIO = { measure_1: "auto", measure_2: "difference", measure_3: "ratio",
-                         measure_4: "odds_ratio", measure_5: "coefficient" };
+                         measure_4: "odds_ratio", measure_5: "raw_coefficient" };
+
+// `color = "between_groups"` reads each group's effect against the first group's, so with no
+// tab_vars there are no groups. A Variables array's length is invisible to the declarative `enable:`
+// DSL (an empty array is truthy), which is why this one is imperative while `adjustment`'s gate on
+// `empirical` is a plain `enable: (empirical)` in the .u.yaml.
+var applyVarEnables = function(ui) {
+    var tv = ui.tab_vars ? ui.tab_vars.value() : null;
+    if (ui.color_3) ui.color_3.setEnabled(!!(tv && tv.length > 0));
+};
 
 var applyModelEnables = function(ui) {
     var eff = ui.effect ? ui.effect.value() : "auto";
@@ -1504,6 +1537,7 @@ module.exports = {
 
     // A variable box changed: every per-variable widget lists them, so all four rebuild.
     onChange_vars: function(ui) {
+        applyVarEnables(ui);
         renderModelTable(ui);
         renderVarTable(ui);
         renderModelBuilder(ui);

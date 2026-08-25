@@ -328,7 +328,7 @@ testthat::test_that("the preset table is ONE table, resolved the same way by bot
   testthat::expect_identical(
     names(tabxplor:::DISPLAY_PRESETS),
     c("est", "est_ci", "est_base", "est_coef", "base_est_mdiff", "base_est_mratio", "est_obs",
-      "base_est", "base", "base_ci", "base_moe", "base_ratio", "base_or", "or_base",
+      "base_est", "base", "base_ci", "base_moe", "base_diff", "base_ratio", "base_or", "or_base",
       "mean_sd", "mean_cv", "or_pct", "OR_pct"))
   # a preset may declare one arm per column ROLE; an unknown role takes `default`.
   testthat::expect_identical(tabxplor:::display_resolve("est_base"), "{est} ({base})")
@@ -623,4 +623,20 @@ testthat::test_that("the Total's 100 % goes when the cells stop showing a level"
   testthat::expect_false(grepl("100%", tot(display = "{ratio} ({pct})")))
   testthat::expect_false(grepl("100%", tot(display = "or")))
   testthat::expect_false(grepl("100%", tot(display = "or_base")))
+})
+
+
+# Phase 22g-vi: the missing sibling of `base_ratio` / `base_or`. It was offered by the jamovi
+# display ComboBox and by the generated .h.R, and picking it ABORTED -- there was no such preset.
+testthat::test_that("`base_diff` is a preset, beside its ratio and odds-ratio siblings", {
+  g <- gss_cat_data_formatting()
+  testthat::expect_identical(tabxplor:::display_resolve("base_diff"), "{base} ({diff})")
+  t <- suppressMessages(tab(g, race, party3, pct = "row", na = "drop_all",
+                            display = "base_diff"))
+  testthat::expect_match(format(t[[2]])[[1]], "%.*\\(.*%\\)")
+  # every value the jamovi ComboBox offers resolves -- the rule the crash broke
+  vals <- yaml::read_yaml(testthat::test_path("..", "..", "jamovi", "jmvtab.a.yaml"))$options
+  vals <- Filter(function(o) identical(o$name, "display"), vals)[[1]]$options
+  for (v in vapply(vals, function(o) as.character(o$name), character(1)))
+    testthat::expect_no_error(tabxplor:::display_resolve(v))
 })

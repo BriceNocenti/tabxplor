@@ -31,7 +31,10 @@
 #     NA-count is NOT caught -> can serve a STALE fit after a data edit; best-effort, self-heals on the
 #     next structural change). Escape hatch: the JMV_FULL_HASH constant in R/jmvtab-cache.R.
 #     forces a full-value column hash (slower, exact) in BOTH modules -- see ?tabxplor-options.
-# See: dev/tabxplor_2.0.0_jamovi_dev.md ; CLAUDE.md > 2.0.0 roadmap > Phase 22j.
+#   - THE STAGED COMPARISON'S RENDER IS KEPT TWICE, and both copies earn it: jmvcore's `$state`
+#     survives an engine reset but warns past 5e5 compressed bytes, while JMVREG_RENDERS (below)
+#     survives only the process. The state carries the signature always and the HTML while it fits.
+# See: dev/tabxplor_2.0.0_jamovi_dev.md (§ Phase 22g-vi) ; CLAUDE.md > 2.0.0 roadmap > Phase 22j.
 
 
 # === Constants + config ====================================================================
@@ -207,6 +210,46 @@ jmvtab_reg_staged <- function(models, predictors) {
 #' @keywords internal
 #' @noRd
 jmvtab_reg_compare_sig <- function(opts) jmv_hash(opts)
+
+# THE STAGED COMPARISON'S RENDER, kept twice -- and both copies earn their place.
+#
+# `$state` on a hidden Image is the one thing that survives an engine RESET, so the render goes
+# there; but jmvcore compresses a state and prints "state object ... is too large" past 5e5 bytes
+# (its own documented ceiling), and a wide multi-model table's HTML can reach it. So the state
+# carries the render only while it fits, and this process-local mirror carries it always: within one
+# live engine the last two comparisons re-serve from here even if the state came back empty. Two
+# entries, because a user flips between two model sets; keyed on the signature, so a stale render can
+# never be served for a changed one.
+#' @keywords internal
+#' @noRd
+JMVREG_RENDERS <- new.env(parent = emptyenv())
+
+# jmvcore's own limit, in ResultsElement$asProtoBuf(); past it the state is still sent, with a
+# warning printed to the engine log -- so this is a ceiling worth staying under, not a hard error.
+#' @keywords internal
+#' @noRd
+JMVREG_STATE_MAX <- 5e5
+
+#' @keywords internal
+#' @noRd
+jmvtab_reg_render_store <- function(sig, html) {
+  keys <- ls(JMVREG_RENDERS)
+  if (length(keys) >= 2L && !sig %in% keys) rm(list = keys[[1L]], envir = JMVREG_RENDERS)
+  assign(sig, html, envir = JMVREG_RENDERS)
+  # only what fits rides in `$state`; the signature always does, since it is what tells an
+  # unchanged table from an outdated one and it costs nothing.
+  if (nchar(html, type = "bytes") > JMVREG_STATE_MAX) list(sig = sig)
+  else list(sig = sig, html = html)
+}
+
+# The last render for `sig`, from the state if it carried one and from this process otherwise.
+#' @keywords internal
+#' @noRd
+jmvtab_reg_render_fetch <- function(cst) {
+  if (is.null(cst) || is.null(cst$sig)) return(NULL)
+  cst$html %||% (if (exists(cst$sig, envir = JMVREG_RENDERS, inherits = FALSE))
+                   get(cst$sig, envir = JMVREG_RENDERS) else NULL)
+}
 
 # Fold the per-numeric-variable shape picker (the jamovi `shape` Array of Group{var, shape}) into
 # `shape =`. Blank / "linear" / "auto" entries are dropped -- "linear" is a col_var's default and
@@ -427,6 +470,8 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
     # automatic comparison 22g-ii installed (sequential where the subsets nest, else against the
     # first). A picker offering "none" would have named the opposite of what it did.
     display      = opts$display %||% "auto",
+    # a FLOOR, so 0 (the option's default) means "every measure keeps its own precision".
+    digits       = opts$digits %||% 0L,
     shape        = jmvtab_shape_vector(opts$shape),
     color        = opts$color,
     color_signif = opts$color_signif,

@@ -63,10 +63,14 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       if (staged) self$results$cache_state$setState(NULL)
 
       if (staged && !trigger) {
-        if (!is.null(cst) && identical(cst$sig, cur_sig)) {
-          self$results$html_table$setContent(cst$html)  # unchanged / just-computed -> re-serve
+        # ⚠ the render is read through jmvtab_reg_render_fetch(), never off `cst$html`: a render too
+        # big for jmvcore's state ceiling never went in there, and it is the process-local mirror
+        # that has it (R/jmvtabreg-cache.R).
+        last <- jmvtab_reg_render_fetch(cst)
+        if (!is.null(last) && identical(cst$sig, cur_sig)) {
+          self$results$html_table$setContent(last)      # unchanged / just-computed -> re-serve
         } else {
-          self$results$html_table$setContent(private$.compare_hint(cst))
+          self$results$html_table$setContent(private$.compare_hint(last))
         }
         return(invisible())
       }
@@ -91,7 +95,7 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       html <- jmv_backend_render_html(self, tabs)
       self$results$html_table$setContent(paste0(status, html))
       # Remember the computed comparison so a later live edit can re-serve / flag it (Phase h).
-      if (staged) self$results$compare_state$setState(list(sig = cur_sig, html = html))
+      if (staged) self$results$compare_state$setState(jmvtab_reg_render_store(cur_sig, html))
     },
 
     # Collect the jamovi options into the plain list jmvtab_reg_build() consumes. Phase 20g-i: an
@@ -138,6 +142,8 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         measure      = self$options$measure %||% "auto",
         effect       = self$options$effect  %||% "auto",
         display      = self$options$display %||% "auto",
+        # `digits` is a List -> a "0".."6" string, exactly as in jmvtab
+        digits       = as.integer(jmv_opt(self, "digits", "0")),
         empirical    = self$options$empirical,   # a Bool since 22g-iii; NULL -> tab_reg()'s TRUE
         # the reference-level picker (ref_levels) -> tab_reg's `ref` named vector (NULL = default)
         ref          = jmvtab_reg_ref_vector(self$options$ref_levels),
@@ -154,8 +160,9 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # Phase 19k: `color` is a MEASURE now, not a checkbox -- 19e's D25 left exactly four
         # meaningful values, derived from measure_own_ref(): off, the column's own geometry, the
         # model-vs-crude gap, and the between-group one. "auto" is tab_reg()'s TRUE.
-        color        = switch(self$options$color %||% "auto", "no" = FALSE, "auto" = TRUE,
-                              self$options$color),
+        # `"measure"` / `"adjustment"` / `"between_groups"` pass through as the words tab_reg()
+        # takes; only "no" needs a translation, colour being the one argument spelled FALSE.
+        color        = switch(self$options$color %||% "measure", "no" = FALSE, self$options$color),
         color_signif = self$options$color_signif,
         na           = self$options$na,
         n            = self$options$n,
@@ -178,16 +185,16 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
 
     # Phase h: shown in staged comparison mode when the model set / options changed but the user has not
     # clicked Run. Any previous render (cst$html) stays below the banner so the outdated table is visible.
-    .compare_hint = function(cst = NULL) {
+    .compare_hint = function(last = NULL) {
       banner <- paste0(
         "<div style='padding:10px 12px;margin-bottom:6px;border:1px solid #d0a; ",
         "border-radius:4px;background:rgba(204,0,170,0.06);'>",
-        if (is.null(cst))
+        if (is.null(last))
           "Model comparison staged. Click <b>Run comparison</b> to compute the table."
         else
           "The model set or options changed. Click <b>Run comparison</b> to refresh (the table below is outdated).",
         "</div>")
-      paste0(banner, if (is.null(cst)) "" else cst$html)
+      paste0(banner, last %||% "")
     },
 
     .plot = function(image, ...) {

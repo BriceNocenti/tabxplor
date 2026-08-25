@@ -142,7 +142,6 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         cleannames   = self$options$cleannames,      # applied at DISPLAY (Phase 7e)
         totaltab     = self$options$totaltab,
         digits       = as.integer(self$options$digits),  # `digits` is a List -> a "0".."6" string
-        other_if_less_than = self$options$other_if_less_than,
         n            = self$options$n,
         add_pct      = self$options$add_pct,
         subtext      = self$options$subtext,

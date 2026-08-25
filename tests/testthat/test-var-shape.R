@@ -15,7 +15,7 @@ testthat::test_that("the two producers read ONE table, and a refusal is derived 
   # every shape is offered to whoever declares it; nothing is listed twice
   quant <- c("median", "terciles", "quartiles", "quintiles", "deciles")
   testthat::expect_setequal(tabxplor:::shape_vocab("tab"),
-                            c("linear", "levels", quant, "sd_bands", "log", "sqrt"))
+                            c("linear", "log", "sqrt", "sd_bands", quant, "values_to_levels"))
   testthat::expect_setequal(tabxplor:::shape_vocab("tab_reg"),
                             c("linear", quant, "sd_bands", "log", "sqrt", "quadratic"))
   # ...and a named quantile cut and its integer twin cannot mean two different things: `k` is read
@@ -27,9 +27,9 @@ testthat::test_that("the two producers read ONE table, and a refusal is derived 
   testthat::expect_error(shape_numeric_var(1:10, "quadratic"), "tab_reg")
   testthat::expect_error(shape_numeric_var(1:10, "quadratic"), "quintiles")
   testthat::expect_error(quiet(tab(gsh, race, age, shape = c(age = "quadratic"))), "tab_reg")
-  # `levels` is tab()'s alone: a model fits a slope or a set of contrasts, not one per value
+  # `values_to_levels` is tab()'s alone: a model fits a slope or a set of contrasts, not one per value
   testthat::expect_error(tab_reg(gsh, "married", "age", family = "binomial",
-                                 shape = c(age = "levels")), "tab_reg|one of")
+                                 shape = c(age = "values_to_levels")), "tab_reg|one of")
   # a shape naming a variable that is already a factor says so, in the caller's own noun
   testthat::expect_error(quiet(tab(gsh, race, age, shape = c(race = "quintiles"))),
                          "numeric variables")
@@ -117,7 +117,7 @@ testthat::test_that("shape_numeric_var() builds exactly the column tab(shape =) 
 testthat::test_that("`auto` keeps one row per value for a short scale, bands a continuous one", {
   d <- gsh
   d$nkids <- as.integer(pmin(5, abs(round(stats::rnorm(nrow(d), 2, 1.5)))))
-  testthat::expect_identical(tabxplor:::shape_auto(d$nkids), "levels")
+  testthat::expect_identical(tabxplor:::shape_auto(d$nkids), "values_to_levels")
   testthat::expect_identical(tabxplor:::shape_auto(d$age),   "sd_bands")
   # ... and it SAYS which it chose, only where the user did not
   testthat::expect_message(tab(d, age, party3, pct = "row", na = "drop"), "four bands")

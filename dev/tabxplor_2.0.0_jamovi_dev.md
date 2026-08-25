@@ -1987,3 +1987,72 @@ permissive about scope on purpose: the failure worth catching is a helper that i
 
 ⚠ **`width: 100%` plus a horizontal margin overflows.** It cost the Model table a few millimetres
 past its card. A block-level grid already fills its container; give it margins OR a width, never both.
+
+---
+
+## Phase 22g-vi — the yaml pass, and three facts about jmvcore (2026-08-25)
+
+The build chain ran once for every UI item of the round. What follows is only what cost time to
+establish, or would cost it again.
+
+### ⚠ `$.Options` STOPS on an unknown option — it does not return `NULL`
+
+```r
+`$.Options` <- function(x, name) {
+  if (!exists(name, envir = x)) stop("options$", name, " does not exist", call. = FALSE)
+  x[[name]]
+}
+```
+
+So a helper shared by both backends may never reach for an option only one panel declares.
+`jmv_backend_export()` read `self$options$xl_check` behind a comment asserting that jmvtab "reads
+back NULL" — and **every jmvtab export died there**. The one guarded read is `jmv_opt(self, name,
+default)` (`R/jmvtab-export.R`), built on `Options$has()`; use it for any panel-specific option
+reached from a `jmv_backend_*` helper. This is a third member of the reserved/asymmetric-name class
+alongside `levels` → `lvs`, `check` → `xl_check` and `theme` → `tab_theme`.
+
+### ⚠ A state-carrying Image must be `visible: false`, and the reason is not vertical space
+
+`jmvcore::Image$asProtoBuf()` has this branch:
+
+```r
+else if (status == ANALYSIS_COMPLETE && (!is.null(self$state)) && path == "")
+    result$status <- jamovi.coms.AnalysisStatus$ANALYSIS_RENDERING
+```
+
+A hidden state carrier writes no file (`.plot` returns `TRUE`), so `path` is `""` **whenever it holds
+a state** — and it is therefore reported as *still rendering*. Left VISIBLE, the client then asks for
+that render, and the round-trip overwrote the run's own results: the staged comparison appeared and
+was replaced a moment later by the "Model comparison staged" banner. `compare_state` had its
+`visible: false` commented out; `jmvtab`'s `cache_state` had too. Both are hidden again.
+
+State itself is orthogonal to visibility — `ResultsElement$asProtoBuf()` writes `state` in a branch
+that never reads `visible` — so hiding a carrier costs nothing, which is what makes this safe.
+
+### ⚠ `$state` has a documented ceiling: 500 000 bytes, compressed
+
+Same function: past `5e5` jmvcore prints *"state object for … is too large"* and points at
+`dev.jamovi.org/tuts0203-state.html`. The staged comparison stored its whole rendered HTML there.
+It now stores the signature always and the render only while it fits, with a two-entry process-local
+mirror (`JMVREG_RENDERS`, `R/jmvtabreg-cache.R`) that re-serves inside a live engine either way.
+
+### A native `<option>` renders no markup
+
+`opt.textContent` is the only thing a `<select>` paints, so the `shape` picker's annotations are
+plain text — `linear (numeric)`, `sd_bands (cut)`. They are **derived** from `VAR_SHAPES$produces`
+by the generator (`TABX_SHAPE_LABEL`), not written in the `.js`.
+
+### Two orders that must not borrow each other
+
+`REG_FAMILIES[[f]]$fits` is ordered so its FIRST entry is the family's own link, which is what
+`link = "auto"` resolves to. The Model table's drop-down is ordered like `measure`'s own radios
+(`auto, difference, ratio, odds_ratio`) — a link IS a measure, and one order down the cascade is
+what a reader can carry. The sort is in `dev/generate_jamovi_js.R`, on the emitted `TABX_LINKS`
+alone; the suite asserts both halves.
+
+### The outcome-level picker is gated on a declared role
+
+`TABX_OUTCOME_LEVEL_ROLE` (from `REG_FAMILIES$<f>$outcome_level`) says which families take an
+`outcome_level` and what it IS to them — `modelled` (binomial: one level against the rest) or
+`baseline` (multinomial). The old gate was "the outcome has exactly 2 levels", which hid the picker
+on both families that need it most.

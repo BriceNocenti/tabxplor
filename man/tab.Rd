@@ -544,6 +544,7 @@ and on a \code{\link{tab_reg}} table:
 \item \code{"base"} (\code{\{base\}}) --- the level alone: the percentage, the mean or the count.
 \item \code{"base_ci"} (\code{\{base\} \{ci\}}) --- the level with its confidence interval.
 \item \code{"base_moe"} (\code{\{base\} \{moe\}}) --- the level with its margin of error.
+\item \code{"base_diff"} (\code{\{base\} (\{diff\})}) --- the level and, in parentheses, its difference to the reference.
 \item \code{"base_ratio"} (\code{\{base\} (\{ratio\})}) --- the level and, in parentheses, its ratio to the reference.
 \item \code{"base_or"} (\code{\{base\} (\{or\})}) --- the level and, in parentheses, its odds ratio.
 \item \code{"or_base"} (\code{\{or\} (\{base\})}) --- the odds ratio and, in parentheses, the percentage it rests on.

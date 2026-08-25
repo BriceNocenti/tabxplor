@@ -588,12 +588,18 @@ shape_html_table <- function(tab) {
                                  collapse = ""), '</tr>')
   # a curve inside its own sampling noise wears the ASIDE ink, the same grey a non-significant cell
   # wears -- one convention, and the "ns" mark in the range cell says it again where colour cannot.
+  # WARNING: the grey goes on a SPAN INSIDE the cell, never on the <td>. Under every publication
+  # palette tab_css() gives `.tx-sec` a `display:inline-block` (load-bearing there -- it is what
+  # takes the aside out of an ancestor's text-decoration), and that on a <td> destroys
+  # `display:table-cell`: the cell drops out of the row and reflows under its neighbour, which is
+  # what put a curve in the outcome column under `theme = "print_ready"`.
   ns <- attr(st, "noisy") %||% rep(FALSE, nrow(st))
   cells <- lapply(seq_along(st), function(j) {
     v <- htmltools::htmlEscape(as.character(st[[j]]))
-    k <- ifelse(ns, paste(cls[[j]], "tx-sec"), cls[[j]])
+    k <- cls[[j]]
     if (names(st)[[j]] == "shape") { v <- tx_spark_svg(v, h = 44L, dx = 10L, lwd = 2.6)
                                      k <- paste(k, "tx-sparkcell") }
+    v <- ifelse(ns, paste0('<span class="tx-sec">', v, '</span>'), v)
     paste0('<td class="', k, '">', v, '</td>')
   })
   body <- paste0('<tr>', do.call(paste0, cells), '</tr>', collapse = "")

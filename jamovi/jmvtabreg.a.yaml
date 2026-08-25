@@ -168,7 +168,7 @@ options:
         - title: "odds_ratio <i>(OR)</i>"
           name:  odds_ratio
         - title: "raw_coefficient <i>(log, etc.)</i>"
-          name:  coefficient
+          name:  raw_coefficient
       default: auto
       description:
           R: >
@@ -181,7 +181,7 @@ options:
              \item \code{"odds_ratio"} / \code{"ratio"} / \code{"difference"}: the named measure,
              when the outcome's level can carry it. One it cannot says so, and lists what it does
              offer.
-             \item \code{"coefficient"}: the model's own coefficient, un-transformed --- the log
+             \item \code{"raw_coefficient"}: the model's own coefficient, un-transformed --- the log
              of the reported measure wherever that measure is multiplicative, and the additive
              estimate itself on a model that is already additive.
             }
@@ -382,14 +382,14 @@ options:
       type: List
       options:
         - title: "measure <i>(the chosen measure of deviation)</i>"
-          name:  auto
+          name:  measure
         - title: "adjustment <i>(gap between model/observed)</i>"
           name:  adjustment
         - title: "between_groups <i>(gap between tab_vars)</i>"
           name:  between_groups
         - title: "no <i>(no colors)</i>"
           name:  "no"
-      default: auto
+      default: measure
       description:
           R: >
            WHAT the effect cells are coloured by. The colour LADDER always comes from what the
@@ -397,7 +397,7 @@ options:
             standardized-difference one), so what is left to choose is what the estimate is compared
             TO.
             \itemize{
-             \item \code{"auto"}: the effect's own size (compared to no effect).
+             \item \code{"measure"}: the effect's own size (compared to no effect).
              \item \code{"no"}: no colours.
              \item \code{"adjustment"}: how far the ADJUSTED effect moved from the crude one --
              needs \code{empirical}.
@@ -469,6 +469,35 @@ options:
            The column giving the number of observations behind each predictor level:
            `"range"` prints `min-max` when several models were fitted on different people,
            `"min"` the smallest count only, `"no"` no column at all.
+
+    # The same 0-6 ComboBox jmvtab has, driving tab_reg(digits =). A scalar there is a FLOOR, not
+    # an assignment: each measure keeps its own precision where that is finer. The per-token form
+    # (`digits = c(ratio = 3)`) stays R-only -- one number is the question a panel can ask.
+    - name: digits
+      title: ""
+      type: List
+      options:
+        - title: "0"
+          name:  "0"
+        - title: "1"
+          name:  "1"
+        - title: "2"
+          name:  "2"
+        - title: "3"
+          name:  "3"
+        - title: "4"
+          name:  "4"
+        - title: "5"
+          name:  "5"
+        - title: "6"
+          name:  "6"
+      default: "0"
+      description:
+          R: >
+           The minimum number of digits to print, as a single integer (0-6): each measure keeps its
+            own precision where that is finer (an odds ratio reads at two decimals, a mean score at
+            one). In R, \code{tab_reg()} also names one display field at a time,
+            \code{digits = c(ratio = 3)}.
 
     - name: cleannames
       title: cleannames

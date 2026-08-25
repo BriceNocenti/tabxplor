@@ -16,14 +16,16 @@ items:
     # Phase 7e: hidden state carrier for the multi-tier live cache. Only Image elements persist a
     # `$state` across the engine reset, so this Image hosts the (gzip-RDS'd) store. It renders
     # nothing (.plot returns TRUE); `.run()` reads/writes self$results$cache_state$state.
-    # ⚠ `visible: false` is what makes it take NO vertical space (height: 1 still reserved a slot).
-    # It is safe for the store: ResultsElement$asProtoBuf() serialises `state` independently of
-    # `visible`, so the round-trip is untouched.
+    # ⚠ `visible: false` is what makes it take NO vertical space (height: 1 still reserved a slot),
+    # and it is safe for the store TWICE OVER: ResultsElement$asProtoBuf() serialises `state`
+    # independently of `visible`, and Image$asProtoBuf() reports a state-holding image that rendered
+    # no file as ANALYSIS_RENDERING -- so a VISIBLE carrier makes the client ask for a render whose
+    # round-trip can overwrite the run's own results (Phase 22g-vi, jmvtabreg.r.yaml).
     - name: cache_state
       title: ""
       type: Image
       width: 1080
       height: 1
       renderFun: .plot
-      # visible: false
+      visible: false
 ...

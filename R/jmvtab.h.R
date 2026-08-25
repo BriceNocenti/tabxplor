@@ -17,7 +17,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             anova = "welch",
             na = "keep",
             lvs = "all",
-            other_if_less_than = 0,
             cleannames = TRUE,
             ref_levels = NULL,
             levels_order = NULL,
@@ -152,11 +151,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "first",
                     "auto"),
                 default="all")
-            private$..other_if_less_than <- jmvcore::OptionNumber$new(
-                "other_if_less_than",
-                other_if_less_than,
-                min=0,
-                default=0)
             private$..cleannames <- jmvcore::OptionBool$new(
                 "cleannames",
                 cleannames,
@@ -423,7 +417,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..anova)
             self$.addOption(private$..na)
             self$.addOption(private$..lvs)
-            self$.addOption(private$..other_if_less_than)
             self$.addOption(private$..cleannames)
             self$.addOption(private$..ref_levels)
             self$.addOption(private$..levels_order)
@@ -469,7 +462,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         anova = function() private$..anova$value,
         na = function() private$..na$value,
         lvs = function() private$..lvs$value,
-        other_if_less_than = function() private$..other_if_less_than$value,
         cleannames = function() private$..cleannames$value,
         ref_levels = function() private$..ref_levels$value,
         levels_order = function() private$..levels_order$value,
@@ -514,7 +506,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..anova = NA,
         ..na = NA,
         ..lvs = NA,
-        ..other_if_less_than = NA,
         ..cleannames = NA,
         ..ref_levels = NA,
         ..levels_order = NA,
@@ -572,7 +563,8 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 title="",
                 width=1080,
                 height=1,
-                renderFun=".plot"))}))
+                renderFun=".plot",
+                visible=FALSE))}))
 
 jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     "jmvtabBase",
@@ -662,8 +654,6 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   only keep the first level of each \code{col_vars}    \item \code{"auto"}:
 #'   keep the first level when \code{col_var} is only two levels,    keep all
 #'   levels otherwise.    }
-#' @param other_if_less_than When set to a positive integer, levels with less
-#'   count than that will be merged into an "Others" level.
 #' @param cleannames By default, clean levels names, by removing prefix
 #'   numbers like "1-", and text in parenthesis. Set to \code{FALSE} to avoid
 #'   this behaviour.
@@ -797,7 +787,6 @@ jmvtab <- function(
     anova = "welch",
     na = "keep",
     lvs = "all",
-    other_if_less_than = 0,
     cleannames = TRUE,
     ref_levels = NULL,
     levels_order = NULL,
@@ -860,7 +849,6 @@ jmvtab <- function(
         anova = anova,
         na = na,
         lvs = lvs,
-        other_if_less_than = other_if_less_than,
         cleannames = cleannames,
         ref_levels = ref_levels,
         levels_order = levels_order,

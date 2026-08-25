@@ -17,7 +17,7 @@ then weighted --- equal shares of the \emph{population}, not of the sample.}
 \item{name}{The variable's name, written onto the \strong{first level only} (\code{"age: [18,35) low"}), so
 a table that names the variable nowhere else still says what the levels are levels \emph{of}. \code{NULL}
 (the default here) writes nothing. It applies to the two CUTS, whose levels are intervals and
-band words; \code{"levels"} keeps the raw values, which name themselves.}
+band words; \code{"values_to_levels"} keeps the raw values, which name themselves.}
 
 \item{ordered}{Whether the resulting factor is \code{ordered}. Bands and quantile groups do have a
 real order; a model fit does not want one (an ordered factor takes polynomial contrasts instead
@@ -47,15 +47,15 @@ do the same if you shape a column by hand.
 
 \itemize{
 \item \code{"linear"}: the number as it is --- one slope in a model, one mean in a crosstab. The default for a column variable, and what \code{shape} is spelled out as when nothing is done.
-\item \code{"levels"}: one level per distinct value, in numeric order. Right for a counted number or a 1-7 scale; unreadable for a continuous one, which is what \code{"auto"} decides.
+\item \code{"log"}: replace the variable by its logarithm --- diminishing returns. Needs strictly positive values.
+\item \code{"sqrt"}: replace the variable by its square root. Needs non-negative values.
+\item \code{"sd_bands"}: four bands cut at the mean and one standard deviation either side. Each level names its own cut (\verb{[30,48) ; < mean}), so the label can be checked against the interval beside it. The cut points mean the same thing across sub-samples of one variable, where quantile breaks move with each one; but the bands are NOT balanced, and on a skewed variable a landmark falling outside the data is dropped (an exponential variable gets three bands, not four).
 \item \code{"median"}: two groups of equal size, cut at the median --- the coarsest reading of a number.
 \item \code{"terciles"}: three groups of equal size.
 \item \code{"quartiles"}: four groups of equal size. The counts are balanced, so every group answers on a comparable base.
 \item \code{"quintiles"}: five groups of equal size.
 \item \code{"deciles"}: ten groups of equal size. Reads a gradient, but ten rows need a large sample to keep each base usable.
-\item \code{"sd_bands"}: four bands cut at the mean and one standard deviation either side. Each level names its own cut (\verb{[30,48) ; < mean}), so the label can be checked against the interval beside it. The cut points mean the same thing across sub-samples of one variable, where quantile breaks move with each one; but the bands are NOT balanced, and on a skewed variable a landmark falling outside the data is dropped (an exponential variable gets three bands, not four).
-\item \code{"log"}: replace the variable by its logarithm --- diminishing returns. Needs strictly positive values.
-\item \code{"sqrt"}: replace the variable by its square root. Needs non-negative values.
+\item \code{"values_to_levels"}: one level per distinct value, in numeric order. Right for a counted number or a 1-7 scale; unreadable for a continuous one, which is what \code{"auto"} decides.
 \item an integer \code{k} (2 to 20): \code{k} quantile groups of equal size.
 }
 }

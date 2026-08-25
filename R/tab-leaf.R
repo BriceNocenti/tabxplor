@@ -23,6 +23,9 @@
 #   - A numeric column's DEFAULT LAYOUT is num_default_display(): the coefficient of variation
 #     beside the mean, guarded per column. It is chosen here because only the leaf holds the
 #     column's own means, which is what the guard reads.
+#   - WHICH REFERENCE A MEASURE WANTS is settled here too, in plain_resolve(), and it overrides
+#     `ref = "tot"` as well as `"auto"`: an odds ratio is read against a CATEGORY, never against a
+#     marginal that includes the cell itself. The fact is `MEASURES$<m>$ref_auto`, not a literal.
 # See: CLAUDE.md § tabxplor architecture (the calculation pipeline).
 
 # === SECTION: The factor leaf -- tab_plain() / plain_resolve() / plain_core() =================
@@ -241,9 +244,18 @@ plain_resolve <- function(pct, ref, ref2, na, totaltab_name, total_names, tot, c
 
   # DESIGN: `ref = "auto"` stays in the LEAF, being type-specific (a mixed table needs a different
   # answer here and in num_resolve()); WHICH reference is the measure's declared `ref_auto`.
-  if (ref == "auto") {
-    ra  <- measure_ref_auto(if (is.na(comparison) || !nzchar(comparison)) color else comparison)
-    ref <- if (!is.na(ra)) ra else "tot"
+  # DESIGN: ...and a measure that DECLARES its own reference overrides `ref = "tot"` too, silently.
+  # An odds ratio is read against a CATEGORY, never against the marginal percentage -- which
+  # includes the cell itself -- so "tot" is not a choice there but a leftover from the table the
+  # user was reading a moment ago. Here rather than at the boundary: `ref` is still a per-row_var
+  # vector there, `comparison` is not yet resolved, and this is upstream of both
+  # calculate_refrows() calls AND of the `ref == "tot"` -> refrows <- FALSE wipe below, which would
+  # otherwise leave the reference row computed but never marked. num_resolve() needs no twin: an
+  # odds ratio wants a factor, and that leaf tabulates a number.
+  meas <- if (is.na(comparison) || !nzchar(comparison)) color else comparison
+  if (ref %in% c("auto", "tot")) {
+    ra  <- measure_ref_auto(meas)
+    ref <- if (!is.na(ra) && (ref == "auto" || ra != "tot")) ra else if (ref == "auto") "tot" else ref
   }
 
   vctrs::vec_assert(digits, size = 1)

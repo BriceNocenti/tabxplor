@@ -363,3 +363,84 @@ test_that("every function the jamovi .js calls is declared in it", {
                                    paste(calls, collapse = ", ")))
   }
 })
+
+
+# --- Phase 22g-vi -----------------------------------------------------------------------------
+
+# A helper shared by BOTH backends may only read an option BOTH panels declare -- and the failure is
+# not a NULL: jmvcore's `$.Options` STOPS on an unknown name, which took the whole jmvtab export
+# down. jmv_opt() is the one guarded read.
+test_that("a panel-specific option read from a shared helper is guarded", {
+  o_tab <- tabxplor:::jmvtabOptions$new()
+  o_reg <- tabxplor:::jmvtabregOptions$new()
+  expect_false(o_tab$has("xl_check"))
+  expect_true(o_reg$has("xl_check"))
+  # the bare `$` is what crashed
+  expect_error(o_tab$xl_check, "does not exist")
+  # ...and the guarded read answers the default instead
+  expect_null(tabxplor:::jmv_opt(list(options = o_tab), "xl_check"))
+  expect_false(tabxplor:::jmv_opt(list(options = o_tab), "xl_check", FALSE))
+  expect_identical(tabxplor:::jmv_opt(list(options = o_reg), "xl_check", "x"), FALSE)
+})
+
+# The Model table's two headed columns name the FAMILY and the LINK in the words the cascade uses.
+test_that("the Model table's labels and its link order follow the cascade", {
+  fam <- tabxplor:::reg_family_ui_labels()
+  # the two that only repeated their own kind lost the parenthetical
+  expect_identical(unname(fam[["multinomial"]]), "multinomial")
+  expect_identical(unname(fam[["ordinal"]]),     "ordinal")
+  lnk <- tabxplor:::reg_link_ui_labels()
+  # a LINK IS A MEASURE: the label is the measure's own word, with no glm spelling beside it
+  expect_identical(unname(lnk[["odds_ratio"]]), "odds_ratio")
+  expect_false(any(grepl("\\(", lnk[setdiff(names(lnk), "auto")])))
+  # ⚠ the picker's order is `measure`'s, but REG_FAMILIES$fits keeps its own -- its FIRST entry is
+  # the family's own link, which is what `link = "auto"` resolves to. Two facts, and neither may
+  # take the other's order.
+  js  <- readLines(testthat::test_path("..", "..", "jamovi", "js", "jmvtabreg.js"), warn = FALSE)
+  ui  <- grep("^var TABX_LINKS = ", js, value = TRUE)
+  ord <- names(tabxplor:::REG_MEASURE_LINK)
+  for (f in names(tabxplor:::reg_family_ui_labels())) {
+    blk <- regmatches(ui, regexpr(paste0('"', f, '": \\[[^]]*\\]'), ui))
+    got <- regmatches(blk, gregexpr('(?<=")[a-z_]+(?=")', blk, perl = TRUE))[[1]]
+    got <- got[-1]                                  # the first quoted token is the family key
+    expect_identical(got[[1]], "auto", info = f)                # the absence of a pick leads
+    expect_identical(got[-1], intersect(ord, got), info = f)    # then `measure`'s own order
+    # ...while `link = "auto"` still resolves to the FIRST entry of REG_FAMILIES$fits, whatever
+    # place the picker gave it.
+    expect_identical(tabxplor:::reg_estimand(f, link = "auto")$link,
+                     names(tabxplor:::REG_FAMILIES[[f]]$fits)[[1]], info = f)
+  }
+})
+
+# WHICH families take an `outcome_level` is a declared fact, and the picker is gated on it -- not on
+# "the outcome has exactly 2 levels", which hid it on the two families that most need one.
+test_that("the outcome-level picker is gated on the family's declared role", {
+  js <- paste(readLines(testthat::test_path("..", "..", "jamovi", "js", "jmvtabreg.js"),
+                        warn = FALSE), collapse = "\n")
+  role <- vapply(tabxplor:::REG_FAMILIES,
+                 function(r) r$outcome_level %||% NA_character_, character(1))
+  role <- role[!is.na(role)]
+  expect_setequal(names(role), c("binomial", "multinomial"))
+  emitted <- regmatches(js, regexpr("var TABX_OUTCOME_LEVEL_ROLE = \\{[^}]*\\}", js))
+  expect_length(emitted, 1L)
+  for (f in names(role))
+    expect_match(emitted, paste0('"', f, '": "', role[[f]], '"'), fixed = FALSE)
+  expect_match(js, "TABX_OUTCOME_LEVEL_ROLE[famSel]", fixed = TRUE)
+})
+
+# The staged comparison's render survives a state that could not carry it.
+test_that("a staged comparison re-serves from the process mirror when the state cannot hold it", {
+  e <- tabxplor:::JMVREG_RENDERS
+  on.exit(rm(list = ls(e), envir = e), add = TRUE)
+  rm(list = ls(e), envir = e)
+  small <- tabxplor:::jmvtab_reg_render_store("sigA", "<table>A</table>")
+  expect_identical(small$html, "<table>A</table>")
+  big <- tabxplor:::jmvtab_reg_render_store("sigB", strrep("x", 6e5))
+  expect_null(big$html)                       # over jmvcore's own 5e5 state ceiling
+  expect_identical(big$sig, "sigB")
+  expect_identical(nchar(tabxplor:::jmvtab_reg_render_fetch(big)), 600000L)
+  # a state that came back with the signature alone still finds its render
+  expect_identical(tabxplor:::jmvtab_reg_render_fetch(list(sig = "sigA")), "<table>A</table>")
+  expect_null(tabxplor:::jmvtab_reg_render_fetch(NULL))
+  expect_null(tabxplor:::jmvtab_reg_render_fetch(list(sig = "never-computed")))
+})

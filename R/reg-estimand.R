@@ -483,30 +483,30 @@ reg_word_noncollapsible <- function(word) {
 #' @noRd
 REG_FAMILIES <- list(
   gaussian     = list(display = function() gettext("linear regression"),
-                      short = "linear",   ui = "gaussian (linear)",    ui_binary = NA_character_,
+                      short = "linear",   ui = "gaussian (linear)",   ui_binary = NA_character_,
                       outcome = NA_character_, outcome_level = NA_character_,
                       level = "mean",  fits = c(difference = "gaussian", ratio = "mr"),
                       note = function() gettext("vs the reference category")),
   binomial     = list(display = function() gettext("logistic regression"),
-                      short = "logit",    ui = "binomial (logistic)",  ui_binary = "binomial (logistic)",
+                      short = "logit",    ui = "binomial (logistic)", ui_binary = "binomial (logistic)",
                       outcome = NA_character_, outcome_level = "modelled",
                       level = "pct",
                       fits = c(odds_ratio = "binomial", ratio = "rr", difference = "rd"),
                       odds_pred = "complement",
                       note = function() gettext("vs the reference category")),
   poisson      = list(display = function() gettext("Poisson regression"),
-                      short = "poisson",  ui = "poisson (counts)",     ui_binary = NA_character_,
+                      short = "poisson",  ui = "poisson (counts)",    ui_binary = NA_character_,
                       outcome = NA_character_, outcome_level = NA_character_,
                       level = "count", fits = c(ratio = "poisson"),
                       note = function() gettext("vs the reference category")),
   multinomial  = list(display = function() gettext("multinomial logistic regression"),
-                      short = "mlogit",   ui = "multinomial (nominal)", ui_binary = NA_character_,
+                      short = "mlogit",   ui = "multinomial",         ui_binary = NA_character_,
                       outcome = NA_character_, outcome_level = "baseline",
                       level = "pct",   fits = c(odds_ratio = "multinomial"),
                       odds_pred = "vsrest",
                       note = function() gettext("each category vs the reference")),
   ordinal      = list(display = function() gettext("ordinal logistic regression"),
-                      short = "ologit",   ui = "ordinal (ordered)",    ui_binary = NA_character_,
+                      short = "ologit",   ui = "ordinal",             ui_binary = NA_character_,
                       outcome = NA_character_, outcome_level = NA_character_,
                       level = "rank",  fits = c(odds_ratio = "ordinal"),
                       words = list(odds_ratio = "cumOR"),
@@ -579,18 +579,17 @@ reg_family_ui_labels <- function(binary = FALSE) {
   v[!is.na(v)]
 }
 
-# The link picker's labels, COMPOSED from REG_MEASURE_LINK rather than declared a second time: the
-# measure the link estimates, then the glm spelling that map already carries. `reg_family_ui_labels()`
-# is its sibling -- both feed the jamovi Model table through dev/generate_jamovi_js.R, which is why
-# the words live here and not in a .yaml (a jamovi CustomControl renders them from JS).
+# The link picker's labels. A LINK IS A MEASURE, so the label IS the measure's own word -- the same
+# spelling `measure =` offers, and the same order, which is what lets a reader carry one vocabulary
+# down the cascade. The glm spelling ("logit", "rd") is the fit's business and is not shown.
+# `reg_family_ui_labels()` is its sibling -- both feed the jamovi Model table through
+# dev/generate_jamovi_js.R, which is why the words live here and not in a .yaml (a jamovi
+# CustomControl renders them from JS).
 #' @keywords internal
 #' @noRd
-reg_link_ui_labels <- function() {
-  c(auto = "auto (the family's own)",
-    stats::setNames(paste0(gsub("_", " ", names(REG_MEASURE_LINK)),
-                           " (", unname(REG_MEASURE_LINK), ")"),
-                    names(REG_MEASURE_LINK)))
-}
+reg_link_ui_labels <- function()
+  c(auto = "auto (family based)",
+    stats::setNames(names(REG_MEASURE_LINK), names(REG_MEASURE_LINK)))
 
 # THE reader of a STORED outcome level: NA (not NULL -- a tibble column can't hold NULL) means "the
 # family's own default"; reg_prep_binary() and reg_positive_level() want that NA back as NULL.

@@ -20,7 +20,10 @@
 #     the OS home (fs::path_home() / USERPROFILE / HOME), NOT path.expand()/sub() (§5.2 / §14.3 bug).
 #   - `fs` (Suggests) makes path_home / path_sanitize / dir_create cross-platform-robust; every use is
 #     guarded with a base-R fallback so export never HARD-depends on it.
-# See: dev/tabxplor_2.0.0_jamovi_dev.md §14 ; CLAUDE.md > 2.0.0 roadmap > Phase 7g / Phase 15c.
+#   - ⚠ A SHARED HELPER MAY ONLY READ AN OPTION BOTH PANELS DECLARE, and the failure is not a NULL:
+#     jmvcore's `$.Options` STOPS on an unknown name. `xl_check` is Regressions-only and took every
+#     jmvtab export down with it. Anything panel-specific goes through jmv_opt() below.
+# See: dev/tabxplor_2.0.0_jamovi_dev.md §14 + § Phase 22g-vi ; CLAUDE.md > 2.0.0 roadmap > Phase 7g.
 
 # The OS home folder. fs::path_home() reads USERPROFILE (Windows) / HOME (Unix) via libuv -- more
 # robust than either env var alone; fall back to the env vars when `fs` is absent.
@@ -405,6 +408,18 @@ jmv_backend_weights <- function(data, opt_wt) {
   list(data = data, wt = wt)
 }
 
+# ONE option read that tolerates the option not being declared. ⚠ `$.Options` does NOT return NULL
+# for an unknown name -- it `stop()`s ("options$<name> does not exist"). So a helper shared by BOTH
+# backends may never reach for an option only one panel declares: `self$options$xl_check` took the
+# whole jmvtab export down with it. Every panel-specific read from a shared jmv_backend_* helper
+# goes through here.
+#' @keywords internal
+#' @noRd
+jmv_opt <- function(self, name, default = NULL) {
+  has <- tryCatch(isTRUE(self$options$has(name)), error = function(e) FALSE)
+  if (has) self$options[[name]] else default
+}
+
 # Handle the `exportExcel` boolean-click Action (§5.3): resolve the typed FOLDER + FILENAME + the
 # format's extension into a path, write via jmvtab_export(), and RETURN a styled status line (bold green
 # with the path REALLY written, bold red on failure) for the caller to prepend above the results table.
@@ -417,11 +432,10 @@ jmv_backend_export <- function(self, tabs) {
   fmt <- self$options$export_format
   ext <- switch(fmt, "excel" = "xlsx", "html" = "html", "md" = "md", "xlsx")
   p   <- resolveExportPath(self$options$export_dir, self$options$export_filename, ext)
-  # The model-check plots (Regressions only -- jmvtab declares no `check`, so it reads back NULL and
-  # the export takes none). `data` is what tab_xl() would otherwise have to recover from the call
-  # that built the table; here the module already holds it.
-  chk <- self$options$xl_check
-  chk <- if (isTRUE(chk)) "auto" else FALSE
+  # The model-check plots, a REGRESSIONS-ONLY option -- so it is read through jmv_opt(), not `$`.
+  # `data` is what tab_xl() would otherwise have to recover from the call that built the table;
+  # here the module already holds it.
+  chk <- if (isTRUE(jmv_opt(self, "xl_check"))) "auto" else FALSE
   tryCatch({
     actual <- jmvtab_export(tabs, format = fmt, path = p, replace = self$options$xl_replace,
                             check = chk, data = if (isFALSE(chk)) NULL else self$data,
