@@ -628,18 +628,28 @@ Actionable: emit **CSS-only, self-contained, wrapper-scoped** styling; drop JS-d
 tooltips (or convert to `title=`/`:hover`); if interactivity is essential, ship it as a module
 `scripts` asset on the Html element, not inline.
 
-### 7.3 Width and scrolling (the biggest real problem)
+### 7.3 Width and scrolling
 
-`.jmv-results-html { width: 500px }` is a **fixed 500 px** container, and `.content` has **no
-`overflow`**. A wide table overflows and, because the iframe auto-sizes to content, widens the
-whole analysis iframe → the results panel scrolls horizontally.
+**Full analysis, with every rule quoted from the shipped bundle: `dev/jamovi_results_width.md`. Read
+that before touching anything about width.** The short version:
 
-- tabxplor currently uses `kableExtra::scroll_box(width = "1080px")` — this forces the iframe
-  ~1080 px wide and triggers panel-level horizontal scroll (ugly).
-- Fix: wrap the table in tabxplor's **own `overflow-x: auto` container** sized to fit
-  (`width: 100%` → resolves to the 500 px box, or an explicit `max-width`), so the table
-  scrolls **inside its box** and the iframe reports a bounded width. Do not rely on the host
-  to clip — `.content` doesn't.
+- the results iframe reports `#results.getBoundingClientRect().width + 40`, and the app obeys it with
+  a **620 px floor and no ceiling**; the iframe is `scrolling="no"`, so anything past that is clipped;
+- `#results` and every `.jmv-results-item` hug their content — **except an Html result, which
+  jamovi's own stylesheet pins at `.jmv-results-html{width:500px}`**, one rule after the
+  `width:max-content` it gives every other item;
+- a definite width contributes exactly itself and an overflowing descendant contributes nothing, so
+  a table inside an `overflow-x:auto` box never reached the host: every tabxplor result was reported
+  at 588 px, clamped to 620, and cut there — the scroll box's own scrollbar with it.
+
+tabxplor therefore emits one `<style>` (from `jmv_results_content()`, `R/jmvtab-export.R`) that
+un-pins `.jmv-results-html`, hugs the table (`width:max-content`, no display cap — the results panel
+is `overflow:scroll` and scrolls exactly as it does for jamovi's own wide tables), and caps prose with
+`tx-note` so a hint's one-line max-content cannot size the panel.
+
+⚠ A **visible `Image`** result also sets the width (an explicit px width is definite and in-flow) —
+that is why the old `plot` Image "worked" — but it costs vertical space, which is the whole reason the
+state carriers stay `visible:false`. Never use one as a width mechanism.
 
 ### 7.4 Images / plots
 

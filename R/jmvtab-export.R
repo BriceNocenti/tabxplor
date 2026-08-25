@@ -23,7 +23,12 @@
 #   - ⚠ A SHARED HELPER MAY ONLY READ AN OPTION BOTH PANELS DECLARE, and the failure is not a NULL:
 #     jmvcore's `$.Options` STOPS on an unknown name. `xl_check` is Regressions-only and took every
 #     jmvtab export down with it. Anything panel-specific goes through jmv_opt() below.
-# See: dev/tabxplor_2.0.0_jamovi_dev.md §14 + § Phase 22g-vi ; CLAUDE.md > 2.0.0 roadmap > Phase 7g.
+#   - ⚠ THE RESULTS PANEL SIZES ITSELF FROM WHAT WE PUT IN THE Html ELEMENT, and jamovi pins that
+#     element at `width:500px` -- so everything the two backends show goes through ONE boundary,
+#     jmv_results_content(), which un-pins it and states what may drive the width (the table, never
+#     the prose). See the section note beside it, and dev/jamovi_results_width.md.
+# See: dev/tabxplor_2.0.0_jamovi_dev.md §14 + § Phase 22g-vi ; dev/jamovi_results_width.md ;
+#      CLAUDE.md > 2.0.0 roadmap > Phase 7g.
 
 # The OS home folder. fs::path_home() reads USERPROFILE (Windows) / HOME (Unix) via libuv -- more
 # robust than either env var alone; fall back to the env vars when `fs` is absent.
@@ -178,8 +183,8 @@ export_status_html <- function(text, ok = TRUE) {
   }
   color <- if (isTRUE(ok)) "#1a7f37" else "#c62828"   # green / red
   lead  <- if (isTRUE(ok)) "Saved to: " else "Export failed: "
-  paste0("<div style=\"margin:8px 2px;font-weight:bold;color:", color, ";\">",
-         esc(lead), esc(as.character(text)[1]), "</div>")
+  jmv_results_note(paste0(esc(lead), esc(as.character(text)[1])),
+                   style = paste0("margin:8px 2px;font-weight:bold;color:", color, ";"))
 }
 
 
@@ -475,5 +480,77 @@ jmv_backend_render_html <- function(self, tabs) {
     wrap_cols = self$options$wrap_cols,
     theme     = jmv_backend_theme(self)
   ) |>
-    tab_render_scrollbox()
+    jmv_results_scrollbox()
+}
+
+
+# === SECTION: the jamovi results iframe ===========================================================
+# ONE <style> and ONE assembler: everything the two backends put in their single Html result goes
+# through jmv_results_content(), which emits the chrome once and then the fragments in order.
+#
+# ⚠ WHY THE FIRST RULE EXISTS -- read this before touching it. jamovi sizes an analysis FROM its
+# results iframe: the iframe reports `#results.getBoundingClientRect().width + 40`, and the app obeys
+# it with a 620 px FLOOR and no ceiling (main-*.js, `case "sizeChanged"`). `#results` is
+# `display:inline-block`, so it hugs its content -- but jamovi's own stylesheet pins an Html result at
+# `.jmv-results-html{width:500px}`, one rule AFTER the `.jmv-results-item{width:max-content}` it
+# otherwise gives every item. A definite width contributes exactly itself and an overflowing
+# descendant contributes nothing, so the table's real width never reached the host: every tabxplor
+# result was reported at 588 px, clamped up to the 620 px floor, and everything past it clipped by the
+# iframe -- which is `scrolling="no"`, so the scroll box's own scrollbar was clipped with it.
+# Un-pinning restores the framework's own intent. Quoted rules + the full chain:
+# dev/jamovi_results_width.md.
+#
+# The box then HUGS the table: `width:max-content` also makes its min-content equal its max-content,
+# so `#results`' shrink-to-fit lands on the true width in ONE pass and cannot oscillate with the
+# resize feedback loop. There is deliberately NO display cap -- the results panel is `overflow:scroll`,
+# so a wide table scrolls the PANEL exactly as jamovi's own wide tables do: one scrollbar rather than
+# two nested ones, and jamovi's results export keeps the whole table. `max-width` survives only as a
+# runaway guard, and `@media print` lifts even that.
+#
+# ⚠ Prose must NOT drive the width. A wrapping block's max-content is its whole text on ONE line, so
+# an unconstrained hint (~200 characters) reports ~1300 px with no table on screen. Every non-table
+# fragment carries `tx-note`.
+
+# Runaway guard only: no table is meant to reach it.
+JMV_RESULTS_MAX_WIDTH <- 4000L
+
+#' @keywords internal
+#' @noRd
+jmv_results_style <- function(max_width = JMV_RESULTS_MAX_WIDTH) {
+  paste0(
+    "<style>",
+    ".jmv-results-html{width:max-content;}",
+    ".tx-scrollbox{display:block;width:max-content;max-width:", max_width, "px;overflow-x:auto;}",
+    ".tx-note{max-width:520px;}",
+    "@media print{.tx-scrollbox{max-width:none;overflow-x:visible;}}",
+    "</style>"
+  )
+}
+
+# Wrap a rendered table in the box that carries its width (replaces kableExtra::scroll_box;
+# self-contained -- needs no external CSS).
+#' @keywords internal
+#' @noRd
+jmv_results_scrollbox <- function(html) {
+  paste0('<div class="tx-scrollbox">', as.character(html), '</div>')
+}
+
+# The one shape a NON-TABLE fragment takes: `tx-note` is what stops its prose from sizing the panel
+# (see the section note above). Every hand-written block in the two backends goes through here.
+#' @keywords internal
+#' @noRd
+jmv_results_note <- function(inner, style = NULL) {
+  paste0('<div class="tx-note"',
+         if (!is.null(style) && nzchar(style)) paste0(' style="', style, '"') else "",
+         '>', inner, '</div>')
+}
+
+# THE content boundary: the style once, then the fragments in order. NULL / "" fragments drop out, so
+# a caller passes its status line and its body unconditionally.
+#' @keywords internal
+#' @noRd
+jmv_results_content <- function(...) {
+  parts <- as.character(unlist(list(...), use.names = FALSE))
+  parts <- parts[!is.na(parts) & nzchar(parts)]
+  paste0(jmv_results_style(), paste0(parts, collapse = ""))
 }

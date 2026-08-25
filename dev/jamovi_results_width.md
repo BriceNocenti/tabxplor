@@ -76,12 +76,9 @@ That is precisely the reported symptom: *"cut at the right before the scroll box
 
 An `Image` result renders as a `<div>` with an **explicit pixel width** from the `.r.yaml` (`width: 1080`). It is in-flow and definite, so it *does* contribute: `#results` becomes ~1080 wide, the iframe ~1148, and the table beside it is no longer clipped. The 2.6.44 capture shows exactly this — the tabxplor analysis iframe is `width: 1168px` while its two neighbours are at the 644 px floor.
 
-The cost is the two things already known:
+The cost is that it reserves vertical space — a rendering Image is not a zero-height element, whatever `height:` says. So the Image is not a width mechanism worth keeping; it is a side effect, and the state carriers stay `visible:false`.
 
-- it reserves vertical space (a rendering Image is not a zero-height element, whatever `height:` says);
-- ⚠ and it is unsafe for a state carrier — `Image$asProtoBuf()` reports a state-holding image that rendered no file as `ANALYSIS_RENDERING`, so the client requests a render whose round-trip **overwrites the run's own results** (Phase 22g-vi). `visible:false` is load-bearing and must stay.
-
-So the Image is not a width mechanism worth keeping. It is a side effect.
+⚠ Do not re-read that as "a visible carrier breaks the render". `Image$asProtoBuf()` marks a state-holding image that wrote no file as `ANALYSIS_RENDERING` **whatever `visible` says** — the branch never reads it. What actually dropped the state was `clearWith` defaulting to `"*"`, fixed in Phase 22g-viii; `visible:false` is kept for the vertical space alone.
 
 ## 3. The fix: un-pin the Html element
 
@@ -127,6 +124,8 @@ The app imposes no maximum, so this is entirely our choice. There is no way for 
 | jamovi results → PDF | whole table | ⚠ clipped at the cap | whole table |
 | white space | never | never | never |
 
+**Decision (maintainer, 2026-08-25): A.** The cap is gone; `max-width` survives only as a 4000 px runaway guard, and `@media print` lifts even that.
+
 ⚠ **B's nested scrollbars are not hypothetical.** On a 1920 px screen the current base cap is 1600 px while the results panel is typically 900–1100 px: the user scrolls the *panel* right, and only then meets the *box's* scrollbar. A is one scrollbar and matches what jamovi does with its own wide tables.
 
 Neither option leaves an empty white region: `width:max-content` means a fixed width is never imposed, so the "arbitrary limit that pads every export with white" concern does not arise in any of the three — the cap only ever *removes* width, never adds it.
@@ -137,12 +136,32 @@ Neither option leaves an empty white region: `width:max-content` means a fixed w
 
 Nothing further is needed: with every non-Html item at `visible:false`, an inactive item is `position:absolute` (`.jmv-results-item:not([data-active])`) and takes no space at all, and the state round-trip is unaffected — `ResultsElement$asProtoBuf()` serialises `state` in a branch that never reads `visible`. The wasted ~3 cm is the *visible* Image's rendering slot, and the fix above removes the only reason to make one visible.
 
-## 6. What to change, concretely
+## 6. What was built
 
-1. `tab_render_scrollbox()` (`R/tab-render-html.R`) — add `.jmv-results-html{width:max-content;}` to the injected style; keep or drop `max-width` per §4; add the `@media print` line.
-2. One assembler (`jmv_results_html()`, `R/jmvtab-export.R`) used by all four `setContent()` call sites, emitting the style once and wrapping prose in `.tx-note{max-width:520px;}`.
-3. `.tabxplor-caption` — `width:0;min-width:100%`.
-4. Leave both `.r.yaml` files exactly as they are: state carriers stay `visible:false`.
-5. No `.a.yaml` / `.u.yaml` / `.h.R` change, so **no `jmvtools::prepare()` is required** — a plain `jmvtools::install(home = "flatpak")` ships it.
+All of it in `R/jmvtab-export.R`, under `# === SECTION: the jamovi results iframe`:
 
-Live check afterwards: a narrow table (iframe should sit at the 620 px floor), a ~1200 px table (iframe ≈ its width, no clipping, no scrollbar), a very wide regression table (whichever §4 behaviour was chosen), the staged-comparison banner alone (must not blow the panel wide), and a successful Excel export (the green "Saved to:" line with a long path).
+| | |
+|---|---|
+| `jmv_results_style()` | the one `<style>`: the un-pin, the box, `tx-note`, the print escape |
+| `jmv_results_scrollbox()` | wraps a rendered table (moved here from `tab_render_scrollbox()`) |
+| `jmv_results_note()` | the one shape a non-table fragment takes |
+| `jmv_results_content(...)` | THE boundary: the style once, then the fragments; empties drop out |
+
+```css
+.jmv-results-html { width:max-content; }                                    /* the fix */
+.tx-scrollbox     { display:block; width:max-content; max-width:4000px; overflow-x:auto; }
+.tx-note          { max-width:520px; }
+@media print { .tx-scrollbox { max-width:none; overflow-x:visible; } }
+```
+
+- all five `html_table$setContent()` calls in the two backends go through `jmv_results_content()`;
+- the export status line and both regression placeholders go through `jmv_results_note()` — no backend hand-writes a `<div>` any more;
+- `.tabxplor-caption` takes `width:0;min-width:100%`, the idiom `.tx-foot` already used, so a long title cannot size the box either;
+- `tab_render_scrollbox()` is deleted from `R/tab-render-html.R` (it was jamovi-only, and its device-width cap tiers went with the cap);
+- both `.r.yaml` files are untouched: state carriers stay `visible:false`.
+
+Three gates in `tests/testthat/test-jmvtab-export.R`: the chrome is emitted once and in front; no `.b.R` line hand-writes a `<div>`; every `setContent()` goes through the boundary. Plus the caption rule in `tab_css()`. Full suite **FAIL 0 | PASS 9683**; the only snapshot move is the one caption CSS line.
+
+No `.a.yaml` / `.u.yaml` / `.js` / `.h.R` change, so **no `jmvtools::prepare()`** — `jmvtools::install(home = "flatpak")` ships it.
+
+Live check: a narrow table (the iframe sits at the 620 px floor), a ~1200 px table (iframe ≈ its width, nothing clipped, no scrollbar), a very wide regression table (the results panel scrolls, one scrollbar), the staged-comparison banner alone and the empty-selection hint (must not blow the panel wide), and a successful Excel export (the green "Saved to:" line with a long path).

@@ -406,12 +406,17 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # Phase 15d: the table TITLE is a `<div class="tabxplor-caption">` sibling emitted BEFORE the <table>
     # (render_html_engine), not a `<caption>` child -- a `<caption>` participates in the table's width, so
     # a long centred title widened / wrapped thin tables. As a block div it is LEFT-aligned, fills the
-    # container, and `white-space:normal` lets it wrap only when it genuinely exceeds the table width
-    # (never forcing extra width, its max-content being the longest word). Its colour is theme-aware
+    # container, and `white-space:normal` lets it wrap only when it genuinely exceeds the table width.
+    # ⚠ `width:0;min-width:100%` is what makes that true -- the same idiom as `.tx-foot` below: a
+    # wrapping block's max-content is its WHOLE text on one line, so inside a shrink-to-fit container
+    # (jamovi's `.tx-scrollbox`) a long title would otherwise SIZE the box. `width:0` is a definite
+    # size, so it contributes 0 while the container is sized; at layout time the container's width is
+    # definite, so `min-width:100%` resolves and the title fills it. Its colour is theme-aware
     # (full-contrast: pure black in light, white in dark -- the maintainer's "always black, not grey"),
     # added to the rule table below. font-size 110% = a touch bigger than the table, smaller than the old
     # 120%. The legacy kableExtra engine keeps a real <caption> styled in inst/tab.css.
-    ".tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}",
+    paste0(".tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;",
+           "width:0;min-width:100%;}"),
     ".tabxplor-tab tfoot{font-size:80%;text-align:left;}",
     # readable-compact: a real vertical rhythm (line-height 0.85 crammed the rows) + ~1mm of side
     # padding, so text no longer touches the column borders.

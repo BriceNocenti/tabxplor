@@ -70,9 +70,9 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # that has it (R/jmvtabreg-cache.R).
         last <- jmvtab_reg_render_fetch(cst)
         if (!is.null(last) && identical(cst$sig, cur_sig)) {
-          self$results$html_table$setContent(last)      # unchanged / just-computed -> re-serve
+          self$results$html_table$setContent(jmv_results_content(last))   # unchanged -> re-serve
         } else {
-          self$results$html_table$setContent(private$.compare_hint(last))
+          self$results$html_table$setContent(jmv_results_content(private$.compare_hint(last)))
         }
         return(invisible())
       }
@@ -86,7 +86,7 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       tabs  <- built$tabs
 
       if (is.null(tabs)) {
-        self$results$html_table$setContent(private$.hint())
+        self$results$html_table$setContent(jmv_results_content(private$.hint()))
         return(invisible())
       }
 
@@ -95,7 +95,7 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       # prepended above the table; compare_state stores the PURE render so a re-serve stays clean.
       status <- jmv_backend_export(self, tabs)
       html <- jmv_backend_render_html(self, tabs)
-      self$results$html_table$setContent(paste0(status, html))
+      self$results$html_table$setContent(jmv_results_content(status, html))
       # Remember the computed comparison so a later live edit can re-serve / flag it (Phase h).
       if (staged) self$results$compare_state$setState(jmvtab_reg_render_store(cur_sig, html))
     },
@@ -181,23 +181,23 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
     # A friendly placeholder when the outcome / predictors are not both selected yet (or a model
     # comparison was requested with several outcomes, which tab_reg() does not allow).
     .hint = function() {
-      paste0("<div style='padding:12px;opacity:0.7;font-style:italic;'>",
-             "Select an <b>outcome</b> variable and one or more <b>predictors</b> ",
-             "to fit a regression. For a model comparison (predictor subsets), choose a single ",
-             "outcome.</div>")
+      jmv_results_note(
+        paste0("Select an <b>outcome</b> variable and one or more <b>predictors</b> ",
+               "to fit a regression. For a model comparison (predictor subsets), choose a single ",
+               "outcome."),
+        style = "padding:12px;opacity:0.7;font-style:italic;")
     },
 
     # Phase h: shown in staged comparison mode when the model set / options changed but the user has not
     # clicked Run. Any previous render (cst$html) stays below the banner so the outdated table is visible.
     .compare_hint = function(last = NULL) {
-      banner <- paste0(
-        "<div style='padding:10px 12px;margin-bottom:6px;border:1px solid #d0a; ",
-        "border-radius:4px;background:rgba(204,0,170,0.06);'>",
+      banner <- jmv_results_note(
         if (is.null(last))
           "Model comparison staged. Click <b>Run comparison</b> to compute the table."
         else
-          "The model set or options changed. Click <b>Run comparison</b> to refresh (the table below is outdated).",
-        "</div>")
+          "Model options changed, table below is outdated. Click <b>Run comparison</b> to refresh.",
+        style = paste0("padding:10px 12px;margin-bottom:6px;border:1px solid #d0a;",
+                       "border-radius:4px;background:rgba(204,0,170,0.06);"))
       paste0(banner, last %||% "")
     },
 

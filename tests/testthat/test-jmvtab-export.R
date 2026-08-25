@@ -263,3 +263,58 @@ testthat::test_that("a col_var-named ref drives per-col_var references under pct
   marks <- is_refcol(tc)   # exactly one reference column marked per col_var (Black / None)
   testthat::expect_setequal(names(marks)[marks %in% TRUE], c("Black", "None"))
 })
+
+testthat::test_that("the jamovi results content carries the width chrome, once, in front", {
+  # ⚠ THE rule the whole results width rests on: jamovi pins an Html result at
+  # `.jmv-results-html{width:500px}`, so a table wider than that is reported at the app's 620 px floor
+  # and clipped by the iframe. Un-pinning it is what makes the panel size itself from the TABLE.
+  # See dev/jamovi_results_width.md.
+  out <- jmv_results_content("", jmv_results_scrollbox("<table></table>"))
+  testthat::expect_match(out, "^<style>", fixed = FALSE)                     # chrome first
+  testthat::expect_match(out, ".jmv-results-html{width:max-content;}", fixed = TRUE)
+  testthat::expect_identical(lengths(regmatches(out, gregexpr("<style>", out, fixed = TRUE))), 1L)
+  testthat::expect_match(out, "tx-scrollbox", fixed = TRUE)
+  # the box hugs the table and is capped only by the runaway guard
+  testthat::expect_match(out, "width:max-content;max-width:4000px;overflow-x:auto;", fixed = TRUE)
+
+  # empty / NULL fragments drop out, so a caller passes its status line unconditionally
+  testthat::expect_identical(jmv_results_content(NULL, "", "<b>x</b>"),
+                             paste0(jmv_results_style(), "<b>x</b>"))
+})
+
+testthat::test_that("prose cannot size the panel: every fragment is a tx-note", {
+  # a wrapping block's max-content is its WHOLE text on one line, so now that the Html element hugs
+  # its content an unconstrained hint would report ~1300 px with no table on screen.
+  testthat::expect_match(jmv_results_style(), ".tx-note{max-width:520px;}", fixed = TRUE)
+  testthat::expect_match(export_status_html("/a/b.xlsx"), 'class="tx-note"', fixed = TRUE)
+  testthat::expect_match(export_status_html("boom", ok = FALSE), 'class="tx-note"', fixed = TRUE)
+
+  # THE gate, read from the source: the two placeholders are private methods of a jmvcore R6 class, so
+  # the file is the only reach -- and a backend hand-writing a <div> has bypassed jmv_results_note().
+  for (f in c("jmvtab.b.R", "jmvtabreg.b.R")) {
+    src <- readLines(testthat::test_path("..", "..", "R", f), warn = FALSE)
+    testthat::skip_if(length(src) == 0)
+    testthat::expect_length(grep("<div", src, value = TRUE), 0L)
+  }
+})
+
+testthat::test_that("every backend setContent() goes through the content boundary", {
+  # a new code path writing the Html element directly would silently re-pin the panel at 620 px.
+  for (f in c("jmvtab.b.R", "jmvtabreg.b.R")) {
+    src <- readLines(testthat::test_path("..", "..", "R", f), warn = FALSE)
+    testthat::skip_if(length(src) == 0)
+    one  <- paste(src, collapse = "\n")
+    hits <- regmatches(one, gregexpr("html_table[$]setContent[(][[:space:]]*[A-Za-z_.]*", one))[[1]]
+    testthat::expect_true(length(hits) > 0)
+    testthat::expect_true(all(endsWith(hits, "jmv_results_content")),
+                          info = paste(f, paste(hits, collapse = " | ")))
+  }
+})
+
+testthat::test_that("a table title cannot size a shrink-to-fit container", {
+  # `.tabxplor-caption` is a block sibling of the <table>; inside jamovi's max-content scroll box its
+  # own max-content (the whole title on one line) would drive the width. Same idiom as `.tx-foot`.
+  css <- tab_css()
+  testthat::expect_match(css, "\\.tabxplor-caption\\{[^}]*width:0;min-width:100%;\\}")
+  testthat::expect_match(css, ".tabxplor-tab .tx-foot{width:0;min-width:100%;}", fixed = TRUE)
+})

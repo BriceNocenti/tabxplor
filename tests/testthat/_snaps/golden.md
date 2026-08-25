@@ -6,7 +6,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
@@ -123,7 +123,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
@@ -240,7 +240,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
@@ -359,7 +359,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
@@ -478,7 +478,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
@@ -621,7 +621,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
@@ -734,7 +734,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
@@ -849,7 +849,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
@@ -966,7 +966,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
@@ -1083,7 +1083,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
@@ -1199,7 +1199,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
@@ -1313,7 +1313,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
@@ -1429,7 +1429,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
@@ -1575,7 +1575,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
@@ -1695,7 +1695,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}
@@ -1815,7 +1815,7 @@
       <style>
       .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
       .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
-      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}
+      .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
       .tabxplor-tab tfoot{font-size:80%;text-align:left;}
       .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
       .tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}

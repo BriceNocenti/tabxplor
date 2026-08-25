@@ -33,25 +33,25 @@ tea <- tea |>
 
 #### the different main use cases ----
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE
+        family = "binomial"
 )
 
 
 
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", measure = "ratio" , empirical = TRUE
+        family = "binomial", measure = "ratio"
 )
 
 
 # adjustment
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", measure = "ratio" , empirical = TRUE, color = "adjustment"
+        family = "binomial", measure = "ratio", color = "adjustment"
 )
 
 
 # several outcomes
 tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
-        family = c("binomial", "poisson"), empirical = TRUE, 
+        family = c("binomial", "poisson"), 
 )
 
 
@@ -61,7 +61,7 @@ tab_reg(gss_simple, outcome = "married",
                           two   = c("race", "rincome"), 
                           three = c("race", "rincome", "relig"), 
                           full  = c("race", "rincome", "relig", "age") ),
-        family = "binomial", measure = "ratio" , empirical = TRUE, color = "adjustment"
+        family = "binomial", measure = "ratio", color = "adjustment"
 )
 
 # tab_vars 
@@ -75,104 +75,104 @@ tab_reg(gss_simple, outcome = "married", tab_vars = "race",
 
 # binomial
 ## effect = "conditional"
-tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
-        empirical = TRUE, family = "binomial" #, measure = "odds_ratio", 
+tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
+  family = "binomial" #, measure = "odds_ratio", 
 )
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, measure = "log"
+        family = "binomial", measure = "log"
 )
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, link = "ratio"
+        family = "binomial", link = "ratio"
 )
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, link = "difference"
+        family = "binomial", link = "difference"
 ) 
 ## effect = "marginal"
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, measure = "difference"
+        family = "binomial", measure = "difference"
 ) 
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, measure = "ratio"
+        family = "binomial", measure = "ratio"
 )
 ## effect = "at_reference"
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, measure = "difference", effect = "at_reference"
+        family = "binomial", measure = "difference", effect = "at_reference"
 )
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, measure = "ratio", effect = "at_reference"
+        family = "binomial", measure = "ratio", effect = "at_reference"
 )
 
 # gaussian
 ## effect = "conditional"
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical = TRUE
+        family = "gaussian"
 )
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical = TRUE, link = "ratio"
+        family = "gaussian", link = "ratio"
 )
 ## effect = "marginal"
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical = TRUE, effect = "marginal" #, measure = "difference"
+        family = "gaussian", effect = "marginal" #, measure = "difference"
 )
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical = TRUE, measure = "ratio"
+        family = "gaussian", measure = "ratio"
 )
 ## effect = "at_reference"
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical = TRUE, effect = "at_reference" #, measure = "difference"
+        family = "gaussian", effect = "at_reference" #, measure = "difference"
 ) 
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical = TRUE, measure = "ratio", effect = "at_reference"
+        family = "gaussian", measure = "ratio", effect = "at_reference"
 )
 
 
 # poisson
 ## effect = "conditional"
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE
+        family = "poisson"
 )
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE, measure = "log"
+        family = "poisson", measure = "log"
 )
 ## effect = "marginal"
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE, measure = "difference"
+        family = "poisson", measure = "difference"
 )
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE, effect = "marginal"
+        family = "poisson", effect = "marginal"
 )
 ## effect = "at_reference"
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE, measure = "difference", effect = "at_reference"
+        family = "poisson", measure = "difference", effect = "at_reference"
 )
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE, measure = "ratio", effect = "at_reference"
+        family = "poisson", measure = "ratio", effect = "at_reference"
 )
 
 # summed-score binomial
 ## effect = "conditional"
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"),  empirical = TRUE
+        predictors = c("sex", "SPC", "Sport")
 )
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, link = "ratio"
+        predictors = c("sex", "SPC", "Sport"), link = "ratio"
 )
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, link = "difference"
+        predictors = c("sex", "SPC", "Sport"), link = "difference"
 )
 ## effect = "marginal"
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "difference"
+        predictors = c("sex", "SPC", "Sport"), measure = "difference"
 )
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "ratio"
+        predictors = c("sex", "SPC", "Sport"), measure = "ratio"
 )
 ## effect = "at_reference"
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "difference", effect = "at_reference"
+        predictors = c("sex", "SPC", "Sport"), measure = "difference", effect = "at_reference"
 )
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "ratio", effect = "at_reference"
+        predictors = c("sex", "SPC", "Sport"), measure = "ratio", effect = "at_reference"
 )
 
 
@@ -180,24 +180,24 @@ tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_whe
 # multinomial:
 ## effect = "conditional"
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = TRUE
+        family = "multinomial"
 )
 ## effect = "marginal"
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = TRUE, measure = "ratio", color="adjustment"
+        family = "multinomial", measure = "ratio", color="adjustment"
 )
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = TRUE, measure = "difference"
+        family = "multinomial", measure = "difference"
 )
 ## effect = "at_reference"
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = TRUE, effect = "at_reference" #, measure = "odds_ratio"
+        family = "multinomial", effect = "at_reference" #, measure = "odds_ratio"
 )
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = TRUE, measure = "ratio", effect = "at_reference"
+        family = "multinomial", measure = "ratio", effect = "at_reference"
 )
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = TRUE, measure = "difference", effect = "at_reference"
+        family = "multinomial", measure = "difference", effect = "at_reference"
 )
 
 
@@ -205,21 +205,21 @@ tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig
 # ordinal: empirical="column"
 ## effect = "conditional"
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", empirical = TRUE #, shape = c(age = "quadratic")
+        family = "ordinal" #, shape = c(age = "quadratic")
 )
 ## effect = "marginal": 
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", empirical = TRUE, measure = "ratio"
+        family = "ordinal", measure = "ratio"
 )
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", empirical = TRUE, measure = "difference"
+        family = "ordinal", measure = "difference"
 )
 ## effect = "at_reference"
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", empirical = TRUE, measure = "difference", effect = "at_reference" 
+        family = "ordinal", measure = "difference", effect = "at_reference" 
 )
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", empirical = TRUE, measure = "ratio", effect = "at_reference"
+        family = "ordinal", measure = "ratio", effect = "at_reference"
 )
 
 
@@ -334,45 +334,45 @@ tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "reli
 
 # binomial
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age", "tvhours"), 
-        empirical = TRUE, family = "binomial") |> 
+        family = "binomial") |> 
   reg_check_plots()
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age", "tvhours"),
-        family = "binomial", empirical = TRUE, link = "ratio") |> 
+        family = "binomial", link = "ratio") |> 
   reg_check_plots()
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age", "tvhours"),
-        family = "binomial", empirical = TRUE, link = "difference") |> 
+        family = "binomial", link = "difference") |> 
   reg_check_plots()
 # gaussian
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical = TRUE) |> 
+        family = "gaussian") |> 
   reg_check_plots()
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical = TRUE, link = "ratio") |> 
+        family = "gaussian", link = "ratio") |> 
   reg_check_plots()
 # poisson
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE) |> 
+        family = "poisson") |> 
   reg_check_plots()
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE, measure = "log") |> 
+        family = "poisson", measure = "log") |> 
   reg_check_plots()
 # summed-score binomial
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"),  empirical = TRUE) |> 
+        predictors = c("sex", "SPC", "Sport") ) |> 
   reg_check_plots()
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, link = "ratio") |> 
+        predictors = c("sex", "SPC", "Sport"), link = "ratio") |> 
   reg_check_plots()
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, link = "difference") |> 
+        predictors = c("sex", "SPC", "Sport"), link = "difference") |> 
   reg_check_plots()
 # multinomial:
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age", "tvhours"),
-        family = "multinomial", empirical = TRUE) |> 
+        family = "multinomial") |> 
   reg_check_plots()
 # ordinal: 
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age", "tvhours"),
-        family = "ordinal", empirical = TRUE) |> 
+        family = "ordinal") |> 
   reg_check_plots()
 
 # - Please give me a trick to not have to pass `data =` argument twice.
@@ -413,7 +413,7 @@ tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "reli
 
 # Errors
 # - tab_reg(gss_simple, outcome = c("married", "rincome"), predictors = c("race", "relig", "age", "tvhours"), 
-#         empirical = TRUE, family = c("binomial", "ordinal"), shape = c(age = "quadratic")) |> 
+#         family = c("binomial", "ordinal"), shape = c(age = "quadratic")) |> 
 #   reg_check_plots(data = gss_simple)
 # Error in `ggplot2::geom_hline()`:
 # ! Problem while setting up geom aesthetics.
@@ -423,7 +423,7 @@ tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "reli
 # ✖ Fix the following mappings: `linetype`.
 # 
 # - tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-#          predictors = c("sex", "SPC", "Sport"),  empirical = TRUE) |> 
+#          predictors = c("sex", "SPC", "Sport") ) |> 
 #   reg_check_plots(data = gss_simple)
 # Error in `reg_check_plots()` at dev/review_manual/review.R:254:1:
 # ! No model could be refitted from `x`.
@@ -435,16 +435,16 @@ tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "reli
 #### forest_plot() 
 regressions <- tab_reg(gss_simple, outcome = c("married", "age", "tvhours"), 
                        predictors = c("race", "rincome", "relig"), 
-                       empirical = TRUE, family = c("binomial", "gaussian", "poisson"))
+                       family = c("binomial", "gaussian", "poisson"))
 regressions |> forest_plot()
 summed_score <- tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "ratio") 
+        predictors = c("sex", "SPC", "Sport"), measure = "ratio") 
 summed_score|> forest_plot()
 multinom <- tab_reg(gss_simple, outcome = "party3", predictors = c("race", "marital", "relig", "age", "tvhours"),
-        family = "multinomial", empirical = TRUE, measure = "ratio") 
+        family = "multinomial", measure = "ratio") 
 multinom |> forest_plot()
 ordinal <- tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age", "tvhours"),
-        family = "ordinal", empirical = TRUE, measure = "ratio") 
+        family = "ordinal", measure = "ratio") 
 ordinal |> forest_plot()
 
 # I don’t love the current default theme at all, too gray, unreadable, not enough colors, etc. Screen attached.
@@ -491,7 +491,7 @@ gss_simple |>
 # Round 2
 regressions <- tab_reg(gss_simple, outcome = c("married", "age", "tvhours"), 
                        predictors = c("race", "rincome", "relig"), 
-                       empirical = TRUE, family = c("binomial", "gaussian", "poisson"))
+                       family = c("binomial", "gaussian", "poisson"))
 regressions |> forest_plot()
 # - Add horizontal lines between predictors, or between row_vars/tab_vars. 
 # - The breaks dotted lines stop a bit to indicate separation between predictors, but it’s a bit to faint, 
@@ -539,10 +539,10 @@ tab(gss_simple, c(age, rincome, party3), marital, pct = "row", color = TRUE, col
 
 regressions_adj <- tab_reg(gss_simple, outcome = c("married", "age", "tvhours"),  predictors = c("race", "rincome", "relig"), 
                            family = c("binomial", "gaussian", "poisson"), 
-                           color = "adjustment", empirical = TRUE)
+                           color = "adjustment")
 regressions_adj |> forest_plot()
 ordinal <- tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age", "tvhours"),
-        family = "ordinal", measure = "ratio", empirical = TRUE, color = "adjustment") 
+        family = "ordinal", measure = "ratio", color = "adjustment") 
 ordinal |> forest_plot()
 # - empirical = TRUE with color = "adjustment" currently does nothing different, it just colors the main whisker and CI
 #   I want a true user-friendly and readable way to color **the adjustement only**, with its own color and it’s own CI.
@@ -589,7 +589,7 @@ ordinal |> forest_plot()
 # binomial
 ## effect = "conditional"
 model <- tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+        family = "binomial" #, measure = "odds_ratio"
 ) 
 model |> set_display("est_ci") # Nice. But the 1/x.xx display inside the ci bracket is breaking alignement/padding. And I would prefer the "est" only to be colored and to carry the stars (primary token, the ci token carry it’s own bracket even if not seen in the display string, how to fix this reliably in a user-friendly way (for all composed CIs display ?) ?)
 model |> set_display("est_base")
@@ -609,10 +609,10 @@ model |> set_display("{est} ({coeff})") # would there be a way to print the log(
 #  right ? And the legend and column names are lying, because it’s not a marginal IRR ? 
 #  If so, we should forbid this useless combination, and tell it to the user. And change combinations tables and documentation (in vignettes, etc.)
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE
+        family = "poisson"
 ) 
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE, effect = "marginal", measure = "ratio"
+        family = "poisson", effect = "marginal", measure = "ratio"
 ) 
 
 
@@ -631,84 +631,84 @@ tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "reli
 #    I want to remove the overall N here, and re-add N as the first stats footer row.
 # binomial
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+        family = "binomial" #, measure = "odds_ratio"
 ) # Constant "1/1.19", baseline odds, formatting is ok.
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, measure = "log"
+        family = "binomial", measure = "log"
 ) # Constant "-0.17", log(odds) ok. 
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, measure = "ratio"
+        family = "binomial", measure = "ratio"
 ) # Constant "÷2.30", should be baseline reference profile proportion "43%" ?
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, measure = "difference"
+        family = "binomial", measure = "difference"
 ) # Constant "+45.7%", should be "45.7%".
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, effect = "marginal" #, measure = "difference"
+        family = "binomial", effect = "marginal" #, measure = "difference"
 )
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, effect = "marginal", measure = "ratio"
+        family = "binomial", effect = "marginal", measure = "ratio"
 ) # Constant "×2.05", should be average proportion "49%" ?
 # gaussian
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical = TRUE
+        family = "gaussian"
 ) # Constant "+40.76", should be "40.76"
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical = TRUE, measure = "ratio"
+        family = "gaussian", measure = "ratio"
 ) # Constant "×40.47", should be "40.47". 
 tab_reg(gss_simple, outcome = "age", predictors = c("race", "rincome", "relig", "tvhours"),
-        family = "gaussian", empirical = TRUE, effect = "marginal", measure = "ratio"
+        family = "gaussian", effect = "marginal", measure = "ratio"
 ) # Constant "×42.36", should be "42.36". 
 # poisson
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE
+        family = "poisson"
 ) # Constant "×2.95", should be "2.95"
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE, measure = "log"
+        family = "poisson", measure = "log"
 ) # Constant "+1.08", should be "1.08"
 tab_reg(gss_simple, outcome = "tvhours", predictors = c("race", "rincome", "relig", "age"),
-        family = "poisson", empirical = TRUE, effect = "marginal"# , measure = "difference"
+        family = "poisson", effect = "marginal"# , measure = "difference"
 ) # Constant "+2.56", should be "2.56"
 # summed-score binomial
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"),  empirical = TRUE
+        predictors = c("sex", "SPC", "Sport") 
 ) # Constant "1/1.20", baseline odds ok.
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "ratio"
+        predictors = c("sex", "SPC", "Sport"), measure = "ratio"
 ) # Constant "1/1.20". Here all RR in the table are displayed as OR, fix this (math problem or display problem ?) !
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, measure = "difference"
+        predictors = c("sex", "SPC", "Sport"), measure = "difference"
 ) # Constant "+2.72", should be "2.72"
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, effect = "marginal"# # measure = "difference"
+        predictors = c("sex", "SPC", "Sport"), effect = "marginal"# # measure = "difference"
 ) # Constant "+2.58", should be "2.58"
 tab_reg(tea, outcome = "tea_where", family = "binomial", trials = length(tea_where_vars), 
-        predictors = c("sex", "SPC", "Sport"), empirical = TRUE, effect = "marginal", measure = "ratio"
+        predictors = c("sex", "SPC", "Sport"), effect = "marginal", measure = "ratio"
 )
 # multinomial
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = TRUE
+        family = "multinomial"
 ) # Constants are baseline odds, ok.
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = TRUE, effect = "marginal"
+        family = "multinomial", effect = "marginal"
 ) # Constants "+45.3%" etc., should be "45.3%" etc.
 tab_reg(gss_simple, outcome = "party3", predictors = c("race", "rincome", "relig", "age"),
-        family = "multinomial", empirical = TRUE, effect = "marginal", measure = "ratio"
+        family = "multinomial", effect = "marginal", measure = "ratio"
 ) # Constants "÷2.21" etc., should be 1/2.21 = "45%" average population proportion etc.
 # ordinal: empirical="cell"
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", empirical = TRUE
+        family = "ordinal"
 ) # No constants.
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", empirical = TRUE, effect = "marginal" #, measure = "difference"
+        family = "ordinal", effect = "marginal" #, measure = "difference"
 ) # Constants are "+16.5%" etc., should be "16.5%", whole average population proportions.
 tab_reg(gss_simple, outcome = "rincome", predictors = c("race", "marital", "relig", "age"),
-        family = "ordinal", empirical = TRUE, effect = "marginal", measure = "ratio"
+        family = "ordinal", effect = "marginal", measure = "ratio"
 ) # Constants "÷6.06" etc., should be 1/6.06 = "16.5%" average population proportion etc.
 
 
 
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "tvhours", "age", "relig"),
-         family = "binomial", empirical = TRUE
+         family = "binomial"
 )
 # - With two numeric predictors, the width of the sparkline appear to differ depending on the variable. 
 #   I want to standardise that so they all have the same height and the same width. Here, the width of tvhours is about right,
@@ -724,23 +724,23 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "tvho
 
 #### shapes
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+        family = "binomial" #, measure = "odds_ratio"
 )
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
         shape = c(age = 3), 
-        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+        family = "binomial" #, measure = "odds_ratio"
 )
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
         shape = c(age = "quadratic"), 
-        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+        family = "binomial" #, measure = "odds_ratio"
 )
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
         shape = c(age = "sqrt"),
-        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+        family = "binomial" #, measure = "odds_ratio"
 )
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
         shape = c(age = "log"), 
-        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+        family = "binomial" #, measure = "odds_ratio"
 )
 # - shapes are written nowhere for some numeric predictors 
 #   - "quadratic" and quantiles are visible on the table (age^2 row added, perfect)
@@ -756,13 +756,13 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "reli
 # options(tabxplor.parallel = 8, tabxplor.cleannames = TRUE, tabxplor.print = "html") # options(tabxplor.print = "console")
 
 tab_reg(gss_simple, outcome = "married", predictors = c("rincome", "age*race"),
-        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+        family = "binomial" #, measure = "odds_ratio"
 )
 # - in html, "age × race" is written vertically, and it’s long (wastes vertical space, but here there’s horizontal space remaining): 
 #   plase wrap it before the `×`, so it prints vertically in two columns ?
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "age*tvhours"),
         shape = c(tvhours = "quartiles"),
-        family = "binomial", empirical = TRUE #, measure = "odds_ratio"
+        family = "binomial" #, measure = "odds_ratio"
 )
 # - the rows are not very clear, because the user can’t be sure which variable is what. Ex: "per SD/13.4 · [0,1)"
 #   In interactions only, I would want: the main numeric variable, here "age", to be written at the start of "levels" ;
@@ -861,28 +861,28 @@ tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all"
    color = TRUE, color_signif = "grey_non_signif", ref = 1
 ) |> tab_export()
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
-        empirical = TRUE, family = "binomial", display = "{diff} [{OR}] ({base})"
+        family = "binomial", display = "{diff} [{OR}] ({base})"
 )
 
 tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all",
    color = TRUE, color_signif = "grey_non_signif", ref = 1
 ) |> tab_export()
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
-        empirical = TRUE, family = "binomial", display = "{diff} [{OR}] ({base})"
+        family = "binomial", display = "{diff} [{OR}] ({base})"
 ) |> tab_export()
 
 tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all",
    color = TRUE, color_signif = "grey_non_signif", ref = 1
 ) |> tab_export("xl", path = "~/Excel_test.xlsx")
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
-        empirical = TRUE, family = "binomial", display = "{diff} [{OR}] ({base})"
+        family = "binomial", display = "{diff} [{OR}] ({base})"
 ) |> tab_export("xl", path = "~/Excel_test.xlsx")
 
 tab(gss_simple, c(race, relig), c(party3, tvhours), pct = "row", na = "drop_all",
    color = TRUE, color_signif = "grey_non_signif", ref = 1
 ) |> tab_export("md")
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"), 
-        empirical = TRUE, family = "binomial", display = "{diff} [{OR}] ({base})"
+        family = "binomial", display = "{diff} [{OR}] ({base})"
 ) |> tab_export("md")
 
 
@@ -903,10 +903,10 @@ list(
   tab_export("xl", path = "~/Excel_test.xlsx", replace = TRUE)
 
 list(
-  tab_reg(gss_simple, outcome = "married", predictors = c("rincome", "race", "age"), family = "binomial", empirical = TRUE), 
-  tab_reg(gss_simple, outcome = "tvhours", predictors = c("rincome", "race", "age"), family = "poisson", empirical = TRUE),
+  tab_reg(gss_simple, outcome = "married", predictors = c("rincome", "race", "age"), family = "binomial"), 
+  tab_reg(gss_simple, outcome = "tvhours", predictors = c("rincome", "race", "age"), family = "poisson"),
   tab_reg(gss_simple, outcome = "tvhours", predictors = c("rincome", "race", "age"), family = "poisson", color="adjustment"),
-  tab_reg(gss_simple, outcome = "age", predictors = c("rincome", "race", "tvhours"), family = "gaussian", empirical = TRUE)
+  tab_reg(gss_simple, outcome = "age", predictors = c("rincome", "race", "tvhours"), family = "gaussian")
 ) |> 
   tab_export("xl", path = "~/Excel_test_reg.xlsx", replace = TRUE)
 
@@ -914,7 +914,7 @@ list(
 
 # "md"
 tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
-        family = c("binomial", "poisson"), empirical = TRUE, 
+        family = c("binomial", "poisson"), 
 ) |> 
   tab_export("md")
 # | *relig*     |**Protestant**                       | |   **6 269**|  **3 230**| |  (52%)      **1**        |   **1    (53%)**       | |  (2.72)     **1**        |  **1    (2.61)**       |
@@ -943,15 +943,15 @@ tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row", na = "
 #### the different main use cases ----
 # options(tabxplor.print = "console")
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE) |> 
+        family = "binomial") |> 
   tab_export()
 # adjustment
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", measure = "ratio" , empirical = TRUE, color = "adjustment") |> 
+        family = "binomial", measure = "ratio", color = "adjustment") |> 
   tab_export()
 # several outcomes
 tab_reg(gss_simple, outcome = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
-        family = c("binomial", "poisson"), empirical = TRUE) |> 
+        family = c("binomial", "poisson")) |> 
   tab_export(theme = "dark")
 # predictor’s list
 tab_reg(gss_simple, outcome = "married", 
@@ -959,7 +959,7 @@ tab_reg(gss_simple, outcome = "married",
                           two   = c("race", "rincome"), 
                           three = c("race", "rincome", "relig"), 
                           full  = c("race", "rincome", "relig", "age") ),
-        family = "binomial", measure = "ratio" , empirical = TRUE, color = "adjustment") |> 
+        family = "binomial", measure = "ratio", color = "adjustment") |> 
   tab_export()
 # tab_vars 
 tab_reg(gss_simple, outcome = "married", tab_vars = "race",

@@ -64,7 +64,8 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       # The export returns a styled status line (bold green with the path REALLY written / bold red on
       # failure); prepend it above the rendered table (jamovi's Notice has no green success type).
       status <- jmv_backend_export(self, tabs)
-      self$results$html_table$setContent(paste0(status, jmv_backend_render_html(self, tabs)))
+      self$results$html_table$setContent(
+        jmv_results_content(status, jmv_backend_render_html(self, tabs)))
     },
 
     # Collect the jamovi options into the plain list jmvtab_build() consumes. Kept separate so the
