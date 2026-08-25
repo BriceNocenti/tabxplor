@@ -173,17 +173,18 @@ export_number_path <- function(path, replace = FALSE) {
 # The export status line shown above the results table: BOLD green on success (with the file's REAL
 # path), BOLD red on failure. jamovi's Notice has no green/success type, so this is inline-styled HTML
 # prepended to the html_table content (the one results Html element that always renders).
+# ⚠ `lead` is an ARGUMENT because this is a plain helper: jmvcore's `.()` reads `self` out of its
+# caller's frame, so only a function that has one may translate. jmv_backend_export() does.
 #' @keywords internal
 #' @noRd
-export_status_html <- function(text, ok = TRUE) {
+export_status_html <- function(text, ok = TRUE, lead = if (isTRUE(ok)) "Saved to:" else "Export failed:") {
   esc <- function(s) {
     s <- gsub("&", "&amp;", s, fixed = TRUE)
     s <- gsub("<", "&lt;",  s, fixed = TRUE)
     gsub(">", "&gt;", s, fixed = TRUE)
   }
   color <- if (isTRUE(ok)) "#1a7f37" else "#c62828"   # green / red
-  lead  <- if (isTRUE(ok)) "Saved to: " else "Export failed: "
-  jmv_results_note(paste0(esc(lead), esc(as.character(text)[1])),
+  jmv_results_note(paste0(esc(lead), " ", esc(as.character(text)[1])),
                    style = paste0("margin:8px 2px;font-weight:bold;color:", color, ";"))
 }
 
@@ -430,6 +431,11 @@ jmv_opt <- function(self, name, default = NULL) {
 # with the path REALLY written, bold red on failure) for the caller to prepend above the results table.
 # Returns "" when no export was requested. conditionMessage() (not err$message) surfaces the FULL rlang
 # cause chain (Phase 15c un-masking) -- the bare err$message is only the top "In index: 1." wrapper.
+# ⚠ A string a jamovi user READS is translated with jmvcore's `.()`, which resolves against the
+# module's own inst/i18n/<lang>.json -- the SAME catalogue the options panel uses, keyed on jamovi's
+# UI language. Plain gettext() (the R-tabxplor domain) follows the R engine's locale instead, which
+# is not the same thing. `.()` reads `self` out of its caller's frame, so only a function that has
+# one may call it. See dev/tabxplor_2.0.0_jamovi_dev.md § 19.1.
 #' @keywords internal
 #' @noRd
 jmv_backend_export <- function(self, tabs) {
@@ -441,13 +447,17 @@ jmv_backend_export <- function(self, tabs) {
   # `data` is what tab_xl() would otherwise have to recover from the call that built the table;
   # here the module already holds it.
   chk <- if (isTRUE(jmv_opt(self, "xl_check"))) "auto" else FALSE
+  # ⚠ the two lead words are translated HERE, where `self` exists -- and with NO trailing space in
+  # the msgid: the catalogue stores what is written while jamovi looks it up trimmed.
+  ok_lead <- jmvcore::.("Saved to:")
+  ko_lead <- jmvcore::.("Export failed:")
   tryCatch({
     actual <- jmvtab_export(tabs, format = fmt, path = p, replace = self$options$xl_replace,
                             check = chk, data = if (isFALSE(chk)) NULL else self$data,
                             theme = jmv_backend_theme(self))
-    export_status_html(actual, ok = TRUE)
+    export_status_html(actual, ok = TRUE, lead = ok_lead)
   }, error = function(err) {
-    export_status_html(conditionMessage(err), ok = FALSE)
+    export_status_html(conditionMessage(err), ok = FALSE, lead = ko_lead)
   })
 }
 

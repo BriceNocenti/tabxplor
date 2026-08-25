@@ -327,7 +327,9 @@ test_that("every CustomControl is wired to handlers its .js exports", {
 # every identifier the file CALLS must be declared somewhere in it, or be a known global.
 # ⚠ Deliberately permissive -- it collects `var` names anywhere, so a local satisfies a call from
 # another function. It is aimed at the one thing worth catching: a top-level helper that is gone.
-JS_GLOBALS <- c("utils", "document", "window", "setTimeout", "clearTimeout", "require", "module",
+# ⚠ `_` is jamovi's own gettext, defined by the analysis UI (`window._ = this.translate.bind(this)`)
+# BEFORE it evaluates the module -- so it is a global here exactly like `utils`.
+JS_GLOBALS <- c("_", "utils", "document", "window", "setTimeout", "clearTimeout", "require", "module",
                 "console", "Array", "Object", "String", "Number", "Boolean", "Math", "JSON",
                 "RegExp", "Date", "isNaN", "parseInt", "parseFloat", "Promise", "Error",
                 "encodeURIComponent", "decodeURIComponent")

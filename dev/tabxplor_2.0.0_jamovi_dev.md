@@ -1282,6 +1282,66 @@ MOD=~/github/tabxplor
 "$NODE" "$JMC" --i18n "$MOD" --update fr
 ```
 
+⚠ **`inst/i18n/fr.json` is written by `install()`, not by these.** `i18nUpdate` only rewrites
+`jamovi/i18n/*.po`; `prepare()` actively EMPTIES `inst/i18n/`. The catalogue reaches the app only
+after `jmvtools::install()`.
+
+### 19.1 The three surfaces a string can come from, and how each is extracted
+
+Read out of `jamovi-compiler/i18n.js` (`scanAnalyses()`), which is the authority:
+
+| surface | what is scanned | what is extracted |
+|---|---|---|
+| `jamovi/*.yaml` | `0000.yaml`, every `.a.yaml` + its `.u.yaml` / `.r.yaml` | the `label` `title` `description` `ghostText` `suffix` `menuTitle` `superTitle` `content` `notes` keys, and string `default`s |
+| `jamovi/js/**/*.js` | **every module `.js`** | `_("...")`, `n_("...", "...")`, `_p("ctx", "...")` |
+| `R/*.R` (not `.h.R`) | every R file | `.("...")` — jmvcore's translator |
+
+**So a JS-rendered label IS translatable.** The analysis UI defines the lookup itself, before it
+evaluates the module:
+
+```js
+this.translate = n => { … this.i18n.locale_data.messages[n.trim()] … },
+window._ = this.translate.bind(this),
+ui && eval(def)          // <- our module runs AFTER `_` exists
+```
+
+Three runtime constraints follow, and each is a silent failure if broken:
+
+- ⚠ **`_()` is the only one that works.** The globals are `window._` (this module's catalogue) and
+  `window.s_` (jamovi's own, for app strings). There is no `window.n_` and no `window._p`, and
+  `translate` returns `msgstr[0]` only — so **no plural forms and no msgctxt**. Where a sentence
+  needs a branch, write TWO FULL msgids rather than splicing a translated noun into a frame.
+- ⚠ **No edge whitespace inside `_()`.** The lookup key is `n.trim()` while the extractor stores the
+  literal as written, so `_(" trials")` files `" trials"` and looks up `"trials"` — a permanent miss
+  that reports nothing. Put the space outside the call. (Same rule as `dev/french_glossary.md`
+  § Rules already states for `gettext()`.)
+- ⚠ **A fuzzy entry is DROPPED** when `createTranslationJSON()` writes `fr.json`, and an *unescaped*
+  `"` inside any msgstr aborts the compiler with `Invalid key name`, shipping a module with **no
+  translations at all**.
+
+`R/*.R` uses **`jmvcore::.()`**, which resolves against this same `fr.json` keyed on jamovi's UI
+language — which plain `gettext()` (the `R-tabxplor` domain) is not. ⚠ it reads `self` out of its
+caller's frame, so only a function that HAS one may call it: `export_status_html()` takes its lead
+words as an argument for exactly that reason.
+
+### 19.2 What is translated, and what deliberately is not
+
+**The argument name stays English; only the parenthetical is French** — `<b>col_vars = <i>(variables
+en colonne)</i></b>`. So do argument VALUES (`2sd`, `max`, `first`, `linear`), the notation (`OR`,
+`Chi2`, `R2`) and the `a*b` interaction key. That rule is what keeps a French label near its English
+width, and it is why ~40 msgstrs are byte-identical to their msgid on purpose.
+
+⚠ **Width is the real risk, and it is absolute, not relative.** The options pane is ~340px at its
+narrowest and the two CustomControl tables are FIXED-px grids whose head and select cells are
+`white-space:nowrap; text-overflow:ellipsis` — they TRUNCATE silently. `JMV_WIDTH_BUDGET` in
+`tests/testthat/test-jamovi-i18n.R` declares a per-string character budget derived from those pixel
+widths (~6px/char) and holds **both** languages to it, so a budget its own English breaks is a wrong
+budget. Everything else (radio labels, hints, tooltips) wraps and is free.
+
+The companion gate in the same file is coverage: **every literal painted into `textContent` /
+`title` / `placeholder` / a host object's text slot must be inside `_()`**. That is the invariant
+whose absence left ~90 strings English for several phases with no symptom anywhere.
+
 ## 20. Sources
 
 Official: `dev.jamovi.org` (`/tutorial/tuts01xx`, `/api/*`, `/ui/*`,
@@ -1749,11 +1809,11 @@ and `effect` — the right half — stay scalar radios. The link drop-down offer
 outcome with its own link. One table can carry two links (measured: `Model_RR [married]` beside
 `Model_diff [tv]`).
 
-⚠ **Moving a List into the table costs its translation.** A JS-rendered label is outside
-`catalog.pot`, so the four link labels are English-only — the property `TABX_FAMILY_LABEL` has had
-since Phase h. jamovi's options UI has no gettext; the alternative is keeping a scalar List.
-The labels themselves are still generated, not hand-written: `reg_link_ui_labels()` composes them
-from `REG_MEASURE_LINK` (the measure, then the glm spelling that map already carries).
+⚠ **This section used to claim a JS-rendered label could not be translated. That was wrong** — see
+§19.1 below, which Phase 21g-xii established by reading the compiler and the live runtime. A label
+rendered from JS is translatable exactly like a `.yaml` title, provided it is wrapped in `_()`.
+The labels themselves are generated, not hand-written: `reg_link_ui_labels()` composes them
+from `REG_MEASURE_LINK`, and `dev/generate_jamovi_js.R` emits each map value inside `_()`.
 
 ### Three defects the wiring exposed, all reproduced
 

@@ -34,6 +34,13 @@ words on purpose (crude/adjusted, and the reference).
   before `; : ! ?`, decimal **comma** (`×1,5`). Keep this in every translation.
 - **No edge whitespace inside `gettext()`** — `xgettext` strips it, so `"Model: "` would never match at
   runtime. Punctuation/spacing lives in the `gettextf()` template or is added outside the call.
+  ⚠ **The same rule covers jamovi's `_()` and `jmvcore::.()`**, for a different reason: jamovi looks a
+  msgid up TRIMMED while the compiler files it as written, so `_(" trials")` can never match. Put the
+  space outside the call.
+- ⚠ **jamovi has no plural and no context at runtime.** Only `window._` exists (not `n_`, not `_p`),
+  and it returns the first msgstr — so a sentence that needs a branch is written as TWO FULL msgids,
+  never as a translated noun spliced into an English frame. See
+  `dev/tabxplor_2.0.0_jamovi_dev.md` § 19.1.
 
 ## Core terms
 
@@ -219,7 +226,7 @@ reading a table in order (source, champ, variables, Total, l'intérieur) · medi
 | the honest long form     | « toutes les autres variables explicatives choisies étant égales » | his own, `M2_06_07:517`                      |
 | composition effect       | effet de structure                                            | INSEE                                             |
 | holding composition      | à structure constante                                         | INSEE                                             |
-| the base                 | le socle                                                      | ⚠ « base » is taken — see faux amis               |
+| the base                 | le socle                                                      | ⚠ « base » is taken — see faux amis ; also the jamovi `display` glosses (`base_ci` → « socle + IC ») |
 | the round trip           | l'aller-retour · « redescendre au pourcentage »               |                                                   |
 | untangling correlations  | démêler les corrélations cachées                              | his own, `M2_06_07:452`                           |
 | significance-as-permission | une autorisation · « le droit de généraliser »              | *mot d'excuse* does not travel                    |

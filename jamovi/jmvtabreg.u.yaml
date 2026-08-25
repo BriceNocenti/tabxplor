@@ -385,7 +385,7 @@ children:
         stretchFactor: 1
         children:
           - type: Label
-            label: subtext = <i>(note below the table)</i>
+            label: subtext = <i>(text to print below the table)</i>
             stretchFactor: 1
             children:
               - type: CustomControl

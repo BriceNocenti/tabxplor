@@ -1016,25 +1016,124 @@ So the phase is worth it exactly where it was scoped to be: **a multinomial's cr
 **The article** (`dev/tabxplor-the-shape-of-a-number.Rmd`) teaches the column in one clause — *whatever the formula says, taller means more* — and notes that it is the same quantity the linearity panel puts on its axis.
 
 
-#### Phase 21g-xii — jamovi UIs French translations
+#### Phase 21g-xii — jamovi UIs French translations — DONE
 
-French translations need to be **very compact**, because the size of the UI is very constrained, specially the width of the jamovi options panel: **straight to the point, aiming to take no more space** in a language that noticeably tends to takes more space than english to write. At the same time, it must carry a really **idiosyncratic**, specific, consistent, readable, user-friendly, **stylistically strong and simple**, way of speaking about crosstables and regressions in French – to teach them to "literary" social sciences students that hate math and don’t really understand english. For that, you should **avoid a bad word-by-word translation from english** entirely, too often done in the introduction and first regression vignettes: the aim is to **rephrase**, **rewrite another way**, do something a bit different for it to match the specificities of the French language and the specificities of French social sciences.
-- For `jmvtab`, reuse the vocabulary that was already translated in past versions, update the new one. For `jmvtabreg`, nothing was reviewed by a human yet, so you can redo everything for consistency. The current french translations may be stale, may not have been written compact enough to fit the UI, and may not carry the current philosophy and vocabulary (but some are good, included some old jmvtab 1.3.1 ones, that were made compact enough to fit the UI at that time): check, rewrite and improve everytime necessary.
-- The main vocabular is settled in `vignettes/articles/tabxplor-all-else-equal-fr.Rmd`, tranlated from `vignettes/articles/tabxplor-all-else-equal.Rmd`, which is cannon. The French translation of the vignette carries the most precise account of what tabxplor's *philosophy*, *vocabulary*, *usage* and *real-world regression use cases* really are, in Fren; its words are the package's own. 
-- Also see `dev/french_glossary.md` : if new common expressions and vocabulary must join this file, please edit it directly, then ask for the maintainer to review and, if needed, improve your translations.
-- A the end I’ll make a visually review, then edit the translations file myself for improvements.
+**The panel was half untranslatable, and the reason was a wrong line in the dev guide.** The `.yaml`
+catalogue was already 207 of 208 filled, so that half needed a *rewrite*, not a fill. The other half —
+**~90 hard-coded strings in `jamovi/js/*.js`**, i.e. the whole per-variable table, the Model table, the
+interactions picker and the model builder, every column head, button, hint and tooltip — shipped
+English in every locale. `dev/tabxplor_2.0.0_jamovi_dev.md` explained why: *"jamovi's options UI has no
+gettext"*. **That is false**, and both ends were read to prove it: `jamovi-compiler/i18n.js:434-455`
+runs a gettext extractor over `jamovi/js/**/*.js` for `_()` / `n_()` / `_p()`, and the analysis UI does
+`window._ = this.translate.bind(this)` **before** `eval(def)`, translating against the module's own
+`inst/i18n/fr.json`. The line is corrected and the mechanism written down where it will be read
+(§ 19.1 of the guide). Measured: the extractor now reports **77 messages from 2 js files**, and
+`inst/i18n/fr.json` goes **208 → 283 entries, 0 empty**.
+
+**Three runtime constraints, each a silent failure, and each now stated in three places.** ⚠ Only
+`_()` works — the globals are `window._` and `window.s_`, there is no `n_` and no `_p`, and `translate`
+returns `msgstr[0]`, so **no plurals and no msgctxt**: the two `ref2` tooltips are TWO FULL msgids
+rather than a noun spliced into a frame. ⚠ **No edge whitespace inside `_()`** — the lookup is
+`n.trim()` while the extractor files the literal as written, so `_(" trials")` would be a permanent
+miss; the space is outside the call. ⚠ a **fuzzy** entry is dropped from `fr.json` and an unescaped `"`
+in a msgstr aborts the compiler, shipping **no translations at all**.
+
+**The four generated label maps travel the same way.** `dev/generate_jamovi_js.R` gained one writer
+(`js_tr`) and `js_obj(x, val = js_tr)` now emits `_("binomial (logistic)")` into `TABX_FAMILY_LABEL`,
+`TABX_FAMILY_LABEL_BINARY`, `TABX_LINK_LABEL` and both `TABX_SHAPE_LABEL`s — so a label stays
+*generated from the R fact tables* and becomes translatable at the same time. ⚠ still plain text: they
+paint a native `<option>`'s `textContent`.
+
+**The results panel joined too.** The Regressions placeholder, both staged-comparison banners and the
+export status line are R strings; they use **`jmvcore::.()`**, which the compiler also extracts (from
+`R/*.R`) and which resolves against the *same* `fr.json`, keyed on jamovi's UI language — where plain
+`gettext()` follows the R engine's locale instead. ⚠ `.()` reads `self` out of its caller's frame, so
+`export_status_html()` (a plain helper) takes its two lead words as an argument.
+
+**Four defects fixed while the English was still editable** (Phase 22x freezes it): the shipped typo
+`"…their baseline and and shape."`; `"profile =  <i>…"`'s double space; `wrap_rows` / `wrap_cols`
+**double-labelled** in jmvtabreg (a `.u.yaml` Label *and* a non-empty `.a.yaml` title — jmvtab sets
+both to `""`); and two accidental msgid duplicates (`light (colours)` vs `(colors)`, `subtext`'s two
+spellings). ⚠ A fifth was found by wrapping: **`resetPath` wrote the untranslated default** —
+jamovi *translates* an option's declared `default`, so the file-name box opened on « Tableau » and the
+reset button set it back to `Table`. `_()` on those three values fixes it.
+
+**The French, and the one decision that shaped it.** Argument names and VALUES stay English and only
+the parenthetical is French — the glossary's own rule, and what keeps a label near its English width.
+Beyond that it is a rewrite: `measure = <i>(quelle mesure de l'écart est rapportée)</i>` (46 visible
+chars, in a **one-third** column ≈ 110 px) became `<i>(l'écart rapporté)</i>` (26); `digits` 46 → 27;
+`design_effect` 48 → 31; `between_groups` 52 → 38; `ref <i>(interval on the comparison…)</i>` 50 → 33.
+The article's own words are used where they are shorter *and* better — **« socle »** for `base`
+(`base_ci` → « socle + IC »), « écart », « modalité », « contribution au Chi2 ». The group labels drop
+the redundant noun the column beneath them already carries: **« En ligne » / « En colonne » /
+« Sous-tableaux » / « Prédicteurs »**. Two long-standing splits are closed: `conf_level` was both
+« niveau » and « seuil de confiance » (the glossary locks **seuil**), `empirical` both « afficher » and
+« montrer ». And ⚠ one real error: `classic <i>(equal variances)</i>` had its **argument value**
+translated to « classique ».
+
+⚠ **The width rule is ABSOLUTE, not relative to the English — and the data says so.** 124 of the 202
+existing msgstrs were longer than their msgid, nearly all harmlessly (a radio label wraps). What
+actually breaks is a **fixed-px `nowrap` + ellipsis cell**, which truncates silently. So
+`JMV_WIDTH_BUDGET` (new `tests/testthat/test-jamovi-i18n.R`) declares a per-string character budget
+derived from the `grid-template-columns` in the `.js` (~6 px/char: 165 px → 27, 85 px → 14, the 72 px
+tick column → 12) and holds **both languages** to it — a budget its own English breaks is a wrong
+budget, which is how the name column's was corrected from 15 to 16. That is also what decided several
+words: `merge` → **« fusion »** (6) not « fusionner » (9), `click to relevel` → **« réordonner »** so
+the whole opener `8 modalités — réordonner` stays inside 27.
+
+**Two more gates in the same file**, plus `_` joining `JS_GLOBALS` in `test-jamovi-vocabulary.R`:
+**coverage** — every literal painted into `textContent` / `title` / `placeholder` / a host object's
+text slot must be inside `_()`, which is the invariant whose absence left ~90 strings English for
+several phases with no symptom anywhere; and **compiler safety** — no blank msgstr, no fuzzy flag, no
+unescaped quote. ⚠ Both were verified by re-breaking them: unwrapping `del.title` fails naming the
+file and the string, and stretching « fusion » to 23 chars fails naming the budget.
+
+**The build chain ran here** — `md5sum` → `dev/generate_jamovi_js.R` → `node --check` →
+`jmvtools::prepare()` → `md5sum` again (**all seven yaml unchanged**, no `yaml.dump()` rewrite) →
+`i18nUpdate("catalog")` → `i18nUpdate("fr")` → hand-fill → `install(home = "flatpak")`. `msgfmt -c`
+validates the catalogue. **283 of 283 translated**, the package DESCRIPTION blurb included (it had
+never been). Full suite **FAIL 0**, and no golden or snapshot moved — nothing here reaches a rendered
+table.
+
+**Still open: the maintainer's live pass, and then his own edit of `jamovi/i18n/fr.po`.** In French:
+the per-variable table's heads and its `{n} modalités — réordonner` opener at a narrow pane; « fusion »
+in its 72 px column; the Model table's `family =` / `link =` selects; the interactions picker's
+« effet de » / « dans chaque modalité de »; `color_signif` and `color` against the right edge in both
+panels; the Regressions placeholder and a staged comparison; an Excel export's status line; and the
+`shape` / reference selects, whose option labels are the newly translated generated maps.
+
+#### Phase 22h — misceallaneous manual reviews
+
+**`tab_reg` manual reviews**:
+- With predictor subsets, when there is two of more predictors subsets, I want the default `display` to switch to `"est"` for the model columns only (the current `est_base` adds another column in each model’s one, so the visual comparison between models is less direct and longer, I really want them side-by-side with no noise between ; keep the base quantity in the empirical counterpart column only, since there is only one for the whole predictor’s set and it gives something important, the observed percentages or means).
+- now that quantiles prints specifically for integers, with "4 to 24" for example, the level name shows something like "4 to 24 Q4", which is not really readable. Please just do "4 to 24", no quantile count altogether is good and less verbose (even for continous predictors, were the range bracket is self-explaining).
+- I want to remove the shape tables in most of the examples, except a few one (including, obviously, the one speaking about how to work with numeric predictors). Is there a global option for that ? If not, we should create one, and maybe replace the old tabxplor.spark option now that the sparkline never prints inside the n column itself, but on a separate table.
+
+**exports review**:
+- Example, with Excel file saved for you to see: `tab_reg(gss, c("age", "married"), c("rincome", "race", "tvhours")) |> tab_export("xl", path = "~/Documents/reg_from_R_test")`
+- In Excel, the new columns width calculator is good, but it have forgotten one thing only: the pillar abbreviation, when for example "<obs mean>", can be wider than the numbers if the column themselves, so they wrap badly. Use font size 8, take them into account in the column width calculations, but take into account that the font size is a bit smaller than the rest (by not counting the < and > into the character length). Disable automatic Excel wrap on these cells altogether to be sure.
+- By the way: some pillar abbreviations that are in the table in jamovi, are missing in the Excel export, please investigate. It’s the "<diff>" of the two Model_* columns.
+
+**tab manual review**:
+- Keep OR=1 in tab() tooltips, so that it actually gives the ref2 reference column (not in bold, obviously, when percentages are printed and `color="diff"`, because OR is not the current measure of deviation).
+- Add interactions in `tab()` and accept "age*race" in `col_vars`, since they are already used by `tab_reg()` empirical columns which are really crosstables in most cases (useful to get a mean column per category of a factor ; to match what `tab_reg()` does, passing two numeric variables in an interaction would cut one of the two automatically ? Give the factors columns + the numeric columns for consistency with `tab_reg()` What else ? The aim is not to make new special cases for `tab()`, but rather to reuse what is already in `tab_reg()`, so that both have the same behaviour in that matter) ? (It can’t be done for `row_vars` since they take no uncut numeric variables, and with two factors it’s better to use `tab_vars` directly ?)
+- with color="ratio" on a basic crosstable, the "100%" disappears from the Total column (and the n/n_range goes bold and lose it’s grey2 color, though it should not be so visually in focus), even when "ratio" is just the color but the display is still percentages only. Whenever the percentages are displayed and it’s not `levels="first"` etc., there should be a Total column to . It’s just with `display = "ratio"`, or display with ratio or OR or diff as the primary display token, that the 100% should not appear because it does not sum-up to 100%. And even so, we don’t want the n or n_range to go bold and black. I’m not sure how to reliable resolve that one: continue with add hoc rules for the Total colum ? ; of apply it the same `display` than the other factor columns, and ensure the vctrs field calculations are exact (for ex., does the "diff" being all 0 in  Total column cells meaningful, and an information that helps the reader, or just useless noise ? If noise, meaningless, never used, reliably set to NA to skip the display token ?), then only add a ({n}) or ({n_range})display token there ? This one needs to be designed reliably, and thought about, because it may be a source of code simplification enabling to remove old ad hoc unreliable rules.
+  + Same for `display = "estimate"` in a regression.
+- When using `shape =` in `tab()`, I want the default to be not to add the variable name in the first level (this is finally useful only for niche use cases, so keep it opt-in).
 
 
-#### Phase 22x — last jamovi UI polish and bug corrections
+#### Phase 22i — last jamovi UI polish and bug corrections
 
 **Do not change the text, the buttons, the labels, or the wording**: english version is final; French translation have already been done and modifications would require to do it again.
 
 `jmvtabreg` Excel export failing with "Export failed. in index : 1. Caused by error in map2(): In Index 1. With name: age:diff. Caused by error in labs[[i]]:! subscript out of bound.
+- It works when I un-tick the `reg_check_plots()` button, so this is where it may come from.
 
 ⚠ **Open, measured in 22g-x: `multiplier` is a reporting choice that sits in the fit key.** `reg_tidy_rescale()` runs inside `reg_fit()`, so `tidy_native` comes out already scaled by |k| and every scaling pick is a refit — **14.7 s on a multinomial, against ~1.9 s for a hit**. Moving that rescale into `reg_tidy_finalize()` would make `tidy_native` genuinely native and let `multiplier` leave the key, exactly as the estimand did in Phase 22j. Two things to weigh first: the PROFILE bounds ride natively on the record (`reg_fit()` writes `td$conf.low <- ci * mult_vec` before it is built), and `reg_digest_revive()` refits through the recipe's own `multiplier`. Five call sites write `tidy_native` (`reg_tidy_native_z()` and the glm arm). See `dev/benchmarks/results_2.0.0/phase22gx_crude.txt` §3.
 
 ⚠ **Open, found in 22e-i: a declared panel that cannot be drawn.** `REG_CHECKS$residuals$families` includes `"ordinal"`, so `check = "auto"` asks for a residual panel on a `polr` / `svyolr` fit — and `rd_resid()` has no ordinal arm, so it returns `NULL` and the grid silently loses a panel it declared. Two honest cures, pick one: give `rd_resid()` the ordinal randomised-quantile arm (a cumulative-probability draw between the two cut points, which is well defined), or drop `"ordinal"` from that row's `families` and from `normality`'s. ⚠ Whichever is chosen, the fact table and what can be drawn must agree — a family listed in a row is a promise `reg_panel_keys()` makes to the user.
 
+The `jmvtab` off-pct-axis reference picker and reordering UI table still show "ref = ..." in it’s headers, where it’s really "ref2 =" with `pct="row"`, is there a clean way to change the labels of this column header according which kind of percentage is selected (when none is selected, the good default is clearly pct="row", numeric col_vars compare to their Total row, etc. ; only pct="col" in fact, invert the axis of the table)
 
 ---
 

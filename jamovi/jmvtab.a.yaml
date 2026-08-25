@@ -534,7 +534,7 @@ options:
       title: theme
       type: List
       options:
-        - title: "light <i>(colours)</i>"
+        - title: "light <i>(colors)</i>"
           name:  light
         - title: "print_ready <i>(black and white, for publication)</i>"
           name:  print_ready

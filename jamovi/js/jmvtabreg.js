@@ -1,4 +1,6 @@
 // Custom UI events for the jmvtabreg (Regressions) analysis.
+// ⚠ Every user-visible string goes through `_()`; the SHARED span's are edited in jmvtab.js.
+// See that file's header and dev/tabxplor_2.0.0_jamovi_dev.md § 19.1.
 // NOTE: the jamovi compiler ships this file verbatim (comments included) to every user, so keep it
 // lean. jus 3.0: use the GLOBAL `utils.clone` (the events `this` has no `.clone`, unlike jus 2.0).
 // Everything about a PREDICTOR -- its merges, how a number is cut, its baseline, its unit -- is one
@@ -8,17 +10,17 @@
 // Generated from R/tab_reg.R (REG_OUTCOME_KINDS), R/reg-estimand.R (REG_FAMILIES,
 // REG_ESTIMANDS) and R/var-shape.R (VAR_SHAPES). Re-run dev/generate_jamovi_js.R after
 // changing any of them; the suite checks this block (test-jamovi-vocabulary.R).
-var TABX_FAMILY_LABEL = { "gaussian": "gaussian (linear)", "binomial": "binomial (logistic)", "poisson": "poisson (counts)", "multinomial": "multinomial", "ordinal": "ordinal" };
-var TABX_FAMILY_LABEL_BINARY = { "binomial": "binomial (logistic)" };
+var TABX_FAMILY_LABEL = { "gaussian": _("gaussian (linear)"), "binomial": _("binomial (logistic)"), "poisson": _("poisson (counts)"), "multinomial": _("multinomial"), "ordinal": _("ordinal") };
+var TABX_FAMILY_LABEL_BINARY = { "binomial": _("binomial (logistic)") };
 var TABX_OUTCOME_DETECT = { "binary": "binomial", "ordered": "ordinal", "nominal": "multinomial", "numeric": "gaussian" };
 var TABX_OUTCOME_OFFERS = { "binary": ["binomial"], "ordered": ["ordinal", "multinomial", "binomial"], "nominal": ["multinomial", "ordinal", "binomial"], "numeric": ["gaussian", "binomial", "poisson"] };
 var TABX_LINKS = { "gaussian": ["auto", "difference", "ratio"], "binomial": ["auto", "difference", "ratio", "odds_ratio"], "poisson": ["auto", "ratio"], "multinomial": ["auto", "odds_ratio"], "ordinal": ["auto", "odds_ratio"] };
-var TABX_LINK_LABEL = { "auto": "auto (family based)", "difference": "difference", "ratio": "ratio", "odds_ratio": "odds_ratio" };
+var TABX_LINK_LABEL = { "auto": _("auto (family based)"), "difference": _("difference"), "ratio": _("ratio"), "odds_ratio": _("odds_ratio") };
 var TABX_OUTCOME_LEVEL_ROLE = { "binomial": "modelled", "multinomial": "baseline" };
 var TABX_ESTIMANDS = { "gaussian": { "auto": { "auto": ["auto", "difference", "ratio", "raw_coefficient"], "conditional": ["auto", "difference", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio"] }, "difference": { "auto": ["auto", "difference", "ratio", "raw_coefficient"], "conditional": ["auto", "difference", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio"] }, "ratio": { "auto": ["auto", "difference", "ratio", "raw_coefficient"], "conditional": ["auto", "ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio"] } }, "binomial": { "auto": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] }, "difference": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "difference", "raw_coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] }, "ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] }, "odds_ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio", "odds_ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] } }, "poisson": { "auto": { "auto": ["auto", "difference", "ratio", "raw_coefficient"], "conditional": ["auto", "ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio"] }, "ratio": { "auto": ["auto", "difference", "ratio", "raw_coefficient"], "conditional": ["auto", "ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio"] } }, "multinomial": { "auto": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] }, "odds_ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto", "difference", "ratio", "odds_ratio"] } }, "ordinal": { "auto": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto"] }, "odds_ratio": { "auto": ["auto", "difference", "ratio", "odds_ratio", "raw_coefficient"], "conditional": ["auto", "odds_ratio", "raw_coefficient"], "marginal": ["auto", "difference", "ratio"], "at_reference": ["auto"] } } };
 var TABX_SHAPES = ["linear", "log", "sqrt", "quadratic", "sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles"];
 var TABX_SHAPES_CUT = ["sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles"];
-var TABX_SHAPE_LABEL = { "linear": "linear (numeric)", "log": "log (numeric)", "sqrt": "sqrt (numeric)", "quadratic": "quadratic (num.)", "sd_bands": "sd_bands (cut)", "median": "median (cut)", "terciles": "terciles (cut)", "quartiles": "quartiles (cut)", "quintiles": "quintiles (cut)", "deciles": "deciles (cut)" };
+var TABX_SHAPE_LABEL = { "linear": _("linear (numeric)"), "log": _("log (numeric)"), "sqrt": _("sqrt (numeric)"), "quadratic": _("quadratic (num.)"), "sd_bands": _("sd_bands (cut)"), "median": _("median (cut)"), "terciles": _("terciles (cut)"), "quartiles": _("quartiles (cut)"), "quintiles": _("quintiles (cut)"), "deciles": _("deciles (cut)") };
 // --- END GENERATED ---
 
 // The file extension shown after the file name on the path line -- follows the chosen format. Rendered
@@ -429,7 +431,7 @@ var tabxvFillLevels = function (ui, host, v, kind) {
             if (host.varSync) host.varSync(ui, v, tabxvKind(ui, host, kind.group, v));
             tabxvRefreshVar(ui, host, v);
         });
-        sel.title = "how this number becomes groups (shape =)";
+        sel.title = _("how this number becomes groups (shape =)");
         c.levels.appendChild(sel); return;
     }
     var natural = kind.cached || [];
@@ -437,7 +439,8 @@ var tabxvFillLevels = function (ui, host, v, kind) {
     // the COUNT is the original one -- a merge is a statement about those levels, not a new set of
     // them -- and the instruction beside it says which way the click goes.
     var b = document.createElement("span"); b.style.cssText = TABXV.lvlBtn + TABXV.dotted;
-    var n = document.createElement("span"); n.textContent = String(natural.length) + " levels";
+    var n = document.createElement("span");
+    n.textContent = _("{n} levels").replace("{n}", String(natural.length));
     var h = document.createElement("span"); h.style.cssText = TABXV.lvlHow;
     h.textContent = " \u2014 " + (tabxvOpen[v] ? host.closeTip : host.mergeTip);
     b.appendChild(n); b.appendChild(h);
@@ -763,11 +766,11 @@ var tabxmBuildList = function (ui, v, initialOrder, onOrder, canOrder, onCommit,
             if (!canMerge) return;
 
             var t = cell(i > 0 ? TABXM.tick : TABXM.head, 2, row);
-            if (i === 0) t.textContent = "merge";   // the column names itself in its empty cell
+            if (i === 0) t.textContent = _("merge");   // the column names itself in its empty cell
             if (i > 0) {                      // the first level has nothing above to merge into
                 var cb = document.createElement("input");
                 cb.type = "checkbox"; cb.checked = !!ticks[i];
-                cb.title = "merge into the level above";
+                cb.title = _("merge into the level above");
                 cb.addEventListener("change", function () {
                     ticks[i] = cb.checked; commit(); renderRows();
                 });
@@ -852,7 +855,7 @@ var tabxmBuildList = function (ui, v, initialOrder, onOrder, canOrder, onCommit,
             b.style.cssText = canOrder ? TABXM.btn : TABXM.btnOff;
             if (!canOrder) {
                 b.disabled = true;
-                b.title = "an ordered variable already has the order its levels mean";
+                b.title = _("an ordered variable already has the order its levels mean");
                 return b;
             }
             b.addEventListener("click", function (e) { e.preventDefault(); grid.focus(); move(dir); });
@@ -939,22 +942,22 @@ var TABX = {
 // table, and a list reading "mean (default)" then "mean" only asks the user to tell them apart.
 // The blank is the one kept, because it stores nothing and lets tab_reg() own its own default.
 var REG_ANCHORS = ["", "median", "min", "max"];
-var REG_ANCHOR_LABELS = { "": "mean (default)" };
+var REG_ANCHOR_LABELS = { "": _("mean (default)") };
 
 var VAR_TABLE_HOST = {
     ctrl: "varTableCtrl",
     cols: [
-        { key: "name",   head: "predictor",        width: "minmax(90px,1fr)" },
-        { key: "levels", head: "levels / shape =", width: "165px",
-          tip: "a factor shows how many levels it has; a number chooses how it is cut into groups" },
-        { key: "ref",    head: "ref = <i>(reference)</i>", width: "180px",
-          tip: "the baseline each effect is measured against" },
-        { key: "act",    head: "multiplier =",     width: "85px",
-          tip: "a number's effect is read per k units" }
+        { key: "name",   head: _("predictor"),        width: "minmax(90px,1fr)" },
+        { key: "levels", head: _("levels / shape ="), width: "165px",
+          tip: _("a factor shows how many levels it has; a number chooses how it is cut into groups") },
+        { key: "ref",    head: _("ref = <i>(reference)</i>"), width: "180px",
+          tip: _("the baseline each effect is measured against") },
+        { key: "act",    head: _("multiplier ="),     width: "85px",
+          tip: _("a number's effect is read per k units") }
     ],
-    emptyHint: "Select predictors to choose their baseline and and shape.",
-    mergeTip:  "click to relevel",
-    closeTip:  "click to close",
+    emptyHint: _("Select predictors to choose their baseline and shape."),
+    mergeTip:  _("click to relevel"),
+    closeTip:  _("click to close"),
     // Phase 22g-iv: the ▲/▼ bar DOES belong here. `tab_reg()` has no `levels_order` argument, so the
     // option drives a jmvtabreg-only prep step instead: jmvtab_reg_build() relevels the predictor
     // columns before the fit. That is also what makes the reference rule below true by construction.
@@ -963,7 +966,7 @@ var VAR_TABLE_HOST = {
     isCut:     function (sh) { return TABX_SHAPES_CUT.indexOf(sh) >= 0; },
 
     groups: function (ui) {
-        return [{ label: "Predictors", numericMayKeep: true,
+        return [{ label: _("Predictors"), numericMayKeep: true,
                   vars: ui.predictors ? utils.clone(ui.predictors.value(), []) : [] }];
     },
 
@@ -1010,7 +1013,7 @@ var VAR_TABLE_HOST = {
             // The groups' LABELS are computed R-side from the data's own quantiles, so the only
             // baselines nameable here are the two positional keywords tab_reg() declares.
             cell.appendChild(makeSelect(TABXV.sel, ["first", "last"],
-                                        { first: "first group (lowest)", last: "last group (highest)" },
+                                        { first: _("first group (lowest)"), last: _("last group (highest)") },
                                         (stored === "last") ? "last" : "first",
                                         function (r) { arrWrite(ui, "ref_levels", v, "ref", r); }));
             return;
@@ -1021,7 +1024,7 @@ var VAR_TABLE_HOST = {
             if (stored && anchors.indexOf(stored) < 0) anchors.push(stored);   // a typed number stays
             var a = makeSelect(TABXV.sel, anchors, REG_ANCHOR_LABELS, stored,
                                function (r) { arrWrite(ui, "ref_levels", v, "ref", r); });
-            a.title = "the value the effect of this number is read from";
+            a.title = _("the value the effect of this number is read from");
             cell.appendChild(a);
             return;
         }
@@ -1048,7 +1051,7 @@ var VAR_TABLE_HOST = {
         var inp  = document.createElement("input");
         inp.type = "text"; inp.style.cssText = TABXV.inp;
         inp.placeholder = "2sd"; inp.value = arrGet(ui, "multiplier", v, "k");
-        inp.title = 'the effect per k units: "2sd" (the default), "sd", or a number';
+        inp.title = _('the effect per k units: "2sd" (the default), "sd", or a number');
         inp.addEventListener("change", function () {
             arrWrite(ui, "multiplier", v, "k", inp.value);
         });
@@ -1193,8 +1196,8 @@ var renderModelRow = function(ui, frag, v) {
             function(l) { return tabxvClean(ui, l); }, selL,
             function(l) { arrWrite(ui, "outcome_level", v, "level", l === c.levels[0] ? "" : l); });
         lvSel.title = (role === "modelled")
-            ? "outcome_level = the level modelled, against every other one merged"
-            : "outcome_level = the baseline category the others are read against";
+            ? _("outcome_level = the level modelled, against every other one merged")
+            : _("outcome_level = the baseline category the others are read against");
         row.appendChild(lvSel);
     } else if (isNumBinom) {
         var wrapT = document.createElement("div"); wrapT.style.cssText = TABX.multWrap;
@@ -1202,7 +1205,10 @@ var renderModelRow = function(ui, frag, v) {
         inp.type = "number"; inp.step = "1"; inp.min = "1"; inp.style.cssText = TABX.mtTrials;
         inp.placeholder = "max"; inp.value = arrGet(ui, "trials", v, "n");
         inp.addEventListener("change", function() { arrWrite(ui, "trials", v, "n", inp.value); });
-        var sufT = document.createElement("span"); sufT.style.cssText = TABX.refNote; sufT.textContent = " trials";
+        // ⚠ the space is OUTSIDE `_()`: jamovi looks a msgid up trimmed but the catalogue stores it
+        // as written, so edge whitespace inside the call is a permanent silent miss.
+        var sufT = document.createElement("span"); sufT.style.cssText = TABX.refNote;
+        sufT.textContent = " " + _("trials");
         wrapT.appendChild(inp); wrapT.appendChild(sufT);
         row.appendChild(wrapT);
     } else {
@@ -1226,13 +1232,13 @@ var renderModelTable = function(ui) {
     if (deps.length === 0) {
         var hint = document.createElement("div"); hint.style.cssText = TABX.hint;
         hint.textContent =
-            "Add one or more outcome variables to choose each one's model family and link.";
+            _("Add one or more outcome variables to choose each one's model family and link.");
         frag.appendChild(hint);
     } else {
         // The header names the two ARGUMENTS the table sets, so a user learns them by clicking --
         // the same reason every other control in this panel is labelled `<argument> =`.
         var head = document.createElement("div"); head.style.cssText = TABX.mtHead;
-        ["outcome", "family =", "link ="].forEach(function(t) {
+        [_("outcome"), "family =", "link ="].forEach(function(t) {
             var h = document.createElement("span"); h.textContent = t; head.appendChild(h);
         });
         frag.appendChild(head);
@@ -1477,7 +1483,7 @@ var renderCrossRow = function(ui, frag, e, i, pool) {
         function(v) { setCrossVar(ui, i, "var2", v); }));
     var del = document.createElement("button");
     del.type = "button"; del.style.cssText = TABX.xDel; del.textContent = "×";
-    del.title = "Remove this interaction";
+    del.title = _("Remove this interaction");
     del.addEventListener("click", function() { deleteCross(ui, i); });
     row.appendChild(del);
     frag.appendChild(row);
@@ -1485,12 +1491,12 @@ var renderCrossRow = function(ui, frag, e, i, pool) {
 
 var renderCrossBlock = function(ui, frag, pool, keys) {
     var h = document.createElement("div"); h.style.cssText = TABX.sectionHead;
-    h.textContent = "Interactions";
+    h.textContent = _("Interactions");
     frag.appendChild(h);
 
     if (pool.length < 2) {
         var h0 = document.createElement("div"); h0.style.cssText = TABX.hint;
-        h0.textContent = "Select at least two predictors: an interaction crosses two of them.";
+        h0.textContent = _("Select at least two predictors: an interaction crosses two of them.");
         frag.appendChild(h0);
         return;
     }
@@ -1499,14 +1505,14 @@ var renderCrossBlock = function(ui, frag, pool, keys) {
     var well = document.createElement("div"); well.style.cssText = TABX.well;
     if (keys.length > 0) {
         var head = document.createElement("div"); head.style.cssText = TABX.crossHead;
-        ["effect of", "", "within each level of", ""].forEach(function(t) {
+        [_("effect of"), "", _("within each level of"), ""].forEach(function(t) {
             var s = document.createElement("span"); s.textContent = t; head.appendChild(s);
         });
         well.appendChild(head);
         crossesGet(ui).forEach(function(e, i) { renderCrossRow(ui, well, e, i, pool); });
     }
     var add = document.createElement("button");
-    add.type = "button"; add.style.cssText = TABX.addBtn; add.textContent = "+ Add interaction";
+    add.type = "button"; add.style.cssText = TABX.addBtn; add.textContent = _("+ Add interaction");
     if (crossFreePair(ui, pool) === null) { add.disabled = true; add.style.opacity = "0.45"; }
     else add.addEventListener("click", function() { addCross(ui, pool); });
     well.appendChild(add);
@@ -1516,7 +1522,7 @@ var renderCrossBlock = function(ui, frag, pool, keys) {
     // rows on screen the two column heads already say what the pair means.
     if (keys.length === 0) {
         var note = document.createElement("div"); note.style.cssText = TABX.hint;
-        note.textContent = "Cross two predictors to read the effect of the first within each level of the second.";
+        note.textContent = _("Cross two predictors to read the effect of the first within each level of the second.");
         frag.appendChild(note);
     }
 };
@@ -1589,13 +1595,13 @@ var renderModelCard = function(ui, frag, card, i, pool, keys) {
 
     var name = document.createElement("input");
     name.type = "text"; name.style.cssText = TABX.cardName;
-    name.placeholder = "model" + (i + 1); name.value = card.label || "";
+    name.placeholder = _("model") + (i + 1); name.value = card.label || "";
     name.addEventListener("input", function() { setCardLabel(ui, i, name.value); });
     head.appendChild(name);
 
     var del = document.createElement("button");
     del.type = "button"; del.style.cssText = TABX.cardDel; del.textContent = "×";
-    del.title = "Remove this model";
+    del.title = _("Remove this model");
     del.addEventListener("click", function() { deleteCard(ui, i); });
     head.appendChild(del);
     box.appendChild(head);
@@ -1621,7 +1627,7 @@ var renderModelCard = function(ui, frag, card, i, pool, keys) {
             else if (!first && c.locked) c.cb.checked = true;
             c.cb.disabled = !!owner;
             c.lab.style.opacity = owner ? "0.5" : "";
-            c.lab.title = owner ? ("included in " + owner) : "";
+            c.lab.title = owner ? _("included in {pair}").replace("{pair}", owner) : "";
             c.locked = !!owner;
         });
     };
@@ -1659,7 +1665,7 @@ var renderModelCard = function(ui, frag, card, i, pool, keys) {
 
 var renderCardsBlock = function(ui, frag, pool, keys) {
     var h = document.createElement("div"); h.style.cssText = TABX.sectionHead;
-    h.textContent = "Models comparison: choose predictors subsets";
+    h.textContent = _("Models comparison: choose predictors subsets");
     frag.appendChild(h);
 
     var cards = modelsGet(ui);
@@ -1674,7 +1680,7 @@ var renderCardsBlock = function(ui, frag, pool, keys) {
     var well = document.createElement("div"); well.style.cssText = TABX.well;
     cards.forEach(function(card, i) { renderModelCard(ui, well, card, i, pool, keys); });
     var add = document.createElement("button");
-    add.type = "button"; add.style.cssText = TABX.addBtn; add.textContent = "+ Add model";
+    add.type = "button"; add.style.cssText = TABX.addBtn; add.textContent = _("+ Add model");
     add.disabled = !canAdd;
     if (!canAdd) add.style.opacity = "0.45";
     else add.addEventListener("click", function() { addCard(ui, pool); });
@@ -1683,10 +1689,10 @@ var renderCardsBlock = function(ui, frag, pool, keys) {
 
     var note = document.createElement("div"); note.style.cssText = TABX.hint;
     note.textContent = !canAdd
-        ? "One predictor list only: a comparison tests two models of the SAME outcome, and several outcomes are selected."
+        ? _("One predictor list only: a comparison tests two models of the SAME outcome, and several outcomes are selected.")
         : (cards.length === 0
-           ? "Add two or more models to compare them; leave empty to fit the full model."
-           : "Each model draws from the predictors above; untick to leave one out.");
+           ? _("Add two or more models to compare them; leave empty to fit the full model.")
+           : _("Each model draws from the predictors above; untick to leave one out."));
     frag.appendChild(note);
 };
 
@@ -1704,7 +1710,7 @@ var renderModelBuilder = function(ui) {
 
     if (pool.length === 0) {
         var h0 = document.createElement("div"); h0.style.cssText = TABX.hint;
-        h0.textContent = "Select predictors first: they form the pool each model draws from.";
+        h0.textContent = _("Select predictors first: they form the pool each model draws from.");
         frag.appendChild(h0);
     } else {
         renderCrossBlock(ui, frag, pool, keys);
@@ -1803,8 +1809,10 @@ module.exports = {
     // Reset the export folder + file name to their defaults, then clear the action so it can re-fire.
     resetPath_changed: function(ui) {
         if (ui.resetPath && ui.resetPath.value()) {
-            if (ui.export_dir)      ui.export_dir.setValue("~/Documents");
-            if (ui.export_filename) ui.export_filename.setValue("Reg_model");   // == the .a.yaml default
+            // ⚠ `_()`: jamovi TRANSLATES an option's declared default, so without it the box opens
+            // on the translated name and this button resets it to the English one.
+            if (ui.export_dir)      ui.export_dir.setValue(_("~/Documents"));
+            if (ui.export_filename) ui.export_filename.setValue(_("Reg_model"));   // == the .a.yaml default
             ui.resetPath.setValue(false);
         }
     }

@@ -367,7 +367,7 @@ options:
       options:
         - title: "wald = <i>(Wald)</i>"
           name:  wald
-        - title: "profile =  <i>(profile-likelihood)</i>"
+        - title: "profile = <i>(profile-likelihood)</i>"
           name:  profile
       default: wald
       description:
@@ -545,13 +545,13 @@ options:
             for a page that has no colour. See \code{\link{tab_css}}.
 
     - name: wrap_rows
-      title: "Wrap row labels at"
+      title: ""          # the .u.yaml Label above it names the argument; a title here double-labels
       type: Number
       min: 0
       default: 35
 
     - name: wrap_cols
-      title: "Wrap column headers at"
+      title: ""          # idem -- jmvtab sets both to "" for the same reason
       type: Number
       min: 0
       default: 15

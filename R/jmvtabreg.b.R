@@ -181,11 +181,12 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
 
     # A friendly placeholder when the outcome / predictors are not both selected yet (or a model
     # comparison was requested with several outcomes, which tab_reg() does not allow).
+    # ⚠ ONE msgid, not three concatenated pieces: a translator owns the whole sentence, and
+    # jmvcore's `.()` resolves it against the module's own catalogue (inst/i18n/fr.json), i.e. the
+    # SAME one the options panel reads -- keyed on jamovi's UI language, which gettext() is not.
     .hint = function() {
       jmv_results_note(
-        paste0("Select an <b>outcome</b> variable and one or more <b>predictors</b> ",
-               "to fit a regression. For a model comparison (predictor subsets), choose a single ",
-               "outcome."),
+        jmvcore::.("Select an <b>outcome</b> variable and one or more <b>predictors</b> to fit a regression. For a model comparison (predictor subsets), choose a single outcome."),
         style = "padding:12px;opacity:0.7;font-style:italic;")
     },
 
@@ -194,9 +195,9 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
     .compare_hint = function(last = NULL) {
       banner <- jmv_results_note(
         if (is.null(last))
-          "Model comparison staged. Click <b>Run comparison</b> to compute the table."
+          jmvcore::.("Model comparison staged. Click <b>Run comparison</b> to compute the table.")
         else
-          "Model options changed, table below is outdated. Click <b>Run comparison</b> to refresh.",
+          jmvcore::.("Model options changed, table below is outdated. Click <b>Run comparison</b> to refresh."),
         style = paste0("padding:10px 12px;margin-bottom:6px;border:1px solid #d0a;",
                        "border-radius:4px;background:rgba(204,0,170,0.06);"))
       paste0(banner, last %||% "")

@@ -4,6 +4,15 @@
 // Everything about a VARIABLE -- its level order, its merges, how a number is cut, what it is
 // compared to -- is one table, built by the SHARED block and described by VAR_TABLE_HOST below.
 // jus 3.0: use the GLOBAL `utils.clone` (the events `this` has no `.clone`, unlike jus 2.0).
+//
+// ⚠ EVERY user-visible string goes through `_()` -- jamovi's own gettext, which the analysis UI
+// defines (`window._`) before it evaluates this file, and which the compiler extracts from
+// jamovi/js/**/*.js. A literal left unwrapped ships English in every locale and reports nothing;
+// test-jamovi-i18n.R is the gate. Argument NAMES and VALUES (`ref2 =`, `2sd`, `max`) stay English
+// on purpose. No edge whitespace inside `_()` (the lookup trims, the catalogue does not), no
+// plural and no context (only `_` exists at runtime): a branch is TWO FULL msgids.
+// ⚠ A string inside the SHARED span is edited HERE and copied by dev/generate_jamovi_js.R.
+// See dev/tabxplor_2.0.0_jamovi_dev.md § 19.1.
 
 // --- BEGIN GENERATED (dev/generate_jamovi_js.R) -- do not edit ---
 // Generated from R/fmt_class.R (MEASURES), R/tab-display.R (DISPLAY_TOKENS) and
@@ -14,7 +23,7 @@ var TABX_DISPLAY_ODDS_RATIO_FIELDS = ["or"];
 var TABX_SHAPES_INDEX = ["auto", "sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles", "values_to_levels"];
 var TABX_SHAPES_COL = ["linear", "log", "sqrt", "sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles", "values_to_levels"];
 var TABX_SHAPES_CUT = ["sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles", "values_to_levels"];
-var TABX_SHAPE_LABEL = { "linear": "linear (numeric)", "log": "log (numeric)", "sqrt": "sqrt (numeric)", "sd_bands": "sd_bands (cut)", "median": "median (cut)", "terciles": "terciles (cut)", "quartiles": "quartiles (cut)", "quintiles": "quintiles (cut)", "deciles": "deciles (cut)", "values_to_levels": "values_to_levels" };
+var TABX_SHAPE_LABEL = { "linear": _("linear (numeric)"), "log": _("log (numeric)"), "sqrt": _("sqrt (numeric)"), "sd_bands": _("sd_bands (cut)"), "median": _("median (cut)"), "terciles": _("terciles (cut)"), "quartiles": _("quartiles (cut)"), "quintiles": _("quintiles (cut)"), "deciles": _("deciles (cut)"), "values_to_levels": _("values_to_levels") };
 // --- END GENERATED ---
 
 // The file extension shown after the file name on the path line -- follows the chosen format. Rendered
@@ -416,7 +425,7 @@ var tabxvFillLevels = function (ui, host, v, kind) {
             if (host.varSync) host.varSync(ui, v, tabxvKind(ui, host, kind.group, v));
             tabxvRefreshVar(ui, host, v);
         });
-        sel.title = "how this number becomes groups (shape =)";
+        sel.title = _("how this number becomes groups (shape =)");
         c.levels.appendChild(sel); return;
     }
     var natural = kind.cached || [];
@@ -424,7 +433,8 @@ var tabxvFillLevels = function (ui, host, v, kind) {
     // the COUNT is the original one -- a merge is a statement about those levels, not a new set of
     // them -- and the instruction beside it says which way the click goes.
     var b = document.createElement("span"); b.style.cssText = TABXV.lvlBtn + TABXV.dotted;
-    var n = document.createElement("span"); n.textContent = String(natural.length) + " levels";
+    var n = document.createElement("span");
+    n.textContent = _("{n} levels").replace("{n}", String(natural.length));
     var h = document.createElement("span"); h.style.cssText = TABXV.lvlHow;
     h.textContent = " \u2014 " + (tabxvOpen[v] ? host.closeTip : host.mergeTip);
     b.appendChild(n); b.appendChild(h);
@@ -750,11 +760,11 @@ var tabxmBuildList = function (ui, v, initialOrder, onOrder, canOrder, onCommit,
             if (!canMerge) return;
 
             var t = cell(i > 0 ? TABXM.tick : TABXM.head, 2, row);
-            if (i === 0) t.textContent = "merge";   // the column names itself in its empty cell
+            if (i === 0) t.textContent = _("merge");   // the column names itself in its empty cell
             if (i > 0) {                      // the first level has nothing above to merge into
                 var cb = document.createElement("input");
                 cb.type = "checkbox"; cb.checked = !!ticks[i];
-                cb.title = "merge into the level above";
+                cb.title = _("merge into the level above");
                 cb.addEventListener("change", function () {
                     ticks[i] = cb.checked; commit(); renderRows();
                 });
@@ -839,7 +849,7 @@ var tabxmBuildList = function (ui, v, initialOrder, onOrder, canOrder, onCommit,
             b.style.cssText = canOrder ? TABXM.btn : TABXM.btnOff;
             if (!canOrder) {
                 b.disabled = true;
-                b.title = "an ordered variable already has the order its levels mean";
+                b.title = _("an ordered variable already has the order its levels mean");
                 return b;
             }
             b.addEventListener("click", function (e) { e.preventDefault(); grid.focus(); move(dir); });
@@ -881,24 +891,24 @@ var VAR_TABLE_HOST = {
     // that is already the narrowest thing jamovi shows. ⚠ the name column's minmax FLOOR: with
     // minmax(0,1fr) it collapsed to nothing behind the fixed columns and the names vanished.
     cols: [
-        { key: "name",   head: "variable",         width: "minmax(90px,1fr)" },
-        { key: "levels", head: "levels / shape =", width: "165px",
-          tip: "a factor shows how many levels it has; a number chooses how it is cut into groups" },
-        { key: "ref",    head: "ref = <i>(reference)</i>", width: "180px",
-          tip: "what each cell is compared to" }
+        { key: "name",   head: _("variable"),         width: "minmax(90px,1fr)" },
+        { key: "levels", head: _("levels / shape ="), width: "165px",
+          tip: _("a factor shows how many levels it has; a number chooses how it is cut into groups") },
+        { key: "ref",    head: _("ref = <i>(reference)</i>"), width: "180px",
+          tip: _("what each cell is compared to") }
     ],
-    emptyHint: "Select row, column or table variables to order, merge or cut their levels.",
-    mergeTip:  "click to relevel",
-    closeTip:  "click to close",
+    emptyHint: _("Select row, column or table variables to order, merge or cut their levels."),
+    mergeTip:  _("click to relevel"),
+    closeTip:  _("click to close"),
     orderOpt:  "levels_order",
     isCut:     function (sh) { return TABX_SHAPES_CUT.indexOf(sh) >= 0; },
 
     // the 3rd slot is the AXIS rule a number reads: only a COLUMN variable may stay a number (its
     // reading is its mean), which is the same rule shape_refuse_numeric_index() enforces R-side.
     groups: function (ui) {
-        return [{ label: "Row variables",    vars: tabVarsOf(ui, "row_vars"), numericMayKeep: false },
-                { label: "Column variables", vars: tabVarsOf(ui, "col_vars"), numericMayKeep: true  },
-                { label: "Table variables",  vars: tabVarsOf(ui, "tab_vars"), numericMayKeep: false }];
+        return [{ label: _("Row variables"),    vars: tabVarsOf(ui, "row_vars"), numericMayKeep: false },
+                { label: _("Column variables"), vars: tabVarsOf(ui, "col_vars"), numericMayKeep: true  },
+                { label: _("Table variables"),  vars: tabVarsOf(ui, "tab_vars"), numericMayKeep: false }];
     },
 
     // ⚠ ONLY what the table does not itself write (see the SHARED header). `pct` decides which axis
@@ -947,7 +957,7 @@ var VAR_TABLE_HOST = {
             // A cut number DOES have groups, but their labels are computed R-side from the data's
             // own quantiles -- so the only references nameable here are the positional ones.
             choices = or ? ["first", "last"] : ["tot", "first", "last"];
-            labels  = { tot: "Total", first: "First group", last: "Last group" };
+            labels  = { tot: _("Total"), first: _("First group"), last: _("Last group") };
             def     = or ? "first" : "tot";
         } else {
             // The choices are the levels the TABLE will show -- a merged run is ONE level, under its
@@ -955,7 +965,7 @@ var VAR_TABLE_HOST = {
             var levels = tabxvLevels(ui, VAR_TABLE_HOST, v, kind.cached);
             if (levels.length === 0) return;
             choices = or ? levels : ["tot"].concat(levels);
-            labels  = function (o) { return (o === "tot") ? "Total" : tabxvClean(ui, o); };
+            labels  = function (o) { return (o === "tot") ? _("Total") : tabxvClean(ui, o); };
             def     = or ? levels[0] : "tot";
         }
         var stored = arrGet(ui, "ref_levels", v, "ref");
@@ -984,12 +994,15 @@ var tabRef2Cell = function (ui, cell, v, pct) {
     // no "tot": the second reference of an odds ratio is a CATEGORY, like the first.
     var choices = ["first"].concat(levels);
     var stored  = String(ui.ref2.value() || "first");
-    var labs = function (o) { return (o === "first") ? "First" : tabxvClean(ui, o); };
+    var labs = function (o) { return (o === "first") ? _("First") : tabxvClean(ui, o); };
     var sel = makeSelect(TABXV.sel, choices, labs,
                          choices.indexOf(stored) >= 0 ? stored : "first",
                          function (r) { ui.ref2.setValue(r); });
-    sel.title = "odds ratios \u2013 the " + ((pct === "col") ? "row" : "column") +
-                " each odds ratio is compared to (ref2 =)";
+    // ⚠ TWO FULL msgids, not a concatenation: jamovi's runtime exposes `_` alone -- no `_p`, no
+    // msgctxt -- and a translator must own the whole word order, not a noun spliced into a frame.
+    sel.title = (pct === "col")
+        ? _("odds ratios \u2013 the row each odds ratio is compared to (ref2 =)")
+        : _("odds ratios \u2013 the column each odds ratio is compared to (ref2 =)");
     // this ONE cell sits in the column headed `ref =` but writes the OTHER argument, so it says so.
     var tag = document.createElement("span");
     tag.style.cssText = TABXV.lvlHow + "white-space:nowrap;flex:0 0 auto;margin-right:4px;";
@@ -1052,8 +1065,10 @@ module.exports = {
     // Reset the export folder + file name to their defaults, then clear the action so it can re-fire.
     resetPath_changed: function (ui) {
         if (ui.resetPath && ui.resetPath.value()) {
-            if (ui.export_dir)      ui.export_dir.setValue("~/Documents");
-            if (ui.export_filename) ui.export_filename.setValue("Table");
+            // ⚠ `_()` here, because jamovi TRANSLATES an option's declared default: without it the
+            // box opened on "Tableau" and this button reset it to "Table".
+            if (ui.export_dir)      ui.export_dir.setValue(_("~/Documents"));
+            if (ui.export_filename) ui.export_filename.setValue(_("Table"));
             ui.resetPath.setValue(false);
         }
     }

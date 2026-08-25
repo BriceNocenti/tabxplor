@@ -22,6 +22,10 @@
 # is deliberate: jamovi bundles `jamovi/js/*.js` itself, and whether it would resolve a `require()`
 # of a second module is not something this repo can test.
 #
+# ⚠ A LABEL IS EMITTED INSIDE `_()`. jamovi's compiler extracts `_("...")` from jamovi/js/**/*.js
+# and the analysis UI defines `window._` before it evaluates the module, so a generated label is a
+# msgid exactly like a `.yaml` title -- see js_tr() below and dev/tabxplor_2.0.0_jamovi_dev.md § 19.1.
+#
 # ⚠ TWO ORDERS THAT MUST NOT BORROW EACH OTHER. `REG_FAMILIES[[f]]$fits` is ordered so its FIRST
 # entry is the family's own link, which is what `link = "auto"` resolves to; the Model table's
 # drop-down is ordered like `measure`'s own radios, because a link IS a measure and one order down
@@ -52,6 +56,11 @@ js_obj  <- function(x, val = js_str) {                    # named vector/list ->
   paste0("{ ", paste0(js_str(names(x)), ": ",
                       vapply(x, val, character(1)), collapse = ", "), " }")
 }
+# A LABEL a user reads goes through jamovi's own gettext. The compiler extracts `_("...")` from
+# jamovi/js/**/*.js (jamovi-compiler/i18n.js) and the analysis UI defines `window._` before it
+# evaluates the module, so an emitted `_("binomial (logistic)")` is a msgid like any `.yaml` title.
+# ⚠ PLAIN TEXT still: these paint a native <option>'s textContent, so no markup in the msgid.
+js_tr   <- function(x) paste0("_(", js_str(x), ")")
 
 
 # The shape picker's labels: the value, then what it MAKES OF the column -- which is the one thing
@@ -117,12 +126,12 @@ reg_block <- function() {
     "// Generated from R/tab_reg.R (REG_OUTCOME_KINDS), R/reg-estimand.R (REG_FAMILIES,",
     "// REG_ESTIMANDS) and R/var-shape.R (VAR_SHAPES). Re-run dev/generate_jamovi_js.R after",
     "// changing any of them; the suite checks this block (test-jamovi-vocabulary.R).",
-    paste0("var TABX_FAMILY_LABEL = ", js_obj(tabxplor:::reg_family_ui_labels()), ";"),
-    paste0("var TABX_FAMILY_LABEL_BINARY = ", js_obj(tabxplor:::reg_family_ui_labels(binary = TRUE)), ";"),
+    paste0("var TABX_FAMILY_LABEL = ", js_obj(tabxplor:::reg_family_ui_labels(), js_tr), ";"),
+    paste0("var TABX_FAMILY_LABEL_BINARY = ", js_obj(tabxplor:::reg_family_ui_labels(binary = TRUE), js_tr), ";"),
     paste0("var TABX_OUTCOME_DETECT = ", js_obj(detect), ";"),
     paste0("var TABX_OUTCOME_OFFERS = ", js_obj(offers, js_arr), ";"),
     paste0("var TABX_LINKS = ", js_obj(links, js_arr), ";"),
-    paste0("var TABX_LINK_LABEL = ", js_obj(tabxplor:::reg_link_ui_labels()), ";"),
+    paste0("var TABX_LINK_LABEL = ", js_obj(tabxplor:::reg_link_ui_labels(), js_tr), ";"),
     # WHICH FAMILIES TAKE AN `outcome_level`, and what that level IS to them -- "modelled" (binomial:
     # one level against the rest) or "baseline" (multinomial: the category everything is read
     # against). NA elsewhere, and a family with no role gets no picker: the gate used to be "the
@@ -142,7 +151,7 @@ reg_block <- function() {
     # from `produces` rather than spelled out again as a list of exceptions in the .js.
     paste0("var TABX_SHAPES = ", js_arr(reg_shapes), ";"),
     paste0("var TABX_SHAPES_CUT = ", js_arr(reg_cuts), ";"),
-    paste0("var TABX_SHAPE_LABEL = ", js_obj(shape_ui_labels(reg_shapes)), ";"),
+    paste0("var TABX_SHAPE_LABEL = ", js_obj(shape_ui_labels(reg_shapes), js_tr), ";"),
     END
   )
 }
@@ -181,7 +190,7 @@ tab_block <- function() {
     paste0("var TABX_SHAPES_INDEX = ", js_arr(idx_shapes), ";"),
     paste0("var TABX_SHAPES_COL = ", js_arr(col_shapes), ";"),
     paste0("var TABX_SHAPES_CUT = ", js_arr(cuts), ";"),
-    paste0("var TABX_SHAPE_LABEL = ", js_obj(shape_ui_labels(tab_shapes)), ";"),
+    paste0("var TABX_SHAPE_LABEL = ", js_obj(shape_ui_labels(tab_shapes), js_tr), ";"),
     END
   )
 }

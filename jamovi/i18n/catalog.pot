@@ -8,6 +8,19 @@ msgstr ""
 "Language: c\n"
 "Plural-Forms: nplurals=2; plural=(n != 1)\n"
 
+#: jamovi/js/jmvtab.js:428
+#: jamovi/js/jmvtabreg.js:441
+msgid "{n} levels"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1513
+msgid "+ Add interaction"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1681
+msgid "+ Add model"
+msgstr ""
+
 #: jmvtab/ui[2][1][0].label
 msgid ""
 "<b><i>Choose reference categories, merge and reorder levels, cut numeric "
@@ -124,17 +137,38 @@ msgid ""
 "variables:</i>"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:1061
+#: jamovi/js/jmvtabreg.js:1812
 #: jmvtab/options/export_dir.default
 #: jmvtabreg/options/export_dir.default
 msgid "~/Documents"
+msgstr ""
+
+#: jamovi/js/jmvtab.js:887
+#: jamovi/js/jmvtabreg.js:950
+msgid ""
+"a factor shows how many levels it has; a number chooses how it is cut into "
+"groups"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:954
+msgid "a number's effect is read per k units"
 msgstr ""
 
 #: jmvtab/options/ci_method_diff/ac.title
 msgid "ac <i>(Agresti-Caffo)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtabreg.js:1233
+msgid "Add one or more outcome variables to choose each one's model family and link."
+msgstr ""
+
 #: jmvtab/options/test.title
 msgid "Add statistical test/effect size"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1692
+msgid "Add two or more models to compare them; leave empty to fit the full model."
 msgstr ""
 
 #: jmvtab/ui[4][2][0].label
@@ -158,6 +192,11 @@ msgstr ""
 msgid "all_tabs (with tab_vars)"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:843
+#: jamovi/js/jmvtabreg.js:856
+msgid "an ordered variable already has the order its levels mean"
+msgstr ""
+
 #: jmvtab/options/anova.title
 msgid "anova = <i>(which test for numeric variables ?)</i>"
 msgstr ""
@@ -179,6 +218,10 @@ msgstr ""
 #: jmvtab/options/display/auto.title
 #: jmvtabreg/options/display/auto.title
 msgid "auto"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:16
+msgid "auto (family based)"
 msgstr ""
 
 #: jmvtab/options/lvs/auto.title
@@ -245,6 +288,11 @@ msgstr ""
 msgid "between_groups <i>(gap between tab_vars)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtabreg.js:11
+#: jamovi/js/jmvtabreg.js:12
+msgid "binomial (logistic)"
+msgstr ""
+
 #: jmvtab/options/ci/cell.title
 msgid "cell <i>(each cell's own interval)</i>"
 msgstr ""
@@ -293,6 +341,16 @@ msgstr ""
 msgid "cleannames"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:893
+#: jamovi/js/jmvtabreg.js:958
+msgid "click to close"
+msgstr ""
+
+#: jamovi/js/jmvtab.js:892
+#: jamovi/js/jmvtabreg.js:957
+msgid "click to relevel"
+msgstr ""
+
 #: jmvtab/options/pct/col.title
 msgid "col (column)"
 msgstr ""
@@ -319,6 +377,10 @@ msgstr ""
 msgid "color_signif = <i>(significance policy)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:901
+msgid "Column variables"
+msgstr ""
+
 #: jmvtab/options/na/common_base.title
 msgid "common_base <i>(complete cases of 1st col_var)</i>"
 msgstr ""
@@ -343,6 +405,12 @@ msgstr ""
 msgid "contrib <i>(contribution to variance)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtabreg.js:1523
+msgid ""
+"Cross two predictors to read the effect of the first within each level of "
+"the second."
+msgstr ""
+
 #: package/analyses/jmvtab.title
 #: package/analyses/jmvtab.menuTitle
 #: jmvtab/options.title
@@ -355,12 +423,21 @@ msgstr ""
 msgid "ctr <i>(contribs to var.)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:17
+#: jamovi/js/jmvtabreg.js:21
+msgid "deciles (cut)"
+msgstr ""
+
 #: jmvtab/options/design_effect.title
 msgid "design_effect"
 msgstr ""
 
 #: jmvtab/options/display/diff.title
 msgid "diff <i>(difference to ref)</i>"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:16
+msgid "difference"
 msgstr ""
 
 #: jmvtab/options/color/difference.title
@@ -404,8 +481,16 @@ msgstr ""
 msgid "drop_by_outcome <i>(one population per outcome)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtabreg.js:1693
+msgid "Each model draws from the predictors above; untick to leave one out."
+msgstr ""
+
 #: jmvtabreg/ui[1][2][1][2][0].label
 msgid "effect = <i>(where the numbers come from)</i>"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1506
+msgid "effect of"
 msgstr ""
 
 #: jmvtabreg/ui[1][2][1][1]/empirical.label
@@ -440,6 +525,10 @@ msgstr ""
 msgid "Export"
 msgstr ""
 
+#: R/jmvtab-export.R
+msgid "Export failed:"
+msgstr ""
+
 #: jmvtabreg/options/family.title
 msgid "family (per outcome)"
 msgstr ""
@@ -448,8 +537,20 @@ msgstr ""
 msgid "first"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:988
+msgid "First"
+msgstr ""
+
 #: jmvtab/options/lvs/first.title
 msgid "first <i>(first level of each col_var)</i>"
+msgstr ""
+
+#: jamovi/js/jmvtab.js:951
+msgid "First group"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1014
+msgid "first group (lowest)"
 msgstr ""
 
 #: jmvtab/options/ref2.title
@@ -459,6 +560,10 @@ msgstr ""
 #: jmvtab/options/export_format.title
 #: jmvtabreg/options/export_format.title
 msgid "Format"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:11
+msgid "gaussian (linear)"
 msgstr ""
 
 #: jmvtabreg/options/color_signif/grey_non_signif.title
@@ -477,6 +582,11 @@ msgstr ""
 msgid "guaranteed_effect <i>(color all CI-floor/small sample)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:419
+#: jamovi/js/jmvtabreg.js:432
+msgid "how this number becomes groups (shape =)"
+msgstr ""
+
 #: jmvtab/options/export_format/html.title
 #: jmvtabreg/options/export_format/html.title
 msgid "HTML"
@@ -488,6 +598,14 @@ msgstr ""
 
 #: jmvtabreg/options/color_signif/ignore.title
 msgid "ignore <i>(color effect size only, ignore significance)</i>"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1628
+msgid "included in {pair}"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1492
+msgid "Interactions"
 msgstr ""
 
 #: jmvtabreg/options/crosses.title
@@ -502,6 +620,14 @@ msgstr ""
 msgid "keep_for_predictors <i>(predictors NA to real levels)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:951
+msgid "Last group"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1014
+msgid "last group (highest)"
+msgstr ""
+
 #: jmvtabreg/options/levels_order.title
 msgid "Level order (per predictor)"
 msgstr ""
@@ -514,24 +640,36 @@ msgstr ""
 msgid "levels"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:886
+#: jamovi/js/jmvtabreg.js:949
+msgid "levels / shape ="
+msgstr ""
+
 #: jmvtab/ui[2][0][1][0].label
 msgid "levels = <i>(which col_var levels to keep)</i>"
 msgstr ""
 
+#: jmvtab/options/tab_theme/light.title
 #: jmvtabreg/options/tab_theme/light.title
 msgid "light <i>(colors)</i>"
-msgstr ""
-
-#: jmvtab/options/tab_theme/light.title
-msgid "light <i>(colours)</i>"
 msgstr ""
 
 #: jmvtab/options/totaltab/line.title
 msgid "line"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:17
+#: jamovi/js/jmvtabreg.js:21
+msgid "linear (numeric)"
+msgstr ""
+
 #: jmvtabreg/options/link.title
 msgid "link (per outcome)"
+msgstr ""
+
+#: jamovi/js/jmvtab.js:17
+#: jamovi/js/jmvtabreg.js:21
+msgid "log (numeric)"
 msgstr ""
 
 #: package.description
@@ -553,6 +691,10 @@ msgstr ""
 #: jmvtab/options/export_format/md.title
 #: jmvtabreg/options/export_format/md.title
 msgid "Markdown"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:943
+msgid "mean (default)"
 msgstr ""
 
 #: jmvtab/options/display/mean.title
@@ -579,6 +721,21 @@ msgstr ""
 msgid "measure = <i>(which measure is reported)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:17
+#: jamovi/js/jmvtabreg.js:21
+msgid "median (cut)"
+msgstr ""
+
+#: jamovi/js/jmvtab.js:754
+#: jamovi/js/jmvtabreg.js:767
+msgid "merge"
+msgstr ""
+
+#: jamovi/js/jmvtab.js:758
+#: jamovi/js/jmvtabreg.js:771
+msgid "merge into the level above"
+msgstr ""
+
 #: jmvtabreg/options/levels_collapse.title
 msgid "Merged levels (per predictor)"
 msgstr ""
@@ -592,8 +749,34 @@ msgstr ""
 msgid "min"
 msgstr ""
 
+#: jamovi/js/jmvtabreg.js:1596
+msgid "model"
+msgstr ""
+
+#: R/jmvtabreg.b.R
+msgid "Model comparison staged. Click <b>Run comparison</b> to compute the table."
+msgstr ""
+
+#: R/jmvtabreg.b.R
+msgid ""
+"Model options changed, table below is outdated. Click <b>Run comparison</b> "
+"to refresh."
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1666
+msgid "Models comparison: choose predictors subsets"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:11
+msgid "multinomial"
+msgstr ""
+
 #: jmvtabreg/options/multiplier.title
 msgid "multiplier (per numeric predictor)"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:953
+msgid "multiplier ="
 msgstr ""
 
 #: jmvtab/options/display/n.title
@@ -645,6 +828,18 @@ msgstr ""
 msgid "Note below the table"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:996
+msgid "odds ratios – the column each odds ratio is compared to (ref2 =)"
+msgstr ""
+
+#: jamovi/js/jmvtab.js:995
+msgid "odds ratios – the row each odds ratio is compared to (ref2 =)"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:16
+msgid "odds_ratio"
+msgstr ""
+
 #: jmvtab/options/color/odds_ratio.title
 msgid "odds_ratio <i>(odds ratios)</i>"
 msgstr ""
@@ -657,6 +852,12 @@ msgstr ""
 msgid "ols <i>(pooled over all levels)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtabreg.js:1690
+msgid ""
+"One predictor list only: a comparison tests two models of the SAME outcome, "
+"and several outcomes are selected."
+msgstr ""
+
 #: jmvtab/options/display/or.title
 msgid "or <i>(odds ratios)</i>"
 msgstr ""
@@ -665,8 +866,24 @@ msgstr ""
 msgid "or_base <i>(OR + pct)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtabreg.js:11
+msgid "ordinal"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1239
+msgid "outcome"
+msgstr ""
+
 #: jmvtabreg/options/outcome_level.title
 msgid "outcome_level (per outcome)"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1198
+msgid "outcome_level = the baseline category the others are read against"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1197
+msgid "outcome_level = the level modelled, against every other one merged"
 msgstr ""
 
 #: jmvtab/options/export_dir.title
@@ -686,12 +903,24 @@ msgstr ""
 msgid "pct = <i>(type of percentages)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtabreg.js:11
+msgid "poisson (counts)"
+msgstr ""
+
 #: jmvtab/options/ci_method_mean_ratio/poisson.title
 msgid "poisson <i>(naive counts)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtabreg.js:948
+msgid "predictor"
+msgstr ""
+
 #: jmvtabreg/options/models.title
 msgid "Predictor subsets (model comparison)"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:967
+msgid "Predictors"
 msgstr ""
 
 #: jmvtab/options/tab_theme/print_ready.title
@@ -700,16 +929,34 @@ msgid "print_ready <i>(black and white, for publication)</i>"
 msgstr ""
 
 #: jmvtabreg/options/ci_method/profile.title
-msgid "profile =  <i>(profile-likelihood)</i>"
+msgid "profile = <i>(profile-likelihood)</i>"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:21
+msgid "quadratic (num.)"
+msgstr ""
+
+#: jamovi/js/jmvtab.js:17
+#: jamovi/js/jmvtabreg.js:21
+msgid "quartiles (cut)"
 msgstr ""
 
 #: jmvtab/options/ci_method_mean_ratio/quasipoisson.title
 msgid "quasipoisson <i>(dispersion-scaled)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:17
+#: jamovi/js/jmvtabreg.js:21
+msgid "quintiles (cut)"
+msgstr ""
+
 #: jmvtab/options/n/range.title
 #: jmvtabreg/options/n/range.title
 msgid "range"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:16
+msgid "ratio"
 msgstr ""
 
 #: jmvtab/options/display/ratio.title
@@ -736,10 +983,16 @@ msgstr ""
 msgid "ref <i>(interval on the comparison with the reference)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:888
+#: jamovi/js/jmvtabreg.js:951
+msgid "ref = <i>(reference)</i>"
+msgstr ""
+
 #: jmvtab/options/ref_levels.title
 msgid "Reference levels (per variable)"
 msgstr ""
 
+#: jamovi/js/jmvtabreg.js:1813
 #: jmvtabreg/options/export_filename.default
 msgid "Reg_model"
 msgstr ""
@@ -753,6 +1006,14 @@ msgstr ""
 #: jmvtabreg/options.title
 #: jmvtabreg/ui.title
 msgid "Regressions"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1484
+msgid "Remove this interaction"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1602
+msgid "Remove this model"
 msgstr ""
 
 #: jmvtab/ui[6][2]/xl_replace.label
@@ -778,9 +1039,45 @@ msgstr ""
 msgid "row"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:900
+msgid "Row variables"
+msgstr ""
+
 #: jmvtabreg/options/run_compare.title
 #: jmvtabreg/ui[2][2]/run_compare.label
 msgid "Run comparison"
+msgstr ""
+
+#: R/jmvtab-export.R
+msgid "Saved to:"
+msgstr ""
+
+#: jamovi/js/jmvtab.js:17
+#: jamovi/js/jmvtabreg.js:21
+msgid "sd_bands (cut)"
+msgstr ""
+
+#: R/jmvtabreg.b.R
+msgid ""
+"Select an <b>outcome</b> variable and one or more <b>predictors</b> to fit a "
+"regression. For a model comparison (predictor subsets), choose a single "
+"outcome."
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1497
+msgid "Select at least two predictors: an interaction crosses two of them."
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1711
+msgid "Select predictors first: they form the pool each model draws from."
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:956
+msgid "Select predictors to choose their baseline and shape."
+msgstr ""
+
+#: jamovi/js/jmvtab.js:891
+msgid "Select row, column or table variables to order, merge or cut their levels."
 msgstr ""
 
 #: jmvtabreg/options/shape.title
@@ -789,6 +1086,11 @@ msgstr ""
 
 #: jmvtab/options/shape.title
 msgid "shape (per numeric variable)"
+msgstr ""
+
+#: jamovi/js/jmvtab.js:17
+#: jamovi/js/jmvtabreg.js:21
+msgid "sqrt (numeric)"
 msgstr ""
 
 #: jmvtab/options/stars.title
@@ -804,11 +1106,8 @@ msgstr ""
 msgid "student <i>(pooled variance, 2 groups)</i>"
 msgstr ""
 
-#: jmvtabreg/ui[4][1][0].label
-msgid "subtext = <i>(note below the table)</i>"
-msgstr ""
-
 #: jmvtab/ui[5][0].label
+#: jmvtabreg/ui[4][1][0].label
 msgid "subtext = <i>(text to print below the table)</i>"
 msgstr ""
 
@@ -820,10 +1119,15 @@ msgstr ""
 msgid "table"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:1062
 #: jmvtab/options/export_filename.default
 #: jmvtab/results/html_table.title
 #: jmvtabreg/results/html_table.title
 msgid "Table"
+msgstr ""
+
+#: jamovi/js/jmvtab.js:902
+msgid "Table variables"
 msgstr ""
 
 #: package.title
@@ -837,6 +1141,23 @@ msgstr ""
 msgid "tabxplor"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:17
+#: jamovi/js/jmvtabreg.js:21
+msgid "terciles (cut)"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:952
+msgid "the baseline each effect is measured against"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1052
+msgid "the effect per k units: \"2sd\" (the default), \"sd\", or a number"
+msgstr ""
+
+#: jamovi/js/jmvtabreg.js:1025
+msgid "the value the effect of this number is read from"
+msgstr ""
+
 #: jmvtab/options/tab_theme.title
 #: jmvtabreg/options/tab_theme.title
 msgid "theme"
@@ -847,6 +1168,11 @@ msgstr ""
 msgid "theme = <i>(display and colors theme)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:951
+#: jamovi/js/jmvtab.js:959
+msgid "Total"
+msgstr ""
+
 #: jmvtab/options/totaltab.title
 msgid "totaltab"
 msgstr ""
@@ -855,12 +1181,24 @@ msgstr ""
 msgid "totaltab = <i>(with tab_vars, add a total table)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtabreg.js:1209
+msgid "trials"
+msgstr ""
+
 #: jmvtabreg/options/trials.title
 msgid "trials (per outcome)"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:17
+msgid "values_to_levels"
+msgstr ""
+
 #: jmvtab/options/display/var.title
 msgid "var <i>(variance)</i>"
+msgstr ""
+
+#: jamovi/js/jmvtab.js:885
+msgid "variable"
 msgstr ""
 
 #: jmvtab/options/ci_method_diff/wald.title
@@ -883,20 +1221,20 @@ msgstr ""
 msgid "welch <i>(unequal variances)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtab.js:889
+msgid "what each cell is compared to"
+msgstr ""
+
 #: jmvtab/options/ci_method_cell/wilson.title
 msgid "wilson <i>(score, default)</i>"
 msgstr ""
 
+#: jamovi/js/jmvtabreg.js:1506
+msgid "within each level of"
+msgstr ""
+
 #: jmvtab/options/display/wn.title
 msgid "wn <i>(weighted counts)</i>"
-msgstr ""
-
-#: jmvtabreg/options/wrap_cols.title
-msgid "Wrap column headers at"
-msgstr ""
-
-#: jmvtabreg/options/wrap_rows.title
-msgid "Wrap row labels at"
 msgstr ""
 
 #: jmvtab/ui[4][4][0].label
