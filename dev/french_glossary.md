@@ -226,7 +226,7 @@ reading a table in order (source, champ, variables, Total, l'intérieur) · medi
 | the honest long form     | « toutes les autres variables explicatives choisies étant égales » | his own, `M2_06_07:517`                      |
 | composition effect       | effet de structure                                            | INSEE                                             |
 | holding composition      | à structure constante                                         | INSEE                                             |
-| the base                 | le socle                                                      | ⚠ « base » is taken — see faux amis ; also the jamovi `display` glosses (`base_ci` → « socle + IC ») |
+| the base                 | la base                                                       | (`base_ci` → « base + IC ») |
 | the round trip           | l'aller-retour · « redescendre au pourcentage »               |                                                   |
 | untangling correlations  | démêler les corrélations cachées                              | his own, `M2_06_07:452`                           |
 | significance-as-permission | une autorisation · « le droit de généraliser »              | *mot d'excuse* does not travel                    |
@@ -303,12 +303,10 @@ prose works with.
    expérimental » are **cited, not adopted**: using them would make *écart* mean the adjusted effect.
 3. ⚠ **« significatif » means *important* in ordinary French.** Say so out loud — English has the same
    trap and no French teacher has ever had to name it.
-4. ⚠ **« base » is taken** by *les bases de données policières*, the running variable of the article
-   itself → **« socle »**. `display = "base"` stays English, as every argument value does.
-5. ⚠ **« grappe » is taken** by cluster sampling (see the weights section) → « paquets ».
-6. ⚠ **« contrôler » is worse in French than in English** — it also means *vérifier*. The article says
+4. ⚠ **« grappe » is taken** by cluster sampling (see the weights section) → « paquets ».
+5. ⚠ **« contrôler » is worse in French than in English** — it also means *vérifier*. The article says
    so; it is a point the English version cannot make.
-7. ⚠ **A quoted cell value keeps the printed decimal point** (`1/1.48`, `par 1.54 (SD)`); prose numbers
+6. ⚠ **A quoted cell value keeps the printed decimal point** (`1/1.48`, `par 1.54 (SD)`); prose numbers
    take the comma (« 5,2 points »). Same rule as the warning after the estimand cascade.
 
 ## Known first-draft rough spots (for maintainer review)

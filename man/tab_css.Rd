@@ -18,15 +18,14 @@ tab_css(
 \code{"print_marks"}, \code{"print_emphasis"}, \code{"print_minimalistic"}; \code{"bw"} is a synonym of the last --
 see the section below), or -- opt-in -- \code{"auto"} to follow the reader's colour scheme (their
 operating system, and any dark-mode toggle of the host page: Quarto, Bootstrap 5.3, Tailwind).
-Defaults to \code{getOption("tabxplor.theme")}, i.e. \code{"light"}: a dark table is always a
-deliberate choice. \code{"auto"} emits every rule four times (a light base, the OS media query, then
-both toggle directions), which is also what lets \code{\link[=tab_kable]{tab_kable()}}'s own Viewer page force the
-editor's theme -- see its \code{theme} argument.}
+Defaults to \code{getOption("tabxplor.theme")}, i.e. \code{"light"}: a dark table is always a deliberate
+choice. \code{"auto"} emits every rule four times (a light base, the OS media query, then both toggle
+directions), which is also what lets \code{\link[=tab_html]{tab_html()}}'s own Viewer page force the editor's theme.}
 
 \item{format}{Which output the stylesheet is for, in \code{\link[=tab_export]{tab_export()}}'s own vocabulary.
 \code{"html"} (the default) is the full stylesheet \code{\link[=tab_html]{tab_html()}} needs: the colour classes \strong{and}
 the table's own look (font, background, border colours, the greys). \code{"md"} emits the colour
-classes only, which is what \code{\link[=tab_md]{tab_md()}} wants — bare selectors you can map in your own editor's
+classes only, which is what \code{\link[=tab_md]{tab_md()}} wants --- bare selectors you can map in your own editor's
 or publisher's CSS.}
 
 \item{style_tag}{Wrap the CSS in a \verb{<style>} tag (default \code{TRUE}).}
@@ -38,9 +37,8 @@ block, so a coloured page prints (or saves to PDF) publication-ready with no fur
 Defaults to \code{getOption("tabxplor.print_rules")}. Set to \code{FALSE} if your printer is a colour one
 and the colours are the point, or name a palette (\code{"print_emphasis"}) to print in that one.
 \code{"print_marks"} cannot be used here: its marks are cell text, and a print rule can restyle a
-page but not add characters to it. It adds roughly 1.5 KB to a \code{light}/\code{dark} stylesheet and 6 KB to
-an \code{"auto"} one (where the rules must also be emitted against the page-toggle hooks, which would
-otherwise out-specify them).}
+page but not add characters to it. It adds roughly 1.5 KB to a \code{light}/\code{dark} stylesheet and
+6 KB to an \code{"auto"} one.}
 
 \item{...}{Retired arguments, accepted and ignored with a deprecation message since 2.0.0
 (\code{color_type}): the text channel always uses the text palette, and the colour CHANNEL is chosen
@@ -56,13 +54,13 @@ document, whatever their \code{color_breaks}.
 }
 \details{
 Cells carry classes named after the palette \strong{slot} (\code{.p1}-\code{.p4} over-represented text, \code{.m1}-\code{.m4}
-under-represented text, \code{.o1}-\code{.o4} / \code{.u1}-\code{.u4} for the background channel), so \code{tab_kable()} and
-\code{tab_md()} share one vocabulary.
+under-represented text, \code{.o1}-\code{.o4} / \code{.u1}-\code{.u4} for the background channel), so \code{\link[=tab_html]{tab_html()}} and
+\code{\link[=tab_md]{tab_md()}} share one vocabulary.
 }
 \section{Two workflows}{
 
-\strong{Self-contained (the default).} \code{tab_kable(css = TRUE)} and \code{tab_md(css = TRUE)} inline the
-stylesheet with the table, so a single file works anywhere (RStudio/Positron Viewer, jamovi, a
+\strong{Self-contained (the default).} \code{tab_html(css = TRUE)} and \code{tab_md(css = TRUE)} inline the
+stylesheet with the table, so a single file works anywhere (the RStudio/Positron Viewer, jamovi, a
 standalone \code{.html}). Nothing to do.
 
 \strong{Once per document.} In an \code{.Rmd}/\code{.qmd} with many tables, emit it once and let every table reuse
@@ -74,7 +72,7 @@ tab_css(theme = "auto")
 ```
 }\if{html}{\out{</div>}}
 
-Every later \code{tab_kable()} then emits classes only. Two things to know: with \code{css = FALSE} and \strong{no}
+Every later \code{\link[=tab_html]{tab_html()}} then emits classes only. Two things to know: with \code{css = FALSE} and \strong{no}
 \code{tab_css()} call the tables render uncoloured; and one stylesheet means one \code{theme} for the whole
 document.
 }
@@ -83,12 +81,9 @@ document.
 
 Nothing is written inline on a cell, so \strong{any} of the look can be overridden by adding your own
 rules after the stylesheet -- no \code{!important} needed. The cell colour classes are also emitted
-scoped (\verb{.tabxplor-tab .p1}) so they survive host pages that style table cells themselves --
-Bootstrap-based sites (including pkgdown) apply \code{color}/\code{background-color} to every cell of a
-\code{.table}, which would otherwise wash the colours out. On a pathological host (ID selectors or
-\code{!important} on cells), add your own stronger override after the stylesheet. Column widths in
-particular are left to the browser (it sizes each column to its content); to pin one, style its
-role:
+scoped (\verb{.tabxplor-tab .p1}) so they survive host pages that style table cells themselves, such as
+Bootstrap-based sites including pkgdown. Column widths in particular are left to the browser, which
+sizes each column to its content; to pin one, style its role:
 \preformatted{
 .tabxplor-tab .tx-rv  { min-width: 10em; }   /* the row-variable levels column */
 .tabxplor-tab .tx-tot { min-width: 5.5em; }  /* total columns                  */

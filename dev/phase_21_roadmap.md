@@ -130,7 +130,141 @@ Also plan for a reduction of the roxygen part, with the same logic : user-friend
 
 ##### Phase 21b-vi — Exporters & rendering
 
-`tab-export.R` · `tab-export-prep.R` · `tab-render-html.R` · `tab_md.R` · `tab_xl.R` · `tab-xl-backend.R` · `tab-css.R` · `tab-palettes.R` · `tab-test-display.R` · `tab-transpose-render.R` · `tab-theme-detect.R` · `plots.R`. One shared prep model → the four backends + the footer / CSS / transpose / theme / plot support.
+`tab-export.R` · `tab-export-prep.R` · `tab-render-html.R` · `tab_md.R` · `tab_xl.R` · `tab-xl-backend.R` · `tab-css.R` · `tab-palettes.R` · `tab-test-display.R` · `tab-transpose-render.R` · `tab-theme-detect.R` · `plots.R` · `tab-tooltip.R`. One shared prep model → the four backends + the footer / CSS / transpose / theme / plot support.
+
+**DONE.** Plain `#` comments **3580 -> 2103 (1.70x)**, of which BODIES (outside the header block)
+**3180 -> 1725 (1.84x)**; roxygen **696 -> 478**; code unchanged at **4942** non-blank non-comment
+lines and 610 blank lines. Comment/code ratio **0.72 -> 0.43**. Per file (plain `#`, body only):
+`tab-export-prep` 519->212 (2.4x) · `tab_xl` 480->236 · `tab-css` 403->213 · `tab-test-display`
+378->228 · `plots` 345->198 · `tab-render-html` 304->122 (2.5x) · `tab_md` 270->181 · `tab-palettes`
+149->129 · `tab-tooltip` 106->79 · `tab-transpose-render` 98->52 · `tab-xl-backend` 62->25 (2.5x) ·
+`tab-theme-detect` 62->49 · `tab-export` 4->1. Every header is a `# PURPOSE / ROLE / KEY
+CONSTRAINTS` essay pointing to `CLAUDE.md section "tabxplor architecture"`; **zero** `Phase <n>` tags
+(322 before), zero `KEY n` / `Sec n` / `ruling Rn` refs, zero "was / used to / no longer", zero
+benchmark figures, zero post-mortems, and 5 of the 7 `dev/*.md` pointers gone.
+
+**`tab-tooltip.R` was added to the phase, and that exposed a gap in the roadmap.** It is this
+subsystem's own file -- the architecture section lists it here and `TOOLTIP_LINES` is one of the
+declared fact tables -- but it postdates the 21b file lists, having been created in Phase 22c-iv.
+Six MORE `R/` files created during Phases 22-23 are likewise in **no** sub-phase: `var-shape.R`,
+`tab-structure.R` (22c-iii), `tab-cross.R` (22h), `reg-cross.R` (22b-ix), `reg-digest.R` (22j) and
+`data.R` (22l) -- ~2550 lines at ratios 0.33-0.62. They are already history-free (0-1 `Phase` tags
+each), so they need a light pass, not a rewrite; placing them is the maintainer's call.
+
+**Why 1.70x, measured rather than asserted -- and the one methodological correction this phase
+makes.** The per-file targets were set at the ratios 21b-iii and 21b-v achieved, and every LARGE
+file overshot them by a consistent **2.1-2.5x** while every small file landed within ~1.2x. That
+consistency is the finding: the targets were wrong for this subsystem, not the execution. After the
+cut the 13 files hold **~450 comment blocks, of which the overwhelming majority are 1-4 lines**, and
+only 18 blocks exceed 6 lines -- 14 of them the protected dictionaries (`TEST_ROWS`, `TOOLTIP_LINES`,
+the two palette records). The line budget was therefore respected almost everywhere; the count is
+high because there are simply many blocks. A hand-audit of all 122 surviving body lines in
+`tab-render-html.R` found essentially every one to be a trap that yields a WRONG RENDER if ignored
+-- the border-shorthand `currentColor` reset, `tx-bb`/`tx-bb2` deciding by source order,
+`display:inline-block` on a `<td>` breaking the row layout, an Electron webview reporting the OS
+rather than the editor's theme, escaping a user's `&` but not our own `<br>`, and "load knitr before
+falling through", which is the exact live regression Phase 22l had to fix. **The general rule this
+phase adds: RENDERING code floors higher than pipeline or declarative code, because a browser, Excel,
+pandoc and ggplot each behave in ways a reader cannot infer from the R beside them.** Reaching 0.20
+here would mean deleting those warnings; the lever is named rather than pulled.
+
+**Five ownership decisions, which is where the real integration value of this phase sits.** The same
+fact was stated independently in up to FIVE files. Each now has one OWNER and everyone else states
+only what THEIR medium does with it, and points: (1) **the three-row header block** (variable-name
+span / level names / unit row) -> `tab-export-prep.R`, which decides it for every backend, with
+`tab-render-html`, `tab_md`, `tab_xl` and `tab-css` keeping only their own consequence; (2)
+**`tab_col_block_ids()` / one unit per block** -> `tab-export-prep.R`; (3) **the colour contract**
+(ordered channel = magnitude, selective = direction; hex AND face declared together) ->
+`tab-palettes.R`, already correct; (4) **the two openxlsx2 traps** (`create_font(scheme = "minor")`
+silently overriding the named font, `wb_add_font(update =)` over scattered ranges) ->
+`tab-xl-backend.R`, which isolates the raw calls, `tab_xl.R` shrinking to a pointer; (5)
+**`REG_CHECKS`** stays owned by `R/reg-assumptions.R`, with `plots.R` and `tab-test-display.R`
+restating none of its rows.
+
+**`dev/*.md` pointers: all five existed, three survive.** Kept where the document holds what an R
+header cannot restate -- `black_and_white_publication_palette.md` (the CIE L\* measurement the
+publication palettes answer) and the two plot-design documents, on 21b-iv's precedent. Dropped:
+`tabxplor_phase10_exporters.md` (a Phase-10 *plan* document the new headers supersede, the same call
+21b-vii made on the jamovi cache design doc) and `tabxplor_2.0.0_decisions.md S46`. Every
+`CLAUDE.md Phase N` pointer became the one convention.
+
+**Eight documentation defects fixed, four of them user-facing.** Confirmed by grep, never on a
+survey agent's word -- and one survey claim was REJECTED: `reg_compare_rows()` does exist
+(`R/tab_reg.R:2926`).
+
+1. **`reg_gof_tibble()`** (`tab-test-display.R`) -- named as living in `R/tab_reg.R`, defined nowhere
+   in `R/`. The real function is `reg_gof_rows()` (`R/tab_reg.R:2866`). Reported by 21b-iv; this
+   phase owns the file, so it is fixed here.
+2. **`reg_check_spec_entries()`** (two sites, same file) -- defined nowhere; the real label builder
+   is `reg_check_label()` (`R/reg-assumptions.R:301`). One sat inside the WARNING that the check
+   labels must stay in a FUNCTION so `gettext()` runs at render -- that warning is kept, with the
+   name corrected.
+3. **`meta$inference$basis`** -- no such object. The inference facts are PER-COLUMN attributes
+   stamped by `tab_stamp_inference()` (`R/fmt_class.R:1417`), the architecture's own invariant being
+   that a number must not depend on a table attribute, which dplyr drops.
+4. **`reg_meta` used as an object name** in `tab-test-display.R` and `tab_xl.R` -- informal shorthand
+   for a regression table's `meta`; no such object exists. `plots.R` turned out already correct. The
+   remaining two occurrences (`tab-steps-legacy.R:992`, `tab_reg.R:242`) stay reported as the
+   package-wide naming call 21b-v raised.
+5. ⚠ **`?tab_export` contradicted itself on one page** -- `@param format` told the reader to choose
+   the HTML backend engine with `engine =`, while `@param ...` on the same page lists `engine` among
+   the RETIRED arguments, caught and not forwarded. There is one engine; the sentence is gone.
+6. ⚠ **`?tab_xl` printed four escape sequences at the reader.** `man/tab_xl.Rd` rendered
+   `\verb{\\u00f71.2}` and `\verb{\\u00d71.20}` -- the literal text `÷1.2` -- where the prose
+   means `÷1.2` and `×1.20`. The same class of Rd-escaping bug 21b-iv found in `?tab_reg`. Written
+   as the real characters, which the package's `man/` already carries elsewhere and which
+   `test-non-ascii.R` exempts (it drops COMMENT tokens, and roxygen is a comment).
+7. ⚠ **`?tab_xl` carried a broken cross-reference**: `\code{link[base:options]{options}}`, missing
+   its backslash, rendered as literal text. Now `\code{\link[base]{options}}`.
+8. **`tx_transpose_render()`'s parameter dictionary documented a `meta` argument that does not
+   exist** -- the signature is `function(rd, backend)` and its only caller
+   (`tab-export-prep.R:897`) passes two. Dropped.
+
+Two more were corrected where the rewrite landed on them: `tab-palettes.R`'s chrome resolver named
+"the inline / kableExtra / plot / xl path", but the kableExtra engine and `tab_plot()` are both gone
+(22l); and `tab-css.R` carried an orphaned paragraph about `tx_page_style` glued mid-sentence onto
+`tx_css_color`'s block, a function it has nothing to do with. ⚠ Also reported, not fixed:
+`tab-xl-backend.R` had a comment describing `xlb_merge` sitting above the unrelated
+`xlb_add_image` -- deleted under the phase-tag rule rather than relocated, in case the maintainer
+wants that context restored beside `xlb_merge`.
+
+**Roxygen.** 696 -> 478. **190 `#' @keywords internal` lines were inert** -- 145 of them with no
+`@noRd` and no title, so roxygen2 generates nothing from such a block (verified: no matching
+`man/*.Rd` exists). All were deleted, keeping the `@noRd` wherever it was paired, on 21b-vii's
+precedent. ⚠ Two exceptions were correctly left alone because their blocks DO generate a page:
+`tab_estimates()` (`man/tab_estimates.Rd`) and `print.tabxplor_kable()`. The six exported man pages
+were reduced by de-duplication and by deferring pedagogy: `?tab_xl` and `?tab_css` were rewritten by
+hand (the latter modernised throughout -- it taught `tab_kable()` five times where `tab_html()` is
+current; the OPTION is genuinely named `tabxplor.tab_kable_css` and was left alone), `?tab_md`'s
+12-line `@param css` cut to 5, `?forest_plot` / `?reg_check_plots` compressed with the teaching-only
+contract kept in `?reg_check_plots`'s first sentence. No vignette anchors hard-wired (23b's job).
+
+**Verified.** All **287 top-level definitions across the 13 files are byte-identical to `HEAD`**
+(parse -> per-name `deparse()` comparison, valid under reordering), so behaviour cannot have changed;
+non-blank non-comment lines 4942 -> 4942 and blank lines 610 -> 610. The ASCII rule holds in all 13
+(parser-level scan dropping COMMENT tokens). `devtools::document()` clean, **`NAMESPACE` unchanged**,
+exactly **six `man/*.Rd` changed** -- the six exported topics of these files, none added or deleted --
+each with **`\usage` byte-identical and all 99 `\item{}` names preserved**. Full suite:
+**FAIL 0 | WARN 5 | SKIP 4 | PASS 9987**, and `tests/` is **completely clean** -- no golden and no
+`_snaps/` file moved, which is the real proof for this phase, since `test-golden.R`,
+`test-export-parity.R` and the snapshots lock the rendered output of exactly these files.
+
+⚠ **One near-miss worth recording.** Agent C flattened the `\u202f` / `\u00a0` escapes in
+`tx_strip_outcome_suffix()` / `tx_unwrap_text()` to literal spaces while transcribing a block, then
+caught and repaired it with its own deparse check. Independently re-verified here against the
+baseline (3 `\u00a0` + 2 `\u202f`, identical). **The lesson is 21b-vii's, and it now has a second
+witness: a rewrite agent must replace by whole BLOCK and must never retype a line containing an
+escape.**
+
+**Cost: ~1.99M subagent tokens** (69K survey + 278K + 335K (two passes) + 315K + 327K + 439K across
+five rewrite agents), against 21b-iii's 2.0M, 21b-iv's 2.7M, 21b-v's 770K and 21b-vii's 784K, for
+the largest file set of any sub-phase (9883 lines against 21b-vii's ~1500). **One agent needed a
+second pass** (`tab_xl.R`, which returned 259 against a target of 100; the bounded re-engagement
+named ONE deletion class -- notes restating the header -- and moved it to 236 before independently
+confirming the rest was not that class). Two agents self-directed extra passes despite the one-pass
+rule and reported doing so, which is the standing cost the rule exists to prevent. The 13 header
+essays, `tab-export.R`, `tab-theme-detect.R`, `tab-palettes.R` and the `?tab_xl` / `?tab_css` pages
+were hand-written, per rule 9.
 
 ##### Phase 21b-vii — Jamovi modules
 

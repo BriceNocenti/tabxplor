@@ -1,95 +1,81 @@
-# PURPOSE: The ONE CSS generator for every tabxplor stylesheet (Phase 13d).
-# ROLE: Turns (palette, theme) into CSS rules consumed by BOTH media that can carry a
-#   stylesheet: tab_html() and tab_md()/tab_css(). Replaces the old per-table
-#   md_css_rules()/md_css_block()/md_break_class()/md_slot_class_map() (tab_md.R) and the static,
-#   hard-coded html_style_block() (tab-render-html.R).
+# PURPOSE: the ONE CSS generator -- every stylesheet tabxplor emits, for every theme.
+# ROLE: turns (palette, theme) into rules, for the two media that can carry a stylesheet: the html
+#   engine and tab_md(). Cells and CSS read the SAME slot vocabulary (tx_slot_class), so they cannot
+#   disagree, and tx_chrome_hex() (R/tab-palettes.R) is the one source of the chrome colours, which
+#   the exporter prep's `theme_cols` reads too.
 # KEY CONSTRAINTS:
-#   - The header block is THREE rows: `.tx-span` (the variable names), the level headers, and
-#     `.tx-unit` (what each column HOLDS -- "<row% (n)>", "<OR (row%)>"). The unit row is deliberately
-#     quiet: small, regular weight, ITALIC like the console type tag it is, left-aligned (the tag
-#     names its column, it does not label its numbers), in the chrome's `grey` -- set further back
-#     than any cell -- and with NO rule of its own. The row ABOVE it drops its bottom rule too, so
-#     the two read as one header band closed by a single line underneath.
-#     ⚠ SPECIFICITY: `thead .tx-unit` is (0,2,1), like the `thead .tx-r/.tx-l` pair, so it must be
-#     emitted AFTER that pair or the row centres itself again.
-#   - The CSS is TABLE-INDEPENDENT: a pure function of (palette, theme). That is the whole
-#     point of naming classes by palette SLOT rather than by break value -- it is what lets a document
-#     emit the stylesheet ONCE (tab_css()) and reuse it for every table, and what makes class collisions
-#     impossible (`.p3` means the same shade in every table, whatever its color_breaks).
-#   - Cells and CSS read the SAME slot vocabulary (tx_slot_class), so they cannot disagree.
-#   - tx_chrome_hex() is the single source of the chrome colours; tab_export_prep()'s `theme_cols`
-#     reads it too, so the inline path and the CSS path cannot drift.
-#   - Every LOOK is a role class here, geometry included (Phase 14e) -- the html engine emits no
-#     inline style, so a user's own CSS can override any of it. Phase 14i adds `.tx-lbl` (a cell
-#     rowspan'd over the block it names) and `.tx-vname` (a row-variable name, written vertically).
-#   - NO border SHORTHAND (Phase 14j): a shorthand resets border-*-color to `currentColor` = the
-#     cell's palette hex, and every border rule here out-specifies the ONE border-color rule. Always
-#     border-*-style + border-*-width. Locked by test-render-html.R.
-#   - NO column width (Phase 14j): the browser's auto table layout sizes each column to its content.
-#     `.tx-rv`/`.tx-tot`/`.tx-num` are emitted UNSTYLED, as hooks for a user's own fixed-width CSS
-#     (?tab_css). The table is sized by its data: `.tx-foot` keeps the footnote out of that sum.
-#   - THE HOST RESET is one rule for both media (`.tabxplor-tab th,td{border-width:0}`): a host page
-#     draws a border under every row (Bootstrap's `.table>:not(caption)>*>*`, which pkgdown stamps on
-#     every table) and the border-colour rule then paints it black. Every border we DRAW is a role
-#     class at (0,2,0) or better, so the reset takes the host's and leaves ours. The two
-#     `.tabxplor-tab table ...` rules beside it are MD-ONLY by selector (a `table` descendant exists
-#     only in the pandoc <div>+<table>, never in the html engine where .tabxplor-tab IS the table):
-#     they redraw our own chrome, which md carries no per-cell class for.
-# See: CLAUDE.md Phase 13d + 14e + 14i + 14j + 14m-iii, dev/tabxplor_phase10_exporters.md.
+#   - THE CSS IS TABLE-INDEPENDENT: a pure function of (palette, theme). That is the whole point of
+#     naming a class after a palette SLOT rather than a break value. It lets a document emit the
+#     stylesheet ONCE and reuse it for every table, and it makes class collisions impossible --
+#     `.p3` is the same shade in every table, whatever its color_breaks.
+#   - "auto" is a RENDER intent, never a palette. Every palette lookup funnels through
+#     tx_palette_theme(), or a key like "text_auto" gets built and errors on a length-0 vector.
+#   - WARNING: NO BORDER SHORTHAND, anywhere. A shorthand resets border-*-color to `currentColor` --
+#     the cell's own palette hex -- and every border rule here out-specifies the one border-color
+#     rule. Always border-*-style plus border-*-width. Locked by test-render-html.R.
+#   - WARNING: specificity is load-bearing in three places. `thead .tx-unit` is (0,2,1) like the
+#     `thead .tx-r` / `.tx-l` pair, so it must be emitted AFTER them or the unit row re-centres
+#     itself; `.tx-bb` and `.tx-bb2` are identical at (0,3,1), so their order decides; and the layer
+#     order (the OS media query, then both page-toggle directions) is what lets a host's dark-mode
+#     switch win over the base rules.
+#   - THE HOST RESET is one rule for both media, `.tabxplor-tab th, .tabxplor-tab td
+#     { border-width: 0 }`. A host page draws a border under every row (Bootstrap's
+#     `.table > :not(caption) > * > *`, which pkgdown stamps on every table) and our border-colour
+#     rule then paints it black. Every border we DRAW is a role class at (0,2,0) or better, so the
+#     reset takes the host's and leaves ours. It is medium-agnostic on purpose: in the html engine
+#     `.tabxplor-tab` IS the <table>, so a selector needing a `table` DESCENDANT never matches there.
+#     The `.tabxplor-tab table ...` rules beside it are MD-ONLY by that same selector -- they redraw
+#     our own chrome, which md carries no per-cell class for.
+#   - THE COLOUR THEMES STATE `background-color: transparent` -- exactly what a cell has with no rule
+#     at all -- so a host cannot override it and paint over the row hover. The background colour
+#     CHANNEL (`.o3`, `.tx-pill`) is (0,2,0) and still wins.
+#   - NO COLUMN WIDTH: the browser's auto table layout sizes each column to its content.
+#     `.tx-rv` / `.tx-tot` / `.tx-num` are emitted UNSTYLED, as hooks for a reader's own CSS.
+#   - WARNING: a browser does NOT grow a rowspanned cell to hold vertical text that overruns it. The
+#     budget that prevents one is tab_vname_plan() (R/tab-export-prep.R), not a rule here -- a
+#     max-height would truncate a variable name silently.
+#   - WARNING: the tooltip selector cannot be scoped -- bootstrap moves the element to <body>.
+#   - PRINT RULES: browsers drop background-color unless the reader enables "Background graphics", so
+#     a publication palette speaks with ink and face. `print_marks` is REFUSED there: its signal is
+#     cell text, and a print rule can restyle a page but not add characters to it.
+# See: CLAUDE.md section "tabxplor architecture" (the colour system); R/tab-palettes.R (what a slot
+#      IS); R/tab-export-prep.R (the three header rows).
 
 # === SECTION: theme + slot vocabulary ==============================================================
 
-# "auto" is a RENDER intent (follow the reader's colour scheme), never a palette. Every palette lookup
-# must funnel through here: get_color_style(theme = "auto") would build the key "text_auto", find no
-# palette, and error on a length-0 vector.
-# A print palette IS a palette (a real key `text_print`, `text_print_marks`, ...), so every member of
-# the family passes through untouched -- which is why this function needs no arm for them.
-#' @keywords internal
+# a print palette IS a palette (a real key `text_print`, ...), so it passes through untouched here.
 tx_palette_theme <- function(theme) {
   if (is.null(theme) || is.na(theme[1])) return("light")
-  # `print_ready` is a choice BETWEEN palettes, made from the table (tx_theme_for_table). Anything
-  # that reaches a palette lookup still holding it had no table to choose from, and takes the
-  # declared fallback -- so no lookup can ever be handed a key that does not exist.
+  # `print_ready` is a choice BETWEEN palettes (tx_theme_for_table); anything reaching a lookup still
+  # holding it had no table to choose from, so it takes the declared fallback.
   if (identical(theme[1], "print_ready")) return(unname(PRINT_READY[["fallback"]]))
   if (identical(theme[1], "auto")) "light" else theme[1]
 }
 
-# The theme VALUE vocabulary and its one alias. tx_getOption() resolves option NAME synonyms; a VALUE
-# alias needs this. "print" says WHY (the destination medium) and leaves room for the palette to
-# change; "bw" says HOW and is the obvious guess -- accepted silently and canonicalised here, so
-# exactly ONE spelling ever reaches the palette keys. The black-and-white siblings are named by
-# PRINT_PALETTES, so a new publication palette is one row there and reaches every backend for free.
-# Two callers: resolve_export_opts() (so options(tabxplor.theme = "bw") works too) and tx_css_render().
-#' @keywords internal
+# tx_getOption() resolves option NAME synonyms; this is the VALUE alias: "bw" is the obvious guess
+# for "print_minimalistic" and is accepted and canonicalised here, so exactly ONE spelling ever
+# reaches the palette keys.
 tx_resolve_theme <- function(theme) {
   theme <- match.arg(theme[1], c("light", "dark", "auto", "bw", "print_ready",
                                  names(PRINT_PALETTES)))
   if (identical(theme, "bw")) "print_minimalistic" else theme
 }
 
-# tx_theme_option() -- Phase 19h: THE theme option pair, in one place. There are two independent
-# axes and they were each spelled at two call sites:
+# TWO independent axes, easy to conflate:
 #   "export"  what a rendered/exported table should look like  (default "light", "auto" opt-in)
 #   "console" the palette the terminal is using                (auto-detected from the editor)
-# The alias comes FIRST in each chain (tx_getOption takes the first name set, canonical last).
-# WARNING: this is the drift render_footer() had -- called on the EXPORT path but reaching for the
-# CONSOLE pair when its `theme` argument was NULL, so a footer rendered outside rd_footer() silently
-# picked the console theme.
-#' @keywords internal
+# WARNING: reaching for the console pair on the export path (or vice-versa) silently picks the wrong
+# theme -- render_footer() once did this when its `theme` argument was NULL.
 tx_theme_option <- function(scope = c("export", "console")) {
-  # 20b: the name chain AND the default come from TAB_OPTIONS (R/tabxplor-options.R), so a renamed
-  # option or a changed default reaches every reader and the help page at once.
+  # the name chain and the default come from TAB_OPTIONS, so a renamed option reaches every reader.
   switch(match.arg(scope),
     export  = tx_option("theme"),
     console = tx_getOption(tx_option_names("color_style_theme"), "light"))
 }
 
-# tx_theme_resolve() -- THE "auto" downgrade, in one place. `"auto"` means "follow the reader",
-# which needs a stylesheet WE emit; a backend that bakes its colours (Excel, ggplot, kableExtra's
-# lightable themes) cannot honour it and must render something definite instead. It was written out
-# three times, with three different rules and only one of them saying so.
-# `note` is the one-time cli explanation, when the caller has a reason worth naming.
-#' @keywords internal
+# "auto" means "follow the reader", which needs a stylesheet WE emit; a backend that bakes its
+# colours (Excel, ggplot, kableExtra's lightable themes) cannot honour it and downgrades to "light"
+# here instead. `note` is the one-time cli explanation, when the caller has a reason worth naming.
 tx_theme_resolve <- function(theme = NULL, allow_auto = FALSE, note = NULL,
                              scope = "export") {
   if (is.null(theme)) theme <- tx_theme_option(scope)
@@ -101,18 +87,11 @@ tx_theme_resolve <- function(theme = NULL, allow_auto = FALSE, note = NULL,
   theme
 }
 
-# tx_chrome_hex() -- the chrome colours (everything that is NOT a colour-measure slot) -- is a
-# PALETTE, so it lives with the others in R/tab-palettes.R. tx_css_rules() emits it as CSS and
+# tx_chrome_hex() (R/tab-palettes.R) is the chrome PALETTE; tx_css_rules() emits it as CSS and
 # tab_export_prep()'s `theme_cols` reads it inline, so the two renderings cannot drift.
 
-# The chrome of a page tabxplor ITSELF builds -- there are exactly two: the standalone page
-# print.tabxplor_kable() opens in the Viewer, and tab_html_string(standalone = TRUE). Reuses
-# tx_chrome_hex(), so the pane can never drift from the table sitting in it.
-#
-# WHY it needs no !important, though it fights two rules it does not own: htmltools' save_html()
-# An R colour name or a hex code -> a CSS hex. Anything unrecognised falls back to NULL (the caller
+# an R colour name or a hex code -> a CSS hex; anything unrecognised falls back to NULL (the caller
 # then uses the theme's own text colour), so a typo can never emit invalid CSS.
-#' @keywords internal
 #' @noRd
 tx_css_color <- function(x) {
   if (is.null(x) || !nzchar(x)) return(NULL)
@@ -123,20 +102,16 @@ tx_css_color <- function(x) {
   }, error = function(e) NULL)
 }
 
-# builds the page as <head> + `<style>body{background-color:white;}</style>` + the html dependencies
-# (bootstrap's own `body{}`) + </head><body> + OUR string. Ours is therefore LAST in document order at
-# equal specificity (0,0,1), which is all it takes.
+# ours is LAST in document order at equal specificity (0,0,1), which is all it takes -- no !important.
 # WARNING: this must NEVER reach tab_css(). A knitted/Quarto page is the HOST's, not ours -- painting
-# its html,body would repaint the whole document around the table (Phase 13d's rule).
-#' @keywords internal
+# its html,body would repaint the whole document around the table.
 tx_page_style <- function(theme = "light") {
   decl <- function(t) {
     ch <- tx_chrome_hex(t)
     paste0("html,body{background:", ch$bg, ";color:", ch$text, ";}")
   }
-  # "auto" is only ever reached by a page we WRITE (a file the reader opens elsewhere), so the reader's
-  # OS is the only signal available -- no hooks: a standalone page has no framework toggle to follow.
-  # An interactive print resolves "auto" R-side before calling here (only R can see the editor).
+  # "auto" here means a standalone file with no framework toggle to follow, so only the OS signal
+  # applies; an interactive print resolves "auto" in R before calling here.
   if (identical(theme, "auto")) {
     paste0(decl("light"), "\n@media (prefers-color-scheme: dark){", decl("dark"), "}")
   } else {
@@ -144,16 +119,12 @@ tx_page_style <- function(theme = "light") {
   }
 }
 
-# slot integer -> class name. The engine's slot domain (Phase 13a) is 0 = uncoloured, 1-4
-# over-represented, 5-8 under-represented, per channel. Names are 2 chars and uniform-width, which
-# keeps raw markdown aligned in a monospace font:
-#   text : .p1 .p2 .p3 .p4 (over, "plus")   .m1 .m2 .m3 .m4 (under, "minus")
-#   bg   : .o1 .o2 .o3 .o4 (over)           .u1 .u2 .u3 .u4 (under)
-# DESIGN: keyed to the SLOT, not to the break value -- so the name is palette-shade identity, not a
-# threshold. The threshold is the colour legend's job (it already renders it per table). This is what
-# makes the stylesheet table-independent; do not reintroduce break-derived names.
-# Vectorised over `slot`; slot 0 (and NA) -> "".
-#' @keywords internal
+# slot integer -> class name. Slot 0 = uncoloured, 1-4 over-represented, 5-8 under-represented, per
+# channel. Names are 2 chars and uniform-width, which keeps raw markdown aligned in monospace:
+#   text : .p1-.p4 (over, "plus")   .m1-.m4 (under, "minus")
+#   bg   : .o1-.o4 (over)           .u1-.u4 (under)
+# DESIGN: keyed to the SLOT, not the break value, so the name is palette-shade identity, not a
+# threshold -- this is what makes the stylesheet table-independent. Slot 0 (and NA) -> "".
 tx_slot_class <- function(channel = c("text", "bg"), slot) {
   channel <- match.arg(channel)
   over    <- if (channel == "text") "p" else "o"
@@ -169,40 +140,24 @@ tx_slot_class <- function(channel = c("text", "bg"), slot) {
 
 # === SECTION: rules ================================================================================
 
-# The page-toggle hooks. `@media (prefers-color-scheme: dark)` only reports the OS: every framework
-# that ships a dark TOGGLE translates the preference into a class/attribute via JS, which a media query
-# cannot see. Emitting both directions lets an explicit toggle win over the OS either way.
+# these hooks translate a framework's dark TOGGLE (a class/attribute set via JS) into something a
+# media query cannot see; both directions let an explicit toggle win over the OS either way.
 # WARNING: keep these in ONE place -- they are the only part of the design that can rot upstream.
-#
-# KNOWN GAP (verified in a browser 2026-07-16, deliberately NOT fixed): the light list has no Tailwind
-# entry, because Tailwind's class strategy expresses light as the ABSENCE of `html.dark` -- there is no
-# `html.light` to match. So on a Tailwind class-strategy page with a dark OS, the page is light and our
-# table follows the OS into dark: a dark island. Every other framework here sets an explicit light
-# class/attribute, so it only affects Tailwind. Fixing it needs a signal that "a class strategy is in
-# force" (a `color-scheme` probe, or an opt-out of the @media layer) -- see decisions 38.
-#
-# NOT HERE, deliberately (Phase 14k): the VS Code / Positron webview hooks `body.vscode-dark` and
-# `[data-vscode-theme-kind]`. The Positron Viewer is a CROSS-ORIGIN webview IFRAME
-# (vscode-webview://.../index-external.html), so those live on the OUTER workbench body and no
-# selector of ours can ever reach them -- a rule that cannot fire is worse than no rule. The Viewer is
-# handled where it CAN be: print.tabxplor_kable() resolves "auto" in R (tx_detect_theme()) and sets
-# [data-theme] on the page it builds, so the hooks below do the work.
+# KNOWN GAP, deliberately not fixed: no Tailwind light entry -- Tailwind expresses light as the ABSENCE
+# of `html.dark`, so a Tailwind page under a dark OS shows a dark table on a light page.
+# NOT HERE, deliberately: the Positron Viewer is a cross-origin webview iframe, so no selector here can
+# ever reach its outer workbench body -- print.tabxplor_kable() resolves "auto" in R instead and sets
+# [data-theme] on the page it builds.
 tx_dark_hooks  <- c("body.quarto-dark",  "[data-bs-theme=dark]",  "[data-theme=dark]", "html.dark")
 tx_light_hooks <- c("body.quarto-light", "[data-bs-theme=light]", "[data-theme=light]")
 
-# The typographic declarations one theme's face adds ON TOP of the CSS baseline, Phase 18z11.
 # DESIGN: tx_css_render()'s static `.p1,...,.m4{font-weight:bold;}` rule IS the light palette's face
-# expressed as CSS, so it is THE BASELINE and a theme states a face property only where it DIVERGES
-# from it. Two consequences fall out with no branching: light/dark emit "" everywhere (their face IS
-# the baseline -- tx_css_layer() drops empty values, so they are byte-identical and the static rule
-# keeps being emitted exactly once, outside the cascade), and `print` can say "not bold" on its italic
-# slots (the bare `.m1` ties the static rule on specificity and wins on SOURCE ORDER, the scoped
-# `.tabxplor-tab .m1` wins outright).
-#' @keywords internal
+# expressed as CSS -- THE BASELINE -- so a theme states a face property only where it DIVERGES from it.
+# light/dark then emit "" everywhere (tx_css_layer() drops empty values, so they stay byte-identical),
+# and `print` can say "not bold" on its italic slots.
 tx_face_decls <- function(face, base, s) {
   d <- function(f, b, yes, no) if (identical(f[s], b[s])) "" else if (isTRUE(f[s])) yes else no
-  # `underline` is the three-value vocabulary, so it needs its own arm: a doubled rule is one CSS
-  # declaration (`underline double`), not a second property.
+  # underline is a three-value vocabulary: a doubled rule is one CSS declaration ("underline double").
   und <- if (identical(face$underline[s], base$underline[s])) ""
          else switch(face$underline[s], single = "underline", double = "underline double", "none")
   c("font-weight"     = d(face$bold,   base$bold,   "bold",   "normal"),
@@ -210,13 +165,10 @@ tx_face_decls <- function(face, base, s) {
     "text-decoration" = und)
 }
 
-# The theme-independent rule table: one row per (selector, property), carrying the value of EVERY theme
-# (light / dark / print). Built from the same slot vocabulary the cells use. `chrome = FALSE` gives
-# colour rules only (the tab_md contract: bare class selectors the user maps in their own editor CSS).
-# `print_theme` names WHICH black-and-white palette fills the third column -- the one the page is
-# rendered in, or the one a coloured page falls back to inside @media print. The column stays named
-# "print" whatever it holds: it is the LAYER's name, not the palette's.
-#' @keywords internal
+# The theme-independent rule table: one row per (selector, property), carrying the value of EVERY
+# theme. `chrome = FALSE` gives colour rules only (the tab_md contract: bare classes a user maps in
+# their own editor CSS). `print_theme` names WHICH black-and-white palette fills the "print" column --
+# the layer's name, not the palette's, since it may be the page's own theme or a fallback.
 tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
   sel <- character(0); prop <- character(0); lt <- character(0); dk <- character(0)
   pr  <- character(0)
@@ -228,77 +180,52 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
   if (isTRUE(chrome)) {
     cl <- tx_chrome_hex("light")
     cd <- tx_chrome_hex("dark")
-    # WARNING (z11): every CHROME row must state its print value EXPLICITLY. A "" would let the
-    # underlying layer survive into the @media print block, so a dark page would print white-on-#222.
+    # WARNING: every CHROME row must state its print value EXPLICITLY -- a "" would let the underlying
+    # layer survive into @media print, so a dark page would print white-on-#222.
     cp <- tx_chrome_hex(print_theme)
     add(".tabxplor-tab", "color",      cl$text,  cd$text,  cp$text)
     add(".tabxplor-tab", "background", cl$bg,    cd$bg,    cp$bg)
-    # THE HOST PAINTS OUR CELLS DIRECTLY, so the values it can reach must be stated ON THE CELLS.
-    # pkgdown stamps class="table" on every table (pkgdown:::tweak_tables) and Bootstrap's
-    # `.table>:not(caption)>*>*` (0,1,1) then sets color, background-color, padding and
-    # border-bottom-width on the same <td> our classes sit on -- beating anything merely inherited
-    # from the table element (0,1,0). The specificity is deliberate: (0,1,1) TIES the host's rule and
-    # wins on source order (our stylesheet is emitted in the body, after its <head>), while still
-    # losing to our own `.tabxplor-tab .p1` (0,2,0) -- which is what keeps an ink ladder, or a
-    # background channel, from being flattened by it. (The border half is the `border-width:0` reset
-    # further down; the padding half is the `th,td` padding rule beside it.)
-    # `color`: a PUBLICATION PALETTE IS A SHEET OF PAPER, and a sheet is all-or-nothing -- on a dark
-    # Bootstrap page its cells would come back dark with black text while the table stayed white. So
-    # print states its ink here; light/dark carry "" and follow the page on purpose, `auto` most of all.
+    # THE HOST PAINTS OUR CELLS DIRECTLY (pkgdown/Bootstrap's `.table>:not(caption)>*>*` sets color,
+    # background-color and border-bottom-width on the same <td> our classes sit on), so the values it
+    # can reach must be stated ON THE CELLS, at (0,1,1) -- ties the host's rule and wins on source
+    # order, while still losing to `.tabxplor-tab .p1` (0,2,0).
+    # a PUBLICATION PALETTE IS A SHEET OF PAPER, all-or-nothing -- print states its ink here; light/dark
+    # carry "" and follow the page on purpose, `auto` most of all.
     add(".tabxplor-tab th,.tabxplor-tab td", "color",            "", "", cp$text)
-    # `background-color`: "follow the page" has to be SAID, because Bootstrap's own value is opaque
-    # (`--bs-table-bg` = `--bs-body-bg`), and an opaque cell paints over its row -- which is what hid
-    # the row hover on the pkgdown site. `transparent` is what a cell has with no rule at all, so this
-    # changes nothing except that a host can no longer override it.
+    # "follow the page" must be SAID: Bootstrap's own background is opaque (`--bs-table-bg`), and an
+    # opaque cell paints over its row hover. `transparent` is what a cell has with no rule at all.
     add(".tabxplor-tab th,.tabxplor-tab td", "background-color",
         "transparent", "transparent", cp$bg)
     # THE one border-colour rule -- every border in this stylesheet takes its colour from here.
-    # WARNING: that only holds because no rule below uses a border SHORTHAND. `border-right:1px solid`
-    # would reset border-right-color to `currentColor` = the CELL's palette hex (a +20% cell drew a
-    # blue border), and `.tabxplor-tab .tx-br` (0,2,0) out-specifies this (0,1,1), so the shorthand
-    # would win however this rule is written. Phase 14e wrongly recorded the bug as fixed by moving the
-    # geometry off inline styles: that removed the inline half and left the shorthand half. Longhands
-    # (border-*-style / border-*-width) are what make this rule load-bearing -- keep it that way; the
-    # invariant is locked by test-render-html.R ("no border shorthand in the stylesheet").
+    # WARNING: that only holds because no rule below uses a border SHORTHAND (`border-right:1px solid`
+    # would reset border-right-color to the CELL's palette hex). Longhands only; locked by
+    # test-render-html.R.
     add(".tabxplor-tab th,.tabxplor-tab td", "border-color", cl$border, cd$border, cp$border)
     add(".tabxplor-tab tbody tr:hover", "background", cl$hover, cd$hover, cp$hover)
     add(tx_cell_sel("g1"), "color", cl$grey,  cd$grey,  cp$grey)
     add(tx_cell_sel("g2"), "color", cl$grey2, cd$grey2, cp$grey2)
-    # THE UNIT ROW takes the chrome's `grey`, not the aside's `grey2`: it is a line of the header
-    # saying what a column holds, set further back than any cell, and it says so in every theme --
-    # unlike the aside's ink it is NOT gated on `color_whole_cell`, having nothing to do with where a
-    # colour stops inside a cell.
+    # the unit row takes the chrome's `grey`, not the aside's `grey2`, and is NOT gated on
+    # `color_whole_cell` -- it names the column, unrelated to where a colour stops inside a cell.
     add(".tabxplor-tab .tx-unit", "color", cl$grey, cd$grey, cp$grey)
-    # Phase 15d: the table title -- FULL-contrast in both themes (pure black in light, white in dark), not
-    # the softened body grey. Theme-aware so a dark-mode page keeps it legible; jamovi results are light,
-    # where it is the maintainer's requested pure black.
+    # the table title is FULL-contrast in both themes (pure black / white), not the softened body grey.
     add(".tabxplor-caption", "color", "#000000", "#FFFFFF", "#000000")
-    # THE SECONDARY TOKENS of a composite cell. The colour grades the cell's PRIMARY number, so the
-    # aside beside it is set slightly back from the table's own text. Resolved PER THEME by the one
-    # shared resolver, like every other chrome rule here -- a single hex would bake a light-theme
-    # grey into the dark page. Under `color_whole_cell` no rule is emitted at all: the aside then
-    # inherits the cell's own shade, which is what the span's absence already gives -- but the span
-    # is still written, so a stylesheet can restyle it either way.
+    # THE SECONDARY TOKENS (a composite cell's aside) are set back from the table's own text, resolved
+    # per theme like every chrome rule. Under `color_whole_cell` no rule is emitted: the aside then
+    # inherits the cell's own shade, though the span is still written so a stylesheet can restyle it.
     if (!color_whole_cell_opt()) {
       add(".tabxplor-tab .tx-sec", "color", color_secondary_hex("light"),
           color_secondary_hex("dark"), color_secondary_hex(print_theme))
-      # ... and the same for the FACE, which only the print palette has: the aside is not what any
-      # measure grades, so the direction/magnitude typography stops at the primary exactly as the colour
-      # does. Print-only values, so the light/dark layers stay byte-identical.
-      # WARNING: `display:inline-block` is the load-bearing one, NOT `text-decoration:none`. A CSS
-      # text-decoration is drawn by the ancestor box across everything inside it and CANNOT be switched
-      # off by a descendant; only an atomic inline box (an inline-block) is left out of it. The `none`
-      # is kept for the reader and for a host that decorates the span itself.
+      # the FACE reset, print-only (only that palette has one): the aside stops at the primary exactly
+      # as the colour does.
+      # WARNING: `display:inline-block` is the load-bearing property, not `text-decoration:none` --
+      # a CSS text-decoration is drawn by the ancestor across every descendant and can only be
+      # switched off by making the span an atomic inline box.
       sec_face <- c("font-style" = "normal", "text-decoration" = "none",
                     "display" = "inline-block")
       for (k in names(sec_face)) add(".tabxplor-tab .tx-sec", k, "", "", sec_face[[k]])
     }
-    # THE EFFECT-SIZE MARKS, which sit where the stars sit and are NOT an aside: they replace the
-    # colour, so they carry the deviation itself and read in the chrome's own `mark` ink. They take
-    # the same face reset as `.tx-sec` for the same reason (an inline-block is left out of an
-    # ancestor's text-decoration), so a rung-3 underline does not run through the glyphs.
-    # PRINT-ONLY, like the `.tx-sec` face rules above and for the same reason: only a publication
-    # palette writes marks, so a colour layer needs no rule at all and stays byte-identical.
+    # THE EFFECT-SIZE MARKS sit where the stars sit and are NOT an aside: they replace the colour, so
+    # they carry the deviation itself in the chrome's own `mark` ink, print-only like the sec face above.
     add(".tabxplor-tab .tx-mark", "color", "", "", tx_chrome_hex(print_theme)$mark)
     for (k in c("font-style", "text-decoration", "display"))
       add(".tabxplor-tab .tx-mark", k,
@@ -306,9 +233,6 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
                     "display" = "inline-block")[[k]])
   }
 
-  # Phase 14l: the text channel uses the text family and the bg channel the bg family -- the loop
-  # variable IS the family now the color_type override is gone (it used to repoint the text channel
-  # into the fill palette, i.e. fill-coloured font).
   for (ch in c("text", "bg")) {
     pl   <- get_color_style("color_code", type = ch, theme = "light")
     pd   <- get_color_style("color_code", type = ch, theme = "dark")
@@ -319,8 +243,7 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
     for (s in 1:8) {
       csel <- tx_cell_sel(tx_slot_class(ch, s))
       add(csel, prp, toupper(unname(pl[s])), toupper(unname(pd[s])), toupper(unname(pp[s])))
-      # z11: the print face, as its divergence from the baseline. The bg channel emits nothing (its
-      # print face equals its light face), so no per-channel special case is needed here.
+      # the bg channel emits nothing here (its print face equals its light face) -- no special case.
       fd <- tx_face_decls(fp, fb, s)
       for (k in names(fd)) add(csel, k, "", "", fd[[k]])
     }
@@ -329,19 +252,15 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
 }
 
 # DESIGN: every CELL colour class is emitted under TWO selectors -- bare (".p1") AND scoped
-# (".tabxplor-tab .p1"). The bare one keeps the tab_md()/editor contract (bare classes a user maps in
-# their own CSS) and reaches the legend spans, which may sit outside any .tabxplor-tab wrapper. The
-# scoped twin is the HOST-PROOFING: its specificity (0,2,0) out-specifies the table-cell colour rules
-# of Bootstrap-flavoured host pages -- pkgdown stamps class="table" on every table, and Bootstrap 5's
-# `.table>:not(caption)>*>*` (0,1,1) then sets color/background-color on the SAME <td> our class sits
-# on, beating a bare class (0,1,0) and washing every cell colour out (legend spans survived because
-# there the host rule only hit the ancestor td -- direct beats inherited). (0,2,0) wins against any
-# element+single-class host rule with no !important, so "restyle with ordinary CSS" still holds; a
-# pathological host (ID selectors / !important on cells) needs a user override, see ?tab_css.
+# (".tabxplor-tab .p1"). The bare one keeps the tab_md()/editor contract and reaches legend spans that
+# may sit outside any .tabxplor-tab wrapper. The scoped twin is HOST-PROOFING: its specificity (0,2,0)
+# out-specifies a Bootstrap host's table-cell rules (pkgdown's `.table>:not(caption)>*>*`, (0,1,1)),
+# which would otherwise wash every cell colour out. A pathological host (ID selectors / !important)
+# still needs a user override, see ?tab_css.
 tx_cell_sel <- function(cls) paste0(".", cls, ",.tabxplor-tab .", cls)
 
-# Prefix every part of a (possibly comma-separated) selector with every hook -> one comma-joined
-# selector list. `.tabxplor-tab th,.tabxplor-tab td` + 2 hooks -> 4 parts.
+# prefixes every part of a (possibly comma-separated) selector with every hook.
+# `.tabxplor-tab th,.tabxplor-tab td` + 2 hooks -> 4 parts.
 tx_hook_sel <- function(sel, hooks) {
   vapply(sel, function(s) {
     parts <- trimws(strsplit(s, ",", fixed = TRUE)[[1]])
@@ -377,260 +296,155 @@ tx_css_layer <- function(rules, which = c("light", "dark", "print"), hooks = NUL
 #   2 @media prefers-color-scheme     (0,1,0)  -- same specificity, wins on SOURCE ORDER
 #   3 explicit page toggle -> light   (0,2,x)  -- beats the OS
 #   4 explicit page toggle -> dark    (0,2,x)  -- last, so a pathological tie resolves dark
-# WARNING: do not reorder. Layer 3 before 4 and both after 2 is what makes an explicit host toggle
-# (Quarto's body.quarto-dark) override the reader's OS preference in BOTH directions.
-#' @keywords internal
+# WARNING: do not reorder -- layer 3 before 4 and both after 2 is what makes an explicit host toggle
+# override the reader's OS preference in BOTH directions.
 tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = TRUE) {
   theme  <- tx_resolve_theme(theme)
-  # Theme-INDEPENDENT, so it belongs here rather than in the rule table (which is emitted once per
-  # cascade layer under "auto"). Phase 14c: a text-coloured cell is bold in every other medium
-  # (tab_export_prep's `bold` drives kableExtra AND the html engine's inline weight), so the stylesheet
-  # must carry it for the one medium that has no other way to say it: tab_md(), whose cells are bare
-  # `[42%]{.p2}` spans. Harmlessly redundant on the html engine.
-  # The background classes stay unbolded, exactly like the cells: a fill alone does not bold.
-  # z11: this rule IS the light palette's face (get_color_style("face", "text", "light")$bold, all TRUE
-  # -- asserted by test-print-palette.R), which is what lets tx_face_decls() treat it as THE baseline
-  # and emit only a theme's divergences. So it stays exactly here, emitted once outside the cascade.
+  # theme-INDEPENDENT: a text-coloured cell is bold in every other medium, so the stylesheet must carry
+  # it for tab_md(), whose cells are bare `[42%]{.p2}` spans (harmlessly redundant on the html engine).
+  # This rule IS the light palette's face (asserted by test-print-palette.R), which is what lets
+  # tx_face_decls() treat it as THE baseline and emit only a theme's divergences.
   bold_slots <- paste0(paste0(".", tx_slot_class("text", 1:8), collapse = ","), "{font-weight:bold;}")
   static <- c(bold_slots, if (isTRUE(chrome)) c(
-    # Phase 14e: the html engine's GEOMETRY lives here, not inline on every cell. An inline style
-    # cannot be overridden by a user's CSS, so "a good default you can restyle" (what kableExtra gives)
-    # was impossible while the engine wrote its own borders and widths. The engine now emits ROLE
-    # classes (tx-r/tx-l align, tx-num numbers, tx-br/tx-bl borders, tx-tot total col, tx-rv row-var
-    # col, tx-b bold, tx-bt/tx-bb/tx-bb2 row rules, tx-span the col_var header, tx-pill a background)
-    # and every look is decided here. Overriding is then ordinary CSS -- no !important needed, because
-    # nothing of ours is inline any more.
-    # DejaVu Sans Condensed for text (the table-wide rule below) and a MONOSPACE stack for numbers (the
-    # `.tx-num` rule below, Phase g -- numbers are monospace by default so they stay column-aligned).
-    # Revert with options("tabxplor.tab_kable_num_font" = <proportional stack>). All degrade through
-    # their stacks.
-    # `.tabxplor-tab` is the <table> itself (the html engine) OR a wrapping <div> (a markdown table
-    # inside its pandoc fenced div, Phase 14f) -- `border-collapse` only means something on a table, so
-    # name both. Every other rule below is a descendant selector and reaches the table either way.
-    # WARNING (Phase 14j): NO border SHORTHAND anywhere below -- always border-*-style/-width. A
-    # shorthand resets border-*-color to `currentColor`, i.e. the cell's own palette hex, and every
-    # rule here out-specifies the one border-color rule above. Locked by test-render-html.R.
+    # the html engine's GEOMETRY lives here, never inline on a cell, so it stays user-restyleable with
+    # no !important needed. The engine emits ROLE classes (tx-r/tx-l align, tx-num numbers, tx-br/tx-bl
+    # borders, tx-tot/tx-rv, tx-b bold, tx-bt/tx-bb/tx-bb2 row rules, tx-span, tx-pill) and every look
+    # is decided here.
+    # DejaVu Sans Condensed for text, a MONOSPACE stack for numbers (`.tx-num`, so figures stay
+    # column-aligned). Revert with options("tabxplor.tab_kable_num_font" = <proportional stack>).
+    # `.tabxplor-tab` is the <table> itself (html engine) OR a wrapping <div> (a markdown table's
+    # pandoc fenced div) -- name both, since `border-collapse` only means something on a table.
+    # WARNING: NO border SHORTHAND anywhere below -- always border-*-style/-width, or it resets
+    # border-*-color to the cell's own palette hex. Locked by test-render-html.R.
     paste0(".tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;",
            "border-top-width:0;border-bottom-width:0;",
            "margin:0;font-family:\"DejaVu Sans Condensed\",\"DejaVu Sans\",Arial,helvetica,sans-serif;}"),
-    # Phase 15d: the table TITLE is a `<div class="tabxplor-caption">` sibling emitted BEFORE the <table>
-    # (render_html_engine), not a `<caption>` child -- a `<caption>` participates in the table's width, so
-    # a long centred title widened / wrapped thin tables. As a block div it is LEFT-aligned, fills the
-    # container, and `white-space:normal` lets it wrap only when it genuinely exceeds the table width.
-    # ⚠ `width:0;min-width:100%` is what makes that true -- the same idiom as `.tx-foot` below: a
-    # wrapping block's max-content is its WHOLE text on one line, so inside a shrink-to-fit container
-    # (jamovi's `.tx-scrollbox`) a long title would otherwise SIZE the box. `width:0` is a definite
-    # size, so it contributes 0 while the container is sized; at layout time the container's width is
-    # definite, so `min-width:100%` resolves and the title fills it. Its colour is theme-aware
-    # (full-contrast: pure black in light, white in dark -- the maintainer's "always black, not grey"),
-    # added to the rule table below. font-size 110% = a touch bigger than the table, smaller than the old
-    # 120%. The legacy kableExtra engine keeps a real <caption> styled in inst/tab.css.
+    # the table TITLE is a `<div class="tabxplor-caption">` sibling emitted BEFORE the <table>, not a
+    # `<caption>` child (see above). `width:0;min-width:100%` is the same idiom as `.tx-foot` below --
+    # otherwise a long title would SIZE a shrink-to-fit container (jamovi's `.tx-scrollbox`). Its colour
+    # (full-contrast) is added to the rule table below.
     paste0(".tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;",
            "width:0;min-width:100%;}"),
     ".tabxplor-tab tfoot{font-size:80%;text-align:left;}",
     # readable-compact: a real vertical rhythm (line-height 0.85 crammed the rows) + ~1mm of side
     # padding, so text no longer touches the column borders.
     ".tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}",
-    # THE HOST RESET: no cell keeps a border it did not ask us for. A host draws them under every row
-    # (Bootstrap's `.table>:not(caption)>*>*`, which pkgdown stamps on every table; Quarto likewise),
-    # and the `border-color` rule above then recolours those lines black -- a rule under every row in
-    # both media. Every border this stylesheet DRAWS is a role class at (0,2,0) or better, so zeroing
-    # the widths at (0,1,1) takes the host's and leaves ours.
-    # WARNING: width-only, so the border-COLOUR contract above is untouched (`border-width` is not the
-    # `border`/`border-top` shorthand that resets border-*-color); a 0-width border never renders,
-    # whatever its colour.
+    # THE HOST RESET (see the file header). WARNING: width-only, so the border-COLOUR contract above
+    # is untouched (`border-width` is not the `border`/`border-top` shorthand).
     ".tabxplor-tab th,.tabxplor-tab td{border-width:0;}",
-    # ... then the two rules that redraw OUR OWN chrome in markdown, scoped `.tabxplor-tab table` --
-    # md-only BY SELECTOR (they need a `table` DESCENDANT of `.tabxplor-tab`; in md that is the pandoc
-    # <div> -> <table>, in the html engine `.tabxplor-tab` IS the table with no nested one, so they
-    # never match there). A md table carries no per-cell class, so its row rule is a border-top on a
-    # fully-blank row (all cells :empty -- uniquely OUR blank separator; a data/name row has content),
-    # and its ASCII-empty spacer cells collapse to a hairline.
+    # the two rules below redraw OUR OWN chrome in markdown, md-only by selector (they need a `table`
+    # DESCENDANT of `.tabxplor-tab`, absent in the html engine). A md table carries no per-cell class,
+    # so a row separator is a border-top on a fully-blank row (all cells :empty, our own spacer).
     paste0(".tabxplor-tab table tbody tr:not(:has(td:not(:empty)))>*{",
            "border-top-style:solid;border-top-width:1px;padding:0;line-height:0;}"),
     ".tabxplor-tab table td:empty,.tabxplor-tab table th:empty{padding:0;}",
-    # Phase g (A4): approximate the html `.tx-br` vertical rule between col_var groups. md tables carry
-    # no per-column class, but the col_var separator IS a thin all-blank spacer column, so its cells are
-    # the only `:empty` cells inside a CONTENT row (a data/header row has non-empty cells; a blank
-    # SEPARATOR row is all-empty and is handled by the border-top rule above, excluded here via
-    # `:has(...:not(:empty))`). A left border on those spacers draws the vertical line. Best-effort:
-    # relies on data cells never being truly empty (uncoloured md cells render a space, coloured ones a
-    # `[..]{.class}` span).
+    # approximates `.tx-br` (the col_var vertical rule) in md: the separator column IS the only
+    # `:empty` cells inside a content row, so a left border on them draws the line. Best-effort: relies
+    # on data cells never being truly empty.
     paste0(".tabxplor-tab table tbody tr:has(td:not(:empty)) td:empty,",
            ".tabxplor-tab table thead tr:has(th:not(:empty)) th:empty{",
            "border-left-style:solid;border-left-width:1px;}"),
-    # Phase 18m: the whole-table TOP and BOTTOM edges, md-only BY SELECTOR (they need a `table`
-    # DESCENDANT of `.tabxplor-tab` -- the pandoc div>table; the html engine's `.tabxplor-tab` IS the
-    # table with no nested one -> its edges come from `> thead`/`tr.tx-bb` instead). Longhands only (the
-    # no-shorthand border-colour contract). (0,2,3) beats `thead th`'s border-top-width:0 (0,1,2).
+    # the whole-table TOP/BOTTOM edges, md-only by selector (the html engine's edges come from
+    # `> thead`/`tr.tx-bb` instead). Longhands only.
     paste0(".tabxplor-tab table > thead > tr:first-child > *{",
            "border-top-style:solid;border-top-width:1px;}"),
     paste0(".tabxplor-tab table > tbody > tr:last-child > *{",
            "border-bottom-style:solid;border-bottom-width:1px;}"),
-    # Phase 18m: the right edge of the table (the grand Total / last numeric column) -- md has no
-    # column-AFTER-the-last to make a spacer of, so a border-right on each content row's last cell draws
-    # it. `:has(td:not(:empty))` skips the blank separator rows (no stray right tick). Matches the html
-    # engine's tx-br on the final column. The interior verticals (levels|numbers, numbers|Total, col_var
-    # groups) are the :empty spacer columns md inserts, handled by the border-left rule above.
+    # the RIGHT edge (md has no column-after-the-last to spacer): matches the html engine's tx-br on
+    # the final column. `:has(td:not(:empty))` skips the blank separator rows.
     paste0(".tabxplor-tab table > tbody > tr:has(td:not(:empty)) > *:last-child,",
            ".tabxplor-tab table > thead > tr > *:last-child{",
            "border-right-style:solid;border-right-width:1px;}"),
-    # Phase 18r: the LEFT edge, symmetric to the right edge above. Before Phase m the leftmost
-    # column's cells were `:empty` and caught the border-LEFT spacer rule -- an ACCIDENTAL left edge.
-    # Phase m's U+00A0 fill made them non-empty (killing the "ragged" edge), which also removed the
-    # only thing drawing the table's left side -> the first column had no left border at all. Draw it
-    # explicitly here (independent of cell emptiness); `:has(td:not(:empty))` skips the all-blank
-    # separator rows exactly like the right edge. Interior verticals stay the :empty spacer columns.
+    # the LEFT edge, symmetric to the right edge -- drawn explicitly (independent of cell emptiness)
+    # since the leftmost column's own cells are non-empty and draw nothing on their own.
     paste0(".tabxplor-tab table > tbody > tr:has(td:not(:empty)) > *:first-child,",
            ".tabxplor-tab table > thead > tr > *:first-child{",
            "border-left-style:solid;border-left-width:1px;}"),
-    # Phase g (A5): the md footer is a paragraph after the table INSIDE the `.tabxplor-tab` div (the html
-    # engine puts its footer in <tfoot>, styled above). `.tabxplor-tab p` is md-only by selector -- the
-    # html engine's `.tabxplor-tab` IS the <table> and has no descendant <p>.
+    # the md footer is a paragraph after the table inside the `.tabxplor-tab` div; `.tabxplor-tab p` is
+    # md-only by selector (the html engine's div IS the <table>, with no descendant <p>).
     ".tabxplor-tab p{font-size:80%;}",
     paste0(".tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;",
            "vertical-align:bottom;line-height:1;border-top-width:0;",
            "border-bottom-style:solid;border-bottom-width:1px;}"),
-    # Phase 15d: draw the table's TOP edge -- the top-most header row (the col_var spanning row, e.g. the
-    # "model1 model2 model3" span in a model comparison) had only a border-BOTTOM, so the table was open
-    # at the top. `> thead > tr:first-child > *` is html-engine-only BY SELECTOR: it needs thead as a
-    # DIRECT child of `.tabxplor-tab` (true only when `.tabxplor-tab` IS the <table>; in md it wraps a
-    # nested <table>, so this never matches there and md keeps its own chrome). (0,2,2) out-specifies the
-    # `thead th` border-top-width:0 (0,1,2). Longhands only -- the border-colour contract (no shorthand).
-    # Phase 18r: the col_var spanning-NAME row (all cells `.tx-span`) must FLOAT above the grid --
-    # no top border boxing the variable names, closed only by the `.tx-span` border-BOTTOM below them.
-    # `*:not(.tx-span)` draws the top edge ONLY when the first thead row is a level-header row (no span
-    # present, e.g. a single col_var / span-dropped table); a names row gets none. This deliberately
-    # narrows Phase 15d's universal top edge, per the maintainer's display review.
+    # draws the table's TOP edge, html-engine-only by selector (needs thead as a DIRECT child of
+    # `.tabxplor-tab`, true only when it IS the <table>). The col_var spanning-NAME row (`.tx-span`)
+    # must FLOAT above the grid with no top border, so `*:not(.tx-span)` draws the edge only when the
+    # first thead row is a plain level-header row.
     paste0(".tabxplor-tab > thead > tr:first-child > *:not(.tx-span){",
            "border-top-style:solid;border-top-width:1px;}"),
     paste0(".tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;",
            "border-bottom-style:solid;border-bottom-width:1px;}"),
     ".tabxplor-tab .tx-r{text-align:right;}",
     ".tabxplor-tab .tx-l{text-align:left;}",
-    # thead th's `text-align:center` must beat the column's own alignment: same specificity (0,2,0)
-    # vs (0,2,0), so SOURCE ORDER decides -- this pair must stay after .tx-r/.tx-l.
+    # same specificity as .tx-r/.tx-l (0,2,0), so SOURCE ORDER decides -- must stay after them.
     ".tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}",
-    # THE UNIT ROW -- the console's own type tag ("<row%>", "<n>"), carried into every export. It says
-    # what a column HOLDS, which is the exports' answer to a composite cell whose aside is shown in
-    # every row and named nowhere. Discrete BY DESIGN: small, regular weight, italic like a pillar
-    # tag, in the chrome grey, and NO rule of its own -- it reads as the second line of the header,
-    # not as a second header row.
-    # ⚠ SPECIFICITY: `thead .tx-unit` is (0,2,1), the same as the `thead .tx-r/.tx-l` pair above, so
-    # this must stay AFTER it or the row centres itself again. Left, because the tag names the column
-    # rather than labelling its numbers (markdown cannot: a pipe column is aligned once, for the whole
-    # column).
+    # THE UNIT ROW -- the console's own type tag ("<row%>", "<n>"). Discrete by design: small, regular
+    # weight, italic, chrome grey, no rule of its own, reading as the header's second line.
+    # specificity: (0,2,1) like the `thead .tx-r/.tx-l` pair above (see file header) -- left-aligned,
+    # since the tag names the column, not the numbers under it.
     paste0(".tabxplor-tab thead .tx-unit{font-weight:normal;font-style:italic;font-size:80%;",
            "text-align:left;border-top-width:0;padding-top:0;}"),
-    # ... and NO horizontal rule between the level names and it: `thead th` gives every header cell a
-    # bottom rule, which drew a line through the middle of one header block. The block is closed by
-    # the unit row's own bottom rule instead.
-    # ⚠ `:not([rowspan])` is load-bearing. An INDEX column's header spans BOTH rows, so it is itself
-    # the bottom of the header block in its column -- there is no unit cell under it to close it, and
-    # dropping its rule left the levels column open onto the first data row.
+    # no horizontal rule between the level names and the unit row -- `thead th` gives every header cell
+    # a bottom rule, so the block is closed by the unit row's own instead.
+    # ⚠ `:not([rowspan])` is load-bearing: an INDEX column's header spans both rows and has no unit
+    # cell under it, so dropping this exception would leave the levels column open onto the data.
     ".tabxplor-tab thead tr:has(+ tr > .tx-unit) > th:not([rowspan]){border-bottom-width:0;}",
-    # Phase g: numbers are MONOSPACE by default (was: proportional unless the table showed stars).
-    # Proportional digits drift out of column alignment -- worse under the bold references / significant
-    # cells the html render adds -- so the monospace stack keeps every figure column-locked. The size
-    # bump (Cascadia Mono reads small) keeps the row height: 1.1em x line-height 1. Revert to a
-    # proportional stack with options("tabxplor.tab_kable_num_font" = ...).
-    # Phase 15d: the number FONT is BODY-only (`td.tx-num`). A numeric column HEADER carries the same
-    # `tx-num` class (align + nowrap), but a `<th>` stays in the table-wide condensed sans stack -- a
-    # monospace header looks wrong. `td` in the selector keeps headers on the default; `th.tx-num`
-    # inherits `.tabxplor-tab{font-family:...}`.
+    # numbers are MONOSPACE by default -- proportional digits drift out of column alignment, worse
+    # under bold references. Revert with options("tabxplor.tab_kable_num_font" = <proportional stack>).
+    # BODY-only (`td.tx-num`): a numeric column HEADER carries the same class but a `<th>` stays in the
+    # table-wide condensed sans stack -- a monospace header looks wrong.
     ".tabxplor-tab .tx-num{white-space:nowrap;}",
     paste0(".tabxplor-tab td.tx-num{font-family:", tx_num_font("html"),
            ";font-size:1.1em;line-height:1;}"),
     ".tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}",
     ".tabxplor-tab .tx-bl{border-left-style:solid;border-left-width:1px;}",
-    # Phase 14j: `.tx-tot` (total column) and `.tx-rv` (the row-variable levels column) are still
-    # EMITTED, deliberately with no rule of their own. They used to carry min-width:5.5em / 10em, which
-    # is what made "levels and Total columns very wide for nothing": a browser's auto table layout
-    # already sizes each column to its content, so a floor could only ever be too big. They remain as
-    # hooks -- `.tx-rv{min-width:10em}` in the user's own stylesheet is the fixed-width escape hatch
-    # (see ?tab_css), which is exactly what emitting roles instead of inline styles buys.
-    # Phase 14i: a LABEL cell (`rowspan`ned over its block: a merged table's row-variable name, or a
-    # kept tab_var's level) centres itself on the block it names rather than floating at its top.
+    # `.tx-tot`/`.tx-rv` are EMITTED with no rule of their own (see NO COLUMN WIDTH, file header) --
+    # they remain as hooks: `.tx-rv{min-width:10em}` in a user's stylesheet is the fixed-width escape.
+    # a LABEL cell (rowspanned over its block) centres itself on the block it names.
     ".tabxplor-tab .tx-lbl{vertical-align:middle;text-align:center;}",
-    # ... and a row-variable NAME is written vertically, so a long one costs one narrow column
-    # instead of a wide one.
-    # WARNING: a browser does NOT grow a `rowspan`ned cell to hold vertical text that overruns it --
-    # the name spills onto the blocks above and below (`.tx-lbl` centres it). So there is no CSS
-    # guard here on purpose: WHICH names may turn is decided in R, deliberately pessimistically, by
-    # tab_vname_plan() (R/tab-export-prep.R), which is also what Excel reads. Clipping it here would
-    # only truncate a variable name silently.
-    # WARNING: NOT `writing-mode:sideways-lr`, which reads the same way but is still flagged
-    # experimental with patchy support (Chrome shipped it late; MDN marks it so). `vertical-rl` +
-    # rotate(180deg) is the universally-supported equivalent -- bottom-to-top, matching the 90-degree
-    # rotation tab_xl writes into Excel.
+    # a row-variable NAME is written vertically (see the rowspan overrun budget, file header) -- NOT
+    # `writing-mode:sideways-lr`, which is still flagged experimental; `vertical-rl` + rotate(180deg)
+    # is the universally-supported equivalent, matching the 90-degree rotation tab_xl writes to Excel.
     paste0(".tabxplor-tab .tx-vname{writing-mode:vertical-rl;transform:rotate(180deg);",
            "white-space:normal;padding:4px 2px;}"),
     ".tabxplor-tab .tx-b,.tabxplor-tab tr.tx-b{font-weight:bold;}",
     ".tabxplor-tab tr.tx-bt>*{border-top-style:solid;border-top-width:1px;}",
-    # WARNING: `tx-bb` (1px) and `tx-bb2` (2px) have IDENTICAL specificity (0,3,1), so a row carrying
-    # both -- the last row of a row_var block -- is decided by SOURCE ORDER here: tx-bb2 comes second
-    # and wins, which is the intended thicker rule. Do not reorder this pair.
-    # Phase 18r: `td.tx-bb` is the CELL-scoped twin of the row rule. A rowspanned label cell (a
-    # merged table's vertical row-var name) is anchored in its block's FIRST row, so `tr.tx-bb>*`
-    # (last-row direct children) never reaches the one that covers the table bottom -> the bottom-left
-    # corner was left open. render_kable_html() tags that single cell `tx-bb` to close it at 1px (the
-    # cell is not a direct child of the tx-bb2 bottom row, so it stays 1px, not 2px -- as asked).
+    # WARNING: tx-bb/tx-bb2 are identical at (0,3,1) -- see the file header. `td.tx-bb` is the
+    # CELL-scoped twin: a rowspanned label cell is anchored in its block's FIRST row, so `tr.tx-bb>*`
+    # never reaches it and the bottom-left corner was left open; render_kable_html() tags that cell
+    # directly.
     ".tabxplor-tab tr.tx-bb>*,.tabxplor-tab td.tx-bb{border-bottom-style:solid;border-bottom-width:1px;}",
     ".tabxplor-tab tr.tx-bb2>*{border-bottom-style:solid;border-bottom-width:2px;}",
-    # A ROW SEPARATOR DOES NOT CROSS THE VARIABLE-NAME COLUMN. A rowspanned name cell is anchored in
-    # its block's first row and so escapes `tr.tx-bb2>*` anyway; a ONE-ROW block's cell is a direct
-    # child of the closing row and drew a rule its neighbours did not. `tx-nb` (emitted by the html
-    # engine on exactly the name cells that should draw none) opts them all out.
-    # ⚠ a name cell that DOES close a boundary carries `tx-bb` / `tx-bb2` instead of `tx-nb`, never
-    # both -- which is what keeps this rule from having to out-specify the cell-scoped ones below.
+    # a row separator does not cross the variable-name column: a one-row block's name cell is a direct
+    # child of the closing row and would draw a rule its neighbours did not. `tx-nb` opts it out; a
+    # name cell that DOES close a boundary carries `tx-bb`/`tx-bb2` instead, never both.
     ".tabxplor-tab tr.tx-bb>.tx-nb,.tabxplor-tab tr.tx-bb2>.tx-nb{border-bottom-style:none;}",
     ".tabxplor-tab td.tx-bb2{border-bottom-style:solid;border-bottom-width:2px;}",
     ".tabxplor-tab tr.tx-bt2>*{border-top-style:solid;border-top-width:2px;}",
-    # Phase 14j: the footnote (subtext + colour legend) must not SIZE the table. Its cell spans every
-    # column, and its prose is ~330 characters on one line, so its max-content dwarfed the data's --
-    # and a table's used width is max(min-content, min(max-content, available)), so the table took the
-    # full pane and auto layout spread the slack across every column ("a tvhours cell half numbers half
-    # blank"). This was the real cause of the compactness complaint; the min-widths above were a
-    # sideshow. `width:0` is a definite size, so the cell contributes 0 to max-content (a percentage
-    # min-width resolves to 0 while sizing, against an indefinite containing block); at layout time the
-    # cell's width IS definite, so min-width:100% resolves and the text fills it. If a browser ever
-    # disagreed, the fallback is the old stretched table -- nothing breaks.
+    # the footnote must not SIZE the table: `width:0` is a definite size (contributes 0 to
+    # max-content), and once the cell's own width is definite `min-width:100%` resolves and the text
+    # fills it -- the same idiom as `.tabxplor-caption` above.
     ".tabxplor-tab .tx-foot{width:0;min-width:100%;}",
-    # a background HUGS its text (rounded, inline) rather than flooding the cell: a full-cell fill
-    # reads as a blocky grid AND swallows the row hover (a child's background always paints over its
-    # row's, whatever the specificity).
-    # ⚠ the negative margin CANCELS the padding's layout. An inline box's horizontal padding is real
-    # layout, so without it a filled number sits ~4px left of the same number on an unfilled row in a
-    # right-aligned column -- the fill must bleed around the glyphs, never move them.
+    # a background HUGS its text (rounded, inline) rather than flooding the cell: a full fill reads as
+    # a blocky grid and swallows the row hover.
+    # ⚠ the negative margin CANCELS the padding's layout, so a filled number does not shift left of an
+    # unfilled one in a right-aligned column -- the fill bleeds around the glyphs, never moves them.
     ".tabxplor-tab .tx-pill{border-radius:4px;padding:1px 4px;margin:0 -4px;}",
-    # a row sparkline is a PLOT and gets the whole cell: block + auto margins centre it horizontally
-    # whatever the column's text-align, and its own cell drops the numeric right/top geometry for
-    # middle/centre and trims the vertical padding to a hairline. NO border of its own -- the cell's
-    # own rule already draws the rectangle around it.
+    # a row sparkline is a PLOT and gets the whole cell: centred regardless of the column's text-align,
+    # with no border of its own (the cell's own rule already draws the rectangle around it).
     ".tabxplor-tab .tx-spark{display:block;margin:0 auto;}",
     ".tabxplor-tab .tx-sparkcell{vertical-align:middle;text-align:center;padding:1px 2px;}",
-    # Phase 14b: a cell tooltip is one line of "field: value ; field: value" prose, but bootstrap caps
-    # .tooltip-inner at max-width:200px, so it wrapped to four lines and was unreadable.
-    # WARNING: this selector is NOT scopable. Bootstrap moves the tooltip element to <body>
-    # (data-container="body", which is what stops a table's overflow from clipping it), so it is never
-    # a descendant of .tabxplor-tab and no ancestor selector can reach it. It therefore applies to any
-    # other bootstrap tooltip on the host page. Accepted: a one-line tooltip is what every bootstrap
-    # tooltip wants, the rule is unprefixed so a host stylesheet loaded later still wins, and it ships
-    # only with chrome = TRUE (never from tab_md()'s colour-only stylesheet).
-    # `pre`, not `nowrap`: a regression cell's tooltip is TWO lines (its own numbers, then the
-    # observed comparison -- TOOLTIP_LINES$group), and `pre` is `nowrap` plus honouring the newline,
-    # so every one-line tooltip renders exactly as before. It does extend the warning above: a host
-    # page's own tooltips now keep their newlines too, which is what a tooltip author intended.
+    # a cell tooltip is one line of "field: value ; field: value" prose, but bootstrap caps
+    # .tooltip-inner at 200px and wraps it to four. WARNING: this selector cannot be scoped (see the
+    # file header) and so applies to any other bootstrap tooltip on the host page too -- accepted,
+    # since a one-line tooltip is what every bootstrap tooltip wants.
+    # `pre`, not `nowrap`: a regression cell's tooltip is TWO lines (its own numbers, then the observed
+    # comparison), and `pre` also honours the newline.
     ".tooltip-inner{max-width:none;white-space:pre;}",
-    # Phase 14j: the same for a POPOVER (tab_kable(popover = TRUE)), which the html engine has emitted
-    # since 10e with no styling at all -- bootstrap caps .popover at max-width:276px, so our one-line
-    # prose wrapped. `.popover-body` is bootstrap 4/5, `.popover-content` bootstrap 3 (rmarkdown's
-    # dependency, which is what kableExtra's print loads); naming both keeps this version-agnostic.
-    # DESIGN: geometry ONLY. inst/tab.css (the kableExtra path) also paints .popover white-on-black,
-    # and that is deliberately NOT ported: this selector is as unscopable as .tooltip-inner above, so a
-    # colour override would repaint the HOST page's popovers. "One line, not 276px" is what every
-    # bootstrap popover wants; a black background is our taste, imposed on someone else's page. Left
-    # unstyled, the popover simply inherits the host's own theme.
+    # the same for a POPOVER: bootstrap caps `.popover` at 276px. `.popover-body`/`.popover-content`
+    # names both bootstrap 4/5 and 3, version-agnostically. Geometry only, deliberately no colour --
+    # this selector is as unscopable as .tooltip-inner, so a colour override would repaint the HOST
+    # page's popovers too.
     ".popover{max-width:none;}",
     ".popover-body,.popover-content{padding:6px;white-space:pre;}"
   ) else character(0))
@@ -651,10 +465,8 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
 }
 
 # WHICH publication palette a COLOURED page falls back to when it is printed. `TRUE` = the default
-# one, `FALSE` = no print layer at all, a palette name = that one. NULL out means "emit nothing".
-# WARNING: a MARKS palette is refused here. Its signal is cell TEXT, and a media query can restyle a
-# page but cannot add characters to it -- accepting it would silently print an unmarked table.
-#' @keywords internal
+# one, `FALSE` = no print layer, a palette name = that one, NULL out = "emit nothing".
+# WARNING: a MARKS palette is refused -- its signal is cell TEXT, which a media query cannot add.
 tx_print_rules_palette <- function(print_rules) {
   if (is.null(print_rules) || isFALSE(print_rules)) return(NULL)
   if (isTRUE(print_rules)) return("print_minimalistic")
@@ -674,17 +486,13 @@ tx_print_rules_palette <- function(print_rules) {
   nm
 }
 
-# The black-and-white publication palette as an AT-RULE, Phase 18z11: a page rendered in colour
-# PRINTS (or saves to PDF) publication-ready, with no argument and no user awareness. Emitted last, so
-# at equal specificity it wins on source order.
-# WARNING 1: under theme = "auto" the un-hooked layer is NOT enough. Cascade layers 3/4 are
-# hook-prefixed (`body.quarto-dark .tabxplor-tab .p1` = (0,3,1)) and out-specify a plain
-# `.tabxplor-tab .p1` (0,2,0) WHATEVER the source order, so a Quarto-dark page would print dark. The
-# hooked twin below matches their specificity and then wins on order. Do not remove it.
+# The black-and-white publication palette as an AT-RULE: a page rendered in colour PRINTS (or saves to
+# PDF) publication-ready, with no argument and no user awareness.
+# WARNING 1: under theme = "auto" the un-hooked layer alone is not enough -- cascade layers 3/4 are
+# hook-prefixed (0,3,1) and out-specify a plain rule (0,2,0) whatever the source order, so a
+# Quarto-dark page would print dark without the hooked twin below.
 # WARNING 2: every browser DROPS background-color when printing unless the reader ticks "Background
-# graphics", so without print-color-adjust the grey fills would silently vanish and only the typography
-# would reach the paper.
-#' @keywords internal
+# graphics", so without print-color-adjust the grey fills would silently vanish.
 tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
   if (!isTRUE(print_rules)) return(character(0))
   inner <- c(
@@ -702,14 +510,10 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 
 # === SECTION: the public generator =================================================================
 
-# WARNING (Phase 14k): in the "Two workflows" section below, the FOUR-backtick fence is load-bearing,
-# and so is the fact that it carries no `{r}` info string. roxygen2 (>= 7.1) EVALUATES a ```{r} chunk
-# written in roxygen markdown and splices its OUTPUT into the help page -- so the three-backtick chunk
-# we want to SHOW the user has to be quoted by a longer fence. It was not: the section used raw-Rd
-# \preformatted{} wrapped around a live chunk, so document() ran tab_css() and pasted the entire
-# stylesheet into ?tab_css, emitted ~89 "could not resolve link" warnings (one per bracketed token of
-# the CSS it printed: \link{1}, \link{data-bs-theme=light}, ...), and -- because \preformatted{} is Rd,
-# not markdown -- leaked literal **bold** into the rendered page. Never mix raw Rd with a code fence.
+# WARNING: in the "Two workflows" section below, the FOUR-backtick fence is load-bearing, and so is
+# carrying no `{r}` info string -- roxygen2 (>= 7.1) EVALUATES a ```{r} chunk in roxygen markdown and
+# splices its output into the page, so a three-backtick chunk meant to be SHOWN, not run, needs the
+# longer fence. Never mix raw Rd (`\preformatted{}`) with a code fence for the same reason.
 
 #' Generate the tabxplor stylesheet
 #'
@@ -718,12 +522,12 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 #' document, whatever their `color_breaks`.
 #'
 #' Cells carry classes named after the palette **slot** (`.p1`-`.p4` over-represented text, `.m1`-`.m4`
-#' under-represented text, `.o1`-`.o4` / `.u1`-`.u4` for the background channel), so `tab_kable()` and
-#' `tab_md()` share one vocabulary.
+#' under-represented text, `.o1`-`.o4` / `.u1`-`.u4` for the background channel), so [tab_html()] and
+#' [tab_md()] share one vocabulary.
 #'
 #' @section Two workflows:
-#' **Self-contained (the default).** `tab_kable(css = TRUE)` and `tab_md(css = TRUE)` inline the
-#' stylesheet with the table, so a single file works anywhere (RStudio/Positron Viewer, jamovi, a
+#' **Self-contained (the default).** `tab_html(css = TRUE)` and `tab_md(css = TRUE)` inline the
+#' stylesheet with the table, so a single file works anywhere (the RStudio/Positron Viewer, jamovi, a
 #' standalone `.html`). Nothing to do.
 #'
 #' **Once per document.** In an `.Rmd`/`.qmd` with many tables, emit it once and let every table reuse
@@ -736,19 +540,16 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 #' ```
 #' ````
 #'
-#' Every later `tab_kable()` then emits classes only. Two things to know: with `css = FALSE` and **no**
+#' Every later [tab_html()] then emits classes only. Two things to know: with `css = FALSE` and **no**
 #' `tab_css()` call the tables render uncoloured; and one stylesheet means one `theme` for the whole
 #' document.
 #'
 #' @section Restyling a table:
 #' Nothing is written inline on a cell, so **any** of the look can be overridden by adding your own
 #' rules after the stylesheet -- no `!important` needed. The cell colour classes are also emitted
-#' scoped (`.tabxplor-tab .p1`) so they survive host pages that style table cells themselves --
-#' Bootstrap-based sites (including pkgdown) apply `color`/`background-color` to every cell of a
-#' `.table`, which would otherwise wash the colours out. On a pathological host (ID selectors or
-#' `!important` on cells), add your own stronger override after the stylesheet. Column widths in
-#' particular are left to the browser (it sizes each column to its content); to pin one, style its
-#' role:
+#' scoped (`.tabxplor-tab .p1`) so they survive host pages that style table cells themselves, such as
+#' Bootstrap-based sites including pkgdown. Column widths in particular are left to the browser, which
+#' sizes each column to its content; to pin one, style its role:
 #' \preformatted{
 #' .tabxplor-tab .tx-rv  { min-width: 10em; }   /* the row-variable levels column */
 #' .tabxplor-tab .tx-tot { min-width: 5.5em; }  /* total columns                  */
@@ -764,25 +565,23 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 #'   `"print_marks"`, `"print_emphasis"`, `"print_minimalistic"`; `"bw"` is a synonym of the last --
 #'   see the section below), or -- opt-in -- `"auto"` to follow the reader's colour scheme (their
 #'   operating system, and any dark-mode toggle of the host page: Quarto, Bootstrap 5.3, Tailwind).
-#'   Defaults to `getOption("tabxplor.theme")`, i.e. `"light"`: a dark table is always a
-#'   deliberate choice. `"auto"` emits every rule four times (a light base, the OS media query, then
-#'   both toggle directions), which is also what lets [tab_kable()]'s own Viewer page force the
-#'   editor's theme -- see its `theme` argument.
+#'   Defaults to `getOption("tabxplor.theme")`, i.e. `"light"`: a dark table is always a deliberate
+#'   choice. `"auto"` emits every rule four times (a light base, the OS media query, then both toggle
+#'   directions), which is also what lets [tab_html()]'s own Viewer page force the editor's theme.
 #' @param print_rules Also emit a black-and-white publication palette inside an `@media print`
 #'   block, so a coloured page prints (or saves to PDF) publication-ready with no further action.
 #'   Defaults to `getOption("tabxplor.print_rules")`. Set to `FALSE` if your printer is a colour one
 #'   and the colours are the point, or name a palette (`"print_emphasis"`) to print in that one.
 #'   `"print_marks"` cannot be used here: its marks are cell text, and a print rule can restyle a
-#'   page but not add characters to it. It adds roughly 1.5 KB to a `light`/`dark` stylesheet and 6 KB to
-#'   an `"auto"` one (where the rules must also be emitted against the page-toggle hooks, which would
-#'   otherwise out-specify them).
+#'   page but not add characters to it. It adds roughly 1.5 KB to a `light`/`dark` stylesheet and
+#'   6 KB to an `"auto"` one.
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
 #'   (`color_type`): the text channel always uses the text palette, and the colour CHANNEL is chosen
 #'   by `color = c(text, background)` (see [tab()]).
 #' @param format Which output the stylesheet is for, in [tab_export()]'s own vocabulary.
 #'   `"html"` (the default) is the full stylesheet [tab_html()] needs: the colour classes **and**
 #'   the table's own look (font, background, border colours, the greys). `"md"` emits the colour
-#'   classes only, which is what [tab_md()] wants — bare selectors you can map in your own editor's
+#'   classes only, which is what [tab_md()] wants --- bare selectors you can map in your own editor's
 #'   or publisher's CSS.
 #' @param style_tag Wrap the CSS in a `<style>` tag (default `TRUE`).
 #' @param file Optional path to write to instead of returning.
@@ -797,12 +596,8 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 #' cat(tab_css(format = "md", style_tag = FALSE))  # the markdown flavour
 tab_css <- function(theme = NULL, format = c("html", "md"),
                     style_tag = TRUE, file = NULL, print_rules = NULL, ...) {
-  # Phase 19l: the retired inert arguments (`color_type`, ...) ride `...`.
-  # Phase 20a: `chrome = TRUE/FALSE` became `format = c("html", "md")` -- the argument said which
-  # CSS mechanism it toggled, not which output it was for, and the function it named
-  # (`tab_md_css()` = `tab_css(chrome = FALSE)`) existed only because nobody could guess it. It is
-  # caught by NAME here rather than left to tx_deprecate_inert(), which would ACCEPT and IGNORE it:
-  # a swallowed `chrome = FALSE` emits the wrong stylesheet, silently.
+  # `chrome` is caught by NAME here rather than left to tx_deprecate_inert() (which would accept and
+  # ignore it): a swallowed `chrome = FALSE` would silently emit the wrong stylesheet.
   dots <- rlang::list2(...)
   if ("chrome" %in% names(dots))
     cli::cli_abort(c("{.arg chrome} is now {.arg format}, which names the output it is for.",
@@ -812,13 +607,12 @@ tab_css <- function(theme = NULL, format = c("html", "md"),
   format <- rlang::arg_match(format)
   chrome <- identical(format, "html")
   o   <- resolve_export_opts(theme = theme, allow_auto = TRUE)
-  # z11: NULL -> option is the package idiom (cf. engine / popover / css / tooltips), and it is why
-  # tab_html()/tab_md() need NO argument of their own -- they call tab_css() internally, so a user with
-  # a colour printer sets options(tabxplor.print_rules = FALSE) once for a whole document.
+  # NULL -> option is why tab_html()/tab_md() need no argument of their own: a user with a colour
+  # printer sets options(tabxplor.print_rules = FALSE) once for a whole document.
   if (is.null(print_rules)) print_rules <- tx_option("print_rules")
   fallback <- tx_print_rules_palette(print_rules)
-  # The stylesheet carries exactly ONE publication palette: the one the page is rendered in if it is
-  # one, otherwise the one a coloured page falls back to on paper.
+  # the stylesheet carries exactly ONE publication palette: the page's own if it is one, otherwise the
+  # one a coloured page falls back to on paper.
   prt <- if (tx_is_print(o$theme)) o$theme else fallback %||% "print_minimalistic"
   css <- tx_css_render(tx_css_rules(chrome = chrome, print_theme = prt), o$theme, chrome = chrome,
                        print_rules = !is.null(fallback))

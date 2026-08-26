@@ -1,18 +1,19 @@
-# PURPOSE: Export tabxplor tables to simple, human-readable markdown, colours as pandoc spans.
-# ROLE: Parallel to tab_kable() (HTML) and tab_xl() (Excel); consumes the shared tab_export_prep().
+# PURPOSE: the Markdown exporter -- a plain, human-readable pipe table, colours as pandoc spans.
+# ROLE: a backend over tab_export_prep(), beside the html engine and tab_xl().
 # KEY CONSTRAINTS:
-#   - THE HEADER BLOCK IS THREE ROWS but a pandoc pipe table takes ONE, so the col_var-name row and
-#     the UNIT row (what each column holds -- "row%", "row% (n)") are BODY rows under the delimiter,
-#     styled with emphasis. ⚠ Emphasis, never a `.tx-unit` class span: a span costs 13 characters of
-#     raw line width md's fixed-width grid cannot absorb, and a monochrome table must carry no
-#     pandoc span at all.
-#   - Padding must be monospace-precise: numbers right-aligned, pipes aligned (raw text stays readable).
-#   - Bold rows (**...**) can touch pipes; normal cells have 1-space margins.
-#   - Phase 10f: a COLOURED table (any fmt column with a colour measure) wraps EVERY fmt cell in a
-#     break-derived pandoc span [<num>]{.class} (uncoloured cells get the neutral .n) so numbers stay
-#     aligned; an UNCOLOURED table (or color = FALSE) is byte-identical to the plain padded layout.
-#     Class names are palette-INDEPENDENT (slot -> break); tab_css(format = "md") maps them to hex.
-# See: CLAUDE.md Phase 10f, dev/tabxplor_phase10_exporters.md (Sec 12).
+#   - A PANDOC PIPE TABLE HAS ONE HEADER ROW, so the prep's other two (the col_var span and the UNIT
+#     row -- R/tab-export-prep.R) become BODY rows under the delimiter, in emphasis. WARNING:
+#     emphasis, not a `.tx-unit` span -- a span costs 13 characters of raw line width the fixed-width
+#     grid cannot absorb, and a monochrome table must carry no pandoc span at all.
+#   - Padding is monospace-precise (numbers right-aligned, pipes aligned), because the raw file is
+#     meant to be readable as text. A bold row may touch its pipes; a normal cell keeps a 1-space
+#     margin.
+#   - A COLOURED table wraps every fmt cell in a break-derived span `[<num>]{.class}` -- an
+#     uncoloured cell taking the neutral `.n` -- so the numbers stay aligned. An UNCOLOURED table is
+#     byte-identical to the plain padded layout: no span, no div.
+#   - The class names are palette- and theme-INDEPENDENT (a slot, not a hex). tab_css(format = "md")
+#     maps them, which is what lets one stylesheet serve a whole document.
+# See: CLAUDE.md section "tabxplor architecture" (exports and rendering); R/tab-css.R (the classes).
 
 #' Export a tabxplor table to a markdown table
 #'
@@ -33,23 +34,14 @@
 #' @param title `r lifecycle::badge("deprecated")` Renamed to `caption`.
 #' @param col_var_names `r lifecycle::badge("deprecated")` Replaced by `var_names`:
 #'   `col_var_names = FALSE` is `var_names = "rows"` (or `"none"`).
-#' @param css When `TRUE` (the **default**), prepend an inline `<style>` block (from
-#'   \code{\link{tab_css}}), so the exported markdown is self-contained -- it renders coloured and
-#'   compact on its own. Set `FALSE` inside an `.Rmd`/`.qmd` document (the host page brings the
-#'   stylesheet, or emit \code{\link{tab_css}} once at the top -- it styles every table), otherwise the
-#'   inline `<style>` block is duplicated per table.
-#'   Any **styled** table (coloured, or `css = TRUE`) is wrapped in a pandoc fenced div
-#'   `::: {.tabxplor-tab}`, which pandoc renders as `<div class="tabxplor-tab">` -- the hook
-#'   \code{\link{tab_css}}'s table styling needs, since pandoc emits a bare `<table>` it could not
-#'   otherwise reach. So the rendered HTML of a markdown table can look like `tab_kable()`'s (compact
-#'   layout, thin rules under the variable-name row and between sub-tables, no host borders), not just
-#'   be coloured -- even with `css = FALSE`, as long as the stylesheet is brought in some other way. A
-#'   plain uncoloured table is left byte-identical (no div).
-#' @param clipboard Copy output to clipboard via \code{clipr::write_clip()}.
-#'   Requires the \pkg{clipr} package.
+#' @param css When `TRUE` (the default), prepend an inline `<style>` block so the exported markdown is
+#'   self-contained and renders coloured and compact on its own. Set `FALSE` inside an `.Rmd`/`.qmd`
+#'   document once the host page brings the stylesheet (or call \code{\link{tab_css}} once at the top
+#'   for the whole document) -- otherwise the `<style>` block is duplicated per table. A plain
+#'   uncoloured table renders byte-identical either way.
+#' @param clipboard Copy output to clipboard via \code{clipr::write_clip()} (requires \pkg{clipr}).
 #' @param file Path to write the markdown to a file. `NULL` (default) skips.
-#' @param print If `TRUE`, print via `cat()` and return invisibly. If `FALSE`,
-#'   return the character string.
+#' @param print If `TRUE`, print via `cat()` and return invisibly; if `FALSE`, return the string.
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
 #'   (`color_type`, `html_24_bit`): colour is a CSS class, and exports are always 24-bit.
 #'
@@ -64,6 +56,8 @@
 #'   dplyr::mutate(dplyr::across(dplyr::where(is_fmt), ~set_display(., "diff"))) |>
 #'   tab_md()
 #' }
+# === SECTION: the entry point ======================================================================
+
 tab_md <- function(tabs,
                    bold_references = TRUE,
                    special_formatting = TRUE,
@@ -83,18 +77,15 @@ tab_md <- function(tabs,
                    title = lifecycle::deprecated(),
                    col_var_names = lifecycle::deprecated(),
                    ...) {
-  # Phase 19l: the retired inert arguments (`color_type`, `html_24_bit`, ...) ride `...`.
   tx_deprecate_inert(rlang::list2(...), "tab_md")
-  # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
-  # Phase 10j: `title` renamed to `caption` (unified across exporters); `transpose` added.
   if (lifecycle::is_present(title)) {
     lifecycle::deprecate_soft("2.0.0", "tab_md(title)", "tab_md(caption)")
     caption <- title
   }
-  # Phase 14i: `col_var_names` (md-only) generalised to the shared `var_names`, which also governs the
-  # row-variable name and is honoured by every exporter. FALSE = drop the col side of whatever
-  # `var_names` asks for, so the two compose rather than fight.
+  # `col_var_names` (md-only) generalised to the shared `var_names`, which also governs the row-variable
+  # name and is honoured by every exporter. FALSE drops the col side of whatever `var_names` asks for,
+  # so the two compose rather than fight.
   if (lifecycle::is_present(col_var_names)) {
     lifecycle::deprecate_soft("2.0.0", "tab_md(col_var_names)", "tab_md(var_names)")
     if (!isTRUE(col_var_names)) {
@@ -103,18 +94,15 @@ tab_md <- function(tabs,
                    if (identical(var_names, "both")) "rows" else var_names
     }
   }
-  # Phase 13d: `allow_auto` -- markdown carries a stylesheet (css = TRUE / tab_css()), so it can follow
-  # the reader's colour scheme. The spans themselves are theme-independent (only the CSS differs).
+  # `allow_auto`: markdown carries a stylesheet (css = TRUE / tab_css()), so it can follow the reader's
+  # colour scheme -- the spans themselves are theme-independent (only the CSS differs).
   o <- resolve_export_opts(theme = theme, color = color, transpose = transpose,
                            var_names = var_names, allow_auto = TRUE, tabs = tabs)
   theme <- o$theme; color <- o$color
 
-  # --- Phase 10d/10f: shared exporter prep + the base/list split. ---
-  # A single tab (or a mergeable same-col_vars / no-tab_vars list) renders as ONE table; a NON-mergeable
-  # list (several row_vars and/or tab_vars -> tab() returns a list) renders each table
-  # one-after-another (list_method = TRUE), each keeping its own tab_vars sub-tables. md keeps tab_vars
-  # (drop_tab_vars = FALSE) and does its own str_trunc (wrap = NULL). 10f: adding "colors" to `compute`
-  # fills the per-cell slots fmt_col_ann() carries -> md_render_one() renders pandoc colour spans.
+  # a single tab (or a mergeable list) renders as ONE table; a non-mergeable list renders each table
+  # one-after-another (list_method = TRUE), keeping its own tab_vars sub-tables (drop_tab_vars = FALSE).
+  # "colors" in `compute` fills the per-cell slots fmt_col_ann() carries -> md_render_one() renders them.
   compute <- "refs"
   if (bold_references) compute <- c(compute, "bold")
   if (color) compute <- c(compute, "colors")
@@ -123,14 +111,11 @@ tab_md <- function(tabs,
                           theme = theme, var_names = o$var_names, list_method = TRUE,
                           what = "tab_md()")
 
-  # WARNING: the POSITION, never imap()'s `i` -- tab_resolve_tables() passes a user's list through
-  # untouched, so a NAMED list makes `i` the name and `i == 1` silently FALSE on every table (no
-  # error): the caption was dropped. Same trap as xl_check_images().
+  # WARNING: the POSITION, never imap()'s `i` -- a NAMED list makes `i` the name and `i == 1` silently
+  # FALSE on every table, so the caption is dropped with no error. Same trap as xl_check_images().
   parts   <- purrr::map_chr(seq_along(prep$tables), function(i) {
     rd <- prep$tables[[i]]
-    # Phase 14w (item 1) / 17b / 17g: user caption= (FIRST table only) -> stored set_caption() ->
-    # reg auto-title, via the shared rd_caption().
-    cap <- rd_caption(rd, if (i == 1L) caption else NULL)
+    cap <- rd_caption(rd, if (i == 1L) caption else NULL)   # user caption= applies to the FIRST table
     md_render_one(rd, special_formatting = special_formatting, wrap_rows = wrap_rows,
                   subtext = subtext, color = color, css = css,
                   color_legend = color_legend, lang = lang,
@@ -139,9 +124,8 @@ tab_md <- function(tabs,
   })
   md_text <- paste(parts, collapse = "\n\n")
 
-  # the observed curves, in a pipe table of their own below the footer -- the same lines the console
-  # prints, since a GFM table IS what tab_md() emits. Taken only where the base-count cell cannot
-  # carry them (see tab_wants_shape_table).
+  # the observed curves, as a pipe table of their own below the footer, taken only where the
+  # base-count cell cannot carry them (see tab_wants_shape_table).
   if (is_tab(tabs) && tab_wants_shape_table(tabs, "md")) {
     st <- reg_shape_table(tabs)
     if (!is.null(st)) {
@@ -153,17 +137,12 @@ tab_md <- function(tabs,
     }
   }
 
-  # Phase 14f/14m-iii: a STYLED table is wrapped in a pandoc fenced div, and (with `css = TRUE`) the
-  # stylesheet is prepended. Pandoc emits a BARE `<table>` for a pipe table, which none of tab_css()'s
-  # `.tabxplor-tab ...` rules can reach -- so a rendered markdown table got the colours but none of the
-  # layout (compact padding, thin spacer columns, the border-taming of 14m-iii). `::: {.tabxplor-tab}`
-  # renders as `<div class="tabxplor-tab">`, the hook every selector matches. 14m-iii DECOUPLES the div
-  # from `<style>`: a table is styled when it is coloured OR `css = TRUE`, and a styled table always
-  # carries the div -- so the "one tab_css() per document" workflow (bring the sheet via the document)
-  # reaches a coloured `tab_md(css = FALSE)` too. A plain uncoloured table stays byte-identical (no div).
-  # Phase 19h: `roles$has_color` is THE realised "is this table coloured" flag, produced once by
-  # roles_color_flags() for the prep AND the transpose (md used to define it a second time, and the
-  # transpose a third). `compute` already gates it on the caller's `color`.
+  # a STYLED table is wrapped in a pandoc fenced div: pandoc emits a BARE `<table>` for a pipe table,
+  # which none of tab_css()'s `.tabxplor-tab ...` rules can reach, so `::: {.tabxplor-tab}` (rendered
+  # as `<div class="tabxplor-tab">`) is the hook every selector needs. The div is DECOUPLED from
+  # `<style>`: a table is styled when it is coloured OR `css = TRUE`, so the "one tab_css() per
+  # document" workflow reaches a coloured `tab_md(css = FALSE)` too. A plain uncoloured table stays
+  # byte-identical (no div).
   any_color <- any(vapply(prep$tables, function(x) isTRUE(x$roles$has_color), logical(1)))
   styled    <- any_color || isTRUE(css)
   if (styled) md_text <- paste0("::: {.tabxplor-tab}\n", md_text, "\n:::")
@@ -184,15 +163,10 @@ tab_md <- function(tabs,
 }
 
 
-# Phase 20a: `tab_md_css()` is DELETED -- `tab_css(format = "md")` is the same call, and now says so
-# in its own name. It existed because `tab_css(chrome = FALSE)` was unguessable, which is a reason to
-# fix the argument, not to add a function. It was never released (absent from CRAN 1.3.1), so there
-# is nothing to deprecate.
+# === SECTION: the pipe-table renderer ==============================================================
 
-
-# The DEGRADE table: a frame that cannot be read as a tabxplor table still has to come out as
-# markdown, so it comes out as a plain pipe table -- numbers right, everything else left, which is
-# the only alignment convention a pipe table has.
+# a frame that cannot be read as a tabxplor table still has to come out as markdown, so it comes out
+# as a plain pipe table -- numbers right, everything else left, the only alignment a pipe table has.
 md_plain_pipe <- function(df) {
   df   <- as.data.frame(df, stringsAsFactors = FALSE)
   num  <- vapply(df, is.numeric, logical(1))
@@ -211,42 +185,31 @@ md_plain_pipe <- function(df) {
   paste(lines, collapse = "\n")
 }
 
-# Render ONE prepared table (`rd`, from tab_export_prep) to a markdown string (no file/clipboard/print
-# -- tab_md() joins the parts and handles those). Holds the md-specific rendering (Steps 4-13).
-# Phase 10f: when the table carries colours and `color = TRUE`, every fmt cell is wrapped in a pandoc
-# bracketed span `[<num>]{.class}` (break-derived class, uncoloured cells get the neutral `.n`); the
-# uniform scaffold keeps the numbers aligned in raw text. Uncoloured tables (or color = FALSE) render
-# the byte-identical plain padded table.
+# Renders ONE prepared table (`rd`, from tab_export_prep) to a markdown string -- tab_md() joins the
+# parts and handles file/clipboard/print. When the table carries colours, every fmt cell is wrapped in
+# a pandoc bracketed span `[<num>]{.class}` (uncoloured cells get the neutral `.n`), keeping the
+# numbers aligned in raw text; an uncoloured table renders the byte-identical plain padded table.
 md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
                           color = TRUE, css = FALSE, color_legend = TRUE, lang = NULL, title = NULL,
                           theme = NULL) {
-  # Graceful degrade -- a table that can't be read as a tabxplor table renders as a plain pipe table.
   if (isTRUE(rd$vars$degrade)) {
-    if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars$reason)  # batch-aware (see tab_export_prep)
+    if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars$reason)
     return(md_plain_pipe(rd$tab))
   }
 
   tabs         <- rd$tab
   subtext_text <- if (subtext) rd$subtext else character(0)
 
-  # Phase 14i: the LABEL columns (the shared blank/merge set: a merged table's synthetic name column,
-  # OR the kept tab_vars) and their runs -- see tab_label_runs(). This replaces md's own `tab_vars`
-  # gate, which 14d silenced on a merged table: tab_compact() correctly records tab_vars =
-  # character(0), so the loop went quiet and the row-variable name printed on EVERY row.
+  # the LABEL columns (a merged table's synthetic name column, or the kept tab_vars) and their runs.
   label_cols   <- rd$roles$label_cols
   label_runs   <- rd$roles$label_runs
   var_name_col <- rd$roles$var_name_col
 
-  # Phase 16e: the whole footer prose block (weight -> Model: -> colour legend -> stars -> user subtext) via
-  # the ONE shared builder. The break-words are wrapped in the SAME pandoc span classes the cells use (both
-  # call tx_slot_class(), so tab_css() colours them identically). The source is the fmt table -- rd$color_src
-  # for a transposed model (whose rd$tab is plain character), so weight/stars/legend all read the right
-  # attributes (previously weight/stars read the stripped rd$tab). Legend only when coloured.
-  # Phase 17g: rd_footer() folds the shared render_footer(tab_footer_streams(...)) call.
-  # Phase 20h: `lang` IS threaded now. It was documented on tab_md() and dropped here -- so
-  # tab_md(lang = "fr") rendered an English colour legend, while tab_html() /
-  # forest_plot() (which pass it) honoured it. Byte-identical when lang is NULL, which is every
-  # golden and every snapshot: NULL means "follow the ambient locale", the former behaviour.
+  # the whole footer prose (weight -> Model: -> colour legend -> stars -> user subtext) via the ONE
+  # shared builder; the break-words use the same pandoc span classes as the cells (both call
+  # tx_slot_class()), so tab_css() colours them identically. The source is `rd$color_src` for a
+  # transposed model (whose rd$tab is plain character), so weight/stars/legend read the right
+  # attributes. Legend only when coloured.
   src         <- if (is.null(rd$color_src)) tabs else rd$color_src
   want_legend <- isTRUE(color) && isTRUE(color_legend) && length(rd$roles$color_cols) != 0
   subtext_text <- rd_footer(src, "md", theme = theme, want_legend = want_legend,
@@ -263,38 +226,29 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   real_col_vars <- rd$roles$real_col_vars
   has_multi_col_vars <- length(real_col_vars) > 1
   bold_rows  <- rd$bold_rows
-  cvh        <- rd$col_var_header      # Phase 13c-iii: spanning names + suffix-stripped level labels
+  cvh        <- rd$col_var_header      # spanning names + suffix-stripped level labels
 
-  # md-local: positions where a REAL col_var changes (span-header separators). Distinct from kable's
-  # col-border transition index, so it is not shared.
-  # Phase 19h: through the SHARED roles_col_var_edges() (tab-export-prep.R). md's convention is the
-  # right edge of each block, counting a transition only between two REAL col_vars -- so a helper
-  # column (`n`, a total) never opens a span block. Declared there beside kable's and Excel's.
+  # md-local: positions where a REAL col_var changes (span-header separators), through the shared
+  # roles_col_var_edges() -- md's convention is the right edge of each block, counting a transition
+  # only between two REAL col_vars, so a helper column (`n`, a total) never opens a span block.
   new_col_var <- if (has_multi_col_vars)
     roles_col_var_edges(col_var_map, other_cols, real_col_vars,
                         side = "right", real_only = TRUE) else integer(0)
 
   # --- Step 6: Format all cells to character ---
-  # Format fmt columns. The reference masks are reused from the prep's `ann` (.ref) so
-  # format() does not re-run get_reference() -- byte-identical (Phase 10c subset-equivalence).
-  # stars = TRUE: main display. When a column carries significance stars, format() right-pads the star
-  # field so numbers stay aligned; trim ONLY the leading side to preserve that trailing pad
-  # (byte-identical when no star is present -- format() emits no trailing space otherwise).
-  # Phase 13c-ii: bold_split = TRUE also attaches primary_nchar (the bold-prefix width of a composite
-  # "{pct} (n={n})" cell, on the UN-trimmed string) so a bold row bolds only the primary field
-  # (the "(n=...)" stays plain). str_trim(left) shifts it by the leading spaces removed -> prim = pn - lead.
+  # the reference masks are reused from the prep's `ann` (.ref) so format() does not re-run
+  # get_reference(). stars = TRUE right-pads the star field so numbers stay aligned; trim only the
+  # leading side to preserve that trailing pad. bold_split = TRUE also attaches primary_nchar (the
+  # bold-prefix width of a composite cell, on the UN-trimmed string) so a bold row bolds only the
+  # primary field; str_trim(left) shifts it by the leading spaces removed -> prim = pn - lead.
   fmt_out <- purrr::imap(tabs, \(col, nm) {
     if (is_fmt(col)) {
-      # Phase 14m-ii: pad the VALUE-INTERNAL alignment (thousands mark, "(n=...)", star field, ci
-      # brackets, the sd-less mean tail) with a FIGURE SPACE. Markdown sets no font of its own, so when
-      # pandoc renders the table to html the number cells fall in the host's PROPORTIONAL font -- where
-      # an ASCII space is half a digit wide and CSS collapses runs of them, so "100% (n=  673)" arrived
-      # ragged. A figure space is a digit wide and never collapses, so the composites line up. This is
-      # `format()`'s pad only: the CELL-EDGE alignment (pad_cell / md_color_cell) and the spacer columns
-      # stay ASCII on purpose -- pandoc strips cell-edge whitespace, so an empty cell must render `<td></td>`
-      # (`:empty`), the hook Phase 14m's spacer-collapse + blank-row separators key on. nchar is
-      # unchanged (a figure space is one codepoint), so the raw-markdown column layout is byte-for-byte
-      # the same, only the pad glyph inside a value differs.
+      # pad the VALUE-INTERNAL alignment with a FIGURE SPACE, not ASCII: rendered to html the cells sit
+      # in a PROPORTIONAL font, where an ASCII space is half a digit wide and CSS collapses runs of
+      # them ("100% (n=  673)" arrives ragged); a figure space is a digit wide and never collapses.
+      # `format()`'s internal pad only -- the CELL-EDGE pad (pad_cell / md_color_cell) stays ASCII on
+      # purpose, since pandoc must see an empty cell as `<td></td>` (`:empty`) for the spacer/blank-row
+      # mechanisms to key on. nchar is unchanged (one codepoint either way).
       raw     <- format(col, special_formatting = special_formatting, na = "", stars = TRUE,
                         theme = theme, bold_split = TRUE, pad = fig_space,
                         .ref = ann_ref(rd$ann[[nm]]))
@@ -307,9 +261,8 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
            from = if (is.null(pn)) rep(NA_integer_, length(col)) else pf - lead,
            to   = if (is.null(pn)) rep(NA_integer_, length(col)) else pf + pn - 1L - lead)
     } else {
-      # Phase 14f: a `|` in a level or tab_var label would open a spurious cell and desync the whole
-      # row's column count. Escape it -- pandoc renders `\|` as a literal pipe inside a cell. Only the
-      # non-fmt (label) columns can contain one; fmt cells are numbers the package formats itself.
+      # a `|` in a level or tab_var label would open a spurious cell and desync the row's column count;
+      # pandoc renders `\|` as a literal pipe. Only the non-fmt (label) columns can contain one.
       list(txt  = gsub("|", "\\|", as.character(col), fixed = TRUE),
            from = rep(NA_integer_, length(col)),
            to   = rep(NA_integer_, length(col)))
@@ -328,18 +281,13 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     }
   }
 
-  # Phase 14i: name each block ONCE -- blank every label cell that is not a run start (the run model is
-  # the prep's, shared with the html rowspan and the Excel merge). The old loop was a naive per-column
-  # `vals[i] == vals[i-1]` gated on `tab_vars`, so a merged table (which has none) named its
-  # row-variable on every row; tab_label_runs() also nests the columns, which the naive scan did not.
-  # The name column is ITALIC (the maintainer's call): it mirrors the *col_var* name row below and, in
-  # a column that otherwise holds level labels, marks the cell as a variable NAME. tab_var cells stay
-  # plain -- their values ARE levels ("Male"), not names. Done BEFORE the width pass, so the markup is
-  # measured; the column is left-aligned, so the padding needs no arithmetic.
-  # `styled` (computed here, ahead of the label blanking that needs it): a coloured table, or the caller
-  # asked for the stylesheet. In a styled table (rendered to html) a blanked continuation LABEL cell must
-  # be a non-breaking space, NOT "" -- an :empty <td> makes the CSS col_var-separator rule misfire (the
-  # "ragged" leftmost border that appears only on continuation rows; Phase 18m). Plain tables keep "".
+  # name each block ONCE -- blank every label cell that is not a run start (the run model is the prep's,
+  # shared with the html rowspan and the Excel merge). The name column is ITALIC (mirrors the col_var
+  # name row below); tab_var cells stay plain, since their values ARE levels ("Male"), not names. Done
+  # BEFORE the width pass, so the markup is measured.
+  # `styled`: in a styled table (rendered to html) a blanked continuation LABEL cell must be a
+  # non-breaking space, not "" -- an :empty <td> makes the CSS col_var-separator rule misfire (a
+  # "ragged" leftmost border on continuation rows). Plain tables keep "".
   do_color <- isTRUE(rd$roles$has_color)
   styled   <- do_color || isTRUE(css)
   blank_lbl <- if (styled) "\u00a0" else ""
@@ -356,12 +304,10 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
 
   is_right <- fmt_mask  # named logical: TRUE for fmt (right-aligned) columns
 
-  # Phase 18m: the spacer-column set. Plain / unstyled tables keep ONLY the col_var-group spacers
-  # (new_col_var). A STYLED table adds thin spacer columns at the interior boundaries the other exports
-  # draw as vertical rules -- between the levels column and the first number, between the last number and
-  # the grand Total column, and to the right of the Total column -- reusing the same :empty spacer ->
-  # CSS border-left mechanism (so no per-column class is needed). `md_insert_col_sep` inserts a spacer
-  # AFTER each index in `sep_after`; `has_sep` enables it (was `has_multi_col_vars`, now any spacer).
+  # the spacer-column set. Plain tables keep ONLY the col_var-group spacers; a STYLED table adds thin
+  # spacer columns at the interior boundaries other exports draw as vertical rules (levels|first
+  # number, numbers|Total, right of Total), reusing the :empty -> CSS border-left mechanism.
+  # `md_insert_col_sep` inserts a spacer AFTER each index in `sep_after`; `has_sep` enables it.
   sep_after <- new_col_var
   if (styled) {
     fmt_idx   <- which(unname(fmt_mask))
@@ -376,31 +322,23 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   }
   has_sep <- length(sep_after) > 0L
 
-  # Blank out the label columns' header names (they label sub-tables, not real columns). The `""`
-  # sentinel in names(cell_data) is what drives `col_names` at Step 7. Phase 14i: `tab_vars` ->
-  # `label_cols`, so a merged table's name column loses the literal "row_var" header here too.
-  # WARNING (Phase 19h): this is NOT the prep's header blanking and must not be folded into it. The
-  # prep blanks only the LITERAL "row_var" header, keeping a real variable name (`marital`) in
-  # cvh$clean for the backends that show it; md renders every label column's name as a body row
-  # instead, so it blanks them all. Two rules, deliberately.
+  # blank out the label columns' header names (they label sub-tables, not real columns): the `""`
+  # sentinel drives `col_names` at Step 7. WARNING: this is NOT the prep's header blanking and must not
+  # be folded into it -- the prep keeps a real variable name (`marital`) in cvh$clean for the backends
+  # that show it, while md renders every label column's name as a body row instead.
   for (cl in names(label_cols)) {
     idx <- which(names(cell_data) == cl)
     if (length(idx) == 1) names(cell_data)[idx] <- ""
   }
 
-  # --- Step 6b (Phase 10f): per-cell pandoc span attributes (colour) ---
-  # A table is "coloured" iff some fmt column carries a colour measure. In that mode every COLOURED fmt
-  # cell is wrapped in a span; an uncoloured table keeps the byte-identical plain path. attr_mat holds
-  # the per-cell "{.class}" string (fmt columns only; "" = no span).
-  # Phase 13d: the class is a pure function of the palette slot the engine already assigned, so no
-  # per-column plan/palette lookup is needed here at all -- and the names match tab_kable()'s <td>
-  # classes, both styled by the one tab_css() stylesheet. `do_color` / `styled` are computed above (the
-  # label blanking needs `styled`); the col_var-name span row's blanks get the same nbsp treatment (Step 8).
-  # Phase g (A7): in a styled table (pandoc renders it to html), spaces in a multi-word LEVEL / label
-  # name ("Never married", "Strong republican") let the host wrap it mid-name. Replace them with a
-  # non-breaking space so the label holds on one line up to the wrap_rows truncation limit. nchar is
-  # unchanged (U+00A0 is one codepoint), so the raw-text column layout stays byte-identical; a plain
-  # (unstyled) table keeps ASCII spaces so its GFM output stays byte-clean.
+  # --- Step 6b: per-cell pandoc span attributes (colour) ---
+  # a table is "coloured" iff some fmt column carries a colour measure; attr_mat holds the per-cell
+  # "{.class}" string (fmt columns only; "" = no span), a pure function of the palette slot the engine
+  # already assigned -- names match tab_kable()'s <td> classes, both styled by one tab_css() stylesheet.
+  # in a styled table (rendered to html), spaces in a multi-word LEVEL/label let the host wrap it
+  # mid-name -- replaced with a non-breaking space so it holds on one line. nchar is unchanged (U+00A0
+  # is one codepoint), so the raw-text column layout stays byte-identical; an unstyled table keeps
+  # ASCII spaces so its GFM output stays byte-clean.
   if (styled) for (j in other_cols) {
     nz <- nzchar(cell_data[[j]]) & !is.na(cell_data[[j]])
     cell_data[[j]][nz] <- gsub(" ", "\u00a0", cell_data[[j]][nz], fixed = TRUE)
@@ -412,10 +350,8 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
       nm  <- names(fmt_cols)[k]
       j   <- fmt_cols[[k]]
       a   <- rd$ann[[nm]]
-      # Phase 19m-i: this site had the `is.null` half of the guard and NOT the length half its two
-      # html siblings carry -- a short slot vector indexed past its end yields NA, which
-      # md_span_attr() -> tx_slot_class() absorbs into "", i.e. silently uncoloured cells rather
-      # than an error. Absent stays a real state (the neutral); short is now a producer bug.
+      # a wrong length here yields NA absorbed into "" by tx_slot_class() -- silently uncoloured
+      # cells instead of an error -- so it is asserted rather than left to that fallback.
       slot <- function(v) {
         if (is.null(v)) return(integer(nrow(cell_data)))
         stopifnot(length(v) == nrow(cell_data))
@@ -432,12 +368,11 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # --- Step 7: Compute column widths ---
   n_rows <- nrow(cell_data)
   n_cols <- ncol(cell_data)
-  # Phase 13c-iii: the level-header row uses the suffix-stripped labels (the col_var name is now written
-  # in the span row above), keeping the tab_var headers blanked (names(cell_data) == "" for tab_vars).
+  # the level-header row uses the suffix-stripped labels (the col_var name is in the span row above).
   col_names <- cvh$clean
-  col_names[names(cell_data) == ""] <- if (styled) "\u00a0" else ""  # nbsp: the blank row_var/tab_var header
-  # cell must not be :empty in a styled table, else the thead col_var-separator rule draws a stray left
-  # border on it (part of the "first row has many unwanted borders"). Spacer headers stay ASCII (:empty).
+  # nbsp: the blank row_var/tab_var header cell must not be :empty in a styled table, or the thead
+  # col_var-separator rule draws a stray left border on it. Spacer headers stay ASCII (:empty).
+  col_names[names(cell_data) == ""] <- if (styled) "\u00a0" else ""
 
   # For each cell, compute the raw text width
   cell_widths <- matrix(0L, nrow = n_rows, ncol = n_cols)
@@ -445,17 +380,15 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     cell_widths[, j] <- nchar(cell_data[[j]])
   }
   header_widths <- nchar(col_names)
-  # THE UNIT ROW IS A HEADER ROW, so it sizes its column like one: its text is written between two
-  # emphasis markers, and a "<row% (n)>" tag is regularly wider than the level name above it. Without
-  # this the unit cell simply overflowed its column and every pipe below it stepped right.
+  # THE UNIT ROW IS A HEADER ROW, so it sizes its column like one -- a "<row% (n)>" tag is regularly
+  # wider than the level name above it, and without this the cell overflowed and every pipe below it
+  # stepped right.
   if (!is.null(cvh$unit))
     header_widths <- pmax(header_widths, ifelse(nzchar(cvh$unit), nchar(cvh$unit) + 2L, 0L))
 
-  # Phase 14i: `bold_rows` is a pure ROW set, applied to every column -- so a bold row bolded the LABEL
-  # cell too (`**DIPLOM**`). The label columns opt out, here at the consumer (the prep cannot know a
-  # backend's markup). The LEVEL still bolds on a reference row, which is wanted. This is the ONE
-  # definition: the width pass below and the Step-11 body loop must charge the same markup, or the
-  # column over-pads by the `**` it no longer writes.
+  # `bold_rows` is a pure ROW set, so a bold row would bold the LABEL cell too -- the label columns opt
+  # out here, at the consumer (the prep cannot know a backend's markup). This is the ONE definition:
+  # the width pass below and the Step-11 body loop must charge the same markup, or the column over-pads.
   no_bold      <- seq_len(n_cols) %in% label_cols
   bold_rows_of <- function(j) if (no_bold[j]) integer(0) else bold_rows
 
@@ -464,24 +397,19 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   #   left-aligned normal:  nchar + 2 (1 space each side)
   #   bold cell:            nchar + 4 (**...**)
   #   header:               nchar + 2
-  # Phase 10f: a coloured fmt column is laid out as " [<num>]<attr> " (fixed scaffold), so its width is
-  # num_width (numbers, bold-aware) + attr_width ({.class}) + 4, big enough for the header. num_width /
-  # attr_width are reused by the Step-11 scaffold so the numbers align (fixed offset) and pipes align.
+  # a coloured fmt column is laid out as " [<num>]<attr> " (fixed scaffold): width = num_width (numbers,
+  # bold-aware) + attr_width ({.class}) + 4. Reused by the Step-11 scaffold so numbers and pipes align.
   col_width  <- integer(n_cols)
   num_width  <- integer(n_cols)
   attr_width <- integer(n_cols)
   for (j in seq_len(n_cols)) {
     if (do_color && is_right[j]) {
-      # Phase 14f: `num_width` is the width of the VISIBLE value, so the bold rows' +4 must NOT enter
-      # it. `**` is markup, not text: adding it here padded the value INSIDE the bracket, so every
-      # coloured cell in a column that has any bold row read "[    38%]{.p2}" -- four spaces pandoc
-      # discards, and which in the raw markdown push the number out of line with the bold one. The
-      # bold cells' extra 4 is a property of THEIR text, so it belongs in col_width (below) only.
+      # `num_width` is the width of the VISIBLE value -- the bold rows' +4 must NOT enter it, since
+      # `**` is markup, not text: adding it here would pad the value INSIDE the bracket and push the
+      # number out of line with a bold one. Bold's extra 4 belongs in col_width (below) only.
       nonempty <- nzchar(cell_data[[j]])
-      # `num_width` is the widest cell measured in the raw columns its content occupies UP TO its last
-      # visible character -- the value plus any markup that precedes that character (md_extra()).
-      # Padding to it aligns what the reader sees; padding to the value alone (or, worse, adding the
-      # bold +4 to the value) does not, because the markup is invisible only once rendered.
+      # the widest cell measured UP TO its last visible character -- the value plus any markup
+      # preceding it (md_extra()) -- since only that is what a reader actually sees aligned.
       vis <- cell_widths[, j] + md_extra(cell_data[[j]], seq_len(n_rows) %in% bold_rows_of(j),
                                          from_mat[, j], to_mat[, j])
       num_width[j]  <- if (any(nonempty)) max(vis[nonempty]) else 0L
@@ -522,32 +450,22 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     }
   }
 
-  # --- Step 8: the col_var-name row (Phase 13c-iii; re-sited in Phase 14f) ---
-  # WARNING: this row is a BODY row -- it is emitted AFTER the delimiter (see Step 13). It used to sit
-  # above the level-name header, which made a TWO-ROW HEADER, and **pandoc does not have those**: it
-  # silently gave up on the whole table and rendered it as a line-block followed by a paragraph of
-  # pipes. Every tab_md() table carrying a col_var name (i.e. every normal one -- 13c-iii shows the
-  # name for a single col_var too) was invalid. Verified with pandoc 3.7.
-  # Below the delimiter it parses, and it is styled as data: the name in the FIRST cell of its group
-  # (a centred span would need a colspan pandoc pipe tables cannot express), italic, so it reads as a
-  # sub-heading rather than a value.
-  # Phase 14i: `var_names` drops it by blanking `cvh$label` in the prep -- so this gate needs no
-  # argument of its own (it is the same gate the html/kableExtra/xl span rows already used).
+  # --- Step 8: the col_var-name row ---
+  # WARNING: this row is a BODY row, emitted AFTER the delimiter (see Step 13) -- pandoc pipe tables
+  # have no two-row header: placed above the level-name header it silently rendered the whole table as
+  # a line-block, not a table (verified with pandoc 3.7). Below the delimiter it parses, styled as
+  # data: the name sits in the FIRST cell of its group (pandoc pipe tables cannot colspan a centred
+  # span), italic, so it reads as a sub-heading rather than a value.
+  # `var_names` drops it by blanking `cvh$label` in the prep, so this gate needs no argument of its own.
   col_var_header_line <- NULL
   if (any(nzchar(cvh$label))) {
-    # Phase 17g: group the spanning col_var-name row by tab_header_runs() (the shared RLE), not a
-    # hand-rolled while-scan. pandoc pipe tables cannot colspan, so the md-specific layout stays: the
-    # name sits in the FIRST cell of its run (italic), the rest are width-padded blanks -- one cell PER
-    # column (a pipe row must keep the table's cell count or pandoc shifts the data). A long name simply
-    # overflows its own cell: the row is deliberately not pipe-ALIGNED, because padding to it would
-    # widen every column below it.
-    # Phase 18m: build the span row as a PER-COLUMN cell vector (the name in the first cell of its
-    # run, nbsp-padded blanks elsewhere), then route it through md_insert_col_sep(sep_after) exactly like
-    # the body -- so the spacer columns (col_var groups + the interior levels/Total boundaries) line up
-    # across every row. (Was a hand-assembled line that only knew the col_var-group spacers.)
-    # Phase 19n: a span belonging to a SUB-POPULATION carries it beside the variable. md is the one
-    # backend that cannot draw two lines in a cell (a pipe row IS one line), so it composes on ONE:
-    # "*2000 marital*" -- the same one-line form fmt_col_block()$label gives the console.
+    # grouped by tab_header_runs() (the shared RLE). The name sits in the FIRST cell of its run
+    # (italic), the rest are width-padded blanks -- one cell PER column, since a pipe row must keep the
+    # table's cell count. A long name simply overflows its own cell: the row is deliberately not
+    # pipe-ALIGNED, because padding to it would widen every column below it. Routed through
+    # md_insert_col_sep(sep_after) exactly like the body, so the spacer columns line up across rows.
+    # a span belonging to a SUB-POPULATION composes on ONE line ("*2000 marital*"): md is the one
+    # backend that cannot draw two lines in a cell (a pipe row IS one line).
     runs <- tab_header_runs(cvh$label, cvh$group)
     span_cells <- md_pad_blank(col_width, styled)
     col_start  <- 1L
@@ -559,12 +477,8 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     col_var_header_line <- md_insert_col_sep(span_cells, sep_after, n_cols, has_sep)
   }
 
-  # THE UNIT ROW (Phase 22c-ii) -- what each column HOLDS ("row%", "row% (n)", "OR (row%)"), the one
-  # place an export names the ASIDE of a composite cell. Like the col_var-name row it is a BODY row
-  # (a pandoc pipe table takes one header row only) and italic, which is md's own way of saying
-  # "supporting text" -- NOT a `.tx-unit` span: a class span costs 13 characters of raw line width
-  # that md's fixed-width grid cannot absorb, and a monochrome table must carry no pandoc span at all.
-  # It sits directly under the name row, inside the header block the blank underline closes.
+  # THE UNIT ROW -- what each column HOLDS (see the file header): a BODY row, italic, sitting directly
+  # under the name row, inside the header block the blank underline closes.
   unit_line <- NULL
   if (!is.null(cvh$unit) && any(nzchar(cvh$unit))) {
     unit_cells <- md_pad_blank(col_width, styled)
@@ -612,7 +526,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     row_cells <- character(n_cols)
     for (j in seq_len(n_cols)) {
       pfrom  <- from_mat[i, j]; pto <- to_mat[i, j]      # the primary token's range
-      bold_j <- is_bold && !no_bold[j]     # Phase 14i -- see bold_rows_of() above
+      bold_j <- is_bold && !no_bold[j]     # see bold_rows_of() above
       if (do_color && is_right[j]) {
         row_cells[j] <- md_color_cell(cell_data[[j]][i], attr_mat[i, j],
                                       num_width[j], col_width[j], bold_j, pfrom, pto,
@@ -628,9 +542,9 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
 
   # --- Step 12: Insert sub-table separators ---
   if (length(new_group) > 0) {
-    # Phase 14m-iii: on the STYLED path a sub-table boundary is a fully-blank row (all cells :empty in
-    # the render) that tab_css() collapses to a 1px border-top -- a theme-aware rule with NO dash marker
-    # in the raw markdown. The PLAIN path keeps the dash row, so its GFM/text output stays byte-clean.
+    # on the STYLED path a sub-table boundary is a fully-blank row (all cells :empty) that tab_css()
+    # collapses to a 1px border-top, theme-aware, with no dash marker in the raw markdown. The PLAIN
+    # path keeps the dash row, so its GFM/text output stays byte-clean.
     if (styled) {
       sep_row <- md_blank_row(col_width, sep_after, n_cols, has_sep)
     } else {
@@ -655,11 +569,9 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   }
 
   # --- Step 13: Assemble and output ---
-  # Phase 14f: the col_var-name row goes BELOW the delimiter (a body row). Above it, it made a two-row
-  # header, which pandoc does not accept -- see Step 8.
-  # Phase 14m-iii: on the styled path, follow the col_var-name row with a blank row -> tab_css() draws a
-  # 1px border-top under it (the "rule under the name" the maintainer asked for), theme-aware, with no
-  # dash in the raw markdown. Only when the name row exists (var_names may have dropped it).
+  # on the styled path, follow the col_var-name row with a blank row -> tab_css() draws a 1px
+  # border-top under it, theme-aware, with no dash in the raw markdown. Only when the name row exists
+  # (var_names may have dropped it).
   name_underline <- if (styled && (!is.null(col_var_header_line) || !is.null(unit_line))) {
     md_blank_row(col_width, sep_after, n_cols, has_sep)
   } else NULL
@@ -679,7 +591,8 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
 }
 
 
-# Helper: insert empty separator columns between col_var groups
+# === SECTION: padding and alignment helpers ========================================================
+
 # `fill` is what the thin spacer column between col_var groups contains. It MUST be "-" on the
 # delimiter row: a pandoc delimiter cell has to be dashes (optionally with `:`), and a blank one ("| |")
 # made pandoc reject the table outright. Every other row wants a blank spacer.
@@ -699,18 +612,17 @@ md_insert_col_sep <- function(cells, new_col_var, n_cols, has_multi_col_vars, fi
 }
 
 
-# Phase 14m-iii: a fully-blank pipe row -- every cell is ASCII spaces, so pandoc renders each cell as
-# `<td></td>` (`:empty`). tab_css() then selects the row (`tbody tr:not(:has(td:not(:empty)))`) and
-# collapses it to a 1px border-top: the sub-table / col_var-name rule, theme-aware, marker-free in the
-# raw markdown. WARNING: ASCII spaces ONLY. A cell of a FIGURE space (U+2007) renders `<td> </td>` --
-# NOT `:empty` -- and the whole 14m-iii collapse dies. The 14m-ii figure-space swap is confined to a
-# value's INTERNAL padding for exactly this reason; the cell-edge pad here must stay ASCII.
-#' @keywords internal
+# a fully-blank pipe row -- every cell is ASCII spaces, so pandoc renders each cell `<td></td>`
+# (`:empty`), which tab_css() selects and collapses to a 1px border-top: the sub-table / col_var-name
+# rule, theme-aware, marker-free in the raw markdown.
+# WARNING: ASCII spaces ONLY. A FIGURE space (U+2007) renders `<td> </td>`, not `:empty`, and the
+# collapse dies -- the figure-space swap elsewhere is confined to a value's INTERNAL padding for
+# exactly this reason; the cell-edge pad here must stay ASCII.
 md_blank_row <- function(col_width, new_col_var, n_cols, has_multi_col_vars) {
   md_insert_col_sep(strrep(" ", col_width), new_col_var, n_cols, has_multi_col_vars)
 }
 
-# Phase 18m: a width-padded blank cell that is NOT :empty (a leading non-breaking space) for STYLED
+# a width-padded blank cell that is NOT :empty (a leading non-breaking space) for STYLED
 # tables, so the CSS col_var-separator rule fires only on the true ASCII spacer columns -- used for the
 # nearly-blank col_var-name span row. Plain tables keep ASCII spaces (byte-clean GFM). Vectorised.
 md_pad_blank <- function(widths, styled) {
@@ -721,13 +633,12 @@ md_pad_blank <- function(widths, styled) {
 
 
 
-# === SECTION: Phase 10f colour spans (break-derived pandoc classes) ==================
+# === SECTION: the colour spans (break-derived pandoc classes) ======================================
 
 # The pandoc bracketed-span attribute for ONE cell: "{.p3 .o2}" / "{.p3}" / "{.o2}" / "" (uncoloured).
-# Phase 13d: the class names come from the shared slot vocabulary (tx_slot_class, R/tab-css.R), so a
-# markdown span and an html <td> name the same class and ONE stylesheet (tab_css()) styles both.
-# An uncoloured cell gets NO span at all -- md_color_cell() keeps it aligned instead.
-#' @keywords internal
+# The class names come from the shared slot vocabulary (tx_slot_class, R/tab-css.R), so a markdown
+# span and an html <td> name the same class and ONE stylesheet (tab_css()) styles both. An uncoloured
+# cell gets NO span at all -- md_color_cell() keeps it aligned instead.
 md_span_attr <- function(text_slot, bg_slot) {
   parts <- c(tx_slot_class("text", text_slot), tx_slot_class("bg", bg_slot))
   parts <- parts[nzchar(parts)]
@@ -736,18 +647,13 @@ md_span_attr <- function(text_slot, bg_slot) {
 }
 
 # One fmt cell of a coloured column: "<pad>[<num>]<attr><pad>", padded to `total_width`.
-# Phase 14f: the alignment target is the VISIBLE NUMBER, not the markup. Markup (`[`, `**`) is invisible
-# once rendered but occupies columns in the raw file, so the number's right edge is placed at a fixed
-# offset and each cell's markup PREFIX grows leftwards into its own pad. That is what lets a bold cell
-# `**54%**` and a coloured one `[42%]{.m2}` show their numbers in the same column of the raw markdown.
-# Before, `num_width` carried the bold rows' +4 and the value was padded INSIDE the bracket
-# ("[    38%]{.p2}") -- four spaces pandoc discards, and which shifted the number the other way.
-# The attr is padded to `attr_width` (pandoc ignores spaces inside `{...}`: `{.m2  }` == `{.m2}`), so
-# the closing `}` lines up too when classes differ in length. The whole body is then right-padded so
-# the next pipe lands at a fixed column.
-# DESIGN (Phase 13d): an UNCOLOURED cell carries no span (`attr = ""`) and needs no bracket -- its pad
-# absorbs the missing markup, so its number aligns with the others without a do-nothing `.n` class.
-#' @keywords internal
+# the alignment target is the VISIBLE NUMBER, not the markup: `[`/`**` are invisible once rendered but
+# occupy columns in the raw file, so the number's right edge sits at a fixed offset and each cell's
+# markup PREFIX grows leftwards into its own pad -- letting a bold cell `**54%**` and a coloured one
+# `[42%]{.m2}` show their numbers in the same raw column. The attr is padded to `attr_width` (pandoc
+# ignores spaces inside `{...}`), so the closing `}` lines up too when classes differ in length.
+# DESIGN: an UNCOLOURED cell carries no span (`attr = ""`) and needs no bracket -- its pad absorbs the
+# missing markup, so its number aligns without a do-nothing `.n` class.
 md_color_cell <- function(text, attr, num_width, total_width, is_bold, from = NA_integer_,
                           to = NA_integer_, attr_width = nchar(attr)) {
   if (!nzchar(text)) return(strrep(" ", total_width))
@@ -766,25 +672,22 @@ md_color_cell <- function(text, attr, num_width, total_width, is_bold, from = NA
   tx_pad(paste0(" ", body), total_width, "right")
 }
 
-# How many RAW columns of markup precede a cell's last visible character. md_bold() adds one "**"
-# pair around the primary token: the OPENING pair always precedes that character, and the CLOSING one
-# does too whenever the primary ends before the text does ("50% (n=10)" -> 4, "(10) 50%" -> 2).
-# Vectorised over a column.
-#' @keywords internal
+# === SECTION: the extras appender (markup that grows into the pad, never the value) ===============
+
+# How many RAW columns of markup precede a cell's last visible character. md_bold() adds one "**" pair
+# around the primary token: the OPENING pair always precedes that character, and the CLOSING one does
+# too whenever the primary ends before the text does ("50% (n=10)" -> 4, "(10) 50%" -> 2). Vectorised.
 md_extra <- function(text, is_bold, from, to) {
   ends_early <- !is.na(to) & to < nchar(text)
   ifelse(!is_bold | !nzchar(text), 0L, ifelse(ends_early, 4L, 2L))
 }
 
-# Wrap a cell's PRIMARY token in **...**. For a composite cell only that token is bold and the asides
-# beside it stay plain -- on either side, since the primary may be a suffix ("(10) 50%"); a plain cell
-# (no recorded range) is bolded whole. Adds exactly one ** pair either way, so the
-# +4 width budget the column-width computation reserves for bold cells is unchanged.
-# Phase g (A1): the alignment pad (leading/trailing spaces -- incl. the star-placeholder pad a reference
-# cell carries, and the figure-space fill) is kept OUTSIDE the ** markers. `**77%   **` is not valid
-# markdown bold (pandoc will not open an emphasis span that ends in whitespace); `**77%**   ` is, and the
-# outer pad still holds the raw-text column alignment (pandoc trims it at render). See review pass 4.
-#' @keywords internal
+# Wraps a cell's PRIMARY token in **...**; asides beside it (on either side) stay plain, a plain cell
+# (no recorded range) is bolded whole -- exactly one ** pair either way, matching the +4 width budget
+# the column-width computation reserves for bold cells.
+# the alignment pad (leading/trailing spaces, incl. the figure-space fill) is kept OUTSIDE the **
+# markers: `**77%   **` is not valid markdown bold (pandoc will not open an emphasis span ending in
+# whitespace), `**77%**   ` is, and the outer pad still holds the raw-text column alignment.
 md_bold <- function(text, from = NA_integer_, to = NA_integer_) {
   # ws = the alignment fillers: ASCII space, no-break U+00A0, figure U+2007, narrow no-break U+202F.
   ws <- paste0("[", intToUtf8(c(32L, 160L, 8199L, 8239L)), "]")
@@ -802,7 +705,3 @@ md_bold <- function(text, from = NA_integer_, to = NA_integer_) {
          bold_span(substr(text, from, to)),
          substr(text, to + 1L, nchar(text)))
 }
-
-# Phase 13d: md_css_rules() / md_css_block() / md_break_class() / md_slot_class_map() are GONE. The
-# stylesheet is table-independent (a pure function of palette + theme), so it is generated
-# by tab_css() (R/tab-css.R) with no prep walk, no per-column plan and no per-table CSS.

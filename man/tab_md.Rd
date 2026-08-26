@@ -72,26 +72,17 @@ the col-percentages-with-several-row-variables use case.}
 \code{row_vars} uses to name each block (written once per block); the column-variable names
 are the spanning row above their level columns. Level headers always keep their name.}
 
-\item{css}{When \code{TRUE} (the \strong{default}), prepend an inline \verb{<style>} block (from
-\code{\link{tab_css}}), so the exported markdown is self-contained -- it renders coloured and
-compact on its own. Set \code{FALSE} inside an \code{.Rmd}/\code{.qmd} document (the host page brings the
-stylesheet, or emit \code{\link{tab_css}} once at the top -- it styles every table), otherwise the
-inline \verb{<style>} block is duplicated per table.
-Any \strong{styled} table (coloured, or \code{css = TRUE}) is wrapped in a pandoc fenced div
-\verb{::: \{.tabxplor-tab\}}, which pandoc renders as \verb{<div class="tabxplor-tab">} -- the hook
-\code{\link{tab_css}}'s table styling needs, since pandoc emits a bare \verb{<table>} it could not
-otherwise reach. So the rendered HTML of a markdown table can look like \code{tab_kable()}'s (compact
-layout, thin rules under the variable-name row and between sub-tables, no host borders), not just
-be coloured -- even with \code{css = FALSE}, as long as the stylesheet is brought in some other way. A
-plain uncoloured table is left byte-identical (no div).}
+\item{css}{When \code{TRUE} (the default), prepend an inline \verb{<style>} block so the exported markdown is
+self-contained and renders coloured and compact on its own. Set \code{FALSE} inside an \code{.Rmd}/\code{.qmd}
+document once the host page brings the stylesheet (or call \code{\link{tab_css}} once at the top
+for the whole document) -- otherwise the \verb{<style>} block is duplicated per table. A plain
+uncoloured table renders byte-identical either way.}
 
-\item{clipboard}{Copy output to clipboard via \code{clipr::write_clip()}.
-Requires the \pkg{clipr} package.}
+\item{clipboard}{Copy output to clipboard via \code{clipr::write_clip()} (requires \pkg{clipr}).}
 
 \item{file}{Path to write the markdown to a file. \code{NULL} (default) skips.}
 
-\item{print}{If \code{TRUE}, print via \code{cat()} and return invisibly. If \code{FALSE},
-return the character string.}
+\item{print}{If \code{TRUE}, print via \code{cat()} and return invisibly; if \code{FALSE}, return the string.}
 
 \item{title}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{caption}.}
 

@@ -42,14 +42,12 @@ A list of tables sharing the same \code{col_vars} (and no \code{tab_vars}) is me
 other list --- several \code{row_vars} and/or \code{tab_vars} --- is rendered one table after
 another, each keeping its own sub-tables.}
 
-\item{path, replace, open}{The name, and possibly the path, of the Excel file to
-create (possibly without the .xlsx extension). Default path to temporary directory.
-Set global option \code{"tabxplor.export_dir"} with \code{link[base:options]{options}}
-to change default directory. By default replace is \code{TRUE} when \code{path} is provided,
-\code{FALSE} when \code{path} is not provided.
-Use \code{replace = TRUE} to overwrite existing files. Use \code{open = FALSE}
-if you don't want to automatically open the tables in Excel (or another
-software associated with .xlsx files).}
+\item{path, replace, open}{The name, and possibly the path, of the Excel file to create (the
+\code{.xlsx} extension is optional). Defaults to a temporary directory; set the global option
+\code{"tabxplor.export_dir"} with \code{\link[base]{options}} to change it. \code{replace}
+defaults to \code{TRUE} when \code{path} is given and \code{FALSE} otherwise; set it to
+\code{TRUE} to overwrite an existing file. Use \code{open = FALSE} not to open the workbook
+straight away in Excel (or whatever opens \code{.xlsx} files).}
 
 \item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
 \code{"en"} or \code{"fr"}.}
@@ -60,11 +58,10 @@ software associated with .xlsx files).}
 Set to \code{FALSE} to keep them.}
 
 \item{colwidth}{Column widths. \code{"auto"} (the default) fits every column to what its cells
-will actually show --- measured by tabxplor itself from the rendered values, the level headers
-and the unit tags, so a number column is exactly as wide as its widest figure and a text column
+actually show, so a number column is exactly as wide as its widest figure and a text column
 wraps instead of growing past a cap. Give a number instead to force that fixed width on every
 numeric column (a mean's \code{sd} sibling then takes a proportionally narrower one).
-Widths are set per \emph{sheet}: several tables written to one sheet all fit.}
+Widths are set per \emph{sheet}, so several tables written to one sheet all fit.}
 
 \item{color_legend}{Print the colour legend below the table (with the subtext). \code{TRUE} by default, and a
 no-op on a table that carries no colours.}
@@ -83,15 +80,15 @@ titles are given based on the names of the variables.}
 \item{caption}{A single caption; a shortcut that fills \code{titles} (an explicit \code{titles}
 still wins). Unified name across all exporters.}
 
-\item{font_text, font_num, font_num_stars}{Fonts for text (labels, headers) and for numbers. The number
-font is chosen \strong{per table}: \code{font_num} (default \code{"DejaVu Sans"}) when the table
-shows no significance stars, and \code{font_num_stars} (default \code{"Cascadia Mono"}, a
-\strong{monospace} font) when it does -- monospace aligns the stars and \code{(n=...)} composites,
-which a proportional font cannot. Defaults from \code{options(tabxplor.xl_font_text)} /
-\code{options(tabxplor.xl_font_num)} / \code{options(tabxplor.xl_font_num_stars)}. Note that xlsx,
-unlike CSS, has \strong{no font-fallback list}: only one name can be recorded per font, so if it is
-missing on the machine opening the workbook, Excel substitutes by its own rules and no fallback can
-be named here. Set the options to a font you know is installed.}
+\item{font_text, font_num, font_num_stars}{Fonts for text (labels, headers) and for numbers. The
+number font is chosen \strong{per table}: \code{font_num} (default \code{"DejaVu Sans"}) when the
+table shows no significance stars, and \code{font_num_stars} (default \code{"Cascadia Mono"}, a
+\strong{monospace} font) when it does --- monospace aligns the stars and \code{(n=...)}
+composites, which a proportional font cannot. Defaults from
+\code{options(tabxplor.xl_font_text)} / \code{options(tabxplor.xl_font_num)} /
+\code{options(tabxplor.xl_font_num_stars)}. Note that xlsx, unlike CSS, has \strong{no
+font-fallback list}: only one name is recorded, so if it is missing on the machine opening the
+workbook Excel substitutes by its own rules. Set the options to a font you know is installed.}
 
 \item{text_size, text_size_headers, text_size_subtext}{Font sizes of text elements.}
 
@@ -117,14 +114,13 @@ are the spanning row above their level columns. Level headers always keep their 
 \item{wrap_cols}{By default, colnames are wrapped when larger than 12 characters.}
 
 \item{ratio_cells}{What a ratio / odds-ratio cell holds in the workbook. Excel cannot compute
-inside a number format, so a cell storing \code{0.83} cannot be made to print \verb{\\u00f71.2} the way the
+inside a number format, so a cell storing \code{0.83} cannot be made to print \verb{÷1.2} the way the
 console does. \code{"fold"} (the default) stores the \strong{reading value} instead --- the fold, signed by
-its direction (\code{x} at or above the neutral, \code{-1/x} below it) --- which a two-section number
-format prints as \verb{\\u00d71.20} and \verb{\\u00f71.20}, \code{2.11} and \code{1/2.11}. The cell stays a real
-number: it sorts and filters in the direction it is read, and takes the reader's own decimal
-separator. \code{"raw"} stores the untransformed ratio (printed \verb{\\u00d70.83}); \code{"text"} writes the
-exact display string, which reads perfectly but is no longer a number. Option twin:
-\code{tabxplor.xl_ratio_cells}.}
+its direction (\code{x} at or above the neutral, \code{-1/x} below it) --- which prints as \verb{×1.20} and
+\verb{÷1.20}, \code{2.11} and \code{1/2.11}. The cell stays a real number: it sorts and filters in the
+direction it is read, and takes the reader's own decimal separator. \code{"raw"} stores the
+untransformed ratio (printed \verb{×0.83}); \code{"text"} writes the exact display string, which reads
+perfectly but is no longer a number. Option twin: \code{tabxplor.xl_ratio_cells}.}
 
 \item{check}{Model-check plots to draw under each \code{tab_reg()} table: \code{FALSE} (the default),
 \code{"auto"}, or a vector of check keys --- the same values \code{\link{reg_check_plots}} takes,
@@ -146,13 +142,14 @@ Invisibly returns \code{tabs}.
 }
 \description{
 The Excel exporter behind \code{\link{tab_export}}: \code{tab_export(x, format = "xl")}
-calls this. To modify the colors used into the Excel table, you can change the
-global options with \code{\link{set_color_style}} and \code{\link{set_color_breaks}}.
+calls this. Colours follow the same palettes as the console and the HTML output, so a table looks
+the same wherever it is read; change them with \code{\link{set_color_style}} and
+\code{\link{set_color_breaks}}.
 }
 \section{Recovering the raw ratio in Excel}{
 
 A ratio or odds-ratio cell holds its \strong{reading value}: the fold, signed by its direction. The sign
-IS the marker --- negative means the cell reads \verb{\\u00f7} (or \verb{1/}) --- so one formula gives the raw
+IS the marker --- negative means the cell reads \verb{÷} (or \verb{1/}) --- so one formula gives the raw
 ratio back, with no macro and no add-in:
 
 \preformatted{  =IF(A2<0, -1/A2, A2)     the ratio itself

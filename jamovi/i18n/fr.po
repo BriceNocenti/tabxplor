@@ -37,7 +37,7 @@ msgstr "<b>cleannames = <i>(noms nettoyés)</i></b>"
 #: jmvtab/options/col_vars.title
 #: jmvtab/ui/variablesupplier[1].label
 msgid "<b>col_vars = <i>(column variables)</i></b>"
-msgstr "<b>col_vars = <i>(variables en colonne)</i></b>"
+msgstr "<b>col_vars = <i>(variables de colonne)</i></b>"
 
 #: jmvtabreg/options/conf_level.title
 msgid "<b>conf_level = <i>(confidence level)</i></b>"
@@ -97,7 +97,7 @@ msgstr "<b>Références (points de comparaison), modalités, manquants</b>"
 #: jmvtab/options/row_vars.title
 #: jmvtab/ui/variablesupplier[0].label
 msgid "<b>row_vars = <i>(row variables)</i></b>"
-msgstr "<b>row_vars = <i>(variables en ligne)</i></b>"
+msgstr "<b>row_vars = <i>(variables de ligne)</i></b>"
 
 #: jmvtabreg/ui[3].label
 msgid "<b>Significance</b>"
@@ -122,8 +122,7 @@ msgid ""
 "<b>test = <i>(Chi2 and Cramer’V for categorical; ANOVA F and eta2 for "
 "numeric)</i></b>"
 msgstr ""
-"<b>test = <i>(Chi2 et V de Cramér si facteur ; F d'ANOVA et eta2 si "
-"nombre)</i></b>"
+"<b>test = <i>(Chi2/V de Cramér si var. catégorielle; ANOVA F/eta2 si var. numérique</i></b>"
 
 #: jmvtabreg/options/wt.title
 #: jmvtabreg/ui/variablesupplier[3].label
@@ -133,7 +132,7 @@ msgstr "<b>wt = <i>(poids de sondage)</i></b>"
 #: jmvtab/options/wt.title
 #: jmvtab/ui/variablesupplier[3].label
 msgid "<b>wt = <i>(weights)</i></b>"
-msgstr "<b>wt = <i>(pondération)</i></b>"
+msgstr "<b>wt = <i>(variable de pondération)</i></b>"
 
 #: jmvtabreg/ui[1][2][0][0].label
 msgid ""
@@ -210,7 +209,7 @@ msgstr "une variable ordonnée porte déjà l'ordre de ses modalités"
 
 #: jmvtab/options/anova.title
 msgid "anova = <i>(which test for numeric variables ?)</i>"
-msgstr "anova = <i>(quel test pour les nombres ?)</i>"
+msgstr "anova = <i>(quel test pour les var. numériques ?)</i>"
 
 #: jmvtabreg/ui[5][0][2]/xl_check.label
 msgid "assumption checks plots"
@@ -245,7 +244,7 @@ msgstr "auto <i>(suit la mesure de l'écart)</i>"
 
 #: jmvtab/options/color/auto.title
 msgid "auto <i>(smart default: difference + ratio)</i>"
-msgstr "auto <i>(défaut : différence + ratio)</i>"
+msgstr "auto <i>(défaut : difference + ratio)</i>"
 
 #: jmvtabreg/options/measure/auto.title
 msgid "auto <i>(the link's own measure)</i>"
@@ -289,7 +288,7 @@ msgstr "base_or <i>(% + OR)</i>"
 
 #: jmvtab/options/display/base_ratio.title
 msgid "base_ratio <i>(base + ratio)</i>"
-msgstr "base_ratio <i>(socle + ratio)</i>"
+msgstr "base_ratio <i>(base + ratio)</i>"
 
 #: jmvtab/options/ci_method_cell/beta.title
 msgid "beta <i>(Clopper-Pearson exact)</i>"
@@ -314,7 +313,7 @@ msgstr "ci"
 
 #: jmvtab/options/display/ci.title
 msgid "ci <i>(interval alone)</i>"
-msgstr "ci <i>(l'IC seul)</i>"
+msgstr "ci <i>(IC seul)</i>"
 
 #: jmvtab/ui[3][0][0][0].label
 msgid "ci = <i>(confidence intervals)</i>"
@@ -394,7 +393,7 @@ msgstr "En colonne"
 
 #: jmvtab/options/na/common_base.title
 msgid "common_base <i>(complete cases of 1st col_var)</i>"
-msgstr "common_base <i>(cas complets du 1er col_var)</i>"
+msgstr "common_base <i>(cas complets de la 1ere col_var)</i>"
 
 #: jmvtab/options/comp.title
 msgid "comp"
@@ -447,7 +446,7 @@ msgstr "design_effect"
 
 #: jmvtab/options/display/diff.title
 msgid "diff <i>(difference to ref)</i>"
-msgstr "diff <i>(écart à la réf.)</i>"
+msgstr "diff <i>(différence)</i>"
 
 #: jamovi/js/jmvtabreg.js:18
 msgid "difference"
@@ -455,7 +454,7 @@ msgstr "difference"
 
 #: jmvtab/options/color/difference.title
 msgid "difference <i>(from total, or reference cell)</i>"
-msgstr "difference <i>(écart au total, ou à la réf.)</i>"
+msgstr "difference <i>(case - Total, ou case - réf.)</i>"
 
 #: jmvtabreg/options/measure/difference.title
 msgid "difference <i>(RD, diff)</i>"
@@ -480,7 +479,7 @@ msgstr "drop <i>(chaque col_var retire ses NA)</i>"
 
 #: jmvtab/options/na/drop_all.title
 msgid "drop_all <i>(complete cases in all col_vars)</i>"
-msgstr "drop_all <i>(cas complets, tous col_vars)</i>"
+msgstr "drop_all <i>(cas complets, toutes col_vars)</i>"
 
 #: jmvtabreg/options/na/drop_all.title
 msgid "drop_all <i>(one population for the whole analysis)</i>"
@@ -502,7 +501,7 @@ msgstr ""
 
 #: jmvtabreg/ui[1][2][1][2][0].label
 msgid "effect = <i>(where the numbers come from)</i>"
-msgstr "effect = <i>(d'où viennent les nombres?)</i>"
+msgstr "effect = <i>(d'où viennent les chiffres ?)</i>"
 
 #: jamovi/js/jmvtabreg.js:1512
 msgid "effect of"
@@ -518,7 +517,7 @@ msgstr "est <i>(l'estimation)</i>"
 
 #: jmvtabreg/options/display/est_base.title
 msgid "est_base <i>(est. + adj. pct/mean)</i>"
-msgstr "est_base <i>(est. + socle ajusté)</i>"
+msgstr "est_base <i>(est. + pct/mean ajustés)</i>"
 
 #: jmvtabreg/options/display/est_ci.title
 msgid "est_ci <i>(estimate + interval)</i>"
@@ -629,7 +628,7 @@ msgstr "interactions (prédicteurs)"
 
 #: jmvtab/options/na/keep.title
 msgid "keep <i>(NA as a normal level)</i>"
-msgstr "keep <i>(NA comme modalité)</i>"
+msgstr "keep <i>(garder NA comme modalités)</i>"
 
 #: jmvtabreg/options/na/keep_for_predictors.title
 msgid "keep_for_predictors <i>(predictors NA to real levels)</i>"
@@ -723,15 +722,15 @@ msgstr "moyenne (défaut)"
 
 #: jmvtab/options/display/mean.title
 msgid "mean <i>(numeric variables)</i>"
-msgstr "mean <i>(les nombres)</i>"
+msgstr "mean <i>(moyenne, var. num.)</i>"
 
 #: jmvtab/options/display/mean_cv.title
 msgid "mean_cv <i>(mean + cv)</i>"
-msgstr "mean_cv <i>(moyenne + cv)</i>"
+msgstr "mean_cv <i>(+ coeff. var.)</i>"
 
 #: jmvtab/options/display/mean_sd.title
 msgid "mean_sd <i>(mean + sd)</i>"
-msgstr "mean_sd <i>(moyenne + écart-type)</i>"
+msgstr "mean_sd <i>(+ écart-type)</i>"
 
 #: jmvtabreg/options/measure.title
 msgid "measure"
@@ -993,11 +992,11 @@ msgstr "ratio"
 
 #: jmvtab/options/display/ratio.title
 msgid "ratio <i>(ratio to ref)</i>"
-msgstr "ratio <i>(rapport à la réf.)</i>"
+msgstr "ratio <i>(rapport, risque rel.)</i>"
 
 #: jmvtab/options/color/ratio.title
 msgid "ratio <i>(relative risk, or mean ratio)</i>"
-msgstr "ratio <i>(risque relatif, ou de moyennes)</i>"
+msgstr "ratio <i>(rapport case/réf., risque relatif)</i>"
 
 #: jmvtabreg/options/measure/ratio.title
 msgid "ratio <i>(RR, IRR, RoM)</i>"
@@ -1120,8 +1119,7 @@ msgstr "Sélectionner des prédicteurs pour régler leur référence, etc."
 #: jamovi/js/jmvtab.js:912
 msgid "Select row, column or table variables to order, merge or cut their levels."
 msgstr ""
-"Choisir des variables en ligne, en colonne ou de sous-tableaux pour trier, "
-"fusionner ou découper leurs modalités."
+"Choisir des variables pour trier, fusionner ou découper leurs modalités."
 
 #: jmvtabreg/options/shape.title
 msgid "shape (per numeric predictor)"

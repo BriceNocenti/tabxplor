@@ -25,11 +25,11 @@ reg_check_plots(
 \code{svyolr}).}
 
 \item{data}{The data frame or \code{survey::svydesign} the table was built from. \strong{Usually unnecessary}:
-a table records the name it was called with, and when that name still holds a data set the same
+a table records the name it was called with, and when that name still holds data of the same
 size, it is used --- otherwise the call stops rather than draw the wrong model. Give \code{data}
 explicitly when the table was built from an expression rather than a named object
 (\code{tab_reg(gss |> dplyr::filter(...), ...)}), or when the name has since changed. Ignored with a
-bare model. (A table stores a ~4 KB recipe and refits from it; it never keeps the fitted models.)}
+bare model.}
 
 \item{check}{Which panels to draw. \code{"auto"} (default) draws the panels that \emph{decide} something the
 footer cannot say in one number --- linearity, residuals, normality, influence, and
@@ -40,28 +40,25 @@ footer rows and \code{\link[=tab_reg]{tab_reg()}}'s \code{stats} argument use.}
 
 \item{predictors}{Optional: restrict the linearity panel to these continuous predictors.}
 
-\item{ncol}{Number of panel columns in the assembled grid (default: as square as it can be, 3 at
-most).}
+\item{ncol}{Number of panel columns in the assembled grid (default: as square as it can be, 3 at most).}
 
 \item{facet_ncol}{Number of facet columns \emph{inside} a panel (default: 2 for linearity, 4 for
 proportionality).}
 
 \item{theme}{\code{"light"}, \code{"dark"}, or a black-and-white publication palette (\code{"print_ready"} and
-friends -- greyscale, for a thesis appendix). Defaults to
-\code{options("tabxplor.theme")}, like the table exporters.}
+friends). Defaults to \code{options("tabxplor.theme")}, like the table exporters.}
 
 \item{lang}{Language of the titles and captions (\code{"en"}, \code{"fr"}, ...). Defaults to
 \code{options("tabxplor.lang")}.}
 
-\item{max_points}{Thin the raw-point layers to about this many observations (statistics, bands and
-verdicts are always computed on the full data; the thinning keeps the extremes).}
+\item{max_points}{Thin the raw-point layers to about this many observations; statistics and verdicts
+are always computed on the full data.}
 
-\item{nbins}{Bins of the linearity panel's observed curve (default 10, as in the row sparklines).}
+\item{nbins}{Bins of the linearity panel's observed curve (default 10).}
 
 \item{conf}{Confidence level of the Q-Q band. Default \code{0.95}.}
 
-\item{seed}{Seed of the randomised quantile residuals (\code{NULL} = a fresh draw each time, the honest
-way to check that a pattern is not a randomisation artefact).}
+\item{seed}{Seed of the randomised quantile residuals (\code{NULL} for a fresh draw each time).}
 
 \item{...}{Unused, for future extension.}
 }
@@ -73,13 +70,12 @@ per model, all drawn on the current graphics device.
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
 
 \strong{A teaching companion, not a decision tool.} Every verdict these panels illustrate is already a
-row in the table's own footer --- for every model column, in every export, with no plotting package
-installed (see the \code{stats} argument of \code{\link[=tab_reg]{tab_reg()}}). This function exists to \emph{show what a violation
-looks like}, and to let a careful reader look closer.
+row in the table's own footer, for every model column, with no plotting package installed (see the
+\code{stats} argument of \code{\link[=tab_reg]{tab_reg()}}). This function exists to show what a violation looks like.
 
-One call diagnoses \strong{every model} in the table (each outcome, each compared model): one titled
-grid per model, each drawing the panels its own family allows. Pass a \code{\link[=tab_reg]{tab_reg()}} table --- the
-data it was built from is usually found on its own --- or a fitted model directly.
+One call diagnoses every model in the table: one titled grid per model, drawing the panels its own
+family allows. Pass a \code{\link[=tab_reg]{tab_reg()}} table --- the data it was built from is usually found on its own
+--- or a fitted model directly.
 }
 \examples{
 # \donttest: building a multi-panel ggplot grid costs a few seconds of CPU.

@@ -1,105 +1,80 @@
-# PURPOSE: the package's data charts -- forest_plot() (the RESULTS: estimate + interval +
-#   significance, for a tab() crosstab or a tab_reg() table) and reg_check_plots() (the model checks,
-#   drawn). Plus the ONE model they and every future chart read: tab_estimates().
-#   (An exporter renders the TABLE; these render its NUMBERS.)
+# PURPOSE: the package's data charts -- forest_plot() (the results: estimate, interval,
+#   significance) and reg_check_plots() (the model checks, drawn) -- plus the one model both read,
+#   tab_estimates(). An exporter renders the TABLE; these render its NUMBERS.
+# ROLE: tab_estimates() is one long tibble, a row per (table row x plotted column), carrying the
+#   estimate, its interval, its p, its scale, its colour slot and hex -- read through the very
+#   accessors the printed table used -- and its observed counterpart with the gap's interval. It
+#   COMPUTES NOTHING, so a chart over it agrees with the table by construction, and it is testable
+#   with no graphics device.
 #
-# THE MODEL (Phase 18z17). tab_estimates() is one long tibble: one row per (table row x plotted
-#   column), carrying the estimate, its interval, its p, its scale (fmt_scale_of), its colour slot and
-#   hex (the same accessors the printed table used), and its observed counterpart with the gap's
-#   interval. It computes NOTHING -- so a chart over it agrees with the table by construction, and it
-#   is testable without a graphics device (a tibble has a golden lock; a ggplot has none).
+# TWO CHARTS, OPPOSITE CONTRACTS. forest_plot() reads the table and never refits. reg_check_plots()
+#   ALWAYS refits -- diagnostics are about residuals, which no table carries -- and it refits through
+#   reg_fit() itself, from the small recipe the table stored, so there is no second fitting path to
+#   keep in sync. Both help pages say which they are.
 #
-# TWO CHARTS, OPPOSITE CONTRACTS. forest_plot() reads the TABLE and never refits; reg_check_plots()
-#   ALWAYS refits (diagnostics are about residuals, which no table carries). Both help pages say so.
-#
-# ONE AXIS PER PANEL (Phase 22e-ii). A table may hold an odds ratio (log axis) beside a mean
-#   difference (identity), and ggplot has ONE scale per aesthetic. So x is pre-transformed into each
-#   scale's own space, the plot's scale is identity, and breaks AND labels are resolved per panel
-#   through a lookup keyed on that panel's forced limits -- which ggplot resolves once per panel under
-#   free scales. The forcing frame (a geom_blank + expand = 0) is what makes the key exact, so no layer
-#   may reach past it: the gap band is clamped in data space instead. One RANGE per scale key, not per
-#   panel -- panels measuring the same thing must stay comparable.
-#
-# WHAT A FOREST PLOT DRAWS IS A DEVIATION, AND ONLY ONE. The position is the effect (or, on a
-#   crosstab, whatever `color =` grades); the LEVEL it sits on is printed above the whisker, so
-#   position and number say two different things. The whisker takes the cell's colour whole --
-#   significance is read off it, which is why the figure has no stars. A table's SECOND colour channel
-#   is not drawn: it has no interval, no neutral and nowhere positional to go.
-#
-# THE READING AXIS IS TRAINED FIRST, ON PURPOSE. A discrete scale's order is the order it is trained
-#   in, so the first layer maps the whole model; anything that must sit ON a row maps `ypos` itself
-#   and lets ggplot place it. A row NUMBER is a coordinate on the full level set, which in a panel
-#   holding four of eighteen levels is far outside its range.
-#
-# ROLE. reg_check_plots() is TEACHING ONLY, and its documentation says so in the first sentence: every
-#   decision-grade number is already a footer row of the table, for every model column, in every export
-#   (R/reg-assumptions.R). This function exists to show a class what a violation LOOKS like, and to let
-#   a careful reader look closer. Nothing in the workflow requires calling it.
-#
-# ONE ENGINE, TWO ENTRY FORMS (ruling R1). A tab_reg() table, or a bare fit. Both reduce to the same
-#   context (fit, frame, family, weights, shapes), so the panel builders never branch on the form.
-#   The table form REFITS through reg_fit() itself, from the ~4 KB recipe stored in reg_meta$fit_spec:
-#   a 60 ms teaching cost, against the ~10 MB per retained fit that was the measured cause of the
-#   Phase-o jamovi freeze. There is no second fitting path to keep in sync. The microdata it refits on
-#   is normally found from the NAME the table was built with (fit_spec$data_expr), so `data =` is
-#   written once; the N guard is what makes that safe.
-#
-# ONE GRID PER MODEL (ruling R10, revised in 22e-i). A grid carries one model's heading and the panel
-#   set of ITS OWN family -- faceting several models into one panel could only ever apply the first
-#   model's family to all of them, which is wrong the moment a table mixes outcomes.
-#
-# THE PANEL SET IS REG_CHECKS. A panel and a footer row are the same check, so their titles, their
-#   applicable families, their thresholds (`panel_marks`), whether the default grid draws them
-#   (`panel_default`) and the `check =` vocabulary all come from that one table; two of its rows are
-#   TAUGHT BUT NEVER SCORED (residuals, normality -- measured non-discriminating as verdicts, canonical
-#   as lessons) and say so by carrying no discriminator.
-#
-# THE PANEL HEADLINE IS PLOTMATH. One bold assumption word, one plain question, one line -- and the
-#   linearity y axis is a real formula. bquote() buys both without a third Suggests package; the cost
-#   is that the title THEME element must stay plain, or bold() would spread over the whole line.
-#   ⚠ AND that a label may use only what plotmath draws with a RULE or as ordinary text: a math-mode
-#   space, a call's parentheses and `=` / `<` / `>` come from the Adobe SYMBOL font, which `ragg` --
-#   Positron's and RStudio's device -- draws as missing-glyph boxes. The rule, its measurements and
-#   the safe substitutes are in rd_link_expr()'s WARNING (R/reg-assumptions.R); it is locked by
-#   test-tab_reg-plots.R.
+# reg_check_plots() IS TEACHING ONLY, and its first documented sentence says so: every
+#   decision-grade number is already a footer row of the table, for every model column, in every
+#   export. It exists to show a class what a violation LOOKS like. Nothing in the workflow needs it.
 #
 # KEY CONSTRAINTS:
-#   - ggplot2 + gridExtra are Suggests -> every entry point guards with requireNamespace().
-#   - NOTHING here identifies a row or a column by its rendered label or its name prefix. The column
-#     axis is `role` + `col_var`, the row axis is tab_render_vars() + tab_row_roles(), the scale is
-#     fmt_scale_of(). (or_plot()'s `^Emp\\.` prefix match is the defect this rule exists to prevent.)
-#   - NEVER geom_smooth(method = "auto") -- see the warning in R/reg-assumptions.R's primitives.
-# See: dev/regression_effect_plots.md (forest_plot), dev/regression_assumptions_plots.md (the checks).
+#   - ggplot2 and gridExtra are Suggests, so every entry point guards.
+#   - WHAT A FOREST PLOT DRAWS IS A DEVIATION, AND ONLY ONE. The position is the effect; the LEVEL it
+#     sits on is printed above the whisker, so position and number say two different things. The
+#     whisker takes the cell's colour whole -- significance is read off it, which is why the figure
+#     carries no stars. A table's SECOND colour channel is not drawn: it has no interval, no neutral
+#     and nowhere positional to go.
+#   - ONE AXIS PER PANEL. A table may hold an odds ratio (log axis) beside a mean difference
+#     (identity), and ggplot has one scale per aesthetic. So x is pre-transformed into each scale's
+#     own space, the plot's scale is identity, and breaks and labels are resolved per panel through a
+#     lookup keyed on that panel's forced limits. WARNING: the forcing frame (a geom_blank at
+#     expand = 0) is what makes that key exact, so NO LAYER MAY REACH PAST IT -- the gap band is
+#     clamped in data space instead. One RANGE per scale key, not per panel: panels measuring the
+#     same thing must stay comparable.
+#   - WARNING: the reading axis is trained FIRST. A discrete scale's order is the order it is trained
+#     in, so the first layer maps the whole model; anything that must sit ON a row maps `ypos` itself
+#     and lets ggplot place it. A row NUMBER is a coordinate on the full level set, far outside the
+#     range of a panel holding four of eighteen levels.
+#   - ONE GRID PER MODEL: a grid carries one model's heading and the panel set of ITS OWN family.
+#     Faceting several models into one panel could only apply the first model's family to all of
+#     them, which is wrong the moment a table mixes outcomes.
+#   - THE PANEL SET IS REG_CHECKS (R/reg-assumptions.R). A panel and a footer row are the same check,
+#     so titles, applicable families, thresholds, defaults and the `check =` vocabulary all come from
+#     that one table; this file restates none of them.
+#   - WARNING: nothing here identifies a row or a column by its RENDERED LABEL or a name prefix. The
+#     column axis is `role` + `col_var`, the row axis tab_render_vars() + tab_row_roles(), the scale
+#     fmt_scale_of().
+#   - A panel headline is plotmath: one bold assumption word, one plain question, one line. WARNING:
+#     only what plotmath draws with a rule or as ordinary text may appear -- the Adobe SYMBOL glyphs
+#     come out as missing-glyph boxes on `ragg`, the device Positron and RStudio use. The rule and
+#     its safe substitutes are in rd_link_expr()'s WARNING (R/reg-assumptions.R); the title theme
+#     element must stay plain, or bold() spreads over the whole line.
+#   - WARNING: never geom_smooth(method = "auto"), and never pass a vector `linetype =` as a geom
+#     parameter (ggplot replicates the layer data).
+# See: CLAUDE.md section "tabxplor architecture" (the regression subsystem);
+#      dev/regression_effect_plots.md and dev/regression_assumptions_plots.md (the designs and the
+#      maths a header cannot restate).
 
-# Guard the Suggests packages a plot needs.
 tx_plot_deps <- function(pkgs = c("ggplot2", "gridExtra")) {
   tx_need_pkg(pkgs, "This plot")
 }
 
 # === SECTION: the shared theme seam =================================================================
 
-# THE plot theme, from the same `tx_chrome_hex()` vocabulary the tables use (z11: light / dark /
-# print), so a diagnostic panel beside a table is the same object in the same clothes. It replaced the
-# five hard-coded "#c00000" literals: a publication palette matters, because a diagnostic panel is exactly
-# what ends up in a thesis appendix in greyscale.
-#' @keywords internal
+# Reads the table's own tx_chrome_hex() vocabulary, so a diagnostic panel beside a table is dressed the
+# same way -- light, dark or a greyscale publication palette.
 tx_plot_colors <- function(theme = NULL) {
   th <- tx_theme_resolve(theme)          # ggplot bakes its colours: "auto" cannot be honoured
   ch <- tx_chrome_hex(th)
   list(theme = th, text = ch$text, grey = ch$grey, grey2 = ch$grey2 %||% ch$text, bg = ch$bg,
-       # `grey` is the INK of a band or a gridline; `subtle` is the ink of WORDS that must stay
-       # readable while sitting back from the title -- the table's own grey is too light for that on
-       # white, and axis labels are as hard to read as a subtitle.
+       # `subtle`: legible sitting back from the title -- the table's own grey is too light for that
        subtle = if (identical(th, "dark")) "#BEBEBE"
                 else if (tx_is_print(th))  ch$grey2 %||% "#3F3F3F" else "#555555",
-       # the accent: a hue under colour themes, pure black under `print` (a greyscale panel leans on
-       # line TYPE, not on a hue that photocopies to the same grey as the data)
+       # print leans on line TYPE, not a hue that photocopies to the same grey as the data
        accent = if (tx_is_print(th)) "#000000" else "#c00000",
        point  = if (identical(th, "dark")) "#8fb8dd" else if (tx_is_print(th)) "#000000"
                 else "#33648c")
 }
 
-#' @keywords internal
 tx_plot_theme <- function(cols) {
   ggplot2::theme_bw(base_size = 10) +
     ggplot2::theme(
@@ -117,22 +92,14 @@ tx_plot_theme <- function(cols) {
 
 # === SECTION: tab_estimates() -- THE estimate model =================================================
 #
-# One long tibble, one row per (table row x plotted column). It COMPUTES NOTHING: every number comes
-# from the accessor the printed table used, which is the whole no-drift claim -- a chart over this
-# cannot disagree with the table it was made from.
-#
-# The three axes, each from a STORED fact and never from a rendered label:
-#   * columns   `role` ("model" / "emp" / "n" / "") + `col_var` + `is_totcol`
-#   * rows      tab_render_vars() (the DECLARED index columns, 19f) + tab_row_roles() (the row_kind field)
-#   * scale     fmt_scale_of() (R/fmt_class.R), so the estimate, its neutral, its transform, its unit
-#               and its ladder are one record and not four re-derivations
-# and the colour comes from resolve_color_channel_plans() -> fmt_channel_codes(), the same two calls
-# every exporter makes.
+# The three axes, each from a STORED fact, never a rendered label:
+#   columns  role ("model"/"emp"/"n"/"") + col_var + is_totcol
+#   rows     tab_render_vars() + tab_row_roles() (the row_kind field)
+#   scale    fmt_scale_of() -- estimate, neutral, transform, unit and ladder as one record
+# Colour: resolve_color_channel_plans() -> fmt_channel_codes(), the calls every exporter makes.
 
-# The PLOTTED columns. A count column carries no estimate (it is the base, read only by `size = "n"`);
-# a total column is dropped unless asked for; on a regression table the MODEL columns are the subject
-# and the crude ones ride as `obs` (SS9), except where the reader asked to see their own interval.
-#' @keywords internal
+# A count column carries no estimate (it is the base); on a regression table the model columns are the
+# subject and the crude ones ride as `obs`, unless the reader asked to see their own interval.
 est_plot_columns <- function(x, columns = NULL, totals = FALSE, observed = "auto", what = "auto") {
   nm <- names(x)[vapply(x, is_fmt, logical(1))]
   if (!length(nm)) return(character(0))
@@ -152,20 +119,15 @@ est_plot_columns <- function(x, columns = NULL, totals = FALSE, observed = "auto
     keep <- keep & !vapply(nm, function(n) isTRUE(is_totcol(x[[n]])[1]), logical(1))
   nm <- nm[keep]; role <- role[keep]
   if (!any(role == "model")) return(nm)                # a crosstab: every value column is plotted
-  # a regression table: the models are the subject. The crude block joins ONE column at a time and
-  # always by a stored fact -- never "every Obs_* column", which would draw the same crude effect
-  # twice and pair an odds ratio with a percentage.
+  # the crude block joins ONE column at a time, always by a stored fact -- never "every Obs_* column",
+  # which would draw the same crude effect twice and pair an odds ratio with a percentage.
   out <- nm[role == "model"]
-  # `observed = "ci"` is the only mode that needs the crude column ITSELF (it draws its own interval);
-  # "band" / "point" read the `obs` field, which already rides on the model column.
+  # only `observed = "ci"` needs the crude column ITSELF (its own interval); "band"/"point" read `obs`.
   if (identical(observed, "ci")) {
     out <- unique(c(out, stats::na.omit(vapply(nm[role == "model"],
                                                function(n) est_crude_of(x, n), character(1)))))
   }
   if (identical(what, "level")) {
-    # the observed-vs-adjusted levels: the crude column beside each model one. There is exactly one
-    # per model column now, and it carries its level in the field its scale names -- so the test is
-    # simply "does it hold a level", never a guess from what the cell happens to display.
     lv <- nm[role == "emp"]
     out <- unique(c(out, lv[vapply(lv, function(n) any(is.finite(est_level_of(x[[n]]))),
                                    logical(1))]))
@@ -173,16 +135,12 @@ est_plot_columns <- function(x, columns = NULL, totals = FALSE, observed = "auto
   nm[nm %in% out]                                      # table order, not selection order
 }
 
-# The crude counterpart of a model column, by STORED facts: role "emp", the same estimand (`scale`),
-# and -- when several qualify -- the same `col_var`. Never by the "Obs_" name prefix: that pairing is
-# the defect or_plot() shipped with (`^Emp\\.`, silently dead after the Phase-g rename).
-#' @keywords internal
+# The crude counterpart of a model column, by STORED facts -- role "emp", the same estimand (`scale`),
+# and, when several qualify, the same `col_var`. Never by an "Obs_" name prefix, which cannot be relied on.
 est_crude_of <- function(x, col_nm) {
   nm  <- names(x)[vapply(x, is_fmt, logical(1))]
   emp <- nm[vapply(nm, function(n) identical(as.character(get_role(x[[n]]))[1], "emp"), logical(1))]
   if (!length(emp)) return(NA_character_)
-  # Phase 19b: pair on the STORED SCALE -- "is this the crude twin of that model column" is exactly
-  # "does it estimate the same thing", which is now one attribute instead of a coarser `ci_type`.
   scl <- get_scale(x[[col_nm]])
   emp <- emp[vapply(emp, function(n) identical(get_scale(x[[n]]), scl), logical(1))]
   if (!length(emp)) return(NA_character_)
@@ -194,17 +152,8 @@ est_crude_of <- function(x, col_nm) {
   emp[1]
 }
 
-# The FACET key (ruling D7 -- derived once here, never stored: `col_var` is read by the exporters'
-# header machinery and means "the span this column sits under").
-#
-# One panel per estimate column, except that columns which are the SAME estimand seen twice (a model
-# and its crude twin: same col_var, different roles) share a panel. So: facet by `col_var`, unless a
-# col_var holds several columns of the SAME role -- multinomial categories (two model columns under
-# one "party3: OR"), or the levels of a crosstab's column variable, which is exactly the maintainer's
-# layout ruling. A crude column whose col_var matches no model panel (comparison mode, where one
-# observed block serves every model) is REPLICATED into each -- correct, since every model is compared
-# against the same observed effect.
-#' @keywords internal
+# One panel per `col_var`, unless it holds several columns of the SAME role (multinomial categories),
+# which each get their own; an unmatched crude column (comparison mode) is replicated into every panel.
 est_facet_keys <- function(x, cols) {
   cv   <- vapply(cols, function(n) as.character(get_col_var(x[[n]]))[1], character(1))
   role <- vapply(cols, function(n) as.character(get_role(x[[n]]))[1],    character(1))
@@ -216,12 +165,11 @@ est_facet_keys <- function(x, cols) {
   stats::setNames(key, cols)
 }
 
-# The row axis, in ONE rule over the four label-block shapes tab_render_vars() distinguishes:
+# The row axis, over the four label-block shapes tab_render_vars() distinguishes:
 #   tab(d, race, party3)                 var = "race" (the variable), level = the race column
 #   tab(d, c(race, relig), party3)       var = the `row_var` column,  level = the `levels` column
 #   tab(d, race, party3, tab_vars = b)   var = "race",                level = race,  group = b
 #   tab_reg(...)                         var = the `var` column,      level = the `levels` column
-#' @keywords internal
 est_row_axis <- function(x) {
   rv <- tab_render_vars(x)
   if (isTRUE(rv$degrade))
@@ -229,8 +177,6 @@ est_row_axis <- function(x) {
                      "i" = "It needs a factor row variable and at least one value column."))
   grp   <- dplyr::group_vars(x)
   lvl_c <- rv$row_var
-  # Phase 19f: the DECLARED "var"-role column -- one rule for a merged crosstab and a regression,
-  # where this had one clause per shape (and the regression one keyed on the grouping).
   var_c <- if (length(rv$var_col) == 1L && rv$var_col %in% names(x)) rv$var_col else NA_character_
   var   <- if (is.na(var_c)) rep(lvl_c, nrow(x)) else as.character(x[[var_c]])
   gcols <- setdiff(grp, c(var_c, lvl_c))
@@ -278,19 +224,15 @@ tab_estimates <- function(x, columns = NULL, what = c("auto", "effect", "level")
   ax    <- est_row_axis(x)
   facet <- est_facet_keys(x, cols)
 
-  # which rows: the data rows, plus the totals when asked. A regression Constant is an intercept, not
-  # an effect, and has no place on a forest axis (`intercept = TRUE` restores it, as ggstats does).
+  # a regression Constant is an intercept, not an effect, so it is excluded by default
   keep <- ax$roles %in% if (isTRUE(totals)) c("data", "total") else "data"
-  # ...plus the Total row when IT is the reference (`ref = "tot"`): it is not a summary there, it is
-  # the baseline every deviation is measured from, and a forest plot without its anchor row is
-  # missing the one number the whole panel is about.
+  # plus the Total row when it IS the reference (`ref = "tot"`): then it is the baseline, not a summary
   ref_row <- Reduce(`|`, lapply(cols, function(n) is_refrow(x[[n]])), rep(FALSE, nrow(x)))
   keep <- keep | (ax$roles %in% "total" & ref_row)
   if (!isTRUE(intercept)) keep <- keep & ax$var != "Constant"   # the skeleton's own key, not a label
   if (!any(keep))
     cli::cli_abort("No row left to plot (every row is a total, or the intercept).")
 
-  # the model facets, for the crude replication below
   role_of   <- vapply(cols, function(n) as.character(get_role(x[[n]]))[1], character(1))
   mod_facet <- unique(facet[role_of %in% c("model", "")])
 
@@ -298,12 +240,12 @@ tab_estimates <- function(x, columns = NULL, what = c("auto", "effect", "level")
   for (nm in cols) {
     col  <- x[[nm]]
     role <- as.character(get_role(col))[1]
-    # NOT inside the tibble() below: its arguments are evaluated sequentially, so `role` there would
-    # already name the length-n COLUMN and the test would silently be FALSE for every row.
+    # WARNING: `role` must be read here, not inside the tibble() below -- there it would name the
+    # length-n COLUMN instead, and the test would silently be FALSE for every row.
     ser  <- if (identical(role, "emp")) "observed" else "modelled"
     scl  <- fmt_scale_of(col, what)
-    # the estimate and its interval. The interval belongs to the STORED scale, so a forced `what`
-    # that moves off it keeps the point and drops the whisker rather than inventing one.
+    # the interval belongs to the STORED scale, so a forced `what` off it drops the whisker rather
+    # than inventing one
     stored <- fmt_scale_key(col)
     est    <- vctrs::field(col, scl$est_field)
     has_ci <- identical(scl$key, stored)
@@ -311,33 +253,24 @@ tab_estimates <- function(x, columns = NULL, what = c("auto", "effect", "level")
     hi     <- if (has_ci) get_ci_sup(col) else rep(NA_real_, length(col))
     pv     <- if (has_ci) get_pvalue(col) else rep(NA_real_, length(col))
 
-    # colour: the two channel plans (for the measure / policy / ladder), then fmt_col_ann() -- the
-    # EXPORTERS' own resolver, so the point's colour is the cell's colour down to the greys and the
-    # never-greyed reference cell, and not a fourth re-derivation of the same case_when().
+    # fmt_col_ann() is the exporters' own colour resolver, so a point's colour matches its cell's
+    # exactly -- down to the greys and the never-greyed reference cell.
     pl  <- resolve_color_channel_plans(col)
     ann <- fmt_col_ann(col, tcols, want_colors = TRUE)
-    # Phase 19c: "the channel carrying a GAP measure" is measure_own_ref() -- a measure whose baseline
-    # is another column -- so the pair is read off MEASURES rather than written out here.
     gap_chan <- if (!is.null(pl$text) && measure_own_ref(pl$text$measure)) "text"
                 else if (!is.null(pl$bg) && measure_own_ref(pl$bg$measure)) "bg"
                 else NA_character_
 
-    # the observed counterpart and the interval of the GAP (SS9.2: "the modelled point falls outside
-    # the band" is exactly `fmt_gap_p(x) < 1 - conf_level`, because the band is obs (+/- | x/) z*gap_se
-    # with the same z that fmt_gap_p() inverts).
     obs  <- get_obs(col)
     gse  <- get_gap_se(col)
-    # ⚠ zscore_formula(), NOT conf_level_to_z(): the latter ROUNDS to 1.96 (it exists to name colour
-    # BREAKS), and the band has to be the very interval fmt_gap_bounds() draws and fmt_gap_p() inverts.
+    # WARNING: zscore_formula(), NOT conf_level_to_z() -- the latter rounds to 1.96 for colour breaks,
+    # and this band must be the exact interval fmt_gap_bounds()/fmt_gap_p() use.
     half <- zscore_formula(get_conf_level(col)) * gse
     band <- if (isTRUE(scl$mult)) list(lo = obs * exp(-half), hi = obs * exp(half))
             else                  list(lo = obs - half,       hi = obs + half)
 
-    # what a LEVEL panel's reference line sits at. Crosstabs only: get_ref_field() broadcasts the
-    # reference cell of each group from the group's END, which is where a crosstab's Total row is and
-    # is meaningless on a regression skeleton (whose baseline is the FIRST row of each predictor
-    # block) -- the same reason fmt_color_plan() refuses get_ref_var() for `type = "coef"`. A reg
-    # panel needs no line anyway: its baseline level is drawn, marked, as a point of its own.
+    # a LEVEL panel's reference line: crosstabs only -- get_ref_field() broadcasts from a group's END,
+    # meaningless on a regression skeleton (baseline = the block's FIRST row, drawn as its own point).
     ref_v <- if (!identical(scl$kind, "level")) rep(scl$neutral, length(col))
              else if (!identical(role, "")) rep(NA_real_, length(col))
              else if (identical(fmt_var_kind(col), "mean")) get_ref_means(col)
@@ -350,9 +283,7 @@ tab_estimates <- function(x, columns = NULL, what = c("auto", "effect", "level")
       is_ref = is_refrow(col) %in% TRUE, is_total = ax$roles == "total",
       estimate = est, ci_inf = lo, ci_sup = hi, pvalue = pv,
       stars = get_stars(col), n = get_n(col), ref_value = ref_v,
-      # the cell as the TABLE renders it -- format() is the package's only string producer (the
-      # export-parity contract), so `labels = "estimate"` re-prints, never re-formats
-      text = trimws(format(col)),
+      text = trimws(format(col)),   # the cell as the TABLE renders it -- format() is the one string producer
       kind = scl$kind, scale_key = scl$key, neutral = scl$neutral, trans = scl$trans,
       is_pct = scl$is_pct, unit = scl$unit, sd_y = scl$sd_y,
       obs = obs, gap_se = gse, gap = fmt_gap_raw(col), gap_lo = band$lo, gap_hi = band$hi,
@@ -361,9 +292,7 @@ tab_estimates <- function(x, columns = NULL, what = c("auto", "effect", "level")
       policy  = if (is.null(pl$text)) NA_character_ else pl$text$policy,
       slot_text = ann$text_slot, slot_bg = ann$bg_slot,
       hex_text = ann$font, hex_bg = dplyr::na_if(ann$back, "none"),
-      # what a MARK is painted with: the cell's own colour, except under a publication palette where
-      # the text ink is all black and a point borrows the grey ramp (fmt_point_palette). Identical to
-      # `hex_text` under every colour theme.
+      # under a publication palette the text ink is all black, so a mark borrows the grey ramp instead
       point_hex = ifelse(ann$text_slot > 0L, pp[pmax(ann$text_slot, 1L)], ann$font),
       bold = ann$face_bold, italic = ann$face_italic, underline = ann$face_underline,
       gap_slot = if (identical(gap_chan, "text")) ann$text_slot
@@ -373,16 +302,13 @@ tab_estimates <- function(x, columns = NULL, what = c("auto", "effect", "level")
     d$break_dir <- rep(list(scl$break_dir), nrow(d))
     d <- d[keep, , drop = FALSE]
 
-    # D7: one observed block serving several models is repeated in every model panel.
+    # one observed block serving several models is repeated into every model panel
     if (identical(role, "emp") && !d$facet[1] %in% mod_facet && length(mod_facet)) {
       d <- vctrs::vec_rbind(!!!lapply(mod_facet, function(f) { d$facet <- f; d }))
     }
     out[[nm]] <- d
   }
   res <- vctrs::vec_rbind(!!!out)
-  # `what = "level"` needs a stored level. Every model column now carries its adjusted prediction, so
-  # the only tables left without one are those whose scale names no level at all (a link-scale
-  # coefficient, a cumulative odds ratio).
   if (identical(what, "level") &&
       !any(is.finite(res$estimate[res$role %in% c("model", "")])))
     cli::cli_abort(c("{.code what = \"level\"} needs a percentage or a mean, and this table has none.",
@@ -397,14 +323,9 @@ tab_estimates <- function(x, columns = NULL, what = c("auto", "effect", "level")
 
 # === SECTION: getting a fit ==========================================================================
 
-# The (fit, frame, family, label, ...) contexts a call is about. A bare model gives one; a tab_reg()
-# table gives one PER MODEL COLUMN, and each becomes its own titled grid (ruling R10, revised in
-# 22e-i: faceting by model could only ever draw ONE family's panel set, which is wrong the moment a
-# table mixes outcomes).
-#' @keywords internal
+# One (fit, frame, family, label, ...) context per model column.
 reg_plot_fits <- function(x, data = NULL, caller = parent.frame()) {
-  if (!inherits(x, "tbl_df") && !is.data.frame(x)) {
-    # the secondary form: a bare lm / glm / svyglm / polr / multinom / svyolr
+  if (!inherits(x, "tbl_df") && !is.data.frame(x)) {   # the secondary form: a bare lm/glm/.../svyolr
     fr <- tryCatch(stats::model.frame(x), error = function(e) NULL)
     return(list(list(fit = x, data = if (is.null(data)) fr else data,
                      family = reg_plot_family_of(x), outcome = reg_plot_dep_of(x),
@@ -412,10 +333,8 @@ reg_plot_fits <- function(x, data = NULL, caller = parent.frame()) {
                      nobs = tryCatch(stats::nobs(x), error = function(e) NA_integer_),
                      label = gettext("Model"))))
   }
-  # Phase 19m-i: TWO questions, so two messages. "Is this a regression table" is the STORED kind
-  # (tab_is_reg); "does it still carry the recipe to refit from" is `spec$call$fit_spec`. They
-  # diverge on a meta-stripped reg table (test-degraded-attrs.R builds exactly that state), where
-  # the single conflated abort told the user their tab_reg() table was not one.
+  # two distinct questions, so two messages: "is this a regression table" (tab_is_reg) vs "does it
+  # still carry the recipe to refit from" (fit_spec) -- they diverge on a meta-stripped table.
   if (!tab_is_reg(x))
     cli::cli_abort(c("{.arg x} is not a {.fn tab_reg} table.",
                      "i" = "Pass a {.fn tab_reg} result and its data, or a fitted model."))
@@ -432,8 +351,7 @@ reg_plot_fits <- function(x, data = NULL, caller = parent.frame()) {
                wt = if (is.null(svy)) fs$wt else svy$spec$wt)
   if (!is.null(ds$wt) && is.na(ds$wt)) ds$wt <- NULL
   if (!is.null(ds$wt) && !ds$wt %in% names(data)) ds$wt <- NULL
-  # the same preparation the table was built on -- the `shape` recodes and the `ref` anchors -- so
-  # the refit below is the SAME MODEL, not a look-alike on raw columns.
+  # the same `shape`/`ref` preparation the table was built on, so the refit is the SAME model
   data <- reg_prepare_replay(data, fs$prep)
   if (!is.null(ds$design)) ds$design$variables <- data
   nobs_tab <- reg_plot_nobs(x)
@@ -448,9 +366,7 @@ reg_plot_fits <- function(x, data = NULL, caller = parent.frame()) {
                     reg_cross_add(fs$crosses, sp$cross))))),
       error = function(e) { if (is.null(why)) why <<- conditionMessage(e); NULL })
     if (is.null(f)) return(NULL)
-    # THE guard, and it is required rather than optional: a diagnostic plot of the wrong model is
-    # worse than no plot. The table already carries each model's N (the `n` footer row), so this needs
-    # no extra storage -- and it stays silent when `stats = FALSE` left nothing to compare against.
+    # WARNING: required, not optional -- a diagnostic plot of the wrong model is worse than no plot.
     n_i <- if (length(nobs_tab) >= i) nobs_tab[[i]] else NA_real_
     if (is.finite(n_i) && f$nobs != n_i) {
       cli::cli_abort(c("{.arg data} does not reproduce the model in {.arg x}.",
@@ -472,19 +388,14 @@ reg_plot_fits <- function(x, data = NULL, caller = parent.frame()) {
   out
 }
 
-# The quadratic terms of ONE model, keyed by variable -- reg_shape_add()'s named twin, which the
-# panels need in order to name a term and to know which predictor is fitted as a curve.
-#' @keywords internal
+# reg_shape_add()'s named twin, so a panel can name a curvature term and know what is fitted as a curve.
 reg_shape_keep <- function(shape_terms, predictors) {
   if (is.null(shape_terms) || !length(shape_terms)) return(character(0))
   shape_terms[intersect(names(shape_terms), predictors)]
 }
 
-# The data a table was built from, found again. A tab_reg() table records the EXPRESSION its `data`
-# argument was written as; a bare NAME is re-resolvable (cheap, side-effect-free, and the guard below
-# catches a name that now holds something else), so it is the only form followed. Anything else --
-# a pipeline, a subset, `.` -- is not re-run behind the user's back.
-#' @keywords internal
+# A tab_reg() table records only the EXPRESSION its `data` was written as; a bare NAME is re-resolved,
+# anything else (a pipeline, `.`) is not re-run behind the user's back.
 reg_plot_recover_data <- function(expr, caller) {
   hint <- c("i" = "Diagnostics need the microdata; the table stores only the recipe.",
             "x" = "e.g. {.code reg_check_plots(t, gss_simple)}.")
@@ -501,16 +412,14 @@ reg_plot_recover_data <- function(expr, caller) {
   d
 }
 
-# The N of each fit, off the table's own `n` footer rows (NA where `stats = FALSE` stored none).
-#' @keywords internal
+# reg_plot_nobs(): the N of each fit, off the table's own `n` footer rows. The four below infer a bare
+# fit's (family, outcome, predictors) -- the secondary form's only source, since it carries no digest.
 reg_plot_nobs <- function(x) {
   tt <- get_test(x)
   if (is.null(tt) || !nrow(tt)) return(numeric(0))
   as.numeric(tt$n[tt$test == "n"])
 }
 
-# The (family, outcome, predictors) of a BARE fit -- the secondary form's only inference.
-#' @keywords internal
 reg_plot_family_of <- function(fit) {
   if (inherits(fit, "polr") || inherits(fit, "svyolr")) return("ordinal")
   if (inherits(fit, "multinom")) return("multinomial")
@@ -518,21 +427,16 @@ reg_plot_family_of <- function(fit) {
   if (is.null(fam)) return("gaussian")
   if (grepl("binomial", fam)) "binomial" else if (grepl("poisson", fam)) "poisson" else "gaussian"
 }
-#' @keywords internal
 reg_plot_dep_of <- function(fit)
   tryCatch(all.vars(stats::formula(fit))[[1L]], error = function(e) NA_character_)
-#' @keywords internal
 reg_plot_preds_of <- function(fit)
   tryCatch(setdiff(all.vars(stats::formula(fit)), reg_plot_dep_of(fit)), error = function(e) character(0))
 
 
 # === SECTION: the panels ============================================================================
 
-# ONE builder per panel key, dispatched here. The table (REG_CHECKS) says WHICH panels exist and for
-# which families; this switch says HOW each is drawn. Every builder takes ONE context -- a grid
-# belongs to one model (ruling R10, revised in 22e-i) -- and returns a ggplot, or NULL when the data
-# cannot support it.
-#' @keywords internal
+# ONE builder per panel key: REG_CHECKS says which panels exist, this switch says how each is drawn.
+# Every builder returns a ggplot, or NULL when the data cannot support it.
 reg_panel_build <- function(key, cx, cols, opts) {
   switch(key,
          linearity       = reg_panel_linearity(cx, cols, opts),
@@ -545,27 +449,19 @@ reg_panel_build <- function(key, cx, cols, opts) {
          NULL)
 }
 
-# The headline of a panel: the ASSUMPTION word from REG_CHECKS in bold, then the question the reader
-# should ask, plain, on the same line -- so the word the footer row and `check =` use stays striking
-# and the panel still says what to look at. plotmath keeps this dependency-free; the element's own
-# face must therefore be plain, or the whole line would embolden.
-#' @keywords internal
+# The headline: REG_CHECKS's assumption word in bold, then the reading question, plain, one line.
 reg_panel_head <- function(key, question)
   bquote(bold(.(gettext(REG_CHECKS[[key]]$noun))) * .(paste0(": ", question)))
 
-# The shared skin: the theme, the plain title face plotmath needs, and the wrapped subtitle.
-#' @keywords internal
 reg_panel_skin <- function(g, key, question, subtitle, cols)
   g + ggplot2::labs(title = reg_panel_head(key, question), subtitle = rd_wrap(subtitle)) +
     tx_plot_theme(cols) +
     ggplot2::theme(plot.title = ggplot2::element_text(face = "plain"))
 
-# The reference line(s) a panel draws, as a LAYER: one row per declared mark (REG_CHECKS$panel_marks),
-# the linetype carried in the data through an identity scale.
-# WARNING: never pass a vector `linetype =` as a geom PARAM. ggplot2 replicates a layer's data across
-# facets but not its params, so `geom_hline(yintercept = c(5, 10), linetype = c(...))` aborts the
-# moment the panel is facetted (measured on ggplot2 4.0.3).
-#' @keywords internal
+# One reference line per declared mark (REG_CHECKS$panel_marks).
+# WARNING: the linetype must ride in the DATA through an identity scale, never as a geom param --
+# ggplot2 replicates a layer's data across facets but not its params, so a vector `linetype =` param
+# aborts the moment the panel is facetted.
 reg_panel_mark_layers <- function(key, cols) {
   m <- reg_panel_marks(key)
   if (!length(m)) return(NULL)
@@ -576,12 +472,9 @@ reg_panel_mark_layers <- function(key, cols) {
        ggplot2::scale_linetype_identity())
 }
 
-# 1. LINEARITY -- the observed binned curve of each continuous predictor against the shape the MODEL
-# fits (rd_comparator: a straight line, a parabola where `shape = "quadratic"` put a curvature term
-# in). Never a smoother: the assumption IS the shape, so a smoother would trace the very departure
-# the panel exists to show. An ordinal or multinomial outcome gives one curve per cut / per category
-# (rd_link_cuts), which is the standard reading and the only one that shows a proportional-odds
-# departure for a NUMERIC predictor.
+# 1. LINEARITY -- the observed binned curve vs the shape the MODEL fits (a line, or a parabola under
+# `shape = "quadratic"`). Never a smoother: the assumption IS the shape, so a smoother would trace the
+# very departure the panel exists to show. An ordinal/multinomial outcome gets one curve per cut/category.
 reg_panel_linearity <- function(cx, cols, opts) {
   num <- reg_numeric_preds(cx$data, cx$predictors)
   if (!is.null(opts$predictors)) num <- intersect(num, opts$predictors)
@@ -592,14 +485,11 @@ reg_panel_linearity <- function(cx, cols, opts) {
   drw <- cx$data[[svy_row_col]]
   sq  <- names(cx$shape_terms %||% character(0))
   rows <- purrr::list_rbind(purrr::map(num, function(v) {
-    # the x axis is the ONE reading of a predictor's own values a plot makes, so it is the second
-    # place a `ref` anchor must be added back (the first is reg_spec_tips_num()'s tooltip). The
-    # curve's SHAPE is invariant under a location shift; only the axis labels are not.
+    # the `ref` anchor must be added back here too: the curve's SHAPE is invariant under a location
+    # shift, but the axis labels are not.
     x <- cx$data[[v]] + reg_anchor_of(cx$anchors, v)
     purrr::list_rbind(purrr::map(ly$curves, function(cu) {
-      # Phase 18z16-iv (W-G.4): the band takes the DESIGN variance when the user handed a
-      # svydesign to reg_check_plots(), the exact flat closed form on a plain weight column, and is
-      # unchanged (n) unweighted.
+      # design-based variance with a svydesign, the flat closed form on a plain weight column
       b <- rd_bin(x[cu$keep], cu$y, w[cu$keep], opts$nbins, ly$link,
                   design = cx$design, des_rows = drw[cu$keep])
       if (is.null(b)) return(NULL)
@@ -608,8 +498,7 @@ reg_panel_linearity <- function(cx, cols, opts) {
     }))
   }))
   if (is.null(rows) || !nrow(rows)) return(NULL)
-  # one curve = the panel's own blue; several = the cut is what the colour says.
-  many <- !all(is.na(rows$cut))
+  many <- !all(is.na(rows$cut))    # one curve: the panel's own blue; several: the cut is the colour
   if (!many) rows$cut <- ""
   curve <- if (many)
     list(ggplot2::geom_line(ggplot2::aes(colour = .data$cut), linewidth = 0.7, na.rm = TRUE),
@@ -637,9 +526,7 @@ reg_panel_linearity <- function(cx, cols, opts) {
 }
 
 # The facet label of a numeric predictor: the terms the MODEL carries for it, so a cured predictor is
-# not read against a line the model no longer fits. `log`/`sqrt` recoded the column itself
-# (reg_prepare_replay), so their mark IS the label; a quadratic added a second term beside it.
-#' @keywords internal
+# not read against a line the model no longer fits.
 reg_pred_facet <- function(v, cx) {
   mk <- shape_mark(cx$shapes[[v]]$kind %||% NA_character_, v)
   if (!is.na(mk)) return(mk)
@@ -649,13 +536,11 @@ reg_pred_facet <- function(v, cx) {
 }
 
 # 2. RESIDUALS -- binned residuals against the fitted value, or against the expected CATEGORY where
-# the fit has one per level rather than one per row (rd_fitted_1d()). The classic lesson about why a
-# RAW residual is useless for a binary outcome (it takes exactly two values given p-hat), and the
-# reason every non-gaussian family here uses a randomised quantile residual instead.
+# the fit has one per level rather than one per row. Every non-gaussian family here uses a randomised
+# quantile residual, since a raw residual is useless for a binary outcome (only two values given p-hat).
 reg_panel_residuals <- function(cx, cols, opts) {
   r <- rd_resid(cx$fit, cx$family, cx$data[[cx$outcome]], cx$trials, opts$seed)
-  # WARNING: NOT `as.numeric(fitted())` -- an ordinal fit's is the n x K probability matrix, so that
-  # gave n*K values, the length guard fired, and a panel REG_CHECKS DECLARES was silently dropped.
+  # WARNING: NOT `as.numeric(fitted())` -- an ordinal fit's is the n x K probability matrix.
   f <- rd_fitted_1d(cx$fit, cx$family)
   if (is.null(r) || is.null(f) || length(f) != length(r)) return(NULL)
   ordinal <- identical(reg_check_family_of(cx$family), "ordinal")
@@ -694,9 +579,8 @@ reg_panel_normality <- function(cx, cols, opts) {
     cols)
 }
 
-# 4. DISPERSION -- the model's own standard errors against the robust (sandwich) ones, coefficient by
-# coefficient. It is exactly the footer row, un-maximised: the row prints the largest of these points'
-# distance from the diagonal.
+# 4. DISPERSION -- the model's own SE against the robust (sandwich) one, per coefficient: the footer
+# row un-maximised, which prints the largest of these points' distance from the diagonal.
 reg_panel_dispersion <- function(cx, cols, opts) {
   rows <- local({
     se <- reg_check_model_se(cx$fit)
@@ -709,17 +593,9 @@ reg_panel_dispersion <- function(cx, cols, opts) {
       if (is.null(d)) return(NA_real_)
       reg_if_se(d, des)
     }, numeric(1))
-    # Phase 19m-iii: the join key comes from `se` ITSELF. 19m-i left this as a length coincidence
-    # between `se` and a SECOND, independent read (`names(coef(fit))`) -- but there was never a need
-    # for a second read: reg_check_model_se() is `sqrt(diag(vcov(fit)))`, and vcov()'s dimnames are
-    # carried straight through `diag()`, so `names(se)` names exactly the numbers in `se`, with the
-    # same provenance and by construction the same length. (Reading summary(fit)$coefficients instead
-    # would be WRONG twice over: it drops aliased rows, so it would no longer index the influence
-    # closure built above, and on a quasipoisson its SEs are not vcov()'s -- see the WHY at the
-    # head of reg_check_model_se().) Strictly better on multinom, where coef() is a MATRIX so
-    # names() was NULL and this fell back to "1","2",... while vcov() is properly named.
-    # The fallback stays for a fit whose variance matrix carries no dimnames (svy_vglm's $var), but
-    # it is keyed on the NAMES being absent, not on two lengths happening to differ.
+    # WARNING: the join key is `names(se)` itself (se = sqrt(diag(vcov(fit))), so its dimnames are
+    # vcov()'s), never `summary(fit)$coefficients` -- that drops aliased rows and, on a quasipoisson,
+    # is not vcov()'s SE. The numeric fallback below is for a fit whose variance matrix has no dimnames.
     nm <- names(se)
     tibble::tibble(term = if (length(nm)) nm else as.character(seq_along(se)),
                    model_se = se, robust_se = rb)
@@ -824,8 +700,7 @@ reg_panel_proportionality <- function(cx, cols, opts) {
     gettext("are the lines parallel?"),
     gettext("One line per cut of the outcome: parallel means one odds ratio fits every cut."),
     cols) +
-    # the legend takes half the panel's width at the right, and it is one short row of words
-    ggplot2::theme(legend.position = "bottom",
+    ggplot2::theme(legend.position = "bottom",   # one short row, cheaper than the panel's right margin
                    axis.text.x = ggplot2::element_text(angle = 30, hjust = 1))
 }
 
@@ -838,22 +713,21 @@ reg_panel_proportionality <- function(cx, cols, opts) {
 #' `r lifecycle::badge("experimental")`
 #'
 #' **A teaching companion, not a decision tool.** Every verdict these panels illustrate is already a
-#' row in the table's own footer --- for every model column, in every export, with no plotting package
-#' installed (see the `stats` argument of [tab_reg()]). This function exists to *show what a violation
-#' looks like*, and to let a careful reader look closer.
+#' row in the table's own footer, for every model column, with no plotting package installed (see the
+#' `stats` argument of [tab_reg()]). This function exists to show what a violation looks like.
 #'
-#' One call diagnoses **every model** in the table (each outcome, each compared model): one titled
-#' grid per model, each drawing the panels its own family allows. Pass a [tab_reg()] table --- the
-#' data it was built from is usually found on its own --- or a fitted model directly.
+#' One call diagnoses every model in the table: one titled grid per model, drawing the panels its own
+#' family allows. Pass a [tab_reg()] table --- the data it was built from is usually found on its own
+#' --- or a fitted model directly.
 #'
 #' @param x A [tab_reg()] table, or a fitted model (`lm` / `glm` / `svyglm` / `polr` / `multinom` /
 #'   `svyolr`).
 #' @param data The data frame or `survey::svydesign` the table was built from. **Usually unnecessary**:
-#'   a table records the name it was called with, and when that name still holds a data set the same
+#'   a table records the name it was called with, and when that name still holds data of the same
 #'   size, it is used --- otherwise the call stops rather than draw the wrong model. Give `data`
 #'   explicitly when the table was built from an expression rather than a named object
 #'   (`tab_reg(gss |> dplyr::filter(...), ...)`), or when the name has since changed. Ignored with a
-#'   bare model. (A table stores a ~4 KB recipe and refits from it; it never keeps the fitted models.)
+#'   bare model.
 #' @param check Which panels to draw. `"auto"` (default) draws the panels that *decide* something the
 #'   footer cannot say in one number --- linearity, residuals, normality, influence, and
 #'   proportionality for an ordinal outcome. `"all"` adds dispersion and collinearity, whose footer
@@ -861,21 +735,18 @@ reg_panel_proportionality <- function(cx, cols, opts) {
 #'   `"dispersion"`, `"influence"`, `"collinearity"`, `"proportionality"` --- the same words the
 #'   footer rows and [tab_reg()]'s `stats` argument use.
 #' @param predictors Optional: restrict the linearity panel to these continuous predictors.
-#' @param ncol Number of panel columns in the assembled grid (default: as square as it can be, 3 at
-#'   most).
+#' @param ncol Number of panel columns in the assembled grid (default: as square as it can be, 3 at most).
 #' @param facet_ncol Number of facet columns *inside* a panel (default: 2 for linearity, 4 for
 #'   proportionality).
 #' @param theme `"light"`, `"dark"`, or a black-and-white publication palette (`"print_ready"` and
-#'   friends -- greyscale, for a thesis appendix). Defaults to
-#'   `options("tabxplor.theme")`, like the table exporters.
+#'   friends). Defaults to `options("tabxplor.theme")`, like the table exporters.
 #' @param lang Language of the titles and captions (`"en"`, `"fr"`, ...). Defaults to
 #'   `options("tabxplor.lang")`.
-#' @param max_points Thin the raw-point layers to about this many observations (statistics, bands and
-#'   verdicts are always computed on the full data; the thinning keeps the extremes).
-#' @param nbins Bins of the linearity panel's observed curve (default 10, as in the row sparklines).
+#' @param max_points Thin the raw-point layers to about this many observations; statistics and verdicts
+#'   are always computed on the full data.
+#' @param nbins Bins of the linearity panel's observed curve (default 10).
 #' @param conf Confidence level of the Q-Q band. Default `0.95`.
-#' @param seed Seed of the randomised quantile residuals (`NULL` = a fresh draw each time, the honest
-#'   way to check that a pattern is not a randomisation artefact).
+#' @param seed Seed of the randomised quantile residuals (`NULL` for a fresh draw each time).
 #' @param ... Unused, for future extension.
 #'
 #' @return Invisibly, the assembled `gtable` --- or, with several models, the named list of them, one
@@ -907,10 +778,6 @@ reg_check_plots <- function(x, data = NULL, check = "auto", predictors = NULL,
   cols <- tx_plot_colors(theme)
   opts <- list(predictors = predictors, max_points = max_points, nbins = nbins, conf = conf,
                seed = seed, facet_ncol = facet_ncol)
-  # ONE GRID PER MODEL. A grid carries one model's title, and its panel set comes from THAT model's
-  # own family -- which is what a table mixing a binomial and an ordinal outcome needs, and what
-  # faceting by model could never give.
-  # i18n: the WHOLE label-building block under one language, as reg_model_lines() does.
   out <- with_legend_lang(lang, function(lg) purrr::map(ctxs, function(cx) {
     keys <- reg_panel_keys(cx, check)
     grobs <- purrr::compact(purrr::map(keys, function(k) reg_panel_build(k, cx, cols, opts)))
@@ -928,9 +795,8 @@ reg_check_plots <- function(x, data = NULL, check = "auto", predictors = NULL,
 }
 
 # The panels ONE model gets: its own family's, narrowed to the default set, to everything, or to what
-# the user named. Phase 19g (KEY 6): ONE vocabulary and ONE validator, shared with tab_reg(stats =)
-# -- narrowed here to the model CHECKS, which are the only things a panel can be drawn for.
-#' @keywords internal
+# the user named. Shares its vocabulary and validator with tab_reg(stats =), narrowed to the model
+# CHECKS, the only things a panel can be drawn for.
 reg_panel_keys <- function(cx, check = "auto") {
   weighted <- !is.null(cx$wt)
   all_keys <- reg_checks_for(cx$family, weighted, what = "panel")
@@ -944,19 +810,17 @@ reg_panel_keys <- function(cx, check = "auto") {
   keys
 }
 
-# The heading of one model's grid: what was fitted, then how. The formula is the model's OWN, with its
-# terms passed through reg_term_label() so a curvature term reads "age2" and not its frozen literal;
-# the second line takes the family's name from the footer's own vocabulary, so a plot and a table
-# cannot name one model two ways.
-#' @keywords internal
+# The heading of one model's grid: the model's OWN formula, terms passed through reg_term_label() so a
+# curvature term reads "age2" and not its frozen literal; the family name from the footer's own
+# vocabulary, so a plot and a table cannot name one model two ways.
 reg_check_top <- function(cx, cols) {
   terms <- reg_term_label(attr(stats::terms(stats::formula(cx$fit)), "term.labels"),
                           cx$shape_terms)
   head  <- gettextf("Assumption checks: %s ~ %s", cx$outcome,
                     paste(terms, collapse = " + "))
   fam   <- tryCatch(reg_family_display_name(cx$family), error = function(e) cx$family)
-  # a plain space, not the table's narrow no-break one: a graphics device may be single-byte, and
-  # U+202F then fails conversion with a warning (measured on the pdf device under testthat).
+  # a plain space, not the table's narrow no-break one: a graphics device may be single-byte and fail
+  # to convert U+202F
   sub   <- gettextf("%s, n = %s", fam, format(cx$nobs %||% NA_integer_, big.mark = " "))
   if (isTRUE(cx$compare) && !is.null(cx$label) && nzchar(cx$label))
     sub <- gettextf("%s - %s", cx$label, sub)
@@ -970,37 +834,22 @@ reg_check_top <- function(cx, cols) {
 
 # === SECTION: forest_plot() =========================================================================
 #
-# A renderer with no statistics in it. Everything it draws comes out of tab_estimates(); everything it
-# names comes out of the legend's own producers. The three things worth stating here:
-#
-#   * THE LADDER IS THE COLOUR LADDER. The gridlines are the column's own break scale (fmt_scale_of),
-#     labelled with legend_break_label() -- the glyph in the footer and the glyph on the axis are one
-#     function. or_plot()'s private c(1/8, 1/4, ...) is what this replaces: it never moved when a user
-#     called set_color_breaks().
-#   * THE GAP BAND IS THE GAP TEST. Drawn around the OBSERVED point at obs (+/- | x/) z*gap_se, so
-#     "the modelled point falls outside the bracket" is exactly `fmt_gap_p(x) < 1 - conf_level`, to
-#     machine precision. Two correlated estimates' intervals must NOT be compared by overlap
-#     (Schenker & Gentleman 2001) -- which is why the crude interval is not drawn by default.
-#   * THE POLICIES BECOME GEOMETRY. `ignore` = where the point sits; `grey_non_signif` = whether the
-#     whisker crosses the null line; `guaranteed_effect` = how far the near end of the whisker is from
-#     it. One figure explains all three, which is the strongest reason to have it.
+# A renderer with no statistics in it: everything it draws comes out of tab_estimates(), everything it
+# names comes out of the legend's own producers.
+#   * THE LADDER IS THE COLOUR LADDER: the gridlines are the column's own break scale, labelled with
+#     legend_break_label() -- the glyph in the footer and on the axis are one function.
+#   * THE GAP BAND IS THE GAP TEST, drawn around the OBSERVED point at obs (+/- | x/) z*gap_se, so the
+#     modelled point falls outside it exactly when `fmt_gap_p(x) < 1 - conf_level`. Two correlated
+#     intervals must NOT be compared by overlap (Schenker & Gentleman 2001), so the crude one is not
+#     drawn by default.
+#   * THE POLICIES BECOME GEOMETRY: `ignore` is where the point sits, `grey_non_signif` whether the
+#     whisker crosses the null line, `guaranteed_effect` how far its near end is from it.
 
 # === SECTION: the forest plot's axis =================================================================
-#
-# DESIGN: ggplot has ONE scale per aesthetic, so one `scale_x_continuous()` cannot carry two
-# transforms -- and a table may hold an odds ratio (log) beside a mean difference (identity). The
-# resolution: x is pre-transformed into each scale's own space and the plot's scale is identity, while
-# breaks AND labels are resolved PER PANEL. With free scales ggplot calls both functions once per
-# panel, so a lookup keyed on the panel's own limits dispatches them exactly.
-# WARNING: the key is the limits, so they are forced (a `geom_blank` frame + `expand = expansion(0)`)
-# and NO layer may reach past them -- the gap band is clamped in data space rather than allowed to
-# widen a panel.
 
 # The ladder, continued as far as the data goes. The colour rungs are exact (a gridline IS a
-# threshold); a CONTINUATION rung is not, so it is rounded to a readable number. One rule for both
-# geometries -- every ladder steps ~x2 per rung in its own metric (COLOR_SCALES' K2 check) -- so
-# x2 -> x4 -> x8 and +0.3 -> +0.6 -> +1.2 are the same rule.
-#' @keywords internal
+# threshold); a CONTINUATION rung is not, so it is rounded to a readable number -- every ladder steps
+# ~x2 per rung in its own metric, so x2 -> x4 -> x8 and +0.3 -> +0.6 -> +1.2 are the same rule.
 fp_ladder <- function(scl, need, extra_max = 4L) {
   mag <- sort(unique(scl$break_mag[scl$break_dir > 0L]))
   if (!length(mag)) return(numeric(0))
@@ -1011,20 +860,16 @@ fp_ladder <- function(scl, need, extra_max = 4L) {
   mag
 }
 
-# An axis label carries ONE decimal. The rounding happens in the scale the label is READ in: a
-# percentage-point ladder is stored as 0.05 and printed as 5, so rounding the stored value first would
-# turn +5 into +10.
-#' @keywords internal
+# An axis label carries ONE decimal, rounded in the scale it is READ in: a percentage-point ladder is
+# stored as 0.05 and printed as 5, so rounding the stored value first would turn +5 into +10.
 fp_round_mag <- function(m, is_pct) {
   k <- if (is_pct) 100 else 1
   r <- round(m * k, 1) / k
   if (isTRUE(r == 0) && m != 0) signif(m, 2) else r
 }
 
-# One record per FACET, but ONE RANGE PER SCALE KEY: panels measuring the same thing must be directly
-# comparable -- that is what small multiples are for -- while panels on different units keep their own
-# axis, which is the whole point of resolving the scale per panel.
-#' @keywords internal
+# One record per FACET, but ONE RANGE PER SCALE KEY: panels measuring the same thing stay directly
+# comparable, while panels on different units keep their own axis.
 fp_scale_records <- function(e, x, what = "auto", lang = NULL, pad = 0.04, max_n = 9L) {
   recs <- list()
   for (key in unique(as.character(e$scale_key))) {
@@ -1096,9 +941,7 @@ fp_scale_records <- function(e, x, what = "auto", lang = NULL, pad = 0.04, max_n
   for (f in levels(droplevels(e$facet))) {
     i   <- which(e$facet == f)
     key <- names(sort(table(as.character(e$scale_key[i])), decreasing = TRUE))[1]
-    # the SCALE is shared, the COLUMN is not: a multinomial risk ratio and an ordinal win ratio live
-    # on one ladder but are two quantities, and the strip word comes from the facet's own column.
-    # (assigned, not c()'d -- `c()` would append a second `col` and `$` would read the scale's.)
+    # the SCALE is shared, the COLUMN is not (assigned, not c()'d, or `$col` would read the scale's)
     r <- recs[[key]]; r$facet <- f; r$col <- as.character(e$column[i][1])
     out[[f]] <- r
   }
@@ -1106,7 +949,6 @@ fp_scale_records <- function(e, x, what = "auto", lang = NULL, pad = 0.04, max_n
 }
 
 # The two closures ggplot calls once per panel.
-#' @keywords internal
 fp_axis_fns <- function(scales) {
   kb <- function(v) paste(format(v, digits = 15), collapse = "|")
   s  <- scales[!duplicated(vapply(scales, function(z) z$key, character(1)))]
@@ -1116,18 +958,10 @@ fp_axis_fns <- function(scales) {
        labels = function(br)  lmap[[kb(br)]]  %||% rep("", length(br)))
 }
 
-# fp_layout() -- which axis is READ and which is faceted.
-#
-# DESIGN: both orientations show the same numbers -- a cell's deviation is a stored field, not a
-# property of where it is drawn -- so this is a legibility choice, and `pct` does not decide it
-# (measured: a 3x6 table and a 7x3 table, both `pct = "row"`, want opposite orientations). The legible
-# one is MORE levels down the side and FEWER panels across, which is what `"auto"` picks. It is NOT
-# the default: a plot whose rows are the table's rows is the one a reader can check against the table
-# in front of them, and silently swapping the two axes costs more than a cramped panel. The reference
-# level of the panel axis carries no deviation, so it would be an empty panel: it is dropped, and the
-# K-1 panels left are each one group's whole profile. On the reading axis it stays, as the anchor row
-# at the neutral.
-#' @keywords internal
+# Which axis is READ and which is faceted -- a legibility choice. `"auto"` picks whichever puts MORE
+# levels down the side; not the default, since a plot whose rows are the table's rows is the one a
+# reader can check against the table. The reference level is dropped from the panel axis (it would be
+# an empty panel) but stays on the reading axis, as the anchor row at the neutral.
 fp_layout <- function(e, x, layout) {
   if (identical(layout, "keep") || !nrow(e)) return(e)
   if (identical(layout, "auto")) {
@@ -1148,27 +982,22 @@ fp_layout <- function(e, x, layout) {
   e
 }
 
-# The strip suffix and the axis title name the measure the SAME way, so a single-scale plot and a
-# mixed one cannot disagree about what a column measures. `fp_unit_word("units")` names the OUTCOME,
-# which the strip already carries, so a regression column is named by its own header word instead.
-#' @keywords internal
+# The strip suffix and the axis title name the measure the SAME way -- a regression column by its own
+# header word, never `fp_unit_word("units")`, which would name the outcome the strip already carries.
 fp_unit_strip <- function(x, s) {
   ew <- reg_eff_word_of(x, s$col)
   b  <- reg_word_base(ew)
   if (!is.na(b) && !is.null(REG_WORDS[[b]])) REG_WORDS[[b]]$long() else fp_unit_word(s$unit, ew)
 }
 
-#' @keywords internal
 fp_axis_title <- function(x, s) {
   base <- legend_ucfirst(fp_unit_strip(x, s))
   cf   <- get_conf_level(x[[s$col]])[1]
   if (!nzchar(base) || !is.finite(cf)) base else gettextf("%s (%s%% CI)", base, format(100 * cf))
 }
 
-# The number printed above a whisker is the cell's OWN primary token -- the effect on a model column,
-# the level it sits on for a crosstab (whose axis is already the deviation). `format()` stays the one
-# string producer; only the display is swapped to that token first.
-#' @keywords internal
+# The number printed above a whisker is the cell's OWN primary token. `format()` stays the one string
+# producer; only the display is swapped to that token first.
 fp_primary_text <- function(x, d, display = NULL) {
   out <- rep(NA_character_, nrow(d))
   for (nm in unique(as.character(d$column))) {
@@ -1180,13 +1009,8 @@ fp_primary_text <- function(x, d, display = NULL) {
   out
 }
 
-# How many rows each block of panels holds -- the reading axis is free per BLOCK (the facet rows).
-#
-# WARNING: this gives the COUNT, never a position. A discrete scale's positions are the panel's own
-# and are not the factor's level order once free scales have dropped levels, so anything that must sit
-# ON a row maps `ypos` itself and lets ggplot place it. The count is safe, and it is all a rule
-# stopping short of the panel edge needs.
-#' @keywords internal
+# How many rows each block holds. WARNING: a COUNT only, never a position -- a discrete scale's
+# positions are the panel's own once free scales have dropped levels.
 fp_ypos_index <- function(e) {
   e$blk   <- paste(as.character(e$var), as.character(e$group), sep = "\r")
   e$n_blk <- NA_integer_
@@ -1198,7 +1022,6 @@ fp_ypos_index <- function(e) {
 }
 
 # The slot a break stands for: rung 1..4 out from the neutral, 5..8 below it (the fmt slot map).
-#' @keywords internal
 fp_break_slots <- function(dir, mag) {
   o <- integer(length(dir))
   for (s in c(-1L, 1L)) {
@@ -1208,9 +1031,8 @@ fp_break_slots <- function(dir, mag) {
   o
 }
 
-# The axis title. The unit is a KEY on the scale record; the words are gettext()'d HERE, at render, so
-# `lang =` reaches them (a top-level gettext() would freeze the build locale -- z15's warning).
-#' @keywords internal
+# The unit is a KEY on the scale record; the words are gettext()'d HERE, at render, so `lang =` reaches
+# them -- a top-level gettext() would freeze the build locale instead.
 fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcome = NA_character_) {
   base <- switch(unit,
                  or         = if (!is.na(eff_word)) eff_word else gettext("Odds ratio"),
@@ -1239,26 +1061,22 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
 #'
 #' @details
 #' **What is drawn.** Always a \strong{deviation}: the effect a regression estimates, or, for a
-#' cross-table, the comparison its \code{color =} grades -- a difference from the reference in
-#' percentage points, a ratio or an odds ratio on a log axis. The \strong{level} the deviation sits on
-#' (the percentage, the mean, the adjusted probability) is printed above each whisker instead, so the
-#' position and the number say two different things. \code{what = "level"} swaps them.
+#' cross-table, the comparison its \code{color =} grades. The \strong{level} it sits on (the
+#' percentage, the mean, the adjusted probability) is printed above each whisker instead, so position
+#' and number say two different things; \code{what = "level"} swaps them.
 #'
-#' **The gridlines are the table's colour ladder** (\code{\link{set_color_breaks}}), one dashed rule
-#' per rung in that rung's own colour, labelled with the same glyphs the footer uses -- and continued
-#' beyond the last rung (each step twice the one before) as far as the data goes. The whisker takes
-#' the colour of its cell, whole: significance is read off the whisker, so there are no stars.
+#' **The gridlines are the table's colour ladder** (\code{\link{set_color_breaks}}), labelled with the
+#' same glyphs as the footer and continued as far as the data goes. The whisker takes the colour of
+#' its cell whole, so significance is read off it and there are no stars.
 #'
 #' **A table that mixes units** (an odds ratio beside a mean difference) gets one axis per panel, each
-#' in its own transform, and the unit moves into the strip. Panels that measure the SAME thing share
-#' one range, so their effect sizes stay comparable.
+#' in its own transform, with panels measuring the same thing sharing one comparable range.
 #'
 #' **The observed comparison.** With \code{empirical = TRUE}, a regression estimate carries its crude
-#' counterpart. \code{observed = "band"} (the default when the gap was testable) draws a bracket around
-#' the observed value at plus-or-minus the margin of error *of the difference*: the modelled point
-#' falls outside it exactly when the gap test rejects. Two intervals must not be compared by overlap
-#' when the estimators are correlated, which is why the crude interval is not drawn by default;
-#' \code{observed = "ci"} restores that classic figure if you want it.
+#' counterpart. \code{observed = "band"} (the default when testable) draws a bracket at plus-or-minus
+#' the margin of error of the difference: the modelled point falls outside it exactly when the gap
+#' test rejects. Two correlated intervals should not be compared by overlap, which is why the crude
+#' one is not drawn by default; \code{observed = "ci"} restores it.
 #'
 #' @eval tab_args_rd("forest_plot")
 #' @param columns Value columns to draw, by name. \code{NULL} (the default) draws the model columns of
@@ -1275,19 +1093,16 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
 #' @param display What that value prints -- a \code{\{\}} display template, as
 #'   \code{\link{set_display}} takes (\code{"\{est\} (\{base\})"}, \code{"est_ci"}, ...).
 #'   \code{NULL} (the default) prints the cell's own primary token.
-#' @param offset How far below the estimate the observed value sits, as a fraction of a row. ggplot
-#'   has no absolute-unit nudge, so what reads well depends on the viewport: raise it for a tall
-#'   figure with few rows. Under an adjustment colour the arrow takes this row and the observed value
-#'   drops one further.
+#' @param offset How far below the estimate the observed value sits, as a fraction of a row; raise it
+#'   for a tall figure with few rows. Under an adjustment colour the arrow takes this row and the
+#'   observed value drops one further.
 #' @param label_offset How far above the estimate its value is printed, as a fraction of a row.
 #' @param max_size Area of the largest marker, when \code{center = "n"} maps the base to it.
-#' @param footer_width Characters per footer line. A ggplot caption does not wrap, and the plot
-#'   cannot measure the device at build time, so a wide figure wants a larger number and a narrow one
-#'   a smaller.
+#' @param footer_width Characters per footer line, since a ggplot caption does not wrap on its own.
+#'   Use a larger number for a wide figure, smaller for a narrow one.
 #' @param layout Which axis is read and which is faceted: \code{"keep"} (the default) reads the
-#'   table's rows, \code{"transpose"} reads its columns, and \code{"auto"} picks whichever has more
-#'   levels -- more levels down the side, fewer panels across, which is the more legible of the two
-#'   whenever the table is much wider than it is tall. A regression table is never transposed.
+#'   table's rows, \code{"transpose"} reads its columns, \code{"auto"} picks whichever has more levels
+#'   (more legible whenever the table is much wider than tall). A regression table is never transposed.
 #' @param facet \code{NULL} for one panel per estimate column, \code{FALSE} for a single panel.
 #' @param guide \code{"gridlines"} (the default), \code{"bands"} (shade the panel between the colour
 #'   breaks -- the teaching mode, which makes a cell's colour and its position one statement) or
@@ -1297,9 +1112,8 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
 #' @param footer \code{"short"} (the default) the console's own footer, \code{"full"} the exports'
 #'   longer one, or \code{"none"}. Both are wrapped and set flush left.
 #' @param theme \code{"light"}, \code{"dark"} or one of the black-and-white publication palettes
-#'   (\code{"print_ready"} and friends; a plotted mark then reads its
-#'   magnitude off a grey ramp, since a point has no typography).
-#'   \code{NULL} follows \code{getOption("tabxplor.export_theme")}.
+#'   (\code{"print_ready"} and friends -- a mark then reads its magnitude off a grey ramp). \code{NULL}
+#'   follows \code{getOption("tabxplor.export_theme")}.
 #' @param caption A caption. \code{NULL} keeps the table's own.
 #' @param legend Where the colour legend goes: \code{"auto"} (the bottom), \code{"right"},
 #'   \code{"left"}, \code{"top"} or \code{"none"}. When several ladders apply it cannot be a guide and
@@ -1345,9 +1159,7 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
   th   <- cols$theme
   lgd  <- fp_legend_position(legend)
 
-  # DESIGN: a crosstab is plotted on the DEVIATION its `color =` grades -- the quantity the reference
-  # line is the neutral of. The level it sits on is printed above the whisker instead, so the position
-  # and the number say two different things.
+  # a crosstab is plotted on the DEVIATION its `color =` grades, never the level it sits on
   if (identical(what, "auto") && !tab_is_reg(x)) what <- "effect"
   e <- tab_estimates(x, columns = columns, what = what, observed = observed,
                      intercept = intercept, totals = totals, theme = th)
@@ -1364,9 +1176,8 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
   sc <- fp_scale_records(e, x, what, lang, pad = if (identical(center, "none")) 0.04 else 0.10)
   fn <- fp_axis_fns(sc)
   keys <- unique(vapply(sc, function(z) z$key, character(1)))
-  # the axis title speaks for every panel, so it may only exist where they all measure the same thing
-  # AND call it the same thing: a multinomial risk ratio beside an ordinal win ratio shares the scale
-  # but not the word, and one title would name the other panel's quantity.
+  # the axis title speaks for every panel, so it exists only where they share both scale AND word: a
+  # multinomial risk ratio beside an ordinal win ratio shares the scale but not the word.
   wrds <- with_legend_lang(lang, function(lg) vapply(sc, function(z) fp_unit_strip(x, z), character(1)))
   one_word <- length(unique(wrds)) == 1L && length(keys) == 1L
 
@@ -1399,36 +1210,25 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
 
   pal_bg <- fmt_point_palette(th, "bg")
   pal_tx <- fmt_point_palette(th, "text")
-  # the adjustment is the one second measure a forest plot CAN draw: it is the gap between the two
-  # marks already on the row, and it has an interval. When a channel grades it, that gap gets its own
-  # geometry and its own colour -- and if the MAIN colour is the gap, the model whisker goes neutral,
-  # so colour still grades exactly one thing.
+  # the adjustment (the gap between the two marks on a row) is the one SECOND measure a forest plot
+  # can draw -- when a channel grades it, that gap gets its own geometry and colour, and if it is the
+  # MAIN colour the model whisker goes neutral instead, so colour still grades exactly one thing.
   adj_on   <- isTRUE(color) && any(is.finite(e$gap_slot))
   adj_main <- adj_on && any(vapply(unique(as.character(e$measure)), measure_own_ref, logical(1)))
-  # neutral, and light: not `cols$point` (a muted BLUE, which would read as a rung of the very ladder
-  # it stands outside of) and not `grey2` (the ink of a secondary token -- too dark to recede).
-  # `grey` is the table's own "uncoloured cell", which is exactly what this whisker now is.
   ink      <- function(v) if (!isTRUE(color)) cols$point else if (adj_main) cols$grey else v
   gap_hex  <- function(d, pal) ifelse(is.finite(d$gap_slot) & d$gap_slot > 0L,
                                       pal[pmax(d$gap_slot, 1L)], cols$grey)
-  # ggplot has no absolute-unit nudge (a position is data space; a millimetre needs the panel height,
-  # known only at draw time), so every companion row sits a FRACTION of a row from the model's, and
-  # the caller -- who knows the viewport -- can move them. `offset` measured: 0.15 is 1.3-2.4 mm
-  # across the sizes such a table is drawn at, against the 1.8 mm two whisker linewidths come to.
+  # ggplot has no absolute-unit nudge (a position is data space), so every companion row sits a
+  # FRACTION of a row from the model's, and the caller -- who knows the viewport -- can move it.
   off      <- ggplot2::position_nudge(y = -offset)
-  # the rules stop short of the panel edge, so the gap between two predictor blocks reads as a break
-  # rather than as one continuous grid: they run from just under the bottom row to just over the top.
-  # WARNING: a rule frame must carry the ROW-facet variables (`var` / `group`) as well as `facet`, or
-  # facet_grid replicates every block's rules into every panel -- and a `yend` from a nine-level block
-  # then stretches a three-level one to reach it.
+  # WARNING: a rule frame must carry the ROW-facet variables (`var`/`group`) as well as `facet`, or
+  # facet_grid replicates every block's rules into every panel, stretching a short block to a long one.
   rule_y <- unique(e[c("var", "group", "facet", "n_blk")])
   rule   <- function(d) merge(d, rule_y, by = "facet", all.x = TRUE)
 
   # --- layers, back to front -----------------------------------------------------------------------
-  # WARNING: this FIRST layer is what fixes the reading axis. A discrete scale's order is the order it
-  # is trained in, and a later layer holding one row (a coloured row band, the limits frame) would
-  # otherwise put its own level first and scramble every panel -- measured. Training on the whole
-  # model, up front, is the only way the axis is the table's order whatever else is drawn.
+  # WARNING: this FIRST layer fixes the reading axis -- a discrete scale's order is the order it is
+  # trained in, so a later layer holding one row would otherwise scramble every panel.
   p <- ggplot2::ggplot(e) +
     ggplot2::geom_blank(ggplot2::aes(x = .data$x_estimate, y = .data$ypos))
   if (identical(guide, "bands") && isTRUE(color)) {
@@ -1449,13 +1249,12 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
                                   ymin = -Inf, ymax = Inf, alpha = 0.55, inherit.aes = FALSE,
                                   show.legend = FALSE)
   }
-  # DESIGN: a table's SECOND colour channel is not drawn. A forest plot has one position axis and one
-  # ladder; a second measure has no interval, no neutral and nowhere positional to go, and rendering
-  # it as a band behind every row floods the figure without adding a comparison. (The gap under
-  # `color = "adjustment"` is not an exception to this: there the adjustment IS the main measure.)
+  # a table's SECOND colour channel is never drawn here: it has no interval, no neutral and nowhere
+  # positional to go (the gap under `color = "adjustment"` is not an exception -- there it IS the main
+  # measure).
 
-  # the ladder: one dashed rule per rung, IN ITS OWN COLOUR. Drawn for every in-range rung, while the
-  # axis labels are thinned -- so the scale stays complete even where its text cannot fit.
+  # the ladder: one dashed rule per rung, in its own colour, for every in-range rung -- while the axis
+  # labels are thinned, so the scale stays complete even where its text cannot fit.
   rl <- if (guide != "none" && isTRUE(color)) do.call(rbind, lapply(sc, function(z) {
     sl <- fp_break_slots(z$dir_all, z$mag_all); i <- which(sl > 0L)
     if (!length(i)) return(NULL)
@@ -1484,18 +1283,12 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
       ggplot2::aes(x = .data$at, xend = .data$at, y = 0.62, yend = .data$n_blk + 0.38),
       linetype = "dotted", colour = cols$text, linewidth = 0.45)
   }
-  # one rule per block, above its rows: what separates two predictors from each other
-  p <- p + ggplot2::geom_hline(data = rule_y, ggplot2::aes(yintercept = .data$n_blk + 0.5),
+  p <- p + ggplot2::geom_hline(data = rule_y, ggplot2::aes(yintercept = .data$n_blk + 0.5),   # block rule
                                colour = cols$grey, linewidth = 0.3)
 
-  # the observed value and the gap, one row BELOW the model's: a thin black capped whisker (the gap's
-  # own interval -- the estimate falls outside it exactly when the gap test rejects) and a filled
-  # black point at the crude value. Never a wide band: it was the biggest ink on the page and it
-  # located nothing.
-  # what adjustment DID: an arrow from the observed value to the model's, in the gap's own colour.
-  # Its length is the adjustment, to scale -- a small one is meant to look small; the colour is what
-  # says whether the move is a real one. It shares the companion row with the bracket and the observed
-  # point, which are drawn OVER it: both are thin or small enough not to cover the colour.
+  # what adjustment DID: an arrow from the observed value to the model's, in the gap's own colour and
+  # to scale. The bracket and the observed point (drawn after, over it) share its row, both thin
+  # enough not to cover the colour.
   if (adj_on && observed %in% c("band", "point")) {
     ar <- mods[is.finite(mods$x_obs) & is.finite(mods$x_estimate) & !mods$is_ref &
                  mods$x_obs != mods$x_estimate, , drop = FALSE]
@@ -1505,9 +1298,8 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
       arrow = grid::arrow(type = "closed", angle = 22, length = grid::unit(0.042, "inches")))
   }
   if (identical(observed, "band")) {
-    # the ACCEPTANCE REGION, around the observed value: the model estimate falls outside it exactly
-    # when the gap test rejects. Drawn only where the gap IS testable -- on a non-collapsible measure
-    # the movement is real arithmetic but no test exists, and a bracket would claim one.
+    # the ACCEPTANCE REGION around the observed value, drawn only where the gap IS testable -- on a
+    # non-collapsible measure the movement is real arithmetic but no test exists.
     bd <- mods[is.finite(mods$x_gap_lo) & is.finite(mods$x_gap_hi) & mods$gap_tested, , drop = FALSE]
     if (nrow(bd)) {
       span <- vapply(as.character(bd$facet), function(f) diff(sc[[f]]$lim), numeric(1))
@@ -1537,15 +1329,14 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
       colour = cols$text, fill = cols$text, shape = 21, size = 1.6, stroke = 0.5,
       show.legend = FALSE, position = off)
 
-  # the whisker: ONE segment, capped, wholly in the cell's colour -- significance is read off it,
-  # which is why there are no stars. No layer draws a key: the guide has its own frame below, so a
-  # rung nothing happens to land on still gets its glyph.
+  # no layer draws a key here: the guide has its own frame below, so a rung nothing lands on still
+  # gets its glyph.
   if (nrow(wsk)) p <- p + ggplot2::geom_segment(data = wsk,
     ggplot2::aes(x = .data$x_ci_inf, xend = .data$x_ci_sup, y = .data$ypos, yend = .data$ypos,
                  colour = ink(.data$point_hex)), linewidth = 0.9, show.legend = FALSE,
     arrow = grid::arrow(angle = 90, ends = "both", length = grid::unit(0.045, "inches")))
-  # under `guaranteed_effect` the SCORE is the bound nearest the neutral, so that cap is the quantity
-  # the colour grades: it is drawn twice the size, and the policy becomes visible rather than explained
+  # under `guaranteed_effect` the score is the bound NEAREST the neutral, so that cap is drawn twice
+  # the size -- the policy becomes visible rather than explained
   if (nrow(wsk) && any(wsk$policy %in% "guaranteed_effect")) {
     gw <- wsk[wsk$policy %in% "guaranteed_effect", , drop = FALSE]
     ntr <- vapply(as.character(gw$facet), function(f) sc[[f]]$tr(sc[[f]]$neutral), numeric(1))
@@ -1556,8 +1347,7 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
       shape = 124, size = 3.6, stroke = 1, show.legend = FALSE)
   }
   if (!identical(center, "estimate")) {
-    # under an adjustment colour the whisker recedes to grey and the SQUARE carries the measure, in
-    # the arrow's own colour: the mark and the movement it made are then one statement.
+    # under an adjustment colour the whisker recedes to grey and the SQUARE carries the measure instead
     fill_hex <- if (adj_main) gap_hex(mods, pal_tx) else ink(mods$point_hex)
     mods$fill_hex <- ifelse(mods$is_ref, cols$text, fill_hex)
     p <- p + ggplot2::geom_point(data = mods,
@@ -1577,9 +1367,8 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
       label.padding = grid::unit(0.10, "lines"))
   }
 
-  # WARNING: this frame FORCES each panel's limits, which is what makes the break/label lookup exact.
-  # It is added LAST, never first: the first layer to touch a discrete scale fixes its level order,
-  # and this frame carries one level.
+  # WARNING: this frame forces each panel's limits and must come LAST -- it carries only one level, and
+  # the first layer to touch a discrete scale is what fixes its order.
   blank <- do.call(rbind, lapply(sc, function(z)
     data.frame(facet = factor(z$facet, levels = levels(e$facet)), x = z$lim,
                ypos = e$ypos[1], var = e$var[1], group = e$group[1])))
@@ -1611,9 +1400,8 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
           else legend_guide_spec(x, unique(as.character(e$column)),
                                  if (adj_on && !adj_main) "bg" else "text", th, lang)
   if (!is.null(gtxt)) {
-    # DESIGN: the keys come from a frame of their own, drawn at alpha 0 over the neutral. Keyed off
-    # the DATA, a rung that no cell happens to fall in gets a label with no glyph -- measured on both
-    # ends of a `guaranteed_effect` ladder.
+    # the keys come from a frame of their own, drawn at alpha 0 over the neutral -- keyed off the
+    # ladder, not the data, so a rung no cell falls in still gets its glyph.
     kf <- data.frame(hex = c(gtxt$keys$hex, gtxt$grey_hex),
                      facet = factor(levels(droplevels(e$facet))[1], levels = levels(e$facet)),
                      var = e$var[1], group = e$group[1], ypos = e$ypos[1],
@@ -1667,10 +1455,8 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
   # many-outcome regression must not carry a statistical clause it can only state per panel.
   xt <- if (!one_word) NULL else with_legend_lang(lang, function(lg) {
     ti <- fp_axis_title(x, sc[[1]])
-    # the interval's NAME only: its confidence level is already the title's own "(95% CI)", and a
-    # column that colours without an interval has no name to add -- only the level, which would then
-    # be printed twice. Under an adjustment colour the spec names the GAP's test, which is not the
-    # interval this axis draws: it stays in the footer, where it describes the colour.
+    # the interval's NAME only, since the confidence level is already in the title's "(95% CI)". Under
+    # an adjustment colour the spec names the GAP's test, not this axis's interval -- stays in the footer.
     me <- if (adj_main) character(0) else
       sub("[,;] [0-9.]+% .*$", "", fp_method_line(x, unique(as.character(e$column)), lang))
     if (!length(me) || !nzchar(me) || grepl("^[0-9.]+\\s*%", me) || !nzchar(ti)) ti
@@ -1684,9 +1470,7 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
     ggplot2::theme(legend.position = lgd)
 }
 
-# `legend =` is a POSITION; TRUE / FALSE are still accepted. "auto" is the bottom, where a ladder of
-# six keys costs one line instead of a column of width -- and where reg_check_plots() puts its own.
-#' @keywords internal
+# `legend =` is a POSITION; TRUE/FALSE are still accepted. "auto" is the bottom.
 fp_legend_position <- function(legend) {
   if (isTRUE(legend))  return("bottom")
   if (isFALSE(legend)) return("none")
@@ -1696,8 +1480,7 @@ fp_legend_position <- function(legend) {
 }
 
 # The area of a marker is the level's own base, so a small base and a wide interval say the same thing
-# twice -- which is what makes a fragile estimate impossible to overlook.
-#' @keywords internal
+# twice -- a fragile estimate is impossible to overlook.
 fp_point_sizes <- function(e, center, max_size = 6) {
   if (!identical(center, "n") || !any(is.finite(e$n))) return(rep(min(2.2, max_size), nrow(e)))
   r <- range(sqrt(e$n), na.rm = TRUE, finite = TRUE)
@@ -1706,10 +1489,9 @@ fp_point_sizes <- function(e, center, max_size = 6) {
   s
 }
 
-# The forest plot's own skin: theme_minimal, the table's ink for every word, dashed rules, bold strips.
-# The assumption panels keep tx_plot_theme()'s theme_bw -- a chart of the RESULTS and a chart of the
-# DIAGNOSTICS are read differently, and only this one has to sit beside the table it comes from.
-#' @keywords internal
+# The forest plot's own skin. The assumption panels keep tx_plot_theme()'s theme_bw instead -- a chart
+# of the RESULTS and a chart of the DIAGNOSTICS are read differently, and only this one sits beside the
+# table it comes from.
 fp_plot_theme <- function(cols) {
   ggplot2::theme_minimal(base_size = 10) +
     ggplot2::theme(
@@ -1739,25 +1521,16 @@ fp_plot_theme <- function(cols) {
       plot.title.position   = "plot")
 }
 
-# the effect word a regression column's own legend uses (OR / IRR / RR / AME / beta), so the axis title
-# and the footer name the same thing. NA on a cross-table, where the unit word stands alone.
-# Phase 19m-i: the gate is the STORED KIND, not "does it still carry the recipe". The column's own
-# `model_family` / `scale` are what legend_reg_eff_word() reads first, so a meta-stripped reg table
-# keeps its axis word instead of silently losing it -- the same split the legend itself made in 19l.
-#' @keywords internal
+# The effect word a regression column's own legend uses (OR/IRR/RR/AME/beta), so the axis title and
+# the footer name the same thing. NA on a cross-table, where the unit word stands alone.
 reg_eff_word_of <- function(x, col_nm) {
   if (!tab_is_reg(x) || is.null(x[[col_nm]])) return(NA_character_)
   legend_reg_eff_word(x[[col_nm]], reg_call(x))
 }
 
-# The caption: the table's whole footer EXCEPT the colour ladder, which the guide now carries (ruling
-# D6 -- it must never be printed twice). `want_legend` is TRUE only when no guide could be built, in
-# which case the whole prose legend comes back and nothing has to be added.
-#
-# What the guide CANNOT say, and the prose legend did: which interval was computed, and any caveat the
-# measure carries. Those come back as one line each, from the legend's own producers -- so the figure
-# still names its method, in the same words the table would.
-#' @keywords internal
+# The caption: the table's whole footer EXCEPT the colour ladder (which the guide now carries), plus,
+# from the legend's own producers, what the guide cannot say -- the interval computed, any caveat.
+# `want_legend` is TRUE only when no guide could be built, so the whole prose legend returns instead.
 fp_caption <- function(x, cols, caption, subtext, footer, want_legend, theme, lang,
                        width = 130L, drop_method = FALSE) {
   # reg_title() is NA on a cross-table (it names a MODEL), and NA is not NULL: without the is.na()
@@ -1778,7 +1551,6 @@ fp_caption <- function(x, cols, caption, subtext, footer, want_legend, theme, la
                  else paste(vapply(out, rd_wrap, character(1), width = width), collapse = "\n"))
 }
 
-#' @keywords internal
 fp_method_line <- function(x, cols, lang) {
   with_legend_lang(lang, function(lg) {
     sp <- Filter(function(s) s$col_name %in% cols, legend_specs(x))

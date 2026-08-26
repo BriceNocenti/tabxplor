@@ -25,23 +25,20 @@ other list --- several \code{row_vars} and/or \code{tab_vars} --- is rendered on
 another, each keeping its own sub-tables.}
 
 \item{format}{One of \code{"html"} (the default), \code{"md"} (Markdown), \code{"xl"} (Excel)
-or \code{"forest"} (a forest plot of its estimates, see \code{\link{forest_plot}}). The HTML
-backend engine (home-built or kableExtra) is chosen with \code{engine =} (see
-\code{\link{tab_html}}).}
+or \code{"forest"} (a forest plot of the estimates, see \code{\link{forest_plot}}).}
 
 \item{path}{Optional output file. For \code{"xl"} it is the workbook path; for \code{"md"} and
 \code{"html"} the rendered text is written to it; ignored for \code{"forest"}.}
 
 \item{theme}{By default (\code{"light"}) a white table with black text; \code{"dark"} for the
-inverse (colours follow the theme). \code{"auto"} follows the reader's colour scheme (their OS,
-and any dark-mode toggle of the host page), which needs a stylesheet: it works for
-\code{format = "html"} and \code{"md"}, and resolves to
-\code{"light"} for the static \code{"xl"} backend.
+inverse (the colours follow the theme). \code{"auto"} follows the reader's colour scheme
+(their operating system, and any dark-mode toggle of the host page); it needs a stylesheet,
+so it works for \code{format = "html"} and \code{"md"} and resolves to \code{"light"} for the
+static \code{"xl"} backend.
 The black-and-white \strong{publication} palettes render a table for a page that has no colour:
 \code{"print_ready"} picks the right one per table, or name it yourself --
 \code{"print_marks"}, \code{"print_emphasis"}, \code{"print_minimalistic"} (\code{"bw"}).
-See \code{\link{tab_css}} for what each of them says.
-Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}}.}
+Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}} for what each says.}
 
 \item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
 
@@ -71,11 +68,14 @@ string (\code{"md"}), \code{x} invisibly with the Excel file written (\code{"xl"
 \code{ggplot} (\code{"forest"}).
 }
 \description{
-A single entry point that dispatches to the format-specific exporters
-\code{\link{tab_html}} (HTML), \code{\link{tab_md}} (Markdown), \code{\link{tab_xl}} (Excel)
-and \code{\link{forest_plot}} (a chart of the
-estimates). They share one set of display-option names and defaults; \code{tab_export()} forwards
-them and passes any format-specific argument through \code{...}.
+One entry point over the format-specific exporters \code{\link{tab_html}} (HTML),
+\code{\link{tab_md}} (Markdown), \code{\link{tab_xl}} (Excel) and \code{\link{forest_plot}}
+(a chart of the estimates). They share one set of display-option names and defaults;
+\code{tab_export()} forwards them and passes any format-specific argument through \code{...}.
+}
+\details{
+Each exporter is also callable on its own, which reads better in a pipe
+(\code{x |> tab_xl()}); use \code{tab_export()} when the format comes from a variable.
 }
 \examples{
 \donttest{

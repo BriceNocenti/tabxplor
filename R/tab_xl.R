@@ -1,78 +1,68 @@
-# PURPOSE: Export tabxplor tables to Excel with formatting and colors via openxlsx2.
-# ROLE: Primary export format for sharing tables with non-R users. Consumes the shared exporter prep
-#       (R/tab-export-prep.R) for roles / references / bold rows / the resolved per-cell colour, and
-#       the openxlsx2 backend (R/tab-xl-backend.R). tab_xl_plan_one() does the pure per-table CPU
-#       (values + numFmt codes + a precomposed per-cell STYLE grid via xl_build_styles);
-#       xl_write_table() writes the values, applies the styles by id, then merges numFmt on.
+# PURPOSE: the Excel exporter -- values, number formats, colours and widths, through openxlsx2.
+# ROLE: the format for sharing a table with people who do not use R, and the route into Word.
+#   tab_xl_plan_one() does the pure per-table CPU (values + numFmt codes + a precomposed per-cell
+#   style grid); xl_write_table() writes the values, applies the styles by id, then merges numFmt on.
+#   It reads the shared prep (R/tab-export-prep.R) and reaches the engine only through
+#   R/tab-xl-backend.R, which owns the openxlsx2 traps.
 # KEY CONSTRAINTS:
-#   - openxlsx2 is Suggests-only -- the ONE requireNamespace() guard is in tab_xl(); every engine call
-#     goes through the unguarded xlb_* wrappers or xl_apply_styles' create_*/set_cell_style compose.
-#   - EXCEL CANNOT PRINT A COMPOSITE CELL -- one value + one numFmt, so a bracket cannot survive.
-#     Every ASIDE therefore becomes a COLUMN of its own (mat_aside_cols, R/tab_classes.R) carrying
-#     its own segment ("(n={n})"), and the source column keeps its primary alone. The header block is
-#     three rows: the col_var span, the level names, and the UNIT row -- so the data block is written
-#     HEADERLESS one row lower when there is one, and the header's bottom rule moves down to close it.
-#   - THE CELL IS A NUMBER, and everything a template writes around it lives in the numFmt code:
-#     the significance stars, an aside's brackets, a test label, a sigma. One rule (xl_fold_literals)
-#     for all of them, applied to EVERY SECTION of the code (xl_numfmt_affix) -- a two-section code
-#     would otherwise wear its stars on the negative half alone.
+#   - EXCEL CANNOT PRINT A COMPOSITE CELL -- one value, one numFmt, so a bracket cannot survive.
+#     Every ASIDE therefore becomes a COLUMN of its own (mat_aside_cols) carrying its own segment
+#     ("(n={n})"), and the source column keeps its primary alone.
+#   - THE CELL IS A NUMBER, and everything the template writes around it lives in the numFmt code:
+#     the stars, an aside's brackets, a test label, a sigma. WARNING: xl_fold_literals() folds them
+#     into EVERY SECTION (xl_numfmt_affix), or a two-section code wears its stars on the negative
+#     half alone.
 #   - A MULTIPLICATIVE CELL HOLDS ITS READING VALUE (fmt_excel_value: the signed fold), printed by a
 #     two-section code, so "1/2.11" reaches the workbook without costing the cell its numeric type.
-#     `ratio_cells = "raw"` / `"text"` are the two opt-outs. See the ?tab_xl section for the one
-#     formula that recovers the raw ratio.
-#   - TEXT IS A PROPERTY OF A CELL: a `{ci}` bracket and a real min-max `{n_range}` are written
-#     individually into an otherwise numeric column, so a model-fit statistic beside them stays a
-#     number (and takes the reader's own decimal separator).
-#   - COLOUR IS READ, NEVER RE-DERIVED: ann$font / ann$back / ann$face_* (R/tab-export-prep.R), the
-#     same fields tab_kable consumes -- so a greyed cell is grey here too. An ASIDE
-#     column is the console's `sec()`: the secondary grey, no bold, no stars, whatever row it is in.
-#   - Export-Parity: the numFmt codes come from format(x, syntax = "excel") (fmt_class.R
-#     excel_numfmt_code), the single display source of truth. numFmt literals are backslash-escaped
-#     via xl_numfmt_literal() -- NEVER double-quote-wrapped, which crashes the older jamovi-bundled
-#     openxlsx2 ("xml import unsuccessful").
-#   - Shared-style fast path: each cell's FULL style (font+fill+border+alignment) is precomposed and
-#     applied ONCE by id (set_cell_style) over the fewest coalesced multi-area dims (xl_coalesce) --
-#     far fewer + cheaper openxlsx2 calls than a wb_add_* per aspect. numFmt merges on afterwards.
-#   - ONE workbook-scoped style registrar (xl_style_registrar) dedups styles across ALL tables and
-#     keeps style NAMES globally unique: openxlsx2's styles_mgr is workbook-global and resolves a name
-#     to its FIRST match, so per-table name reuse mis-applied table 1's styles to every later table.
-#   - PROSE IS MERGED AND WRAPPED, to about an A4 portrait width (xl_prose_span): a title or a footer
-#     legend left in one narrow column is a paragraph in one cell, and an Excel -> Word paste then
-#     sizes that column to the paragraph. ⚠ Excel does not auto-fit a MERGED cell's height, so the
+#     `ratio_cells = "raw"` / `"text"` opt out; ?tab_xl gives the formula that recovers the ratio.
+#   - TEXT IS A PROPERTY OF A CELL, not of a column: a `{ci}` bracket or a real min-max `{n_range}`
+#     is written individually into an otherwise numeric column, so a statistic beside it stays a
+#     number and takes the reader's own decimal separator.
+#   - COLOUR IS READ, NEVER RE-DERIVED: ann$font / ann$back / ann$face_* from the prep, the same
+#     fields the html engine consumes, so a greyed cell is grey here too. An aside column is the
+#     console's sec(): the secondary grey, no bold, no stars, whatever row it is in.
+#   - format(x, syntax = "excel") is the ONE display source of truth (R/fmt_class.R). WARNING: a
+#     numFmt literal is backslash-escaped (xl_numfmt_literal), NEVER double-quote-wrapped, which
+#     crashes the older openxlsx2 that jamovi bundles.
+#   - ONE WORKBOOK-SCOPED STYLE REGISTRAR (xl_style_registrar): openxlsx2's styles_mgr is
+#     workbook-global and resolves a name to its FIRST match, so per-table name reuse applies table
+#     one's styles to every later table. Each cell's full style is composed once and applied by id
+#     over the fewest coalesced ranges.
+#   - PROSE IS MERGED AND WRAPPED to about an A4 portrait width (xl_prose_span): a title or a legend
+#     left in one narrow column is a paragraph in one cell, and an Excel -> Word paste then sizes
+#     that column to the paragraph. WARNING: Excel does not auto-fit a MERGED cell's height, so the
 #     row height is computed (xl_prose_height) or the legend is clipped to one line.
-#   - COLUMN WIDTHS ARE MEASURED, NOT AUTO-FITTED: ONE vector per SHEET (xl_col_widths ->
-#     xl_sheet_widths), computed from what each cell will show -- format() renders the very strings
-#     Excel displays. A column is as wide as the widest thing in it that CANNOT wrap (a figure), and
-#     everything that can (the level header, the unit tag, a long text value) contributes its width
-#     divided by the lines it may use. `colwidth = "auto"`, the default, IS that fit; a number forces
-#     one fixed width on the numeric columns. openxlsx2's `bestFit` is not used: it blanks merged
-#     ranges, ignores wrapText / rotation / the per-cell font, and is sheet-scoped, so with several
-#     tables stacked the last one silently overwrote the others.
-#   - The plan builder is pure; the workbook is assembled serially (the openxlsx2 write dominates and
-#     is inherently serial -- parallelising it was measured not worth it).
+#   - COLUMN WIDTHS ARE MEASURED, ONE VECTOR PER SHEET (xl_col_widths -> xl_sheet_widths): a column
+#     is as wide as the widest thing in it that CANNOT wrap (a figure), while everything that can (a
+#     level header, a unit tag, a long label) contributes its width divided by the lines it may use.
+#     Per sheet, because a column index belongs to the sheet and not to the table sitting on it.
+#     WARNING: openxlsx2's `bestFit` is not usable -- it blanks merged ranges, ignores wrapText,
+#     rotation and the per-cell font, and is sheet-scoped, so stacked tables overwrite each other.
+#   - The plan builder is pure; the workbook is assembled serially, the openxlsx2 write being
+#     inherently so.
+# See: CLAUDE.md section "tabxplor architecture" (exports and rendering); R/tab-export-prep.R (the
+#      three header rows, tab_col_block_ids()); R/tab-xl-backend.R (the openxlsx2 traps).
 
 #' Excel output for tabxplor tables, with formatting and colors
 #' @description The Excel exporter behind \code{\link{tab_export}}: `tab_export(x, format = "xl")`
-#' calls this. To modify the colors used into the Excel table, you can change the
-#' global options with \code{\link{set_color_style}} and \code{\link{set_color_breaks}}.
+#' calls this. Colours follow the same palettes as the console and the HTML output, so a table looks
+#' the same wherever it is read; change them with \code{\link{set_color_style}} and
+#' \code{\link{set_color_breaks}}.
 #' @eval tab_args_rd("tab_xl")
-#' @param path,replace,open The name, and possibly the path, of the Excel file to
-#' create (possibly without the .xlsx extension). Default path to temporary directory.
-#' Set global option \code{"tabxplor.export_dir"} with \code{link[base:options]{options}}
-#' to change default directory. By default replace is `TRUE` when `path` is provided,
-#' `FALSE` when `path` is not provided.
-#' Use \code{replace = TRUE} to overwrite existing files. Use \code{open = FALSE}
-#' if you don't want to automatically open the tables in Excel (or another
-#' software associated with .xlsx files).
+#' @param path,replace,open The name, and possibly the path, of the Excel file to create (the
+#' \code{.xlsx} extension is optional). Defaults to a temporary directory; set the global option
+#' \code{"tabxplor.export_dir"} with \code{\link[base]{options}} to change it. \code{replace}
+#' defaults to \code{TRUE} when \code{path} is given and \code{FALSE} otherwise; set it to
+#' \code{TRUE} to overwrite an existing file. Use \code{open = FALSE} not to open the workbook
+#' straight away in Excel (or whatever opens \code{.xlsx} files).
 #' @param colnames_rotation Rotate the names of columns to an angle (in degrees).
 #' @param remove_tab_vars By default, \code{tab_vars} columns are removed to gain space.
 #' Set to \code{FALSE} to keep them.
 #' @param colwidth Column widths. \code{"auto"} (the default) fits every column to what its cells
-#'   will actually show --- measured by tabxplor itself from the rendered values, the level headers
-#'   and the unit tags, so a number column is exactly as wide as its widest figure and a text column
+#'   actually show, so a number column is exactly as wide as its widest figure and a text column
 #'   wraps instead of growing past a cap. Give a number instead to force that fixed width on every
 #'   numeric column (a mean's \code{sd} sibling then takes a proportionally narrower one).
-#'   Widths are set per \emph{sheet}: several tables written to one sheet all fit.
+#'   Widths are set per \emph{sheet}, so several tables written to one sheet all fit.
 #' @param check Model-check plots to draw under each `tab_reg()` table: `FALSE` (the default),
 #'   `"auto"`, or a vector of check keys --- the same values \code{\link{reg_check_plots}} takes,
 #'   which is what draws them. Each grid is written as a picture below the table it belongs to.
@@ -81,17 +71,16 @@
 #'   \code{\link{tab_reg}} call cannot be replayed from the name it was written with (a `%>%`
 #'   pipeline, a subset expression) --- an ordinary `tab_reg(gss, ...)` recovers it by itself.
 #' @param ratio_cells What a ratio / odds-ratio cell holds in the workbook. Excel cannot compute
-#'   inside a number format, so a cell storing `0.83` cannot be made to print `\u00f71.2` the way the
+#'   inside a number format, so a cell storing `0.83` cannot be made to print `÷1.2` the way the
 #'   console does. `"fold"` (the default) stores the **reading value** instead --- the fold, signed by
-#'   its direction (`x` at or above the neutral, `-1/x` below it) --- which a two-section number
-#'   format prints as `\u00d71.20` and `\u00f71.20`, `2.11` and `1/2.11`. The cell stays a real
-#'   number: it sorts and filters in the direction it is read, and takes the reader's own decimal
-#'   separator. `"raw"` stores the untransformed ratio (printed `\u00d70.83`); `"text"` writes the
-#'   exact display string, which reads perfectly but is no longer a number. Option twin:
-#'   \code{tabxplor.xl_ratio_cells}.
+#'   its direction (`x` at or above the neutral, `-1/x` below it) --- which prints as `×1.20` and
+#'   `÷1.20`, `2.11` and `1/2.11`. The cell stays a real number: it sorts and filters in the
+#'   direction it is read, and takes the reader's own decimal separator. `"raw"` stores the
+#'   untransformed ratio (printed `×0.83`); `"text"` writes the exact display string, which reads
+#'   perfectly but is no longer a number. Option twin: \code{tabxplor.xl_ratio_cells}.
 #' @section Recovering the raw ratio in Excel:
 #' A ratio or odds-ratio cell holds its **reading value**: the fold, signed by its direction. The sign
-#' IS the marker --- negative means the cell reads `\u00f7` (or `1/`) --- so one formula gives the raw
+#' IS the marker --- negative means the cell reads `÷` (or `1/`) --- so one formula gives the raw
 #' ratio back, with no macro and no add-in:
 #'
 #' \preformatted{  =IF(A2<0, -1/A2, A2)     the ratio itself
@@ -106,15 +95,15 @@
 #'   titles are given based on the names of the variables.
 #' @param caption A single caption; a shortcut that fills \code{titles} (an explicit \code{titles}
 #'   still wins). Unified name across all exporters.
-#' @param font_text,font_num,font_num_stars Fonts for text (labels, headers) and for numbers. The number
-#'   font is chosen \strong{per table}: \code{font_num} (default \code{"DejaVu Sans"}) when the table
-#'   shows no significance stars, and \code{font_num_stars} (default \code{"Cascadia Mono"}, a
-#'   \strong{monospace} font) when it does -- monospace aligns the stars and \code{(n=...)} composites,
-#'   which a proportional font cannot. Defaults from \code{options(tabxplor.xl_font_text)} /
-#'   \code{options(tabxplor.xl_font_num)} / \code{options(tabxplor.xl_font_num_stars)}. Note that xlsx,
-#'   unlike CSS, has \strong{no font-fallback list}: only one name can be recorded per font, so if it is
-#'   missing on the machine opening the workbook, Excel substitutes by its own rules and no fallback can
-#'   be named here. Set the options to a font you know is installed.
+#' @param font_text,font_num,font_num_stars Fonts for text (labels, headers) and for numbers. The
+#'   number font is chosen \strong{per table}: \code{font_num} (default \code{"DejaVu Sans"}) when the
+#'   table shows no significance stars, and \code{font_num_stars} (default \code{"Cascadia Mono"}, a
+#'   \strong{monospace} font) when it does --- monospace aligns the stars and \code{(n=...)}
+#'   composites, which a proportional font cannot. Defaults from
+#'   \code{options(tabxplor.xl_font_text)} / \code{options(tabxplor.xl_font_num)} /
+#'   \code{options(tabxplor.xl_font_num_stars)}. Note that xlsx, unlike CSS, has \strong{no
+#'   font-fallback list}: only one name is recorded, so if it is missing on the machine opening the
+#'   workbook Excel substitutes by its own rules. Set the options to a font you know is installed.
 #' @param text_size,text_size_headers,text_size_subtext Font sizes of text elements.
 #' @param theme By default (\code{"light"}) a white table with black text; set to \code{"dark"}
 #'   for a black table with white text (the colours follow the theme).
@@ -162,38 +151,25 @@ tab_xl <-
            ratio_cells = NULL, check = FALSE, data = NULL,
            print_color_legend = lifecycle::deprecated(), ...) {
 
-    # Phase 19l: the retired inert arguments (`color_type`, `html_24_bit`, ...) ride `...`.
     tx_deprecate_inert(rlang::list2(...), "tab_xl")
 
-    # 20b: ONE default idiom on the public surface -- an option-backed argument says `NULL` and the
-    # value comes from the declared table (TAB_OPTIONS, R/tabxplor-options.R). These four used to
-    # spell `getOption("tabxplor.xl_*", <a literal repeated in .onLoad and in ?tabxplor-options>)`
-    # in the formal itself, which is the third of the three idioms 20b collapsed.
     font_text      <- font_text      %||% tx_option("xl_font_text")
     font_num       <- font_num       %||% tx_option("xl_font_num")
     font_num_stars <- font_num_stars %||% tx_option("xl_font_num_stars")
     ratio_cells    <- match.arg(ratio_cells %||% tx_option("xl_ratio_cells"),
                                 c("fold", "raw", "text"))
 
-    # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
+    # per-table color_breaks override for the render; no-op when tabs carries none.
     .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
 
     tx_need_pkg("openxlsx2", "Excel export")
 
     if (length(replace) == 0) replace <- length(path) != 0
 
-    # Phase 17g: the long-inert `n_min` / `hide_near_zero` / `conditional_format` args were removed
-    # before the 2.0.0 CRAN freeze (they never did anything: n_min moved to tab(n_min=), near-zero
-    # greying was dropped, and Excel conditional formatting was never implemented). Passing them now
-    # errors "unused argument" -- accepted per the Phase 17 §Settled decisions ruling.
-
-    # Phase 10j: `print_color_legend` renamed to `color_legend` (unified across exporters).
     if (lifecycle::is_present(print_color_legend)) {
       lifecycle::deprecate_soft("2.0.0", "tab_xl(print_color_legend)", "tab_xl(color_legend)")
       color_legend <- print_color_legend
     }
-    # Shared option resolver (theme/color/color_legend/transpose). Phase 10j makes tab_xl theme-aware:
-    # the palettes below now honour `theme` (was hardcoded "light").
     o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
                              transpose = transpose, caption = caption, var_names = var_names,
                              tabs = tabs)
@@ -203,8 +179,7 @@ tab_xl <-
     if (!is.null(caption) && missing(titles)) titles <- caption
 
     tabs_base <- tabs
-    # Graceful degrade (single input): write the raw frame (+ a message) instead of crashing when the
-    # input can't be read as a tabxplor table.
+    # graceful degrade: an unreadable input writes as a raw frame (+ a message) instead of crashing.
     rv <- if (is.data.frame(tabs)) tab_render_vars(tabs) else list(degrade = FALSE)
     if (isTRUE(rv$degrade)) {
       tab_degrade_inform(rv$reason)
@@ -213,62 +188,47 @@ tab_xl <-
     }
     if (is.data.frame(tabs)) tabs <- list(tabs)
 
-    # Phase 10j: display-extra materialise (backend "xl" keeps a real `n` column) is centralised in
-    # tab_export_prep(); tab_xl just passes transpose = transpose below. Phase 14o: transpose is now a
-    # render-model flip (tx_transpose_render), AFTER materialise, so its `tab` is a plain character grid
-    # (values written as TEXT here; editable numbers deferred -- see tx_transpose_render()).
+    # transpose is a render-model flip AFTER materialise (tx_transpose_render), so a transposed `tab`
+    # is a plain character grid: values are written as TEXT here, editable numbers deferred.
     colwidth <- vctrs::vec_recycle(colwidth, length(tabs))
 
-    # === Shared exporter prep (Phase 10g/10j/17g) ==================================
-    # Role detection (fmt / other / total columns, total-block borders, references, bold rows) AND the
-    # two-channel colour are derived ONCE by the shared framework (R/tab-export-prep.R). compact =
-    # FALSE keeps one prep-table per input tab (each -> its own sheet region). Phase 10j: `compute`
-    # includes "colors" so the per-column `ann` carries the theme-resolved colour. Phase 17g: xl now
-    # consumes ann's `text_hex`/`bg_hex` directly (the fmt_channel_codes source the CSS side reads) --
-    # no private slot->hex palette, so xl is theme-aware through the ONE shared colour source.
+    # === Shared exporter prep ========================================================
     compute <- c("refs", "bold")
     if (color) compute <- c(compute, "colors")
     prep <- tab_export_prep(
       tabs, backend = "xl", drop_tab_vars = remove_tab_vars,
       list_method = TRUE, compute = compute, transpose = transpose,
       theme = theme, var_names = o$var_names,
-      # Excel joins the ONE wrap system: it used to pass no spec at all, so a long level label and a
-      # long variable name reached the sheet whole and only Excel's own mid-word break could hold
-      # them. `brk = "\n"` is what a wrapped cell honours; the spaces stay ordinary spaces (the
-      # U+202F substitution exists to stop a BROWSER re-breaking what we wrapped, and Excel does not).
+      # `brk = "\n"` is what a wrapped Excel cell honours; spaces stay ordinary (the U+202F
+      # substitution is only there to stop a BROWSER re-breaking what was wrapped -- Excel does not).
       wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 1,
                   whitespace_only = TRUE, unbreakable_spaces = FALSE, brk = "\n"),
       color_legend = color_legend, what = "tab_xl()"
     )
     rd <- prep$tables
 
-    # Graceful degrade: any unreadable list member is written as a plain sheet, with a message.
     if (any(purrr::map_lgl(rd, ~ isTRUE(.$vars$degrade)))) {
-      purrr::walk(rd, ~ if (isTRUE(.$vars$notify)) tab_degrade_inform(.$vars$reason))  # batch-aware
+      purrr::walk(rd, ~ if (isTRUE(.$vars$notify)) tab_degrade_inform(.$vars$reason))
       xl_finish(function(p) xlb_write_xlsx(purrr::map(rd, ~ tibble::as_tibble(.$tab)), p),
                 path, replace, open)
       return(invisible(tabs_base))
     }
 
     tabs           <- purrr::map(rd, "tab")           # ungrouped, tab_vars dropped when requested
-    # Phase 14o: a transposed table's `tab` is a plain character grid; the subtext / colour legend /
-    # title read the MEASURES + variable roles off the original fmt table, kept as `color_src`.
+    # a transposed table's `tab` is a plain character grid; the subtext / colour legend / title read
+    # the MEASURES + variable roles off the original fmt table, kept as `color_src`.
     tabs_src       <- purrr::map(rd, ~ if (is.null(.$color_src)) .$tab else .$color_src)
     transposed     <- purrr::map_lgl(rd, ~ isTRUE(.$transposed))
     roles          <- purrr::map(rd, "roles")
-    # Phase 14d: the SOURCE names for the title (`row_var` is the column holding the labels, which on
-    # a merged table is the literal "levels"); geometry elsewhere keeps using `roles`.
-    # Phase 14i: the prep now always passes `row_vars` through, so the `%||%` fallback that used to
-    # guard this line is gone -- it was also a latent bug (base `%||%` is R >= 4.4; the package
-    # supports R >= 4.1 and imports it from nowhere), and it silently swallowed the missing field.
+    # `row_var` is the column holding the row labels, which on a merged table is the literal "levels";
+    # geometry elsewhere keeps reading `roles` instead.
     row_vars       <- purrr::map(rd, ~ .$vars$row_vars)
     tab_vars       <- purrr::map(rd, ~ .$vars$tab_vars)
     col_vars_plain <- purrr::map(rd, ~ .$vars$col_vars)
 
-    # Phase 14u: a `tabxplor_tabs` is an EXPLICIT collection of independent tables (one reg comparison
-    # per outcome, or a several-row_vars output_list) -> one sheet each by default. The col-var "auto"
-    # stacking (below) grouped tables that share col_vars onto one sheet, which is wrong for these; it is
-    # kept for a plain manual `list(tab1, tab2)`.
+    # a `tabxplor_tabs` is an EXPLICIT collection of independent tables (one reg comparison per
+    # outcome, or a several-row_vars output_list) -> one sheet each; the col-var "auto" stacking below
+    # (which groups tables sharing col_vars onto one sheet) is for a plain manual `list(tab1, tab2)`.
     if (identical(sheets, "auto") && inherits(tabs_base, "tabxplor_tabs")) sheets <- "tabs"
     stopifnot(sheets %in% c("tabs", "unique", "auto") |
                 (is.integer(sheets) & length(sheets) == length(tabs)))
@@ -283,24 +243,14 @@ tab_xl <-
         sheets
       }
 
-    # subtext (+ colour legend) computed once on the main process. Phase 13b: the legend is built as
-    # RICH-TEXT runs (medium = "excel") so each break-word is coloured (its palette hex + bold) while
-    # the rest stays plain black -- written as fmt_txt cells by the writer. Its plain text (derived from
-    # the runs so it matches byte-for-byte) is merged into `subtext` for the geometry / styling; the
-    # legend occupies the first `length(legend_runs)` subtext rows, overwritten with rich text below.
-    # Phase 19h: the SOURCE is the render model's own `subtext` slot (already discarded of empties);
-    # only the newline flattening below is xl's -- a workbook cell holds one line.
+    # subtext (+ colour legend) computed once. A workbook cell holds one line, so the render model's
+    # `subtext` is newline-flattened here.
     subtext <- purrr::map(prep$tables, "subtext") |>
       purrr::map(~ gsub(" +", " ", gsub("\\\n", " ", ., perl = TRUE), perl = TRUE))
-    # Phase 16e: the whole footer (weight -> Model: -> colour legend -> stars) as rich-text run lines via the
-    # ONE shared builder -- replaces the hand-built plain-line head/tail sandwich around the colour legend.
-    # They ride the SAME rich-text block (so the legend_row overwrite stays aligned); the user subtext stays
-    # plain black on its own rows below (subtext = character(0) here, merged next).
-    # Phase 17g: shared rd_footer(); xl passes the whole run set (no color_cols guard -- legend = the
-    # color_legend arg) and no user subtext here (merged plain, below).
-    # Phase 20h: `lang` IS threaded now. It was a documented formal of tab_xl() that the body never
-    # read at all, so tab_xl(lang = "fr") wrote an English colour legend. Byte-identical when NULL
-    # (= follow the ambient locale), which is every golden and every export-parity fixture.
+    # the whole footer (weight -> Model: -> colour legend -> stars) as RICH-TEXT run lines from the
+    # shared builder, so each break-word carries its palette hex + bold while the rest stays plain
+    # black; its plain text (derived from the runs, byte-for-byte) merges into `subtext` for geometry,
+    # and the legend occupies the first `length(legend_runs)` subtext rows, overwritten below.
     legend_runs <- purrr::map(tabs_src, function(t)
       rd_footer(t, "runs", theme = theme, want_legend = isTRUE(color_legend), lang = lang))
     if (any(purrr::map_lgl(legend_runs, ~ length(.) > 0L))) {
@@ -310,16 +260,14 @@ tab_xl <-
     }
 
     if (missing(titles)) {
-      # Phase 14w (item 1): a regression table titles itself from its `reg_meta` (family + outcome +
-      # predictors, or outcome + reference + effect for a comparison) -- this is the reg fix for the old
-      # "levels by var" mis-title. Otherwise (Phase 14u): a NAMED tabxplor_tabs (a several-row_vars
-      # output_list -> names = the row_vars) uses its element names, and a plain table the vars-derived
-      # "X by Y" title.
+      # a regression table titles itself from its `meta` (family + outcome + predictors, or outcome +
+      # reference + effect for a comparison); a NAMED tabxplor_tabs (several row_vars -> names = the
+      # row_vars) uses its element names; a plain table gets the vars-derived "X by Y" title.
       base_nm <- names(tabs_base)
       named_tabs <- inherits(tabs_base, "tabxplor_tabs") && length(base_nm) == length(tabs) &&
         all(nzchar(base_nm))
-      # Phase 19h: through the SHARED rd_caption() (user caption -> set_caption() -> reg auto-title),
-      # with xl's own two extra fallbacks passed as the closure. One caption rule, one place.
+      # shared rd_caption() (user caption -> set_caption() -> reg auto-title), with xl's own two extra
+      # fallbacks passed as the closure -- one caption rule, one place.
       titles <- purrr::pmap_chr(
         list(prep$tables, tabs_src, row_vars, col_vars_plain, tab_vars, seq_along(tabs)),
         function(rd, t, rv, cv, tv, i) {
@@ -330,24 +278,21 @@ tab_xl <-
     } else {
       titles <- vctrs::vec_recycle(titles, length(tabs))
     }
-    # Phase 14w (item 1): a reg table's SHEET name is the compact "<short>_<dep>_<pred>" tag, not the
-    # truncated prose title. Non-reg tables keep the title (truncated below).
+    # a reg table's SHEET name is the compact "<short>_<dep>_<pred>" tag, not the truncated prose
+    # title; non-reg tables keep the title (truncated below).
     sheet_base <- purrr::map2_chr(tabs_src, titles, function(t, ti) {
       sn <- reg_sheet_name(reg_call(t)); if (!is.na(sn)) sn else ti
     })
 
-    # Sheet-stacking offsets: within a sheet each stacked table starts below the previous one
-    # (rows + subtext + 6 blank -- Phase 13c-iii: +1 for the col_var spanning-name header row).
-    # Absolute geometry is derived from `start` in the plan builder.
-    # the observed curves, in a small table of their own below the footer -- taken only where the
-    # base-count cell cannot carry them (see tab_wants_shape_table). Its rows join the stacking
-    # offset, or a second table on the same sheet would land on top of it.
+    # sheet-stacking offsets: within a sheet each stacked table starts below the previous one (rows +
+    # subtext + 6 blank, +1 for the col_var spanning-name header row); absolute geometry is derived
+    # from `start` in the plan builder. Observed-curve shape tables (below) join the same offset, or a
+    # second table on the sheet would land on top of one.
     shapes <- purrr::map(tabs_src, function(t)
       if (is_tab(t) && tab_wants_shape_table(t, "xl")) reg_shape_table(t) else NULL)
     shape_n <- purrr::map_int(shapes, function(st)
     if (is.null(st)) 0L else nrow(st) + length(attr(st, "note")) + 2L)
-    # ... and the model-check pictures, for the same reason: they are drawn BEFORE the geometry so
-    # their height joins the stacking offset instead of landing on the next table.
+    # model-check pictures are drawn BEFORE the geometry too, so their height joins the same offset.
     check_imgs <- xl_check_images(tabs_src, check, data, theme = theme, lang = lang)
     check_n    <- purrr::map_int(check_imgs, xl_check_rows)
     newsheet <- sheet != dplyr::lag(sheet, default = -1L)
@@ -371,9 +316,6 @@ tab_xl <-
         paste0(sub("..$", "", sheet_titles, perl = TRUE), ".", nb), sheet_titles)
     }
 
-    # Colour palettes built ONCE (Phase 5): TEXT channel -> font colour (the text palette),
-    # BACKGROUND channel -> cell fill (bg palette). 11 hex per palette, indexed by slot integer.
-    # Phase 10j: the palettes honour `theme` (default "light" == the old hardcoded value).
     opts <- list(
       font_num          = font_num,
       font_num_stars    = font_num_stars,
@@ -383,18 +325,11 @@ tab_xl <-
       wrap_rows         = wrap_rows,            # a text column's width cap: see xl_col_widths()
       text_size_headers = text_size_headers,
       text_size_subtext = text_size_subtext,
-      # Phase 17g: no private palette -- slot->hex is single-sourced through ann (fmt_channel_codes),
-      # the same source the CSS side reads. tab_xl_plan_one() consumes ann$text_hex / ann$bg_hex.
       ratio_cells       = ratio_cells,           # what a multiplicative cell holds: fold/raw/text
-      # the RESOLVED palette: format() needs it to write a publication palette's marks into the cell
-      # (and into the numFmt literal), exactly as it writes the significance stars.
-      theme             = theme
+      theme             = theme                  # format() needs it for a publication palette's marks
     )
 
     # === Per-table plans (pure: raw values + numFmt codes + colour slots + font plan + geometry) ===
-    # tab_xl_plan_one() carries no workbook and is side-effect-free; the workbook is assembled serially
-    # from the plans below. (Parallelising the plan build was measured NOT worth it -- the openxlsx2
-    # WRITE dominates the time and is inherently serial; see dev/benchmarks/results_2.0.0/phase10h_*.)
     plans <- purrr::pmap(
       list(tab = tabs, roles = roles, ann = purrr::map(rd, "ann"),
            bold_rows = purrr::map(rd, "bold_rows"),
@@ -409,17 +344,14 @@ tab_xl <-
     wb <- xlb_new_workbook()
     xlb_base_font(wb, font_text, text_size)
     purrr::walk(sheet_titles, ~ xlb_add_sheet(wb, .))
-    # freeze under the first table's own header block -- title, span row and unit row included. The
-    # hard-coded row 3 froze two rows of a four-row header, so the level names scrolled away.
+    # freeze under the first table's own header block -- title, span row and unit row included, or a
+    # fixed row would leave part of a multi-row header scrolling away.
     first_plan <- plans[!duplicated(sheet)]
     purrr::walk2(unique(sheet), first_plan,
                  function(sh, pl) xlb_freeze(wb, sh, pl$data_row0 + 1L, pl$freeze_col))
-    # ONE style registrar for the whole workbook -> globally-unique style names (Phase 11a: per-table
-    # name reuse silently applied table 1's styles to every later table).
     reg <- xl_style_registrar(wb)
-    # ⚠ A COLUMN BELONGS TO THE SHEET, NOT TO THE TABLE. Several tables stacked on one sheet each set
-    # widths on the same indices, and the last one silently won -- so a narrow table below a wide one
-    # squeezed it. Reduced with pmax per sheet, which is the only answer that fits every table on it.
+    # a column belongs to the SHEET, not the table: several tables stacked on one sheet reduce to the
+    # pmax of their widths, or a narrow table below a wide one would squeeze it.
     sheet_w <- xl_sheet_widths(plans, sheet)
     purrr::walk2(plans, sheet, ~ xl_write_table(wb, .x, opts, reg, widths = sheet_w[[.y]]))
 
@@ -428,19 +360,15 @@ tab_xl <-
   }
 
 
-# Resolve the path ONCE, write through it, tell the user where the file went, open it if asked.
-# WHY once: tab_xl_resolve_path() is not pure -- with `replace = FALSE` it auto-numbers PAST any
-# existing file, so calling it a second time (as the two degrade paths did) returned Tab2.xlsx after
-# writing Tab1.xlsx, and `open` opened a file that had never been written.
-# WHY the message: the default path is a tempdir(), and the function returns `tabs` (so a pipe keeps
-# flowing), so a user with `open = FALSE` had no way at all to find the file.
+# resolve the path ONCE: tab_xl_resolve_path() is not pure -- with `replace = FALSE` it auto-numbers
+# past any existing file, so a second call would return Tab2.xlsx after writing Tab1.xlsx. The
+# message matters because the default path is a tempdir() and `open = FALSE` gives no other way to
+# find the file.
 xl_finish <- function(write, path, replace, open) {
   path <- tab_xl_resolve_path(path, replace)
   write(path)
   cli::cli_inform(c("v" = "Excel file written to {.file {path}}"))
-  # A failed *open* after a successful *write* is non-fatal: on a machine with no spreadsheet
-  # application (e.g. WSL2), openxlsx2::xl_open() aborts with "No applications (detected) available."
-  # Downgrade any open failure to a friendly info message rather than erroring out.
+  # a failed *open* is non-fatal (e.g. WSL2 has no spreadsheet application) -- downgrade to a message.
   if (isTRUE(open)) {
     tryCatch(
       xlb_open(path),
@@ -453,9 +381,6 @@ xl_finish <- function(write, path, replace, open) {
 }
 
 
-# Resolve the export path: default to options("tabxplor.export_dir") or tempdir()/Tab, ensure the
-# directory exists, add the .xlsx extension, and auto-number when replace = FALSE and the file exists.
-#' @keywords internal
 tab_xl_resolve_path <- function(path, replace) {
   if (is.null(path)) {
     path <- getOption("tabxplor.export_dir")
@@ -468,49 +393,34 @@ tab_xl_resolve_path <- function(path, replace) {
     if (!dir.exists(dir_path)) dir.create(dir_path, recursive = TRUE)
   }
   if (!grepl("\\.xlsx$", path, perl = TRUE)) path <- paste0(path, ".xlsx")
-  # THE shared "replace" rule (auto-number past an existing file when replace = FALSE), single-sourced so
-  # direct tab_xl() use and the jamovi exporter number identically. See R/jmvtab-export.R.
+  # shared with the jamovi exporter (R/jmvtab-export.R), so both number identically.
   export_number_path(path, replace)
 }
 
 
-# Pure per-table plan: raw values to write + numFmt codes (stars folded) + colour slots + absolute
-# geometry. Side-effect-free (no workbook), so the workbook is assembled serially from the plans.
-# Geometry (given `start`): title row = start; header row = start + 1; data rows = start + 2 ..
-# start + 1 + nrow; subtext below. Column role indices come from the shared prep `roles`.
-#' @keywords internal
-# Phase 13c-v: build the per-cell VALUE tibble Excel writes. A text-mode fmt column (ci = "cell" / OR)
-# becomes its format() display string (character); every other fmt column its raw get_num() number.
-# Mixed column types in one tibble are fine (openxlsx2 writes each column by its R type).
-#' @keywords internal
+# a text-mode fmt column (ci = "cell" / OR) becomes its format() display string; every other fmt
+# column its raw get_num() number -- mixed column types in one tibble are fine (openxlsx2 writes
+# each column by its R type).
 xl_materialize_data <- function(tab, fmt_cols, text_fmt_cols, transposed = FALSE, theme = NULL,
                                 fold = TRUE) {
   for (ci in fmt_cols) {
     tab[[ci]] <- if (isTRUE(transposed)) {
-      as.character(tab[[ci]])                       # Phase 14o: already a pre-formatted display string
+      as.character(tab[[ci]])                       # already a pre-formatted display string
     } else if (ci %in% text_fmt_cols) {
       format(tab[[ci]], special_formatting = TRUE, na = "", stars = TRUE, theme = theme)
     } else {
-      # THE READING VALUE (fmt_excel_value): a multiplicative cell holds its signed fold, every other
-      # cell its raw number.
-      # NaN -> NA so an empty numeric cell (a summary-stat / p-value row where the test does not apply)
-      # writes as a BLANK cell, not the Excel #VALUE!/#N/A error -- openxlsx2 renders NaN as an error even
-      # when NA is blanked (the na arg only covers NA). See xlb_na_argname for the NA half.
+      # NaN -> NA so an empty numeric cell (a summary-stat / p-value row the test doesn't apply to)
+      # writes BLANK rather than Excel's #VALUE!/#N/A -- openxlsx2 renders NaN as an error even when
+      # NA is blanked (the na arg only covers NA). See xlb_na_argname for the NA half.
       v <- fmt_excel_value(tab[[ci]], fold = fold); v[is.nan(v)] <- NA_real_; v
     }
   }
   tibble::as_tibble(tab)
 }
 
-# xl_fold_literals() -- A TEMPLATE'S OWN LITERALS BECOME NUMBER-FORMAT LITERALS. Where a display has
-# exactly one token, everything around it is text Excel can print beside the number without costing
-# the cell its numeric type: "(n={n})" -> \(#,##0\), "(sigma{sd})" -> \(\s#,##0.0\),
-# "{pvalue} (Chi2)" -> 0.0%\ \(Chi2\). That is what lets an aside column (mat_aside_cols) look like
-# the aside it replaced, and it replaces the two hand-written arms (a test label, a sigma prefix)
-# that used to do this one template at a time.
-# Runs AFTER the significance stars, which belong to the number, not outside its brackets.
-# WARNING: per SECTION -- a two-section code would otherwise take the literal on its last one only.
-#' @keywords internal
+# a template's own literals become number-format literals: where a display has exactly one token,
+# everything around it folds into the numFmt code ("(n={n})" -> \(#,##0\)), which is what lets an
+# aside column (mat_aside_cols) look like the aside it replaced. Runs AFTER the significance stars.
 xl_fold_literals <- function(code, disp) {
   val <- !is.na(code) & code != "TEXT" & !is.na(disp)
   for (t in unique(disp[val])) {
@@ -527,17 +437,11 @@ xl_fold_literals <- function(code, disp) {
   code
 }
 
-# xl_check_images() -- the model-check plots, rendered to PNG so a workbook can carry them under the
-# model they belong to. `reg_check_plots()` refits from the recipe the table stores (meta$spec$call)
-# and recovers the data frame from the NAME the call was written with, so an ordinary
-# `tab_reg(gss, ...) |> tab_export("xl", check = "auto")` needs no `data`; pass one only where the
-# call was piped with %>% or subsetted.
-# ⚠ reg_check_plots() DRAWS on the current device as a side effect and returns its gtables
-# invisibly, so the first pass runs into a null device and each gtable is then drawn into its own
-# PNG. The grid's own layout gives the panel count, which is what sizes the image: big enough for the
-# axis text, no bigger.
-# Returns one entry per input table: NULL where there is nothing to draw.
-#' @keywords internal
+# model-check plots rendered to PNG, one entry per input table (NULL where there is nothing to
+# draw). `reg_check_plots()` refits from the stored recipe (meta$spec$call) and recovers the data
+# frame from the NAME the call was written with, so `data` is only needed for a piped/subsetted call.
+# ⚠ reg_check_plots() DRAWS on the current device as a side effect, so the first pass runs into a
+# null device and each returned gtable is then drawn into its own PNG.
 xl_check_images <- function(tabs, check, data, theme = NULL, lang = NULL, dpi = 150) {
   none <- vector("list", length(tabs))
   if (is.null(check) || isFALSE(check)) return(none)
@@ -558,13 +462,12 @@ xl_check_images <- function(tabs, check, data, theme = NULL, lang = NULL, dpi = 
     # returns a bare gtable for ONE model (wrapped here, unnamed -> `i` is an integer) and a list
     # NAMED by model for two or more (-> `i` is "age: diff"). The label IS that name: read `i`.
     imgs <- purrr::imap(grids, function(gt, i) {
-      # the PANEL grid, read off the arrangement: `top` (the model's title) occupies the first
-      # layout row and spans every column, so it is one row of the layout and none of the panels.
+      # `top` (the model's title) occupies the first layout row and spans every column, so it is
+      # excluded from the panel count.
       nc <- max(1L, suppressWarnings(max(gt$layout$r, na.rm = TRUE)))
       nr <- max(1L, length(unique(gt$layout$t)) - 1L)
-      # LANDSCAPE, and generous on the width: a panel's axis labels and its subtitle are what get cut
-      # first, and they cost width, not height. The device size IS the text budget -- a ggplot draws
-      # at a fixed point size, so a wider device gives every label more room rather than shrinking it.
+      # landscape and generous on width: a ggplot draws at a fixed point size, so a wider device gives
+      # axis labels more room rather than shrinking them.
       w  <- min(13, 4.6 * nc); h <- min(9, 2.7 * nr + 0.4)
       f  <- tempfile(fileext = ".png")
       grDevices::png(f, width = w, height = h, units = "in", res = dpi)
@@ -578,74 +481,40 @@ xl_check_images <- function(tabs, check, data, theme = NULL, lang = NULL, dpi = 
 
 # how many sheet ROWS an image block occupies -- one label row per image plus its height at Excel's
 # default 15-point row. The stacking offsets must know, or the next table would sit under a picture.
-#' @keywords internal
 xl_check_rows <- function(imgs)
   if (!length(imgs)) 0L else
     sum(vapply(imgs, function(im) as.integer(ceiling(im$height * 72 / 15)) + 2L, integer(1)))
 
 # === SECTION: column widths -- ONE vector, measured from what the cell will show ===================
-#
-# Excel's width unit is one character of the WORKBOOK BASE FONT (xlb_base_font), so a width is a
-# character count plus the cell's padding. Everything needed to measure one is already in R:
-# format() renders the very strings Excel will show (it is also where the numFmt codes come from), the
-# level headers and the unit tags are in the render model, and tab_vname_plan() has already decided
-# how wide the variable-name column may be.
-#
-# WHY NOT openxlsx2's `bestFit`: it counts characters of cells ALREADY on the sheet, blanks every
-# merged range before measuring, and is blind to wrapText, to text rotation and to the per-cell font.
-# It is also SHEET-scoped and runs at the end of each table, so with several tables stacked the last
-# one silently overwrote the others' widths. Measured here instead, per SHEET (xl_sheet_widths), and
-# `colwidth = "auto"` -- the default -- means THIS fit.
-#
-# DESIGN: a NUMBER column never wraps (a wrapped figure is unreadable), so its width is simply its
-# widest cell. A TEXT column may wrap, so it is capped: past the cap the cell wraps and Excel fits the
-# row height itself (⚠ except a MERGED cell, whose height it never fits -- see xl_row_lines below).
+# Excel's width unit is one character of the workbook base font (xlb_base_font); format() renders
+# the exact strings Excel shows, so nothing beyond the render model is needed to measure a column --
+# unlike openxlsx2's own `bestFit` (see the header for why it can't be trusted).
 
-# One character count -> one Excel column width. `ratio` is the cell font's size relative to the base
-# font the width unit is defined by; XL_PAD is the cell's left+right padding, ~5px = 0.7 characters,
-# rounded up to a comfortable 1.
-#' @keywords internal
+# XL_PAD is the cell's left+right padding, ~5px = 0.7 characters, rounded up to a comfortable 1.
 XL_PAD <- 1.0
-#' @keywords internal
 xl_width_of <- function(nchars, ratio = 1) max(2.5, nchars * ratio + XL_PAD)
 
-# ... and the one ratio there is. Numbers are written at the base SIZE but in the number font, and a
-# table showing stars or marks switches that to a MONOSPACE stack (tx_num_font) so the suffixes align
-# -- whose digit is about a tenth wider than the condensed sans the width unit is defined by.
-#' @keywords internal
+# a table showing stars/marks switches numbers to a MONOSPACE stack (tx_num_font) so the suffixes
+# align, whose digit is about a tenth wider than the condensed sans the width unit is defined by.
 XL_MONO_RATIO <- 1.1
 
-# The widest LINE of each value: a wrapped cell (item 4d gives Excel the same `\n` breaks html gets)
-# is as wide as its longest line, not as its whole text.
-#' @keywords internal
+# a wrapped cell (Excel gets the same `\n` breaks html does) is as wide as its longest LINE.
 xl_text_width <- function(x) {
   x <- x[!is.na(x) & nzchar(x)]
   if (!length(x)) return(0L)
   max(nchar(unlist(strsplit(x, "[\n\r]"), use.names = FALSE)), 0L)
 }
 
-# THE width vector for one table: one entry per sheet column.
-#   fmt columns   -- the widest rendered cell, against the level header and the unit tag; no wrap.
-#   the name col  -- tab_vname_plan()'s own `chars` (a rotated run costs one vertical line, so only
-#                    the horizontal names size it); the plan already capped it.
-#   other text    -- the widest value against the header, capped at `wrap_rows`; wraps past that.
-# `colwidth` as a NUMBER keeps the old fixed behaviour for the fmt columns (and the narrow sd twin).
-# The lines a HEADER may use. THE rule the whole vector rests on: a column is as wide as the widest
-# thing in it that CANNOT wrap, and everything that can contributes its width divided by the lines it
-# may use. A figure must never wrap (a broken number is unreadable), so the data cells set the floor;
-# the level header wraps and Excel fits its row's height itself.
-#' @keywords internal
+# the width vector for one table, one entry per sheet column: fmt columns -- the widest rendered
+# cell, against the level header and the unit tag, never wrapped; the name col -- tab_vname_plan()'s
+# own capped `chars`; other text -- the widest value against the header, capped at `wrap_rows` and
+# wrapped past it. `colwidth` as a NUMBER keeps the fixed behaviour for fmt columns (and the sd twin).
 XL_HEAD_LINES <- 2L
 
-# THE UNIT TAG IS THE ONE HEADER PIECE THAT DOES NOT WRAP. It is a compound word, not prose --
-# "<obs mean>", "<row%-diff>" -- so a break lands mid-name and reads as two tags; and it names its
-# column rather than labelling its numbers, so it must never be what sets the column's width. Hence
-# a size of its own, small enough that a long tag stays inside the figures above it (8pt against a
-# body of 10), and its ANGLE BRACKETS left out of the count: they are the console's own notation,
-# narrower than a figure, and counting them is what tipped a tag past its column.
-#' @keywords internal
+# the unit tag is a compound word ("<obs mean>"), so it must never wrap or size the column: its own
+# smaller size (8pt) keeps a long tag inside the figures above it, and its angle brackets -- the
+# console's own notation -- are excluded from the count.
 XL_UNIT_SIZE <- 8
-#' @keywords internal
 xl_col_widths <- function(tab, roles, cvh, o, colwidth, theme = "light") {
   ncl    <- ncol(tab)
   ratio  <- if (isTRUE(roles$has_stars)) XL_MONO_RATIO else 1
@@ -671,19 +540,17 @@ xl_col_widths <- function(tab, roles, cvh, o, colwidth, theme = "light") {
                        error = function(e) as.character(col))
       return(xl_width_of(max(xl_text_width(body) * ratio, head_w(j))))
     }
-    # the variable-NAME column takes the width tab_vname_plan() left it (a rotated run costs one
-    # vertical line, so only the names that stayed horizontal size it); it is already capped there.
+    # the name column takes the width tab_vname_plan() already capped (a rotated run costs one
+    # vertical line, so only the names that stayed horizontal size it).
     if (nm %in% names(vname_chars)) return(xl_width_of(vname_chars[[nm]]))
-    # a text column is capped by `wrap_rows` -- the one argument that says how wide a row label may
-    # be. tab_wrap_text() has already broken the values there, so this only ever holds an unbreakable
-    # run, and Excel wraps it (the cell has wrap_text; its row is unmerged, so Excel fits the height).
+    # capped at `wrap_rows`: the values are already broken there, so this only ever holds an
+    # unbreakable run, and Excel wraps it (the row is unmerged, so it fits the height itself).
     xl_width_of(max(min(cap_text, xl_text_width(as.character(col))), head_w(j)))
   }, double(1))
 }
 
 # The width vector PER SHEET: the element-wise max over every table stacked on it, padded to the
 # widest. Named by sheet, so the writer looks its own up.
-#' @keywords internal
 xl_sheet_widths <- function(plans, sheet) {
   by <- split(purrr::map(plans, ~ .$col_widths %||% double(0)), sheet)
   purrr::map(by, function(ws) {
@@ -693,11 +560,8 @@ xl_sheet_widths <- function(plans, sheet) {
   })
 }
 
-# How many wrapped LINES a text of `n` characters needs in a column `w` wide -- the one estimator both
-# the prose rows and the merged label / span cells use.
-# ⚠ Excel auto-fits the height of an ordinary wrapped cell but NEVER of a merged one, so a merged
-# label or a two-line span row would be clipped to one line without an explicit height.
-#' @keywords internal
+# how many wrapped LINES a text needs in a column `w` wide -- the estimator prose rows and merged
+# label/span cells share. ⚠ Excel never auto-fits a MERGED cell's height, unlike an ordinary one.
 xl_row_lines <- function(text, width) {
   text  <- text %||% ""
   width <- rep_len(pmax(1, as.double(width)), length(text))
@@ -709,26 +573,17 @@ xl_row_lines <- function(text, width) {
   pmax(1L, out)
 }
 
-# xl_prose_span() -- HOW FAR A LINE OF PROSE IS MERGED: from column 1 up to roughly an A4 portrait
-# text width. A title or a footer legend left in column A alone is a paragraph in one narrow cell, and
-# an Excel -> Word paste then sizes that column to the paragraph, which is what blew the table's
-# geometry apart. Merged and wrapped, the prose sizes nothing.
-# Excel's width unit is one character of the default font, ~7 px plus 5 px of cell padding; A4
-# portrait text width is ~17 cm = ~642 px at 96 dpi. It reads THE width vector (xl_col_widths), the
-# same one the writer sets on the sheet -- it used to re-derive its own copy of the old literals, and
-# the two could disagree.
-#' @keywords internal
+# how far a line of prose is merged, from column 1 up to roughly an A4 portrait text width (~17 cm =
+# ~642 px at 96 dpi; Excel's width unit is ~7 px + 5 px padding). Reads the SAME width vector the
+# writer sets on the sheet, so the two can never disagree.
 XL_A4_PX <- 642
-#' @keywords internal
 xl_prose_span <- function(widths, ncl) {
   px <- cumsum(widths * 7 + 5)
   max(1L, min(ncl, sum(px <= XL_A4_PX) + 1L))
 }
 
-# ... and the height that wrapped prose needs. ⚠ Excel does NOT auto-fit the height of a MERGED cell,
-# so a wrapped legend would be clipped to one line without this. ~5 px per character at the subtext
-# size, one line per 11.5 points.
-#' @keywords internal
+# the height wrapped prose needs (⚠ a MERGED cell never auto-fits): ~5 px per character at the
+# subtext size, one line per 11.5 points.
 xl_prose_height <- function(text, span_px, size = 9) {
   per_line <- max(20L, floor(span_px / (size * 0.55)))
   lines    <- pmax(1L, ceiling(nchar(text) / per_line))
@@ -737,7 +592,6 @@ xl_prose_height <- function(text, span_px, size = 9) {
 
 # The shape table as (row, col, text) cells: a header row, one row per curve, then the note -- the
 # same four columns every other medium prints, in the order reg_shape_table() declares.
-#' @keywords internal
 xl_shape_cells <- function(shape, row0) {
   if (is.null(shape) || nrow(shape) == 0L) return(NULL)
   hd <- attr(shape, "headers"); nt <- attr(shape, "note")
@@ -754,18 +608,17 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
                             transposed = FALSE) {
   n   <- nrow(tab)
   ncl <- ncol(tab)
-  # Phase 13c-iii: a col_var spanning-NAME header row sits above the level-name header (whenever the
-  # table has a col_var), shifting the header + data + everything below down by one row. `data_row0`,
-  # `header_row`, `last_row` derive every absolute position, so downstream offsets follow automatically.
+  # a col_var spanning-NAME header row sits above the level-name header (whenever the table has a
+  # col_var), shifting the header + data + everything below down by one row; `data_row0` / `header_row`
+  # / `last_row` derive every absolute position from here.
   cvh        <- col_var_header
   has_span   <- !is.null(cvh) && any(nzchar(cvh$label))
   span_off   <- if (has_span) 1L else 0L
   span_row   <- start + 1L                       # the spanning-name row (used only if has_span)
   header_row <- start + 1L + span_off
-  # Phase 22c-ii: the UNIT row, directly UNDER the level header -- what each column holds. Excel gives
-  # every aside a column of its own (mat_aside_cols), so this row says the reading direction and the
-  # statistic ("row%", "mean (sd)"), which is also what a numeric col_var's now-blank level header no
-  # longer says. Sits INSIDE the header block, so the header's bottom rule moves down to it.
+  # the UNIT row, directly under the level header, says what each column holds ("row%", "mean (sd)")
+  # -- also what a numeric col_var's now-blank level header no longer says. Sits INSIDE the header
+  # block, so the header's bottom rule moves down to it.
   has_unit   <- !is.null(cvh) && !is.null(cvh$unit) && any(nzchar(cvh$unit))
   unit_off   <- if (has_unit) 1L else 0L
   unit_row   <- header_row + 1L                  # used only if has_unit
@@ -775,30 +628,26 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
 
   fmt_cols    <- roles$fmt_cols
   txt_cols    <- roles$other_cols
-  # Phase 14m-ii (rework): monospace numbers (Cascadia Mono) only for a table that SHOWS stars, else the
-  # proportional font. Per-table, because a list export can mix starred (reg) and plain (crosstab) sheets.
+  # monospace (Cascadia Mono) only for a table that SHOWS stars, per-table since a list export can
+  # mix starred (reg) and plain (crosstab) sheets.
   font_num    <- tx_num_font("xl", roles$has_stars, plain = o$font_num, stars = o$font_num_stars)
   row_var_col <- roles$row_var_col
   totcols     <- roles$totcols
-  # Phase 14o: a transposed table's `tab` is plain character (no fmt columns), so the fmt accessors that
-  # re-derive roles from the tab (is_refcol / get_col_var) read from `roles` instead. Its reference is a
-  # ROW (the Total), carried by bold_rows, not a column.
+  # a transposed table's `tab` is plain character (no fmt columns), so its roles are read from
+  # `roles` instead; its reference is a ROW (the Total), carried by bold_rows, not a column.
   ref_cols    <- if (isTRUE(transposed)) integer(0) else which(is_refcol(tab))
 
   cv_names      <- if (isTRUE(transposed)) unname(roles$col_var_map) else get_col_var(tab)
-  # the LEFT edge of each column BLOCK (tab_col_block_ids): Excel draws one rule there and the table's
-  # own right edge closes the last one, so no rule can fall INSIDE a block -- which is what used to
-  # box a Total column away from the count carved out of it.
+  # the left edge of each column BLOCK (tab_col_block_ids): Excel draws one rule there and the
+  # table's own right edge closes the last one, so no rule can fall INSIDE a block.
   block_start   <- tab_block_starts(roles$col_blocks %||% integer(0))
 
-  # THE WIDTH VECTOR, measured once from what each cell will show (xl_col_widths). Every consumer
-  # reads it: the writer sets it on the sheet, xl_prose_span() decides how far a footer line merges,
-  # and the merged-cell row heights are computed against it.
+  # every downstream consumer reads THIS width vector: the writer sets it on the sheet,
+  # xl_prose_span() decides how far a footer line merges, merged-cell heights are computed against it.
   col_widths <- xl_col_widths(tab, roles, col_var_header, o, colwidth, theme = o$theme)
 
-  # Phase 14i: the label columns' runs, lifted to ABSOLUTE sheet rows. `label_merges` is one merge per
-  # run (skipping length-1 runs -- Excel rejects a 1-cell "merge", and a rotated 1-row cell would only
-  # force a tall row); `vname_runs` are the name column's, the only ones that also get the rotation.
+  # label runs lifted to ABSOLUTE sheet rows: `label_merges` skips length-1 runs (Excel rejects a
+  # 1-cell "merge"); `vname_runs` are the name column's, the only ones that also rotate.
   label_merges <- purrr::imap(roles$label_runs, function(run, cl) {
     at <- which(run$show & run$span > 1L)
     tibble::tibble(col = match(cl, names(tab)),
@@ -806,10 +655,8 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   })
   label_merges <- if (length(label_merges)) dplyr::bind_rows(label_merges)
                   else tibble::tibble(col = integer(), row1 = integer(), row2 = integer())
-  # ... and, among those, the ones that ROTATE. Which names turn is the prep's shared decision
-  # (tab_vname_plan): a rotation must SAVE width, so it weighs the name's length against its block's
-  # height and against the names that cannot turn at all. The html engine reads the same vector for
-  # its `tx-vname` class, which is what keeps the two media saying the same thing.
+  # which names turn is the prep's shared decision (tab_vname_plan), read here and by the html engine
+  # so the two media agree.
   vname_runs   <- purrr::imap(roles$vname_plans %||% list(), function(p, cl) {
     j   <- match(cl, names(tab))
     run <- roles$label_runs[[cl]]
@@ -820,26 +667,16 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   vname_runs   <- if (length(vname_runs)) dplyr::bind_rows(vname_runs)
                   else tibble::tibble(col = integer(), row1 = integer(), row2 = integer())
 
-  # A MULTIPLICATIVE CELL KEEPS A REAL NUMBER. It holds the READING VALUE (fmt_excel_value: the
-  # signed fold) and prints through a two-section code, so "1/2.11" and "\u00f71.20" reach the
-  # workbook without costing the cell its numeric type -- what `ratio_cells = "text"` used to be the
-  # only way to get. `"text"` survives for a reader who wants the exact console string and no
-  # arithmetic. The cells are named by the SHARED plan (fmt_mult_plan), never by matching a raw
-  # token: a regression cell displays `{est}`, which IS the odds ratio on an odds-ratio column.
+  # cells are named by the SHARED plan (fmt_mult_plan), never by matching a raw token: a regression
+  # cell displays `{est}`, which IS the odds ratio on an odds-ratio column.
   xl_code   <- function(col) {
     code <- format(col, syntax = "excel")
     if (identical(o$ratio_cells, "text")) code[fmt_mult_plan(col)$cells] <- "TEXT"
     code
   }
-  # TEXT IS A PROPERTY OF A CELL, NOT OF A COLUMN. A `{ci}` bracket and a genuine min-max `{n_range}`
-  # cannot be a number, but the cells beside them can -- and turning the whole column to text took
-  # every model-fit statistic in it with them (an "AIC 17 129" written as a string, which Excel then
-  # flags as a number stored as text, and which carries a "." decimal into a locale that reads ","). A
-  # numeric column is written with a hole at each text cell, and those few cells are then written
-  # individually, exactly as a row sparkline already is.
-  # Phase 14o: a transposed column is heterogeneous character throughout (pre-formatted display
-  # strings, editable numbers deferred -- see tx_transpose_render()), so there the whole column is
-  # text. The colours still ride `ann`.
+  # turning the whole column to text took every model-fit statistic in it along with the bracket, so
+  # a numeric column is written with a hole at each text cell, filled individually below like a
+  # sparkline. A transposed column is heterogeneous character throughout, so there it is all text.
   text_fmt_cols <- if (isTRUE(transposed)) fmt_cols else integer(0)
   text_cells    <- if (isTRUE(transposed)) NULL else
     purrr::list_rbind(purrr::map(fmt_cols, function(ci) {
@@ -853,16 +690,13 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
       tibble::tibble(col = as.integer(ci), row = keep + data_row0, text = txt[keep])
     }))
 
-  # Phase 14i: Excel keeps only a merged range's top-left value, so the label repeats below one become
-  # invisible ghosts a user would find again on unmerging. Blank them at the source -- the display
-  # equivalent of md's blanked cells, and on the WRITTEN copy only (every role is read off `tab`).
+  # Excel keeps only a merged range's top-left value, so a label's repeats below it become invisible
+  # ghosts on unmerging. Blank them at the source, on the WRITTEN copy only (roles read off `tab`).
   xl_data <- xl_materialize_data(tab, fmt_cols, text_fmt_cols, transposed = transposed,
                                  theme = o$theme,
                                  fold = identical(o$ratio_cells, "fold"))
-  # A row sparkline lives in a base-count cell that holds NO number, so it displaces nothing: the
-  # column stays a real editable count and these few cells are written afterwards, individually, as
-  # text. Only where the column is numeric -- a genuine min-max range already makes it a
-  # `text_fmt_col`, whose format() string carries the glyphs on its own.
+  # a row sparkline lives in a base-count cell holding NO number, so it displaces nothing: the column
+  # stays a real editable count and these few cells are written afterwards, individually, as text.
   spark_cells <- if (isTRUE(transposed)) NULL else
     purrr::list_rbind(purrr::map(fmt_cols, function(ci) {
       cc  <- tab[[ci]]
@@ -879,18 +713,15 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     xl_data[[cl]][!roles$label_runs[[cl]]$show] <- NA_character_
   }
 
-  # Number formats: format(syntax = "excel") is the single display source of truth. Fold significance
-  # stars into the numFmt literal (0.0%\*\*\*), keeping the cell a real number; a "TEXT"-coded column
-  # (ci / OR) is written as a string with Excel's "@" text format; NA codes stay General. Stars are
-  # STORAGE-driven (get_stars() is "" when no pvalue was stored). When any cell is starred, pad EVERY
-  # value cell's star literal to the column-max width so numbers stay aligned in the column.
+  # fold significance stars into the numFmt literal (0.0%\*\*\*), keeping the cell a real number; a
+  # "TEXT"-coded column (ci / OR) is written as a string with Excel's "@" text format; NA codes stay
+  # General. Stars are STORAGE-driven (get_stars() is "" when no pvalue was stored); when any cell is
+  # starred, pad EVERY value cell's star literal to the column-max width so numbers stay aligned.
   numfmt <- if (length(fmt_cols)) purrr::map_dfr(fmt_cols, function(ci) {
     col <- tab[[ci]]
     if (ci %in% text_fmt_cols) {                        # text-mode column -> "@" per written cell
-      # Phase 14e: Excel renders in a proportional font, so the alignment padding must be figure
-      # spaces (a digit wide), not ASCII half-digit spaces -- as in html. `html = TRUE` is NOT the
-      # lever here: it would also switch on the html-only <sub> markup.
-      # Phase 14o: a transposed column is already a pre-formatted display string (character).
+      # figure-space padding (Excel is a proportional font, unlike ASCII half-digit spaces in html);
+      # a transposed column is already a pre-formatted display string.
       val  <- if (isTRUE(transposed)) as.character(col)
               else format(col, special_formatting = TRUE, na = "", stars = TRUE, theme = o$theme,
                           pad = fig_space)
@@ -903,37 +734,19 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     st   <- fmt_cell_suffix(col, stars = TRUE, theme = o$theme)
     val  <- !is.na(code) & code != "TEXT"
     if (any(val & nzchar(st))) {
-      # Phase 14h: the same width and the same pad glyph as format()'s star field (fmt_class.R) --
-      # an unstarred "" is width 0, so the max over every value cell IS the column-max star width.
-      # formatC() padded with ASCII spaces, half a digit wide in the proportional font Excel renders.
+      # an unstarred "" is width 0, so max() over every value cell IS the column-max star width.
       w      <- max(nchar(st[val]))
       st_pad <- tx_pad(st, w, "right", pad = fig_space) # glyphs left, pad right
-      # WARNING: backslash-escape the star literal (xl_numfmt_literal), NEVER double-quote-wrap it -- a raw
-      # " in a formatCode crashes the older jamovi-bundled openxlsx2 ("xml import unsuccessful").
-      # ⚠ EVERY SECTION: a signed or multiplicative code has two, and a suffix on the whole string
-      # would star the negative half alone.
-      code[val] <- xl_numfmt_affix(code[val], suffix = st_pad[val])
+      code[val] <- xl_numfmt_affix(code[val], suffix = st_pad[val])  # see header: escape, every section
     }
-    # ONE RULE for everything a template writes around its number -- a test label ("{pvalue} (Chi2)"),
-    # an aside's brackets and sigma ("(sigma{sd})"), an "n=" -- so Excel shows what the console shows
-    # and the cell stays a real number. Replaces the two arms that did this one template at a time.
     code <- xl_fold_literals(code, get_display(col))
     code[!is.na(code) & code == "TEXT"] <- "@"
     tibble::tibble(col = as.integer(ci), row = seq_along(code) + data_row0, code = code)
   }) else tibble::tibble(col = integer(), row = integer(), code = character())
   numfmt <- dplyr::filter(numfmt, !is.na(.data$code))
 
-  # Colour (two channels) comes from the shared prep `ann` (Phase 10j / 17g): text channel -> font
-  # (bold + colour, folded into the font plan below); background channel -> cell fill (applied by the
-  # writer). Phase 17g: consume ann's already theme-resolved HEX (`text_hex`/`bg_hex`, produced by
-  # fmt_channel_codes -- the SAME source the CSS side reads) rather than re-index a private palette by
-  # slot. The `slot > 0L` filter keeps exactly the coloured cells (slot 0 <=> hex NA); uncoloured
-  # columns contribute all-zero slots / NA hex, filtered out.
-  # Phase 22f-ii: the ink comes from the prep's RESOLVED per-cell colour (`ann$font` / `ann$back`),
-  # the same three fields tab_kable consumes -- not from the raw slots. The slot form
-  # said nothing about an UNCOLOURED cell, so Excel drew every greyed non-significant cell in pure
-  # black while html greyed it: `ann$font` already folds the whole rule (hex -> anchor black ->
-  # grey / grey2), so there is nothing left here to get wrong.
+  # text channel -> font (bold + colour, folded into the font plan below); background channel -> cell
+  # fill (applied by the writer).
   aside_col <- vapply(seq_len(ncl), function(j)
     is_fmt(tab[[j]]) && fmt_is_aside(tab[[j]]), logical(1))
   sec_hex   <- color_secondary_hex(o$theme)
@@ -941,10 +754,8 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     a <- ann[[names(tab)[ci]]]
     if (is.null(a$font)) return(NULL)
     rows <- seq_along(a$font) + data_row0
-    # AN ASIDE COLUMN IS AN ASIDE. mat_aside_cols() is Excel's paint_split(): the source column keeps
-    # its primary, each secondary token becomes a column. So those columns wear the console's aside
-    # ink and none of its emphasis -- including inside a Total or reference row, where `ann$font`
-    # would otherwise blacken them (the console's `sec()` never yields to an anchor either).
+    # an aside column wears the console's aside ink and none of its emphasis, even inside a Total or
+    # reference row (where `ann$font` would otherwise blacken it).
     ink  <- if (aside_col[[ci]]) rep(sec_hex, length(rows)) else a$font
     face <- !aside_col[[ci]]
     tibble::tibble(col = as.integer(ci), row = rows, hex = ink,
@@ -962,10 +773,8 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   ref_rows      <- bold_rows + data_row0
   ref_row_cols  <- union(fmt_cols, txt_cols)
 
-  # Unified FONT plan: openxlsx2's wb_add_font(update=) is buggy over large ranges when the sheet has
-  # scattered cells (title/subtext), so every font need is aggregated per cell into ONE complete
-  # descriptor applied with update = FALSE (a full replace) -- cross-aspect merge keeps numFmt / fill /
-  # border / alignment intact. Base name/size are filled by the writer. See R/tab-xl-backend.R.
+  # every font need is aggregated per cell into ONE complete descriptor -- see R/tab-xl-backend.R for
+  # why (wb_add_font(update=) is buggy over scattered ranges). Base name/size are filled by the writer.
   mk_src <- function(rows, cols, name = NA_character_, size = NA_real_, bold = FALSE,
                      color = NA_character_, italic = FALSE) {
     if (!length(rows) || !length(cols)) return(NULL)
@@ -974,30 +783,25 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
                   color = color)
   }
   txt_colour <- colour
-  # the reference bold rides the PRIMARY, exactly as it does in the console and in html: an aside
-  # column carries the same number set back, never a second bold one.
+  # the reference bold rides the PRIMARY: an aside column carries the same number set back, never a
+  # second bold one.
   ref_cols     <- setdiff(ref_cols, which(aside_col))
   ref_row_cols <- setdiff(ref_row_cols, which(aside_col))
   fonts <- dplyr::bind_rows(
     mk_src(data_rows, fmt_cols, name = font_num),                                # numeric font
     mk_src(header_row, seq_len(ncl), bold = TRUE, size = o$text_size_headers),   # headers
-    # THE UNIT ROW is the console's own type tag ("<row%>", "<n>") carried into the workbook: the
-    # header's size, regular weight, ITALIC like a pillar tag, and in the chrome's `grey` -- set
-    # further back than any cell, because it is a line of the header rather than a value.
-    # ⚠ theme-aware: this used to hard-code the light grey, so a dark or a publication workbook
-    # printed a light-theme ink.
+    # the unit row is the console's own type tag ("<row%>", "<n>"): header size, regular weight,
+    # italic like a pillar tag, in the theme's chrome grey (set back from any cell's own ink).
     if (has_unit) mk_src(unit_row, seq_len(ncl), size = XL_UNIT_SIZE, italic = TRUE,
                          color = tx_chrome_hex(o$theme)$grey),
-    # A VARIABLE NAME IS A HEADING, so the name column is bold throughout -- the rule html has always
-    # applied (`tx-b` on a `tx-vname` cell) and Excel never did.
+    # a variable name is a heading, so the name column is bold throughout, as html has always done.
     mk_src(c(header_row, data_rows), roles$var_name_col, bold = TRUE),
     mk_src(c(header_row, data_rows), ref_cols, bold = TRUE),                     # reference cols
     mk_src(ref_rows, ref_row_cols, bold = TRUE),                                 # reference rows
     mk_src(start, 1L, bold = TRUE, size = 12),                                   # title
     mk_src(subtext_rows, 1L, size = o$text_size_subtext),                        # subtext
-    # text-channel colour AND face (z11: `bold` was hard-wired TRUE here). A reference row that is also
-    # an under-slot cell ends up bold+italic -- `any(bold)` doing its job, the structural bold winning
-    # over the measure's non-bold; that union is the intended reading, not a special case.
+    # a reference row that is also an under-slot cell ends up bold+italic: `any(bold)` below lets the
+    # structural bold win over the measure's non-bold, which is the intended reading.
     if (nrow(txt_colour)) tibble::tibble(row = txt_colour$row, col = txt_colour$col,
                                          name = NA_character_, size = NA_real_,
                                          bold = txt_colour$bold, italic = txt_colour$italic,
@@ -1019,12 +823,9 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
         .groups = "drop")
   }
 
-  # Background-channel colour -> per-cell fill hex (ann$back, the html pill's own source).
   bg <- dplyr::filter(colour, !is.na(.data$fill))
   bg_fill <- tibble::tibble(row = bg$row, col = bg$col, fill = bg$fill)
 
-  # Precompose the ENTIRE per-cell style (font + fill + border + alignment) into the fewest distinct
-  # styles, each with its coalesced dims -- the openxlsx2 "shared styles, applied by id" fast path.
   styles <- xl_build_styles(
     header_row = header_row, unit_row = if (has_unit) unit_row else NA_integer_,
     data_rows = data_rows, last_row = last_row, ncl = ncl,
@@ -1041,60 +842,35 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     sheet = sheet,
     title = title, title_row = start,
     subtext = subtext_clean, subtext_row = last_row + 1L,
-    # the shape table: a header row, its rows, then the note -- one blank line under the subtext
-    # block. Plain cells, like the row sparklines already written into the count column.
+    # header row, one row per curve, then the note -- one blank line under the subtext block.
     shape_cells = xl_shape_cells(shape, last_row + length(subtext_clean) + 2L),
-    # the model-check pictures, under everything else the table wrote
     check_imgs = check_imgs,
     check_row = last_row + length(subtext_clean) + 2L +
       (if (is.null(shape)) 0L else nrow(shape) + 3L),
-    # Phase 13b: the coloured legend runs occupy the FIRST rows of the subtext block (legend merged
-    # first, above), overwritten with rich text by the writer.
+    # the legend runs occupy the FIRST subtext rows (merged above), overwritten with rich text below.
     legend_runs = legend_runs, legend_row = last_row + 1L,
-    # Phase 13c-v: fmt cell values -- a text-mode column (ci = "cell" / OR) is written as its format()
-    # display STRING (the exact console text, "@"-formatted above); every other column writes the raw
-    # get_num() number and lets Excel's numFmt code format it. Built per column so the tibble carries a
-    # mix of character (text-mode) and numeric columns. Phase 14i blanks the label columns' repeats
-    # on it (above), so a merged range holds no ghost value under its top-left cell.
+    # a text-mode column (ci = "cell" / OR) is written as its format() display STRING; every other
+    # column writes the raw get_num() number, so the tibble mixes character and numeric columns.
     data = xl_data,
     header_row = header_row, ncl = ncl, data_row0 = data_row0,
-    # the index columns stay put beside the header: a table is read by its row labels
-    freeze_col = max(1L, length(txt_cols)) + 1L,
-    # THE PROSE SPAN -- how far a title / footer line is merged across. A footer legend written into
-    # column A alone is what makes an Excel -> Word paste blow the column widths apart: Word sizes a
-    # column to its widest cell, and the legend is a paragraph. Merged and wrapped, it sizes nothing.
-    # Capped at roughly an A4 PORTRAIT text width rather than the table's own, so a very wide table
-    # does not stretch the legend into one unreadable line.
+    freeze_col = max(1L, length(txt_cols)) + 1L,       # index columns stay put beside the header
     prose_cols = xl_prose_span(col_widths, ncl),
     unit_row = if (has_unit) unit_row else NA_integer_,
     unit_names = if (has_unit) cvh$unit else NULL,
-    # AN INDEX COLUMN HAS NO UNIT, so its header takes both header rows rather than floating above a
-    # blank cell: one merged, bottom-aligned cell, which puts "levels" on the same line as the
-    # "<row%>" beside it. html does the same with a rowspan.
+    # an index column has no unit, so its header spans both header rows: one merged, bottom-aligned
+    # cell, putting "levels" on the same line as the "<row%>" beside it.
     head_merges = if (has_unit) unname(txt_cols) else integer(0),
-    # Phase 13c-iii: the level header shows the suffix-stripped labels; the writer overwrites the header
-    # cells with them and (when has_span) writes the merged col_var spanning-name row above.
     clean_names = if (!is.null(cvh)) cvh$clean else names(tab),
     span_row = if (has_span) span_row else NA_integer_,
     header_runs = if (has_span) tab_header_runs(cvh$label, cvh$group) else NULL,
     fmt_cols = fmt_cols, row_var_col = row_var_col, colwidth = colwidth,
-    # Phase 14l: the Excel-only "<var>_sd" siblings (roles$sd_cols, the ONE definition of the rule).
-    # They hold "s2.1" under a header of "sd", so the standard numeric width is wasted on them.
-    sd_cols = unname(roles$sd_cols),
-    # Phase 14i: the label columns' runs at ABSOLUTE sheet rows -- the writer merges each one, so a
-    # row/tab variable is named once per block instead of on every row. `vname_col` is the name column
-    # (values ARE variable names): merged AND rotated 90 degrees, so a long name costs one narrow
-    # column. A kept tab_var is merged but never rotated -- its values are levels the user reads.
+    sd_cols = unname(roles$sd_cols),                   # the Excel-only "<var>_sd" siblings, narrower
+    # `vname_col` (values ARE variable names) is merged AND rotated 90 degrees, so a long name costs
+    # one narrow column; a kept tab_var is merged but never rotated -- its values are levels.
     label_merges = label_merges, vname_col = unname(roles$var_name_col),
-    # ... and THE width vector, one entry per sheet column: measured from the rendered content, never
-    # auto-fitted (see xl_col_widths for why openxlsx2's `bestFit` cannot be trusted).
     col_widths = col_widths,
-    # the few base-count cells that hold a row sparkline instead of a count: written individually,
-    # as text, after the numeric column (see xl_materialize_data above).
-    spark_cells = spark_cells,
-    # ... and the cells no number can hold -- a `{ci}` bracket, a genuine min-max `{n_range}` --
-    # written the same way, so the numbers beside them in the same column stay numbers.
-    text_cells = text_cells,
+    spark_cells = spark_cells,                         # base-count cells holding a sparkline, not a count
+    text_cells = text_cells,                           # cells no number can hold (a `{ci}`, an `{n_range}`)
     styles = styles, numfmt = numfmt
   )
 }
@@ -1104,7 +880,6 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
 # the fewest DISTINCT styles, each with a coalesced multi-area dims. numFmt is NOT here (it is applied
 # by the writer as a separate merging pass). Borders are painted onto 4 side matrices (0 none / 1 thin
 # / 2 double), alignment onto zone matrices (base -> header -> total cols -> total rows, last wins).
-#' @keywords internal
 xl_build_styles <- function(header_row, unit_row = NA_integer_,
                             data_rows, last_row, ncl, fmt_cols, txt_cols, totcols,
                             block_start, tot_rows, tot_rows_1, tot_rows_last, end_group,
@@ -1120,13 +895,12 @@ xl_build_styles <- function(header_row, unit_row = NA_integer_,
   prow <- function(M, rows, v) { i <- idx(rows); if (length(i)) M[i, ] <- v; M }
   pcol <- function(M, cols, v) { c <- ci(cols); if (length(c)) M[, c] <- v; M }
   bt <- prow(bt, c(header_row, tot_rows_1), 1L)                           # surround/header top + block top
-  # the header block's bottom rule closes the UNIT row when there is one: no line separates a column's
-  # name from what it holds (the maintainer's rule -- the unit reads as part of the header).
+  # the header's bottom rule closes the UNIT row when there is one: no line separates a column's name
+  # from what it holds -- the unit reads as part of the header.
   head_bottom <- if (is.na(unit_row)) header_row else unit_row
   bb <- prow(bb, c(head_bottom, last_row, tot_rows_last), 1L)            # header/surround/bottomline/block bottom
-  # ONE RULE PER BLOCK BOUNDARY, drawn on the block's FIRST column; the table's own last column
-  # closes the last one. A Total column used to draw its own left AND right rule, which boxed it away
-  # from the base count carved out of it -- one fmt column with a line through it.
+  # one rule per block boundary, drawn on the block's FIRST column; the table's own last column
+  # closes the last one -- never both sides, or a Total column boxes away the count carved out of it.
   bl <- pcol(bl, c(1L, block_start), 1L)                                  # first col / block starts
   br <- pcol(br, ncl, 1L)                                                 # the table's right edge
   bb <- prow(bb, end_group, 2L)                                           # between-group double (wins)
@@ -1138,20 +912,15 @@ xl_build_styles <- function(header_row, unit_row = NA_integer_,
   hi <- idx(header_row)                                                   # header
   if (o$colnames_rotation == 0) { ah[hi, ] <- "center" } else { ah[hi, ] <- "left"; ar[hi, ] <- o$colnames_rotation }
   av[hi, ] <- "bottom"; aw[hi, ] <- TRUE
-  # the unit row: LEFT (the tag names its column, it does not label its numbers), never rotated
+  # the unit row: LEFT (names its column, does not label its numbers), never rotated and NEVER wraps
+  # (a compound tag like "<obs mean>" would break mid-word and read as two tags).
   ui <- idx(unit_row)
-  # ⚠ AND IT DOES NOT WRAP, unlike the level header above it. A tag is a compound word ("<obs mean>",
-  # "<row%-diff>"), so Excel's own mid-word break reads as two tags; xl_col_widths() therefore counts
-  # it on ONE line, at its own smaller size and without its angle brackets, so it stays inside the
-  # figures rather than setting the column's width.
   if (length(ui)) { ah[ui, ] <- "left"; av[ui, ] <- "bottom"; aw[ui, ] <- FALSE; ar[ui, ] <- 0L }
-  # numbers read RIGHT. Excel lands a numeric cell there by itself, but a TEXT-written one (a `{ci}`
-  # bracket, an `{n_range}`) landed left, so one column read against the next.
+  # numbers read RIGHT; a TEXT-written cell (a `{ci}` bracket, an `{n_range}`) would otherwise land
+  # left, misaligning one column against the next.
   fcd <- ci(fmt_cols); if (length(fcd) && length(di)) ah[di, fcd] <- "right"
-  # a LABEL column reads from the left, header included -- a variable name is a heading, not a number
-  # ... and WRAPS: xl_col_widths() caps a text column at `wrap_rows`, and the prep has already broken
-  # the values there, so the cell must be allowed to show the second line (its row is unmerged, so
-  # Excel fits the height itself).
+  # a LABEL column reads from the left and WRAPS: values are already broken at `wrap_rows`, so Excel
+  # just needs leave to show the second line (row unmerged, so it fits the height itself).
   xcd <- ci(txt_cols)
   if (length(xcd)) { ah[, xcd] <- "left"; if (length(di)) aw[di, xcd] <- TRUE }
   # the NAME column wraps: tab_vname_plan() capped its width, and the prep already broke the names at
@@ -1169,21 +938,14 @@ xl_build_styles <- function(header_row, unit_row = NA_integer_,
     xc <- ci(txt_cols); if (length(xc)) { ah[tri, xc] <- "left";  av[tri, xc] <- "top"; aw[tri, xc] <- TRUE }
     if (length(tc))    { ah[tri, tc] <- "left";  av[tri, tc] <- "top"; aw[tri, tc] <- FALSE }
   }
-  # Phase 14i: the row-variable NAME column reads vertically (90 degrees), centred on the block it
-  # merges over -- so a long name costs one narrow column instead of a wide one. `text_rotation` was
-  # already a per-cell matrix in the style dedup key (only `colnames_rotation` drove it), so this is a
-  # paint, and xl_coalesce() groups it for free. LAST, so it beats the total-row/total-col zones above
-  # (the name column is a text column, and a block's total row would otherwise re-align it to "left").
-  # Only the MERGED runs: a 1-row block stays horizontal (rotating it would just make the row tall).
+  # the row-variable NAME column rotates 90 degrees, centred on the block it merges over, so a long
+  # name costs one narrow column; painted LAST so it beats the total-row/total-col zones above. Only
+  # the MERGED runs rotate -- a 1-row block stays horizontal, or rotating it just makes the row tall.
   if (length(vname_col) > 0 && !is.null(vname_runs) && nrow(vname_runs) > 0) {
     vc <- ci(vname_col)
     for (k in seq_len(nrow(vname_runs))) {
       vi <- idx(vname_runs$row1[k]:vname_runs$row2[k])
       if (length(vi) && length(vc)) {
-        # A variable name reads from the LEFT in both orientations (`horizontal`, which under a 90
-        # degree rotation keeps the line against the column's left edge), and a ROTATED one CENTRES
-        # on the block it spans -- it names that block, so it belongs at its middle. A horizontal
-        # name keeps the data zone's own `top`, against the first row it names.
         ar[vi, vc] <- 90L; ah[vi, vc] <- "left"; av[vi, vc] <- "center"; aw[vi, vc] <- TRUE
       }
     }
@@ -1202,9 +964,7 @@ xl_build_styles <- function(header_row, unit_row = NA_integer_,
   cells$fname  <- dplyr::coalesce(fonts$name[fm],  o$font_text)
   cells$fsize  <- dplyr::coalesce(fonts$size[fm],  as.double(o$text_size))
   cells$fbold  <- !is.na(fm) & fonts$bold[fm]
-  # z11: the palette's face beyond weight. Constant FALSE under the colour palettes, so the style
-  # partition, its ordering and hence the emitted font ids are unchanged there.
-  cells$fital  <- !is.na(fm) & fonts$italic[fm]
+  cells$fital  <- !is.na(fm) & fonts$italic[fm]     # a publication palette's face beyond weight
   cells$fund   <- dplyr::coalesce(fonts$underline[fm], "")
   cells$fcolor <- fonts$color[fm]
   # overlay per-cell fill
@@ -1235,34 +995,17 @@ xl_build_styles <- function(header_row, unit_row = NA_integer_,
 }
 
 
-# WORKBOOK-SCOPED style registrar: deduplicates fonts / fills / borders / composed cell-xfs by CONTENT
-# across ALL tables and hands out GLOBALLY-UNIQUE style NAMES.
-# WARNING (Phase 11a bug): openxlsx2's styles_mgr is workbook-global and its get_*_id(name) resolves a
-#   name to the FIRST matching entry (match(name, df$name)). The old xl_apply_styles reset its uid()
-#   counter + caches per table, so from the 2nd table on every "txf1"/"txl1"/"txb1"/"txx1" name
-#   collided with table 1's -- and get_xf_id("txx<i>") silently returned TABLE 1's i-th xf, applying
-#   table 1's styles to every later table (offset borders, wrong font sizes, dead colours). ONE
-#   registrar per workbook keeps the names monotonic and shares style objects across tables.
-#' @keywords internal
+# deduplicates fonts / fills / borders / composed cell-xfs by CONTENT across ALL tables and hands
+# out GLOBALLY-UNIQUE style names -- see header for why (openxlsx2's styles_mgr is workbook-global).
 xl_style_registrar <- function(wb) {
   sm  <- wb$styles_mgr
   fc  <- new.env(parent = emptyenv()); lc <- new.env(parent = emptyenv())
   bc  <- new.env(parent = emptyenv()); xc <- new.env(parent = emptyenv())
   ctr <- 0L
   uid <- function() { ctr <<- ctr + 1L; ctr }
-  # WARNING (Phase 14l): `scheme = ""` is NOT cosmetic -- it is the whole reason a number cell renders
-  # in `font_num`. openxlsx2::create_font() defaults `scheme = "minor"` = "this IS the theme's body
-  # font", and Excel then resolves the font from the THEME, ignoring our explicit `name`. Since
-  # xlb_base_font(wb, font_text) writes the theme's minor font, every font we emitted -- all correctly
-  # named "DejaVu Sans" in the XML -- was drawn in "DejaVu Sans Condensed". Proven by unzipping the
-  # workbook: cellXfs -> fontId resolved to a font named DejaVu Sans on every numeric cell, while the
-  # font box in Excel read "DejaVu Sans Condensed (Body)". Never let `scheme` back in.
-  # WARNING: `scheme` is safely absent from the dedup key below ONLY because it is a constant. A
-  # per-font scheme would need `key` to grow a field, or two different fonts would collide onto one id.
-  # `italic`/`underline` carry a publication palette's typography (its under-cells are italic, its
-  # upper rungs ruled). Constant FALSE / "" for the colour palettes, so the key partition and hence the
-  # emitted font ids are unchanged there. `underline` is OOXML's own vocabulary ("single" / "double"),
-  # so it is written verbatim -- and it is IN the dedup key, which every font aspect must be.
+  # scheme = "" -- see R/tab-xl-backend.R for why. It is safely absent from the dedup key below only
+  # because it is a constant. `italic`/`underline` carry a publication palette's typography (constant
+  # FALSE / "" under the colour palettes); `underline` is OOXML's own vocabulary ("single"/"double").
   font_id <- function(name, size, bold, color, italic = FALSE, underline = "") {
     key <- paste(name, size, bold, italic, underline, color, sep = "\r")
     if (is.null(fc[[key]])) {
@@ -1320,10 +1063,7 @@ xl_style_registrar <- function(wb) {
 }
 
 
-# Apply the precomposed cell styles by id (font + fill + border + alignment in ONE composed xf per
-# distinct style, deduped WORKBOOK-WIDE through `reg`) over each style's coalesced dims. numFmt is
-# applied separately by the writer (it merges cross-aspect, per cell).
-#' @keywords internal
+# numFmt is NOT applied here -- it is a separate merging pass in the writer (cross-aspect, per cell).
 xl_apply_styles <- function(wb, s, styles, reg) {
   if (!nrow(styles)) return(invisible(wb))
   for (i in seq_len(nrow(styles))) {
@@ -1343,11 +1083,8 @@ xl_apply_styles <- function(wb, s, styles, reg) {
 }
 
 
-# Per-sheet writer: write the raw values, then apply the precomposed cell styles by id (font + fill +
-# border + alignment in ONE set_cell_style per distinct style), then the numFmt merging pass and the
-# column widths / row heights. `reg` is the workbook-scoped style registrar (Phase 11a) shared across
-# every table, so style NAMES never collide across the workbook.
-#' @keywords internal
+# per-sheet writer: raw values, then the precomposed cell styles by id, then the numFmt merging pass
+# and the column widths / row heights. `reg` is the workbook-scoped registrar shared across tables.
 xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
   s   <- plan$sheet
   hdr <- plan$header_row
@@ -1357,17 +1094,15 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
   # overwritten from `clean_names` below in either case.
   if (is.na(plan$unit_row)) xlb_write_data(wb, s, plan$data, hdr, 1L)
   else                      xlb_write_data(wb, s, plan$data, plan$unit_row + 1L, 1L, col_names = FALSE)
-  # ... then the row sparklines, one cell at a time: openxlsx2 types per CELL, so a text glyph run
-  # drops into an otherwise numeric count column without turning the whole column into text.
+  # sparklines/text cells one at a time: openxlsx2 types per CELL, so a text glyph drops into an
+  # otherwise numeric column without turning the whole column into text.
   for (cells in list(plan$spark_cells, plan$text_cells))
     if (!is.null(cells) && nrow(cells))
       purrr::pwalk(cells, function(col, row, text) xlb_write_cell(wb, s, xl_cell(row, col), text))
   xlb_write_cell(wb, s, xl_cell(plan$title_row, 1L), plan$title)
   if (length(plan$subtext)) xlb_write_cell(wb, s, xl_cell(plan$subtext_row, 1L), plan$subtext)
-  # EVERY LINE OF PROSE IS ONE MERGED, WRAPPED CELL as wide as `prose_cols` -- the title above the
-  # table and each footer line below it. That is what keeps an Excel -> Word paste from sizing a
-  # column to a paragraph. The title sits at the BOTTOM of its cell (against the table it names), a
-  # footer line at the TOP (reading down from the table).
+  # the title sits at the BOTTOM of its merged cell (against the table it names), a footer line at
+  # the TOP (reading down from the table).
   prose_rows <- c(plan$title_row, seq_along(plan$subtext) + plan$subtext_row - 1L)
   prose_txt  <- c(plan$title %||% "", plan$subtext)
   if (plan$prose_cols > 1L)
@@ -1380,7 +1115,7 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
   if (!is.null(plan$shape_cells) && nrow(plan$shape_cells))
     purrr::pwalk(plan$shape_cells, function(row, col, text)
       xlb_write_cell(wb, s, xl_cell(row, col), text))
-  # ... and the model-check pictures, each under a plain label naming the model it checks
+  # model-check pictures, each under a plain label naming the model it checks
   r <- plan$check_row
   for (im in plan$check_imgs %||% list()) {
     if (nzchar(im$label)) xlb_write_cell(wb, s, xl_cell(r, 1L), im$label)
@@ -1388,11 +1123,10 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
     r <- r + ceiling(im$height * 72 / 15) + 2L
   }
 
-  # Phase 13c-iii: overwrite the level-header cells with the suffix-stripped labels (the col_var name is
-  # written in the spanning row above), then the merged col_var spanning-name row (a variable name over
-  # its contiguous level columns; blank over the row var / total / count columns).
+  # overwrite the level-header cells with the suffix-stripped labels (the col_var name is written in
+  # the spanning row above), then the merged col_var spanning-name row.
   for (j in seq_len(plan$ncl)) xlb_write_cell(wb, s, xl_cell(hdr, j), plan$clean_names[j])
-  # ... and the unit row below it: what each column HOLDS, written once per BLOCK (tab_col_units()).
+  # the unit row below it: what each column HOLDS, written once per BLOCK.
   if (!is.na(plan$unit_row)) {
     for (j in which(nzchar(plan$unit_names)))
       xlb_write_cell(wb, s, xl_cell(plan$unit_row, j), plan$unit_names[j])
@@ -1405,10 +1139,8 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
     for (k in seq_along(runs$labels)) {
       c1 <- col0; c2 <- col0 + runs$spans[k] - 1L
       if (nzchar(runs$labels[k])) {
-        # Phase 19n: a span belonging to a SUB-POPULATION (a spread level, a split-model group) puts
-        # it on its own line above the variable -- an in-cell newline, with wrap_text set on the span
-        # row below. The two facts arrive stored and apart (`col_group` / `col_var`); before 19n they
-        # arrived welded as "White<br>married" and this line had to gsub an html tag out of a name.
+        # a span belonging to a SUB-POPULATION puts it on its own line above the variable, an in-cell
+        # newline with wrap_text set on the span row below.
         xlb_write_cell(wb, s, xl_cell(plan$span_row, c1),
                        if (nzchar(runs$groups[k])) paste0(runs$groups[k], "\n", runs$labels[k])
                        else runs$labels[k])
@@ -1419,10 +1151,9 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
     }
   }
 
-  # Phase 14i: merge each LABEL run vertically, so a row/tab variable is named once per block. The
-  # name column's cells are also rotated 90 degrees (painted in xl_build_styles), which is what makes
-  # a long name cost one narrow column. Merged BEFORE the styles: openxlsx2 keeps the range's top-left
-  # value, and set_cell_style() over a merged range still reaches every cell of it.
+  # merge each LABEL run vertically, so a row/tab variable is named once per block. Merged BEFORE the
+  # styles: openxlsx2 keeps a merged range's top-left value, and set_cell_style() still reaches every
+  # cell of it.
   if (nrow(plan$label_merges)) {
     lm <- plan$label_merges
     for (k in seq_len(nrow(lm))) {
@@ -1433,8 +1164,8 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
   # --- styles: one composed xf (font + fill + border + alignment) per distinct cell style ---
   xl_apply_styles(wb, s, plan$styles, reg)
 
-  # Phase 13c-iii: style the col_var spanning-name row (bold + centred, like the level header).
-  # Phase 19n: wrap_text when any span carries a sub-population line, so the two lines show.
+  # style the col_var spanning-name row (bold + centred); wrap_text when any span carries a
+  # sub-population line, so the two lines show.
   if (!is.na(plan$span_row)) {
     span_wrap <- if (any(nzchar(plan$header_runs$groups))) "1" else ""
     xf <- reg$xf_id(o$font_text, o$text_size_headers, TRUE, NA_character_, NA_character_,
@@ -1450,7 +1181,7 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
       purrr::pwalk(function(code, dims) xlb_numfmt(wb, s, dims, code))
   }
 
-  # --- Phase 13b: overwrite the legend rows (first of the subtext block) with coloured rich text ---
+  # --- overwrite the legend rows (first of the subtext block) with coloured rich text ---
   if (length(plan$legend_runs)) {
     for (i in seq_along(plan$legend_runs)) {
       runs <- plan$legend_runs[[i]]
@@ -1460,10 +1191,7 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
     }
   }
 
-  # --- column widths / row heights ---
-  # ONE vector, measured in the plan (xl_col_widths) and set here. ⚠ set per SHEET, not per table:
-  # `widths` is the pmax over every table stacked on this sheet (xl_sheet_widths), because a column
-  # index belongs to the sheet and the last writer used to silently overwrite the earlier ones.
+  # --- column widths / row heights: set per SHEET (pmax over every table stacked on it), not per table ---
   w <- widths %||% plan$col_widths
   # a ROTATED column header needs width for its turned line rather than for its text
   rot <- o$colnames_rotation
@@ -1471,9 +1199,8 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
     w[plan$fmt_cols] <- if (rot < 60) 8 else 6 + 8 * cos(rot / 90 * pi / 2)
   if (length(w)) xlb_col_widths(wb, s, seq_along(w), w)
   if (rot > 0) xlb_row_heights(wb, s, plan$header_row, 13.8 + 105 * sin(rot / 90 * pi / 2))
-  # ⚠ EXCEL NEVER AUTO-FITS A MERGED CELL'S HEIGHT. The col_var span row can hold two lines (a
-  # sub-population under a variable name) and a merged label run can wrap, so both are given the
-  # height their content needs; every other wrapped cell is unmerged and Excel fits it itself.
+  # ⚠ Excel never auto-fits a MERGED cell's height: the col_var span row can hold two lines, so it
+  # is given the height its content needs.
   if (!is.na(plan$span_row) && !is.null(plan$header_runs)) {
     hr   <- plan$header_runs
     at   <- cumsum(c(1L, utils::head(hr$spans, -1L)))
@@ -1488,14 +1215,11 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
 }
 
 
-# Which axis holds the DEPENDENT variable(s)? Under pct="row" a row is a GROUP and the column
-# distribution is what is being described ("race by marital" = the distribution of race, by marital
-# status); under pct="col" the two axes swap. `pct` is not an argument here, not in `vars`, and not in
-# the `vars` attribute -- its only surviving trace on a built table is the fmt columns' `pct_type`.
-# DESIGN (Phase 14l): only an all-"col" table flips. A mean and a regression coefficient have no
-# percentage base at all (`none`), so neither is directional and neither may vote;
-# a genuinely mixed row+col table falls back to the outcome-first default rather than guessing.
-#' @keywords internal
+# which axis holds the dependent variable(s): under pct="row" a row is the group and the column
+# distribution is what is described ("race by marital"); under pct="col" the axes swap. `pct` is not
+# an argument or a stored attribute -- its only trace is the fmt columns' `pct_type`, so only an
+# all-"col" table flips; a mean/coefficient (`none`) cannot vote, and a mixed table falls back
+# outcome-first rather than guessing.
 tab_title_rows_first <- function(tabs) {
   types <- purrr::map_chr(tabs, ~ if (is_fmt(.)) get_pct_type(.) else NA_character_)
   dir   <- types[!is.na(types) & types %in% c("row", "col")]
@@ -1512,17 +1236,9 @@ tab_title_names <- function(x, max = 2) {
   paste0(paste(x[seq_len(max)], collapse = ", "), " +", length(x) - max, " more")
 }
 
-#' @keywords internal
 tab_get_titles <- function(tabs, row, col, tab, max = 2) {
-  # Phase 14d: was a case_when over `length(row) == 1` with NO fallback, fed the DETECTED roles. On a
-  # merged table (several row_vars) those roles were the merge's own scaffolding, so the title read
-  # "levels by multi (tabbed by row_var)" -- three words, none of them a variable of the user's -- and
-  # any shape the branches missed fell through to a literal "NA". The roles are recorded now, so the
-  # real names are available; name them all, eliding past `max` with a count.
-  # Phase 14l: the DEPENDENT variable comes first ("ROCK, JAZZ by DIPLOM" reads as the thing described,
-  # then the thing it is broken down by), which under pct="row" is the col_vars -- so the old fixed
-  # "<rows> by <cols>" was backwards on the common table. `tabs` was already accepted and unused; it is
-  # what tab_title_rows_first() needs, so nothing new is threaded in.
+  # the DEPENDENT variable is named first ("ROCK, JAZZ by DIPLOM" reads as the thing described, then
+  # what it is broken down by), which under pct="row" is the col_vars.
   rows <- tab_title_names(row, max)
   cols <- tab_title_names(col, max)
   swap <- tab_title_rows_first(tabs)

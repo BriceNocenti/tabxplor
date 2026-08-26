@@ -1,14 +1,14 @@
 # PURPOSE: EVERY palette tabxplor draws with, in one place -- the colour ramps, the chrome, and the
 #   black-and-white publication palettes -- plus the store that keys them by (family, theme).
-# ROLE: A palette answers one question: "slot 3 of the text channel, in this theme -- what does it
+# ROLE: a palette answers one question: "slot 3 of the text channel, in this theme -- what does it
 #   look like?" Everything upstream is theme-blind (the engine computes SLOTS, integers 0-8) and
 #   everything downstream just draws what it is handed, so this file is the ONE boundary where a
-#   number becomes an appearance. Read through get_color_style() / tx_chrome_hex(); written (for the
-#   colour ramps only) by set_color_palette().
+#   number becomes an appearance. Read through get_color_style() / tx_chrome_hex(); written, for the
+#   colour ramps only, by set_color_palette().
 # KEY CONSTRAINTS:
 #   - A palette is HEX **and** FACE. A backend must never derive "is this bold" from "does this have
-#     a colour hex": that collapses on a publication palette whose every slot is near-black, and five
-#     sites once did. The face is declared beside the hex, always.
+#     a colour hex": that collapses on a publication palette whose every slot is near-black. The
+#     face is declared beside the hex, always.
 #   - A publication palette CANNOT be derived from a colour one: desaturating the two direction ramps
 #     collapses them onto the same greyscale, so the direction is not degraded but GONE. Hence the
 #     curated grids below -- and hence set_color_palette() provably cannot alter publication output.
@@ -20,9 +20,9 @@
 #     "where is the italic list". Adding a palette is one row there and nothing else.
 #   - Keep the oklch(...) annotations on every colour literal: they are how the ramps were chosen
 #     (chroma peaks, lightness steps, colour-blind safety) and the only way to re-tune them.
-# See: CLAUDE.md section "tabxplor architecture" (the colour system). The one pointer worth keeping is
-#   dev/black_and_white_publication_palette.md: it holds the MEASUREMENT the publication palettes
-#   answer (the shipped colour ramps converted to CIE L*), which a header cannot restate.
+# See: CLAUDE.md section "tabxplor architecture" (the colour system);
+#      dev/black_and_white_publication_palette.md, which holds the measurement the publication
+#      palettes answer (the shipped ramps converted to CIE L*) and that a header cannot restate.
 
 # === SECTION: the colour ramps -- 8-bit fallback, then the 24-bit OKLCH palettes ====================
 
@@ -44,7 +44,7 @@ default_text_colors <- c(
   "#300dfd"  # oklch(0.47 0.30 270)
 )
 default_text_colors_neg <- c( 
-  # more ligthness differences for color blinds
+  # more lightness differences for colour blindness
   "#dca331", # oklch(0.75 0.1400 80)
   "#de7c01", # oklch(0.68 0.1596 60)
   "#dd5301", # oklch(0.62 0.1868 42)
@@ -66,10 +66,10 @@ default_background_colors_neg <- c(
 )
 
 #### Background-legend colors ----
-# A colour legend break-word for the BACKGROUND channel cannot be drawn with a fill in every medium (an
-# Excel run carries a font colour only), and the pale background fills are invisible as text
-# on white. These are the same hues darkened to read as text. Light only (the dark bg palette already
-# reads as text). Produced by dev/color_palette_tools.R::darken_for_legend(); regenerate there.
+# A legend break-word for the BACKGROUND channel cannot be drawn with a fill in every medium (an Excel
+# run carries a font colour only), and the pale fills are invisible as text on white. These are the
+# same hues darkened to read as text; light only. Regenerate with
+# dev/color_palette_tools.R::darken_for_legend().
 default_bg_legend_colors <- c(
   "#67A1A7", # oklch(0.67 0.0611 204)  <- #dffcff
   "#6492B0", # oklch(0.64 0.0674 238)  <- #d7efff
@@ -93,7 +93,7 @@ default_dark_text_colors <- c(
   "#6987ff"#,# oklch(0.66 0.1797 270)
 )
 default_dark_text_colors_neg <- c(
-  # more ligthness differences for color blinds
+  # more lightness differences for colour blindness
   "#867002", # oklch(0.55 0.1124 95)
   "#b87501", # oklch(0.62 0.1341 70)
   "#ec6f02", # oklch(0.68 0.1792 50)
@@ -116,10 +116,8 @@ default_dark_background_colors_neg <- c(
 )
 
 ## 8-BIT FALLBACK PALETTES (RStudio console only) ----
-# The console default is the 24-bit OKLCH palette (below). RStudio's console cannot render 24-bit
-# truecolor, so there we fall back to these curated 256-colour palettes (4 over + 4 neg). Positron /
-# modern terminals get the 24-bit palette.
-#' @keywords internal
+# RStudio's console cannot render 24-bit truecolor, so there it falls back to these curated
+# 256-colour ramps. Positron and modern terminals get the OKLCH palettes above.
 palette_8bit <- list(
   text_light = c("#33FFFF", "#00CCFF", "#0066FF", "#0000FF",   # over (faint -> strong)
                  "#FF9933", "#FF6600", "#FF3333", "#FF0000"),  # under
@@ -135,11 +133,10 @@ palette_8bit <- list(
 
 # === SECTION: the chrome -- everything that is NOT a colour-measure slot ===========================
 
-# ONE resolver, per theme: tab_export_prep() builds `theme_cols` from it (the inline / kableExtra /
-# plot / xl path) and tx_css_rules()
-# emits it as CSS (the html path), so the two renderings cannot drift. The colour themes state their
-# chrome here; a publication palette states its own two greys in PRINT_PALETTES, beside the ink ladder
-# they have to sit next to.
+# ONE resolver, per theme: tab_export_prep() builds `theme_cols` from it and tx_css_rules() emits it
+# as CSS, so the two renderings cannot drift. The colour themes state their chrome here; a
+# publication palette states its own two greys in PRINT_PALETTES, beside the ink ladder they sit next
+# to.
 #   text  : the table's own font colour (also what a reference cell gets -- it inherits, no class)
 #   grey  : an uncoloured cell in a column that HAS a colour measure
 #   grey2 : an uncoloured cell in a column with no colour measure -- and, by the same logic, the
@@ -149,11 +146,8 @@ palette_8bit <- list(
 #           aside: they REPLACE the colour, so they carry the deviation itself and must read as
 #           strongly as the number. Pure black under every print palette (a superscript glyph at
 #           grey2 is too faint to be seen at all); `grey2` elsewhere, where nothing writes a mark.
-# Phase 14e: `hover` is kableExtra's lightable yellow (its `tbody tr:hover` -- more visible and more
-# familiar than the grey wash we had). DARK: pure #FFFFFF on #111111 is a harsh, glare-y contrast for
-# body text; #CECDC3 on #222222 is the (softer, warmer) pairing the maintainer asked for. The border
-# stays the text colour, so it softens with it.
-#' @keywords internal
+# DARK: pure #FFFFFF on #111111 is a harsh, glare-y contrast for body text, so the pairing is the
+# softer #CECDC3 on #222222. The border stays the text colour, so it softens with it.
 tx_chrome_hex <- function(theme = "light") {
   pal <- print_palette_of(tx_palette_theme(theme))
   # On paper the chrome is fixed -- black ink, white ground, no hover -- and the only thing a
@@ -180,36 +174,28 @@ tx_chrome_hex <- function(theme = "light") {
 # The one grey FILL ramp (every publication palette's bg channel), and its dark stand-in for the media that
 # have no fill at all (an Excel legend run, a ggplot label): there a fill must be spoken as ink, and
 # the light ramp would be invisible on white.
-#' @keywords internal
 PRINT_BG        <- c("#F5F5F5", "#E4E4E4", "#D0D0D0", "#B8B8B8")
-#' @keywords internal
 PRINT_BG_LEGEND <- c("#767676", "#595959", "#3F3F3F", "#1A1A1A")
 
 # The two mark glyphs of `theme = "print_marks"`. WARNING: U+207A / U+207B are East-Asian NEUTRAL, so
-# every terminal and every renderer draws them one cell wide and the column keeps its alignment. Do
-# NOT swap in an arrow, a dagger or a block glyph: those are AMBIGUOUS width and would shift the
-# column on any CJK-configured terminal (the trap the row sparkline documents).
-#' @keywords internal
+# every renderer draws them one cell wide and the column keeps its alignment. Do NOT swap in an arrow,
+# a dagger or a block glyph -- those are AMBIGUOUS width and shift the column on a CJK terminal.
 PRINT_MARKS <- c(over = "\u207A", under = "\u207B")
 
 # --- the palette record ---
 
 # THE face record, in the one place its shape is written: how each of the 8 slots is DRAWN, beside the
 # hex that says what it is drawn WITH. Declared, never derived -- a backend that infers "bold" from
-# "has a colour hex" collapses on an all-black publication palette, and five sites once did.
+# "has a colour hex" collapses on an all-black publication palette.
 #   bold / italic  .
 #   underline      "" / "single" / "double" -- OOXML's own vocabulary, so Excel writes it verbatim
-#   marks          the run of glyphs the cell wears after its value ("" = none). Like the significance
-#                  stars it stands in for, it is drawn as a SUPPORTING piece -- the chrome's `grey2`,
-#                  with none of the cell's own face -- so the two annotations look alike in every
-#                  theme and neither outshouts the number. format() enforces that by ending the
-#                  primary character range where the value ends.
-#   semantic       emit the face as MARKUP (<b>/<i>/<u>) and not only as CSS -- true of the whole
-#                  print family, whose destinations (GitHub's markdown sanitizer, an HTML -> Word
-#                  paste) carry tags and nothing else
+#   marks          the run of glyphs the cell wears after its value ("" = none). Drawn as a
+#                  SUPPORTING piece, like the stars it stands in for -- the chrome's `grey2`, none of
+#                  the cell's own face -- so neither annotation outshouts the number.
+#   semantic       emit the face as MARKUP (<b>/<i>/<u>), not only as CSS -- true of the whole print
+#                  family, whose destinations (GitHub, an HTML -> Word paste) carry tags and nothing else
 # A length-1 argument is a CONSTANT face: that is how the colour palettes say their one fact (every
 # text slot bold, nothing on a fill) without an 8-row grid of identical rows to say it.
-#' @keywords internal
 face_record <- function(bold = FALSE, italic = FALSE, underline = "", marks = "",
                         semantic = FALSE) {
   slot8 <- function(v) if (length(v) == 8L) v else rep(v, 8L)
@@ -227,7 +213,6 @@ face_record <- function(bold = FALSE, italic = FALSE, underline = "", marks = ""
 # and per palette: `grey` (a greyed-out cell), `grey2` (an aside, and an uncoloured column), `shade`
 # (what the legend calls each direction face -- a CLOSURE so gettext() runs at render, NULL where the
 # palette names none), `doc` (one line, read by the generated man-page section).
-#' @keywords internal
 print_palette <- function(slots, doc, grey, grey2, shade = list(over = NULL, under = NULL)) {
   stopifnot(nrow(slots) == 8L,
             identical(slots$dir, rep(c("over", "under"), each = 4L)),
@@ -249,18 +234,15 @@ print_palette <- function(slots, doc, grey, grey2, shade = list(over = NULL, und
 
 # --- the three grids ---
 
-#' @keywords internal
 PRINT_PALETTES <- list(
 
-  # The general-purpose one. Direction is the FACE, magnitude the INK -- and the ink's top rung is
-  # bold, the loudest signal a page has, so it marks the strongest deviation rather than a mere
-  # direction. Three rungs over four break slots on purpose: the legend drops the repeated threshold.
+  # The general-purpose one: direction is the FACE, magnitude the INK, whose top rung is bold -- the
+  # loudest signal a page has, spent on the strongest deviation rather than on mere direction.
   print_minimalistic = print_palette(
     doc   = "direction by underline (over) and italic (under); magnitude by an ink ladder.",
-    # LIGHT on purpose: greyed means "deliberately harder to read", so it is held to the large-text /
-    # non-text floor (3.03:1 on white, 1.53:1 on the deepest fill) and never to the 4.5:1 body-text
-    # one -- but it must still clear 3:1, and it must stay lighter than rung 1 (7.45:1), which is what
-    # makes the reading ladder greyed < rung 1 < rung 2 monotone.
+    # LIGHT on purpose: greyed means "deliberately harder to read", so it is held to the large-text
+    # floor (3:1) rather than the 4.5:1 body-text one, and must stay lighter than rung 1 -- which is
+    # what keeps the reading ladder greyed < rung 1 < rung 2 monotone.
     grey  = "#949494", grey2 = "#444444",
     shade = list(over = function() gettext("Underlined"), under = function() gettext("Italic")),
     tibble::tribble(
@@ -274,11 +256,10 @@ PRINT_PALETTES <- list(
       "under",  3L,    "#000000", TRUE,  TRUE,    "",         0L,
       "under",  4L,    "#000000", TRUE,  TRUE,    "",         0L)),
 
-  # For a table whose CELLS already say which way they point -- every tab_reg() measure prints its own
-  # +/-, x/div or x/1-over-x glyph, and a tab() percentage does too under display = "{base} ({ratio})".
-  # Direction being spoken for, the typography spends everything on magnitude: four emphasis rungs in
-  # pure black, with italic left as a quiet second voice on the under side. Rung 1 is undecorated, so
-  # the greyed cell can go back to the ordinary #888888.
+  # For a table whose CELLS already say which way they point (every tab_reg() measure prints its own
+  # +/- or x/div glyph). Direction being spoken for, the typography spends everything on magnitude:
+  # four emphasis rungs in pure black, italic a quiet second voice on the under side. Rung 1 is
+  # undecorated, so the greyed cell can go back to the ordinary #888888.
   print_emphasis = print_palette(
     doc   = paste("magnitude by an emphasis ladder (bold, then underline, then double underline) in",
                   "pure black; direction by the cell's own measure symbol, plus italic under the null."),
@@ -295,10 +276,9 @@ PRINT_PALETTES <- list(
       "under",  3L,    "#000000", TRUE,  TRUE,    "single",   0L,
       "under",  4L,    "#000000", TRUE,  TRUE,    "double",   0L)),
 
-  # The cell says what it is in its OWN CHARACTERS -- the only encoding a plain-text copy survives,
-  # the only one a screen reader can read aloud, and the one a journal that forbids colour still
-  # accepts. It REPLACES the significance stars, which sit in the same place and would otherwise read
-  # as a second, contradictory run of symbols; the face is then free to reinforce the top rungs.
+  # The cell says what it is in its OWN CHARACTERS -- the only encoding a plain-text copy survives and
+  # a screen reader can read aloud. It REPLACES the significance stars, which sit in the same place
+  # and would otherwise read as a second, contradictory run of symbols.
   print_marks = print_palette(
     doc   = paste("magnitude and direction by a repeated superscript mark after the value",
                   "(no significance stars: the marks take their place, do not use with `tab_reg()`)."),
@@ -318,22 +298,18 @@ PRINT_PALETTES <- list(
 
 # --- print_ready: the palette a table should wear, chosen from what the table IS ---
 
-# `print_ready` is not a palette but a CHOICE of one, made per TABLE. A crosstab reads best with the
-# MARKS: nothing typographic then competes with the numbers, and the run of glyphs survives a
-# plain-text copy. A regression reads best with the EMPHASIS ladder, because its cells already carry
-# their own direction symbol (+/-, x/div, x/1-over-x), which frees the typography to spend everything
-# on magnitude. tab_is_reg() is the declared table identity, so this is a READ, not a guess.
-# WARNING: the two members write DIFFERENT `.p1..m4` rules, and a stylesheet is table-independent by
-# contract -- so a batch resolves to ONE of them, and `fallback` is what a caller with no table in
-# hand gets (a standalone tab_css(), the console). It is the EMPHASIS member on purpose: the marks are
-# cell TEXT and survive a missing stylesheet, an emphasis ladder does not.
-#' @keywords internal
+# `print_ready` is not a palette but a CHOICE of one, made per TABLE, read off tab_is_reg(). A
+# crosstab takes the MARKS -- nothing typographic competes with the numbers, and the glyphs survive a
+# plain-text copy. A regression takes the EMPHASIS ladder, its cells already carrying their own
+# direction symbol, which frees the typography to spend everything on magnitude.
+# WARNING: the two members write DIFFERENT `.p1..m4` rules and a stylesheet is table-independent by
+# contract, so a batch resolves to ONE of them and `fallback` serves a caller with no table in hand.
+# It is the EMPHASIS member on purpose: marks are cell TEXT and survive a missing stylesheet.
 PRINT_READY <- c(crosstab = "print_marks", regression = "print_emphasis",
                  fallback = "print_minimalistic")
 
 # Resolve `print_ready` against the table(s) being rendered. Any other theme passes through. A batch
 # takes the regression arm only when EVERY table is one -- `.p3` cannot mean two things at once.
-#' @keywords internal
 tx_theme_for_table <- function(theme, tabs = NULL) {
   if (is.null(theme) || is.na(theme[1]) || !identical(theme[1], "print_ready")) return(theme)
   if (is.null(tabs)) return(unname(PRINT_READY[["fallback"]]))
@@ -347,33 +323,27 @@ tx_theme_for_table <- function(theme, tabs = NULL) {
 
 # Is this theme one of the black-and-white palettes? THE predicate every "is it print" test funnels
 # through, so adding a fourth palette needs no edit outside this file.
-#' @keywords internal
 tx_is_print <- function(theme) {
   !is.null(theme) && !is.na(theme[1]) && theme[1] %in% names(PRINT_PALETTES)
 }
 
 # The palette record behind a theme, or NULL for the colour themes.
-#' @keywords internal
 print_palette_of <- function(theme) {
   if (!tx_is_print(theme)) return(NULL)
   PRINT_PALETTES[[theme[1]]]
 }
 
-# The strongest rule a set of underline values asks for. A cell can be reached by several sources (a
-# structural reference row, its own colour slot); the logical aspects beside it merge with any(), and
-# this is that rule for the three-value vocabulary.
-#' @keywords internal
+# The strongest rule a set of underline values asks for: a cell can be reached by several sources (a
+# reference row, its own colour slot), and the logical aspects beside it merge with any().
 face_underline_max <- function(v) {
   v <- v[!is.na(v) & nzchar(v)]
   if (!length(v)) "" else if ("double" %in% v) "double" else "single"
 }
 
-# Which palette family a GRAPHICS DEVICE reads for a channel. ggplot2's `fontface` has no underline
-# and a plotted point has no face at all, so a publication palette -- whose ink is black by design,
-# the magnitude living in the typography -- would collapse to one shade on a device. There it borrows
-# its own dark grey ramp (`bg_legend`, the ramp that already stands in for a fill wherever a fill is
-# impossible): four ordered levels, with bold and italic still beside them.
-#' @keywords internal
+# Which palette family a GRAPHICS DEVICE reads. ggplot2's `fontface` has no underline and a plotted
+# point has no face at all, so a publication palette -- black ink, magnitude in the typography --
+# would collapse to one shade. There it borrows its own dark grey ramp (`bg_legend`), four ordered
+# levels with bold and italic still beside them.
 tx_plot_ink_family <- function(theme, channel = c("text", "bg")) {
   channel <- match.arg(channel)
   if (identical(channel, "bg")) "bg" else if (tx_is_print(theme)) "bg_legend" else "text"
@@ -381,13 +351,10 @@ tx_plot_ink_family <- function(theme, channel = c("text", "bg")) {
 
 # Does this palette annotate its cells with repeated marks? Derived, never declared: a palette that
 # marks its cells must not also star them -- one cell position, one meaning.
-#' @keywords internal
 print_palette_marks <- function(pal) !is.null(pal) && any(nzchar(pal$face$marks))
 
 # The man-page catalogue, generated from the `doc` field so the taught list cannot drift from the
-# grids above. Read by ?tab_css, the ONE page that documents the family; every other `theme` argument
-# points here rather than restating it.
-#' @keywords internal
+# grids above. Read by ?tab_css, the ONE page that documents the family.
 print_palettes_rd <- function() {
   item <- function(nm) sprintf("  \\item{\\code{\"%s\"}}{%s}", nm, PRINT_PALETTES[[nm]]$doc)
   c("@section The black-and-white publication palettes:",
@@ -409,10 +376,8 @@ print_palettes_rd <- function() {
 
 # === SECTION: the store, and the one assembly that keys every palette ==============================
 
-#' @keywords internal
 tabxplor_palette_env <- new.env(parent = emptyenv())
 
-#' @keywords internal
 default_palette_base <- function() {
   list(
     text_colors                = default_text_colors,
@@ -428,7 +393,6 @@ default_palette_base <- function() {
   )
 }
 
-#' @keywords internal
 build_palettes <- function() {
   e <- tabxplor_palette_env
   if (is.null(e$base)) e$base <- default_palette_base()
@@ -449,13 +413,10 @@ build_palettes <- function() {
     e$hex[[paste0("bg_", nm)]]        <- c(PRINT_BG,        PRINT_BG)
     e$hex[[paste0("bg_legend_", nm)]] <- c(PRINT_BG_LEGEND, PRINT_BG_LEGEND)
   }
-  # THE FACE -- the twin of the hex: how a slot is DRAWN, assembled here exactly as the hex is. A
-  # publication palette brings its own graded record (its grid); the colour palettes state their one
-  # constant fact through the SAME constructor, so there is only ever one way to write a face.
-  # WARNING: bold-on-every-text-slot is not decoration -- it IS what tx_css_render()'s static
+  # THE FACE -- the twin of the hex, assembled here exactly as the hex is (see face_record() above).
+  # WARNING: bold-on-every-text-slot is not decoration. It IS what tx_css_render()'s static
   # `.p1..m4{font-weight:bold}` rule says, i.e. THE baseline tx_face_decls() diffs every palette
-  # against. Changing it silently changes what the print stylesheet has to restate.
-  # See face_record() above for the record's fields.
+  # against, so changing it changes what the print stylesheet has to restate.
   bold8 <- face_record(bold = TRUE)          # the colour palettes' one fact, and THE CSS baseline
   flat  <- face_record()                     # a fill says nothing typographically, in any palette
   e$face <- list(text_light = bold8, text_dark = bold8, bg_light = flat, bg_dark = flat,

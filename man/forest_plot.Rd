@@ -57,9 +57,8 @@ a constant square and no value, for a plot with many panels.}
 \code{NULL} (the default) prints the cell's own primary token.}
 
 \item{layout}{Which axis is read and which is faceted: \code{"keep"} (the default) reads the
-table's rows, \code{"transpose"} reads its columns, and \code{"auto"} picks whichever has more
-levels -- more levels down the side, fewer panels across, which is the more legible of the two
-whenever the table is much wider than it is tall. A regression table is never transposed.}
+table's rows, \code{"transpose"} reads its columns, \code{"auto"} picks whichever has more levels
+(more legible whenever the table is much wider than tall). A regression table is never transposed.}
 
 \item{facet}{\code{NULL} for one panel per estimate column, \code{FALSE} for a single panel.}
 
@@ -73,10 +72,9 @@ breaks -- the teaching mode, which makes a cell's colour and its position one st
 
 \item{totals}{Draw total rows and total columns.}
 
-\item{offset}{How far below the estimate the observed value sits, as a fraction of a row. ggplot
-has no absolute-unit nudge, so what reads well depends on the viewport: raise it for a tall
-figure with few rows. Under an adjustment colour the arrow takes this row and the observed value
-drops one further.}
+\item{offset}{How far below the estimate the observed value sits, as a fraction of a row; raise it
+for a tall figure with few rows. Under an adjustment colour the arrow takes this row and the
+observed value drops one further.}
 
 \item{label_offset}{How far above the estimate its value is printed, as a fraction of a row.}
 
@@ -85,18 +83,16 @@ drops one further.}
 \item{footer}{\code{"short"} (the default) the console's own footer, \code{"full"} the exports'
 longer one, or \code{"none"}. Both are wrapped and set flush left.}
 
-\item{footer_width}{Characters per footer line. A ggplot caption does not wrap, and the plot
-cannot measure the device at build time, so a wide figure wants a larger number and a narrow one
-a smaller.}
+\item{footer_width}{Characters per footer line, since a ggplot caption does not wrap on its own.
+Use a larger number for a wide figure, smaller for a narrow one.}
 
 \item{legend}{Where the colour legend goes: \code{"auto"} (the bottom), \code{"right"},
 \code{"left"}, \code{"top"} or \code{"none"}. When several ladders apply it cannot be a guide and
 goes to the caption instead.}
 
 \item{theme}{\code{"light"}, \code{"dark"} or one of the black-and-white publication palettes
-(\code{"print_ready"} and friends; a plotted mark then reads its
-magnitude off a grey ramp, since a point has no typography).
-\code{NULL} follows \code{getOption("tabxplor.export_theme")}.}
+(\code{"print_ready"} and friends -- a mark then reads its magnitude off a grey ramp). \code{NULL}
+follows \code{getOption("tabxplor.export_theme")}.}
 
 \item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
 \code{"en"} or \code{"fr"}.}
@@ -122,26 +118,22 @@ they are about residuals, which no table carries.)
 }
 \details{
 \strong{What is drawn.} Always a \strong{deviation}: the effect a regression estimates, or, for a
-cross-table, the comparison its \code{color =} grades -- a difference from the reference in
-percentage points, a ratio or an odds ratio on a log axis. The \strong{level} the deviation sits on
-(the percentage, the mean, the adjusted probability) is printed above each whisker instead, so the
-position and the number say two different things. \code{what = "level"} swaps them.
+cross-table, the comparison its \code{color =} grades. The \strong{level} it sits on (the
+percentage, the mean, the adjusted probability) is printed above each whisker instead, so position
+and number say two different things; \code{what = "level"} swaps them.
 
-\strong{The gridlines are the table's colour ladder} (\code{\link{set_color_breaks}}), one dashed rule
-per rung in that rung's own colour, labelled with the same glyphs the footer uses -- and continued
-beyond the last rung (each step twice the one before) as far as the data goes. The whisker takes
-the colour of its cell, whole: significance is read off the whisker, so there are no stars.
+\strong{The gridlines are the table's colour ladder} (\code{\link{set_color_breaks}}), labelled with the
+same glyphs as the footer and continued as far as the data goes. The whisker takes the colour of
+its cell whole, so significance is read off it and there are no stars.
 
 \strong{A table that mixes units} (an odds ratio beside a mean difference) gets one axis per panel, each
-in its own transform, and the unit moves into the strip. Panels that measure the SAME thing share
-one range, so their effect sizes stay comparable.
+in its own transform, with panels measuring the same thing sharing one comparable range.
 
 \strong{The observed comparison.} With \code{empirical = TRUE}, a regression estimate carries its crude
-counterpart. \code{observed = "band"} (the default when the gap was testable) draws a bracket around
-the observed value at plus-or-minus the margin of error \emph{of the difference}: the modelled point
-falls outside it exactly when the gap test rejects. Two intervals must not be compared by overlap
-when the estimators are correlated, which is why the crude interval is not drawn by default;
-\code{observed = "ci"} restores that classic figure if you want it.
+counterpart. \code{observed = "band"} (the default when testable) draws a bracket at plus-or-minus
+the margin of error of the difference: the modelled point falls outside it exactly when the gap
+test rejects. Two correlated intervals should not be compared by overlap, which is why the crude
+one is not drawn by default; \code{observed = "ci"} restores it.
 }
 \examples{
 if (requireNamespace("ggplot2", quietly = TRUE)) {

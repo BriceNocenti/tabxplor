@@ -991,6 +991,9 @@ missing, none stale). `devtools::test(filter = "non-ascii|display|args|options")
 
 #### Phase 23e — Tests simplification
 testthat tests have grown organically: it was right for development, but would slow future dev for no real benefits. I want you to select the tests that are *really* necessary, and to move the others to a folder of `dev/` scripts not run with `test`. **The full suite must go below 20 seconds** (parallelised, on this desktop computer).
+- Study what would be the best tests to keep in priority. The ones that measure outputs, rather that the one that overfits the current "how" of the code ? The ones that tests main architecture and design of tabxplor framework and ecosystem of functions, and ensure integration, rather than the ones that tests for a specific implementation of a function whose internals could be done differently without hurting package integration ? What else ? Do not hesisate to make web searches about packages tests, the right and the wrong kind of tests for long development, focusing on long term package maintenance and simplifying the dev tests at release.
+- Identify long tests and, if they are really necessary, think about how to make them faster without losing their reliability.
+- If the preparation steps are computed several times for several tests, make an efficient common preparation.
 
 #### Phase 23f — french translations
 
