@@ -9,7 +9,7 @@
 \arguments{
 \item{x}{A html table returned by \code{\link{tab_kable}}.}
 
-\item{...}{Passed to \pkg{kableExtra}'s print method.}
+\item{...}{Passed to the next print method.}
 }
 \value{
 \code{x}, invisibly.
@@ -20,7 +20,13 @@ Opens the html table \code{\link{tab_kable}} returned in the Viewer, on a page p
 theme is resolved from \strong{your editor} rather than your operating system: the Viewer is a webview,
 and its \code{prefers-color-scheme} reports the OS, so it cannot see the editor the table is sitting
 in. Anything else -- a non-interactive print, a knitted document, or a table tabxplor did not style
-(\code{css = FALSE}, or the kableExtra engine) -- prints exactly as \pkg{kableExtra} does.
+(\code{css = FALSE}) -- prints the markup exactly as \pkg{knitr} does.
+}
+\details{
+The Viewer page carries jQuery and bootstrap (from \pkg{rmarkdown}) plus tabxplor's own binding
+script, which is what turns the cells' \code{title=} attributes into styled tooltips and makes
+\code{popover = TRUE} work. Without \pkg{rmarkdown} and \pkg{htmltools} the table still prints,
+and the tooltips fall back to the browser's own plain ones.
 }
 \seealso{
 \code{\link{tab_kable}}, \code{\link{tab_css}}

@@ -206,7 +206,7 @@ empty_tab <- dplyr::filter(tb10c, FALSE)
 testthat::test_that("tab_kable degrades gracefully (message, no error)", {
   for (nm in names(degrade_shapes)) {
     testthat::expect_message(out <- tab_kable(degrade_shapes[[nm]]), "skipped", info = nm)
-    testthat::expect_s3_class(out, "kableExtra")
+    testthat::expect_s3_class(out, "knitr_kable")
   }
 })
 

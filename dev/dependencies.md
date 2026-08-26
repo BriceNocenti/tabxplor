@@ -37,11 +37,11 @@ Imports rather than Suggests for exactly that reason — it is called unguarded 
 |                                  |                        count | note                                                                           |
 |:---------------------------------|-----------------------------:|:-------------------------------------------------------------------------------|
 | Imports (non-base)               |                       **15** | 5 slots of headroom against CRAN's 20                                          |
-| Suggests                         |                       **22** | `DescTools` and `bench` left in Phase 23e with their tests                     |
+| Suggests                         |                       **22** | `DescTools`, `bench` (23e) and `kableExtra` all left; `htmltools` joined       |
 | Hard install, recursive          |              **32** packages | what `install.packages("tabxplor")` pulls at runtime (34 counting `LinkingTo`) |
-| `dependencies = TRUE`, recursive |             **127** packages | what `tx_need_pkg()`'s advice pulls                                            |
-| jamovi `.jmo` payload            | **47** packages, **58.1 MB** | what jamovi does *not* already bundle                                          |
-| ...of which test-only            |   **0** packages, **0 MB** | the 21.9 MB of `DescTools` + `bench` is gone                                     |
+| `dependencies = TRUE`, recursive |              **94** packages | what `tx_need_pkg()`'s advice pulls                                            |
+| jamovi `.jmo` payload            | **23** packages, **31.8 MB** | what jamovi does *not* already bundle                                          |
+| ...of which test-only            |     **0** packages, **0 MB** | the 21.9 MB of `DescTools` + `bench` is gone                                    |
 
 ## Who pays for a dependency
 
@@ -94,9 +94,11 @@ flatpak run --devel --command=sh org.jamovi.jamovi -c 'ls /app/lib/R/library'
 
 | jamovi `.jmo` payload | packages |        size |
 |:----------------------|---------:|------------:|
-| before                |      114 |    156.8 MB |
-| after                 |       47 |     58.1 MB |
-| **removed**           |   **67** | **98.6 MB** |
+| before Phase 22l      |      114 |    156.8 MB |
+| after 22l             |       47 |     58.1 MB |
+| after 23e             |       25 |     36.3 MB |
+| after `kableExtra`    |   **23** | **31.8 MB** |
+| **removed in total**  |   **91** | **125.0 MB** |
 
 `ggpubr` (→ rstatix, ggsci, ggsignif, polynom), `FactoMineR` (→ DT, emmeans, leaps, scatterplot3d,
 showtext, …), `questionr` (→ shiny, miniUI, styler, httpuv, promises, later) and `car` (→ lme4,
@@ -112,7 +114,7 @@ Ranked by what dropping it removes from the `.jmo` — the closure, not the pack
 | `VGAM` + `svyVGAM`                     |                                 8.4 MB | survey-weighted multinomial, a specialist path                                                                                                            |
 | `marginaleffects`                      | 7.0 MB (+ insight, checkmate, Formula) | `effect = "at_reference"` only; the g-computation engine is tabxplor's own                                                                                |
 | `openxlsx2`                            |                                 4.5 MB | Excel export — ⚠ this one the jamovi module's own export button uses                                                                                      |
-| `kableExtra`                           |                     4.5 MB (+ svglite) | the themed Viewer page and its tooltips                                                                                                                   |
+| `kableExtra` *(gone, 22l-bis)*         |                     4.5 MB (+ svglite) | ⚠ **nothing** — it had zero function calls in `R/`; tabxplor now ships its own html dependency (see *Vendored code*)                                       |
 | `mirai` + `parallelly` + `RhpcBLASctl` |                    2.9 MB (+ nanonext) | parallelism — ⚠ of no use *inside* jamovi, which runs its own process model                                                                               |
 | `gridExtra`                            |                                 0.7 MB | the model-check panel grid                                                                                                                                |
 | `bench` *(gone, 23e)*                  |                     0.6 MB (+ profmem) | ⚠ nothing — test-only and opt-in even there; moved with `test-benchmark.R`                                                                                 |
@@ -124,12 +126,12 @@ Ranked by what dropping it removes from the `.jmo` — the closure, not the pack
 is survey and its tree** — survey (4.1) → minqa, numDeriv, mitools → **DBI (1.6)**. Everything else
 in Imports is already in jamovi's library. `forcats` is the only other 0.5 MB.
 
-**The two free wins were the test-only Suggests `DescTools` + `bench` — 21.9 MB of a 58 MB payload,
-for code no user ever ran.** Phase 23e took them: their parity tests moved to
-`dev/tests/testthat/`, where an undeclared package is allowed. Worth more to the `.jmo` than every
-feature dependency except VGAM.
+⚠ **The free wins were the three that cost a user no feature at all** — 26.4 MB in total.
+`DescTools` + `bench` were test-only, and Phase 23e moved their parity tests to
+`dev/tests/testthat/`, where an undeclared package is allowed. `kableExtra` shipped nothing but an
+S3 class. Everything still on the list buys something real, so from here the trade stops being free.
 
-⚠ **The same list ranks the third audience's cost.** About **25 of the 47** remaining payload
+⚠ **The same list ranks the third audience's cost.** Most of the **23** remaining payload
 packages need compilation, and the heaviest are exactly the exotic ones a student's machine will
 have to fetch and build from scratch — `VGAM`, `openxlsx2`, `survey`, `nanonext`. Nothing common is
 left: every tidyverse-shaped package tabxplor uses is already
@@ -184,7 +186,7 @@ missing package of one request at once and gives the exact install line.
 | package                                           | feature                                                                     | guard                                  |
 |:--------------------------------------------------|:----------------------------------------------------------------------------|:---------------------------------------|
 | `openxlsx2`                                       | Excel export                                                                | abort, in `tab_xl()`                   |
-| `kableExtra`                                      | the themed Viewer page and its tooltip JS                                   | inform, degrades to a plain print      |
+| `rmarkdown` + `htmltools`                         | the Viewer page, and the tooltip / popover binding in a knitted document    | inform, degrades to a plain print      |
 | `clipr`                                           | `tab_md(clipboard = TRUE)`                                                  | inform                                 |
 | `ggplot2`, `gridExtra`                            | `forest_plot()`, `reg_check_plots()`, the Excel check images                | abort (inform for the images)          |
 | `marginaleffects`                                 | `effect = "at_reference"` only — the g-computation engine is tabxplor's own | abort                                  |
@@ -224,18 +226,25 @@ the package, its authors and the original study, and says how to get the untouch
 
 ## Vendored code, with credit
 
-Two functions live in tabxplor rather than in a dependency. Both are GPL (>= 2) → GPL (>= 3), both
-carry their attribution in a comment above them, and both were verified against the original.
+Three things live in tabxplor rather than in a dependency. All are GPL (>= 2) or MIT → GPL (>= 3),
+all carry their attribution in a comment above them, and each was verified against the original.
 
 | what                                         | where                 | verified                                                                                                                                                     |
 |:---------------------------------------------|:----------------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `htmltools::htmlEscape` → `tx_html_escape()` | `R/utils.R`           | identical for both `attribute` modes, encoding included                                                                                                      |
 | `car::vif.default/polr/svyolr` → `tx_vif()`  | `R/reg-assumptions.R` | `all.equal(tolerance = 1e-13)` on 14 fit shapes; `NULL` exactly where car errors or returns `NaN`. Re-run `dev/vif_car_parity.R` after **any** change to it. |
+| kableExtra's `kePrint.js` → `inst/tabxplor-1.0/tabxplor.js` | `R/tab-render-html.R` (`tx_html_deps()`) | ten lines binding the bootstrap tooltip / popover plugins to attributes the html engine already writes. jQuery and bootstrap come from `rmarkdown`; kableExtra's `lightable.css` is deliberately not reproduced. |
 
 `tx_vif()` implements Fox & Monette (1992) GVIF and returns **both** of car's shapes, so both call
 sites read it unchanged. It refuses rather than approximates: fewer than 2 terms, aliased
 coefficients, a rank-deficient fit, a matrix-coefficient fit (multinomial) or a singular vcov all give
 `NULL`, and the collinearity row is then simply absent.
+
+⚠ `tx_html_deps()` returns `NULL` when `rmarkdown` or `htmltools` is absent, and every caller
+degrades. Nothing breaks when it does: the cells' `title=` attribute is a native browser tooltip on
+its own, so a table still hovers — unstyled. **Popovers** are the part that genuinely needs the JS.
+The Viewer branch is `interactive()`-only, so the suite can prove the dependency list and the print
+predicate but never that a tooltip appears; that check is manual.
 
 ## String handling
 

@@ -721,7 +721,6 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "tvho
 
 
 
-
 #### shapes
 tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial" #, measure = "odds_ratio"

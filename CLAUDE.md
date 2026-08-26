@@ -735,6 +735,32 @@ Payload **114 packages / 156.8 MB -> 47 / 58.1 MB**. Of what remains, **`DescToo
 Imports-only floor is 6.9 MB of which **6.4 is `survey`** (-> minqa, numDeriv, mitools -> DBI).
 All of it is priced in `dev/dependencies.md` and reproducible with **`dev/dep_footprint.R`**.
 
+**`kableExtra` went too, after the measurement showed why it was worth it.** It had **zero function
+calls** in `R/`: `tab_kable_join()` stamped the `"kableExtra"` class so `print.kableExtra` /
+`knit_print.kableExtra` would attach four html dependencies. Two of those four are
+`rmarkdown::html_dependency_jquery()` / `_bootstrap()` -- and `rmarkdown` was already a Suggest; the
+third, `kePrint.js`, is **275 bytes** of `$(...).tooltip()` boilerplate; the fourth, `lightable.css`,
+tabxplor never used. So the header WARNING at `R/tab-render-html.R:16` ("LOAD-BEARING... do not clean
+up the class") was overstated, and `?tab_html`'s own `@param popover` already told users to paste
+that very snippet into their document by hand.
+
+Now: `inst/tabxplor-1.0/tabxplor.js` (vendored from kePrint.js, MIT, credited -- the package's first
+shipped JS asset), one producer `tx_html_deps()` read by both paths, the class stamp reduced to
+`c("tabxplor_kable", "knitr_kable")`, the Viewer branch building its own page through
+`htmltools::browsable()`, and a **new `knit_print.tabxplor_kable`** -- ⚠ that last one was previously
+inherited *free* from `knit_print.kableExtra`, and without it a knitted document silently loses the
+JS. `getOption("kableExtra_view_html")` became `tabxplor.view_html`, honouring the old name.
+`htmltools` returns as a Suggest at **zero cost**: `rmarkdown` already imports it.
+
+⚠ **Risk was lower than the comments implied**, and `R/jmvtab-export.R:316` already said so: tabxplor's
+tooltips "ride the native `title=` attribute, which needs no bootstrap JS". Absent the deps a table
+still hovers, unstyled; the JS upgrades the styling and is what makes **popovers** work at all.
+
+**Verified**: `knitr::knit_print(tab_html(x))` carries all three dependencies by name, and a rendered
+document contains the decoded binding inline. `.jmo` payload **25 -> 23 packages, 36.3 -> 31.8 MB**.
+⚠ The Viewer branch is `interactive()`-only, so the suite proves the dependency list and the print
+predicate but never that a tooltip appears -- that check is the maintainer's, by hovering a cell.
+
 **A defect fixed on the way, not a dependency matter.** `broom:::tidy.multinom` sets `y.level` to the
 string `"1"` when the outcome has two levels instead of naming the category, and
 `reg_columns_multinom()` filters on the real level name -- so **zero rows matched and the whole column

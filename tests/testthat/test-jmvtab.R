@@ -266,7 +266,6 @@ testthat::test_that("resolveExportPath(dir, filename, ext): folder + bare name +
 
 
 testthat::test_that("tab_html_string produces self-contained HTML (table + inlined CSS)", {
-  testthat::skip_if_not_installed("kableExtra")
   h <- tab_html_string(tabs)
   testthat::expect_true(grepl("<table", h))
   testthat::expect_true(grepl("<style", h))           # CSS inlined, not linked

@@ -825,8 +825,7 @@ testthat::test_that("export_number_path: replace keeps the name, else auto-numbe
 
 testthat::test_that("jmvtab_export honours replace and RETURNS the path really written (md/html/excel)", {
   for (fmt in c("md", "html", "excel")) {
-    if (fmt == "html" && !requireNamespace("kableExtra", quietly = TRUE)) next
-    if (fmt == "excel" && !requireNamespace("openxlsx2", quietly = TRUE)) next
+        if (fmt == "excel" && !requireNamespace("openxlsx2", quietly = TRUE)) next
     tmp <- withr::local_tempdir()
     ext <- switch(fmt, md = "md", html = "html", excel = "xlsx")
     p   <- file.path(tmp, paste0("Tableau.", ext))
@@ -1152,14 +1151,13 @@ testthat::test_that("jmvtab_export writes Markdown", {
 
 
 testthat::test_that("jmvtab_export writes self-contained HTML", {
-  testthat::skip_if_not_installed("kableExtra")
   tmp <- withr::local_tempdir()
   p   <- file.path(tmp, "t.html")
   jmvtab_export(tabs, "html", p)
   testthat::expect_true(file.exists(p))
   txt <- paste(readLines(p), collapse = "\n")
   testthat::expect_true(grepl("<table", txt))
-  testthat::expect_true(grepl("lightable|<style", txt))
+  testthat::expect_true(grepl("<style", txt))
 })
 
 

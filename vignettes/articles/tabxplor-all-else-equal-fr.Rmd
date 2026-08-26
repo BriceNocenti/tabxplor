@@ -224,11 +224,11 @@ car_arrests |>
          odds_ratio = set_display(Yes, "OR")    )
 ```
 
-Lire les trois dernières colonnes. À partir de 86 % et de 74 %, on obtient :
+Chacune des trois dernières colonnes correspond à une mesure de l’écart. À partir de 86 % et de 74 %, on obtient :
 
 - une **différence** de **&minus;12 points** — on soustrait l'un de l'autre ;
-- un **rapport** de **&divide;1.16** — les personnes noires ont été relâchées 1,2 fois moins souvent ;
-- un **rapport de cotes** de **1/2.11** — inversé, parce qu'il s'agit d'une sous-représentation.
+- un **rapport** de **&divide;1.16** — les personnes noires ont été relâchées 1,2 fois moins souvent que les personnes blanches ;
+- un **rapport de cotes** de **1/2.11** — le chiffre brut est **0.47**, que tabxplor inverse, quand il est inférieur à 1, pour pouvoir lire « 2.11 fois *moins* de chances (*odds*) que les personnes blanches d’avoir été relaché plutôt que mis en garde à vue ».
 
 **Dans `tab_reg()`, ce choix porte un nom — `measure` — et il vaut la peine de le lire en entier : la *mesure de l'écart*.** Ni une « échelle » abstraite, ni une unité : la question posée est **quelle sorte d'écart on veut voir rapportée** — soustraire, diviser, ou diviser les cotes. C'est le seul argument qu'on règle régulièrement, et c'est l'équivalent de `color =` dans `tab()`.
 

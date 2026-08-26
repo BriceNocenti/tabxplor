@@ -177,9 +177,9 @@ testthat::test_that("retired export arguments are inert and report once", {
 
 testthat::test_that("the output is Viewer-routed / knittable", {
   h <- tab_kable(tab(gss, marital, race, pct = "row"))
-  # the `kableExtra` class is what print.kableExtra / knit_print.kableExtra dispatch on; without it a
+  # the `knitr_kable` class is what the print / knit_print fall-through dispatches on; without it a
   # bare knitr_kable just cat()s the markup to the console instead of opening the Viewer.
-  testthat::expect_s3_class(h, "kableExtra")
+  testthat::expect_s3_class(h, "knitr_kable")
   testthat::expect_s3_class(h, "knitr_kable")
   testthat::expect_equal(attr(h, "format"), "html")
   testthat::expect_match(as.character(h), '<table class="tabxplor-tab">', fixed = TRUE)
@@ -359,9 +359,9 @@ testthat::test_that("print() is byte-identical to today when it is not an intera
   tb <- tab(gss, marital, race, pct = "row", color = "diff")
   k  <- tab_kable(tb)
   testthat::expect_s3_class(k, "tabxplor_kable")
-  # testthat is never interactive, so this IS the branch the suite runs: NextMethod() -> kableExtra's
-  # print -> cat(). It also covers a knit (`print()` inside a chunk) and kableExtra_view_html = FALSE.
-  # NOTE the assertion is deliberately on the OUTPUT, not the return value: kableExtra's print returns
+  # testthat is never interactive, so this IS the branch the suite runs: NextMethod() -> knitr's
+  # print -> cat(). It also covers a knit (`print()` inside a chunk) and tabxplor.view_html = FALSE.
+  # NOTE the assertion is deliberately on the OUTPUT, not the return value: knitr's print returns
   # cat()'s NULL, and "byte-identical to today" outranks the returns-its-input convention here.
   testthat::expect_identical(utils::capture.output(print(k)),
                              utils::capture.output(cat(as.character(k))))
@@ -416,15 +416,15 @@ testthat::test_that("Phase 17g: output_kable renders a two-channel colour after 
 })
 
 
-testthat::test_that("Phase 17g: tabxplor_kable print degrades when kableExtra is absent", {
+testthat::test_that("tabxplor_kable print degrades when the html dependencies are absent", {
   km <- tabxplor:::kable_print_mode
   # non-interactive / no theme / view-off / knitting all fall through to the base method
   testthat::expect_identical(km("dark", FALSE, TRUE, FALSE, TRUE), "next")
   testthat::expect_identical(km(NULL,   TRUE,  TRUE, FALSE, TRUE), "next")
   testthat::expect_identical(km("dark", TRUE,  TRUE, TRUE,  TRUE), "next")
-  # interactive themed print WITH kableExtra -> the themed Viewer page
+  # interactive themed print WITH the deps -> the themed Viewer page
   testthat::expect_identical(km("dark", TRUE,  TRUE, FALSE, TRUE), "viewer")
-  # interactive themed print WITHOUT kableExtra -> graceful degrade (note + knitr print), never a crash
+  # interactive themed print WITHOUT them -> graceful degrade (note + knitr print), never a crash
   testthat::expect_identical(km("dark", TRUE,  TRUE, FALSE, FALSE), "degrade")
 })
 

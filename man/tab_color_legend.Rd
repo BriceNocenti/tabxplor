@@ -32,8 +32,8 @@ background channel from the darker \code{bg_legend} palette (see \code{\link{set
 
 \item{classes}{\code{medium = "html"} only: emit the break-words as CSS slot classes rather than inline
 hex, because a tabxplor stylesheet ships with the output (\code{tab_html()}). Then the
-legend follows a theme toggle exactly like the cells it describes. \code{FALSE} (the kableExtra engine,
-which carries no stylesheet of ours) keeps inline hex.}
+legend follows a theme toggle exactly like the cells it describes. \code{FALSE} (a table rendered
+without a stylesheet of ours) keeps inline hex.}
 }
 \value{
 A character vector (or, for "runs", a list of run-lists), or NULL when nothing is coloured.

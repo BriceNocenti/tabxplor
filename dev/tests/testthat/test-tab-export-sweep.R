@@ -59,7 +59,6 @@ gss <- fx_gss()
 
 
 testthat::test_that("tab_kable works with grouped tables", {
-  testthat::skip_if_not_installed("kableExtra")
 
   gss_sub <- gss |> dplyr::filter(year %in% c(2000, 2014))
   tabs <- tab(gss_sub, race, marital, year, pct = "row", color = "diff")
@@ -69,7 +68,6 @@ testthat::test_that("tab_kable works with grouped tables", {
 
 
 testthat::test_that("tab_kable accepts theme='light' and theme='dark'", {
-  testthat::skip_if_not_installed("kableExtra")
 
   tabs <- tab(gss, race, marital, pct = "row", color = "diff")
   testthat::expect_no_error(tab_kable(tabs, theme = "light"))
@@ -78,7 +76,6 @@ testthat::test_that("tab_kable accepts theme='light' and theme='dark'", {
 
 
 testthat::test_that("tab_kable get_data returns a data.frame", {
-  testthat::skip_if_not_installed("kableExtra")
 
   tabs <- tab(gss, race, marital, pct = "row", color = "diff")
   result <- tab_kable(tabs, get_data = TRUE)
@@ -87,7 +84,6 @@ testthat::test_that("tab_kable get_data returns a data.frame", {
 
 
 testthat::test_that("tab_kable works with counts (no color)", {
-  testthat::skip_if_not_installed("kableExtra")
 
   tabs <- tab(gss, race, marital)
   testthat::expect_no_error(tab_kable(tabs))
@@ -95,7 +91,6 @@ testthat::test_that("tab_kable works with counts (no color)", {
 
 
 testthat::test_that("tab_kable works with chi2 subtext", {
-  testthat::skip_if_not_installed("kableExtra")
 
   tabs <- tab(gss, race, marital, pct = "row", test = TRUE, color = "diff")
   testthat::expect_no_error(tab_kable(tabs))
@@ -111,7 +106,6 @@ sw_prepared <- dplyr::starwars |>
 
 
 testthat::test_that("tab_kable works with numeric tables", {
-  testthat::skip_if_not_installed("kableExtra")
 
   sw <- sw_prepared
   tabs <- tab_num(sw, sex, height, na = "drop", color = "diff")
@@ -120,7 +114,6 @@ testthat::test_that("tab_kable works with numeric tables", {
 
 
 testthat::test_that("tab_kable with contrib color works", {
-  testthat::skip_if_not_installed("kableExtra")
 
   tabs <- tab(gss, race, marital, pct = "row", test = TRUE, color = "contrib")
   testthat::expect_no_error(tab_kable(tabs))
@@ -192,12 +185,11 @@ gss <- fx_gss()
 # === SECTION: tab_kable =======================================================
 
 testthat::test_that("tab_kable returns a kable object", {
-  testthat::skip_if_not_installed("kableExtra")
 
   tabs <- tab(gss, race, marital, pct = "row", color = "diff")
   result <- tab_kable(tabs)
   testthat::expect_true(
-    inherits(result, "knitr_kable") | inherits(result, "kableExtra") |
+    inherits(result, "knitr_kable") | inherits(result, "tabxplor_kable") |
       is.character(result)
   )
 })

@@ -836,10 +836,10 @@ testthat::test_that("a single tab is returned bare (not wrapped in tabxplor_tabs
 })
 
 
-testthat::test_that("tab_kable(list) routes to the Viewer (kableExtra class) with joined tables", {
+testthat::test_that("tab_kable(list) routes to the Viewer with joined tables", {
   t <- tab(fx_gss(), c(marital, relig), race, pct = "row", output_list = TRUE)
   k <- tab_kable(t)
-  testthat::expect_s3_class(k, "kableExtra")                  # print.kableExtra -> Viewer
+  testthat::expect_s3_class(k, "knitr_kable")                  # print.tabxplor_kable -> Viewer
   testthat::expect_true(grepl("<table", as.character(k)))
 })
 
@@ -917,7 +917,6 @@ testthat::test_that("tab_reg() shows stars by default; stars = FALSE strips the 
 
 
 testthat::test_that("tab_kable main cells carry stars (opt-in) but tooltips do not leak them", {
-  testthat::skip_if_not_installed("kableExtra")
   t1  <- tab(gss, marital, race, pct = "row", ci = "ref", stars = TRUE)
   html <- as.character(tab_kable(t1, tooltip = TRUE))
   testthat::expect_true(grepl("\\*", html))                    # main cells show stars
@@ -1239,7 +1238,7 @@ test_that("split_var tables get a per-group export footer; plain tables one foot
   expect_equal(length(gregexpr("McFadden R2", md_p)[[1]]), 1L)  # a single block
 
   # split export renders through kable too
-  expect_s3_class(suppressWarnings(tab_kable(t_split)), "kableExtra")
+  expect_s3_class(suppressWarnings(tab_kable(t_split)), "knitr_kable")
 })
 
 

@@ -51,6 +51,22 @@ testthat::test_that("tab_kable html engine structure is stable", {
 
 
 
+testthat::test_that("the Viewer assets are tabxplor's own, and the print mode gates them", {
+  d <- tabxplor:::tx_html_deps()
+  testthat::skip_if(is.null(d), "rmarkdown / htmltools are Suggests")
+  testthat::expect_setequal(vapply(d, `[[`, "", "name"), c("jquery", "bootstrap", "tabxplor"))
+  js <- system.file("tabxplor-1.0", "tabxplor.js", package = "tabxplor")
+  testthat::expect_true(nzchar(js) && file.size(js) > 0)   # the binding actually ships
+  # the pure predicate: only an interactive, themed, non-knitting print WITH the deps opens the Viewer
+  km <- tabxplor:::kable_print_mode
+  testthat::expect_identical(km("dark", FALSE, TRUE, FALSE, TRUE),  "next")
+  testthat::expect_identical(km(NULL,   TRUE,  TRUE, FALSE, TRUE),  "next")
+  testthat::expect_identical(km("dark", TRUE,  TRUE, TRUE,  TRUE),  "next")
+  testthat::expect_identical(km("dark", TRUE,  TRUE, FALSE, TRUE),  "viewer")
+  testthat::expect_identical(km("dark", TRUE,  TRUE, FALSE, FALSE), "degrade")
+})
+
+
 testthat::test_that("html engine output is self-contained (inline <style>, no external <link>)", {
   h <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff")))
   testthat::expect_match(h, "<table")
@@ -161,7 +177,7 @@ testthat::test_that("no border SHORTHAND survives in the stylesheet (coloured ce
 
 testthat::test_that("a wrapped header keeps its <br>, a user's markup is still escaped", {
   # tab_wrap_text() breaks long header names on "<br>"; escaping the whole label printed a literal
-  # "Some very long<br>race level name" (kableExtra never hit this -- knitr::kable(escape = FALSE)).
+  # "Some very long<br>race level name" (knitr::kable(escape = FALSE) never hit this).
   d <- gss; levels(d$race)[1] <- "Some very long race level name"
   h <- as.character(tab_kable(tab(d, marital, race, pct = "row"), tooltips = FALSE))
   testthat::expect_match(h, "<th[^>]*>[^<]*<br>")

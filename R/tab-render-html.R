@@ -13,14 +13,14 @@
 #   - The <style> is hoisted ONCE by tab_kable_join(). It works inside jamovi: the results view
 #     injects our html through jQuery .html(), which applies <style> nodes, and has no sanitizer on
 #     that path (what jamovi ignores is htmlDependency, not <style>).
-#   - WARNING: the `kableExtra` class on our output is LOAD-BEARING. tab_kable_join() stamps it so
-#     print.kableExtra() / knit_print.kableExtra() route the fragment to the Viewer and bind the
-#     bootstrap tooltips. kableExtra is a Suggests we still need for that; do not "clean up" the
-#     class.
+#   - The `knitr_kable` class on our output IS load-bearing: it is what routes the fragment to
+#     knitr's own print / knit_print when tabxplor's do not apply. The Viewer page and the tooltip
+#     binding are tabxplor's own, through tx_html_deps() -- jQuery and bootstrap from rmarkdown, the
+#     binding from inst/tabxplor-1.0/tabxplor.js.
 #   - WARNING: do not replace the tooltip string with a library call. kableExtra::spec_tooltip() /
 #     spec_popover() cannot emit this placement -- their match.arg() takes single tokens, so
 #     "auto right" errors and c("auto", "right") silently yields a length-2 attribute that recycles
-#     into the title.
+#     into the title. The attribute is therefore built by hand below.
 #   - A CELL'S RENDERING STOPS AT ITS PRIMARY TOKEN: the text colour, the background fill and, under
 #     a publication palette, the face. html_cell_text() is the one place all three are known, so it
 #     applies all three; the aside takes `tx-sec` and the stylesheet sets it back. A background is a
@@ -474,12 +474,39 @@ render_html_degrade <- function(tab) {
 tab_kable_join <- function(parts, css = "", theme = NULL) {
   body <- paste(unlist(parts), collapse = "\n<br>\n")
   out  <- if (nzchar(css)) paste0("<style>", css, "</style>\n", body) else body
-  out <- structure(out, format = "html",
-                   class = c("tabxplor_kable", "kableExtra", "knitr_kable"))
+  out <- structure(out, format = "html", class = c("tabxplor_kable", "knitr_kable"))
   # tabxplor paints a Viewer page only when its OWN stylesheet ships (css != ""): otherwise there is
   # no document to paint against, and the Viewer's dark chrome around an unstyled table is unreadable.
   if (nzchar(css)) attr(out, "tabxplor_theme") <- theme
   out
+}
+
+
+# === SECTION: the html dependencies ===============================================================
+
+# THE ONE PRODUCER of the browser-side assets, read by the Viewer print and by the knit path.
+#
+# tabxplor writes the tooltip ATTRIBUTES itself (html_cell_text(), above); these three bind them:
+# jQuery and bootstrap come from rmarkdown, which every Rmd user already has, and the 10-line binding
+# is ours (inst/tabxplor-1.0/). lightable.css is deliberately NOT reproduced -- tabxplor ships its own
+# stylesheet through tab_css() and uses none of kableExtra's themes.
+#
+# ⚠ NULL when rmarkdown or htmltools is absent: BOTH are Suggests, and the caller degrades. Nothing
+# breaks when it does -- the `title=` attribute is a native browser tooltip on its own, so a table
+# without these still hovers, just unstyled. Popovers are the part that genuinely needs the JS.
+#' @keywords internal
+#' @noRd
+tx_html_deps <- function() {
+  if (!requireNamespace("rmarkdown", quietly = TRUE) ||
+      !requireNamespace("htmltools", quietly = TRUE)) return(NULL)
+  src <- system.file("tabxplor-1.0", package = "tabxplor")
+  if (!nzchar(src)) return(NULL)
+  list(
+    rmarkdown::html_dependency_jquery(),
+    rmarkdown::html_dependency_bootstrap(theme = "cosmo"),
+    htmltools::htmlDependency("tabxplor", utils::packageVersion("tabxplor"),
+                              src = src, script = "tabxplor.js")
+  )
 }
 
 
@@ -507,13 +534,13 @@ tx_kable_page <- function(html, theme = "light", detected = tx_detect_theme()) {
 
 # Pure predicate (all inputs passed in) so it is testable -- testthat is never interactive(), and the
 # branches below are otherwise unreachable. Returns:
-#   "next"    : fall through to kableExtra/knitr's own print
-#   "degrade" : an interactive themed print wants the Viewer, but kableExtra is absent -> note + print
-#   "viewer"  : paint the themed Viewer page and let kableExtra bind the tooltips
+#   "next"    : fall through to knitr's own print
+#   "degrade" : an interactive themed print wants the Viewer, but the deps are absent -> note + print
+#   "viewer"  : paint the themed Viewer page and bind the tooltips
 #' @noRd
-kable_print_mode <- function(theme, interactive, view_opt, knitting, have_ke) {
+kable_print_mode <- function(theme, interactive, view_opt, knitting, have_deps) {
   if (is.null(theme) || !interactive || !isTRUE(view_opt) || knitting) return("next")
-  if (!have_ke) return("degrade")
+  if (!have_deps) return("degrade")
   "viewer"
 }
 
@@ -524,10 +551,15 @@ kable_print_mode <- function(theme, interactive, view_opt, knitting, have_ke) {
 #' theme is resolved from **your editor** rather than your operating system: the Viewer is a webview,
 #' and its \code{prefers-color-scheme} reports the OS, so it cannot see the editor the table is sitting
 #' in. Anything else -- a non-interactive print, a knitted document, or a table tabxplor did not style
-#' (\code{css = FALSE}, or the kableExtra engine) -- prints exactly as \pkg{kableExtra} does.
+#' (\code{css = FALSE}) -- prints the markup exactly as \pkg{knitr} does.
+#'
+#' The Viewer page carries jQuery and bootstrap (from \pkg{rmarkdown}) plus tabxplor's own binding
+#' script, which is what turns the cells' \code{title=} attributes into styled tooltips and makes
+#' \code{popover = TRUE} work. Without \pkg{rmarkdown} and \pkg{htmltools} the table still prints,
+#' and the tooltips fall back to the browser's own plain ones.
 #'
 #' @param x A html table returned by \code{\link{tab_kable}}.
-#' @param ... Passed to \pkg{kableExtra}'s print method.
+#' @param ... Passed to the next print method.
 #' @return \code{x}, invisibly.
 #' @seealso \code{\link{tab_kable}}, \code{\link{tab_css}}
 #' @export
@@ -537,15 +569,18 @@ print.tabxplor_kable <- function(x, ...) {
   # everything but an interactive Viewer print falls through to the next method, byte for byte:
   #   - no theme      : we did not ship the stylesheet, so the page is not ours to paint
   #   - !interactive(): there is no page (the only branch the test suite exercises)
-  #   - knitting      : the page belongs to the DOCUMENT; dispatch walks on to knit_print.kableExtra
-  #   - degrade       : kableExtra is absent -- its tooltip JS cannot be reproduced, so a note then
-  #                     the same fall-through
+  #   - knitting      : the page belongs to the DOCUMENT; knit_print.tabxplor_kable carries the deps
+  #   - degrade       : rmarkdown / htmltools are absent, so there is no page to build -- a note,
+  #                     then the same fall-through (the browser's own title= tooltips still work)
+  deps <- tx_html_deps()
   mode <- kable_print_mode(theme, interactive(),
-                           getOption("kableExtra_view_html", TRUE),
+                           # `kableExtra_view_html` is honoured as the former spelling of the opt-out
+                           getOption("tabxplor.view_html", getOption("kableExtra_view_html", TRUE)),
                            !is.null(tx_knitr_opt("out.format", "knit")),
-                           requireNamespace("kableExtra", quietly = TRUE))
+                           !is.null(deps))
   if (identical(mode, "degrade"))
-    tx_need_pkg("kableExtra", "A themed Viewer page with tooltips", severity = "inform")
+    tx_need_pkg(c("rmarkdown", "htmltools"), "A themed Viewer page with styled tooltips",
+                severity = "inform")
   # WARNING: load knitr before falling through -- an S3 method exists only once its own package is
   # loaded, so an unguarded NextMethod() would reach print.default() instead of knitr's.
   if (identical(mode, "next") || identical(mode, "degrade")) {
@@ -553,9 +588,12 @@ print.tabxplor_kable <- function(x, ...) {
     cat(as.character(x), sep = "\n")
     return(invisible(x))
   }
-  # delegate, never reimplement: kableExtra's print attaches the JS that binds our tooltips.
-  print(structure(tx_kable_page(as.character(x), theme),
-                  format = "html", class = c("kableExtra", "knitr_kable")), ...)
+  # The Viewer page, with its assets: htmltools' own print method for a shiny.tag.list is what
+  # writes the dependencies out and opens the pane.
+  page <- htmltools::browsable(htmltools::HTML(tx_kable_page(as.character(x), theme)))
+  htmltools::htmlDependencies(page) <- deps
+  class(page) <- "shiny.tag.list"
+  print(page, ...)
   invisible(x)
 }
 

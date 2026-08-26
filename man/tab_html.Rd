@@ -77,16 +77,10 @@ hover. Set to \code{FALSE} to discard (or set the option to \code{FALSE} once pe
 document, e.g. in a vignette or report where every table auto-prints).}
 
 \item{popover}{By default, takes \code{getOption("tabxplor.kable_popover")}. When
-\code{FALSE}, html tooltips are of the base kind : they can't be used with floating table of
-content in \pkg{rmarkdown} documents. Set to \code{TRUE} to use \pkg{kableExtra} html
-popovers instead, which are compatible with floating toc. Remember
-to enable the \code{popover} module by copying the following code into your document :
-\code{<script>
-$(document).ready(function(){
-  $('[data-toggle="popover"]').popover();
-});
-</script>
-}}
+\code{FALSE}, html tooltips are of the base kind: they can't be used with a floating table of
+contents in \pkg{rmarkdown} documents. Set to \code{TRUE} for click popovers instead, which are
+compatible with a floating toc. Both are bound automatically, in the Viewer and in a knitted
+document alike, provided \pkg{rmarkdown} and \pkg{htmltools} are installed.}
 
 \item{color_legend}{Print the colour legend below the table (with the subtext). \code{TRUE} by default, and a
 no-op on a table that carries no colours.}

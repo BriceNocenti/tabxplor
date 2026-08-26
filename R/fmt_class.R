@@ -6124,7 +6124,7 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
       if (nzchar(und))  out <- cli::style_underline(out)
       out
     } else if (identical(medium, "html")) {
-      # DESIGN: the span is emitted inline (kableExtra::text_spec() is byte-unstable across releases).
+      # DESIGN: the span is emitted inline -- no library call; theirs are byte-unstable across releases.
       # `classes` = "our stylesheet ships with this output" -> the break-word carries a slot CLASS
       # (theme-toggle-safe); else keep hex. Weight is per-channel: `font-weight:bold` only on the text
       # channel. `font-weight` is stated EXPLICITLY when the palette says not-bold, since this inline
@@ -6486,8 +6486,8 @@ render_streams <- function(streams, medium, theme, colored, classes = FALSE) {
 #' @param theme Palette theme (default from options).
 #' @param classes `medium = "html"` only: emit the break-words as CSS slot classes rather than inline
 #'   hex, because a tabxplor stylesheet ships with the output (`tab_html()`). Then the
-#'   legend follows a theme toggle exactly like the cells it describes. `FALSE` (the kableExtra engine,
-#'   which carries no stylesheet of ours) keeps inline hex.
+#'   legend follows a theme toggle exactly like the cells it describes. `FALSE` (a table rendered
+#'   without a stylesheet of ours) keeps inline hex.
 #' @return A character vector (or, for "runs", a list of run-lists), or NULL when nothing is coloured.
 #' @keywords internal
 tab_color_legend <- function(x, medium = c("console", "html", "md", "runs", "plain"),

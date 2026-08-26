@@ -515,6 +515,16 @@ knit_print.tabxplor_grouped_tab <- function(x, ...) {
   NextMethod()
 }
 
+# The three above all hand a `tabxplor_kable` back to knit_print(), so this is where every knitted
+# table lands. knitr's own knit_print.knitr_kable would emit the markup and nothing else; the `meta`
+# is what carries jQuery, bootstrap and the tooltip binding into the DOCUMENT (tx_html_deps()).
+# ⚠ NULL meta is fine: knitr accepts it, and the cells' title= attributes are a plain browser
+# tooltip on their own.
+#' @exportS3Method knitr::knit_print
+knit_print.tabxplor_kable <- function(x, ...) {
+  knitr::asis_output(paste0(as.character(x), "\n\n"), meta = tx_html_deps())
+}
+
 
 
 #' Table headers for class tab
@@ -635,16 +645,10 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' hover. Set to \code{FALSE} to discard (or set the option to \code{FALSE} once per
 #' document, e.g. in a vignette or report where every table auto-prints).
 #' @param popover By default, takes \code{getOption("tabxplor.kable_popover")}. When
-#' `FALSE`, html tooltips are of the base kind : they can't be used with floating table of
-#' content in \pkg{rmarkdown} documents. Set to `TRUE` to use \pkg{kableExtra} html
-#' popovers instead, which are compatible with floating toc. Remember
-#' to enable the `popover` module by copying the following code into your document :
-#' \code{<script>
-#' $(document).ready(function(){
-#'   $('[data-toggle="popover"]').popover();
-#' });
-#' </script>
-#'}
+#' `FALSE`, html tooltips are of the base kind: they can't be used with a floating table of
+#' contents in \pkg{rmarkdown} documents. Set to `TRUE` for click popovers instead, which are
+#' compatible with a floating toc. Both are bound automatically, in the Viewer and in a knitted
+#' document alike, provided \pkg{rmarkdown} and \pkg{htmltools} are installed.
 #' @param caption The table caption. For formatting, you need to use a `css`
 #' with `caption{}`in rmarkdown.
 # @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
