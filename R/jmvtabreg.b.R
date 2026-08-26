@@ -1,32 +1,27 @@
-# PURPOSE: Jamovi module backend for the `jmvtabreg` analysis (Regressions).
-# ROLE: A thin orchestrator (Phase 15b), the sibling of R/jmvtab.b.R. `.run()` reads the options from
-#       jamovi/jmvtabreg.a.yaml, restores the live fit cache from the hidden `cache_state` result
-#       element's $state, calls the pure jmvtab_reg_build() (R/jmvtabreg-cache.R -- which drives
-#       tab_reg() with the cache injected via `.fit_cache`), persists the updated store, and renders
-#       the table as HTML via tab_kable().
+# PURPOSE: The jamovi backend for the `jmvtabreg` analysis (Regressions).
+# ROLE: A thin orchestrator, the sibling of R/jmvtab.b.R. `.run()` reads the panel's options, restores
+#       the fit cache from the hidden `cache_state` element's $state, calls the pure jmvtab_reg_build()
+#       (R/jmvtabreg-cache.R, which drives tab_reg() with the cache injected), persists the updated
+#       store, and renders through the shared jmv_backend_* helpers (R/jmvtab-export.R).
 # KEY CONSTRAINTS:
-#   - jmvtabreg.h.R is GENERATED from jmvtabreg.a.yaml (jmvtools::prepare()); never hand-edit it. The
-#     R6Class `inherit = jmvtabregBase` is evaluated LAZILY (at instantiation, in the running app), so
-#     this file loads / checks fine before the .h.R exists.
-#   - ...and it LAGS: between a `.a.yaml` edit and the maintainer's next prepare(), a newly declared
-#     option reads back NULL. So every option below carries an explicit `%||%` fallback -- the module
-#     must run on defaults in that window, never abort.
-#   - Phase 19k: `.opts()` speaks tab_reg()'s OWN vocabulary end to end (effect / measure / display /
-#     shape / a measure-valued colour). No translator sits between a control and its argument.
-#   - Phase 20g-i finished that: an OPTION IS NAMED AFTER THE tab_reg() ARGUMENT it drives (or
-#     `<argument>_<slot>` where several fold into one -- `ci_method`, `ref` + `ref_levels`).
-#     test-jamovi-vocabulary.R checks the rule. ⚠ renaming an option DISCARDS its value in
-#     already-saved .omv files -- accepted, this module carries no back-compat promise.
-#   - Phase 22g-iii: `stats =` has NO control. Since 22g-ii tab_reg()'s own default compares several
-#     predictor subsets against each other, so a picker offering "none" named the opposite of what it
-#     did; `empirical` became a tick-box for the same reason (TRUE is the argument's default, and R
-#     decides WHERE the crude effect goes).
-#   - The module runs in Jamovi's bundled R -- keep dependencies to what the package Imports/Suggests.
-#   - The cache lives ONLY in $state (survives the engine reset); never rely on R globals.
-#   - Export (Excel / HTML / Markdown) reuses R/jmvtab-export.R (resolveExportPath / jmvtab_export).
-# See: dev/tabxplor_2.0.0_jamovi_dev.md ; CLAUDE.md > 2.0.0 roadmap > Phase 15b.
+#   - AN OPTION IS NAMED AFTER THE tab_reg() ARGUMENT IT DRIVES (or `<argument>_<slot>` where several
+#     fold into one), so `.opts()` speaks tab_reg()'s own vocabulary end to end and no translator sits
+#     between a control and its argument; test-jamovi-vocabulary.R checks the rule. ⚠ renaming an
+#     option DISCARDS its value in already-saved .omv files -- accepted: this module carries no
+#     back-compat promise.
+#   - jmvtabreg.h.R is GENERATED from jamovi/jmvtabreg.a.yaml by jmvtools::prepare(); never hand-edit
+#     it. `inherit = jmvtabregBase` is resolved LAZILY (at instantiation, in the running app), so this
+#     file loads and checks fine before the .h.R exists -- and the .h.R LAGS, hence the `%||%` on
+#     every read: in that window the module runs on defaults instead of aborting.
+#   - A MODEL COMPARISON IS STAGED, not live. Refitting every model on each predictor edit is what
+#     froze the panel, so with >=2 folded models the table computes only on Run (or on an Export,
+#     which needs the result) and the fit cache is dropped outright -- see `.run()`.
+#   - `stats =` has no control: tab_reg()'s own default already compares several predictor subsets, so
+#     the panel asks nothing and sends NULL.
+#   - The cache lives ONLY in $state -- it alone survives jamovi's engine reset. Never in an R global.
+#   - The module runs in jamovi's bundled R: keep to what the package Imports / Suggests.
+# See: CLAUDE.md § tabxplor architecture (jamovi) ; dev/tabxplor_2.0.0_jamovi_dev.md.
 
-# @rdname jamovi
 jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
   "jmvtabregClass",
   inherit = jmvtabregBase,
@@ -36,20 +31,14 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
 
       data <- self$data
 
-      # Weights (shared helper: adds a Data-level weight back as .COUNTS).
       wr   <- jmv_backend_weights(data, self$options$wt)
       data <- wr$data
       wt   <- wr$wt
 
       opts  <- private$.opts(wt)
 
-      # DESIGN (Phase h): a model COMPARISON (>=2 folded models) is heavy -- refitting every model on
-      # each live predictor edit is what froze the panel. In that "staged" mode the table computes ONLY
-      # on the Run button (or an Export, which needs the result): between clicks a changed signature
-      # marks the shown table outdated; an unchanged one (incl. the run_compare auto-reset run) re-serves
-      # the last render. Single-model use stays fully live. compare_state persists sig + HTML across resets.
-      # Phase 19k: THE predicate, jmvtab_reg_staged() -- which exists for exactly this and whose own
-      # caller inlined it instead, so only the tests reached it and the two copies could drift.
+      # Between Run clicks a CHANGED signature marks the table outdated and an unchanged one
+      # re-serves the last render; compare_state carries both across an engine reset.
       staged  <- jmvtab_reg_staged(
         self$options$models, self$options$predictors,
         jmvtab_reg_cross_keys(self$options$crosses, self$options$predictors))
@@ -57,17 +46,13 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       cur_sig <- jmvtab_reg_compare_sig(opts)
       cst     <- self$results$compare_state$state       # list(sig=, html=) or NULL
 
-      # The fit cache is only useful for a SINGLE model: a comparison is a test between the fits. In staged
-      # comparison mode it just holds raw fits (~10 MB each) that re-serialize into $state on every UI
-      # round-trip -> the freeze. Drop it entirely here (the single most important line) so it stops
-      # persisting; the trigger path below then builds without a cache. Reverting to one model starts a
-      # fresh cache on the next run (the digest fast-path re-engages).
+      # WARNING: a comparison is a test BETWEEN the fits, so it KEEPS them -- and they would then 
+      # re-serialize into $state on every UI round-trip. Dropping the cache here is what stops that.
       if (staged) self$results$cache_state$setState(NULL)
 
       if (staged && !trigger) {
-        # ⚠ the render is read through jmvtab_reg_render_fetch(), never off `cst$html`: a render too
-        # big for jmvcore's state ceiling never went in there, and it is the process-local mirror
-        # that has it (R/jmvtabreg-cache.R).
+        # ⚠ read the render through jmvtab_reg_render_fetch(), never off `cst$html`: one too big for
+        # jmvcore's state ceiling never went in there, and only the process-local mirror has it.
         last <- jmvtab_reg_render_fetch(cst)
         if (!is.null(last) && identical(cst$sig, cur_sig)) {
           self$results$html_table$setContent(jmv_results_content(last))   # unchanged -> re-serve
@@ -78,11 +63,10 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       }
 
       store <- if (staged) NULL else self$results$cache_state$state   # NULL on the first / staged run
-      # Flush queued option changes BEFORE the (potentially heavy) fit so a newer edit supersedes this
-      # run instead of piling up -- the jmvcore remedy for UI stutter. Guarded for the non-jamovi harness.
+      # Flush queued option changes BEFORE the (heavy) fit, so a newer edit supersedes this run.
       try(private$.checkpoint(), silent = TRUE)
       built <- jmvtab_reg_build(data, opts, store, use_cache = !staged)
-      self$results$cache_state$setState(if (staged) NULL else built$store)  # persist the fit digests (single model only)
+      self$results$cache_state$setState(if (staged) NULL else built$store)
       tabs  <- built$tabs
 
       if (is.null(tabs)) {
@@ -90,83 +74,53 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         return(invisible())
       }
 
-      # Export (Excel / HTML / Markdown) + HTML render -- the shared jmv_backend_* helpers. The export
-      # returns a styled status line (bold green with the path REALLY written / bold red on failure)
-      # prepended above the table; compare_state stores the PURE render so a re-serve stays clean.
       status <- jmv_backend_export(self, tabs)
       html <- jmv_backend_render_html(self, tabs)
       self$results$html_table$setContent(jmv_results_content(status, html))
-      # Remember the computed comparison so a later live edit can re-serve / flag it (Phase h).
+      # Store the PURE render, so a later re-serve stays clean of the export status line.
       if (staged) self$results$compare_state$setState(jmvtab_reg_render_store(cur_sig, html))
     },
 
-    # Collect the jamovi options into the plain list jmvtab_reg_build() consumes. Phase 20g-i: an
-    # option is NAMED after the tab_reg() argument it drives (or `<argument>_<slot>` when several
-    # options fold into one), so this list is a pass-through and no longer a translation table --
-    # `test-jamovi-vocabulary.R` checks the rule. The build core stays engine-free / testable
-    # without a live jamovi session.
     .opts = function(wt) {
       list(
         outcome      = self$options$outcome,
-        # the model-builder (`models` Array) folds into `predictors`: empty -> the flat pool (one
-        # model); >=1 card -> a named list of predictor subsets (model comparison).
-        # ...and the interaction picker folds INTO it too, as `a*b` keys -- so there is one
-        # `predictors` argument here exactly as there is in tab_reg(), and no second one to keep in
-        # step. Since 22g-viii a pair is DEFINED once (`crosses`) and TICKED per card (each card's
-        # own `crosses` field), which is what makes an additive model expressible beside a crossed
-        # one; with no card at all, every defined pair applies to the single live model.
+        # The model builder and the interaction picker fold into the ONE `predictors` argument
+        # tab_reg() takes -- an interaction IS a predictor.
         # ⚠ `flatten` is the several-outcomes rule: ONE predictor subset with several outcomes is a
-        # per-outcome table, not a comparison, so the card must not make `predictors` a LIST there --
-        # `is_comparison <- is.list(predictors)` would then refuse the second outcome.
+        # per-outcome table, not a comparison, and `is.list(predictors)` is what tells them apart, so
+        # the card must not make `predictors` a LIST there.
         predictors   = jmvtab_reg_models(
           self$options$models, self$options$predictors,
           jmvtab_reg_cross_keys(self$options$crosses, self$options$predictors),
           flatten = length(self$options$outcome) > 1L),
-        # ⚠ `stats =` HAS NO CONTROL since Phase 22g-iii: tab_reg()'s own default already compares
-        # several predictor subsets against each other (22g-ii), so the panel asks nothing and the
-        # build core passes NULL.
-        # The per-outcome Model table drives family / link / outcome_level / trials -- the left
-        # half of tab_reg()'s estimand cascade, which is a question about each OUTCOME. All four
-        # pass through RAW and are resolved together by jmvtab_reg_build(), which then makes ONE
-        # tab_reg() call with per-outcome vectors: several outcomes with different families (and now
-        # different links) render as one mixed table.
+        # The estimand cascade's LEFT half is a question about each OUTCOME: all four pass through raw
+        # and resolve together in jmvtab_reg_build(), so mixed families render as one table.
         family        = self$options$family,
         link          = self$options$link,
         outcome_level = self$options$outcome_level,
         trials        = self$options$trials,
-        # numeric-predictor scaling (raw array; the build core drops it for multinomial / ordinal
-        # groups so a family switch never aborts tab_reg()).
+        # Raw: the build core drops it for multinomial / ordinal groups, so a family switch cannot
+        # abort tab_reg().
         multiplier   = self$options$multiplier,
-        # Phase 19k: the per-numeric-predictor SHAPE picker (linear / quadratic / log / sqrt /
-        # quartiles / quintiles) -> tab_reg()'s `shape`.
         shape        = self$options$shape,
         wt           = wt,
         tab_vars     = self$options$tab_vars,
-        # ...and its right half stays scalar: which measure is REPORTED, and where it comes from.
+        # ...and the cascade's RIGHT half stays scalar: which measure is REPORTED, and from where.
         measure      = self$options$measure %||% "auto",
         effect       = self$options$effect  %||% "auto",
         display      = self$options$display %||% "auto",
-        # `digits` is a List -> a "0".."6" string, exactly as in jmvtab
-        digits       = as.integer(jmv_opt(self, "digits", "0")),
-        empirical    = self$options$empirical,   # a Bool since 22g-iii; NULL -> tab_reg()'s TRUE
-        # the reference-level picker (ref_levels) -> tab_reg's `ref` named vector (NULL = default)
+        digits       = as.integer(jmv_opt(self, "digits", "0")),  # a List -> a "0".."6" string
+        empirical    = self$options$empirical,   # a Bool; NULL -> tab_reg()'s TRUE
         ref          = jmvtab_reg_ref_vector(self$options$ref_levels),
-        # Phase 20g-ii: the per-predictor level-merge tick-boxes (raw Array; folded by
-        # jmvtab_levels_collapse() in jmvtab_reg_build, the SAME folder jmvtab uses).
         levels_collapse = self$options$levels_collapse,
-        # The per-predictor level ORDER, a DISPLAY order: jmvtab_reg_build() hands it to
-        # `tab_reg(.levels_order =)`, which permutes the row skeleton and never the data -- so a
-        # reorder is a cache HIT. The panel's "the baseline IS the first level" rule is carried by
-        # `ref` alone, which the widget writes off the order's first entry.
+        # A DISPLAY order: `tab_reg(.levels_order =)` permutes the row skeleton and never the data, so
+        # a reorder is a cache HIT. "The baseline IS the first level" is carried by `ref` alone.
         levels_order    = self$options$levels_order,
         conf_level   = self$options$conf_level,
         ci_method    = self$options$ci_method,
         stars        = self$options$stars,
-        # Phase 19k: `color` is a MEASURE now, not a checkbox -- 19e's D25 left exactly four
-        # meaningful values, derived from measure_own_ref(): off, the column's own geometry, the
-        # model-vs-crude gap, and the between-group one. "auto" is tab_reg()'s TRUE.
-        # `"measure"` / `"adjustment"` / `"between_groups"` pass through as the words tab_reg()
-        # takes; only "no" needs a translation, colour being the one argument spelled FALSE.
+        # `color` is a MEASURE, not a checkbox: the words pass through as tab_reg() takes them, and
+        # only "no" needs translating, colour being the one argument spelled FALSE.
         color        = switch(self$options$color %||% "measure", "no" = FALSE, self$options$color),
         color_signif = self$options$color_signif,
         na           = self$options$na,
@@ -176,22 +130,17 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       )
     },
 
-    # .render_html / export / weights are the shared jmv_backend_* helpers in
-    # R/jmvtab-export.R (Phase 17i) -- called directly from .run() above.
+    # Render / export / weights are the shared jmv_backend_* helpers in R/jmvtab-export.R.
 
-    # A friendly placeholder when the outcome / predictors are not both selected yet (or a model
-    # comparison was requested with several outcomes, which tab_reg() does not allow).
-    # ⚠ ONE msgid, not three concatenated pieces: a translator owns the whole sentence, and
-    # jmvcore's `.()` resolves it against the module's own catalogue (inst/i18n/fr.json), i.e. the
-    # SAME one the options panel reads -- keyed on jamovi's UI language, which gettext() is not.
+    # ⚠ ONE msgid, not concatenated pieces: a translator owns the whole sentence. And jmvcore's `.()`,
+    # not gettext(): it reads the module's own catalogue, keyed on jamovi's UI language.
     .hint = function() {
       jmv_results_note(
         jmvcore::.("Select an <b>outcome</b> variable and one or more <b>predictors</b> to fit a regression. For a model comparison (predictor subsets), choose a single outcome."),
         style = "padding:12px;opacity:0.7;font-style:italic;")
     },
 
-    # Phase h: shown in staged comparison mode when the model set / options changed but the user has not
-    # clicked Run. Any previous render (cst$html) stays below the banner so the outdated table is visible.
+    # Any previous render stays below the banner, so the outdated table remains visible.
     .compare_hint = function(last = NULL) {
       banner <- jmv_results_note(
         if (is.null(last))
