@@ -197,7 +197,7 @@ TAB_OPTIONS <- list(
 
   shape_auto_max = tx_opt(
     12L, "display",
-    doc = c("where {.code shape = \"auto\"} draws the line for a numeric row or tab variable: a",
+    doc = c("where `shape = \"auto\"` draws the line for a numeric row or tab variable: a",
             "column with at most this many distinct \\strong{whole} values is a counted number or a",
             "short scale, and keeps one level per value; anything else is continuous and is cut into",
             "`\"sd_bands\"`. Raise it for a long scale, lower it to band more eagerly --- or name the",

@@ -49,6 +49,15 @@ knitr::knit_hooks$set(output = function(x, options) {
          fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
          '</code></pre>')
 })
+# A cli message or warning is its own kind of condition, so knitr routes each through its own hook,
+# not `output`: without these two it would land in the collapsed source block, ANSI codes and all.
+for (hook in c("message", "warning")) {
+  knitr::knit_hooks$set(stats::setNames(list(function(x, options) {
+    paste0('<pre class="r-output"><code>',
+           fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+           '</code></pre>')
+  }), hook))
+}
 ```
 
 Pour les modèles de régression les plus courants, `tab_reg()` construit un **tableau de synthèse** qui  se comporte comme un tableau croisé `tabxplor` : une ligne par catégorie de chaque prédicteur/variable explicatives ; des étoiles de significativité ; des couleurs qui, par défaut, signalent la taille de l’effet et grisent les effets non significatifs ; les mêmes exports Excel, html ou markdown. `empirical = TRUE` affiche l'**effet observé / brut / empirique à côté de l'effet ajusté du modèle, toutes les autres variables explicatives choisies étant égales** : il est alors possible de savoir ce que « contrôler par les autres variables explicative » change réellement.

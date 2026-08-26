@@ -25,6 +25,7 @@ LazyData: true
 Roxygen: list(markdown = TRUE)
 Suggests:
     bench (>= 1.1.0),
+    carData (>= 3.0.0),
     DescTools (>= 0.99.0),
     FactoMineR (>= 2.0),
     fansi (>= 0.5.0),
@@ -51,13 +52,14 @@ Suggests:
     VGAM (>= 1.1.0),
     marginaleffects (>= 0.20.0),
     withr (>= 3.0.0),
+    questionr (>= 0.7.0),
     yaml,
     gridExtra (>= 2.3.0),
     clipr
 Config/testthat/edition: 3
 Config/testthat/parallel: true
 Config/testthat/start-first: tab_reg*, tab_logit, parallel-parity, jmvtab-cache, export*
-Config/Needs/website: pkgdown, carData, questionr
+Config/Needs/website: pkgdown
 Config/Needs/coverage: covr
 Imports:
     dplyr (>= 1.0.3),

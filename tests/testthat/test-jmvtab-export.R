@@ -292,8 +292,7 @@ testthat::test_that("prose cannot size the panel: every fragment is a tx-note", 
   # THE gate, read from the source: the two placeholders are private methods of a jmvcore R6 class, so
   # the file is the only reach -- and a backend hand-writing a <div> has bypassed jmv_results_note().
   for (f in c("jmvtab.b.R", "jmvtabreg.b.R")) {
-    src <- readLines(testthat::test_path("..", "..", "R", f), warn = FALSE)
-    testthat::skip_if(length(src) == 0)
+    src <- readLines(src_path("R", f), warn = FALSE)
     testthat::expect_length(grep("<div", src, value = TRUE), 0L)
   }
 })
@@ -301,8 +300,7 @@ testthat::test_that("prose cannot size the panel: every fragment is a tx-note", 
 testthat::test_that("every backend setContent() goes through the content boundary", {
   # a new code path writing the Html element directly would silently re-pin the panel at 620 px.
   for (f in c("jmvtab.b.R", "jmvtabreg.b.R")) {
-    src <- readLines(testthat::test_path("..", "..", "R", f), warn = FALSE)
-    testthat::skip_if(length(src) == 0)
+    src <- readLines(src_path("R", f), warn = FALSE)
     one  <- paste(src, collapse = "\n")
     hits <- regmatches(one, gregexpr("html_table[$]setContent[(][[:space:]]*[A-Za-z_.]*", one))[[1]]
     testthat::expect_true(length(hits) > 0)

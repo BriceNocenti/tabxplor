@@ -49,20 +49,47 @@ knitr::knit_hooks$set(output = function(x, options) {
          fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
          '</code></pre>')
 })
+# A cli message or warning is its own kind of condition, so knitr routes each through its own hook,
+# not `output`: without these two it would land in the collapsed source block, ANSI codes and all.
+for (hook in c("message", "warning")) {
+  knitr::knit_hooks$set(stats::setNames(list(function(x, options) {
+    paste0('<pre class="r-output"><code>',
+           fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+           '</code></pre>')
+  }), hook))
+}
 ```
 
 *Une version française de ce document est disponible : [Tableaux de régression avec tab_reg()](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg-fr.html).*
 
 For the most common regression models, `tab_reg()` builds a **regression table** that looks and behaves like a `tabxplor` cross-table: one row per predictor level, significance stars, colours that grey out non-significant effects, and the same Excel, html or markdown exports. You give it a data frame, an **outcome** and some **predictors**, and it works out the right kind of model from the outcome's type. Its distinctive feature is `empirical = TRUE`, which shows the **observed / crude / empirical effect right next to the model's adjusted one**, so you can see what "controlling for the other variables" actually changed.
 
-**There are two articles on regression, and this is the reference one.** It is organised by feature: one section per family, the full grid of what each model can report, weighted data, interactions, model checks and plots. If you are learning rather than looking something up, start with [*All else equal: reading a regression without losing the data*](tabxplor-all-else-equal.html), which walks a single analysis from a first cross-table to a finished sentence and sends you back here for the details.
+**There are two articles on regression, and this is the reference one.** It is organised by feature: one section per family, the full grid of what each model can report, weighted data, interactions, model checks and plots. If you are learning rather than looking something up, start with `vignette("tabxplor-all-else-equal")`, which walks a single analysis from a first cross-table to a finished sentence and sends you back here for the details.
 
-We use a formatted version of the `forcats::gss_cat` data, from the US General Social Survey:
+**Without writing R code**, the same tables are a point-and-click **Regressions** analysis in the tabxplor module for [jamovi](https://www.jamovi.org/download); its options carry the names of the arguments below, so this reads as its manual too.
+
+We use a formatted version of the `forcats::gss_cat` data, from the US General Social Survey, and — for the summed-score model — the `tea` data with its six "where do you drink tea?" items reduced to one score (see *Batteries of yes/no items* in `vignette("tabxplor")` for that preparation):
 
 ```{r}
 gss_simple <- gss_cat_data_formatting()
 ```
 
+```{r}
+data("tea", package = "FactoMineR")
+tea_where_vars <- c("home", "work", "tearoom", "friends", "resto", "pub")
+
+tea <- tea |>
+  tibble::as_tibble() |>
+  dplyr::mutate(dplyr::across(   # the "yes" answer must be each factor's first level
+    dplyr::all_of(c(tea_where_vars, "Sport")),
+    ~ (if (grepl("^Not", levels(.)[1])) forcats::fct_rev(.) else .) |>
+      forcats::fct_relabel(~ gsub(".", " ", ., fixed = TRUE))
+  )) |>
+  score_from_lv1("tea_where", vars_list = tea_where_vars)
+```
+
+
+# 1. What a regression table is
 
 ## The outcome's type chooses the model and the observed quantity to compare with
 
@@ -91,6 +118,328 @@ A continuous predictor has no levels, so its cell shows the effect alone — the
 
 On **weighted** data, one thing is worth knowing from the start: an observed column is always measured exactly like the model column beside it, so its confidence interval accounts for the weighting (and, under a `survey` design, for the whole design). A `tab()` cross-table does not, by default — add `design_effect = TRUE` there if you want its percentages directly comparable with these. See [Weighted and survey data](#weighted-and-survey-data) below.
 
+## Every outcome has an observed counterpart
+
+`empirical = TRUE` answers one question — **"how much of this association survives once I adjust for the rest?"** — and it works for every kind of outcome. The rule behind it is a single sentence:
+
+> The observed effect is **the model's own effect, fitted with one predictor**.
+
+That is worth saying plainly, because it is what makes the comparison fair. The crude number is not "a percentage" and the modelled one "a coefficient" — they are the *same quantity*, computed the same way, on the *same people* (the same complete cases), and shown on the same scale. Only the list of predictors differs. So the distance between them measures adjustment, and nothing else.
+
+The "same people" part is the default, not a hope: `na = "drop_by_outcome"` gives every model of an outcome one complete-case population, so a compared model cannot be fitted on rows the observed columns do not cover. If you ask for `na = "drop_by_model"` instead, a model on a different population gets **no** observed effect at all — better an empty cell than a "gap" that is really listwise deletion.
+
+A word on how to read it. The colour says how much two numbers differ, and the greying whether that difference exceeds noise. It does not say "this is a confounder": the 10% first threshold is a convention, not a decision rule, and part of an odds-ratio gap is arithmetic rather than confounding (see *One warning about odds ratios*, below). "This effect was **attenuated** by adjustment" is the safe reading; "explained by" is not.
+
+### An ordered outcome: what changes when you adjust
+
+Income here is an **ordered** factor, so it is fit as a proportional-odds model. `Obs_cumOR` is the same model with one predictor at a time:
+
+```{r}
+tab_reg(gss_simple, "rincome", c("race", "relig"),
+        empirical = TRUE, color = c(TRUE, "adjustment"))
+```
+
+Read a row left to right: the observed cumulative odds ratio, then the modelled one, with the **background** colouring the gap between them. Being Black is associated with lower income (`1/1.54` observed), and adjusting for religion barely moves it (`1/1.51`) — the association is not explained by religion. Compare Buddhist/Hinduist, where the effect *grows* once race and the other groups are held constant: adjustment can strengthen an association as easily as it can wash one away.
+
+On this scale the **background colour is not a test**: an odds ratio moves when any strong predictor is added, which is arithmetic rather than confounding. Ask for `measure = "difference"` and the same comparison is read on Somers' `D`, where it *is* one — the crude value is then the cross-table's own superiority probability, computed from the counts with no model at all, so the distance to the modelled one measures adjustment and nothing else:
+
+```{r}
+tab_reg(gss_simple, "rincome", c("race", "relig"), measure = "difference",
+        empirical = TRUE, display = "est_base", color = c(TRUE, "adjustment"))
+```
+
+### A nominal outcome: the crude number rides in the cell
+
+A multinomial model already spends one column per outcome category, so a second set of columns would double the table. The observed effect is printed **in the cell instead**, in parentheses:
+
+```{r}
+tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
+        empirical = TRUE, color = c(TRUE, "adjustment"))
+```
+
+`1/2.46 (1/2.43)` means "modelled `1/2.46`, observed `1/2.43`" — nothing to see. `1/12.48 (1/10.17)` means adjustment pushed the effect a little further from 1. The footer says which number is which, and hovering a cell (in an HTML export) adds the crude percentages behind it.
+
+### A summed score
+
+With `trials =`, the crude column is the odds ratio of the summed items, `Obs_OR`, with the observed **mean score** beside it — the average number of places out of six. The model column shows the same two quantities adjusted, so the pair reads across.
+
+```{r}
+tab_reg(tea, "tea_where", c("sex", "SPC", "Sport"),
+        family = "binomial", trials = length(tea_where_vars),
+        empirical = TRUE, color = c(TRUE, "adjustment"))
+```
+
+### How to read it — and how not to
+
+A gap is a clue, not a verdict: it holds for *these* covariates, measured *this* way, and both numbers are estimates, so a crude one based on few people wanders and the gap wanders with it. `vignette("tabxplor-all-else-equal")` is a whole article on reading that distance.
+
+One habit is specific to the scale, and it decides what the table will let you do. An odds ratio changes when you add a predictor **even if that predictor has nothing to do with the exposure** — non-collapsibility — so part of every gap on an odds-ratio column is arithmetic rather than confounding, and the colours there stay purely descriptive. For a gap you can *test*, ask for a collapsible measure: percentage points, or a risk ratio.
+
+```{r}
+tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
+        measure = "difference", empirical = TRUE, color = c(TRUE, "adjustment"),
+        color_signif = "grey_non_signif")
+```
+
+The cell now reads "modelled effect in percentage points, observed one in parentheses", and a background that stays grey means the two are not distinguishable from noise.
+
+# 2. The four arguments: `family`, `link`, `measure`, `effect`
+
+Four arguments decide what a model column
+contains, and they **chain** — each follows from the one before unless you say otherwise, which is
+what `"auto"` means on all four:
+
+```text
+outcome ──auto──▶ family ──auto──▶ link ──auto──▶ measure ──auto──▶ effect
+```
+
+**One rule underpins them, and it is what differs from `tab()`.** Only **`link`** changes the model
+that is fitted. `measure` and `effect` change what is *read off* it, and `display` only changes what
+the cell **shows**. In a cross-table every measure comes from the same counts, so asking for a ratio
+rather than a difference is a display choice; in a regression it is a step of computation — the model
+works your measure out from its predictions — but it is still the *same fit*. So a risk ratio and an
+odds ratio can be two readings of one logistic model, and a *different* model is something you ask
+for by name.
+
+## The four arguments, in plain words
+
+| argument  | the question it answers                 | `"auto"` gives you                | who sets it                |
+|:----------|:----------------------------------------|:----------------------------------|:---------------------------|
+| `family`  | what kind of number is the outcome      | detected from the outcome         | you, on a numeric outcome  |
+| `link`    | which measure the **model** estimates   | the family's own                  | rarely — experts           |
+| `measure` | which measure is **reported**           | the link's                        | **the one you set**        |
+| `effect`  | where that number is taken from         | a coefficient if there is one     | rarely; for an ideal type  |
+
+`effect`'s three values name three quantities:
+
+| `effect`         | the question it answers                                        | its name in the literature    |
+|------------------|----------------------------------------------------------------|-------------------------------|
+| `"conditional"`  | two people alike on all other predictors: what does this do?   | conditional effect (the coef.) |
+| `"marginal"`     | if everyone switched it, how far would the outcome move?       | average marginal effect (AME) |
+| `"at_reference"` | the same, but for one person at the reference profile          | effect at the reference profile |
+
+By hand you would get them with `coef(glm(...))` (exponentiated when the measure is a ratio), with
+`marginaleffects::avg_comparisons(model)`, and with the same call on a one-row profile where every
+other predictor sits at its reference level or its mean. You will rarely type any of them:
+`"auto"` picks `"conditional"` whenever the reported measure *is* the model's own — which is exactly
+when a coefficient exists — and `"marginal"` otherwise. `"conditional"` earns its keep as an
+assertion: ask for it where no coefficient can carry your measure and the table says so, naming the
+two cures, instead of quietly giving you something else.
+
+⚠ **One clause qualifies `"auto"`: it never lands on a *predicted* odds ratio.** A marginal odds
+ratio is a specialist quantity (Karlson & Jann 2023), so on a prediction route `"auto"` steps back to
+the outcome's own measure — "x times as likely" for a percentage. Name `measure = "odds_ratio"` to
+get it.
+
+**`effect = "at_reference"`** evaluates the effect at the reference profile — the abstract individual
+combining the reference level of every predictor — instead of averaging it over the sample. For a
+multinomial model it also unlocks a contrast the other two do not have: the odds ratio of each
+outcome category *versus all the others* at that profile.
+
+```{r, eval = FALSE}
+tab_reg(gss_simple, "married", c("race", "age"), effect = "at_reference")
+```
+
+## Which model an outcome can be fitted with
+
+`link` is the value set of models. Its words are `measure`'s own words, because a link **is** a
+measure — the one the model estimates directly — so the statistician's vocabulary never surfaces.
+† marks the family's own link, which is what `link = "auto"` resolves to.
+
+| outcome kind   | `family`         | a cell is… | `link =`         | the model that fits         | its coef.      |
+|----------------|------------------|------------|------------------|-----------------------------|----------------|
+| factor, 2 lvl  | `binomial`       | percentage | `"odds_ratio"` † | logistic regression         | `OR`           |
+|                |                  |            | `"ratio"`        | modified Poisson, robust SE | `RR`           |
+|                |                  |            | `"difference"`   | identity-link binomial      | `RD`           |
+| numeric, score | `binomial`+trials| percentage | the same three   | the same, per item          | `OR`/`RR`/`RD` |
+| numeric        | `gaussian`       | a mean     | `"difference"` † | linear regression           | `diff`         |
+|                |                  |            | `"ratio"`        | log-link Poisson pseudo-ML  | `RoM`          |
+| numeric, count | `poisson`        | a count    | `"ratio"` †      | Poisson, quasi-Poisson SEs  | `IRR`          |
+| factor, 3+ un. | `multinomial`    | percentage | `"odds_ratio"` † | multinomial logit           | `OR`           |
+| factor, ord.   | `ordinal`        | a rank     | `"odds_ratio"` † | proportional-odds model     | `cumOR`        |
+
+`family = "quasipoisson"` has exactly the row of `poisson` — it changes the variance assumption, not
+what is estimated.
+
+## What each measure reports, from any of them
+
+Which measures exist is decided by **what a cell is**: a percentage has an identity, a log and a
+logit, so all three; a mean or a count has no odds, so no odds ratio; and a **rank** — an ordered
+outcome's cell — is compared by pairs of people rather than by shares, which is what lets an ordinal
+model report in one column. Every cell below is the acronym the combination puts in the column
+header, after the constant `Model_` prefix.
+
+| a cell is… | `measure =`    | `"conditional"` \*      | `"marginal"` | `"at_reference"` |
+|------------|----------------|-------------------------|--------------|------------------|
+| percentage | `"odds_ratio"` | `OR`                    | `mOR` ¹      | `refOR` ¹        |
+| percentage | `"ratio"`      | `RR`                    | `mRR`        | `refRR`          |
+| percentage | `"difference"` | `RD`                    | `mRD`        | `refRD`          |
+| a mean     | `"difference"` | `diff`                  | `mdiff`      | `refdiff`        |
+| a mean     | `"ratio"`      | `RoM`                   | `mRoM`       | `refRoM`         |
+| a mean     | `"odds_ratio"` | not defined             | not defined  | not defined      |
+| a count    | `"ratio"`      | `IRR`                   | `mIRR`       | `refIRR`         |
+| a count    | `"difference"` | —                       | `mdiff`      | `refdiff`        |
+| a count    | `"odds_ratio"` | not defined             | not defined  | not defined      |
+| a rank     | `"difference"` | —                       | `mD`         | not offered ²    |
+| a rank     | `"ratio"`      | —                       | `mWR`        | not offered ²    |
+| a rank     | `"odds_ratio"` | `cumOR`                 | not offered ¹| not offered ¹    |
+
+The `"conditional"` column is the one `reg_measures()` shows per **link**; the other two are the same
+for every link the family fits, which is why it lists them once.
+
+\* a coefficient exists **only where that measure is the `link`** — see the previous table. Ask for
+one that is not, and the call is refused naming its two cures: drop `effect`, or fit the model that
+estimates it.
+
+¹ a predicted odds ratio needs a percentage **and its complement**, so a 3+ category outcome has to
+be asked "versus what?" first: on a multinomial outcome it exists only as the *versus the rest*
+contrast at `effect = "at_reference"`, and on an ordinal one not at all.
+
+² a rank's measures compare two people **drawn from the population**, and one profile holds only one.
+
+`reg_measures(data, outcome)` prints this grid for **your** outcome, and prints only what can be
+built: a *not defined* combination has no row, and the message above the table says why. Its two
+refusals are not the same one — a quantity has no odds to take a ratio of, whatever anyone
+implements, while *not offered* means tabxplor does not build it and the error lists what this
+outcome does offer, at this model and at the others.
+
+A further state exists only at run time: a link that does not converge on *your* data. The call says
+so, and for the risk difference it falls back to the linear probability model.
+
+`measure = "raw_coefficient"` is not a fourth column: it is **the model's own coefficient**, the
+estimand shown un-transformed. Where the reported measure is multiplicative that is its log, and the
+header says which one it logs (`Model_log(OR)`, `Model_log(IRR)`, `Model_log(RoM)`); where the model
+is already additive there is nothing to un-exponentiate, and the coefficient IS the additive estimate
+the column already shows. So it answers for every family — which is what lets a table mixing a
+logistic outcome and a linear one be asked for its coefficients at all. Being the fit's *own* number
+it is always the conditional one; ask it with `effect = "marginal"` and the call says so and names
+the cure. (`"coefficient"`, `"coef"`, `"log"`, `"log_odds"`, `"log_risk"` and `"log_rate"` are
+accepted spellings; the last three pin which base.)
+
+## What the header words mean
+
+A header names the **measure**; the **contrast** is a marker on it. So there is one acronym to look
+up per quantity, and one marker to read on top of it.
+
+| acronym | the quantity               | how you would get it by hand                                      |
+|---------|----------------------------|-------------------------------------------------------------------|
+| `OR`    | odds ratio                 | `exp(coef(glm(y ~ ., binomial)))`                                 |
+| `cumOR` | cumulative odds ratio      | `exp(coef(MASS::polr(...)))`, the proportional-odds model         |
+| `RR`    | risk ratio                 | modified Poisson, robust SE (Zou 2004)                            |
+| `RD`    | risk difference, in points | `glm(y ~ ., binomial("identity"))`, robust SE                     |
+| `IRR`   | incidence-rate ratio       | `exp(coef(glm(y ~ ., poisson)))`                                  |
+| `RoM`   | ratio of means             | log-link pseudo-Poisson, robust SE (Santos Silva & Tenreyro 2006) |
+| `diff`  | mean difference            | `coef(lm(...))`                                                   |
+
+| marker        | reads                                             | example         |
+|---------------|---------------------------------------------------|-----------------|
+| *(none)*      | conditional — holding the other predictors fixed  | `Model_OR`      |
+| `m` prefix    | marginal — averaged over the sample               | `Model_mRR`     |
+| `ref` prefix  | at the reference profile                          | `Model_refRD`   |
+| `log(…)`      | the same estimand, un-exponentiated               | `Model_log(OR)` |
+
+The observed companion carries the measure **without** a marker (`Obs_RR` beside `Model_mRR`): it is
+a univariable effect, and where its levels come from the counts themselves a marginal and a
+conditional contrast are the same number.
+
+## The one argument that changes the model: `link`
+
+Everything else changes what is reported. `link` changes what is fitted, and that is the whole of the
+difference — so it is the one argument that can put an assumption in your table you did not intend.
+Each link buys a directly readable coefficient at the price of one:
+
+| `family` and `link` | what is fitted | what the coefficient assumes |
+|---|---|---|
+| binomial · `"odds_ratio"` *(default)* | logistic regression | a constant odds ratio across profiles |
+| binomial · `"ratio"` | modified Poisson, robust SE | a constant risk ratio |
+| binomial · `"difference"` | identity-link binomial, robust SE | a constant risk difference |
+| gaussian · `"difference"` *(default)* | linear regression | a constant mean difference |
+| gaussian · `"ratio"` | log-link Poisson pseudo-ML, robust SE | E(y) = exp(xβ), so a constant ratio of means |
+| poisson · `"ratio"` *(default)* | Poisson, quasi-Poisson SEs | a constant rate ratio |
+| ordinal · `"odds_ratio"` *(default)* | proportional-odds model | one odds ratio, shared by every cut |
+| multinomial · `"odds_ratio"` *(default)* | multinomial logit | a constant odds ratio per category |
+
+What the literature says about the three non-default links:
+
+- **The risk ratio is a well-established route, not a workaround.** `link = "ratio"` on a binary
+  outcome fits Zou's modified Poisson, which exists precisely to avoid the convergence failures of a
+  log-binomial fit and is standard practice in epidemiology. Its own limits are different in kind
+  from the risk difference's: fitted risks are not bounded above by 1, and in small or sparse samples
+  both the estimate and the sandwich standard error are biased — penalised variants exist for that
+  case.
+- **The risk difference is the fragile one.** An identity link is bounded on neither side, so it can
+  predict impossible risks and can simply fail to converge. When it does, tabxplor fits the linear
+  probability model instead and the footer says so — the two target the same quantity, but they are
+  different estimators and agree only if the model is right.
+- **The ratio of means is consistent whenever the mean function is right.** Poisson pseudo-likelihood
+  does not claim your outcome is a count: it is a device for the log link, and its robust standard
+  error does not require the Poisson variance to be correct. Nothing, however, rescues a wrong mean
+  function — and the outcome must be non-negative.
+- **The default is not assumption-free either.** A logistic coefficient assumes a constant odds
+  ratio, an ordinal one assumes the same odds ratio at every cut (the footer's Brant test checks it),
+  and the odds ratio is non-collapsible, so it moves when a covariate is added even where there is
+  nothing to confound.
+
+**Which route to take.** If a risk ratio or a risk difference is what you want to *report*, the safer
+default is to leave the model on its family's own scale and name the measure with `measure =`. Three
+reasons, none of them about taste: the logit always converges and can never predict a probability
+outside 0–100 %, while the log and identity links can do both; a marginal effect imposes no
+constant-effect assumption on the scale you report, since it averages the effect the fitted model
+actually implies at each respondent's own profile; and every `measure` runs on the same fit, so
+changing which measure you show never changes what was estimated.
+
+That said, the two are different questions rather than two spellings of one. A coefficient is a
+**conditional** effect — "two people alike on every other predictor" — and a marginal effect a
+population average. Take the `link` route when the conditional quantity is what you want: to line up
+with a published conditional estimate, or when "the effect is the same size everywhere on this scale"
+is the claim you actually mean to make. `reg_formulas()` tells you which model ran.
+
+## Caveats worth knowing
+
+- **A binary outcome with `family = "poisson"` is not a count model**, and is refused rather than
+  quietly rewritten. `family` says what kind of number the outcome is and never picks a link behind
+  your back; the message names the two things that spelling could have meant — `link = "ratio"` (the
+  modified Poisson's *conditional* risk ratio) and `measure = "ratio"` (the *marginal* one).
+- **`link = "ratio"` on a numeric outcome stops on a negative outcome.** A ratio of means is not
+  defined there; the call suggests modelling `log()` of a positive outcome, or leaving `link` alone.
+- **`Model_RD` and `Model_mRD` are both percentage points, and are not the same number.** `Model_RD`
+  is a conditional risk difference from an identity-link fit (`link = "difference"`), `Model_mRD` a
+  marginal one standardised over the logistic fit (`measure = "difference"`) — which is what the `m`
+  marker says.
+- **Conditional odds ratios are non-collapsible**, so `color = "adjustment"` colours the gap on such
+  a column but never tests it (see *How to read it — and how not to*, above). Ask for
+  `measure = "difference"` or `measure = "ratio"` — or, if you must publish odds ratios,
+  `measure = "odds_ratio", effect = "marginal"`, whose *marginal* odds ratio is collapsible and whose
+  gap the table does test.
+- **One combination has no observed companion.** At `effect = "at_reference"` the model is
+  conditional on one profile while the observed columns stay marginal over the whole sample, so the
+  two are shown but not compared — `color = "adjustment"` and `{obs}` stay empty.
+- **What needs an extra package, and what has no method.** `effect = "at_reference"` goes through **marginaleffects**; a *survey-weighted* multinomial model has no marginal-effects method at all, so there it can only be read on its coefficients — keep the model's own measure and the call goes through. A survey-weighted **ordinal** model is the exception: its rank measures (`measure = "difference"` / `"ratio"`) run on tabxplor's own g-computation and take the design-based variance straight from the fit, so they work under any design — only the crude/adjusted *gap test* is unavailable there, and `color = "adjustment"` then colours without testing. (`display` itself reaches every column, marginal or not.)
+
+## Asking your own outcome
+
+`reg_measures()` prints this grid for one outcome of your own data — it reads the very table
+`tab_reg()` resolves against, so what it prints is what the function does:
+
+```{r}
+reg_measures(gss_simple, "married")
+```
+
+It comes in **two blocks**. The first is one row per model you could fit: its `link`, and the measure
+that model's own coefficients carry. The second is what is read off the model's *predictions* — the
+same whichever link you fit, which is why those rows say `link = "(any)"`. So what `link` changes is
+only which measure has a **coefficient**; every measure stays reportable from any of them.
+
+Name a link to read the table at that model alone, and a family to read it as that kind of outcome:
+
+```{r}
+reg_measures(gss_simple, "married", link = "ratio")
+```
+
+The same list is in `?tab_reg`, section *"Which models each outcome offers, and which measures"*,
+generated from the same source.
+
+# 3. One part per kind of outcome
 
 ## Logistic regression (a binary factor)
 
@@ -149,88 +498,38 @@ measure you ask for is a marginal effect.
 
 #### Percentage points: `measure = "difference"`
 
-The friendliest of the three, because points are the unit people already think in. `Model_mRD` is
-the **average marginal effect** (AME): the model's predicted probability computed for every
-respondent as if they were at the level, then at the reference, and the two averages subtracted.
+The friendliest of the three, because points are the unit people already think in. `Model_mRD` is the **average marginal effect**: the model's predicted probability computed for every respondent as if they were at the level, then at the reference, and the two averages subtracted.
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
         measure = "difference", empirical = TRUE)
 ```
 
-Read the `race` block: "comparing Black and White respondents who are alike in income, age and
-religion, being Black is associated with a marriage rate **19.8 points lower**, on average".
-
-With `empirical = TRUE` the crude column is the same quantity with one predictor — the plain
-observed difference of percentages:
-
-- in the sample (`Obs_RD`), the marriage rate is **21.2 points lower** for Black than for White
-  respondents (`30.9% − 52.0%`);
-- the modelled difference `Model_mRD` is `-19.8%`, very close, so very little of that gap is
-  explained by age, income or religion.
-
-The **adjusted percentages** in the two columns' brackets say the same thing in the other direction:
-Black respondents marry at `30.9%` in this sample (observed), and standardizing their income, age
-and religion to the population mix moves that only to `31.5%`, against `51.3%` if everyone were
-White. The gap persists after adjustment.
-
-The observed differences and their confidence intervals are exactly what a plain table gives:
-
-```{r}
-dependent  <- "married"
-predictors <- c("race", "age", "rincome", "relig")
-factor_predictors <- c("race", "rincome", "relig")
-gss_simple |>
-  dplyr::filter(dplyr::if_all(all_of(c(predictors, dependent)), ~ !is.na(.) )) |> 
-  tab(all_of(factor_predictors), all_of(dependent), pct = "row", na = "drop", 
-      color = "difference", ref = 1, color_signif = "grey_non_signif", stars = TRUE, 
-      ci_method = c(diff = "wald")
-      ) |>
-  dplyr::mutate(diff = set_display(`01-Married`, "diff"))
-```
+Read the `race` block: "comparing Black and White respondents who are alike in income, age and religion, being Black is associated with a marriage rate **19.8 points lower**, on average". The crude `Obs_RD` beside it is the plain observed difference of percentages, `-21.2` — very close, so little of that gap is explained by age, income or religion. The **adjusted percentages** in the brackets say it the other way round: Black respondents marry at `30.9%` observed, and standardising their income, age and religion to the population mix moves that only to `31.5%`, against `51.3%` if everyone were White.
 
 #### "How many times as likely?": `measure = "ratio"`
 
-An odds ratio is **not** a "times more likely". The two are close only when the outcome is **rare**;
-as soon as it is common — above roughly 10%, which covers most survey questions — the odds ratio
-sits much further from 1 than the ratio of probabilities, so reading `Model_OR = 1/2.4` as "2.4
-times less likely to be married" overstates the gap. There is a second reason to care: an odds ratio
-is *non-collapsible*, which means it moves when you add a covariate **even if that covariate is not a
-confounder** — so comparing `Model_OR` across nested models is not valid. Risk ratios do not have
-that problem.
+An odds ratio is **not** a "times more likely". The two are close only when the outcome is **rare**; above roughly 10 %, which covers most survey questions, the odds ratio sits much further from 1 than the ratio of probabilities. And an odds ratio is *non-collapsible*: it moves when you add a covariate even if that covariate is not a confounder, so comparing `Model_OR` across nested models is not valid. Risk ratios do not have that problem.
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
         measure = "ratio", empirical = TRUE)
 ```
 
-`Model_mRR` now reads plainly: "comparing Black and White respondents alike in income, age and
-religion, Black respondents are about **1.6 times less likely** to be married" — and `Obs_RR` is the
-same quantity computed straight from the data, with no model. The cell is coherent by construction:
-the reference probability divided by the risk ratio gives the level's probability
-(`51% ÷ 1.6 ≈ 32%`), the multiplicative counterpart of the additive identity above.
+`Model_mRR` reads plainly: Black respondents alike in income, age and religion are about **1.6 times less likely** to be married. The cell is coherent by construction — the reference probability divided by the risk ratio gives the level's probability (`51% ÷ 1.6 ≈ 32%`), the multiplicative counterpart of the additive identity above.
 
 #### The odds ratio, made comparable: `measure = "odds_ratio"` on a prediction route
 
-If your field publishes odds ratios you are not stuck with the conditional one. Ask for the odds
-ratio *of the two adjusted predictions* and you get a **marginal odds ratio** (`Model_mOR`), which
-keeps the relative-effect reading while behaving like a marginal effect across models
-(Karlson & Jann 2023):
+If your field publishes odds ratios you are not stuck with the conditional one. Ask for the odds ratio *of the two adjusted predictions* and you get a **marginal odds ratio** (`Model_mOR`), which keeps the relative-effect reading while behaving like a marginal effect across models (Karlson & Jann 2023):
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
         measure = "odds_ratio", effect = "marginal", empirical = TRUE)
 ```
 
-`1/2.29` against the conditional `1/2.40` above — a little closer to 1, which is the
-non-collapsibility showing. It matters for one thing in particular: because it is collapsible,
-`color = "adjustment"` **tests** the crude-to-adjusted gap on this column, where on a conditional
-odds ratio it can only colour it (see *One warning about odds ratios* below). It is available on a
-binary outcome and on a summed score; a 3+ category outcome has to be asked "versus what?" first,
-so there it exists only at `effect = "at_reference"`.
+`1/2.29` against the conditional `1/2.40` above — a little closer to 1, which is the non-collapsibility showing. It matters for one thing in particular: because it is collapsible, `color = "adjustment"` **tests** the crude-to-adjusted gap on this column, where on a conditional odds ratio it can only colour it (see *One warning about odds ratios* below). It is available on a binary outcome and on a summed score; a 3+ category outcome has to be asked "versus what?" first, so there it exists only at `effect = "at_reference"`.
 
-⚠ You have to name it: `"auto"` never lands on a *predicted* odds ratio, because it is a specialist
-quantity that should be asked for rather than arrived at by accident.
+⚠ You have to name it: `"auto"` never lands on a *predicted* odds ratio, because it is a specialist quantity that should be asked for rather than arrived at by accident.
 
 ### The other risk ratio: `link = "ratio"`
 
@@ -270,6 +569,107 @@ is the crude risk ratio with a Katz interval, never the crude odds ratio. The mo
 a reasonable sample (n of at least about 100), and since a quasi-likelihood has no true likelihood
 its footer reports N and a Wald-vs-null test instead of AIC/BIC.
 
+## Linear regression (a numeric outcome)
+
+A continuous outcome gives plain linear regression coefficients (here we set `family` explicitly, because an integer like `age` is ambiguous — it could also be modelled as a count):
+
+```{r}
+tab_reg(gss_simple, "age", c("race", "marital", "relig", "rincome"), family = "gaussian")
+```
+
+In the case of a linear regression, the **empirical/observed counterpart of the model coefficient** for a categorical predictor is simply the **difference of means** : here, the difference of mean age, per level of the predictor, compared to the reference level. 
+```{r}
+tab_reg(gss_simple, "age", c("race", "marital", "relig", "rincome"), family = "gaussian", empirical = TRUE)
+```
+
+The empirical mean ages, and differences of mean ages from reference, can be computed in a simple table with : 
+
+```{r}
+tab(gss_simple, "race", "age", pct = "row", digits = 2, na = "drop",
+    color = "difference", ref = 1,  ci_method = c(mean_diff = "ols")
+) |> 
+  mutate(diff = set_display(age, "diff"))
+# ols : the variance pooled over every level of the variable, so the intervals are exactly those a
+#  linear regression puts on its coefficients ("student" pools the two compared groups only).
+```
+
+## Poisson regression (a count outcome)
+
+```{r}
+tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson")
+```
+
+An **incidence-rate ratio** (IRR) of 1.5 means "50% more hours of TV per day". Unweighted Poisson models automatically use dispersion-scaled (quasi-Poisson) standard errors, so over-dispersed counts get honest, wider intervals. Concretely: with an over-dispersed outcome, `family = "poisson"` returns CIs and p-values **identical to `family = "quasipoisson"`** and emits a warning saying so (the footer reports the dispersion); at equidispersion (≈ 1) the scaling is a no-op and the result matches a plain `glm(family = poisson)` — so a comparison to a hand-fit Poisson `glm` never surprises you.
+
+In the case of a poisson regression, the **empirical/observed counterpart of the model’s exponentiated coefficient** for a categorical predictor is the **ratio of means** : here, the ratio of average TV hours compared to the reference level.
+
+```{r}
+tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson", empirical = TRUE)
+```
+
+The empirical average TV hours per day, and differences of rate of television watching from reference, can be computed in a simple table with : 
+
+```{r}
+tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
+    color = "ratio", ref = 1,  ci_method = c(mean_ratio = "quasipoisson")
+) |> 
+  mutate(IRR = set_display(tvhours, "ratio"))
+# the default method is a robust ratio of means (each group's own variance) ;
+#  we use "quasipoisson" to match those computed by quasi-poisson regression -- one dispersion
+#  estimated over every level (assumption : variance is proportional to mean). 
+```
+
+## Grouped-binomial outcomes (a summed score)
+
+When the outcome is a **summed score** — how many of several yes/no items a respondent answered one way — you model the number of "successes" out of a fixed number of items with `trials =`. `tab_reg()` then fits `cbind(score, trials - score)` as a binomial, so the odds ratios read on the *per-item* probability.
+
+This is the natural model for a **multiple-answer survey question** — here the `tea` data prepared above, its six "where do you drink tea?" items summed into one score by `score_from_lv1()`.
+
+```{r}
+tab_reg(tea, "tea_where", c("sex", "SPC", "Sport"),
+        family = "binomial", trials = length(tea_where_vars))
+```
+
+Each odds ratio now reads *for any one place*: `1/1.44` for men means that, for any of the six places, men are about 1.44 times less likely than women to drink tea there. The model treats the six items as interchangeable trials, so one odds ratio covers them all — which is exactly the assumption to keep in mind before using it.
+
+Grouped-binomial (like Poisson) models report a Pearson **dispersion** check in the footer, flagging over-dispersed counts.
+
+## Ordinal and nominal outcomes (a factor with 3+ levels)
+
+An **ordered** factor outcome is fit as a proportional-odds (cumulative) logistic model, and it reports in **one column**: its whole claim is that one number per predictor level is enough, so it never spends a column per outcome category. By default that number is the cumulative odds ratio `cumOR` — the model's own coefficient, and the one measure the proportional-odds assumption makes the same at every cut:
+
+```{r}
+tab_reg(gss_simple, "rincome", c("race", "age", "relig"))
+```
+
+A cumulative odds ratio is hard to say out loud, so ask for another **measure of deviation** and the same fit is read as a probability. `measure = "difference"` gives Somers' `D` — *of two people, one from this group and one from the reference group, how often does the one from this group end up higher on the scale?* — with that probability itself in brackets, 50 % being a coin flip:
+
+```{r}
+tab_reg(gss_simple, "rincome", c("race", "age", "relig"),
+        measure = "difference", display = "est_base")
+```
+
+`measure = "ratio"` reads the same pair multiplicatively, as a **win ratio** (wins to losses). Both still take one column, because both read the whole predicted distribution rather than one slice of it — and both are robust where the cumulative odds ratio is not: they barely move when the proportional-odds assumption fails, and, unlike an odds ratio, they do not drift under adjustment when there is nothing to adjust for. The footer names the scale from low to high, since a one-column table shows the outcome's name and none of its categories.
+
+If you want a number **per outcome category** — a percentage-point effect on each income band — that is a question the ordering does not help with, and `family = "multinomial"` answers it without assuming proportional odds.
+
+A nominal outcome with three or more unordered levels is fit as one **multinomial** logistic model, giving one odds-ratio column per outcome category versus the reference category (also called relative risks ratios) :
+
+```{r}
+tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"))
+```
+
+Relative risk ratios may be quite difficult to read because they are relative to **two** reference levels : not only the reference chosen for the predictor, but also the reference level chosen for the dependent variable. It’s specially difficult when it’s difficult to find a good reference level corresponding to the most common situation (like "married" for matrimonial status).
+
+Most of the time, asking for percentage points instead is easier to interpret, because it makes the second reference level disappear and modelises, for each level of the outcome, the difference of percentages of each predictor level compared to its reference (a less abstract quantity than odds ratios). It is `measure = "difference"`, exactly as on a binary outcome, and the resulting `mRD` columns are average marginal effects:
+
+```{r}
+tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"), measure = "difference", empirical = TRUE) # |> tab_export()
+```
+
+A 3+ level outcome would need one crude column per outcome category, so `empirical = TRUE` folds the crude effect **into** the model cell instead — `+40.6% (+38.6%)`, modelled then observed — and the crude percentages and differences appear in html tooltips, at mouse hover of a cell. Ask for the columns anyway with `empirical = "column"`.
+
+# 4. Reading what adjustment did
 
 ## Colouring what adjustment did
 
@@ -303,7 +703,7 @@ want to read: "the other variables explained part of this association" is one st
 side of 1 the effect is on.
 
 The same gap is readable as a number when you want the exact values, in the cell or on hover.
-`display =` writes the template at build time (see *Reading the table* below); on a finished table
+`display =` writes the template at build time (part 5, *Fine-tuning the display*); on a finished table
 `set_display()` does the same — the columns that have no observed counterpart simply keep their
 plain display:
 
@@ -384,23 +784,21 @@ tab_reg(small, "married", c("race", "rincome", "relig"),
         color = c(TRUE, "adjustment"), color_signif = "grey_non_signif")
 ```
 
-### Three ways to get this wrong
-
-**"The two confidence intervals overlap, so nothing changed."** They almost always overlap, because the
-model and the observed effect are computed from the *same people* and move together (a correlation of
-0.5 to 0.9). Reading the overlap would declare "no change" essentially always. The test in the table
-does the right thing instead: it measures the difference directly, which is why its interval is much
-narrower than you would guess from the two printed ones.
-
-**"A significant gap proves confounding."** It proves the two numbers differ by more than noise. Why
-they differ is your reading, not the table's — and on a non-collapsible scale part of the difference is
-arithmetic, which is the whole point of the previous section.
-
-**"Every coloured cell counts."** Each cell is tested on its own, with no correction for the number of
-tests. In a table with seven comparisons, about one in five will show a spurious coloured cell. Read
-the pattern — a whole block of predictors shifting the same way — rather than one isolated cell.
-
 ### For the record: what exactly is tested
+
+The `"adjustment"` colour always shows the **size** of the gap. Whether it also *tests* it depends on one property of the measure, and the table decides for you:
+
+| what you asked for | gap tested? |
+|---|---|
+| `measure = "difference"` — any outcome | **yes** |
+| `measure = "ratio"`, or `link = "ratio"` (risk ratios) | **yes** |
+| `measure = "odds_ratio", effect = "marginal"` (binary or summed score) | **yes** |
+| Poisson incidence-rate ratios, a linear mean difference | **yes** |
+| **conditional** odds ratios — binomial, multinomial, ordinal cumulative | no (non-collapsible) |
+| a compound `formula =` | no |
+| a *weighted* 3+ level outcome | it can only be read on its coefficients |
+
+Where there is no test, `color_signif` is ignored for that channel and the colours read descriptively — the table never pretends to a significance it does not have.
 
 The null is that the modelled and observed effects are equal, on the effect's own scale: the log-ratio
 for a risk ratio, an odds ratio or an incidence-rate ratio, the plain difference for a mean
@@ -446,541 +844,53 @@ people: at `effect = "at_reference"`, or under `na = "drop_by_model"` when a com
 missing rows than the observed columns, the comparison is not made at all. (By default it always is —
 see just below.)
 
-## Grouped-binomial outcomes (a summed score)
+# 5. Shaping the table
 
-When the outcome is a **summed score** — how many of several yes/no items a respondent answered one way — you model the number of "successes" out of a fixed number of items with `trials =`. `tab_reg()` then fits `cbind(score, trials - score)` as a binomial, so the odds ratios read on the *per-item* probability.
+## Fine-tuning the display, and scaling a predictor
 
-This is the natural model for a **multiple-answer survey question**. We take the `tea` data and its six "where do you drink tea?" items, summed into one score by `score_from_lv1()` — see *Multiple-answer questions* in `vignette("tabxplor")` for that preparation:
+A few arguments change *what each cell shows*, or *how a predictor is scaled* — without changing the model itself.
 
-```{r}
-data("tea", package = "FactoMineR")
-tea_where_vars <- c("home", "work", "tearoom", "friends", "resto", "pub")
-
-tea <- tea |>
-  tibble::as_tibble() |>
-  dplyr::mutate(dplyr::across(   # the "yes" answer must be each factor's first level
-    dplyr::all_of(c(tea_where_vars, "Sport")),
-    ~ (if (grepl("^Not", levels(.)[1])) forcats::fct_rev(.) else .) |>
-      forcats::fct_relabel(~ gsub(".", " ", ., fixed = TRUE))
-  )) |>
-  score_from_lv1("tea_where", vars_list = tea_where_vars)
-```
+**`display`** chooses the cell layout — the same named layouts `tab()` offers, in the same `{}` grammar. `"est_ci"` shows the confidence interval beside every estimate (any family):
 
 ```{r}
-tab_reg(tea, "tea_where", c("sex", "SPC", "Sport"),
-        family = "binomial", trials = length(tea_where_vars))
+tab_reg(gss_simple, "married", c("race", "age"), display = "est_ci")
 ```
 
-Each odds ratio now reads *for any one place*: `1/1.44` for men means that, for any of the six places, men are about 1.44 times less likely than women to drink tea there. The model treats the six items as interchangeable trials, so one odds ratio covers them all — which is exactly the assumption to keep in mind before using it.
-
-Grouped-binomial (like Poisson) models report a Pearson **dispersion** check in the footer, flagging over-dispersed counts.
-
-## Ordinal and nominal outcomes (a factor with 3+ levels)
-
-An **ordered** factor outcome is fit as a proportional-odds (cumulative) logistic model, and it reports in **one column**: its whole claim is that one number per predictor level is enough, so it never spends a column per outcome category. By default that number is the cumulative odds ratio `cumOR` — the model's own coefficient, and the one measure the proportional-odds assumption makes the same at every cut:
+`"est_base"` folds the **model-adjusted prediction** into the estimate cell — an adjusted probability on a logistic model, an adjusted mean on a linear or a count one, each column answering with its own quantity. `"base_est"` swaps them, so the table reads as adjusted predictions graded by the effect, and `"base"` shows the predictions alone:
 
 ```{r}
-tab_reg(gss_simple, "rincome", c("race", "age", "relig"))
+tab_reg(gss_simple, "married", c("race", "age"), display = "est_base")
 ```
 
-A cumulative odds ratio is hard to say out loud, so ask for another **measure of deviation** and the same fit is read as a probability. `measure = "difference"` gives Somers' `D` — *of two people, one from this group and one from the reference group, how often does the one from this group end up higher on the scale?* — with that probability itself in brackets, 50 % being a coin flip:
+Note the difference: `display = "est_base"` *keeps* the odds-ratio column and adds the adjusted probability beside it, whereas `measure = "difference"` (seen above) turns the **whole** column into a marginal effect in points.
+
+**`multiplier`** chooses the **unit** a continuous predictor's effect is reported per. One unit is rarely a readable amount: a one-year change in `age` barely moves the odds, so its odds ratio sits near 1, never crosses a colour threshold, and the row reads as "no effect" — while a whole standard deviation of age multiplies the odds by about 0.66. So the default is **per two standard deviations**, and the row says which (`per 34.6 (2SD)`) — the variable is named in the column beside it. Two standard deviations is roughly the span of a binary predictor, which is the point: it puts a continuous row and a two-level row on the same footing, so a whole table can be read down its column:
 
 ```{r}
-tab_reg(gss_simple, "rincome", c("race", "age", "relig"),
-        measure = "difference", display = "est_base")
+tab_reg(gss_simple, "married", c("race", "age"))
 ```
 
-`measure = "ratio"` reads the same pair multiplicatively, as a **win ratio** (wins to losses). Both still take one column, because both read the whole predicted distribution rather than one slice of it — and both are robust where the cumulative odds ratio is not: they barely move when the proportional-odds assumption fails, and, unlike an odds ratio, they do not drift under adjustment when there is nothing to adjust for. The footer names the scale from low to high, since a one-column table shows the outcome's name and none of its categories.
-
-If you want a number **per outcome category** — a percentage-point effect on each income band — that is a question the ordering does not help with, and `family = "multinomial"` answers it without assuming proportional odds.
-
-A nominal outcome with three or more unordered levels is fit as one **multinomial** logistic model, giving one odds-ratio column per outcome category versus the reference category (also called relative risks ratios) :
+Pass a single value to change it for every continuous predictor, or a named vector to override chosen ones — `"sd"`, `"2sd"` (roughly bottom to top of the distribution), or a number of units. `multiplier = 1` gives the raw per-one-unit effect:
 
 ```{r}
-tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"))
+tab_reg(gss_simple, "married", c("race", "age"), multiplier = c(age = 10))
 ```
 
-Relative risk ratios may be quite difficult to read because they are relative to **two** reference levels : not only the reference chosen for the predictor, but also the reference level chosen for the dependent variable. It’s specially difficult when it’s difficult to find a good reference level corresponding to the most common situation (like "married" for matrimonial status).
+Everything scales together — the estimate, its interval, the observed `Obs_*` companion and the model-versus-observed comparison — and the p-value never changes. Two things worth knowing: because the default is not 1, a continuous predictor's `Model_OR` will **not** match `exp(coef(glm(...)))` unless you ask for `multiplier = 1`; and the standard deviation is measured once, on the predictors' complete cases, so the same variable keeps the same unit across several outcomes, compared models and `tab_vars` groups.
 
-Most of the time, asking for percentage points instead is easier to interpret, because it makes the second reference level disappear and modelises, for each level of the outcome, the difference of percentages of each predictor level compared to its reference (a less abstract quantity than odds ratios). It is `measure = "difference"`, exactly as on a binary outcome, and the resulting `mRD` columns are average marginal effects:
+### The reference a predictor's effect is measured from
+
+`ref` names the **reference** — for a factor, the level the others are compared against; for a continuous predictor, the value it is **anchored** at:
 
 ```{r}
-tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"), measure = "difference", empirical = TRUE) # |> tab_export()
+tab_reg(gss_simple, "married", c("race", "age"), ref = c(race = "Black", age = 40))
 ```
 
-A 3+ level outcome would need one crude column per outcome category, so `empirical = TRUE` folds the crude effect **into** the model cell instead — `+40.6% (+38.6%)`, modelled then observed — and the crude percentages and differences appear in html tooltips, at mouse hover of a cell. Ask for the columns anyway with `empirical = "column"`.
+The two halves are one idea, and they share one grammar with `multiplier` and `shape`: a value written **without a variable name** is the default for every predictor it can apply to, a named one overrides that variable. So `shape = "quintiles"` cuts every continuous predictor, `multiplier = c("2sd", age = 10)` reads "per two standard deviations, except `age`, per decade", and `ref = c("median", "last", race = "Black")` sets both defaults at once — the value itself says which kind of predictor it is for (a number or `"mean"` / `"median"` / `"min"` / `"max"` for a continuous one, `"first"` / `"last"` for a factor).
 
+Anchoring a continuous predictor **does not change its own effect**: a slope is the same wherever you start reading it from. The predictor's row says where its anchor sits, right beside the unit its effect is per — `per 34.6 (2SD), at 47.2 (mean)`, or `at 0 (min)` — so the Constant row's profile is readable from the table itself. What it changes is the **Constant** row, and any term the predictor interacts with. That is why the default is the mean rather than zero: nobody is 0 years old, so the intercept of a raw fit describes nobody. Read the Constant row as the baseline the rest of the column moves away from — a baseline odds on an odds-ratio column, a baseline probability or mean on an additive one — and its label says where that baseline sits (`Reference profile`, or `Population average` on a marginal column). If a predictor's zero *is* meaningful, say so: `ref = c(tvhours = 0)`.
 
-## Every outcome has an observed counterpart
-
-`empirical = TRUE` answers one question — **"how much of this association survives once I adjust for the rest?"** — and it works for every kind of outcome. The rule behind it is a single sentence:
-
-> The observed effect is **the model's own effect, fitted with one predictor**.
-
-That is worth saying plainly, because it is what makes the comparison fair. The crude number is not "a percentage" and the modelled one "a coefficient" — they are the *same quantity*, computed the same way, on the *same people* (the same complete cases), and shown on the same scale. Only the list of predictors differs. So the distance between them measures adjustment, and nothing else.
-
-The "same people" part is the default, not a hope: `na = "drop_by_outcome"` gives every model of an outcome one complete-case population, so a compared model cannot be fitted on rows the observed columns do not cover. If you ask for `na = "drop_by_model"` instead, a model on a different population gets **no** observed effect at all — better an empty cell than a "gap" that is really listwise deletion.
-
-A word on how to read it. The colour says how much two numbers differ, and the greying whether that difference exceeds noise. It does not say "this is a confounder": the 10% first threshold is a convention, not a decision rule, and part of an odds-ratio gap is arithmetic rather than confounding (see the annex). "This effect was **attenuated** by adjustment" is the safe reading; "explained by" is not.
-
-### An ordered outcome: what changes when you adjust
-
-Income here is an **ordered** factor, so it is fit as a proportional-odds model. `Obs_cumOR` is the same model with one predictor at a time:
-
-```{r}
-tab_reg(gss_simple, "rincome", c("race", "relig"),
-        empirical = TRUE, color = c(TRUE, "adjustment"))
-```
-
-Read a row left to right: the observed cumulative odds ratio, then the modelled one, with the **background** colouring the gap between them. Being Black is associated with lower income (`1/1.54` observed), and adjusting for religion barely moves it (`1/1.51`) — the association is not explained by religion. Compare Buddhist/Hinduist, where the effect *grows* once race and the other groups are held constant: adjustment can strengthen an association as easily as it can wash one away.
-
-On this scale the **background colour is not a test**: an odds ratio moves when any strong predictor is added, which is arithmetic rather than confounding. Ask for `measure = "difference"` and the same comparison is read on Somers' `D`, where it *is* one — the crude value is then the cross-table's own superiority probability, computed from the counts with no model at all, so the distance to the modelled one measures adjustment and nothing else:
-
-```{r}
-tab_reg(gss_simple, "rincome", c("race", "relig"), measure = "difference",
-        empirical = TRUE, display = "est_base", color = c(TRUE, "adjustment"))
-```
-
-### A nominal outcome: the crude number rides in the cell
-
-A multinomial model already spends one column per outcome category, so a second set of columns would double the table. The observed effect is printed **in the cell instead**, in parentheses:
-
-```{r}
-tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
-        empirical = TRUE, color = c(TRUE, "adjustment"))
-```
-
-`1/2.46 (1/2.43)` means "modelled `1/2.46`, observed `1/2.43`" — nothing to see. `1/12.48 (1/10.17)` means adjustment pushed the effect a little further from 1. The footer says which number is which, and hovering a cell (in an HTML export) adds the crude percentages behind it.
-
-### A summed score
-
-With `trials =`, the crude column is the odds ratio of the summed items, `Obs_OR`, with the observed **mean score** beside it — the average number of places out of six. The model column shows the same two quantities adjusted, so the pair reads across.
-
-```{r}
-tab_reg(tea, "tea_where", c("sex", "SPC", "Sport"),
-        family = "binomial", trials = length(tea_where_vars),
-        empirical = TRUE, color = c(TRUE, "adjustment"))
-```
-
-### How to read it — and how not to
-
-Three habits are worth acquiring.
-
-**A gap is a clue, not a verdict.** "Adjusting for religion halved this effect" is a sentence about your model, not about the world: it holds for *these* covariates, measured *this* way. A different set of controls gives a different gap.
-
-**Do not read a gap as "the true effect minus the biased one".** Both numbers are estimates. If the crude one is based on few people it will wander, and the gap wanders with it. That is what the greying is for (below).
-
-**Watch the scale, especially with odds ratios.** An odds ratio changes when you add a predictor *even if that predictor has nothing to do with the exposure* — a purely mathematical property called non-collapsibility. So on the odds-ratio columns above, part of every gap is arithmetic, not confounding, and the colours stay purely descriptive: they show the size of the move without claiming it is significant. If you want a gap you can test, ask for a collapsible measure — percentage points (`measure = "difference"`) or a risk ratio (`measure = "ratio"`), which is also the friendlier quantity to explain:
-
-```{r}
-tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
-        measure = "difference", empirical = TRUE, color = c(TRUE, "adjustment"),
-        color_signif = "grey_non_signif")
-```
-
-Now the cell reads "modelled effect in percentage points, observed one in parentheses", and a background that stays grey means the two are not distinguishable from noise.
-
-### For the record: which paths carry a test, and with which standard error
-
-The `"adjustment"` colour always shows the **size** of the gap. Whether it also *tests* it depends on one property of the effect measure, and the table decides for you:
-
-| what you asked for | observed effect | gap tested? |
-|---|---|---|
-| `measure = "difference"` — any outcome | yes | **yes** |
-| `measure = "ratio"`, or `link = "ratio"` (risk ratios) | yes | **yes** |
-| `measure = "odds_ratio", effect = "marginal"` (binary or summed score) | yes | **yes** |
-| Poisson incidence-rate ratios, a linear mean difference | yes | **yes** |
-| **conditional** odds ratios — binomial, multinomial, ordinal cumulative | yes | no (non-collapsible) |
-| a compound `formula =` | no | no |
-| a *weighted* 3+ level outcome | — | it can only be read on its coefficients |
-
-Where there is no test, `color_signif` is ignored for that channel and the colours read descriptively — the table never pretends to a significance it does not have.
-
-Where there **is** one, the two estimates were fitted on the same rows, so they are correlated and the standard error of their difference is smaller than `sqrt(SE₁² + SE₂²)` would suggest. tabxplor uses the sampling variance of the difference of the two **influence functions** (Weesie 1999; Mize, Doan & Long 2019), design-based when there are survey weights. For a 3+ level outcome the modelled leg is the score of the multinomial or cumulative logit times its own variance matrix, and the observed leg is a closed form — the same one that produces the crude interval the table prints. The three `color_signif` policies then read that one interval exactly as they do everywhere else in tabxplor: `"ignore"` colours the gap regardless, `"grey_non_signif"` greys it unless the interval excludes "no change", and `"guaranteed_effect"` colours the *floor* of the gap ("adjustment moved this by at least ×1.1").
-
-Two limits, stated rather than hidden. Each cell is tested on its own, with no multiple-comparison correction, so read the pattern rather than the one bright cell. And the test uses the robust (sandwich) variance on both sides — which is the right thing for comparing two differently-specified estimators, but means it can differ by a few percent from the descriptive interval printed beside it.
-
-
-## Linear regression (a numeric outcome)
-
-A continuous outcome gives plain linear regression coefficients (here we set `family` explicitly, because an integer like `age` is ambiguous — it could also be modelled as a count):
-
-```{r}
-tab_reg(gss_simple, "age", c("race", "marital", "relig", "rincome"), family = "gaussian")
-```
-
-In the case of a linear regression, the **empirical/observed counterpart of the model coefficient** for a categorical predictor is simply the **difference of means** : here, the difference of mean age, per level of the predictor, compared to the reference level. 
-```{r}
-tab_reg(gss_simple, "age", c("race", "marital", "relig", "rincome"), family = "gaussian", empirical = TRUE)
-```
-
-The empirical mean ages, and differences of mean ages from reference, can be computed in a simple table with : 
-
-```{r}
-tab(gss_simple, "race", "age", pct = "row", digits = 2, na = "drop",
-    color = "difference", ref = 1,  ci_method = c(mean_diff = "ols")
-) |> 
-  mutate(diff = set_display(age, "diff"))
-# ols : the variance pooled over every level of the variable, so the intervals are exactly those a
-#  linear regression puts on its coefficients ("student" pools the two compared groups only).
-```
-
-
-## Poisson regression (a count outcome)
-
-```{r}
-tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson")
-```
-
-An **incidence-rate ratio** (IRR) of 1.5 means "50% more hours of TV per day". Unweighted Poisson models automatically use dispersion-scaled (quasi-Poisson) standard errors, so over-dispersed counts get honest, wider intervals. Concretely: with an over-dispersed outcome, `family = "poisson"` returns CIs and p-values **identical to `family = "quasipoisson"`** and emits a warning saying so (the footer reports the dispersion); at equidispersion (≈ 1) the scaling is a no-op and the result matches a plain `glm(family = poisson)` — so a comparison to a hand-fit Poisson `glm` never surprises you.
-
-In the case of a poisson regression, the **empirical/observed counterpart of the model’s exponentiated coefficient** for a categorical predictor is the **ratio of means** : here, the ratio of average TV hours compared to the reference level.
-
-```{r}
-tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson", empirical = TRUE)
-```
-
-The empirical average TV hours per day, and differences of rate of television watching from reference, can be computed in a simple table with : 
-
-```{r}
-tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
-    color = "ratio", ref = 1,  ci_method = c(mean_ratio = "quasipoisson")
-) |> 
-  mutate(IRR = set_display(tvhours, "ratio"))
-# the default method is a robust ratio of means (each group's own variance) ;
-#  we use "quasipoisson" to match those computed by quasi-poisson regression -- one dispersion
-#  estimated over every level (assumption : variance is proportional to mean). 
-```
-
-## What a model column reports : `family` × `link` × `measure` × `effect`
-
-This section is the reference behind every table above. Four arguments decide what a model column
-contains, and they **chain** — each follows from the one before unless you say otherwise, which is
-what `"auto"` means on all four:
-
-```text
-outcome ──auto──▶ family ──auto──▶ link ──auto──▶ measure ──auto──▶ effect
-```
-
-**One rule underpins them, and it is what differs from `tab()`.** Only **`link`** changes the model
-that is fitted. `measure` and `effect` change what is *read off* it, and `display` only changes what
-the cell **shows**. In a cross-table every measure comes from the same counts, so asking for a ratio
-rather than a difference is a display choice; in a regression it is a step of computation — the model
-works your measure out from its predictions — but it is still the *same fit*. So a risk ratio and an
-odds ratio can be two readings of one logistic model, and a *different* model is something you ask
-for by name.
-
-### The four arguments, in plain words
-
-| argument  | the question it answers                 | `"auto"` gives you                | who sets it                |
-|:----------|:----------------------------------------|:----------------------------------|:---------------------------|
-| `family`  | what kind of number is the outcome      | detected from the outcome         | you, on a numeric outcome  |
-| `link`    | which measure the **model** estimates   | the family's own                  | rarely — experts           |
-| `measure` | which measure is **reported**           | the link's                        | **the one you set**        |
-| `effect`  | where that number is taken from         | a coefficient if there is one     | rarely; for an ideal type  |
-
-`effect`'s three values name three quantities:
-
-| `effect`         | the question it answers                                        | its name in the literature    |
-|------------------|----------------------------------------------------------------|-------------------------------|
-| `"conditional"`  | two people alike on all other predictors: what does this do?   | conditional effect (the coef.) |
-| `"marginal"`     | if everyone switched it, how far would the outcome move?       | average marginal effect (AME) |
-| `"at_reference"` | the same, but for one person at the reference profile          | effect at the reference profile |
-
-By hand you would get them with `coef(glm(...))` (exponentiated when the measure is a ratio), with
-`marginaleffects::avg_comparisons(model)`, and with the same call on a one-row profile where every
-other predictor sits at its reference level or its mean. You will rarely type any of them:
-`"auto"` picks `"conditional"` whenever the reported measure *is* the model's own — which is exactly
-when a coefficient exists — and `"marginal"` otherwise. `"conditional"` earns its keep as an
-assertion: ask for it where no coefficient can carry your measure and the table says so, naming the
-two cures, instead of quietly giving you something else.
-
-⚠ **One clause qualifies `"auto"`: it never lands on a *predicted* odds ratio.** A marginal odds
-ratio is a specialist quantity (Karlson & Jann 2023), so on a prediction route `"auto"` steps back to
-the outcome's own measure — "x times as likely" for a percentage. Name `measure = "odds_ratio"` to
-get it.
-
-**`effect = "at_reference"`** evaluates the effect at the reference profile — the abstract individual
-combining the reference level of every predictor — instead of averaging it over the sample. For a
-multinomial model it also unlocks a contrast the other two do not have: the odds ratio of each
-outcome category *versus all the others* at that profile.
-
-```{r, eval = FALSE}
-tab_reg(gss_simple, "married", c("race", "age"), effect = "at_reference")
-```
-
-### Which model an outcome can be fitted with
-
-`link` is the value set of models. Its words are `measure`'s own words, because a link **is** a
-measure — the one the model estimates directly — so the statistician's vocabulary never surfaces.
-† marks the family's own link, which is what `link = "auto"` resolves to.
-
-| outcome kind   | `family`         | a cell is… | `link =`         | the model that fits         | its coef.      |
-|----------------|------------------|------------|------------------|-----------------------------|----------------|
-| factor, 2 lvl  | `binomial`       | percentage | `"odds_ratio"` † | logistic regression         | `OR`           |
-|                |                  |            | `"ratio"`        | modified Poisson, robust SE | `RR`           |
-|                |                  |            | `"difference"`   | identity-link binomial      | `RD`           |
-| numeric, score | `binomial`+trials| percentage | the same three   | the same, per item          | `OR`/`RR`/`RD` |
-| numeric        | `gaussian`       | a mean     | `"difference"` † | linear regression           | `diff`         |
-|                |                  |            | `"ratio"`        | log-link Poisson pseudo-ML  | `RoM`          |
-| numeric, count | `poisson`        | a count    | `"ratio"` †      | Poisson, quasi-Poisson SEs  | `IRR`          |
-| factor, 3+ un. | `multinomial`    | percentage | `"odds_ratio"` † | multinomial logit           | `OR`           |
-| factor, ord.   | `ordinal`        | a rank     | `"odds_ratio"` † | proportional-odds model     | `cumOR`        |
-
-`family = "quasipoisson"` has exactly the row of `poisson` — it changes the variance assumption, not
-what is estimated.
-
-### What each measure reports, from any of them
-
-Which measures exist is decided by **what a cell is**: a percentage has an identity, a log and a
-logit, so all three; a mean or a count has no odds, so no odds ratio; and a **rank** — an ordered
-outcome's cell — is compared by pairs of people rather than by shares, which is what lets an ordinal
-model report in one column. Every cell below is the acronym the combination puts in the column
-header, after the constant `Model_` prefix.
-
-| a cell is… | `measure =`    | `"conditional"` \*      | `"marginal"` | `"at_reference"` |
-|------------|----------------|-------------------------|--------------|------------------|
-| percentage | `"odds_ratio"` | `OR`                    | `mOR` ¹      | `refOR` ¹        |
-| percentage | `"ratio"`      | `RR`                    | `mRR`        | `refRR`          |
-| percentage | `"difference"` | `RD`                    | `mRD`        | `refRD`          |
-| a mean     | `"difference"` | `diff`                  | `mdiff`      | `refdiff`        |
-| a mean     | `"ratio"`      | `RoM`                   | `mRoM`       | `refRoM`         |
-| a mean     | `"odds_ratio"` | not defined             | not defined  | not defined      |
-| a count    | `"ratio"`      | `IRR`                   | `mIRR`       | `refIRR`         |
-| a count    | `"difference"` | —                       | `mdiff`      | `refdiff`        |
-| a count    | `"odds_ratio"` | not defined             | not defined  | not defined      |
-| a rank     | `"difference"` | —                       | `mD`         | not offered ²    |
-| a rank     | `"ratio"`      | —                       | `mWR`        | not offered ²    |
-| a rank     | `"odds_ratio"` | `cumOR`                 | not offered ¹| not offered ¹    |
-
-The `"conditional"` column is the one `reg_measures()` shows per **link**; the other two are the same
-for every link the family fits, which is why it lists them once.
-
-\* a coefficient exists **only where that measure is the `link`** — see the previous table. Ask for
-one that is not, and the call is refused naming its two cures: drop `effect`, or fit the model that
-estimates it.
-
-¹ a predicted odds ratio needs a percentage **and its complement**, so a 3+ category outcome has to
-be asked "versus what?" first: on a multinomial outcome it exists only as the *versus the rest*
-contrast at `effect = "at_reference"`, and on an ordinal one not at all.
-
-² a rank's measures compare two people **drawn from the population**, and one profile holds only one.
-
-`reg_measures(data, outcome)` prints this grid for **your** outcome, and prints only what can be
-built: a *not defined* combination has no row, and the message above the table says why. Its two
-refusals are not the same one — a quantity has no odds to take a ratio of, whatever anyone
-implements, while *not offered* means tabxplor does not build it and the error lists what this
-outcome does offer, at this model and at the others.
-
-A further state exists only at run time: a link that does not converge on *your* data. The call says
-so, and for the risk difference it falls back to the linear probability model.
-
-`measure = "raw_coefficient"` is not a fourth column: it is **the model's own coefficient**, the
-estimand shown un-transformed. Where the reported measure is multiplicative that is its log, and the
-header says which one it logs (`Model_log(OR)`, `Model_log(IRR)`, `Model_log(RoM)`); where the model
-is already additive there is nothing to un-exponentiate, and the coefficient IS the additive estimate
-the column already shows. So it answers for every family — which is what lets a table mixing a
-logistic outcome and a linear one be asked for its coefficients at all. Being the fit's *own* number
-it is always the conditional one; ask it with `effect = "marginal"` and the call says so and names
-the cure. (`"coefficient"`, `"coef"`, `"log"`, `"log_odds"`, `"log_risk"` and `"log_rate"` are
-accepted spellings; the last three pin which base.)
-
-### What the header words mean
-
-A header names the **measure**; the **contrast** is a marker on it. So there is one acronym to look
-up per quantity, and one marker to read on top of it.
-
-| acronym | the quantity               | how you would get it by hand                                      |
-|---------|----------------------------|-------------------------------------------------------------------|
-| `OR`    | odds ratio                 | `exp(coef(glm(y ~ ., binomial)))`                                 |
-| `cumOR` | cumulative odds ratio      | `exp(coef(MASS::polr(...)))`, the proportional-odds model         |
-| `RR`    | risk ratio                 | modified Poisson, robust SE (Zou 2004)                            |
-| `RD`    | risk difference, in points | `glm(y ~ ., binomial("identity"))`, robust SE                     |
-| `IRR`   | incidence-rate ratio       | `exp(coef(glm(y ~ ., poisson)))`                                  |
-| `RoM`   | ratio of means             | log-link pseudo-Poisson, robust SE (Santos Silva & Tenreyro 2006) |
-| `diff`  | mean difference            | `coef(lm(...))`                                                   |
-
-| marker        | reads                                             | example         |
-|---------------|---------------------------------------------------|-----------------|
-| *(none)*      | conditional — holding the other predictors fixed  | `Model_OR`      |
-| `m` prefix    | marginal — averaged over the sample               | `Model_mRR`     |
-| `ref` prefix  | at the reference profile                          | `Model_refRD`   |
-| `log(…)`      | the same estimand, un-exponentiated               | `Model_log(OR)` |
-
-The observed companion carries the measure **without** a marker (`Obs_RR` beside `Model_mRR`): it is
-a univariable effect, and where its levels come from the counts themselves a marginal and a
-conditional contrast are the same number.
-
-### The one argument that changes the model: `link`
-
-Everything else changes what is reported. `link` changes what is fitted, and that is the whole of the
-difference — so it is the one argument that can put an assumption in your table you did not intend.
-Each link buys a directly readable coefficient at the price of one:
-
-| `family` and `link` | what is fitted | what the coefficient assumes |
-|---|---|---|
-| binomial · `"odds_ratio"` *(default)* | logistic regression | a constant odds ratio across profiles |
-| binomial · `"ratio"` | modified Poisson, robust SE | a constant risk ratio |
-| binomial · `"difference"` | identity-link binomial, robust SE | a constant risk difference |
-| gaussian · `"difference"` *(default)* | linear regression | a constant mean difference |
-| gaussian · `"ratio"` | log-link Poisson pseudo-ML, robust SE | E(y) = exp(xβ), so a constant ratio of means |
-| poisson · `"ratio"` *(default)* | Poisson, quasi-Poisson SEs | a constant rate ratio |
-| ordinal · `"odds_ratio"` *(default)* | proportional-odds model | one odds ratio, shared by every cut |
-| multinomial · `"odds_ratio"` *(default)* | multinomial logit | a constant odds ratio per category |
-
-What the literature says about the three non-default links:
-
-- **The risk ratio is a well-established route, not a workaround.** `link = "ratio"` on a binary
-  outcome fits Zou's modified Poisson, which exists precisely to avoid the convergence failures of a
-  log-binomial fit and is standard practice in epidemiology. Its own limits are different in kind
-  from the risk difference's: fitted risks are not bounded above by 1, and in small or sparse samples
-  both the estimate and the sandwich standard error are biased — penalised variants exist for that
-  case.
-- **The risk difference is the fragile one.** An identity link is bounded on neither side, so it can
-  predict impossible risks and can simply fail to converge. When it does, tabxplor fits the linear
-  probability model instead and the footer says so — the two target the same quantity, but they are
-  different estimators and agree only if the model is right.
-- **The ratio of means is consistent whenever the mean function is right.** Poisson pseudo-likelihood
-  does not claim your outcome is a count: it is a device for the log link, and its robust standard
-  error does not require the Poisson variance to be correct. Nothing, however, rescues a wrong mean
-  function — and the outcome must be non-negative.
-- **The default is not assumption-free either.** A logistic coefficient assumes a constant odds
-  ratio, an ordinal one assumes the same odds ratio at every cut (the footer's Brant test checks it),
-  and the odds ratio is non-collapsible, so it moves when a covariate is added even where there is
-  nothing to confound.
-
-**Which route to take.** If a risk ratio or a risk difference is what you want to *report*, the safer
-default is to leave the model on its family's own scale and name the measure with `measure =`. Three
-reasons, none of them about taste: the logit always converges and can never predict a probability
-outside 0–100 %, while the log and identity links can do both; a marginal effect imposes no
-constant-effect assumption on the scale you report, since it averages the effect the fitted model
-actually implies at each respondent's own profile; and every `measure` runs on the same fit, so
-changing which measure you show never changes what was estimated.
-
-That said, the two are different questions rather than two spellings of one. A coefficient is a
-**conditional** effect — "two people alike on every other predictor" — and a marginal effect a
-population average. Take the `link` route when the conditional quantity is what you want: to line up
-with a published conditional estimate, or when "the effect is the same size everywhere on this scale"
-is the claim you actually mean to make. `reg_formulas()` tells you which model ran.
-
-### Caveats worth knowing
-
-- **A binary outcome with `family = "poisson"` is not a count model**, and is refused rather than
-  quietly rewritten. `family` says what kind of number the outcome is and never picks a link behind
-  your back; the message names the two things that spelling could have meant — `link = "ratio"` (the
-  modified Poisson's *conditional* risk ratio) and `measure = "ratio"` (the *marginal* one).
-- **`link = "ratio"` on a numeric outcome stops on a negative outcome.** A ratio of means is not
-  defined there; the call suggests modelling `log()` of a positive outcome, or leaving `link` alone.
-- **`Model_RD` and `Model_mRD` are both percentage points, and are not the same number.** `Model_RD`
-  is a conditional risk difference from an identity-link fit (`link = "difference"`), `Model_mRD` a
-  marginal one standardised over the logistic fit (`measure = "difference"`) — which is what the `m`
-  marker says.
-- **Conditional odds ratios are non-collapsible**, so `color = "adjustment"` colours the gap on such
-  a column but never tests it (see *How to read it — and how not to*, above). Ask for
-  `measure = "difference"` or `measure = "ratio"` — or, if you must publish odds ratios,
-  `measure = "odds_ratio", effect = "marginal"`, whose *marginal* odds ratio is collapsible and whose
-  gap the table does test.
-- **One combination has no observed companion.** At `effect = "at_reference"` the model is
-  conditional on one profile while the observed columns stay marginal over the whole sample, so the
-  two are shown but not compared — `color = "adjustment"` and `{obs}` stay empty.
-- **What needs an extra package, and what has no method.** `effect = "at_reference"` goes through **marginaleffects**; a *survey-weighted* multinomial model has no marginal-effects method at all, so there it can only be read on its coefficients — keep the model's own measure and the call goes through. A survey-weighted **ordinal** model is the exception: its rank measures (`measure = "difference"` / `"ratio"`) run on tabxplor's own g-computation and take the design-based variance straight from the fit, so they work under any design — only the crude/adjusted *gap test* is unavailable there, and `color = "adjustment"` then colours without testing. (`display` itself reaches every column, marginal or not.)
-
-### Asking your own outcome
-
-`reg_measures()` prints this grid for one outcome of your own data — it reads the very table
-`tab_reg()` resolves against, so what it prints is what the function does:
-
-```{r}
-reg_measures(gss_simple, "married")
-```
-
-It comes in **two blocks**. The first is one row per model you could fit: its `link`, and the measure
-that model's own coefficients carry. The second is what is read off the model's *predictions* — the
-same whichever link you fit, which is why those rows say `link = "(any)"`. So what `link` changes is
-only which measure has a **coefficient**; every measure stays reportable from any of them.
-
-Name a link to read the table at that model alone, and a family to read it as that kind of outcome:
-
-```{r}
-reg_measures(gss_simple, "married", link = "ratio")
-```
-
-The same list is in `?tab_reg`, section *"Which models each outcome offers, and which measures"*,
-generated from the same source.
-
-
-## Weighted and survey data
-
-Passing a weight column with `wt =` switches estimation to a **survey design** (`survey::svyglm()`), which gives correct *design-based* standard errors. The framework `tabxplor` uses is simple: the **estimate is weighted**, and the model's standard errors come from the survey design, so unequal weights widen the confidence intervals honestly. The crude `Obs_*` companions are on the same basis, always — which is what makes them comparable with the model column beside them.
-
-```{r, eval = FALSE}
-# `weight` is a survey weight column in your data -- the common case:
-tab_reg(data, "outcome", c("pred1", "pred2"), wt = "weight")
-```
-
-There are only **two ways to hand tabxplor your weights**, and that is deliberate. Either you give `wt =` a weight column, or — when your file also carries strata, clusters, a finite-population correction or calibration — you build the design once with the [survey](https://CRAN.R-project.org/package=survey) package and pass **the design itself** as `data`:
-
-```{r, eval = FALSE}
-library(survey)
-d <- svydesign(ids = ~psu, strata = ~stratum, weights = ~w, data = my_survey, nest = TRUE)
-tab_reg(d, "outcome", c("pred1", "pred2"), empirical = TRUE)
-```
-
-Everything then follows that design, in one regime: the `Model_*` coefficients and their intervals (`survey::svyglm()`), the average marginal effects, the per-standard-deviation scaling of numeric predictors, the model-vs-observed gap test — **and the observed `Obs_*` companion columns**, whose intervals are built on the design variance of each cell. That last point matters for the comparison this vignette is about: the model column and the observed column beside it are now measured the same way, so a difference between them is about *adjustment*, not about two different notions of uncertainty.
-
-Two honest limits. A comparison *between two cells* (an observed odds ratio, a risk difference) ignores the design covariance between them, so it lands a few percent either side of the exact answer — against the 15–25 % it was out by when those columns were computed as if the sample were simple random. And a *nominal* outcome has no observed *column*: its crude value is folded into the model cell as a point, with no interval to make design-based. An ordinal one does have a column — its crude superiority pair is a closed form on the cell table — but a survey-weighted ordinal model cannot be read on it at all (see below).
-
-Without a design, the observed columns' intervals already account for the weighting exactly (the flat survey design, `ids = ~1`) — a correction for unequal weighting only, blind to clustering and calibration.
-
-**Why a weighted `tab_reg()` is not a weighted `tab()`.** `tab_reg()` cannot choose: its observed columns have to be measured like the model column beside them, and that one is design-based by construction (`survey::svyglm()`). `tab()` can, and keeps the descriptive convention — a weighted estimate on the raw sample size — as its default. Each table's footer says which it used, and `tab(design_effect = TRUE)` is what brings the two into line. In the vocabulary of `vignette("tabxplor")`: `tab_reg()` is always at **level 2** (or level 3 under a design), while `tab()` starts at level 1.
-
-
-## Comparing several models
-
-Pass a **named list** of predictor sets instead of a vector to fit and show several models side by side. A comparison Likelihood ratio test is one more footer key: `stats = "compare_baseline"` tests each model against the first (name another with `stats = c(compare_baseline = "M2")`), `stats = "compare_sequential"` tests each against the previous one:
-
-```{r}
-tab_reg(gss_simple,
-        "married",
-        list("Race only"    = "race",
-             "+ age"        = c("race", "age"),
-             "+ party"      = c("race", "age", "party3")),
-        stats = "compare_sequential")
-```
-
-## The same model within sub-populations
-
-`tab_vars =` is the regression analogue of `tab()`'s `tab_vars`: the same model is fitted **within each level** of a grouping variable, and the per-group tables are stacked into one grouped table. It answers "does this effect hold in every subgroup?". With just one dependent variable, it uses `tab_spread()` internally to lay the groups out as side-by-side columns for an easy comparison : 
-
-```{r}
-tab_reg(gss_simple, "married", c("race", "rincome"), tab_vars = "year")
-```
-
-Reading a row across the groups is the same chore as reading a model against its observed effect, and
-it has the same answer: `color = "between_groups"` colours how far each group's effect sits from the
-**first** group's, on the same row. Where the model-comparison test below says "these models differ"
-once for the whole model, this says *which effects* differ between groups — a per-predictor reading of
-what statisticians call effect modification.
-
-Here the groups are separate people, so the difference between two of their effects can be tested — and
-it is, so `color_signif` works as everywhere else. Add `"grey_non_signif"` and a background colour then
-means "this really is a different effect, not just noise":
-
-```{r}
-tab_reg(gss_simple, "married", c("race", "rincome"), tab_vars = "party3",
-        color = c(TRUE, "between_groups"), color_signif = "grey_non_signif")
-```
-
-Text colour = how strong the effect is inside that group. Background = how far it sits from the first
-group's effect on the same row, greyed out when the difference could be chance. The first group is the
-baseline and stays blank (nothing is compared to itself); reorder the levels with
-`forcats::fct_relevel()` to pick another one. Hovering a cell in the html table gives the exact numbers:
-the other group's effect, the size of the gap, its confidence interval and its p-value.
-
-The footer gained a line at the same time: **one test per predictor**, asking "does this predictor act
-differently between the groups?" for all its levels at once. That is the aggregated version of the same
-question, and it is the one to quote — because it is asked once, not once per cell. You can ask for it
-alone, without the colours, with `stats = c("n", "group_interaction")`.
+Order matters in one place, and it is stated rather than guessed: `shape` recodes the column first (it defines what the model's variable *is*), then the anchor applies to the result. So `ref` on a `"log"`-shaped predictor anchors the log, and a `"quartiles"`-shaped one has become a factor and takes a level name.
 
 ## Interactions: one predictor's effect depending on another
 
@@ -1101,13 +1011,7 @@ on the effect's own scale — the log-ratio for an odds ratio, a risk ratio or a
 the plain difference for a beta or a marginal effect — and compared to a normal (z) threshold, which is
 mildly conservative in small samples.
 
-The three policies read that same interval:
-
-| `color_signif` | what the background shows |
-|----------------|---------------------------|
-| `"ignore"` (default in `tab()`) | the size of the gap, coloured whether or not it is significant |
-| `"grey_non_signif"` (default in `tab_reg()`) | the same, greyed unless the gap's interval excludes "no difference" |
-| `"guaranteed_effect"` | the **floor** of the gap: "these two effects differ by at least ×1.1" (on a difference scale, "by at least 2 points") |
+The three `color_signif` policies then read that interval exactly as they do in part 4 — here "no change" reads "no difference between the two groups".
 
 Two details worth knowing. The significance **stars** in the cells keep reading each estimate's own
 p-value — "is this effect different from 1?" — not the gap's; the gap's p-value is in the tooltip.
@@ -1116,53 +1020,70 @@ design-based Wald test when you supply survey weights — the same rule as the m
 one extra pooled model, on the **coefficients**: on a marginal column the cells show marginal effects
 while the footer tests the coefficients, two related but distinct questions, and the line says so.
 
-## Fine-tuning the display, and scaling a predictor
+## Comparing several models
 
-A few arguments change *what each cell shows*, or *how a predictor is scaled* — without changing the model itself.
-
-**`display`** chooses the cell layout — the same named layouts `tab()` offers, in the same `{}` grammar. `"est_ci"` shows the confidence interval beside every estimate (any family):
+Pass a **named list** of predictor sets instead of a vector to fit and show several models side by side. A comparison Likelihood ratio test is one more footer key: `stats = "compare_baseline"` tests each model against the first (name another with `stats = c(compare_baseline = "M2")`), `stats = "compare_sequential"` tests each against the previous one:
 
 ```{r}
-tab_reg(gss_simple, "married", c("race", "age"), display = "est_ci")
+tab_reg(gss_simple,
+        "married",
+        list("Race only"    = "race",
+             "+ age"        = c("race", "age"),
+             "+ party"      = c("race", "age", "party3")),
+        stats = "compare_sequential")
 ```
 
-`"est_base"` folds the **model-adjusted prediction** into the estimate cell — an adjusted probability on a logistic model, an adjusted mean on a linear or a count one, each column answering with its own quantity. `"base_est"` swaps them, so the table reads as adjusted predictions graded by the effect, and `"base"` shows the predictions alone:
+## The same model within sub-populations
+
+`tab_vars =` is the regression analogue of `tab()`'s `tab_vars`: the same model is fitted **within each level** of a grouping variable, and the per-group tables are stacked into one grouped table. It answers "does this effect hold in every subgroup?". With just one dependent variable, it uses `tab_spread()` internally to lay the groups out as side-by-side columns for an easy comparison : 
 
 ```{r}
-tab_reg(gss_simple, "married", c("race", "age"), display = "est_base")
+tab_reg(gss_simple, "married", c("race", "rincome"), tab_vars = "year")
 ```
 
-Note the difference: `display = "est_base"` *keeps* the odds-ratio column and adds the adjusted probability beside it, whereas `measure = "difference"` (seen above) turns the **whole** column into a marginal effect in points.
+Reading a row across the groups is the same chore as reading a model against its observed effect, and
+it has the same answer: `color = "between_groups"` colours how far each group's effect sits from the
+**first** group's, on the same row. Where the model-comparison test below says "these models differ"
+once for the whole model, this says *which effects* differ between groups — a per-predictor reading of
+what statisticians call effect modification.
 
-**`multiplier`** chooses the **unit** a continuous predictor's effect is reported per. One unit is rarely a readable amount: a one-year change in `age` barely moves the odds, so its odds ratio sits near 1, never crosses a colour threshold, and the row reads as "no effect" — while a whole standard deviation of age multiplies the odds by about 0.66. So the default is **per one standard deviation**, and the row says which (`per 17.3 (SD)`) — the variable is named in the column beside it:
+Here the groups are separate people, so the difference between two of their effects can be tested — and
+it is, so `color_signif` works as everywhere else. Add `"grey_non_signif"` and a background colour then
+means "this really is a different effect, not just noise":
 
 ```{r}
-tab_reg(gss_simple, "married", c("race", "age"))
+tab_reg(gss_simple, "married", c("race", "rincome"), tab_vars = "party3",
+        color = c(TRUE, "between_groups"), color_signif = "grey_non_signif")
 ```
 
-Pass a single value to change it for every continuous predictor, or a named vector to override chosen ones — `"sd"`, `"2sd"` (roughly bottom to top of the distribution), or a number of units. `multiplier = 1` gives the raw per-one-unit effect:
+Text colour = how strong the effect is inside that group. Background = how far it sits from the first
+group's effect on the same row, greyed out when the difference could be chance. The first group is the
+baseline and stays blank (nothing is compared to itself); reorder the levels with
+`forcats::fct_relevel()` to pick another one. Hovering a cell in the html table gives the exact numbers:
+the other group's effect, the size of the gap, its confidence interval and its p-value.
 
-```{r}
-tab_reg(gss_simple, "married", c("race", "age"), multiplier = c(age = 10))
+The footer gained a line at the same time: **one test per predictor**, asking "does this predictor act
+differently between the groups?" for all its levels at once. That is the aggregated version of the same
+question, and it is the one to quote — because it is asked once, not once per cell. You can ask for it
+alone, without the colours, with `stats = c("n", "group_interaction")`.
+
+## Weighted and survey data
+
+There are only **two ways to hand tabxplor your weights**, and that is deliberate. Either you give `wt =` a weight column, or — when your file also carries strata, clusters, a finite-population correction or calibration — you build the design once with the [survey](https://CRAN.R-project.org/package=survey) package and pass **the design itself** as `data`:
+
+```{r, eval = FALSE}
+tab_reg(data, "outcome", c("pred1", "pred2"), wt = "weight")
+
+library(survey)
+d <- svydesign(ids = ~psu, strata = ~stratum, weights = ~w, data = my_survey, nest = TRUE)
+tab_reg(d, "outcome", c("pred1", "pred2"), empirical = TRUE)
 ```
 
-Everything scales together — the estimate, its interval, the observed `Obs_*` companion and the model-versus-observed comparison — and the p-value never changes. Two things worth knowing: because the default is not 1, a continuous predictor's `Model_OR` will **not** match `exp(coef(glm(...)))` unless you ask for `multiplier = 1`; and the standard deviation is measured once, on the predictors' complete cases, so the same variable keeps the same unit across several outcomes, compared models and `split_var` groups.
+Either way estimation switches to `survey::svyglm()` and everything follows that design in one regime: the coefficients and their intervals, the average marginal effects, the scaling of numeric predictors, the model-versus-observed gap test — **and the observed `Obs_*` companion columns**, whose intervals are built on the design variance of each cell. That last point is what makes this vignette's central comparison work: the model column and the observed column beside it are measured the same way, so a difference between them is about *adjustment*, not about two notions of uncertainty.
 
-### The reference a predictor's effect is measured from
+One consequence is worth stating, because it differs from `tab()`: a regression is **always** design-based, while a cross-table starts on the plain unweighted sample size and needs `design_effect = TRUE` to join it. `vignette("tabxplor-weights")` explains that ladder, the two honest limits of a design-based observed column, and how to tell whether your own file deserves a full design at all.
 
-`ref` names the **reference** — for a factor, the level the others are compared against; for a continuous predictor, the value it is **anchored** at:
-
-```{r}
-tab_reg(gss_simple, "married", c("race", "age"), ref = c(race = "Black", age = 40))
-```
-
-The two halves are one idea, and they share one grammar with `multiplier` and `shape`: a value written **without a variable name** is the default for every predictor it can apply to, a named one overrides that variable. So `shape = "quintiles"` cuts every continuous predictor, `multiplier = c("2sd", age = 10)` reads "per two standard deviations, except `age`, per decade", and `ref = c("median", "last", race = "Black")` sets both defaults at once — the value itself says which kind of predictor it is for (a number or `"mean"` / `"median"` / `"min"` / `"max"` for a continuous one, `"first"` / `"last"` for a factor).
-
-Anchoring a continuous predictor **does not change its own effect**: a slope is the same wherever you start reading it from. The predictor's row says where its anchor sits, right beside the unit its effect is per — `per 17.3 (SD), at 47.2 (mean)`, or `at 0 (min)` — so the Constant row's profile is readable from the table itself. What it changes is the **Constant** row, and any term the predictor interacts with. That is why the default is the mean rather than zero: nobody is 0 years old, so the intercept of a raw fit describes nobody. Read the Constant row as the baseline the rest of the column moves away from — a baseline odds on an odds-ratio column, a baseline probability or mean on an additive one — and its label says where that baseline sits (`Reference profile`, or `Population average` on a marginal column). If a predictor's zero *is* meaningful, say so: `ref = c(tvhours = 0)`.
-
-Order matters in one place, and it is stated rather than guessed: `shape` recodes the column first (it defines what the model's variable *is*), then the anchor applies to the result. So `ref` on a `"log"`-shaped predictor anchors the log, and a `"quartiles"`-shaped one has become a factor and takes a level name.
-
-
+# 6. Checking the model
 
 ## Reading the footer statistics
 
@@ -1177,7 +1098,7 @@ The footer summarises model fit; which statistics appear depends on the family:
 
 For weighted models a reduced set is reported (a Wald test against the null, Nagelkerke / Cox–Snell pseudo-R², a Rao–Scott AIC), because the likelihood-based quantities do not apply to a design-based fit.
 
-## Checking the model
+## The five model checks
 
 The same footer carries five **model checks**, and there is nothing to learn beyond the five nouns: each names an assumption, and the parenthesis names the instrument that measured it. Four are printed by default. **Linearity** is the one you ask for by name, or with `stats = "all"` — because it refits the model once per continuous predictor, and because the free half of it is on screen anyway (see the shape table below).
 
@@ -1188,20 +1109,22 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), stats = c("
 Read them in the order they print, which is the order of what each one threatens — first what the number *means*, then whether its interval can be trusted, then how fragile it is:
 
 - **Proportionality (Brant)** — for an ordinal outcome, *is one cumulative odds ratio enough for every cut?* Printed by default there, and a refit anyway, because a cumulative odds ratio that fails it is not one number but a fiction. When it fails, `measure = "difference"` is the robust way to keep reading the same fit (Somers' `D` barely moves when the assumption breaks); `family = "multinomial"` is the way to stop assuming it at all.
-- **Linearity** — *is this predictor's effect really one straight line?* One row per continuous predictor. A wrong shape does not stay in its own row: in the model above, letting `age` curve instead of run straight moves the top income category's odds ratio by about a quarter, and flips another income level's verdict at the 5 % threshold — while nothing in the table hints at it.
+- **Linearity** — *is this predictor's effect really one straight line?* One row per continuous predictor, and the row a wrong shape shows up in is rarely the only row it damages. The next two sections are about reading it and curing it.
 - **Dispersion (robust/model SE)** — *are the standard errors wide enough?* About 1 means the family's variance assumption holds; 1.4 means the intervals should be about 40 % wider than they are. For a count outcome, `family = "quasipoisson"` fixes exactly that, and the row then returns to about 1 (while the Pearson dispersion φ still reports the over-dispersion itself). Under a survey design it simply says how much the design mattered — the intervals are already the design's.
 - **Collinearity (max VIF)** — *can the data tell these predictors apart?* Above about 5, two predictors are measuring much the same thing and their intervals are inflated. Collinearity biases nothing, so this is the one check that is a caution rather than a problem. (It needs the `car` package.)
 - **Influence (max dfbetas)** — *does one respondent carry the result?* The largest amount, in standard errors, by which dropping a single respondent moves any coefficient. With thousands of respondents this is normally reassuringly small, and that reassurance is the point. Careful: influence is not the same as being an outlier — a surprising answer from an otherwise ordinary respondent moves nothing.
 
 Two things worth knowing. A curvature test on one predictor can pick up **another** predictor's wrong shape when the two are strongly correlated — one more reason to read the collinearity row beside it. And with a large survey sample almost any diagnostic *p*-value ends up significant, which is why three of the five report a magnitude instead.
 
-### The shape table: what a continuous predictor's effect actually looks like
+## The shape of a continuous predictor
 
 ```{r, include = FALSE}
 options(tabxplor.shape_table = "all")   # this section is about it
 ```
 
 The linearity row tells you *whether* one straight line is enough. The small **shape table** printed under the footer tells you *what shape the data has* — and it costs nothing, because no model is involved: the outcome is simply cut into ten equal-sized slices of the predictor, and the average is taken in each.
+
+The table below carries one of each, which is why it is worth reading closely: **`tvhours` has exactly the shape a coefficient assumes** — a straight fall, so its single number describes it honestly — while **`age` has a shape no coefficient can express**.
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age", "tvhours"), family = "binomial")
@@ -1219,7 +1142,9 @@ This is the one number a continuous predictor never has in the table itself. A c
 
 - a **straight** rise or fall — one number describes it, nothing to do;
 - a **bend** or a **plateau** — the effect is not the same everywhere, and the cures below fix it;
-- a **reversal**, up then down, like `age` here — the one a single coefficient cannot express at all, because it reports one direction for a variable that has two. `age` climbs steeply, levels off, then falls: the single `1.22` per standard deviation printed in its row is the average of a rise and a fall.
+- a **reversal**, up then down, like `age` here — the one a single coefficient cannot express at all, because it reports one direction for a variable that has two. `age` climbs steeply, levels off, then falls: the single `1.45` per two standard deviations printed in its row is the average of a rise and a fall, a number that describes nobody. `tvhours` is the contrast, and the reassuring case: it falls throughout, so its `1/1.69` really is *the* effect of watching more television, and there is nothing to do about it.
+
+The damage does not stay in the offending row. Letting `age` curve instead of run straight moves the top income category's odds ratio by about a quarter and flips another income level's verdict at the 5 % threshold — in a model where nothing but this shape table hints at a problem. That is the whole reason to look.
 
 ⚠ **Do not compare two pictures by eye.** Each curve is drawn at its own scale and fills the height whatever its size — that is what makes small shapes visible at all. `age` and `tvhours` look about equally dramatic above; the ranges say one is a nine-fold change and the other closer to two and a half. **The picture answers *what shape*, the range answers *how big*.** Only the numbers compare.
 
@@ -1239,7 +1164,7 @@ For an **ordinal** or **multinomial** outcome the table draws only the first cut
 
 `options(tabxplor.shape_table = "console")` keeps the shape table where you are working and out of your exports; `"no"` removes it everywhere.
 
-### Curing a shape
+## Curing a shape
 
 `shape =` is how you fix what the table just showed you, without leaving the table. The most readable answer is usually to cut the predictor into groups — it then becomes an ordinary factor, so it gets one odds ratio per group, its own observed companion, counts and colours, and the shape becomes visible in the printed numbers themselves:
 
@@ -1259,13 +1184,29 @@ tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",
 
 (A `poly()` or spline basis is deliberately never emitted: the marginal-effects engine silently returns zero for those. If you reach one through a `formula`, a warning says so.)
 
-## Plots
+## The check plots: `reg_check_plots()`
+
+```{r, eval = FALSE}
+reg_check_plots(t)                       # the default panels, one titled grid per model
+reg_check_plots(t, check = "all")        # plus dispersion and collinearity
+reg_check_plots(t, check = "linearity")  # just one
+```
+
+The same nouns as the footer rows, one panel each, and **one titled grid per model** — each drawing the panels its own family allows, so a table mixing a binomial and an ordinal outcome is diagnosed correctly. The data is normally found on its own, from the name the table was built with; pass `data =` when the table came from an expression rather than a named object. `check = "auto"` leaves out **dispersion** and **collinearity**, whose footer row already says the whole thing; `check = "all"` restores them.
+
+These are a **teaching** companion, not a decision tool: every verdict they illustrate is already a footer row, in every export, with no plotting package installed. They exist to show what a violation looks like. `theme = "print_ready"` gives a greyscale version for a thesis appendix; you can also pass a plain fitted model instead of a table.
+
+Two panels repay a second look. **Linearity** compares the observed curve to *the shape the model fits* — a straight line normally, a parabola once `shape = "quadratic"` put a curvature term in — so it stays honest about a predictor you have already cured. With an ordinal or a multinomial outcome it draws **one curve per cut of the outcome** (per category, against the reference, for a multinomial): parallel curves are the proportional-odds assumption holding, which the Brant test in the footer scores but the *Proportionality* panel, being about factors, cannot show for a continuous predictor.
+
+Note the opposite contracts: `forest_plot()` never re-fits (the results are in the table), `reg_check_plots()` always does (residuals are not).
+
+# 7. Plots
 
 ```{r, include = FALSE}
 options(tabxplor.shape_table = "no")    # back to the vignette's own setting
 ```
 
-### The results: `forest_plot()`
+## The results: `forest_plot()`
 
 `forest_plot()` draws the finished table — every effect with its confidence interval and its colour, one panel per model column:
 
@@ -1284,7 +1225,7 @@ The three ways of reading significance become three things you can see:
 | `"grey_non_signif"` | grey unless the interval excludes the null | whether the whisker crosses the null line |
 | `"guaranteed_effect"` | colour the interval bound nearest the null | how far the near end of the whisker is from it |
 
-### Observed versus modelled, drawn honestly
+## Observed versus modelled, drawn honestly
 
 With `empirical = TRUE`, each modelled effect carries its observed (crude) counterpart, and the plot draws it as a **hollow point with a bracket** — the margin of error *of the difference between the two*:
 
@@ -1300,27 +1241,11 @@ It is deliberately *not* two intervals side by side. Comparing two intervals by 
 
 A dotted connector with no bracket means the gap could not be tested — most often a conditional odds ratio, which moves under adjustment even with nothing to adjust for (see *Three ways to get this wrong* above).
 
-### The model checks: `reg_check_plots()`
-
-```{r, eval = FALSE}
-reg_check_plots(t)                       # the default panels, one titled grid per model
-reg_check_plots(t, check = "all")        # plus dispersion and collinearity
-reg_check_plots(t, check = "linearity")  # just one
-```
-
-The same nouns as the footer rows, one panel each, and **one titled grid per model** — each drawing the panels its own family allows, so a table mixing a binomial and an ordinal outcome is diagnosed correctly. The data is normally found on its own, from the name the table was built with; pass `data =` when the table came from an expression rather than a named object. `check = "auto"` leaves out **dispersion** and **collinearity**, whose footer row already says the whole thing; `check = "all"` restores them.
-
-These are a **teaching** companion, not a decision tool: every verdict they illustrate is already a footer row, in every export, with no plotting package installed. They exist to show what a violation looks like. `theme = "print_ready"` gives a greyscale version for a thesis appendix; you can also pass a plain fitted model instead of a table.
-
-Two panels repay a second look. **Linearity** compares the observed curve to *the shape the model fits* — a straight line normally, a parabola once `shape = "quadratic"` put a curvature term in — so it stays honest about a predictor you have already cured. With an ordinal or a multinomial outcome it draws **one curve per cut of the outcome** (per category, against the reference, for a multinomial): parallel curves are the proportional-odds assumption holding, which the Brant test in the footer scores but the *Proportionality* panel, being about factors, cannot show for a continuous predictor.
-
-Note the opposite contracts: `forest_plot()` never re-fits (the results are in the table), `reg_check_plots()` always does (residuals are not).
-
 ## Where to go next
 
-- `tab_reg()` is also available **without writing R code**, as a point-and-click **Regressions** analysis in the [jamovi](https://www.jamovi.org/download) module — install *tabxplor* from jamovi's module library (see `vignette("tabxplor")`).
+- `vignette("tabxplor-all-else-equal")` — the same material taught as one continuous analysis, with the reading habits that go with it.
 - `vignette("tabxplor")` — cross-tables and the colour helpers.
+- `vignette("tabxplor-weights")` — weighted and survey data, for both producers.
 - `?tab_reg` for every argument (grouped by purpose), and `?tab_reg` &rarr; *Details* for the modelling choices.
-- `survey::svydesign()` for complex designs (strata, clusters, calibration, finite-population corrections). Replicate-weight designs (`svrepdesign()`) are not supported.
 - **Out of scope**, and best fitted with their own packages: survival / Cox models, mixed (multilevel) models, and pooling over multiply-imputed datasets.
 - On comparing a crude and an adjusted coefficient, the canonical reference is Clogg, Petkova & Haritou (1995, *AJS* 100(5)), with Allison's comment in the same issue — what `color = "adjustment"` computes, generalised to GLMs, survey designs and marginal effects. For nested logit models, the KHB decomposition (Karlson, Holm & Breen 2012) separates the part of the change that is confounding from the part that is rescaling.

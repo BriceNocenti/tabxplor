@@ -59,6 +59,11 @@ testthat::test_that("the derived vocabularies reproduce what they replaced", {
 })
 
 testthat::test_that("the build-time guard ties get_num()/set_num() to the table, both ways", {
+  # display_switch_tokens() reads every length-1 string constant out of body(fn); covr rewrites each
+  # body as `if (TRUE) { covr:::count("<srcref key>"); <call> }`, and those keys ARE such constants.
+  # The same guard runs at load (R/tab-display.R), before covr instruments, so nothing is lost.
+  testthat::skip_if(identical(Sys.getenv("R_COVR"), "true"),
+                    "covr injects string literals into the function bodies this walks")
   d <- names(tabxplor:::DISPLAY_TOKENS)[is.na(vapply(
     tabxplor:::DISPLAY_TOKENS, function(r) r$alias %||% NA_character_, character(1)))]
   # the scale-relative `est` / `base` are handled by the ONE resolver both maps run first, so it

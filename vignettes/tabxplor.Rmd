@@ -64,11 +64,22 @@ knitr::knit_hooks$set(output = function(x, options) {
          fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
          '</code></pre>')
 })
+# A cli message or warning is its own kind of condition, so knitr routes each through its own hook,
+# not `output`: without these two it would land in the collapsed source block, ANSI codes and all.
+for (hook in c("message", "warning")) {
+  knitr::knit_hooks$set(stats::setNames(list(function(x, options) {
+    paste0('<pre class="r-output"><code>',
+           fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+           '</code></pre>')
+  }), hook))
+}
 ```
 
 `tabxplor` helps you **explore data with cross-tables, coloring the cells so you can read a table at a glance**. Over-represented cells use shades of blue, under-represented ones turn red/orange, so patterns jump out without you squinting at every number.
 
 Everything is a `tibble`, so the result works with the usual `dplyr` verbs, and tables export to Excel, HTML and Markdown with their color helpers. Underlying heavy computations run on `data.table`
+
+**No R needed, if you prefer menus.** Everything below is also available point-and-click, through a module for [jamovi](https://www.jamovi.org/download) — a free, open-source statistical software. Install it, open the modules menu (the **`+`** at the top right), choose **jamovi library**, and install *tabxplor*: it adds a **Crosstables** analysis and a **Regressions** analysis, with the same coloured, exportable tables. The options carry the same names as the arguments taught here, so this vignette reads as its manual.
 
 Throughout this vignette we use `gss_simple`, a cleaned-up version of the US General Social Survey (`forcats::gss_cat`) with factors levels merged and reordered.
 
@@ -124,171 +135,16 @@ tab(gss_simple, c(race, relig), c(party3, tvhours), na = "drop", pct = "row")
 
 A few other everyday arguments: `na = "drop"` to drop missing values from the base, `digits =` for the number of decimals, and `cleannames = TRUE` to strip prefixes like `"1-"` from level names. See `?tab` for the full list.
 
-### Multiple-answer questions: one column per item
-
-**Multiple-answer questions** — "which of these apply to you?" — reach the data as a *battery* of yes/no factors, one per item. `levels = "first"` keeps only the first level of each column factor, so a whole battery fits in one compact table, one column per item.
-
-The `tea` data (300 tea drinkers, from the `FactoMineR` package) has such a battery: *when do you drink tea?*, asked as six yes/no items. Everything below depends on one thing — the "yes" answer has to be each factor's **first** level:
+**If your numbers are already counted** — a published table, a `table()`, a `count()` — start from `tab_counts()` instead. It builds the same object, with the same percentages, colours and tests:
 
 ```{r, echo = TRUE}
-data("tea", package = "FactoMineR")
-tea_when_vars <- c("breakfast", "tea.time", "evening", "lunch", "dinner", "always")
-
-# Put the "yes" level first — it is the one the tables keep
-tea <- tea |>
-  tibble::as_tibble() |>
-  dplyr::mutate(dplyr::across(
-    dplyr::all_of(c(tea_when_vars, "Sport")),
-    ~ (if (grepl("^Not", levels(.)[1])) forcats::fct_rev(.) else .) |>
-      forcats::fct_relabel(~ gsub(".", " ", ., fixed = TRUE))
-  ))
+counts <- dplyr::count(gss_simple, marital, race)          # or a published table
+tab_counts(counts, marital, race, counts = n, pct = "row", color = "difference")
 ```
 
-`score_from_lv1()` reduces that same battery to a single **summed score**: for each person it counts the factors sitting at their first level — here, at how many of the six moments they drink tea (missing values never count). The score is an ordinary numeric variable, so it takes its place in the same table, as a mean:
+## Colours: reading a table at a glance
 
-```{r, echo = TRUE}
-tea <- tea |> score_from_lv1("tea_when", vars_list = tea_when_vars) # score variable
-tab(tea, SPC, all_of(c(tea_when_vars, "tea_when")), pct = "row", levels = "first", na = "drop", color = TRUE)
-```
-
-Each percentage reads down its own column: 63 % of senior managers drink tea at breakfast, against 25 % of manual workers. There is no Total column, and rightly so — the six items do not add up to 100 %, since one person can tick several. The score plays that role instead: 2.1 moments a day on average for senior managers, 1.5 for manual workers.
-
-`levels = "auto"` makes that choice **per variable**: it keeps the first level only of two-level factors, and every level of the others. It is what you want when a battery of yes/no items sits beside an ordinary factor — here two tea moments and the social category, in one table:
-
-```{r, echo = TRUE}
-tab(tea, sex, c(breakfast, evening, SPC), pct = "row", levels = "auto", na = "drop", tot = "row")
-```
-
-A summed score is also exactly what a **grouped-binomial** regression models — see `trials` in `vignette("tabxplor-reg")`.
-
-## Weights
-
-Most survey files come with a **weight**: a number saying how many people in the population each respondent stands for. The argument `wt =` uses it, and every percentage and mean in the table becomes an estimate of the *population* rather than of the people you happened to interview.
-
-That is the easy half. The harder half is the **margin of error** around those percentages — the confidence intervals, the significance stars, the colours and the tests. There, tabxplor has **three weighting levels**, and a table's footer always tells you which one it is on.
-
-### Level 1 — weighted percentages, plain margins of error (the default)
-
-```{r, echo=TRUE, eval=FALSE}
-tab(my_survey, education, job, wt = weight, pct = "row")
-#> Weighted by weight; confidence intervals and tests use the unweighted sample size.
-```
-
-The percentages are weighted; the margins of error simply count your real respondents. This is the convention almost every teaching text and every point-and-click program uses, and it is why it is the default here. But when the weights are **unequal** it is optimistic: a sample where some people count for four others carries less information than its size suggests, and the intervals come out **usually a bit too narrow**.
-
-### Level 2 — `design_effect = TRUE`
-
-```{r, echo=TRUE, eval=FALSE}
-tab(my_survey, education, job, wt = weight, pct = "row", design_effect = TRUE)
-options(tabxplor.design_effect = TRUE)   # or once, for the whole session
-#> Weighted by weight; confidence intervals and tests account for the weighting.
-```
-
-Now the unequal weighting is taken into account in **every** interval, star, colour threshold and whole-table test. This is not a rule of thumb: a column of weights *is* a survey design — the simplest one, with no clusters and no strata — and tabxplor computes that design's variance exactly, reproducing the reference [survey](https://CRAN.R-project.org/package=survey) package to the last digit.
-
-Here it is on real data. We give `gss_simple` a made-up weight (never-married people are under-covered in most surveys, so they count for more), and build the same table twice:
-
-```{r, echo = TRUE}
-gss_w <- dplyr::mutate(gss_simple, w = ifelse(marital %in% "Never married", 2.5, 0.8))
-
-tab(gss_w, race, party3, wt = w, pct = "row", ci = "cell", na = "drop")
-```
-
-```{r, echo = TRUE}
-tab(gss_w, race, party3, wt = w, pct = "row", ci = "cell", na = "drop",
-    design_effect = TRUE)
-```
-
-Same percentages, wider brackets, and a footer that says what changed. Behind them, the 16 292 White respondents are now worth about 11 800 — the price of the unequal weights.
-
-If you weight at all, level 2 is the honest reading of your own numbers, and it costs nothing. It is not the default only because switching it on moves every figure in every table anyone has already produced, so it should be a deliberate, visible act rather than a silent one. One more reason to turn it on: a regression table's observed columns are *always* at level 2 (see `vignette("tabxplor-reg")`), so this is what makes a `tab()` percentage and a `tab_reg()` observed percentage on the same data directly comparable.
-
-### Level 3 — a `survey` design
-
-Real surveys are not drawn by picking names at random from the whole country. They are usually **stratified** (drawn separately by region, city size…), often **clustered** (a few neighbourhoods are picked first, then several households inside each), and their weights are usually **calibrated** so the sample matches known population totals for age, sex, region. Those three facts are not in the weight column; they live in extra variables. If your file has them, build a design with the [survey](https://CRAN.R-project.org/package=survey) package and pass it as `data`:
-
-```{r, echo=TRUE, eval=FALSE}
-library(survey)
-d <- svydesign(ids = ~psu, strata = ~stratum, weights = ~w, data = my_survey, nest = TRUE)
-tab(d, race, marital, pct = "row", color = TRUE, test = TRUE)
-#> Design-based (survey): weighted estimates, intervals and tests account for the sample design.
-```
-
-Everything then follows the design: the estimates, the p-values, and every confidence interval, star and colour threshold.
-
-| you pass | level | what the intervals and tests carry |
-|---|---|---|
-| `wt = w` | 1 | the weighted estimate, on the raw *n* — no design effect at all |
-| `wt = w` + `design_effect = TRUE` | 2 | the unequal weighting, exactly — blind to clustering and calibration |
-| a `survey` design as `data` | 3 | the full design: strata, clusters, `fpc`, calibration |
-
-### What level 2 can and cannot do for you
-
-Level 2 sees the weights, and nothing else. That matters, because the three things it cannot see do **not** pull in the same direction:
-
-| | seen at level 2 | needs a design (level 3) |
-|---|---|---|
-| unequal weights | **yes, exactly** | |
-| strata, calibration, finite population | | would **narrow** your intervals — by a few percent at most |
-| **clusters** | | can make them **much wider** |
-
-So the two corrections you are missing at level 2 are wildly unequal. Ignoring the strata and the calibration costs a few percent, and in the *safe* direction — your intervals are slightly too cautious. Ignoring **clusters** goes the other way and can be enormous: on a real clustered school survey, an average that level 2 reports with a margin of error of ±3 points really deserves ±9. On the American NHANES health survey, the distribution of ethnicity comes out **nine times** too precise, because that survey is built around exactly that variable. These do not cancel out: when clustering is present, it wins.
-
-**Which surveys are clustered?** Not the ones drawn from a register, or run by web, telephone or mail — there level 2 is simply the right answer, however unequal the weights. But **face-to-face** household surveys are clustered by construction, because sending interviewers to scattered addresses is unaffordable. The French *Enquête Emploi*, for instance, is drawn as groups of about **twenty neighbouring dwellings**; neighbours resemble each other, so twenty interviews in one street tell you less than twenty interviews spread across the country.
-
-**Does it matter for *your* table?** Usually much less than those numbers suggest, and there is a simple test. The cluster effect largely cancels out in a *comparison*, as long as both compared groups are found inside the same neighbourhoods. So ask one question about your row variable:
-
-> Does it **vary within** a neighbourhood, or does it **define** one?
-
-Sex, age, diploma, occupation, income, opinions — these vary within any neighbourhood, so a comparison between their categories is close to right at level 2. Region, urban/rural, city size, type of neighbourhood, local immigrant density — these *are* the neighbourhood, and there level 2 is as wrong as it is for a single percentage. The measurements back this up: on the same clustered file where an average is three times too precise, the *difference* between two groups is only 13 % too precise, and a regression coefficient 8 % — and differences are exactly what tabxplor's colours and stars test.
-
-**Check what your file actually contains before reaching for level 3.** Look for a stratum, cluster or calibration variable (`strate`, `grappe`, `psu`, `nomen`…). Many released research files ship one calibrated weight and nothing else — the cluster is a small geographic area, so it is withheld for confidentiality — and on such a file a `survey` design would carry only the unequal weighting, which is exactly what level 2 already gives you. The European Social Survey is a useful middle case: it does publish its clusters and strata, but in a *separate* file you have to download and merge.
-
-### The fine print
-
-- **Sometimes level 2 makes an interval *narrower*.** That is correct, not a bug. If the weights happen to line up with what you are measuring, unequal selection can carry *more* information than equal selection, and the effective sample size comes out above your number of respondents. (The older approximation tabxplor used could only ever widen; that is why it was replaced by the exact computation.)
-- **Degrees of freedom.** A clustered survey is usually built on few clusters — 15 to 60 is common — and level 3 refers each interval to that number, which widens it again by roughly 8 %. Level 2 has no clusters to count, so it cannot do this: a second, separate reason a face-to-face survey's true margin of error is wider than what level 2 prints.
-- **When level 3 cannot be computed.** If a design's variance fails for a table, it falls back to the level-2 correction and says so in its footer, rather than claiming a design its numbers do not carry.
-- **Exact for a cell, cautious for a difference.** Level 3 is exact for a single percentage; for a cell-vs-reference *difference* it cannot carry the covariance between the two cells, so the difference comes out slightly too wide rather than too narrow. It will never hand you a star the design does not support.
-- **Pre-aggregated counts and cost.** Level 2 needs the individual weights, so a table built with `tab_counts()` from published counts cannot use it — such a table says so in its footer. And a level-3 table costs roughly three times a weighted one.
-
-
-## Sub-tables
-
-Give `tab()` a third variable as `tab_vars` and it builds **one sub-table per group** (here, one per income group). The result is *grouped*: `dplyr` operations then run within each sub-table.
-
-```{r, echo = TRUE}
-tab(gss_simple, race, party3, rincome, na = "drop", pct = "row")
-```
-
-When you pass several **row variables** *without* `tab_vars`, `tab()` merges the mirror tables into a single table by default. `output_list = TRUE` returns instead a **list with one table per row variable** (with `tab_vars`, the result is always a list):
-
-```{r, echo = TRUE, eval = FALSE}
-tab(gss_simple, c(married, income25k), race, pct = "row", output_list = TRUE)
-```
-
-### The most compact table: one block of columns per group
-
-`spread_vars` shows a sub-table variable **across** the page instead of down it: each of its levels becomes a *block of columns*. Put it together with `levels = "first"` (one column per variable, see above) and you get the most condensed table the package can draw --- several variables, several groups, one screen:
-
-```{r, echo = TRUE}
-tab(gss_simple, rincome, c(married, tvhours), tab_vars = race, spread_vars = race,
-    pct = "row", na = "drop", levels = "first", comp = "all",
-    color = TRUE, color_signif = "grey_non_signif")
-```
-
-The layout follows from the shape, and the table says so:
-
-- there is **one `Total` row** for the whole table; each block answers in its own columns.
-- the base count takes **one `n` column per block**, gathered at the right, so the counts can be read against each other. A `Total` column per block would only repeat `100%`.
-- `comp = "all"` compares every cell against the **overall** total rather than its own group's --- here the `Ensemble` block's `Total` cell, the one number every shade in the table is measured from. The color legend names it.
-- a total *line* cannot become a block of columns, so `totaltab = "line"` (the default) is promoted to `"table"`, and the message says so. Say `totaltab = "no"` if you want no overall block at all.
-
-A variable named in `spread_vars` alone is added to `tab_vars` for you, so `tab(gss_simple, rincome, party3, spread_vars = race, pct = "row")` is a complete call.
-
-## colors: reading helpers
-
-One you the main purposes of `tabxplor` is to provide a full palette of color helpers for data exploration. `color = "difference"` colors each cell by **how far it sits from its reference** — by default the Total of its row or column. Cells clearly above the average turn **blue**, cells clearly below turn **red/orange** — the further a cell sits from its reference, the stronger the shade — and a color legend is printed underneath.
+One of the main purposes of `tabxplor` is its palette of colour helpers for data exploration. `color = "difference"` colors each cell by **how far it sits from its reference** — by default the Total of its row or column. Cells clearly above the average turn **blue**, cells clearly below turn **red/orange** — the further a cell sits from its reference, the stronger the shade — and a color legend is printed underneath.
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, pct = "row", color = "difference")
@@ -335,7 +191,7 @@ tab(gss_simple, race, c(party3, marital), pct = "col", color = "difference",
 
 Color thresholds and the palette can be customised : set them **once for the whole session** with `set_color_breaks()` and `set_color_palette()`.
 
-## colors that respect significance
+## Colours that respect significance
 
 The colors above show the *size* of a deviation, but not whether it is **statistically reliable**. On small samples a big-looking difference can be pure noise. The `color_signif` argument brings significance into the coloring:
 
@@ -365,9 +221,7 @@ An alternative is to keep the small rows and cols but group them all in a "Other
 tab(gss_simple, relig, race, pct = "row",  other_if_less_than = 400)
 ```
 
-
-
-## Confidence intervals, tests and contributions
+## Confidence intervals, tests and stars
 
 Print confidence intervals for the percentage or mean of each cell with `ci = "cell"` :
 
@@ -384,7 +238,7 @@ gss_simple |>
   )
 ```
 
-`display = "base_ci"` is the named layout for this: `{base}` is "the level this column shows" — a percentage on a factor column, a mean on a numeric one — so one call works for a mix of factors and numbers, and each column answers with its own quantity:
+`display = "base_ci"` is the named layout for this. `{base}` means "the level this column shows" — a percentage on a factor column, a mean on a numeric one — so one call works for a mix of factors and numbers, and each column answers with its own quantity. The next section covers the rest of the layouts.
 
 
 Add significance stars with `stars = TRUE`. They tell the same story than confidence intervals of the difference with the reference, but for different confidence levels (99%, 95%, 90%) :
@@ -395,21 +249,49 @@ gss_simple |>
   tab(rincome, c(party3, tvhours), pct = "row", display = "base_ci", stars = TRUE)
 ```
 
-**Show two numbers in one cell.** `display` is not just for confidence intervals: it takes a **`{}` template** that combines any cell fields. For example `display = "{pct} ({diff})"` prints each percentage followed by its difference from the reference, and `"{pct} (n={n})"` follows it with the count:
-
-```{r, echo = TRUE}
-tab(gss_simple, race, party3, pct = "row", color = "difference", display = "{pct} ({diff})")
-```
-
-The first field in the template is the *primary* one — the value Excel keeps and the one the colours read. `vignette("tabxplor-programming")` explains the full grammar and lists every field you can combine.
-
 `test = TRUE` adds a statistical test of independence per (sub-)table — **Chi-squared** for factor columns, **Welch's F ANOVA** for numeric variables (`options(tabxplor.anova = "classic")` switches to the pooled F):
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, c(party3, tvhours), pct = "row", test = TRUE)
 ```
 
-See below for the detail of how confidence intervals and colors can be composed.
+## What the cell shows: the `display` grammar
+
+Every cell already holds far more than the one number it prints — its count, its percentage, its difference from the reference, its confidence interval. `display` chooses which of them you see. **Nothing is recomputed**: a display is picked after the table is built, so changing it never changes a number.
+
+The quickest route is a **named layout**. The everyday ones:
+
+| `display =` | the cell shows |
+|---|---|
+| `"base"` | the level alone — the percentage, the mean or the count (the default) |
+| `"base_ci"` | the level with its confidence interval, `48.6 [45.1; 52.1]` |
+| `"base_moe"` | the level with its margin of error, `48.6 ± 3.5` |
+| `"base_diff"` | the level and, in brackets, its difference from the reference |
+| `"base_ratio"` | the level and the same comparison as a ratio |
+| `"mean_sd"` | a mean and its standard deviation (numeric columns) |
+| `"mean_cv"` | a mean and its coefficient of variation — the spread as a percentage of the level, so two columns measured in different units become comparable (the default on numeric columns) |
+
+```{r, echo = TRUE}
+tab(gss_simple, race, c(party3, tvhours), pct = "row", display = "base_moe")
+```
+
+**Or write your own**, with a `{}` template naming the fields you want. `display = "{pct} ({diff})"` prints each percentage followed by its difference from the reference; `"{pct} (n={n})"` follows it with the count:
+
+```{r, echo = TRUE}
+tab(gss_simple, race, party3, pct = "row", color = "difference", display = "{pct} ({diff})")
+```
+
+Two rules are worth knowing. The **first field outside brackets is the primary one**: it carries the significance stars, it is what an Excel export keeps as a real number, and it is the only part the colours paint. And a field can carry **its own precision**, `{pct:1} ({n:0})`, which beats the table's `digits` — useful when an aside would otherwise be printed to as many decimals as the estimate.
+
+**On a table you have already built**, `set_display()` does the same thing:
+
+```{r, echo = TRUE}
+tabs <- tab(gss_simple, race, party3, pct = "row")
+set_display(tabs, "{pct} (n={n})")
+```
+
+`?tab` lists every field a template can name; `vignette("tabxplor-programming")` explains the record behind them.
+
 
 ## Which cells make the table interesting? (`color = "contrib"`)
 
@@ -478,26 +360,106 @@ Hovering an html table shows both numbers (`ctr:` and `resid:`) in the tooltip, 
 display: every tooltip line is named after the field it shows, so the hover uses the same words as
 the column headers and as `$`.
 
-**For the record** (the vocabulary, if you need to cite it): the residual is the *adjusted standardized
-residual* of Haberman — SPSS's "adjusted residual", R's `chisq.test()$stdres`. Careful, several tools
-call `(o − e)/√e` "standardized residual" too, but that one is **not** on a ±2 scale: its variance is
-below 1, so it under-states. tabxplor always uses the adjusted one, both for the colours and for the
-greying. Thresholds come from `conf_level`, and with a weight the residual uses the unweighted *n*
-(or the table's effective *n*, see [Weights](#weights)) while the contribution itself stays weighted. Cells whose
-expected count is below 1 are left uncoloured — no approximation holds there. And, as everywhere in
-tabxplor, the test is per cell: in a 30-cell table, expect one or two false positives at 5 %
-(±3 is roughly a Bonferroni correction at that size).
+**If you need to cite it**: this is Haberman's *adjusted standardized residual* — SPSS's "adjusted
+residual", R's `chisq.test()$stdres` — not the `(o − e)/√e` that several tools also call
+"standardized", which sits below a ±2 scale and under-states. As everywhere in tabxplor the test is
+per cell, so in a 30-cell table expect one or two false positives at 5 % (±3 is roughly a Bonferroni
+correction at that size). See `?tab`.
 
-## Hover tooltips (html tables)
+## Sub-tables, and the most compact table
 
-Every html table carries per-cell hover **tooltips** with the numbers behind the cell: the unweighted count, the difference from the reference, the ratio, the confidence interval... They are on by default in the Viewer and in reports — this vignette only switched them off document-wide with `options(tabxplor.tab_kable_tooltips = FALSE)`, to keep the page light. Hover the cells of the table below, where they are switched back on with `tooltips = TRUE`:
+Give `tab()` a third variable as `tab_vars` and it builds **one sub-table per group** (here, one per income group). The result is *grouped*: `dplyr` operations then run within each sub-table.
 
 ```{r, echo = TRUE}
-tab(gss_simple, race, party3, pct = "row", color = "difference") |>
-  tab_html(tooltips = TRUE)
+tab(gss_simple, race, party3, rincome, na = "drop", pct = "row")
 ```
 
-**A note on weights.** With a weight (`wt =`), every proportion or mean is weighted, but by default the sample size behind the confidence intervals and tests stays the real, **unweighted** number of observations — the footer says so. Under unequal weights that carries no design effect, so it runs a little too narrow : `options(tabxplor.design_effect = TRUE)` (see [Weights](#weights)) widens every interval by exactly the weighting's own design effect and switches the whole-table Chi2 / F tests to their design-based counterparts.
+When you pass several **row variables** *without* `tab_vars`, `tab()` merges the mirror tables into a single table by default. `output_list = TRUE` returns instead a **list with one table per row variable** (with `tab_vars`, the result is always a list):
+
+```{r, echo = TRUE, eval = FALSE}
+tab(gss_simple, c(married, income25k), race, pct = "row", output_list = TRUE)
+```
+
+### The most compact table: one block of columns per group
+
+`spread_vars` shows a sub-table variable **across** the page instead of down it: each of its levels becomes a *block of columns*. Put it together with `levels = "first"` (one column per variable, see above) and you get the most condensed table the package can draw --- several variables, several groups, one screen:
+
+```{r, echo = TRUE}
+tab(gss_simple, rincome, c(married, tvhours), tab_vars = race, spread_vars = race,
+    pct = "row", na = "drop", levels = "first", comp = "all",
+    color = TRUE, color_signif = "grey_non_signif")
+```
+
+The layout follows from the shape, and the table says so:
+
+- there is **one `Total` row** for the whole table; each block answers in its own columns.
+- the base count takes **one `n` column per block**, gathered at the right, so the counts can be read against each other. A `Total` column per block would only repeat `100%`.
+- `comp = "all"` compares every cell against the **overall** total rather than its own group's --- here the `Ensemble` block's `Total` cell, the one number every shade in the table is measured from. The color legend names it.
+- a total *line* cannot become a block of columns, so `totaltab = "line"` (the default) is promoted to `"table"`, and the message says so. Say `totaltab = "no"` if you want no overall block at all.
+
+A variable named in `spread_vars` alone is added to `tab_vars` for you, so `tab(gss_simple, rincome, party3, spread_vars = race, pct = "row")` is a complete call.
+
+## Batteries of yes/no items, and a score
+
+**Multiple-answer questions** — "which of these apply to you?" — reach the data as a *battery* of yes/no factors, one per item. `levels = "first"` keeps only the first level of each column factor, so a whole battery fits in one compact table, one column per item.
+
+The `tea` data (300 tea drinkers, from the `FactoMineR` package) has such a battery: *when do you drink tea?*, asked as six yes/no items. Everything below depends on one thing — the "yes" answer has to be each factor's **first** level:
+
+```{r, echo = TRUE}
+data("tea", package = "FactoMineR")
+tea_when_vars <- c("breakfast", "tea.time", "evening", "lunch", "dinner", "always")
+
+# Put the "yes" level first — it is the one the tables keep
+tea <- tea |>
+  tibble::as_tibble() |>
+  dplyr::mutate(dplyr::across(
+    dplyr::all_of(c(tea_when_vars, "Sport")),
+    ~ (if (grepl("^Not", levels(.)[1])) forcats::fct_rev(.) else .) |>
+      forcats::fct_relabel(~ gsub(".", " ", ., fixed = TRUE))
+  ))
+```
+
+`score_from_lv1()` reduces that same battery to a single **summed score**: for each person it counts the factors sitting at their first level — here, at how many of the six moments they drink tea (missing values never count). The score is an ordinary numeric variable, so it takes its place in the same table, as a mean:
+
+```{r, echo = TRUE}
+tea <- tea |> score_from_lv1("tea_when", vars_list = tea_when_vars) # score variable
+tab(tea, SPC, all_of(c(tea_when_vars, "tea_when")), pct = "row", levels = "first", na = "drop", color = TRUE)
+```
+
+Each percentage reads down its own column: 63 % of senior managers drink tea at breakfast, against 25 % of manual workers. There is no Total column, and rightly so — the six items do not add up to 100 %, since one person can tick several. The score plays that role instead: 2.1 moments a day on average for senior managers, 1.5 for manual workers.
+
+`levels = "auto"` makes that choice **per variable**: it keeps the first level only of two-level factors, and every level of the others. It is what you want when a battery of yes/no items sits beside an ordinary factor — here two tea moments and the social category, in one table:
+
+```{r, echo = TRUE}
+tab(tea, sex, c(breakfast, evening, SPC), pct = "row", levels = "auto", na = "drop", tot = "row")
+```
+
+Put a battery together with `spread_vars` (above) and you get the most condensed table the package draws — six items, two sexes, one screen:
+
+```{r, echo = TRUE}
+tab(tea, SPC, all_of(c(tea_when_vars, "tea_when")), tab_vars = sex, spread_vars = sex,
+    pct = "row", levels = "first", na = "drop", comp = "all", color = TRUE)
+```
+
+A summed score is also exactly what a **grouped-binomial** regression models — see `trials` in `vignette("tabxplor-reg")`.
+
+## Weights, in one minute
+
+Give `wt =` a weight column and every percentage and mean becomes an estimate of the *population* rather than of the people you happened to interview:
+
+```{r, echo = TRUE}
+gss_w <- dplyr::mutate(gss_simple, w = ifelse(marital %in% "Never married", 2.5, 0.8))
+tab(gss_w, race, party3, wt = w, pct = "row", na = "drop")
+```
+
+That is the easy half. The **margins of error** around those percentages have three levels, and a table's footer always says which one it is on:
+
+1. **weighted percentages, plain margins of error** — the default, and the convention almost every textbook uses. Under unequal weights it runs a little too narrow.
+2. **`design_effect = TRUE`** — every interval, star, colour threshold and test accounts for the unequal weighting, exactly.
+3. **a `survey` design passed as `data`** — everything follows the full design: strata, clusters, calibration.
+
+Which one you need, what each costs you, and whether it matters for your table: `vignette("tabxplor-weights")`.
+
 
 ## Exporting
 
@@ -509,6 +471,8 @@ tab_export(tabs) # default : html table (RStudio Viewer, .Rmd/.qmd, etc.)
 tab_export(tabs, format = "xl", path = "table") # Excel export 
 tab_export(tabs, format = "md", path = "table") # flat markdown file (pipes tables)
 ```
+
+**Getting a table into Word** goes through Excel, and that is the recommended route rather than a workaround: the workbook holds the *real* numbers, not rounded strings, so you can still fix a decimal or a label there. Then copy the cells and paste them into Word — **from the desktop app, not the browser version**, which drops the formatting. Colours, bold and borders all survive.
 
 Two options are worth knowing:
 
@@ -547,6 +511,17 @@ This is not merely a taste: converted to lightness, the two directions of the co
 
 **You rarely need to ask for it.** Every stylesheet already carries this palette in an `@media print` block, so a colored html table *prints* — or saves to PDF from your browser — publication-ready on its own. Set `options(tabxplor.print_rules = FALSE)` if your printer is a color one and the colors are the point.
 
+## Hover tooltips (html tables)
+
+Every html table carries per-cell hover **tooltips** with the numbers behind the cell: the unweighted count, the difference from the reference, the ratio, the confidence interval... They are on by default in the Viewer and in reports — this vignette only switched them off document-wide with `options(tabxplor.tab_kable_tooltips = FALSE)`, to keep the page light. Hover the cells of the table below, where they are switched back on with `tooltips = TRUE`:
+
+```{r, echo = TRUE}
+tab(gss_simple, race, party3, pct = "row", color = "difference") |>
+  tab_html(tooltips = TRUE)
+```
+
+**A note on weights.** With a weight (`wt =`), every proportion or mean is weighted, but by default the sample size behind the confidence intervals and tests stays the real, **unweighted** number of observations — the footer says so. Under unequal weights that carries no design effect, so it runs a little too narrow : `options(tabxplor.design_effect = TRUE)` (see [Weights](#weights)) widens every interval by exactly the weighting's own design effect and switches the whole-table Chi2 / F tests to their design-based counterparts.
+
 ## A chart of the table: `forest_plot()`
 
 A colored table already reads at a glance. When the pattern is what matters, `forest_plot()` draws the same numbers: one whisker per cell, in the cell's own colour, with the percentage or mean printed just above it.
@@ -583,122 +558,6 @@ tab(gss_simple, race, marital, pct = "row", subtext = "Source: GSS, 2000-2014") 
   set_caption("Custom title")
 ```
 
-
-## Confidence intervals and colors composition : variable_type × `color` × `color_signif`
-
-This section is the reference behind the two color sections above. It shows how the parameters fit together — the **variable type**, the **measure** you color (`color`), and the **significance policy** (`color_signif`).
-
-The **type** is set by the column variable — a **factor** (percentages are computed, `pct`) or a **numeric** (means are computed, `mean`). The row variable is always turned into a factor.
-
-Every colored table answers three questions:
-
-- **How to measure deviation?** `color =` picks what a color *means*: `"diff"` (distance from the reference), `"ratio"` (relative risk for percentages, mean ratio for means), `"contrib"` (departure from independence — weight in the Chi-squared, or the standardized residual, see below), `"OR"` (odds ratio). `color = TRUE` picks a sensible one per column type.
-- **How confident are we in this measure?** every color reads one **confidence interval** at `conf_level` (95% by default). A cell is *significant* when that interval excludes its neutral value — **0** for a difference, **1** for a ratio or odds ratio. The printed bracket, the significance stars and the greying all read that same interval, so they can never disagree.
-- **How to show significance?** `color_signif` — `"ignore"`, `"grey_non_signif"` or `"guaranteed_effect"` ; `stars = TRUE` to use significance stars instead of, or stacked with, colors.
-
-**The confidence interval used for the colors and stars** compares each cell to its reference cell (by default, the corresponding cell in the Total row or Total column):
-
-| type | color     | what the color measures                  | confidence interval (default)      |
-|------|-----------|------------------------------------------|------------------------------------|
-| pct  | `diff`    | cell % - reference % (percentage points) | Newcombe hybrid-score              |
-| pct  | `ratio`   | cell % / reference % (relative risk)     | Katz log-risk-ratio                |
-| pct  | `OR`      | empirical odds ratio                     | Woolf log-odds-ratio               |
-| pct  | `contrib` | signed χ² contribution (no reference)    | — (adjusted standardized residual) |
-| mean | `diff`    | cell mean - reference mean (SD units)    | Welch *t*                          |
-| mean | `ratio`   | cell mean / reference mean               | robust ratio-of-means              |
-
-Alternative interval methods go in ONE argument, `ci_method` — a named vector, partial like `ref` or `pct`, so a kind you do not name keeps its default (see `?tab`): 
-
-- `ci_method = c(diff = "ac")` (Agresti-Caffo) or `"wald"` for a percentage difference; 
-- `ci_method = c(mean_diff = "student")` (the two groups pooled, a two-sample *t* test) or `"ols"` (pooled over **every** level of the variable — the interval a linear regression gives that coefficient) for a mean difference; 
-- `ci_method = c(mean_ratio = "quasipoisson")` (scaled by the dispersion a quasi-Poisson regression estimates over every level — that regression's own interval) or `"poisson"` for a mean ratio. 
-- Several at once: `ci_method = c(cell = "beta", diff = "ac")`.
-- The relative-risk (Katz) and odds-ratio (Woolf) intervals have no alternative, so they are not a choice.
-- A mean **difference** is colored **standardized** — Glass's Δ, the difference divided by the reference's standard deviation — so the `mean_diff` color breaks are read in SD units, unless the user provides a custom break scale.
-- **Every threshold is the same threshold, written in another measure.** The taught ±5 points is the first rung of `pct_diff`; read at a 50 % reference cell, those same 5 points are 0.1 SD, a ratio of ×1.1 and an odds ratio of ×1.2 — which is exactly where each of the other ladders starts. So a shade means the same size of deviation whichever measure you read a table on, and `set_color_breaks()` is where you move them all.
-- For a factor with **3 or more levels**, the odds ratio (and its interval) compares each level to the `ref2` baseline level : it is a relative risk ratio (RRR) (the same observed quantity that is modelised by a multinomial logistic regression). The OR interval is computed only when `color_signif` or `stars` needs it.
-
-**Simple, cell-by-cell confidence intervals** (`ci = "cell"`) compare each cell to 0 % (or a mean of 0), *not* to a reference:
-
-| type | color  | confidence interval (default) | other method                    |
-|------|--------|-------------------------------|---------------------------------|
-| pct  | `cell` | Wilson score interval         | `ci_method = c(cell = "wald")`  |
-| mean | `cell` | one-sample Student *t* (n-1)  | —                               |
-
-Because they compare to 0 and not to a reference, cell intervals are purely descriptive: they carry **no significance and no stars**, and *every* cell has one — the total row included. `ci_method = c(cell = )` chooses `"wilson"` (default), `"wald"` or `"beta"` (Korn-Graubard) for percentages; a mean cell interval is always the one-sample Student *t*.
-
-**`color_signif` turns that interval into a coloring policy.** 
-
-- `"ignore"` colors **every** cell by its **observed effect** size, for example the observed difference compared to the Total row. Grey cells have an observed effect below the threshold (for example, differences of less than ±5 points of percentages). 
-- `"grey_non_signif"` and `"guaranteed_effect"` both color **only significant cells**, but differ in the *intensity basis*: 
-  + `grey_non_signif` colors by the **observed** effect, like "ignore", greying out small deviations, but it also **greys out any large deviation that turns to be non-significant**. Ideal for large samples.
-  + `guaranteed_effect` colors by the **guaranteed** effect — the confidence-bound (CI-floor), the **smaller deviation that is assured at a given confidence level** (default 95%) — so its colors are dimmer and conservative, but **all significative differences are colored**, which is ideal for small samples.
-
-| type | color     | `="ignore"`     | `="grey_non_signif"`                | `="guaranteed_effect"`                     |
-|------|-----------|-----------------|-------------------------------------|--------------------------------------------|
-| pct  | `diff`    | observed diff   | grey if the diff-CI contains 0      | diff CI-floor                              |
-| pct  | `ratio`   | observed ratio  | grey if the ratio-CI contains 1     | ratio CI-floor                             |
-| pct  | `OR`      | observed OR     | grey if the OR-CI contains 1        | OR CI-floor                                |
-| pct  | `contrib` | χ² contribution | idem, grey if \|residual\| < z(95%) | **the residual itself**, `zscore` breaks |
-| mean | `diff`    | observed diff   | grey if the diff-CI contains 0      | diff CI-floor                              |
-| mean | `ratio`   | observed ratio  | grey if the ratio-CI contains 1     | ratio CI-floor                             |
-
-`contrib` is the one measure whose **unit changes with the policy**, because a contribution has no
-confidence interval to take a floor of. `ignore` and `grey_non_signif` colour the *relative*
-contribution (a share of this table's χ², in multiples of the mean cell — the correspondence-analysis
-reading); `guaranteed_effect` colours the **adjusted standardized residual** on the absolute
-`zscore` break scale, whose default `c(1.96, 2.58, 3.89, 6)` is written
-`conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))`. Its *first* value is re-anchored to the
-significance threshold at print time (so every significant cell is coloured, whatever `conf_level`
-says) and the others are read as spacings from it. Both readings share one significance source:
-
-- the **adjusted standardized residual** (Haberman; SPSS's "adjusted residual", `chisq.test()$stdres`),
-  never the Pearson residual `(o − e)/√e`, whose variance is below 1 and which therefore under-rejects;
-- computed the way every interval in tabxplor is: weighted estimate, and a base that follows the
-  inference basis — the raw *n* (the reading a correspondence analysis expects), or that *n* divided
-  by the **association's** design effect under `options(tabxplor.design_effect = TRUE)` or a `survey`
-  design. That design effect is Rao-Scott's, the very one the table's own Chi-2 line reports, so the
-  colours and the p-value describe one design effect and not two. One base per table, so a counts
-  table and a percentage table of the same data give the **same** residuals. The contribution itself
-  stays **weighted** and is identical at every basis — it estimates the population table's structure,
-  while the residual is the test, which is what keeps the correspondence-analysis reading safe;
-- with cells whose expected count is below 1 left uncoloured (the normal approximation fails there);
-- and per cell, with no multiple-comparison correction — as everywhere else in tabxplor. In a 30-cell
-  table expect one or two false positives at 5 %; the ±3 convention is roughly Bonferroni at that size.
-
-The residual is also readable as a number: `display = "{resid}"` or `"{pct} ({resid})"`, and it always
-appears in the html tooltip.
-
-Colours are computed **per column** at print time, so they cannot see a table-level attribute — but each
-column now records the confidence level it was built at, so every significance threshold inside them
-(the greying, and the `zscore` anchor) follows the call's `conf_level`, like the printed intervals and
-the stars. `options(tabxplor.conf_level)` remains the fallback for a column that never recorded one (a
-hand-built `fmt()`).
-
-Examples :
-
-```{r, echo=TRUE, eval=FALSE}
-# --- factors: percentages -------------------------------------------------
-tab(gss_simple, race, party3, pct = "row", color = "difference",  color_signif = "grey_non_signif")
-tab(gss_simple, race, party3, pct = "row", color = "ratio", color_signif = "guaranteed_effect")
-tab(gss_simple, rincome, married, pct = "row", color = "odds_ratio", display = "{or}", ref = "first", ref2 = 1)
-tab(gss_simple, rincome, party3, color = "contrib")   # works with pct = "row"/"col" too
-#    the same table read as standardized residuals (the +-2 / +-3 scale), with the numbers shown
-tab(gss_simple, rincome, party3, color = "contrib", color_signif = "guaranteed_effect",
-    display = "{n} ({resid})")
-#    a stricter residual ladder, written in confidence levels
-tab(gss_simple, rincome, party3, color = "contrib", color_signif = "guaranteed_effect",
-    color_breaks = list(zscore = conf_level_to_z(c(0.99, 0.999, 0.9999))))
-
-# --- numerics: means ------------------------------------------------------
-tab(gss_simple, rincome, tvhours, color = "difference",  color_signif = "guaranteed_effect")
-tab(gss_simple, rincome, tvhours, color = "ratio", color_signif = "grey_non_signif")
-
-#    a custom scale for differences in means, and a "first row" reference
-tab(gss_simple, rincome, tvhours, color = "difference", color_signif = "grey_non_signif",
-    color_breaks = list(mean_diff = c(0.4, 0.8, 1.6)), ref = 1)
-```
-
 ## Session options
 
 A handful of `options()` set your preferred defaults once for the whole session — put them at the top of a script, or in your `.Rprofile`. Each one has a per-call argument too; the option just changes the default. The everyday ones:
@@ -710,18 +569,15 @@ A handful of `options()` set your preferred defaults once for the whole session 
 - `options(tabxplor.theme = "auto")` — the export theme (`"light"`/`"dark"`/`"auto"`); `set_color_palette(theme = "auto")` does the same for the console.
 - `options(tabxplor.stars = TRUE)` — show significance stars in every table (like `stars = TRUE`).
 - `options(tabxplor.conf_level = 0.9)` — the confidence level for intervals and tests (default `0.95`).
-- `options(tabxplor.design_effect = TRUE)` — on weighted data, make every interval, star, colour threshold and test account for the unequal weighting (see [Weights](#weights)).
-- `display = "base_moe"` — print a confidence interval as a `pct ± margin of error` instead of the `[low; high]` bracket `display = "base_ci"` gives.
+- `options(tabxplor.design_effect = TRUE)` — on weighted data, make every interval, star, colour threshold and test account for the unequal weighting (see `vignette("tabxplor-weights")`).
 - `options(tabxplor.lang = "fr")` — the language of the colour legends and footers (`"auto"`/`"en"`/`"fr"`).
 
 Colour thresholds and palettes have their own helpers, `set_color_breaks()` and `set_color_palette()`. `?tabxplor-options` documents every option, and `vignette("tabxplor-programming")` covers the more advanced ones (export fonts, parallel builds…).
 
-## A point-and-click interface (jamovi)
-
-Everything above is also available **without writing R code**, through a [jamovi](https://www.jamovi.org/download) module. jamovi is a free, open-source statistical software : install it, open the modules menu (the **`+`** at the top-right), choose **jamovi library**, and install *tabxplor*. It adds a **Crosstables** analysis — and a **Regressions** analysis powered by `tab_reg()` — with the same coloured, exportable tables, driven entirely by menus. Handy for teaching, or for colleagues who do not use R.
-
 ## Where to go next
 
-- `vignette("tabxplor-reg")` — regression tables with `tab_reg()`, and comparing modelled to observed effects.
+- `vignette("tabxplor-all-else-equal")` — regressions, taught the way this vignette teaches cross-tables: one analysis walked from a first table to a finished sentence.
+- `vignette("tabxplor-reg")` — the regression reference: every family, every argument, the model checks and the plots.
+- `vignette("tabxplor-weights")` — weighted and survey data, for both producers.
 - `vignette("tabxplor-programming")` — the `tabxplor_fmt` cell type and how to program with its fields.
-- `?tab` for every argument (grouped by purpose), `?tab_ci` for confidence-interval methods, and `?tabxplor-options` for the package-wide defaults.
+- `?tab` for every argument (grouped by purpose, including the confidence-interval methods) and `?tabxplor-options` for the package-wide defaults.

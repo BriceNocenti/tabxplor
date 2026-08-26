@@ -21,14 +21,11 @@
 # Name checks stay; value checks are gone.
 
 # ⚠ `jamovi/` is .Rbuildignore'd, so NONE of these files exists inside a built package -- this whole
-# file is a source-tree check. Guard on the FILE, exactly as the generated-block test below guards on
-# `dev/`: without it `R CMD check` errors on the tarball (found by Phase 19n's check(), the first one
-# run since 19b, i.e. since this file was written).
+# file is a source-tree check. Every read goes through src_path() (helper-source.R), which skips when
+# the path is absent; without it `R CMD check` ERRORS on the tarball.
 yaml_opts <- function(file) {
   skip_if_not_installed("yaml")
-  path <- testthat::test_path("..", "..", "jamovi", file)
-  skip_if_not(file.exists(path), "jamovi/ is not shipped in a built package")
-  y <- yaml::read_yaml(path)
+  y <- yaml::read_yaml(src_path("jamovi", file))
   stats::setNames(y$options, vapply(y$options, function(o) o$name, character(1)))
 }
 # ui_bracket_names() -- Phase 20h: the names the .js reaches through `ui[...]` rather than `ui.<name>`.
@@ -147,7 +144,7 @@ test_that("the .u.yaml controls and the .js name declared options", {
   skip_if_not_installed("yaml")
   for (an in c("jmvtab", "jmvtabreg")) {
     o   <- yaml_opts(paste0(an, ".a.yaml"))
-    ui  <- yaml::read_yaml(testthat::test_path("..", "..", "jamovi", paste0(an, ".u.yaml")))
+    ui  <- yaml::read_yaml(src_path("jamovi", paste0(an, ".u.yaml")))
 
     # every `name:` / `optionName:` in the control tree
     ctrl_names <- character(0); bound <- character(0)
@@ -165,7 +162,7 @@ test_that("the .u.yaml controls and the .js name declared options", {
                   info = paste0(an, ".u.yaml: optionName `", nm, "` is not a declared option"))
 
     # the hand-written .js may only reach for a declared option, a control, or the root view
-    js  <- readLines(testthat::test_path("..", "..", "jamovi", "js", paste0(an, ".js")), warn = FALSE)
+    js  <- readLines(src_path("jamovi", "js", paste0(an, ".js")), warn = FALSE)
     hit <- unique(unlist(regmatches(js, gregexpr("(?<=\\bui\\.)[A-Za-z_][A-Za-z0-9_]*", js,
                                                  perl = TRUE))))
     # Phase 20h: ...and by BRACKET access, which the `ui.<name>` regex above cannot see. A rename of
@@ -190,8 +187,8 @@ test_that("the .u.yaml controls and the .js name declared options", {
 test_that("the .js radio maps agree with the .u.yaml that names those radios", {
   skip_if_not_installed("yaml")
   for (an in c("jmvtab", "jmvtabreg")) {
-    ui <- yaml::read_yaml(testthat::test_path("..", "..", "jamovi", paste0(an, ".u.yaml")))
-    js <- paste(readLines(testthat::test_path("..", "..", "jamovi", "js", paste0(an, ".js")),
+    ui <- yaml::read_yaml(src_path("jamovi", paste0(an, ".u.yaml")))
+    js <- paste(readLines(src_path("jamovi", "js", paste0(an, ".js")),
                           warn = FALSE), collapse = "\n")
     # every RadioButton, as control-name -> the value it sets
     declared <- list()
@@ -228,8 +225,7 @@ test_that("the jamovi .js files are syntactically valid", {
   node <- Sys.which("node")
   skip_if(!nzchar(node), "node is not on the PATH")
   for (an in c("jmvtab", "jmvtabreg")) {
-    f <- testthat::test_path("..", "..", "jamovi", "js", paste0(an, ".js"))
-    skip_if_not(file.exists(f), "jamovi/ is not shipped in a built package")
+    f <- src_path("jamovi", "js", paste0(an, ".js"))
     out <- suppressWarnings(system2(node, c("--check", shQuote(f)), stdout = TRUE, stderr = TRUE))
     expect_identical(attr(out, "status") %||% 0L, 0L, info = paste(c(an, out), collapse = "\n"))
   }
@@ -238,8 +234,7 @@ test_that("the jamovi .js files are syntactically valid", {
 
 test_that("the generated .js rule blocks are up to date", {
   skip_on_cran()
-  gen <- testthat::test_path("..", "..", "dev", "generate_jamovi_js.R")
-  skip_if_not(file.exists(gen), "dev/ is not shipped in a built package")
+  gen <- src_path("dev", "generate_jamovi_js.R")
   # `check` mode exits 1 when a block differs from what the R tables would write today.
   st <- system2("Rscript", c(shQuote(gen), "check"),
                 stdout = TRUE, stderr = TRUE, env = "OMP_NUM_THREADS=1")
@@ -260,7 +255,7 @@ test_that("a radio group covers every value of the option it writes", {
   spell <- function(x) if (is.logical(x)) c("no", "yes")[x + 1L] else as.character(x)
   for (an in c("jmvtab", "jmvtabreg")) {
     opts <- yaml_opts(paste0(an, ".a.yaml"))
-    ui   <- yaml::read_yaml(testthat::test_path("..", "..", "jamovi", paste0(an, ".u.yaml")))
+    ui   <- yaml::read_yaml(src_path("jamovi", paste0(an, ".u.yaml")))
     pairs <- list()
     walk <- function(node) {
       if (!is.list(node)) return(invisible(NULL))
@@ -285,9 +280,8 @@ test_that("a radio group covers every value of the option it writes", {
 test_that("every CustomControl is wired to handlers its .js exports", {
   skip_if_not_installed("yaml")
   for (an in c("jmvtab", "jmvtabreg")) {
-    p <- testthat::test_path("..", "..", "jamovi", paste0(an, ".u.yaml"))
-    f <- testthat::test_path("..", "..", "jamovi", "js", paste0(an, ".js"))
-    skip_if_not(file.exists(p) && file.exists(f), "jamovi/ is not shipped in a built package")
+    p <- src_path("jamovi", paste0(an, ".u.yaml"))
+    f <- src_path("jamovi", "js", paste0(an, ".js"))
     ui <- yaml::read_yaml(p)
 
     ctrls <- character(0)
@@ -338,8 +332,7 @@ JS_KEYWORDS <- c("function", "if", "for", "while", "switch", "catch", "return", 
 
 test_that("every function the jamovi .js calls is declared in it", {
   for (an in c("jmvtab", "jmvtabreg")) {
-    f <- testthat::test_path("..", "..", "jamovi", "js", paste0(an, ".js"))
-    skip_if_not(file.exists(f), "jamovi/ is not shipped in a built package")
+    f <- src_path("jamovi", "js", paste0(an, ".js"))
     src <- paste(readLines(f, warn = FALSE), collapse = "\n")
     # strip line comments and strings, so a word inside prose or a literal is not a "call"
     code <- gsub("//[^\n]*", "", src)
@@ -374,6 +367,11 @@ test_that("every function the jamovi .js calls is declared in it", {
 # not a NULL: jmvcore's `$.Options` STOPS on an unknown name, which took the whole jmvtab export
 # down. jmv_opt() is the one guarded read.
 test_that("a panel-specific option read from a shared helper is guarded", {
+  # ⚠ the generated .h.R builds the option classes only `if (requireNamespace("jmvcore"))`, AT INSTALL
+  # TIME -- and `R CMD check --as-cran` sets _R_CHECK_INSTALL_DEPENDS_, i.e. installs with
+  # Depends/Imports only. So the generator, not the package, is what must be checked.
+  skip_if(is.null(tabxplor:::jmvtabOptions),
+          "jamovi option classes need jmvcore on the library path at INSTALL time")
   o_tab <- tabxplor:::jmvtabOptions$new()
   o_reg <- tabxplor:::jmvtabregOptions$new()
   expect_false(o_tab$has("xl_check"))
@@ -399,7 +397,7 @@ test_that("the Model table's labels and its link order follow the cascade", {
   # ⚠ the picker's order is `measure`'s, but REG_FAMILIES$fits keeps its own -- its FIRST entry is
   # the family's own link, which is what `link = "auto"` resolves to. Two facts, and neither may
   # take the other's order.
-  js  <- readLines(testthat::test_path("..", "..", "jamovi", "js", "jmvtabreg.js"), warn = FALSE)
+  js  <- readLines(src_path("jamovi", "js", "jmvtabreg.js"), warn = FALSE)
   ui  <- grep("^var TABX_LINKS = ", js, value = TRUE)
   ord <- names(tabxplor:::REG_MEASURE_LINK)
   for (f in names(tabxplor:::reg_family_ui_labels())) {
@@ -418,7 +416,7 @@ test_that("the Model table's labels and its link order follow the cascade", {
 # WHICH families take an `outcome_level` is a declared fact, and the picker is gated on it -- not on
 # "the outcome has exactly 2 levels", which hid it on the two families that most need one.
 test_that("the outcome-level picker is gated on the family's declared role", {
-  js <- paste(readLines(testthat::test_path("..", "..", "jamovi", "js", "jmvtabreg.js"),
+  js <- paste(readLines(src_path("jamovi", "js", "jmvtabreg.js"),
                         warn = FALSE), collapse = "\n")
   role <- vapply(tabxplor:::REG_FAMILIES,
                  function(r) r$outcome_level %||% NA_character_, character(1))

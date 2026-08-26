@@ -348,3 +348,8 @@ counts_refuse_mean_methods <- function(ci_method) {
     "i" = "The slots that apply here are {.val cell} and {.val diff}."
   ))
 }
+
+# codetools: tab_counts() binds every argument riding on `...` as a local, via
+# list2env(tab_dots_expand(.d, "tab_counts"), environment()) -- correct at run time, invisible to the
+# code walker. DERIVED from the declaration, so a new or retired argument needs no edit here.
+utils::globalVariables(tab_args_for("tab_counts"))

@@ -805,6 +805,7 @@ test_that("the hover gap reads like every other interval in the package", {
 
 testthat::test_that("a name rotates only when it saves width, and a compound name wraps", {
   testthat::skip_if_not_installed("broom")
+  testthat::skip_if_not_installed("carData")
   names_of <- function(x) {
     b <- sub("^.*</style>", "", as.character(tab_html(x)))
     regmatches(b, gregexpr('<td class="[^"]*tx-lbl[^"]*"[^>]*>[^<]*(<br>[^<]*)*</td>', b))[[1]]
@@ -832,6 +833,7 @@ testthat::test_that("a name rotates only when it saves width, and a compound nam
 })
 
 testthat::test_that("a col_var is named once in the span row", {
+  testthat::skip_if_not_installed("carData")
   a <- carData::Arrests
   t <- tab(a, colour, released, pct = "row", ref = "first") |>
     dplyr::mutate(difference = set_display(.data$Yes, "difference"),

@@ -43,6 +43,15 @@ knitr::knit_hooks$set(output = function(x, options) {
          fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
          '</code></pre>')
 })
+# A cli message or warning is its own kind of condition, so knitr routes each through its own hook,
+# not `output`: without these two it would land in the collapsed source block, ANSI codes and all.
+for (hook in c("message", "warning")) {
+  knitr::knit_hooks$set(stats::setNames(list(function(x, options) {
+    paste0('<pre class="r-output"><code>',
+           fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+           '</code></pre>')
+  }), hook))
+}
 ```
 
 Cette vignette s'adresse aux utilisateurs qui veulent programmer avec `tabxplor` — écrire leurs propres fonctions, extraire les nombres sous-jacents, ou remodeler un tableau case par case. Si vous souhaitez seulement construire et lire des tableaux, `vignette("tabxplor")` est le point de départ.

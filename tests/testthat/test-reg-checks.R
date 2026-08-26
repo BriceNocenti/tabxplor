@@ -66,6 +66,10 @@ test_that("Dispersion tracks sqrt(phi) on an over-dispersed count, and returns t
 # ---- Influence (max dfbetas) -----------------------------------------------------------------
 
 test_that("Influence equals max |stats::dfbetas()|", {
+  # R 4.6.0 rebuilt the glm influence measures on PEARSON residuals, with no leave-one-out dispersion
+  # where the dispersion is fixed. tabxplor's engine is the new definition; on an older R the
+  # reference itself is the old one, so there is nothing to compare against.
+  skip_if(getRversion() < "4.6.0", "stats::dfbetas() for glm changed in R 4.6.0")
   f   <- chk_fit()$fit
   ref <- max(abs(stats::dfbetas(f)))
   got <- tabxplor:::reg_check_influence(f)

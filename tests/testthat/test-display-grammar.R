@@ -150,8 +150,7 @@ testthat::test_that("no template the package writes has TOP-LEVEL literal conten
   # says something outside its tokens. Every template the package itself writes separates its tokens
   # with whitespace only -- "(Chi2)" and "(n=" sit inside a bracket GROUP, not at the top level -- so
   # the rule cannot reach an existing column. A new template with a bare literal must be deliberate.
-  rfiles <- list.files(testthat::test_path("..", "..", "R"), "\\.R$", full.names = TRUE)
-  testthat::skip_if(length(rfiles) == 0, "package sources not available (installed check)")
+  rfiles <- list.files(src_path("R"), "\\.R$", full.names = TRUE)
   src <- unlist(lapply(rfiles, readLines, warn = FALSE))
   src <- src[!grepl("^\\s*#", src)]                    # a comment may QUOTE a template it does not write
   lit <- gsub('^"|"$', "", unlist(regmatches(src, gregexpr('"[^"\\\\]*\\{[a-z_]+\\}[^"\\\\]*"', src))))
@@ -678,7 +677,8 @@ testthat::test_that("`base_diff` is a preset, beside its ratio and odds-ratio si
                             display = "base_diff"))
   testthat::expect_match(format(t[[2]])[[1]], "%.*\\(.*%\\)")
   # every value the jamovi ComboBox offers resolves -- the rule the crash broke
-  vals <- yaml::read_yaml(testthat::test_path("..", "..", "jamovi", "jmvtab.a.yaml"))$options
+  testthat::skip_if_not_installed("yaml")
+  vals <- yaml::read_yaml(src_path("jamovi", "jmvtab.a.yaml"))$options
   vals <- Filter(function(o) identical(o$name, "display"), vals)[[1]]$options
   for (v in vapply(vals, function(o) as.character(o$name), character(1)))
     testthat::expect_no_error(tabxplor:::display_resolve(v))

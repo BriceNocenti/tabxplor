@@ -65,7 +65,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 - `reg-digest.R` — `tabxplor_fitdigest`, the fit-free record of a fit; `REG_FIT_KINDS` / `REG_DIGEST_PARTS`.
 - `reg-empirical.R` — the observed (crude) companion columns; `REG_EMPIRICAL` / `REG_EMP_BY_LINK`.
 - `reg-influence.R` — the marginal engine (g-computation over `REG_LINK_FUNS`) + the gap-SE influence functions.
-- `reg-assumptions.R` — model checks + `shape=` cures; `REG_CHECKS`; the plot primitives; the observed curves and their sparkline.
+- `reg-assumptions.R` — model checks + `shape=` cures; `REG_CHECKS`; the plot primitives; the observed curves and their shape table.
 - `reg-cross.R` — interactions, the shared surface for both producers: the peel, the validation, the autocut, `REG_CROSS_ARMS`.
 - `reg-spec-build.R` — the per-model product builder (`reg_spec_build`).
 
@@ -100,7 +100,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 
 **Cross-cutting** (touch with care): `fmt_class.R` is the foundation of every column; `.onLoad()` in `utils.R` seeds every option; `format.tabxplor_fmt()` and `fmt_color_channels()` are the shared display/colour sources of truth across all backends.
 
-**Other directories:** `vignettes/` (user + regression + programming vignettes, each with a French twin; plus `vignettes/articles/`, pkgdown-only, which also holds the *All else equal* teaching article and its French twin) · `tests/testthat/` (testthat v3) · `man/` (roxygen-generated, never edit) · `inst/i18n/` + `po/` (translations) · `jamovi/` (module definition) · `dev/` (architecture guide, dev scripts, perf harness, `.Rbuildignore`'d).
+**Other directories:** `vignettes/` (introduction, *All else equal*, regression, weights, programming; `vignettes/articles/` is pkgdown-only and holds the French twins) · `tests/testthat/` (testthat v3) · `man/` (roxygen-generated, never edit) · `inst/i18n/` + `po/` (translations) · `jamovi/` (module definition) · `dev/` (architecture guide, dev scripts, perf harness, `.Rbuildignore`'d).
 
 ---
 
@@ -292,7 +292,7 @@ The measure's behaviour — raw getter, scale keys, significance source, gating 
 
 **The boundary and the build** (`reg-resolve.R`, `tab_reg.R` + `reg-spec-build.R`). `reg_resolve_args()` is the crosstab boundary's twin, with `data` *inside* it — `family = "auto"`, `multiplier = "sd"` and `shape` are answered by the data — and one grammar per axis: the four estimand arguments per outcome, `multiplier` / `shape` / `ref` per predictor (unnamed = the fallback, named = that variable). `reg_build()` then runs over a typed `new_reg_ctx`, its per-model half a declared product (`reg_spec_build()`), the three nesting axes — `tab_vars` groups × models × outcomes — dispatching through the shared parallel seam. **A model comparison is a default too**: several `predictors` sets are tested against each other without being asked, sequential where every model nests in the next and against the first otherwise, decided in `reg_compare_rows()` where the fits exist. ⚠ `compare != "none"` is what makes a build serial and makes it keep its fits, so the boundary degrades the automatic one to `"none"` wherever a comparison has no meaning.
 
-**Effects and model checks.** A marginal quantity comes from tabxplor's own analytic g-computation, or from `marginaleffects` at a reference profile — derived from the contrast, never declared per row. `REG_CHECKS` catalogues the checks (linearity, dispersion, influence, proportionality, collinearity), each with the `shape =` cure that fixes what it flags — the check and its cure are one object — each priced (`cost`) and each declaring whether it runs by default (`footer_default`), because what a table must say and what it costs are two questions. The **observed shape** of a numeric predictor is the free half of the linearity check: one curve per outcome, binned with no fit at all, drawn as a sparkline in a window floored by the data's own sampling noise and by the first colour rung — so a flat run means flat. It goes in the predictor's own `n` cell where the table has one outcome and the medium can hold it, and otherwise in a small **shape table** below the footer.
+**Effects and model checks.** A marginal quantity comes from tabxplor's own analytic g-computation, or from `marginaleffects` at a reference profile — derived from the contrast, never declared per row. `REG_CHECKS` catalogues the checks (linearity, dispersion, influence, proportionality, collinearity), each with the `shape =` cure that fixes what it flags — the check and its cure are one object — each priced (`cost`) and each declaring whether it runs by default (`footer_default`), because what a table must say and what it costs are two questions. The **observed shape** of a numeric predictor is the free half of the linearity check: one curve per outcome, binned with no fit at all, drawn in a window floored by the data's own sampling noise and by the first colour rung — so a flat run means flat. It goes in a small **shape table** below the footer, beside the range it is a picture of.
 
 ### Exports and rendering
 
@@ -485,7 +485,7 @@ this, not the code. Symptoms + rules:
 | `test-tab_reg-plots.R`    | Phase 12h / z15: reg_check_plots() smoke tests (build a gtable without error)                   |
 | `test-tab-estimates.R`    | Phase 18z17: the estimate model + fmt_scale_of() -- no graphics device                          |
 | `test-forest-plot.R`      | Phase 18z17: forest_plot() -- ladder == gridlines, cell colour == point, gap band == test       |
-| `test-reg-shape.R`        | Phase 18z15: `shape =`, the plot primitives, the stored curves and the row sparkline            |
+| `test-reg-shape.R`        | Phase 18z15: `shape =`, the plot primitives, the stored curves and the shape table              |
 | `test-reg-rank.R`         | Phase 22c-vi: the ordinal superiority pair -- gradients, K=2 reduction, collapsibility, survey  |
 
 ---
@@ -632,80 +632,100 @@ The task is to **drastically** rewrite and simplify R scripts comments (includin
 
 ### Phase 22 — manual reviews and last features before release (DONE)
 
+#### Phase 22j — Package check() + resolve github action R CMD check failures — DONE
+
+`R CMD check` returned **1 ERROR, 1 WARNING, 2 NOTEs** on all five CI platforms (and had for weeks), plus a red `test-coverage`. **`devtools::check()` now returns `Status: OK` — 0 errors, 0 warnings, 0 notes** (`devtools::test()`: FAIL 0 | PASS 9987). Not one failure was a defect in tabxplor's behaviour: every one was a test asserting something untrue of the environment `R CMD check` builds, or an upstream change. What the phase is worth recording is the five root causes, because three of them are traps any future test can fall into again.
+
+⚠ **A test that reads the package SOURCE is a DEVELOPMENT test, and `../..` is not there.** `R CMD check` runs the tests from `<pkg>.Rcheck/tests/testthat`, where `../..` holds only the *installed* package — and `jamovi/` and `dev/` are `.Rbuildignore`d, so they are absent from the tarball too. Fourteen sites read the source; nine guarded it with an inline `skip_if_not(file.exists(…))` and **five did not**, which is the whole ERROR. Two more (`test-jmvtab-export.R:295, 304`) put the `skip_if()` *after* the `readLines()` that throws, so the guard was unreachable — `length(src) == 0` is only ever true for an empty file that exists. One spelling replaces all fourteen: **`src_path(...)`** in the new `tests/testthat/helper-source.R`, which resolves the path and skips when it is absent. Its `WARNING` states the rule: call it *instead of* `test_path()`, never after the read.
+
+⚠ **`--as-cran` installs the package with Depends/Imports ONLY** (`_R_CHECK_INSTALL_DEPENDS_=TRUE`, set in `tools:::.check_packages`'s `if (as_cran)` block). The generated `R/jmvtab*.h.R` build their option classes under `if (requireNamespace("jmvcore", quietly = TRUE))` **at install time**, so under check `jmvtabOptions` is `NULL` and `$new()` gives *"attempt to apply non-function"* — with jmvcore 2.7.38 sitting right there in the library, which is what made it look impossible. Verified directly: `_R_CHECK_INSTALL_DEPENDS_=TRUE R CMD INSTALL -l <tmplib> .` then `is.null(tabxplor:::jmvtabOptions)` is TRUE, FALSE in a normal install. The test now skips on the *generator*, not on the package. ⚠ The same mechanism has a real-world edge left un-patched: a user who installs tabxplor **before** jmvcore gets NULL generators until tabxplor is reinstalled. Inside jamovi it cannot happen, and the `.h.R` are `jmvtools::prepare()` output that must never be hand-edited.
+
+⚠ **Two upstream changes, each looking like a regression:**
+
+- **R 4.6.0 rebuilt the glm influence measures** on Pearson residuals, dropping the leave-one-out dispersion where the dispersion is fixed (R NEWS, *"Several influence measures for `glm` objects…"*). tabxplor's engine IS the new definition, so `test-reg-checks.R`'s parity against `stats::dfbetas()` failed **on oldrel-1 alone** (`ref` 0.098 against an unchanged `got` 0.120). This was the maintainer's hunch about oldrel-1, and it is the whole of it: guarded with `skip_if(getRversion() < "4.6.0", …)`.
+- **openxlsx2 1.29** stopped writing `<scheme>` on its own base font (CI has 1.29, this box 1.28). `test-tab_xl.R` asserted `sum(grepl("<scheme", fonts)) == 1L` — an assertion about openxlsx2's internals. It now states the invariant that is actually tabxplor's: **at most one** font carries a scheme, and if one does it is the base font. The third assertion beside it was deleted, being a tautology (it subset `fonts` on the negation of its own predicate).
+
+**Two tolerances that asserted bit-identical floating point.** `test-reg-cross.R:246` compared a p-value from two *independently refitted* glms at `tolerance = 1e-10`; macOS/aarch64 differed by 2e-11 relative. Now `1e-7` — seven significant figures prove the p-value IS the additive-vs-crossed comparison; anything tighter tests the BLAS. And `test-19m3-defects.R` (covr-only, the last thing keeping `test-coverage` red) walks `body()` harvesting length-1 string constants, while covr rewrites every body as `if (TRUE) { covr:::count("<srcref key>"); … }` — whose keys are exactly that. It takes the `R_COVR` skip `test-parallel-parity.R` already uses; the identical guard at `R/tab-display.R:1285` runs at load, before covr instruments, so nothing is lost.
+
+**The WARNING and the two NOTEs.** `carData` was used by four tests but declared only in `Config/Needs/website`, which `R CMD check` does not read → added to `Suggests` with a `skip_if_not_installed()` at each site. `checkRd: Lost braces` came from ONE stray cli inline markup in a fact-table `doc` field (`R/tab-options.R`, `shape_auto_max`) reaching Rd as bare braces — the only one in the package (swept `R/`, `man/`, every roxygen block and every `doc =`). And `no visible binding for 'add_n'`: `tab_counts()` binds its dots arguments through `list2env(tab_dots_expand(…))`, invisible to codetools, and `add_n` was the one name with no mirror — being deprecated, it never becomes a `ctx` field the way `R/tab.R:2862`'s derived declaration covers the rest. Fixed the same way, **derived**: `utils::globalVariables(tab_args_for("tab_counts"))`.
+
+**CI hygiene**: `actions/checkout@v4` → `@v5` and `actions/upload-artifact@v4` → `@v5` in the three workflows that use them, clearing the Node-20 deprecation annotation.
+
+⚠ **Not re-verified here: vignette building.** The check ran with `vignettes = FALSE` because a parallel session was rewriting `vignettes/` throughout (Phase 23a). Both vignette steps were already OK on CI; re-run a full `devtools::check()` once 23a lands.
+
+#### Phase 22k — Imports and Suggests cleaning
+- Please hard-deprecate tab_plot(), bad looking, glitchy and used by nobody, to clear the Suggests list of useless stuff it brings. Keep it’s code commented out somewhere for possible rewriting in future dev.
+- Are there Imports we could skip by writing just a little code, or copying some of their functions in `R/utils.R` with a Thank You when the licence permits it ? Give up stringi:: for base R, or would it make some stuff less reliable ? Give up broom:: ? Give up knitr ?
+- Are there other Suggests that are already near removal and that we could terminate ? Or Suggests from which we only use a function that could be easily borrowed, etc. ?
+- If there are room in Imports before the 20 non-base Imports CRAN trigger, this is the order in which I would want to promote current Suggests to Imports: VGAM (>= 1.1.0), svyVGAM (>= 1.2), brant (>= 0.3.0), mirai (>= 2.5.0), RhpcBLASctl, parallelly (>= 1.32.0), openxlsx2 (>= 1.0.0).
 
 
+#### Phase 22l — exported functions review
+
+Too much functions are currently exported. It clutters a bit the pkgdown reference page and can lose some users even if the structure and order clearly help. I wonder if everything is needed. Please give me a clear map of what is currently exported
+
+
+---
 
 ### Phase 23 — documentation integration and simplification 2
 
-The package documentation had grown cluttered with dev history and lost focus. This phase enforces the **documentation ecosystem** hierarchy (top of this file) across every layer: present-tense, history-free, general to specific, each fact stated once, *referencing more global or more precise docs rather than duplicating them*. Before writing any document, state what it is for, its focus within the ecosystem, and what belongs elsewhere.
+The package documentation had grown cluttered with dev history and have lost focus. This phase enforces the **documentation ecosystem** hierarchy (top of this file) across every layer: present-tense, history-free, general to specific, basic use cases to expert territory, each fact stated once, *referencing more global or more precise docs rather than duplicating them*. Before writing any document, state what it is for, its focus within the ecosystem, and what belongs elsewhere.
 - **Reducing the overall size of the documentation is critical**, since the current documentation in very verbose, technical, non-integrated, and have grown organically during development.
 - But the *goal* is **not** to make a summary of current documentation: it’s more often to rewrite them **based on the *final* design, architecture and real-world usage**
 - In each phase, start by reading the `## tabxplor architecture` section (top of this file) to get the big picture around which everything should revolve. Then, read `vignettes/articles/tabxplor-all-else-equal.Rmd` and, when French is needed, `vignettes/articles/tabxplor-all-else-equal-fr.Rmd`: they are currently **the most precise account of what tabxplor's *philosophy*, *vocabulary*, *usage* and *real-world regression use cases* really are**; its words are the package's own.
 - Documentation should be clear, simple, focused, direct, no-bullshit, understandable by both machine and **human**. It should really help the people who need it most, "literary" social sciences students that discover programmation, R, and tabxplor, have difficulties, and are looking for . More experts statistical users should know everything they need to know to use the package in the way it’s intended, but in a clear, direct, focused way and not over-technical way (they don’t need to be told about the internals, etc.).
+- Documentation should **never lecture the user**, but should **be clear and simple enough to be pedagogical**. Also, **the main use cases should be readable, accessible (not lost in the middle of an uncomprehensible heap of docs), understandable by "literary" social sciences students that hates math and fear programming**.
 
 
-#### Phase 23a — vignettes simplification and integration
+#### Phase 23a — vignettes simplification and integration — DONE
 
-`vignettes/articles/tabxplor-all-else-equal.Rmd` is already up-to-date and is the *reference* for the rest.
+**The set is now five English vignettes, ordered teaching-before-reference**, plus the four French twins (Phase 23f). 3 111 -> 3 131 lines, which is the point: ~500 lines of duplication, dev-history and misplaced reference were cut, and the space went into the two things that were missing (a `display` section, the introspection accessors) and into `all-else-equal` becoming reachable offline.
 
-Introduction, regression and programming vignettes are currently both grown organically with many sometimes unorganised stuff, and outdated. 
+| file | lines | role |
+|:-----|------:|:-----|
+| `tabxplor.Rmd` | 727 -> 583 | introduction |
+| `tabxplor-all-else-equal.Rmd` | 743 -> 761 | **promoted from `articles/`** — the regression teaching route |
+| `tabxplor-reg.Rmd` | 1326 -> 1250 | the regression reference |
+| `tabxplor-weights.Rmd` | **new, 179** | weighted and survey data, both producers |
+| `tabxplor-programming.Rmd` | 315 -> 358 | programming with the `fmt` cell |
 
-Some shared constraints: 
+**The introduction was reordered, and that is the largest single gain.** Colour — the package's whole idea — used to arrive at line 289, behind a 92-line survey-methodology essay and a battery-of-items detour. It is now the second section. jamovi is named in the opening (the maintainer's call: a reader who wants menus should not have to reach the end to learn they exist). Deleted outright: the 115-line `variable_type x color x color_signif` grid, which called itself "the reference behind the two color sections above" and duplicates `?tab`'s generated `@param ci_method` (`R/tab-args.R:341-369`) verbatim -- Wilson / Wald / beta / Newcombe / Agresti-Caffo / Welch / Student / OLS / robust / quasipoisson / Katz are all documented there. Added: a `display` section (named layouts, the `{}` grammar, per-token precision `{base:1}`, `set_display()` post-hoc), `tab_counts()` for already-counted data, the Excel -> Word route (which `R/tab_xl.R` is already engineered for), and a `tab_vars` + `spread_vars` demo on `tea`.
 
+⚠ **`tea_when` was kept over `tea_where` on measurement, not taste**: max |diff| 23.0 vs 21.2 points, mean 6.5 vs 5.3.
 
-##### Common problems and guidelines
+**The regression vignette got a spine.** It had 46 headings and **no top-level heading at all**; it now has seven numbered parts (what a table is · the four arguments · one part per kind of outcome · reading what adjustment did · shaping the table · checking the model · plots). Three near-identical "For the record: what exactly is tested" appendices became one, in part 4, absorbing the "which paths carry a test" table; the interactions appendix keeps its own independent-samples maths and points there for the shared `color_signif` policies. The teaching passages `all-else-equal` now owns were cut or compressed (its "Three ways to get this wrong", "How to read it"), and the three `####` measure sub-sections merged. It opens by naming the article as the way to *learn* and itself as the way to *look up*.
 
-**Current vignettes console and html tables formatting problems:**
-- There is an horizontal border appearing between *all* rows (not just between row variables, totals, etc., like it should and does in normal exports).
-- The vertical row variable’s names collides with each other when there are too few rows for their length 
-- There are some artifacts appearing with some console outputs:
-  <!-- reg_measures(arrests, "released")
-  #> [1m[22m[36mℹ[39m [34m"released"[39m: binary outcome detected -> `family = "binomial"` (logit).
-  #> [1m[22m[36mℹ[39m [34m"released"[39m: `family = "binomial"`, `link = "odds_ratio"` (logistic regression).
-  #> [36mℹ[39m Other models: `link = "ratio"` or `link = "difference"`. -->
+⚠ **The reorder broke a data dependency**: the `tea` setup lived in the grouped-binomial section (part 3) and is used in part 1. Hoisted to the preamble beside `gss_simple`. Any future reordering of that file must re-check chunk order.
 
+**Corrections, each verified against live output rather than by reading:**
 
+- **`multiplier` was documented wrong.** The prose said "the default is **per one standard deviation** (`per 17.3 (SD)`)" while the chunk three lines below printed `per 34.6 (2SD), at 47.2 (mean)` -- the default has been `"2sd"` since 22g-v (`R/tab-args.R:617`). Fixed in three places, with the *why* added (2 SD is roughly the span of a binary predictor, so a continuous row and a two-level row become comparable down the column). The shape section's `1.22 per standard deviation` was likewise `1.45` per 2SD.
+- **Two dangling cross-references**: "see the annex" (no such section) and "see *Reading the table* below" (no such section).
+- `split_var`, a removed development argument, was still cross-referenced in two vignettes -> `tab_vars`.
+- ⚠ The roadmap's *"the reg vignette now prints 40 shape tables"* was **already stale**: `options(tabxplor.shape_table = "no")` is set in the setup chunk and flipped on only around the shape section. Exactly 3 chunks print one.
 
-**Introduction vignette:**
-- The part about `display` tokens must be here (with also something in regression vignette), it have became a very powerful yet quite simple feature.
-- Concisely teach levels = "first" with several binary answers to the same survey question (major survey use-case), and at the same time levels = "auto", with the FactoMineR:: tea dataset. Also very briefly teach to use tab_vars + spread_vars to make a very condensed table of on the tea dataset (show, rather than being verbose). Choose one of both variables lists below only (the more striking crosstable, with the higher deviations), and add the score variable itself as a `cols_vars` too inside the same table.
-- Add a direct Word export ? No, teach briefly to go through Excel: it’s recommended to store the tables with the real numbers, not the rounded ones, do the last formattings if needed, then copy-paste to Word (using the app, not the web browser, not to lose formatting, works very well).
+**Part 6 answers the "right shape vs impossible shape" ask without new data.** Measured: `tvhours` is genuinely straight (curvature LR p = 0.95) while `age` reverses (p = 1.5e-274). Both were already in the example table; only the prose failed to say so. It now names the contrast, and the linearity bullet points forward instead of repeating the damage figure.
 
-```r
-data("tea", package = "FactoMineR")
-tea_when_vars  <- c("breakfast", "tea.time", "evening", "lunch", "dinner", "always")
-tea_where_vars <- c("home", "work", "tearoom", "friends", "resto", "pub")
+**The weights vignette is a move plus a merge**, not a rewrite. The introduction's three-rung ladder joins the regression vignette's own weights section, so `tab_reg()` is always at level 2 (or 3) while `tab()` starts at level 1 — a sentence that was already written in the introduction's vocabulary while sitting in a different document. The introduction keeps ~18 lines and a pointer; the regression vignette ~12.
 
-tea <- tea |> 
-  tibble::as_tibble() |> 
-  dplyr::mutate(across(
-    all_of(c(tea_when_vars, tea_where_vars)), 
-    ~ (if (stringr::str_detect(levels(.)[1], "^Not")) {forcats::fct_rev(.)} else {.}) |> 
-      forcats::fct_relabel(~ stringr::str_replace_all(., "\\.", " "))
-  ))
-tea <- tea |> 
-  score_from_lv1("tea_when" , vars_list = tea_when_vars) |> 
-  score_from_lv1("tea_where", vars_list = tea_where_vars)
-```
+**`all-else-equal` is a real vignette.** ⚠ It keeps `hdv2003`, and both `carData` and `questionr` join `Suggests`. The cheaper option was falsified first: §5's non-collapsibility example needs an adjuster *balanced* across the predictor yet *strongly* predictive of the outcome, and an exhaustive scan of `gss_simple` (best ×1.13 inflation at adjR² 0.031) plus `Arrests`, `TitanicSurvival`, `Chile` (which mixes real confounding into the arithmetic), `Wells` and `Salaries` found nothing near `hdv2003`'s ×1.6 with a flat age profile. The chunks are guarded so the vignette degrades rather than fails where a Suggests package is absent. `vignettes/articles/.gitignore` now covers `*.html` (the 351 KB knitted copy sitting there turned out never to have been tracked; it is a stale local build artifact of the old path and can be deleted at leisure).
 
+**The ANSI leak is fixed, and it was two hooks, not one.** Every vignette sets `options(cli.num_colors = 256)` for its console examples and overrode knitr's **`output`** hook only. A `cli_inform()` raises a *message* condition and a `cli_warn()` a *warning* one, each routed through its own hook — so with `collapse = TRUE` they landed inside the collapsed source block with raw SGR codes. Both hooks are now set, in all nine files. Measured: 0 ANSI escapes across all five rendered vignettes, and the deliberate teaching warnings (the Brant rejection) render with proper `ℹ` glyphs. The notes are *kept and coloured*, not suppressed — they are part of what the package teaches.
 
-**Regression vignette:**
-- All that is about checks should be in their own pedagogical and simple section of the vignette, covering footer, check plots; with a specific part for numeric variable’s linearity checks stating how to read and concretely use sparklines/shape tables/the associated numbers/check plots linearity panel. On real-world data where is matters, one having the exact right shape and one having an impossible shape messing with the coefficients.
-- (**The reg vignette now prints 40 shape tables**, one under every example with a continuous predictor — the price of an always-on default. If that reads as noise, tabxplor.spark = "no" in its setup chunk (enabled just for the new section) is the one-line cure.)
+**Programming vignette: one addition, six corrections.** Added `## Knowing what you have before you touch it` — `tab_structure()` / `tab_supports()` / `tab_columns()` / `fmt_attr()` / `reg_measures()`, which were absent although `NEWS.md` presents them as headline 2.0.0 features and their own help says to use them "before trying". Corrected: `tabxplor.xl_or_numeric` does not exist (it is `xl_ratio_cells`, with a different value vocabulary); `signif_levels`/`signif_labels` are superseded by `tabxplor.stars`; `resid` was listed among the 21 stored fields although it is derived from the p-value **and the sign of `ctr`**, so `vctrs::field(x, "resid")` would fail; the token list omitted `moe`/`sd`/`cv`/`coef`; the primary token is the first one **outside brackets**, and a token may carry its own precision; and a comment said "more decimals on the total row" above code giving it fewer.
 
+⚠ **Two reported rendering defects were NOT fixed** — they live in `.R` files and a parallel session held that lane:
 
+- **A horizontal border under every row.** Not tabxplor's CSS and absent from the shipped vignette (`html_vignette` loads no Bootstrap). It is pkgdown-only: `pkgdown:::tweak_tables()` unconditionally *prepends* the Bootstrap class `table` to every `<table>`, and `.table > :not(caption) > * > *` then sets `border-bottom-width` at specificity (0,1,1). `R/tab-css.R:236-252` already fights this exact battle (its comment at 322-332 names `tweak_tables()`) but only for `color`/`background-color`; the one rule zeroing a cell border (`R/tab-css.R:436`) needs a `table` *descendant* of `.tabxplor-tab` and so matches the markdown engine only. **Fix**: one (0,1,1) rule zeroing `border-bottom-width` on `.tabxplor-tab th, .tabxplor-tab td`, which the role classes already override where a rule belongs.
+- **Vertical variable names colliding.** `tab_vname_plan()` (`R/tab-export-prep.R:303-321`) decides both rotation and characters-per-line from `TX_VERT_CHARS_PER_ROW = 2L`, a constant unrelated to any rendered pixel height; the breaks are baked in as literal `<br>`, and `.tx-vname` (`R/tab-css.R:549-550`) sets `writing-mode: vertical-rl` with no `max-height` or `overflow`. A name admitted at the `w <= span * 4` boundary overflows its `rowspan` — worst on a short block, the reported symptom. The same numbers feed `tab_xl()`'s rotated cells, so a fix in `tab_vname_plan()` reaches both media while a CSS-only fix reaches HTML alone.
 
-- **One vocabulary rule for `deviation` / `measure`, decided in `dev/reg_estimand_api_redesign_follow_up.md` §6** (the rename to `deviation` is refused; §6.2 is the rule that replaces it): *a **deviation** is the quantity — how far a group sits from its reference; a **measure** is which of the three ways it is expressed.* Write "measure of deviation" the first time the argument appears in a document, `measure` alone thereafter. Today `vignettes/tabxplor.Rmd` teaches "How to measure deviation?" for `color`, the *All else equal* article teaches "measure of deviation" for `measure`, and `vignettes/tabxplor-reg.Rmd` teaches neither — while 6 of its 7 uses of the word are "standard deviation". French is already fixed in `dev/french_glossary.md` (*écart* / *mesure (de l'écart)*).
-- Document undocumented stuff. `spread_vars` in `tab()` ?
-- Vignettes should not be neverending. If some aspects, either expert, or on the contrary pedagogical and near useless to experts, need to be placed in new vignettes, make me propositions. Point to `tab_structure()` · `tab_supports()` · `reg_measures()` · `tab_columns()` · `fmt_attr()`, etc., when relevant.
+**Registration**: `DESCRIPTION` (`carData`, `questionr` -> Suggests; `Config/Needs/website` back to `pkgdown` alone), `_pkgdown.yml` (both the navbar menu and the `articles:` index, where an incomplete list is a hard error), `README.Rmd`. Every "Where to go next" was rewritten over the five documents.
 
-
-**Programming vignette**
-
-
-
+**Verification**: all five vignettes render in a cold `Rscript`; 0 ANSI escapes; no unintended chunk warnings. No test suite — the changes are documentation, plus `DESCRIPTION`/`_pkgdown.yml` metadata.
 
 #### Phase 23b — roxygen2 documentation simplication
+
+Now that many features are explained in different vignettes, I want the 
 
 - The main user-facing functions documentation **examples** should use the updated syntax and user-friendly argument’s order. `?tab_reg` examples are now plain wrong, since the `family` --> `link` -->  `measure` --> `effect` argument cascade change. `vignettes/articles/tabxplor-all-else-equal.Rmd` is the reference for `tab_reg()` main use case, do not hesitate to replicate some good examples on gss_simple or tea datasets. Continue to ensure the examples don’t slow down R CMD CHECK, for CRAN, but also for `devtools::check()` that run near all examples.
 - Carry §6.2's *deviation / measure* rule into `?tab`'s `@param color` and `?tab_reg`'s `@param measure`, and say once, in `?tab`, that an acronym names a **measure** while `display =` names a **field** (so `or` / `diff` / `ratio` are legal in both arguments with different meanings).
@@ -753,7 +773,7 @@ Files inside the `dev/` folder have grown organically, with many now useless fil
 
 #### Phase 23f — french translations
 
-⚠ **Open, found in 22h: `vignettes/articles/tabxplor-reg-fr.Rmd` § *La forme sous laquelle un prédicteur continu est ajusté* still describes the RETIRED sparkline** — « la petite courbe dessinée dans la cellule `n` — vide — d'un prédicteur continu » — which has been a shape table under the footer since 22g-ii. Its English twin's section was rewritten then and the French one was not, so the twin is ~30 lines where the source is ~45 and describes a rendering that no longer exists. 22h left the prose alone (the English is final and the French translated; a rewrite here is a translation job, not a defect fix) and only mirrored the `options(tabxplor.shape_table =)` switching.
+The aim is to create a **compact, yet holistic and integrated translation**: avoiding word-do-word translation of the english version altogether is your highest priority.
 
 #### Phase 23f-i — all-else_equal vignette french translation — DONE
 
@@ -791,6 +811,16 @@ Files inside the `dev/` folder have grown organically, with many now useless fil
 **Registration, and a standing rule finally applied.** `_pkgdown.yml` takes both edits (the navbar « En français » block, and the `articles:` index — an incomplete index is a hard pkgdown error). README's *Learn more* gains the article, which was missing from it entirely, in `README.Rmd` and the knitted `README.md`. And CLAUDE.md's long-standing *"start the english vignettes with a link to the French one"* rule is applied — to all four, for the first time.
 
 **Verified by rendering, four times.** Final French render: **0 English strings in prose or tables**, 5 « Lecture : » blocks, heading count and level sequence identical to the English (32/32), chunk bodies differing only in the three setup chunks, the nine ASCII comments and the four translated labels. Typography swept by grep: no decimal point in prose outside a quoted cell value, no `[0-9]%` without a space, no `$` before a number (money is « 14 088 $ »), guillemets spaced.
+
+#### Phase 23f-ii — other vignettes french translations
+
+The two references for French vocabulary are `vignettes/articles/tabxplor-all-else-equal-fr.Rmd` and `dev/french_glossary.md`.
+
+
+#### Phase 23g – pkgdown site
+
+Update the pkgdown site with the package documentation for release.
+- Check at pkgdown references: is there organisation and structure still meaningful, clear, readable, useful for new users, reflecting the current architecture and main uses cases of the package ? Are all exported functions organised in the outline, or a some new ones wandering around ?
 
 
 

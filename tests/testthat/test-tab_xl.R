@@ -136,12 +136,13 @@ testthat::test_that("tab_xl emits no font `scheme` (numbers really render in fon
   suppressMessages(tab_xl(tb, path = p, sheets = "unique", replace = TRUE, open = FALSE))
   fonts <- openxlsx2::wb_load(p)$styles_mgr$styles$fonts
 
-  # exactly ONE scheme survives: font 0, openxlsx2's own base font, where "minor" is semantically
-  # right (it IS the theme's body font, and it is what Excel measures column widths in).
-  testthat::expect_equal(sum(grepl("<scheme", fonts)), 1L)
-  testthat::expect_true(grepl("DejaVu Sans Condensed", fonts[grepl("<scheme", fonts)]))
-  # every font WE registered names itself and lets the name stand
-  testthat::expect_false(any(grepl("<scheme", fonts[!grepl("<scheme", fonts)])))
+  # openxlsx2's own base font is the ONLY one that may carry a scheme -- "minor" is semantically
+  # right there (it IS the theme's body font, and what Excel measures column widths in). Whether it
+  # writes one at all is openxlsx2's business: 1.28 does, 1.29 does not. What must hold is that no
+  # font WE register carries one, since a scheme sends Excel back to the theme for the face.
+  scheme <- grepl("<scheme", fonts)
+  testthat::expect_lte(sum(scheme), 1L)
+  if (any(scheme)) testthat::expect_true(all(grepl("DejaVu Sans Condensed", fonts[scheme])))
   # a plain table: numbers in the PROPORTIONAL DejaVu Sans, text in Condensed, no Cascadia
   testthat::expect_true(any(grepl('name val="DejaVu Sans"', fonts, fixed = TRUE)))
   testthat::expect_true(any(grepl('name val="DejaVu Sans Condensed"', fonts, fixed = TRUE)))
@@ -539,6 +540,7 @@ testthat::test_that("tab_xl(check =) labels one picture per model when there are
 
 testthat::test_that("tab_xl fits each column to what its cells show, and per sheet", {
   testthat::skip_if_not_installed("openxlsx2")
+  testthat::skip_if_not_installed("carData")
   wids <- function(f) {
     cols <- openxlsx2::wb_load(f)$worksheets[[1]]$cols_attr
     lo <- as.integer(sub('.*min="(\\d+)".*', "\\1", cols))
@@ -573,6 +575,7 @@ testthat::test_that("tab_xl fits each column to what its cells show, and per she
 # must not wrap (a compound word broken mid-name reads as two tags).
 testthat::test_that("the unit row is small, unwrapped, and does not widen its column", {
   testthat::skip_if_not_installed("openxlsx2")
+  testthat::skip_if_not_installed("carData")
   a <- carData::Arrests
   t <- tab(a, colour, released, pct = "row")
   p <- withr::local_tempfile(fileext = ".xlsx")

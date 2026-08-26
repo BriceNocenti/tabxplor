@@ -243,7 +243,7 @@ test_that("the interaction test is the additive-vs-crossed model comparison", {
   a <- stats::glm(married ~ race + age4 + relig, d, family = stats::binomial())
   b <- stats::glm(married ~ relig + interaction(race, age4), d, family = stats::binomial())
   an <- stats::anova(a, b, test = "Chisq")
-  expect_equal(r$pvalue, an[["Pr(>Chi)"]][[2]], tolerance = 1e-10)
+  expect_equal(r$pvalue, an[["Pr(>Chi)"]][[2]], tolerance = 1e-7)  # not bit-identical IRLS
   expect_equal(r$df1, an$Df[[2]])
   # C4-1: a non-syntactic block name keeps its overall-association row (it was silently lost)
   expect_true("race*age4" %in% tt$var[tt$test == "global_lr"])

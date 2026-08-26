@@ -7,8 +7,8 @@
 # in the two `.js` files shipped English in every locale. These gates keep that from coming back, and
 # keep a translation from silently overflowing the options pane.
 
-po_path <- function() testthat::test_path("..", "..", "jamovi", "i18n", "fr.po")
-js_path <- function(an) testthat::test_path("..", "..", "jamovi", "js", paste0(an, ".js"))
+po_path <- function() src_path("jamovi", "i18n", "fr.po")
+js_path <- function(an) src_path("jamovi", "js", paste0(an, ".js"))
 
 # Read a .po into a msgid -> msgstr character vector. Handles the multi-line continuation form.
 po_read <- function(f) {
@@ -33,7 +33,7 @@ vis_nchar <- function(x) nchar(gsub("<[^>]*>", "", gsub('\\\\"', '"', x)), type 
 
 
 test_that("the jamovi catalogue is complete, unfuzzy and compiler-safe", {
-  f <- po_path(); skip_if_not(file.exists(f), "jamovi/ is not shipped in a built package")
+  f <- po_path()
   src <- readLines(f, warn = FALSE, encoding = "UTF-8")
   tr  <- po_read(f)
 
@@ -80,7 +80,7 @@ JMV_WIDTH_BUDGET <- c(
 )
 
 test_that("no translation overflows the fixed-width cell it is painted in", {
-  f <- po_path(); skip_if_not(file.exists(f), "jamovi/ is not shipped in a built package")
+  f <- po_path()
   tr <- po_read(f)
   for (en in names(JMV_WIDTH_BUDGET)) {
     b <- JMV_WIDTH_BUDGET[[en]]
@@ -105,7 +105,7 @@ JS_TEXT_EXEMPT <- c("2sd", "max", "\u2026", "family =", "link =",
 
 test_that("every user-visible string in the jamovi .js goes through _()", {
   for (an in c("jmvtab", "jmvtabreg")) {
-    f <- js_path(an); skip_if_not(file.exists(f), "jamovi/ is not shipped in a built package")
+    f <- js_path(an)
     src <- paste(readLines(f, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
     code <- gsub("//[^\n]*", "", src)                       # comments quote strings freely
 

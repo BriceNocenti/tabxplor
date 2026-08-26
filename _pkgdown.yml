@@ -20,10 +20,12 @@ navbar:
       menu:
       - text: Introduction to tabxplor
         href: articles/tabxplor.html
-      - text: Regression tables with tab_reg()
-        href: articles/tabxplor-reg.html
       - text: "All else equal: reading a regression without losing the data"
         href: articles/tabxplor-all-else-equal.html
+      - text: Regression tables with tab_reg()
+        href: articles/tabxplor-reg.html
+      - text: Weighted and survey data
+        href: articles/tabxplor-weights.html
       - text: Programming with tabxplor
         href: articles/tabxplor-programming.html
       - text: -------
@@ -173,15 +175,16 @@ reference:
   - tab_wrap_text
   - tab_parallel_stop
 
-# An incomplete `articles:` index is a hard pkgdown error, so all eight articles are listed here.
+# An incomplete `articles:` index is a hard pkgdown error, so all nine articles are listed here.
 # The French translations (vignettes/articles/*-fr) sit in the secondary "En français" group.
 articles:
 - title: Get started
   navbar: ~
   contents:
   - tabxplor
+  - tabxplor-all-else-equal
   - tabxplor-reg
-  - articles/tabxplor-all-else-equal
+  - tabxplor-weights
   - tabxplor-programming
 - title: En français
   navbar: Français
