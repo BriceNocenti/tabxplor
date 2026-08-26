@@ -286,10 +286,15 @@ testthat::test_that("a publication palette is a SHEET: its chrome reaches the ce
     testthat::expect_true(any(grepl("color:#", cell)), label = nm)
     testthat::expect_true(any(grepl("background-color:#", cell)), label = nm)
   }
-  # the colour themes do NOT force it -- they follow the page on purpose, `auto` most of all.
+  # the colour themes do NOT force an INK -- they follow the page on purpose, `auto` most of all.
+  # Their GROUND is stated all the same, as `transparent`: that is what a cell has with no rule at
+  # all, but Bootstrap's own value is opaque (`--bs-table-bg` = `--bs-body-bg`) and an opaque cell
+  # paints over its row, which is what hid the row hover on the pkgdown site.
   base <- strsplit(tab_css(theme = "light", style_tag = FALSE), "\n")[[1]]
   base <- base[seq_len(which(grepl("^@media print", base))[1] - 1L)]
-  testthat::expect_false(any(grepl("^\\.tabxplor-tab th,\\.tabxplor-tab td\\{[^}]*background-color:", base)))
+  cell <- grep("^\\.tabxplor-tab th,\\.tabxplor-tab td\\{", base, value = TRUE)
+  testthat::expect_false(any(grepl("[{;]color:#", cell)))   # the INK; border-color is not it
+  testthat::expect_true(any(grepl("background-color:transparent", cell, fixed = TRUE)))
 })
 
 testthat::test_that("@media print carries the palette into any coloured page", {

@@ -189,7 +189,7 @@ msgstr "add_pct = <i>(voir freq. des totaux à 100%)</i>"
 
 #: jmvtabreg/options/color/adjustment.title
 msgid "adjustment <i>(gap between model/observed)</i>"
-msgstr "adjustment <i>(écart modèle / observé)</i>"
+msgstr "adjustment <i>(l’écart modèle / observé)</i>"
 
 #: jmvtab/options/pct/all.title
 #: jmvtab/options/lvs/all.title
@@ -250,7 +250,7 @@ msgstr "auto <i>(défaut : différence + ratio)</i>"
 
 #: jmvtabreg/options/measure/auto.title
 msgid "auto <i>(the link's own measure)</i>"
-msgstr "auto <i>(la mesure du lien)</i>"
+msgstr "auto <i>(la mesure de base du modèle)</i>"
 
 #: jmvtab/options/ref.title
 msgid "auto/tot/<i>{row_number}</i>/<i>{row_name}</i>"
@@ -298,7 +298,7 @@ msgstr "beta <i>(Clopper-Pearson exact)</i>"
 
 #: jmvtabreg/options/color/between_groups.title
 msgid "between_groups <i>(gap between tab_vars)</i>"
-msgstr "between_groups <i>(écart entre groupes)</i>"
+msgstr "between_groups <i>(l’écart entre groupes, avec tab_vars)</i>"
 
 #: jamovi/js/jmvtabreg.js:13
 #: jamovi/js/jmvtabreg.js:14
@@ -373,11 +373,11 @@ msgstr "color"
 
 #: jmvtab/ui[1][0][1][0].label
 msgid "color = <i>(what measure of deviation the colors shows)</i>"
-msgstr "color = <i>(quel écart la couleur montre)</i>"
+msgstr "color = <i>(quel écart la couleur montre-t-elle ?)</i>"
 
 #: jmvtabreg/ui[1][1][0][1][0].label
 msgid "color = <i>(what the color shows)</i>"
-msgstr "color = <i>(ce que montre la couleur)</i>"
+msgstr "color = <i>(que montre la couleur ?)</i>"
 
 #: jmvtab/options/color_signif.title
 #: jmvtabreg/options/color_signif.title
@@ -744,7 +744,7 @@ msgstr "measure <i>(la mesure de l'écart choisie)</i>"
 
 #: jmvtabreg/ui[1][1][0][0][0].label
 msgid "measure = <i>(which measure is reported)</i>"
-msgstr "measure = <i>(l'écart rapporté)</i>"
+msgstr "measure = <i>(quel écart comparé à la réference ?)</i>"
 
 #: jamovi/js/jmvtab.js:26
 #: jamovi/js/jmvtabreg.js:23

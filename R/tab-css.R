@@ -28,9 +28,13 @@
 #   - NO column width (Phase 14j): the browser's auto table layout sizes each column to its content.
 #     `.tx-rv`/`.tx-tot`/`.tx-num` are emitted UNSTYLED, as hooks for a user's own fixed-width CSS
 #     (?tab_css). The table is sized by its data: `.tx-foot` keeps the footnote out of that sum.
-#   - The three `.tabxplor-tab table ...` rules (Phase 14m-iii) are MD-ONLY by selector (a `table`
-#     descendant exists only in the pandoc <div>+<table>, never in the html engine where .tabxplor-tab
-#     IS the table): they tame the host's per-row borders and redraw our rules as collapsed blank rows.
+#   - THE HOST RESET is one rule for both media (`.tabxplor-tab th,td{border-width:0}`): a host page
+#     draws a border under every row (Bootstrap's `.table>:not(caption)>*>*`, which pkgdown stamps on
+#     every table) and the border-colour rule then paints it black. Every border we DRAW is a role
+#     class at (0,2,0) or better, so the reset takes the host's and leaves ours. The two
+#     `.tabxplor-tab table ...` rules beside it are MD-ONLY by selector (a `table` descendant exists
+#     only in the pandoc <div>+<table>, never in the html engine where .tabxplor-tab IS the table):
+#     they redraw our own chrome, which md carries no per-cell class for.
 # See: CLAUDE.md Phase 13d + 14e + 14i + 14j + 14m-iii, dev/tabxplor_phase10_exporters.md.
 
 # === SECTION: theme + slot vocabulary ==============================================================
@@ -229,18 +233,25 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
     cp <- tx_chrome_hex(print_theme)
     add(".tabxplor-tab", "color",      cl$text,  cd$text,  cp$text)
     add(".tabxplor-tab", "background", cl$bg,    cd$bg,    cp$bg)
-    # A PUBLICATION PALETTE IS A SHEET OF PAPER, and a sheet is all-or-nothing: it must never take
-    # half its colours from the page it sits on. The rule above states the chrome on the TABLE (0,1,0)
-    # and lets the cells inherit -- which is enough until a host colours the cells DIRECTLY, and
-    # Bootstrap does: `.table>:not(caption)>*>*` (0,1,1) beats an inherited value, so on a dark
-    # Bootstrap page (pkgdown's light-switch, a Quarto dark theme) the cells would come back dark with
-    # black text on them while the table around them stayed white. So the print value is stated again
-    # ON THE CELLS. The specificity is deliberate: (0,1,1) TIES the host's rule and wins on source
-    # order (our stylesheet is emitted in the body, after its <head>), while still losing to our own
-    # `.tabxplor-tab .p1` (0,2,0) -- which is what keeps an ink ladder from being flattened by it.
-    # Light/dark carry "" and are dropped: those two follow the page on purpose, `auto` most of all.
+    # THE HOST PAINTS OUR CELLS DIRECTLY, so the values it can reach must be stated ON THE CELLS.
+    # pkgdown stamps class="table" on every table (pkgdown:::tweak_tables) and Bootstrap's
+    # `.table>:not(caption)>*>*` (0,1,1) then sets color, background-color, padding and
+    # border-bottom-width on the same <td> our classes sit on -- beating anything merely inherited
+    # from the table element (0,1,0). The specificity is deliberate: (0,1,1) TIES the host's rule and
+    # wins on source order (our stylesheet is emitted in the body, after its <head>), while still
+    # losing to our own `.tabxplor-tab .p1` (0,2,0) -- which is what keeps an ink ladder, or a
+    # background channel, from being flattened by it. (The border half is the `border-width:0` reset
+    # further down; the padding half is the `th,td` padding rule beside it.)
+    # `color`: a PUBLICATION PALETTE IS A SHEET OF PAPER, and a sheet is all-or-nothing -- on a dark
+    # Bootstrap page its cells would come back dark with black text while the table stayed white. So
+    # print states its ink here; light/dark carry "" and follow the page on purpose, `auto` most of all.
     add(".tabxplor-tab th,.tabxplor-tab td", "color",            "", "", cp$text)
-    add(".tabxplor-tab th,.tabxplor-tab td", "background-color", "", "", cp$bg)
+    # `background-color`: "follow the page" has to be SAID, because Bootstrap's own value is opaque
+    # (`--bs-table-bg` = `--bs-body-bg`), and an opaque cell paints over its row -- which is what hid
+    # the row hover on the pkgdown site. `transparent` is what a cell has with no rule at all, so this
+    # changes nothing except that a host can no longer override it.
+    add(".tabxplor-tab th,.tabxplor-tab td", "background-color",
+        "transparent", "transparent", cp$bg)
     # THE one border-colour rule -- every border in this stylesheet takes its colour from here.
     # WARNING: that only holds because no rule below uses a border SHORTHAND. `border-right:1px solid`
     # would reset border-right-color to `currentColor` = the CELL's palette hex (a +20% cell drew a
@@ -420,20 +431,21 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # readable-compact: a real vertical rhythm (line-height 0.85 crammed the rows) + ~1mm of side
     # padding, so text no longer touches the column borders.
     ".tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}",
-    # Phase 14m-iii: the markdown chrome, scoped `.tabxplor-tab table` -- md-only BY SELECTOR (it needs a
-    # `table` DESCENDANT of `.tabxplor-tab`; in md that is the pandoc <div> -> <table>, in the html engine
-    # `.tabxplor-tab` IS the table with no nested one, so these three NEVER match there). In md we do NOT
-    # draw the borders -- the host (Bootstrap/Quarto) does, under every row -- and the `border-color` rule
-    # above then recolours the host's lines black. So: (1) reset the host's per-cell border WIDTHS to 0
-    # (width-only: it does NOT touch the border-color contract above -- a 0-width border never renders,
-    # whatever its colour); (2) redraw ONLY our own rules as a 1px border-top on a fully-blank row (all
-    # cells :empty -- uniquely OUR blank separator; a data/name row has content); (3) collapse the
-    # ASCII-empty spacer/blank cells to a hairline. See decisions §43.
-    # WARNING: rule (1) MUST stay BEFORE `.tabxplor-tab thead th` below -- both are (0,1,2), so the tie is
-    # broken by SOURCE ORDER and thead th's border-bottom (the header underline) must win.
-    # WARNING: NO border shorthand (border-width is a WIDTH property, not the `border`/`border-top`
-    # shorthand that resets border-*-color; longhands border-top-style/-width redraw the rule). §40 lock.
-    ".tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}",
+    # THE HOST RESET: no cell keeps a border it did not ask us for. A host draws them under every row
+    # (Bootstrap's `.table>:not(caption)>*>*`, which pkgdown stamps on every table; Quarto likewise),
+    # and the `border-color` rule above then recolours those lines black -- a rule under every row in
+    # both media. Every border this stylesheet DRAWS is a role class at (0,2,0) or better, so zeroing
+    # the widths at (0,1,1) takes the host's and leaves ours.
+    # WARNING: width-only, so the border-COLOUR contract above is untouched (`border-width` is not the
+    # `border`/`border-top` shorthand that resets border-*-color); a 0-width border never renders,
+    # whatever its colour.
+    ".tabxplor-tab th,.tabxplor-tab td{border-width:0;}",
+    # ... then the two rules that redraw OUR OWN chrome in markdown, scoped `.tabxplor-tab table` --
+    # md-only BY SELECTOR (they need a `table` DESCENDANT of `.tabxplor-tab`; in md that is the pandoc
+    # <div> -> <table>, in the html engine `.tabxplor-tab` IS the table with no nested one, so they
+    # never match there). A md table carries no per-cell class, so its row rule is a border-top on a
+    # fully-blank row (all cells :empty -- uniquely OUR blank separator; a data/name row has content),
+    # and its ASCII-empty spacer cells collapse to a hairline.
     paste0(".tabxplor-tab table tbody tr:not(:has(td:not(:empty)))>*{",
            "border-top-style:solid;border-top-width:1px;padding:0;line-height:0;}"),
     ".tabxplor-tab table td:empty,.tabxplor-tab table th:empty{padding:0;}",
@@ -540,8 +552,13 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # Phase 14i: a LABEL cell (`rowspan`ned over its block: a merged table's row-variable name, or a
     # kept tab_var's level) centres itself on the block it names rather than floating at its top.
     ".tabxplor-tab .tx-lbl{vertical-align:middle;text-align:center;}",
-    # ... and a row-variable NAME is written vertically, so a long one costs no column width and wraps
-    # into several vertical lines instead of stretching the table sideways.
+    # ... and a row-variable NAME is written vertically, so a long one costs one narrow column
+    # instead of a wide one.
+    # WARNING: a browser does NOT grow a `rowspan`ned cell to hold vertical text that overruns it --
+    # the name spills onto the blocks above and below (`.tx-lbl` centres it). So there is no CSS
+    # guard here on purpose: WHICH names may turn is decided in R, deliberately pessimistically, by
+    # tab_vname_plan() (R/tab-export-prep.R), which is also what Excel reads. Clipping it here would
+    # only truncate a variable name silently.
     # WARNING: NOT `writing-mode:sideways-lr`, which reads the same way but is still flagged
     # experimental with patchy support (Chrome shipped it late; MDN marks it so). `vertical-rl` +
     # rotate(180deg) is the universally-supported equivalent -- bottom-to-top, matching the 90-degree

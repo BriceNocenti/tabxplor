@@ -46,8 +46,9 @@
 #   - WHICH NAMES ROTATE is one decision too (`roles$vname_plans`, tab_vname_plan): a rotation must
 #     SAVE width, so it weighs each name's length against its block's height and against the names
 #     that CANNOT turn (a one-row block), which set the column's floor. html reads it as the
-#     `tx-vname` class, Excel as a 90-degree rotation and as that column's width. A rotated name then
-#     wraps to its block's own height -- derived, which is why no `wrap_rows_vertical` exists.
+#     `tx-vname` class, Excel as a 90-degree rotation and as that column's width. A rotated name gets
+#     ONE vertical line and never wraps -- which is why no `wrap_rows_vertical` exists -- because
+#     neither medium grows a rowspanned/merged block to hold an overrun.
 #   - THE BLOCK BOUNDARIES (`roles$new_group`, the thicker rule between row_var blocks) are read off
 #     the label columns' VALUES, never off the dplyr grouping: `group_indices()` answers 1 for every
 #     row of a table that lost its `grouped_df` class, and the separators vanished with no error.
@@ -274,14 +275,17 @@ tab_label_runs <- function(tab, label_names) {
 #   - those FORCED-horizontal names set the FLOOR, because the column is already as wide as the
 #     longest of them: rotating a name no longer than that saves nothing. `employed` beside
 #     `Constant` therefore stays horizontal although it is narrower -- which is the point;
-#   - a name rotates only if it is longer than the floor AND its block is tall enough to hold it, at
-#     TX_VERT_CHARS_PER_ROW characters of rotated text per row over at most TX_VERT_MAX_LINES lines;
+#   - a name rotates only if it is longer than the floor AND its block can hold it on ONE vertical
+#     line (tx_vert_capacity);
 #   - the floor is capped at TX_VNAME_MAX (or at `wrap_rows`, when the user set it lower). A NAME
 #     column exists to name blocks, not to be read as prose: past ~13 characters a wider column costs
 #     the data more than a second line costs the name, so the name wraps instead.
-# A name that DOES rotate wraps to its block's own height -- one vertical line holds as many turned
-# characters as the block is tall -- which is why no `wrap_rows_vertical` argument exists: the
-# renderer knows that height and a user preference could not be better informed.
+#
+# ⚠ ONE VERTICAL LINE, AND THE BUDGET IS PESSIMISTIC, because neither medium can recover from an
+# overrun: a browser does not grow a `rowspan`ned cell to hold vertical text that exceeds it (the
+# name spills onto the blocks above and below, `.tx-lbl` centring it), and Excel never auto-fits a
+# merged row. A name that does not fit stays HORIZONTAL and wraps -- there, rows do grow. That is
+# also why no `wrap_rows_vertical` argument exists: a rotated name never wraps at all.
 
 #' @keywords internal
 #' @noRd
@@ -289,12 +293,25 @@ TX_VNAME_MAX          <- 13L   # the widest a name column may be before the name
 #' @keywords internal
 #' @noRd
 TX_VNAME_MIN          <- 4L    # ... and the narrowest: a shorter name never earns a rotation
+# THE TWO NUMBERS ARE READ OFF THE STYLESHEET (R/tab-css.R), not invented: a data row is
+# `line-height:1.1` + `padding:3px` twice, so `1.1em + 6px` tall; a sideways latin character advances
+# by its own glyph width, ~0.6em mixed-case in the DejaVu/Arial stack; and the name cell spends
+# `padding:4px` twice of the BLOCK on itself -- a fixed 8px, charged once, not per row. So a block of
+# `span` rows holds (span * (1.1em + 6px) - 8px) / 0.6em turned characters, i.e. ~2*span - 1 at every
+# font size between 12 and 18px. Rounded DOWN, and the rate cut to 1.75 for the headroom the overrun
+# rule above demands.
 #' @keywords internal
 #' @noRd
-TX_VERT_CHARS_PER_ROW <- 2L    # rotated characters one table row is tall enough to hold
+TX_VERT_CHARS_PER_ROW <- 1.75  # turned characters one table row is tall enough to hold
 #' @keywords internal
 #' @noRd
-TX_VERT_MAX_LINES     <- 2L    # vertical lines a name may use; each costs ~1 character of width
+TX_VERT_PAD_CHARS     <- 1L    # ... less what the name cell's own padding costs the block, once
+
+# How many turned characters a block of `span` rows can hold, on ONE vertical line.
+#' @keywords internal
+#' @noRd
+tx_vert_capacity <- function(span)
+  pmax(0L, as.integer(floor(span * TX_VERT_CHARS_PER_ROW)) - TX_VERT_PAD_CHARS)
 
 # One name column's plan: `vert` per ROW (TRUE on the run starts that rotate), `chars` the horizontal
 # width the column needs, `width` per ROW the wrap width that row's name takes.
@@ -307,18 +324,17 @@ tab_vname_plan <- function(vals, run, wrap_rows = Inf) {
   w    <- nchar(nm)
   cap  <- max(TX_VNAME_MIN,
               min(TX_VNAME_MAX, if (is.finite(wrap_rows)) as.integer(wrap_rows) else TX_VNAME_MAX))
-  # can this block hold its name, turned?
-  fits <- run$show & nzchar(nm) & run$span > 1L &
-    w <= run$span * TX_VERT_CHARS_PER_ROW * TX_VERT_MAX_LINES
+  # can this block hold its name, turned, on one line?
+  vcap <- tx_vert_capacity(run$span)
+  fits <- run$show & nzchar(nm) & run$span > 1L & w <= vcap
   forced <- run$show & nzchar(nm) & !fits
   # ⚠ stable without iterating: a name that fits but loses to the floor becomes horizontal at a width
   # already <= the floor, so it can never raise it.
   chars <- max(TX_VNAME_MIN, min(cap, if (any(forced)) max(w[forced]) else 0L))
   vert  <- fits & w > chars
-  # A ROTATED NAME'S WRAP WIDTH IS ITS BLOCK'S OWN HEIGHT: how many turned characters one vertical
-  # line can hold here. Derived, which is why there is no `wrap_rows_vertical` -- the renderer knows
-  # the height and a user preference could not. (`fits` already caps the lines at TX_VERT_MAX_LINES.)
-  width <- ifelse(vert, pmax(1L, run$span * TX_VERT_CHARS_PER_ROW), chars)
+  # A ROTATED NAME'S WRAP WIDTH IS ITS BLOCK'S OWN CAPACITY -- which `fits` has already cleared, so
+  # tx_wrap_name() never breaks it. Stated anyway, so the vector says what the column holds.
+  width <- ifelse(vert, pmax(1L, vcap), chars)
   # ⚠ CARRIED DOWN THE RUN, never left per row. A block's continuation rows hold the same name, and a
   # width that differed there would wrap them differently -- which changes the VALUE, and the label
   # runs are read off the values, so one block would split into two and the name print twice.

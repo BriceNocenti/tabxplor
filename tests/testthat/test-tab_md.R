@@ -600,13 +600,18 @@ testthat::test_that("a blank separator row renders through pandoc as a <tr> of e
   testthat::expect_match(h, '<div class="tabxplor-tab">', fixed = TRUE)
 })
 
-testthat::test_that("format = \"html\" carries the md-only rules; format = \"md\" omits them", {
+testthat::test_that("format = \"html\" carries the host reset + the md-only rules; \"md\" omits them", {
   css <- tab_css(style_tag = FALSE)                              # format = "html"
-  reset <- ".tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}"
+  # THE HOST RESET is medium-agnostic: it must reach the html engine, where `.tabxplor-tab` IS the
+  # <table> and a `.tabxplor-tab table ...` selector never matches. That asymmetry is what left a
+  # Bootstrap border under every row of a pkgdown-rendered table.
+  reset <- ".tabxplor-tab th,.tabxplor-tab td{border-width:0;}"
   testthat::expect_match(css, reset, fixed = TRUE)
+  testthat::expect_no_match(css, ".tabxplor-tab table td,.tabxplor-tab table th{border-width",
+                            fixed = TRUE)
   testthat::expect_match(css, "tr:not(:has(td:not(:empty)))", fixed = TRUE)     # blank-row rule
   testthat::expect_match(css, ".tabxplor-tab table td:empty", fixed = TRUE)     # spacer collapse
-  # the reset MUST precede the header underline (same specificity -> source order decides the tie)
+  # the reset reads first, before every rule that redraws over it (it loses on specificity anyway)
   testthat::expect_lt(regexpr(reset, css, fixed = TRUE),
                       regexpr(".tabxplor-tab thead th{", css, fixed = TRUE))
   # the chrome-free flavour omits all three
