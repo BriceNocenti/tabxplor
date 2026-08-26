@@ -24,9 +24,8 @@ tab_counts(
 \item{row_var, col_var}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Singular aliases of
 \code{row_vars}/\code{col_vars} (which now accept several variables). Kept working.}
 
-\item{tab_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :
-a subtable is made for each combination of levels of the selected variables.
-Leave empty to make a simple cross-table. All \code{tab_vars} are converted to factor.}
+\item{tab_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables: one subtable per
+combination of their levels. Leave empty for a simple cross-table.}
 
 \item{counts}{The column holding the \strong{unweighted} count for each cell (long tidy shape).}
 

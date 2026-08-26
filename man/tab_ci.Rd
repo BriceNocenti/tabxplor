@@ -83,31 +83,14 @@ existing tab, reconstructing that plan from the table's own markers.
 \section{Significance stars}{
 
 With \code{stars = TRUE} and an interval anchored on the comparison (see \code{ci}), each cell
-shows how sure we can be that its difference from the reference is real and not just sampling
-noise: \code{*} means significant at the 10\\% level (p < 0.10), \code{**} at 5\\% (p < 0.05),
-\code{***} at 1\\% (p < 0.01). The exact p-value is stored per cell in the \code{pvalue} field of
-the \code{fmt} vectors, readable with \code{$pvalue} or \code{get_pvalue()}.
+says how sure we can be that its deviation from the reference is real and not sampling noise:
+\code{*} at the 10\\% level, \code{**} at 5\\%, \code{***} at 1\\%. The exact p-value is stored per
+cell, readable with \code{$pvalue} or \code{get_pvalue()}.
 
-There is no separate statistical test run behind the scenes: the significance is read straight
-from the confidence interval that is displayed. A cell is significant at a given level exactly
-when its interval at that confidence level no longer contains zero, so the stars and the printed
-\code{[inf; sup]} bracket can never contradict each other. Which test this amounts to depends on
-the interval:
-\itemize{
-\item \strong{percentage difference} (the default, \code{ci_method = c(diff = "newcombe")}):
-inverting the Newcombe hybrid-score interval. This is, to a very close approximation, the
-classical two-sample test of proportions (the score / "N-1" chi-squared test).
-\item \strong{percentage difference} with \code{ci_method = c(diff = "ac")} or
-\code{c(diff = "wald")}: inverting the Agresti-Caffo (adjusted Wald) or the Wald interval ---
-an (adjusted) two-proportion z-test.
-\item \strong{mean difference}: the \strong{Welch two-sample t-test} (for groups with unequal
-variances); inverting the Welch t interval is exactly this well-known test.
-\item \code{ci = "cell"} (an absolute cell interval, not a difference) is purely descriptive,
-so it carries no stars and its \code{pvalue} is \code{NA}.
-}
-On weighted data the estimate is weighted but the sample size used is the real (unweighted)
-number of cases, unless you opt in to the weighting's own design effect with
-\code{options("tabxplor.design_effect" = TRUE)}.
+No separate test runs behind the scenes: a cell is significant exactly when the interval it
+prints no longer contains zero, so the stars and the \code{[inf; sup]} bracket can never
+contradict each other. Which classical test that amounts to follows \code{ci_method}, and the
+table's legend names it. An absolute cell interval compares nothing, so it carries no stars.
 }
 
 \examples{

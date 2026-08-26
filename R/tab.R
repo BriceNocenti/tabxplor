@@ -51,186 +51,91 @@ NULL
 #' Cross-table with color helpers
 #'
 #' @description
-#' `tab()` builds a cross-table of one or several row variables by one or several column
-#' variables, and colors the cells so the table is easy to read at a glance --- in the R
-#' console, or exported to Excel, HTML or Word. Cells can show counts, row or column
-#' percentages, or (for a numeric column variable) means, optionally with differences,
-#' confidence intervals and statistical tests.
+#' `tab()` builds a cross-table of one or several row variables by one or several column variables,
+#' and colors the cells so the table is easy to read at a glance --- in the R console, or exported
+#' to Excel, HTML or Word. Cells can show counts, row or column percentages, or (for a numeric
+#' column variable) means, optionally with differences, confidence intervals and tests.
 #'
-#' The result is a `tibble` (of class `tabxplor_tab`), so you can keep working on it with the
-#' usual \pkg{dplyr} verbs ([dplyr::select()], [dplyr::filter()], [dplyr::arrange()],
-#' [dplyr::mutate()]).
+#' The result is a `tibble` (of class `tabxplor_tab`), so every \pkg{dplyr} verb keeps working on
+#' it.
 #'
-#' New to the package? Start with `vignette("tabxplor")` and with just four arguments ---
-#' `data`, `row_vars`, `col_vars` and `pct` --- then add `color` when you want reading helpers.
-#'
-#' @details
-#' `tab()` has many arguments, but you only need a handful to begin. They fall into groups:
-#' \itemize{
-#'   \item **The table**: `data`, `row_vars`, `col_vars`, `tab_vars` (one sub-table per group),
-#'     `wt` (a weight variable).
-#'   \item **What each cell shows**: `pct` (row or column percentages, or leave counts), `digits`.
-#'   \item **Colors (reading helpers)**: `color`, and `color_signif` (whether statistical
-#'     significance gates the color). Thresholds and palettes are set once for the whole session
-#'     with [set_color_breaks()] and [set_color_palette()]; a color legend prints automatically.
-#'   \item **Comparisons**: `ref` / `ref2` / `comp` (which cell is the baseline for differences),
-#'     and `display` when you want odds ratios shown.
-#'   \item **Statistics**: `test` (chi-squared or Welch's F), and `ci` + `conf_level` + `stars`
-#'     (confidence intervals). `ci_method` picks the engine for each kind of interval.
-#'   \item **Totals & missing values**: `totaltab`, `na`, `levels`, and `tot` (which totals to
-#'     show), taken by name through `...`.
-#'   \item **Advanced / output**: `display`, `n_min`, `output_list`, `spread_vars`, `filter`.
-#' }
-#' The package-wide display, color and statistics defaults are `options()`, listed at
+#' New to the package? Four arguments are enough to begin --- `data`, `row_vars`, `col_vars` and
+#' `pct` --- then add `color` when you want reading helpers. The
+#' [Introduction](https://bricenocenti.github.io/tabxplor/articles/tabxplor.html)
+#' (`vignette("tabxplor")`) works through them. Package-wide defaults are `options()`, listed at
 #' [tabxplor-options].
 #'
 #' @eval tab_args_rd("tab")
 #' @eval tab_dots_rd("tab")
 #'
 #' @details
-#' \strong{Ordered factors.} An \code{ordered} factor stays ordered through the whole pipeline,
-#' which is what lets \code{ref2 = "cumulative"} pick its column variables by class. One
-#' consequence is worth knowing: the synthetic \code{"Total"} / \code{"Ensemble"} / \code{"NA"}
-#' levels are appended \emph{after} the real ones, so on an ordered grouping column they compare as
-#' the greatest levels. They are labels, not points on the scale.
+#' \strong{Ordered factors} stay ordered through the whole pipeline, which is what lets
+#' \code{ref2 = "cumulative"} pick its column variables by class. One consequence is worth knowing:
+#' the synthetic \code{"Total"} and \code{"NA"} levels are appended \emph{after} the real ones, so
+#' on an ordered column they compare as the greatest. They are labels, not points on the scale.
 #'
-#' \strong{Weighted data.} With a weight (\code{wt}), the default confidence interval treats the
-#' weighted percentage as if it came from the unweighted number of cases. That carries no design
-#' effect, so under unequal weights it is \strong{usually too narrow} --- and the table's footer
-#' says so. \code{design_effect = TRUE} (or \code{options(tabxplor.design_effect = TRUE)} for a
-#' whole session) corrects it exactly, in every descriptive interval and every colour threshold.
-#' Because it is the exact variance and not an upper bound, it can also make an interval
-#' \emph{narrower}: that is correct, not a bug.
-#'
-#' \strong{Survey designs.} Pass a \code{survey::svydesign} as \code{data} and strata, clusters,
-#' \code{fpc} \emph{and} calibration reach every interval, star and colour threshold, each referred
-#' to the design's own degrees of freedom. It is exact for a cell and mildly conservative for a
-#' cell-versus-reference difference, so it never produces a star the design does not support, and
-#' sometimes withholds one it would. A design-based table costs roughly three times a weighted one.
-#' Pre-aggregated counts (\code{\link{tab_counts}}) cannot carry either correction, and their
-#' footer says so rather than claiming one.
-#'
-#' \code{vignette("tabxplor")} works through when each of these matters.
+#' \strong{Weights and survey designs.} A weight (\code{wt}) weights the estimates; the intervals
+#' still use the raw number of cases unless \code{design_effect = TRUE}. Pass a
+#' \code{survey::svydesign} as \code{data} and strata, clusters, \code{fpc} and calibration reach
+#' every interval, star and colour threshold. The footer always names what you got. See
+#' \href{https://bricenocenti.github.io/tabxplor/articles/tabxplor-weights.html}{Weighted and
+#' survey data} (\code{vignette("tabxplor-weights")}).
 #'
 #' @section Significance stars:
 #' With \code{stars = TRUE} and an interval anchored on the comparison (see \code{ci}), each cell
-#' shows how sure we can be that its difference from the reference is real and not just sampling
-#' noise: \code{*} means significant at the 10\% level (p < 0.10), \code{**} at 5\% (p < 0.05),
-#' \code{***} at 1\% (p < 0.01). The exact p-value is stored per cell in the \code{pvalue} field of
-#' the \code{fmt} vectors, readable with \code{$pvalue} or \code{get_pvalue()}.
+#' says how sure we can be that its deviation from the reference is real and not sampling noise:
+#' \code{*} at the 10\% level, \code{**} at 5\%, \code{***} at 1\%. The exact p-value is stored per
+#' cell, readable with \code{$pvalue} or \code{get_pvalue()}.
 #'
-#' There is no separate statistical test run behind the scenes: the significance is read straight
-#' from the confidence interval that is displayed. A cell is significant at a given level exactly
-#' when its interval at that confidence level no longer contains zero, so the stars and the printed
-#' \code{[inf; sup]} bracket can never contradict each other. Which test this amounts to depends on
-#' the interval:
-#' \itemize{
-#'   \item \strong{percentage difference} (the default, \code{ci_method = c(diff = "newcombe")}):
-#'     inverting the Newcombe hybrid-score interval. This is, to a very close approximation, the
-#'     classical two-sample test of proportions (the score / "N-1" chi-squared test).
-#'   \item \strong{percentage difference} with \code{ci_method = c(diff = "ac")} or
-#'     \code{c(diff = "wald")}: inverting the Agresti-Caffo (adjusted Wald) or the Wald interval ---
-#'     an (adjusted) two-proportion z-test.
-#'   \item \strong{mean difference}: the \strong{Welch two-sample t-test} (for groups with unequal
-#'     variances); inverting the Welch t interval is exactly this well-known test.
-#'   \item \code{ci = "cell"} (an absolute cell interval, not a difference) is purely descriptive,
-#'     so it carries no stars and its \code{pvalue} is \code{NA}.
-#' }
-#' On weighted data the estimate is weighted but the sample size used is the real (unweighted)
-#' number of cases, unless you opt in to the weighting's own design effect with
-#' \code{options("tabxplor.design_effect" = TRUE)}.
+#' No separate test runs behind the scenes: a cell is significant exactly when the interval it
+#' prints no longer contains zero, so the stars and the \code{[inf; sup]} bracket can never
+#' contradict each other. Which classical test that amounts to follows \code{ci_method}, and the
+#' table's legend names it. An absolute cell interval compares nothing, so it carries no stars.
 #'
-#' @eval display_tokens_rd(user_only = TRUE)
-#' @eval display_presets_rd()
-#'
-#' @return A \code{tibble} of class \code{tab}, possibly with colored reading helpers.
-#' All non-text columns are of class \code{\link{fmt}}, storing all
-#' the data necessary to print formats and colors. Columns with \code{row_var} and
-#' \code{tab_vars} are of class \code{factor} : every added \code{factor} will be
-#' considered as a \code{tab_vars} and used for grouping. To add text columns without
-#' using them in calculations, be sure they are of class \code{character}.
+#' @return A \code{tibble} of class \code{tabxplor_tab}. Every numeric column is an
+#' \code{\link{fmt}} vector holding all the data behind the number it shows; the \code{row_vars}
+#' and \code{tab_vars} columns are factors. Any factor column you add later is treated as a
+#' \code{tab_vars} and used for grouping, so keep added text columns as \code{character}.
 #' @export
 #'
-#' @examples # A simple cross-table:
-#' tab(forcats::gss_cat, marital, race)
+#' @examples
+#' # A simple cross-table of counts:
+#' tab(car_arrests, colour, released)
 #'
-#'
-#' # With more variables provided, `tab` makes a subtables for each combination of levels:
 #' \donttest{
-#' tab(forcats::gss_cat, marital, tab_vars = c(year, race))
-#'}
+#' # Row percentages, with the difference to the total coloured:
+#' tab(questionr_hdv, qualif, cinema, pct = "row", na = "drop", color = "difference")
 #'
-#' # You can add several col_vars, mixing factors and numeric (means) ; `levels = "first"`
-#' # keeps only the first level of each factor col_var for compact summary tables:
-#' \donttest{
-#' tab(dplyr::storms, category, c(status, pressure, wind))
-#'}
-#'
-#' # Colors to help the user read the table:
-#' data <- forcats::gss_cat |>
-#'   dplyr::filter(year %in% c(2000, 2006, 2012), !marital %in% c("No answer", "Widowed"))
-#' gss  <- "Source: General social survey 2000-2014"
-#' gss2 <- "Source: General social survey 2000, 2006 and 2012"
-#'
-#' # Differences between the cell and it's subtable's total cell:
-#' \donttest{
-#' tab(data, race, marital, year, subtext = gss2, pct = "row", color = "difference")
-#' }
-#'
-#' # Differences between the cell and the whole table's general total cell:
-#' \donttest{
-#' tab(data, race, marital, year, subtext = gss2, pct = "row", color = "difference",
-#'   comp = "all")
-#' }
-#'
-#' # Historical differences:
-#' \donttest{
-#' data2 <- data |> dplyr::mutate(year = as.factor(year))
-#' tab(data2, year, marital, race, subtext = gss2, pct = "row",
-#'     color = "difference", ref = "first", tot = "col")
-#'
-#'
-#' # Differences with the total, except if their confidences intervals are superior to them:
-#' tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row",
+#' # One subtable per level of a third variable, and colour only what is significant:
+#' tab(questionr_hdv, qualif, cinema, sexe, pct = "row", na = "drop",
 #'     color = "difference", color_signif = "grey_non_signif")
 #'
-#' # Same differences, minus their confidence intervals:
-#' tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row",
-#'     color = "difference", color_signif = "guaranteed_effect")
+#' # Several col_vars at once, mixing factors and numeric variables (means):
+#' tab(car_salaries, rank, c(discipline, salary, yrs.service), pct = "row")
 #'
-#' # Contribution of cells to table's variance, like in a correspondence analysis:
-#' tab(forcats::gss_cat, race, marital, subtext = gss, color = "contrib")
-#'}
+#' # `levels = "first"` keeps one column per variable: a compact summary of many items.
+#' tab(facto_tea, SPC, c(breakfast, evening, home), pct = "row", levels = "first")
 #'
-#' # Since the result is a tibble, you can use all dplyr verbs to modify it :
-#' \donttest{
-#' library(dplyr)
-#' tab(dplyr::storms, category, c(status, pressure, wind)) |>
-#'   dplyr::filter(category != "-1") |>
-#'   dplyr::select(-`tropical depression`) |>
-#'   dplyr::arrange(is_totrow(pick(everything())), desc(category))
-#'}
+#' # Each cell's contribution to the table's variance, as in a correspondence analysis:
+#' tab(questionr_hdv, qualif, cinema, na = "drop", color = "contrib")
 #'
-#'\donttest{
-#' # With `dplyr::arrange`, don't forget to keep the order of tab variables and total rows:
-#' tab(data, race, marital, year, pct = "row") |>
-#'   dplyr::arrange(year, is_totrow(dplyr::pick(dplyr::everything())), desc(Married))
-#'   }
+#' # The result is a tibble, so every dplyr verb works on it. Keep the total rows last:
+#' tab(questionr_hdv, qualif, cinema, pct = "row", na = "drop") |>
+#'   dplyr::arrange(is_totrow(dplyr::pick(dplyr::everything())), dplyr::desc(Oui))
+#' }
 #'
 #' @seealso
 #'   [tab_reg()] (regression tables), and the variants [tab_num()] (numeric variables),
 #'   [tab_counts()] (pre-aggregated counts) and [tab_plain()] (one bare cross-table).
-#'   [set_color_breaks()] / [set_color_palette()] customise the colours,
-#'   [tab_structure()] reports what a finished table is and what accepts it.
-#'   Export a table with [tab_xl()] (Excel), [tab_kable()] (HTML) or [tab_md()] (Markdown), and
-#'   CHART it with [forest_plot()] (every cell's estimate, interval and colour).
-#'   Package-wide defaults live in [tabxplor-options].
+#'   [tabxplor-display] says what a cell can show; [set_color_breaks()] / [set_color_palette()]
+#'   customise the colours; [tab_structure()] reports what a finished table is and what accepts it.
+#'   Export it with [tab_xl()] (Excel), [tab_kable()] (HTML) or [tab_md()] (Markdown), and chart it
+#'   with [forest_plot()]. Package-wide defaults live in [tabxplor-options].
 #'
-#'   `color = "contrib"` shows each cell's departure from the **log-linear model of independence**
-#'   (that is what the chi-squared is), so it reads as a heatmap of the association pattern. For the
-#'   specialist contingency-table models built on top of it --- quasi-independence, Goodman's RC
-#'   association models, UNIDIFF --- see the \pkg{logmult} package
-#'   (\url{https://cran.r-project.org/package=logmult}), which also supports complex survey designs.
+#'   `color = "contrib"` reads as a heatmap of the association pattern. For the specialist
+#'   contingency-table models built on top of it --- quasi-independence, Goodman's RC association
+#'   models, UNIDIFF --- see the \pkg{logmult} package
+#'   (\url{https://cran.r-project.org/package=logmult}).
 tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
                 pct = "no", color = "no", color_signif = "ignore", test = FALSE,
                 na = "keep", levels = "all",

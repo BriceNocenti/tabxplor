@@ -93,12 +93,15 @@ reference:
   - tab_xl
   - tab_css
 
-- title: Colours
+- title: What a cell shows, and how it is coloured
   desc: >
-    What a coloured cell looks like, and at which value it changes shade. `set_color_palette()` sets
-    the hues and the console's light/dark theme; `set_color_breaks()` sets the thresholds each
-    measure is read on; `conf_level_to_z()` writes one of those thresholds as a confidence level.
+    `tabxplor-display` is the vocabulary of the `display` argument: the fields a cell may show and
+    the named layouts that arrange them. Then, what a coloured cell looks like and at which value it
+    changes shade: `set_color_palette()` sets the hues and the console's light/dark theme;
+    `set_color_breaks()` sets the thresholds each measure is read on; `conf_level_to_z()` writes one
+    of those thresholds as a confidence level.
   contents:
+  - tabxplor-display
   - set_color_palette
   - set_color_breaks
   - conf_level_to_z

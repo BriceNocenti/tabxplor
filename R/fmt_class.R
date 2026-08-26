@@ -116,8 +116,9 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 #' of \code{n}.
 #' @param display The display type : the name of the field you want to show when printing
 #' the vector, as a single string or a character vector the length of \code{n}. Every accepted
-#'  value is listed in \emph{Every display token} below; a \code{\{\}} template combining several
-#'  of them (e.g. \code{"\{pct\} (n=\{n\})"}) is also accepted --- see \code{\link{tab}}.
+#'  value is listed in \emph{Every display token} below; a named layout or a \code{\{\}} template
+#'  combining several (e.g. \code{"\{pct\} (n=\{n\})"}) is also accepted --- see
+#'  \link{tabxplor-display}.
 #' @param wn The underlying weighted counts, as a double vector the length of
 #' \code{n}. It is used in certain operations on \code{\link{fmt}}, like means.
 #' @param pct The percentages, as a double vector the length of \code{n}.
@@ -245,9 +246,10 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 #' built with.
 #' @eval fmt_fields_rd()
 #' @eval display_tokens_rd(user_only = FALSE)
-#' @eval display_presets_rd()
 #'
 #' @return A vector of class \code{tabxplor_fmt}.
+#' @seealso \link{tabxplor-display} for the \code{\{\}} grammar and the named layouts \code{display}
+#'   accepts; \link{fmt_fields} and \link{fmt_attributes} for the accessors.
 #' @export
 #'
 #' @examples
@@ -4876,7 +4878,7 @@ GAP_ADDITIVE_FACTS <- list(
 
 MEASURES <- list(
   difference = list(word = function() gettext("difference"),           break_over = "+",       break_under = "-",
-                 doc = "cell difference from the reference (percentage points for factors; the standardized difference Glass's \\eqn{\\Delta} for numeric means).",
+                 doc = "the cell's difference from its reference (percentage points for factors, Glass's \\eqn{\\Delta} for means).",
                  break_scale = TRUE,  ref_kind = NA_character_, threshold_mult = FALSE, unit_kind = "diff",
                  has_ref_lead = TRUE,
                  channels = c("text", "bg"), producers = c("tab", "reg"), color_arg = "tab",
@@ -4922,7 +4924,7 @@ MEASURES <- list(
                  # its odds ratios, so "cell >= 1.2" would compare a percentage to an odds ratio.
                  subject = "OR",
                  break_over = "",        break_under = "1/",
-                 doc = "the empirical odds ratio (for \\code{pct = \"row\"}/\\code{\"col\"}), coloured on its own symmetric \\code{odds_ratio} scale (so \\code{pct_ratio} stays free for \\code{\"ratio\"}).",
+                 doc = "the odds ratio, on percentage tables, coloured on its own symmetric scale.",
                  break_scale = FALSE, ref_kind = "category",    threshold_mult = TRUE,  unit_kind = "none",
                  has_ref_lead = FALSE,
                  # text-only (a whole-cell measure) and percentages only (a mean has no odds). Its

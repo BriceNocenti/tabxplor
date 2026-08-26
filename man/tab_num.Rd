@@ -25,15 +25,12 @@ tab_num(
 
 \item{col_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> The column variable(s) --- see
 \code{row_vars}. \strong{An interaction} is written \code{a*b}, as in
-\code{\link{tab_reg}()}: two categorical variables give one column per observed
-CELL of the pair, and a numeric one crossed with a factor gives one mean column per
-level of the factor, beside the factor's own columns. Two numeric variables have no
-cells to cross, so the second is cut into quartiles (say otherwise with
-\code{shape}). Only \code{col_vars} takes one.}
+\code{\link{tab_reg}()}, and only \code{col_vars} takes one: two factors give one
+column per observed cell of the pair, a number crossed with a factor one mean column
+per level. See \code{vignette("tabxplor")}.}
 
-\item{tab_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :
-a subtable is made for each combination of levels of the selected variables.
-Leave empty to make a simple cross-table. All \code{tab_vars} are converted to factor.}
+\item{tab_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables: one subtable per
+combination of their levels. Leave empty for a simple cross-table.}
 
 \item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
 

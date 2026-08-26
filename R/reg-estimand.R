@@ -1373,8 +1373,9 @@ reg_estimand_offer_lines <- function(family, link = NULL, effect = NULL) {
 #' What can this outcome be modelled as?
 #'
 #' Lists what [tab_reg()] can report for one outcome: which models it could fit, and which measure
-#' of deviation each of them yields. It reads the same runtime table the argument validator, the
-#' error messages and `?tab_reg`'s own section read, so what it prints is what the function does.
+#' of deviation each of them yields. It reads the same runtime table the argument validator and the
+#' error messages read, so what it prints is what the function does. The section below is the same
+#' table for every kind of outcome, read without any data.
 #'
 #' **The table has two blocks**, because the grid factors:
 #' * one row per model you could fit — its **`link`**, and the measure that model's own coefficients
@@ -1399,11 +1400,13 @@ reg_estimand_offer_lines <- function(family, link = NULL, effect = NULL) {
 #'
 #' @return A tibble of `family` (only when several are listed), `link`, `measure`, `effect`,
 #'   `header` (the column name it would produce) and `reads_as` (what that header's acronym means).
+#' @eval reg_measures_rd()
+#' @seealso [tab_reg()] to build the table, [reg_formulas()] to see the formula each column was
+#'   fitted with.
 #' @export
 #' @examples
-#' d <- forcats::gss_cat
-#' d$married <- as.integer(d$marital == "Married")
-#' reg_measures(d, "married")
+#' reg_measures(car_arrests, "released")
+#' reg_measures(car_salaries, "salary")
 reg_measures <- function(data, outcome, family = "auto", link = "all") {
   svy <- svy_unwrap_data(data, "reg_measures")
   if (!is.null(svy)) data <- svy$data
@@ -1502,10 +1505,9 @@ reg_measures_rd <- function() {
   }
   c("@section Which models each outcome offers, and which measures:",
     "Generated from the package's own resolution table, so it cannot drift from what",
-    "\\code{tab_reg()} builds. A measure that IS the model's own is read off its coefficients;",
-    "any other is computed from its predictions (\\code{effect = \"marginal\"} or",
-    "\\code{\"at_reference\"}). Call \\code{\\link{reg_measures}()} on your outcome for the same",
-    "table read on your own data, one row per model and the prediction-based measures once.",
+    "\\code{\\link{tab_reg}()} builds. A measure that IS the model's own is read off its",
+    "coefficients; any other is computed from its predictions (\\code{effect = \"marginal\"} or",
+    "\\code{\"at_reference\"}).",
     "\\itemize{", vapply(setdiff(names(REG_ESTIMANDS), "quasipoisson"), line, character(1)), "}")
 }
 

@@ -75,8 +75,9 @@ of \code{n}.}
 
 \item{display}{The display type : the name of the field you want to show when printing
 the vector, as a single string or a character vector the length of \code{n}. Every accepted
-value is listed in \emph{Every display token} below; a \code{\{\}} template combining several
-of them (e.g. \code{"\{pct\} (n=\{n\})"}) is also accepted --- see \code{\link{tab}}.}
+value is listed in \emph{Every display token} below; a named layout or a \code{\{\}} template
+combining several (e.g. \code{"\{pct\} (n=\{n\})"}) is also accepted --- see
+\link{tabxplor-display}.}
 
 \item{wn}{The underlying weighted counts, as a double vector the length of
 \code{n}. It is used in certain operations on \code{\link{fmt}}, like means.}
@@ -325,33 +326,6 @@ the last few are not meant to be typed:
 }
 }
 
-\section{Display layouts}{
-
-The named layouts \code{display} accepts. They are spelt with the scale-relative
-\code{\{est\}} / \code{\{base\}} fields, so one name means the same thing on a crosstab
-and on a \code{\link{tab_reg}} table:
-\itemize{
-\item \code{"est"} (\code{\{est\}}) --- the estimate alone.
-\item \code{"est_ci"} (\code{\{est\} \{ci\}}) --- the estimate with its confidence interval.
-\item \code{"est_base"} (\code{\{est\} (\{base\})}) --- the estimate and, in parentheses, the level it sits on.
-\item \code{"est_base_once"} (\code{\{est\}}) --- the estimate alone --- the level is stated once, by the observed column beside it.
-\item \code{"est_coef"} (\code{\{est\} (\{coef\})}) --- the estimate and, in parentheses, the model's own coefficient.
-\item \code{"base_est_mdiff"} (\code{\{est\} (\{diff\})}) --- the estimate and, in parentheses, the same comparison as a difference.
-\item \code{"base_est_mratio"} (\code{\{est\} (\{ratio\})}) --- the estimate and, in parentheses, the same comparison as a ratio.
-\item \code{"est_obs"} (\code{(\{obs\}) \{est\}}) --- the estimate and, before it in parentheses, the observed (crude) effect it is compared to.
-\item \code{"base_est"} (\code{(\{base\}) \{est\}}) --- the level, then the estimate --- the mirror of \code{est_base}, which sets a crude and a modelled effect side by side.
-\item \code{"base"} (\code{\{base\}}) --- the level alone: the percentage, the mean or the count.
-\item \code{"base_ci"} (\code{\{base\} \{ci\}}) --- the level with its confidence interval.
-\item \code{"base_moe"} (\code{\{base\} \{moe\}}) --- the level with its margin of error.
-\item \code{"base_diff"} (\code{\{base\} (\{diff\})}) --- the level and, in parentheses, its difference to the reference.
-\item \code{"base_ratio"} (\code{\{base\} (\{ratio\})}) --- the level and, in parentheses, its ratio to the reference.
-\item \code{"base_or"} (\code{\{base\} (\{or\})}) --- the level and, in parentheses, its odds ratio.
-\item \code{"or_base"} (\code{\{or\} (\{base\})}) --- the odds ratio and, in parentheses, the percentage it rests on.
-\item \code{"mean_sd"} (\code{\{mean\} (σ\{sd\})}) --- the mean and, in parentheses, its standard deviation.
-\item \code{"mean_cv"} (\code{\{mean\} (cv \{cv\})}) --- the mean and, in parentheses, its coefficient of variation --- the spread as a percentage of the mean, comparable between columns measured in different units (the default where every mean is positive).
-}
-}
-
 \examples{
 library(dplyr)
 
@@ -442,4 +416,8 @@ tab_num(forcats::gss_cat, race, c(age, tvhours), marital, digits = 1L, comp = "a
       set_color("no"),
     .names = "{.col}_sd"
   ))
+}
+\seealso{
+\link{tabxplor-display} for the \code{\{\}} grammar and the named layouts \code{display}
+accepts; \link{fmt_fields} and \link{fmt_attributes} for the accessors.
 }

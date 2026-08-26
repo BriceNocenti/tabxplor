@@ -42,7 +42,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 - `tab-leaf.R` — the aggregate core: `tab_plain`/`tab_num`, `plain_core`/`num_core`, the leaves' CI/chi2, total rows.
 - `tab-agg.R` — sufficient-statistic aggregation + the CI engine; `CI_METHODS` / `CI_GEOMS`.
 - `tab-chi2.R` — the whole-table chi²/ANOVA test and the per-cell contribution writer.
-- `tab-display.R` — the `{}` display grammar, its named layouts, the display-time base count; `DISPLAY_TOKENS` / `DISPLAY_PRESETS`.
+- `tab-display.R` — the `{}` display grammar, its named layouts, the display-time base count, and the `?tabxplor-display` user page they fill; `DISPLAY_TOKENS` / `DISPLAY_PRESETS`.
 - `tab-resolve.R` — the crosstab argument boundary (validation + the colour/settings cascade).
 - `tab-counts.R` — `tab_counts()`, the from-aggregated-counts constructor.
 - `tab-cross.R` — the `a*b` entries of `col_vars`: what each arm makes as COLUMNS, and where.
@@ -344,7 +344,7 @@ The docs form one hierarchy, general to specific. **Each fact is stated at exact
 - **Inline `# DESIGN:` / `# WARNING:` tags** — the non-obvious "why" at the exact line, caveats to avoid, etc.
 - **Vignettes** (`vignette("tabxplor")`, regression, programming) — usage and teaching, for users.
 - **`vignettes/articles/tabxplor-all-else-equal.Rmd`** — the most precise account of what tabxplor's *philosophy*, *vocabulary*, *usage* and *real-world regression use cases* really are; its words (deviation, observed vs adjusted, the base, the round trip) are the package's own.
-- **Roxygen man pages** (`?tab`, `?tabxplor-vctrs`, `?tabxplor-options`, `?tabxplor-data.table`) — user-facing reference: *usage* and the main use cases, never build/internals/history.
+- **Roxygen man pages** (`?tab`, `?tabxplor-display`, `?tabxplor-vctrs`, `?tabxplor-options`, `?tabxplor-data.table`) — user-facing reference: *usage* and the main use cases, never build/internals/history. A `@param` states what the argument is, its values, and at most one sentence of when to change it; the rest is a link to the vignette that owns it.
 - **`dev/*.md`** (`.Rbuildignore`'d) — transversal or expert technical guides only.
 - **Roadmap "DONE" summaries → `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`** — the ONLY place dev history lives.
 
@@ -869,13 +869,94 @@ The package documentation had grown cluttered with dev history and have lost foc
 
 **Verification**: all five vignettes render in a cold `Rscript`; 0 ANSI escapes; no unintended chunk warnings. No test suite — the changes are documentation, plus `DESCRIPTION`/`_pkgdown.yml` metadata.
 
-#### Phase 23b — roxygen documentation simplication and full rewrite
+#### Phase 23b — roxygen documentation simplication and full rewrite — DONE
 
-Now that many features are explained in different vignettes, I want the main user-facing functions own documentation to be **much more focused**.
-- For `tab` and `tab_reg`, **documentation length should be divided by around 2**. The results and details sections are not here to teach statistics, or internals, so they m. **The arguments descriptions should go straight to the point**, specially when details are explained in vignettes.
-- The main user-facing functions documentation **examples** should use the updated syntax and user-friendly argument’s order. `?tab_reg` examples are now plain wrong, since the `family` --> `link` -->  `measure` --> `effect` argument cascade change. `vignettes/articles/tabxplor-all-else-equal.Rmd` is the reference for `tab_reg()` main use case, do not hesitate to replicate some good examples on gss_simple or tea datasets. Continue to ensure the examples don’t slow down R CMD CHECK, for CRAN, but also for `devtools::check()` that run near all examples.
-- Carry §6.2's *deviation / measure* rule into `?tab`'s `@param color` and `?tab_reg`'s `@param measure`, and say once, in `?tab`, that an acronym names a **measure** while `display =` names a **field** (so `or` / `diff` / `ratio` are legal in both arguments with different meanings).
-- Point to the right vignette, either for a better way to learn (beginners), or for more details (experts). Do it the modern way: **give a web link to the pkgdown site article directly** (simpler for people to read it on the Internet than to build the vignette themselves). Point to the introduction vignette in `?tab` description and the regression vignette in `?tab_reg` description. Start the english vignettes with a link/web link to the French vignette to say it exists, if not already done.
+**`?tab` 648 → 352 Rd lines, `?tab_reg` 848 → 458** (1.84x and 1.85x; on the body alone, `\usage`
+being fixed at 39 and 31 lines, 1.93x and 1.87x). Two thirds of both pages was `@param` prose, so
+the cut is an argument-by-argument rewrite, not a section deletion. The standard applied to every
+one: **what the argument is, its values, at most one sentence of when to change it** — recorded as a
+`DESIGN:` line at the top of `R/tab-args.R` and in the documentation-ecosystem list, so the next
+`doc =` written follows it. Teaching goes to the vignette that owns it, linked **once per page**.
+
+⚠ **One premise of the brief did not hold, and it removed all the cross-page risk.** `tab_args_rd()`
+emits a `TAB_ARGS` row only where it is a **formal** of the target producer, and the leaves take
+everything through `...`; the exporters read `EXPORT_ARGS`, a different table. So **none of the
+fourteen big `?tab` arguments appears on any second page**, no `doc_for` override was needed
+anywhere, and the four sibling pages that do share a row simply got shorter for free (`?tab_ci`
+124 → 107, `?tab_num` 72 → 69, `?tab_counts` 90 → 89, `?tab_plain` 71 → 70).
+
+**A new topic, `?tabxplor-display`** (`R/tab-display.R`, the `@name`-only house-page pattern of
+`?tabxplor-options`). The `{}` field list and the named-layout list were rendered on **three** pages;
+one user-facing question — *what can a cell show?* — now has one page, carrying the grammar (the
+three ways to ask, the **primary** token being the first one *outside* brackets, the per-token
+precision `{base:1}`, `est`/`base` being scale-relative) plus both generated lists. `?tab` and
+`?tab_reg` drop 54 and 27 lines and point at it. ⚠ **`?fmt` keeps `display_tokens_rd(user_only =
+FALSE)`**: that rendering's own prose refers to the `fmt` fields glossed above it *on that page*, so
+it works nowhere else — it is the programmer's exhaustive inventory, a different fact for a
+different reader. It loses only `display_presets_rd()`. `reg_measures_rd()` likewise moved off
+`?tab_reg` to **`?reg_measures`**, whose output it literally is; `reg_words_rd()` stays, being the
+reading key for the object `tab_reg()` returns.
+
+**The `?tab_reg` examples were wrong, and the defect was the pre-`link` slogan left behind.** The old
+comment read *"the CONDITIONAL risk ratio: `measure = "ratio"` … fits the modified Poisson"*, which
+contradicts the page's own `@details`. Traced through `reg_estimand_row()` (`R/reg-estimand.R:1058`):
+with `link = "auto"` on a binomial, `effect` resolves to `"marginal"`. **Verified by running both**:
+`measure = "ratio"` gives `Model_mRR`, *"logistic regression"*, ÷1.10 / ÷1.36; `link = "ratio"` gives
+`Model_RR`, *"modified Poisson regression"*, ÷1.11 / ÷1.24. The pair is now a real contrast and is
+commented as one. Two more went with it: the `if (requireNamespace("marginaleffects"))` guard (only
+`effect = "at_reference"` needs that package) and a redundant `effect = "marginal"` that made two
+examples the same table twice.
+
+**Both example blocks were rewritten on the four shipped data sets** — no `gss_cat_data_formatting()`
+preamble, no `head(data, 3000)` speed boilerplate, one idea per call, following *All else equal*'s
+own running examples. Measured: the non-`\donttest` example is **0.92 s** on `?tab_reg` and well
+under a second on `?tab`, the whole `\donttest` block ~3.3 s. `?tab` went from eleven calls (four of
+them `color_signif` / `comp` / `ref` variants of one table) to seven.
+
+**Eleven `@param` blocks stated a default the formal does not carry** — all now read
+``NULL` (default) reads `options(tabxplor.<key>)` — <value>`. On `?tab`: `conf_level`, `color`
+(said `FALSE`, formal `"no"`), `n`, `stars` (head and body disagreed), `cleannames` (stated none) and
+`anova` (named the option, not its value). On `?tab_reg`: `n`, `ref`, `shape`, `color_signif`
+(⚠ `"grey_non_signif"` is hard-coded in `R/reg-resolve.R:534`, **not** an option — and differs from
+`tab()`'s `"ignore"`, a contrast worth its clause) and `conf_level`, which was **doubly wrong**:
+"Default `0.95`" on a `NULL` formal, *and* a claim that the value does not come from
+`options("tabxplor.conf_level")` when the default path is exactly that.
+
+**The vocabulary rules.** ⚠ half was already written — `TAB_ARGS$color$doc` already opened *"Which
+measure(s) of deviation to color"* and already carried the acronym rule (*an acronym names a
+**measure**, `display =` a **field**, `ref2 =` a **level***); the work was to preserve both through
+the cut. What was missing is now on `?tab_reg`'s `@param measure`, which opens *"Which measure of
+deviation is reported"* and defines the pair once.
+
+**Vignette pointers** are `\href{}` web links to the pkgdown site: `?tab`'s description to the
+Introduction, `?tab_reg`'s to *All else equal* (to **learn**) and the regression vignette (to **look
+up**), plus one `see <vignette>` clause on each argument that lost an essay. ⚠ **the English
+vignettes already link to their French twins** (`tabxplor.Rmd:42`, `-reg:66`, `-all-else-equal:70`,
+`-programming:65`); only `tabxplor-weights.Rmd` has no twin, which is Phase 23f-ii's.
+
+**Two stale lines fixed in `vignettes/tabxplor-reg.Rmd:1108`**, both factual: *"(It needs the `car`
+package.)"* — Phase 22l vendored `tx_vif()` and dropped `car` entirely — and *"Above about 5"*, where
+the footer marks collinearity from **10** (`REG_CHECKS$collinearity$flag`); 5 is the first of the
+plot's two guide marks, and the sentence now says both.
+
+⚠ **`devtools::document()` rewrites `jamovi/i18n/fr.po` on every run, reverting ten committed
+translations** (`noms simplifiés` → `noms nettoyés`, `étoiles de signif.` → `étoiles de
+significativité`, …). Reproduced deterministically; `pkgload::load_all()` alone does **not** do it,
+so it is a roclet-stage side effect, and it predates this phase. Nothing here touches jamovi:
+**restore it before committing** with `git checkout HEAD -- jamovi/i18n/fr.po`.
+
+**Verification.** `devtools::document()` clean and `NAMESPACE` byte-identical (the new topic is
+`@name`-only, so it exports nothing). Contract asserted mechanically on both pages: `\usage`
+byte-identical to HEAD and the `\item{<arg>}` **name set** unchanged — 35 on `?tab`, 26 on
+`?tab_reg`, every formal still documented; the only `\item` lines that disappeared are the five
+`\describe{}` entries of the moved Model-checks section. **Code identity proved by parsing**: all
+171 top-level expressions of `R/tab_reg.R` `deparse()`-identical to HEAD, and on the four other
+edited files the only differences are the intended `doc =` strings plus `tab-display.R`'s one new
+`NULL`. Every example of both pages run and read. Index completeness green (44 public topics, none
+missing, none stale). `devtools::test(filter = "non-ascii|display|args|options")`: **FAIL 0 | PASS
+753**, the single warning being the pre-existing over-dispersion teaching one.
+
+⚠ **Not run here: `devtools::check()`** — the release gate, which the maintainer runs.
 
 
 #### Phase 23c — user messages simplication and focus — DONE

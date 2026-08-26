@@ -37,9 +37,10 @@
 #     GROUP on a grouped tab, and "is this field empty in the whole column" would then be answered
 #     per sub-table, pruning an aside out of a one-row group while its neighbours keep it.
 #   - DISPLAY_TOKENS' row ORDER is a contract, and its `doc=` / `source=` strings are user-facing
-#     documentation: display_tokens_rd() emits them into ?fmt and ?tab through an `@eval` block, and
-#     display_presets_rd() does the same for DISPLAY_PRESETS' own `doc=`, so the LIST of named
-#     layouts cannot drift from the shipped table (the hand-written one had lost three).
+#     documentation: ?tabxplor-display (declared at the bottom of this file) is THE user page for
+#     the grammar, and display_tokens_rd() / display_presets_rd() fill it from these tables through
+#     `@eval`, so the taught vocabulary cannot drift from the shipped one. ?tab and ?tab_reg point
+#     at it rather than repeating it; ?fmt keeps the exhaustive token list, for a reader of fields.
 #   - EVERY TOKEN CARRIES ITS SHORT NAME (`label=`), and that is what names a COLUMN: fmt_display_
 #     label() (R/fmt_class.R) walks the column's own template and substitutes labels for tokens, so
 #     the console type tag, the exports' unit header row and an Excel aside column's header all say
@@ -656,8 +657,9 @@ display_preset_arm <- function(entry, role = NULL) {
 
 
 # --- the GENERATED help section -----------------------------------------------------------------
-# Called from a roxygen `@eval` block, so ?fmt / ?tab cannot drift from the tokens the package has.
-#   user_only = TRUE -> ?tab: the twelve a user may type. FALSE -> ?fmt: every token.
+# Called from a roxygen `@eval` block, so the help cannot drift from the tokens the package has.
+#   user_only = TRUE -> ?tabxplor-display: the twelve a user may type. FALSE -> ?fmt: every token
+#   (its prose refers to the fmt fields glossed above it on that page, so it only works there).
 #' @keywords internal
 #' @noRd
 display_tokens_rd <- function(user_only = TRUE) {
@@ -678,8 +680,7 @@ display_tokens_rd <- function(user_only = TRUE) {
   }
   c(if (user_only) "@section Display fields:" else "@section Every display token:",
     if (user_only)
-      c("The fields a \\code{\\{\\}} template may name. The first one is the \\emph{primary}:",
-        "it is what Excel shows and what the colours read.")
+      c("The fields a \\code{\\{\\}} template may name, and \\code{display} may name on their own.")
     else
       c("Generated from the package's own display table, so it cannot drift from what",
         "\\code{get_num()} reads. Each of",
@@ -713,6 +714,50 @@ display_presets_rd <- function() {
     "and on a \\code{\\link{tab_reg}} table:",
     "\\itemize{", vapply(keep, line, character(1), USE.NAMES = FALSE), "}")
 }
+
+
+#' What a table cell shows: the display grammar
+#'
+#' @description
+#' Every function that builds a table takes a `display` argument, and [set_display()] changes it
+#' afterwards. This page is its vocabulary: the fields a cell may show, and the named layouts that
+#' arrange them.
+#'
+#' Choosing a display never triggers a computation and never changes a number --- every field is
+#' already stored in the cell (see [fmt]), so `set_display()` on a finished table gives exactly what
+#' asking for it in the call would have.
+#'
+#' @details
+#' Three ways to ask, from the shortest:
+#' \itemize{
+#'   \item a **named layout**: `display = "est_ci"`, `"base_ratio"`, `"mean_sd"`.
+#'   \item a **single field**: `display = "ci"`, `"diff"`, `"n"`.
+#'   \item a **`{}` template** of your own: `"{est} ({base})"`, `"{pct} [{n}]"`.
+#' }
+#'
+#' In a template, the **primary** field is the first one written *outside* brackets --- so an aside
+#' may come first, `"({base}) {est}"`, without ceasing to be an aside. The primary carries the
+#' significance stars, it is what Excel writes and what `get_num()` returns, and it is the part the
+#' colours paint.
+#'
+#' A field may carry **its own precision**, `"{est:3} ({base:1})"`, which beats every default ---
+#' the only way to set an aside's decimals independently of the estimate's.
+#'
+#' `est` and `base` are **scale-relative**: `est` is whatever the column estimates (a percentage, a
+#' mean difference, an odds ratio) and `base` the level it sits on. That is what lets one layout
+#' name mean the same thing on a [tab()] crosstab and on a [tab_reg()] regression table.
+#'
+#' A field with nothing to show renders blank but keeps its width, so the column stays aligned; a
+#' field empty in the whole column is dropped, and a note says which argument would have filled it.
+#'
+#' @eval display_tokens_rd(user_only = TRUE)
+#' @eval display_presets_rd()
+#'
+#' @seealso [set_display()] and [get_display()] change or read it on a built table; [tab()] and
+#'   [tab_reg()] set it in the call; [fmt] describes every field a cell stores, and
+#'   [tabxplor-options] the session-wide defaults.
+#' @name tabxplor-display
+NULL
 
 
 #' @keywords internal

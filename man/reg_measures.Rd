@@ -23,8 +23,9 @@ A tibble of \code{family} (only when several are listed), \code{link}, \code{mea
 }
 \description{
 Lists what \code{\link[=tab_reg]{tab_reg()}} can report for one outcome: which models it could fit, and which measure
-of deviation each of them yields. It reads the same runtime table the argument validator, the
-error messages and \code{?tab_reg}'s own section read, so what it prints is what the function does.
+of deviation each of them yields. It reads the same runtime table the argument validator and the
+error messages read, so what it prints is what the function does. The section below is the same
+table for every kind of outcome, read without any data.
 }
 \details{
 \strong{The table has two blocks}, because the grid factors:
@@ -43,8 +44,26 @@ and the message says why (an odds ratio needs a probability to take the odds of)
 only at run time: a link that does not converge on your data. \code{tab_reg()} says so and, for the
 risk difference, falls back to the linear probability model.
 }
+\section{Which models each outcome offers, and which measures}{
+
+Generated from the package's own resolution table, so it cannot drift from what
+\code{\link{tab_reg}()} builds. A measure that IS the model's own is read off its
+coefficients; any other is computed from its predictions (\code{effect = "marginal"} or
+\code{"at_reference"}).
+\itemize{
+\item \strong{gaussian} --- a cell is a mean. Models: \code{link = "difference"}, the default (linear regression); \code{link = "ratio"} (log-link mean regression (Poisson pseudo-likelihood, robust standard errors)). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"raw_coefficient"}.
+\item \strong{binomial} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (logistic regression); \code{link = "ratio"} (modified Poisson regression); \code{link = "difference"} (additive-risk regression (identity link, robust standard errors)). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"raw_coefficient"}.
+\item \strong{poisson} --- a cell is a count. Models: \code{link = "ratio"}, the default (Poisson regression). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"raw_coefficient"}.
+\item \strong{multinomial} --- a cell is a percentage. Models: \code{link = "odds_ratio"}, the default (multinomial logistic regression). Reported: \code{measure = }\code{"ratio"}, \code{"difference"}, \code{"odds_ratio"}, \code{"raw_coefficient"}.
+\item \strong{ordinal} --- a cell is a position on an ordered scale. Models: \code{link = "odds_ratio"}, the default (ordinal logistic regression). Reported: \code{measure = }\code{"difference"}, \code{"ratio"}, \code{"odds_ratio"}, \code{"raw_coefficient"}.
+}
+}
+
 \examples{
-d <- forcats::gss_cat
-d$married <- as.integer(d$marital == "Married")
-reg_measures(d, "married")
+reg_measures(car_arrests, "released")
+reg_measures(car_salaries, "salary")
+}
+\seealso{
+\code{\link[=tab_reg]{tab_reg()}} to build the table, \code{\link[=reg_formulas]{reg_formulas()}} to see the formula each column was
+fitted with.
 }
