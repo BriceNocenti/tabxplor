@@ -9,6 +9,10 @@
 #     fmt_scale_row() / fmt_var_kind() / get_pct_type(); never re-derive a scale from a display, a
 #     family, or from whether `var` is non-NA.
 #   - The record is DENSE: every column carries all fields, an inapplicable one stored as NA.
+#   - A REFERENCE IS READ PER BLOCK, NEVER GLOBALLY: under `comp = "all"` the total table holds one
+#     reference row per row_var, so a cell reads the FIRST one at or after it (fmt_broadcast_next),
+#     the total table closing each variable's run of sub-tables. Broadcasting one scalar to the whole
+#     column was a length blow-up the moment two row_vars were stacked.
 #   - pct is stored 0-1 (x100 only in format()); `diff` is always a DIFFERENCE (the ratio is `ratio`).
 #   - `{est}` / `{base}` are SCALE-RELATIVE tokens: they name a role, and each column answers with the
 #     token it has always rendered (EST_SCALES' est_display / base_display, resolved once by
@@ -2947,9 +2951,11 @@ get_mean_contrib <- function(x) {
   if (!any(totrows)) return(rep(NA_real_, length(x)))
 
   if (comp) {
-    grand <- grand_totrow(x)
-    if (!any(grand)) return(rep(NA_real_, length(x)))
-    rep(ctr[grand][sum(grand)], length(x))
+    grand <- which(grand_totrow(x))
+    if (!length(grand)) return(rep(NA_real_, length(x)))
+    # the SAME rule get_ref_field() applies: several row_vars put one grand total per variable in the
+    # total table, and a row reads the one that closes its own variable.
+    fmt_broadcast_next(ctr, grand)
   } else {
     fmt_broadcast_last(ctr, totrows)
   }
@@ -3141,13 +3147,25 @@ fmt_broadcast_last <- function(values, boundary) {
   values[stats::ave(seq_along(values), gr, FUN = max)]
 }
 
+# fmt_broadcast_next() -- the comp = "all" twin: the reference lives in the TOTAL TABLE, which holds
+# one reference row per row_var (several row_vars stack several of them). A row reads the FIRST such
+# reference at or after it, because the total table closes each variable's run of sub-tables -- it is
+# the last level of the tab_var axis, and the table is row_var-major (tab_compact()). With one
+# row_var there is a single reference and every row reads it, as before.
+#' @keywords internal
+fmt_broadcast_next <- function(values, refs) {
+  idx <- refs[findInterval(seq_along(values) - 1L, refs) + 1L]
+  idx[is.na(idx)] <- refs[[length(refs)]]           # nothing follows: the last one still answers
+  values[idx]
+}
+
 #' @keywords internal
 get_ref_field <- function(x, getter) {
   refrows <- if (get_ref_type(x) == "tot") is_totrow(x) else is_refrow(x)
   values  <- getter(x)
   if (get_comp_all(x)) {
-    refs <- refrows & is_tottab(x)
-    if (!any(refs)) rep(NA_real_, length(x)) else rep(values[refs], length(x))
+    refs <- which(refrows & is_tottab(x))
+    if (!length(refs)) rep(NA_real_, length(x)) else fmt_broadcast_next(values, refs)
   } else {
     fmt_broadcast_last(values, refrows)
   }

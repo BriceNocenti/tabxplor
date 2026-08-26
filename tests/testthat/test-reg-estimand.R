@@ -120,17 +120,24 @@ test_that("a measure the LEVEL cannot carry is refused as not defined", {
 
 
 test_that("reg_measures() factors the grid: one row per model, then the predictions once", {
-  m <- suppressMessages(reg_measures(est_data(), "married"))
+  m <- suppressMessages(reg_measures(est_data(), "married", link = "all"))
   expect_true(all(c("link", "measure", "effect", "header", "reads_as") %in% names(m)))
   # ONE family -> no `family` column; the conditional block is one row per fittable link
   expect_false("family" %in% names(m))
   expect_identical(m$link[m$effect == "conditional"], names(REG_FAMILIES$binomial$fits))
+  # `link = "all"` is what raises the question the `base_link` column answers
+  expect_identical(m$base_link, c(TRUE, FALSE, FALSE, NA, NA, NA))
+  # ...and the DEFAULT reads the family's own model alone, which is what makes the table readable
+  d <- suppressMessages(reg_measures(est_data(), "married"))
+  expect_false("base_link" %in% names(d))
+  expect_identical(d$link[d$effect == "conditional"], reg_family_link("binomial"))
+  expect_lt(nrow(d), nrow(m))
   expect_identical(m$header[m$effect == "conditional" & m$measure == "odds_ratio"], "Model_OR")
   # ...and the prediction block is listed ONCE, at no link in particular
   expect_true(all(m$link[m$effect != "conditional"] == "(any)"))
   expect_false(any(duplicated(m[m$link == "(any)", c("measure")])))
   # a measure this outcome cannot carry has NO row (the old "not defined" status): a mean has no odds
-  g <- suppressMessages(reg_measures(est_data(), "tvhours", family = "gaussian"))
+  g <- suppressMessages(reg_measures(est_data(), "tvhours", family = "gaussian", link = "all"))
   expect_false("odds_ratio" %in% g$measure)
   # `family = "auto"` lists every family the outcome KIND offers, the detected one first
   a <- suppressMessages(reg_measures(est_data(), "tvhours"))

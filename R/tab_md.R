@@ -8,9 +8,13 @@
 #   - Padding is monospace-precise (numbers right-aligned, pipes aligned), because the raw file is
 #     meant to be readable as text. A bold row may touch its pipes; a normal cell keeps a 1-space
 #     margin.
-#   - A COLOURED table wraps every fmt cell in a break-derived span `[<num>]{.class}` -- an
-#     uncoloured cell taking the neutral `.n` -- so the numbers stay aligned. An UNCOLOURED table is
-#     byte-identical to the plain padded layout: no span, no div.
+#   - A COLOURED table wraps each fmt cell's PRIMARY TOKEN in a break-derived span
+#     `[<num>]{.class} (<aside>)`, the same rule html states: the span carries the value and the
+#     stars or marks it wears, the aside beside it stays plain. An uncoloured cell gets no span at
+#     all, and an uncoloured table is byte-identical to the plain padded layout: no span, no div.
+#   - ONE WIDTH INVARIANT: every cell's last text character lands on raw column 1 + num_width, so
+#     markup grows leftwards into the cell's own pad. md_cell_markup() is the ONE place that measures
+#     it (`pre` / `post`), read by both the width pass and the body loop -- they cannot disagree.
 #   - The class names are palette- and theme-INDEPENDENT (a slot, not a hex). tab_css(format = "md")
 #     maps them, which is what lets one stylesheet serve a whole document.
 # See: CLAUDE.md section "tabxplor architecture" (exports and rendering); R/tab-css.R (the classes).
@@ -238,9 +242,12 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # --- Step 6: Format all cells to character ---
   # the reference masks are reused from the prep's `ann` (.ref) so format() does not re-run
   # get_reference(). stars = TRUE right-pads the star field so numbers stay aligned; trim only the
-  # leading side to preserve that trailing pad. bold_split = TRUE also attaches primary_nchar (the
-  # bold-prefix width of a composite cell, on the UN-trimmed string) so a bold row bolds only the
-  # primary field; str_trim(left) shifts it by the leading spaces removed -> prim = pn - lead.
+  # leading side to preserve that trailing pad. bold_split = TRUE also attaches the primary token's
+  # RANGE on the UN-trimmed string; trimming the left shifts it by the spaces removed.
+  # THREE numbers come out of it, and they are what the whole layout reads:
+  #   `s` the span's start, `b` the BOLD's end (the value), `e` the SPAN's end (value + its stars or
+  #   marks -- a supporting piece that must take the cell's colour, not the aside's plain ink).
+  # `s = NA` means "this cell has no primary at all" -> no span, no bold (a `{n_range}` Total cell).
   fmt_out <- purrr::imap(tabs, \(col, nm) {
     if (is_fmt(col)) {
       # pad the VALUE-INTERNAL alignment with a FIGURE SPACE, not ASCII: rendered to html the cells sit
@@ -254,24 +261,34 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
                         .ref = ann_ref(rd$ann[[nm]]))
       pn      <- attr(raw, "primary_nchar")
       pf      <- attr(raw, "primary_from")
+      sfx     <- attr(raw, "suffix_nchar") %||% 0L      # the stars / marks run, a column-wide width
       trimmed <- trimws(raw, which = "left", whitespace = "[\\h\\v]")
       lead    <- nchar(raw) - nchar(trimmed)
       trimmed[is.na(trimmed)] <- ""
-      list(txt  = trimmed,
-           from = if (is.null(pn)) rep(NA_integer_, length(col)) else pf - lead,
-           to   = if (is.null(pn)) rep(NA_integer_, length(col)) else pf + pn - 1L - lead)
+      n <- nchar(trimmed)
+      if (is.null(pn)) {                                # no recorded range: the cell IS its primary
+        list(txt = trimmed, s = rep(1L, length(col)), b = n, e = n)
+      } else {
+        st <- pmax(1L, pf - lead)                       # the trim only ever eats the primary's own pad
+        bd <- pf + pn - 1L - lead
+        en <- pmin(n, bd + sfx)
+        none <- is.na(pn) | pn == 0L | bd < st
+        st[none] <- NA_integer_; bd[none] <- NA_integer_; en[none] <- NA_integer_
+        if (color_whole_cell_opt()) { st[!none] <- 1L; en[!none] <- n[!none] }
+        list(txt = trimmed, s = st, b = bd, e = en)
+      }
     } else {
       # a `|` in a level or tab_var label would open a spurious cell and desync the row's column count;
       # pandoc renders `\|` as a literal pipe. Only the non-fmt (label) columns can contain one.
-      list(txt  = gsub("|", "\\|", as.character(col), fixed = TRUE),
-           from = rep(NA_integer_, length(col)),
-           to   = rep(NA_integer_, length(col)))
+      txt <- gsub("|", "\\|", as.character(col), fixed = TRUE)
+      list(txt = txt, s = rep(1L, length(col)), b = nchar(txt), e = nchar(txt))
     }
   })
   cell_data <- as.data.frame(lapply(fmt_out, `[[`, "txt"), stringsAsFactors = FALSE)
-  # the primary token's character RANGE per cell (NA = the whole cell is the primary)
-  from_mat  <- do.call(cbind, lapply(fmt_out, `[[`, "from"))
-  to_mat    <- do.call(cbind, lapply(fmt_out, `[[`, "to"))
+  # the primary token's ranges per cell (see Step 6's comment): span start, bold end, span end
+  s_mat <- do.call(cbind, lapply(fmt_out, `[[`, "s"))
+  b_mat <- do.call(cbind, lapply(fmt_out, `[[`, "b"))
+  e_mat <- do.call(cbind, lapply(fmt_out, `[[`, "e"))
 
   # Truncate row labels (10f: only when wrap_rows is set; default NULL = lossless, column grows).
   # A pipe cell cannot hold a raw newline, so md "wrap" means "do not truncate by default".
@@ -392,36 +409,50 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   no_bold      <- seq_len(n_cols) %in% label_cols
   bold_rows_of <- function(j) if (no_bold[j]) integer(0) else bold_rows
 
+  # --- Step 7b: the markup of every coloured cell, built ONCE -------------------------------------
+  # md_cell_markup() is the one definition; the width pass and the Step-11 body loop read the SAME
+  # `pre` / `post`, so a column can never over- or under-pad.
+  mk_str  <- matrix("", n_rows, n_cols)
+  mk_pre  <- matrix(0L, n_rows, n_cols)
+  mk_post <- matrix(0L, n_rows, n_cols)
+  attr_width <- integer(n_cols)
+  if (do_color) for (j in which(is_right)) {
+    nz <- nzchar(cell_data[[j]])
+    # the attr is padded to the column's widest, so the closing `}` -- and every coloured cell's
+    # number -- line up in the raw file (pandoc ignores spaces inside `{...}`).
+    attr_width[j] <- if (any(nz)) max(nchar(attr_mat[nz, j])) else 0L
+    bj <- seq_len(n_rows) %in% bold_rows_of(j)
+    for (i in seq_len(n_rows)) {
+      m <- md_cell_markup(cell_data[[j]][i], attr_mat[i, j], bj[i],
+                          s_mat[i, j], e_mat[i, j], b_mat[i, j], attr_width[j])
+      mk_str[i, j] <- m$str; mk_pre[i, j] <- m$pre; mk_post[i, j] <- m$post
+    }
+  }
+
   # Column width = max of display widths:
   #   right-aligned normal: nchar + 3 (1 leading + 2 trailing for bold zone)
   #   left-aligned normal:  nchar + 2 (1 space each side)
   #   bold cell:            nchar + 4 (**...**)
   #   header:               nchar + 2
-  # a coloured fmt column is laid out as " [<num>]<attr> " (fixed scaffold): width = num_width (numbers,
-  # bold-aware) + attr_width ({.class}) + 4. Reused by the Step-11 scaffold so numbers and pipes align.
+  # A COLOURED fmt column reads the same 3-column margin, and everything else is measured from the
+  # markup actually built: `num_width` is the widest cell UP TO its last text character (value plus
+  # the markup preceding it), `post_width` the widest run trailing it. So the invariant holds whatever
+  # a cell contains: every cell's last text character lands on raw column 1 + num_width.
   col_width  <- integer(n_cols)
   num_width  <- integer(n_cols)
-  attr_width <- integer(n_cols)
+  post_width <- integer(n_cols)
   for (j in seq_len(n_cols)) {
     if (do_color && is_right[j]) {
-      # `num_width` is the width of the VISIBLE value -- the bold rows' +4 must NOT enter it, since
-      # `**` is markup, not text: adding it here would pad the value INSIDE the bracket and push the
-      # number out of line with a bold one. Bold's extra 4 belongs in col_width (below) only.
       nonempty <- nzchar(cell_data[[j]])
-      # the widest cell measured UP TO its last visible character -- the value plus any markup
-      # preceding it (md_extra()) -- since only that is what a reader actually sees aligned.
-      vis <- cell_widths[, j] + md_extra(cell_data[[j]], seq_len(n_rows) %in% bold_rows_of(j),
-                                         from_mat[, j], to_mat[, j])
-      num_width[j]  <- if (any(nonempty)) max(vis[nonempty]) else 0L
-      attr_width[j] <- if (any(nonempty)) max(nchar(attr_mat[nonempty, j])) else 0L
-      col_width[j]  <- max(num_width[j] + attr_width[j] + 4L, header_widths[j] + 2L)
+      num_width[j]  <- if (any(nonempty)) max(cell_widths[nonempty, j] + mk_pre[nonempty, j]) else 0L
+      post_width[j] <- if (any(nonempty)) max(mk_post[nonempty, j]) else 0L
+      col_width[j]  <- max(num_width[j] + post_width[j] + 3L, header_widths[j] + 2L)
     } else {
       margin <- if (is_right[j]) 3L else 2L
       widths <- cell_widths[, j] + margin  # normal cells
       bj     <- bold_rows_of(j)
-      if (length(bj) > 0) {
-        widths[bj] <- cell_widths[bj, j] + 4L  # bold cells
-      }
+      # a cell with no primary at all is never bolded, so it is charged nothing for it
+      if (length(bj) > 0) widths[bj] <- cell_widths[bj, j] + ifelse(is.na(s_mat[bj, j]), 0L, 4L)
       col_width[j] <- max(c(widths, header_widths[j] + 2L))
     }
   }
@@ -429,10 +460,10 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # --- Helper: pad a cell ---
   # is_right: TRUE for fmt (right-aligned), FALSE for text (left-aligned)
   # is_bold: TRUE to wrap with **
-  # from/to: the primary token's range in a composite cell (NA = bold the whole cell).
-  pad_cell <- function(text, width, is_right, is_bold, from = NA_integer_, to = NA_integer_) {
-    if (is_bold && nchar(text) > 0) {
-      bold_text <- md_bold(text, from, to)                # partial (composite) or whole-cell bold
+  # s/b: the primary token's range (`s = NA` -> the cell has no primary, so nothing is bolded).
+  pad_cell <- function(text, width, is_right, is_bold, s = NA_integer_, b = NA_integer_) {
+    if (is_bold && !is.na(s) && nchar(text) > 0) {
+      bold_text <- md_bold(text, s, b)                    # partial (composite) or whole-cell bold
       if (is_right) {
         tx_pad(bold_text, width, "left")
       } else {
@@ -525,15 +556,13 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     is_bold <- i %in% bold_rows
     row_cells <- character(n_cols)
     for (j in seq_len(n_cols)) {
-      pfrom  <- from_mat[i, j]; pto <- to_mat[i, j]      # the primary token's range
       bold_j <- is_bold && !no_bold[j]     # see bold_rows_of() above
       if (do_color && is_right[j]) {
-        row_cells[j] <- md_color_cell(cell_data[[j]][i], attr_mat[i, j],
-                                      num_width[j], col_width[j], bold_j, pfrom, pto,
-                                      attr_width = attr_width[j])
+        row_cells[j] <- md_color_cell(mk_str[i, j], mk_pre[i, j], cell_widths[i, j],
+                                      num_width[j], col_width[j])
       } else {
         row_cells[j] <- pad_cell(cell_data[[j]][i], col_width[j],
-                                  is_right[j], bold_j, pfrom, pto)
+                                  is_right[j], bold_j, s_mat[i, j], b_mat[i, j])
       }
     }
     body_lines[i] <- md_insert_col_sep(row_cells, sep_after, n_cols,
@@ -646,41 +675,55 @@ md_span_attr <- function(text_slot, bg_slot) {
   paste0("{", paste0(".", parts, collapse = " "), "}")
 }
 
-# One fmt cell of a coloured column: "<pad>[<num>]<attr><pad>", padded to `total_width`.
-# the alignment target is the VISIBLE NUMBER, not the markup: `[`/`**` are invisible once rendered but
-# occupy columns in the raw file, so the number's right edge sits at a fixed offset and each cell's
-# markup PREFIX grows leftwards into its own pad -- letting a bold cell `**54%**` and a coloured one
-# `[42%]{.m2}` show their numbers in the same raw column. The attr is padded to `attr_width` (pandoc
-# ignores spaces inside `{...}`), so the closing `}` lines up too when classes differ in length.
-# DESIGN: an UNCOLOURED cell carries no span (`attr = ""`) and needs no bracket -- its pad absorbs the
-# missing markup, so its number aligns without a do-nothing `.n` class.
-md_color_cell <- function(text, attr, num_width, total_width, is_bold, from = NA_integer_,
-                          to = NA_integer_, attr_width = nchar(attr)) {
-  if (!nzchar(text)) return(strrep(" ", total_width))
-  content <- if (is_bold) md_bold(text, from, to) else text   # partial (composite) / whole-cell bold
-  # An uncoloured cell uses " " where a coloured one opens its bracket, so a bracket costs no offset.
-  open  <- if (nzchar(attr)) "[" else " "
-  attr2 <- if (nzchar(attr) && attr_width > nchar(attr)) {
-    sub("[}]$", paste0(strrep(" ", attr_width - nchar(attr)), "}"), attr)
-  } else attr
-  close <- if (nzchar(attr)) paste0("]", attr2) else ""
-  # Pad by the cell's own VISIBLE-END width (value + the markup preceding its last visible character),
-  # so every cell's last visible character lands on the same raw column. The markup grows leftwards
-  # into the pad instead of pushing the value right.
-  vis  <- nchar(text) + md_extra(text, is_bold, from, to)
-  body <- paste0(strrep(" ", max(0L, num_width - vis)), open, content, close)
-  tx_pad(paste0(" ", body), total_width, "right")
+# One fmt cell of a coloured column, padded to `total_width`. `str` and `pre` come from
+# md_cell_markup(); `n` is the cell's text width.
+# the alignment target is the LAST TEXT CHARACTER, not the markup: `[`/`**` are invisible once
+# rendered but occupy columns in the raw file, so each cell's markup PREFIX grows leftwards into its
+# own pad -- letting a bold cell `**54%**` and a coloured one `[42%]{.m2}` end on the same raw column.
+# DESIGN: an UNCOLOURED cell carries no span at all -- its pad absorbs the missing markup, so it
+# aligns without a do-nothing `.n` class.
+md_color_cell <- function(str, pre, n, num_width, total_width) {
+  if (!nzchar(str)) return(strrep(" ", total_width))
+  tx_pad(paste0(" ", strrep(" ", max(0L, num_width - n - pre)), str), total_width, "right")
 }
 
-# === SECTION: the extras appender (markup that grows into the pad, never the value) ===============
+# === SECTION: one cell's markup, and the two numbers the layout reads =============================
 
-# How many RAW columns of markup precede a cell's last visible character. md_bold() adds one "**" pair
-# around the primary token: the OPENING pair always precedes that character, and the CLOSING one does
-# too whenever the primary ends before the text does ("50% (n=10)" -> 4, "(10) 50%" -> 2). Vectorised.
-md_extra <- function(text, is_bold, from, to) {
-  ends_early <- !is.na(to) & to < nchar(text)
-  ifelse(!is_bold | !nzchar(text), 0L, ifelse(ends_early, 4L, 2L))
+# THE CELL'S RENDERING STOPS AT ITS PRIMARY TOKEN, exactly as in html (R/tab-render-html.R): the
+# colour span wraps `s..e` -- the value plus the stars or marks it wears -- and the aside beside it
+# stays plain. The bold, which is a ROW property, stops earlier, at the value (`s..b`).
+# Returns the built string plus `pre` / `post`: how many raw columns of markup sit before and after
+# the cell's last text character. They are the ONE definition the width pass and the body loop share.
+# `**` goes INSIDE the span: the span must be the outer one, since it contains the suffix the bold
+# does not (`[**42%**\u207a]{.p1}`).
+md_cell_markup <- function(text, attr, is_bold, s, e, b, attr_width) {
+  if (!nzchar(text)) return(list(str = "", pre = 0L, post = 0L))
+  n <- nchar(text)
+  if (is.na(s)) return(list(str = text, pre = 0L, post = 0L))   # no primary: nothing to mark
+  before <- substr(text, 1L, s - 1L)
+  core   <- substr(text, s, e)
+  after  <- substr(text, e + 1L, n)
+  trail <- 0L                                        # markup after the last character of `core`
+  if (is_bold) {
+    bt <- md_bold(core, 1L, b - s + 1L)
+    # the closing `**` trails only where the bold reaches the core's end AND no alignment filler
+    # follows it (md_bold keeps the filler outside the markers).
+    if (!identical(bt, core) && b >= e && !grepl(paste0(MD_FILL, "$"), core)) trail <- 2L
+    core <- bt
+  }
+  if (nzchar(attr)) {
+    a2 <- if (attr_width > nchar(attr))
+      sub("[}]$", paste0(strrep(" ", attr_width - nchar(attr)), "}"), attr) else attr
+    core  <- paste0("[", core, "]", a2)
+    trail <- trail + 1L + nchar(a2)
+  }
+  str  <- paste0(before, core, after)
+  post <- if (nzchar(after)) 0L else trail           # an aside after the span pushes it all before
+  list(str = str, pre = nchar(str) - n - post, post = post)
 }
+
+# the alignment fillers: ASCII space, no-break U+00A0, figure U+2007, narrow no-break U+202F.
+MD_FILL <- paste0("[", intToUtf8(c(32L, 160L, 8199L, 8239L)), "]")
 
 # Wraps a cell's PRIMARY token in **...**; asides beside it (on either side) stay plain, a plain cell
 # (no recorded range) is bolded whole -- exactly one ** pair either way, matching the +4 width budget
@@ -689,8 +732,7 @@ md_extra <- function(text, is_bold, from, to) {
 # markers: `**77%   **` is not valid markdown bold (pandoc will not open an emphasis span ending in
 # whitespace), `**77%**   ` is, and the outer pad still holds the raw-text column alignment.
 md_bold <- function(text, from = NA_integer_, to = NA_integer_) {
-  # ws = the alignment fillers: ASCII space, no-break U+00A0, figure U+2007, narrow no-break U+202F.
-  ws <- paste0("[", intToUtf8(c(32L, 160L, 8199L, 8239L)), "]")
+  ws <- MD_FILL
   bold_span <- function(s) {
     if (!nzchar(s)) return(s)
     lead  <- regmatches(s, regexpr(paste0("^", ws, "*"), s))

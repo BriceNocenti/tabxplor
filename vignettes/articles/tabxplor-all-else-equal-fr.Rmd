@@ -233,34 +233,47 @@ Chaque type de variable ou famille de modèle possède sa propre manière de bas
 | —                     | score comptant un nombre de réponses Oui/Non | `binomial`        | rapport de cotes                                           |
 
 
-Pour une variable catégorielle (un `factor` au sens de R), le modèle exact dépend du nombre de catégories et de leur caractère ordonné ou non : binomial (2 catégories), multinomial (trois catégories ou plus) ou ordinal (trois catégories ordonnées ou plus). Il s’agit dans tous les cas d’une regression « logistique » : le modèle de base modèlise des cotes et des rapports entre des cotes, $\log(\text{odds}) = \log\left(\frac{\%_{\text{garde a vue}}}{100 - \%_{\text{garde a vue}}}\right)$, aussi nommé un lien « logit », qui donne son nom à cette famille. Il utilise donc, naturellement, l’écart le plus difficile à interpréter ! 
+Pour une variable catégorielle, un `factor` au sens de R, le modèle exact dépend du nombre de catégories et de leur caractère ordonné ou non : binomial (2 catégories), multinomial (trois catégories ou plus) ou ordinal (trois catégories ordonnées ou plus). 
+
+Il s’agit, dans tous les cas, d’une regression « logistique » : le modèle de base modèlise des cotes et des rapports entre des cotes, $\log(\text{odds}) = \log\left(\frac{\%_{\text{garde a vue}}}{100 - \%_{\text{garde a vue}}}\right)$ – aussi nommé un lien « logit », qui donne son nom à cette famille. Il utilise donc, naturellement, l’écart le plus difficile à interpréter ! 
 
 Pour une variable numérique, il y a nécessairement un choix à effectuer : modèle gaussien, poisson ou binomial ?
 
 La bonne manière sociologique d'y penser n'est pas « quelle loi statistique ma variable suit-elle ? » (question de mathématiques), ni « quel test dois-je faire ? » (question statistique), mais : **« quelle sorte de quantité est-ce que je suis en train de compter ? »** Une mesure continue, un décompte, une proportion sont trois choses différentes, et chacune a sa manière préférentielle de dire que tel groupe est plus haut que tel autre.
 
-Par exemple si, plutôt que `released`, nous voulions modéliser `checks` — dans combien des six fichiers de police le nom de la personne interpellée figurait déjà – quel modèle pourrions-nous choisir ? C'est un décompte, mais c’est *aussi* un score sur six, et on pourrait éventuellement la modéliser comme une quantité continue. À partir de ce choix, une regression va le plus souvent **modéliser l’écart** de mises en garde à vues **d’une manière spécifique** :
+Par exemple si, plutôt que `released`, nous voulions modéliser `checks` — dans combien des six fichiers de police le nom de la personne interpellée figurait déjà – quels modèles pourrions-nous choisir ? C'est un décompte, mais c’est *aussi* un score sur six, et on pourrait éventuellement la modéliser comme une quantité continue. À partir de ce choix, une regression va le plus souvent **modéliser l’écart** de mises en garde à vues **d’une manière spécifique** :
 
 - **comme décompte** — les autres variables choises étant égales, les personnes racisées comme noires figurent dans **1,35 fois plus** de fichiers que les personnes du groupe ethnique majoritaire (rapport de taux d’incidence, IRR) ;
 - **comme score sur six** — pour **un fichier donné**, leur chance (cote, *odds*) d'y figurer plutôt que de ne pas y figurer est **1,55 fois plus élevée** (*odds ratio*)
 - **comme quantité continue** — elles figurent en moyenne dans **0,5 fichier de plus** que les personnes blanches (une différence de moyennes, donc une soustraction: 2 - 1,5) ;
 
-```{r}
-tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), 
-        family = "gaussian", stats = NULL)
+Chaque possibilité correspond à un modèle :
+
+```{r, eval = FALSE}
+tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), family = "gaussian")
+tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), family = "poisson" )
+tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), family = "binomial", trials = 6)
 ```
 
-```{r}
-tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), 
-        family = "poisson", stats = NULL)
+En plaçant les trois côte-à-côte, nous pouvons constater qu’ils correspondent à trois manières de regarder la même chose :
+
+```{r, message=FALSE}
+car_arrests |>
+  mutate(checks_gaussian = checks, checks_poisson = checks, checks_binomial = checks) |>
+  tab_reg(c("checks_gaussian", "checks_poisson", "checks_binomial"), 
+           family = c("gaussian", "poisson", "binomial"), trials = c(checks_binomial = 6), 
+           predictors = c("colour", "employed", "citizen"), 
+           stats = NULL, empirical = FALSE
+          )
 ```
 
-```{r}
-tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), 
-       family = "binomial", trials = 6, stats = NULL)
-```
+Mêmes données, mêmes prédicteurs, trois mesures de l’écart différentes, trois phrases d’interprétation spécifiques. 
 
-Mêmes données, mêmes prédicteurs, trois phrases d’interprétation différentes. On pourrait discuter de celle qui « prédit » le mieux le modèle (par exemple, la regression linéaire utilise une distribution gaussienne/normale qui correspond mal à l’importance de la catégorie "incrit dans 0 fichiers de police", 35% de l’échantillon). On pourrait discuter des hypothèses faites par chacune (par exemple, le modèle binomial fait comme si l’inscription dans chaque fichier de police chaque avait une chance égale et indépendantes de se produire). Le principal élément à retenir, c’est ici que chaque famille de modèle possède une quantité préférée, une manière habituelle de modéliser l’écart entre plusieurs catégories d’un prédicteur.
+On pourrait discuter de celle qui « prédit » le mieux le modèle. Par exemple, la regression linéaire utilise une distribution gaussienne/normale qui correspond mal à l’importance de la catégorie "incrit dans 0 fichiers de police", 35% de l’échantillon). 
+
+On pourrait discuter des hypothèses faites par chacune. Par exemple, le modèle binomial fait comme si l’inscription dans chaque fichier de police chaque avait une chance égale et indépendantes de se produire.
+
+Mais le principal élément à retenir, c’est ici que chaque famille de modèle possède une quantité préférée, une manière habituelle de modéliser l’écart entre plusieurs catégories d’un prédicteur.
 
 ### Que peut-on demander à cette variable ?
 
@@ -277,93 +290,98 @@ Nous verrons qu’utiliser des effets marginaux, moyennés sur l’échantillon,
 À noter qu’il existe beaucoup d’autres modèles possibles, qui requièrent de passer un lien différent (`link =`), c’est-à-dire de demander au même modèle de modéliser directement une autre mesure de l’écart (une différence ou un ratio par exemple). Ils ne sont utilisés que dans des situations bien particulières.
 
 ```{r, echo=TRUE, eval=FALSE}
-reg_measures(car_arrests, "checks", base_link = FALSE)
+reg_measures(car_arrests, "checks", link = "all")
 ```
-
-
 
 
 
 ## Le pont : la colonne « écart observé » *est* le tableau croisé
 
-Par défaut tabxplor ajoute, à côté de chaque colonne du modèle, sa contrepartie observée (`empirical = FALSE` la retire) :
+Voici maintenant le modèle de regression logistique de notre variable à expliquer `"released"`, avec ses personnes relachées ou mises en garde à vue – binomiale car notre variable est binaire.
 
 ```{r}
 model <- tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"))
 model
 ```
 
-Regarder maintenant la colonne **`Obs_OR`**, et la comparer aux rapports de cotes calculés tout à l'heure à partir du tableau croisé :
+Par défaut tabxplor ajoute, à côté de chaque colonne du modèle, sa contrepartie observée dans une colonne **`Obs_OR`**. À y regarder de plus près, elle calcule exactement des mêmes rapports de cotes (OR) que nous avions obtenu tout à l'heure sans faire le modèle :
 
 ```{r}
 tab(car_arrests, c(colour, sex, employed, citizen), released, pct = "row", ref = "first",
     stars = TRUE, color = "odds_ratio", color_signif = "grey_non_signif", display = "OR")
 ```
 
-**Les mêmes nombres, les mêmes étoiles.** La colonne observée n'est ni une approximation du tableau croisé ni un résumé : elle *est* le tableau croisé — le rapport de cotes calculé directement sur les pourcentages observés, imprimé à côté du modèle, sous un en-tête `Obs_…` (c'est `empirical` qui la commande). Les étoiles ont été ajoutées pour dire en toutes lettres ce que le grisé encode déjà : non significativement différent de la modalité de référence, au seuil de confiance de 95 %.
+**Les mêmes nombres, les mêmes étoiles.** La colonne observée n'est ni une approximation du tableau croisé ni un résumé : elle *est* le tableau croisé — le rapport de cotes calculé directement sur les pourcentages observés, imprimé à côté du modèle. Les traditionnelles étoiles ont été ajoutées pour dire en toutes lettres ce que les couleurs encodent déjà : une catégorie sans étoile n’est pas significativement différente de la modalité de référence, au seuil de confiance de 90 % (95% : deux étoiles, ou couleur grise).
 
-C'est ce qui rend la comparaison honnête, et cela vaut d'être énoncé comme une règle : **dans tabxplor, l'effet observé est toujours la même quantité que l'effet modélisé, calculée sur les mêmes personnes, dans la même échelle — un seul prédicteur au lieu de tous.** Seule la liste des prédicteurs diffère. La distance entre les deux colonnes mesure donc l'**ajustement**, et rien d'autre. (Ici rien ne manque dans les données, si bien que les deux populations coïncident d'elles-mêmes ; en général la colonne observée est calculée sur les observations complètes du modèle, de sorte qu'elles coïncident toujours.)
+C'est ce qui rend la comparaison possible et honnête, et cela vaut d'être énoncé comme une règle : **dans tabxplor, l'écart observé est toujours la même quantité que l'effet modélisé, calculée sur les mêmes personnes, dans la même échelle, avec les mêmes intervalles de confiance.** (Ici rien ne manque dans les données, si bien que les deux populations coïncident d'elles-mêmes ; en général la colonne observée est calculée sur les observations complètes du modèle, de sorte qu'elles coïncident toujours.)
 
-**C'est cette paire, et non les nombres pris un à un, que l'article apprend à lire.** Un tableau croisé donne toujours ses résultats **toutes choses *inégales* par ailleurs** : les deux variables croisées y sont prises dans un contexte dense, liées à toutes les autres, y compris à celles que l'enquête n'a pas mesurées. Un modèle donne les siens **toutes les autres variables explicatives choisies étant égales**. Les deux colonnes portent exactement cette différence-là, et rien de plus.
+La principale différence est que **l’écart observé ne vaut que pour un seul prédicteur**, et se lit predicteur par prédicteur, tandis que **l’écart modélisé concerne l’ensemble du tableau** et se lit « tous les autres prédicteurs choisis étant fixés ».
 
-C'est aussi, sous une autre forme, ce que Jérôme Deauvieau appelle traduire les résultats d'un modèle **dans le langage du tableau croisé** — sauf qu'ici la traduction n'est pas à faire après coup : les deux langues sont imprimées côte à côte.
+La distance entre les deux colonnes mesure l'**ajustement** du modèle : les déviations, petites ou grandes, que le modèle apporte par rapport aux écarts déjà observés dans les données. On dit que le modèle **ajuste** les données empiriques. C'est cette paire, et non les nombres pris un à un, qu’il faut apprend à lire. Un tableau croisé donne toujours ses résultats **toutes choses *inégales* par ailleurs** : les deux variables croisées y sont prises dans un contexte dense, liées à toutes les autres, y compris à celles que l'enquête n'a pas mesurées. Un modèle donne les siens **toutes les autres variables explicatives choisies étant égales**. Les deux colonnes portent exactement cette différence-là, et rien de plus.
 
-Montrer les deux n'est pas non plus une lubie de tabxplor. C'est par exemple ce qu'exige STROBE (*STrengthening the Reporting of OBservational studies in Epidemiology*) : donner les estimations non ajustées *et* les estimations ajustées, pour que le lecteur puisse les comparer et juger de combien, et dans quel sens, elles ont bougé.
+C'est aussi, sous une autre forme, ce que Jérôme Deauvieau appelle traduire les résultats d'un modèle **dans le langage du tableau croisé** – sauf qu'ici les deux langues sont imprimées côte à côte. Cette approche tend à devenir la norme dans certaines disciplines scientifiques. Par exemple, le STROBE (*STrengthening the Reporting of OBservational studies in Epidemiology*) exige de donner les estimations non ajustées et les estimations ajustées, pour que le lecteur puisse les comparer et juger de combien, et dans quel sens, elles ont bougé. Les sciences sociales, qui prétendent généralement rester plus proches de l’empirie, auraient tout intérêt à adopter largement cette convention.
 
-## Lire une ligne de gauche à droite
+## Lire une ligne de gauche à droite permet de suivre la logique de la modélisation
 
 ```{r, echo=FALSE}
 model
 ```
 
-Prendre le bloc `colour` de ce tableau. Il contient quatre nombres, rangés dans l'ordre où l'on y pense :
+Prenons les deux lignes `White` et `Black` du prédicteur `colour` de ce tableau. De gauche à droite, dans les cinq colonnes, on peut lire :
 
-| on lit | on obtient | cela veut dire |
-|:---|:---|:---|
-| l'effectif | 3 938 / 1 288 | combien de personnes il y a derrière chaque ligne |
-| `Obs_OR`, entre parenthèses | (86 %) / (74 %) | ce qu'on a réellement **compté** dans les données |
-| `Obs_OR`, l'estimation | `1/2.11***` | la **comparaison observée** qu'on en a tirée |
-| `Model_OR`, l'estimation | `1/1.48***` | la même comparaison, **entre gens semblables sur le reste** |
-| `Model_OR`, entre parenthèses | (84 %) / (79 %) | ce que deviendraient alors les pourcentages, selon le modèle |
+| on lit                                     | on obtient      | cela veut dire                                               |
+|:-------------------------------------------|:----------------|:-------------------------------------------------------------|
+| l'effectif `n`                             | 3 938 / 1 288   | combien de personnes il y a derrière chaque ligne            |
+| colonne `Obs_OR`, nombre entre parenthèses | (86 %) / (74 %) | ce qu'on a réellement **compté** dans les données            |
+| colonne `Obs_OR`, l'estimation             | `1/2.11***`     | la **comparaison observée** qu'on en a tirée                 |
+| colonne`Model_OR`, l'estimation            | `1/1.48***`     | la même comparaison, **entre personnes semblables sur le reste**  |
+| colonne`Model_OR`, entre parenthèses       | (84 %) / (79 %) | ce que deviendraient alors les pourcentages, selon le modèle |
 
-Les deux **estimations** se touchent, au milieu, et c'est voulu : c'est cette comparaison-là qu'on est venu chercher. Les deux **pourcentages** sont aux deux bords — l'observé tout à gauche, l'ajusté tout à droite. (Dans un tableau de moyennes, ces deux-là seraient des moyennes ; tabxplor appelle ce nombre extérieur le **socle** — `base` dans les arguments —, quoi qu'il se trouve être.) Une ligne lue de gauche à droite, c'est l'opération de modélisation elle-même : *voici ce que j'ai compté → voici l'écart que j'en tire → voici cet écart entre gens comparables sur les prédicteurs choisis → voici ce que deviennent les pourcentages*.
+Les deux **estimations** se touchent, au milieu, parce que c'est cette comparaison qui est la clé de voute de l’interprétation. Les deux **pourcentages** sont aux deux bords — l'observé tout à gauche au point de départ, l'ajusté tout à droite à l’arrivée. (Avec une variable à expliquer numérique, ces deux-là seraient des moyennes.) Une ligne lue de gauche à droite mime ainsi l'opération de la modélisation elle-même : *voici ce que j'ai compté → voici l'écart que j'en tire → voici cet écart entre gens comparables sur les prédicteurs choisis → voici ce que deviennent les pourcentages*.
 
-Et, enfin, la phrase :
+Et, enfin, la phrase d’interprétation :
 
-> **Lecture** : parmi les personnes interpellées pour possession à Toronto, **86 % des personnes blanches ont été relâchées, contre 74 % des personnes noires** — une cote environ 2,1 fois plus faible. Entre personnes **de même sexe, de même situation d'emploi, de même nationalité et de mêmes antécédents**, l'écart se resserre sans se refermer : cote environ **1,5 fois plus faible**, soit **84 % contre 79 %** en proportions ajustées.
+> Parmi les personnes interpellées pour possession à Toronto, **86 % des personnes blanches ont été relâchées, contre 74 % des personnes noires** — une cote environ 2,1 fois plus faible. Entre personnes **de même sexe, de même situation d'emploi, de même nationalité et de mêmes antécédents**, l'écart se resserre mais ne se referme pas : cote environ **1,5 fois plus faible**, soit **84 % contre 79 %** en proportions ajustées.
 
-Noter ce que les proportions ajustées permettent de dire et que le rapport de cotes ne permet pas. `1/1.48` est un nombre abstrait ; *84 % contre 79 %* est un énoncé sur des personnes : ce que vaudraient les pourcentages si les gens se ressemblaient réellement sur tous les autres prédicteurs choisis.
+Notons ce que les proportions ajustées permettent de dire et que le rapport de cotes `OR` ne permet pas. `1/1.48` est un nombre abstrait ; *84 % contre 79 %* est un énoncé sur des personnes : ce que deviendraient les pourcentages si les gens se ressemblaient réellement sur tous les autres prédicteurs choisis.
 
-**Et ce bloc « Bilan du modèle » sous chaque tableau ?** C'est, littéralement, son bilan de santé : sur combien de personnes il a été ajusté (`N`), quelle part de la variabilité de la variable à expliquer il rend (`R2 de McFadden`), et quelques vérifications sur sa tenue (`Influence` : est-ce qu'un seul enquêté porte le résultat à lui tout seul ? `Colinéarité` : est-ce que deux prédicteurs mesurent la même chose ?). C'est l'argument `stats` qui le gouverne — d'où le `stats = NULL` qui revient dans les appels de cet article, et qui ne fait que retirer ce bloc. Nous ne nous en servons jamais ici, parce que notre question est ce que l'ajustement *a fait*, non de savoir si le modèle est bon. Les deux comptent, et [Tableaux de régression](tabxplor-reg-fr.html) en explique chaque ligne.
+Au passage, à quoi le block **« Bilan du modèle »** sous chaque tableau correspond-t-il ? Il s’agit, littéralement, de son bilan de santé : 
+- Sur combien de personnes a-t-il été ajusté (`N`) ?
+- Comment se tient-il ? 
+  + `Dispersion` : est-ce qu’on peut faire confiance à ses étoiles de significativité ? (Est-ce que l’erreur-type du modèle est comparable à celle que donne une méthode robuste tenant compte de l’hétérogénéité des variances des différentes catégories ?) 
+  + `Influence` : est-ce qu'un seul enquêté porte le résultat à lui tout seul ? 
+  + `Colinéarité` : est-ce que deux prédicteurs mesurent en fait la même chose, ce qui fausse les résultats ? 
+- Le modèle avec prédicteurs est-il significativement meilleur que le modèle nul, sans prédicteurs (`LR vs null`) ?
+- De quelle part de la variabilité (variance) de la variable à expliquer le modèle rend-il compte (`R2 de McFadden`) ?
+
+ Nous ne nous en servons jamais ici, parce que notre question est ce que l'ajustement *a fait*, non de savoir si le modèle est bon. Les deux sont importants, et [Tableaux de régression](tabxplor-reg-fr.html) explique la signification des différentes statistiques.
 
 ## Les cinq choses que l'ajustement peut faire
 
-Les étudiant·es arrivent souvent en attendant de l'ajustement qu'il réduise les effets, et c'est très souvent ce qu'il fait. Mais il y a cinq issues possibles, toutes courantes, et qui n'en connaît qu'une lira mal les quatre autres. Chaque ligne ci-dessous est un résultat réel de cet article :
+Les étudiant·es s’attendent généralement à ce que l'ajustement réduise toujours les écarts par rapport aux chiffres observées, parce que c'est ce qu’il fait très souvent. Mais il y a bien cinq issues possibles, toutes rencontrées dans les données, et chaque ligne ci-dessous est un résultat réel commenté quelque part dans cet article :
 
-| ce qui se passe | exemple | brut &rarr; ajusté |
-|:---|:---|:---|
-| **il tient** | l'âge, sur le fait d'aller au cinéma (France) | &minus;16,8 &rarr; &minus;17,1 points |
-| **il se reduit** | la race, sur le fait d'être relâché (Toronto) | &minus;11,7 &rarr; &minus;5,2 points |
-| **il disparaît** | le sexe, sur le fait d'être relâché (Toronto) | &minus;3,1 &rarr; +0,1 point |
-| **il s’amplifie** | la classe, sur le fait d'aller au cinéma (France) | &minus;21,3 &rarr; &minus;24,9 points |
-| **il s'inverse** | le sexe, sur l'admission à Berkeley | &minus;14,2 &rarr; +1,9 point |
+| ce qui se passe        | exemple                                                  | brut &rarr; ajusté                    |
+|:-----------------------|:---------------------------------------------------------|:--------------------------------------|
+| **l’écart tient bon**  | l'âge, sur le fait d'aller au cinéma (France)            | &minus;16,8 &rarr; &minus;17,1 points |
+| **l’écart se reduit**  | la couleur de peau, sur la mise en garde à vue (Toronto) | &minus;11,7 &rarr; &minus;5,2 points  |
+| **l’écart disparaît**  | le sexe, sur la mise en garde à vue (Toronto)            | &minus;3,1 &rarr; +0,1 point          |
+| **l’écart s’amplifie** | la classe sociale, sur le fait d'aller au cinéma (France)| &minus;21,3 &rarr; &minus;24,9 points |
+| **l’écart s'inverse**  | le sexe, sur l'admission à Berkeley (USA)                | &minus;14,2 &rarr; +1,9 point         |
 
-Toutes ces lignes sont en **points de pourcentage**, et c'est délibéré : la section 5 montre ce que devient ce même tableau lu sur l'échelle des rapports de cotes.
+Toutes ces lignes sont converties en **points de pourcentage** plutôt que conservées sous forme d’*odds ratios* : on prend simplement la différence entre le pourcentage ajusté de la catégorie étudiée (par exemple Homme) et le pourcentage ajusté de la catégorie de réference (par exemple Femme) – ce qu’on appelle la différence marginale, visible avec le préfixe "m" dans le tableau (cf. ci-dessous). 
 
-**Il tient.** Les personnes âgées vont moins au cinéma, et maintenir la classe sociale constante déplace cela de trois dixièmes de point. Quoi qu'explique l'effet d'âge, ce n'est pas la classe.
+**Noir-blanc : l’écart se réduit.** Dans le cas des mises en garde à vue à Toronto, nous avons vu que l'effet de la couleur de peau perdait environ la moitié de sa taille. Une partie de ce qui ressemblait à un effet direct de la race assignée était l'emploi, la nationalité et les antécédents dans les rapports avec la police (tous conséquences, d’une certaine manière, d’une certaine dimension du racisme structurel). Mais l’autre moitié, celle qui tient, pourrait *aussi* s’expliquer par une forme de racisation plus directe qui se joueraient dans les interactions avec les policiers – ou par d’autres facteurs non mesurés.
 
-**Il fond.** L'écart de race à Toronto perd plus de la moitié de sa taille. Une partie de ce qui ressemblait à un effet direct de la race était l'emploi, la nationalité et les antécédents — tous conséquences d'un racisme structurel ; et une autre partie tenait bel et bien à quelque chose de plus direct, qui se joue dans l'interaction avec les policiers.
-
-**Il disparaît.** Les femmes étaient relâchées un peu plus souvent que les hommes (86 % contre 83 %, tout juste significatif). Entre personnes comparables, plus rien du tout. Le tableau ci-dessous est en points de pourcentage, ce que demande `measure = "difference"`. (Le `m` qui apparaît dans l'en-tête de colonne dit que le modèle a calculé l'effet personne par personne avant d'en faire la moyenne ; la section 4 l'explique.)
+**Homme-femme : l’écart disparaît.** Dans les mêmes données, les femmes sont relâchées un peu plus souvent que les hommes (86 % contre 83 %, tout juste significatif). Dans le modèle, dès lors qu’on raisonne entre personnes comparables sur les variables choisies, l’effet disparait totalement :
 
 ```{r}
 tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
-        measure = "difference", stats = NULL)
+        measure = "difference")
 ```
 
-La ligne `sex` passe de `-3.1 %*` à `+0.1 %`. Lire cela avec soin, car c'est l'endroit où l'on en dit trop le plus volontiers : cela ne dit pas que les hommes et les femmes ont été traités de la même façon. Cela dit que la petite différence observée est ce à quoi on pouvait s'attendre du seul fait que, dans ce fichier, les hommes et les femmes diffèrent par l'emploi, la nationalité et les antécédents — si bien qu'il ne reste rien, dans ce cas précis, que le sexe ait à expliquer.
+La ligne `sex` passe de `-3.1 %*` à `+0.1 %`. Lire cela avec soin, car c'est l'endroit où l'on en dit souvent trop : cela ne dit pas que les hommes et les femmes ont été traités de la même façon. Cela dit que la petite différence observée est ce à quoi on pouvait s'attendre du seul fait que, dans ce fichier, les hommes et les femmes diffèrent par l'emploi, la nationalité et les antécédents — si bien qu'il ne reste rien, dans ce cas précis, que le sexe ait à expliquer.
 
-**Il s’amplifie, et il s'inverse** — les deux cas les moins enseignés, auxquels la section 5 est consacrée.
+Et nous verrons par la sutie deux cas où l’ajustement réalisé par la modèle **amplifie** l’écart, voire **l’inverse** par rapport à ce qu’on observait dans le tableau croisé.
 
 ## Le voir bouger, bloc par bloc
 
@@ -373,7 +391,7 @@ La chose la plus utile qu'on puisse faire d'une régression est de l'ajuster plu
 tab_reg(car_arrests, "released",
         list("who they are" = c("colour", "sex", "citizen", "employed"),
              "+ prior record" = c("colour", "sex", "citizen", "employed", "checks")),
-        measure = "difference", display = "est")
+        measure = "difference", display = "est", stats=NULL)
 ```
 
 Lire la ligne `colour` de gauche à droite : **&minus;11,7 points &rarr; &minus;7,8 &rarr; &minus;5,2**. L'emploi et la nationalité rendent compte d'environ un tiers de l'écart ; les antécédents d'un quart de plus ; et **cinq points environ survivent à tout ce que contient le fichier**.
@@ -534,6 +552,11 @@ tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "chec
 reg_formulas(tab_reg(car_arrests, "released", c("colour", "checks"), measure = "ratio", empirical = FALSE))
 reg_formulas(tab_reg(car_arrests, "released", c("colour", "checks"), link    = "ratio", empirical = FALSE))
 ```
+
+`link` est l'écart que chaque modèle estime — le mot que prend `link =` — et `fit` est l'appel R qui a
+tourné : un `glm()` logistique ordinaire pour le premier, dont le rapport vient des prédictions,
+contre un `svyglm()` à vraisemblance de Poisson pour le second, qui estime le rapport directement et
+prend des erreurs-types robustes (Huber-White), cette vraisemblance étant délibérément la mauvaise.
 
 **Lequel utiliser.** Préférer **`measure = "ratio"`**, la voie moyennée, dans presque tous les cas : le modèle logistique converge toujours, ne peut jamais prédire une probabilité supérieure à 100 %, et le nombre qu'il donne décrit les gens qu'on a enquêtés. Aller chercher **`link = "ratio"`** quand on a besoin du risque relatif *conditionnel* — celui qui suppose que le même rapport vaut pour tout le monde : c'est ce qu'attendra un lecteur venu de l'épidémiologie, et c'est ce qu'il faut pour s'aligner sur une estimation de Poisson modifiée publiée. La grille complète de ce que chaque famille peut ajuster et rapporter est dans [Tableaux de régression](tabxplor-reg-fr.html).
 

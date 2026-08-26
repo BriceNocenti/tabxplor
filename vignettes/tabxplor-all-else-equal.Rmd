@@ -209,9 +209,11 @@ Rather than memorise the grid, ask:
 reg_measures(car_arrests, "released")
 ```
 
-The table has **two blocks**, and the split is the whole answer. The first is one row per model you could fit: its `link`, and the measure that model's own coefficients carry. The second is what can be read off the model's **predictions** instead — and those rows say `link = "(any)"`, because a marginal effect averages fitted probabilities and does not care which link produced them.
+The table has **two blocks**, and the split is the whole answer. The first is the model itself: its `link`, and the measure that model's own coefficients carry. The second is what can be read off the model's **predictions** instead — and those rows say `link = "(any)"`, because a marginal effect averages fitted probabilities and does not care which link produced them.
 
 So `link` is the one choice that matters, and it decides only **which measure comes with a coefficient**: everything else is available whichever model you fit. `measure` then picks a row, `effect` is the override knob for the two prediction forms, and `header` is the column name you will get.
+
+By default only the family's **own** model is listed — the one it fits unless told otherwise. Every family can be fitted at other links, which are specialist choices; `reg_measures(car_arrests, "released", link = "all")` adds them, and marks the family's own with `base_link`.
 
 Only what can be built is listed — a measure this kind of outcome does not have simply has no row, and the message above the table says why. Try it on `checks` and you will be offered three families instead of one (a quantity, a count, or a score out of q items), each with its own block.
 
@@ -547,6 +549,11 @@ tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "chec
 reg_formulas(tab_reg(car_arrests, "released", c("colour", "checks"), measure = "ratio", empirical = FALSE))
 reg_formulas(tab_reg(car_arrests, "released", c("colour", "checks"), link    = "ratio", empirical = FALSE))
 ```
+
+`link` is the measure each model estimates — the word `link =` takes — and `fit` is the R call that
+ran: an ordinary logistic `glm()` for the first, whose ratio comes from its predictions, against a
+Poisson-likelihood `svyglm()` for the second, which estimates the ratio directly and takes robust
+(Huber-White) standard errors because that likelihood is deliberately the wrong one.
 
 **Which to use.** Prefer **`measure = "ratio"`**, the marginal path, in almost every case: the logistic model always converges, can never predict a probability above 100 %, and the number it gives describes the people you surveyed. Reach for **`link = "ratio"`** when you need the *conditional* risk ratio — the one that assumes the same ratio holds for everybody, which is what a reader coming from epidemiology will expect, and what you must use to line up with a published modified-Poisson estimate. The full grid of what each family can fit and report is in `vignette("tabxplor-reg")`.
 

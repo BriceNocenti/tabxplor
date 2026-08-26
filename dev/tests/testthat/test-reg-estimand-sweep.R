@@ -105,7 +105,7 @@ test_that("a prediction route may run on a NON-default fit -- link and measure a
                                 link = "ratio", measure = "difference", cleannames = FALSE))
   expect_true("Model_mRD" %in% names(t))
   expect_identical(get_scale(modcol(t)), "points")
-  expect_identical(reg_formulas(t)$fit, "rr")        # the model is the modified Poisson...
+  expect_identical(reg_formulas(t)$fit, 'svyglm(quasipoisson("log"))')  # the modified Poisson...
   expect_identical(reg_call(t)$link, "ratio")        # ...and the table remembers it
   expect_identical(reg_call(t)$measure, "difference")
 })
@@ -933,7 +933,7 @@ test_that("`link` takes `measure`'s own words, plus the glm spellings, silently"
   expect_identical(reg_link_key("RR"),         "ratio")        # the acronyms work here too
   expect_identical(reg_link_key("IRR"),        "ratio")        # ...every one of them, since 22c-v
   expect_identical(reg_link_key("RoM"),        "ratio")
-  # 22c-v: what reg_formulas() prints in `fit` is typeable back into `link`
+  # the internal fit keys stay typeable into `link` (reg_formulas() now prints the measure itself)
   expect_identical(reg_link_key("rr"),         "ratio")
   expect_identical(reg_link_key("rd"),         "difference")
   expect_identical(reg_link_key("mr"),         "ratio")
@@ -1001,8 +1001,11 @@ test_that("`link` names the model and `measure` the report: two different risk r
                                    measure = "ratio", empirical = TRUE, cleannames = FALSE))
   expect_true("Model_RR"  %in% names(cond))     # the modified Poisson's own coefficient
   expect_true("Model_mRR" %in% names(marg))     # g-computed from the logistic fit
-  expect_identical(reg_formulas(cond)$fit, "rr")
-  expect_identical(reg_formulas(marg)$fit, "binomial")
+  expect_identical(reg_formulas(cond)$fit, 'svyglm(quasipoisson("log"))')
+  expect_identical(reg_formulas(marg)$fit, 'glm(binomial("logit"))')
+  # `link` says which word rebuilds each of them
+  expect_identical(reg_formulas(cond)$link, "ratio")
+  expect_identical(reg_formulas(marg)$link, "odds_ratio")
   # both are risk ratios, so both sit on the same scale and pair with the same crude column
   expect_identical(get_scale(modcol(cond)), "pct_ratio")
   expect_identical(get_scale(modcol(marg)), "pct_ratio")

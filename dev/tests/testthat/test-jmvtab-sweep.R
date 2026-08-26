@@ -841,16 +841,29 @@ testthat::test_that("jmvtab_export honours replace and RETURNS the path really w
 })
 
 
-testthat::test_that("export_status_html: bold green success with the path, bold red failure, escaped", {
+testthat::test_that("export_status_html: a tinted box, green on success and red on failure, escaped", {
   ok <- export_status_html("D:/Documents/Tableau1.xlsx", ok = TRUE)
-  testthat::expect_match(ok, "font-weight:bold")
-  testthat::expect_match(ok, "#1a7f37")                         # green
-  testthat::expect_match(ok, "Saved to: ", fixed = TRUE)
+  testthat::expect_match(ok, "#1a7f37")                         # the ink
+  testthat::expect_match(ok, "#E7F7E9")                         # ...and its own hue, as the ground
+  testthat::expect_match(ok, "border-radius", fixed = TRUE)
+  testthat::expect_match(ok, "Saved to:", fixed = TRUE)
   testthat::expect_match(ok, "Tableau1.xlsx", fixed = TRUE)     # the REAL (numbered) path
   bad <- export_status_html("boom <x> & <y>", ok = FALSE)
   testthat::expect_match(bad, "#c62828")                        # red
-  testthat::expect_match(bad, "Export failed: ", fixed = TRUE)
+  testthat::expect_match(bad, "#FFECE9")
+  testthat::expect_match(bad, "Export failed:", fixed = TRUE)
   testthat::expect_match(bad, "&lt;x&gt; &amp; &lt;y&gt;", fixed = TRUE)   # HTML-escaped
+})
+
+testthat::test_that("the export status outlives the click that made it", {
+  # the Export action resets itself ~2 s after the click, and that reset is a real option change --
+  # so the note has to come back from `$state`, not from the run that wrote it.
+  st <- jmv_export_remember(list(schema = "x"), export_status_html("/a/Tab1.xlsx"))
+  testthat::expect_identical(st$schema, "x")                    # the carrier is not disturbed
+  testthat::expect_match(jmv_export_recall(st), "Tab1.xlsx", fixed = TRUE)
+  testthat::expect_identical(jmv_export_recall(NULL), "")       # a first run says nothing
+  testthat::expect_identical(jmv_export_recall(list()), "")
+  testthat::expect_identical(jmv_export_recall(jmv_export_remember(NULL, "")), "")
 })
 
 

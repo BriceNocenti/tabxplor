@@ -211,3 +211,16 @@ test_that("`spread_vars` alone makes the variable a tab_var, and promotes a tota
   ens <- names(sp)[vapply(sp, function(x) is_fmt(x) && get_col_group(x) == "Ensemble", logical(1))]
   expect_true(all(!is.na(get_pct(sp[[ens[[1]]]]))))
 })
+
+test_that("a compacted table keeps its tab_var column; a single-row_var one still drops it", {
+  # the LEVEL column alone is a complete index only with one row_var (its Total row names the
+  # sub-table); a compacted table nests variable x sub-table, so the column has to stay.
+  one  <- tabxplor:::tab_export_prep(t_tv, backend = "kable", wrap = NULL)
+  testthat::expect_false("year" %in% names(one$tables[[1]]$tab))
+
+  t_cmp <- tab(gss, c(marital, relig), race, tab_vars = year, pct = "row")
+  many  <- tabxplor:::tab_export_prep(t_cmp, backend = "kable", wrap = NULL)
+  nms   <- names(many$tables[[1]]$tab)
+  testthat::expect_true("year" %in% nms)
+  testthat::expect_equal(nms[1:3], c("row_var", "year", "levels"))   # column order IS the nesting
+})

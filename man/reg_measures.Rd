@@ -4,7 +4,7 @@
 \alias{reg_measures}
 \title{What can this outcome be modelled as?}
 \usage{
-reg_measures(data, outcome, family = "auto", link = "all")
+reg_measures(data, outcome, family = "auto", link = "auto")
 }
 \arguments{
 \item{data}{A data frame (or a \code{survey} design), as for \code{\link[=tab_reg]{tab_reg()}}.}
@@ -14,12 +14,14 @@ reg_measures(data, outcome, family = "auto", link = "all")
 \item{family}{The model family. \code{"auto"} (default) lists every family this kind of outcome can
 take, the detected one first — which is the choice to make before the others.}
 
-\item{link}{Which measure the model estimates. \code{"all"} (default) lists every link the family
-fits; name one to read the table at that model alone.}
+\item{link}{Which measure the model estimates. \code{"auto"} (default) reads the table at each family's
+own model; \code{"all"} adds every other link it fits; name one to read it at that model alone.}
 }
 \value{
 A tibble of \code{family} (only when several are listed), \code{link}, \code{measure}, \code{effect},
 \code{header} (the column name it would produce) and \code{reads_as} (what that header's acronym means).
+With \code{link = "all"}, a \code{base_link} column says which model is the family's own (\code{NA} on the
+prediction rows, which belong to no link in particular).
 }
 \description{
 Lists what \code{\link[=tab_reg]{tab_reg()}} can report for one outcome: which models it could fit, and which measure
@@ -38,6 +40,10 @@ fit — \code{link} reads \code{"(any)"} there.
 
 So \code{link} is the choice that matters, and it decides only which measure comes with a
 \emph{coefficient}: everything else is available from any of them.
+
+By default only each family's \strong{own} model is listed — the one it fits unless told otherwise.
+\code{link = "all"} adds the others, which are specialist choices, and marks the family's own with
+\code{base_link}.
 
 Only what can be built is listed. A measure this kind of outcome does not have simply has no row,
 and the message says why (an odds ratio needs a probability to take the odds of). One state exists

@@ -54,10 +54,11 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # ⚠ read the render through jmvtab_reg_render_fetch(), never off `cst$html`: one too big for
         # jmvcore's state ceiling never went in there, and only the process-local mirror has it.
         last <- jmvtab_reg_render_fetch(cst)
+        note <- jmv_export_recall(cst)          # the last export's box survives a re-serve
         if (!is.null(last) && identical(cst$sig, cur_sig)) {
-          self$results$html_table$setContent(jmv_results_content(last))   # unchanged -> re-serve
+          self$results$html_table$setContent(jmv_results_content(last, note))  # unchanged -> re-serve
         } else {
-          self$results$html_table$setContent(jmv_results_content(private$.compare_hint(last)))
+          self$results$html_table$setContent(jmv_results_content(private$.compare_hint(last), note))
         }
         return(invisible())
       }
@@ -75,10 +76,18 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       }
 
       status <- jmv_backend_export(self, tabs)
+      note   <- if (nzchar(status)) status else jmv_export_recall(cst)
       html <- jmv_backend_render_html(self, tabs)
-      self$results$html_table$setContent(jmv_results_content(status, html))
-      # Store the PURE render, so a later re-serve stays clean of the export status line.
-      if (staged) self$results$compare_state$setState(jmvtab_reg_render_store(cur_sig, html))
+      # the box sits UNDER the table, and outlives the Export action's own ~2 s reset
+      self$results$html_table$setContent(jmv_results_content(html, note))
+      # Store the PURE render, so a later re-serve stays clean of the export status line; the note
+      # rides beside it. ⚠ compare_state is written on a NON-staged run only right after an export:
+      # a fitted render is heavy, and re-setting it every round-trip is what `staged` exists to avoid.
+      if (staged)
+        self$results$compare_state$setState(
+          jmv_export_remember(jmvtab_reg_render_store(cur_sig, html), note))
+      else if (nzchar(status))
+        self$results$compare_state$setState(jmv_export_remember(cst, status))
     },
 
     .opts = function(wt) {

@@ -572,6 +572,14 @@ reg_family_display_name <- function(family) {
   r <- REG_FAMILIES[[family]]
   if (is.null(r)) gettext("regression") else r$display()
 }
+# WHICH MEASURE a fitted model estimates, as the word `link =` takes: an internal fit key spells its
+# own (REG_FIT_SPELLINGS), a family names its first `fits` entry. Read by reg_formulas().
+#' @keywords internal
+#' @noRd
+reg_link_of_fit <- function(fit_family) {
+  if (fit_family %in% REG_FIT_ONLY_FAMILIES) unname(REG_FIT_SPELLINGS[[fit_family]])
+  else reg_family_link(fit_family)
+}
 #' @keywords internal
 #' @noRd
 reg_family_short <- function(family) REG_FAMILIES[[family]]$short %||% "reg"
@@ -1390,6 +1398,10 @@ reg_estimand_offer_lines <- function(family, link = NULL, effect = NULL) {
 #' So `link` is the choice that matters, and it decides only which measure comes with a
 #' *coefficient*: everything else is available from any of them.
 #'
+#' By default only each family's **own** model is listed — the one it fits unless told otherwise.
+#' `link = "all"` adds the others, which are specialist choices, and marks the family's own with
+#' `base_link`.
+#'
 #' Only what can be built is listed. A measure this kind of outcome does not have simply has no row,
 #' and the message says why (an odds ratio needs a probability to take the odds of). One state exists
 #' only at run time: a link that does not converge on your data. `tab_reg()` says so and, for the
@@ -1399,11 +1411,13 @@ reg_estimand_offer_lines <- function(family, link = NULL, effect = NULL) {
 #' @param outcome The outcome column name.
 #' @param family The model family. `"auto"` (default) lists every family this kind of outcome can
 #'   take, the detected one first — which is the choice to make before the others.
-#' @param link Which measure the model estimates. `"all"` (default) lists every link the family
-#'   fits; name one to read the table at that model alone.
+#' @param link Which measure the model estimates. `"auto"` (default) reads the table at each family's
+#'   own model; `"all"` adds every other link it fits; name one to read it at that model alone.
 #'
 #' @return A tibble of `family` (only when several are listed), `link`, `measure`, `effect`,
 #'   `header` (the column name it would produce) and `reads_as` (what that header's acronym means).
+#'   With `link = "all"`, a `base_link` column says which model is the family's own (`NA` on the
+#'   prediction rows, which belong to no link in particular).
 #' @eval reg_measures_rd()
 #' @seealso [tab_reg()] to build the table, [reg_formulas()] to see the formula each column was
 #'   fitted with.
@@ -1411,7 +1425,7 @@ reg_estimand_offer_lines <- function(family, link = NULL, effect = NULL) {
 #' @examples
 #' reg_measures(car_arrests, "released")
 #' reg_measures(car_salaries, "salary")
-reg_measures <- function(data, outcome, family = "auto", link = "all") {
+reg_measures <- function(data, outcome, family = "auto", link = "auto") {
   svy <- svy_unwrap_data(data, "reg_measures")
   if (!is.null(svy)) data <- svy$data
   auto_fam <- identical(family, "auto")
@@ -1439,11 +1453,16 @@ reg_measures <- function(data, outcome, family = "auto", link = "all") {
   trials <- if ("binomial" %in% fams && identical(REG_FAMILIES[[fams[[1]]]]$level, "mean"))
     cli::format_inline(
       "{.code family = \"binomial\"} reads it as a score out of q items: pass {.arg trials}.")
+  # what was decided for them, and the argument that changes it: every family fits models at other
+  # links, and a specialist who wants one asks for the whole grid by name.
+  more <- if (identical(link, "auto"))
+    cli::format_inline("{.code link = \"all\"} lists the other models each family can fit.")
   cli::cli_inform(c(
     "i" = head,
     if (!is.null(others)) c("i" = others),
     if (!is.null(trials)) c("i" = trials),
-    "i" = "Any of these also reads on the model's own scale: {.code measure = \"raw_coefficient\"}."))
+    "i" = "Any of these also reads on the model's own scale: {.code measure = \"raw_coefficient\"}.",
+    if (!is.null(more)) c("i" = more)))
   out
 }
 
@@ -1461,14 +1480,20 @@ reg_measures_one <- function(fam, link = "all", outcome = NULL) {
     if (identical(lk, "auto")) reg_family_link(fam) else lk
   }
   lks <- intersect(lks, fits)                       # a link this family does not fit has no row
-  row <- function(r, lk_shown) tibble::tibble(
-    family = fam, link = lk_shown, measure = r$base_measure, effect = r$effect,
+  # `base_link` answers the question `link = "all"` raises and no other does -- WHICH of these models
+  # is the family's own. At one link it would be a tautology and a word to learn for nothing.
+  show_base <- identical(link, "all")
+  base_lk   <- reg_family_link(fam)
+  row <- function(r, lk_shown, base = NA) tibble::tibble(
+    family = fam, link = lk_shown,
+    base_link = if (show_base) base else NULL,
+    measure = r$base_measure, effect = r$effect,
     header = paste0("Model_", reg_word(r)), reads_as = reg_word_long(r))
 
   cond <- purrr::list_rbind(purrr::map(lks, function(lk) {
     r <- reg_estimand(fam, link = lk, measure = "auto", effect = "conditional")
     if (!identical(r$status, "ok")) return(NULL)
-    row(r, lk)
+    row(r, lk, base = identical(lk, base_lk))
   }))
   # the prediction block, read at ONE link (any of them) and shown once
   base <- if (length(lks)) lks[[1L]] else reg_family_link(fam)

@@ -287,6 +287,30 @@ testthat::test_that("jmvtab_export writes a valid Excel workbook", {
 
 
 
+testthat::test_that("the export status is a tinted box that outlives the click", {
+  # jamovi resets the Export action ~2 s after the click, and that reset is a real option change: the
+  # run it triggers has `exportExcel = FALSE`, so the note must come back from `$state`.
+  ok <- tabxplor:::export_status_html("/home/me/Tableau1.xlsx", ok = TRUE)
+  testthat::expect_match(ok, "#1a7f37")                    # the ink...
+  testthat::expect_match(ok, "#E7F7E9")                    # ...and its own hue, lifted to a ground
+  testthat::expect_match(ok, "border-radius", fixed = TRUE)
+  bad <- tabxplor:::export_status_html("boom", ok = FALSE)
+  testthat::expect_match(bad, "#c62828")
+  testthat::expect_match(bad, "#FFECE9")
+
+  st <- tabxplor:::jmv_export_remember(list(schema = "x"), ok)
+  testthat::expect_identical(st$schema, "x")               # the carrier is not disturbed
+  testthat::expect_match(tabxplor:::jmv_export_recall(st), "Tableau1.xlsx", fixed = TRUE)
+  testthat::expect_identical(tabxplor:::jmv_export_recall(NULL), "")
+  testthat::expect_identical(tabxplor:::jmv_export_recall(list()), "")
+
+  # ...and it is emitted UNDER the table, never above it
+  content <- tabxplor:::jmv_results_content("<table>x</table>", ok)
+  testthat::expect_lt(regexpr("<table>", content, fixed = TRUE),
+                      regexpr("Tableau1.xlsx", content, fixed = TRUE))
+})
+
+
 # === SECTION: the cache-key skeleton ==============================================================
 
 testthat::test_that("tab_cache_keys emits the tier 0-2 skeleton", {

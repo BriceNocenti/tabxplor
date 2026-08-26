@@ -40,13 +40,15 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       # queueing behind it (the jmvcore remedy for UI stutter). Guarded for the non-jamovi harness.
       try(private$.checkpoint(), silent = TRUE)
       built <- jmvtab_build(data, opts, store)
-      self$results$cache_state$setState(built$store)
       tabs  <- built$tabs
 
-      # The status line is prepended above the table because jamovi's Notice has no success type.
+      # The status box sits UNDER the table (jamovi's Notice has no success type) and OUTLIVES the
+      # click: the Export action resets itself after ~2 s, so the note rides in the state carrier.
       status <- jmv_backend_export(self, tabs)
+      note   <- if (nzchar(status)) status else jmv_export_recall(store)
+      self$results$cache_state$setState(jmv_export_remember(built$store, note))
       self$results$html_table$setContent(
-        jmv_results_content(status, jmv_backend_render_html(self, tabs)))
+        jmv_results_content(jmv_backend_render_html(self, tabs), note))
     },
 
     # Kept separate so the build core stays engine-free, i.e. testable without a live jamovi session.

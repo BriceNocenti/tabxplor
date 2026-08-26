@@ -121,6 +121,34 @@ testthat::test_that("tab_xl fits each column to what its cells show, and per she
 
 
 
+testthat::test_that("the shape table lies over the main grid, and a check picture is not crowded", {
+  testthat::skip_if_not_installed("openxlsx2")
+  d <- fx_reg_df(); d$married <- as.integer(d$marital == "Married")
+  m <- tab_reg(d, "married", c("race", "age", "tvhours"), family = "binomial")
+  testthat::skip_if(is.null(tabxplor:::reg_shape_table(m)))
+  f <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(m, path = f, replace = TRUE, open = FALSE, check = "auto"))
+  wb <- openxlsx2::wb_load(f)
+  mg <- xl_merges(wb)
+
+  # THE FIRST SHAPE COLUMN TAKES THE INDEX BLOCK (it holds a formula, and lands under the row
+  # labels); every other one takes two data columns, a data column being one number wide.
+  df  <- openxlsx2::wb_to_df(wb, sheet = 1, col_names = FALSE)
+  hdr <- which(apply(df, 1, function(r) any(!is.na(r) & grepl("model scale", r))))
+  testthat::expect_length(hdr, 1L)
+  row <- as.integer(rownames(df)[hdr])
+  testthat::expect_true(paste0("A", row, ":B", row) %in% mg)     # the 2-column index block
+  testthat::expect_true(paste0("C", row, ":D", row) %in% mg)
+
+  # the picture carries its own title, so nothing is written above it -- and the gap under it is
+  # the one constant both the budget and the writer read.
+  testthat::expect_gte(tabxplor:::XL_CHECK_GAP, 4L)
+  testthat::expect_equal(
+    tabxplor:::xl_check_block(list(height = 5.8)),
+    as.integer(ceiling(5.8 * 72 / 15)) + tabxplor:::XL_CHECK_GAP)
+})
+
+
 # === SECTION: the A1 ranges and the numFmt escaping ===============================================
 
 test_that("int_to_col / xl_cell produce A1 references", {

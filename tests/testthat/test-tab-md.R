@@ -127,6 +127,10 @@ testthat::test_that("tab_md pipe grid lines have same number of pipes", {
 # === SECTION: colour spans (Phase 10f) ========================================
 
 tabs_col <- tab(gss, race, marital, pct = "row", color = "diff")
+# a COMPOSITE display is what puts an aside beside the primary token -- the shape the span must not
+# swallow, and the one every width case below is measured on.
+tabs_comp <- dplyr::mutate(tabs_col,
+                           dplyr::across(dplyr::where(is_fmt), ~ set_display(., "{pct} ({n})")))
 
 
 testthat::test_that("coloured table emits pandoc bracketed spans with slot classes", {
@@ -148,12 +152,32 @@ testthat::test_that("color = FALSE yields plain markdown (no spans)", {
 })
 
 
+testthat::test_that("the colour span stops at the primary token, and the aside stays plain", {
+  # THE CELL'S RENDERING STOPS AT ITS PRIMARY TOKEN -- the rule html states and md now applies.
+  md <- tab_md(tabs_comp, print = FALSE)
+  # the span CLOSES before the aside (the separator is a nbsp, so html cannot break the pair)
+  testthat::expect_match(md, "\\]\\{\\.[pm][0-9][^}]*\\}[ \u00a0]\\(")
+  testthat::expect_false(grepl("\\[[^]]*\\([^)]*\\)[^]]*\\]\\{", md))  # no aside inside a span
+
+  # the stars ride INSIDE the span: they are the cell's own signal, not an aside
+  st <- tab_md(tab(gss, race, marital, pct = "row", color = "diff", stars = TRUE), print = FALSE)
+  testthat::expect_match(st, "[0-9]%[*]+\\]\\{\\.[pm][0-9]")
+
+  # the documented opt-out reaches md too
+  withr::with_options(list(tabxplor.color_whole_cell = TRUE), {
+    whole <- tab_md(tabs_comp, print = FALSE)
+    testthat::expect_match(whole, "\\([^)]*\\)[ ]*\\]\\{\\.[pm][0-9]")
+  })
+})
+
+
 testthat::test_that("numbers stay aligned when coloured and uncoloured cells mix in a column", {
   # Phase 13d: dropping the `.n` neutral removed the span that used to give EVERY cell of a coloured
   # column the same "[num]{...}" scaffold. An uncoloured cell now uses a bracket-free geometry ("  " in
   # place of " [") so the number's right edge lands at the same offset. The sibling pipe-width test
   # cannot see this: padding to total_width keeps the pipes aligned even if the numbers drift.
-  md    <- tab_md(tabs_col, print = FALSE)
+  for (tb in list(tabs_col, tabs_comp)) {
+  md    <- tab_md(tb, print = FALSE)
   lines <- strsplit(md, "\n")[[1]]
   # the alignment row. NOTE the character class excludes spaces on purpose: the Phase 13c-iii col_var
   # spanning-name row is `|        |   marital   |`, which a `[-: ]+` class matches -- picking it up
@@ -185,6 +209,7 @@ testthat::test_that("numbers stay aligned when coloured and uncoloured cells mix
                             paste(unique(ends), collapse = "/"), ":\n",
                             paste0("[", col, "]", collapse = "\n")))
     }
+  }
   }
   testthat::succeed()
 })
@@ -332,4 +357,9 @@ testthat::test_that("md carries the unit row, italic and span-free", {
   testthat::expect_false(any(grepl("tx-unit", ln, fixed = TRUE)))
   # ... and the grid stays square
   testthat::expect_length(unique(nchar(ln)), 1L)
+
+  # the same, on the shape that actually stresses the width model: an interior span with an aside
+  # after it, mixed with uncoloured and bold cells in one column.
+  ln2 <- grep("^[|]", strsplit(tab_md(tabs_comp, print = FALSE), "\n")[[1]], value = TRUE)
+  testthat::expect_length(unique(nchar(ln2)), 1L)
 })

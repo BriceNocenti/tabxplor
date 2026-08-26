@@ -1140,6 +1140,39 @@ reg_fit_formula <- function(outcome, predictors, add_terms = NULL, formula = NUL
   stats::as.formula(paste0(response %||% paste0("`", outcome, "`"), " ~ ", rhs))
 }
 
+# The glm FAMILY OBJECT each internal link key fits with. Read by reg_fit() (what really runs) and by
+# reg_formulas() (what it prints), so the printed call and the fitted one cannot drift.
+#' @keywords internal
+#' @noRd
+reg_fit_family_obj <- function(family, weighted = FALSE) switch(
+  family,
+  "binomial"     = if (weighted) stats::quasibinomial("logit") else stats::binomial("logit"),
+  "poisson"      = if (weighted) stats::quasipoisson("log") else stats::poisson("log"),
+  "quasipoisson" = stats::quasipoisson("log"),
+  # quasipoisson in BOTH bases -- the "rr" fit goes through svyglm either way, and AIC / BIC then
+  # return NA, the honest answer for a quasi-likelihood.
+  "rr"           = stats::quasipoisson("log"),
+  "rd"           = stats::binomial("identity"),
+  # the RATIO OF MEANS: Poisson pseudo-maximum-likelihood with robust SEs -- the log link is the
+  # point, not a claim about counts.
+  "mr"           = stats::quasipoisson("log"),
+  "gaussian"     = stats::gaussian()
+)
+
+# ...and that call written out, in glm vocabulary -- the `fit` column of reg_formulas(). A svyglm()
+# row is also the sandwich: survey's design-based variance IS the Huber-White estimator, which is why
+# a deliberately misspecified likelihood ("rr", "mr", "rd") always goes through it.
+#' @keywords internal
+#' @noRd
+reg_fitter_call <- function(family, weighted = FALSE) {
+  if (identical(family, "multinomial")) return(if (weighted) "svy_vglm(multinomial())" else "multinom()")
+  if (identical(family, "ordinal"))     return(if (weighted) "svyolr()" else "polr()")
+  if (identical(family, "gaussian") && !weighted) return("lm()")
+  fo  <- reg_fit_family_obj(family, weighted)
+  fun <- if (reg_fam_svy_fitted(family, weighted)) "svyglm" else "glm"
+  paste0(fun, "(", fo$family, "(\"", fo$link, "\"))")
+}
+
 # The RESPONSE side of a grouped-binomial fit, from the estimand's link key: the modified Poisson
 # models the success COUNT (with log(trials) as offset), every other link the two-column pair.
 #' @keywords internal
@@ -1168,9 +1201,11 @@ reg_grouped_response <- function(family)
 #' changes any effect, only what the Constant row means.
 #'
 #' @param x A table built by [tab_reg()].
-#' @return A tibble with one row per model: `model` (its name in the table), `outcome`, `family`
-#'   (the outcome family), `fit` (the internal link the measure asked for --- `"rr"`, `"rd"`, `"mr"`
-#'   --- or the family itself) and `formula`.
+#' @return A tibble with one row per model: `model` (its name in the table), `outcome`, `family` (the
+#'   outcome family), `link` (the measure that model estimates --- the word `link =` takes), `fit`
+#'   (the R call it was fitted with) and `formula`. A `svyglm()` row also means robust
+#'   (Huber-White) standard errors: survey's design-based variance IS the sandwich, which is why a
+#'   ratio or a difference on a binary outcome is fitted through it.
 #' @seealso [tab_reg()], [reg_measures()] (what an outcome can be modelled as).
 #' @export
 #' @examples
@@ -1199,7 +1234,10 @@ reg_formulas <- function(x) {
       model   = sp$label, outcome = sp$outcome,
       family  = if (sp$fit_family %in% names(REG_FIT_FAMILY))
                   unname(REG_FIT_FAMILY[[sp$fit_family]]) else sp$fit_family,
-      fit     = sp$fit_family,
+      # WHAT TO TYPE and WHAT RAN, side by side: `link` is the measure this model estimates, spelt
+      # exactly as `link =` takes it, and `fit` is the R call -- so neither says an internal key.
+      link    = reg_link_of_fit(sp$fit_family),
+      fit     = reg_fitter_call(sp$fit_family, isTRUE(fs$weighted)),
       formula = paste(deparse(fml, width.cutoff = 500L), collapse = " "))
   }))
 }
@@ -1534,20 +1572,7 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
                            multiplier = multiplier, rec = rec))
   }
 
-  fam_obj <- switch(
-    family,
-    "binomial"     = if (weighted) stats::quasibinomial("logit") else stats::binomial("logit"),
-    "poisson"      = if (weighted) stats::quasipoisson("log") else stats::poisson("log"),
-    "quasipoisson" = stats::quasipoisson("log"),
-    # quasipoisson in BOTH bases -- the "rr" fit goes through svyglm either way, and AIC / BIC then
-    # return NA, the honest answer for a quasi-likelihood.
-    "rr"           = stats::quasipoisson("log"),
-    "rd"           = stats::binomial("identity"),
-    # the RATIO OF MEANS: Poisson pseudo-maximum-likelihood with robust SEs -- the log link is the
-    # point, not a claim about counts.
-    "mr"           = stats::quasipoisson("log"),
-    "gaussian"     = stats::gaussian()
-  )
+  fam_obj <- reg_fit_family_obj(family, weighted)
 
   # ONE assembly for every fitter (reg_fit_formula), so reg_formulas() reports what really ran.
   # A Poisson likelihood has no two-column response: the grouped modified Poisson models the success
@@ -4682,6 +4707,9 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
                     prep = a$prep, data_expr = data_expr,
                     multiplier = a$multiplier, link = a$est$link,
                     effect = a$est$effect, measure = a$est$measure,
+                    # the resolved flag reg_fit() itself branches on, so reg_formulas() can name the
+                    # fitter that really ran rather than re-derive it from the weights
+                    weighted = isTRUE(a$shared$weighted),
                     wt = a$wt_disp, design_vars = reg_design_vars(a$design_spec)),
     # which observed counterpart each outcome has (NA = none), and where it went -- stored, with the
     # LAYOUT, so the footer can word whatever the cell's bracket actually holds.

@@ -361,6 +361,30 @@ test_that("adding a count column to a percentage one WARNS instead of erroring (
 })
 
 
+# `comp = "all"` puts the reference in the TOTAL TABLE, which holds one reference row per row_var
+# BLOCK -- several row_vars stack several of them, and a row must read its OWN block's.
+testthat::test_that("comp = \"all\" reads the total table's reference of its own row_var block", {
+  g <- fx_gss()
+  # `age` carries missing values rincome does not, so under na = "drop" the two blocks really are
+  # two populations -- which is what makes the per-block reference more than cosmetic.
+  t <- tab(g, c(rincome, age), tvhours, tab_vars = race, pct = "row", shape = c(age = "quartiles"),
+           color = "difference", na = "drop", comp = "all")
+  col <- t[["tvhours"]]
+  refs <- tabxplor:::get_ref_field(col, get_mean)
+  testthat::expect_length(refs, nrow(t))              # was length(x) * n_row_vars -- a hard error
+
+  tot <- which(is_totrow(col) & is_tottab(col))
+  testthat::expect_length(tot, 2L)
+  testthat::expect_false(isTRUE(all.equal(get_mean(col)[tot[1]], get_mean(col)[tot[2]])))
+  rv <- as.character(t$row_var)
+  testthat::expect_equal(unique(refs[rv == rv[[1]]]), get_mean(col)[tot[[1]]])
+  testthat::expect_equal(unique(refs[rv == rv[[nrow(t)]]]), get_mean(col)[tot[[2]]])
+
+  testthat::expect_length(tabxplor:::get_mean_contrib(col), nrow(t))
+  testthat::expect_silent(invisible(tab_html(t)))
+})
+
+
 # === SECTION: fmt_attr(): the programmatic attribute surface ======================================
 
 testthat::test_that("fmt_attr() reaches every declared attribute", {

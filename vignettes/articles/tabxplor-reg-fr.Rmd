@@ -268,8 +268,12 @@ reg_formulas(tab_reg(gss_simple, "married", c("race", "age"), measure = "ratio")
 reg_formulas(tab_reg(gss_simple, "married", c("race", "age"), link    = "ratio"))
 ```
 
-La colonne `fit` donne la réponse : `binomial` pour le premier — le modèle logistique ordinaire, dont
-le rapport est calculé à partir des prédictions — et `rr` pour le second, un tout autre modèle.
+Deux colonnes répondent. `link` est l'écart que le modèle estime — `odds_ratio` pour le premier, dont
+le rapport est donc calculé à partir des prédictions ; `ratio` pour le second, qui l'estime
+directement — et c'est le mot que prend `link =`. `fit` est l'appel R : `glm(binomial("logit"))`
+contre `svyglm(quasipoisson("log"))`, un tout autre modèle. Une ligne `svyglm()` signale aussi des
+erreurs-types robustes (Huber-White), et c'est précisément pour cela qu'on peut poser une
+vraisemblance de Poisson sur une variable en 0/1.
 
 **Lequel utiliser.** Préférez **`measure = "ratio"`**, le marginal, dans presque tous les cas : le
 modèle logistique converge toujours, ne peut jamais prédire une probabilité supérieure à 100 %, et le
@@ -913,11 +917,18 @@ table même contre laquelle `tab_reg()` se résout, donc ce qu'elle affiche est 
 reg_measures(gss_simple, "married")
 ```
 
-Elle vient en **deux blocs**. Le premier donne une ligne par modèle ajustable : son `link`, et la
-mesure que portent les coefficients de ce modèle. Le second donne ce qui se lit sur les *prédictions*
-du modèle — les mêmes quel que soit le lien ajusté, d'où le `link = "(any)"` de ces lignes. Ce que
-change `link`, c'est donc seulement quelle mesure a un **coefficient** ; toute mesure reste
-rapportable depuis n'importe lequel.
+Elle vient en **deux blocs**. Le premier donne le modèle lui-même : son `link`, et la mesure que
+portent ses coefficients. Le second donne ce qui se lit sur les *prédictions* du modèle — les mêmes
+quel que soit le lien ajusté, d'où le `link = "(any)"` de ces lignes. Ce que change `link`, c'est donc
+seulement quelle mesure a un **coefficient** ; toute mesure reste rapportable depuis n'importe lequel.
+
+Par défaut, le premier bloc ne contient que le modèle propre à chaque famille. `link = "all"` ajoute
+tous les autres liens auxquels elle peut être ajustée — des choix de spécialiste — et signale le
+modèle de base par la colonne `base_link` :
+
+```{r}
+reg_measures(gss_simple, "married", link = "all")
+```
 
 Nommez un lien pour ne lire la table qu'à ce modèle, et une famille pour la lire comme cette sorte de
 variable expliquée :

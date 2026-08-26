@@ -27,6 +27,10 @@
 #   it "<n>") and tab_xl()'s vertical rules (so no line falls between a Total and its own count).
 #   Anything needing to know where a block starts asks this function; it is not re-derived.
 #
+# A TAB_VAR COLUMN IS DROPPED ONLY WHERE THE LEVEL COLUMN IS A COMPLETE ROW INDEX -- one row_var,
+#   where a sub-table is one contiguous run of levels and its Total row names it ("Total 2000"). A
+#   COMPACTED table nests variable x sub-table, so the column stays whatever the backend asked for.
+#
 # KEY CONSTRAINTS:
 #   - The render model is an EPHEMERAL S3-tagged list, never table attributes: dplyr's rename/select
 #     desync bare attributes. Built once, consumed by one backend, discarded.
@@ -321,7 +325,11 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
     tab_vname_plan(tab[[cl]], run, wrap_rows = wrap$rows %||% Inf))
 
   tab <- dplyr::ungroup(tab)
-  if (drop_tab_vars && length(tab_vars) > 0) {
+  # A tab_var column is dropped only where the LEVEL column alone is a complete row index: with one
+  # row_var a sub-table is one contiguous run of levels and its Total row carries the level name
+  # ("Total 2000"). A COMPACTED table nests two indexes (variable x sub-table), so the level column
+  # cannot say which sub-table a row belongs to and the column stays, whatever the backend asked for.
+  if (drop_tab_vars && length(tab_vars) > 0 && !isTRUE(rv$compacted)) {
     drop_these <- setdiff(tab_vars, reg_grp_col)
     if (length(drop_these) > 0) tab <- dplyr::select(tab, -tidyselect::all_of(drop_these))
   }

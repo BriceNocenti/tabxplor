@@ -341,6 +341,47 @@ test_that(".levels_order permutes the rows and changes no estimate", {
 
 
 
+# === SECTION: what the table says it fitted =======================================================
+
+test_that("reg_formulas() names the measure to type and the R call that ran", {
+  d <- fx_reg_df(); d$married <- as.integer(d$marital == "Married")
+  f <- function(...) suppressMessages(
+    reg_formulas(tab_reg(d, "married", c("race", "age"), empirical = FALSE, ...)))
+
+  # `link` is the word `link =` takes, so it ROUND-TRIPS; `fit` is the R call, in glm vocabulary --
+  # neither column ever prints an internal key ("rr" / "rd" / "mr").
+  or <- f(family = "binomial")
+  expect_identical(or$link, "odds_ratio")
+  expect_identical(or$fit,  'glm(binomial("logit"))')
+  expect_identical(or$family, "binomial")            # the OUTCOME family, not the fitter's
+
+  rr <- f(family = "binomial", link = "ratio")
+  expect_identical(rr$link, "ratio")                 # a modified Poisson, fitted for the sandwich
+  expect_identical(rr$fit,  'svyglm(quasipoisson("log"))')
+  expect_identical(rr$family, "binomial")
+  expect_identical(suppressMessages(
+    reg_formulas(tab_reg(d, "married", c("race", "age"), empirical = FALSE,
+                         family = "binomial", link = rr$link)))$fit, rr$fit)
+
+  rd <- f(family = "binomial", link = "difference")
+  expect_identical(rd$fit, 'svyglm(binomial("identity"))')
+
+  expect_identical(f(family = "gaussian")$fit, "lm()")
+  expect_identical(suppressMessages(
+    reg_formulas(tab_reg(d, "tvhours", "race", family = "poisson", empirical = FALSE)))$fit,
+    'glm(poisson("log"))')
+  expect_identical(suppressMessages(
+    reg_formulas(tab_reg(d, "marital", "race", family = "multinomial", empirical = FALSE)))$fit,
+    "multinom()")
+
+  # a weighted fit names the fitter that really ran
+  d$w <- rep(c(1, 2), length.out = nrow(d))
+  w <- suppressMessages(reg_formulas(tab_reg(d, "married", "race", family = "binomial",
+                                             wt = "w", empirical = FALSE)))
+  expect_identical(w$fit, 'svyglm(quasibinomial("logit"))')
+})
+
+
 # === SECTION: logistic: OR, CI and p against glm and svyglm =======================================
 
 logit_data <- function() {

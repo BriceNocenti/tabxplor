@@ -54,7 +54,9 @@ straight away in Excel (or whatever opens \code{.xlsx} files).}
 
 \item{colnames_rotation}{Rotate the names of columns to an angle (in degrees).}
 
-\item{remove_tab_vars}{By default, \code{tab_vars} columns are removed to gain space.
+\item{remove_tab_vars}{By default, \code{tab_vars} columns are removed to gain space --- the
+sub-table's Total row names it. Ignored where several \code{row_vars} are stacked: the level
+column alone is then not a complete row index, so the column stays.
 Set to \code{FALSE} to keep them.}
 
 \item{colwidth}{Column widths. \code{"auto"} (the default) fits every column to what its cells

@@ -3,9 +3,9 @@
 #          orchestrators share.
 # ROLE: Engine-free and session-free, so the logic is testable without a live jamovi session. A
 #       backend detects the export click, resolves the path and calls jmvtab_export(); what comes
-#       back -- the path REALLY written, or the failure -- is a status line to prepend above the
-#       table. The shared jmv_backend_* helpers (weights, export, theme, render) hold the blocks that
-#       were identical across the two backends, so a fix lands once.
+#       back -- the path REALLY written, or the failure -- is a status box under the table. The shared
+#       jmv_backend_* helpers (weights, export, theme, render) hold the blocks that were identical
+#       across the two backends, so a fix lands once.
 # KEY CONSTRAINTS:
 #   - A module gets NO native file picker, so a typed FOLDER box plus a bare FILENAME box are the
 #     only route (the format's extension is authoritative, never typed); resolveExportPath()
@@ -18,6 +18,11 @@
 #   - ⚠ THE RESULTS PANEL SIZES ITSELF FROM THE Html ELEMENT, which jamovi pins at width:500px -- so
 #     everything the two backends show goes through ONE boundary, jmv_results_content(), which
 #     un-pins it and decides what may drive that width (the table, never the prose).
+#   - ⚠ THE EXPORT STATUS OUTLIVES THE CLICK. jamovi's own JS resets the Export action ~2 s after it
+#     fires so a second click can re-fire, and that reset is a real option change: the run it
+#     triggers has `exportExcel = FALSE`. The note therefore rides in the `$state` carrier each
+#     analysis already has (jmv_export_remember / jmv_export_recall) and is re-emitted until the next
+#     export replaces it.
 # See: CLAUDE.md § tabxplor architecture (jamovi) ; dev/tabxplor_2.0.0_jamovi_dev.md ;
 #      dev/jamovi_results_width.md (the CSS chain, quoted out of jamovi's own bundle).
 
@@ -111,6 +116,13 @@ export_number_path <- function(path, replace = FALSE) {
   repeat { i <- i + 1L; cand <- paste0(stem, i, dot); if (!file.exists(cand)) return(cand) }
 }
 
+# The export status, as a rounded box under the table. ONE hue per state, stated the way every other
+# palette in the package is -- the hex beside the OKLCH coordinate it was picked at:
+#   ok      ink oklch(0.52 0.14 148) #1a7f37 | ground L 0.96 C 0.025 #E7F7E9 | edge L 0.88 #BEE3C2
+#   failed  ink oklch(0.54 0.19  27) #c62828 | ground L 0.96 C 0.025 #FFECE9 | edge L 0.88 #FDC9C3
+# The ink is the one jamovi's own flat styling uses; the ground is the SAME hue lifted to a tint, so
+# the pair carries the state without a second colour. Contrast ok/failed = 4.6 / 4.9, both over AA.
+# Italic and selectable: the path is meant to be copied.
 #' @noRd
 export_status_html <- function(text, ok = TRUE, lead = if (isTRUE(ok)) "Saved to:" else "Export failed:") {
   esc <- function(s) {
@@ -118,9 +130,31 @@ export_status_html <- function(text, ok = TRUE, lead = if (isTRUE(ok)) "Saved to
     s <- gsub("<", "&lt;",  s, fixed = TRUE)
     gsub(">", "&gt;", s, fixed = TRUE)
   }
-  color <- if (isTRUE(ok)) "#1a7f37" else "#c62828"   # green / red
-  jmv_results_note(paste0(esc(lead), " ", esc(as.character(text)[1])),
-                   style = paste0("margin:8px 2px;font-weight:bold;color:", color, ";"))
+  ink    <- if (isTRUE(ok)) "#1a7f37" else "#c62828"
+  ground <- if (isTRUE(ok)) "#E7F7E9" else "#FFECE9"
+  edge   <- if (isTRUE(ok)) "#BEE3C2" else "#FDC9C3"
+  jmv_results_note(
+    paste0("<b>", esc(lead), "</b> <i>", esc(as.character(text)[1]), "</i>"),
+    style = paste0("margin:10px 2px;padding:6px 10px;border-radius:6px;",
+                   "border:1px solid ", edge, ";background-color:", ground, ";color:", ink, ";",
+                   "font-style:normal;overflow-wrap:anywhere;user-select:text;"))
+}
+
+# THE EXPORT STATUS OUTLIVES THE CLICK. jamovi's own JS resets the Export action about 2 s after it
+# fires, so a second click can re-fire; that reset is a real option change, and the run it triggers
+# used to erase the line the moment it had been read. It is therefore kept in the `$state` carrier
+# each analysis already has, and re-emitted on every run until the next export replaces it.
+# ⚠ `store` may be NULL (a first run, or a staged regression), and then there is simply nothing to say.
+#' @noRd
+jmv_export_remember <- function(store, note) {
+  if (is.null(store)) store <- list()
+  store$export_note <- note
+  store
+}
+#' @noRd
+jmv_export_recall <- function(store) {
+  n <- store$export_note
+  if (is.null(n) || is.na(n[1]) || !nzchar(n[1])) "" else n[1]
 }
 
 

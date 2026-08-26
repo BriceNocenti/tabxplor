@@ -14,27 +14,23 @@ gss <- forcats::gss_cat
 
 
 # --- A1: tab_collapse_total_rows() keyed on group_vars()[1], not on the declared variable column ---
-# tab_compact() groups by c(merge_tab_vars, "row_var"), so with tab_vars the FIRST grouping variable
-# is the tab_var. The block sweep then stopped distinguishing row_var blocks, and the blank sentinel
-# that gives the shared Total its own group landed in the tab_var -- corrupting the sub-table key.
-# The shape is reachable only since 19f lifted the "tab_vars x several row_vars" refusal.
-test_that("19m-i A1: a compacted + tab_vars table collapses per SUB-TABLE, keyed on the variable column", {
+# The defect was that the blank sentinel giving the shared Total its own group landed in the tab_var
+# instead of the variable column. It is now unreachable from the other end: the table is row_var-major
+# (tab_compact()), so one tab_var level's blocks are scattered across the variables and there is
+# nothing adjacent to collapse -- `common_totrow` is refused there, and says so.
+test_that("19m-i A1: with tab_vars the collapse is refused, and every total is kept", {
   t  <- tab(gss, c(marital, race), relig, tab_vars = year, common_totrow = TRUE)
-  tm <- suppressMessages(tab_materialize_extras(t))
+  tabxplor:::tx_reset_messages()
+  expect_message(tm <- tab_materialize_extras(t), "every total row is kept")
 
   expect_identical(tab_declared_vars(tm)$var_col, "row_var")
-  # the blank goes in the VARIABLE column, never in the tab_var
-  expect_gt(sum(as.character(tm$row_var) == ""), 0L)
+  # nothing was blanked, in either index column: the table is untouched
+  expect_identical(sum(as.character(tm$row_var) == ""), 0L)
   expect_identical(sum(as.character(tm$year) == ""), 0L)
-  # every year keeps its own levels
-  expect_setequal(setdiff(unique(as.character(tm$year)), ""),
-                  unique(as.character(t$year)))
+  expect_setequal(unique(as.character(tm$year)), unique(as.character(t$year)))
 
-  # non-vacuity: the collapse really removed the duplicate totals -- ONE surviving Total per year
-  fmt1  <- names(t)[purrr::map_lgl(t, is_fmt)][[1]]
-  n_tot <- sum(is_totrow(tm[[fmt1]]))
-  expect_lt(n_tot, sum(is_totrow(t[[fmt1]])))
-  expect_identical(n_tot, dplyr::n_distinct(as.character(t$year)))
+  fmt1 <- names(t)[purrr::map_lgl(t, is_fmt)][[1]]
+  expect_identical(sum(is_totrow(tm[[fmt1]])), sum(is_totrow(t[[fmt1]])))
 })
 
 test_that("19m-i A1: without tab_vars the collapse is unchanged (one shared Total)", {

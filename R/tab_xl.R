@@ -38,6 +38,11 @@
 #     Per sheet, because a column index belongs to the sheet and not to the table sitting on it.
 #     WARNING: openxlsx2's `bestFit` is not usable -- it blanks merged ranges, ignores wrapText,
 #     rotation and the per-cell font, and is sheet-scoped, so stacked tables overwrite each other.
+#   - A SHAPE TABLE AND A CHECK PICTURE LIE OVER THE MAIN GRID, they do not join it: the shape table
+#     merges its first column across the INDEX BLOCK (landing under the row labels) and two data
+#     columns for each of the others, and neither touches the main table's own widths. ⚠ the gap
+#     between two pictures is one constant (XL_CHECK_GAP, through xl_check_block) read by the
+#     stacking budget AND by the writer, or the next table lands under a picture.
 #   - The plan builder is pure; the workbook is assembled serially, the openxlsx2 write being
 #     inherently so.
 # See: CLAUDE.md section "tabxplor architecture" (exports and rendering); R/tab-export-prep.R (the
@@ -56,7 +61,9 @@
 #' \code{TRUE} to overwrite an existing file. Use \code{open = FALSE} not to open the workbook
 #' straight away in Excel (or whatever opens \code{.xlsx} files).
 #' @param colnames_rotation Rotate the names of columns to an angle (in degrees).
-#' @param remove_tab_vars By default, \code{tab_vars} columns are removed to gain space.
+#' @param remove_tab_vars By default, \code{tab_vars} columns are removed to gain space --- the
+#'   sub-table's Total row names it. Ignored where several \code{row_vars} are stacked: the level
+#'   column alone is then not a complete row index, so the column stays.
 #' Set to \code{FALSE} to keep them.
 #' @param colwidth Column widths. \code{"auto"} (the default) fits every column to what its cells
 #'   actually show, so a number column is exactly as wide as its widest figure and a text column
@@ -457,13 +464,10 @@ xl_check_images <- function(tabs, check, data, theme = NULL, lang = NULL, dpi = 
       if (inherits(g, "gtable")) list(g) else g
     }, error = function(e) NULL)
     if (!length(grids)) return(NULL)
-    # WARNING: imap() hands the NAME when its input is named and the INDEX when it is not, so a
-    # parallel vector indexed by `i` errors the moment the list gains names. reg_check_plots()
-    # returns a bare gtable for ONE model (wrapped here, unnamed -> `i` is an integer) and a list
-    # NAMED by model for two or more (-> `i` is "age: diff"). The label IS that name: read `i`.
-    imgs <- purrr::imap(grids, function(gt, i) {
+    imgs <- purrr::map(grids, function(gt) {
       # `top` (the model's title) occupies the first layout row and spans every column, so it is
-      # excluded from the panel count.
+      # excluded from the panel count -- and it is why no label is written beside the picture: the
+      # image already names the model it checks, with its formula.
       nc <- max(1L, suppressWarnings(max(gt$layout$r, na.rm = TRUE)))
       nr <- max(1L, length(unique(gt$layout$t)) - 1L)
       # landscape and generous on width: a ggplot draws at a fixed point size, so a wider device gives
@@ -473,17 +477,23 @@ xl_check_images <- function(tabs, check, data, theme = NULL, lang = NULL, dpi = 
       grDevices::png(f, width = w, height = h, units = "in", res = dpi)
       on.exit(grDevices::dev.off(), add = TRUE)
       grid::grid.newpage(); grid::grid.draw(gt)
-      list(file = f, width = w, height = h, label = if (is.character(i)) i else "")
+      list(file = f, width = w, height = h)
     })
     imgs
   })
 }
 
-# how many sheet ROWS an image block occupies -- one label row per image plus its height at Excel's
-# default 15-point row. The stacking offsets must know, or the next table would sit under a picture.
+# The blank rows between two check pictures (and under the last one): 4 x Excel's default 15-point
+# row is about 1 cm, which is what keeps two plots from touching.
+XL_CHECK_GAP <- 4L
+
+# how many sheet ROWS one image occupies, gap included -- its height at Excel's default 15-point row.
+# WARNING: the stacking budget (xl_check_rows) and the writer must read this ONE function, or the
+# next table lands under a picture.
+xl_check_block <- function(im) as.integer(ceiling(im$height * 72 / 15)) + XL_CHECK_GAP
+
 xl_check_rows <- function(imgs)
-  if (!length(imgs)) 0L else
-    sum(vapply(imgs, function(im) as.integer(ceiling(im$height * 72 / 15)) + 2L, integer(1)))
+  if (!length(imgs)) 0L else sum(vapply(imgs, xl_check_block, integer(1)))
 
 # === SECTION: column widths -- ONE vector, measured from what the cell will show ===================
 # Excel's width unit is one character of the workbook base font (xlb_base_font); format() renders
@@ -590,17 +600,25 @@ xl_prose_height <- function(text, span_px, size = 9) {
   lines * (size * 1.28) + 2
 }
 
-# The shape table as (row, col, text) cells: a header row, one row per curve, then the note -- the
-# same four columns every other medium prints, in the order reg_shape_table() declares.
-xl_shape_cells <- function(shape, row0) {
+# The shape table as (row, col, span, text) cells: a header row, one row per curve, then the note --
+# the same four columns every other medium prints, in the order reg_shape_table() declares.
+# THE SHAPE TABLE BORROWS THE MAIN TABLE'S GRID, so it must be laid over it rather than into it: the
+# first column holds a formula and takes the whole INDEX BLOCK, landing under the row labels, and
+# every other column takes TWO data columns, a data column being one number wide. Nothing here
+# changes the main table's own widths.
+xl_shape_cells <- function(shape, row0, index_cols = 1L) {
   if (is.null(shape) || nrow(shape) == 0L) return(NULL)
   hd <- attr(shape, "headers"); nt <- attr(shape, "note")
+  spans <- c(index_cols, rep(2L, length(hd) - 1L))
+  at    <- cumsum(c(1L, utils::head(spans, -1L)))
+  line  <- function(row, text, bold = FALSE)
+    tibble::tibble(row = row, col = at, span = spans, text = text, bold = bold, wrap = bold)
   purrr::list_rbind(c(
-    list(tibble::tibble(row = row0, col = seq_along(hd), text = hd)),
+    list(line(row0, hd, bold = TRUE)),              # the header wraps, so a long name keeps its column
     purrr::map(seq_len(nrow(shape)), function(i)
-      tibble::tibble(row = row0 + i, col = seq_along(shape),
-                     text = vapply(shape, function(cl) as.character(cl)[[i]], character(1)))),
-    list(tibble::tibble(row = row0 + nrow(shape) + seq_along(nt), col = 1L, text = nt))))
+      line(row0 + i, vapply(shape, function(cl) as.character(cl)[[i]], character(1)))),
+    list(tibble::tibble(row = row0 + nrow(shape) + seq_along(nt), col = 1L,
+                        span = sum(spans), text = nt, bold = FALSE, wrap = FALSE))))
 }
 
 tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, sheet, title, subtext,
@@ -843,7 +861,8 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     title = title, title_row = start,
     subtext = subtext_clean, subtext_row = last_row + 1L,
     # header row, one row per curve, then the note -- one blank line under the subtext block.
-    shape_cells = xl_shape_cells(shape, last_row + length(subtext_clean) + 2L),
+    shape_cells = xl_shape_cells(shape, last_row + length(subtext_clean) + 2L,
+                                 index_cols = max(1L, length(txt_cols))),
     check_imgs = check_imgs,
     check_row = last_row + length(subtext_clean) + 2L +
       (if (is.null(shape)) 0L else nrow(shape) + 3L),
@@ -1113,14 +1132,22 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
     xlb_row_heights(wb, s, prose_rows[keep],
                     xl_prose_height(prose_txt[keep], XL_A4_PX, o$text_size_subtext))
   if (!is.null(plan$shape_cells) && nrow(plan$shape_cells))
-    purrr::pwalk(plan$shape_cells, function(row, col, text)
-      xlb_write_cell(wb, s, xl_cell(row, col), text))
-  # model-check pictures, each under a plain label naming the model it checks
+    purrr::pwalk(plan$shape_cells, function(row, col, span, text, bold, wrap) {
+      d <- xl_cell(row, col)
+      if (span > 1L) d <- paste0(d, ":", xl_cell(row, col + span - 1L))
+      xlb_write_cell(wb, s, xl_cell(row, col), text)
+      if (span > 1L) xlb_merge(wb, s, d)
+      # no borders: the block reads as a note under the table, not as a second table
+      if (bold || wrap)
+        xlb_set_cell_style(wb, s, d, reg$xf_id(
+          o$font_text, o$text_size, bold, NA_character_, NA_character_,
+          0L, 0L, 0L, 0L, "left", "bottom", if (wrap) "1" else "", ""))
+    })
+  # model-check pictures, stacked with one gap each -- each already carries its model's title
   r <- plan$check_row
   for (im in plan$check_imgs %||% list()) {
-    if (nzchar(im$label)) xlb_write_cell(wb, s, xl_cell(r, 1L), im$label)
-    xlb_add_image(wb, s, xl_cell(r + 1L, 1L), im$file, im$width, im$height)
-    r <- r + ceiling(im$height * 72 / 15) + 2L
+    xlb_add_image(wb, s, xl_cell(r, 1L), im$file, im$width, im$height)
+    r <- r + xl_check_block(im)
   }
 
   # overwrite the level-header cells with the suffix-stripped labels (the col_var name is written in

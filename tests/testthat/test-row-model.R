@@ -96,7 +96,7 @@ testthat::test_that("a merged table remembers which of its variables were ordina
   testthat::expect_false(is.ordered(m$levels))
 })
 
-testthat::test_that("tab_vars and several row_vars finally compose (the list fallback is gone)", {
+testthat::test_that("tab_vars and several row_vars compose, row_var-major", {
   g <- dplyr::filter(gss, year %in% c(2000, 2014))
   t <- tab(g, c(marital, relig), race, tab_vars = year, pct = "row")
   testthat::expect_s3_class(t, "tabxplor_tab")          # was a LIST of tables
@@ -104,10 +104,14 @@ testthat::test_that("tab_vars and several row_vars finally compose (the list fal
   v <- tabxplor:::tab_declared_vars(t)
   testthat::expect_equal(v$tab_vars, "year")
   testthat::expect_equal(v$row_vars, c("marital", "relig"))
-  # sub-table axis is the OUTER one: every row_var block sits inside one year
-  testthat::expect_equal(dplyr::group_vars(t), c("year", "row_var"))
-  yr <- as.character(t$year)                      # each year (+ the total table) is ONE contiguous run
-  testthat::expect_equal(rle(yr)$values, unique(yr))
+  # THE ROW_VAR IS THE OUTER AXIS: two row_vars are two tables over the same population, the tab_vars
+  # are the sub-populations INSIDE each. Row order is column order (tab_label_order reads position).
+  testthat::expect_equal(dplyr::group_vars(t), c("row_var", "year"))
+  testthat::expect_equal(names(t)[1:3], c("row_var", "year", "levels"))
+  rv <- as.character(t$row_var)                   # each VARIABLE is ONE contiguous run...
+  testthat::expect_equal(rle(rv)$values, unique(rv))
+  yr <- as.character(t$year)                      # ...and every year repeats inside each of them
+  testthat::expect_gt(length(rle(yr)$values), dplyr::n_distinct(yr))
   testthat::expect_silent(tab_md(t, print = FALSE))
 })
 

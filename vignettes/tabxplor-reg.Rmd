@@ -423,10 +423,17 @@ is the claim you actually mean to make. `reg_formulas()` tells you which model r
 reg_measures(gss_simple, "married")
 ```
 
-It comes in **two blocks**. The first is one row per model you could fit: its `link`, and the measure
-that model's own coefficients carry. The second is what is read off the model's *predictions* — the
-same whichever link you fit, which is why those rows say `link = "(any)"`. So what `link` changes is
-only which measure has a **coefficient**; every measure stays reportable from any of them.
+It comes in **two blocks**. The first is the model itself: its `link`, and the measure that model's
+own coefficients carry. The second is what is read off the model's *predictions* — the same whichever
+link you fit, which is why those rows say `link = "(any)"`. So what `link` changes is only which
+measure has a **coefficient**; every measure stays reportable from any of them.
+
+By default the first block holds each family's **own** model alone. `link = "all"` adds every other
+link it can be fitted at — specialist choices — and marks the family's own with `base_link`:
+
+```{r}
+reg_measures(gss_simple, "married", link = "all")
+```
 
 Name a link to read the table at that model alone, and a family to read it as that kind of outcome:
 
@@ -548,8 +555,11 @@ reg_formulas(tab_reg(gss_simple, "married", c("race", "age"), measure = "ratio")
 reg_formulas(tab_reg(gss_simple, "married", c("race", "age"), link    = "ratio"))
 ```
 
-The `fit` column is the answer: `binomial` for the first — the ordinary logistic model, with the
-ratio worked out from its predictions — and `rr` for the second, a different model altogether.
+Two columns answer it. `link` is the measure the model estimates — `odds_ratio` for the first, so the
+ratio is worked out from its predictions; `ratio` for the second, which estimates it directly — and
+that word is what you type into `link =`. `fit` is the R call: `glm(binomial("logit"))` against
+`svyglm(quasipoisson("log"))`, a different model altogether. A `svyglm()` row also means robust
+(Huber-White) standard errors, which is exactly why a Poisson likelihood may be put on a 0/1 outcome.
 
 **Which to use.** Prefer **`measure = "ratio"`**, the marginal one, in almost every case: the
 logistic model always converges, can never predict a probability above 100%, and the number it gives

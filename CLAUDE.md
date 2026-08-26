@@ -30,7 +30,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 **Core type system** — the `fmt` record, the table classes, the row/table identity.
 
 - `fmt_class.R` — the `tabxplor_fmt` vctrs record (the rich cell): fields, attributes, arithmetic, colour engine; the `MEASURES` / `EST_SCALES` fact tables.
-- `tab_classes.R` — `tabxplor_tab`/`grouped_tab` S3 classes, dplyr methods, print, `tab_compact()`/`tab_plot()`, the `test` footer; the palette/breaks API and `COLOR_SCALES`.
+- `tab_classes.R` — `tabxplor_tab`/`grouped_tab` S3 classes, dplyr methods, print, `tab_compact()`, the `test` footer; the palette/breaks API and `COLOR_SCALES`.
 - `row-model.R` — the row axis: `row_kind` field + `tabxplor_lvl` factor subclass; `ROW_KINDS`; level operations.
 - `table-spec.R` — the table identity `meta$spec` (kind / vars / call).
 - `tab-structure.R` — `tab_structure()`/`tab_supports()`/`tab_columns()`: which reshape ops accept which table structure; `TAB_OPS`.
@@ -254,7 +254,7 @@ tab() / tab_many()                          [public; differ only in default outp
 
 **The aggregate core** (`tab-leaf.R` + `tab-agg.R`) is the single place microdata becomes cells: the leaves `plain_core()` (factors) and `num_core()` (numeric column variables) turn sufficient statistics into `fmt` fields, their confidence interval and the whole-table test in one pass. The superseded dplyr-era steps (`tab_pct` → `tab_ci` → `tab_chi2` → …) are quarantined in `tab-steps-legacy.R`: still exported, they share the *arithmetic* (`ci_dispatch()`, `chi2_compute_test()`) with the leaves, so a step and a build cannot compute two different answers.
 
-**The reference system:** `ref` picks the baseline a deviation is measured from (`tot` / `first` / an index / a regex), reinterpreted by `pct` (a reference *row* under row%/means, a reference *column* under col%); `ref2` names the second level for odds ratios; `comp` compares within each sub-table or against the total table. **Significance:** a cell is significant when its confidence interval excludes the **neutral value** — 0 for a difference, 1 for a ratio — and the displayed p-value and stars come from inverting that same interval, so colour, greying and stars cannot disagree. Interval geometry is declared in `CI_GEOMS`, its method in `CI_METHODS`.
+**The reference system:** `ref` picks the baseline a deviation is measured from (`tot` / `first` / an index / a regex), reinterpreted by `pct` (a reference *row* under row%/means, a reference *column* under col%); `ref2` names the second level for odds ratios; `comp` compares within each sub-table or against the total table — and `comp = "all"` reads the total table's reference **of the row's own row_var**, the first one at or after it, since the total table closes each variable's run of sub-tables. **Significance:** a cell is significant when its confidence interval excludes the **neutral value** — 0 for a difference, 1 for a ratio — and the displayed p-value and stars come from inverting that same interval, so colour, greying and stars cannot disagree. Interval geometry is declared in `CI_GEOMS`, its method in `CI_METHODS`.
 
 ### The inference layer
 
@@ -304,7 +304,7 @@ The measure's behaviour — raw getter, scale keys, significance source, gating 
 
 ### Exports and rendering
 
-`tab_export(x, format =)` (`tab-export.R`) is the facade over four backends: HTML (the default), Markdown, Excel and plot, sharing one preparation step — `tab_export_prep()` (`tab-export-prep.R`) builds an ephemeral render model (roles, references, faces, header spans, variable-name blocks) that every backend consumes. A spread swaps the two header bands, since after a spread a **column** is identified by its sub-population and a **block** by its variable: the column header takes the `col_group`, the span takes the `col_var` and, above it, the level only where that variable gives several columns per group.
+`tab_export(x, format =)` (`tab-export.R`) is the facade over four backends: HTML (the default), Markdown, Excel and plot, sharing one preparation step — `tab_export_prep()` (`tab-export-prep.R`) builds an ephemeral render model (roles, references, faces, header spans, variable-name blocks) that every backend consumes. A spread swaps the two header bands, since after a spread a **column** is identified by its sub-population and a **block** by its variable: the column header takes the `col_group`, the span takes the `col_var` and, above it, the level only where that variable gives several columns per group. **Several `row_vars` stack row_var-major** — two row_vars are two tables over the same population, the `tab_vars` the sub-populations inside each — and **row order IS column order**, since label nesting is read off physical column position; a tab_var column is then dropped only where the level column alone is a complete row index, which one row_var is and a stacked pair is not.
 
 Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML, and `tab_xl()` writes a number with format codes from that *same* `format(syntax = "excel")`, so a display change never needs mirroring. **Excel keeps the cell a number and puts everything else in the code**: an aside becomes a column carrying its own segment (`(n={n})`), and every literal a template writes — the stars, the brackets, a sigma, a test label — folds into the numFmt, per section. A multiplicative cell holds its **reading value**, the signed fold, so `1/2.11` reaches the workbook without becoming text; text stays a property of a *cell*, not of a column. The exports' **unit row** is the console's own type tag (`<row%>`, `<n>`), written once per **block** — `tab_col_block_ids()`, the one definition of a block, which also decides where a vertical rule falls. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so light/dark and the publication palettes work by stylesheet — except `print_marks`, whose signal is cell text and so comes from `format()` like the stars. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's scheme — a subsystem that must never error, because a wrong guess only mis-tints.
 
@@ -795,6 +795,137 @@ drops to 2 after complete-case filtering. `reg_tidy_multinom()` takes the name f
 
 **Verification.** `devtools::document()` clean, `NAMESPACE` unchanged; alias and `\usage` conservation asserted; the index-completeness check green (43 public topics, none missing, none stale); the five edited example pages run, and the only lifecycle conditions left are each deprecated page warning about **itself**. `devtools::test(filter = "fmt|steps-legacy|tab-structure|tab$")`: **FAIL 0 | PASS 477**. `NEWS.md` untouched — nothing here changes a user-callable contract.
 
+#### Phase 22n — the last manual review — DONE
+
+Ten items read off real output — a markdown table, a jamovi session, an Excel workbook, two
+introspection accessors. **Not one needed a new branch**: each either applies a rule the package
+already states elsewhere or deletes the line that was doing the wrong thing.
+
+**`tab_md()` painted the whole cell.** `[1/2.45*** (28%)]{.m3}` — the aside took the colour too, on
+the one backend that never got the rule html states (*a cell's rendering stops at its primary
+token*). The range was already in hand: `R/tab_md.R` read `primary_from`/`primary_nchar` and passed
+them only to `md_bold()`. It now derives **three** numbers per cell — `s` (the span opens), `b` (the
+bold stops, at the value), `e` (the span closes, after the value's stars **or** marks) — with
+`s = NA` meaning *no primary at all*, so a `{n_range}` Total cell takes no span and no bold. Reading
+`suffix_nchar` rather than `mark_nchar` is what keeps a plain starred column byte-identical: stars
+and publication marks are mutually exclusive (`fmt_cell_suffix()`), so one rule covers both. `**`
+goes **inside** the span — the span must be outer, it contains the suffix the bold does not; verified
+against pandoc 3.7. The documented opt-out `tabxplor.color_whole_cell` now reaches md, which had
+ignored it.
+
+⚠ **The width model was rebuilt, and it fixed two latent bugs.** `md_extra()` is replaced by
+**`md_cell_markup()`**, which builds a cell's markup once and returns `pre` / `post` — the raw
+columns of markup before and after its last text character — read by the width pass **and** the body
+loop, so they cannot disagree. `md_color_cell()` became pure padding. The scaffold constant went
+`+ 4L` → `+ 3L` and `attr_width` left the formula: the old `4` smuggled the closing `]{…}` in through
+`attr_width` as well, which **over-padded a coloured composite column by one** and would have
+**overflowed `col_width` by one** on a cell that was bold *and* coloured. `attr_width` survives only
+as the `attr2` padding target, now applied to interior spans too so coloured cells stay mutually
+aligned in the raw file. The invariant is unchanged in words and exact in code: *every cell's last
+text character lands on raw column `1 + num_width`*. `_snaps/golden.md` regenerated — the only diff
+is those two facts, verified line by line (`diff | grep -v '^[<>] *|'` is empty).
+
+**The tooltip delay was Bootstrap 5, not the tooltip.** `inst/tabxplor-1.0/tabxplor.js` bound through
+the **jQuery plugin API** (`$t.tooltip()`), which Bootstrap 5 removed. The built site loads
+`bootstrap-5.3.8`, which wins over the BS3 dependency `tx_html_deps()` requests — so the binding
+silently no-opped and the browser's own `title=` tooltip fired, after about a second. The JS now tries
+the `bootstrap` global first (`new bootstrap.Tooltip(...)`, Popper included in the bundle) and falls
+back to jQuery, with `delay: 0` stated on both paths. ⚠ **Inside jamovi the tooltip is native
+`title=` and always will be** — the results iframe runs no module JS.
+
+**The jamovi export path flashed for exactly 2 s.** `jamovi/js/jmvtab.js` resets the Export action
+2 s after the click so a second click can re-fire; that reset is a real option change, and the run it
+triggers has `exportExcel = FALSE` — which returned `""` and erased the line. The note now rides in
+the `$state` carrier each analysis already has (`jmv_export_remember()` / `jmv_export_recall()`:
+`cache_state` for the crosstab, `compare_state` for the regression) and is re-emitted until the next
+export replaces it. ⚠ compare_state is written on a *non-staged* run only right after an export: a
+fitted render is heavy, and re-setting it every round-trip is what `staged` exists to avoid. The box
+moved **under** the table and became a rounded, tinted one — the ink is jamovi's own flat green/red,
+the ground is **the same hue lifted to a tint**, stated the way every palette in the package is (hex
+beside the OKLCH coordinate it was picked at): `#1a7f37` on `#E7F7E9`, `#c62828` on `#FFECE9`,
+contrast 4.6 / 4.9, both over AA. Italic, selectable, `overflow-wrap:anywhere`. ⚠ The options-panel
+route was measured and **not taken**: R can only write an option through
+`self$options$option(x)$value <-`, which is not a documented jmvcore API.
+
+**`tab_vars` + several `row_vars` is now row_var-major**, and the reorder was **three edits and a
+deletion**: `tab_stack_tables()` binds in list order, so the natural stack already was row_var-major
+— the `order()` re-sort in `tab_compact()` WAS the old behaviour. The `relocate()` and the
+`group_by()` flip with it to `c("row_var", <tab_vars>)`. ⚠ **Row order is column order**:
+`tab_label_order()` derives label nesting from *physical column position*, so a `tab_var`-first
+column order with row_var-major rows would fragment every rowspan and every block rule — which is why
+the roadmap's original "the tab_vars stay the first columns" could not be implemented as written.
+The rules needed no new weight: `new_group` reads the innermost label run, and both nestings
+partition identically. `group_vars()` is now `c("row_var", <tab_vars>)`, `names(t)[1:3]` is
+`c("row_var", <tab_var>, "levels")`, and `summarise()` therefore peels the tab_var rather than the
+row_var.
+
+**The tab_var columns stay in the exports**, by one condition at the drop site
+(`R/tab-export-prep.R`, `&& !isTRUE(rv$compacted)`) stated as a structural fact rather than a
+preference: *a tab_var column is dropped only where the level column alone is a complete row index* —
+one row_var, whose Total row names the sub-table ("Total 2000"). A compacted table nests two indexes.
+All three consumers inherit it; `tab_xl(remove_tab_vars =)` keeps its meaning and gains one sentence;
+a regression table is a no-op (its tab_vars are already exempt via `reg_grp_col`).
+
+⚠ **`common_totrow = TRUE` is refused when `tab_vars` are present** and says so once
+(`tx_inform_once`). Collapsing presupposes the blocks sharing a total are ADJACENT, which row_var-
+major deliberately breaks; the old code would have kept the last variable's Total and silently
+deleted the others'. It also makes the 19m-i A1 defect unreachable from the other end.
+
+**`comp = "all"` aborted, and the cause was a length blow-up.** Reproduced from the maintainer's
+`jmvtab()` call: `Can't recycle ..1 (left) (size 92) to match ..2 (left) (size 46)`.
+`get_ref_field()` assumed the total table holds **one** reference row; with several `row_vars` it
+holds one per variable, so `rep(values[refs], length(x))` returned `N * length(x)`. `get_mean_contrib()`
+had the same defect **silently** — it broadcast the *last* variable's grand total to every row. Both
+now read **`fmt_broadcast_next()`**: a cell reads the first total-table reference at or after it,
+because the total table closes each variable's run of sub-tables (it is the last level of the tab_var
+axis). ⚠ **The rule is stated against the layout the reorder produces** — a modulo cycle was tried
+first and is wrong there. Measured: the two blocks' references genuinely differ (2.9808 vs 2.9819)
+because `na = "drop"` drops different rows, so the per-block reference is not cosmetic. This
+combination had **no coverage anywhere in the suite**; it has one now, in `test-fmt.R`.
+
+**Excel, three items.** The check-plot gap is one constant read by the stacking budget and the writer
+alike (`XL_CHECK_GAP = 4L` through `xl_check_block()`) — it was the same expression written twice,
+and 2 → 4 rows is the ~1 cm that was missing. The label above each picture is **gone** with the
+`label` field that fed it: the gtable's `top` row already carries the model's title and its formula,
+so it said it twice. And the shape table now **lies over the main grid instead of into it**: its
+first column merges the **index block** (landing under the row labels — it holds a formula), every
+other column merges **two data columns** (a data column is one number wide), the header row is bold
+with `wrap_text`, no borders, and the main table's own widths are untouched.
+
+**`reg_measures()` lost its unmanageable grid — with one argument, not two.** The roadmap asked for a
+`base_link` argument, but `link = "auto"` **already** returned exactly the family's own link, so a
+second knob on the same axis was the ad-hoc layer this phase exists to avoid. `link`'s default is
+now `"auto"`; `link = "all"` lists every model **and** adds the `base_link` logical column (`NA` on
+the prediction rows, which belong to no link in particular). Measured: `checks` 13 → 10 rows,
+`released` 6 → 4. The trailing message names `link = "all"` as the way to see the rest — the standard
+"what was decided for you, and the argument that changes it" shape.
+
+**`reg_formulas()` stopped printing internal keys.** `family = "binomial"` sat beside `fit = "rr"`,
+which reads as a contradiction and answers neither "what do I type?" nor "which `glm()` ran?". Two
+columns now:
+
+```text
+model    outcome  family   link       fit                          formula
+Yes: RR  released binomial ratio      svyglm(quasipoisson("log"))  released ~ colour + checks
+Yes: OR  released binomial odds_ratio glm(binomial("logit"))       released ~ colour + checks
+Yes: RD  released binomial difference svyglm(binomial("identity")) released ~ colour + checks
+```
+
+`link` is the word `link =` takes, so the round-trip the old `fit` carried is now explicit; `fit` is
+the R call. Neither is re-derived: `reg_link_of_fit()` inverts `REG_FAMILIES$fits`, and the `fam_obj`
+switch was lifted out of `reg_fit()` into **`reg_fit_family_obj()`**, read by the fitter and by the
+printer alike, so the printed call and the fitted one cannot drift. `weighted` is the resolved flag
+`reg_fit()` itself branches on, now stored in `fit_spec`. A `svyglm()` row also means robust
+(Huber-White) standard errors — the honest answer to "where does `rr` come from" — and the `@return`
+says so.
+
+**Verification.** Shipped suite **FAIL 0 | PASS 4375 | SKIP 1**, the single WARN being the
+pre-existing over-dispersion teaching one. `dev/run_dev_tests.R` **FAIL 1 | PASS 5907 | SKIP 3** —
+⚠ that one failure is **pre-existing on HEAD**, verified by running the file against a
+`git archive HEAD` checkout: `test-i18n-sweep.R:167` expects `"p-valeur"` while `po/R-fr.po` carries
+`msgid "pvalue" / msgstr "pvalue"`. Left for the French phase rather than guessed at.
+`devtools::document()` clean, `NAMESPACE` byte-identical, `jamovi/i18n/fr.po` untouched this run.
+⚠ Not run here: `devtools::check()` — the release gate the maintainer runs.
 
 ---
 
@@ -1017,7 +1148,7 @@ The aim is to create a **compact, yet holistic and integrated translation**: avo
 **Four more terminological decisions, all recorded in `dev/french_glossary.md` § *Le vocabulaire d'enseignement*** (123 new lines, flagged for the maintainer's manual review):
 
 - ⚠ **« effet marginal » is a false friend for this readership.** Cibois — cited in this article — uses it for an effect *in percentage points*; `effect = "marginal"` means *averaged over the sample*. Defused at first use, with « effet moyenné » / « effet moyenné sur l'échantillon » alternating. The compensation is real: the « marge » etymology is **stronger in French**, since it is literally a Total row's margin.
-- ⚠ **« base » was unusable** — the article's own running variable is *le nombre de **bases** de données policières*. The base is **« le socle »**; `display = "base"` stays English like every argument value.
+- ⚠ **« base » was unusable** — the article's own running variable is *le nombre de **bases** de données policières*. The base is **« la base »**; `display = "base"` stays English like every argument value.
 - **crude/adjusted is a family, not a pair** (the maintainer's own correction): « observé »/« ajusté », « brut »/« ajusté », « empirique »/« modélisé », chosen per context — but **one per sentence**, never the hedged triplet `-reg-fr` writes today. « effet net » is canonical in French sociology and is mentioned exactly once, so a reader recognises it elsewhere.
 - **Fitting a model rotates** — *ajuster* (canon), *estimer*, *calculer*, and *réaliser* from the séance. ⚠ One guard: never both senses of *ajusté* in one sentence.
 
@@ -1033,7 +1164,7 @@ The aim is to create a **compact, yet holistic and integrated translation**: avo
 
 **The three `<!-- TODO -->` comments are resolved.** The verification notes are settled against a real render; **l. 416** ("when is an outcome too common for an OR?") is answered with a rule rather than a threshold — *an odds ratio is always further from 1 than the risk ratio of the same comparison, and the gap grows with how common the event you **name** is*, so naming the rare complement brings them together; **l. 461** is answered by the two-route rule above, and deleted. **l. 699's bibliography is written, in both languages**, one entry per source with the idea it contributes in parentheses — and the French edition **inverts the framing**: Cibois, Deauvieau and Selz & Maillochon open it as the tradition the article extends, the anglophone works following.
 
-⚠ **A French term that names an argument is given WITH its English code name**, at the point where the French word is coined and nowhere else — « la **variable à expliquer** / `outcome` », « l'**écart** / `measure` », « le **socle** / `base` », « le **bilan du modèle** / `stats` ». The reader thinks in French and types in English, and an argument only ever named in French cannot be used; the same names serve jamovi, whose options mirror the arguments. Recorded as a rule in `dev/french_glossary.md` § Rules, and **applied to both twins** so the two teach the same thing. Checking it against the chunks also found a gap present in the English since it was written: `shape` and `trials` are demonstrated and were never named in prose, in either language. Both are now named. (`na` is left alone — incidental to a crosstab call, not a teaching point here.)
+⚠ **A French term that names an argument is given WITH its English code name**, at the point where the French word is coined and nowhere else — « la **variable à expliquer** / `outcome` », « l'**écart** / `measure` », « la `base` », « le **bilan du modèle** / `stats` ». The reader thinks in French and types in English, and an argument only ever named in French cannot be used; the same names serve jamovi, whose options mirror the arguments. Recorded as a rule in `dev/french_glossary.md` § Rules, and **applied to both twins** so the two teach the same thing. Checking it against the chunks also found a gap present in the English since it was written: `shape` and `trials` are demonstrated and were never named in prose, in either language. Both are now named. (`na` is left alone — incidental to a crosstab call, not a teaching point here.)
 
 **What the French gains and loses.** It gains `questionr::hdv2003`, a French INSEE survey whose levels print in French — so §5's case study simply names « cadres » and « ouvrier·es spécialisé·es » where the English has to gloss them. It loses the other three fixtures, whose English levels sit inside French prose: glossed once each where the data is introduced, never again per table. Four hand-authored labels are translated (the three model-comparison names and `is_prof`); everything else in the chunks is byte-identical.
 
@@ -1070,18 +1201,18 @@ grids; six were re-aligned; the rest were left alone, and that is recorded here 
 
 **Converted to tribble grids** (`tx_grid`-folded, all content identical):
 
-| table | file | before -> after |
-|---|---|---|
-| `EST_SCALES` | `fmt_class.R` | 112 -> 38 lines, 13 x 22 pure scalars |
-| `COLOR_SCALES` | `tab_classes.R` | 64 -> 36; `default` is polymorphic (numeric / `list(over=,under=)` / `NULL` / `quote(zscore)`) -> a list column, written literally |
-| `REG_EMPIRICAL` | `reg-empirical.R` | 27 shape rows x 10 columns; lines were 139-148 chars and only half aligned |
-| `REG_CHECKS` | `reg-assumptions.R` | 56 -> 24 |
-| `REG_DIGEST_PARTS` | `reg-digest.R` | 35 -> 14 |
-| `REG_FIT_KINDS` | `reg-digest.R` | 18 -> 12 |
-| `DISPLAY_PRESETS` | `tab-display.R` | 55 -> 32 |
-| `CI_GEOMS` | `tab-agg.R` | 49 -> 32; the 9 scalars align, the per-row `engine` closure stays per row (the header argues why, correctly) |
-| `VAR_SHAPES` | `var-shape.R` | scalars on line 1, the user-facing `doc` on its own line below |
-| `TOOLTIP_LINES` | `tab-tooltip.R` | 29 -> 19; needed hoisting three anonymous `when =` closures to named predicates (`tip_when_mean` / `_ratio` / `_or`), which is the point -- a row now says WHICH condition, not what it is |
+| table              | file                | before -> after                                                                                                                                                                            |
+|--------------------|---------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `EST_SCALES`       | `fmt_class.R`       | 112 -> 38 lines, 13 x 22 pure scalars                                                                                                                                                      |
+| `COLOR_SCALES`     | `tab_classes.R`     | 64 -> 36; `default` is polymorphic (numeric / `list(over=,under=)` / `NULL` / `quote(zscore)`) -> a list column, written literally                                                         |
+| `REG_EMPIRICAL`    | `reg-empirical.R`   | 27 shape rows x 10 columns; lines were 139-148 chars and only half aligned                                                                                                                 |
+| `REG_CHECKS`       | `reg-assumptions.R` | 56 -> 24                                                                                                                                                                                   |
+| `REG_DIGEST_PARTS` | `reg-digest.R`      | 35 -> 14                                                                                                                                                                                   |
+| `REG_FIT_KINDS`    | `reg-digest.R`      | 18 -> 12                                                                                                                                                                                   |
+| `DISPLAY_PRESETS`  | `tab-display.R`     | 55 -> 32                                                                                                                                                                                   |
+| `CI_GEOMS`         | `tab-agg.R`         | 49 -> 32; the 9 scalars align, the per-row `engine` closure stays per row (the header argues why, correctly)                                                                               |
+| `VAR_SHAPES`       | `var-shape.R`       | scalars on line 1, the user-facing `doc` on its own line below                                                                                                                             |
+| `TOOLTIP_LINES`    | `tab-tooltip.R`     | 29 -> 19; needed hoisting three anonymous `when =` closures to named predicates (`tip_when_mean` / `_ratio` / `_or`), which is the point -- a row now says WHICH condition, not what it is |
 
 ⚠ **A tribble takes comment lines BETWEEN rows**, which dissolved the one real objection: `REG_CHECKS`'
 threshold justifications (dfbetas >= 1 / VIF >= 10) and `EST_SCALES`' fold WARNINGs sit on their own

@@ -7,6 +7,10 @@
 #   - The dplyr_row_slice/dplyr_col_modify/dplyr_reconstruct trio is the core mechanism.
 #     Each calls lv1_group_vars() to decide: downgrade to tabxplor_tab or keep grouped.
 #   - Color palettes (6 sets) and break logic live here, shared with fmt_class.R and tab_xl.R.
+#   - tab_compact() stacks several row_vars ROW_VAR-MAJOR: two row_vars are two tables over the same
+#     population, the tab_vars are the sub-populations inside each. ⚠ the relocate, the group_by and
+#     the row order must state the SAME order -- tab_label_order() (R/tab-export-prep.R) derives
+#     label nesting from physical column position, so a mismatch fragments every rowspan and rule.
 # See: CLAUDE.md § Design Decisions > dplyr Integration.
 
 # Create class tabxplor_tab --------------------------------------------------------------
@@ -877,15 +881,15 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
     ~ dplyr::rename_with(.x, ~"levels",
                          .cols = tidyselect::all_of(tab_get_vars(.x)$row_var)) |>
       dplyr::mutate(row_var = new_lvl(as.factor(.y), "var")) |>
-      dplyr::relocate(tidyselect::all_of(c(merge_tab_vars, "row_var")))
+      dplyr::relocate(tidyselect::all_of(c("row_var", merge_tab_vars)))
   )
+  # ROW ORDER IS COLUMN ORDER, and the row_var is the OUTER axis: two row_vars are two tables over
+  # the same population, while the tab_vars are the sub-populations INSIDE each. tab_stack_tables()
+  # binds in list order, so the natural stack already is row_var-major -- there is nothing to re-sort.
+  # WARNING: the relocate above and the group_by below must state the same order. tab_label_order()
+  # (R/tab-export-prep.R) derives label NESTING from physical column position, so a mismatch fragments
+  # every rowspan and every block rule.
   tabs <- tab_stack_tables(prepped)
-  # With tab_vars, the sub-table axis is the OUTER one (one sub-table per tab_var level, each holding
-  # every row_var's block) -- the stack is row_var-major, so re-order. order() is stable, so each
-  # table's own row order and the table order both survive inside a tab_var level.
-  if (length(merge_tab_vars) > 0)
-    tabs <- tabs[do.call(order, unname(lapply(merge_tab_vars,
-                                              function(v) as.integer(tabs[[v]])))), ]
 
   # Lone total column -> drop its "_<col_var>" qualifier (via its stored `col_var`, language-independent).
   tot_i <- which(is_totcol(tabs))
@@ -901,7 +905,7 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
                     metas_in,
                     spec = new_spec(tab_kind(tabs[[1]]), vars = vars_merged,
                                     call = tab_call(tabs[[1]])))) |>
-    dplyr::group_by(dplyr::across(tidyselect::all_of(c(merge_tab_vars, "row_var"))))
+    dplyr::group_by(dplyr::across(tidyselect::all_of(c("row_var", merge_tab_vars))))
 
 
   tabs
@@ -1153,6 +1157,15 @@ mat_aside_cols <- function(tab) {
 tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
   dv <- tab_declared_vars(tab)
   if (!isTRUE(dv$compacted)) return(tab)                      # a single row_var: untouched
+  # WARNING: collapsing presupposes that the blocks sharing a total are ADJACENT. With tab_vars they
+  # are not -- the table is row_var-major (tab_compact()), so one tab_var level's blocks are scattered
+  # across the variables and a collapse would keep the last one and silently delete the others.
+  if (length(dv$tab_vars)) {
+    tx_inform_once("common_totrow_tab_vars", c(
+      "i" = "{.arg common_totrow}: with {.arg tab_vars}, every total row is kept.",
+      "i" = "Drop {.arg tab_vars} to share one total row between the variables."))
+    return(tab)
+  }
   var_col <- dv$var_col                                       # the column naming each row's VARIABLE
   is_tot <- is_totrow(tab)
   tot    <- which(is_tot)

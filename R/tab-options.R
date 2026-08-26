@@ -125,7 +125,7 @@ TAB_OPTIONS <- list(
             "`TRUE` to extend the primary's own rendering over the whole cell instead (the",
             "pre-2.0.0 look). There is nothing to choose beyond that: which grey an aside takes",
             "belongs to the theme's palette, not to a per-cell option --- see `set_color_palette()`.",
-            "Console and html; Markdown and Excel render a cell as a whole either way.")),
+            "Console, html and Markdown; Excel renders a cell as a whole either way.")),
 
   var_names = tx_opt(
     "both", "display", arg = "var_names",

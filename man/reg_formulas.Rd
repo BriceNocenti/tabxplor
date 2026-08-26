@@ -10,9 +10,11 @@ reg_formulas(x)
 \item{x}{A table built by \code{\link[=tab_reg]{tab_reg()}}.}
 }
 \value{
-A tibble with one row per model: \code{model} (its name in the table), \code{outcome}, \code{family}
-(the outcome family), \code{fit} (the internal link the measure asked for --- \code{"rr"}, \code{"rd"}, \code{"mr"}
---- or the family itself) and \code{formula}.
+A tibble with one row per model: \code{model} (its name in the table), \code{outcome}, \code{family} (the
+outcome family), \code{link} (the measure that model estimates --- the word \verb{link =} takes), \code{fit}
+(the R call it was fitted with) and \code{formula}. A \code{svyglm()} row also means robust
+(Huber-White) standard errors: survey's design-based variance IS the sandwich, which is why a
+ratio or a difference on a binary outcome is fitted through it.
 }
 \description{
 Shows the formula behind every column of a \code{\link[=tab_reg]{tab_reg()}} table --- exactly what reached

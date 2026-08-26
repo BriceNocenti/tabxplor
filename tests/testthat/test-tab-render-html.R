@@ -57,6 +57,12 @@ testthat::test_that("the Viewer assets are tabxplor's own, and the print mode ga
   testthat::expect_setequal(vapply(d, `[[`, "", "name"), c("jquery", "bootstrap", "tabxplor"))
   js <- system.file("tabxplor-1.0", "tabxplor.js", package = "tabxplor")
   testthat::expect_true(nzchar(js) && file.size(js) > 0)   # the binding actually ships
+  # TWO BINDINGS, because there are two Bootstraps: 5 dropped the jQuery plugin API, and a page that
+  # has only that one (a pkgdown site) fell back to the browser's own second-long `title=` tooltip.
+  src <- paste(readLines(js, warn = FALSE), collapse = "\n")
+  testthat::expect_match(src, "bs.Tooltip", fixed = TRUE)          # bootstrap 5
+  testthat::expect_match(src, "$t.tooltip", fixed = TRUE)          # bootstrap 3 / 4, via jQuery
+  testthat::expect_match(src, "delay: 0", fixed = TRUE)            # stated, on both paths
   # the pure predicate: only an interactive, themed, non-knitting print WITH the deps opens the Viewer
   km <- tabxplor:::kable_print_mode
   testthat::expect_identical(km("dark", FALSE, TRUE, FALSE, TRUE),  "next")
