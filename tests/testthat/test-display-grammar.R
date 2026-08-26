@@ -112,9 +112,9 @@ testthat::test_that("stars ride the PRIMARY token, not the secondary (not double
   # stars are opt-in in format(): request them explicitly (they show at the main display).
   plain <- format(x, stars = TRUE)                            # "40%***", "60%*"
   comp  <- format(set_display(x, "{pct} ({n})"), stars = TRUE)  # "40%*** (100)", "60%* (100)"
-  testthat::expect_identical(stringi::stri_count_regex(plain, "\\*"),
-                             stringi::stri_count_regex(comp,  "\\*"))   # same star count -> not doubled
-  testthat::expect_true(any(stringi::stri_count_regex(plain, "\\*") > 0))  # the test is meaningful
+  testthat::expect_identical(lengths(regmatches(plain, gregexpr("\\*", plain, perl = TRUE))),
+                             lengths(regmatches(comp, gregexpr("\\*", comp, perl = TRUE))))   # same star count -> not doubled
+  testthat::expect_true(any(lengths(regmatches(plain, gregexpr("\\*", plain, perl = TRUE))) > 0))  # the test is meaningful
 })
 
 testthat::test_that("a void aside renders blank AND keeps its width, so the column stays aligned", {
@@ -372,7 +372,7 @@ testthat::test_that("a multiplicative cell prints its inverse below the neutral,
   testthat::expect_true(any(grepl("1/", format(set_display(co, "{or} ({pct})")), fixed = TRUE)))
   # so does the est_ci bracket, bounds included, and the bounds are NOT reordered
   ec <- set_display(co, "est_ci")
-  txt <- stringi::stri_trim(format(ec, special_formatting = TRUE))
+  txt <- trimws(format(ec, special_formatting = TRUE), whitespace = "[\\h\\v]")
   i   <- which(!is.na(get_ci_inf(ec)) & get_or(ec) < 1)[1]
   testthat::skip_if(is.na(i))
   testthat::expect_match(txt[i], "^1/[0-9.]+ +\\[1/[0-9.]+;", perl = TRUE)

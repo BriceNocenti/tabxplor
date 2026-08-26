@@ -181,9 +181,9 @@ leaf_defuse_vars <- function(data, row_var_quo, col_quo, tab_vars_quo, wt_quo,
 plain_resolve <- function(pct, ref, ref2, na, totaltab_name, total_names, tot, comp, color,
                           digits, totaltab, tab_vars, comparison = NA_character_) {
   vctrs::vec_assert(ref, size = 1)
-  ref <- stringi::stri_trim_both(stringi::stri_replace_all_regex(ref, "\\s+", " "))
+  ref <- trimws(gsub("\\s+", " ", ref, perl = TRUE), whitespace = "[\\h\\v]")
   vctrs::vec_assert(ref2, size = 1)
-  ref2 <- stringi::stri_trim_both(stringi::stri_replace_all_regex(ref2, "\\s+", " "))
+  ref2 <- trimws(gsub("\\s+", " ", ref2, perl = TRUE), whitespace = "[\\h\\v]")
   vctrs::vec_assert(totaltab_name, size = 1)
 
   if (pct == "all_tabs" & length(tab_vars) == 0) pct <- "all"
@@ -387,8 +387,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 
 
   if (any(col_var_in_row_var)) {
-    colvarbis <- names(tabs)[stringi::stri_detect_regex(names(tabs), "_colvarbis$")]
-    data.table::setnames(tabs, colvarbis, stringi::stri_replace_first_regex(colvarbis, "_colvarbis$", ""),
+    colvarbis <- names(tabs)[grepl("_colvarbis$", names(tabs), perl = TRUE)]
+    data.table::setnames(tabs, colvarbis, sub("_colvarbis$", "", colvarbis, perl = TRUE),
                          skip_absent = TRUE)
   }
 
@@ -491,22 +491,22 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 
   } else {
     text_vars <- !purrr::map_lgl(tabs, is.numeric)
-    n_index  <- stringi::stri_detect_regex(names(tabs), "^n_")  | text_vars
-    wn_index <- stringi::stri_detect_regex(names(tabs), "^wn_") | text_vars
-    w2_index <- stringi::stri_detect_regex(names(tabs), "^w2_") | text_vars
+    n_index  <- grepl("^n_", names(tabs), perl = TRUE)  | text_vars
+    wn_index <- grepl("^wn_", names(tabs), perl = TRUE) | text_vars
+    w2_index <- grepl("^w2_", names(tabs), perl = TRUE) | text_vars
 
     text_vars <- text_vars[text_vars]
 
     tabs_n  <- data.table::setnames(tabs[, n_index, with = FALSE] ,
-                                    function(.x) stringi::stri_replace_first_regex(.x, "^n_" , ""))
+                                    function(.x) sub("^n_", "", .x, perl = TRUE))
     tabs_wn <- data.table::setnames(tabs[, wn_index, with = FALSE],
-                                    function(.x) stringi::stri_replace_first_regex(.x, "^wn_", ""))
+                                    function(.x) sub("^wn_", "", .x, perl = TRUE))
 
     tabs_wn[, (names(tabs_wn)) := purrr::map(.SD, as.double)]
 
     if (has_w2) {
       tabs_w2 <- data.table::setnames(tabs[, w2_index, with = FALSE],
-                                      function(.x) stringi::stri_replace_first_regex(.x, "^w2_", ""))
+                                      function(.x) sub("^w2_", "", .x, perl = TRUE))
       tabs_w2[, (names(tabs_w2)) := purrr::map(.SD, as.double)]
     }
 
@@ -1848,7 +1848,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
     tabs[, "ref_rows___" := NULL]
   }
 
-  w2_cols <- names(tabs)[stringi::stri_detect_regex(names(tabs), "_w2$|_w2s1$|_w2s2$")]
+  w2_cols <- names(tabs)[grepl("_w2$|_w2s1$|_w2s2$", names(tabs), perl = TRUE)]
   if (length(w2_cols) > 0) data.table::set(tabs, j = w2_cols, value = NULL)
 
 
@@ -1861,20 +1861,20 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
 
   tabs_n  <-
-    data.table::setnames(tabs[, stringi::stri_detect_regex(names(tabs), "_n$"), with = FALSE] ,
-                         function(.x) stringi::stri_replace_first_regex(.x, "_n$" , ""))
+    data.table::setnames(tabs[, grepl("_n$", names(tabs), perl = TRUE), with = FALSE] ,
+                         function(.x) sub("_n$", "", .x, perl = TRUE))
 
   tabs_wn  <-
     if (length(wt) != 0) {
-      data.table::setnames(tabs[, stringi::stri_detect_regex(names(tabs), "_wn$"), with = FALSE] ,
-                           function(.x) stringi::stri_replace_first_regex(.x, "_wn$" , ""))
+      data.table::setnames(tabs[, grepl("_wn$", names(tabs), perl = TRUE), with = FALSE] ,
+                           function(.x) sub("_wn$", "", .x, perl = TRUE))
     } else {
       list(NA_reals)
     }
 
   tabs_mean  <-
-    data.table::setnames(tabs[, stringi::stri_detect_regex(names(tabs), "_mean$"), with = FALSE] ,
-                         function(.x) stringi::stri_replace_first_regex(.x, "_mean$" , ""))
+    data.table::setnames(tabs[, grepl("_mean$", names(tabs), perl = TRUE), with = FALSE] ,
+                         function(.x) sub("_mean$", "", .x, perl = TRUE))
 
   tabs_mean <- tibble::as_tibble(tabs_mean) |>
     dplyr::mutate(dplyr::across(
@@ -1889,35 +1889,35 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   # explicit exclusion. A numeric col_var whose name ends in one of these suffixes would
   # likewise be mis-parsed.
   tabs_var  <-
-    data.table::setnames(tabs[, stringi::stri_detect_regex(names(tabs), "_var$") &
+    data.table::setnames(tabs[, grepl("_var$", names(tabs), perl = TRUE) &
                                 !is_placeholder_var(names(tabs)),
                               with = FALSE],
-                         function(.x) stringi::stri_replace_first_regex(.x, "_var$" , ""))
+                         function(.x) sub("_var$", "", .x, perl = TRUE))
 
 
-  are_diff <- stringi::stri_detect_regex(names(tabs), "_diff$")
+  are_diff <- grepl("_diff$", names(tabs), perl = TRUE)
   tabs_diff  <-
     if (any(are_diff)) {
       data.table::setnames(tabs[, are_diff, with = FALSE] ,
-                           function(.x) stringi::stri_replace_first_regex(.x, "_diff$" , ""))
+                           function(.x) sub("_diff$", "", .x, perl = TRUE))
     } else {
       list(NA_reals)
     }
 
-  are_ratio <- stringi::stri_detect_regex(names(tabs), "_ratio$")
+  are_ratio <- grepl("_ratio$", names(tabs), perl = TRUE)
   tabs_ratio  <-
     if (any(are_ratio)) {
       data.table::setnames(tabs[, are_ratio, with = FALSE] ,
-                           function(.x) stringi::stri_replace_first_regex(.x, "_ratio$" , ""))
+                           function(.x) sub("_ratio$", "", .x, perl = TRUE))
     } else {
       list(NA_reals)
     }
 
   reshape_suffix <- function(sfx) {
-    hit <- stringi::stri_detect_regex(names(tabs), paste0(sfx, "$"))
+    hit <- grepl(paste0(sfx, "$"), names(tabs), perl = TRUE)
     if (any(hit)) {
       data.table::setnames(tabs[, hit, with = FALSE],
-                           function(.x) stringi::stri_replace_first_regex(.x, paste0(sfx, "$"), ""))
+                           function(.x) sub(paste0(sfx, "$"), "", .x, perl = TRUE))
     } else {
       list(NA_reals)
     }

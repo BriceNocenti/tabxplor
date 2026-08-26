@@ -18,8 +18,8 @@ tab_color_legend(
 \item{x}{A \code{tabxplor_tab}.}
 
 \item{medium}{One of "console", "html", "md", "runs", "plain". \code{"runs"} is for the media that
-draw the legend as coloured TEXT and cannot fill: an Excel rich-text cell (\code{\link{tab_xl}})
-and a \pkg{ggpubr} label (\code{\link{tab_plot}}). It returns the runs unrendered, and draws the
+draw the legend as coloured TEXT and cannot fill, such as an Excel rich-text cell
+(\code{\link{tab_xl}}). It returns the runs unrendered, and draws the
 background channel from the darker \code{bg_legend} palette (see \code{\link{set_color_palette}}).}
 
 \item{style}{"terse" (compact, console default) or "prose" (full sentences, export default).}

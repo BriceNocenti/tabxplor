@@ -1,4 +1,4 @@
-# PURPOSE: Test export functions (tab_kable, tab_plot) with Suggests-only guards.
+# PURPOSE: Test export functions (tab_kable, tab_xl) with Suggests-only guards.
 # ROLE: Ensures export functions produce valid output without errors.
 # KEY CONSTRAINTS:
 #   - Must run via test_check("tabxplor"), never in isolation.
@@ -88,49 +88,13 @@ testthat::test_that("tab_kable with contrib color works", {
   testthat::expect_no_error(tab_kable(tabs))
 })
 
-# === SECTION: tab_plot ========================================================
+# === SECTION: tab_plot, defunct in 2.0.0 ======================================
 
-testthat::test_that("tab_plot returns a ggplot or grob object", {
-  testthat::skip_if_not_installed("ggplot2")
-  testthat::skip_if_not_installed("ggpubr")
-  testthat::skip_if_not_installed("cowplot")
-
+testthat::test_that("tab_plot() is defunct and says what replaces it", {
   tabs <- tab(gss, race, marital, pct = "row", color = "diff")
-  result <- tab_plot(tabs)
-  testthat::expect_true(
-    inherits(result, "gg") | inherits(result, "gtable") |
-      inherits(result, "grob") | inherits(result, "ggplot") |
-      !is.null(result)
-  )
-})
-
-testthat::test_that("tab_plot accepts theme='light' and theme='dark'", {
-  testthat::skip_if_not_installed("ggplot2")
-  testthat::skip_if_not_installed("ggpubr")
-  testthat::skip_if_not_installed("cowplot")
-
-  tabs <- tab(gss, race, marital, pct = "row", color = "diff")
-  testthat::expect_no_error(tab_plot(tabs, theme = "light"))
-  testthat::expect_no_error(tab_plot(tabs, theme = "dark"))
-})
-
-testthat::test_that("tab_plot works with numeric tables", {
-  testthat::skip_if_not_installed("ggplot2")
-  testthat::skip_if_not_installed("ggpubr")
-  testthat::skip_if_not_installed("cowplot")
-
-  sw <- sw_prepared
-  tabs <- tab_num(sw, sex, height, na = "drop", color = "diff")
-  testthat::expect_no_error(tab_plot(tabs))
-})
-
-testthat::test_that("tab_plot works with contrib color", {
-  testthat::skip_if_not_installed("ggplot2")
-  testthat::skip_if_not_installed("ggpubr")
-  testthat::skip_if_not_installed("cowplot")
-
-  tabs <- tab(gss, race, marital, pct = "row", test = TRUE, color = "contrib")
-  testthat::expect_no_error(tab_plot(tabs))
+  testthat::expect_error(tab_plot(tabs), class = "defunctError")
+  # and `format = "plot"` is no longer a value tab_export() accepts
+  testthat::expect_error(tab_export(tabs, "plot"), "arg")
 })
 
 # === SECTION: tab_xl (extended tests) =========================================

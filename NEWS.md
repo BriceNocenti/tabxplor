@@ -3,872 +3,143 @@
 
 ## New features
 
-
-* **`tab(col_vars = a*b)` crosses two column variables**, spelt exactly as `tab_reg(predictors =)`
-  spells it. Two categorical variables give one column per observed cell of the pair; a numeric one
-  crossed with a factor gives one mean column per level of the factor, beside the factor's own
-  columns; two numeric ones cut the second into quartiles and say so. Only `col_vars` takes one.
-
-* **`tab_reg()` shows the observed (crude) effect by default.** Every modelled effect now sits beside
-  the same quantity fitted with one predictor, so what adjustment changed is read across the table.
-  `empirical` says where it goes --- a column of its own, inside the model cell, or (where a table is
-  already wide: `tab_vars` groups, a 3+ level outcome) computed and read from the hover tooltip.
-  `empirical = FALSE` turns it off.
-* **`tab_reg()` compares your models by default.** Give `predictors` a list of several models and the
-  footer tests them: each against the previous one where they nest, otherwise each against the first.
-  Naming your own footer statistics (`stats = c("n", "aic")`) drops it.
-* A cell's hover tooltip now has two lines: the cell's own numbers, then the observed comparison.
-
-* Excel export: ratios and odds ratios are now readable **and** computable --- a cell holds its
-  reading value, so Excel prints `1/2.11` while the cell stays a real number that sorts, filters and
-  takes the reader's own decimal separator (`?tab_xl` gives the formula that recovers the raw ratio).
-  `tab_xl(check = "auto")` draws the model-check plots under each `tab_reg()` table.
-* Every export names each column with the console's own type tag (`<row%>`, `<n>`), and long footer
-  legends are wrapped in a merged cell so an Excel-to-Word paste keeps the table's column widths.
-* Excel column widths now fit their content: each column is measured from what its cells will
-  actually show, instead of one fixed width for every number. `tab_xl(colwidth = 10)` still forces a
-  fixed one. Long variable names wrap at their own seams (`long_snake_case`) in HTML and Excel alike,
-  and a variable name is written vertically only where that actually saves width.
-* **A numeric row or tab variable is now grouped, not exploded.** `tab(data, age, y)` used to make
-  one row per distinct value; it now cuts `age` into four bands at its mean and one standard
-  deviation either side (one row per value is kept for a counted number or a short scale), and says
-  which it chose. The new `shape` argument decides it explicitly --- `"median"`, `"terciles"`,
-  `"quartiles"`, `"quintiles"`, `"deciles"`, a number of groups, `"sd_bands"`,
-  `"values_to_levels"`, or `"log"` / `"sqrt"` for a column variable --- and is
-  the same vocabulary [tab_reg()] already took. The new `shape_numeric_var()` applies it to one
-  vector.
-
-* **A numeric column now shows how spread out it is, readably.** The cell was `49 (s17)`; it is
-  `49 (cv 36%)` --- the standard deviation as a percentage of the mean, which is comparable between
-  columns measured in different units (a column whose mean is not positive keeps the bare mean).
-  `display = "mean_sd"` restores the standard deviation, `display = "mean"` shows neither, and
-  `{sd}` / `{cv}` are ordinary display tokens usable in any layout.
-
-* **Every column now says what it holds.** A cell showing a secondary number in brackets
-  (`100% (9 838)`, `1/1.63*** (31%)`) named it nowhere: the console type tag reads `<row% (n)>` /
-  `<OR (row%)>` now, and html, Markdown and Excel exports gain a discrete third header row saying
-  the same, once per variable. In Excel, where a cell cannot hold a bracket, each secondary number
-  becomes a column of its own instead of being dropped.
-
-* **New `display` layouts** `"base_diff"`, `"base_ratio"`, `"base_or"` and `"or_base"`, and `"OR"` / `"{OR}"`
-  accepted as spellings of `"or"`. The full list of named layouts is now in `?tab`.
-
-* **An ordinal regression now reports in one column, readably.** `tab_reg(family = "ordinal")`
-  keeps its cumulative odds ratio by default, and `measure = "difference"` / `"ratio"` now read the
-  same fit as a *probability of superiority*: of two people, one from this group and one from the
-  reference group, how often does the one from this group come out higher on the scale. It takes one
-  column (not one per outcome category), it has an observed counterpart with a real interval, and
-  the crude/adjusted gap is genuinely tested. Ordinal models can be read this way on weighted and
-  survey data too. For a number per outcome category, use `family = "multinomial"`.
-
-* **`spread_vars` gives the most compact table**: each level of a sub-table variable becomes a block
-  of columns, the whole table keeps ONE `Total` row, and the base count takes one `n` column per
-  block at the right (instead of a `Total` column per block, repeating 100%). A variable named in
-  `spread_vars` alone is added to `tab_vars` for you. In exports, the column header names the
-  sub-population and one merged span names the variable. See `vignette("tabxplor")`.
-
-* **Interactions in `tab_reg()`**: write `a*b` in `predictors` (bare or quoted), R's own spelling.
-  Two categorical variables give one row per cell against a common reference; a continuous one gives
-  its slope within each level of the moderator. The footer reports whether the interaction is real,
-  and "with and without" is an ordinary model comparison. See `vignette("tabxplor-reg")`.
-  The `stats` key for the `tab_vars` effect-modification test is renamed `"group_interaction"`, so
-  that `"interaction"` names this one.
-
-* `tab_reg(shape =)` gains `"sd_bands"`: cut a continuous predictor at the mean and one standard
-  deviation either side, with labels carrying both the real cut points and the mean/SD scale.
-
-* `tab_reg(measure =)`'s fourth value is `"coefficient"` --- the model's own coefficient,
-  un-transformed. It replaces `"log"` (still accepted as a spelling, with `"log_odds"` /
-  `"log_risk"` / `"log_rate"`) and, unlike it, answers for every family: on a model that is already
-  additive there is nothing to un-exponentiate, so it is the additive estimate itself. One table
-  mixing a logistic and a linear outcome can therefore be asked for its coefficients.
-
-* `tab_html()` now escapes row labels, so an ordinary level like `Arts & Humanities` no longer emits
-  invalid HTML (column headers were already escaped).
-
-* **`tab()` is now the unified entry point.** It accepts **several `row_vars` / `col_vars`**
-  (e.g. `tab(data, c(race, relig), marital)`), merged into one table by default or returned as a list
-  with `output_list = TRUE`. `tab_many()` is kept as a soft-deprecated alias. Several `row_vars` and
-  `tab_vars` now **compose** — `tab(data, c(race, relig), marital, tab_vars = year)` returns a table
-  where it used to silently return a list.
-* **`n = c("range", "min", "no")`** says how many people a table is about: the unweighted base beside
-  the `Total` cell of a crosstab, in the `n` column of a regression table, and printed as a range
-  (`100% (6 712-9 838)`) whenever the parts of the table do not rest on the same people — several
-  column variables losing different `NA`s, or several models. It replaces `add_n`.
+* **`tab()` is the unified entry point.** It takes several `row_vars` and `col_vars`, merged into one
+  table or returned as a list with `output_list = TRUE`, and composes with `tab_vars`;
+  `col_vars = a*b` crosses two column variables. `tab_many()` is a soft-deprecated alias.
+* **`tab_reg()` — colour-coded regression tables** (linear, logistic, Poisson, multinomial, ordinal),
+  on weighted and survey data, with model comparison, marginal effects and every export format. Its
+  estimand is a cascade, `family` → `link` → `measure` → `effect`. See `vignette("tabxplor-reg")`.
+  - **Every modelled effect sits beside its observed (crude) counterpart** — the same quantity fitted
+  with one predictor instead of all of them — so what adjustment changed is read across the table.
+  `color = "adjustment"` colours that gap and tests it; `empirical = FALSE` turns it off.
+  - **Every regression table checks itself**: linearity, proportional odds, dispersion, influence and
+  collinearity, one footer row per model. `shape =` is the cure — fit a continuous predictor as
+  quantile groups, a curve, or a log / sqrt transformation.
+  - **jamovi**: a new "Regression models" analysis (`jmvtabreg`); Crosstables gains a reference-level
+  picker, level merging, export, tooltips and the new options, each named after its R argument.
+* **`tab_counts()`** builds a full colour-coded table from already-aggregated counts instead of
+  microdata. **`forest_plot()`** draws any tabxplor table as estimates with their intervals, stars and
+  own cell colours, returning a modifiable `ggplot`; **`reg_check_plots()`** draws the model checks.
+* **Weights and survey designs.** Pass a `survey::svydesign()` as `data` and strata, clusters, `fpc`
+  and calibration reach every interval, test and colour; `options(tabxplor.design_effect = TRUE)` does
+  the same, exactly, for a plain weight column. A weighted table's footer states its basis.
+* **Correct confidence intervals**, asymmetric where they should be (Wilson, Newcombe, Welch, Katz),
+  chosen with one named vector `ci_method = c(cell =, diff =, mean_diff =, mean_ratio =)`. `ci` says
+  only *where* the interval sits; significance stars are opt-in (`stars =`) and read that interval.
+* **Whole-table tests**: an effect size (Cramér's V, phi, eta²), Fisher's exact on a sparse table, a
+  one-way ANOVA for mean columns, and Haberman's adjusted residual behind `color = "contrib"`.
 * **Redesigned colour API.** Position picks the visual channel (1st value → text, 2nd → background),
-  names pick the column type (`pct` / `mean`); `color = TRUE` (or `"auto"`) is the smart per-type
-  default. New OKLCH light/dark palettes, 24-bit truecolor console, `set_color_palette()` (replaces
-  `set_color_style()`), and a per-table `color_breaks =` argument. Every colour ladder is now the same
-  ladder written in another measure at a 50 % reference cell, so a shade means the same size of
-  deviation whichever measure a table is read on.
-* **Dark mode.** `theme = "auto"` on `tab_html()` / `tab_md()` / `tab_css()` / `tab_export()` follows
-  whoever is reading the table (their browser, or the editor for the Viewer). The console also
-  auto-detects a dark editor (RStudio and Positron).
-* **Black-and-white publication palettes.** `theme = "print_ready"` (on `tab_html()` / `tab_md()` /
-  `tab_xl()` / `tab_export()` / `tab_css()`) renders the colour measures typographically, because a
-  greyscale print turns the two colour directions into the same shades of grey. It picks the right
-  encoding for each table: `"print_marks"` for a cross-table, which writes a repeated superscript
-  mark after each value (`24%⁺⁺`) instead of the significance stars — the one encoding that survives
-  a plain-text copy — and `"print_emphasis"` for a regression, whose cells already show their own
-  direction, so its typography spends everything on magnitude (bold, then underline, then double
-  underline). Name either yourself, or `"print_minimalistic"` (`"bw"`) for the general-purpose one:
-  an underline for over-represented cells, italic for under-represented ones, the ink darkening and
-  turning bold with the size of the deviation, and a grey fill for a second measure. They reach Excel as real font attributes (the marks as real numbers), and are
-  written as `<b>`/`<i>`/`<u>` markup as well as CSS, so they survive a paste into Word. In every
-  theme, colour ones included, significance stars (and the marks that replace them) are now drawn in
-  the theme's secondary grey and never bold, italic or underlined: they support the number instead of
-  outshouting it. Every
-  stylesheet also carries one in an `@media print` block, so a coloured html table already prints
-  publication-ready (`options(tabxplor.print_rules = FALSE)` to opt out, or name another palette).
-* **A new, dependency-free HTML engine, now the default** for `tab_html()` (about 3× faster and much
-  lighter than kableExtra, which becomes optional). Its geometry is CSS classes, so your own CSS can
-  restyle it.
-* **`options(tabxplor.print = "html")`** — auto-print every table as its html version: in the Viewer
-  pane in RStudio/Positron, and as a real colored table in rmarkdown/Quarto chunks (`"kable"` is kept
-  as a synonym). New `options(tabxplor.tab_kable_tooltips = FALSE)` switches the per-cell hover
-  tooltips off document-wide. The vignettes now showcase the live html tables.
-* **Significance stars and correct confidence intervals.** Stars are opt-in (`stars =`); cell / difference
-  / mean intervals are now the proper asymmetric intervals (Wilson, Newcombe, Welch) and the stars read
-  the same interval. One named vector, `ci_method = c(cell =, diff =, mean_diff =, mean_ratio =)`,
-  chooses each interval's method.
-* **Mean columns get a whole-table test** — a one-way ANOVA, the counterpart of the chi-squared for
-  factor columns. New `tab(anova = "welch" | "classic")` chooses which F is *shown*
-  (`options(tabxplor.anova)` remains the default): both are always computed and stored, so this
-  changes a display, never a number.
-* **`tab_plain()` gains `ci =` and `ci_method =`**, so it builds its own intervals like `tab_num()`
-  does, instead of needing `|> tab_ci()`. It resolves them exactly as `tab()` does, so
-  `tab_plain(ci = "cell")` and `tab(ci = "cell")` agree cell for cell.
-* **Effect sizes and Fisher's exact.** `test = TRUE` now carries Cramér's V / phi or eta²; a small
-  sparse table uses Fisher's exact.
-* **`tab_structure()` and `tab_supports()`** answer "what have I got, and what can I do with it?"
-  before you try. A table reports whether it is merged (several row variables), grouped
-  (sub-tables), or a list, and which of `tab_compact()` / `tab_transpose()` / `transpose = TRUE`
-  accept it — a support matrix that used to exist only as scattered error messages.
-* **`tab_columns()`** does the same for the columns: one row per numeric column with what it
-  estimates, how it is coloured, and — side by side for the first time — the confidence level, the
-  degrees of freedom, the basis (raw count / weights / survey design) and the method its interval was
-  built with. **`fmt_attr(x, name)`** reads or writes any one of those facts by name.
-* **`forest_plot()` — a chart of any tabxplor table**, cross-table or regression: every estimate with
-  its confidence interval, its stars and *its own cell colour*, one panel per column of the table.
-  It reads the finished table and re-computes nothing, so the figure cannot disagree with the numbers
-  you printed: the gridlines are your `set_color_breaks()` ladder, the colour key is the table's own
-  legend, and it returns an ordinary `ggplot` you can `+ theme()` and `ggsave()`. By default it draws
-  whatever the table computed (`ci = "cell"` → percentages with their intervals, `ci = "ref"` →
-  differences from the reference, `display = "{or}"` → odds ratios on a log axis). On a regression
-  table with `empirical = TRUE` it draws the observed effect with the margin of error **of the gap**
-  between the two, so "is the point outside the bracket?" is exactly the table's own gap test — rather than the
-  two overlapping intervals that reading invites and that are wrong for correlated estimates.
-  Also reachable as `tab_export(format = "forest")`.
-* **Weights, and survey designs.** A weighted `tab()` estimates the population, and now **says in its
-  footer** what its confidence intervals and tests are based on. By default that is still the raw
-  number of respondents (no design effect). `options(tabxplor.design_effect = TRUE)` makes every
-  weighted interval, star, colour threshold and p-value **account for the unequal weighting, exactly**
-  (per call: `tab(design_effect = TRUE)`) —
-  a weight column *is* a survey design (the flat one), so this reproduces `survey` to the last digit
-  rather than approximating it. Pass a `survey::svydesign()` as `data` and the whole table follows the
-  full design instead: strata, clusters, `fpc`, calibration (so a design can also make an interval
-  *narrower*), each interval referred to the design's own degrees of freedom. `tab_reg()`'s observed
-  (`Obs_*`) columns are **always** on the same basis as the `Model_*` column beside them, so the two are
-  finally comparable by construction — turn the option on if you want a `tab()` percentage to match them.
-  See `?tab` and `?tab_reg`.
-* **Standardized residuals for `color = "contrib"`.** Which cells depart from independence is now
-  answered with the **adjusted standardized residual** (Haberman — SPSS's "adjusted residual", R's
-  `chisq.test()$stdres`), on the package's usual inference base (the unweighted *n*, or — when weights
-  or a design are accounted for — that *n* divided by the association's own design effect, the same
-  Rao-Scott one the table's Chi-2 line reports; one base per table, so a counts table and a
-  percentage table of the same data give the same residuals).
-  `color_signif = "guaranteed_effect"` switches the colour to that residual on an absolute ±2 / ±3
-  scale that means the same thing in every table, while the default keeps the correspondence-analysis
-  reading (each cell's share of the table's chi-squared). The residual can also be printed
-  (`display = "{pct} ({resid})"`) and appears in html tooltips. New `zscore` colour-break scale and
-  `conf_level_to_z()` to write it in confidence levels.
-* **Readable colour legends and footers**, fully translatable to **French**
-  (`options(tabxplor.lang = "fr")`, a `lang =` argument, or the R/OS locale). A legend states the
-  **measure in words** ("Percentage points (risk) difference: cell >= the Total row +5; ..."), then
-  what an uncoloured cell means; a regression's `Model:` line names each part of the cell by the
-  abbreviation the table prints above it (`obs%`, `adj%`).
-* **Labelled-data (`haven`) support.** Value labels become the factor levels;
-  `options(tabxplor.var_labels = TRUE)` shows variable labels instead of names in exports.
-* **New arguments on `tab()`**: `na` gains `"common_base"` /,
-  `spread_vars =`, `n_min =` (hide small-base cells), `display =` (composite cells like `"{pct} (n={n})"`),
-  `common_totrow =`, and a per-`col_var` / positional `ref`. Opt-in parallel builds through
-  `options(tabxplor.parallel = TRUE)` (needs `mirai`), for `tab()` and `tab_reg()` alike.
-* **`tab_counts()`** — build a full colour-coded table from already-aggregated counts (long, wide, `table`,
-  or frequencies + base N) instead of microdata.
-* **`tab_reg()`** — colour-coded regression tables (linear / logistic / Poisson / multinomial / ordinal),
-  with survey weights, model comparison, average marginal effects, and Excel / HTML / Markdown export.
-  See the regression vignette. `tab_logit()` / `multi_logit()` are thin wrappers; `forest_plot()` /
-  `reg_check_plots()` draw it.
-* **Every regression table now checks itself.** The footer carries five model checks — **Linearity**
-  (per continuous predictor), **Proportionality (Brant)**, **Dispersion (robust/model SE)**,
-  **Influence (max dfbetas)** and **Collinearity (max VIF)** — one row per model column, so a
-  comparison reads down. They matter: on the model used throughout the regression vignette, letting
-  `age` curve moves the top income category's odds ratio by a quarter and flips another income
-  level's verdict, and nothing in the table used to say so. The three that cost nothing are shown by
-  default; the two that fit a model (Linearity, Proportionality) are asked for by name —
-  `stats = c("n", "aic", "linearity")`, or **`stats = "all"` for every statistic and every check the
-  model allows**. `stats = "collinearity"` needs the new suggested package `car`. The per-predictor
-  overall-association test (`stats = "global"`) moved from a footer sentence to footer rows for the
-  same reason.
-* **A continuous predictor's row shows the shape of its effect**, as a small curve in its own label —
-  ten bins of the outcome against the predictor, with no model in it (`options(tabxplor.shape_table = FALSE)`
-  to switch it off, `"ascii"` for a font without block characters). In HTML it becomes an inline SVG.
-* **`tab_reg(shape =)` fits a continuous predictor as something other than a line** — the cure for what
-  the linearity row finds. A named vector: `"quintiles"` / `"quartiles"` / an integer cuts it into
-  quantile groups (it becomes an ordinary factor, with one estimate, observed companion, count and
-  colour per group); `"quadratic"` adds a curvature term, giving the predictor two rows; `"log"` /
-  `"sqrt"` fit the transformed column. The observed `Obs_*` companion is fitted with the same shape, so
-  the model-versus-observed comparison still compares like with like.
-* **`reg_check_plots()`** draws those checks — one panel each, one titled grid per model, in the
-  light / dark / print themes. A teaching companion: every verdict it illustrates is already a footer
-  row. It takes a `tab_reg()` table (finding the data it was built from on its own), or a fitted
-  model directly; `check = "all"` adds the two panels the default grid leaves to the footer.
-* **One observed column beside one model column.** `tab_reg(empirical = TRUE)` used to draw a
-  descriptive column *and* a crude-effect column on two different colour ladders. The two are one
-  estimand computed twice --- with a single predictor, and with all of them --- so they are now one
-  column shape built twice: same scale, same ladder, same layout, one legend block, with the level
-  each effect sits on (the observed percentage or mean, the adjusted prediction) printed in the same
-  cell. The two effects end up side by side, which is the comparison the argument is for. On a 3+
-  level outcome, where one model column would need one crude column per category, the crude value
-  rides inside the model cell instead; `empirical = "column"` and `"cell"` force either.
-* **Colour the gap between the modelled and the observed effect.** `tab_reg(empirical = TRUE)` already
-  prints the crude effect beside the adjusted one; `color = c("OR", "adjustment")` now colours *how far
-  apart they are*, so a whole table of "what did adjusting change?" reads at a glance. With
-  `split_var`, `color = "between_groups"` does the same against the first group (effect modification,
-  row by row). `color_signif` applies to both, so a gap can be greyed when it is no bigger than chance,
-  and the html tooltip gives its confidence interval and p-value. The gap is also printable
-  (`display = "{est} (obs {obs})"`, or `"{est} ({gap})"`). Part of an **odds-ratio** gap is
-  non-collapsibility rather than
-  confounding, so there the colours stay descriptive and `tab_reg()` says so once: use marginal effects
-  (`effect = "marginal"`) or risk ratios (`measure = "ratio"`) for a comparison the test can read.
-* **Every outcome now has an observed counterpart.** `tab_reg(empirical = TRUE)` used to go quiet on
-  three families. A **summed score** (`trials =`) now shows the odds ratio of the summed items; an
-  **ordinal** outcome shows `Obs_cumOR`, the cumulative odds ratio of the same model with one
-  predictor; a **multinomial** outcome would need one crude column per category, so its observed
-  effect is folded into the model cell instead — `2.31 (2.05)`. `color = "adjustment"`
-  therefore works everywhere, and on the marginal paths (`effect = "marginal"`) of a 3+ level
-  outcome the gap now carries a real significance test. One rule covers all of it: *the observed effect
-  is the model's own effect, fitted with a single predictor*.
-* **The odds ratio is always there.** On any `pct = "row"` / `"col"` table every cell now carries its
-  odds ratio, so seeing one is a display choice rather than a build option: `display = "{or}"` (or
-  `"{or} ({pct})"`), `color = "odds_ratio"` to colour it, `ref2` to pick which level the 2×2 compares
-  against. The `OR =` argument is soft-deprecated onto exactly that. With `levels = "first"` the table
-  shows one level against the merged rest, so its odds ratio is the true binary one.
-* **`tab(ref2 = "cumulative")`** — the descriptive twin of that ordinal model: one **cumulative odds
-  ratio per cut point** ("at or below level j") for an `ordered` col_var, with no proportional-odds
-  assumption. The spread of the odds ratios across a row *is* the departure from proportional odds.
-* **`ci` asks one question: where does the interval sit?** `"auto"` (the new default — an interval
-  whenever something reads it), `"no"`, `"cell"` (each cell's own) or `"ref"` (against the reference).
-  *Which* comparison it measures is `color`'s to say, so the old `"diff"` / `"ratio"` are
-  soft-deprecated onto `"ref"`. `ci = "no"` and `ci = "cell"` leave nothing to test a comparison
-  against, so they inform you and disable `stars` / `color_signif` instead of overruling what you
-  typed. `display` also accepts a bare field name (`display = "n"`, the same as `"{n}"`).
-* **One display grammar for `tab()` and `tab_reg()`.** The same named layouts everywhere ---
-  `"est"`, `"est_ci"`, `"est_base"`, `"base_est"`, `"base"`, `"base_ci"` --- built on two new
-  scale-relative tokens: `{est}` is whatever the column estimates and `{base}` the level it sits on
-  (a percentage, a mean, a count), so one template works on every family. `{gap}` shows how far
-  adjustment moved a regression effect, in print and Excel as well as in a tooltip. On `tab_reg()`
-  the layouts now reach every family and every column, and `display` never triggers a computation:
-  every quantity a layout can name is already stored, so `set_display()` on a finished table gives
-  the same table as asking for it at build time.
-* **Only the primary field of a cell is coloured.** A cell printing several fields reads as one
-  number with an aside --- `1/1.63*** (31%)` --- so the shade now grades the number and the aside is
-  set slightly back from the table's own text, following the theme.
-  `options(tabxplor.color_whole_cell = TRUE)` restores the whole-cell colour. Which field is the primary --- the one that
-  also carries the stars and that `get_num()` returns --- is the first one written outside brackets,
-  so a layout may print the aside first (`"base_est"`) without demoting the number.
-* **One rule for multiplicative cells.** A value below its reference prints as its inverse
-  (`1/2.67` for an odds ratio, `÷2.67` for a risk / rate / mean ratio, the measure's own glyph) in
-  *every* rendering --- a bare cell, a `{}` composite and the `est_ci` bracket alike. Composites
-  used to drop it, so a table could show `1/2.67` and `0.37` for the same quantity. A reference cell prints a bare
-  `1`, so its row stands out. Set
-  `options(tabxplor.ratio_print = "raw")` for the journal convention.
-* **`ci_method = c(mean_diff = "ols")`** pools the variance over *every* level of the variable, so
-  the interval is the one a linear regression gives that coefficient (`"student"` pools the two
-  compared groups only). `c(mean_ratio = "quasipoisson")` now likewise uses the single dispersion a
-  quasi-Poisson regression estimates. `tab_reg(empirical = TRUE)`'s observed columns use them
-  automatically on an unweighted table, and the design-based forms on a weighted one --- so an
-  observed effect and its interval are exactly the univariable model's.
-* **`ordered` factors now survive `tab()`.** They used to be silently stripped to plain factors. Note
-  that the synthetic `Total` / `Ensemble` / `NA` levels are appended after the real ones, so on an
-  ordered grouping column they compare as the greatest levels — they are labels, not scale points.
-* **Observed effects for continuous predictors too.** `tab_reg(empirical = TRUE)` used to leave every
-  continuous predictor blank — often the rows where adjustment bites hardest. They now carry their
-  observed (univariable) effect, on the model's own scale, so `color = "adjustment"` and its
-  significance test work there as well. One rule now covers every predictor: the `Obs_*` columns show
-  the **observed, unadjusted (univariable)** effect.
-* **Continuous predictors are now scaled per standard deviation by default** (`multiplier = "sd"`).
-  Per one unit their effect is usually too small to read or to colour — a year of age barely moves an
-  odds ratio, a whole standard deviation multiplies it by 0.66. The row label names the unit
-  (`age (per 1 SD (13.5))`). `multiplier` accepts a single value for all continuous predictors or a
-  named vector overriding some (`"sd"`, `"2sd"`, or a number of units); **`multiplier = 1` restores the
-  per-one-unit reading**, which is what you want when comparing a cell against `exp(coef(glm(...)))`.
-* **Does this predictor act differently between subgroups?** With `split_var`,
-  `stats = c(..., "interaction")` adds one aggregated test per predictor to the footer — the classic
-  effect-modification test, asked once for all a predictor's levels, so it carries none of the
-  multiplicity of a per-cell reading. `color = "between_groups"` turns it on for you.
-* **`tab_reg()` speaks `tab()`'s vocabulary.** The arguments both producers share are now spelled the
-  same way: `dependent` is **`outcome`**, `split_var` is **`tab_vars`**, `reference` is **`ref`**
-  (`c(var = "level")`, predictors and `tab_vars`), and `method` is **`ci_method`** — the named vector
-  `tab()` takes, whose fifth slot is the regression's (`ci_method = c(model = "profile")`, or just
-  `"profile"`). `inverse_two_level_factors` (a logical that toggled level *order*) is
-  **`outcome_level`**, which names the level: `outcome_level = c(married = "Married")` for the level
-  MODELLED on a binomial outcome, the baseline category on a multinomial one, refused on an ordinal
-  one. It is the twin of `ref`, and the pair asks opposite questions — *`ref` names the level you
-  compare AGAINST, `outcome_level` the level you MODEL*. Every retired spelling aborts naming its
-  replacement.
-* **One `stats =` for the whole model-summary footer.** `compare` and `baseline` are gone: the
-  comparison is a footer key like any other, and the baseline model is that key's value —
-  `stats = c("n", "aic", "compare_sequential")`, `stats = c("n", compare_baseline = "Model 1")`, or
-  `stats = "compare_baseline"` for the first model. A comparison key *adds* a row and restricts
-  nothing. Note `stats = FALSE` / `"none"` now hides the comparison too, which `compare` did not.
-* **`tab_reg()` no longer documents `.fit_cache`** (jamovi-internal; it rides `...`).
-* **`tab_reg()`'s estimand is a cascade**: `family` → `link` → `measure` → `effect`, where `"auto"`
-  means *follow from the left*, so setting one re-derives everything to its right and most tables set
-  none of them. **A link is a measure** — the one the model estimates directly — so `link` takes
-  `measure`'s own words (`"odds_ratio"` / `"ratio"` / `"difference"`) and the statistician's
-  vocabulary never surfaces. `family` says what kind of number the outcome is, `link` **which measure
-  the model estimates**, `measure` **which one is reported**, `effect` where that number comes from
-  (`"conditional"` — renamed from `"coefficient"` — `"marginal"`, `"at_reference"`). A coefficient
-  exists only where the reported measure IS the model's; any other measure is worked out from the
-  model's predictions, so it is available whichever model you fit. All four are resolved per outcome
-  like `family`, and `measure` still takes the discipline's acronym (`"RR"` / `"IRR"` / `"RD"` /
-  `"OR"`) while the header marks the contrast on it (`Model_OR`, `Model_mRR`, `Model_refRD`,
-  `Model_log(OR)`). This **replaces** `exponentiate` (→ `measure = "log"`), `at`
-  (→ `effect = "at_reference"`), `effect = "ame"` / `"ame_ratio"` (→ `"marginal"`) and
-  `estimate_display` (→ `display`). The retired names abort with the new spelling.
-* **Two risk ratios, two arguments.** `link = "ratio"` on a **binary** outcome fits the **modified
-  Poisson** (robust standard errors) and reports its *conditional* risk ratio; `measure = "ratio"`
-  reports the *marginal* one from the ordinary logistic fit. They are different quantities, and now
-  different arguments — `family = "poisson"` on a binary outcome is refused, naming both.
-  `link = "difference"` gives the **risk difference** from an identity-link fit (falling back to the
-  linear probability model, with a message, if it does not converge), and `link = "ratio"` on a
-  **continuous** outcome a **ratio of adjusted means** (Poisson pseudo-likelihood). Because the two
-  axes are separate, a measure may now be reported from a model that does not estimate it —
-  `link = "ratio", measure = "difference"` is a marginal risk difference computed from the
-  modified-Poisson fit. `empirical = TRUE` gives the matching crude companion in every case.
-* **A marginal odds ratio** (`effect = "marginal", measure = "odds_ratio"`) is available on a binary
-  outcome: the odds ratio of the two adjusted predictions, which unlike a conditional one is not
-  moved by covariates it does not confound (Karlson & Jann 2023). It must be asked for by name.
-* **New `reg_measures(data, outcome, link =)`** lists what an outcome can be modelled as at one
-  model: every `effect` × `measure` cell with its status — *available*, *not defined* (an odds ratio
-  needs a probability), or *not offered* — and the header it would produce. It is the same runtime
-  table the argument validator, the error messages and `?tab_reg`'s own generated section read.
-* **New `reg_formulas()`** shows the formula behind every column of a `tab_reg()` table: exactly what
-  reached `glm()`, `svyglm()`, `multinom()` or `polr()`.
-* **`tab_reg()` selects its variables like `tab()`** — `outcome`, `predictors`, `tab_vars` and `wt`
-  take bare names and every tidyselect helper. The two escape hatches are unchanged (a model formula
-  in `outcome`, a named list of models in `predictors`, each element selected on its own).
-* **`tab_reg(color =)` can no longer contradict the column.** The colour ladder comes from what the
-  column estimates, so the geometry values are gone: `color = TRUE` grades each cell on its own
-  scale, and what is left to choose is what to compare it *to* — `c(TRUE, "adjustment")` (was
-  `c("OR", "adjustment")`) or `c(TRUE, "between_groups")`.
-* **Regression tables now show the numbers behind the estimates.** An `n` column gives each predictor
-  level its unadjusted count (`n = "no"` to drop it), and the footer answers "is this variable
-  associated with the outcome at all?" with one overall test per multi-level predictor (it costs no
-  extra model fit; `stats = FALSE` or an explicit `stats =` vector opts out).
-* **`tab_export()`** — one entry point for every export format. **`tab_html()`** is the new name for
-  `tab_kable()` (kept as a permanent alias). **`tab_css()`** generates one stylesheet for a whole document;
-  its cell-colour rules survive Bootstrap-based host pages (pkgdown, Quarto), which style table cells
-  themselves. **`set_caption()` / `get_caption()`** store a caption that survives a pipeline.
-* **`tab_transpose()` / `transpose = TRUE`** — flip a table, mainly for the column-percentage inversion
-  workflow. Also: **French vignettes on a bilingual pkgdown website**.
-* **Marginal effects are much faster.** `tab_reg(effect = "marginal")` computes its estimates,
-  adjusted predictions and confidence intervals itself, from an analytic derivative, instead of
-  through a numerical one: measured 10.0 s → 1.2 s on a four-predictor logistic regression over
-  21 000 rows, and 45.2 s → 5.2 s on a three-level multinomial. The printed numbers are unchanged
-  (they match `marginaleffects` to eight decimal places, which the tests pin).
-* **New jamovi "Regression models" analysis (`jmvtabreg`)** for `tab_reg()`. The Crosstables module (`jmvtab`)
-  gains a reference-level picker, export, a live cache, and the new options. The jamovi html results and
-  exports now show the per-cell hover tooltips (counts, confidence intervals, differences;
-  `options(tabxplor.tab_kable_tooltips = FALSE)` to disable).
-* **Levels can be merged from the jamovi panels**: tick a level to fold it into the one above,
-  chain ticks to merge a run, and name the result. Available on every crosstab axis (beside the
-  existing level reordering) and on each factor predictor of a regression. In R, do the same with
-  `forcats::fct_collapse()` before calling `tab()` / `tab_reg()` — it is the very same operation.
-* **The jamovi panels now name every option after the R argument it drives** (`outcome`,
-  `tab_vars`, `ci_method`, `multiplier`, `shape`, `ref`, `stats`…), so clicking through the module
-  still teaches the R API. Two controls were added: the model checks that refit the model
-  (`stats = "all"`) and the N per predictor level (`n`). ⚠ jamovi keys an analysis's saved
-  settings by option name, so **a `.omv` file saved with an earlier development build loses the
-  values of the renamed options** and falls back to their defaults.
+  `color = TRUE` is the smart per-column-type default, and every ladder is the same ladder written in
+  another measure, so a shade means the same deviation whichever measure a table is read on. OKLCH
+  palettes, `set_color_palette()`, `color_breaks`, a `theme = "auto"` dark mode, and black-and-white
+  publication palettes (`theme = "print_ready"`) saying it all typographically.
+* **One display grammar for both producers.** Named layouts (`"est"`, `"est_ci"`, `"est_base"`, …)
+  built on `{}` tokens — `display = "{pct} (n={n})"` — where `{est}` is whatever the column estimates
+  and `{base}` the level it sits on. It is post-hoc: `set_display()` on a finished table gives the
+  same table as asking at build time. Every cell of a percentage table now carries its odds ratio.
+* **`shape =` decides how a number enters a table**: quantile groups, bands at the mean and one
+  standard deviation either side, one level per value, or a `"log"` / `"sqrt"` transformation. A
+  numeric `row_vars` / `tab_vars` is grouped rather than exploded; a mean cell shows `49 (cv 36%)`.
+* **New `tab()` arguments**:
+  - `spread_vars` (each level of a sub-table variable becomes a block of columns, with one 
+    `Total` row and one `n` column per block)
+  - `n = c("range", "min", "no")` (how many people the table is about)
+  - `n_min`, `common_totrow` and `na = "common_base"`.
+* **`tab_export()`** is one entry point for every format, and **`tab_html()`** (the new name for
+  `tab_kable()`) renders through a new dependency-free engine, about 3× faster and restylable because
+  its geometry is CSS classes; **`tab_css()`** writes one stylesheet for a whole document. Also new:
+  `options(tabxplor.print = "html")` with hover tooltips, `set_caption()`, `transpose = TRUE`.
+* **Excel export moved to `openxlsx2`**: a ratio stays a real number that sorts and filters while
+  printing `1/2.11`, column widths fit their content, a secondary number becomes a column of its own,
+  and `tab_xl(check = "auto")` draws the model-check plots under a regression table.
+* **Introspection accessors.** `tab_structure()` and `tab_supports()` say what a table is and what
+  can be done with it, `tab_columns()` what every numeric column estimates and how it is coloured,
+  `fmt_attr()` any one column fact by name, `reg_measures()` and `reg_formulas()` the same for models.
+* **French translations** of every legend, footer and message (`options(tabxplor.lang = "fr")`, a
+  `lang =` argument, or the locale), on a bilingual pkgdown website. **Labelled data (`haven`)**:
+  value labels become factor levels. **Parallel builds** with `options(tabxplor.parallel = TRUE)`.
+
 
 ## Changes that may affect existing code
 
-* **`tab_reg()`'s two new defaults change what a table holds**: `empirical = TRUE` adds an observed
-  column (so a table has more columns, and each cell prints the level it sits on beside the effect),
-  and several `predictors` sets add a comparison row. Pass `empirical = FALSE` / `stats = ` for the
-  old shape. `tab_reg(ci_method =)` moved into `...`; it is passed by name exactly as before.
-
-* **`tab(shape =)` no longer writes the variable's name onto the first level.** It was useful only
-  for a table whose leading text columns are stripped: ask for it with `tab(shape_name = TRUE)`.
-
-* **`options(tabxplor.spark =)` is `options(tabxplor.shape_table =)`**, named for what it governs ---
-  the shape table under a `tab_reg()` footer. The old name still works.
-
-* **One vocabulary for measure names.** Every argument that names a measure --- `tab(color =)`,
-  `fmt(color =)`, `tab_reg(measure =)`, `tab_reg(link =)` --- now reads one table, so the
-  discipline's acronyms work everywhere the measure does: `"RD"` / `"diff"`, `"RR"` / `"IRR"` /
-  `"RoM"`, `"OR"`, each with an all-lowercase twin. `tab(color = "rr")` and `color = "IRR"` used to
-  abort while `tab_reg(measure = )` accepted them. What only a model estimates (`"cumOR"`, `"D"`,
-  `"WR"`) stays on the regression arguments, and says so instead of reading as an unknown word.
-
-* **`fmt(color =)` validates its value**, as the documentation always said it did: an unknown
-  measure is an error where it used to be stored verbatim and colour nothing, and every accepted
-  spelling is stored as its canonical measure name. `fmt(color_signif =)` likewise.
-
-* **On the regression side only, three spellings are gone**: `measure = "risk_ratio"` /
-  `"rate_ratio"` / `"MR"` (the taught spellings are `"ratio"` and its acronyms; `"mr"` names a
-  *model* and belongs to `link`), and case folding, so `measure = "Difference"` or `"ODDS_RATIO"`
-  is no longer silently accepted.
-
-* **A numeric `row_vars` / `tab_vars` is grouped rather than given one row per value**, and a
-  numeric column's cell shows a coefficient of variation instead of a standard deviation (see *New
-  features*). `shape = "values_to_levels"` and `display = "mean_sd"` restore the old output exactly.
-
-* **The colour thresholds moved.** `pct_ratio` is now `×1.1 / ×1.2 / ×1.5 / ×2` above the reference
-  and `÷1.1 / ÷1.25 / ÷2 / ÷4` below it (a percentage ratio is capped at `1 / base`, so a cell reaches
-  much further below its reference than above); `mean_ratio` takes the same over side, mirrored; and
-  `mean_diff` is `0.1 / 0.2 / 0.4 / 0.8` SD instead of Cohen's three rungs. On the **background**
-  channel the two ratio scales keep their two loudest rungs only, so the default `color = TRUE` still
-  flags relative deviations without shading half the table. `pct_diff`, `odds_ratio` and `contrib` are
-  unchanged. `set_color_breaks()` restores any of them.
-* **`color_signif = "guaranteed_effect"` reads the same numbers as `"ignore"`** — its ladder is now the
-  scale's own, one rung down, instead of being rescaled (which printed thresholds like `×1.3333`).
-* **A ratio prints two decimals** (`×1.29`), like the odds ratio beside it, when the cell asks for none.
-* **In a `tab_reg()` table a continuous predictor's row now reports its unit in the level
-  (`per SD/13.5`) and draws its observed shape in the otherwise-empty `n` cell** (a framed
-  sparkline in HTML), instead of crowding both into the row label. `multiplier` now applies to
-  **multinomial and ordinal** outcomes too, so their continuous predictors read per standard
-  deviation by default like every other family --- pass `multiplier = 1` for the raw per-unit
-  coefficient. With `n = "no"` there is no cell left to draw the curve in.
-* **A `display` template's literal text now prints even when its main field is empty.**
-  `display = "{pct} pts"` on a cell with no percentage used to render nothing and now renders
-  `pts`. A literal *inside brackets* is unaffected: `"{pct} ({n})"` still renders nothing at all.
-
-* **A variable with a level named `"Total"` (or `"Ensemble"`) is now refused**, naming the level.
-  `tab()` uses those labels for its own total rows and read such a level back AS one — bold, out of
-  the percentage base, and printed twice, with no warning. Rename the level, or move tabxplor's
-  labels with `options(tabxplor.total_names = c(row = "..."))`. A level named `"NA"` or `"Others"` is
-  still fine.
-* **`tab_reg(stats =)`: the two model checks that fit a model are now opt-in**, and `"all"` means
-  all. Linearity refits once per continuous predictor and the Brant proportional-odds test fits its
-  own auxiliary logits; between them they were most of the cost of a regression table (a
-  200 000-row, 6-predictor logit went from 12.3 s to 3.4 s). Ask for them by name —
-  `stats = c("n", "aic", "linearity")` — or take everything with `stats = "all"`, which previously
-  meant only the default set. Dispersion, Influence and Collinearity are unchanged and still shown
-  by default, `reg_check_plots()` draws any panel on request, and the observed curve in each
-  continuous predictor's own row label needs no model at all. One consequence: an ordinal table no
-  longer warns about a rejected proportional-odds assumption unless you asked for the check.
-* **Everything past the variable roles must now be named.** `tab()`, `tab_plain()`, `tab_num()` and
-  `tab_counts()` take `...` right after their variable arguments, so an unnamed extra argument is
-  refused by name instead of landing in whatever formal sat at that position. Every named call keeps
-  working, and a typo now gets a suggestion (`tab(colour = TRUE)` → *did you mean `color`?*) where R
-  used to say only "unused argument". One consequence worth knowing: an argument sitting after `...`
-  is matched **exactly**, so an abbreviation that used to partial-match silently (`color_br =`) is
-  now refused — with the full name in the message.
-* **The four synthetic labels are one option**: `options(tabxplor.total_names = c(row =, col =,
-  tab =, other =))` replaces the `total_names` / `totaltab_name` / `other_level` arguments (which
-  still work, with a message). A partial vector is allowed, so a French document can set
-  `c(tab = "Ensemble", other = "Autres")` once and leave the rest alone.
-* **`options(tabxplor.stars)` now carries the star ladder too**: `FALSE`, `TRUE`, or your own
-  `c("*" = 0.05, "**" = 0.01)`. It replaces `tabxplor.signif_levels` + `tabxplor.signif_labels`
-  (still read if you set them). The stars are a render-time reading of each cell's stored p-value,
-  so changing the ladder re-reads tables you have already built.
-* **`fmt` columns carry a 16th attribute, `col_group`** --- which sub-population a column's block
-  belongs to, after `tab(spread_vars =)` / `tab_spread()` or `tab_reg(split_var =)` (`""` otherwise).
-  Read it with `get_col_group()`. Those columns used to fold the level into their `col_var` as
-  `"{level}<br>{variable}"`; `get_col_var()` returns the plain variable name now, and the two facts
-  together identify a column *block*. Rendered output is unchanged. Only code reading `col_var` off a
-  *spread* table is affected.
-* **`ci = "cell"` now shows the total (reference) row's own interval too.** A cell interval compares
-  each cell to 0 %, not to a reference, so every cell has one — including the total row, which is the
-  best-estimated cell in the table. Numeric tables already printed it; percentage tables left it
-  blank.
-* **`tab_reg()` now checks four arguments it never checked.** `conf_level = 95` reached the interval
-  engine as a probability, a typo in `stats` was silently dropped (so a footer row simply went
-  missing, with no message), `color_signif = "grey"` was stored on every column as a policy no
-  consumer knows, and a `baseline` given without `compare = "baseline"` was ignored in silence. Each
-  now aborts — or, for the last, says why it cannot be used.
-* **An unknown argument value now aborts instead of being silently ignored.** `totaltab`, `n_min` and
-  `conf_level` were validated nowhere at all, so `tab(totaltab = "tabel")` quietly meant "no total
-  table" and `conf_level = 95` reached the interval engine as a probability. Every crosstab producer
-  (`tab()`, `tab_plain()`, `tab_num()`, `tab_counts()`) now checks its arguments against one declared
-  vocabulary and names the valid set in the message; `conf_level = 95` suggests `0.95`.
-* **`tab_counts(ci_method = c(mean_diff = ))` now aborts.** A counts table has no mean columns, so the
-  two mean slots were accepted and did nothing; `cell` and `diff` are unaffected.
-* **A weighted table now says, in its footer, what its intervals and tests are based on** — and the
-  default position ("the raw number of respondents") is stated rather than left silent. The
-  development-only option `tabxplor.kish_neff` is **renamed `tabxplor.design_effect`** (it was never
-  released) and no longer approximates: it now computes the weighting's own design effect exactly. It
-  is scoped to `tab()` and its leaves; `tab_reg()` never reads it, its observed columns being always
-  corrected. Two consequences on numbers: with the option **on**, a weighted table's intervals and
-  p-values change slightly (an approximation became exact, in either direction, and a table weighted by
-  a *constant* gets an effective n a whisker below the raw one, `survey`'s own finite-sample factor); and
-  `tab_reg(empirical = TRUE)` on weighted data now widens its observed intervals **unconditionally**,
-  which is what makes them match the model column beside them.
-* **`tab(pct = "all", ci = "cell")` used to error** ("`false` must be a vector, not NULL"), weighted or
-  not. Fixed.
-* **What `tab()` returns is now decided by `output_list` alone.** `options(tabxplor.output_kable)` was
-  read inside a build stage and changed the *class* of the returned object; it now only renders the
-  result with `tab_html()`, as documented.
-* **`pct` is vectorised over `col_vars`**, like `levels` and `digits` (`tab(d, x, c(a, b), pct =
-  c("row", "col"))`). A per-`row_var` list is refused with a message: that axis is global in `tab()`.
-* **`totcol = "each"` and `"all_col_vars"` no longer error and no longer build per-`col_var` totals** —
-  exactly one total column is shown since 2.0.0, and they are now spellings of it.
-* **`tab_reg(stats = "dispersion")` now names the model check, not the Pearson dispersion.** The exact
-  Pearson dispersion of a count model keeps its footer row under `stats = "phi"`, and it is now correct
-  for weighted models too (it used to divide by a survey design's degrees of freedom, reading about 20
-  where it should read about 1).
-* **`tab_reg()` fits every model of an outcome on the same people, by default.** The new
-  `na = "drop_by_outcome"` shares one complete-case population across the models of a given outcome
-  (`"drop_by_model"` restores the per-model drop, `"drop_all"` shares one across the whole call). This
-  is what makes the observed (`empirical = TRUE`) columns comparable to the model beside them, and it
-  lets the likelihood-ratio comparison run where it used to degrade to an AIC difference; it also
-  changes N, and therefore the estimates, when compared models have different missingness. Where the
-  populations still differ, no observed effect is attached at all — a coloured "gap" would be listwise
-  deletion rather than adjustment.
-* **`tab_reg(family = "auto")` reads an integer-valued outcome as gaussian** instead of refusing to
-  guess, so age in years, a summed score or income in whole units no longer need an explicit family
-  (the message names `"poisson"` for a genuine count).
-* **The `color = "adjustment"` / `"between_groups"` thresholds now follow the estimate's own scale**:
-  a difference in the outcome's own units is compared in standard deviations of that outcome
-  (`adj_diff_std`), so the same model on an outcome recorded in hours, minutes or days reads the same
-  way. Their break labels are signed (`+2`, `-5`) on an additive scale instead of `×0.02`.
-* **`conf_level` now reaches the gap greying** as well as the printed intervals and the stars.
-* **A weighted table's whole-table test and effect size are now computed on the weighted table.**
-  Every other figure beside them already was: the confidence intervals are `Wilson(weighted %,
-  unweighted n)` and the mean F uses the weighted group moments. Only the chi-squared and Cramér's V
-  were still fully unweighted, so a weighted table reported a p-value and an effect size describing a
-  population you had not asked about. Unweighted tables are unchanged. Fisher's exact test is skipped
-  when weights are used (an exact test counts whole observations).
-* **Survey designs: `tab(ids =, strata =, fpc =, nest =)` and the same arguments on `tab_reg()` /
-  `tab_logit()` / `multi_logit()` are removed**, together with `test = "survey"`. They reached the
-  whole-table p-value and nothing else. Build the design once with `survey::svydesign()` and pass it as
-  `data` instead — it says everything those arguments did, plus calibration:
-  `tab(svydesign(ids = ~psu, strata = ~region, weights = ~w, data = d), x, y, test = TRUE)`.
-  `test` is now simply `TRUE` / `FALSE`: the **kind** of test follows what you passed — weights, or
-  weights plus `options(tabxplor.design_effect = TRUE)`, or a design. Replicate-weight (`svrepdesign`)
-  and two-phase designs are refused with a message rather than failing obscurely, and passing `wt =`
-  *and* a design is now an error (a design already carries its own weights).
-* **Excel export now uses `openxlsx2`** (Suggests) instead of `openxlsx`.
 * **Dependencies reshuffled.** `magrittr` / `stringr` / `crayon` are dropped, so **`%>%` is no longer
-  re-exported** — use the base `|>` pipe (or load `magrittr`/`dplyr`). `kableExtra` and `DescTools` move to
-  Suggests; `survey` / `nnet` / `MASS` / `broom` become hard dependencies (weighted, multinomial, ordinal
-  and basic `tab_reg()` work out of the box).
-* **Significance stars are opt-in** (off by default) in `tab()`; `tab_reg()` still shows them.
-* **The base count, `add_pct` and chi-squared / ANOVA p-values are now drawn at display/export time**, not stored
-  as columns/rows in the built object. Read them via `get_n()` on the Total column and the `test` attribute
-  (`get_test()`).
-* For **numeric (mean) columns**, the `diff` field is now a real **difference**; the cell/reference ratio
-  moved to the `ratio` field.
-* **`tab(na = "drop")` with several `col_vars`** now drops each column's own missing values (the old shared
-  base is now `na = "drop_all"`).
-* A few options got clearer names (`tabxplor.kable_css` → `tabxplor.tab_kable_css`, plus
-  `tabxplor.console_theme` / `tabxplor.export_theme`); the old names still work.
-* **`color = "contrib"` with a `color_signif` policy** now tests the adjusted standardized residual
-  rather than the Pearson one, so more cells are (correctly) flagged as significant; with weights it
-  uses the unweighted *n* rather than the sum of weights, which previously made every cell "significant"
-  as soon as weights carried population scale. `color_signif = "guaranteed_effect"` also changes what it
-  colours (the residual, on the new absolute `zscore` scale). The default
-  `color_signif = "ignore"` — the correspondence-analysis reading — is unchanged.
-* **`tab_reg()` reports a continuous predictor's effect per standard deviation by default**
-  (`multiplier = "sd"`, see above). Pass `multiplier = 1` for the previous per-one-unit reading.
+  re-exported** — use the base `|>` pipe. `kableExtra` and `DescTools` move to Suggests, Excel export
+  from `openxlsx` to `openxlsx2`, and `survey` / `nnet` / `MASS` / `broom` become hard dependencies.
+* **The base count, `add_pct` and the chi-squared / ANOVA p-values are drawn at display time**, not
+  stored as columns and rows. Read them with `get_n()` on the Total column and `get_test()`.
+* For **numeric (mean) columns** the `diff` field is a real **difference**, the cell/reference ratio
+  moving to `ratio`, and a cell shows a coefficient of variation instead of a standard deviation; a
+  numeric `row_vars` / `tab_vars` is grouped rather than exploded. `shape = "values_to_levels"` and
+  `display = "mean_sd"` restore the old output exactly.
+* **`tab(na = "drop")` with several `col_vars`** drops each column's own missing values (the old
+  shared base is now `na = "drop_all"`).
+* **The colour thresholds moved** for `pct_ratio`, `mean_ratio` and `mean_diff`, and the background
+  channel keeps the two ratio scales' loudest rungs only. `set_color_breaks()` restores any of them.
+* **A weighted table's whole-table test and effect size are computed on the weighted table** (only
+  those two were still unweighted), Fisher's exact is skipped under weights, and `color = "contrib"`
+  significance reads the adjusted residual on the unweighted *n*.
+* **Everything past the variable roles must be named**, `tab()` and its siblings taking `...` right
+  after their variable arguments: an unnamed extra argument is refused, a typo gets a suggestion, and
+  an abbreviation that used to partial-match silently is refused. An unknown value now aborts too.
+* **A variable with a level named `"Total"` (or `"Ensemble"`) is refused**, naming the level: those
+  are tabxplor's own total-row labels. Rename it, or move them with `options(tabxplor.total_names =)`.
+* **`fmt` column attributes**: `type` is split into `scale` (what the column estimates) and `pct_type`
+  (which kind of percentage), `ci_type` is gone, and a new `col_group` names a column block's
+  sub-population. Only code building or inspecting `fmt` vectors is affected; see
+  `vignette("tabxplor-programming")`.
+* **Options renamed**, the old names still read: `tabxplor.total_names` replaces the `total_names` /
+  `totaltab_name` / `other_level` arguments, and `tabxplor.stars` carries the star ladder.
 
 ## Bug fixes
 
-* **`tab()` could not use a column whose name was not syntactic.** `tab(data, x, \`my var\`)` aborted
-  saying the column did not exist. Any name works now.
-
-* **The Total column's "100 %" disappeared under `color = "ratio"`** as soon as significance was
-  shown (`color_signif`, `stars`, `ci = "ref"`), although the cells were still percentages.
-
-* **A Total cell showing only its base count was printed as the table's own figure**, in bold and in
-  the table's ink. It reads as an aside, like every other bracketed value.
-
-* **`display = "estimate"` aborted** where `"est"` worked. Both are accepted.
-
-* **A quantile cut's levels carried a redundant rank** (`"4 to 24 Q4"`): the bounds already say where
-  the group sits, so the tag is gone.
-
-* **Excel: a `tab_reg()` model column lost its unit tag** (`<diff>`) where its observed twin kept
-  one, and a long tag (`<obs mean>`) could wrap badly and widen its column. Unit tags are now written
-  at 8pt, on one line, and never set a column's width.
-
-* **`set_display()` silently rendered another field when given a word it did not know.**
-  `set_display(x, "difference")` printed the count. Every value is now checked against the package's
-  own vocabulary, and a measure's own name (`"difference"`, `"odds_ratio"`) reaches the field that
-  shows it, so one word means one quantity in `color =` and in `display =` alike.
-
-* **A table that lost its class kept fewer of its properties than it needed to.** The rules between
-  `row_vars` blocks, and a `tab_reg()` table's base-count column, survive `as_tibble()`.
-
-* **The colour legend under the table named the Total row even when `ref` was not the total.** It now
-  says "the reference category (in bold)" for any non-total reference.
-
-* **Rendering a table in one language then another kept the first one.** `lang = "fr"` followed by
-  `lang = "en"` returned French, because the gettext cache was never actually invalidated.
-
-* **A regression coefficient is no longer printed as a percentage.** On the two scales whose level is
-  neither a percentage nor a mean --- a gaussian beta, a `measure = "log"` estimate --- a difference
-  of -3.6 was rendered `-364.1%`, in print, in Excel and in the html tooltip, next to a correct
-  confidence interval.
-
-* **The html tooltip was rewritten.** Every line now goes through the same renderer as the cells and
-  is named after the field it shows (`diff`, `ratio`, `OR`, `ctr`, `resid`, `obs`, `gap`, `n`, and
-  `row%` / `adj%` / `obs%` for a level), no line repeats what the cell already prints, a reference
-  cell says `ref` once, and the exact p-value now appears wherever the interval is the one being
-  reported. The odds ratio is shown on every row/column-percentage table, not only where it is the
-  colour measure. Tooltip labels are no longer translated: they are the field names.
-
-* **No odds ratio on a Total column that is 100 % by construction.** An odds ratio needs a 2x2, and
-  on the margin the percentages sum to there is none; the number computed there was meaningless, and
-  it was colouring the `Total` column of an odds-ratio table and showing a confidence interval on
-  hover. It is empty now, in the cell, the tooltip and the colour legend.
-
-* **The `Total` column drops its `100 %` when the cells stop showing a percentage**, e.g. under
-  `display = "ratio"`, printing only the base count. It already did so on odds ratios.
-
-* **`pct = "col"` failed on an `ordered` row variable**, with `Can't combine <ordered> and <factor>`,
-  whenever the base count or `add_pct` row was added --- that is, on printing or exporting.
-
-* **`na = "drop_all"` failed with both factor and numeric column variables** on an `ordered` row
-  variable, with `Can't join ... due to incompatible types`.
-
-* **`tab_plain(color_signif =)` did nothing.** The superseded factor leaf never applied the colour
-  spec it resolved, so the significance policy was stored as `"ignore"` whatever you asked, a
-  composite like `color = "diff_ci"` kept its measure and lost its test, and a two-channel
-  `color = c(<text>, <background>)` failed outright. `tab()` and `tab_num()` were unaffected.
-* **`tab_md(lang =)` and `tab_xl(lang =)` did nothing.** The colour legend followed the ambient
-  locale whatever you passed. `tab_html()`, `tab_plot()` and `forest_plot()` were unaffected.
-* **A survey-design ANOVA row called itself a Welch F.** On a weighted / `svydesign` table the
-  numeric p-value row printed `pvalue (Chi2, Welch F; survey-design)` for a test that is a
-  design-based Wald F. It now says `F`, the `; survey-design` suffix naming the estimator.
-* **Arithmetic silently did nothing on a `pct_ci`, `mean_ci` or `pvalue` column.** `x * 2` returned
-  `x` unchanged, with no warning, on display values `?fmt` documents — so `mutate()` over the fmt
-  columns of a table showing confidence intervals quietly left them alone. They now write back to the
-  field they display, like every other token.
-* **The two `tab_reg()` estimands added in 2.0.0 got no model checks at all.** `link = "difference"`
-  on a binary outcome and `link = "ratio"` on a continuous one are fitted through a different
-  *link*, and the assumption checks (`stats =`, `reg_check_plots()`) were keyed on that link rather
-  than on the distribution behind it — so those two tables silently reported no linearity, dispersion,
-  influence or collinearity row and drew no diagnostic panel.
-* **A partial per-outcome vector aborted instead of defaulting.** `tab_reg(data, c("a", "b"),
-  family = c(a = "binomial"))` — and the same shape of `inverse_two_level_factors` — died with
-  "subscript out of bounds" where the documented rule is that an unnamed outcome takes the default. A
-  *positional* `inverse_two_level_factors` was unusable for the same reason.
-* **A model formula given beside `predictors` reported the wrong error.** `tab_reg(data, y ~ x,
-  list(m1 = "a"))` died on an internal assertion instead of saying "provide either a formula in
-  `dependent` or `predictors`, not both".
-* **A `tab_reg()` table's own record could contradict its own column header.** With
-  `color = "adjustment"` (which turns `empirical` on), the stored effect word was captured before that
-  and the column header after it, so the two disagreed.
-* **A table with no column variable could not be transposed**: `tab_html(tab(data, marital),
-  transpose = TRUE)` aborted with "subscript out of bounds".
-* **A custom total-column name containing a regular-expression character** (e.g.
-  `total_names = c("Total", "Total (n)")`) was interpolated into a pattern when the lone total column
-  was renamed, so it could fail to be recognised.
-* **`options(tabxplor.stars = TRUE)` did not reach `tab_num()`**, although it reached `tab()` for the
-  same table: the option was read too late to decide whether a reference interval is needed, so the
-  two produced different numbers.
-* **`tab_num()` and `tab_plain()` recorded nothing about the table they built** — no table kind, and
-  no weight name, so a directly-built weighted `tab_num()` printed no "Weighted by …" footer.
-* **`tab_num(color = "after_ci")` dropped the significance policy** the combined value carries, so its
-  cells were coloured without the greying `tab()` applies to the same request.
-* **`tab_counts()` stored a `color_signif` policy it never applied** when `ci` anchored nothing to test
-  (`"cell"` / `"no"`): the table claimed a significance gate its colours did not use. It now informs
-  and disables it, as `tab()` does.
-* **`tab(filter = )` accepted only a character string.** A bare expression (`filter = !is.na(x)`) was
-  evaluated in the caller's frame instead of the data, and aborted with "object not found" — although
-  that is the form the documentation shows. Both forms work now, and an expression may reference the
-  caller's own variables.
-* **A transposed regression table's model-fit footer rendered grey in HTML**, where the untransposed
-  one keeps it black: the transpose dropped the per-cell "reading anchor" flags, and a silent fallback
-  hid it.
-* **`theme = "print_minimalistic"` on `tab_html(engine = "kableExtra")` rendered a black table** — the
-  black-and-white publication palette got the dark theme.
-* **`tab_spread()` left the table's tests pointing at columns that no longer exist**, so a spread
-  cross-table lost its whole test summary (chi-squared, effect size, p-value).
-* **`tab_plot()`'s colour legend ignored the palette's typography** and forced every token bold, so
-  under `theme = "print_minimalistic"` — where the direction is a typographic face, not a colour — the legend became
-  unreadable.
-
-* **`color = "auto"` works beside `color_signif`**, and now means exactly what `color = TRUE` means.
-  The combination used to abort with *"Unknown color measure"* — on cross-tables and on mean tables
-  alike.
-* **`tab_num(ci = "ref")` colours its cells.** With the default `color = "auto"` the table came out
-  entirely uncoloured.
-* **`dplyr::bind_rows()` on two subtabled (grouped) tables no longer loses everything below the
-  table**: the weight footnote, the colour legend, the confidence-interval note, the test summary and
-  a stored caption all survive now. Plain tables were already fine.
-* **`ref` / `ref2` accept `"last"`**, the mirror of `"first"`: the last *level* of the row or column
-  variable (a total row/column is never selected — that is `"tot"`). It used to be silently treated
-  as a regular expression, so it matched nothing and produced an empty comparison plus a confusing
-  warning.
-* Adding a **count column to a percentage column** (`tab$n + tab$pct`) warned about the mismatch and
-  then aborted; it now just warns.
-* A factor carrying **`NA` as a real level** (`factor(..., exclude = NULL)`, common in imported data) no
-  longer crashes `print()` / `format()` / any export.
-* `ci_method = c(cell = "beta")` under a `survey` design now applies Korn & Graubard's
-  degrees-of-freedom rescale, as `survey::svyciprop(method = "beta")` does. On a design built on few
-  clusters its intervals were measurably too short. Unchanged without a design.
-* `tab()` accepts a **`data.table`** as input, and a **logical `col_var`**.
-* **Clearer errors** for an unknown named `ref`, a variable used as both a tab and a row/column variable,
-  and an all-zero / all-`NA` weight.
-* The **`lang` argument now works on Linux** (`lang = "fr"` used to return an English legend).
-* In `tab_reg()`, a **logical predictor** rendered as an empty row, and the `Constant` row lost its bold
-  when `empirical = TRUE`.
-* `color = TRUE` on an odds-ratio table with **two or more factor `col_vars`** silently coloured on
-  the difference instead of the odds ratio.
-* HTML **tooltips no longer repeat what the cell already prints**: a composite cell (`"{pct} (n={n})"`,
-  or an average-marginal-effect cell) used to show its own bracket again on hover.
-* **`tab_reg()` on a survey design now weights everything it should.** The observed (`empirical = TRUE`)
-  columns were computed *unweighted* beside a design-weighted model column — the one comparison the
-  feature exists for, made on two different populations — and `effect = "ame"` returned a
-  sample-average instead of a population-average marginal effect (a 13% error in our test case). The
-  per-standard-deviation scaling of numeric predictors and the model-vs-observed gap test were
-  unweighted too, and the footer never said the table was weighted at all.
-* **A calibrated survey design** (`survey::calibrate()` / post-stratified) no longer errors in
-  `tab_reg()` as soon as any row has a missing value. It also no longer loses the model-vs-observed
-  gap test (`color = "adjustment"`) on such a table, and `effect = "ame"` no longer returned a wrong
-  gap standard error there.
-* **`tab_reg(split_var = )` on a survey design** errored outright whenever the groups had unequal
-  sizes, and on a *calibrated* design it silently fitted each group with the wrong respondents'
-  weights (up to 38% off in our test case).
-* **The design-based p-value now describes the table you see**: it was computed on the design's
-  original data, ignoring `filter =`, rare-level lumping (`other_if_less_than`) and `cleannames`
-  relabelling, so a lumped table could report the p-value of the unlumped one.
-* `tab_num()`, `tab_plain()` and `tab_many()` **accept a survey design** as `data` (only `tab()` and
-  `tab_reg()` did); `tab_counts()` explains why it cannot.
-* **`color = "contrib"` significance now accounts for the sample design.** It always used the
-  weighting-only effective size, so a stratified + clustered table and a flat one gave identical
-  cell p-values while their confidence intervals differed. Where the row variable is defined at the
-  cluster level (a geography, a school, an establishment — the commonest reason to have clusters)
-  this overstated the residual by a factor 2.5 in our test case, colouring cells that should be
-  greyed. Note some cells may now go **uncoloured** where the smaller base takes their expected count
-  below 1.
-* **A table with several `row_vars` kept none of its inference metadata**, so its footer stated the
-  *opposite* of what was computed (an interval accounting for the weighting, described as not doing
-  so), and a `tab_plain(design) |> tab_ci()` pipeline lost the design's degrees of freedom — intervals
-  9% too narrow with few clusters.
-* **A weighted table with `tab_vars` and `totaltab = "table"`** silently lost the whole-table
-  ("Ensemble") test row.
-* **Pre-aggregated counts** (`tab_counts(wt_counts = )`) no longer report a design-based p-value they
-  cannot support: such a table states, and now consistently uses, the unweighted sample size.
-* One degraded survey design anywhere in a session used to mislabel **every later `tab_reg()`** as
-  having failed to compute its design variance.
-* `tab_reg()`'s observed (`Obs_*`) columns now **store the effective sample size** their intervals were
-  computed on, in the `n_eff` field, instead of discarding it; and the multinomial crude tooltip uses
-  the same interval method as the column beside it.
-* `tab_reg(trials = "<column name>")` now gives a clear error naming the argument, instead of failing
-  deep inside `glm()`.
-* **The colour legend no longer names an interval method the bounds were not built with.** Each column
-  now records its own (`get_ci_method()`), so a mean's one-sample cell interval is called a Student t
-  interval rather than a Welch one, and a Poisson crude rate ratio is called Katz rather than Wald.
+* **`tab()` could not use a column whose name was not syntactic**: ``tab(data, x, `my var`)`` aborted
+  saying the column did not exist.
+* A factor carrying **`NA` as a real level** (`factor(..., exclude = NULL)`, common in imported data)
+  no longer crashes `print()`, `format()` or any export.
+* **`pct = "col"` and `na = "drop_all"` failed on an `ordered` row variable**, on printing or
+  exporting; and **`tab(pct = "all", ci = "cell")` errored**, weighted or not.
+* **The `lang` argument now works on Linux**, and switching language mid-session keeps the new one.
+* **`tab_spread()` lost the table's whole test summary**, and `dplyr::bind_rows()` on two grouped
+  tables lost the weight footnote, colour legend and caption.
+* **`ref` / `ref2` accept `"last"`**, and errors are clearer for an unknown named `ref`, a variable
+  used on two axes, or an all-zero weight. `tab()` accepts a `data.table` and a logical `col_var`.
 
 ## Deprecations
 
 ### Soft-deprecated
 
-* `tab(add_n =)` — use `n = c("range", "min", "no")`, or `options(tabxplor.n =)`. `add_n = FALSE`
-  is `n = "no"`.
-* `tab(total_names =)`, `tab(totaltab_name =)` and `tab(other_level =)` — use
-  `options(tabxplor.total_names =)`. Same on `tab_plain()`, `tab_num()` and `tab_counts()`.
-* `options(tabxplor.signif_levels)` / `options(tabxplor.signif_labels)` — give the ladder to
-  `options(tabxplor.stars)` as a named vector.
-
-### Removed
-
-* **`options(tabxplor.ci_print =)` is gone**, and with it the last cell layout only an option could
-  reach. A confidence interval is a *display* now: `display = "base_ci"` prints `48% [45;50]%`,
-  `display = "base_moe"` prints `48% ±2%`, and the bare `"{ci}"` / `"{moe}"` tokens print the
-  interval alone. `ci = "cell"` shows each cell's own interval, as before. The option name is inert
-  (R offers no way to warn when one is set).
-* **The `kableExtra` HTML engine is gone.** `tab_html()` / `tab_kable()` render through the
-  dependency-free engine that has been the default since the beta, whose every look is a CSS class
-  you can restyle (`tab_css()`) and which is the only one that can follow a `theme = "auto"` toggle.
-  `engine =` is accepted and ignored with a message, and the options
-  `tabxplor.tab_kable_engine`, `tabxplor.always_add_css_in_tab_kable` and
-  `tabxplor.kable_html_font` are removed. **kableExtra** remains an optional dependency: its print
-  method is what opens a table in the Viewer and binds the tooltips.
-* **`kable_tabxplor_style()` is defunct** — use `tab_html()`, which renders any table (a `tabxplor_tab`
-  or a plain data.frame) with colours, tooltips and spanning headers.
-* **`color_type` and `html_24_bit` are no longer arguments** of `tab_html()` / `tab_md()` /
-  `tab_xl()` / `tab_plot()` / `tab_css()` / `tab_export()`; nor are `html_font` and `full_width`.
-  They had been inert since the beta. Passing one still works and reports it once: the colour
-  *channel* is chosen by `color = c(text, background)`, and font and width are CSS rules
-  (see `tab_css()`).
-* **`tab_css(chrome =)` is now `tab_css(format = c("html", "md"))`**, which says what it is for:
-  `"html"` (the default) is the full stylesheet, `"md"` the colour classes only. **`tab_md_css()` is
-  removed** — it was `tab_css(format = "md")` under a name you had to already know.
-* **`tab_logit()` and `multi_logit()` are removed** — use `tab_reg(family = "binomial")`
-  (`multi_logit(models = )` is `tab_reg(predictors = <named list>)`). They were thin wrappers that
-  exposed only part of `tab_reg()`, so `effect`, `measure`, `compare`, `baseline`, `reference` and
-  `color` were out of reach through them.
-* **The option `tabxplor.color_style_type` is removed** (it was documented but never set, and only
-  ever emitted its own deprecation warning). The colour channel is `color = c(text, background)`.
+* Functions: `tab_many()` (a shim over `tab()`), `tab_transpose()` (use `transpose = TRUE`), and the
+  step-by-step chain `tab_pct()` / `tab_tot()` / `tab_totaltab()` / `tab_ci()` / `tab_chi2()`.
+* `tab()` arguments: singular `row_var` / `col_var`, `sup_cols` (use `col_vars`), `filter` (filter
+  upstream), `names_prefix` / `names_sort` (they belong to `tab_spread()`), `add_n` (use `n =`),
+  `total_names` / `totaltab_name` / `other_level` (use `options(tabxplor.total_names =)`), `OR` (use
+  `display = "{or}"` / `ref2 = "cumulative"`), `ci = "diff"` / `"ratio"` (use `ci = "ref"`), `chi2`
+  (use `test`), `method_cell` / `method_diff` (use `ci_method`), and `"diff_ci"` / `"after_ci"` /
+  `"ci"` (use `color` + `color_signif`).
+* Elsewhere: `tab_xl(print_color_legend =)` → `color_legend =`, `set_diff_type()` →
+  `set_ref_type()`, the `in_totrow` cell field → `row_kind` (`is_totrow()` and `x$in_totrow` are
+  unchanged), and `options(tabxplor.signif_levels)` / `options(tabxplor.signif_labels)`.
 
 ### Hard-deprecated (defunct in 2.1.0)
 
-* **The step-by-step chain** — `tab_pct()` / `tab_tot()` / `tab_totaltab()` / `tab_ci()` /
-  `tab_chi2()` — now warns on every call. What goes away is the *chaining API*, not the statistics:
-  `tab()` and `tab_num()` compute percentages, differences, confidence intervals and the whole-table
-  test in one pass, with the same arithmetic, and the numbers are identical.
+* The step-by-step chain warns on every call. What goes away is the *chaining API*, not the
+  statistics: `tab()` and `tab_num()` compute the same numbers, in one pass.
 * `tab_prepare()`, `complete_partial_totals()` and `fct_recode_helper()` will become internal or be
-  removed in 2.1.0. `tab_prepare()`'s work is done by `tab()` itself (`na_drop_all` is
-  `filter = !is.na(...)`; `cleannames`, `other_if_less_than` and `other_level` are `tab()` arguments).
+  removed; `tab_prepare()`'s work is done by `tab()` itself.
 
-### Soft-deprecated
+### Removed (now an error)
 
-* **The `in_totrow` cell field is replaced by `row_kind`**, which says what kind of row a cell sits
-  in (`"data"` / `"total"` and the synthetic display rows `"n"`, `"pct"`, `"pvalue"`, `"gof"`,
-  `"blank"`). `is_totrow()` and `as_totrow()` are unchanged, `x$in_totrow` still returns the logical,
-  and `fmt(in_totrow = )` is soft-deprecated in favour of `fmt(row_kind = )`.
-* `tab_many()` — now a thin shim over `tab()`, translating the five arguments that were renamed
-  (`chi2` → `test`, `totrow` / `totcol` → `tot`, `compact` → `output_list`, and
-  `na_drop_all = c(a, b)` → `filter = !is.na(a) & !is.na(b)`). Only `data`, `row_vars`, `col_vars`,
-  `tab_vars` and `wt` may be passed by position; everything else must be named.
-* Singular `row_var` / `col_var`; `tab(sup_cols =)` (use `col_vars =`); `tab(filter =)` (filter
-  upstream); `tab(names_prefix =, names_sort =)` (they belong to `tab_spread()`).
-* `tab_pct()` / `tab_tot()` / `tab_totaltab()` / **`tab_ci()`** / **`tab_chi2()`** — the whole
-  step-by-step chain is superseded. Confidence intervals and the whole-table test are computed by the
-  build itself, from `tab()`'s `ci` / `ci_method` / `conf_level` / `stars` / `test` / `color`
-  arguments. The steps still work on an existing table and give the same numbers.
-* `tab_transpose()` (use `transpose = TRUE`); `tab_plot()`.
-* Renamed arguments: `chi2` → `test`, `tab_xl(print_color_legend =)` →`color_legend =`,
-  `method_cell` / `method_diff` → `ci_method = c(cell =, diff =)`. `set_diff_type()` → `set_ref_type()`,
-  which shares its stem with `get_ref_type()` and with the `ref` attribute both address.
-* The combined colour strings `"diff_ci"` / `"after_ci"` / `"ci"` (use `color = "difference"` +
-  `color_signif =`); `color_type` (now inert).
-* **`tab(OR =)`** — `"OR"` / `"OR_pct"` map to `display = "{or}"` / `"{or} ({pct})"`, `"cumOR"` to
-  `ref2 = "cumulative"`. **`ci = "diff"` / `"ratio"`** map to `ci = "ref"` (`"ratio"` also keeps its
-  Katz bounds; `color = "ratio"` is the way to ask for them).
-* `color`'s canonical values are the full words — `"difference"`, `"ratio"`, `"odds_ratio"`,
-  `"contrib"`. The acronyms (`"diff"`, `"OR"`, `"or"`) are permanent aliases, not deprecations, but a
-  built table now stores and its legend now names the full word.
-
-Removed / defunct (now error):
-
-* `tab_xl(n_min =, hide_near_zero =)` (long inert); the little-used `totcol` vector
-  forms; the `tabxplor.compact` option (use `output_list =`); `tab_num(ci_scale =)` (a duplicate of
-  `color = "ratio"`).
-* `method_ratio` / `method_mean_diff` / `method_mean_ratio` (never released; use `ci_method`).
-  A proportion *ratio* has only one interval (Katz), so it was never a choice.
-* `or_plot()` (never released; use `forest_plot()`, which draws every family and effect, follows
-  `set_color_breaks()` and returns a modifiable `ggplot`).
-* `ids` / `strata` / `fpc` / `nest` on `tab()`, `tab_reg()`, `tab_logit()` and `multi_logit()`, and
-  `test = "survey"` (pass a `survey::svydesign()` as `data` — see above).
-* **The `fmt` column attributes `type` and `ci_type`, with `get_type()` / `set_type()` /
-  `get_ci_type()` / `set_ci_type()` and `fmt()`'s `type =` / `ci_type =` arguments.** `type`
-  conflated two facts and is **split in two**: `scale =` says what the column estimates
-  (`"level_pct"`, `"level_mean"`, `"level_n"`, `"points"`, `"mean_diff"`, `"raw_diff"`,
-  `"pct_ratio"`, `"mean_ratio"`, `"odds_ratio"`, `"log_coef"`), and `pct_type =` which kind of
-  percentage it is (`"row"` / `"col"` / `"all"` / `"all_tabs"` / `"none"`), read with `get_scale()` /
-  `get_pct_type()`. `ci_type` is gone rather than renamed: the stored interval is always on the
-  estimate's own scale, and whether a column *has* one is read from its bounds. `fmt()` answers a
-  `type =` / `ci_type =` call with the mapping to the new arguments. This only concerns code that
-  builds or inspects `fmt` vectors directly (see `vignette("tabxplor-programming")`); every `tab()`
-  and `tab_reg()` table is unchanged, cell for cell.
+* Functions: `tab_plot()`, `tab_logit()`, `multi_logit()`, `or_plot()`, `kable_tabxplor_style()` and
+  `tab_md_css()` — use `tab_export()`, `tab_reg()`, `forest_plot()`, `tab_html()` and
+  `tab_css(format = "md")`.
+* **The `kableExtra` HTML engine**, with `engine =` (accepted and ignored) and the options
+  `tabxplor.tab_kable_engine`, `tabxplor.always_add_css_in_tab_kable`, `tabxplor.kable_html_font`.
+  kableExtra stays optional: its print method is what opens a table in the Viewer.
+* Arguments and options: `color_type`, `html_24_bit`, `html_font`, `full_width`,
+  `tab_xl(n_min =, hide_near_zero =)`, `method_ratio` and its siblings,
+  `tabxplor.ci_print` (use `display = "base_ci"` /`"base_moe"`), `tabxplor.compact`, `tabxplor.color_style_type`.
+* **The `fmt` attributes `type` and `ci_type`**, with `get_type()` / `set_type()` / `get_ci_type()` /
+  `set_ci_type()` and `fmt()`'s `type =` / `ci_type =` arguments — replaced by `scale`, `pct_type`.
 
 
 # tabxplor 1.3.1

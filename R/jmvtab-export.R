@@ -11,7 +11,7 @@
 #     only route (the format's extension is authoritative, never typed); resolveExportPath()
 #     composes and sanitises them, and export_documents_dir() resolves the per-OS default folder.
 #   - ⚠ In jamovi's bundled R, path.expand("~") resolves to Documents rather than the real home --
-#     expand through the OS home (fs::path_home() / USERPROFILE / HOME) instead.
+#     expand through the OS home (USERPROFILE / HOME) instead.
 #   - `fs` is Suggests: every use carries a base-R fallback, so export never hard-depends on it.
 #   - ⚠ A SHARED HELPER MAY ONLY READ AN OPTION BOTH PANELS DECLARE, and the failure is not a NULL:
 #     jmvcore's `$.Options` STOPS on an unknown name. Anything panel-specific goes through jmv_opt().
@@ -23,12 +23,9 @@
 
 #' @noRd
 export_home_dir <- function() {
-  if (requireNamespace("fs", quietly = TRUE)) {
-    h <- tryCatch(as.character(fs::path_home()), error = function(e) "")
-    if (length(h) && nzchar(h[1])) return(h[1])
-  }
-  h <- Sys.getenv("USERPROFILE")
+  h <- Sys.getenv("USERPROFILE")                           # Windows, where jamovi mostly runs
   if (!nzchar(h)) h <- Sys.getenv("HOME")
+  if (!nzchar(h)) h <- path.expand("~")
   h
 }
 
@@ -85,12 +82,8 @@ export_unwrap <- function(s) {
 #' @noRd
 export_sanitize_filename <- function(name) {
   name <- basename(export_unwrap(name))                    # drop any directory pasted into the name box
-  if (requireNamespace("fs", quietly = TRUE)) {
-    name <- tryCatch(as.character(fs::path_sanitize(name)), error = function(e) name)
-  } else {
-    name <- gsub('[/\\\\?<>:*|":[:cntrl:]]', "", name)     # OS-illegal characters
-    name <- sub("[. ]+$", "", name)                        # trailing dots / spaces (invalid on Windows)
-  }
+  name <- gsub('[/\\\\?<>:*|":[:cntrl:]]', "", name)       # OS-illegal characters
+  name <- sub("[. ]+$", "", name)                          # trailing dots / spaces (invalid on Windows)
   sub("\\.[A-Za-z0-9]{1,5}$", "", trimws(name))            # drop any extension the user typed
 }
 
@@ -247,8 +240,7 @@ jmvtab_export <- function(tabs, format = c("excel", "html", "md"), path, replace
   dir <- dirname(path)
   if (nzchar(dir) && !dir.exists(dir)) {
     created <- tryCatch({
-      if (requireNamespace("fs", quietly = TRUE)) fs::dir_create(dir)
-      else dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+      dir.create(dir, recursive = TRUE, showWarnings = FALSE)
       dir.exists(dir)
     }, error = function(e) FALSE, warning = function(w) FALSE)
     if (!created) {

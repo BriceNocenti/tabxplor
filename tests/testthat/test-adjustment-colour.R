@@ -326,7 +326,7 @@ test_that("{obs} renders bare and in a composite, and round-trips through get_nu
                effect = "marginal", measure = "difference", empirical = TRUE)
   ac <- a[[grep("^Model_", names(a), value = TRUE)[[1]]]]
   testthat::expect_true(any(grepl("%$", format(set_display(ac, "obs")))))
-  testthat::expect_true(any(grepl("^\\+", stringi::stri_trim(format(set_display(ac, "obs"))))))
+  testthat::expect_true(any(grepl("^\\+", trimws(format(set_display(ac, "obs")), whitespace = "[\\h\\v]"))))
   aok <- !is.na(get_obs(ac))            # an empty cell writes no number, so its code is irrelevant
   testthat::expect_true(all(grepl("%", format(set_display(ac, "obs"), syntax = "excel")[aok])))
 })
@@ -391,7 +391,6 @@ test_that("every exporter renders an adjustment-coloured table without error", {
 # --- Phase 18z13 (D2 / D4): the gap ladder reads the ESTIMATE's own scale -------------------------
 
 test_that("D2: the additive gap is unit-invariant (hours / minutes / days colour identically)", {
-  skip_if_not_installed("broom")
   d <- adj_data()
   d$tv_hr  <- d$tvhours
   d$tv_min <- d$tvhours * 60
@@ -413,7 +412,6 @@ test_that("D2: the additive gap is unit-invariant (hours / minutes / days colour
 })
 
 test_that("D4: the gap's break glyphs follow the selected scale, not the measure", {
-  skip_if_not_installed("broom")
   d   <- adj_data()
   leg <- function(t) paste(tab_color_legend(t, medium = "plain", style = "terse"), collapse = " | ")
 

@@ -18,7 +18,6 @@ cst <- function(t, col) {
 # ---- the shared grammar -------------------------------------------------------------------------
 
 test_that("one grammar: a bare scalar, `default =`, and per-variable overrides", {
-  skip_if_not_installed("broom")
   d <- anc_data()
 
   # multiplier: an unnamed value is the fallback -- the 1.x form discarded it as soon as a name appeared
@@ -50,7 +49,6 @@ test_that("one grammar: a bare scalar, `default =`, and per-variable overrides",
 })
 
 test_that("the grammar's refusals name the eligible set and the two vocabularies", {
-  skip_if_not_installed("broom")
   d <- anc_data()
   f <- function(...) tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE, ...)
   expect_error(f(ref = c(nope = "mean")), "predictor")
@@ -64,7 +62,6 @@ test_that("the grammar's refusals name the eligible set and the two vocabularies
 # ---- the anchor is a reparametrization -----------------------------------------------------------
 
 test_that("only the intercept moves: every estimate is invariant under the anchor", {
-  skip_if_not_installed("broom")
   d  <- anc_data()
   t0 <- tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE,
                 multiplier = 1, ref = c(age = 0))
@@ -82,7 +79,6 @@ test_that("only the intercept moves: every estimate is invariant under the ancho
 })
 
 test_that('the default anchor is the WEIGHTED mean of the predictors\' complete cases', {
-  skip_if_not_installed("broom")
   d  <- anc_data()
   d$w <- runif(nrow(d), 0.5, 2)
   t1 <- tab_reg(d, "married", c("race", "age"), family = "binomial", wt = "w", stats = FALSE,
@@ -94,7 +90,6 @@ test_that('the default anchor is the WEIGHTED mean of the predictors\' complete 
 })
 
 test_that("`shape` recodes first, the anchor applies to the result", {
-  skip_if_not_installed("broom")
   d  <- anc_data()
   t1 <- tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE,
                 shape = c(age = "log"), ref = c(age = "mean"))
@@ -112,7 +107,6 @@ test_that("`shape` recodes first, the anchor applies to the result", {
 # ---- the Constant row ----------------------------------------------------------------------------
 
 test_that("the Constant row holds the baseline THIS contrast is read against", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d  <- anc_data()
   p  <- c("race", "age")
@@ -139,7 +133,6 @@ test_that("the Constant row holds the baseline THIS contrast is read against", {
 })
 
 test_that("the Constant row is written on the column's own geometry, and labelled by contrast", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d <- anc_data()
   lab <- function(t) as.character(t$levels)[as.character(t$var) == "Constant"]
@@ -166,7 +159,6 @@ test_that("the Constant row is written on the column's own geometry, and labelle
 # ---- the two descriptive readers ------------------------------------------------------------------
 
 test_that("a shifted column is read back in the user's own units", {
-  skip_if_not_installed("broom")
   d  <- anc_data()
   t1 <- tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE,
                 empirical = TRUE)
@@ -177,7 +169,6 @@ test_that("a shifted column is read back in the user's own units", {
 })
 
 test_that("reg_check_plots() replays the preparation, so the refit IS the table's model", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("ggplot2")
   d  <- anc_data()
   t1 <- suppressWarnings(tab_reg(d, "married", c("race", "age"), family = "binomial",

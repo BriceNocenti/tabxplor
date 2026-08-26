@@ -636,9 +636,8 @@ tab(data, race, marital, year, pct = "row") |>
 \code{\link[=tab_counts]{tab_counts()}} (pre-aggregated counts) and \code{\link[=tab_plain]{tab_plain()}} (one bare cross-table).
 \code{\link[=set_color_breaks]{set_color_breaks()}} / \code{\link[=set_color_palette]{set_color_palette()}} customise the colours,
 \code{\link[=tab_structure]{tab_structure()}} reports what a finished table is and what accepts it.
-Export a table with \code{\link[=tab_xl]{tab_xl()}} (Excel), \code{\link[=tab_kable]{tab_kable()}} (HTML), \code{\link[=tab_md]{tab_md()}} (Markdown) or
-\code{\link[=tab_plot]{tab_plot()}}, and CHART it with \code{\link[=forest_plot]{forest_plot()}} (every cell's estimate, interval and colour --
-\code{tab_plot()} renders the table as an image, \code{forest_plot()} is the real chart).
+Export a table with \code{\link[=tab_xl]{tab_xl()}} (Excel), \code{\link[=tab_kable]{tab_kable()}} (HTML) or \code{\link[=tab_md]{tab_md()}} (Markdown), and
+CHART it with \code{\link[=forest_plot]{forest_plot()}} (every cell's estimate, interval and colour).
 Package-wide defaults live in \link{tabxplor-options}.
 
 \code{color = "contrib"} shows each cell's departure from the \strong{log-linear model of independence}

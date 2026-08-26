@@ -292,7 +292,6 @@ test_that("at = 'reference' writes no `obs`: the two columns are different estim
 # --- Phase 18z13: D7 (the reference group is choosable) / D11 (no writes without a reader) --------
 
 test_that("D7: `reference` picks the split_var baseline instead of the first level", {
-  skip_if_not_installed("broom")
   d  <- gap_data()
   # the baseline group is the one with no `obs` (a group is not compared to itself)
   base_of <- function(t) {
@@ -309,7 +308,6 @@ test_that("D7: `reference` picks the split_var baseline instead of the first lev
 })
 
 test_that("D11: obs / gap_se are written only where a gap measure reads them", {
-  skip_if_not_installed("broom")
   d  <- gap_data()
   # ⚠ `empirical = "column"`, not TRUE: since 22g-ii `tab_vars` resolve TRUE to "tooltip" (the
   # crude value computed, no column), and the crude COLUMNS are what this asserts about.
@@ -418,7 +416,6 @@ test_that("a pinned gap bound renders as the null, never as a negative zero", {
 test_that("a gap at machine precision is NA, not a z of 20", {
   # a UNIVARIABLE model equals its own crude fit exactly, so both the gap and its SE are floating-
   # point dust -- and their ratio was a p of 1e-92 that painted the column at full strength.
-  skip_if_not_installed("broom")
   d <- gap_data()
   t <- suppressMessages(tab_reg(d, "age", "race", family = "gaussian", empirical = TRUE,
                                 stats = FALSE))

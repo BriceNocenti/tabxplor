@@ -28,7 +28,6 @@ capture_msg <- function(expr) {
 # === S1 reg_validate_args(): the four arguments the reg boundary never checked ====================
 
 test_that("`conf_level` is validated, with the 95-vs-0.95 hint", {
-  skip_if_not_installed("broom")
   d <- rr_data()
   # it reached the interval engine as a probability: `qnorm(1 - (1 - 95)/2)` -> NaN, a warning, and
   # a table full of NaN bounds.
@@ -41,7 +40,6 @@ test_that("`conf_level` is validated, with the 95-vs-0.95 hint", {
 })
 
 test_that("`stats` names are validated instead of silently filtered", {
-  skip_if_not_installed("broom")
   d <- rr_data()
   # reg_footer_stats() did `stats[stats %in% reg_stat_keys()]`, so a typo produced a MISSING footer
   # row and no message. reg_validate_stat_keys() has carried `arg = "stats"` since 19g, uncalled.
@@ -54,7 +52,6 @@ test_that("`stats` names are validated instead of silently filtered", {
 })
 
 test_that("`color_signif` is validated on the reg path too", {
-  skip_if_not_installed("broom")
   d <- rr_data()
   # it went straight to fmt(), which CASTS without validating -- so the unknown policy was stored on
   # every column and merely painted as "ignore".
@@ -69,7 +66,6 @@ test_that("`color_signif` is validated on the reg path too", {
 # unrepresentable -- a baseline is a single string by grammar, and naming one IS asking for the
 # comparison. What is checkable instead is the grammar itself.
 test_that("the model-comparison keys are refused when they contradict each other", {
-  skip_if_not_installed("broom")
   d <- rr_data(); M <- list(m1 = "race", m2 = c("race", "age"))
   expect_error(tab_reg(d, "married", M, family = "binomial",
                        stats = c("compare_baseline", "compare_sequential")),
@@ -85,7 +81,6 @@ test_that("the model-comparison keys are refused when they contradict each other
 })
 
 test_that("a comparison key ADDS a row and restricts nothing", {
-  skip_if_not_installed("broom")
   d <- rr_data(); M <- list(m1 = "race", m2 = c("race", "age"))
   only <- suppressMessages(tab_reg(d, "married", M, family = "binomial",
                                    stats = "compare_sequential"))
@@ -99,7 +94,6 @@ test_that("a comparison key ADDS a row and restricts nothing", {
 })
 
 test_that("the scalar logicals are refused when they are not scalar logicals", {
-  skip_if_not_installed("broom")
   d <- rr_data()
   expect_error(tab_reg(d, "married", "race", family = "binomial", empirical = "yes"), "TRUE")
   expect_error(tab_reg(d, "married", "race", family = "binomial", n = "yes"), "Unknown")
@@ -108,7 +102,6 @@ test_that("the scalar logicals are refused when they are not scalar logicals", {
 # === S2: the split_var refusals now precede the colour/family informs (H23) =======================
 
 test_that("a `split_var` that is also a predictor aborts before anything is announced", {
-  skip_if_not_installed("broom")
   d <- rr_data()
   # the same abort fired ~500 lines later, so it arrived after up to eight informs about families,
   # colours and forcings the call was never going to produce.
@@ -121,7 +114,6 @@ test_that("a `split_var` that is also a predictor aborts before anything is anno
 # === S4: the four output arguments, resolved in an order that is not wrong ========================
 
 test_that("the `color = \"adjustment\"` note fires on the DEFAULT color_signif, not only on an explicit one", {
-  skip_if_not_installed("broom")
   d <- rr_data()
   # reg_color_notes() tested `!is.null(color_signif)` while the default "grey_non_signif" was applied
   # 22 lines LATER -- so the identical effective state was silent one way and noisy the other.
@@ -135,7 +127,7 @@ test_that("the `color = \"adjustment\"` note fires on the DEFAULT color_signif, 
 })
 
 test_that("`empirical` is FINAL before the effect word is recorded (H22)", {
-  skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
+  skip_if_not_installed("marginaleffects")
   d <- rr_data()
   # `color = "adjustment"` FORCES empirical on, and the table's own narrative record must still name
   # the column it built: the header word is a pure function of the resolved estimand, so the two
@@ -152,7 +144,7 @@ test_that("`empirical` is FINAL before the effect word is recorded (H22)", {
 # named vector is the documented shape ("unknown dependent -> the default"), not a user error.
 
 test_that("a PARTIAL named `family` defaults the unnamed dependents instead of erroring", {
-  skip_if_not_installed("broom"); skip_if_not_installed("nnet")
+  skip_if_not_installed("nnet")
   d <- rr_data()
   # `party3` is not named -> "auto" -> detected. Before: `family[["party3"]]` = subscript out of bounds.
   expect_no_error(
@@ -164,7 +156,7 @@ test_that("a PARTIAL named `family` defaults the unnamed dependents instead of e
 })
 
 test_that("a SHORTER positional `family` defaults the surplus dependents instead of erroring", {
-  skip_if_not_installed("broom"); skip_if_not_installed("nnet")
+  skip_if_not_installed("nnet")
   d <- rr_data()
   # length 2 against 3 dependents: the third falls back to "auto" (reg_per_dep's `i <= length(x)`).
   expect_no_error(
@@ -174,7 +166,7 @@ test_that("a SHORTER positional `family` defaults the surplus dependents instead
 })
 
 test_that("a PARTIAL named `outcome_level` leaves the other outcomes at their default", {
-  skip_if_not_installed("broom"); skip_if_not_installed("nnet")
+  skip_if_not_installed("nnet")
   d <- rr_data()
   expect_no_error(
     suppressMessages(tab_reg(d, c("married", "party3"), "race",
@@ -182,7 +174,6 @@ test_that("a PARTIAL named `outcome_level` leaves the other outcomes at their de
 })
 
 test_that("`outcome_level` names the level, on a factor and on a 0/1 numeric outcome", {
-  skip_if_not_installed("broom")
   d <- rr_data()
   a <- suppressMessages(tab_reg(d, "married", "race", family = "binomial",
                                 outcome_level = c(married = "Not married")))
@@ -199,7 +190,7 @@ test_that("`outcome_level` names the level, on a factor and on a 0/1 numeric out
 })
 
 test_that("`outcome_level` is refused where the family has no level to single out", {
-  skip_if_not_installed("broom"); skip_if_not_installed("MASS")
+  skip_if_not_installed("MASS")
   d <- rr_data()
   d$inc3 <- factor(forcats::fct_lump_n(d$rincome, 2), ordered = TRUE)
   expect_error(suppressMessages(tab_reg(d, "inc3", "race", family = "ordinal",
@@ -218,7 +209,6 @@ test_that("`outcome_level` is refused where the family has no level to single ou
 # === defect 8: a formula `dependent` is not a vector of three dependents ==========================
 
 test_that("a formula `dependent` beside `predictors` gives the teachable message, not a stopifnot", {
-  skip_if_not_installed("broom")
   d <- rr_data()
   # `length(y ~ x)` is 3 (`~`, lhs, rhs), so this used to enter the multi-dependent recursion and
   # die on the internal `stopifnot(is.character(dependent))`.
@@ -231,7 +221,6 @@ test_that("a formula `dependent` beside `predictors` gives the teachable message
 # === the `test` tibble's `outcome` key (19m-i's "missing join key"; `dep` until 20c) ============
 
 test_that("every reg footer row states WHICH OUTCOME it is about; every crosstab row states none", {
-  skip_if_not_installed("broom")
   d <- rr_data()
   t  <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial"))
   tt <- attr(t, "test", exact = TRUE)
@@ -248,13 +237,11 @@ test_that("`outcome` is DECLARED in the schema, so it is not read as a grouping 
   # test_group_cols() is `setdiff(names(tt), names(new_test_tibble()))` minus dot-prefixed names, so
   # an undeclared column would split the reg footer into one block per outcome (19g's own defect).
   expect_true("outcome" %in% names(new_test_tibble()))
-  skip_if_not_installed("broom")
   t <- suppressMessages(tab_reg(rr_data(), "married", c("race", "age"), family = "binomial"))
   expect_length(test_group_cols(attr(t, "test", exact = TRUE)), 0L)
 })
 
 test_that("a multi-outcome footer heads its columns by outcome; a model COMPARISON does not", {
-  skip_if_not_installed("broom")
   d <- rr_data()
   # one model per outcome: the dependent IDENTIFIES the column, so it is the header
   t1 <- suppressMessages(tab_reg(d, c("married", "tvhours"), "race",
@@ -328,7 +315,6 @@ test_that("reg_color_auto_measure() reads the estimand's stored SCALE, not its a
 # tab_check_dots() -- one dots-validator for both producers. The safety property is what this pins:
 # a removed name still ABORTS (never a silent no-op), it just no longer names its replacement.
 test_that("a retired spelling aborts as an unknown argument (no silent no-op)", {
-  skip_if_not_installed("broom")
   d <- rr_data()
   retired <- list(
     dependent                 = list(dependent = "married"),
@@ -346,7 +332,6 @@ test_that("a retired spelling aborts as an unknown argument (no silent no-op)", 
 })
 
 test_that("the two producers now ask the shared questions with the shared word", {
-  skip_if_not_installed("broom")
   d <- rr_data()
   # `tab_vars`, `ref` and `ci_method` are the SAME argument on both producers -- declared, so
   # tx_check_tab_args() polices tab_reg()'s signature against TAB_ARGS like a crosstab's.

@@ -101,7 +101,6 @@ testthat::test_that("numeric diff prose shows the standardized SD thresholds, no
 })
 
 testthat::test_that("tab_reg: a mean difference shows SD, IRR says IRR, OR says OR", {
-  skip_if_not_installed("broom")
   b <- suppressWarnings(tab_reg(gss, "tvhours", c("marital", "race"), family = "gaussian"))
   lb <- leg_en(b)
   # the acronym is DATA: printed exactly as the header spells it, never capitalised as prose

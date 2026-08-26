@@ -559,7 +559,7 @@ reg_digest_working <- function(digest, frame) {
   if (is.null(b) || ncol(mm$X) != length(b)) return(NULL)
   keep <- !is.na(b)
   X    <- mm$X[, keep, drop = FALSE]
-  colnames(X) <- stringi::stri_replace_all_regex(colnames(X), "`", "")
+  colnames(X) <- gsub("`", "", colnames(X), perl = TRUE)
   fam  <- tryCatch(stats::family(digest), error = function(e) NULL)
   bw   <- reg_digest_base_weights(digest, frame)
   if (is.null(fam) || is.null(bw)) return(NULL)

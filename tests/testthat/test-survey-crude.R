@@ -11,7 +11,6 @@
 # See: dev/full_survey_design_scope.md S5 (the crude columns) and S3.4 (how wrong the old base was).
 
 skip_if_not_installed("survey")
-skip_if_not_installed("broom")
 
 # Weights correlated with the outcome AND a real PSU cluster effect, so design != weighted !=
 # unweighted by a wide margin -- the "segregated predictor" shape S3.4 measured at 2.3-2.6x.

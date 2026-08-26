@@ -179,7 +179,7 @@ test_that("a forest plot's axis and guide follow lang =", {
 
 
 # === Phase 20h: `lang` was INERT on two exporters ============================
-# `lang` is documented on tab_html / tab_plot / forest_plot / tab_md / tab_xl and rd_footer() takes
+# `lang` is documented on tab_html / forest_plot / tab_md / tab_xl and rd_footer() takes
 # it, but only the first three ever passed it: tab_md() handed it to md_render_one(), which dropped
 # it, and tab_xl() never read it at all. Both fixtures fail on the pre-20h tree.
 

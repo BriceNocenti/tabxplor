@@ -1,6 +1,6 @@
 # PURPOSE: package initialization plus the shared factor / list / string utilities.
 # ROLE: .onLoad() SEEDS the package options and the colour palette; everything else here is a small
-#   helper with no home of its own -- the two stringi-based replacements for str_wrap/str_trunc, the
+#   helper with no home of its own -- the base-R wrapping / padding / truncating primitives, the
 #   NAME wrapper beside them, the retired-export-argument catcher, the two message helpers
 #   (tx_inform_once() / tx_need_pkg()), and the three exported user helpers (score_from_lv1(),
 #   gss_cat_data_formatting(), and the deprecated fct_recode_helper()).
@@ -42,15 +42,77 @@ vars_chr <- function(x) {
 }
 
 
-# Internal stringi replacements for two stringr functions with no direct stringi equivalent.
-# Signatures mirror the stringr originals (arg names + order), so every call site is a name swap.
-
-# str_wrap(): wrap each element to `width`; stri_wrap returns a list of lines, join with "\n".
-tx_str_wrap <- function(string, width = 80, exdent = 0, whitespace_only = TRUE) {
-  wrapped <- stringi::stri_wrap(string, width = width, exdent = exdent,
-                                whitespace_only = whitespace_only, simplify = FALSE)
-  vapply(wrapped, function(lines) stringi::stri_c(lines, collapse = "\n"), character(1))
+# tx_pad(): pad each element to `width`, on DISPLAY width -- not on character count, because the
+# tables are aligned by eye and a wide glyph occupies two columns. `pad` is often a figure space or
+# a non-breaking space rather than an ASCII one, so formatC() cannot do this.
+tx_pad <- function(str, width, side = c("left", "right", "both"), pad = " ") {
+  side <- match.arg(side)
+  n   <- pmax(0L, width - nchar(str, type = "width"))
+  out <- switch(side,
+    left  = paste0(strrep(pad, n), str),
+    right = paste0(str, strrep(pad, n)),
+    both  = paste0(strrep(pad, n %/% 2L), str, strrep(pad, n - n %/% 2L)))
+  out[is.na(str)] <- NA_character_
+  out
 }
+
+# tx_str_wrap(): wrap each element to `width`, lines joined by "\n". A LABEL, not prose.
+#
+# WARNING: NOT base::strwrap(), and NOT a greedy fill. strwrap formats a PARAGRAPH -- it normalises
+# whitespace runs, double-spaces after a full stop and re-flows across elements. And a greedy fill
+# (take words until the line is full) gives a visibly worse table: it leaves one long line beside a
+# nearly empty one.
+#
+# THE ALGORITHM IS MINIMUM RAGGEDNESS, by dynamic programming: over all ways of breaking the words
+# into lines, take the one minimising the sum of (cap - line width)^2 over every line BUT THE LAST.
+# Squaring is what makes two medium lines beat one full and one nearly empty. `exdent` shortens the
+# cap of every line after the first, and is written back in as leading spaces.
+# `whitespace_only` is kept for the signature's sake: a label breaks at spaces, never inside a word
+# (a compound NAME with no spaces is tx_wrap_name()'s job, in the next section).
+# ⚠ NA becomes the literal "NA": the wrapped value goes on to be a factor level or a cell label,
+# and a missing one still has to print.
+tx_str_wrap <- function(string, width = 80, exdent = 0, whitespace_only = TRUE) {
+  ind    <- strrep(" ", exdent)
+  string <- as.character(string)
+  string[is.na(string)] <- "NA"
+  vapply(string, function(x) {
+    if (!nzchar(x)) return(x)
+    w <- strsplit(x, "[[:space:]]+", perl = TRUE)[[1]]
+    w <- w[nzchar(w)]
+    if (length(w) <= 1L) return(paste0(w, collapse = ""))
+    n    <- length(w)
+    L    <- nchar(w, type = "width")
+    ends <- cumsum(L) + seq_len(n) - 1L               # width of words 1..j on one line
+    span <- function(i, j) ends[j] - (if (i > 1L) ends[i - 1L] + 1L else 0L)
+    cap1 <- width
+    cap2 <- max(1L, width - exdent)
+    # best[i] = least cost of laying out words i..n, line i being a NON-first line.
+    best <- c(rep(Inf, n), 0)
+    brk  <- integer(n)
+    for (i in n:1) for (j in i:n) {
+      len <- span(i, j)
+      if (len > cap2 && j > i) break                  # a lone over-long word still gets its line
+      cost <- (if (j == n) 0 else (cap2 - len)^2) + best[j + 1L]
+      if (cost < best[i]) { best[i] <- cost; brk[i] <- j }
+    }
+    first <- 1L; fbest <- Inf
+    for (j in 1:n) {
+      len <- span(1L, j)
+      if (len > cap1 && j > 1L) break
+      cost <- (if (j == n) 0 else (cap1 - len)^2) + best[j + 1L]
+      if (cost < fbest) { fbest <- cost; first <- j }
+    }
+    out <- character(0); i <- 1L; j <- first
+    repeat {
+      out <- c(out, paste(w[i:j], collapse = " "))
+      if (j >= n) break
+      i <- j + 1L; j <- brk[i]
+    }
+    if (length(out) > 1L) out[-1L] <- paste0(ind, out[-1L])
+    paste0(out, collapse = "\n")
+  }, character(1), USE.NAMES = FALSE)
+}
+
 
 # === SECTION: wrapping a NAME, as opposed to prose =================================================
 #
@@ -116,11 +178,8 @@ tx_wrap_name <- function(string, width = 12L, exdent = 1L, hard = TRUE, brk = "\
 
 # str_trunc(): truncate to `width` with a trailing ellipsis (right side only, the sole use).
 tx_str_trunc <- function(string, width, ellipsis = "...") {
-  too_long <- !is.na(string) & stringi::stri_length(string) > width
-  string[too_long] <- stringi::stri_c(
-    stringi::stri_sub(string[too_long], 1L, width - stringi::stri_length(ellipsis)),
-    ellipsis
-  )
+  too_long <- !is.na(string) & nchar(string, type = "chars") > width
+  string[too_long] <- paste0(substr(string[too_long], 1L, width - nchar(ellipsis, type = "chars")), ellipsis)
   string
 }
 
@@ -178,7 +237,7 @@ tx_reset_messages <- function() {
 }
 
 # THE Suggests gate: one message for every missing package of one request, never one per package.
-# `what` is plain prose ("Excel export", "tab_plot()"): it is substituted as a VALUE, so cli markup
+# `what` is plain prose ("Excel export", "the model-check plots"): it is substituted as a VALUE, so cli markup
 # written into it would reach the user raw.
 # Deliberately the only message allowed three bullets -- it is rare, it is shown once, and it is
 # aimed at a reader for whom installing a package is the hard part.
@@ -342,10 +401,9 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
   no_name_in <- missing(name_in)
   if (no_name_in) {
     name_in <- deparse(substitute(data))
-    if (stringi::stri_detect_regex(name_in, "\\(")) {
-      name_in <-
-        stringi::stri_extract_first_regex(name_in, "[^\\(]+$") |>
-        stringi::stri_replace_all_regex("\\).*$", "")
+    if (grepl("\\(", name_in, perl = TRUE)) {
+      name_in <- regmatches(name_in, regexpr("[^\\(]+$", name_in, perl = TRUE))
+      name_in <- sub("\\).*$", "", name_in, perl = TRUE)
     }
   }
   if (missing(name_out)) name_out <- name_in
@@ -375,13 +433,13 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
           dplyr::filter(!is_totrow(.data$pct)) |>
           dplyr::rename_with(~ "lvs", .cols = 1) |>
           dplyr::mutate(lvs = paste0("\"",
-                              stringi::stri_replace_all_regex(lvs, "\"", "'"),
+                              gsub("\"", "'", lvs, perl = TRUE),
                               "\""),
                  pct = format(.data$pct),
                  n   = format(n),
-                 txt = paste0(stringi::stri_pad(pct, max(stringi::stri_length(pct))),
+                 txt = paste0(tx_pad(pct, max(nchar(pct, type = "chars"))),
                               " ",
-                              stringi::stri_pad(n, max(stringi::stri_length(n)))
+                              tx_pad(n, max(nchar(n, type = "chars")))
                  )
           ) |>
           dplyr::select(lvs, txt)
@@ -390,8 +448,8 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
 
     recode <- frequencies |>
       purrr::map(
-        ~ paste0(stringi::stri_pad(.x$lvs, max(stringi::stri_length(.x$lvs)), "right"), " = ",
-                 stringi::stri_pad(.x$lvs, max(stringi::stri_length(.x$lvs)), "right"),
+        ~ paste0(tx_pad(.x$lvs, max(nchar(.x$lvs, type = "chars")), "right"), " = ",
+                 tx_pad(.x$lvs, max(nchar(.x$lvs, type = "chars")), "right"),
                  ", # ",
                  .x$txt
         )
@@ -401,13 +459,11 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
   } else {
     recode <- data |>
       purrr::map(~ paste0("\"",
-                          stringi::stri_replace_all_regex(
-                            levels(.), "\"", "'"
-                          ),
+                          gsub("\"", "'", levels(.), perl = TRUE),
                           "\"")) |>
       purrr::map(
-        ~ paste0(stringi::stri_pad(., max(stringi::stri_length(.)), "right"), " = ",
-                 stringi::stri_pad(., max(stringi::stri_length(.)), "right"), collapse = ",\n")
+        ~ paste0(tx_pad(., max(nchar(., type = "chars")), "right"), " = ",
+                 tx_pad(., max(nchar(., type = "chars")), "right"), collapse = ",\n")
       )
 
   }
@@ -576,84 +632,61 @@ where <- function (fn)
 }
 
 
-# ggpubr functions (vendored, for tab_plot() as a tableGrob) ---------------------------------------
 
+# === SECTION: knitr chunk options ================================================================
+# knitr is Suggests: the three chunk options tabxplor reads are only ever set DURING a render, and a
+# render is exactly when knitr is loaded. `knitr.in.progress` is knitr's own flag for that, so the
+# gate answers "am I being knitted?" and the requireNamespace() below can never be the slow path.
 #' @keywords internal
-is_tablegrob <- function (tab) {
-  inherits(tab, "gtable") & inherits(tab, "grob")
+tx_knitr_opt <- function(name, which = c("current", "knit")) {
+  if (!isTRUE(getOption("knitr.in.progress"))) return(NULL)
+  if (!requireNamespace("knitr", quietly = TRUE)) return(NULL)
+  switch(match.arg(which),
+         current = knitr::opts_current$get(name),
+         knit    = knitr::opts_knit$get(name))
 }
 
-#' @keywords internal
-is_ggtexttable <- function (tab) {
-  !is.null(attr(tab, "ggtexttableGrob"))
-}
+
+# === SECTION: HTML escaping ======================================================================
+# Vendored from htmltools::htmlEscape (htmltools 0.5.9, RStudio/Posit, GPL (>= 2), redistributed
+# here under tabxplor's GPL (>= 3) as that licence's "or later" clause permits). Thank you.
+#
+# htmltools was a one-function Import: this, plus base64enc / digest / fastmap and a compile, for a
+# vector of gsub()s. The early return is what makes it cheap on a table of numbers, where nothing
+# ever matches -- and `useBytes = TRUE` on both the test and the substitutions is what keeps it so
+# in a non-UTF-8 locale.
+#
+# WARNING: `attribute = TRUE` is not decoration. Inside an attribute value a bare quote or a raw
+# newline ENDS the attribute, so the extra four are a correctness requirement, not a nicety.
+tx_html_specials <- list("&" = "&amp;", "<" = "&lt;", ">" = "&gt;")
+tx_html_specials_attrib <- c(
+  tx_html_specials,
+  list("'" = "&#39;", "\"" = "&quot;", "\r" = "&#13;", "\n" = "&#10;")
+)
 
 #' @keywords internal
-as_ggtexttable <- function (tabgrob) {
-  res <- ggpubr::as_ggplot(tabgrob)
-  attr(res, "ggtexttableGrob") <- tabgrob
-  res
-}
-
-#' @keywords internal
-get_tablegrob <- function (tab)
-{
-  if (is_ggtexttable(tab)) {
-    tabgrob <- attr(tab, "ggtexttableGrob")
-  }
-  else if (is_tablegrob(tab)) {
-    tabgrob <- tab
-  }
-  else {
-    cli::cli_abort("{.arg tab} must come from {.fn ggpubr::ggtexttable} or {.fn gridExtra::tableGrob}.")
-  }
-  tabgrob
-}
-
-#' @keywords internal
-tab_return_same_class_as_input <- function (tabgrob, input) {
-  if (is_ggtexttable(input)) {
-    return(as_ggtexttable(tabgrob))
-  }
-  else if (is_tablegrob(input)) {
-    return(tabgrob)
-  }
-  tabgrob
-}
-
-### https://stackoverflow.com/questions/32106333/align-grob-at-fixed-top-center-position-regardless-of-size
-justify_grob <- function(grob, hjust = "left", vjust = "top", pad = 5){
-  w <- sum(grob$widths)
-  h <- sum(grob$heights)
-  xy <- list(x = switch(hjust,
-                        center = 0.5 + grid::unit(pad, "points"),
-                        left = 0.5*w + grid::unit(pad, "points"),
-                        right = grid::unit(1,"npc") - 0.5*w - grid::unit(pad, "points")),
-             y = switch(vjust,
-                        center = 0.5 + grid::unit(pad, "points"),
-                        bottom = 0.5*h + grid::unit(pad, "points"),
-                        top = grid::unit(1,"npc") - 0.5*h - grid::unit(pad, "points") ) )
-  if (is.null(grob$vp)) {
-    grob$vp <- grid::viewport(x = xy[[1]], y = xy[[2]] )
-  } else {
-    grob$vp$x <- xy[[1]]
-    grob$vp$y <- xy[[2]]
-  }
-
-  return(grob)
+tx_html_escape <- function(text, attribute = FALSE) {
+  specials <- if (attribute) tx_html_specials_attrib else tx_html_specials
+  pattern  <- if (attribute) "[&<>'\"\r\n]" else "[&<>]"
+  text <- enc2utf8(as.character(text))
+  if (!any(grepl(pattern, text, useBytes = TRUE))) return(text)
+  for (chr in names(specials))
+    text <- gsub(chr, specials[[chr]], text, fixed = TRUE, useBytes = TRUE)
+  Encoding(text) <- "UTF-8"
+  text
 }
 
 
 # Escaped characters ------------------------------------------------------------------------------
 #' @keywords internal
-unbrk      <- stringi::stri_unescape_unicode("\\u202f") # unbreakable space
-sigma_sign <- stringi::stri_unescape_unicode("\\u03c3") # sigma for sd
-mult_sign  <- stringi::stri_unescape_unicode("\\u00d7") # multiply sign (ratio >= 1)
-div_sign   <- stringi::stri_unescape_unicode("\\u00f7") # divide sign (ratio < 1, shows 1/ratio)
+unbrk      <- "\u202f" # unbreakable space
+sigma_sign <- "\u03c3" # sigma for sd
+mult_sign  <- "\u00d7" # multiply sign (ratio >= 1)
+div_sign   <- "\u00f7" # divide sign (ratio < 1, shows 1/ratio)
 # U+2007 FIGURE SPACE is exactly digit-width in tabular fonts, where an ASCII space is not (and CSS
 # collapses space runs) -- used for proportional-font exports (html/Excel) only; console and
 # markdown keep the ASCII space.
-fig_space  <- stringi::stri_unescape_unicode("\\u2007")
+fig_space  <- "\u2007"
 
 
 # Only a STARRED table needs the monospace stack below: a proportional "*" is narrower than a digit

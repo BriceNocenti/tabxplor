@@ -261,7 +261,6 @@ testthat::test_that("ci = 'cell' exports the CI text (not the raw proportion)", 
 
 testthat::test_that("OR exports as 1/x text by default, numbers with or_numeric = TRUE", {
   testthat::skip_if_not_installed("openxlsx2")
-  testthat::skip_if_not_installed("broom")
   d  <- forcats::gss_cat
   d$married <- factor(ifelse(d$marital == "Married", "yes", "no"))
   # ⚠ `empirical = FALSE`: what is under test is the multiplicative READING VALUE, and it is read
@@ -445,7 +444,6 @@ testthat::test_that("tab_xl: a composite cell's aside becomes its own column, he
 
 testthat::test_that("a split-off aside keeps the CELL's reading order, so the estimates pair up", {
   testthat::skip_if_not_installed("openxlsx2")
-  testthat::skip_if_not_installed("broom")
   d <- dplyr::mutate(forcats::gss_cat, married = factor(.data$marital == "Married"))
   t <- suppressMessages(tab_reg(d, outcome = "married", predictors = "race",
                                 family = "binomial", empirical = TRUE))
@@ -466,7 +464,6 @@ testthat::test_that("a split-off aside keeps the CELL's reading order, so the es
 
 testthat::test_that("the variable-name column is thin when rotated, and fits a horizontal name", {
   testthat::skip_if_not_installed("openxlsx2")
-  testthat::skip_if_not_installed("broom")
   w_of <- function(f) {
     a <- paste(unlist(openxlsx2::wb_load(f)$worksheets[[1]]$cols_attr), collapse = " ")
     as.numeric(sub('^.*<col min="1" max="1"[^/]*width="([0-9.]+)".*$', "\\1", a))
@@ -540,7 +537,6 @@ testthat::test_that("tab_xl(check =) labels one picture per model when there are
 
 testthat::test_that("tab_xl fits each column to what its cells show, and per sheet", {
   testthat::skip_if_not_installed("openxlsx2")
-  testthat::skip_if_not_installed("carData")
   wids <- function(f) {
     cols <- openxlsx2::wb_load(f)$worksheets[[1]]$cols_attr
     lo <- as.integer(sub('.*min="(\\d+)".*', "\\1", cols))
@@ -548,7 +544,7 @@ testthat::test_that("tab_xl fits each column to what its cells show, and per she
     w  <- as.double(sub('.*width="([0-9.]+)".*', "\\1", cols))
     vapply(seq_len(max(hi)), function(i) w[which(lo <= i & hi >= i)][1], double(1))
   }
-  a <- carData::Arrests
+  a <- car_arrests
   t <- tab(a, colour, released, pct = "row", ref = "first") |>
     dplyr::mutate(odds_ratio = set_display(.data$Yes, "odds_ratio"))
   p <- withr::local_tempfile(fileext = ".xlsx")
@@ -575,8 +571,7 @@ testthat::test_that("tab_xl fits each column to what its cells show, and per she
 # must not wrap (a compound word broken mid-name reads as two tags).
 testthat::test_that("the unit row is small, unwrapped, and does not widen its column", {
   testthat::skip_if_not_installed("openxlsx2")
-  testthat::skip_if_not_installed("carData")
-  a <- carData::Arrests
+  a <- car_arrests
   t <- tab(a, colour, released, pct = "row")
   p <- withr::local_tempfile(fileext = ".xlsx")
   suppressMessages(tab_xl(t, path = p, open = FALSE, replace = TRUE))
@@ -615,7 +610,6 @@ testthat::test_that("the unit row is small, unwrapped, and does not widen its co
 # observed column and its model twin side by side with the SAME tag. The run key carries the role,
 # so the model column keeps its own -- it used to be swallowed, silently.
 testthat::test_that("an observed column and its model twin each say their unit", {
-  testthat::skip_if_not_installed("broom")
   d <- forcats::gss_cat
   d$married <- d$marital == "Married"
   r <- suppressMessages(tab_reg(d, "married", c("race", "age"), stats = "no"))

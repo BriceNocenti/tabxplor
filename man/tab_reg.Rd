@@ -679,9 +679,10 @@ error. Printed as a \emph{reassurance}: with thousands of respondents a near-zer
 finding. Influence is not outlyingness. \strong{Marked} from 1 --- one respondent moving a
 coefficient by a whole standard error.}
 \item{\strong{Collinearity (max VIF)} (a ratio)}{Can the data tell these predictors apart? The
-largest variance inflation factor (\code{car::vif()}). The one check that is not a comparison with
-the data --- collinearity biases nothing, it only widens intervals. \strong{Marked} from 10, the
-textbook figure. Needs \code{car}; refused for multinomial outcomes.}
+largest variance inflation factor (Fox and Monette's generalised VIF, for a predictor with
+several levels). The one check that is not a comparison with the data --- collinearity biases
+nothing, it only widens intervals. \strong{Marked} from 10, the textbook figure. Refused for
+multinomial outcomes.}
 }
 
 The two marked thresholds are \strong{conventions, not tests}: no cut-off on a variance inflation

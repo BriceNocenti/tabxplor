@@ -256,7 +256,6 @@ test_that("the measure aliases work both ways and `log` pins its base", {
 })
 
 test_that("reg_measures() factors the grid: one row per model, then the predictions once", {
-  skip_if_not_installed("broom")
   m <- suppressMessages(reg_measures(est_data(), "married"))
   expect_true(all(c("link", "measure", "effect", "header", "reads_as") %in% names(m)))
   # ONE family -> no `family` column; the conditional block is one row per fittable link
@@ -282,7 +281,7 @@ test_that("reg_measures() factors the grid: one row per model, then the predicti
 # --- 4. the two routes to a ratio, and what only the cascade opens --------------------------------
 
 test_that("`link` names the model and `measure` the report: two different risk ratios", {
-  skip_if_not_installed("broom"); skip_if_not_installed("survey")
+  skip_if_not_installed("survey")
   d <- est_data()
   cond <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                    link = "ratio", empirical = TRUE, cleannames = FALSE))
@@ -299,7 +298,7 @@ test_that("`link` names the model and `measure` the report: two different risk r
 })
 
 test_that("a prediction route may run on a NON-default fit -- link and measure are separate axes", {
-  skip_if_not_installed("broom"); skip_if_not_installed("survey")
+  skip_if_not_installed("survey")
   d <- est_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                 link = "ratio", measure = "difference", cleannames = FALSE))
@@ -311,7 +310,6 @@ test_that("a prediction route may run on a NON-default fit -- link and measure a
 })
 
 test_that("measure = 'log' == the old exponentiate = FALSE", {
-  skip_if_not_installed("broom")
   d <- est_data()
   t <- suppressMessages(tab_reg(d, "married", c("race"), family = "binomial", measure = "log",
                                 cleannames = FALSE))
@@ -325,7 +323,7 @@ test_that("measure = 'log' == the old exponentiate = FALSE", {
 })
 
 test_that("link = 'difference' on a binary outcome is the identity-link risk difference", {
-  skip_if_not_installed("broom"); skip_if_not_installed("survey")
+  skip_if_not_installed("survey")
   d  <- est_data()
   t  <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "difference",
                                  empirical = TRUE, cleannames = FALSE))
@@ -342,7 +340,7 @@ test_that("link = 'difference' on a binary outcome is the identity-link risk dif
 })
 
 test_that("link = 'ratio' on a continuous outcome is the ratio of adjusted means", {
-  skip_if_not_installed("broom"); skip_if_not_installed("survey")
+  skip_if_not_installed("survey")
   d  <- est_data()
   t  <- suppressMessages(tab_reg(d, "tvhours", "race", family = "gaussian", link = "ratio",
                                  empirical = TRUE, cleannames = FALSE))
@@ -399,7 +397,6 @@ test_that("the MARGINAL odds ratio matches marginaleffects' own lnoravg", {
 
 # What the deleted redundancy refusal used to hide, now demonstrable rather than asserted.
 test_that("a linear model's marginal effect IS its coefficient -- until the shape is not linear", {
-  skip_if_not_installed("broom")
   d <- stats::na.omit(est_data()[, c("tvhours", "race", "age")])
   co <- suppressMessages(tab_reg(d, "tvhours", c("race", "age"), family = "gaussian",
                                  cleannames = FALSE))
@@ -453,7 +450,6 @@ test_that("D25: a reg colour cannot contradict what the column estimates", {
 })
 
 test_that("D6: the multi-dependent x model-list recursion forwards every argument", {
-  skip_if_not_installed("broom")
   d <- est_data()
   tabs <- suppressMessages(tab_reg(
     d, c("married", "tvhours"), list(m1 = "race", m2 = c("race", "age")),
@@ -466,7 +462,6 @@ test_that("D6: the multi-dependent x model-list recursion forwards every argumen
 })
 
 test_that("the estimand is stored in the table's recipe, per dependent", {
-  skip_if_not_installed("broom")
   d <- est_data()
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio",
                                 cleannames = FALSE))

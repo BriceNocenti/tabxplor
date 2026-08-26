@@ -429,6 +429,7 @@ testthat::test_that("color_type is deprecated on every exporter and does nothing
   tb <- tab(d, marital, race, pct = "row", color = TRUE)
 
   # each of the 6 public surfaces warns once when color_type is explicitly passed
+  lifecycle::expect_deprecated(tab_html(tb, color_type = "bg"))
   lifecycle::expect_deprecated(tab_kable(tb, color_type = "bg"))
   lifecycle::expect_deprecated(tab_md(tb, color_type = "bg", print = FALSE))
   lifecycle::expect_deprecated(tab_css(color_type = "bg"))
@@ -436,8 +437,6 @@ testthat::test_that("color_type is deprecated on every exporter and does nothing
   p <- withr::local_tempfile(fileext = ".xlsx")
   lifecycle::expect_deprecated(suppressMessages(
     tab_xl(tb, color_type = "bg", path = p, open = FALSE, replace = TRUE)))
-  testthat::skip_if_not_installed("ggpubr")
-  lifecycle::expect_deprecated(tab_plot(tb, color_type = "bg"))
 })
 
 testthat::test_that("color_type is INERT: tab_css output is byte-identical with or without it", {

@@ -47,11 +47,14 @@ cat(tab_css(theme = "light"))
 ```{r, echo = FALSE, include = FALSE}
 # Colorer les sorties console (ANSI -> html, via fansi), mais rendre les resultats as-is (les
 # tableaux html, marques par knitr d'un jeton ASIS) au hook par defaut de knitr, intacts.
+# Escape the three HTML specials before fansi turns the ANSI codes into markup.
+esc_html <- function(x) gsub(">", "&gt;", gsub("<", "&lt;", gsub("&", "&amp;", x, fixed = TRUE),
+                                               fixed = TRUE), fixed = TRUE)
 default_output_hook <- knitr::knit_hooks$get("output")
 knitr::knit_hooks$set(output = function(x, options) {
   if (grepl("KNITR_ASIS_OUTPUT_TOKEN", x, fixed = TRUE)) return(default_output_hook(x, options))
   paste0('<pre class="r-output"><code>',
-         fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+         fansi::sgr_to_html(x = esc_html(x), warn = FALSE),
          '</code></pre>')
 })
 # A cli message or warning is its own kind of condition, so knitr routes each through its own hook,
@@ -59,7 +62,7 @@ knitr::knit_hooks$set(output = function(x, options) {
 for (hook in c("message", "warning")) {
   knitr::knit_hooks$set(stats::setNames(list(function(x, options) {
     paste0('<pre class="r-output"><code>',
-           fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+           fansi::sgr_to_html(x = esc_html(x), warn = FALSE),
            '</code></pre>')
   }), hook))
 }
@@ -109,50 +112,37 @@ Trois de ces mots méritent un avertissement tout de suite plutôt que plus tard
 
 Quatre jeux de données, chacun choisi parce qu'il rend une chose visible.
 
+Trois d'entre eux sont livrés avec tabxplor, chacun portant le nom du package dont il provient — `car_arrests` et `car_salaries` viennent de **carData** (John Fox, Sanford Weisberg et Brad Price), `questionr_hdv` de **questionr** (Julien Barnier, François Briatte et Joseph Larmarange), qui diffuse l'enquête *Histoire de vie* de l'INSEE. Merci à eux ; `?car_arrests` les crédite en détail. Le quatrième est dans R de base.
+
 ```{r}
-data("Arrests",  package = "carData")     # Toronto, relache apres une interpellation pour cannabis
-data("Salaries", package = "carData")     # salaires universitaires americains, recueillis pour etudier un ecart de remuneration
-data("hdv2003",  package = "questionr")   # France, enquete "Histoire de vie" de l'INSEE
-
-arrests <- Arrests |>
-  tibble::as_tibble() |>
-  dplyr::mutate(released = forcats::fct_rev(released),          # "Yes" en premier : c'est ce que nous etudions
-         colour   = forcats::fct_relevel(colour, "White"))
-
-salaries <- Salaries |>
-  tibble::as_tibble() |>
-  dplyr::mutate(rank    = forcats::fct_relevel(rank, "AsstProf", "AssocProf", "Prof"),
-         is_prof = factor(ifelse(rank == "Prof", "Professeur\u00b7e des universit\u00e9s", "Pas encore"),
-                          levels = c("Professeur\u00b7e des universit\u00e9s", "Pas encore")))
-
-hdv <- hdv2003 |>
-  tibble::as_tibble() |>
-  dplyr::mutate(cinema = forcats::fct_rev(cinema),               # "Oui" en premier, pour la meme raison
-         qualif = forcats::fct_relevel(qualif, "Cadre"))
-
 ucb <- as.data.frame(UCBAdmissions) |>                    # R de base, aucun package requis
   tidyr::uncount(Freq) |> tibble::as_tibble() |>
   dplyr::mutate(Admit  = factor(Admit,  levels = c("Admitted", "Rejected")),
          Gender = factor(Gender, levels = c("Male", "Female")))
+
+# `is_prof` est livre en anglais : traduisons ses deux modalites une fois pour toutes
+car_salaries <- car_salaries |>
+  dplyr::mutate(is_prof = forcats::fct_recode(
+    is_prof, "Professeur\u00b7e des universit\u00e9s" = "Full professor", "Pas encore" = "Not yet"))
 ```
 
-**Un réflexe à prendre tout de suite : mettre en premier la modalité qui intéresse.** tabxplor modélise et affiche la **première** modalité d'un facteur. `fct_rev()` n'est donc pas de la cosmétique : sans lui, tout cet article parlerait des personnes qui n'ont *pas* été relâchées.
+**Un réflexe à prendre tout de suite : mettre en premier la modalité qui intéresse.** tabxplor modélise et affiche la **première** modalité d'un facteur. Ce n'est pas de la cosmétique : c'est pourquoi `ucb` ci-dessus déclare `"Admitted"` en premier, et pourquoi les trois jeux livrés affichent déjà `"Yes"`, `"White"` et `"Oui"` en tête. Sans cela, tout cet article parlerait des personnes qui n'ont *pas* été relâchées.
 
 **Trois de ces quatre fichiers sont anglophones**, et leurs modalités s'affichent telles quelles dans les tableaux. Traduisons-les une fois pour toutes, plutôt qu'à chaque tableau :
 
-- `arrests` — `released` : `Yes` = relâché avec une convocation, `No` = maintenu en garde à vue ; `colour` : `White` / `Black` ; `employed`, `citizen` : `Yes` / `No` ; `checks` : le nombre de fichiers de police, sur six, où le nom figurait déjà.
-- `salaries` — `sex` : `Male` / `Female` ; `rank` : `AsstProf` / `AssocProf` / `Prof` ; `discipline` ; `yrs.service` : années d'ancienneté ; `salary` en dollars.
+- `car_arrests` — `released` : `Yes` = relâché avec une convocation, `No` = maintenu en garde à vue ; `colour` : `White` / `Black` ; `employed`, `citizen` : `Yes` / `No` ; `checks` : le nombre de fichiers de police, sur six, où le nom figurait déjà.
+- `car_salaries` — `sex` : `Male` / `Female` ; `rank` : `AsstProf` / `AssocProf` / `Prof` ; `discipline` ; `yrs.service` : années d'ancienneté ; `salary` en dollars.
 - `ucb` — `Admit` : `Admitted` / `Rejected` ; `Gender` : `Male` / `Female` ; `Dept` : six départements, notés `A` à `F`.
-- `hdv2003` est une enquête de l'INSEE : ses modalités sont déjà en français.
+- `questionr_hdv` est une enquête de l'INSEE : ses modalités sont déjà en français.
 
-L'exemple qui court dans tout l'article est `arrests` : 5 226 personnes interpellées à Toronto pour possession d'une petite quantité de cannabis, entre 1997 et 2002, à partir de données rassemblées pour une série du *Toronto Star*. La variable à expliquer est le fait d'avoir été **relâché avec une convocation** plutôt que maintenu en garde à vue. Le fichier enregistre la race de la personne interpellée dans une colonne nommée `colour`, son emploi, sa nationalité, son sexe, son âge, et `checks` — le nombre de fichiers de police, sur six, où son nom figurait déjà. Retenir ce dernier : la moitié de l'article tourne autour de lui.
+L'exemple qui court dans tout l'article est `car_arrests` : 5 226 personnes interpellées à Toronto pour possession d'une petite quantité de cannabis, entre 1997 et 2002, à partir de données rassemblées pour une série du *Toronto Star*. La variable à expliquer est le fait d'avoir été **relâché avec une convocation** plutôt que maintenu en garde à vue. Le fichier enregistre la race de la personne interpellée dans une colonne nommée `colour`, son emploi, sa nationalité, son sexe, son âge, et `checks` — le nombre de fichiers de police, sur six, où son nom figurait déjà. Retenir ce dernier : la moitié de l'article tourne autour de lui.
 
 # 1. Partir de ce qu'on voit
 
 Avant tout modèle, le tableau.
 
 ```{r}
-tab(arrests, colour, released, pct = "row",
+tab(car_arrests, colour, released, pct = "row",
     color = "difference", color_signif = "grey_non_signif")
 ```
 
@@ -161,7 +151,7 @@ tab(arrests, colour, released, pct = "row",
 Les trois autres prédicteurs candidats, dans un seul tableau :
 
 ```{r}
-tab(arrests, c(colour, sex, employed, citizen), released, pct = "row",
+tab(car_arrests, c(colour, sex, employed, citizen), released, pct = "row",
     color = "difference", color_signif = "grey_non_signif", ref = "first")
 ```
 
@@ -191,17 +181,17 @@ Une variable catégorielle est binomiale, multinomiale ou ordinale selon ses pro
 
 
 ```{r}
-tab_reg(arrests, "checks", c("colour", "employed", "citizen"), 
+tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), 
         family = "gaussian", stats = NULL)
 ```
 
 ```{r}
-tab_reg(arrests, "checks", c("colour", "employed", "citizen"), 
+tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), 
         family = "poisson", stats = NULL)
 ```
 
 ```{r}
-tab_reg(arrests, "checks", c("colour", "employed", "citizen"), 
+tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), 
        family = "binomial", trials = 6, stats = NULL)
 ```
 
@@ -214,7 +204,7 @@ Aucune n'est *a priori* plus juste que les autres. On choisit celle qu'on aurait
 Plutôt que de retenir la grille par cœur, on la demande :
 
 ```{r}
-reg_measures(arrests, "released")
+reg_measures(car_arrests, "released")
 ```
 
 Le tableau a **deux blocs**, et c'est ce partage qui est toute la réponse. Le premier donne une ligne par modèle qu'on pourrait ajuster : son `link`, et la mesure que portent les coefficients de ce modèle-là. Le second donne ce qui se lit sur les **prédictions** du modèle — et ces lignes-là portent `link = "(any)"`, parce qu'un effet marginal moyenne des probabilités ajustées et se moque bien du lien qui les a produites.
@@ -230,7 +220,7 @@ Un pourcentage tout seul ne dit pas grand-chose : 74 % est élevé ou faible sel
 Il y a trois façons de mesurer un même écart. Ce sont trois lectures des *deux mêmes nombres*, et un simple tableau croisé suffit à les calculer :
 
 ```{r}
-arrests |> 
+car_arrests |> 
   tab(colour, released, pct = "row", ref = "first", stars = TRUE,
       color = "difference", color_signif = "grey_non_signif") |> 
   mutate(difference = set_display(Yes, "diff"),
@@ -264,7 +254,7 @@ Les étoiles et les cases grisées répondent à une autre question que les nomb
 Les données sont un échantillon. Ces 5 226 personnes ne nous intéressent pas pour elles-mêmes : ce qui nous intéresse, c'est de savoir si ce qu'on observe chez elles est un trait de la population dont elles viennent, ou un hasard de qui s'est trouvé interpellé puis enregistré. Un intervalle de confiance n'est rien d'autre que cela : **l'ensemble des valeurs qui, dans la population, seraient compatibles avec ce qu'on a observé.**
 
 ```{r}
-tab(arrests, colour, released, pct = "row", ref = "first", ci = "ref",
+tab(car_arrests, colour, released, pct = "row", ref = "first", ci = "ref",
     color = "difference", color_signif = "grey_non_signif")
 ```
 
@@ -281,13 +271,13 @@ Une case est **significative** quand cet intervalle exclut la **valeur neutre**,
 `checks` — dans combien des six fichiers de police le nom de la personne figure déjà — est un nombre : il n'a donc pas de modalités à comparer. Deux choses changent.
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "checks"), stats = NULL)
+tab_reg(car_arrests, "released", c("colour", "checks"), stats = NULL)
 ```
 
 **D'abord, l'effet est par unité — et l'unité est un choix.** Un fichier de police de plus, sur six, est un grand pas ; une année d'âge de plus, un petit. tabxplor rapporte donc par défaut l'effet **par deux écarts-types**, et la ligne dit laquelle : `par 3.08 (2SD), à 1.64 (moyenne)` — de combien on avance, et depuis quel point. Deux écarts-types, parce que c'est à peu près l'écart que couvre un prédicteur binaire : une ligne continue et une ligne à deux modalités deviennent ainsi comparables d'un coup d'œil. `multiplier` en change quand une unité naturelle existe :
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "checks"), multiplier = c(checks = 1), 
+tab_reg(car_arrests, "released", c("colour", "checks"), multiplier = c(checks = 1), 
         empirical = FALSE, stats = NULL)
 ```
 
@@ -298,7 +288,7 @@ La lecture se fait maintenant par fichier : chaque fichier supplémentaire divis
 Quand une seule droite résume mal, le remède le plus lisible est de cesser de traiter la variable comme un nombre et de la découper en modalités. C'est `shape` qui le fait :
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "checks"), shape = c(checks = "quartiles"), stats = NULL)
+tab_reg(car_arrests, "released", c("colour", "checks"), shape = c(checks = "quartiles"), stats = NULL)
 ```
 
 `checks` est maintenant un facteur ordinaire, avec ses pourcentages, ses effets et ses couleurs — et la forme se lit à même les nombres observés : 91 %, 87 %, 70 %. Il ne se passe pas grand-chose entre zéro et un ou deux fichiers ; l'effondrement vient après. C'est un résultat, et une pente unique le cachait.
@@ -308,7 +298,7 @@ tab_reg(arrests, "released", c("colour", "checks"), shape = c(checks = "quartile
 Reste une ligne à expliquer, celle que les étudiant·es sautent le plus souvent : **Constant**.
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "checks"),
+tab_reg(car_arrests, "released", c("colour", "checks"),
         multiplier = c(checks = 1), ref = c(checks = 0), stats = NULL)
 ```
 
@@ -319,7 +309,7 @@ C'est `ref` qui le fixe. Pour un facteur, il nomme la modalité à laquelle les 
 **Deux choses méritent d'être connues.** Quand tous les prédicteurs sont des facteurs, le profil de référence est un **vrai groupe de personnes**, et la colonne `n` les compte — donc on la regarde. Il peut être minuscule : dans le modèle ci-dessous, la référence est une femme blanche, sans emploi et sans la nationalité, et le fichier en contient **7**. Le modèle fonctionne toujours, mais une référence qui repose sur si peu de monde ne décrit à peu près personne, et mieux vaut le savoir avant de la citer.
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen"), empirical = FALSE, stats = NULL)
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen"), empirical = FALSE, stats = NULL)
 ```
 
 Et dès qu'un **nombre** figure parmi les prédicteurs, ce compte disparaît, comme dans le tableau juste au-dessus : le profil se tient à une valeur exacte d'une variable continue, et la plupart du temps personne ne se tient exactement là. C'est l'avertissement que la sociologie française connaît depuis longtemps sous une autre forme — **l'homme moyen de Quetelet n'a jamais existé** —, celui-là même que Hanmer et Kalkan adressent aux profils moyens en général, et c'est une raison de plus pour que l'aller-retour de la section 4 se termine par une moyenne sur des personnes réelles (à moins que fabriquer un individu typique ne relève d'une démarche idéal-typique assumée et construite).
@@ -331,14 +321,14 @@ Et dès qu'un **nombre** figure parmi les prédicteurs, ce compte disparaît, co
 Voici le geste sur lequel tout l'article repose. Par défaut, comme on l'a déjà vu, le modèle ajoute à côté de chaque colonne sa contrepartie observée (`empirical = FALSE` la retire) :
 
 ```{r}
-model <- tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"))
+model <- tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"))
 model
 ```
 
 Regarder maintenant la colonne **`Obs_OR`**, et la comparer aux rapports de cotes calculés tout à l'heure à partir du tableau croisé :
 
 ```{r}
-tab(arrests, c(colour, sex, employed, citizen), released, pct = "row", ref = "first",
+tab(car_arrests, c(colour, sex, employed, citizen), released, pct = "row", ref = "first",
     stars = TRUE, color = "odds_ratio", color_signif = "grey_non_signif", display = "OR")
 ```
 
@@ -399,7 +389,7 @@ Toutes ces lignes sont en **points de pourcentage**, et c'est délibéré : la s
 **Il disparaît.** Les femmes étaient relâchées un peu plus souvent que les hommes (86 % contre 83 %, tout juste significatif). Entre personnes comparables, plus rien du tout. Le tableau ci-dessous est en points de pourcentage, ce que demande `measure = "difference"`. (Le `m` qui apparaît dans l'en-tête de colonne dit que le modèle a calculé l'effet personne par personne avant d'en faire la moyenne ; la section 4 l'explique.)
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
         measure = "difference", stats = NULL)
 ```
 
@@ -412,7 +402,7 @@ La ligne `sex` passe de `-3.1 %*` à `+0.1 %`. Lire cela avec soin, car c'est l'
 La chose la plus utile qu'on puisse faire d'une régression est de l'ajuster plusieurs fois, en ajoutant les prédicteurs un à un, et de regarder une ligne bouger. Il suffit de passer une **liste nommée** au lieu d'un vecteur :
 
 ```{r}
-tab_reg(arrests, "released",
+tab_reg(car_arrests, "released",
         list("who they are" = c("colour", "sex", "citizen", "employed"),
              "+ prior record" = c("colour", "sex", "citizen", "employed", "checks")),
         measure = "difference", display = "est")
@@ -427,14 +417,14 @@ C'est le format sous lequel il faut publier. Il montre au lecteur ce que chaque 
 Sur un tableau large, comparer deux colonnes case par case devient long. `color = "adjustment"` colore le déplacement lui-même.
 
 ```{r}
-tab_reg(arrests, "released",
+tab_reg(car_arrests, "released",
         list("who they are" = c("colour", "sex", "citizen", "employed"),
              "+ prior record" = c("colour", "sex", "citizen", "employed", "checks")),
         measure = "difference", color="adjustment", display = "est", stats=NULL)
 ```
 
 ```{r, echo=FALSE, eval=FALSE}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
         measure = "difference", color = c(TRUE, "adjustment"), stats=NULL)
 ```
 
@@ -496,7 +486,7 @@ La ligne Constant est la plus rapide des trois, et elle n'est pas décorative : 
 **Le rapport de cotes** — le réglage par défaut, puisqu'un modèle logistique travaille en cotes. Comparable à la littérature publiée, difficile à dire à voix haute.
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"), stats=NULL)
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"), stats=NULL)
 ```
 
 > **Lecture** : toutes les autres variables choisies étant égales, les personnes noires interpellées ont eu **1,48 fois moins de chances** d'être relâchées *plutôt que de ne pas l'être* — autrement dit, leur **cote** d'être relâchées est 1,48 fois plus faible.
@@ -506,7 +496,7 @@ C'est ici que la règle de la section 2 se paie comptant : la clause finale, ou 
 **Le risque relatif** — `measure = "ratio"`. Ce n'est pas la mesure propre du modèle : elle est donc calculée puis moyennée, et l'en-tête le dit, `Model_mRR`. Cette fois, il s'agit bien de « combien de fois plus souvent ».
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
         measure = "ratio", stats=NULL)
 ```
 
@@ -515,7 +505,7 @@ tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks")
 **La différence en points de pourcentage** — `measure = "difference"`. La plus utile de toutes, le plus souvent, parce que le point est l'unité dans laquelle les gens pensent déjà.
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
         measure = "difference", stats=NULL)
 ```
 
@@ -524,7 +514,7 @@ tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks")
 **Les proportions ajustées elles-mêmes**, l'autre bout de l'aller-retour — déjà données entre parenthèses dans tous les `display` par défaut. On peut ne garder qu'elles avec `display = "base"`, colorées ici par les différences moyennées (en points de pourcentage).
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
         measure = "difference", display = "base", stats=NULL)
 ```
 
@@ -566,15 +556,15 @@ Tout ce qui précède changeait ce qui était **rapporté**, jamais ce qui étai
 Il ne compte qu'une seule fois, et cela vaut d'être vu, parce que les deux écritures portent le même nom de risque relatif :
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
         link = "ratio", stats=NULL)
 ```
 
 `Model_RR` — sans marque, donc un coefficient. C'est le modèle de **Poisson modifiée** qu'utilisent les épidémiologistes, et qui travaille directement en risques relatifs. Le comparer au `Model_mRR` plus haut : les deux tombent presque d'accord ici (`÷1.08` contre `÷1.07` sur la ligne `colour`). Ce qui diffère, c'est ce que chacun affirme — et quel modèle a réellement tourné :
 
 ```{r}
-reg_formulas(tab_reg(arrests, "released", c("colour", "checks"), measure = "ratio", empirical = FALSE))
-reg_formulas(tab_reg(arrests, "released", c("colour", "checks"), link    = "ratio", empirical = FALSE))
+reg_formulas(tab_reg(car_arrests, "released", c("colour", "checks"), measure = "ratio", empirical = FALSE))
+reg_formulas(tab_reg(car_arrests, "released", c("colour", "checks"), link    = "ratio", empirical = FALSE))
 ```
 
 **Lequel utiliser.** Préférer **`measure = "ratio"`**, la voie moyennée, dans presque tous les cas : le modèle logistique converge toujours, ne peut jamais prédire une probabilité supérieure à 100 %, et le nombre qu'il donne décrit les gens qu'on a enquêtés. Aller chercher **`link = "ratio"`** quand on a besoin du risque relatif *conditionnel* — celui qui suppose que le même rapport vaut pour tout le monde : c'est ce qu'attendra un lecteur venu de l'épidémiologie, et c'est ce qu'il faut pour s'aligner sur une estimation de Poisson modifiée publiée. La grille complète de ce que chaque famille peut ajuster et rapporter est dans `vignette("tabxplor-reg")`.
@@ -588,7 +578,7 @@ Tout ce qui précède était de la mécanique. Cette section-ci est celle qui d�
 Le nombre ajusté dépend entièrement des variables qu'on a listées. Pas un peu : beaucoup.
 
 ```{r}
-tab_reg(arrests, "released",
+tab_reg(car_arrests, "released",
         list("sans les ant\u00e9c\u00e9dents" = c("colour", "employed", "citizen"),
              "avec les ant\u00e9c\u00e9dents" = c("colour", "employed", "citizen", "checks") ),
         measure = "difference", display="est")
@@ -605,11 +595,11 @@ Qui écrit « toutes choses égales par ailleurs » avance donc quelque chose su
 L'argument pour est évident : une personne au long passé judiciaire n'est pas traitée comme les autres, et il serait naïf de comparer un primo-délinquant à un récidiviste. L'argument contre demande un tableau de plus. `checks` compte des fichiers de police — arrestations antérieures, condamnations, mise à l'épreuve. Posons donc la question que le modèle ne peut pas se poser à lui-même : **les antécédents sont-ils eux-mêmes structurés par la race ?**
 
 ```{r}
-tab(arrests, colour, checks, pct = "row", color = "difference", ref = 1)
+tab(car_arrests, colour, checks, pct = "row", color = "difference", ref = 1)
 ```
 
 ```{r}
-tab_reg(arrests, "checks", c("colour", "sex", "employed", "citizen"),
+tab_reg(car_arrests, "checks", c("colour", "sex", "employed", "citizen"),
         family = "binomial", trials = 6)
 ```
 
@@ -624,7 +614,7 @@ Cela porte un nom : le **surajustement**, ou le fait de conditionner sur une var
 **Le même problème, dans une autre discipline.** Voici des salaires universitaires, tirés d'un fichier que l'établissement avait constitué précisément pour surveiller un écart de rémunération. En France, la formule qui recouvre exactement le même piège est celle qu'on entend chaque année dans la presse : « **à poste équivalent** ».
 
 ```{r}
-tab_reg(salaries, "salary",
+tab_reg(car_salaries, "salary",
         list("le sexe seul" = "sex",
              "+ discipline, anciennet\u00e9" = c("sex", "discipline", "yrs.service"),
              "+ grade" = c("sex", "discipline", "yrs.service", "rank")),
@@ -636,7 +626,7 @@ L'écart brut est de **14 088 $** en faveur des hommes. Ajouter la discipline et
 **Sur la colonne du grade**, poser la même question que tout à l'heure :
 
 ```{r}
-tab(salaries, sex, is_prof, pct = "row", color = "difference", ref = 1, color_signif = "grey_non_signif")
+tab(car_salaries, sex, is_prof, pct = "row", color = "difference", ref = 1, color_signif = "grey_non_signif")
 ```
 
 **46 % des femmes sont professeures des universités, contre 69 % des hommes.** Si la promotion est elle-même inégale, alors contrôler par le grade revient à comparer les femmes aux hommes promus au même rythme — et donc à ajuster précisément sur le mécanisme par lequel un écart salarial s'installe. Les 4 771 $ sont l'écart *à grade égal* : une quantité réelle, une question plus étroite, et non « l'écart salarial corrigé ».
@@ -644,7 +634,7 @@ tab(salaries, sex, is_prof, pct = "row", color = "difference", ref = 1, color_si
 **Sur les étoiles disparues**, se souvenir de la section 2. Il y a ici 397 personnes, dont 39 femmes. « Non significatif » veut dire que cet échantillon ne parvient plus à distinguer un écart de 4 771 $ de zéro — non que l'écart soit nul. Imprimer l'intervalle, et voir :
 
 ```{r}
-tab_reg(salaries, "salary", c("sex", "discipline", "yrs.service", "rank"),
+tab_reg(car_salaries, "salary", c("sex", "discipline", "yrs.service", "rank"),
         family = "gaussian", display = "est_ci", empirical = FALSE)
 ```
 
@@ -685,7 +675,7 @@ Reste le piège qui est de pure mathématique — et la raison pour laquelle cet
 L'enquête *Histoire de vie* de l'INSEE demandait si l'on va au cinéma. Croisons cela avec la catégorie sociale :
 
 ```{r}
-tab_reg(hdv, "cinema", c("qualif", "age"))
+tab_reg(questionr_hdv, "cinema", c("qualif", "age"))
 ```
 
 **65 % des cadres vont au cinéma, contre 22 % des ouvrier·es spécialisé·es** : un écart de classe considérable, et parfaitement bourdieusien. Or le rapport de cotes *grandit* quand on ajuste sur l'âge, passant de `1/6.63` à `1/10.75`. Lu naïvement, cela dit que l'âge masquait une partie de l'écart de classe — ce qui serait un résultat intéressant.
@@ -693,7 +683,7 @@ tab_reg(hdv, "cinema", c("qualif", "age"))
 Ce n'en est pas un. Regardons les âges moyens :
 
 ```{r}
-tab(hdv, qualif, c(cinema, age), pct = "row", na = "drop", color = "difference", ref = 1)
+tab(questionr_hdv, qualif, c(cinema, age), pct = "row", na = "drop", color = "difference", ref = 1)
 ```
 
 Les catégories ont **toutes le même âge** — entre 46 et 50 ans. Il n'y a à peu près rien que l'âge puisse confondre. D'où vient alors l'écart supplémentaire ?
@@ -703,7 +693,7 @@ Du rapport de cotes lui-même. **Un rapport de cotes bouge dès qu'on ajoute au 
 La vérification consiste à poser la même question avec une mesure de l'écart qui n'a pas ce défaut :
 
 ```{r}
-tab_reg(hdv, "cinema", c("qualif", "age"), measure = "difference")
+tab_reg(questionr_hdv, "cinema", c("qualif", "age"), measure = "difference")
 ```
 
 | ouvrier·es spécialisé·es vs cadres | brut | ajusté | déplacement |

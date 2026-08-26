@@ -36,13 +36,6 @@ expect_all_backends_ok <- function(x) {
   expect_no_error(quiet(print(x)))
   expect_no_error(quiet(tab_export(x, "md")))
   expect_no_error(quiet(tab_export(x, "html")))
-  # build the plot object; route any draw to a throwaway device (as test-tab_reg-plots.R does) so
-  # it neither warns on a missing font nor leaves an Rplots.pdf behind.
-  if (requireNamespace("ggplot2", quietly = TRUE)) {
-    grDevices::pdf(tempfile(fileext = ".pdf"))
-    on.exit(grDevices::dev.off(), add = TRUE)
-    expect_no_error(suppressWarnings(suppressMessages(tab_export(x, "plot"))))
-  }
   if (requireNamespace("openxlsx2", quietly = TRUE))
     expect_no_error(quiet(
       tab_xl(x, path = withr::local_tempfile(fileext = ".xlsx"),
@@ -200,7 +193,6 @@ test_that("a table stripped of `meta` still refers its intervals to the design d
 # === Phase 22g-vii: what a downgraded table still knows about itself ===============================
 
 testthat::test_that("a regression is recognised by its COLUMNS once meta and test are gone", {
-  testthat::skip_if_not_installed("broom")
   d <- forcats::gss_cat |>
     dplyr::mutate(married = factor(dplyr::if_else(marital == "Married", "Married", "Not married")))
   t <- suppressMessages(tab_reg(d, "married", c("race", "relig"), family = "binomial"))

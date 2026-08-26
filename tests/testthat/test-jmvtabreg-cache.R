@@ -5,7 +5,6 @@
 # fit and no frame, and its footer checks intact. The NULL-path identity for ordinary tab_reg()
 # callers is locked by test-tab_reg.R. See CLAUDE.md > roadmap > Phase 22j.
 
-skip_if_not_installed("broom")
 
 # --- helpers ------------------------------------------------------------------------------
 # Phase 15d: the per-outcome Model table (the family / outcome_level / trials ARRAYS) replaced the

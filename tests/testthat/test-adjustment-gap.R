@@ -436,7 +436,6 @@ test_that("every exporter renders an adjustment-tested table without error", {
 # --- Phase 18z13 (D3): the gap interval follows the table's conf_level -----------------------------
 
 test_that("D3: conf_level reaches the gap interval, not only the printed one", {
-  skip_if_not_installed("broom")
   d <- gapb_data()
   w <- function(cl) {
     t <- suppressMessages(tab_reg(d, "married", c("race", "party3"),

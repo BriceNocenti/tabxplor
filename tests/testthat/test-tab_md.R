@@ -208,7 +208,7 @@ testthat::test_that("tab_md pipe grid lines have same number of pipes", {
   # separator + data rows (from the separator's preceding line onward) -- which stays equal-width.
   sep  <- which(grepl("^\\|[-: |]+$", pipe_lines))[1]
   grid <- pipe_lines[seq.int(sep - 1L, length(pipe_lines))]
-  pipe_counts <- purrr::map_int(grid, ~ stringi::stri_count_regex(., "\\|"))
+  pipe_counts <- purrr::map_int(grid, ~ lengths(regmatches(., gregexpr("\\|", ., perl = TRUE))))
   testthat::expect_true(length(unique(pipe_counts)) == 1,
                         label = "all grid pipe lines have same number of pipes")
 })
@@ -311,7 +311,7 @@ testthat::test_that("coloured tables keep numbers aligned (equal pipe-line width
   sep  <- which(grepl("^[|][-: |]+$", pl))[1]
   grid <- pl[seq.int(sep - 1L, length(pl))]
   testthat::expect_length(unique(nchar(grid)), 1L)
-  pipes <- purrr::map_int(grid, ~ stringi::stri_count_regex(., "[|]"))
+  pipes <- purrr::map_int(grid, ~ lengths(regmatches(., gregexpr("[|]", ., perl = TRUE))))
   testthat::expect_length(unique(pipes), 1L)
 })
 

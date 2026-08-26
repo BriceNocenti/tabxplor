@@ -27,3 +27,4 @@
 ^\.covrignore$
 ^tests/testthat/_problems$
 ^Rplots\.pdf$
+^data-raw$

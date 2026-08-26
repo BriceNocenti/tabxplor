@@ -21,7 +21,7 @@ get_caption(x)
 \description{
 Records a caption/title on a \code{tabxplor_tab} that survives a dplyr pipeline (it is kept in the
 table's \code{meta$vars$caption}, carried through every verb) and is read by the exporters
-(\code{\link{tab_md}}, \code{\link{tab_kable}}, \code{\link{tab_xl}}, \code{\link{tab_plot}}) as the
+(\code{\link{tab_md}}, \code{\link{tab_kable}}, \code{\link{tab_xl}}) as the
 table title, ahead of a regression table's auto-title, when the exporter's own \code{caption=}
 argument is not supplied. \code{get_caption()} reads it back (\code{NULL} when none is stored).
 }

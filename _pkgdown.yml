@@ -82,15 +82,14 @@ reference:
 
 - title: Export a finished table
   desc: >
-    `tab_export()` is the one function most users need. `tab_html()`, `tab_md()`, `tab_xl()` and
-    `tab_plot()` are the per-format exporters it wraps (`tab_kable()` is an alias of `tab_html()`);
+    `tab_export()` is the one function most users need. `tab_html()`, `tab_md()` and `tab_xl()`
+    are the per-format exporters it wraps (`tab_kable()` is an alias of `tab_html()`);
     `tab_css()` emits the colour stylesheet for a whole document.
   contents:
   - tab_export
   - tab_html
   - tab_md
   - tab_xl
-  - tab_plot
   - tab_css
 
 - title: Colours
@@ -106,10 +105,16 @@ reference:
 - title: Captions, options and data
   desc: >
     A caption travels with the table into every export; every default lives in a `tabxplor.*` option.
+    The four example data sets are complete copies of data published elsewhere, each named after the
+    package it comes from and credited on its own page.
   contents:
   - set_caption
   - tabxplor-options
   - gss_cat_data_formatting
+  - facto_tea
+  - questionr_hdv
+  - car_arrests
+  - car_salaries
 
 - title: Point-and-click interface (jamovi)
   desc: >

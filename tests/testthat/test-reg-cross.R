@@ -4,7 +4,6 @@
 # three parametrisations are ONE fit); the crude companion of a combined factor IS the observed cell
 # table; and the nested arm's slopes are the fit's own, per the unit the row names.
 
-skip_if_not_installed("broom")
 
 cr_data <- function() {
   d <- forcats::gss_cat
@@ -157,7 +156,7 @@ test_that("`shape = \"sd_bands\"` bands at the mean and one SD either side", {
   lv <- as.character(t$levels)[cx(t) == "age"]
   expect_length(lv, 4L)
   # every label carries BOTH facts: the real cut points, and IN WORDS where the band sits
-  sg <- stringi::stri_unescape_unicode("\\u03c3")
+  sg <- "\u03c3"
   # ⚠ `age` is whole-numbered, so a band names its VALUES ("18 to 29") rather than the interval
   # holding them (Phase 22g-v); the band WORDS are shape_band_words()' own.
   expect_match(lv[[1]], paste0("^[0-9]+ to [0-9]+ ; < -1", sg, "$"))

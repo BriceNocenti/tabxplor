@@ -3,7 +3,7 @@
 # Every statistic is pinned against an INDEPENDENT reference, never a hand-written number:
 #   Dispersion    a hand-written HC0 sandwich (the `sandwich` package is not a dependency)
 #   Influence     stats::dfbetas()
-#   Collinearity  car::vif()
+#   Collinearity  1/(1-R2) of the auxiliary regression, and Fox & Monette's determinant ratio
 #   Linearity     stats::drop1() on a hand-built augmented fit
 # so a change of algebra fails here even when the printed table still looks plausible.
 
@@ -83,24 +83,91 @@ test_that("Influence equals max |stats::dfbetas()|", {
 
 # ---- Collinearity (max VIF) ------------------------------------------------------------------
 
-test_that("Collinearity equals car::vif(), on one VIF scale whatever the term degrees of freedom", {
-  skip_if_not_installed("car")
-  # several multi-df factors -> car returns the (GVIF, Df, GVIF^(1/(2Df))) matrix
-  f1 <- chk_fit()$fit
-  v1 <- car::vif(f1)
-  expect_true(is.matrix(v1))
-  expect_equal(tabxplor:::reg_check_collinearity(f1), max(v1[, 3]^2), tolerance = 1e-10)
-  # only 1-df terms -> car returns a bare VIF vector; the same helper must give the same scale
-  f2 <- chk_fit(preds = c("age", "tvhours"))$fit
-  v2 <- car::vif(f2)
-  expect_false(is.matrix(v2))
-  expect_equal(tabxplor:::reg_check_collinearity(f2), max(v2), tolerance = 1e-10)
+test_that("tx_vif() IS 1/(1 - R2) of the auxiliary regression, on the model's own weights", {
+  # The textbook definition, computed the long way round: regress each model-matrix column on all
+  # the others and read the inflation off its R2. It never touches vcov(), which is the only thing
+  # tx_vif() reads -- so this is a genuinely independent derivation, not a restatement.
+  f  <- chk_fit(preds = c("age", "tvhours"))$fit          # only 1-df terms -> the bare-vector shape
+  v  <- tabxplor:::tx_vif(f)
+  expect_false(is.matrix(v))
+  expect_named(v, c("age", "tvhours"))
+  X  <- stats::model.matrix(f)[, -1, drop = FALSE]
+  w  <- f$weights                                          # ⚠ the IRLS weights: a glm's VIF is on them
+  aux <- vapply(seq_len(ncol(X)), function(j)
+    1 / (1 - summary(stats::lm(X[, j] ~ X[, -j, drop = FALSE], weights = w))$r.squared), 0)
+  expect_equal(unname(v), aux, tolerance = 1e-10)
+  expect_equal(tabxplor:::reg_check_collinearity(f), max(aux), tolerance = 1e-10)
+
+  # and the plain OLS arm, where no weight enters at all
+  l  <- stats::lm(tvhours ~ age + I(age^2 / 100), data = chk_fit()$data)
+  Xl <- stats::model.matrix(l)[, -1, drop = FALSE]
+  expect_equal(unname(tabxplor:::tx_vif(l)),
+               vapply(1:2, function(j)
+                 1 / (1 - summary(stats::lm(Xl[, j] ~ Xl[, -j]))$r.squared), 0),
+               tolerance = 1e-10)
+})
+
+test_that("tx_vif() is Fox & Monette's GVIF: a determinant ratio of the predictors' correlations", {
+  # The multi-df shape, again from the DATA side (cov.wt on the model matrix) rather than from
+  # vcov() -- the identity that makes the generalised VIF a generalisation at all.
+  f <- chk_fit()$fit                                       # race + rincome are multi-df -> matrix
+  v <- tabxplor:::tx_vif(f)
+  expect_true(is.matrix(v))
+  expect_identical(colnames(v), c("GVIF", "Df", "GVIF^(1/(2*Df))"))
+  expect_identical(rownames(v), labels(stats::terms(f)))
+  X   <- stats::model.matrix(f)[, -1, drop = FALSE]
+  ass <- attr(stats::model.matrix(f), "assign")[-1]
+  R   <- stats::cov.wt(X, wt = f$weights, cor = TRUE)$cor
+  gv  <- vapply(seq_len(max(ass)), function(k) { i <- which(ass == k)
+    det(R[i, i, drop = FALSE]) * det(R[-i, -i, drop = FALSE]) / det(R) }, 0)
+  expect_equal(unname(v[, 1]), gv, tolerance = 1e-8)
+  expect_equal(unname(v[, 2]), as.numeric(table(ass)))     # Df comes from `assign`
+  expect_equal(unname(v[, 3]), unname(v[, 1]^(1 / (2 * v[, 2]))), tolerance = 1e-12)
+  # the footer reads ONE scale whatever the term width
+  expect_equal(tabxplor:::reg_check_collinearity(f), max(v[, 3]^2), tolerance = 1e-12)
+})
+
+test_that("tx_vif() drops the ordinal cut-points, which vcov() still carries", {
+  skip_if_not_installed("MASS")
+  d <- chk_fit()$data
+  d$ord <- factor(cut(d$tvhours, c(-1, 1, 3, 100), labels = c("lo", "mid", "hi")),
+                  levels = c("lo", "mid", "hi"), ordered = TRUE)
+  o <- MASS::polr(ord ~ age + race, data = d, Hess = TRUE, method = "logistic")
+  expect_identical(nrow(stats::vcov(o)),                   # the premise: vcov CARRIES them
+                   length(stats::coef(o)) + length(o$zeta))
+  v <- tabxplor:::tx_vif(o)
+  expect_identical(rownames(v), labels(stats::terms(o)))
+  expect_false(any(names(o$zeta) %in% rownames(v)))
+  expect_true(all(v[, 1] >= 1 - 1e-8))                     # a GVIF is never below 1
+  # and dropping them CHANGES the answer, so the drop is load-bearing rather than cosmetic
+  Rz <- stats::cov2cor(stats::vcov(o)); i <- 1L
+  expect_false(isTRUE(all.equal(unname(v[1, 1]),
+                                det(Rz[i, i, drop = FALSE]) * det(Rz[-i, -i, drop = FALSE]) / det(Rz),
+                                tolerance = 1e-6)))
+})
+
+test_that("tx_vif() refuses rather than approximates, and the footer then shows no row", {
+  d   <- chk_data()
+  one <- stats::glm(married ~ race, data = tidyr::drop_na(d, married, race),
+                    family = stats::binomial())
+  expect_null(tabxplor:::tx_vif(one))                      # fewer than 2 terms
+  expect_true(is.na(tabxplor:::reg_check_collinearity(one)))
+
+  dm <- chk_fit(preds = c("age", "tvhours"))$data; dm$age2 <- dm$age
+  al <- stats::glm(married ~ age + age2 + tvhours, data = dm, family = stats::binomial())
+  expect_true(anyNA(stats::coef(al)))                      # aliased
+  expect_null(tabxplor:::tx_vif(al))
+  expect_true(is.na(tabxplor:::reg_check_collinearity(al)))
+
+  skip_if_not_installed("nnet")
+  mn <- nnet::multinom(marital ~ age + race, data = tidyr::drop_na(d, marital, age, race),
+                       trace = FALSE)
+  expect_null(tabxplor:::tx_vif(mn))                       # a block vcov has no single R
 })
 
 # ---- Linearity -------------------------------------------------------------------------------
 
 test_that("Linearity is drop1() on the model plus the predictor's centred squared term", {
-  skip_if_not_installed("broom")
   # Phase 20f: it costs a fit, so it is asked for by name (REG_CHECKS$cost == "refit").
   t  <- suppressMessages(tab_reg(chk_data(), "married", c("race", "age", "rincome"),
                                  family = "binomial", cleannames = FALSE,
@@ -121,7 +188,6 @@ test_that("Linearity is drop1() on the model plus the predictor's centred square
 })
 
 test_that("the curvature p is invariant to the centring, which exists for the Collinearity check", {
-  skip_if_not_installed("car")
   cf <- chk_fit(preds = c("age", "race"))
   dm  <- cf$data
   dm$z <- (dm$age - mean(dm$age)) / stats::sd(dm$age)
@@ -131,8 +197,8 @@ test_that("the curvature p is invariant to the centring, which exists for the Co
                stats::drop1(ctr, scope = "I(z^2)",   test = "Chisq")[["Pr(>Chi)"]][2],
                tolerance = 1e-8)
   # but the collinearity of the emitted pair is not invariant -- which is why the term is centred
-  expect_gt(max(car::vif(raw)[, 3]^2), 20)
-  expect_lt(max(car::vif(ctr)[, 3]^2), 5)
+  expect_gt(max(tabxplor:::tx_vif(raw)[, 3]^2), 20)
+  expect_lt(max(tabxplor:::tx_vif(ctr)[, 3]^2), 5)
 })
 
 test_that("reg_nested_test() IS drop1's test, to the last bit, on both arms", {
@@ -210,7 +276,6 @@ test_that("the nested test is what carries multinomial Linearity", {
 # ---- the footer grain and the `stats =` vocabulary --------------------------------------------
 
 test_that("a comparison table carries one check row per (model column x numeric predictor)", {
-  skip_if_not_installed("broom")
   t <- suppressMessages(tab_reg(
     chk_data(), "married",
     list(m1 = c("race", "age"), m2 = c("race", "age", "tvhours")),
@@ -233,7 +298,6 @@ test_that("a comparison table carries one check row per (model column x numeric 
 })
 
 test_that("the FREE checks are the default set, the costly ones are opt-in, and stats='all' is all", {
-  skip_if_not_installed("broom")
   d <- chk_data()
   full <- get_test(suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial")))
   # Phase 20f: the three that are arithmetic on the fit in hand ride the default footer...
@@ -284,8 +348,9 @@ test_that("REG_CHECKS declares its cost AND its default, and the readers agree w
 
 test_that("a check absent for a family produces no row, never a wrong number", {
   skip_if_not_installed("nnet")
-  # multinomial: car::vif() warns on an intercept-free fit and the hand-rolled substitute is wrong,
-  # so Collinearity is refused -- while the others still compute from the score-based influence
+  # multinomial: one coefficient block per outcome category and a block vcov, so there is no single
+  # correlation matrix to take a determinant of -- Collinearity is refused, while the others still
+  # compute from the score-based influence
   expect_false("collinearity" %in% tabxplor:::reg_checks_for("multinomial"))
   t <- suppressMessages(suppressWarnings(
     tab_reg(chk_data(), "marital", "race", family = "multinomial", cleannames = FALSE)))

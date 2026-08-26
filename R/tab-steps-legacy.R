@@ -95,7 +95,7 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
       dplyr::group_by(!!row_var) |>
       dplyr::summarise(dplyr::across(where(is_fmt), sum)) |>
       dplyr::summarise(dplyr::across(where(is_fmt), ~ as_totrow(as_tottab(sum(.))))) |>
-      dplyr::mutate(!!row_var := paste("TOTAL", stringi::stri_trans_toupper(name)))
+      dplyr::mutate(!!row_var := paste("TOTAL", toupper(name)))
   )
 
   if (totaltab[1] == "line") {
@@ -254,7 +254,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
         dplyr::group_keys(dplyr::filter(tabs, !.data$tottab_line)) |>
         tidyr::unite(!!row_var, sep = " / ") |>
         dplyr::mutate(!!row_var := paste(name[1], !!row_var) |>
-                        stringi::stri_trans_toupper() |> forcats::as_factor())
+                        toupper() |> forcats::as_factor())
     } else {
       group_vars_totals <- tibble::tibble(!!row_var := factor(name[1]))
     }
@@ -488,7 +488,7 @@ tab_pct <- function(tabs, pct = "row",
 
 
       if (any(pct != "all_tabs")) {
-        pct_nat <- pct |> stringi::stri_replace_first_regex("all_tabs", "no") |>
+        pct_nat <- sub("all_tabs", "no", pct, perl = TRUE) |>
           purrr::set_names(names(pct))
 
         tabs <- tabs |>
@@ -950,7 +950,7 @@ tab_ci <- function(tabs,
     if (length(grp)) tabs <- dplyr::group_by(tabs, dplyr::across(dplyr::all_of(grp)), .drop = drp)
 
 
-    ci_with_ref <- stringi::stri_replace_first_regex(ci_with_ref, "_row|_col", "")
+    ci_with_ref <- sub("_row|_col", "", ci_with_ref, perl = TRUE)
     # WARNING: adding a contrast interval to a percentage column CHANGES WHAT THAT COLUMN IS
     #   (`level_pct` -> `points`). This stamps that, not the argument it was asked with, and every
     #   reader (ci_center(), format()'s bracket, the colour significance gate, the legend, the

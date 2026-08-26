@@ -16,7 +16,7 @@ testthat::test_that("format(): stars are opt-in (default off), appended only wit
   x <- star_col()
   testthat::expect_false(any(grepl("\\*", format(x))))          # default: none
   out <- format(x, stars = TRUE)
-  testthat::expect_equal(stringi::stri_count_regex(out, "\\*"), c(3L, 0L, 1L))  # ***, none, *
+  testthat::expect_equal(lengths(regmatches(out, gregexpr("\\*", out, perl = TRUE))), c(3L, 0L, 1L))  # ***, none, *
 })
 
 testthat::test_that("stars are right-padded so numbers stay aligned (monospace)", {
@@ -73,7 +73,6 @@ testthat::test_that("star presence is the dual of the CI excluding neutral (no c
 })
 
 testthat::test_that("tab_reg() shows stars by default; stars = FALSE strips the pvalue", {
-  testthat::skip_if_not_installed("broom")
   d <- gss |> dplyr::mutate(m = factor(dplyr::if_else(marital == "Married", "Married", "No")))
   r1  <- tab_reg(d, "m", c("race", "rincome"), family = "binomial")
   orc <- reg_fmt_cols(r1)[[1]]

@@ -6,7 +6,7 @@
 #   estimand vocabulary is R/reg-estimand.R's, the argument boundary R/reg-resolve.R's, the crude
 #   companion R/reg-empirical.R's, and the per-model product R/reg-spec-build.R's.
 # KEY CONSTRAINTS:
-#   - ONE ENGINE PER SHAPE, all tidied through broom: stats::lm / stats::glm unweighted,
+#   - ONE ENGINE PER SHAPE, each tidied from its own summary(): stats::lm / stats::glm unweighted,
 #     survey::svyglm as soon as there are weights or a design, nnet::multinom for a nominal 3+ level
 #     outcome, MASS::polr for an ordered one. survey / MASS / nnet / brant / marginaleffects / car
 #     are Suggests, and every entry point guards them.
@@ -14,7 +14,7 @@
 #     (default) builds the interval as estimate +/- crit * se and recomputes p from those same two
 #     numbers; the crit refers to z where the family FIXES the dispersion (unweighted binomial,
 #     poisson) and to t(df.residual) where it is ESTIMATED (lm, quasi*, weighted svyglm), which is
-#     what makes it match broom's own z / t p exactly. `"profile"` pairs confint() with the
+#     what makes it match summary()'s own z / t p exactly. `"profile"` pairs confint() with the
 #     likelihood-ratio p, its dual.
 #   - ONE REFERENCE DISTRIBUTION PER FIT. That z-or-t choice is made ONCE, in reg_fit(), and travels
 #     out with the tidy (`disp_known` / `df_residual`); the marginal sweep, the baseline row and a
@@ -930,11 +930,11 @@ reg_skeleton_from_fit <- function(fit) {
 }
 
 term_prefix <- function(label) {
-  stringi::stri_replace_all_regex(label, "([.\\\\+*?\\[^\\]$(){}=!<>|:#/-])", "\\\\$1")
+  gsub("([.\\\\+*?\\[^\\]$(){}=!<>|:#/-])", "\\\\$1", label, perl = TRUE)
 }
 
 reg_cleanup <- function(x, cleannames)
-  if (isTRUE(cleannames)) stringi::stri_replace_all_regex(x, cleannames_condition(), "") else x
+  if (isTRUE(cleannames)) gsub(cleannames_condition(), "", x, perl = TRUE) else x
 
 # The (var, level [, extra]) join key aligning fitted results onto skeleton rows: the separator is a
 # carriage return, which can never appear inside a variable name or a factor level.
@@ -963,7 +963,7 @@ reg_lr_pvalues <- function(fit) {
     ))
     stats::pchisq(red$deviance - dev_full, df = 1, lower.tail = FALSE)
   }, numeric(1))
-  stats::setNames(p, stringi::stri_replace_all_regex(colnames(X), "`", ""))
+  stats::setNames(p, gsub("`", "", colnames(X), perl = TRUE))
 }
 
 # === SECTION: ONE REFERENCE DISTRIBUTION PER FIT ================================================
@@ -1068,6 +1068,55 @@ reg_tidy_native_z <- function(td) {
   td$p.value <- 2 * stats::pnorm(-abs(td$estimate / td$std.error))
   td
 }
+
+# THE NATIVE TIDY OF EVERY FIT -- (term, estimate, std.error) on the model's own scale, read off its
+# summary(). Three shapes, because three engines lay their
+# coefficients out differently; the weighted twins above build the same columns by hand, so all five
+# fitters hand reg_fit_record() one contract.
+
+# stats::lm / stats::glm / survey::svyglm: one (estimate, se, statistic, p) matrix, terms as rownames.
+# ⚠ the SPINE is names(coef(fit)), not the summary's rownames: an ALIASED coefficient (a collinear
+# column the fitter dropped) is NA in coef() and simply ABSENT from the summary. Keeping its row
+# means a rank-deficient fit still aligns term-for-term with the skeleton reg_column() matches on.
+# The columns are taken by POSITION: the headers differ per family (t / z), the positions never do.
+#' @keywords internal
+reg_tidy_coefmat <- function(fit) {
+  cf <- stats::coef(fit)
+  cm <- stats::coef(summary(fit))
+  i  <- match(names(cf), rownames(cm))
+  tibble::tibble(term      = names(cf),        estimate  = unname(cf),
+                 std.error = unname(cm[i, 2]), statistic = unname(cm[i, 3]),
+                 p.value   = unname(cm[i, 4]))
+}
+
+# nnet::multinom: one block per NON-REFERENCE outcome category, terms in the fit's own column order.
+# ⚠ TWO LEVELS IS A REAL CASE -- `family = "multinomial"` on a binary outcome, or a category emptied
+# by the complete-case filter -- and nnet then returns its coefficients as a plain named VECTOR. The
+# category name has to come from fit$lev[-1]: it is the key reg_columns_multinom() filters on, so a
+# block labelled anything else yields a column of NA.
+#' @keywords internal
+reg_tidy_multinom <- function(fit) {
+  s  <- summary(fit)
+  co <- s$coefficients; se <- s$standard.errors
+  if (is.null(dim(co))) {
+    co <- matrix(co, nrow = 1L, dimnames = list(fit$lev[-1], names(co)))
+    se <- matrix(se, nrow = 1L, dimnames = list(fit$lev[-1], names(se)))
+  }
+  trm <- colnames(co)
+  dplyr::bind_rows(lapply(rownames(co), function(r) tibble::tibble(
+    y.level = r, term = trm, estimate = unname(co[r, trm]), std.error = unname(se[r, trm]))))
+}
+
+# MASS::polr: the summary matrix is rbind(slopes, cut-points), and only the slopes are effects.
+# names(coef()) is MASS's own answer to which rows those are -- its coef() drops the zeta
+# thresholds, its vcov() does not.
+#' @keywords internal
+reg_tidy_polr <- function(fit) {
+  cm <- stats::coef(summary(fit))
+  i  <- match(names(stats::coef(fit)), rownames(cm))
+  tibble::tibble(term = rownames(cm)[i], estimate = unname(cm[i, 1]), std.error = unname(cm[i, 2]))
+}
+
 
 # === SECTION: The 3+ level engines (multinomial / proportional-odds) ============================
 
@@ -1184,7 +1233,7 @@ reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, met
                        "i" = "Unexpected coefficient names: {.val {nm[is.na(k)]}}."))
     }
     ylev <- y_levels[-1]                               # non-reference categories, in level order
-    td   <- tibble::tibble(y.level = ylev[k], term = stringi::stri_replace_all_regex(trm, "`", ""),
+    td   <- tibble::tibble(y.level = ylev[k], term = gsub("`", "", trm, perl = TRUE),
                            estimate = unname(cf), std.error = unname(se[nm]))
     return(reg_fit_record(tidy_native = reg_tidy_native_z(td), nobs = nrow(mdata),
                           fit = fit, data = mdata, digest = reg_digest(fit, rec),
@@ -1193,8 +1242,8 @@ reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, met
   }
 
   fit <- nnet::multinom(fml, data = mdata, trace = FALSE)
-  td  <- broom::tidy(fit)                              # y.level, term, estimate, std.error, ...
-  td$term <- stringi::stri_replace_all_regex(td$term, "`", "")     # strip formula backticks -> match skeleton
+  td  <- reg_tidy_multinom(fit)
+  td$term <- gsub("`", "", td$term, perl = TRUE)     # strip formula backticks -> match skeleton
   reg_fit_record(tidy_native = reg_tidy_native_z(td), nobs = nrow(mdata),
                  fit = fit, data = mdata, digest = reg_digest(fit, rec),
                  y_ref = y_levels[1], y_levels = y_levels[-1],
@@ -1228,7 +1277,7 @@ reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, meth
     )
     cf  <- fit$coefficients
     se  <- sqrt(diag(stats::vcov(fit)))[names(cf)]
-    td  <- tibble::tibble(term = stringi::stri_replace_all_regex(names(cf), "`", ""),
+    td  <- tibble::tibble(term = gsub("`", "", names(cf), perl = TRUE),
                           estimate = unname(cf), std.error = unname(se))
     cli::cli_inform(c("i" = paste0("The proportional-odds assumption is not tested here: the Brant ",
                                    "test needs an unweighted fit.")))
@@ -1238,9 +1287,8 @@ reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, meth
   }
 
   fit <- MASS::polr(fml, data = mdata, Hess = TRUE, method = "logistic")
-  td  <- broom::tidy(fit)
-  td  <- td[td$coef.type == "coefficient", , drop = FALSE]   # drop cut-point ("scale") intercepts
-  td$term <- stringi::stri_replace_all_regex(td$term, "`", "")
+  td  <- reg_tidy_polr(fit)
+  td$term <- gsub("`", "", td$term, perl = TRUE)
   # The Brant test is NOT run here: it is a footer ROW's statistic costing J-1 extra fits, so it is
   # built where that row is -- else every diagnostic and crude polr fit would pay for it.
   reg_fit_record(tidy_native = reg_tidy_native_z(td), nobs = nrow(mdata),
@@ -1547,8 +1595,8 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
   }
   if (inherits(fit, "svyglm")) fit <- reg_svyglm_env(fit)
 
-  td <- broom::tidy(fit)                            # native scale: estimate, std.error, p.value
-  td$term <- stringi::stri_replace_all_regex(td$term, "`", "")  # strip formula backticks -> match skeleton
+  td <- reg_tidy_coefmat(fit)                       # native scale: estimate, std.error, p.value
+  td$term <- gsub("`", "", td$term, perl = TRUE)  # strip formula backticks -> match skeleton
 
   # `multiplier` is NOT applied here: it is a reporting choice, so it belongs to
   # reg_tidy_finalize() beside the interval and the exponentiation -- which is what keeps this tidy
@@ -1591,7 +1639,7 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
   # `conf_level` change without refitting.
   if (use_profile) {
     ci   <- suppressMessages(stats::confint(fit, level = conf_level))   # log/native scale
-    idx  <- match(td$term, stringi::stri_replace_all_regex(rownames(ci), "`", ""))
+    idx  <- match(td$term, gsub("`", "", rownames(ci), perl = TRUE))
     # ⚠ the profile bounds are an OUTPUT of the likelihood at THIS conf_level, so they are the one
     # thing that cannot be rebuilt from (estimate, std.error) -- hence `method = "profile"` is not
     # cacheable, and its bounds ride NATIVELY on the record. reg_tidy_rescale() scales them at
@@ -1602,7 +1650,7 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
     td$p.value <- unname(lrp[match(td$term, names(lrp))])
   } else if (scaled) {
     # with the SE scaled and the t reference, p is recomputed from est / se so p, CI and stars stay
-    # duals (broom's own p belongs to the un-scaled model).
+    # duals (summary()'s own p belongs to the un-scaled model).
     td$p.value <- 2 * stats::pt(-abs(td$estimate / td$std.error), df = df_res)
   }
 
@@ -2526,6 +2574,25 @@ reg_aic_value <- function(fit) {
   as.numeric(a)[1]
 }
 
+# The gaussian model-fit statistics: summary.lm()'s own numbers.
+# `df` is the F test's NUMERATOR df, `df.residual` the fit's own.
+# ⚠ NULL for anything that is not an lm. A glm summary carries no r.squared, and a footer row built
+# on a NULL statistic would be a wrong number rather than a missing one.
+#' @keywords internal
+reg_glance_lm <- function(fit) {
+  s <- summary(fit)
+  if (is.null(s$r.squared)) return(NULL)
+  fs <- s$fstatistic                                   # NULL on an intercept-only fit
+  tibble::tibble(
+    r.squared = s$r.squared, adj.r.squared = s$adj.r.squared, sigma = s$sigma,
+    statistic   = if (is.null(fs)) NA_real_ else unname(fs[["value"]]),
+    df          = if (is.null(fs)) NA_real_ else unname(fs[["numdf"]]),
+    df.residual = as.numeric(stats::df.residual(fit)),
+    p.value     = if (is.null(fs)) NA_real_ else
+      unname(stats::pf(fs[["value"]], fs[["numdf"]], fs[["dendf"]], lower.tail = FALSE)),
+    AIC = stats::AIC(fit), BIC = stats::BIC(fit))
+}
+
 # GOF stats for ONE fit. quasi* / svyglm have no true likelihood, so those stats stay NA or become a
 # relabelled Rao-Scott Wald -- never a false LR.
 reg_glance <- function(fit, family, grouped, weighted, nobs) {
@@ -2564,7 +2631,7 @@ reg_glance <- function(fit, family, grouped, weighted, nobs) {
   }
 
   if (family == "gaussian") {
-    g <- tryCatch(broom::glance(fit), error = function(e) NULL)
+    g <- tryCatch(reg_glance_lm(fit), error = function(e) NULL)
     if (!is.null(g)) out <- dplyr::bind_rows(out,
       row("r2",      statistic = g$r.squared),
       row("r2_adj",  statistic = g$adj.r.squared),
@@ -4546,9 +4613,10 @@ reg_stage_finalize <- function(ctx) {
 #'     finding. Influence is not outlyingness. **Marked** from 1 --- one respondent moving a
 #'     coefficient by a whole standard error.}
 #'   \item{**Collinearity (max VIF)** (a ratio)}{Can the data tell these predictors apart? The
-#'     largest variance inflation factor (`car::vif()`). The one check that is not a comparison with
-#'     the data --- collinearity biases nothing, it only widens intervals. **Marked** from 10, the
-#'     textbook figure. Needs `car`; refused for multinomial outcomes.}
+#'     largest variance inflation factor (Fox and Monette's generalised VIF, for a predictor with
+#'     several levels). The one check that is not a comparison with the data --- collinearity biases
+#'     nothing, it only widens intervals. **Marked** from 10, the textbook figure. Refused for
+#'     multinomial outcomes.}
 #' }
 #'
 #' The two marked thresholds are **conventions, not tests**: no cut-off on a variance inflation

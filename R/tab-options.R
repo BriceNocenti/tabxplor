@@ -244,7 +244,7 @@ TAB_OPTIONS <- list(
 
   legend_style = tx_opt(
     "prose", "stats",
-    c("the colour-legend style in exports ([tab_md()], [tab_html()], [tab_xl()], [tab_plot()]):",
+    c("the colour-legend style in exports ([tab_md()], [tab_html()], [tab_xl()]):",
       "`\"prose\"` (full sentences) or `\"terse\"` (the compact one-line form the console uses). The",
       "console itself is always terse.")),
 
@@ -328,11 +328,7 @@ TAB_OPTIONS <- list(
             "signed fold, so Excel prints what the console prints and the cell stays a number;",
             "`\"raw\"` the untransformed ratio; `\"text\"` the exact display string.")),
 
-  # --- plot, paths and language ------------------------------------------------------------------
-  plot_num_font = tx_opt(
-    "Cascadia Mono", "plot",
-    "the [tab_plot()] number font, applied only when the table shows stars (`\"\"` keeps the ggpubr default)."),
-
+  # --- paths and language ------------------------------------------------------------------
   export_dir = tx_opt(
     NULL, "plot",
     "default directory for exported files (`NULL` = the working / typed path)."),

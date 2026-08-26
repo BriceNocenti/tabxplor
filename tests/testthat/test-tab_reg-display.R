@@ -12,7 +12,6 @@ first_fmt <- function(t) reg_first_fmt(t)
 # ---- display = "est_ci" : visible confidence-interval bracket ---------------------------
 
 test_that("display='est_ci' shows a visible CI bracket for OR and beta", {
-  skip_if_not_installed("broom")
   d  <- reg_data()
   oc <- first_fmt(tab_reg(d, "married", c("race", "age"), display = "est_ci"))
   txt <- format(oc, special_formatting = TRUE)
@@ -27,7 +26,6 @@ test_that("display='est_ci' shows a visible CI bracket for OR and beta", {
 })
 
 test_that("est_ci bracket reads the stored asymmetric bounds, on the cell's own scale", {
-  skip_if_not_installed("broom")
   oc  <- first_fmt(tab_reg(reg_data(), "married", "age", display = "est_ci"))
   txt <- format(oc, special_formatting = TRUE)
   i   <- which(!is.na(get_ci_inf(oc)))[1]
@@ -39,7 +37,6 @@ test_that("est_ci bracket reads the stored asymmetric bounds, on the cell's own 
 })
 
 test_that("options(tabxplor.ratio_print = 'raw') restores the plain bracket", {
-  skip_if_not_installed("broom")
   withr::local_options(tabxplor.ratio_print = "raw")
   oc  <- first_fmt(tab_reg(reg_data(), "married", "age", display = "est_ci"))
   txt <- format(oc, special_formatting = TRUE)
@@ -49,7 +46,7 @@ test_that("options(tabxplor.ratio_print = 'raw') restores the plain bracket", {
 # ---- the folds: the estimate beside the level it sits on -------------------------------
 
 test_that("display='est_base' folds the adjusted probability into the OR cell", {
-  skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
+  skip_if_not_installed("marginaleffects")
   oc  <- first_fmt(tab_reg(reg_data(), "married", "race", display = "est_base"))
   txt <- format(oc)
   expect_true(any(grepl("\\([0-9]", txt)))               # "(16%)" prediction
@@ -60,7 +57,7 @@ test_that("display='est_base' folds the adjusted probability into the OR cell", 
 })
 
 test_that("display='base_est' shows the adjusted probability, graded by the effect", {
-  skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
+  skip_if_not_installed("marginaleffects")
   oc  <- first_fmt(tab_reg(reg_data(), "married", "race", display = "base_est"))
   expect_true(any(grepl("%", format(oc), fixed = TRUE)))
   # on the templated rows the LEVEL is now the primary field (the Constant keeps its own token)
@@ -69,14 +66,14 @@ test_that("display='base_est' shows the adjusted probability, graded by the effe
 })
 
 test_that("a {diff} fold puts the marginal effect beside the odds ratio", {
-  skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
+  skip_if_not_installed("marginaleffects")
   oc  <- first_fmt(tab_reg(reg_data(), "married", "race", display = "{est} ({diff})"))
   expect_true(any(grepl("\\([-+][0-9]", format(oc))))    # "(-21%)" / "(+1%)" marginal effect
   expect_equal(get_num(oc), get_or(oc))
 })
 
 test_that("the folds reach EVERY family: a gaussian cell folds an adjusted MEAN", {
-  skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
+  skip_if_not_installed("marginaleffects")
   bc <- first_fmt(tab_reg(reg_data(), "tvhours", "race", family = "gaussian",
                           display = "est_base"))
   expect_true(any(grepl("\\([0-9]", format(bc))))        # "(2.37)" the adjusted mean
@@ -85,7 +82,7 @@ test_that("the folds reach EVERY family: a gaussian cell folds an adjusted MEAN"
 })
 
 test_that("display reaches the marginal path too -- one grammar, both builders", {
-  skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
+  skip_if_not_installed("marginaleffects")
   t <- suppressMessages(
     tab_reg(reg_data(), "married", "race", family = "binomial", effect = "marginal", measure = "difference",
             display = "est_ci"))
@@ -113,7 +110,6 @@ test_that("Excel names the test in the p-value row label, not the numFmt (Phase 
 # ---- split_var export footer -----------------------------------------------------------------
 
 test_that("split_var tables get a per-group export footer; plain tables one footer at the end", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   # a models list keeps the STACKED per-group footer (the auto-spread side-by-side shape is tested
   # separately). The two models share ONE "Model fit" block per group, keyed on the group.
@@ -149,7 +145,6 @@ ame_data <- function() {
 }
 
 test_that("an ordered-factor predictor's AME is non-NA on every non-reference level (Item E)", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d <- ame_data()
   suppressWarnings(t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial",
@@ -165,7 +160,6 @@ test_that("an ordered-factor predictor's AME is non-NA on every non-reference le
 })
 
 test_that("an ordered-factor predictor's coefficient OR is non-NA (was all-NA)", {
-  skip_if_not_installed("broom")
   d <- ame_data()
   suppressWarnings(t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial",
                                 cleannames = FALSE))
@@ -177,7 +171,6 @@ test_that("an ordered-factor predictor's coefficient OR is non-NA (was all-NA)",
 })
 
 test_that("model effect columns carry their level's n; footer cells have no tooltip (Items D/L6)", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   t <- tab_reg(d, "married", c("race", "age"), family = "binomial")
   # each level's own base is on hover, and the Constant row carries the model N (Phase 22b-i)
@@ -195,7 +188,6 @@ test_that("model effect columns carry their level's n; footer cells have no tool
 })
 
 test_that("empirical columns keep the per-LEVEL n in the tooltip (Item D)", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", empirical = TRUE)
   tips <- tabxplor:::tab_tooltip_text(t[["Obs_OR"]])
@@ -205,7 +197,6 @@ test_that("empirical columns keep the per-LEVEL n in the tooltip (Item D)", {
 # ---- Phase 22b-iii: every geometry of one comparison, on both roles ----------------------
 
 test_that("a regression cell carries both geometries of its own comparison", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   # the pair is (level, reference level), so `diff` and `ratio` are filled on both roles and on
   # every measure -- only the column's OWN estimate field keeps what was fitted.
@@ -223,7 +214,6 @@ test_that("a regression cell carries both geometries of its own comparison", {
 })
 
 test_that("the crude column's derived geometries ARE the observed ones", {
-  skip_if_not_installed("broom")
   d   <- reg_data()
   t   <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE))
   col <- t[["Obs_OR"]]
@@ -240,7 +230,6 @@ test_that("the crude column's derived geometries ARE the observed ones", {
 })
 
 test_that("`base_est_mdiff` gives each ROLE its own arm, and never prints one field twice", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE,
                                 display = "base_est_mdiff"))
@@ -256,7 +245,6 @@ test_that("`base_est_mdiff` gives each ROLE its own arm, and never prints one fi
 })
 
 test_that("the Model: footer names the aside the cell actually prints", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   line <- function(...) tabxplor:::reg_model_lines(
     suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE, ...)))
@@ -274,7 +262,6 @@ test_that("the Model: footer names the aside the cell actually prints", {
 })
 
 test_that("choosing a display changes no number (D11), presets included", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                 empirical = TRUE))
@@ -291,7 +278,6 @@ test_that("choosing a display changes no number (D11), presets included", {
 # ---- Phase 22b-xviii: the LEVEL has its own precision, and the outcome is named once -------------
 
 test_that("a `{base}` aside prints its own decimals, never the estimate's", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   # `measure = "difference"` puts the column on the `points` scale, whose ESTIMATE wants a decimal
   # (a 2.4-point risk difference is not a 2-point one) while its LEVEL is an ordinary percentage.
@@ -309,7 +295,6 @@ test_that("a `{base}` aside prints its own decimals, never the estimate's", {
 })
 
 test_that("the outcome is named once above the table, and only where there is one", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   one <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", stats = FALSE))
   expect_identical(unname(pillar::tbl_sum(one)[["Outcome"]]), "married")
@@ -326,7 +311,6 @@ test_that("the outcome is named once above the table, and only where there is on
 # ---- Phase 22g-v: `digits` -- a floor on the cell, a suffix on one token ------------------------
 
 test_that("digits sets every cell, and a named field sets just that one", {
-  skip_if_not_installed("broom")
   d  <- reg_data()
   f  <- function(...) format(first_fmt(
     tab_reg(d, "married", "race", stats = "no", empirical = FALSE, ...)))[-1]
@@ -349,7 +333,6 @@ test_that("digits sets every cell, and a named field sets just that one", {
 })
 
 test_that("a display token may carry its own precision, and Excel follows it", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   # the grammar is the same one `digits = c(base = 1)` writes
   oc <- first_fmt(tab_reg(d, "married", "race", stats = "no", empirical = FALSE,
@@ -365,7 +348,6 @@ test_that("a display token may carry its own precision, and Excel follows it", {
 # beside them -- so the model columns sit side by side with nothing between the numbers being
 # compared.
 test_that("several predictor subsets: the model columns drop the level, the observed keeps it", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   t <- suppressMessages(tab_reg(d, "married", list(a = "race", b = c("race", "rincome")),
                                 stats = "no"))

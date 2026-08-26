@@ -2,93 +2,27 @@
 % Please edit documentation in R/tab_classes.R
 \name{tab_plot}
 \alias{tab_plot}
-\title{Print a tabxplor table as plot}
+\title{Print a tabxplor table as plot (defunct)}
 \usage{
-tab_plot(
-  tabs,
-  theme = NULL,
-  color = TRUE,
-  color_legend = TRUE,
-  lang = NULL,
-  caption = NULL,
-  transpose = FALSE,
-  var_names = NULL,
-  wrap_rows = 35,
-  wrap_cols = 14,
-  whitespace_only = TRUE,
-  ...
-)
+tab_plot(tabs, ...)
 }
 \arguments{
-\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_reg}}, or a \code{list} of tab.
-A list of tables sharing the same \code{col_vars} (and no \code{tab_vars}) is merged into one; any
-other list --- several \code{row_vars} and/or \code{tab_vars} --- is rendered one table after
-another, each keeping its own sub-tables.}
+\item{tabs}{A data.frame.}
 
-\item{theme}{By default (\code{"light"}) a white table with black text; set to \code{"dark"} for a
-black table with white text. This backend ships no stylesheet, so it does NOT take \code{"auto"}
-(which needs one to follow the reader) -- \code{tab_html()}, \code{tab_md()} and
-\code{\link{tab_css}} do.
-The black-and-white \strong{publication} palettes render a table for a page that has no colour:
-\code{"print_ready"} picks the right one per table, or name it yourself --
-\code{"print_marks"}, \code{"print_emphasis"}, \code{"print_minimalistic"} (\code{"bw"}).
-See \code{\link{tab_css}} for what each of them says.
-(ggplot2 has no underline, so on a plot a publication palette reads its magnitude off a four-step
-grey ramp instead of the page's black ink, keeping bold and italic beside it.)}
-
-\item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
-
-\item{color_legend}{Print the colour legend below the table (with the subtext). \code{TRUE} by default, and a
-no-op on a table that carries no colours.}
-
-\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
-\code{"en"} or \code{"fr"}.}
-
-\item{caption}{The table caption.}
-
-\item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become columns) --
-the col-percentages-with-several-row-variables use case.}
-
-\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default), \code{"rows"},
-\code{"cols"} or \code{"none"}. The row-variable name is the leading column a table with several
-\code{row_vars} uses to name each block (written once per block); the column-variable names
-are the spanning row above their level columns. Level headers always keep their name.}
-
-\item{wrap_rows}{By default, rownames are wrapped when larger than 30 characters.}
-
-\item{wrap_cols}{By default, colnames are wrapped when larger than 12 characters.}
-
-\item{whitespace_only}{Set to \code{FALSE} to wrap also on non whitespace characters.}
-
-\item{...}{Retired arguments, accepted and ignored with a deprecation message since 2.0.0
-(\code{color_type}, \code{html_24_bit}).}
+\item{...}{Ignored.}
 }
 \value{
-A \code{\link[ggplot2]{ggplot}} object to be printed in the
-\code{RStudio} Plots pane or exported as image, using \code{\link[ggpubr]{ggtexttable}}.
+Never returns: it errors.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#defunct}{\figure{lifecycle-defunct.svg}{options: alt='[Defunct]'}}}{\strong{[Defunct]}}
 
-Superseded (2.0.0): \code{tab_plot()} renders a \pkg{tabxplor} table as a \pkg{ggpubr} image, but its
-display is limited and it is no longer actively developed. It keeps working and is retained for a
-future redesign; prefer \code{\link{tab_kable}} (HTML), \code{\link{tab_md}} (markdown) or
-\code{\link{tab_xl}} (Excel).
+Removed in 2.0.0. \code{tab_plot()} drew a \emph{picture of the table} as a \pkg{ggpubr} image. Use
+\code{\link[=tab_html]{tab_html()}}, \code{\link[=tab_md]{tab_md()}} or \code{\link[=tab_xl]{tab_xl()}} to export the table itself, and \code{\link[=forest_plot]{forest_plot()}} for a
+chart of the numbers -- every estimate with its confidence interval, its significance and its
+colour.
 
-It is a PICTURE OF THE TABLE, not a chart: for a chart of the numbers -- every estimate with its
-confidence interval, its significance and its colour -- see \code{\link{forest_plot}}.
+It was the only part of the package needing \pkg{ggpubr}, \pkg{cowplot} and \pkg{gtable}, whose
+dependency trees every user paid for; its display never matched the other backends'.
 }
-\examples{
-\donttest{
-# ggpubr / gtable / ggplot2 are Suggests-only and tab_plot() stops without them, so guard the
-# example: \donttest{} does NOT exempt it from R CMD check --as-cran, which CRAN also runs
-# without Suggests installed.
-if (requireNamespace("ggpubr", quietly = TRUE) &&
-    requireNamespace("gtable", quietly = TRUE) &&
-    requireNamespace("ggplot2", quietly = TRUE)) {
-  tab(forcats::gss_cat, race, marital, pct = "row", color = "difference") |>
-    tab_plot()
-}
-}
-
-}
+\keyword{internal}

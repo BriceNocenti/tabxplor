@@ -15,10 +15,62 @@ reg_data <- function() {
     )
 }
 
+# ---- the native tidiers (what reg_fit() hands reg_fit_record) --------------------------------
+
+test_that("reg_tidy_coefmat() keeps an ALIASED coefficient as an NA row, in model order", {
+  d <- reg_data() |> dplyr::filter(!is.na(age), !is.na(tvhours))
+  d$age_copy <- d$age                                       # an exactly collinear column
+  f  <- stats::glm(married ~ age + age_copy + tvhours, data = d, family = stats::binomial())
+  td <- tabxplor:::reg_tidy_coefmat(f)
+  expect_true(anyNA(stats::coef(f)))                        # the premise: the fitter dropped one
+  expect_identical(td$term, names(stats::coef(f)))          # the spine is coef(), not the summary
+  expect_equal(nrow(td), length(stats::coef(f)))
+  expect_gt(nrow(td), nrow(stats::coef(summary(f))))        # the summary has one row fewer
+  expect_true(is.na(td$estimate[td$term == "age_copy"]))
+})
+
+test_that("reg_tidy_coefmat() reports svyglm's design-based t, not a naive z", {
+  skip_if_not_installed("survey")
+  d   <- reg_data() |> dplyr::filter(!is.na(age))
+  des <- survey::svydesign(ids = ~1, weights = ~1, data = d)
+  f   <- survey::svyglm(married ~ age + race, design = des, family = stats::quasibinomial())
+  td  <- tabxplor:::reg_tidy_coefmat(f)
+  expect_equal(td$p.value, 2 * stats::pt(-abs(td$statistic), stats::df.residual(f)),
+               tolerance = 1e-10)
+  expect_false(isTRUE(all.equal(td$p.value, 2 * stats::pnorm(-abs(td$statistic)))))
+})
+
+test_that("a two-level multinomial names its category, and its column is not empty", {
+  skip_if_not_installed("nnet")
+  d <- reg_data() |> dplyr::filter(!is.na(age))
+  m <- nnet::multinom(married ~ age + race, data = d, trace = FALSE)
+  # nnet returns coef() as a plain named VECTOR here, so the category name can only come from
+  # fit$lev[-1] -- and that name IS the key reg_columns_multinom() filters the tidy on.
+  expect_identical(unique(tabxplor:::reg_tidy_multinom(m)$y.level), m$lev[2])
+  t1  <- suppressMessages(tab_reg(d, "married", c("age", "race"), family = "multinomial"))
+  num <- unlist(lapply(t1[vapply(t1, is_fmt, logical(1))], get_num))
+  expect_true(any(is.finite(num)))                          # not a column of NA
+})
+
+test_that("the 3+ level engines share one tidy contract", {
+  skip_if_not_installed("nnet"); skip_if_not_installed("MASS")
+  # the same three columns the svyVGAM / svyolr branches build by hand, so all five fitters hand
+  # reg_fit_record() one shape (`y.level` being the multinomial's extra block key).
+  d <- forcats::gss_cat |>
+    dplyr::filter(!is.na(age)) |>
+    dplyr::mutate(m3 = droplevels(forcats::fct_collapse(
+      marital, M = "Married", N = "Never married", other_level = "Other")),
+      ord3 = factor(as.character(m3), levels = c("Other", "N", "M"), ordered = TRUE))
+  expect_named(tabxplor:::reg_tidy_multinom(nnet::multinom(m3 ~ age, data = d, trace = FALSE)),
+               c("y.level", "term", "estimate", "std.error"))
+  expect_named(tabxplor:::reg_tidy_polr(
+    MASS::polr(ord3 ~ age, data = d, Hess = TRUE, method = "logistic")),
+    c("term", "estimate", "std.error"))
+})
+
 # ---- family dispatch + wrapper equivalence --------------------------------------------------
 
 test_that("tab_reg(family='binomial') is identical to tab_reg()", {
-  skip_if_not_installed("broom")
   d  <- reg_data()
   t1 <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", cleannames = FALSE)
   t2 <- tab_reg(d, "married", c("race", "rincome"), cleannames = FALSE)
@@ -27,7 +79,6 @@ test_that("tab_reg(family='binomial') is identical to tab_reg()", {
 })
 
 test_that("family='auto' detects binary -> binomial, and an integer outcome -> gaussian", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   tabxplor:::tx_reset_messages()   # the note is once per session
   expect_message(tab_reg(d, "married", "race", cleannames = FALSE), "binary")
@@ -43,7 +94,6 @@ test_that("family='auto' detects binary -> binomial, and an integer outcome -> g
 })
 
 test_that("family='auto' detects a continuous outcome -> gaussian (message)", {
-  skip_if_not_installed("broom")
   d <- reg_data() |> dplyr::mutate(score = age + 0.5)                 # non-integer -> continuous
   expect_message(col_tab <- tab_reg(d, "score", "race"), "continuous")
   expect_identical(tabxplor:::fmt_var_kind(col_tab[["Model_diff"]]), "coef")
@@ -52,7 +102,6 @@ test_that("family='auto' detects a continuous outcome -> gaussian (message)", {
 # ---- gaussian beta: parity + additive fmt shape ---------------------------------------------
 
 test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the additive coef shape", {
-  skip_if_not_installed("broom")
   d   <- reg_data()
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
@@ -95,7 +144,6 @@ test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the addit
 })
 
 test_that("gaussian beta renders raw (no % / x glyph), reference shows 0", {
-  skip_if_not_installed("broom")
   t1  <- tab_reg(reg_data(), "tvhours", "race", family = "gaussian", empirical = FALSE,
                  cleannames = FALSE)
   col <- t1[["Model_diff"]]
@@ -108,7 +156,6 @@ test_that("gaussian beta renders raw (no % / x glyph), reference shows 0", {
 # ---- poisson IRR: parity + multiplicative fmt shape -----------------------------------------
 
 test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR shape", {
-  skip_if_not_installed("broom")
   d   <- reg_data()
   # suppressWarnings: this fixture is genuinely over-dispersed, so the Phase 12f dispersion flag
   # fires. That is correct and asserted in test-tab_reg-footer.R; here it is incidental noise.
@@ -148,7 +195,6 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
 # ---- exponentiate + references --------------------------------------------------------------
 
 test_that("measure = log on a logit yields raw log-odds (additive coef shape)", {
-  skip_if_not_installed("broom")
   d   <- reg_data()
   col <- tab_reg(d, "married", "race", family = "binomial", measure = "log",
                  cleannames = FALSE)[["Model_log(OR)"]]
@@ -164,7 +210,6 @@ test_that("measure = log on a logit yields raw log-odds (additive coef shape)", 
 })
 
 test_that("ref= relevels a factor predictor's baseline", {
-  skip_if_not_installed("broom")
   d  <- reg_data()
   t1 <- tab_reg(d, "married", "race", family = "binomial",
                 ref = c(race = "White"), cleannames = FALSE)
@@ -178,7 +223,6 @@ test_that("ref= relevels a factor predictor's baseline", {
 # ---- several dependents + colour ------------------------------------------------------------
 
 test_that("a character `predictors` with several dependents gives one column per dependent", {
-  skip_if_not_installed("broom")
   d  <- reg_data() |>
     dplyr::mutate(has_tv = factor(dplyr::if_else(tvhours > 0, "Some TV", "No TV"),
                                   levels = c("Some TV", "No TV")))   # positive level = "Some TV"
@@ -189,7 +233,6 @@ test_that("a character `predictors` with several dependents gives one column per
 # ---- Phase 15e: several dependents with DIFFERENT families in one table ----------------------
 
 test_that("mixed binomial + gaussian: per-column families + byte-parity vs standalone builds", {
-  skip_if_not_installed("broom")
   d   <- reg_data()
   mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
                  family = c("binomial", "gaussian"), cleannames = FALSE)
@@ -215,7 +258,6 @@ test_that("mixed binomial + gaussian: per-column families + byte-parity vs stand
 })
 
 test_that("mixed binomial + poisson: legend effect words are OR and IRR per column", {
-  skip_if_not_installed("broom")
   d   <- reg_data()
   mix <- suppressWarnings(tab_reg(d, c("married", "tvhours"), c("age", "race"),
                                   family = c("binomial", "poisson"), cleannames = FALSE))
@@ -231,7 +273,6 @@ test_that("mixed binomial + poisson: legend effect words are OR and IRR per colu
 })
 
 test_that("Phase 17c: reg columns carry a stored `role` (model vs emp), not an 'Emp.' name match", {
-  skip_if_not_installed("broom")
   m <- suppressWarnings(tab_reg(reg_data(), "married", c("age", "race"),
                                 family = "binomial", empirical = TRUE, cleannames = FALSE))
   role <- tabxplor:::get_role(m)
@@ -247,7 +288,6 @@ test_that("Phase 17c: reg columns carry a stored `role` (model vs emp), not an '
 })
 
 test_that("mixed-family 'Model:' footer = one line per family; homogeneous = one unprefixed line", {
-  skip_if_not_installed("broom")
   d   <- reg_data()
   mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
                  family = c("binomial", "gaussian"), cleannames = FALSE)
@@ -266,7 +306,6 @@ test_that("mixed-family 'Model:' footer = one line per family; homogeneous = one
 })
 
 test_that("mixed-family caption is generic; homogeneous keeps its family name", {
-  skip_if_not_installed("broom")
   d   <- reg_data()
   mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
                  family = c("binomial", "gaussian"), cleannames = FALSE)
@@ -276,7 +315,6 @@ test_that("mixed-family caption is generic; homogeneous keeps its family name", 
 })
 
 test_that("mixed-family GOF footer keeps each outcome's own stat set", {
-  skip_if_not_installed("broom")
   d   <- reg_data()
   mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
                  family = c("binomial", "gaussian"), cleannames = FALSE)
@@ -291,7 +329,6 @@ test_that("mixed-family GOF footer keeps each outcome's own stat set", {
 })
 
 test_that("auto colour default is per-family (OR for the logit, diff for the gaussian)", {
-  skip_if_not_installed("broom")
   d   <- reg_data()
   mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
                  family = c("binomial", "gaussian"), cleannames = FALSE)
@@ -300,7 +337,6 @@ test_that("auto colour default is per-family (OR for the logit, diff for the gau
 })
 
 test_that("family accepts a named vector; auto-detection is per dependent (ambiguous integer names itself)", {
-  skip_if_not_installed("broom")
   d   <- reg_data()
   # named vector keyed by dependent
   mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
@@ -315,7 +351,6 @@ test_that("family accepts a named vector; auto-detection is per dependent (ambig
 })
 
 test_that("mixed-family table exports through md / kable without error", {
-  skip_if_not_installed("broom")
   d   <- reg_data()
   mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
                  family = c("binomial", "gaussian"), cleannames = FALSE)
@@ -324,7 +359,6 @@ test_that("mixed-family table exports through md / kable without error", {
 })
 
 test_that("colour: gaussian beta greys non-significant / reference, colours a large standardized beta", {
-  skip_if_not_installed("broom")
   t1  <- tab_reg(reg_data(), "tvhours", c("age", "race"), family = "gaussian", cleannames = FALSE)
   col <- t1[["Model_diff"]]
   txt <- fmt_color_channels(col)$text
@@ -346,7 +380,6 @@ gb_data <- function() {
 }
 
 test_that("grouped binomial (trials=) matches glm(cbind(s, q-s)); OR fmt shape", {
-  skip_if_not_installed("broom")
   d   <- gb_data()
   # suppressWarnings: the grouped-binomial fixture is over-dispersed -> the Phase 12f dispersion
   # flag fires (correct; asserted in test-tab_reg-footer.R). This test is about the OR/CI/p parity.
@@ -382,7 +415,6 @@ test_that("grouped binomial (trials=) matches glm(cbind(s, q-s)); OR fmt shape",
 
 
 test_that("trials=TRUE uses the observed max score; measure = log gives the coef shape", {
-  skip_if_not_installed("broom")
   d  <- gb_data()
   # suppressWarnings: over-dispersed fixture -> the dispersion flag (asserted in test-tab_reg-footer.R).
   auto <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = TRUE,
@@ -400,7 +432,6 @@ test_that("trials=TRUE uses the observed max score; measure = log gives the coef
 })
 
 test_that("trials= reaches the rr / rd links too (link = ratio / difference)", {
-  skip_if_not_installed("broom")
   # The regression this guards: `link = "ratio"` / `"difference"` resolve the fit to the internal
   # keys `rr` / `rd`, which reg_is_grouped_binomial() used to miss (it tested the FIT key against
   # "binomial"), so both dropped `trials` and met the raw 0..q score -- an abort on an estimand
@@ -446,14 +477,12 @@ test_that("trials= reaches the rr / rd links too (link = ratio / difference)", {
 
 
 test_that("trials errors outside the binomial family; ordinary >2-level binomial still aborts", {
-  skip_if_not_installed("broom")
   d <- gb_data()
   expect_error(tab_reg(d, "score", "race", family = "poisson", trials = 10), "trials")
   expect_error(tab_reg(d, "score", "race", family = "binomial"), "binary|trials")  # no trials -> abort
 })
 
 test_that("trials rejects a column name / a bad count AT THE BOUNDARY (Phase 18z16-iv)", {
-  skip_if_not_installed("broom")
   d <- gb_data()
   d$q <- 10L                                    # a per-row item-count column, the natural mistake
   # used to die inside glm() with "contrasts can be applied only to factors with 2 or more levels"
@@ -473,7 +502,6 @@ test_that("trials rejects a column name / a bad count AT THE BOUNDARY (Phase 18z
 # ---- formula escape-hatch (Phase 12c-ii) ----------------------------------------------------
 
 test_that("a simple formula reduces to the dependent+predictors path (identical)", {
-  skip_if_not_installed("broom")
   d  <- reg_data()
   t1 <- tab_reg(d, married ~ race + rincome, family = "binomial", cleannames = FALSE)
   t2 <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", cleannames = FALSE)
@@ -481,7 +509,6 @@ test_that("a simple formula reduces to the dependent+predictors path (identical)
 })
 
 test_that("a compound formula (poly) fits with best-effort term rows; coefs match lm", {
-  skip_if_not_installed("broom")
   d   <- reg_data()
   t1  <- tab_reg(d, tvhours ~ race + poly(age, 2), family = "gaussian", cleannames = FALSE)
   col <- t1[["Model_diff"]]
@@ -499,7 +526,6 @@ test_that("a compound formula (poly) fits with best-effort term rows; coefs matc
 })
 
 test_that("a compound formula with an interaction renders and exports without error", {
-  skip_if_not_installed("broom")
   t1 <- tab_reg(reg_data(), tvhours ~ race * rincome, family = "gaussian", cleannames = FALSE)
   expect_s3_class(t1, "tabxplor_grouped_tab")
   expect_true(any(grepl(":", as.character(t1$var))))                  # the interaction term rows
@@ -513,7 +539,6 @@ test_that("a compound formula reaches the 3+ level engines too (Phase 20f-iiii)"
   # -- `party3 ~ race * age` fitted `race + age`. (2) reg_skeleton_from_fit() read its coefficient
   # names from coef(), which is a MATRIX for nnet::multinom (names() NULL -> every non-factor term
   # produced zero rows) and drops MASS::polr's intercept (one short, so assign was misaligned).
-  skip_if_not_installed("broom")
   skip_if_not_installed("nnet")
   skip_if_not_installed("MASS")
   d <- reg_data()[seq(1, nrow(reg_data()), 6), ]
@@ -533,7 +558,6 @@ test_that("a compound formula reaches the 3+ level engines too (Phase 20f-iiii)"
 })
 
 test_that("formula errors: predictors both supplied, and a call-LHS with family='auto'", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   expect_error(tab_reg(d, married ~ race, predictors = "race"), "either")
   expect_error(tab_reg(d, I(tvhours > 2) ~ race), "auto-detect|explicit")
@@ -542,7 +566,6 @@ test_that("formula errors: predictors both supplied, and a call-LHS with family=
 # ---- exports --------------------------------------------------------------------------------
 
 test_that("gaussian tab_reg output exports through every backend without error", {
-  skip_if_not_installed("broom")
   t1 <- tab_reg(reg_data(), "tvhours", c("age", "race"), family = "gaussian")
   expect_no_error(tab_kable(t1))
   expect_no_error(tab_md(t1))
@@ -582,7 +605,6 @@ ord_income_data <- function() {                             # ordered income, kn
 }
 
 test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column per category", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("nnet")
   d  <- mnl_data()
   # `multiplier = 1`: the parity claim is against nnet's own PER-UNIT coefficient. Since Phase 22b-v
@@ -603,7 +625,13 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
   dm$race   <- forcats::fct_drop(dm$race)
   dm$party3 <- forcats::fct_drop(dm$party3)
   m  <- nnet::multinom(party3 ~ race + age, data = dm, trace = FALSE)
-  td <- broom::tidy(m)                                      # y.level, term, estimate, std.error, ...
+  # the reference comes through vcov(), never through summary() -- so it is an INDEPENDENT route to
+  # the same numbers as reg_tidy_multinom(), which reads the summary's standard.errors matrix.
+  cf <- stats::coef(m); V <- stats::vcov(m)                 # nnet names V "<level>:<term>"
+  td <- dplyr::bind_rows(lapply(rownames(cf), function(r) tibble::tibble(
+    y.level = r, term = colnames(cf), estimate = unname(cf[r, ]),
+    std.error = unname(sqrt(diag(V))[paste0(r, ":", colnames(cf))]))))
+  td$p.value <- 2 * stats::pnorm(-abs(td$estimate / td$std.error))
   z  <- stats::qnorm(0.975)
 
   for (j in c("Dem", "Rep")) {
@@ -628,7 +656,6 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
 })
 
 test_that("outcome_level= sets the multinomial baseline category", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("nnet")
   t1 <- tab_reg(mnl_data(), "party3", "race", family = "multinomial",
                 outcome_level = c(party3 = "Dem"), cleannames = FALSE)
@@ -636,7 +663,6 @@ test_that("outcome_level= sets the multinomial baseline category", {
 })
 
 test_that("tab_reg() ordinal cumulative OR / CI / p match MASS::polr; single column, Constant NA", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("MASS")
   d   <- ord_data()
   t1  <- suppressWarnings(tab_reg(d, "spectrum", c("race", "age"),   # per unit: polr's own scale
@@ -653,8 +679,12 @@ test_that("tab_reg() ordinal cumulative OR / CI / p match MASS::polr; single col
   dm <- d |> dplyr::filter(!is.na(spectrum), !is.na(race), !is.na(age))
   dm$race <- forcats::fct_drop(dm$race)
   o  <- MASS::polr(spectrum ~ race + age, data = dm, Hess = TRUE, method = "logistic")
-  td <- broom::tidy(o)
-  td <- td[td$coef.type == "coefficient", ]                 # drop the cut-point ("scale") rows
+  # coef() is MASS's own answer to which rows are slopes; vcov() still carries the cut-points, so
+  # subsetting it by those names is what drops them -- an independent route to reg_tidy_polr().
+  cf <- stats::coef(o)
+  td <- tibble::tibble(term = names(cf), estimate = unname(cf),
+                       std.error = unname(sqrt(diag(stats::vcov(o)))[names(cf)]))
+  expect_false(any(names(o$zeta) %in% td$term))             # the cut-points are gone
   z  <- stats::qnorm(0.975)
   keep <- !is.na(get_pvalue(col))
   expect_equal(sum(keep), nrow(td))
@@ -668,7 +698,6 @@ test_that("tab_reg() ordinal cumulative OR / CI / p match MASS::polr; single col
 })
 
 test_that("multiplier reaches the 3+ level engines: per-SD by DEFAULT on ordinal and multinomial", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("MASS")
   skip_if_not_installed("nnet")
   # a per-ONE-unit effect beside a factor contrast is unreadable, so the default scales every family.
@@ -698,7 +727,6 @@ test_that("multiplier reaches the 3+ level engines: per-SD by DEFAULT on ordinal
 })
 
 test_that("family='auto' detects nominal -> multinomial and ordered -> ordinal (messages)", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("nnet")
   skip_if_not_installed("MASS")
   expect_message(tab_reg(mnl_data(), "party3", "race"), "multinomial")
@@ -706,7 +734,6 @@ test_that("family='auto' detects nominal -> multinomial and ordered -> ordinal (
 })
 
 test_that("weighted 3+ level: ordinal works (svyolr), MNL needs svyVGAM (Phase 12g)", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("survey")
   # weighted ordinal is now supported via survey::svyolr (positive weights: svyolr's start-value
   # glm.fit step cannot take zero weights, and gss_cat's tvhours has zeros).
@@ -727,7 +754,6 @@ test_that("weighted 3+ level: ordinal works (svyolr), MNL needs svyVGAM (Phase 1
 })
 
 test_that("ordinal PO diagnostic warns when the parallel-lines assumption is violated", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("MASS")
   skip_if_not_installed("brant")
   # Phase 20f: the Brant test is the Proportionality CHECK's statistic and it fits J-1 binary logits,
@@ -751,7 +777,6 @@ test_that("ordinal PO diagnostic warns when the parallel-lines assumption is vio
 })
 
 test_that("multinomial + ordinal tab_reg output exports without error", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("nnet")
   skip_if_not_installed("MASS")
   mnl <- tab_reg(mnl_data(), "party3", c("race", "age"), family = "multinomial")
@@ -773,7 +798,6 @@ test_that("multinomial + ordinal tab_reg output exports without error", {
 # assertions are about the ADDITIVE marginal effect, so they ask for it.
 
 test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed cell", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
@@ -822,7 +846,6 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
 })
 
 test_that("a gaussian marginal difference builds, and IS the coefficient", {
-  skip_if_not_installed("broom")
   # The identity link is collapsible, so averaging changes nothing -- which used to be a REFUSAL and
   # is now a demonstrable fact: two routes, two headers, one number.
   d  <- reg_data()
@@ -835,7 +858,6 @@ test_that("a gaussian marginal difference builds, and IS the coefficient", {
 })
 
 test_that("the gaussian coefficient matches marginaleffects' AME", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
   # Phase 18z9: `multiplier = 1` pins the per-1-unit reading this parity assertion is ABOUT
@@ -859,7 +881,6 @@ test_that("the gaussian coefficient matches marginaleffects' AME", {
 })
 
 test_that("poisson AME is a raw count-change and matches marginaleffects", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
   # suppressWarnings: over-dispersed poisson fixture -> the dispersion flag (asserted in
@@ -880,7 +901,6 @@ test_that("poisson AME is a raw count-change and matches marginaleffects", {
 })
 
 test_that("multinomial AME: one column per outcome category, matches marginaleffects", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("nnet")
   skip_if_not_installed("marginaleffects")
   d  <- mnl_data()
@@ -904,7 +924,6 @@ test_that("multinomial AME: one column per outcome category, matches marginaleff
 })
 
 test_that("ordinal marginal: ONE column, and Somers' D matches a hand-computed pair", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("MASS")
   d  <- ord_data()
   t1 <- suppressWarnings(tab_reg(d, "spectrum", "race", family = "ordinal", effect = "marginal",
@@ -934,7 +953,6 @@ test_that("ordinal marginal: ONE column, and Somers' D matches a hand-computed p
 })
 
 test_that("weighted binomial AME (svyglm) is population-weighted and matches marginaleffects", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("survey")
   skip_if_not_installed("marginaleffects")
   d   <- reg_data() |> dplyr::filter(!is.na(tvhours))
@@ -957,7 +975,6 @@ test_that("weighted binomial AME (svyglm) is population-weighted and matches mar
 })
 
 test_that("AME tables export through every backend without error", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial", effect = "marginal", measure = "difference")
   expect_no_error(tab_kable(t1))
@@ -974,7 +991,6 @@ test_that("AME tables export through every backend without error", {
 # checked against marginaleffects comparisons()/predictions() at a datagrid built the same way.
 
 test_that("at the reference profile (binomial): effect/prediction/CI match marginaleffects there", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
   t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "at_reference", measure = "difference",
@@ -1003,7 +1019,6 @@ test_that("at the reference profile (binomial): effect/prediction/CI match margi
 test_that("MNL 'j vs rest' OR at the reference profile matches marginaleffects (comparison='lnor')", {
   # ⚠ `measure = "odds_ratio"` is NAMED: a 3+ category outcome has to be asked "versus what?" before
   # a predicted odds ratio means anything, so the cascade never resolves to one on its own.
-  skip_if_not_installed("broom")
   skip_if_not_installed("nnet")
   skip_if_not_installed("marginaleffects")
   d  <- mnl_data()
@@ -1034,7 +1049,6 @@ test_that("MNL 'j vs rest' OR at the reference profile matches marginaleffects (
 # are not deprecated: each lands in `...` and aborts as an unknown argument (the shared tab_check_dots
 # guard), and a removed `effect` VALUE aborts as an unknown effect value. The point is no silent no-op.
 test_that("a removed argument or effect value aborts (no silent no-op)", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   expect_error(
     tab_reg(d, "married", "race", family = "binomial", at = "reference", cleannames = FALSE),
@@ -1051,7 +1065,6 @@ test_that("a removed argument or effect value aborts (no silent no-op)", {
 })
 
 test_that("an at-reference table exports through every backend without error", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial", effect = "at_reference", measure = "difference")
   expect_no_error(tab_kable(t1))
@@ -1079,7 +1092,6 @@ reg_2dep_data <- function() {
 # must withhold `obs` only on the at_reference columns; a table-scalar `any(!obs)` gate used to blank
 # the crude value (and `color = "adjustment"`) on the coefficient columns too.
 test_that("per-spec obs: a mixed-effect multi-outcome table keeps `obs` on the coefficient columns", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d <- reg_2dep_data()
   r <- suppressWarnings(tab_reg(
@@ -1097,7 +1109,6 @@ test_that("per-spec obs: a mixed-effect multi-outcome table keeps `obs` on the c
 })
 
 test_that("K: several dependents x a list of models -> a tabxplor_tabs, one per dependent", {
-  skip_if_not_installed("broom")
   d <- reg_2dep_data()
   r <- suppressWarnings(tab_reg(
     d, outcome = c("married", "widowed"),
@@ -1122,7 +1133,6 @@ test_that("K: several dependents x a list of models -> a tabxplor_tabs, one per 
 })
 
 test_that("L1: a complete model's predictor order is kept (at the end)", {
-  skip_if_not_installed("broom")
   d <- reg_2dep_data()
   # `complete` is a superset of `a` -> the union takes `complete`'s own order (race, rincome, age)
   r <- tab_reg(d, "married",
@@ -1139,7 +1149,6 @@ test_that("L1: a complete model's predictor order is kept (at the end)", {
 })
 
 test_that("L2: a SUPERSET baseline is recognised as nested (LR, not the AIC fallback) under drop_all", {
-  skip_if_not_installed("broom")
   d <- reg_2dep_data()
   r <- tab_reg(d, "married",
                predictors = list(small = c("race", "age"), complete = c("race", "age", "rincome")),
@@ -1151,7 +1160,6 @@ test_that("L2: a SUPERSET baseline is recognised as nested (LR, not the AIC fall
 })
 
 test_that("na = 'drop_all' fits every model on one shared complete-case population (equal N)", {
-  skip_if_not_installed("broom")
   d <- reg_2dep_data()                                     # rincome has NAs -> N would differ per model
   r <- tab_reg(d, "married",
                predictors = list(a = "race", b = c("race", "rincome")),
@@ -1161,7 +1169,6 @@ test_that("na = 'drop_all' fits every model on one shared complete-case populati
 })
 
 test_that("Phase h: a predictor dropped from one comparison model keeps its reference-row bold", {
-  skip_if_not_installed("broom")
   d <- reg_2dep_data()
   r <- tab_reg(d, "married",
                predictors = list(a = c("race", "age"), b = c("rincome", "age")),
@@ -1179,7 +1186,6 @@ test_that("Phase h: a predictor dropped from one comparison model keeps its refe
 # ---- Phase 18z13 (SS7.1): the N behind each predictor level -------------------------------------
 
 test_that("the `n` column gives every predictor level its unadjusted N, on the model's own frame", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                 cleannames = FALSE))
@@ -1210,7 +1216,6 @@ test_that("the `n` column gives every predictor level its unadjusted N, on the m
 })
 
 test_that("the `n` column does not disturb the reference-row bold", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", cleannames = FALSE))
   m <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE)
@@ -1226,7 +1231,6 @@ test_that("the `n` column does not disturb the reference-row bold", {
 # ---- Phase 22g-v: keeping the missing values, and the profile interval --------------------------
 
 test_that("na = 'keep_for_predictors' gives every predictor an NA level, cutting a number for it", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   d$race[1:200]    <- NA                      # a factor: the level is kept as it stands
   d$tvhours[1:300] <- NA                      # a number: it has no level to put them in
@@ -1248,7 +1252,6 @@ test_that("na = 'keep_for_predictors' gives every predictor an NA level, cutting
 })
 
 test_that("ci_method = 'profile' really builds a profile-likelihood interval", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("MASS")
   d <- reg_data()
   w <- tab_reg(d, "married", "race", stats = "no", empirical = FALSE)
@@ -1267,7 +1270,6 @@ test_that("ci_method = 'profile' really builds a profile-likelihood interval", {
 # that one thing is `ref =`. The rest permutes the row skeleton and must move no number, in any
 # family, an ORDERED predictor and an ORDINAL outcome included.
 test_that(".levels_order permutes the rows and changes no estimate", {
-  skip_if_not_installed("broom")
   d  <- reg_data()
   lv <- levels(d$rincome)
   ord <- list(rincome = c(lv[[1]], rev(lv[-1])))
@@ -1291,7 +1293,6 @@ test_that(".levels_order permutes the rows and changes no estimate", {
 })
 
 test_that(".levels_order names a level the table does not have without effect", {
-  skip_if_not_installed("broom")
   d  <- reg_data()
   t0 <- suppressMessages(tab_reg(d, "married", "race", stats = "no", empirical = FALSE))
   lv <- as.character(t0$levels)                       # Constant, then race's own level order

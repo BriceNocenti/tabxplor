@@ -222,9 +222,8 @@ NULL
 #'   [tab_counts()] (pre-aggregated counts) and [tab_plain()] (one bare cross-table).
 #'   [set_color_breaks()] / [set_color_palette()] customise the colours,
 #'   [tab_structure()] reports what a finished table is and what accepts it.
-#'   Export a table with [tab_xl()] (Excel), [tab_kable()] (HTML), [tab_md()] (Markdown) or
-#'   [tab_plot()], and CHART it with [forest_plot()] (every cell's estimate, interval and colour --
-#'   `tab_plot()` renders the table as an image, `forest_plot()` is the real chart).
+#'   Export a table with [tab_xl()] (Excel), [tab_kable()] (HTML) or [tab_md()] (Markdown), and
+#'   CHART it with [forest_plot()] (every cell's estimate, interval and colour).
 #'   Package-wide defaults live in [tabxplor-options].
 #'
 #'   `color = "contrib"` shows each cell's departure from the **log-linear model of independence**
@@ -2391,7 +2390,7 @@ tab_cleannames_relabel <- function(data, vars_not_numeric) {
   if (length(vars_not_numeric) != 0) data <- data |>
     dplyr::mutate(dplyr::across(
       tidyselect::all_of(vars_not_numeric),
-      ~ forcats::fct_relabel(., ~ stringi::stri_replace_all_regex(., cleannames_condition(), ""))
+      ~ forcats::fct_relabel(., ~ gsub(cleannames_condition(), "", ., perl = TRUE))
     ))
   data
 }
@@ -2749,7 +2748,7 @@ diff_index <-  function(ref, row_var, num_names, pct, is_group = TRUE) {
   }
 
   exact <- which(targets == ref)
-  index <- if (length(exact) >= 1L) exact else which(stringi::stri_detect_regex(targets, ref))
+  index <- if (length(exact) >= 1L) exact else which(grepl(ref, targets, perl = TRUE))
   if (length(index) >= 2) {
     what <- if (identical(pct, "row")) "rows" else "columns"
     cli::cli_warn(c("!" = "{.code ref = {.val {ref}}} matches {length(index)} {what}; the first is used.",

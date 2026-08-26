@@ -48,7 +48,6 @@ test_that("comp='tab' adds a tab_var column; comp='all' collapses the group labe
 })
 
 test_that("reg grid: Model fit header, dependent-named columns, a shared predictors column", {
-  skip_if_not_installed("broom")
   g <- test_summary_grid(tab_reg(gss, c("married", "income25k"), c("relig", "age")))
   expect_equal(g$stat_header, "Model fit")
   expect_setequal(g$value_headers, c("married", "income25k"))
@@ -82,7 +81,6 @@ test_that("a spread crosstab keeps its per-group test summary, keyed on the new 
 })
 
 test_that("reg grid: split_var levels become the row groups", {
-  skip_if_not_installed("broom")
   # a models list keeps the STACKED grouped form, where split levels are the row groups
   g <- test_summary_grid(tab_reg(gss, "married",
                                  list(m1 = c("relig", "age"), m2 = c("relig", "age")),
@@ -146,7 +144,6 @@ test_that("export default = summary (p-value + effect size, no statistic); test_
 # === split_var appears in the html/Excel export =====================================================
 
 test_that("a regression split_var renders as a merged, vertical first column in HTML", {
-  skip_if_not_installed("broom")
   # a models list keeps the STACKED form, where the split_var is the merged vertical first column.
   r <- tab_reg(gss, "married", list(m1 = c("relig", "age"), m2 = c("relig", "age")),
                tab_vars = "race")

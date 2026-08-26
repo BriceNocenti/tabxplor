@@ -3,7 +3,6 @@
 # The two fact tables' own consistency is asserted at load (R/reg-digest.R) and their cross-table
 # edges by TAB_FOREIGN_KEYS, so nothing here re-checks those.
 
-skip_if_not_installed("broom")
 
 dg_data <- function() gss_cat_data_formatting()
 dg_ds   <- function(wt = NULL) list(design = NULL, wt = wt)

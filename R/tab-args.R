@@ -662,7 +662,7 @@ TAB_ARGS <- list(
 EXPORT_ARGS <- list(
   # --- the table itself -------------------------------------------------------------------------
   tabs = list(
-    producers = c("tab_html", "tab_md", "tab_xl", "tab_plot"),
+    producers = c("tab_html", "tab_md", "tab_xl"),
     doc = c("A table made with \\code{\\link{tab}} or \\code{\\link{tab_reg}}, or a `list` of tab.",
             "A list of tables sharing the same `col_vars` (and no `tab_vars`) is merged into one; any",
             "other list --- several `row_vars` and/or `tab_vars` --- is rendered one table after",
@@ -671,7 +671,7 @@ EXPORT_ARGS <- list(
 
   # --- the shared render controls ---------------------------------------------------------------
   color = list(
-    producers = c("tab_html", "tab_xl", "tab_plot", "tab_export"), option = NULL,
+    producers = c("tab_html", "tab_xl", "tab_export"), option = NULL,
     doc = "Set to \\code{FALSE} to render the table without colours (monochrome).",
     doc_for = list(
       tab_md = c("When `TRUE` (default) and the table carries colours (e.g. built with",
@@ -682,43 +682,43 @@ EXPORT_ARGS <- list(
                  "spans."),
       forest_plot = "Set to \\code{FALSE} for a plain plot with no colour measure.")),
   color_legend = list(
-    producers = c("tab_html", "tab_md", "tab_xl", "tab_plot", "tab_export"),
+    producers = c("tab_html", "tab_md", "tab_xl", "tab_export"),
     doc = c("Print the colour legend below the table (with the subtext). `TRUE` by default, and a",
             "no-op on a table that carries no colours.")),
   lang = list(
-    producers = c("tab_html", "tab_md", "tab_xl", "tab_plot", "tab_export", "forest_plot"),
+    producers = c("tab_html", "tab_md", "tab_xl", "tab_export", "forest_plot"),
     option = "lang",
     doc = c("Colour-legend language: \\code{NULL} (auto from the R/OS locale, English fallback),",
             "\\code{\"en\"} or \\code{\"fr\"}.")),
   transpose = list(
-    producers = c("tab_html", "tab_md", "tab_xl", "tab_plot", "tab_export"),
+    producers = c("tab_html", "tab_md", "tab_xl", "tab_export"),
     doc = c("Set to \\code{TRUE} to transpose each table before export (rows become columns) --",
             "the col-percentages-with-several-row-variables use case.")),
   var_names = list(
-    producers = c("tab_html", "tab_md", "tab_xl", "tab_plot", "tab_export"), option = "var_names",
+    producers = c("tab_html", "tab_md", "tab_xl", "tab_export"), option = "var_names",
     doc = c("Which variable names to write beside the table: `\"both\"` (the default), `\"rows\"`,",
             "`\"cols\"` or `\"none\"`. The row-variable name is the leading column a table with several",
             "`row_vars` uses to name each block (written once per block); the column-variable names",
             "are the spanning row above their level columns. Level headers always keep their name.")),
   wrap_rows = list(
-    producers = c("tab_html", "tab_md", "tab_plot", "tab_xl"),
+    producers = c("tab_html", "tab_md", "tab_xl"),
     doc = "By default, rownames are wrapped when larger than 30 characters.",
     doc_for = list(
       tab_md = c("Max width for row labels before truncation. `NULL` (default) never truncates",
                  "(lossless -- the column grows); set a number to cap the label width. A markdown pipe",
                  "cell cannot hold a raw newline, so md \"wrapping\" means \"do not truncate\"."))),
   wrap_cols = list(
-    producers = c("tab_html", "tab_plot", "tab_xl"),
+    producers = c("tab_html", "tab_xl"),
     doc = "By default, colnames are wrapped when larger than 12 characters."),
   whitespace_only = list(
-    producers = c("tab_html", "tab_plot"),
+    producers = c("tab_html"),
     doc = "Set to `FALSE` to wrap also on non whitespace characters."),
 
   # --- DECLARED, prose stays home (see the header) ------------------------------------------------
-  theme = list(producers = c("tab_html", "tab_md", "tab_xl", "tab_plot", "tab_export", "tab_css",
+  theme = list(producers = c("tab_html", "tab_md", "tab_xl", "tab_export", "tab_css",
                              "forest_plot"),
                option = "theme", doc_in_producer = TRUE),
-  caption = list(producers = c("tab_html", "tab_md", "tab_xl", "tab_plot", "tab_export",
+  caption = list(producers = c("tab_html", "tab_md", "tab_xl", "tab_export",
                                "forest_plot"), doc_in_producer = TRUE),
   css = list(producers = c("tab_html", "tab_md"), option = "css", doc_in_producer = TRUE),
   format = list(producers = c("tab_export", "tab_css"), doc_in_producer = TRUE),

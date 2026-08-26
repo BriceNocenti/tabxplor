@@ -17,12 +17,12 @@
 # matrix and biases nothing -- and it is here because it is what every textbook, and jamovi's own
 # Assumption Checks pane, puts first, so its absence would read as an omission.
 #
-# NOTHING HERE IS A NEW STATISTICS ENGINE. Four of the five reuse code the package already owns:
+# NOTHING HERE IS A NEW STATISTICS ENGINE. Every one reuses code the package already owns:
 #   Linearity       reg_fit(add_terms =) + reg_nested_test()  -- both fits in hand, no second one
 #   Proportionality reg_ordinal_diagnostic()                  -- the Brant test, run where its row is
 #   Dispersion      reg_check_influence_pass() + reg_if_se()  -- the sandwich, design-aware
 #   Influence       reg_check_influence_pass()                -- the SAME sweep, read the other way
-#   Collinearity    car::vif()                                -- the one new Suggest
+#   Collinearity    tx_vif()                                  -- Fox & Monette's GVIF, vendored below
 #
 # EACH COSTS WHAT IT SAYS, AND EACH DECLARES ITS OWN DEFAULT. Two of the five need a model fit --
 # Linearity one per numeric predictor, Proportionality the Brant test's auxiliary logits -- and
@@ -395,19 +395,78 @@ reg_check_influence_pass <- function(fit, frame = NULL, want = c("dispersion", "
   c(dispersion = disp, influence = infl)
 }
 
+# === SECTION: the variance inflation factor ======================================================
+# Vendored from car::vif.default() / vif.polr() / vif.svyolr() (car 3.1-5, John Fox and Sanford
+# Weisberg, GPL (>= 2), redistributed here under tabxplor's GPL (>= 3) as that licence's "or later"
+# clause permits). Thank you.
+#
+# THE ALGEBRA IS FOX & MONETTE (1992), "Generalized collinearity diagnostics", JASA 87:178-183: on
+# the CORRELATION matrix R of the coefficient covariance with the intercept dropped, a term's
+# generalised VIF is det(R_term) * det(R_rest) / det(R) -- the factor by which the joint confidence
+# region of that term's coefficients is inflated by the other predictors. For a 1-df term it reduces
+# to the familiar 1 / (1 - R2_j) of the auxiliary regression of that column on the others.
+#
+# TWO SHAPES, because both call sites read them: a bare named vector of VIFs when every term is
+# 1-df, and a (GVIF, Df, GVIF^(1/(2*Df))) matrix otherwise -- the third column being the per-df
+# scale on which terms of different width compare, and whose SQUARE is the familiar 5 / 10 ladder.
+#
+# WARNING: it REFUSES rather than approximates. Each of these returns NULL, and the caller then
+# shows no row:
+#   fewer than 2 terms         there is nothing to be collinear WITH.
+#   aliased coefficients       vcov has dropped a column model.matrix still has: no alignment.
+#   a rank-deficient fit       the same mismatch, from an unused factor level. tab_reg() drops those,
+#                              but reg_check_plots() takes a BARE user fit.
+#   a matrix-coefficient fit   multinom / svy_vglm carry one coefficient block per outcome category
+#                              and a block vcov: there is no single R to take a determinant of.
+#                              REG_CHECKS excludes multinomial from collinearity for that reason.
+#   a singular vcov            det(R) <= 0, or not finite.
+# A fit with NO intercept is computed anyway, on the full R.
+#' @keywords internal
+tx_vif <- function(fit) {
+  cf <- tryCatch(stats::coef(fit), error = function(e) NULL)
+  if (is.null(cf) || !is.numeric(cf) || !is.null(dim(cf)) ||
+      is.null(names(cf)) || anyNA(cf)) return(NULL)
+  V <- tryCatch(stats::vcov(fit), error = function(e) NULL)
+  if (!is.matrix(V) || is.null(rownames(V))) return(NULL)
+  # THE SLOPES, engine by engine: svyolr's coef() carries the cut-points, polr's does not but its
+  # vcov() does, and every glm-shaped fit carries its intercept first.
+  nms <- if (inherits(fit, "svyolr")) names(stats::coef(fit, intercepts = FALSE)) else names(cf)
+  nms <- setdiff(nms, "(Intercept)")
+  ass <- tryCatch(attr(stats::model.matrix(fit), "assign"), error = function(e) NULL)
+  if (is.null(ass)) return(NULL)
+  ass <- ass[ass != 0]
+  trm <- tryCatch(labels(stats::terms(fit)), error = function(e) NULL)
+  # ⚠ max(ass) != length(trm) guards a term contributing no column: which(ass == i) would be empty
+  # and det(R[integer(0), integer(0)]) is 1, i.e. a GVIF of 1 for a term that has no coefficients --
+  # a plausible-looking wrong number, which is exactly what this check exists to catch.
+  if (!length(nms) || length(nms) != length(ass) || !all(nms %in% rownames(V)) ||
+      is.null(trm) || length(trm) < 2L || max(ass) != length(trm)) return(NULL)
+  R <- tryCatch(suppressWarnings(stats::cov2cor(V[nms, nms, drop = FALSE])),
+                error = function(e) NULL)
+  if (is.null(R) || anyNA(R)) return(NULL)
+  detR <- det(R)
+  if (!is.finite(detR) || detR <= 0) return(NULL)
+  res <- matrix(0, length(trm), 3L, dimnames = list(trm, c("GVIF", "Df", "GVIF^(1/(2*Df))")))
+  for (i in seq_along(trm)) {
+    k <- which(ass == i)
+    res[i, 1] <- det(as.matrix(R[k, k, drop = FALSE])) *
+                 det(as.matrix(R[-k, -k, drop = FALSE])) / detR
+    res[i, 2] <- length(k)
+  }
+  if (all(res[, 2] == 1)) res[, 1] else { res[, 3] <- res[, 1]^(1 / (2 * res[, 2])); res }
+}
+
+
 # Check 5 -- COLLINEARITY, as the largest variance inflation factor.
 #
-# car::vif() returns a bare VIF per term when every term is 1-df, and a (GVIF, Df, GVIF^(1/(2Df)))
+# tx_vif() returns a bare VIF per term when every term is 1-df, and a (GVIF, Df, GVIF^(1/(2Df)))
 # matrix otherwise -- different scales, so the matrix form is squared back onto the familiar VIF scale
 # (what performance::check_collinearity() reports), and the usual 5 / 10 readings apply either way.
 #
-# `car` is Suggests-only: absent -> no row, never a hand-rolled substitute.
+# A fit tx_vif() refuses (see its WARNING) gives no row at all, never an approximation.
 #' @keywords internal
 reg_check_collinearity <- function(fit) {
-  if (!requireNamespace("car", quietly = TRUE)) return(NA_real_)
-  # ⚠ suppressMessages too: on an interacted fit car::vif() prints a note about higher-order terms,
-  # which describes a model the user deliberately asked for and says nothing they can act on.
-  v <- tryCatch(suppressMessages(suppressWarnings(car::vif(fit))), error = function(e) NULL)
+  v <- tryCatch(tx_vif(fit), error = function(e) NULL)
   if (is.null(v) || !length(v)) return(NA_real_)
   val <- if (is.matrix(v)) {
     if (ncol(v) >= 3L) v[, 3]^2 else v[, 1]

@@ -59,7 +59,7 @@
 # the file header -- but it never inspects them.)
 #' @keywords internal
 tab_tooltip_attrs <- function(text, popover = FALSE, escape = FALSE) {
-  esc <- if (escape) htmltools::htmlEscape(text, attribute = TRUE) else text
+  esc <- if (escape) tx_html_escape(text, attribute = TRUE) else text
   # "auto right" is Bootstrap's auto token: prefer right, reorient to left when the tooltip would
   # overflow the viewport. It keeps today's look while fixing the last columns being unreachable in a
   # narrow Viewer pane -- and unlike a "last N columns" rule in R it is measured at render time, so it
@@ -121,7 +121,7 @@ render_kable_html <- function(rd, meta,
 # not escaping at all would pass a user's own "<" straight into the markup.
 #' @keywords internal
 html_escape_br <- function(x) {
-  gsub("&lt;br&gt;", "<br>", htmltools::htmlEscape(x), fixed = TRUE)
+  gsub("&lt;br&gt;", "<br>", tx_html_escape(x), fixed = TRUE)
 }
 
 # Phase 18z15 -- upgrade a block-glyph sparkline to an inline <svg> polyline (121 bytes against
@@ -171,7 +171,7 @@ tx_spark_svg <- function(x, h = 22L, dx = 5L, lwd = 2.4) {
 # normal-weight <span> so the "(n=...)" part overrides the inherited row/cell bold; each part is
 # escaped separately so the offset can't drift. Non-composite / non-bold cells are just escaped.
 # `esc`: the HTML-escape fn -- identity for the engine, which places cells raw and has already
-# escaped them; a caller that has not may pass htmltools::htmlEscape.
+# escaped them; a caller that has not may pass tx_html_escape.
 #' @keywords internal
 # A composite cell in THREE pieces -- the aside before the primary, the primary, the aside after --
 # so a backend can bold and colour the number without touching what sits beside it. The asides carry
@@ -185,7 +185,7 @@ tx_spark_svg <- function(x, h = 22L, dx = 5L, lwd = 2.4) {
 # says (fmt_class.R, paint_split): it grades the number, so it must stop where the number does.
 # Cells it could not split come back in `attr(out, "pill_left")` for the caller to flood whole.
 #' @keywords internal
-html_cell_text <- function(raw, from, pn, bold, esc = htmltools::htmlEscape, face = NULL,
+html_cell_text <- function(raw, from, pn, bold, esc = tx_html_escape, face = NULL,
                            pill = NULL, mk = NULL) {
   out  <- esc(raw)
   left <- if (is.null(pill)) rep(FALSE, length(raw)) else nzchar(pill)
@@ -527,7 +527,7 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
 
   unit_thead <- if (has_unit) {
     paste0('<tr>', paste0('<th class="', cls_col[!span2], ' tx-unit">',
-                          htmltools::htmlEscape(cvh$unit[!span2]), '</th>', collapse = ""), '</tr>')
+                          tx_html_escape(cvh$unit[!span2]), '</th>', collapse = ""), '</tr>')
   } else ""
 
   # Phase 13c-iii: the col_var spanning-name header row -- each variable name centred (colspan) over its
@@ -551,7 +551,7 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   # aligned block it fills the container and wraps only past the table's own width. See R/tab-css.R
   # (.tabxplor-caption).
   cap <- if (!is.null(caption) && length(caption) && nzchar(caption)) {
-    paste0('<div class="tabxplor-caption">', htmltools::htmlEscape(caption), '</div>')
+    paste0('<div class="tabxplor-caption">', tx_html_escape(caption), '</div>')
   } else ""
 
   # Phase 14j: the footnote goes in a `tx-foot` div, which is what stops it SIZING the table. Its cell
@@ -591,7 +591,7 @@ shape_html_table <- function(tab) {
   if (is.null(st)) return(NULL)
   hd <- attr(st, "headers"); al <- attr(st, "align")
   cls <- vapply(al, function(a) if (a == "right") "tx-r tx-num" else "tx-l", character(1))
-  thead <- paste0('<tr>', paste0('<th class="', cls, '">', htmltools::htmlEscape(hd), '</th>',
+  thead <- paste0('<tr>', paste0('<th class="', cls, '">', tx_html_escape(hd), '</th>',
                                  collapse = ""), '</tr>')
   # a curve inside its own sampling noise wears the ASIDE ink, the same grey a non-significant cell
   # wears -- one convention, and the "ns" mark in the range cell says it again where colour cannot.
@@ -602,7 +602,7 @@ shape_html_table <- function(tab) {
   # what put a curve in the outcome column under `theme = "print_ready"`.
   ns <- attr(st, "noisy") %||% rep(FALSE, nrow(st))
   cells <- lapply(seq_along(st), function(j) {
-    v <- htmltools::htmlEscape(as.character(st[[j]]))
+    v <- tx_html_escape(as.character(st[[j]]))
     k <- cls[[j]]
     if (names(st)[[j]] == "shape") { v <- tx_spark_svg(v, h = 44L, dx = 10L, lwd = 2.6)
                                      k <- paste(k, "tx-sparkcell") }
@@ -613,7 +613,7 @@ shape_html_table <- function(tab) {
   nt    <- attr(st, "note")                        # empty wherever no row wears the "ns" mark
   tfoot <- if (!length(nt)) "" else
     paste0('<tfoot><tr><td colspan="', length(st), '"><div class="tx-foot">',
-           paste(htmltools::htmlEscape(nt), collapse = "<br>"), '</div></td></tr></tfoot>')
+           paste(tx_html_escape(nt), collapse = "<br>"), '</div></td></tr></tfoot>')
   paste0('<table class="tabxplor-tab">', '<thead>', thead, '</thead>',
          '<tbody>', body, '</tbody>', tfoot, '</table>')
 }
@@ -624,9 +624,9 @@ shape_html_table <- function(tab) {
 render_html_degrade <- function(tab) {
   tab <- tibble::as_tibble(tab)
   nm  <- names(tab)
-  head_cells <- paste0('<th>', htmltools::htmlEscape(nm), '</th>')
+  head_cells <- paste0('<th>', tx_html_escape(nm), '</th>')
   thead <- paste0('<tr>', paste0(head_cells, collapse = ""), '</tr>')
-  cols <- lapply(tab, function(col) paste0('<td>', htmltools::htmlEscape(as.character(col)), '</td>'))
+  cols <- lapply(tab, function(col) paste0('<td>', tx_html_escape(as.character(col)), '</td>'))
   row_inner <- if (length(cols)) do.call(paste0, cols) else rep("", nrow(tab))
   body <- paste0('<tr>', row_inner, '</tr>', collapse = "\n")
   paste0('<table class="tabxplor-tab"><thead>', thead,
@@ -730,25 +730,30 @@ kable_print_mode <- function(theme, interactive, view_opt, knitting, have_ke) {
 #' @keywords internal
 print.tabxplor_kable <- function(x, ...) {
   theme <- attr(x, "tabxplor_theme")
-  # Everything but an interactive Viewer print falls through to kableExtra's own method, byte for byte:
+  # Everything but an interactive Viewer print falls through to the next method, byte for byte:
   #   - no theme      : we did not ship the stylesheet, so the page is not ours to paint (see the join)
-  #   - !interactive(): kableExtra's print cat()s the markup; there is no page. (This is also the ONLY
+  #   - !interactive(): the next method cat()s the markup; there is no page. (This is also the ONLY
   #                     branch the test suite executes -- testthat is never interactive.)
   #   - knitting      : the page belongs to the DOCUMENT. Painting its html,body would repaint Quarto
   #                     around the table. knit_print is likewise NOT overridden: dispatch walks the
   #                     class vector on to knit_print.kableExtra, which is what we want.
+  #   - degrade       : an interactive themed print kableExtra is absent for -- its two UNEXPORTED html
+  #                     deps carry the tooltip JS and cannot be reproduced, so: a note, then the same
+  #                     fall-through. Table shows, tooltips simply off.
   mode <- kable_print_mode(theme, interactive(),
                            getOption("kableExtra_view_html", TRUE),
-                           !is.null(knitr::opts_knit$get("out.format")),
+                           !is.null(tx_knitr_opt("out.format", "knit")),
                            requireNamespace("kableExtra", quietly = TRUE))
-  if (identical(mode, "next")) return(NextMethod())
-  # Phase 17g: the themed Viewer page AND the tooltip binding are kableExtra's to attach -- its two
-  # UNEXPORTED html deps (html_dependency_kePrint / _lightable) carry the JS. kableExtra is Suggests, so
-  # when it is absent we cannot reproduce them; degrade cleanly rather than dispatch into a missing
-  # method: a one-time note, then knitr's own print (NextMethod) -- table shows, tooltips simply off.
-  if (identical(mode, "degrade")) {
+  if (identical(mode, "degrade"))
     tx_need_pkg("kableExtra", "A themed Viewer page with tooltips", severity = "inform")
-    return(NextMethod())
+  # WARNING: load knitr before falling through. NextMethod() walks on to print.knitr_kable (or to
+  # kableExtra's, when that namespace is loaded), and an S3 method exists only once its own package
+  # is loaded -- knitr being a Suggest, an un-guarded NextMethod() reaches print.default() instead
+  # and shows the raw character vector with its attributes. The one-liner below IS knitr's method.
+  if (identical(mode, "next") || identical(mode, "degrade")) {
+    if (requireNamespace("knitr", quietly = TRUE)) return(NextMethod())
+    cat(as.character(x), sep = "\n")
+    return(invisible(x))
   }
   # Delegate, never reimplement: kableExtra's print is what attaches jquery + bootstrap + those two
   # dependencies -- the JS that binds our tooltips in the Viewer. Reproducing it would mean kableExtra:::.

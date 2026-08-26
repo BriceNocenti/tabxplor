@@ -276,7 +276,7 @@ testthat::test_that("Phase 6: output_list / merge / deprecations / KNOWN-BUG fix
 
 testthat::test_that("tab drops NA consistently with na = 'drop'", {
   tabs1 <- tab(data, gender, hair_color, sex, na = "drop")
-  testthat::expect_true(all(!stringi::stri_detect_regex(dplyr::pull(tabs1, sex), "^NA")))
+  testthat::expect_true(all(!grepl("^NA", dplyr::pull(tabs1, sex), perl = TRUE)))
 })
 
 # Coverage of tab_many()-only controls that tab() intentionally does not expose: `levels`
@@ -292,11 +292,11 @@ testthat::test_that("tab_many() (deprecated alias) levels / na_drop_all features
     testthat::expect_true("orange" %in% names(tabs2))
 
     tabs3 <- tab_many(data, gender, hair_color, sex, na = "drop_all")
-    testthat::expect_true(all(!stringi::stri_detect_regex(dplyr::pull(tabs3, sex), "^NA")))
+    testthat::expect_true(all(!grepl("^NA", dplyr::pull(tabs3, sex), perl = TRUE)))
 
     tabs4 <- tab_many(data, gender, hair_color, sex, na_drop_all = gender)
-    testthat::expect_true(all(!stringi::stri_detect_regex(dplyr::pull(tabs4, sex), "^NA")))
-    testthat::expect_true(any(stringi::stri_detect_regex(names(tabs4), "^NA")))
+    testthat::expect_true(all(!grepl("^NA", dplyr::pull(tabs4, sex), perl = TRUE)))
+    testthat::expect_true(any(grepl("^NA", names(tabs4), perl = TRUE)))
   })
 })
 
@@ -398,21 +398,21 @@ testthat::test_that("tab work with tribble (even many tab_vars)", {
 # testthat::test_that("tab_totaltab works with all arguments (and with tab_tot)", {
 #   testthat::expect_true(
 #     nrow(tabs |> tab_totaltab("line") |> tab_totaltab("no") |> tab_totaltab("table")|>
-#            dplyr::filter_at(1, ~ stringi::stri_detect_regex(., "^Ensemble")) ) != 0,
+#            dplyr::filter_at(1, ~ grepl("^Ensemble", ., perl = TRUE)) ) != 0,
 #   )
 #
 #   testthat::expect_identical(
 #     nrow(tabs |>
 #            tab_totaltab() |> tab_tot() |>
-#            dplyr::filter_at(1, ~ stringi::stri_detect_regex(., "^Ensemble")) ),
+#            dplyr::filter_at(1, ~ grepl("^Ensemble", ., perl = TRUE)) ),
 #
 #     nrow(tabs |> tab_totaltab(name = "Overall", data = data) |>
-#            dplyr::filter_at(1, ~ stringi::stri_detect_regex(., "^Overall"))  ) + 1L
+#            dplyr::filter_at(1, ~ grepl("^Overall", ., perl = TRUE))  ) + 1L
 #   )
 #
 #   testthat::expect_identical(
 #     nrow(tabs |> tab_totaltab("line") |> tab_tot() |>
-#            dplyr::filter_at(1, ~ stringi::stri_detect_regex(., "^Ensemble")) ),
+#            dplyr::filter_at(1, ~ grepl("^Ensemble", ., perl = TRUE)) ),
 #     1L
 #   )
 # })
@@ -483,8 +483,7 @@ testthat::test_that("tab work with tribble (even many tab_vars)", {
 #     tabs |> tab_pct("row") |> tab_ci("cell", visible = TRUE) |>
 #       dplyr::ungroup() |>
 #       dplyr::mutate(dplyr::across(
-#         where(is_fmt), ~ stringi::stri_detect_regex(format(.),
-#                                              stringi::stri_unescape_unicode("\\u00b1")))) |>
+#         where(is_fmt), ~ grepl(#                                              "\u00b1", format(.), perl = TRUE))) |>
 #       dplyr::summarise(dplyr::across(where(is.logical), any)) |>
 #       purrr::map_lgl(~ .) |> any()
 #   )

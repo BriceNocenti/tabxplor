@@ -59,7 +59,7 @@ testthat::test_that("quantile groups are balanced, weighted when asked, and froz
 })
 
 testthat::test_that("sd_bands sit at the mean +/- 1 SD, in words, and degrade rather than abort", {
-  sg <- stringi::stri_unescape_unicode("\\u03c3")
+  sg <- "\u03c3"
   b <- shape_numeric_var(gsh$age, "sd_bands")
   testthat::expect_length(levels(b), 4L)
   # the band says its OWN cut, so the label can be checked against the interval beside it

@@ -10,8 +10,8 @@
 #   - values are trimmed, inside a composite as well as at the ends;
 #   - both html engines emit the SAME bootstrap attributes, from one builder.
 
-mult_glyph <- stringi::stri_unescape_unicode("\\u00d7")
-div_glyph  <- stringi::stri_unescape_unicode("\\u00f7")
+mult_glyph <- "\u00d7"
+div_glyph  <- "\u00f7"
 
 tip_of <- function(t, col) tabxplor:::tab_tooltip_text(t[[col]])
 
@@ -224,7 +224,6 @@ testthat::test_that("a total row's contribution is named as the MEAN it is", {
 # is a statement about ANOTHER column and reads as its own sentence. TOOLTIP_LINES$group declares it.
 
 testthat::test_that("obs and gap take a line of their own, in that order", {
-  testthat::skip_if_not_installed("broom")
   g <- gss_cat_data_formatting()
   g$married <- factor(ifelse(g$marital == "Married", "yes", "no"))
   t  <- suppressMessages(tab_reg(g, "married", c("race", "rincome"), family = "binomial",

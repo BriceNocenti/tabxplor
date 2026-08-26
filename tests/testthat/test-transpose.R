@@ -169,8 +169,6 @@ testthat::test_that("every exporter accepts transpose = TRUE without error", {
   testthat::expect_no_error(tab_kable(t, transpose = TRUE))
   testthat::expect_no_error(tab_xl(t, path = withr::local_tempfile(fileext = ".xlsx"),
                                    transpose = TRUE, replace = TRUE, open = FALSE))
-  testthat::skip_if_not_installed("ggpubr")
-  testthat::expect_no_error(tab_plot(t, transpose = TRUE))
 })
 
 # Phase 19h (D1): rd2 is a MODIFICATION of rd, not a 39-slot literal. The literal had already lost two
@@ -195,7 +193,6 @@ testthat::test_that("the transposed model keeps every slot the flip does not tou
 # tests below) instead of the misleading crosstab "exactly one row variable" (a reg reads as `merged`
 # via its var-role predictor column).
 testthat::test_that("Phase 20i: tab_transpose() on a regression aborts with a kind-specific message", {
-  testthat::skip_if_not_installed("broom")
   r <- suppressMessages(tab_reg(gss_cat_data_formatting(), "married", c("relig", "age"),
                                 family = "binomial", cleannames = FALSE))
   testthat::expect_false(tab_supports(r, "transpose_object"))
@@ -203,7 +200,6 @@ testthat::test_that("Phase 20i: tab_transpose() on a regression aborts with a ki
 })
 
 testthat::test_that("a transposed regression's footer cells stay black in HTML (D1)", {
-  testthat::skip_if_not_installed("broom")
   d <- gss_cat_data_formatting()
   r <- suppressMessages(tab_reg(d, "married", c("relig", "age"), family = "binomial",
                                 cleannames = FALSE))

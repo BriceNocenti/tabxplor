@@ -42,11 +42,14 @@ cat(tab_css(theme = "light"))
 ```{r, echo = FALSE, include = FALSE}
 # Colorer les sorties console (ANSI -> html, via fansi), mais rendre les resultats as-is (les
 # tableaux html, marques par knitr d'un jeton ASIS) au hook par defaut de knitr, intacts.
+# Escape the three HTML specials before fansi turns the ANSI codes into markup.
+esc_html <- function(x) gsub(">", "&gt;", gsub("<", "&lt;", gsub("&", "&amp;", x, fixed = TRUE),
+                                               fixed = TRUE), fixed = TRUE)
 default_output_hook <- knitr::knit_hooks$get("output")
 knitr::knit_hooks$set(output = function(x, options) {
   if (grepl("KNITR_ASIS_OUTPUT_TOKEN", x, fixed = TRUE)) return(default_output_hook(x, options))
   paste0('<pre class="r-output"><code>',
-         fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+         fansi::sgr_to_html(x = esc_html(x), warn = FALSE),
          '</code></pre>')
 })
 # A cli message or warning is its own kind of condition, so knitr routes each through its own hook,
@@ -54,7 +57,7 @@ knitr::knit_hooks$set(output = function(x, options) {
 for (hook in c("message", "warning")) {
   knitr::knit_hooks$set(stats::setNames(list(function(x, options) {
     paste0('<pre class="r-output"><code>',
-           fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+           fansi::sgr_to_html(x = esc_html(x), warn = FALSE),
            '</code></pre>')
   }), hook))
 }
@@ -471,20 +474,11 @@ tout. (Par défaut elle l'est toujours — voir plus bas.)
 
 Quand la variable expliquée est un **score** — combien d'items oui/non parmi plusieurs un répondant a-t-il choisi ? — on modélise le nombre de choix (« succès ») sur un nombre fixe d'items (le nombre de réponses possibles) avec `trials =`. `tab_reg()` ajuste alors `cbind(score, trials - score)` comme un modèle binomial, si bien que les rapports de cotes se lisent sur la probabilité *par item*.
 
-C'est le modèle naturel d'une **question d'enquête à réponses multiples**. Nous reprenons les données `tea` et leurs six items « où buvez-vous du thé ? », sommés en un score par `score_from_lv1()` — voir *Questions à réponses multiples* dans `vignette("tabxplor")` pour cette préparation :
+C'est le modèle naturel d'une **question d'enquête à réponses multiples**. Nous reprenons les données `facto_tea` (du paquet **FactoMineR**, merci à ses auteur·es ; voir `?facto_tea`) et leurs six items « où buvez-vous du thé ? », sommés en un score par `score_from_lv1()` — voir *Questions à réponses multiples* dans `vignette("tabxplor")` pour cette préparation :
 
 ```{r}
-data("tea", package = "FactoMineR")
 tea_where_vars <- c("home", "work", "tearoom", "friends", "resto", "pub")
-
-tea <- tea |>
-  tibble::as_tibble() |>
-  dplyr::mutate(dplyr::across(   # la réponse « oui » doit être la première modalité de chaque facteur
-    dplyr::all_of(c(tea_where_vars, "Sport")),
-    ~ (if (grepl("^Not", levels(.)[1])) forcats::fct_rev(.) else .) |>
-      forcats::fct_relabel(~ gsub(".", " ", ., fixed = TRUE))
-  )) |>
-  score_from_lv1("tea_where", vars_list = tea_where_vars)
+tea <- facto_tea |> score_from_lv1("tea_where", vars_list = tea_where_vars)
 ```
 
 ```{r}

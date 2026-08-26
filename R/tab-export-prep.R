@@ -1,5 +1,5 @@
 # PURPOSE: The ONE shared exporter-prep helper + ephemeral render-model for tab_kable / tab_md /
-#          tab_plot (and, from Phase 10g, tab_xl). Kills the 4x-duplicated "canonical col_vars ->
+#          tab_xl. Kills the duplicated "canonical col_vars ->
 #          validate -> compact" preamble, the per-exporter role detection, and the repeated
 #          get_reference()/fmt_channel_codes() derivations by computing each ONCE.
 # ROLE: Phase 10d. The exporters become `prep <- tab_export_prep(...); render_<backend>(prep)`.
@@ -95,7 +95,7 @@ tab_check_same_col_vars <- function(tabs, what = "tab_export_prep()",
 # returned so every backend reads a consistent shape (Phase 10j); `want_colors = FALSE` (color = FALSE
 # export) only forces a MONOCHROME column -- no slots, no hex, the font/back/bold an uncoloured column
 # would take -- skipping the fmt_channel_codes() hex-mapping cost.
-# BYTE-IDENTICAL (want_colors = TRUE) to the tab_kable colour loop (tab_classes.R) / tab_plot colours.
+# BYTE-IDENTICAL (want_colors = TRUE) to the tab_kable colour loop (tab_classes.R).
 #' @keywords internal
 fmt_col_ann <- function(col, theme_cols, want_colors = TRUE) {
   ref_alltot <- get_reference(col, mode = "all_totals")
@@ -144,7 +144,7 @@ fmt_col_ann <- function(col, theme_cols, want_colors = TRUE) {
     # Phase 18z11: the palette's own TYPOGRAPHY for this cell's text slot, kept FLAT (three vectors,
     # not a nested list) because tx_transpose_render() flips per-cell logicals with a flat helper.
     # These are the MEASURE's face only -- `keep_black` (the structural reference/total bold) is folded
-    # into `bold` below and deliberately not into these, since tab_plot's structural bolding is a
+    # into `bold` below and deliberately not into these, since a backend's structural bolding is a
     # row/column SET, not a per-cell flag.
     face_bold      = face$bold,
     face_italic    = face$italic,
@@ -362,7 +362,7 @@ tx_recolumn_labels <- function(col, new) {
 
 # Resolve the input into the list of tables to render.
 #   - a single tab        -> itself.
-#   - a list              -> `list_method = TRUE` (tab_md / tab_xl / tab_plot): the list, rendered
+#   - a list              -> `list_method = TRUE` (tab_md / tab_xl): the list, rendered
 #                            one-after-another (each keeps its own tab_vars sub-tables);
 #                            `list_method = FALSE` (tab_kable, no list renderer yet): error (block A).
 # Phase 14d: a list is NEVER merged here. `tab()` already merges what it decides to merge (a
@@ -444,7 +444,7 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
   }
   # Phase 14i: `var_names` drops the row-side variable-NAME annotation -- the merged table's synthetic
   # `row_var` column, whose values ARE the names. Done HERE, before the role detection, so every index
-  # below is right and every backend (incl. tab_plot, which reads no header model) inherits one rule.
+  # below is right and every backend inherits one rule.
   # The col side is the twin blank of `col_var_header$label` further down.
   # It never touches a level column's header: `marital` on a single-row_var table, `year` on a kept
   # tab_var. That header is the column's only identification and costs no width -- the maintainer's
@@ -493,7 +493,7 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
       new <- unlist(purrr::map2(raw, p$width, function(s, w)
         tx_wrap_name(s, width = w, exdent = 1L, brk = wrap$brk %||% "\n")), use.names = FALSE)
       if (isTRUE(wrap$unbreakable_spaces))
-        new <- stringi::stri_replace_all_regex(new, " ", unbrk)
+        new <- gsub(" ", unbrk, new, perl = TRUE)
       tab[[cl]] <- tx_recolumn_labels(tab[[cl]], new)
     }
   }
@@ -506,7 +506,7 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
   # Does this table actually SHOW a cell suffix -- significance stars, or a publication palette's
   # effect-size marks? The number font switches to a monospace stack (so the suffixes align) ONLY then;
   # a plain table keeps proportional DejaVu Sans. Read by the html engine (adds the `tx-has-stars`
-  # class), tab_xl (picks font_num_stars) and tab_plot. The name says "stars" because that is what a
+  # class) and tab_xl (picks font_num_stars). The name says "stars" because that is what a
   # reader calls the run of symbols after a number; the marks sit in the same place and cost the same.
   has_stars <- length(fmt_cols) > 0 &&
     any(vapply(fmt_cols,
@@ -1076,23 +1076,20 @@ tx_unwrap_text <- function(x) {
 
 # tx_num_font() -- Phase 19h: THE number-font rule, which is one DECISION written twice.
 #
-# Measured, the three options are NOT one option -- they are three incompatible value syntaxes: a CSS
-# font stack (html/md), a single xlsx font NAME (Excel has no fallback list, so the option IS the
-# fallback), and a graphics family (ggpubr). What IS duplicated is the rule: **switch to a monospace
-# font when the table shows significance stars**, so the stars cannot push the digits out of column.
-# html/md has been unconditionally monospace since Phase g and so needs no switch; Excel and the plot
-# still choose, and both wrote the choice out themselves.
+# The two options are NOT one option -- they are incompatible value syntaxes: a CSS font stack
+# (html/md) and a single xlsx font NAME (Excel has no fallback list, so the option IS the fallback).
+# What IS shared is the rule: **switch to a monospace font when the table shows significance stars**,
+# so the stars cannot push the digits out of column. html/md is unconditionally monospace and so needs
+# no switch; Excel chooses.
 #
 # `has_stars` is roles$has_stars -- already in the render model, computed once from the cells.
 #' @keywords internal
-tx_num_font <- function(medium = c("html", "xl", "plot"), has_stars = FALSE,
+tx_num_font <- function(medium = c("html", "xl"), has_stars = FALSE,
                         plain = NULL, stars = NULL) {
   switch(match.arg(medium),
     html = tx_option("tab_kable_num_font"),
     xl   = if (isTRUE(has_stars)) stars %||% tx_option("xl_font_num_stars")
-           else                   plain %||% tx_option("xl_font_num"),
-    # "" keeps the ggpubr default: tab_plot() has no per-column font, so a plain table is left alone
-    plot = if (isTRUE(has_stars)) tx_option("plot_num_font") else "")
+           else                   plain %||% tx_option("xl_font_num"))
 }
 
 # roles_color_flags() -- Phase 19h: THE colour flags of the render model, one producer for the prep
@@ -1147,7 +1144,7 @@ roles_totblock_edges <- function(in_block) {
 # converted to NAMED arguments in the same change -- do NOT reintroduce a positional call, it would
 # shift every later toggle silently (color -> color_type, color_legend -> color, ...).
 # NOTE (Phase 18z11): the allow_auto gate below tests "auto" SPECIFICALLY, so the new "print" theme
-# reaches every backend including the static ones (tab_xl, tab_plot) -- which is right: "print" is a
+# reaches every backend including the static one (tab_xl) -- which is right: "print" is a
 # palette, not a render intent, and Excel is exactly where a publication table is wanted.
 #' @keywords internal
 resolve_export_opts <- function(theme = NULL,

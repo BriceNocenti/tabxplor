@@ -66,7 +66,6 @@ testthat::test_that("styled md: only real spacer columns are :empty (no ragged l
 
 # ---- Item 4: the reg colour legend strips the [dep] disambiguation bracket ---------------------------
 testthat::test_that("multi-dependent reg legend drops the [dep] bracket (kept only in console headers)", {
-  skip_if_not_installed("broom")
   t  <- suppressWarnings(tab_reg(gss5, outcome = c("married", "tvhours"),
                                  predictors = c("race", "age"),
                                  family = c("binomial", "poisson"), empirical = TRUE))
@@ -77,7 +76,6 @@ testthat::test_that("multi-dependent reg legend drops the [dep] bracket (kept on
 
 # ---- Item 5: binomial measure = "log" + empirical does NOT bold every row -------------------------
 testthat::test_that("binomial measure = log empirical bolds only reference rows + footer", {
-  skip_if_not_installed("broom")
   t  <- suppressWarnings(tab_reg(gss5, outcome = "married", predictors = c("race", "rincome", "age"),
                                  family = "binomial", empirical = TRUE, measure = "log"))
   tb <- tabxplor:::tab_export_prep(t, backend = "md")$tables[[1]]
@@ -88,7 +86,6 @@ testthat::test_that("binomial measure = log empirical bolds only reference rows 
 
 # ---- Item 6: split_var + one dependent auto-spread -> ONE GOF block, non-empty ------------------------
 testthat::test_that("split_var single-dependent auto-spread gives one GOF block keyed to spread columns", {
-  skip_if_not_installed("broom")
   t  <- suppressWarnings(tab_reg(gss5, outcome = "married", predictors = c("rincome", "party3"),
                                  tab_vars = "race"))
   tst <- get_test(t)

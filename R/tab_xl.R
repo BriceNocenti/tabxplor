@@ -24,7 +24,7 @@
 #     individually into an otherwise numeric column, so a model-fit statistic beside them stays a
 #     number (and takes the reader's own decimal separator).
 #   - COLOUR IS READ, NEVER RE-DERIVED: ann$font / ann$back / ann$face_* (R/tab-export-prep.R), the
-#     same fields tab_kable and tab_plot consume -- so a greyed cell is grey here too. An ASIDE
+#     same fields tab_kable consumes -- so a greyed cell is grey here too. An ASIDE
 #     column is the console's `sec()`: the secondary grey, no bold, no stars, whatever row it is in.
 #   - Export-Parity: the numFmt codes come from format(x, syntax = "excel") (fmt_class.R
 #     excel_numfmt_code), the single display source of truth. numFmt literals are backslash-escaped
@@ -291,7 +291,7 @@ tab_xl <-
     # Phase 19h: the SOURCE is the render model's own `subtext` slot (already discarded of empties);
     # only the newline flattening below is xl's -- a workbook cell holds one line.
     subtext <- purrr::map(prep$tables, "subtext") |>
-      purrr::map(~ stringi::stri_replace_all_regex(., "\\\n", " ") |> stringi::stri_replace_all_regex(" +", " "))
+      purrr::map(~ gsub(" +", " ", gsub("\\\n", " ", ., perl = TRUE), perl = TRUE))
     # Phase 16e: the whole footer (weight -> Model: -> colour legend -> stars) as rich-text run lines via the
     # ONE shared builder -- replaces the hand-built plain-line head/tail sandwich around the colour legend.
     # They ride the SAME rich-text block (so the legend_row overwrite stays aligned); the user subtext stays
@@ -360,15 +360,15 @@ tab_xl <-
     # Clean AFTER the 25-char cut and BEFORE the de-duplication below: openxlsx2 would otherwise do
     # the identical substitution itself (with a warning) at add_worksheet() time -- i.e. after our
     # de-duplication, which would then have run on names that are not the final ones.
-    sheet_titles <- sheet_base[newsheet] |> stringi::stri_sub(1, 25) |> xl_clean_sheet_name()
+    sheet_titles <- substr(sheet_base[newsheet], 1, 25) |> xl_clean_sheet_name()
     sheet_titles <- dplyr::if_else(duplicated(sheet_titles),
-                                   stringi::stri_c(sheet_titles, ".2"), sheet_titles)
+                                   paste0(sheet_titles, ".2"), sheet_titles)
     nb <- 2
     while (length(unique(sheet_titles)) != length(sheet_titles)) {
       nb <- nb + 1
       sheet_titles <- dplyr::if_else(
         duplicated(sheet_titles),
-        stringi::stri_c(stringi::stri_replace_first_regex(sheet_titles, "..$", ""), ".", nb), sheet_titles)
+        paste0(sub("..$", "", sheet_titles, perl = TRUE), ".", nb), sheet_titles)
     }
 
     # Colour palettes built ONCE (Phase 5): TEXT channel -> font colour (the text palette),
@@ -463,11 +463,11 @@ tab_xl_resolve_path <- function(path, replace) {
   } else {
     path <- path[[1]]
   }
-  if (stringi::stri_detect_regex(path, "\\\\|/")) {
-    dir_path <- path |> stringi::stri_replace_first_regex("\\\\[^\\\\]+$|/[^/]+$", "")
+  if (grepl("\\\\|/", path, perl = TRUE)) {
+    dir_path <- sub("\\\\[^\\\\]+$|/[^/]+$", "", path, perl = TRUE)
     if (!dir.exists(dir_path)) dir.create(dir_path, recursive = TRUE)
   }
-  if (!stringi::stri_detect_regex(path, "\\.xlsx$")) path <- stringi::stri_c(path, ".xlsx")
+  if (!grepl("\\.xlsx$", path, perl = TRUE)) path <- paste0(path, ".xlsx")
   # THE shared "replace" rule (auto-number past an existing file when replace = FALSE), single-sourced so
   # direct tab_xl() use and the jamovi exporter number identically. See R/jmvtab-export.R.
   export_number_path(path, replace)
@@ -541,7 +541,7 @@ xl_fold_literals <- function(code, disp) {
 xl_check_images <- function(tabs, check, data, theme = NULL, lang = NULL, dpi = 150) {
   none <- vector("list", length(tabs))
   if (is.null(check) || isFALSE(check)) return(none)
-  if (!isTRUE(tx_need_pkg(c("ggplot2", "gridExtra", "grid"),
+  if (!isTRUE(tx_need_pkg(c("ggplot2", "gridExtra"),
                           "The model-check plots of `check`", severity = "inform")))
     return(none)
   purrr::map(tabs, function(t) {
@@ -907,7 +907,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
       # an unstarred "" is width 0, so the max over every value cell IS the column-max star width.
       # formatC() padded with ASCII spaces, half a digit wide in the proportional font Excel renders.
       w      <- max(nchar(st[val]))
-      st_pad <- stringi::stri_pad(st, w, side = "right", pad = fig_space) # glyphs left, pad right
+      st_pad <- tx_pad(st, w, "right", pad = fig_space) # glyphs left, pad right
       # WARNING: backslash-escape the star literal (xl_numfmt_literal), NEVER double-quote-wrap it -- a raw
       # " in a formatCode crashes the older jamovi-bundled openxlsx2 ("xml import unsuccessful").
       # ⚠ EVERY SECTION: a signed or multiplicative code has two, and a suffix on the whole string
@@ -930,7 +930,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   # slot. The `slot > 0L` filter keeps exactly the coloured cells (slot 0 <=> hex NA); uncoloured
   # columns contribute all-zero slots / NA hex, filtered out.
   # Phase 22f-ii: the ink comes from the prep's RESOLVED per-cell colour (`ann$font` / `ann$back`),
-  # the same three fields tab_kable and tab_plot consume -- not from the raw slots. The slot form
+  # the same three fields tab_kable consumes -- not from the raw slots. The slot form
   # said nothing about an UNCOLOURED cell, so Excel drew every greyed non-significant cell in pure
   # black while html greyed it: `ann$font` already folds the whole rule (hex -> anchor black ->
   # grey / grey2), so there is nothing left here to get wrong.

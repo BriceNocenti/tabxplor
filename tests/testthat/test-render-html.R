@@ -190,7 +190,7 @@ testthat::test_that("the colour legend uses slot classes, never inline hex", {
   # describes follow a toggle. The discriminator is "does our stylesheet ship?", NOT the theme:
   # theme = "light" + css = FALSE is a real case (the document supplies tab_css("auto") itself),
   # and inline hex would be wrong there too. (The hex path survives for the media that carry no
-  # stylesheet -- see `classes = FALSE` in the next test, and tab_xl / tab_plot.)
+  # stylesheet -- see `classes = FALSE` in the next test, and tab_xl.)
   for (th in c("light", "dark", "auto")) {
     f <- foot(tab_kable(tb, theme = th, color_legend = TRUE))
     testthat::expect_false(grepl("color:#", f, fixed = TRUE))   # no inline hex ANYWHERE in the legend
@@ -732,7 +732,6 @@ testthat::test_that("tabxplor.tab_kable_tooltips = FALSE strips tooltips documen
 # ---- Phase 22b-x: what the FIRST column draws, and how a long block name is folded ---------------
 
 testthat::test_that("a row_var separator stops at the name column; the model-fit block's does not", {
-  testthat::skip_if_not_installed("broom")
   d <- forcats::gss_cat |>
     dplyr::mutate(married = factor(dplyr::if_else(marital == "Married", "Married", "Not married")))
   t <- suppressMessages(tab_reg(d, "married", c("race", "tvhours"), family = "binomial"))
@@ -750,7 +749,6 @@ testthat::test_that("a row_var separator stops at the name column; the model-fit
 })
 
 testthat::test_that("a rotated name wraps to its block's height, breaking before the operator", {
-  testthat::skip_if_not_installed("broom")
   d <- forcats::gss_cat |>
     dplyr::mutate(married = factor(dplyr::if_else(marital == "Married", "Married", "Not married")))
   # `tvhours*marital` (15 chars over a 6-row block) is longer than the floor "Constant" sets, so it
@@ -771,7 +769,6 @@ testthat::test_that("a rotated name wraps to its block's height, breaking before
 # --- Phase 22b-xviii: the background is a colour MEASURE, so it stops at the primary token --------
 
 test_that("the pill wraps the primary token alone, and does not move it", {
-  skip_if_not_installed("broom")
   d <- suppressWarnings(gss_cat_data_formatting())
   t <- suppressMessages(tab_reg(d, "married", c("race", "rincome", "relig", "age"),
                                 family = "binomial", measure = "difference",
@@ -788,7 +785,6 @@ test_that("the pill wraps the primary token alone, and does not move it", {
 })
 
 test_that("the hover gap reads like every other interval in the package", {
-  skip_if_not_installed("broom")
   d <- suppressWarnings(gss_cat_data_formatting())
   t <- suppressMessages(tab_reg(d, "married", c("race", "rincome", "relig", "age"),
                                 family = "binomial", measure = "difference",
@@ -804,13 +800,11 @@ test_that("the hover gap reads like every other interval in the package", {
 # === Phase 22g-vii: the name column, the doubled span, and the publication marks ===================
 
 testthat::test_that("a name rotates only when it saves width, and a compound name wraps", {
-  testthat::skip_if_not_installed("broom")
-  testthat::skip_if_not_installed("carData")
   names_of <- function(x) {
     b <- sub("^.*</style>", "", as.character(tab_html(x)))
     regmatches(b, gregexpr('<td class="[^"]*tx-lbl[^"]*"[^>]*>[^<]*(<br>[^<]*)*</td>', b))[[1]]
   }
-  a <- carData::Arrests
+  a <- car_arrests
   t <- suppressMessages(tab_reg(a, "checks", c("colour", "employed", "citizen"),
                                 family = "gaussian", stats = FALSE))
   nm <- names_of(t)
@@ -833,8 +827,7 @@ testthat::test_that("a name rotates only when it saves width, and a compound nam
 })
 
 testthat::test_that("a col_var is named once in the span row", {
-  testthat::skip_if_not_installed("carData")
-  a <- carData::Arrests
+  a <- car_arrests
   t <- tab(a, colour, released, pct = "row", ref = "first") |>
     dplyr::mutate(difference = set_display(.data$Yes, "difference"),
                   odds_ratio = set_display(.data$Yes, "odds_ratio"))

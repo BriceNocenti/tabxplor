@@ -1770,8 +1770,8 @@ validate_display_template <- function(recipe, fields = DISPLAY_USER_FIELDS) {
       "i" = "Name one field, or combine several in a {{}} template: {.code {{pct}} (n={{n}})}.",
       "i" = "Fields: {.val {DISPLAY_USER_FIELDS}}."))
   }
-  opens  <- stringi::stri_count_regex(recipe, "\\{")
-  closes <- stringi::stri_count_regex(recipe, "\\}")
+  opens  <- lengths(regmatches(recipe, gregexpr("\\{", recipe, perl = TRUE)))
+  closes <- lengths(regmatches(recipe, gregexpr("\\}", recipe, perl = TRUE)))
   toks   <- regmatches(recipe, gregexpr("\\{[^{}]+\\}", recipe))[[1]]
   fields_used <- trimws(gsub("[{}]", "", toks))
   # the optional per-token precision -- "{base:1}" -- validated here and stripped before the
@@ -3312,9 +3312,9 @@ print_num <- function(num, digits) {
   # A value rounding to zero prints "0", from either side and at any digit count: "-0" says a
   # direction the rounding has just erased. At digits = 0 sprintf yields the bare "-0", which is why
   # the decimals are optional here.
-  sprintf(paste0("%-0.", digits, "f"), num) |>
-    stringi::stri_replace_first_regex("^-?0(\\.0+)?$", "0") |>
-    stringi::stri_replace_first_regex("^100(\\.0+)?$", "100")
+  out <- sprintf(paste0("%-0.", digits, "f"), num)
+  out <- sub("^-?0(\\.0+)?$", "0", out, perl = TRUE)
+  sub("^100(\\.0+)?$", "100", out, perl = TRUE)
 }
 
 # THE one test of "this cell rendered something", shared by every annotation paste, by the stars mask
@@ -3322,7 +3322,7 @@ print_num <- function(num, digits) {
 # void. WARNING: it must trim the UNICODE whitespace class, not trimws(): the html/Excel pad glyph is
 # a FIGURE SPACE (U+2007), and a padded-blank cell would otherwise read as content.
 #' @keywords internal
-fmt_rendered <- function(s) !is.na(s) & nzchar(stringi::stri_trim_both(s, "\\P{Wspace}"))
+fmt_rendered <- function(s) !is.na(s) & nzchar(trimws(s, whitespace = "[\\h\\v]"))
 
 # THE interval a `{ci}` token prints -- ONE renderer, on the COLUMN'S OWN SCALE, for every scale.
 # Everything it keys on is DECLARED in EST_SCALES: `is_pct` gives the x100 and the "%", `mult` the
@@ -3401,7 +3401,7 @@ excel_numfmt_code <- function(digits, pct, ci, text, signed = FALSE, mult = FALS
       vapply(abs(n), function(k) paste0(rep(",",     k %/% 3), collapse = ""), character(1))),
     TRUE         ~ paste0("#,##0.", rep0_n)
   )
-  res <- dplyr::if_else(isci, paste0(stringi::stri_unescape_unicode("\\u00b1"), res), res)
+  res <- dplyr::if_else(isci, paste0("\u00b1", res), res)
   # explicit +/- for diff/contrib cells, leading multiply sign for ratio cells.
   # WARNING: the multiply sign is backslash-escaped (xl_numfmt_literal), NOT quote-wrapped -- a raw "
   # in a formatCode crashes the older jamovi openxlsx2.
@@ -3547,7 +3547,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   mult_inverse <- ci_mult && !ratio_raw
   mult_under   <- MEASURES[[scl$label_meas]]$break_under
 
-  pm <- stringi::stri_unescape_unicode("\\u00b1")
+  pm <- "\u00b1"
 
   # AN INTERVAL RENDERS ON ITS COLUMN'S OWN SCALE, and `is_pct` is the one fact that decides: x100
   # with a "%" exactly where the ESTIMATE is a percentage (a cell %, a percentage-point difference),
@@ -3686,8 +3686,8 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     # column. The composite expander pads the joined string as one token, which would leave the
     # separator ragged ("( 8 610-16 301)" over "(  1 700-3 093)"). Same rule, and the same medium
     # `pad` glyph, as the "(sigma sd)" tail below.
-    lo <- stringi::stri_pad(lo, width = max(stringi::stri_length(lo)), side = "left", pad = pad)
-    hi <- stringi::stri_pad(hi, width = max(stringi::stri_length(hi)), side = "left", pad = pad)
+    lo <- tx_pad(lo, max(nchar(lo, type = "chars")), "left", pad = pad)
+    hi <- tx_pad(hi, max(nchar(hi, type = "chars")), "left", pad = pad)
     out[n_range_hi] <- paste0(lo, "-", hi)
   }
   out[pct_no_ci] <- paste0(out[pct_no_ci], "%")
@@ -3794,7 +3794,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     at_zero <- !is.na(num_out) & round(num_out, digits) == 0
     at_zero[is.na(at_zero)] <- FALSE
     base_c  <- diff_signed & ref_base() & (at_zero | nzchar(as.character(get_role(x))[1]))
-    out[base_c] <- stringi::stri_replace_first_fixed(out[base_c], "+", "")
+    out[base_c] <- sub("+", "", out[base_c], fixed = TRUE)
   }
 
 
@@ -3820,7 +3820,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   st_w   <- 0L
   if (any(st_val & nzchar(st))) {
     st_w   <- max(nchar(st[st_val]))
-    st_pad <- stringi::stri_pad(st, st_w, side = "right", pad = pad)
+    st_pad <- tx_pad(st, st_w, "right", pad = pad)
     st_pad[!st_val] <- ""
   }
   st_done <- rep(FALSE, length(out))
@@ -3848,7 +3848,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       ref     <- ref_cells[disp_diff]
       reffmt  <- set_display(x[disp_diff],
                              ifelse(scl$var_kind %in% c("count", "mean"), "mean", "pct")) |>
-        format() #|> stringi::stri_trim()
+        format()
       out[disp_diff] <- ifelse(ref & fmt_rendered(reffmt),
                                paste0("ref:", reffmt),
                                out[disp_diff])
@@ -3876,7 +3876,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       } else {
         disp_ctr & totrows & !totcol
       }
-      trim <- stringi::stri_trim(out[mctr])
+      trim <- trimws(out[mctr], whitespace = "[\\h\\v]")
       out[mctr] <- ifelse(fmt_rendered(trim) & is.finite(num_out[mctr]),
                           paste0("mean:", trim), "")
     }
@@ -3897,8 +3897,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       if (any(!is.na(get_pct(x)[disp_or])) && !fmt_is_aside(x)) {  # annotate ref %
         reffmt <- set_display(x[disp_or], "pct") |> set_digits(0L) |> format()
         reffmt <- suppressWarnings(
-          stringi::stri_pad(reffmt, suppressWarnings(max(stringi::stri_length(reffmt), na.rm = TRUE)),
-                           pad = pad)
+          tx_pad(reffmt, suppressWarnings(max(nchar(reffmt, type = "chars"), na.rm = TRUE)), side = "left", pad = pad)
         )
         # `!is.na(or_val)` -- a reference cell with NO odds ratio must not claim "1" (the cumulative
         # OR's degenerate last cut has a reference row and no ratio; it would print raw "NA").
@@ -3974,7 +3973,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       toks <- purrr::map2(toks, void, function(s, e) {
         s[e] <- ""
         if (all(e)) return(s)
-        stringi::stri_pad(s, max(stringi::stri_length(s[!e])), side = "left", pad = pad)
+        tx_pad(s, max(nchar(s[!e], type = "chars")), "left", pad = pad)
       })
       keep <- display_template_keep(seg, vapply(void, all, logical(1)))
       strs <- vector("list", length(seg$pieces)); ti <- 0L
@@ -4249,9 +4248,8 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
       ok & ((if (!is.null(.ref)) .ref$all_totals else get_reference(x, "all_totals")) | is_refrow(x))
     } else rep(FALSE, length(out))
     paint_cells(ok, identity, bolded)
-    out[ok] <- out[ok] |>
-      stringi::stri_replace_first_regex("^0%$|^-0%$", pillar::style_subtle("0%")) |> # 0 in gray
-      stringi::stri_replace_first_regex("^0$|^0$", pillar::style_subtle("0"))
+    out[ok] <- sub("^0%$|^-0%$", pillar::style_subtle("0%"), out[ok], perl = TRUE)  # 0 in gray
+    out[ok] <- sub("^0$", pillar::style_subtle("0"), out[ok], perl = TRUE)
   }
 
   pillar::new_pillar_shaft_simple(out, align = "right", na = "")
@@ -4644,7 +4642,7 @@ fmt_color_channels <- function(x) {
        bg_slot   = fmt_color_slots(x, pl$bg))
 }
 
-# The single slot -> APPEARANCE mapping shared by the exporters (tab_kable / tab_plot / tab_xl).
+# The single slot -> APPEARANCE mapping shared by the exporters (tab_kable / tab_md / tab_xl).
 # Returns per cell for BOTH channels: the colour code (NA where uncoloured), the raw slot vectors, and
 # the per-cell FACE (bold / italic / underline). Text channel uses the "text" palette, background the
 # "bg" palette -- mirrors pillar_shaft's two-channel logic so console and exports match.
@@ -6459,8 +6457,8 @@ render_streams <- function(streams, medium, theme, colored, classes = FALSE) {
 #' is a list of runs \code{list(text, color, bold)}; otherwise a character string.
 #' @param x A \code{tabxplor_tab}.
 #' @param medium One of "console", "html", "md", "runs", "plain". \code{"runs"} is for the media that
-#'   draw the legend as coloured TEXT and cannot fill: an Excel rich-text cell (\code{\link{tab_xl}})
-#'   and a \pkg{ggpubr} label (\code{\link{tab_plot}}). It returns the runs unrendered, and draws the
+#'   draw the legend as coloured TEXT and cannot fill, such as an Excel rich-text cell
+#'   (\code{\link{tab_xl}}). It returns the runs unrendered, and draws the
 #'   background channel from the darker \code{bg_legend} palette (see \code{\link{set_color_palette}}).
 #' @param style "terse" (compact, console default) or "prose" (full sentences, export default).
 #' @param lang NULL (auto from locale) / "en" / "fr".

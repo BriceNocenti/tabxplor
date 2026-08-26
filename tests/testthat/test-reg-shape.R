@@ -38,7 +38,6 @@ test_that("`shape` refuses everything outside its closed vocabulary, naming the 
 })
 
 test_that('shape = "linear" is byte-identical to no shape at all', {
-  skip_if_not_installed("broom")
   d  <- shp_data()
   t0 <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial"))
   t1 <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
@@ -50,7 +49,6 @@ test_that('shape = "linear" is byte-identical to no shape at all', {
 # ---- quadratic ----------------------------------------------------------------------------------
 
 test_that('shape = "quadratic" gives the predictor two rows, both fitted and both estimable', {
-  skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                 shape = c(age = "quadratic"), stats = FALSE))
@@ -65,7 +63,6 @@ test_that('shape = "quadratic" gives the predictor two rows, both fitted and bot
 })
 
 test_that('the quadratic pair matches a hand-built glm, and centring keeps its VIF low', {
-  skip_if_not_installed("broom")
   d  <- shp_data()
   t  <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                  multiplier = 1, shape = c(age = "quadratic"), stats = FALSE))
@@ -78,12 +75,10 @@ test_that('the quadratic pair matches a hand-built glm, and centring keeps its V
   expect_equal(unname(got), unname(exp(stats::coef(ref)[4:5])), tolerance = 1e-6)
   # centring is not cosmetic: uncentred, the pair's own VIF is ~40 and the Collinearity check would
   # flag every curved model as broken
-  skip_if_not_installed("car")
-  expect_lt(max(car::vif(ref)), 5)
+  expect_lt(max(tabxplor:::tx_vif(ref)[, 3]^2), 5)   # the scale the check reads, not the raw matrix
 })
 
 test_that("a curved predictor keeps its observed twin: the crude fit takes the SAME shape", {
-  skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                 shape = c(age = "quadratic"), empirical = TRUE, stats = FALSE))
@@ -99,7 +94,7 @@ test_that("a curved predictor keeps its observed twin: the crude fit takes the S
 })
 
 test_that("the marginal path keeps ONE row per predictor (an AME already integrates the curvature)", {
-  skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
+  skip_if_not_installed("marginaleffects")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                 shape = c(age = "quadratic"), effect = "marginal", measure = "difference", stats = FALSE))
@@ -107,7 +102,6 @@ test_that("the marginal path keeps ONE row per predictor (an AME already integra
 })
 
 test_that("a cured predictor gets no Linearity row (its remedy is already in the model)", {
-  skip_if_not_installed("broom")
   d  <- shp_data()
   # Phase 20f: Linearity refits, so it is opt-in (REG_CHECKS$cost == "refit")
   t0 <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
@@ -123,7 +117,6 @@ test_that("a cured predictor gets no Linearity row (its remedy is already in the
 # ---- quantile groups + transforms ----------------------------------------------------------------
 
 test_that("quantile groups turn the predictor into a factor, with the whole factor machinery", {
-  skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                 shape = c(age = "quintiles"), empirical = TRUE, stats = FALSE))
@@ -142,7 +135,6 @@ test_that("quantile groups turn the predictor into a factor, with the whole fact
 })
 
 test_that('shape = "sqrt" fits the transformed column and says so in the label', {
-  skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "tvhours"), family = "binomial",
                                 multiplier = 1, shape = c(tvhours = "sqrt"), stats = FALSE))
@@ -254,7 +246,6 @@ test_that("rd_qq()'s analytic band brackets a correct model", {
 })
 
 test_that("rd_resid() is standard normal under a correct model, and refuses a multinomial", {
-  skip_if_not_installed("broom")
   set.seed(3)
   n <- 800
   x <- stats::rnorm(n)
@@ -279,7 +270,6 @@ nprint <- function(t, v) {
 }
 
 test_that("a continuous predictor gets its observed shape, in a table of its own", {
-  skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE))
   st <- tabxplor:::reg_shape_table(t)
@@ -293,7 +283,6 @@ test_that("a continuous predictor gets its observed shape, in a table of its own
 })
 
 test_that("`options(tabxplor.shape_table =)` chooses where the shape table is drawn", {
-  skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE))
   want <- function(...) c(console = tab_wants_shape_table(t, "console"),
@@ -319,7 +308,6 @@ test_that("`options(tabxplor.shape_table =)` chooses where the shape table is dr
 })
 
 test_that("the curve is the MODELLED level's, not the factor's first level", {
-  skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", "age", family = "binomial", stats = FALSE))
   # ⚠ ONE RECORD PER OUTCOME, keyed by it (22b-xviii)
@@ -336,7 +324,6 @@ test_that("the curve is the MODELLED level's, not the factor's first level", {
 })
 
 test_that("several outcomes get one curve EACH, and the shape table rather than a cell", {
-  skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, c("married", "tvhours"), "age",
                                 family = c(married = "binomial", tvhours = "gaussian"),
@@ -361,7 +348,6 @@ test_that("several outcomes get one curve EACH, and the shape table rather than 
 })
 
 test_that("NO medium puts a glyph run in a cell -- the cell route is dormant", {
-  skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE))
   expect_false(tabxplor:::SPARK_IN_CELL)
@@ -373,7 +359,6 @@ test_that("NO medium puts a glyph run in a cell -- the cell route is dormant", {
 })
 
 test_that("the html engine upgrades the glyph run to an inline <svg>; the plot medium drops it", {
-  skip_if_not_installed("broom")
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                 stats = FALSE))
@@ -391,7 +376,6 @@ test_that("the html engine upgrades the glyph run to an inline <svg>; the plot m
 # ---- the composed unit label, and the sparkline that follows the shape ---------------------------
 
 test_that("a continuous row's level is COMPOSED: shape, unit, anchor -- and none overwrites another", {
-  skip_if_not_installed("broom")
   d <- shp_data()
   f <- function(...) suppressMessages(
     tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE, ...))
@@ -405,7 +389,6 @@ test_that("a continuous row's level is COMPOSED: shape, unit, anchor -- and none
 })
 
 test_that("the sparkline is drawn on the model's own x axis: one width, and the shape moves it", {
-  skip_if_not_installed("broom")
   d  <- shp_data()
   # ⚠ `gl()` looks the curve up BY ITS `var` CELL, which a transform now marks (`log(age)`). It
   # therefore asserts nothing unless the row is found: without the expect_length() below, a lookup
@@ -429,7 +412,6 @@ test_that("the sparkline is drawn on the model's own x axis: one width, and the 
 })
 
 test_that("the shape table names the transform it DREW, and only that", {
-  skip_if_not_installed("broom")
   d  <- shp_data()
   f  <- function(...) suppressMessages(
     tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE, ...))
@@ -449,7 +431,6 @@ test_that("the shape table names the transform it DREW, and only that", {
 })
 
 test_that("the mark survives the tab_vars merge, and the curve keys stay bare", {
-  skip_if_not_installed("broom")
   d  <- shp_data()
   t  <- suppressMessages(tab_reg(d, "married", c("rincome", "age"), tab_vars = "race",
                                  family = "binomial", shape = c(age = "log"), stats = FALSE))
@@ -465,7 +446,6 @@ test_that("the mark survives the tab_vars merge, and the curve keys stay bare", 
 # ---- Phase 22b-xviii: the vertical window has a floor ------------------------------------------
 
 test_that("a curve smaller than its own noise reads FLAT, and a real one uses the height", {
-  skip_if_not_installed("broom")
   set.seed(20260822)
   n     <- 400
   noise <- data.frame(x = stats::rnorm(n), g = factor(sample(c("a", "b"), n, TRUE)))
@@ -504,7 +484,6 @@ test_that("the window's floor is the first colour rung, read on the curve's own 
 # ---- Phase 22b-xviii (ii): the observed range beside the picture --------------------------------
 
 test_that("the observed range is the curve's own low and high, back on the outcome's scale", {
-  skip_if_not_installed("broom")
   d <- suppressWarnings(gss_cat_data_formatting())
   rg <- function(...) tabxplor:::reg_shape_table(
     suppressMessages(suppressWarnings(tab_reg(d, ..., stats = FALSE))))$range
@@ -525,7 +504,6 @@ test_that("the observed range is the curve's own low and high, back on the outco
 })
 
 test_that("the range travels with the picture, in the same row of the shape table", {
-  skip_if_not_installed("broom")
   d <- suppressWarnings(gss_cat_data_formatting())
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE))
   st <- tabxplor:::reg_shape_table(t)
@@ -560,7 +538,6 @@ test_that("an ordinal outcome says which curve it is drawing", {
 })
 
 test_that("the first column is the outcome on the model's own scale, one form per link", {
-  skip_if_not_installed("broom")
   d  <- suppressWarnings(gss_cat_data_formatting())
   y  <- function(t) tabxplor:::reg_shape_table(t)$outcome[[1L]]
   b  <- function(...) suppressMessages(tab_reg(d, "married", "age", family = "binomial",
@@ -595,7 +572,6 @@ test_that("the drawing floor and the noise mark are two different verdicts", {
 # ---- Phase 22g-v ------------------------------------------------------------------------------
 
 test_that("the shape table names EVERY group, not only the first variable's", {
-  skip_if_not_installed("broom")
   d  <- shp_data()
   t  <- suppressMessages(tab_reg(d, "married", c("race", "age", "tvhours"), tab_vars = "relig",
                                  family = "binomial", empirical = FALSE, stats = "no"))

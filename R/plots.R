@@ -1,7 +1,7 @@
 # PURPOSE: the package's data charts -- forest_plot() (the RESULTS: estimate + interval +
 #   significance, for a tab() crosstab or a tab_reg() table) and reg_check_plots() (the model checks,
 #   drawn). Plus the ONE model they and every future chart read: tab_estimates().
-#   (tab_plot(), in R/tab_classes.R, is not a chart -- it renders the TABLE as an image.)
+#   (An exporter renders the TABLE; these render its NUMBERS.)
 #
 # THE MODEL (Phase 18z17). tab_estimates() is one long tibble: one row per (table row x plotted
 #   column), carrying the estimate, its interval, its p, its scale (fmt_scale_of), its colour slot and
@@ -769,9 +769,8 @@ reg_panel_influence <- function(cx, cols, opts) {
 
 # 6. COLLINEARITY -- the VIF of every term, on the 5 / 10 ladder every textbook uses.
 reg_panel_collinearity <- function(cx, cols, opts) {
-  if (!requireNamespace("car", quietly = TRUE)) return(NULL)
   rows <- local({
-    v <- tryCatch(suppressWarnings(car::vif(cx$fit)), error = function(e) NULL)
+    v <- tryCatch(tx_vif(cx$fit), error = function(e) NULL)
     if (is.null(v) || !length(v)) return(NULL)
     val <- if (is.matrix(v)) { if (ncol(v) >= 3L) v[, 3]^2 else v[, 1] } else as.numeric(v)
     nm  <- if (is.matrix(v)) rownames(v) else names(v)
@@ -1310,8 +1309,8 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
 #' @param ... Unused.
 #'
 #' @return A \code{ggplot} (or a list of them), ready for \code{+ theme()} and \code{ggsave()}.
-#' @seealso \code{\link{reg_check_plots}} for the model checks, \code{\link{tab_plot}} to render the
-#'   table itself as an image.
+#' @seealso \code{\link{reg_check_plots}} for the model checks, \code{\link{tab_export}} to export
+#'   the table itself.
 #' @export
 #'
 #' @examples

@@ -1,6 +1,6 @@
 # Phase 12f: the regression model-summary footer (GOF stats in the `test` attribute, materialised as a
 # console block / export rows at display) + multi-model comparison, plus the shared bits: the "gof"
-# fmt display token and the crosstab in-cell test label. GOF parity is checked against broom::glance /
+# fmt display token and the crosstab in-cell test label. GOF parity is checked against summary.lm() /
 # base logLik/AIC/BIC / stats::anova run on the SAME model tab_reg fits.
 
 reg_data <- function() {
@@ -25,7 +25,6 @@ test_that("the 'gof' token renders a plain big-mark number (per-cell digits) and
 # ---- footer parity: binomial (glm) ----------------------------------------------------------
 
 test_that("binomial footer N/LR-null/McFadden/AIC/BIC match a hand-fit glm; display-only", {
-  skip_if_not_installed("broom")
   d   <- reg_data()
   t1  <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", cleannames = FALSE)
   tst <- get_test(t1)
@@ -54,7 +53,6 @@ test_that("binomial footer N/LR-null/McFadden/AIC/BIC match a hand-fit glm; disp
 })
 
 test_that("the footer does not alter the built coefficient skeleton (stats= toggle)", {
-  skip_if_not_installed("broom")
   d       <- reg_data()
   with    <- tab_reg(d, "married", "race", family = "binomial", cleannames = FALSE)
   without <- tab_reg(d, "married", "race", family = "binomial", stats = FALSE, cleannames = FALSE)
@@ -73,7 +71,6 @@ test_that("the footer does not alter the built coefficient skeleton (stats= togg
 })
 
 test_that("stats= picks and the footer keeps only the requested stats", {
-  skip_if_not_installed("broom")
   tst <- get_test(tab_reg(reg_data(), "married", "race", family = "binomial",
                           stats = c("n", "aic"), cleannames = FALSE))
   expect_setequal(unique(tst$test), c("n", "aic"))
@@ -81,8 +78,7 @@ test_that("stats= picks and the footer keeps only the requested stats", {
 
 # ---- footer parity: gaussian (lm) -----------------------------------------------------------
 
-test_that("gaussian footer (N/R2/adjR2/F/sigma) matches broom::glance", {
-  skip_if_not_installed("broom")
+test_that("gaussian footer (N/R2/adjR2/F/sigma) matches summary.lm()", {
   d   <- reg_data()
   t1  <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", cleannames = FALSE)
   tst <- get_test(t1); cv <- "Model_diff"
@@ -94,24 +90,30 @@ test_that("gaussian footer (N/R2/adjR2/F/sigma) matches broom::glance", {
                           c(tabxplor:::reg_global_types(), tabxplor:::reg_check_types())),
                   c("n", "r2", "r2_adj", "f_model", "sigma"))
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
-  g  <- broom::glance(stats::lm(tvhours ~ age + race, data = dm))
+  m  <- stats::lm(tvhours ~ age + race, data = dm)
+  g  <- summary(m); fs <- g$fstatistic
   expect_equal(gv("r2"),      g$r.squared,     tolerance = 1e-6)
   expect_equal(gv("r2_adj"),  g$adj.r.squared, tolerance = 1e-6)
-  expect_equal(gv("f_model"), unname(g$statistic), tolerance = 1e-6)
+  expect_equal(gv("f_model"), unname(fs[["value"]]), tolerance = 1e-6)
   expect_equal(gv("sigma"),   g$sigma,         tolerance = 1e-6)
+  # the two df and the p of that F -- the fields whose MEANING is easiest to get wrong
+  expect_equal(unname(tst$df1[tst$col == cv & tst$test == "f_model"]), unname(fs[["numdf"]]))
+  expect_equal(unname(tst$df2[tst$col == cv & tst$test == "f_model"]), unname(fs[["dendf"]]))
+  expect_equal(unname(tst$pvalue[tst$col == cv & tst$test == "f_model"]),
+               unname(stats::pf(fs[["value"]], fs[["numdf"]], fs[["dendf"]], lower.tail = FALSE)),
+               tolerance = 1e-6)
 
   # AIC/BIC are available on request (stats=)
   t2 <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian",
                 stats = c("n", "aic", "bic"), cleannames = FALSE)
   t2t <- get_test(t2)
-  expect_equal(unname(t2t$statistic[t2t$test == "aic"]), g$AIC, tolerance = 1e-6)
-  expect_equal(unname(t2t$statistic[t2t$test == "bic"]), g$BIC, tolerance = 1e-6)
+  expect_equal(unname(t2t$statistic[t2t$test == "aic"]), stats::AIC(m), tolerance = 1e-6)
+  expect_equal(unname(t2t$statistic[t2t$test == "bic"]), stats::BIC(m), tolerance = 1e-6)
 })
 
 # ---- footer parity: poisson dispersion ------------------------------------------------------
 
 test_that("poisson footer carries a Pearson dispersion matching sum(pearson^2)/df + warns", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   expect_warning(t1 <- tab_reg(d, "tvhours", c("age", "race"), family = "poisson",
                                cleannames = FALSE), "dispersion")
@@ -127,7 +129,6 @@ test_that("poisson footer carries a Pearson dispersion matching sum(pearson^2)/d
 # ---- multi-model comparison -----------------------------------------------------------------
 
 test_that("compare='baseline' adds an LR-vs-baseline row matching anova() (same-N nested models)", {
-  skip_if_not_installed("broom")
   d  <- reg_data()
   mc <- tab_reg(d, "married",
                     predictors = list(demo = c("race", "age"), full = c("race", "age", "rincome")),
@@ -146,7 +147,6 @@ test_that("compare='baseline' adds an LR-vs-baseline row matching anova() (same-
 })
 
 test_that("compare falls back to Delta-AIC (with a message) when N differs across models", {
-  skip_if_not_installed("broom")
   d <- reg_data()                                        # tvhours has NAs -> different N than race-only
   # Phase 18z13 (D1): the DEFAULT `na = "drop_by_outcome"` now puts both models on one population, so
   # the likelihood-ratio test fires -- which is the point of that default. The AIC fallback is what the
@@ -161,7 +161,6 @@ test_that("compare falls back to Delta-AIC (with a message) when N differs acros
 })
 
 test_that("D1: the shared-population default makes the likelihood-ratio comparison fire", {
-  skip_if_not_installed("broom")
   d  <- reg_data()
   mc <- suppressMessages(tab_reg(d, "married",
                                      predictors = list(a = "race", b = c("race", "tvhours")),
@@ -174,7 +173,6 @@ test_that("D1: the shared-population default makes the likelihood-ratio comparis
 })
 
 test_that("compare no-ops (message) for a single model", {
-  skip_if_not_installed("broom")
   expect_message(
     tab_reg(reg_data(), "married", "race", family = "binomial", stats = "compare_baseline",
             cleannames = FALSE),
@@ -185,7 +183,6 @@ test_that("compare no-ops (message) for a single model", {
 # ---- footer renders through every backend ---------------------------------------------------
 
 test_that("the regression footer renders (console block + export rows) without error", {
-  skip_if_not_installed("broom")
   t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial")
   expect_output(print(t1), "Model fit")                  # the console footer block (Phase 16a GFM table)
   # Phase g (A7): a styled md table's label cells use non-breaking spaces; normalise for text greps.
@@ -239,7 +236,6 @@ test_that("ordinal footer carries a Brant PO test p-value row (Item I)", {
 })
 
 test_that("reg reference cells and GOF footer render black + bold, data cells stay grey (Items D/J)", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", empirical = TRUE)
   rd <- tabxplor:::tab_export_prep(t, backend = "kable", wrap = NULL)$tables[[1]]
@@ -273,7 +269,6 @@ test_that("reg reference cells and GOF footer render black + bold, data cells st
 # ---- Phase 18z13 (SS7.2): the per-predictor global test ------------------------------------------
 
 test_that("stats='global' IS drop1() on the fit already in hand, as per-predictor footer rows", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "binomial",
                                 cleannames = FALSE, stats = c("n", "global")))
@@ -304,7 +299,6 @@ test_that("stats='global' IS drop1() on the fit already in hand, as per-predicto
 })
 
 test_that("the global test skips 1-df terms, unsupported engines and stats = FALSE", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   # a numeric predictor's overall p IS its single cell's p -- a row for it would be noise
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
@@ -326,7 +320,6 @@ test_that("the global test skips 1-df terms, unsupported engines and stats = FAL
 # ---- Phase 18z15: the `term` retrofit fixes a live split-table defect ----------------------------
 
 test_that("on a split table the per-predictor rows name the predictors, not the split level", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   d$grp <- factor(ifelse(d$year < 2006, "early", "late"))
   t <- suppressMessages(tab_reg(d, "married",
@@ -371,7 +364,6 @@ test_that("the footer and the crude tooltips key onto the MODEL column, never th
 # --- Phase 22b-xviii: the footer reads outward from the data -------------------------------------
 
 test_that("the footer is N, then the checks worst-first, then the content, then the comparison", {
-  skip_if_not_installed("broom")
   d <- suppressWarnings(gss_cat_data_formatting())
   t <- suppressMessages(tab_reg(d, "married", c("race", "rincome", "age"), family = "binomial",
                                 stats = "all"))
@@ -393,7 +385,6 @@ test_that("the footer is N, then the checks worst-first, then the content, then 
 })
 
 test_that("the joint test is opt-in and Brant is an ordinal default", {
-  skip_if_not_installed("broom")
   expect_false("global" %in% reg_footer_stats("binomial", FALSE, FALSE, NULL))
   expect_true ("global" %in% reg_footer_stats("binomial", FALSE, FALSE, "all"))
   expect_true ("global" %in% reg_footer_stats("binomial", FALSE, FALSE, c("n", "global")))
@@ -422,7 +413,6 @@ cmp_msgs <- function(expr) {
 }
 
 test_that("several predictor sets compare by default, sequential where they nest", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   chain <- list(m1 = "race", m2 = c("race", "rincome"), m3 = c("race", "rincome", "relig"))
   expect_true(any(grepl("compare_seq", cmp_rows(
@@ -437,7 +427,6 @@ test_that("several predictor sets compare by default, sequential where they nest
 })
 
 test_that("the default comparison never speaks up, and never refuses a table", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   # one model: nothing to compare, and no lecture about it
   expect_length(cmp_rows(suppressMessages(tab_reg(d, "married", "race", family = "binomial"))), 0L)
@@ -453,7 +442,6 @@ test_that("the default comparison never speaks up, and never refuses a table", {
 })
 
 test_that("an ordinary table keeps its parallelism and drops its fits", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   # ⚠ `compare != "none"` is what turns BOTH off (reg_specs_independent, and the fit kept on the
   # product), so a default that left "auto" live would cost every table both.
@@ -465,7 +453,6 @@ test_that("an ordinary table keeps its parallelism and drops its fits", {
 # ---- Phase 22g-v: NOTHING IS NOTHING -----------------------------------------------------------
 
 test_that("stats = NULL / FALSE / \"no\" / \"none\" all hide the footer; \"auto\" is the default", {
-  skip_if_not_installed("broom")
   d <- reg_data()
   f <- function(...) nrow(get_test(tab_reg(d, "married", "race", family = "binomial",
                                           empirical = FALSE, ...)))

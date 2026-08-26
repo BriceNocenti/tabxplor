@@ -296,7 +296,7 @@ new_lvl_collapse <- function(spec) {
       # followers (`1-Protestant, Catholic`), so an ordering prefix never lands mid-name -- and
       # `cleannames = TRUE` then strips the one remaining prefix, giving `Protestant, Catholic`.
       lab <- if (i <= length(labs) && !is.na(labs[[i]]) && nzchar(labs[[i]])) labs[[i]]
-             else paste(c(lv[[1]], stringi::stri_replace_all_regex(lv[-1], cleannames_condition(), "")),
+             else paste(c(lv[[1]], gsub(cleannames_condition(), "", lv[-1], perl = TRUE)),
                         collapse = ", ")
       if (lab %in% reserved)
         cli::cli_abort(c("{.val {lab}} cannot name a merged level of {.var {v}}.",

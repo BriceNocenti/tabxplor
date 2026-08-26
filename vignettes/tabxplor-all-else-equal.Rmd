@@ -15,12 +15,6 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 # depend on where it is built.
 options(tabxplor.lang = "en")
 Sys.setenv(LANGUAGE = "en")   # the model-fit row labels go through gettext, not this option
-
-# The data sets below live in Suggests packages, so the vignette must degrade rather than fail
-# where they are absent (CRAN checks with Suggests unavailable).
-if (!all(vapply(c("carData", "questionr"), requireNamespace, logical(1), quietly = TRUE))) {
-  knitr::opts_chunk$set(eval = FALSE)
-}
 ```
 
 ```{r setup, message=FALSE}
@@ -52,11 +46,14 @@ cat(tab_css(theme = "light"))
 ```{r, echo = FALSE, include = FALSE}
 # Colour the console outputs (ANSI -> html, via fansi), but hand as-is results (the html tables,
 # marked by knitr with an ASIS token) back to knitr's default hook untouched.
+# Escape the three HTML specials before fansi turns the ANSI codes into markup.
+esc_html <- function(x) gsub(">", "&gt;", gsub("<", "&lt;", gsub("&", "&amp;", x, fixed = TRUE),
+                                               fixed = TRUE), fixed = TRUE)
 default_output_hook <- knitr::knit_hooks$get("output")
 knitr::knit_hooks$set(output = function(x, options) {
   if (grepl("KNITR_ASIS_OUTPUT_TOKEN", x, fixed = TRUE)) return(default_output_hook(x, options))
   paste0('<pre class="r-output"><code>',
-         fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+         fansi::sgr_to_html(x = esc_html(x), warn = FALSE),
          '</code></pre>')
 })
 # A cli message or warning is its own kind of condition, so knitr routes each through its own hook,
@@ -64,7 +61,7 @@ knitr::knit_hooks$set(output = function(x, options) {
 for (hook in c("message", "warning")) {
   knitr::knit_hooks$set(stats::setNames(list(function(x, options) {
     paste0('<pre class="r-output"><code>',
-           fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+           fansi::sgr_to_html(x = esc_html(x), warn = FALSE),
            '</code></pre>')
   }), hook))
 }
@@ -116,43 +113,25 @@ Two of these deserve a warning now rather than later.
 
 Four data sets, each chosen because it makes one thing visible.
 
+Three of them ship with tabxplor, each named after the package it comes from — `car_arrests` and `car_salaries` from **carData** (John Fox, Sanford Weisberg and Brad Price), `questionr_hdv` from **questionr** (Julien Barnier, François Briatte and Joseph Larmarange), which carries INSEE's *Histoire de vie* survey. With thanks to all of them; `?car_arrests` credits each in full. The fourth is in base R.
+
 ```{r}
-data("Arrests",  package = "carData")     # Toronto, released after a marijuana arrest
-data("Salaries", package = "carData")     # US college salaries, collected to study a pay gap
-data("hdv2003",  package = "questionr")   # France, INSEE "Histoire de vie" survey
-
-arrests <- Arrests |>
-  tibble::as_tibble() |>
-  dplyr::mutate(released = forcats::fct_rev(released),          # put "Yes" first: it is what we study
-         colour   = forcats::fct_relevel(colour, "White"))
-
-salaries <- Salaries |>
-  tibble::as_tibble() |>
-  dplyr::mutate(rank    = forcats::fct_relevel(rank, "AsstProf", "AssocProf", "Prof"),
-         is_prof = factor(ifelse(rank == "Prof", "Full professor", "Not yet"),
-                          levels = c("Full professor", "Not yet")))
-
-hdv <- hdv2003 |>
-  tibble::as_tibble() |>
-  dplyr::mutate(cinema = forcats::fct_rev(cinema),               # "Oui" first, for the same reason
-         qualif = forcats::fct_relevel(qualif, "Cadre"))
-
 ucb <- as.data.frame(UCBAdmissions) |>                    # base R, no package needed
   tidyr::uncount(Freq) |> tibble::as_tibble() |>
   dplyr::mutate(Admit  = factor(Admit,  levels = c("Admitted", "Rejected")),
          Gender = factor(Gender, levels = c("Male", "Female")))
 ```
 
-**One habit worth acquiring immediately**: put the level you care about **first**. tabxplor keeps the first level of a factor as the one it models and the one it shows, so `fct_rev()` here is not cosmetics — without it every sentence in this article would be about people who were *not* released.
+**One habit worth acquiring immediately**: put the level you care about **first**. tabxplor keeps the first level of a factor as the one it models and the one it shows — which is why `ucb` above names `"Admitted"` first, and why the three shipped data sets already read `"Yes"`, `"White"` and `"Oui"` first. Without it every sentence in this article would be about people who were *not* released.
 
-The running example is `arrests`: 5 226 people arrested in Toronto for possession of a small quantity of marijuana, between 1997 and 2002, from data gathered for a series in the *Toronto Star*. The outcome is whether the person was **released with a summons** rather than held. The data records the arrestee's race in a column called `colour`, whether they were employed, whether they were a citizen, their sex and age, and `checks` — the number of police databases, out of six, on which their name already appeared. Keep that last one in mind; half of this article turns on it.
+The running example is `car_arrests`: 5 226 people arrested in Toronto for possession of a small quantity of marijuana, between 1997 and 2002, from data gathered for a series in the *Toronto Star*. The outcome is whether the person was **released with a summons** rather than held. The data records the arrestee's race in a column called `colour`, whether they were employed, whether they were a citizen, their sex and age, and `checks` — the number of police databases, out of six, on which their name already appeared. Keep that last one in mind; half of this article turns on it.
 
 # 1. Start from what you can see
 
 Before any model, the table.
 
 ```{r}
-tab(arrests, colour, released, pct = "row",
+tab(car_arrests, colour, released, pct = "row",
     color = "difference", color_signif = "grey_non_signif")
 ```
 
@@ -161,7 +140,7 @@ tab(arrests, colour, released, pct = "row",
 Now the other three candidate predictors, in one table:
 
 ```{r}
-tab(arrests, c(colour, sex, employed, citizen), released, pct = "row",
+tab(car_arrests, c(colour, sex, employed, citizen), released, pct = "row",
     color = "difference", color_signif = "grey_non_signif", ref = "first")
 ```
 
@@ -191,17 +170,17 @@ options(tabxplor.shape_table = "all")
 
 
 ```{r}
-tab_reg(arrests, "checks", c("colour", "employed", "citizen"), 
+tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), 
         family = "gaussian", stats = NULL)
 ```
 
 ```{r}
-tab_reg(arrests, "checks", c("colour", "employed", "citizen"), 
+tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), 
         family = "poisson", stats = NULL)
 ```
 
 ```{r}
-tab_reg(arrests, "checks", c("colour", "employed", "citizen"), 
+tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), 
        family = "binomial", trials = 6, stats = NULL)
 ```
 
@@ -223,7 +202,7 @@ None is a priori more correct here. Choose the one whose sentence you would actu
 Rather than memorise the grid, ask:
 
 ```{r}
-reg_measures(arrests, "released")
+reg_measures(car_arrests, "released")
 ```
 
 The table has **two blocks**, and the split is the whole answer. The first is one row per model you could fit: its `link`, and the measure that model's own coefficients carry. The second is what can be read off the model's **predictions** instead — and those rows say `link = "(any)"`, because a marginal effect averages fitted probabilities and does not care which link produced them.
@@ -239,7 +218,7 @@ A percentage on its own says very little. 74 % is high or low depending on what 
 There are three ways to measure one deviation, they are three readings of *the same two numbers*, and we can calculate them in a simple crosstable:
 
 ```{r}
-arrests |> 
+car_arrests |> 
   tab(colour, released, pct = "row", ref = "first", stars = TRUE,
       color = "difference", color_signif = "grey_non_signif") |> 
   mutate(difference = set_display(Yes, "diff"),
@@ -264,7 +243,7 @@ The stars and the greyed-out cells answer a different question from the numbers,
 Your data is a sample. You are not interested in these 5 226 people; you are interested in whether what you see among them is a feature of the population they came from, or an accident of who happened to be arrested and recorded. That is all a confidence interval is: **the range of values for the population that would be consistent with what you observed.**
 
 ```{r}
-tab(arrests, colour, released, pct = "row", ref = "first", ci = "ref",
+tab(car_arrests, colour, released, pct = "row", ref = "first", ci = "ref",
     color = "difference", color_signif = "grey_non_signif")
 ```
 
@@ -279,13 +258,13 @@ A cell is **significant** when that interval excludes the **neutral value** — 
 `checks`, in how many police databases out of six the name of the person already appears, is a number, so it has no categories to compare. Two things change.
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "checks"), stats = NULL)
+tab_reg(car_arrests, "released", c("colour", "checks"), stats = NULL)
 ```
 
 **First, the effect is per unit — and the unit is a choice.** One extra database out of six is a large step; one extra year of age is a small one. So tabxplor reports the effect **per two standard deviations** by default, and the row says both how far it steps and from where: `per 3.08 (2SD), at 1.64 (mean)`. Two SD, because that is roughly the span a binary predictor covers — which makes a continuous row and a two-level row comparable at a glance. Change it with `multiplier` when a natural unit exists:
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "checks"), multiplier = c(checks = 1), 
+tab_reg(car_arrests, "released", c("colour", "checks"), multiplier = c(checks = 1), 
         empirical = FALSE, stats = NULL)
 ```
 
@@ -296,7 +275,7 @@ Now it reads per single database: each extra database divides the odds of releas
 When one straight line is a poor summary, the most readable fix is to stop treating the variable as a number and cut it into categories. `shape` is what does it:
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "checks"), shape = c(checks = "quartiles"), stats = NULL)
+tab_reg(car_arrests, "released", c("colour", "checks"), shape = c(checks = "quartiles"), stats = NULL)
 ```
 
 Now `checks` is an ordinary factor with its own percentages, effects and colours, and the shape is visible in the observed numbers themselves: 91 %, 87 %, 70 %. Not much happens between zero and one or two database; the collapse comes later. That is a finding, and a single slope hid it.
@@ -306,7 +285,7 @@ Now `checks` is an ordinary factor with its own percentages, effects and colours
 One row is left to explain, and it is the one students most often skip: **Constant**.
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "checks"),
+tab_reg(car_arrests, "released", c("colour", "checks"),
         multiplier = c(checks = 1), ref = c(checks = 0), stats = NULL)
 ```
 
@@ -317,7 +296,7 @@ A regression measures everything *from* somewhere, and the Constant row is that 
 **Two things are worth knowing.** When every predictor is a factor, the reference profile is a **real group of people**, and the `n` column counts them — so look at it. It can be tiny: in the model below, the baseline is a white, female, unemployed non-citizen, and the file holds **7 of them**. The model still works, but a baseline resting on so few people describes almost nobody, which is worth knowing before you quote it.
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen"), empirical = FALSE, stats = NULL)
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen"), empirical = FALSE, stats = NULL)
 ```
 
 And when a **number** is among the predictors, that count disappears, like in the table above this one. The profile sits at one exact value of a continuous variable, and most of the time nobody sits exactly there. It is the same warning Hanmer and Kalkan make about average-case profiles in general — **the average person often does not exist** — and it is one more reason the round trip of Section 4 ends by averaging over real people (unless inventing a typical one is part of a controlled and well-designed ideal-typical method).
@@ -329,14 +308,14 @@ And when a **number** is among the predictors, that count disappears, like in th
 Here is the move that this whole article rests on. By default, as you’ve already seen, the model adds a column for its observed counterpart (set `empirical = FALSE` to remove it) :
 
 ```{r}
-model <- tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"))
+model <- tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"))
 model
 ```
 
 Now look at the **`Obs_OR`** column, and compare it with the odds ratios we computed from the cross-table a moment ago:
 
 ```{r}
-tab(arrests, c(colour, sex, employed, citizen), released, pct = "row", ref = "first",
+tab(car_arrests, c(colour, sex, employed, citizen), released, pct = "row", ref = "first",
     stars = TRUE, color = "odds_ratio", color_signif = "grey_non_signif", display = "OR")
 ```
 
@@ -393,7 +372,7 @@ Every row is in **percentage points**, and that is deliberate: Section 5 shows w
 **It vanishes.** Women were released slightly more often than men (86 % against 83 %, just significant). Among comparable people, nothing at all — the table below is in percentage points, which is what `measure = "difference"` asks for. (The `m` that appears in the column header says the model worked the effect out person by person and averaged it; Section 4 explains.)
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
         measure = "difference", stats = NULL)
 ```
 
@@ -406,7 +385,7 @@ The `sex` row goes from `-3.1 %*` to `+0.1 %`. Read that carefully, because it i
 The single most useful thing you can do with a regression is to fit it several times, adding predictors one-by-one, and watch one row move. Pass a **named list** instead of a vector:
 
 ```{r}
-tab_reg(arrests, "released",
+tab_reg(car_arrests, "released",
         list("who they are" = c("colour", "sex", "citizen", "employed"),
              "+ prior record" = c("colour", "sex", "citizen", "employed", "checks")),
         measure = "difference", display = "est")
@@ -421,14 +400,14 @@ This is the format to write up. It shows the reader what each set of controls bo
 On a wide table, comparing two columns cell by cell can be long. `color = "adjustment"` colors the movement itself.
 
 ```{r}
-tab_reg(arrests, "released",
+tab_reg(car_arrests, "released",
         list("who they are" = c("colour", "sex", "citizen", "employed"),
              "+ prior record" = c("colour", "sex", "citizen", "employed", "checks")),
         measure = "difference", color="adjustment", display = "est", stats=NULL)
 ```
 
 ```{r, echo=FALSE, eval=FALSE}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
         measure = "difference", color = c(TRUE, "adjustment"), stats=NULL)
 ```
 
@@ -488,7 +467,7 @@ The Constant row is the quickest of the three, and it is not decoration: a coeff
 **The odds ratio** — the default, because a logistic model works in odds ratios. Comparable with the published literature, hard to say aloud.
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"), stats=NULL)
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"), stats=NULL)
 ```
 
 > Black arrestees had **1/1.48** the odds of release of white arrestees, all else equal.
@@ -496,7 +475,7 @@ tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks")
 **The risk ratio** — `measure = "ratio"`. Not the model's own measure, so it is worked out and averaged, and the header says so: `Model_mRR`. Now it *is* "how many times as likely".
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
         measure = "ratio", stats=NULL)
 ```
 
@@ -505,7 +484,7 @@ tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks")
 **The difference in percentage points** — `measure = "difference"`. Usually the most useful of all, because points are the unit people already mostly think in.
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
         measure = "difference", stats=NULL)
 ```
 
@@ -514,7 +493,7 @@ tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks")
 **The adjusted percentages themselves**, the far end of the round trip, but given in all default `display` in parentheses. We can keep these only with `display = "base"`, here colored with marginal differences (in percentage points).
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
         measure = "difference", display = "base", stats=NULL)
 ```
 
@@ -554,15 +533,15 @@ Everything above changed what was **reported**, never what was **fitted** / **mo
 It matters exactly once, and it is worth seeing because both spellings are called a risk ratio:
 
 ```{r}
-tab_reg(arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
         link = "ratio", stats=NULL)
 ```
 
 `Model_RR` — unmarked, so a coefficient. This is the **modified Poisson** model epidemiologists use, which works in risk ratios directly. Compare it with the `Model_mRR` above, and you will find they nearly agree here (`÷1.08` against `÷1.07` for the `colour` row). What differs is the claim each makes, and which model ran:
 
 ```{r}
-reg_formulas(tab_reg(arrests, "released", c("colour", "checks"), measure = "ratio", empirical = FALSE))
-reg_formulas(tab_reg(arrests, "released", c("colour", "checks"), link    = "ratio", empirical = FALSE))
+reg_formulas(tab_reg(car_arrests, "released", c("colour", "checks"), measure = "ratio", empirical = FALSE))
+reg_formulas(tab_reg(car_arrests, "released", c("colour", "checks"), link    = "ratio", empirical = FALSE))
 ```
 
 **Which to use.** Prefer **`measure = "ratio"`**, the marginal path, in almost every case: the logistic model always converges, can never predict a probability above 100 %, and the number it gives describes the people you surveyed. Reach for **`link = "ratio"`** when you need the *conditional* risk ratio — the one that assumes the same ratio holds for everybody, which is what a reader coming from epidemiology will expect, and what you must use to line up with a published modified-Poisson estimate. The full grid of what each family can fit and report is in `vignette("tabxplor-reg")`.
@@ -576,7 +555,7 @@ Everything so far was mechanics. This section is the part that decides whether y
 The adjusted number depends entirely on which variables you listed. Not a little — a lot:
 
 ```{r}
-tab_reg(arrests, "released",
+tab_reg(car_arrests, "released",
         list("without prior record" = c("colour", "employed", "citizen"),
              "with prior record"    = c("colour", "employed", "citizen", "checks") ),
         measure = "difference", display="est")
@@ -590,14 +569,14 @@ So when you write "all else equal", you are making a claim about a list you chos
 
 Should `checks` be in the model at all?
 
-The case for is obvious: someone with a long record is treated differently, and it would be naive to compare a first offender with a repeat one. The case against needs one more table. `checks` counts police databases — of previous arrests, previous convictions, parole status. So ask the question the model cannot ask itself: **is prior record itself patterned by race?**
+The case for is obvious: someone with a long record is treated differently, and it would be naive to compare a first offender with a repeat one. The case against needs one more table. `checks` counts police databases — of previous car_arrests, previous convictions, parole status. So ask the question the model cannot ask itself: **is prior record itself patterned by race?**
 
 ```{r}
-tab(arrests, colour, checks, pct = "row", color = "difference", ref = 1)
+tab(car_arrests, colour, checks, pct = "row", color = "difference", ref = 1)
 ```
 
 ```{r}
-tab_reg(arrests, "checks", c("colour", "sex", "employed", "citizen"),
+tab_reg(car_arrests, "checks", c("colour", "sex", "employed", "citizen"),
         family = "binomial", trials = 6)
 ```
 
@@ -609,10 +588,10 @@ This has a name — **overcontrol bias**, or conditioning on a mediator — and 
 
 **Nothing in the output tells you which case you are in.** The table looks identical either way. This is a question about sociology, not about statistics, and it is why this article began by saying no amount of adjustment turns survey data into a controlled experiment.
 
-**The same problem, in a different discipline.** These are academic salaries, from a data set the college collected precisely to monitor a pay gap:
+**The same problem, in a different discipline.** These are academic car_salaries, from a data set the college collected precisely to monitor a pay gap:
 
 ```{r}
-tab_reg(salaries, "salary",
+tab_reg(car_salaries, "salary",
         list("sex alone"      = "sex",
              "+ field, years" = c("sex", "discipline", "yrs.service"),
              "+ rank"         = c("sex", "discipline", "yrs.service", "rank")),
@@ -624,7 +603,7 @@ The raw gap is **$14 088** in favour of men. Adding field and seniority takes it
 **On the rank column**, ask the same question as before:
 
 ```{r}
-tab(salaries, sex, is_prof, pct = "row", color = "difference", ref = 1, color_signif = "grey_non_signif")
+tab(car_salaries, sex, is_prof, pct = "row", color = "difference", ref = 1, color_signif = "grey_non_signif")
 ```
 
 **46 % of the women are full professors, against 69 % of the men.** If promotion is itself unequal, then controlling for rank compares women with the men who were promoted at the same rate — and adjusts away precisely the mechanism through which a pay gap would operate. The $4 771 is the gap *within rank*: a real quantity, a narrower question, and not "the pay gap corrected".
@@ -632,7 +611,7 @@ tab(salaries, sex, is_prof, pct = "row", color = "difference", ref = 1, color_si
 **On the disappearing stars**, remember Section 2. There are 397 people here and 39 of them are women. "Not significant" means this sample can no longer tell a $4 771 gap apart from zero — not that the gap is zero. Print the interval and see:
 
 ```{r}
-tab_reg(salaries, "salary", c("sex", "discipline", "yrs.service", "rank"),
+tab_reg(car_salaries, "salary", c("sex", "discipline", "yrs.service", "rank"),
         family = "gaussian", display = "est_ci", empirical = FALSE)
 ```
 
@@ -673,7 +652,7 @@ Now the trap that is pure mathematics, and the reason this article keeps insisti
 The French *Histoire de vie* survey asked whether people go to the cinema. Cross it with social class:
 
 ```{r}
-tab_reg(hdv, "cinema", c("qualif", "age"))
+tab_reg(questionr_hdv, "cinema", c("qualif", "age"))
 ```
 
 **65 % of senior managers go to the cinema against 22 % of unskilled workers** — a large, thoroughly Bourdieusian class gap. And the odds ratio *grows* under adjustment for age, from `1/6.63` to `1/10.75`. Read naively, that says age was masking part of the class gap, which would be an interesting finding.
@@ -681,7 +660,7 @@ tab_reg(hdv, "cinema", c("qualif", "age"))
 It is not a finding. Look at the mean ages:
 
 ```{r}
-tab(hdv, qualif, c(cinema, age), pct = "row", na = "drop", color = "difference", ref = 1)
+tab(questionr_hdv, qualif, c(cinema, age), pct = "row", na = "drop", color = "difference", ref = 1)
 ```
 
 The classes are **all the same age** — between 46 and 50. There is almost nothing for age to confound. So where did the extra gap come from?
@@ -691,7 +670,7 @@ From the odds ratio itself. **An odds ratio moves when you add any strong predic
 The way to check is to ask the same question with a measure of deviation that does not have the problem:
 
 ```{r}
-tab_reg(hdv, "cinema", c("qualif", "age"), measure = "difference")
+tab_reg(questionr_hdv, "cinema", c("qualif", "age"), measure = "difference")
 ```
 
 | unskilled workers vs senior managers |    crude |  adjusted |       moved by |

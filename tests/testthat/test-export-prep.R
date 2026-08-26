@@ -128,7 +128,7 @@ testthat::test_that("list_method keeps a non-mergeable list as N tables; else it
   testthat::expect_length(p$tables, 2L)
   testthat::expect_false(p$tables[[1]]$vars$degrade)
   testthat::expect_false(p$tables[[2]]$vars$degrade)
-  # list_method = FALSE (tab_kable / tab_plot) -> historical error
+  # list_method = FALSE (tab_kable) -> historical error
   testthat::expect_error(
     tabxplor:::tab_export_prep(tv_list, backend = "kable", wrap = NULL, list_method = FALSE),
     "no tab_vars"
@@ -412,7 +412,6 @@ testthat::test_that("L3: a redundant col_var span (name == col_var for all cols)
   testthat::expect_true(span(tab(gss, marital, race, pct = "row")))
   # numeric col_var: header "mean (sd)" != col_var "tvhours" -> span kept
   testthat::expect_true(span(tab(gss, marital, tvhours, pct = "row")))
-  testthat::skip_if_not_installed("broom")
   d <- forcats::gss_cat |>
     dplyr::mutate(married = factor(dplyr::if_else(marital == "Married", "Married", "Not married")))
   # Phase 14w (item 3): a single-model reg column is now named "Model_OR" while its col_var names the
@@ -482,7 +481,6 @@ testthat::test_that("a whole-table helper column takes no variable name", {
 # === Phase 22g-v: a name is printed once ==========================================================
 
 testthat::test_that("a predictor-subset comparison names its models once, in every backend", {
-  skip_if_not_installed("broom")
   d <- suppressWarnings(gss_cat_data_formatting())
   t <- suppressMessages(tab_reg(
     d, "married",

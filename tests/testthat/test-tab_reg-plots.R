@@ -14,7 +14,7 @@ reg_plot_data <- function() {
 # reg_check_plots ---------------------------------------------------------------------------------
 
 test_that("reg_check_plots() draws the check panels of a tab_reg table and of a bare fit", {
-  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra"); skip_if_not_installed("broom")
+  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra")
   d <- reg_plot_data()
   grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial"))
@@ -26,7 +26,7 @@ test_that("reg_check_plots() draws the check panels of a tab_reg table and of a 
 })
 
 test_that("reg_check_plots() finds its data again, and `auto` is not `all`", {
-  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra"); skip_if_not_installed("broom")
+  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra")
   d <- reg_plot_data()
   grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial"))
@@ -39,7 +39,7 @@ test_that("reg_check_plots() finds its data again, and `auto` is not `all`", {
 })
 
 test_that("reg_check_plots() refuses a table without its data, and a wrong data set", {
-  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra"); skip_if_not_installed("broom")
+  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra")
   d <- reg_plot_data()
   grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial"))
@@ -53,7 +53,7 @@ test_that("reg_check_plots() refuses a table without its data, and a wrong data 
 })
 
 test_that("reg_check_plots() draws every family, and facets a model comparison", {
-  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra"); skip_if_not_installed("broom")
+  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra")
   skip_if_not_installed("MASS"); skip_if_not_installed("nnet")
   d  <- reg_plot_data()
   ds <- withr::with_seed(1, d[sample(nrow(d), 3000L), ])
@@ -129,7 +129,6 @@ test_that("an ordinal linearity panel draws one observed curve per cut", {
 })
 
 test_that("the randomised quantile residual is reproducible, and `seed = NULL` is a fresh draw", {
-  skip_if_not_installed("broom")
   d  <- reg_plot_data()
   ds <- withr::with_seed(1, tidyr::drop_na(d, married, age)[1:2000, ])
   f  <- stats::glm(I(married == "Married") ~ age, data = ds, family = stats::binomial())
@@ -148,7 +147,7 @@ test_that("reg_check_plots() panel set follows REG_CHECKS, family by family", {
   expect_true(all(c("linearity", "residuals", "normality", "dispersion", "influence",
                     "collinearity") %in% reg_checks_for("binomial", what = "panel")))
   # a multinomial refuses every residual panel (two level orderings give residuals correlated -0.705)
-  # and collinearity (car::vif() warns there)
+  # and collinearity (a block vcov has no single correlation matrix)
   mn <- reg_checks_for("multinomial", what = "panel")
   expect_false(any(c("residuals", "normality", "collinearity") %in% mn))
   # proportionality is ordinal-only, and unweighted-only (svyolr has no Brant fit)
@@ -171,7 +170,6 @@ test_that("reg_check_plots() panel set follows REG_CHECKS, family by family", {
 # system rests on, and it is worth a fixture of its own.
 
 test_that("Phase 18z13: a model column is told from its observed twin by ROLE", {
-  skip_if_not_installed("broom")
   d <- reg_plot_data()
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE))
   or_cols <- names(t)[vapply(t, function(c) is_fmt(c) && identical(get_scale(c), "odds_ratio"), logical(1))]
@@ -196,7 +194,7 @@ test_that("Phase 18z13: a model column is told from its observed twin by ROLE", 
 # dropped for ~94 commits (the fit's fitted() is the n x K probability matrix, not one number per
 # row). This walks the promise instead of trusting it.
 test_that("every panel a family DECLARES actually builds", {
-  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra"); skip_if_not_installed("broom")
+  skip_if_not_installed("ggplot2"); skip_if_not_installed("gridExtra")
   skip_if_not_installed("nnet"); skip_if_not_installed("MASS")
   d <- reg_plot_data()[1:1500, ]
   grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())

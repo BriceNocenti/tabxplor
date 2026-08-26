@@ -2,7 +2,6 @@
 # weighted glance, and weighted model comparison. Parity is checked against a hand-built survey::svyglm.
 
 skip_if_not_installed("survey")
-skip_if_not_installed("broom")
 
 # A small deterministic clustered + stratified fixture (psu nested in strata).
 reg_survey_data <- function() {

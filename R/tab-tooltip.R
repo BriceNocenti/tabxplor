@@ -26,7 +26,7 @@
 #' @noRd
 tip_num <- function(v) {
   s <- format(v)
-  stringi::stri_trim_both(stringi::stri_replace_all_regex(s, "[ \\u2007]{2,}", " "))
+  trimws(gsub("[ \u2007]{2,}", " ", s, perl = TRUE), whitespace = "[\\h\\v]")
 }
 
 # Does the cell already print this quantity, anywhere in its template? By FIELD wherever the token
@@ -136,12 +136,12 @@ tip_render_est <- function(x, ctx, tok) {
     v_ci[is.na(v_ci)] <- ""
   }
   # one "%" per line: the estimate carries it, so its own interval does not repeat it.
-  both <- nzchar(v_est) & nzchar(v_ci) & stringi::stri_endswith_fixed(v_est, "%")
-  v_ci[both] <- stringi::stri_replace_first_regex(v_ci[both], "%$", "")
-  out <- stringi::stri_trim_both(paste(v_est, v_ci))
+  both <- nzchar(v_est) & nzchar(v_ci) & endsWith(v_est, "%")
+  v_ci[both] <- sub("%$", "", v_ci[both], perl = TRUE)
+  out <- trimws(paste(v_est, v_ci), whitespace = "[\\h\\v]")
   if (ctx$is_effect && all(is.na(get_ctr(x)))) {
     pv  <- test_fmt_pvalue(get_pvalue(x))
-    out <- dplyr::if_else(is.na(pv), out, stringi::stri_trim_both(paste0(out, ", p = ", pv)))
+    out <- dplyr::if_else(is.na(pv), out, trimws(paste0(out, ", p = ", pv), whitespace = "[\\h\\v]"))
   }
   out[is.na(out)] <- ""
   out
@@ -165,8 +165,7 @@ tip_render_ctr <- function(x, ctx, tok) {
   if (identical(get_color_signif(x), "guaranteed_effect")) ok <- ok & !tip_mean_ctr(x)
   if (!any(ok)) return(rep("", length(x)))
   # a contribution has no direction of its own -- the residual line carries the sign.
-  out <- dplyr::if_else(ok, stringi::stri_replace_first_regex(tip_num(set_display(x, tok)),
-                                                              "^-", ""), "")
+  out <- dplyr::if_else(ok, sub("^-", "", tip_num(set_display(x, tok)), perl = TRUE), "")
   out[is.na(out)] <- ""
   out
 }
@@ -423,6 +422,6 @@ tab_base_n_values <- function(tab) {
 tip_crude_level <- function(pct, inf, sup) {
   col <- fmt(n = NA_integer_, pct = pct, ci_inf = inf, ci_sup = sup, display = "{pct} {ci}",
              scale = "level_pct", pct_type = "row", role = "emp", digits = 0L)
-  txt <- stringi::stri_replace_first_regex(tip_num(format(col)), "\\]%$", "]")
+  txt <- sub("\\]%$", "]", tip_num(format(col)), perl = TRUE)
   paste0(display_token_label("pct", col), ": ", txt)
 }

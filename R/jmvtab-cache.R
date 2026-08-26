@@ -406,7 +406,7 @@ jmv_cache_store_tests <- function(ctx) {
 #' @noRd
 jmvtab_cleannames_display <- function(tabs) {
   cond <- cleannames_condition()
-  strip <- function(x) stringi::stri_replace_all_regex(x, cond, "")
+  strip <- function(x) gsub(cond, "", x, perl = TRUE)
   one <- function(tb) {
     vars <- tab_get_vars(tb)
     label_cols <- intersect(c(vars$row_var, as.character(vars$tab_vars)), names(tb))

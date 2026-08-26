@@ -67,7 +67,7 @@ default_background_colors_neg <- c(
 
 #### Background-legend colors ----
 # A colour legend break-word for the BACKGROUND channel cannot be drawn with a fill in every medium (an
-# Excel run / ggpubr label carry a font colour only), and the pale background fills are invisible as text
+# Excel run carries a font colour only), and the pale background fills are invisible as text
 # on white. These are the same hues darkened to read as text. Light only (the dark bg palette already
 # reads as text). Produced by dev/color_palette_tools.R::darken_for_legend(); regenerate there.
 default_bg_legend_colors <- c(

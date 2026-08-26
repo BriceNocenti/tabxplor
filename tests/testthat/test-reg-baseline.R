@@ -15,7 +15,6 @@ bl_first <- function(t) t[[grep("^Model", names(t))[[1]]]]
 bl_cst   <- function(t) which(as.character(t$var) == "Constant")
 
 test_that("the baseline row renders a level, never an effect", {
-  skip_if_not_installed("broom")
   d <- bl_data()
   # family x measure -> what the Constant is stamped with, and what it prints
   cases <- list(
@@ -46,7 +45,7 @@ test_that("the baseline row renders a level, never an effect", {
 })
 
 test_that("an odds column keeps the baseline ODDS, with its level as the cell's aside", {
-  skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
+  skip_if_not_installed("marginaleffects")
   t   <- suppressMessages(tab_reg(bl_data(), "married", c("race", "rincome"),
                                   family = "binomial", empirical = TRUE, stats = FALSE))
   col <- bl_first(t); i <- bl_cst(t)
@@ -58,7 +57,7 @@ test_that("an odds column keeps the baseline ODDS, with its level as the cell's 
 })
 
 test_that("the marginal and at-reference baselines land on the same field as the coefficient one", {
-  skip_if_not_installed("broom"); skip_if_not_installed("marginaleffects")
+  skip_if_not_installed("marginaleffects")
   d <- bl_data()
   for (eff in c("marginal", "at_reference")) {
     t <- suppressMessages(tab_reg(d, "married", c("race", "rincome"), family = "binomial",
@@ -71,7 +70,6 @@ test_that("the marginal and at-reference baselines land on the same field as the
 })
 
 test_that("a summed score's RISK ratio has its own scale, not the odds ratio's", {
-  skip_if_not_installed("broom")
   d  <- bl_data() |> dplyr::mutate(score = pmin(as.integer(tvhours), 10L))
   or <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
                                  stats = FALSE))[["Model_OR"]]
@@ -90,7 +88,6 @@ test_that("a summed score's RISK ratio has its own scale, not the odds ratio's",
 })
 
 test_that("the baseline's own base is the profile's count, or the population, or nothing", {
-  skip_if_not_installed("broom")
   d  <- bl_data()
   nn <- function(t) {
     m <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = FALSE)
@@ -114,7 +111,6 @@ test_that("the baseline's own base is the profile's count, or the population, or
 })
 
 test_that("a model check past its convention is MARKED, at the faintest shade", {
-  skip_if_not_installed("broom"); skip_if_not_installed("car")
   d <- bl_data()
   set.seed(1)
   d$age2 <- as.numeric(d$age) + stats::rnorm(nrow(d), 0, 0.01)   # collinear on purpose

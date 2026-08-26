@@ -274,7 +274,6 @@ test_that("Phase h: quasipoisson empirical rides the poisson crude path (Obs_IRR
 # ---- Phase g: measure = "log" colours the coef + logs the empirical companion ----------------
 
 test_that("measure = log: a binomial coefficient is coloured (log_odds scale), not all grey", {
-  skip_if_not_installed("broom")
   d <- emp_data()
   t <- suppressWarnings(tab_reg(d, "married", c("race", "inc3"), family = "binomial",
                                 measure = "log", cleannames = FALSE))
@@ -289,7 +288,6 @@ test_that("measure = log: a binomial coefficient is coloured (log_odds scale), n
 })
 
 test_that("measure = log + empirical: Obs_log(OR) / Obs_log(IRR), logged effect + logged CI", {
-  skip_if_not_installed("broom")
   d <- emp_data()
   # binomial: Obs_log(OR); the logged empirical == log of the OR-version, same colour as the model
   tb  <- suppressWarnings(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE,
@@ -381,7 +379,6 @@ test_that("display = 'ratio' renders the ratio field; legacy 'rr' still works", 
 # --- decisions doc S50: adjusted % (marginal standardization) + empirical on the model frame ---------
 
 test_that("change B: empirical companions use the model's complete-case frame, not full data", {
-  skip_if_not_installed("broom")
   d <- emp_data()
   expect_true(anyNA(d$inc3) && !anyNA(d$race))     # differential missingness: inc3 has NAs, race none
   t  <- tab_reg(d, "married", c("race", "inc3"), family = "binomial", empirical = TRUE,
@@ -436,7 +433,6 @@ test_that("change A: adjusted % coheres with the AME; unadjusted prediction == t
 # forms reproduce. The pairwise forms this replaced were right in NEITHER basis on a k > 2 predictor.
 
 test_that("gaussian Obs_diff == the univariable lm coefficient CI on a 3-LEVEL predictor", {
-  skip_if_not_installed("broom")
   d <- tidyr::drop_na(forcats::gss_cat[, c("tvhours", "race", "age")])
   d$race <- forcats::fct_drop(d$race)
   t  <- tab_reg(d, "tvhours", c("race", "age"), family = "gaussian", empirical = TRUE,
@@ -450,7 +446,6 @@ test_that("gaussian Obs_diff == the univariable lm coefficient CI on a 3-LEVEL p
 })
 
 test_that("poisson Obs_IRR == the univariable quasi-Poisson CI on a 3-LEVEL predictor", {
-  skip_if_not_installed("broom")
   d <- tidyr::drop_na(forcats::gss_cat[, c("tvhours", "race", "age")])
   d <- d[d$tvhours > 0, ]; d$race <- forcats::fct_drop(d$race)
   t  <- suppressWarnings(tab_reg(d, "tvhours", c("race", "age"), family = "poisson",
@@ -464,7 +459,6 @@ test_that("poisson Obs_IRR == the univariable quasi-Poisson CI on a 3-LEVEL pred
 })
 
 test_that("a WEIGHTED table takes the sandwich twin instead", {
-  skip_if_not_installed("broom")
   d <- tidyr::drop_na(forcats::gss_cat[, c("tvhours", "race", "age")])
   d$race <- forcats::fct_drop(d$race)
   set.seed(1); d$w <- stats::runif(nrow(d), 0.3, 3)
@@ -477,7 +471,6 @@ test_that("a WEIGHTED table takes the sandwich twin instead", {
 # === the crude/adjusted MERGE: one column shape, built twice ========================================
 
 testthat::test_that("one crude column per model column, on ONE ladder and ONE legend block", {
-  skip_if_not_installed("broom")
   d <- emp_data()
   # the three cases a base column used to grade on a different ladder from the effect beside it
   for (a in list(list(family = "binomial"),
@@ -501,7 +494,6 @@ testthat::test_that("one crude column per model column, on ONE ladder and ONE le
 })
 
 testthat::test_that("a crude column is never its own baseline (ruling Q1(b))", {
-  skip_if_not_installed("broom")
   d <- emp_data()
   for (a in list(list(family = "binomial"), list(family = "gaussian"), list(family = "binomial", link = "ratio"))) {
     dep <- if (identical(a$family, "binomial")) "married" else "tvhours"
@@ -535,7 +527,6 @@ testthat::test_that("under a gap measure the crude column IS the reference colum
 })
 
 testthat::test_that("`display` is post-hoc: it changes no number, on either column", {
-  skip_if_not_installed("broom")
   d <- emp_data()
   base <- tab_reg(d, "married", "race", family = "binomial", empirical = TRUE, cleannames = FALSE)
   same <- tab_reg(d, "married", "race", family = "binomial", empirical = TRUE, cleannames = FALSE,
@@ -634,7 +625,6 @@ test_that("`empirical` takes the word its fact table declares, not only TRUE/FAL
 # --- Phase 22g-ii: the mode is one value, and `TRUE` is the default ------------------------------
 
 test_that("`TRUE` draws a crude column, except where a table is already wide", {
-  skip_if_not_installed("broom")
   d <- emp_data()
   mode <- function(t) {
     r <- vapply(t[vapply(t, is_fmt, logical(1))], function(c) get_role(c), character(1))
@@ -653,7 +643,6 @@ test_that("`TRUE` draws a crude column, except where a table is already wide", {
 })
 
 test_that("`tooltip` computes everything `column` does, and draws nothing", {
-  skip_if_not_installed("broom")
   d  <- emp_data()
   mc <- function(t) t[[names(t)[vapply(t, function(x)
     is_fmt(x) && identical(get_role(x), "model"), logical(1))][[1]]]]
@@ -669,7 +658,6 @@ test_that("`tooltip` computes everything `column` does, and draws nothing", {
 })
 
 test_that("`cell` is the `est_obs` LAYOUT, not a per-cell rewrite", {
-  skip_if_not_installed("broom")
   d <- emp_data()
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", empirical = "cell"))
   x <- t[[names(t)[vapply(t, function(z)

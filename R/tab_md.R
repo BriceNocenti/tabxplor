@@ -190,6 +190,27 @@ tab_md <- function(tabs,
 # is nothing to deprecate.
 
 
+# The DEGRADE table: a frame that cannot be read as a tabxplor table still has to come out as
+# markdown, so it comes out as a plain pipe table -- numbers right, everything else left, which is
+# the only alignment convention a pipe table has.
+md_plain_pipe <- function(df) {
+  df   <- as.data.frame(df, stringsAsFactors = FALSE)
+  num  <- vapply(df, is.numeric, logical(1))
+  body <- lapply(df, function(x) format(x, trim = TRUE, justify = "none"))
+  w    <- pmax(nchar(names(df), type = "width"),
+               vapply(body, function(x) max(0L, nchar(x, type = "width")), integer(1)))
+  pad  <- function(x, i) tx_pad(x, w[i], side = if (num[i]) "left" else "right")
+  row  <- function(cells) paste0("|", paste(cells, collapse = "|"), "|")
+  rule <- vapply(seq_along(df), function(i)
+    if (num[i]) paste0(strrep("-", w[i] - 1L), ":") else paste0(":", strrep("-", w[i] - 1L)),
+    character(1))
+  lines <- c(row(vapply(seq_along(df), function(i) pad(names(df)[i], i), character(1))), row(rule))
+  if (nrow(df))
+    lines <- c(lines, vapply(seq_len(nrow(df)), function(r)
+      row(vapply(seq_along(df), function(i) pad(body[[i]][r], i), character(1))), character(1)))
+  paste(lines, collapse = "\n")
+}
+
 # Render ONE prepared table (`rd`, from tab_export_prep) to a markdown string (no file/clipboard/print
 # -- tab_md() joins the parts and handles those). Holds the md-specific rendering (Steps 4-13).
 # Phase 10f: when the table carries colours and `color = TRUE`, every fmt cell is wrapped in a pandoc
@@ -202,7 +223,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # Graceful degrade -- a table that can't be read as a tabxplor table renders as a plain pipe table.
   if (isTRUE(rd$vars$degrade)) {
     if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars$reason)  # batch-aware (see tab_export_prep)
-    return(paste(knitr::kable(tibble::as_tibble(rd$tab), format = "pipe"), collapse = "\n"))
+    return(md_plain_pipe(rd$tab))
   }
 
   tabs         <- rd$tab
@@ -223,7 +244,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # attributes (previously weight/stars read the stripped rd$tab). Legend only when coloured.
   # Phase 17g: rd_footer() folds the shared render_footer(tab_footer_streams(...)) call.
   # Phase 20h: `lang` IS threaded now. It was documented on tab_md() and dropped here -- so
-  # tab_md(lang = "fr") rendered an English colour legend, while tab_html() / tab_plot() /
+  # tab_md(lang = "fr") rendered an English colour legend, while tab_html() /
   # forest_plot() (which pass it) honoured it. Byte-identical when lang is NULL, which is every
   # golden and every snapshot: NULL means "follow the ambient locale", the former behaviour.
   src         <- if (is.null(rd$color_src)) tabs else rd$color_src
@@ -279,7 +300,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
                         .ref = ann_ref(rd$ann[[nm]]))
       pn      <- attr(raw, "primary_nchar")
       pf      <- attr(raw, "primary_from")
-      trimmed <- stringi::stri_trim(raw, side = "left")
+      trimmed <- trimws(raw, which = "left", whitespace = "[\\h\\v]")
       lead    <- nchar(raw) - nchar(trimmed)
       trimmed[is.na(trimmed)] <- ""
       list(txt  = trimmed,
@@ -485,18 +506,18 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     if (is_bold && nchar(text) > 0) {
       bold_text <- md_bold(text, from, to)                # partial (composite) or whole-cell bold
       if (is_right) {
-        stringi::stri_pad(bold_text, width, side = "left")
+        tx_pad(bold_text, width, "left")
       } else {
-        stringi::stri_pad(bold_text, width, side = "right")
+        tx_pad(bold_text, width, "right")
       }
     } else {
       # Non-bold, or bold with empty text (just pad normally)
       if (is_right) {
         # Right-align: pad text to (width - 2) then add 2 trailing spaces
-        paste0(stringi::stri_pad(text, width - 2L, side = "left"), "  ")
+        paste0(tx_pad(text, width - 2L, "left"), "  ")
       } else {
         # Left-align: 1 leading space + text padded to (width - 2) + 1 trailing space
-        paste0(" ", stringi::stri_pad(text, width - 2L, side = "right"), " ")
+        paste0(" ", tx_pad(text, width - 2L, "right"), " ")
       }
     }
   }
@@ -532,9 +553,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     col_start  <- 1L
     for (r in seq_along(runs$labels)) {
       if (nzchar(runs$labels[r]))
-        span_cells[col_start] <- stringi::stri_pad(
-          paste0(" *", fmt_col_block(runs$labels[r], runs$groups[r])$label, "*"),
-          col_width[col_start], side = "right")
+        span_cells[col_start] <- tx_pad(paste0(" *", fmt_col_block(runs$labels[r], runs$groups[r])$label, "*"), col_width[col_start], "right")
       col_start <- col_start + runs$spans[r]
     }
     col_var_header_line <- md_insert_col_sep(span_cells, sep_after, n_cols, has_sep)
@@ -552,9 +571,9 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     for (j in which(nzchar(cvh$unit))) {
       txt <- paste0("*", cvh$unit[j], "*")
       unit_cells[j] <- if (is_right[j])
-        paste0(stringi::stri_pad(txt, col_width[j] - 2L, side = "left"), "  ")
+        paste0(tx_pad(txt, col_width[j] - 2L, "left"), "  ")
       else
-        paste0(" ", stringi::stri_pad(txt, col_width[j] - 2L, side = "right"), " ")
+        paste0(" ", tx_pad(txt, col_width[j] - 2L, "right"), " ")
     }
     unit_line <- md_insert_col_sep(unit_cells, sep_after, n_cols, has_sep)
   }
@@ -564,10 +583,10 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   for (j in seq_len(n_cols)) {
     header_cells[j] <- if (is_right[j]) {
       # Right-aligned header
-      paste0(stringi::stri_pad(col_names[j], col_width[j] - 2L, side = "left"), "  ")
+      paste0(tx_pad(col_names[j], col_width[j] - 2L, "left"), "  ")
     } else {
       # Left-aligned header
-      paste0(" ", stringi::stri_pad(col_names[j], col_width[j] - 2L, side = "right"), " ")
+      paste0(" ", tx_pad(col_names[j], col_width[j] - 2L, "right"), " ")
     }
   }
 
@@ -695,7 +714,7 @@ md_blank_row <- function(col_width, new_col_var, n_cols, has_multi_col_vars) {
 # tables, so the CSS col_var-separator rule fires only on the true ASCII spacer columns -- used for the
 # nearly-blank col_var-name span row. Plain tables keep ASCII spaces (byte-clean GFM). Vectorised.
 md_pad_blank <- function(widths, styled) {
-  if (styled) stringi::stri_pad("\u00a0", widths, side = "right") else strrep(" ", widths)
+  if (styled) tx_pad("\u00a0", widths, "right") else strrep(" ", widths)
 }
 
 
@@ -744,7 +763,7 @@ md_color_cell <- function(text, attr, num_width, total_width, is_bold, from = NA
   # into the pad instead of pushing the value right.
   vis  <- nchar(text) + md_extra(text, is_bold, from, to)
   body <- paste0(strrep(" ", max(0L, num_width - vis)), open, content, close)
-  stringi::stri_pad(paste0(" ", body), total_width, side = "right")
+  tx_pad(paste0(" ", body), total_width, "right")
 }
 
 # How many RAW columns of markup precede a cell's last visible character. md_bold() adds one "**"

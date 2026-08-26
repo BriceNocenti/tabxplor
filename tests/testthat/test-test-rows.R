@@ -4,7 +4,6 @@
 # build-time stopifnot at the tail of R/tab-test-display.R (it runs at load, not here).
 
 test_that("every discriminator a producer can write is a declared row", {
-  skip_if_not_installed("broom")
   gss <- gss_cat_data_formatting()
   # one table of each kind the package builds -- this is the exhaustiveness gate, and it is a test
   # rather than a source scan because chi2_compute_test() is full of unrelated string constants.

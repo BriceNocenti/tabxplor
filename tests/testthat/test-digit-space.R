@@ -10,9 +10,9 @@
 #        space (its cell-edge + spacer padding stays ASCII -- see test-render-html.R).
 # See: CLAUDE.md > Phase 14h + 14m-ii.
 
-fig <- stringi::stri_unescape_unicode("\\u2007")   # FIGURE SPACE, one digit wide
-sig <- stringi::stri_unescape_unicode("\\u03c3")   # sigma
-nbs <- stringi::stri_unescape_unicode("\\u202f")   # Phase 14x: the OLD mean/sd joiner -- must be GONE
+fig <- "\u2007"   # FIGURE SPACE, one digit wide
+sig <- "\u03c3"   # sigma
+nbs <- "\u202f"   # Phase 14x: the OLD mean/sd joiner -- must be GONE
                                                    # now (replaced by `pad`: ASCII in console, fig in md/html)
 
 # === the thousands mark follows `pad` =============================================
@@ -120,7 +120,7 @@ testthat::test_that("tab_md(): a bold row bolds the mean, not the sd", {
   md <- tab_md(t, color = FALSE, css = FALSE, color_legend = FALSE)
   # bold closes BEFORE the joiner: "**3.0**<figsp>(sigma2.6)", never "**3.0 (sigma2.6)**".
   # Phase 14x: the joiner is now the FIGURE space (markdown renders in a proportional host font).
-  jn <- stringi::stri_unescape_unicode("\\u00a0")   # the template literal's own space
+  jn <- "\u00a0"   # the template literal's own space
   testthat::expect_match(md, paste0("\\*\\*[0-9.]+\\*\\*", jn, "\\(", sig), all = FALSE)
   testthat::expect_no_match(md, paste0("\\*\\*[0-9.]+", jn, "\\(", sig, "[0-9. ]+\\)\\*\\*"),
                             all = TRUE)
@@ -175,7 +175,7 @@ testthat::test_that("tab_xl(): the star literal is padded with figure spaces", {
   testthat::expect_identical(st, c("***", "", "*"))
   # the width every cell's star field is padded to = the column max ("" counts 0)
   w  <- max(nchar(st))
-  padded <- stringi::stri_pad(st, w, side = "right", pad = fig)
+  padded <- tx_pad(st, w, "right", pad = fig)
   testthat::expect_identical(nchar(padded), rep(w, 3L))
   testthat::expect_false(any(grepl(" ", padded, fixed = TRUE)))
   # and format()'s own star pad agrees, glyph for glyph

@@ -57,11 +57,14 @@ library(tabxplor)
 ```{r, echo = FALSE, include = FALSE}
 # Colour the console outputs (ANSI -> html, via fansi), but hand as-is results (the html tables,
 # marked by knitr with an ASIS token) back to knitr's default hook untouched.
+# Escape the three HTML specials before fansi turns the ANSI codes into markup.
+esc_html <- function(x) gsub(">", "&gt;", gsub("<", "&lt;", gsub("&", "&amp;", x, fixed = TRUE),
+                                               fixed = TRUE), fixed = TRUE)
 default_output_hook <- knitr::knit_hooks$get("output")
 knitr::knit_hooks$set(output = function(x, options) {
   if (grepl("KNITR_ASIS_OUTPUT_TOKEN", x, fixed = TRUE)) return(default_output_hook(x, options))
   paste0('<pre class="r-output"><code>',
-         fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+         fansi::sgr_to_html(x = esc_html(x), warn = FALSE),
          '</code></pre>')
 })
 # A cli message or warning is its own kind of condition, so knitr routes each through its own hook,
@@ -69,7 +72,7 @@ knitr::knit_hooks$set(output = function(x, options) {
 for (hook in c("message", "warning")) {
   knitr::knit_hooks$set(stats::setNames(list(function(x, options) {
     paste0('<pre class="r-output"><code>',
-           fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+           fansi::sgr_to_html(x = esc_html(x), warn = FALSE),
            '</code></pre>')
   }), hook))
 }
@@ -403,26 +406,17 @@ A variable named in `spread_vars` alone is added to `tab_vars` for you, so `tab(
 
 **Multiple-answer questions** — "which of these apply to you?" — reach the data as a *battery* of yes/no factors, one per item. `levels = "first"` keeps only the first level of each column factor, so a whole battery fits in one compact table, one column per item.
 
-The `tea` data (300 tea drinkers, from the `FactoMineR` package) has such a battery: *when do you drink tea?*, asked as six yes/no items. Everything below depends on one thing — the "yes" answer has to be each factor's **first** level:
+`facto_tea`, which ships with tabxplor (300 tea drinkers, from the **FactoMineR** package of François Husson, Julie Josse, Sébastien Lê and Jérémy Mazet — with thanks; see `?facto_tea`), has such a battery: *when do you drink tea?*, asked as six yes/no items. Everything below depends on one thing — the "yes" answer has to be each factor's **first** level, which is how the shipped copy stores it:
 
 ```{r, echo = TRUE}
-data("tea", package = "FactoMineR")
 tea_when_vars <- c("breakfast", "tea.time", "evening", "lunch", "dinner", "always")
-
-# Put the "yes" level first — it is the one the tables keep
-tea <- tea |>
-  tibble::as_tibble() |>
-  dplyr::mutate(dplyr::across(
-    dplyr::all_of(c(tea_when_vars, "Sport")),
-    ~ (if (grepl("^Not", levels(.)[1])) forcats::fct_rev(.) else .) |>
-      forcats::fct_relabel(~ gsub(".", " ", ., fixed = TRUE))
-  ))
+levels(facto_tea$breakfast)     # the "yes" answer first: what every table below reads
 ```
 
 `score_from_lv1()` reduces that same battery to a single **summed score**: for each person it counts the factors sitting at their first level — here, at how many of the six moments they drink tea (missing values never count). The score is an ordinary numeric variable, so it takes its place in the same table, as a mean:
 
 ```{r, echo = TRUE}
-tea <- tea |> score_from_lv1("tea_when", vars_list = tea_when_vars) # score variable
+tea <- facto_tea |> score_from_lv1("tea_when", vars_list = tea_when_vars) # score variable
 tab(tea, SPC, all_of(c(tea_when_vars, "tea_when")), pct = "row", levels = "first", na = "drop", color = TRUE)
 ```
 
@@ -539,7 +533,7 @@ Three things are worth knowing:
 * **Significance is the whisker.** It is coloured whole, so an interval that crosses the reference line is visible without stars — and there are none.
 * **It reads the table, and computes nothing.** It returns a plain `ggplot`, so `+ ggplot2::labs(...)`, `+ ggplot2::theme(...)` and `ggsave()` work; `theme = "print_minimalistic"` gives the greyscale version, `guide = "bands"` shades the panel behind the whiskers with the colour scale itself (a good way to *show* a class what the colours mean).
 
-Do not confuse it with `tab_plot()`, which makes a picture *of the table* (useful to paste a coloured table where nothing else renders). `forest_plot()` is the chart; it also draws regression tables — see `vignette("tabxplor-reg")`.
+`forest_plot()` draws regression tables too — see `vignette("tabxplor-reg")`.
 
 ## Working with the result
 

@@ -12,7 +12,6 @@ logit_data <- function() {
 }
 
 test_that("tab_reg() returns a grouped odds-ratio tab with the right structure", {
-  skip_if_not_installed("broom")
   t1 <- tab_reg(logit_data(), "married", c("race", "rincome"), empirical = FALSE)
 
   expect_s3_class(t1, "tabxplor_grouped_tab")
@@ -33,7 +32,6 @@ test_that("tab_reg() returns a grouped odds-ratio tab with the right structure",
 })
 
 test_that("tab_reg() odds ratios / CI / p match stats::glm (unweighted)", {
-  skip_if_not_installed("broom")
   data <- logit_data()
   t1   <- tab_reg(data, "married", c("race", "rincome"), cleannames = FALSE)
   col  <- t1[["Model_OR"]]
@@ -61,7 +59,6 @@ test_that("tab_reg() odds ratios / CI / p match stats::glm (unweighted)", {
 })
 
 test_that("tab_reg() matches survey::svyglm with survey weights", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("survey")
   data <- logit_data() |>
     dplyr::filter(!is.na(tvhours)) |>
@@ -89,7 +86,6 @@ test_that("tab_reg() matches survey::svyglm with survey weights", {
 })
 
 test_that("colour: grey_non_signif greys CI-includes-1 cells, colours large significant OR", {
-  skip_if_not_installed("broom")
   t1  <- tab_reg(logit_data(), "married", c("race", "rincome"), cleannames = FALSE)
   col <- t1[["Model_OR"]]
   txt <- fmt_color_channels(col)$text
@@ -102,7 +98,6 @@ test_that("colour: grey_non_signif greys CI-includes-1 cells, colours large sign
 })
 
 test_that("tab_reg() puts one OR column per model, blank where a predictor is absent", {
-  skip_if_not_installed("broom")
   t2 <- tab_reg(logit_data(), "married",
                     predictors = list(demographic = c("race", "age"),
                                   full        = c("race", "age", "rincome")))
@@ -117,7 +112,6 @@ test_that("tab_reg() puts one OR column per model, blank where a predictor is ab
 })
 
 test_that("a 3+ level outcome forced to binomial is ONE LEVEL against the rest", {
-  skip_if_not_installed("broom")
   d <- logit_data()
   # Phase 22g-v: the forced family used to be refused. It now collapses the outcome -- the chosen
   # level (the first, by default) against every other one merged -- which is the ordinary way of
@@ -140,7 +134,6 @@ test_that("a 3+ level outcome forced to binomial is ONE LEVEL against the rest",
 })
 
 test_that("tab_reg() output exports through every backend without error", {
-  skip_if_not_installed("broom")
   t1 <- tab_reg(logit_data(), "married", c("race", "rincome"))
   expect_no_error(tab_kable(t1))
   expect_no_error(tab_md(t1))
@@ -151,7 +144,6 @@ test_that("tab_reg() output exports through every backend without error", {
 })
 
 test_that("1/OR display renders OR < 1 as a reciprocal", {
-  skip_if_not_installed("broom")
   t1  <- tab_reg(logit_data(), "married", c("race", "rincome"), cleannames = FALSE)
   txt <- format(t1[["Model_OR"]], special_formatting = TRUE)
   i <- which(as.character(t1$levels) == "Black")   # OR well below 1
@@ -159,7 +151,6 @@ test_that("1/OR display renders OR < 1 as a reciprocal", {
 })
 
 test_that("method = 'profile' uses profile-likelihood CI + LR-test p (dual)", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("MASS")
   data <- logit_data()
   col  <- tab_reg(data, "married", c("race", "rincome"), ci_method = "profile",
@@ -182,7 +173,6 @@ test_that("method = 'profile' uses profile-likelihood CI + LR-test p (dual)", {
 })
 
 test_that("method = 'profile' falls back to Wald for weighted models (with a message)", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("survey")
   data <- logit_data() |>
     dplyr::filter(!is.na(tvhours)) |>
@@ -200,7 +190,6 @@ test_that("method = 'profile' falls back to Wald for weighted models (with a mes
 })
 
 test_that("color_signif = 'ignore' colours non-significant odds ratios too", {
-  skip_if_not_installed("broom")
   col <- tab_reg(logit_data(), "married", c("race", "rincome"),
                    color_signif = "ignore", cleannames = FALSE)[["Model_OR"]]
   expect_identical(get_color_signif(col), "ignore")
@@ -228,7 +217,6 @@ test_that("color_signif = 'ignore' colours non-significant odds ratios too", {
 # --- Phase 14x: na= forwarding + the model-comparison mode ----------------------------------------
 
 test_that("tab_reg()/tab_reg() forward na = 'drop_all'", {
-  skip_if_not_installed("broom")
   d <- logit_data()
   # na = "drop_all" fits on the shared complete-case population -> runs without error and keeps shape.
   t1 <- tab_reg(d, "married", c("race", "rincome"), na = "drop_all")
@@ -244,7 +232,6 @@ test_that("tab_reg()/tab_reg() forward na = 'drop_all'", {
 })
 
 test_that("tab_reg() accepts several dependents (K mode -> a list of tables)", {
-  skip_if_not_installed("broom")
   # second dependent NOT derived from a predictor (else the model is perfectly separated -> glm warns)
   d <- logit_data() |>
     dplyr::mutate(heavy_tv = factor(dplyr::if_else(tvhours >= 3, "heavy", "light")))

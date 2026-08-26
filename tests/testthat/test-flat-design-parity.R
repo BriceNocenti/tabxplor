@@ -105,7 +105,6 @@ test_that("4. the closed form == svyrecvar on the SAME flat design (both leaves)
 })
 
 test_that("7. tab_reg(empirical=)'s Obs_OR bracket == the univariable svyglm SE(log OR)", {
-  skip_if_not_installed("broom")
   d <- fdp_fixture(3000, seed = 5); des <- fdp_des(d)
   tt <- tab_reg(d, "col", "grp", family = "binomial", empirical = TRUE, wt = "w")
   oc <- tt[["Obs_OR"]]
@@ -133,7 +132,6 @@ test_that("8. a mean-DIFFERENCE bracket is exactly the two domain design varianc
                tolerance = 0.01)
   # ... and the crude Obs_diff column of tab_reg() is the same quantity with a POOLED (Student) SE,
   # which REG_EMPIRICAL picks so it matches the model AME beside it -- close, deliberately not equal.
-  skip_if_not_installed("broom")
   dc <- tab_reg(d, "x", "grp", family = "gaussian", empirical = TRUE, wt = "w")[["Obs_diff"]]
   hr <- (get_ci_sup(dc) - get_ci_inf(dc)) / 2
   expect_true(all(abs(hr[is.finite(hr)] / (se_svy * conf_level_to_z(0.95, digits = Inf)) - 1) < 0.07))

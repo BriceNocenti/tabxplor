@@ -139,7 +139,7 @@ tx_transpose_render <- function(rd, backend) {
   # the html engine a NULL, whose length-check fell back to `ref_alltot` alone -- silently greying a
   # transposed regression's footer cells. It is a per-cell logical like any other.
   keepblack_d <- slot_lgl("keep_black")
-  # font / back are the RESOLVED per-cell hex (theme grey folded in) -- tab_plot reads these, not slots.
+  # font / back are the RESOLVED per-cell hex (theme grey folded in) -- a backend reads these, not slots.
   font_d      <- slot_chr("font", NA_character_)
   back_d      <- slot_chr("back", "none")
   texthex_d   <- slot_chr("text_hex", NA_character_)
@@ -348,7 +348,7 @@ tx_format_source_cols <- function(tab, ann, order_i, backend) {
     } else if (identical(backend, "md")) {
       raw <- format(col, special_formatting = TRUE, na = "", stars = TRUE, bold_split = TRUE,
                     pad = fig_space, .ref = rf)
-      txt[[k]] <- stringi::stri_trim(raw, side = "left")        # strip the source column's own pad
+      txt[[k]] <- trimws(raw, which = "left", whitespace = "[\\h\\v]")  # strip the source column's own pad
       txt[[k]][is.na(txt[[k]])] <- ""
     } else if (identical(backend, "kable")) {
       txt[[k]] <- format(col, html = TRUE, special_formatting = TRUE, na = "", stars = TRUE,

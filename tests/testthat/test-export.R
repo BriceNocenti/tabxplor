@@ -12,10 +12,6 @@ testthat::test_that("tab_export() dispatches to each format", {
   tab_export(t_row, "xl", path = f, open = FALSE, replace = TRUE)
   testthat::expect_true(file.exists(f) && file.size(f) > 0)
 
-  if (requireNamespace("ggpubr", quietly = TRUE) &&
-      requireNamespace("cowplot", quietly = TRUE)) {
-    testthat::expect_no_error(tab_export(t_row, "plot"))
-  }
 })
 
 testthat::test_that("color = FALSE renders monochrome (no colour spans)", {
@@ -70,19 +66,6 @@ testthat::test_that("contrib tables render through every exporter (comp tab/all,
   }
 })
 
-testthat::test_that("tab_plot renders a non-mergeable list as a list of plots (list-method parity)", {
-  testthat::skip_if_not_installed("ggpubr")
-  testthat::skip_if_not_installed("cowplot")
-  testthat::skip_if_not_installed("gtable")
-  is_gg <- function(x) inherits(x, "ggplot")            # version-agnostic (is.ggplot() is deprecated)
-  t2 <- tab(forcats::gss_cat, race, relig, pct = "row", color = "diff")  # different col_vars
-  testthat::expect_true(is_gg(tab_plot(t_row)))                          # single -> one plot
-  lst <- tab_plot(list(t_row, t2))                                        # non-mergeable -> list
-  testthat::expect_true(is.list(lst) && !is_gg(lst))
-  testthat::expect_length(lst, 2L)
-  testthat::expect_true(all(vapply(lst, is_gg, logical(1))))
-})
-
 # === SECTION: var_names, on all four exporters (Phase 14i) ===================
 
 testthat::test_that("var_names is honoured by every exporter, and defaults to the option", {
@@ -110,12 +93,6 @@ testthat::test_that("var_names is honoured by every exporter, and defaults to th
   # variable name.
   mg <- sub('".*$', "", sub('^.*ref="', "", unlist(openxlsx2::wb_load(tmp)$worksheets[[1]]$mergeCells)))
   testthat::expect_length(grep("^A[0-9]+:A", mg, value = TRUE), 1L)   # the header/unit one only
-
-  # plot (soft-deprecated, but it takes the same arg -- the drop happens in the shared prep)
-  testthat::skip_if_not_installed("ggpubr")
-  testthat::skip_if_not_installed("gtable")
-  testthat::expect_s3_class(
-    suppressWarnings(tab_export(merged, "plot", var_names = "none")), "ggplot")
 
   # the option is the default
   withr::local_options(tabxplor.var_names = "none")

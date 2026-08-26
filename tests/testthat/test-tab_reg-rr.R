@@ -343,8 +343,7 @@ test_that("a logged crude column is the log of ITS measure, never of the family'
   # re-derived from the crude family's COEFFICIENT shape, so wherever the two differ -- a summed
   # score (whose block's coefficient is an odds ratio) or a borrowed shape (a binary marginal ratio's
   # crude twin lives in another block) -- `Obs_log(RR)` printed Woolf's log(OR).
-  skip_if_not_installed("FactoMineR")
-  e <- new.env(); utils::data("tea", package = "FactoMineR", envir = e); tea <- e$tea
+  tea   <- as.data.frame(facto_tea)
   items <- c("home", "tearoom", "work", "friends", "resto", "pub")
   tea$tea_where <- rowSums(vapply(items, function(v) as.integer(tea[[v]] == v),
                                   integer(nrow(tea))))

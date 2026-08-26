@@ -93,7 +93,6 @@ testthat::test_that("the marginal superiority measure is COLLAPSIBLE, where the 
 
 testthat::test_that("tab_reg() draws ONE column, with its crude twin and a tested gap", {
   testthat::skip_if_not_installed("MASS")
-  testthat::skip_if_not_installed("broom")
   d <- gss_cat_data_formatting()
   t <- suppressWarnings(tab_reg(d, outcome = "rincome", predictors = c("race", "marital"),
                                 family = "ordinal", effect = "marginal", empirical = TRUE,
@@ -114,7 +113,6 @@ testthat::test_that("tab_reg() draws ONE column, with its crude twin and a teste
 
 testthat::test_that("`measure = \"ratio\"` on an ordered outcome builds one win-ratio column", {
   testthat::skip_if_not_installed("MASS")
-  testthat::skip_if_not_installed("broom")
   d <- gss_cat_data_formatting()
   t <- suppressWarnings(tab_reg(d, outcome = "rincome", predictors = "race",
                                 family = "ordinal", measure = "ratio", cleannames = FALSE))
@@ -129,7 +127,6 @@ testthat::test_that("`measure = \"ratio\"` on an ordered outcome builds one win-
 testthat::test_that("a WEIGHTED ordinal model can be read on its rank measures", {
   testthat::skip_if_not_installed("MASS")
   testthat::skip_if_not_installed("survey")
-  testthat::skip_if_not_installed("broom")
   d <- gss_cat_data_formatting()[c("rincome", "race", "marital")]
   d <- d[stats::complete.cases(d), ]
   set.seed(2); d$w <- stats::runif(nrow(d), .5, 2)

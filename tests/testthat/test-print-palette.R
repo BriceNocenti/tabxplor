@@ -212,7 +212,7 @@ testthat::test_that("the print palette meets its perceptual specification", {
   ink <- unname(get_color_style("color_code", "text", "print_minimalistic"))
   testthat::expect_true(all(diff(zz_contrast(c(grey, ink[1], ink[2]), "#FFFFFF")) > 0))
 
-  # The legend's font stand-in for the fills (an Excel run / ggpubr label cannot fill).
+  # The legend's font stand-in for the fills (an Excel run cannot fill).
   testthat::expect_true(all(zz_contrast(get_color_style("color_code", "bg_legend", "print_minimalistic"),
                                         "#FFFFFF") >= 4.5))
 })
@@ -432,12 +432,6 @@ testthat::test_that("the legend names the face, not a colour, and never promises
   testthat::expect_match(pl, "+5", fixed = TRUE)
   testthat::expect_match(pl, "+10", fixed = TRUE)
   testthat::expect_no_match(pl, "+30", fixed = TRUE)
-})
-
-testthat::test_that("tab_plot renders the print palette without error", {
-  skip_if_not_installed("ggplot2")
-  skip_if_not_installed("ggpubr")
-  testthat::expect_no_error(tab_plot(zz_tab(), theme = "print_minimalistic"))
 })
 
 testthat::test_that("a transposed table keeps the print face", {

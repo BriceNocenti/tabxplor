@@ -388,16 +388,6 @@ testthat::test_that("print methods never crash on malformed / empty tabxplor tab
   testthat::expect_no_error(utils::capture.output(print(empty_tab)))
 })
 
-testthat::test_that("tab_plot degrades gracefully (message, no error)", {
-  testthat::skip_if_not_installed("ggpubr")
-  testthat::skip_if_not_installed("gtable")
-  testthat::skip_if_not_installed("ggplot2")
-  testthat::skip_if_not_installed("cowplot")
-  for (nm in names(degrade_shapes)) {
-    testthat::expect_message(tab_plot(degrade_shapes[[nm]]), "skipped", info = nm)
-  }
-})
-
 testthat::test_that("tab_xl degrades gracefully (writes the raw frame, no error)", {
   testthat::skip_if_not_installed("openxlsx2")
   for (nm in names(degrade_shapes)) {

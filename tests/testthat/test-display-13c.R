@@ -43,7 +43,6 @@ testthat::test_that("a REFERENCE cell at the neutral prints a bare 1, a cell tha
   # a non-reference cell rounding to the neutral keeps the glyph and the decimals
   testthat::expect_true(any(f[!is_totrow(col)] == paste0(mult_glyph, "1.00")))
   # and a regression Constant IS a reference row, but its odds ratio is a real baseline value
-  skip_if_not_installed("broom")
   reg <- suppressMessages(tab_reg(gss_cat_data_formatting(), "married", "race",
                                   family = "binomial"))
   cst <- format(reg[["Model_OR"]], special_formatting = TRUE)[as.character(reg$var) == "Constant"]

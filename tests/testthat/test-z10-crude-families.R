@@ -52,7 +52,6 @@ test_that("crude_key is stored per outcome, and NA only where there is genuinely
 # --- grouped binomial (`trials =`) ------------------------------------------------------------------
 
 test_that("a grouped binomial's crude OR is the univariable glm(cbind(s, q - s))", {
-  skip_if_not_installed("broom")
   d <- z10_data()
   t <- suppressWarnings(suppressMessages(
     tab_reg(d, "score", c("race", "mar3"), family = "binomial", trials = 10, empirical = TRUE,

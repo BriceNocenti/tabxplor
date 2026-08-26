@@ -18,9 +18,7 @@ inv_data <- function(n = 2000) {
 }
 
 inv_tea <- function() {
-  e <- new.env()
-  utils::data("tea", package = "FactoMineR", envir = e)
-  tea <- e$tea
+  tea   <- as.data.frame(facto_tea)
   items <- c("home", "tearoom", "work", "friends", "resto", "pub")
   tea$tea_where <- rowSums(vapply(items, function(v) as.integer(tea[[v]] == v),
                                   integer(nrow(tea))))
@@ -58,10 +56,8 @@ inv_check <- function(t, tag) {
 }
 
 test_that("every family's cells hold one estimand: interval, neutral and star agree", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("nnet")
   skip_if_not_installed("MASS")
-  skip_if_not_installed("FactoMineR")
   d <- inv_data()
   # family x LINK x contrast x measure -> the one case that exercises each producer. Since the
   # cascade, `link` and `measure` are separate axes, so both routes to a ratio are swept: the
@@ -119,7 +115,6 @@ test_that("every family's cells hold one estimand: interval, neutral and star ag
 })
 
 test_that("a logged column is the log of its exponentiated twin, cell for cell", {
-  skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d <- inv_data()
   # the path derives its contrast from `comparison` but its SCALE from the estimand: the two were one

@@ -19,7 +19,7 @@ Two design principles underpin the whole package:
 
 **Performance:** aggregation runs on `data.table` internally; the user only ever sees tibbles of `fmt` columns.
 
-**Dependencies are pay-as-you-go:** table building and core inference are always available (hard Imports include `data.table`, `broom`, and the stats engines `survey`/`nnet`/`MASS`); exporters, plotting, parallelism, jamovi and advanced regression backends are all Suggests, guarded at their entry points.
+**Dependencies are pay-as-you-go:** table building and core inference are always available (15 non-base Imports, including `data.table` and the stats engines `survey`/`nnet`/`MASS`); exporters, plotting, parallelism, jamovi and advanced regression backends are all Suggests, guarded at their entry points by `tx_need_pkg()`. The CRAN ceiling is 20 Imports and the headroom is deliberate; nothing is promoted from Suggests. See `dev/dependencies.md` for the inventory, the vendored code and its credits, and the costed options not taken.
 
 ---
 
@@ -55,7 +55,8 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 - `tab-args.R` — the argument surface: `TAB_ARGS` / `EXPORT_ARGS` drive signatures, value lists and `@param` prose.
 - `tab-options.R` — the option subsystem: `TAB_OPTIONS` + the generated `?tabxplor-options` page.
 - `zzz-fact-keys.R` — `TAB_FOREIGN_KEYS`: cross-table foreign-key checks run at load.
-- `utils.R` — `.onLoad()` (seeds options), factor/list/string utilities, deprecation and message helpers.
+- `utils.R` — `.onLoad()` (seeds options), factor/list/string utilities (padding, wrapping, HTML escaping), deprecation and message helpers.
+- `data.R` — the four example data sets and their source credits (built by `data-raw/DATASETS.R`).
 
 **Regression** — `tab_reg()` and its model machinery.
 
@@ -100,7 +101,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 
 **Cross-cutting** (touch with care): `fmt_class.R` is the foundation of every column; `.onLoad()` in `utils.R` seeds every option; `format.tabxplor_fmt()` and `fmt_color_channels()` are the shared display/colour sources of truth across all backends.
 
-**Other directories:** `vignettes/` (introduction, *All else equal*, regression, weights, programming; `vignettes/articles/` is pkgdown-only and holds the French twins) · `tests/testthat/` (testthat v3) · `man/` (roxygen-generated, never edit) · `inst/i18n/` + `po/` (translations) · `jamovi/` (module definition) · `dev/` (architecture guide, dev scripts, perf harness, `.Rbuildignore`'d).
+**Other directories:** `vignettes/` (introduction, *All else equal*, regression, weights, programming; `vignettes/articles/` is pkgdown-only and holds the French twins) · `tests/testthat/` (testthat v3) · `man/` (roxygen-generated, never edit) · `data/` + `data-raw/` (the four example data sets and the script that builds them) · `inst/i18n/` + `po/` (translations) · `jamovi/` (module definition) · `dev/` (architecture guide, dev scripts, perf harness, `.Rbuildignore`'d).
 
 ---
 
@@ -653,7 +654,7 @@ The task is to **drastically** rewrite and simplify R scripts comments (includin
 
 ⚠ **Not re-verified here: vignette building.** The check ran with `vignettes = FALSE` because a parallel session was rewriting `vignettes/` throughout (Phase 23a). Both vignette steps were already OK on CI; re-run a full `devtools::check()` once 23a lands.
 
-#### Phase 22l — vignette rendering fixes — DONE
+#### Phase 22k — vignette rendering fixes — DONE
 
 Two defects, both in `R/` and neither reachable from a vignette, fixed by **removing an asymmetry** in each case rather than adding a rule.
 
@@ -674,16 +675,130 @@ Measured on real tables: `marital` (7 chars / 7 rows) and `partyid` (7 / 11) kee
 **Tests.** `test-tab_md.R`'s "md-only rules" test now states the reset is medium-agnostic and asserts the old selector is GONE; `test-print-palette.R`'s "the colour themes do not force it" asserts no ink but a `transparent` ground. `_snaps/golden.md` regenerated: 16 cases, four diff lines, all four the two CSS rules and nothing else. Everything else stayed green unedited, including the no-shorthand lock (`border-width` is a width property, not the `border`/`border-top` shorthand that resets `border-*-color`) and the four existing rotation assertions.
 
 
-#### Phase 22l — Imports and Suggests cleaning
-- Please hard-deprecate tab_plot(), bad looking, glitchy and used by nobody, to clear the Suggests list of useless stuff it brings. Keep it’s code commented out somewhere for possible rewriting in future dev.
-- Are there Imports we could skip by writing just a little code, or copying some of their functions in `R/utils.R` with a Thank You when the licence permits it ? Give up stringi:: for base R, or would it make some stuff less reliable ? Give up broom:: ? Give up knitr ?
-- Are there other Suggests that are already near removal and that we could terminate ? Or Suggests from which we only use a function that could be easily borrowed, etc. ?
-- If there are room in Imports before the 20 non-base Imports CRAN trigger, this is the order in which I would want to promote current Suggests to Imports: VGAM (>= 1.1.0), svyVGAM (>= 1.2), brant (>= 0.3.0), mirai (>= 2.5.0), RhpcBLASctl, parallelly (>= 1.32.0), openxlsx2 (>= 1.0.0).
+#### Phase 22l — Imports and Suggests cleaning — DONE
+
+**Imports 19 -> 15** (five slots of headroom against CRAN's 20), **Suggests 32 -> 24**, and
+`install.packages("tabxplor", dependencies = TRUE)` -- which `tx_need_pkg()` actively teaches -- went
+from pulling **205 packages to 131**. The hard install went 45 -> 34. Gone from a user's library:
+`shiny`, `lme4`, `quantreg`, `mgcv`, `pbkrtest`, `DT`, `emmeans`, `rstatix`, `ggpubr`, `FactoMineR`,
+`questionr`, `car`, `carData`, `showtext` and 60 more. The standing policy, the inventory and the
+options priced but not taken now live in **`dev/dependencies.md`**, referenced from the architecture
+section; this summary records only what moved and what it cost.
+
+⚠ **Nothing was promoted.** The seven candidates would have taken Imports to 26, and each is huge
+(`VGAM`), compiled (`openxlsx2` -> Rcpp + stringi) or dead weight unless `tabxplor.parallel = TRUE`
+(`mirai`, `RhpcBLASctl`, `parallelly`). The freed slots are the deliverable.
+
+⚠ **One premise of the brief did not hold: `survey` is not only a survey dependency.**
+`survey::regTermTest()` is the Wald engine for *unweighted* multinomial and ordinal footers
+(`R/tab_reg.R:2538`, `:3021`), so moving it would have silently removed footer rows for users who
+never touch a design. It stays in Imports, and `dev/dependencies.md` records why.
+
+**`tab_plot()` is defunct**, following `kable_tabxplor_style()`'s precedent (an exported stub with
+`@keywords internal` and `lifecycle::deprecate_stop`). It was 346 lines plus a six-function vendored
+`ggpubr` block in `R/utils.R`, the sole consumer of `ggpubr` / `cowplot` / `gtable` (~15 packages,
+`rstatix` and `ggsci` among them), and the most expensive single call in the package at 2.49 s. Also
+removed: `tab_export(format = "plot")`, the `tabxplor.plot_num_font` option, `tx_num_font()`'s `plot`
+branch, and `"tab_plot"` from **11** `TAB_ARGS` producer vectors. Its source is parked as live,
+un-commented R in **`dev/legacy/tab_plot_2.0.0.R`** -- not commented out in `R/`, which the
+documentation discipline forbids and which would make it ungreppable -- with a header listing the
+four things besides the file that a revival needs.
+
+**Three Imports removed by writing a little code.**
+
+- **`htmltools`** was one function. `tx_html_escape()` (`R/utils.R`) is a faithful port of
+  `htmlEscape` (GPL >= 2, credited), verified identical for both `attribute` modes, encoding included.
+  ⚠ The nine vignettes also called it, in their `fansi` knit hooks; they now escape inline, so
+  htmltools leaves DESCRIPTION entirely rather than dropping to Suggests.
+- **`broom`** was four call sites. `reg_tidy_coefmat()` / `reg_tidy_multinom()` / `reg_tidy_polr()` /
+  `reg_glance_lm()` read the same numbers off `summary()`, verified identical against broom 1.0.13 on
+  glm / lm / svyglm / multinom / polr / glance. ⚠ The spine of `reg_tidy_coefmat()` is
+  `names(coef(fit))`, **not** the summary's rownames: an aliased coefficient is `NA` in `coef()` and
+  absent from the summary, and `reg_crude_rows()` matches the skeleton by row position.
+- **`knitr` -> Suggests.** `VignetteBuilder` is unaffected and the three `knit_print` methods were
+  already *delayed* registrations. Chunk options now go through `tx_knitr_opt()`, and the one real
+  call (`kable()` on the degrade path) became `md_plain_pipe()`.
+
+⚠ **A live regression the knitr move exposed, worth remembering.** `print.tabxplor_kable()` ends in
+`NextMethod()`, and an S3 method exists only once its own package is loaded. Previously
+`knitr::opts_knit$get()` loaded knitr as a side effect; without it, the fall-through reached
+`print.default()` and printed the raw character vector with its attributes. The method now loads
+knitr before falling through, with a one-line `cat()` fallback -- which also collapsed the `"next"`
+and `"degrade"` branches into one.
+
+**`car` dropped, `tx_vif()` vendored** (`R/reg-assumptions.R`) -- overturning that file's own
+"never a hand-rolled substitute" note, since `car` dragged `lme4`, `quantreg`, `mgcv` and `pbkrtest`
+for one formula. It is Fox & Monette (1992) GVIF, returning **both** of car's shapes so both call
+sites read it unchanged, and it **refuses rather than approximates** (fewer than 2 terms, aliased
+coefficients, a rank-deficient fit, a matrix-coefficient fit, a singular vcov -> `NULL`, no row).
+Measured `all.equal(tolerance = 1e-13)` against real `car::vif()` on **14** fit shapes, and `NULL`
+exactly where car errors or returns `NaN`. That check cannot be a test (car is no longer declared),
+so it is **`dev/vif_car_parity.R`**, to re-run after any change. The suite's own tests were re-pointed
+at two *independent* derivations: `1/(1 - R2)` of the auxiliary regression on the model's IRLS
+weights, and the determinant ratio taken on `cov.wt(X)` -- the data side, never `vcov()`.
+
+**Four example data sets now ship** (`R/data.R`, `data-raw/DATASETS.R`), removing `FactoMineR`
+(~18 packages for one data set), `questionr` (which pulls `shiny`) and `carData` from Suggests.
+⚠ They are the **complete** originals -- 44.6 KB for all four, so trimming bought nothing -- with one
+editorial change: in a two-level yes/no factor the "yes" answer goes first, which is what `tab()` and
+`tab_reg()` model and show. ⚠ **The name carries the credit**: `facto_tea`, `questionr_hdv`,
+`car_arrests`, `car_salaries`, so attaching the source package beside tabxplor masks nothing. A
+same-name copy would have been *worse* than a rename, since the level order deliberately differs.
+All four are GPL (>= 2); every `@source` names the package, its authors, the original study and how
+to get the untouched data. The vignettes lost their preparation chunks and their `requireNamespace`
+degrade guard; the tests lost four skip guards.
+
+**`stringi` removed: 143 call sites, 19 functions, 16 files.** Three primitives in `R/utils.R` carry
+the load -- `tx_pad()` (padding on **display width**, `nchar(type = "width")`, since `pad` is often a
+figure space), `tx_str_wrap()` and `tx_str_trunc()`. ⚠ `tx_str_wrap()` is **minimum-raggedness by
+dynamic programming**, not a greedy fill and not `strwrap()`: `stri_wrap()` minimises the sum of
+squared trailing space, and a greedy fill produced visibly different tables. Verified over **21 112**
+comparisons, 0 differences; `tx_pad()` likewise exact.
+
+⚠ **Four traps, each hit and fixed, all now recorded in `dev/dependencies.md`:**
+
+1. **stringi vectorises over `pattern`; base R does not.** `stri_detect_fixed(one_line, five_tags)`
+   returns five logicals; `grepl(five_tags, one_line)` uses the first and warns.
+2. **`x |> stri_*()` cannot be reordered mechanically** -- stringi takes the string first, `gsub()`
+   the pattern. Fourteen piped calls had to be rewritten as explicit ones.
+3. **`stri_trim(x, side = "left")` is one-sided**; losing `which =` moved every markdown column, which
+   is what `test-golden.R` caught.
+4. **ICU classes are not PCRE classes**: `\P{Wspace}` -> `[\h\v]`, and a `\uXXXX` escape inside an ICU
+   *pattern* is a literal backslash-u in PCRE.
+
+⚠ **What the stringi work did NOT buy**, stated plainly because it is easy to assume otherwise:
+stringi is still installed, via `tidyr` -> `stringr` -> `stringi`. Dropping it bought a CRAN slot and
+removed a direct coupling; only dropping `tidyr` would remove the package from a user's library.
+
+**Two smaller items.** `fs` went, its three call sites already carrying complete base fallbacks -- so
+an ad-hoc double code path went with it. `grid` moved Suggests -> Imports: it is a base package, so it
+costs nothing and does not count toward the 20, and it was being called **unguarded** in
+`forest_plot()`.
+
+⚠ **`DescTools` was measured and deliberately kept.** It drags ~15 packages for CI-parity assertions
+in four test files, validating the closed-form CI engine against an independent implementation --
+which is worth keeping. Moving those tests to `dev/` is **Phase 23e**'s job, not this one.
+
+**Verification.** `devtools::test()`: **FAIL 0 | PASS 9987**, with `test-golden.R`,
+`test-export-parity.R`, `test-fmt-contract.R`, `test-fuse-parity.R` and every `_snaps/` file
+byte-identical -- which is what proves the string rewrite. All nine vignettes render in a cold
+`Rscript`, 0 ANSI escapes. `devtools::document()` clean; the three delayed
+`S3method(knitr::knit_print, …)` registrations survive. The five remaining test warnings and four
+skips are all pre-existing (over-dispersion teaching warnings, a non-converging synthetic glm,
+opt-in benchmarks). ⚠ **Not run here: a full `devtools::check()`** -- it is the release gate and the
+maintainer runs it.
+
+**A defect fixed on the way, not a dependency matter.** `broom:::tidy.multinom` sets `y.level` to the
+string `"1"` when the outcome has two levels instead of naming the category, and
+`reg_columns_multinom()` filters on the real level name -- so **zero rows matched and the whole column
+came out NA**. Reachable via `family = "multinomial"` on a binary outcome, or a 3-level outcome that
+drops to 2 after complete-case filtering. `reg_tidy_multinom()` takes the name from `fit$lev[-1]`;
+`test-tab_reg.R` now covers it.
 
 
 #### Phase 22m — exported functions review
 
-Too much functions are currently exported. It clutters a bit the pkgdown reference page and can lose some users even if the structure and order clearly help. I wonder if everything is needed. Please give me a clear map of what is currently exported
+Too much functions are currently exported. It clutters a bit the pkgdown reference page and can lose some users (even if the structure and order of the reference page clearly help). I wonder if everything is needed. Please give me a clear map of what is currently exported, and ranked candidates for removal before 2.0.0 release. For each removal, state the work that would need to be done to remove the export without creating not-user-friendly situations.
 
 
 ---
@@ -781,12 +896,6 @@ Now that many features are explained in different vignettes, I want the main use
 #### Phase 23e — Tests simplification
 testthat tests have grown organically: it was right for development, but would slow future dev for no real benefits. I want you to select the tests that are *really* necessary, and to move the others to a folder of `dev/` scripts not run with `test`. **The full suite must go below 20 seconds** (parallelised, on this desktop computer).
 
-#### Phase 23f — `dev/` folder
-Files inside the `dev/` folder have grown organically, with many now useless files and outdated ones, which is very messy for future development : I want you to clean and reorganise the folder and main files.
-- Put all files related to v 2.0.0 dev history and of no real use for future dev in an 2.0.0 archive subfolder. That should be most of them.
-- Only keep at `dev/` root level a few selected .md files that explain in detail the architecture or functioning or use cases of some subsystems, and will be really useful for future dev : clean these files, simplify them by removing useless dev history and focusing on current architecture and usage, ensure they are up-to-date compared to the current design and code ;  organise them internally in such a way that goals, design and architecture decisions, usage, and everything giving the big picture come first, and details come next ; reference them in the architecture document.
-
-
 #### Phase 23f — french translations
 
 The aim is to create a **compact, yet holistic and integrated translation**: avoiding word-do-word translation of the english version altogether is your highest priority.
@@ -832,8 +941,13 @@ The aim is to create a **compact, yet holistic and integrated translation**: avo
 
 The two references for French vocabulary are `vignettes/articles/tabxplor-all-else-equal-fr.Rmd` and `dev/french_glossary.md`.
 
+#### Phase 23g — `dev/` folder
+Files inside the `dev/` folder have grown organically, with many now useless files and outdated ones, which is very messy for future development : I want you to clean and reorganise the folder and main files.
+- Put all files related to v 2.0.0 dev history and of no real use for future dev in an 2.0.0 archive subfolder. That should be most of them.
+- Only keep at `dev/` root level a few selected .md files that explain in detail the architecture or functioning or use cases of some subsystems, and will be really useful for future dev : clean these files, simplify them by removing useless dev history and focusing on current architecture and usage, ensure they are up-to-date compared to the current design and code ;  organise them internally in such a way that goals, design and architecture decisions, usage, and everything giving the big picture come first, and details come next ; reference them in the architecture document.
 
-#### Phase 23g – pkgdown site
+
+#### Phase 23h – pkgdown site
 
 Update the pkgdown site with the package documentation for release.
 - Check at pkgdown references: is there organisation and structure still meaningful, clear, readable, useful for new users, reflecting the current architecture and main uses cases of the package ? Are all exported functions organised in the outline, or a some new ones wandering around ?

@@ -151,6 +151,6 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
 }
 }
 \seealso{
-\code{\link{reg_check_plots}} for the model checks, \code{\link{tab_plot}} to render the
-table itself as an image.
+\code{\link{reg_check_plots}} for the model checks, \code{\link{tab_export}} to export
+the table itself.
 }

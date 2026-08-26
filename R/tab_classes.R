@@ -1,5 +1,5 @@
 # PURPOSE: S3 class definitions for tabxplor_tab/grouped_tab, dplyr method dispatch,
-#   print methods, tab_kable(), tab_plot(), tab_compact(), color palettes and breaks.
+#   print methods, tab_kable(), tab_compact(), color palettes and breaks.
 # ROLE: Ensures tabxplor tables survive dplyr operations and print with colors.
 # KEY CONSTRAINTS:
 #   - Every dplyr verb needs an S3 method for tabxplor_grouped_tab. Missing one = silent
@@ -145,7 +145,7 @@ get_assumptions <- function(x) get_meta(x)[["assumptions"]]
 #'
 #' Records a caption/title on a \code{tabxplor_tab} that survives a dplyr pipeline (it is kept in the
 #' table's \code{meta$vars$caption}, carried through every verb) and is read by the exporters
-#' (\code{\link{tab_md}}, \code{\link{tab_kable}}, \code{\link{tab_xl}}, \code{\link{tab_plot}}) as the
+#' (\code{\link{tab_md}}, \code{\link{tab_kable}}, \code{\link{tab_xl}}) as the
 #' table title, ahead of a regression table's auto-title, when the exporter's own \code{caption=}
 #' argument is not supplied. \code{get_caption()} reads it back (\code{NULL} when none is stored).
 #'
@@ -419,13 +419,14 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
   # `Outcome:` line), and a positional guess silently blanks nothing -- or the wrong line -- the day
   # one is added. The tags themselves are plain text, so this survives the ANSI styling too.
   tags <- c("<char>", "<list>", "<fct>", "<ord>", "<chr>")
+  tag_re <- paste(tags, collapse = "|")     # no metacharacter among them: one alternation is enough
   head_n <- min(length(out), 8L)
   hdr <- which(vapply(out[seq_len(head_n)],
-                      function(l) any(stringi::stri_detect_fixed(l, tags)), logical(1)))
+                      function(l) grepl(tag_re, l, perl = TRUE), logical(1)))
   if (length(hdr)) {
     hdr <- hdr[[1L]]
     for (tg in tags)
-      out[hdr] <- stringi::stri_replace_all_fixed(out[hdr], tg, strrep(" ", nchar(tg)))
+      out[hdr] <- gsub(tg, strrep(" ", nchar(tg)), out[hdr], fixed = TRUE)
   }
 
 
@@ -669,7 +670,7 @@ tab_html <- function(tabs,
                      theme = NULL,
                      color = TRUE, tooltips = NULL, popover = NULL, color_legend = TRUE,
                      lang = NULL,
-                     caption = knitr::opts_current$get("tab.cap"),
+                     caption = NULL,
                      transpose = FALSE,
                      var_names = NULL,
                      get_data = FALSE,
@@ -680,6 +681,9 @@ tab_html <- function(tabs,
   # Retired args (`color_type`/`html_24_bit`/`engine`/`html_font`/`full_width`) are absorbed by `...`,
   # warned about once, never forwarded.
   tx_deprecate_inert(rlang::list2(...), "tab_html")
+  # A knitr chunk's `tab.cap` is the caption when the call gives none -- read here rather than as a
+  # default argument, so knitr can stay a Suggest (tx_knitr_opt() answers NULL outside a render).
+  caption <- caption %||% tx_knitr_opt("tab.cap")
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
                            transpose = transpose, var_names = var_names, allow_auto = TRUE,
@@ -1388,351 +1392,26 @@ reg_footer_lines <- function(tabs) {
 
 
 
-#' Print a tabxplor table as plot
+#' Print a tabxplor table as plot (defunct)
 #'
 #' @description
-#' `r lifecycle::badge("superseded")`
+#' `r lifecycle::badge("defunct")`
 #'
-#' Superseded (2.0.0): `tab_plot()` renders a \pkg{tabxplor} table as a \pkg{ggpubr} image, but its
-#' display is limited and it is no longer actively developed. It keeps working and is retained for a
-#' future redesign; prefer \code{\link{tab_kable}} (HTML), \code{\link{tab_md}} (markdown) or
-#' \code{\link{tab_xl}} (Excel).
+#' Removed in 2.0.0. `tab_plot()` drew a *picture of the table* as a \pkg{ggpubr} image. Use
+#' [tab_html()], [tab_md()] or [tab_xl()] to export the table itself, and [forest_plot()] for a
+#' chart of the numbers -- every estimate with its confidence interval, its significance and its
+#' colour.
 #'
-#' It is a PICTURE OF THE TABLE, not a chart: for a chart of the numbers -- every estimate with its
-#' confidence interval, its significance and its colour -- see \code{\link{forest_plot}}.
+#' It was the only part of the package needing \pkg{ggpubr}, \pkg{cowplot} and \pkg{gtable}, whose
+#' dependency trees every user paid for; its display never matched the other backends'.
 #'
-#' @eval tab_args_rd("tab_plot")
-#' @param theme By default (\code{"light"}) a white table with black text; set to \code{"dark"} for a
-#' black table with white text. This backend ships no stylesheet, so it does NOT take \code{"auto"}
-#' (which needs one to follow the reader) -- \code{tab_html()}, \code{tab_md()} and
-#' \code{\link{tab_css}} do.
-#'   The black-and-white **publication** palettes render a table for a page that has no colour:
-#'   \code{"print_ready"} picks the right one per table, or name it yourself --
-#'   \code{"print_marks"}, \code{"print_emphasis"}, \code{"print_minimalistic"} (\code{"bw"}).
-#'   See \code{\link{tab_css}} for what each of them says.
-#' (ggplot2 has no underline, so on a plot a publication palette reads its magnitude off a four-step
-#' grey ramp instead of the page's black ink, keeping bold and italic beside it.)
-#' @param caption The table caption.
-# @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
-#' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
-#'   (`color_type`, `html_24_bit`).
-#' @return A \code{\link[ggplot2]{ggplot}} object to be printed in the
-#' `RStudio` Plots pane or exported as image, using \code{\link[ggpubr]{ggtexttable}}.
+#' @param tabs A data.frame.
+#' @param ... Ignored.
+#' @return Never returns: it errors.
+#' @keywords internal
 #' @export
-#'
-#' @examples
-#' \donttest{
-#' # ggpubr / gtable / ggplot2 are Suggests-only and tab_plot() stops without them, so guard the
-#' # example: \donttest{} does NOT exempt it from R CMD check --as-cran, which CRAN also runs
-#' # without Suggests installed.
-#' if (requireNamespace("ggpubr", quietly = TRUE) &&
-#'     requireNamespace("gtable", quietly = TRUE) &&
-#'     requireNamespace("ggplot2", quietly = TRUE)) {
-#'   tab(forcats::gss_cat, race, marital, pct = "row", color = "difference") |>
-#'     tab_plot()
-#' }
-#' }
-#'
-tab_plot <- function(tabs,
-                     theme = NULL,
-                     color = TRUE, color_legend = TRUE, lang = NULL, caption = NULL, transpose = FALSE,
-                     var_names = NULL,
-                     wrap_rows = 35, wrap_cols = 14, # unbreakable_spaces = TRUE
-                     whitespace_only = TRUE, ...) {
-  tx_deprecate_inert(rlang::list2(...), "tab_plot")
-  .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
-  tx_need_pkg(c("ggpubr", "gtable", "ggplot2", "cowplot"), "tab_plot()")
-  if (is.list(tabs) && !is.data.frame(tabs) && length(tabs) > 1L) {
-    return(purrr::map(tabs, tab_plot, theme = theme,
-                      color = color, color_legend = color_legend,
-                      caption = caption, transpose = transpose, wrap_rows = wrap_rows,
-                      wrap_cols = wrap_cols, whitespace_only = whitespace_only))
-  }
-
-  o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
-                           transpose = transpose, var_names = var_names, tabs = tabs)
-  theme <- o$theme
-  color_legend <- o$color_legend
-  compute <- c("refs", "bold")
-  if (o$color) compute <- c(compute, "colors")
-
-  prep <- tab_export_prep(
-    tabs, backend = "plot", compute = compute, transpose = o$transpose,
-    wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 1,
-                whitespace_only = whitespace_only, unbreakable_spaces = FALSE, brk = "\n"),
-    theme = theme, var_names = o$var_names,
-    color_legend = color_legend, what = "tab_plot()"
-  )
-  rd <- prep$tables[[1]]
-
-  if (isTRUE(rd$vars$degrade)) {
-    if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars$reason)  # batch-aware (see tab_export_prep)
-    return(invisible(tibble::as_tibble(tabs)))
-  }
-
-  tabs        <- rd$tab
-  row_var     <- rd$vars$row_var
-  tab_vars    <- rd$vars$tab_vars
-  subtext     <- rd$subtext
-  new_group   <- rd$roles$new_group
-  color_cols  <- rd$roles$color_cols
-  fmt_cols    <- rd$roles$fmt_cols
-  other_cols  <- rd$roles$other_cols
-  totcols     <- rd$roles$totcols
-  totrows     <- rd$roles$totrows
-  new_col_var <- rd$roles$new_col_var
-  any_bg      <- rd$roles$any_bg
-
-  refs2 <- rd$bold_rows   # bold rows (reference/total in every discriminating column)
-  refs3 <- rd$bold_cols   # bold columns (all-reference columns)
-
-  text_color  <- prep$meta$theme_cols$text
-  grey_color  <- prep$meta$theme_cols$grey
-  grey_color2 <- prep$meta$theme_cols$grey2
-
-  color_selection <- purrr::map(rd$ann, "font")
-  bg_selection    <- purrr::map(rd$ann, "back")
-
-  if (length(other_cols) != 0) {
-    other_font <- as.list(dplyr::mutate(tabs[other_cols],
-                                        dplyr::across(tidyselect::everything(), ~ text_color)))
-    other_none <- as.list(dplyr::mutate(tabs[other_cols],
-                                        dplyr::across(tidyselect::everything(), ~ "none")))
-    color_selection <- dplyr::bind_cols(other_font, color_selection)
-    bg_selection    <- dplyr::bind_cols(other_none, bg_selection)
-  } else {
-    color_selection <- color_selection |> dplyr::bind_cols()
-    bg_selection    <- bg_selection    |> dplyr::bind_cols()
-  }
-
-  # The face comes from the PALETTE (`ann$face_bold`), not from guessing at the hex, and NOT from
-  # `ann$bold` (which folds in the per-CELL keep_black) -- tab_plot's structural bolding is the row/column
-  # SETS refs2/refs3, kept as separate terms below. ggplot2's `fontface` has no underline, so under the
-  # print palette -- where the underline IS the over direction -- an over-represented cell is told apart
-  # by its ink alone here. Accepted loss: the plot backends are frozen legacy.
-  face_of <- function(field) {
-    sel <- purrr::map(rd$ann, field)
-    if (length(other_cols) != 0) {
-      blanks <- as.list(dplyr::mutate(tabs[other_cols],
-                                      dplyr::across(tidyselect::everything(), ~ FALSE)))
-      dplyr::bind_cols(blanks, sel)
-    } else dplyr::bind_cols(sel)
-  }
-  bold_sel <- face_of("face_bold")
-  ital_sel <- face_of("face_italic")
-  face_selection <- purrr::imap(bold_sel, function(b, cn) {
-    b <- b | seq_along(b) %in% refs2 | cn %in% refs3
-    i <- ital_sel[[cn]]
-    dplyr::case_when(b & i ~ "bold.italic", b ~ "bold", i ~ "italic", TRUE ~ "plain")
-  }) |> dplyr::bind_cols()
-
-  for (cl in names(rd$roles$label_cols)) {
-    if (!cl %in% names(tabs)) next
-    show <- rd$roles$label_runs[[cl]]$show
-    tabs[[cl]] <- as.character(tabs[[cl]])
-    tabs[[cl]][!show] <- ""
-  }
-  # a graphics device has no block glyphs, so strip a reg row's sparkline over every text column (else
-  # "conversion failure in mbcsToSbcs" and a row of garbage). Only the plot medium needs this.
-  for (cl in other_cols) if (cl %in% names(tabs))
-    tabs[[cl]] <- tx_spark_strip(as.character(tabs[[cl]]))
-
-  # A monospace body font ONLY when the table SHOWS significance stars (so the stars align); a plain
-  # table keeps the ggpubr default. WARNING: ggpubr exposes no per-COLUMN font, so when applied it hits
-  # the WHOLE body (row labels turn monospace too) -- a small deviation confined to a starred tab_plot().
-  # Revert with options("tabxplor.plot_num_font" = ""). "Cascadia Mono" must be on the graphics device.
-  plot_num_font <- tx_num_font("plot", rd$roles$has_stars)
-  tbody_args <- list(color = "black", size = 11, fill = "white", linewidth = 0,
-                     linecolor = "black", hjust = 0.98, x = 0.95) # x/hjust = right-adjust
-  if (nzchar(plot_num_font)) tbody_args$fontfamily <- plot_num_font
-
-  tabs_gg <- tabs |>
-    dplyr::mutate(
-      dplyr::across(
-        where(is_fmt),
-        # tx_spark_strip() again: a base-count cell now carries the row sparkline in its own display
-        # template, so the glyphs only exist once the fmt column has been rendered -- after the pass
-        # over the text columns above.
-        ~ tx_spark_strip(format(., special_formatting = TRUE,
-                                .ref = ann_ref(rd$ann[[dplyr::cur_column()]])))
-      ),
-      dplyr::across( # otherwise, unbreakable spaces fail in some graphic devices
-        where(is.factor),
-        ~ forcats::fct_relabel(., ~ stringi::stri_replace_all_regex(., unbrk, " "))
-      ),
-      dplyr::across( # otherwise, unbreakable spaces fail in some graphic devices
-        where(is.character),
-        ~ stringi::stri_replace_all_regex(., unbrk, " ")
-      ),
-    ) |>
-
-    ggpubr::ggtexttable(
-      rows = NULL, # base_size = 11,
-      theme = ggpubr::ttheme("blank",
-                             padding = grid::unit(c(4, 3), "mm"), # c(h, v)
-                             tbody.style = do.call(ggpubr::tbody_style, tbody_args)),
-    )
-
-
-
-  for(j in 1:ncol(tabs)) {
-    for(i in 1:nrow(tabs)) {
-      tabs_gg <- tabs_gg |> ggpubr::table_cell_font(
-        row    = i + 1,
-        column = j,
-        color  = color_selection[[j]][[i]],
-        face   = face_selection[[j]][[i]]
-      )
-      if (any_bg) {
-        fillv <- bg_selection[[j]][[i]]
-        if (!is.na(fillv) && fillv != "none") {
-          tabs_gg <- tabs_gg |> ggpubr::table_cell_bg(
-            row = i + 1, column = j, fill = fillv, linewidth = 0
-          )
-        }
-      }
-    }
-  }
-
-  tabs_gg <- tabs_gg |>
-    ggpubr::tab_add_border(from.row = 1, linetype = 1, linewidth = 2, linecolor = "black") |>
-    ggpubr::tab_add_hline(
-      at.row = unique(c(1, totrows, totrows + 1, new_group)), row.side = "bottom",
-      linetype = 1, linewidth = 2, linecolor = "black",
-    ) |>
-    ggpubr::tab_add_vline(
-      at.column = unique(c(new_col_var, totcols - 1)), column.side = "right",
-      linetype = 1, linewidth = 2, linecolor = "black",
-    ) |>
-    ggpubr::tab_add_vline(
-      at.column = unique(c(other_cols, totcols)), column.side = "left",
-      linetype = 1, linewidth = 2, linecolor = "black",
-     )
-
-{
-  footer_src  <- if (is.null(rd$color_src)) tabs else rd$color_src
-  footer_runs <- rd_footer(footer_src, "runs", theme = theme[1],
-                           want_legend = color_legend && length(color_cols) != 0,
-                           subtext = subtext, lang = lang)
-  # tab_plot translates the footer model's per-token typography; ggpubr has no underline, so that
-  # face is dropped.
-  color_legend <- purrr::map(footer_runs, function(line) {
-    text   <- purrr::map_chr(line, "text")
-    color  <- purrr::map_chr(line, "color")
-    bold   <- purrr::map_lgl(line, ~ isTRUE(.x$bold))
-    italic <- purrr::map_lgl(line, ~ isTRUE(.x$italic))
-    color[is.na(color)] <- text_color
-    face <- dplyr::case_when(bold & italic ~ "bold.italic", bold ~ "bold",
-                             italic ~ "italic", TRUE ~ "plain")
-    # fold each run of same-looking tokens (same colour AND face) into one cell, else one column per
-    # token is wasteful.
-    key <- paste(color, face)
-    grp <- cumsum(key != dplyr::lag(key, default = ""))
-    tibble::tibble(
-      text  = vapply(split(text, grp), paste0, character(1), collapse = ""),
-      color = color[!duplicated(grp)],
-      face  = face[!duplicated(grp)]
-    ) |>
-      # otherwise, unbreakable spaces fail in some graphic devices
-      dplyr::mutate(text = stringi::stri_replace_all_regex(.data$text, unbrk, " "))
-  })
-  if (length(color_legend) == 0) color_legend <- NULL
-  }
-
-  if (length(color_legend) != 0) {
-      tab_legend <- color_legend |>
-        purrr::map_dfr(
-          ~ dplyr::select(., "text") |>
-            dplyr::mutate(name = dplyr::row_number()) |>
-            tidyr::pivot_wider( names_from = "name", values_from = "text")
-        )
-
-      tab_legend_color <- color_legend |>
-        purrr::map_dfr(
-          ~ dplyr::select(., "color") |>
-            dplyr::mutate(name = dplyr::row_number()) |>
-            tidyr::pivot_wider( names_from = "name", values_from = "color")
-
-        )
-
-      tab_legend_face <- color_legend |>
-        purrr::map_dfr(
-          ~ dplyr::select(., "face") |>
-            dplyr::mutate(name = dplyr::row_number()) |>
-            tidyr::pivot_wider( names_from = "name", values_from = "face")
-        )
-
-      tab_legend_plot <- tab_legend |>
-        ggpubr::ggtexttable(
-          rows = NULL,
-          theme = ggpubr::ttheme("blank",
-                                 padding = grid::unit(c(7, 4), "mm"), # c(h, v)
-                                 colnames.style = ggpubr::colnames_style(
-                                   color = "white",
-                                   size = 0,
-                                   fill = "white",
-                                   linewidth = 0
-                                 ),
-                                 tbody.style = ggpubr::tbody_style(
-                                   color     = "black", #face = "plain", #parse = TRUE,
-                                   size      = 8,
-                                   fill      = "white", #c("grey95", "grey90"),
-                                   linewidth = 0,
-                                   linecolor = "black",
-
-                                   hjust = 0.98, x = 0.95 # right ajust
-                                 )),
-        )
-
-
-      for(i in 1:nrow(tab_legend)) {
-        for(j in 1:ncol(tab_legend)) {
-          fc <- tab_legend_face[[j]][[i]]
-          tab_legend_plot <- tab_legend_plot |> ggpubr::table_cell_font(
-            row    = i + 1,
-            column = j,
-            color  = tab_legend_color[[j]][[i]],
-            face   = if (is.na(fc)) "plain" else fc
-          )
-        }
-      }
-
-
-      cowplot::set_null_device("png") # "pdf", "png", "cairo", "agg"
-
-      tabgrob    <- get_tablegrob(tabs_gg) |> justify_grob()
-      legendgrob <- get_tablegrob(tab_legend_plot) |> justify_grob()
-
-      tabgrob <- gtable::gtable_add_rows(
-        tabgrob,
-        heights = grid::grobHeight(legendgrob),
-        pos = -1
-      )
-      tabgrob <- gtable::gtable_add_grob(tabgrob, legendgrob,
-                                         t = nrow(tabgrob),
-                                         b = nrow(tabgrob),
-                                         l = 1,
-                                         r = ncol(tabgrob))
-      tabs_gg <- tab_return_same_class_as_input(tabgrob, input = tabs_gg)
-  }
-
-
-  tabgrob <- get_tablegrob(tabs_gg)
-  tabgrob <- justify_grob(tabgrob)
-  tabs_gg <- tab_return_same_class_as_input(tabgrob, input = tabs_gg)
-
-  cap <- rd_caption(rd, caption)
-  if (!is.null(cap) && length(cap) == 1L && !is.na(cap) && nzchar(cap)) {
-    titlegrob <- grid::textGrob(cap, x = 0, hjust = 0,
-                                gp = grid::gpar(fontface = "bold", fontsize = 11, col = text_color))
-    tabgrob <- get_tablegrob(tabs_gg)
-    tabgrob <- gtable::gtable_add_rows(
-      tabgrob, heights = grid::grobHeight(titlegrob) + grid::unit(4, "mm"), pos = 0)
-    tabgrob <- gtable::gtable_add_grob(tabgrob, titlegrob, t = 1, b = 1, l = 1, r = ncol(tabgrob))
-    tabs_gg <- tab_return_same_class_as_input(tabgrob, input = tabs_gg)
-  }
-
-  return(tabs_gg)
+tab_plot <- function(tabs, ...) {
+  lifecycle::deprecate_stop("2.0.0", "tab_plot()", "tab_export()")
 }
 
 
@@ -1785,36 +1464,30 @@ tab_wrap_text <- function(tabs, wrap_rows = 35L, wrap_cols = 15L, exdent = 1,
       dplyr::across(
         where(is.factor),
         ~ forcats::fct_relabel(
-          ., ~ tx_str_wrap(.,
-                                 width           = wrap_rows,
-                                 exdent          = exdent,
-                                 whitespace_only = whitespace_only) |>
-            stringi::stri_replace_all_regex("\n", brk)
+          ., ~ gsub("\n", brk, tx_str_wrap(., width = wrap_rows, exdent = exdent,
+                                           whitespace_only = whitespace_only), fixed = TRUE)
         )
       ),
       dplyr::across(
         where(is.character),
-        ~ tx_str_wrap(.,
-                            width           = wrap_rows,
-                            exdent          = exdent,
-                            whitespace_only = whitespace_only) |>
-          stringi::stri_replace_all_regex("\n", brk)
+        ~ gsub("\n", brk, tx_str_wrap(., width = wrap_rows, exdent = exdent,
+                                      whitespace_only = whitespace_only), fixed = TRUE)
       )
     )
 
   if (unbreakable_spaces) {
     tabs <- tabs |>
       dplyr::rename_with(
-        ~ stringi::stri_replace_all_regex(., " ", unbrk)
+        ~ gsub(" ", unbrk, ., perl = TRUE)
       ) |>
       dplyr::mutate(
         dplyr::across(
           where(is.factor),
-          ~ forcats::fct_relabel(., ~ stringi::stri_replace_all_regex(., " ", unbrk) )
+          ~ forcats::fct_relabel(., ~ gsub(" ", unbrk, ., perl = TRUE) )
         ),
         dplyr::across(
         where(is.character),
-        ~ stringi::stri_replace_all_regex(., " ", unbrk)
+        ~ gsub(" ", unbrk, ., perl = TRUE)
       ),
 
       )
@@ -1855,7 +1528,7 @@ tab_get_wrapped_dimensions <- function(tabs, no_tab_vars = FALSE,
   height <- tabs_with_colnames |>
     dplyr::mutate(dplyr::across(
       tidyselect::everything(),
-      ~ 1L + stringi::stri_count_regex(., "\n")
+      ~ 1L + lengths(regmatches(., gregexpr("\n", ., perl = TRUE)))
     )) |>
     dplyr::rowwise() |>
     dplyr::mutate(n = max(dplyr::c_across(cols = tidyselect::everything()))) |>
@@ -1863,9 +1536,9 @@ tab_get_wrapped_dimensions <- function(tabs, no_tab_vars = FALSE,
 
   width <- tabs_with_colnames |>
     purrr::map(
-      ~ stringi::stri_split_regex(., "\n") |>
+      ~ strsplit(., "\n", perl = TRUE) |>
         purrr::flatten_chr() |>
-        stringi::stri_length() |>
+        nchar(type = "chars") |>
         max()
     ) |>
     purrr::map_int(
@@ -2037,7 +1710,7 @@ group_by.tabxplor_tab <- function(.data,
 rowwise.tabxplor_tab <- function(data, ...) {
   out <- NextMethod()
   out <- rlang::exec(new_grouped_tab, out, dplyr::group_data(out), !!!tab_attrs(data))
-  `class<-`(out, stringi::stri_replace_first_regex(class(out), "grouped_df", "rowwise_df"))
+  `class<-`(out, sub("grouped_df", "rowwise_df", class(out), perl = TRUE))
 }
 
 
@@ -2284,7 +1957,7 @@ rowwise.tabxplor_grouped_tab <- function(data, ...) {
   groups <- dplyr::group_data(out)
 
   out <- rlang::exec(new_grouped_tab, out, groups, !!!tab_attrs(data))
-  `class<-`(out, stringi::stri_replace_first_regex(class(out), "grouped_df", "rowwise_df"))
+  `class<-`(out, sub("grouped_df", "rowwise_df", class(out), perl = TRUE))
 }
 
 #' summarise method for class tabxplor_grouped_tab
@@ -2547,8 +2220,8 @@ vec_cast.data.frame.tabxplor_grouped_tab <- function(x, to, ...) {
 #' @param dark_text_colors,dark_text_colors_neg,dark_background_colors,dark_background_colors_neg
 #' The dark-theme counterparts (4 hex each).
 #' @param bg_legend_colors,bg_legend_colors_neg (4 hex each) The FONT stand-in for
-#' \code{background_colors} in the colour legend of media that cannot fill a run (Excel,
-#' \code{\link{tab_plot}}); the defaults are the background colours at -0.2 OKLCH lightness. Setting
+#' \code{background_colors} in the colour legend of media that cannot fill a run (Excel);
+#' the defaults are the background colours at -0.2 OKLCH lightness. Setting
 #' \code{background_colors} without these makes them follow it unchanged (readable only if your fills
 #' already are). There is no dark counterpart: an Excel legend cell is on a white page whatever the
 #' theme, and the dark fills read there as-is.
@@ -2662,8 +2335,8 @@ set_color_style <- function(type = c("text", "bg"), theme = NULL,
 #' function, and both are given here because they share this page. In \code{get_color_style()} and
 #' the deprecated \code{set_color_style()}: \code{"text"} (font colour), \code{"bg"} (background
 #' fill), or \code{"bg_legend"} (\code{mode = "color_code"} only), the darker FONT stand-in for the
-#' background palette, for media that cannot fill a run (an Excel rich-text run, a \pkg{ggpubr} text
-#' label) -- see the colour legend. In \code{get_color_breaks()}: \code{"positive"} (the default)
+#' background palette, for media that cannot fill a run (an Excel rich-text run) -- see the colour
+#' legend. In \code{get_color_breaks()}: \code{"positive"} (the default)
 #' returns a readable form -- a plain vector of magnitudes when the scale is symmetric, a
 #' \code{list(over =, under =)} otherwise -- and \code{"all"} the signed / reciprocal thresholds
 #' the engine actually compares against (\code{c(-x, x)} for additive scales, \code{c(1/x, x)} for
