@@ -188,7 +188,7 @@ Un *odds ratio* est donc difficile à formuler et à visualiser: c’est une mes
 
 Un **risque relatif**, lui, se dit sans précaution : « 1,16 fois moins souvent relâchées que les personnes blanches ». 
 
-Le piège est exactement là : privée de la clause *et* du mot *cote*, une phrase en « fois moins de chances » énonce un risque relatif — donc, si le nombre est un rapport de cotes, une grandeur fausse et très exagérée. L'article de Carina Mood (*European Sociological Review*, 2010) est le bon avertissement en sociologie, et la section 5 ci-dessous montre un cas où le rapport de cotes bouge beaucoup pendant que les pourcentages, eux, ne changent presque pas.
+Le piège est exactement là : privée de la clause *et* du mot *cote*, une phrase en « fois moins de chances » énonce un risque relatif — donc, si le nombre est un rapport de cotes, une grandeur fausse et très exagérée. L'article de Carina Mood (*European Sociological Review*, 2010) est le bon avertissement en sociologie, et la section 6 ci-dessous montre un cas où le rapport de cotes bouge beaucoup pendant que les pourcentages, eux, ne changent presque pas.
 
 ## Ce qui vaut au-delà de l'échantillon
 
@@ -294,7 +294,6 @@ reg_measures(car_arrests, "checks", link = "all")
 ```
 
 
-
 ## Le pont : la colonne « écart observé » *est* le tableau croisé
 
 Voici maintenant le modèle de regression logistique de notre variable à expliquer `"released"`, avec ses personnes relachées ou mises en garde à vue – binomiale car notre variable est binaire.
@@ -356,6 +355,190 @@ Au passage, à quoi le block **« Bilan du modèle »** sous chaque tableau corr
 
  Nous ne nous en servons jamais ici, parce que notre question est ce que l'ajustement *a fait*, non de savoir si le modèle est bon. Les deux sont importants, et [Tableaux de régression](tabxplor-reg-fr.html) explique la signification des différentes statistiques.
 
+## Un prédicteur sans catégories
+
+`checks` — dans combien des six fichiers de police le nom de la personne figure déjà — est une variable numérique : il n'a donc pas de modalités à comparer. Deux choses changent.
+
+```{r}
+tab_reg(car_arrests, "released", c("colour", "checks"), stats = NULL)
+```
+
+**D'abord, l'effet est par unité — et l'unité est un choix.** Un fichier de police de plus, sur six, est un grand pas ; une année d'âge de plus, un petit. tabxplor rapporte donc par défaut l'effet **par deux écarts-types**, et la ligne dit laquelle : `par 3.08 (2SD), à 1.64 (moyenne)` — de combien on avance, et depuis quel point. Deux écarts-types, parce que c'est à peu près l'écart que couvre un prédicteur binaire : une ligne continue et une ligne à deux modalités deviennent ainsi comparables d'un coup d'œil. `multiplier` en change quand une unité naturelle existe :
+
+```{r}
+tab_reg(car_arrests, "released", c("colour", "checks"), multiplier = c(checks = 1), 
+        empirical = FALSE, stats = NULL)
+```
+
+La lecture se fait maintenant par fichier : chaque fichier supplémentaire divise par 1,50 la cote d'être relâché.
+
+**Ensuite, regarder la petite courbe, sous le tableau principal.** C'est la variable à expliquer tracée contre le prédicteur numérique, par tranches d'effectif égal, sans aucun modèle dedans — mais dans l'échelle du modèle (ici, des cotes). La colonne **`étendue observée`** en résume les extrêmes. C'est la forme qu'ont réellement les données, et elle est là pour qu'on puisse vérifier ce qu'un coefficient de régression unique suppose sans le dire : qu'il n'y a qu'une seule pente, et que l'effet est linéaire d'un bout à l'autre. Ici la courbe est proche d'une droite — un peu dentelée, rien de plus — et l'hypothèse de linéarité tient.
+
+Quand une seule droite résume mal, le remède le plus lisible est de cesser de traiter la variable comme un nombre et de la découper en modalités. C'est `shape` qui le fait :
+
+```{r}
+tab_reg(car_arrests, "released", c("colour", "checks"), shape = c(checks = "quartiles"), stats = NULL)
+```
+
+`checks` est maintenant un facteur ordinaire, avec ses pourcentages, ses effets et ses couleurs — et la forme se lit à même les nombres observés : 91 %, 87 %, 70 %. Il ne se passe pas grand-chose entre zéro et un ou deux fichiers ; l'effondrement vient après. C'est un résultat, et une pente unique le cachait.
+
+## Le profil de référence
+
+Reste une ligne à expliquer, celle que les étudiant·es sautent le plus souvent : **Constant**.
+
+```{r}
+tab_reg(car_arrests, "released", c("colour", "checks"),
+        multiplier = c(checks = 1), ref = c(checks = 0), stats = NULL)
+```
+
+Une régression mesure tout *depuis* quelque part, et la ligne Constant est ce quelque part : le **profil de référence** — c'est le nom que porte la ligne dans le tableau —, c'est-à-dire la personne qui a la modalité de référence de chaque facteur et la valeur d'ancrage de chaque nombre, les unes et les autres réglées par `ref`. Ici, une personne blanche sans aucun antécédent : sa cote d'être relâchée est de `12.61` contre 1, soit 93 % de chances de l'être.
+
+C'est `ref` qui le fixe. Pour un facteur, il nomme la modalité à laquelle les autres sont comparées ; pour un nombre, il nomme la valeur depuis laquelle la variable est mesurée. L'ancrage par défaut est la **moyenne**, parce que zéro n'a souvent aucun sens — personne n'a zéro an — mais ici zéro est à la fois sensé et intéressant, et c'est donc ce que nous avons demandé. Changer l'ancrage change la ligne Constant et rien d'autre : une pente linéaire reste la même où qu'on commence à la lire.
+
+**Deux choses méritent d'être connues.** Quand tous les prédicteurs sont des facteurs, le profil de référence est un **vrai groupe de personnes**, et la colonne `n` les compte — donc on la regarde. Il peut être minuscule : dans le modèle ci-dessous, la référence est une femme blanche, sans emploi et sans la nationalité, et le fichier en contient **7**. Le modèle fonctionne toujours, mais une référence qui repose sur si peu de monde ne décrit à peu près personne, et mieux vaut le savoir avant de la citer.
+
+```{r}
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen"), empirical = FALSE, stats = NULL)
+```
+
+Et dès qu'une variable numérique figure parmi les prédicteurs, ce compte disparaît, comme dans le tableau juste au-dessus : le profil se tient à une valeur exacte d'une variable continue, et la plupart du temps personne ne se tient exactement là. C'est l'avertissement que la sociologie française connaît depuis longtemps sous une autre forme — **l'homme moyen de Quetelet n'a jamais existé** —, celui-là même que Hanmer et Kalkan adressent aux profils moyens en général, et c'est une raison de plus pour que l'aller-retour de la section 4 se termine par une moyenne sur des personnes réelles (à moins que fabriquer un individu typique ne relève d'une démarche idéal-typique assumée et construite).
+
+
+# 4. Redescendre à une phrase que l'on peut dire à haute voix
+
+Voici le problème que pose ce qui précède. Que veut dire, concrètement, un rapport de cotes de `1/1.48` ? Il faut essayer de le dire à voix haute, en une phrase, à quelqu'un qui n'est pas statisticien : on n'y arrive pas.
+
+Un rapport de cotes produit mathématiquement un meilleur modèle, mais ajoute une couche d’abstraction qui peut en rendre difficile l’interprétation. Par rapport à un risque relatif (un simple ratio entre deux pourcentages), il exagère souvent.
+
+**De combien, et quand ?** Le rapport de cotes ne dépend pas de la modalité qu'on nomme : `1/2.11` pour « être relâché » devient `2.11` pour « être en garde à vue » — le même nombre, retourné. Et il ne dépend pas davantage de l'endroit où l'on se trouve sur l'échelle des pourcentages. C'est là qu'est le vrai piège, un *odds ratio* de 2,11, c'est aussi bien :
+
+| on passe de | à    | soit, en points | soit, en « fois plus souvent » | OR   |
+|:------------|:-----|:----------------|:-------------------------------|------| 
+| 5 %         | 10 % | +5 points       | ×2 — deux fois plus souvent    | 2,11 |
+| 50 %        | 68 % | +18 points      | ×1,36                          | 2,11 |
+| 74 %        | 86 % | +12 points      | ×1,16                          | 2,11 |
+| 90 %        | 95 % | +5 points       | ×1,06 — presque rien           | 2,11 |
+
+Un seul et même nombre pour quatre situations que personne ne décrirait de la même façon. La cote est en effet **symétrique autour de 50 %** : elle traite l’événement étudié et son issu opposé de la même façon, « 5 % contre 10 % » et « 90 % contre 95 % » exactement pareil, alors que la première paire est un doublement et la seconde une quasi-égalité.
+
+<!-- La raison tient en une ligne. Le rapport de cotes est le **produit des deux risques relatifs**, celui de l'événement et celui de son contraire : les personnes blanches sont relâchées 1,16 fois plus souvent (86 % contre 74 %), et *ne pas* être relâché·e touche 26 % des personnes noires contre 14 % des blanches, soit 1,82 fois plus souvent — et 1,16 × 1,82 = 2,11. Nommer l'autre modalité ne fait qu'échanger les deux facteurs : le produit, lui, ne bouge pas. Voilà pourquoi changer la phrase ne change jamais le nombre. -->
+
+D'où la règle de lecture : **un rapport de cotes ne veut rien dire tant qu'on ne sait pas de quel pourcentage il part.** Deux conséquences valent la peine d'être retenues :
+
+- **En points de pourcentage** (différence), un même rapport de cotes vaut beaucoup au milieu de l'échelle et presque rien aux deux bords : 18 points à 50 %, 5 points à 5 %, 3 points à 95 %.
+- **En « fois plus souvent »** (ratio), il est toujours plus éloigné de 1 que le risque relatif, et il ne s'en rapproche que si l'événement nommé est **rare**. Ici l'événement nommé est fréquent (83 % des personnes sont relâchées), et l'écart est maximal : 2,11 en *odds ratio* mais « 1,16 fois plus de risques d’avoir été mis en garde à vue ».
+
+C'est très exactement pour cela que le tableau ajoute le pourcentage observé et le pourcentage ajusté : ce sont eux qui remettent le rapport de cotes à sa place sur l'échelle. Mais plutôt que de le compenser après coup, on peut aussi demander directement au modèle une autre mesure.
+
+La dernière étape de l'aller-retour consiste précisément à **redescendre** vers une quantité qu'on pourrait mettre dans une phrase : c'est le *même modèle*, ajusté une fois, mais lu de plusieurs façons.
+
+## Un modèle, quatre lectures
+
+`tab_reg()` pose quatre questions :
+
+| argument    | question à laquelle il répond                        | en pratique                                                                         |
+|:------------|:-----------------------------------------------------|:------------------------------------------------------------------------------------|
+| `family =`  | que compte la variable à expliquer ?                 | automatique pour une variable catégorielle ; à définir pour une variable numérique (section 1) |
+| `link =`    | avec quel type d’écart travaille le **modèle** ?     | généralement, ne pas y toucher                  |
+| `measure =` | quelle mesure de l’'écart veut-on voir **affichée/colorée** ?| **c'est le paramètre qu’on choisit**                                                      |
+| `effect =`  | d'où ce chiffre est-il tiré ?                        | ne pas y toucher, sauf pour construire des idéaux-types avec `"at_reference"`       |
+
+Voici la règle à appliquer pour utiliser `tab_reg()` :
+
+> **Si l’écart demandé (`measure =`) est celui dans lequel le modèle travaille déjà, on lit le coefficient propre du modèle. Sinon, le modèle calcule l’écart demandée (`measure =`) à partir de ses prédictions, pour chaque personne de l'échantillon, et en fait la moyenne.**
+
+Il suffit, ensuite, de passer `measure =` pour choisir celle qui nous convient.
+
+**Le rapport de cotes**, difficile à dire à voix haut, est le réglage par défaut, puisqu'un modèle logistique travaille avec des *odds*.
+
+```{r}
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"), stats=NULL)
+```
+
+> **Lecture** : toutes les autres variables choisies étant égales, les personnes noires interpellées ont eu **1,48 plus de chances** de finir en garde à vue *plutôt que d’être relachés — autrement dit, leur **cote** d'être relâchées est 1,48 fois plus faible.
+
+C'est ici que la règle de la section 2 se paie comptant : la clause finale, ou le mot *cote*. Sans eux, la phrase annonce un risque relatif de 1,48 qui est en contradiction totale avec les données.
+
+**Le risque relatif marginal** — `measure = "ratio"`. Ce n'est pas la mesure propre du modèle : elle est donc calculée puis moyennée, et l'en-tête le dit, `Model_mRR`. Cette fois, il s'agit bien de « combien de fois plus souvent » :
+
+```{r}
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+        measure = "ratio", stats=NULL)
+```
+
+> **Lecture** : entre personnes de même sexe, de même situation d'emploi, de même nationalité et de mêmes antécédents, les personnes noires ont été relâchées **1,07 fois moins souvent** que les personnes blanches.
+
+Si l’on compte non pas en chances d’avoir été relaché, mais l’inverse : les personnes racisées comme noires ont 1.34 fois plus de chances d’avoir été mis en garde à vue. Le ratio n’est pas symmétrique, c’est son problème, et il est donc toujours plus parlant lorsqu’on prend la catégorie rare que lorsqu’on prend la catégorie fréquente.
+
+```{r}
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+        measure = "ratio", stats=NULL, outcome_level = "No")
+```
+
+**La différence marginale, en points de pourcentage** — `measure = "difference"`. La plus utile de toutes, le plus souvent, parce que le point est l'unité dans laquelle beaucoup de gens pensent déjà.
+
+```{r}
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+        measure = "difference", stats=NULL)
+```
+
+> **Lecture** : entre personnes de même sexe, de même situation d'emploi, de même nationalité et de mêmes antécédents, les personnes noires ont été relâchées **5,2 points de pourcentage moins souvent** que les personnes blanches.
+
+La différence marginale (visible avec le préfixe "m" dans le tableau) est la plus aisée à calculer : on prend simplement la différence entre le pourcentage ajusté (entre parenthèses) de la catégorie étudiée (par exemple Homme) et le pourcentage ajusté de la catégorie de réference (par exemple Femme). 
+
+**Un mot sur la lecture des pourcentages ajustés eux-mêmes**, qui constitue le bout du chemin de la modélisation.
+
+> **Lecture** : la distribution réelle du sexe, de l'emploi, de la nationalité et des antécédents restant ce qu'elle est, si tout le monde dans le fichier avait été blanc, on estime que **84 %** auraient été relâchés ; si tout le monde avait été noir, **79 %** seulement.
+
+Ce n'est pas le pourcentage d'une personne moyenne. C'est l'échantillon entier, compté deux fois : une fois comme si tout le monde était dans un groupe, une fois comme si tout le monde était dans l'autre, tout le reste étant laissé tel qu'il est réellement dans l’échantillon. C'est pour cela qu'elle se compare aux 86 % et 74 % observés sur la même ligne : **les mêmes personnes, mais une autre manière de les compter**.
+
+## Un « effet marginal » est un écart moyenné sur l’ensemble de la population
+
+Cette opération porte, en statistique, le nom d'**effet marginal** — et il faut prendre garde à un faux ami : en sociologie française, à la suite de Philippe Cibois, « effet marginal » désigne souvent un effet *exprimé en points de pourcentage*. Originellement, le mot veut dire **moyenné sur l'échantillon**, et vaut pour un rapport aussi bien qu’une différence. On dira donc aussi bien *effet moyenné* ou *effet moyenné sur l'échantillon*, qui ont l'avantage de dire ce qu'ils font.
+
+Le terme « marginal » vient des **marges d'un tableau croisé**. Une marge, c’est la ligne Total, c'est ce qu'on obtient quand on cesse de répartir les gens en groupes pour les regarder tous à la fois — et l'opération est identique : calculer l'effet pour chaque enquêté·e, avec sa propre combinaison de caractéristiques, puis faire la moyenne, comme une ligne Total moyenne les lignes au dessus d’elle. (À une différence près, bien sûr : le Total est observé, non ajusté ; tandis que l'effet moyenné provient du modèle — le pourcentage prédit de chaque personne est calculé avec les autres prédicteurs maintenus à ses propres valeurs.)
+
+Cela vaut la peine d'être appris, parce que **c'est ce qu'on fait le plus souvent avec une régression logistique**. Pour un facteur oui/non, la famille binomiale s'ajuste généralement le mieux avec un lien logit ; mais même si le modèle travaille mieux en rapports de cotes, on peut vouloir l'interpréter en risques relatifs — c'est, de fait, la seule manière d'écrire légitimement une phrase du genre .
+
+Puisque ne pas renseigner `measure =` donne le coefficient propre du modèle (exponentié au besoin), *tout autre écart demandé est donc un effet moyenné*. Le plus souvent, pour une variable Oui/Non, on interprète donc la régression logistique à partir des différences marginales (`measure = "difference"`) pour la lecture la plus parlante et la plus proche des pourcentages, ou à partir du risque relatif marginal (`measure = "ratio"`) lorsque l’on souhaite pouvoir légitimement écrire des phrases comme « les hommes ont 1,4 fois moins de chances d’avoir `x` que les femmes ».
+
+Trois différences permettent d’identifier un effet marginal en observant le tableau : 
+
+| où regarder | on lit un coefficient | on lit un effet moyenné |
+|:---|:---|:---|
+| l'en-tête de colonne | `Model_OR` — aucune marque | `Model_mRR` — le **`m`** |
+| la ligne **Constant** | *Profil de référence* | *Moyenne de la population* |
+| la ligne `Modèle :` du bas | « rapport de cotes (par rapport à la modalité de référence) » | « …moyenne sur l'échantillon » |
+
+Le changement de la constante n'est pas décoratif : un coefficient se mesure *depuis* un point de départ, et le tableau montre donc ce point — une modalité de chaque prédicteur. Un effet moyenné, lui, est moyenné sur tout le monde : il n'y a pas de point de départ à montrer, et la ligne donne à la place le chiffre de l'échantillon entier.
+
+## Laquelle rapporter
+
+| ce qu'on veut faire | demander | ce qu'on peut alors écrire |
+|:---|:---|:---|
+| comparer aux modèles publiés | le réglage par défaut | « rapport de cotes de 1,48 » |
+| dire « x fois plus souvent » | `measure = "ratio"` | « 1,07 fois moins souvent » |
+| dire « combien de points » | `measure = "difference"` | « 5,2 points de moins » |
+| montrer les pourcentages | les chiffres entre parenthèses | « 84 % contre 79 % » |
+
+Si l'on ne rapporte qu'un seul nombre, les **points de pourcentage** sont un bon choix : c'est celui que le lecteur peut vérifier contre les pourcentages observés, assis dans le même tableau. Si l'on en rapporte deux, ajouter le rapport de cotes permet de contenter les spécialistes.
+
+## L'idéal-type, ou : pour qui ce nombre est-il vrai ?
+
+L’argument `measure` nous dit *quel* écart ; l’argument `effect` nous dit d’où vient le chiffre et notamment **à quel point de réference on se place pour le calculer**.
+
+| `effect` | le nombre décrit&hellip; |
+|:---|:---|
+| `"conditional"` | n'importe qui : le modèle suppose qu'une seule réponse vaut pour tous |
+| `"marginal"` | les gens réellement enquêtés, moyennés |
+| `"at_reference"` | un profil **idéal-typique**, soigneusement construit |
+
+`effect = "at_reference"` permet d’afficher la mesure de l’écart, non pas en moyenne, mais au profil de référence – celui-là pour lequel était calculé la « constante » du modèle (croisement des catégories de réference de toutes les variables catégorielles choisies et des points d’ancrage de toutes les variables numériques choisies). Ce profil n'est ni une moyenne ni un accident : c'est une **figure qu'on construit**, une modalité de chaque prédicteur, choisie parce qu'elle mérite qu'on y pense. C'est l'**idéal-type** de Max Weber — une simplification assumée, faite pour penser avec plutôt que pour décrire un phénomène empirique. C'est `ref =` qui le construit : *le jeune cadre* et *l'ouvrière âgée* sont l'un et l'autre à un argument de distance, et le modèle dira ce qu'il attend de chacun. Un idéal-type se construit, il ne se trouve pas. Que la combinaison ne corresponde qu'à un petit nombre de personnes réelles n'est donc pas un défaut en soi — mais il faut alors que sa signification sociologique, elle, ait été soigneusement pensée.
+
+
+# 5. Étudier l’ajustement du modèle
+
+
 ## Cinq manières dont l'ajustement peut déplacer l’effet observé
 
 Les étudiant·es s’attendent généralement à ce que l'ajustement réduise toujours les écarts par rapport aux chiffres observées, parce que c'est ce qu’il fait très souvent. Mais il y a bien cinq issues possibles, toutes rencontrées dans les données, et chaque ligne ci-dessous est un résultat réel commenté quelque part dans cet article :
@@ -367,8 +550,6 @@ Les étudiant·es s’attendent généralement à ce que l'ajustement réduise t
 | **l’écart disparaît**  | le sexe, sur la mise en garde à vue (Toronto)            | &minus;3,1 &rarr; +0,1 point          |
 | **l’écart s’amplifie** | la classe sociale, sur le fait d'aller au cinéma (France)| &minus;21,3 &rarr; &minus;24,9 points |
 | **l’écart s'inverse**  | le sexe, sur l'admission à Berkeley (USA)                | &minus;14,2 &rarr; +1,9 point         |
-
-Toutes ces lignes sont converties en **points de pourcentage** plutôt que conservées sous forme d’*odds ratios* : on prend simplement la différence entre le pourcentage ajusté (modélisé) de la catégorie étudiée (par exemple Homme) et le pourcentage ajusté de la catégorie de réference (par exemple Femme) – ce qu’on appelle la différence marginale, visible avec le préfixe "m" dans le tableau (cf. ci-dessous).
 
 **Noir-blanc : l’écart se réduit.** Dans le cas des mises en garde à vue à Toronto, nous avons vu que l'effet de la couleur de peau perdait environ la moitié de sa taille. Une partie de ce qui ressemblait à un effet direct de la race assignée était l'emploi, la nationalité et les antécédents dans les rapports avec la police (tous conséquences, d’une certaine manière, d’un certain aspect dimension du racisme structurel). Mais l’autre moitié, celle qui tient, pourrait *aussi* s’expliquer par une forme de racisation plus directe se jouant dans les interactions avec les policiers – ou par d’autres facteurs non mesurés ici.
 
@@ -401,7 +582,7 @@ Lire la ligne `colour` de gauche à droite : **&minus;11,7 points &rarr; &minus;
 
 C'est un format idéal pour publier, pourvu que les revues scientifiques lui trouvent une place. Il montre au lecteur ce que chaque jeu de « contrôles » a rapporté, au lieu de lui demander de faire confiance à un unique nombre final. De cette manière, il demande une patiente construction du modèle qui empêche qu’on ne garde, à la fin, que celui qui donnait la réponse souhaitée.
 
-## Colorer le déplacement
+## Colorer la manière dont les écarts se déplacent
 
 Sur un tableau large, comparer l’ajustement colonne par colonne peut devenir fastidieux. `color = "adjustment"` permet de visualiser le déplacement lui-même. La catégorie de réference pour le calcul des couleurs devient alors la colonne "Obs_RD" (« différence de risque observée »), en gras :
 
@@ -432,117 +613,7 @@ tab_reg(car_arrests, "released",
         measure = "difference", color=c("measure", "adjustment"), stats=NULL)
 ```
 
-# 4. Redescendre à une phrase que l'on peut dire à haute voix
-
-Voici le problème que pose tout ce qui précède. Que veut dire, concrètement, un rapport de cotes de `1/1.48` ? Il faut essayer de le dire à voix haute, en une phrase, à quelqu'un qui n'est pas statisticien. On n'y arrive pas.
-
-Un rapport de cotes est une bonne chose à produire pour un modèle et une mauvaise chose à lire pour une personne. Ce n'est pas « combien de fois plus souvent » : c'est un rapport de *cotes*, et il exagère.
-
-**De combien, et quand ?** Une règle simple suffit : un rapport de cotes est **toujours plus éloigné de 1** que le risque relatif de la même comparaison, et l'écart entre les deux **grandit avec la fréquence de l'événement qu'on nomme**. Ici l'événement nommé est « être relâché », et il arrive à 83 % des gens : l'exagération est maximale. Si l'on nommait l'événement rare — « ne pas être relâché », 17 % — les deux quantités se rapprocheraient beaucoup. C'est la même comparaison dans les deux cas ; seule change la phrase qu'on écrit. D'où la règle de lecture : plus l'événement dont on parle est fréquent, moins on a le droit de traduire un rapport de cotes en « fois plus souvent ».
-
-La dernière étape de l'aller-retour consiste donc à **redescendre** vers une quantité qu'on pourrait mettre dans une phrase. Cela ne coûte rien : c'est le *même modèle*, ajusté une fois, lu de plusieurs façons.
-
-## Un seul bouton, une seule règle
-
-`tab_reg()` pose quatre questions, et elles s'enchaînent : chacune découle de la précédente, dans une cascade « auto », sauf indication contraire.
-
-| argument | la question à laquelle il répond | en pratique |
-|:---|:---|:---|
-| `family` | quelle sorte de nombre est la variable à expliquer ? | détectée le plus souvent pour un facteur ; **à choisir** pour un nombre (section 1) |
-| `link` | dans quelle sorte d'écart travaille le **modèle** ? | dans bien des cas, ne pas y toucher — voir la fin de cette section |
-| `measure` | quelle sorte d'écart veut-on voir **rapportée** ? | **c'est celui-là qu'on règle** |
-| `effect` | d'où ce nombre est-il tiré ? | ne pas y toucher, sauf pour construire des idéaux-types avec `"at_reference"` |
-
-Et une règle relie `measure` à tout le reste :
-
-> **Si la mesure demandée est celle dans laquelle le modèle travaille déjà, on lit le coefficient propre du modèle. Sinon, le modèle calcule la mesure demandée à partir de ses prédictions, pour chaque personne de l'échantillon, et en fait la moyenne.**
-
-⚠ Cette opération porte, en statistique, le nom d'**effet marginal** — et il faut prendre garde à un faux ami : en sociologie française, à la suite de Philippe Cibois, « effet marginal » désigne souvent un effet *exprimé en points de pourcentage*. Ici, le mot veut dire **moyenné sur l'échantillon**, quelle que soit la mesure. On dira donc aussi bien *effet moyenné* ou *effet moyenné sur l'échantillon*, qui ont l'avantage de dire ce qu'ils font — mais l'argument, lui, s'écrit `effect = "marginal"`.
-
-Cela vaut la peine d'être appris, parce que **c'est ce qu'on fait le plus souvent avec une régression logistique**. Pour un facteur oui/non, la famille binomiale s'ajuste généralement le mieux avec un lien logit ; mais même si le modèle travaille mieux en rapports de cotes, on peut vouloir l'interpréter en risques relatifs — c'est, de fait, la seule manière d'écrire légitimement une phrase du genre « les hommes ont 1,4 fois plus souvent fait `x` que les femmes ».
-
-Le mot « marginal » vient de la **marge d'un tableau croisé**, et c'est exactement la même marge. Une ligne Total, c'est ce qu'on obtient quand on cesse de répartir les gens en groupes pour les regarder tous à la fois — et l'opération est identique : calculer l'effet pour chaque enquêté·e, à sa propre combinaison de caractéristiques, puis faire la moyenne, comme une ligne Total moyenne les lignes du dessus. (À une différence près, bien sûr : le Total est observé, non ajusté, tandis que l'effet moyenné vient du modèle — le nombre de chaque personne est calculé avec les autres prédicteurs maintenus à ses propres valeurs.)
-
-Comme `measure =` laissé tranquille donne le coefficient propre du modèle (exponentié au besoin), *toute autre mesure demandée est un effet moyenné*. Tous les tableaux de la section 3 qui affichaient des points de pourcentage ou des risques relatifs en étaient.
-
-Et il n'y a jamais à se souvenir de ce qu'on a demandé, parce que le tableau le dit à trois endroits.
-
-| où regarder | on lit un coefficient | on lit un effet moyenné |
-|:---|:---|:---|
-| l'en-tête de colonne | `Model_OR` — aucune marque | `Model_mRR` — le **`m`** |
-| la ligne **Constant** | *Profil de référence* | *Moyenne de la population* |
-| la ligne `Modèle :` du bas | « rapport de cotes (par rapport à la modalité de référence) » | « …moyenne sur l'échantillon » |
-
-La ligne Constant est la plus rapide des trois, et elle n'est pas décorative : un coefficient se mesure *depuis* un point de départ, et le tableau montre donc ce point — une modalité de chaque prédicteur. Un effet moyenné, lui, est moyenné sur tout le monde : il n'y a pas de point de départ à montrer, et la ligne donne à la place le chiffre de l'échantillon entier.
-
-## Un modèle, quatre lectures
-
-**Le rapport de cotes** — le réglage par défaut, puisqu'un modèle logistique travaille en cotes. Comparable à la littérature publiée, difficile à dire à voix haute.
-
-```{r}
-tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"), stats=NULL)
-```
-
-> **Lecture** : toutes les autres variables choisies étant égales, les personnes noires interpellées ont eu **1,48 fois moins de chances** d'être relâchées *plutôt que de ne pas l'être* — autrement dit, leur **cote** d'être relâchées est 1,48 fois plus faible.
-
-C'est ici que la règle de la section 2 se paie comptant : la clause finale, ou le mot *cote*, et de préférence l'un des deux seulement. Sans eux, la phrase annonce un risque relatif de 1,48 — soit, on va le voir, près de cinq fois l'écart réel.
-
-**Le risque relatif** — `measure = "ratio"`. Ce n'est pas la mesure propre du modèle : elle est donc calculée puis moyennée, et l'en-tête le dit, `Model_mRR`. Cette fois, il s'agit bien de « combien de fois plus souvent ».
-
-```{r}
-tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
-        measure = "ratio", stats=NULL)
-```
-
-> **Lecture** : entre personnes de même sexe, de même situation d'emploi, de même nationalité et de mêmes antécédents, les personnes noires ont été relâchées **1,07 fois moins souvent** que les personnes blanches.
-
-**La différence en points de pourcentage** — `measure = "difference"`. La plus utile de toutes, le plus souvent, parce que le point est l'unité dans laquelle les gens pensent déjà.
-
-```{r}
-tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
-        measure = "difference", stats=NULL)
-```
-
-> **Lecture** : entre personnes de même sexe, de même situation d'emploi, de même nationalité et de mêmes antécédents, les personnes noires ont été relâchées **5,2 points de pourcentage moins souvent** que les personnes blanches.
-
-**Les proportions ajustées elles-mêmes**, l'autre bout de l'aller-retour — déjà données entre parenthèses dans tous les `display` par défaut. On peut ne garder qu'elles avec `display = "base"`, colorées ici par les différences moyennées (en points de pourcentage).
-
-```{r}
-tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
-        measure = "difference", display = "base", stats=NULL)
-```
-
-> **Lecture** : la distribution réelle du sexe, de l'emploi, de la nationalité et des antécédents restant ce qu'elle est, si tout le monde dans le fichier avait été blanc, on estime que **84 %** auraient été relâchés ; si tout le monde avait été noir, **79 %** seulement.
-
-Il faut s'arrêter sur cette dernière phrase, parce qu'elle dit ce qu'*est* une proportion ajustée. Ce n'est pas le pourcentage d'une personne moyenne. C'est l'échantillon entier, compté deux fois : une fois comme si tout le monde était dans un groupe, une fois comme si tout le monde était dans l'autre, tout le reste étant laissé tel qu'il est réellement. C'est pour cela qu'elle se compare aux 86 % et 74 % observés sur la même ligne : **les mêmes personnes, une autre manière de les compter**.
-
-**Deux choses à savoir sur ce dernier tableau.** La ligne `checks` affiche toujours une différence, parce qu'une variable numérique n'a pas de modalités : il n'y a donc pas de proportion à prédire. Et la colonne reste intitulée `Model_mRD` alors même qu'elle imprime des pourcentages — `display` change ce qu'une case *montre*, jamais ce que la colonne *est*. C'est aussi pourquoi il est généralement plus simple de s'en tenir au `display` par défaut : la mesure en couleur, et les proportions ajustées entre parenthèses.
-
-## Laquelle rapporter
-
-| ce qu'on veut faire | demander | ce qu'on peut alors écrire |
-|:---|:---|:---|
-| comparer aux modèles publiés | le réglage par défaut | « rapport de cotes de 1,48 » |
-| dire « x fois plus souvent » | `measure = "ratio"` | « 1,07 fois moins souvent » |
-| dire « combien de points » | `measure = "difference"` | « 5,2 points de moins » |
-| montrer les pourcentages | `display = "base"` | « 84 % contre 79 % » |
-
-Si l'on ne rapporte qu'un seul nombre, que ce soient les **points de pourcentage** : c'est celui que le lecteur peut vérifier contre les pourcentages observés, assis dans le même tableau. Si l'on en rapporte deux, ajouter le rapport de cotes pour les spécialistes.
-
-## L'idéal-type, ou : pour qui ce nombre est-il vrai ?
-
-`measure` dit *quel* écart ; `effect` dit **de qui**. On le règle rarement, parce que la règle ci-dessus choisit déjà bien — le coefficient propre du modèle quand on demande sa mesure à lui, un effet moyenné quand on en demande une autre. Ce à quoi il sert, c'est la troisième possibilité.
-
-| `effect` | le nombre décrit&hellip; |
-|:---|:---|
-| `"conditional"` | n'importe qui : le modèle suppose qu'une seule réponse vaut pour tous |
-| `"marginal"` | les gens réellement enquêtés, moyennés |
-| `"at_reference"` | un profil **idéal-typique**, construit exprès |
-
-**C'est la troisième ligne qu'il faut aller chercher, et « profil de référence » lui rend mal justice.** Ce profil n'est ni une moyenne ni un accident : c'est une **figure qu'on construit**, une modalité de chaque prédicteur, choisie parce qu'elle mérite qu'on y pense. C'est l'**idéal-type** de Max Weber — une simplification assumée, faite pour penser avec plutôt que pour décrire qui que ce soit en particulier. C'est `ref` qui le construit : *le jeune cadre* et *l'ouvrière âgée* sont l'un et l'autre à un argument de distance, et le modèle dira ce qu'il attend de chacun.
-
-L'avertissement de la section 2 s'applique néanmoins de plein droit : un idéal-type se construit, il ne se trouve pas. Que la combinaison ne corresponde qu'à un petit nombre de personnes réelles n'est donc pas un défaut en soi — mais il faut alors que sa signification sociologique, elle, ait été pensée.
-
+<!-- 
 ## Le bouton d'expert : `link`, et les deux risques relatifs
 
 Tout ce qui précède changeait ce qui était **rapporté**, jamais ce qui était **ajusté**. Un seul argument change le modèle lui-même, et c'est celui auquel la plupart des utilisateurs ne toucheront sans doute jamais : `link` dit dans quelle sorte d'écart le modèle *travaille*.
@@ -566,11 +637,12 @@ tourné : un `glm()` logistique ordinaire pour le premier, dont le rapport vient
 contre un `svyglm()` à vraisemblance de Poisson pour le second, qui estime le rapport directement et
 prend des erreurs-types robustes (Huber-White), cette vraisemblance étant délibérément la mauvaise.
 
-**Lequel utiliser.** Préférer **`measure = "ratio"`**, la voie moyennée, dans presque tous les cas : le modèle logistique converge toujours, ne peut jamais prédire une probabilité supérieure à 100 %, et le nombre qu'il donne décrit les gens qu'on a enquêtés. Aller chercher **`link = "ratio"`** quand on a besoin du risque relatif *conditionnel* — celui qui suppose que le même rapport vaut pour tout le monde : c'est ce qu'attendra un lecteur venu de l'épidémiologie, et c'est ce qu'il faut pour s'aligner sur une estimation de Poisson modifiée publiée. La grille complète de ce que chaque famille peut ajuster et rapporter est dans [Tableaux de régression](tabxplor-reg-fr.html).
+**Lequel utiliser.** Préférer **`measure = "ratio"`**, la voie moyennée, dans presque tous les cas : le modèle logistique converge toujours, ne peut jamais prédire une probabilité supérieure à 100 %, et le nombre qu'il donne décrit les gens qu'on a enquêtés. Aller chercher **`link = "ratio"`** quand on a besoin du risque relatif *conditionnel* — celui qui suppose que le même rapport vaut pour tout le monde : c'est ce qu'attendra un lecteur venu de l'épidémiologie, et c'est ce qu'il faut pour s'aligner sur un modèle Poisson modifié publié. La grille complète de ce que chaque famille peut ajuster et rapporter est dans [Tableaux de régression](tabxplor-reg-fr.html). 
+-->
 
-# 5. Ce que le modèle ne tranche pas
+# 6. Ce que le modèle ne tranche pas
 
-Tout ce qui précède était de la mécanique. Cette section-ci est celle qui décide si l'analyse vaut quelque chose, et rien de ce qu'elle contient n'est un calcul.
+Tout ce qui précède était mathématique. Cette section-ci est celle qui décide si l'analyse vaut quelque chose, et rien de ce qu'elle contient n'est un calcul.
 
 ## « Toutes choses égales par ailleurs » — mais lesquelles ?
 

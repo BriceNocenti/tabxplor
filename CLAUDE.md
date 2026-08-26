@@ -1360,12 +1360,12 @@ inside the DONE summaries resolve by a single rule stated once, instead of being
 **The four new guides are written from the final design, not edited down from their sources.** The
 sources are archived intact beside them as the evidence base.
 
-| new guide            | lines | distilled from                                                                                                                                 |
-|----------------------|------:|-------------------------------------------------------------------------------------------------------------------------------------------------|
-| `jamovi_module.md`   | 1 205 | `tabxplor_2.0.0_jamovi_dev.md` + `jamovi_results_width.md` (2 482 lines)                                                                        |
-| `regression.md`      |   609 | `model_vs_observed_gap_test.md`, `ordinal_one_column_effects.md`, `poisson_vs_logistic_binary_outcome.md`, `reg_interactions…` §8, both plot designs |
-| `inference.md`       |   373 | `chi2_cell_residuals_and_contributions.md`, `weights_only_design_effect_soundness.md`, `weights_framework_redesign.md` Appendix A               |
-| `colors.md`          |   307 | `color_ladders_balance.md`, `color_blind_palettes_guide.md`, `black_and_white_publication_palette.md`                                           |
+| new guide          | lines | distilled from                                                                                                                                       |
+|--------------------|------:|------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `jamovi_module.md` | 1 205 | `tabxplor_2.0.0_jamovi_dev.md` + `jamovi_results_width.md` (2 482 lines)                                                                             |
+| `regression.md`    |   609 | `model_vs_observed_gap_test.md`, `ordinal_one_column_effects.md`, `poisson_vs_logistic_binary_outcome.md`, `reg_interactions…` §8, both plot designs |
+| `inference.md`     |   373 | `chi2_cell_residuals_and_contributions.md`, `weights_only_design_effect_soundness.md`, `weights_framework_redesign.md` Appendix A                    |
+| `colors.md`        |   307 | `color_ladders_balance.md`, `color_blind_palettes_guide.md`, `black_and_white_publication_palette.md`                                                |
 
 ⚠ **The selection rule was found by measurement, not chosen.** Three parallel surveys classified all
 52 files; the durable set turned out to be **exactly** those whose content cannot live in an `R/`
