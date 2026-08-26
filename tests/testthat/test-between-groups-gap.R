@@ -283,7 +283,7 @@ test_that("at = 'reference' writes no `obs`: the two columns are different estim
   testthat::expect_message(
     t <- tab_reg(d, outcome = "married", predictors = c("race", "party3"), family = "binomial",
                  effect = "at_reference", measure = "difference", empirical = TRUE),
-    "reference profile")
+    "at one profile")
   mcol <- reg_fmt_cols(t)[[1]]
   testthat::expect_true(all(is.na(get_obs(t[[mcol]]))))
   testthat::expect_true("Obs_RD" %in% names(t))         # the crude column is still shown

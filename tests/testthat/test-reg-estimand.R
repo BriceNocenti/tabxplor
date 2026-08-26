@@ -443,7 +443,7 @@ test_that("a retired estimand argument, effect value or family spelling aborts (
 test_that("D25: a reg colour cannot contradict what the column estimates", {
   d <- est_data()
   expect_error(tab_reg(d, "married", "race", family = "binomial", color = "difference"),
-               "measure")
+               "not a .*tab_reg.* colour")
   expect_error(tab_reg(d, "married", "race", family = "binomial", color = "odds_ratio"),
                "adjustment")
   # what remains is what to compare the effect TO

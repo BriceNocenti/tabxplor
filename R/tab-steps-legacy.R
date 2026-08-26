@@ -220,7 +220,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
   name <- vctrs::vec_recycle(name, 2)
 
   if (length(col_vars_levels) == 0 & "col" %in% tot) {
-    warning("can't add a total column without at least one non-mean col_var")
+    cli::cli_warn("A total column needs at least one non-mean col_var; none was added.")
     tot <- dplyr::if_else("row" %in% tot, "row", "no")
   }
 
@@ -453,8 +453,6 @@ tab_pct <- function(tabs, pct = "row",
           !(is_tottab(tabs[nrow(tabs),]) &
             is_totrow(tabs[nrow(tabs),]) &
             any(is_totcol(tabs))) ) {
-        warning("since percentages are 'all_tabs', a total table ",
-                "was added")
         if (!is_tottab(tabs[nrow(tabs),])) {
           tabs <- tabs |> tab_totaltab('line')
         }
@@ -1106,15 +1104,10 @@ tab_match_groups_and_totrows <- function(tabs) {
 
 
     if (length(groups) != 0) {
-      warning("no total row(s) found. Some added based on actual grouping variables : ",
-              paste(groups, collapse = ", "))
       return(dplyr::group_by(tabs, !!!rlang::syms(groups)) |> tab_tot("row"))
     } else if ( !any(is_tottab(tabs)) ) { #If there are no groups
-      warning("no groups nor total row(s) found. One added for the whole table")
       return(tab_tot(tabs, "row"))
     } else {
-      warning("no groups nor total row(s), but total table found. ",
-              "Grouped upon tab_vars and total rows added")
       tab_vars <- rlang::syms(tab_get_vars(tabs)$tab_vars)
       return(dplyr::group_by(tabs, !!!tab_vars) |> tab_tot("row"))
     }
@@ -1149,8 +1142,6 @@ tab_match_groups_and_totrows <- function(tabs) {
       return(dplyr::group_by(tabs, !!rlang::sym(group_var_name)))
     }
 
-    warning("grouping variable(s) not corresponding to total_rows, ",
-            "new groups calculated, based on actual total_rows")
     return(dplyr::relocate(tabs_totrow_groups, .data$totrow_groups, .before = 1) |>
              dplyr::group_by(.data$totrow_groups)
     )
@@ -1164,9 +1155,7 @@ tab_match_groups_and_totrows <- function(tabs) {
 #' @keywords internal
 tab_add_totcol_if_no <- function(tabs) {
   if (!any(is_totcol(tabs)) & ! all(fmt_var_kind(tabs) == "mean")) {
-    only_one_column <- length(which(purrr::map_lgl(tabs, is_fmt))) == 1L
     tabs <- tabs |> tab_tot("col", totcol = "last")
-    if (!only_one_column) warning("no total column, one was added (from the last non-mean column)")
   }
   tabs
 }
@@ -1183,17 +1172,9 @@ tab_validate_comp <- function(tabs, comp) {
 
   if (!all(is.na(comp_all))) {
     if(comp == "tab" & any(comp_all_no_na) ) {
-      warning("since at least one column already have an element calculated ",
-              "with comparison to the total row of the total table (pct or means ",
-              "diffs from total, chi2 variances or confidence intervals), ",
-              "comp were set to 'all'")
       comp <- "all"
     }
     if (comp == "all" & all(!comp_all_no_na) ) {
-      warning("since at least one column already have an element calculated ",
-              "with comparison to the total row of each tab_var (pct or means ",
-              "diffs from total, chi2 variances or confidence intervals), ",
-              "comp were set to 'tab'")
       comp <- "tab"
     }
   }
@@ -1212,8 +1193,6 @@ tab_validate_comp <- function(tabs, comp) {
 #' @keywords internal
 tab_match_comp_and_tottab <- function(tabs, comp) {
   if(comp == "all" & !any(is_tottab(tabs) & is_totrow(tabs)) ) {
-    warning("since 'comp' is 'all', a total table with a ",
-            "total row was added")
     tabs <- tabs |> tab_totaltab('line')
   }
   tabs

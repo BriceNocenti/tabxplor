@@ -133,6 +133,7 @@ test_that("a 3+ level outcome forced to binomial is ONE LEVEL against the rest",
   expect_equal(unname(or[!is.na(or) & or != 1]),
                unname(exp(stats::coef(hand))[-1]), tolerance = 1e-6)
   # ...and the collapse is ANNOUNCED: it changes what the table is about
+  tabxplor:::tx_reset_messages()   # the note is once per session
   expect_message(tab_reg(d, "marital", "race", family = "binomial", outcome_level = lv,
                          stats = "no", empirical = FALSE), "against the")
   expect_no_error(suppressMessages(tab_reg(d, "marital", "race")))
@@ -186,10 +187,11 @@ test_that("method = 'profile' falls back to Wald for weighted models (with a mes
   data <- logit_data() |>
     dplyr::filter(!is.na(tvhours)) |>
     dplyr::mutate(w = tvhours + 1)
+  tabxplor:::tx_reset_messages()   # the note is once per session
   expect_message(
     tw <- tab_reg(data, "married", c("race", "rincome"), wt = "w",
                     ci_method = "profile", cleannames = FALSE),
-    "not defined for survey"
+    "no profile interval"
   )
   colw <- tab_reg(data, "married", c("race", "rincome"), wt = "w",
                     ci_method = "wald", cleannames = FALSE)[["Model_OR"]]

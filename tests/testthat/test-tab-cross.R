@@ -56,6 +56,7 @@ test_that("the block reads as ONE block, named by the key, its columns by the le
 
 test_that("two continuous parents: the moderator is cut, never silently", {
   d <- cx_data()
+  tabxplor:::tx_reset_messages()   # the note is once per session
   expect_message(t <- tab(d, marital, age*tvhours, pct = "row"), "cut")
   expect_equal(sum(purrr::map_lgl(t, ~ is_fmt(.) && identical(get_col_var(.), "age*tvhours"))), 4L)
 })
@@ -67,7 +68,7 @@ test_that("a cross is refused on every axis but col_vars, and by tab_counts()", 
   expect_error(tab(d, marital, age, spread_vars = race*relig3),  "spread_vars")
   expect_error(tab(d, marital, race:relig3),                     "col_vars")
   expect_error(tab(d, marital, race*race),                       "with itself")
-  expect_error(tab(d, marital, c(race, race*relig3)),            "beside an interaction")
+  expect_error(tab(d, marital, c(race, race*relig3)),            "already carried by")
   expect_error(tab(d, marital, age*race, shape = c(age = "log")), "cannot keep a number")
   cnt <- dplyr::count(d, race, relig3, name = "n")
   expect_error(tab_counts(cnt, race, race*relig3, counts = n), "takes no interaction")

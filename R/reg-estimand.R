@@ -1282,10 +1282,8 @@ reg_normalize_color <- function(color) {
     if (!is.na(key) && nzchar(key) && key %in% own) return(key)
     cli::cli_abort(c(
       "{.arg color} = {.val {v}} is not a {.fn tab_reg} colour.",
-      "i" = paste0("A regression column states what it estimates, so its colour LADDER comes from ",
-                   "the column -- change the estimand with {.arg measure} instead."),
-      "i" = "What is left to choose is what to compare it TO: {.or {.val {own}}}.",
-      "i" = "{.code color = TRUE} colours by the effect itself; {.code c(TRUE, \"adjustment\")} adds the background."))
+      "i" = "A model column chooses what to compare its effect TO: {.or {.val {own}}}.",
+      "i" = '{.code color = TRUE} colours by the effect itself.'))
   }, character(1))
   # a bare "no" in the text slot with a real background measure is the "background only" spelling
   if (length(out) > 1L && all(out == "no")) return("no")
@@ -1337,13 +1335,9 @@ reg_effect_key <- function(x) {
   if (x %in% REG_EFFECTS_VALUES) return(x)
   if (identical(x, "raw_coefficient"))
     cli::cli_abort(c(
-      '{.arg effect} = {.val coefficient} is now {.val conditional}.',
-      "i" = paste0("It names the quantity -- the conditional effect, the one the model's own ",
-                   "coefficient carries -- rather than the artefact it is read off.")))
+      '{.arg effect} = {.val coefficient} is now {.val conditional}.'))
   cli::cli_abort(c("Unknown {.arg effect} value {.val {x}}.",
-                   "i" = "Valid: {.or {.val {REG_EFFECTS_VALUES}}}.",
-                   "i" = paste0("{.arg link} says which measure the MODEL estimates, {.arg measure} ",
-                                "which one is REPORTED, and {.arg effect} where the number comes from.")))
+                   "i" = "Valid: {.or {.val {REG_EFFECTS_VALUES}}}."))
 }
 
 # "here is what this outcome DOES offer" -- shared by the abort and by reg_measures(), and read at

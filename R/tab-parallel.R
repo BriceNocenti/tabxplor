@@ -98,11 +98,7 @@ tab_parallel_workers <- function(cache_env = NULL) {
   p <- tx_option("parallel")
   if (is.null(p) || isFALSE(p) || identical(p, "no")) return(0L)
   if (!requireNamespace("mirai", quietly = TRUE)) {
-    rlang::warn(
-      paste0("`parallel` was requested but the {mirai} package is not installed; ",
-             "running sequentially. Install it with install.packages(\"mirai\")."),
-      .frequency = "once", .frequency_id = "tabxplor_no_mirai"
-    )
+    tx_need_pkg("mirai", "options(tabxplor.parallel = TRUE)", severity = "inform")
     return(0L)
   }
   cap <- if (nzchar(Sys.getenv("_R_CHECK_LIMIT_CORES_"))) 2L else Inf

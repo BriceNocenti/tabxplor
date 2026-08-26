@@ -77,9 +77,9 @@ test_that("`:` is refused by name: it is a different model in R, not a synonym",
   # `a:b` is the interaction term WITHOUT its main effects -- which for a continuous parent is a
   # different fit and depends on the anchor, and is what reg_cross_resolve() exists to refuse.
   expect_error(tab_reg(d, "married", c(race:age4), family = "binomial", stats = FALSE),
-               "not how an interaction is written")
+               "an interaction is written")
   expect_error(tab_reg(d, "married", c("race:age4"), family = "binomial", stats = FALSE),
-               "not how an interaction is written")
+               "an interaction is written")
   a <- stats::glm(married ~ age:race,  d, family = stats::binomial())
   b <- stats::glm(married ~ age * race, d, family = stats::binomial())
   expect_gt(abs(as.numeric(stats::logLik(a)) - as.numeric(stats::logLik(b))), 1)
@@ -104,7 +104,7 @@ test_that("the ORDER picks the presentation, never the model", {
 test_that("the refusals name the cure", {
   d <- cr_data()
   f <- function(p) tab_reg(d, "married", p, family = "binomial", stats = FALSE)
-  expect_error(f(c("race", "race*age4")), "beside an interaction")   # the parent rule
+  expect_error(f(c("race", "race*age4")), "already carried by the interaction")   # the parent rule
   expect_error(f("race*nope"), "does not exist")
   expect_error(f("race*race"), "with itself")
   # a shape that keeps the moderator CONTINUOUS is the user's own choice, so the abort stands

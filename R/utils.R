@@ -1,8 +1,9 @@
 # PURPOSE: package initialization plus the shared factor / list / string utilities.
 # ROLE: .onLoad() SEEDS the package options and the colour palette; everything else here is a small
 #   helper with no home of its own -- the two stringi-based replacements for str_wrap/str_trunc, the
-#   NAME wrapper beside them, the retired-export-argument catcher, and the three exported user helpers
-#   (score_from_lv1(), gss_cat_data_formatting(), and the deprecated fct_recode_helper()).
+#   NAME wrapper beside them, the retired-export-argument catcher, the two message helpers
+#   (tx_inform_once() / tx_need_pkg()), and the three exported user helpers (score_from_lv1(),
+#   gss_cat_data_formatting(), and the deprecated fct_recode_helper()).
 # KEY CONSTRAINTS:
 #   - TAB_OPTIONS (R/tab-options.R) is the single source of truth for option names and defaults;
 #     .onLoad() only seeds them, through tx_seed_options().
@@ -144,6 +145,60 @@ tx_deprecate_inert <- function(dots, fn) {
     )
   }
   dots[setdiff(names(dots), names(TX_INERT_EXPORT_ARGS))]
+}
+
+
+# === SECTION: user messages =======================================================================
+# A message is addressed to the person writing the call: what is wrong, or what was decided for them,
+# and the argument that changes it. See CLAUDE.md § Cross-cutting invariants.
+
+# An automatic recode changes what the table IS, so it is never silent -- but it must not repeat on
+# every call of a loop either.
+# ⚠ THE ID CARRIES THE SUBJECT, not just the kind of message: `paste0("shape_auto_", var)`, never
+# "shape_auto". A fixed id would silence the note for the NEXT variable of the same session.
+#' @keywords internal
+#' @noRd
+tx_inform_once <- function(id, ..., .envir = parent.frame()) {
+  id <- paste0("tabxplor_", id)
+  tx_said[[id]] <- TRUE
+  cli::cli_inform(c(...), .envir = .envir, .frequency = "once", .frequency_id = id)
+  invisible(NULL)
+}
+
+# The ids said so far, so a session can be put back to its first-call state. Used by the tests that
+# assert on a once-per-session message, which would otherwise see it only in whichever ran first.
+tx_said <- new.env(parent = emptyenv())
+
+#' @keywords internal
+#' @noRd
+tx_reset_messages <- function() {
+  for (id in ls(tx_said)) rlang::reset_message_verbosity(id)
+  rm(list = ls(tx_said), envir = tx_said)
+  invisible(NULL)
+}
+
+# THE Suggests gate: one message for every missing package of one request, never one per package.
+# `what` is plain prose ("Excel export", "tab_plot()"): it is substituted as a VALUE, so cli markup
+# written into it would reach the user raw.
+# Deliberately the only message allowed three bullets -- it is rare, it is shown once, and it is
+# aimed at a reader for whom installing a package is the hard part.
+#' @keywords internal
+#' @noRd
+tx_need_pkg <- function(pkgs, what, severity = c("abort", "inform"), call = NULL) {
+  miss <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
+  if (length(miss) == 0L) return(invisible(TRUE))
+  code <- if (length(miss) == 1L) paste0('install.packages("', miss, '")')
+          else paste0('install.packages(c(', paste0('"', miss, '"', collapse = ", "), '))')
+  msg <- c(
+    "{what} needs the {.pkg {miss}} package{?s}.",
+    "i" = "{.code {code}}",
+    "i" = 'Everything tabxplor can use: {.code install.packages("tabxplor", dependencies = TRUE)}')
+  if (identical(match.arg(severity), "inform")) {
+    tx_inform_once(paste0("need_pkg_", paste(miss, collapse = "_")), msg,
+                   .envir = environment())
+    return(invisible(FALSE))
+  }
+  cli::cli_abort(msg, call = call)
 }
 
 #' @keywords internal
@@ -550,7 +605,7 @@ get_tablegrob <- function (tab)
     tabgrob <- tab
   }
   else {
-    stop("tab should be an object from either ggpubr::ggtexttable() or gridExtra::tableGrob().")
+    cli::cli_abort("{.arg tab} must come from {.fn ggpubr::ggtexttable} or {.fn gridExtra::tableGrob}.")
   }
   tabgrob
 }

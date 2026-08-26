@@ -222,11 +222,7 @@ reg_validate_args <- function(conf_level = NULL, stats = NULL, color_signif = NU
          (is.character(empirical) && empirical %in% emp_words))))
     cli::cli_abort(c(
       "{.arg empirical} must be {.code TRUE}, {.code FALSE}, or {.or {.val {emp_words}}}.",
-      "x" = "Got {.val {empirical}}.",
-      "i" = paste("{.code TRUE} (the default) draws a crude column, except where that would double a",
-                  "table already wide ({.arg tab_vars} groups, a 3+ level outcome) -- there the crude",
-                  "value is computed and read from the hover tooltip. {.val tooltip}, {.val cell}",
-                  "(inside the model cell) and {.val column} force one outright.")), call = NULL)
+      "x" = "Got {.val {empirical}}."), call = NULL)
   invisible(TRUE)
 }
 
@@ -453,10 +449,8 @@ reg_resolve_estimands <- function(data, outcome, family = "auto", link = "auto",
   if (weighted && any(reg_fam_3plus(families)) && any(no_method)) {
     cli::cli_abort(c(
       "A survey-weighted {.val multinomial}/{.val ordinal} outcome can only be read on its coefficients.",
-      "i" = paste0("Its marginal quantities have no method here, so a measure other than the ",
-                   "model's own cannot be reported."),
-      "i" = paste0("Use {.code effect = \"conditional\"} with the model's own measure, drop the ",
-                   "weights, or -- on an ordered outcome -- ask for {.code measure = \"difference\"}.")),
+      "i" = paste0('Use {.code effect = "conditional"}, drop the weights, or, on an ordered ',
+                   'outcome, {.code measure = "difference"}.')),
       call = NULL)
   }
 
@@ -516,8 +510,9 @@ reg_resolve_output <- function(display = NULL, color = TRUE, color_signif = NULL
   # `adjustment` scores the model effect against its OBSERVED counterpart, in `obs` -- so asking for
   # the colour asks for `empirical` (the measure's own declared `requires["empirical"]`).
   if (any(vapply(color_arg, measure_forces, logical(1), "empirical")) && !emp_on(empirical)) {
-    cli::cli_inform(c("i" = paste0("{.code color = \"adjustment\"} compares each model effect to its ",
-                                   "observed one, so {.code empirical = TRUE} is turned on.")))
+    tx_inform_once("color_adjustment_empirical", c("i" = paste0(
+      '{.code color = "adjustment"} compares each model effect to its observed one, ',
+      "so {.code empirical = TRUE} is turned on.")))
     empirical <- TRUE
   }
   # --- Z: the `empirical` degrade ---------------------------------------------------------------
@@ -528,13 +523,10 @@ reg_resolve_output <- function(display = NULL, color = TRUE, color_signif = NULL
     # about it on every compound formula and every crude-less family would lecture a reader about an
     # argument they never typed. A word is a request; `TRUE` is "do the sensible thing".
     # name the REAL cause: a compound formula has no predictor structure to be crude about.
-    if (is.character(empirical)) cli::cli_inform(if (formula_mode) c("i" = paste0(
-      "{.arg empirical} (crude descriptive companion) needs one predictor per row; a compound formula ",
-      "({.code poly()} / interactions / {.code I()}) has none, so it is ignored here."),
-      "i" = 'Use {.arg predictors} with {.arg shape} for a curved term, e.g. {.code shape = c(age = "quadratic")}.')
-      else c("i" = paste0(
-      "{.arg empirical} (crude descriptive companion) is not available for any of these outcome ",
-      "families; ignored here.")))
+    if (is.character(empirical)) cli::cli_inform(if (formula_mode) c(
+      "i" = "{.arg empirical} needs one predictor per row, and a compound formula has none; ignored.",
+      "i" = 'Use {.arg predictors} with {.code shape = c(age = "quadratic")} for a curved term.')
+      else c("i" = "{.arg empirical} has no observed companion for these outcome families; ignored."))
     empirical <- FALSE
   }
 
@@ -728,9 +720,7 @@ reg_resolve_references <- function(ref, data, all_predictors, tab_vars = NULL,
   wrong <- intersect(named, outcomes)
   if (length(wrong) > 0L)
     cli::cli_abort(c(
-      "{.val {wrong[[1]]}} is an outcome, not a predictor, so {.arg ref} cannot set its level.",
-      "i" = paste0("{.arg ref} names the level other levels are compared AGAINST; ",
-                   "{.arg outcome_level} names the level that is MODELLED."),
+      "{.val {wrong[[1]]}} is an outcome, and {.arg ref} sets a predictor's level.",
       "i" = 'Did you mean {.code outcome_level = c({wrong[[1]]} = "{ref[[wrong[[1]]]]}")}?'),
       call = NULL)
 
@@ -814,9 +804,9 @@ reg_na_cut_shapes <- function(data, preds, shapes) {
     auto <- c(auto, v)
   }
   if (length(auto))
-    cli::cli_inform(c("i" = paste0(
-      "{.val {auto}}: cut into bands so the missing values can be kept as a level ",
-      "({.code shape = } chooses otherwise).")))
+    tx_inform_once(paste0("na_cut_", paste(auto, collapse = "_")), c("i" = paste0(
+      "{.val {auto}}: cut into bands, so the missing values can be kept as a level.",
+      " {.arg shape} chooses otherwise.")))
   shapes
 }
 
@@ -993,12 +983,8 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   # both `compare` and the resolved outcome vector are known. Only an EXPLICIT key reaches it.
   if (!identical(compare, "none") && length(prep$outcome) > 1L)
     cli::cli_abort(c("A model comparison needs the models to share one {.arg outcome}.",
-                     "x" = paste0("{.arg stats} asks for {.val {paste0('compare_', compare)}}, but ",
-                                  "{.arg outcome} names {length(prep$outcome)}: ",
-                                  "{.val {prep$outcome}}."),
-                     "i" = paste0("A comparison tests one model against another on the same ",
-                                  "response. Compare within an outcome, or drop the comparison ",
-                                  "key to get one column block per outcome.")), call = NULL)
+                     "x" = "{.arg outcome} names {length(prep$outcome)}: {.val {prep$outcome}}.",
+                     "i" = "Compare within one outcome, or drop the comparison key."), call = NULL)
 
   # S3 -- the per-outcome table.
   deps <- reg_resolve_estimands(prep$data, prep$outcome, family = family, link = link,
@@ -1094,10 +1080,8 @@ reg_resolve_trials <- function(trials, outcome, families, data, formula_mode) {
     cli::cli_abort(c(
       "{.arg trials} must be an item count, not a column name.",
       "x" = "Got {.val {as.character(trials)}}.",
-      "i" = paste("Pass the number of ITEMS behind the summed score: an integer, a vector named by",
-                  "outcome, or {.code TRUE} to use each outcome's observed maximum."),
-      "i" = "Per-row item counts are not supported; write the model formula with {.code cbind()}."),
-      call = NULL)
+      "i" = paste("Pass the number of items behind the summed score, or {.code TRUE} for each",
+                  "outcome's observed maximum.")), call = NULL)
   # (an all-NA logical vector is the "take the observed maximum for these outcomes" spelling)
   if (!is.numeric(trials) && !isTRUE(trials) && !(is.logical(trials) && all(is.na(trials))))
     cli::cli_abort(c(
@@ -1176,9 +1160,7 @@ reg_check_tab_vars <- function(data, tab_vars, outcome, all_predictors, formula_
   cli::cli_abort(c(
     "{.arg tab_vars} {.val {tab_vars}}: no model can be fitted within {.val {grp}}.",
     "x" = if (length(vb) == 0L) "That group has no rows left."
-          else "{cli::qty(vb)}{.val {vb}} {?has/have} a single value there, so {?it/they} \\
-                cannot be a model term.",
-    "i" = "Drop or merge that group (e.g. with {.fn forcats::fct_lump} or a {.fn filter}), \\
-           or split by a variable that varies within every group."
+          else "{cli::qty(vb)}{.val {vb}} {?has/have} a single value there.",
+    "i" = "Merge that group, or split by a variable that varies within every group."
   ), call = NULL)
 }

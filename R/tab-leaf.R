@@ -188,10 +188,8 @@ plain_resolve <- function(pct, ref, ref2, na, totaltab_name, total_names, tot, c
 
   if (pct == "all_tabs" & length(tab_vars) == 0) pct <- "all"
 
-  if (color != "no" & ref == "no") {
-    warning("since color is ", color, " ref can't be `no` and was set to `tot`")
-    ref <- "tot"
-  }
+  # a comparison colour needs a baseline to compare to
+  if (color != "no" & ref == "no") ref <- "tot"
 
   if (is.null(tot)) {
     tot <- switch(pct,
@@ -206,35 +204,17 @@ plain_resolve <- function(pct, ref, ref2, na, totaltab_name, total_names, tot, c
     # `both` expands differently on the two leaves: both totals here, the row total on tab_num().
     if (tot[1] == "both") tot <- c("row", "col")
 
-    if (!"col" %in% tot) {
-      if (pct == "row") {
-        warning("since pct == 'row', a total column was added")
-        tot <- c(tot, "col")
-      }
-      if (color != "no" & pct == "col" & ref == "tot") {
-        warning("since color == ", color, " and pct == 'col' and ref == 'tot', a total column was added")
-        tot <- c(tot, "col")
-      }
-      if (pct %in% c("all", "all_tabs")) {
-        warning("since pct == 'all' or 'all_tabs', a total column was added")
-        tot <- c(tot, "col")
-      }
-    }
+    # a percentage rests on a base, and a `tot` reference is a total: both are added silently,
+    # since the added row or column is then plainly in the table.
+    if (!"col" %in% tot &&
+        (pct == "row" || pct %in% c("all", "all_tabs") ||
+         (color != "no" & pct == "col" & ref == "tot")))
+      tot <- c(tot, "col")
 
-    if (!"row" %in% tot) {
-      if (pct == "col") {
-        warning("since pct == 'col', total rows were added")
-        tot <- c(tot, "row")
-      }
-      if (color != "no" & pct == "row" & ref == "tot") {
-        warning("since color == ", color, " and pct == 'row' and ref == 'tot', total rows were added")
-        tot <- c(tot, "row")
-      }
-      if (pct %in% c("all", "all_tabs")) {
-        warning("since pct == 'all' or 'all_tabs', total rows were added")
-        tot <- c(tot, "row")
-      }
-    }
+    if (!"row" %in% tot &&
+        (pct == "col" || pct %in% c("all", "all_tabs") ||
+         (color != "no" & pct == "row" & ref == "tot")))
+      tot <- c(tot, "row")
   }
 
   vctrs::vec_assert(comp, size = 1)
@@ -265,12 +245,10 @@ plain_resolve <- function(pct, ref, ref2, na, totaltab_name, total_names, tot, c
 
   if (((comp[1] == "all" & ref == "tot") | pct == "all_tabs") &
       !totaltab %in% c("table", "line")) {
-    warning("since comp = 'all', a total table was added to compare with")
     totaltab <-  "line"
   }
 
   if (comp[1] == "all" & !ref %in% c("tot", "no", "") & totaltab != "table") {
-    warning("since comp = 'all', a full total table was added to compare with")
     totaltab <- "table"
   }
 
@@ -357,7 +335,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 
     if (nrow(data) == 0) stop("data is of length 0 (possibly after filter or na = 'drop_all')")
   } else if (nrow(.fine) == 0) {
-    stop("data is of length 0 (possibly after filter or na = 'drop_all')")
+    cli::cli_abort(c("No data left to tabulate.",
+                     "i" = "Check {.arg filter} and {.code na = \"drop_all\"}."))
   }
 
   # DESIGN: two aggregation sources, one dcast -- a raw scan per row_var x col_var (`use_raw`), or a
@@ -1178,11 +1157,8 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
                    else ((P * N)[ra, , drop = FALSE])[, ref_col_idx, drop = FALSE])
         }
       } else {
-        warning(paste0(
-          "in ref2 = '", ref2, "' , no columns were found as reference for comparison ; ",
-          "to remove this warning, precise the value of ref ",
-          "until there is one column matched"
-        ))
+        cli::cli_warn(c("!" = "{.code ref2 = {.val {ref2}}} matches no column: nothing to compare to.",
+                        "i" = "Name one level of the column variable."))
         ref_col_idx <- rep(NA_integer_, k)
         RR <- matrix(NA_real_, n, k)
       }
@@ -1210,11 +1186,8 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, or_compare, pct
       set_cols(tabs_diff, P - P[, refcols])
       set_cols(tabs_mean, P / P[, refcols])   # *2 rule ratio
     } else {
-      warning(paste0(
-        "in ref = '", ref, "' , no columns were found as reference for comparison ; ",
-        "to remove this warning, precise the value of ref ",
-        "until there is one column matched"
-      ))
+      cli::cli_warn(c("!" = "{.code ref = {.val {ref}}} matches no column: nothing to compare to.",
+                      "i" = "Name one level of the column variable."))
       set_cols(tabs_diff, matrix(NA_real_, n, k))
       set_cols(tabs_mean, matrix(NA_real_, n, k))
     }
@@ -1505,19 +1478,12 @@ num_resolve <- function(color, ref, ci, tot, comp, totaltab, row_var, col_vars, 
 
   if (is_placeholder_var(row_var) | any(is_placeholder_var(col_vars))) color <- ""
 
-  # "a comparison colour needs a reference": this leaf warns and repairs where the pipeline aborts.
+  # "a comparison colour needs a reference": this leaf repairs where the pipeline aborts.
   needs_ref <- measure_forces(color, "ref")
-  if (needs_ref & ref %in% c("no", "")) {
-    warning("since color = 'diff', ref must be provided and was set to 'tot'")
-    ref <- "tot"
-  }
+  if (needs_ref & ref %in% c("no", "")) ref <- "tot"
 
   if (is.null(ci)) ci <- "no"
-
-  if (ci == "diff" & ref %in% c("no", "")) {
-    warning("since ci = 'diff', a diff was added with ref = 'tot'")
-    ref <- "tot"
-  }
+  if (ci == "diff" & ref %in% c("no", "")) ref <- "tot"
 
   ci_visible <- ci == "cell"
 
@@ -1542,15 +1508,9 @@ num_resolve <- function(color, ref, ci, tot, comp, totaltab, row_var, col_vars, 
 
   if (length(tab_vars) == 0) totaltab <- "no"
 
-  if (comp[1] == "all" & ref == "tot" & !totaltab %in% c("table", "line")) {
-    warning("since comp = 'all', a total table was added to compare with")
-    totaltab <-  "line"
-  }
-
-  if (comp[1] == "all" & !ref %in% c("tot", "no", "") & totaltab != "table") {
-    warning("since comp = 'all', a full total table was added to compare with")
-    totaltab <- "table"
-  }
+  # comp = "all" compares against the total table, so there must be one
+  if (comp[1] == "all" & ref == "tot" & !totaltab %in% c("table", "line")) totaltab <- "line"
+  if (comp[1] == "all" & !ref %in% c("tot", "no", "") & totaltab != "table") totaltab <- "table"
 
   list(color = color, ref = ref, ci = ci, ci_visible = ci_visible,
        tot = tot, comp = comp, totaltab = totaltab)
@@ -1629,7 +1589,8 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
     if (nrow(data) == 0) stop("data is of length 0 (possibly after filter or na = 'drop')")
   } else if (nrow(.fine) == 0) {
-    stop("data is of length 0 (possibly after filter or na = 'drop')")
+    cli::cli_abort(c("No data left to tabulate.",
+                     "i" = "Check {.arg filter} and {.arg na}."))
   }
 
   if (!use_raw) {

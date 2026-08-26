@@ -521,6 +521,7 @@ testthat::test_that("color_signif = 'ignore' does NOT force a CI", {
 # Phase 19d / D28: `ci = "cell"` beside a policy INFORMS and disables -- one rule, both paths.
 # It used to abort for `color_signif` and silently drop the stars.
 testthat::test_that("an explicit ci = 'cell' with a color_signif policy informs and disables", {
+  tabxplor:::tx_reset_messages()   # the note is once per session
   testthat::expect_message(
     t <- tab(forcats::gss_cat, race, marital, pct = "row", color = TRUE, ci = "cell",
              color_signif = "grey_non_signif"),
@@ -539,6 +540,7 @@ testthat::test_that("an explicit ci = 'cell' with a color_signif policy informs 
 # interval where `tab_num()` built none, and the jamovi tuple recorded a `ci` its carrier contradicted.
 testthat::test_that("an explicit ci = 'no' informs and disables, on both resolvers", {
   gss <- forcats::gss_cat
+  tabxplor:::tx_reset_messages()   # the note is once per session
   testthat::expect_message(
     t <- tab(gss, race, marital, pct = "row", color = TRUE, ci = "no",
              color_signif = "grey_non_signif"),
@@ -547,11 +549,13 @@ testthat::test_that("an explicit ci = 'no' informs and disables, on both resolve
   testthat::expect_equal(get_color_signif(t$Married), "ignore")
   testthat::expect_true(all(is.na(get_ci_inf(t$Married))))       # the user said no interval
 
+  tabxplor:::tx_reset_messages()   # the note is once per session
   testthat::expect_message(
     s <- tab(gss, race, marital, pct = "row", ci = "no", stars = TRUE), 'ci = "no"')
   testthat::expect_true(all(is.na(get_ci_inf(s$Married))))
 
   # the numeric leaf, called directly, agrees cell for cell -- that is the whole point of one rule
+  tabxplor:::tx_reset_messages()   # the note is once per session
   testthat::expect_message(
     n <- tab_num(gss, race, tvhours, ci = "no", stars = TRUE), 'ci = "no"')
   testthat::expect_true(all(is.na(get_ci_inf(n$tvhours))))

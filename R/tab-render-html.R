@@ -747,10 +747,7 @@ print.tabxplor_kable <- function(x, ...) {
   # when it is absent we cannot reproduce them; degrade cleanly rather than dispatch into a missing
   # method: a one-time note, then knitr's own print (NextMethod) -- table shows, tooltips simply off.
   if (identical(mode, "degrade")) {
-    rlang::inform(
-      c("!" = "An interactive Viewer page for tabxplor html tables needs the {kableExtra} package.",
-        "i" = "Install it (install.packages(\"kableExtra\")) for a themed Viewer page with tooltips."),
-      .frequency = "once", .frequency_id = "tabxplor_kable_viewer_no_kableExtra")
+    tx_need_pkg("kableExtra", "A themed Viewer page with tooltips", severity = "inform")
     return(NextMethod())
   }
   # Delegate, never reimplement: kableExtra's print is what attaches jquery + bootstrap + those two

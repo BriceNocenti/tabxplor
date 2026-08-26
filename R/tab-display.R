@@ -721,8 +721,7 @@ display_note_empty <- function(fields) {
   hints <- DISPLAY_FIELD_SOURCE[fields]
   hints <- hints[!is.na(hints)]
   cli::cli_inform(c(
-    "i" = paste0("{.arg display}: {cli::qty(length(fields))}{?field/fields} ",
-                 "{.val {fields}} {?is/are} empty in this table, so {?it renders/they render} void."),
+    "i" = "{cli::qty(length(fields))}{.arg display} field{?s} {.val {fields}} {?is/are} empty here.",
     if (length(hints))
       stats::setNames(paste0("{.field ", names(hints), "} needs ", unname(hints), "."),
                       rep("i", length(hints)))
@@ -750,7 +749,6 @@ display_refuse_mismatch <- function(col, fields, tmpl) {
   if ("level" %in% c(have, want)) return(invisible(NULL))
   cli::cli_abort(c(
     "{.arg display} = {.val {tmpl}} prints a {.field {want}} beside a {.field {have}} interval.",
-    "x" = "A cell carries ONE interval, and this column's is on the {.field {have}} scale.",
     "i" = paste0("Ask for the matching comparison ({.code color = \"",
                  # a colour measure IS the geometry, bar a LEVEL and any MEASURES cannot name.
                  if (identical(have, "level")) "no"

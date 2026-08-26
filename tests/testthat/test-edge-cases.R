@@ -469,13 +469,13 @@ testthat::test_that("an unknown named ref warns cleanly and falls back to auto",
   gss <- forcats::gss_cat
   testthat::expect_warning(
     r1 <- tab(gss, marital, race, ref = c(badname = "x")),
-    "Unknown .*ref.* name.*badname"
+    ".*ref.* name.*badname.*matches no row_var"
   )
   testthat::expect_s3_class(r1, "tabxplor_tab")
   # plural form must also render (both quantities pinned to length(unknown))
   testthat::expect_warning(
     tab(gss, marital, race, ref = c(bad1 = "x", bad2 = "y")),
-    "match no row_var and are ignored"
+    "match no row_var"
   )
 })
 

@@ -795,8 +795,7 @@ tab_check_dots <- function(dots, producer, call = rlang::caller_env()) {
     pos <- if (is.null(nms)) seq_along(dots) else which(!nzchar(nms))
     cli::cli_abort(c(
       "{cli::qty(length(pos))}Argument{?s} {pos} of {.fn {producer}} {?is/are} not named.",
-      "i" = "Since 2.0.0 only {.arg data} and the variable roles are positional; everything else
-             must be named (this is what stops a value landing in the wrong argument)."),
+      "i" = "Only {.arg data} and the variable roles are positional; name everything else."),
       call = call)
   }
   if (!length(dots)) return(invisible(TRUE))

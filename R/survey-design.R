@@ -68,7 +68,6 @@ svy_unwrap_data <- function(data, fn = "tab") {
   #   weight vector. survey.design absorbs `type` in `...`, so one call shape serves both classes.
   frame[[svy_wt_col]]  <- as.double(stats::weights(data, type = "sampling"))
   frame[[svy_row_col]] <- seq_len(nrow(frame))
-  cli::cli_inform(c("i" = "Survey design detected: estimates and tests use the design."))
   # degf captured once here: survey refers every interval to t(degf), not to z.
   list(data = frame, spec = list(design = data, wt = svy_wt_col,
                                  degf = svy_degf(data)))
@@ -93,12 +92,7 @@ svy_check_test <- function(test, arg = "test") {
   if (!(is.logical(test) && length(test) == 1L && !is.na(test)))
     cli::cli_abort(c(
       "{.arg {arg}} must be {.code TRUE} or {.code FALSE}.",
-      "x" = "Got {.val {test}}.",
-      "i" = paste("The KIND of test follows what you pass: {.arg wt} gives a weighted test,",
-                  "{.code options(tabxplor.design_effect = TRUE)} makes it account for the",
-                  "weighting, and a {.fn survey::svydesign} passed as {.arg data} gives a",
-                  "design-based one.")
-    ))
+      "x" = "Got {.val {test}}."))
   isTRUE(test)
 }
 

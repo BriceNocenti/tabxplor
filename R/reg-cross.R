@@ -200,11 +200,8 @@ reg_parse_crosses <- function(predictors, data, outcome, tab_vars = NULL,
   if (length(colon) > 0L) {
     star <- gsub(":", "*", colon[[1]], fixed = TRUE)
     cli::cli_abort(c(
-      "{.arg {arg}}: {.val {colon}} -- {.code :} is not how an interaction is written here.",
-      "i" = paste("Write {.code {star}}. In R {.code a:b} is the interaction term WITHOUT its main",
-                  "effects, which is a different model and depends on where each variable's zero",
-                  "is; {.code a*b} is {.code a + b + a:b}, which is what this table fits."),
-      "i" = "For a RANGE of columns, name them: {.code all_of(names(data)[3:7])}."), call = NULL)
+      "{.arg {arg}}: an interaction is written {.code a*b}, not {.code a:b}.",
+      "i" = "Write {.code {star}}."), call = NULL)
   }
   parts <- lapply(keys, function(k) strsplit(k, "*", fixed = TRUE)[[1]])
   for (i in seq_along(keys)) {
@@ -234,8 +231,8 @@ reg_parse_crosses <- function(predictors, data, outcome, tab_vars = NULL,
   # can soundly ask for -- `a:b`, `a + a:b` and `a + b + a:b` are ONE fit wherever the moderator is
   # categorical (measured identical), and listing a parent beside the pair is either rank-deficient
   # (`cells`) or a silent reparametrisation (`nested`, where R codes a slope per level only while
-  # the modified variable has no main effect). The message therefore says so, rather than only
-  # refusing. See dev/reg_interactions_and_predictor_terms.md section 8.
+  # the modified variable has no main effect).
+  # See dev/reg_interactions_and_predictor_terms.md section 8.
   # ⚠ PER MODEL, never across the list: `list(additive = c(a, b), crossed = c(a:b))` is exactly the
   # comparison this spelling exists for, and a whole-call check would refuse it.
   for (mp in if (is.list(predictors)) predictors else list(predictors)) {
@@ -244,18 +241,8 @@ reg_parse_crosses <- function(predictors, data, outcome, tab_vars = NULL,
     dup <- intersect(pl$plain, own)
     if (length(dup) > 0L)
       cli::cli_abort(c(
-        "{.arg {arg}} lists {.val {dup}} beside an interaction it is part of.",
-        "i" = if (is.null(outcome))
-          paste("A CROSS SUPPLIES ITS VARIABLES: two factors become one block of cells, and a",
-                "number crossed with a factor already prints the factor's own block beside its",
-                "means.")
-        else paste("The MODEL is the same either way: {.code a*b} IS {.code a + b + a:b}, so an",
-                   "interaction already carries both its variables."),
-        "i" = if (is.null(outcome))
-          "Drop {.val {dup}}. What changes is only which COLUMNS are printed."
-        else paste("Drop {.val {dup}}. What changes is only which ROWS are printed -- one per cell",
-                   "of the pair, or one slope per group, instead of a main effect plus",
-                   "differences.")), call = NULL)
+        "{.arg {arg}}: {.val {dup}} {?is/are} already carried by the interaction {?it is/they are} part of.",
+        "i" = "Drop {.val {dup}}."), call = NULL)
   }
   list(keys = keys, parents = parents)
 }
@@ -285,10 +272,10 @@ reg_cross_autocut <- function(keys, data, reg_shapes) {
     if (!stays_numeric(md) || !stays_numeric(mr)) next
     if (!is.null(reg_shapes[[mr]]) || !is.null(add[[mr]])) next
     add[[mr]] <- "quartiles"
-    cli::cli_inform(c("i" = paste0(
-      "{.code ", k, "}: two continuous variables have no cells to cross, so {.val ", mr, "} was cut ",
-      "-- {.code shape = c(", mr, ' = "quartiles")}. Write {.code ', mr, "*", md,
-      "} to cut {.val ", md, "} instead.")))
+    tx_inform_once(paste0("cross_autocut_", k), c("i" = paste0(
+      "{.code ", k, "}: two continuous variables have no cells to cross, so {.val ", mr,
+      '} was cut into quartiles. Write {.code ', mr, "*", md, "} to cut {.val ", md,
+      "} instead.")))
   }
   add
 }
@@ -314,9 +301,9 @@ reg_cross_resolve <- function(keys, data, reg_shapes = NULL, arg = "predictors")
     # retype for no information. Swap to it and say so in one line; the block is then named as the
     # swap, which is what the var column, the footer and reg_formulas() print.
     if (kind(mr) != "factor" && kind(md) == "factor") {
-      cli::cli_inform(c("i" = paste0(
-        "{.code ", k, "} read as {.code ", mr, "*", md, "}: the rows are about the FIRST variable, ",
-        "and only a continuous one has slopes to show within groups.")))
+      tx_inform_once(paste0("cross_swap_", k), c("i" = paste0(
+        "{.code ", k, "} read as {.code ", mr, "*", md,
+        "}: the rows are about the first variable, and only a continuous one has slopes.")))
       swap <- md; md <- mr; mr <- swap
       k    <- paste0(md, "*", mr)
     }
@@ -324,12 +311,7 @@ reg_cross_resolve <- function(keys, data, reg_shapes = NULL, arg = "predictors")
       cli::cli_abort(c(
         "{.arg {arg}}: {.val {k}} needs a categorical moderator.",
         "x" = "{.val {mr}} is continuous.",
-        "i" = paste0('Cut it: {.code shape = c(', mr, ' = "quartiles")} -- one slope per group, ',
-                     "each with its own count and observed effect."),
-        "i" = if (identical(arg, "predictors"))
-          paste0("For the classical coefficient instead, write the model as a formula: ",
-                 "{.code outcome = y ~ ... + ", md, " * ", mr, "}.")
-        else NULL), call = NULL)
+        "i" = paste0('Cut it: {.code shape = c(', mr, ' = "quartiles")}.')), call = NULL)
     arm <- if (kind(md) == "factor") "cells" else "nested"
     if (arm == "nested" && identical(reg_shapes[[md]]$kind %||% "", "quadratic"))
       cli::cli_abort(c("{.arg {arg}}: {.val {k}} cannot cross a squared predictor.",

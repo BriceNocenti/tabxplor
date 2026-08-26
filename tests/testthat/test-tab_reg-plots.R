@@ -31,7 +31,7 @@ test_that("reg_check_plots() finds its data again, and `auto` is not `all`", {
   grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())
   t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial"))
   # the table records the NAME `data =` was written as, so it needs no second `data =`
-  expect_message(expect_s3_class(reg_check_plots(t), "gtable"), "\\bd\\b")
+  expect_s3_class(reg_check_plots(t), "gtable")
   # `auto` leaves out the two panels whose footer row says the whole thing; `all` restores them
   cx <- suppressMessages(tabxplor:::reg_plot_fits(t, d))[[1L]]
   expect_false(any(c("dispersion", "collinearity") %in% tabxplor:::reg_panel_keys(cx, "auto")))

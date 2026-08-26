@@ -102,9 +102,7 @@ tab_counts_reshape <- function(data, row_var, col_var, tab_vars, counts, wt_coun
     if (reg_cross_is_term(e) || (is.character(e) && any(reg_cross_has_op(e))))
       cli::cli_abort(c(
         "{.fn tab_counts} takes no interaction: it starts from counts already aggregated.",
-        "i" = paste("Cross the pair in {.fn tab}, on the microdata --",
-                    "{.code tab(data, rows, a*b)} -- or count the two variables together first.")),
-        call = NULL)
+        "i" = "Cross the pair in {.fn tab}: {.code tab(data, rows, a*b)}."), call = NULL)
   }
   rv     <- rlang::as_name(row_var)
   cv     <- rlang::as_name(col_var)
@@ -262,9 +260,9 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
   if (is.character(spread_vars) && length(spread_vars)) {
     resh$tab_vars <- c(resh$tab_vars, setdiff(spread_vars, resh$tab_vars))
     if (any(totaltab == "line")) {
-      cli::cli_inform(c("i" = paste(
-        "A total line cannot become a column block: a full total table was added",
-        "({.code totaltab = \"table\"}). Use {.code totaltab = \"no\"} for no overall column.")))
+      tx_inform_once("spread_totline", c("i" = paste(
+        "A total line cannot become a column block: a full total table was added.",
+        'Use {.code totaltab = "no"} for no overall column.')))
       totaltab[totaltab == "line"] <- "table"
     }
   }

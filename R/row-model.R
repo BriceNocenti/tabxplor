@@ -260,9 +260,6 @@ lvl_check_reserved <- function(data, vars, call = NULL) {
     cli::cli_abort(c(
       "{.var {v}} has {cli::qty(length(bad))}{?a level/levels} named {.val {bad}}, which
        {.fn tab} uses for its own total {cli::qty(length(bad))}{?row/rows}.",
-      "x" = "Left alone, {cli::qty(length(bad))}{?that level/those levels} would be read as a
-             total {cli::qty(length(bad))}{?row/rows}: bold, out of the percentage base, and
-             printed twice.",
       "i" = "Rename the level, or move {.fn tab}'s own labels with
              {.code options(tabxplor.total_names = c(row = \"...\"))}."), call = call)
   }

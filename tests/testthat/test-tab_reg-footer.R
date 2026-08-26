@@ -155,7 +155,7 @@ test_that("compare falls back to Delta-AIC (with a message) when N differs acros
     mc <- tab_reg(d, "married",
                       predictors = list(a = "race", b = c("race", "tvhours")),
                       stats = "compare_baseline", cleannames = FALSE, na = "drop_by_model"),
-    "not nested or N differs"
+    "not nested"
   )
   expect_true("compare_baseline_aic" %in% get_test(mc)$test)
 })

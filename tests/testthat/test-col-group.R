@@ -170,6 +170,7 @@ test_that("`comp = 'all'` leaves ONE reference cell, in the total-table block, a
 
 test_that("`spread_vars` alone makes the variable a tab_var, and promotes a total line", {
   d <- dplyr::filter(gss, year %in% c(2000, 2014))
+  tabxplor:::tx_reset_messages()   # the note is once per session
   expect_message(sp <- tab(d, marital, race, pct = "row", spread_vars = year, color = "diff"),
                  "column block")
   # it became a tab_var, then went to column: its levels are the blocks

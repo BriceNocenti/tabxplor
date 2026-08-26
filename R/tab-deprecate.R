@@ -71,7 +71,7 @@ tab_deprecate_many <- function(chi2 = NULL, totrow = NULL, totcol = NULL, compac
     ok_totcol <- TAB_ARG_VALUES$totcol$values
     if (!is.null(totcol) && !as.character(totcol)[1] %in% ok_totcol)
       cli::cli_abort(c("Unknown {.arg totcol} value {.val {as.character(totcol)[1]}}.",
-                       "i" = "Valid: {.val {ok_totcol}} -- and {.fn tab} spells it {.arg tot}."))
+                       "i" = "Valid: {.val {ok_totcol}}; {.fn tab} spells it {.arg tot}."))
     row_on <- if (is.null(totrow)) TRUE else all(as.logical(totrow))
     col_on <- if (is.null(totcol)) TRUE else !identical(as.character(totcol)[1], "no")
     if (!is.null(totrow) && !row_on)
@@ -221,8 +221,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt, ...,
     cli::cli_abort(c(
       "{.fn tab_many} takes only {.arg data}, {.arg row_vars}, {.arg col_vars}, {.arg tab_vars} and {.arg wt} by position.",
       "x" = "{cli::qty(length(unnamed))}Argument{?s} {unnamed + 5L} {?is/are} unnamed.",
-      "i" = "{cli::qty(length(unnamed))}Name {?it/them}: the rest is passed to {.fn tab}, whose argument order differs."
-    ))
+      "i" = "{cli::qty(length(unnamed))}Name {?it/them}."))
 
   extra <- tab_deprecate_many(
     chi2    = if (missing(chi2))    NULL else chi2,

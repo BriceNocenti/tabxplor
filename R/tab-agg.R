@@ -555,7 +555,7 @@ ci_prop_diff <- function(p1, n1, p2, n2, conf_level = 0.95, method = "newcombe",
     },
     "wald" = ci_pivot(p1 - p2, sqrt(p1 * (1 - p1) / n1 + p2 * (1 - p2) / n2),
                       df = df, conf_level = conf_level, want_p = want_p),
-    stop("unknown method_diff: ", method)
+    cli::cli_abort("Unknown method_diff {.val {method}}.", .internal = TRUE)
   )
 }
 
@@ -659,7 +659,7 @@ ci_mean_ratio <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TR
              else ((n1 - 1) * v1 / m1 + (n2 - 1) * v2 / m2) / (n1 + n2 - 2)
       sqrt(1 / (m1 * n1) + 1 / (m2 * n2)) * sqrt(phi)
     },
-    stop("unknown method_mean_ratio: ", method)
+    cli::cli_abort("Unknown method_mean_ratio {.val {method}}.", .internal = TRUE)
   )
   df  <- if (qpool) pool$df else if (identical(method, "quasipoisson")) n1 + n2 - 2 else Inf
   res <- ci_pivot(lr, se, df = df_or_design(df, df_design), conf_level = conf_level,

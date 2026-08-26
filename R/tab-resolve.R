@@ -100,11 +100,7 @@ tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
   needs_chi2   <- vapply(color, measure_forces, logical(1), "chi2",   USE.NAMES = FALSE)
   if (!is.null(totrow)) {
     ctr_no_row <- needs_totrow & totrow == FALSE
-    if (any(ctr_no_row)) {
-      warning("total rows were added, since color == 'contrib' needs them ",
-              "to store information about mean contributions to variance")
-      totrow[ctr_no_row] <- TRUE
-    }
+    totrow[ctr_no_row] <- TRUE
   }
   chi2[needs_chi2 & chi2 == FALSE] <- TRUE
 
@@ -192,11 +188,10 @@ ci_disable_signif <- function(ci, color_signif = "ignore", stars = FALSE) {
   why <- if ("cell" %in% hit)
     gettext("stores each cell's own interval, so there is nothing to test a comparison against")
   else gettext("computes no interval, so there is nothing for a significance test to read")
-  cli::cli_inform(c(
+  tx_inform_once(paste0("ci_no_test_", hit[[1]]), c(
     "i" = paste0("{.code ci = \"", hit[[1]], "\"} ", why,
-                 ": {.arg stars} and {.arg color_signif} are disabled here."),
-    "i" = "Use {.code ci = \"ref\"} to test each cell against its reference."
-  ))
+                 ": {.arg stars} and {.arg color_signif} are off."),
+    "i" = '{.code ci = "ref"} tests each cell against its reference.'))
   list(color_signif = "ignore", stars = FALSE)
 }
 

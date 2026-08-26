@@ -173,12 +173,8 @@ tab_md <- function(tabs,
 
   if (!is.null(file)) writeLines(md_text, file)
   if (clipboard) {
-    if (!requireNamespace("clipr", quietly = TRUE)) {
-      warning("Package 'clipr' is needed to copy to clipboard. ",
-              "Install it with install.packages('clipr').")
-    } else {
+    if (isTRUE(tx_need_pkg("clipr", "Copying to the clipboard", severity = "inform")))
       clipr::write_clip(md_text)
-    }
   }
   if (print) {
     cat(md_text, "\n")

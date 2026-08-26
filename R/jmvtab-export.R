@@ -242,10 +242,7 @@ jmvtab_export <- function(tabs, format = c("excel", "html", "md"), path, replace
                           check = FALSE, data = NULL, theme = NULL, ...) {
   format <- match.arg(format)
 
-  if (format == "excel" && !requireNamespace("openxlsx2", quietly = TRUE)) {
-    stop("Excel export needs the 'openxlsx2' package. Install it with ",
-         'install.packages("openxlsx2"), or choose HTML or Markdown instead.', call. = FALSE)
-  }
+  if (format == "excel") tx_need_pkg("openxlsx2", "Excel export")
 
   dir <- dirname(path)
   if (nzchar(dir) && !dir.exists(dir)) {
@@ -255,8 +252,8 @@ jmvtab_export <- function(tabs, format = c("excel", "html", "md"), path, replace
       dir.exists(dir)
     }, error = function(e) FALSE, warning = function(w) FALSE)
     if (!created) {
-      stop("Can't create the folder:\n  ", dir,
-           "\nChoose a folder that exists, or check you're allowed to write there.", call. = FALSE)
+      cli::cli_abort(c("Cannot create the folder {.file {dir}}.",
+                       "i" = "Choose a folder that exists, or one you are allowed to write in."))
     }
   }
 

@@ -1767,10 +1767,8 @@ validate_display_template <- function(recipe, fields = DISPLAY_USER_FIELDS) {
   if (!grepl("[{}]", recipe)) {
     cli::cli_abort(c(
       "Invalid {.arg display} value {.val {recipe}}.",
-      "i" = "Name one field, or combine several in a {{}} template,
-             e.g. {.code {{pct}} (n={{n}})} or {.code {{diff}} {{ci}}}.",
-      "i" = "Valid fields: {.val {DISPLAY_USER_FIELDS}}."
-    ))
+      "i" = "Name one field, or combine several in a {{}} template: {.code {{pct}} (n={{n}})}.",
+      "i" = "Fields: {.val {DISPLAY_USER_FIELDS}}."))
   }
   opens  <- stringi::stri_count_regex(recipe, "\\{")
   closes <- stringi::stri_count_regex(recipe, "\\}")
@@ -4191,10 +4189,9 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
   # per-(sub)table MEAN contribution to variance there (get_mean_contrib) -- so without them it cannot
   # print. The requirement is the measure's own declared `requires["totrow"]`.
   needs_totrow <- measure_forces(color, "totrow") && !any(totrows)
-  if (needs_totrow) warning(
-    "cannot print color == '", measure_key(color), "' with no total rows to store ",
-    "information about mean contributions to variance"
-  )
+  if (needs_totrow) cli::cli_warn(c(
+    "!" = "{.code color = {.val {measure_key(color)}}} needs total rows: it stores each cell's mean contribution there.",
+    "i" = '{.code tot = "row"} adds them.'))
 
   na_out  <- is.na(out)
   ok      <- !na_out & !nas
@@ -5237,9 +5234,8 @@ measure_validate <- function(color, producer = NULL, call = rlang::caller_env())
       # baseline is another column), which is what makes the second line true without a branch.
       other <- setdiff(MEASURE_PRODUCERS, producer)
       cli::cli_abort(c(
-        "{.val {elsewhere}} cannot be used in a {.fn {MEASURE_PRODUCER_FN[[producer]]}} table.",
-        "i" = paste0("It is a {.fn {MEASURE_PRODUCER_FN[[other]]}} measure: it compares an effect to ",
-                     "another COLUMN, which only a model fills."),
+        "{.val {elsewhere}} is a {.fn {MEASURE_PRODUCER_FN[[other]]}} measure, not a
+         {.fn {MEASURE_PRODUCER_FN[[producer]]}} one.",
         "i" = "Valid here: {ok_here}."),
         call = call)
     }
@@ -6989,19 +6985,15 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
   l            <- length(x)
   rep_NA_real  <- rep(NA_real_, l)
 
-  if (!same_type) warning("operation ", op,
-                          " over columns with different pct types, ",
-                          "or mixing pct and means (",
-                          fmt_kind_label(x), "/", fmt_kind_label(y), ")")
+  if (!same_type) cli::cli_warn(
+    "{op} over columns of different kinds ({fmt_kind_label(x)}/{fmt_kind_label(y)}).")
   # isFALSE, not `!`: `same_comp` is THREE-valued (comp_all is NA on a count column, so a count + a
   # pct gives NA) and a bare `if (!NA)` ERRORS -- adding a count column to a percentage one aborted
   # instead of warning. The reconcile itself has always been NA-safe (rule "comp3").
-  if (isFALSE(same_comp)) warning("operation ", op,
-                          " may mix calculations made on tabs and calculations ",
-                          "made on all tabs (different 'comp_all')")
-  if (!same_col_var) warning("operation ", op,
-                             " over columns belonging to different variables(",
-                             col_var_x , "/", ay[["col_var"]], ")")
+  if (isFALSE(same_comp)) cli::cli_warn(
+    "{op} over columns compared to different totals (their {.field comp_all} differ).")
+  if (!same_col_var) cli::cli_warn(
+    "{op} over columns of different variables ({col_var_x}/{ay[['col_var']]}).")
 
   switch(
     op,
@@ -7119,10 +7111,9 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
   am   <- fmt_attrs_of(.x)
   scl  <- am[["scale"]]
   base <- am[["pct_type"]]
-  if (!is.na(scl) && scl == "mixed") warning(
-    "operation ", .fn,
-    " within a variable mixing different types of percentages"
-  )
+  fn_name <- .fn
+  if (!is.na(scl) && scl == "mixed") cli::cli_warn(
+    "{fn_name} within a variable that mixes different kinds of percentage.")
 
   switch(.fn,
          "sum" = do.call(new_fmt, c(list(display   = get_display(.x)[1],

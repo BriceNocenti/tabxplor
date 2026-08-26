@@ -71,15 +71,9 @@
 #   - NEVER geom_smooth(method = "auto") -- see the warning in R/reg-assumptions.R's primitives.
 # See: dev/regression_effect_plots.md (forest_plot), dev/regression_assumptions_plots.md (the checks).
 
-# Guard the Suggests packages a plot needs, with an install hint.
+# Guard the Suggests packages a plot needs.
 tx_plot_deps <- function(pkgs = c("ggplot2", "gridExtra")) {
-  for (pkg in pkgs) {
-    if (!requireNamespace(pkg, quietly = TRUE)) {
-      cli::cli_abort(c("{.pkg {pkg}} is required for this plot.",
-                       "i" = 'Install it with {.code install.packages("{pkg}")}.'))
-    }
-  }
-  invisible(TRUE)
+  tx_need_pkg(pkgs, "This plot")
 }
 
 # === SECTION: the shared theme seam =================================================================
@@ -504,7 +498,6 @@ reg_plot_recover_data <- function(expr, caller) {
   if (!is.data.frame(d) && !inherits(d, "survey.design"))
     cli::cli_abort(c("{.arg data} is required with a {.fn tab_reg} table.",
                      "i" = "{.code {expr}}, the data it was built from, is not here any more.", hint))
-  cli::cli_inform("Using {.code {expr}}, the data {.fn tab_reg} was called with.")
   d
 }
 

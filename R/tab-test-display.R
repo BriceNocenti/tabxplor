@@ -336,7 +336,8 @@ TEST_CROSSTAB_KEYS <- .trow_keys(.trow_chr("producer") == "tab")
 test_row_key <- function(stat, method) {
   k <- .trow_keys(.trow_chr("stat") == stat & .trow_chr("method") == method)
   if (length(k) != 1L)
-    stop("tabxplor: no single TEST_ROWS row for stat '", stat, "', method '", method, "'.")
+    cli::cli_abort("No single TEST_ROWS row for stat {.val {stat}}, method {.val {method}}.",
+                   .internal = TRUE)
   k
 }
 

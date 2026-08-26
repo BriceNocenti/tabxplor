@@ -249,17 +249,14 @@ testthat::test_that("Phase 6: output_list / merge / deprecations / KNOWN-BUG fix
   # ... and an unknown value still aborts, naming the argument that replaced it
   testthat::expect_error(suppressWarnings(tab_many(gss, marital, race, totcol = "tabel")), "totcol")
 
-  # Deliberate user-facing warnings. Asserted here because other suites (test-jmvtab-cache.R)
-  # suppress them as incidental, so without this they would be uncovered.
-  # comp = "all" with a ref that is not the total row forces the full total table (a `ref = "tot"`
-  # comparison only needs a total LINE, and warns differently).
-  testthat::expect_warning(
+  # comp = "all" with a ref that is not the total row forces the full total table -- silently, since
+  # the added table is then plainly there. A ref matching NOTHING still warns: the cells go empty.
+  testthat::expect_no_warning(
     tab(gss, marital, race, tab_vars = year, pct = "row", color = "diff", comp = "all",
-        ref = "Married"),
-    "full total table")
+        ref = "Married"))
   testthat::expect_warning(
     tab(gss, marital, race, pct = "row", color = "diff", ref = "no-such-level"),
-    "no rows were found as reference")
+    "matches no row")
 
   # KNOWN-BUG fixed: tab_num(<tab_vars>, ci="cell") no longer crashes (both comp modes)
   testthat::expect_no_error(tab_num(gss, race, age, marital, ci = "cell"))

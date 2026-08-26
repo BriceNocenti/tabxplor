@@ -57,9 +57,7 @@ tab_cross_refuse_axis <- function(quo, data, arg) {
   if (!length(k)) return(invisible(NULL))
   cli::cli_abort(c(
     "{.arg {arg}}: {.val {k}} is an interaction, and only {.arg col_vars} takes one.",
-    "i" = paste("A cross needs a column axis: it is either one column per CELL of the pair, or one",
-                "mean column per level of the moderator."),
-    "i" = paste0("For one sub-table per combination of the two, name them both: ",
+    "i" = paste0("For one sub-table per combination, name them both: ",
                  "{.code tab_vars = c(", gsub("*", ", ", k[[1]], fixed = TRUE), ")}.")),
     call = NULL)
 }

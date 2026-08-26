@@ -262,16 +262,14 @@ shape_value <- function(val, var, producer = "tab") {
       '{.arg shape} for {.val {var}}: {.val {kind}} is not something {.fn {producer}} can do.',
       "x" = "It {cli::qty(length(r$producers))}{?is/are} for {.or {.fn {r$producers}}}.",
       "i" = if (identical(r$produces, "term"))
-        'A curvature is a model term. To see the curve as groups, use {.val quintiles}.'
+        '{.val quintiles} shows the same curve as groups.'
       else 'Use {.or {.val {vocab}}}, or a number of groups.'), call = NULL)
   }
   if (!is.na(k)) return(list(kind = "quantiles", k = k))
   if (!is.character(kind) || length(kind) != 1L || !kind %in% vocab)
     cli::cli_abort(c(
       "{.arg shape} for {.val {var}} must be one of {.or {.val {vocab}}}, or a number of groups.",
-      "x" = "Got {.val {as.character(val)[[1]]}}.",
-      "i" = '{.val quintiles} (or an integer) cuts it into quantile groups -- one estimate each.'),
-      call = NULL)
+      "x" = "Got {.val {as.character(val)[[1]]}}."), call = NULL)
   if (identical(VAR_SHAPES[[kind]]$kind, "none")) return(NULL)   # the default, spelled out
   list(kind = VAR_SHAPES[[kind]]$kind, k = NA_integer_)
 }
@@ -471,7 +469,7 @@ shape_cut_quantiles <- function(x, k, w = NULL, var = "x", breaks = NULL, labels
   # A SHORTFALL IS NOW A FACT ABOUT THE DATA, so it is said -- and only then. ⚠ one string literal
   # per gettextf() call (see shape_band_words).
   if (length(br) - 1L < k)
-    cli::cli_inform(c("i" = gettextf(
+    tx_inform_once(paste0("shape_short_", var), c("i" = gettextf(
       "%s: cut into %s groups rather than %s, having too few distinct values.",
       var, length(br) - 1L, k)))
   b    <- shape_bounds(x, br)
@@ -715,10 +713,9 @@ shape_report <- function(shapes, auto) {
     else
       gettextf("%s: cut into four bands, at its mean and one standard deviation either side.", v)
   }, character(1))
-  cli::cli_inform(c(
+  tx_inform_once(paste0("shape_auto_", paste(auto, collapse = "_")), c(
     stats::setNames(said, rep("i", length(said))),
-    "i" = paste0('Choose otherwise with {.code shape = c(', auto[[1]],
-                 ' = "quintiles")} \u2014 see {.help tabxplor::shape_numeric_var}.')))
+    "i" = paste0('Choose otherwise with {.code shape = c(', auto[[1]], ' = "quintiles")}.')))
   invisible(NULL)
 }
 

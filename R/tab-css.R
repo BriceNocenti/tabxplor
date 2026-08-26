@@ -91,8 +91,7 @@ tx_theme_resolve <- function(theme = NULL, allow_auto = FALSE, note = NULL,
   if (is.null(theme)) theme <- tx_theme_option(scope)
   theme <- tx_resolve_theme(theme)
   if (identical(theme, "auto") && !isTRUE(allow_auto)) {
-    if (!is.null(note))
-      cli::cli_inform(note, .frequency = "once", .frequency_id = "tabxplor_theme_auto_downgrade")
+    if (!is.null(note)) tx_inform_once("theme_auto_downgrade", note)
     theme <- "light"
   }
   theme
@@ -645,16 +644,15 @@ tx_print_rules_palette <- function(print_rules) {
   nm <- as.character(print_rules)[1]
   # `print_ready` is refused for the same reason its crosstab arm is: it CAN resolve to the marks.
   if (identical(nm, "print_ready")) cli::cli_abort(
-    c('{.val print_ready} cannot be a print-media fallback: it chooses between palettes from the
-       table, and one of them writes marks into the cells -- which an {.code @media print} rule
-       cannot add.',
-      "i" = 'Name one of them: {.code print_rules = "print_emphasis"}.'))
+    c("{.val print_ready} cannot be a print-media fallback: it may resolve to a palette that writes
+       marks into the cells, which a print rule cannot add.",
+      "i" = 'Name one palette: {.code print_rules = "print_emphasis"}.'))
   if (!tx_is_print(nm)) cli::cli_abort(
     c("{.arg print_rules} must be {.val TRUE}, {.val FALSE}, or a publication palette.",
       "i" = "Available: {.val {names(PRINT_PALETTES)}}."))
   if (print_palette_marks(print_palette_of(nm))) cli::cli_abort(
-    c("{.val {nm}} cannot be a print-media fallback: its marks are cell text, and an
-       {.code @media print} rule can restyle a page but not add characters to it.",
+    c("{.val {nm}} cannot be a print-media fallback: its marks are cell text, which a print rule
+       cannot add.",
       "i" = 'Render the table with {.code theme = "{nm}"} instead.'))
   nm
 }

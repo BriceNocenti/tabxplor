@@ -1188,13 +1188,10 @@ tab_collapse_total_rows <- function(tab, ref_bold = FALSE) {
   blk_group <- split(seq_along(blocks), factor(blk_key, levels = unique(blk_key)))
 
   if (any(vapply(blk_group, function(i) length(unique(sig[i])) > 1L, logical(1)))) {
-    cli::cli_inform(
-      c("i" = paste0(
-        "The variables have different total rows, so every total is shown ",
-        "(under {.code na = \"drop\"} each variable drops its own missing values). ",
-        "Use {.code na = \"keep\"}, {.code \"drop_all\"} or {.code \"common_base\"} ",
-        "for a single total row.")),
-      .frequency = "once", .frequency_id = "tabxplor_totrows_differ")
+    tx_inform_once("totrows_differ", c(
+      "i" = paste0("The variables have different total rows, so every total is shown: under ",
+                   '{.code na = "drop"} each variable drops its own missing values.'),
+      "i" = '{.code na = "keep"}, {.val drop_all} or {.val common_base} give a single total row.'))
     return(tab)
   }
 
@@ -1444,26 +1441,7 @@ tab_plot <- function(tabs,
                      whitespace_only = TRUE, ...) {
   tx_deprecate_inert(rlang::list2(...), "tab_plot")
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
-  if (!requireNamespace("ggpubr", quietly = TRUE)) {
-    stop(paste0("Package \"ggpubr\" needed for this function to work. ",
-                "You can install it with : install.packages('ggpubr')"),
-         call. = FALSE)
-  }
-  if (!requireNamespace("gtable", quietly = TRUE)) {
-    stop(paste0("Package \"gtable\" needed for this function to work. ",
-                "You can install it with : install.packages('gtable')"),
-         call. = FALSE)
-  }
-  if (!requireNamespace("ggplot2", quietly = TRUE)) {
-    stop(paste0("Package \"ggplot2\" needed for this function to work. ",
-                "You can install it with : install.packages('ggplot2')"),
-         call. = FALSE)
-  }
-  if (!requireNamespace("cowplot", quietly = TRUE)) {
-    stop(paste0("Package \"cowplot\" needed for this function to work. ",
-                "You can install it with : install.packages('cowplot')"),
-         call. = FALSE)
-  }
+  tx_need_pkg(c("ggpubr", "gtable", "ggplot2", "cowplot"), "tab_plot()")
   if (is.list(tabs) && !is.data.frame(tabs) && length(tabs) > 1L) {
     return(purrr::map(tabs, tab_plot, theme = theme,
                       color = color, color_legend = color_legend,

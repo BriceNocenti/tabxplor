@@ -266,7 +266,7 @@ test_that("color_signif does not apply to an odds-ratio `adjustment` gap: it rea
     t <- tab_reg(d, outcome = "married", predictors = c("race", "party3"), family = "binomial",
                  empirical = TRUE, color = c(TRUE, "adjustment"),
                  color_signif = "guaranteed_effect"),
-    "color_signif")
+    "non-collapsibility")
   testthat::expect_true(all(is.na(get_gap_se(t$Model_OR))))    # the reason it reads under `ignore`
   pl <- tabxplor:::fmt_color_plan(t$Model_OR, "bg", color = get_color_bg(t$Model_OR))
   testthat::expect_identical(pl$policy, "ignore")

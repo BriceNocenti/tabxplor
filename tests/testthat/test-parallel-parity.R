@@ -237,6 +237,7 @@ test_that("tab_reg parallel: a worker's messages reach the user, in unit order",
   warm_pool(2L)
   said <- function(parallel) {
     msgs <- character()
+    tabxplor:::tx_reset_messages()   # the note is once per session
     withCallingHandlers(
       with_par(parallel, tab_reg(reg_fx, c("married", "tvhours"), "race", stats = FALSE)),
       message = function(m) { msgs <<- c(msgs, conditionMessage(m)); invokeRestart("muffleMessage") })
@@ -300,6 +301,7 @@ test_that("a sibling unit's messages still reach the user when another unit fail
   bad <- reg_fx
   bad$constvar <- factor("only")
   msgs <- character()
+  tabxplor:::tx_reset_messages()   # the note is once per session
   expect_error(withCallingHandlers(
     with_par(2L, tab_reg(bad, c("married", "tvhours"),
                          list(m1 = "race", m2 = c("race", "constvar")), stats = FALSE)),

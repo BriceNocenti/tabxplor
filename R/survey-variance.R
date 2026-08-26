@@ -103,9 +103,8 @@ svy_var_setup <- function(prep, keys, n_tab, mkeys, nfr, K) {
 svy_var_degraded <- function(reason = NULL) {
   cli::cli_inform(c(
     "!" = if (identical(reason, "size"))
-      "This table is too large for the sample design's variance."
-    else "The sample design's variance could not be computed for this table.",
-    "i" = "Its confidence intervals fall back to the weighting alone."))
+      "This table is too large for the design's variance: its intervals use the weights alone."
+    else "The design's variance could not be computed here: the intervals use the weights alone."))
   invisible(TRUE)
 }
 

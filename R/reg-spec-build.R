@@ -200,7 +200,7 @@ reg_spec_build_one <- function(i, ctx) {
                  coef   = reg_cols_coef(f, sp, ctx),
                  ame    = reg_cols_ame(f, sp, ctx),
                  vsrest = reg_cols_vsrest(f, sp, ctx),
-                 cli::cli_abort("Internal: unknown estimand builder {.val {sp$est$builder}}."))
+                 cli::cli_abort("Unknown estimand builder {.val {sp$est$builder}}.", .internal = TRUE))
   cv0 <- cols[[1]]$label            # the placeholder; see new_reg_spec_product()
   # The N behind each level, on THIS model's complete cases, stamped on every column it belongs to:
   # a stored fact, not a column of its own, so the base-count column is synthesised at display time

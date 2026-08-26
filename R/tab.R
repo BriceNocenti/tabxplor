@@ -372,9 +372,9 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
     # DESIGN: a total LINE cannot become a column block -- spread, it leaves a block holding one
     #   cell. Asked for a spread, the table needs a full total table or none at all.
     if (any(totaltab == "line")) {
-      cli::cli_inform(c("i" = paste(
-        "A total line cannot become a column block: a full total table was added",
-        "({.code totaltab = \"table\"}). Use {.code totaltab = \"no\"} for no overall column.")))
+      tx_inform_once("spread_totline", c("i" = paste(
+        "A total line cannot become a column block: a full total table was added.",
+        'Use {.code totaltab = "no"} for no overall column.')))
       totaltab[totaltab == "line"] <- "table"
     }
   }
@@ -818,7 +818,7 @@ resolve_stars <- function(stars, call = rlang::caller_env()) {
     return(if (is.numeric(v)) length(v) > 0L else isTRUE(v))
   }
   if (is.numeric(stars))
-    cli::cli_abort(c("{.arg stars} is TRUE or FALSE; the star LADDER is a global option.",
+    cli::cli_abort(c("{.arg stars} is TRUE or FALSE; the star ladder is a global option.",
                      "i" = 'Set it with {.code options(tabxplor.stars = c("*" = 0.05, "**" = 0.01))}
                             -- it is read when the table is printed, so it applies to every table.'),
                    call = call)
@@ -981,15 +981,12 @@ ref2_resolve_cum <- function(ref2, pct, col_vars_cumor) {
   want <- v == "cumulative"
   bad_class <- want & !col_vars_cumor
   bad_pct   <- want &  col_vars_cumor & pct != "row"
-  if (any(bad_class)) cli::cli_inform(c(
-    "i" = paste0("{.code ref2 = \"cumulative\"} needs an {.cls ordered} col_var with 3+ levels; ",
-                 "{cli::qty(sum(bad_class))} {?it is/they are} skipped here."),
-    "i" = "{.code data |> dplyr::mutate(x = factor(x, levels = c(...), ordered = TRUE))}"
-  ))
-  if (any(bad_pct)) cli::cli_inform(c(
-    "i" = paste0("{.code ref2 = \"cumulative\"} cumulates each row's distribution, so it needs ",
-                 "{.code pct = \"row\"}; skipped here.")
-  ))
+  if (any(bad_class)) tx_inform_once("ref2_cum_class", c(
+    "i" = paste0('{.code ref2 = "cumulative"} needs an {.cls ordered} col_var with 3+ levels; ',
+                 "{cli::qty(sum(bad_class))} {?it is/they are} skipped."),
+    "i" = "{.code data |> dplyr::mutate(x = factor(x, levels = c(...), ordered = TRUE))}"))
+  if (any(bad_pct)) tx_inform_once("ref2_cum_pct", c(
+    "i" = '{.code ref2 = "cumulative"} cumulates each row, so it needs {.code pct = "row"}; skipped.'))
   v[bad_class | bad_pct] <- "first"
   v
 }
@@ -1067,8 +1064,7 @@ tab_setup <- function(ctx) {
       cli::cli_abort(c(
         "Column variable {.val {nm}} must be a factor, character or numeric.",
         "x" = "Got a {.cls {class(v)}} column.",
-        "i" = "Convert it first \u2014 bin a date or continuous variable into groups, or use {.code as.factor()}."
-      ))
+        "i" = "Convert it with {.code as.factor()}."))
     }
   }
 
@@ -1118,11 +1114,9 @@ tab_setup <- function(ctx) {
                        c(vars_chr(row_vars), vars_chr(col_vars)))
   if (length(tab_dup) != 0L) {
     cli::cli_abort(c(
-      "{cli::qty(tab_dup)}The variable{?s} {.val {tab_dup}} {?is/are} used both as a tab variable \\
-       and as a row or column variable.",
-      "i" = "A variable cannot be a tab variable and a row/column variable at the same time \u2014 \\
-             pick a different variable for one of the two roles."
-    ))
+      "{cli::qty(tab_dup)}{.val {tab_dup}} {?is/are} used both as a tab variable and as a row or \\
+       column variable.",
+      "i" = "{cli::qty(tab_dup)}Give {?it/them} one role only."))
   }
 
   if (rlang::quo_is_missing(na_drop_all_quo) || rlang::quo_is_null(na_drop_all_quo)) {
@@ -1156,9 +1150,9 @@ tab_setup <- function(ctx) {
   ref_is_vector <- length(ref) > 1
   ref         <- resolve_ref_vector(ref, vars_chr(row_vars))
   if (ref_is_vector && col_regime) {
-    cli::cli_inform(c("i" = paste0("With {.code pct = \"col\"}, {.arg ref} is vectorised over the ",
-                                   "col_vars (length {length(col_vars)}); this ref did not match, so it ",
-                                   "is collapsed to a single column reference (its first value).")))
+    cli::cli_inform(c("i" = paste0('With {.code pct = "col"}, {.arg ref} runs over the col_vars ',
+                                   "(length {length(col_vars)}); this one did not match, so its first ",
+                                   "value is used for every column.")))
     ref <- vctrs::vec_recycle(ref[1], nrowvars)
   }
   ref2        <- vctrs::vec_recycle(ref2    , nrowvars)
@@ -1220,7 +1214,8 @@ tab_setup <- function(ctx) {
                all(purrr::map_int(pct, length) == length(col_vars))) {
       pct
     } else {
-      stop("pct can't be recycled to the lengths of row_vars and col_vars (see documentation `?tab_many`)")
+      cli::cli_abort(c("{.arg pct} does not fit the row_vars and col_vars.",
+                       "i" = "Give one value, one per col_var, or a list of one per row_var."))
     }
 
   ref_vect <-
@@ -1578,8 +1573,8 @@ tab_transform <- function(ctx) {
     ref_num_vec <- unlist(ref_vect, use.names = FALSE)[col_vars_num]
     ref_num     <- if (length(ref_num_vec)) ref_num_vec[[1]] else ref
     if (length(unique(ref_num_vec)) > 1L)
-      cli::cli_inform(c("i" = paste0("Several numeric col_vars with different references: the first ",
-                                     "({.val {ref_num}}) applies to all mean columns.")))
+      cli::cli_inform(c("i" = paste0("Several numeric col_vars with different {.arg ref}: the first ",
+                                     "({.val {ref_num}}) applies to every mean column.")))
     color_num <- if (identical(color, "auto") || measure_applies(color, "num")) color else "no"
     r_num <- num_resolve(color_num, ref_num, ci, dplyr::if_else(totrow, "row", "no"),
                          comp[1], totaltab, rv, num_col_syms, tv_syms)
@@ -2309,10 +2304,7 @@ tab_render_vars <- function(tabs) {
 
 #' @keywords internal
 tab_degrade_inform <- function(reason) {
-  cli::cli_inform(c(
-    "!" = "tabxplor formatting and colors skipped: {reason}.",
-    "i" = "Rendering the plain table instead."
-  ))
+  cli::cli_inform(c("!" = "Colours and formatting skipped ({reason}): the plain table is shown."))
 }
 
 
@@ -2759,21 +2751,9 @@ diff_index <-  function(ref, row_var, num_names, pct, is_group = TRUE) {
   exact <- which(targets == ref)
   index <- if (length(exact) >= 1L) exact else which(stringi::stri_detect_regex(targets, ref))
   if (length(index) >= 2) {
-    switch(pct,
-           "row" = warning(paste0(
-             "with ref = '", ref, "' , several rows were found as ",
-             "reference for comparison ; only the first was kept ; ",
-             "to remove this warning, precise the value of ref ",
-             "until there is only one row_var level matched"
-           )),
-
-           "col" = warning(paste0(
-             "with ref = '", ref, "' , several columns were found as ",
-             "reference for comparison ; only the first was kept ; ",
-             "to remove this warning, precise the value of ref ",
-             "until there is only one column matched"
-           ))
-    )
+    what <- if (identical(pct, "row")) "rows" else "columns"
+    cli::cli_warn(c("!" = "{.code ref = {.val {ref}}} matches {length(index)} {what}; the first is used.",
+                    "i" = "Name one level exactly."))
   }
   index <- tidyr::replace_na(dplyr::first(index), 0)
 
@@ -2837,13 +2817,9 @@ calculate_refrows <- function(tabs, ref, comp, tab_row_names, tab_vars,
           dplyr::pull("var")
       }
 
-    if (!any(refrows)) {
-      warning(paste0(
-        "in ref = '", ref, "' , no rows were found as reference for comparison ; ",
-        "to remove this warning, precise the value of ref ",
-        "until there is one row_var level matched"
-      ))
-    }
+    if (!any(refrows))
+      cli::cli_warn(c("!" = "{.code ref = {.val {ref}}} matches no row: nothing to compare to.",
+                      "i" = "Name one level of the row variable."))
   } else {
     refrows <- if (comp == "tab") { totrow_vector } else { totrow_vector & tottab_vector }
   }
@@ -2860,10 +2836,7 @@ resolve_ref_vector <- function(ref, row_vars_chr, what = "row_var") {
   if (!is.null(nms) && any(nzchar(nms))) {
     unknown <- setdiff(nms[nzchar(nms)], row_vars_chr)
     if (length(unknown)) {
-      cli::cli_warn(paste0(
-        "{cli::qty(unknown)}Unknown {.arg ref} name{?s} {.val {unknown}}: ",
-        "{cli::qty(unknown)}{?it matches/they match} no {what} and {cli::qty(unknown)}{?is/are} ignored."
-      ))
+      cli::cli_warn("{cli::qty(unknown)}{.arg ref} name{?s} {.val {unknown}} {?matches/match} no {what}; ignored.")
     }
     out  <- rlang::set_names(rep("auto", n), row_vars_chr)
     keep <- intersect(nms, row_vars_chr)

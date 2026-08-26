@@ -87,11 +87,7 @@
 #' @keywords internal
 #' @noRd
 reg_abort_marginaleffects <- function(what) {
-  cli::cli_abort(c(
-    "{.pkg marginaleffects} is required for {.code {what}}.",
-    "i" = 'Install it with {.code install.packages("marginaleffects")}, or use
-           {.code effect = "conditional"} / {.code effect = "marginal"}, which need no extra package.'
-  ))
+  tx_need_pkg("marginaleffects", what)
 }
 
 reg_check_deps <- function(family, weighted, needs_marginaleffects = FALSE) {
@@ -99,17 +95,8 @@ reg_check_deps <- function(family, weighted, needs_marginaleffects = FALSE) {
     reg_abort_marginaleffects('effect = "at_reference"')
   # nnet / MASS need no guard: they are Imports. ⚠ VGAM is called directly on the weighted
   # multinomial path, so it is guarded explicitly -- an implicit guard is invisible to R CMD check.
-  if (isTRUE(weighted) && family == "multinomial") {
-    missing_pkgs <- c("svyVGAM", "VGAM")[
-      !vapply(c("svyVGAM", "VGAM"), requireNamespace, logical(1), quietly = TRUE)
-    ]
-    if (length(missing_pkgs) > 0) {
-      cli::cli_abort(c(
-        "{.pkg {missing_pkgs}} {?is/are} required for survey-weighted multinomial (nominal 3+ level) models.",
-        "i" = 'Install {?it/them} with {.code install.packages("svyVGAM")}, or drop the weights / design.'
-      ))
-    }
-  }
+  if (isTRUE(weighted) && family == "multinomial")
+    tx_need_pkg(c("svyVGAM", "VGAM"), "A survey-weighted multinomial model")
 }
 
 reg_parse_formula <- function(formula, data) {
@@ -189,14 +176,12 @@ reg_color_notes <- function(color, color_signif, ests, tab_vars, na, na_explicit
   if (length(gap) == 0L && !emp_on(empirical)) return(notes)
 
   if ("between_groups" %in% gap && is.null(tab_vars)) {
-    add("{.code color = \"between_groups\"} compares each effect to the first group's, so it needs ",
-        "{.arg tab_vars} to say what the groups are. Without it nothing is coloured.")
+    add('{.code color = "between_groups"} needs {.arg tab_vars} to say what the groups are; ',
+        "nothing is coloured.")
   }
   if (identical(at, "reference")) {
-    add("{.code at = \"reference\"} evaluates the model at the reference profile, while the ",
-        "observed columns stay marginal over the whole sample: the two are shown side by side, ",
-        "but not compared cell by cell ({.code color = \"adjustment\"} and {.code \"{{obs}}\"} ",
-        "stay empty).")
+    add('{.code effect = "at_reference"} reads the model at one profile while the observed columns ',
+        "stay marginal, so the two are shown side by side but not compared.")
   }
   if ("adjustment" %in% gap) {
     # THE SAME PREDICATE the gate uses at build time (reg_same_estimand()), so the note and the gate
@@ -211,21 +196,19 @@ reg_color_notes <- function(color, color_signif, ests, tab_vars, na, na_explicit
       }, character(1)))
       bare <- stats::na.omit(bare)
       if (length(bare)) {
-        add("{.code effect = {.val {effect}}} has no observed counterpart on the same scale for ",
-            "{.val {bare}}, so {.code color = \"adjustment\"} stays empty there. Use ",
-            "{.code effect = \"conditional\"} to compare them.")
+        add("{.val {bare}}: {.code effect = {.val {effect}}} has no observed counterpart on the ",
+            'same scale. {.code effect = "conditional"} compares them.')
       }
     }
     if (!is.null(color_signif) && !identical(color_signif, "ignore") &&
         !any(vapply(ests, function(e) reg_estimand_collapsible(e$fit, e$effect), logical(1)))) {
-      add("{.arg color_signif} does not apply to an odds-ratio {.val adjustment} gap: part of it is ",
-          "non-collapsibility, not confounding. Use {.code effect = \"marginal\"} or ",
-          "{.code measure = \"ratio\"} (risk ratios), for a gap the test can read.")
+      add("An odds-ratio adjustment gap is not tested: part of it is non-collapsibility, not ",
+          'confounding. {.code measure = "ratio"} gives a gap the test can read.')
     }
     if (na_explicit && identical(na, "drop_by_model")) {
-      add("{.code na = \"drop_by_model\"} lets each model use its own complete cases, so a model ",
-          "fitted on rows the observed columns do not cover gets no observed effect at all (no ",
-          "colour, no test): their distance would be listwise deletion, not adjustment.")
+      add('{.code na = "drop_by_model"} fits each model on its own complete cases, so a model the ',
+          "observed columns do not cover gets no observed effect: the gap would be deletion, not ",
+          "adjustment.")
     }
   }
   notes
@@ -401,7 +384,7 @@ reg_detect_family <- function(data, outcome) {
   }
   fam  <- REG_OUTCOME_KINDS[[kind]]$detect
   said <- REG_OUTCOME_KINDS[[kind]]$said
-  cli::cli_inform(c("i" = paste0(
+  tx_inform_once(paste0("family_auto_", outcome), c("i" = paste0(
     "{.val {outcome}}: ", said, " -> {.code family = \"", fam, "\"} (",
     reg_family_short(fam), ")",
     if (identical(kind, "numeric") && !any(y %% 1 != 0, na.rm = TRUE))
@@ -672,10 +655,8 @@ reg_prep_binary <- function(data, outcome, outcome_level = NULL) {
       cli::cli_abort(c(
         "The outcome variable {.val {outcome}} must be binary (2 levels).",
         "x" = "It has {nlevels(y)} level{?s}: {.val {levels(y)}}.",
-        "i" = paste0("For a summed score -- how many of q yes/no items each person chose -- pass ",
-                     "{.arg trials} to fit a grouped binomial."),
-        "i" = paste0("For an outcome with 3 or more categories, use {.code family = \"multinomial\"} ",
-                     "(unordered) or {.code family = \"ordinal\"} (ordered).")
+        "i" = paste0('Use {.code family = "multinomial"} (unordered) or ',
+                     '{.code family = "ordinal"} (ordered), or {.arg trials} for a summed score.')
       ))
     }
     # glm models levels(y)[2], so the chosen level goes LAST.
@@ -703,7 +684,7 @@ reg_binarise_outcome <- function(data, outcome, outcome_level = NULL, announce =
         else levels(y)[[1L]]
   rest <- gettextf("Not %s", lv)
   if (announce)
-    cli::cli_inform(c("i" = paste0(
+    tx_inform_once(paste0("binomial_collapse_", outcome), c("i" = paste0(
       "{.val {outcome}}: {.code family = \"binomial\"} models {.val {lv}} against the ",
       "{nlevels(y) - 1L} other categories, merged.")))
   data[[outcome]] <- factor(ifelse(as.character(y) == lv, lv, rest), levels = c(lv, rest))
@@ -1179,7 +1160,7 @@ reg_fit_multinom <- function(mdata, outcome, predictors, do_exp, conf_level, met
                              weighted = FALSE, make_design = NULL, add_terms = NULL,
                              formula = NULL, multiplier = NULL, rec = NULL) {
   if (method == "profile") {
-    cli::cli_inform(c("!" = "Profile intervals are not defined for multinomial models; using Wald."))
+    cli::cli_inform(c("!" = "Multinomial models have no profile interval; using Wald."))
   }
   y_levels <- levels(mdata[[outcome]])            # reg_fit_frame() dropped the unused ones
   # ⚠ re-home the formula to THIS frame: nnet::multinom and MASS::polr store their call and
@@ -1227,7 +1208,7 @@ reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, meth
                             weighted = FALSE, make_design = NULL, add_terms = NULL,
                             formula = NULL, multiplier = NULL, rec = NULL) {
   if (method == "profile") {
-    cli::cli_inform(c("!" = "Profile intervals are not defined for proportional-odds models; using Wald."))
+    cli::cli_inform(c("!" = "Proportional-odds models have no profile interval; using Wald."))
   }
   # reg_fit_frame() made the outcome an ordered factor and said so once.
   # ⚠ re-home the formula to THIS frame -- see reg_fit_multinom().
@@ -1240,17 +1221,17 @@ reg_fit_ordinal <- function(mdata, outcome, predictors, do_exp, conf_level, meth
     fit <- tryCatch(
       survey::svyolr(fml, design = make_design(mdata)),
       error = function(e) cli::cli_abort(c(
-        "The survey-weighted ordinal model ({.fn survey::svyolr}) failed to fit.",
+        "The survey-weighted ordinal model failed to fit.",
         "x" = conditionMessage(e),
-        "i" = "{.fn svyolr} needs strictly positive weights - check for zero / negative weights."
+        "i" = "Check for zero or negative weights."
       ))
     )
     cf  <- fit$coefficients
     se  <- sqrt(diag(stats::vcov(fit)))[names(cf)]
     td  <- tibble::tibble(term = stringi::stri_replace_all_regex(names(cf), "`", ""),
                           estimate = unname(cf), std.error = unname(se))
-    cli::cli_inform(c("i" = paste0("The proportional-odds (parallel-lines) assumption is not tested for ",
-                                   "survey-weighted ordinal models (the Brant test needs an unweighted fit).")))
+    cli::cli_inform(c("i" = paste0("The proportional-odds assumption is not tested here: the Brant ",
+                                   "test needs an unweighted fit.")))
     return(reg_fit_record(tidy_native = reg_tidy_native_z(td), nobs = nrow(mdata),
                           fit = fit, data = mdata, digest = reg_digest(fit, rec),
                           do_exp = do_exp, conf_level = conf_level, multiplier = multiplier))
@@ -1288,10 +1269,7 @@ reg_selfheal_call <- function(fit, data) {
 # built -- and R would repeat it verbatim on every table.
 reg_ordinal_diagnostic <- function(fit, asked = FALSE) {
   if (!requireNamespace("brant", quietly = TRUE)) {
-    if (isTRUE(asked)) cli::cli_inform(c("i" = paste0(
-      "Proportional-odds (parallel-lines) assumption not tested: install {.pkg brant} to run the ",
-      "Brant test."
-    )))
+    if (isTRUE(asked)) tx_need_pkg("brant", "The proportional-odds test", severity = "inform")
     return(invisible(NA_real_))
   }
   fit <- reg_selfheal_call(fit, fit$model)
@@ -1301,9 +1279,8 @@ reg_ordinal_diagnostic <- function(fit, asked = FALSE) {
     warning = function(w) { sparse <<- TRUE; invokeRestart("muffleWarning") }),
     error = function(e) NULL)
   if (sparse)
-    cli::cli_inform(c("i" = paste0(
-      "The Brant test could not use every combination of the outcome and the predictors ",
-      "(too few cases in some); read its p-value with care.")))
+    cli::cli_inform(c("i" = paste0("Too few cases in some outcome x predictor combinations: read ",
+                                   "the proportional-odds p-value with care.")))
   if (is.null(bt) || !is.matrix(bt) ||
       !"Omnibus" %in% rownames(bt) || !"probability" %in% colnames(bt)) {
     return(invisible(NA_real_))                             # unexpected shape -> stay silent
@@ -1442,7 +1419,8 @@ reg_fit_frame <- function(data, outcome, predictors, family, design_spec,
       if (!is.ordered(y)) {
         y <- as.ordered(forcats::fct_drop(as.factor(y)))
         lv_str <- paste(levels(y), collapse = " < ")
-        if (!quiet) cli::cli_inform(c("i" = "{.val {outcome}}: treated as ordered ({lv_str})."))
+        if (!quiet) tx_inform_once(paste0("ordered_", outcome),
+                                   c("i" = "{.val {outcome}}: read as ordered ({lv_str})."))
       } else {
         y <- forcats::fct_drop(y)
       }
@@ -1556,9 +1534,8 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
       error = function(e) NULL, warning = function(w) NULL)
     if (is.null(fit) || !isTRUE(fit$converged)) {
       cli::cli_inform(c("!" = paste0(
-        "The identity-link risk-difference model did not converge for {.val {outcome}}; ",
-        "fitting the {.strong linear probability model} instead. It estimates the same risk ",
-        "difference, but is a different estimator: the two agree only where the model holds.")))
+        "{.val {outcome}}: the risk-difference model did not converge; fitting a linear probability ",
+        "model, which targets the same difference with a different estimator.")))
       fit <- do.call(survey::svyglm, list(fml_lpm, design = des0, family = stats::gaussian()))
     }
     fit
@@ -1586,21 +1563,18 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
   if (scaled) {
     td$std.error <- td$std.error * sqrt(phi)
     if (phi > 1.5) cli::cli_warn(c(
-      "!" = paste0("Over-dispersion (Pearson dispersion = {signif(phi, 3)}",
-                   "{if (phi > 2) ', strong' else ''}); standard errors are scaled by sqrt(dispersion) ",
-                   "(quasi-{family}-like)."),
-      "i" = "The footer reports the dispersion; use {.code family = \"quasipoisson\"} for the fully quasi fit."
+      "!" = "Over-dispersion (dispersion = {signif(phi, 3)}): standard errors are scaled by its square root.",
+      "i" = 'Use {.code family = "quasipoisson"} for the fully quasi fit.'
     ))
   }
 
   # "rr" is excluded by construction, but say so rather than downgrade silently.
   use_profile <- method == "profile" && !weighted && reg_fam_disp_known(family)
   if (method == "profile" && weighted) {
-    cli::cli_inform(c("!" = paste0("Profile-likelihood intervals are not defined for survey-weighted ",
-                                   "models; using Wald.")))
+    cli::cli_inform(c("!" = "Survey-weighted models have no profile interval; using Wald."))
   } else if (method == "profile" && family == "rr") {
-    cli::cli_inform(c("!" = paste0("Profile-likelihood intervals are not defined for a modified Poisson ",
-                                   "fit (a quasi-likelihood); using the robust Wald interval.")))
+    cli::cli_inform(c("!" = paste0("A modified-Poisson fit is a quasi-likelihood and has no profile ",
+                                   "interval; using the robust Wald one.")))
   }
 
   # THE fit's own reference distribution, decided ONCE and carried out with the fit: z where the
@@ -1988,9 +1962,8 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
     # print a per-category average marginal effect under a Somers' D header. The one fit that gets
     # here is survey::svyolr(), which reg_prob_engine() refuses.
     if (isTRUE(rank)) cli::cli_abort(c(
-      "This ordinal model cannot be read as a probability of superiority.",
-      "i" = "Weighted ordinal fits have no marginal quantities here.",
-      "x" = "Use {.code effect = \"conditional\"} (the cumulative odds ratio), or drop the weights."),
+      "A weighted ordinal model cannot be read as a probability of superiority.",
+      "i" = 'Use {.code effect = "conditional"} (the cumulative odds ratio), or drop the weights.'),
       call = NULL)
     if (!requireNamespace("marginaleffects", quietly = TRUE))
       reg_abort_marginaleffects("this contrast, which has no closed form on this model")
@@ -2685,7 +2658,7 @@ reg_resolve_stats <- function(stats) {
   cmp <- keys[is_cmp]
   if (length(cmp) > 1L)
     cli::cli_abort(c("{.arg stats} names more than one model comparison: {.val {cmp}}.",
-                     "i" = "A footer row compares each model to ONE other, so pick one.",
+                     "i" = "A footer row compares each model to one other, so pick one.",
                      call = NULL))
 
   val <- unname(stats[is_cmp])
@@ -2734,7 +2707,7 @@ reg_resolve_digits <- function(digits) {
                      "i" = "Valid: {.or {.val {DISPLAY_USER_FIELDS}}}.",
                      "i" = "An unnamed value is the floor for the whole table."), call = NULL)
   if (sum(!nzchar(nm)) > 1L)
-    cli::cli_abort(c("{.arg digits} takes ONE unnamed value, the floor for the whole table.",
+    cli::cli_abort(c("{.arg digits} takes one unnamed value, the floor for the whole table.",
                      "i" = 'Name the others: {.code digits = c(2, ratio = 3)}.'), call = NULL)
   list(floor  = if (any(!nzchar(nm))) d[[which(!nzchar(nm))[[1]]]] else 0L,
        tokens = stats::setNames(d[nzchar(nm)], nm[nzchar(nm)]))
@@ -2890,8 +2863,8 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
   if (n < 2L) {
     # ⚠ silent under "auto": that is the DEFAULT, and a one-model table is not a mistake.
     if (!identical(compare, "auto"))
-      cli::cli_inform(c("i" = paste0("{.arg compare} needs at least two models (a {.arg predictors} ",
-                                     "list or several outcomes); ignored.")))
+      cli::cli_inform(c("i" = paste0("{.arg compare} needs at least two models: a {.arg predictors} ",
+                                     "list, or several outcomes.")))
     return(reg_gof)
   }
   # WHICH comparison, decided from the models themselves: a chain where each one nests in the next is
@@ -2962,12 +2935,11 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
     }
     daic <- tryCatch(reg_aic_value(m_full) - reg_aic_value(m_ref), error = function(e) NA_real_)
     # ⚠ the ROW still appears -- Delta-AIC names itself and is a legitimate answer -- but a table
-    # that never asked for a comparison must not take two bullets to explain the one it got.
+    # that never asked for a comparison must not explain the one it got.
     if (!auto) cli::cli_inform(c(
-      "i" = paste0(
-        "Column {.val {col}}: models are not nested or N differs -> showing the AIC difference vs the ",
-        "{if (compare == 'sequential') 'previous' else 'baseline'} model instead of a likelihood-ratio test."),
-      "i" = 'A different N is usually the per-model missing-value drop; set {.code na = "drop_all"} to fit every model on the same complete cases so the likelihood-ratio test can run.'))
+      "i" = paste0("{.val {col}}: the models are not nested, or their N differ, so the AIC ",
+                   "difference is shown instead of a likelihood-ratio test."),
+      "i" = 'Differing N is usually the missing values: {.code na = "drop_all"} fits them on the same rows.'))
     row(test_row_key(stat_key, "aic"), col, statistic = daic, nobs = fits[[i]]$nobs)
   })
   rows <- purrr::compact(rows)
@@ -3794,8 +3766,7 @@ reg_stage_specs <- function(ctx) {
   workers <- if (is.null(why)) wanted else 0L
   # ⚠ only when parallel was actually asked for: it must not nag on every comparison.
   if (!is.null(why) && wanted > 1L)
-    cli::cli_inform(c("i" = paste0("{.code options(tabxplor.parallel)}: the models are built one ",
-                                   "after another here -- {why}.")))
+    cli::cli_inform(c("i" = "The models are built one after another: {why}."))
 
   if (workers > 1L) {
     # ⚠ the whole ctx is the shipped object -- data, skeleton, design and crude block -- sent ONCE.
@@ -3825,7 +3796,7 @@ reg_stage_specs <- function(ctx) {
   # from. ⚠ every model owns at least one column and the LAYOUT depends on it: two models sharing an
   # offset would collide in the assembler's match(), silently dropping the second's crude block.
   fit_ncol      <- purrr::map_int(products, ~ length(.x$cols))
-  if (any(fit_ncol == 0L)) cli::cli_abort("Internal: a model produced no column.")
+  if (any(fit_ncol == 0L)) cli::cli_abort("A model produced no column.", .internal = TRUE)
   fit_first_idx <- cumsum(c(1L, utils::head(fit_ncol, -1L)))
   # `product_labels[[k]]` = the UNIQUIFIED names product k's own columns ended up with, in order.
   # DESIGN: everything downstream keys a column BY LABEL through this, never by a position computed

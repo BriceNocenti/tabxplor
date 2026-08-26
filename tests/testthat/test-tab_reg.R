@@ -29,12 +29,15 @@ test_that("tab_reg(family='binomial') is identical to tab_reg()", {
 test_that("family='auto' detects binary -> binomial, and an integer outcome -> gaussian", {
   skip_if_not_installed("broom")
   d <- reg_data()
+  tabxplor:::tx_reset_messages()   # the note is once per session
   expect_message(tab_reg(d, "married", "race", cleannames = FALSE), "binary")
   # Phase 18z13 (D10): an integer-valued numeric used to abort as "ambiguous", which caught every
   # integer-STORED continuous outcome -- age in years, a Likert sum, income in whole units. It now
   # reads as gaussian (which always fits) and the message names poisson for a genuine count. The R side
   # and the jamovi family selector agree on that rule.
+  tabxplor:::tx_reset_messages()   # the note is once per session
   expect_message(t <- tab_reg(d, "tvhours", "race"), "gaussian")
+  tabxplor:::tx_reset_messages()   # the note is once per session
   expect_message(tab_reg(d, "tvhours", "race"), "poisson")            # ... naming the count alternative
   expect_identical(get_model_family(t[["Model_diff"]]), "gaussian")
 })

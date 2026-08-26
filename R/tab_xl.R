@@ -178,11 +178,7 @@ tab_xl <-
     # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
     .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
 
-    if (!requireNamespace("openxlsx2", quietly = TRUE)) {
-      stop(paste0("Package \"openxlsx2\" needed for this function to work. ",
-                  "You can install it with : install.packages('openxlsx2')"),
-           call. = FALSE)
-    }
+    tx_need_pkg("openxlsx2", "Excel export")
 
     if (length(replace) == 0) replace <- length(path) != 0
 
@@ -545,11 +541,9 @@ xl_fold_literals <- function(code, disp) {
 xl_check_images <- function(tabs, check, data, theme = NULL, lang = NULL, dpi = 150) {
   none <- vector("list", length(tabs))
   if (is.null(check) || isFALSE(check)) return(none)
-  if (!all(vapply(c("ggplot2", "gridExtra", "grid"), requireNamespace, logical(1), quietly = TRUE))) {
-    cli::cli_inform(c("!" = paste("{.pkg ggplot2} / {.pkg gridExtra} are needed for",
-                                  "{.arg check}; the workbook is written without the plots.")))
+  if (!isTRUE(tx_need_pkg(c("ggplot2", "gridExtra", "grid"),
+                          "The model-check plots of `check`", severity = "inform")))
     return(none)
-  }
   purrr::map(tabs, function(t) {
     if (!is.data.frame(t) || !tab_is_reg(t)) return(NULL)
     grids <- tryCatch({
@@ -557,7 +551,7 @@ xl_check_images <- function(tabs, check, data, theme = NULL, lang = NULL, dpi = 
       on.exit(grDevices::dev.off(), add = TRUE)
       g <- reg_check_plots(t, data = data, check = check, theme = theme, lang = lang)
       if (inherits(g, "gtable")) list(g) else g
-    }, error = function(e) { cli::cli_inform(c("!" = "{.arg check}: {conditionMessage(e)}")); NULL })
+    }, error = function(e) NULL)
     if (!length(grids)) return(NULL)
     # WARNING: imap() hands the NAME when its input is named and the INDEX when it is not, so a
     # parallel vector indexed by `i` errors the moment the list gains names. reg_check_plots()
