@@ -796,9 +796,24 @@ drops to 2 after complete-case filtering. `reg_tidy_multinom()` takes the name f
 `test-tab_reg.R` now covers it.
 
 
-#### Phase 22m — exported functions review
+#### Phase 22m — exported functions review — DONE
 
-Too much functions are currently exported. It clutters a bit the pkgdown reference page and can lose some users (even if the structure and order of the reference page clearly help). I wonder if everything is needed. Please give me a clear map of what is currently exported, and ranked candidates for removal before 2.0.0 release. For each removal, state the work that would need to be done to remove the export without creating not-user-friendly situations.
+**The map is `dev/tabxplor_2.0.0_exported_functions_review.md`, and it is where the removal proposals stay.** Measured first, because it decided the whole shape of the phase: of the **98 exports, 56 come from 1.3.1** (a released contract) and only **42 are new in 2.0.0**. The maintainer's call was to implement the index and page structure now and leave every unexport as a written proposal for a separate session — which is the right split, because the second measurement is that **unexporting an accessor buys nothing on the reference index**: all 41 `fmt` accessors sat on ONE page, so the index only moves by restructuring.
+
+**What was actually cluttering the page, then.** Not the export count — the **tail**. A whole section advertised the five hard-deprecated steps (`tab_pct` / `tab_tot` / `tab_totaltab` / `tab_ci` / `tab_chi2`), which warn on **every** call and are defunct in 2.1.0; and `?fmt` was a **719-line page carrying 42 aliases**, whose `\value` alone was a stack of ~40 one-line paragraphs ("A modified fmt vector." six times over). Four edits, no export added or removed, `NAMESPACE` byte-identical:
+
+- **The five steps and `tab_get_vars()` took `@keywords internal`.** Still exported, still working, still warning — off the index. ⚠ That does NOT break a cross-reference: pkgdown builds every topic's page and only skips it in the *index*, so `?tab`'s own `\link{tab_chi2}` (`R/tab-args.R:266`) keeps resolving. `tab_many()` and `tab_plain()` stay visible, in one "Superseded entry points" group — a 1.3.1 user searching the site for `tab_many` must find it.
+- **`?fmt` split in three, on the type system's own line** — a **field** varies per cell, an **attribute** over a whole column, which is exactly the distinction the docs were hiding. `?fmt` (445 lines: the record, `fmt()`, `is_fmt()`), `?fmt_fields` (127: the 15 per-cell accessors), `?fmt_attributes` (225: the 24 per-column ones). Verified by conservation: the 41 original aliases are **exactly** the union of the three pages, the three sets are disjoint, and every `\usage` line is byte-identical to HEAD's.
+- **`reg_formulas()` and `shape_numeric_var()` joined `_pkgdown.yml`**, which had never listed them — two public topics pkgdown could not index. An **index-completeness check** (public Rd topics == topics under `reference:`, both directions) is what catches this; it is one script, worth running before any release.
+- **`?tab_plain` and `?tab_num` stopped teaching deprecated functions.** Both demonstrated `tab_prepare()`, and `?tab_plain` also chained `tab_chi2()`. ⚠ The `tab_chi2()` half could NOT be rewritten as `tab_plain(test = TRUE)`: `test` is declared for `producers = c("tab", "tab_counts")` only, so `tab_check_dots()` refuses it — the example was deleted instead. `other_if_less_than` is likewise `tab`-only, so the three legacy-step examples lost it rather than moved it.
+
+**Two roxygen mechanics worth keeping.** `@describeIn` **does** resolve against a `@name`-only topic (the `@name tabxplor-options` + `NULL` house pattern), which is what makes a split like this cheap. And `@inheritParams fmt` on each new page's block pulls in exactly the parameters its own functions use — `fmt_fields` got `x` / `value` / `...` / `row_kind` / `in_totrow` / `in_tottab` / `in_refrow`, `fmt_attributes` its twelve — so a field is still described once, in `fmt()`'s block.
+
+**Defects recorded in the review file**, three of them fixed above. The fourth is Phase 22l's: `vignettes/tabxplor.Rmd:546` and `vignettes/tabxplor-programming.Rmd:349` still describe `tab_plot()` as a working function, when it is `deprecate_stop()`. Also recorded, so it is not re-litigated: `get_type()` / `set_type()` / `get_ci_type()` / `set_ci_type()` were 1.3.1 exports removed with **no stub** — deliberate, because `fmt()` answers the old call with the full mapping (`fmt_abort_legacy_args()`).
+
+**The proposals left on the table** (review file §5): Tier 1 is six exports never released and reachable another way (`new_lvl`, `is_lvl`, `get_model_family`, `set_model_family`, `set_row_kind`, `get_color_bg`) — 98 → 92, no stub, no `NEWS` line. Tier 2 is `tab_get_wrapped_dimensions`, which has **zero call sites in `R/`, tests, vignettes and `dev/`**, plus the three already promised internal in 2.1.0 (leave them: the promise is written). Tier 3, retiring the twelve un-taught 1.3.1 accessors behind `deprecate_stop()` stubs, is argued **against** — it buys no index space and twelve permanent stubs is code kept forever to save nothing a user sees.
+
+**Verification.** `devtools::document()` clean, `NAMESPACE` unchanged; alias and `\usage` conservation asserted; the index-completeness check green (43 public topics, none missing, none stale); the five edited example pages run, and the only lifecycle conditions left are each deprecated page warning about **itself**. `devtools::test(filter = "fmt|steps-legacy|tab-structure|tab$")`: **FAIL 0 | PASS 477**. `NEWS.md` untouched — nothing here changes a user-callable contract.
 
 
 ---
@@ -941,10 +956,8 @@ The aim is to create a **compact, yet holistic and integrated translation**: avo
 
 The two references for French vocabulary are `vignettes/articles/tabxplor-all-else-equal-fr.Rmd` and `dev/french_glossary.md`.
 
-#### Phase 23g — `dev/` folder
-Files inside the `dev/` folder have grown organically, with many now useless files and outdated ones, which is very messy for future development : I want you to clean and reorganise the folder and main files.
-- Put all files related to v 2.0.0 dev history and of no real use for future dev in an 2.0.0 archive subfolder. That should be most of them.
-- Only keep at `dev/` root level a few selected .md files that explain in detail the architecture or functioning or use cases of some subsystems, and will be really useful for future dev : clean these files, simplify them by removing useless dev history and focusing on current architecture and usage, ensure they are up-to-date compared to the current design and code ;  organise them internally in such a way that goals, design and architecture decisions, usage, and everything giving the big picture come first, and details come next ; reference them in the architecture document.
+#### Phase 23g — Code housekeeping and future-proofing
+All facts tables, parameters tables, options tables, etc., and other tibble::tribble or the like used in code, should be well aligned for human readability, a human should be able to easily modify them with all the relevant informations structured, condensed and at the same place, visible at first glance, using a tribble if necessary (see, for example, the "print" black and white palettes).
 
 
 #### Phase 23h – pkgdown site
@@ -952,6 +965,10 @@ Files inside the `dev/` folder have grown organically, with many now useless fil
 Update the pkgdown site with the package documentation for release.
 - Check at pkgdown references: is there organisation and structure still meaningful, clear, readable, useful for new users, reflecting the current architecture and main uses cases of the package ? Are all exported functions organised in the outline, or a some new ones wandering around ?
 
+#### Phase 23i — `dev/` folder
+Files inside the `dev/` folder have grown organically, with many now useless files and outdated ones, which is very messy for future development : I want you to clean and reorganise the folder and main files.
+- Put all files related to v 2.0.0 dev history and of no real use for future dev in an 2.0.0 archive subfolder. That should be most of them.
+- Only keep at `dev/` root level a few selected .md files that explain in detail the architecture or functioning or use cases of some subsystems, and will be really useful for future dev : clean these files, simplify them by removing useless dev history and focusing on current architecture and usage, ensure they are up-to-date compared to the current design and code ;  organise them internally in such a way that goals, design and architecture decisions, usage, and everything giving the big picture come first, and details come next ; reference them in the architecture document.
 
 
 

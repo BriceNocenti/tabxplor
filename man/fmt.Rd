@@ -3,45 +3,6 @@
 \name{fmt}
 \alias{fmt}
 \alias{is_fmt}
-\alias{get_num}
-\alias{set_num}
-\alias{get_scale}
-\alias{set_scale}
-\alias{get_pct_type}
-\alias{set_pct_type}
-\alias{is_totrow}
-\alias{get_row_kind}
-\alias{set_row_kind}
-\alias{as_totrow}
-\alias{is_tottab}
-\alias{as_tottab}
-\alias{set_display}
-\alias{is_totcol}
-\alias{as_totcol}
-\alias{is_refrow}
-\alias{as_refrow}
-\alias{get_comp_all}
-\alias{set_comp_all}
-\alias{get_ref_type}
-\alias{set_ref_type}
-\alias{set_diff_type}
-\alias{get_col_var}
-\alias{set_col_var}
-\alias{get_col_group}
-\alias{get_model_family}
-\alias{set_model_family}
-\alias{get_ci_method}
-\alias{is_refcol}
-\alias{as_refcol}
-\alias{get_color}
-\alias{get_color_bg}
-\alias{get_color_signif}
-\alias{set_color}
-\alias{set_color_signif}
-\alias{get_digits}
-\alias{get_pvalue}
-\alias{set_digits}
-\alias{set_pvalue}
 \title{Create a vector of class formatted numbers}
 \usage{
 fmt(
@@ -88,84 +49,6 @@ fmt(
 )
 
 is_fmt(x)
-
-get_num(x)
-
-set_num(x, value)
-
-get_scale(x, ...)
-
-set_scale(x, scale)
-
-get_pct_type(x, ...)
-
-set_pct_type(x, pct_type)
-
-is_totrow(x, ...)
-
-get_row_kind(x)
-
-set_row_kind(x, row_kind)
-
-as_totrow(x, in_totrow = TRUE)
-
-is_tottab(x, ...)
-
-as_tottab(x, in_tottab = TRUE)
-
-set_display(x, value)
-
-is_totcol(x, ...)
-
-as_totcol(x, totcol = TRUE)
-
-is_refrow(x, ...)
-
-as_refrow(x, in_refrow = TRUE)
-
-get_comp_all(x, replace_na = TRUE)
-
-set_comp_all(x, comp_all = FALSE)
-
-get_ref_type(x, ...)
-
-set_ref_type(x, ref)
-
-set_diff_type(x, ref)
-
-get_col_var(x, ...)
-
-set_col_var(x, col_var)
-
-get_col_group(x, ...)
-
-get_model_family(x, ...)
-
-set_model_family(x, model_family)
-
-get_ci_method(x, ...)
-
-is_refcol(x, ...)
-
-as_refcol(x, refcol = TRUE)
-
-get_color(x, ...)
-
-get_color_bg(x, ...)
-
-get_color_signif(x, ...)
-
-set_color(x, color)
-
-set_color_signif(x, color_signif)
-
-get_digits(x)
-
-get_pvalue(x)
-
-set_digits(x, value)
-
-set_pvalue(x, value)
 }
 \arguments{
 \item{n}{The underlying count, as an integer vector of length \code{n()}. It is used
@@ -260,7 +143,10 @@ estimate's own test scale. Written by \code{tab_reg} where the two estimates are
 (\code{tab_vars} groups), so \code{color = "between_groups"} can honour \code{color_signif};
 \code{NA} elsewhere. A double vector the length of \code{n}. Non-displayed.}
 
-\item{row_kind}{The kind of row a cell sits in (see \code{\link{get_row_kind}}).}
+\item{row_kind}{What kind of row the cell sits in --- one of \code{"data"} (an ordinary body row),
+\code{"total"}, and the synthetic display rows \code{"n"}, \code{"pct"}, \code{"pvalue"},
+\code{"gof"}, \code{"blank"}. A character vector the length of \code{n}. It supersedes the logical
+\code{in_totrow} field, kept as a soft-deprecated argument and read-only \code{$in_totrow}.}
 
 \item{in_tottab}{\code{TRUE} when the cell is part of a total table}
 
@@ -356,82 +242,11 @@ built with.}
 methods below, to add arguments in the future.}
 
 \item{x}{The object to test, to get a field in, or to modify.}
-
-\item{value}{The value you want to inject in some \code{fmt} vector's vctrs::field
-or attribute using a given "set" function.}
-
-\item{replace_na}{By default, \code{\link{get_comp_all}} takes NA in comparison level
-to be a \code{FALSE} (=comparison at subtables/groups level). Set to \code{FALSE}
-to avoid this behavior.}
 }
 \value{
 A vector of class \code{tabxplor_fmt}.
 
 A logical vector.
-
-A double vector.
-
-A modified fmt vector.
-
-A character vector with the vectors scale.
-
-A modified fmt vector.
-
-A character vector with the vectors percentage type.
-
-A modified fmt vector.
-
-A logical vector with the fmt vectors totrow field.
-
-A character vector with the fmt vector's row_kind field.
-
-A modified fmt vector with the row_kind field changed.
-
-A modified fmt vector with totrow field changed.
-
-A logical vector with the fmt vectors tottab field.
-
-A modified fmt vector with tottab field changed.
-
-The entered objects, with all fmt vectors with the wanted display.
-
-A logical vector with the fmt vectors totcol attribute.
-
-A modified fmt vector with totcol attribute changed.
-
-A logical vector with the fmt vectors in_refrow field
-
-A modified fmt vector with in_refrom field changed.
-
-A modified fmt vector with comp attribute changed.
-
-A logical vector with the fmt vectors type attributes
-
-A modified fmt vector.
-
-A logical vector with the fmt vectors col_var attributes
-
-A modified fmt vector.
-
-A character vector with the vectors' col_group attributes (\code{""} when the table was
-never spread). On a data.frame, one value per column.
-
-A character vector with the fmt vectors' model_family attributes (\code{""} when unset,
-e.g. on cross-tables). On a data.frame, one value per column.
-
-A modified fmt vector.
-
-A character vector with the vectors interval method ("" when no interval was computed).
-
-A logical vector with the fmt vectors is_refcol attributes
-
-A modified fmt vector.
-
-A logical vector with the fmt vectors color attributes
-
-A single character with the background color measure, or \code{NA}.
-
-A modified fmt vector.
 }
 \description{
 \code{fmt} vectors, of class \code{tabxplor_fmt}, powers \pkg{tabxplor}
@@ -452,95 +267,6 @@ using \pkg{vctrs}.
 \section{Functions}{
 \itemize{
 \item \code{is_fmt()}: a test function for class fmt.
-
-\item \code{get_num()}: get the currently displayed field
-
-\item \code{set_num()}: set the currently displayed field (not changing display type)
-
-\item \code{get_scale()}: get the estimate scale of fmt columns (at \code{fmt} level or \code{tab} level)
-
-\item \code{set_scale()}: set the estimate scale attribute of a \code{fmt} vector
-
-\item \code{get_pct_type()}: get which kind of percentage fmt columns hold (at \code{fmt} level or \code{tab} level)
-
-\item \code{set_pct_type()}: set the percentage-type attribute of a \code{fmt} vector
-
-\item \code{is_totrow()}: test function to detect cells in total rows
-(at \code{fmt} level or \code{tab} level)
-
-\item \code{get_row_kind()}: get the "row_kind" field: what kind of row each cell sits in
-(one of \code{"data"}, \code{"total"}, \code{"n"}, \code{"pct"}, \code{"pvalue"},
-\code{"gof"}, \code{"blank"}).
-
-\item \code{set_row_kind()}: set the "row_kind" field
-
-\item \code{as_totrow()}: set the "total" row kind (belong to total row)
-
-\item \code{is_tottab()}: test function to detect cells in total tables
-(at \code{fmt} level or \code{tab} level)
-
-\item \code{as_tottab()}: set the "in_tottab" field (belong to total table)
-
-\item \code{set_display()}: set the "display" vctrs::field of a \code{fmt} vector, or of
-all of them in the whole tibble.
-
-\item \code{is_totcol()}: test function for total columns
-(at \code{fmt} level or \code{tab} level)
-
-\item \code{as_totcol()}: set the "totcol" attribute of a \code{fmt} vector
-
-\item \code{is_refrow()}: test function to detect cells in reference rows
-(at \code{fmt} level or \code{tab} level)
-
-\item \code{as_refrow()}: set the "in_refrow" field (belong to reference row)
-
-\item \code{get_comp_all()}: get comparison level of fmt columns
-
-\item \code{set_comp_all()}: set the comparison level attribute of a \code{fmt} vector
-
-\item \code{get_ref_type()}: get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
-
-\item \code{set_ref_type()}: set the reference attribute of a \code{fmt} vector — which row or column a
-comparison is made against. It is the writer of the attribute \code{\link[=get_ref_type]{get_ref_type()}} reads.
-
-\item \code{set_diff_type()}: \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use \code{\link[=set_ref_type]{set_ref_type()}}, which shares its stem
-with the getter \code{\link[=get_ref_type]{get_ref_type()}} and with the \code{ref} attribute both of them address.
-
-\item \code{get_col_var()}: get names of column variable of fmt columns (at \code{fmt} level or \code{tab} level)
-
-\item \code{set_col_var()}: set the "col_var" attribute of a \code{fmt} vector
-
-\item \code{get_col_group()}: get the sub-population of fmt columns (at \code{fmt} level or \code{tab} level)
-
-\item \code{get_model_family()}: get the regression model family of fmt columns (at \code{fmt} or \code{tab} level)
-
-\item \code{set_model_family()}: set the "model_family" attribute of a \code{fmt} vector (the per-column
-regression family, "" on crosstabs)
-
-\item \code{get_ci_method()}: get the interval method of fmt columns (at \code{fmt} level or \code{tab} level)
-
-\item \code{is_refcol()}: test function for reference columns (at \code{fmt} level or \code{tab} level)
-
-\item \code{as_refcol()}: set the "ref_col" attribute of a \code{fmt} vector
-
-\item \code{get_color()}: get color (at \code{fmt} level or \code{tab} level)
-
-\item \code{get_color_bg()}: get the background-channel color measure (\code{NA} when there is none)
-
-\item \code{get_color_signif()}: get the significance policy (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"})
-
-\item \code{set_color()}: set the "color" attribute of a \code{fmt} vector
-
-\item \code{set_color_signif()}: set the significance policy attribute of a \code{fmt} vector
-
-\item \code{get_digits()}: get the "digits" field
-
-\item \code{get_pvalue()}: get the per-cell p-value (what the significance stars read)
-
-\item \code{set_digits()}: set the "digits" field
-
-\item \code{set_pvalue()}: set the per-cell p-value. \code{set_pvalue(x, NA_real_)} is how a duplicated,
-purely descriptive copy of a column loses its stars: the stored p-value is their only source.
 
 }}
 \section{The fields of a cell}{

@@ -54,3 +54,4 @@ Deprecated in 2.0.0, defunct in 2.1.0 -- percentages, differences and ratios are
 directly by \code{\link[=tab]{tab()}}, through its \code{pct} / \code{ref} / \code{comp} arguments. \code{tab_pct()} still works on
 an existing tab.
 }
+\keyword{internal}

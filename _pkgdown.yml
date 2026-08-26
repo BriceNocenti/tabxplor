@@ -58,11 +58,10 @@ reference:
 - title: Variants of tab()
   desc: >
     The same idea as `tab()`, for a particular input: `tab_num()` for numeric variables,
-    `tab_counts()` for pre-aggregated counts, `tab_plain()` for a single bare cross-table.
+    `tab_counts()` for data that is already counted.
   contents:
   - tab_num
   - tab_counts
-  - tab_plain
 
 - title: Charts
   desc: >
@@ -73,12 +72,14 @@ reference:
   - forest_plot
   - reg_check_plots
 
-- title: What can this outcome be modelled as?
+- title: What a model can be, and what it fitted
   desc: >
     `reg_measures()` lists which effect x measure combinations `tab_reg()` can build for a given
-    outcome, and why the others are refused.
+    outcome, and why the others are refused. `reg_formulas()` shows the formula behind every column
+    of a finished table -- exactly what reached the fitter.
   contents:
   - reg_measures
+  - reg_formulas
 
 - title: Export a finished table
   desc: >
@@ -140,43 +141,45 @@ reference:
 
 - title: Inspect a table
   desc: >
-    What have I got, and what can I do with it? `tab_structure()` reports the structure (merged, grouped, a
-    list) and `tab_supports()` which operations accept it; `tab_columns()` lists every numeric
-    column with what it estimates, how it is coloured and how its interval was computed;
-    `tab_get_vars()` names the variables and `is_tab()` tests the class. `fmt_attr()` reads or
-    writes one column attribute by name.
+    What have I got, and what can I do with it? `tab_structure()` reports the structure (merged,
+    grouped, a list) -- with the variables on each axis -- and `tab_supports()` which operations
+    accept it; `tab_columns()` lists every numeric column with what it estimates, how it is
+    coloured and how its interval was computed; `is_tab()` tests the class.
   contents:
   - tab_structure
   - tab_supports
   - tab_columns
-  - tab_get_vars
   - is_tab
-  - fmt_attr
 
 - title: The fmt cell type
-  desc: The `tabxplor_fmt` vctrs record behind every numeric cell, and its constructors.
+  desc: >
+    The `tabxplor_fmt` vctrs record behind every numeric cell. A **field** varies from cell to cell,
+    an **attribute** holds for a whole column: `fmt()` builds the record, `fmt_fields` and
+    `fmt_attributes` document the accessors of each kind, and `fmt_attr()` reaches any attribute by
+    name. `new_tab()` builds the table around them.
   contents:
   - fmt
+  - fmt_fields
+  - fmt_attributes
+  - fmt_attr
   - new_tab
   - fmt_get_color_code
 
-- title: Superseded entry points and steps
+- title: Superseded entry points
   desc: >
-    `tab_many()` is now a thin shim over `tab()`, which absorbed it. The individual steps below are
-    what the build fuses into one pass; each is still exported and works on an existing table, but
-    `tab()` / `tab_num()` supersede them.
+    Both still work and give the same numbers, but `tab()` has absorbed them: `tab_many()` is now a
+    thin shim over it, and `tab_plain()` builds one bare cross-table from a single pair of
+    variables. The step-by-step chain they used to be piped into (`tab_pct()`, `tab_tot()`,
+    `tab_ci()`, `tab_chi2()`, ...) is deprecated -- the build fuses it into one pass.
   contents:
   - tab_many
-  - tab_pct
-  - tab_tot
-  - tab_totaltab
-  - tab_ci
-  - tab_chi2
+  - tab_plain
 
 - title: Data-prep and text helpers
   desc: Small utilities for preparing data or laying out a table.
   contents:
   - score_from_lv1
+  - shape_numeric_var
   - tab_wrap_text
   - tab_parallel_stop
 

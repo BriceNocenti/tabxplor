@@ -65,7 +65,7 @@ of means and standard deviations.
 }
 \examples{
 \donttest{
-data <- dplyr::storms |> tab_prepare(category, wind, na_drop_all = wind)
+data <- dplyr::storms |> dplyr::filter(!is.na(wind))
 tab_num(data, category, wind, tot = "row",
         color = "difference", color_signif = "guaranteed_effect")
 }

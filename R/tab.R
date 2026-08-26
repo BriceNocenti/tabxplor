@@ -2202,10 +2202,16 @@ tab_last_factor_row_var <- function(fct_names, groups = character(0)) {
 
 #' The variables of a tabxplor table
 #' @description
+#' `r lifecycle::badge("superseded")`
+#'
 #' Which variable plays which role in a finished table: the row variable, the column variable(s) and
 #' the sub-table variable(s). Read off the table's own declared model (the index columns' stored
 #' roles and the `fmt` columns' `col_var`), never guessed from a column name --- so it survives
 #' renaming, `dplyr` verbs and a merge of several row variables.
+#'
+#' Superseded by [tab_structure()], which answers the same question --- as `row_vars`, `col_vars`
+#' and `tab_vars` --- and says in the same breath what kind of object the table is (merged, grouped,
+#' a list) and which reshape operations accept it. `tab_get_vars()` keeps working, unchanged.
 #' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab}},
 #' \code{\link{tab_reg}} or \code{\link{tab_plain}}.
 #' @param vars A character vector naming the roles you want:
@@ -2215,6 +2221,7 @@ tab_last_factor_row_var <- function(fct_names, groups = character(0)) {
 #' @seealso [tab_structure()], which reports the table's STRUCTURE (merged / grouped / list) and which
 #'   operations accept it.
 #' @export
+#' @keywords internal
 #'
 tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
   stopifnot(is.data.frame(tabs))

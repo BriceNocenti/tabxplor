@@ -19,7 +19,10 @@
 #   own preconditions true. That reconstruction is the point of these functions, and is why they
 #   outlived the pipeline copy.
 # KEY CONSTRAINTS:
-#   - Exports are unchanged: the @export roxygen travels with the functions.
+#   - Exports are unchanged: the @export roxygen travels with the functions. Each also carries
+#     `@keywords internal`, so the five stay off the pkgdown reference index -- a function that
+#     warns on every call is not something to advertise to someone browsing the site. Their pages
+#     are still built, so every `\link{tab_chi2}` in the live docs keeps resolving.
 #   - Nothing here is called BY the core; the shared arithmetic stays where the build uses it.
 #   - `degf` is read off the COLUMNS (the smallest design df), never off a table attribute -- that
 #     is what lets a table a pipeline has stripped of its metadata still refer its intervals to
@@ -45,10 +48,9 @@
 #' @return A \code{tibble} of class \code{tab}. Total-table rows are then detected with
 #' \code{\link{is_tottab}}.
 #' @export
+#' @keywords internal
 #'
-#' @examples \donttest{ data <- dplyr::starwars |>
-#' tab_prepare(sex, hair_color, gender, other_if_less_than = 5,
-#'             na_drop_all = sex)
+#' @examples \donttest{ data <- dplyr::starwars |> dplyr::filter(!is.na(sex))
 #'
 #' data |>
 #'   tab_plain(sex, hair_color, gender) |>
@@ -186,8 +188,9 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
 #' @return A \code{tibble} of class \code{tab}. Total rows are then detected with
 #'  \code{\link{is_totrow}}, and total columns with \code{\link{is_totcol}}.
 #' @export
+#' @keywords internal
 #'
-#' @examples \donttest{data <- dplyr::starwars |> tab_prepare(sex, hair_color)
+#' @examples \donttest{data <- dplyr::starwars
 #'
 #' data |>
 #'   tab_plain(sex, hair_color) |>
@@ -414,6 +417,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 #' @return A \code{tibble} of class \code{tab}, with percentages displayed, possibly colored based
 #' on differences from totals or first cell.
 #' @export
+#' @keywords internal
 tab_pct <- function(tabs, pct = "row",
                     digits = NULL, ref = c("tot", "first", "no"),
                     comp = NULL, color = FALSE, just_diff = FALSE) {
@@ -718,12 +722,11 @@ diff_formula <- function(x, type, ref, refer) {
 #' @return A \code{tibble} of class \code{tab}, colored based on differences (from
 #' totals/first cells) and confidence intervals.
 #' @export
+#' @keywords internal
 #'
 #' @examples # A typical workflow with tabxplor step-by-step functions :
 #' \donttest{
-#' data <- dplyr::starwars |>
-#'   tab_prepare(sex, hair_color, gender, other_if_less_than = 5,
-#'               na_drop_all = sex)
+#' data <- dplyr::starwars |> dplyr::filter(!is.na(sex))
 #'
 #' data |>
 #'   tab_plain(sex, hair_color, gender, tot = c("row", "col"),
@@ -1021,6 +1024,7 @@ tab_ci <- function(tabs,
 #' @return A \code{tibble} of class \code{tab}, with Chi2 summaries as metadata,
 #' possibly colored based on contributions of cells to variance.
 #' @export
+#' @keywords internal
 tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
                      comp = NULL, color = c("no", "auto", "all", "all_pct"),
                      .deff = NULL

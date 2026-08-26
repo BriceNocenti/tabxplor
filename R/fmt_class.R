@@ -31,6 +31,10 @@
 #     nor by a template that renders nothing wherever it sits.
 #   - Adding a FIELD touches ~9 sites here (follow the /vctrs-field skill); adding an ATTRIBUTE is a
 #     new_fmt() formal + one `fmt_attr_rules` row (a build-time stopifnot refuses a missing row).
+#   - THE ACCESSORS ARE DOCUMENTED ON THE FIELD/ATTRIBUTE LINE, not in one wall: `?fmt` is the record,
+#     `?fmt_fields` the 15 per-cell accessors, `?fmt_attributes` the 24 per-column ones. A new
+#     accessor takes `@describeIn fmt_fields` or `@describeIn fmt_attributes` -- and NOT its own
+#     `@return`, which each page states once for every getter and setter it holds.
 #   - Display glyph constants (mult_sign, div_sign, unbrk, sigma_sign, fig_space) live in utils.R.
 # See: CLAUDE.md § tabxplor architecture (type system + colour system); /vctrs-field + /color-mode skills.
 
@@ -519,6 +523,52 @@ fmt_abort_legacy_args <- function(...) {
                  call = NULL)
 }
 
+
+# === SECTION: The accessor surface -- two pages, one distinction ====================================
+# A FIELD varies per cell, an ATTRIBUTE over a whole column. That is the type system's load-bearing
+# line, so the accessors are documented on the two pages it draws, not on one wall of forty. Both
+# take their parameter prose from fmt()'s own block (@inheritParams), so a field is described once.
+
+#' Per-cell fields of a `fmt` vector
+#'
+#' @description
+#' Read and write the values that vary from cell to cell: the displayed number, its decimals, its
+#' p-value, and the kind of row each cell sits in. Every `fmt` vector carries all of them, an
+#' inapplicable one stored as `NA` --- so these always answer, even on a column where the field
+#' means nothing.
+#'
+#' Use them on a single `fmt` vector or, through `dplyr::across(where(is_fmt), ...)`, on a whole
+#' table. To reach a field these do not name, use `x$<field>` or [vctrs::field()].
+#'
+#' @inheritParams fmt
+#' @return A getter returns a vector the length of `x`; a setter the modified `fmt` vector. Given a
+#'   data.frame, a getter answers once per `fmt` column.
+#' @seealso [fmt()] for what every field means and how to build a cell; [fmt_attributes] for the
+#'   per-column facts; `vignette("tabxplor-programming")`.
+#' @name fmt_fields
+NULL
+
+#' Per-column attributes of a `fmt` vector
+#'
+#' @description
+#' Read and write the facts that hold for a whole column: what it estimates, which percentage base
+#' it rests on, which reference it is compared to, how it is coloured, and how its confidence
+#' interval was built. They are stored on the vector, not on the table, so a column keeps them when
+#' it is extracted, renamed or piped through `dplyr`.
+#'
+#' [fmt_attr()] reaches any of them by name --- these are the readable way to address one you know.
+#' [tab_columns()] shows them all, for every column of a table at once.
+#'
+#' @inheritParams fmt
+#' @return A getter returns the stored value --- its declared default where the attribute was never
+#'   set (`""` for a name, `FALSE` for a flag, `NA` where there is none) --- and answers once per
+#'   `fmt` column when given a data.frame. A setter returns the modified `fmt` vector.
+#' @seealso [fmt_attr()] to address an attribute by name; [tab_columns()] for a whole table;
+#'   [fmt()] for what every attribute means; [fmt_fields] for the per-cell values.
+#' @name fmt_attributes
+NULL
+
+
 #' @describeIn fmt a test function for class fmt.
 #' @return A logical vector.
 #' @export
@@ -529,8 +579,7 @@ is_fmt <- function(x) {
 
 
 
-#' @describeIn fmt get the currently displayed field
-#' @return A double vector.
+#' @describeIn fmt_fields get the currently displayed field
 #' @export
 get_num <- function(x) {
   # DESIGN: get_num() is the authoritative `display` -> underlying-field map. Allowed display values
@@ -597,10 +646,9 @@ get_num <- function(x) {
   out
 }
 
-#' @describeIn fmt set the currently displayed field (not changing display type)
+#' @describeIn fmt_fields set the currently displayed field (not changing display type)
 #' @param value The value you want to inject in some \code{fmt} vector's vctrs::field
 #' or attribute using a given "set" function.
-#' @return A modified fmt vector.
 #' @export
 set_num <- function(x, value) {
   value <- vctrs::vec_recycle(value, length(x))
@@ -639,8 +687,7 @@ set_num <- function(x, value) {
   out
 }
 
-#' @describeIn fmt get the estimate scale of fmt columns (at \code{fmt} level or \code{tab} level)
-#' @return A character vector with the vectors scale.
+#' @describeIn fmt_attributes get the estimate scale of fmt columns (at \code{fmt} level or \code{tab} level)
 #' @export
 get_scale <- function(x, ...) UseMethod("get_scale")
 #' @method get_scale default
@@ -660,8 +707,7 @@ get_scale.tabxplor_fmt <- function(x, ...) attr(x, "scale", exact = TRUE)
 #' @noRd
 get_scale.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_scale(.))
 
-#' @describeIn fmt set the estimate scale attribute of a \code{fmt} vector
-#' @return A modified fmt vector.
+#' @describeIn fmt_attributes set the estimate scale attribute of a \code{fmt} vector
 #' @export
 set_scale     <- function(x, scale) {
   scale <- as.character(scale)[1]
@@ -670,8 +716,7 @@ set_scale     <- function(x, scale) {
   `attr<-`(x, "scale", scale)
 }
 
-#' @describeIn fmt get which kind of percentage fmt columns hold (at \code{fmt} level or \code{tab} level)
-#' @return A character vector with the vectors percentage type.
+#' @describeIn fmt_attributes get which kind of percentage fmt columns hold (at \code{fmt} level or \code{tab} level)
 #' @export
 get_pct_type <- function(x, ...) UseMethod("get_pct_type")
 #' @method get_pct_type default
@@ -698,8 +743,7 @@ get_pct_type.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_pct_type(.))
 #' @noRd
 set_count_col <- function(x) set_pct_type(set_scale(x, "level_n"), "none")
 
-#' @describeIn fmt set the percentage-type attribute of a \code{fmt} vector
-#' @return A modified fmt vector.
+#' @describeIn fmt_attributes set the percentage-type attribute of a \code{fmt} vector
 #' @export
 set_pct_type  <- function(x, pct_type) {
   pct_type <- as.character(pct_type)[1]
@@ -711,9 +755,8 @@ set_pct_type  <- function(x, pct_type) {
 
 
 
-#' @describeIn fmt test function to detect cells in total rows
+#' @describeIn fmt_fields test function to detect cells in total rows
 #' (at \code{fmt} level or \code{tab} level)
-#' @return A logical vector with the fmt vectors totrow field.
 #' @export
 is_totrow <- function(x, ...) UseMethod("is_totrow")
 #' @method is_totrow default
@@ -725,19 +768,17 @@ is_totrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
 #' @noRd
 is_totrow.tabxplor_fmt <- function(x, ...) vctrs::field(x, "row_kind") == "total"
 
-#' @describeIn fmt get the "row_kind" field: what kind of row each cell sits in
+#' @describeIn fmt_fields get the "row_kind" field: what kind of row each cell sits in
 #' (one of \code{"data"}, \code{"total"}, \code{"n"}, \code{"pct"}, \code{"pvalue"},
 #' \code{"gof"}, \code{"blank"}).
-#' @return A character vector with the fmt vector's row_kind field.
 #' @export
 get_row_kind <- function(x) {
   if (!is_fmt(x)) return(rep("data", length(x)))
   vctrs::field(x, "row_kind")
 }
 
-#' @describeIn fmt set the "row_kind" field
+#' @describeIn fmt_fields set the "row_kind" field
 #' @param row_kind The kind of row a cell sits in (see \code{\link{get_row_kind}}).
-#' @return A modified fmt vector with the row_kind field changed.
 #' @export
 set_row_kind <- function(x, row_kind) {
   row_kind <- vctrs::vec_recycle(vctrs::vec_cast(row_kind, character()), length(x))
@@ -779,8 +820,7 @@ is_totrow.data.frame <- function(x, ..., partial = FALSE) {
   fmt_row_flag(x, "row_kind", partial)
 }
 
-#' @describeIn fmt set the "total" row kind (belong to total row)
-#' @return A modified fmt vector with totrow field changed.
+#' @describeIn fmt_fields set the "total" row kind (belong to total row)
 #' @export
 as_totrow  <- function(x, in_totrow = TRUE) {
   vctrs::vec_assert(in_totrow, logical())
@@ -852,9 +892,8 @@ complete_partial_totals <- function(tabs) {
 
 
 
-#' @describeIn fmt test function to detect cells in total tables
+#' @describeIn fmt_fields test function to detect cells in total tables
 #' (at \code{fmt} level or \code{tab} level)
-#' @return A logical vector with the fmt vectors tottab field.
 #' @export
 is_tottab <- function(x, ...) UseMethod("is_tottab")
 #' @method is_tottab default
@@ -872,8 +911,7 @@ is_tottab.data.frame <- function(x, ..., partial = FALSE) {
   fmt_row_flag(x, "in_tottab", partial)
 }
 
-#' @describeIn fmt set the "in_tottab" field (belong to total table)
-#' @return A modified fmt vector with tottab field changed.
+#' @describeIn fmt_fields set the "in_tottab" field (belong to total table)
 #' @export
 as_tottab  <- function(x, in_tottab = TRUE) {
   vctrs::vec_assert(in_tottab, logical())
@@ -881,9 +919,8 @@ as_tottab  <- function(x, in_tottab = TRUE) {
 }
 
 
-#' @describeIn fmt set the "display" vctrs::field of a \code{fmt} vector, or of
+#' @describeIn fmt_fields set the "display" vctrs::field of a \code{fmt} vector, or of
 #' all of them in the whole tibble.
-#' @return The entered objects, with all fmt vectors with the wanted display.
 #' @export
 set_display <- function(x, value) UseMethod("set_display")
 #' @method set_display default
@@ -969,9 +1006,8 @@ set_display.data.frame <- function(x, value) {
 }
 
 
-#' @describeIn fmt test function for total columns
+#' @describeIn fmt_attributes test function for total columns
 #' (at \code{fmt} level or \code{tab} level)
-#' @return A logical vector with the fmt vectors totcol attribute.
 #' @export
 is_totcol <- function(x, ...) UseMethod("is_totcol")
 #' @method is_totcol default
@@ -991,8 +1027,7 @@ is_totcol.tabxplor_fmt <- function(x, ...) attr(x, "totcol", exact = TRUE)
 #' @noRd
 is_totcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_totcol(.))
 
-#' @describeIn fmt set the "totcol" attribute of a \code{fmt} vector
-#' @return A modified fmt vector with totcol attribute changed.
+#' @describeIn fmt_attributes set the "totcol" attribute of a \code{fmt} vector
 #' @export
 as_totcol     <- function(x, totcol = TRUE) {
   vctrs::vec_assert(totcol, logical(), size = 1)
@@ -1001,9 +1036,8 @@ as_totcol     <- function(x, totcol = TRUE) {
 
 
 
-#' @describeIn fmt test function to detect cells in reference rows
+#' @describeIn fmt_fields test function to detect cells in reference rows
 #' (at \code{fmt} level or \code{tab} level)
-#' @return A logical vector with the fmt vectors in_refrow field
 #' @export
 is_refrow <- function(x, ...) UseMethod("is_refrow")
 #' @method is_refrow default
@@ -1022,8 +1056,7 @@ is_refrow.data.frame <- function(x, ..., partial = TRUE) {
   fmt_row_flag(x, "in_refrow", partial)
 }
 
-#' @describeIn fmt set the "in_refrow" field (belong to reference row)
-#' @return A modified fmt vector with in_refrom field changed.
+#' @describeIn fmt_fields set the "in_refrow" field (belong to reference row)
 #' @export
 as_refrow  <- function(x, in_refrow = TRUE) {
   vctrs::vec_assert(in_refrow, logical())
@@ -1031,7 +1064,7 @@ as_refrow  <- function(x, in_refrow = TRUE) {
 }
 
 
-#' @describeIn fmt get comparison level of fmt columns
+#' @describeIn fmt_attributes get comparison level of fmt columns
 # No @inheritParams fmt here: @describeIn merges this block into the `fmt` topic, where `x` is
 # already documented -- roxygen2 then errors that nothing remains to inherit.
 #' @param replace_na By default, \code{\link{get_comp_all}} takes NA in comparison level
@@ -1045,8 +1078,7 @@ get_comp_all <- function(x, replace_na = TRUE) {
   comp
 }
 
-#' @describeIn fmt set the comparison level attribute of a \code{fmt} vector
-#' @return A modified fmt vector with comp attribute changed.
+#' @describeIn fmt_attributes set the comparison level attribute of a \code{fmt} vector
 #' @export
 set_comp_all      <- function(x, comp_all = FALSE) {
   `attr<-`(x, "comp_all", comp_all)
@@ -1054,8 +1086,7 @@ set_comp_all      <- function(x, comp_all = FALSE) {
 
 
 
-#' @describeIn fmt get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
-#' @return A logical vector with the fmt vectors type attributes
+#' @describeIn fmt_attributes get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
 #' @export
 get_ref_type <- function(x, ...) UseMethod("get_ref_type")
 #' @method get_ref_type default
@@ -1077,9 +1108,8 @@ get_ref_type.data.frame <- function(x, ...) {
   purrr::map_chr(x, ~ get_ref_type(.))
 }
 
-#' @describeIn fmt set the reference attribute of a \code{fmt} vector — which row or column a
+#' @describeIn fmt_attributes set the reference attribute of a \code{fmt} vector — which row or column a
 #'   comparison is made against. It is the writer of the attribute [get_ref_type()] reads.
-#' @return A modified fmt vector.
 #' @export
 set_ref_type <- function(x, ref) {
   # The stored `ref` values are the resolver's own vocabulary plus a row NUMBER or a matched LABEL,
@@ -1089,7 +1119,7 @@ set_ref_type <- function(x, ref) {
   `attr<-`(x, "ref", ref)
 }
 
-#' @describeIn fmt `r lifecycle::badge("deprecated")` Use [set_ref_type()], which shares its stem
+#' @describeIn fmt_attributes `r lifecycle::badge("deprecated")` Use [set_ref_type()], which shares its stem
 #'   with the getter [get_ref_type()] and with the `ref` attribute both of them address.
 #' @export
 set_diff_type <- function(x, ref) {
@@ -1107,8 +1137,7 @@ set_diff_type <- function(x, ref) {
 fmt_has_interval <- function(x) !all(is.na(get_ci_inf(x)))
 
 
-#' @describeIn fmt get names of column variable of fmt columns (at \code{fmt} level or \code{tab} level)
-#' @return A logical vector with the fmt vectors col_var attributes
+#' @describeIn fmt_attributes get names of column variable of fmt columns (at \code{fmt} level or \code{tab} level)
 #' @export
 get_col_var <- function(x, ...) UseMethod("get_col_var")
 #' @method get_col_var default
@@ -1128,17 +1157,14 @@ get_col_var.tabxplor_fmt <- function(x, ...) attr(x, "col_var", exact = TRUE)
 #' @noRd
 get_col_var.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_col_var(.))
 
-#' @describeIn fmt set the "col_var" attribute of a \code{fmt} vector
-#' @return A modified fmt vector.
+#' @describeIn fmt_attributes set the "col_var" attribute of a \code{fmt} vector
 #' @export
 set_col_var   <- function(x, col_var) {
   vctrs::vec_assert(col_var, character(), size = 1)
   `attr<-`(x ,"col_var" , col_var)
 }
 
-#' @describeIn fmt get the sub-population of fmt columns (at \code{fmt} level or \code{tab} level)
-#' @return A character vector with the vectors' col_group attributes (\code{""} when the table was
-#'   never spread). On a data.frame, one value per column.
+#' @describeIn fmt_attributes get the sub-population of fmt columns (at \code{fmt} level or \code{tab} level)
 #' @export
 get_col_group <- function(x, ...) {
   if (is.data.frame(x)) return(purrr::map_chr(x, get_col_group))
@@ -1190,9 +1216,7 @@ tab_col_blocks <- function(x) {
 }
 
 
-#' @describeIn fmt get the regression model family of fmt columns (at \code{fmt} or \code{tab} level)
-#' @return A character vector with the fmt vectors' model_family attributes (\code{""} when unset,
-#'   e.g. on cross-tables). On a data.frame, one value per column.
+#' @describeIn fmt_attributes get the regression model family of fmt columns (at \code{fmt} or \code{tab} level)
 #' @export
 get_model_family <- function(x, ...) {
   if (is.data.frame(x)) return(purrr::map_chr(x, get_model_family))
@@ -1200,9 +1224,8 @@ get_model_family <- function(x, ...) {
   if (is.null(mf)) "" else mf
 }
 
-#' @describeIn fmt set the "model_family" attribute of a \code{fmt} vector (the per-column
+#' @describeIn fmt_attributes set the "model_family" attribute of a \code{fmt} vector (the per-column
 #'   regression family, "" on crosstabs)
-#' @return A modified fmt vector.
 #' @export
 set_model_family <- function(x, model_family) {
   vctrs::vec_assert(model_family, character(), size = 1)
@@ -1354,8 +1377,7 @@ set_basis <- function(x, basis) {
   `attr<-`(x, "basis", basis)
 }
 
-#' @describeIn fmt get the interval method of fmt columns (at \code{fmt} level or \code{tab} level)
-#' @return A character vector with the vectors interval method ("" when no interval was computed).
+#' @describeIn fmt_attributes get the interval method of fmt columns (at \code{fmt} level or \code{tab} level)
 #' @export
 get_ci_method <- function(x, ...) UseMethod("get_ci_method")
 #' @method get_ci_method default
@@ -1407,8 +1429,7 @@ tab_stamp_inference <- function(tabs, conf_level = NULL, degf = NULL, basis = NU
 
 
 
-#' @describeIn fmt test function for reference columns (at \code{fmt} level or \code{tab} level)
-#' @return A logical vector with the fmt vectors is_refcol attributes
+#' @describeIn fmt_attributes test function for reference columns (at \code{fmt} level or \code{tab} level)
 #' @export
 is_refcol <- function(x, ...) UseMethod("is_refcol")
 #' @method is_refcol default
@@ -1429,8 +1450,7 @@ is_refcol.tabxplor_fmt <- function(x, ...) attr(x, "refcol", exact = TRUE)
 is_refcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_refcol(.))
 
 
-#' @describeIn fmt set the "ref_col" attribute of a \code{fmt} vector
-#' @return A modified fmt vector.
+#' @describeIn fmt_attributes set the "ref_col" attribute of a \code{fmt} vector
 #' @export
 as_refcol     <- function(x, refcol = TRUE) {
   vctrs::vec_assert(refcol, logical(), size = 1)
@@ -1444,8 +1464,7 @@ as_refcol     <- function(x, refcol = TRUE) {
 #' @keywords internal
 fmt_color_attr <- function(x) attr(x, "color", exact = TRUE)
 
-#' @describeIn fmt get color (at \code{fmt} level or \code{tab} level)
-#' @return A logical vector with the fmt vectors color attributes
+#' @describeIn fmt_attributes get color (at \code{fmt} level or \code{tab} level)
 #' @export
 get_color <- function(x, ...) UseMethod("get_color")
 #' @method get_color default
@@ -1466,8 +1485,7 @@ get_color.data.frame <- function(x, ...) {
   purrr::map_chr(x, ~ get_color(.))
 }
 
-#' @describeIn fmt get the background-channel color measure (\code{NA} when there is none)
-#' @return A single character with the background color measure, or \code{NA}.
+#' @describeIn fmt_attributes get the background-channel color measure (\code{NA} when there is none)
 #' @export
 get_color_bg <- function(x, ...) {
   if (is.data.frame(x)) return(purrr::map_chr(x, ~ get_color_bg(.)))
@@ -1475,7 +1493,7 @@ get_color_bg <- function(x, ...) {
   if (length(a) >= 2L) a[2] else NA_character_
 }
 
-#' @describeIn fmt get the significance policy (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"})
+#' @describeIn fmt_attributes get the significance policy (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"})
 #' @export
 get_color_signif <- function(x, ...) {
   if (is.data.frame(x)) return(purrr::map_chr(x, ~ get_color_signif(.)))
@@ -1510,8 +1528,7 @@ resolve_color_channels <- function(color) {
   color
 }
 
-#' @describeIn fmt set the "color" attribute of a \code{fmt} vector
-#' @return A modified fmt vector.
+#' @describeIn fmt_attributes set the "color" attribute of a \code{fmt} vector
 #' @export
 
 #' @export
@@ -1525,7 +1542,7 @@ set_color     <- function(x, color) {
 # attach set_color_signif()'s documentation to this constant instead.
 COLOR_SIGNIF_VALUES <- c("ignore", "grey_non_signif", "guaranteed_effect")
 
-#' @describeIn fmt set the significance policy attribute of a \code{fmt} vector
+#' @describeIn fmt_attributes set the significance policy attribute of a \code{fmt} vector
 #' @export
 set_color_signif <- function(x, color_signif) {
   `attr<-`(x, "color_signif", resolve_color_signif(color_signif))
@@ -2690,6 +2707,7 @@ fmt_attrs_of <- function(x) {
 #
 # TWO SURFACES, deliberately, and the distinction is what keeps this from being duplication:
 #   the NAMED accessors  are the TAUGHT surface -- a user writes get_scale(x), and the vignettes do.
+#                        They live on `?fmt_attributes`, beside this page.
 #   fmt_attr()           is the PROGRAMMATIC one -- a helper loops over fmt_col_attrs, and until now
 #                        had to write a switch over 16 function names to do it.
 #
@@ -2869,7 +2887,7 @@ fmt_materialize_wn <- function(col) set_wn(col, get_wn(col))
 get_pct    <- fmt_field_factory("pct")
 #' @keywords internal
 get_diff   <- fmt_field_factory("diff")
-#' @describeIn fmt get the "digits" field
+#' @describeIn fmt_fields get the "digits" field
 #' @export
 get_digits <- fmt_field_factory("digits")
 #' @keywords internal
@@ -2946,7 +2964,7 @@ fmt_stars_applicable <- function(x) {
   k <- measure_key(get_color(x))
   is.na(k) || !nzchar(k) || !identical(MEASURES[[k]]$sig_source, "pvalue")
 }
-#' @describeIn fmt get the per-cell p-value (what the significance stars read)
+#' @describeIn fmt_fields get the per-cell p-value (what the significance stars read)
 #' @export
 get_pvalue <- fmt_field_factory("pvalue")
 #' @keywords internal
@@ -3260,7 +3278,7 @@ set_pct     <- fmt_set_field_factory("pct"    , cast = double()   )
 set_diff    <- fmt_set_field_factory("diff"   , cast = double()   )
 #' @keywords internal
 set_ratio   <- fmt_set_field_factory("ratio"  , cast = double()   )
-#' @describeIn fmt set the "digits" field
+#' @describeIn fmt_fields set the "digits" field
 #' @export
 set_digits  <- fmt_set_field_factory("digits" , cast = integer()  )
 set_ctr     <- fmt_set_field_factory("ctr"    , cast = double()   )
@@ -3283,7 +3301,7 @@ set_ci      <- function(x, value) {
   x <- set_ci_inf(x, ctr - value)
   x
 }
-#' @describeIn fmt set the per-cell p-value. `set_pvalue(x, NA_real_)` is how a duplicated,
+#' @describeIn fmt_fields set the per-cell p-value. `set_pvalue(x, NA_real_)` is how a duplicated,
 #' purely descriptive copy of a column loses its stars: the stored p-value is their only source.
 #' @export
 set_pvalue  <- fmt_set_field_factory("pvalue" , cast = double()   )

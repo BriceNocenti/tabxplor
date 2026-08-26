@@ -54,18 +54,11 @@
 #'
 #' @examples
 #' \donttest{
-#' data <- dplyr::starwars |> tab_prepare(sex, hair_color)
-#'
-#' # the leaf builds the cells AND their intervals (2.0.0): `ci` is resolved here exactly as in
-#' # tab(), so tab_plain(ci = "ref") and tab(ci = "ref") agree cell for cell.
-#' data |>
+#' # the leaf builds the cells AND their intervals: `ci` is resolved here exactly as in tab(),
+#' # so tab_plain(ci = "ref") and tab(ci = "ref") agree cell for cell.
+#' dplyr::starwars |>
 #'   tab_plain(sex, hair_color, tot = c("row", "col"), pct = "row",
 #'             ci = "ref", color = "difference", color_signif = "grey_non_signif")
-#'
-#' # the whole-table test is still a step (superseded, but supported)
-#' data |>
-#'   tab_plain(sex, hair_color, tot = c("row", "col"), pct = "row") |>
-#'   tab_chi2()
 #' }
 tab_plain <- function(data, row_var, col_var, tab_vars, wt, ...,
                       num = FALSE, df = FALSE, .fine = NULL, .by_table = FALSE
@@ -1404,7 +1397,7 @@ leaf_ci_plain <- function(P, tot_n, n_eff = NULL, ci, pct, ci_scale = "diff",
 #'
 #' @examples
 #' \donttest{
-#' data <- dplyr::storms |> tab_prepare(category, wind, na_drop_all = wind)
+#' data <- dplyr::storms |> dplyr::filter(!is.na(wind))
 #' tab_num(data, category, wind, tot = "row",
 #'         color = "difference", color_signif = "guaranteed_effect")
 #' }

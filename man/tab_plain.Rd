@@ -62,17 +62,10 @@ rules, so its numbers agree with \code{tab()}'s cell for cell.
 }
 \examples{
 \donttest{
-data <- dplyr::starwars |> tab_prepare(sex, hair_color)
-
-# the leaf builds the cells AND their intervals (2.0.0): `ci` is resolved here exactly as in
-# tab(), so tab_plain(ci = "ref") and tab(ci = "ref") agree cell for cell.
-data |>
+# the leaf builds the cells AND their intervals: `ci` is resolved here exactly as in tab(),
+# so tab_plain(ci = "ref") and tab(ci = "ref") agree cell for cell.
+dplyr::starwars |>
   tab_plain(sex, hair_color, tot = c("row", "col"), pct = "row",
             ci = "ref", color = "difference", color_signif = "grey_non_signif")
-
-# the whole-table test is still a step (superseded, but supported)
-data |>
-  tab_plain(sex, hair_color, tot = c("row", "col"), pct = "row") |>
-  tab_chi2()
 }
 }

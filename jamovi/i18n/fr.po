@@ -170,8 +170,7 @@ msgstr "ac <i>(Agresti-Caffo)</i>"
 #: jamovi/js/jmvtabreg.js:1239
 msgid "Add one or more outcome variables to choose each one's model family and link."
 msgstr ""
-"Ajouter une ou plusieurs variables à expliquer pour choisir la famille et le "
-"lien de chaque modèle."
+"Ajouter des variables à expliquer pour choisir la famille/le lien du modèle."
 
 #: jmvtab/options/test.title
 msgid "Add statistical test/effect size"
@@ -258,7 +257,7 @@ msgstr "auto/tot/<i>{num_ligne}</i>/<i>{nom_ligne}</i>"
 
 #: jmvtabreg/options/display/base.title
 msgid "base <i>(adjusted pct/mean, alone)</i>"
-msgstr "base <i>(le socle ajusté, seul)</i>"
+msgstr "base <i>(pct/mean ajustés, seuls)</i>"
 
 #: jmvtab/options/display/base.title
 msgid "base <i>(pct or mean)</i>"
@@ -266,15 +265,15 @@ msgstr "base <i>(% ou moyenne)</i>"
 
 #: jmvtab/options/display/base_ci.title
 msgid "base_ci <i>(base + interval)</i>"
-msgstr "base_ci <i>(socle + IC)</i>"
+msgstr "base_ci <i>(base + intervalle)</i>"
 
 #: jmvtab/options/display/base_diff.title
 msgid "base_diff <i>(base + diff)</i>"
-msgstr "base_diff <i>(socle + écart)</i>"
+msgstr "base_diff <i>(base + écart)</i>"
 
 #: jmvtabreg/options/display/base_est.title
 msgid "base_est <i>(adj. pct/mean + est.)</i>"
-msgstr "base_est <i>(socle ajusté + est.)</i>"
+msgstr "base_est <i>(pct/mean ajustés + est.)</i>"
 
 #: jmvtabreg/options/display/base_est_mdiff.title
 msgid "base_est_mdiff <i>(+ marg. diff)</i>"
@@ -327,7 +326,7 @@ msgstr "ci_method"
 
 #: jmvtabreg/ui[3][0][2][0].label
 msgid "ci_method = <i>(confidence intervals)</i>"
-msgstr "ci_method = <i>(méthode d'IC)</i>"
+msgstr "ci_method = <i>(méthode des intervalles de confiance)</i>"
 
 #: jmvtab/ui[3][2][0][0].label
 msgid "ci_method = c(cell = )"
@@ -473,7 +472,7 @@ msgstr "display = <i>(ce que montre la case)</i>"
 
 #: jmvtabreg/ui[1][2][1][0][0].label
 msgid "display = <i>(what numbers the cell show)</i>"
-msgstr "display = <i>(les nombres de la case)</i>"
+msgstr "display = <i>(quels nombres la case affiche-t-elle ?)</i>"
 
 #: jmvtab/options/na/drop.title
 msgid "drop <i>(each col_var drops its own NA)</i>"
@@ -493,7 +492,7 @@ msgstr "drop_by_model <i>(chaque modèle sur ses cas complets)</i>"
 
 #: jmvtabreg/options/na/drop_by_outcome.title
 msgid "drop_by_outcome <i>(one population per outcome)</i>"
-msgstr "drop_by_outcome <i>(une population par variable)</i>"
+msgstr "drop_by_outcome <i>(une population par variable à expliquer)</i>"
 
 #: jamovi/js/jmvtabreg.js:1699
 msgid "Each model draws from the predictors above; untick to leave one out."
@@ -503,7 +502,7 @@ msgstr ""
 
 #: jmvtabreg/ui[1][2][1][2][0].label
 msgid "effect = <i>(where the numbers come from)</i>"
-msgstr "effect = <i>(d'où vient le nombre)</i>"
+msgstr "effect = <i>(d'où viennent les nombres?)</i>"
 
 #: jamovi/js/jmvtabreg.js:1512
 msgid "effect of"
@@ -634,7 +633,7 @@ msgstr "keep <i>(NA comme modalité)</i>"
 
 #: jmvtabreg/options/na/keep_for_predictors.title
 msgid "keep_for_predictors <i>(predictors NA to real levels)</i>"
-msgstr "keep_for_predictors <i>(NA des prédicteurs en modalités)</i>"
+msgstr "keep_for_predictors <i>(garder les NA des prédicteurs comme modalités)</i>"
 
 #: jamovi/js/jmvtab.js:980
 msgid "Last group"
@@ -740,7 +739,7 @@ msgstr "measure"
 
 #: jmvtabreg/options/color/measure.title
 msgid "measure <i>(the chosen measure of deviation)</i>"
-msgstr "measure <i>(la mesure de l'écart choisie)</i>"
+msgstr "measure <i>(l’écart comparé à la référence)</i>"
 
 #: jmvtabreg/ui[1][1][0][0][0].label
 msgid "measure = <i>(which measure is reported)</i>"
@@ -1114,12 +1113,11 @@ msgstr "Il faut au moins deux prédicteurs : une interaction en croise deux."
 #: jamovi/js/jmvtabreg.js:1717
 msgid "Select predictors first: they form the pool each model draws from."
 msgstr ""
-"Choisir d'abord des prédicteurs : ils forment le réservoir où puise chaque "
-"modèle."
+"Choisir d'abord l’ensemble des prédicteurs : ensuite découper des sous-ensembles."
 
 #: jamovi/js/jmvtabreg.js:962
 msgid "Select predictors to choose their baseline and shape."
-msgstr "Choisir des prédicteurs pour régler leur référence et leur découpage."
+msgstr "Sélectionner des prédicteurs pour régler leur référence, etc."
 
 #: jamovi/js/jmvtab.js:912
 msgid "Select row, column or table variables to order, merge or cut their levels."

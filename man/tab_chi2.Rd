@@ -46,3 +46,4 @@ Deprecated in 2.0.0, defunct in 2.1.0 -- the whole-table test and the per-cell c
 computed directly by \code{\link[=tab]{tab()}}, through its \code{test} and \code{color} arguments. \code{tab_chi2()} still works
 on an existing tab, reconstructing that plan from the table's own markers.
 }
+\keyword{internal}

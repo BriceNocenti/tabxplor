@@ -17,12 +17,19 @@ tab_get_vars(tabs, vars = c("row_var", "col_vars", "tab_vars"))
 A list with the variables names.
 }
 \description{
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
+
 Which variable plays which role in a finished table: the row variable, the column variable(s) and
 the sub-table variable(s). Read off the table's own declared model (the index columns' stored
 roles and the \code{fmt} columns' \code{col_var}), never guessed from a column name --- so it survives
 renaming, \code{dplyr} verbs and a merge of several row variables.
+
+Superseded by \code{\link[=tab_structure]{tab_structure()}}, which answers the same question --- as \code{row_vars}, \code{col_vars}
+and \code{tab_vars} --- and says in the same breath what kind of object the table is (merged, grouped,
+a list) and which reshape operations accept it. \code{tab_get_vars()} keeps working, unchanged.
 }
 \seealso{
 \code{\link[=tab_structure]{tab_structure()}}, which reports the table's STRUCTURE (merged / grouped / list) and which
 operations accept it.
 }
+\keyword{internal}

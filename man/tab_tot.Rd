@@ -39,10 +39,11 @@ Deprecated in 2.0.0, defunct in 2.1.0 -- totals are built directly by \code{\lin
 always computed, one total column shown). \code{tab_tot()} still works on an existing tab.
 }
 \examples{
-\donttest{data <- dplyr::starwars |> tab_prepare(sex, hair_color)
+\donttest{data <- dplyr::starwars
 
 data |>
   tab_plain(sex, hair_color) |>
   tab_tot("col", totcol = "each")
   }
 }
+\keyword{internal}
