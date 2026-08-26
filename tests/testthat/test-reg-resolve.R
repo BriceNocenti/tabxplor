@@ -1,20 +1,22 @@
-# Phase 19m-ii: tab_reg()'s ARGUMENT BOUNDARY -- reg_resolve_args() and the defects the extraction
-# exposed. Every test here fails on the pre-19m-ii tree.
-#
-# ROLE: this is the boundary's own file. Statistical soundness stays in test-tab_reg.R; what is
-# asserted here is what was RESOLVED and what the user was TOLD. The wide characterization sweep is
-# dev/verify_reg_specs.R (291 cases, save/check) -- these are the cases that must never regress.
+# PURPOSE: the regression argument boundary: one grammar per axis, and what it refuses.
+# ROLE: the shipped CONTRACT for R/reg-resolve.R -- a failure here is a user-visible change.
+#   The exhaustive sweep around it lives in dev/tests/testthat/.
+# See: CLAUDE.md section "Testing" (what belongs in which suite).
+
+# === SECTION: the regression argument boundary ====================================================
 
 skip_on_cran()
 
+
 rr_data <- function() {
-  g <- forcats::gss_cat
+  g <- fx_reg_df()
   g <- g[seq(1L, nrow(g), by = 6L), , drop = FALSE]
   g$married <- factor(ifelse(g$marital == "Married", "Married", "Not married"))
   g$party3  <- forcats::fct_lump_n(g$partyid, 2)
   g$score   <- pmin(g$tvhours, 6L)
   as.data.frame(g)
 }
+
 
 # every cli_inform this call emits, as plain strings (the notes are what several tests here are about)
 capture_msg <- function(expr) {
@@ -24,6 +26,7 @@ capture_msg <- function(expr) {
                                               invokeRestart("muffleMessage") })
   out
 }
+
 
 # === S1 reg_validate_args(): the four arguments the reg boundary never checked ====================
 
@@ -39,6 +42,7 @@ test_that("`conf_level` is validated, with the 95-vs-0.95 hint", {
                "single probability")
 })
 
+
 test_that("`stats` names are validated instead of silently filtered", {
   d <- rr_data()
   # reg_footer_stats() did `stats[stats %in% reg_stat_keys()]`, so a typo produced a MISSING footer
@@ -51,6 +55,7 @@ test_that("`stats` names are validated instead of silently filtered", {
       tab_reg(d, "married", "race", family = "binomial", stats = s)))
 })
 
+
 test_that("`color_signif` is validated on the reg path too", {
   d <- rr_data()
   # it went straight to fmt(), which CASTS without validating -- so the unknown policy was stored on
@@ -61,6 +66,7 @@ test_that("`color_signif` is validated on the reg path too", {
     expect_no_error(suppressMessages(
       tab_reg(d, "married", "race", family = "binomial", color_signif = s)))
 })
+
 
 # Phase 20c: `compare` + `baseline` are two `stats =` keys, so the two things this used to check are
 # unrepresentable -- a baseline is a single string by grammar, and naming one IS asking for the
@@ -80,24 +86,6 @@ test_that("the model-comparison keys are refused when they contradict each other
                "[Uu]nknown argument")
 })
 
-test_that("a comparison key ADDS a row and restricts nothing", {
-  d <- rr_data(); M <- list(m1 = "race", m2 = c("race", "age"))
-  only <- suppressMessages(tab_reg(d, "married", M, family = "binomial",
-                                   stats = "compare_sequential"))
-  both <- suppressMessages(tab_reg(d, "married", M, family = "binomial",
-                                   stats = c("n", "aic", "compare_sequential")))
-  # naming only the comparison keeps the per-family default statistics beside it
-  expect_true("mcfadden_r2" %in% get_test(only)$test)
-  expect_false("mcfadden_r2" %in% get_test(both)$test)
-  expect_true(any(grepl("^compare_seq", get_test(only)$test)))
-  expect_true(any(grepl("^compare_seq", get_test(both)$test)))
-})
-
-test_that("the scalar logicals are refused when they are not scalar logicals", {
-  d <- rr_data()
-  expect_error(tab_reg(d, "married", "race", family = "binomial", empirical = "yes"), "TRUE")
-  expect_error(tab_reg(d, "married", "race", family = "binomial", n = "yes"), "Unknown")
-})
 
 # === S2: the split_var refusals now precede the colour/family informs (H23) =======================
 
@@ -111,67 +99,6 @@ test_that("a `split_var` that is also a predictor aborts before anything is anno
     "cannot also be the outcome or a predictor"))
 })
 
-# === S4: the four output arguments, resolved in an order that is not wrong ========================
-
-test_that("the `color = \"adjustment\"` note fires on the DEFAULT color_signif, not only on an explicit one", {
-  d <- rr_data()
-  # reg_color_notes() tested `!is.null(color_signif)` while the default "grey_non_signif" was applied
-  # 22 lines LATER -- so the identical effective state was silent one way and noisy the other.
-  msg <- function(...) paste(capture_msg(tab_reg(d, "married", c("race", "age"),
-                                                 family = "binomial", color = "adjustment", ...)),
-                             collapse = " ")
-  expect_match(msg(),                               "non-collapsibility")
-  expect_match(msg(color_signif = "grey_non_signif"), "non-collapsibility")
-  # and it stays silent where the policy genuinely does not apply
-  expect_no_match(msg(color_signif = "ignore"), "non-collapsibility")
-})
-
-test_that("`empirical` is FINAL before the effect word is recorded (H22)", {
-  skip_if_not_installed("marginaleffects")
-  d <- rr_data()
-  # `color = "adjustment"` FORCES empirical on, and the table's own narrative record must still name
-  # the column it built: the header word is a pure function of the resolved estimand, so the two
-  # cannot drift whichever order the forcing runs in.
-  t <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial",
-                                effect = "marginal", color = "adjustment", empirical = FALSE))
-  mcol <- grep("^Model", names(t), value = TRUE)[[1]]
-  expect_identical(paste0("Model_", reg_call(t)$eff_word), mcol)
-  expect_identical(reg_call(t)$eff_word, "mRR")   # auto never marginalises an odds ratio
-})
-
-# === defect 1: reg_per_dep() is THE per-dependent slicer =========================================
-# Three copies of one cascade, and two of them RAISED where the declared slicer defaults. A PARTIAL
-# named vector is the documented shape ("unknown dependent -> the default"), not a user error.
-
-test_that("a PARTIAL named `family` defaults the unnamed dependents instead of erroring", {
-  skip_if_not_installed("nnet")
-  d <- rr_data()
-  # `party3` is not named -> "auto" -> detected. Before: `family[["party3"]]` = subscript out of bounds.
-  expect_no_error(
-    t <- suppressMessages(tab_reg(d, c("married", "party3"), c("race", "age"),
-                                  family = c(married = "binomial"))))
-  fam <- reg_call(t)$families
-  expect_identical(unname(fam[["married"]]), "binomial")
-  expect_identical(unname(fam[["party3"]]),  "multinomial")
-})
-
-test_that("a SHORTER positional `family` defaults the surplus dependents instead of erroring", {
-  skip_if_not_installed("nnet")
-  d <- rr_data()
-  # length 2 against 3 dependents: the third falls back to "auto" (reg_per_dep's `i <= length(x)`).
-  expect_no_error(
-    t <- suppressMessages(tab_reg(d, c("married", "party3", "tvhours"), "race",
-                                  family = c("binomial", "multinomial"))))
-  expect_identical(unname(reg_call(t)$families[["tvhours"]]), "gaussian")
-})
-
-test_that("a PARTIAL named `outcome_level` leaves the other outcomes at their default", {
-  skip_if_not_installed("nnet")
-  d <- rr_data()
-  expect_no_error(
-    suppressMessages(tab_reg(d, c("married", "party3"), "race",
-                             outcome_level = c(married = "Not married"))))
-})
 
 test_that("`outcome_level` names the level, on a factor and on a 0/1 numeric outcome", {
   d <- rr_data()
@@ -188,6 +115,7 @@ test_that("`outcome_level` names the level, on a factor and on a 0/1 numeric out
                                 outcome_level = c(bin = "0")))
   expect_identical(reg_call(z)$positive_level[[1]], "Not bin")        # the 0s, as asked
 })
+
 
 test_that("`outcome_level` is refused where the family has no level to single out", {
   skip_if_not_installed("MASS")
@@ -206,6 +134,7 @@ test_that("`outcome_level` is refused where the family has no level to single ou
                "[Uu]nknown argument")
 })
 
+
 # === defect 8: a formula `dependent` is not a vector of three dependents ==========================
 
 test_that("a formula `dependent` beside `predictors` gives the teachable message, not a stopifnot", {
@@ -218,54 +147,6 @@ test_that("a formula `dependent` beside `predictors` gives the teachable message
                "formula.*or.*predictors|predictors.*not both")
 })
 
-# === the `test` tibble's `outcome` key (19m-i's "missing join key"; `dep` until 20c) ============
-
-test_that("every reg footer row states WHICH OUTCOME it is about; every crosstab row states none", {
-  d <- rr_data()
-  t  <- suppressMessages(tab_reg(d, "married", c("race", "age"), family = "binomial"))
-  tt <- attr(t, "test", exact = TRUE)
-  expect_true("outcome" %in% names(tt))
-  expect_identical(unique(tt$outcome), "married")
-
-  # a crosstab row is about no outcome -- NA, not "": `var = ""` already means "the whole table"
-  ct <- tab(d, marital, race, test = TRUE)
-  expect_true("outcome" %in% names(attr(ct, "test", exact = TRUE)))
-  expect_true(all(is.na(attr(ct, "test", exact = TRUE)$outcome)))
-})
-
-test_that("`outcome` is DECLARED in the schema, so it is not read as a grouping variable", {
-  # test_group_cols() is `setdiff(names(tt), names(new_test_tibble()))` minus dot-prefixed names, so
-  # an undeclared column would split the reg footer into one block per outcome (19g's own defect).
-  expect_true("outcome" %in% names(new_test_tibble()))
-  t <- suppressMessages(tab_reg(rr_data(), "married", c("race", "age"), family = "binomial"))
-  expect_length(test_group_cols(attr(t, "test", exact = TRUE)), 0L)
-})
-
-test_that("a multi-outcome footer heads its columns by outcome; a model COMPARISON does not", {
-  d <- rr_data()
-  # one model per outcome: the dependent IDENTIFIES the column, so it is the header
-  t1 <- suppressMessages(tab_reg(d, c("married", "tvhours"), "race",
-                                 family = c("binomial", "gaussian")))
-  g1 <- test_grid_reg(t1, attr(t1, "test", exact = TRUE))
-  expect_true(all(c("married", "tvhours") %in% unlist(g1)))
-  # a comparison: every column has the SAME outcome, so the model label is the header
-  t2 <- suppressMessages(tab_reg(d, "married", list(m1 = "race", m2 = c("race", "age")),
-                                 family = "binomial"))
-  g2 <- test_grid_reg(t2, attr(t2, "test", exact = TRUE))
-  expect_false("married" %in% unlist(g2))
-})
-
-# === the four pure helpers ========================================================================
-# They were closures over tab_reg()'s mutating frame; as functions of their arguments they are
-# testable on their own, which is the point.
-
-test_that("reg_trials_observed_max() answers only where a trial count exists", {
-  expect_equal(reg_trials_observed_max(c(0L, 3L, 6L)), 6)   # max() keeps the input's type
-  expect_true(is.na(reg_trials_observed_max(factor(c("a", "b")))))   # a factor is a plain logit
-  expect_true(is.na(reg_trials_observed_max(c(0L, 1L))))             # 0/1 has no trial count
-  expect_true(is.na(reg_trials_observed_max(c("a", "b"))))
-  expect_true(is.na(reg_trials_observed_max(c(NA_real_, NA_real_)))) # all-NA: no finite max
-})
 
 test_that("reg_word() composes the header: marker o log-wrap o base acronym", {
   expect_identical(reg_word(reg_estimand("binomial", measure = "odds_ratio", effect = "conditional")), "OR")
@@ -284,6 +165,7 @@ test_that("reg_word() composes the header: marker o log-wrap o base acronym", {
   expect_identical(reg_word_base("refRD"),      "RD")
 })
 
+
 test_that("reg_color_for() fills only the auto slots, and is idempotent", {
   e  <- reg_estimand("binomial", measure = "auto", effect = "conditional")
   # the bare-TRUE sentinel
@@ -298,15 +180,6 @@ test_that("reg_color_for() fills only the auto slots, and is idempotent", {
   expect_identical(reg_color_for("adjustment", e), "adjustment")
 })
 
-test_that("reg_color_auto_measure() reads the estimand's stored SCALE, not its arguments", {
-  or  <- reg_estimand("binomial", measure = "auto", effect = "conditional")             # odds_ratio scale
-  lg  <- reg_estimand("binomial", measure = "log", effect = "conditional")              # log_odds scale
-  expect_true(nzchar(reg_color_auto_measure(or)))
-  expect_true(nzchar(reg_color_auto_measure(lg)))
-  # a ratio geometry and an additive one do not answer the same context
-  bt  <- reg_estimand("gaussian", measure = "auto", effect = "conditional")             # raw_diff scale
-  expect_false(identical(reg_color_auto_measure(or), reg_color_auto_measure(bt)))
-})
 
 
 # --- Phase 20c (KEY 4): one word per question ------------------------------------------------------
@@ -331,6 +204,7 @@ test_that("a retired spelling aborts as an unknown argument (no silent no-op)", 
   }
 })
 
+
 test_that("the two producers now ask the shared questions with the shared word", {
   d <- rr_data()
   # `tab_vars`, `ref` and `ci_method` are the SAME argument on both producers -- declared, so
@@ -353,4 +227,87 @@ test_that("the two producers now ask the shared questions with the shared word",
   # and an unknown slot is refused by the ONE validator both producers share
   expect_error(tab_reg(d, "married", "race", family = "binomial", ci_method = c(nope = "wald")),
                "Unknown")
+})
+
+
+
+# === SECTION: multiplier, shape and ref: one grammar ==============================================
+
+anc_data <- function() {
+  d <- fx_reg_df()
+  d$race    <- forcats::fct_drop(d$race)
+  d$married <- factor(as.integer(d$marital == "Married"), labels = c("no", "yes"))
+  tibble::as_tibble(d[!is.na(d$age) & !is.na(d$tvhours), , drop = FALSE])
+}
+
+
+cst <- function(t, col) {
+  x <- t[[col]]
+  get_num(x[as.character(t$var) == "Constant"])
+}
+
+
+# ---- the shared grammar -------------------------------------------------------------------------
+
+test_that("one grammar: a bare scalar, `default =`, and per-variable overrides", {
+  d <- anc_data()
+
+  # multiplier: an unnamed value is the fallback -- the 1.x form discarded it as soon as a name appeared
+  m <- tab_reg(d, "married", c("race", "age", "tvhours"), family = "binomial", stats = FALSE,
+               multiplier = c("2sd", age = 10))
+  k <- reg_call(m)$multiplier
+  expect_equal(unname(k[["age"]]), 10)
+  expect_equal(unname(k[["tvhours"]]),
+               2 * tabxplor:::wtd_sd(d$tvhours[!is.na(d$race)]), tolerance = 1e-8)
+  expect_equal(k, reg_call(tab_reg(d, "married", c("race", "age", "tvhours"), family = "binomial",
+                                   stats = FALSE,
+                                   multiplier = c(default = "2sd", age = 10)))$multiplier)
+
+  # shape: a bare scalar cuts EVERY continuous predictor -- inexpressible before this phase
+  s <- suppressWarnings(tab_reg(d, "married", c("race", "age", "tvhours"), family = "binomial",
+                                stats = FALSE, shape = "quartiles"))
+  expect_true(all(c("age", "tvhours") %in% as.character(s$var)))
+  expect_equal(sum(as.character(s$var) == "age"), 4L)      # four quantile groups, one row each
+
+  # ref: the value names the kind it applies to, so both defaults fit in one unnamed pair
+  r  <- tab_reg(d, "married", c("race", "relig", "age"), family = "binomial", stats = FALSE,
+                ref = c("median", "last", race = "Black"))
+  fr <- d[!is.na(d$race) & !is.na(d$relig) & !is.na(d$age), ]
+  expect_equal(unname(reg_call(r)$fit_spec$prep$anchors[["age"]]),
+               tabxplor:::shape_wquantile(fr$age, 0.5), tolerance = 1e-8)
+  expect_identical(as.character(r$levels)[as.character(r$var) == "race"][[1]], "Black")
+  lv <- as.character(r$levels)[as.character(r$var) == "relig"]
+  expect_identical(lv[[1]], utils::tail(levels(forcats::fct_drop(d$relig)), 1))  # `last`, every OTHER factor
+})
+
+
+test_that("the grammar's refusals name the eligible set and the two vocabularies", {
+  d <- anc_data()
+  f <- function(...) tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE, ...)
+  expect_error(f(ref = c(nope = "mean")), "predictor")
+  expect_error(f(ref = "banana"), "default")                 # matches neither vocabulary
+  expect_error(f(ref = c("mean", "median")), "same kind")    # two defaults for one kind
+  expect_error(f(multiplier = c("sd", "2sd")), "same kind")
+  expect_error(f(ref = c(age = "quartile")), "must be a number")
+  expect_error(f(shape = c(race = "quadratic")), "continuous")
+})
+
+
+# ---- the anchor is a reparametrization -----------------------------------------------------------
+
+test_that("only the intercept moves: every estimate is invariant under the anchor", {
+  d  <- anc_data()
+  t0 <- tab_reg(d, "married", c("race", "age"), family = "binomial", stats = FALSE,
+                multiplier = 1, ref = c(age = 0))
+  for (a in list(NULL, c(age = "median"), c(age = 40))) {
+    t1 <- do.call(tab_reg, c(list(d, "married", c("race", "age"), family = "binomial",
+                                  stats = FALSE, multiplier = 1), if (!is.null(a)) list(ref = a)))
+    keep <- as.character(t1$var) != "Constant"
+    for (g in list(get_or, get_ci_inf, get_ci_sup, get_pvalue))
+      expect_equal(g(t1[["Model_OR"]])[keep], g(t0[["Model_OR"]])[keep], tolerance = 1e-9)
+  }
+  # and the intercept really does move, in the direction the anchor says
+  expect_false(isTRUE(all.equal(cst(t0, "Model_OR"),
+                                cst(tab_reg(d, "married", c("race", "age"), family = "binomial",
+                                            stats = FALSE, multiplier = 1), "Model_OR"))))
 })

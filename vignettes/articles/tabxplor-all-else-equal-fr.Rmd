@@ -68,21 +68,21 @@ for (hook in c("message", "warning")) {
 }
 ```
 
-« Toutes choses égales par ailleurs. » La formule revient dans presque tous les mémoires, et presque personne ne saurait dire *quelles* choses ont été maintenues égales, ni ce que cela a changé au résultat. C'est qu'on enseigne le plus souvent la régression comme une machine : on y verse des variables, il en sort des nombres — coefficients, rapports de cotes — qui n'ont plus aucun rapport visible avec ce qu'on pouvait lire dans les données.
+« Toutes choses égales par ailleurs. » Si la formule revient souvent, tous les étudiants ne savent pas dire *quelles* choses ont été maintenues égales, ni ce que cela a changé au résultat. Les méthodes de régression ne sont-elles pas, trop souvent, enseignées comme des machines à prédire ? : on y verse des variables, il en sort des nombres — coefficients, rapports de cotes — dont le rapport avec ce qu'on pouvait lire dans les données reste souvent mystérieux.
 
-Cet article prend le chemin inverse, et n'enseigne qu'une chose : construire un modèle de régression sur des données d'enquête ou des données administratives, et le lire, **sans jamais perdre de vue les pourcentages dont on est parti**. Chaque modèle y est posé à côté du tableau croisé dont il sort, et ce qui compte est toujours la **comparaison entre les deux** : maintenir les autres variables constantes, concrètement, qu'est-ce que cela a changé ?
+`tabxplor` prend le chemin inverse : son objectif est de construire un modèle de régression sur des données d'enquête (ou des basées de données administratives), et le lire **sans jamais perdre de vue les pourcentages dont on est parti**. Chaque modèle y est posé à côté du tableau croisé dont il sort, et ce qui compte est toujours la **comparaison entre les deux** : maintenir les autres variables constantes, concrètement, qu'est-ce que cela change ?
 
-**Il y a ici deux guides de la régression, et celui-ci est le lent.** `vignette("tabxplor-reg")` est la référence : chaque famille, chaque argument, la grille complète de ce que chaque modèle peut rapporter, la pondération, les graphiques — on y va chercher un point précis. Celui-ci suit une seule analyse, d'un premier tableau croisé jusqu'à une phrase finie, et renvoie là-bas pour les détails.
+Il y a ici deux guides de la régression, et celui-ci est le plus lent. `vignette("tabxplor-reg")` est la référence : chaque famille, chaque argument, la grille complète de ce que chaque modèle peut rapporter, la pondération, les graphiques — on y va pour chercher un point précis. Celui-ci suit une seule analyse, d'un premier tableau croisé jusqu'à une interprétation du modèle.
 
 ## Ce qu'un modèle fait, et ce qu'il ne fait pas
 
-Un mot sur ce à quoi sert un modèle de ce genre, parce que cela change la lecture de tous les nombres qui suivent.
+Un mot sur ce à quoi sert un modèle de regression, parce que cela change la lecture de tous les chiffres qui suivent.
 
-Nous ne **pronostiquons** rien : il ne s'agit à aucun moment de deviner le sort d'un individu. Nous ne **prouvons** aucune cause non plus. Aucun ajustement ne transforme une enquête ou un fichier administratif en expérience, et cet article montrera deux cas où « contrôler par » une variable rend la réponse *plus fausse*.
+Nous ne **prédisons** rien : il ne s'agit à aucun moment de deviner le sort d'un individu. Nous ne **prouvons** aucune causalité non plus. Aucun calcul ne transforme une enquête ou un fichier administratif en expérimentation controlée, et cet article montre deux cas où « contrôler par » une variable rend la réponse plus fausse que de ne pas le faire.
 
-Ce que nous faisons, c'est **démêler des corrélations cachées**. Les variables sociales vont par paquets : le revenu voyage avec le diplôme, qui voyage avec la profession, qui voyage avec l'âge. Quand on trouve que deux choses vont ensemble, la première question honnête est de savoir si elles vont *encore* ensemble entre des gens qui se ressemblent sur le reste du paquet. Une régression sur données d'enquête répond à cette question, et à celle-là seulement. Richard Berk en donne la version modeste : une analyse de régression classique ne produit rien de plus, à partir d'un jeu de données, qu'une collection de moyennes et de variances conditionnelles ; tout l'intérêt est de les comparer.
+Ce que nous faisons, c'est **démêler des corrélations cachées**. Les variables sociodémographiques vont les unes avec les autres : le revenu voyage avec le diplôme, qui voyage avec la profession, qui voyage avec l'âge. Quand on trouve que deux caractéristiques ou comportements sont corrélés, voyagent ensemble, la première question est de savoir s’ils sont *encore* corrélées parmi les gens qui se ressemblent sur le reste des variables. Une régression sur données d'enquête répond à cette question, et à celle-là seulement. Richard Berk en donne la version modeste : à partir d'un jeu de données, une analyse de régression ne produit rien de plus qu'une collection de moyennes et de variances conditionnelles ; tout l'intérêt est de les comparer.
 
-D'où le geste qui revient à chaque page : un **aller-retour**. On part d'un pourcentage observé, on passe par un modèle, on redescend à un pourcentage. Quand on n'arrive pas à redescendre, c'est qu'on s'est trompé quelque part.
+Le plus puralnt est donc d’effectuer un **aller-retour complet** : on part d'un pourcentage observé, on passe par un modèle, on redescend à un pourcentage. Quand on n'arrive pas à redescendre, c'est certainement qu'on s'est trompé quelque part.
 
 ## Sept mots, et ce qu'on en fait
 
@@ -91,31 +91,29 @@ Sept mots font presque tout le travail. Chacun se définit par ce qu'on en *fait
 | le mot | ce qu'il désigne ici | ce qu'on en fait |
 |:---|:---|:---|
 | **variable à expliquer**<br>`outcome` | ce qu'on cherche à comprendre | on la compte, ou on en prend la moyenne : c'est le nombre qui est dans les cases |
-| **prédicteur**<br>`predictors` | ce sur quoi on compare les gens | on découpe la population selon lui, et on compare les morceaux |
+| **prédicteur**<br>`predictors` | ce sur quoi on compare les gens | on découpe la population d’après lui, et on compare les profils |
 | **référence**<br>`ref` | le groupe auquel tout le reste est comparé | on choisit une modalité de référence par prédicteur ; bien la choisir rend le tableau lisible |
 | **écart**<br>`measure` | la distance entre un groupe et sa référence | on choisit comment le mesurer : une différence, un rapport, ou un rapport de cotes |
 | **effet**<br>`effect` | un écart attribué à un prédicteur | *brut* quand ce prédicteur est seul, *ajusté* quand les autres sont dans le modèle |
 | **ajusté**<br>`Model_…` | mesuré entre des gens qui se ressemblent sur les autres prédicteurs | on le lit *contre* le nombre brut de la colonne `Obs_…`, jamais tout seul |
-| **« toutes choses égales par ailleurs »** | les autres variables de la liste qu'on a dressée ont été maintenues constantes | celles qu'on a oubliées, ou que l'enquête n'a pas mesurées, ne l'ont pas été |
+| **« toutes choses égales par ailleurs »** | les autres variables choisies ont été maintenues constantes | jamais celles qu'on a oubliées, ou que l'enquête n'a pas mesurées |
 
-⚠ **Les mots en `code` sont les noms anglais qu'il faut taper**, dans `tab_reg()` comme dans le module jamovi : les arguments et les options portent le même nom.
+⚠ **Les mots en `code` sont les noms anglais qu'il faut taper**, dans la fonction `tab_reg()` ou avec les boutons de l’interface graphique jamovi, pour définir les paramètres du modèle.
 
-Trois de ces mots méritent un avertissement tout de suite plutôt que plus tard.
+Trois mots méritent un avertissement tout de suite.
 
-**« Toutes choses égales par ailleurs » ne veut jamais dire toutes choses.** Cela veut dire : les variables qu'on a listées, mesurées comme les données les ont mesurées. Angrist et Pischke le formulent exactement : une régression est une manière de rendre les autres choses égales, mais l'égalité n'est produite que pour les variables introduites comme contrôles — sans elles, pas de *ceteris paribus*. Un tableau ne peut pas dire ce qui lui manque. La formule honnête, celle qu'il faudrait écrire à chaque fois, est plus longue : **« toutes les autres variables explicatives choisies étant égales »**.
+**« Toutes choses égales par ailleurs » s’écrit toujours entre guillements.** Tout n’est jamais égal : seulement les variables qu'on a choisies, de la manière dont l’enquête les a mesurées. Angrist et Pischke le formulent ainsi : une régression est une manière de rendre les autres choses égales, mais l'égalité n'est produite que pour les variables introduites comme contrôles. Un tableau ne peut pas dire ce qui lui manque. La vraie formule, celle qu'il faudrait écrire à chaque fois, est plus longue : **« toutes les autres variables explicatives choisies étant égales »**.
 
-**« Contrôler par » promet trop — et, en français, le mot est encore pire.** On n'a rien contrôlé du tout : rien, dans le monde, n'a été maintenu en place. Et « contrôler » veut aussi dire *vérifier*, ce qui n'arrange rien. On a **comparé des personnes qui se trouvent se ressembler**. Andrew Gelman insiste sur ce point : une régression porte sur des comparaisons, non sur la façon dont une variable réagit quand on la fait varier — c'est une manière ordonnée de calculer des comparaisons moyennes dans des données. Dès que « contrôler par X » se met à sonner comme une intervention sur le monde réel, on le retraduit : **« je compare deux personnes qui diffèrent sur ce point et se ressemblent sur tout le reste de la liste »**. C'est plus long, et c'est ce que le nombre veut dire.
+**« Contrôler par » est une promesse intenable.** On n'a rien contrôlé du tout : rien, dans le monde social, n'a été maintenu en place par une méthode expérimentale contrôlée. On a **comparé des personnes qui se ressemblent**. Andrew Gelman insiste sur ce point : une régression porte sur des comparaisons, non sur la façon dont une variable réagit quand on la fait varier — c'est **une manière ordonnée de calculer des comparaisons moyennes** dans des données. Dès que « contrôler par X » se met à sonner comme une intervention sur le monde réel, penser à la traduction plus longue: **« je compare deux personnes qui diffèrent sur ce point et se ressemblent sur tout le reste de la liste »**.
 
-**Et un piège proprement français : « chances » ne dit pas toujours la même chose.** « Deux fois moins de chances d'être relâché » et « deux fois moins de chances d'avoir été relâché *plutôt que de ne pas l'avoir été* » ne sont pas la même quantité — la première est un risque relatif, la seconde un rapport de cotes. La section 2 y revient longuement. Il suffit pour l'instant de retenir que, en français, **la fin de la phrase n'est pas un ornement**.
+**Il existe également un piège proprement français : « chances » ne dit pas toujours la même chose.** Il designe parfois un risque relatif ou une chance relative (*relative risk* or *relative chances* en anglais) : « deux fois moins de chances d'être relâché » . Ailleurs, il porte sur les chances qu’un évenement se produise plutôt qu’il ne se produise pas, sa cote (*odds*), et sert à comparer les cotes de plusieurs catégories : « deux fois moins de chances d'avoir été relâché *plutôt que de ne pas l'avoir été* » (un *odds ratio* en anglais). Il suffit pour l'instant de retenir que, en français, la fin de la phrase n'est pas un ornement.
 
 ## Les données
 
-Quatre jeux de données, chacun choisi parce qu'il rend une chose visible.
-
-Trois d'entre eux sont livrés avec tabxplor, chacun portant le nom du package dont il provient — `car_arrests` et `car_salaries` viennent de **carData** (John Fox, Sanford Weisberg et Brad Price), `questionr_hdv` de **questionr** (Julien Barnier, François Briatte et Joseph Larmarange), qui diffuse l'enquête *Histoire de vie* de l'INSEE. Merci à eux ; `?car_arrests` les crédite en détail. Le quatrième est dans R de base.
+Trois des jeux de données utilisés proviennent d’un autre package : `car_arrests` et `car_salaries` viennent de **carData** (John Fox, Sanford Weisberg et Brad Price), `questionr_hdv` de **questionr** (Julien Barnier, François Briatte et Joseph Larmarange), qui diffuse l'enquête *Histoire de vie* de l'INSEE. Le quatrième est gracieusement livré avec le R de base. Merci à eux. 
 
 ```{r}
-ucb <- as.data.frame(UCBAdmissions) |>                    # R de base, aucun package requis
+ucb <- as.data.frame(UCBAdmissions) |>              # R de base, aucun package requis
   tidyr::uncount(Freq) |> tibble::as_tibble() |>
   dplyr::mutate(Admit  = factor(Admit,  levels = c("Admitted", "Rejected")),
          Gender = factor(Gender, levels = c("Male", "Female")))
@@ -126,59 +124,56 @@ car_salaries <- car_salaries |>
     is_prof, "Professeur\u00b7e des universit\u00e9s" = "Full professor", "Pas encore" = "Not yet"))
 ```
 
-**Un réflexe à prendre tout de suite : mettre en premier la modalité qui intéresse.** tabxplor modélise et affiche la **première** modalité d'un facteur. Ce n'est pas de la cosmétique : c'est pourquoi `ucb` ci-dessus déclare `"Admitted"` en premier, et pourquoi les trois jeux livrés affichent déjà `"Yes"`, `"White"` et `"Oui"` en tête. Sans cela, tout cet article parlerait des personnes qui n'ont *pas* été relâchées.
+**Un réflexe à prendre tout de suite : mettre en premier la catégorie qui nous intéresse.** `tabxplor` modélise et affiche la **première** modalité d'un facteur. Ce n'est pas un choix cosmétique : sans cela, cet article parlerait des personnes qui n'ont *pas* été relâchées plutôt que des personnes relâchées.
 
-**Trois de ces quatre fichiers sont anglophones**, et leurs modalités s'affichent telles quelles dans les tableaux. Traduisons-les une fois pour toutes, plutôt qu'à chaque tableau :
-
-- `car_arrests` — `released` : `Yes` = relâché avec une convocation, `No` = maintenu en garde à vue ; `colour` : `White` / `Black` ; `employed`, `citizen` : `Yes` / `No` ; `checks` : le nombre de fichiers de police, sur six, où le nom figurait déjà.
-- `car_salaries` — `sex` : `Male` / `Female` ; `rank` : `AsstProf` / `AssocProf` / `Prof` ; `discipline` ; `yrs.service` : années d'ancienneté ; `salary` en dollars.
-- `ucb` — `Admit` : `Admitted` / `Rejected` ; `Gender` : `Male` / `Female` ; `Dept` : six départements, notés `A` à `F`.
-- `questionr_hdv` est une enquête de l'INSEE : ses modalités sont déjà en français.
-
-L'exemple qui court dans tout l'article est `car_arrests` : 5 226 personnes interpellées à Toronto pour possession d'une petite quantité de cannabis, entre 1997 et 2002, à partir de données rassemblées pour une série du *Toronto Star*. La variable à expliquer est le fait d'avoir été **relâché avec une convocation** plutôt que maintenu en garde à vue. Le fichier enregistre la race de la personne interpellée dans une colonne nommée `colour`, son emploi, sa nationalité, son sexe, son âge, et `checks` — le nombre de fichiers de police, sur six, où son nom figurait déjà. Retenir ce dernier : la moitié de l'article tourne autour de lui.
+L'exemple qui court dans tout l'article est `car_arrests` : 5 226 personnes interpellées à Toronto pour possession d'une petite quantité de cannabis, entre 1997 et 2002, à partir de données rassemblées pour une série du *Toronto Star*. La variable à expliquer est le fait d'avoir été **relâché avec une convocation** plutôt que maintenu en garde à vue. Le fichier enregistre la race assignée à la personne interpellée dans une colonne nommée `colour`, son emploi, sa nationalité, son sexe, son âge, et `checks` — le nombre de fichiers de police, sur six, où son nom figurait déjà, qui sera très important dans la suite de l'article.
 
 # 1. Partir de ce qu'on voit
 
-Avant tout modèle, le tableau.
+Avant tout modèle, le tableau croisé.
 
 ```{r}
 tab(car_arrests, colour, released, pct = "row",
-    color = "difference", color_signif = "grey_non_signif")
-```
-
-86 % des personnes blanches interpellées ont été relâchées, contre 74 % des personnes noires : douze points d'écart. **Voilà le résultat.** Tout ce qui suit cherche à le comprendre, non à le remplacer.
-
-Les trois autres prédicteurs candidats, dans un seul tableau :
-
-```{r}
-tab(car_arrests, c(colour, sex, employed, citizen), released, pct = "row",
     color = "difference", color_signif = "grey_non_signif", ref = "first")
 ```
 
-Avoir un emploi et avoir la nationalité vont l'un et l'autre avec le fait d'être relâché, et fortement. D'où la question évidente — celle, précisément, pour laquelle une régression existe : **les personnes noires interpellées ont moins souvent un emploi et moins souvent la nationalité ; l'écart de race n'est-il que ces deux écarts-là, déguisés ?**
+86 % des personnes blanches interpellées ont été relâchées, contre 74 % des personnes noires : douze points d'écart.   **Voilà le résultat de base.** Tout ce qui suit cherche à le comprendre, non à le remplacer.
+
+Nous utilisons `color_signif = "grey_non_signif"` nous tester que cette comparison est significative au seuil de confiance de 95% : les cases non significativement différentes de la modalité de réference, ici les personnes racisées comme blanches, sont colorées en gris.
+
+Les trois autres prédicteurs qui pourraient nous aider à expliquer les choix de gardes à vue, dans un seul tableau:
+
+```{r}
+tab(car_arrests, c(colour, sex, employed, citizen), released, pct = "row",
+    color = "difference", color_signif = "grey_non_signif", ref = 1)
+```
+
+Avoir un emploi et avoir la nationalité canadienne vont l'un et l'autre avec le fait d'être relâché, et fortement. D'où la question évidente — celle, précisément, pour laquelle une régression existe : **les personnes assignées comme noires interpellées ont moins souvent un emploi et moins souvent la nationalité ; l'écart racial n'est-il que ces deux écarts-là, déguisés ?**
 
 ## De quelle sorte de nombre s'agit-il ?
 
-`tab_reg()` a besoin de savoir quelle sorte de quantité il modélise, parce que c'est cela qui décide de ce qu'un « écart » entre deux groupes veut seulement dire. Pour une variable catégorielle (un facteur), il le trouve le plus souvent tout seul ; pour une variable numérique, le choix nous revient.
+`tab_reg()` a besoin de savoir quelle sorte de quantité il modélise, parce que c'est cela qui décide ce qu'un « écart » entre deux groupes veut seulement dire. Pour une variable catégorielle (un `factor` au sens de R), il s’agit nécessairement d’une regression logistique ; pour une variable numérique, il y a toujours un choix à effectuer.
 
-| ce qu'est la variable à expliquer | son nom | à quoi ressemble un effet |
-|:---|:---|:---|
-| une quantité continue (argent, âge…) | `gaussian` | une différence de moyennes, ou un rapport de moyennes |
-| un décompte d'événements (heures de `x`, nombre de `x` par jour) | `poisson` | un rapport de taux — « 1,4 fois plus de `x` par jour » |
-| une réponse par oui ou non | `binomial` | un rapport de cotes, converti au besoin en points de pourcentage ou en risque relatif |
-| un choix parmi 3 modalités ou plus | `multinomial` | la même chose, avec une colonne par modalité |
-| une variable catégorielle ordonnée | `ordinal` | un seul rapport de cotes, partagé par toutes les coupures de l'échelle |
+| type | ce qu'est la variable à expliquer          | son nom       | à quoi ressemble un effet                                                             |
+|:-------------------|:-------------------------------------------|:--------------|:--------------------------------------------------------------------------------------|
+| variable numérique | une quantité continue (argent, âge…)       | `gaussian`    | une différence de moyennes, ou un rapport de moyennes                                 |
+| — | un décompte (heures de `x`, nombre de `x`) | `poisson`     | un rapport de taux — « 1,4 fois plus de `x` par jour »                                |
+| — | un score comptant un nombre de réponses Oui/Non | `binomial`    | —  |
+| variable catégorielle | une réponse Oui/Non         | `binomial`    | un rapport de cotes (*odds ratio*), converti au besoin en points de pourcentage ou en risque relatif |
+| — | un choix parmi 3 modalités ou plus         | `multinomial` | la même chose, avec une colonne par modalité                                          |
+| — | une variable catégorielle ordonnée         | `ordinal`     | un seul rapport de cotes, partagé par toutes les modalités                            |
 
-La bonne façon d'y penser n'est pas « quelle loi statistique ma variable suit-elle ? ». C'est une question de mathématiques, et ce n'est pas celle qui compte — pas plus, d'ailleurs, que la question que se posent d'abord la plupart des étudiant·es, « quel test dois-je faire ? ». La question utile est : **« quelle sorte de quantité suis-je en train de compter ? »** Une mesure continue, un décompte, une proportion sont trois choses différentes à compter, et chacune a sa manière naturelle de dire que tel groupe est plus haut que tel autre.
+La bonne manière sociologique d'y penser n'est pas « quelle loi statistique ma variable suit-elle ? » (qui est une question de mathématiques), ni « quel test dois-je faire ? » (qui est une question de statistiques), mais : **« quelle sorte de quantité est-ce que je suis en train de compter ? »** Une mesure continue, un décompte, une proportion sont trois choses très différentes, et chacune a sa manière préférentielle de dire que tel groupe est plus haut que tel autre.
 
 ## Une variable numérique : trois façons de la compter
 
-Une variable catégorielle est binomiale, multinomiale ou ordinale selon ses propres propriétés : le cas intéressant est donc la variable numérique, parce qu'un nombre peut se compter de plusieurs façons et que le choix nous revient. Prenons `checks` — dans combien des six fichiers de police le nom de la personne interpellée figurait déjà. C'est une quantité, c'est un décompte, et c'est *aussi* un score sur six. Les trois lectures sont légitimes, et chacune donne une phrase différente. Les voici avant même les tableaux, puisque c'est entre ces trois phrases qu'il faut choisir :
+Une variable catégorielle utilise presque toujours une regression logistique : selon son nombre de ses modalités et leur caractère ordonné, celle-ci est binomiale (2 catégories), multinomiale (trois catégories ou plus) ou ordinale (trois catégories ordonnées ou plus).
 
-- **comme quantité continue** — les personnes noires figurent dans **0,5 fichier de plus** que les personnes blanches, en moyenne et à autres variables égales (1,5 contre 2,0) ;
-- **comme décompte** — elles figurent dans **1,35 fois plus** de fichiers ;
-- **comme score sur six** — pour **un fichier donné**, leur cote d'y figurer plutôt que de ne pas y figurer est **1,55 fois plus élevée**.
+À l’inverse, une variable numérique peut être comptée de plusieurs manières : le choix nous revient. Prenons `checks` — dans combien des six fichiers de police le nom de la personne interpellée figurait déjà. C'est un décompte, c’est *aussi* un score sur six, et on pourrait éventuellement la modéliser comme une quantité continue. À partir de ce choix, une regression va (le plus souvent) **modéliser l’écart** de mises en garde à vues blancs/noirs **d’une manière spécifique** : 
 
+- **comme décompte** — les autres variables choises étant égales, les personnes racisées comme noires figurent dans **1,35 fois plus** de fichiers que les personnes du groupe ethnique majoritaire (rapport de taux d’incidence, IRR) ;
+- **comme score sur six** — pour **un fichier donné**, leur chance (cote, *odds*) d'y figurer plutôt que de ne pas y figurer est **1,55 fois plus élevée** (*odds ratio*)
+- **comme quantité continue** — elles figurent en moyenne dans **0,5 fichier de plus** que les personnes blanches (une différence de moyennes, donc une soustraction: 2 - 1,5) ;
 
 ```{r}
 tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), 
@@ -195,23 +190,24 @@ tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"),
        family = "binomial", trials = 6, stats = NULL)
 ```
 
-Mêmes données, mêmes prédicteurs, trois phrases.
-
-Aucune n'est *a priori* plus juste que les autres. On choisit celle qu'on aurait effectivement envie d'écrire. La troisième mérite d'être connue parce qu'elle correspond à une forme très répandue de question d'enquête — une batterie d'items oui/non additionnés en un score — et parce qu'elle est la seule des trois à traiter les six fichiers comme six chances comparables plutôt que comme une quantité. Elle se demande avec `family = "binomial"` et `trials = 6`, le nombre d'items.
+Mêmes données, mêmes prédicteurs, trois phrases d’interprétation différentes. On pourrait discuter de celle qui « prédit » le mieux le modèle (par exemple, la regression linéaire utilise une distribution gaussienne/normale qui correspond mal à l’importance de la catégorie "incrit dans 0 fichiers de police", 35% de l’échantillon). On pourrait discuter des hypothèses faites par chacune (par exemple, le modèle binomial fait comme si l’inscription dans chaque fichier de police chaque avait une chance égale et indépendantes de se produire). Le principal élément à retenir, c’est ici que chaque famille de modèle possède une quantité préférée, une manière habituelle de modéliser l’écart entre plusieurs catégories d’un prédicteur.
 
 ## Que peut-on demander à cette variable ?
 
-Plutôt que de retenir la grille par cœur, on la demande :
+Pour connaître les modèles les plus communs pour une variable donnée :
 
 ```{r}
-reg_measures(car_arrests, "released")
+reg_measures(car_arrests, "checks")
 ```
 
-Le tableau a **deux blocs**, et c'est ce partage qui est toute la réponse. Le premier donne une ligne par modèle qu'on pourrait ajuster : son `link`, et la mesure que portent les coefficients de ce modèle-là. Le second donne ce qui se lit sur les **prédictions** du modèle — et ces lignes-là portent `link = "(any)"`, parce qu'un effet marginal moyenne des probabilités ajustées et se moque bien du lien qui les a produites.
+Chaque famille de modèle vient avec un lien (`link = `) par défaut, c’est-à-dire une manière préférentielle de mesurer l’écart entre différents groupes. C’est son effet *conditionnel* : quand nous choisissons de le lire, nous interprétons directement les coefficients donnés par le modèle. Nous verrons qu’utiliser des effets marginaux, moyennés sur l’échantillon, permet toujours de laisser le modèle de base faire ce qu’il préfère, *pour interpréter l’écart que nous préfèrons, nous, pour tourner nos phrases* d’une manière adaptée à notre objet de recherche.
 
-`link` est donc le seul choix qui engage quelque chose, et il ne décide que d'une chose : **quelle mesure vient avec un coefficient**. Tout le reste est disponible quel que soit le modèle ajusté. `measure` choisit ensuite une ligne, `effect` est le bouton qui force l'une des deux formes de prédiction au besoin, et `header` donne le nom de colonne obtenu.
+Il existe beaucoup d’autres modèles possibles, qui requièrent de passer un lien (`link =`) différent, c’est-à-dire de demander au même modèle de modéliser directement une autre mesure de l’écart. Ils ne sont utilisés que dans des situations particulières.
 
-Seul ce qui est constructible est listé : une mesure que cette sorte de variable n'a pas n'a tout simplement pas de ligne. Essayer sur `checks`, et trois familles seront proposées au lieu d'une (une quantité, un décompte, ou un score sur q items), chacune avec son bloc.
+```{r, echo=TRUE, eval=FALSE}
+reg_measures(car_arrests, "checks", base_link = FALSE)
+```
+
 
 # 2. Transformer un pourcentage en comparaison
 

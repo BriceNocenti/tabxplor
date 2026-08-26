@@ -11,7 +11,7 @@
 
 pkg <- normalizePath(".", winslash = "/")
 suppressMessages(devtools::load_all(pkg, quiet = TRUE))
-source(file.path(pkg, "tests", "testthat", "helper-benchmark.R"))
+source(file.path(pkg, "dev", "tests", "testthat", "helper-benchmark.R"))
 
 gss <- forcats::gss_cat
 gss$year <- factor(gss$year)     # keep col_vars all-factor -> all chi2 (not ANOVA)

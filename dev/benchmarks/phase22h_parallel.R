@@ -175,8 +175,8 @@ if (!is.null(arg_of("child"))) {
   # the tier-1 aggregate (cached on main), the row-axis map (the only parallelisable part) and the
   # rest (resolve + assemble + output shape). The render is timed separately -- it is not in build.
   if (mode == "jmv") {
-    if (!file.exists("tests/testthat/helper-benchmark.R")) quit(save = "no")
-    source("tests/testthat/helper-benchmark.R")
+    if (!file.exists("dev/tests/testthat/helper-benchmark.R")) quit(save = "no")
+    source("dev/tests/testthat/helper-benchmark.R")
     d    <- forcats::gss_cat
     opts <- benchmark_jmvtab_opts(row_vars = c("partyid", "rincome", "year"),
                                   col_vars = c("race", "marital", "relig"),

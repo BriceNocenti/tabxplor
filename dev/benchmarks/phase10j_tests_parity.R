@@ -14,7 +14,7 @@
 pkg <- normalizePath(".", winslash = "/")
 suppressMessages(devtools::load_all(pkg, quiet = TRUE))
 suppressMessages(library(dplyr))
-source(file.path(pkg, "tests", "testthat", "helper-benchmark.R"))
+source(file.path(pkg, "dev", "tests", "testthat", "helper-benchmark.R"))
 tx <- asNamespace("tabxplor")
 
 # ------------------------------------------------------------------ head replication (capture inputs)

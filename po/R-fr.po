@@ -601,8 +601,8 @@ msgid ""
 "%d bins, +/-2 SE. The dashed line is what the model fits; a bending curve "
 "asks for shape=\"quadratic\"."
 msgstr ""
-"%d classes, +/-2 ET. La ligne en pointillés est ce que le modèle ajuste ; "
-"une courbe qui s'infléchit appelle shape=\"quadratic\"."
+"%d tranches, +/-2 ET. La ligne en pointillés est celle du modèle ; "
+"une courbe très arrondie (colline, cuvette) appelle shape=\"quadratic\"."
 
 #: plots.R:676
 msgid "Expected category"
@@ -625,7 +625,7 @@ msgid ""
 "Mean residual per bin of the fitted value: a trend, or many points out, "
 "means the model is missing something."
 msgstr ""
-"Résidu moyen par classe de valeur prédite : une tendance, ou beaucoup de "
+"Résidu moyen : une tendance, ou beaucoup de "
 "points dehors, signale que le modèle oublie quelque chose."
 
 #: plots.R:696
@@ -645,8 +645,7 @@ msgid ""
 "The band is pointwise: about 5 % of points fall outside it even when the "
 "model is right."
 msgstr ""
-"La bande est ponctuelle : environ 5 % des points en sortent même quand le "
-"modèle est juste."
+"Environ 5 % des points sortent de la bande même quand le modèle est juste (distrib. gaussienne/normale)."
 
 #: plots.R:739
 msgid "Model SE"
@@ -658,7 +657,7 @@ msgstr "ET robuste"
 
 #: plots.R:742
 msgid "do the two standard errors agree?"
-msgstr "les deux erreurs types concordent-elles ?"
+msgstr "les deux erreurs-types concordent-elles ?"
 
 #: plots.R:743
 msgid ""
@@ -686,7 +685,7 @@ msgid ""
 "coefficient's standard errors."
 msgstr ""
 "De combien chaque enquêté déplace le coefficient qu'il déplace le plus, en "
-"erreurs types de ce coefficient."
+"erreurs-types de ce coefficient."
 
 #: plots.R:794
 msgid "VIF"
@@ -944,7 +943,7 @@ msgstr ""
 
 #: reg-assumptions.R:1401
 msgid "outcome (model scale)"
-msgstr "variable expliquée (échelle du modèle)"
+msgstr "variable expliquée"
 
 #: reg-assumptions.R:1401
 msgid "group"
@@ -952,7 +951,7 @@ msgstr "groupe"
 
 #: reg-assumptions.R:1402
 msgid "numeric predictor"
-msgstr "prédicteur numérique"
+msgstr "prédicteur num."
 
 #: reg-assumptions.R:1402
 msgid "observed range"
@@ -1361,7 +1360,7 @@ msgstr "Chi2 !"
 
 #: tab-test-display.R:458
 msgid "pvalue"
-msgstr "p-valeur"
+msgstr "pvalue"
 
 #: tab-test-display.R:460
 msgid "; survey-design"
@@ -1370,7 +1369,7 @@ msgstr " ; plan de sondage (survey-design)"
 #: tab-test-display.R:461
 #, c-format
 msgid "pvalue (%s%s)"
-msgstr "p-valeur (%s%s)"
+msgstr "pvalue (%s%s)"
 
 #: tab-test-display.R:468
 msgid "effect size"
@@ -1824,7 +1823,7 @@ msgstr ""
 #~ "How far one respondent moves a coefficient, in its own standard errors. "
 #~ "Influence is leverage x outlyingness, not outlyingness."
 #~ msgstr ""
-#~ "De combien un seul enquêté déplace un coefficient, en erreurs types de ce "
+#~ "De combien un seul enquêté déplace un coefficient, en erreurs-types de ce "
 #~ "coefficient. L'influence est le produit du levier et de l'atypicité, pas "
 #~ "l'atypicité seule."
 

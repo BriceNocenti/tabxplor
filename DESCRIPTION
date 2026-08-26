@@ -24,8 +24,6 @@ Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 Suggests:
-    bench (>= 1.1.0),
-    DescTools (>= 0.99.0),
     fansi (>= 0.5.0),
     jmvcore (>= 2.4.0),
     knitr,
@@ -50,7 +48,7 @@ Suggests:
     clipr
 Config/testthat/edition: 3
 Config/testthat/parallel: true
-Config/testthat/start-first: tab_reg*, tab_logit, parallel-parity, jmvtab-cache, export*
+Config/testthat/start-first: tab-reg, plots, tab-xl, reg-estimand, survey-variance, tab-classes, golden, tab-render-html, reg-assumptions, tab-display, tab, tab-transpose-render, tab-export, tab-palettes, reg-influence, survey-design, jmvtab, tab-export-prep, reg-cross, tab-args
 Config/Needs/website: pkgdown
 Config/Needs/coverage: covr
 Imports:

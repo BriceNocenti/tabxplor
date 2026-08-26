@@ -5,7 +5,7 @@
 quiet <- function(x) suppressMessages(x)
 
 cx_data <- function() {
-  d <- forcats::gss_cat
+  d <- fx_gss()
   d$relig3 <- forcats::fct_lump_n(d$relig, 2)
   d
 }
@@ -99,7 +99,7 @@ test_that("a shaped parent is cut BEFORE the cells are combined", {
 # Phase 22h: found while building the above. `as.character()` on a LIST of symbols deparses, so a
 # non-syntactic name came back backticked and every later selection missed it.
 test_that("tab() takes a column whose name is not syntactic", {
-  d <- forcats::gss_cat
+  d <- fx_gss()
   d[["my race"]] <- d$race
   d[["my age"]]  <- d$age
   expect_no_error(quiet(tab(d, marital, tidyselect::all_of("my race"), pct = "row")))

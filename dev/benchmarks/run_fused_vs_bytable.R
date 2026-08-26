@@ -9,7 +9,7 @@
 
 pkg <- normalizePath(".", winslash = "/")
 suppressMessages(devtools::load_all(pkg, quiet = TRUE))
-source(file.path(pkg, "tests", "testthat", "helper-benchmark.R"))
+source(file.path(pkg, "dev", "tests", "testthat", "helper-benchmark.R"))
 suppressMessages(library(data.table))
 
 # --- fixture: full Cartesian of pc18-like factor levels (NA included on DIPLOM/CRITREVENU) ---

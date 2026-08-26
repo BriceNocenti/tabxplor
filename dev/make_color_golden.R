@@ -27,6 +27,7 @@
 
 pkg <- normalizePath(".", winslash = "/")
 devtools::load_all(pkg, quiet = TRUE)
+source(file.path(pkg, "tests", "testthat", "helper-fixtures.R"))
 source(file.path(pkg, "tests", "testthat", "helper-color-golden.R"))
 
 out_dir <- file.path(pkg, "tests", "testthat", "_color_golden")

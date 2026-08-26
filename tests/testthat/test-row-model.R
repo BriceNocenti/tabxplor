@@ -1,7 +1,7 @@
 # Phase 19f (KEY 1) -- the row model: the `row_kind` field and the declared `tabxplor_lvl` index.
 # Each block fails without the change it names.
 
-gss <- forcats::gss_cat
+gss <- fx_gss()
 
 # --- the shared half: row_kind replaces in_totrow -----------------------------------------------
 

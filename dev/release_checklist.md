@@ -14,6 +14,9 @@ git checkout dev && git pull
 # 1. Pre-flight on dev
 #    - Version bumped in DESCRIPTION, NEWS.md section finalized
 #    - Full test suite green (the CLAUDE.md § Testing recipe)
+#    - Second suite green:  OMP_NUM_THREADS=1 Rscript dev/run_dev_tests.R
+#      (the engine-parity sweeps, the source-tree lint and the seam checks the shipped suite
+#       keeps only a slice of -- see CLAUDE.md § Testing)
 #    - devtools::check() green (the ~3 min release gate)
 #    - Rscript -e 'pkgdown::check_pkgdown()' clean
 

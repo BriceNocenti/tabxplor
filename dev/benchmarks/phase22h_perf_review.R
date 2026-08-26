@@ -454,8 +454,8 @@ if (run_suite("E")) {
 
 if (run_suite("F") && identical(CFG$engine, "current")) {
   cat("\n== F: jamovi live UI (warm cache) ==\n")
-  if (file.exists("tests/testthat/helper-benchmark.R")) {
-    source("tests/testthat/helper-benchmark.R")
+  if (file.exists("dev/tests/testthat/helper-benchmark.R")) {
+    source("dev/tests/testthat/helper-benchmark.R")
     for (sz in c("small", "big")) {
       ops <- quiet(if (sz == "small") benchmark_jmvtab_ops() else benchmark_jmvtab_big_ops())
       for (op in names(ops)) {

@@ -6,7 +6,7 @@
 #          -> prints a table; compose dev/benchmarks/results_2.0.0/phase9b3_<label>.txt from it.
 pkg <- normalizePath(".", winslash = "/")
 suppressMessages(devtools::load_all(pkg, quiet = TRUE))
-source(file.path(pkg, "tests", "testthat", "helper-benchmark.R"))  # benchmark_measure()
+source(file.path(pkg, "dev", "tests", "testthat", "helper-benchmark.R"))  # benchmark_measure()
 
 label <- (function() { a <- commandArgs(TRUE); if (length(a)) a[[1]] else "run" })()
 gss <- forcats::gss_cat

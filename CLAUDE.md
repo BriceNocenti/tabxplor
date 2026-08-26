@@ -101,7 +101,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 
 **Cross-cutting** (touch with care): `fmt_class.R` is the foundation of every column; `.onLoad()` in `utils.R` seeds every option; `format.tabxplor_fmt()` and `fmt_color_channels()` are the shared display/colour sources of truth across all backends.
 
-**Other directories:** `vignettes/` (introduction, *All else equal*, regression, weights, programming; `vignettes/articles/` is pkgdown-only and holds the French twins) · `tests/testthat/` (testthat v3) · `man/` (roxygen-generated, never edit) · `data/` + `data-raw/` (the four example data sets and the script that builds them) · `inst/i18n/` + `po/` (translations) · `jamovi/` (module definition) · `dev/` (architecture guide, dev scripts, perf harness, `.Rbuildignore`'d).
+**Other directories:** `vignettes/` (introduction, *All else equal*, regression, weights, programming; `vignettes/articles/` is pkgdown-only and holds the French twins) · `tests/testthat/` (testthat v3, subsystem-named: the package's contract) · `man/` (roxygen-generated, never edit) · `data/` + `data-raw/` (the four example data sets and the script that builds them) · `inst/i18n/` + `po/` (translations) · `jamovi/` (module definition) · `dev/` (architecture guide, dev scripts, perf harness, and `dev/tests/` — the second test suite; all `.Rbuildignore`'d).
 
 ---
 
@@ -131,7 +131,7 @@ The payoff to internalise: **adding a measure, an option, an argument, an estima
 | Fact table         | Home                 | Declares                                                                                |
 |--------------------|----------------------|-----------------------------------------------------------------------------------------|
 | `MEASURES`         | `fmt_class.R`        | The colour measures (raw field, scale keys, significance source, legend, requirements)  |
-| `EST_SCALES`       | `fmt_class.R`        | What a column estimates (field, null, geometry, colour ladder, SD source, precision)   |
+| `EST_SCALES`       | `fmt_class.R`        | What a column estimates (field, null, geometry, colour ladder, SD source, precision)    |
 | `MEASURE_ACRONYMS` | `fmt_class.R`        | The discipline's acronyms: one spelling vocabulary for every argument naming a measure  |
 | `DISPLAY_TOKENS`   | `tab-display.R`      | The `{}` display grammar (field source, geometry, aliases, placement)                   |
 | `DISPLAY_PRESETS`  | `tab-display.R`      | The named cell layouts both producers resolve (`est` / `est_ci` / `est_base` / …)       |
@@ -368,128 +368,57 @@ Inspect a built table at runtime through the accessors: `tab_structure()`, `tab_
 
 ## Testing
 
-### How to run the suite (the ONLY sanctioned recipe — 2026-07-16)
+**Two suites.** `tests/testthat/` is the package's **contract**: it must fail when a user-visible fact changes, must not fail when an internal is redesigned, and must stay fast enough to run on every edit. Everything else lives in `dev/tests/` (`.Rbuildignore`d), unchanged and still runnable.
 
 ```bash
-# In a temp .R file (outside tests/), then run it EXACTLY like this, unsandboxed:
-#   OMP_NUM_THREADS=1 Rscript that_file.R
-# The .R file:  Sys.setenv(TESTTHAT_CPUS = "8", NOT_CRAN = "true"); devtools::test("~/github/tabxplor")
+# The shipped suite. In a temp .R file (outside tests/), then: OMP_NUM_THREADS=1 Rscript that_file.R
+#   Sys.setenv(TESTTHAT_CPUS = "6", NOT_CRAN = "true"); devtools::test("~/github/tabxplor")
+#   devtools::test("~/github/tabxplor", filter = "tab-reg")   # one/few files while iterating
+
+# The second suite -- at release, or after touching what it guards:
+#   OMP_NUM_THREADS=1 Rscript dev/run_dev_tests.R
 ```
 
-✅ **Since 2026-07-23 the suite SELF-PINS its threads** — `tests/testthat/setup.R` pins data.table
-(`setDTthreads(1L)`) AND BLAS/OpenMP (`RhpcBLASctl::blas_set_num_threads(1L)`, Suggests-guarded — the
-runtime call is the ONLY thing that can pin an already-running worker, since OpenBLAS-pthread fixes its
-count from the env at process startup), and `tests/testthat.R` sets `OMP_NUM_THREADS=1` + a non-CRAN
-`TESTTHAT_CPUS` fallback before workers spawn. So `devtools::test()`, `devtools::check()`, GH Actions
-and CRAN all get 1 thread/worker with no manual env. Keep the `OMP_NUM_THREADS=1` prefix anyway
-(harmless belt for grandchild processes and RhpcBLASctl-less setups).
+**Measured here:** shipped suite **~40 s** (46 files, 4 316 assertions, 6 workers; ~136 s serial); `dev/tests/` 41 files, 5 899 assertions. A multi-minute run means something else is wrong — look for orphans (below) before blaming the code.
 
-⚠ **The trap this guards against** (root-caused 2026-07-16, second session lost to it; hit again by
-`devtools::check()` 2026-07-23 before the self-pin): `Config/testthat/parallel: true` runs each test
-file in its own PROCESS, and **each process then multi-threads on its own**:
+### What belongs in which suite
 
-| thread source                                | per worker | x 8 workers | lever                                              |
-|----------------------------------------------|------------|-------------|----------------------------------------------------|
-| data.table (defaults to 50 % of cores)       | 6          | 48          | `setDTthreads(1L)` — in `tests/testthat/setup.R`   |
-| OpenBLAS *pthread* build (`lm`/`glm`/ggplot) | ~10        | ~80         | `RhpcBLASctl` pin in setup.R + `OMP_NUM_THREADS=1` |
+A test earns its place in `tests/testthat/` when it would fail if a **user-visible fact** changed and would not fail when an internal is redesigned. Four kinds qualify: the **output goldens**; the **type and class contract** (`fmt` fields and attributes, the dplyr wall, degraded tables); the **public surface** (argument boundaries, declared fact tables and their foreign keys, options, exports); and **one canonical parity block per statistical engine** — `stats::lm`/`glm`, `nnet::multinom`, `MASS::polr`, `survey::svyglm`/`svyolr`, `svyVGAM`, `marginaleffects`, `brant` — because that is the only standing assurance the numbers are right.
 
-**Measured: 165 threads on 12 cores (~14x oversubscribed) -> the suite ran >26 min instead of ~50 s**,
-two workers pegged at ~485 % CPU while the rest starved and the log went silent for 10 min. With both
-levers: **47 threads, 48.9 s, FAIL 0.**
+Five kinds go to `dev/tests/`: **source-tree lint** (reads `R/`, `jamovi/`, so it can only skip under `R CMD check`); **phase-defect suites** (one historical 2.0.0 bug each); **internal-seam parity** (`carve`/`fuse`/`carrier` — the goldens already lock what those seams produce); the **secondary arm** of each engine's parity; and **exhaustive sweeps**, where the shipped file keeps a representative slice. `dev/verify_reg_invariants.R` is the older precedent for the last one.
 
-**Never run anything else while the suite runs.** A single `Rscript` repro uses ~4 cores here; racing
-it against 8 workers is what turns "slow" into "apparently hung". Iterate with `filter =`, and run the
-full suite once, alone.
+⚠ **The shipped suite is subsystem-shaped**: a file is named for the subsystem it guards (`test-reg-estimand.R` ↔ `R/reg-estimand.R`), so a new test's home is derivable from the Repository Map. The exceptions are deliberate: `test-golden.R` / `test-color-golden.R` (the output tripwires), `test-edge-cases.R` (degenerate inputs across everything), `test-i18n.R`, `test-non-ascii.R`, `test-utils.R` and `test-plots.R`.
 
-⛔ **Before blaming the code for a slow run, check whether YOU are the cause** — this is the companion
-to the orphan rule below. In order: (1) is another R of mine running? (2) `ps -eLo pid,args | grep -c
-"[-]-no-readline --slave"` — is the THREAD count >> 12? (3) only then look for orphans. A worker at
-485 % CPU is oversubscription, not a hang.
+### One population, and when to leave it
 
-```r
-# One/few files while iterating (cheap, safe to repeat):
-devtools::test("~/github/tabxplor", filter = "tab")  # regex on test-<name>.R
-```
+`helper-fixtures.R` holds the suite's fixtures, memoised — testthat sources helpers **once per worker**, so a cached value is shared by every file that worker runs.
 
-⚠ **A green local suite does NOT mean a green CI — this box is `fr_FR.UTF-8`.** GNU gettext ignores
-`LANGUAGE` entirely when `LC_MESSAGES` is `C`/`POSIX`, which is the state under `R CMD check` on
-Linux (check.R forces `LANGUAGE=en`, and testthat's `local_reproducible_output()` pins `LANG`/
-`LANGUAGE` to `"C"` per block) **and on the CRAN farm**. So every French assertion passes here and
-fails there. That is why French output is guarded by `skip_if_no_gettext()`
-(`tests/testthat/helper-i18n.R`) and why each i18n feature is tested twice — an UNGUARDED English
-block (the guard-rail that keeps the goldens from moving; must run everywhere) plus a GUARDED French
-one.
+⚠ **There are two populations, and the reason is cost, not taste.** A crosstab aggregates on data.table and does not care how many rows it reads — measured, `tab()` and `tab_html()` take the same time on 3 000 rows as on 21 483. A model fit does care: `tab_reg()` is 5.3× faster on the sample, `nnet::multinom()` 14×. So the crosstab side reads the whole frame (`fx_gss()` / `fx_gss_fmt()`, which IS `forcats::gss_cat` — the goldens never had to move) and only the regression side reads the sample (`fx_reg_df()` / `fx_reg_fmt()`). **Moving a crosstab test onto the sample buys nothing and costs it its statistical power**; a regression test that genuinely needs power (a violated proportional-odds assumption, an O(1/n) agreement) takes the whole frame back.
 
-**Never simulate CI, even before committing something really locale-touching and heavily do translation: only do it when the user call for it, when you explicitely now the user will push (not for every commit), at release, etc.**
+### Threads and workers
 
-```bash
-LC_ALL=C.UTF-8 LANGUAGE=en OMP_NUM_THREADS=1 Rscript <runner>.R   # the CI locale
-```
+✅ The suite **self-pins**: `tests/testthat/setup.R` pins data.table and BLAS/OpenMP per worker, and `tests/testthat.R` sets `OMP_NUM_THREADS=1` before they spawn. Keep the `OMP_NUM_THREADS=1` prefix anyway (grandchild processes, RhpcBLASctl-less setups).
 
-Use `C.UTF-8`, not `C`: plain `C` is *harsher* than any CI runner (non-UTF-8 native encoding), and
-makes `test-non-ascii.R`'s own fixtures fail for reasons no CI job will ever hit.
+⚠ **The trap this guards against**: `Config/testthat/parallel: true` runs each file in its own PROCESS, and each then multi-threads on its own — measured, 8 workers × (data.table ~6 + OpenBLAS ~10) = 165 threads on 12 logical cores, and a ~1 min suite ran >26 min.
 
-⚠ **Two test/tooling steps need `dangerouslyDisableSandbox` here — root-caused 2026-07-16 from the bwrap
-command line, do not re-diagnose:**
+⚠ **`detectCores()` counts SMT siblings.** This CPU reports 12 and has **6** real cores (`/sys/devices/system/cpu/cpu*/topology/thread_siblings_list` shows two siblings each); `parallelly::availableCores(logical = FALSE)` cannot tell either under WSL2. 8 workers beat 6 by ~6 % while oversubscribing a shared machine, so `tests/testthat.R` sizes the pool from the kernel topology. ⚠ **`devtools::test()` does not read `tests/testthat.R`** — set `TESTTHAT_CPUS` yourself there, which is what the recipe above does.
 
-- **`test-parallel-parity.R` fails sandboxed** (`fail=1 err=7`, ~0.7 s) with
-  `nanonext::.dispatcher_start: 16 | Permission denied`. Cause: bwrap runs **`--unshare-net`**, and
-  mirai's dispatcher needs sockets. **Not a regression** — it passes 11/11 unsandboxed. Any full-suite
-  run inside the sandbox reports these 8 as failures; ignore them or run that file unsandboxed.
-- **`devtools::document()` fails sandboxed** with *"cannot open file 'NAMESPACE': Read-only file
-  system"*. Cause: bwrap `--ro-bind`s `NAMESPACE` and `man/` specifically (the rest of the repo is
-  writable, which is why snapshot writes succeed). Run it unsandboxed.
+⚠ **`setDTthreads()` must never be called in a per-file loop**: it tears down and rebuilds data.table's OpenMP pool, which inflated a per-file timing harness ~2× and produced the misleading "before" figures in `dev/benchmarks/results_2.0.0/`.
 
-⚠ Dev now runs **inside WSL2 Ubuntu 26.04** (`~/github/tabxplor` on ext4), not Windows. The old `d:/Statistiques/github/tabxplor` paths are dead — the Windows checkout survives **build-only** for Windows `.jmo` (see *Jamovi module development*). The `~46s` / `225s -> 56s` suite timings recorded here were measured on Windows/NTFS and have **not** been re-measured on ext4 — treat them as order-of-magnitude only.
+**Never run anything else while the suite runs.** Before blaming the code for a slow run, check whether YOU are the cause: another R of yours running, then `ps -eLo pid,args | grep -c "[-]-no-readline --slave"` (thread count ≫ cores?), then orphans.
 
-**Measured on ext4 / WSL2, 2026-07-16 (per-file, serial): total `359 s`, 2357 passing; slowest
-`test-tab_reg.R` `33.6 s`, then `counts-parity` / `calculations` / `color-legend` ~23-25 s, most files
-1-13 s.** Under `Config/testthat/parallel: true` the wall clock is roughly the SLOWEST FILE, so the
-recorded `56 s` is consistent and still right. **A multi-minute run means something else is wrong — look
-for orphans (below) before blaming the code.** Pass `TESTTHAT_CPUS=8`: `parallel: true` alone picks only
-~2 processes here.
+### Locale, sandbox, orphans
 
-⛔ **NEVER kill a test run by killing its parent — you orphan the workers, and they do NOT stop.**
-Measured 2026-07-16: two `TaskStop`'d suites left 6 R processes (2 `--file=…` parents + 4
-`--no-readline --slave` testthat/mirai workers) alive for **52 minutes at ~860 % CPU** (one had burned
-174 min of CPU time). They silently starve every later run — a suite that "takes 15 minutes" is usually
-this, not the code. Symptoms + rules:
+⚠ **A green local suite does NOT mean a green CI — this box is `fr_FR.UTF-8`.** GNU gettext ignores `LANGUAGE` when `LC_MESSAGES` is `C`/`POSIX`, which is the state under `R CMD check` on Linux and on the CRAN farm. So every French assertion passes here and fails there. French output is guarded by `skip_if_no_gettext()` (`tests/testthat/helper-i18n.R`), and each i18n feature is tested twice — an UNGUARDED English block plus a GUARDED French one. **Never simulate CI unless the maintainer asks**: `LC_ALL=C.UTF-8 LANGUAGE=en OMP_NUM_THREADS=1 Rscript <runner>.R` (use `C.UTF-8`, not `C`, which is harsher than any real runner).
 
-- **Diagnose AND kill unsandboxed — bwrap runs `--unshare-pid --proc /proc`**, so each Bash tool call
-  gets its OWN PID namespace (`ps` shows the shell as PID 1). Two consequences: `ps aux` **cannot see
-  the orphans**, and a *sandboxed* `kill <host-pid>` cannot kill them — worse, a low PID like `34`
-  usually DOES exist inside the namespace, so it would kill **the wrong process**. Both `ps` and `kill`
-  must run unsandboxed. Identify yours by the parent's
-  `--file=/tmp/claude-…/<session-id>/scratchpad/…` — never by name alone (Positron runs its own R, and
-  killing that is destructive).
-- **Never `pkill -f <pattern>`.** Measured: `pkill -f testthat` matched and killed the calling shell,
-  and `pkill -f t9.R` is what orphaned the workers (parent SIGKILLed -> exit 137, children reparented
-  and kept running). Read `ps` first, then `kill` explicit PIDs.
-- **Prefer not to create them**: run the suite in the foreground with a long timeout, or
-  `filter =` to the files you touched. `setsid nohup … &` is ALSO killed when the tool's shell exits.
-- **Never pipe a long run through `tail`/`head`** — they buffer until EOF, so the output file stays
-  empty and the run looks hung. Write the incremental log to a file and read that.
-- ⚠ Killing PIDs needs the maintainer: the auto-mode classifier denies it (rightly — this is a shared
-  dev box). Surface the `ps` evidence and hand over the exact `kill -9 <pids>`.
+⚠ **Two steps need `dangerouslyDisableSandbox`** — bwrap runs `--unshare-net` and `--ro-bind`s `NAMESPACE`/`man/`: `dev/tests/testthat/test-tab-parallel.R` (mirai's dispatcher needs sockets) and `devtools::document()`.
 
-**Test files:**
+⛔ **NEVER kill a test run by killing its parent — you orphan the workers, and they do NOT stop.** Measured: two killed suites left 6 R processes alive for 52 minutes at ~860 % CPU, silently starving every later run.
 
-| File                      | Coverage                                                                                        |
-|---------------------------|-------------------------------------------------------------------------------------------------|
-| `test-fmt_class.R`        | fmt creation, printing, type conversion, c(), arithmetic                                        |
-| `test-tab.R`              | Core: plain tables, pct, totals, NA, CI, chi2, references, wrapping                             |
-| `test-tab_classes.R`      | Class preservation through dplyr verbs                                                          |
-| `test-tab_xl.R`           | Basic Excel export                                                                              |
-| `test-tab_reg-binomial.R` | Binary outcomes: OR/CI/p parity vs glm/svyglm, 1/OR (was test-tab_logit.R)                      |
-| `test-tab_reg.R`          | Phase 12c/12d/12e: beta/OR/IRR/MNL/ordinal + AME parity vs lm/glm/multinom/polr/marginaleffects |
-| `test-tab_reg-display.R`  | Phase 12h: estimate_display (est_ci bracket / prob / ame folds), Excel test label, split footer |
-| `test-tab_reg-plots.R`    | Phase 12h / z15: reg_check_plots() smoke tests (build a gtable without error)                   |
-| `test-tab-estimates.R`    | Phase 18z17: the estimate model + fmt_scale_of() -- no graphics device                          |
-| `test-forest-plot.R`      | Phase 18z17: forest_plot() -- ladder == gridlines, cell colour == point, gap band == test       |
-| `test-reg-shape.R`        | Phase 18z15: `shape =`, the plot primitives, the stored curves and the shape table              |
-| `test-reg-rank.R`         | Phase 22c-vi: the ordinal superiority pair -- gradients, K=2 reduction, collapsibility, survey  |
-
----
+- **Diagnose AND kill unsandboxed** — bwrap runs `--unshare-pid`, so each Bash call gets its own PID namespace: `ps aux` cannot see the orphans, and a sandboxed `kill <host-pid>` would hit the wrong process. Identify yours by the parent's `--file=/tmp/claude-…/<session-id>/scratchpad/…`, never by name alone (Positron runs its own R).
+- **Never `pkill -f <pattern>`** — measured, `pkill -f testthat` killed the calling shell, and `pkill -f t9.R` is what orphaned the workers. Read `ps` first, then `kill` explicit PIDs.
+- **Never pipe a long run through `tail`/`head`** — they buffer until EOF, so the log looks empty and the run looks hung. Write to a file and read that.
+- ⚠ Killing PIDs needs the maintainer: surface the `ps` evidence and hand over the exact `kill -9 <pids>`.
 
 ## Jamovi module development
 
@@ -690,9 +619,12 @@ section; this summary records only what moved and what it cost.
 (`mirai`, `RhpcBLASctl`, `parallelly`). The freed slots are the deliverable.
 
 ⚠ **One premise of the brief did not hold: `survey` is not only a survey dependency.**
-`survey::regTermTest()` is the Wald engine for *unweighted* multinomial and ordinal footers
-(`R/tab_reg.R:2538`, `:3021`), so moving it would have silently removed footer rows for users who
-never touch a design. It stays in Imports, and `dev/dependencies.md` records why.
+`survey::svyglm()` is the FITTER for the three quasi-likelihood families `rr` / `rd` / `mr`
+(`link = "ratio"` or `"difference"` on a binomial or gaussian outcome) **even with no weights**,
+because a misspecified likelihood needs robust standard errors; `regTermTest()` then supplies their
+`wald_null` row. Those are exactly the measures the *All else equal* article teaches, so it stays in
+Imports. ⚠ Measured afterwards: it is also **93% of the jamovi `.jmo`'s Imports-only floor** (6.4 MB
+of 6.9, via minqa / numDeriv / mitools -> DBI), which is priced in `dev/dependencies.md`.
 
 **`tab_plot()` is defunct**, following `kable_tabxplor_style()`'s precedent (an exported stub with
 `@keywords internal` and `lifecycle::deprecate_stop`). It was 346 lines plus a six-function vendored
@@ -779,7 +711,10 @@ costs nothing and does not count toward the 20, and it was being called **unguar
 in four test files, validating the closed-form CI engine against an independent implementation --
 which is worth keeping. Moving those tests to `dev/` is **Phase 23e**'s job, not this one.
 
-**Verification.** `devtools::test()`: **FAIL 0 | PASS 9987**, with `test-golden.R`,
+**Verification.** ⚠ Measured against the **pre-23e** test tree (104 files); Phase 23e consolidated it
+to 47 while this phase was being written, carrying all four of the tests added here into its merged
+files (`test-reg-assumptions.R`, `test-tab-reg.R`, `test-tab-export.R`). Re-run once 23e settles.
+`devtools::test()`: **FAIL 0 | PASS 9987**, with `test-golden.R`,
 `test-export-parity.R`, `test-fmt-contract.R`, `test-fuse-parity.R` and every `_snaps/` file
 byte-identical -- which is what proves the string rewrite. All nine vignettes render in a cold
 `Rscript`, 0 ANSI escapes. `devtools::document()` clean; the three delayed
@@ -787,6 +722,18 @@ byte-identical -- which is what proves the string rewrite. All nine vignettes re
 skips are all pre-existing (over-dispersion teaching warnings, a non-converging synthetic glm,
 opt-in benchmarks). ⚠ **Not run here: a full `devtools::check()`** -- it is the release gate and the
 maintainer runs it.
+
+**The jamovi `.jmo`, measured afterwards -- and it reframes what a Suggest costs.**
+⚠ `jamovi-compiler` reads `Depends + Imports + Suggests + LinkingTo` **alike** and bundles everything
+jamovi does not already ship (verified in `compilerr.js`, and on disk: `build/R4.5.0-x64-linux/` held
+`DescTools` and `bench`, both test-only). jamovi bundles ~124 packages, **including `stringi`,
+`broom`, `htmltools`, `knitr`, `fs`, `gtable`, `dplyr`, `tidyr`, `purrr`, `MASS`, `nnet` and
+`ggplot2`** -- so the three Imports this phase removed for CRAN's sake bought the `.jmo` **nothing**.
+What bought it 98.6 MB was dropping four *Suggests*: `ggpubr`, `FactoMineR`, `questionr`, `car`.
+Payload **114 packages / 156.8 MB -> 47 / 58.1 MB**. Of what remains, **`DescTools` + `bench` are
+21.9 MB of test-only weight** -- the best move left, and it costs a user nothing (Phase 23e). And the
+Imports-only floor is 6.9 MB of which **6.4 is `survey`** (-> minqa, numDeriv, mitools -> DBI).
+All of it is priced in `dev/dependencies.md` and reproducible with **`dev/dep_footprint.R`**.
 
 **A defect fixed on the way, not a dependency matter.** `broom:::tidy.multinom` sets `y.level` to the
 string `"1"` when the outcome has two levels instead of naming the category, and
@@ -832,13 +779,13 @@ The package documentation had grown cluttered with dev history and have lost foc
 
 **The set is now five English vignettes, ordered teaching-before-reference**, plus the four French twins (Phase 23f). 3 111 -> 3 131 lines, which is the point: ~500 lines of duplication, dev-history and misplaced reference were cut, and the space went into the two things that were missing (a `display` section, the introspection accessors) and into `all-else-equal` becoming reachable offline.
 
-| file | lines | role |
-|:-----|------:|:-----|
-| `tabxplor.Rmd` | 727 -> 583 | introduction |
-| `tabxplor-all-else-equal.Rmd` | 743 -> 761 | **promoted from `articles/`** — the regression teaching route |
-| `tabxplor-reg.Rmd` | 1326 -> 1250 | the regression reference |
-| `tabxplor-weights.Rmd` | **new, 179** | weighted and survey data, both producers |
-| `tabxplor-programming.Rmd` | 315 -> 358 | programming with the `fmt` cell |
+| file                          |        lines | role                                                          |
+|:------------------------------|-------------:|:--------------------------------------------------------------|
+| `tabxplor.Rmd`                |   727 -> 583 | introduction                                                  |
+| `tabxplor-all-else-equal.Rmd` |   743 -> 761 | **promoted from `articles/`** — the regression teaching route |
+| `tabxplor-reg.Rmd`            | 1326 -> 1250 | the regression reference                                      |
+| `tabxplor-weights.Rmd`        | **new, 179** | weighted and survey data, both producers                      |
+| `tabxplor-programming.Rmd`    |   315 -> 358 | programming with the `fmt` cell                               |
 
 **The introduction was reordered, and that is the largest single gain.** Colour — the package's whole idea — used to arrive at line 289, behind a 92-line survey-methodology essay and a battery-of-items detour. It is now the second section. jamovi is named in the opening (the maintainer's call: a reader who wants menus should not have to reach the end to learn they exist). Deleted outright: the 115-line `variable_type x color x color_signif` grid, which called itself "the reference behind the two color sections above" and duplicates `?tab`'s generated `@param ci_method` (`R/tab-args.R:341-369`) verbatim -- Wilson / Wald / beta / Newcombe / Agresti-Caffo / Welch / Student / OLS / robust / quasipoisson / Katz are all documented there. Added: a `display` section (named layouts, the `{}` grammar, per-token precision `{base:1}`, `set_display()` post-hoc), `tab_counts()` for already-counted data, the Excel -> Word route (which `R/tab_xl.R` is already engineered for), and a `tab_vars` + `spread_vars` demo on `tea`.
 
@@ -914,7 +861,7 @@ under a second on `?tab`, the whole `\donttest` block ~3.3 s. `?tab` went from e
 them `color_signif` / `comp` / `ref` variants of one table) to seven.
 
 **Eleven `@param` blocks stated a default the formal does not carry** — all now read
-``NULL` (default) reads `options(tabxplor.<key>)` — <value>`. On `?tab`: `conf_level`, `color`
+``NULL` (default) reads `options(tabxplor.<key>)`— <value>`. On `?tab`: `conf_level`, `color`
 (said `FALSE`, formal `"no"`), `n`, `stars` (head and body disagreed), `cleannames` (stated none) and
 `anova` (named the option, not its value). On `?tab_reg`: `n`, `ref`, `shape`, `color_signif`
 (⚠ `"grey_non_signif"` is hard-coded in `R/reg-resolve.R:534`, **not** an option — and differs from
@@ -967,6 +914,7 @@ missing, none stale). `devtools::test(filter = "non-ascii|display|args|options")
 
 **Two helpers replace two families of ad-hoc code** (`R/utils.R`, § *user messages*):
 
+
 - **`tx_inform_once(id, ...)`** — the automatic-decision note. ⚠ **The id carries the SUBJECT, not the kind of message**: `paste0("shape_auto_", var)`, never `"shape_auto"`, or the note would be silenced for the *next* variable of the same session. 16 call sites, including the 4 that already hand-rolled `.frequency = "once"` with their own id — one spelling now. Its companion **`tx_reset_messages()`** puts a session back to its first-call state, which is what lets a test still assert on a once-per-session note.
 - **`tx_need_pkg(pkgs, what, severity)`** — the Suggests gate, replacing **eight** spellings (four consecutive `stop(paste0("Package \"ggpubr\" needed for this function to work..."))` in `tab_plot()` collapse to one call). It names **every** missing package of one request in a single message, gives the exact `install.packages(c(...))` line, and teaches `install.packages("tabxplor", dependencies = TRUE)` — deliberately the only message allowed three bullets, because it is rare, shown once, and aimed at a reader for whom installing is the hard part. `severity = "inform"` where the feature degrades (mirai, kableExtra, brant, clipr, the Excel check images).
 
@@ -989,11 +937,34 @@ missing, none stale). `devtools::test(filter = "non-ascii|display|args|options")
 - Drastically reduce bug fixes (same thing really), to only speak about very very few bugs that could have been hit by real user. Remove everything about any new argument or implementation. Make it small.
 - Keep deprecation, reduce it’s size, list elements quickly, but keep differenciate what is soft deprecated and what is hard deprecated.
 
-#### Phase 23e — Tests simplification
-testthat tests have grown organically: it was right for development, but would slow future dev for no real benefits. I want you to select the tests that are *really* necessary, and to move the others to a folder of `dev/` scripts not run with `test`. **The full suite must go below 20 seconds** (parallelised, on this desktop computer).
-- Study what would be the best tests to keep in priority. The ones that measure outputs, rather that the one that overfits the current "how" of the code ? The ones that tests main architecture and design of tabxplor framework and ecosystem of functions, and ensure integration, rather than the ones that tests for a specific implementation of a function whose internals could be done differently without hurting package integration ? What else ? Do not hesisate to make web searches about packages tests, the right and the wrong kind of tests for long development, focusing on long term package maintenance and simplifying the dev tests at release.
-- Identify long tests and, if they are really necessary, think about how to make them faster without losing their reliability.
-- If the preparation steps are computed several times for several tests, make an efficient common preparation.
+#### Phase 23e — Tests simplification — DONE
+
+**Two suites now.** `tests/testthat/` is the package's contract: **104 files / 9 273 assertions → 46 files / 4 316**, and `devtools::test()` goes **134 s → ~40 s** on this box. `dev/tests/` (41 files, 5 899 assertions) holds everything else, moved unchanged and run by `Rscript dev/run_dev_tests.R`. ⚠ **Nothing was deleted**: 4 316 + 5 899 > 9 273, because a split file's shared preamble serves both halves. `Suggests` 24 → 22.
+
+⚠ **The 20 s target was not reached, and the reason is a real conflict.** What is left in the shipped suite *is* the expensive part: the canonical parity blocks (`lm`/`glm`, `multinom`, `polr`, `svyglm`/`svyolr`, `svyVGAM`, `marginaleffects`, `brant`), the 51 output goldens, and the type/API contract. Removing assertions stopped buying time long ago — 40 % of the assertions came out for an 8 % gain — because **the cost is model fits, not assertion count**. Getting under 20 s from here means dropping canonical parity, which the maintainer's ruling keeps. The measured floor: ~136 s serial, and parallel scaling is capped by **6 physical cores**.
+
+**The measurement that shaped the whole phase, and overturned the plan.** The plan assumed one small fixture everywhere. Measured: `tab()` and `tab_html()` cost the **same** on 3 000 rows as on 21 483 (0.040 vs 0.042 s; 0.085 vs 0.087) — a crosstab aggregates on data.table and does not care. Only fits do: `tab_reg()` **5.3×**, `nnet::multinom()` **14×**. So `helper-fixtures.R` declares **two populations**: `fx_gss()` / `fx_gss_fmt()` are the whole frame (and `fx_gss()` IS `forcats::gss_cat`, so **not one golden had to move** — the tripwire is intact), `fx_reg_df()` / `fx_reg_fmt()` a 3 000-row sample, floored at 10 rows per level so no level a test names can vanish. A blanket sample was tried first and reverted: it bought nothing outside regression while forcing 37 fixes and regenerating every golden. ⚠ A 1 200-row sample was tried too — 1 s faster, 5 failures — so 3 000 is the floor, not a guess.
+
+**What earns a place, stated in CLAUDE.md § Testing**: a test stays when it fails on a user-visible change and does not fail on an internal redesign. Four kinds qualify (goldens; the type and class contract; the public surface and the declared fact tables; one canonical parity block per engine). Five kinds moved: source-tree lint (it can only ever skip under `R CMD check`), the phase-defect suites (`19l`, `19m`, `19m3`, `review-pass5`, `14w`), internal-seam parity (`carve`/`fuse`/`num-fuse`/`carrier` — each file's own header already said the goldens cover it), the secondary arm of each engine's parity, and the exhaustive sweeps. `dev/verify_reg_invariants.R` was already the precedent.
+
+**The shipped suite is subsystem-shaped**: `test-<subsystem>.R` guards `R/<subsystem>.R`, so a new test's home follows from the Repository Map. Every file carries a `# PURPOSE / # ROLE` header naming what it guards, and a `# === SECTION:` banner per topic.
+
+⚠ **`test-tab-parallel.R` moved WHOLE.** `tabxplor.parallel` is opt-in and `FALSE` by default, the file is `skip_on_cran()`, it needs mirai, and spawning the daemon pool costs ~10 s — which set the shipped suite's critical path by itself.
+
+**`DescTools` and `bench` left Suggests**, closing the item Phase 22l deferred here: both had zero call sites in `R/` and in the vignettes, so moving their tests removed the declaration (`dev/dependencies.md` updated; ~21.9 MB off the `.jmo` payload). `brant`, `svyVGAM` and `VGAM` stay — `R/` uses them.
+
+⚠ **Three defects the re-partition exposed, all pre-existing.**
+
+- **A test asserted on live global options.** `test-tab-args.R`'s "every option is seeded FROM the declared table" read `getOption()`, so any test that legitimately called the public `set_color_breaks()` broke it once the two landed in the same worker. It now clears the seeded names, re-runs `tx_seed_options()` and reads what the seeder wrote — verified by passing with an option deliberately corrupted first.
+- **A once-per-session message test depended on worker packing.** `tx_inform_once()` is session-scoped, so `expect_message()` failed when another file had already fired that id. Fixed with `tx_reset_messages()`, Phase 23c's sanctioned pattern.
+- **Two tolerances tested convergence, not a formula.** A grouped-binomial CI and a multinomial AME compared two independently fitted glms; `expect_equal()`'s tolerance is *relative*, so a p-value of 3e-7 failed while agreeing to nine decimals. Now compared absolutely, with the claim each tolerance states written beside it — and where the residual gap is `nnet`'s own convergence rather than tabxplor's, the two claims are asserted at two tolerances.
+
+⚠ **`detectCores()` counts SMT siblings.** This CPU reports 12 and has **6** real cores; `parallelly::availableCores(logical = FALSE)` cannot tell either under WSL2. `tests/testthat.R` now sizes the pool from `/sys/.../thread_siblings_list`. Measured: 8 workers beat 6 by ~6 % while oversubscribing a shared machine, so 6 is the default (the maintainer's call). ⚠ `devtools::test()` does **not** read `tests/testthat.R`, so the CLAUDE.md recipe sets `TESTTHAT_CPUS = "6"` itself.
+
+⚠ **The "before" per-file numbers in `dev/benchmarks/results_2.0.0/` are inflated ~2×.** The harness re-sourced `setup.R` per file, and `setDTthreads()` rebuilds data.table's OpenMP pool on every call — the very trap CLAUDE.md § Testing documents. The ranking is sound, the totals are not; `phase23e_README.md` says so beside them.
+
+**Verification.** Shipped suite **FAIL 0 | PASS 4 316 | SKIP 1**; `dev/run_dev_tests.R` **FAIL 0 | PASS 5 899 | SKIP 3**. `_golden/`, `_color_golden/` and `_snaps/golden.md` are byte-identical to HEAD; `_snaps/fmt-contract.md` → `fmt.md` and `render-html.md` → `tab-render-html.md` are renames with a zero-line diff. ⚠ Not run here: `devtools::check()`, the release gate the maintainer runs.
+
 
 #### Phase 23f — french translations
 

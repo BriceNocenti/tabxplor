@@ -6,7 +6,7 @@
 
 
 cr_data <- function() {
-  d <- forcats::gss_cat
+  d <- fx_reg_df()
   d$race    <- forcats::fct_drop(d$race)
   d$married <- factor(as.integer(d$marital == "Married"), labels = c("no", "yes"))
   d$age4    <- cut(d$age, breaks = stats::quantile(d$age, (0:4) / 4, na.rm = TRUE),

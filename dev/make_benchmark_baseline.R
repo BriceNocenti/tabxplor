@@ -11,7 +11,7 @@
 
 pkg <- normalizePath(".", winslash = "/")
 suppressMessages(devtools::load_all(pkg, quiet = TRUE))
-source(file.path(pkg, "tests", "testthat", "helper-benchmark.R"))
+source(file.path(pkg, "dev", "tests", "testthat", "helper-benchmark.R"))
 
 res <- benchmark_run("small_gss_cat", nrow(forcats::gss_cat), benchmark_small_ops(), iterations = 10L)
 out <- res[, c("operation", "median_s", "mem_mb")]

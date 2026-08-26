@@ -26,8 +26,8 @@ msgid ""
 "<b><i>Choose reference categories, merge and reorder levels, cut numeric "
 "variables:</i></b>"
 msgstr ""
-"<b><i>Choisir les références, fusionner et trier les modalités, découper les "
-"nombres :</i></b>"
+"<b><i>Choisir les catégories de référence, fusionner/trier, couper les "
+"var. numériques :</i></b>"
 
 #: jmvtab/options/cleannames.title
 #: jmvtabreg/ui[4][0][1]/cleannames.label
@@ -49,11 +49,11 @@ msgstr "<b>Intervalles de confiance (IC)</b>"
 
 #: jmvtab/ui[3][1][0].label
 msgid "<b>Confidence-interval methods (advanced)</b>"
-msgstr "<b>Méthodes d'IC (avancé)</b>"
+msgstr "<b>Méthodes de calcul des IC (avancé)</b>"
 
 #: jmvtab/ui[3][0][3]/design_effect.label
 msgid "<b>design_effect = <i>(design effect of the weights)</i></b>"
-msgstr "<b>design_effect = <i>(effet de plan)</i></b>"
+msgstr "<b>design_effect = <i>(effet de plan des pondérations)</i></b>"
 
 #: jmvtabreg/options/empirical.title
 msgid "<b>empirical = <i>(show the observed effect)</i></b>"
@@ -139,8 +139,8 @@ msgid ""
 "<i>Choose reference categories, merge and reorder levels, reshape numeric "
 "variables:</i>"
 msgstr ""
-"<i>Choisir les références, fusionner et trier les modalités, transformer les "
-"nombres :</i>"
+"<i>Choisir les catégories de référence, fusionner/trier, transformer les "
+"var. numériques:</i>"
 
 #: jamovi/js/jmvtab.js:1088
 #: jamovi/js/jmvtabreg.js:1818
@@ -192,7 +192,7 @@ msgstr "adjustment <i>(l’écart modèle / observé)</i>"
 #: jmvtab/options/pct/all.title
 #: jmvtab/options/lvs/all.title
 msgid "all"
-msgstr "all"
+msgstr "all (toutes les garder)"
 
 #: jmvtab/options/comp/all.title
 msgid "all <i>(compare with the total subtable)</i>"
@@ -205,7 +205,7 @@ msgstr "all_tabs (avec tab_vars)"
 #: jamovi/js/jmvtab.js:856
 #: jamovi/js/jmvtabreg.js:862
 msgid "an ordered variable already has the order its levels mean"
-msgstr "une variable ordonnée porte déjà l'ordre de ses modalités"
+msgstr "une variable ordinale porte déjà son ordre"
 
 #: jmvtab/options/anova.title
 msgid "anova = <i>(which test for numeric variables ?)</i>"
@@ -256,7 +256,7 @@ msgstr "auto/tot/<i>{num_ligne}</i>/<i>{nom_ligne}</i>"
 
 #: jmvtabreg/options/display/base.title
 msgid "base <i>(adjusted pct/mean, alone)</i>"
-msgstr "base <i>(pct/mean ajustés, seuls)</i>"
+msgstr "base <i>(%/mean ajustés, seuls)</i>"
 
 #: jmvtab/options/display/base.title
 msgid "base <i>(pct or mean)</i>"
@@ -268,11 +268,11 @@ msgstr "base_ci <i>(base + intervalle)</i>"
 
 #: jmvtab/options/display/base_diff.title
 msgid "base_diff <i>(base + diff)</i>"
-msgstr "base_diff <i>(base + écart)</i>"
+msgstr "base_diff <i>(base + diff)</i>"
 
 #: jmvtabreg/options/display/base_est.title
 msgid "base_est <i>(adj. pct/mean + est.)</i>"
-msgstr "base_est <i>(pct/mean ajustés + est.)</i>"
+msgstr "base_est <i>(%/mean ajustés + est.)</i>"
 
 #: jmvtabreg/options/display/base_est_mdiff.title
 msgid "base_est_mdiff <i>(+ marg. diff)</i>"
@@ -317,7 +317,7 @@ msgstr "ci <i>(IC seul)</i>"
 
 #: jmvtab/ui[3][0][0][0].label
 msgid "ci = <i>(confidence intervals)</i>"
-msgstr "ci = <i>(quels IC afficher)</i>"
+msgstr "ci = <i>(quels intervalles de confiance ?)</i>"
 
 #: jmvtabreg/options/ci_method.title
 msgid "ci_method"
@@ -463,7 +463,7 @@ msgstr "difference <i>(RD, diff)</i>"
 #: jmvtab/ui[4][6][0].label
 #: jmvtabreg/ui[4][0][5][0].label
 msgid "digits = <i>(number of digits)</i>"
-msgstr "digits = <i>(nb de décimales)</i>"
+msgstr "digits = <i>(nombre de décimales)</i>"
 
 #: jmvtab/ui[1][0][2][0].label
 msgid "display = <i>(what each cell shows)</i>"
@@ -471,7 +471,7 @@ msgstr "display = <i>(ce que montre la case)</i>"
 
 #: jmvtabreg/ui[1][2][1][0][0].label
 msgid "display = <i>(what numbers the cell show)</i>"
-msgstr "display = <i>(quels nombres la case affiche-t-elle ?)</i>"
+msgstr "display = <i>(quels chiffres la case affiche-t-elle ?)</i>"
 
 #: jmvtab/options/na/drop.title
 msgid "drop <i>(each col_var drops its own NA)</i>"
@@ -495,8 +495,7 @@ msgstr "drop_by_outcome <i>(une population par variable à expliquer)</i>"
 
 #: jamovi/js/jmvtabreg.js:1699
 msgid "Each model draws from the predictors above; untick to leave one out."
-msgstr ""
-"Chaque modèle puise dans les prédicteurs ci-dessus ; décocher pour en "
+msgstr "Chaque modèle puise dans les prédicteurs ci-dessus ; décocher pour en "
 "retirer un."
 
 #: jmvtabreg/ui[1][2][1][2][0].label
@@ -517,7 +516,7 @@ msgstr "est <i>(l'estimation)</i>"
 
 #: jmvtabreg/options/display/est_base.title
 msgid "est_base <i>(est. + adj. pct/mean)</i>"
-msgstr "est_base <i>(est. + pct/mean ajustés)</i>"
+msgstr "est_base <i>(est. + %/mean ajustés)</i>"
 
 #: jmvtabreg/options/display/est_ci.title
 msgid "est_ci <i>(estimate + interval)</i>"
@@ -553,7 +552,7 @@ msgstr "first"
 
 #: jamovi/js/jmvtab.js:1018
 msgid "First"
-msgstr "1re"
+msgstr "first (1re cat.)"
 
 #: jmvtab/options/lvs/first.title
 msgid "first <i>(first level of each col_var)</i>"
@@ -561,11 +560,11 @@ msgstr "first <i>(1re modalité de chaque col_var)</i>"
 
 #: jamovi/js/jmvtab.js:980
 msgid "First group"
-msgstr "1er groupe"
+msgstr "first (1ere cat.)"
 
 #: jamovi/js/jmvtabreg.js:1020
 msgid "first group (lowest)"
-msgstr "1er groupe (le plus bas)"
+msgstr "first (1ere cat.)"
 
 #: jmvtab/options/ref2.title
 msgid "first/tot/<i>{col_number}</i>"
@@ -628,7 +627,7 @@ msgstr "interactions (prédicteurs)"
 
 #: jmvtab/options/na/keep.title
 msgid "keep <i>(NA as a normal level)</i>"
-msgstr "keep <i>(garder NA comme modalités)</i>"
+msgstr "keep <i>(garder les valeurs manquantes)</i>"
 
 #: jmvtabreg/options/na/keep_for_predictors.title
 msgid "keep_for_predictors <i>(predictors NA to real levels)</i>"
@@ -636,11 +635,11 @@ msgstr "keep_for_predictors <i>(garder les NA des prédicteurs comme modalités)
 
 #: jamovi/js/jmvtab.js:980
 msgid "Last group"
-msgstr "dernier groupe"
+msgstr "last (dernière cat.)"
 
 #: jamovi/js/jmvtabreg.js:1020
 msgid "last group (highest)"
-msgstr "dernier groupe (le plus haut)"
+msgstr "last (dernière cat.)"
 
 #: jmvtabreg/options/levels_order.title
 msgid "Level order (per predictor)"
@@ -661,7 +660,7 @@ msgstr "modalités / shape ="
 
 #: jmvtab/ui[2][0][1][0].label
 msgid "levels = <i>(which col_var levels to keep)</i>"
-msgstr "levels = <i>(modalités de col_var gardées)</i>"
+msgstr "levels = <i>(modalités des col_vars)</i>"
 
 #: jmvtab/options/tab_theme/light.title
 #: jmvtabreg/options/tab_theme/light.title
@@ -799,7 +798,7 @@ msgstr "multinomial"
 
 #: jmvtabreg/options/multiplier.title
 msgid "multiplier (per numeric predictor)"
-msgstr "multiplier (échelle, par prédicteur numérique)"
+msgstr "multiplier (échelle, par prédicteur num.)"
 
 #: jamovi/js/jmvtabreg.js:959
 msgid "multiplier ="
@@ -1114,7 +1113,7 @@ msgstr ""
 
 #: jamovi/js/jmvtabreg.js:962
 msgid "Select predictors to choose their baseline and shape."
-msgstr "Sélectionner des prédicteurs pour régler leur référence, etc."
+msgstr "Sélectionner des prédicteurs pour choisir leur référence, etc."
 
 #: jamovi/js/jmvtab.js:912
 msgid "Select row, column or table variables to order, merge or cut their levels."
@@ -1158,7 +1157,7 @@ msgstr "tab <i>(comparer par sous-tableau)</i>"
 
 #: jmvtab/options/totaltab/table.title
 msgid "table"
-msgstr "table (un sous-tableau)"
+msgstr "table (un sous-tableau Ensemble)"
 
 #: jamovi/js/jmvtab.js:1089
 #: jmvtab/options/export_filename.default
@@ -1220,7 +1219,7 @@ msgstr "totaltab"
 
 #: jmvtab/ui[4][1][0].label
 msgid "totaltab = <i>(with tab_vars, add a total table)</i>"
-msgstr "totaltab = <i>(un tableau d'ensemble)</i>"
+msgstr "totaltab = <i>(avec tab_vars, tableau d'ensemble)</i>"
 
 #: jamovi/js/jmvtabreg.js:1215
 msgid "trials"
@@ -1232,7 +1231,7 @@ msgstr "trials (nombre de questions, par variable)"
 
 #: jamovi/js/jmvtab.js:26
 msgid "values_to_levels"
-msgstr "values_to_levels"
+msgstr "values_to_levels (cat.)"
 
 #: jmvtab/options/display/var.title
 msgid "var <i>(variance)</i>"
@@ -1248,7 +1247,7 @@ msgstr "wald"
 
 #: jmvtab/options/ci_method_cell/wald.title
 msgid "wald <i>(normal approx.)</i>"
-msgstr "wald <i>(approx. normale)</i>"
+msgstr "wald <i>(approximation normale)</i>"
 
 #: jmvtabreg/options/ci_method/wald.title
 msgid "wald = <i>(Wald)</i>"
@@ -1260,7 +1259,7 @@ msgstr "Welch <i>(variances inégales)</i>"
 
 #: jmvtab/options/ci_method_mean_diff/welch.title
 msgid "welch <i>(unequal variances)</i>"
-msgstr "welch <i>(var. inégales)</i>"
+msgstr "welch <i>(variances inégales)</i>"
 
 #: jamovi/js/jmvtab.js:910
 msgid "what each cell is compared to"
@@ -1281,9 +1280,9 @@ msgstr "wn <i>(effectifs pondérés)</i>"
 #: jmvtab/ui[4][4][0].label
 #: jmvtabreg/ui[4][0][3][0].label
 msgid "wrap_cols = <i>(nb chars for line break)</i>"
-msgstr "wrap_cols = <i>(noms col.: saut de ligne à)</i>"
+msgstr "wrap_cols = <i>(noms col.: saut de ligne à:)</i>"
 
 #: jmvtab/ui[4][3][0].label
 #: jmvtabreg/ui[4][0][2][0].label
 msgid "wrap_rows = <i>(nb chars for line break)</i>"
-msgstr "wrap_rows = <i>(noms lignes: saut de ligne à)</i>"
+msgstr "wrap_rows = <i>(noms lignes: saut de ligne à:)</i>"

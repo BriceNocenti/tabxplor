@@ -4,9 +4,9 @@
 #       column's default layout rests on.
 # See: CLAUDE.md > Phase 22c-iii; R/var-shape.R.
 
-gsh <- suppressWarnings(gss_cat_data_formatting())
-gsh$age     <- forcats::gss_cat$age
-gsh$tvhours <- forcats::gss_cat$tvhours
+gsh <- suppressWarnings(fx_gss_fmt())
+gsh$age     <- fx_gss()$age
+gsh$tvhours <- fx_gss()$tvhours
 quiet <- function(e) suppressMessages(e)
 
 # === the declared vocabulary =====================================================================
@@ -97,7 +97,7 @@ testthat::test_that("the variable's name is written on the FIRST level only", {
                                    fixed = TRUE)))
   # ... but never on `levels`: a raw value names itself, and prefixing it broke the tab_counts()
   # parity a numeric key has always had (measured).
-  d <- dplyr::mutate(forcats::gss_cat, yr = as.integer(year))
+  d <- dplyr::mutate(fx_gss(), yr = as.integer(year))
   a <- quiet(tab(d, yr, race, pct = "row"))
   b <- quiet(tab_counts(dplyr::count(d, yr, race, name = "n"), yr, race, counts = n, pct = "row"))
   testthat::expect_equal(a, b)
@@ -134,7 +134,7 @@ testthat::test_that("a shaped row variable is an ordinary factor from the prepar
   testthat::expect_true("Total" %in% levels(t$age))
   # `levels` reproduces what a numeric row variable has always become: a PLAIN factor, so a table
   # built this way stays identical to one built before `shape` existed (and to tab_counts()').
-  d <- gsh; d$yr <- as.integer(forcats::gss_cat$year)
+  d <- gsh; d$yr <- as.integer(fx_gss()$year)
   testthat::expect_false(is.ordered(quiet(tab(d, yr, party3, pct = "row", na = "drop"))$yr))
   # the cut runs ONCE, on the whole population: every sub-table shares the breaks, so there are
   # exactly four cut labels however many sub-tables there are
@@ -183,7 +183,7 @@ testthat::test_that("the numeric default is mean_cv, GUARDED per column", {
   testthat::expect_match(format(t$age)[[1]], "cv")
   # a column that holds a non-positive mean falls back to the bare mean -- ONE layout per column,
   # never a wild figure in some rows and a sensible one in others
-  d <- gsh; d$gap <- forcats::gss_cat$age - 47
+  d <- gsh; d$gap <- fx_gss()$age - 47
   t2 <- quiet(tab(d, race, c(age, gap), na = "drop"))
   testthat::expect_identical(unique(get_display(t2$gap)), "mean")
   testthat::expect_identical(unique(get_display(t2$age)), DISPLAY_PRESETS$mean_cv$template)

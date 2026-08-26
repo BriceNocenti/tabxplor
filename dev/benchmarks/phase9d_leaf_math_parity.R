@@ -16,7 +16,7 @@
 
 pkg <- normalizePath(".", winslash = "/")
 suppressMessages(devtools::load_all(pkg, quiet = TRUE))
-source(file.path(pkg, "tests", "testthat", "helper-benchmark.R"))  # benchmark_measure()
+source(file.path(pkg, "dev", "tests", "testthat", "helper-benchmark.R"))  # benchmark_measure()
 suppressMessages(library(data.table))
 
 `%||%` <- function(a, b) if (is.null(a)) b else a

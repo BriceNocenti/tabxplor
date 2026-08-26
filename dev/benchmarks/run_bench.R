@@ -20,7 +20,7 @@
 pkg <- normalizePath(".", winslash = "/")
 suppressMessages(devtools::load_all(pkg, quiet = TRUE))
 # Shared ops/timing/printing helpers (same ones the in-suite benchmark uses).
-source(file.path(pkg, "tests", "testthat", "helper-benchmark.R"))
+source(file.path(pkg, "dev", "tests", "testthat", "helper-benchmark.R"))
 source(file.path(pkg, "dev", "benchmarks", "gen_big_df.R"))
 
 big <- gen_big_df(cache = file.path(pkg, "dev", "benchmarks", "big_df.rds"))

@@ -39,7 +39,7 @@ golden_sparse_df <- function() {
 
 # Named list of zero-arg thunks, each producing one table. Names are the fixture basenames.
 golden_cases <- function() {
-  gss <- forcats::gss_cat
+  gss <- fx_gss()
   syn <- golden_syn_df()
   sparse <- golden_sparse_df()
 

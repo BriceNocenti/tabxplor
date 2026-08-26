@@ -21,7 +21,7 @@
 
 pkg <- normalizePath(".", winslash = "/")
 suppressMessages(devtools::load_all(pkg, quiet = TRUE))
-source(file.path(pkg, "tests", "testthat", "helper-benchmark.R"))  # benchmark_measure()
+source(file.path(pkg, "dev", "tests", "testthat", "helper-benchmark.R"))  # benchmark_measure()
 
 gss <- forcats::gss_cat
 q   <- function(x) suppressWarnings(suppressMessages(x))            # timing, not a correctness check

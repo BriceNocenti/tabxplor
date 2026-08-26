@@ -435,7 +435,7 @@ options:
            Default to 0.95 (95%).
 
     - name: stars
-      title: stars
+      title: ""
       type: Bool
       default: false
       description:

@@ -84,7 +84,7 @@ color_golden_syn_diff_fmt <- function() {
 # Named list of zero-arg thunks, each returning a CAPTURE (nested list of hex vectors). Names
 # are the fixture basenames written to _color_golden/<name>.rds.
 color_golden_cases <- function() {
-  gss <- forcats::gss_cat
+  gss <- fx_gss()
 
   list(
     # --- synthetic tie lock (LOCKED: factor "diff" must stay byte-identical) ---
