@@ -45,65 +45,48 @@
 
 # === SECTION: the declared vocabulary ==============================================================
 
-# One row per shape. `kind` is what the applier dispatches on, `produces` what the column IS
+# ONE row per shape. `kind` is what the applier dispatches on, `produces` what the column IS
 # afterwards (which is what a producer's variable classification must read), `producers` who may ask
-# for it, `mark` how a still-numeric transform names itself in a header, `doc` the user-facing prose
-# ?shape_numeric_var renders.
+# for it, `k` how many groups a quantile cut makes (NA where the shape does not cut), `mark` how a
+# still-numeric transform names itself in a header, `doc` the user-facing prose ?shape_numeric_var
+# renders.
 #' @keywords internal
 #' @noRd
-.vshape <- function(kind, produces, producers, k = NA_integer_, mark = NA_character_, doc)
-  list(kind = kind, produces = produces, producers = producers, k = k, mark = mark, doc = doc)
-
-#' @keywords internal
-#' @noRd
-VAR_SHAPES <- list(
-  linear = .vshape(
-    "none", "numeric", c("tab", "tab_reg"),
-    doc = paste("the number as it is --- one slope in a model, one mean in a crosstab. The default",
-                "for a column variable, and what `shape` is spelled out as when nothing is done.")),
-  log = .vshape(
-    "log", "numeric", c("tab", "tab_reg"), mark = "log(x)",
-    doc = paste("replace the variable by its logarithm --- diminishing returns. Needs strictly",
-                "positive values.")),
-  sqrt = .vshape(
-    "sqrt", "numeric", c("tab", "tab_reg"), mark = "\u221a(x)",
-    doc = "replace the variable by its square root. Needs non-negative values."),
-  quadratic = .vshape(
-    "quadratic", "term", "tab_reg",
-    doc = paste("add a curvature term, so the predictor takes two rows --- the slope at the mean,",
-                "and the squared term saying whether the slope flattens or accelerates away from",
-                "it. A model term, so [tab()] cannot take it.")),
-  sd_bands = .vshape(
-    "bands", "factor", c("tab", "tab_reg"),
-    doc = paste("four bands cut at the mean and one standard deviation either side. Each level",
-                "names its own cut (`[30,48) ; < mean`), so the label can be checked against the",
-                "interval beside it. The cut points mean the same thing across sub-samples of one",
-                "variable, where quantile breaks move with each one; but the bands are NOT",
-                "balanced, and on a skewed variable a landmark falling outside the data is dropped",
-                "(an exponential variable gets three bands, not four).")),
-  median = .vshape(
-    "quantiles", "factor", c("tab", "tab_reg"), k = 2L,
-    doc = "two groups of equal size, cut at the median --- the coarsest reading of a number."),
-  terciles = .vshape(
-    "quantiles", "factor", c("tab", "tab_reg"), k = 3L,
-    doc = "three groups of equal size."),
-  quartiles = .vshape(
-    "quantiles", "factor", c("tab", "tab_reg"), k = 4L,
-    doc = paste("four groups of equal size. The counts are balanced, so every group answers on a",
-                "comparable base.")),
-  quintiles = .vshape(
-    "quantiles", "factor", c("tab", "tab_reg"), k = 5L,
-    doc = "five groups of equal size."),
-  deciles = .vshape(
-    "quantiles", "factor", c("tab", "tab_reg"), k = 10L,
-    doc = paste("ten groups of equal size. Reads a gradient, but ten rows need a large sample to",
-                "keep each base usable.")),
+VAR_SHAPES <- tx_grid(tibble::tribble(
+  ~key,               ~kind,       ~produces, ~producers,          ~k,          ~mark, ~doc,
+  "linear",           "none",      "numeric", c("tab", "tab_reg"), NA_integer_, NA_character_,
+      paste("the number as it is --- one slope in a model, one mean in a crosstab. The default for a column",
+            "variable, and what `shape` is spelled out as when nothing is done."),
+  "log",              "log",       "numeric", c("tab", "tab_reg"), NA_integer_, "log(x)",
+      "replace the variable by its logarithm --- diminishing returns. Needs strictly positive values.",
+  "sqrt",             "sqrt",      "numeric", c("tab", "tab_reg"), NA_integer_, "\u221a(x)",
+      "replace the variable by its square root. Needs non-negative values.",
+  "quadratic",        "quadratic", "term",    "tab_reg",           NA_integer_, NA_character_,
+      paste("add a curvature term, so the predictor takes two rows --- the slope at the mean, and the squared",
+            "term saying whether the slope flattens or accelerates away from it. A model term, so [tab()]",
+            "cannot take it."),
+  "sd_bands",         "bands",     "factor",  c("tab", "tab_reg"), NA_integer_, NA_character_,
+      paste("four bands cut at the mean and one standard deviation either side. Each level names its own cut",
+            "(`[30,48) ; < mean`), so the label can be checked against the interval beside it. The cut points",
+            "mean the same thing across sub-samples of one variable, where quantile breaks move with each one;",
+            "but the bands are NOT balanced, and on a skewed variable a landmark falling outside the data is",
+            "dropped (an exponential variable gets three bands, not four)."),
+  "median",           "quantiles", "factor",  c("tab", "tab_reg"), 2L,          NA_character_,
+      "two groups of equal size, cut at the median --- the coarsest reading of a number.",
+  "terciles",         "quantiles", "factor",  c("tab", "tab_reg"), 3L,          NA_character_,
+      "three groups of equal size.",
+  "quartiles",        "quantiles", "factor",  c("tab", "tab_reg"), 4L,          NA_character_,
+      "four groups of equal size. The counts are balanced, so every group answers on a comparable base.",
+  "quintiles",        "quantiles", "factor",  c("tab", "tab_reg"), 5L,          NA_character_,
+      "five groups of equal size.",
+  "deciles",          "quantiles", "factor",  c("tab", "tab_reg"), 10L,         NA_character_,
+      paste("ten groups of equal size. Reads a gradient, but ten rows need a large sample to keep each base",
+            "usable."),
   # LAST because it is the one that explodes the level count: a level per distinct value.
-  values_to_levels = .vshape(
-    "levels", "factor", "tab",
-    doc = paste("one level per distinct value, in numeric order. Right for a counted number or a",
-                "1-7 scale; unreadable for a continuous one, which is what `\"auto\"` decides."))
-)
+  "values_to_levels", "levels",    "factor",  "tab",               NA_integer_, NA_character_,
+      paste("one level per distinct value, in numeric order. Right for a counted number or a 1-7 scale;",
+            "unreadable for a continuous one, which is what `\"auto\"` decides."),
+))
 
 # The value set one producer accepts, in the order it is offered. THE one list; there is no second.
 #' @keywords internal
@@ -385,7 +368,7 @@ shape_labels <- function(bounds, side, name = NULL, sep = " ") {
 # a landmark without lying about which one it lost.
 # WARNING: the sigma NEVER enters a string literal -- it is a %s, so the source stays ASCII AND the
 # msgid stays ASCII. potools extracts a "\uXXXX" escape verbatim while gettext() looks the EVALUATED
-# string up, which silently fuzzies every accented entry (the Phase 22e-i trap).
+# string up, which silently fuzzies every accented entry.
 #' @keywords internal
 #' @noRd
 shape_band_words <- function(tag) {

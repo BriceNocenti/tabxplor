@@ -94,7 +94,8 @@ reg_check_family_of <- function(f) {
   ifelse(is.na(d), f, d)
 }
 
-# ONE row per check.
+# ONE row per check, in the grid's own column order.
+#   key           the check's name -- the `stats =` / `check =` vocabulary, and REG_CHECK_KEY_OF's target
 #   noun          the assumption, as a word the reader already knows (a msgid)
 #   types         discriminator -> INSTRUMENT (a msgid). The label is "<noun> (<instrument>)" (the
 #                 crosstab summary's own convention, "pvalue (Chi2, Welch F)"). A term test carries
@@ -123,62 +124,30 @@ reg_check_family_of <- function(f) {
 #   panel_marks   the reference line(s) that panel draws. DESIGN: a panel and a footer row are one
 #                 check, so they must read one threshold -- `flag` where the check declares one.
 #' @keywords internal
-REG_CHECKS <- list(
+REG_CHECKS <- tx_grid(tibble::tribble(
+  ~key,              ~noun,             ~types,                                                            ~kind,         ~digits,      ~flag, ~families,                                    ~weighted_ok, ~per_predictor, ~cost,   ~footer_default, ~panel,             ~panel_default, ~panel_marks,
   # 1. the ESTIMATE: is this predictor's effect really one straight line?
-  linearity = list(
-    noun = "Linearity",
-    types = c(linearity_lr = "LR", linearity_f = "F", linearity_wald = "Wald"),
-    kind = "pvalue", digits = NA_integer_,
-    families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = TRUE,
-    cost = "refit", footer_default = FALSE, panel = "linearity", panel_default = TRUE),
+  "linearity",       "Linearity",       c(linearity_lr = "LR", linearity_f = "F", linearity_wald = "Wald"), "pvalue",      NA_integer_,  NULL,  REG_CHECK_FAMILIES,                           TRUE,         TRUE,           "refit", FALSE,           "linearity",        TRUE,           NULL,
   # 2. what the estimate MEANS: is one odds ratio enough for every cut?
-  proportionality = list(
-    noun = "Proportionality",
-    types = c(proportionality = "Brant"),
-    kind = "pvalue", digits = NA_integer_,
-    families = "ordinal", weighted_ok = FALSE, per_predictor = FALSE,
-    cost = "refit", footer_default = TRUE, panel = "proportionality", panel_default = TRUE),
-  # 3. the INTERVAL: are the standard errors wide enough?
-  dispersion = list(
-    noun = "Dispersion",
-    types = c(dispersion = "robust/model SE"),
-    kind = "gof", digits = 2L,
-    families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = FALSE,
-    # one number against one number: the footer row says it all, so the panel is opt-in.
-    cost = "free", footer_default = TRUE, panel = "dispersion", panel_default = FALSE),
-  # 4. is it REAL: does one respondent carry the result?
-  influence = list(
-    noun = "Influence",
-    types = c(influence = "max dfbetas"),
-    # |dfbetas| >= 1: ONE respondent moves a coefficient by a full standard error. Belsley, Kuh &
-    # Welsch's small-sample rule -- their 2/sqrt(n) large-sample one is useless at survey n, where it
-    # flags thousands of points.
-    kind = "gof", digits = 2L, flag = 1,
-    families = REG_CHECK_FAMILIES, weighted_ok = TRUE, per_predictor = FALSE,
-    cost = "free", footer_default = TRUE, panel = "influence", panel_default = TRUE, panel_marks = 1),
-  # 5. why is it WIDE: can the data tell these predictors apart?
-  collinearity = list(
-    noun = "Collinearity",
-    types = c(collinearity = "max VIF"),
-    # VIF >= 10: the textbook convention (Kutner et al.). ⚠ O'Brien (2007) argues explicitly against
-    # any such cut-off -- hence a warning shade and a documented rule of thumb, not a verdict.
-    kind = "gof", digits = 2L, flag = 10,
-    families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
-    # a design property that biases nothing: the footer number is the decision, the bars are colour.
-    per_predictor = FALSE, cost = "free", footer_default = TRUE, panel = "collinearity", panel_default = FALSE,
-    panel_marks = c(5, 10)),
+  "proportionality", "Proportionality", c(proportionality = "Brant"),                                       "pvalue",      NA_integer_,  NULL,  "ordinal",                                    FALSE,        FALSE,          "refit", TRUE,            "proportionality",  TRUE,           NULL,
+  # 3. the INTERVAL: are the standard errors wide enough? One number against one number, so the
+  #    footer row says it all and the panel is opt-in.
+  "dispersion",      "Dispersion",      c(dispersion = "robust/model SE"),                                  "gof",         2L,           NULL,  REG_CHECK_FAMILIES,                           TRUE,         FALSE,          "free",  TRUE,            "dispersion",       FALSE,          NULL,
+  # 4. is it REAL: does one respondent carry the result? |dfbetas| >= 1 moves a coefficient by a full
+  #    standard error -- Belsley, Kuh & Welsch's small-sample rule, their 2/sqrt(n) large-sample one
+  #    being useless at survey n, where it flags thousands of points.
+  "influence",       "Influence",       c(influence = "max dfbetas"),                                       "gof",         2L,           1,     REG_CHECK_FAMILIES,                           TRUE,         FALSE,          "free",  TRUE,            "influence",        TRUE,           1,
+  # 5. why is it WIDE: can the data tell these predictors apart? VIF >= 10 is the textbook convention
+  #    (Kutner et al.); O'Brien (2007) argues explicitly against any such cut-off, hence a warning
+  #    shade and a rule of thumb, not a verdict. A design property that biases nothing, so the footer
+  #    number is the decision and the bars are colour.
+  "collinearity",    "Collinearity",    c(collinearity = "max VIF"),                                        "gof",         2L,           10,    setdiff(REG_CHECK_FAMILIES, "multinomial"),   TRUE,         FALSE,          "free",  TRUE,            "collinearity",     FALSE,          c(5, 10),
   # TAUGHT, NEVER SCORED. Both were measured not to discriminate as verdicts, but both are the
   # canonical lessons, so they keep their panel and give up their row -- an empty `types` IS that
   # statement.
-  residuals = list(
-    noun = "Residuals", types = character(0), kind = NA_character_, digits = NA_integer_,
-    families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
-    per_predictor = FALSE, cost = "free", footer_default = FALSE, panel = "residuals", panel_default = TRUE),
-  normality = list(
-    noun = "Normality", types = character(0), kind = NA_character_, digits = NA_integer_,
-    families = setdiff(REG_CHECK_FAMILIES, "multinomial"), weighted_ok = TRUE,
-    per_predictor = FALSE, cost = "free", footer_default = FALSE, panel = "normality", panel_default = TRUE)
-)
+  "residuals",       "Residuals",       character(0),                                                       NA_character_, NA_integer_,  NULL,  setdiff(REG_CHECK_FAMILIES, "multinomial"),   TRUE,         FALSE,          "free",  FALSE,           "residuals",        TRUE,           NULL,
+  "normality",       "Normality",       character(0),                                                       NA_character_, NA_integer_,  NULL,  setdiff(REG_CHECK_FAMILIES, "multinomial"),   TRUE,         FALSE,          "free",  FALSE,           "normality",        TRUE,           NULL,
+))
 
 # Every discriminator the checks can emit (the `test` values that are check rows).
 #' @keywords internal

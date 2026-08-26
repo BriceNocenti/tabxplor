@@ -35,6 +35,37 @@
 # See: CLAUDE.md § tabxplor architecture (the declarative architecture); R/tab-options.R (the option
 #   twins this table's `option` column points at).
 
+# COLUMNS. `producers` is the only one every row carries; everything else states what is unusual
+# about the argument. Every row writes them in TAB_ARG_ORDER -- short facts first, `doc` last -- so
+# the 81 rows read down a column; asserted at load.
+#   producers   the producers this is a FORMAL of. tab_args_rd() orders by formals() and asserts the
+#               two sets match, so a signature and this table cannot drift.
+#   dots        the producers that take it through `...` instead of as a formal.
+#   status      "deprecated" / "superseded". ⚠ may be a NAMED vector, one entry per producer -- read
+#               it with tab_arg_status(name, producer), never with `$status`.
+#   default     the formal's default; `default_for` overrides it per producer (a named list).
+#   option      the tabxplor.* option that supplies the default when the formal is NULL (a
+#               TAB_OPTIONS key, checked at load).
+#   values      the argument's OWN value set, for an argument no fact table gives a vocabulary to.
+#   values_from the fact table that owns the vocabulary instead (checked at load).
+#   values_rd   the *_rd() generator that renders the value list into the help page.
+#   validate    FALSE = declared for the documentation only, never checked at the boundary.
+#   leaf        the narrower value set the LEAF producers accept, where the full one is wider.
+#   size        the exact length the value must have (absent = any).
+#   na_ok       NA is a legal value.
+#   check       the numeric contract the value must meet: "probability" | "count".
+#   stored      `pct` only: the PCT_TYPES key stamped when the argument is off.
+#   doc         the roxygen @param body, as Rd lines. `doc_for` overrides it per producer;
+#               `doc_with` says another row's block documents this one; `doc_in_producer = TRUE`
+#               that the prose stays in the producer's own roxygen.
+# The one order every row of both tables writes its fields in, asserted below.
+#' @keywords internal
+#' @noRd
+TAB_ARG_ORDER <- c("producers", "dots", "status", "default", "default_for", "option",
+                   "values", "values_from", "values_rd", "validate", "leaf", "size", "na_ok",
+                   "check", "stored",
+                   "doc", "doc_for", "doc_with", "doc_in_producer")
+
 #' @keywords internal
 #' @noRd
 TAB_ARGS <- list(
@@ -60,13 +91,13 @@ TAB_ARGS <- list(
             " \\code{row_vars}/\\code{col_vars} (which now accept several variables). Kept working.")),
   col_var = list(producers = c("tab", "tab_plain", "tab_counts"), status = c(tab = "deprecated"), doc_with = "row_var"),
   tab_vars = list(
-    default_for = list(tab_reg = NULL),
     producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_many", "tab_reg"),
+    default_for = list(tab_reg = NULL),
     doc = c("<\\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables: one subtable per",
             "combination of their levels. Leave empty for a simple cross-table.")),
   wt = list(
-    default_for = list(tab_reg = NULL),
     producers = c("tab", "tab_plain", "tab_num", "tab_many", "tab_reg"),   # tab_counts says `wt_counts`
+    default_for = list(tab_reg = NULL),
     doc = "A weight variable, of class numeric. Leave empty for unweighted results."),
   sup_cols = list(
     producers = c("tab"), status = "deprecated",
@@ -74,8 +105,9 @@ TAB_ARGS <- list(
             "only the first level printed. Deprecated in 2.0.0: pass these columns in \\code{col_vars} and",
             "set \\code{levels = \"first\"} instead (\\code{col_vars} already accepts several variables).")),
   na = list(
-    default = "keep", default_for = list(tab_reg = c("drop_by_outcome", "drop_by_model", "drop_all", "keep_for_predictors"), tab_num = c("keep", "drop")),
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), values = c("keep", "drop", "drop_all", "common_base"), leaf = c("keep", "drop"), size = 1L,
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), default = "keep",
+    default_for = list(tab_reg = c("drop_by_outcome", "drop_by_model", "drop_all", "keep_for_predictors"), tab_num = c("keep", "drop")),
+    values = c("keep", "drop", "drop_all", "common_base"), leaf = c("keep", "drop"), size = 1L,
     doc = c("The policy to adopt for missing values, as a single string :",
             " \\itemize{",
             "  \\item \\code{\"keep\"} (default): every `NA` becomes an explicit `\"NA\"` level.",
@@ -88,16 +120,15 @@ TAB_ARGS <- list(
             "  their own `NA`'s as a level within it. Microdata only.",
             "  }")),
   levels = list(
-    default = "all",
-    producers = c("tab"), values = c("all", "first", "auto"),
+    producers = c("tab"), default = "all", values = c("all", "first", "auto"),
     doc = c("The levels of \\code{col_vars} to keep, as a single string or a vector the same",
             "length as \\code{col_vars}: \\code{\"all\"} (default), \\code{\"first\"} (only the first",
             "level of each --- a compact summary of many items), or \\code{\"auto\"} (the first level",
             "of a two-level variable, all of them otherwise). For finer selections use",
             "\\code{\\link[dplyr:select]{dplyr::select}} on the finished table.")),
   digits = list(
-    default = 0,
     producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
+    default = 0,
     doc = c("The number of digits to print, as a single integer, or an integer vector the",
             "same length as \\code{col_vars}."),
     doc_for = list(tab_reg = c(
@@ -106,14 +137,13 @@ TAB_ARGS <- list(
       "  score at one). Name a display field to set just that one, including an aside:",
       "  \\code{digits = c(ratio = 3)}, \\code{digits = c(base = 2)}, \\code{digits = c(1, or = 3)}."))),
   n_min = list(
-    default = 0,
-    producers = c("tab", "tab_counts"), check = "count",
+    producers = c("tab", "tab_counts"), default = 0, check = "count",
     doc = c("A single positive integer (default \\code{0}, off). A pure display filter applied",
             "last: it hides cells resting on too few people, without recomputing anything. Totals and",
             "the p-value line are always kept.")),
   display = list(
-    default = NULL,
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), values_from = "DISPLAY_TOKENS",
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), default = NULL,
+    values_from = "DISPLAY_TOKENS",
     doc = c("What each value cell shows (text output only -- the console, \\code{\\link{tab_kable}}",
             "  and \\code{\\link{tab_md}}; Excel falls back to the primary field). \\code{NULL} (default)",
             "  keeps each cell's plain value. Three ways to ask: a \\strong{named layout}",
@@ -124,40 +154,41 @@ TAB_ARGS <- list(
             "  A layout showing an interval prints the one the table computed, so pair it with a",
             "  \\code{ci = } value or a \\code{color} that needs one.")),
   totaltab = list(
-    default = "line",
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts"), values = c("line", "table", "no", ""), size = 1L,
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts"), default = "line",
+    values = c("line", "table", "no", ""), size = 1L,
     doc = c("The total table, when \\code{tab_vars} makes subtables: \\code{\"line\"} (default, a",
             "general total line), \\code{\"table\"} (a complete total table --- \\code{row_vars} by",
             "\\code{col_vars}, without \\code{tab_vars}) or \\code{\"no\"}.")),
   totaltab_name = list(
-    default = "Ensemble",
     producers = c("tab", "tab_plain", "tab_num", "tab_counts"),
+    default = "Ensemble",
     doc = "The name of the total table, as a single string."),
   # `dots`: still current, but out of tab()'s signature -- a table always HAS both totals, so this
   # only says which ones to show, and a crowded signature is the wrong place to ask that.
   tot = list(
-    default = c("row", "col"), default_for = list(tab_plain = NULL, tab_num = NULL), dots = "tab",
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts"), values = c("row", "col", "both", "no", ""),
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts"), dots = "tab",
+    default = c("row", "col"), default_for = list(tab_plain = NULL, tab_num = NULL),
+    values = c("row", "col", "both", "no", ""),
     doc = c("Which totals to show: \\code{c(\"row\", \"col\")} or \\code{\"both\"} (default),",
             "\\code{\"row\"}, \\code{\"col\"}, or \\code{\"no\"} (removed after the calculations that",
             "need them).")),
   total_names = list(
-    default = "Total",
     producers = c("tab", "tab_plain", "tab_num", "tab_counts"),
+    default = "Total",
     doc = c("The names of the totals, as a character vector of length one or two.",
             "Use syntax of type \\code{c(\"Total row\", \"Total column\")} to set different names for",
             "rows and cols.")),
   pct = list(
-    default = "no",
-    producers = c("tab", "tab_plain", "tab_counts"), values = c("no", "row", "col", "all", "all_tabs"), na_ok = TRUE, stored = "none",
+    producers = c("tab", "tab_plain", "tab_counts"), default = "no",
+    values = c("no", "row", "col", "all", "all_tabs"), na_ok = TRUE, stored = "none",
     doc = c("The percentages to calculate, as a single string or a vector the same length as",
             "\\code{col_vars}: \\code{\"row\"}, \\code{\"col\"}, \\code{\"all\"} (frequencies within",
             "each subtable), \\code{\"all_tabs\"} (frequencies over every table) or \\code{\"no\"}",
             "(default, counts). Everything else --- the reference, the interval, the colour ---",
             "follows from this choice.")),
   ref = list(
-    default = "auto", default_for = list(tab_reg = NULL, tab_num = "tot"),
     producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
+    default = "auto", default_for = list(tab_reg = NULL, tab_num = "tot"),
     doc = c("The reference cell that differences and ratios are computed against:",
             " \\itemize{",
             "  \\item \\code{\"auto\"} (default): the corresponding total for a difference, the first",
@@ -170,20 +201,20 @@ TAB_ARGS <- list(
             "One reference per \\code{row_vars} with a named vector,",
             "\\code{ref = c(race = \"first\")}; an unnamed one goes by position.")),
   ref2 = list(
-    default = "first",
     producers = c("tab", "tab_plain", "tab_counts"),
+    default = "first",
     doc = c("The second reference level for odds ratios, needed only for a factor with",
             "**3 levels or more** (the \"OR of each level versus \\code{ref2}\"); the first level by",
             "default. Ignored for a **binary** factor, where each level's OR is taken against the",
             "other. Same values as \\code{ref}.")),
   comp = list(
-    default = "tab", default_for = list(tab_num = c("tab", "all")),
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts"), values = c("tab", "all", ""), size = 1L, na_ok = TRUE,
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts"), default = "tab",
+    default_for = list(tab_num = c("tab", "all")), values = c("tab", "all", ""), size = 1L, na_ok = TRUE,
     doc = c("What each cell is compared with: \\code{\"tab\"} (default) compares it inside its own",
             "\\code{tab_vars} subtable, \\code{\"all\"} against the total table's own reference line.")),
   OR = list(
-    default = "no",
     producers = c("tab", "tab_plain", "tab_counts"), status = "deprecated",
+    default = "no",
     doc = c("`r lifecycle::badge(\"deprecated\")` The odds ratio is computed on **every** row/col",
             " percentage table since 2.0.0, so this argument had nothing left to switch on: it was a",
             " \\code{display}, a \\code{color} and a \\code{ref2} welded together. Each value maps to one of them:",
@@ -195,28 +226,27 @@ TAB_ARGS <- list(
             " Colour it with \\code{color = \"odds_ratio\"}, and pick which 2x2 with \\code{ref} (the row) and",
             " \\code{ref2} (the column level).")),
   test = list(
-    default = FALSE,
     producers = c("tab", "tab_counts"),
+    default = FALSE,
     doc = c("Set to \\code{TRUE} to test each (sub)table for independence: \\strong{Chi-squared}",
             "for factor \\code{col_vars}, \\strong{Welch's F} for numeric ones, with an effect size",
             "beside it. Needed by \\code{color = \"contrib\"}, and added automatically for it. The",
             "footer names the test you actually got --- see \\code{vignette(\"tabxplor-weights\")}.")),
   anova = list(
-    default = NULL,
-    producers = c("tab", "tab_num"), option = "anova", values = c("welch", "classic"), size = 1L,
+    producers = c("tab", "tab_num"), default = NULL, option = "anova", values = c("welch", "classic"), size = 1L,
     doc = c("Which one-way ANOVA \\strong{F} the p-value line shows for \\emph{numeric}",
             "\\code{col_vars}: \\code{\"welch\"} (does not assume equal variances) or \\code{\"classic\"}",
             "(the pooled F). \\code{NULL} (default) reads \\code{options(tabxplor.anova)} ---",
             "\\code{\"welch\"}. Both are always computed, so this only chooses which row is shown.")),
   chi2 = list(
-    default = lifecycle::deprecated(),
     producers = c("tab", "tab_counts", "tab_many"), status = "deprecated",
+    default = lifecycle::deprecated(),
     doc = c("`r lifecycle::badge(\"deprecated\")` Renamed to \\code{test} in 2.0.0: the test is a",
             "Chi-squared only for factors (numeric \\code{col_vars} get Welch's F), so the old name was",
             "misleading. Still works.")),
   ci = list(
-    default = "auto",
     producers = c("tab", "tab_plain", "tab_num", "tab_counts"),
+    default = "auto",
     values = c("auto", "no", "cell", "ref"), validate = FALSE,
     doc = c("**What the confidence interval is anchored on**. Its \\emph{geometry} is not asked",
             " here: it follows the comparison the table makes, so an odds-ratio table gets an",
@@ -231,24 +261,23 @@ TAB_ARGS <- list(
             " \\code{color_signif} are disabled (with a message). The method is chosen with",
             " \\code{ci_method} and named in the table's legend.")),
   conf_level = list(
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
     default = NULL,   # NULL everywhere; each producer's own boundary resolves it at call time.
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), option = "conf_level", check = "probability",
+    option = "conf_level", check = "probability",
     doc = c("The confidence level, as a single numeric between 0 and 1. \\code{NULL} (default)",
             "reads \\code{options(tabxplor.conf_level)} --- 0.95.")),
   stars = list(
-    default_for = list(tab_reg = TRUE),
-    default = NULL,
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), option = "stars",
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
+    default = NULL, default_for = list(tab_reg = TRUE), option = "stars",
     doc = c("Logical. With \\code{ci = \"ref\"}, print significance stars for each cell's difference",
             "from its reference, read from the displayed interval itself. \\code{NULL} (default) reads",
             "\\code{options(tabxplor.stars)} --- \\code{FALSE}.")),
   ci_method = list(
-    default_for = list(tab_reg = NULL),
-    default = NULL,
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
     # on tab_reg it rides `...`: one binary choice (wald / profile) does not earn a place in a
     # signature a user reads to learn the producer.
     dots = "tab_reg",
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), values_from = "CI_METHODS",
+    default = NULL, default_for = list(tab_reg = NULL), values_from = "CI_METHODS",
     doc = c("The interval method, one kind at a time, as ONE named vector -- partial, like",
             "\\code{ref} or \\code{pct}, so an unnamed kind keeps its default. Example:",
             "\\code{ci_method = c(cell = \"beta\", diff = \"ac\")}.",
@@ -263,8 +292,7 @@ TAB_ARGS <- list(
             "}",
             "A proportion \\emph{ratio} has only one method (Katz), so it is not a choice.")),
   design_effect = list(
-    default = NULL,
-    producers = c("tab", "tab_plain", "tab_num"), option = "design_effect",
+    producers = c("tab", "tab_plain", "tab_num"), default = NULL, option = "design_effect",
     doc = c("Whether the intervals, stars and colour thresholds of a \\strong{weighted} table",
             "account for the weighting's own design effect instead of using the raw sample size.",
             "\\code{NULL} (default) reads \\code{options(tabxplor.design_effect)} --- \\code{FALSE}.",
@@ -275,8 +303,8 @@ TAB_ARGS <- list(
             "\\code{ci_method = c(cell = , diff = )} instead.")),
   method_diff = list(producers = c("tab"), status = "deprecated", doc_with = "method_cell"),
   color = list(
-    default = "no", default_for = list(tab_reg = "measure", tab_num = "auto"),
     producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
+    default = "no", default_for = list(tab_reg = "measure", tab_num = "auto"),
     values_from = "MEASURES", values_rd = "color_measures_rd",
     doc = c("Which \\strong{measure of deviation} to color --- a deviation being how far a cell",
             "sits from its reference, the measure which of the ways of expressing it you read.",
@@ -292,25 +320,21 @@ TAB_ARGS <- list(
             "\\code{difference} / \\code{ratio} may go on the background; thresholds come from",
             "\\code{\\link{set_color_breaks}}.")),
   color_signif = list(
-    default_for = list(tab_reg = NULL),
-    default = "ignore",
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
-    values_from = "COLOR_SIGNIF_VALUES", values_rd = "color_signif_rd",
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), default = "ignore",
+    default_for = list(tab_reg = NULL), values_from = "COLOR_SIGNIF_VALUES", values_rd = "color_signif_rd",
     doc = c("How significance gates the color, as a single string:",
             "{VALUES}",
             "With \\code{color = \"contrib\"}, which has no interval to floor, the first two color",
             "the \\strong{relative} contribution and \\code{\"guaranteed_effect\"} the \\strong{adjusted",
             "standardized residual}. See \\code{vignette(\"tabxplor\")}.")),
   color_breaks = list(
-    default = NULL,
-    producers = c("tab", "tab_num", "tab_counts"), option = "color_breaks",
+    producers = c("tab", "tab_num", "tab_counts"), default = NULL, option = "color_breaks",
     values_from = "COLOR_SCALES",
     doc = c("A per-table override of the colour thresholds, in the form",
             "\\code{\\link{set_color_breaks}} accepts; unset scales keep the global ones.")),
   n = list(
-    default = NULL,
-    producers = c("tab", "tab_counts", "tab_reg"), option = "n",
-    values = c("range", "min", "no"), size = 1L,
+    producers = c("tab", "tab_counts", "tab_reg"), default = NULL, option = "n", values = c("range", "min", "no"),
+    size = 1L,
     doc = c("How many people this table is about. \\code{NULL} (default) reads",
             "\\code{options(tabxplor.n)} --- \\code{\"range\"}, which prints the unweighted base beside",
             "the \\code{Total} cell, \\code{100\\% (9 838)}, or the whole range where the columns do",
@@ -319,36 +343,34 @@ TAB_ARGS <- list(
   # NULL default on purpose: tab_dots_expand() refills an unsupplied argument, so a TRUE here
   #   would make every tab_counts() call look user-supplied and warn.
   add_n = list(
-    default = NULL,
     producers = c("tab", "tab_counts"), status = "deprecated",
+    default = NULL,
     doc = c("`r lifecycle::badge(\"deprecated\")` use `n` instead: `add_n = FALSE` is",
             "`n = \"no\"`.")),
   add_pct = list(
-    default = FALSE,
     producers = c("tab", "tab_counts"),
+    default = FALSE,
     doc = c("Set to `TRUE` to add a column with the frequencies of the row",
             "variable (for `pct = \"row\"`) or a row with the frequencies of the column variable",
             "(for  `pct = \"col\"`).")),
   common_totrow = list(
-    default = FALSE,
     producers = c("tab", "tab_counts"),
+    default = FALSE,
     doc = c("With several \\code{row_vars}, `FALSE` (default) shows one Total row per row",
             "variable; `TRUE` collapses the identical ones into a single shared Total. Genuinely",
             "different totals (which only `na = \"drop\"` can produce) are never merged.")),
   subtext = list(
-    default_for = list(tab_reg = ""),
-    default = "",
-    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"),
-    doc = "A character vector to print rows of legend under the table."),
+    producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), default = "",
+    default_for = list(tab_reg = ""), doc = "A character vector to print rows of legend under the table."),
   output_list = list(
-    default = FALSE,
     producers = c("tab"),
+    default = FALSE,
     doc = c("Logical (default \\code{FALSE}). With several \\code{row_var}, \\code{FALSE}",
             " merges the mirror tables into a single \\code{tabxplor_tab}; \\code{TRUE} returns a list with",
             " one table per \\code{row_var}. With \\code{tab_vars}, tables stay a list regardless.")),
   spread_vars = list(
-    default = character(),
     producers = c("tab", "tab_counts"),
+    default = character(),
     doc = c("<\\link[tidyr:tidyr_tidy_select]{tidy-select}> The \\code{tab_vars} to show",
             "  ACROSS the page instead of down it: each of their levels becomes a block of columns,",
             "  and the table becomes as compact as it can be. A variable named here alone is added to",
@@ -356,23 +378,22 @@ TAB_ARGS <- list(
             "  against the overall total, and with \\code{levels = \"first\"} to keep one column per",
             "  block.")),
   names_prefix = list(
-    default = NULL,
     producers = c("tab", "tab_counts"), status = "deprecated",
+    default = NULL,
     doc = c("`r lifecycle::badge(\"deprecated\")` These belong to",
             " \\code{\\link{tab_spread}}, which is the function that names the new columns; they reach it only",
             " when \\code{spread_vars} is given. Call \\code{tab_spread()} yourself for control over the names.")),
   names_sort = list(producers = c("tab", "tab_counts"), status = "deprecated", default = FALSE,
                     doc_with = "names_prefix"),
   cleannames = list(
-    default_for = list(tab_reg = NULL),
-    default = NULL,
-    producers = c("tab", "tab_counts", "tab_reg"), option = "cleannames",
+    producers = c("tab", "tab_counts", "tab_reg"), default = NULL, default_for = list(tab_reg = NULL),
+    option = "cleannames",
     doc = c("Set to \\code{TRUE} to clean level names, by removing prefix numbers like \"1-\" and",
             "text in parentheses. \\code{NULL} (default) reads",
             "\\code{options(tabxplor.cleannames)} --- \\code{FALSE}.")),
   other_if_less_than = list(
-    default = 0,
     producers = c("tab"),
+    default = 0,
     doc = c("When set to a positive integer, levels with less count",
             "than it will be merged into an \"Others\" level.")),
   other_level = list(
@@ -405,18 +426,18 @@ TAB_ARGS <- list(
   .levels_order = list(producers = c("tab", "tab_reg"), status = "internal", doc_with = ".cache"),
   .levels_collapse = list(producers = c("tab", "tab_reg"), status = "internal", doc_with = ".cache"),
   num = list(
-    default = FALSE,
     producers = c("tab_plain", "tab_num"),
+    default = FALSE,
     doc = "Set to \\code{TRUE} to obtain a table with normal numeric vectors (not fmt)."),
   df = list(
-    default = FALSE,
     producers = c("tab_plain", "tab_num"),
+    default = FALSE,
     doc = c(" Set to \\code{TRUE} to obtain a plain data.frame (not a tibble),",
             "with normal numeric vectors (not fmt). Useful, for example, to pass the table to",
             "correspondence analysis with \\pkg{FactoMineR}.")),
   .fine = list(
-    default = NULL,
     producers = c("tab_plain", "tab_num"), status = "internal",
+    default = NULL,
     doc = c("Internal. `.fine` is a pre-computed count-aggregate to roll up from",
             "instead of scanning the raw data (used by \\code{\\link{tab_counts}} and the scan-fusion path);",
             "`.by_table` forces the table-by-table path.")),
@@ -434,15 +455,15 @@ TAB_ARGS <- list(
     doc = c("<[`tidy-select`][tidyr::tidyr_tidy_select]> For a wide `data.frame`: the columns",
             "  holding the `col_var` levels.")),
   col_name = list(
-    default = "variable",
     producers = c("tab_counts"),
+    default = "variable",
     doc = "Name of the (synthesised) column variable when `cols` is used."),
   base = list(
     producers = c("tab_counts"),
     doc = "For `input = \"pct\"`: the column holding each row's sample size N."),
   input = list(
-    default = c("counts", "pct"),
-    producers = c("tab_counts"), values = c("counts", "pct"), size = 1L, validate = FALSE,
+    producers = c("tab_counts"), default = c("counts", "pct"), values = c("counts", "pct"), validate = FALSE,
+    size = 1L,
     doc = c("`\"counts\"` (default) or `\"pct\"` (with `cols` and `base`: the level columns hold",
             "  frequencies, and counts are rebuilt from them and `base`).")),
   totrow = list(
@@ -471,25 +492,28 @@ TAB_ARGS <- list(
   effect = list(producers = "tab_reg", default = "auto", values_from = "REG_ESTIMANDS",
                 doc_in_producer = TRUE),
   trials = list(producers = "tab_reg", default = NULL, doc_in_producer = TRUE),
-  empirical = list(producers = "tab_reg", default = TRUE, size = 1L, validate = FALSE,
-                   values = c("no", "tooltip", "cell", "column"), doc_in_producer = TRUE),
+  empirical = list(
+    producers = "tab_reg", default = TRUE, values = c("no", "tooltip", "cell", "column"), validate = FALSE,
+    size = 1L, doc_in_producer = TRUE),
   outcome_level = list(producers = "tab_reg", default = NULL, values_from = "REG_FAMILIES",
                        doc_in_producer = TRUE),
   multiplier = list(producers = "tab_reg", default = "2sd", doc_in_producer = TRUE),
   # `dots` on tab(): the whole vocabulary is one help page of its own (?shape_numeric_var), and a
   # crowded signature is the wrong place to teach it. tab_reg() keeps its own prose -- there `shape`
   # is about FITTING, and a quadratic is a model term tab() cannot take.
-  shape = list(producers = c("tab", "tab_reg"), default = NULL, values_from = "VAR_SHAPES",
-               dots = "tab", doc_in_producer = TRUE,
+  shape = list(producers = c("tab", "tab_reg"), dots = "tab", default = NULL,
+               values_from = "VAR_SHAPES",
                doc_for = list(tab = c(
                  "How a \\strong{numeric} variable enters the table. Cut it into groups and it",
                  "  becomes an ordinary factor --- one row (or column) per group. One value for",
                  "  every numeric variable, or one per variable:",
                  "  \\code{shape = c(age = \"quintiles\")}. On the row and tab axes a number always",
                  "  gets one, \\code{\"auto\"} by default; a numeric \\code{col_vars} keeps its means.",
-                 "  \\code{\\link{shape_numeric_var}} lists the whole vocabulary."))),
-  shape_name = list(producers = "tab", default = FALSE, dots = "tab",
-                    doc = c("Whether a shaped variable writes its own name onto its",
+                 "  \\code{\\link{shape_numeric_var}} lists the whole vocabulary.")),
+               doc_in_producer = TRUE),
+  shape_name = list(
+    producers = "tab", dots = "tab", default = FALSE,
+    doc = c("Whether a shaped variable writes its own name onto its",
                             "  \\strong{first} level (\\code{\"age: [18,30) low\"}), so a table whose",
                             "  leading text columns are stripped still says what the levels are levels",
                             "  of. \\code{FALSE} by default.")),
@@ -510,6 +534,9 @@ TAB_ARGS <- list(
 #   carry no `doc` here even though shared, because the ACCEPTED VALUES differ by backend
 #   (`theme`'s "auto" exists only where a stylesheet ships) -- differing value sets are not a
 #   duplicate, so the prose stays with `doc_in_producer = TRUE`.
+# COLUMNS: the same as TAB_ARGS' -- `producers`, `option`, `doc` / `doc_for` / `doc_with` /
+#   `doc_in_producer` -- minus every validation one: an exporter's value set is its backend's, so no
+#   row here carries `values` (asserted at load).
 #' @keywords internal
 #' @noRd
 EXPORT_ARGS <- list(
@@ -568,25 +595,24 @@ EXPORT_ARGS <- list(
     doc = "Set to `FALSE` to wrap also on non whitespace characters."),
 
   # --- DECLARED, prose stays home (see the header) ------------------------------------------------
-  theme = list(producers = c("tab_html", "tab_md", "tab_xl", "tab_export", "tab_css",
-                             "forest_plot"),
-               option = "theme", doc_in_producer = TRUE),
-  caption = list(producers = c("tab_html", "tab_md", "tab_xl", "tab_export",
-                               "forest_plot"), doc_in_producer = TRUE),
-  css = list(producers = c("tab_html", "tab_md"), option = "css", doc_in_producer = TRUE),
-  format = list(producers = c("tab_export", "tab_css"), doc_in_producer = TRUE),
-  file = list(producers = c("tab_md", "tab_css"), doc_in_producer = TRUE),
-  path = list(producers = c("tab_xl", "tab_export"), doc_in_producer = TRUE),
-  subtext = list(producers = c("tab_md", "forest_plot"), doc_in_producer = TRUE),
-  tooltips = list(producers = "tab_html", option = "tooltips", doc_in_producer = TRUE),
-  popover  = list(producers = "tab_html", option = "popover",  doc_in_producer = TRUE),
-  print_rules = list(producers = "tab_css", option = "print_rules", doc_in_producer = TRUE),
-  ratio_cells = list(producers = "tab_xl",  option = "ratio_cells", doc_in_producer = TRUE),
-  check       = list(producers = "tab_xl",  doc_in_producer = TRUE),
-  data        = list(producers = "tab_xl",  doc_in_producer = TRUE),
-  font_text = list(producers = "tab_xl", option = "font_text", doc_in_producer = TRUE),
-  font_num  = list(producers = "tab_xl", option = "font_num",  doc_in_producer = TRUE),
-  font_num_stars = list(producers = "tab_xl", option = "font_num_stars", doc_in_producer = TRUE)
+  theme          = list(producers = c("tab_html", "tab_md", "tab_xl", "tab_export", "tab_css",
+                                      "forest_plot"),                option = "theme",          doc_in_producer = TRUE),
+  caption        = list(producers = c("tab_html", "tab_md", "tab_xl", "tab_export",
+                                      "forest_plot"),                                           doc_in_producer = TRUE),
+  css            = list(producers = c("tab_html", "tab_md"),         option = "css",            doc_in_producer = TRUE),
+  format         = list(producers = c("tab_export", "tab_css"),                                 doc_in_producer = TRUE),
+  file           = list(producers = c("tab_md", "tab_css"),                                     doc_in_producer = TRUE),
+  path           = list(producers = c("tab_xl", "tab_export"),                                  doc_in_producer = TRUE),
+  subtext        = list(producers = c("tab_md", "forest_plot"),                                 doc_in_producer = TRUE),
+  tooltips       = list(producers = "tab_html",                      option = "tooltips",       doc_in_producer = TRUE),
+  popover        = list(producers = "tab_html",                      option = "popover",        doc_in_producer = TRUE),
+  print_rules    = list(producers = "tab_css",                       option = "print_rules",    doc_in_producer = TRUE),
+  ratio_cells    = list(producers = "tab_xl",                        option = "ratio_cells",    doc_in_producer = TRUE),
+  check          = list(producers = "tab_xl",                                                   doc_in_producer = TRUE),
+  data           = list(producers = "tab_xl",                                                   doc_in_producer = TRUE),
+  font_text      = list(producers = "tab_xl",                        option = "font_text",      doc_in_producer = TRUE),
+  font_num       = list(producers = "tab_xl",                        option = "font_num",       doc_in_producer = TRUE),
+  font_num_stars = list(producers = "tab_xl",                        option = "font_num_stars", doc_in_producer = TRUE)
 )
 
 #' @keywords internal
@@ -808,7 +834,11 @@ stopifnot(
   all(vapply(TAB_ARGS, function(r) is.null(r[["check"]]) ||
                r[["check"]] %in% c("probability", "count"), logical(1))),
   setequal(names(TAB_ARG_VALUES),
-           c("pct", "na", "levels", "comp", "tot", "totaltab", "totcol", "output", "anova", "n"))
+           c("pct", "na", "levels", "comp", "tot", "totaltab", "totcol", "output", "anova", "n")),
+  # THE GRID RULE on a table too ragged to be a tribble: every row writes its fields in ONE order,
+  # so the 81 of them read down a column. TAB_ARG_ORDER is that order, and this is what keeps it.
+  all(vapply(c(TAB_ARGS, EXPORT_ARGS),
+             function(r) identical(names(r), intersect(TAB_ARG_ORDER, names(r))), logical(1)))
 )
 
 stopifnot(

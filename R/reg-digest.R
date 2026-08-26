@@ -34,6 +34,7 @@
 
 # One row per FITTING BACKEND, in DISPATCH order (most specific class first: svyglm inherits glm
 # inherits lm). Each row says what the backend is, not what any caller wants of it:
+#   classes    the S3 class the dispatch matches on
 #   equations  "single" (one linear predictor) / "categorical" (one per outcome category)
 #   score      which influence engine reads it -- NA = it exposes no per-observation score, so the
 #              gap test is refused rather than approximated
@@ -41,67 +42,40 @@
 #   revive     can reg_digest_revive() refit it from the recipe?
 #' @keywords internal
 #' @noRd
-REG_FIT_KINDS <- list(
-  # ⚠ svy_vglm exposes no terms(), no family() and no model.matrix(): reg_prob_engine() has always
+REG_FIT_KINDS <- tx_grid(tibble::tribble(
+  ~key,       ~classes,   ~equations,    ~score,        ~parts,                  ~revive,
+  # svy_vglm exposes no terms(), no family() and no model.matrix(): reg_prob_engine() has always
   # returned NULL for it. The digest states that as a fact rather than inventing a terms object.
-  svy_vglm = list(classes = "svy_vglm", equations = "categorical", score = NA_character_,
-                  parts = character(0), revive = TRUE),
-  svyolr   = list(classes = "svyolr",   equations = "categorical", score = NA_character_,
-                  parts = c("zeta", "y_levels"), revive = TRUE),
-  polr     = list(classes = "polr",     equations = "categorical", score = "polr",
-                  parts = c("zeta", "y_levels"), revive = TRUE),
-  multinom = list(classes = "multinom", equations = "categorical", score = "multinom",
-                  parts = "y_levels", revive = TRUE),
-  svyglm   = list(classes = "svyglm",   equations = "single",      score = "irls",
-                  parts = c("family", "design_n"), revive = TRUE),
-  glm      = list(classes = "glm",      equations = "single",      score = "irls",
-                  parts = "family", revive = TRUE),
-  lm       = list(classes = "lm",       equations = "single",      score = "irls",
-                  parts = "family", revive = TRUE)
-)
+  "svy_vglm", "svy_vglm", "categorical", NA_character_, character(0),            TRUE,
+  "svyolr",   "svyolr",   "categorical", NA_character_, c("zeta", "y_levels"),   TRUE,
+  "polr",     "polr",     "categorical", "polr",        c("zeta", "y_levels"),   TRUE,
+  "multinom", "multinom", "categorical", "multinom",    "y_levels",              TRUE,
+  "svyglm",   "svyglm",   "single",      "irls",        c("family", "design_n"), TRUE,
+  "glm",      "glm",      "single",      "irls",        "family",                TRUE,
+  "lm",       "lm",       "single",      "irls",        "family",                TRUE,
+))
 
 REG_SCORE_ENGINES <- c("irls", "multinom", "polr")
 
-# One row per STORED PART: what it is, which kinds carry it, and the consumer that reads it. `kinds`
-# = "all" means every kind that has a terms() method (svy_vglm has none, and takes only the core
-# scalars). `extract` is a closure over the fit; it returns NULL where the fit cannot supply it.
+# One row per STORED PART: what it is, which kinds carry it, the closure that pulls it off the fit
+# (it returns NULL where the fit cannot supply it), and the consumer that reads it. `kinds` = "all"
+# means every kind that has a terms() method -- svy_vglm has none, and takes only the core scalars.
 #' @keywords internal
 #' @noRd
-REG_DIGEST_PARTS <- list(
-  terms = list(
-    kinds = "all", why = "every model matrix and every counterfactual sweep",
-    extract = function(fit, rec) reg_digest_terms(fit)),
-  xlevels = list(
-    kinds = "all", why = "model.frame(xlev =) must reproduce the fit's own factor coding",
-    extract = function(fit, rec) reg_digest_xlevels(fit)),
-  contrasts = list(
-    kinds = "all", why = "model.matrix(contrasts.arg =), the other half of that coding",
-    extract = function(fit, rec) tryCatch(fit$contrasts, error = function(e) NULL)),
-  coef = list(
-    kinds = "all", why = "coef(); a multinomial's is the (K-1) x p MATRIX, verbatim",
-    extract = function(fit, rec) tryCatch(stats::coef(fit), error = function(e) NULL)),
-  vcov = list(
-    kinds = "all", why = "vcov(); on an svyglm / svyolr it is already the design-based sandwich",
-    extract = function(fit, rec) reg_digest_vcov(fit)),
-  nobs = list(
-    kinds = "all", why = "nobs(), and the assertion that a rebuilt frame is the fitted one",
-    extract = function(fit, rec) tryCatch(as.integer(stats::nobs(fit)), error = function(e) NA_integer_)),
-  df_residual = list(
-    kinds = "all", why = "df.residual(): the reference distribution every interval refers to",
-    extract = function(fit, rec) reg_df_residual(fit)),
-  family = list(
-    kinds = c("lm", "glm", "svyglm"), why = "family()$linkinv / $mu.eta / $variance: g-computation and the IRLS weights",
-    extract = function(fit, rec) reg_digest_family_spec(fit)),
-  zeta = list(
-    kinds = c("polr", "svyolr"), why = "the cumulative-logit cut points, part of the parameter vector",
-    extract = function(fit, rec) fit$zeta),
-  y_levels = list(
-    kinds = c("multinom", "polr", "svyolr"), why = "reg_prob_engine()'s level set, replacing predict() / model.frame()",
-    extract = function(fit, rec) rec$y_levels %||% reg_fit_y_levels(fit)),
-  design_n = list(
-    kinds = "svyglm", why = "reg_if_align(): `[` does not drop rows on a calibrated or PPS design",
-    extract = function(fit, rec) reg_digest_design_n(fit))
-)
+REG_DIGEST_PARTS <- tx_grid(tibble::tribble(
+  ~key,          ~kinds,                          ~extract,                                                                                   ~why,
+  "terms",       "all",                           function(fit, rec) reg_digest_terms(fit),                                                   "every model matrix and every counterfactual sweep",
+  "xlevels",     "all",                           function(fit, rec) reg_digest_xlevels(fit),                                                 "model.frame(xlev =) must reproduce the fit's own factor coding",
+  "contrasts",   "all",                           function(fit, rec) tryCatch(fit$contrasts, error = function(e) NULL),                       "model.matrix(contrasts.arg =), the other half of that coding",
+  "coef",        "all",                           function(fit, rec) tryCatch(stats::coef(fit), error = function(e) NULL),                    "coef(); a multinomial's is the (K-1) x p MATRIX, verbatim",
+  "vcov",        "all",                           function(fit, rec) reg_digest_vcov(fit),                                                    "vcov(); on an svyglm / svyolr it is already the design-based sandwich",
+  "nobs",        "all",                           function(fit, rec) tryCatch(as.integer(stats::nobs(fit)), error = function(e) NA_integer_), "nobs(), and the assertion that a rebuilt frame is the fitted one",
+  "df_residual", "all",                           function(fit, rec) reg_df_residual(fit),                                                    "df.residual(): the reference distribution every interval refers to",
+  "family",      c("lm", "glm", "svyglm"),        function(fit, rec) reg_digest_family_spec(fit),                                             "family()$linkinv / $mu.eta / $variance: g-computation and the IRLS weights",
+  "zeta",        c("polr", "svyolr"),             function(fit, rec) fit$zeta,                                                                "the cumulative-logit cut points, part of the parameter vector",
+  "y_levels",    c("multinom", "polr", "svyolr"), function(fit, rec) rec$y_levels %||% reg_fit_y_levels(fit),                                 "reg_prob_engine()'s level set, replacing predict() / model.frame()",
+  "design_n",    "svyglm",                        function(fit, rec) reg_digest_design_n(fit),                                                "reg_if_align(): `[` does not drop rows on a calibrated or PPS design",
+))
 
 # The table's own consistency, at build time (the REG_CHECKS / fmt_attr_rules idiom).
 stopifnot(
@@ -209,8 +183,7 @@ reg_digest_vcov <- function(fit) {
 }
 
 # THE OUTCOME'S LEVEL SET, read off the fit where no recipe supplies it (a digest taken of a
-# stand-alone fit). It is the ONE thing reg_prob_engine() used to reach into a fitted object for --
-# once, here, while the object still exists.
+# stand-alone fit). The ONE thing that must be read off the object itself, once, while it exists.
 #' @keywords internal
 #' @noRd
 reg_fit_y_levels <- function(fit) {
@@ -460,8 +433,8 @@ reg_digest_revive <- function(f, data) {
 
 # === SECTION: THE WORKING PARTS -- an IRLS fit's influence, without the fit ========================
 #
-# reg_coef_if_maker() used to read `model.matrix(fit)`, `fit$weights` and
-# `residuals(fit, type = "working")`. All three are functions of (terms, coef, family, frame):
+# `model.matrix(fit)`, `fit$weights` and `residuals(fit, type = "working")` are all functions of
+# (terms, coef, family, frame), so reg_coef_if_maker() reconstructs them rather than keeping a fit:
 #
 #   eta = X b + offset      mu = linkinv(eta)      r = (y - mu) / mu.eta(eta)
 #   W   = prior_w * mu.eta(eta)^2 / variance(mu)

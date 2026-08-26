@@ -33,7 +33,7 @@ tabxplor_compute <- "tabxplor"
 # academic -- measured on this box, it returns 12 under `taskset -c 0,1` and 12 under
 # `_R_CHECK_LIMIT_CORES_`, where the true answer is 2 both times. Left uncorrected, `parallel = TRUE`
 # spawns a full pool onto two allocated cores in every container, HPC job and CI runner, which suite
-# C measured as a 25 % LOSS (Phase 22h). The cascade below is one rung per case it gets wrong:
+# C measured as a 25 % LOSS. The cascade below is one rung per case it gets wrong:
 #   1. `_R_CHECK_LIMIT_CORES_` -- CRAN's 2-core rule for examples / tests / vignettes.
 #   2. `options(mc.cores)`     -- base R's own convention: a user who set it has already answered.
 #   3. parallelly::availableCores() -- cgroups v1/v2, affinity masks, SLURM / PBS / SGE / LSF.
@@ -68,7 +68,7 @@ tab_available_cores <- function() {
 }
 
 # THE auto worker count: half the cores this R may actually use, floored at 2 and capped at 4.
-# Every clause is measured (Phase 22h, the tables x workers grid):
+# Every clause is measured (the tables x workers grid):
 #   - CAP AT 4 because the whole rest of the machine buys little: 8 workers is +38 % over 4 at 24
 #     tables and NOTHING below 8 tables, for four more processes and ~530 MB.
 #   - HALF the cores because a build must not saturate the machine it runs on. It costs real speed
@@ -115,7 +115,7 @@ tab_parallel_workers <- function(cache_env = NULL) {
 # WARNING: THE BYTE-IDENTITY CONTRACT NEEDS THIS, and it is not obvious. A daemon must pin its BLAS
 # (see the everywhere() block below) or a glm-bound map thrashes -- but pinning only the WORKERS
 # makes them disagree with a main process whose BLAS is still multi-threaded, in the last bits of
-# every coefficient. Measured (Phase 22h, 2 outcomes, this box's OpenBLAS-pthread at 12 threads):
+# every coefficient. Measured (2 outcomes, an OpenBLAS-pthread build at 12 threads):
 #   main 12 / workers 1 -> parallel != serial     main 1 / workers 1 -> parallel == serial
 # and, the fact that explains it, a SERIAL build at 1 vs 12 BLAS threads already differed. So the
 # thread count is part of the answer, and the two branches must agree on it. Pinning to 1 for the
@@ -300,7 +300,7 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(), .names = NULL
   # OpenBLAS-pthread) opens one thread PER CORE the first time a worker calls glm(): W workers x
   # C cores of spinning threads on C cores. `tab()`'s units are data.table-bound and never noticed;
   # `tab_reg()`'s units are glm-bound, and the contention is catastrophic rather than marginal.
-  # Measured (Phase 22h, 3 outcomes x 3 workers, 12 cores): serial 0.81 s, parallel 56.91 s
+  # Measured (3 outcomes x 3 workers, 12 cores): serial 0.81 s, parallel 56.91 s
   # UNPINNED, parallel 0.29 s pinned. RhpcBLASctl's RUNTIME call is the only lever that works on an
   # already-running worker -- OpenBLAS-pthread fixes its count from the environment at process
   # start, so setting OMP_NUM_THREADS here would be too late. Suggests-only, hence the guard: a

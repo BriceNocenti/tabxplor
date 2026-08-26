@@ -954,10 +954,10 @@ materialize_specs <- function() list(
   # A continuous predictor has no level population, so its base-count cell is empty by construction
   # -- that is where its OBSERVED SHAPE goes, as a glyph run in the cell's own display template. Runs
   # right after base_n (the columns must exist) and before the footer rows.
-  # ⚠ DORMANT (22b-xviii, second round). Every curve goes to the shape table below the footer now
-  # (reg_shape_table): a curve plus the range it is read against is ~26 characters, and the count
-  # column paid them on every row of every medium that took this route. The writer and its spec are
-  # kept whole, so putting the curve back in the cell is this one constant.
+  # ⚠ DORMANT. Every curve goes to the shape table below the footer (reg_shape_table): a curve
+  # plus the range it is read against is ~26 characters, and the count column paid them on every row
+  # of every medium taking this route. The writer and its spec are kept whole, so putting the curve
+  # back in the cell is this one constant.
   reg_spark = list(
     when  = function(tab, backend, ctx) SPARK_IN_CELL && tab_is_reg(tab) &&
       !is.null(get_assumptions(tab)) &&
@@ -2551,8 +2551,6 @@ mk_color_scale <- function(name, values) {
 #   null_default  what an empty/NULL value restores instead of switching the scale off.
 #   quantity   WHAT the numbers measure: points / sd / relative / log_odds / z / contrib. A ladder is
 #              read in its own metric -- the value itself, except `relative` and `log_odds`, read in log.
-#   anchor     where the first rung came from, in prose. Every ladder is the 5-point rung written in
-#              another measure at ONE reference cell of 50 %, which is why they can be compared at all.
 #   sides      "mirror" (the two sides carry the same thresholds) or "asymmetric". A multiplicative
 #              ladder MIRRORS unless the quantity it grades is BOUNDED ABOVE: a percentage ratio is
 #              capped at 1/base, so a cell can sit far below its reference and never far above it,
@@ -2560,73 +2558,47 @@ mk_color_scale <- function(name, values) {
 #   bg_keep    how many LOUD rungs this ladder keeps when carried on the BACKGROUND channel (NA = all).
 #              A fill is a secondary, at-a-glance voice: on `color = c("difference", "ratio")` the
 #              ratio's faint rungs only restate what the text channel already says.
+#   anchor     where the first rung came from, in prose. Every ladder is the 5-point rung written in
+#              another measure at ONE reference cell of 50 %, which is why they can be compared at all.
 #   derive     for a NON-settable scale: how the plan builds it from another (`log` = log_odds_scale).
 #   legacy     the pre-2.0 flat argument that set it; `alias` the short name get_color_breaks() takes.
 #' @keywords internal
-COLOR_SCALES <- list(
-  pct_diff   = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE,
-                    default = c(0.05, 0.1, 0.2, 0.3), legacy = "pct_breaks", alias = "pct",
-                    quantity = "points", sides = "mirror",
-                    anchor = "5 points -- the reference rung the whole package is written from"),
+COLOR_SCALES <- tx_grid(tibble::tribble(
+  ~key,           ~center, ~strict, ~std,  ~settable, ~default,                                                        ~null_default,                                    ~quantity,  ~sides,       ~bg_keep, ~anchor,                                                                           ~derive,                                ~legacy,          ~alias,
+  "pct_diff",     0,       TRUE,    FALSE, TRUE,      c(0.05, 0.1, 0.2, 0.3),                                          NULL,                                             "points",   "mirror",     NULL,     "5 points -- the reference rung the whole package is written from",                NULL,                                   "pct_breaks",     "pct",
   # asymmetric: a percentage ratio is capped at 1/base, so the over side has a ceiling the under side
   # has not. The under rungs are the over rungs read as the same relative deviation, one rung stricter.
-  pct_ratio  = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
-                    default = list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4)),
-                    legacy = "pct_breaks",
-                    quantity = "relative", sides = "asymmetric", bg_keep = 2L,
-                    anchor = "x1.1 = 5 points at a 50 % reference"),
-  # odds_ratio is the dedicated OR scale (symmetric): OR colour reads it, so pct_ratio / mean_ratio can
-  # be set asymmetrically without changing OR breaks. Its metric is the log-odds, which runs to
-  # infinity both ways, so mirroring it is right rather than merely convenient.
-  odds_ratio = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
-                    default = list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4)),
-                    quantity = "log_odds", sides = "mirror",
-                    anchor = "x1.2 = 5 points at a 50 % reference (1.22, rounded)"),
-  # `mean_diff` is standardized only on its NULL-default arm -- supplying data-unit values is how a user
-  # asks for absolute colouring, so `std` is FALSE here and TRUE in null_default.
-  mean_diff  = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE, default = NULL,
-                    null_default = list(breaks = c(0.1, 0.2, 0.4, 0.8), std = TRUE),
-                    quantity = "sd", sides = "mirror",
-                    anchor = "0.1 SD = 5 points at a 50 % reference (Cohen's 0.2 / 0.8 kept as rungs 2 and 4)"),
+  "pct_ratio",    1,       TRUE,    FALSE, TRUE,      list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4)),    NULL,                                             "relative", "asymmetric", 2L,       "x1.1 = 5 points at a 50 % reference",                                             NULL,                                   "pct_breaks",     NULL,
+  # the dedicated OR scale, symmetric: OR colour reads it, so pct_ratio / mean_ratio can be set
+  # asymmetrically without changing OR breaks. Its metric is the log-odds, which runs to infinity both
+  # ways, so mirroring it is right rather than merely convenient.
+  "odds_ratio",   1,       TRUE,    FALSE, TRUE,      list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4)),       NULL,                                             "log_odds", "mirror",     NULL,     "x1.2 = 5 points at a 50 % reference (1.22, rounded)",                             NULL,                                   NULL,             NULL,
+  # standardized only on its NULL-default arm -- supplying data-unit values is how a user asks for
+  # absolute colouring, so `std` is FALSE here and TRUE in null_default.
+  "mean_diff",    0,       TRUE,    FALSE, TRUE,      NULL,                                                            list(breaks = c(0.1, 0.2, 0.4, 0.8), std = TRUE), "sd",       "mirror",     NULL,     "0.1 SD = 5 points at a 50 % reference (Cohen's 0.2 / 0.8 kept as rungs 2 and 4)", NULL,                                   NULL,             NULL,
   # a mean, a count and a rate are unbounded above, so this one mirrors where pct_ratio does not.
-  mean_ratio = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
-                    default = c(1.1, 1.2, 1.5, 2),
-                    legacy = "mean_breaks", alias = "mean",
-                    quantity = "relative", sides = "mirror", bg_keep = 2L,
-                    anchor = "x1.1 = a 10 % relative deviation"),
-  contrib    = list(center = 0, strict = FALSE, std = FALSE, settable = TRUE,
-                    default = c(1, 2, 5, 10), legacy = "contrib_breaks",
-                    quantity = "contrib", sides = "mirror",
-                    anchor = "1x the mean cell contribution"),
-  # the ABSOLUTE z scale, read by color = "contrib" under color_signif = "guaranteed_effect". Written in
-  # confidence levels (95/99/99.99 % -> 1.96/2.58/3.89/6) so it means the same thing in every table,
+  "mean_ratio",   1,       TRUE,    FALSE, TRUE,      c(1.1, 1.2, 1.5, 2),                                             NULL,                                             "relative", "mirror",     2L,       "x1.1 = a 10 % relative deviation",                                                NULL,                                   "mean_breaks",    "mean",
+  "contrib",      0,       FALSE,   FALSE, TRUE,      c(1, 2, 5, 10),                                                  NULL,                                             "contrib",  "mirror",     NULL,     "1x the mean cell contribution",                                                   NULL,                                   "contrib_breaks", NULL,
+  # the ABSOLUTE z scale, read by color = "contrib" under color_signif = "guaranteed_effect". Written
+  # in confidence levels (95/99/99.99 % -> 1.96/2.58/3.89/6) so it means the same thing in every table,
   # unlike `contrib` (a share of the table's own chi2). The one ladder with its own published shape.
-  zscore     = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE,
-                    default = quote(conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))),
-                    quantity = "z", sides = "mirror",
-                    anchor = "confidence levels -- a declared convention, exempt from the shape rule"),
+  "zscore",       0,       TRUE,    FALSE, TRUE,      quote(conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))),        NULL,                                             "z",        "mirror",     NULL,     "confidence levels -- a declared convention, exempt from the shape rule",          NULL,                                   NULL,             NULL,
   # the two scales of `color = "adjustment"` / "between_groups" -- how far a model estimate sits from
-  # the value it is compared to. The multiplicative anchor is the epidemiological 10 % change-in-estimate
-  # rule; the additive one is in the effect's OWN units (a RELATIVE change would explode near the null).
-  adj_ratio  = list(center = 1, strict = TRUE,  std = FALSE, settable = TRUE,
-                    default = list(over = c(1.10, 1.25, 1.50, 2.00),
-                                   under = c(1.10, 1.25, 1.50, 2.00)),
-                    quantity = "relative", sides = "mirror",
-                    anchor = "x1.1 = the 10 % change-in-estimate rule (Mickey & Greenland 1989)"),
-  adj_diff   = list(center = 0, strict = TRUE,  std = FALSE, settable = TRUE,
-                    default = c(0.02, 0.05, 0.10, 0.20),
-                    quantity = "points", sides = "mirror", anchor = "2 points of the estimate"),
-  # the additive gap for an outcome whose units are ARBITRARY (a gaussian beta, a count AME): `adj_diff`'s
-  # probability ladder would make the reading depend on the unit, so this one is standardized by SD(Y).
-  # NOT Cohen's 0.2/0.5/0.8 (that measures an effect; this measures the gap BETWEEN two effects).
-  adj_diff_std = list(center = 0, strict = TRUE, std = TRUE, settable = TRUE,
-                      default = c(0.05, 0.10, 0.20, 0.40),
-                      quantity = "sd", sides = "mirror", anchor = "0.05 SD of the outcome"),
+  # the value it is compared to. The multiplicative anchor is the epidemiological 10 % change-in-
+  # estimate rule; the additive one is in the effect's OWN units (a RELATIVE change would explode
+  # near the null).
+  "adj_ratio",    1,       TRUE,    FALSE, TRUE,      list(over = c(1.10, 1.25, 1.50, 2.00), under = c(1.10, 1.25, 1.50, 2.00)), NULL,                                             "relative", "mirror",     NULL,     "x1.1 = the 10 % change-in-estimate rule (Mickey & Greenland 1989)",               NULL,                                   NULL,             NULL,
+  "adj_diff",     0,       TRUE,    FALSE, TRUE,      c(0.02, 0.05, 0.1, 0.2),                                         NULL,                                             "points",   "mirror",     NULL,     "2 points of the estimate",                                                        NULL,                                   NULL,             NULL,
+  # the additive gap for an outcome whose units are ARBITRARY (a gaussian beta, a count AME):
+  # `adj_diff`'s probability ladder would make the reading depend on the unit, so this one is
+  # standardized by SD(Y). NOT Cohen's 0.2/0.5/0.8 -- that measures an effect, this measures the
+  # gap BETWEEN two effects.
+  "adj_diff_std", 0,       TRUE,    TRUE,  TRUE,      c(0.05, 0.1, 0.2, 0.4),                                          NULL,                                             "sd",       "mirror",     NULL,     "0.05 SD of the outcome",                                                          NULL,                                   NULL,             NULL,
   # DERIVED at plan time from a settable sibling (never stored, never user-settable): the LOG of a
   # multiplicative ladder, so set_color_breaks(odds_ratio=)/(adj_ratio=) reaches the log readings too.
-  log_odds     = list(settable = FALSE, derive = list(from = "odds_ratio", how = "log")),
-  adj_diff_log = list(settable = FALSE, derive = list(from = "adj_ratio",  how = "log"))
-)
+  "log_odds",     NULL,    NULL,    NULL,  FALSE,     NULL,                                                            NULL,                                             NULL,       NULL,         NULL,     NULL,                                                                              list(from = "odds_ratio", how = "log"), NULL,             NULL,
+  "adj_diff_log", NULL,    NULL,    NULL,  FALSE,     NULL,                                                            NULL,                                             NULL,       NULL,         NULL,     NULL,                                                                              list(from = "adj_ratio", how = "log"),  NULL,             NULL,
+))
 
 # the declared vocabulary of `quantity`, and which of them are read in LOG when the shape rule
 # measures a ladder in "its own metric".

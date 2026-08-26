@@ -141,9 +141,7 @@ tab(car_arrests, colour, released, pct = "row",
     color = "difference", color_signif = "grey_non_signif", ref = "first")
 ```
 
-86 % des personnes blanches interpellées ont été relâchées, contre 74 % des personnes noires : douze points d'écart.   **Voilà le résultat de base.** Tout ce qui suit cherche à le comprendre, non à le remplacer.
-
-Nous utilisons `color_signif = "grey_non_signif"` nous tester que cette comparison est significative au seuil de confiance de 95% : les cases non significativement différentes de la modalité de réference, ici les personnes racisées comme blanches, sont colorées en gris.
+86 % des personnes blanches interpellées ont été relâchées, contre 74 % des personnes noires : douze points d'écart. **Voilà le résultat de base.** Tout ce qui suit cherche à le comprendre, non à le remplacer.
 
 Les trois autres prédicteurs qui pourraient nous aider à expliquer les choix de gardes à vue, dans un seul tableau:
 
@@ -158,7 +156,7 @@ Avoir un emploi et avoir la nationalité canadienne vont l'un et l'autre avec le
 
 Un pourcentage tout seul ne dit pas grand-chose : 74 % est élevé ou faible selon ce à quoi on le rapporte. Toute la régression est bâtie sur des **comparaisons**. Le premier vrai pas consiste donc à transformer une paire de pourcentages en un seul nombre qui les compare : l'**écart** d'un groupe à sa référence.
 
-Il y a trois façons de mesurer un même écart. Ce sont trois lectures des *deux mêmes nombres*, et un simple tableau croisé suffit à les calculer :
+Il y a trois façons de mesurer un même écart. Ce sont trois lectures des *deux mêmes chiffres*, et un simple tableau croisé suffit à les calculer :
 
 ```{r}
 car_arrests |> 
@@ -171,9 +169,9 @@ car_arrests |>
 
 Chacune des trois dernières colonnes correspond à une mesure de l’écart. À partir de 86 % et de 74 %, on obtient :
 
-- une **différence** de **&minus;12 points** — on soustrait l'un de l'autre ;
+- une **différence** de **&minus;12 points de pourcentage** — on soustrait l'un de l'autre ;
 - un **rapport** de **&divide;1.16** — les personnes noires ont été relâchées 1,2 fois moins souvent que les personnes blanches ;
-- un **rapport de cotes** de **1/2.11** — le chiffre brut est **0.47**, que tabxplor inverse, quand il est inférieur à 1, pour pouvoir lire « 2.11 fois *moins* de chances (*odds*) que les personnes blanches d’avoir été relaché plutôt que mis en garde à vue ».
+- un **rapport de cotes** de **1/2.11** — les personnes noires ont 2.11 fois *moins* de chances (*odds*) que les personnes blanches d’avoir été relachées plutôt que mises en garde à vue.
 
 **Dans `tab_reg()`, ce choix porte un nom — `measure` — et il vaut la peine de le lire en entier : la *mesure de l'écart*.** Ni une « échelle » abstraite, ni une unité : la question posée est **quelle sorte d'écart on veut voir rapportée** — soustraire, diviser, ou diviser les cotes. C'est le seul argument qu'on règle régulièrement, et c'est l'équivalent de `color =` dans `tab()`.
 
@@ -211,34 +209,37 @@ Dans une enquête nationale avec 5 000 partici, presque tout écart réel sera s
 
 ⚠ En français, le piège est double : dans la langue courante, « significatif » veut dire *important*, et il ne veut pas dire cela ici.
 
-`color_signif = "grey_non_signif"` est le réglage qui encode tout cela : il colore les cases selon la taille de l'effet et grise celles qu'on n'a pas le droit de généraliser. Ce qui reste en couleur est ce dont on peut parler. (Notons-le au passage : ce sont ici des données administratives et non un échantillon représentatif, si bien que les biais tenant à la façon dont les faits ont été enregistrés pèsent en réalité bien plus lourd que l'incertitude d'échantillonnage.)
+`color_signif = "grey_non_signif"` est le réglage qui encode cela dans `tabxplor` : il colore les cases selon la taille de l'écart et grise celles qu'on n'a pas le droit de généraliser (avec un seuil de confiance de 95%). Ce qui reste en couleur est ce dont on peut parler. (Notons-le au passage : ce sont ici des données administratives et non un échantillon représentatif, si bien que les biais tenant à la façon dont les faits ont été enregistrés pèsent en réalité bien plus lourd que l'incertitude d'échantillonnage.)
 
 
 # 3. Maintenir les autres variables constantes
 
-Passer du tableau croisé à la regression consiste ensuite, simplement, à **modéliser le type d’écart que nous avons choisi** « toutes les autres variables explicatives étant égales ».
+Passer du tableau croisé à la regression consiste ensuite, simplement, à **modéliser le type d’écart que nous avons choisi** « toutes les autres variables explicatives étant égales ». 
+
+Chaque type de variable ou famille de modèle possède sa propre manière de base de modéliser cet écart. Mais comme nous le verrons, il est toujours possible de garder le même modèle en affichant l’écart qui nous intéresse le plus, via le calcul des effets marginaux.
 
 
-## De quelle sorte de nombre s'agit-il ?
+## Choisir un modèle : de quelle sorte de nombre s'agit-il ?
 
-`tab_reg()` a besoin de savoir quelle sorte de quantité il modélise, parce que c'est cela qui décide ce qu'un « écart » entre deux groupes veut seulement dire. Pour une variable catégorielle (un `factor` au sens de R), il s’agit nécessairement d’une regression logistique ; pour une variable numérique, il y a toujours un choix à effectuer.
+`tab_reg()` a besoin de savoir quelle sorte de quantité il modélise, parce que **chaque famille de modèle travaille prioritairement sur une certaine mesure de l’écart**.
 
-| type | ce qu'est la variable à expliquer          | son nom       | à quoi ressemble un effet                                                             |
-|:-------------------|:-------------------------------------------|:--------------|:--------------------------------------------------------------------------------------|
-| variable numérique | une quantité continue (argent, âge…)       | `gaussian`    | une différence de moyennes, ou un rapport de moyennes                                 |
-| — | un décompte (heures de `x`, nombre de `x`) | `poisson`     | un rapport de taux — « 1,4 fois plus de `x` par jour »                                |
-| — | un score comptant un nombre de réponses Oui/Non | `binomial`    | —  |
-| variable catégorielle | une réponse Oui/Non         | `binomial`    | un rapport de cotes (*odds ratio*), converti au besoin en points de pourcentage ou en risque relatif |
-| — | un choix parmi 3 modalités ou plus         | `multinomial` | la même chose, avec une colonne par modalité                                          |
-| — | une variable catégorielle ordonnée         | `ordinal`     | un seul rapport de cotes, partagé par toutes les modalités                            |
+| type                  | ce qu'est la variable à expliquer            | famille du modèle | mesure de l’écart « de base »                              |
+|:----------------------|:---------------------------------------------|:------------------|:-----------------------------------------------------------|
+| variable catégorielle | réponse Oui/Non                              | `binomial`        | rapport de cotes (*odds ratio* = OR)                       |
+| —                     | choix parmi 3 modalités ou plus              | `multinomial`     | rapport de cotes – avec une colonne par catégorie          |
+| —                     | choix parmi des catégories ordonnées         | `ordinal`         | rapport de cotes – un seul partagé par toutes les modalités|
+| variable numérique    | quantité continue (argent, âge…)             | `gaussian`        | différence de moyennes                                     |
+| —                     | décompte (heures de `x`, nombre de `x`)      | `poisson`         | rapport de taux d’incidence — « 1,4 fois plus de `x`/jour »|
+| —                     | score comptant un nombre de réponses Oui/Non | `binomial`        | rapport de cotes                                           |
 
-La bonne manière sociologique d'y penser n'est pas « quelle loi statistique ma variable suit-elle ? » (qui est une question de mathématiques), ni « quel test dois-je faire ? » (qui est une question de statistiques), mais : **« quelle sorte de quantité est-ce que je suis en train de compter ? »** Une mesure continue, un décompte, une proportion sont trois choses très différentes, et chacune a sa manière préférentielle de dire que tel groupe est plus haut que tel autre.
 
-## Une variable numérique : trois façons de la compter
+Pour une variable catégorielle (un `factor` au sens de R), le modèle exact dépend du nombre de catégories et de leur caractère ordonné ou non : binomial (2 catégories), multinomial (trois catégories ou plus) ou ordinal (trois catégories ordonnées ou plus). Il s’agit dans tous les cas d’une regression « logistique » : le modèle de base modèlise des cotes et des rapports entre des cotes, $\log(\text{odds}) = \log\left(\frac{\%_{\text{garde a vue}}}{100 - \%_{\text{garde a vue}}}\right)$, aussi nommé un lien « logit », qui donne son nom à cette famille. Il utilise donc, naturellement, l’écart le plus difficile à interpréter ! 
 
-Une variable catégorielle utilise presque toujours une regression logistique : selon son nombre de ses modalités et leur caractère ordonné, celle-ci est binomiale (2 catégories), multinomiale (trois catégories ou plus) ou ordinale (trois catégories ordonnées ou plus).
+Pour une variable numérique, il y a nécessairement un choix à effectuer : modèle gaussien, poisson ou binomial ?
 
-À l’inverse, une variable numérique peut être comptée de plusieurs manières : le choix nous revient. Prenons `checks` — dans combien des six fichiers de police le nom de la personne interpellée figurait déjà. C'est un décompte, c’est *aussi* un score sur six, et on pourrait éventuellement la modéliser comme une quantité continue. À partir de ce choix, une regression va (le plus souvent) **modéliser l’écart** de mises en garde à vues blancs/noirs **d’une manière spécifique** : 
+La bonne manière sociologique d'y penser n'est pas « quelle loi statistique ma variable suit-elle ? » (question de mathématiques), ni « quel test dois-je faire ? » (question statistique), mais : **« quelle sorte de quantité est-ce que je suis en train de compter ? »** Une mesure continue, un décompte, une proportion sont trois choses différentes, et chacune a sa manière préférentielle de dire que tel groupe est plus haut que tel autre.
+
+Par exemple si, plutôt que `released`, nous voulions modéliser `checks` — dans combien des six fichiers de police le nom de la personne interpellée figurait déjà – quel modèle pourrions-nous choisir ? C'est un décompte, mais c’est *aussi* un score sur six, et on pourrait éventuellement la modéliser comme une quantité continue. À partir de ce choix, une regression va le plus souvent **modéliser l’écart** de mises en garde à vues **d’une manière spécifique** :
 
 - **comme décompte** — les autres variables choises étant égales, les personnes racisées comme noires figurent dans **1,35 fois plus** de fichiers que les personnes du groupe ethnique majoritaire (rapport de taux d’incidence, IRR) ;
 - **comme score sur six** — pour **un fichier donné**, leur chance (cote, *odds*) d'y figurer plutôt que de ne pas y figurer est **1,55 fois plus élevée** (*odds ratio*)
@@ -261,7 +262,7 @@ tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"),
 
 Mêmes données, mêmes prédicteurs, trois phrases d’interprétation différentes. On pourrait discuter de celle qui « prédit » le mieux le modèle (par exemple, la regression linéaire utilise une distribution gaussienne/normale qui correspond mal à l’importance de la catégorie "incrit dans 0 fichiers de police", 35% de l’échantillon). On pourrait discuter des hypothèses faites par chacune (par exemple, le modèle binomial fait comme si l’inscription dans chaque fichier de police chaque avait une chance égale et indépendantes de se produire). Le principal élément à retenir, c’est ici que chaque famille de modèle possède une quantité préférée, une manière habituelle de modéliser l’écart entre plusieurs catégories d’un prédicteur.
 
-## Que peut-on demander à cette variable ?
+### Que peut-on demander à cette variable ?
 
 Pour connaître les modèles les plus communs pour une variable donnée :
 
@@ -269,9 +270,11 @@ Pour connaître les modèles les plus communs pour une variable donnée :
 reg_measures(car_arrests, "checks")
 ```
 
-Chaque famille de modèle vient avec un lien (`link = `) par défaut, c’est-à-dire une manière préférentielle de mesurer l’écart entre différents groupes. C’est son effet *conditionnel* : quand nous choisissons de le lire, nous interprétons directement les coefficients donnés par le modèle. Nous verrons qu’utiliser des effets marginaux, moyennés sur l’échantillon, permet toujours de laisser le modèle de base faire ce qu’il préfère, *pour interpréter l’écart que nous préfèrons, nous, pour tourner nos phrases* d’une manière adaptée à notre objet de recherche.
+Chaque famille de modèle vient avec son lien (`link = `) par défaut, sa manière préférentielle de mesurer l’écart entre différents groupes. C’est son effet *conditionnel* : quand nous choisissons de le lire, nous interprétons directement les coefficients donnés par le modèle. 
 
-Il existe beaucoup d’autres modèles possibles, qui requièrent de passer un lien (`link =`) différent, c’est-à-dire de demander au même modèle de modéliser directement une autre mesure de l’écart. Ils ne sont utilisés que dans des situations particulières.
+Nous verrons qu’utiliser des effets marginaux, moyennés sur l’échantillon, permet toujours de laisser le modèle de base faire ce qu’il préfère, *pour interpréter l’écart que nous préfèrons, nous, pour tourner nos phrases* — d’une manière adaptée à notre objet de recherche. Cela permet notamment de passer des **odds ratios**, difficile à interpréter, à des mesures de l’écart plus parlantes.
+
+À noter qu’il existe beaucoup d’autres modèles possibles, qui requièrent de passer un lien différent (`link =`), c’est-à-dire de demander au même modèle de modéliser directement une autre mesure de l’écart (une différence ou un ratio par exemple). Ils ne sont utilisés que dans des situations bien particulières.
 
 ```{r, echo=TRUE, eval=FALSE}
 reg_measures(car_arrests, "checks", base_link = FALSE)
@@ -281,7 +284,7 @@ reg_measures(car_arrests, "checks", base_link = FALSE)
 
 
 
-## Le pont : la colonne observée *est* le tableau croisé
+## Le pont : la colonne « écart observé » *est* le tableau croisé
 
 Par défaut tabxplor ajoute, à côté de chaque colonne du modèle, sa contrepartie observée (`empirical = FALSE` la retire) :
 

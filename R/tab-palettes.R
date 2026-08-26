@@ -15,11 +15,12 @@
 #   - The working principle, in one line: an ORDERED channel (a colour ramp, an ink ladder, an
 #     emphasis ladder, a repeated mark) carries MAGNITUDE; a SELECTIVE channel (hue, underline vs
 #     italic, or the cell's own +/- symbol) carries DIRECTION.
-#   - A publication palette's grid IS its definition. A slot's ink, weight, slant, rule and mark sit
-#     on ONE ROW, because the question a maintainer asks is "what does break 2 look like", not
-#     "where is the italic list". Adding a palette is one row there and nothing else.
-#   - Keep the oklch(...) annotations on every colour literal: they are how the ramps were chosen
-#     (chroma peaks, lightness steps, colour-blind safety) and the only way to re-tune them.
+#   - A palette's grid IS its definition. A colour rung's hex and its oklch coordinate, a print
+#     slot's ink, weight, slant, rule and mark, sit on ONE ROW -- because the question a maintainer
+#     asks is "what does break 2 look like", not "where is the italic list". Adding a palette, or
+#     re-tuning a ramp, is one row and nothing else.
+#   - The `oklch` column is how the ramps were chosen (chroma peaks, lightness steps, colour-blind
+#     safety) and the only way to re-tune them. No code reads it; never drop it.
 # See: CLAUDE.md section "tabxplor architecture" (the colour system);
 #      dev/black_and_white_publication_palette.md, which holds the measurement the publication
 #      palettes answer (the shipped ramps converted to CIE L*) and that a header cannot restate.
@@ -31,89 +32,110 @@
 # OKLCH Chroma Peaks
 # - Blue            H265 / L45  ; H180 to 265
 # - to Orange Red   H28 / L62   ; H90 to 28   (avoid true red ?)
-# 
+#
 # - Green           H142 / L86  ; H110 to H160
 # - to Violet Red   H325 / L70  ; H285 to H25
 
-### Light palette ----
-#### Text colors ----
-default_text_colors <- c(
-  "#02a5b3", # oklch(0.66 0.1124 205) # better for color blindness
-  "#0891c9", # oklch(0.62 0.13 235)
-  "#0267c7", # oklch(0.52 0.17 255)
-  "#300dfd"  # oklch(0.47 0.30 270)
-)
-default_text_colors_neg <- c( 
-  # more lightness differences for colour blindness
-  "#dca331", # oklch(0.75 0.1400 80)
-  "#de7c01", # oklch(0.68 0.1596 60)
-  "#dd5301", # oklch(0.62 0.1868 42)
-  "#d60103"#,# oklch(0.55 0.2253 29)
+# THE COLOUR RAMPS -- one row per rung of every ramp, so a ladder reads DOWN a column: four rungs of
+# rising intensity, over and under the reference, per channel and theme.
+#   channel  "text" the ink, "bg" the fill, "bg_legend" the bg hues darkened to read as TEXT -- a
+#            legend break-word cannot be drawn with a fill in every medium (an Excel run carries a
+#            font colour only) and the pale fills are invisible on white. Light only. Regenerate
+#            with dev/color_palette_tools.R::darken_for_legend().
+#   theme    "light" / "dark".
+#   dir      "over" / "under" -- which side of the reference the cell falls on.
+#   rung     1-4, faint to strong.
+#   hex      what ships.
+#   oklch    "L C H", the coordinate the hex was tuned at: the chroma peaks above, the lightness
+#            steps and the colour-blind safety are all read off this column, and nothing else does.
+COLOR_RAMPS <- tibble::tribble(
+  ~channel,    ~theme,  ~dir,    ~rung, ~hex,      ~oklch,
+  "text",      "light", "over",  1L,    "#02a5b3", "0.66 0.1124 205",   # better for colour blindness
+  "text",      "light", "over",  2L,    "#0891c9", "0.62 0.13   235",
+  "text",      "light", "over",  3L,    "#0267c7", "0.52 0.17   255",
+  "text",      "light", "over",  4L,    "#300dfd", "0.47 0.30   270",
+  "text",      "light", "under", 1L,    "#dca331", "0.75 0.1400  80",
+  "text",      "light", "under", 2L,    "#de7c01", "0.68 0.1596  60",
+  "text",      "light", "under", 3L,    "#dd5301", "0.62 0.1868  42",
+  "text",      "light", "under", 4L,    "#d60103", "0.55 0.2253  29",
+
+  "bg",        "light", "over",  1L,    "#dffcff", "0.97 0.0304 205",   # better for colour blindness
+  "bg",        "light", "over",  2L,    "#d7efff", "0.94 0.0336 235",
+  "bg",        "light", "over",  3L,    "#cee3ff", "0.91 0.0439 255",
+  "bg",        "light", "over",  4L,    "#bbccff", "0.85 0.0733 270",
+  "bg",        "light", "under", 1L,    "#fff4e1", "0.97 0.0271  80",
+  "bg",        "light", "under", 2L,    "#ffe6d3", "0.94 0.0374  60",
+  "bg",        "light", "under", 3L,    "#ffd7c8", "0.91 0.0488  42",
+  "bg",        "light", "under", 4L,    "#ffbaaf", "0.85 0.082   29",
+
+  "bg_legend", "light", "over",  1L,    "#67A1A7", "0.67 0.0611 204",
+  "bg_legend", "light", "over",  2L,    "#6492B0", "0.64 0.0674 238",
+  "bg_legend", "light", "over",  3L,    "#5E85B8", "0.61 0.0896 255",
+  "bg_legend", "light", "over",  4L,    "#5169C7", "0.55 0.1481 270",
+  "bg_legend", "light", "under", 1L,    "#A7936F", "0.67 0.0553  82",
+  "bg_legend", "light", "under", 2L,    "#AE815E", "0.64 0.0741  59",
+  "bg_legend", "light", "under", 3L,    "#B56E53", "0.61 0.0989  41",
+  "bg_legend", "light", "under", 4L,    "#BE4034", "0.55 0.1639  29",
+
+  "text",      "dark",  "over",  1L,    "#028282", "0.55 0.0934 195",   # better for colour blindness
+  "text",      "dark",  "over",  2L,    "#0286b1", "0.58 0.1151 230",
+  "text",      "dark",  "over",  3L,    "#4687d8", "0.62 0.1400 255",
+  "text",      "dark",  "over",  4L,    "#6987ff", "0.66 0.1797 270",
+  "text",      "dark",  "under", 1L,    "#867002", "0.55 0.1124  95",
+  "text",      "dark",  "under", 2L,    "#b87501", "0.62 0.1341  70",
+  "text",      "dark",  "under", 3L,    "#ec6f02", "0.68 0.1792  50",
+  "text",      "dark",  "under", 4L,    "#ff626b", "0.70 0.1906  20",
+
+  "bg",        "dark",  "over",  1L,    "#002828", "0.25 0.0423 195",   # better for colour blindness
+  "bg",        "dark",  "over",  2L,    "#012d3f", "0.28 0.0553 230",
+  "bg",        "dark",  "over",  3L,    "#122e5d", "0.31 0.09   260",
+  "bg",        "dark",  "over",  4L,    "#202e7a", "0.34 0.13   270",
+  "bg",        "dark",  "under", 1L,    "#292100", "0.25 0.051   95",
+  "bg",        "dark",  "under", 2L,    "#3b2300", "0.28 0.0602  70",
+  "bg",        "dark",  "under", 3L,    "#4f2100", "0.31 0.0814  50",
+  "bg",        "dark",  "under", 4L,    "#720119", "0.35 0.1401  20",
 )
 
-#### Background colors ----
-default_background_colors <-  c(
-  "#dffcff", # oklch(0.97 0.0304 205)  # better for color blindness
-  "#d7efff", # oklch(0.94 0.0336 235) # "#d4f0ff", # oklch(0.94 0.0358 230)   # "#E9E3FF", # oklch(0.93 0.038 295)
-  "#cee3ff", # oklch(0.91 0.0439 255) # "#d3e2ff", # oklch(0.91 0.0429 265)   # "#DED3FF", # oklch(0.89 0.060 295)
-  "#bbccff"  # oklch(0.85 0.0733 270) # "#c8c7ff"  # oklch(0.85 0.0771 285)   # "#D2C3FF"# # oklch(0.85 0.084 295)
-)
-default_background_colors_neg <- c(
-  "#fff4e1", # oklch(0.97 0.0271 80)   # "#ffeccd", # oklch(0.95 0.0456 80)    # "#ffe9e5", # oklch(0.95 0.0249 30)  # "#fff8e6", # oklch(0.98 0.025 90)
-  "#ffe6d3", # oklch(0.94 0.0374 60)   # "#ffddc3", # oklch(0.92 0.051 60)     # "#ffdad3", # oklch(0.92 0.0461 30)  # "#ffeab1", # oklch(0.94 0.076 90)
-  "#ffd7c8", # oklch(0.91 0.0488 42)   # "#ffcebc", # oklch(0.89 0.0608 42)    # "#ffcdc5", # oklch(0.89 0.0575 30)  # "#fddb7c", # oklch(0.90 0.12  90)
-  "#ffbaaf"#,# oklch(0.85 0.082 29)    # "#ffbfb5"#,# oklch(0.86 0.0754 29.01) # "#ffbfb4"#,# oklch(0.86 0.0754 30)  # "#ffce2d"#,# oklch(0.87 0.168 90)
-)
+# The runner-up kept for each rung that has one -- only the two background channels were ever
+# re-tuned. Swap a hex into the grid above and rebuild.
+#   ~channel, ~theme,  ~dir,    ~rung, ~hex,      ~oklch,
+#   "bg",     "light", "over",  2L,    "#d4f0ff", "0.94 0.0358 230",
+#   "bg",     "light", "over",  3L,    "#d3e2ff", "0.91 0.0429 265",
+#   "bg",     "light", "over",  4L,    "#c8c7ff", "0.85 0.0771 285",
+#   "bg",     "light", "under", 1L,    "#ffeccd", "0.95 0.0456  80",
+#   "bg",     "light", "under", 2L,    "#ffddc3", "0.92 0.051   60",
+#   "bg",     "light", "under", 3L,    "#ffcebc", "0.89 0.0608  42",
+#   "bg",     "light", "under", 4L,    "#ffbfb5", "0.86 0.0754 29.01",
+#
+#   "bg",     "dark",  "over",  1L,    "#001b1b", "0.20 0.0336 195",
+#   "bg",     "dark",  "over",  2L,    "#002537", "0.25 0.0526 235",
+#   "bg",     "dark",  "over",  3L,    "#132d5c", "0.30 0.0900 261",
+#   "bg",     "dark",  "over",  4L,    "#17226d", "0.30 0.1300 270",
+#   "bg",     "dark",  "under", 1L,    "#1c1600", "0.20 0.0407  95",
+#   "bg",     "dark",  "under", 2L,    "#321c00", "0.25 0.0537  70",
+#   "bg",     "dark",  "under", 3L,    "#4c1f00", "0.30 0.0792  50",
+#   "bg",     "dark",  "under", 4L,    "#6b141f", "0.35 0.1200  20",
+# )
 
-#### Background-legend colors ----
-# A legend break-word for the BACKGROUND channel cannot be drawn with a fill in every medium (an Excel
-# run carries a font colour only), and the pale fills are invisible as text on white. These are the
-# same hues darkened to read as text; light only. Regenerate with
-# dev/color_palette_tools.R::darken_for_legend().
-default_bg_legend_colors <- c(
-  "#67A1A7", # oklch(0.67 0.0611 204)  <- #dffcff
-  "#6492B0", # oklch(0.64 0.0674 238)  <- #d7efff
-  "#5E85B8", # oklch(0.61 0.0896 255)  <- #cee3ff
-  "#5169C7"  # oklch(0.55 0.1481 270)  <- #bbccff
-)
-default_bg_legend_colors_neg <- c(
-  "#A7936F", # oklch(0.67 0.0553 82)   <- #fff4e1
-  "#AE815E", # oklch(0.64 0.0741 59)   <- #ffe6d3
-  "#B56E53", # oklch(0.61 0.0989 41)   <- #ffd7c8
-  "#BE4034"  # oklch(0.55 0.1639 29)   <- #ffbaaf
-)
+# Faint -> strong, one ramp out of the grid. The ten names below are what build_palettes() and
+# set_color_palette() know.
+tx_ramp <- function(channel, theme, dir) {
+  r <- COLOR_RAMPS[COLOR_RAMPS$channel == channel & COLOR_RAMPS$theme == theme &
+                     COLOR_RAMPS$dir == dir, ]
+  r$hex[order(r$rung)]
+}
 
+default_text_colors                <- tx_ramp("text",      "light", "over")
+default_text_colors_neg            <- tx_ramp("text",      "light", "under")
+default_background_colors          <- tx_ramp("bg",        "light", "over")
+default_background_colors_neg      <- tx_ramp("bg",        "light", "under")
+default_bg_legend_colors           <- tx_ramp("bg_legend", "light", "over")
+default_bg_legend_colors_neg       <- tx_ramp("bg_legend", "light", "under")
+default_dark_text_colors           <- tx_ramp("text",      "dark",  "over")
+default_dark_text_colors_neg       <- tx_ramp("text",      "dark",  "under")
+default_dark_background_colors     <- tx_ramp("bg",        "dark",  "over")
+default_dark_background_colors_neg <- tx_ramp("bg",        "dark",  "under")
 
-### Dark palette ----
-#### Dark text colors ----
-default_dark_text_colors <- c(
-  "#028282", # oklch(0.55 0.0934 195) # better for color blindness
-  "#0286b1", # oklch(0.58 0.1151 230)
-  "#4687d8", # oklch(0.62 0.1400 255)
-  "#6987ff"#,# oklch(0.66 0.1797 270)
-)
-default_dark_text_colors_neg <- c(
-  # more lightness differences for colour blindness
-  "#867002", # oklch(0.55 0.1124 95)
-  "#b87501", # oklch(0.62 0.1341 70)
-  "#ec6f02", # oklch(0.68 0.1792 50)
-  "#ff626b"# # oklch(0.70 0.1906 20)
-)
-
-
-#### Dark background colors ----
-default_dark_background_colors <-  c(
-  "#002828", # oklch(0.25 0.0423 195)   # "#001b1b", # oklch(0.20 0.0336 195)  # better for color blindness
-  "#012d3f", # oklch(0.28 0.0553 230)   # "#002537", # oklch(0.25 0.0526 235)
-  "#122e5d", # oklch(0.31 0.09   260)   # "#132d5c", # oklch(0.30 0.0900 261)
-  "#202e7a"#,# oklch(0.34 0.13   270)   # "#17226d"#,# oklch(0.30 0.1300 270)
-)
-default_dark_background_colors_neg <- c(
-  "#292100", # oklch(0.25 0.051  95)   # "#1c1600", # oklch(0.20 0.0407 95) # "#211a00", # oklch(0.22 0.045 95) # "#1f1400", # oklch(0.2 0.0412 81.48)   # "#fff4e1", # oklch(0.97 0.0271 80) 
-  "#3b2300", # oklch(0.28 0.0602 70)   # "#321c00", # oklch(0.25 0.0537 70) # "#321c00", # oklch(0.25 0.0537 70) # "#2f1d0e", # oklch(0.25 0.0374 59.56)   # "#ffe6d3", # oklch(0.94 0.0374 60) 
-  "#4f2100", # oklch(0.31 0.0814 50)   # "#4c1f00", # oklch(0.30 0.0792 50) # "#441b00", # oklch(0.28 0.0738 50) # "#511900", # oklch(0.3 0.0906 41.62)   # "#ffd7c8", # oklch(0.91 0.0488 42) 
-  "#720119"# # oklch(0.35 0.1401 20)   # "#6b141f"# # oklch(0.35 0.1200 20) # "#6b141f"# # oklch(0.35 0.12 19.39) # "#6c1610"#,# oklch(0.35 0.12 29)   # "#ffbaaf"#,# oklch(0.85 0.082 29)  
-)
 
 ## 8-BIT FALLBACK PALETTES (RStudio console only) ----
 # RStudio's console cannot render 24-bit truecolor, so there it falls back to these curated

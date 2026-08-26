@@ -251,9 +251,9 @@ lvl_check_reserved <- function(data, vars, call = NULL) {
     x  <- data[[v]]
     # WARNING: only a factor or a character column can CARRY a reserved label -- every reserved name
     #   is a string tab() mints. Anything else is skipped, and that is a performance rule as much as
-    #   a logical one: the leaf's call site (tab-leaf.R) passes its numeric col_vars too, so the old
-    #   `unique(as.character(x))` fallback stringified and hashed a whole continuous column. Measured
-    #   on the 8M-row fixture: 6.8 s of an 8.5 s table, ~80 % of the wall clock (Phase 22h).
+    #   a logical one: the leaf's call site (tab-leaf.R) passes its numeric col_vars too, and an
+    #   `unique(as.character(x))` fallback stringifies and hashes a whole continuous column --
+    #   measured on the 8M-row fixture, 6.8 s of an 8.5 s table, ~80 % of the wall clock.
     lv <- if (is.factor(x)) levels(x) else if (is.character(x)) unique(x) else next
     bad <- intersect(lv, reserved)
     if (length(bad) == 0L) next

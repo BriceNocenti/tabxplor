@@ -1732,8 +1732,7 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, est,
   # DESIGN: the Constant is a reference ROW but not a reference LEVEL, so it keeps the intercept
   # instead of the neutral: a baseline odds / mean IS a value. ⚠ its profile is the fitted equation's
   # -- factors at their reference, numerics at ZERO -- not the reference profile `at_reference` uses
-  # (numerics at their mean). Whether a numeric predictor's reference should be declarable, which
-  # would settle this row with no code of its own, is Phase 22b-vii's.
+  # (numerics at their mean).
   ref_lvl  <- skeleton$is_ref & skeleton$var != "Constant" & in_model
   neutral  <- if (effect_shape == "ratio") 1 else 0
   est_v[ref_lvl] <- neutral

@@ -66,9 +66,9 @@
 # `drop_extra` -- the whole predictor set minus this one -- is a key member, because it is what
 # lands each crude fit on the model's own complete cases.
 #
-# WARNING: this file sorts BEFORE R/tab_reg.R, so its top-level code (the REG_EMPIRICAL literal) may
-# not read anything defined there. Every cross-file call below is made at RUN time, which is why the
-# split is free.
+# WARNING: this file sorts BEFORE R/tab_reg.R, so its top-level code -- the REG_EMPIRICAL grid, which
+# tx_grid() folds at SOURCE time -- may not read anything defined there. Every cross-file call below
+# is made at RUN time, which is why the split is free.
 # See: CLAUDE.md section "tabxplor architecture" (the regression subsystem).
 
 # === empirical: the descriptive crude companion beside the model effect =========================
@@ -491,11 +491,13 @@ reg_fit_overlay <- function(col, eff, est, shape) {
   list(col = col, eff = eff)
 }
 
-# REG_EMPIRICAL -- THE CRUDE COMPANION FACT TABLE: per family, the SHAPE of the crude effect
-# column that mirrors each model estimand (see the header's "one shape, built twice"). It declares
-# neither a colour, a display, nor a "base" row (rides in `EST_SCALES$<scale>$base_display`).
+# REG_EMPIRICAL -- THE CRUDE COMPANION FACT TABLE: per family, the SHAPE of the crude effect column
+# that mirrors each model estimand (see the header's "one shape, built twice"). It declares neither a
+# colour, a display, nor a "base" row (that rides in `EST_SCALES$<scale>$base_display`).
 #
 # COLUMNS
+#   block       the family, or the link pseudo-family (`rr` / `mr`), the shape belongs to.
+#   shape       the shape's own name -- the key a model row's `crude_shape` points at.
 #   word        the base measure acronym (a REG_WORDS key) reg_crude_word() composes the column name
 #               from -- "Obs_RR", "Obs_log(OR)". The SHAPE's own acronym, never the model column's,
 #               and it carries no contrast marker (see reg_crude_word()).
@@ -504,9 +506,8 @@ reg_fit_overlay <- function(col, eff, est, shape) {
 #   ci_method   the interval engine, under the table's `n` basis...
 #   ci_method_design  ...and under a weights / design basis: unweighted the fit is lm/glm and the
 #               interval is MODEL-BASED (dispersion pooled over the predictor's levels); weighted it
-#               is svyglm and the interval is the SANDWICH. Absent = the same interval either way.
-#   link        the crude estimator's link, for the gap SE's influence function (g'(mu)). NA where
-#               the shape is not an effect.
+#               is svyglm and the interval is the SANDWICH. NULL = the same interval either way.
+#   link        the crude estimator's link, for the gap SE's influence function (g'(mu)).
 #   per_category  one crude effect per OUTCOME category (multinomial): rides in the model cell
 #               unless `empirical = "column"` asks for the columns.
 #   refit       this shape has NO closed form, so its crude estimate comes from a univariable fit
@@ -514,69 +515,65 @@ reg_fit_overlay <- function(col, eff, est, shape) {
 #               proportional odds is a CONSTRAINT, so a one-factor polr is not the cell table.
 #               reg_crude_saturated() reads it, which is why that predicate names no family.
 #
-# A family's own scalars: `coef` names the shape a row with no declared `crude_shape` falls back to;
-# `method_diff` the engine of the GRID's own level-vs-reference difference (a descriptive quantity
-# belonging to no estimand -- a crude EFFECT's engine is its own shape's `ci_method`).
-REG_EMPIRICAL <- list(
-  binomial = list(
-    method_diff = "wald", coef = "or",
-    ame    = list(word = "RD",  scale = "points",     ref = "tot",         ci_method = "wald",  link = "identity"),
-    or     = list(word = "OR",  scale = "odds_ratio", ref = "1",           ci_method = "woolf", link = "logit"),
-    or_log = list(word = "OR",  scale = "log_coef",   ref = NA_character_, ci_method = "woolf", link = "logit")),
-  # the modified-Poisson companion: the crude RISK ratio, Katz log-RR interval (not the binomial
-  # arm's Woolf log-OR).
-  rr = list(
-    method_diff = "wald", coef = "rr",
-    ame    = list(word = "RD",  scale = "points",     ref = "tot",         ci_method = "wald", link = "identity"),
-    rr     = list(word = "RR",  scale = "pct_ratio",  ref = "1",           ci_method = "katz", link = "log"),
-    rr_log = list(word = "RR",  scale = "log_coef",   ref = NA_character_, ci_method = "katz", link = "log")),
-  # a RATIO OF MEANS (`measure = "ratio"` on a continuous outcome; the "mr" log-link pseudo-ML fit).
-  mr = list(
-    coef = "mr",
-    mr     = list(word = "RoM", scale = "mean_ratio", ref = "1",           ci_method = "quasipoisson", ci_method_design = "robust", link = "log"),
-    mr_log = list(word = "RoM", scale = "log_coef",   ref = NA_character_, ci_method = "quasipoisson", ci_method_design = "robust", link = "log")),
-  gaussian = list(
-    coef = "diff",
-    diff = list(word = "diff", scale = "raw_diff", ref = NA_character_, ci_method = "ols", ci_method_design = "welch", link = "identity")),
-  # ⚠ also declares an ADDITIVE shape (a poisson marginal effect is a difference of expected
-  # COUNTS): `welch`'s ROBUST interval is the target in both bases, unlike gaussian's `ols`.
-  poisson = list(
-    coef = "irr",
-    irr     = list(word = "IRR",  scale = "mean_ratio", ref = "1",           ci_method = "quasipoisson", ci_method_design = "robust", link = "log"),
-    irr_log = list(word = "IRR",  scale = "log_coef",   ref = NA_character_, ci_method = "quasipoisson", ci_method_design = "robust", link = "log"),
-    diff    = list(word = "diff", scale = "raw_diff",   ref = NA_character_, ci_method = "welch", ci_method_design = "welch", link = "identity")),
-  # grouped_binomial (`trials =`): still saturated, Woolf 2x2 on the SUMMED counts; its LEVEL is
-  # the mean SCORE, hence the two `score_*` scales. ⚠ its own `rr`/`rr_log` (the two groups' mean
-  # SCORES), not the respondent-level REG_EMPIRICAL$rr -- reg_crude_shape() enforces this precedence.
-  grouped_binomial = list(
-    method_diff = "wald", coef = "or",
-    ame    = list(word = "RD",  scale = "raw_diff",    ref = NA_character_, ci_method = "welch", ci_method_design = "welch", link = "identity"),
-    or     = list(word = "OR",  scale = "score_odds_ratio", ref = "1",     ci_method = "woolf", link = "logit"),
-    or_log = list(word = "OR",  scale = "log_coef",    ref = NA_character_, ci_method = "woolf", link = "logit"),
-    rr     = list(word = "RR",  scale = "score_ratio", ref = "1",           ci_method = "katz",  link = "log"),
-    rr_log = list(word = "RR",  scale = "log_coef",    ref = NA_character_, ci_method = "katz",  link = "log")),
-  # multinomial: one crude effect PER OUTCOME CATEGORY, the {j, ref} x {level, ref level} Woolf ratio.
-  multinomial = list(
-    method_diff = "wald", coef = "or",
-    or        = list(word = "OR", scale = "odds_ratio", ref = "1",           ci_method = "woolf", link = "logit",    per_category = TRUE),
-    or_log    = list(word = "OR", scale = "log_coef",   ref = NA_character_, ci_method = "woolf", link = "logit",    per_category = TRUE),
-    ame       = list(word = "RD", scale = "points",     ref = "tot",         ci_method = "wald",  link = "identity", per_category = TRUE),
-    ame_ratio = list(word = "RR", scale = "pct_ratio",  ref = "1",           ci_method = "katz",  link = "log",      per_category = TRUE),
-    ame_ratio_log = list(word = "RR", scale = "log_coef", ref = NA_character_, ci_method = "katz", link = "log",     per_category = TRUE)),
-  # ordinal: no closed form (proportional odds is a constraint), so a univariable polr/svyolr through
-  # reg_fit(). A cumulative odds ratio has no single share to sit on: `{base}` renders void.
-  # The ordinal block is the one that mixes the two ROUTES: `cumor` has no closed form (proportional
-  # odds is a constraint, so a one-factor polr is not the cell table) and refits, while the three
-  # rank shapes are exact arithmetic on two rows of the outcome x predictor table -- which is why
-  # reg_crude_saturated() asks the SHAPE, not the family.
-  ordinal = list(
-    coef = "cumor",
-    cumor     = list(word = "cumOR", scale = "odds_ratio", ref = "1",           ci_method = "wald_log", link = "logit", refit = TRUE),
-    cumor_log = list(word = "cumOR", scale = "log_coef",   ref = NA_character_, ci_method = "wald_log", link = "logit", refit = TRUE),
-    somers_d  = list(word = "D",     scale = "points",     ref = "tot",         ci_method = "wald",     link = "identity"),
-    win_ratio = list(word = "WR",    scale = "pct_ratio",  ref = "1",           ci_method = "wald_log", link = "log"),
-    win_ratio_log = list(word = "WR", scale = "log_coef",  ref = NA_character_, ci_method = "wald_log", link = "log"))
-)
+# A block's own two scalars sit beside the grid: `coef` names the shape a row with no declared
+# `crude_shape` falls back to; `method_diff` the engine of the GRID's own level-vs-reference
+# difference -- a descriptive quantity belonging to no estimand, where a crude EFFECT's engine is its
+# own shape's `ci_method`.
+REG_EMPIRICAL <- local({
+  grid <- tibble::tribble(
+    ~block,             ~shape,          ~word,   ~scale,             ~ref,          ~ci_method,     ~ci_method_design, ~link,      ~per_category, ~refit,
+    "binomial",         "ame",           "RD",    "points",           "tot",         "wald",         NULL,              "identity", NULL,          NULL,
+    "binomial",         "or",            "OR",    "odds_ratio",       "1",           "woolf",        NULL,              "logit",    NULL,          NULL,
+    "binomial",         "or_log",        "OR",    "log_coef",         NA_character_, "woolf",        NULL,              "logit",    NULL,          NULL,
+    # the modified-Poisson companion: the crude RISK ratio, Katz log-RR interval (not the binomial
+    # arm's Woolf log-OR).
+    "rr",               "ame",           "RD",    "points",           "tot",         "wald",         NULL,              "identity", NULL,          NULL,
+    "rr",               "rr",            "RR",    "pct_ratio",        "1",           "katz",         NULL,              "log",      NULL,          NULL,
+    "rr",               "rr_log",        "RR",    "log_coef",         NA_character_, "katz",         NULL,              "log",      NULL,          NULL,
+    # a RATIO OF MEANS (`measure = "ratio"` on a continuous outcome; the "mr" log-link pseudo-ML fit).
+    "mr",               "mr",            "RoM",   "mean_ratio",       "1",           "quasipoisson", "robust",          "log",      NULL,          NULL,
+    "mr",               "mr_log",        "RoM",   "log_coef",         NA_character_, "quasipoisson", "robust",          "log",      NULL,          NULL,
+    "gaussian",         "diff",          "diff",  "raw_diff",         NA_character_, "ols",          "welch",           "identity", NULL,          NULL,
+    # poisson also declares an ADDITIVE shape (a poisson marginal effect is a difference of expected
+    # COUNTS): `welch`'s ROBUST interval is the target in both bases, unlike gaussian's `ols`.
+    "poisson",          "irr",           "IRR",   "mean_ratio",       "1",           "quasipoisson", "robust",          "log",      NULL,          NULL,
+    "poisson",          "irr_log",       "IRR",   "log_coef",         NA_character_, "quasipoisson", "robust",          "log",      NULL,          NULL,
+    "poisson",          "diff",          "diff",  "raw_diff",         NA_character_, "welch",        "welch",           "identity", NULL,          NULL,
+    # grouped_binomial (`trials =`): still saturated, Woolf 2x2 on the SUMMED counts; its LEVEL is the
+    # mean SCORE, hence the two `score_*` scales. Its own `rr`/`rr_log` are the two groups' mean
+    # SCORES, not the respondent-level `rr` block -- reg_crude_shape() enforces that precedence.
+    "grouped_binomial", "ame",           "RD",    "raw_diff",         NA_character_, "welch",        "welch",           "identity", NULL,          NULL,
+    "grouped_binomial", "or",            "OR",    "score_odds_ratio", "1",           "woolf",        NULL,              "logit",    NULL,          NULL,
+    "grouped_binomial", "or_log",        "OR",    "log_coef",         NA_character_, "woolf",        NULL,              "logit",    NULL,          NULL,
+    "grouped_binomial", "rr",            "RR",    "score_ratio",      "1",           "katz",         NULL,              "log",      NULL,          NULL,
+    "grouped_binomial", "rr_log",        "RR",    "log_coef",         NA_character_, "katz",         NULL,              "log",      NULL,          NULL,
+    # multinomial: one crude effect PER OUTCOME CATEGORY, the {j, ref} x {level, ref level} Woolf ratio.
+    "multinomial",      "or",            "OR",    "odds_ratio",       "1",           "woolf",        NULL,              "logit",    TRUE,          NULL,
+    "multinomial",      "or_log",        "OR",    "log_coef",         NA_character_, "woolf",        NULL,              "logit",    TRUE,          NULL,
+    "multinomial",      "ame",           "RD",    "points",           "tot",         "wald",         NULL,              "identity", TRUE,          NULL,
+    "multinomial",      "ame_ratio",     "RR",    "pct_ratio",        "1",           "katz",         NULL,              "log",      TRUE,          NULL,
+    "multinomial",      "ame_ratio_log", "RR",    "log_coef",         NA_character_, "katz",         NULL,              "log",      TRUE,          NULL,
+    # ordinal is the one block that MIXES THE TWO ROUTES: the cumulative odds ratio has no closed form
+    # and refits, while the three rank shapes are exact arithmetic on two rows of the outcome x
+    # predictor table -- which is why reg_crude_saturated() asks the SHAPE, not the family. A
+    # cumulative odds ratio has no single share to sit on either, so `{base}` renders void.
+    "ordinal",          "cumor",         "cumOR", "odds_ratio",       "1",           "wald_log",     NULL,              "logit",    NULL,          TRUE,
+    "ordinal",          "cumor_log",     "cumOR", "log_coef",         NA_character_, "wald_log",     NULL,              "logit",    NULL,          TRUE,
+    "ordinal",          "somers_d",      "D",     "points",           "tot",         "wald",         NULL,              "identity", NULL,          NULL,
+    "ordinal",          "win_ratio",     "WR",    "pct_ratio",        "1",           "wald_log",     NULL,              "log",      NULL,          NULL,
+    "ordinal",          "win_ratio_log", "WR",    "log_coef",         NA_character_, "wald_log",     NULL,              "log",      NULL,          NULL,
+  )
+  coef        <- c(binomial = "or",   rr = "rr",   mr = "mr", gaussian = "diff",
+                   poisson  = "irr",  grouped_binomial = "or", multinomial = "or", ordinal = "cumor")
+  method_diff <- c(binomial = "wald", rr = "wald", grouped_binomial = "wald", multinomial = "wald")
+
+  blocks <- unique(grid$block)
+  stats::setNames(lapply(blocks, function(b) c(
+    if (b %in% names(method_diff)) list(method_diff = unname(method_diff[[b]])),
+    list(coef = unname(coef[[b]])),
+    tx_grid(grid[grid$block == b, -1L])
+  )), blocks)
+})
 
 # REG_EMP_BY_LINK -- (block, link, logged) -> the shape name, read off the table's OWN `link` column
 # and its `log_coef` scale. The estimand library composes every crude companion through it

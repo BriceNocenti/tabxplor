@@ -553,71 +553,43 @@ DISPLAY_TOKEN_LABELS   <- {
 # what puts the two estimates side by side across the pair. Declaring it here rather than in a
 # builder is what makes the mirror survive a post-hoc set_display() and reach every producer.
 #
-# COLUMNS: `template` (a string, or one per role), `doc` (the user-facing phrase display_presets_rd()
-# emits into ?tab, so the documented list cannot drift from the shipped one), `alias` (this row is a
-# legacy SPELLING of another preset -- no template, no doc, not listed).
+# COLUMNS: `template` (a string, or one per role), `alias` (this row is a legacy SPELLING of another
+# preset -- no template, no doc, not listed), `doc` (the user-facing phrase display_presets_rd()
+# emits into ?tab, so the documented list cannot drift from the shipped one).
 #' @keywords internal
 #' @noRd
-.dpreset <- function(template = NA_character_, doc = NA_character_, alias = NA_character_)
-  list(template = template, doc = doc, alias = alias)
-
-#' @keywords internal
-#' @noRd
-DISPLAY_PRESETS <- list(
-  est             = .dpreset("{est}",
-                             doc = 'the estimate alone'),
-  est_ci          = .dpreset("{est} {ci}",
-                             doc = 'the estimate with its confidence interval'),
-  est_base        = .dpreset(c(default = "{est} ({base})",  emp = "({base}) {est}"),
-                             doc = 'the estimate and, in parentheses, the level it sits on'),
+DISPLAY_PRESETS <- tx_grid(tibble::tribble(
+  ~key,              ~template,                                              ~alias,        ~doc,
+  "est",             "{est}",                                                NA_character_, "the estimate alone",
+  "est_ci",          "{est} {ci}",                                           NA_character_, "the estimate with its confidence interval",
+  "est_base",        c(default = "{est} ({base})", emp = "({base}) {est}"),  NA_character_, "the estimate and, in parentheses, the level it sits on",
   # `est_base` with the level stated ONCE, by the observed column: the default where several
   # predictor subsets are compared, so the model columns sit side by side with nothing between them.
-  est_base_once   = .dpreset(c(default = "{est}",            emp = "({base}) {est}"),
-                             doc = paste('the estimate alone --- the level is stated once, by the',
-                                         'observed column beside it')),
-  est_coef        = .dpreset("{est} ({coef})",
-                             doc = "the estimate and, in parentheses, the model's own coefficient"),
-  base_est_mdiff  = .dpreset(c(default = "{est} ({diff})",  emp = "({base}) {est}"),
-                             doc = 'the estimate and, in parentheses, the same comparison as a difference'),
-  base_est_mratio = .dpreset(c(default = "{est} ({ratio})", emp = "({base}) {est}"),
-                             doc = 'the estimate and, in parentheses, the same comparison as a ratio'),
+  "est_base_once",   c(default = "{est}", emp = "({base}) {est}"),           NA_character_, "the estimate alone --- the level is stated once, by the observed column beside it",
+  "est_coef",        "{est} ({coef})",                                       NA_character_, "the estimate and, in parentheses, the model's own coefficient",
+  "base_est_mdiff",  c(default = "{est} ({diff})", emp = "({base}) {est}"),  NA_character_, "the estimate and, in parentheses, the same comparison as a difference",
+  "base_est_mratio", c(default = "{est} ({ratio})", emp = "({base}) {est}"), NA_character_, "the estimate and, in parentheses, the same comparison as a ratio",
   # the crude effect INSIDE the model cell (`empirical = "cell"`): the aside comes FIRST, like every
   # other observed-then-modelled layout here, so the two comparable numbers read left to right.
-  est_obs         = .dpreset("({obs}) {est}",
-                             doc = paste('the estimate and, before it in parentheses, the observed',
-                                         '(crude) effect it is compared to')),
-  base_est        = .dpreset("({base}) {est}",
-                             doc = paste('the level, then the estimate --- the mirror of `est_base`,',
-                                         'which sets a crude and a modelled effect side by side')),
-  base            = .dpreset("{base}",
-                             doc = 'the level alone: the percentage, the mean or the count'),
-  base_ci         = .dpreset("{base} {ci}",
-                             doc = 'the level with its confidence interval'),
-  base_moe        = .dpreset("{base} {moe}",
-                             doc = 'the level with its margin of error'),
-  base_diff       = .dpreset("{base} ({diff})",
-                             doc = 'the level and, in parentheses, its difference to the reference'),
-  base_ratio      = .dpreset("{base} ({ratio})",
-                             doc = 'the level and, in parentheses, its ratio to the reference'),
-  base_or         = .dpreset("{base} ({or})",
-                             doc = 'the level and, in parentheses, its odds ratio'),
-  or_base         = .dpreset("{or} ({base})",
-                             doc = 'the odds ratio and, in parentheses, the percentage it rests on'),
+  "est_obs",         "({obs}) {est}",                                        NA_character_, "the estimate and, before it in parentheses, the observed (crude) effect it is compared to",
+  "base_est",        "({base}) {est}",                                       NA_character_, "the level, then the estimate --- the mirror of `est_base`, which sets a crude and a modelled effect side by side",
+  "base",            "{base}",                                               NA_character_, "the level alone: the percentage, the mean or the count",
+  "base_ci",         "{base} {ci}",                                          NA_character_, "the level with its confidence interval",
+  "base_moe",        "{base} {moe}",                                         NA_character_, "the level with its margin of error",
+  "base_diff",       "{base} ({diff})",                                      NA_character_, "the level and, in parentheses, its difference to the reference",
+  "base_ratio",      "{base} ({ratio})",                                     NA_character_, "the level and, in parentheses, its ratio to the reference",
+  "base_or",         "{base} ({or})",                                        NA_character_, "the level and, in parentheses, its odds ratio",
+  "or_base",         "{or} ({base})",                                        NA_character_, "the odds ratio and, in parentheses, the percentage it rests on",
   # the two numeric-column layouts. `mean` needs no preset: it is already a bare token.
-  mean_sd         = .dpreset("{mean} (\u03c3{sd})",
-                             doc = 'the mean and, in parentheses, its standard deviation'),
-  mean_cv         = .dpreset("{mean} (cv {cv})",
-                             doc = paste('the mean and, in parentheses, its coefficient of',
-                                         'variation --- the spread as a percentage of the mean,',
-                                         'comparable between columns measured in different units',
-                                         '(the default where every mean is positive)')),
-  # legacy SPELLINGS: the 1.x `OR = "or_pct"` layout, and the value the jamovi display ComboBox writes
-  or_pct          = .dpreset(alias = "or_base"),
-  OR_pct          = .dpreset(alias = "or_base"),
-  # the word spelt out. `est` stays canonical -- an alias resolves before anything is stored, so no
-  # `display` field ever holds "estimate".
-  estimate        = .dpreset(alias = "est")
-)
+  "mean_sd",         "{mean} (\u03c3{sd})",                                                                   NA_character_, "the mean and, in parentheses, its standard deviation",
+  "mean_cv",         "{mean} (cv {cv})",                                     NA_character_, "the mean and, in parentheses, its coefficient of variation --- the spread as a percentage of the mean, comparable between columns measured in different units (the default where every mean is positive)",
+  # legacy SPELLINGS: the 1.x `OR = "or_pct"` layout, the value the jamovi display ComboBox writes,
+  # and the word spelt out. `est` stays canonical -- an alias resolves before anything is stored, so
+  # no `display` field ever holds "estimate".
+  "or_pct",          NA_character_,                                          "or_base",     NA_character_,
+  "OR_pct",          NA_character_,                                          "or_base",     NA_character_,
+  "estimate",        NA_character_,                                          "est",         NA_character_,
+))
 
 #' @keywords internal
 #' @noRd

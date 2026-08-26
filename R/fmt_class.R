@@ -1868,7 +1868,7 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", ...) {  # ... 
 # estimate may live on different ladders (a `color = "adjustment"` Model_OR column has odds_ratio
 # gridlines and an adj_ratio colour ladder), which is why each is declared separately.
 #
-# EST_SCALES columns:
+# EST_SCALES columns, in the grid's own order:
 #   kind       "effect" (there is a null to draw, and a stored interval can be tested against it)
 #              | "level" (a percentage / mean / count: no null). A level column's own one-proportion
 #              interval has no reference null, so the significance gate must not read it.
@@ -1883,161 +1883,90 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", ...) {  # ... 
 #   mult       multiplicative fold (the fmt_color_slots center-1 rule).
 #   is_pct     the estimate renders x100.
 #   est_field  the fmt field the estimate lives in (fmt_center_field() reads this).
+#   unit       the axis title, as a KEY (translated at render, never here).
+#   default_display  what a cell of this scale shows when nothing asked. WARNING: `odds_ratio` /
+#              `pct_ratio` / `points` default to "pct" and NOT to their own `est_field` -- today's
+#              behaviour on an exported constructor, so changing it is user-visible, not a refactor.
 #   est_display  the DISPLAY_TOKENS token `{est}` borrows on this scale, so "the estimate, whatever
 #              this column estimates" renders exactly as the column's own estimate always did. Its
 #              token's `field` IS est_field (checked at load).
+#   est_digits   the ESTIMATE token's own precision, a FLOOR (absent = the cell's). The mirror of
+#              base_digits, for the scales where the estimate is FINER than the level it sits on: a
+#              per-item odds ratio wants two decimals while the mean score under it wants one, and
+#              one `digits` per cell cannot say both. It is not DISPLAY_TOKENS$min_digits: that one
+#              is a default a cell overrides by asking, this one is the scale's own statement.
 #   base_display  the token `{base}` borrows: the LEVEL beside the estimate (a percentage, a mean, a
 #              count). NA where the level is ambiguous -- on a link scale a coefficient may sit over a
 #              probability or over a mean, and guessing would be a lie; `{base}` renders void there.
-#   est_digits   the ESTIMATE token's own precision, a FLOOR (absent = the cell's). The mirror of base_digits,
-#              for the scales where the estimate is FINER than the level it sits on: a per-item odds
-#              ratio wants two decimals while the mean score under it wants one, and one `digits`
-#              per cell cannot say both. ⚠ it is not DISPLAY_TOKENS$min_digits: that one is a
-#              default a cell overrides by asking, this one is the scale's own statement.
 #   base_digits  the LEVEL's own precision, absent = the cell's. One `digits` per cell serves every
-#              token of it, so an estimate needing a decimal (a risk difference in points) used to
-#              drag its percentage aside to "50.8 %". Declared only on the EFFECT scales, where
-#              `{base}` really is an aside -- on a LEVEL scale `{base}` IS the estimate and the
-#              column's own `digits` is the user's answer. A template may override it per token,
-#              "{base:2}", which is how `tab_reg(digits = c(base = 2))` is written.
+#              token of it, so an estimate needing a decimal (a risk difference in points) would drag
+#              its percentage aside to "50.8 %". Declared only on the EFFECT scales, where `{base}`
+#              really is an aside -- on a LEVEL scale `{base}` IS the estimate and the column's own
+#              `digits` is the user's answer. A template may override it per token, "{base:2}", which
+#              is how `tab_reg(digits = c(base = 2))` is written.
 #   const_display the token a regression's BASELINE row renders: the quantity this column's effects
 #              OPERATE ON. Odds ratios multiply odds, so an odds column shows the baseline odds; risk
 #              and rate ratios multiply the level, and differences add to it, so those show the level
 #              itself; a coefficient adds on the link scale. NA on the level scales, which have no
 #              baseline row. A LEVEL token here also means the row carries no p-value: there is no
 #              null a percentage or a mean could be tested against.
-#   unit       the axis title, as a KEY (translated at render, never here).
 #   break_key  the ESTIMATE's ladder in color_scales(); NA = no ladder, use the device's own breaks.
 #   gap_key    the adj_* ladder its GAP reads (fmt_gap_scale_key() reads this).
 #   label_meas which MEASURES row supplies this scale's glyphs -- the forest axis's break labels AND
 #              the multiplicative cell rendering ("odds_ratio" -> "1/2" / "2", "ratio" -> "/2" / "x2").
 #              ONE declaration per measure, so a cell, its ladder and its axis cannot disagree.
 #              WARNING: a MEASURES KEY -- a rename must reach here or both lose their glyphs.
-#   sd_from    where the SD-standardized ladder's divisor comes from: a regression column's stored
-#              var(Y) ("var") or a crosstab cell's REFERENCE variance ("ref_var"). NULL = none.
 #   sec        NULL, or the secondary axis this scale needs to stay readable: when the colour ladder
 #              lives on a different scale from the printed estimate, that ladder's scale is the axis.
+#   sd_from    where the SD-standardized ladder's divisor comes from: a regression column's stored
+#              var(Y) ("var") or a crosstab cell's REFERENCE variance ("ref_var"). NULL = none.
+#
+# `level_twin` / `effect_twin` are DERIVED from `var_kind` and `kind` just below the grid, never
+# declared: forest_plot(what =) reads them to name a column's other side.
 #' @keywords internal
-EST_SCALES <- list(
-  odds_ratio = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
-                    neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
-                    est_field = "or",    unit = "or",    default_display = "pct",
-                    est_display = "or", base_display = "pct", base_digits = 0L, const_display = "or",
-                    break_key = "odds_ratio", gap_key = "adj_ratio",
-                    label_meas = "odds_ratio", sec = NULL),
+EST_SCALES <- tx_grid(tibble::tribble(
+  ~key,               ~kind,    ~geometry,    ~var_kind, ~ladder, ~neutral, ~trans,     ~mult, ~is_pct, ~est_field, ~unit,        ~default_display, ~est_display, ~est_digits, ~base_display, ~base_digits, ~const_display, ~break_key,    ~gap_key,       ~label_meas,  ~sec,  ~sd_from,
+  "odds_ratio",       "effect", "ratio",      "pct",     "pct",   1,        "log10",    TRUE,  FALSE,   "or",       "or",         "pct",            "or",         NULL,        "pct",         0L,           "or",           "odds_ratio",  "adj_ratio",    "odds_ratio", NULL,  NULL,
   # THE TWO SUMMED-SCORE ROWS (`tab_reg(trials =)`): a multiplicative effect on the PER-ITEM
-  # probability, sitting on the mean SCORE -- the average number of "yes" out of `trials`, which is
-  # what a reader of a battery of items wants. ⚠ "score" names the LEVEL, not the ratio, so
-  # neither can borrow its ungrouped twin's row: `{base}` would fold a score into `pct` (x100, "%")
-  # and the column would claim var_kind "pct" to every tooltip and plot.
-  # WARNING: they are TWO rows for the same reason odds_ratio and pct_ratio are -- an odds ratio and
-  # a risk ratio are different quantities with different fields and different glyphs, and folding
+  # probability, sitting on the mean SCORE -- the average number of "yes" out of `trials`. "score"
+  # names the LEVEL, not the ratio, so neither can borrow its ungrouped twin's row: `{base}` would
+  # fold a score into `pct` (x100, "%") and the column would claim var_kind "pct" to every tooltip
+  # and plot. WARNING: they are TWO rows for the same reason odds_ratio and pct_ratio are -- folding
   # them printed every summed-score RR as "1/x". An incidence-rate ratio is in neither: a rate ratio
   # is a ratio of means, so it is `mean_ratio`, whose `unit` already says so.
-  score_odds_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "pct",
-                    neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
-                    est_field = "or",    unit = "or", default_display = "mean",
-                    # the aside is a mean SCORE out of `trials` -- one decimal, whatever precision
-                    # the odds ratio beside it is read at (`or` declares a minimum of 2).
-                    est_display = "or", est_digits = 2L, base_display = "mean", const_display = "or",
-                    break_key = "odds_ratio", gap_key = "adj_ratio",
-                    label_meas = "odds_ratio", sec = NULL),
-  score_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "pct",
-                    neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
-                    est_field = "ratio", unit = "ratio", default_display = "mean",
-                    est_display = "ratio", est_digits = 2L, base_display = "mean",
-                    const_display = "mean",
-                    break_key = "pct_ratio", gap_key = "adj_ratio",
-                    label_meas = "ratio", sec = NULL),
-  pct_ratio  = list(kind = "effect", geometry = "ratio", var_kind = "pct",  ladder = "pct",
-                    neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
-                    est_field = "ratio", unit = "ratio", default_display = "pct",
-                    est_display = "ratio", base_display = "pct", base_digits = 0L, const_display = "pct",
-                    break_key = "pct_ratio",  gap_key = "adj_ratio",
-                    label_meas = "ratio", sec = NULL),
-  mean_ratio = list(kind = "effect", geometry = "ratio", var_kind = "mean", ladder = "std",
-                    neutral = 1,  trans = "log10",   mult = TRUE,  is_pct = FALSE,
-                    est_field = "ratio", unit = "rate_ratio", default_display = "mean",
-                    est_display = "ratio", est_digits = 2L, base_display = "mean",
-                    const_display = "mean",
-                    break_key = "mean_ratio", gap_key = "adj_ratio",
-                    label_meas = "ratio", sec = NULL),
-  # a beta / a count AME: printed in the OUTCOME's units, coloured on the SD-standardized ladder.
-  # DESIGN: `est_display = "diff"`, like the crosstab row below it -- an identity-link beta IS a mean
-  # difference, and naming it "coef" gave one quantity two names (the header already says `diff`).
-  # `coef` survives only where the model's own scale is logged, and there it says log(OR) -- see
-  # fmt_coef_label().
+  "score_odds_ratio", "effect", "ratio",      "mean",    "pct",   1,        "log10",    TRUE,  FALSE,   "or",       "or",         "mean",           "or",         2L,          "mean",        NULL,         "or",           "odds_ratio",  "adj_ratio",    "odds_ratio", NULL,  NULL,
+  "score_ratio",      "effect", "ratio",      "mean",    "pct",   1,        "log10",    TRUE,  FALSE,   "ratio",    "ratio",      "mean",           "ratio",      2L,          "mean",        NULL,         "mean",         "pct_ratio",   "adj_ratio",    "ratio",      NULL,  NULL,
+  "pct_ratio",        "effect", "ratio",      "pct",     "pct",   1,        "log10",    TRUE,  FALSE,   "ratio",    "ratio",      "pct",            "ratio",      NULL,        "pct",         0L,           "pct",          "pct_ratio",   "adj_ratio",    "ratio",      NULL,  NULL,
+  "mean_ratio",       "effect", "ratio",      "mean",    "std",   1,        "log10",    TRUE,  FALSE,   "ratio",    "rate_ratio", "mean",           "ratio",      2L,          "mean",        NULL,         "mean",         "mean_ratio",  "adj_ratio",    "ratio",      NULL,  NULL,
+  # A beta / a count AME, printed in the OUTCOME's units and coloured on the SD-standardized ladder;
+  # then the crosstab MEAN difference, the same ladder standardized by the REFERENCE cell's SD.
+  # `est_display = "diff"` on both -- an identity-link beta IS a mean difference, and naming it
+  # "coef" gave one quantity two names. `coef` survives only where the model's own scale is logged,
+  # and there it says log(OR) (fmt_coef_label()).
   # WARNING: raw_diff and mean_diff are NOT one row with two `sd_from` values -- their `gap_key`
-  # differs too (adj_diff_std vs adj_diff), and folding them would mean re-deriving both from
-  # `model_family`, i.e. re-introducing the dispatch this key exists to delete. Every stamping site
-  # knows which of the two it is building.
-  raw_diff   = list(kind = "effect", geometry = "difference", var_kind = "coef", ladder = "std",
-                    neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
-                    est_field = "diff",  unit = "units", default_display = "n",
-                    est_display = "diff", base_display = "mean", const_display = "mean",
-                    break_key = "mean_diff",  gap_key = "adj_diff_std",
-                    label_meas = "difference", sec = "sd", sd_from = "var"),
-  # a crosstab MEAN difference: the same ladder, standardized by the REFERENCE cell's SD rather than
-  # by a stored var(Y) -- which is exactly the split fmt_color_plan()'s sd_ref block already makes.
-  mean_diff  = list(kind = "effect", geometry = "difference", var_kind = "mean", ladder = "std",
-                    neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
-                    est_field = "diff",  unit = "units", default_display = "mean",
-                    est_display = "diff", base_display = "mean", const_display = "mean",
-                    break_key = "mean_diff",  gap_key = "adj_diff",
-                    label_meas = "difference", sec = "sd", sd_from = "ref_var"),
-  # measure = "raw_coefficient": printed on the link scale, coloured on the logged odds_ratio ladder (what
-  # `ladder = "log"` selects).
-  log_coef   = list(kind = "effect", geometry = "log", var_kind = "coef", ladder = "log",
-                    neutral = 0,  trans = "identity", mult = FALSE, is_pct = FALSE,
-                    est_field = "diff",  unit = "log",   default_display = "n",
-                    est_display = "coef", base_display = NA_character_, const_display = "coef",
-                    break_key = "log_odds",   gap_key = "adj_diff_log",
-                    label_meas = "difference", sec = "exp"),
-  points     = list(kind = "effect", geometry = "difference", var_kind = "pct", ladder = "pct",
-                    neutral = 0,  trans = "identity", mult = FALSE, is_pct = TRUE,
-                    est_field = "diff",  unit = "points", default_display = "pct",
-                    est_display = "diff", base_display = "pct", base_digits = 0L, const_display = "pct",
-                    break_key = "pct_diff",   gap_key = "adj_diff",
-                    label_meas = "difference", sec = NULL),
-  # the three LEVEL scales: a cell percentage / a mean / a count. No null to draw (the reference is a
-  # per-column value), and no ladder of their own -- a level column's colour ladder grades its
+  # differs too, and folding them would mean re-deriving both from `model_family`, i.e. the very
+  # dispatch this key exists to delete. Every stamping site knows which of the two it is building.
+  "raw_diff",         "effect", "difference", "coef",    "std",   0,        "identity", FALSE, FALSE,   "diff",     "units",      "n",              "diff",       NULL,        "mean",        NULL,         "mean",         "mean_diff",   "adj_diff_std", "difference", "sd",  "var",
+  "mean_diff",        "effect", "difference", "mean",    "std",   0,        "identity", FALSE, FALSE,   "diff",     "units",      "mean",           "diff",       NULL,        "mean",        NULL,         "mean",         "mean_diff",   "adj_diff",     "difference", "sd",  "ref_var",
+  # measure = "raw_coefficient": printed on the link scale, coloured on the logged odds_ratio ladder.
+  "log_coef",         "effect", "log",        "coef",    "log",   0,        "identity", FALSE, FALSE,   "diff",     "log",        "n",              "coef",       NULL,        NA_character_, NULL,         "coef",         "log_odds",    "adj_diff_log", "difference", "exp", NULL,
+  "points",           "effect", "difference", "pct",     "pct",   0,        "identity", FALSE, TRUE,    "diff",     "points",     "pct",            "diff",       NULL,        "pct",         0L,           "pct",          "pct_diff",    "adj_diff",     "difference", NULL,  NULL,
+  # The three LEVEL scales -- a cell percentage / a mean / a count. No null to draw (the reference is
+  # a per-column value), and no ladder of their own: a level column's colour ladder grades its
   # DIFFERENCE, so putting it on the level axis would be a lie. `gap_key` is "adj_diff" only so
   # fmt_gap_scale_key() stays uniform on a column no gap measure can ride.
-  level_pct  = list(kind = "level",  geometry = "level", var_kind = "pct",   ladder = "pct",
-                    neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
-                    est_field = "pct",   unit = "pct",   default_display = "pct",
-                    est_display = "pct", base_display = "pct", const_display = NA_character_,
-                    break_key = NA_character_, gap_key = "adj_diff",
-                    label_meas = "difference", sec = NULL),
-  level_mean = list(kind = "level",  geometry = "level", var_kind = "mean",  ladder = "std",
-                    neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
-                    est_field = "mean",  unit = "units", default_display = "mean",
-                    est_display = "mean", base_display = "mean", const_display = NA_character_,
-                    break_key = NA_character_, gap_key = "adj_diff", sd_from = "ref_var",
-                    label_meas = "difference", sec = NULL),
-  level_n    = list(kind = "level",  geometry = "level", var_kind = "count", ladder = "std",
-                    neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = FALSE,
-                    est_field = "n",     unit = "count", default_display = "n",
-                    est_display = "n", base_display = "n", const_display = NA_character_,
-                    break_key = NA_character_, gap_key = "adj_diff", sd_from = "ref_var",
-                    label_meas = "difference", sec = NULL),
+  "level_pct",        "level",  "level",      "pct",     "pct",   NA_real_, "identity", FALSE, TRUE,    "pct",      "pct",        "pct",            "pct",        NULL,        "pct",         NULL,         NA_character_,  NA_character_, "adj_diff",     "difference", NULL,  NULL,
+  "level_mean",       "level",  "level",      "mean",    "std",   NA_real_, "identity", FALSE, FALSE,   "mean",     "units",      "mean",           "mean",       NULL,        "mean",        NULL,         NA_character_,  NA_character_, "adj_diff",     "difference", NULL,  "ref_var",
+  "level_n",          "level",  "level",      "count",   "std",   NA_real_, "identity", FALSE, FALSE,   "n",        "count",      "n",              "n",          NULL,        "n",           NULL,         NA_character_,  NA_character_, "adj_diff",     "difference", NULL,  "ref_var",
   # THE NEUTRAL: what binding two columns of unlike scales collapses to (fmt_attr_rules). Its content
   # is level_pct's, so vec_arith's mismatch warning has a real fact to test, not a magic string.
-  mixed      = list(kind = "level",  geometry = "level", var_kind = "pct",   ladder = "pct",
-                    neutral = NA_real_, trans = "identity", mult = FALSE, is_pct = TRUE,
-                    est_field = "pct",   unit = "pct",   default_display = "n",
-                    est_display = "pct", base_display = "pct", const_display = NA_character_,
-                    break_key = NA_character_, gap_key = "adj_diff",
-                    label_meas = "difference", sec = NULL)
-)
+  "mixed",            "level",  "level",      "pct",     "pct",   NA_real_, "identity", FALSE, TRUE,    "pct",      "pct",        "n",              "pct",        NULL,        "pct",         NULL,         NA_character_,  NA_character_, "adj_diff",     "difference", NULL,  NULL,
+))
 
 #' @keywords internal
 EST_SCALE_KEYS <- names(EST_SCALES)
 #' @keywords internal
 est_var_kind <- function(key) (EST_SCALES[[key]] %||% EST_SCALES[["mixed"]])$var_kind
-# WARNING: `odds_ratio` / `pct_ratio` / `points` default to "pct" and NOT to their own `est_field`.
-# That is today's behaviour on an exported constructor: changing it is a user-visible decision, not a
-# refactor.
 #' @keywords internal
 est_default_display <- function(key) (EST_SCALES[[key]] %||% EST_SCALES[["mixed"]])$default_display
 #' @keywords internal
@@ -4878,93 +4807,93 @@ GAP_ADDITIVE_FACTS <- list(
 
 MEASURES <- list(
   difference = list(word = function() gettext("difference"),           break_over = "+",       break_under = "-",
-                 doc = "the cell's difference from its reference (percentage points for factors, Glass's \\eqn{\\Delta} for means).",
-                 break_scale = TRUE,  ref_kind = NA_character_, threshold_mult = FALSE, unit_kind = "diff",
-                 has_ref_lead = TRUE,
-                 channels = c("text", "bg"), producers = c("tab", "reg"), color_arg = "tab",
-                 applies_to = c("pct", "num"), builds = "diff",
-                 requires = c(ref = "always", ci = "gated"),
-                 auto_for = list(text = c("pct", "reg_diff")),
-                 raw = function(x) get_diff(x),
-                 scale = c(pct = "pct_diff", std = "mean_diff", log = "log_odds"),
-                 sig_source = "bounds", gate_row = "refrow",
-                 # WHAT a difference is depends on the ladder, so the export name is a per-scale fact:
-                 # a difference of proportions, of means, or of log odds are three quantities.
-                 by_scale = list(
-                   pct_diff  = list(word_long = function() gettext("percentage points (risk) difference"),
-                                    word_guar = function(p) gettextf("%s%%-guaranteed percentage points (risk) difference", p)),
-                   mean_diff = list(word_long     = function() gettext("mean difference"),
-                                    word_std      = function() gettext("standardized difference"),
-                                    word_long_std = function() gettext("standardized mean difference"),
-                                    word_guar     = function(p) gettextf("%s%%-guaranteed mean difference", p),
-                                    word_guar_std = function(p) gettextf("%s%%-guaranteed standardized mean difference", p)),
-                   log_odds  = list(word_long = function() gettext("log-odds difference"),
-                                    word_guar = function(p) gettextf("%s%%-guaranteed log-odds difference", p)))),
+                    doc = "the cell's difference from its reference (percentage points for factors, Glass's \\eqn{\\Delta} for means).",
+                    break_scale = TRUE,  ref_kind = NA_character_, threshold_mult = FALSE, unit_kind = "diff",
+                    has_ref_lead = TRUE,
+                    channels = c("text", "bg"), producers = c("tab", "reg"), color_arg = "tab",
+                    applies_to = c("pct", "num"), builds = "diff",
+                    requires = c(ref = "always", ci = "gated"),
+                    auto_for = list(text = c("pct", "reg_diff")),
+                    raw = function(x) get_diff(x),
+                    scale = c(pct = "pct_diff", std = "mean_diff", log = "log_odds"),
+                    sig_source = "bounds", gate_row = "refrow",
+                    # WHAT a difference is depends on the ladder, so the export name is a per-scale fact:
+                    # a difference of proportions, of means, or of log odds are three quantities.
+                    by_scale = list(
+                      pct_diff  = list(word_long = function() gettext("percentage points (risk) difference"),
+                                       word_guar = function(p) gettextf("%s%%-guaranteed percentage points (risk) difference", p)),
+                      mean_diff = list(word_long     = function() gettext("mean difference"),
+                                       word_std      = function() gettext("standardized difference"),
+                                       word_long_std = function() gettext("standardized mean difference"),
+                                       word_guar     = function(p) gettextf("%s%%-guaranteed mean difference", p),
+                                       word_guar_std = function(p) gettextf("%s%%-guaranteed standardized mean difference", p)),
+                      log_odds  = list(word_long = function() gettext("log-odds difference"),
+                                       word_guar = function(p) gettextf("%s%%-guaranteed log-odds difference", p)))),
   ratio      = list(word = function() gettext("ratio"),                break_over = .lg_times, break_under = .lg_div,
-                 doc = "relative risk (factors) or mean ratio (numerics) vs the reference.",
-                 break_scale = FALSE, ref_kind = NA_character_, threshold_mult = TRUE,  unit_kind = "none",
-                 has_ref_lead = TRUE,
-                 # `ratio` shares `diff`'s build class: the leaf computes both fields in one pass (a
-                 # diff <-> ratio toggle never rebuilds -- jamovi tier-3 re-paint).
-                 channels = c("text", "bg"), producers = c("tab", "reg"), color_arg = "tab",
-                 applies_to = c("pct", "num"), builds = "diff",
-                 requires = c(ref = "always", ci = "gated"),
-                 auto_for = list(text = "num", bg = "pct"),
-                 raw = function(x) get_ratio(x),
-                 scale = c(pct = "pct_ratio", std = "mean_ratio", log = "mean_ratio"),
-                 sig_source = "bounds", gate_row = "refrow",
-                 by_scale = list(
-                   pct_ratio  = list(word_long = function() gettext("relative risk (ratio)"),
-                                     word_guar = function(p) gettextf("%s%%-guaranteed relative risk (ratio)", p)),
-                   mean_ratio = list(word_long = function() gettext("ratio of means"),
-                                     word_guar = function(p) gettextf("%s%%-guaranteed ratio of means", p)))),
+                    doc = "relative risk (factors) or mean ratio (numerics) vs the reference.",
+                    break_scale = FALSE, ref_kind = NA_character_, threshold_mult = TRUE,  unit_kind = "none",
+                    has_ref_lead = TRUE,
+                    # `ratio` shares `diff`'s build class: the leaf computes both fields in one pass (a
+                    # diff <-> ratio toggle never rebuilds -- jamovi tier-3 re-paint).
+                    channels = c("text", "bg"), producers = c("tab", "reg"), color_arg = "tab",
+                    applies_to = c("pct", "num"), builds = "diff",
+                    requires = c(ref = "always", ci = "gated"),
+                    auto_for = list(text = "num", bg = "pct"),
+                    raw = function(x) get_ratio(x),
+                    scale = c(pct = "pct_ratio", std = "mean_ratio", log = "mean_ratio"),
+                    sig_source = "bounds", gate_row = "refrow",
+                    by_scale = list(
+                      pct_ratio  = list(word_long = function() gettext("relative risk (ratio)"),
+                                        word_guar = function(p) gettextf("%s%%-guaranteed relative risk (ratio)", p)),
+                      mean_ratio = list(word_long = function() gettext("ratio of means"),
+                                        word_guar = function(p) gettextf("%s%%-guaranteed ratio of means", p)))),
   odds_ratio = list(word = function() "OR", word_long = function() gettext("odds ratio"),
-                 word_guar = function(p) gettextf("%s%%-guaranteed odds ratio", p),
-                 # the graded quantity is NOT the cell: `color = "or"` colours a percentage table on
-                 # its odds ratios, so "cell >= 1.2" would compare a percentage to an odds ratio.
-                 subject = "OR",
-                 break_over = "",        break_under = "1/",
-                 doc = "the odds ratio, on percentage tables, coloured on its own symmetric scale.",
-                 break_scale = FALSE, ref_kind = "category",    threshold_mult = TRUE,  unit_kind = "none",
-                 has_ref_lead = FALSE,
-                 # text-only (a whole-cell measure) and percentages only (a mean has no odds). Its
-                 # baseline is the FIRST level, not the total row. "gated" here means the Woolf interval
-                 # (the interval of THIS comparison), tested against the odds-ratio neutral.
-                 channels = "text", producers = c("tab", "reg"), color_arg = "tab",
-                 applies_to = "pct", builds = "or", ref_auto = "first",
-                 requires = c(ref = "always", ci = "gated"),
-                 # ⚠ tab() NEVER auto-resolves to the odds ratio (it is asked for by name) -> reg-only context.
-                 auto_for = list(text = "reg_ratio"),
-                 raw = function(x) get_or(x),
-                 scale = c(pct = "odds_ratio", std = "odds_ratio", log = "odds_ratio"),
-                 sig_source = "bounds", gate_row = "refrow"),
+                    word_guar = function(p) gettextf("%s%%-guaranteed odds ratio", p),
+                    # the graded quantity is NOT the cell: `color = "or"` colours a percentage table on
+                    # its odds ratios, so "cell >= 1.2" would compare a percentage to an odds ratio.
+                    subject = "OR",
+                    break_over = "",        break_under = "1/",
+                    doc = "the odds ratio, on percentage tables, coloured on its own symmetric scale.",
+                    break_scale = FALSE, ref_kind = "category",    threshold_mult = TRUE,  unit_kind = "none",
+                    has_ref_lead = FALSE,
+                    # text-only (a whole-cell measure) and percentages only (a mean has no odds). Its
+                    # baseline is the FIRST level, not the total row. "gated" here means the Woolf interval
+                    # (the interval of THIS comparison), tested against the odds-ratio neutral.
+                    channels = "text", producers = c("tab", "reg"), color_arg = "tab",
+                    applies_to = "pct", builds = "or", ref_auto = "first",
+                    requires = c(ref = "always", ci = "gated"),
+                    # ⚠ tab() NEVER auto-resolves to the odds ratio (it is asked for by name) -> reg-only context.
+                    auto_for = list(text = "reg_ratio"),
+                    raw = function(x) get_or(x),
+                    scale = c(pct = "odds_ratio", std = "odds_ratio", log = "odds_ratio"),
+                    sig_source = "bounds", gate_row = "refrow"),
   contrib    = list(word = function() gettext("contribution to Chi2"), break_over = .lg_times, break_under = .lg_times,
-                 doc = "signed contribution to the chi-squared (reference-free).",
-                 break_scale = FALSE, ref_kind = "indep",       threshold_mult = TRUE,  unit_kind = "contrib",
-                 has_ref_lead = FALSE, lead = fmt_contrib_lead,
-                 # the ONE measure the test step computes and stamps: the signed chi2 residual needs the
-                 # whole table and stores each cell's mean contribution ON the total row (both forced).
-                 # `method = NA` = no interval to name.
-                 channels = "text", producers = "tab", color_arg = "tab",
-                 applies_to = "pct", builds = "contrib",
-                 requires = c(chi2 = "always", totrow = "always"),
-                 auto_for = list(text = "counts"),
-                 method = NA,
-                 raw = function(x) dplyr::if_else(is_totrow(x), NA_real_, get_ctr(x) / get_mean_contrib(x)),
-                 scale = c(pct = "contrib", std = "contrib", log = "contrib"),
-                 sig_source = "pvalue", gate_row = "totrow",
-                 # contrib is the ONE measure whose reading changes with the significance policy, so the
-                 # divergence is a FIELD (a `guar` override), never a switch arm. `ignore` /
-                 # `grey_non_signif` colour the RELATIVE contribution (a share of this table's chi2 -- the
-                 # correspondence-analysis reading); `guaranteed_effect` colours the ADJUSTED STANDARDIZED
-                 # RESIDUAL on the absolute |z| scale (the SPSS reading). Both share ONE significance
-                 # source: the residual p-value. `guar` keeps only what depends on the POLICY; the glyphs
-                 # follow from the scale it swaps to (`by_scale$zscore`).
-                 guar = list(word = function() gettext("standardized residual"),
-                             break_origin = "threshold",
-                             scale = c(pct = "zscore", std = "zscore", log = "zscore")),
-                 by_scale = list(zscore = list(break_over = "+", break_under = "-",
-                                               threshold_mult = FALSE, unit_kind = "none"))),
+                    doc = "signed contribution to the chi-squared (reference-free).",
+                    break_scale = FALSE, ref_kind = "indep",       threshold_mult = TRUE,  unit_kind = "contrib",
+                    has_ref_lead = FALSE, lead = fmt_contrib_lead,
+                    # the ONE measure the test step computes and stamps: the signed chi2 residual needs the
+                    # whole table and stores each cell's mean contribution ON the total row (both forced).
+                    # `method = NA` = no interval to name.
+                    channels = "text", producers = "tab", color_arg = "tab",
+                    applies_to = "pct", builds = "contrib",
+                    requires = c(chi2 = "always", totrow = "always"),
+                    auto_for = list(text = "counts"),
+                    method = NA,
+                    raw = function(x) dplyr::if_else(is_totrow(x), NA_real_, get_ctr(x) / get_mean_contrib(x)),
+                    scale = c(pct = "contrib", std = "contrib", log = "contrib"),
+                    sig_source = "pvalue", gate_row = "totrow",
+                    # contrib is the ONE measure whose reading changes with the significance policy, so the
+                    # divergence is a FIELD (a `guar` override), never a switch arm. `ignore` /
+                    # `grey_non_signif` colour the RELATIVE contribution (a share of this table's chi2 -- the
+                    # correspondence-analysis reading); `guaranteed_effect` colours the ADJUSTED STANDARDIZED
+                    # RESIDUAL on the absolute |z| scale (the SPSS reading). Both share ONE significance
+                    # source: the residual p-value. `guar` keeps only what depends on the POLICY; the glyphs
+                    # follow from the scale it swaps to (`by_scale$zscore`).
+                    guar = list(word = function() gettext("standardized residual"),
+                                break_origin = "threshold",
+                                scale = c(pct = "zscore", std = "zscore", log = "zscore")),
+                    by_scale = list(zscore = list(break_over = "+", break_under = "-",
+                                                  threshold_mult = FALSE, unit_kind = "none"))),
   # the two tab_reg-only measures. They score the SAME quantity through the SAME helper (how far the
   # model estimate sits from `obs`) and differ ONLY in what `obs` is, hence in the reference the legend
   # names. `scale_from = "gap"` takes the ladder from the ESTIMATE's own scale: an OR/RR/IRR folds around
@@ -4977,30 +4906,30 @@ MEASURES <- list(
   # score `obs`, which only a regression fills); `by_scale` overrides the multiplicative presentation
   # on each ADDITIVE scale.
   adjustment = list(word = function() gettext("adjustment"),    break_over = .lg_times, break_under = .lg_div,
-                 doc = "how far each \\strong{modelled} effect sits from its \\strong{observed} (crude, unadjusted) counterpart -- what adjusting for the other predictors did to it. Turns \\code{empirical = TRUE} on. Meant for the \\emph{background} channel.",
-                 break_scale = FALSE, ref_kind = "observed",     threshold_mult = TRUE,  unit_kind = "none",
-                 has_ref_lead = TRUE, lead = fmt_gap_lead,
-                 channels = c("text", "bg"), producers = "reg", color_arg = "reg",
-                 applies_to = c("pct", "num"), builds = "diff",
-                 requires = c(empirical = "always"),
-                 method = function() gettext("z test on the difference between two estimates fitted on the same sample"),
-                 caveat = function(spec) fmt_noncollapsible_caveat(spec),
-                 raw = function(x) fmt_adjustment_score(x), scale_from = "gap",
-                 sig_source = "bounds", bounds = fmt_gap_bounds,
-                 gate_row = "refrow", force_policy = fmt_gap_force_policy,
-                 by_scale = GAP_ADDITIVE_FACTS),
+                    doc = "how far each \\strong{modelled} effect sits from its \\strong{observed} (crude, unadjusted) counterpart -- what adjusting for the other predictors did to it. Turns \\code{empirical = TRUE} on. Meant for the \\emph{background} channel.",
+                    break_scale = FALSE, ref_kind = "observed",     threshold_mult = TRUE,  unit_kind = "none",
+                    has_ref_lead = TRUE, lead = fmt_gap_lead,
+                    channels = c("text", "bg"), producers = "reg", color_arg = "reg",
+                    applies_to = c("pct", "num"), builds = "diff",
+                    requires = c(empirical = "always"),
+                    method = function() gettext("z test on the difference between two estimates fitted on the same sample"),
+                    caveat = function(spec) fmt_noncollapsible_caveat(spec),
+                    raw = function(x) fmt_adjustment_score(x), scale_from = "gap",
+                    sig_source = "bounds", bounds = fmt_gap_bounds,
+                    gate_row = "refrow", force_policy = fmt_gap_force_policy,
+                    by_scale = GAP_ADDITIVE_FACTS),
   between_groups = list(word = function() gettext("between groups"), break_over = .lg_times, break_under = .lg_div,
-                 doc = "with \\code{tab_vars}, how far each group's effect sits from the \\strong{first} group's, on the same row: a per-predictor reading of effect modification. Meant for the \\emph{background} channel.",
-                 break_scale = FALSE, ref_kind = "group",        threshold_mult = TRUE,  unit_kind = "none",
-                 has_ref_lead = TRUE, lead = fmt_gap_lead,
-                 channels = c("text", "bg"), producers = "reg", color_arg = "reg",
-                 applies_to = c("pct", "num"), builds = "diff",
-                 requires = c(interaction = "always"),
-                 method = function() gettext("z test on the difference between two independent estimates"),
-                 raw = function(x) fmt_adjustment_score(x), scale_from = "gap",
-                 sig_source = "bounds", bounds = fmt_gap_bounds,
-                 gate_row = "refrow", force_policy = fmt_gap_force_policy,
-                 by_scale = GAP_ADDITIVE_FACTS)
+                        doc = "with \\code{tab_vars}, how far each group's effect sits from the \\strong{first} group's, on the same row: a per-predictor reading of effect modification. Meant for the \\emph{background} channel.",
+                        break_scale = FALSE, ref_kind = "group",        threshold_mult = TRUE,  unit_kind = "none",
+                        has_ref_lead = TRUE, lead = fmt_gap_lead,
+                        channels = c("text", "bg"), producers = "reg", color_arg = "reg",
+                        applies_to = c("pct", "num"), builds = "diff",
+                        requires = c(interaction = "always"),
+                        method = function() gettext("z test on the difference between two independent estimates"),
+                        raw = function(x) fmt_adjustment_score(x), scale_from = "gap",
+                        sig_source = "bounds", bounds = fmt_gap_bounds,
+                        gate_row = "refrow", force_policy = fmt_gap_force_policy,
+                        by_scale = GAP_ADDITIVE_FACTS)
 )
 
 # the table must be COMPLETE on the vocabulary fields, or an accessor would silently answer "no channel"

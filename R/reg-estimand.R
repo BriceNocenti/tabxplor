@@ -31,7 +31,7 @@
 # (link, effect, measure) from four facts a family declares -- `level`, `fits`, `words`, `note` --
 # and two shared maps (REG_MEASURE_LINK, REG_LEVEL_MEASURES). So adding a family is one REG_FAMILIES
 # row and adding a link one map entry, and a family CANNOT declare a scale, a header word and a
-# crude shape that disagree with each other, because it no longer declares them.
+# crude shape that disagree with each other, because it declares none of the three.
 #
 # THE STATES a user must be able to tell apart. A row in the table -> build it. No row -> one of four
 # refusals, DERIVED from the clause that failed rather than declared: `impossible` (the level has no
@@ -435,6 +435,10 @@ reg_word_noncollapsible <- function(word) {
 # name table (reg_family_display_name(), reg_family_short(), the UI labels) is DERIVED from this one,
 # and so is the whole estimand library -- so adding a family is one row.
 #
+# Every row writes its fields in ONE order -- display, short, ui, ui_binary, outcome, outcome_level,
+# level, fits, words, odds_pred, crude, note, why -- so the families read down a column. They are
+# grouped below by what they are FOR, not by that order.
+#
 # The estimand columns, which are what the library composes from:
 #   level      what a cell of this outcome IS: "pct" | "mean" | "count" | "rank". It decides which
 #              measures exist (REG_LEVEL_MEASURES) and which is the level's own. Declaring it (with
@@ -490,8 +494,7 @@ REG_FAMILIES <- list(
   binomial     = list(display = function() gettext("logistic regression"),
                       short = "logit",    ui = "binomial (logistic)", ui_binary = "binomial (logistic)",
                       outcome = NA_character_, outcome_level = "modelled",
-                      level = "pct",
-                      fits = c(odds_ratio = "binomial", ratio = "rr", difference = "rd"),
+                      level = "pct",   fits = c(odds_ratio = "binomial", ratio = "rr", difference = "rd"),
                       odds_pred = "complement",
                       note = function() gettext("vs the reference category")),
   poisson      = list(display = function() gettext("Poisson regression"),
@@ -517,22 +520,23 @@ REG_FAMILIES <- list(
   # dispersion warning): `ui = NA` says so once, where the label lives. It differs from poisson in
   # the VARIANCE assumption, not in what it estimates, so it borrows poisson's crude cells.
   quasipoisson = list(display = function() gettext("quasi-Poisson regression"),
-                      short = "qpoisson", ui = NA_character_,          ui_binary = NA_character_,
+                      short = "qpoisson", ui = NA_character_,         ui_binary = NA_character_,
                       outcome = NA_character_,
-                      level = "count", fits = c(ratio = "quasipoisson"), crude = "poisson",
+                      level = "count", fits = c(ratio = "quasipoisson"),
+                      crude = "poisson",
                       note = function() gettext("vs the reference category")),
   # the three internal LINK keys: never named by a user, never offered by a picker, and declaring no
   # `fits` -- which IS what makes them internal. `link` is how they are reached.
   rr           = list(display = function() gettext("modified Poisson regression"),
-                      short = "rr",       ui = NA_character_,          ui_binary = NA_character_,
+                      short = "rr",       ui = NA_character_,         ui_binary = NA_character_,
                       outcome = "binomial"),
   rd           = list(display = function()
                         gettext("additive-risk regression (identity link, robust standard errors)"),
-                      short = "rd",       ui = NA_character_,          ui_binary = NA_character_,
+                      short = "rd",       ui = NA_character_,         ui_binary = NA_character_,
                       outcome = "binomial"),
   mr           = list(display = function()
                         gettext("log-link mean regression (Poisson pseudo-likelihood, robust standard errors)"),
-                      short = "mr",       ui = NA_character_,          ui_binary = NA_character_,
+                      short = "mr",       ui = NA_character_,         ui_binary = NA_character_,
                       outcome = "gaussian")
 )
 
@@ -1095,8 +1099,8 @@ reg_estimand <- function(family, link = "auto", measure = "auto", effect = "auto
 reg_no_coefficient_why <- function(link)
   function() gettextf("the model estimates %s, so this measure has no coefficient here", link)
 
-# Why a LEVEL has no such measure -- one sentence per kind of level, so the two `impossible` cells
-# gaussian and poisson used to declare are generated instead.
+# Why a LEVEL has no such measure -- one sentence per kind of level, so an `impossible` cell is
+# generated rather than declared per family.
 #' @keywords internal
 #' @noRd
 reg_no_measure_why <- function(family) {

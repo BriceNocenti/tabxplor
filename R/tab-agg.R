@@ -285,9 +285,10 @@ resolve_ci_method <- function(ci_method = NULL, method_cell = NULL, method_diff 
 # CI_METHODS above says WHICH METHOD a kind of interval may be built with. CI_GEOMS says WHICH INTERVAL
 # a column's plan asks for -- the engine that builds it, the CI_METHODS slot that names it, and the
 # EST_SCALES key it makes the column ESTIMATE. One row per (kind x var_kind x scale) the package can
-# answer, keyed "<kind>.<var_kind>[.<scale>]", read only through the four readers below, so the factor
-# leaf, the numeric leaf and the superseded tab_ci() step cannot answer the same question differently.
+# answer, read only through the four readers below, so the factor leaf, the numeric leaf and the
+# superseded tab_ci() step cannot answer the same question differently.
 #
+#   key          "<kind>.<var_kind>[.<scale>]" -- asserted below to be exactly those three fields
 #   kind         "cell" (the cell's own interval) | "diff" (the cell against its reference)
 #   var_kind     the column's fmt_var_kind(): "pct" | "mean". A "count"/"coef" column has no row here.
 #   scale        the ci_scale the reader sees: "diff" | "ratio". Absent on a cell interval (no contrast).
@@ -304,55 +305,38 @@ resolve_ci_method <- function(ci_method = NULL, method_cell = NULL, method_diff 
 #   The proportion engines take `df =` (the design df, straight to conf_level_to_crit); the mean ones
 #   take `df_design =`, which REPLACES the sample-based df. A shared name list would make that swappable
 #   by a typo; a per-row closure cannot.
-CI_GEOMS <- list(
-  "cell.pct" = list(
-    kind = "cell", var_kind = "pct", scale = NA_character_,
-    method_slot = "cell", method_fixed = NA_character_,
-    scale_key = NA_character_, wants_ref = FALSE, wants_p = FALSE, ref_cell = "keep",
-    engine = function(a) switch(
+CI_GEOMS <- tx_grid(tibble::tribble(
+  ~key,              ~kind,  ~var_kind, ~scale,        ~method_slot,  ~method_fixed, ~scale_key,     ~wants_ref, ~wants_p, ~ref_cell, ~engine,
+  "cell.pct",        "cell", "pct",     NA_character_, "cell",        NA_character_, NA_character_,  FALSE,      FALSE,    "keep",
+    function(a) switch(
       a$method,
       "wilson" = ci_wilson(a$est, a$base, conf_level = a$conf_level, df = a$degf),
       "wald"   = ci_wald(  a$est, a$base, conf_level = a$conf_level, df = a$degf),
       # Korn-Graubard's df rescale needs the cell's RAW base beside the effective one -- hence `n_raw`,
       # NOT `base` (that one is n_eff-coalesced and NA'd on the reference cell).
       "beta"   = ci_beta(  a$est, a$base, conf_level = a$conf_level,
-                           df = a$degf, n_raw = a$n_raw))),
-  "cell.mean" = list(
-    kind = "cell", var_kind = "mean", scale = NA_character_,
-    method_slot = NA_character_, method_fixed = "student",
-    scale_key = NA_character_, wants_ref = FALSE, wants_p = FALSE, ref_cell = "keep",
-    # One-sample Student t(n-1) cell interval (a variance is estimated).
-    engine = function(a) ci_pivot(a$est, sqrt(a$var / a$base),
-                                  df = df_or_design(a$base - 1, a$degf),
-                                  conf_level = a$conf_level, want_p = FALSE)),
-  "diff.pct.diff" = list(
-    kind = "diff", var_kind = "pct", scale = "diff",
-    method_slot = "diff", method_fixed = NA_character_,
-    scale_key = "points", wants_ref = TRUE, wants_p = TRUE, ref_cell = "na",
-    engine = function(a) ci_prop_diff(a$est, a$base, a$ref, a$ref_n, conf_level = a$conf_level,
-                                      method = a$method, want_p = a$want_p, df = a$degf)),
-  "diff.pct.ratio" = list(
-    kind = "diff", var_kind = "pct", scale = "ratio",
-    method_slot = NA_character_, method_fixed = "katz",
-    scale_key = "pct_ratio", wants_ref = TRUE, wants_p = TRUE, ref_cell = "na",
-    # Katz is the only proportion-ratio method, so here the method is not a choice.
-    engine = function(a) ci_katz_rr(a$est, a$base, a$ref, a$ref_n, conf_level = a$conf_level,
-                                    want_p = a$want_p, df = a$degf)),
-  "diff.mean.diff" = list(
-    kind = "diff", var_kind = "mean", scale = "diff",
-    method_slot = "mean_diff", method_fixed = NA_character_,
-    scale_key = "mean_diff", wants_ref = TRUE, wants_p = TRUE, ref_cell = "na",
-    engine = function(a) ci_mean_diff2(a$est, a$var, a$base, a$ref, a$ref_var, a$ref_n,
-                                       method = a$method, conf_level = a$conf_level,
-                                       want_p = a$want_p, df_design = a$degf, pool = a$pool)),
-  "diff.mean.ratio" = list(
-    kind = "diff", var_kind = "mean", scale = "ratio",
-    method_slot = "mean_ratio", method_fixed = NA_character_,
-    scale_key = "mean_ratio", wants_ref = TRUE, wants_p = TRUE, ref_cell = "na",
-    engine = function(a) ci_mean_ratio(a$est, a$var, a$base, a$ref, a$ref_var, a$ref_n,
-                                       method = a$method, conf_level = a$conf_level,
-                                       want_p = a$want_p, df_design = a$degf, pool = a$pool))
-)
+                           df = a$degf, n_raw = a$n_raw)),
+  # one-sample Student t(n-1) cell interval (a variance is estimated)
+  "cell.mean",       "cell", "mean",    NA_character_, NA_character_, "student",     NA_character_,  FALSE,      FALSE,    "keep",
+    function(a) ci_pivot(a$est, sqrt(a$var / a$base),
+                         df = df_or_design(a$base - 1, a$degf),
+                         conf_level = a$conf_level, want_p = FALSE),
+  "diff.pct.diff",   "diff", "pct",     "diff",        "diff",        NA_character_, "points",       TRUE,       TRUE,     "na",
+    function(a) ci_prop_diff(a$est, a$base, a$ref, a$ref_n, conf_level = a$conf_level,
+                             method = a$method, want_p = a$want_p, df = a$degf),
+  # Katz is the only proportion-ratio method, so here the method is not a choice.
+  "diff.pct.ratio",  "diff", "pct",     "ratio",       NA_character_, "katz",        "pct_ratio",    TRUE,       TRUE,     "na",
+    function(a) ci_katz_rr(a$est, a$base, a$ref, a$ref_n, conf_level = a$conf_level,
+                           want_p = a$want_p, df = a$degf),
+  "diff.mean.diff",  "diff", "mean",    "diff",        "mean_diff",   NA_character_, "mean_diff",    TRUE,       TRUE,     "na",
+    function(a) ci_mean_diff2(a$est, a$var, a$base, a$ref, a$ref_var, a$ref_n,
+                              method = a$method, conf_level = a$conf_level,
+                              want_p = a$want_p, df_design = a$degf, pool = a$pool),
+  "diff.mean.ratio", "diff", "mean",    "ratio",       "mean_ratio",  NA_character_, "mean_ratio",   TRUE,       TRUE,     "na",
+    function(a) ci_mean_ratio(a$est, a$var, a$base, a$ref, a$ref_var, a$ref_n,
+                              method = a$method, conf_level = a$conf_level,
+                              want_p = a$want_p, df_design = a$degf, pool = a$pool),
+))
 
 stopifnot(all(vapply(CI_GEOMS, function(g) setequal(
   names(g), c("kind", "var_kind", "scale", "method_slot", "method_fixed",

@@ -85,7 +85,7 @@ reg_specs_independent <- function(ctx) {
   # WARNING: `compare` is a DEFAULT now ("auto", from an unnamed `stats`), so a table that asked for
   # no comparison must not land here with anything but "none" -- reg_resolve_args() degrades "auto"
   # before the shared record is built. Getting that wrong costs every table its parallelism AND makes
-  # reg_spec_build() keep the fit objects Phase 22j stopped keeping.
+  # reg_spec_build() keep the fit objects instead of distilling them.
   if (length(ctx$specs) < 2L) return(NULL)
   s <- ctx$shared
   if (!identical(s$compare, "none"))
@@ -101,8 +101,7 @@ reg_specs_independent <- function(ctx) {
 # EVERYTHING THAT NEEDS THE FITTED OBJECT, COMPUTED WHILE IT LIVES. All four are facts about the
 # FIT, not about the estimand -- the model-fit statistics, the per-predictor global tests, the
 # assumption checks and each crossed pair's test -- so they survive a `measure` / `effect` change
-# and the cached record can carry them with the fit thrown away -- which is what makes a distilled
-# record carry its checks, where it used to lose them silently.
+# and the cached record can carry them with the fit thrown away, checks included.
 #
 # ⚠ THE COLUMN LABEL IS A PLACEHOLDER: it is not known yet (the columns are built after the fit),
 # and reg_stage_footer() rewrites `col` wholesale for all four slots anyway. reg_rows_keyed() writes
@@ -322,8 +321,8 @@ reg_spec_tips_mnl <- function(sp, e, cols, ctx) {
       col_label = b$label, row = which(keep),
       var   = as.character(skeleton$var[keep]),
       # THE OBSERVED LEVEL AND ITS INTERVAL, and nothing else: the cell already folds in the crude
-      # odds ratio (22a-ii), so the risk difference this line used to add was a third estimand
-      # contradicting the one beside it. Rendered as an ordinary fmt cell.
+      # odds ratio, so a risk difference here would be a third estimand contradicting the one beside
+      # it. Rendered as an ordinary fmt cell.
       tip   = tip_crude_level(pr, tipsd$emp_prop_inf[j], tipsd$emp_prop_sup[j]))
   }))
   if (length(out) == 0L) return(NULL)

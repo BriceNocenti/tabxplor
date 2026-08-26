@@ -225,12 +225,21 @@ tip_render_note <- function(x, ctx, tok) {
 #
 # ⚠ `not_ref` / `not_base` apply only where the line names a DEVIATION: a level (a percentage, a
 # mean, a count) is a fact about the cell, and a reference cell has one like any other.
+# The five shared gates, in the order the builder applies them, and the column-level conditions the
+# grid's `when` names -- hoisted so a row states WHICH condition, not what it is.
 #' @noRd
-.ttip <- function(token = NA_character_, label = NA_character_,
-                  gates = c("comparable", "not_ref", "not_base", "not_shown", "not_emitted"),
-                  when = NULL, render = NULL, group = 1L)
-  list(token = token, label = label, gates = gates, when = when, render = render,
-       group = as.integer(group))
+TOOLTIP_GATES <- c("comparable", "not_ref", "not_base", "not_shown", "not_emitted")
+#' @noRd
+tip_when_mean  <- function(x, ctx) identical(ctx$vkind, "mean")
+#' @noRd
+tip_when_ratio <- function(x, ctx) ctx$pct_type %in% c("row", "col") || identical(ctx$vkind, "mean")
+# an odds ratio shows on every row/col-% column, INCLUDING its own baseline (a whole column of 1s):
+# "OR: 1" is how a reader finds which column the ratio is read against.
+#' @noRd
+tip_when_or <- function(x, ctx) {
+  if (!(ctx$pct_type %in% c("row", "col") || nzchar(ctx$role))) return(FALSE)
+  any(is.finite(get_or(x)))
+}
 
 # The LAST row: reg_append_empirical_tip() (R/tab-render-html.R) appends the multinomial crude level
 # onto a finished string and lands there by position.
@@ -238,35 +247,25 @@ tip_render_note <- function(x, ctx, tok) {
 TOOLTIP_GROUP_OBS <- 2L
 
 #' @noRd
-TOOLTIP_LINES <- list(
-  # no `not_shown` gate: what this adds is the interval and the exact p-value, never shown elsewhere.
-  est   = .ttip("est", gates = c("comparable", "not_ref"), render = tip_render_est),
-  # the level the estimate sits on -- one line for a percentage, a mean and a count alike, since
-  # `{base}` resolves per scale.
-  base  = .ttip("base", gates = c("not_shown", "not_emitted")),
-  sd    = .ttip("sd", gates = c("not_shown", "not_emitted"),
-                when = function(x, ctx) identical(ctx$vkind, "mean")),
-  diff  = .ttip("diff"),
-  ratio = .ttip("ratio",
-                when = function(x, ctx) ctx$pct_type %in% c("row", "col") ||
-                  identical(ctx$vkind, "mean")),
-  # shown on every row/col-% column, INCLUDING its own baseline (a whole column of 1s): "OR: 1" is
-  # how a reader finds which column the ratio is read against.
-  or    = .ttip("or",
-                when = function(x, ctx) {
-                  if (!(ctx$pct_type %in% c("row", "col") || nzchar(ctx$role))) return(FALSE)
-                  any(is.finite(get_or(x)))
-                }),
-  std   = .ttip(label = "std diff", gates = c("comparable", "not_ref", "not_base"),
-                when = function(x, ctx) identical(ctx$vkind, "mean"), render = tip_render_std),
-  ctr   = .ttip("ctr", label = tip_label_ctr, gates = c("comparable", "not_shown"),
-                render = tip_render_ctr),
-  resid = .ttip("resid", gates = c("comparable", "not_shown"), render = tip_render_resid),
-  obs   = .ttip("obs", label = tip_label_obs, group = TOOLTIP_GROUP_OBS),
-  gap   = .ttip("gap", gates = character(), render = tip_render_gap, group = TOOLTIP_GROUP_OBS),
-  n     = .ttip("n", gates = c("not_shown", "not_emitted"), render = tip_render_n),
-  note  = .ttip(label = "", gates = character(), render = tip_render_note)
-)
+TOOLTIP_LINES <- tx_grid(tibble::tribble(
+  ~key,    ~token,        ~label,        ~gates,                                 ~when,          ~render,          ~group,
+  # no `not_shown` gate on `est`: what it adds is the interval and the exact p-value, never shown
+  # elsewhere. Then `base`, the level the estimate sits on -- one line for a percentage, a mean and a
+  # count alike, since `{base}` resolves per scale.
+  "est",   "est",         NA_character_, c("comparable", "not_ref"),             NULL,           tip_render_est,   1L,
+  "base",  "base",        NA_character_, c("not_shown", "not_emitted"),          NULL,           NULL,             1L,
+  "sd",    "sd",          NA_character_, c("not_shown", "not_emitted"),          tip_when_mean,  NULL,             1L,
+  "diff",  "diff",        NA_character_, TOOLTIP_GATES,                          NULL,           NULL,             1L,
+  "ratio", "ratio",       NA_character_, TOOLTIP_GATES,                          tip_when_ratio, NULL,             1L,
+  "or",    "or",          NA_character_, TOOLTIP_GATES,                          tip_when_or,    NULL,             1L,
+  "std",   NA_character_, "std diff",    c("comparable", "not_ref", "not_base"), tip_when_mean,  tip_render_std,   1L,
+  "ctr",   "ctr",         tip_label_ctr, c("comparable", "not_shown"),           NULL,           tip_render_ctr,   1L,
+  "resid", "resid",       NA_character_, c("comparable", "not_shown"),           NULL,           tip_render_resid, 1L,
+  "obs",   "obs",         tip_label_obs, TOOLTIP_GATES,                          NULL,           NULL,             TOOLTIP_GROUP_OBS,
+  "gap",   "gap",         NA_character_, character(),                            NULL,           tip_render_gap,   TOOLTIP_GROUP_OBS,
+  "n",     "n",           NA_character_, c("not_shown", "not_emitted"),          NULL,           tip_render_n,     1L,
+  "note",  NA_character_, "",            character(),                            NULL,           tip_render_note,  1L,
+))
 
 
 # === SECTION: the builder ==========================================================================

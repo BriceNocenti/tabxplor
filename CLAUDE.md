@@ -52,6 +52,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 
 **Arguments, options, integrity** — the surface as data.
 
+- `aaa-grid.R` — how a declared table is WRITTEN (the grid rule) and `tx_grid()`, the fold every one of them uses; sorts first.
 - `tab-args.R` — the argument surface: `TAB_ARGS` / `EXPORT_ARGS` drive signatures, value lists and `@param` prose.
 - `tab-options.R` — the option subsystem: `TAB_OPTIONS` + the generated `?tabxplor-options` page.
 - `zzz-fact-keys.R` — `TAB_FOREIGN_KEYS`: cross-table foreign-key checks run at load.
@@ -127,7 +128,11 @@ There are **two producers, one output type**. `tab()` builds crosstabs from micr
 
 The codebase is organised around **declared fact tables**: each fact — a colour measure, an option, an argument, an estimand, a display token, a kind of row — is stated **once, in one table** and read through named accessors, instead of being scattered across literals and `switch` statements. The single rule a future change must respect: *every fact is stated once, in one declared table; a key one table reads out of another is a foreign key, checked at load* — `zzz-fact-keys.R` validates every edge at namespace load, so a rename that breaks a reference fails the install, not a user's table.
 
-The payoff to internalise: **adding a measure, an option, an argument, an estimand is one new row — not N scattered edits.** Do not re-introduce ad-hoc branches; extend the table. The main fact tables:
+The payoff to internalise: **adding a measure, an option, an argument, an estimand is one new row — not N scattered edits.** Do not re-introduce ad-hoc branches; extend the table.
+
+**A declared table is written as a grid** (`R/aaa-grid.R`, which states the rule and sorts first because a grid is folded at source time): one row per fact, fields in one fixed order, aligned in columns, a column dictionary immediately above, and nothing about a row stated anywhere else — a row may run long, being read unwrapped. Where every field is a scalar the grid is a `tibble::tribble()`, folded by `tx_grid()` into the named list of named lists every accessor, roxygen generator and foreign-key check already reads (a `NULL` cell means "this row has no such field"); where a field is a closure or a paragraph of `doc` it stays a `list()` of one aligned block per row, the fixed field order being what makes it a grid. `TAB_ARGS` and `EXPORT_ARGS`, too ragged and too prose-heavy for a tribble, declare that order as `TAB_ARG_ORDER` and assert it at load. A tribble takes comment lines between rows, so a threshold's justification still sits on its own row.
+
+The main fact tables:
 
 | Fact table         | Home                 | Declares                                                                                |
 |--------------------|----------------------|-----------------------------------------------------------------------------------------|
@@ -138,6 +143,7 @@ The payoff to internalise: **adding a measure, an option, an argument, an estima
 | `DISPLAY_PRESETS`  | `tab-display.R`      | The named cell layouts both producers resolve (`est` / `est_ci` / `est_base` / …)       |
 | `CI_METHODS`       | `tab-agg.R`          | The confidence-interval methods and geometries (with `CI_GEOMS`)                        |
 | `COLOR_SCALES`     | `tab_classes.R`      | The break scales and palettes                                                           |
+| `COLOR_RAMPS`      | `tab-palettes.R`     | Every colour rung: channel x theme x direction x rung, its hex and its OKLCH coordinate |
 | `PRINT_PALETTES`   | `tab-palettes.R`     | The black-and-white publication palettes: a row per break slot (ink, face, mark)        |
 | `TAB_ARGS`         | `tab-args.R`         | The argument surface (signatures, values, option twins, prose; + `EXPORT_ARGS`)         |
 | `TAB_OPTIONS`      | `tab-options.R`      | The package options and their defaults                                                  |
@@ -993,6 +999,7 @@ missing, none stale). `devtools::test(filter = "non-ascii|display|args|options")
 **Verification.** Shipped suite **FAIL 0 | PASS 4 316 | SKIP 1**; `dev/run_dev_tests.R` **FAIL 0 | PASS 5 899 | SKIP 3**. `_golden/`, `_color_golden/` and `_snaps/golden.md` are byte-identical to HEAD; `_snaps/fmt-contract.md` → `fmt.md` and `render-html.md` → `tab-render-html.md` are renames with a zero-line diff. ⚠ Not run here: `devtools::check()`, the release gate the maintainer runs.
 
 
+
 #### Phase 23f — french translations
 
 The aim is to create a **compact, yet holistic and integrated translation**: avoiding word-do-word translation of the english version altogether is your highest priority.
@@ -1038,9 +1045,92 @@ The aim is to create a **compact, yet holistic and integrated translation**: avo
 
 The two references for French vocabulary are `vignettes/articles/tabxplor-all-else-equal-fr.Rmd` and `dev/french_glossary.md`.
 
-#### Phase 23g — Code housekeeping and future-proofing
-All facts tables, parameters tables, options tables, etc., and other tibble::tribble or the like used in code, should be well aligned for human readability, a human should be able to easily modify them with all the relevant informations structured, condensed and at the same place, visible at first glance, using a tribble if necessary (see, for example, the "print" black and white palettes).
+#### Phase 23g — Code housekeeping and future-proofing — DONE
 
+**The deliverable is a rule, not a reformat.** A declared table is now written as a **grid** -- one row
+per fact, fields in one fixed order, aligned in columns, a column dictionary immediately above, and
+nothing about a row stated anywhere else; a row may run long, being read unwrapped. The rule and its
+one mechanism live in the new **`R/aaa-grid.R`** (35 lines), which sorts FIRST in C collation *and must*:
+a grid is folded at SOURCE time, so every table using it lives in a file that comes after.
+`R/utils.R` -- the obvious home -- sorts second-to-last and could not have served.
+
+**`tx_grid()` is what made the conversion free.** It folds a written `tibble::tribble()` into the
+named list of named lists every reader already indexes, so **not one accessor, roxygen generator,
+foreign-key edge or test moved**. That is the `PRINT_PALETTES` precedent generalised: the tribble is
+the written source only. Verified: `man/` and `NAMESPACE` byte-identical after `document()`, and every
+`_golden/` / `_color_golden/` / `_snaps/` file byte-identical. ⚠ Its one semantic choice: **a `NULL`
+cell means "this row has no such field" and is DROPPED** (so `%||%` reads keep working), while `NA`
+means declared-and-empty and is kept.
+
+**The survey came first, and it overturned the plan.** Three parallel audits of all 47 top-level
+constants in `R/` found **most tables already scannable** (`REG_WORDS`, `CI_METHODS`, `fmt_attr_rules`,
+`TEST_ROWS`, `REG_LINK_FUNS`, `REG_CROSS_ARMS`, `REG_LEVEL_MEASURES`, `REG_ASIDE_NOTE`, `TAB_OPS`, and
+~21 single-line vocabulary vectors). A mass conversion would have been churn. Nine tables became
+grids; six were re-aligned; the rest were left alone, and that is recorded here so it is not re-opened.
+
+**Converted to tribble grids** (`tx_grid`-folded, all content identical):
+
+| table | file | before -> after |
+|---|---|---|
+| `EST_SCALES` | `fmt_class.R` | 112 -> 38 lines, 13 x 22 pure scalars |
+| `COLOR_SCALES` | `tab_classes.R` | 64 -> 36; `default` is polymorphic (numeric / `list(over=,under=)` / `NULL` / `quote(zscore)`) -> a list column, written literally |
+| `REG_EMPIRICAL` | `reg-empirical.R` | 27 shape rows x 10 columns; lines were 139-148 chars and only half aligned |
+| `REG_CHECKS` | `reg-assumptions.R` | 56 -> 24 |
+| `REG_DIGEST_PARTS` | `reg-digest.R` | 35 -> 14 |
+| `REG_FIT_KINDS` | `reg-digest.R` | 18 -> 12 |
+| `DISPLAY_PRESETS` | `tab-display.R` | 55 -> 32 |
+| `CI_GEOMS` | `tab-agg.R` | 49 -> 32; the 9 scalars align, the per-row `engine` closure stays per row (the header argues why, correctly) |
+| `VAR_SHAPES` | `var-shape.R` | scalars on line 1, the user-facing `doc` on its own line below |
+| `TOOLTIP_LINES` | `tab-tooltip.R` | 29 -> 19; needed hoisting three anonymous `when =` closures to named predicates (`tip_when_mean` / `_ratio` / `_or`), which is the point -- a row now says WHICH condition, not what it is |
+
+⚠ **A tribble takes comment lines BETWEEN rows**, which dissolved the one real objection: `REG_CHECKS`'
+threshold justifications (dfbetas >= 1 / VIF >= 10) and `EST_SCALES`' fold WARNINGs sit on their own
+rows exactly as before. A cell also holds a closure, a `quote()` or a vector as a list column.
+
+**The colour ramps are now one 40-row grid** (`COLOR_RAMPS`, `tab-palettes.R`): `channel` x `theme` x
+`dir` x `rung`, with `hex` and the `oklch` coordinate side by side, the ten `default_*_colors[_neg]`
+vectors derived from it by `tx_ramp()` so `build_palettes()` is untouched. A ladder now reads DOWN a
+column, which is what the colour-blindness tuning actually needs. ⚠ The four `_neg`/dark ramps carried
+**2-4 superseded alternatives per line, to ~230 chars** -- pure inline dev history. The runner-up of
+each rung is kept as a commented-out twin grid below (the maintainer's call); the rest are gone, with
+the six stale `#,#` editing artefacts. `palette_8bit` (8 rungs, another shape) is untouched.
+
+**Re-aligned, and why each stays a `list()`.** `MEASURES` was the worst-aligned table in the package
+-- every continuation line sat 4 columns left of its own `list(`, on all six rows -- and is blocked
+from a grid by closures on 8 fields, the nested `by_scale` sub-table and 32 ragged fields.
+`REG_FAMILIES` had its fields in a different order on four rows. `DISPLAY_TOKENS` was **left exactly
+as it is**: its 35 interleaved comments turned out to be one load-bearing design note per token, and
+`.dtok()`'s sparse form ("a row states only what is unusual about it") beats 26 x 16 mostly-`NA` cells.
+`TEST_ROWS` likewise -- its four row constructors plus `modifyList` defaults already give one aligned
+line per row while suppressing 10 irrelevant columns.
+
+**`TAB_ARGS` had no column dictionary at all** -- 81 rows, 18 fields, seven (`values_rd`, `leaf`,
+`na_ok`, `size`, `dots`, `check`, `validate`) documented nowhere in the package. It has one now, and
+`EXPORT_ARGS` too. Too ragged (20 % filled) and too prose-heavy to be a tribble, both instead declare
+**`TAB_ARG_ORDER`** and **assert it at load**, beside the existing invariants -- so the grid rule is
+enforced on the one table that cannot be one. Getting there: 41 rows led with `default` instead of
+`producers`, and 21 more were off-canon; all 107 rows of the two tables now agree. ⚠ Verified the
+assertion bites, by scrambling one row and watching the load fail.
+
+⚠ **`doc` prose was never touched, and must not be**: `tab_args_rd()` emits `body[[1]]` and `body[-1]`
+as SEPARATE Rd lines, so a `doc` vector's element boundaries ARE line breaks in `man/*.Rd`. Re-wrapping
+one would change the shipped help page.
+
+**Housekeeping.** The residual dev history in `R/` is gone: 11 `Phase N` tags and 6 "used to / no
+longer" post-mortems, rewritten present-tense -- keeping the measurement, dropping the phase tag,
+where the number is load-bearing (the parallel seam's WARNINGs). `dev/*.md` pointers stay: Phase 23i
+owns that folder. Two stale facts fixed: `TEST_ROWS`' header said "39 kinds of row" (there are 42),
+and `EST_SCALES`' dictionary never documented `default_display` although `est_default_display()` reads
+it. Three now-unused constructors went with their tables (`.vshape`, `.dpreset`, `.ttip`).
+
+**Net: 703 insertions against 871 deletions across 18 files**, plus the new 35-line `aaa-grid.R`.
+
+**Verification.** A dump harness compared every declared table field-by-field against a HEAD checkout
+after each conversion (`git archive HEAD` into the scratchpad, the same script under each tree): **content
+and row order identical throughout**, the only differences being within-row FIELD order, which is what
+the phase normalises. `devtools::document()`: `man/` and `NAMESPACE` byte-identical.
+`devtools::test()`: **FAIL 0 | PASS 4323 | SKIP 1**, every golden and snapshot unchanged.
+⚠ Not run here: `devtools::check()` -- the release gate the maintainer runs.
 
 #### Phase 23h — pkgdown site — DONE
 

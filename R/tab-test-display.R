@@ -109,7 +109,7 @@ test_pvalue_label <- function(test, min_e = NA_real_) {
 
 # === SECTION: TEST_ROWS -- what kind of statistical row this is ====================================
 # THE vocabulary of the `test` attribute's discriminator column: one row per kind of test row, for
-# BOTH producers. The `test` tibble is a 15-column union type carrying 39 kinds of row
+# BOTH producers. The `test` tibble is a 15-column union type carrying 42 kinds of row
 # (new_test_tibble(), R/tab_classes.R).
 #
 # Nothing here decides a statistic -- the arithmetic stays in chi2_compute_test() / reg_glance() /

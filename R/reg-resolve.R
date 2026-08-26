@@ -973,7 +973,7 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   # ⚠ THE DEFAULT COMPARISON DEGRADES, IT NEVER REFUSES. `"auto"` is what an unnamed `stats` asks
   # for, so it must not abort a table, and it must not turn on the two things `compare != "none"`
   # switches: reg_specs_independent() refuses parallelism on it, and reg_spec_build() then KEEPS the
-  # fit object (which is exactly what Phase 22j stopped doing). Several `predictors` sets is the one
+  # fit object instead of distilling it. Several `predictors` sets is the one
   # shape where a between-model test means anything -- and reg_prepare_data() has already refused
   # such a list with several outcomes, so after this line "auto" implies one outcome too.
   if (identical(compare, "auto") &&
