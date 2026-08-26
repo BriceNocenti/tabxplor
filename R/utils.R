@@ -535,9 +535,13 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
   invisible(recode)
 }
 
-#' `forcats::gss_cat` test dataframe, from US General Social Survey,
-#'   but formatted with merged levels for cleaner tables,
-#'   and first levels chosen to be used as references (for color helpers, regressions, etc.)
+#' A General Social Survey extract, formatted for cross-tables
+#'
+#' `forcats::gss_cat` with levels merged into readable groups, and each variable's first level
+#' chosen as the reference the colors and the models compare everything else to. The data set most
+#' examples and vignettes are built on.
+#'
+#' @return A tibble of 21483 rows: the US General Social Survey, 2000-2014.
 #' @export
 gss_cat_data_formatting <- function() {
 forcats::gss_cat |>

@@ -1,5 +1,7 @@
 ---
 title: "Toutes choses égales par ailleurs : lire une régression sans lâcher les pourcentages"
+description: >
+  Une analyse menée du premier tableau croisé à une phrase finie — ce qu'un modèle ajoute, ce qu'il retire, et comment le dire sans lâcher les pourcentages.
 output: rmarkdown::html_vignette
 ---
 
@@ -41,7 +43,9 @@ options(tabxplor.shape_table = "no")
 ```
 
 ```{r, echo = FALSE, results = "asis"}
-cat(tab_css(theme = "light"))
+# The website carries a light/dark switch and tab_css("auto") follows it; a shipped vignette
+# is always read on a light page, so there it stays light.
+cat(tab_css(theme = if (Sys.getenv("IN_PKGDOWN") == "true") "auto" else "light"))
 ```
 
 ```{r, echo = FALSE, include = FALSE}
@@ -72,7 +76,7 @@ for (hook in c("message", "warning")) {
 
 `tabxplor` prend le chemin inverse : son objectif est de construire un modèle de régression sur des données d'enquête (ou des basées de données administratives), et le lire **sans jamais perdre de vue les pourcentages dont on est parti**. Chaque modèle y est posé à côté du tableau croisé dont il sort, et ce qui compte est toujours la **comparaison entre les deux** : maintenir les autres variables constantes, concrètement, qu'est-ce que cela change ?
 
-Il y a ici deux guides de la régression, et celui-ci est le plus lent. `vignette("tabxplor-reg")` est la référence : chaque famille, chaque argument, la grille complète de ce que chaque modèle peut rapporter, la pondération, les graphiques — on y va pour chercher un point précis. Celui-ci suit une seule analyse, d'un premier tableau croisé jusqu'à une interprétation du modèle.
+Il y a ici deux guides de la régression, et celui-ci est le plus lent. [Tableaux de régression](tabxplor-reg-fr.html) est la référence : chaque famille, chaque argument, la grille complète de ce que chaque modèle peut rapporter, la pondération, les graphiques — on y va pour chercher un point précis. Celui-ci suit une seule analyse, d'un premier tableau croisé jusqu'à une interprétation du modèle.
 
 ## Ce qu'un modèle fait, et ce qu'il ne fait pas
 
@@ -150,6 +154,71 @@ tab(car_arrests, c(colour, sex, employed, citizen), released, pct = "row",
 
 Avoir un emploi et avoir la nationalité canadienne vont l'un et l'autre avec le fait d'être relâché, et fortement. D'où la question évidente — celle, précisément, pour laquelle une régression existe : **les personnes assignées comme noires interpellées ont moins souvent un emploi et moins souvent la nationalité ; l'écart racial n'est-il que ces deux écarts-là, déguisés ?**
 
+# 2. Transformer un pourcentage en comparaison
+
+Un pourcentage tout seul ne dit pas grand-chose : 74 % est élevé ou faible selon ce à quoi on le rapporte. Toute la régression est bâtie sur des **comparaisons**. Le premier vrai pas consiste donc à transformer une paire de pourcentages en un seul nombre qui les compare : l'**écart** d'un groupe à sa référence.
+
+Il y a trois façons de mesurer un même écart. Ce sont trois lectures des *deux mêmes nombres*, et un simple tableau croisé suffit à les calculer :
+
+```{r}
+car_arrests |> 
+  tab(colour, released, pct = "row", ref = "first", stars = TRUE,
+      color = "difference", color_signif = "grey_non_signif") |> 
+  mutate(difference = set_display(Yes, "diff"),
+         ratio      = set_display(Yes, "ratio"),
+         odds_ratio = set_display(Yes, "OR")    )
+```
+
+Chacune des trois dernières colonnes correspond à une mesure de l’écart. À partir de 86 % et de 74 %, on obtient :
+
+- une **différence** de **&minus;12 points** — on soustrait l'un de l'autre ;
+- un **rapport** de **&divide;1.16** — les personnes noires ont été relâchées 1,2 fois moins souvent que les personnes blanches ;
+- un **rapport de cotes** de **1/2.11** — le chiffre brut est **0.47**, que tabxplor inverse, quand il est inférieur à 1, pour pouvoir lire « 2.11 fois *moins* de chances (*odds*) que les personnes blanches d’avoir été relaché plutôt que mis en garde à vue ».
+
+**Dans `tab_reg()`, ce choix porte un nom — `measure` — et il vaut la peine de le lire en entier : la *mesure de l'écart*.** Ni une « échelle » abstraite, ni une unité : la question posée est **quelle sorte d'écart on veut voir rapportée** — soustraire, diviser, ou diviser les cotes. C'est le seul argument qu'on règle régulièrement, et c'est l'équivalent de `color =` dans `tab()`.
+
+**La cote, c'est le mot des paris sportifs.** Le terme vient du turf : dire qu'un cheval est *coté à 3 contre 1*, c'est dire que sa probabilité de gagner est trois fois plus grande que sa probabilité de perdre. Une cote met en rapport une situation dissymétrique — au numérateur la réussite, au dénominateur l'échec. Ici : sur 100 personnes blanches interpellées, 86 sont relâchées et 14 ne le sont pas, soit une cote de **6,1 contre 1** ; chez les personnes noires, 74 contre 26, soit **2,8 contre 1**. Le rapport de ces deux quantitées est le *rapport de cotes* : $2.8/6.1 = 0.46$. Comme il tombe du mauvais côté de 1, on en prend l'inverse, $1/0.46$  — et on inverse aussi la formulation : `1/2.11`, soit 2,11 fois moins.
+
+**Ce sont trois mesures du *même* écart**, et pourtant elles ne se lisent pas du tout de la même façon : le rapport de cotes fait sonner l'écart environ cinq fois plus fort que le rapport. Ce n'est pas une déformation, c'est que l'un divise des *cotes* et l'autre des pourcentages. Mais c'est le contresens le plus répandu des sciences sociales, et autant le dire franchement : **un rapport de cotes de 2 ne veut pas dire « deux fois plus souvent »**.
+
+D'où une règle de formulation, qui est la vraie difficulté du français sur ce point. Il existe deux manières de dire un rapport de cotes sans le confondre avec un risque relatif, et **il en faut toujours au moins une** :
+
+- **par la clause finale** — « les personnes noires ont 2,11 fois moins de chances que les personnes blanches d'avoir été relâchées *plutôt que d’avoir mises en garde à vue* ». Ou directement « 2.11 fois plus de chances d’avoir été mises en garde à vue » : les deux *odds* sont, par construction, inverses. C'est la fin de la phrase, et elle seule, qui sépare les deux quantités pour le lecteur averti – mais en gardant le lecteur profane dans la confusion.
+- **par l’emploi du terme « cote »** — « leur cote d’être mis en garde à vue est 2,11 fois plus forte que les personnes blanches ». La probabilité d’avoir été mis en garde à vue des personnes noires a une cote deux fois plus élevée que celle du groupe ethnique majoritaire. Le mot *cote* porte la distinction à lui tout seul, le résultat est rigoureux, mais il n’est pas très parlant.
+
+Un *odds ratio* est donc difficile à formuler et à visualiser: c’est une mesure abstraite, qui porte une double comparaison et donc une double réference.
+
+Un **risque relatif**, lui, se dit sans précaution : « 1,16 fois moins souvent relâchées que les personnes blanches ». 
+
+Le piège est exactement là : privée de la clause *et* du mot *cote*, une phrase en « fois moins de chances » énonce un risque relatif — donc, si le nombre est un rapport de cotes, une grandeur fausse et très exagérée. L'article de Carina Mood (*European Sociological Review*, 2010) est le bon avertissement en sociologie, et la section 5 ci-dessous montre un cas où le rapport de cotes bouge beaucoup pendant que les pourcentages, eux, ne changent presque pas.
+
+## Ce qui vaut au-delà de l'échantillon
+
+Les étoiles et les cases grisées répondent à une autre question que les nombres, et il vaut la peine de tenir les deux séparées.
+
+Les données sont un échantillon. Ces 5 226 personnes ne nous intéressent pas pour elles-mêmes : ce qui nous intéresse, c'est de savoir si ce qu'on observe chez elles est un trait de la population dont elles viennent, ou un hasard de qui s'est trouvé interpellé puis enregistré. Un intervalle de confiance n'est rien d'autre que cela : **l'ensemble des valeurs qui, dans la population, seraient compatibles avec ce qu'on a observé.**
+
+```{r}
+tab(car_arrests, colour, released, pct = "row", ref = "first", ci = "ref",
+    color = "difference", color_signif = "grey_non_signif")
+```
+
+Une case est **significative** quand cet intervalle exclut la **valeur neutre**, celle qui signifierait aucun écart du tout : 0 pour une différence, 1 pour un rapport ou un rapport de cotes. Le crochet imprimé, les étoiles et le grisé lisent tous le même intervalle : ils ne peuvent donc pas se contredire.
+
+**Et, ensuite, la significativité cesse d'être intéressante.** C'est le point que l'enseignement ordinaire des statistiques manque parfois, s'agissant des sciences sociales. « Significatif » n'est pas un verdict de vrai ou de faux, et ce n'est pas une mesure de l'ampleur ni de l'importance de quoi que ce soit. Dans un dispositif expérimental avec des , un 
+
+Dans une enquête nationale avec 5 000 partici, presque tout écart réel sera significatif, y compris des écarts bien trop petits pour qu'on écrive une phrase dessus ; avec 300, un écart large et réel peut ne pas l'être. La significativité est une **autorisation** : elle dit seulement si l'on a le droit de généraliser l'observation au-delà de l'échantillon. L'autorisation obtenue, **la seule question qui reste est celle de la taille de l'effet** — et, dans cet article, de ce que l'ajustement lui a fait.
+
+⚠ En français, le piège est double : dans la langue courante, « significatif » veut dire *important*, et il ne veut pas dire cela ici.
+
+`color_signif = "grey_non_signif"` est le réglage qui encode tout cela : il colore les cases selon la taille de l'effet et grise celles qu'on n'a pas le droit de généraliser. Ce qui reste en couleur est ce dont on peut parler. (Notons-le au passage : ce sont ici des données administratives et non un échantillon représentatif, si bien que les biais tenant à la façon dont les faits ont été enregistrés pèsent en réalité bien plus lourd que l'incertitude d'échantillonnage.)
+
+
+# 3. Maintenir les autres variables constantes
+
+Passer du tableau croisé à la regression consiste ensuite, simplement, à **modéliser le type d’écart que nous avons choisi** « toutes les autres variables explicatives étant égales ».
+
+
 ## De quelle sorte de nombre s'agit-il ?
 
 `tab_reg()` a besoin de savoir quelle sorte de quantité il modélise, parce que c'est cela qui décide ce qu'un « écart » entre deux groupes veut seulement dire. Pour une variable catégorielle (un `factor` au sens de R), il s’agit nécessairement d’une regression logistique ; pour une variable numérique, il y a toujours un choix à effectuer.
@@ -209,112 +278,12 @@ reg_measures(car_arrests, "checks", base_link = FALSE)
 ```
 
 
-# 2. Transformer un pourcentage en comparaison
 
-Un pourcentage tout seul ne dit pas grand-chose : 74 % est élevé ou faible selon ce à quoi on le rapporte. Toute la régression est bâtie sur des **comparaisons**. Le premier vrai pas consiste donc à transformer une paire de pourcentages en un seul nombre qui les compare : l'**écart** d'un groupe à sa référence.
 
-Il y a trois façons de mesurer un même écart. Ce sont trois lectures des *deux mêmes nombres*, et un simple tableau croisé suffit à les calculer :
-
-```{r}
-car_arrests |> 
-  tab(colour, released, pct = "row", ref = "first", stars = TRUE,
-      color = "difference", color_signif = "grey_non_signif") |> 
-  mutate(difference = set_display(Yes, "diff"),
-         ratio      = set_display(Yes, "ratio"),
-         odds_ratio = set_display(Yes, "OR")    )
-```
-
-Chacune des trois dernières colonnes correspond à une mesure de l’écart. À partir de 86 % et de 74 %, on obtient :
-
-- une **différence** de **&minus;12 points** — on soustrait l'un de l'autre ;
-- un **rapport** de **&divide;1.16** — les personnes noires ont été relâchées 1,2 fois moins souvent que les personnes blanches ;
-- un **rapport de cotes** de **1/2.11** — le chiffre brut est **0.47**, que tabxplor inverse, quand il est inférieur à 1, pour pouvoir lire « 2.11 fois *moins* de chances (*odds*) que les personnes blanches d’avoir été relaché plutôt que mis en garde à vue ».
-
-**Dans `tab_reg()`, ce choix porte un nom — `measure` — et il vaut la peine de le lire en entier : la *mesure de l'écart*.** Ni une « échelle » abstraite, ni une unité : la question posée est **quelle sorte d'écart on veut voir rapportée** — soustraire, diviser, ou diviser les cotes. C'est le seul argument qu'on règle régulièrement, et c'est l'équivalent de `color =` dans `tab()`.
-
-**La cote, c'est le mot des paris.** Le terme vient du turf, et c'est là qu'il faut aller le chercher : dire qu'un cheval est *coté à 3 contre 1*, c'est dire que sa probabilité de gagner est trois fois plus grande que sa probabilité de perdre. Une cote met en rapport une situation dissymétrique — au numérateur la réussite, au dénominateur l'échec. Ici : sur 100 personnes blanches interpellées, 86 sont relâchées et 14 ne le sont pas, soit une cote de **6,1 contre 1** ; chez les personnes noires, 74 contre 26, soit **2,8 contre 1**. Le **rapport de ces deux cotes** est le *rapport de cotes*. Comme il tombe du mauvais côté de 1, on en prend l'inverse — et on inverse aussi la formulation : `1/2.11`, soit 2,11 fois moins.
-
-**Ce sont trois mesures du *même* écart**, et pourtant elles ne se lisent pas du tout de la même façon : le rapport de cotes fait sonner l'écart environ cinq fois plus fort que le rapport. Ce n'est pas une déformation, c'est que l'un rapporte des *cotes* et l'autre des pourcentages. Mais c'est le contresens le plus répandu des sciences sociales, et autant le dire franchement : **un rapport de cotes de 2 ne veut pas dire « deux fois plus souvent »**.
-
-D'où une règle de formulation, qui est la vraie difficulté du français sur ce point. Il existe deux manières de dire un rapport de cotes sans le confondre avec un risque relatif, et **il en faut toujours au moins une** :
-
-- **par la clause** — « les personnes noires ont eu 2,11 fois moins de chances d'avoir été relâchées *plutôt que de ne pas l'avoir été* ». C'est la fin de la phrase, et elle seule, qui sépare les deux quantités ;
-- **par le nom** — « leur *cote* d'être relâchées est 2,11 fois plus faible ». Le mot *cote* porte la distinction à lui tout seul, et la phrase raccourcit d'autant.
-
-Un **risque relatif**, lui, se dit sans précaution : « 1,16 fois moins souvent relâchées ». Le piège est exactement là : privée de la clause *et* du mot *cote*, une phrase en « fois moins de chances » énonce un risque relatif — donc, si le nombre est un rapport de cotes, une grandeur fausse et très exagérée. L'article de Carina Mood (*European Sociological Review*, 2010) est le bon avertissement en sociologie, et la section 5 montre un cas où le rapport de cotes bouge beaucoup pendant que les pourcentages, eux, ne bougent presque pas.
-
-## Ce qui vaut au-delà de l'échantillon
-
-Les étoiles et les cases grisées répondent à une autre question que les nombres, et il vaut la peine de tenir les deux séparées.
-
-Les données sont un échantillon. Ces 5 226 personnes ne nous intéressent pas pour elles-mêmes : ce qui nous intéresse, c'est de savoir si ce qu'on observe chez elles est un trait de la population dont elles viennent, ou un hasard de qui s'est trouvé interpellé puis enregistré. Un intervalle de confiance n'est rien d'autre que cela : **l'ensemble des valeurs qui, dans la population, seraient compatibles avec ce qu'on a observé.**
-
-```{r}
-tab(car_arrests, colour, released, pct = "row", ref = "first", ci = "ref",
-    color = "difference", color_signif = "grey_non_signif")
-```
-
-Une case est **significative** quand cet intervalle exclut la **valeur neutre**, celle qui signifierait aucun écart du tout : 0 pour une différence, 1 pour un rapport ou un rapport de cotes. Le crochet imprimé, les étoiles et le grisé lisent tous le même intervalle : ils ne peuvent donc pas se contredire.
-
-**Et, ensuite, la significativité cesse d'être intéressante.** C'est le point que l'enseignement ordinaire manque, s'agissant des sciences sociales. « Significatif » n'est pas un verdict de vrai ou de faux, et ce n'est pas une mesure de l'ampleur ni de l'importance de quoi que ce soit. Avec 5 000 enquêté·es, presque tout écart réel sera significatif, y compris des écarts bien trop petits pour qu'on écrive une phrase dessus ; avec 300, un écart large et réel peut ne pas l'être. La significativité est une **autorisation** : elle dit seulement si l'on a le droit de généraliser l'observation au-delà de l'échantillon. L'autorisation obtenue, **la seule question qui reste est celle de la taille de l'effet** — et, dans cet article, de ce que l'ajustement lui a fait.
-
-⚠ En français, le piège est double : dans la langue courante, « significatif » veut dire *important*, et il ne veut pas dire cela ici.
-
-`color_signif = "grey_non_signif"` est le réglage qui encode tout cela : il colore les cases selon la taille de l'effet et grise celles qu'on n'a pas le droit de généraliser. Ce qui reste en couleur est ce dont on peut parler. (Notons-le au passage : ce sont ici des données administratives et non un échantillon représentatif, si bien que les biais tenant à la façon dont les faits ont été enregistrés pèsent en réalité bien plus lourd que l'incertitude d'échantillonnage.)
-
-## Un prédicteur sans modalités
-
-`checks` — dans combien des six fichiers de police le nom de la personne figure déjà — est un nombre : il n'a donc pas de modalités à comparer. Deux choses changent.
-
-```{r}
-tab_reg(car_arrests, "released", c("colour", "checks"), stats = NULL)
-```
-
-**D'abord, l'effet est par unité — et l'unité est un choix.** Un fichier de police de plus, sur six, est un grand pas ; une année d'âge de plus, un petit. tabxplor rapporte donc par défaut l'effet **par deux écarts-types**, et la ligne dit laquelle : `par 3.08 (2SD), à 1.64 (moyenne)` — de combien on avance, et depuis quel point. Deux écarts-types, parce que c'est à peu près l'écart que couvre un prédicteur binaire : une ligne continue et une ligne à deux modalités deviennent ainsi comparables d'un coup d'œil. `multiplier` en change quand une unité naturelle existe :
-
-```{r}
-tab_reg(car_arrests, "released", c("colour", "checks"), multiplier = c(checks = 1), 
-        empirical = FALSE, stats = NULL)
-```
-
-La lecture se fait maintenant par fichier : chaque fichier supplémentaire divise par 1,50 la cote d'être relâché.
-
-**Ensuite, regarder la petite courbe, sous le tableau principal.** C'est la variable à expliquer tracée contre le prédicteur numérique, par tranches d'effectif égal, sans aucun modèle dedans — mais dans l'échelle du modèle (ici, des cotes). La colonne **`étendue observée`** en résume les extrêmes. C'est la forme qu'ont réellement les données, et elle est là pour qu'on puisse vérifier ce qu'un coefficient de régression unique suppose sans le dire : qu'il n'y a qu'une seule pente, et que l'effet est linéaire d'un bout à l'autre. Ici la courbe est proche d'une droite — un peu dentelée, rien de plus — et l'hypothèse de linéarité tient.
-
-Quand une seule droite résume mal, le remède le plus lisible est de cesser de traiter la variable comme un nombre et de la découper en modalités. C'est `shape` qui le fait :
-
-```{r}
-tab_reg(car_arrests, "released", c("colour", "checks"), shape = c(checks = "quartiles"), stats = NULL)
-```
-
-`checks` est maintenant un facteur ordinaire, avec ses pourcentages, ses effets et ses couleurs — et la forme se lit à même les nombres observés : 91 %, 87 %, 70 %. Il ne se passe pas grand-chose entre zéro et un ou deux fichiers ; l'effondrement vient après. C'est un résultat, et une pente unique le cachait.
-
-## Le profil de référence
-
-Reste une ligne à expliquer, celle que les étudiant·es sautent le plus souvent : **Constant**.
-
-```{r}
-tab_reg(car_arrests, "released", c("colour", "checks"),
-        multiplier = c(checks = 1), ref = c(checks = 0), stats = NULL)
-```
-
-Une régression mesure tout *depuis* quelque part, et la ligne Constant est ce quelque part : le **profil de référence** — c'est le nom que porte la ligne dans le tableau —, c'est-à-dire la personne qui a la modalité de référence de chaque facteur et la valeur d'ancrage de chaque nombre, les unes et les autres réglées par `ref`. Ici, une personne blanche sans aucun antécédent : sa cote d'être relâchée est de `12.61` contre 1, soit 93 % de chances de l'être.
-
-C'est `ref` qui le fixe. Pour un facteur, il nomme la modalité à laquelle les autres sont comparées ; pour un nombre, il nomme la valeur depuis laquelle la variable est mesurée. L'ancrage par défaut est la **moyenne**, parce que zéro n'a souvent aucun sens — personne n'a zéro an — mais ici zéro est à la fois sensé et intéressant, et c'est donc ce que nous avons demandé. Changer l'ancrage change la ligne Constant et rien d'autre : une pente linéaire reste la même où qu'on commence à la lire.
-
-**Deux choses méritent d'être connues.** Quand tous les prédicteurs sont des facteurs, le profil de référence est un **vrai groupe de personnes**, et la colonne `n` les compte — donc on la regarde. Il peut être minuscule : dans le modèle ci-dessous, la référence est une femme blanche, sans emploi et sans la nationalité, et le fichier en contient **7**. Le modèle fonctionne toujours, mais une référence qui repose sur si peu de monde ne décrit à peu près personne, et mieux vaut le savoir avant de la citer.
-
-```{r}
-tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen"), empirical = FALSE, stats = NULL)
-```
-
-Et dès qu'un **nombre** figure parmi les prédicteurs, ce compte disparaît, comme dans le tableau juste au-dessus : le profil se tient à une valeur exacte d'une variable continue, et la plupart du temps personne ne se tient exactement là. C'est l'avertissement que la sociologie française connaît depuis longtemps sous une autre forme — **l'homme moyen de Quetelet n'a jamais existé** —, celui-là même que Hanmer et Kalkan adressent aux profils moyens en général, et c'est une raison de plus pour que l'aller-retour de la section 4 se termine par une moyenne sur des personnes réelles (à moins que fabriquer un individu typique ne relève d'une démarche idéal-typique assumée et construite).
-
-# 3. Maintenir les autres variables constantes
 
 ## Le pont : la colonne observée *est* le tableau croisé
 
-Voici le geste sur lequel tout l'article repose. Par défaut, comme on l'a déjà vu, le modèle ajoute à côté de chaque colonne sa contrepartie observée (`empirical = FALSE` la retire) :
+Par défaut tabxplor ajoute, à côté de chaque colonne du modèle, sa contrepartie observée (`empirical = FALSE` la retire) :
 
 ```{r}
 model <- tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"))
@@ -340,7 +309,7 @@ Montrer les deux n'est pas non plus une lubie de tabxplor. C'est par exemple ce 
 
 ## Lire une ligne de gauche à droite
 
-```{r}
+```{r, echo=FALSE}
 model
 ```
 
@@ -362,7 +331,7 @@ Et, enfin, la phrase :
 
 Noter ce que les proportions ajustées permettent de dire et que le rapport de cotes ne permet pas. `1/1.48` est un nombre abstrait ; *84 % contre 79 %* est un énoncé sur des personnes : ce que vaudraient les pourcentages si les gens se ressemblaient réellement sur tous les autres prédicteurs choisis.
 
-**Et ce bloc « Bilan du modèle » sous chaque tableau ?** C'est, littéralement, son bilan de santé : sur combien de personnes il a été ajusté (`N`), quelle part de la variabilité de la variable à expliquer il rend (`R2 de McFadden`), et quelques vérifications sur sa tenue (`Influence` : est-ce qu'un seul enquêté porte le résultat à lui tout seul ? `Colinéarité` : est-ce que deux prédicteurs mesurent la même chose ?). C'est l'argument `stats` qui le gouverne — d'où le `stats = NULL` qui revient dans les appels de cet article, et qui ne fait que retirer ce bloc. Nous ne nous en servons jamais ici, parce que notre question est ce que l'ajustement *a fait*, non de savoir si le modèle est bon. Les deux comptent, et `vignette("tabxplor-reg")` en explique chaque ligne.
+**Et ce bloc « Bilan du modèle » sous chaque tableau ?** C'est, littéralement, son bilan de santé : sur combien de personnes il a été ajusté (`N`), quelle part de la variabilité de la variable à expliquer il rend (`R2 de McFadden`), et quelques vérifications sur sa tenue (`Influence` : est-ce qu'un seul enquêté porte le résultat à lui tout seul ? `Colinéarité` : est-ce que deux prédicteurs mesurent la même chose ?). C'est l'argument `stats` qui le gouverne — d'où le `stats = NULL` qui revient dans les appels de cet article, et qui ne fait que retirer ce bloc. Nous ne nous en servons jamais ici, parce que notre question est ce que l'ajustement *a fait*, non de savoir si le modèle est bon. Les deux comptent, et [Tableaux de régression](tabxplor-reg-fr.html) en explique chaque ligne.
 
 ## Les cinq choses que l'ajustement peut faire
 
@@ -434,7 +403,7 @@ Le premier seuil est un changement de &times;1,1 — la vieille convention épid
 
 On peut aussi afficher les deux à la fois : `color = c("measure", "adjustment")` met les effets en couleur de texte et l'écart à l'effet observé en couleur de fond — mais la lecture y gagne rarement.
 
-# 4. Redescendre à une phrase qu'on peut dire
+# 4. Redescendre à une phrase que l'on peut dire à haute voix
 
 Voici le problème que pose tout ce qui précède. Que veut dire, concrètement, un rapport de cotes de `1/1.48` ? Il faut essayer de le dire à voix haute, en une phrase, à quelqu'un qui n'est pas statisticien. On n'y arrive pas.
 
@@ -563,7 +532,7 @@ reg_formulas(tab_reg(car_arrests, "released", c("colour", "checks"), measure = "
 reg_formulas(tab_reg(car_arrests, "released", c("colour", "checks"), link    = "ratio", empirical = FALSE))
 ```
 
-**Lequel utiliser.** Préférer **`measure = "ratio"`**, la voie moyennée, dans presque tous les cas : le modèle logistique converge toujours, ne peut jamais prédire une probabilité supérieure à 100 %, et le nombre qu'il donne décrit les gens qu'on a enquêtés. Aller chercher **`link = "ratio"`** quand on a besoin du risque relatif *conditionnel* — celui qui suppose que le même rapport vaut pour tout le monde : c'est ce qu'attendra un lecteur venu de l'épidémiologie, et c'est ce qu'il faut pour s'aligner sur une estimation de Poisson modifiée publiée. La grille complète de ce que chaque famille peut ajuster et rapporter est dans `vignette("tabxplor-reg")`.
+**Lequel utiliser.** Préférer **`measure = "ratio"`**, la voie moyennée, dans presque tous les cas : le modèle logistique converge toujours, ne peut jamais prédire une probabilité supérieure à 100 %, et le nombre qu'il donne décrit les gens qu'on a enquêtés. Aller chercher **`link = "ratio"`** quand on a besoin du risque relatif *conditionnel* — celui qui suppose que le même rapport vaut pour tout le monde : c'est ce qu'attendra un lecteur venu de l'épidémiologie, et c'est ce qu'il faut pour s'aligner sur une estimation de Poisson modifiée publiée. La grille complète de ce que chaque famille peut ajuster et rapporter est dans [Tableaux de régression](tabxplor-reg-fr.html).
 
 # 5. Ce que le modèle ne tranche pas
 
@@ -720,8 +689,8 @@ Les épidémiologistes appellent cela le **piège du « tableau 2 »** (*Table 2
 
 # Pour aller plus loin
 
-- `vignette("tabxplor-reg")` — la référence : chaque famille, la grille complète de ce que construit chaque combinaison famille × lien × mesure × effet, données pondérées et plans de sondage, interactions, vérifications du modèle, forest plots. *(Version française : [Tableaux de régression avec tab_reg()](tabxplor-reg-fr.html).)*
-- `vignette("tabxplor")` — tableaux croisés, couleurs, et les intervalles de confiance utilisés ci-dessus. *(Version française : [Introduction à tabxplor](tabxplor-fr.html).)*
+- [Tableaux de régression](tabxplor-reg-fr.html) — la référence : chaque famille, la grille complète de ce que construit chaque combinaison famille × lien × mesure × effet, données pondérées et plans de sondage, interactions, vérifications du modèle, forest plots.
+- [Introduction à tabxplor](tabxplor-fr.html) — tableaux croisés, couleurs, et les intervalles de confiance utilisés ci-dessus.
 - `reg_measures(data, outcome)` liste ce qu'on peut demander à une variable à expliquer donnée ; `reg_formulas(model)` montre les formules réellement ajustées ; `tab_columns(model)` dit ce que chaque colonne estime et comment son intervalle a été construit.
 - `?tab_reg` documente chaque argument, groupé par usage.
 

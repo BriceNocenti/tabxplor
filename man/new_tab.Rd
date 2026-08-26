@@ -3,7 +3,7 @@
 \name{new_tab}
 \alias{new_tab}
 \alias{new_grouped_tab}
-\title{A constructor for class tabxplor_tab}
+\title{Constructor for class \code{tabxplor_tab}}
 \usage{
 new_tab(
   tabs = tibble::tibble(),
@@ -75,5 +75,5 @@ A \code{tibble} of class \code{tabxplor_tab}.
 A \code{tibble} of class \code{tabxplor_grouped_tab}.
 }
 \description{
-A constructor for class tabxplor_tab
+Constructor for class \code{tabxplor_tab}
 }

@@ -3,7 +3,7 @@
 \name{tab_html}
 \alias{tab_html}
 \alias{tab_kable}
-\title{Print a tabxplor table in html}
+\title{Render a tabxplor table as html}
 \usage{
 tab_html(
   tabs,

@@ -1,5 +1,7 @@
 ---
 title: "Weighted and survey data"
+description: >
+  Weights, complex survey designs, and the three levels of margin of error — which one your file deserves, on both producers.
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Weighted and survey data}
@@ -32,7 +34,9 @@ set_color_palette(theme = "light")
 ```
 
 ```{r, echo = FALSE, results = "asis"}
-cat(tab_css(theme = "light"))
+# The website carries a light/dark switch and tab_css("auto") follows it; a shipped vignette
+# is always read on a light page, so there it stays light.
+cat(tab_css(theme = if (Sys.getenv("IN_PKGDOWN") == "true") "auto" else "light"))
 ```
 
 ```{r, echo = FALSE, include = FALSE}

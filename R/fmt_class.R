@@ -1817,7 +1817,7 @@ validate_display_template <- function(recipe, fields = DISPLAY_USER_FIELDS) {
 
 # fmt_get_color_code() doen't work in mutate with groups.
 
-#' Get HTML Color Code of a fmt vector
+#' The html color code of a `fmt` vector
 #' @param x The fmt vector to get the html color codes from.
 #' @param ... Absorbs deprecated arguments (e.g. \code{html_24_bit}); ignored.
 #'

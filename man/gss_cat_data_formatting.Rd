@@ -2,14 +2,15 @@
 % Please edit documentation in R/utils.R
 \name{gss_cat_data_formatting}
 \alias{gss_cat_data_formatting}
-\title{\code{forcats::gss_cat} test dataframe, from US General Social Survey,
-but formatted with merged levels for cleaner tables,
-and first levels chosen to be used as references (for color helpers, regressions, etc.)}
+\title{A General Social Survey extract, formatted for cross-tables}
 \usage{
 gss_cat_data_formatting()
 }
+\value{
+A tibble of 21483 rows: the US General Social Survey, 2000-2014.
+}
 \description{
-\code{forcats::gss_cat} test dataframe, from US General Social Survey,
-but formatted with merged levels for cleaner tables,
-and first levels chosen to be used as references (for color helpers, regressions, etc.)
+\code{forcats::gss_cat} with levels merged into readable groups, and each variable's first level
+chosen as the reference the colors and the models compare everything else to. The data set most
+examples and vignettes are built on.
 }

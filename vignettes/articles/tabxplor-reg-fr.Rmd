@@ -1,5 +1,7 @@
 ---
 title: "Tableaux de régression avec tab_reg()"
+description: >
+  La référence de tab_reg() — les quatre arguments de l'écart, une partie par type de variable à expliquer, la lecture de l'ajustement et les diagnostics.
 output: rmarkdown::html_vignette
 ---
 
@@ -36,7 +38,9 @@ set_color_palette(theme = "light")
 ```
 
 ```{r, echo = FALSE, results = "asis"}
-cat(tab_css(theme = "light"))
+# The website carries a light/dark switch and tab_css("auto") follows it; a shipped vignette
+# is always read on a light page, so there it stays light.
+cat(tab_css(theme = if (Sys.getenv("IN_PKGDOWN") == "true") "auto" else "light"))
 ```
 
 ```{r, echo = FALSE, include = FALSE}
@@ -474,7 +478,7 @@ tout. (Par défaut elle l'est toujours — voir plus bas.)
 
 Quand la variable expliquée est un **score** — combien d'items oui/non parmi plusieurs un répondant a-t-il choisi ? — on modélise le nombre de choix (« succès ») sur un nombre fixe d'items (le nombre de réponses possibles) avec `trials =`. `tab_reg()` ajuste alors `cbind(score, trials - score)` comme un modèle binomial, si bien que les rapports de cotes se lisent sur la probabilité *par item*.
 
-C'est le modèle naturel d'une **question d'enquête à réponses multiples**. Nous reprenons les données `facto_tea` (du paquet **FactoMineR**, merci à ses auteur·es ; voir `?facto_tea`) et leurs six items « où buvez-vous du thé ? », sommés en un score par `score_from_lv1()` — voir *Questions à réponses multiples* dans `vignette("tabxplor")` pour cette préparation :
+C'est le modèle naturel d'une **question d'enquête à réponses multiples**. Nous reprenons les données `facto_tea` (du paquet **FactoMineR**, merci à ses auteur·es ; voir `?facto_tea`) et leurs six items « où buvez-vous du thé ? », sommés en un score par `score_from_lv1()` — voir *Questions à réponses multiples* dans [Introduction à tabxplor](tabxplor-fr.html) pour cette préparation :
 
 ```{r}
 tea_where_vars <- c("home", "work", "tearoom", "friends", "resto", "pub")
@@ -949,7 +953,7 @@ Deux limites honnêtes. Une comparaison *entre deux cellules* (un rapport de cot
 
 Sans plan de sondage, les intervalles des colonnes observées tiennent déjà compte de la pondération exactement (le plan plat, `ids = ~1`) — une correction de l'inégalité des poids seule, aveugle aux grappes et au calage.
 
-**Pourquoi un `tab_reg()` pondéré n'est pas un `tab()` pondéré.** `tab_reg()` n'a pas le choix : ses colonnes observées doivent être mesurées comme la colonne de modèle placée à côté, et celle-ci est fondée sur le plan par construction (`survey::svyglm()`). `tab()`, lui, a le choix, et garde comme défaut la convention descriptive — une estimation pondérée sur l'effectif brut. La note de bas de page de chaque tableau dit lequel a été utilisé, et `tab(design_effect = TRUE)` est ce qui aligne les deux. Dans le vocabulaire de `vignette("tabxplor")` : `tab_reg()` est toujours au **niveau 2** (ou au niveau 3 sous un plan de sondage), là où `tab()` démarre au niveau 1.
+**Pourquoi un `tab_reg()` pondéré n'est pas un `tab()` pondéré.** `tab_reg()` n'a pas le choix : ses colonnes observées doivent être mesurées comme la colonne de modèle placée à côté, et celle-ci est fondée sur le plan par construction (`survey::svyglm()`). `tab()`, lui, a le choix, et garde comme défaut la convention descriptive — une estimation pondérée sur l'effectif brut. La note de bas de page de chaque tableau dit lequel a été utilisé, et `tab(design_effect = TRUE)` est ce qui aligne les deux. Dans le vocabulaire de [Introduction à tabxplor](tabxplor-fr.html) : `tab_reg()` est toujours au **niveau 2** (ou au niveau 3 sous un plan de sondage), là où `tab()` démarre au niveau 1.
 
 
 ## Comparer plusieurs modèles
@@ -1312,8 +1316,8 @@ Notez les contrats opposés : `forest_plot()` ne réajuste jamais (les résultat
 
 ## Pour aller plus loin
 
-- `tab_reg()` est aussi disponible **sans écrire de code R**, comme une analyse **Modèles de regression** dans le module [jamovi](https://www.jamovi.org/download) — installez *tabxplor* depuis la bibliothèque de modules de jamovi (voir `vignette("tabxplor")`).
-- `vignette("tabxplor")` — les tableaux croisés et les repères de couleur.
+- `tab_reg()` est aussi disponible **sans écrire de code R**, comme une analyse **Modèles de regression** dans le module [jamovi](https://www.jamovi.org/download) — installez *tabxplor* depuis la bibliothèque de modules de jamovi (voir [Introduction à tabxplor](tabxplor-fr.html)).
+- [Introduction à tabxplor](tabxplor-fr.html) — les tableaux croisés et les repères de couleur.
 - `?tab_reg` pour chaque argument (groupés par usage), et `?tab_reg` &rarr; *Details* pour les choix de modélisation.
 - `survey::svydesign()` pour les plans de sondage complexes (strates, grappes, calage, corrections de population finie). Les plans à poids de réplication (`svrepdesign()`) ne sont pas pris en charge.
 - **Hors périmètre**, et à ajuster avec leurs propres packages : les modèles de survie / de Cox, les modèles mixtes (multiniveaux) et l'agrégation sur des données multi-imputées.

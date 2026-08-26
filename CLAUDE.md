@@ -57,6 +57,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 - `zzz-fact-keys.R` — `TAB_FOREIGN_KEYS`: cross-table foreign-key checks run at load.
 - `utils.R` — `.onLoad()` (seeds options), factor/list/string utilities (padding, wrapping, HTML escaping), deprecation and message helpers.
 - `data.R` — the four example data sets and their source credits (built by `data-raw/DATASETS.R`).
+- `tabxplor-package.R` — the `?tabxplor` landing topic (roxygen `_PACKAGE`; internal, so off the reference index).
 
 **Regression** — `tab_reg()` and its model machinery.
 
@@ -1041,10 +1042,91 @@ The two references for French vocabulary are `vignettes/articles/tabxplor-all-el
 All facts tables, parameters tables, options tables, etc., and other tibble::tribble or the like used in code, should be well aligned for human readability, a human should be able to easily modify them with all the relevant informations structured, condensed and at the same place, visible at first glance, using a tribble if necessary (see, for example, the "print" black and white palettes).
 
 
-#### Phase 23h – pkgdown site
+#### Phase 23h — pkgdown site — DONE
 
-Update the pkgdown site with the package documentation for release.
-- Check at pkgdown references: is there organisation and structure still meaningful, clear, readable, useful for new users, reflecting the current architecture and main uses cases of the package ? Are all exported functions organised in the outline, or a some new ones wandering around ?
+**The reference index needed no repair: `pkgdown::check_pkgdown()` was already clean, all 44 public
+topics listed, none stale.** What the phase found instead was three things a reader sees and one
+thing a reader should never have seen.
+
+⚠ **CLAUDE.md was being published, and it is on the live site now.** `pkgdown:::package_mds()` renders
+**every** root `*.md` it does not itself handle -- only README / NEWS / LICENCE / `cran-comments.md`
+are spared -- so the maintainer's guide became a 216 KB `docs/CLAUDE.html`, took a line in
+`sitemap.xml`, and was indexed **section by section in the search box** (`search.json`'s first entry
+was *"tabxplor -- AI Assistant Guide"*). pkgdown offers no exclusion, so the lever is after the build:
+**`dev/site_prune.R`**, sourced by `dev/build_site.R` and by the workflow's *Build site* step. It
+deletes the page, then re-runs `pkgdown::build_search()` -- which reads the html actually present in
+`docs/`, so deleting first is what keeps page and index in step -- and drops the sitemap line.
+
+**The light switch, and the one line that silently disables it.** `template: light-switch: true` puts
+a Light/Dark/Auto control in the navbar and applies it as bootstrap 5.3 colour modes
+(`data-bs-theme` on `<html>`) -- which is already one of `tx_dark_hooks` (`R/tab-css.R`), so
+`tab_css(theme = "auto")` follows it with no new code. ⚠ **An explicit `navbar: structure:` drops the
+control without a word**: pkgdown's default right side is `[search, github, lightswitch]`, and this
+site had overridden it to `[search, github]` to shape the LEFT side. Measured on the first build:
+`lightswitch.js` present, zero `data-bs-theme-value` buttons. The nine vignettes now emit
+
+```r
+cat(tab_css(theme = if (Sys.getenv("IN_PKGDOWN") == "true") "auto" else "light"))
+```
+
+-- `Sys.getenv("IN_PKGDOWN")` is exactly what `pkgdown::in_pkgdown()` tests, so this needs no
+dependency, and it is the whole reason the branch exists: a CRAN-shipped vignette is read on an
+`html_vignette` page that is light whatever the reader's OS says, while the site follows the reader.
+Verified on a freshly built article: 87 `[data-bs-theme=dark]` rules and one
+`prefers-color-scheme` layer.
+
+**The home page is now `pkgdown/index.md`** (pkgdown prefers it to `README.md`), knitted from
+`pkgdown/index.Rmd`, which **is `README.Rmd` in colour**: generated from it by four stated edits --
+drop `theme = "print_ready"`, `tab_css("auto")` instead of `"print_emphasis"`, no hero screenshot and
+no black-and-white caveat, no badges (pkgdown puts them in its own sidebar) -- plus site-relative
+article links instead of absolute ones back to the released site. The rule is written at the top of
+the file: *edit both, or neither.* Verified: 24 coloured slot classes in the tables, zero print marks,
+zero French leak. ⚠ pkgdown does **not** knit `.Rmd`; `pkgdown/index.md` is committed, like
+`README.md`.
+
+**The index reordered to the reader's journey** -- build (`tab`/`tab_reg`, the variants), then *what a
+cell shows and how it is coloured* (up from sixth, behind Export: colour is the package's idea), then
+Export, Charts, model introspection -- and *Captions, options and data* split into **Captions and
+options** and **Example data**. `set_color_breaks` left the colour section: verified against
+`pkgdown:::data_reference_index()`, an index row already prints every alias of its topic, so the
+entry was a no-op. Six `@title`s were rewritten, because the index prints titles side by side and
+that is the only place length, casing and jargon show: `gss_cat_data_formatting` (a 3-line, ~200-char
+title, and a block with no `@description` and no `@return`), `tab_compact`, `tab_html`, `new_tab`,
+`tab_wrap_text`, `fmt_get_color_code`. ⚠ `jmvtab` / `jmvtabreg` ("Crosstables" / "Regressions") were
+**not** touched: those titles live in the generated `R/jmvtab*.h.R`, which are never hand-edited, and
+in `jamovi/*.a.yaml` they are also the analysis names in jamovi's own menu, where they are right.
+Spelling was left alone too -- colour/color runs 137/163 in the vignettes and 113/97 in roxygen, so
+normalising the index alone would make it the odd one out.
+
+**Also**: one `description:` per vignette (nine files), shown on `articles/index.html` and as each
+page's `<meta name="description">`, with the Articles index regrouped *Start here* / *Going further* /
+*En français* -- the old single group was headed "Get started" and held five articles. The 20
+`vignette("tabxplor…")` calls in the four French articles autolinked to the **English** pages; they
+now point at their French twins by relative link, which also collapsed the two "*Version française :
+…*" asides that existed to compensate. `?tabxplor` exists (`R/tabxplor-package.R`, roxygen
+`_PACKAGE`, internal-keyworded so the index is unaffected), and the home sidebar carries one
+`home: links:` entry to jamovi, so the no-code route is visible from the landing page. The
+gh-pages deploy is `clean: true`, so
+the released site holds 2.0.0 pages only -- every 1.3.1 page was still live -- and `dev/build_site.R`
+now calls `clean_site()` first, since `docs/` is git-ignored, never cleaned by a build, and had been
+serving a `test-colors.html` and a nested `articles/articles/` since July. pkgdown writes the
+redirects for the article that moved, so the old FR URLs still resolve.
+
+⚠ **Never edit a script while `Rscript` is running it** -- R reads it incrementally, and the first
+build died on `Error: unexpected symbol` *after* finishing the site.
+
+**Flagged, not edited:**
+
+- `DESCRIPTION`'s Description still ends *"exported with formats and colors to 'Excel', html,
+  markdown and plot"*. `tab_plot()` is defunct (22l) and `tab_export(format = "plot")` is gone. It is
+  CRAN-facing text and it now shows verbatim on `?tabxplor` and in the site's sidebar.
+- `NEWS.md:59` says the French translations are *"on a bilingual pkgdown website"* -- one English site
+  with an "En français" group since 23a. Untouched: NEWS.md 2.0.0 is final.
+- `README.md` is stale against `README.Rmd` (the *Weighted and survey data* bullet), left for the
+  final README pass. The site's home page no longer depends on it.
+- The 14 exports documented on `@keywords internal` pages (`tab_plot`, `tab_prepare`, `new_lvl`, …)
+  stay as they are: those are Phase 22m's Tier 1/2 unexport proposals, written up in
+  `dev/tabxplor_2.0.0_exported_functions_review.md` §5.
 
 #### Phase 23i — `dev/` folder
 Files inside the `dev/` folder have grown organically, with many now useless files and outdated ones, which is very messy for future development : I want you to clean and reorganise the folder and main files.

@@ -1,7 +1,17 @@
 url: https://bricenocenti.github.io/tabxplor/
 
+# `light-switch` puts a Light/Dark/Auto control in the navbar, applied as bootstrap 5.3 colour modes
+# (`data-bs-theme` on <html>) -- which is one of the hooks tab_css(theme = "auto") already writes its
+# cascade against (tx_dark_hooks, R/tab-css.R), so the tables follow the reader like the page does.
+# The vignettes emit "auto" only under pkgdown; a CRAN-shipped vignette is read on a light page.
 template:
   bootstrap: 5
+  light-switch: true
+
+home:
+  links:
+  - text: Use it without code, in jamovi
+    href: https://www.jamovi.org/download.html
 
 # One English site. The French translations of the vignettes live in Articles ("En français") --
 # no second FR site build, no language toggle. `intro` is dropped from the left side so the
@@ -13,7 +23,7 @@ template:
 navbar:
   structure:
     left: [reference, articles, news]
-    right: [search, github]
+    right: [search, github, lightswitch]
   components:
     articles:
       text: Articles
@@ -34,7 +44,7 @@ navbar:
         href: articles/tabxplor-fr.html
       - text: Tableaux de régression avec tab_reg()
         href: articles/tabxplor-reg-fr.html
-      - text: Toutes choses égales par ailleurs
+      - text: "Toutes choses égales par ailleurs : lire une régression sans lâcher les pourcentages"
         href: articles/tabxplor-all-else-equal-fr.html
       - text: Programmer avec tabxplor
         href: articles/tabxplor-programming-fr.html
@@ -63,6 +73,30 @@ reference:
   - tab_num
   - tab_counts
 
+- title: What a cell shows, and how it is coloured
+  desc: >
+    `tabxplor-display` is the vocabulary of the `display` argument: the fields a cell may show and
+    the named layouts that arrange them. Then, what a coloured cell looks like and at which value it
+    changes shade: `set_color_palette()` sets the hues and the console's light/dark theme,
+    `set_color_breaks()` the thresholds each measure is read on, and `conf_level_to_z()` writes one
+    of those thresholds as a confidence level.
+  contents:
+  - tabxplor-display
+  - set_color_palette
+  - conf_level_to_z
+
+- title: Export a finished table
+  desc: >
+    `tab_export()` is the one function most users need. `tab_html()`, `tab_md()` and `tab_xl()`
+    are the per-format exporters it wraps (`tab_kable()` is an alias of `tab_html()`);
+    `tab_css()` emits the colour stylesheet for a whole document.
+  contents:
+  - tab_export
+  - tab_html
+  - tab_md
+  - tab_xl
+  - tab_css
+
 - title: Charts
   desc: >
     `forest_plot()` draws the estimates of any tabxplor table -- a cross-table or a regression --
@@ -81,39 +115,19 @@ reference:
   - reg_measures
   - reg_formulas
 
-- title: Export a finished table
-  desc: >
-    `tab_export()` is the one function most users need. `tab_html()`, `tab_md()` and `tab_xl()`
-    are the per-format exporters it wraps (`tab_kable()` is an alias of `tab_html()`);
-    `tab_css()` emits the colour stylesheet for a whole document.
-  contents:
-  - tab_export
-  - tab_html
-  - tab_md
-  - tab_xl
-  - tab_css
-
-- title: What a cell shows, and how it is coloured
-  desc: >
-    `tabxplor-display` is the vocabulary of the `display` argument: the fields a cell may show and
-    the named layouts that arrange them. Then, what a coloured cell looks like and at which value it
-    changes shade: `set_color_palette()` sets the hues and the console's light/dark theme;
-    `set_color_breaks()` sets the thresholds each measure is read on; `conf_level_to_z()` writes one
-    of those thresholds as a confidence level.
-  contents:
-  - tabxplor-display
-  - set_color_palette
-  - set_color_breaks
-  - conf_level_to_z
-
-- title: Captions, options and data
+- title: Captions and options
   desc: >
     A caption travels with the table into every export; every default lives in a `tabxplor.*` option.
-    The four example data sets are complete copies of data published elsewhere, each named after the
-    package it comes from and credited on its own page.
   contents:
   - set_caption
   - tabxplor-options
+
+- title: Example data
+  desc: >
+    The data behind the examples and the vignettes. `gss_cat_data_formatting()` returns the US
+    survey extract most examples use; the four data sets are complete copies of data published
+    elsewhere, each named after the package it comes from and credited on its own page.
+  contents:
   - gss_cat_data_formatting
   - facto_tea
   - questionr_hdv
@@ -189,16 +203,27 @@ reference:
 # An incomplete `articles:` index is a hard pkgdown error, so all nine articles are listed here.
 # The French translations (vignettes/articles/*-fr) sit in the secondary "En français" group.
 articles:
-- title: Get started
+- title: Start here
   navbar: ~
+  desc: >
+    The introduction builds a first coloured table; *All else equal* walks one analysis from that
+    table to a finished sentence about a regression.
   contents:
   - tabxplor
   - tabxplor-all-else-equal
+- title: Going further
+  navbar: ~
+  desc: >
+    Look up what a regression table can be asked, what a weighted or survey file changes, and how to
+    write your own pipelines around the `fmt` cell.
+  contents:
   - tabxplor-reg
   - tabxplor-weights
   - tabxplor-programming
 - title: En français
   navbar: Français
+  desc: >
+    Les traductions françaises des articles (les pages de référence restent en anglais).
   contents:
   - articles/tabxplor-fr
   - articles/tabxplor-reg-fr

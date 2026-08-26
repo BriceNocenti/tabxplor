@@ -2,7 +2,7 @@
 % Please edit documentation in R/fmt_class.R
 \name{fmt_get_color_code}
 \alias{fmt_get_color_code}
-\title{Get HTML Color Code of a fmt vector}
+\title{The html color code of a \code{fmt} vector}
 \usage{
 fmt_get_color_code(x, type = "text", theme = "light", ...)
 }
@@ -20,7 +20,7 @@ to the current setting (RStudio theme when detectable, else \code{"light"}).}
 A character vector with html color codes, of the length of the initial vector.
 }
 \description{
-Get HTML Color Code of a fmt vector
+The html color code of a \code{fmt} vector
 }
 \examples{
 \donttest{

@@ -142,6 +142,8 @@ tx_slot_class <- function(channel = c("text", "bg"), slot) {
 
 # these hooks translate a framework's dark TOGGLE (a class/attribute set via JS) into something a
 # media query cannot see; both directions let an explicit toggle win over the OS either way.
+# The package's own website is one such host: pkgdown's `light-switch` sets `data-bs-theme` on
+# <html>, and the vignettes emit tab_css("auto") when built there (_pkgdown.yml).
 # WARNING: keep these in ONE place -- they are the only part of the design that can rot upstream.
 # KNOWN GAP, deliberately not fixed: no Tailwind light entry -- Tailwind expresses light as the ABSENCE
 # of `html.dark`, so a Tailwind page under a dark OS shows a dark table on a light page.

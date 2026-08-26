@@ -1,5 +1,7 @@
 ---
 title: "All else equal: reading a regression without losing the data"
+description: >
+  One analysis walked from a first cross-table to a finished sentence — what a model adds, what it takes away, and how to say it without losing the percentages.
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{All else equal: reading a regression without losing the data}
@@ -40,7 +42,9 @@ options(tabxplor.shape_table = "no")
 ```
 
 ```{r, echo = FALSE, results = "asis"}
-cat(tab_css(theme = "light"))
+# The website carries a light/dark switch and tab_css("auto") follows it; a shipped vignette
+# is always read on a light page, so there it stays light.
+cat(tab_css(theme = if (Sys.getenv("IN_PKGDOWN") == "true") "auto" else "light"))
 ```
 
 ```{r, echo = FALSE, include = FALSE}

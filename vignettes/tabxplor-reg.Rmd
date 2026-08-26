@@ -1,5 +1,7 @@
 ---
 title: "Regression tables with tab_reg()"
+description: >
+  The reference for tab_reg() — the four estimand arguments, one part per kind of outcome, reading what adjustment did, and checking the model.
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Regression tables with tab_reg()}
@@ -36,7 +38,9 @@ set_color_palette(theme = "light")
 ```
 
 ```{r, echo = FALSE, results = "asis"}
-cat(tab_css(theme = "light"))
+# The website carries a light/dark switch and tab_css("auto") follows it; a shipped vignette
+# is always read on a light page, so there it stays light.
+cat(tab_css(theme = if (Sys.getenv("IN_PKGDOWN") == "true") "auto" else "light"))
 ```
 
 ```{r, echo = FALSE, include = FALSE}

@@ -1,5 +1,7 @@
 ---
 title: "Introduction à tabxplor"
+description: >
+  Construire un premier tableau croisé coloré, lire ses couleurs et sa légende, puis choisir ce qu'affiche une case et comment l'exporter.
 output: rmarkdown::html_vignette
 ---
 
@@ -30,7 +32,9 @@ set_color_palette(theme = "light") # type = "text"
 ```
 
 ```{r, echo = FALSE, results = "asis"}
-cat(tab_css(theme = "light"))
+# The website carries a light/dark switch and tab_css("auto") follows it; a shipped vignette
+# is always read on a light page, so there it stays light.
+cat(tab_css(theme = if (Sys.getenv("IN_PKGDOWN") == "true") "auto" else "light"))
 ```
 
 ```{r, eval = FALSE}
@@ -146,7 +150,7 @@ Chaque pourcentage se lit dans sa propre colonne : 63 % des cadres supérieurs (
 tab(tea, sex, c(breakfast, evening, SPC), pct = "row", levels = "auto", na = "drop", tot = "row")
 ```
 
-Un score sommé est aussi exactement ce que modélise une régression **binomiale groupée** — voir `trials` dans `vignette("tabxplor-reg")`.
+Un score sommé est aussi exactement ce que modélise une régression **binomiale groupée** — voir `trials` dans [Tableaux de régression](tabxplor-reg-fr.html).
 
 ## Pondération
 
@@ -188,7 +192,7 @@ tab(gss_w, race, party3, wt = w, pct = "row", ci = "cell", na = "drop",
 
 Mêmes pourcentages, crochets plus larges, et une note de bas de page qui dit ce qui a changé. Derrière, les 16 292 répondants blancs n'en valent plus qu'environ 11 800 : c'est le prix de l'inégalité des poids.
 
-Si vous pondérez, le niveau 2 est la lecture honnête de vos propres chiffres, et il ne coûte rien. S'il n'est pas le défaut, c'est seulement parce que l'activer déplace tous les chiffres de tous les tableaux déjà produits : cela doit rester un geste délibéré et visible, pas un changement silencieux. Une raison de plus de l'activer : dans un tableau de régression, les colonnes observées sont *toujours* au niveau 2 (voir `vignette("tabxplor-reg")`), et c'est donc ce qui rend directement comparables un pourcentage de `tab()` et un pourcentage observé de `tab_reg()` sur les mêmes données.
+Si vous pondérez, le niveau 2 est la lecture honnête de vos propres chiffres, et il ne coûte rien. S'il n'est pas le défaut, c'est seulement parce que l'activer déplace tous les chiffres de tous les tableaux déjà produits : cela doit rester un geste délibéré et visible, pas un changement silencieux. Une raison de plus de l'activer : dans un tableau de régression, les colonnes observées sont *toujours* au niveau 2 (voir [Tableaux de régression](tabxplor-reg-fr.html)), et c'est donc ce qui rend directement comparables un pourcentage de `tab()` et un pourcentage observé de `tab_reg()` sur les mêmes données.
 
 ### Niveau 3 — un plan de sondage `survey`
 
@@ -389,7 +393,7 @@ gss_simple |>
 tab(gss_simple, race, party3, pct = "row", color = "difference", display = "{pct} ({diff})")
 ```
 
-Le premier champ du gabarit est le champ *primaire* — la valeur que garde Excel et celle que lisent les couleurs. `vignette("tabxplor-programming")` détaille toute la grammaire et liste tous les champs possibles.
+Le premier champ du gabarit est le champ *primaire* — la valeur que garde Excel et celle que lisent les couleurs. [Programmer avec tabxplor](tabxplor-programming-fr.html) détaille toute la grammaire et liste tous les champs possibles.
 
 `test = TRUE` ajoute un test statistique d'indépendance par (sous-)tableau : **test du Chi2** pour les colonnes facteurs, **ANOVA F de Welch** pour les variables numériques (`options(tabxplor.anova = "classic")` bascule vers une ANOVA F classique, à variance commune) :
 
@@ -557,7 +561,7 @@ Trois choses à savoir :
 * **La significativité, c'est la moustache.** Elle est colorée en entier : un intervalle qui traverse la ligne de référence se voit sans étoiles — et il n'y en a pas.
 * **Il lit le tableau et ne calcule rien.** Il renvoie un `ggplot` ordinaire : `+ ggplot2::labs(...)`, `+ ggplot2::theme(...)` et `ggsave()` fonctionnent ; `theme = "print_minimalistic"` en donne la version en niveaux de gris, et `guide = "bands"` colore le fond du panneau avec l'échelle elle-même (une bonne façon de *montrer* à une classe ce que les couleurs veulent dire).
 
-`forest_plot()` trace aussi les tableaux de régression — voir `vignette("tabxplor-reg")`.
+`forest_plot()` trace aussi les tableaux de régression — voir [Tableaux de régression](tabxplor-reg-fr.html).
 
 ## Travailler avec le résultat
 
@@ -713,7 +717,7 @@ Une poignée d'`options()` fixent les préférences par défaut, une fois pour t
 - `display = "base_moe"` — imprimer un intervalle de confiance sous forme de `pct ± marge d'erreur` plutôt qu'en crochet `[bas ; haut]`, ce que donne `display = "base_ci"`.
 - `options(tabxplor.lang = "fr")` — la langue des légendes de couleur et des notes de bas de tableau (`"auto"`/`"en"`/`"fr"`).
 
-Les seuils de couleur et les palettes ont leurs propres fonctions, `set_color_breaks()` et `set_color_palette()`. `?tabxplor-options` documente chaque option, et `vignette("tabxplor-programming")` couvre les plus avancées (polices d'export, calcul parallèle…).
+Les seuils de couleur et les palettes ont leurs propres fonctions, `set_color_breaks()` et `set_color_palette()`. `?tabxplor-options` documente chaque option, et [Programmer avec tabxplor](tabxplor-programming-fr.html) couvre les plus avancées (polices d'export, calcul parallèle…).
 
 ## Une interface graphique (jamovi)
 
@@ -721,6 +725,6 @@ Tout ce qui précède est aussi disponible **sans écrire de code R**, via un mo
 
 ## Pour aller plus loin
 
-- `vignette("tabxplor-reg")` — les modèles de régression avec `tab_reg()`, et la comparaison entre effets modélisés et effets observés.
-- `vignette("tabxplor-programming")` — le type de vecteur R `tabxplor_fmt` et comment programmer avec ses champs `vctrs`.
+- [Tableaux de régression](tabxplor-reg-fr.html) — les modèles de régression avec `tab_reg()`, et la comparaison entre effets modélisés et effets observés.
+- [Programmer avec tabxplor](tabxplor-programming-fr.html) — le type de vecteur R `tabxplor_fmt` et comment programmer avec ses champs `vctrs`.
 - `?tab` pour obtenir l’aide sur chaque argument, `?tab_ci` pour le détail des méthodes d'intervalle de confiance, et `?tabxplor-options` pour les réglages par défaut du package.

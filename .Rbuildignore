@@ -20,7 +20,6 @@
 ^\.claude$
 ^dev$
 ^_pkgdown\.yml$
-^_pkgdown\.fr\.yml$
 ^docs$
 ^pkgdown$
 ^codecov\.yml$

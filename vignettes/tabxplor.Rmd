@@ -1,5 +1,7 @@
 ---
 title: "Introduction to tabxplor"
+description: >
+  Build a first coloured cross-table, read its colours and its legend, then choose what a cell shows and how it exports.
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Introduction to tabxplor}
@@ -36,7 +38,9 @@ set_color_palette(theme = "light") # type = "text"
 ```
 
 ```{r, echo = FALSE, results = "asis"}
-cat(tab_css(theme = "light"))
+# The website carries a light/dark switch and tab_css("auto") follows it; a shipped vignette
+# is always read on a light page, so there it stays light.
+cat(tab_css(theme = if (Sys.getenv("IN_PKGDOWN") == "true") "auto" else "light"))
 ```
 
 *Une version française de ce document est disponible : [Introduction à tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-fr.html).*

@@ -11,7 +11,7 @@
 
 # Create class tabxplor_tab --------------------------------------------------------------
 
-#' A constructor for class tabxplor_tab
+#' Constructor for class `tabxplor_tab`
 #'
 #' @param tabs A table, stored into a \code{\link[tibble]{tibble}} data.frame.
 #' It is generally made with \code{\link{tab}}, \code{\link{tab_reg}}
@@ -609,7 +609,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 
 
 
-#' Print a tabxplor table in html
+#' Render a tabxplor table as html
 #'
 #' @description
 #' The HTML exporter behind \code{\link{tab_export}}: `tab_export(x, format = "html")` calls this, and
@@ -816,7 +816,7 @@ tab_stack_tables <- function(tables) {
   tibble::new_tibble(cols, nrow = sum(purrr::map_int(tables, nrow)))
 }
 
-#' Bind a list of tabs with the same col_vars (and no tab_vars) into a single tab
+#' Bind a list of tables into one
 #'
 #' @param tabs A `list` of `tabxplor_tab` (or a `tabxplor_tab`)
 # @param pvalue_lines Set to `TRUE` to add a line with chi2 pvalues under each table.
@@ -1430,7 +1430,7 @@ tab_plot <- function(tabs, ...) {
 
 
 
-#' Wrap column names and character/factor variables.
+#' Wrap column names and long labels
 #' @param tabs A `tabxplor_tab` or a `tibble` .
 #' @param wrap_rows Row labels are wrapped past this width (35 by default), as prose --- on
 #'   whitespace.

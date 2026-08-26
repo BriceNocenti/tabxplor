@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab_classes.R
 \name{tab_wrap_text}
 \alias{tab_wrap_text}
-\title{Wrap column names and character/factor variables.}
+\title{Wrap column names and long labels}
 \usage{
 tab_wrap_text(
   tabs,
@@ -36,7 +36,7 @@ boundary) as well as at spaces.}
 The same \code{tabxplor_tab} or \code{tibble}.
 }
 \description{
-Wrap column names and character/factor variables.
+Wrap column names and long labels
 }
 \examples{
 \donttest{

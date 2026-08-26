@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab_classes.R
 \name{tab_compact}
 \alias{tab_compact}
-\title{Bind a list of tabs with the same col_vars (and no tab_vars) into a single tab}
+\title{Bind a list of tables into one}
 \usage{
 tab_compact(tabs)
 }
@@ -13,7 +13,7 @@ tab_compact(tabs)
 A \code{tabxplor_tab}
 }
 \description{
-Bind a list of tabs with the same col_vars (and no tab_vars) into a single tab
+Bind a list of tables into one
 }
 \examples{
 \donttest{

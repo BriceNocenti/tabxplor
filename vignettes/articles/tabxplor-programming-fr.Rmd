@@ -1,5 +1,7 @@
 ---
 title: "Programmer avec tabxplor"
+description: >
+  Programmer avec la case fmt — savoir ce qu'est un tableau, atteindre n'importe quel champ ou attribut, écrire ses propres chaînes de traitement.
 output: rmarkdown::html_vignette
 ---
 
@@ -30,7 +32,9 @@ set_color_palette(theme = "light")
 ```
 
 ```{r, echo = FALSE, results = "asis"}
-cat(tab_css(theme = "light"))
+# The website carries a light/dark switch and tab_css("auto") follows it; a shipped vignette
+# is always read on a light page, so there it stays light.
+cat(tab_css(theme = if (Sys.getenv("IN_PKGDOWN") == "true") "auto" else "light"))
 ```
 
 ```{r, echo = FALSE, include = FALSE}
@@ -57,7 +61,7 @@ for (hook in c("message", "warning")) {
 }
 ```
 
-Cette vignette s'adresse aux utilisateurs qui veulent programmer avec `tabxplor` — écrire leurs propres fonctions, extraire les nombres sous-jacents, ou remodeler un tableau case par case. Si vous souhaitez seulement construire et lire des tableaux, `vignette("tabxplor")` est le point de départ.
+Cette vignette s'adresse aux utilisateurs qui veulent programmer avec `tabxplor` — écrire leurs propres fonctions, extraire les nombres sous-jacents, ou remodeler un tableau case par case. Si vous souhaitez seulement construire et lire des tableaux, [Introduction à tabxplor](tabxplor-fr.html) est le point de départ.
 
 Chaque colonne de nombres d'un tableau `tabxplor` est un unique vecteur de classe **`tabxplor_fmt`** (« nombre formaté »). En coulisses, il s’agit d’un [record `vctrs`](https://vctrs.r-lib.org/reference/new_rcrd.html) : derrière la seule valeur visible, chaque case stocke **toutes les données nécessaires pour calculer le nombre affiché, sa mise en forme et sa couleur** — effectifs, pourcentages, différences, risques relatifs, bornes d'intervalle de confiance, rapports de cotes, etc. Comme c'est un véritable vecteur, il survit à tous les verbes `dplyr`, et il est possible de lire ou de réécrire n'importe lequel de ses champs.
 
@@ -288,7 +292,7 @@ purrr::pmap(specs, \(row_var, col_var, pct)
 
 ## Options avancées
 
-Au-delà des réglages les plus habituels (`vignette("tabxplor")` &rarr; *Options de session*), ces `options()` ajustent les exportateurs et la parallelisation des calculs. 
+Au-delà des réglages les plus habituels ([Introduction à tabxplor](tabxplor-fr.html) &rarr; *Options de session*), ces `options()` ajustent les exportateurs et la parallelisation des calculs. 
 
 HTML / `tab_html()` :
 
@@ -316,6 +320,6 @@ Voir `?tabxplor-options` pour la liste complète et chaque valeur par défaut.
 
 ## Voir aussi
 
-- `vignette("tabxplor")` — les tableaux croisés et les aides à la coloration.
-- `vignette("tabxplor-reg")` — les tableaux de régression.
+- [Introduction à tabxplor](tabxplor-fr.html) — les tableaux croisés et les aides à la coloration.
+- [Tableaux de régression](tabxplor-reg-fr.html) — les tableaux de régression.
 - `?fmt`, `?tab_num`, `?tab_ci` pour la documentation de référence du type et de ses composants.
