@@ -23,7 +23,7 @@
 #     which z4 left byte-identical -- so they did NOT move, which is the mechanical proof that the
 #     new adjusted-residual gate and the absolute `residual` scale touch only the two gated policies.
 # Afterwards: review `git diff tests/testthat/_color_golden/` and accept deliberately.
-# See: dev/new_colors_UI.md §13 (Step 0) ; CLAUDE.md golden regeneration protocol.
+# See: dev/colors.md ; CLAUDE.md golden regeneration protocol.
 
 pkg <- normalizePath(".", winslash = "/")
 devtools::load_all(pkg, quiet = TRUE)

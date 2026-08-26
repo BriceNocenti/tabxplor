@@ -24,7 +24,7 @@
 #
 # ⚠ A LABEL IS EMITTED INSIDE `_()`. jamovi's compiler extracts `_("...")` from jamovi/js/**/*.js
 # and the analysis UI defines `window._` before it evaluates the module, so a generated label is a
-# msgid exactly like a `.yaml` title -- see js_tr() below and dev/tabxplor_2.0.0_jamovi_dev.md § 19.1.
+# msgid exactly like a `.yaml` title -- see js_tr() below and dev/jamovi_module.md (French translation).
 #
 # ⚠ TWO ORDERS THAT MUST NOT BORROW EACH OTHER. `REG_FAMILIES[[f]]$fits` is ordered so its FIRST
 # entry is the family's own link, which is what `link = "auto"` resolves to; the Model table's
@@ -32,7 +32,7 @@
 # the cascade is what a reader can carry. The sort lives here, on the emitted TABX_LINKS alone.
 # `VAR_SHAPES`' declaration order, by contrast, IS the offer order and is simply filtered.
 #
-# See: CLAUDE.md > Phase 19k ; dev/tabxplor_2.0.0_jamovi_dev.md (§ Phase 22g-vi).
+# See: dev/jamovi_module.md (the yaml data model, and the option-naming rule).
 
 # Locate the package root from THIS script's own path, so it runs identically from the root, from
 # tests/testthat (the drift check) and from anywhere else.

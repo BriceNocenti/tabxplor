@@ -173,7 +173,7 @@ on the background channel (`color = c("diff", "ratio")`, default `pct_ratio = li
   `resolve_export_opts(tabs =)`, the one place a theme becomes concrete; a caller with no table (the
   console, a standalone `tab_css()`) takes `PRINT_READY[["fallback"]]`, and `tx_palette_theme()`
   applies that too, so no palette lookup can ever be handed a key that does not exist.
-  See `dev/black_and_white_publication_palette.md` for the measurement they answer.
+  See `dev/colors.md` for the ladder derivations and the measurement they answer.
 
 ## Arg parsing (R/tab.R)
 

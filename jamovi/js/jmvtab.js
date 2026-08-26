@@ -1,6 +1,6 @@
 // Custom UI events for the jmvtab (Crosstables) analysis.
 // NOTE: the jamovi compiler ships this file verbatim (comments included) to every user, so keep
-// it lean. See dev/tabxplor_2.0.0_jamovi_dev.md (Phase 22g-iv: the per-variable table; §14 export).
+// it lean. See dev/jamovi_module.md (the levels control; the Excel export).
 // Everything about a VARIABLE -- its level order, its merges, how a number is cut, what it is
 // compared to -- is one table, built by the SHARED block and described by VAR_TABLE_HOST below.
 // jus 3.0: use the GLOBAL `utils.clone` (the events `this` has no `.clone`, unlike jus 2.0).
@@ -12,7 +12,7 @@
 // on purpose. No edge whitespace inside `_()` (the lookup trims, the catalogue does not), no
 // plural and no context (only `_` exists at runtime): a branch is TWO FULL msgids.
 // ⚠ A string inside the SHARED span is edited HERE and copied by dev/generate_jamovi_js.R.
-// See dev/tabxplor_2.0.0_jamovi_dev.md § 19.1.
+// See dev/jamovi_module.md (the French translation section).
 
 // --- BEGIN GENERATED (dev/generate_jamovi_js.R) -- do not edit ---
 // Generated from R/fmt_class.R (MEASURES), R/tab-display.R (DISPLAY_TOKENS) and

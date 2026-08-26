@@ -22,8 +22,8 @@
 #   - The `oklch` column is how the ramps were chosen (chroma peaks, lightness steps, colour-blind
 #     safety) and the only way to re-tune them. No code reads it; never drop it.
 # See: CLAUDE.md section "tabxplor architecture" (the colour system);
-#      dev/black_and_white_publication_palette.md, which holds the measurement the publication
-#      palettes answer (the shipped ramps converted to CIE L*) and that a header cannot restate.
+#      dev/colors.md, which holds the ladder derivations and the measurement the publication
+#      palettes answer (the shipped ramps converted to CIE L*), neither of which a header can hold.
 
 # === SECTION: the colour ramps -- 8-bit fallback, then the 24-bit OKLCH palettes ====================
 

@@ -30,7 +30,7 @@
 #   - ⚠ THE STAGED COMPARISON'S RENDER IS KEPT TWICE and both copies earn it: jmvcore's $state
 #     survives an engine reset but warns past 5e5 compressed bytes, while JMVREG_RENDERS survives
 #     only the process. The state carries the signature always and the HTML while it fits.
-# See: CLAUDE.md § tabxplor architecture (jamovi) ; dev/tabxplor_2.0.0_jamovi_dev.md.
+# See: CLAUDE.md § tabxplor architecture (jamovi) ; dev/jamovi_module.md.
 
 
 # === Constants + config ====================================================================

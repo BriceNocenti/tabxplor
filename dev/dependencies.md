@@ -37,7 +37,7 @@ Imports rather than Suggests for exactly that reason — it is called unguarded 
 |                                  |                        count | note                                                                           |
 |:---------------------------------|-----------------------------:|:-------------------------------------------------------------------------------|
 | Imports (non-base)               |                       **15** | 5 slots of headroom against CRAN's 20                                          |
-| Suggests                         |                       **22** | `DescTools`, `bench` (23e) and `kableExtra` all left; `htmltools` joined       |
+| Suggests                         |                       **22** | `DescTools`, `bench` and `kableExtra` all left; `htmltools` joined            |
 | Hard install, recursive          |              **32** packages | what `install.packages("tabxplor")` pulls at runtime (34 counting `LinkingTo`) |
 | `dependencies = TRUE`, recursive |              **94** packages | what `tx_need_pkg()`'s advice pulls                                            |
 | jamovi `.jmo` payload            | **23** packages, **31.8 MB** | what jamovi does *not* already bundle                                          |
@@ -90,15 +90,16 @@ flatpak run --devel --command=sh org.jamovi.jamovi -c 'ls /app/lib/R/library'
 - **A test-only Suggest is pure `.jmo` dead weight.** `DescTools` costs **21.3 MB** and is used by
   four test files and nothing else.
 
-**Measured, this phase:**
+**What rule 4 is worth, measured** — the `.jmo` payload as the four heavy Suggests, then the two
+test-only ones, then `kableExtra` came out:
 
-| jamovi `.jmo` payload | packages |        size |
-|:----------------------|---------:|------------:|
-| before Phase 22l      |      114 |    156.8 MB |
-| after 22l             |       47 |     58.1 MB |
-| after 23e             |       25 |     36.3 MB |
-| after `kableExtra`    |   **23** | **31.8 MB** |
-| **removed in total**  |   **91** | **125.0 MB** |
+| jamovi `.jmo` payload         | packages |        size |
+|:------------------------------|---------:|------------:|
+| the starting point            |      114 |    156.8 MB |
+| less the four heavy Suggests  |       47 |     58.1 MB |
+| less the two test-only ones   |       25 |     36.3 MB |
+| less `kableExtra`             |   **23** | **31.8 MB** |
+| **removed in total**          |   **91** | **125.0 MB** |
 
 `ggpubr` (→ rstatix, ggsci, ggsignif, polynom), `FactoMineR` (→ DT, emmeans, leaps, scatterplot3d,
 showtext, …), `questionr` (→ shiny, miniUI, styler, httpuv, promises, later) and `car` (→ lme4,
@@ -110,14 +111,14 @@ Ranked by what dropping it removes from the `.jmo` — the closure, not the pack
 
 | Suggest                                |                          `.jmo` saving | what it costs the user to lose                                                                                                                            |
 |:---------------------------------------|---------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `DescTools` *(gone, 23e)*              |                            **21.3 MB** | ⚠ **nothing** — it was test-only. Its parity tests now live in `dev/tests/testthat/`, so the tree (readr, haven, httr, readxl, vroom, tzdb, bit64, e1071, mvtnorm, …) is gone with it. |
+| `DescTools` *(removed)*                |                            **21.3 MB** | ⚠ **nothing** — it was test-only. Its parity tests now live in `dev/tests/testthat/`, so the tree (readr, haven, httr, readxl, vroom, tzdb, bit64, e1071, mvtnorm, …) is gone with it. |
 | `VGAM` + `svyVGAM`                     |                                 8.4 MB | survey-weighted multinomial, a specialist path                                                                                                            |
 | `marginaleffects`                      | 7.0 MB (+ insight, checkmate, Formula) | `effect = "at_reference"` only; the g-computation engine is tabxplor's own                                                                                |
 | `openxlsx2`                            |                                 4.5 MB | Excel export — ⚠ this one the jamovi module's own export button uses                                                                                      |
-| `kableExtra` *(gone, 22l-bis)*         |                     4.5 MB (+ svglite) | ⚠ **nothing** — it had zero function calls in `R/`; tabxplor now ships its own html dependency (see *Vendored code*)                                       |
+| `kableExtra` *(removed)*               |                     4.5 MB (+ svglite) | ⚠ **nothing** — it had zero function calls in `R/`; tabxplor now ships its own html dependency (see *Vendored code*)                                       |
 | `mirai` + `parallelly` + `RhpcBLASctl` |                    2.9 MB (+ nanonext) | parallelism — ⚠ of no use *inside* jamovi, which runs its own process model                                                                               |
 | `gridExtra`                            |                                 0.7 MB | the model-check panel grid                                                                                                                                |
-| `bench` *(gone, 23e)*                  |                     0.6 MB (+ profmem) | ⚠ nothing — test-only and opt-in even there; moved with `test-benchmark.R`                                                                                 |
+| `bench` *(removed)*                    |                     0.6 MB (+ profmem) | ⚠ nothing — test-only and opt-in even there; moved with `test-benchmark.R`                                                                                 |
 | `survey`                               |        6.4 MB **of the Imports floor** | ⚠ dropping it alone saves **nothing** while `svyVGAM` is a Suggest — `svyVGAM` Depends on it. See the options table.                                      |
 | `forcats`                              |                                 0.5 MB | ⚠ same trap: `haven` (inside `DescTools`) pulls it, so it is free only once DescTools goes                                                                |
 | `brant`, `clipr`, `rstudioapi`, `yaml` |                                     ~0 | tiny, or already in jamovi's library                                                                                                                      |
@@ -127,7 +128,7 @@ is survey and its tree** — survey (4.1) → minqa, numDeriv, mitools → **DBI
 in Imports is already in jamovi's library. `forcats` is the only other 0.5 MB.
 
 ⚠ **The free wins were the three that cost a user no feature at all** — 26.4 MB in total.
-`DescTools` + `bench` were test-only, and Phase 23e moved their parity tests to
+`DescTools` + `bench` were test-only, and their parity tests moved to
 `dev/tests/testthat/`, where an undeclared package is allowed. `kableExtra` shipped nothing but an
 S3 class. Everything still on the list buys something real, so from here the trade stops being free.
 
@@ -281,7 +282,7 @@ something, and it is not proportional to what CRAN or a plain `install.packages(
 
 | option                              |    CRAN     |                                      `.jmo` | what it costs                                                                                                                                                                                                                                                                                                                                      |
 |:------------------------------------|:-----------:|--------------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **`DescTools` out of Suggests**     |      —      |                                **−21.3 MB** | ✅ **DONE (Phase 23e).** Test-only: CI parity in four files, validating the closed-form CI engine against an independent implementation. That validation is kept, as `dev/tests/testthat/test-tab-agg-sweep.R` and `test-survey-variance-sweep.R`. |
+| **`DescTools` out of Suggests**     |      —      |                                **−21.3 MB** | ✅ **Done.** Test-only: CI parity in four files, validating the closed-form CI engine against an independent implementation. That validation is kept, as `dev/tests/testthat/test-tab-agg-sweep.R` and `test-survey-variance-sweep.R`. |
 | **`bench` out of Suggests**         |      —      |                                     −0.6 MB | ⚠ also test-only, and opt-in even there (`TABXPLOR_BENCH=true`). `helper-benchmark.R` already falls back to `system.time()`. Same phase, same argument.                                                                                                                                                                                            |
 | `VGAM` + `svyVGAM` → refuse instead |      —      |                                     −8.4 MB | survey-weighted multinomial would stop working rather than degrade. A specialist path, but a real one.                                                                                                                                                                                                                                             |
 | `marginaleffects` → refuse instead  |      —      |                                     −7.0 MB | `effect = "at_reference"` only; tabxplor's own g-computation covers `effect = "marginal"`.                                                                                                                                                                                                                                                         |

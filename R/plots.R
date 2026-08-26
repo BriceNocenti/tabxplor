@@ -51,7 +51,7 @@
 #   - WARNING: never geom_smooth(method = "auto"), and never pass a vector `linetype =` as a geom
 #     parameter (ggplot replicates the layer data).
 # See: CLAUDE.md section "tabxplor architecture" (the regression subsystem);
-#      dev/regression_effect_plots.md and dev/regression_assumptions_plots.md (the designs and the
+#      dev/regression.md sections 6-7 (the effect plot and the model checks: the designs and the
 #      maths a header cannot restate).
 
 tx_plot_deps <- function(pkgs = c("ggplot2", "gridExtra")) {

@@ -17,7 +17,7 @@
 #   - The contribution helpers (contrib_zero_inner / var_contrib_ctr_signed / contrib_adj_resid /
 #     contrib_pvalue) work on plain vectors, never on the record -- that is what keeps the pass cheap.
 # See: CLAUDE.md § tabxplor architecture (the inference layer);
-#      dev/chi2_cell_residuals_and_contributions.md (the residual / contribution derivation).
+#      dev/inference.md section 2 (the residual / contribution derivation, and the naming trap).
 
 
 # === SECTION: the whole-table test =================================================

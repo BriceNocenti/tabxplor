@@ -70,7 +70,7 @@
 # WARNING: this file sorts BEFORE R/reg-estimand.R, so REG_CHECK_FAMILIES cannot be derived from
 # REG_FIT_FAMILY; the exhaustiveness is asserted at load instead (R/zzz-fact-keys.R).
 # See: CLAUDE.md section "tabxplor architecture" (the regression subsystem);
-#      dev/regression_assumptions_plots.md (the panel designs and their measurements).
+#      dev/regression.md section 7 (the panel designs and their measurements).
 
 
 # === SECTION: the fact table ========================================================================

@@ -3,20 +3,15 @@
 The canonical French term for each recurring tabxplor concept, so the `.po` catalogue, the French
 vignettes and the pkgdown site stay consistent. `.Rbuildignore`'d.
 
-**Phase w-ii** translated the three vignettes into French, as web-only articles in
-`vignettes/articles/*-fr.Rmd` (they render French legends via `options(tabxplor.lang = "fr")`). They
-follow the terms below; new recurring choices settled while translating: *variable en ligne / en
-colonne* (row / column variable), *variable expliquée* (outcome / dependent), *prédicteur* (predictor),
-*champ* (fmt field), *case* (cell), *modélisé / observé* (modelised / empirical), *gabarit* (display
-template). Column labels (`Obs_%`, `Model_OR`, …) and argument names stay English. The three rough
-spots below are runtime-string issues (not vignette prose) and still await maintainer review.
+The French vignettes are web-only articles (`vignettes/articles/*-fr.Rmd`, rendering French legends
+via `options(tabxplor.lang = "fr")`) and follow the tables below. Column labels (`Obs_%`,
+`Model_OR`, …) and argument names stay English.
 
-**Phase 23f-i** added *Le vocabulaire d'enseignement* below, for the French twin of the *All else
-equal* article. Its primary source is the maintainer's own logit séance
+⚠ **§ *Le vocabulaire d'enseignement* is the section to read before writing any French teaching
+prose about regression.** Its primary source is the maintainer's own logit séance
 (`~/github/formations_stat/M2_06_07.Rmd`) rather than a dictionary: these are the words the target
-readership already has. It is the section to read before writing any French teaching prose about
-regression — and it records, deliberately, the two places where one concept keeps **several** French
-words on purpose (crude/adjusted, and the reference).
+readership already has. It records, deliberately, the two places where one concept keeps **several**
+French words on purpose — crude/adjusted, and the reference.
 
 ## Rules
 

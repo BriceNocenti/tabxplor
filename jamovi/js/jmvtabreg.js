@@ -1,6 +1,6 @@
 // Custom UI events for the jmvtabreg (Regressions) analysis.
 // ⚠ Every user-visible string goes through `_()`; the SHARED span's are edited in jmvtab.js.
-// See that file's header and dev/tabxplor_2.0.0_jamovi_dev.md § 19.1.
+// See that file's header and dev/jamovi_module.md (the French translation section).
 // NOTE: the jamovi compiler ships this file verbatim (comments included) to every user, so keep it
 // lean. jus 3.0: use the GLOBAL `utils.clone` (the events `this` has no `.clone`, unlike jus 2.0).
 // Everything about a PREDICTOR -- its merges, how a number is cut, its baseline, its unit -- is one

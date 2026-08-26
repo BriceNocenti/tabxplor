@@ -14,7 +14,7 @@
 #     the next build then can't overwrite them ("Permission denied ...\marginaleffects.dll"). We kill
 #     jamovi processes (by exe path) + delete the stale module dir BEFORE install and kill again AFTER
 #     (CFG$stop_jamovi / clean_module). A fresh R session does NOT clear these OS processes.
-# See: dev/tabxplor_2.0.0_jamovi_dev.md section 3.1-3.6 ; CLAUDE.md "Jamovi module development".
+# See: dev/jamovi_module.md section 2 ; CLAUDE.md "Jamovi module development".
 #
 # USAGE (on Windows 11, R 4.6.1):
 #   Rscript dev/build_jmo_windows.R

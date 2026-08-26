@@ -23,8 +23,8 @@
 #   - DATA-DEPENDENT resolution stays at the leaves, NOT here: `levels = "auto"` (needs the real
 #     level count), a literal or regex `ref` (matched against built row labels), `na` dropping, and
 #     the leaf's tot / totaltab forcing.
-# See: CLAUDE.md § tabxplor architecture (the declarative architecture);
-#      dev/tabxplor_argument_computation_map.md (the full argument -> computation map).
+# See: CLAUDE.md § tabxplor architecture (the declarative architecture); TAB_ARGS (R/tab-args.R),
+#      which IS the argument -> computation map.
 
 # @param  The row_var-wise argument vectors (`color`/`color_signif` already decoded and split by
 #   normalize_color_spec(); `totrow = NULL` skips the contrib forcing), the per-col_var `pct` and

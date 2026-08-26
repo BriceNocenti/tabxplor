@@ -931,4 +931,4 @@ plot_oklch_hue_strip_cvd <- function(
 # (faint -> strong), position-based (no pos1..neg5 names, no ratio slot). They are composed into
 # 8-element slot vectors (4 over + 4 under) and pre-built once into ANSI style functions (cli), stored
 # in an internal env and only rebuilt by set_color_palette(). The engine indexes them by the
-# integer slot from fmt_color_slots() (1:4 = over intensities, 5:8 = under). See dev/new_colors_UI.md.
+# integer slot from fmt_color_slots() (1:4 = over intensities, 5:8 = under). See dev/colors.md.

@@ -28,7 +28,7 @@
 #     the CI method); what it COPIES must not.
 #   - The result is byte-identical to tab(cleannames = FALSE, .defer_level_merge = TRUE), locked by
 #     test-jmvtab-cache.R; the option vocabulary is locked by test-jamovi-vocabulary.R.
-# See: CLAUDE.md § tabxplor architecture (jamovi) ; dev/tabxplor_2.0.0_jamovi_dev.md.
+# See: CLAUDE.md § tabxplor architecture (jamovi) ; dev/jamovi_module.md.
 
 
 # === Cache kernel (shared by the jmvtab crosstab store AND the jmvtabreg fit store) =========

@@ -232,7 +232,7 @@ reg_parse_crosses <- function(predictors, data, outcome, tab_vars = NULL,
   # categorical (measured identical), and listing a parent beside the pair is either rank-deficient
   # (`cells`) or a silent reparametrisation (`nested`, where R codes a slope per level only while
   # the modified variable has no main effect).
-  # See dev/reg_interactions_and_predictor_terms.md section 8.
+  # See dev/regression.md section 5, which measures why each refusal is not a matter of taste.
   # ⚠ PER MODEL, never across the list: `list(additive = c(a, b), crossed = c(a:b))` is exactly the
   # comparison this spelling exists for, and a whole-call check would refuse it.
   for (mp in if (is.list(predictors)) predictors else list(predictors)) {

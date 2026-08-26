@@ -54,7 +54,7 @@
 # The orchestration -- which cells get a gap SE at all -- is reg_gap_se_columns() in
 # R/reg-empirical.R; the printed marginal effects are reg_marginal_gcomp() in R/tab_reg.R.
 # See: CLAUDE.md section "tabxplor architecture" (the regression subsystem);
-#      dev/model_vs_observed_gap_test.md (the derivation and the calibration study).
+#      dev/regression.md section 2 (the derivation and the calibration study).
 
 
 # reg_if_from_parts() -- the influence function of ANY M-estimator solving sum_i X_i W_i r_i = 0, as a

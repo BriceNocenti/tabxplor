@@ -13,8 +13,8 @@
 #     (Step 1) is defined so the DEFAULTS are equivalent, hence locked modes reproduce.
 #   - The synthetic factor-"diff" case exercises cells sitting EXACTLY on breaks (0.05/0.1/0.2/
 #     0.3 and the x2 ratio) -- the tie behaviour that risk R1 (fold + findInterval, left.open)
-#     must reproduce byte-for-byte. Factor "diff" is the LOCKED tripwire Phase 5 must not move.
-# See: CLAUDE.md > 2.0.0 roadmap > Phase 5 ; dev/new_colors_UI.md §13 (Step 0).
+#     must reproduce byte-for-byte. Factor "diff" is the LOCKED tripwire: it must not move.
+# See: CLAUDE.md > tabxplor architecture (the colour system) ; dev/colors.md.
 
 # The render combinations that cover all four palettes (Phase 13a): text / background x light / dark.
 # type/theme are passed explicitly to fmt_get_color_code so the capture does not depend on the

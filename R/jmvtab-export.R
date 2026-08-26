@@ -23,8 +23,8 @@
 #     triggers has `exportExcel = FALSE`. The note therefore rides in the `$state` carrier each
 #     analysis already has (jmv_export_remember / jmv_export_recall) and is re-emitted until the next
 #     export replaces it.
-# See: CLAUDE.md § tabxplor architecture (jamovi) ; dev/tabxplor_2.0.0_jamovi_dev.md ;
-#      dev/jamovi_results_width.md (the CSS chain, quoted out of jamovi's own bundle).
+# See: CLAUDE.md § tabxplor architecture (jamovi) ; dev/jamovi_module.md, whose section 7 quotes
+#      the whole CSS chain out of jamovi's own bundle.
 
 #' @noRd
 export_home_dir <- function() {
@@ -368,7 +368,7 @@ jmv_backend_render_html <- function(self, tabs) {
 # stylesheet pins an Html result at `width:500px`, so the table's real width never reached the host.
 # Un-pinning to `width:max-content` restores that intent and lets the box hug the table in one pass;
 # there is deliberately no display cap (the panel scrolls instead), and prose must NOT drive the
-# width -- hence `tx-note` on every non-table fragment. Full CSS chain: dev/jamovi_results_width.md.
+# width -- hence `tx-note` on every non-table fragment. Full CSS chain: dev/jamovi_module.md s7.
 
 # Runaway guard only: no table is meant to reach it.
 JMV_RESULTS_MAX_WIDTH <- 4000L

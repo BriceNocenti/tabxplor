@@ -356,7 +356,7 @@ Au passage, à quoi le block **« Bilan du modèle »** sous chaque tableau corr
 
  Nous ne nous en servons jamais ici, parce que notre question est ce que l'ajustement *a fait*, non de savoir si le modèle est bon. Les deux sont importants, et [Tableaux de régression](tabxplor-reg-fr.html) explique la signification des différentes statistiques.
 
-## Les cinq choses que l'ajustement peut faire
+## Cinq manières dont l'ajustement peut déplacer l’effet observé
 
 Les étudiant·es s’attendent généralement à ce que l'ajustement réduise toujours les écarts par rapport aux chiffres observées, parce que c'est ce qu’il fait très souvent. Mais il y a bien cinq issues possibles, toutes rencontrées dans les données, et chaque ligne ci-dessous est un résultat réel commenté quelque part dans cet article :
 
@@ -368,61 +368,69 @@ Les étudiant·es s’attendent généralement à ce que l'ajustement réduise t
 | **l’écart s’amplifie** | la classe sociale, sur le fait d'aller au cinéma (France)| &minus;21,3 &rarr; &minus;24,9 points |
 | **l’écart s'inverse**  | le sexe, sur l'admission à Berkeley (USA)                | &minus;14,2 &rarr; +1,9 point         |
 
-Toutes ces lignes sont converties en **points de pourcentage** plutôt que conservées sous forme d’*odds ratios* : on prend simplement la différence entre le pourcentage ajusté de la catégorie étudiée (par exemple Homme) et le pourcentage ajusté de la catégorie de réference (par exemple Femme) – ce qu’on appelle la différence marginale, visible avec le préfixe "m" dans le tableau (cf. ci-dessous). 
+Toutes ces lignes sont converties en **points de pourcentage** plutôt que conservées sous forme d’*odds ratios* : on prend simplement la différence entre le pourcentage ajusté (modélisé) de la catégorie étudiée (par exemple Homme) et le pourcentage ajusté de la catégorie de réference (par exemple Femme) – ce qu’on appelle la différence marginale, visible avec le préfixe "m" dans le tableau (cf. ci-dessous).
 
-**Noir-blanc : l’écart se réduit.** Dans le cas des mises en garde à vue à Toronto, nous avons vu que l'effet de la couleur de peau perdait environ la moitié de sa taille. Une partie de ce qui ressemblait à un effet direct de la race assignée était l'emploi, la nationalité et les antécédents dans les rapports avec la police (tous conséquences, d’une certaine manière, d’une certaine dimension du racisme structurel). Mais l’autre moitié, celle qui tient, pourrait *aussi* s’expliquer par une forme de racisation plus directe qui se joueraient dans les interactions avec les policiers – ou par d’autres facteurs non mesurés.
+**Noir-blanc : l’écart se réduit.** Dans le cas des mises en garde à vue à Toronto, nous avons vu que l'effet de la couleur de peau perdait environ la moitié de sa taille. Une partie de ce qui ressemblait à un effet direct de la race assignée était l'emploi, la nationalité et les antécédents dans les rapports avec la police (tous conséquences, d’une certaine manière, d’un certain aspect dimension du racisme structurel). Mais l’autre moitié, celle qui tient, pourrait *aussi* s’expliquer par une forme de racisation plus directe se jouant dans les interactions avec les policiers – ou par d’autres facteurs non mesurés ici.
 
-**Homme-femme : l’écart disparaît.** Dans les mêmes données, les femmes sont relâchées un peu plus souvent que les hommes (86 % contre 83 %, tout juste significatif). Dans le modèle, dès lors qu’on raisonne entre personnes comparables sur les variables choisies, l’effet disparait totalement :
+**Homme-femme : l’écart disparaît.** Dans les mêmes données, les femmes sont relâchées un peu plus souvent que les hommes (86 % contre 83 %, tout juste significatif). Pourtant dans le modèle, dès lors qu’on raisonne entre personnes comparables sur les variables choisies, l’effet se dissipe totalement :
 
 ```{r}
 tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
         measure = "difference")
 ```
 
-La ligne `sex` passe de `-3.1 %*` à `+0.1 %`. Lire cela avec soin, car c'est l'endroit où l'on en dit souvent trop : cela ne dit pas que les hommes et les femmes ont été traités de la même façon. Cela dit que la petite différence observée est ce à quoi on pouvait s'attendre du seul fait que, dans ce fichier, les hommes et les femmes diffèrent par l'emploi, la nationalité et les antécédents — si bien qu'il ne reste rien, dans ce cas précis, que le sexe ait à expliquer.
+La ligne `sex` passe de `-3.1 %*` à `+0.1 %`. Lire cela avec soin, car c'est là qu'on en dit souvent trop : cela ne dit pas que les hommes et les femmes ont été traités de la même façon. Cela dit que la petite différence observée est ce à quoi on pouvait s'attendre du seul fait que, dans ce fichier, les hommes et les femmes diffèrent par l'emploi, la nationalité et les antécédents — si bien qu'il ne reste rien, dans ce cas précis, que le sexe ait à expliquer directement.
 
-Et nous verrons par la sutie deux cas où l’ajustement réalisé par la modèle **amplifie** l’écart, voire **l’inverse** par rapport à ce qu’on observait dans le tableau croisé.
+Et nous verrons par la suite deux cas où l’ajustement réalisé par la modèle **amplifie** l’écart, voire **l’inverse** par rapport à ce qu’on observait dans le tableau croisé.
 
-## Le voir bouger, bloc par bloc
+## Voir bouger l’ajustement du modèle, prédicteur par prédicteur
 
-La chose la plus utile qu'on puisse faire d'une régression est de l'ajuster plusieurs fois, en ajoutant les prédicteurs un à un, et de regarder une ligne bouger. Il suffit de passer une **liste nommée** au lieu d'un vecteur :
+La chose la plus utile qu'on puisse faire avec un modèle de régression est de l'ajuster plusieurs fois, en ajoutant les prédicteurs un part un, et de regarder comment les chiffres bougent. Dans R il suffit de passer une **liste nommée** au lieu d'un vecteur :
 
 ```{r}
+model <- 
 tab_reg(car_arrests, "released",
-        list("who they are" = c("colour", "sex", "citizen", "employed"),
+        list("colour" = "colour",
+            "+ who they are" = c("colour", "sex", "citizen", "employed"),
              "+ prior record" = c("colour", "sex", "citizen", "employed", "checks")),
         measure = "difference", display = "est", stats=NULL)
+model
 ```
 
-Lire la ligne `colour` de gauche à droite : **&minus;11,7 points &rarr; &minus;7,8 &rarr; &minus;5,2**. L'emploi et la nationalité rendent compte d'environ un tiers de l'écart ; les antécédents d'un quart de plus ; et **cinq points environ survivent à tout ce que contient le fichier**.
+Lire la ligne `colour` de gauche à droite : **&minus;11,7 points &rarr; &minus;7,8 &rarr; &minus;5,2**. La différence observée est à gauche. L'emploi et la nationalité rendent compte d'environ un tiers de l'écart. Les antécédents d'un quart de plus. Et les cinq points vu plus haut survivent à toutes les variables choisies.
 
-C'est le format sous lequel il faut publier. Il montre au lecteur ce que chaque jeu de contrôles a rapporté, au lieu de lui demander de faire confiance à un unique nombre final — et il rend visible qu'on soit allé, ou non, à la pêche à la spécification qui donnait la réponse souhaitée.
+C'est un format idéal pour publier, pourvu que les revues scientifiques lui trouvent une place. Il montre au lecteur ce que chaque jeu de « contrôles » a rapporté, au lieu de lui demander de faire confiance à un unique nombre final. De cette manière, il demande une patiente construction du modèle qui empêche qu’on ne garde, à la fin, que celui qui donnait la réponse souhaitée.
 
 ## Colorer le déplacement
 
-Sur un tableau large, comparer deux colonnes case par case devient long. `color = "adjustment"` colore le déplacement lui-même.
+Sur un tableau large, comparer l’ajustement colonne par colonne peut devenir fastidieux. `color = "adjustment"` permet de visualiser le déplacement lui-même. La catégorie de réference pour le calcul des couleurs devient alors la colonne "Obs_RD" (« différence de risque observée »), en gras :
 
 ```{r}
 tab_reg(car_arrests, "released",
-        list("who they are" = c("colour", "sex", "citizen", "employed"),
+        list("colour" = "colour",
+            "+ who they are" = c("colour", "sex", "citizen", "employed"),
              "+ prior record" = c("colour", "sex", "citizen", "employed", "checks")),
-        measure = "difference", color="adjustment", display = "est", stats=NULL)
+        measure = "difference", color="adjustment", color_signif = "guaranteed_effect", 
+        stats=NULL)
 ```
+
+Les nuances du jaune au rouge disent que l'ajustement a ramené l'écart **plus près de la valeur nulle** (0 = « aucun effet »), voire parfois qu'il en a **inversé le sens** (par exemple, on passe d’un écart négatif à un écart positif). Pour un rapport ou un **odds ratio** la valeur nulle est 1, et inverser l’effet consisterait à passer de « A à *moins* de chances de X que B » (`÷`) à « A à *plus* de chances de X que B » (`×`). 
+
+Des bleus de plus en plus foncés diraient, pour leur part, que l'ajustement a poussé l'écart **plus loin de la valeur nulle** (0 = « aucun effet ») : si la différence observée était déjà sous 0, le modèle a agrandi l'effet dans le même sens, creusé l’écart observé entre les deux catégories.
+
+Avec le réglage `color_signif = "guaranteed effect"`, tout ce qui est significatif est coloré, et un ajustement qui reste gris veut dire que le déplacement  à trop de chances d’être dû au hasard de la sélection de l’échantillon (n'est pas plus grand que le bruit statistique) : au vu du nombre de personnes enquêtées, l'écart modélisé n'est pas significativement différent de l'écart observé.
+
+Le premier seuil est un changement de &times;1,1 — la vieille convention épidémiologique selon laquelle un déplacement de 10 % mérite d'être remarqué. **En faire une aide à la lecture, jamais une règle** : le seuil qui convient dépend de la taille de l'effet, de celle de l'échantillon et des corrélations en jeu. Pour demander « est-ce que ça a bougé, et dans quel sens ? », il fait très bien l'affaire ; pour décider quelles variables ont leur place dans un modèle, pas tellement.
+
+On peut afficher les deux à la fois : `color = c("measure", "adjustment")` utilise la couleur du texte pour montrer l’effet de chaque colonne, et la couleur de fond pour montrer le déplacement par rapport à l'effet observé, mais le résultat n’est pas toujours évivent à lire.
 
 ```{r, echo=FALSE, eval=FALSE}
-tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
-        measure = "difference", color = c(TRUE, "adjustment"), stats=NULL)
+tab_reg(car_arrests, "released",
+        list("colour" = "colour",
+            "+ who they are" = c("colour", "sex", "citizen", "employed"),
+             "+ prior record" = c("colour", "sex", "citizen", "employed", "checks")),
+        measure = "difference", color=c("measure", "adjustment"), stats=NULL)
 ```
-
-Les bleus de plus en plus soutenus disent que l'ajustement a poussé l'écart **plus loin de « aucun effet »** : si la différence observée était déjà sous 0, le modèle a agrandi l'effet dans le sens négatif.
-
-Les nuances du jaune au rouge disent que l'ajustement a ramené l'écart **plus près de « aucun effet »** (plus près de 0 pour une différence, plus près de 1 pour un rapport), voire qu'il en a **inversé le sens** (de `-` à `+` pour une différence, de `÷` à `×` pour un rapport).
-
-Avec le réglage par défaut `color_signif = "grey_non_signif"`, un ajustement qui reste gris signifie que le déplacement *n'est pas plus grand que le bruit* : à cette taille d'échantillon, l'effet du modèle n'est pas vraiment différent de l'effet observé.
-
-Le premier seuil est un changement de &times;1,1 — la vieille convention épidémiologique selon laquelle un déplacement de 10 % mérite d'être remarqué. **En faire une aide à la lecture, jamais une règle** : le seuil qui convient dépend de la taille de l'effet, de celle de l'échantillon et des corrélations en jeu. Pour demander « est-ce que ça a bougé, et dans quel sens ? », il fait très bien l'affaire ; pour décider quelles variables ont leur place dans un modèle, non.
-
-On peut aussi afficher les deux à la fois : `color = c("measure", "adjustment")` met les effets en couleur de texte et l'écart à l'effet observé en couleur de fond — mais la lecture y gagne rarement.
 
 # 4. Redescendre à une phrase que l'on peut dire à haute voix
 

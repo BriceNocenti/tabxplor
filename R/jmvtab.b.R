@@ -18,7 +18,7 @@
 #     palette flip rebuild the whole table.
 #   - The cache lives ONLY in $state -- it alone survives jamovi's engine reset. Never in an R global.
 #   - The module runs in jamovi's bundled R: keep to what the package Imports / Suggests.
-# See: CLAUDE.md § tabxplor architecture (jamovi) ; dev/tabxplor_2.0.0_jamovi_dev.md.
+# See: CLAUDE.md § tabxplor architecture (jamovi) ; dev/jamovi_module.md.
 
 jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
   "jmvtabClass",

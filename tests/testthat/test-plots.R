@@ -72,7 +72,7 @@ test_that("every table shape draws one ggplot", {
   d <- fp_data()
   q <- function(e) suppressWarnings(suppressMessages(e))
   # One shape per KIND forest_plot has to lay out -- a difference, a mean, a model column and a
-  # per-category one. The exhaustive shape x option sweep is dev/tests/testthat/test-plots-sweep3.R:
+  # per-category one. The exhaustive shape x option sweep is dev/tests/testthat/test-plots-sweep.R:
   # every ggplot_build() here costs more than the fit that fed it.
   shapes <- list(
     xt_diff = tab(d, race, party3, pct = "row", ci = "ref", color = TRUE),

@@ -103,7 +103,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 
 **Cross-cutting** (touch with care): `fmt_class.R` is the foundation of every column; `.onLoad()` in `utils.R` seeds every option; `format.tabxplor_fmt()` and `fmt_color_channels()` are the shared display/colour sources of truth across all backends.
 
-**Other directories:** `vignettes/` (introduction, *All else equal*, regression, weights, programming; `vignettes/articles/` is pkgdown-only and holds the French twins) · `tests/testthat/` (testthat v3, subsystem-named: the package's contract) · `man/` (roxygen-generated, never edit) · `data/` + `data-raw/` (the four example data sets and the script that builds them) · `inst/i18n/` + `po/` (translations) · `jamovi/` (module definition) · `dev/` (architecture guide, dev scripts, perf harness, and `dev/tests/` — the second test suite; all `.Rbuildignore`'d).
+**Other directories:** `vignettes/` (introduction, *All else equal*, regression, weights, programming; `vignettes/articles/` is pkgdown-only and holds the French twins) · `tests/testthat/` (testthat v3, subsystem-named: the package's contract) · `man/` (roxygen-generated, never edit) · `data/` + `data-raw/` (the four example data sets and the script that builds them) · `inst/i18n/` + `po/` (translations) · `jamovi/` (module definition) · `dev/` (seven technical guides, the dev scripts and perf harness, `dev/tests/` — the second test suite — and `dev/archive_2.0.0/`, the 2.0.0 evidence base; all `.Rbuildignore`'d).
 
 ---
 
@@ -262,7 +262,7 @@ tab() / tab_many()                          [public; differ only in default outp
 
 **The inference basis** is the layer's central idea: how the *estimate* is computed (`wt`) and how the *interval and test* are computed (the basis) are **orthogonal**. The basis is one of `n` / `weights` / `design` / `design_partial` and — with `conf_level`, `degf` and `ci_method` — is stored **on each column, not on the table**, because `dplyr` drops table attributes and a number must never depend on one. A bind reconciles them by the weakest-claim rule.
 
-**Design-based cell variance** (`survey-variance.R`) feeds the existing `n_eff` field, so the ordinary CI machinery becomes design-aware with no new field. A plain weight column is a survey design at `ids = ~1`, where the general formula collapses to a per-cell closed form computed from the aggregate alone (Kish is its degenerate limit); a real design goes through `survey::svyrecvar`, which owns the variance algebra throughout.
+**Design-based cell variance** (`survey-variance.R`) feeds the existing `n_eff` field, so the ordinary CI machinery becomes design-aware with no new field. A plain weight column is a survey design at `ids = ~1`, where the general formula collapses to a per-cell closed form computed from the aggregate alone (Kish is its degenerate limit); a real design goes through `survey::svyrecvar`, which owns the variance algebra throughout. **`dev/inference.md`** derives that closed form and the chi2 cell residual, and states what a weights-only design effect can and cannot see.
 
 ### The display grammar
 
@@ -276,7 +276,7 @@ Colour has three orthogonal axes: a **measure** (which deviation to grade — `d
 2. **Breaks** — per-scale thresholds (`COLOR_SCALES`). Every ladder is the SAME ladder written in another measure at one reference cell of 50 %, so a shade means the same size of deviation whichever measure a table is read on; each declares its `quantity`, its `anchor`, whether its two `sides` mirror (only where the quantity is unbounded above), and how many loud rungs it keeps on the background channel (`bg_keep` — a fill is the corrective voice). The shape rule is checked at load.
 3. **Selection** — a vectorised `findInterval` engine (`fmt_color_plan` → `fmt_color_slots` → `fmt_color_channels`) that folds each cell per side and picks the strongest matching threshold.
 
-The measure's behaviour — raw getter, scale keys, significance source, gating — lives in its `MEASURES` row, which drives both the plan and the legend with no per-measure branches; every backend then consumes the one artifact `fmt_color_channels` produces, which is why console, HTML, Excel, Markdown and plots colour identically.
+The measure's behaviour — raw getter, scale keys, significance source, gating — lives in its `MEASURES` row, which drives both the plan and the legend with no per-measure branches; every backend then consumes the one artifact `fmt_color_channels` produces, which is why console, HTML, Excel, Markdown and plots colour identically. **`dev/colors.md`** derives where each ladder's anchor comes from, what colour-vision deficiency requires of a palette, and why a page with no colour needs a different palette rather than a desaturated one.
 
 **The footer legend states the measure, not the palette.** One line is `[<columns> — ]<measure named in words>: <subject> ≥ <reference> <thresholds>; <subject> ≤ …`, then one clause saying what an *uncoloured* cell means — the reverse being a tautology the cells already show. The name is a per-(measure × ladder scale) fact on the same `MEASURES` row, in two registers (`word` for the console, `word_long` for the exports), because a difference of proportions, of means and of log odds are three quantities. A colour palette names no direction — its break-words *are* blue and red — while a publication palette, whose greyscale has no diverging ramp, keeps its two face words and its two sentences.
 
@@ -300,7 +300,7 @@ The measure's behaviour — raw getter, scale keys, significance source, gating 
 
 **The boundary and the build** (`reg-resolve.R`, `tab_reg.R` + `reg-spec-build.R`). `reg_resolve_args()` is the crosstab boundary's twin, with `data` *inside* it — `family = "auto"`, `multiplier = "sd"` and `shape` are answered by the data — and one grammar per axis: the four estimand arguments per outcome, `multiplier` / `shape` / `ref` per predictor (unnamed = the fallback, named = that variable). `reg_build()` then runs over a typed `new_reg_ctx`, its per-model half a declared product (`reg_spec_build()`), the three nesting axes — `tab_vars` groups × models × outcomes — dispatching through the shared parallel seam. **A model comparison is a default too**: several `predictors` sets are tested against each other without being asked, sequential where every model nests in the next and against the first otherwise, decided in `reg_compare_rows()` where the fits exist. ⚠ `compare != "none"` is what makes a build serial and makes it keep its fits, so the boundary degrades the automatic one to `"none"` wherever a comparison has no meaning.
 
-**Effects and model checks.** A marginal quantity comes from tabxplor's own analytic g-computation, or from `marginaleffects` at a reference profile — derived from the contrast, never declared per row. `REG_CHECKS` catalogues the checks (linearity, dispersion, influence, proportionality, collinearity), each with the `shape =` cure that fixes what it flags — the check and its cure are one object — each priced (`cost`) and each declaring whether it runs by default (`footer_default`), because what a table must say and what it costs are two questions. The **observed shape** of a numeric predictor is the free half of the linearity check: one curve per outcome, binned with no fit at all, drawn in a window floored by the data's own sampling noise and by the first colour rung — so a flat run means flat. It goes in a small **shape table** below the footer, beside the range it is a picture of.
+**Effects and model checks.** A marginal quantity comes from tabxplor's own analytic g-computation, or from `marginaleffects` at a reference profile — derived from the contrast, never declared per row. `REG_CHECKS` catalogues the checks (linearity, dispersion, influence, proportionality, collinearity), each with the `shape =` cure that fixes what it flags — the check and its cure are one object — each priced (`cost`) and each declaring whether it runs by default (`footer_default`), because what a table must say and what it costs are two questions. The **observed shape** of a numeric predictor is the free half of the linearity check: one curve per outcome, binned with no fit at all, drawn in a window floored by the data's own sampling noise and by the first colour rung — so a flat run means flat. It goes in a small **shape table** below the footer, beside the range it is a picture of. **`dev/regression.md`** derives the gap SE, the one-column ordinal effect, when a risk ratio beats an odds ratio, why `predictors` is not R's formula language, and the specs of both chart families.
 
 ### Exports and rendering
 
@@ -314,7 +314,7 @@ The **hover tooltip** (`tab-tooltip.R`) is that same rule read line by line: `TO
 
 ### jamovi
 
-Two point-and-click analyses mirror the two producers: `jmvtab` (Crosstables) and `jmvtabreg` (Regressions). Each is a thin `R6` backend (`*.b.R`) over an engine-free build core (`jmvtab_build()` / `jmvtab_reg_build()`) driving `tab()` / `tab_reg()` through a content-addressed **live-UI cache** (`*-cache.R`), so an interactive tweak re-paints instead of recomputing. Each option is named after the argument it drives, so the backend is a pass-through, not a translation table — and where the panel asks a *simpler* question than the argument takes (a tick-box for `empirical`, two of `theme`'s seven values), R resolves the rest. An argument applied at RENDER (`theme`, `wrap_*`) is read straight off the options and deliberately kept out of `.opts()`, which is the crosstab cache key's complement. The regression store holds **distilled fit records** (kilobytes) keyed on the model alone — the model's own and each observed (crude) univariable one, one record shape told apart by its key — so every estimand change is a hit and nothing heavy crosses jamovi's `$state`. The generated `*.h.R` option headers are never hand-edited.
+Two point-and-click analyses mirror the two producers: `jmvtab` (Crosstables) and `jmvtabreg` (Regressions). Each is a thin `R6` backend (`*.b.R`) over an engine-free build core (`jmvtab_build()` / `jmvtab_reg_build()`) driving `tab()` / `tab_reg()` through a content-addressed **live-UI cache** (`*-cache.R`), so an interactive tweak re-paints instead of recomputing. Each option is named after the argument it drives, so the backend is a pass-through, not a translation table — and where the panel asks a *simpler* question than the argument takes (a tick-box for `empirical`, two of `theme`'s seven values), R resolves the rest. An argument applied at RENDER (`theme`, `wrap_*`) is read straight off the options and deliberately kept out of `.opts()`, which is the crosstab cache key's complement. The regression store holds **distilled fit records** (kilobytes) keyed on the model alone — the model's own and each observed (crude) univariable one, one record shape told apart by its key — so every estimand change is a hit and nothing heavy crosses jamovi's `$state`. The generated `*.h.R` option headers are never hand-edited. **`dev/jamovi_module.md`** is the guide to the app itself — its runtime, its file formats, and the width chain that decides how much of a table a user actually sees.
 
 ### Cross-cutting invariants
 
@@ -352,7 +352,7 @@ The docs form one hierarchy, general to specific. **Each fact is stated at exact
 - **Vignettes** (`vignette("tabxplor")`, regression, programming) — usage and teaching, for users.
 - **`vignettes/articles/tabxplor-all-else-equal.Rmd`** — the most precise account of what tabxplor's *philosophy*, *vocabulary*, *usage* and *real-world regression use cases* really are; its words (deviation, observed vs adjusted, the base, the round trip) are the package's own.
 - **Roxygen man pages** (`?tab`, `?tabxplor-display`, `?tabxplor-vctrs`, `?tabxplor-options`, `?tabxplor-data.table`) — user-facing reference: *usage* and the main use cases, never build/internals/history. A `@param` states what the argument is, its values, and at most one sentence of when to change it; the rest is a link to the vignette that owns it.
-- **`dev/*.md`** (`.Rbuildignore`'d) — transversal or expert technical guides only.
+- **`dev/*.md`** (`.Rbuildignore`'d) — transversal or expert technical guides only, and there are seven: `dependencies.md` (the dependency policy), `release_checklist.md`, `french_glossary.md`, `jamovi_module.md`, `colors.md`, `inference.md`, `regression.md`. Each holds what an `R/` header is too short to derive — a foreign system, a cross-file policy, a statistical derivation — and the header that needs it points at it by section. ⚠ The 2.0.0 evidence base is `dev/archive_2.0.0/` (indexed by its own `README.md`): a `dev/<name>.md` named in a DONE summary lives there, unchanged.
 - **Roadmap "DONE" summaries → `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`** — the ONLY place dev history lives.
 
 Inspect a built table at runtime through the accessors: `tab_structure()`, `tab_columns()`, `reg_measures()`, `reg_formulas()`, `fmt_attr()`, and the `get_*` / `set_*` family.
@@ -488,7 +488,7 @@ To know the real structure of the final .html and .js, check at this live captur
 
 To **capture new html** in the dev console, **ask the maintainer whenever you need**.
 
-Look at `dev/tabxplor_2.0.0_jamovi_dev.md` and `@dev/jamovi/` for detailed informations.
+Look at `dev/jamovi_module.md` and `@dev/jamovi/` for detailed informations.
 
 ---
 
@@ -778,7 +778,7 @@ drops to 2 after complete-case filtering. `reg_tidy_multinom()` takes the name f
 
 #### Phase 22m — exported functions review — DONE
 
-**The map is `dev/tabxplor_2.0.0_exported_functions_review.md`, and it is where the removal proposals stay.** Measured first, because it decided the whole shape of the phase: of the **98 exports, 56 come from 1.3.1** (a released contract) and only **42 are new in 2.0.0**. The maintainer's call was to implement the index and page structure now and leave every unexport as a written proposal for a separate session — which is the right split, because the second measurement is that **unexporting an accessor buys nothing on the reference index**: all 41 `fmt` accessors sat on ONE page, so the index only moves by restructuring.
+**The map is `dev/archive_2.0.0/tabxplor_2.0.0_exported_functions_review.md`, and it is where the removal proposals stay.** Measured first, because it decided the whole shape of the phase: of the **98 exports, 56 come from 1.3.1** (a released contract) and only **42 are new in 2.0.0**. The maintainer's call was to implement the index and page structure now and leave every unexport as a written proposal for a separate session — which is the right split, because the second measurement is that **unexporting an accessor buys nothing on the reference index**: all 41 `fmt` accessors sat on ONE page, so the index only moves by restructuring.
 
 **What was actually cluttering the page, then.** Not the export count — the **tail**. A whole section advertised the five hard-deprecated steps (`tab_pct` / `tab_tot` / `tab_totaltab` / `tab_ci` / `tab_chi2`), which warn on **every** call and are defunct in 2.1.0; and `?fmt` was a **719-line page carrying 42 aliases**, whose `\value` alone was a stack of ~40 one-line paragraphs ("A modified fmt vector." six times over). Four edits, no export added or removed, `NAMESPACE` byte-identical:
 
@@ -1347,12 +1347,109 @@ build died on `Error: unexpected symbol` *after* finishing the site.
   final README pass. The site's home page no longer depends on it.
 - The 14 exports documented on `@keywords internal` pages (`tab_plot`, `tab_prepare`, `new_lvl`, …)
   stay as they are: those are Phase 22m's Tier 1/2 unexport proposals, written up in
-  `dev/tabxplor_2.0.0_exported_functions_review.md` §5.
+  `dev/archive_2.0.0/tabxplor_2.0.0_exported_functions_review.md` §5.
 
-#### Phase 23i — `dev/` folder
-Files inside the `dev/` folder have grown organically, with many now useless files and outdated ones, which is very messy for future development : I want you to clean and reorganise the folder and main files.
-- Put all files related to v 2.0.0 dev history and of no real use for future dev in an 2.0.0 archive subfolder. That should be most of them.
-- Only keep at `dev/` root level a few selected .md files that explain in detail the architecture or functioning or use cases of some subsystems, and will be really useful for future dev : clean these files, simplify them by removing useless dev history and focusing on current architecture and usage, ensure they are up-to-date compared to the current design and code ;  organise them internally in such a way that goals, design and architecture decisions, usage, and everything giving the big picture come first, and details come next ; reference them in the architecture document.
+#### Phase 23i — `dev/` folder — DONE
+
+**`dev/` root went from 52 markdown files (57 000 lines) to 8, and the seven that are not the
+roadmap sink total 3 192 lines.** 141 files moved into `dev/archive_2.0.0/`, every one of them by
+`git mv` and **not one renamed or rewritten** — which is what makes the ~200 `dev/<name>.md` pointers
+inside the DONE summaries resolve by a single rule stated once, instead of being rewritten across
+1.8 MB of history.
+
+**The four new guides are written from the final design, not edited down from their sources.** The
+sources are archived intact beside them as the evidence base.
+
+| new guide            | lines | distilled from                                                                                                                                 |
+|----------------------|------:|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| `jamovi_module.md`   | 1 205 | `tabxplor_2.0.0_jamovi_dev.md` + `jamovi_results_width.md` (2 482 lines)                                                                        |
+| `regression.md`      |   609 | `model_vs_observed_gap_test.md`, `ordinal_one_column_effects.md`, `poisson_vs_logistic_binary_outcome.md`, `reg_interactions…` §8, both plot designs |
+| `inference.md`       |   373 | `chi2_cell_residuals_and_contributions.md`, `weights_only_design_effect_soundness.md`, `weights_framework_redesign.md` Appendix A               |
+| `colors.md`          |   307 | `color_ladders_balance.md`, `color_blind_palettes_guide.md`, `black_and_white_publication_palette.md`                                           |
+
+⚠ **The selection rule was found by measurement, not chosen.** Three parallel surveys classified all
+52 files; the durable set turned out to be **exactly** those whose content cannot live in an `R/`
+header — a foreign system (jamovi), a cross-file policy (dependencies, release, glossary), or a
+statistical derivation too long to restate. That is Phase 21b's doing: it moved per-subsystem
+architecture *into* the headers, which is why 33 of the 52 classify as pure history and why the
+survivors are almost exactly the files an `R/` header already delegates to with a `See:` line. The
+same rule decided what each new guide must NOT say: `COLOR_SCALES` already declares every ladder's
+`quantity`, `anchor` and `sides` and checks the shape rule at load, so `colors.md` carries the
+*derivation* behind each anchor and nothing else; `R/survey-variance.R`'s header already states the
+influence function, so `inference.md` carries the flat closed form and the soundness question.
+
+**Two files the surveys promoted that the brief had not listed**, both genuinely durable and now
+folded in: `ordinal_one_column_effects.md` (the only derivation of the superiority pair — `γ`, `δ`,
+`WR` — and of why the *marginal* definition is the collapsible one) and
+`weights_only_design_effect_soundness.md` (the defensible answer to a question a reviewer will ask
+about a shipped default: clustering costs SE ×0.10–0.67, the three conservative omissions 0–8 % each,
+and they do not cancel).
+
+**Rot found and fixed, all of it pre-existing:**
+
+- ⚠ `dev/tabxplor_architecture.md` is cited by **25 lines across five dev docs and does not exist** —
+  it became this file's `## tabxplor architecture` section. Those five docs are now archived; the
+  archive README says so.
+- `tests/testthat/test-plots.R:75` pointed at `dev/tests/testthat/test-plots-sweep3.R`; the file is
+  `test-plots-sweep.R`. **The only dangling pointer from outside `dev/`.**
+- `dev/tabxplor_argument_computation_map.md` — still cited from `R/tab-resolve.R` as "the full
+  argument → computation map" — catalogues `OR`, `chi2`, `method_cell`, `add_n`, `tot`,
+  `color_all_signif`, **none of which is a current `tab()` formal**. Archived, and the pointer now
+  names `TAB_ARGS`, which IS the map.
+- `dev/tabxplor_jmvtab_cache_design.md` specifies a **five**-tier cache; `R/jmvtab-cache.R` ships
+  **four**, with a different tier 3. Archived; its header was already the real spec.
+- `dev/build_site.R` explained itself by naming `dev/build_site_bilingual.R`, deleted long ago.
+- ⚠ `chi2_cell_residuals_and_contributions.md` calls the break scale `residual` throughout; it ships
+  as **`zscore`**, and its breaks are not the study's `c(2,3,4,6)` but
+  `conf_level_to_z(c(0.95, 0.99, 0.9999, 1 - 2e-9))` — a ladder of confidence levels, and the one
+  member of `COLOR_SHAPE_EXEMPT`. `inference.md` states the shipped fact.
+- ⚠ `color_blind_palettes_guide.md` §241–§413 audits a **snapshot** of the palettes and §414 proposes
+  hue shifts whose adoption status is recorded nowhere. `colors.md` carries the criteria and points
+  at `COLOR_RAMPS`' `oklch` column as the live values, instead of restating a stale audit.
+
+**Deduplication, not just deletion.** `jamovi_module.md`'s install section was a verbatim second copy
+of this file's § Jamovi module development (the build table, the `jmvtools` pin, the SDK,
+`ELECTRON_RUN_AS_NODE`); it is now a pointer. Conversely the two rules buried in that document's
+trailing phase logs were promoted into the guide proper: **the option name is the argument name**,
+and ⚠ **a `$state` carrier needs `clearWith: []`** — `jmvcore::Image$new()` defaults it to `"*"` and
+`ResultsElement$fromProtoBuf()` returns early on any option change, which silently degraded both
+live caches for as long as they existed.
+
+**Pruned in place, so no existing pointer moved**: `dev/benchmarks/` lost its ~20 phase-named
+profilers (the harness, `baseline.csv` and `results_2.0.0/` stayed, since three CLAUDE.md lines name
+the last); `dev/review_manual/` lost its six frozen passes and ~16 MB of `phase14*` artifacts
+(`review.R`, `xl_review.R`, `legend_review.R` stayed). `dev/jamovi/`, `dev/legacy/`, `dev/tests/` and
+`dev/night_run/` are untouched — all four are written for the future.
+
+⚠ **Two scripts the plan had marked for the archive stayed at root, on the surveys' evidence**:
+`breaks_balance_probe.R` (its own header says to re-run it after ANY `color_breaks` change) and
+`verify_no_ghost_functions.R` (a standing maintenance report). 21 scripts remain at root, each wired
+to something that runs; the 6 archived are the phase-bound ones no runner names.
+
+**Repointed**: 9 `R/` headers, 2 `jamovi/js/` headers (⚠ verified safe — `dev/generate_jamovi_js.R`
+rewrites only the text *between* its `BEGIN/END` markers, and these lines sit above the first),
+2 test files, `.claude/skills/color-mode/SKILL.md`, 5 dev scripts and 4 places in this file.
+
+**Flagged, not decided:** `dev/tabxplor-the-shape-of-a-number.Rmd` is a **complete draft vignette**
+(YAML, setup chunks, prose), absent from `vignettes/` and `_pkgdown.yml` — not history, so not
+archived, but it is either a deliverable or should be dropped. `dev/formats_SAS_to_R.R` (the private
+INSEE utility) stayed at root untouched. `dev/benchmarks/big_df.rds` is 336 MB of `dev/`'s 368,
+gitignored and regenerable by `gen_big_df.R` — not deleted here.
+
+**Verification.** Code identity proved by parsing: all 55 `R/` files compared against a `git archive
+HEAD` checkout keyed on the name each top-level binding takes — **identical**, so the `R/` edits are
+comment-only and behaviour cannot have changed. Shipped suite **FAIL 0 | PASS 4375 | SKIP 1**;
+`dev/run_dev_tests.R` **FAIL 1 | PASS 5907 | SKIP 3**, that one being the pre-existing
+`test-i18n-sweep.R:167` French msgid gap, at exactly its documented baseline.
+`Rscript dev/generate_jamovi_js.R check` green, which is what proves the two `jamovi/js/` header
+edits landed outside the generated spans. `devtools::document()` clean: `NAMESPACE` and all 112
+`man/*.Rd` **byte-identical** (and `jamovi/i18n/fr.po` was not reverted this run). The
+dangling-pointer sweep is clean on every live file — the archived studies keep their historical paths
+by design, and `dev/review_manual/phase14l_legend.html` is an output path `make_legend_preview.R`
+writes, not a reference. All 141 moves are staged as exact-content renames, so `git log --follow`
+reaches each archived file once committed.
+
+⚠ Not run here: `devtools::check()` — the release gate the maintainer runs.
 
 
 

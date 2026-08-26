@@ -1,7 +1,7 @@
 # PURPOSE: measure what the colour LADDERS actually do on real tables -- how much colour each grades,
 #   how the two sides balance, and whether the same cell lands on the same intensity whichever measure
 #   it is read on.
-# ROLE: the standing evidence for dev/color_ladders_balance.md. Re-run after ANY change to
+# ROLE: the standing evidence behind dev/colors.md section 2. Re-run after ANY change to
 #   `color_breaks`; it needs no fixtures and prints a self-contained report.
 # USAGE: OMP_NUM_THREADS=1 Rscript dev/breaks_balance_probe.R
 suppressMessages(devtools::load_all(".", quiet = TRUE))
