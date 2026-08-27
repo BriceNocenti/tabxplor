@@ -99,6 +99,45 @@ A single repository can serve both: the R package at the root, `_extensions/` be
 - **Inside the webexercises fork — no.** That fork tracks an upstream repository, and the more it carries that upstream does not, the harder every rebase gets. Its scope is exercise widgets: it should keep `webex.css` / `webex.js` and nothing else.
 - **No package, files copied per project — no.** That is exactly today's 769-line `style.css`, four times over.
 
+### 5.1 And the editor extension — one repo or two?
+
+Mechanically, one repo works: an R package wants `DESCRIPTION` at the root, a VS Code extension wants
+`package.json`, and `quarto add user/repo` reads `_extensions/` — three manifests that do not collide
+by name. So the question is not whether it *can* be done but whether it should be, and the answer
+turns on what is actually shared.
+
+**Only the palette is shared. Not code.** The editor consumes it as `editor.tokenColorCustomizations`
+JSON; pkgdown as scss; Quarto as a `.theme` file and a brand file. That is one small data table plus
+generators — which a single repo gives you, and which a generator writing a second repo gives you
+just as well.
+
+**Against one repo, three costs that are paid forever:**
+
+- **Three exclusion lists.** `.Rbuildignore` has to hide `package.json`, `syntaxes/` and
+  `_extensions/`; `.vscodeignore` has to hide `R/`, `man/`, `inst/` and `_extensions/`. Every new
+  directory must be added to two of them, and forgetting one either fails `R CMD check` or ships
+  the R sources to a marketplace.
+- **One version number, three cadences.** A tweak to an editor colour forces an R package bump; a
+  pkgdown fix bumps what the marketplace shows.
+- **The existing extension is not a theme.** `pandoc-span-highlight` injects a TextMate grammar and
+  contributes a render-to-PowerPoint command. Colour is the smallest part of it, and a grammar has
+  no reason to live beside an R package.
+
+⚠ **And the argument that would have justified merging does not hold: VS Code settings have no
+include mechanism.** `editor.tokenColorCustomizations` must sit inline in `settings.json`, so the
+editor side is a paste (or a synced profile) whatever the repository layout is. One repo would not
+make it automatic.
+
+**Recommendation: keep them separate, and make the flow one-directional.** `txtheme` owns the palette
+and *generates* the editor block — the annotation colours and the heading ladder as a ready
+`textMateRules` array — and `pandoc-span-highlight` keeps the grammar and the command, and stops
+owning any colour. A hex is then written in exactly one place and reaches the editor by the same
+generator that reaches the site.
+
+Revisit this only if the editor side ever becomes a **published, colour-only** theme of its own —
+that is, if `txtheme` stops overriding *Starless Monokai Atom* and replaces it. Then the palette and
+the theme are the same artefact, and one repo is the natural home.
+
 ## 6. What you write, per project
 
 The whole point of the framework is this section being short.
@@ -156,12 +195,13 @@ One R file in the package, `build_theme.R`, run by hand when the palette changes
 | `inst/pkgdown/BS5/extra.scss`               | pkgdown: dark bslib variables + dark code theme + `prose.scss` |
 | `_extensions/txtheme/starless-html/*.theme` | Quarto's `syntax-highlighting`                                 |
 | `inst/highlight/code-{light,dark}.scss`     | a pkgdown site naming the style instead of taking the package  |
+| `inst/editor/token-colors.json`             | the editor: a ready `textMateRules` block to paste (see 5.1)   |
 
 **The token mapping is the generator's whole substance.** A VS Code theme is a list of TextMate scopes; skylighting has 31 token types; the mapping between them is one table, written once:
 
 | skylighting                                                  | pkgdown class            | TextMate scope                                    |
 |--------------------------------------------------------------|--------------------------|---------------------------------------------------|
-| Normal                                                       | (`pre code`)             | `source` — **overridden to `#CECDC3`**, see below |
+| Normal                                                       | (`pre code`)             | `source` — **overridden to `#CDCBBC`**, see below |
 | Comment, Annotation, Documentation, CommentVar, RegionMarker | `co` `an` `do` `cv` `re` | `comment`                                         |
 | String, Char, VerbatimString, SpecialString                  | `st` `ch` `vs` `ss`      | `string`                                          |
 | Keyword, ControlFlow, Import, Preprocessor                   | `kw` `cf` `im` `pp`      | `keyword`                                         |
@@ -170,20 +210,68 @@ One R file in the package, `build_theme.R`, run by hand when the palette changes
 | DataType, Attribute                                          | `dt` `at`                | `entity.name.type`, `entity.other.attribute-name` |
 | Variable                                                     | `va`                     | `variable`                                        |
 | Operator                                                     | `op`                     | **see the judgement call below**                  |
+| Attribute (an argument name)                                 | `at`                     | `variable.parameter` — `#fc9867`, see below       |
 | Alert, Error, Warning                                        | `al` `er` `wa`           | `invalid`, `keyword`                              |
 | Information                                                  | `in`                     | `constant.other.placeholder`                      |
 
 ⚠ **One judgement call, and it must be made in the generator, not per project.** downlit tags `(`, `,`, `$` **and** `<-` all as `.op` — 317 of them on one vignette page, the commonest class by far. In the editor the brackets are punctuation grey `#939293` and only `<-` is pink. Pink for all of them makes every bracket shout, so `.op` takes the punctuation grey. It is the one place where the port is *deliberately* not the editor.
 
+⚠ **An R argument name is tagged by one highlighter and not the other.** Pandoc marks `pct =` as
+Attribute (`<span class="at">pct =</span>`), so Quarto colours it from the `.theme` file for free;
+**downlit leaves it as bare text** — only the `=` beside it is tagged — and no CSS selector can reach
+a bare text node. pkgdown therefore needs a dozen lines of JS, shipped with the theme and pulled in
+by `template: includes:`: for each `span.op` whose text is exactly `=`, wrap the identifier in the
+text node before it as `<span class="at">`. Two things make it exact rather than a heuristic — it
+works on the parsed DOM, so it can never touch a string or a comment, and downlit emits each
+operator as one span, so `==`, `<=`, `!=` and `<-` never match. A pandoc block is immune by
+construction: there the `=` lives *inside* the `at` span, so the loop finds nothing to do.
+
 The other deliberate departures, all from the author's own `settings.json`, belong in `overrides.yml`:
 
 | override        | value                            | why                                                                        |
 |-----------------|----------------------------------|----------------------------------------------------------------------------|
-| base text       | `#CECDC3` instead of `#fcfcfa`   | a near-white makes the text louder than the colours it sits among          |
+| base text       | `#CDCBBC` instead of `#fcfcfa`   | a near-white makes the text louder than the colours it sits among          |
 | bold            | `#e6ae02`                        | markdown bold should read as emphasis, not as more text                    |
 | block quote     | `#B7B5AC` italic, rule `#e6ae02` | quotes recede, their rule ties to bold                                     |
 | inline code     | `#fc9867`                        | the theme's own `markup.inline.raw` colour                                 |
 | code background | `#1f1f1f`                        | VS Code's own dark ground, which is what "starless" inherits in the editor |
+
+### 7.1 The palette, decided
+
+The dark half is settled, and it is **one hue**. Everything warm on the page sits at OKLCH hue ~100,
+which is not a coincidence to be admired but the thing that makes a chroma cap work later: the page
+can be desaturated as a whole and stays coherent, because there is only one hue to desaturate.
+
+| role | value | OKLCH |
+|---|---|---|
+| body ink | `#CDCBBC` | 0.840 · 0.020 · 101 |
+| **headings, h1 → h6** | `warm-95-10` | L 0.95 → **0.84**, C 0.10 0.09 0.08 0.08 0.08 0.08, h 100 |
+| | `#FEF1A1 #F5E9A3 #ECE2A4 #E5DB9D #DED396 #D6CC8F` | |
+| the note (`.comment`) | `#c6bf93` | 0.799 · 0.059 · 100 |
+| bold / `.resultat` | `#e6ae02` | 0.781 · 0.160 · 85 |
+| inline code | `#fc9867` | 0.774 · 0.136 · 46 |
+| page | `#21252b` | 0.263 |
+
+Three decisions are worth keeping, because each was arrived at against an alternative that looked
+right and measured wrong:
+
+- **h6 is floored on the ink.** Its L is 0.840 — the body text's own lightness — and nothing goes
+  below. The search started because the previous heading green was *darker* than the prose it led;
+  stating the floor is what stops that returning.
+- **A rung of lightness buys about 0.02 of chroma.** At hue 100 the sRGB ceiling is 0.086 at L 0.96,
+  0.107 at 0.95, 0.128 at 0.94. `warm-95-10` asks for exactly what its top rung can hold; one rung
+  higher and the 0.10 would have been silently clipped, which is what makes a ladder's first step
+  disappear.
+- **The chroma is what separates a heading from a bold run**, not the hue. The closest rung to the
+  gold is h6 at 0.093 in OKLab — comfortable, but a third of the clearance a green ladder had. The
+  gap is −0.08 of chroma against +0.04 of lightness and 15° of hue. ⚠ A global chroma cap therefore
+  erodes exactly that: at a cap of 0.08 the two close to 0.045, near the 0.036 that counts as a
+  collision. The cap and the warm family pull against each other, and the lever that survives a cap
+  is lightness.
+
+The annotation classes keep their published colours and lose their boxes: on a rendered page a chip
+per annotated phrase turns prose into a mosaic, so an annotation is its text colour and nothing else.
+`.comment` alone keeps a fill, because it has to read as something added in the margin.
 
 ## 8. Migration, in order
 
@@ -284,9 +372,9 @@ template:
   theme-dark: arrow-dark          # overridden by pkgdown/extra.scss
   bslib:
     body-bg-dark: "#21252b"
-    body-color-dark: "#CECDC3"    # warm, not #dee2e6: the text must not outshine the colours
+    body-color-dark: "#CDCBBC"    # warm, not #dee2e6: the text must not outshine the colours
     body-emphasis-color-dark: "#e6e6e6"
-    headings-color-dark: "#61afef"
+    headings-color-dark: "#FEF1A1"  # the ladder's h1: only the fallback, see the scss below
     body-tertiary-bg-dark: "#282c34"
     border-color-dark: "#3e4451"
     link-color-dark: "#61afef"
@@ -298,6 +386,16 @@ and `pkgdown/extra.scss`:
 ```scss
 // the code theme: dev/highlight-starless-monokai-atom.scss, copied in whole
 html[data-bs-theme="dark"] pre { background-color: #1f1f1f; }
+
+// the heading ladder (warm-95-10, 7.1). bslib has ONE headings variable, so six levels are six
+// rules -- the variable above is what anything these do not reach falls back to.
+html[data-bs-theme="dark"] h1 { color: #FEF1A1; }
+html[data-bs-theme="dark"] h2 { color: #F5E9A3; }
+html[data-bs-theme="dark"] h3 { color: #ECE2A4; }
+html[data-bs-theme="dark"] h4 { color: #E5DB9D; }
+html[data-bs-theme="dark"] h5 { color: #DED396; }
+html[data-bs-theme="dark"] h6 { color: #D6CC8F; }
+
 html[data-bs-theme="dark"] strong,
 html[data-bs-theme="dark"] b { color: #e6ae02; }
 html[data-bs-theme="dark"] blockquote {
@@ -305,7 +403,13 @@ html[data-bs-theme="dark"] blockquote {
   color: #B7B5AC;
   font-style: italic;
 }
+html[data-bs-theme="dark"] :not(pre) > code {
+  background-color: #fc986733; padding: 3px 5px; border-radius: 5px;
+}
 ```
+
+Plus `dev/annotation_classes.css`, which the theme carries as-is: the twelve annotation classes as
+text colour only, and `.comment` on `#c6bf93`.
 
 ⚠ The `html` prefix on the code-theme rules is load-bearing: pkgdown adds `theme-dark` **after** `pkgdown/extra.scss`, so source order cannot win — only the extra element in the selector can.
 

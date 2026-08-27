@@ -56,6 +56,15 @@ oklch_hex <- function(L, C, H) {
           round(srgb_encode(v[2]) * 255), round(srgb_encode(v[3]) * 255))
 }
 
+# The most chroma sRGB can show at a given lightness and hue. `oklch_hex()` clamps to it silently;
+# this is what lets a caller SEE the clamp instead -- a palette must never record a chroma it does
+# not actually have.
+oklch_maxC <- function(L, H) {
+  lo <- 0; hi <- 0.4
+  for (i in 1:30) { m <- (lo + hi) / 2; if (in_gamut(L, m, H)) lo <- m else hi <- m }
+  lo
+}
+
 rel_lum  <- function(hex) {
   v <- srgb_linear(strtoi(substring(hex, c(2, 4, 6), c(3, 5, 7)), 16L) / 255)
   sum(v * c(0.2126, 0.7152, 0.0722))
