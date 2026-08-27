@@ -36,6 +36,16 @@
 # - Green           H142 / L86  ; H110 to H160
 # - to Violet Red   H325 / L70  ; H285 to H25
 
+# ⚠ THE TWO THEMES ARE NOT ONE PALETTE INVERTED, and the reason is the gamut, not taste. On white the
+# CEILING supplies the ladder -- cyan holds only 0.113 at L 0.66 while violet holds 0.304 at L 0.47 --
+# so the light ramps sit at ~100% of the ceiling at every rung and get x2.7 of chroma for free. On a
+# dark page, once every rung must stay legible, that ceiling is FLAT (cool 0.145-0.176), so the dark
+# ramps have to MANUFACTURE their ladder by holding the faint rungs below a ceiling they could have
+# reached. Hence the two shapes: light descends into ever more chroma; dark arches -- rungs 1-3
+# climbing, rung 4 dropping back to collect the chroma its hue only holds lower down. The dark FILLS
+# invert the light ones the other way, sitting ABOVE the page as light panels rather than below it as
+# tints, because a tint of a dark page is a hole. See dev/dark_palette.md for the whole derivation.
+
 # THE COLOUR RAMPS -- one row per rung of every ramp, so a ladder reads DOWN a column: four rungs of
 # rising intensity, over and under the reference, per channel and theme.
 #   channel  "text" the ink, "bg" the fill, "bg_legend" the bg hues darkened to read as TEXT -- a
@@ -77,23 +87,23 @@ COLOR_RAMPS <- tibble::tribble(
   "bg_legend", "light", "under", 3L,    "#B56E53", "0.61 0.0989  41",
   "bg_legend", "light", "under", 4L,    "#BE4034", "0.55 0.1639  29",
 
-  "text",      "dark",  "over",  1L,    "#028282", "0.55 0.0934 195",   # better for colour blindness
-  "text",      "dark",  "over",  2L,    "#0286b1", "0.58 0.1151 230",
-  "text",      "dark",  "over",  3L,    "#4687d8", "0.62 0.1400 255",
-  "text",      "dark",  "over",  4L,    "#6987ff", "0.66 0.1797 270",
-  "text",      "dark",  "under", 1L,    "#867002", "0.55 0.1124  95",
-  "text",      "dark",  "under", 2L,    "#b87501", "0.62 0.1341  70",
-  "text",      "dark",  "under", 3L,    "#ec6f02", "0.68 0.1792  50",
-  "text",      "dark",  "under", 4L,    "#ff626b", "0.70 0.1906  20",
+  "text",      "dark",  "over",  1L,    "#2ba1a7", "0.65 0.1000 200",   # better for colour blindness
+  "text",      "dark",  "over",  2L,    "#37a8d7", "0.69 0.1200 230",
+  "text",      "dark",  "over",  3L,    "#72a7ff", "0.73 0.1400 260",
+  "text",      "dark",  "over",  4L,    "#9c84ff", "0.69 0.1750 290",
+  "text",      "dark",  "under", 1L,    "#d6a13d", "0.74 0.1300  80",
+  "text",      "dark",  "under", 2L,    "#ec923e", "0.74 0.1450  60",
+  "text",      "dark",  "under", 3L,    "#ff885e", "0.75 0.1550  40",
+  "text",      "dark",  "under", 4L,    "#ff635f", "0.70 0.1900  25",
 
-  "bg",        "dark",  "over",  1L,    "#002828", "0.25 0.0423 195",   # better for colour blindness
-  "bg",        "dark",  "over",  2L,    "#012d3f", "0.28 0.0553 230",
-  "bg",        "dark",  "over",  3L,    "#122e5d", "0.31 0.09   260",
-  "bg",        "dark",  "over",  4L,    "#202e7a", "0.34 0.13   270",
-  "bg",        "dark",  "under", 1L,    "#292100", "0.25 0.051   95",
-  "bg",        "dark",  "under", 2L,    "#3b2300", "0.28 0.0602  70",
-  "bg",        "dark",  "under", 3L,    "#4f2100", "0.31 0.0814  50",
-  "bg",        "dark",  "under", 4L,    "#720119", "0.35 0.1401  20",
+  "bg",        "dark",  "over",  1L,    "#c3ecee", "0.91 0.0425 200",   # better for colour blindness
+  "bg",        "dark",  "over",  2L,    "#b4e0f6", "0.88 0.0550 230",
+  "bg",        "dark",  "over",  3L,    "#b3cffd", "0.85 0.0714 260",
+  "bg",        "dark",  "over",  4L,    "#c1b9fc", "0.82 0.0938 290",
+  "bg",        "dark",  "under", 1L,    "#f3e0c2", "0.91 0.0447  80",
+  "bg",        "dark",  "under", 2L,    "#f6d0b2", "0.88 0.0586  60",
+  "bg",        "dark",  "under", 3L,    "#fabda8", "0.85 0.0765  40",
+  "bg",        "dark",  "under", 4L,    "#fcaaa3", "0.82 0.0979  25",
 )
 
 # The runner-up kept for each rung that has one -- only the two background channels were ever
@@ -164,12 +174,23 @@ palette_8bit <- list(
 #   grey2 : an uncoloured cell in a column with no colour measure -- and, by the same logic, the
 #           SECONDARY tokens of a composite cell (color_secondary_hex()): both mean
 #           "present, but nothing is being said about it"
+#   on_fill : the ink a cell takes when it carries a FILL and no text colour of its own. NA means the
+#           page's own ink already works -- true wherever the fills are a tint of the page, which is
+#           every theme but dark. ⚠ THE DARK FILLS ARE LIGHT PANELS, not tints (see the ramps above),
+#           so `text` (#f1efe0) measures APCA Lc 0 on them: unreadable, not merely faint. The value is
+#           the page's own ground, so a filled cell reads as the page showing through -- Lc 66-87 on
+#           the eight fills, against the light theme's 76 for black on its own.
 #   mark  : a publication palette's effect-size MARKS, which sit where the stars sit but are not an
 #           aside: they REPLACE the colour, so they carry the deviation itself and must read as
 #           strongly as the number. Pure black under every print palette (a superscript glyph at
 #           grey2 is too faint to be seen at all); `grey2` elsewhere, where nothing writes a mark.
 # DARK: pure #FFFFFF on #111111 is a harsh, glare-y contrast for body text, so the pairing is the
-# softer #CECDC3 on #222222. The border stays the text colour, so it softens with it.
+# softer #f1efe0 on #21252b -- Atom One Dark's deeper shade, which is also what the pkgdown site
+# uses. The border stays the text colour, so it softens with it.
+# ⚠ THIS GROUND IS A FALLBACK, not the ground the palette was tuned against being fixed. `tab_css()`
+# writes `background:transparent` for the colour themes, so in an .Rmd, a .qmd or on the site the
+# table follows the PAGE and this hex is never seen; it is the interactive Viewer's ground, and the
+# reference the dark ramps are measured against. The ramps hold from L 0.20 to 0.30 (dev/dark_palette.md).
 tx_chrome_hex <- function(theme = "light") {
   pal <- print_palette_of(tx_palette_theme(theme))
   # On paper the chrome is fixed -- black ink, white ground, no hover -- and the only thing a
@@ -177,15 +198,16 @@ tx_chrome_hex <- function(theme = "light") {
   # for an aside. It owns those two because they must sit beside ITS ink ladder (a palette whose first
   # rung is pure black can use the ordinary grey; one whose first rung is already grey cannot).
   if (!is.null(pal)) return(list(text = "#000000", grey = pal$grey, grey2 = pal$grey2,
-                                 mark = "#000000",
+                                 mark = "#000000", on_fill = NA_character_,
                                  bg = "#ffffff", border = "#000000", hover = "transparent"))
   switch(
     tx_palette_theme(theme),
-    dark = list(text = "#f1efe0", grey = "#919085", grey2 = "#CDCBBC", # text = "#CECDC3", grey = "#707070", grey2 = "#bebebe",
-                mark = "#f1efe0",
-                # former base dark theme texts color: text = "#f0efe5", grey = "#919087", grey2 = "#CECDC3"
-                bg = "#222222", border = "#CDCBBC", hover = "rgba(255,242,204,.10)"),
+    dark = list(text = "#f1efe0", grey = "#919085", grey2 = "#CDCBBC",
+                mark = "#f1efe0", on_fill = "#21252b",
+                # former base dark theme texts color: text = "#f0efe5", grey = "#919087", grey2 = "#CECDC3" ; even before: # text = "#CECDC3", grey = "#707070", grey2 = "#bebebe",
+                bg = "#21252b", border = "#CDCBBC", hover = "rgba(255,242,204,.10)"),
     list(text = "#000000", grey = "#949494", grey2 = "#444444", mark = "#444444",
+         on_fill = NA_character_,
          bg = "#ffffff", border = "#000000", hover = "#FFFCE5")
   )
 }

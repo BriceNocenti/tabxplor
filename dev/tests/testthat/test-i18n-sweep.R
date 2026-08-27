@@ -20,7 +20,7 @@ test_that("French typography: multiply sign + decimal comma (locale-independent)
   # number formatting follows the resolved `lang` directly, NOT the gettext catalog -- so this holds
   # even where translation is impossible. Hence unguarded. (ASCII-escaped per the non-ASCII rule.)
   ct <- tab(fr_data(), race, y, pct = "row", color = TRUE)
-  expect_match(footer_txt(ct, "fr"), "\u00d71,5")      # x1,5
+  expect_match(footer_txt(ct, "fr"), "\u00d71,5")      # x1,5 -- the fill keeps the LOUD breaks
 })
 
 

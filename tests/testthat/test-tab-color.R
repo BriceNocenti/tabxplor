@@ -123,17 +123,19 @@ testthat::test_that("guaranteed_breaks prepends the neutral and drops the top ru
 })
 
 
-testthat::test_that("the background channel keeps a ladder's LOUD rungs only", {
+testthat::test_that("the background channel keeps its LOUD rungs, drawn in the faint slots", {
   # a fill is a secondary, at-a-glance voice: COLOR_SCALES$bg_keep says how many rungs survive there.
+  # Of four, breaks 3 and 4 survive -- the loud ones, as they always did -- but they are DRAWN with
+  # palette slots 1 and 3, so the loudest fill never sits under the text channel's own colour.
   col <- fmt(n = rep(100L, 2), scale = "level_pct", pct_type = "row", pct = c(.6, .5),
              diff = c(.1, 0), ratio = c(1.2, 1))
   col <- set_color(col, c("difference", "ratio"))
   p   <- resolve_color_channel_plans(col)
   testthat::expect_length(p$text$over_breaks, 4L)                 # pct_diff, untouched
-  testthat::expect_equal(p$bg$over_breaks,  c(1.5, 2))            # pct_ratio, two loud rungs
-  testthat::expect_equal(p$bg$under_breaks, c(2, 4))
-  testthat::expect_equal(p$bg$over_slots,   c(0L, 3L, 4L))        # with their OWN fills
-  testthat::expect_equal(p$bg$under_slots,  c(0L, 7L, 8L))
+  testthat::expect_equal(p$bg$over_breaks,  c(1.5, 2))            # pct_ratio 1.1/1.2/1.5/2 -> top two
+  testthat::expect_equal(p$bg$under_breaks, c(2, 4))              # and 1.1/1.25/2/4 -> top two
+  testthat::expect_equal(p$bg$over_slots,   c(0L, 1L, 3L))        # in the FAINT fills, not the loud
+  testthat::expect_equal(p$bg$under_slots,  c(0L, 5L, 7L))
   # the text channel of the same measure keeps every rung
   testthat::expect_equal(fmt_color_plan(col, "text", color = "ratio")$over_breaks,
                          c(1.1, 1.2, 1.5, 2))

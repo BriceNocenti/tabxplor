@@ -1,393 +1,586 @@
-# PURPOSE: choose tabxplor's DARK over/under palette by eye, the way the theme was chosen.
+# PURPOSE: choose tabxplor's DARK palettes by eye, the way the theme was chosen.
 # ROLE: dev tool, .Rbuildignore'd.  Rscript dev/palette_preview.R -> dev/palette_preview.html
-#   Real tabxplor tables on the real dark chrome, each rendered three times -- as seen, and as a
-#   deuteranope and a protanope see it -- with a menu of candidate palettes and the chroma cap.
 #
-# THE DIAGNOSIS THE CANDIDATES ANSWER. Measured against each theme's own page and ink:
+# ✓ THE TEXT PALETTE IS SETTLED: `tuned-by-hand-3`. The exploration that reached it is recorded in
+#   dev/dark_palette.md; the runners-up are kept below only so the choice can be re-read against
+#   them. THIS PAGE IS NOW ABOUT THE BACKGROUND CHANNEL.
 #
-#             text rung 1        text rung 4        fills            what it means
-#   light     L .66  3.0:1 page  L .47  8.1:1 page  L .97-.85       intensity = DARKER = more
-#             7.0:1 from ink     2.6:1 from ink     1.1-1.6:1 page   contrast; the fill is a tint
-#                                                                    and the black ink reads on it
-#   dark      L .55  3.3:1 page  L .66  4.8:1 page  L .25-.34       intensity = lighter, but the
-#             2.8:1 from ink     2.0:1 from ink     1.0-1.3:1 page   whole ramp sits BELOW the ink
+# ⚠ MEASURED IN APCA Lc for text, and in OKLab LIGHTNESS DISTANCE for fills -- and the second is not
+#   pedantry. APCA is a text model and clips below Lc 10, so it reads 0 for a fill that is plainly
+#   visible; it reads 0 for the LIGHT theme's own fills too. A fill is judged against the light
+#   theme's own numbers instead: its fills sit dL 0.029-0.150 from the page, WCAG 1.08-1.59, with
+#   adjacent rungs 0.030-0.059 apart.
 #
-# Three faults, and they are independent:
-#   1. ⚠ EVERY DARK RUNG IS DIMMER THAN THE ORDINARY INK (#CDCBBC, L 0.84). A coloured cell is
-#      therefore less visible than a plain one -- the exact opposite of the package's whole idea, and
-#      what reads as "muddy". In light mode the ramp moves AWAY from the ink (black) into colour.
-#   2. THE LADDER'S DYNAMIC RANGE IS HALVED. Light runs 2.3:1 -> 8.1:1 against its page, a factor of
-#      3.5; dark runs 3.2:1 -> 5.3:1, a factor of 1.6. Rungs are hard to tell apart because there is
-#      not much room between them.
-#   3. THE FILLS ARE DARKER THAN THE PAGE (L 0.25 against 0.263): rung 1 measures 1.0:1 -- literally
-#      invisible. They read as holes, where the light palette's fills read as clean bright shapes.
+# THE BACKGROUND PROBLEM, AND WHY THE DUAL CHANNEL IS THE WHOLE OF IT. Text colour and fill carry
+# DIFFERENT measures (`color = c("difference", "ratio")`), so they move independently: any of the 8
+# text colours can land on any of the 8 fills. A fill must therefore clear EVERY text colour at once,
+# and the text ramp is fixed at L 0.649-0.751. That single band is what both options below negotiate.
 #
-# ⚠ THE CONSTRAINT THAT MAKES THIS INTERESTING: the two channels are independent, so a cell can
-#   carry text colour, a fill, or both -- but the fill is a `.tx-pill` span INSIDE the cell, and the
-#   text colour sits on the cell. A LIGHT fill (the look that works) forces DARK text on it, while an
-#   unfilled cell on a dark page needs LIGHT text. One ramp cannot do both. The `island` candidates
-#   below resolve it in CSS: `td.p2 > .tx-pill` is expressible, so a text slot can take one colour
-#   in the open and another inside a fill.
+#   A. FILLS DARKER THAN THE TEXT -- the faithful mirror of the light theme. Its fills sit 0.03-0.15
+#      BELOW white; these sit 0.04-0.17 ABOVE a page at L 0.263. Text stays readable on them (worst
+#      Lc 30), a bare fill keeps the page's own ink (Lc 82), and no new CSS rule is needed anywhere.
+#      ⚠ The shipped fills are the same idea done backwards: L 0.25-0.35 against a page at 0.263, so
+#      rung 1 is DARKER than the page. That is what reads as a hole rather than a mark.
+#   B. FILLS LIGHTER THAN THE TEXT -- bold panels, WCAG 9-14 against the page, unmissable. Two costs,
+#      both real: every text colour is then dark-on-light at only Lc 14-27, and the page's own ink
+#      (#f1efe0) is INVISIBLE on them (Lc 0), so a cell with a fill and no text slot must repaint its
+#      ink dark. That rule is expressible in html and markdown but must be restated in tab_xl() and
+#      the console, which is why option A is much cheaper to ship.
 #
-# WHAT THE LITERATURE ADDS (searched, not assumed): on a dark ground a saturated colour reads as
-#   more saturated and can vibrate, so dark palettes want 15-25% LESS chroma than their light
-#   equivalents; and luminance -- not hue or chroma -- is what carries legibility for text, while a
-#   filled area needs only 3:1 where text needs 4.5:1. That is why a fill may be far lighter than a
-#   text colour of the "same" rung, and why the lifted candidates cut chroma as they raise L.
+# ⚠ AND THE TRADE INSIDE EACH: the further a fill moves from the page, the more it reads as a shape
+#   and the LESS the text on it does. Bolder is not better here; it is a different bargain.
 
-source("dev/heading_ladders.R")             # oklch_hex(), contrast(), the OKLCH converters
+source("dev/heading_ladders.R")             # oklch_hex(), oklch_maxC(), hex_oklch(), apca(), contrast()
 suppressMessages(pkgload::load_all(".", quiet = TRUE))
 
 options(tabxplor.lang = "en", tabxplor.tab_kable_css = FALSE, tabxplor.cleannames = TRUE,
         tabxplor.tab_kable_tooltips = FALSE)
 Sys.setenv(LANGUAGE = "en")
 
-PAGE <- "#21252b"; INK <- "#CDCBBC"; PANEL <- "#282c34"; BORDER <- "#3e4451"
-HEADS <- c("#FEF1A1", "#F5E9A3", "#ECE2A4", "#E5DB9D", "#DED396", "#D6CC8F")   # warm-95-10
+# === SECTION: the chrome, and the grounds a table can land on =====================================
+# Read from the package, never retyped. The table paints no ground of its own, so the ground varies.
 
-# === SECTION: the candidates ======================================================================
-# Each is four ramps of four rungs, faint -> strong. `pill` is the ink a TEXT slot takes when it
-# sits inside a fill; NULL means the text ramp is readable on the fills as it stands.
+CH     <- tx_chrome_hex("dark")
+INK    <- CH$text                                  # #f1efe0 -- a plain table figure
+ASIDE  <- CH$grey2                                 # #CDCBBC -- the footer, and the page's own prose
+GREYED <- CH$grey                                  # #919085 -- a non-significant cell
+HEADS  <- c("#FEF1A1", "#F5E9A3", "#ECE2A4", "#E5DB9D"); PANEL_INK <- "#CDCBBC"
 
-LIGHT_TEXT_OVER  <- c("#02a5b3", "#0891c9", "#0267c7", "#300dfd")
-LIGHT_TEXT_UNDER <- c("#dca331", "#de7c01", "#dd5301", "#d60103")
-LIGHT_BG_OVER    <- c("#dffcff", "#d7efff", "#cee3ff", "#bbccff")
-LIGHT_BG_UNDER   <- c("#fff4e1", "#ffe6d3", "#ffd7c8", "#ffbaaf")
+GROUNDS <- list(
+  list(id = "atom", hex = "#21252b", nm = "Atom One Dark - the site theme"),
+  list(id = "bs",   hex = "#212529", nm = "Bootstrap 5.3 default dark"),
+  list(id = "tx",   hex = CH$bg,     nm = "tabxplor interactive Viewer"),
+  list(id = "gh",   hex = "#0d1117", nm = "GitHub dark"),
+  list(id = "deep", hex = "#181818", nm = "a deeper ground"))
+REF <- GROUNDS[[1]]$hex
+lift <- function(hex, by) { v <- hex_oklch(hex); oklch_hex(min(v[1] + by, 1), v[2], v[3]) }
 
-# A ramp from OKLCH. ⚠ IT NEVER RECORDS A CHROMA IT DOES NOT HAVE: every rung is clamped to what
-# sRGB can actually show at that lightness and hue, the achieved value is what the sidebar prints,
-# and a clamp is reported at generation time. That is not pedantry here -- it is the whole of fault 3
-# below, and it went unnoticed once already.
-ramp <- function(L, C, H, label = "") {
-  n    <- max(length(L), length(C), length(H))
-  L <- rep_len(L, n); C <- rep_len(C, n); H <- rep_len(H, n)
-  cmax <- vapply(seq_len(n), function(i) oklch_maxC(L[i], H[i]), numeric(1))
-  ok   <- pmin(C, cmax)
-  if (any(ok < C - 1e-4) && nzchar(label))
-    message("  clamped in ", label, ": asked ", paste(sprintf("%.2f", C), collapse = " "),
-            " -> ", paste(sprintf("%.3f", ok), collapse = " "))
-  structure(vapply(seq_len(n), function(i) oklch_hex(L[i], ok[i], H[i]), character(1)),
-            L = L, C = ok, H = H)
+# === SECTION: the text ramps ======================================================================
+# ✓ FINAL, and the hues every fill below is built around: 200/230/260/290 cool, 80/60/40/25 warm.
+#   L .65 .69 .73 .69  C .100 .120 .140 .175   |   L .74 .74 .75 .70  C .130 .145 .155 .190
+TUNED3 <- c("#2ba1a7", "#37a8d7", "#72a7ff", "#9c84ff", "#d6a13d", "#ec923e", "#ff885e", "#ff635f")
+
+# Kept only so the choice can be re-read against them. Everything else the exploration produced is
+# recorded in dev/dark_palette.md and deleted from here.
+TEXTS <- list(
+  list(id = "tuned-3",  nm = "tuned-by-hand-3  ✓ FINAL", hex = TUNED3,
+       note = "the settled dark text palette — even hue gaps, an arch in lightness on both sides, four rungs at 100% of the gamut ceiling, and the widest colour-blind margin of anything measured (0.153–0.233)"),
+  list(id = "tuned-2",  nm = "tuned-by-hand-2", hex = c(TUNED3[1:4], "#c79601", "#e48e25", "#ff8950", "#fe6c66"),
+       note = "the pass before: a warm side at L 0.70–0.75, whose rung 1 sits on the olive that low lightness forces on a yellow"),
+  list(id = "tuned-1",  nm = "tuned-by-hand-1", hex = c(TUNED3[1:4], "#c1983a", "#d98a2e", "#ff8950", "#fe6c66"),
+       note = "the first hand-tuned pass"),
+  list(id = "tuned-p1", nm = "tuned-3 + p1 lift", hex = c("#38ABB0", TUNED3[2:8]),
+       note = "the final palette with p1 lifted L 0.65 → 0.68, the one change that takes the faintest over rung clear of the greyed cell (Lc 41 → 46)"),
+  list(id = "gen-desc", nm = "generated: desc-even", hex = c("#62ECF3", "#4AC6FB", "#6BA1FA", "#9D88FA", "#F4D16E", "#F7AC52", "#FA8C56", "#FB7570"),
+       note = "the best the generator reached: chroma maximised backwards from rung 4, even hue gaps, a descending lightness"),
+  list(id = "gen-flat", nm = "generated: flat-70-even", hex = c("#22B3BA", "#21ACE0", "#679DF8", "#9E8AFA", "#C19D2D", "#DB8E27", "#EF7D43", "#FB6E6B"),
+       note = "the generator's flat-lightness answer — every rung at Lc 45–50"),
+  list(id = "gen-arch", nm = "generated: arch-70-82-70", hex = c("#71AAB0", "#7DBADE", "#9CC7FF", "#7B98FA", "#B29B74", "#DAA478", "#FFAD8D", "#FB6958"),
+       note = "the generator's arch — rungs 1–3 climbing, rung 4 dropping for its chroma"),
+  list(id = "current",  nm = "current (shipped)", hex = c(tx_ramp("text","dark","over"), tx_ramp("text","dark","under")),
+       note = "what tabxplor ships today — the baseline"),
+  list(id = "light",    nm = "the light palette", hex = c(tx_ramp("text","light","over"), tx_ramp("text","light","under")),
+       note = "the light palette on a dark page, for reference"))
+
+# === SECTION: the fills ===========================================================================
+# ⚠ CHROMA IS DELIBERATELY LOW HERE, and that is not a compromise: a filled area is large, so hue
+# separates it at a chroma that would be invisible in a digit. The light theme's own fills run
+# C 0.028-0.082. What a fill must NOT do is compete with the text sitting on it.
+
+HC <- c(200, 230, 260, 290); HW <- c(80, 60, 40, 25)        # the text palette's own hues
+fills <- function(L, C) { one <- function(H) vapply(seq_along(L), function(i)
+    oklch_hex(L[i], min(C[i], oklch_maxC(L[i], H[i])), H[i]), character(1))
+  c(one(HC), one(HW)) }
+
+# ⚠ WHERE A LIGHT FILL'S CHROMA ACTUALLY LIVES, and it is not where the text ramp's did. Up in the
+# light band the EARLY hue is the rich one and everything after it collapses: at L 0.912, h200 holds
+# 0.142 while h230 holds 0.050 and h290 0.044. So RUNG 2 is the bottleneck of a light fill ramp, not
+# rung 4 -- and rung 1 must be held far below its own ceiling or the ramp cannot rise at all.
+# ⚠ Compressing the fill hues toward cyan buys nothing: h225 against h230 at L 0.912 is 0.007.
+# ⚠ THE ONLY LEVER FOR MORE CHROMA IS LOWER LIGHTNESS, AND IT IS PRICED. Measured, every 0.010 of
+# lightness given back buys ~0.006 of chroma at rung 4 and costs ~2 Lc of the worst text-on-fill:
+#
+#     band            rung-4 C   text-on-fill      band            rung-4 C   text-on-fill
+#     .945 -> .846      0.079      15 (= B1)       .915 -> .816      0.094       9
+#     .935 -> .836      0.082      13              .905 -> .806      0.100       7
+#     .925 -> .826      0.088      11
+#
+#   Light's own worst is 14 and APCA calls Lc 15 the threshold of discernible, so the last two rows
+#   put the rare cross-direction pair below anything defensible. They are carried to be seen.
+# ⚠ And at B1's OWN band the chroma can be maxed for nothing: 0.033/0.043/0.056/0.079 against its
+#   0.024/0.040/0.055/0.075, with the worst text-on-fill unchanged at 15. That one is free.
+
+# Chroma maximised backwards from rung 4, `r` the minimum ratio between rungs -- the same rule the
+# text ramp was built with, and what keeps the floor as high as the ramp allows.
+mfill <- function(L, H, r, f = 0.95) {
+  ce <- vapply(seq_along(L), function(i) oklch_maxC(L[i], H[i]), numeric(1))
+  C <- numeric(4); C[4] <- f * ce[4]
+  for (i in 3:1) C[i] <- min(f * ce[i], C[i + 1] / r)
+  vapply(seq_len(4), function(i) oklch_hex(L[i], C[i], H[i]), character(1))
 }
-s4 <- function(a, b) seq(a, b, length.out = 4)
+# `pill_ink` is the ink a text slot takes INSIDE a fill, and the only inversion the design allows:
+# it reaches a cell that has a fill and NO text slot, whose ink would otherwise be the page's own.
+PILL <- "#16181c"
+bmax <- function(id, nm, L, r, note, remap = NULL, veil = NULL, shape = "round")
+  list(id = id, nm = nm, pill = PILL, L = NULL, C = NULL, remap = remap, veil = veil, shape = shape,
+       hex = c(mfill(L, HC, r), mfill(L, HW, r)), note = note)
 
-# ⚠ THE GAMUT IS WHY `lifted` FAILS, and the numbers are worth keeping. Max sRGB chroma:
-#
-#            h205  h235  h255  h270  |  h80   h60   h42   h29     (the light palette's own hues)
-#   L 0.90   0.105 0.057 0.049 0.048 | 0.094 0.065 0.055 0.052
-#   L 0.80   0.137 0.119 0.103 0.100 | 0.166 0.140 0.120 0.115
-#   L 0.70   0.120 0.149 0.160 0.156 | 0.145 0.164 0.199 0.191
-#   L 0.60   0.103 0.127 0.198 0.217 | 0.124 0.141 0.181 0.246
-#
-# The rung-1 hues (cyan, amber) peak around L 0.80-0.85; the rung-4 hues (violet, red) peak around
-# L 0.55-0.60 and are nearly grey by L 0.90. So a ramp that RISES in lightness makes rung 4 the
-# LEAST saturated rung -- which is exactly the "not striking" of `lifted`, and it is a fact of sRGB,
-# not a tuning mistake. Anything that wants rung 4 to be the strongest must keep it low enough to
-# hold chroma: flat lightness with a rising chroma, or a descent.
+# ⚠ TWO WORKAROUNDS FOR THE DUAL CHANNEL, and both are previews of a change that belongs in R.
+#   `remap` -- COLOR_SCALES$bg_keep = 2 keeps the two LOUDEST break rungs on the fill channel, and
+#     draws them with palette slots 3 and 4. The breaks are right; the slots are the problem. Drawing
+#     the same two breaks with slots 1 and 3 lifts the worst text-on-fill from Lc 9 to 16, and with
+#     1 and 2 to 22 -- for nothing, since the ladder still has only two steps to show either way.
+#     ⚠ Here it is a CSS rule scoped to cells that HAVE a text slot, so two things are wrong that a
+#     real implementation would not do: the legend swatches and the bare-fill cells keep the loud
+#     slot. Read the coloured cells, not the footer.
+#   `veil` -- a translucent white box behind the digits ONLY, so the fill keeps its chroma in the
+#     margins while the centre gains lightness. ⚠ CSS composites alpha in gamma-encoded sRGB, so the
+#     lift is not linear in alpha: 0.30 raises the fill by dL 0.056 and buys 10 Lc, 0.40 by 0.074 and
+#     14 Lc. It needs one more element than tab_html() emits, added here by post-processing.
+#     ⚠ `.tx-pill` ships as `padding:1px 4px` (R/tab-css.R:461), which leaves only 4px of chromatic
+#     margin for a veil to sit inside. The veil palettes widen it, or there is nothing left to see.
+#     `shape` -- "round", a flat alpha in a fully rounded box; or "soft", a gradient fading to
+#     transparent at its left and right edges. ⚠ A fading veil needs NO rounding: the fade IS the
+#     shape. ⚠ THE FADE IS HORIZONTAL, and a radial one is a trap: sized in percentages it never
+#     reaches its last stop inside the box (an `ellipse 74%` still carries two thirds of its alpha at
+#     the left edge), so it renders as a flat veil. There is nothing to fade into vertically anyway,
+#     the pill's margin there being 1px. It is also the least portable thing on this page -- a
+#     gradient survives html and nothing else, where a flat alpha has a solid equivalent Excel and
+#     the console could be given.
 
-pal <- function(name, note, text_over, text_under, bg_over, bg_under,
-                pill_ink = NULL, chroma_may_fall = FALSE) {
-  # ⚠ CHECKED, NOT TRUSTED: after clamping, chroma must still RISE with the rung. A ceiling reached
-  # by rung 3 makes rung 4 no stronger, which inverts the very thing the ladder encodes -- and it is
-  # invisible in the asked-for numbers.
-  for (nm in c("text_over", "text_under")) {
-    v <- get(nm); C <- attr(v, "C")
-    if (!chroma_may_fall && !is.null(C) && any(diff(C) < -1e-4))
-      warning("chroma falls in ", name, " ", nm, ": ", paste(sprintf("%.3f", C), collapse = " "),
-              call. = FALSE)
-  }
-  list(name = name, id = gsub("[^A-Za-z0-9-]", "-", name), note = note,
-       text_over = text_over, text_under = text_under, bg_over = bg_over, bg_under = bg_under,
-       pill_ink = pill_ink)
-}
+BGS <- list(
+  list(id = "b1", nm = "B1 panels (as chosen)", pill = PILL,
+       L = c(.945,.912,.879,.846), C = c(.025,.040,.055,.075),
+       note = "the one picked: light panels at WCAG 9–13, worst text-on-fill Lc 15 — level with the light theme's own 14"),
+  bmax("b1m", "B1 band, chroma maxed", c(.945,.912,.879,.846), 1.45,
+       "the same band with every rung pushed to the gamut, at the same ramp shape (×3.1) — chroma up on every rung and the worst text-on-fill unchanged at 15. This one costs nothing"),
+  bmax("b1f", "B1 band, high floor", c(.945,.912,.879,.846), 1.30,
+       "the same band again, the ramp flattened to ×2.4 so the floor comes up to C 0.033 — the most colour in the faint rungs that this lightness allows"),
+  bmax("b2m", "one step deeper", c(.935,.902,.869,.836), 1.45,
+       "the band down 0.010: rung 4 reaches C 0.082, and the worst text-on-fill falls 15 → 13"),
+  bmax("b2f", "one step deeper, high floor", c(.935,.902,.869,.836), 1.30,
+       "the same, ramp flattened — floor C 0.039, rung 4 C 0.082"),
+  bmax("b3m", "two steps deeper", c(.925,.892,.859,.826), 1.45,
+       "rung 4 at C 0.088, and the worst text-on-fill at Lc 11 — now below the light theme's own 14"),
+  bmax("b4f", "the richest that holds", c(.915,.882,.849,.816), 1.30,
+       "the chosen one: floor C 0.043, rung 4 C 0.094 — and a worst text-on-fill of Lc 9, which is what the two rows below exist to repair"),
+  bmax("b4r13", "richest · fill slots 1+3", c(.915,.882,.849,.816), 1.30, remap = c(1L, 3L),
+       "the same fills, with the two loud breaks drawn on slots 1 and 3 instead of 3 and 4 — the ladder still shows two steps, and the worst text-on-fill goes Lc 9 → 16"),
+  bmax("b4r12", "richest · fill slots 1+2", c(.915,.882,.849,.816), 1.30, remap = c(1L, 2L),
+       "the same again on slots 1 and 2 — Lc 22, the quietest fills the palette has, and the two steps are then close together"),
+  bmax("b4v30", "richest · veil 30%", c(.915,.882,.849,.816), 1.30, veil = 0.30,
+       "the loud fills kept, with a fully rounded translucent box behind the digits only: the margins hold their chroma, the centre lifts dL 0.056, and text-on-fill goes Lc 9 → 19"),
+  bmax("b4v40", "richest · veil 40%", c(.915,.882,.849,.816), 1.30, veil = 0.40,
+       "the same at 40% — Lc 23, and the fill starts to read as a ring around the number rather than a block"),
+  bmax("b4s35", "richest · veil 35% soft", c(.915,.882,.849,.816), 1.30, veil = 0.35, shape = "soft",
+       "a veil that FADES to transparent at its edges instead of stopping — no rounding needed, because the fade is the shape. The Lc below is the centre; the outermost digits sit on less of it"),
+  bmax("b4s45", "richest · veil 45% soft", c(.915,.882,.849,.816), 1.30, veil = 0.45, shape = "soft",
+       "the fading veil pushed harder — a gradient can carry more alpha at its centre than a hard-edged box can, because nothing about it shows an edge"),
+  bmax("b4both", "richest · slots 1+3 & veil 30%", c(.915,.882,.849,.816), 1.30,
+       remap = c(1L, 3L), veil = 0.30,
+       "both fixes together: Lc 24, the best dual channel measured here and well past the light theme's own 14"),
+  bmax("b4bs", "richest · slots 1+3 & veil 35% soft", c(.915,.882,.849,.816), 1.30,
+       remap = c(1L, 3L), veil = 0.35, shape = "soft",
+       "both again, with the fading veil"),
+  list(id = "a1", nm = "A1 mirror (darker fills)", pill = NULL,
+       L = c(.30,.34,.38,.43), C = c(.030,.045,.060,.080),
+       note = "the other direction, kept for comparison: the light theme's fills transposed below the page instead of above it"),
+  # ✓ WHAT SHIPS. Its `remap` and `pill` are not preview tricks any more: the package does both --
+  # bg_keep now spreads its breaks into the faint slots (R/fmt_class.R), and tx_chrome_hex()$on_fill
+  # repaints a bare fill's ink. Stated here so the scorecard measures the real thing.
+  list(id = "cur", nm = "current (shipped) ✓", pill = tx_chrome_hex("dark")$on_fill,
+       L = NULL, C = NULL, remap = c(1L, 3L),
+       note = "what tabxplor ships: light panels at WCAG 8–12, the two loud breaks drawn in slots 1 and 3, and a bare fill's ink repainted to the page's own ground"))
 
-H_OVER  <- c(205, 235, 255, 270)      # the light palette's exact hues, kept throughout
-H_UNDER <- c(80, 60, 42, 29)
+BGS <- lapply(BGS, function(b) { if (is.null(b$hex))
+    b$hex <- if (is.null(b$L)) c(tx_ramp("bg","dark","over"), tx_ramp("bg","dark","under"))
+             else fills(b$L, b$C); b })
 
-PALETTES <- list(
-  pal("current", "what tabxplor ships today -- the baseline the others are judged against",
-      c("#028282", "#0286b1", "#4687d8", "#6987ff"), c("#867002", "#b87501", "#ec6f02", "#ff626b"),
-      c("#002828", "#012d3f", "#122e5d", "#202e7a"), c("#292100", "#3b2300", "#4f2100", "#720119")),
+# ⚠ THE TWO CHANNELS ARE INDEPENDENT AXES, and the page keys them on two separate attributes --
+# `data-text` and `data-bg` -- so any text ramp can be seen under any fill. That is not a convenience:
+# it is the thing being judged, since the two channels carry different measures and move apart.
+TXTP <- lapply(TEXTS, function(t) list(id = paste0("t-", t$id), name = t$nm, note = t$note,
+                                       text = t$hex))
+BGP  <- lapply(BGS, function(b) list(id = paste0("b-", b$id), name = b$nm, note = b$note,
+                                     text = TUNED3, bg = b$hex, pill = b$pill,
+                                     remap = b$remap, veil = b$veil, shape = b$shape))
 
-  pal("light-as-is", "the LIGHT palette, unchanged, on the dark page",
-      LIGHT_TEXT_OVER, LIGHT_TEXT_UNDER, LIGHT_BG_OVER, LIGHT_BG_UNDER),
-
-  pal("light-reversed", "the same colours, rungs reversed: the strongest deviation is the lightest",
-      rev(LIGHT_TEXT_OVER), rev(LIGHT_TEXT_UNDER), LIGHT_BG_OVER, LIGHT_BG_UNDER),
-
-  pal(chroma_may_fall = TRUE, "lifted",
-      "lightness rising -- kept to show what the gamut does to rung 4: its chroma FALLS 0.11 to 0.05",
-      ramp(s4(0.78, 0.90), s4(0.11, 0.14), H_OVER,  "lifted over"),
-      ramp(s4(0.78, 0.90), s4(0.11, 0.14), H_UNDER, "lifted under"),
-      ramp(s4(0.33, 0.45), s4(0.04, 0.10), H_OVER),
-      ramp(s4(0.33, 0.45), s4(0.04, 0.10), H_UNDER)),
-
-  # ---- chroma carries the ladder, lightness barely moves --------------------------------------
-  pal("chroma-led", "one lightness band, the rungs told apart by saturation alone",
-      ramp(c(0.78, 0.77, 0.75, 0.74), c(0.07, 0.10, 0.13, 0.15), H_OVER,  "chroma-led over"),
-      ramp(c(0.78, 0.77, 0.75, 0.74), c(0.07, 0.11, 0.15, 0.17), H_UNDER, "chroma-led under"),
-      ramp(c(0.36, 0.40, 0.44, 0.48), c(0.03, 0.05, 0.08, 0.11), H_OVER),
-      ramp(c(0.36, 0.40, 0.44, 0.48), c(0.03, 0.06, 0.09, 0.12), H_UNDER)),
-
-  pal("chroma-led-low", "the same band offset darker, where the rung-4 hues hold more chroma",
-      ramp(c(0.74, 0.73, 0.71, 0.69), c(0.07, 0.11, 0.16, 0.19), H_OVER,  "chroma-led-low over"),
-      ramp(c(0.74, 0.73, 0.71, 0.69), c(0.07, 0.12, 0.17, 0.21), H_UNDER, "chroma-led-low under"),
-      ramp(c(0.34, 0.39, 0.44, 0.49), c(0.03, 0.06, 0.09, 0.13), H_OVER),
-      ramp(c(0.34, 0.39, 0.44, 0.49), c(0.03, 0.06, 0.10, 0.14), H_UNDER)),
-
-  # ---- the light palette's hues, its shape, lifted onto a dark page ------------------------------
-  pal("light-hues-descend",
-      "the light palette's own logic on a dark page: bright and pale to deep and saturated",
-      ramp(c(0.86, 0.80, 0.74, 0.68), c(0.10, 0.12, 0.15, 0.18), H_OVER,  "descend over"),
-      ramp(c(0.86, 0.80, 0.74, 0.68), c(0.11, 0.14, 0.17, 0.20), H_UNDER, "descend under"),
-      ramp(c(0.38, 0.42, 0.46, 0.50), c(0.03, 0.06, 0.09, 0.13), H_OVER),
-      ramp(c(0.38, 0.42, 0.46, 0.50), c(0.03, 0.06, 0.10, 0.14), H_UNDER)),
-
-  pal("light-hues-tilt",
-      "a gentle fall, not an arch -- the lightness only ever descends here (the old name lied)",
-      ramp(c(0.84, 0.79, 0.74, 0.70), c(0.10, 0.12, 0.14, 0.155), H_OVER,  "arch over"),
-      ramp(c(0.84, 0.79, 0.74, 0.70), c(0.11, 0.14, 0.17, 0.190), H_UNDER, "arch under"),
-      ramp(c(0.37, 0.41, 0.45, 0.49), c(0.03, 0.06, 0.09, 0.13), H_OVER),
-      ramp(c(0.37, 0.41, 0.45, 0.49), c(0.03, 0.06, 0.10, 0.14), H_UNDER)),
-
-# ---- the trade curve, and four points on it ------------------------------------------------------
-# Searching the space says two things. First, THE CEILING HAS A MINIMUM EXACTLY WHERE RUNG 4 SITS:
-# at L 0.74 it is 0.128 at h205, 0.148 at h230, and only 0.133 at h270 -- the blue-violet end is the
-# worst place in the cool region for chroma, and it climbs again past it (0.140 at h285, 0.159 at
-# h300). Second, everything else is one trade, and it is worth reading as a curve:
-#
-#   what rung 4 can hold, per lightness it is allowed to sink to
-#     L4     0.84  0.82  0.80  0.78  0.76  0.74  0.72  0.70
-#     h270   .079  .090  .100  .111  .122  .133  .145  .156
-#     h285   .083  .094  .105  .117  .128  .140  .152  .164
-#     h29    .088  .101  .115  .129  .143  .159  .175  .191   (the red end)
-#
-# The ink is L 0.84. So "rung 4 as bright as the ink" costs it two thirds of its chroma, and every
-# 0.02 of lightness given back buys about 0.011. The four below are points on that curve: the same
-# ladder shape (chroma at 42/60/80/100 % of what rung 4 holds), differing only in where they stop.
-  pal("flat-078", "flat at L 0.78 -- the calmest the gamut allows if the chroma must still rise",
-      ramp(0.78, 0.111 * c(.42, .60, .80, 1), H_OVER,  "flat-078 over"),
-      ramp(0.78, 0.129 * c(.42, .60, .80, 1), H_UNDER, "flat-078 under"),
-      ramp(c(0.36, 0.40, 0.44, 0.48), c(0.03, 0.05, 0.08, 0.11), H_OVER),
-      ramp(c(0.36, 0.40, 0.44, 0.48), c(0.03, 0.06, 0.09, 0.12), H_UNDER)),
-
-  pal("tilt-076", "a gentle fall to L 0.76, which buys rung 4 a tenth more chroma",
-      ramp(seq(0.82, 0.76, length.out = 4), 0.122 * c(.42, .60, .80, 1), H_OVER,  "tilt-076 over"),
-      ramp(seq(0.82, 0.76, length.out = 4), 0.143 * c(.42, .60, .80, 1), H_UNDER, "tilt-076 under"),
-      ramp(c(0.36, 0.40, 0.44, 0.48), c(0.03, 0.05, 0.08, 0.11), H_OVER),
-      ramp(c(0.36, 0.40, 0.44, 0.48), c(0.03, 0.06, 0.09, 0.12), H_UNDER)),
-
-  # Only the LAST rung leaves the band. Three rungs stay bright and even; rung 4 dips for the chroma
-  # that makes it read as the strong one -- which is the thing `lifted` could not do.
-  pal("step-4", "three rungs level and bright, and only rung 4 drops for the chroma it needs",
-      ramp(c(0.82, 0.81, 0.79, 0.72), c(0.061, 0.087, 0.116, 0.145), H_OVER,  "step-4 over"),
-      ramp(c(0.82, 0.81, 0.79, 0.72), c(0.073, 0.105, 0.140, 0.175), H_UNDER, "step-4 under"),
-      ramp(c(0.36, 0.40, 0.44, 0.48), c(0.03, 0.05, 0.08, 0.11), H_OVER),
-      ramp(c(0.36, 0.40, 0.44, 0.48), c(0.03, 0.06, 0.09, 0.12), H_UNDER)),
-
-  # The hue offset the search found: rung 4 at 285 instead of 270 is worth about 5% more chroma at
-  # the same lightness, and the family still reads cyan -> blue -> violet.
-  pal("step-4-285", "the same, with rung 4 moved to hue 285 where the ceiling is higher",
-      ramp(c(0.82, 0.81, 0.79, 0.72), c(0.064, 0.091, 0.122, 0.152), c(205, 240, 265, 285),
-           "step-4-285 over"),
-      ramp(c(0.82, 0.81, 0.79, 0.72), c(0.073, 0.105, 0.140, 0.175), c(85, 62, 42, 25),
-           "step-4-285 under"),
-      ramp(c(0.36, 0.40, 0.44, 0.48), c(0.03, 0.05, 0.08, 0.11), c(205, 240, 265, 285)),
-      ramp(c(0.36, 0.40, 0.44, 0.48), c(0.03, 0.06, 0.09, 0.12), c(85, 62, 42, 25))),
-
-  # ---- light boxes, ONE text ramp ---------------------------------------------------------------
-  # ⚠ The hard constraint: a rung has ONE text colour, or the legend cannot be read. So the ramp has
-  # to work in the open AND on a light fill, which puts it in the middle band -- bright enough
-  # against the page (L 0.263), dark enough against a fill at L 0.88+. The only inversion allowed is
-  # the ink of a cell that has a fill and NO text slot, which otherwise takes the page's own ink.
-  pal("boxes-mid", "light fills, one mid text ramp that reads on both, dark ink on bare fills",
-      ramp(c(0.72, 0.69, 0.66, 0.63), c(0.11, 0.14, 0.18, 0.21), H_OVER,  "boxes-mid over"),
-      ramp(c(0.72, 0.69, 0.66, 0.63), c(0.12, 0.15, 0.19, 0.23), H_UNDER, "boxes-mid under"),
-      LIGHT_BG_OVER, LIGHT_BG_UNDER, pill_ink = "#1b1f24"),
-
-  pal("boxes-flat", "the same idea with a flat text lightness: saturation alone ranks the rungs",
-      ramp(c(0.69, 0.68, 0.67, 0.66), c(0.09, 0.13, 0.16, 0.185), H_OVER,  "boxes-flat over"),
-      ramp(c(0.69, 0.68, 0.67, 0.66), c(0.10, 0.14, 0.18, 0.210), H_UNDER, "boxes-flat under"),
-      LIGHT_BG_OVER, LIGHT_BG_UNDER, pill_ink = "#1b1f24"),
-
-  pal("boxes-soft", "fills a shade deeper so the text ramp can sit higher and stay readable",
-      ramp(c(0.78, 0.75, 0.72, 0.69), c(0.10, 0.13, 0.17, 0.20), H_OVER,  "boxes-soft over"),
-      ramp(c(0.78, 0.75, 0.72, 0.69), c(0.11, 0.14, 0.18, 0.22), H_UNDER, "boxes-soft under"),
-      ramp(c(0.90, 0.88, 0.86, 0.84), c(0.04, 0.05, 0.06, 0.07), H_OVER),
-      ramp(c(0.90, 0.88, 0.86, 0.84), c(0.04, 0.05, 0.06, 0.07), H_UNDER),
-      pill_ink = "#1b1f24")
-)
-
-# === SECTION: colour-vision simulation ============================================================
-# Machado et al. (2009), through colorspace's matrices -- the same route dev/color_palette_tools.R
-# takes. Deutan and protan only: together they are ~8% of men, tritan is ~0.01%.
-
-# ⚠ The matrix is defined in LINEAR RGB, so the sRGB gamma has to come off and go back on -- the
-# same steps dev/color_palette_tools.R's simulate_cvd_farver() takes. Applying it to gamma-encoded
-# values looks plausible and is wrong.
-# ⚠ And `pmax(0, m)` drops a matrix's dim (the scalar is the first argument); `pmax(m, 0)` keeps it.
+# === SECTION: colour vision =======================================================================
+# Machado et al. (2009) through colorspace. ⚠ The matrices are defined in LINEAR RGB, so the sRGB
+# gamma comes off and goes back on. ⚠ And `pmax(0, m)` drops a matrix's dim where `pmax(m, 0)` keeps it.
 cvd <- function(hex, type) {
   M   <- colorspace::interpolate_cvd_transform(
     switch(type, deutan = colorspace::deutanomaly_cvd, protan = colorspace::protanomaly_cvd), 1)
   lin <- srgb_linear(farver::decode_colour(hex, to = "rgb") / 255)
-  out <- srgb_encode(as.matrix(lin) %*% t(M))
-  farver::encode_colour(round(pmin(pmax(out, 0), 1) * 255), from = "rgb")
+  farver::encode_colour(round(pmin(pmax(srgb_encode(as.matrix(lin) %*% t(M)), 0), 1) * 255), from = "rgb")
+}
+dE_ok <- function(a, b) { u <- hex_oklch(a); v <- hex_oklch(b)
+  ua <- c(u[2]*cos(u[3]*pi/180), u[2]*sin(u[3]*pi/180))
+  va <- c(v[2]*cos(v[3]*pi/180), v[2]*sin(v[3]*pi/180))
+  sqrt((u[1]-v[1])^2 + sum((ua-va)^2)) }
+
+# === SECTION: the checks ==========================================================================
+# ⚠ The text checks do NOT include "the |Lc| rises": the light palette's own falls 43 -> 14 as its
+# deviation grows. A ladder is a CHROMA ramp whose rungs must each stay legible. Only "rung 1 clears
+# grey" is correctness (dev/colors.md 3.2 rule 3); the rest are the design floors to argue about.
+TCHECKS <- c("rung 1 clears grey", "rung 4 stays readable", "chroma never falls",
+             "direction survives CVD", "rungs separable")
+BCHECKS <- c("reads as a shape (light: dL 0.029)", "fills separable (light: 0.030)",
+             "text on fill no worse than light (Lc 14)", "a bare fill's ink works (Lc 45)")
+
+tscore <- function(p, ground) {
+  tx <- list(p$text[1:4], p$text[5:8])
+  lc <- lapply(tx, function(v) abs(vapply(v, apca, 1, bg = ground)))
+  cc <- lapply(tx, function(v) vapply(v, function(h) hex_oklch(h)[2], 1))
+  gap <- vapply(1:4, function(i) min(
+    dE_ok(cvd(p$text[i], "deutan"), cvd(p$text[i+4], "deutan")),
+    dE_ok(cvd(p$text[i], "protan"), cvd(p$text[i+4], "protan"))), numeric(1))
+  step <- unlist(lapply(tx, function(v) vapply(1:3, function(i) dE_ok(v[i], v[i+1]), numeric(1))))
+  list(lc = lc, gap = gap, step = step,
+       ok = c(all(vapply(lc, function(x) x[1] >= abs(apca(GREYED, ground)) + 3, TRUE)),
+              all(vapply(lc, function(x) min(x) >= 35, TRUE)),
+              all(vapply(cc, function(x) all(x[-1] / x[-4] > 1.02), TRUE)),
+              all(gap >= 0.08), all(step >= 0.040)))
+}
+# ⚠ A fill is measured by LIGHTNESS DISTANCE from the page, not by APCA (see the header), and EVERY
+# BAR BELOW IS THE LIGHT THEME'S OWN NUMBER -- rung 1 sits dL 0.029 from its page, adjacent rungs
+# 0.030 apart, and its worst text-on-fill is Lc 14 (its rung-1 amber #dca331 on its rung-4 fill
+# #ffbaaf). ⚠ That last one is worth sitting with: the dual channel is ALREADY weak in the shipped
+# light theme, so "no worse than light" is a low bar and the figure itself is what to read. A bare
+# fill's ink is held to Lc 45, the APCA floor for large text, because nothing else protects it.
+# ⚠ CSS composites alpha in gamma-encoded sRGB, not in linear light and not in OKLab.
+over_srgb <- function(top, a, bot) { t <- strtoi(substring(top, c(2,4,6), c(3,5,7)), 16L)
+  b <- strtoi(substring(bot, c(2,4,6), c(3,5,7)), 16L)
+  sprintf("#%02X%02X%02X", round(a*t[1]+(1-a)*b[1]), round(a*t[2]+(1-a)*b[2]), round(a*t[3]+(1-a)*b[3])) }
+# What a text colour actually sits on: the fill slots the dual channel really uses, veiled if asked.
+dual_fills <- function(p) { i <- if (is.null(p$remap)) c(3L, 4L) else p$remap
+  f <- p$bg[c(i, i + 4L)]
+  if (is.null(p$veil)) f else vapply(f, function(b) over_srgb("#ffffff", p$veil, b), character(1)) }
+
+bscore <- function(p, ground) {
+  gl <- hex_oklch(ground)[1]; fl <- vapply(p$bg, function(h) hex_oklch(h)[1], 1)
+  dl <- abs(fl - gl); adj <- min(abs(diff(fl[1:4])), abs(diff(fl[5:8])))
+  onf <- min(abs(outer(p$text, dual_fills(p), Vectorize(function(t, b) apca(t, b)))))
+  bare <- min(abs(vapply(p$bg, function(b) apca(if (is.null(p$pill)) INK else p$pill, b), 1)))
+  list(dl = dl, adj = adj, onf = onf, bare = bare,
+       wcag = vapply(p$bg, contrast, 1, b = ground),
+       ok = c(min(dl) >= 0.029, adj >= 0.030, onf >= 14, bare >= 45))
 }
 
 # === SECTION: the stylesheet ======================================================================
-# ⚠ SPECIFICITY: tab_css()'s dark layer is `[data-bs-theme=dark] .tabxplor-tab .p1` (0,3,0). A
-# candidate's rules carry the page attribute plus `html`, so (0,3,1) -- always higher, whatever the
-# source order. The CVD copies add one class more again, so they win inside their own wrapper.
+# ⚠ SPECIFICITY: tab_css()'s dark layer is `[data-bs-theme=dark] .tabxplor-tab .p1` (0,3,0). These
+# rules carry the page attribute plus `html`, so (0,3,1) -- always higher, whatever the source order.
+TXT_CLS <- c(paste0(".p", 1:4), paste0(".m", 1:4))
+BG_CLS  <- c(paste0(".o", 1:4), paste0(".u", 1:4))
 
-slot_css <- function(p, prefix) {
-  txt <- c(paste0(".p", 1:4), paste0(".m", 1:4))
-  bgc <- c(paste0(".o", 1:4), paste0(".u", 1:4))
-  out <- c(
-    paste0(prefix, " .tabxplor-tab ", txt, "{color:", c(p$text_over, p$text_under), ";}"),
-    paste0(prefix, " .tabxplor-tab ", bgc,
-           "{background-color:", c(p$bg_over, p$bg_under), ";}"))
-  # ⚠ THE ONLY INVERSION ALLOWED. A rung has ONE text colour or its legend cannot be read, so no rule
-  # here repaints a text slot. This one reaches only a cell that has a FILL AND NO TEXT SLOT, whose
-  # ink would otherwise be the page's own -- unreadable once the fill is light.
-  if (!is.null(p$pill_ink))
-    out <- c(out, paste0(prefix, " .tabxplor-tab td",
-                         paste0(":not(", txt, ")", collapse = ""),
-                         " .tx-pill{color:", p$pill_ink, ";}"))
+text_css <- function(p, prefix) paste0(prefix, " .tabxplor-tab ", TXT_CLS, "{color:", p$text, ";}",
+                                       collapse = "\n")
+bg_css <- function(p, prefix) {
+  out <- paste0(prefix, " .tabxplor-tab ", BG_CLS, "{background-color:", p$bg, ";}")
+  # ⚠ THE ONE INVERSION THE DESIGN ALLOWS. A rung has ONE text colour or its legend cannot be read,
+  # so no rule here repaints a text slot. This reaches only a cell that has a FILL AND NO TEXT SLOT,
+  # whose ink would otherwise be the page's own -- invisible once the fill is light.
+  if (!is.null(p$pill))
+    out <- c(out, paste0(prefix, " .tabxplor-tab td", paste0(":not(", TXT_CLS, ")", collapse = ""),
+                         " .tx-pill{color:", p$pill, ";}"))
+  # The remap reaches only a fill INSIDE a cell that has a text slot -- which is the dual channel.
+  if (!is.null(p$remap)) {
+    has_txt <- paste0("td:is(", paste(TXT_CLS, collapse = ","), ")")
+    out <- c(out, paste0(prefix, " .tabxplor-tab ", has_txt, " .tx-pill", c(".o3", ".o4", ".u3", ".u4"),
+                         "{background-color:", p$bg[c(p$remap, p$remap + 4L)], ";}"))
+  }
+  if (!is.null(p$veil)) {
+    a <- format(p$veil)
+    out <- c(out,
+      # ⚠ WIDER, NOT ROUNDER. The fill keeps the shape tab_css() gives it (border-radius 4px, a near
+      # rectangle); only its padding grows, or the veil has no chromatic margin to sit inside.
+      paste0(prefix, " .tabxplor-tab .tx-pill{padding:1px 7px;margin:0 -7px;}"),
+      paste0(prefix, " .tabxplor-tab .tx-lift{",
+        if (identical(p$shape, "soft"))
+          # ⚠ A HORIZONTAL fade, and a radial one is wrong here. The pill's margin is 7px at the
+          # sides and 1px above and below, so there is nothing to fade into vertically. And a radial
+          # gradient sized in percentages never reaches its last stop inside the box: at the left
+          # edge of an `ellipse 74%` it still carries two thirds of its alpha, which is why it read
+          # as a flat veil rather than a fading one.
+          paste0("padding:0 4px;margin:0 -4px;background:linear-gradient(90deg,",
+                 "rgba(255,255,255,0) 0%,rgba(255,255,255,", a, ") 20%,rgba(255,255,255,", a,
+                 ") 80%,rgba(255,255,255,0) 100%);}")
+        else paste0("padding:0 3px;margin:0 -3px;border-radius:999px;background:rgba(255,255,255,",
+                    a, ");}")))
+  }
   paste(out, collapse = "\n")
 }
-
-palette_css <- function(p) paste(c(
-  slot_css(p, sprintf('html[data-pal="%s"]', p$id)),
+axis_css <- function(p, attr, fn) paste(c(
+  fn(p, sprintf('html[data-%s="%s"]', attr, p$id)),
   vapply(c("deutan", "protan"), function(t) {
-    q <- p
-    for (f in c("text_over", "text_under", "bg_over", "bg_under"))
-      q[[f]] <- cvd(q[[f]], t)
-    if (!is.null(q$pill_ink)) q$pill_ink <- cvd(q$pill_ink, t)
-    slot_css(q, sprintf('html[data-pal="%s"] .cvd-%s', p$id, t))
+    q <- p; q$text <- cvd(q$text, t)
+    if (!is.null(q$bg)) q$bg <- cvd(q$bg, t)
+    if (!is.null(q$pill)) q$pill <- cvd(q$pill, t)
+    fn(q, sprintf('html[data-%s="%s"] .cvd-%s', attr, p$id, t))
   }, character(1))), collapse = "\n")
 
-# What the sidebar prints: the whole selected scale, as OKLCH and as measured. `L`/`C`/`H` come off
-# the ramp itself, so a clamped rung shows the chroma it HAS, never the one that was asked for.
-scale_rows <- function(p) {
-  one <- function(v, slot) {
-    L <- attr(v, "L"); C <- attr(v, "C"); H <- attr(v, "H")
-    vapply(seq_along(v), function(i) sprintf(
-      "<tr><td>%s%d</td><td class='sw'><span style='background:%s'></span></td><td><code>%s</code></td>%s<td>%.1f</td></tr>",
-      slot, i, v[i], v[i],
-      if (is.null(L)) "<td colspan=3 class='na'>fixed</td>" else
-        sprintf("<td>%.2f</td><td>%.3f</td><td>%.0f</td>", L[i], C[i], H[i]),
-      contrast(v[i], if (slot %in% c("p", "m")) PAGE else INK)), character(1))
-  }
-  paste0("<table class='scale'><tr><th>slot</th><th></th><th>hex</th><th>L</th><th>C</th>",
-         "<th>h</th><th>ratio</th></tr>",
-         paste(c(one(p$text_over, "p"), one(p$text_under, "m"),
-                 one(p$bg_over, "o"),   one(p$bg_under, "u")), collapse = ""), "</table>")
+# === SECTION: the sidebar =========================================================================
+
+lc_spans <- function(hexes) vapply(hexes, function(h) paste0(vapply(GROUNDS, function(g)
+  sprintf('<span class="lc %s">%.0f</span>', g$id, abs(apca(h, g$hex))), character(1)),
+  collapse = ""), character(1))
+
+text_card <- function(p) {
+  row <- function(v, slot, bg) vapply(seq_along(v), function(i) { o <- hex_oklch(v[i])
+    sprintf("<tr><td>%s%d</td><td class='sw'><span style='background:%s'></span></td><td><code>%s</code></td><td>%.2f</td><td>%.3f</td><td>%.0f</td><td class='lcc'>%s</td></tr>",
+      slot, i, v[i], v[i], o[1], o[2], o[3], if (bg) sprintf("%.3f", abs(o[1] - hex_oklch(REF)[1]))
+                                             else lc_spans(v[i])) }, character(1))
+  ts <- tscore(p, REF)
+  paste0("<table class='scale'><tr><th>slot</th><th></th><th>hex</th><th>L</th><th>C</th><th>h</th>",
+         "<th>|Lc|</th></tr>",
+         paste(c(row(p$text[1:4], "p", FALSE), row(p$text[5:8], "m", FALSE)), collapse = ""),
+         "</table>", chk_div(TCHECKS, ts$ok),
+         gamut_svg(p$text[1:4], "text over"), gamut_svg(p$text[5:8], "text under"))
+}
+chk_div <- function(nms, ok) sprintf("<div class='chk'>%s</div>", paste(sprintf(
+  '<span class="%s">%s %s</span>', ifelse(ok, "y", "n"), ifelse(ok, "&check;", "&cross;"), nms),
+  collapse = ""))
+# ⚠ The fill card's text-on-fill figure is measured against the SETTLED text ramp, not against
+# whichever ramp the other menu shows: the text palette is final, and a metric that moved with both
+# menus would say nothing about the fill.
+bg_card <- function(p) {
+  row <- function(v, slot) vapply(seq_along(v), function(i) { o <- hex_oklch(v[i])
+    sprintf("<tr><td>%s%d</td><td class='sw'><span style='background:%s'></span></td><td><code>%s</code></td><td>%.2f</td><td>%.3f</td><td>%.0f</td><td class='lcc'>%.3f</td></tr>",
+      slot, i, v[i], v[i], o[1], o[2], o[3], abs(o[1] - hex_oklch(REF)[1])) }, character(1))
+  bs <- bscore(p, REF)
+  paste0("<table class='scale'><tr><th>fill</th><th></th><th>hex</th><th>L</th><th>C</th><th>h</th>",
+         "<th>dL</th></tr>",
+         paste(c(row(p$bg[1:4], "o"), row(p$bg[5:8], "u")), collapse = ""), "</table>",
+         chk_div(BCHECKS, bs$ok),
+         sprintf("<div class='num'>WCAG %s<br>text on fill <b>Lc %.0f</b>%s%s<br>a bare fill's ink <b>Lc %.0f</b>%s</div>",
+                 paste(sprintf("%.2f", bs$wcag[1:4]), collapse = " "), bs$onf,
+                 if (is.null(p$remap)) "" else sprintf(" &middot; slots %s", paste(p$remap, collapse = "+")),
+                 if (is.null(p$veil)) "" else sprintf(" &middot; veil %.0f%% %s", 100 * p$veil, p$shape),
+                 bs$bare, if (is.null(p$pill)) "" else sprintf(" (repainted %s)", p$pill)))
+}
+
+# === SECTION: the gamut curve =====================================================================
+# The oklch.com reading: for each rung's hue, the chroma sRGB holds at every lightness, with the
+# rung's own point on it. Headroom, the cusp it is near, and the floor it must clear, in one glance.
+CURVE_L <- seq(0.46, 0.97, by = 0.01)
+gamut_svg <- function(v, lab, w = 272, h = 132) {
+  o <- vapply(v, hex_oklch, numeric(3))
+  x <- function(l) 24 + (l - 0.46) / 0.51 * (w - 32); y <- function(c) h - 18 - c / 0.32 * (h - 30)
+  paste0('<svg class="gam" viewBox="0 0 ', w, ' ', h, '" width="100%">',
+    sprintf('<line x1="24" y1="%.1f" x2="%d" y2="%.1f" stroke="%s" stroke-width=".6" opacity=".25"/>',
+            y(0.1), w-8, y(0.1), PANEL_INK),
+    sprintf('<line x1="24" y1="%.1f" x2="%d" y2="%.1f" stroke="%s" stroke-width=".6" opacity=".25"/>',
+            y(0.2), w-8, y(0.2), PANEL_INK),
+    paste(vapply(seq_along(v), function(i) sprintf(
+      '<polyline points="%s" fill="none" stroke="%s" stroke-width="1.1" opacity=".45"/>',
+      paste(sprintf("%.1f,%.1f", x(CURVE_L),
+        y(vapply(CURVE_L, oklch_maxC, numeric(1), H = o[3, i]))), collapse = " "), v[i]),
+      character(1)), collapse = ""),
+    paste(sprintf('<circle cx="%.1f" cy="%.1f" r="3.4" fill="%s" stroke="%s" stroke-width="1"/>',
+                  x(o[1, ]), y(o[2, ]), v, PANEL_INK), collapse = ""),
+    sprintf('<text x="2" y="%.1f" class="ax">.2</text><text x="2" y="%.1f" class="ax">.1</text>',
+            y(0.2)+3, y(0.1)+3),
+    sprintf('<text x="24" y="%d" class="ax">L .46</text><text x="%d" y="%d" class="ax">.97</text>',
+            h-6, w-24, h-6),
+    sprintf('<text x="80" y="12" class="ax">%s</text>', lab), '</svg>')
+}
+
+# === SECTION: the comparison strips ================================================================
+# Coloured cells are BOLD, because the dark text palette is bold on all eight slots and a strip that
+# was not would flatter it.
+NUM <- list(over = c("+5.2", "+11.4***", "+21.7***", "+32.5***"),
+            under = c("&minus;5.2", "&minus;11.4***", "&minus;21.7***", "&minus;32.5***"))
+
+text_row <- function(p) {
+  one <- function(v, lab) paste(sprintf('<span class="sc" style="color:%s">%s</span>', v, lab), collapse = "")
+  fl <- vapply(GROUNDS, function(g) { ok <- tscore(p, g$hex)$ok
+    sprintf('<span class="flag %s">%s</span>', g$id, if (all(ok)) "" else paste0("&cross;", sum(!ok)))
+  }, character(1))
+  sprintf(paste0('<div class="srow text" data-go="%s"><span class="nm">%s</span><span class="flags">%s</span>',
+    '%s<span class="sep"></span>%s<span class="sep"></span>',
+    '<span class="sc rf" style="color:%s">12.0</span><span class="sc rf" style="color:%s">12.0</span></div>'),
+    p$id, p$name, paste(fl, collapse = ""),
+    one(p$text[1:4], NUM$over), one(p$text[5:8], NUM$under), INK, GREYED)
+}
+# A fill is judged with a figure ON it -- both the text ramp's own colour, and the bare-cell ink.
+bg_row <- function(p) {
+  df <- dual_fills(p)          # what a text colour actually lands on, once the fixes are applied
+  cell <- function(i) sprintf('<span class="bc" style="background:%s"><b style="color:%s">%s</b> <i style="color:%s">12.0</i></span>',
+    if (i <= 4) df[min(i, 2)] else df[min(i - 4, 2) + 2], p$text[i],
+    if (i <= 4) "+21.7" else "&minus;21.7", if (is.null(p$pill)) INK else p$pill)
+  fl <- vapply(GROUNDS, function(g) { ok <- bscore(p, g$hex)$ok
+    sprintf('<span class="flag %s">%s</span>', g$id, if (all(ok)) "" else paste0("&cross;", sum(!ok)))
+  }, character(1))
+  sprintf('<div class="srow bg" data-go="%s"><span class="nm">%s</span><span class="flags">%s</span>%s<span class="sep"></span>%s</div>',
+          p$id, p$name, paste(fl, collapse = ""),
+          paste(vapply(1:4, cell, character(1)), collapse = ""),
+          paste(vapply(5:8, cell, character(1)), collapse = ""))
 }
 
 # === SECTION: the tables ==========================================================================
 
 gss <- gss_cat_data_formatting()
 tabs <- list(
-  # Four row variables against four column ones, so every rung of both directions actually appears:
-  # measured on this call, p1:21 p2:16 p3:4 p4:14 and m1:18 m2:19 m3:4 m4:13. A single pair reaches
-  # only the first three rungs, which is no test of a ladder.
-  "Text channel only -- every rung, both directions" =
-    tab(gss, c(race, rincome, marital, relig), c(party3, married, income25k, black),
-        pct = "row", color = "difference"),
-  "Both channels -- deviation on the text, ratio on the fill" =
-    tab(gss, c(race, rincome), c(party3, relig), pct = "row",
-        color = c("difference", "ratio"), ref = 1),
-  # The background channel ALONE: no text slot anywhere, so every filled cell shows the fill against
-  # the page and the ink that sits on it -- which is the one reading the `pill_ink` rule changes.
-  "Background channel only -- the fills, with no text colour to help them" =
-    tab(gss, c(race, rincome), c(party3, relig), pct = "row",
-        color = c("no", "difference"), ref = 1),
+  dual = list("Both channels &mdash; deviation on the text, ratio on the fill" =
+                tab(gss, c(race, rincome), c(party3, relig), pct = "row",
+                    color = c("difference", "ratio"), ref = 1)),
+  bg   = list("The fills alone, with no text colour to help them" =
+                tab(gss, c(race, rincome), c(party3, relig), pct = "row",
+                    color = c("no", "difference"), ref = 1)),
+  text = list("Every rung, both directions" =
+                tab(gss, c(race, rincome, marital, relig), c(party3, married, income25k, black),
+                    pct = "row", color = "difference"),
+              "Greyed where not significant, so the ladder is read beside the grey it must out-rank" =
+                tab(gss, relig, c(married, income25k), pct = "row", levels = "first",
+                    color = "difference", color_signif = "grey_non_signif")))
 
-  "Greyed where not significant, so the ladder is read beside a grey" =
-    tab(gss, relig, c(married, income25k), pct = "row", levels = "first",
-        color = "difference", color_signif = "grey_non_signif"))
-
-one_table <- function(html, title) paste0(
-  '<h3>', title, '</h3>\n', html,
-  '\n<details class="cvd"><summary>colour vision &mdash; deuteranopia and protanopia</summary>',
-  '<div class="trio">',
-  '<div class="cvd-deutan"><div class="lab">deuteranopia &mdash; ~6% of men</div>', html, '</div>',
-  '<div class="cvd-protan"><div class="lab">protanopia &mdash; ~2% of men</div>', html, '</div>',
-  '</div></details>')
-
-tables_html <- paste(vapply(names(tabs), function(nm)
-  one_table(as.character(tab_html(tabs[[nm]])), nm), character(1)), collapse = "\n")
+one_table <- function(html, title) paste0('<h3>', title, '</h3>\n', html,
+  '\n<details class="cvd"><summary>colour vision &mdash; deuteranopia and protanopia</summary><div class="trio">',
+  '<div class="cvd-deutan"><div class="lab">deuteranopia</div>', html, '</div>',
+  '<div class="cvd-protan"><div class="lab">protanopia</div>', html, '</div></div></details>')
+# ⚠ tab_html() emits <td class="p4"><span class="tx-pill o3">75%</span></td> -- one box, not two. The
+# veil needs an inner element, so one is added HERE, and only where a fill sits under a text colour.
+# It is inert until a palette gives .tx-lift a background, so every palette shares the same markup.
+add_lift <- function(h) gsub(
+  '(<td class="[^"]*\\b[pm][1-4]\\b[^"]*"><span class="tx-pill [ou][1-4]">)([^<]*)(</span>)',
+  '\\1<span class="tx-lift">\\2</span>\\3', h, perl = TRUE)
+render <- function(l) paste(vapply(names(l), function(nm)
+  one_table(add_lift(as.character(tab_html(l[[nm]]))), nm), character(1)), collapse = "\n")
 
 # === SECTION: the page ============================================================================
 
-opt <- paste0('<option value="', vapply(PALETTES, function(p) p$id, character(1)), '"',
-              c(" selected", rep("", length(PALETTES) - 1)), '>',
-              vapply(PALETTES, function(p) p$name, character(1)), '</option>', collapse = "")
+menu <- function(lst, sel) paste0('<option value="', vapply(lst, function(p) p$id, character(1)),
+  '"', ifelse(vapply(lst, function(p) p$id, character(1)) == sel, " selected", ""), '>',
+  vapply(lst, function(p) p$name, character(1)), '</option>', collapse = "")
+blocks <- function(lst, cls, fn) paste0('<div class="', cls, '" data-for="',
+  vapply(lst, function(p) p$id, character(1)), '">', vapply(lst, fn, character(1)), '</div>',
+  collapse = "")
+SEL_T <- "t-tuned-3"; SEL_B <- "b-b4both"
 
-notes <- paste0('<div class="pnote" data-for="', vapply(PALETTES, function(p) p$id, character(1)),
-                '">', vapply(PALETTES, function(p) p$note, character(1)), '</div>', collapse = "")
+gopt <- paste0('<option value="', vapply(GROUNDS, function(g) g$id, character(1)), '">',
+               vapply(GROUNDS, function(g) paste0(g$hex, " ", g$nm), character(1)), '</option>', collapse = "")
 
-scales <- paste0('<div class="pscale" data-for="', vapply(PALETTES, function(p) p$id, character(1)),
-                 '">', vapply(PALETTES, scale_rows, character(1)), '</div>', collapse = "")
+ground_css <- paste(vapply(GROUNDS, function(g) sprintf(paste0(
+  'html[data-ground="%1$s"] body{background:%2$s;}\nhtml[data-ground="%1$s"] .panel{background:%3$s;}\n',
+  'html[data-ground="%1$s"] .lc.%1$s,html[data-ground="%1$s"] .flag.%1$s{display:inline;}'),
+  g$id, g$hex, lift(g$hex, 0.03)), character(1)), collapse = "\n")
 
 html <- paste0('<!doctype html>
-<html lang="en" data-bs-theme="dark" data-pal="current">
+<html lang="en" data-bs-theme="dark" data-text="t-tuned-3" data-bg="b-b4both" data-ground="atom">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>tabxplor - dark over/under palettes</title>
+<title>tabxplor - dark background palettes</title>
 <style>', tab_css(theme = "auto", style_tag = FALSE), '</style>
-<style>', paste(vapply(PALETTES, palette_css, character(1)), collapse = "\n"), '</style>
+<style>', paste(c(vapply(TXTP, axis_css, character(1), attr = "text", fn = text_css),
+                    vapply(BGP,  axis_css, character(1), attr = "bg",   fn = bg_css)), collapse = "\n"), '</style>
 <style>
-  body{background:', PAGE, ';color:', INK, ';margin:0;line-height:1.5;
+  body{color:', ASIDE, ';margin:0;line-height:1.5;
        font-family:"DejaVu Sans","Source Sans Pro",system-ui,sans-serif;}
   .layout{display:flex;align-items:flex-start;}
-  .panel{flex:0 0 15rem;position:sticky;top:0;height:100vh;overflow-y:auto;background:', PANEL, ';
-         border-right:1px solid ', BORDER, ';padding:.9rem 1rem;font-size:.8rem;}
+  .panel{flex:0 0 19rem;position:sticky;top:0;height:100vh;overflow-y:auto;
+         border-right:1px solid #3e4451;padding:.9rem 1rem;font-size:.8rem;}
   .wrap{flex:1 1 auto;min-width:0;padding:1rem 1.5rem 40vh;}
   h1,h2,h3{font-weight:bold;line-height:1.25;}
-  h1{color:', HEADS[1], ';font-size:1.8rem;} h2{color:', HEADS[2], ';font-size:1.45rem;}
-  h3{color:', HEADS[3], ';font-size:1.15rem;margin-top:2.2rem;}
+  h1{color:', HEADS[1], ';font-size:1.7rem;} h2{color:', HEADS[2], ';font-size:1.35rem;margin-top:2.4rem;}
+  h3{color:', HEADS[3], ';font-size:1.1rem;margin-top:2rem;}
   .trio{display:flex;gap:1.4rem;flex-wrap:wrap;align-items:flex-start;}
   .lab{font-size:.72rem;opacity:.55;margin-bottom:.3rem;}
-  .pnote{display:none;opacity:.75;margin:.4rem 0 1.4rem;}
-  .pscale{display:none;}
-  html[data-pal="current"] .pnote[data-for="current"],
-  html[data-pal="current"] .pscale[data-for="current"]{display:block;}
-  .scale{border-collapse:collapse;font-size:.68rem;width:100%;}
+  .tnote,.bnote,.tcard,.bcard{display:none;} .tnote,.bnote{opacity:.8;margin:.4rem 0 1.2rem;}
+  html[data-text="t-tuned-3"] .tnote[data-for="t-tuned-3"],
+  html[data-text="t-tuned-3"] .tcard[data-for="t-tuned-3"],
+  html[data-bg="b-b4both"] .bnote[data-for="b-b4both"],
+  html[data-bg="b-b4both"] .bcard[data-for="b-b4both"]{display:block;}
+  .cardhd{font-size:.68rem;opacity:.45;margin:.9rem 0 .2rem;border-top:1px solid #3e4451;padding-top:.5rem;}
+  .scale{border-collapse:collapse;font-size:.68rem;width:100%;margin-bottom:.4rem;}
   .scale th{opacity:.5;font-weight:normal;text-align:left;}
-  .scale td{padding:0 .25rem 0 0;white-space:nowrap;}
+  .scale td{padding:0 .3rem 0 0;white-space:nowrap;}
   .scale .sw span{display:inline-block;width:1.1rem;height:.7rem;border-radius:2px;}
-  .scale .na{opacity:.4;}
+  .scale .lcc{text-align:right;}
+  .lc,.flag{display:none;}
+  .chk{font-size:.66rem;margin-top:.4rem;} .chk.sep{border-top:1px solid #3e4451;padding-top:.3rem;}
+  .chk span{display:block;} .chk .y{opacity:.5;} .chk .n{color:#ff8b7d;font-weight:bold;}
+  .num{font-size:.68rem;opacity:.7;margin-top:.5rem;line-height:1.6;}
+  .flag{color:#ff8b7d;font-weight:bold;}
+  .refbar{font-size:.7rem;opacity:.75;margin:.6rem 0 1rem;line-height:1.9;} .refbar code{opacity:.6;}
+  .strip{margin:1rem 0 0;font-size:.82rem;}
+  .srow{display:flex;align-items:center;gap:.1rem;padding:.14rem 0;white-space:nowrap;cursor:pointer;}
+  .srow:hover{background:rgba(255,242,204,.06);}
+  .srow.head{opacity:.45;font-size:.66rem;border-bottom:1px solid #3e4451;cursor:default;}
+  .srow.head:hover{background:none;} .srow.head .sc{font-weight:normal;}
+  .srow .nm{flex:0 0 13rem;font-size:.72rem;opacity:.85;overflow:hidden;text-overflow:ellipsis;}
+  .srow .flags{flex:0 0 2rem;font-size:.7rem;}
+  .sc{display:inline-block;width:5.1rem;text-align:right;font-weight:bold;font-variant-numeric:tabular-nums;}
+  .sc.rf{font-weight:normal;width:4rem;} .sep{display:inline-block;width:1.4rem;}
+  .bc{display:inline-block;width:7.4rem;padding:.12rem .35rem;margin-right:.15rem;border-radius:2px;
+      font-size:.74rem;font-variant-numeric:tabular-nums;}
+  .bc i{font-style:normal;opacity:.85;font-size:.9em;}
   details.cvd{margin:.6rem 0 0;opacity:.85;}
   details.cvd summary{font-size:.78rem;opacity:.6;cursor:pointer;}
-  select,input{font:inherit;font-size:.8rem;}
-  label{display:block;margin-bottom:.7rem;}
+  select,input{font:inherit;font-size:.8rem;max-width:100%;} label{display:block;margin-bottom:.7rem;}
 </style>
+<style>', ground_css, '</style>
 </head>
 <body>
 <div class="layout">
 <nav class="panel">
-  <label>palette<br><select id="pal">', opt, '</select></label>
+  <label>text palette<br><select id="seltext">', menu(TXTP, SEL_T), '</select></label>
+  <label>background palette<br><select id="selbg">', menu(BGP, SEL_B), '</select></label>
+  <label>ground<br><select id="ground">', gopt, '</select></label>
   <label>chroma cap &mdash; <span id="capout">off</span><br>
-    <input id="cap" type="range" min="0.02" max="0.30" step="0.01" value="0.30" style="width:100%;">
-  </label>
-  <div style="opacity:.55;margin-bottom:.8rem;">The colour-vision copies are folded under each
-  table. The cap applies to everything on the page at once.</div>
-  ', scales, '
+    <input id="cap" type="range" min="0.02" max="0.30" step="0.01" value="0.30" style="width:100%;"></label>
+  <div class="refbar">
+    <span style="color:', INK, '">&#9632;</span> plain figure <code>', INK, '</code>
+    ', paste(vapply(GROUNDS, function(g) sprintf('<span class="lc %s">Lc %.0f</span>', g$id,
+        abs(apca(INK, g$hex))), character(1)), collapse = ""), '<br>
+    <span style="color:', GREYED, '">&#9632;</span> greyed <code>', GREYED, '</code>
+    ', paste(vapply(GROUNDS, function(g) sprintf('<span class="lc %s">Lc %.0f</span>', g$id,
+        abs(apca(GREYED, g$hex))), character(1)), collapse = ""), '
+  </div>
+  <div class="cardhd">text ramp</div>', blocks(TXTP, "tcard", text_card), '
+  <div class="cardhd">fills — text-on-fill measured against the settled text ramp</div>',
+  blocks(BGP, "bcard", bg_card), '
 </nav>
 <div class="wrap">
-<h1>The dark over / under palette</h1>
-', notes, '
-', tables_html, '
+<h1>The dark background palette</h1>
+<div class="pnote" style="display:block;opacity:.7;margin-bottom:.8rem;">The text ramp is settled
+(<b>tuned-by-hand-3</b>) and fixed for every fill below. A fill has to clear <i>every</i> text colour
+at once, because the two channels carry different measures and move independently.</div>
+
+<h2>The fills</h2>
+<div class="pnote" style="display:block;opacity:.7;margin-bottom:.6rem;">Each fill with the text
+colour of the same rung on it, and beside it the ink a cell takes when it has a fill and no text
+colour. A red mark counts the checks failing on the current ground.</div>
+<div class="strip">', paste(vapply(BGP, bg_row, character(1)), collapse = "\n"), '</div>
+
+<h2 id="selected">The selected palette, on real tables</h2>
+', blocks(BGP, "bnote", function(p) p$note), blocks(TXTP, "tnote", function(p) p$note), '
+', render(tabs$dual), '
+', render(tabs$bg), '
+
+<h2>The text ramps, for the record</h2>
+<div class="strip">', paste(vapply(TXTP, text_row, character(1)), collapse = "\n"), '</div>
+', render(tabs$text), '
 </div></div>
-<script>', chroma_cap_js <- paste(readLines("dev/chroma_cap.js", warn = FALSE), collapse = "\n"), '</script>
+<script>', paste(readLines("dev/chroma_cap.js", warn = FALSE), collapse = "\n"), '</script>
 <script>
   const root = document.documentElement;
-  document.querySelector("#pal").addEventListener("change", e => {
-    root.setAttribute("data-pal", e.target.value);
-    document.querySelectorAll(".pnote, .pscale").forEach(n =>
-      n.style.display = n.dataset.for === e.target.value ? "block" : "none");
-  });
+  const axis = (selId, attr, noteCls, cardCls) => {
+    const sel = document.querySelector(selId);
+    const apply = v => { root.setAttribute(attr, v);
+      document.querySelectorAll("." + noteCls + ",." + cardCls).forEach(n =>
+        n.style.display = n.dataset.for === v ? "block" : "none"); };
+    sel.addEventListener("change", e => apply(e.target.value));
+    return { sel: sel, apply: apply };
+  };
+  const T = axis("#seltext", "data-text", "tnote", "tcard");
+  const B = axis("#selbg",   "data-bg",   "bnote", "bcard");
+  document.querySelector("#ground").addEventListener("change", e =>
+    root.setAttribute("data-ground", e.target.value));
+  document.querySelectorAll(".srow[data-go]").forEach(r => r.addEventListener("click", () => {
+    const a = r.dataset.go.startsWith("b-") ? B : T;
+    a.sel.value = r.dataset.go; a.apply(r.dataset.go);
+    document.querySelector("#selected").scrollIntoView({behavior:"smooth"});
+  }));
   const cap = document.querySelector("#cap"), capout = document.querySelector("#capout");
   cap.addEventListener("input", () => {
     const v = +cap.value, off = v >= 0.30;
@@ -398,4 +591,23 @@ html <- paste0('<!doctype html>
 </body></html>')
 
 writeLines(html, "dev/palette_preview.html")
-message("written: dev/palette_preview.html  (", length(PALETTES), " palettes x 3 vision modes)")
+
+# === SECTION: the self-test =======================================================================
+stopifnot(apca("#888888", "#ffffff") == 63.1)                      # Myndex reference vector
+old_maxC <- function(L, H) { lo <- 0; hi <- 0.4
+  for (i in 1:30) { m <- (lo + hi)/2; if (in_gamut(L, m, H)) lo <- m else hi <- m }; lo }
+g <- expand.grid(L = seq(0.05, 0.98, length.out = 20), H = seq(0, 350, by = 10))
+stopifnot(max(abs(mapply(function(L,H) oklch_maxC(L,H) - old_maxC(L,H), g$L, g$H))) < 1/255)
+
+message("text ramps")
+for (p in TXTP) { s <- tscore(p, REF)
+  message(sprintf("  %-26s |Lc| %2.0f>%2.0f / %2.0f>%2.0f  cvd %.3f  step %.3f  %s", p$name,
+    s$lc[[1]][1], s$lc[[1]][4], s$lc[[2]][1], s$lc[[2]][4], min(s$gap), min(s$step),
+    if (all(s$ok)) "ok" else paste("fails:", paste(TCHECKS[!s$ok], collapse = ", ")))) }
+message("\nfills, under the settled text ramp")
+for (p in BGP) { s <- bscore(p, REF)
+  message(sprintf("  %-26s dL %s  step %.3f  WCAG %.2f-%.2f  text-on-fill Lc %2.0f  bare ink Lc %2.0f  %s",
+    p$name, paste(sprintf("%.3f", s$dl[1:4]), collapse = " "), s$adj, min(s$wcag), max(s$wcag),
+    s$onf, s$bare, if (all(s$ok)) "ok" else paste("fails:", paste(BCHECKS[!s$ok], collapse = ", ")))) }
+message("\nwritten: dev/palette_preview.html  (", length(TXTP), " text x ", length(BGP),
+        " fills x ", length(GROUNDS), " grounds x 3 vision modes)")

@@ -89,8 +89,9 @@ testthat::test_that("legend weight: text break-words bold, background break-word
   }
   # md: text breaks carry `**`; background breaks do not (plain bracketed span).
   testthat::expect_match(tab_color_legend(tb, medium = "md"), "[*][*]\\[[+]5\\]\\{[.]p1\\}[*][*]")
-  testthat::expect_match(tab_color_legend(tb, medium = "md"), "\\[.2\\]\\{[.]o4\\}")
-  testthat::expect_no_match(tab_color_legend(tb, medium = "md"), "[*][*]\\[.2\\]\\{[.]o4\\}")
+  # the fill channel keeps breaks 2 and 4, drawn with slots 1 and 3 (see fmt_color_plan).
+  testthat::expect_match(tab_color_legend(tb, medium = "md"), "\\[.2\\]\\{[.]o3\\}")
+  testthat::expect_no_match(tab_color_legend(tb, medium = "md"), "[*][*]\\[.2\\]\\{[.]o3\\}")
   # runs (excel / plot): the text channel is bold, the background channel plain.
   runs <- tab_color_legend(tb, medium = "runs")[[1]]
   coloured <- purrr::keep(runs, ~ !is.na(.$color))
@@ -387,7 +388,8 @@ testthat::test_that("the page never leaks into the returned html, whatever the t
 testthat::test_that("tab_html_string() paints the standalone page it builds", {
   tb <- tab(gss, marital, race, pct = "row")
   h  <- tab_html_string(tb, theme = "dark")
-  testthat::expect_match(h, "html,body{background:#222222", fixed = TRUE)
+  testthat::expect_match(h, paste0("html,body{background:", tabxplor:::tx_chrome_hex("dark")$bg),
+                         fixed = TRUE)
   # in <head>, before the table -- and the file is opened elsewhere, so "auto" keeps the @media
   # cascade rather than resolving R-side the way the Viewer's own page does.
   testthat::expect_lt(regexpr("html,body{", h, fixed = TRUE), regexpr("<body>", h, fixed = TRUE))

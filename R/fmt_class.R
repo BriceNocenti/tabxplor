@@ -4501,17 +4501,26 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   }
 
   # THE BACKGROUND IS A COARSER VOICE. A fill is read at a glance and sits behind a number the text
-  # channel already grades, so a ladder may declare (COLOR_SCALES$bg_keep) how many of its LOUD rungs
+  # channel already grades, so a ladder may declare (COLOR_SCALES$bg_keep) how many of its rungs
   # survive there -- the ratio scales keep two, because their faint rungs only restate the difference
-  # channel beside them. The slots come along unchanged, so a fill means what its shade always meant.
+  # channel beside them.
+  # DESIGN: the surviving breaks are the LOUD ones -- of four, breaks 3 and 4 -- but they are drawn
+  # with the palette's FAINT slots, 1 and 3. Those are two independent choices and only the second
+  # changed: a fill still fires where it always did, and says the same thing in quieter colour.
+  # Drawing them in the two loudest fills put the darkest one under the text channel's own colour,
+  # where the worst text-on-fill measured APCA Lc 9; slots 1 and 3 lift it to 16, and the light theme
+  # from 14 to 26 (dev/dark_palette.md). Both themes, this being about slots and not about hexes.
   # WARNING: after the guaranteed_effect shift, never before -- trimming first would leave the
   # prepended neutral as the background's own faintest rung, colouring every significant cell.
   keep <- COLOR_SCALES[[scale_key]]$bg_keep
   if (identical(channel, "bg") && !is.null(keep)) {
     trim <- function(b, sl) {
-      if (length(b) <= keep) return(list(b, sl))
-      i <- seq.int(length(b) - keep + 1L, length(b))
-      list(b[i], c(0L, sl[-1L][i]))
+      n <- length(b)
+      if (n <= keep) return(list(b, sl))
+      step <- ceiling(n / keep)
+      i <- seq.int(n - keep + 1L, n)                        # the breaks that survive: the LOUD ones
+      j <- seq.int(1L, by = step, length.out = keep)        # the slots that draw them: 1 and 3 of 4
+      list(b[i], c(0L, sl[-1L][j]))
     }
     o <- trim(over_breaks,  over_slots);  over_breaks  <- o[[1]]; over_slots  <- o[[2]]
     u <- trim(under_breaks, under_slots); under_breaks <- u[[1]]; under_slots <- u[[2]]
@@ -4635,6 +4644,11 @@ fmt_channel_codes <- function(x, theme = "light", ink = "text") {
   # historical output is upper-case hex (cf. fmt_get_color_code).
   text[tsel] <- toupper(unname(text_styles[ch$text_slot[tsel]]))
   bg[bsel]   <- toupper(unname(bg_styles[ch$bg_slot[bsel]]))
+  # ⚠ A FILL WITH NO TEXT COLOUR takes the theme's `on_fill` ink, not the page's. On the dark theme
+  # the fills are light panels and the page ink measures APCA Lc 0 on them. Stated once in
+  # tx_chrome_hex(); tx_css_rules() says the same thing as a selector for html and markdown.
+  on_fill <- tx_chrome_hex(theme)$on_fill
+  if (!is.null(on_fill) && !is.na(on_fill)) text[bsel & !tsel] <- toupper(on_fill)
 
   slot_face <- function(slot, type) {
     f   <- get_color_style("face", type = type, theme = theme)
@@ -6064,6 +6078,14 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
       # `theme` is an argument, so the palette must follow it -- reading the option here would render a
       # legend the caller never asked for.
       style <- get_color_style("crayon", type = fam(tk$ch), theme = pal)[[tk$c]]
+      # ⚠ The console PAINTS a fill behind a background break-word (make_ansi_style(bg = TRUE)), so
+      # the word keeps the terminal's own foreground -- light, on the theme whose fills are light
+      # panels. Compose the theme's `on_fill` ink over it, or the break-word cannot be read.
+      if (identical(tk$ch, "bg") && !identical(medium, "runs")) {
+        ofc <- tx_chrome_hex(pal)$on_fill
+        if (!is.null(ofc) && !is.na(ofc))
+          style <- cli::combine_ansi_styles(style, cli::make_ansi_style(ofc))
+      }
       out <- style(tk$t)
       if (bold) out <- cli::style_bold(out)
       if (ital) out <- cli::style_italic(out)
@@ -6094,10 +6116,14 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
         hex <- slot_hex(tk$c, tk$ch)
         if (identical(tk$ch, "text"))
           paste0("<span style=\"", wt, "color:", hex, " !important;\">", lab, "</span>")
-        else
-          paste0("<span style=\"", wt, "background-color:", hex,
+        else {
+          # no stylesheet ships with this output, so the on_fill ink is stated inline too.
+          ofc <- tx_chrome_hex(pal)$on_fill
+          ink <- if (is.null(ofc) || is.na(ofc)) "" else paste0("color:", ofc, " !important;")
+          paste0("<span style=\"", wt, ink, "background-color:", hex,
                  " !important;border-radius:4px;padding-right:4px;padding-left:4px;\">",
                  lab, "</span>")
+        }
       }
     } else if (identical(medium, "md")) {
       # `**` makes the TEXT break-words stand out in RAW markdown too; the background channel is plain.

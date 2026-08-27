@@ -213,6 +213,26 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
     # a PUBLICATION PALETTE IS A SHEET OF PAPER, all-or-nothing -- print states its ink here; light/dark
     # carry "" and follow the page on purpose, `auto` most of all.
     add(".tabxplor-tab th,.tabxplor-tab td", "color",            "", "", cp$text)
+    # ⚠ ANYTHING CARRYING A FILL AND NO TEXT COLOUR takes `on_fill`, not the page's ink -- which on
+    # the dark theme's light panels is unreadable (APCA Lc 0). This is the ONE rule in the package
+    # that repaints a text slot, so it is written to reach only what has NO text class, leaving every
+    # coloured rung its single legend colour. It takes TWO selector families because the exclusion
+    # lives in different places per medium:
+    #   html CELL  <td class="p4"><span class="tx-pill o3"> -- the text class is on the ANCESTOR
+    #   md CELL    [42%]{.p2 .o1}                            -- and here on the SAME element,
+    #   LEGEND     <span class="o3">x1.5</span>              -- as it is for a legend swatch, in both
+    # ⚠ The legend is the case that must not be missed: a break-word nobody can read names the break.
+    # Restated in tab_color_legend() and fmt_channel_codes() for the media with no selectors.
+    # `:not()` with a selector LIST is Selectors 4 -- safe here, this stylesheet already uses `:has()`,
+    # which is newer still. The chained form would make this one rule 1.6 kB.
+    notxt <- paste0(":not(", paste0(".", c(paste0("p", 1:4), paste0("m", 1:4)), collapse = ","), ")")
+    anybg <- paste0(":is(", paste0(".", c(paste0("o", 1:4), paste0("u", 1:4)), collapse = ","), ")")
+    on_fill_sel <- paste0(c(
+      paste0(".tabxplor-tab td", notxt, " .tx-pill"),
+      paste0(anybg, notxt, ":not(.tx-pill)"),
+      paste0(".tabxplor-tab ", anybg, notxt, ":not(.tx-pill)")), collapse = ",")
+    add(on_fill_sel, "color", tx_na_blank(cl$on_fill), tx_na_blank(cd$on_fill),
+        tx_na_blank(cp$on_fill))
     # "follow the page" must be SAID: Bootstrap's own background is opaque (`--bs-table-bg`), and an
     # opaque cell paints over its row hover. `transparent` is what a cell has with no rule at all.
     add(".tabxplor-tab th,.tabxplor-tab td", "background-color",
@@ -283,6 +303,9 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
 # which would otherwise wash every cell colour out. A pathological host (ID selectors / !important)
 # still needs a user override, see ?tab_css.
 tx_cell_sel <- function(cls) paste0(".", cls, ",.tabxplor-tab .", cls)
+
+# A chrome value that may be absent: "" is how this builder spells "say nothing at this layer".
+tx_na_blank <- function(x) if (is.null(x) || is.na(x)) "" else x
 
 # prefixes every part of a (possibly comma-separated) selector with every hook.
 # `.tabxplor-tab th,.tabxplor-tab td` + 2 hooks -> 4 parts.
