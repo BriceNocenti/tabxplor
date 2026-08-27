@@ -195,6 +195,15 @@ TAB_OPTIONS <- list(
             "`\"print_ready\"` cannot be used here: their marks are cell text, and a print rule can",
             "restyle a page but not add characters to it.")),
 
+  background = tx_opt(
+    "page", "colours",
+    doc = c("what a rendered table paints behind itself. `\"page\"` leaves it **transparent**, so the",
+            "table sits on the page's own ground, whatever that is; `\"theme\"` paints the theme's own",
+            "background, a card of its own; or name any CSS colour. Change it only where the page is",
+            "not yours to follow --- a dark table dropped into a light document, an html email. The",
+            "interactive Viewer page paints itself either way, and a **publication** palette is",
+            "always a sheet of white paper.")),
+
   shape_auto_max = tx_opt(
     12L, "display",
     doc = c("where `shape = \"auto\"` draws the line for a numeric row or tab variable: a",

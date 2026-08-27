@@ -1,0 +1,10 @@
+// Site CSS that is not a bslib variable. pkgdown appends this file last (pkgdown:::bs_theme_rules),
+// so it wins over its own rules on source order -- but NOT over the dark syntax theme, which pkgdown
+// adds afterwards: a rule aimed at that needs an `html` prefix to out-specify it.
+
+// pkgdown caps every dropdown at 280px and scrolls the overflow. The Articles menu holds eleven
+// entries plus the "En francais" separator -- a scrollbar in a navigation menu, on every page. Give
+// it the room it needs and keep the cap only for a genuinely short window.
+.dropdown-menu {
+  max-height: min(80vh, 34rem);
+}

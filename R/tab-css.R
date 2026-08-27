@@ -28,7 +28,9 @@
 #     our own chrome, which md carries no per-cell class for.
 #   - THE COLOUR THEMES STATE `background-color: transparent` -- exactly what a cell has with no rule
 #     at all -- so a host cannot override it and paint over the row hover. The background colour
-#     CHANNEL (`.o3`, `.tx-pill`) is (0,2,0) and still wins.
+#     CHANNEL (`.o3`, `.tx-pill`) is (0,2,0) and still wins. The TABLE follows the page the same way,
+#     and for the same reason it is said rather than left unsaid; `tabxplor.background` (tx_table_bg)
+#     is what paints a card instead, for a page that is not ours to follow.
 #   - NO COLUMN WIDTH: the browser's auto table layout sizes each column to its content.
 #     `.tx-rv` / `.tx-tot` / `.tx-num` are emitted UNSTYLED, as hooks for a reader's own CSS.
 #   - WARNING: a browser does NOT grow a rowspanned cell to hold vertical text that overruns it. The
@@ -167,6 +169,19 @@ tx_face_decls <- function(face, base, s) {
     "text-decoration" = und)
 }
 
+# What a table paints behind itself, per theme -- `tabxplor.background`, and the one place it is read.
+# "page" is transparent BOTH sides: a stylesheet cannot know the page's colour, and following it is
+# right wherever the page is someone else's (a knitted document, pkgdown, jamovi's results panel) and
+# harmless where it is ours (tx_page_style() paints the Viewer page itself).
+tx_table_bg <- function(background = NULL) {
+  if (is.null(background)) background <- tx_option("background")
+  b <- as.character(background)[1]
+  if (identical(b, "page"))  return(c(light = "transparent", dark = "transparent"))
+  if (identical(b, "theme")) return(c(light = tx_chrome_hex("light")$bg,
+                                      dark  = tx_chrome_hex("dark")$bg))
+  c(light = b, dark = b)
+}
+
 # The theme-independent rule table: one row per (selector, property), carrying the value of EVERY
 # theme. `chrome = FALSE` gives colour rules only (the tab_md contract: bare classes a user maps in
 # their own editor CSS). `print_theme` names WHICH black-and-white palette fills the "print" column --
@@ -186,7 +201,11 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
     # layer survive into @media print, so a dark page would print white-on-#222.
     cp <- tx_chrome_hex(print_theme)
     add(".tabxplor-tab", "color",      cl$text,  cd$text,  cp$text)
-    add(".tabxplor-tab", "background", cl$bg,    cd$bg,    cp$bg)
+    # THE TABLE FOLLOWS THE PAGE. `transparent` is stated rather than left unsaid for the reason the
+    # cells state it below: a host's own ground can be opaque. `background = "theme"` paints the
+    # theme's card instead, for a page that is not ours to follow. Print is always paper.
+    tbg <- tx_table_bg()
+    add(".tabxplor-tab", "background", tbg[["light"]], tbg[["dark"]], cp$bg)
     # THE HOST PAINTS OUR CELLS DIRECTLY (pkgdown/Bootstrap's `.table>:not(caption)>*>*` sets color,
     # background-color and border-bottom-width on the same <td> our classes sit on), so the values it
     # can reach must be stated ON THE CELLS, at (0,1,1) -- ties the host's rule and wins on source
@@ -211,6 +230,10 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
     add(".tabxplor-tab .tx-unit", "color", cl$grey, cd$grey, cp$grey)
     # the table title is FULL-contrast in both themes (pure black / white), not the softened body grey.
     add(".tabxplor-caption", "color", "#000000", "#FFFFFF", "#000000")
+    # THE FOOTER (legend, test rows, subtext) is an aside about the table, so it takes `grey2` -- the
+    # same set-back ink a composite cell's aside takes. The coloured runs inside it are spans of their
+    # own and keep their slot colour: a descendant's rule needs no specificity contest with this one.
+    add(".tabxplor-tab .tx-foot", "color", cl$grey2, cd$grey2, cp$grey2)
     # THE SECONDARY TOKENS (a composite cell's aside) are set back from the table's own text, resolved
     # per theme like every chrome rule. Under `color_whole_cell` no rule is emitted: the aside then
     # inherits the cell's own shade, though the span is still written so a stylesheet can restyle it.
@@ -426,7 +449,11 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # the footnote must not SIZE the table: `width:0` is a definite size (contributes 0 to
     # max-content), and once the cell's own width is definite `min-width:100%` resolves and the text
     # fills it -- the same idiom as `.tabxplor-caption` above.
-    ".tabxplor-tab .tx-foot{width:0;min-width:100%;}",
+    # `padding-bottom` is the strip a HOST's scrollbar sits in. pkgdown makes every table its own
+    # scroll box (`main table{display:block;overflow:auto}`), and an overlay scrollbar -- the default
+    # on Windows and on Chrome -- is drawn OVER the content at the box's bottom edge, which is the
+    # legend's last line. 5px is enough to clear it and too little to read as space.
+    ".tabxplor-tab .tx-foot{width:0;min-width:100%;padding-bottom:5px;}",
     # a background HUGS its text (rounded, inline) rather than flooding the cell: a full fill reads as
     # a blocky grid and swallows the row hover.
     # ⚠ the negative margin CANCELS the padding's layout, so a filled number does not shift left of an

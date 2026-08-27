@@ -10,9 +10,15 @@ vignette: >
 ---
 
 ```{r setup, include = FALSE}
+# Messages and warnings are off for every chunk: the teaching notes tabxplor prints (an
+# auto-detected family, an over-dispersion caveat) are explained in the prose where they
+# matter, and repeated under every table they only clutter it. Re-enable one with
+# `message = TRUE` on the chunk that needs it.
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>"
+  comment = "#>",
+  message = FALSE,
+  warning = FALSE
 )
 library(tabxplor)
 

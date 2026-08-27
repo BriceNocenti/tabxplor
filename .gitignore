@@ -40,3 +40,7 @@ docs/
 # locally: harmless, but it lands in the package root and R CMD check NOTEs it as a
 # "Non-standard file/directory found at top level".
 Rplots.pdf
+
+# An exported Positron settings.json carries live secrets (a claudeQuota session key, an org id).
+# Untracked on purpose -- this line is what stops a `git add -A` from publishing it.
+dev/Positron_Windows_settings.json

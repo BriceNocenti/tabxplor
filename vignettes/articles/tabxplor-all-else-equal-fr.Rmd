@@ -6,7 +6,12 @@ output: rmarkdown::html_vignette
 ---
 
 ```{r, include = FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+# Messages and warnings are off for every chunk: the teaching notes tabxplor prints (an
+# auto-detected family, an over-dispersion caveat) are explained in the prose where they
+# matter, and repeated under every table they only clutter it. Re-enable one with
+# `message = TRUE` on the chunk that needs it.
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>",
+                      message = FALSE, warning = FALSE)
 
 # Fixer la langue des DEUX manieres, comme les autres documents traduits : options(tabxplor.lang)
 # pilote la legende des couleurs, la note de bas de tableau et le titre de regression, tandis que
@@ -419,7 +424,7 @@ Un rapport de cotes produit mathématiquement un meilleur modèle, mais ajoute u
 | 74 %        | 86 % | +12 points      | ×1,16                          | 2,11 |
 | 90 %        | 95 % | +5 points       | ×1,06 — presque rien           | 2,11 |
 
-Un seul et même nombre pour quatre situations que personne ne décrirait de la même façon. La cote est en effet **symétrique autour de 50 %** : elle traite l’événement étudié et son issu opposé de la même façon, « 5 % contre 10 % » et « 90 % contre 95 % » exactement pareil, alors que la première paire est un doublement et la seconde une quasi-égalité.
+Un seul et même nombre pour quatre situations que personne ne décrirait de la même façon. La cote est en effet **symétrique autour de 50 %** : elle traite l’événement étudié et son issue opposée de la même façon, « 5 % contre 10 % » et « 90 % contre 95 % » exactement pareil, alors que la première paire est un doublement et la seconde une quasi-égalité.
 
 <!-- La raison tient en une ligne. Le rapport de cotes est le **produit des deux risques relatifs**, celui de l'événement et celui de son contraire : les personnes blanches sont relâchées 1,16 fois plus souvent (86 % contre 74 %), et *ne pas* être relâché·e touche 26 % des personnes noires contre 14 % des blanches, soit 1,82 fois plus souvent — et 1,16 × 1,82 = 2,11. Nommer l'autre modalité ne fait qu'échanger les deux facteurs : le produit, lui, ne bouge pas. Voilà pourquoi changer la phrase ne change jamais le nombre. -->
 
@@ -430,7 +435,7 @@ D'où la règle de lecture : **un rapport de cotes ne veut rien dire tant qu'on 
 
 C'est très exactement pour cela que le tableau ajoute le pourcentage observé et le pourcentage ajusté : ce sont eux qui remettent le rapport de cotes à sa place sur l'échelle. Mais plutôt que de le compenser après coup, on peut aussi demander directement au modèle une autre mesure.
 
-La dernière étape de l'aller-retour consiste précisément à **redescendre** vers une quantité qu'on pourrait mettre dans une phrase : c'est le *même modèle*, ajusté une fois, mais lu de plusieurs façons.
+La dernière étape de l'aller-retour consiste alors à **redescendre** vers une quantité qu'on pourrait mettre dans une phrase : c'est le *même modèle*, ajusté une fois, mais lu de plusieurs façons.
 
 ## Un modèle, quatre lectures
 
@@ -447,7 +452,7 @@ Voici la règle à appliquer pour utiliser `tab_reg()` :
 
 > **Si l’écart demandé (`measure =`) est celui dans lequel le modèle travaille déjà, on lit le coefficient propre du modèle. Sinon, le modèle calcule l’écart demandée (`measure =`) à partir de ses prédictions, pour chaque personne de l'échantillon, et en fait la moyenne.**
 
-Il suffit, ensuite, de passer `measure =` pour choisir celle qui nous convient.
+Il suffit, alors, de passer `measure =` pour choisir celle qui nous convient.
 
 **Le rapport de cotes**, difficile à dire à voix haut, est le réglage par défaut, puisqu'un modèle logistique travaille avec des *odds*.
 
@@ -455,7 +460,7 @@ Il suffit, ensuite, de passer `measure =` pour choisir celle qui nous convient.
 tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"), stats=NULL)
 ```
 
-> **Lecture** : toutes les autres variables choisies étant égales, les personnes noires interpellées ont eu **1,48 fois plus de chances** de finir en garde à vue *plutôt que d’être relâchées* — autrement dit, leur **cote** d'être relâchées est 1,48 fois plus faible.
+> Toutes les autres variables choisies étant égales, les personnes noires interpellées ont eu **1,48 fois plus de chances** de finir en garde à vue *plutôt que d’être relâchées* — autrement dit, leur **cote** d'être relâchées est 1,48 fois plus faible.
 
 C'est ici que la règle de la section 2 se paie comptant : la clause finale, ou le mot *cote*. Sans eux, la phrase annonce un risque relatif de 1,48 qui est en contradiction totale avec les données.
 
@@ -466,7 +471,7 @@ tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "chec
         measure = "ratio", stats=NULL)
 ```
 
-> **Lecture** : entre personnes de même sexe, de même situation d'emploi, de même nationalité et de mêmes antécédents, les personnes noires ont été relâchées **1,07 fois moins souvent** que les personnes blanches.
+> Entre personnes de même sexe, de même situation d'emploi, de même nationalité et de mêmes antécédents, les personnes noires ont été relâchées **1,07 fois moins souvent** que les personnes blanches.
 
 Si l’on compte non pas en chances d’avoir été relâché, mais l’inverse : les personnes racisées comme noires ont 1,34 fois plus de chances d’avoir été mises en garde à vue. Le ratio n’est pas symétrique, c’est son problème, et il est donc toujours plus parlant lorsqu’on prend la catégorie rare que lorsqu’on prend la catégorie fréquente.
 
@@ -482,13 +487,13 @@ tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "chec
         measure = "difference", stats=NULL)
 ```
 
-> **Lecture** : entre personnes de même sexe, de même situation d'emploi, de même nationalité et de mêmes antécédents, les personnes noires ont été relâchées **5,2 points de pourcentage moins souvent** que les personnes blanches.
+> Entre personnes de même sexe, de même situation d'emploi, de même nationalité et de mêmes antécédents, les personnes noires ont été relâchées **5,2 points de pourcentage moins souvent** que les personnes blanches.
 
 La différence marginale (visible avec le préfixe "m" dans le tableau) est la plus aisée à calculer : on prend simplement la différence entre le pourcentage ajusté (entre parenthèses) de la catégorie étudiée (par exemple Homme) et le pourcentage ajusté de la catégorie de réference (par exemple Femme). 
 
 **Un mot sur la lecture des pourcentages ajustés eux-mêmes**, qui constitue le bout du chemin de la modélisation.
 
-> **Lecture** : la distribution réelle du sexe, de l'emploi, de la nationalité et des antécédents restant ce qu'elle est, si tout le monde dans le fichier avait été blanc, on estime que **84 %** auraient été relâchés ; si tout le monde avait été noir, **79 %** seulement.
+> La distribution réelle du sexe, de l'emploi, de la nationalité et des antécédents restant ce qu'elle est, si tout le monde dans le fichier avait été blanc, on estime que **84 %** auraient été relâchés ; si tout le monde avait été noir, **79 %** seulement.
 
 Ce n'est pas le pourcentage d'une personne moyenne. C'est l'échantillon entier, compté deux fois : une fois comme si tout le monde était dans un groupe, une fois comme si tout le monde était dans l'autre, tout le reste étant laissé tel qu'il est réellement dans l’échantillon. C'est pour cela qu'elle se compare aux 86 % et 74 % observés sur la même ligne : **les mêmes personnes, mais une autre manière de les compter**.
 
@@ -512,7 +517,7 @@ Trois différences permettent d’identifier un effet marginal en observant le t
 
 Le changement de la constante n'est pas décoratif : un coefficient se mesure *depuis* un point de départ, et le tableau montre donc ce point — une modalité de chaque prédicteur. Un effet moyenné, lui, est moyenné sur tout le monde : il n'y a pas de point de départ à montrer, et la ligne donne à la place le chiffre de l'échantillon entier.
 
-## Laquelle rapporter
+## Quelle mesure rapporter ?
 
 | ce qu'on veut faire | demander | ce qu'on peut alors écrire |
 |:---|:---|:---|
@@ -523,7 +528,7 @@ Le changement de la constante n'est pas décoratif : un coefficient se mesure *d
 
 Si l'on ne rapporte qu'un seul nombre, les **points de pourcentage** sont un bon choix : c'est celui que le lecteur peut vérifier contre les pourcentages observés, assis dans le même tableau. Si l'on en rapporte deux, ajouter le rapport de cotes permet de contenter les spécialistes.
 
-## L'idéal-type, ou : pour qui ce nombre est-il vrai ?
+## La comparaison des profils comme méthode idéale-typique
 
 L’argument `measure` nous dit *quel* écart ; l’argument `effect` nous dit d’où vient le chiffre et notamment **à quel point de réference on se place pour le calculer**.
 
@@ -642,11 +647,11 @@ prend des erreurs-types robustes (Huber-White), cette vraisemblance étant déli
 
 # 6. Ce que le modèle ne tranche pas
 
-Tout ce qui précède était mathématique. Cette section-ci est celle qui décide si l'analyse vaut quelque chose, et rien de ce qu'elle contient n'est un calcul.
+Tout ce qui précède était du domaine des mathématiques, pas encore des sciences sociales : ici nous décidons si l'analyse vaut quelque chose.
 
 ## « Toutes choses égales par ailleurs » — mais lesquelles ?
 
-Le nombre ajusté dépend entièrement des variables qu'on a listées. Pas un peu : beaucoup.
+Le nombre ajusté dépend **entièrement** des variables que nous avons mesurées et choisies. 
 
 ```{r}
 tab_reg(car_arrests, "released",
@@ -655,7 +660,7 @@ tab_reg(car_arrests, "released",
         measure = "difference", display="est")
 ```
 
-Le même écart de race vaut **&minus;5,2 points** dans une colonne et **&minus;7,9** dans l'autre. Les deux sont « toutes choses égales par ailleurs ». Ils diffèrent de moitié, et la seule différence est une variable.
+Le même écart de comportement des policiers en fonction de la couleur de peau des personnes arrêtées vaut **&minus;5,2 points** dans une colonne et **&minus;7,9** dans l'autre. Les deux sont « toutes choses égales par ailleurs ». Ils diffèrent de presque la moitié, et la seule différence est une variable.
 
 Qui écrit « toutes choses égales par ailleurs » avance donc quelque chose sur une liste qu'il a lui-même dressée. Le modèle n'a aucun avis sur ce qui manque à cette liste, et aucun moyen de prévenir. D'où la question qui décide de tout.
 
