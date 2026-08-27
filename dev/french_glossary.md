@@ -7,6 +7,15 @@ The French vignettes are web-only articles (`vignettes/articles/*-fr.Rmd`, rende
 via `options(tabxplor.lang = "fr")`) and follow the tables below. Column labels (`Obs_%`,
 `Model_OR`, …) and argument names stay English.
 
+⚠ **The whole French set is written in one register: `on` for the generic rule, `nous` for the shared
+analytic move, and *zero* `vous` / `votre` / `vos` — headings included.** Settled in Phase 23f-i for
+the article and extended to the four reference pages in 23f-ii, so a reader moving between them meets
+one voice. The single exception is a **quoted questionnaire item**, which addresses a respondent and
+therefore keeps `vous` (« parmi ces situations, lesquelles vous concernent ? », « où buvez-vous du
+thé ? »). An imperative addressed to the reader is rewritten, not merely softened: « Donnez une valeur
+unique » → « Une valeur unique la change » ; « Vérifiez ce que contient votre fichier » → « Vérifier ce
+que contient le fichier ».
+
 ⚠ **§ *Le vocabulaire d'enseignement* is the section to read before writing any French teaching
 prose about regression.** Its primary source is the maintainer's own logit séance
 (`~/github/formations_stat/M2_06_07.Rmd`) rather than a dictionary: these are the words the target
@@ -303,6 +312,37 @@ prose works with.
    so; it is a point the English version cannot make.
 6. ⚠ **A quoted cell value keeps the printed decimal point** (`1/1.48`, `par 1.54 (SD)`); prose numbers
    take the comma (« 5,2 points »). Same rule as the warning after the estimand cascade.
+
+## Le vocabulaire des pages de référence
+
+Settled in Phase 23f-ii, when the four reference pages were re-authored in the article's voice. Only
+what the article did not already fix.
+
+| English                        | French                                          | note                                                     |
+|--------------------------------|-------------------------------------------------|----------------------------------------------------------|
+| outcome (in prose)             | variable à expliquer                            | ⚠ NOT « variable expliquée », which is the *printed* label |
+| footer statistics (the block)  | le bilan du modèle                              | ⚠ NOT « le résumé statistique »; see *bilan de santé*    |
+| to fit (a model)               | estimer · ajuster · réaliser                    | rotate; « estimé » where the sentence is about adjustment |
+| model checks                   | les vérifications du modèle                     |                                                          |
+| effect modification            | la modification d'effet                         | not « l'interaction », which names the *term*            |
+| the shape table                | le tableau des formes                           | printed under the footer                                 |
+| observed range                 | l'étendue observée                              |                                                          |
+| win ratio                      | rapport de victoires (*win ratio*)              | English name once — it is the searchable term            |
+| superiority probability        | probabilité de supériorité                      | Somers' `D` read as a probability                        |
+| display grammar / template     | la grammaire `display` / le gabarit             |                                                          |
+| named layout                   | la mise en page nommée                          |                                                          |
+| primary token                  | le jeton primaire                               | « le premier jeton **hors crochets** »                   |
+| aside (a bracketed field)      | une mention secondaire                          |                                                          |
+| the base count                 | l'effectif de base                              |                                                          |
+| three levels (of margin of error) | les trois niveaux                            | the weights vignette's spine                             |
+
+⚠ **`RR` is « risque relatif », never « rapport de risques »** (22f-i) — a rule the pre-23f-ii twin
+broke in a heading. The distinct `or` field is glossed « rapport de cotes / rapport de **risques
+relatifs** » (the multinomial RRR), which is a different quantity and keeps its own name.
+
+⚠ **A section reporting `measure = "ratio"` says « combien de fois plus *souvent* ? », not « plus de
+*chances* ? »** — that section reports a risk ratio, and « chances » is exactly the word the odds-ratio
+rule reserves.
 
 ## Known first-draft rough spots (for maintainer review)
 

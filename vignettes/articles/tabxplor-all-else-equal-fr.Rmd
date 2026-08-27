@@ -86,7 +86,7 @@ Nous ne **prédisons** rien : il ne s'agit à aucun moment de deviner le sort d'
 
 Ce que nous faisons, c'est **démêler des corrélations cachées**. Les variables sociodémographiques vont les unes avec les autres : le revenu voyage avec le diplôme, qui voyage avec la profession, qui voyage avec l'âge. Quand on trouve que deux caractéristiques ou comportements sont corrélés, voyagent ensemble, la première question est de savoir s’ils sont *encore* corrélées parmi les gens qui se ressemblent sur le reste des variables. Une régression sur données d'enquête répond à cette question, et à celle-là seulement. Richard Berk en donne la version modeste : à partir d'un jeu de données, une analyse de régression ne produit rien de plus qu'une collection de moyennes et de variances conditionnelles ; tout l'intérêt est de les comparer.
 
-Le plus puralnt est donc d’effectuer un **aller-retour complet** : on part d'un pourcentage observé, on passe par un modèle, on redescend à un pourcentage. Quand on n'arrive pas à redescendre, c'est certainement qu'on s'est trompé quelque part.
+Le plus parlant est donc d’effectuer un **aller-retour complet** : on part d'un pourcentage observé, on passe par un modèle, on redescend à un pourcentage. Quand on n'arrive pas à redescendre, c'est certainement qu'on s'est trompé quelque part.
 
 ## Sept mots, et ce qu'on en fait
 
@@ -110,7 +110,7 @@ Trois mots méritent un avertissement tout de suite.
 
 **« Contrôler par » est une promesse intenable.** On n'a rien contrôlé du tout : rien, dans le monde social, n'a été maintenu en place par une méthode expérimentale contrôlée. On a **comparé des personnes qui se ressemblent**. Andrew Gelman insiste sur ce point : une régression porte sur des comparaisons, non sur la façon dont une variable réagit quand on la fait varier — c'est **une manière ordonnée de calculer des comparaisons moyennes** dans des données. Dès que « contrôler par X » se met à sonner comme une intervention sur le monde réel, penser à la traduction plus longue: **« je compare deux personnes qui diffèrent sur ce point et se ressemblent sur tout le reste de la liste »**.
 
-**Il existe également un piège proprement français : « chances » ne dit pas toujours la même chose.** Il designe parfois un risque relatif ou une chance relative (*relative risk* or *relative chances* en anglais) : « deux fois moins de chances d'être relâché » . Ailleurs, il porte sur les chances qu’un évenement se produise plutôt qu’il ne se produise pas, sa cote (*odds*), et sert à comparer les cotes de plusieurs catégories : « deux fois moins de chances d'avoir été relâché *plutôt que de ne pas l'avoir été* » (un *odds ratio* en anglais). Il suffit pour l'instant de retenir que, en français, la fin de la phrase n'est pas un ornement.
+**Il existe également un piège proprement français : « chances » ne dit pas toujours la même chose.** Il désigne parfois un risque relatif ou une chance relative (*relative risk* or *relative chances* en anglais) : « deux fois moins de chances d'être relâché » . Ailleurs, il porte sur les chances qu’un événement se produise plutôt qu’il ne se produise pas, sa cote (*odds*), et sert à comparer les cotes de plusieurs catégories : « deux fois moins de chances d'avoir été relâché *plutôt que de ne pas l'avoir été* » (un *odds ratio* en anglais). Il suffit pour l'instant de retenir que, en français, la fin de la phrase n'est pas un ornement.
 
 ## Les données
 
@@ -171,17 +171,17 @@ Chacune des trois dernières colonnes correspond à une mesure de l’écart. À
 
 - une **différence** de **&minus;12 points de pourcentage** — on soustrait l'un de l'autre ;
 - un **rapport** de **&divide;1.16** — les personnes noires ont été relâchées 1,2 fois moins souvent que les personnes blanches ;
-- un **rapport de cotes** de **1/2.11** — les personnes noires ont 2.11 fois *moins* de chances (*odds*) que les personnes blanches d’avoir été relachées plutôt que mises en garde à vue.
+- un **rapport de cotes** de **1/2.11** — les personnes noires ont 2,11 fois *moins* de chances (*odds*) que les personnes blanches d’avoir été relâchées plutôt que mises en garde à vue.
 
 **Dans `tab_reg()`, ce choix porte un nom — `measure` — et il vaut la peine de le lire en entier : la *mesure de l'écart*.** Ni une « échelle » abstraite, ni une unité : la question posée est **quelle sorte d'écart on veut voir rapportée** — soustraire, diviser, ou diviser les cotes. C'est le seul argument qu'on règle régulièrement, et c'est l'équivalent de `color =` dans `tab()`.
 
-**La cote, c'est le mot des paris sportifs.** Le terme vient du turf : dire qu'un cheval est *coté à 3 contre 1*, c'est dire que sa probabilité de gagner est trois fois plus grande que sa probabilité de perdre. Une cote met en rapport une situation dissymétrique — au numérateur la réussite, au dénominateur l'échec. Ici : sur 100 personnes blanches interpellées, 86 sont relâchées et 14 ne le sont pas, soit une cote de **6,1 contre 1** ; chez les personnes noires, 74 contre 26, soit **2,8 contre 1**. Le rapport de ces deux quantitées est le *rapport de cotes* : $2.8/6.1 = 0.46$. Comme il tombe du mauvais côté de 1, on en prend l'inverse, $1/0.46$  — et on inverse aussi la formulation : `1/2.11`, soit 2,11 fois moins.
+**La cote, c'est le mot des paris sportifs.** Le terme vient du turf : dire qu'un cheval est *coté à 3 contre 1*, c'est dire que sa probabilité de gagner est trois fois plus grande que sa probabilité de perdre. Une cote met en rapport une situation dissymétrique — au numérateur la réussite, au dénominateur l'échec. Ici : sur 100 personnes blanches interpellées, 86 sont relâchées et 14 ne le sont pas, soit une cote de **6,1 contre 1** ; chez les personnes noires, 74 contre 26, soit **2,8 contre 1**. Le rapport de ces deux quantités est le *rapport de cotes* : $2.8/6.1 = 0.46$. Comme il tombe du mauvais côté de 1, on en prend l'inverse, $1/0.46$  — et on inverse aussi la formulation : `1/2.11`, soit 2,11 fois moins.
 
 **Ce sont trois mesures du *même* écart**, et pourtant elles ne se lisent pas du tout de la même façon : le rapport de cotes fait sonner l'écart environ cinq fois plus fort que le rapport. Ce n'est pas une déformation, c'est que l'un divise des *cotes* et l'autre des pourcentages. Mais c'est le contresens le plus répandu des sciences sociales, et autant le dire franchement : **un rapport de cotes de 2 ne veut pas dire « deux fois plus souvent »**.
 
 D'où une règle de formulation, qui est la vraie difficulté du français sur ce point. Il existe deux manières de dire un rapport de cotes sans le confondre avec un risque relatif, et **il en faut toujours au moins une** :
 
-- **par la clause finale** — « les personnes noires ont 2,11 fois moins de chances que les personnes blanches d'avoir été relâchées *plutôt que d’avoir mises en garde à vue* ». Ou directement « 2.11 fois plus de chances d’avoir été mises en garde à vue » : les deux *odds* sont, par construction, inverses. C'est la fin de la phrase, et elle seule, qui sépare les deux quantités pour le lecteur averti – mais en gardant le lecteur profane dans la confusion.
+- **par la clause finale** — « les personnes noires ont 2,11 fois moins de chances que les personnes blanches d'avoir été relâchées *plutôt que d’avoir été mises en garde à vue* ». Ou directement « 2,11 fois plus de chances d’avoir été mises en garde à vue » : les deux *odds* sont, par construction, inverses. C'est la fin de la phrase, et elle seule, qui sépare les deux quantités pour le lecteur averti – mais en gardant le lecteur profane dans la confusion.
 - **par l’emploi du terme « cote »** — « leur cote d’être mis en garde à vue est 2,11 fois plus forte que les personnes blanches ». La probabilité d’avoir été mis en garde à vue des personnes noires a une cote deux fois plus élevée que celle du groupe ethnique majoritaire. Le mot *cote* porte la distinction à lui tout seul, le résultat est rigoureux, mais il n’est pas très parlant.
 
 Un *odds ratio* est donc difficile à formuler et à visualiser: c’est une mesure abstraite, qui porte une double comparaison et donc une double réference.
@@ -209,7 +209,7 @@ Dans une enquête nationale avec 5 000 partici, presque tout écart réel sera s
 
 ⚠ En français, le piège est double : dans la langue courante, « significatif » veut dire *important*, et il ne veut pas dire cela ici.
 
-`color_signif = "grey_non_signif"` est le réglage qui encode cela dans `tabxplor` : il colore les cases selon la taille de l'écart et grise celles qu'on n'a pas le droit de généraliser (avec un seuil de confiance de 95%). Ce qui reste en couleur est ce dont on peut parler. (Notons-le au passage : ce sont ici des données administratives et non un échantillon représentatif, si bien que les biais tenant à la façon dont les faits ont été enregistrés pèsent en réalité bien plus lourd que l'incertitude d'échantillonnage.)
+`color_signif = "grey_non_signif"` est le réglage qui encode cela dans `tabxplor` : il colore les cases selon la taille de l'écart et grise celles qu'on n'a pas le droit de généraliser (avec un seuil de confiance de 95 %). Ce qui reste en couleur est ce dont on peut parler. (Notons-le au passage : ce sont ici des données administratives et non un échantillon représentatif, si bien que les biais tenant à la façon dont les faits ont été enregistrés pèsent en réalité bien plus lourd que l'incertitude d'échantillonnage.)
 
 
 # 3. Maintenir les autres variables constantes
@@ -243,7 +243,7 @@ La bonne manière sociologique d'y penser n'est pas « quelle loi statistique ma
 
 Par exemple si, plutôt que `released`, nous voulions modéliser `checks` — dans combien des six fichiers de police le nom de la personne interpellée figurait déjà – quels modèles pourrions-nous choisir ? C'est un décompte, mais c’est *aussi* un score sur six, et on pourrait éventuellement la modéliser comme une quantité continue. À partir de ce choix, une regression va le plus souvent **modéliser l’écart** de mises en garde à vues **d’une manière spécifique** :
 
-- **comme décompte** — les autres variables choises étant égales, les personnes racisées comme noires figurent dans **1,35 fois plus** de fichiers que les personnes du groupe ethnique majoritaire (rapport de taux d’incidence, IRR) ;
+- **comme décompte** — les autres variables choisies étant égales, les personnes racisées comme noires figurent dans **1,35 fois plus** de fichiers que les personnes du groupe ethnique majoritaire (rapport de taux d’incidence, IRR) ;
 - **comme score sur six** — pour **un fichier donné**, leur chance (cote, *odds*) d'y figurer plutôt que de ne pas y figurer est **1,55 fois plus élevée** (*odds ratio*)
 - **comme quantité continue** — elles figurent en moyenne dans **0,5 fichier de plus** que les personnes blanches (une différence de moyennes, donc une soustraction: 2 - 1,5) ;
 
@@ -269,7 +269,7 @@ car_arrests |>
 
 Mêmes données, mêmes prédicteurs, trois mesures de l’écart différentes, trois phrases d’interprétation spécifiques. 
 
-On pourrait discuter de celle qui « prédit » le mieux le modèle. Par exemple, la regression linéaire utilise une distribution gaussienne/normale qui correspond mal à l’importance de la catégorie "incrit dans 0 fichiers de police", 35% de l’échantillon). 
+On pourrait discuter de celle qui « prédit » le mieux le modèle. Par exemple, la regression linéaire utilise une distribution gaussienne/normale qui correspond mal à l’importance de la catégorie « inscrit dans 0 fichier de police », 35 % de l’échantillon). 
 
 On pourrait discuter des hypothèses faites par chacune. Par exemple, le modèle binomial fait comme si l’inscription dans chaque fichier de police chaque avait une chance égale et indépendantes de se produire.
 
@@ -296,7 +296,7 @@ reg_measures(car_arrests, "checks", link = "all")
 
 ## Le pont : la colonne « écart observé » *est* le tableau croisé
 
-Voici maintenant le modèle de regression logistique de notre variable à expliquer `"released"`, avec ses personnes relachées ou mises en garde à vue – binomiale car notre variable est binaire.
+Voici maintenant le modèle de regression logistique de notre variable à expliquer `"released"`, avec ses personnes relâchées ou mises en garde à vue – binomiale car notre variable est binaire.
 
 ```{r}
 model <- tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"))
@@ -310,7 +310,7 @@ tab(car_arrests, c(colour, sex, employed, citizen), released, pct = "row", ref =
     stars = TRUE, color = "odds_ratio", color_signif = "grey_non_signif", display = "OR")
 ```
 
-**Les mêmes nombres, les mêmes étoiles.** La colonne observée n'est ni une approximation du tableau croisé ni un résumé : elle *est* le tableau croisé — le rapport de cotes calculé directement sur les pourcentages observés, imprimé à côté du modèle. Les traditionnelles étoiles ont été ajoutées pour dire en toutes lettres ce que les couleurs encodent déjà : une catégorie sans étoile n’est pas significativement différente de la modalité de référence, au seuil de confiance de 90 % (95% : deux étoiles, ou couleur grise).
+**Les mêmes nombres, les mêmes étoiles.** La colonne observée n'est ni une approximation du tableau croisé ni un résumé : elle *est* le tableau croisé — le rapport de cotes calculé directement sur les pourcentages observés, imprimé à côté du modèle. Les traditionnelles étoiles ont été ajoutées pour dire en toutes lettres ce que les couleurs encodent déjà : une catégorie sans étoile n’est pas significativement différente de la modalité de référence, au seuil de confiance de 90 % (95 % : deux étoiles, ou couleur grise).
 
 C'est ce qui rend la comparaison possible et honnête, et cela vaut d'être énoncé comme une règle : **dans tabxplor, l'écart observé est toujours la même quantité que l'effet modélisé, calculée sur les mêmes personnes, dans la même échelle, avec les mêmes intervalles de confiance.** (Ici rien ne manque dans les données, si bien que les deux populations coïncident d'elles-mêmes ; en général la colonne observée est calculée sur les observations complètes du modèle, de sorte qu'elles coïncident toujours.)
 
@@ -340,7 +340,7 @@ Les deux **estimations** se touchent, au milieu, parce que c'est cette comparais
 
 Et, enfin, la phrase d’interprétation :
 
-> Parmi les personnes interpellées pour possession à Toronto, **86 % des personnes blanches ont été relâchées, contre 74 % des personnes noires** — une cote environ 2,1 fois plus faible. Entre personnes **de même sexe, de même situation d'emploi, de même nationalité et de mêmes antécédents**, l'écart se resserre mais ne se referme pas : cote environ **1,5 fois plus faible**, soit **84 % contre 79 %** en proportions ajustées.
+> **Lecture** : parmi les personnes interpellées pour possession à Toronto, **86 % des personnes blanches ont été relâchées, contre 74 % des personnes noires** — une cote environ 2,1 fois plus faible. Entre personnes **de même sexe, de même situation d'emploi, de même nationalité et de mêmes antécédents**, l'écart se resserre mais ne se referme pas : cote environ **1,5 fois plus faible**, soit **84 % contre 79 %** en proportions ajustées.
 
 Notons ce que les proportions ajustées permettent de dire et que le rapport de cotes `OR` ne permet pas. `1/1.48` est un nombre abstrait ; *84 % contre 79 %* est un énoncé sur des personnes : ce que deviendraient les pourcentages si les gens se ressemblaient réellement sur tous les autres prédicteurs choisis.
 
@@ -455,7 +455,7 @@ Il suffit, ensuite, de passer `measure =` pour choisir celle qui nous convient.
 tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"), stats=NULL)
 ```
 
-> **Lecture** : toutes les autres variables choisies étant égales, les personnes noires interpellées ont eu **1,48 plus de chances** de finir en garde à vue *plutôt que d’être relachés — autrement dit, leur **cote** d'être relâchées est 1,48 fois plus faible.
+> **Lecture** : toutes les autres variables choisies étant égales, les personnes noires interpellées ont eu **1,48 fois plus de chances** de finir en garde à vue *plutôt que d’être relâchées* — autrement dit, leur **cote** d'être relâchées est 1,48 fois plus faible.
 
 C'est ici que la règle de la section 2 se paie comptant : la clause finale, ou le mot *cote*. Sans eux, la phrase annonce un risque relatif de 1,48 qui est en contradiction totale avec les données.
 
@@ -468,7 +468,7 @@ tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "chec
 
 > **Lecture** : entre personnes de même sexe, de même situation d'emploi, de même nationalité et de mêmes antécédents, les personnes noires ont été relâchées **1,07 fois moins souvent** que les personnes blanches.
 
-Si l’on compte non pas en chances d’avoir été relaché, mais l’inverse : les personnes racisées comme noires ont 1.34 fois plus de chances d’avoir été mis en garde à vue. Le ratio n’est pas symmétrique, c’est son problème, et il est donc toujours plus parlant lorsqu’on prend la catégorie rare que lorsqu’on prend la catégorie fréquente.
+Si l’on compte non pas en chances d’avoir été relâché, mais l’inverse : les personnes racisées comme noires ont 1,34 fois plus de chances d’avoir été mises en garde à vue. Le ratio n’est pas symétrique, c’est son problème, et il est donc toujours plus parlant lorsqu’on prend la catégorie rare que lorsqu’on prend la catégorie fréquente.
 
 ```{r}
 tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
@@ -551,7 +551,7 @@ Les étudiant·es s’attendent généralement à ce que l'ajustement réduise t
 | **l’écart s’amplifie** | la classe sociale, sur le fait d'aller au cinéma (France)| &minus;21,3 &rarr; &minus;24,9 points |
 | **l’écart s'inverse**  | le sexe, sur l'admission à Berkeley (USA)                | &minus;14,2 &rarr; +1,9 point         |
 
-**Noir-blanc : l’écart se réduit.** Dans le cas des mises en garde à vue à Toronto, nous avons vu que l'effet de la couleur de peau perdait environ la moitié de sa taille. Une partie de ce qui ressemblait à un effet direct de la race assignée était l'emploi, la nationalité et les antécédents dans les rapports avec la police (tous conséquences, d’une certaine manière, d’un certain aspect dimension du racisme structurel). Mais l’autre moitié, celle qui tient, pourrait *aussi* s’expliquer par une forme de racisation plus directe se jouant dans les interactions avec les policiers – ou par d’autres facteurs non mesurés ici.
+**Noir-blanc : l’écart se réduit.** Dans le cas des mises en garde à vue à Toronto, nous avons vu que l'effet de la couleur de peau perdait environ la moitié de sa taille. Une partie de ce qui ressemblait à un effet direct de la race assignée était l'emploi, la nationalité et les antécédents dans les rapports avec la police (tous conséquences, d’une certaine manière, d’une certaine dimension du racisme structurel). Mais l’autre moitié, celle qui tient, pourrait *aussi* s’expliquer par une forme de racisation plus directe se jouant dans les interactions avec les policiers – ou par d’autres facteurs non mesurés ici.
 
 **Homme-femme : l’écart disparaît.** Dans les mêmes données, les femmes sont relâchées un peu plus souvent que les hommes (86 % contre 83 %, tout juste significatif). Pourtant dans le modèle, dès lors qu’on raisonne entre personnes comparables sur les variables choisies, l’effet se dissipe totalement :
 
@@ -603,7 +603,7 @@ Avec le réglage `color_signif = "guaranteed effect"`, tout ce qui est significa
 
 Le premier seuil est un changement de &times;1,1 — la vieille convention épidémiologique selon laquelle un déplacement de 10 % mérite d'être remarqué. **En faire une aide à la lecture, jamais une règle** : le seuil qui convient dépend de la taille de l'effet, de celle de l'échantillon et des corrélations en jeu. Pour demander « est-ce que ça a bougé, et dans quel sens ? », il fait très bien l'affaire ; pour décider quelles variables ont leur place dans un modèle, pas tellement.
 
-On peut afficher les deux à la fois : `color = c("measure", "adjustment")` utilise la couleur du texte pour montrer l’effet de chaque colonne, et la couleur de fond pour montrer le déplacement par rapport à l'effet observé, mais le résultat n’est pas toujours évivent à lire.
+On peut afficher les deux à la fois : `color = c("measure", "adjustment")` utilise la couleur du texte pour montrer l’effet de chaque colonne, et la couleur de fond pour montrer le déplacement par rapport à l'effet observé, mais le résultat n’est pas toujours évident à lire.
 
 ```{r, echo=FALSE, eval=FALSE}
 tab_reg(car_arrests, "released",

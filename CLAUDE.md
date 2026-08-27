@@ -103,7 +103,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 
 **Cross-cutting** (touch with care): `fmt_class.R` is the foundation of every column; `.onLoad()` in `utils.R` seeds every option; `format.tabxplor_fmt()` and `fmt_color_channels()` are the shared display/colour sources of truth across all backends.
 
-**Other directories:** `vignettes/` (introduction, *All else equal*, regression, weights, programming; `vignettes/articles/` is pkgdown-only and holds the French twins) · `tests/testthat/` (testthat v3, subsystem-named: the package's contract) · `man/` (roxygen-generated, never edit) · `data/` + `data-raw/` (the four example data sets and the script that builds them) · `inst/i18n/` + `po/` (translations) · `jamovi/` (module definition) · `dev/` (seven technical guides, the dev scripts and perf harness, `dev/tests/` — the second test suite — and `dev/archive_2.0.0/`, the 2.0.0 evidence base; all `.Rbuildignore`'d).
+**Other directories:** `vignettes/` (introduction, *All else equal*, regression, weights, programming; `vignettes/articles/` is pkgdown-only and holds the five French twins) · `tests/testthat/` (testthat v3, subsystem-named: the package's contract) · `man/` (roxygen-generated, never edit) · `data/` + `data-raw/` (the four example data sets and the script that builds them) · `inst/i18n/` + `po/` (translations) · `jamovi/` (module definition) · `dev/` (seven technical guides, the dev scripts and perf harness, `dev/tests/` — the second test suite — and `dev/archive_2.0.0/`, the 2.0.0 evidence base; all `.Rbuildignore`'d).
 
 ---
 
@@ -1172,9 +1172,92 @@ The aim is to create a **compact, yet holistic and integrated translation**: avo
 
 **Verified by rendering, four times.** Final French render: **0 English strings in prose or tables**, 5 « Lecture : » blocks, heading count and level sequence identical to the English (32/32), chunk bodies differing only in the three setup chunks, the nine ASCII comments and the four translated labels. Typography swept by grep: no decimal point in prose outside a quoted cell value, no `[0-9]%` without a space, no `$` before a number (money is « 14 088 $ »), guillemets spaced.
 
-#### Phase 23f-ii — other vignettes french translations
+#### Phase 23f-ii — other vignettes french translations — DONE
 
-The two references for French vocabulary are `vignettes/articles/tabxplor-all-else-equal-fr.Rmd` and `dev/french_glossary.md`.
+**The French set is now five documents in one voice.** `tabxplor-weights-fr.Rmd` is new; the three
+older twins were re-authored against the post-23a English, not updated. Every pair now matches
+heading for heading:
+
+| document                      | lignes (EN → FR) | chunks | titres | avant |
+|:------------------------------|:-----------------|:-------|:-------|:------|
+| `tabxplor-fr`                 | 581 → 578        | 53/53  | 20/20  | 730 l., 26 titres |
+| `tabxplor-reg-fr`             | 1 259 → 1 332    | 63/63  | 52/52  | 1 335 l., 48 titres, **aucun de niveau `#`** |
+| `tabxplor-weights-fr`         | 188 → 185        | 11/11  | 8/8    | **n'existait pas** |
+| `tabxplor-programming-fr`     | 365 → 360        | 27/27  | 14/14  | 325 l., 13 titres |
+
+⚠ **The twins were the pre-23a documents, and wrong in ways a reader could act on.** Nine stale facts
+corrected: `per 17.3 (SD)` / « par écart-type » (the default has been `"2sd"` since 22g-v — the row
+prints `per 34.6 (2SD), at 47.2 (mean)`) · `split_var` (removed; it is `tab_vars`) · « (Elle nécessite
+le package `car`.) » (22l vendored `tx_vif()`) · collinearity « au-dessus de 5 » (the footer flags from
+**10**; 5 is the plot's first guide mark) · `tabxplor.xl_or_numeric` (does not exist — it is
+`xl_ratio_cells`, with a different value set) · `signif_levels`/`signif_labels` (superseded by
+`tabxplor.stars`) · the token list stopping at `gap` (`moe`, `sd`, `cv`, `coef` were missing) · « L'autre
+**rapport de risques** » (22f-i settled `RR` = **risque relatif**) · « Combien de fois plus de
+**chances** ? » on a section reporting a *risk ratio*, where « chances » is the very word the
+odds-ratio rule reserves.
+
+**The register is one decision applied everywhere**: `on` / `nous`, **zero `vous`** — headings
+included, which is what forced « Vos premiers tableaux croisés » → « Les premiers tableaux croisés »,
+« …faire pour vous » and « Interroger **votre** propre variable ». Measured 63 → 4, and the four
+survivors are all **quoted questionnaire items** addressing a respondent (« lesquelles vous
+concernent ? », « où buvez-vous du thé ? »), which the English phrases the same way. Recorded as a
+rule in `dev/french_glossary.md`, with a new § *Le vocabulaire des pages de référence* for the ~18
+terms this phase settled.
+
+**Structural work, per document.** The **introduction** was reordered to the English's shape — colour
+moves from eleventh to second — losing six headings (the weights block, now its own document; the
+115-line `variable_type × color × color_signif` grid that duplicates `?tab`'s generated
+`@param ci_method` verbatim; the trailing jamovi section, folded into the opening) and gaining the
+`display` section, `tab_counts()`, the Excel → Word route and the `spread_vars` demo. The **regression
+reference** got the seven-part spine it never had, which meant moving *Toute variable à expliquer a sa
+contrepartie observée* into part 1 (it sat at l. 529, after part 3's material), hoisting the four
+estimand-argument sections into a part 2 placed *before* the per-family part, merging the three « Pour
+mémoire » appendices into one, and adding *Corriger une forme* plus the rebuilt shape-table section
+around the `tvhours` (straight) vs `age` (reversal) contrast. **Programming** gained *Savoir ce qu'on a
+en main avant d'y toucher* (`tab_structure()` / `tab_supports()` / `tab_columns()` / `fmt_attr()`),
+absent although `NEWS.md` presents those accessors as headline 2.0.0 features.
+
+⚠ **One real defect carried over from `tabxplor-fr.Rmd`**: its level-3 chunk comment printed
+« Fondé sur le plan de sondage (survey) : … », but the actual msgstr (`po/R-fr.po:551`) is
+« **Estimations, intervalles et tests pondérés tiennent compte du plan d'échantillonnage
+(survey-design).** » Both files now print the true string.
+
+**`tabxplor-all-else-equal-fr.Rmd` — typo pass only** (the maintainer's ruling): 16 lines, structure
+and sense untouched. `puralnt` → `parlant`, `designe`/`évenement`/`relachée(s)`/`quantitées`/`choises`/
+`symmétrique`/`évivent` accented, `d'avoir mises` → `d'avoir été mises`, `1,48 plus de chances` →
+`1,48 **fois** plus`, an unclosed italic at l. 458, five prose typography slips (`2.11` → `2,11` ×2,
+`1.34` → `1,34`, `35%` → `35 %`, `95%` → `95 %` ×2), and l. 343's blockquote restored to the
+« **Lecture** : » form — bringing the count to the **5** the 23f-i summary records.
+
+⚠ **Three sentences are truncated mid-clause and were NOT invented**, each needing a clause only the
+maintainer can author: l. 206 « Dans un dispositif expérimental avec des **, un** » · l. 208 « avec
+5 000 **partici,** » · l. 501 « une phrase du genre **.** ».
+
+**Registration.** `_pkgdown.yml` gains `articles/tabxplor-weights-fr` in the `articles:` index (an
+incomplete index is a hard pkgdown error) and in the navbar, whose « En français » menu was also
+reordered to mirror the English one — the two disagreed. `vignettes/tabxplor-weights.Rmd` gains the
+« *Une version française…* » line, the only English vignette that lacked one. `README.Rmd` and
+`pkgdown/index.md` gain the FR clause on the *Weighted and survey data* bullet; `README.md` was
+**missing that bullet entirely** (the staleness 23h flagged), so it is added there, closing that item.
+
+**Verification.** All six affected documents render in a cold `Rscript` with **0 ANSI escapes**
+(the two condition hooks matter: a `cli_inform()` raises a *message* and a `cli_warn()` a *warning*,
+each with its own knitr hook). Heading parity is exact in count **and level sequence** for all four
+pairs — ⚠ extracted with the code fences skipped, since a plain `grep '^#{1,4} '` counts the R comments
+inside chunks and reports 28 headings where there are 20. **Chunk-code parity**: after stripping
+comments, 42/44 · 56/57 · 3/6 · 23/23 identical, and every remaining difference is a translated string
+literal (`"Titre personnalisé"`, `subtext = "Source : GSS…"`) or a French variable name in an
+`eval = FALSE` illustrative call (`mon_enquete`, `diplome`, `poids`, `strate`) — no executed R code
+differs. Stale-fact sweep clean; typography sweep clean on prose with code spans removed (0 unspaced
+`%`, 0 prose decimal points); every relative `](tabxplor-*-fr.html)` resolves; the `articles:` index
+holds all ten.
+
+⚠ **English `cli` messages still reach a French page** — `R/tab_reg.R:1378`'s *"Cumulative odds ratios
+may mislead…"* shows on the ordinal example. This is the standing package-wide condition Phase 23c
+recorded (`Config/potools/style: explicit` extracts only literal `gettext()`/`gettextf()`, and cli's
+inline markup is incompatible with it), not something this phase introduced. ⚠ Also not run here:
+`devtools::check()` — the release gate — and no test suite, these being documentation plus
+`_pkgdown.yml` / README metadata.
 
 #### Phase 23g — Code housekeeping and future-proofing — DONE
 

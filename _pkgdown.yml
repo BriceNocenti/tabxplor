@@ -42,10 +42,12 @@ navbar:
       - text: En français
       - text: Introduction à tabxplor
         href: articles/tabxplor-fr.html
-      - text: Tableaux de régression avec tab_reg()
-        href: articles/tabxplor-reg-fr.html
       - text: "Toutes choses égales par ailleurs : lire une régression sans lâcher les pourcentages"
         href: articles/tabxplor-all-else-equal-fr.html
+      - text: Tableaux de régression avec tab_reg()
+        href: articles/tabxplor-reg-fr.html
+      - text: Données pondérées et plans de sondage
+        href: articles/tabxplor-weights-fr.html
       - text: Programmer avec tabxplor
         href: articles/tabxplor-programming-fr.html
 
@@ -226,6 +228,7 @@ articles:
     Les traductions françaises des articles (les pages de référence restent en anglais).
   contents:
   - articles/tabxplor-fr
-  - articles/tabxplor-reg-fr
   - articles/tabxplor-all-else-equal-fr
+  - articles/tabxplor-reg-fr
+  - articles/tabxplor-weights-fr
   - articles/tabxplor-programming-fr

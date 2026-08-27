@@ -67,6 +67,8 @@ for (hook in c("message", "warning")) {
 gss_simple <- gss_cat_data_formatting()
 ```
 
+*Une version française de ce document est disponible : [Données pondérées et plans de sondage](https://bricenocenti.github.io/tabxplor/articles/tabxplor-weights-fr.html).*
+
 Most survey files come with a **weight**: a number saying how many people in the population each respondent stands for. The argument `wt =` uses it, and every percentage and mean in the table becomes an estimate of the *population* rather than of the people you happened to interview.
 
 That is the easy half. The harder half is the **margin of error** around those percentages — the confidence intervals, the significance stars, the colours and the tests. There, tabxplor has **three levels**, and a table's footer always tells you which one it is on.

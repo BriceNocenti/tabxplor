@@ -1548,7 +1548,8 @@ black-and-white scheme on its own.
   walked from a first cross-table to a finished sentence (*aussi
   disponible [en français](articles/tabxplor-all-else-equal-fr.html)*).
 - [Weighted and survey data](articles/tabxplor-weights.html) — the three
-  levels of margin of error, and which one your file deserves.
+  levels of margin of error, and which one your file deserves (*aussi
+  disponible [en français](articles/tabxplor-weights-fr.html)*).
 - [Programming with tabxplor](articles/tabxplor-programming.html) — many
   tables at once, custom workflows, options (*aussi disponible [en
   français](articles/tabxplor-programming-fr.html)*).
