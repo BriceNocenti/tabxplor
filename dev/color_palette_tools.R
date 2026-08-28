@@ -10,6 +10,9 @@
 # KEY CONSTRAINTS:
 #   - Lives in dev/ (.Rbuildignore'd) ON PURPOSE: it is the sole reason the package
 #     would otherwise depend on farver + colorspace, and it pulls in base graphics.
+#   - This file's maths is about the TABLE palette (COLOR_RAMPS). The maths for the SITE
+#     theme is txtheme's exported API; `.cg_apca()` duplicates txtheme::apca() on purpose,
+#     because txtheme has no Imports and this file needs farver. Same Myndex reference vector.
 #     Do NOT move it back into R/ -- see CLAUDE.md and the design notes at the end of
 #     R/tab_classes.R.
 #   - Depends on: farver, colorspace, knitr, kableExtra (none declared in DESCRIPTION).

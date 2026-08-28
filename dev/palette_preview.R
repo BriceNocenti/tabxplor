@@ -30,7 +30,9 @@
 # ⚠ AND THE TRADE INSIDE EACH: the further a fill moves from the page, the more it reads as a shape
 #   and the LESS the text on it does. Bolder is not better here; it is a different bargain.
 
-source("dev/heading_ladders.R")             # oklch_hex(), oklch_maxC(), hex_oklch(), apca(), contrast()
+source("dev/heading_ladders.R")             # the ladders, and txtheme's OKLCH/APCA maths under
+                                           # the names used below. This file is about the TABLE
+                                           # palette; the SITE theme lives in txtheme itself.
 suppressMessages(pkgload::load_all(".", quiet = TRUE))
 
 options(tabxplor.lang = "en", tabxplor.tab_kable_css = FALSE, tabxplor.cleannames = TRUE,

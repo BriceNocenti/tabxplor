@@ -42,8 +42,8 @@ prose <- c(
 # The second style. A heading colour that survives an empty page is not the test; a course page runs
 # annotation spans, inline code and chunks past it, and the green has to hold its rank among them.
 annotation_css <- local({
-  f <- "dev/annotation_classes.css"
-  if (file.exists(f)) paste(readLines(f, warn = FALSE), collapse = "\n") else ""
+  f <- system.file("pkgdown/BS5/assets/txtheme-annotations.css", package = "txtheme")
+  if (nzchar(f)) paste(readLines(f, warn = FALSE), collapse = "\n") else ""
 })
 
 chunk <- paste0(

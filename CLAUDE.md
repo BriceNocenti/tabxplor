@@ -538,9 +538,39 @@ Other long-form 2.0.0 docs live in `dev/` (all `.Rbuildignore`'d), never inline 
 
 ### Phase 24 — About to release, last checks
 
-#### Phase 24a — Unified theme framework
+#### Phase 24a — Unified theme framework ✓ DONE
 
-Implement `dev/unified_theme_framework.md`: it’s a small new personal R package for themes and colors management, that will be used for the pkgdown site theme here in tabxplor.
+**The site is themed, and the theme lives in a package.** tabxplor's pkgdown site was themed by nothing at all — stock Bootstrap dark, stock highlighting, `_pkgdown.yml`'s `template:` two lines — while the whole design sat unused in `dev/` as preview tools and generated `.scss` fragments. It is now delivered by **`~/github/txtheme`**, a new small R package + Quarto extension where a colour is decided once, in one declared grid, and every consumer reads what a generator wrote from it. tabxplor is its first consumer, not its home.
+
+**What tabxplor's own YAML shrank to.** `_pkgdown.yml`'s `template:` gains one line, `package: txtheme` — no `bslib:` block, no `theme:`/`theme-dark:`, no brand file. `pkgdown/extra.scss` is back to the `.dropdown-menu` rule alone, and `DESCRIPTION` names `BriceNocenti/txtheme` in `Config/Needs/website` (never a Suggests: no R code of tabxplor's touches it, and `Config/Needs/*` never reaches CRAN).
+
+**Departures from the brief** (`dev/unified_theme_framework.md`, moved to `txtheme/dev/design.md` and rewritten from proposal to description):
+
+- **No `_brand.yml` for pkgdown, and no `brand.yml` dependency.** A template package's `extra.scss` arrives as a *rules* layer (`bslib::bs_add_rules()`), where a Sass variable is inert but a Bootstrap 5.3 **custom property** is not — and all eight chrome targets have `--bs-*` twins. The brand file bought pkgdown nothing; the brief's eight-line `bslib:` block became zero lines.
+- **⚠ The `-rgb` twins, which the brief did not mention.** Bootstrap derives `--bs-secondary-color`/`--bs-tertiary-color` from the *literal* body-colour channels and `pkgdown.scss` reads `var(--bs-body-color-rgb)` in eleven places; `a` reads **only** `--bs-link-color-rgb`, so setting the link hex alone does nothing at all. The generator emits each twin beside its hex plus the two derived `rgba()` rules, and `--bs-link-hover-color` derived by Bootstrap's own 20 % tint.
+- **One declared palette instead of a vendored 177-scope theme JSON + `overrides.yml`.** Four grids, split by the namespace each key belongs to: `TX_PALETTE` (colour), `TX_SLOTS` (where it is painted), `TX_TOKENS` (skylighting's 31, once each), `TX_BRAND` (Quarto role). Foreign keys checked at load, as in `zzz-fact-keys.R`.
+- **The heading ladder is derived, not typed.** Each rung's row carries `spec = "oklch 0.950 0.10 100"` and `.onLoad()` rebuilds the hex from it — `warm-95-10`, floored on the ink at L 0.840.
+- **The `.at` shim and the annotations sheet ship with the package**, through its own `inst/pkgdown/BS5/templates/in-header.html` (which keeps pkgdown's own line, and which a site can still shadow). ⚠ The annotation classes are **opt-in** (`template: params: txtheme: {annotations: true}`): `.non, .error {text-decoration: underline double}` would decorate every warned or errored example on a reference page, which emits `<span class="warning">` of its own. tabxplor does not opt in.
+- **`heading_ladders.R`'s maths became txtheme's exported API** — one true source. The file keeps the 64 ladder proposals and attaches `txtheme::oklch_hex()` / `hex_oklch()` / `max_chroma()` / `apca()` / `contrast()` under the names the three previews already call, so nothing else changed. Dev-only: `dev/` is `.Rbuildignore`d and stripped from the release branch.
+- **No recorded APCA column.** A slot knows the ground it is read on, a colour does not, so contrast is a report `build_theme()` prints per slot rather than a cell that could drift. `inst/prose/prose.scss` was dropped for the same reason: every prose rule is a `TX_SLOTS` row (colour + style), which beats a second hand-written file stating half of each rule.
+
+**Two findings that cost a render each, both now recorded in `txtheme/dev/design.md` Appendix A:**
+
+- ⚠ **libsass cannot compile CSS `min()` with mixed units.** The committed `max-height: min(80vh, 34rem)` in `pkgdown/extra.scss` aborted the whole site build with *"Incompatible units: 'rem' and 'vh'"* — a latent breakage found by this phase. Uppercase `MIN(...)` matches no Sass function and passes through; pkgdown's own `pkgdown.scss` writes `MAX(100%, 20rem)` for the same reason.
+- ⚠ **A Quarto `color.palette` entry named after a brand role is promoted to that role, in both modes and silently.** A palette key `link` put the dark accent blue on the *light* stylesheet at Lc 30. The colour is called `accent`, and `.onLoad()` refuses any name in `BRAND_ROLES`. (A role that names only one mode *is* correctly ignored in the other — verified, so the unified `{dark:}`-only brand file is safe.)
+
+**The acceptance test.** Stage 0 themed the site by hand as a golden file; stage 2 replaced it with `template: package: txtheme`. The compiled Bootstrap CSS carries the **identical 3112 rules**, the only difference being that `.dropdown-menu` moves from before to after the theme block — pkgdown's documented layering (a template package's `extra.scss` lands *before* the site's own, which is what keeps tabxplor an `!important`-free lever over txtheme). Verified further: 30 scoped token rules, `--bs-body-color-rgb: 205,203,188` (not Bootstrap's stock `222,226,230`), both assets copied, `txtheme-at.js` linked at the right relative root, the annotations sheet not linked, `check_pkgdown()` clean.
+
+**Removed from tabxplor:** `dev/highlight-starless-monokai-{atom,pro,one}.scss` (their own header said "copy this to `pkgdown/extra.scss`" — `template: package:` *is* that copy), `dev/annotation_classes.css` (moved to `txtheme/inst/prose/annotations.scss`, minus its `:root` block, which the generator now writes), `dev/unified_theme_framework.md` (moved). `dev/site_theme_preview.R` lost `starless()`, the three port definitions, the writer loop and the on-page YAML box (578 → 485 lines): it reads txtheme's shipped flat `.scss` through its own existing parser, and its job narrows from "choose the theme by eye" to "check the shipped theme against real markup".
+
+**txtheme itself:** `R CMD check` 0/0/0 in 12.6 s, 169 assertions. **No `Imports` at all** — pkgdown reads a shipped file rather than loading the namespace, so on a website build the package only has to install; `tx_tribble()`/`tx_grid()` reimplement the grid fold in ~25 lines of base R, and the JSON and YAML writers are hand-rolled for the same reason. `build_theme(check = TRUE)` rebuilds every output in memory and diffs it against disk (no dates in banners, sorted keys), and the suite asserts it. Verified on the Positron-bundled Quarto 1.10.18: a two-page project renders with `format: txtheme-html`, two syntax-highlighting stylesheets with different content as a `quarto-color-scheme`/`quarto-color-alternate` pair, and the brand hexes in the dark stylesheet from a bare `_brand.yml` at the root with no `brand:` key anywhere.
+
+**The workflow's prune call is now guarded.** `.github/workflows/pkgdown.yaml` ran `source("dev/site_prune.R")` unconditionally, which would have failed on `master` after the release, where `dev/` is stripped — and where the prune is unnecessary anyway, `CLAUDE.md` being stripped too. It is `if (file.exists("dev/site_prune.R"))` now.
+
+⚠ **One maintainer step remains**: rehearse tabxplor's change as a **PR** rather than pushing to a branch the workflow deploys from — `.github/workflows/pkgdown.yaml` runs on `pull_request` with its deploy step gated `if: github.event_name != 'pull_request'`, so a PR is a free full-fidelity check that pak resolves `BriceNocenti/txtheme` (a public repo: `secrets.GITHUB_TOKEN` cannot fetch a private one).
+
+#### Phase 24b — rebuild pkgdown site with `~/dev1/github/txtheme`
+
 
 ### Phase 25 — CRAN release
 

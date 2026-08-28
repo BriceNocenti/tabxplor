@@ -49,7 +49,7 @@ Suggests:
 Config/testthat/edition: 3
 Config/testthat/parallel: true
 Config/testthat/start-first: tab-reg, plots, tab-xl, reg-estimand, survey-variance, tab-classes, golden, tab-render-html, reg-assumptions, tab-display, tab, tab-transpose-render, tab-export, tab-palettes, reg-influence, survey-design, jmvtab, tab-export-prep, reg-cross, tab-args
-Config/Needs/website: pkgdown
+Config/Needs/website: pkgdown, BriceNocenti/txtheme
 Config/Needs/coverage: covr
 Imports:
     dplyr (>= 1.0.3),

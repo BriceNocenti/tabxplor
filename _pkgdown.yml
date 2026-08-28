@@ -4,9 +4,15 @@ url: https://bricenocenti.github.io/tabxplor/
 # (`data-bs-theme` on <html>) -- which is one of the hooks tab_css(theme = "auto") already writes its
 # cascade against (tx_dark_hooks, R/tab-css.R), so the tables follow the reader like the page does.
 # The vignettes emit "auto" only under pkgdown; a CRAN-shipped vignette is read on a light page.
+# `package: txtheme` brings the whole dark theme -- chrome, heading ladder, prose, code colours --
+# plus the argument-name shim, from https://github.com/BriceNocenti/txtheme. A colour changes in
+# txtheme/R/aaa-palette.R, not here, and there is deliberately no `bslib:` block and no brand file.
+# ⚠ `light-switch: true` is what makes any of it apply: every txtheme rule is scoped
+#   html[data-bs-theme="dark"], and pkgdown only emits the dark cascade when the switch is on.
 template:
   bootstrap: 5
   light-switch: true
+  package: txtheme
 
 home:
   links:

@@ -1,15 +1,20 @@
-# PURPOSE: choose the site's dark chrome and its code-highlighting colours BY EYE, without rebuilding.
+# PURPOSE: check the SHIPPED site theme against real markup, without rebuilding the site.
 # ROLE: dev tool, .Rbuildignore'd.  Rscript dev/site_theme_preview.R  ->  dev/site_theme_preview.html
-#   Open that file in a browser (\\wsl.localhost\dev\home\dev1\github\tabxplor\dev\), flip the
-#   controls at the top, and paste the YAML it prints into _pkgdown.yml.
+#   Open that file in a browser (\\wsl.localhost\dev\home\dev1\github\tabxplor\dev\) and flip the
+#   controls at the top.
 #
-# WHAT IT SHOWS, and the three INDEPENDENT layers it lets you set:
-#   1. the page chrome   -- bootstrap 5.3 dark colours, set in _pkgdown.yml as bslib `*-dark`
-#      variables. The page exposes them as the CSS custom properties they compile to, so a colour
-#      picked here is the value to write in the YAML.
-#   2. the code colours  -- pkgdown's `template: theme:` (light) and `theme-dark:`. All 35 styles
-#      pkgdown bundles are here, plus three ports of the maintainer's own editor theme
-#      (izumii.starless-monokai, read from ~/.positron-server/extensions).
+# ⚠ THE THEME IS DECIDED, AND IT IS NOT SET HERE. The dark chrome, the heading ladder, the prose
+#   rules and the code colours come from the `txtheme` package (`template: package: txtheme` in
+#   _pkgdown.yml); a colour changes in txtheme/R/aaa-palette.R and reaches this page through the
+#   compiled stylesheet below. So this tool's job is no longer "choose the theme by eye" but "check
+#   the shipped theme against markup a specimen page cannot produce" -- downlit's own code blocks,
+#   pandoc's own document elements, and real tab()/tab_reg() tables.
+#
+# WHAT IT SHOWS, and the three layers it still lets you vary BY EYE (nothing it writes is a decision):
+#   1. the page chrome   -- bootstrap 5.3 dark colours, exposed as the CSS custom properties they
+#      compile to. The page opens on txtheme's own values.
+#   2. the code colours  -- all 35 styles pkgdown bundles, plus `txtheme-dark`, read back from the
+#      shipped inst/highlight/txtheme-dark.scss so this page cannot disagree with the site.
 #   3. the TABLE colours -- tabxplor's own palette, which nothing above touches. It is set in R with
 #      set_color_palette(); the tables below are rendered through tab_css(theme = "auto"), the same
 #      call the vignettes make, so they follow the light/dark toggle exactly as the site does.
@@ -18,7 +23,7 @@
 #   chrome is the site's own, not an approximation. Build the site at least once, or the page loads
 #   unstyled. dev/build_site.R wipes docs/ before it builds, so re-run this script after a rebuild.
 
-stopifnot(requireNamespace("pkgload", quietly = TRUE))
+stopifnot(requireNamespace("pkgload", quietly = TRUE), requireNamespace("txtheme", quietly = TRUE))
 pkgload::load_all(".", quiet = TRUE)
 
 options(tabxplor.lang = "en", tabxplor.tab_kable_css = FALSE, tabxplor.tab_kable_tooltips = TRUE,
@@ -31,10 +36,12 @@ out_file  <- "dev/site_theme_preview.html"
 style_dir <- system.file("highlight-styles", package = "pkgdown")
 
 
-# === SECTION: the bundled highlight styles =========================================================
+# === SECTION: the highlight styles ================================================================
 
 # Each pkgdown style is flat CSS: `pre {…}` plus one `pre code span.XX {…}` per token class. Read
 # them as (selector, declarations) pairs so any prefix can be put in front of the selector.
+# txtheme ships its own theme in exactly that shape (inst/highlight/txtheme-dark.scss, generated from
+# TX_TOKENS), which is why reading it costs no code here and cannot drift from the site.
 read_style <- function(path) {
   txt   <- paste(readLines(path, warn = FALSE), collapse = "\n")
   txt   <- gsub("/\\*.*?\\*/", "", txt)                       # the aligned token-name comments
@@ -48,68 +55,27 @@ bundled <- vapply(list.files(style_dir, "\\.scss$"), function(f) sub("\\.scss$",
 styles  <- lapply(file.path(style_dir, paste0(bundled, ".scss")), read_style)
 names(styles) <- bundled
 
+styles[["txtheme-dark"]] <- read_style(
+  system.file("highlight/txtheme-dark.scss", package = "txtheme"))
 
-# === SECTION: the Starless Monokai ports ===========================================================
-
-# The VS Code theme sets token colours and NO editor background -- that is what "starless" means, and
-# it is why these ports set no `pre` background either: the code block takes the page's own dark
-# ground, and the "code background" control below is what overrides it.
-# Colours read from izumii.starless-monokai 1.1.2 (themes/starless-monokai-*.json), mapped from
-# TextMate scopes to pandoc's token classes.
-# DESIGN: the base text is #CDCBBC, not the theme file's #fcfcfa -- the maintainer's own settings.json
-# override, on the ground that a near-white makes the text louder than the colours around it.
-# DESIGN: comments are LIGHTER than the editor's. Measured on the three dark grounds this page can
-# show (#1f1f1f / #21252b / #282c34), the theme's own #727072 gives 3.4 / 3.1 / 2.9 to 1 -- under
-# WCAG AA everywhere, and a page is read at a smaller size than an editor. #8b8a8d gives 4.8 / 4.5 /
-# 4.1. It lands close to the punctuation grey, and that is fine: the theme sets comments ITALIC, so
-# the style carries the distinction the luminance no longer can.
-# DESIGN: `.op` is downlit's class for BOTH `(` `,` `$` and `<-`. In the editor the first are
-# punctuation (grey) and only the second is pink; grey is the majority and the calmer block, so the
-# ports use the punctuation grey and leave pink to keywords.
-# `param` is the ARGUMENT NAME. Pandoc tags `pct =` as Attribute (`at`); the editor scopes it
-# `variable.parameter`, which this theme paints #fc9867 italic -- the same orange as inline code,
-# which is what makes the two read as one family.
-starless <- function(fg, comment, keyword, string, fun, const, type, op, info, param) {
-  tok <- c(
-    normal = fg,                                              # `pre code`, the text itself
-    al = paste0(keyword, "; font-weight: bold"), an = comment, at = paste0(param, "; font-style: italic"),
-    bn = const, bu = fun, cf = keyword, ch = string, cn = const, co = paste0(comment, "; font-style: italic"),
-    cv = comment, do = comment, dt = paste0(type, "; font-style: italic"), dv = const,
-    er = paste0(keyword, "; text-decoration: underline"), ex = fun, fl = const, fu = fun,
-    im = keyword, "in" = info, kw = keyword, op = op, ot = fun, pp = keyword, re = comment,
-    sc = const, ss = string, st = string, va = fg, vs = string, wa = keyword
-  )
-  sel  <- ifelse(names(tok) == "normal", "pre code", paste0("pre code span.", names(tok)))
-  data.frame(sel = sel, decl = paste0("color: ", tok), stringsAsFactors = FALSE)
-}
-
-styles[["starless-monokai-atom"]] <- starless(
-  fg = "#CDCBBC", comment = "#8b8a8d", keyword = "#ff6188", string  = "#a9dc76",
-  fun = "#61afef", const   = "#ab9df2", type    = "#78dce8", op = "#939293", info = "#fc9867",
-  param = "#fc9867")
-styles[["starless-monokai-pro"]] <- starless(
-  fg = "#CDCBBC", comment = "#8b8a8d", keyword = "#ff6188", string  = "#61afef",
-  fun = "#a9dc76", const   = "#ab9df2", type    = "#78dce8", op = "#939293", info = "#fc9867",
-  param = "#fc9867")
-styles[["starless-monokai-one"]] <- starless(
-  fg = "#abb2bf", comment = "#828b9c", keyword = "#e06c75", string  = "#e5c07b",
-  fun = "#98c379", const   = "#c678dd", type    = "#56b6c2", op = "#abb2bf", info = "#d19a66",
-  param = "#d19a66")
-
-ports <- c("starless-monokai-atom", "starless-monokai-pro", "starless-monokai-one")
+ports <- "txtheme-dark"
 all_styles <- names(styles)
-# Which styles suit a dark page: the bundled ones say so in their name, plus every port. Only used to
+# Which styles suit a dark page: the bundled ones say so in their name, plus txtheme's. Only used to
 # group the menus, so a wrong guess costs nothing.
 dark_ish  <- c(grep("dark|monokai|dracula|nord|espresso|oblivion|radical|zenburn|ayu-mirage",
                     bundled, value = TRUE), ports)
 light_ish <- setdiff(all_styles, dark_ish)
 
 
-# The pandoc-span annotation classes, vendored from the maintainer's Zettlr / Positron stylesheet.
-# See the file's own header for what was adapted for a rendered page.
+# The pandoc-span annotation classes, from txtheme's generated asset (its :root colours from
+# TX_PALETTE, its typography from inst/prose/annotations.scss).
+# ⚠ On the real site this stylesheet is OPT-IN (`template: params: txtheme: {annotations: true}`) and
+#   tabxplor does not opt in: `.non, .error {text-decoration: underline double}` would decorate every
+#   warned or errored example on a reference page, which emits <span class="warning"> of its own.
+#   Here it is loaded unconditionally, because seeing the classes is the point.
 annotation_css <- local({
-  f <- "dev/annotation_classes.css"
-  if (file.exists(f)) paste(readLines(f, warn = FALSE), collapse = "\n") else ""
+  f <- system.file("pkgdown/BS5/assets/txtheme-annotations.css", package = "txtheme")
+  if (nzchar(f)) paste(readLines(f, warn = FALSE), collapse = "\n") else ""
 })
 
 
@@ -133,23 +99,6 @@ highlight_css <- paste(
     vapply(all_styles, function(n)
       css_for(n, sprintf('html[data-bs-theme="dark"][data-hld="%s"]', n)), character(1))),
   collapse = "\n")
-
-
-# A port is not one of pkgdown's own styles, so `theme-dark:` cannot name it: it ships as a stylesheet
-# instead. WARNING: pkgdown adds the dark theme AFTER pkgdown/extra.scss (see pkgdown:::bs_theme), so
-# source order cannot win -- the `html` in the wrapper is what makes these rules out-specify it.
-for (nm in ports) {
-  s <- styles[[nm]]
-  writeLines(c(
-    paste0("// ", nm, ": a port of the VS Code theme izumii.starless-monokai, for pkgdown."),
-    "// Copy this file to pkgdown/extra.scss (or append it to one), then rebuild the site.",
-    "// The `html` prefix is load-bearing: it out-specifies pkgdown's own theme-dark rules.",
-    "",
-    'html[data-bs-theme="dark"] {',
-    paste0("  ", s$sel, " { ", s$decl, "; }"),
-    "}"),
-    file.path("dev", paste0("highlight-", nm, ".scss")))
-}
 
 
 # The light palette, pinned inside one wrapper so a light-coloured table can be judged on a dark page.
@@ -276,47 +225,46 @@ opt_tags <- function(selected) {
   opt <- function(nms) paste0('<option value="', nms, '"',
                               ifelse(nms == selected, " selected", ""), '>', nms, '</option>',
                               collapse = "")
-  paste0('<optgroup label="the maintainer\'s editor theme">', opt(ports), '</optgroup>',
+  paste0('<optgroup label="the shipped theme">', opt(ports), '</optgroup>',
          '<optgroup label="dark">', opt(setdiff(dark_ish, ports)), '</optgroup>',
          '<optgroup label="light">', opt(light_ish), '</optgroup>')
 }
 
-# THE HEADING LADDER: `floor-18-real` (dev/heading_greens_preview.R, sixth round). Hue 150, top at
-# L 0.90 -- one rung below the family's 0.91, because at 0.91 the sRGB ceiling is C 0.161 and the
-# 0.18 the ladder asks for would be clipped. Chroma falls 0.18 -> 0.12 and then holds from h4: the
-# levels that lead are told apart by colour, the levels that only mark share one calm value.
-# ⚠ bslib has ONE `headings-color-dark`, so the ladder cannot be a variable -- it is six rules in
-# pkgdown/extra.scss, and the picker below keeps h1's value as what anything unstyled falls back to.
-source("dev/heading_ladders.R")             # every ladder, and the OKLCH maths behind them
-HEADING_DEFAULT <- "floor-18-real"
+# THE HEADING LADDER: `warm-95-10` -- the ladder the site actually ships, and txtheme's own
+# TX_PALETTE re-derives its six hexes from this spec at load. The other ladders stay in the menu so
+# the choice can be re-read against them; picking one here changes nothing but this page.
+source("dev/heading_ladders.R")             # every ladder, and txtheme's OKLCH maths
+HEADING_DEFAULT <- "warm-95-10"
 HEADING_LADDER  <- LADDERS[[which(vapply(LADDERS, function(l) l$name, "") == HEADING_DEFAULT)]]$hex
 
-# The dark chrome. Each row is (label, the CSS custom property bootstrap 5.3 reads, the bslib
-# variable that compiles to it, bootstrap's stock value) -- the YAML box is written from this table.
+# The dark chrome. Each row is (label, the CSS custom property bootstrap 5.3 reads, bootstrap's stock
+# value, txtheme's). Only the eight a colour picker can hold are here; the `-rgb` twins and the two
+# derived rgba() rules the real theme also writes are txtheme's business, not this page's.
 chrome <- data.frame(stringsAsFactors = FALSE,
   label = c("page background", "body text", "emphasis", "headings", "panels, code background",
             "borders", "links", "inline code"),
   prop  = c("--bs-body-bg", "--bs-body-color", "--bs-emphasis-color", "--bs-heading-color",
             "--bs-tertiary-bg", "--bs-border-color", "--bs-link-color", "--bs-code-color"),
-  yaml  = c("body-bg-dark", "body-color-dark", "body-emphasis-color-dark", "headings-color-dark",
-            "body-tertiary-bg-dark", "border-color-dark", "link-color-dark", "code-color-dark"),
-  # bootstrap 5.3's own dark values -- the YAML box writes a line only where you moved off one.
+  # bootstrap 5.3's own dark values -- what the `bootstrap default` preset resets to.
   # `headings` is `inherit` upstream, which a colour input cannot hold, so it starts at the body text.
   stock = c("#212529", "#dee2e6", "#ffffff", "#dee2e6", "#2b3035", "#495057", "#6ea8fe", "#ffffff"),
-  # THE DEFAULT the page opens on -- `txtheme`, the preset below. `stock` stays bootstrap's, because
-  # the YAML box writes a bslib line only where a value has moved off the framework's own.
+  # THE DEFAULT the page opens on -- txtheme's shipped values, the preset below.
   start = c("#21252b", "#CDCBBC", "#fcfcfa", HEADING_LADDER[1], "#282c34", "#3e4451",
             "#61afef", "#fc9867"))
 
 chrome_rows <- paste0(
   '<label class="tw"><span>', chrome$label, '</span>',
-  '<input type="color" data-prop="', chrome$prop, '" data-yaml="', chrome$yaml,
-  '" data-stock="', chrome$stock, '" data-start="', chrome$start,
-  '" value="', chrome$start, '">',
+  '<input type="color" data-prop="', chrome$prop, '" data-stock="', chrome$stock,
+  '" data-start="', chrome$start, '" value="', chrome$start, '">',
   '<code class="hex">', chrome$start, '</code></label>', collapse = "\n")
 
+# The argument-name shim, read from the package that ships it to the real site -- so what this page
+# does to a downlit block is exactly what a reader's browser does.
+at_shim_js <- paste(readLines(system.file("pkgdown/BS5/assets/txtheme-at.js", package = "txtheme"),
+                              warn = FALSE), collapse = "\n")
+
 html <- paste0('<!doctype html>
-<html lang="en" data-bs-theme="dark" data-hl="arrow-light" data-hld="starless-monokai-atom">
+<html lang="en" data-bs-theme="dark" data-hl="arrow-light" data-hld="txtheme-dark">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tabxplor - site theme preview</title>
@@ -336,8 +284,6 @@ html <- paste0('<!doctype html>
   label.tw span{min-width:11rem;}
   label.tw input[type=color]{width:2.5rem;height:1.6rem;padding:0;border:0;background:none;}
   .hex{font-size:.75rem;opacity:.7;}
-  #yaml{white-space:pre;font-size:.8rem;background:var(--bs-tertiary-bg);
-        border:1px solid var(--bs-border-color);border-radius:.3rem;padding:.75rem;margin:0;}
   main h2{margin-top:2rem;}
 </style>
 </head>
@@ -351,7 +297,7 @@ html <- paste0('<!doctype html>
       <select id="hl">', opt_tags("arrow-light"), '</select>
     </label>
     <label>code colours &mdash; dark page
-      <select id="hld">', opt_tags("starless-monokai-atom"), '</select>
+      <select id="hld">', opt_tags("txtheme-dark"), '</select>
     </label>
     <label>code background (dark)
       <select id="codebg">
@@ -380,9 +326,9 @@ html <- paste0('<!doctype html>
     </label>
     <label>dark chrome
       <select id="preset">
-        <option value="txtheme" selected>txtheme &mdash; the one being built</option>
+        <option value="txtheme" selected>txtheme &mdash; what the site ships</option>
         <option value="monokai-pro">monokai pro &mdash; cyan links, neutral ground</option>
-        <option value="">bootstrap default (what the site has now)</option>
+        <option value="">bootstrap default (stock, themed by nothing)</option>
       </select>
     </label>
     <label>chroma cap &mdash; <span id="capout">off</span>
@@ -390,25 +336,24 @@ html <- paste0('<!doctype html>
     </label>
     <button id="reset" class="btn btn-sm btn-outline-secondary">reset</button>
   </div>
-  <details class="mt-2"><summary>dark chrome, and the YAML for all of it</summary>
-    <div class="grid mt-2" style="align-items:flex-start;">
-      <div>', chrome_rows, '</div>
-      <pre id="yaml"></pre>
-    </div>
+  <details class="mt-2"><summary>the dark chrome, colour by colour</summary>
+    <div class="grid mt-2" style="align-items:flex-start;">', chrome_rows, '</div>
   </details>
 </div>
 
 <div class="container template-article"><div class="row"><main id="main" class="col-md-9">
 <h1>Site theme preview</h1>
-<p class="lead">Everything on this page is the real thing: the site\'s own compiled stylesheet, code
-blocks with downlit\'s own markup, and tables built by <code>tab()</code> and <code>tab_reg()</code>
-through <code>tab_css(theme = "auto")</code>. Only the controls above are new.</p>
+<p class="lead">Everything on this page is the real thing: the site\'s own compiled stylesheet, the
+shipped <code>txtheme</code> code theme, code blocks with downlit\'s own markup, and tables built by
+<code>tab()</code> and <code>tab_reg()</code> through <code>tab_css(theme = "auto")</code>. Only the
+controls above are new, and nothing they do is a decision &mdash; the theme is set in
+<code>txtheme/R/aaa-palette.R</code>.</p>
 
 <h2>Prose, links and inline code</h2>
 <p>A paragraph of ordinary text, so the body colour can be judged against the background rather than
 in isolation. It carries a <a href="#">link</a>, some <strong>bold</strong>, some <em>italic</em>,
 and a piece of <code>inline_code()</code>, which takes its own colour
-(<code>code-color-dark</code>) and not the code block\'s.</p>
+(<code>--bs-code-color</code>) and not the code block\'s.</p>
 <blockquote class="blockquote"><p>A block quote. Under the prose overrides it takes the warm grey and
 the italic the editor theme gives it, and its rule the same gold as <strong>bold text</strong>.</p></blockquote>
 <ul><li>A list item.</li><li>Another, with <code>tab(pct = "row")</code> in it.</li></ul>
@@ -422,9 +367,10 @@ the italic the editor theme gives it, and its rule the same gold as <strong>bold
 ', doc_elements, '
 
 <h2>Tables</h2>
-<p>tabxplor\'s colours are its own: nothing in <code>_pkgdown.yml</code> reaches them. They are set in
-R with <code>set_color_palette()</code>, and they follow the toggle above because the page emits
-<code>tab_css(theme = "auto")</code> &mdash; exactly what the vignettes do on the site.</p>
+<p>tabxplor\'s colours are its own: nothing in <code>_pkgdown.yml</code> or in <code>txtheme</code>
+reaches them. They are set in R with <code>set_color_palette()</code>, and they follow the toggle
+above because the page emits <code>tab_css(theme = "auto")</code> &mdash; exactly what the vignettes
+do on the site.</p>
 ', tables_html, '
 
 <h2>The light palette, on whatever page you are looking at</h2>
@@ -437,49 +383,25 @@ what made this unreadable. Nothing in the ladders follows the toggle: that is th
 <div style="height:35vh"></div>
 </main></div></div>
 <script>', chroma_cap_js, '</script>
+<script>', at_shim_js, '</script>
 <script>
-// downlit leaves an R ARGUMENT NAME as bare text -- only the `=` beside it is tagged -- while pandoc
-// tags the pair as Attribute (`at`). Nothing in CSS can reach a bare text node, so the name is
-// wrapped here, and one `.at` colour then serves both toolchains.
-// Two things keep it exact, and neither is a heuristic. The operator span must read exactly "=":
-// `==`, `<=`, `!=` and `<-` are each a single span of their own, so a comparison is never touched.
-// And a PANDOC block is immune by construction -- there the `=` lives INSIDE the `at` span, so the
-// loop finds no `op` span to act on. No block-level guard is needed, and one would be wrong: it
-// would skip any block that happens to carry an `at` token for another reason.
-document.querySelectorAll("pre code").forEach(code => {
- code.querySelectorAll("span.op").forEach(op => {
-  if (op.textContent !== "=") return;
-  const prev = op.previousSibling;
-  if (!prev || prev.nodeType !== 3) return;
-  const m = prev.textContent.match(/([A-Za-z.][\\w.]*)\\s*$/);
-  if (!m) return;
-  const at = document.createElement("span");
-  at.className = "at";
-  at.textContent = m[1];
-  prev.textContent = prev.textContent.slice(0, m.index);
-  op.parentNode.insertBefore(at, op);
- });
-});
-
 const $ = s => document.querySelector(s), root = document.documentElement;
-const KEY = "tabxplor-theme-preview-2";   // bumped: an older stored state would mask the defaults
+const KEY = "tabxplor-theme-preview-3";   // bumped: an older stored state would mask the defaults
 // `txtheme` is Starless Monokai Atom read as a page: the ground and the panel come from the editor,
 // the base text is the warm #CDCBBC of the settings.json override (NOT One Dark #abb2bf, which is
-// cooler and duller), emphasis is the #fcfcfa that warm text was demoted from, headings and links
-// headings take the GREEN of the settings.json rule for this theme (markup.heading.markdown #92be62,
-// a step down from the theme own #A9DC76), links keep the Atom blue, and inline code takes #fc9867 --
-// the theme own markup.inline.raw colour, which the prose layer then tints at 20% behind it.
+// cooler and duller), emphasis is the #fcfcfa that warm text was demoted from, the headings take the
+// warm-95-10 ladder\'s top rung, links keep the Atom blue, and inline code takes #fc9867 -- the
+// theme\'s own markup.inline.raw colour, which the prose layer then tints at 20% behind it.
 const presets = {
   txtheme:  {"--bs-body-bg":"#21252b","--bs-body-color":"#CDCBBC","--bs-emphasis-color":"#fcfcfa",
-             "--bs-heading-color":"#79FF9C","--bs-tertiary-bg":"#282c34","--bs-border-color":"#3e4451",
+             "--bs-heading-color":"', HEADING_LADDER[1], '","--bs-tertiary-bg":"#282c34",
+             "--bs-border-color":"#3e4451",
              "--bs-link-color":"#61afef","--bs-code-color":"#fc9867"},
   "monokai-pro":
             {"--bs-body-bg":"#1e2024","--bs-body-color":"#CDCBBC","--bs-emphasis-color":"#fcfcfa",
              "--bs-heading-color":"#fcfcfa","--bs-tertiary-bg":"#26282c","--bs-border-color":"#3a3d42",
              "--bs-link-color":"#78dce8","--bs-code-color":"#fc9867"},
 };
-const chrome = ', paste0("[", paste0('{prop:"', chrome$prop, '",yaml:"', chrome$yaml,
-                                     '",stock:"', chrome$stock, '"}', collapse = ","), "]"), ';
 
 function state() {
   const s = {mode: $("#mode").value, hl: $("#hl").value, hld: $("#hld").value,
@@ -490,9 +412,8 @@ function state() {
 }
 function apply() {
   const s = state();
-  // The ladder OWNS the headings, so the bslib variable follows its top rung rather than being a
+  // The ladder OWNS the headings, so the chrome picker follows its top rung rather than being a
   // second, independent choice: it is only the fallback for anything the six rules do not reach.
-  // ⚠ before the chrome loop below, which is what writes that variable into the YAML.
   const ladder = $("#ladder").value.split(",");
   document.querySelectorAll("input[data-prop]").forEach(i => {
     if (i.dataset.prop === "--bs-heading-color") i.value = ladder[0];
@@ -501,23 +422,16 @@ function apply() {
   root.setAttribute("data-bs-theme", s.mode);
   root.setAttribute("data-hl", s.hl);
   root.setAttribute("data-hld", s.hld);
-  const port = s.hld.indexOf("starless-") === 0;
-  let decls = "", yaml = "template:\\n  bootstrap: 5\\n  light-switch: true\\n" +
-              "  theme: " + s.hl + "\\n" +
-              (port ? "  theme-dark: arrow-dark   # overridden by the stylesheet below\\n"
-                    : "  theme-dark: " + s.hld + "\\n"), bslib = "";
-  chrome.forEach(c => {
-    const v = s.chrome[c.prop];
-    if (v && v.toLowerCase() !== c.stock.toLowerCase()) {
-      decls += c.prop + ":" + v + ";";
-      bslib += "    " + c.yaml + ": \\"" + v + "\\"\\n";
-    }
+  let decls = "";
+  document.querySelectorAll("input[data-prop]").forEach(i => {
+    if (i.value && i.value.toLowerCase() !== i.dataset.stock.toLowerCase())
+      decls += i.dataset.prop + ":" + i.value + ";";
   });
   let css = decls ? \'html[data-bs-theme="dark"]{\' + decls + "}" : "";
-  // The editor theme colours markdown itself, not only code: gold bold, a gold quote rule and a
-  // warm grey italic quote. Bootstrap has no variable for any of the three -- they are plain CSS.
   const heads = ladder.map((c, i) =>
     \'html[data-bs-theme="dark"] h\' + (i + 1) + " { color: " + c + "; }").join("\\n") + "\\n";
+  // The editor theme colours markdown itself, not only code: gold bold, a gold quote rule and a
+  // warm grey italic quote. Bootstrap has no variable for any of the three -- they are plain CSS.
   const prose = $("#prose").value ?
     \'html[data-bs-theme="dark"] strong, html[data-bs-theme="dark"] b { color: #e6ae02; }\\n\' +
     \'html[data-bs-theme="dark"] blockquote { border-left-color: #e6ae02; color: #B7B5AC;\' + " font-style: italic; }\\n" +
@@ -526,13 +440,6 @@ function apply() {
   css += heads + prose;
   if (s.codebg) css += \'html[data-bs-theme="dark"] pre{background-color:\' + s.codebg + " !important;}";
   window.txChromaCap.setLive($("#tweaks"), css);
-  if (bslib) yaml += "  bslib:\\n" + bslib;
-  if (port) yaml += "\\n# " + s.hld + " is not one of pkgdown own styles: copy\\n" +
-      "# dev/highlight-" + s.hld + ".scss  ->  pkgdown/extra.scss\\n";
-  if (s.codebg || prose) yaml += "\\n# pkgdown/extra.scss\\n" +
-      (s.codebg ? \'[data-bs-theme="dark"] pre { background-color: \' + s.codebg + "; }\\n" : "") +
-      heads + prose;
-  $("#yaml").textContent = yaml;
   document.querySelectorAll("input[data-prop]").forEach(i =>
     i.nextElementSibling.textContent = i.value);
   localStorage.setItem(KEY, JSON.stringify(s));

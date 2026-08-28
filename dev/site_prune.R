@@ -1,6 +1,8 @@
 # PURPOSE: drop from a built site the pages that are not site pages.
 # ROLE: sourced right after the build -- by dev/build_site.R locally, and by the "Build site" step of
-#   .github/workflows/pkgdown.yaml on CI. Run it from the package root.
+#   .github/workflows/pkgdown.yaml on CI, which guards the call with file.exists(): dev/ is stripped
+#   from the release and master branches, where CLAUDE.md is gone too and there is nothing to prune.
+#   Run it from the package root.
 # WHY: pkgdown renders EVERY root *.md it does not already handle itself (see pkgdown:::package_mds:
 #   only README / NEWS / LICENCE / cran-comments are spared), so CLAUDE.md -- the maintainer's guide
 #   and roadmap -- becomes docs/CLAUDE.html, is listed in sitemap.xml, and is indexed section by

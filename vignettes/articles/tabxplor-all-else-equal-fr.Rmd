@@ -662,13 +662,13 @@ tab_reg(car_arrests, "released",
 
 Le même écart de comportement des policiers en fonction de la couleur de peau des personnes arrêtées vaut **&minus;5,2 points** dans une colonne et **&minus;7,9** dans l'autre. Les deux sont « toutes choses égales par ailleurs ». Ils diffèrent de presque la moitié, et la seule différence est une variable.
 
-Qui écrit « toutes choses égales par ailleurs » avance donc quelque chose sur une liste qu'il a lui-même dressée. Le modèle n'a aucun avis sur ce qui manque à cette liste, et aucun moyen de prévenir. D'où la question qui décide de tout.
+Qui écrit « toutes choses égales par ailleurs » avance donc quelque chose sur une liste de variables qu'il a lui-même dressée. Le modèle n'a aucun avis sur ce qui manque à cette liste, et aucun moyen de le prévenir.
 
-## Ajuster sur ce qu'on cherche à mesurer
+## Faire disparaître ce qu'on cherche à mesurer
 
-`checks` doit-il seulement figurer dans le modèle ?
+`checks` doit-il figurer dans le modèle ?
 
-L'argument pour est évident : une personne au long passé judiciaire n'est pas traitée comme les autres, et il serait naïf de comparer un primo-délinquant à un récidiviste. L'argument contre demande un tableau de plus. `checks` compte des fichiers de police — arrestations antérieures, condamnations, mise à l'épreuve. Posons donc la question que le modèle ne peut pas se poser à lui-même : **les antécédents sont-ils eux-mêmes structurés par la race ?**
+L'argument pour est évident : une personne au long passé judiciaire n'est pas traitée comme les autres, et il serait naïf de comparer un primo-délinquant à un récidiviste. L'argument contre demande un tableau de plus. `checks` compte des fichiers de police — arrestations antérieures, condamnations, mise à l'épreuve. Posons donc la question que le modèle ne peut pas se poser à lui-même : **les antécédents policiers sont-ils eux-mêmes structurés par les groupe ethnique ?**
 
 ```{r}
 tab(car_arrests, colour, checks, pct = "row", color = "difference", ref = 1)
@@ -679,15 +679,15 @@ tab_reg(car_arrests, "checks", c("colour", "sex", "employed", "citizen"),
         family = "binomial", trials = 6)
 ```
 
-Les personnes noires interpellées figurent en moyenne dans **2,1 fichiers contre 1,5**, et le motif survit à l'ajustement sur le sexe, l'emploi et la nationalité (cote `1.52` par fichier, toujours très significative). Les antécédents ne sont pas une donnée de fond neutre : ce sont les traces de rencontres antérieures avec la police même dont on étudie le comportement.
+Les personnes noires interpellées figurent en moyenne dans **2,1 fichiers contre 1,5** pour les personnes blanches interpellées, et le motif survit à l'ajustement sur le sexe, l'emploi et la nationalité (cote `1.52` par fichier, toujours très significative). Les antécédents ne sont pas une donnée neutre : ce sont les traces de rencontres antérieures avec la police même dont on étudie le comportement.
 
-Si certaines de ces rencontres ont eu lieu pour les raisons mêmes qu'on examine aujourd'hui, alors « contrôler par les antécédents » retire une partie du phénomène qu'on cherche à mesurer. Les cinq points qui survivent dans le modèle ajusté ne sont plus alors « l'effet de race purgé de toute confusion », mais **l'effet de race lors de cette interpellation-ci, en plus de tout ce que la police avait déjà consigné sur cette personne** — affirmation plus étroite, plus défendable, et surtout différente.
+Si certaines de ces rencontres ont eu lieu pour les raisons mêmes qu'on examine aujourd'hui, alors « contrôler par les antécédents » fait disparaître une partie du phénomène qu'on cherche à mesurer. Les cinq points qui survivent dans le modèle ajusté ne sont plus alors « l'effet du groupe ethnique purgé de toute confusion », car les assignations ethniques effectuées par les policiers lors de cette interpellation-ci et la consultation des fichages antérieurs sont entremêlés dans la réalité sociale.
 
-Cela porte un nom : le **surajustement**, ou le fait de conditionner sur une variable intermédiaire. Cinelli, Forney et Pearl en donnent la règle en une ligne : bloquer les chemins fallacieux entre les variables, et ne pas toucher aux chemins causals. **Une variable qui se tient *entre* ce qu'on étudie et ce qu'on explique est sur un chemin causal ; l'ajuster bloque l'effet qu'on cherchait.**
+Ce phénomène porte un nom : le **surajustement**. Cinelli, Forney et Pearl en donnent cette explication : **Une variable qui se tient *entre* ce qu'on étudie et ce qu'on explique est sur un chemin causal ; l'ajuster bloque l'effet qu'on cherchait.** La règle à appliquer est alors de bloquer les chemins fallacieux entre les variables, mais de ne pas toucher aux chemins causals que l’on peut identifier.
 
-**Rien, dans la sortie, ne dit dans lequel des deux cas on se trouve.** Le tableau est identique dans un cas comme dans l'autre. C'est une question de sociologie et non de statistique — et c'est bien pourquoi cet article a commencé par dire qu'aucun ajustement ne transforme une enquête en expérience contrôlée.
+Rien, dans le résultat dumodèle, ne dit dans lequel des deux cas on se trouve. Le tableau est identique dans un cas comme dans l'autre. C'est une question de sociologie et non de statistique — et c'est bien pourquoi aucun modèle ne transforme des données d’enquête en expérimentation contrôlée.
 
-**Le même problème, dans une autre discipline.** Voici des salaires universitaires, tirés d'un fichier que l'établissement avait constitué précisément pour surveiller un écart de rémunération. En France, la formule qui recouvre exactement le même piège est celle qu'on entend chaque année dans la presse : « **à poste équivalent** ».
+Voici des salaires d’enseignants, tirés d'un fichier qu’une université anonymisée a constitué en 2008-2009 pour surveiller les écarts de rémunération. En France, la formule qui recouvre exactement le même piège est celle qu'on entend chaque année dans la presse : « **à poste équivalent** ».
 
 ```{r}
 tab_reg(car_salaries, "salary",
@@ -697,30 +697,31 @@ tab_reg(car_salaries, "salary",
         family = "gaussian", empirical = FALSE, display="{est:0}")
 ```
 
-L'écart brut est de **14 088 $** en faveur des hommes. Ajouter la discipline et l'ancienneté le ramène à **8 423 $** ; ajouter le grade universitaire le ramène à **4 771 $**, et les étoiles disparaissent. Une lecture pressée dirait : « les deux tiers de l'écart salarial sont expliqués, et le reste n'est pas significatif ». Les deux moitiés de cette phrase sont des pièges.
+L'écart brut est de **14 088 $** en faveur des hommes. Ajouter la discipline et l'ancienneté le ramène à **8 423 $** ; ajouter le grade universitaire, professeur assistant, professeur associé ou professeur, le ramène à **4 771 $**, et les étoiles disparaissent. Une lecture pressée dirait : « les deux tiers de l'écart salarial sont expliqués, et le reste n'est pas significatif ». Les deux moitiés de cette phrase sont des pièges.
 
-**Sur la colonne du grade**, poser la même question que tout à l'heure :
+**Sur la colonne du grade universitaire**, on peut poser la même question que tout à l'heure :
 
 ```{r}
-tab(car_salaries, sex, is_prof, pct = "row", color = "difference", ref = 1, color_signif = "grey_non_signif")
+tab(car_salaries, sex, is_prof, pct = "row", 
+    color = "difference", ref = 1, color_signif = "grey_non_signif")
 ```
 
-**46 % des femmes sont professeures des universités, contre 69 % des hommes.** Si la promotion est elle-même inégale, alors contrôler par le grade revient à comparer les femmes aux hommes promus au même rythme — et donc à ajuster précisément sur le mécanisme par lequel un écart salarial s'installe. Les 4 771 $ sont l'écart *à grade égal* : une quantité réelle, une question plus étroite, et non « l'écart salarial corrigé ».
+**46 % des femmes ont le grade de professeures, contre 69 % des hommes.** Si la promotion est elle-même inégale, alors contrôler par le grade revient à comparer les femmes aux hommes promus au même rythme — et donc à faire disparaître précisément le mécanisme par lequel un écart salarial s'installe. Les 4 771 $ sont l'écart *à grade égal* : une quantité réelle, une question plus étroite, et non « l'écart salarial corrigé ».
 
-**Sur les étoiles disparues**, se souvenir de la section 2. Il y a ici 397 personnes, dont 39 femmes. « Non significatif » veut dire que cet échantillon ne parvient plus à distinguer un écart de 4 771 $ de zéro — non que l'écart soit nul. Imprimer l'intervalle, et voir :
+**Sur les étoiles disparues**. Il y a ici 397 personnes, dont 39 femmes. « Non significatif » veut dire que cet échantillon ne parvient plus à distinguer un écart de 4 771 $ de zéro — non que l'écart soit nul. Affichier l'intervalle de confiance permet de le voir :
 
 ```{r}
 tab_reg(car_salaries, "salary", c("sex", "discipline", "yrs.service", "rank"),
         family = "gaussian", display = "est_ci", empirical = FALSE)
 ```
 
-L'écart est compatible avec tout, depuis **2 853 $ en faveur des femmes jusqu'à 12 396 $ en faveur des hommes**. Ce n'est pas « aucune différence » : c'est un échantillon trop petit pour trancher. Avec dix fois plus de personnes et la même estimation, ces mêmes 4 771 $ ressortiraient hautement significatifs. Sur 39 femmes, **l'absence de preuve n'est pas la preuve de l'absence** — et c'est exactement pour cela que `display = "est_ci"` mérite d'être appelé chaque fois qu'une étoile importante vient à manquer.
+L'écart est compatible avec tous les scénarios possibles, depuis *2 853 $ en faveur des femmes jusqu'à 12 396 $ en faveur des hommes. Ce n'est pas « aucune différence » : c'est un échantillon trop petit pour trancher. Avec dix fois plus de personnes et la même estimation, ces mêmes 4 771 $ ressortiraient hautement significatifs. Sur 39 femmes, l'absence de preuve n'est pas la preuve de l'absence — et c'est exactement pour cela que `display = "est_ci"` mérite d'être utilisé chaque fois qu'une étoile importante vient à manquer.
 
-**Et il y a un renversement caché dans ce tableau**, qui mérite un coup d'œil : `yrs.service` passe de **+10 823 $** brut à **&minus;1 155 $** ajusté. L'ancienneté prédit fortement le salaire — jusqu'à ce qu'on maintienne le grade constant, moment où les années supplémentaires ne valent plus rien du tout. L'ancienneté paie par la promotion, et pas autrement.
+Il y a un renversement caché dans ce tableau qui mérite le coup d'œil : `yrs.service` passe de **+10 823 $** observé à **&minus;1 155 $** ajusté. L'ancienneté prédit fortement le salaire — jusqu'à ce qu'on maintienne le grade constant, moment où les années supplémentaires ne valent plus rien du tout. L'ancienneté paie par la promotion, et pas autrement.
 
-## Quand l'ajustement retourne la réponse
+## Quand l'ajustement inverse la réponse
 
-Le tableau le plus célèbre de la discipline. Admissions en master à Berkeley, automne 1973, les six plus gros départements :
+Prenons le tableau célèbre de Bickel, Hammel et O'Connell sur les admissions en master à l’Université de Berkeley, publié dans *Science* en 1975 :
 
 ```{r}
 tab(ucb, Gender, Admit, pct = "row", color = "difference", color_signif = "grey_non_signif")
@@ -732,41 +733,42 @@ tab(ucb, Gender, Admit, pct = "row", color = "difference", color_signif = "grey_
 tab_reg(ucb, "Admit", c("Gender", "Dept"), measure = "difference")
 ```
 
-**&minus;14,2 points deviennent +1,9**, et ce n'est plus significatif. Non pas réduit : **retourné**. Et le mécanisme est entièrement visible dans un tableau croisé, ce qui est bien tout l'intérêt :
+**&minus;14,2 points deviennent +1,9**, et ce n'est plus significatif. Non pas réduit : **inversé**. Et le mécanisme est entièrement visible dans un tableau croisé, ce qui est bien tout l'intérêt :
 
 ```{r}
 tab(ucb, Gender, Dept, pct = "row", color = "difference", ref = 1)
 ```
 
-Lire les deux lignes en regard des taux d'admission des départements, dans le tableau précédent (A 64 %, B 63 %, C 35 %, D 34 %, E 25 %, F 6 %). **31 % des hommes ont candidaté au département A, le plus facile, contre 6 % des femmes ; 21 % des femmes ont candidaté en E et 19 % en F, les deux plus difficiles, contre 7 % et 14 % des hommes.** Les femmes ont candidaté dans des départements qui admettaient moins de monde. À l'intérieur des départements, les différences sont petites et vont dans les deux sens.
+Les deux lignes sont à lire en regard des taux d'admission des départements dans le tableau précédent (A 64 %, B 63 %, C 35 %, D 34 %, E 25 %, F 6 %). 31 % des hommes ont candidaté au département A, le plus facile, contre 6 % des femmes ; 21 % des femmes ont candidaté en E et 19 % en F, les deux plus difficiles, contre 7 % et 14 % des hommes. **Les femmes ont candidaté dans des départements plus sélectifs.** À l'intérieur des départements, les différences sont petites et vont dans les deux sens.
 
-C'est un **effet de structure**, et c'en est même l'illustration canonique — Bickel, Hammel et O'Connell l'ont publiée dans *Science* en 1975. L'INSEE l'explique avec un exemple que tout le monde comprend : le salaire moyen peut monter alors qu'aucun salaire ne bouge dans aucune profession, simplement parce que les professions bien payées gagnent des effectifs. On parle aussi, pour ce retournement, de **paradoxe de Simpson**.
+C'est l’illustration canonique de ce qu’on nomme un **effet de structure**. L'INSEE l'explique avec un exemple que tout le monde comprend : le salaire moyen peut monter alors qu'aucun salaire ne bouge dans aucune profession, simplement parce que les professions bien payées gagnent en effectifs. On parle aussi, pour ce retournement, de **paradoxe de Simpson**.
 
-**Résister à la morale bien rangée.** « Le biais n'était qu'une illusion » n'est *pas* ce que montre ce tableau, et la littérature récente est ferme là-dessus. Conditionner sur le département estime l'écart *à l'intérieur* des départements, ce qui laisse entièrement intacte la question de savoir pourquoi les femmes ont candidaté là où elles ont candidaté, et pourquoi les départements où elles candidataient étaient ceux qui pouvaient en admettre le moins. L'ajustement a répondu à une question plus étroite, et il y a bien répondu. Que ce soit la question intéressante n'est pas une affaire de statistique.
+« Le biais n'était qu'une illusion » n'est *pas* ce que montre ce tableau, et la littérature récente est ferme là-dessus. Conditionner le modèle sur le département de l’université estime l'écart *à l'intérieur* des départements, ce qui laisse entièrement intacte la question de savoir pourquoi les femmes ont candidaté là où elles ont candidaté, et pourquoi les départements où elles candidataient étaient les plus sélectifs. Le modèle a ici répondu à une question plus étroite, qui nous a fournit non pas une réponse définitive mais un mécanisme concret à étudier.
 
 ## Quand le déplacement est de l'arithmétique, pas de la sociologie
 
-Reste le piège qui est de pure mathématique — et la raison pour laquelle cet article n'arrête pas d'insister sur les pourcentages.
+Un autre piège est celui dont nous avons déjà parlé plus haut à propos de la comparaison des rapports de cotes (`odds ratios`). 
 
-L'enquête *Histoire de vie* de l'INSEE demandait si l'on va au cinéma. Croisons cela avec la catégorie sociale :
+L'enquête *Histoire de vie* de 2003 de l'INSEE, dont Julien Barnier fournit un extrait avec le package `questionr`, demandait aux enquêtés s’ils allaient au cinéma. Croisons cela avec la catégorie sociale :
 
 ```{r}
 tab_reg(questionr_hdv, "cinema", c("qualif", "age"))
 ```
 
-**65 % des cadres vont au cinéma, contre 22 % des ouvrier·es spécialisé·es** : un écart de classe considérable, et parfaitement bourdieusien. Or le rapport de cotes *grandit* quand on ajuste sur l'âge, passant de `1/6.63` à `1/10.75`. Lu naïvement, cela dit que l'âge masquait une partie de l'écart de classe — ce qui serait un résultat intéressant.
+65 % des cadres vont au cinéma, contre 22 % des ouvrier·es spécialisé·es : un écart de classe considérable et parfaitement bourdieusien. Or le rapport de cotes *grandit* quand on ajuste sur l'âge, passant de `1/6.63` à `1/10.75`. Lu naïvement, on pourrait croire que l'âge masquait une partie de l'écart de classe, ce qui serait un résultat intéressant.
 
 Ce n'en est pas un. Regardons les âges moyens :
 
 ```{r}
-tab(questionr_hdv, qualif, c(cinema, age), pct = "row", na = "drop", color = "difference", ref = 1)
+tab(questionr_hdv, qualif, c(cinema, age), pct = "row", na = "drop_all", 
+    color = "difference", ref = 1)
 ```
 
-Les catégories ont **toutes le même âge** — entre 46 et 50 ans. Il n'y a à peu près rien que l'âge puisse confondre. D'où vient alors l'écart supplémentaire ?
+Les catégories ont **toutes le même âge moyen**, entre 46 et 50 ans, et la dispersion des réponses y est proche (coefficient de variation entre 28 et 37% – l’écart-type divisé par la moyenne). Il semble donc douteux que l’age explique quoi que ce soit. D'où vient alors l'écart supplémentaire ?
 
-Du rapport de cotes lui-même. **Un rapport de cotes bouge dès qu'on ajoute au modèle n'importe quel prédicteur fort de la variable à expliquer, même sans le moindre rapport avec la variable qui nous intéresse.** Cette propriété porte un nom, la non-collapsibilité, et elle relève de l'arithmétique, non de la sociologie. L'avertissement de Carina Mood aux sociologues est exactement celui-là : pour cette raison, on ne peut pas comparer des rapports de cotes entre modèles ayant des prédicteurs différents — ce qui est précisément ce à quoi une colonne brute et une colonne ajustée, côte à côte, invitent.
+Le coupable est le rapport de cotes lui-même. **Un rapport de cotes bouge dès qu'on ajoute au modèle n'importe quel prédicteur fort de la variable à expliquer, même sans le moindre rapport avec la variable qui nous intéresse.** Cette propriété porte un nom, la non-collapsibilité, et elle relève de l'arithmétique. L'avertissement de Carina Mood aux sociologues est exactement celui-là : pour cette raison, on ne peut pas comparer des rapports de cotes entre modèles ayant des prédicteurs différents — ce qui est précisément ce à quoi une colonne observée et une colonne ajustée, côte à côte, invitent.
 
-La vérification consiste à poser la même question avec une mesure de l'écart qui n'a pas ce défaut :
+La vérification consiste à poser la même question avec une mesure de l'écart qui n'a pas ce défaut, comme une différence de points de pourcentages :
 
 ```{r}
 tab_reg(questionr_hdv, "cinema", c("qualif", "age"), measure = "difference")
@@ -778,25 +780,17 @@ tab_reg(questionr_hdv, "cinema", c("qualif", "age"), measure = "difference")
 | risque relatif | `÷2.9` | `÷3.1` | &times;1,07 |
 | différence en points | `-43.2` | `-45.2` | 2 points |
 
-Sur les deux mesures qui se tiennent bien, l'écart de classe **ne bouge presque pas** — le résultat honnête, et nettement plus terne : l'âge n'explique à peu près rien de l'écart culturel entre catégories. Tout le spectacle de la première ligne était le rapport de cotes en train de se remettre à l'échelle.
+Sur les deux mesures qui se comportent bien, l'écart de classe **ne bouge presque pas**. Le résultat est nettement plus terne : l'âge n'explique à peu près rien de l'écart culturel entre catégories. Tout le spectacle de la première ligne est créé par un rapport de cotes en train de se remettre à l'échelle.
 
-**C'est pourquoi tabxplor colore le déplacement sur une colonne de rapports de cotes, mais refuse de le tester.** ⚠ Et il faut le savoir, car le tableau ne le dit pas : sa légende ne porte aucune mention de ce refus. Si lire l'ajustement est le but du tableau — et dans cet article c'est toujours le cas — travailler avec une mesure de l'écart dont le déplacement veut dire ce qu'on croit : `measure = "difference"` pour des points, `measure = "ratio"` pour des risques relatifs. Le rapport de cotes sert à publier à côté d'une littérature qui l'emploie.
+Si lire l'ajustement entre les données observées et les prédictions du modèle est le but du tableau, il est nécessaire d’utiliser une mesure de l'écart plus fiable,  `measure = "difference"` pour des points de pourcentage, ou `measure = "ratio"` pour des risques relatifs.
 
-## Toutes les lignes ne se lisent pas de la même façon
+## Trois contresens courants
 
-Une dernière habitude. Un tableau de régression tend un coefficient pour chaque prédicteur, tous présentés de la même manière, ce qui invite discrètement à les lire tous pareil. Il ne faut pas.
+**« Le chiffre ajusté est le vrai chiffre. »** Il n'est pas plus vrai. Il répond à une autre question. Le chiffre brut dit *de combien ces groupes diffèrent*, le chiffre ajusté dit *de combien ils diffèrent entre enquêtés semblables sur ma liste de variables*. Les deux sont des faits présents dans les données d’enquête, et l'objet le plus intéressant est la distance entre eux.
 
-Cette liste de contrôles a été dressée pour répondre à une question portant sur **une** variable. Les autres lignes sont ajustées sur un ensemble de variables assemblé pour ce prédicteur-là, non pour les leurs : il manque certains de leurs facteurs de confusion, et certaines des variables sur lesquelles elles sont ajustées sont leurs propres variables intermédiaires. Dans le modèle sur le fait d'être relâché, la ligne `citizen` est ajustée sur les antécédents — qui, pour la nationalité, sont sans doute une conséquence plutôt qu'un facteur de confusion.
+**« Non significatif veut dire qu’il n’y a aucun effet. »** Cela veut dire que cet échantillon-ci ne parvient pas à le distinguer de zéro. Sur les 39 femmes de l'exemple universitaire, c'est un énoncé qui concerne l'échantillon davantage que la réalité sociale. Regarder l'intervalle de confiance permet de le comprendre.
 
-Les épidémiologistes appellent cela le **piège du « tableau 2 »** (*Table 2 fallacy*), du nom du tableau d'un article où tous les coefficients sont imprimés ensemble ; l'article de Westreich et Greenland (2013) en est la référence. Le remède n'est pas statistique, il est éditorial : **rapporter la ligne pour laquelle le modèle a été conçu, et traiter les autres pour ce qu'elles sont — des ajustements, non des résultats.** Si une seconde variable intéresse vraiment, elle mérite son propre modèle, avec sa propre liste.
-
-## Trois contresens
-
-**« Le nombre ajusté est le vrai. »** Il n'est pas plus vrai. Il répond à une autre question. Le brut dit *de combien ces groupes diffèrent*, l'ajusté dit *de combien ils diffèrent entre gens semblables sur ma liste*. Les deux sont des faits du monde réel, et l'objet intéressant est la distance entre eux. C'est bien pourquoi les deux colonnes sont imprimées côte à côte.
-
-**« Non significatif veut dire aucun effet. »** Cela veut dire que cet échantillon-ci ne parvient pas à le distinguer de zéro. Sur les 39 femmes de l'exemple universitaire, c'est un énoncé sur l'échantillon. Regarder l'intervalle de confiance — `display = "est_ci"` l'imprime — avant de conclure quoi que ce soit d'une absence.
-
-**« Chaque case colorée est un résultat. »** Chaque case est testée pour elle-même, sans correction du nombre de tests présents sur la page. Dans un tableau qui porte une douzaine de comparaisons, une ou deux paraîtront notables par hasard : un seuil de confiance de 95 % se trompe une fois sur vingt. Lire la **configuration d'ensemble** — tout un bloc de lignes qui va dans le même sens — et citer le test par variable du bas de tableau plutôt qu'une case isolée.
+**« Chaque case colorée est un résultat en soi. »** La différence de chaque case avec la catégorie de référence est testée pour elle-même, sans correction du nombre de tests présents sur la page. Dans un tableau qui porte une vingtaine de comparaisons, environ une semblera significative du fait d’un pur hasard de la sélection de l’échantillon : un seuil de confiance de 95 % se trompe une fois sur vingt. C’est pourquoi il est important de lire la **configuration d'ensemble** — tout un bloc de lignes qui va dans le même sens.
 
 # Pour aller plus loin
 

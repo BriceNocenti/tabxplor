@@ -70,13 +70,16 @@ transform of it exists. And optimising the hues: because the dark ceiling is fla
   which is the independence the two channels have in the package. It carries a comparison strip, the
   candidate on real tables, deuteranope and protanope copies, a picker for five plausible grounds,
   the chroma cap, and a per-candidate scorecard with the chroma-vs-lightness curve for its own hues.
-- **`dev/heading_ladders.R`** — the OKLCH maths, base R only: `oklch_hex()` (gamut-mapped by
-  reducing chroma alone), `oklch_maxC()` (the ceiling, memoised), `oklch_cusp()` (where a hue
-  peaks), `hex_oklch()` (the read-back), `oklch_ramp()` / `oklch_ladder()`, `contrast()` and
-  `apca()`.
+- **`dev/heading_ladders.R`** — the heading-ladder proposals, and the OKLCH maths attached under
+  the names these scripts call. ⚠ The maths itself lives in **`txtheme`**, the site-theme package,
+  as its exported API: `oklch_hex()` (gamut-mapped by reducing chroma alone), `max_chroma()` (the
+  ceiling, memoised), `oklch_cusp()` (where a hue peaks), `hex_oklch()` (the read-back),
+  `oklch_ramp()` / `oklch_ladder()`, `contrast()` and `apca()`. One true source for the *site*
+  theme and these *table*-palette tools alike; dev-only, so nothing shipped depends on it.
 - **`dev/color_palette_tools.R`** — CVD simulation, APCA, text × background grids. ⚠ Its
-  `.cg_apca()` and `heading_ladders.R`'s `apca()` are deliberate duplicates: the latter file is
-  base-R only. Both are checked against the same Myndex vector (`#888` on `#fff` → 63.1).
+  `.cg_apca()` and `txtheme::apca()` are deliberate duplicates: txtheme is base-R only (no Imports
+  at all), this file needs farver + colorspace. Both are checked against the same Myndex vector
+  (`#888` on `#fff` → 63.1).
 - **`dev/chroma_cap.js`** — caps every colour on a page at once; goal 7's test.
 - **`dev/make_color_golden.R`** — regenerates the 15 `_color_golden` fixtures. Any ramp edit moves
   them, and the diff must be argued.

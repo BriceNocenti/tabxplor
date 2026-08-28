@@ -1,6 +1,14 @@
-# PURPOSE: the heading-green ladders, and the OKLCH maths behind them -- the ONE definition.
-# ROLE: sourced by both previews (dev/heading_greens_preview.R writes the specimen page,
-#   dev/site_theme_preview.R offers the same ladders on the real site chrome). It writes nothing.
+# PURPOSE: the heading-ladder proposals -- the search record, and the ONE definition of every ladder.
+# ROLE: sourced by the three dev previews (dev/heading_greens_preview.R writes the specimen page,
+#   dev/site_theme_preview.R shows the settled ladder on the real site chrome, dev/palette_preview.R
+#   borrows the colour maths). It writes nothing.
+#
+# ⚠ THE MATHS LIVES IN txtheme, NOT HERE. oklch_hex(), hex_oklch(), the gamut ceiling, APCA and WCAG
+#   are txtheme's exported API -- one true source for the site theme and these previews alike -- and
+#   the block below attaches them under the names the scripts already call. txtheme has no Imports,
+#   so it is base R either way; installing it is `pak::pak("BriceNocenti/txtheme")`.
+#   ⚠ dev-only: dev/ is .Rbuildignore'd and stripped from the release branch, so nothing in R/,
+#     tests/, the tarball or a CRAN check depends on txtheme.
 #
 # WHY A LADDER AND NOT A COLOUR: on a dark ground prominence IS perceptual lightness, so six levels
 #   want six values of L, not one green used six times. The rest of the palette fixes the room it
@@ -20,154 +28,24 @@
 # ⚠ THE GAMUT IS NOT FLAT. Green chroma peaks near L 0.86 at hue 140 (max 0.277 in sRGB) and
 #   collapses above L 0.92 (0.10 at hue 140). A "very light, very saturated" green does not exist:
 #   ask for one and oklch_hex() reduces the chroma until it fits, as CSS Color 4 does.
+#
+# ⚠ THE SETTLED LADDER IS `warm-95-10` (round ten), and it is the site's: txtheme's TX_PALETTE
+#   records those six hexes and re-derives them from this very spec at load. Everything else here is
+#   the search that reached it, kept so the choice can be re-read against its alternatives.
 
-# === SECTION: OKLCH <-> sRGB ======================================================================
-# A port of the Ottosson matrices. Out-of-gamut colours lose CHROMA, never lightness or hue: that is
-# what keeps a ladder's steps even when one rung asks for more saturation than sRGB can show.
-
-M1  <- matrix(c(0.8189330101, 0.3618667424, -0.1288597137,
-                0.0329845436, 0.9293118715,  0.0361456387,
-                0.0482003018, 0.2643662691,  0.6338517070), 3, 3, byrow = TRUE)
-M2  <- matrix(c(0.2104542553,  0.7936177850, -0.0040720468,
-                1.9779984951, -2.4285922050,  0.4505937099,
-                0.0259040371,  0.7827717662, -0.8086757660), 3, 3, byrow = TRUE)
-RGB2XYZ <- matrix(c(0.4124564, 0.3575761, 0.1804375,
-                    0.2126729, 0.7151522, 0.0721750,
-                    0.0193339, 0.1191920, 0.9503041), 3, 3, byrow = TRUE)
-
-srgb_encode <- function(c) ifelse(c <= 0.0031308, 12.92 * c, 1.055 * c^(1 / 2.4) - 0.055)
-srgb_linear <- function(c) ifelse(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055)^2.4)
-
-oklch_rgb <- function(L, C, H) {
-  ab  <- c(L, C * cos(H * pi / 180), C * sin(H * pi / 180))
-  lms <- solve(M2, ab)^3
-  as.vector(solve(RGB2XYZ) %*% solve(M1, lms))
-}
-in_gamut <- function(L, C, H, eps = 1e-4) all(oklch_rgb(L, C, H) >= -eps & oklch_rgb(L, C, H) <= 1 + eps)
-
-oklch_hex <- function(L, C, H) {
-  if (!in_gamut(L, C, H)) {                    # binary-search the chroma back into sRGB
-    lo <- 0; hi <- C
-    for (i in 1:40) { mid <- (lo + hi) / 2; if (in_gamut(L, mid, H)) lo <- mid else hi <- mid }
-    C <- lo
-  }
-  v <- pmax(0, pmin(1, oklch_rgb(L, C, H)))
-  sprintf("#%02X%02X%02X", round(srgb_encode(v[1]) * 255),
-          round(srgb_encode(v[2]) * 255), round(srgb_encode(v[3]) * 255))
-}
-
-# === SECTION: the gamut ceiling and the cusp ======================================================
-# The one fact every ramp is designed against: CHROMA IS BOUNDED, and the bound depends on BOTH L and
-# H. A ramp that ignores it does not fail loudly -- it silently records a chroma it does not have.
-
-# Ottosson's forward matrices, folded. `oklch_rgb()` reaches the same numbers through three solve()s
-# per call, which costs ~180 matrix inversions per ceiling; a generator evaluates thousands, so the
-# ceiling takes this path instead -- measured 28x faster before memoisation.
-# ⚠ The published constants are rounded, so this agrees with oklch_rgb() to 7e-4 on linear RGB and
-# moves oklch_maxC() by up to 2.3e-4 -- a sixteenth of one hex quantum (1/255), and no hex changes,
-# since oklch_hex() still gamut-maps through the solve() path. dev/palette_preview.R asserts both.
-ok_lrgb <- function(L, C, H) {
-  hr <- H * pi / 180; a <- C * cos(hr); b <- C * sin(hr)
-  l <- (L + 0.3963377774 * a + 0.2158037573 * b)^3
-  m <- (L - 0.1055613458 * a - 0.0638541728 * b)^3
-  s <- (L - 0.0894841775 * a - 1.2914855480 * b)^3
-  c( 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
-    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s)
-}
-
-# The most chroma sRGB can show at a given lightness and hue. `oklch_hex()` clamps to it silently;
-# this is what lets a caller SEE the clamp instead -- a palette must never record a chroma it does
-# not actually have. ⚠ `hi = 0.4` is a hard cap: a hue whose true ceiling exceeds it returns ~0.4.
-.maxC_cache <- new.env(parent = emptyenv())
-oklch_maxC <- function(L, H) {
-  key <- sprintf("%.4f_%.2f", L, H %% 360)
-  hit <- .maxC_cache[[key]]
-  if (!is.null(hit)) return(hit)
-  lo <- 0; hi <- 0.4
-  for (i in 1:30) { m <- (lo + hi) / 2
-    v <- ok_lrgb(L, m, H)
-    if (all(v >= -1e-4 & v <= 1 + 1e-4)) lo <- m else hi <- m }
-  assign(key, lo, envir = .maxC_cache)
-  lo
-}
-
-# Where a hue holds its most chroma -- the sRGB CUSP. This is the map a ramp is designed against: the
-# cusp lightness runs from L 0.90 at cyan to L 0.46 at violet, and 0.89 at gold to 0.63 at red, which
-# is why a ramp that RISES in lightness cannot keep the light theme's hue order without going pale.
-oklch_cusp <- function(H) {
-  Ls <- seq(0.03, 0.99, by = 0.002)
-  Cs <- vapply(Ls, oklch_maxC, numeric(1), H = H)
-  i  <- which.max(Cs)
-  c(L = Ls[i], C = Cs[i])
-}
-
-# What a hex actually IS, in OKLCH. The read-back that keeps every reported coordinate honest.
-hex_oklch <- function(hex) {
-  v   <- srgb_linear(strtoi(substring(hex, c(2, 4, 6), c(3, 5, 7)), 16L) / 255)
-  lms <- (M1 %*% (RGB2XYZ %*% v))^(1 / 3)
-  lab <- as.vector(M2 %*% lms)
-  c(L = lab[1], C = sqrt(lab[2]^2 + lab[3]^2),
-    H = (atan2(lab[3], lab[2]) * 180 / pi) %% 360)   # ⚠ %% binds tighter than / -- parenthesise
-}
-
-# A ramp whose chroma is given as a FRACTION OF THE CEILING, never as an absolute. Asking for a
-# chroma that does not exist becomes impossible rather than merely reported, which is the whole of
-# dev/dark_palette.md's trap 1. The L / C / H attributes are READ BACK OFF THE HEX, so a ramp cannot
-# record a coordinate it does not have -- neither the asked-for one nor a rounding of it.
-oklch_ramp <- function(L, frac, H) {
-  n <- max(length(L), length(frac), length(H))
-  L <- rep_len(L, n); frac <- rep_len(frac, n); H <- rep_len(H, n)
-  cmax <- vapply(seq_len(n), function(i) oklch_maxC(L[i], H[i]), numeric(1))
-  hex  <- vapply(seq_len(n), function(i) oklch_hex(L[i], frac[i] * cmax[i], H[i]), character(1))
-  got  <- vapply(hex, hex_oklch, numeric(3))
-  structure(hex, L = got[1, ], C = got[2, ], H = H, frac = frac, cmax = cmax,
-            names = NULL)
-}
-
-# The same, anchored at BOTH ENDS: `f1` and `f4` are fractions of the ceiling AT THEIR OWN RUNG, and
-# the rungs between follow a geometric line, because a ladder is read as a ratio.
-# ⚠ USE THIS, not a constant fraction, for any ramp that moves in hue. THE CEILING IS NOT MONOTONE
-# ALONG A HUE PATH: on the warm side red at L 0.69 holds 0.196 where orange at L 0.76 holds 0.155, so
-# one fraction of each rung's own ceiling makes rung 2 LESS saturated than rung 1 -- it inverts the
-# ladder while looking like the honest choice. A rung whose own ceiling falls below the line is still
-# clamped to it, so the ramp records only chroma it has.
-oklch_ladder <- function(L, H, f1, f4) {
-  n <- max(length(L), length(H)); L <- rep_len(L, n); H <- rep_len(H, n)
-  cmax <- vapply(seq_len(n), function(i) oklch_maxC(L[i], H[i]), numeric(1))
-  C1   <- f1 * cmax[1]; C4 <- f4 * cmax[n]
-  C    <- pmin(C1 * (C4 / C1)^seq(0, 1, length.out = n), cmax)
-  hex  <- vapply(seq_len(n), function(i) oklch_hex(L[i], C[i], H[i]), character(1))
-  got  <- vapply(hex, hex_oklch, numeric(3))
-  structure(hex, L = got[1, ], C = got[2, ], H = H, cmax = cmax, names = NULL)
-}
-
-# === SECTION: contrast ============================================================================
-
-rel_lum  <- function(hex) {
-  v <- srgb_linear(strtoi(substring(hex, c(2, 4, 6), c(3, 5, 7)), 16L) / 255)
-  sum(v * c(0.2126, 0.7152, 0.0722))
-}
-contrast <- function(a, b) { l <- sort(c(rel_lum(a), rel_lum(b)), decreasing = TRUE)
-                             (l[1] + 0.05) / (l[2] + 0.05) }
-
-# APCA-W3 0.98G, signed: POSITIVE = dark text on a light ground, NEGATIVE = the reverse. Use this and
-# not contrast() for anything dark: WCAG 2.x overstates contrast for dark colours badly enough that
-# its own authors say it cannot guide a dark theme, which is exactly the regime the dark ramps live
-# in. Lc 90 fluent body / 75 body columns / 60 content / 45 headlines / 30 spot-readable / 15 invisible.
-# ⚠ Duplicates .cg_apca() in dev/color_palette_tools.R deliberately: this file is base-R only, that
-# one needs farver + colorspace + kableExtra. Both are checked against the same Myndex vector.
-apca_Y <- function(hex) {
-  v <- (strtoi(substring(hex, c(2, 4, 6), c(3, 5, 7)), 16L) / 255)^2.4
-  Y <- sum(v * c(0.2126729, 0.7151522, 0.0721750))
-  if (Y < 0.022) Y + (0.022 - Y)^1.414 else Y                 # soft-clamp the near-black end
-}
-apca <- function(text, bg) {
-  Yt <- apca_Y(text); Yb <- apca_Y(bg)
-  if (abs(Yb - Yt) < 0.0005) return(0)
-  S <- if (Yb > Yt) (Yb^0.56 - Yt^0.57) * 1.14 else (Yb^0.65 - Yt^0.62) * 1.14
-  round((if (abs(S) < 0.1) 0 else if (S > 0) S - 0.027 else S + 0.027) * 100, 1)
-}
+# === SECTION: the maths, attached from txtheme ====================================================
+stopifnot(requireNamespace("txtheme", quietly = TRUE))
+oklch_hex    <- txtheme::oklch_hex
+hex_oklch    <- txtheme::hex_oklch
+oklch_maxC   <- txtheme::max_chroma       # named max_chroma() there: what the SRGB ceiling is
+oklch_cusp   <- txtheme::oklch_cusp
+oklch_ramp   <- txtheme::oklch_ramp
+oklch_ladder <- txtheme::oklch_ladder
+in_gamut     <- txtheme::in_gamut
+srgb_encode  <- txtheme::srgb_encode
+srgb_linear  <- txtheme::srgb_linear
+apca         <- txtheme::apca             # ⚠ use this, not contrast(), for anything dark
+contrast     <- txtheme::contrast
 
 # === SECTION: the twelve ladders ==================================================================
 # Each row is one proposal: six values of L, six of C, six of hue. A scalar is recycled, so a ladder

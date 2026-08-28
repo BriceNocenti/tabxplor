@@ -39,7 +39,9 @@ jobs:
       - name: Build site
         run: |
           pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
-          source("dev/site_prune.R")
+          # Guarded because dev/ is stripped from the release and master branches, where the prune
+          # is also unnecessary: CLAUDE.md, the only page it removes, is not there either.
+          if (file.exists("dev/site_prune.R")) source("dev/site_prune.R")
         shell: Rscript {0}
 
       - name: Deploy to GitHub pages 🚀
