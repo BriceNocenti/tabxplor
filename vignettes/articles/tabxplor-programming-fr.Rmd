@@ -163,7 +163,7 @@ tabs |> mutate(across(where(is_fmt), ~ mutate(., digits = 2L)))
 Un exemple plus complet : transformer la variance d'un tableau de moyennes en écart-type et l'ajouter comme une nouvelle colonne, non colorée, affichée à une décimale :
 
 ```{r, eval = FALSE}
-tab_num(gss_simple, race, c(age, tvhours), digits = 1L) |>
+tab(gss_simple, race, c(age, tvhours), digits = 1L) |>
   mutate(across(
     c(age, tvhours),
     ~ mutate(., var = sqrt(var), display = "var", digits = 1L) |> set_color("no"),
@@ -239,20 +239,13 @@ Outre les champs de chaque case, chaque colonne `fmt` porte quelques **attributs
 
 ## Savoir ce qu'on a en main avant d'y toucher
 
-Un code générique ne peut pas présumer de la forme du tableau qu'on lui passe. Quatre accesseurs y répondent, de sorte qu'une fonction se décide sur des faits plutôt que sur une devinette tirée des noms de colonnes.
+Un code générique ne peut pas présumer de la forme du tableau qu'on lui passe. Trois accesseurs y répondent, de sorte qu'une fonction se décide sur des faits plutôt que sur une devinette tirée des noms de colonnes.
 
 `tab_structure()` dit **ce qu'est l'objet** — un tableau croisé ou un tableau de régression, fusionné ou non, groupé ou non, et quelles variables occupent chaque axe :
 
 ```{r}
 t <- tab(gss_simple, race, marital, pct = "row", ci = "ref", color = "difference")
 tab_structure(t)
-```
-
-`tab_supports()` répond **si une opération s'applique**, avant même de l'essayer :
-
-```{r}
-tab_supports(t, "compact")
-tab_supports(t, "transpose_render")
 ```
 
 `tab_columns()` est la vue au niveau des colonnes : une ligne par colonne, avec tout ce que lisent les exportateurs et le moteur de couleurs — ce qu'elle estime, sa référence, sa méthode d'intervalle de confiance, son rôle :

@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab.R
 \name{tab}
 \alias{tab}
-\title{Cross-table with color helpers}
+\title{Cross-tables with color helpers}
 \usage{
 tab(
   data,
@@ -340,8 +340,8 @@ tab(questionr_hdv, qualif, cinema, pct = "row", na = "drop") |>
 
 }
 \seealso{
-\code{\link[=tab_reg]{tab_reg()}} (regression tables), and the variants \code{\link[=tab_num]{tab_num()}} (numeric variables),
-\code{\link[=tab_counts]{tab_counts()}} (pre-aggregated counts) and \code{\link[=tab_plain]{tab_plain()}} (one bare cross-table).
+\code{\link[=tab_reg]{tab_reg()}} (regression tables) and \code{\link[=tab_counts]{tab_counts()}} (pre-aggregated counts); the superseded
+\code{\link[=tab_num]{tab_num()}} (numeric variables) and \code{\link[=tab_plain]{tab_plain()}} (one bare cross-table).
 \link{tabxplor-display} says what a cell can show; \code{\link[=set_color_breaks]{set_color_breaks()}} / \code{\link[=set_color_palette]{set_color_palette()}}
 customise the colours; \code{\link[=tab_structure]{tab_structure()}} reports what a finished table is and what accepts it.
 Export it with \code{\link[=tab_xl]{tab_xl()}} (Excel), \code{\link[=tab_kable]{tab_kable()}} (HTML) or \code{\link[=tab_md]{tab_md()}} (Markdown), and chart it

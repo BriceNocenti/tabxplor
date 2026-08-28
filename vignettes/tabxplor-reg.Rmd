@@ -1,5 +1,5 @@
 ---
-title: "Regression tables with tab_reg()"
+title: "Regression models with tab_reg(): reference"
 description: >
   The reference for tab_reg() — the four estimand arguments, one part per kind of outcome, reading what adjustment did, and checking the model.
 output: rmarkdown::html_vignette

@@ -79,7 +79,7 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 # EXPORTED FUNCTIONS TO WORK WITH CLASS FMT ##############################################
 
 
-#' Create a vector of class formatted numbers
+#' Create an `fmt` vector, the tabxplor cell
 #' @description \code{fmt} vectors, of class \code{tabxplor_fmt}, powers \pkg{tabxplor}
 #' and \code{\link{tab}} tibbles.
 #' As a \code{\link[vctrs:new_rcrd]{record}}, they stores all data necessary to
@@ -336,7 +336,8 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 #' # To do more complex operations, like creating a new column with standard deviation and
 #' # print it with 2 decimals, use `dplyr::mutate` on all the fmt columns of a table :
 #'
-#' tab_num(forcats::gss_cat, race, c(age, tvhours), marital, digits = 1L, comp = "all") |>
+#' tab(forcats::gss_cat, race, c(age, tvhours), marital, digits = 1L, comp = "all",
+#'     color = "auto") |>
 #'   dplyr::mutate(dplyr::across( #Mutate over the whole table.
 #'     c(age, tvhours),
 #'     ~ dplyr::mutate(.,         #Mutate over each fmt vector's underlying data.frame.
@@ -2685,8 +2686,6 @@ fmt_attrs_of <- function(x) {
 #' Read or write one `fmt` column attribute, by name
 #'
 #' @description
-#' `r lifecycle::badge("experimental")`
-#'
 #' The generic form of the `get_*()` / `set_*()` family: one function covering every per-column
 #' attribute a `tabxplor_fmt` vector carries, so a helper can loop over them instead of naming each.
 #' The named accessors ([get_scale()], [get_col_var()], [is_totcol()], …) remain the readable way to

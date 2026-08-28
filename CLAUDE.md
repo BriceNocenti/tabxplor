@@ -776,33 +776,85 @@ so the table's own margin would sit *above* the horizontal scrollbar instead of 
 ⚠ **One maintainer step remains**: the Excel width workbook is a visual judgement — say where a
 column reads too tight or too generous and the three constants move.
 
-#### Phase 24d — pkgdown site Reference, functions short description, and the like
+#### Phase 24d — the Reference page, read top to bottom ✓ DONE
 
-In the pkgdown site, in "Reference", I want to change the order and the grouping of functions, and rewrite the whole thing, including functions short description, for readability and user-friendliness. Check at the currently build site, read the page directly yourself, and see for the inconsistencies, duplicates, and unhelpful ordering.
-- The intro of each section is often too verbose, and sometimes repeat what is already said by each function entry. For example "tab() builds a colour-coded cross-table; tab_reg() a regression table that looks and behaves like one" : the functions own titles already say exactly that, it’s useless. Please, modify these little introductions for concision and user-friendliness ; don’t hesitate to modify the functions short description in their roxygen blocks too so that the Reference page is as readable and as user-friendly as possible, while staying sleek, concise, compact, no bullshit.
-- Some functions that should’nt be tagged as "experimental" are. Let `tab_columns()` and `tab_structure()` as experimental, I’m not too sure it’s useful.
-- `jmvtab` and `jmvtabreg` functions short description only show "Crosstables" and "Regressions". I’m not sure if it’s because this name is used for the jamovi UI main analysis button (I think not ? check), of if it could be renamed with no problems for something meaningfu  telling the reader this is a full graphical interface, etc.
+**The index is now ordered by what a user reaches for first**, and a section says only what its
+entries' titles cannot. Twelve visible groups: the two producers (`tab()`, `tab_reg()`, and
+`tab_counts()` beside them), the jamovi analyses, then what can be DONE to a finished table
+(reshape, export, chart), the small helpers, the superseded entry points, and last the vocabulary
+and programming surface (display/colour, model estimands, options, introspection, the `fmt` type).
+The `Variants of tab()` group is dissolved. Every `desc:` that renamed the functions listed under it
+was cut — `Charts` now reads `Both need **ggplot2**`, which is the one thing two titles could not
+say — and four groups whose title is already the whole sentence carry no `desc:` at all.
 
-As a new ordering for the whole Reference page, I want:
-- The two main functions
-- Point-and-click interface (jamovi)
-- Reshaping and combining
-- Export a finished table
-- Charts (reg_check_plots() and forest_plot() currently have a duplicated entry, can you check that ?)
-- Data-prep and text helpers
-- Superseded entry points
-- What a cell shows, and how it is coloured
-- What a model can be, and what it fitted
-- Captions and options
-- Inspect a table
-- The fmt cell type
-- Example data (is it possible to remove that one from References, while keeping it in the package documentation ?)
+**Seventeen titles rewritten**, the index line being the only description most readers see:
+`tab_reg()` "All-in-one tables for regressions, with each modelled effect beside its observed one"
+(was 12 words of jargon), the four exporters down to a verb and an object ("Render a table as html",
+"Write a table to an Excel workbook"), `tab_spread()` "Turn a sub-table variable into columns",
+`new_tab()` and `fmt()` naming what they build rather than their class. `tab()` keeps its own title;
+`tab_reg()`'s is written to sit under it.
 
-A few changes also required :
-- I want to soft-deprecate and supersed `tab_num()`, and put it in the superseded part with `tab_plain`. `tab_counts()` must then be put in the first group with `tab()` and `tab_reg()`, but aften them.
-- I want to not export `tab_supports()`, internal only.
+**`tab_num()` is superseded**, badge and all, and moves beside `tab_many()` and `tab_plain()`:
+`tab()` builds the same table whenever `col_vars` holds numeric variables. Nothing in `R/` ever
+called it — the build reaches `num_core()` directly — so this is documentation, not a behaviour
+change: no warning, no signature change. `tab()`'s `@seealso`, the `fmt` topic's example and the two
+programming vignettes stop teaching it. ⚠ The `fmt` example gained `color = "auto"`: that is the one
+place the two differ, `tab_num()` alone starting `color` at `"auto"` where `tab()` starts at `"no"`.
 
-At the end, rebuild the pkgdown site in dev for me to check it again, with the last versions of the vignettes, etc.
+**`tab_supports()` is internal.** The predicate had no call site in `R/`, no test, and one user:
+the programming vignettes. `TAB_OPS` and `tab_check_structure()` are untouched — the rules stay
+declared, only the public predicate goes — and `tab_structure()`'s page stops advertising it.
+
+**Three `experimental` badges removed** (`reg_check_plots()`, `shape_numeric_var()`, `fmt_attr()`);
+`tab_structure()` and `tab_columns()` keep theirs, and `tab_transpose()` keeps its accurate
+`deprecated` one in the reshape group where users look for it.
+
+**The five example-data topics leave the index** through a section literally titled `internal` —
+pkgdown's documented way to build a topic's page and keep it off the index — so `?car_salaries`, the
+site search and every `\link{}` from an example still resolve.
+
+⚠ **`forest_plot()` / `reg_check_plots()` were never duplicated**: one `contents:` entry and one
+`\alias{}` each. What read as a duplicate was the section `desc:` naming both functions in prose
+directly above the two entries that name them again — the redundancy this phase removed. (pkgdown
+2.2.1 also emits a section's heading and its entry list as two sibling `<div class="section
+level2">`, which widens the gap between them; that is stock markup.)
+
+⚠ **`man/` was stale for three index titles** (`tab`, `tab_reg`, `tab_counts`): `R/` had been edited
+without a `document()`, so the built site showed the previous wording. The rebuild fixes it.
+
+**The two home pages are generated again, by one script.** `dev/build_readmes.R` knits both
+`README.md` (GitHub, black-and-white) and `pkgdown/index.md` (the site, in colour) from their
+`.Rmd` twins, against the WORKING TREE (`load_all(export_all = FALSE)`) rather than whatever
+tabxplor is installed. `dev/build_site.R` runs its `index` half before every build, so the home
+page cannot be stale. ⚠ It shells out to a subprocess rather than sourcing: each source pins
+tabxplor options and `LANGUAGE` so the page cannot depend on who builds it, and those pins would
+otherwise leak into every example and article rendered afterwards. Both `.Rmd` gained
+`md_extensions: -implicit_figures` — pandoc turns a lone `![alt](src)` into a `<figure>`, which
+would promote the hero image's alt text into a visible caption. `README.md` had drifted from its
+own source (it still carried the pre-2.0.0 feature list), so the rebuild is a catch-up.
+
+**The site opens light, whatever the reader's OS says.** The switch stays and a chosen mode is
+still honoured for good — dark is opt-in, its ramps keeping less separation than the light ones,
+and a coloured table being read on a white page by convention. One file does it,
+`pkgdown/extra.js`: pkgdown links it from `<head>` right after its own `lightswitch.js` and
+before the page paints, and it seeds the very `localStorage` key that switch reads. ⚠ Seeding
+rather than only setting the attribute is the point: the attribute alone would leave the button
+claiming *Auto* over a light page, and pkgdown's `prefers-color-scheme` listener would flip it
+back on the next system change. It also keeps the TABLES in step — `tab_css(theme = "auto")`
+emits an `@media (prefers-color-scheme: dark)` layer, which the `[data-bs-theme=light]` layer
+after it out-specifies, so a dark-OS reader gets a light page AND light tables.
+
+**More air between sections, in proportion to the heading's rank** (`pkgdown/extra.scss`, the
+articles only — a reference page is looked up, not read through): 4 / 2.5 / 1.75 / 1.25 rem from
+`h2` down to `h5`, where pkgdown stops at 1.5 and 1 and gives `h4` and below nothing at all. A
+sub-section opening its parent keeps the small gap. Margins collapse, so each value is the whole
+gap rather than an addition to the paragraph above.
+
+**Measured.** `pkgdown::check_pkgdown()` clean; shipped suite **FAIL 0 | PASS 4468**. One NEWS edit,
+approved: the *Introspection accessors* bullet no longer names `tab_supports()`. The jamovi titles
+stay `Crosstables` / `Regressions` — they are generated from `jamovi/*.a.yaml` `title:`, the field
+that also labels the ribbon item and the results heading, so renaming them would cost a
+`jmvtools::install()` regeneration and a new msgid for a line the section heading already carries.
 
 ### Phase 25 — CRAN release
 

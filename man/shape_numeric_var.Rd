@@ -2,7 +2,7 @@
 % Please edit documentation in R/var-shape.R
 \name{shape_numeric_var}
 \alias{shape_numeric_var}
-\title{Shape a numeric variable}
+\title{Cut or transform a numeric variable}
 \usage{
 shape_numeric_var(x, shape, w = NULL, name = NULL, ordered = TRUE)
 }
@@ -28,8 +28,6 @@ For a cut: a factor whose levels carry the real cut points and, in words, where 
 sits. For \code{"log"} / \code{"sqrt"}: a numeric vector.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
-
 Turn a number into the form you want to read it in: cut it into quantile groups or into bands at
 the mean and one standard deviation either side (it becomes an ordinary factor), or transform it
 and keep it a number. This is the same operation \code{tab(shape =)} and \code{\link[=tab_reg]{tab_reg()}}\verb{(shape =)}

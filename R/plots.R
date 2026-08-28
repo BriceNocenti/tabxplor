@@ -710,8 +710,6 @@ reg_panel_proportionality <- function(cx, cols, opts) {
 #' Diagnostic plots of a regression model
 #'
 #' @description
-#' `r lifecycle::badge("experimental")`
-#'
 #' **A teaching companion, not a decision tool.** Every verdict these panels illustrate is already a
 #' row in the table's own footer, for every model column, with no plotting package installed (see the
 #' `stats` argument of [tab_reg()]). This function exists to show what a violation looks like.
@@ -1050,7 +1048,7 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
   gettextf("%s (%s%% CI)", base, format(100 * conf))
 }
 
-#' Forest plot of a tabxplor table
+#' Forest plot of any tabxplor table
 #'
 #' Draws every estimate of a table with its confidence interval, its significance and its colour --
 #' for a cross-table from \code{\link{tab}} as much as for a regression table from

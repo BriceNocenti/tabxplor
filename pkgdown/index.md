@@ -5,31 +5,32 @@
 
 # tabxplor
 
-`tabxplor` makes cross-tables readable at a glance, for data
-exploration. One line of code builds a table with percentages, weighted
-counts, confidence intervals and tests — and **colors highlight the
-cells that stand out from the total, only when the difference is
-statistically solid**. You spot the structure of your data immediately,
-instead of scanning numbers row by row.
+`tabxplor` makes cross-tables and regression models readable at a glance
+for data exploration. It builds a table with percentages, weighted
+counts, confidence intervals, tests — and colors highlight the cells
+that stand out from the total or reference, only when the difference is
+statistically solid, to spot the structure of your data immediately.
 
-- **Colors encode effect size *and* significance** at once: the stronger
-  the difference, the deeper the color; non-significant cells stay
-  uncolored (or greyed). A black-and-white `theme = "print_ready"`
-  renders the same reading for journals.
-- **Cells are rich values**: each one carries its count, percentage,
-  confidence interval and reference behind the displayed number — tables
-  are `tibble`s you can keep working on with `dplyr`.
-- **The same colors follow you everywhere**: console, html, Excel,
-  markdown/Quarto and plots.
-- **Regression tables too**: `tab_reg()` presents logistic and other
-  models with the same visual language, next to the observed
-  percentages.
-- Weighted and survey data are supported throughout, and a
-  point-and-click [jamovi](https://www.jamovi.org/) module is available.
+- **Colors encode effect size and significance**: the stronger the
+  difference, the deeper the color; non-significant cells are
+  greyed-out.
+- Html, Excel and markdown/Quarto exports are available.
+- It comes with a point-and-click [jamovi](https://www.jamovi.org/)
+  graphical interface: no code needed.
+- A black-and-white `theme = "print_ready"` renders the same reading for
+  journals.
+- **Regression models** are presented with the same visual language,
+  next to their observed effect.
+- In R the tables **are `tibble`s you can keep working on with
+  `dplyr`**. Cells are rich values, each one carries its count,
+  percentage, confidence interval and reference behind the displayed
+  number.
+- Weighted data and survey design are supported.
 
 <style>
 .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
 .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
+.tabxplor-tab{margin-bottom:1.2em;}
 .tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
 .tabxplor-tab tfoot{font-size:80%;text-align:left;}
 .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
@@ -67,6 +68,7 @@ instead of scanning numbers row by row.
 .tabxplor-tab .tx-pill{border-radius:4px;padding:1px 4px;margin:0 -4px;}
 .tabxplor-tab .tx-spark{display:block;margin:0 auto;}
 .tabxplor-tab .tx-sparkcell{vertical-align:middle;text-align:center;padding:1px 2px;}
+.tabxplor-tab.tx-shape{font-size:90%;}
 .tooltip-inner{max-width:none;white-space:pre;}
 .popover{max-width:none;}
 .popover-body,.popover-content{padding:6px;white-space:pre;}
@@ -78,6 +80,9 @@ instead of scanning numbers row by row.
 .tabxplor-tab .tx-unit{color:#949494;}
 .tabxplor-caption{color:#000000;}
 .tabxplor-tab .tx-foot{color:#444444;}
+.tabxplor-tab.tx-shape{color:#444444;}
+.tabxplor-tab.tx-shape thead th{color:#444444;}
+.tabxplor-tab.tx-shape .tx-sec{color:#949494;}
 .tabxplor-tab .tx-sec{color:#444444;}
 .p1,.tabxplor-tab .p1{color:#02A5B3;}
 .p2,.tabxplor-tab .p2{color:#0891C9;}
@@ -87,14 +92,14 @@ instead of scanning numbers row by row.
 .m2,.tabxplor-tab .m2{color:#DE7C01;}
 .m3,.tabxplor-tab .m3{color:#DD5301;}
 .m4,.tabxplor-tab .m4{color:#D60103;}
-.o1,.tabxplor-tab .o1{background-color:#DFFCFF;}
-.o2,.tabxplor-tab .o2{background-color:#D7EFFF;}
-.o3,.tabxplor-tab .o3{background-color:#CEE3FF;}
-.o4,.tabxplor-tab .o4{background-color:#BBCCFF;}
-.u1,.tabxplor-tab .u1{background-color:#FFF4E1;}
-.u2,.tabxplor-tab .u2{background-color:#FFE6D3;}
-.u3,.tabxplor-tab .u3{background-color:#FFD7C8;}
-.u4,.tabxplor-tab .u4{background-color:#FFBAAF;}
+.o1,.tabxplor-tab .o1{background-color:#C4EAEE;}
+.o2,.tabxplor-tab .o2{background-color:#B7DEF6;}
+.o3,.tabxplor-tab .o3{background-color:#B2D0F8;}
+.o4,.tabxplor-tab .o4{background-color:#AEC2FF;}
+.u1,.tabxplor-tab .u1{background-color:#F0DFC4;}
+.u2,.tabxplor-tab .u2{background-color:#F6CFB0;}
+.u3,.tabxplor-tab .u3{background-color:#FCBDA5;}
+.u4,.tabxplor-tab .u4{background-color:#FEAC9F;}
 @media (prefers-color-scheme: dark) {
   .tabxplor-tab{color:#f1efe0;background:transparent;}
   .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,:is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),.tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill){color:#21252b;}
@@ -105,6 +110,9 @@ instead of scanning numbers row by row.
   .tabxplor-tab .tx-unit{color:#919085;}
   .tabxplor-caption{color:#FFFFFF;}
   .tabxplor-tab .tx-foot{color:#CDCBBC;}
+  .tabxplor-tab.tx-shape{color:#CDCBBC;}
+  .tabxplor-tab.tx-shape thead th{color:#CDCBBC;}
+  .tabxplor-tab.tx-shape .tx-sec{color:#919085;}
   .tabxplor-tab .tx-sec{color:#CDCBBC;}
   .p1,.tabxplor-tab .p1{color:#2BA1A7;}
   .p2,.tabxplor-tab .p2{color:#37A8D7;}
@@ -131,6 +139,9 @@ body.quarto-light .g2,body.quarto-light .tabxplor-tab .g2,[data-bs-theme=light] 
 body.quarto-light .tabxplor-tab .tx-unit,[data-bs-theme=light] .tabxplor-tab .tx-unit,[data-theme=light] .tabxplor-tab .tx-unit{color:#949494;}
 body.quarto-light .tabxplor-caption,[data-bs-theme=light] .tabxplor-caption,[data-theme=light] .tabxplor-caption{color:#000000;}
 body.quarto-light .tabxplor-tab .tx-foot,[data-bs-theme=light] .tabxplor-tab .tx-foot,[data-theme=light] .tabxplor-tab .tx-foot{color:#444444;}
+body.quarto-light .tabxplor-tab.tx-shape,[data-bs-theme=light] .tabxplor-tab.tx-shape,[data-theme=light] .tabxplor-tab.tx-shape{color:#444444;}
+body.quarto-light .tabxplor-tab.tx-shape thead th,[data-bs-theme=light] .tabxplor-tab.tx-shape thead th,[data-theme=light] .tabxplor-tab.tx-shape thead th{color:#444444;}
+body.quarto-light .tabxplor-tab.tx-shape .tx-sec,[data-bs-theme=light] .tabxplor-tab.tx-shape .tx-sec,[data-theme=light] .tabxplor-tab.tx-shape .tx-sec{color:#949494;}
 body.quarto-light .tabxplor-tab .tx-sec,[data-bs-theme=light] .tabxplor-tab .tx-sec,[data-theme=light] .tabxplor-tab .tx-sec{color:#444444;}
 body.quarto-light .p1,body.quarto-light .tabxplor-tab .p1,[data-bs-theme=light] .p1,[data-bs-theme=light] .tabxplor-tab .p1,[data-theme=light] .p1,[data-theme=light] .tabxplor-tab .p1{color:#02A5B3;}
 body.quarto-light .p2,body.quarto-light .tabxplor-tab .p2,[data-bs-theme=light] .p2,[data-bs-theme=light] .tabxplor-tab .p2,[data-theme=light] .p2,[data-theme=light] .tabxplor-tab .p2{color:#0891C9;}
@@ -140,14 +151,14 @@ body.quarto-light .m1,body.quarto-light .tabxplor-tab .m1,[data-bs-theme=light] 
 body.quarto-light .m2,body.quarto-light .tabxplor-tab .m2,[data-bs-theme=light] .m2,[data-bs-theme=light] .tabxplor-tab .m2,[data-theme=light] .m2,[data-theme=light] .tabxplor-tab .m2{color:#DE7C01;}
 body.quarto-light .m3,body.quarto-light .tabxplor-tab .m3,[data-bs-theme=light] .m3,[data-bs-theme=light] .tabxplor-tab .m3,[data-theme=light] .m3,[data-theme=light] .tabxplor-tab .m3{color:#DD5301;}
 body.quarto-light .m4,body.quarto-light .tabxplor-tab .m4,[data-bs-theme=light] .m4,[data-bs-theme=light] .tabxplor-tab .m4,[data-theme=light] .m4,[data-theme=light] .tabxplor-tab .m4{color:#D60103;}
-body.quarto-light .o1,body.quarto-light .tabxplor-tab .o1,[data-bs-theme=light] .o1,[data-bs-theme=light] .tabxplor-tab .o1,[data-theme=light] .o1,[data-theme=light] .tabxplor-tab .o1{background-color:#DFFCFF;}
-body.quarto-light .o2,body.quarto-light .tabxplor-tab .o2,[data-bs-theme=light] .o2,[data-bs-theme=light] .tabxplor-tab .o2,[data-theme=light] .o2,[data-theme=light] .tabxplor-tab .o2{background-color:#D7EFFF;}
-body.quarto-light .o3,body.quarto-light .tabxplor-tab .o3,[data-bs-theme=light] .o3,[data-bs-theme=light] .tabxplor-tab .o3,[data-theme=light] .o3,[data-theme=light] .tabxplor-tab .o3{background-color:#CEE3FF;}
-body.quarto-light .o4,body.quarto-light .tabxplor-tab .o4,[data-bs-theme=light] .o4,[data-bs-theme=light] .tabxplor-tab .o4,[data-theme=light] .o4,[data-theme=light] .tabxplor-tab .o4{background-color:#BBCCFF;}
-body.quarto-light .u1,body.quarto-light .tabxplor-tab .u1,[data-bs-theme=light] .u1,[data-bs-theme=light] .tabxplor-tab .u1,[data-theme=light] .u1,[data-theme=light] .tabxplor-tab .u1{background-color:#FFF4E1;}
-body.quarto-light .u2,body.quarto-light .tabxplor-tab .u2,[data-bs-theme=light] .u2,[data-bs-theme=light] .tabxplor-tab .u2,[data-theme=light] .u2,[data-theme=light] .tabxplor-tab .u2{background-color:#FFE6D3;}
-body.quarto-light .u3,body.quarto-light .tabxplor-tab .u3,[data-bs-theme=light] .u3,[data-bs-theme=light] .tabxplor-tab .u3,[data-theme=light] .u3,[data-theme=light] .tabxplor-tab .u3{background-color:#FFD7C8;}
-body.quarto-light .u4,body.quarto-light .tabxplor-tab .u4,[data-bs-theme=light] .u4,[data-bs-theme=light] .tabxplor-tab .u4,[data-theme=light] .u4,[data-theme=light] .tabxplor-tab .u4{background-color:#FFBAAF;}
+body.quarto-light .o1,body.quarto-light .tabxplor-tab .o1,[data-bs-theme=light] .o1,[data-bs-theme=light] .tabxplor-tab .o1,[data-theme=light] .o1,[data-theme=light] .tabxplor-tab .o1{background-color:#C4EAEE;}
+body.quarto-light .o2,body.quarto-light .tabxplor-tab .o2,[data-bs-theme=light] .o2,[data-bs-theme=light] .tabxplor-tab .o2,[data-theme=light] .o2,[data-theme=light] .tabxplor-tab .o2{background-color:#B7DEF6;}
+body.quarto-light .o3,body.quarto-light .tabxplor-tab .o3,[data-bs-theme=light] .o3,[data-bs-theme=light] .tabxplor-tab .o3,[data-theme=light] .o3,[data-theme=light] .tabxplor-tab .o3{background-color:#B2D0F8;}
+body.quarto-light .o4,body.quarto-light .tabxplor-tab .o4,[data-bs-theme=light] .o4,[data-bs-theme=light] .tabxplor-tab .o4,[data-theme=light] .o4,[data-theme=light] .tabxplor-tab .o4{background-color:#AEC2FF;}
+body.quarto-light .u1,body.quarto-light .tabxplor-tab .u1,[data-bs-theme=light] .u1,[data-bs-theme=light] .tabxplor-tab .u1,[data-theme=light] .u1,[data-theme=light] .tabxplor-tab .u1{background-color:#F0DFC4;}
+body.quarto-light .u2,body.quarto-light .tabxplor-tab .u2,[data-bs-theme=light] .u2,[data-bs-theme=light] .tabxplor-tab .u2,[data-theme=light] .u2,[data-theme=light] .tabxplor-tab .u2{background-color:#F6CFB0;}
+body.quarto-light .u3,body.quarto-light .tabxplor-tab .u3,[data-bs-theme=light] .u3,[data-bs-theme=light] .tabxplor-tab .u3,[data-theme=light] .u3,[data-theme=light] .tabxplor-tab .u3{background-color:#FCBDA5;}
+body.quarto-light .u4,body.quarto-light .tabxplor-tab .u4,[data-bs-theme=light] .u4,[data-bs-theme=light] .tabxplor-tab .u4,[data-theme=light] .u4,[data-theme=light] .tabxplor-tab .u4{background-color:#FEAC9F;}
 body.quarto-dark .tabxplor-tab,[data-bs-theme=dark] .tabxplor-tab,[data-theme=dark] .tabxplor-tab,html.dark .tabxplor-tab{color:#f1efe0;background:transparent;}
 body.quarto-dark .tabxplor-tab td:not(.p1,body.quarto-dark .p2,body.quarto-dark .p3,body.quarto-dark .p4,body.quarto-dark .m1,body.quarto-dark .m2,body.quarto-dark .m3,body.quarto-dark .m4) .tx-pill,body.quarto-dark :is(.o1,body.quarto-dark .o2,body.quarto-dark .o3,body.quarto-dark .o4,body.quarto-dark .u1,body.quarto-dark .u2,body.quarto-dark .u3,body.quarto-dark .u4):not(.p1,body.quarto-dark .p2,body.quarto-dark .p3,body.quarto-dark .p4,body.quarto-dark .m1,body.quarto-dark .m2,body.quarto-dark .m3,body.quarto-dark .m4):not(.tx-pill),body.quarto-dark .tabxplor-tab :is(.o1,body.quarto-dark .o2,body.quarto-dark .o3,body.quarto-dark .o4,body.quarto-dark .u1,body.quarto-dark .u2,body.quarto-dark .u3,body.quarto-dark .u4):not(.p1,body.quarto-dark .p2,body.quarto-dark .p3,body.quarto-dark .p4,body.quarto-dark .m1,body.quarto-dark .m2,body.quarto-dark .m3,body.quarto-dark .m4):not(.tx-pill),[data-bs-theme=dark] .tabxplor-tab td:not(.p1,[data-bs-theme=dark] .p2,[data-bs-theme=dark] .p3,[data-bs-theme=dark] .p4,[data-bs-theme=dark] .m1,[data-bs-theme=dark] .m2,[data-bs-theme=dark] .m3,[data-bs-theme=dark] .m4) .tx-pill,[data-bs-theme=dark] :is(.o1,[data-bs-theme=dark] .o2,[data-bs-theme=dark] .o3,[data-bs-theme=dark] .o4,[data-bs-theme=dark] .u1,[data-bs-theme=dark] .u2,[data-bs-theme=dark] .u3,[data-bs-theme=dark] .u4):not(.p1,[data-bs-theme=dark] .p2,[data-bs-theme=dark] .p3,[data-bs-theme=dark] .p4,[data-bs-theme=dark] .m1,[data-bs-theme=dark] .m2,[data-bs-theme=dark] .m3,[data-bs-theme=dark] .m4):not(.tx-pill),[data-bs-theme=dark] .tabxplor-tab :is(.o1,[data-bs-theme=dark] .o2,[data-bs-theme=dark] .o3,[data-bs-theme=dark] .o4,[data-bs-theme=dark] .u1,[data-bs-theme=dark] .u2,[data-bs-theme=dark] .u3,[data-bs-theme=dark] .u4):not(.p1,[data-bs-theme=dark] .p2,[data-bs-theme=dark] .p3,[data-bs-theme=dark] .p4,[data-bs-theme=dark] .m1,[data-bs-theme=dark] .m2,[data-bs-theme=dark] .m3,[data-bs-theme=dark] .m4):not(.tx-pill),[data-theme=dark] .tabxplor-tab td:not(.p1,[data-theme=dark] .p2,[data-theme=dark] .p3,[data-theme=dark] .p4,[data-theme=dark] .m1,[data-theme=dark] .m2,[data-theme=dark] .m3,[data-theme=dark] .m4) .tx-pill,[data-theme=dark] :is(.o1,[data-theme=dark] .o2,[data-theme=dark] .o3,[data-theme=dark] .o4,[data-theme=dark] .u1,[data-theme=dark] .u2,[data-theme=dark] .u3,[data-theme=dark] .u4):not(.p1,[data-theme=dark] .p2,[data-theme=dark] .p3,[data-theme=dark] .p4,[data-theme=dark] .m1,[data-theme=dark] .m2,[data-theme=dark] .m3,[data-theme=dark] .m4):not(.tx-pill),[data-theme=dark] .tabxplor-tab :is(.o1,[data-theme=dark] .o2,[data-theme=dark] .o3,[data-theme=dark] .o4,[data-theme=dark] .u1,[data-theme=dark] .u2,[data-theme=dark] .u3,[data-theme=dark] .u4):not(.p1,[data-theme=dark] .p2,[data-theme=dark] .p3,[data-theme=dark] .p4,[data-theme=dark] .m1,[data-theme=dark] .m2,[data-theme=dark] .m3,[data-theme=dark] .m4):not(.tx-pill),html.dark .tabxplor-tab td:not(.p1,html.dark .p2,html.dark .p3,html.dark .p4,html.dark .m1,html.dark .m2,html.dark .m3,html.dark .m4) .tx-pill,html.dark :is(.o1,html.dark .o2,html.dark .o3,html.dark .o4,html.dark .u1,html.dark .u2,html.dark .u3,html.dark .u4):not(.p1,html.dark .p2,html.dark .p3,html.dark .p4,html.dark .m1,html.dark .m2,html.dark .m3,html.dark .m4):not(.tx-pill),html.dark .tabxplor-tab :is(.o1,html.dark .o2,html.dark .o3,html.dark .o4,html.dark .u1,html.dark .u2,html.dark .u3,html.dark .u4):not(.p1,html.dark .p2,html.dark .p3,html.dark .p4,html.dark .m1,html.dark .m2,html.dark .m3,html.dark .m4):not(.tx-pill){color:#21252b;}
 body.quarto-dark .tabxplor-tab th,body.quarto-dark .tabxplor-tab td,[data-bs-theme=dark] .tabxplor-tab th,[data-bs-theme=dark] .tabxplor-tab td,[data-theme=dark] .tabxplor-tab th,[data-theme=dark] .tabxplor-tab td,html.dark .tabxplor-tab th,html.dark .tabxplor-tab td{background-color:transparent;border-color:#CDCBBC;}
@@ -157,6 +168,9 @@ body.quarto-dark .g2,body.quarto-dark .tabxplor-tab .g2,[data-bs-theme=dark] .g2
 body.quarto-dark .tabxplor-tab .tx-unit,[data-bs-theme=dark] .tabxplor-tab .tx-unit,[data-theme=dark] .tabxplor-tab .tx-unit,html.dark .tabxplor-tab .tx-unit{color:#919085;}
 body.quarto-dark .tabxplor-caption,[data-bs-theme=dark] .tabxplor-caption,[data-theme=dark] .tabxplor-caption,html.dark .tabxplor-caption{color:#FFFFFF;}
 body.quarto-dark .tabxplor-tab .tx-foot,[data-bs-theme=dark] .tabxplor-tab .tx-foot,[data-theme=dark] .tabxplor-tab .tx-foot,html.dark .tabxplor-tab .tx-foot{color:#CDCBBC;}
+body.quarto-dark .tabxplor-tab.tx-shape,[data-bs-theme=dark] .tabxplor-tab.tx-shape,[data-theme=dark] .tabxplor-tab.tx-shape,html.dark .tabxplor-tab.tx-shape{color:#CDCBBC;}
+body.quarto-dark .tabxplor-tab.tx-shape thead th,[data-bs-theme=dark] .tabxplor-tab.tx-shape thead th,[data-theme=dark] .tabxplor-tab.tx-shape thead th,html.dark .tabxplor-tab.tx-shape thead th{color:#CDCBBC;}
+body.quarto-dark .tabxplor-tab.tx-shape .tx-sec,[data-bs-theme=dark] .tabxplor-tab.tx-shape .tx-sec,[data-theme=dark] .tabxplor-tab.tx-shape .tx-sec,html.dark .tabxplor-tab.tx-shape .tx-sec{color:#919085;}
 body.quarto-dark .tabxplor-tab .tx-sec,[data-bs-theme=dark] .tabxplor-tab .tx-sec,[data-theme=dark] .tabxplor-tab .tx-sec,html.dark .tabxplor-tab .tx-sec{color:#CDCBBC;}
 body.quarto-dark .p1,body.quarto-dark .tabxplor-tab .p1,[data-bs-theme=dark] .p1,[data-bs-theme=dark] .tabxplor-tab .p1,[data-theme=dark] .p1,[data-theme=dark] .tabxplor-tab .p1,html.dark .p1,html.dark .tabxplor-tab .p1{color:#2BA1A7;}
 body.quarto-dark .p2,body.quarto-dark .tabxplor-tab .p2,[data-bs-theme=dark] .p2,[data-bs-theme=dark] .tabxplor-tab .p2,[data-theme=dark] .p2,[data-theme=dark] .tabxplor-tab .p2,html.dark .p2,html.dark .tabxplor-tab .p2{color:#37A8D7;}
@@ -184,6 +198,9 @@ body.quarto-dark .u4,body.quarto-dark .tabxplor-tab .u4,[data-bs-theme=dark] .u4
   .tabxplor-tab .tx-unit{color:#949494;}
   .tabxplor-caption{color:#000000;}
   .tabxplor-tab .tx-foot{color:#444444;}
+  .tabxplor-tab.tx-shape{color:#444444;}
+  .tabxplor-tab.tx-shape thead th{color:#444444;}
+  .tabxplor-tab.tx-shape .tx-sec{color:#949494;}
   .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
   .tabxplor-tab .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}
   .p1,.tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
@@ -210,6 +227,9 @@ body.quarto-dark .u4,body.quarto-dark .tabxplor-tab .u4,[data-bs-theme=dark] .u4
   body.quarto-light .tabxplor-tab .tx-unit,[data-bs-theme=light] .tabxplor-tab .tx-unit,[data-theme=light] .tabxplor-tab .tx-unit,body.quarto-dark .tabxplor-tab .tx-unit,[data-bs-theme=dark] .tabxplor-tab .tx-unit,[data-theme=dark] .tabxplor-tab .tx-unit,html.dark .tabxplor-tab .tx-unit{color:#949494;}
   body.quarto-light .tabxplor-caption,[data-bs-theme=light] .tabxplor-caption,[data-theme=light] .tabxplor-caption,body.quarto-dark .tabxplor-caption,[data-bs-theme=dark] .tabxplor-caption,[data-theme=dark] .tabxplor-caption,html.dark .tabxplor-caption{color:#000000;}
   body.quarto-light .tabxplor-tab .tx-foot,[data-bs-theme=light] .tabxplor-tab .tx-foot,[data-theme=light] .tabxplor-tab .tx-foot,body.quarto-dark .tabxplor-tab .tx-foot,[data-bs-theme=dark] .tabxplor-tab .tx-foot,[data-theme=dark] .tabxplor-tab .tx-foot,html.dark .tabxplor-tab .tx-foot{color:#444444;}
+  body.quarto-light .tabxplor-tab.tx-shape,[data-bs-theme=light] .tabxplor-tab.tx-shape,[data-theme=light] .tabxplor-tab.tx-shape,body.quarto-dark .tabxplor-tab.tx-shape,[data-bs-theme=dark] .tabxplor-tab.tx-shape,[data-theme=dark] .tabxplor-tab.tx-shape,html.dark .tabxplor-tab.tx-shape{color:#444444;}
+  body.quarto-light .tabxplor-tab.tx-shape thead th,[data-bs-theme=light] .tabxplor-tab.tx-shape thead th,[data-theme=light] .tabxplor-tab.tx-shape thead th,body.quarto-dark .tabxplor-tab.tx-shape thead th,[data-bs-theme=dark] .tabxplor-tab.tx-shape thead th,[data-theme=dark] .tabxplor-tab.tx-shape thead th,html.dark .tabxplor-tab.tx-shape thead th{color:#444444;}
+  body.quarto-light .tabxplor-tab.tx-shape .tx-sec,[data-bs-theme=light] .tabxplor-tab.tx-shape .tx-sec,[data-theme=light] .tabxplor-tab.tx-shape .tx-sec,body.quarto-dark .tabxplor-tab.tx-shape .tx-sec,[data-bs-theme=dark] .tabxplor-tab.tx-shape .tx-sec,[data-theme=dark] .tabxplor-tab.tx-shape .tx-sec,html.dark .tabxplor-tab.tx-shape .tx-sec{color:#949494;}
   body.quarto-light .tabxplor-tab .tx-sec,[data-bs-theme=light] .tabxplor-tab .tx-sec,[data-theme=light] .tabxplor-tab .tx-sec,body.quarto-dark .tabxplor-tab .tx-sec,[data-bs-theme=dark] .tabxplor-tab .tx-sec,[data-theme=dark] .tabxplor-tab .tx-sec,html.dark .tabxplor-tab .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
   body.quarto-light .tabxplor-tab .tx-mark,[data-bs-theme=light] .tabxplor-tab .tx-mark,[data-theme=light] .tabxplor-tab .tx-mark,body.quarto-dark .tabxplor-tab .tx-mark,[data-bs-theme=dark] .tabxplor-tab .tx-mark,[data-theme=dark] .tabxplor-tab .tx-mark,html.dark .tabxplor-tab .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}
   body.quarto-light .p1,body.quarto-light .tabxplor-tab .p1,[data-bs-theme=light] .p1,[data-bs-theme=light] .tabxplor-tab .p1,[data-theme=light] .p1,[data-theme=light] .tabxplor-tab .p1,body.quarto-dark .p1,body.quarto-dark .tabxplor-tab .p1,[data-bs-theme=dark] .p1,[data-bs-theme=dark] .tabxplor-tab .p1,[data-theme=dark] .p1,[data-theme=dark] .tabxplor-tab .p1,html.dark .p1,html.dark .tabxplor-tab .p1{color:#555555;font-weight:normal;text-decoration:underline;}
@@ -235,20 +255,16 @@ body.quarto-dark .u4,body.quarto-dark .tabxplor-tab .u4,[data-bs-theme=dark] .u4
 
 ``` r
 install.packages("tabxplor", dependencies = TRUE)
-
-# Development version:
-# install.packages("devtools")
-devtools::install_github("BriceNocenti/tabxplor")
 ```
 
 ## A quick look
 
 A simple cross-table with row percentages: shades of blue mean the cell
-is over-represented compared to the total row, shades of red mean it is
-under-represented, and the legend below the table says by how much.
+is over-represented compared to the total row, shades of yellow to red
+mean it is under-represented.
 
 ``` r
-gss <- gss_cat_data_formatting() # a cleaned-up version of forcats::gss_cat
+gss <- gss_cat_data_formatting() # cleaned-up version of forcats::gss_cat
 
 tab(gss, race, party3, pct = "row", color = "difference")
 ```
@@ -504,15 +520,18 @@ style="font-weight:bold;">-30</span> points.
 
 </table>
 
-Several column variables can be crossed at once — handy for series of
-survey questions, keeping only the level of interest. With
-`color_signif = "grey_non_signif"`, cells that are *not* significantly
-different from the total are greyed out, so every colored (or black)
-figure is a solid one. Use `wt =` for weighted or survey data.
+Several column variables can be crossed at once for series of Yes/No
+survey questions. With `color_signif = "grey_non_signif"`, cells that
+are not significantly different from the total are greyed out, so every
+colored figure is a solid one. Use `wt =` for weighted or survey data.
+Example with [FactoMineR](http://factominer.free.fr/index_fr.html) tea
+data :
 
 ``` r
-tab(gss, relig, c(married, income25k, black), pct = "row", levels = "first",
-    color = "difference", color_signif = "grey_non_signif")
+tea_when_vars <- c("breakfast", "tea.time", "evening", "lunch", "dinner", "always")
+tab(facto_tea, SPC, all_of(tea_when_vars), pct = "row", 
+    levels = "first", na = "drop", 
+    color = "difference", ref = "first", color_signif = "grey_non_signif")
 ```
 
 <table class="tabxplor-tab">
@@ -527,17 +546,32 @@ tab(gss, relig, c(married, income25k, black), pct = "row", levels = "first",
 
 <th class="tx-span" colspan="1">
 
-married
+breakfast
 </th>
 
 <th class="tx-span" colspan="1">
 
-income25k
+tea.time
 </th>
 
 <th class="tx-span" colspan="1">
 
-black
+evening
+</th>
+
+<th class="tx-span" colspan="1">
+
+lunch
+</th>
+
+<th class="tx-span" colspan="1">
+
+dinner
+</th>
+
+<th class="tx-span" colspan="1">
+
+always
 </th>
 
 </tr>
@@ -546,7 +580,7 @@ black
 
 <th class="tx-l tx-br tx-bl tx-rv" rowspan="2">
 
-relig
+SPC
 </th>
 
 <th class="tx-r tx-num tx-br">
@@ -556,17 +590,32 @@ n
 
 <th class="tx-r tx-num tx-br">
 
-01-Married
+breakfast_lv
 </th>
 
 <th class="tx-r tx-num tx-br">
 
-01-\$25000 or<br>more
+tea time
 </th>
 
 <th class="tx-r tx-num tx-br">
 
-01-Black
+evening_lv
+</th>
+
+<th class="tx-r tx-num tx-br">
+
+lunch_lv
+</th>
+
+<th class="tx-r tx-num tx-br">
+
+dinner_lv
+</th>
+
+<th class="tx-r tx-num tx-br">
+
+always_lv
 </th>
 
 </tr>
@@ -593,37 +642,67 @@ n
 \<row%\>
 </th>
 
+<th class="tx-r tx-num tx-br tx-unit">
+
+\<row%\>
+</th>
+
+<th class="tx-r tx-num tx-br tx-unit">
+
+\<row%\>
+</th>
+
+<th class="tx-r tx-num tx-br tx-unit">
+
+\<row%\>
+</th>
+
 </tr>
 
 </thead>
 
 <tbody>
 
-<tr>
+<tr class="tx-b">
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
-1-Protestant
+employee
 </td>
 
-<td class="tx-r tx-num tx-br g2">
+<td class="tx-r tx-num tx-br tx-b">
 
-10 846
+59
 </td>
 
-<td class="tx-r tx-num tx-br g1">
+<td class="tx-r tx-num tx-br tx-b">
 
-50%
+49%
 </td>
 
-<td class="tx-r tx-num tx-br g1">
+<td class="tx-r tx-num tx-br tx-b">
 
-32%
+53%
 </td>
 
-<td class="tx-r tx-num tx-br p1 tx-b">
+<td class="tx-r tx-num tx-br tx-b">
 
-21%
+44%
+</td>
+
+<td class="tx-r tx-num tx-br tx-b">
+
+7%
+</td>
+
+<td class="tx-r tx-num tx-br tx-b">
+
+14%
+</td>
+
+<td class="tx-r tx-num tx-br tx-b">
+
+34%
 </td>
 
 </tr>
@@ -632,27 +711,42 @@ n
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
-2-Catholic
+middle
 </td>
 
 <td class="tx-r tx-num tx-br g2">
 
-5 124
+40
 </td>
 
 <td class="tx-r tx-num tx-br g1">
 
-50%
+60%
 </td>
 
 <td class="tx-r tx-num tx-br g1">
 
-35%
+48%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+30%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+5%
 </td>
 
 <td class="tx-r tx-num tx-br m2 tx-b">
 
-4%
+0%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+28%
 </td>
 
 </tr>
@@ -661,12 +755,12 @@ n
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
-3-Other christian
+non-worker
 </td>
 
 <td class="tx-r tx-num tx-br g2">
 
-784
+64
 </td>
 
 <td class="tx-r tx-num tx-br g1">
@@ -676,36 +770,17 @@ n
 
 <td class="tx-r tx-num tx-br g1">
 
-35%
+59%
 </td>
 
-<td class="tx-r tx-num tx-br g1">
+<td class="tx-r tx-num tx-br m3 tx-b">
 
-18%
+20%
 </td>
 
-</tr>
+<td class="tx-r tx-num tx-br p2 tx-b">
 
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-4-Jewish
-</td>
-
-<td class="tx-r tx-num tx-br g2">
-
-388
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-51%
-</td>
-
-<td class="tx-r tx-num tx-br p1 tx-b">
-
-43%
+20%
 </td>
 
 <td class="tx-r tx-num tx-br m2 tx-b">
@@ -713,33 +788,9 @@ n
 3%
 </td>
 
-</tr>
-
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-5-Buddhist/Hinduist
-</td>
-
-<td class="tx-r tx-num tx-br g2">
-
-218
-</td>
-
 <td class="tx-r tx-num tx-br g1">
 
-51%
-</td>
-
-<td class="tx-r tx-num tx-br p2 tx-b">
-
-47%
-</td>
-
-<td class="tx-r tx-num tx-br m1 tx-b">
-
-5%
+23%
 </td>
 
 </tr>
@@ -748,25 +799,84 @@ n
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
-6-Muslim
+other worker
 </td>
 
 <td class="tx-r tx-num tx-br g2">
 
-104
+20
 </td>
 
 <td class="tx-r tx-num tx-br g1">
 
-53%
+40%
 </td>
 
 <td class="tx-r tx-num tx-br g1">
 
-32%
+60%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+40%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+0%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+10%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+35%
+</td>
+
+</tr>
+
+<tr>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+senior
+</td>
+
+<td class="tx-r tx-num tx-br g2">
+
+35
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+63%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+57%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+31%
 </td>
 
 <td class="tx-r tx-num tx-br p2 tx-b">
+
+26%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+3%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
 
 34%
 </td>
@@ -777,27 +887,42 @@ n
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
-7-Other
+student
 </td>
 
 <td class="tx-r tx-num tx-br g2">
 
-388
-</td>
-
-<td class="tx-r tx-num tx-br m1 tx-b">
-
-37%
+70
 </td>
 
 <td class="tx-r tx-num tx-br g1">
 
-37%
+43%
 </td>
 
 <td class="tx-r tx-num tx-br g1">
 
-13%
+61%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+44%
+</td>
+
+<td class="tx-r tx-num tx-br p2 tx-b">
+
+21%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+7%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+50%
 </td>
 
 </tr>
@@ -806,61 +931,47 @@ n
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
-8-None
+workman
 </td>
 
 <td class="tx-r tx-num tx-br g2">
 
-3 523
-</td>
-
-<td class="tx-r tx-num tx-br m2 tx-b">
-
-37%
+12
 </td>
 
 <td class="tx-r tx-num tx-br g1">
 
-37%
+25%
 </td>
 
 <td class="tx-r tx-num tx-br g1">
 
-11%
+50%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+17%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+8%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+25%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+25%
 </td>
 
 </tr>
 
-<tr>
-
-<td class="tx-l tx-br tx-bl tx-rv">
-
-NA
-</td>
-
-<td class="tx-r tx-num tx-br g2">
-
-108
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-45%
-</td>
-
-<td class="tx-r tx-num tx-br m2 tx-b">
-
-15%
-</td>
-
-<td class="tx-r tx-num tx-br g1">
-
-18%
-</td>
-
-</tr>
-
-<tr class="tx-b tx-bt tx-bb tx-bb2">
+<tr class="tx-bt tx-bb tx-bb2">
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
@@ -869,22 +980,37 @@ Total
 
 <td class="tx-r tx-num tx-br g2">
 
-21 483
+300
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br g1">
 
-47%
+48%
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br g1">
+
+56%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
 
 34%
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br g1">
 
 15%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+7%
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+34%
 </td>
 
 </tr>
@@ -895,21 +1021,22 @@ Total
 
 <tr>
 
-<td colspan="5">
+<td colspan="8">
 
 <div class="tx-foot">
 
-Percentage points (risk) difference: cell ≥ the Total row
-<span class="p1" style="font-weight:bold;">+5</span>; <span class="p2"
-style="font-weight:bold;">+10</span>; <span class="p3"
+Percentage points (risk) difference: cell ≥ the reference category (in
+bold) <span class="p1" style="font-weight:bold;">+5</span>;
+<span class="p2" style="font-weight:bold;">+10</span>; <span class="p3"
 style="font-weight:bold;">+20</span>; <span class="p4"
-style="font-weight:bold;">+30</span> points; cell ≤ the Total row
-<span class="m1" style="font-weight:bold;">-5</span>; <span class="m2"
+style="font-weight:bold;">+30</span> points; cell ≤ ref <span class="m1"
+style="font-weight:bold;">-5</span>; <span class="m2"
 style="font-weight:bold;">-10</span>; <span class="m3"
 style="font-weight:bold;">-20</span>; <span class="m4"
 style="font-weight:bold;">-30</span> points. Uncoloured: not
-significantly different from the Total row (Newcombe score interval, 95%
-confidence) or under the first colour threshold (±5 points).
+significantly different from the reference category (Newcombe score
+interval, 95% confidence) or under the first colour threshold (±5
+points).
 
 </div>
 
@@ -923,12 +1050,12 @@ confidence) or under the first colour threshold (±5 points).
 
 The same visual language extends to regression models: `tab_reg()`
 detects a binary outcome and fits a logistic regression, coloring odds
-ratios by strength and greying the non-significant ones, with a possible
-comparison between modelised quantities and their crude observed
-empirical counterparts.
+ratios by strength and greying the non-significant ones, with a default
+comparison between the modelised deviations and their crude/observed
+counterparts.
 
 ``` r
-tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"), empirical = TRUE)
+tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"))
 ```
 
 <div class="tabxplor-caption">
@@ -1247,7 +1374,7 @@ style="font-weight:normal;">(55%) </span>  2.14<span class="tx-sec" style="
 
 </tr>
 
-<tr class="tx-b tx-bt2">
+<tr class="tx-bt2">
 
 <td class="tx-l tx-br tx-bl tx-lbl tx-vname tx-b tx-bb2" rowspan="8">
 
@@ -1259,169 +1386,169 @@ Model fit
 N
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 </td>
 
-<td class="tx-r tx-num tx-b">
+<td class="tx-r tx-num">
 
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 12 990
 </td>
 
 </tr>
 
-<tr class="tx-b">
+<tr>
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
 Dispersion (robust/model SE)
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 </td>
 
-<td class="tx-r tx-num tx-b">
+<td class="tx-r tx-num">
 
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 1.00
 </td>
 
 </tr>
 
-<tr class="tx-b">
+<tr>
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
 Collinearity (max VIF)
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 </td>
 
-<td class="tx-r tx-num tx-b">
+<td class="tx-r tx-num">
 
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 1.03
 </td>
 
 </tr>
 
-<tr class="tx-b">
+<tr>
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
 Influence (max dfbetas)
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 </td>
 
-<td class="tx-r tx-num tx-b">
+<td class="tx-r tx-num">
 
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 0.05
 </td>
 
 </tr>
 
-<tr class="tx-b">
+<tr>
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
 LR vs null
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 </td>
 
-<td class="tx-r tx-num tx-b">
+<td class="tx-r tx-num">
 
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 \<0.01%
 </td>
 
 </tr>
 
-<tr class="tx-b">
+<tr>
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
 McFadden R2
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 </td>
 
-<td class="tx-r tx-num tx-b">
+<td class="tx-r tx-num">
 
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 0.049
 </td>
 
 </tr>
 
-<tr class="tx-b">
+<tr>
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
 AIC
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 </td>
 
-<td class="tx-r tx-num tx-b">
+<td class="tx-r tx-num">
 
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 17 129
 </td>
 
 </tr>
 
-<tr class="tx-b tx-bb tx-bb2">
+<tr class="tx-bb tx-bb2">
 
 <td class="tx-l tx-br tx-bl tx-rv">
 
 BIC
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 </td>
 
-<td class="tx-r tx-num tx-b">
+<td class="tx-r tx-num">
 
 </td>
 
-<td class="tx-r tx-num tx-br tx-b">
+<td class="tx-r tx-num tx-br">
 
 17 181
 </td>
@@ -1466,8 +1593,7 @@ at the 90% level; no star: not significant.
 
 </table>
 
-<br>
-<table class="tabxplor-tab">
+<table class="tabxplor-tab tx-shape">
 
 <thead>
 
@@ -1475,7 +1601,7 @@ at the 90% level; no star: not significant.
 
 <th class="tx-l">
 
-outcome (model scale)
+outcome
 </th>
 
 <th class="tx-l">
@@ -1503,7 +1629,7 @@ observed shape (central 95%)
 
 <td class="tx-l">
 
-log(%Married / (1 - %Married))
+p = %<sub>Married</sub> ; log(p/(1-p))
 </td>
 
 <td class="tx-l">
@@ -1533,17 +1659,15 @@ age
 
 ## Export your tables
 
-Any table exports with its colors to Excel, html or markdown, and can be
-drawn as a plot:
+Any table exports with its colors to Excel, html or markdown (for Word,
+copy-paste from Excel) :
 
 ``` r
-tab(gss, marital, race, pct = "row", color = "difference") |> tab_export()  # "html"
-tab(gss, marital, race, pct = "row", color = "difference") |> tab_xl()      # Excel
-tab(gss, marital, race, pct = "row", color = "difference") |> tab_xl(theme = "print_ready")  # black & white
+tab(gss, marital, race, pct = "row", color = "difference") |> tab_html()
+tab(gss, marital, race, pct = "row", color = "difference") |> tab_xl()
+tab(gss, marital, race, pct = "row", color = "difference") |>
+  tab_xl(theme = "print_ready")
 ```
-
-A colored html table also *prints*, or saves to PDF, in that
-black-and-white scheme on its own.
 
 ## Learn more
 
@@ -1552,16 +1676,13 @@ black-and-white scheme on its own.
 - [Regression tables with tab_reg()](articles/tabxplor-reg.html) (*aussi
   disponible [en français](articles/tabxplor-reg-fr.html)*).
 - [Reading a regression without losing sight of the
-  percentages](articles/tabxplor-reading-a-regression.html) — a single analysis
-  walked from a first cross-table to a finished sentence (*aussi
-  disponible [en français](articles/tabxplor-reading-a-regression-fr.html)*).
+  percentages](articles/tabxplor-reading-a-regression.html) — a single
+  analysis walked from a first cross-table to a finished sentence
+  (*aussi disponible [en
+  français](articles/tabxplor-reading-a-regression-fr.html)*).
 - [Weighted and survey data](articles/tabxplor-weights.html) — the three
   levels of margin of error, and which one your file deserves (*aussi
   disponible [en français](articles/tabxplor-weights-fr.html)*).
 - [Programming with tabxplor](articles/tabxplor-programming.html) — many
   tables at once, custom workflows, options (*aussi disponible [en
   français](articles/tabxplor-programming-fr.html)*).
-
-No code needed: the tabxplor modules for the free statistical
-spreadsheet [jamovi](https://www.jamovi.org/) offer the same tables
-(Crosstables and Regressions) in a point-and-click interface.

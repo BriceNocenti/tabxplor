@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab_xl.R
 \name{tab_xl}
 \alias{tab_xl}
-\title{Excel output for tabxplor tables, with formatting and colors}
+\title{Write a table to an Excel workbook}
 \usage{
 tab_xl(
   tabs,

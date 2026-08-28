@@ -6,17 +6,17 @@ jms: '1.0'
 authors:
   - Brice Nocenti
 maintainer: Brice Nocenti
-date: '2026-07-23'
+date: '2026-08-28'
 type: R
 description: >-
   Make it easy to deal with multiple cross-tables in data exploration, by
   creating them, manipulating them, and adding color helpers to highlight
-  deviations  (differences from totals, comparisons between lines or columns,
-  contributions to  variance, odds ratios, etc.) and significance (confidence
+  deviations (differences from totals, comparisons between lines or columns,
+  contributions to variance, odds ratios, etc.) and significance (confidence
   intervals, stars, etc.). Create the same kind of tables for regression models,
-  with a framework to compare modelised quantities with their observed/empirical
-  counterpart systematically. Tables can be exported to 'Excel', plot and html
-  with formats and colors.
+  with a framework to compare model effects with their observed/crude
+  counterpart systematically. All tables can be exported with formats and
+  colors  to 'Excel', html and markdown.
 analyses:
   - title: Crosstables
     name: jmvtab

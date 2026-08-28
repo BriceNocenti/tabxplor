@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab_reg.R
 \name{tab_reg}
 \alias{tab_reg}
-\title{Regression table (effect measures) as a tabxplor table}
+\title{All-in-one tables for regressions, with each modelled effect beside its observed one}
 \usage{
 tab_reg(
   data,

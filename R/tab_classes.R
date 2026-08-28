@@ -15,7 +15,7 @@
 
 # Create class tabxplor_tab --------------------------------------------------------------
 
-#' Constructor for class `tabxplor_tab`
+#' Build a `tabxplor_tab` around `fmt` columns
 #'
 #' @param tabs A table, stored into a \code{\link[tibble]{tibble}} data.frame.
 #' It is generally made with \code{\link{tab}}, \code{\link{tab_reg}}
@@ -145,7 +145,7 @@ get_empirical_tips <- function(x) get_meta(x)[["empirical_tips"]]
 
 get_assumptions <- function(x) get_meta(x)[["assumptions"]]
 
-#' Store a caption on a tabxplor table
+#' Store a caption on a table
 #'
 #' Records a caption/title on a \code{tabxplor_tab} that survives a dplyr pipeline (it is kept in the
 #' table's \code{meta$vars$caption}, carried through every verb) and is read by the exporters
@@ -613,7 +613,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 
 
 
-#' Render a tabxplor table as html
+#' Render a table as html
 #'
 #' @description
 #' The HTML exporter behind \code{\link{tab_export}}: `tab_export(x, format = "html")` calls this, and

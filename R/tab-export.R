@@ -8,7 +8,7 @@
 #   - jmvtab_export() mirrors this switch; a new format is added to both.
 # See: CLAUDE.md section "tabxplor architecture" (exports and rendering).
 
-#' Export a tabxplor table to Excel, HTML, Markdown, or a plot
+#' Export a table to html, Excel or Markdown (wrapper)
 #'
 #' One entry point over the format-specific exporters \code{\link{tab_html}} (HTML),
 #' \code{\link{tab_md}} (Markdown), \code{\link{tab_xl}} (Excel) and \code{\link{forest_plot}}

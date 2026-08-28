@@ -16,20 +16,19 @@
 #   tab_structure(x)    the structural facts. Exported ("what have I got?" is a user question).
 #   TAB_OPS             one ROW per operation: which facts it requires and why. A new operation is a
 #                       row; a new structural fact is a column.
-#   tab_supports(x, op) the predicate, so a caller can ASK instead of trying. Exported.
+#   tab_supports(x, op) the predicate, so a call site can ASK instead of trying. Internal.
 #   tab_check_structure()   the internal enforcer every abort site calls.
 
 
 # --- the facts ---------------------------------------------------------------------------------------
 
-#' The structure of a tabxplor table
+#' The structure of a table
 #'
 #' @description
 #' `r lifecycle::badge("experimental")`
 #'
 #' What kind of object a `tabxplor` result is, read from its own declared model — the row-index
 #' columns (their stored roles) and the table's stated kind — rather than guessed from column names.
-#' Use it with [tab_supports()] to know, before trying, whether an operation accepts what you have.
 #'
 #' @param x A `tabxplor_tab` / `tabxplor_grouped_tab`, or a list of them (`output_list = TRUE`).
 #'
@@ -44,7 +43,7 @@
 #'   \item{`same_col_vars`, `same_tab_vars`}{for a list only: whether its tables agree.}
 #' }
 #'
-#' @seealso [tab_supports()] for what each structure allows.
+#' @seealso [tab_columns()] for the column-axis view.
 #' @export
 #'
 #' @examples
@@ -250,8 +249,6 @@ TAB_OPS <- list(
 #' Does this table's structure allow an operation?
 #'
 #' @description
-#' `r lifecycle::badge("experimental")`
-#'
 #' The support matrix of the structure-sensitive operations, as a predicate. Every place the package
 #' refuses a table for its structure reads this same table of rules, so what is allowed can be *read*
 #' instead of discovered.
@@ -262,13 +259,7 @@ TAB_OPS <- list(
 #'
 #' @return A single `TRUE`/`FALSE`.
 #' @seealso [tab_structure()].
-#' @export
-#'
-#' @examples
-#' \donttest{
-#' t <- tab(forcats::gss_cat, marital, race, year, pct = "row")
-#' tab_supports(t, "transpose_render")   # FALSE: it has tab_vars
-#' }
+#' @keywords internal
 tab_supports <- function(x, op) {
   op   <- match.arg(op, names(TAB_OPS))
   spec <- TAB_OPS[[op]]

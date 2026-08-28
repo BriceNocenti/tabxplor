@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab.R
 \name{tab_spread}
 \alias{tab_spread}
-\title{Spread a tab, passing a tab variable to column}
+\title{Turn a sub-table variable into columns}
 \usage{
 tab_spread(tabs, spread_vars, names_prefix, names_sort = FALSE, totname = NULL)
 }

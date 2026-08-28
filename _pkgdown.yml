@@ -34,11 +34,11 @@ navbar:
     articles:
       text: Articles
       menu:
-      - text: Introduction to tabxplor
+      - text: "Introduction to tabxplor: crosstables with tab()"
         href: articles/tabxplor.html
-      - text: "Reading a regression without losing sight of the percentages"
+      - text: "Regression models: how to read them without losing sight of the data"
         href: articles/tabxplor-reading-a-regression.html
-      - text: Regression tables with tab_reg()
+      - text: "Regression models with tab_reg(): reference"
         href: articles/tabxplor-reg.html
       - text: Weighted and survey data
         href: articles/tabxplor-weights.html
@@ -46,58 +46,51 @@ navbar:
         href: articles/tabxplor-programming.html
       - text: -------
       - text: En français
-      - text: Introduction à tabxplor
+      - text: "Introduction à tabxplor : tableaux croisés avec tab()"
         href: articles/tabxplor-fr.html
-      - text: "Interpréter un modèle de régression sans perdre de vue les pourcentages"
+      - text: "Modèles de regression : les interpréter sans perdre de vue les données"
         href: articles/tabxplor-reading-a-regression-fr.html
-      - text: Tableaux de régression avec tab_reg()
+      - text: "Modèles de régression avec tab_reg() : référence"
         href: articles/tabxplor-reg-fr.html
       - text: Données pondérées et plans de sondage
         href: articles/tabxplor-weights-fr.html
       - text: Programmer avec tabxplor
         href: articles/tabxplor-programming-fr.html
 
-# The reference is ordered by priority: the two headline functions first, then everything an ordinary
-# user needs, then (clearly separated) the functions for programming with tabxplor. The S3 methods and
-# internal helpers carry `@keywords internal`, so pkgdown drops them from the index entirely -- users
-# call the generics (`get_scale()`, `mutate()`, …), never the dotted methods.
+# The reference is ordered by what a user reaches for first: the two producers, then the
+# point-and-click interface, then what can be done to a finished table -- reshaped, exported,
+# charted. The vocabulary pages and the programming surface come after. S3 methods and internal
+# helpers carry `@keywords internal`, so pkgdown drops them from the index entirely -- users call
+# the generics (`get_scale()`, `mutate()`, …), never the dotted methods. The last section is
+# literally titled `internal`, which is pkgdown's way of building a topic's page and keeping it out
+# of the index: the example data sets are met in the examples and the articles that use them.
 reference:
 
-# ===================================  Everyday use  ===================================
-
-- title: The two main functions
-  desc: >
-    Start here. `tab()` builds a colour-coded cross-table; `tab_reg()` a regression table that
-    looks and behaves like one.
+- title: Main functions
+  desc: ""
   contents:
   - tab
   - tab_reg
-
-- title: Variants of tab()
-  desc: >
-    The same idea as `tab()`, for a particular input: `tab_num()` for numeric variables,
-    `tab_counts()` for data that is already counted.
-  contents:
-  - tab_num
   - tab_counts
 
-- title: What a cell shows, and how it is coloured
+- title: Point-and-click interface (jamovi)
   desc: >
-    `tabxplor-display` is the vocabulary of the `display` argument: the fields a cell may show and
-    the named layouts that arrange them. Then, what a coloured cell looks like and at which value it
-    changes shade: `set_color_palette()` sets the hues and the console's light/dark theme,
-    `set_color_breaks()` the thresholds each measure is read on, and `conf_level_to_z()` writes one
-    of those thresholds as a confidence level.
+    The two analyses tabxplor adds to [jamovi](https://www.jamovi.org/download.html) -- everything
+    the package does, driven by menus. Install jamovi, open the modules menu (the `+` at the
+    top-right), choose *jamovi library*, and install **tabxplor**.
   contents:
-  - tabxplor-display
-  - set_color_palette
-  - conf_level_to_z
+  - jmvtab
+  - jmvtabreg
+
+- title: Reshaping and combining
+  desc: Change the shape of a finished table; nothing is recomputed.
+  contents:
+  - tab_spread
+  - tab_compact
+  - tab_transpose
 
 - title: Export a finished table
-  desc: >
-    `tab_export()` is the one function most users need. `tab_html()`, `tab_md()` and `tab_xl()`
-    are the per-format exporters it wraps (`tab_kable()` is an alias of `tab_html()`);
-    `tab_css()` emits the colour stylesheet for a whole document.
+  desc: ""
   contents:
   - tab_export
   - tab_html
@@ -106,19 +99,35 @@ reference:
   - tab_css
 
 - title: Charts
-  desc: >
-    `forest_plot()` draws the estimates of any tabxplor table -- a cross-table or a regression --
-    with their intervals, their significance and their colours, reading the finished table and
-    never re-fitting. `reg_check_plots()` draws the model checks, which always do.
+  desc: (Both need **ggplot2**.)
   contents:
   - forest_plot
   - reg_check_plots
 
-- title: What a model can be, and what it fitted
+- title: Data-prep and text helpers
+  desc: Small utilities for preparing data or laying out a table.
+  contents:
+  - score_from_lv1
+  - shape_numeric_var
+  - tab_wrap_text
+  - tab_parallel_stop
+
+- title: Superseded entry points
   desc: >
-    `reg_measures()` lists which effect x measure combinations `tab_reg()` can build for a given
-    outcome, and why the others are refused. `reg_formulas()` shows the formula behind every column
-    of a finished table -- exactly what reached the fitter.
+    They still work and give the same numbers; `tab()` has absorbed all three.
+  contents:
+  - tab_many
+  - tab_num
+  - tab_plain
+
+- title: What a cell shows, and how it is coloured
+  desc: The vocabulary of `display =`, then of `color =`.
+  contents:
+  - tabxplor-display
+  - set_color_palette
+  - conf_level_to_z
+
+- title: What a model can be, and what it fitted
   contents:
   - reg_measures
   - reg_formulas
@@ -130,58 +139,17 @@ reference:
   - set_caption
   - tabxplor-options
 
-- title: Example data
-  desc: >
-    The data behind the examples and the vignettes. `gss_cat_data_formatting()` returns the US
-    survey extract most examples use; the four data sets are complete copies of data published
-    elsewhere, each named after the package it comes from and credited on its own page.
-  contents:
-  - gss_cat_data_formatting
-  - facto_tea
-  - questionr_hdv
-  - car_arrests
-  - car_salaries
-
-- title: Point-and-click interface (jamovi)
-  desc: >
-    Everything tabxplor does, without writing R code. Install the free open-source
-    [jamovi](https://www.jamovi.org/download.html), open the modules menu (the `+` at the
-    top-right), choose *jamovi library*, and install **tabxplor**: it adds a *Crosstables*
-    and a *Regressions* analysis, driven entirely by menus.
-  contents:
-  - jmvtab
-  - jmvtabreg
-
-# ==============================  Programming with tabxplor  ==============================
-# For writing your own helpers and pipelines. Everyday use never needs the functions below.
-
-- title: Reshaping and combining
-  desc: >
-    Reshape and combine finished tables: pivot a sub-table variable into columns, merge several
-    tables into one, swap rows and columns.
-  contents:
-  - tab_spread
-  - tab_compact
-  - tab_transpose
-
 - title: Inspect a table
-  desc: >
-    What have I got, and what can I do with it? `tab_structure()` reports the structure (merged,
-    grouped, a list) -- with the variables on each axis -- and `tab_supports()` which operations
-    accept it; `tab_columns()` lists every numeric column with what it estimates, how it is
-    coloured and how its interval was computed; `is_tab()` tests the class.
+  desc: What have I got? -- the table as a whole, then column by column.
   contents:
   - tab_structure
-  - tab_supports
   - tab_columns
   - is_tab
 
 - title: The fmt cell type
   desc: >
-    The `tabxplor_fmt` vctrs record behind every numeric cell. A **field** varies from cell to cell,
-    an **attribute** holds for a whole column: `fmt()` builds the record, `fmt_fields` and
-    `fmt_attributes` document the accessors of each kind, and `fmt_attr()` reaches any attribute by
-    name. `new_tab()` builds the table around them.
+    The `tabxplor_fmt` vctrs record behind every numeric cell: a **field** varies from cell to cell,
+    an **attribute** holds for a whole column.
   contents:
   - fmt
   - fmt_fields
@@ -190,23 +158,13 @@ reference:
   - new_tab
   - fmt_get_color_code
 
-- title: Superseded entry points
-  desc: >
-    Both still work and give the same numbers, but `tab()` has absorbed them: `tab_many()` is now a
-    thin shim over it, and `tab_plain()` builds one bare cross-table from a single pair of
-    variables. The step-by-step chain they used to be piped into (`tab_pct()`, `tab_tot()`,
-    `tab_ci()`, `tab_chi2()`, ...) is deprecated -- the build fuses it into one pass.
+- title: internal
   contents:
-  - tab_many
-  - tab_plain
-
-- title: Data-prep and text helpers
-  desc: Small utilities for preparing data or laying out a table.
-  contents:
-  - score_from_lv1
-  - shape_numeric_var
-  - tab_wrap_text
-  - tab_parallel_stop
+  - gss_cat_data_formatting
+  - facto_tea
+  - questionr_hdv
+  - car_arrests
+  - car_salaries
 
 # An incomplete `articles:` index is a hard pkgdown error, so all nine articles are listed here.
 # The French translations (vignettes/articles/*-fr) sit in the secondary "En français" group.

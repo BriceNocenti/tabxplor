@@ -19,7 +19,7 @@
 #     maps them, which is what lets one stylesheet serve a whole document.
 # See: CLAUDE.md section "tabxplor architecture" (exports and rendering); R/tab-css.R (the classes).
 
-#' Export a tabxplor table to a markdown table
+#' Render a table as Markdown
 #'
 #' @description
 #' The Markdown exporter behind \code{\link{tab_export}}: `tab_export(x, format = "md")` calls this.

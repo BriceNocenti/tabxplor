@@ -1,5 +1,5 @@
 ---
-title: "Interpréter un modèle de régression sans perdre de vue les pourcentages"
+title: "Interpréter un modèle de régression sans perdre de vue les données observées"
 description: >
   Une analyse menée du premier tableau croisé à une phrase finie — ce qu'un modèle ajoute, ce qu'il retire, et comment le dire sans lâcher les pourcentages.
 output: rmarkdown::html_vignette

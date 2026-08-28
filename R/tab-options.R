@@ -452,7 +452,7 @@ tab_options_rd <- function() {
   }), use.names = FALSE)
 }
 
-#' tabxplor global options
+#' The tabxplor options, and their defaults
 #'
 #' `tabxplor` reads its display, colour, statistics and export defaults from `options()`, all
 #' prefixed `tabxplor.`. Set any of them for a session with [options()], e.g.

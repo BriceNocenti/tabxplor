@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab-counts.R
 \name{tab_counts}
 \alias{tab_counts}
-\title{Cross-table from already-aggregated counts ("from the middle")}
+\title{Cross-tables from already-aggregated counts}
 \usage{
 tab_counts(
   data,

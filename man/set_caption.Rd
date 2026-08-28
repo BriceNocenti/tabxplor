@@ -3,7 +3,7 @@
 \name{set_caption}
 \alias{set_caption}
 \alias{get_caption}
-\title{Store a caption on a tabxplor table}
+\title{Store a caption on a table}
 \usage{
 set_caption(x, caption)
 

@@ -584,11 +584,9 @@ shape_one <- function(x, spec, w = NULL, var = "x", ordered = FALSE, name = NULL
 
 # === SECTION: the exported primitive ===============================================================
 
-#' Shape a numeric variable
+#' Cut or transform a numeric variable
 #'
 #' @description
-#' `r lifecycle::badge("experimental")`
-#'
 #' Turn a number into the form you want to read it in: cut it into quantile groups or into bands at
 #' the mean and one standard deviation either side (it becomes an ordinary factor), or transform it
 #' and keep it a number. This is the same operation `tab(shape =)` and [tab_reg()]`(shape =)`

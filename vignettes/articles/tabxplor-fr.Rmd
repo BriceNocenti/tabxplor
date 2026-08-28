@@ -1,5 +1,5 @@
 ---
-title: "Introduction à tabxplor"
+title: "Introduction à tabxplor : tableaux croisés avec tab()"
 description: >
   Construire un premier tableau croisé, lire ses couleurs et sa légende, puis choisir ce qu'affiche une case et comment l'exporter.
 output: rmarkdown::html_vignette
@@ -493,7 +493,7 @@ Note : il s'agit du résidu standardisé ajusté de Haberman — le « résidu a
 
 `forest_plot()` permet de représenter graphiquement les écarts d’un tableau croisé avec leurs intervalles de confiance.
 
-```{r, echo = TRUE, fig.width = 4, fig.height = 6}
+```{r, echo = TRUE, fig.width = 8, fig.height = 4}
 tab(tea, SPC, c(breakfast, lunch, evening, dinner), pct = "row",
     levels = "first", na = "drop", 
     color = "ratio", color_signif = "guaranteed_effect", ref = 1) |> 

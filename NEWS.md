@@ -52,7 +52,7 @@
 * **Excel export moved to `openxlsx2`**: a ratio stays a real number that sorts and filters while
   printing `1/2.11`, column widths fit their content, a secondary number becomes a column of its own,
   and `tab_xl(check = "auto")` draws the model-check plots under a regression table.
-* **Introspection accessors.** `tab_structure()` and `tab_supports()` say what a table is and what
+* **Introspection accessors.** `tab_structure()` says what a table is and what
   can be done with it, `tab_columns()` what every numeric column estimates and how it is coloured,
   `fmt_attr()` any one column fact by name, `reg_measures()` and `reg_formulas()` the same for models.
 * **French translations** of every legend, footer and message (`options(tabxplor.lang = "fr")`, a

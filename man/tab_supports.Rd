@@ -16,18 +16,11 @@ tab_supports(x, op)
 A single \code{TRUE}/\code{FALSE}.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
-
 The support matrix of the structure-sensitive operations, as a predicate. Every place the package
 refuses a table for its structure reads this same table of rules, so what is allowed can be \emph{read}
 instead of discovered.
 }
-\examples{
-\donttest{
-t <- tab(forcats::gss_cat, marital, race, year, pct = "row")
-tab_supports(t, "transpose_render")   # FALSE: it has tab_vars
-}
-}
 \seealso{
 \code{\link[=tab_structure]{tab_structure()}}.
 }
+\keyword{internal}

@@ -1380,8 +1380,14 @@ leaf_ci_plain <- function(P, tot_n, n_eff = NULL, ci, pct, ci_scale = "diff",
 # === SECTION: The numeric leaf -- tab_num() / num_resolve() / num_core() ======================
 
 #' Means table
-#' @description Cross categorical variables with numeric variables, and get a table
-#' of means and standard deviations.
+#' @description
+#' `r lifecycle::badge("superseded")`
+#'
+#' Cross categorical variables with numeric ones, and get a table of means. Superseded by
+#' [tab()], which builds the same table whenever `col_vars` holds numeric variables -- and
+#' everything around it (both kinds of variable at once, colours, totals, tests). It stays the
+#' smallest entry point into the numeric aggregate core, and takes the same arguments resolved
+#' by the same rules, so its numbers agree with `tab()`'s cell for cell.
 #' @eval tab_args_rd("tab_num")
 #' @param ... Every other argument of [tab()] -- `color`, `ci`, `tot`, `digits`, ... -- passed
 #'   by name. See [tab()]; a typo gets a suggestion.

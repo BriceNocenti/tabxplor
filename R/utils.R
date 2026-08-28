@@ -299,7 +299,7 @@ cleannames_condition <- function()
   "^[^- ]+-(?![[:lower:]])|^[^- ]+(?<![[:lower:]])-| *\\(.+\\)"
 
 
-#' Create a score variable by counting factors at their first level
+#' Score a set of factors by counting their first level
 #'
 #' Builds an integer score column counting, for each row, how many of the listed factors sit at
 #' their **first level** (1 if so, 0 otherwise) -- the score ranges 0 to `length(vars_list)`. The

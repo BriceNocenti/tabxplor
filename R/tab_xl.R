@@ -48,7 +48,7 @@
 # See: CLAUDE.md section "tabxplor architecture" (exports and rendering); R/tab-export-prep.R (the
 #      three header rows, tab_col_block_ids()); R/tab-xl-backend.R (the openxlsx2 traps).
 
-#' Excel output for tabxplor tables, with formatting and colors
+#' Write a table to an Excel workbook
 #' @description The Excel exporter behind \code{\link{tab_export}}: `tab_export(x, format = "xl")`
 #' calls this. Colours follow the same palettes as the console and the HTML output, so a table looks
 #' the same wherever it is read; change them with \code{\link{set_color_style}} and

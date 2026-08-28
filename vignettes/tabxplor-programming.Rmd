@@ -170,7 +170,7 @@ tabs |> mutate(across(where(is_fmt), ~ mutate(., digits = 2L)))
 A fuller example: turn a means table's variance into a standard deviation and add it as a new, un-coloured column shown to one decimal:
 
 ```{r, eval = FALSE}
-tab_num(gss_simple, race, c(age, tvhours), digits = 1L) |>
+tab(gss_simple, race, c(age, tvhours), digits = 1L) |>
   mutate(across(
     c(age, tvhours),
     ~ mutate(., var = sqrt(var), display = "var", digits = 1L) |> set_color("no"),
@@ -246,20 +246,13 @@ Besides its per-cell fields, each `fmt` column carries a few **column-level attr
 
 ## Knowing what you have before you touch it
 
-Generic code cannot assume the shape of the table it is handed. Four accessors answer that, so a function can branch on facts rather than guess from column names.
+Generic code cannot assume the shape of the table it is handed. Three accessors answer that, so a function can branch on facts rather than guess from column names.
 
 `tab_structure()` says **what the object is** — a crosstab or a regression table, merged or not, grouped or not, and which variables sit on each axis:
 
 ```{r}
 t <- tab(gss_simple, race, marital, pct = "row", ci = "ref", color = "difference")
 tab_structure(t)
-```
-
-`tab_supports()` answers **whether an operation applies**, before you try it:
-
-```{r}
-tab_supports(t, "compact")
-tab_supports(t, "transpose_render")
 ```
 
 `tab_columns()` is the column-level view: one row per column, with everything the exporters and the colour engine read — what it estimates, its reference, its confidence-interval method, its role:

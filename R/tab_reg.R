@@ -4204,7 +4204,7 @@ reg_stage_finalize <- function(ctx) {
 
 # === Public API =====================================================================
 
-#' All-in-one tables for regression models with observed effect/model effect comparisons
+#' All-in-one tables for regressions, with each modelled effect beside its observed one
 #'
 #' Fits one regression model per column and returns a `tabxplor` table of the per-family effect
 #' measure --- a linear **mean difference** (gaussian), **odds ratios** (binomial), **incidence-rate

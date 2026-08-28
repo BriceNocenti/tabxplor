@@ -2,7 +2,7 @@
 % Please edit documentation in R/plots.R
 \name{forest_plot}
 \alias{forest_plot}
-\title{Forest plot of a tabxplor table}
+\title{Forest plot of any tabxplor table}
 \usage{
 forest_plot(
   x,

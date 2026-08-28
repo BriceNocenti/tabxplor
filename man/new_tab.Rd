@@ -3,7 +3,7 @@
 \name{new_tab}
 \alias{new_tab}
 \alias{new_grouped_tab}
-\title{Constructor for class \code{tabxplor_tab}}
+\title{Build a \code{tabxplor_tab} around \code{fmt} columns}
 \usage{
 new_tab(
   tabs = tibble::tibble(),
@@ -75,5 +75,5 @@ A \code{tibble} of class \code{tabxplor_tab}.
 A \code{tibble} of class \code{tabxplor_grouped_tab}.
 }
 \description{
-Constructor for class \code{tabxplor_tab}
+Build a \code{tabxplor_tab} around \code{fmt} columns
 }

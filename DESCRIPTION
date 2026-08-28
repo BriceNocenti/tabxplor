@@ -11,11 +11,9 @@ Description: Make it easy to deal with multiple cross-tables in data exploration
   (differences from totals, comparisons between lines or columns, contributions to 
   variance, odds ratios, etc.) and significance (confidence intervals, stars, etc.).
   Create the same kind of tables for regression models, with a framework to compare
-  modelised quantities with their observed/empirical counterpart systematically.
-  All functions are pipe-friendly and render data frames which can be easily 
-  manipulated. Time-taking operations are done with 'data.table' to go faster 
-  with big dataframes. All tables can be exported with formats and colors 
-  to 'Excel', html, markdown and plot.
+  model effects with their crude/observed counterpart systematically.
+  All functions render data frames which can be easily manipulated. 
+  All tables can be exported with formats and colors to 'Excel', html and markdown.
 URL: https://github.com/BriceNocenti/tabxplor,
     https://bricenocenti.github.io/tabxplor/
 BugReports: https://github.com/BriceNocenti/tabxplor/issues

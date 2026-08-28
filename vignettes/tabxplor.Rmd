@@ -1,5 +1,5 @@
 ---
-title: "Introduction to tabxplor"
+title: "Introduction to tabxplor: crosstables with tab()"
 description: >
   Build a first coloured cross-table, read its colours and its legend, then choose what a cell shows and how it exports.
 output: rmarkdown::html_vignette
@@ -552,7 +552,7 @@ tab(gss_simple, race, party3, pct = "row", color = "difference") |>
 
 A colored table already reads at a glance. When the pattern is what matters, `forest_plot()` draws the same numbers: one whisker per cell, in the cell's own colour, with the percentage or mean printed just above it.
 
-```{r, echo = TRUE, fig.width = 4, fig.height = 6}
+```{r, echo = TRUE, fig.width = 8, fig.height = 4}
 tab(tea, SPC, c(breakfast, lunch, evening, dinner), pct = "row",
     levels = "first", na = "drop",
     color = "ratio", color_signif = "guaranteed_effect", ref = 1) |>

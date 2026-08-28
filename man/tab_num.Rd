@@ -57,8 +57,13 @@ considered as a \code{tab_vars} and used for grouping. To add text columns witho
 using them in calculations, be sure they are of class \code{character}.
 }
 \description{
-Cross categorical variables with numeric variables, and get a table
-of means and standard deviations.
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
+
+Cross categorical variables with numeric ones, and get a table of means. Superseded by
+\code{\link[=tab]{tab()}}, which builds the same table whenever \code{col_vars} holds numeric variables -- and
+everything around it (both kinds of variable at once, colours, totals, tests). It stays the
+smallest entry point into the numeric aggregate core, and takes the same arguments resolved
+by the same rules, so its numbers agree with \code{tab()}'s cell for cell.
 }
 \examples{
 \donttest{

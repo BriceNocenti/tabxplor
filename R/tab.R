@@ -125,8 +125,8 @@ NULL
 #' }
 #'
 #' @seealso
-#'   [tab_reg()] (regression tables), and the variants [tab_num()] (numeric variables),
-#'   [tab_counts()] (pre-aggregated counts) and [tab_plain()] (one bare cross-table).
+#'   [tab_reg()] (regression tables) and [tab_counts()] (pre-aggregated counts); the superseded
+#'   [tab_num()] (numeric variables) and [tab_plain()] (one bare cross-table).
 #'   [tabxplor-display] says what a cell can show; [set_color_breaks()] / [set_color_palette()]
 #'   customise the colours; [tab_structure()] reports what a finished table is and what accepts it.
 #'   Export it with [tab_xl()] (Excel), [tab_kable()] (HTML) or [tab_md()] (Markdown), and chart it
@@ -1718,7 +1718,7 @@ tab_assemble_output <- function(ctx) {
 
 # === SECTION: the spread / transpose reshapes ==============================================
 
-#' Spread a tab, passing a tab variable to column
+#' Turn a sub-table variable into columns
 #'
 #' @description
 #' Turns each level of a `tab_vars` variable into a **block of columns**: fewer rows, more columns,
@@ -1943,7 +1943,7 @@ spread_relabel <- function(tabs, spread_vars, spread_levels, test, col_vars = ch
 }
 
 
-#' Transpose a cross-table (swap its rows and columns)
+#' Swap the rows and columns of a cross-table
 #'
 #' @description
 #' `r lifecycle::badge("deprecated")`

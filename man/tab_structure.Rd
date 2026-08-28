@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab-structure.R
 \name{tab_structure}
 \alias{tab_structure}
-\title{The structure of a tabxplor table}
+\title{The structure of a table}
 \usage{
 tab_structure(x)
 }
@@ -26,7 +26,6 @@ names each row's variable).}
 
 What kind of object a \code{tabxplor} result is, read from its own declared model — the row-index
 columns (their stored roles) and the table's stated kind — rather than guessed from column names.
-Use it with \code{\link[=tab_supports]{tab_supports()}} to know, before trying, whether an operation accepts what you have.
 }
 \examples{
 \donttest{
@@ -35,5 +34,5 @@ tab_structure(t)$merged
 }
 }
 \seealso{
-\code{\link[=tab_supports]{tab_supports()}} for what each structure allows.
+\code{\link[=tab_columns]{tab_columns()}} for the column-axis view.
 }

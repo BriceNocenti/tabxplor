@@ -3,7 +3,7 @@
 \name{fmt}
 \alias{fmt}
 \alias{is_fmt}
-\title{Create a vector of class formatted numbers}
+\title{Create an \code{fmt} vector, the tabxplor cell}
 \usage{
 fmt(
   n = integer(),
@@ -406,7 +406,7 @@ tabs |> mutate(across(where(is_fmt), ~ vctrs::field(., "diff")))
 # To do more complex operations, like creating a new column with standard deviation and
 # print it with 2 decimals, use `dplyr::mutate` on all the fmt columns of a table :
 
-tab_num(forcats::gss_cat, race, c(age, tvhours), marital, digits = 1L, comp = "all") |>
+tab(forcats::gss_cat, race, c(age, tvhours), marital, digits = 1L, comp = "all") |>
   dplyr::mutate(dplyr::across( #Mutate over the whole table.
     c(age, tvhours),
     ~ dplyr::mutate(.,         #Mutate over each fmt vector's underlying data.frame.

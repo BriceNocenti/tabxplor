@@ -3,7 +3,7 @@
 \name{tabxplor-options}
 \alias{tabxplor-options}
 \alias{tabxplor.options}
-\title{tabxplor global options}
+\title{The tabxplor options, and their defaults}
 \description{
 \code{tabxplor} reads its display, colour, statistics and export defaults from \code{options()}, all
 prefixed \code{tabxplor.}. Set any of them for a session with \code{\link[=options]{options()}}, e.g.

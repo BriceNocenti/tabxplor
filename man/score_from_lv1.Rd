@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{score_from_lv1}
 \alias{score_from_lv1}
-\title{Create a score variable by counting factors at their first level}
+\title{Score a set of factors by counting their first level}
 \usage{
 score_from_lv1(data, name, vars_list)
 }

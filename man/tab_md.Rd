@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab_md.R
 \name{tab_md}
 \alias{tab_md}
-\title{Export a tabxplor table to a markdown table}
+\title{Render a table as Markdown}
 \usage{
 tab_md(
   tabs,

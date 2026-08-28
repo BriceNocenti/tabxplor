@@ -1,5 +1,5 @@
 ---
-title: "Tableaux de régression avec tab_reg()"
+title: "Modèles de régression avec tab_reg() : référence"
 description: >
   La référence de tab_reg() — les quatre arguments de l'écart, une partie par type de variable à expliquer, la lecture de l'ajustement et les diagnostics.
 output: rmarkdown::html_vignette
@@ -72,13 +72,13 @@ for (hook in c("message", "warning")) {
 }
 ```
 
-Pour les modèles de régression les plus courants, `tab_reg()` construit un **tableau de régression** qui ressemble à un tableau croisé `tabxplor` et se comporte comme lui : une ligne par modalité de prédicteur, des étoiles de significativité, des couleurs qui grisent les effets non significatifs, et les mêmes exports Excel, html ou markdown. On lui donne un data frame, une **variable à expliquer** / `outcome` et des **prédicteurs** / `predictors`, et il déduit du type de la variable à expliquer quel modèle convient. Sa particularité est `empirical = TRUE`, qui affiche l'**effet observé / brut à côté de l'effet ajusté du modèle** : on voit ainsi ce que « contrôler par les autres variables » a réellement changé.
+Pour les modèles de régression les plus courants, `tab_reg()` construit un **tableau de régression** qui ressemble à un tableau croisé `tabxplor` et se comporte de la même manière : une ligne par modalité de prédicteur, des étoiles de significativité, des couleurs qui grisent les effets non significatifs, et les mêmes exports Excel, html ou markdown. On lui donne un data frame, une **variable à expliquer** / `outcome` et des **prédicteurs** / `predictors`, et il déduit du type de la variable à expliquer quel modèle convient. Sa particularité est `empirical = TRUE`, qui affiche l'**effet observé / brut à côté de l'effet ajusté du modèle** : on voit ainsi ce que « contrôler par les autres variables » a réellement changé.
 
 **Il y a deux documents sur la régression, et celui-ci est la référence.** Il est organisé par fonctionnalité : une partie par famille, la grille complète de ce que chaque modèle peut rapporter, les données pondérées, les interactions, les vérifications du modèle et les graphiques. Pour *apprendre* plutôt que pour chercher un point précis, commencer par [Interpréter un modèle de régression](tabxplor-reading-a-regression-fr.html), qui suit une seule analyse du premier tableau croisé jusqu'à une phrase finie, et qui renvoie ici pour les détails.
 
-**Sans écrire de code R**, les mêmes tableaux sont une analyse **Modèles de régression** en presse-bouton dans le module [jamovi](https://www.jamovi.org/download) ; ses options portent le nom des arguments ci-dessous, si bien que cette page en est aussi le manuel.
+**Sans écrire aucun code R**, les mêmes modèles peuvent être réalisés dans l’interface graphique [jamovi](https://www.jamovi.org/download) qui vient avec `tabxplor`. Ses boutons portent le nom des arguments ci-dessous et tout peut y être reproduit.
 
-Nous utilisons une version formatée des données `forcats::gss_cat`, issues du *General Social Survey* états-unien, et — pour le modèle sur score sommé — `facto_tea` (du paquet **FactoMineR**, merci à ses auteur·es ; voir `?facto_tea`), dont les six items « où buvez-vous du thé ? » sont réduits à un score (voir *Batteries d'items oui/non* dans [Introduction à tabxplor](tabxplor-fr.html) pour cette préparation) :
+Nous utilisons une version formatée des données `forcats::gss_cat`, issues du *General Social Survey* états-unien, et de la base de donnée `tea` du package **FactoMineR::** (merci à leurs auteur·es).
 
 ```{r}
 gss_simple <- gss_cat_data_formatting()
@@ -86,9 +86,8 @@ gss_simple <- gss_cat_data_formatting()
 
 ```{r}
 tea_where_vars <- c("home", "work", "tearoom", "friends", "resto", "pub")
-tea <- facto_tea |> score_from_lv1("tea_where", vars_list = tea_where_vars)
+tea <- facto_tea |> score_from_lv1("tea_where", vars_list = tea_where_vars) # score sur 6
 ```
-
 
 # 1. Ce qu'est un tableau de régression
 

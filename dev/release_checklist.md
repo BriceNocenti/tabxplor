@@ -19,6 +19,8 @@ git checkout dev && git pull
 #       keeps only a slice of -- see CLAUDE.md § Testing)
 #    - devtools::check() green (the ~3 min release gate)
 #    - Rscript -e 'pkgdown::check_pkgdown()' clean
+#    - Home pages regenerated from their sources, on dev (dev/ is stripped from the release
+#      branch, and README.md ships):  OMP_NUM_THREADS=1 Rscript dev/build_readmes.R
 
 # 2. Branch + strip development-only files
 git checkout -b release/x.y.z

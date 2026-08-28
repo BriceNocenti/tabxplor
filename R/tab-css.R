@@ -593,7 +593,7 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 # splices its output into the page, so a three-backtick chunk meant to be SHOWN, not run, needs the
 # longer fence. Never mix raw Rd (`\preformatted{}`) with a code fence for the same reason.
 
-#' Generate the tabxplor stylesheet
+#' The stylesheet an html table needs
 #'
 #' The CSS that colours tabxplor tables. It is a **constant** -- a pure function of the colour palette,
 #' the channel type and the theme -- so it does not take a table: one stylesheet styles every table in a

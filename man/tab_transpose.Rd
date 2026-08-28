@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab.R
 \name{tab_transpose}
 \alias{tab_transpose}
-\title{Transpose a cross-table (swap its rows and columns)}
+\title{Swap the rows and columns of a cross-table}
 \usage{
 tab_transpose(tabs, name = NULL)
 }

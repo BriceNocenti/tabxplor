@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab-css.R
 \name{tab_css}
 \alias{tab_css}
-\title{Generate the tabxplor stylesheet}
+\title{The stylesheet an html table needs}
 \usage{
 tab_css(
   theme = NULL,

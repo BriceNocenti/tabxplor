@@ -67,8 +67,6 @@ Invisibly, the assembled \code{gtable} --- or, with several models, the named li
 per model, all drawn on the current graphics device.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
-
 \strong{A teaching companion, not a decision tool.} Every verdict these panels illustrate is already a
 row in the table's own footer, for every model column, with no plotting package installed (see the
 \code{stats} argument of \code{\link[=tab_reg]{tab_reg()}}). This function exists to show what a violation looks like.

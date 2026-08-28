@@ -24,8 +24,6 @@ The stored value (its declared default when the attribute is unset). On a data.f
 entry per \code{fmt} column, named. Writing returns the modified vector.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
-
 The generic form of the \verb{get_*()} / \verb{set_*()} family: one function covering every per-column
 attribute a \code{tabxplor_fmt} vector carries, so a helper can loop over them instead of naming each.
 The named accessors (\code{\link[=get_scale]{get_scale()}}, \code{\link[=get_col_var]{get_col_var()}}, \code{\link[=is_totcol]{is_totcol()}}, …) remain the readable way to
