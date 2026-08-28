@@ -217,10 +217,14 @@ tx_deprecate_inert <- function(dots, fn) {
 # "shape_auto". A fixed id would silence the note for the NEXT variable of the same session.
 #' @keywords internal
 #' @noRd
-tx_inform_once <- function(id, ..., .envir = parent.frame()) {
-  id <- paste0("tabxplor_", id)
-  tx_said[[id]] <- TRUE
-  cli::cli_inform(c(...), .envir = .envir, .frequency = "once", .frequency_id = id)
+# WARNING: the id formal is DOT-PREFIXED on purpose. It sits before `...`, so R partial-matches a
+#   named argument against it -- and a message written the cli way, `tx_inform_once("id", "i" = ...)`,
+#   had its `"i"` bullet swallowed as the id, silently dropping the line AND printing the id instead.
+#   `.id` cannot be reached by any bullet name.
+tx_inform_once <- function(.id, ..., .envir = parent.frame()) {
+  .id <- paste0("tabxplor_", .id)
+  tx_said[[.id]] <- TRUE
+  cli::cli_inform(c(...), .envir = .envir, .frequency = "once", .frequency_id = .id)
   invisible(NULL)
 }
 

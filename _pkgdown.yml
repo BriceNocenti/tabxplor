@@ -114,11 +114,13 @@ reference:
 
 - title: Superseded entry points
   desc: >
-    They still work and give the same numbers; `tab()` has absorbed all three.
+    They still work and give the same numbers; `tab()` has absorbed all three, and `scale` +
+    `pct_type` have absorbed the fourth.
   contents:
   - tab_many
   - tab_num
   - tab_plain
+  - tabxplor-type
 
 - title: What a cell shows, and how it is coloured
   desc: The vocabulary of `display =`, then of `color =`.
@@ -145,6 +147,7 @@ reference:
   - tab_structure
   - tab_columns
   - is_tab
+  - tabxplor-base-coercion
 
 - title: The fmt cell type
   desc: >

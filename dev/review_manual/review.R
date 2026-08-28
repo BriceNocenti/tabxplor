@@ -890,7 +890,7 @@ tab_reg(gss_simple, outcome = "married", predictors = c("race", "rincome", "reli
 
 
 
-### exports and display tests  ---- 
+### exports and display tests ----
 list(
   tab(gss_simple, c("rincome", "age"), "marital", pct = "row", color = TRUE),
   tab(gss_simple, c("rincome", "age"), "marital", pct = "row", color = TRUE, color_signif = "grey_non_signif"),

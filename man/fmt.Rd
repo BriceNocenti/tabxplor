@@ -238,9 +238,10 @@ means), \code{"woolf"}, \code{"wald_log"}, \code{"profile"}; \code{""} (default)
 carries no interval. Read back by the colour legend, so it always names the method the bounds were
 built with.}
 
-\item{...}{In \code{fmt()}, not used: it exists only so that the arguments removed in tabxplor
-2.0.0 (\code{type}, \code{ci_type}) get an error naming their replacement. In the accessor
-methods below, to add arguments in the future.}
+\item{...}{In \code{fmt()}, it exists only for the arguments retired in tabxplor 2.0.0:
+\code{type} is translated into \code{scale} + \code{pct_type} (see
+\code{\link{tabxplor-type}}), \code{ci_type} gets an error naming its replacement. In the
+accessor methods below, to add arguments in the future.}
 
 \item{x}{The object to test, to get a field in, or to modify.}
 }
@@ -406,7 +407,8 @@ tabs |> mutate(across(where(is_fmt), ~ vctrs::field(., "diff")))
 # To do more complex operations, like creating a new column with standard deviation and
 # print it with 2 decimals, use `dplyr::mutate` on all the fmt columns of a table :
 
-tab(forcats::gss_cat, race, c(age, tvhours), marital, digits = 1L, comp = "all") |>
+tab(forcats::gss_cat, race, c(age, tvhours), marital, digits = 1L, comp = "all",
+    color = "auto") |>
   dplyr::mutate(dplyr::across( #Mutate over the whole table.
     c(age, tvhours),
     ~ dplyr::mutate(.,         #Mutate over each fmt vector's underlying data.frame.

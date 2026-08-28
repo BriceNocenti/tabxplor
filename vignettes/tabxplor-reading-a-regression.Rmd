@@ -32,7 +32,7 @@ options(tabxplor.shape_table = "no")
 library(tabxplor)
 library(dplyr)
 
-# Tables render as tabxplor's real html tables (the recommended everyday setting)
+# html tables in RStudio/Positron Viewer (recommended)
 options(tabxplor.print = "html")
 ```
 

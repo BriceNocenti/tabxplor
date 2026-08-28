@@ -152,7 +152,7 @@ short names for the regression headers (`RD`, `RR`, `mRR`, …) and their expans
 
 | measure × scale        | English                             | French                                           |
 |------------------------|-------------------------------------|--------------------------------------------------|
-| difference × pct_diff  | percentage points (risk) difference | différence de points de pourcentage (de risques) |
+| difference × pct_diff  | percentage points (risk) difference | différence de points de pourcentage |
 | difference × mean_diff | mean difference                     | différence de moyennes                           |
 | … standardized         | standardized mean difference        | différence de moyennes standardisée              |
 | difference × log_odds  | log-odds difference                 | différence de log-cotes                          |

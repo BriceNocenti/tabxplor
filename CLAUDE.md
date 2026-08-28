@@ -856,6 +856,112 @@ stay `Crosstables` / `Regressions` — they are generated from `jamovi/*.a.yaml`
 that also labels the ribbon item and the results heading, so renaming them would cost a
 `jmvtools::install()` regeneration and a new msgid for a line the section heading already carries.
 
+#### Phase 24e — ggfacto reverse dependency ✓ DONE
+
+**The visible failure was the first of three.** `R CMD check` of CRAN `ggfacto` 0.3.2 stopped at
+`'set_type' is not an exported object`; behind it sat `fmt(type = )` in `pca_interpret()` (exported
+in 0.3.2, live example) and in `benzecri_mrv(fmt = TRUE)`, and behind those two real tabxplor
+defects the revdep exposed. Everything below was measured, never assumed.
+
+**The `type` vocabulary is translated, not refused** (`R/tab-deprecate.R`, whose scope line now says
+so). `type` conflated two facts; the map back onto the `(scale, pct_type)` pair is stated ONCE, in
+`fmt_type_legacy()`, and read by all three entry points that still admit the old word:
+`set_type()`, `get_type()` and `fmt(type = )` — soft-deprecated, defunct in 2.1.0, on the Superseded
+group of the Reference page (`?tabxplor-type`). `set_type()` writes through the validating setters,
+never `attr<-`, so a shim cannot become a laxer way in; `"mean"` / `"n"` / `"coef"` also reset
+`pct_type` to `"none"`, since 1.x, having one attribute, could not have claimed a percentage there.
+`get_type()` is the LOSSY way back and says so in its own description: every effect scale reads
+`"coef"`, a distinction 1.x could not make. ⚠ `ci_type` still aborts — the interval is always on the
+estimate's own scale, so there is nothing to route — and `fmt()` refuses `type` alongside an explicit
+`scale`/`pct_type` rather than silently picking one. The translation happens BEFORE `display` is
+forced, `display`'s default being a promise reading `scale[1]`, which is what makes
+`fmt(pct = , type = "all")` still come out as a percentage.
+
+**Release blocker: an NA cell crashed the colour engine.** `dplyr::bind_rows()` NA-fills a `fmt`
+column absent from one of its inputs, and EVERY field of those cells comes back NA — 4 lines to
+reproduce, nothing to do with ggfacto. `fmt_color_slots()` then evaluated `any(is_wn)` on an NA and
+the whole print aborted. The two display comparisons are guarded, and the sweep for siblings found
+the real root: `is_totrow()` / `is_refrow()` / `is_tottab()` returned NA, poisoning the masked
+assignments in `format()` and the `bold`/`keep_black` masks in `tab_export_prep()`. **An unknown row
+is not a total row**, so the three predicates fold NA to FALSE at the source — one fix instead of
+one per consumer, and it is the invariant `leaf_totrow_tottab()` already stated.
+
+**A `mixed` column no longer grades a cell it cannot read.** `mixed` is what reconciling unlike
+columns gives. It carries ONE ladder, so a mean difference was read on the percentage-point ladder
+and a −1.9 landed at the deepest slot. A MULTIPLICATIVE measure needs nothing — `pct_ratio` and
+`mean_ratio` carry the same over-breaks, so a ratio is the one comparison unlike quantities state
+alike; an ADDITIVE one gates out the cells that are not on its ladder (the same per-cell lever the
+blank/gof cells already use), keeping their number and losing only the shade, and
+`tx_inform_once()` names `color = "ratio"`. ⚠ Data is never touched: the `diff` field is read by the
+tooltip, `get_num()` and Excel. The 2.1.0 follow-up is recorded at the line: build the plan once per
+family and pick per cell, which also needs the footer legend to print two measure lines for one
+column.
+
+⚠ **A latent trap in `tx_inform_once()`, found writing that message**: its `id` formal sits before
+`...`, so `tx_inform_once("id", "i" = ...)` had the `"i"` bullet **partial-matched as the id** —
+the line silently dropped and the id printed in its place. The formal is `.id` now, which no bullet
+name can reach. The 20 existing call sites all passed one `c(...)` vector and were unaffected.
+
+**`tab_transpose()` is a supported reshape operation again**, no badge, no warning. It has a job
+nothing else does: a **profile table** (many variables down the page, few groups across it), and it
+is the ONLY way to put a mean on a row — a number given to `row_vars` is always cut into levels.
+Its `@description` says what it IS rather than what to use instead, with a section on columns of
+unlike kinds; `tab_export(transpose = )` stays the recommendation where only the output matters.
+⚠ **A transposed column IS a bind** — it stacks one cell from each source column — so it now claims
+only what its parts agreed on, through the SAME declared reconcile every `bind_rows()` uses
+(`fmt_attrs_merge()`, driven by `fmt_attr_rules`), instead of copying one representative column's
+attributes onto all of them. That is what used to hand a mean cell a percentage column's scale and
+ladder, and it is what makes the gate above fire. `old_base` is still read from the representative:
+which percentage the table held is a fact about its AXIS, and merging with a mean column
+(`pct_type = "none"`) would lose the row% ↔ col% flip. Measured: a homogeneous transpose is
+byte-identical to the native table it mirrors.
+
+**`as.matrix()` / `as.table()` hand a table to base R** (`R/tab_classes.R`). One shared internal,
+two thin methods, and one decision the user should not have to remember: **a table's own margins are
+not data**. A row survives iff at least one of its cells says `row_kind == "data"` — which drops the
+Total row AND the display-time n / pct / p-value / gof rows in one test, and keeps an ordinary row
+whose cells are partly NA — plus `!is_tottab()`, since `totaltab = "table"` writes a total table's
+rows as ordinary ones. Total columns go, every cell contributes the number it SHOWS (`get_num()`),
+and the label columns become dimnames through the same `as_df_merge_rownames()` the `df = TRUE`
+leaves use, so a stacked several-`row_vars` table degrades predictably (`race_Other`). `totals =
+TRUE` keeps everything. ⚠ `as.data.frame()` is deliberately NOT given a method: tibble and dplyr
+call it internally on their own objects, and nothing in the tidyverse calls `as.matrix()`/
+`as.table()` on a data frame in a load-bearing way.
+
+**Measured.** Shipped suite **FAIL 0 | PASS 4548** (+80), in ~40 s. New assertions in their
+subsystem homes: a new `test-tab-deprecate.R` (the seven `type` round trips as a declared map, the
+three retired spellings of "no type", the `ci_type` refusal, the conflict, and the `.id` formal),
+`test-fmt.R` (an NA-filled cell through `format()`/`print()`/html/tooltips/markdown, and the three
+predicates), `test-tab-color.R` (the mixed column under both measures, and a homogeneous one
+untouched), `test-tab-transpose-render.R` (not deprecated; a mixed round trip; a homogeneous mean
+profile keeping `level_mean`) and `test-tab-classes.R` (the two coercions, `totals = TRUE`, the
+display rows, the total table, several label columns, the empty case). **No golden moved.**
+
+**The revdep, end to end.** CRAN ggfacto 0.3.2 built from its own release commit and checked against
+this tabxplor in a throwaway library: **Status: OK** — `HCPC_tab()`, `pca_interpret()` and
+`benzecri_mrv()` all run.
+
+**ggfacto modernised for its next version** (a separate repo, `Imports: tabxplor (>= 2.0.0)`).
+`HCPC_tab()` is built the way round it is READ — the variables' levels down the page, the clusters
+across it — because `tab()` stacks several `row_vars` into one table by itself; the vendored
+`tab_transpose()` copy, `set_type()`, the `n`-column surgery, the `Total_` rename and the
+`$display == "mean"` branch are all gone, and so is the duplicated `n` row they produced. Numeric
+variables keep a transpose, in their own homogeneous block. The two summary rows come from their own
+one-variable table (`tab(data, clust, pct = "all") |> tab_transpose()`) and are declared as DISPLAY
+rows carrying the table's own scale and colour — ⚠ a block claiming anything else reconciles BOTH
+away on the bind, which is how every column came out `mixed` and uncoloured in the first attempt.
+`pca_interpret()` colours a coordinate by its SIZE on the standardized ladder instead of the old
+`diff = 3` / `1/9` sign hack. Three ggfacto bugs fell out of the testing: `ggmca(active_tables = )`
+gave every level an empty tooltip; a level named like its own variable lost its tooltip (tabxplor
+appends `_lv` to it, and the plot never sees that rename — undone through `fct_relabel()`, ⚠ because
+everything downstream picks the tooltip pieces out by `is.character()` and a character `lvs` is
+nested away with them); and a tooltip's `Frequency` line could read above 100 %, being divided by the
+last row of the last table instead of by the population. 25 of 25 example paths green; its own
+`R CMD check` is clean but for the pre-existing NEWS-heading NOTE.
+
+⚠ **One maintainer step remains**: ggfacto's own release (version bump, `README.md` re-knit from
+`README.Rmd`, CRAN submission) is not part of this phase.
+
 ### Phase 25 — CRAN release
 
 

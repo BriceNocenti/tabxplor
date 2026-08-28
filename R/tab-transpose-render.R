@@ -6,8 +6,10 @@
 #   - A TRANSPOSED COLUMN IS HETEROGENEOUS -- a percentage, a mean and a count stacked -- so it
 #     cannot be a tabxplor_fmt column and cannot be re-format()ted. The cell STRINGS (and, for Excel,
 #     the values and their numFmt codes) are produced here per ORIGINAL column, then flipped as plain
-#     data. That is exactly why the object-level tab_transpose(), which copies one column's
-#     attributes onto all of them, mis-colours numeric cells.
+#     data, which is what lets this seam colour every cell on its own ladder and accept a structure
+#     the object-level tab_transpose() refuses (several row_vars, tab_vars). The object-level flip is
+#     the one to use when the RESULT must stay a table; a mixed column there is graded by whichever
+#     ladder its `mixed` scale carries (fmt_color_plan()).
 #   - THE UNIT LINE TURNS WITH THE AXES: a transposed data column holds one original ROW across every
 #     original column, so it is named only where those columns agreed on one name -- and row% becomes
 #     col% (tx_flip_pct_label), which is what makes a transposed row% table render exactly like a

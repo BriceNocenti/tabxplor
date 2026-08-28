@@ -17,24 +17,41 @@ a subtabled table with \code{tab_vars}, and at most one total row and one total 
 A transposed \code{tabxplor_tab}.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
+Turns a table's rows into its columns and its columns into its rows, and returns a real
+\code{tabxplor_tab} --- one you can keep piping through \pkg{dplyr}, colour, print and export.
+Row percentages become column percentages, and the old total column and total row swap places.
 
-\code{tab_transpose()} is \strong{soft-deprecated} since tabxplor 2.0.0. It flips the \emph{object} (the
-\code{tabxplor_fmt} fields), which cannot carry a transposed column's mixed cell types, so a table with
-several row variables or numeric columns transposes incorrectly (numeric cells mis-coloured,
-duplicated total columns). Use the exporters' \code{transpose = TRUE} argument instead --- it flips the
-finished render model after colours are computed, and handles several row variables and numeric
-columns:
+Its job is the \strong{profile table}: many variables down the page, a few groups across it. It is also
+the only way to put a \emph{mean} on a row, since a number given to \code{row_vars} is always cut into
+levels --- build the means as columns (\code{tab(data, groups, numeric_vars)}) and transpose.
+
+Use the exporters' \code{transpose = TRUE} argument instead whenever you only need the OUTPUT:
+it flips the finished render model after every colour and cell string is computed, so it handles
+what a data-level flip cannot (several row variables, \code{tab_vars} sub-tables, columns of
+unlike kinds).
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{tab(data, row_vars, col_vars, pct = "row") |> tab_kable(transpose = TRUE)   # or tab_md() / tab_xl()
 }\if{html}{\out{</div>}}
+}
+\section{Columns of unlike kinds}{
 
-The function is kept (unchanged) for the single-row-variable round-trip it always supported.
+A transposed column stacks whatever the original rows held, so transposing a table that mixes
+percentage and mean columns gives a \code{mixed} column. Its numbers and its cell layouts are exact;
+only the colour ladder is shared, so an \emph{additive} measure (\code{color = "difference"}) grades
+the percentage cells and leaves the others uncoloured, while a \emph{multiplicative} one
+(\code{color = "ratio"}) grades them all --- the percentage and mean ratio ladders being the same
+rungs.
 }
+
 \examples{
+# race x marital, read as marital x race:
+tab(forcats::gss_cat, marital, race, pct = "row") |> tab_transpose()
+
 \donttest{
-# build marital x race as row percentages, then display it as race x marital:
-tab(forcats::gss_cat, marital, race, pct = "row") |>
-  tab_kable(transpose = TRUE)
+# the profile table: mean rows come from mean columns
+tab(forcats::gss_cat, marital, c(age, tvhours)) |> tab_transpose()
 }
+}
+\seealso{
+\code{\link{tab_spread}}, \code{\link{tab_compact}}, \code{\link{tab_export}}.
 }

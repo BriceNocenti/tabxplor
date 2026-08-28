@@ -55,9 +55,10 @@ set_pvalue(x, value)
 \item{value}{The value you want to inject in some \code{fmt} vector's vctrs::field
 or attribute using a given "set" function.}
 
-\item{...}{In \code{fmt()}, not used: it exists only so that the arguments removed in tabxplor
-2.0.0 (\code{type}, \code{ci_type}) get an error naming their replacement. In the accessor
-methods below, to add arguments in the future.}
+\item{...}{In \code{fmt()}, it exists only for the arguments retired in tabxplor 2.0.0:
+\code{type} is translated into \code{scale} + \code{pct_type} (see
+\code{\link{tabxplor-type}}), \code{ci_type} gets an error naming its replacement. In the
+accessor methods below, to add arguments in the future.}
 
 \item{row_kind}{The kind of row a cell sits in (see \code{\link{get_row_kind}}).}
 

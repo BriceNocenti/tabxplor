@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab-export.R
 \name{tab_export}
 \alias{tab_export}
-\title{Export a table to html, Excel, Markdown or a chart}
+\title{Export a table to html, Excel or Markdown (wrapper)}
 \usage{
 tab_export(
   x,

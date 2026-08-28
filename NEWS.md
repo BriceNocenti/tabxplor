@@ -55,6 +55,10 @@
 * **Introspection accessors.** `tab_structure()` says what a table is and what
   can be done with it, `tab_columns()` what every numeric column estimates and how it is coloured,
   `fmt_attr()` any one column fact by name, `reg_measures()` and `reg_formulas()` the same for models.
+* **`as.matrix()` and `as.table()` hand a table to base R** — the numbers as a plain matrix, or a
+  base `table` with named dimnames — dropping the totals and the display-time rows, because a
+  correspondence analysis or a chi-squared test run on a table's own margins is wrong:
+  `FactoMineR::CA(as.matrix(tab(gss_cat, race, marital)))`.
 * **French translations** of every legend, footer and message (`options(tabxplor.lang = "fr")`, a
   `lang =` argument, or the locale), on a bilingual pkgdown website. **Labelled data (`haven`)**:
   value labels become factor levels. **Parallel builds** with `options(tabxplor.parallel = TRUE)`.
@@ -87,6 +91,11 @@
   (which kind of percentage), `ci_type` is gone, and a new `col_group` names a column block's
   sub-population. Only code building or inspecting `fmt` vectors is affected; see
   `vignette("tabxplor-programming")`.
+* **`tab_transpose()` is a supported reshape operation again** (it was soft-deprecated in the
+  pre-release): it is the way to get a transposed *object*, and the only way to put a mean on a row,
+  since a number given to `row_vars` is always cut into levels. Use the exporters' `transpose = TRUE`
+  when only the output matters. A transposed column now claims only what its parts agreed on, by the
+  same rule every `bind_rows()` follows.
 * **Options renamed**, the old names still read: `tabxplor.total_names` replaces the `total_names` /
   `totaltab_name` / `other_level` arguments, and `tabxplor.stars` carries the star ladder.
 
@@ -103,13 +112,19 @@
   tables lost the weight footnote, colour legend and caption.
 * **`ref` / `ref2` accept `"last"`**, and errors are clearer for an unknown named `ref`, a variable
   used on two axes, or an all-zero weight. `tab()` accepts a `data.table` and a logical `col_var`.
+* **`dplyr::bind_rows()` on two tables with different columns crashed on printing**: the missing
+  cells come back all-`NA`, which the colour engine could not read. They now render blank everywhere.
+* **A column holding unlike quantities** — a transposed table with percentage AND mean columns, or a
+  bind of the two — **coloured a mean difference on the percentage-point ladder**, sending it to the
+  deepest shade. It now grades only the cells its ladder can read, and says so once; `color = "ratio"`
+  grades them all.
 
 ## Deprecations
 
 ### Soft-deprecated
 
-* Functions: `tab_many()` (a shim over `tab()`), `tab_transpose()` (use `transpose = TRUE`), and the
-  step-by-step chain `tab_pct()` / `tab_tot()` / `tab_totaltab()` / `tab_ci()` / `tab_chi2()`.
+* Functions: `tab_many()` (a shim over `tab()`) and the step-by-step chain `tab_pct()` /
+  `tab_tot()` / `tab_totaltab()` / `tab_ci()` / `tab_chi2()`.
 * `tab()` arguments: singular `row_var` / `col_var`, `sup_cols` (use `col_vars`), `filter` (filter
   upstream), `names_prefix` / `names_sort` (they belong to `tab_spread()`), `add_n` (use `n =`),
   `total_names` / `totaltab_name` / `other_level` (use `options(tabxplor.total_names =)`), `OR` (use
@@ -119,6 +134,9 @@
 * Elsewhere: `tab_xl(print_color_legend =)` → `color_legend =`, `set_diff_type()` →
   `set_ref_type()`, the `in_totrow` cell field → `row_kind` (`is_totrow()` and `x$in_totrow` are
   unchanged), and `options(tabxplor.signif_levels)` / `options(tabxplor.signif_labels)`.
+* The `fmt` attribute `type`, which said both what a column estimates and which percentage it is:
+  `get_type()` / `set_type()` and `fmt(type =)` translate into `scale` + `pct_type` (see
+  `?tabxplor-type`) and are defunct in 2.1.0.
 
 ### Hard-deprecated (defunct in 2.1.0)
 
@@ -138,8 +156,8 @@
 * Arguments and options: `color_type`, `html_24_bit`, `html_font`, `full_width`,
   `tab_xl(n_min =, hide_near_zero =)`, `method_ratio` and its siblings,
   `tabxplor.ci_print` (use `display = "base_ci"` /`"base_moe"`), `tabxplor.compact`, `tabxplor.color_style_type`.
-* **The `fmt` attributes `type` and `ci_type`**, with `get_type()` / `set_type()` / `get_ci_type()` /
-  `set_ci_type()` and `fmt()`'s `type =` / `ci_type =` arguments — replaced by `scale`, `pct_type`.
+* **The `fmt` attribute `ci_type`**, with `get_ci_type()` / `set_ci_type()` and `fmt()`'s
+  `ci_type =` argument: the stored interval is always on the estimate's own `scale`.
 
 
 # tabxplor 1.3.1

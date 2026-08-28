@@ -589,3 +589,37 @@ testthat::test_that("fmt record shape snapshot", {
     print(sort(setdiff(names(attributes(x)), c("names", "class", "row.names"))))
   })
 })
+
+
+# === SECTION: NA cells (bind_rows fills a column absent from one input) ===========================
+# dplyr::bind_rows() NA-fills a fmt column the other table has not got, and EVERY field of those
+# cells comes back NA -- `display` and `row_kind` included. That is an ordinary user action, so a
+# cell that shows nothing must render blank in every medium, never abort.
+
+testthat::test_that("a NA-filled fmt cell renders in every medium", {
+  gss <- fx_gss()
+  t1  <- tab(gss, race, marital, pct = "row", color = "difference", test = TRUE)
+  t2  <- tab(gss, race, partyid, pct = "row", color = "difference", test = TRUE)
+  z   <- dplyr::bind_rows(t1, t2)
+
+  na_cells <- is.na(tabxplor:::get_display(z[["Married"]]))
+  testthat::expect_true(any(na_cells))
+
+  testthat::expect_true(all(is.na(format(z[["Married"]])[na_cells])))
+  testthat::expect_identical(fmt_color_channels(z[["Married"]])$text_slot[na_cells],
+                             rep(0L, sum(na_cells)))
+  testthat::expect_no_error(utils::capture.output(print(z)))
+  testthat::expect_no_error(tab_html(z))
+  testthat::expect_no_error(tab_html(z, tooltips = TRUE))
+  testthat::expect_no_error(tab_md(z, print = FALSE))
+})
+
+testthat::test_that("the three row predicates never return NA", {
+  x <- fmt(n = c(1L, 1L))
+  x <- vctrs::`field<-`(x, "row_kind" , c("total", NA_character_))
+  x <- vctrs::`field<-`(x, "in_refrow", c(TRUE   , NA))
+  x <- vctrs::`field<-`(x, "in_tottab", c(TRUE   , NA))
+  testthat::expect_identical(is_totrow(x), c(TRUE, FALSE))
+  testthat::expect_identical(is_refrow(x), c(TRUE, FALSE))
+  testthat::expect_identical(is_tottab(x), c(TRUE, FALSE))
+})

@@ -102,6 +102,12 @@ Individual fields are read most simply with `$` on the fmt column (see "Reading 
 tabs$Married$pct
 ```
 
+To hand the whole table to base R --- a correspondence analysis, `chisq.test()`, `mosaicplot()` --- `as.matrix()` and `as.table()` do it in one call. They keep only the data cells: the total row, the total columns and the display-time rows (the base count, `add_pct`, the p-values) go, because an analysis run on a table's own margins is wrong. Pass `totals = TRUE` to keep them.
+
+```{r}
+as.matrix(tab(gss_simple, race, marital))
+```
+
 ## The fields of a cell
 
 A `tabxplor_fmt` cell carries **21 fields** (many are `NA` when the relevant quantity was not requested). The user-facing ones are:

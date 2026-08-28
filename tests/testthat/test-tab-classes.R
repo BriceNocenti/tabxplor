@@ -467,3 +467,51 @@ test_that("a standalone extracted tabxplor_fmt column formats and colours on its
   expect_identical(slot_of(bare$v), slot_of(col))
   expect_true(any(slot_of(bare$v) != 0))
 })
+
+
+# === SECTION: handing a table to base R ===========================================================
+# as.matrix() / as.table() drop what is not data -- the totals and the display-time rows -- because a
+# CA or a chi-squared run on a table's own margins is wrong.
+
+testthat::test_that("as.matrix() gives the data cells, with the labels as rownames", {
+  gss <- fx_gss()
+  m <- as.matrix(tab(gss, race, marital))
+  testthat::expect_true(is.matrix(m) && is.numeric(m))
+  testthat::expect_identical(rownames(m), c("Other", "Black", "White"))
+  testthat::expect_false("Total" %in% colnames(m))
+  testthat::expect_false("Total" %in% rownames(m))
+  # the numbers are the ones the cells SHOW
+  testthat::expect_identical(unname(m[, "Married"]),
+                             get_num(dplyr::filter(tab(gss, race, marital),
+                                                   !is_totrow(tab(gss, race, marital)))[["Married"]]))
+})
+
+testthat::test_that("as.matrix(totals = TRUE) keeps them", {
+  m <- as.matrix(tab(fx_gss(), race, marital), totals = TRUE)
+  testthat::expect_true("Total" %in% colnames(m))
+  testthat::expect_true("Total" %in% rownames(m))
+})
+
+testthat::test_that("as.matrix() drops the display-time rows and the total table", {
+  gss <- fx_gss()
+  m <- as.matrix(tab(gss, race, marital, pct = "col", add_pct = TRUE))
+  testthat::expect_identical(rownames(m), c("Other", "Black", "White"))
+  m2 <- as.matrix(tab(dplyr::filter(gss, year %in% c(2000, 2014)),
+                      race, marital, tab_vars = year, totaltab = "table"))
+  testthat::expect_false(any(grepl("Ensemble", rownames(m2))))
+})
+
+testthat::test_that("several label columns fold into one rowname", {
+  m <- as.matrix(tab(fx_gss(), c(race, partyid), marital))
+  testthat::expect_true(all(grepl("_", rownames(m))))
+})
+
+testthat::test_that("as.table() names the dimnames after the variables", {
+  tt <- as.table(tab(fx_gss(), race, marital))
+  testthat::expect_s3_class(tt, "table")
+  testthat::expect_identical(names(dimnames(tt)), c("race", "marital"))
+})
+
+testthat::test_that("a table with no fmt column is refused", {
+  testthat::expect_error(as.matrix(new_tab(tibble::tibble(a = 1:2))), "no .*column")
+})

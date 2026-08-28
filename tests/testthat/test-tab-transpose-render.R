@@ -9,16 +9,51 @@ gss <- fx_gss()
 
 
 
-# a small wrapper: the object-level tab_transpose() is soft-deprecated (use transpose = TRUE), but still
-# supported for the single-row_var round-trip -- silence the deprecation where we test it on purpose.
+# a small wrapper kept from when tab_transpose() was soft-deprecated: it is a supported reshape
+# operation again, so this only guards against a deprecation creeping back in.
 xpose <- function(...) {
-  withr::local_options(lifecycle_verbosity = "quiet")
+  withr::local_options(lifecycle_verbosity = "warning")
   tab_transpose(...)
 }
 
 
 
-# === SECTION: DEPRECATED object-level tab_transpose() (single row_var) ========
+# === SECTION: object-level tab_transpose() (single row_var) ===================
+
+testthat::test_that("tab_transpose() is not deprecated", {
+  withr::local_options(lifecycle_verbosity = "warning")
+  testthat::expect_no_warning(tab_transpose(tab(gss, marital, race, pct = "row")))
+})
+
+testthat::test_that("a transposed mixed table keeps its numbers and grades only what it can", {
+  # a table with BOTH percentage and mean columns: the transposed columns are `mixed`.
+  orig <- tab(gss, marital, c(race, age), pct = "row", color = "difference")
+  tr   <- xpose(orig)
+  mean_row <- which(as.character(dplyr::pull(tr, 1)) == "age")
+  testthat::expect_length(mean_row, 1L)
+  testthat::expect_identical(get_scale(tr[[2]]), "mixed")
+
+  # the displays survive the flip: the mean cell still reads as a mean, the pct cells as percentages
+  testthat::expect_true(grepl("mean", tabxplor:::get_display(tr[[2]])[mean_row], fixed = TRUE))
+
+  # an ADDITIVE measure grades the percentage cells and leaves the mean one uncoloured, rather than
+  # reading a mean difference on the percentage-point ladder (which put it at the deepest slot).
+  slots <- suppressMessages(fmt_color_channels(tr[[2]])$text_slot)
+  testthat::expect_identical(slots[mean_row], 0L)
+
+  # ...and a MULTIPLICATIVE one grades every cell: the two ratio ladders are the same rungs.
+  tr_r  <- dplyr::mutate(tr, dplyr::across(where(is_fmt), ~ set_color(., "ratio")))
+  ratio <- get_ratio(tr_r[[2]])[mean_row]
+  testthat::expect_false(is.na(ratio))
+  testthat::expect_gt(max(fmt_color_channels(tr_r[[2]])$text_slot), 0L)
+})
+
+testthat::test_that("a homogeneous mean profile table keeps its own scale and ladder", {
+  tr <- xpose(tab(gss, marital, c(age, tvhours), color = "difference"))
+  fmtc <- names(tr)[purrr::map_lgl(tr, is_fmt)]
+  testthat::expect_true(all(get_scale(tr[fmtc]) == "level_mean"))
+})
+
 
 testthat::test_that("transpose of a row% table == a native col% table (structure + render)", {
   orig   <- tab(gss, marital, race, pct = "row", color = "diff")

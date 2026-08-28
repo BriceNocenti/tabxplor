@@ -79,9 +79,10 @@ set_color_signif(x, color_signif)
 \arguments{
 \item{x}{The object to test, to get a field in, or to modify.}
 
-\item{...}{In \code{fmt()}, not used: it exists only so that the arguments removed in tabxplor
-2.0.0 (\code{type}, \code{ci_type}) get an error naming their replacement. In the accessor
-methods below, to add arguments in the future.}
+\item{...}{In \code{fmt()}, it exists only for the arguments retired in tabxplor 2.0.0:
+\code{type} is translated into \code{scale} + \code{pct_type} (see
+\code{\link{tabxplor-type}}), \code{ci_type} gets an error naming its replacement. In the
+accessor methods below, to add arguments in the future.}
 
 \item{scale}{What the column estimates, as a single string (an attribute, not a field): one key
 into the declared library of estimate scales. It says which field holds the estimate, what its

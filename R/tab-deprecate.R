@@ -1,11 +1,11 @@
-# PURPOSE: The 1.x -> 2.0.0 translation layer for tab() -- the retired arguments and the superseded
-#   tab_many() entry point.
+# PURPOSE: The 1.x -> 2.0.0 translation layer -- the retired arguments, the superseded tab_many()
+#   entry point, and the retired `type` vocabulary of the fmt column attributes.
 # ROLE: Grouped here so the live build path never meets them: every function in this file exists to
 #   map an OLD spelling onto a current one and then get out of the way.
 # KEY CONSTRAINTS:
 #   - Each shim is LOSSLESS or it aborts -- never a silent approximation. `OR` becomes display/ref2,
-#     `chi2` becomes `test`, `na_drop_all` becomes an exact `filter`, and `sup_cols` becomes the
-#     (col_vars, levels, pct) triple.
+#     `chi2` becomes `test`, `na_drop_all` becomes an exact `filter`, `sup_cols` becomes the
+#     (col_vars, levels, pct) triple, and `type` becomes the (scale, pct_type) pair.
 #   - A shim returns only the entries the caller actually SET, so tab()'s own defaults apply to the
 #     rest. One that passed `tot = "row"` because `totrow` defaults to TRUE would silently drop the
 #     total column.
@@ -255,4 +255,110 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt, ...,
                       filter = !!filter_quo, !!!extra))
   }
   if (legacy_shape && is.list(out) && !is.data.frame(out) && length(out) == 1L) out[[1]] else out
+}
+
+
+# === SECTION: The retired `type` vocabulary =========================================================
+# `type` conflated two facts -- WHAT a column estimates and WHICH percentage it is -- and 2.0.0 split
+# them into `scale` (a key into EST_SCALES) and `pct_type`. The map back is stated ONCE, here, and
+# read by all three entry points that still admit the old word: fmt(type = ), set_type(), get_type().
+
+# DESIGN: the allow-list IS 1.x's, so a call that worked then works now and one that did not still
+#   aborts with the same seven values. `n` is the pair, not the scale alone: a column repurposed as a
+#   count (or a mean, or a coefficient) whose `pct_type` still claimed "row" would keep percentage
+#   semantics it no longer has -- and 1.x, having one attribute, could not have claimed them.
+#' @keywords internal
+#' @noRd
+fmt_type_legacy <- function(type, call = rlang::caller_env()) {
+  type <- as.character(type)[1]
+  if (is.na(type) || type %in% c("no", "")) type <- "n"
+  ok <- c("row", "col", "all", "all_tabs", "mean", "n", "coef")
+  if (!type %in% ok)
+    cli::cli_abort(c("{.arg type} must be one of {.val {ok}}.",
+                     "i" = "It is retired: {.arg scale} and {.arg pct_type} replace it."),
+                   call = call)
+  switch(type,
+         mean = list(scale = "level_mean", pct_type = "none"),
+         n    = list(scale = "level_n"   , pct_type = "none"),
+         # "coef" named a regression-coefficient column, which is a raw difference in 2.0.0.
+         coef = list(scale = "raw_diff"  , pct_type = "none"),
+         list(scale = "level_pct", pct_type = type))
+}
+
+# The message every `type` shim delivers -- one sentence, the argument that replaces it, written as
+# code. Shared so the three entry points cannot say three different things.
+#' @keywords internal
+#' @noRd
+fmt_type_deprecate <- function(what, pair, user_env = rlang::caller_env(2)) {
+  with_txt <- paste0('scale = "', pair$scale, '", pct_type = "', pair$pct_type, '"')
+  lifecycle::deprecate_soft(
+    "2.0.0", what, with = I(with_txt), user_env = user_env,
+    details = paste0("`type` said both what a column estimates and which percentage it is; ",
+                     "`scale` and `pct_type` say them separately."))
+}
+
+#' Column types, the tabxplor 1.x spelling
+#'
+#' @description
+#' `r lifecycle::badge("superseded")`
+#'
+#' In tabxplor 1.x a `fmt` column carried one `type` attribute, whose seven values conflated two
+#' facts. Since 2.0.0 they are two attributes: [get_scale()] / [set_scale()] say **what the column
+#' estimates** (a key into the declared scale table), and [get_pct_type()] / [set_pct_type()] say
+#' **which kind of percentage** it holds. These two functions translate, so 1.x code keeps running;
+#' they are defunct in tabxplor 2.1.0.
+#'
+#' `get_type()` re-fuses what 2.0.0 split, so it is a reading aid rather than an accessor:
+#' `level_mean` reads back `"mean"`, `level_n` reads `"n"`, a level percentage reads its own
+#' `pct_type`, and every effect scale (a difference, a ratio, an odds ratio, a coefficient) reads
+#' `"coef"` --- distinctions 1.x could not make are lost on the way back.
+#'
+#' @param x A `fmt` vector, or a data frame of them.
+#' @param type One of `"row"`, `"col"`, `"all"`, `"all_tabs"`, `"mean"`, `"n"`, `"coef"`.
+#' @param ... Used in methods to add arguments in the future.
+#' @return `get_type()` a character vector; `set_type()` a modified `fmt` vector.
+#' @seealso [get_scale()], [set_scale()], [get_pct_type()], [set_pct_type()], [fmt_attr()].
+#' @name tabxplor-type
+#' @examples
+#' x <- fmt(n = c(10, 20), pct = c(0.3, 0.7), scale = "level_pct", pct_type = "row")
+#' get_type(x)
+NULL
+
+#' @describeIn tabxplor-type set the retired `type` attribute of a `fmt` vector
+#' @export
+set_type <- function(x, type) {
+  pair <- fmt_type_legacy(type)
+  fmt_type_deprecate("set_type()", pair, user_env = rlang::caller_env())
+  # WARNING: through the validating setters, never `attr<-`: a shim must not be a back door into a
+  #   vocabulary the live path refuses.
+  set_pct_type(set_scale(x, pair$scale), pair$pct_type)
+}
+
+#' @describeIn tabxplor-type get the retired `type` of `fmt` columns
+#' @export
+get_type <- function(x, ...) UseMethod("get_type")
+#' @method get_type default
+#' @export
+#' @noRd
+get_type.default      <- function(x, ...) {
+  if (is.null(purrr::attr_getter("scale")(x))) "" else fmt_type_from_scale(x)
+}
+#' @method get_type tabxplor_fmt
+#' @export
+#' @noRd
+get_type.tabxplor_fmt <- function(x, ...) fmt_type_from_scale(x)
+#' @method get_type data.frame
+#' @export
+#' @noRd
+get_type.data.frame   <- function(x, ...) purrr::map_chr(x, ~ get_type(.))
+
+# The lossy way back: EST_SCALES' own `kind`/`est_field` decide, so a scale added later needs no edit
+# here -- it is an effect, so it reads "coef", which is what 1.x called any non-level column.
+#' @keywords internal
+#' @noRd
+fmt_type_from_scale <- function(x) {
+  scale <- get_scale(x)
+  row   <- EST_SCALES[[scale]]
+  if (is.null(row) || !identical(row$kind, "level")) return("coef")
+  switch(row$est_field, mean = "mean", n = "n", get_pct_type(x))
 }

@@ -1946,20 +1946,30 @@ spread_relabel <- function(tabs, spread_vars, spread_levels, test, col_vars = ch
 #' Swap the rows and columns of a cross-table
 #'
 #' @description
-#' `r lifecycle::badge("deprecated")`
+#' Turns a table's rows into its columns and its columns into its rows, and returns a real
+#' \code{tabxplor_tab} --- one you can keep piping through \pkg{dplyr}, colour, print and export.
+#' Row percentages become column percentages, and the old total column and total row swap places.
 #'
-#' `tab_transpose()` is **soft-deprecated** since tabxplor 2.0.0. It flips the *object* (the
-#' `tabxplor_fmt` fields), which cannot carry a transposed column's mixed cell types, so a table with
-#' several row variables or numeric columns transposes incorrectly (numeric cells mis-coloured,
-#' duplicated total columns). Use the exporters' `transpose = TRUE` argument instead --- it flips the
-#' finished render model after colours are computed, and handles several row variables and numeric
-#' columns:
+#' Its job is the **profile table**: many variables down the page, a few groups across it. It is also
+#' the only way to put a *mean* on a row, since a number given to \code{row_vars} is always cut into
+#' levels --- build the means as columns (\code{tab(data, groups, numeric_vars)}) and transpose.
+#'
+#' Use the exporters' \code{transpose = TRUE} argument instead whenever you only need the OUTPUT:
+#' it flips the finished render model after every colour and cell string is computed, so it handles
+#' what a data-level flip cannot (several row variables, \code{tab_vars} sub-tables, columns of
+#' unlike kinds).
 #'
 #' ```r
 #' tab(data, row_vars, col_vars, pct = "row") |> tab_kable(transpose = TRUE)   # or tab_md() / tab_xl()
 #' ```
 #'
-#' The function is kept (unchanged) for the single-row-variable round-trip it always supported.
+#' @section Columns of unlike kinds:
+#' A transposed column stacks whatever the original rows held, so transposing a table that mixes
+#' percentage and mean columns gives a `mixed` column. Its numbers and its cell layouts are exact;
+#' only the colour ladder is shared, so an *additive* measure (\code{color = "difference"}) grades
+#' the percentage cells and leaves the others uncoloured, while a *multiplicative* one
+#' (\code{color = "ratio"}) grades them all --- the percentage and mean ratio ladders being the same
+#' rungs.
 #'
 #' @param tabs A single table made with \code{\link{tab}} (one row variable, one column variable; not
 #'   a subtabled table with `tab_vars`, and at most one total row and one total column).
@@ -1967,18 +1977,18 @@ spread_relabel <- function(tabs, spread_vars, spread_levels, test, col_vars = ch
 #'   `NULL` (default) uses the old column-variable name.
 #'
 #' @return A transposed `tabxplor_tab`.
+#' @seealso \code{\link{tab_spread}}, \code{\link{tab_compact}}, \code{\link{tab_export}}.
 #' @export
 #'
 #' @examples
+#' # race x marital, read as marital x race:
+#' tab(forcats::gss_cat, marital, race, pct = "row") |> tab_transpose()
+#'
 #' \donttest{
-#' # build marital x race as row percentages, then display it as race x marital:
-#' tab(forcats::gss_cat, marital, race, pct = "row") |>
-#'   tab_kable(transpose = TRUE)
+#' # the profile table: mean rows come from mean columns
+#' tab(forcats::gss_cat, marital, c(age, tvhours)) |> tab_transpose()
 #' }
 tab_transpose <- function(tabs, name = NULL) {
-  lifecycle::deprecate_soft(
-    "2.0.0", "tab_transpose()",
-    details = 'Use the `transpose = TRUE` argument of tab_kable() / tab_md() / tab_xl() / tab_export().')
   if (!is.data.frame(tabs)) {
     cli::cli_abort("{.arg tabs} must be a {.pkg tabxplor} table.")
   }
@@ -2037,9 +2047,18 @@ tab_transpose <- function(tabs, name = NULL) {
   old_col_var <- if (length(real_col_vars) > 0) real_col_vars[[1]] else NA_character_
   rep_name <- fmtc[purrr::map_lgl(tabs[fmtc], ~ identical(get_col_var(.), old_col_var))]
   rep_name <- if (length(rep_name) > 0) rep_name[[1]] else fmtc[[1]]
-  rep_attrs <- purrr::set_names(
-    lapply(fmt_col_attrs, function(a) attr(tabs[[rep_name]], a, exact = TRUE)), fmt_col_attrs)
-  old_base <- if (is.null(rep_attrs$pct_type)) "row" else rep_attrs$pct_type
+  # A TRANSPOSED COLUMN IS A BIND of the source columns -- it stacks one cell from each -- so it
+  # claims only what its weakest part carried: the SAME declared reconcile every c()/bind_rows()
+  # applies (fmt_attrs_merge(), driven by fmt_attr_rules). Taking one representative column's
+  # attributes instead is what used to hand a mean cell a percentage column's scale, and its ladder.
+  # Where the sources disagree on what they estimate, the result is `scale = "mixed"`, which the
+  # colour engine reads as "grade only the cells this ladder can read" (fmt_color_plan()).
+  # WARNING: `old_base` is read from the REPRESENTATIVE, not from the merge -- which percentage the
+  #   table held is a fact about its AXIS, and a merge with a mean column (pct_type "none") would
+  #   lose the row% <-> col% flip that makes a transposed table read like a native one.
+  rep_attrs <- purrr::reduce(lapply(tabs[fmtc], fmt_attrs_of), fmt_attrs_merge)
+  old_base  <- get_pct_type(tabs[[rep_name]])
+  if (is.null(old_base) || is.na(old_base)) old_base <- "row"
   new_base <- switch(old_base, row = "col", col = "row", old_base)
 
   if (is.null(name)) name <- if (!is.na(old_col_var)) old_col_var else "variables"

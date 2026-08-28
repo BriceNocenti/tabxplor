@@ -332,3 +332,49 @@ test_that("a legend's column names are plain; its coloured break-words keep the 
   # and the token model no longer has a hand-set flag to disagree with the palette
   testthat::expect_false("b" %in% names(tabxplor:::.lg_tok("x")))
 })
+
+
+# === SECTION: the mixed column ====================================================================
+# `mixed` is what reconciling unlike columns gives -- a transposed table whose sources were a
+# percentage block and a mean one, or a bind_rows() of the two. It carries ONE ladder, so an ADDITIVE
+# measure grades only the cells that ladder can read (a mean difference on the percentage-point
+# ladder was a loud wrong colour), while a MULTIPLICATIVE one grades them all: pct_ratio and
+# mean_ratio are the same rungs.
+
+# a transposed table with both percentage rows and a mean row
+mixed_tab <- function(color = "difference")
+  suppressMessages(tab_transpose(tab(fx_gss(), marital, c(race, age), pct = "row", color = color)))
+
+mean_cells <- function(col) is.na(get_pct(col)) & !is.na(get_mean(col))
+
+testthat::test_that("reconciling unlike columns gives `mixed`, not one of their scales", {
+  tr <- mixed_tab()
+  fmtc <- names(tr)[purrr::map_lgl(tr, is_fmt)]
+  testthat::expect_true(all(get_scale(tr[fmtc]) == "mixed"))
+})
+
+testthat::test_that("a mixed column grades its own family under an additive measure", {
+  tr  <- mixed_tab("difference")
+  col <- tr[["Never married"]]
+  mc  <- mean_cells(col)
+  testthat::expect_true(any(mc))
+  testthat::expect_identical(suppressMessages(fmt_color_channels(col)$text_slot)[mc],
+                             rep(0L, sum(mc)))
+  # ...and it says so once, naming the argument that colours them all
+  tabxplor:::tx_reset_messages()
+  testthat::expect_message(fmt_color_channels(col), "ratio")
+})
+
+testthat::test_that("a mixed column grades every cell under a multiplicative measure", {
+  tr  <- mixed_tab("ratio")
+  col <- tr[["Never married"]]
+  mc  <- mean_cells(col)
+  testthat::expect_no_message(fmt_color_channels(col))
+  testthat::expect_false(any(is.na(get_ratio(col)[mc])))
+})
+
+testthat::test_that("a homogeneous column is untouched by the mixed gate", {
+  t <- tab(fx_gss(), race, marital, pct = "col", color = "difference")
+  testthat::expect_no_message(fmt_color_channels(t[[2]]))
+  testthat::expect_identical(get_scale(t[[2]]), "level_pct")
+})

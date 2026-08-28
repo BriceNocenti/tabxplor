@@ -6,7 +6,7 @@
 \alias{tabxplor-package}
 \title{tabxplor: User-Friendly Tables with Color Helpers for Data Exploration}
 \description{
-Make it easy to deal with multiple cross-tables in data exploration, by creating them, manipulating them, and adding color helpers to highlight deviations (differences from totals, comparisons between lines or columns, contributions to variance, odds ratios, etc.) and significance (confidence intervals, stars, etc.). Create the same kind of tables for regression models, with a framework to compare modelised quantities with their observed/empirical counterpart systematically. All functions are pipe-friendly and render data frames which can be easily manipulated. Time-taking operations are done with 'data.table' to go faster with big dataframes. All tables can be exported with formats and colors to 'Excel', html, markdown and plot.
+Make it easy to deal with multiple cross-tables in data exploration, by creating them, manipulating them, and adding color helpers to highlight deviations (differences from totals, comparisons between lines or columns, contributions to variance, odds ratios, etc.) and significance (confidence intervals, stars, etc.). Create the same kind of tables for regression models, with a framework to compare model effects with their crude/observed counterpart systematically. All functions render data frames which can be easily manipulated. All tables can be exported with formats and colors to 'Excel', html and markdown.
 }
 \seealso{
 Useful links:

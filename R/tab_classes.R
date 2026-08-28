@@ -1741,6 +1741,104 @@ rowwise.tabxplor_tab <- function(data, ...) {
 
 
 
+# === SECTION: handing a table to base R ============================================================
+# A tabxplor_tab is a tibble of rich cells; base R and the analysis packages built on it (FactoMineR,
+# stats::chisq.test, graphics::mosaicplot) want a bare numeric matrix with dimnames. These two
+# methods are that bridge, and they make ONE decision the user should not have to remember: a table's
+# own TOTALS are not data, so they go. A correspondence analysis or a chi-squared test run on a table
+# containing its own margins is simply wrong.
+# DESIGN: as.data.frame() is deliberately NOT given a method -- tibble and dplyr call it internally
+#   on their own objects, so shadowing it would change what a tab does inside code that never asked.
+#   Nothing in the tidyverse calls as.matrix()/as.table() on a data frame in a load-bearing way.
+
+# The shared core. Rows: a row survives iff at least one of its cells says `row_kind == "data"` --
+# which drops the Total row AND the display-time n / pct / p-value / gof rows in one test, and keeps
+# an ordinary row whose cells are partly NA (a bind_rows of two tables). Columns: the total columns
+# go, every fmt column is unwrapped to the number it SHOWS, and the label columns become dimnames
+# through the same as_df_merge_rownames() the `df = TRUE` leaves use.
+#' @keywords internal
+#' @noRd
+tab_as_base_matrix <- function(x, totals = FALSE, call = rlang::caller_env()) {
+  x <- dplyr::ungroup(x)
+  fmtc <- names(x)[purrr::map_lgl(x, is_fmt)]
+  if (length(fmtc) == 0L)
+    cli::cli_abort("{.arg x} has no {.pkg tabxplor} column to turn into a matrix.", call = call)
+
+  if (!totals) {
+    kinds <- vapply(x[fmtc], function(col) get_row_kind(col) %in% "data", logical(nrow(x)))
+    keep  <- if (is.matrix(kinds)) apply(kinds, 1L, any) else kinds
+    # ...and a TOTAL TABLE's own rows are margins over the tab_vars, exactly as a Total row is a
+    # margin over the levels -- `totaltab = "table"` writes them as ordinary data rows.
+    keep  <- keep & !is_tottab(x)
+    x     <- x[keep, , drop = FALSE]
+    fmtc  <- setdiff(fmtc, names(which(is_totcol(x))))
+    if (length(fmtc) == 0L)
+      cli::cli_abort(c("Every column of {.arg x} is a total column.",
+                       "i" = "Keep them with {.code totals = TRUE}."), call = call)
+  }
+  labs <- setdiff(names(x)[!purrr::map_lgl(x, is_fmt)], character())
+  nums <- dplyr::mutate(x[c(labs, fmtc)],
+                        dplyr::across(tidyselect::all_of(fmtc), get_num))
+  df <- as_df_merge_rownames(data.table::as.data.table(nums),
+                             if (length(labs)) labs[[1]] else NA_character_)
+  as.matrix(df)
+}
+
+#' Hand a table to base R
+#'
+#' @description
+#' `as.matrix()` gives the table's numbers as a plain numeric matrix; `as.table()` gives the same
+#' matrix as a base \code{\link[base]{table}}, its `dimnames` named after the row and column
+#' variables. That is the shape base R and the packages built on it expect --- a correspondence
+#' analysis, `chisq.test()`, `mosaicplot()`:
+#'
+#' ```r
+#' FactoMineR::CA(as.matrix(tab(forcats::gss_cat, race, marital)), graph = FALSE)
+#' ```
+#'
+#' Only the DATA cells come across. The total row, the total columns and the display-time rows (the
+#' base count, `add_pct`, the p-value and model-fit lines) are dropped, because a test or an analysis
+#' run on a table's own margins is wrong; `totals = TRUE` keeps them. Each cell contributes the
+#' number it *shows*, so a plain \code{\link{tab}} gives counts, a `pct = "row"` table proportions,
+#' and a numeric column means.
+#'
+#' @param x A table made with \code{\link{tab}}, \code{\link{tab_counts}} or \code{\link{tab_reg}}.
+#' @param totals Set to `TRUE` to keep the total row, the total columns and the display-time rows.
+#' @param ... Not used.
+#'
+#' @return A numeric `matrix`, or a base `table`.
+#' @seealso \code{\link{get_num}}, \code{\link{tab_export}}.
+#' @name tabxplor-base-coercion
+#' @examples
+#' tabs <- tab(forcats::gss_cat, race, marital)
+#' as.matrix(tabs)
+#' as.table(tabs)
+#'
+#' # a row-percentage table gives proportions, not counts:
+#' as.matrix(tab(forcats::gss_cat, race, marital, pct = "row"))
+NULL
+
+#' @describeIn tabxplor-base-coercion the table's numbers as a numeric matrix
+#' @method as.matrix tabxplor_tab
+#' @export
+as.matrix.tabxplor_tab <- function(x, totals = FALSE, ...) tab_as_base_matrix(x, totals)
+
+#' @describeIn tabxplor-base-coercion the same, as a base `table` with named dimnames
+#' @method as.table tabxplor_tab
+#' @export
+as.table.tabxplor_tab <- function(x, totals = FALSE, ...) {
+  m  <- tab_as_base_matrix(x, totals)
+  st <- tab_structure(x)
+  # the dimnames' NAMES are the variables the two axes hold -- pasted where an axis holds several,
+  # exactly as the row labels themselves are.
+  nm <- c(paste(c(st$tab_vars, st$row_vars), collapse = "_"),
+          paste(unique(st$col_vars), collapse = "_"))
+  nm[!nzchar(nm) | is.na(nm)] <- ""
+  names(dimnames(m)) <- nm
+  as.table(m)
+}
+
+
 # === SECTION: tab coercion wall ===================================================================
 # The vctrs ptype2/cast methods that keep a tabxplor_tab (the richer type) through every c()/bind with a
 # tibble, data.frame or another tab. All route through tab_cast()/tab_ptype2(), which reconcile the table

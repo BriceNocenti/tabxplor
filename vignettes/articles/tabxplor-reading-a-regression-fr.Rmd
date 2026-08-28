@@ -29,7 +29,7 @@ Sys.setenv(LANGUAGE = "fr")   # les libelles du bilan du modele passent par gett
 library(tabxplor)
 library(dplyr)
 
-# Les tableaux sont rendus comme les vrais tableaux html de tabxplor (le reglage recommande au quotidien)
+# Tableaux html dans le Viewer de RStudio/Positron (recommandé)
 options(tabxplor.print = "html")
 ```
 

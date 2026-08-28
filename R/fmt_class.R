@@ -193,9 +193,10 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 #' @param totcol \code{TRUE} when the vector is a total column
 #' @param refcol \code{TRUE} when the vector is a reference column
 #' @param x The object to test, to get a field in, or to modify.
-#' @param ... In \code{fmt()}, not used: it exists only so that the arguments removed in tabxplor
-#'   2.0.0 (\code{type}, \code{ci_type}) get an error naming their replacement. In the accessor
-#'   methods below, to add arguments in the future.
+#' @param ... In \code{fmt()}, it exists only for the arguments retired in tabxplor 2.0.0:
+#'   \code{type} is translated into \code{scale} + \code{pct_type} (see
+#'   \code{\link{tabxplor-type}}), \code{ci_type} gets an error naming its replacement. In the
+#'   accessor methods below, to add arguments in the future.
 #' @param color The colour measure, as a single string --- how a cell's value is compared to colour
 #' it (significance is handled separately by \code{color_signif}):
 #' \itemize{
@@ -393,9 +394,13 @@ fmt <- function(n         = integer(),
                 ci_method    = ""      , # which interval ENGINE built its bounds
                 ...) {
 
-  # `...` exists only to catch the removed `type`/`ci_type` args and answer with their replacement
-  # (`scale` + `pct_type`) at the point of the mistake, instead of R's opaque "unused argument".
-  fmt_abort_legacy_args(...)
+  # `...` exists only to meet the retired `type`/`ci_type` args. `type` is TRANSLATED (one shim, in
+  # tab-deprecate.R, shared with set_type()/get_type()); `ci_type` has no lossless map and aborts
+  # naming its replacement, instead of R's opaque "unused argument".
+  # WARNING: the reassignment must come BEFORE `display` is forced -- `display`'s default is a
+  #   promise reading `scale[1]`, which is exactly how `fmt(pct = , type = "all")` still gets "pct".
+  legacy <- fmt_legacy_args(..., scale_given = !missing(scale), pct_type_given = !missing(pct_type))
+  if (!is.null(legacy)) { scale <- legacy$scale ; pct_type <- legacy$pct_type }
   if (length(scale) != 1L || is.na(scale) || !scale %in% EST_SCALE_KEYS)
     cli::cli_abort(c("{.arg scale} must be one of {.val {EST_SCALE_KEYS}}.",
                      "x" = "Got {.val {scale}}."), call = NULL)
@@ -503,31 +508,39 @@ fmt <- function(n         = integer(),
           ci_method = ci_method)
 }
 
-# The removed `type` / `ci_type` obituary, delivered where the mistake is made: the error names the
-# replacement rather than leaving R to say "unused argument".
+# The two retired `fmt()` arguments, met where the mistake is made. `type` is TRANSLATED, since its
+# map onto the (scale, pct_type) pair is exact (fmt_type_legacy(), R/tab-deprecate.R). `ci_type` is
+# an obituary: 2.0.0 stores the interval on the estimate's own scale, so there is nothing to route.
 #' @keywords internal
 #' @noRd
-fmt_abort_legacy_args <- function(...) {
-  bad <- names(list(...))
-  if (!length(bad)) return(invisible(NULL))
-  hint <- c(
-    type    = "{.arg type} conflated two facts and is SPLIT in two: {.arg scale} (what the column
-               estimates) and {.arg pct_type} (which kind of percentage: row / col / all). A row
-               percentage is {.code scale = \"level_pct\", pct_type = \"row\"}, a mean
-               {.code scale = \"level_mean\"}, a count {.code scale = \"level_n\"}, a regression
-               coefficient {.code scale = \"raw_diff\"}.",
-    ci_type = "{.arg ci_type} is gone: the stored interval is always on the estimate's own
-               {.arg scale}. A difference interval on a row percentage is
-               {.code scale = \"points\"}, on a mean {.code scale = \"mean_diff\"}, an odds ratio
-               {.code scale = \"odds_ratio\"}, a ratio {.code scale = \"pct_ratio\"} /
-               {.code \"mean_ratio\"}.")
-  known <- intersect(bad, names(hint))
-  if (!length(known))
-    cli::cli_abort("Unused argument{?s} in {.fn fmt}: {.arg {bad}}.", call = NULL)
-  cli::cli_abort(c("{.fn fmt} no longer has {.arg {known}} (tabxplor 2.0.0).",
-                   stats::setNames(unname(hint[known]), rep("i", length(known))),
-                   "i" = "See {.code ?fmt} and {.code names(tabxplor:::EST_SCALES)}."),
-                 call = NULL)
+fmt_legacy_args <- function(..., scale_given = FALSE, pct_type_given = FALSE) {
+  dots <- list(...)
+  bad  <- names(dots)
+  if (!length(bad)) return(NULL)
+
+  if ("ci_type" %in% bad)
+    cli::cli_abort(c(
+      "{.fn fmt} no longer has {.arg ci_type} (tabxplor 2.0.0).",
+      "i" = "The stored interval is always on the estimate's own {.arg scale}. A difference interval
+             on a row percentage is {.code scale = \"points\"}, on a mean
+             {.code scale = \"mean_diff\"}, an odds ratio {.code scale = \"odds_ratio\"}, a ratio
+             {.code scale = \"pct_ratio\"} / {.code \"mean_ratio\"}.",
+      "i" = "See {.code ?fmt} and {.code names(tabxplor:::EST_SCALES)}."), call = NULL)
+
+  unknown <- setdiff(bad, "type")
+  if (length(unknown))
+    cli::cli_abort("Unused argument{?s} in {.fn fmt}: {.arg {unknown}}.", call = NULL)
+
+  # DESIGN: an explicit `scale`/`pct_type` beside `type` is a CONFLICT, not a precedence question --
+  #   the two spellings could disagree, and silently picking one would be the approximation this
+  #   file exists to refuse.
+  pair <- fmt_type_legacy(dots$type)
+  if (scale_given || pct_type_given)
+    cli::cli_abort(c(
+      "{.fn fmt} was given both {.arg type} and its replacement.",
+      "i" = "{.arg type} is retired: keep {.arg scale} / {.arg pct_type} and drop it."), call = NULL)
+  fmt_type_deprecate("fmt(type = )", pair, user_env = rlang::caller_env(2))
+  pair
 }
 
 
@@ -773,7 +786,14 @@ is_totrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
 #' @method is_totrow tabxplor_fmt
 #' @export
 #' @noRd
-is_totrow.tabxplor_fmt <- function(x, ...) vctrs::field(x, "row_kind") == "total"
+# WARNING: NEVER NA. dplyr::bind_rows() NA-fills a fmt column absent from one of its inputs, and
+#   every field of those cells comes back NA -- an NA here poisons the masked assignments in
+#   format(), the bold/keep_black masks in tab_export_prep(), and the colour engine's gates. An
+#   unknown row is not a total row, so the three row predicates fold NA to FALSE at the source.
+is_totrow.tabxplor_fmt <- function(x, ...) {
+  k <- vctrs::field(x, "row_kind")
+  !is.na(k) & k == "total"
+}
 
 #' @describeIn fmt_fields get the "row_kind" field: what kind of row each cell sits in
 #' (one of \code{"data"}, \code{"total"}, \code{"n"}, \code{"pct"}, \code{"pvalue"},
@@ -910,7 +930,10 @@ is_tottab.default  <-  function(x, ...) rep(FALSE, length(x)) #{
 #' @method is_tottab tabxplor_fmt
 #' @export
 #' @noRd
-is_tottab.tabxplor_fmt <- function(x, ...) vctrs::field(x, "in_tottab")
+is_tottab.tabxplor_fmt <- function(x, ...) {
+  f <- vctrs::field(x, "in_tottab")   # NA -> FALSE, cf. is_totrow.tabxplor_fmt
+  !is.na(f) & f
+}
 #' @method is_tottab data.frame
 #' @export
 #' @noRd
@@ -1054,7 +1077,10 @@ is_refrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
 #' @method is_refrow tabxplor_fmt
 #' @export
 #' @noRd
-is_refrow.tabxplor_fmt <- function(x, ...) vctrs::field(x, "in_refrow")
+is_refrow.tabxplor_fmt <- function(x, ...) {
+  f <- vctrs::field(x, "in_refrow")   # NA -> FALSE, cf. is_totrow.tabxplor_fmt
+  !is.na(f) & f
+}
 #' @method is_refrow data.frame
 #' @export
 #' @noRd
@@ -4551,6 +4577,30 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # which is in_refrow but has a non-neutral value).
   if (md$gate_row == "refrow") gate <- gate & !is_refrow(x)
 
+  # THE MIXED COLUMN. `mixed` is what binding unlike columns collapses to -- a transposed profile
+  # table (tab_transpose() on a table with both percentage and mean columns), a bind_rows() of a
+  # percentage block under a mean one. Its cells are percentages AND means, and a column carries ONE
+  # ladder, the one its scale declares.
+  # DESIGN: a MULTIPLICATIVE measure needs nothing -- pct_ratio and mean_ratio carry the same
+  #   over-breaks (1.1 / 1.2 / 1.5 / 2), so a ratio is the one comparison unlike quantities state
+  #   alike, and every cell is graded. An ADDITIVE one cannot be shared: a mean difference read on
+  #   the percentage-point ladder is out by orders of magnitude, which is a loud WRONG colour (a
+  #   -1.9 mean difference landed at the deepest slot). So the cells the ladder cannot read keep
+  #   their number and lose only the shade -- the same per-cell lever as the blank/gof cells below.
+  # TODO(2.1.0): grade them instead, by building the plan once per family and picking per cell,
+  #   which also needs the footer legend to print two measure lines for one column.
+  if (identical(fmt_scale_key(x), "mixed") && !identical(center, 1)) {
+    own <- vctrs::field(x, scl$est_field)          # the field this ladder's family reads
+    off <- is.na(own) & gate
+    if (any(off)) {
+      gate <- gate & !off
+      tx_inform_once("mixed_additive_color", c(
+        "!" = "A column holding unlike quantities: its {.val {measure}} colour grades only the
+               {scl$est_field} cells.",
+        "i" = "{.code color = \"ratio\"} grades them all --- the one comparison they share."))
+    }
+  }
+
   # Per-direction breaks + palette slots: each side carries its own magnitudes (over/under $breaks) and
   # intensities 1:4. The engine folds each cell to a magnitude >= the neutral, findInterval() against
   # the side's breaks: over -> slots 1:4, under -> slots 5:8.
@@ -4653,10 +4703,13 @@ fmt_color_slots <- function(x, plan) {
   # slot: a rule of thumb earns "look at this", never the verdict's deep red.
   # ⚠ `under_slots` carries a leading 0 (the below-the-first-break slot), so the FAINTEST shade is
   # the smallest POSITIVE one, never min().
-  is_wn <- disp0 == "gof_warn"
+  # WARNING: `disp0` can be NA -- dplyr::bind_rows() NA-fills a fmt column absent from one of its
+  #   inputs, and every field of those cells, `display` included, comes back NA. Both masks are
+  #   guarded (the `%in%` above already is): an NA there aborted the whole print.
+  is_wn <- !is.na(disp0) & disp0 == "gof_warn"
   faint <- plan$under_slots[plan$under_slots > 0L]
   if (any(is_wn) && length(faint)) slot[is_wn] <- min(faint)
-  is_pv <- disp0 == "pvalue"
+  is_pv <- !is.na(disp0) & disp0 == "pvalue"
   if (any(is_pv) && identical(plan$measure, "difference")) {
     alpha  <- 1 - get_conf_level(x)
     pv     <- get_pvalue(x)

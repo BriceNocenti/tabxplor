@@ -68,16 +68,14 @@ tabs <- list(
                            levels = "first"),
 
   # --- 25-30: the regressions --------------------------------------------------------------------
-  "reg binomial"    = tab_reg(g, outcome = "married", predictors = p, family = "binomial",
-                              empirical = TRUE),
-  "reg poisson"     = tab_reg(g, outcome = "tvhours", predictors = p, family = "poisson",
-                              empirical = TRUE),
+  "reg binomial"    = tab_reg(g, outcome = "married", predictors = p, family = "binomial"),
+  "reg poisson"     = tab_reg(g, outcome = "tvhours", predictors = p, family = "poisson"),
   "reg gaussian"    = tab_reg(g, outcome = "age", predictors = c("rincome", "race", "tvhours"),
-                              family = "gaussian", empirical = TRUE),
+                              family = "gaussian"),
   "reg log(OR)"     = tab_reg(g, outcome = "married", predictors = p, family = "binomial",
-                              measure = "log", empirical = TRUE),
+                              measure = "log"),
   "reg marginal RD" = tab_reg(g, outcome = "married", predictors = p, family = "binomial",
-                              effect = "marginal", measure = "difference", empirical = TRUE),
+                              effect = "marginal", measure = "difference"),
   "reg adjustment"  = tab_reg(g, outcome = "tvhours", predictors = p, family = "poisson",
                               color = "adjustment")
 )

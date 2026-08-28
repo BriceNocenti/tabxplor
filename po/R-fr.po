@@ -61,12 +61,12 @@ msgstr "différence"
 
 #: fmt_class.R:4897
 msgid "percentage points (risk) difference"
-msgstr "différence de points de pourcentage (de risques)"
+msgstr "différence de points de pourcentage"
 
 #: fmt_class.R:4898
 #, c-format
 msgid "%s%%-guaranteed percentage points (risk) difference"
-msgstr "différence de points de pourcentage (de risques) garantie à %s %%"
+msgstr "différence de points de pourcentage garantie à %s %%"
 
 #: fmt_class.R:4899 reg-estimand.R:346
 msgid "mean difference"
