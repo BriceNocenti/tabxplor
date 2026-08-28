@@ -709,11 +709,20 @@ display_presets_rd <- function() {
     gsub("`([^`]+)`", "\\\\code{\\1}", s)
   }
   brc  <- function(s) gsub("([{}])", "\\\\\\1", s)          # Rd needs \{ and \}
+  # DESIGN: the PDF manual is LaTeX, which can set no sigma, so a template carrying one is written
+  # twice -- the html reading keeping what the console actually prints. WHOLE, around the span:
+  # \ifelse is a text tag and checkRd refuses it inside \code{}. sigma_sign (R/utils.R) stays the
+  # one declaration of the glyph.
+  span <- function(s) {
+    if (!grepl(sigma_sign, s, fixed = TRUE)) return(paste0("\\code{", s, "}"))
+    paste0("\\ifelse{latex}{\\code{", gsub(sigma_sign, "SD", s, fixed = TRUE), "}}",
+           "{\\code{", s, "}}")
+  }
   keep <- names(DISPLAY_PRESETS)[
     !names(DISPLAY_PRESETS) %in% names(DISPLAY_PRESET_ALIASES)]
   line <- function(nm) {
     r <- DISPLAY_PRESETS[[nm]]
-    paste0("  \\item \\code{\"", nm, "\"} (\\code{", brc(display_preset_arm(r$template)), "})",
+    paste0("  \\item \\code{\"", nm, "\"} (", span(brc(display_preset_arm(r$template))), ")",
            if (is.na(r$doc)) "" else paste0(" --- ", esc(r$doc)), ".")
   }
   c("@section Display layouts:",

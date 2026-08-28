@@ -94,7 +94,7 @@ fail to converge, and the linear probability model then takes over, with a messa
 }
 
 Reach for it when you want the model's \emph{coefficient} to be that measure; to report a measure
-without changing the model, set \code{measure} instead. ⚠ \code{"log"} is the one word the two arguments
+without changing the model, set \code{measure} instead. \code{"log"} is the one word the two arguments
 do not share: here the \strong{log link}, on \code{measure} a spelling of \code{"raw_coefficient"}.}
 
 \item{measure}{\strong{Which measure of deviation is reported} --- a deviation being how far a group
@@ -113,7 +113,7 @@ people hear in it, and because a risk ratio stays comparable across nested model
 On an \strong{ordered} outcome the first three read the whole predicted distribution rather than one
 category, so they stay in one column: Somers' \code{D} and the win ratio. Where the measure IS the
 model's own it is read off the coefficients, otherwise from its predictions --- so it is
-available whichever model you fit. ⚠ \code{"auto"} never lands on a \strong{predicted odds ratio}, a
+available whichever model you fit. \code{"auto"} never lands on a \strong{predicted odds ratio}, a
 specialist quantity to be asked for by name. Call \code{\link[=reg_measures]{reg_measures()}} to see what an outcome
 offers.}
 
@@ -162,7 +162,7 @@ table already wide (\code{tab_vars} groups, a 3+ level outcome), which take \cod
 }
 The two columns are the same column twice: same estimand, same colour ladder, one legend block.
 Each cell prints the effect with the level it sits on --- the observed percentage or mean on the
-crude side, the \strong{adjusted} prediction on the model side. ⚠ a \strong{continuous} predictor has no
+crude side, the \strong{adjusted} prediction on the model side. A \strong{continuous} predictor has no
 levels, so its crude cell is the univariable slope, which assumes linearity: check that with
 \code{shape} first.}
 
@@ -191,7 +191,7 @@ group's: a per-predictor reading of effect modification.
 
 The two are mutually exclusive, and each always tests its own gap: a gap whose interval covers
 zero is greyed whatever \code{color_signif} says --- so a cell can be filled while neither estimate
-carries a star, which is correct rather than odd. ⚠ a conditional \strong{odds ratio} is not
+carries a star, which is correct rather than odd. A conditional \strong{odds ratio} is not
 collapsible, so there the colours stay descriptive and are not tested. Read a coloured cell as
 "adjustment moved this effect", not as "this variable is a confounder". See
 \href{https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.html}{the regression
@@ -227,7 +227,7 @@ covers, which is what makes a continuous row and a factor row comparable at a gl
 Same grammar as \code{ref}: \code{multiplier = c("sd", age = 10)}.
 
 The estimate, its interval and the observed companion all scale together; the p-value does not
-move. ⚠ \strong{because the default is not 1, a continuous predictor's \verb{Model_*} cell does not equal
+move. \strong{Because the default is not 1, a continuous predictor's \verb{Model_*} cell does not equal
 \code{exp(coef(glm(...)))} unless you pass \code{multiplier = 1}.}}
 
 \item{shape}{How a \strong{continuous} predictor enters the model, when one straight line is not

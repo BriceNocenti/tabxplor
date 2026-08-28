@@ -17,7 +17,10 @@ git checkout dev && git pull
 #    - Second suite green:  OMP_NUM_THREADS=1 Rscript dev/run_dev_tests.R
 #      (the engine-parity sweeps, the source-tree lint and the seam checks the shipped suite
 #       keeps only a slice of -- see CLAUDE.md § Testing)
-#    - devtools::check() green (the ~3 min release gate)
+#    - devtools::check(manual = TRUE) green (the ~3 min release gate). The `manual = TRUE` is
+#      NOT optional: the default builds no PDF, and "checking PDF version of manual" is the only
+#      step that catches a glyph LaTeX cannot set. Locally: R CMD Rd2pdf --no-preview --force .
+#      Needs HTML Tidy too (apt install tidy), or "checking HTML version of manual" only SKIPS.
 #    - Rscript -e 'pkgdown::check_pkgdown()' clean
 #    - Home pages regenerated from their sources, on dev (dev/ is stripped from the release
 #      branch, and README.md ships):  OMP_NUM_THREADS=1 Rscript dev/build_readmes.R
@@ -57,6 +60,16 @@ git push origin vx.y.z
   (`jamovi/`, `po/`, `vignettes/articles/`, `_pkgdown.yml`, `.github/`,
   `README.Rmd`, `cran-comments.md`, `.Rbuildignore`). If a new dev-only path
   appears, add it to step 2 here.
+- **The site must be live before step 5.** Every `bricenocenti.github.io` link in the Rd,
+  the README and the vignettes 404 until the pkgdown workflow has deployed from `master` and
+  Pages is enabled, and CRAN's incoming check reports them. Merge, confirm the site answers,
+  then submit.
+- **rhub: the compiler containers say nothing here.** tabxplor has no `src/`, so `clang*`,
+  `gcc*`, `c23`, `lto`, `*-asan`, `valgrind` and `rchk` only exercise a toolchain the package
+  never uses -- and a stale image there fails on a *dependency* (`clang19`/`clang20` carry an
+  R-devel from 2026-03 that vctrs 0.7.2 will not load on). Use the platforms that vary the
+  RUNTIME instead: `nosuggests` (the 25 Suggests and their `tx_need_pkg()` gates), `nold`,
+  `atlas`, `mkl`, `donttest`, `ubuntu-next`, `ubuntu-release`.
 - `.Rbuildignore` stays identical on both branches — building the CRAN tarball
   from `dev` must keep working.
 - Hotfix on master only if CRAN demands an immediate patch: fix on `dev`,

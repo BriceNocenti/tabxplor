@@ -4281,7 +4281,7 @@ reg_stage_finalize <- function(ctx) {
 #'     fail to converge, and the linear probability model then takes over, with a message.
 #'
 #'   Reach for it when you want the model's *coefficient* to be that measure; to report a measure
-#'   without changing the model, set `measure` instead. ⚠ `"log"` is the one word the two arguments
+#'   without changing the model, set `measure` instead. `"log"` is the one word the two arguments
 #'   do not share: here the **log link**, on `measure` a spelling of `"raw_coefficient"`.
 #' @param measure **Which measure of deviation is reported** --- a deviation being how far a group
 #'   sits from the reference, the measure which of the ways of expressing it you read. The one
@@ -4298,7 +4298,7 @@ reg_stage_finalize <- function(ctx) {
 #'   On an **ordered** outcome the first three read the whole predicted distribution rather than one
 #'   category, so they stay in one column: Somers' `D` and the win ratio. Where the measure IS the
 #'   model's own it is read off the coefficients, otherwise from its predictions --- so it is
-#'   available whichever model you fit. ⚠ `"auto"` never lands on a **predicted odds ratio**, a
+#'   available whichever model you fit. `"auto"` never lands on a **predicted odds ratio**, a
 #'   specialist quantity to be asked for by name. Call [reg_measures()] to see what an outcome
 #'   offers.
 #' @param effect **Where the reported number comes from**, once the model and the measure are fixed.
@@ -4366,7 +4366,7 @@ reg_stage_finalize <- function(ctx) {
 #'   Same grammar as `ref`: `multiplier = c("sd", age = 10)`.
 #'
 #'   The estimate, its interval and the observed companion all scale together; the p-value does not
-#'   move. ⚠ **because the default is not 1, a continuous predictor's `Model_*` cell does not equal
+#'   move. **Because the default is not 1, a continuous predictor's `Model_*` cell does not equal
 #'   `exp(coef(glm(...)))` unless you pass `multiplier = 1`.**
 #' @param shape How a **continuous** predictor enters the model, when one straight line is not
 #'   enough. The `Linearity` footer row and the little curve drawn in the predictor's `n` cell tell
@@ -4405,7 +4405,7 @@ reg_stage_finalize <- function(ctx) {
 #'   }
 #'   The two columns are the same column twice: same estimand, same colour ladder, one legend block.
 #'   Each cell prints the effect with the level it sits on --- the observed percentage or mean on the
-#'   crude side, the **adjusted** prediction on the model side. ⚠ a **continuous** predictor has no
+#'   crude side, the **adjusted** prediction on the model side. A **continuous** predictor has no
 #'   levels, so its crude cell is the univariable slope, which assumes linearity: check that with
 #'   `shape` first.
 #' @param n How many people the table is about. `NULL` (default) reads `options(tabxplor.n)` ---
@@ -4476,7 +4476,7 @@ reg_stage_finalize <- function(ctx) {
 #'
 #'   The two are mutually exclusive, and each always tests its own gap: a gap whose interval covers
 #'   zero is greyed whatever `color_signif` says --- so a cell can be filled while neither estimate
-#'   carries a star, which is correct rather than odd. ⚠ a conditional **odds ratio** is not
+#'   carries a star, which is correct rather than odd. A conditional **odds ratio** is not
 #'   collapsible, so there the colours stay descriptive and are not tested. Read a coloured cell as
 #'   "adjustment moved this effect", not as "this variable is a confounder". See
 #'   \href{https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.html}{the regression

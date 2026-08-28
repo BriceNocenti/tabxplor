@@ -84,7 +84,7 @@ for (hook in c("message", "warning")) {
 
 Le tableau qui en résulte est un `data.frame` habituel, un `tibble` modifiable avec tous les verbes `dplyr` habituels. Il s’exporte vers Excel, HTML et Markdown avec ses repères de couleur.
 
-**Pas besoin de R pour qui préfère utiliser une interface graphique.** Tout ce qui suit existe aussi en version « presse-bouton », via un module pour le logiciel libre [jamovi](https://www.jamovi.org/download). L'installer, ouvrir le menu des modules (le **`+`** en haut à droite), choisir **bibliothèque de jamovi**, chercher *tabxplor* dans la barre de recherche et l’installer : cela ajoute une analyse **Tableaux croisés** et une analyse **Modèles de régression**. Les boutons y portent le nom des arguments enseignés ici.
+**Pas besoin de R pour qui préfère utiliser une interface graphique.** Tout ce qui suit existe aussi en version « presse-bouton », via un module pour le logiciel libre [jamovi](https://www.jamovi.org/). L'installer, ouvrir le menu des modules (le **`+`** en haut à droite), choisir **bibliothèque de jamovi**, chercher *tabxplor* dans la barre de recherche et l’installer : cela ajoute une analyse **Tableaux croisés** et une analyse **Modèles de régression**. Les boutons y portent le nom des arguments enseignés ici.
 
 Tout au long de cette introduction, nous utilisons `gss_simple`, une version du *General Social Survey* états-unien (`forcats::gss_cat`) avec des modalités regroupées.
 

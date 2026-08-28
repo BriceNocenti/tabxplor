@@ -76,7 +76,7 @@ Pour les modèles de régression les plus courants, `tab_reg()` construit un **t
 
 **Il y a deux documents sur la régression, et celui-ci est la référence.** Il est organisé par fonctionnalité : une partie par famille, la grille complète de ce que chaque modèle peut rapporter, les données pondérées, les interactions, les vérifications du modèle et les graphiques. Pour *apprendre* plutôt que pour chercher un point précis, commencer par [Interpréter un modèle de régression](tabxplor-reading-a-regression-fr.html), qui suit une seule analyse du premier tableau croisé jusqu'à une phrase finie, et qui renvoie ici pour les détails.
 
-**Sans écrire aucun code R**, les mêmes modèles peuvent être réalisés dans l’interface graphique [jamovi](https://www.jamovi.org/download) qui vient avec `tabxplor`. Ses boutons portent le nom des arguments ci-dessous et tout peut y être reproduit.
+**Sans écrire aucun code R**, les mêmes modèles peuvent être réalisés dans l’interface graphique [jamovi](https://www.jamovi.org/) qui vient avec `tabxplor`. Ses boutons portent le nom des arguments ci-dessous et tout peut y être reproduit.
 
 Nous utilisons une version formatée des données `forcats::gss_cat`, issues du *General Social Survey* états-unien, et de la base de donnée `tea` du package **FactoMineR::** (merci à leurs auteur·es).
 
@@ -1330,7 +1330,7 @@ Un trait pointillé sans crochet signifie que l'écart n'a pas pu être testé �
 - [Interpréter un modèle de régression](tabxplor-reading-a-regression-fr.html) — la même matière enseignée comme une seule analyse suivie, avec les habitudes de lecture qui vont avec.
 - [Introduction à tabxplor](tabxplor-fr.html) — les tableaux croisés et les repères de couleur.
 - [Données pondérées et plans de sondage](tabxplor-weights-fr.html) — pondération et plans de sondage, pour les deux producteurs.
-- `tab_reg()` est aussi disponible **sans écrire de code R**, comme une analyse **Modèles de régression** dans le module [jamovi](https://www.jamovi.org/download) — installer *tabxplor* depuis la bibliothèque de modules de jamovi (voir [Introduction à tabxplor](tabxplor-fr.html)).
+- `tab_reg()` est aussi disponible **sans écrire de code R**, comme une analyse **Modèles de régression** dans le module [jamovi](https://www.jamovi.org/) — installer *tabxplor* depuis la bibliothèque de modules de jamovi (voir [Introduction à tabxplor](tabxplor-fr.html)).
 - `?tab_reg` pour chaque argument (groupés par usage), et `?tab_reg` &rarr; *Details* pour les choix de modélisation.
 - **Hors périmètre**, et à estimer avec leurs propres packages : les modèles de survie / de Cox, les modèles mixtes (multiniveaux) et l'agrégation sur des données multi-imputées.
 - Sur la comparaison d'un coefficient brut et d'un coefficient ajusté, la référence canonique est Clogg, Petkova & Haritou (1995, *AJS* 100(5)), avec le commentaire d'Allison dans le même numéro — c'est ce que calcule `color = "adjustment"`, généralisé ici aux GLM, aux plans de sondage et aux effets marginaux. Pour les modèles logit emboîtés, la décomposition KHB (Karlson, Holm & Breen 2012) sépare la part du changement qui relève de la confusion de celle qui relève du changement d'échelle.

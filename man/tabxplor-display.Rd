@@ -83,7 +83,7 @@ and on a \code{\link{tab_reg}} table:
 \item \code{"base_ratio"} (\code{\{base\} (\{ratio\})}) --- the level and, in parentheses, its ratio to the reference.
 \item \code{"base_or"} (\code{\{base\} (\{or\})}) --- the level and, in parentheses, its odds ratio.
 \item \code{"or_base"} (\code{\{or\} (\{base\})}) --- the odds ratio and, in parentheses, the percentage it rests on.
-\item \code{"mean_sd"} (\code{\{mean\} (σ\{sd\})}) --- the mean and, in parentheses, its standard deviation.
+\item \code{"mean_sd"} (\ifelse{latex}{\code{\{mean\} (SD\{sd\})}}{\code{\{mean\} (σ\{sd\})}}) --- the mean and, in parentheses, its standard deviation.
 \item \code{"mean_cv"} (\code{\{mean\} (cv \{cv\})}) --- the mean and, in parentheses, its coefficient of variation --- the spread as a percentage of the mean, comparable between columns measured in different units (the default where every mean is positive).
 }
 }

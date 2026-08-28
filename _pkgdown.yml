@@ -17,7 +17,7 @@ template:
 home:
   links:
   - text: Use it without code, in jamovi
-    href: https://www.jamovi.org/download.html
+    href: https://www.jamovi.org/
 
 # One English site. The French translations of the vignettes live in Articles ("En français") --
 # no second FR site build, no language toggle. `intro` is dropped from the left side so the
@@ -75,7 +75,7 @@ reference:
 
 - title: Point-and-click interface (jamovi)
   desc: >
-    The two analyses tabxplor adds to [jamovi](https://www.jamovi.org/download.html) -- everything
+    The two analyses tabxplor adds to [jamovi](https://www.jamovi.org/) -- everything
     the package does, driven by menus. Install jamovi, open the modules menu (the `+` at the
     top-right), choose *jamovi library*, and install **tabxplor**.
   contents:

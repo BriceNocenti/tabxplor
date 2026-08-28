@@ -2,10 +2,7 @@ Package: tabxplor
 Title: User-Friendly Tables with Color Helpers for Data Exploration
 Version: 2.0.0
 Authors@R: 
-    person(given = "Brice",
-           family = "Nocenti",
-           role = c("aut", "cre"),
-           email = "brice.nocenti@protonmail.com")
+    person("Brice", "Nocenti", , "brice.nocenti@gmail.com", role = c("aut", "cre"))
 Description: Make it easy to deal with multiple cross-tables in data exploration, by
   creating them, manipulating them, and adding color helpers to highlight deviations 
   (differences from totals, comparisons between lines or columns, contributions to 

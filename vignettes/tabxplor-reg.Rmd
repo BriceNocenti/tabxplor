@@ -78,7 +78,7 @@ For the most common regression models, `tab_reg()` builds a **regression table**
 
 **There are two articles on regression, and this is the reference one.** It is organised by feature: one section per family, the full grid of what each model can report, weighted data, interactions, model checks and plots. If you are learning rather than looking something up, start with `vignette("tabxplor-reading-a-regression")`, which walks a single analysis from a first cross-table to a finished sentence and sends you back here for the details.
 
-**Without writing R code**, the same tables are a point-and-click **Regressions** analysis in the tabxplor module for [jamovi](https://www.jamovi.org/download); its options carry the names of the arguments below, so this reads as its manual too.
+**Without writing R code**, the same tables are a point-and-click **Regressions** analysis in the tabxplor module for [jamovi](https://www.jamovi.org/); its options carry the names of the arguments below, so this reads as its manual too.
 
 We use a formatted version of the `forcats::gss_cat` data, from the US General Social Survey, and — for the summed-score model — `facto_tea` (from the **FactoMineR** package, with thanks; see `?facto_tea`) with its six "where do you drink tea?" items reduced to one score (see *Batteries of yes/no items* in `vignette("tabxplor")` for that preparation):
 

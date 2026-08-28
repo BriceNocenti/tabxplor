@@ -287,7 +287,7 @@ TAB_OPTIONS <- list(
       "than that is greyed and marked `ns` --- read it as a flat line whatever its shape. In HTML",
       "the glyphs become an inline SVG; a plot never draws them (no graphics-device font has them).",
       "",
-      "\u26a0 An ordinal or multinomial outcome has one curve per cut or per category and this draws",
+      "An ordinal or multinomial outcome has one curve per cut or per category and this draws",
       "only the first: [reg_check_plots()] shows them all.")),
 
   # --- HTML --------------------------------------------------------------------------------------

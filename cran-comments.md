@@ -14,20 +14,25 @@ arguments are soft-deprecated, not removed).
   - Ubuntu Linux LTS, R-release
   - Ubuntu Linux LTS, R-oldrel-1
 
+* win-builder (R-devel): <FILL: link to the win-builder result>
+
 * rhub: <FILL: link to the rhub workflow run>
+  Platforms run: nosuggests, nold, atlas, mkl, donttest, ubuntu-next, ubuntu-release.
+  The compiler containers (clang*, gcc*, lto, *-asan, valgrind, rchk) are not run: the
+  package has no compiled code, so they exercise a toolchain it never uses.
 
 ## R CMD check results
-* local:
-    No ERRORs, no WARNINGs, no NOTEs.
+* local (devtools::check(manual = TRUE)):
+    <FILL after the run>
 
 * github Actions :
-    No ERRORs, no WARNINGs, no NOTEs.
+    <FILL after the run>
 
 * win-builder
-    No ERRORs, no WARNINGs, no NOTEs.
+    <FILL after the run>
 
 * rhub
-    No ERRORs, no WARNINGs, no NOTEs.
+    <FILL after the run>
 
 ## Downstream dependencies
 The only downstream dependency is with my package `ggfacto`.

@@ -759,6 +759,15 @@ Each `type:` compiles to a `jmvcore` R6 class (`dev/jamovi/reference/jmvcore/opt
 source of truth). Common keys: `name` (→ `self$options$<name>`), `title`, `type`, `default`,
 docs-only `description:`.
 
+⚠ **A `description: R:` block is Rd, and jmvtools reflows it** into the generated `.h.R`
+roxygen at a fixed width — so it is written like any other `@param`: `\strong{}`, `\code{}`,
+`\itemize{}`. Two things it must not do. A raw HTML tag (`<b>`) becomes `\if{html}{\out{<b>}}`,
+which `Rd2HTML` opens *before* the paragraph it wraps — an HTML-validation NOTE. And no wrapped
+line may begin `<digit>.`, which roxygen markdown reads as an ordered list: `… between 0 and 1.
+Default to 0.95` reflowed into a numbered list and broke the sentence. Since the width the reflow
+lands on cannot be predicted from the YAML, verify on the regenerated `man/*.Rd`, never on the
+source: `grep 'out{<\|^\\enumerate{' man/jmvtab*.Rd`.
+
 | `type:`            | UI                      | Key type-specific keys                                                  | Value in R              |
 |--------------------|-------------------------|-------------------------------------------------------------------------|-------------------------|
 | `Data`             | (dataset)               | —                                                                       | data frame              |

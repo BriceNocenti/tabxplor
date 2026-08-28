@@ -681,7 +681,7 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   cell by default.
 #' @param comp The comparison level : by subtables/groups, or for the whole
 #'   table.
-#' @param ci <b>What the confidence interval is anchored on</b> -- one
+#' @param ci \strong{What the confidence interval is anchored on} -- one
 #'   question, four answers. The  GEOMETRY of the interval is not asked here: it
 #'   follows the comparison the table makes  (set by \code{color} /
 #'   \code{display}), so a difference table gets a difference  interval and a
@@ -693,8 +693,8 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   so \code{stars} and \code{color_signif} are   informed and switched off.
 #'   \item \code{"ref"}: the interval of the comparison with the reference cell
 #'   -- what   \code{stars} and \code{color_signif} read.  }
-#' @param conf_level The confidence level, as a single numeric between 0 and
-#'   1. Default to 0.95 (95\%).
+#' @param conf_level The confidence level, a single numeric between 0 and 1
+#'   --- 0.95 by default.
 #' @param stars With \code{ci = "diff"}, print significance stars (\code{*}
 #'   \code{**} \code{***}) for the difference of each cell from its reference.
 #'   Read from the same confidence interval that is displayed, so stars and

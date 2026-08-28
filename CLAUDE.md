@@ -351,7 +351,7 @@ The docs form one hierarchy, general to specific. **Each fact is stated at exact
 - **Inline `# DESIGN:` / `# WARNING:` tags** — the non-obvious "why" at the exact line, caveats to avoid, etc.
 - **Vignettes** (`vignette("tabxplor")`, regression, programming) — usage and teaching, for users.
 - **`vignettes/tabxplor-reading-a-regression.Rmd`** — the most precise account of what tabxplor's *philosophy*, *vocabulary*, *usage* and *real-world regression use cases* really are; its words (deviation, observed vs adjusted, the base, the round trip) are the package's own.
-- **Roxygen man pages** (`?tab`, `?tabxplor-display`, `?tabxplor-vctrs`, `?tabxplor-options`, `?tabxplor-data.table`) — user-facing reference: *usage* and the main use cases, never build/internals/history. A `@param` states what the argument is, its values, and at most one sentence of when to change it; the rest is a link to the vignette that owns it.
+- **Roxygen man pages** (`?tab`, `?tabxplor-display`, `?tabxplor-vctrs`, `?tabxplor-options`, `?tabxplor-data.table`) — user-facing reference: *usage* and the main use cases, never build/internals/history. A `@param` states what the argument is, its values, and at most one sentence of when to change it; the rest is a link to the vignette that owns it. ⚠ The manual is LaTeX, so an Rd file is ASCII but for the few glyphs it can set (`— … × ÷`); `test-non-ascii.R` locks it.
 - **`dev/*.md`** (`.Rbuildignore`'d) — transversal or expert technical guides only, and there are seven: `dependencies.md` (the dependency policy), `release_checklist.md`, `french_glossary.md`, `jamovi_module.md`, `colors.md`, `inference.md`, `regression.md`. Each holds what an `R/` header is too short to derive — a foreign system, a cross-file policy, a statistical derivation — and the header that needs it points at it by section. ⚠ The 2.0.0 evidence base is `dev/archive_2.0.0/` (indexed by its own `README.md`): a `dev/<name>.md` named in a DONE summary lives there, unchanged.
 - **Roadmap "DONE" summaries → `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`** — the ONLY place dev history lives.
 
@@ -961,6 +961,86 @@ last row of the last table instead of by the population. 25 of 25 example paths 
 
 ⚠ **One maintainer step remains**: ggfacto's own release (version bump, `README.md` re-knit from
 `README.Rmd`, CRAN submission) is not part of this phase.
+
+#### Phase 24f — rhub and win-builder.r-project.org failures ✓ DONE
+
+**The rhub red was never ours, and the evidence is one column of the log.** `clang19` / `clang20`
+died at `.onLoad failed in loadNamespace() for 'vctrs' — symbol bindings not supported yet`, inside
+vctrs's own `.onLoad`, during `R CMD build`'s install step, before any tabxplor code runs. Those two
+images carry **R-devel r89629 (2026-03-15)** while every job that passed — `ubuntu-clang`,
+`ubuntu-gcc12`, `ubuntu-release` — runs **r90452 (2026-08-27)**; the binary they install is
+`vctrs 0.7.2`, released *after* that snapshot, and the error string exists in neither local R 4.6.1
+nor R-devel r90246. So every package importing vctrs fails there identically. ⚠ The wider point,
+now in `dev/release_checklist.md`: **tabxplor has no `src/`**, so `clang*` / `gcc*` / `c23` / `lto` /
+`*-asan` / `valgrind` / `rchk` exercise a toolchain the package never uses. The platforms that vary
+the RUNTIME are the ones worth spending: `nosuggests` (25 Suggests behind `tx_need_pkg()`), `nold`,
+`atlas`, `mkl`, `donttest`, `ubuntu-next`, `ubuntu-release`.
+
+**win-builder's ERROR and WARNING were one cause: the manual is LaTeX.** Seven `Unicode character
+not set up for use with LaTeX` — σ once, ⚠ six times — and nothing else in `man/` was at fault
+(`—`, `…`, `×`, `÷` are all set by utf8 inputenc). It had never been seen locally because
+**`devtools::check()` defaults to `manual = FALSE`**; with tinytex on this box the failure and its
+fix both reproduce in one `R CMD Rd2pdf` (before: the same 7 errors, `Error in running
+tools::texi2pdf()`; after: **103 pages, 0 errors**).
+
+The two glyphs are not the same kind of thing, so they are not treated alike. **⚠ is decoration**:
+dropped from the six user-facing Rd sites (five `@param` in `R/tab_reg.R`, the `tabxplor.shape_table`
+`doc` string in `R/tab-options.R`, whose field `tab_options_rd()` alone reads), capitalising what
+followed — the sentences already carried their own bold. Comments, `dev/` and this file keep it.
+**σ is content**: `mean_sd` really prints `3.5 (σ1.2)` and `sd_bands` labels the same glyph, so
+`display_presets_rd()` writes the template twice, `\ifelse{latex}{\code{… (SD{sd})}}{\code{… (σ{sd})}}`.
+⚠ Verified in `tools:::Rd2latex` rather than assumed: it honours `\ifelse`, while **`\enc{}{}` falls
+back only when the whole output encoding is ASCII** — the obvious mechanism, and the wrong one here.
+⚠ And the split goes **around the code span, not inside it**: `\ifelse` is a text tag, so the first
+attempt (`\code{… \ifelse{latex}{SD}{σ} …}`) built the PDF but traded the ERROR for
+`checkRd: (7) Tag \ifelse is invalid in a \code block` — caught by running the gate, not by any
+grep over the Rd.
+
+**Three defects behind the HTML NOTE, all in `jamovi/jmvtab.a.yaml`.** A `description: R:` block is
+**Rd**, and jmvtools reflows it. `ci` was written with a raw `<b>`, which roxygen turns into
+`\if{html}{\out{<b>}}` and `Rd2HTML` opens *before* the paragraph — tidy's three warnings at
+`man/jmvtab.Rd:165`; it is `\strong{}` now. `conf_level`'s reflow put `1.` at a line start, so
+roxygen markdown made a numbered list of it: the param read *"between 0 and 1"* then a bullet, with
+a stray `\%` — reworded so no wrapped line can begin `<digit>.`. And `R/tab.R:87` wrote `\%` in
+HAND-WRITTEN roxygen, which escapes the backslash in turn and printed `10\% level` in `?tab` and
+`?tab_ci` (one line, both pages, since `tab_ci` inherits the param). ⚠ **The opposite rule holds
+inside an `@eval` doc string** (`R/tab-args.R:340`), inserted as raw Rd, which correctly writes
+`\\%` — `man/tab.Rd:221` already rendered right. `jmvtools::install(home = "flatpak")` regenerated
+`R/jmvtab.h.R` (3 lines) and left `inst/i18n/fr.json` byte-identical, the reworded prose being R
+documentation and not a msgid.
+
+**The URL NOTE is half a bug and half a schedule.** Measured: `www.jamovi.org/download` is **404**
+and `/download.html` a **302 to the homepage** — the page is gone — so all eight links (5 vignettes,
+`_pkgdown.yml`) now point at `https://www.jamovi.org/`, 200 with no redirect. The eleven
+`bricenocenti.github.io` 404s are not fixable in code: `gh api …/pages` returns 404 and there is no
+`gh-pages` branch, so the site has simply never deployed. ⚠ Submit only after the merge has
+deployed it — now a Notes bullet in the release checklist.
+
+**The guard is in `test-non-ascii.R`, whose rule this is the second half of.** Two blocks scan
+`man/*.Rd` — an allow-list of the four glyphs LaTeX sets, and a ban on the double-escaped percent
+R CMD check never mentions — both skipping where `man/` is not next to the tests, exactly as the two
+R-source blocks do. ⚠ What must be ASCII is **what LaTeX is handed**, not what the file contains, so
+the scanner asks `tools::Rd2latex` rather than imitating it: a regex resolving `\ifelse{latex}{A}{B}`
+worked until the arms grew braces of their own, and would have had to grow `\if{html}` and `\enc`
+too. The converter settles all three, and costs 0.9 s over 114 files. A third block proves it is not
+vacuous, mirroring the file's existing scanner self-test: a bare σ and a ⚠ are caught, the wrapped
+σ and the four allowed glyphs are not.
+
+**Measured.** `devtools::check(manual = TRUE)` **0 errors, 0 warnings, 0 notes** in 3m11
+(`checking Rd files`, `checking PDF version of manual`, `checking examples with --run-donttest` and
+`checking HTML version of manual` all OK). `R CMD Rd2pdf` alone: 103 pages, 0 LaTeX errors, against
+the same 7 before. ⚠ The HTML NOTE needed **HTML Tidy installed** to be verifiable at all — without
+it R CMD check skips that step and says so, which is why it was checked directly too: `Rd2HTML` +
+`tidy` over the whole manual, **0 findings on 114 pages**. `pkgdown::check_pkgdown()` clean; shipped
+suite **FAIL 0 | PASS 4554** (+6, the new blocks) in ~40 s, the one WARN and two SKIP pre-existing
+and environmental. No golden moved, and none could: every edit is roxygen prose, a doc generator, a
+YAML description, a URL or a test — no number and no rendered cell is reachable from any of them.
+
+⚠ **Maintainer steps remain**: `devtools::check(manual = TRUE)`; merge PR #3 and enable Pages;
+re-run win-builder and rhub (without the compiler containers); then finish `cran-comments.md`, which
+still claims "no NOTEs" everywhere and needs the real run links and whatever the fresh runs say.
+
+
 
 ### Phase 25 — CRAN release
 

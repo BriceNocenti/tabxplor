@@ -84,7 +84,7 @@ existing tab, reconstructing that plan from the table's own markers.
 
 With \code{stars = TRUE} and an interval anchored on the comparison (see \code{ci}), each cell
 says how sure we can be that its deviation from the reference is real and not sampling noise:
-\code{*} at the 10\\% level, \code{**} at 5\\%, \code{***} at 1\\%. The exact p-value is stored per
+\code{*} at the 10\% level, \code{**} at 5\%, \code{***} at 1\%. The exact p-value is stored per
 cell, readable with \code{$pvalue} or \code{get_pvalue()}.
 
 No separate test runs behind the scenes: a cell is significant exactly when the interval it

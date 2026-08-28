@@ -92,7 +92,7 @@ for (hook in c("message", "warning")) {
 
 Everything is a `tibble`, so the result works with the usual `dplyr` verbs, and tables export to Excel, HTML and Markdown with their color helpers. Underlying heavy computations run on `data.table`
 
-**No R needed, if you prefer menus.** Everything below is also available point-and-click, through a module for [jamovi](https://www.jamovi.org/download) — a free, open-source statistical software. Install it, open the modules menu (the **`+`** at the top right), choose **jamovi library**, and install *tabxplor*: it adds a **Crosstables** analysis and a **Regressions** analysis, with the same coloured, exportable tables. The options carry the same names as the arguments taught here, so this vignette reads as its manual.
+**No R needed, if you prefer menus.** Everything below is also available point-and-click, through a module for [jamovi](https://www.jamovi.org/) — a free, open-source statistical software. Install it, open the modules menu (the **`+`** at the top right), choose **jamovi library**, and install *tabxplor*: it adds a **Crosstables** analysis and a **Regressions** analysis, with the same coloured, exportable tables. The options carry the same names as the arguments taught here, so this vignette reads as its manual.
 
 Throughout this vignette we use `gss_simple`, a cleaned-up version of the US General Social Survey (`forcats::gss_cat`) with factors levels merged and reordered.
 

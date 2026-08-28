@@ -87,7 +87,7 @@ That is not a stylistic preference. A regression is often taught as a machine yo
 
 **There are two guides to regression here, and this is the slow one.** `vignette("tabxplor-reg")` is the reference: every family, every argument, the full grid of what each model can report, the weighting rules, the plots. Read it when you need to look something up. This one walks a single analysis from a first cross-table to a finished sentence, and refers you there for the details.
 
-Everything here is also available **without writing R code**, as a point-and-click **Regressions** analysis in the tabxplor module for [jamovi](https://www.jamovi.org/download).
+Everything here is also available **without writing R code**, as a point-and-click **Regressions** analysis in the tabxplor module for [jamovi](https://www.jamovi.org/).
 
 ## What we are and are not doing
 
