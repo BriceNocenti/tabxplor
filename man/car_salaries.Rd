@@ -27,7 +27,7 @@ car_salaries
 }
 \description{
 Nine months' salary for 397 professors at one US college, collected by the institution to monitor
-a pay gap. Used in the \emph{All else equal} article to show a gap that \strong{grows} under adjustment, and
+a pay gap. Used in the \emph{Reading a regression} article to show a gap that \strong{grows} under adjustment, and
 then a \strong{mediator}: rank explains the gap away, but rank is itself part of what is unequal.
 }
 \examples{

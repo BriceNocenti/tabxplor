@@ -29,7 +29,7 @@ questionr_hdv
 \description{
 A French national survey, used to show what \strong{adjustment} does to a relationship: going to the
 cinema is strongly patterned by occupation, and also by age -- and the two are entangled. See the
-\emph{All else equal} article for the analysis. It also carries a real sampling weight (\code{poids}), so it
+\emph{Reading a regression} article for the analysis. It also carries a real sampling weight (\code{poids}), so it
 is the data set to try \verb{wt =} on; see \code{vignette("tabxplor-weights")}.
 }
 \examples{

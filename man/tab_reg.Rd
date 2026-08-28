@@ -341,8 +341,8 @@ and p-value, so the table prints with stars, greys what is not significant, and 
 }
 \details{
 To \strong{learn} what such a table says, read
-\href{https://bricenocenti.github.io/tabxplor/articles/tabxplor-all-else-equal.html}{All else
-equal} (\code{vignette("tabxplor-all-else-equal")}); to \strong{look something up}, the
+\href{https://bricenocenti.github.io/tabxplor/articles/tabxplor-reading-a-regression.html}{Reading a
+regression} (\code{vignette("tabxplor-reading-a-regression")}); to \strong{look something up}, the
 \href{https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.html}{regression vignette}
 (\code{vignette("tabxplor-reg")}).
 

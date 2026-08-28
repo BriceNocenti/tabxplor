@@ -31,7 +31,7 @@ French words on purpose — crude/adjusted, and the reference.
   (« la **variable à expliquer** — `outcome` »), at the point where the French word is coined and
   nowhere else. The reader thinks in French and types in English, and an argument that is only ever
   named in French cannot be used. The same names serve jamovi, whose options mirror the arguments.
-  Settled in Phase 23f-i; applied to both *All else equal* twins.
+  Settled in Phase 23f-i; applied to both *Reading a regression* twins.
 - **Notation and international abbreviations stay as-is**: `OR`, `IRR`, `β`, `AME`, `MER`, `AIC`, `BIC`,
   `Chi2`, `phi`, `eta2`, `R2`, `%`, `N`. A French statistics reader uses these directly.
 - **French typography** (handled in code by `legend_num()` + the `lang == "fr"` branches): thin space
@@ -194,7 +194,7 @@ it cannot be glossed « rapport de cotes (odds) » in one and not the other: it 
 
 ## Le vocabulaire d'enseignement (article « Toutes choses égales par ailleurs »)
 
-Settled in Phase 23f-i, for the French twin of `vignettes/articles/tabxplor-all-else-equal.Rmd`. The
+Settled in Phase 23f-i, for the French twin of `vignettes/tabxplor-reading-a-regression.Rmd`. The
 readership is "literary" social-science students, so the primary source is **the maintainer's own
 logit séance** (`~/github/formations_stat/M2_06_07.Rmd:310-2100`) — those are the words these
 students already have — checked against Cibois (*Les méthodes d'analyse d'enquêtes*, ch. V),

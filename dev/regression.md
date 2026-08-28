@@ -12,7 +12,7 @@
 >   - §2.5 and §4.4 turn on **collapsibility**. That one property decides which columns can be
 >     tested and which can only be described; do not weaken either statement.
 > See: `CLAUDE.md § tabxplor architecture` (the regression subsystem) · `dev/inference.md` (the same
-> influence-function algebra, for a crosstab's cells) · `vignettes/articles/tabxplor-all-else-equal.Rmd`
+> influence-function algebra, for a crosstab's cells) · `vignettes/tabxplor-reading-a-regression.Rmd`
 > (what all of this is *for*).
 
 ---

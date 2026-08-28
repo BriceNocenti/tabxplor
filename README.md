@@ -187,7 +187,7 @@ A colored html table also *prints*, or saves to PDF, in that black-and-white sch
 
 - [Introduction to tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor.html) — the place to start (*aussi disponible [en français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-fr.html)*).
 - [Regression tables with tab_reg()](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.html) (*aussi disponible [en français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg-fr.html)*).
-- [All else equal: reading a regression without losing the data](https://bricenocenti.github.io/tabxplor/articles/tabxplor-all-else-equal.html) — a single analysis walked from a first cross-table to a finished sentence (*aussi disponible [en français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-all-else-equal-fr.html)*).
+- [Reading a regression without losing sight of the percentages](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reading-a-regression.html) — a single analysis walked from a first cross-table to a finished sentence (*aussi disponible [en français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reading-a-regression-fr.html)*).
 - [Weighted and survey data](https://bricenocenti.github.io/tabxplor/articles/tabxplor-weights.html) — the three levels of margin of error, and which one your file deserves (*aussi disponible [en français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-weights-fr.html)*).
 - [Programming with tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming.html) — many tables at once, custom workflows, options (*aussi disponible [en français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming-fr.html)*).
 

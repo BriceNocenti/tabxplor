@@ -310,7 +310,7 @@ tab(car_arrests, c(colour, sex, employed, citizen), released, pct = "row", ref =
     stars = TRUE, color = "odds_ratio", color_signif = "grey_non_signif", display = "OR")
 ```
 
-Les mêmes nombres, les mêmes étoiles. La colonne observée n'est ni une approximation du tableau croisé ni un résumé : elle *est* le tableau croisé — le rapport de cotes calculé directement sur les pourcentages observés, imprimé à côté du modèle. Les traditionnelles étoiles ont été ajoutées pour dire en toutes lettres ce que les couleurs encodent déjà : une catégorie sans étoile n’est pas significativement différente de la modalité de référence, au seuil de confiance de 90 %.
+Les mêmes nombres, les mêmes étoiles. La colonne observée n'est ni une approximation du tableau croisé ni un résumé : elle *est* le tableau croisé — le rapport de cotes calculé directement sur les pourcentages observés, imprimé à côté du modèle. Les traditionnelles étoiles ont été ajoutées pour dire en toutes lettres ce que les couleurs encodent déjà : une catégorie sans étoile n’est pas significativement différente de la modalité de référence, au seuil de confiance de 90 % que marque la plus petite étoile (le grisé, lui, se décide à 95 %).
 
 C'est ce qui rend la comparaison possible et honnête, et cela vaut d'être énoncé comme une règle : **dans tabxplor, l'écart observé est toujours homogène avec l'effet modélisé, calculée sur les mêmes personnes, dans la même échelle, avec les mêmes intervalles de confiance.** (Ici rien ne manque dans les données, si bien que les deux populations coïncident d'elles-mêmes ; en général la colonne observée est calculée sur les observations complètes du modèle, de sorte qu'elles coïncident toujours.)
 
@@ -629,14 +629,14 @@ Tout ce qui précède changeait ce qui était **rapporté**, jamais ce qui étai
 
 Il ne compte qu'une seule fois, et cela vaut d'être vu, parce que les deux écritures portent le même nom de risque relatif :
 
-```{r}
+```{r, eval=FALSE, include=FALSE}
 tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
         link = "ratio", stats=NULL)
 ```
 
 `Model_RR` — sans marque, donc un coefficient. C'est le modèle de **Poisson modifiée** qu'utilisent les épidémiologistes, et qui travaille directement en risques relatifs. Le comparer au `Model_mRR` plus haut : les deux tombent presque d'accord ici (`÷1.08` contre `÷1.07` sur la ligne `colour`). Ce qui diffère, c'est ce que chacun affirme — et quel modèle a réellement tourné :
 
-```{r}
+```{r, eval=FALSE, include=FALSE}
 reg_formulas(tab_reg(car_arrests, "released", c("colour", "checks"), measure = "ratio", empirical = FALSE))
 reg_formulas(tab_reg(car_arrests, "released", c("colour", "checks"), link    = "ratio", empirical = FALSE))
 ```
@@ -827,7 +827,6 @@ Si lire l'ajustement entre les données observées et les prédictions du modèl
 
 **Quels contrôles aident, lesquels nuisent :**
 
-- **Westreich** et **Greenland**, 2013 (*le piège du « tableau 2 » : ne pas lire toutes les lignes de la même façon*).
 - **Cinelli**, **Forney** et **Pearl**, « A Crash Course in Good and Bad Controls », 2024 (*bloquer les chemins fallacieux, ne pas toucher aux chemins causals*).
 - **Elwert** et **Winship**, 2014 (*le biais de sélection : conditionner sur un facteur de collision*).
 - **Maldonado** et **Greenland**, 1993 (*l'origine du seuil de 10 % — et pourquoi ce n'est pas une règle de sélection des variables*).

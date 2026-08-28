@@ -185,6 +185,6 @@ Deux limites, énoncées franchement. Une comparaison *entre deux cases* (un rap
 
 - [Introduction à tabxplor](tabxplor-fr.html) — les tableaux croisés, les couleurs et les intervalles de confiance.
 - [Tableaux de régression](tabxplor-reg-fr.html) — le cadre de la régression.
-- [Toutes choses égales par ailleurs](tabxplor-all-else-equal-fr.html) — une analyse suivie du premier tableau croisé à une phrase finie.
+- [Interpréter un modèle de régression](tabxplor-reading-a-regression-fr.html) — une analyse suivie du premier tableau croisé à une phrase finie.
 - `?tab` pour `wt`, `design_effect` et `ci_method` ; `?tabxplor-options` pour les réglages de session.
 - `survey::svydesign()` pour les plans complexes (strates, grappes, calage sur marges, corrections de population finie).

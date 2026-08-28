@@ -74,7 +74,7 @@ for (hook in c("message", "warning")) {
 
 Pour les modèles de régression les plus courants, `tab_reg()` construit un **tableau de régression** qui ressemble à un tableau croisé `tabxplor` et se comporte comme lui : une ligne par modalité de prédicteur, des étoiles de significativité, des couleurs qui grisent les effets non significatifs, et les mêmes exports Excel, html ou markdown. On lui donne un data frame, une **variable à expliquer** / `outcome` et des **prédicteurs** / `predictors`, et il déduit du type de la variable à expliquer quel modèle convient. Sa particularité est `empirical = TRUE`, qui affiche l'**effet observé / brut à côté de l'effet ajusté du modèle** : on voit ainsi ce que « contrôler par les autres variables » a réellement changé.
 
-**Il y a deux documents sur la régression, et celui-ci est la référence.** Il est organisé par fonctionnalité : une partie par famille, la grille complète de ce que chaque modèle peut rapporter, les données pondérées, les interactions, les vérifications du modèle et les graphiques. Pour *apprendre* plutôt que pour chercher un point précis, commencer par [Toutes choses égales par ailleurs](tabxplor-all-else-equal-fr.html), qui suit une seule analyse du premier tableau croisé jusqu'à une phrase finie, et qui renvoie ici pour les détails.
+**Il y a deux documents sur la régression, et celui-ci est la référence.** Il est organisé par fonctionnalité : une partie par famille, la grille complète de ce que chaque modèle peut rapporter, les données pondérées, les interactions, les vérifications du modèle et les graphiques. Pour *apprendre* plutôt que pour chercher un point précis, commencer par [Interpréter un modèle de régression](tabxplor-reading-a-regression-fr.html), qui suit une seule analyse du premier tableau croisé jusqu'à une phrase finie, et qui renvoie ici pour les détails.
 
 **Sans écrire de code R**, les mêmes tableaux sont une analyse **Modèles de régression** en presse-bouton dans le module [jamovi](https://www.jamovi.org/download) ; ses options portent le nom des arguments ci-dessous, si bien que cette page en est aussi le manuel.
 
@@ -172,7 +172,7 @@ tab_reg(tea, "tea_where", c("sex", "SPC", "Sport"),
 
 ### Comment le lire — et comment ne pas le lire
 
-Un écart est un indice, pas un verdict : il vaut pour *ces* variables de contrôle, mesurées *ainsi*, et les deux nombres sont des estimations — un nombre brut reposant sur peu de personnes fluctue, et l'écart fluctue avec lui. [Toutes choses égales par ailleurs](tabxplor-all-else-equal-fr.html) est un article entier consacré à la lecture de cette distance.
+Un écart est un indice, pas un verdict : il vaut pour *ces* variables de contrôle, mesurées *ainsi*, et les deux nombres sont des estimations — un nombre brut reposant sur peu de personnes fluctue, et l'écart fluctue avec lui. [Interpréter un modèle de régression](tabxplor-reading-a-regression-fr.html) est un article entier consacré à la lecture de cette distance.
 
 Une habitude est propre à l'échelle, et elle décide de ce que le tableau permettra de faire. Un rapport de cotes change quand on ajoute un prédicteur **même si ce prédicteur n'a rien à voir avec l'exposition** — la non-collapsibilité — si bien qu'une part de chaque écart, sur une colonne de rapports de cotes, est de l'arithmétique et non de la confusion : les couleurs y restent purement descriptives. Pour un écart qu'on puisse *tester*, demander une mesure collapsible : des points de pourcentage, ou un risque relatif.
 
@@ -1328,7 +1328,7 @@ Un trait pointillé sans crochet signifie que l'écart n'a pas pu être testé �
 
 ## Pour aller plus loin
 
-- [Toutes choses égales par ailleurs](tabxplor-all-else-equal-fr.html) — la même matière enseignée comme une seule analyse suivie, avec les habitudes de lecture qui vont avec.
+- [Interpréter un modèle de régression](tabxplor-reading-a-regression-fr.html) — la même matière enseignée comme une seule analyse suivie, avec les habitudes de lecture qui vont avec.
 - [Introduction à tabxplor](tabxplor-fr.html) — les tableaux croisés et les repères de couleur.
 - [Données pondérées et plans de sondage](tabxplor-weights-fr.html) — pondération et plans de sondage, pour les deux producteurs.
 - `tab_reg()` est aussi disponible **sans écrire de code R**, comme une analyse **Modèles de régression** dans le module [jamovi](https://www.jamovi.org/download) — installer *tabxplor* depuis la bibliothèque de modules de jamovi (voir [Introduction à tabxplor](tabxplor-fr.html)).

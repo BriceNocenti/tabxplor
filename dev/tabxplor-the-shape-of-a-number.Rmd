@@ -48,7 +48,7 @@ That single line is not a summary. It is a **promise**: that the relationship is
 
 Very often that promise is false, and in a way that matters for what you want to say. This article is about how to see it, and what to do about it. It needs no mathematics — only the ability to look at a small picture and say "that bends".
 
-**This is the short companion to [*All else equal: reading a regression without losing the data*](tabxplor-all-else-equal.html)**, which teaches how to read a regression table at all. Read that one first if the words *observed*, *adjusted* and *reference* are not yet familiar. `vignette("tabxplor-reg")` is the reference manual for everything used here.
+**This is the short companion to [*Reading a regression without losing sight of the percentages*](tabxplor-reading-a-regression.html)**, which teaches how to read a regression table at all. Read that one first if the words *observed*, *adjusted* and *reference* are not yet familiar. `vignette("tabxplor-reg")` is the reference manual for everything used here.
 
 ## The data
 
@@ -295,7 +295,7 @@ For any of these today: compute the column yourself and hand it to `tab_reg()` a
 
 ## Where to go next
 
-- [*All else equal: reading a regression without losing the data*](tabxplor-all-else-equal.html) — the slow walk through a whole analysis, from cross-table to sentence.
+- [*Reading a regression without losing sight of the percentages*](tabxplor-reading-a-regression.html) — the slow walk through a whole analysis, from cross-table to sentence.
 - `vignette("tabxplor-reg")` — the reference: every family, every argument, model checks, plots.
 - `?shape_numeric_var` lists every value `shape =` accepts, with what each one does.
 - `reg_formulas(model)` shows what was actually fitted; `reg_check_plots(model)` draws the observed points with the fitted curve through them.

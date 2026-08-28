@@ -44,7 +44,7 @@
 #'
 #' A French national survey, used to show what **adjustment** does to a relationship: going to the
 #' cinema is strongly patterned by occupation, and also by age -- and the two are entangled. See the
-#' *All else equal* article for the analysis. It also carries a real sampling weight (`poids`), so it
+#' *Reading a regression* article for the analysis. It also carries a real sampling weight (`poids`), so it
 #' is the data set to try `wt =` on; see `vignette("tabxplor-weights")`.
 #'
 #' @format A tibble of 2 000 rows and 20 columns. The ones the article uses:
@@ -96,7 +96,7 @@
 #' Salaries of US college professors, 2008-09
 #'
 #' Nine months' salary for 397 professors at one US college, collected by the institution to monitor
-#' a pay gap. Used in the *All else equal* article to show a gap that **grows** under adjustment, and
+#' a pay gap. Used in the *Reading a regression* article to show a gap that **grows** under adjustment, and
 #' then a **mediator**: rank explains the gap away, but rank is itself part of what is unequal.
 #'
 #' @format A tibble of 397 rows and 7 columns.

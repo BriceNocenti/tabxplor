@@ -76,7 +76,7 @@ for (hook in c("message", "warning")) {
 
 For the most common regression models, `tab_reg()` builds a **regression table** that looks and behaves like a `tabxplor` cross-table: one row per predictor level, significance stars, colours that grey out non-significant effects, and the same Excel, html or markdown exports. You give it a data frame, an **outcome** and some **predictors**, and it works out the right kind of model from the outcome's type. Its distinctive feature is `empirical = TRUE`, which shows the **observed / crude / empirical effect right next to the model's adjusted one**, so you can see what "controlling for the other variables" actually changed.
 
-**There are two articles on regression, and this is the reference one.** It is organised by feature: one section per family, the full grid of what each model can report, weighted data, interactions, model checks and plots. If you are learning rather than looking something up, start with `vignette("tabxplor-all-else-equal")`, which walks a single analysis from a first cross-table to a finished sentence and sends you back here for the details.
+**There are two articles on regression, and this is the reference one.** It is organised by feature: one section per family, the full grid of what each model can report, weighted data, interactions, model checks and plots. If you are learning rather than looking something up, start with `vignette("tabxplor-reading-a-regression")`, which walks a single analysis from a first cross-table to a finished sentence and sends you back here for the details.
 
 **Without writing R code**, the same tables are a point-and-click **Regressions** analysis in the tabxplor module for [jamovi](https://www.jamovi.org/download); its options carry the names of the arguments below, so this reads as its manual too.
 
@@ -174,7 +174,7 @@ tab_reg(tea, "tea_where", c("sex", "SPC", "Sport"),
 
 ### How to read it — and how not to
 
-A gap is a clue, not a verdict: it holds for *these* covariates, measured *this* way, and both numbers are estimates, so a crude one based on few people wanders and the gap wanders with it. `vignette("tabxplor-all-else-equal")` is a whole article on reading that distance.
+A gap is a clue, not a verdict: it holds for *these* covariates, measured *this* way, and both numbers are estimates, so a crude one based on few people wanders and the gap wanders with it. `vignette("tabxplor-reading-a-regression")` is a whole article on reading that distance.
 
 One habit is specific to the scale, and it decides what the table will let you do. An odds ratio changes when you add a predictor **even if that predictor has nothing to do with the exposure** — non-collapsibility — so part of every gap on an odds-ratio column is arithmetic rather than confounding, and the colours there stay purely descriptive. For a gap you can *test*, ask for a collapsible measure: percentage points, or a risk ratio.
 
@@ -1256,7 +1256,7 @@ A dotted connector with no bracket means the gap could not be tested — most of
 
 ## Where to go next
 
-- `vignette("tabxplor-all-else-equal")` — the same material taught as one continuous analysis, with the reading habits that go with it.
+- `vignette("tabxplor-reading-a-regression")` — the same material taught as one continuous analysis, with the reading habits that go with it.
 - `vignette("tabxplor")` — cross-tables and the colour helpers.
 - `vignette("tabxplor-weights")` — weighted and survey data, for both producers.
 - `?tab_reg` for every argument (grouped by purpose), and `?tab_reg` &rarr; *Details* for the modelling choices.

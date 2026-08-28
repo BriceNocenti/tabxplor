@@ -36,8 +36,8 @@ navbar:
       menu:
       - text: Introduction to tabxplor
         href: articles/tabxplor.html
-      - text: "All else equal: reading a regression without losing the data"
-        href: articles/tabxplor-all-else-equal.html
+      - text: "Reading a regression without losing sight of the percentages"
+        href: articles/tabxplor-reading-a-regression.html
       - text: Regression tables with tab_reg()
         href: articles/tabxplor-reg.html
       - text: Weighted and survey data
@@ -48,8 +48,8 @@ navbar:
       - text: En français
       - text: Introduction à tabxplor
         href: articles/tabxplor-fr.html
-      - text: "Toutes choses égales par ailleurs : lire une régression sans lâcher les pourcentages"
-        href: articles/tabxplor-all-else-equal-fr.html
+      - text: "Interpréter un modèle de régression sans perdre de vue les pourcentages"
+        href: articles/tabxplor-reading-a-regression-fr.html
       - text: Tableaux de régression avec tab_reg()
         href: articles/tabxplor-reg-fr.html
       - text: Données pondérées et plans de sondage
@@ -214,11 +214,11 @@ articles:
 - title: Start here
   navbar: ~
   desc: >
-    The introduction builds a first coloured table; *All else equal* walks one analysis from that
+    The introduction builds a first coloured table; *Reading a regression* walks one analysis from that
     table to a finished sentence about a regression.
   contents:
   - tabxplor
-  - tabxplor-all-else-equal
+  - tabxplor-reading-a-regression
 - title: Going further
   navbar: ~
   desc: >
@@ -234,7 +234,7 @@ articles:
     Les traductions françaises des articles (les pages de référence restent en anglais).
   contents:
   - articles/tabxplor-fr
-  - articles/tabxplor-all-else-equal-fr
+  - articles/tabxplor-reading-a-regression-fr
   - articles/tabxplor-reg-fr
   - articles/tabxplor-weights-fr
   - articles/tabxplor-programming-fr

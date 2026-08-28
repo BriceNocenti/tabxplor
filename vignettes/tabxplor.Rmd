@@ -580,7 +580,7 @@ Colour thresholds and palettes have their own helpers, `set_color_breaks()` and 
 
 ## Where to go next
 
-- `vignette("tabxplor-all-else-equal")` — regressions, taught the way this vignette teaches cross-tables: one analysis walked from a first table to a finished sentence.
+- `vignette("tabxplor-reading-a-regression")` — regressions, taught the way this vignette teaches cross-tables: one analysis walked from a first table to a finished sentence.
 - `vignette("tabxplor-reg")` — the regression reference: every family, every argument, the model checks and the plots.
 - `vignette("tabxplor-weights")` — weighted and survey data, for both producers.
 - `vignette("tabxplor-programming")` — the `tabxplor_fmt` cell type and how to program with its fields.

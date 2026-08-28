@@ -1551,10 +1551,10 @@ black-and-white scheme on its own.
   start (*aussi disponible [en français](articles/tabxplor-fr.html)*).
 - [Regression tables with tab_reg()](articles/tabxplor-reg.html) (*aussi
   disponible [en français](articles/tabxplor-reg-fr.html)*).
-- [All else equal: reading a regression without losing the
-  data](articles/tabxplor-all-else-equal.html) — a single analysis
+- [Reading a regression without losing sight of the
+  percentages](articles/tabxplor-reading-a-regression.html) — a single analysis
   walked from a first cross-table to a finished sentence (*aussi
-  disponible [en français](articles/tabxplor-all-else-equal-fr.html)*).
+  disponible [en français](articles/tabxplor-reading-a-regression-fr.html)*).
 - [Weighted and survey data](articles/tabxplor-weights.html) — the three
   levels of margin of error, and which one your file deserves (*aussi
   disponible [en français](articles/tabxplor-weights-fr.html)*).

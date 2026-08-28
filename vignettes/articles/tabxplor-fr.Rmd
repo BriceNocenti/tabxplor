@@ -577,7 +577,7 @@ Les seuils de couleur et les palettes ont leurs propres fonctions, `set_color_br
 
 ## Pour aller plus loin
 
-- [Toutes choses égales par ailleurs](tabxplor-all-else-equal-fr.html) — la régression, enseignée comme cette page enseigne les tableaux croisés : une seule analyse suivie du premier tableau jusqu'à une phrase finie.
+- [Interpréter un modèle de régression](tabxplor-reading-a-regression-fr.html) — la régression, enseignée comme cette page enseigne les tableaux croisés : une seule analyse suivie du premier tableau jusqu'à une phrase finie.
 - [Tableaux de régression](tabxplor-reg-fr.html) — la référence de la régression : chaque famille, chaque argument, les vérifications du modèle et les graphiques.
 - [Données pondérées et plans de sondage](tabxplor-weights-fr.html) — la pondération et les plans de sondage, pour les tableaux croisés comme pour les régressions.
 - [Programmer avec tabxplor](tabxplor-programming-fr.html) — le type de case `tabxplor_fmt` et comment programmer avec ses champs.

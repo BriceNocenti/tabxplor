@@ -4188,8 +4188,8 @@ reg_stage_finalize <- function(ctx) {
 #' `tabxplor` crosstab.
 #'
 #' To **learn** what such a table says, read
-#' \href{https://bricenocenti.github.io/tabxplor/articles/tabxplor-all-else-equal.html}{All else
-#' equal} (`vignette("tabxplor-all-else-equal")`); to **look something up**, the
+#' \href{https://bricenocenti.github.io/tabxplor/articles/tabxplor-reading-a-regression.html}{Reading a
+#' regression} (`vignette("tabxplor-reading-a-regression")`); to **look something up**, the
 #' \href{https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.html}{regression vignette}
 #' (`vignette("tabxplor-reg")`).
 #'
