@@ -262,3 +262,47 @@ testthat::test_that("a name rotates only when it saves width, and a compound nam
   testthat::expect_gt(length(lines), 1L)
   testthat::expect_true(all(nchar(lines) <= tabxplor:::TX_VNAME_MAX + 1L))
 })
+
+
+# === one line of air under a finished table ======================================================
+# A table is a block of its own: the prose after it must not touch it, in any medium. Stated once
+# (TX_TAIL_SPACE) and read by both stylesheets.
+
+testthat::test_that("a rendered table carries a trailing gap, and only the outer element does", {
+  css <- tab_css(format = "html", style_tag = FALSE)
+  expect_match(css, paste0(".tabxplor-tab{margin-bottom:", tabxplor:::TX_TAIL_SPACE, ";}"),
+               fixed = TRUE)
+  # ⚠ SPECIFICITY IS THE POINT: `.tabxplor-tab table` (0,1,1) keeps `margin:0`, so a markdown div's
+  # INNER table adds no second gap. The base rule must therefore still zero it, and our rule must
+  # come after it for the outer element.
+  expect_match(css, ".tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;", fixed = TRUE)
+  expect_lt(regexpr(".tabxplor-tab,.tabxplor-tab table{", css, fixed = TRUE),
+            regexpr(".tabxplor-tab{margin-bottom:", css, fixed = TRUE))
+})
+
+testthat::test_that("the gap sits BELOW the footer legend, not above it", {
+  t <- tab(fx_gss_fmt(), race, party3, pct = "row", color = TRUE)
+  h <- as.character(tab_html(t))
+  # the legend rides in <tfoot>, so it is INSIDE the element the margin hangs off
+  expect_match(h, "tx-foot", fixed = TRUE)
+  expect_true(grepl("</tfoot></table>", h, fixed = TRUE))
+  expect_match(trimws(h), "</table>$")
+})
+
+testthat::test_that("stacked parts are separated by the margin, not by a <br>", {
+  # a regression table stacks its shape table under the main one: two `.tabxplor-tab` elements, and
+  # the trailing gap of the first is what separates them. A <br> as well would double it.
+  d <- fx_reg_df(); d$m <- as.integer(d$marital == "Married")
+  t <- suppressMessages(tab_reg(d, "m", c("age", "race"), family = "binomial"))
+  h <- as.character(tab_html(t))
+  testthat::skip_if(lengths(regmatches(h, gregexpr("<table", h))) < 2L)
+  expect_false(grepl("</table>\n<br>", h, fixed = TRUE))
+})
+
+testthat::test_that("jamovi moves the gap onto the scrollbox", {
+  # `overflow-x:auto` makes the box a formatting context, so a table's own trailing margin would sit
+  # above the horizontal scrollbar instead of below the whole thing.
+  s <- tabxplor:::jmv_results_style()
+  expect_match(s, paste0("margin-bottom:", tabxplor:::TX_TAIL_SPACE, ";"), fixed = TRUE)
+  expect_match(s, ".tx-scrollbox > .tabxplor-tab:last-child{margin-bottom:0;}", fixed = TRUE)
+})

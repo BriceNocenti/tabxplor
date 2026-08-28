@@ -372,3 +372,37 @@ test_that("the estimand invariant holds: the OR is always further from 1 than th
   expect_true(all(abs(log(or)) > abs(log(rr))))
   expect_true(all(sign(log(or)) == sign(log(rr))))
 })
+
+
+# === the precision band ============================================================================
+# A column keeps between 2 and 3 significant figures of its own level unless the user says otherwise.
+# tx_sig_digits() is the primitive both edges are written with; reg_cell_digits() is the upper one,
+# applied to UNIT scales alone (those whose level is in the outcome's own units).
+
+test_that("tx_sig_digits() reads a magnitude in significant figures", {
+  expect_equal(tabxplor:::tx_sig_digits(101002, 3L), 0L)   # six figures deserve no decimal
+  expect_equal(tabxplor:::tx_sig_digits(100,    3L), 0L)   # a power of ten: 3 sig figs IS "100"
+  expect_equal(tabxplor:::tx_sig_digits(99.4,   3L), 1L)
+  expect_equal(tabxplor:::tx_sig_digits(9.4,    3L), 2L)
+  expect_equal(tabxplor:::tx_sig_digits(0.05,   3L), 4L)
+  # the sign is not a magnitude, and the WIDEST value decides for the whole column
+  expect_equal(tabxplor:::tx_sig_digits(c(-101002, 2), 3L), 0L)
+  # nothing to read
+  expect_true(is.na(tabxplor:::tx_sig_digits(c(NA, NA))))
+  expect_true(is.na(tabxplor:::tx_sig_digits(0)))
+})
+
+test_that("reg_cell_digits() clamps a UNIT scale and leaves a FIXED one alone", {
+  # unit scales: the level is in the outcome's own units, so the magnitude decides
+  expect_equal(reg_cell_digits("raw_diff",  101002), 0L)
+  expect_equal(reg_cell_digits("raw_diff",  3.03),   1L)   # the declared 1 is already inside the band
+  expect_equal(reg_cell_digits("mean_diff", 101002), 0L)
+  # fixed scales: a percentage, a point, a ratio and an odds ratio live in a known range and keep
+  # their declared precision whatever the outcome's magnitude is
+  expect_equal(reg_cell_digits("odds_ratio", 101002), reg_cell_digits("odds_ratio"))
+  expect_equal(reg_cell_digits("points",     101002), reg_cell_digits("points"))
+  expect_equal(reg_cell_digits("pct_ratio",  101002), reg_cell_digits("pct_ratio"))
+  expect_equal(reg_cell_digits("log_coef",   101002), reg_cell_digits("log_coef"))
+  # no magnitude to read -> the declared number, unchanged
+  expect_equal(reg_cell_digits("raw_diff", NA_real_), reg_cell_digits("raw_diff"))
+})

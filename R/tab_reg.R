@@ -997,8 +997,17 @@ reg_df_residual <- function(fit) {
 # (the coefficient column, a marginal one, and a crude column refit from the same fitter), and a crude
 # column must stamp EXACTLY what its model twin does or the two stop folding into one legend block.
 #   the METHOD word its legend renders; `mult` = the estimate is multiplicative, so Wald on the log.
+# ⚠ `method` here is WHAT RAN, not what was asked: a family whose dispersion is estimated has no
+# profile interval and quietly falls back (see reg_fit_glm's `use_profile`), and a footer claiming
+# "profile" over Wald bounds is the one thing a legend must never do. Callers pass the fit record's
+# own `profile` flag back through reg_method_used().
 reg_wald_method_name <- function(method, mult)
   if (identical(method, "profile")) "profile" else if (isTRUE(mult)) "wald_log" else "wald"
+
+# The word a FITTED record earned: "profile" only where the profile branch actually ran.
+#' @keywords internal
+reg_method_used <- function(method, fit_res)
+  if (identical(method, "profile") && !isTRUE(fit_res$profile)) "wald" else method
 #   the DF it was referred to. NA where the reference is z, and NA under `profile`, whose
 #   likelihood-ratio bounds refer to no distribution at all; get_degf() reads NA as "refer to z".
 reg_wald_degf <- function(method, disp_known, df_residual) {
@@ -1648,6 +1657,11 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
   } else if (method == "profile" && family == "rr") {
     cli::cli_inform(c("!" = paste0("A modified-Poisson fit is a quasi-likelihood and has no profile ",
                                    "interval; using the robust Wald one.")))
+  } else if (method == "profile" && !reg_fam_disp_known(family)) {
+    # the third refusal, which used to be the silent one: gaussian and every quasi- family estimate
+    # their dispersion, so `confint()` on them is not a likelihood profile.
+    cli::cli_inform(c("!" = paste0("{.val {family}} estimates its dispersion and has no profile ",
+                                   "interval; using the Wald one.")))
   }
 
   # THE fit's own reference distribution, decided ONCE and carried out with the fit: z where the
@@ -1664,6 +1678,11 @@ reg_fit <- function(data, outcome, predictors, family, design_spec, do_exp,
   # `conf_level` change without refitting.
   if (use_profile) {
     ci   <- suppressMessages(stats::confint(fit, level = conf_level))   # log/native scale
+    # ⚠ confint.profile.glm ends in drop(), so a ONE-COEFFICIENT fit returns a length-2 VECTOR with
+    # no dimnames: rownames() is NULL, every index is NA and `ci[idx, 1]` aborts on the model path
+    # (the crude one swallowed it and lost the column). A univariable model is the common shape here.
+    if (is.null(dim(ci)))
+      ci <- matrix(ci, nrow = 1L, dimnames = list(names(stats::coef(fit))[[1L]], names(ci)))
     idx  <- match(td$term, gsub("`", "", rownames(ci), perl = TRUE))
     # ⚠ the profile bounds are an OUTPUT of the likelihood at THIS conf_level, so they are the one
     # thing that cannot be rebuilt from (estimate, std.error) -- hence `method = "profile"` is not
@@ -1738,14 +1757,15 @@ reg_tidy_finalize <- function(f, do_exp, conf_level, multiplier = NULL) {
 # Align one fit to the union skeleton -> ONE fmt column: a reference LEVEL of a predictor present in
 # this model takes the neutral value, a predictor ABSENT from it stays NA.
 reg_column <- function(skeleton, fit_res, model_predictors, col_var, est,
-                       color, color_signif, model_family = "", method = "wald", trials = NA) {
+                       color, color_signif, model_family = "", method = "wald", trials = NA,
+                       level_mag = NA_real_) {
   effect_shape <- if (isTRUE(est$exp)) "ratio" else "additive"
   # The column's SHAPE is the estimand row's: the fmt field, the EST_SCALES key, the token, the
   # digits. No builder names a family-specific field.
   scale_key    <- reg_scale_of(est, trials)
   est_field    <- EST_SCALES[[scale_key]]$est_field
   base_field   <- EST_SCALES[[scale_key]]$base_display %||% NA_character_
-  digits       <- reg_cell_digits(scale_key)
+  digits       <- reg_cell_digits(scale_key, level_mag)
   td  <- fit_res$tidy
   m   <- match(skeleton$term, td$term)
   est_v <- td$estimate[m]
@@ -1789,8 +1809,10 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, est,
     fields,
     list(ci_inf = lo, ci_sup = hi, pvalue = p,
          scale = scale_key, display = disp, digits = digits,
-         ci_method = reg_wald_method_name(method, identical(effect_shape, "ratio")),
-         degf = reg_wald_degf(method, fit_res$disp_known, fit_res$df_residual),
+         ci_method = reg_wald_method_name(reg_method_used(method, fit_res),
+                                          identical(effect_shape, "ratio")),
+         degf = reg_wald_degf(reg_method_used(method, fit_res),
+                              fit_res$disp_known, fit_res$df_residual),
          color = color, color_signif = color_signif, col_var = col_var,
          comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"))
   if (identical(effect_shape, "ratio")) args <- c(args, list(ref = "1"))
@@ -2454,7 +2476,7 @@ reg_constant_baseline <- function(fit, data, predictors, at, wt, conf_level, sca
 reg_marginal_column <- function(skeleton, marg, model_predictors, scale, var_y,
                                 group, color, color_signif, col_var, or_tip = NULL,
                                 model_family = "", trials = NULL, const = NULL,
-                                degf = NA_real_) {
+                                degf = NA_real_, level_mag = NA_real_) {
   amt <- marg$ame; prd <- marg$pred
   if (!is.na(group)) {
     amt <- amt[!is.na(amt$group) & amt$group == group, , drop = FALSE]
@@ -2517,7 +2539,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, scale, var_y,
       n = rep(NA_integer_, n_rows),   # the level's own count is stamped by the spec builder
       ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
       scale = sc, pct_type = reg_pct_type(sc), display = display,
-      digits = reg_cell_digits(sc),
+      digits = reg_cell_digits(sc, level_mag),
       # a multiplicative estimate's interval is Wald on the LOG, and its baseline is the neutral 1.
       # A marginal effect is ALWAYS Wald -- neither engine produces profile bounds.
       ci_method = reg_wald_method_name("wald", scr$mult), degf = degf,
@@ -2543,7 +2565,8 @@ reg_columns_multinom <- function(skeleton, f, sp, est, color, color_signif,
                   jc, " vs ", y_ref)
     list(label = lab, emp_key = j,   # emp_key: raw category, for the empirical tooltip
          col   = reg_column(skeleton, sub, sp$predictors, col_var, est, color, color_signif,
-                            model_family = model_family, method = method))
+                            model_family = model_family, method = method,
+                            level_mag = sp$level_mag))
   })
 }
 
@@ -3315,7 +3338,8 @@ new_reg_spec <- function(outcome = character(0), predictors = character(0), labe
                          fit_family = "", trials = NULL, outcome_level = NA_character_,
                          compound = FALSE, formula = NULL, cross = character(0),
                          row_vars = character(0),
-                         color = NA_character_, est = NULL, crude_key = NA_character_) {
+                         color = NA_character_, est = NULL, crude_key = NA_character_,
+                         level_mag = NA_real_) {
   # `outcome` arrives NAMED on the comparison branch and unnamed on the per-outcome one, and every
   # downstream map_chr(specs, "outcome") compares it to a bare column name.
   outcome <- unname(outcome)
@@ -3636,6 +3660,7 @@ reg_crude_block <- function(sp, sp_fam, inv_sp, key, mdata, pos, y_ref, var_y, c
     marginal = !identical(sp$est$effect, "conditional") &&
       (reg_fam_binary(sp_fam) || reg_fam_prob(sp_fam)))
   out <- reg_empirical_columns(skeleton, emp, fac_preds_e, key, sp_fam, sp$est, var_y,
+                               level_mag = sp$level_mag,
                                conf_level = conf_level, color_signif = color_signif,
                                color = sp$color, fit_est = fit_e,
                                weighted = svy_weighted(design_spec, design_spec$wt),
@@ -3743,7 +3768,7 @@ reg_cols_ame <- function(f, sp, ctx) {
       list(label = lab, emp_key = g,   # emp_key: raw category, for the empirical tooltip
            col   = dress(reg_marginal_column(skeleton, marg, sp$row_vars, sp_scale,
                                              var_y, g, sp_col, color_signif, cv_cat,
-                                             model_family = sp_fam,
+                                             model_family = sp_fam, level_mag = sp$level_mag,
                                              trials = sp$trials, const = const,
                                              degf = marg_degf), g))
     })
@@ -3762,6 +3787,7 @@ reg_cols_ame <- function(f, sp, ctx) {
       col   = dress(reg_marginal_column(skeleton, marg, sp$row_vars, sp_scale,
                                         var_y, NA_character_, sp_col, color_signif,
                                         cv, or_tip = or_tip, model_family = sp_fam,
+                                        level_mag = sp$level_mag,
                                         trials = sp$trials, const = const,
                                         degf = marg_degf))))
   }
@@ -3800,7 +3826,7 @@ reg_cols_vsrest <- function(f, sp, ctx) {
     lab <- paste0(if (prefix_dep) paste0(sp$outcome, " - ") else "", jc, " vs rest")
     col <- reg_marginal_column(skeleton, marg, sp$row_vars, sp_scale,
                                NA_real_, g, sp_col, color_signif, cv_cat,
-                               model_family = sp_fam, const = const,
+                               model_family = sp_fam, const = const, level_mag = sp$level_mag,
                                degf = reg_wald_degf("wald", f$disp_known, f$df_residual))
     col <- reg_fill_base(col, marg_add, skeleton, sp$row_vars, group = g, crosses = crosses)
     list(label = lab, col = reg_apply_display(col, reg_display_of(display, empirical, is_comparison)))
@@ -3836,7 +3862,8 @@ reg_cols_coef <- function(f, sp, ctx) {
   cv  <- if (is_comparison) sp$label
          else reg_shared_col_var(sp_fam, sp$outcome, f$positive_level, cleannames, sp$trials)
   col <- reg_column(skeleton, f, model_predictors, cv, sp$est, sp_col, color_signif,
-                    model_family = sp_fam, method = method, trials = sp$trials)
+                    model_family = sp_fam, method = method, trials = sp$trials,
+                    level_mag = sp$level_mag)
   list(list(label = reg_model_col_name(sp_eff, sp$outcome, is_comparison, sp$label, n_outcomes),
             col = dress(col)))
 }
@@ -4177,7 +4204,7 @@ reg_stage_finalize <- function(ctx) {
 
 # === Public API =====================================================================
 
-#' Regression table (effect measures) as a tabxplor table
+#' All-in-one tables for regression models with observed effect/model effect comparisons
 #'
 #' Fits one regression model per column and returns a `tabxplor` table of the per-family effect
 #' measure --- a linear **mean difference** (gaussian), **odds ratios** (binomial), **incidence-rate
@@ -4472,6 +4499,9 @@ reg_stage_finalize <- function(ctx) {
 #'   "each measure's own"), and a measure finer than the level it sits on keeps its own precision.
 #'   Name a display field to set just that one, an aside included --- `digits = c(ratio = 3)`,
 #'   `digits = c(1, or = 3)`; a template may carry its own, `display = "{est:3} ({base:1})"`.
+#'   Left alone, a column reading in the outcome's own units (a mean, a mean difference) follows
+#'   that outcome's magnitude, so a six-figure salary prints no decimals and a rate prints two;
+#'   `digits =` always raises it back.
 #' @param cleannames Logical. If `TRUE`, strips numeric prefixes from factor levels for display.
 #'   Uses `getOption("tabxplor.cleannames")` when `NULL`.
 #' @param subtext Optional character. A note shown below the table.

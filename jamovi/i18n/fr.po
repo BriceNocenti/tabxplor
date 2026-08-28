@@ -187,7 +187,7 @@ msgstr "add_pct = <i>(voir freq. des totaux à 100%)</i>"
 
 #: jmvtabreg/options/color/adjustment.title
 msgid "adjustment <i>(gap between model/observed)</i>"
-msgstr "adjustment <i>(l’écart modèle / observé)</i>"
+msgstr "adjustment <i>(distance modèle/observé)</i>"
 
 #: jmvtab/options/pct/all.title
 #: jmvtab/options/lvs/all.title
@@ -213,7 +213,7 @@ msgstr "anova = <i>(quel test pour les var. numériques ?)</i>"
 
 #: jmvtabreg/ui[5][0][2]/xl_check.label
 msgid "assumption checks plots"
-msgstr "graph. vérif. des hypothèses (Excel)"
+msgstr "graph. vérification des hypothèses (Excel)"
 
 #: jmvtabreg/options/xl_check.title
 msgid "assumption checks plots in Excel"
@@ -244,7 +244,7 @@ msgstr "auto <i>(suit la mesure de l'écart)</i>"
 
 #: jmvtab/options/color/auto.title
 msgid "auto <i>(smart default: difference + ratio)</i>"
-msgstr "auto <i>(défaut : difference + ratio)</i>"
+msgstr "auto <i>(difference + ratio)</i>"
 
 #: jmvtabreg/options/measure/auto.title
 msgid "auto <i>(the link's own measure)</i>"
@@ -256,7 +256,7 @@ msgstr "auto/tot/<i>{num_ligne}</i>/<i>{nom_ligne}</i>"
 
 #: jmvtabreg/options/display/base.title
 msgid "base <i>(adjusted pct/mean, alone)</i>"
-msgstr "base <i>(%/mean ajustés, seuls)</i>"
+msgstr "base <i>(%/moyenne ajustés)</i>"
 
 #: jmvtab/options/display/base.title
 msgid "base <i>(pct or mean)</i>"
@@ -296,7 +296,7 @@ msgstr "beta <i>(Clopper-Pearson exact)</i>"
 
 #: jmvtabreg/options/color/between_groups.title
 msgid "between_groups <i>(gap between tab_vars)</i>"
-msgstr "between_groups <i>(l’écart entre groupes, avec tab_vars)</i>"
+msgstr "between_groups <i>(dist. entre tab_vars)</i>"
 
 #: jamovi/js/jmvtabreg.js:13
 #: jamovi/js/jmvtabreg.js:14
@@ -504,7 +504,7 @@ msgstr "effect = <i>(d'où viennent les chiffres ?)</i>"
 
 #: jamovi/js/jmvtabreg.js:1512
 msgid "effect of"
-msgstr "effet de"
+msgstr "l’effet de"
 
 #: jmvtabreg/ui[1][2][1][1]/empirical.label
 msgid "empirical = <i>(show the observed effect)</i>"
@@ -512,11 +512,15 @@ msgstr "empirical = <i>(afficher l'effet observé)</i>"
 
 #: jmvtabreg/options/display/est.title
 msgid "est <i>(the estimate)</i>"
-msgstr "est <i>(l'estimation)</i>"
+msgstr "est <i>(l'estimation de l’écart choisie)</i>"
+
+#: jmvtabreg/options/display/ci.title
+msgid "ci <i>(confidence interval)</i>"
+msgstr "ci <i>(intervalle de confiance)</i>"
 
 #: jmvtabreg/options/display/est_base.title
 msgid "est_base <i>(est. + adj. pct/mean)</i>"
-msgstr "est_base <i>(est. + %/mean ajustés)</i>"
+msgstr "est_base <i>(est. + %/moy. ajustés)</i>"
 
 #: jmvtabreg/options/display/est_ci.title
 msgid "est_ci <i>(estimate + interval)</i>"
@@ -524,7 +528,7 @@ msgstr "est_ci <i>(estimation + IC)</i>"
 
 #: jmvtabreg/options/display/est_coef.title
 msgid "est_coef <i>(est. + raw coeff)</i>"
-msgstr "est_coef <i>(est. + coef. brut)</i>"
+msgstr "est_coef <i>(est. + coefficient brut)</i>"
 
 #: jmvtab/options/export_format/excel.title
 #: jmvtabreg/options/export_format/excel.title
@@ -674,7 +678,7 @@ msgstr "line (une seule ligne)"
 #: jamovi/js/jmvtab.js:26
 #: jamovi/js/jmvtabreg.js:23
 msgid "linear (numeric)"
-msgstr "linear (var. num.)"
+msgstr "linear (var. numérique)"
 
 #: jmvtabreg/options/link.title
 msgid "link (per outcome)"
@@ -719,6 +723,10 @@ msgstr "Markdown"
 msgid "mean (default)"
 msgstr "moyenne (défaut)"
 
+#: jamovi/js/jmvtabreg.js:953
+msgid "0 (as in glm)"
+msgstr "0 (comme dans glm)"
+
 #: jmvtab/options/display/mean.title
 msgid "mean <i>(numeric variables)</i>"
 msgstr "mean <i>(moyenne, var. num.)</i>"
@@ -737,7 +745,7 @@ msgstr "measure"
 
 #: jmvtabreg/options/color/measure.title
 msgid "measure <i>(the chosen measure of deviation)</i>"
-msgstr "measure <i>(l’écart comparé à la référence)</i>"
+msgstr "measure <i>(écart comparé à la réf.)</i>"
 
 #: jmvtabreg/ui[1][1][0][0][0].label
 msgid "measure = <i>(which measure is reported)</i>"
@@ -834,7 +842,7 @@ msgstr "newcombe <i>(score hybride)</i>"
 #: jmvtab/options/n/no.title
 #: jmvtabreg/options/n/no.title
 msgid "no"
-msgstr "no (pas d’effectif)"
+msgstr "no (pas d’effectifs affichés)"
 
 #: jmvtab/options/pct/no.title
 msgid "no (counts)"
@@ -959,8 +967,8 @@ msgid "print_ready <i>(black and white, for publication)</i>"
 msgstr "print_ready <i>(noir et blanc, publication)</i>"
 
 #: jmvtabreg/options/ci_method/profile.title
-msgid "profile = <i>(profile-likelihood)</i>"
-msgstr "profile = <i>(vraisemblance profilée)</i>"
+msgid "profile = <i>(profile-likelihood ; not cached, long)</i>"
+msgstr "profile = <i>(vraisemblance profilée ; hors du cache, long)</i>"
 
 #: jamovi/js/jmvtabreg.js:23
 msgid "quadratic (num.)"
@@ -1014,9 +1022,12 @@ msgid "ref <i>(interval on the comparison with the reference)</i>"
 msgstr "ref <i>(IC de l'écart à la référence)</i>"
 
 #: jamovi/js/jmvtab.js:909
-#: jamovi/js/jmvtabreg.js:957
 msgid "ref = <i>(reference)</i>"
 msgstr "ref = <i>(référence)</i>"
+
+#: jamovi/js/jmvtabreg.js:961
+msgid "ref = <i>(reference profile)</i>"
+msgstr "ref = <i>(profil de référence)</i>"
 
 #: jamovi/js/jmvtab.js:898
 msgid "ref2 = <i>(reference)</i>"
@@ -1280,9 +1291,9 @@ msgstr "wn <i>(effectifs pondérés)</i>"
 #: jmvtab/ui[4][4][0].label
 #: jmvtabreg/ui[4][0][3][0].label
 msgid "wrap_cols = <i>(nb chars for line break)</i>"
-msgstr "wrap_cols = <i>(noms col.: saut de ligne à:)</i>"
+msgstr "wrap_cols = <i>(noms col., saut de ligne à:)</i>"
 
 #: jmvtab/ui[4][3][0].label
 #: jmvtabreg/ui[4][0][2][0].label
 msgid "wrap_rows = <i>(nb chars for line break)</i>"
-msgstr "wrap_rows = <i>(noms lignes: saut de ligne à:)</i>"
+msgstr "wrap_rows = <i>(noms lignes, saut de ligne à:)</i>"

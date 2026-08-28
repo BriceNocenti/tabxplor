@@ -121,3 +121,31 @@ test_that("20h: tab_md(lang = 'fr') renders the French legend", {
   # ...and it is genuinely the argument, not the ambient locale
   expect_false(identical(fr, tab_md(t, lang = "en")))
 })
+
+
+# === the shape table ==============================================================================
+# Its strings are gettext()'d at RENDER, under with_legend_lang()'s language -- so both readings of
+# each are asserted, the English one unguarded (it must hold on the CRAN farm too).
+
+shape_txt <- function(lang) {
+  d <- fr_data(); d$n1 <- as.numeric(seq_len(nrow(d)) %% 17)
+  t <- suppressMessages(tab_reg(d, outcome = "y", predictors = c("race", "n1"),
+                                family = "binomial"))
+  st <- with_legend_lang(lang, function(lg) tabxplor:::reg_shape_table(t))
+  paste(c(attr(st, "headers"), unlist(lapply(st, as.character))), collapse = " | ")
+}
+
+test_that("the shape table stays English when asked in English", {
+  en <- shape_txt("en")
+  expect_match(en, "outcome", fixed = TRUE)
+  expect_match(en, "numeric predictor", fixed = TRUE)
+  expect_no_match(en, "variable expliqu\u00e9e")
+})
+
+test_that("the shape table translates to French", {
+  skip_if_no_gettext()
+  fr <- shape_txt("fr")
+  expect_match(fr, "variable expliqu\u00e9e")
+  expect_match(fr, "pr\u00e9dicteur num\\.")
+  expect_no_match(fr, "numeric predictor")
+})

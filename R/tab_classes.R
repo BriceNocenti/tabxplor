@@ -775,7 +775,13 @@ kable_tabxplor_style <- function(tabs, ...) {
 
 # Promote a merged sub-table's total row to its reference row when it has no explicit reference, so each
 # stacked sub-table colours against its OWN total.
+# ⚠ THAT IS `comp = "tab"`'S RULE, AND ONLY ITS. Under `comp = "all"` there is exactly ONE reference
+# per row_var -- the total TABLE's own total row (get_ref_field() reads `is_totrow & is_tottab`) --
+# and marking every sub-total a reference row bolded them all AND uncoloured them, a reference row
+# never being coloured (fmt_color_plan's `gate_row = "refrow"`). The numbers were always right; it
+# was the display that lost the anchor, and only with several row_vars, which is the one path here.
 promote_totrow_to_refrow <- function(col) {
+  if (isTRUE(get_comp_all(col))) return(col)
   in_refrow <- vctrs::field(col, "in_refrow")
   if (any(in_refrow)) return(col)             # sub-table already has a reference row
   totrow <- is_totrow(col)
@@ -869,9 +875,11 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 
 
   # DESIGN: when a merged sub-table has no explicit reference row, promote its total row to reference
-  # (promote_totrow_to_refrow) so each stacked sub-table colours against its OWN total. The per-row_var
-  # tables are row-bound on PLAIN field-frames via tab_stack_tables(), the promotion folded onto each
-  # field frame there (still per sub-table, so `any(in_refrow)` stays grouped per row_var).
+  # (promote_totrow_to_refrow) so each stacked sub-table colours against its OWN total -- under
+  # `comp = "tab"`, which is what "its own total" means; `comp = "all"` keeps the total table's row.
+  # The per-row_var tables are row-bound on PLAIN field-frames via tab_stack_tables(), the promotion
+  # folded onto each field frame there (still per sub-table, so `any(in_refrow)` stays grouped per
+  # row_var).
   # The merged table DECLARES its two-column index -- `row_var` (role "var") names per row which variable
   # that row belongs to, `levels` (role "level", `var` NA) holds the levels. `compacted` is the mere
   # presence of the "var"-role column.

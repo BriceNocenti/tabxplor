@@ -342,6 +342,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 options=list(
                     "auto",
                     "est",
+                    "ci",
                     "est_ci",
                     "est_coef",
                     "base",
@@ -680,7 +681,8 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   stars.
 #' @param ci_method Wald intervals (also the only option for weighted models)
 #'   or profile-likelihood intervals (unweighted binomial / poisson only; needs
-#'   MASS).
+#'   MASS). A profile interval is an output of the likelihood at one confidence
+#'   level, so it cannot be cached: every change refits the models.
 #' @param stars Show per-cell significance stars (the colours read the
 #'   confidence interval either way).
 #' @param color WHAT the effect cells are coloured by. The colour LADDER

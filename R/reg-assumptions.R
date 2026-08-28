@@ -729,27 +729,31 @@ rd_link_expr <- function(kind, lab, outcome = NULL, level = NULL) {
 # THE SAME FORMULA IN PLAIN TEXT -- the shape table's first column, where a plot has an axis. It is
 # rd_link_expr()'s twin, not a second answer: same five kinds, and the SUBJECT comes from the one
 # declared fact both read, RD_LINK_SCALES$level (`pct` = a percentage OF THE MODELLED LEVEL, `num` =
-# a mean of the outcome). A reader who has seen `log(%Married / (1 - %Married))` in the table meets
-# the identical quantity on reg_check_plots()'s y axis.
+# a mean of the outcome). A reader who has seen `p = %Married ; log(p/(1-p))` in the table meets the
+# identical quantity on reg_check_plots()'s y axis.
+# THE SUBJECT IS NAMED ONCE, THEN THE FORMULA IS WRITTEN ON THE LETTER. `log(%Married / (1 -
+# %Married))` spelled a long level twice and ran to thirty characters beside a table it is only a
+# note under; naming `p` first says the same thing in half the width, and the letter is the one every
+# textbook writes the link with.
+# TWO SYNTAXES, ONE PRODUCER -- `html` sets the qualifier as a real subscript, which is the whole
+# reason a percentage can afford to be qualified at all. The caller then does NOT escape this column.
 # ⚠ ONE STRING LITERAL PER gettextf() CALL (the rule stated at reg_shape_table()): potools extracts
 # what it SEES, so a formula assembled with paste0() inside the call could never be looked up.
 # ⚠ Called at RENDER, never stored: gettext() must run under with_legend_lang()'s language, not the
 # one that happened to be current when the table was built.
 #' @keywords internal
-rd_link_text <- function(kind, outcome, level = NULL) {
-  kind <- kind %||% "mean"
-  # ⚠ An ordinal / multinomial outcome has NO single modelled level: rd_link_y() reads it as
-  # `Y != first`, so the subject says so AND still names the outcome -- without the name a
-  # several-outcome table would show two rows nothing distinguishes. "not 1st" is right for both
-  # families at once: on an ordered outcome `Y > 1st` and `Y != 1st` are the same set.
+rd_link_text <- function(kind, outcome, level = NULL, syntax = c("text", "html")) {
+  syntax <- match.arg(syntax)
+  kind   <- kind %||% "mean"
+  esc    <- if (identical(syntax, "html")) tx_html_escape else identity
   sub <- if (identical(rd_link_scale(kind)$level, "pct")) {
-    if (is.null(level) || is.na(level)) gettextf("%%%s not 1st", rd_label_of(outcome %||% "y"))
-    else paste0("%", rd_label_of(level))
-  } else gettextf("mean %s", rd_label_of(outcome %||% "y"))
+    nm <- esc(rd_label_of(level %||% outcome %||% "y"))
+    if (identical(syntax, "html")) paste0("%<sub>", nm, "</sub>") else paste0("%", nm)
+  } else gettextf("mean %s", esc(rd_label_of(outcome %||% "y")))
   switch(kind,
-         logit   = gettextf("log(%s / (1 - %s))", sub, sub),
-         logrisk = ,
-         logmean = gettextf("log(%s)", sub),
+         logit   = gettextf("p = %s ; log(p/(1-p))", sub),
+         logrisk = gettextf("p = %s ; log(p)", sub),
+         logmean = gettextf("m = %s ; log(m)", sub),
          sub)
 }
 
@@ -1363,10 +1367,17 @@ tx_shape_table_mode <- function() {
 # renders the same four columns in the same order.
 #' @keywords internal
 #' @noRd
-reg_shape_table <- function(tab, n = 20L) {
+reg_shape_table <- function(tab, n = 20L, syntax = c("text", "html")) {
+  syntax <- match.arg(syntax)
   a <- get_assumptions(tab)
   if (is.null(a) || length(a) == 0L) return(NULL)
   rows <- purrr::list_rbind(purrr::map(a, function(rec) {
+    # ⚠ AN ORDINAL / MULTINOMIAL OUTCOME GETS NO CURVE HERE. rd_link_y() reads it as `Y != first`,
+    # which is ONE of its K-1 readings and the least trustworthy: measured on gss_cat$partyid the
+    # reference category is 0.4 % of the sample, so the row printed "99-100%" over a flat run. The
+    # row stays -- the predictor exists and its shape must be checked -- and says where to look.
+    # reg_check_plots() draws them all (rd_link_cuts()), which is the honest answer.
+    rank_fam <- reg_check_family_of(rec$family %||% "") %in% c("multinomial", "ordinal")
     purrr::list_rbind(purrr::imap(rec$curves, function(cu, v) {
       grp <- unique(as.character(cu$group %||% ""))
       purrr::list_rbind(purrr::map(grp, function(g) {
@@ -1381,11 +1392,13 @@ reg_shape_table <- function(tab, n = 20L) {
         # NA, and a group that lacks a variable group 1 had must fall back, not abort.
         mk <- if (is.null(rec$mark)) NA_character_ else unname(rec$mark[v])
         tibble::tibble(outcome = rec$outcome, group = g, var = if (is.na(mk)) v else mk,
-                       range = rd_range_label(cg, rec$kind, rec$family), shape = gl,
-                       noisy = isTRUE(rd_spark_window(cg)$noisy),
+                       range = if (rank_fam) "" else rd_range_label(cg, rec$kind, rec$family),
+                       shape = if (rank_fam) gettext("see reg_check_plots()") else gl,
+                       noisy = !rank_fam && isTRUE(rd_spark_window(cg)$noisy),
                        # WHAT THE CURVE'S HEIGHT IS, spelled out: the outcome on the scale the MODEL
                        # fits, which is the same quantity reg_check_plots() puts on its y axis.
-                       ycell = rd_link_text(rec$kind, rec$outcome, rec$level),
+                       ycell = if (rank_fam) rd_label_of(rec$outcome)
+                               else rd_link_text(rec$kind, rec$outcome, rec$level, syntax),
                        ylab = rec$ylab %||% "", family = rec$family %||% "")
       }))
     }))
@@ -1422,11 +1435,11 @@ reg_shape_table <- function(tab, n = 20L) {
   # pieces and can never be found at run time.
   note <- if (any(rows$noisy))
     gettext("\"ns\": the curve is inside its own sampling noise -- read it as flat.") else character(0)
-  # ⚠ NO "(1st curve)" suffix any more: an ordinal / multinomial cell now READS `%x not 1st`, which
-  # already says which of the several curves this is. The suffix beside it said the same thing twice.
+  # ⚠ THE HEADER NAMES THE COLUMN, NOT THE SCALE: the cell writes the formula, so "(model scale)"
+  # beside it said the same thing twice.
   structure(
     out,
-    headers = c(gettext("outcome (model scale)"), if (keep_group) gettext("group"),
+    headers = c(gettext("outcome"), if (keep_group) gettext("group"),
                 gettext("numeric predictor"), gettext("observed range"),
                 gettext("observed shape (central 95%)")),
     align   = c("left", if (keep_group) "left", "left", "left", "left"),
@@ -1457,13 +1470,19 @@ tx_pipe_table <- function(df, headers, align, grey = NULL) {
 }
 
 # The console rendering: the pipe table, one blank line under the footer grid, then the note.
+# THE WHOLE BLOCK WEARS THE ASIDE INK (`grey2`), because it is a note under the table and not a
+# second table; a NOISY row then wears the dimmer `grey`, so the two verdicts stay one step apart.
+# ⚠ Styled AFTER the padding, like tx_pipe_table()'s own rows: an ANSI sequence has no width but
+# nchar() counts it.
 #' @keywords internal
 #' @noRd
 shape_render_console <- function(tab) {
   st <- reg_shape_table(tab)
   if (is.null(st)) return(invisible(NULL))
+  aside <- tryCatch(cli::make_ansi_style(tx_chrome_hex(tx_theme_option("console"))$grey2),
+                    error = function(e) identity)
   # the footer grid already closes with a blank line -- one separates the two tables, never two.
-  cli::cat_line(tx_pipe_table(st, attr(st, "headers"), attr(st, "align"), attr(st, "noisy")))
+  cli::cat_line(aside(tx_pipe_table(st, attr(st, "headers"), attr(st, "align"), attr(st, "noisy"))))
   nt <- attr(st, "note")                           # empty wherever no row wears the "ns" mark
   if (length(nt)) cli::cat_line(cli::col_grey(paste0("# ", nt)))
   cli::cat_line()

@@ -378,7 +378,13 @@ jmv_results_style <- function(max_width = JMV_RESULTS_MAX_WIDTH) {
   paste0(
     "<style>",
     ".jmv-results-html{width:max-content;}",
-    ".tx-scrollbox{display:block;width:max-content;max-width:", max_width, "px;overflow-x:auto;}",
+    ".tx-scrollbox{display:block;width:max-content;max-width:", max_width,
+    "px;overflow-x:auto;margin-bottom:", TX_TAIL_SPACE, ";}",
+    # ⚠ THE AIR MOVES OUT ONTO THE BOX: `overflow-x:auto` makes the scrollbox a formatting context,
+    # so the table's own trailing margin would sit INSIDE it -- above the horizontal scrollbar
+    # instead of below the whole thing. Only the LAST table gives it up; the ones stacked above keep
+    # theirs, which is what still separates them.
+    ".tx-scrollbox > .tabxplor-tab:last-child{margin-bottom:0;}",
     ".tx-note{max-width:520px;}",
     "@media print{.tx-scrollbox{max-width:none;overflow-x:visible;}}",
     "</style>"

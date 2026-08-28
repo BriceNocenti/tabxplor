@@ -945,8 +945,12 @@ var TABX = {
 // ⚠ so `"mean"` is NOT offered beside it: the two write different options and produce the same
 // table, and a list reading "mean (default)" then "mean" only asks the user to tell them apart.
 // The blank is the one kept, because it stores nothing and lets tab_reg() own its own default.
-var REG_ANCHORS = ["", "median", "min", "max"];
-var REG_ANCHOR_LABELS = { "": _("mean (default)") };
+// `0` is offered although it is not one of the four keywords: it is glm()'s own anchor, so it is the
+// value a reader coming from R expects to be able to ask for, and a text box for an arbitrary number
+// would be a second control in a table that has no room for one. tab_reg() already parses it
+// (reg_anchor_value() reads a numeric string before the keywords).
+var REG_ANCHORS = ["", "0", "median", "min", "max"];
+var REG_ANCHOR_LABELS = { "": _("mean (default)"), "0": _("0 (as in glm)") };
 
 var VAR_TABLE_HOST = {
     ctrl: "varTableCtrl",
@@ -954,7 +958,7 @@ var VAR_TABLE_HOST = {
         { key: "name",   head: _("predictor"),        width: "minmax(90px,1fr)" },
         { key: "levels", head: _("levels / shape ="), width: "165px",
           tip: _("a factor shows how many levels it has; a number chooses how it is cut into groups") },
-        { key: "ref",    head: _("ref = <i>(reference)</i>"), width: "180px",
+        { key: "ref",    head: _("ref = <i>(reference profile)</i>"), width: "180px",
           tip: _("the baseline each effect is measured against") },
         { key: "act",    head: _("multiplier ="),     width: "85px",
           tip: _("a number's effect is read per k units") }

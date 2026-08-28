@@ -346,3 +346,165 @@ test_that("a display token may carry its own precision, and Excel follows it", {
   expect_true(any(grepl("0\\.0000", format(oc, syntax = "excel"))))
   expect_error(tab_reg(d, "married", "race", display = "{est:9}"), "Invalid precision")
 })
+
+
+# === a foreign token states its own precision =====================================================
+# DISPLAY_TOKENS$min_digits is a DEFAULT where the token IS the column's own estimate or level (an
+# unset 0 takes it), and a FLOOR where it is not: a `{coef}` aside is a log odds whatever the level
+# beside it reads at.
+
+test_that("a token off the column's own scale keeps its declared minimum", {
+  d <- fx_reg_df(); d$m <- as.integer(d$marital == "Married")
+  t <- suppressMessages(tab_reg(d, "m", "race", family = "binomial", measure = "diff",
+                                display = "est_coef", color = FALSE, stats = FALSE))
+  txt <- unlist(lapply(purrr::keep(t, is_fmt), format, na = ""))
+  # the estimate is a risk difference in points (the column's own, 1 decimal); the coefficient in
+  # parentheses is on the link scale and asks for two
+  expect_true(any(grepl("\\([-+][0-9]\\.[0-9]{2}\\)", txt)))
+})
+
+test_that("the Excel split of a `{base}` aside keeps the scale's own base_digits", {
+  # mat_aside_cols() gives the split-off column the display "({base})", so a test keyed on the
+  # literal string "base" missed EST_SCALES$base_digits and the column fell back to the cell's own.
+  d <- fx_reg_df()
+  t <- suppressMessages(suppressWarnings(
+    tab_reg(d, "rincome", "race", family = "ordinal", measure = "ratio",
+            color = FALSE, stats = FALSE)))
+  sp <- tabxplor:::mat_aside_cols(tibble::as_tibble(t))
+  aside <- purrr::keep(sp[grepl("_pct$", names(sp))], is_fmt)
+  testthat::skip_if(length(aside) == 0L)
+  for (col in aside) {
+    expect_false(any(grepl("\\.[0-9]", format(col, na = ""))))          # a proportion, no decimals
+    expect_false(any(grepl("0\\.0", format(col, syntax = "excel"))))    # and its numFmt agrees
+  }
+})
+
+
+# === an interval bound is written like the estimate it brackets ===================================
+# One rule, no per-measure arm: EST_SCALES$neutral says whether the bound names a SIDE at all (NA on
+# a level scale), and MEASURES$break_over / $break_under name it -- the same pair the colour legend
+# prints. So a difference's bounds are signed, a ratio's carry the multiply as well as the fold, and
+# an odds ratio -- which declares no over-glyph -- is left exactly as it was.
+
+test_that("fmt_ci_bracket() reads the scale's neutral and the measure's glyphs", {
+  f <- tabxplor:::fmt_ci_bracket
+  # ADDITIVE: a positive bound wears the "+" its estimate wears; a negative one keeps its own sign
+  expect_equal(f(c(0.35, -0.12, -0.004), c(0.45, -0.03, 0.14), c(0, 0, 0), is_pct = TRUE,
+                 neutral = 0, over = "+", under = "-"),
+               c("[+35;+45]%", "[-12;-3]%", "[-0;+14]%"))
+  # MULTIPLICATIVE: the fold on the under side, the multiply on the over side
+  expect_equal(f(c(1.84, 0.474, 0.998), c(2.17, 0.862, 1.37), rep(2, 3),
+                 neutral = 1, over = "\u00d7", under = "\u00f7"),
+               c("[\u00d71.84;\u00d72.17]", "[\u00f72.11;\u00f71.16]",
+                 "[\u00f71.00;\u00d71.37]"))
+  # an ODDS RATIO declares an EMPTY over-glyph, so its bounds are unchanged by the rule
+  expect_equal(f(c(0.225, 0.87), c(0.457, 1.75), rep(2, 2), neutral = 1, over = "", under = "1/"),
+               c("[1/4.44;1/2.19]", "[1/1.15;1.75]"))
+  # A LEVEL names no side (neutral is NA there): a percentage keeps its bare bounds
+  expect_equal(f(c(0.38, 0.76), c(0.43, 0.85), c(0, 0), is_pct = TRUE,
+                 neutral = NA_real_, over = "+", under = "-"),
+               c("[38;43]%", "[76;85]%"))
+  # `tabxplor.ratio_print_raw` switches every glyph off, estimate and bounds alike
+  expect_equal(f(c(1.84, 0.474), c(2.17, 0.862), rep(2, 2), neutral = 1, over = NULL, under = NULL),
+               c("[1.84;2.17]", "[0.47;0.86]"))
+  # a void bound renders BLANK, never a half-interval
+  expect_equal(f(c(NA, 0.35), c(0.45, NA), c(0, 0), is_pct = TRUE, neutral = 0,
+                 over = "+", under = "-"), c(NA_character_, NA_character_))
+})
+
+test_that("a column's interval and its estimate use the same notation", {
+  g <- fx_gss_fmt()
+  # the first rendered bracket of the table, whichever column and row carries one
+  first_ci <- function(t) {
+    v <- unlist(lapply(purrr::keep(t, is_fmt), format, na = ""), use.names = FALSE)
+    v <- v[grepl("[", v, fixed = TRUE)]
+    if (length(v)) v[[1]] else ""
+  }
+  # ⚠ `color_signif = "guaranteed_effect"` is what makes the table COMPUTE an interval to print.
+  one <- function(color)
+    first_ci(tab(g, race, party3, pct = "row", color = color, ref = 1,
+                 color_signif = "guaranteed_effect", display = "base_ci"))
+  expect_match(one("auto"),  "\\[[-+]", perl = TRUE)                   # signed, like its estimate
+  expect_match(one("ratio"), "\\[[\u00d7\u00f7][0-9]", perl = TRUE)  # a glyph on the bound
+  # a LEVEL interval (no colour measure) names no side and stays bare
+  expect_no_match(first_ci(tab(g, race, party3, pct = "row", ci = "cell", display = "base_ci")),
+                  "\\[[-+\u00d7\u00f7]", perl = TRUE)
+})
+
+
+# === a fill with no text colour takes the theme's `on_fill` ink ===================================
+# Stated once in tx_chrome_hex() and honoured by three renderers: the exports (fmt_get_color_code),
+# the footer legend, and -- since the console PAINTS the fill as an ANSI background -- the cells.
+
+test_that("the console inks a background-only cell so it stays readable", {
+  # ⚠ PROBE THE CAPABILITY, never guess it from an option: testthat's local_reproducible_output()
+  # pins cli to one colour for every block, and the palette's ANSI styles are built once and cached,
+  # so a session that cannot emit 24-bit colour has nothing to assert on. Same philosophy as
+  # skip_if_no_gettext(): ask the very producer the code will use.
+  withr::local_options(list(cli.num_colors = 16777216L, crayon.enabled = TRUE))
+  skip_if_not(grepl("48;2;", get_color_style(type = "bg")[[1]]("x"), fixed = TRUE),
+              "this session cannot emit 24-bit ANSI fills")
+  g <- fx_gss_fmt()
+  ansi <- function(theme) {
+    withr::local_options(list(tabxplor.console_theme = theme))
+    t <- tab(g, race, party3, pct = "row", color = c("no", "ratio"), ref = 1)
+    paste(capture.output(print(t, n = 6)), collapse = "\n")
+  }
+  hex2fg <- function(h) paste0("38;2;", paste(as.integer(grDevices::col2rgb(h)), collapse = ";"))
+  # the dark theme's fills are light panels, so its `on_fill` ink must reach every filled cell
+  dark_ink <- tx_chrome_hex("dark")$on_fill
+  expect_false(is.na(dark_ink))
+  d <- ansi("dark")
+  expect_true(grepl("48;2;", d, fixed = TRUE))             # cells really are filled
+  expect_true(grepl(hex2fg(dark_ink), d, fixed = TRUE))
+  # the light theme declares none (its page ink already reads on those fills): output unchanged
+  expect_true(is.na(tx_chrome_hex("light")$on_fill))
+  expect_false(grepl(hex2fg(dark_ink), ansi("light"), fixed = TRUE))
+})
+
+test_that("a background-only colour still renders its footer", {
+  # `color = c("no", <measure>)` has no TEXT measure, and the legend read that (absent) one for its
+  # baseline -- leaving ref_kind NULL and aborting the whole footer.
+  g <- fx_gss_fmt()
+  expect_no_error(capture.output(
+    print(tab(g, race, party3, pct = "row", color = c("no", "ratio"), ref = 1), n = 3)))
+})
+
+
+# === a spread narrows a layout nobody named ======================================================
+# A spread multiplies the columns, so a cell that took a COMPOSITE layout BY DEFAULT falls back to
+# the bare estimate its scale declares. The test is "is this still the leaf's own choice?", so every
+# named layout -- `display =`, `ci =`, a post-hoc set_display() -- keeps its own.
+
+test_that("a numeric column's default layout drops its aside when the table is spread", {
+  tea <- facto_tea
+  disp <- function(t) unique(unlist(lapply(purrr::keep(t, is_fmt), get_display)))
+  # unspread: the leaf's own default, the coefficient of variation included
+  expect_equal(disp(tab(tea, SPC, age, tab_vars = sex, na = "drop")),
+               DISPLAY_PRESETS$mean_cv$template)
+  # spread: the bare estimate EST_SCALES declares for the column's own scale
+  sp <- tab(tea, SPC, age, tab_vars = sex, spread_vars = sex, na = "drop")
+  expect_true("mean" %in% disp(sp))
+  expect_false(any(grepl("cv", disp(sp), fixed = TRUE)))
+})
+
+test_that("a named layout is never narrowed, and the spread table stays overridable", {
+  tea <- facto_tea
+  disp <- function(t) unique(unlist(lapply(purrr::keep(t, is_fmt), get_display)))
+  args <- list(tea, quote(SPC), quote(age), tab_vars = quote(sex),
+               spread_vars = quote(sex), na = "drop")
+  # `display =` is applied AFTER the spread, so the user's word wins
+  expect_true(any(grepl("cv", disp(do.call(tab, c(args, list(display = "mean_cv")))), fixed = TRUE)))
+  # `ci =` names a layout of its own: not the leaf's default, so untouched
+  expect_true(any(grepl("ci", disp(do.call(tab, c(args, list(ci = "cell")))), fixed = TRUE)))
+  # ...and the built table is still a table: set_display() puts the aside back
+  sp <- do.call(tab, args)
+  expect_true(any(grepl("cv", disp(set_display(sp, "mean_cv")), fixed = TRUE)))
+})
+
+test_that("a percentage column is untouched by the rule", {
+  # only a COMPOSITE default narrows, and a pct column's is the bare token already
+  tea <- facto_tea
+  t <- tab(tea, SPC, tea.time, tab_vars = sex, spread_vars = sex, pct = "row", na = "drop")
+  expect_equal(unique(unlist(lapply(purrr::keep(t, is_fmt), get_display))), "pct")
+})

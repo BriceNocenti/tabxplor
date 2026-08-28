@@ -728,7 +728,7 @@ tab_reg(car_salaries, "salary",
         list("sex alone"      = "sex",
              "+ field, years" = c("sex", "discipline", "yrs.service"),
              "+ rank"         = c("sex", "discipline", "yrs.service", "rank")),
-        family = "gaussian", empirical = FALSE, display="{est:0}")
+        family = "gaussian", empirical = FALSE)
 ```
 
 The raw gap is **$14 088** in favour of men. Adding field and seniority takes it to **$8 423**; adding academic rank — assistant professor, associate professor, full professor — takes it to **$4 771**, and the stars disappear. A careless reading would be "two thirds of the pay gap is explained, and the rest is not significant". Both halves of that sentence are traps.

@@ -569,9 +569,7 @@ Other long-form 2.0.0 docs live in `dev/` (all `.Rbuildignore`'d), never inline 
 
 ⚠ **One maintainer step remains**: rehearse tabxplor's change as a **PR** rather than pushing to a branch the workflow deploys from — `.github/workflows/pkgdown.yaml` runs on `pull_request` with its deploy step gated `if: github.event_name != 'pull_request'`, so a PR is a free full-fidelity check that pak resolves `BriceNocenti/txtheme` (a public repo: `secrets.GITHUB_TOKEN` cannot fetch a private one).
 
-#### Phase 24b — rebuild pkgdown site with `~/dev1/github/txtheme`
-
-#### Phase 24c — the regression teaching article, retitled and brought level with its French twin ✓ DONE
+#### Phase 24b — the regression teaching article, retitled and brought level with its French twin ✓ DONE
 
 **The French twin had moved ahead, and the English had not.** The maintainer manually rewrote `tabxplor-all-else-equal-fr.Rmd` over two commits (288 insertions / 213 deletions): a reorganisation into six sections, a dozen clarified approximations, two passages cut. This phase carried the meaningful half of that rewrite into the English — in English idiom, not translated back — and renamed both files, since the title no longer leads on "all else equal".
 
@@ -589,7 +587,222 @@ Other long-form 2.0.0 docs live in `dev/` (all `.Rbuildignore`'d), never inline 
 
 **Measured**: English renders in **15.2 s**, French in **14.7 s** (down from before, the commented block no longer fitting models). Shipped suite **FAIL 0 | PASS 4376**. Every figure quoted in new prose was read off the rendered tables, not carried over from the French: observed range 61–91 % (OR 6.7), the 2 SD odds of 3.5, the binomial 1.55, the marginal 1.34 at `outcome_level = "No"`, the CVs of 28–37 %.
 
+#### Phase 24c — last manual review ✓ DONE
 
+Fourteen items from the maintainer's own read-through of finished tables. No new feature: every fix
+is a wrong number, a wrong emphasis, a clipped cell or a stale option, and each landed in a declared
+fact or a boundary that already existed.
+
+**The precision band, stated once.** `tab_reg(car_salaries, salary, …)` printed `(101 002.4)` and
+`+14 088.0` — one decimal of noise on a six-figure mean. The rule is now one sentence: **a column
+keeps between 2 and 3 significant figures of its own level unless the user says otherwise**, written
+with one primitive, `tx_sig_digits()` (`R/fmt_class.R`). It applies to **unit scales** alone — those
+whose level is in the outcome's own units, gated on the fact the grid already carries
+(`EST_SCALES$base_display == "mean"`) — and never to a percentage, a point, a ratio or an odds ratio,
+whose range is known and whose precision is declared. `reg_cell_digits(scale, level_mag)` clamps the
+declared default; `fmt_magnitude_cap()` stops format()'s **four** floors (`DISPLAY_MIN_DIGITS`,
+`est_digits`, `fmt_ci_digits`, the `diff_mean` 0→1 bump) putting the decimal back — measured, storing
+0 alone was invisible, `est_ci` still printing `[2 853.0; 12 396.0]`.
+
+⚠ **The magnitude is read once per SPEC, from the whole frame** (`reg_resolve_specs` →
+`new_reg_spec(level_mag =)` → the three existing stamping sites). A post-hoc pass over the finished
+table was designed first and is wrong three ways, each verified: grouping by *scale* merges two
+outcomes of unlike magnitude (`tab_reg(car_salaries, c(salary, yrs.service), …)` is one table, four
+`raw_diff` columns); grouping by `(scale, col_var)` splits a **model comparison** into singletons and
+separates the crude column from its twin (`R/tab_reg.R` — the crude companions share the model's
+`col_var` *except* in comparison mode); and `tab_vars` never reaches a shared finalize at all
+(`reg_build_group()` recurses into a full `reg_build()` per group), so one group would print a
+decimal the next did not. Read off the spec, a model column and its observed twin agree by
+construction. `num_digits_floor()` (the band's lower edge) is deliberately left as it is: its bounds
+are closed at the powers of ten, which is the one place the two edges do not line up.
+
+**`min_digits` is now scoped, which fixes two reports at once.** It was applied *only where the
+stored digits is 0*, and the stored value is the LEVEL's precision — so `{coef}`, an aside on
+another scale entirely, inherited a mean's one decimal and printed a log odds as `+0.1`. It is a
+**floor** for a token that is neither the column's estimate nor its level, and the old
+default-on-unset rule where it is. The ordinal `<sup%>` column printing `49.1%` is the same cause on
+the Excel side: `mat_aside_cols()` gives a split-off aside the display `"({base})"` and the test read
+`raw_display == "base"` *literally*, so `EST_SCALES$base_digits` never applied. Both now key on the
+template's own primary token (`prim_raw`), so `"base"` and `"({base})"` read alike.
+
+**The shape table is a note, and says only what it can stand behind.** Its outcome cell names the
+subject once and writes the formula on the letter — `p = %Married ; log(p/(1-p))` where it was
+`log(%Married / (1 - %Married))`, half the width — with **two syntaxes from one producer**
+(`rd_link_text(syntax =)`), the html one setting the qualifier as a real subscript. The header is
+`outcome`: the cell says "model scale" by showing it. The block wears the aside ink (`grey2`) at 90 %
+in every medium — a `.tx-shape` class in html, `cli::make_ansi_style()` on the console, a font colour
+one point down in Excel — with a noisy row one step dimmer (`grey`).
+⚠ **An ordinal or multinomial outcome now draws no curve here**: `rd_link_y()` reads it as
+`Y != first`, which is one of its K−1 readings and the least trustworthy — measured on
+`gss_cat$partyid` the reference category is **0.4 %** of the sample, so the row printed
+`99-100% (OR 7.0) ns` over a flat run. The row stays, names the outcome, and its shape cell reads
+`see reg_check_plots()`, which draws them all. In Excel the curve's merge went 2 → **3** columns and
+the block is no longer clamped to the table's width: it is laid *over* the sheet, so on a narrow
+table it runs one column past the right edge rather than cutting the one cell that cannot wrap.
+
+**Less bold under the table.** A regression footer row is black and **not** bold — colour is the only
+emphasis a model-fit number keeps, so a flagged check keeps its shade and a non-significant p-value
+its red. Two lines in `tab-export-prep.R` decide it for every backend at once; `Model fit` stays bold
+through the variable-name COLUMN, which html and Excel already bold in its own right. ⚠ Markdown
+keeps its own divergence (`tab_md()` opts label columns out of `bold_rows`, for crosstab row-variable
+names too): aligning it would move every Markdown golden for a change nobody asked for.
+
+**`comp = "all"` with several `row_vars`.** The stacking bind promoted **every** total row to a
+reference row, which bolded them all and — a reference row never being coloured
+(`gate_row = "refrow"`) — took the sub-totals' over/under colours away. That promotion is
+`comp = "tab"`'s rule and only its: under `comp = "all"` there is one reference per `row_var`, in the
+total table. One guard in `promote_totrow_to_refrow()`. The *numbers* were always right —
+`get_ref_field()` keys on `is_totrow & is_tottab`, never on `in_refrow`.
+
+**`ref` survives a `shape` cut.** `na = "keep_for_predictors"` forces `sd_bands` on a numeric
+predictor with missing values and `shape_apply()` makes it a factor — *before* `ref` is resolved,
+and the two `ref` vocabularies are disjoint by kind, so `ref = c(tvhours = "min")` reached the factor
+resolver and aborted (a bare `ref = "min"` aborted differently, for naming no eligible variable).
+`reg_ref_after_cut()` translates the anchor into **the band that value falls in**, at the one point
+where both readings of the column exist — exact for all four keywords and for a literal number,
+since `reg_anchor_value()` already turns each into one. A bare default is translated the same way and
+then dropped, having been honoured. The same failure under an explicit `shape = c(v = "quartiles")`
+goes with it.
+
+**Excel: `#####`, and the borders a merge swallowed.** Measured with `systemfonts` at the default
+10 pt, converted with the file's own px model (`width * 7 + 5`): the base font's digit is 7 px and
+**both** number fonts' is 8 px, so `XL_MONO_RATIO`'s `has_stars` gate was backwards — it
+over-provisioned the starred path and left the plain one 14 % short, which is the whole `100%`
+failure with no bold in sight. It is deleted for one `XL_NUM_RATIO` (1.15) on every figure column,
+plus `XL_BOLD_RATIO` (1.12) applied **per cell** — bold deltas measured at `0%` 20→22 px, `100%`
+36→40, `21 483` 44→50 — never per column, the Total row being bold and spanning every one of them.
+`XL_PAD` stays 1.0. A TEXT cell is measured with the string it is actually written with (`xl_code()`
+hoisted above the sizer), since an ordinary cell shows its numFmt and not `special_formatting`.
+⚠ **Excel draws a merged range from its top-left cell**, so a border painted per ROW is simply not
+drawn on a vertically merged label column: verified on a written workbook, `A3:A4` swallowed the rule
+under the column names, `A5:A20` the rule between two `row_vars`, and `A21:A36` the table's own
+closing rule — the label column "leaked" while every other column closed. Each range's edges are
+folded onto the cell Excel reads, and the final `new_group` boundary is no longer dropped, so the
+Excel bottom matches html's 2 px. `dev/xl_width_review.R` writes the eight edge cases as one workbook
+for the maintainer's visual pass; arithmetically every column now clears its widest **bold** string
+with ~1 character to spare.
+
+**`ci_method = "profile"`** is wired end to end and has no loop; three real defects fixed. A family
+whose dispersion is *estimated* (gaussian, every quasi-) has no profile interval and fell back to
+Wald **silently**, while `reg_wald_method_name()` stamped the word from the *argument* — so a footer
+claimed "profile" over Wald bounds. `reg_method_used()` reads the fit record's own `profile` flag
+(already stored), and the third refusal now informs like the other two. `confint.profile.glm` ends in
+`drop()`, so a **one-coefficient** fit returns a length-2 vector with no dimnames and `ci[idx, 1]`
+aborted (swallowed on the crude path, fatal on the model one) — coerced back to a matrix. The cost
+is by design and stays: the button says `profile = <i>(profile-likelihood ; not cached, long)</i>`.
+
+**jamovi.** `0` joins the numeric `ref` picker (glm's own anchor; `reg_anchor_value()` already parsed
+it); `ci` joins the `display` presets, before `est_ci`, needing nothing in R (`ci` is a bare token);
+and `outcome_level` is gated on the family in the build core, exactly as `trials` already was — the
+panel keeps a stored level across a family switch, so switching multinomial → ordinal used to abort
+`tab_reg()`. Gating in R protects every caller and keeps the choice for switching back.
+⚠ **One msgid carries one translation**: the working tree held `ref = <i>(reference)</i>` twice with
+different French, which `msgfmt` refuses — breaking the *whole* French UI, not one label. Fixed at
+the source, where it belongs: the regression panel's English now reads `(reference profile)`.
+⚠ `jmvtools::prepare()` **deletes** `inst/i18n/fr.json` without rebuilding it; only a full
+`install()` compiles the `.po` into it (285 → 288 entries, all four new strings translated).
+
+**Measured.** Shipped suite **FAIL 0 | PASS 4457**, in ~40 s. The goldens were regenerated for the
+working tree's `R/tab-palettes.R` re-tune of the eight light `bg` rungs, verified cell by cell first:
+0 fixtures where WHICH cells carry a colour changed, 0 non-hex substitutions, exactly 8 distinct hex
+moves, no text-ramp hex touched — the palette moved and the colour engine did not, which is what let
+the LOCKED `_color_golden` cases be rewritten. `_snaps/golden.md` takes the same eight plus this
+phase's four `.tx-shape` rules; the structural `_golden/*.rds` did not move at all. Both ledgers
+(`dev/make_golden.R`, `dev/make_color_golden.R`) carry the argument. ⚠ The shipped fixtures clear
+the new digits rule **by luck** (`age` ≈ 47, `tvhours` ≈ 3, `n_mean_w` max 10.23), so a green suite
+was no evidence: 15 new assertions were added in their subsystem homes — `test-reg-estimand.R` (the
+band's boundaries), `test-tab-reg.R` (the three shapes that break a post-hoc grouping),
+`test-tab-display.R` (the foreign-token floor, the Excel `{base}` split, the six interval geometries,
+the console `on_fill` ink and the background-only footer), `test-reg-resolve.R`
+(`ref` across a cut), `test-tab-export-prep.R` (footer bold, `comp = "all"`), `test-tab-xl.R` (a
+width regression asserted against the ratios, never a hard-coded number), `test-reg-assumptions.R`
+(the two shape syntaxes, the rank-family pointer) and `test-i18n.R` (the shape table, both readings).
+
+**Three more from a second read-through.**
+
+*A fill with no text colour takes the theme's `on_fill` ink — in the CONSOLE too.* The rule is stated
+once (`tx_chrome_hex()`) and was honoured by the exports and the footer legend but not by the cells:
+the console paints a background channel as an ANSI fill, so a cell coloured on background alone kept
+the TERMINAL's own foreground — light, on the dark theme whose fills are light panels, hence
+unreadable. `pillar_shaft.tabxplor_fmt()` now composes it exactly as `fmt_get_color_code()` does.
+`on_fill` is NA on the light theme, so that output is byte-identical.
+
+*Found while testing it: a background-only colour crashed its own footer.* `color = c("no", ratio)`
+has no TEXT measure, and `legend_ref_info()` read that absent one for its baseline — `ref_kind` came
+back NULL and the whole legend aborted, taking the table's print with it. It reads the colouring
+measure of whichever channel carries one, the same fallback the `policy` line beside it already made.
+
+*An interval bound is now written in the same notation as the estimate it brackets* — `[+35;+45]%`
+where it printed `[35;45]%` beside an estimate reading `+35`, and `[÷1.00;×1.37]` where the fold
+showed but the multiply did not. ONE rule, no per-measure arm, composed from two facts already
+declared: `EST_SCALES$neutral` says whether a bound names a SIDE at all — it is `NA` on a LEVEL
+scale, where a bound is a percentage or a mean and must stay bare, and that NA is the whole gate —
+and `MEASURES$break_over` / `$break_under` name it, the very pair the colour legend prints. A bound is
+then (glyph for its side) + (its magnitude in the scale's own geometry). ⚠ That is also why the ODDS
+RATIO is untouched, as it should be: it declares an EMPTY over-glyph, so `[1/4.45;1/2.19]` and
+`[1/1.15;1.75]` come out of the same rule unchanged — the table is read, never a sign hard-coded.
+`tabxplor.ratio_print_raw` switches every glyph off, estimate and bounds alike. No golden moved
+(none displays a `{ci}` on an effect scale), which is precisely why the six geometries are asserted
+directly in `test-tab-display.R`.
+
+**A spread narrows a layout nobody named.** `spread_vars` multiplies the columns by the spread
+variable's level count, so a cell has a fraction of the width it had — and a numeric column was
+still spending it on a coefficient of variation. The rule is stated once
+(`tab_narrow_default_display()`, `R/tab-display.R`): *a column still wearing the DEFAULT layout its
+leaf chose falls back to the bare estimate its own scale declares* (`EST_SCALES$default_display`).
+⚠ The test is **"is this still the leaf's own choice?"**, recomputed from the column's own values
+(`num_default_display()`) rather than recorded — which is what keeps the rule out of every other code
+path: nothing is stored, no flag is threaded, and `display =`, `ci =` and a post-hoc `set_display()`
+each keep their layout by simply not matching. And it runs at the SPREAD, which `tab()` performs
+BEFORE `tab_apply_display()`, so the ordering alone is what makes an explicit `display =` win. It
+lives in `tab_spread()`, which is public, so a spread a user performs themselves reads the same.
+Percentages are untouched: only a COMPOSITE default has an aside to drop.
+
+**One line of air under a finished table, in every medium.** A table is a block of its own, and a
+host that gives a `<table>` no bottom margin (`html_vignette`, jamovi, the Viewer page) welded the
+next paragraph to the legend — so a document had to write its own line break after every table. One
+declared value, `TX_TAIL_SPACE` (`R/tab-css.R`), read by both stylesheets: `.tabxplor-tab` (the
+`<table>` of the html engine, the fenced `<div>` of `tab_md()`) carries `margin-bottom`, and the
+legend rides in `<tfoot>` so the gap falls below it. Three things make it a rule rather than a nudge:
+it is a **margin**, so adjacent vertical margins COLLAPSE and it is a FLOOR — where a host already
+spaces its paragraphs more generously nothing moves; the `.tabxplor-tab table` half of the base rule
+still zeroes the INNER table and out-specifies it at (0,1,1), so a markdown div adds no second gap;
+and `tab_kable_join()` **drops its `<br>`**, the margin now separating two stacked parts as well as
+trailing the last — one mechanism where there were two, which is what stops a table and its own
+shape table drifting two lines apart. ⚠ jamovi moves the gap onto `.tx-scrollbox` and gives it up on
+the last table inside (`jmv_results_style()`): `overflow-x:auto` makes the box a formatting context,
+so the table's own margin would sit *above* the horizontal scrollbar instead of below everything.
+
+⚠ **One maintainer step remains**: the Excel width workbook is a visual judgement — say where a
+column reads too tight or too generous and the three constants move.
+
+#### Phase 24d — pkgdown site Reference, functions short description, and the like
+
+In the pkgdown site, in "Reference", I want to change the order and the grouping of functions, and rewrite the whole thing, including functions short description, for readability and user-friendliness. Check at the currently build site, read the page directly yourself, and see for the inconsistencies, duplicates, and unhelpful ordering.
+- The intro of each section is often too verbose, and sometimes repeat what is already said by each function entry. For example "tab() builds a colour-coded cross-table; tab_reg() a regression table that looks and behaves like one" : the functions own titles already say exactly that, it’s useless. Please, modify these little introductions for concision and user-friendliness ; don’t hesitate to modify the functions short description in their roxygen blocks too so that the Reference page is as readable and as user-friendly as possible, while staying sleek, concise, compact, no bullshit.
+- Some functions that should’nt be tagged as "experimental" are. Let `tab_columns()` and `tab_structure()` as experimental, I’m not too sure it’s useful.
+- `jmvtab` and `jmvtabreg` functions short description only show "Crosstables" and "Regressions". I’m not sure if it’s because this name is used for the jamovi UI main analysis button (I think not ? check), of if it could be renamed with no problems for something meaningfu  telling the reader this is a full graphical interface, etc.
+
+As a new ordering for the whole Reference page, I want:
+- The two main functions
+- Point-and-click interface (jamovi)
+- Reshaping and combining
+- Export a finished table
+- Charts (reg_check_plots() and forest_plot() currently have a duplicated entry, can you check that ?)
+- Data-prep and text helpers
+- Superseded entry points
+- What a cell shows, and how it is coloured
+- What a model can be, and what it fitted
+- Captions and options
+- Inspect a table
+- The fmt cell type
+- Example data (is it possible to remove that one from References, while keeping it in the package documentation ?)
+
+A few changes also required :
+- I want to soft-deprecate and supersed `tab_num()`, and put it in the superseded part with `tab_plain`. `tab_counts()` must then be put in the first group with `tab()` and `tab_reg()`, but aften them.
+- I want to not export `tab_supports()`, internal only.
+
+At the end, rebuild the pkgdown site in dev for me to check it again, with the last versions of the vignettes, etc.
 
 ### Phase 25 — CRAN release
 

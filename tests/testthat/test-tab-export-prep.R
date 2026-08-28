@@ -224,3 +224,38 @@ test_that("a compacted table keeps its tab_var column; a single-row_var one stil
   testthat::expect_true("year" %in% nms)
   testthat::expect_equal(nms[1:3], c("row_var", "year", "levels"))   # column order IS the nesting
 })
+
+
+# === the two emphasis rules the render model owns =================================================
+
+test_that("a regression footer row is black but NOT bold", {
+  d <- fx_reg_df(); d$m <- as.integer(d$marital == "Married")
+  t  <- suppressMessages(tab_reg(d, "m", "race", family = "binomial"))
+  # `tables` is one render model per table; a regression table is one.
+  rd <- tabxplor:::tab_export_prep(t, backend = "kable")$tables[[1]]
+  ft <- rd$footer_rows %||% integer(0)
+  testthat::skip_if(!length(ft))
+  # a model-fit number is a report card under the table: COLOUR is the only emphasis it keeps, so
+  # neither the numbers nor the stat names beside them are bold.
+  expect_false(any(ft %in% rd$bold_rows))
+  for (a in rd$ann) expect_false(any(a$bold[ft]))
+})
+
+test_that("under comp = \"all\" a stacked sub-total is not a reference row", {
+  g <- fx_gss()
+  g$income25k <- forcats::fct_lump_n(g$rincome, 3)
+  g$party3    <- forcats::fct_lump_n(g$partyid, 3)
+  g$married   <- forcats::fct_lump_n(g$marital, 3)
+  # ⚠ SEVERAL row_vars is the one path that stacks, and the stacking bind used to promote EVERY
+  # total row to a reference row -- which bolded them all and, a reference row never being coloured,
+  # took the sub-totals' own over/under colours away.
+  t <- tab(g, c(income25k, married), party3, race, pct = "row", color = TRUE,
+           color_signif = "grey_non_signif", comp = "all")
+  col <- purrr::keep(t, is_fmt)[[1]]
+  expect_false(any(is_refrow(col)))
+  # the sub-totals ARE coloured; the total table's own row is the anchor and is not
+  slot <- tabxplor:::fmt_color_slots(col, tabxplor:::fmt_color_plan(col))
+  sub  <- which(is_totrow(col) & !is_tottab(col))
+  expect_true(any(slot[sub] != 0L))
+  expect_true(all(slot[is_totrow(col) & is_tottab(col)] == 0L))
+})

@@ -170,6 +170,20 @@ GitHub link to `contact@jamovi.org` (needs an OSI licence).
   `analysis`/`theme`/`palette`) fails at analysis creation with "symbol already has a regular
   binding". Use a safe internal name (e.g. `lvs`) and map it to the `tab()` argument in `.b.R`.
 
+**One msgid carries one translation, so two panels cannot spell an option differently.** `_()` is
+  keyed on the English string across the whole module, and `msgfmt` refuses a catalogue holding the
+  same msgid twice --- which silently breaks the *entire* French UI, not just that label. Where two
+  panels mean different things by the same word, change the ENGLISH (`ref = <i>(reference)</i>` in
+  `jmvtab` vs `ref = <i>(reference profile)</i>` in `jmvtabreg`), never the `.po`.
+
+**`ci_method = "profile"` is uncached by design and the button says so.** A profile interval is an
+  output of the likelihood at one confidence level, so it is the one quantity a fit digest cannot
+  rebuild (`reg_crude_cacheable()`); every option change refits every model, serially.
+
+**`jmvtools::prepare()` DELETES `inst/i18n/fr.json` without rebuilding it** --- only a full
+  `jmvtools::install()` compiles `jamovi/i18n/fr.po` into it. Restore the file (or run `install()`)
+  before committing, or the module ships with no French at all.
+
 
 
 ---

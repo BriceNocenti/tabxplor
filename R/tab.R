@@ -48,7 +48,7 @@ NULL
 # WARNING: tab()'s @param blocks are GENERATED. Every argument -- its producers, its legal values,
 # its option twin and its prose -- is ONE row of TAB_ARGS (R/tab-args.R). Edit the row, not this
 # file: tab_args_rd() orders by formals(), and a load-time check refuses a formal with no row.
-#' Cross-table with color helpers
+#' Cross-tables with color helpers
 #'
 #' @description
 #' `tab()` builds a cross-table of one or several row variables by one or several column variables,
@@ -1763,6 +1763,10 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
   NA_spread_vars  <- purrr::map_lgl(spread_vars,
                                     ~ as.character(.) %in% c("NA", "NULL", "no"))
   if (all(NA_spread_vars) ) return(tabs)
+
+  # the columns are about to be multiplied by the spread level count: a layout nobody named narrows
+  # to its scale's own estimate (tab-display.R states the rule).
+  tabs <- tab_narrow_default_display(tabs)
 
   subtext <- get_subtext(tabs)
   test    <- get_test(tabs)

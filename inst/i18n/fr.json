@@ -116,7 +116,7 @@
                 "add_pct = <i>(voir freq. des totaux à 100%)</i>"
             ],
             "adjustment <i>(gap between model/observed)</i>": [
-                "adjustment <i>(l’écart modèle / observé)</i>"
+                "adjustment <i>(distance modèle/observé)</i>"
             ],
             "all": [
                 "all (toutes les garder)"
@@ -134,7 +134,7 @@
                 "anova = <i>(quel test pour les var. numériques ?)</i>"
             ],
             "assumption checks plots": [
-                "graph. vérif. des hypothèses (Excel)"
+                "graph. vérification des hypothèses (Excel)"
             ],
             "assumption checks plots in Excel": [
                 "graphiques de vérification des hypothèses dans Excel"
@@ -155,7 +155,7 @@
                 "auto <i>(suit la mesure de l'écart)</i>"
             ],
             "auto <i>(smart default: difference + ratio)</i>": [
-                "auto <i>(défaut : difference + ratio)</i>"
+                "auto <i>(difference + ratio)</i>"
             ],
             "auto <i>(the link's own measure)</i>": [
                 "auto <i>(la mesure de base du modèle)</i>"
@@ -164,7 +164,7 @@
                 "auto/tot/<i>{num_ligne}</i>/<i>{nom_ligne}</i>"
             ],
             "base <i>(adjusted pct/mean, alone)</i>": [
-                "base <i>(%/mean ajustés, seuls)</i>"
+                "base <i>(%/moyenne ajustés)</i>"
             ],
             "base <i>(pct or mean)</i>": [
                 "base <i>(% ou moyenne)</i>"
@@ -194,7 +194,7 @@
                 "beta <i>(Clopper-Pearson exact)</i>"
             ],
             "between_groups <i>(gap between tab_vars)</i>": [
-                "between_groups <i>(l’écart entre groupes, avec tab_vars)</i>"
+                "between_groups <i>(dist. entre tab_vars)</i>"
             ],
             "binomial (logistic)": [
                 "binomial (logistique)"
@@ -338,22 +338,25 @@
                 "effect = <i>(d'où viennent les chiffres ?)</i>"
             ],
             "effect of": [
-                "effet de"
+                "l’effet de"
             ],
             "empirical = <i>(show the observed effect)</i>": [
                 "empirical = <i>(afficher l'effet observé)</i>"
             ],
             "est <i>(the estimate)</i>": [
-                "est <i>(l'estimation)</i>"
+                "est <i>(l'estimation de l’écart choisie)</i>"
+            ],
+            "ci <i>(confidence interval)</i>": [
+                "ci <i>(intervalle de confiance)</i>"
             ],
             "est_base <i>(est. + adj. pct/mean)</i>": [
-                "est_base <i>(est. + %/mean ajustés)</i>"
+                "est_base <i>(est. + %/moy. ajustés)</i>"
             ],
             "est_ci <i>(estimate + interval)</i>": [
                 "est_ci <i>(estimation + IC)</i>"
             ],
             "est_coef <i>(est. + raw coeff)</i>": [
-                "est_coef <i>(est. + coef. brut)</i>"
+                "est_coef <i>(est. + coefficient brut)</i>"
             ],
             "Excel": [
                 "Excel"
@@ -458,7 +461,7 @@
                 "line (une seule ligne)"
             ],
             "linear (numeric)": [
-                "linear (var. num.)"
+                "linear (var. numérique)"
             ],
             "link (per outcome)": [
                 "link (par variable à expliquer)"
@@ -478,6 +481,9 @@
             "mean (default)": [
                 "moyenne (défaut)"
             ],
+            "0 (as in glm)": [
+                "0 (comme dans glm)"
+            ],
             "mean <i>(numeric variables)</i>": [
                 "mean <i>(moyenne, var. num.)</i>"
             ],
@@ -491,7 +497,7 @@
                 "measure"
             ],
             "measure <i>(the chosen measure of deviation)</i>": [
-                "measure <i>(l’écart comparé à la référence)</i>"
+                "measure <i>(écart comparé à la réf.)</i>"
             ],
             "measure = <i>(which measure is reported)</i>": [
                 "measure = <i>(quel écart comparé à la réference ?)</i>"
@@ -554,7 +560,7 @@
                 "newcombe <i>(score hybride)</i>"
             ],
             "no": [
-                "no (pas d’effectif)"
+                "no (pas d’effectifs affichés)"
             ],
             "no (counts)": [
                 "no (effectifs)"
@@ -640,8 +646,8 @@
             "print_ready <i>(black and white, for publication)</i>": [
                 "print_ready <i>(noir et blanc, publication)</i>"
             ],
-            "profile = <i>(profile-likelihood)</i>": [
-                "profile = <i>(vraisemblance profilée)</i>"
+            "profile = <i>(profile-likelihood ; not cached, long)</i>": [
+                "profile = <i>(vraisemblance profilée ; hors du cache, long)</i>"
             ],
             "quadratic (num.)": [
                 "quadratic (² num.)"
@@ -681,6 +687,9 @@
             ],
             "ref = <i>(reference)</i>": [
                 "ref = <i>(référence)</i>"
+            ],
+            "ref = <i>(reference profile)</i>": [
+                "ref = <i>(profil de référence)</i>"
             ],
             "ref2 = <i>(reference)</i>": [
                 "ref2 = <i>(référence)</i>"
@@ -854,10 +863,10 @@
                 "wn <i>(effectifs pondérés)</i>"
             ],
             "wrap_cols = <i>(nb chars for line break)</i>": [
-                "wrap_cols = <i>(noms col.: saut de ligne à:)</i>"
+                "wrap_cols = <i>(noms col., saut de ligne à:)</i>"
             ],
             "wrap_rows = <i>(nb chars for line break)</i>": [
-                "wrap_rows = <i>(noms lignes: saut de ligne à:)</i>"
+                "wrap_rows = <i>(noms lignes, saut de ligne à:)</i>"
             ]
         }
     }

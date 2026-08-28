@@ -10,6 +10,9 @@
 # See: CLAUDE.md > 2.0.0 roadmap > Golden regeneration protocol.
 #
 # LEDGER
+#   Phase 24c: the STRUCTURAL fixtures did not move -- only `_snaps/golden.md`, on the CSS block:
+#   COLOR_RAMPS' eight light `bg` rungs (the same re-tune _color_golden records) plus the four new
+#   `.tx-shape` rules the regression shape table brings. Accepted with snapshot_accept("golden").
 #   Phase 22c-ii: 26 fixtures move, on TWO members and nothing else (verified field by field against
 #   `git archive HEAD` on all 36 cases): `or` and, on the two odds-ratio cases, `display`. An odds
 #   ratio needs a 2x2, and on the DEGENERATE MARGIN -- the Total column under pct = "row", the Total

@@ -308,7 +308,10 @@ gives the same result. It never changes the estimand, which is \code{measure}'s 
 \item{digits}{The number of decimals. A single integer sets every cell (\code{0}, the default, means
 "each measure's own"), and a measure finer than the level it sits on keeps its own precision.
 Name a display field to set just that one, an aside included --- \code{digits = c(ratio = 3)},
-\code{digits = c(1, or = 3)}; a template may carry its own, \code{display = "{est:3} ({base:1})"}.}
+\code{digits = c(1, or = 3)}; a template may carry its own, \code{display = "{est:3} ({base:1})"}.
+Left alone, a column reading in the outcome's own units (a mean, a mean difference) follows
+that outcome's magnitude, so a six-figure salary prints no decimals and a rate prints two;
+\verb{digits =} always raises it back.}
 
 \item{cleannames}{Logical. If \code{TRUE}, strips numeric prefixes from factor levels for display.
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}

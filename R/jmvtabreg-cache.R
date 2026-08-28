@@ -299,7 +299,14 @@ jmvtab_reg_build <- function(data, opts, store = NULL, use_cache = TRUE) {
   }
 
   fams <- vapply(dep, function(d) jmvtab_reg_dep_family(opts$family, d, data), character(1))
-  lvls <- vapply(dep, function(d) jmvtab_reg_dep_level(opts$outcome_level, d), character(1))
+  # ⚠ GATED ON THE FAMILY, exactly as `trials` is just below. The panel keeps a stored
+  # `outcome_level` when the family select changes (switching back restores the choice), and an
+  # ordinal or gaussian family offers no such level -- so an ungated read aborted tab_reg() on a
+  # multinomial -> ordinal switch. Dropping it here protects every caller, not only the panel.
+  lvls <- vapply(seq_along(dep), function(i) {
+    if (is.na(reg_outcome_level_role(fams[i]))) NA_character_
+    else jmvtab_reg_dep_level(opts$outcome_level, dep[i])
+  }, character(1))
   tris <- vapply(seq_along(dep), function(i) {
     if (identical(fams[i], "binomial")) jmvtab_reg_dep_trials(opts$trials, dep[i])
     else NA_integer_

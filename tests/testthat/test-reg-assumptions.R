@@ -281,5 +281,27 @@ test_that("the observed range is the curve's own low and high, back on the outco
   expect_match(rg("tvhours", "age", family = "poisson"),                      "\\(\u00d7[0-9.]+\\)$")
   expect_match(rg("age", "tvhours", family = "gaussian"),                     "\\(\\+[0-9.]+ SD\\)$")
   # ⚠ an ODDS RATIO is the one measure rendered with no glyph, so it is the only one NAMED
-  expect_match(rg("rincome", "age"), "\\(cumOR [0-9.]+\\)$")
+  expect_match(rg("married", "age", family = "binomial"), "\\(OR [0-9.]+\\)$")
+
+  # AN ORDINAL / MULTINOMIAL OUTCOME DRAWS NO CURVE HERE: `Y != first` is one of its K-1 readings and
+  # the least trustworthy (a tiny reference category prints "99-100%"), so the row names the outcome
+  # and points at the panel that draws them all.
+  st <- tabxplor:::reg_shape_table(
+    suppressMessages(suppressWarnings(tab_reg(d, "rincome", "age", stats = FALSE))))
+  expect_equal(unique(st$range), "")
+  expect_match(st$shape, "reg_check_plots", fixed = TRUE)
+  expect_equal(st$outcome[[1]], "rincome")
+})
+
+
+test_that("the shape table's outcome cell names the subject once, in two syntaxes", {
+  d <- fx_reg_df(); d$m <- as.integer(d$marital == "Married")
+  yc <- function(syntax) tabxplor:::reg_shape_table(
+    suppressMessages(tab_reg(d, "m", c("age", "race"), family = "binomial", stats = FALSE)),
+    syntax = syntax)$outcome[[1]]
+  # `p` is named, then the formula is written on the letter -- never the subject twice
+  expect_match(yc("text"), "^p = %.* ; log\\(p/\\(1-p\\)\\)$")
+  # the html twin sets the qualifier as a real subscript, which is what lets it be qualified at all
+  expect_match(yc("html"), "%<sub>.*</sub>", fixed = FALSE)
+  expect_match(yc("html"), "log(p/(1-p))", fixed = TRUE)
 })

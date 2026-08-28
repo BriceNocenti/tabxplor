@@ -122,6 +122,13 @@ reg_measure_key <- function(x) {
 #
 # It is the LEVEL's precision, not the estimate's: a token too coarse at 0 raises itself through
 # DISPLAY_TOKENS$min_digits.
+# THE DECLARED NUMBER IS A MID-RANGE DEFAULT. On a UNIT scale -- one whose level is in the outcome's
+# own units, i.e. whose level token is `mean` -- it cannot be more, a salary being six figures and a
+# rate two, so `level_mag` (the spec's own reading of the outcome) clamps it to 3 significant
+# figures: 101 002.4 was one decimal of noise. A FIXED scale (a percentage, a point, a ratio, an odds
+# ratio) lives in a known range and keeps its declared number untouched. The upper edge is stated
+# once, in tx_sig_digits() / fmt_magnitude_cap() (R/fmt_class.R), which also stops format()'s own
+# floors from claiming the decimal back.
 # ⚠ IT IS THE LEVEL'S, so on a scale whose ESTIMATE needs more than its level does it must not be
 # read as the estimate's: in format() a 0 means "unset" and is what lets a token's own minimum
 # apply, while a 1 SILENCES it -- which is how `score_ratio` printed x1.4 where the `ratio` token
@@ -135,9 +142,15 @@ REG_CELL_DIGITS <- c(odds_ratio = 0L, score_odds_ratio = 1L, pct_ratio = 0L, sco
 
 #' @keywords internal
 #' @noRd
-reg_cell_digits <- function(scale) {
-  d <- REG_CELL_DIGITS[[scale[[1]]]]
-  if (is.null(d)) 2L else d
+reg_cell_digits <- function(scale, level_mag = NA_real_) {
+  scale <- scale[[1]]
+  d <- REG_CELL_DIGITS[[scale]]
+  if (is.null(d)) d <- 2L
+  row <- EST_SCALES[[scale]]
+  lvl <- if (identical(row$kind, "level")) row$est_display else row$base_display
+  if (!identical(lvl, "mean")) return(d)                 # a fixed scale declares its own precision
+  cap <- tx_sig_digits(level_mag, 3L)
+  if (is.na(cap)) d else min(d, cap)
 }
 
 # THE SCALE A COLUMN IS STAMPED WITH, the estimand's own -- except for a SUMMED-SCORE outcome

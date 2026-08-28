@@ -22,6 +22,13 @@
 #     pre-existing c_contrib* cases all use the default color_signif = "ignore" -- the CA reading,
 #     which z4 left byte-identical -- so they did NOT move, which is the mechanical proof that the
 #     new adjusted-residual gate and the absolute `residual` scale touch only the two gated policies.
+#   Phase 24c: ALL 15 regenerated for the light BACKGROUND ramp alone (COLOR_RAMPS' eight `bg` rungs
+#     were re-tuned). Verified cell by cell against `git show HEAD:` on every fixture: 0 fixtures
+#     where WHICH cells carry a colour changed, 0 non-hex substitutions, and exactly 8 distinct hex
+#     moves -- #DFFCFF/#D7EFFF/#CEE3FF/#BBCCFF (over) and #FFF4E1/#FFE6D3/#FFD7C8/#FFBAAF (under),
+#     each to its new rung. NO text-ramp hex moved. So the colour SLOTS are unchanged by
+#     construction: the palette moved, the engine did not, which is why the LOCKED cases above may
+#     be regenerated here without reopening what they lock.
 # Afterwards: review `git diff tests/testthat/_color_golden/` and accept deliberately.
 # See: dev/colors.md ; CLAUDE.md golden regeneration protocol.
 

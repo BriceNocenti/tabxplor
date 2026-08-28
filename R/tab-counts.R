@@ -160,7 +160,7 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
 
 # === SECTION: public constructor =====================================================
 
-#' Cross-table from already-aggregated counts ("from the middle")
+#' Cross-tables from already-aggregated counts ("from the middle")
 #'
 #' @description
 #' `tab_counts()` builds the same color-coded cross-table as [tab()], but from data that is

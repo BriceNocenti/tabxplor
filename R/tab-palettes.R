@@ -59,52 +59,67 @@
 #   oklch    "L C H", the coordinate the hex was tuned at: the chroma peaks above, the lightness
 #            steps and the colour-blind safety are all read off this column, and nothing else does.
 COLOR_RAMPS <- tibble::tribble(
-  ~channel,    ~theme,  ~dir,    ~rung, ~hex,      ~oklch,
-  "text",      "light", "over",  1L,    "#02a5b3", "0.66 0.1124 205",   # better for colour blindness
-  "text",      "light", "over",  2L,    "#0891c9", "0.62 0.13   235",
-  "text",      "light", "over",  3L,    "#0267c7", "0.52 0.17   255",
-  "text",      "light", "over",  4L,    "#300dfd", "0.47 0.30   270",
-  "text",      "light", "under", 1L,    "#dca331", "0.75 0.1400  80",
-  "text",      "light", "under", 2L,    "#de7c01", "0.68 0.1596  60",
-  "text",      "light", "under", 3L,    "#dd5301", "0.62 0.1868  42",
-  "text",      "light", "under", 4L,    "#d60103", "0.55 0.2253  29",
+  ~channel,    ~theme,  ~dir, ~rung, ~hex, ~oklch,#Light Chroma Hue
+  "text",      "light", "over",  1L, "#02a5b3",  "0.66 0.1124 205",   # better for colour blindness
+  "text",      "light", "over",  2L, "#0891c9",  "0.62 0.13   235",
+  "text",      "light", "over",  3L, "#0267c7",  "0.52 0.17   255",
+  "text",      "light", "over",  4L, "#300dfd",  "0.47 0.30   270",
+  "text",      "light", "under", 1L, "#dca331",  "0.75 0.1400  80",
+  "text",      "light", "under", 2L, "#de7c01",  "0.68 0.1596  60",
+  "text",      "light", "under", 3L, "#dd5301",  "0.62 0.1868  42",
+  "text",      "light", "under", 4L, "#d60103",  "0.55 0.2253  29",
 
-  "bg",        "light", "over",  1L,    "#dffcff", "0.97 0.0304 205",   # better for colour blindness
-  "bg",        "light", "over",  2L,    "#d7efff", "0.94 0.0336 235",
-  "bg",        "light", "over",  3L,    "#cee3ff", "0.91 0.0439 255",
-  "bg",        "light", "over",  4L,    "#bbccff", "0.85 0.0733 270",
-  "bg",        "light", "under", 1L,    "#fff4e1", "0.97 0.0271  80",
-  "bg",        "light", "under", 2L,    "#ffe6d3", "0.94 0.0374  60",
-  "bg",        "light", "under", 3L,    "#ffd7c8", "0.91 0.0488  42",
-  "bg",        "light", "under", 4L,    "#ffbaaf", "0.85 0.082   29",
+  "bg",        "light", "over",  1L, "#c4eaee",  "0.91 0.0400 205",  # "#dffcff", "0.97 0.0304 205",   # better for colour blindness
+  "bg",        "light", "over",  2L, "#b7def6",  "0.88 0.0525 235",  # "#d7efff", "0.94 0.0336 235",
+  "bg",        "light", "over",  3L, "#b2d0f8",  "0.85 0.0650 255",  # "#cee3ff", "0.91 0.0439 255",
+  "bg",        "light", "over",  4L, "#aec2ff",  "0.82 0.0890 270",  # "#bbccff", "0.85 0.0733 270",
+  "bg",        "light", "under", 1L, "#f0dfc4",  "0.91 0.0400  80",  # "#fff4e1", "0.97 0.0271  80",
+  "bg",        "light", "under", 2L, "#f6cfb0",  "0.88 0.0600  60",  # "#ffe6d3", "0.94 0.0374  60",
+  "bg",        "light", "under", 3L, "#fcbda5",  "0.85 0.0800  42",  # "#ffd7c8", "0.91 0.0488  42",
+  "bg",        "light", "under", 4L, "#feac9f",  "0.82 0.1000  29",  # "#ffbaaf", "0.85 0.082   29",
 
-  "bg_legend", "light", "over",  1L,    "#67A1A7", "0.67 0.0611 204",
-  "bg_legend", "light", "over",  2L,    "#6492B0", "0.64 0.0674 238",
-  "bg_legend", "light", "over",  3L,    "#5E85B8", "0.61 0.0896 255",
-  "bg_legend", "light", "over",  4L,    "#5169C7", "0.55 0.1481 270",
-  "bg_legend", "light", "under", 1L,    "#A7936F", "0.67 0.0553  82",
-  "bg_legend", "light", "under", 2L,    "#AE815E", "0.64 0.0741  59",
-  "bg_legend", "light", "under", 3L,    "#B56E53", "0.61 0.0989  41",
-  "bg_legend", "light", "under", 4L,    "#BE4034", "0.55 0.1639  29",
+  # (for Excel legends, that have no in-cell background colors)
+  "bg_legend", "light", "over",  1L, "#53A4AD",  "0.67 0.080 205",  # "#67A1A7", "0.67 0.0611 204",
+  "bg_legend", "light", "over",  2L, "#4796C0",  "0.64 0.100 235",  # "#6492B0", "0.64 0.0674 238",
+  "bg_legend", "light", "over",  3L, "#4E85CA",  "0.61 0.120 255",  # "#5E85B8", "0.61 0.0896 255",
+  "bg_legend", "light", "over",  4L, "#4E68CE",  "0.55 0.160 270",  # "#5169C7", "0.55 0.1481 270",
+  "bg_legend", "light", "under", 1L, "#AF905B",  "0.67 0.080  80",  # "#A7936F", "0.67 0.0553  82",
+  "bg_legend", "light", "under", 2L, "#C17938",  "0.64 0.120  60",  # "#AE815E", "0.64 0.0741  59",
+  "bg_legend", "light", "under", 3L, "#CF5B28",  "0.61 0.160  42",  # "#B56E53", "0.61 0.0989  41",
+  "bg_legend", "light", "under", 4L, "#CC291F",  "0.55 0.200  29",  # "#BE4034", "0.55 0.1639  29",
 
-  "text",      "dark",  "over",  1L,    "#2ba1a7", "0.65 0.1000 200",   # better for colour blindness
-  "text",      "dark",  "over",  2L,    "#37a8d7", "0.69 0.1200 230",
-  "text",      "dark",  "over",  3L,    "#72a7ff", "0.73 0.1400 260",
-  "text",      "dark",  "over",  4L,    "#9c84ff", "0.69 0.1750 290",
-  "text",      "dark",  "under", 1L,    "#d6a13d", "0.74 0.1300  80",
-  "text",      "dark",  "under", 2L,    "#ec923e", "0.74 0.1450  60",
-  "text",      "dark",  "under", 3L,    "#ff885e", "0.75 0.1550  40",
-  "text",      "dark",  "under", 4L,    "#ff635f", "0.70 0.1900  25",
+  "text",      "dark",  "over",  1L, "#2ba1a7",  "0.65 0.1000 200", 
+  "text",      "dark",  "over",  2L, "#37a8d7",  "0.69 0.1200 230",
+  "text",      "dark",  "over",  3L, "#72a7ff",  "0.73 0.1400 260",
+  "text",      "dark",  "over",  4L, "#9c84ff",  "0.69 0.1750 290",
+  "text",      "dark",  "under", 1L, "#d6a13d",  "0.74 0.1300  80",
+  "text",      "dark",  "under", 2L, "#ec923e",  "0.74 0.1450  60",
+  "text",      "dark",  "under", 3L, "#ff885e",  "0.75 0.1550  40",
+  "text",      "dark",  "under", 4L, "#ff635f",  "0.70 0.1900  25",
 
-  "bg",        "dark",  "over",  1L,    "#c3ecee", "0.91 0.0425 200",   # better for colour blindness
-  "bg",        "dark",  "over",  2L,    "#b4e0f6", "0.88 0.0550 230",
-  "bg",        "dark",  "over",  3L,    "#b3cffd", "0.85 0.0714 260",
-  "bg",        "dark",  "over",  4L,    "#c1b9fc", "0.82 0.0938 290",
-  "bg",        "dark",  "under", 1L,    "#f3e0c2", "0.91 0.0447  80",
-  "bg",        "dark",  "under", 2L,    "#f6d0b2", "0.88 0.0586  60",
-  "bg",        "dark",  "under", 3L,    "#fabda8", "0.85 0.0765  40",
-  "bg",        "dark",  "under", 4L,    "#fcaaa3", "0.82 0.0979  25",
+  "bg",        "dark",  "over",  1L, "#c3ecee",  "0.91 0.0425 200",
+  "bg",        "dark",  "over",  2L, "#b4e0f6",  "0.88 0.0550 230",
+  "bg",        "dark",  "over",  3L, "#b3cffd",  "0.85 0.0714 260",
+  "bg",        "dark",  "over",  4L, "#c1b9fc",  "0.82 0.0938 290",
+  "bg",        "dark",  "under", 1L, "#f3e0c2",  "0.91 0.0447  80",
+  "bg",        "dark",  "under", 2L, "#f6d0b2",  "0.88 0.0586  60",
+  "bg",        "dark",  "under", 3L, "#fabda8",  "0.85 0.0765  40",
+  "bg",        "dark",  "under", 4L, "#fcaaa3",  "0.82 0.0979  25",
 )
+
+# tibble::tribble(
+#   ~L  , ~C   , ~H , 
+#   0.67, 0.080, 205, 
+#   0.64, 0.100, 235, 
+#   0.61, 0.120, 255, 
+#   0.55, 0.160, 270, 
+#   0.67, 0.080,  80, 
+#   0.64, 0.120,  60, 
+#   0.61, 0.160,  42, 
+#   0.55, 0.200,  29, 
+# ) |> 
+#   purrr::pmap_chr(txtheme::oklch_hex)
+
 
 # The runner-up kept for each rung that has one -- only the two background channels were ever
 # re-tuned. Swap a hex into the grid above and rebuild.
@@ -180,6 +195,9 @@ palette_8bit <- list(
 #           so `text` (#f1efe0) measures APCA Lc 0 on them: unreadable, not merely faint. The value is
 #           the page's own ground, so a filled cell reads as the page showing through -- Lc 66-87 on
 #           the eight fills, against the light theme's 76 for black on its own.
+#           ⚠ THREE RENDERERS MUST HONOUR IT, and each states it in its own idiom: the exports
+#           (fmt_get_color_code), the footer legend, and the CONSOLE CELLS -- which paint the fill as
+#           an ANSI background, so without it the cell keeps the terminal's own light foreground.
 #   mark  : a publication palette's effect-size MARKS, which sit where the stars sit but are not an
 #           aside: they REPLACE the colour, so they carry the deviation itself and must read as
 #           strongly as the number. Pure black under every print palette (a superscript glyph at

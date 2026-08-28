@@ -239,7 +239,7 @@ reg_validate_args <- function(conf_level = NULL, stats = NULL, color_signif = NU
 #' @noRd
 reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NULL,
                              shape = NULL, family = "auto", levels_collapse = NULL,
-                             na = "drop_by_outcome") {
+                             na = "drop_by_outcome", ref = NULL) {
   # --- C: a PREBUILT survey design as `data` --------------------------------------------------
   # THE shared boundary (R/survey-design.R) extracts its model frame and materialises the design's
   # weights as a column; the design itself still drives every fit.
@@ -348,6 +348,11 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   if (keep_na) reg_shapes <- reg_na_cut_shapes(data, preds_na, reg_shapes)
   if (length(reg_shapes) > 0L) {
     sh   <- shape_apply(data, reg_shapes, w = wt)
+    # ⚠ THE ANCHOR IS TRANSLATED HERE, the ONE point where both readings of the column exist. A cut
+    # changes the variable's KIND, and `ref`'s two vocabularies are disjoint by kind, so a "min" the
+    # user asked of a number reached the factor resolver as a level name and aborted -- which
+    # `na = "keep_for_predictors"` triggered on its own, cutting silently.
+    ref  <- reg_ref_after_cut(ref, data, sh$data, names(reg_shapes), preds_na, wt)
     data <- sh$data
     reg_shapes   <- sh$shapes                    # with each quantile shape's breaks frozen
     if (!is.null(design_obj)) design_obj$variables <- data
@@ -375,7 +380,7 @@ reg_prepare_data <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
        outcome = outcome, predictors = predictors, all_predictors = all_predictors,
        is_comparison = is_comparison, formula_mode = formula_mode, raw_formula = raw_formula,
        reg_shapes = reg_shapes, var_labels = var_labels, degf = degf,
-       cross_keys = cross$keys, na_levels = na_levels)
+       cross_keys = cross$keys, na_levels = na_levels, ref = ref)
 }
 
 # === S3: the per-outcome TABLE =================================================================
@@ -810,6 +815,49 @@ reg_na_cut_shapes <- function(data, preds, shapes) {
   shapes
 }
 
+# `ref` AFTER A CUT: an anchor keyword (or a bare number) asked of a predictor that `shape` has just
+# turned into a factor names the BAND THAT VALUE FALLS IN, so the user's request survives the recode
+# instead of aborting against the other vocabulary. Exact for all four keywords and for a literal
+# number alike, because reg_anchor_value() already turns each into one -- read off the pre-cut
+# column, which is the only place it still exists.
+# A BARE default is translated the same way and, once every numeric predictor has been cut, DROPPED:
+# it has been honoured on each of them, so leaving it would abort for naming no eligible variable.
+#' @keywords internal
+#' @noRd
+reg_ref_after_cut <- function(ref, before, after, vars, preds, wt = NULL) {
+  if (is.null(ref) || !length(ref)) return(ref)
+  nm   <- names(ref) %||% rep("", length(ref))
+  fb   <- which(!nzchar(nm) | nm == "default")
+  cut  <- Filter(function(v) v %in% names(before) && v %in% names(after) &&
+                             shape_is_numeric(before[[v]]) && !shape_is_numeric(after[[v]]),
+                 intersect(vars, names(after)))
+  if (!length(cut)) return(ref)
+  w <- if (!is.null(wt) && wt %in% names(before)) as.numeric(before[[wt]]) else NULL
+  band <- function(value, v) {
+    x <- as.numeric(before[[v]])
+    k <- tryCatch(reg_anchor_value(value, x, w, v), error = function(e) NA_real_)
+    if (!is.finite(k)) return(NULL)
+    i <- which.min(abs(x - k))
+    if (!length(i)) NULL else as.character(after[[v]])[[i]]
+  }
+  for (v in cut) {
+    j   <- which(nm == v)
+    val <- if (length(j)) ref[[j[[1L]]]] else if (length(fb)) ref[[fb[[1L]]]] else NULL
+    # a LEVEL keyword ("first"/"last") already reads on a factor: leave it to reg_ref_level().
+    if (is.null(val) || !identical(reg_ref_fallback_kind(val), "numeric")) next
+    lv <- band(val, v)
+    if (is.null(lv)) next
+    if (length(j)) ref[[j[[1L]]]] <- lv else { ref <- c(ref, stats::setNames(lv, v)); nm <- names(ref) }
+  }
+  nm   <- names(ref) %||% rep("", length(ref))
+  fb   <- which(!nzchar(nm) | nm == "default")
+  left <- setdiff(Filter(function(v) shape_is_numeric(after[[v]]), intersect(preds, names(after))),
+                  cut)
+  if (length(fb) && identical(reg_ref_fallback_kind(ref[[fb[[1L]]]]), "numeric") && !length(left))
+    ref <- ref[-fb]
+  ref
+}
+
 # outcome -> the level it was collapsed to, for every binomial: what a replay must redo.
 #' @keywords internal
 #' @noRd
@@ -901,9 +949,21 @@ reg_resolve_specs <- function(data, deps, predictors, is_comparison = FALSE, for
     spec_names <- NULL                                   # map2() over a bare vector carried none
     union_predictors <- reg_cross_row_vars(predictors, crosses)
   }
+  # THE OUTCOME'S OWN MAGNITUDE, read once from the WHOLE frame: on a unit scale (a mean, a mean
+  # difference) no declared decimal count can mean anything, a salary being six figures and a rate
+  # two, so reg_cell_digits() clamps its default against this. Here rather than post-hoc over the
+  # finished table because a model comparison, several outcomes and a `tab_vars` recursion each break
+  # a grouping key -- read off the spec, a model column and its observed twin agree by construction.
+  level_mags <- vapply(seq_len(nrow(deps)), function(i) {
+    y <- data[[outcome[[i]]]]
+    if (!is.numeric(y)) return(NA_real_)
+    suppressWarnings(mean(abs(as.numeric(y)), na.rm = TRUE))
+  }, double(1))
+
   # each spec carries its OWN resolved family shape and ESTIMAND row (`est`).
   specs <- purrr::pmap(list(rows, preds, labels), function(r, p, l)
     new_reg_spec(outcome = outcome[[r]], predictors = reg_cross_predictors(p, crosses), label = l,
+                 level_mag = level_mags[[r]],
                  cross = reg_cross_keys(p, crosses), row_vars = reg_cross_row_vars(p, crosses),
                  fit_family = deps$fit_family[[r]],
                  # NA in the table means "not a grouped binomial"; the spec field is NULL instead.
@@ -968,7 +1028,9 @@ reg_resolve_args <- function(data, outcome, predictors, tab_vars = NULL, wt = NU
   # S2 -- everything that touches `data`.
   prep <- reg_prepare_data(data, outcome, predictors, tab_vars = tab_vars, wt = wt,
                            shape = shape, family = family,
-                           levels_collapse = levels_collapse, na = na)
+                           levels_collapse = levels_collapse, na = na, ref = ref)
+  # a `ref` anchor on a predictor the boundary CUT is now that band's level name (see S2).
+  ref  <- prep$ref
 
   # ⚠ THE DEFAULT COMPARISON DEGRADES, IT NEVER REFUSES. `"auto"` is what an unnamed `stats` asks
   # for, so it must not abort a table, and it must not turn on the two things `compare != "none"`

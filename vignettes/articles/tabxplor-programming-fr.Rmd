@@ -331,7 +331,7 @@ purrr::pmap(specs, \(row_var, col_var, pct)
 
 ## Options avancées
 
-Au-delà des réglages les plus habituels ([Introduction à tabxplor](tabxplor-fr.html) &rarr; *Options de session R*), ces `options()` ajustent les exportateurs et la construction des tableaux.
+Au-delà des réglages les plus habituels ([Introduction à tabxplor](tabxplor-fr.html) &rarr; *Options globales R*), ces `options()` ajustent les exportateurs et la construction des tableaux.
 
 HTML / `tab_html()` :
 

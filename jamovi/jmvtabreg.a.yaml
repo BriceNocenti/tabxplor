@@ -367,13 +367,15 @@ options:
       options:
         - title: "wald = <i>(Wald)</i>"
           name:  wald
-        - title: "profile = <i>(profile-likelihood)</i>"
+        - title: "profile = <i>(profile-likelihood ; not cached, long)</i>"
           name:  profile
       default: wald
       description:
           R: >
            Wald intervals (also the only option for weighted models) or
            profile-likelihood intervals (unweighted binomial / poisson only; needs MASS).
+           A profile interval is an output of the likelihood at one confidence level, so it
+           cannot be cached: every change refits the models.
 
     - name: stars
       title: stars
@@ -437,6 +439,8 @@ options:
           name:  auto
         - title: "est <i>(the estimate)</i>"
           name:  est
+        - title: "ci <i>(confidence interval)</i>"
+          name:  ci
         - title: "est_ci <i>(estimate + interval)</i>"
           name:  est_ci
         - title: "est_coef <i>(est. + raw coeff)</i>"

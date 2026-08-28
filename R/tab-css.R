@@ -68,6 +68,14 @@ tx_resolve_theme <- function(theme) {
 #   "console" the palette the terminal is using                (auto-detected from the editor)
 # WARNING: reaching for the console pair on the export path (or vice-versa) silently picks the wrong
 # theme -- render_footer() once did this when its `theme` argument was NULL.
+# THE AIR UNDER A FINISHED TABLE, as one value both stylesheets read: tab_css() puts it on the table
+# itself, and jamovi's own wrapper moves it onto the scrollbox (jmv_results_style), so the gap sits
+# below a horizontal scrollbar rather than above it. "About one line of text" of the SURROUNDING
+# prose -- `em` here resolves against the page's font size, the table declaring none of its own.
+#' @keywords internal
+#' @noRd
+TX_TAIL_SPACE <- "1.2em"
+
 tx_theme_option <- function(scope = c("export", "console")) {
   # the name chain and the default come from TAB_OPTIONS, so a renamed option reaches every reader.
   switch(match.arg(scope),
@@ -254,6 +262,13 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
     # same set-back ink a composite cell's aside takes. The coloured runs inside it are spans of their
     # own and keep their slot colour: a descendant's rule needs no specificity contest with this one.
     add(".tabxplor-tab .tx-foot", "color", cl$grey2, cd$grey2, cp$grey2)
+    # THE SHAPE TABLE is a note under the table, not a second table: the aside ink and one step down
+    # in size -- still above the 80 % footer, which is an aside about the note.
+    # ⚠ a NOISY row keeps the dimmer `grey` here, so the block's ink and the row's verdict stay one
+    # step apart (elsewhere `.tx-sec` IS `grey2`, and against a grey2 block it would say nothing).
+    add(".tabxplor-tab.tx-shape", "color", cl$grey2, cd$grey2, cp$grey2)
+    add(".tabxplor-tab.tx-shape thead th", "color", cl$grey2, cd$grey2, cp$grey2)
+    add(".tabxplor-tab.tx-shape .tx-sec", "color", cl$grey, cd$grey, cp$grey)
     # THE SECONDARY TOKENS (a composite cell's aside) are set back from the table's own text, resolved
     # per theme like every chrome rule. Under `color_whole_cell` no rule is emitted: the aside then
     # inherits the cell's own shade, though the span is still written so a stylesheet can restyle it.
@@ -367,6 +382,16 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     paste0(".tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;",
            "border-top-width:0;border-bottom-width:0;",
            "margin:0;font-family:\"DejaVu Sans Condensed\",\"DejaVu Sans\",Arial,helvetica,sans-serif;}"),
+    # ONE LINE OF AIR UNDER A FINISHED TABLE, below the footer legend and below everything else it
+    # emitted. A table is a block of its own and the prose after it must not touch it -- and a host
+    # that gives a <table> no bottom margin (html_vignette, jamovi, the Viewer page) left them
+    # welded together, which is why a document had to write its own line break after every table.
+    # ⚠ `margin`, not `padding`: adjacent vertical margins COLLAPSE, so this is a FLOOR, not an
+    # addition -- where the host's own paragraph spacing is already bigger, nothing moves. It is
+    # also what separates two STACKED tables (tab_kable_join no longer writes a <br> for that).
+    # ⚠ the `.tabxplor-tab table` half of the rule above keeps `margin:0`, and out-specifies this at
+    # (0,1,1): a markdown div's INNER table must not add a second gap.
+    paste0(".tabxplor-tab{margin-bottom:", TX_TAIL_SPACE, ";}"),
     # the table TITLE is a `<div class="tabxplor-caption">` sibling emitted BEFORE the <table>, not a
     # `<caption>` child (see above). `width:0;min-width:100%` is the same idiom as `.tx-foot` below --
     # otherwise a long title would SIZE a shrink-to-fit container (jamovi's `.tx-scrollbox`). Its colour
@@ -486,6 +511,7 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # with no border of its own (the cell's own rule already draws the rectangle around it).
     ".tabxplor-tab .tx-spark{display:block;margin:0 auto;}",
     ".tabxplor-tab .tx-sparkcell{vertical-align:middle;text-align:center;padding:1px 2px;}",
+    ".tabxplor-tab.tx-shape{font-size:90%;}",
     # a cell tooltip is one line of "field: value ; field: value" prose, but bootstrap caps
     # .tooltip-inner at 200px and wraps it to four. WARNING: this selector cannot be scoped (see the
     # file header) and so applies to any other bootstrap tooltip on the host page too -- accepted,

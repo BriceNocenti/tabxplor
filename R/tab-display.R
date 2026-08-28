@@ -21,6 +21,9 @@
 #     cell renders as an aside -- the Total cell reduced to "({n_range})" where its block does not
 #     sum. Its type TAG still names the count (a label drops the primary's own brackets): the column
 #     holds a count, and the cell reads it as an aside, which are two questions.
+#   - tab_narrow_default_display() states the one rule that UNDOES a default: a spread multiplies the
+#     columns, so a layout nobody named falls back to its scale's own estimate. It runs at the spread
+#     and tab() applies `display =` after it, which is the whole of "the user's word wins".
 #   - DISPLAY_PRESETS + display_resolve() are the ONE named-layout table, read by tab() and by
 #     tab_reg() alike, so a display learnt on a crosstab means the same on a regression. A preset may
 #     declare one arm per column ROLE, which is where the crude/model mirror is stated -- so it holds
@@ -74,6 +77,39 @@
 
 #' @keywords internal
 #' @noRd
+# A SPREAD MULTIPLIES THE COLUMNS -- one per level of the spread variable -- so every cell has a
+# fraction of the width it had. A column still wearing the DEFAULT layout its leaf chose, nobody
+# having asked for one, therefore falls back to the bare estimate ITS OWN SCALE declares
+# (EST_SCALES$default_display); a layout someone NAMED is never touched. Measured on the numeric
+# default that motivated this, `mean_cv`: a coefficient of variation is a second number per cell,
+# and a spread is exactly where a cell can least afford one.
+#
+# ⚠ THE TEST IS "IS THIS STILL THE LEAF'S OWN CHOICE?", recomputed from the column's own values
+# (num_default_display) rather than recorded -- which is what keeps the rule out of every other code
+# path. Nothing is stored and no flag is threaded, so `display =`, `ci =` and a post-hoc
+# set_display() each keep their layout by simply not matching. And it runs at the SPREAD, which
+# tab() performs BEFORE tab_apply_display(), so an explicit `display =` is applied over it and wins;
+# on the built table set_display() wins the same way.
+#' @keywords internal
+#' @noRd
+tab_narrow_default_display <- function(tabs) {
+  one <- function(col) {
+    if (!is_fmt(col)) return(col)
+    d <- unique(get_display(col))
+    # a COMPOSITE default only: a bare token has nothing to drop, and a per-cell mix was never a leaf
+    # default (the leaves write one layout per column).
+    if (length(d) != 1L || is.na(d) || !grepl("{", d, fixed = TRUE)) return(col)
+    if (!identical(d, num_default_display(get_mean(col)))) return(col)
+    bare <- EST_SCALES[[get_scale(col)]]$default_display
+    if (is.null(bare) || is.na(bare) || identical(bare, d)) return(col)
+    fmt_set_display(col, bare)
+  }
+  # column by column, never dplyr::across(): across() runs PER GROUP on a grouped tab, and "the
+  # column's own default" is a question about the whole column (same reason as tab_apply_display).
+  for (nm in names(tabs)) tabs[[nm]] <- one(tabs[[nm]])
+  tabs
+}
+
 tab_apply_display <- function(tabs, display) {
   ds <- display_resolve(display)
   if (is.null(ds)) return(tabs)

@@ -338,7 +338,7 @@ purrr::pmap(specs, \(row_var, col_var, pct)
 
 ## Advanced options
 
-Beyond the everyday defaults (`vignette("tabxplor")` &rarr; *Session options*), these `options()` tune the exporters and the build. HTML / `tab_html()`:
+Beyond the everyday defaults (`vignette("tabxplor")` &rarr; *Global R options*), these `options()` tune the exporters and the build. HTML / `tab_html()`:
 
 - `tabxplor.tab_kable_css` — inline the stylesheet with each table (`TRUE`); set `FALSE` in a many-table document and call `tab_css()` once instead (this vignette does).
 - `tabxplor.tab_kable_tooltips` — the per-cell hover tooltips (`TRUE`); set `FALSE` once per document to switch them off everywhere.

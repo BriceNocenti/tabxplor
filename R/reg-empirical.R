@@ -661,6 +661,7 @@ cat_get <- function(l, key) {
 # effect also travels back as a VECTOR keyed by OUTCOME CATEGORY; `emp_mode` decides whether those
 # effects draw their own columns ("column") or ride in the model cell ("cell").
 reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, est, var_y,
+                                  level_mag = NA_real_,
                                   conf_level = 0.95, color_signif = "grey_non_signif",
                                   color = NULL, fit_est = NULL, weighted = FALSE,
                                   degf = Inf, emp_mode = "column",
@@ -699,7 +700,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
   emp_col <- function(shape, fields, n_eff = NULL) {
     args <- c(fields, if (!is.null(n_eff)) list(n_eff = n_eff), list(
       scale = shape$scale, pct_type = reg_pct_type(shape$scale),
-      digits = reg_cell_digits(shape$scale),
+      digits = reg_cell_digits(shape$scale, level_mag),
       display = "est",
       ci_method = emp_method(shape), degf = emp_degf,
       color = emp_color, color_signif = emp_signif, refcol = gap_base,

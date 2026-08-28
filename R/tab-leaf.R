@@ -1527,11 +1527,17 @@ num_resolve <- function(color, ref, ci, tot, comp, totaltab, row_var, col_vars, 
 # layout per column is what keeps a column readable -- and `mean_sd` is one word away.
 #' @keywords internal
 #' @noRd
+# ⚠ A SPREAD NARROWS THIS BACK: tab_narrow_default_display() (R/tab-display.R) recomputes this very
+# call to ask "is the column still wearing the leaf's own default?", and drops the aside where it is.
 num_default_display <- function(mean) {
   m <- mean[!is.na(mean)]
   if (length(m) && all(m > 0)) DISPLAY_PRESETS$mean_cv$template else "mean"
 }
 
+# THE LOWER EDGE of the package's precision band: a column keeps at least 2 significant figures of
+# its own level. tx_sig_digits() (R/fmt_class.R) is the primitive it is written with and the upper
+# edge reads; the bounds are stated CLOSED here on purpose (a mean of exactly 10 keeps a decimal),
+# which is the one place the two edges do not line up.
 num_digits_floor <- function(digits, means) {
   m <- suppressWarnings(max(means, na.rm = TRUE))
   if (!is.finite(m)) m <- 0

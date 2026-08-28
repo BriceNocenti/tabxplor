@@ -138,7 +138,8 @@ stars.}
 
 \item{ci_method}{Wald intervals (also the only option for weighted models)
 or profile-likelihood intervals (unweighted binomial / poisson only; needs
-MASS).}
+MASS). A profile interval is an output of the likelihood at one confidence
+level, so it cannot be cached: every change refits the models.}
 
 \item{stars}{Show per-cell significance stars (the colours read the
 confidence interval either way).}

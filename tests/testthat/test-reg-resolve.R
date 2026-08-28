@@ -311,3 +311,38 @@ test_that("only the intercept moves: every estimate is invariant under the ancho
                                 cst(tab_reg(d, "married", c("race", "age"), family = "binomial",
                                             stats = FALSE, multiplier = 1), "Model_OR"))))
 })
+
+
+# === `ref` across a shape cut =====================================================================
+# The two `ref` vocabularies are disjoint BY KIND (an anchor for a number, a level for a factor), and
+# `shape` -- or `na = "keep_for_predictors"`, which cuts silently -- changes a predictor's kind. The
+# boundary translates the anchor into the band that value falls in, so the request survives the
+# recode instead of reaching the other resolver.
+
+test_that("an anchor survives the cut `na = \"keep_for_predictors\"` makes", {
+  d <- fx_reg_df()
+  lv <- function(...) as.character(suppressMessages(suppressWarnings(
+    tab_reg(d, "marital", ..., family = "binomial", outcome_level = "Married",
+            na = "keep_for_predictors", color = FALSE, stats = FALSE)))$levels)
+
+  # named on the cut variable, and bare: both used to abort, with two different messages
+  expect_no_error(lv(c("age", "tvhours", "race"), ref = c(tvhours = "min")))
+  expect_no_error(lv(c("tvhours", "race"), ref = "min"))
+  # "min" and "max" pick opposite bands (the reference level heads its own block)
+  lo <- lv(c("tvhours", "race"), ref = c(tvhours = "min"))[[2]]
+  hi <- lv(c("tvhours", "race"), ref = c(tvhours = "max"))[[2]]
+  expect_false(identical(lo, hi))
+})
+
+test_that("an explicit `shape` cut translates its anchor the same way", {
+  d <- fx_reg_df()
+  expect_no_error(suppressMessages(suppressWarnings(
+    tab_reg(d, "marital", c("tvhours", "race"), family = "binomial", outcome_level = "Married",
+            shape = c(tvhours = "quartiles"), ref = c(tvhours = "mean"), color = FALSE,
+            stats = FALSE))))
+  # an UNCUT numeric still anchors as a number
+  t <- suppressMessages(tab_reg(d, "marital", c("age", "race"), family = "binomial",
+                                outcome_level = "Married", ref = c(age = "min"),
+                                color = FALSE, stats = FALSE))
+  expect_match(paste(as.character(t$levels), collapse = " "), "(min)", fixed = TRUE)
+})

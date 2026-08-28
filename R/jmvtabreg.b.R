@@ -106,6 +106,8 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # and resolve together in jmvtab_reg_build(), so mixed families render as one table.
         family        = self$options$family,
         link          = self$options$link,
+        # Raw, like `multiplier` below: the build core drops it for a family that offers no such
+        # level, so a family switch cannot abort tab_reg() on a stale panel value.
         outcome_level = self$options$outcome_level,
         trials        = self$options$trials,
         # Raw: the build core drops it for multinomial / ordinal groups, so a family switch cannot

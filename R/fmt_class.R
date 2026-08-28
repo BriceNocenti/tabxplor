@@ -2117,6 +2117,33 @@ fmt_kind_label <- function(x) {
 #' @keywords internal
 fmt_ci_digits <- function(row) if (isTRUE(row$mult)) 2L else if (isTRUE(row$is_pct)) 0L else 1L
 
+# THE DECIMALS A MAGNITUDE DESERVES -- `sig` significant figures of it, and the one primitive the
+# package's precision band is written with: a column keeps between 2 and 3 significant figures of its
+# own level unless the user says otherwise. Read by fmt_magnitude_cap() (the upper edge) and by
+# reg_cell_digits() (the regression default). NA where there is no magnitude to read.
+# ⚠ num_digits_floor() (R/tab-leaf.R) is the crosstab's lower edge and states its bounds CLOSED (a
+# mean of exactly 10 keeps a decimal), so it is deliberately not rewritten in terms of this.
+#' @keywords internal
+tx_sig_digits <- function(values, sig = 3L) {
+  m <- suppressWarnings(max(abs(as.double(values)), na.rm = TRUE))
+  if (!is.finite(m) || m <= 0) return(NA_integer_)
+  max(0L, as.integer(sig) - (as.integer(floor(log10(m))) + 1L))
+}
+
+# THE UPPER EDGE, per column: how many decimals this column's own LEVEL can justify. It applies to
+# UNIT SCALES only -- the ones whose level is in the outcome's own units, where no declared decimal
+# count can mean anything, a salary being six figures and a rate two. A fixed scale (a percentage, a
+# point, a ratio, an odds ratio, a log coefficient) already declares its precision and is left alone.
+# The gate is a fact the grid already carries: the level token is `mean`.
+# ⚠ It caps the FLOORS, never the stored `digits` -- `set_digits()` and `tab_reg(digits =)` must stay
+# able to ask for more.
+#' @keywords internal
+fmt_magnitude_cap <- function(x, row) {
+  lvl <- if (identical(row$kind, "level")) row$est_display else row$base_display
+  if (!identical(lvl, "mean")) return(NA_integer_)
+  tx_sig_digits(vctrs::field(x, "mean"), 3L)
+}
+
 #' @keywords internal
 fmt_center_field <- function(x) fmt_scale_row(x)$est_field
 
@@ -3308,16 +3335,32 @@ fmt_coef_of <- function(x) {
   ifelse(!is.na(v) & v > 0, suppressWarnings(log(v)), NA_real_)
 }
 
+# A BOUND IS WRITTEN IN THE SAME NOTATION AS THE ESTIMATE IT BRACKETS -- one rule, no per-measure
+# arm, read from two facts already declared:
+#   EST_SCALES$neutral    the value the interval is a deviation FROM (0 additive, 1 multiplicative),
+#                         and NA on a LEVEL scale -- where a bound is a percentage or a mean, names
+#                         no side, and so takes no glyph. That NA is the whole gate.
+#   MEASURES$break_over / $break_under   the measure's own two glyphs, the very pair its colour
+#                         legend prints: "+"/"-", "x"/"/", ""/"1/".
+# So a bound is (glyph for its side) + (its magnitude in the scale's own geometry): "+35" / "-3",
+# "x2.11" / "/2.11", and a bare "1.75" beside "1/4.45" -- an odds ratio declaring no over-glyph is
+# the reason this reads the table instead of hard-coding a sign. Without it a difference's interval
+# printed "[35;45]" beside an estimate reading "+35", and a ratio's showed the fold but not the
+# multiply.
+# `over = NULL` switches every glyph off, which is what `tabxplor.ratio_print_raw` asks for.
 #' @keywords internal
-fmt_ci_bracket <- function(lo, hi, digits, is_pct = FALSE, clamp = FALSE, mult_under = NULL) {
+fmt_ci_bracket <- function(lo, hi, digits, is_pct = FALSE, clamp = FALSE,
+                           neutral = NA_real_, over = NULL, under = NULL) {
   if (is_pct) { lo <- lo * 100; hi <- hi * 100 }
   if (clamp)  { lo <- pmax(lo, 0); hi <- pmin(hi, 100) }
+  glyphs <- !is.na(neutral) && !is.null(over) && !is.null(under)
+  mult   <- isTRUE(neutral == 1)
   bnd <- function(b) {
-    s <- sprintf(paste0("%-0.", digits, "f"), b)
-    if (is.null(mult_under)) return(s)
-    i <- !is.na(b) & b > 0 & b < 1
-    s[i] <- paste0(mult_under, sprintf(paste0("%-0.", digits[i], "f"), 1 / b[i]))
-    s
+    if (!glyphs) return(sprintf(paste0("%-0.", digits, "f"), b))
+    # the magnitude in the scale's own geometry: |b| additively, the FOLD multiplicatively
+    mag  <- if (mult) ifelse(!is.na(b) & b > 0 & b < 1, 1 / b, b) else abs(b)
+    side <- !is.na(b) & b < neutral
+    paste0(ifelse(side, under, over), sprintf(paste0("%-0.", digits, "f"), mag))
   }
   out <- paste0("[", bnd(lo), ";", bnd(hi), "]", if (is_pct) "%" else "")
   out[is.na(lo) | is.na(hi)] <- NA_character_
@@ -3472,31 +3515,46 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   scl      <- fmt_scale_row(x)
   # `{est}` / `{base}` resolve HERE, once, to the token this column has always rendered them as, so
   # every mask, glyph, annotation and Excel code below applies to them with no arm of their own.
-  display <- fmt_resolve_scale_tokens(display_primary(raw_display), scl)
+  # `prim_raw` is the primary token AS THE TEMPLATE NAMES IT -- "base" alike from `display = "base"`
+  # and from the Excel split's "({base})" (mat_aside_cols), which is what keeps a split-off aside at
+  # its scale's own precision instead of falling back to the column's.
+  prim_raw <- display_primary(raw_display)
+  display <- fmt_resolve_scale_tokens(prim_raw, scl)
   nas  <- is.na(display)
   digits <- get_digits(x)
   digits[!nas & display %in% c("n", "n_range")] <- 0
-  # ONLY 0 is overridden, and only where the token declares a floor (DISPLAY_TOKENS$min_digits): a
-  # cell asking for 1 or 3 decimals gets them. `digits` is per-cell but ONE value serves every
-  # display of that cell -- a percentage wants 0 and its own ratio wants 2 -- so the floor cannot be
-  # stored on the cell; it belongs where what is being SHOWN is known, which is here.
-  # ⚠ 0 MEANS "UNSET", which is why a SCALE must not declare a precision its own estimate token
-  # already declares (REG_CELL_DIGITS): a 1 there does not raise the token's 2, it SILENCES it --
+  # THE MAGNITUDE CAP: no floor below may claim more precision than 3 significant figures of this
+  # column's own level (fmt_magnitude_cap(), unit scales only). It caps the FLOORS and never the
+  # stored `digits`, so `set_digits()` and `tab_reg(digits =)` still ask for more and get it.
+  cap  <- fmt_magnitude_cap(x, scl)
+  cp   <- function(v) if (is.na(cap)) v else pmin(v, cap)
+  # A TOKEN THAT IS NOT THIS COLUMN'S OWN QUANTITY STATES ITS OWN PRECISION (DISPLAY_TOKENS
+  # $min_digits), as a floor: a `{coef}` aside is a log odds whatever the level beside it reads at,
+  # and inheriting a mean's one decimal made it "+0.4" where "+0.35" was meant. Where the token IS
+  # the column's estimate or its level the old rule holds -- the minimum is a DEFAULT a cell
+  # overrides by asking, so it applies only to an unset 0.
+  # ⚠ 0 MEANS "UNSET" there, which is why a SCALE must not declare a precision its own estimate
+  # token already declares (REG_CELL_DIGITS): a 1 does not raise the token's 2, it SILENCES it --
   # which is how a grouped-binomial ratio printed x1.4 where x1.44 was meant.
-  md <- unname(DISPLAY_MIN_DIGITS[display])
-  digits[!nas & !is.na(md) & digits == 0L] <- md[!nas & !is.na(md) & digits == 0L]
+  md  <- cp(unname(DISPLAY_MIN_DIGITS[display]))
+  own <- !nas & (prim_raw %in% c("est", "base") |
+                 display %in% c(scl$est_display %||% "", scl$base_display %||% ""))
+  hit <- !nas & !is.na(md) & !own
+  digits[hit] <- pmax(digits[hit], md[hit])
+  hit <- !nas & !is.na(md) & own & digits == 0L
+  digits[hit] <- md[hit]
   # THE LEVEL HAS ITS OWN PRECISION (EST_SCALES$base_digits). Keyed on the RAW token, so it reaches a
   # `{base}` aside (the composite loop below re-enters with the unresolved name) and a bare
   # `display = "base"` column alike, and never a `{pct}` a user wrote themselves.
   if (!is.null(scl$base_digits))
-    digits[!nas & raw_display == "base"] <- scl$base_digits
+    digits[!nas & prim_raw == "base"] <- scl$base_digits
   # ...and THE ESTIMATE has its own where the scale says so: `{est}` as written, or the token it
   # resolves to, so a bare `display = "or"` column reads at the same precision as `{est}` does.
   # ⚠ a FLOOR, unlike base_digits: the level's precision may be coarser than the cell's and the
   # estimate's may not, so a user asking for more decimals must still get them.
   if (!is.null(scl$est_digits)) {
-    e <- !nas & (raw_display == "est" | display == (scl$est_display %||% ""))
-    digits[e] <- pmax(digits[e], scl$est_digits)
+    e <- !nas & (prim_raw == "est" | display == (scl$est_display %||% ""))
+    digits[e] <- pmax(digits[e], cp(scl$est_digits))
   }
 
 
@@ -3549,7 +3607,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # an `obs` / `gap` takes the SAME decimals floor as the estimate it is compared to: one comparison,
   # one precision, so a crude ratio never prints two decimals beside a modelled one printing one.
   if (obs_mult) {
-    o_floor <- unname(DISPLAY_MIN_DIGITS[scl$est_display %||% NA_character_])
+    o_floor <- cp(unname(DISPLAY_MIN_DIGITS[scl$est_display %||% NA_character_]))
     if (!is.na(o_floor))
       digits[!nas & display %in% c("obs", "gap") & digits == 0L] <- o_floor
   }
@@ -3560,7 +3618,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   disp_moe  <- display == "moe" & !nas
   # THE decimals floor for an interval bound, derived from the scale (fmt_ci_digits()), one rule for
   # the `{ci}` bracket and the `{moe}` half-width alike.
-  ci_floor  <- fmt_ci_digits(scl)
+  ci_floor  <- cp(fmt_ci_digits(scl))
   if (ci_floor > 0L) {
     lo_dg <- !nas & display %in% c("ci", "moe") & digits < ci_floor
     digits[lo_dg] <- ci_floor
@@ -3590,7 +3648,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
   pct_or_ci <- pct_or_ci | obs_as_pct
   out[pct_or_ci] <- out[pct_or_ci] * 100
-  digits[diff_mean] <- ifelse(digits[diff_mean] == 0, 1, digits[diff_mean])
+  digits[diff_mean] <- ifelse(digits[diff_mean] == 0, cp(1L), digits[diff_mean])
   # `.digits`: THIS TOKEN'S OWN PRECISION, named in the template ("{base:1}"). Applied last, so it
   # beats every declared default above -- the token's minimum, the level's `base_digits`, the
   # interval floor. Internal: the composite expander passes it, no user calls format() with it.
@@ -3634,10 +3692,16 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # COLUMN's own scale, so one template works on a percentage column and a mean column alike. A void
   # bound yields NA -- an interval that was never computed renders BLANK, never the centre value
   # wearing brackets -- and the composite expander then pads it to its column's width.
-  if (any(disp_ci))
+  if (any(disp_ci)) {
+    # the glyphs go with the measure, EXCEPT where a multiplicative column is asked to print raw
+    # (`tabxplor.ratio_print_raw`): there the estimate itself carries none, so neither may its bounds.
+    ci_glyph <- !ci_mult || mult_inverse
     out[disp_ci] <- fmt_ci_bracket(get_ci_inf(x)[disp_ci], get_ci_sup(x)[disp_ci], digits[disp_ci],
                                    is_pct = is_pct, clamp = is_pct && identical(scl$kind, "level"),
-                                   mult_under = if (mult_inverse) mult_under else NULL)
+                                   neutral = scl$neutral,
+                                   over  = if (ci_glyph) MEASURES[[scl$label_meas]]$break_over,
+                                   under = if (ci_glyph) mult_under)
+  }
   if (any(disp_moe)) {
     m <- out[disp_moe]                                    # NA -> NA, like the bracket
     out[disp_moe] <- ifelse(is.na(m), NA_character_, paste0(pm, m, if (is_pct) "%" else ""))
@@ -4192,11 +4256,20 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
     # and the aside is not what any measure grades. Wrapping is also unsafe in general: an inner reset
     # ends the outer style early, which is what an aside written FIRST ("({base}) {est}") would do.
     grey_cells <- ok & unselected & !totals
+    # ⚠ A FILL WITH NO TEXT COLOUR TAKES THE THEME'S `on_fill` INK, here exactly as in
+    # fmt_get_color_code() (the exports) and in the footer legend. The console PAINTS the fill as an
+    # ANSI background, so without this the cell keeps the TERMINAL's own foreground -- light, on the
+    # dark theme whose fills are light panels, which is unreadable. NA on the light theme, where the
+    # page ink is already right, so that output is untouched.
+    on_fill <- tx_chrome_hex(tx_palette_theme(tx_theme_option("console")))$on_fill
+    on_fill_style <- if (!is.null(on_fill) && !is.na(on_fill))
+      tryCatch(cli::make_ansi_style(on_fill), error = function(e) NULL)
     key <- paste(channels$text_slot, channels$bg_slot, grey_cells, bolded)
     for (k in unique(key[ok])) {
       cells <- ok & key == k
       i <- which(cells)[[1]]
       f <- if (channels$text_slot[i] > 0L) text_styles[[channels$text_slot[i]]]
+           else if (channels$bg_slot[i] > 0L && !is.null(on_fill_style)) on_fill_style
            else if (grey_cells[i])         pillar::style_subtle
            else                            identity
       for (g in list(if (channels$bg_slot[i] > 0L) bg_styles[[channels$bg_slot[i]]],
@@ -6227,7 +6300,11 @@ legend_specs <- function(x, theme = "light") {
     # the emp/model split reads the column's STORED `role` attr, not the "Emp." name prefix. Fall back
     # to "model" if an old/hand-built reg column lacks it.
     role     <- if (isTRUE(is_reg)) { r <- get_role(col); if (nzchar(r)) r else "model" } else "model"
-    ref      <- legend_ref_info(x, col, m_txt, orient, is_coef = is_coef, is_reg = is_reg,
+    # THE BASELINE IS THE COLOURING MEASURE'S, whichever channel carries it: `color = c("no", ...)`
+    # is a background-only column, and reading the (absent) TEXT measure left `ref_kind` NULL and
+    # aborted the whole footer. Same fallback the `policy` line above already makes.
+    m_ref    <- if (!is.na(m_txt)) m_txt else m_bg
+    ref      <- legend_ref_info(x, col, m_ref, orient, is_coef = is_coef, is_reg = is_reg,
                                 policy = policy)
     scale_key <- get_scale(col)
     ci_method <- get_ci_method(col)

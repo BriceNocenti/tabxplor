@@ -440,8 +440,13 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
   # row-anchor signal for tab_bold_rows(), captured BEFORE the footer override below needs the pure signal.
   anchors <- purrr::map(ann, "keep_black")
 
-  # a regression GOF footer row reads black + bold: a model-fit number, not data to grey out. Never
-  # touches a crosstab. A marked check (`gof_warn`) keeps its own shade instead.
+  # A REGRESSION GOF FOOTER ROW READS BLACK, AND NOT BOLD: a model-fit number is a report card under
+  # the table, so COLOUR is the only emphasis it keeps -- a marked check (`gof_warn`) keeps its own
+  # shade, a non-significant p-value its red. Bolding the numbers and the stat names beside them put
+  # the footer in front of the table it describes, in dark mode especially. The one thing still bold
+  # is the "Model fit" label in the predictor-names column, which each backend bolds through that
+  # COLUMN (html `tx-b` on the named cell, xl's var_name_col source) and not through the row.
+  # Never touches a crosstab.
   footer_rows <- if (length(fmt_cols) > 0) {
     purrr::reduce(purrr::map(names(fmt_cols),
       ~ display_primary(get_display(tab[[.x]])) %in% DISPLAY_FOOTER_TOKENS), `&`)
@@ -451,7 +456,7 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
       blk <- footer_rows & display_primary(get_display(tab[[nm]])) != "gof_warn"
       a$keep_black[blk] <- TRUE
       a$font[blk]       <- theme_cols$text
-      a$bold[footer_rows] <- TRUE
+      a$bold[footer_rows] <- FALSE
       a
     })
   }
@@ -461,8 +466,9 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
   bold_rows <- if ("bold" %in% compute) {
     tab_bold_rows(anchors)
   } else integer(0)
-  # A footer row's LABEL cells (row-var / level columns) bold too, matching its value cells.
-  if ("bold" %in% compute && any(footer_rows)) bold_rows <- union(bold_rows, which(footer_rows))
+  # ...and a footer row is never a bold ROW either, which is what used to reach its LABEL cells (the
+  # stat names in the level column). See the block above.
+  if ("bold" %in% compute && any(footer_rows)) bold_rows <- setdiff(bold_rows, which(footer_rows))
   bold_cols <- if ("bold" %in% compute && length(ref_alltot_list) > 0) {
     names(which(purrr::map_lgl(ref_alltot_list, all)))
   } else character(0)

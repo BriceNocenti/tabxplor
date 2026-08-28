@@ -499,14 +499,29 @@ xl_check_rows <- function(imgs)
 # Excel's width unit is one character of the workbook base font (xlb_base_font); format() renders
 # the exact strings Excel shows, so nothing beyond the render model is needed to measure a column --
 # unlike openxlsx2's own `bestFit` (see the header for why it can't be trusted).
+#
+# MEASURED IN THE INK THE CELL IS DRAWN IN, which is three facts and not one: the base font sets the
+# width UNIT, the figures are drawn in `font_num` (XL_NUM_RATIO), and a bold cell is wider again
+# (XL_BOLD_RATIO), per CELL because the Total row is bold and spans every column. A figure cannot
+# wrap, so it sizes its column; a header, a unit tag or a label contributes its width divided by the
+# lines it may use. Measured per SHEET (xl_sheet_widths): a column index belongs to the sheet.
 
 # XL_PAD is the cell's left+right padding, ~5px = 0.7 characters, rounded up to a comfortable 1.
 XL_PAD <- 1.0
 xl_width_of <- function(nchars, ratio = 1) max(2.5, nchars * ratio + XL_PAD)
 
-# a table showing stars/marks switches numbers to a MONOSPACE stack (tx_num_font) so the suffixes
-# align, whose digit is about a tenth wider than the condensed sans the width unit is defined by.
-XL_MONO_RATIO <- 1.1
+# THE INK A FIGURE IS ACTUALLY DRAWN IN. Excel's width unit is one digit of the WORKBOOK BASE FONT,
+# which xlb_base_font() sets to the TEXT font (a condensed sans); numbers are drawn in `font_num` --
+# measured at the default 10pt, an 8px digit against the base's 7px, in the plain stack AND in the
+# monospace one a starred table switches to. So the ratio is a property of every figure column, not
+# of stars: the old `has_stars` gate over-provisioned the starred path and left the plain one 14 %
+# short, which is why a bare "100%" Total column printed "#####" with no bold in sight.
+XL_NUM_RATIO <- 1.15
+# ...and BOLD, measured per cell on the same stack: "0%" 20 -> 22 px, "100%" 36 -> 40, "21 483"
+# 44 -> 50. The digits are tabular and do not move; it is "%", "." and the thousands mark that grow,
+# which is why the SHORT columns were the ones that failed. Per CELL and never per column: the Total
+# row is bold and spans every column, so a column-level factor would tax the whole sheet.
+XL_BOLD_RATIO <- 1.12
 
 # a wrapped cell (Excel gets the same `\n` breaks html does) is as wide as its longest LINE.
 xl_text_width <- function(x) {
@@ -525,17 +540,33 @@ XL_HEAD_LINES <- 2L
 # smaller size (8pt) keeps a long tag inside the figures above it, and its angle brackets -- the
 # console's own notation -- are excluded from the count.
 XL_UNIT_SIZE <- 8
-xl_col_widths <- function(tab, roles, cvh, o, colwidth, theme = "light") {
+# `bold`: one logical per DATA row per column -- the cells Excel will draw bold (xl_build_styles's
+# own set: the reference rows and columns, the variable-name column, a measure's own face). NULL =
+# nothing bold, which is what a caller that has not computed the styles yet gets.
+# `text_of`: the string a TEXT cell is written with (a bracket, a model-fit statistic, a sparkline),
+# NULL where the cell is written as a NUMBER and so shows its numFmt instead. One vector per column.
+xl_col_widths <- function(tab, roles, cvh, o, colwidth, theme = "light",
+                          bold = NULL, text_of = NULL) {
   ncl    <- ncol(tab)
-  ratio  <- if (isTRUE(roles$has_stars)) XL_MONO_RATIO else 1
   hratio <- as.double(o$text_size_headers %||% o$text_size) / as.double(o$text_size)
   cap_text <- if (is.finite(o$wrap_rows %||% Inf)) as.integer(o$wrap_rows) else 40L
   uratio <- XL_UNIT_SIZE / as.double(o$text_size)
+  # the header row is bold throughout, so it is measured bold too.
   head_w <- function(j) {
     lab <- if (!is.null(cvh)) cvh$clean[[j]] else names(tab)[[j]]
     un  <- if (!is.null(cvh) && !is.null(cvh$unit)) cvh$unit[[j]] else ""
-    max(ceiling(xl_text_width(lab) * hratio / XL_HEAD_LINES),
+    max(ceiling(xl_text_width(lab) * hratio * XL_BOLD_RATIO / XL_HEAD_LINES),
         ceiling(max(0L, xl_text_width(un) - 2L) * uratio))
+  }
+  # the widest cell of a column, each measured with ITS OWN ink: a figure in the number font, bold
+  # where that cell is bold. A wrapped cell counts its longest LINE, as xl_text_width() always did.
+  ink_w <- function(x, j, ratio) {
+    x <- as.character(x)
+    b <- if (is.null(bold)) rep(FALSE, length(x)) else rep_len(bold[[j]] %||% FALSE, length(x))
+    x[is.na(x)] <- ""
+    w <- vapply(seq_along(x), function(i)
+      xl_text_width(x[[i]]) * ratio * (if (isTRUE(b[[i]])) XL_BOLD_RATIO else 1), double(1))
+    max(c(0, w))
   }
   vname_chars <- purrr::map(roles$vname_plans %||% list(), ~ .$chars)
   vapply(seq_len(ncl), function(j) {
@@ -548,14 +579,17 @@ xl_col_widths <- function(tab, roles, cvh, o, colwidth, theme = "light") {
       }
       body <- tryCatch(format(col, special_formatting = FALSE, na = "", stars = TRUE, theme = theme),
                        error = function(e) as.character(col))
-      return(xl_width_of(max(xl_text_width(body) * ratio, head_w(j))))
+      # a TEXT cell shows the special-formatted string, not the numFmt the rest of the column shows.
+      txt  <- if (is.null(text_of)) NULL else text_of[[j]]
+      if (!is.null(txt)) body[!is.na(txt) & nzchar(txt)] <- txt[!is.na(txt) & nzchar(txt)]
+      return(xl_width_of(max(ink_w(body, j, XL_NUM_RATIO), head_w(j))))
     }
     # the name column takes the width tab_vname_plan() already capped (a rotated run costs one
     # vertical line, so only the names that stayed horizontal size it).
-    if (nm %in% names(vname_chars)) return(xl_width_of(vname_chars[[nm]]))
+    if (nm %in% names(vname_chars)) return(xl_width_of(vname_chars[[nm]] * XL_BOLD_RATIO))
     # capped at `wrap_rows`: the values are already broken there, so this only ever holds an
     # unbreakable run, and Excel wraps it (the row is unmerged, so it fits the height itself).
-    xl_width_of(max(min(cap_text, xl_text_width(as.character(col))), head_w(j)))
+    xl_width_of(max(min(cap_text, ink_w(col, j, 1)), head_w(j)))
   }, double(1))
 }
 
@@ -604,12 +638,17 @@ xl_prose_height <- function(text, span_px, size = 9) {
 # the same four columns every other medium prints, in the order reg_shape_table() declares.
 # THE SHAPE TABLE BORROWS THE MAIN TABLE'S GRID, so it must be laid over it rather than into it: the
 # first column holds a formula and takes the whole INDEX BLOCK, landing under the row labels, and
-# every other column takes TWO data columns, a data column being one number wide. Nothing here
-# changes the main table's own widths.
+# every other column takes TWO data columns, a data column being one number wide -- except the LAST,
+# the curve itself, which is a twenty-glyph run and was being cut at two. Nothing here changes the
+# main table's own widths.
+# ⚠ LAID OVER THE SHEET, NOT INTO THE TABLE: the block is deliberately NOT clamped to the table's
+# column count. On a narrow table it runs one column past the right edge, which costs nothing (it
+# draws no border and nothing else sits there) where clamping would cut the one cell that cannot
+# wrap or shorten.
 xl_shape_cells <- function(shape, row0, index_cols = 1L) {
   if (is.null(shape) || nrow(shape) == 0L) return(NULL)
   hd <- attr(shape, "headers"); nt <- attr(shape, "note")
-  spans <- c(index_cols, rep(2L, length(hd) - 1L))
+  spans <- c(index_cols, rep(2L, max(0L, length(hd) - 2L)), if (length(hd) > 1L) 3L)
   at    <- cumsum(c(1L, utils::head(spans, -1L)))
   line  <- function(row, text, bold = FALSE)
     tibble::tibble(row = row, col = at, span = spans, text = text, bold = bold, wrap = bold)
@@ -660,9 +699,40 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   # table's own right edge closes the last one, so no rule can fall INSIDE a block.
   block_start   <- tab_block_starts(roles$col_blocks %||% integer(0))
 
+  # cells are named by the SHARED plan (fmt_mult_plan), never by matching a raw token: a regression
+  # cell displays `{est}`, which IS the odds ratio on an odds-ratio column. Defined HERE, above the
+  # widths, because a TEXT cell is the one cell whose width is not its numFmt's.
+  xl_code   <- function(col) {
+    code <- format(col, syntax = "excel")
+    if (identical(o$ratio_cells, "text")) code[fmt_mult_plan(col)$cells] <- "TEXT"
+    code
+  }
+  # WHAT EACH COLUMN IS DRAWN WITH, for the sizer: which of its cells are bold (the same set
+  # xl_build_styles paints below -- reference rows and columns, the variable-name column, a face the
+  # colour plan gave a cell), and the string a TEXT cell shows instead of its number format.
+  n_rows_tab <- nrow(tab)
+  bold_of <- purrr::map(seq_len(ncl), function(j) {
+    b <- seq_len(n_rows_tab) %in% bold_rows
+    if (j %in% ref_cols || j %in% unname(roles$var_name_col)) b <- rep(TRUE, n_rows_tab)
+    a <- ann[[names(tab)[[j]]]]$bold
+    if (!is.null(a)) b <- b | rep_len(a, n_rows_tab)
+    b
+  })
+  text_of <- purrr::map(seq_len(ncl), function(j) {
+    if (!j %in% fmt_cols) return(NULL)
+    cc  <- tab[[j]]
+    hit <- xl_code(cc)
+    if (!any(!is.na(hit) & hit == "TEXT")) return(NULL)
+    txt <- tryCatch(format(cc, special_formatting = TRUE, na = "", stars = TRUE, theme = o$theme),
+                    error = function(e) NULL)
+    if (is.null(txt)) return(NULL)
+    txt[is.na(hit) | hit != "TEXT"] <- ""
+    txt
+  })
   # every downstream consumer reads THIS width vector: the writer sets it on the sheet,
   # xl_prose_span() decides how far a footer line merges, merged-cell heights are computed against it.
-  col_widths <- xl_col_widths(tab, roles, col_var_header, o, colwidth, theme = o$theme)
+  col_widths <- xl_col_widths(tab, roles, col_var_header, o, colwidth, theme = o$theme,
+                              bold = bold_of, text_of = text_of)
 
   # label runs lifted to ABSOLUTE sheet rows: `label_merges` skips length-1 runs (Excel rejects a
   # 1-cell "merge"); `vname_runs` are the name column's, the only ones that also rotate.
@@ -685,13 +755,6 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   vname_runs   <- if (length(vname_runs)) dplyr::bind_rows(vname_runs)
                   else tibble::tibble(col = integer(), row1 = integer(), row2 = integer())
 
-  # cells are named by the SHARED plan (fmt_mult_plan), never by matching a raw token: a regression
-  # cell displays `{est}`, which IS the odds ratio on an odds-ratio column.
-  xl_code   <- function(col) {
-    code <- format(col, syntax = "excel")
-    if (identical(o$ratio_cells, "text")) code[fmt_mult_plan(col)$cells] <- "TEXT"
-    code
-  }
   # turning the whole column to text took every model-fit statistic in it along with the bracket, so
   # a numeric column is written with a hole at each text cell, filled individually below like a
   # sparkline. A transposed column is heterogeneous character throughout, so there it is all text.
@@ -851,7 +914,14 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     tot_rows      = roles$totrows         + data_row0,
     tot_rows_1    = roles$totblock_top    + data_row0,
     tot_rows_last = roles$totblock_bottom + data_row0,
-    end_group     = utils::head(roles$new_group, -1L) + data_row0,
+    # ⚠ EVERY boundary, the last one included: it is the table's own bottom rule in column 1, and
+    # dropping it left the label column open where every other column closed.
+    end_group     = roles$new_group + data_row0,
+    # the vertical merges, so a range's edges can be folded onto its top-left cell (see the borders).
+    merges        = dplyr::bind_rows(
+      label_merges,
+      if (has_unit && length(txt_cols))
+        tibble::tibble(col = unname(txt_cols), row1 = header_row, row2 = unit_row)),
     vname_col     = unname(roles$var_name_col), vname_runs = vname_runs,
     fonts = fonts, bg_fill = bg_fill, title_row = start, subtext_rows = subtext_rows, o = o
   )
@@ -902,6 +972,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
 xl_build_styles <- function(header_row, unit_row = NA_integer_,
                             data_rows, last_row, ncl, fmt_cols, txt_cols, totcols,
                             block_start, tot_rows, tot_rows_1, tot_rows_last, end_group,
+                            merges = NULL,
                             vname_col = integer(0), vname_runs = NULL,
                             fonts, bg_fill, title_row, subtext_rows, o) {
   block_rows <- header_row:last_row
@@ -923,6 +994,19 @@ xl_build_styles <- function(header_row, unit_row = NA_integer_,
   bl <- pcol(bl, c(1L, block_start), 1L)                                  # first col / block starts
   br <- pcol(br, ncl, 1L)                                                 # the table's right edge
   bb <- prow(bb, end_group, 2L)                                           # between-group double (wins)
+  # ⚠ EXCEL DRAWS A MERGED RANGE FROM ITS TOP-LEFT CELL, so a border painted per ROW is simply not
+  # drawn on a vertically merged label column: the header/unit merge swallowed the rule under the
+  # column names, each row_var run swallowed the rule between two row_vars, and the last run
+  # swallowed the table's own closing rule -- the label column "leaked" while every other column
+  # closed. Fold each range's edges onto the cell Excel actually reads. Html needs none of this: a
+  # rowspanned cell carries its own class (tab-render-html.R).
+  if (!is.null(merges) && nrow(merges)) for (k in seq_len(nrow(merges))) {
+    cc <- ci(merges$col[[k]]); if (!length(cc)) next
+    ii <- idx(merges$row1[[k]]:merges$row2[[k]]); if (!length(ii)) next
+    top <- ii[[1L]]
+    bb[top, cc] <- max(bb[ii, cc]); bt[top, cc] <- max(bt[ii, cc])
+    bl[top, cc] <- max(bl[ii, cc]); br[top, cc] <- max(br[ii, cc])
+  }
 
   # alignment: character/logical matrices, painted general -> specific (last wins)
   ah <- matrix(NA_character_, nb, ncl); av <- matrix("", nb, ncl)
@@ -1137,11 +1221,11 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
       if (span > 1L) d <- paste0(d, ":", xl_cell(row, col + span - 1L))
       xlb_write_cell(wb, s, xl_cell(row, col), text)
       if (span > 1L) xlb_merge(wb, s, d)
-      # no borders: the block reads as a note under the table, not as a second table
-      if (bold || wrap)
-        xlb_set_cell_style(wb, s, d, reg$xf_id(
-          o$font_text, o$text_size, bold, NA_character_, NA_character_,
-          0L, 0L, 0L, 0L, "left", "bottom", if (wrap) "1" else "", ""))
+      # no borders, the aside ink and one point down: the block reads as a NOTE under the table, not
+      # as a second table -- the same step the console and the html `.tx-shape` rules take.
+      xlb_set_cell_style(wb, s, d, reg$xf_id(
+        o$font_text, max(6, as.double(o$text_size) - 1), bold, tx_chrome_hex(o$theme)$grey2,
+        NA_character_, 0L, 0L, 0L, 0L, "left", "bottom", if (wrap) "1" else "", ""))
     })
   # model-check pictures, stacked with one gap each -- each already carries its model's title
   r <- plan$check_row

@@ -132,13 +132,15 @@ testthat::test_that("the shape table lies over the main grid, and a check pictur
   mg <- xl_merges(wb)
 
   # THE FIRST SHAPE COLUMN TAKES THE INDEX BLOCK (it holds a formula, and lands under the row
-  # labels); every other one takes two data columns, a data column being one number wide.
+  # labels); the middle ones take two data columns, a data column being one number wide; the LAST --
+  # the curve -- takes three, a twenty-glyph run not fitting in two.
   df  <- openxlsx2::wb_to_df(wb, sheet = 1, col_names = FALSE)
-  hdr <- which(apply(df, 1, function(r) any(!is.na(r) & grepl("model scale", r))))
+  hdr <- which(apply(df, 1, function(r) any(!is.na(r) & grepl("numeric predictor", r))))
   testthat::expect_length(hdr, 1L)
   row <- as.integer(rownames(df)[hdr])
   testthat::expect_true(paste0("A", row, ":B", row) %in% mg)     # the 2-column index block
-  testthat::expect_true(paste0("C", row, ":D", row) %in% mg)
+  testthat::expect_true(paste0("C", row, ":D", row) %in% mg)     # a middle column: two
+  testthat::expect_true(paste0("G", row, ":I", row) %in% mg)     # the curve: three, past the edge
 
   # the picture carries its own title, so nothing is written above it -- and the gap under it is
   # the one constant both the budget and the writer read.
@@ -309,4 +311,33 @@ testthat::test_that("format(syntax = 'excel') emits the expected numFmt codes", 
   ci <- tab(gss, marital, race, pct = "row", ci = "cell")
   ci_fmt <- ci[[which(purrr::map_lgl(ci, is_fmt))[[1]]]]
   testthat::expect_true(any(format(ci_fmt, syntax = "excel") == "TEXT"))
+})
+
+
+test_that("a figure column is wide enough for its own BOLD ink", {
+  testthat::skip_if_not_installed("openxlsx2")
+  g <- fx_gss()
+  g$income25k <- forcats::fct_lump_n(g$rincome, 3)
+  g$party3    <- forcats::fct_lump_n(g$partyid, 3)
+  t <- tab(g, income25k, party3, pct = "row")
+  f <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(t, path = f, replace = TRUE, open = FALSE))
+  wb <- openxlsx2::wb_load(f)
+  # `cols_attr` is one entry per RANGE, not per column
+  ca  <- wb$worksheets[[1]]$cols_attr
+  num <- function(a, x) as.numeric(sub(paste0('.*', a, '="([0-9.]+)".*'), "\\1", x))
+  w   <- rep(NA_real_, max(num("max", ca)))
+  for (k in seq_along(ca)) w[num("min", ca[[k]]):num("max", ca[[k]])] <- num("width", ca[[k]])
+
+  rd   <- tabxplor:::tab_export_prep(t, backend = "xl")$tables[[1]]
+  bold <- seq_len(nrow(rd$tab)) %in% (rd$bold_rows %||% integer(0))
+  # ⚠ asserted against the ratios, never a hard-coded width: the constants may move, the invariant
+  # ("every figure fits, bold included") may not. The base font's digit is the width unit; the
+  # number font's is XL_NUM_RATIO of it, and a bold one XL_BOLD_RATIO more.
+  for (j in which(purrr::map_lgl(rd$tab, is_fmt))) {
+    body <- format(rd$tab[[j]], special_formatting = FALSE, na = "", stars = TRUE)
+    need <- max(nchar(body) * tabxplor:::XL_NUM_RATIO *
+                  ifelse(bold[seq_along(body)], tabxplor:::XL_BOLD_RATIO, 1))
+    expect_gte(w[[j]], need)
+  }
 })

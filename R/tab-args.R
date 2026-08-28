@@ -376,7 +376,9 @@ TAB_ARGS <- list(
             "  and the table becomes as compact as it can be. A variable named here alone is added to",
             "  \\code{tab_vars} for you. Pair it with \\code{comp = \"all\"} to compare every block",
             "  against the overall total, and with \\code{levels = \"first\"} to keep one column per",
-            "  block.")),
+            "  block. Because the columns are multiplied, a cell layout you did not ask for narrows",
+            "  to its bare estimate --- a numeric column shows its mean alone, without the",
+            "  coefficient of variation; name a layout with \\code{display =} to keep one.")),
   names_prefix = list(
     producers = c("tab", "tab_counts"), status = "deprecated",
     default = NULL,

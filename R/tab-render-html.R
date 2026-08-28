@@ -330,10 +330,13 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     vert  <- named & (roles$vname_plans[[cl]]$vert %||% (run$span > 1L))
     # the bottom rule is decided HERE: a rowspanned cell is anchored in its block's FIRST row, so
     # `tr.tx-bb2>*` never reaches it, unlike a one-row block's own closing row.
+    # ⚠ AT THE TABLE'S OWN WEIGHT: the closing row draws `tr.tx-bb2` (a block boundary) across every
+    # other column, so a 1px rule here left the label column visibly lighter than the table it closes.
     bot <- rep("", n_row)
     if (any(run$show)) {
       last_i <- max(which(run$show))
-      if (last_i + run$span[last_i] - 1L >= n_row) bot[last_i] <- "tx-bb"
+      close  <- if (n_row %in% roles$new_group) "tx-bb2" else "tx-bb"
+      if (last_i + run$span[last_i] - 1L >= n_row) bot[last_i] <- close
       if (!is.na(foot_top) && foot_top <= n_row && isTRUE(run$show[[foot_top]]))
         bot[foot_top] <- "tx-bb2"
     }
@@ -425,7 +428,9 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
 # the glyph run upgraded to an <svg> at double size -- a table of its own has room a base-count cell
 # has not.
 shape_html_table <- function(tab) {
-  st <- reg_shape_table(tab)
+  # `syntax = "html"`: the outcome cell comes back as markup (a subscripted "%"), so that ONE column
+  # is not escaped again below -- every other cell still is.
+  st <- reg_shape_table(tab, syntax = "html")
   if (is.null(st)) return(NULL)
   hd <- attr(st, "headers"); al <- attr(st, "align")
   cls <- vapply(al, function(a) if (a == "right") "tx-r tx-num" else "tx-l", character(1))
@@ -436,7 +441,8 @@ shape_html_table <- function(tab) {
   # `display:inline-block` under every publication palette, which on a <td> would break the row layout.
   ns <- attr(st, "noisy") %||% rep(FALSE, nrow(st))
   cells <- lapply(seq_along(st), function(j) {
-    v <- tx_html_escape(as.character(st[[j]]))
+    v <- as.character(st[[j]])
+    if (names(st)[[j]] != "outcome") v <- tx_html_escape(v)   # the outcome cell IS markup
     k <- cls[[j]]
     if (names(st)[[j]] == "shape") { v <- tx_spark_svg(v, h = 44L, dx = 10L, lwd = 2.6)
                                      k <- paste(k, "tx-sparkcell") }
@@ -448,7 +454,8 @@ shape_html_table <- function(tab) {
   tfoot <- if (!length(nt)) "" else
     paste0('<tfoot><tr><td colspan="', length(st), '"><div class="tx-foot">',
            paste(tx_html_escape(nt), collapse = "<br>"), '</div></td></tr></tfoot>')
-  paste0('<table class="tabxplor-tab">', '<thead>', thead, '</thead>',
+  # `tx-shape`: a note under the table, not a second table -- one step smaller and in the aside ink.
+  paste0('<table class="tabxplor-tab tx-shape">', '<thead>', thead, '</thead>',
          '<tbody>', body, '</tbody>', tfoot, '</table>')
 }
 
@@ -472,7 +479,11 @@ render_html_degrade <- function(tab) {
 # Joins the per-table render parts: hoists ONE <style> block and stacks the <table> fragments.
 # `theme` is the render INTENT, carried to print.tabxplor_kable() so the Viewer page can match it.
 tab_kable_join <- function(parts, css = "", theme = NULL) {
-  body <- paste(unlist(parts), collapse = "\n<br>\n")
+  # ⚠ NO <br> BETWEEN THE PARTS ANY MORE: each part ends in a `.tabxplor-tab`, which now carries one
+  # line of air below it (TX_TAIL_SPACE), so the separator and the trailing gap are ONE mechanism
+  # instead of two -- a <br> as well would have doubled the space between a table and its own shape
+  # table, which reads as a note under it.
+  body <- paste(unlist(parts), collapse = "\n")
   out  <- if (nzchar(css)) paste0("<style>", css, "</style>\n", body) else body
   out <- structure(out, format = "html", class = c("tabxplor_kable", "knitr_kable"))
   # tabxplor paints a Viewer page only when its OWN stylesheet ships (css != ""): otherwise there is

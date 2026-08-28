@@ -463,3 +463,53 @@ test_that("tab_reg() output exports through every backend without error", {
   expect_no_error(tab_xl(t1, path = xf, replace = TRUE))
   expect_true(file.exists(xf))
 })
+
+
+# === the precision band, end to end ================================================================
+# The rule is stated once (reg_cell_digits + fmt_magnitude_cap) and STORED at build, so `digits =`,
+# `set_digits()` and a `{tok:n}` template all still override it.
+
+test_that("a six-figure outcome prints no decimals, and every column of it agrees", {
+  t <- tab_reg(car_salaries, "salary", c("sex", "rank"), color = FALSE)
+  txt <- unlist(lapply(purrr::keep(t, is_fmt), format, na = ""))
+  # the level, the difference and the interval: none of them keeps a decimal at six figures
+  expect_true(any(grepl("101 002", txt, fixed = TRUE)))
+  expect_true(any(grepl("+14 088", txt, fixed = TRUE)))
+  expect_false(any(grepl("101 002\\.", txt)))
+  expect_false(any(grepl("\\+14 088\\.", txt)))
+  # ...and the four format() floors do not put it back
+  for (d in c("est_coef", "est_ci", "base", "est_base")) {
+    s <- unlist(lapply(purrr::keep(set_display(t, d), is_fmt), format, na = ""))
+    expect_false(any(grepl("[0-9] [0-9]{3}\\.[0-9]", s)), label = d)
+  }
+})
+
+test_that("the user still owns the precision", {
+  t2 <- tab_reg(car_salaries, "salary", "sex", color = FALSE, digits = 2)
+  expect_true(any(grepl("\\+14 088\\.0[0-9]",
+                        unlist(lapply(purrr::keep(t2, is_fmt), format, na = "")))))
+  t3 <- tab_reg(car_salaries, "salary", "sex", color = FALSE, display = "{est:1}")
+  expect_true(any(grepl("\\+14 088\\.0",
+                        unlist(lapply(purrr::keep(t3, is_fmt), format, na = "")))))
+})
+
+test_that("the magnitude is the SPEC's, so unlike outcomes and unlike models cannot disagree", {
+  # ⚠ two outcomes of very different magnitude are ONE table: a rule keyed on the estimate SCALE
+  # (both are `raw_diff`) would cap yrs.service off salary's six figures.
+  t <- tab_reg(car_salaries, c("salary", "yrs.service"), "sex", color = FALSE)
+  d <- purrr::map(purrr::keep(t, is_fmt), ~ unique(get_digits(.x)))
+  sal <- d[grepl("salary", names(d))]
+  yrs <- d[grepl("yrs", names(d))]
+  expect_true(all(unlist(sal) == 0L))
+  expect_true(all(unlist(yrs) > 0L))
+
+  # a MODEL COMPARISON: the crude column does not share the model columns' col_var, so a rule keyed
+  # on that would split them; read off the spec they cannot differ.
+  cmp <- tab_reg(car_salaries, "salary",
+                 list(a = "sex", b = c("sex", "rank")), family = "gaussian", color = FALSE)
+  expect_true(all(unlist(purrr::map(purrr::keep(cmp, is_fmt), ~ unique(get_digits(.x)))) == 0L))
+
+  # a `tab_vars` group recurses into a full build per group -- one magnitude, read before the split
+  grp <- tab_reg(car_salaries, "salary", "rank", tab_vars = "sex", color = FALSE)
+  expect_true(all(unlist(purrr::map(purrr::keep(grp, is_fmt), ~ unique(get_digits(.x)))) == 0L))
+})
