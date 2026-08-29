@@ -1,0 +1,440 @@
+# tabxplor
+
+`tabxplor` makes cross-tables and regression models readable at a glance
+for data exploration. It builds a table with percentages, weighted
+counts, confidence intervals, tests — and colors highlight the cells
+that stand out from the total or reference, only when the difference is
+statistically solid, to spot the structure of your data immediately.
+
+- **Colors encode effect size and significance**: the stronger the
+  difference, the deeper the color; non-significant cells are
+  greyed-out.
+- Html, Excel and markdown/Quarto exports are available.
+- It comes with a point-and-click [jamovi](https://www.jamovi.org/)
+  graphical interface: no code needed.
+- A black-and-white `theme = "print_ready"` renders the same reading for
+  journals.
+- **Regression models** are presented with the same visual language,
+  next to their observed effect.
+- In R the tables **are `tibble`s you can keep working on with
+  `dplyr`**. Cells are rich values, each one carries its count,
+  percentage, confidence interval and reference behind the displayed
+  number.
+- Weighted data and survey design are supported.
+
+## Installation
+
+``` r
+
+install.packages("tabxplor", dependencies = TRUE)
+```
+
+## A quick look
+
+A simple cross-table with row percentages: shades of blue mean the cell
+is over-represented compared to the total row, shades of yellow to red
+mean it is under-represented.
+
+``` r
+
+gss <- gss_cat_data_formatting() # cleaned-up version of forcats::gss_cat
+
+tab(gss, race, party3, pct = "row", color = "difference")
+```
+
+[TABLE]
+
+Several column variables can be crossed at once for series of Yes/No
+survey questions. With `color_signif = "grey_non_signif"`, cells that
+are not significantly different from the total are greyed out, so every
+colored figure is a solid one. Use `wt =` for weighted or survey data.
+Example with [FactoMineR](http://factominer.free.fr/index_fr.md) tea
+data :
+
+``` r
+
+tea_when_vars <- c("breakfast", "tea.time", "evening", "lunch", "dinner", "always")
+tab(facto_tea, SPC, all_of(tea_when_vars), pct = "row", 
+    levels = "first", na = "drop", 
+    color = "difference", ref = "first", color_signif = "grey_non_signif")
+```
+
+[TABLE]
+
+The same visual language extends to regression models:
+[`tab_reg()`](https://bricenocenti.github.io/tabxplor/reference/tab_reg.md)
+detects a binary outcome and fits a logistic regression, coloring odds
+ratios by strength and greying the non-significant ones, with a default
+comparison between the modelised deviations and their crude/observed
+counterparts.
+
+``` r
+
+tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"))
+```
+
+Logistic regression: married by race, age +1 more
+
+[TABLE]
+
+| outcome | numeric predictor | observed range | observed shape (central 95%) |
+|----|----|----|----|
+| p = %_(Married) ; log(p/(1-p)) | age | 13-57% (OR 8.7) | ![](data:image/svg+xml;base64,PHN2ZyBjbGFzcz0idHgtc3BhcmsiIHdpZHRoPSIxOTIuNiIgaGVpZ2h0PSI0NCIgdmlld2JveD0iMCAwIDE5Mi42IDQ0IiBhcmlhLWhpZGRlbj0idHJ1ZSI+PHBvbHlsaW5lIHBvaW50cz0iMS4zLDQyLjcgMTEuMywzMC45IDIxLjMsMTMuMSAzMS4zLDcuMiA0MS4zLDEuMyA1MS4zLDEuMyA2MS4zLDEuMyA3MS4zLDEuMyA4MS4zLDEuMyA5MS4zLDEuMyAxMDEuMywxLjMgMTExLjMsMS4zIDEyMS4zLDEuMyAxMzEuMywxLjMgMTQxLjMsMS4zIDE1MS4zLDEuMyAxNjEuMyw3LjIgMTcxLjMsNy4yIDE4MS4zLDEzLjEgMTkxLjMsMTMuMSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMi42IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiPjwvcG9seWxpbmU+PC9zdmc+) |
+
+Or as a black and white table ready for publication:
+
+``` r
+
+options(tabxplor.theme = "print_ready")
+tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"))
+```
+
+Logistic regression: married by race, age +1 more
+
+[TABLE]
+
+| outcome | numeric predictor | observed range | observed shape (central 95%) |
+|----|----|----|----|
+| p = %_(Married) ; log(p/(1-p)) | age | 13-57% (OR 8.7) | ![](data:image/svg+xml;base64,PHN2ZyBjbGFzcz0idHgtc3BhcmsiIHdpZHRoPSIxOTIuNiIgaGVpZ2h0PSI0NCIgdmlld2JveD0iMCAwIDE5Mi42IDQ0IiBhcmlhLWhpZGRlbj0idHJ1ZSI+PHBvbHlsaW5lIHBvaW50cz0iMS4zLDQyLjcgMTEuMywzMC45IDIxLjMsMTMuMSAzMS4zLDcuMiA0MS4zLDEuMyA1MS4zLDEuMyA2MS4zLDEuMyA3MS4zLDEuMyA4MS4zLDEuMyA5MS4zLDEuMyAxMDEuMywxLjMgMTExLjMsMS4zIDEyMS4zLDEuMyAxMzEuMywxLjMgMTQxLjMsMS4zIDE1MS4zLDEuMyAxNjEuMyw3LjIgMTcxLjMsNy4yIDE4MS4zLDEzLjEgMTkxLjMsMTMuMSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMi42IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiPjwvcG9seWxpbmU+PC9zdmc+) |
+
+## Export your tables
+
+Any table exports with its colors to Excel, html or markdown (for Word,
+copy-paste from Excel) :
+
+``` r
+
+tab(gss, marital, race, pct = "row", color = "difference") |> tab_html()
+tab(gss, marital, race, pct = "row", color = "difference") |> tab_xl()
+tab(gss, marital, race, pct = "row", color = "difference") |> tab_xl(theme = "print_ready")
+```
+
+## Learn more
+
+- [Introduction to
+  tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor.md)
+  — the place to start (*aussi disponible [en
+  français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-fr.md)*).
+- [Regression tables with
+  tab_reg()](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.md)
+  (*aussi disponible [en
+  français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg-fr.md)*).
+- [Reading a regression without losing sight of the
+  percentages](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reading-a-regression.md)
+  — a single analysis walked from a first cross-table to a finished
+  sentence (*aussi disponible [en
+  français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reading-a-regression-fr.md)*).
+- [Weighted and survey
+  data](https://bricenocenti.github.io/tabxplor/articles/tabxplor-weights.md)
+  — the three levels of margin of error, and which one your file
+  deserves (*aussi disponible [en
+  français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-weights-fr.md)*).
+- [Programming with
+  tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming.md)
+  — many tables at once, custom workflows, options (*aussi disponible
+  [en
+  français](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming-fr.md)*).
+
+# Package index
+
+## Main functions
+
+- [`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md) :
+  Cross-tables with color helpers
+- [`tab_reg()`](https://bricenocenti.github.io/tabxplor/reference/tab_reg.md)
+  : All-in-one tables for regressions, with each modelled effect beside
+  its observed one
+- [`tab_counts()`](https://bricenocenti.github.io/tabxplor/reference/tab_counts.md)
+  : Cross-tables from already-aggregated counts
+
+## Point-and-click interface (jamovi)
+
+The two analyses tabxplor adds to [jamovi](https://www.jamovi.org/) –
+everything the package does, driven by menus. Install jamovi, open the
+modules menu (the `+` at the top-right), choose *jamovi library*, and
+install **tabxplor**.
+
+- [`jmvtab()`](https://bricenocenti.github.io/tabxplor/reference/jmvtab.md)
+  : Crosstables
+- [`jmvtabreg()`](https://bricenocenti.github.io/tabxplor/reference/jmvtabreg.md)
+  : Regressions
+
+## Reshaping and combining
+
+Change the shape of a finished table; nothing is recomputed.
+
+- [`tab_spread()`](https://bricenocenti.github.io/tabxplor/reference/tab_spread.md)
+  : Turn a sub-table variable into columns
+- [`tab_compact()`](https://bricenocenti.github.io/tabxplor/reference/tab_compact.md)
+  : Bind a list of tables into one
+- [`tab_transpose()`](https://bricenocenti.github.io/tabxplor/reference/tab_transpose.md)
+  : Swap the rows and columns of a cross-table
+
+## Export a finished table
+
+- [`tab_export()`](https://bricenocenti.github.io/tabxplor/reference/tab_export.md)
+  : Export a table to html, Excel or Markdown (wrapper)
+- [`tab_html()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md)
+  [`tab_kable()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md)
+  : Render a table as html
+- [`tab_md()`](https://bricenocenti.github.io/tabxplor/reference/tab_md.md)
+  : Render a table as Markdown
+- [`tab_xl()`](https://bricenocenti.github.io/tabxplor/reference/tab_xl.md)
+  : Write a table to an Excel workbook
+- [`tab_css()`](https://bricenocenti.github.io/tabxplor/reference/tab_css.md)
+  : The stylesheet an html table needs
+
+## Charts
+
+(Both need **ggplot2**.)
+
+- [`forest_plot()`](https://bricenocenti.github.io/tabxplor/reference/forest_plot.md)
+  : Forest plot of any tabxplor table
+- [`reg_check_plots()`](https://bricenocenti.github.io/tabxplor/reference/reg_check_plots.md)
+  : Diagnostic plots of a regression model
+
+## Data-prep and text helpers
+
+Small utilities for preparing data or laying out a table.
+
+- [`score_from_lv1()`](https://bricenocenti.github.io/tabxplor/reference/score_from_lv1.md)
+  : Score a set of factors by counting their first level
+- [`shape_numeric_var()`](https://bricenocenti.github.io/tabxplor/reference/shape_numeric_var.md)
+  : Cut or transform a numeric variable
+- [`tab_wrap_text()`](https://bricenocenti.github.io/tabxplor/reference/tab_wrap_text.md)
+  : Wrap column names and long labels
+- [`tab_parallel_stop()`](https://bricenocenti.github.io/tabxplor/reference/tab_parallel_stop.md)
+  : Stop the tabxplor parallel worker pool
+
+## Superseded entry points
+
+They still work and give the same numbers;
+[`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md) has
+absorbed all three, and `scale` + `pct_type` have absorbed the fourth.
+
+- [`tab_many()`](https://bricenocenti.github.io/tabxplor/reference/tab_many.md)
+  **\[superseded\]** : Many cross-tables as one, with color helpers
+- [`tab_num()`](https://bricenocenti.github.io/tabxplor/reference/tab_num.md)
+  **\[superseded\]** : Means table
+- [`tab_plain()`](https://bricenocenti.github.io/tabxplor/reference/tab_plain.md)
+  **\[superseded\]** : Plain single cross-table
+- [`set_type()`](https://bricenocenti.github.io/tabxplor/reference/tabxplor-type.md)
+  [`get_type()`](https://bricenocenti.github.io/tabxplor/reference/tabxplor-type.md)
+  **\[superseded\]** : Column types, the tabxplor 1.x spelling
+
+## What a cell shows, and how it is coloured
+
+The vocabulary of `display =`, then of `color =`.
+
+- [`tabxplor-display`](https://bricenocenti.github.io/tabxplor/reference/tabxplor-display.md)
+  : What a table cell shows: the display grammar
+- [`set_color_palette()`](https://bricenocenti.github.io/tabxplor/reference/set_color_palette.md)
+  [`set_color_style()`](https://bricenocenti.github.io/tabxplor/reference/set_color_palette.md)
+  [`get_color_style()`](https://bricenocenti.github.io/tabxplor/reference/set_color_palette.md)
+  [`set_color_breaks()`](https://bricenocenti.github.io/tabxplor/reference/set_color_palette.md)
+  [`get_color_breaks()`](https://bricenocenti.github.io/tabxplor/reference/set_color_palette.md)
+  : Colours: palettes, styles and breaks
+- [`conf_level_to_z()`](https://bricenocenti.github.io/tabxplor/reference/conf_level_to_z.md)
+  : Convert confidence levels into z thresholds
+
+## What a model can be, and what it fitted
+
+- [`reg_measures()`](https://bricenocenti.github.io/tabxplor/reference/reg_measures.md)
+  : What can this outcome be modelled as?
+- [`reg_formulas()`](https://bricenocenti.github.io/tabxplor/reference/reg_formulas.md)
+  : The model formulas a regression table fitted
+
+## Options
+
+Every default lives in a `tabxplor.*` option.
+
+- [`tabxplor-options`](https://bricenocenti.github.io/tabxplor/reference/tabxplor-options.md)
+  [`tabxplor.options`](https://bricenocenti.github.io/tabxplor/reference/tabxplor-options.md)
+  : The tabxplor options, and their defaults
+
+## Inspect a table
+
+What have I got? – the table as a whole, then column by column.
+
+- [`tab_structure()`](https://bricenocenti.github.io/tabxplor/reference/tab_structure.md)
+  **\[experimental\]** : The structure of a table
+
+- [`tab_columns()`](https://bricenocenti.github.io/tabxplor/reference/tab_columns.md)
+  **\[experimental\]** :
+
+  Every `fmt` column of a table, and what it carries
+
+- [`get_test()`](https://bricenocenti.github.io/tabxplor/reference/get_test.md)
+  : Read a table's statistical tests
+
+- [`is_tab()`](https://bricenocenti.github.io/tabxplor/reference/is_tab.md)
+  : Is this a tabxplor table?
+
+- [`as.matrix(`*`<tabxplor_tab>`*`)`](https://bricenocenti.github.io/tabxplor/reference/tabxplor-base-coercion.md)
+  [`as.table(`*`<tabxplor_tab>`*`)`](https://bricenocenti.github.io/tabxplor/reference/tabxplor-base-coercion.md)
+  : Hand a table to base R
+
+## The type system
+
+What a table and its cells are made of: the `tabxplor_fmt` vctrs record
+behind every numeric cell, where a **field** varies from cell to cell
+and an **attribute** holds for a whole column, and the attributes the
+table itself carries.
+
+- [`fmt()`](https://bricenocenti.github.io/tabxplor/reference/fmt.md)
+  [`is_fmt()`](https://bricenocenti.github.io/tabxplor/reference/fmt.md)
+  :
+
+  Create an `fmt` vector, the tabxplor cell
+
+- [`get_num()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+  [`set_num()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+  [`is_totrow()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+  [`get_row_kind()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+  [`set_row_kind()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+  [`as_totrow()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+  [`is_tottab()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+  [`as_tottab()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+  [`set_display()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+  [`is_refrow()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+  [`as_refrow()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+  [`get_digits()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+  [`get_pvalue()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+  [`set_digits()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+  [`set_pvalue()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+  :
+
+  Per-cell fields of a `fmt` vector
+
+- [`get_scale()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`set_scale()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`get_pct_type()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`set_pct_type()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`is_totcol()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`as_totcol()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`get_comp_all()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`set_comp_all()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`get_ref_type()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`set_ref_type()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`set_diff_type()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`get_col_var()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`set_col_var()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`get_col_group()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`get_model_family()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`set_model_family()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`get_ci_method()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`is_refcol()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`as_refcol()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`get_color()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`get_color_bg()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`get_color_signif()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`set_color()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  [`set_color_signif()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attributes.md)
+  :
+
+  Per-column attributes of a `fmt` vector
+
+- [`fmt_attr()`](https://bricenocenti.github.io/tabxplor/reference/fmt_attr.md)
+  [`` `fmt_attr<-`() ``](https://bricenocenti.github.io/tabxplor/reference/fmt_attr.md)
+  :
+
+  Read or write one `fmt` column attribute, by name
+
+- [`new_tab()`](https://bricenocenti.github.io/tabxplor/reference/new_tab.md)
+  [`new_grouped_tab()`](https://bricenocenti.github.io/tabxplor/reference/new_tab.md)
+  :
+
+  Build a `tabxplor_tab` around `fmt` columns
+
+- [`set_caption()`](https://bricenocenti.github.io/tabxplor/reference/set_caption.md)
+  [`get_caption()`](https://bricenocenti.github.io/tabxplor/reference/set_caption.md)
+  : Store a caption on a table
+
+- [`fmt_get_color_code()`](https://bricenocenti.github.io/tabxplor/reference/fmt_get_color_code.md)
+  :
+
+  The html color code of a `fmt` vector
+
+# Articles
+
+### Start here
+
+The introduction builds a first coloured table; *Reading a regression*
+walks one analysis from that table to a finished sentence about a
+regression.
+
+- [Introduction to tabxplor: crosstables with
+  tab()](https://bricenocenti.github.io/tabxplor/articles/tabxplor.md):
+
+  Build a first coloured cross-table, read its colours and its legend,
+  then choose what a cell shows and how it exports.
+
+- [Reading a regression model without losing sight of the observed
+  data](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reading-a-regression.md):
+
+  One analysis walked from a first cross-table to a finished sentence —
+  what a model adds, what it takes away, and how to say it without
+  losing the percentages.
+
+### Going further
+
+Look up what a regression table can be asked, what a weighted or survey
+file changes, and how to write your own pipelines around the `fmt` cell.
+
+- [Regression models with tab_reg():
+  reference](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.md):
+
+  The reference for tab_reg() — the four estimand arguments, one part
+  per kind of outcome, reading what adjustment did, and checking the
+  model.
+
+- [Weighted and survey
+  data](https://bricenocenti.github.io/tabxplor/articles/tabxplor-weights.md):
+
+  Weights, complex survey designs, and the three levels of margin of
+  error — which one your file deserves, on both producers.
+
+- [Programming with
+  tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming.md):
+
+  Programming with the fmt cell — know what a table is, reach any field
+  or attribute, and write your own pipelines.
+
+### En français
+
+Les traductions françaises des articles (les pages de référence restent
+en anglais).
+
+- [Introduction à tabxplor : tableaux croisés avec
+  tab()](https://bricenocenti.github.io/tabxplor/articles/tabxplor-fr.md):
+
+  Construire un premier tableau croisé, lire ses couleurs et sa légende,
+  puis choisir ce qu’affiche une case et comment l’exporter.
+
+- [Interpréter un modèle de régression sans perdre de vue les données
+  observées](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reading-a-regression-fr.md):
+
+  Une analyse menée du premier tableau croisé à une phrase finie — ce
+  qu’un modèle ajoute, ce qu’il retire, et comment le dire sans lâcher
+  les pourcentages.
+
+- [Modèles de régression avec tab_reg() :
+  référence](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg-fr.md):
+
+  La référence de tab_reg() — les quatre arguments de l’écart, une
+  partie par type de variable à expliquer, la lecture de l’ajustement et
+  les diagnostics.
+
+- [Données pondérées et plans de
+  sondage](https://bricenocenti.github.io/tabxplor/articles/tabxplor-weights-fr.md):
+
+  Pondération, plans de sondage complexes, et les trois niveaux de marge
+  d’erreur — celui que mérite un fichier donné, des tableaux croisés aux
+  régressions.
+
+- [Programmer avec
+  tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming-fr.md):
+
+  Programmer avec la case fmt — savoir ce qu’est un tableau, atteindre
+  n’importe quel champ ou attribut, écrire ses propres chaînes de
+  traitement.

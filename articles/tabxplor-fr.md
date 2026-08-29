@@ -1,0 +1,926 @@
+# Introduction à tabxplor : tableaux croisés avec tab()
+
+La première fois seulement, installer le package :
+
+``` r
+
+install.packages("tabxplor", dependencies = TRUE)
+```
+
+Au début de chaque nouvelle session R ou en haut d’un script, le charger
+:
+
+``` r
+
+library(tabxplor)
+```
+
+`tabxplor` vise à **l’exploration des données au moyen de tableaux
+croisés**. Il colore les écarts par rapport au Total, ou par rapport à
+une catégorie de référence, pour montrer la structure du tableau en un
+coup d’œil. Les cases sur-représentées prennent des nuances de bleu, les
+sous-représentées des nuances du jaune au rouge.
+
+Le tableau qui en résulte est un `data.frame` habituel, un `tibble`
+modifiable avec tous les verbes `dplyr` habituels. Il s’exporte vers
+Excel, HTML et Markdown avec ses repères de couleur.
+
+**Pas besoin de R pour qui préfère utiliser une interface graphique.**
+Tout ce qui suit existe aussi en version « presse-bouton », via un
+module pour le logiciel libre [jamovi](https://www.jamovi.org/).
+L’installer, ouvrir le menu des modules (le **`+`** en haut à droite),
+choisir **bibliothèque de jamovi**, chercher *tabxplor* dans la barre de
+recherche et l’installer : cela ajoute une analyse **Tableaux croisés**
+et une analyse **Modèles de régression**. Les boutons y portent le nom
+des arguments enseignés ici.
+
+Tout au long de cette introduction, nous utilisons `gss_simple`, une
+version du *General Social Survey* états-unien
+([`forcats::gss_cat`](https://forcats.tidyverse.org/reference/gss_cat.html))
+avec des modalités regroupées.
+
+``` r
+
+gss_simple <- gss_cat_data_formatting()
+```
+
+## Premiers tableaux croisés
+
+[`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md) a
+besoin d’un data frame, d’une **variable en ligne** et d’une **variable
+en colonne**. Par défaut, il affiche des effectifs :
+
+``` r
+
+tab(gss_simple, marital, race)
+```
+
+|               | race   |       |       |        |
+|---------------|--------|-------|-------|--------|
+| marital       | White  | Black | Other | Total  |
+|               | \<n\>  |       |       | \<n\>  |
+| Married       | 8 316  | 869   | 932   | 10 117 |
+| Separated     | 437    | 196   | 110   | 743    |
+| Divorced      | 2 676  | 495   | 212   | 3 383  |
+| Widowed       | 1 475  | 262   | 70    | 1 807  |
+| Never married | 3 478  | 1 305 | 633   | 5 416  |
+| NA            | 13     | 2     | 2     | 17     |
+| Total         | 16 395 | 3 129 | 1 959 | 21 483 |
+
+Voici le **tableau html** de tabxplor — celui qu’on obtient dans le
+panneau Viewer de RStudio ou de Positron avec l’option recommandée,
+utilisée dans toute cette page :
+
+``` r
+
+options(tabxplor.print = "html")
+```
+
+Sans l’option, le même tableau s’imprime dans la **console**, sous forme
+de `tibble` éventuellement coloré :
+
+``` r
+
+tab(gss_simple, marital, race)
+```
+
+``` r-output
+#> # A tabxplor tab: 7 × 5
+#>   marital        White Black Other  Total
+#>                    <n>   <n>   <n>    <n>
+#> 1 Married        8 316   869   932 10 117
+#> 2 Separated        437   196   110    743
+#> 3 Divorced       2 676   495   212  3 383
+#> 4 Widowed        1 475   262    70  1 807
+#> 5 Never married  3 478 1 305   633  5 416
+#> 6 NA                13     2     2     17
+#> 7 Total         16 395 3 129 1 959 21 483
+```
+
+Les données sont états-uniennes et leurs modalités restent en anglais :
+`marital` est le statut matrimonial (`Married` marié·e, `Never married`
+jamais marié·e, `Divorced` divorcé·e, `Widowed` veuf·ve, `Separated`
+séparé·e) et `race` la couleur de peau déclarée (`White` blanche,
+`Black` noire, `Other` autre).
+
+Ajouter `pct = "row"` pour des pourcentages en ligne (ou `"col"` pour
+des pourcentages en colonne) :
+
+``` r
+
+tab(gss_simple, marital, race, pct = "row")
+```
+
+|               | race     |       |       |               |
+|---------------|----------|-------|-------|---------------|
+| marital       | White    | Black | Other | Total         |
+|               | \<row%\> |       |       | \<row% (n)\>  |
+| Married       | 82%      | 9%    | 9%    | 100% (10 117) |
+| Separated     | 59%      | 26%   | 15%   | 100% (   743) |
+| Divorced      | 79%      | 15%   | 6%    | 100% ( 3 383) |
+| Widowed       | 82%      | 14%   | 4%    | 100% ( 1 807) |
+| Never married | 64%      | 24%   | 12%   | 100% ( 5 416) |
+| NA            | 76%      | 12%   | 12%   | 100% (    17) |
+| Total         | 76%      | 15%   | 9%    | 100% (21 483) |
+
+Quand la variable en colonne est **numérique**,
+[`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md)
+affiche sa **moyenne** dans chaque ligne :
+
+``` r
+
+tab(gss_simple, marital, age)
+```
+
+|               | age           |
+|---------------|---------------|
+| marital       | mean          |
+|               | \<mean (cv)\> |
+| Married       | 49 (cv 31%)   |
+| Separated     | 45 (cv 30%)   |
+| Divorced      | 51 (cv 26%)   |
+| Widowed       | 72 (cv 18%)   |
+| Never married | 34 (cv 40%)   |
+| NA            | 52 (cv 32%)   |
+| Total         | 47 (cv 37%)   |
+
+Il est possible de passer **plusieurs variables en ligne et en colonne à
+la fois**.
+
+``` r
+
+tab(gss_simple, c(race, relig), c(party3, tvhours), na = "drop_all", pct = "row")
+```
+
+[TABLE]
+
+Ici `relig` est la religion déclarée, `party3` l’orientation partisane
+en trois postes (`Democrat`, `Independent`, `Republican`) et `tvhours`
+le nombre d’heures de télévision par jour.
+
+Quelques autres arguments utiles : `na = "drop"` pour retirer les
+valeurs manquantes de la base ; `digits =` pour choisir le nombre de
+décimales ; `cleannames = TRUE` pour retirer des préfixes comme `"1-"`
+des noms de modalités. Voir
+[`?tab`](https://bricenocenti.github.io/tabxplor/reference/tab.md) pour
+la liste complète.
+
+Quand l’entrée n’est pas une base de données individualisées mais des
+effectifs déjà comptés (un tableau publié, un
+[`table()`](https://rdrr.io/r/base/table.html), un
+[`count()`](https://dplyr.tidyverse.org/reference/count.html)), le point
+de départ est
+[`tab_counts()`](https://bricenocenti.github.io/tabxplor/reference/tab_counts.md).
+Il construit le même objet, avec les mêmes pourcentages, les mêmes
+couleurs et les mêmes tests :
+
+``` r
+
+counts <- dplyr::count(gss_simple, marital, race)
+tab_counts(counts, marital, race, counts = n, pct = "row", color = "difference")
+```
+
+[TABLE]
+
+## Les couleurs : lire un tableau d’un coup d’œil
+
+C’est l’objet même de `tabxplor` : une gamme de repères de couleur
+personnalisables pour l’exploration de données, fondée sur une
+**certaine mesure de l’écart par rapport à une catégorie de référence**,
+`"difference"`, `"ratio"` ou `"odds ratio"`.
+
+`color = "difference"` colore chaque case selon sa différence à sa
+référence, par défaut le Total de sa ligne ou de sa colonne. Les cases
+nettement au-dessus de la moyenne deviennent **bleues**, celles
+nettement en dessous **rouge/orange** — plus l’écart est grand, plus la
+nuance est forte.
+
+``` r
+
+tab(gss_simple, race, party3, pct = "row", color = "difference")
+```
+
+[TABLE]
+
+`color = "auto"` choisit automatiquement un schéma adapté à chaque type
+de colonne (“difference” comme couleur de texte et “ratio” comme couleur
+d’arrière-plan pour des pourcentages ; “ratio” seul pour des moyennes ;
+etc.) :
+
+``` r
+
+tab(gss_simple, rincome, c(party3, marital), pct = "row", color = "auto")
+```
+
+[TABLE]
+
+Les colonnes numériques sont colorées de la même façon, sur leurs
+différences de moyennes (ici, les heures de télévision par jour selon la
+tranche de revenu `rincome`) :
+
+``` r
+
+tab(gss_simple, rincome, tvhours, color = "difference")
+```
+
+[TABLE]
+
+**Quelle case sert de référence pour la comparaison ?** Par défaut,
+chaque case est comparée au Total pertinent (ligne Total pour les
+pourcentages en ligne, colonne Total pour les pourcentages en colonne) :
+la couleur met ainsi en évidence sur-représentations et
+sous-représentations. Deux variantes utiles :
+
+`ref = 1` compare chaque modalité à la **première catégorie** — parfait
+pour lire une évolution dans le temps, ou une variable ordinale. Ici,
+nous choisissons de mesurer l’écart par rapport à l’an 2000 sous la
+forme d’un rapport (`color = "ratio"`) :
+
+``` r
+
+tab(gss_simple, relig, year, pct = "col", color = "ratio", ref = 1)
+```
+
+[TABLE]
+
+Avec des sous-tableaux (`tab_vars =`), `comp = "all"` compare au Total
+**d’ensemble** plutôt qu’au Total de chaque sous-tableau.
+
+``` r
+
+tab(gss_simple, rincome, party3, race, na = "drop", pct = "row", 
+    color = "auto", comp="all")
+```
+
+[TABLE]
+
+**Une référence différente pour chaque variable.** `ref` est
+réinterprété selon le type de `pct`. Sous des pourcentages en **ligne**
+(ou des moyennes), il désigne une **ligne** de référence : un vecteur
+*nommé* en donne donc une par variable en ligne — ici `race` est lu par
+rapport à sa première ligne, `relig` par rapport à son Total :
+
+``` r
+
+tab(gss_simple, c(race, relig), party3, pct = "row", na = "drop", 
+    color = "difference", ref = c(race = 1, relig = "tot")       )
+```
+
+[TABLE]
+
+Les seuils de couleur et la palette sont personnalisables :
+[`set_color_breaks()`](https://bricenocenti.github.io/tabxplor/reference/set_color_palette.md)
+et
+[`set_color_palette()`](https://bricenocenti.github.io/tabxplor/reference/set_color_palette.md)
+les fixent une fois pour toute la session R.
+
+## Des couleurs qui respectent la significativité
+
+Les couleurs ci-dessus montrent la *taille* d’un écart, mais ne disent
+pas s’il est **statistiquement fiable**. Sur de petits échantillons, une
+différence qui semble marquée peut n’être que du bruit, dû au hasard de
+la sélection de l’échantillon. L’argument `color_signif` fait entrer la
+significativité dans les repères de couleur :
+
+- `"ignore"` (par défaut) : colore chaque écart selon l’écart observé,
+  en grisant les différences trop petites, sous un certain seuil (±5 %
+  pour une différence).
+- `"grey_non_signif"` : colore selon la taille de l’écart, grise les
+  petits écarts sous ce même seuil, mais **grise aussi les cases dont
+  l’écart paraît important sans être significatif**. Chaque case colorée
+  est alors garantie significativement différente de sa référence (seuil
+  de confiance de 95 %), sans que le tableau soit encombré par de très
+  petites différences significatives.
+- `"guaranteed_effect"` : ne colore que la part de l’écart dont on est
+  certains à 95 % (la borne inférieure de son intervalle de confiance),
+  avec donc des couleurs plutôt moins foncées. À utiliser sur de
+  **petits échantillons**, pour **mettre en évidence toutes les
+  différences qu’on a le droit d’interpréter**. Tout ce qui est coloré
+  est significatif ; rien de ce qui est gris ne l’est.
+
+``` r
+
+tab(gss_simple, race, party3, pct = "row", 
+    color = "difference", color_signif = "grey_non_signif")
+```
+
+[TABLE]
+
+``` r
+
+gss_simple |>
+  dplyr::filter(year == "2012") |> # n=1 974
+  tab(race, party3, pct = "row", 
+      color = "difference", color_signif = "guaranteed_effect")
+```
+
+[TABLE]
+
+Sur de **petits échantillons**, un pourcentage qui semble marqué peut
+reposer sur une poignée de répondants. `n_min =` est un filtre purement
+visuel, appliqué une fois que tous les calculs ont été réalisés : il
+masque les cases dont la base (non pondérée) est sous le seuil, et
+retire entièrement une ligne quand sa plus grande base est trop faible.
+Ici, les religions les plus rares disparaissent :
+
+``` r
+
+tab(gss_simple, relig, race, pct = "row", n_min = 400)
+```
+
+|                   | race     |       |       |               |
+|-------------------|----------|-------|-------|---------------|
+| relig             | White    | Black | Other | Total         |
+|                   | \<row%\> |       |       | \<row% (n)\>  |
+| 1-Protestant      | 75%      | 21%   | 4%    | 100% (10 846) |
+| 2-Catholic        | 78%      | 4%    | 18%   | 100% ( 5 124) |
+| 3-Other christian | 72%      | 18%   | 10%   | 100% (   784) |
+| 8-None            | 80%      | 11%   | 9%    | 100% ( 3 523) |
+| Total             | 76%      | 15%   | 9%    | 100% (21 483) |
+
+L’autre solution est de garder les lignes et les colonnes rares, mais de
+les regrouper toutes dans une modalité « Autres » :
+
+``` r
+
+tab(gss_simple, relig, race, pct = "row",  other_if_less_than = 400)
+```
+
+|                   | race     |       |       |               |
+|-------------------|----------|-------|-------|---------------|
+| relig             | White    | Black | Other | Total         |
+|                   | \<row%\> |       |       | \<row% (n)\>  |
+| 1-Protestant      | 75%      | 21%   | 4%    | 100% (10 846) |
+| 2-Catholic        | 78%      | 4%    | 18%   | 100% ( 5 124) |
+| 3-Other christian | 72%      | 18%   | 10%   | 100% (   784) |
+| 8-None            | 80%      | 11%   | 9%    | 100% ( 3 523) |
+| Others            | 68%      | 10%   | 22%   | 100% ( 1 098) |
+| NA                | 67%      | 18%   | 16%   | 100% (   108) |
+| Total             | 76%      | 15%   | 9%    | 100% (21 483) |
+
+## Intervalles de confiance, tests et étoiles
+
+Afficher l’intervalle de confiance du pourcentage ou de la moyenne de
+chaque case avec `ci = "cell"` :
+
+``` r
+
+tab(gss_simple, race, party3, pct = "row", ci = "cell") # par défaut, conf_level = 0.95
+```
+
+[TABLE]
+
+Afficher les intervalles de confiance de l’**écart** avec une référence,
+ceux-là mêmes qui servent à calculer la significativité (ici si 0
+appartient à l’intervalle, la case n’est pas significativement
+différente de la référence, ici la ligne Total ; idem autour de la
+valeur nulle 1 pour un “ratio” ou un “odds ratio”) :
+
+``` r
+
+gss_simple |>
+  dplyr::filter(year == "2012") |> # n=1 974
+  tab(race, party3, pct = "row", 
+      color = "difference", ref = 1, color_signif = "guaranteed_effect",
+      display = "base_ci" # "{base} {ci}"
+  )
+```
+
+[TABLE]
+
+`display = "base_ci"` permet d’afficher le chiffre de base, pourcentage
+ou moyenne, à côté de son intervalle de confiance. `display = "ci"`
+affiche l’intervalle de confiance seul.
+
+`stars = TRUE` ajoute des étoiles de significativité. Elles racontent la
+même histoire que les intervalles de confiance de l’écart avec la
+référence, mais pour d’autres seuils de confiance (99 %, 95 %, 90 %) :
+
+``` r
+
+gss_simple |>
+  dplyr::filter(year == "2012") |> # n=1 974
+  tab(rincome, party3, pct = "row", ref = 1, display = "ci", stars = TRUE)
+```
+
+[TABLE]
+
+`test = TRUE` ajoute un test statistique d’indépendance par
+(sous-)tableau : **test du Chi2** pour les variables de colonne
+catégorielles, **ANOVA F de Welch** pour les variables numériques
+(`options(tabxplor.anova = "classic")` bascule vers l’ANOVA F classique,
+à variance commune) :
+
+``` r
+
+tab(gss_simple, race, c(party3, tvhours), pct = "row", test = TRUE)
+```
+
+[TABLE]
+
+## Batteries d’items oui/non, et un score
+
+Les **questions à réponses multiples**, classiques dans les données
+d’enquête, se présentent sous la forme d’une batterie de réponses
+Oui/Non, avec une variable par réponse possible. `levels = "first"` ne
+garde que la première modalité : tout tient alors dans un tableau
+compact, une colonne par item.
+
+Les données `tea` du package **FactoMineR**, de François Husson, Julie
+Josse, Sébastien Lê et Jérémy Mazet – merci à eux –, posent à 300
+pratiquants la question **quand buvez-vous du thé** ?
+
+``` r
+
+tea_when_vars <- c("breakfast", "lunch", "tea.time", "evening",  "dinner", "always")
+# levels(facto_tea$breakfast) # toujours la reponse « oui » en premier
+tea <- facto_tea |> score_from_lv1("tea_when", vars_list = tea_when_vars)
+tab(tea, SPC, all_of(c(tea_when_vars, "tea_when")), pct = "row", levels = "first", 
+    na = "drop", color = "difference")
+```
+
+[TABLE]
+
+[`score_from_lv1()`](https://bricenocenti.github.io/tabxplor/reference/score_from_lv1.md)
+ajoute une variable de type **score** pour compter le nombre de réponses
+données par les enquêtés : ici, à combien des six moments différents la
+personne boit du thé.
+
+Chaque pourcentage se lit dans sa propre colonne : 63 % des cadres
+supérieurs (`senior`) boivent du thé au petit-déjeuner, contre 25 % des
+ouvriers (`workman`). Il n’y a pas de colonne Total car la somme ne fait
+pas 100 %, mais le score moyen par catégorie joue ce rôle : 2,1 moments
+par jour en moyenne pour les cadres supérieurs contre 1,5 pour les
+ouvriers.
+
+`levels = "auto"` fait ce choix **variable par variable** : il ne garde
+que la première modalité des facteurs à deux modalités, et toutes les
+modalités des autres.
+
+``` r
+
+tab(tea, sex, c(breakfast, evening, SPC), pct = "row", levels = "auto", na = "drop", tot = "row")
+```
+
+## Sous-tableaux et multiples variables de ligne
+
+Donner à
+[`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md) une
+troisième variable comme `tab_vars` construit **un sous-tableau par
+groupe** (ici, un par tranche de revenu). Le résultat est *groupé* : les
+opérations `dplyr` s’appliquent alors à l’intérieur de chaque
+sous-tableau.
+
+``` r
+
+tab(gss_simple, race, party3, rincome, na = "drop", pct = "row")
+```
+
+[TABLE]
+
+Quand on passe plusieurs **variables en ligne** *sans* `tab_vars`,
+[`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md)
+fusionne par défaut les tableaux jumeaux en un seul.
+`output_list = TRUE` renvoie au contraire une **liste, avec un tableau
+par variable en ligne** (avec des `tab_vars`, le résultat est toujours
+une liste) :
+
+``` r
+
+tab(gss_simple, c(married, income25k), race, pct = "row", output_list = TRUE)
+```
+
+### Un tableau très compact : un bloc de colonnes par groupe
+
+`spread_vars` affiche une variable de sous-tableau **en largeur** plutôt
+qu’en hauteur : chacune de ses modalités devient un *bloc de colonnes*.
+Combiné à `levels = "first"`, on obtient un tableau très condensé :
+
+``` r
+
+tab(tea, SPC, all_of(tea_when_vars), tab_vars = sex, spread_vars = sex,
+    pct = "row", levels = "first", na = "drop", comp = "all", color = "auto")
+```
+
+[TABLE]
+
+La mise en page découle de cette forme, et le tableau le dit :
+
+- `comp = "all"` compare chaque case au total **d’ensemble** plutôt qu’à
+  celui de son groupe — ici la case `Total` du bloc `Ensemble`, en gras.
+
+## La pondération
+
+`wt =` permet d’ajouter une variable de pondération. Les pourcentages,
+les moyennes et les écarts deviennent des estimations pondérées du
+chiffre de la population de référence de l’échantillon.
+
+Leurs **intervalles de confiance** et leurs **tests statistiques**,
+toutefois, prennent la pondération en compte selon trois options
+possibles :
+
+1.  Par défaut, le calcul des marges d’erreurs se fait sur les
+    **effectifs non-pondérés** (avec les pourcentages pondérés) — c’est
+    la convention de presque tous les logiciels de statistiques. Lorsque
+    les poids sont inégaux, les intervalles sont souvent un peu trop
+    étroits.
+2.  **`design_effect = TRUE`** — chaque intervalle, étoile de
+    significativité, seuil de couleur et test (Chi2, ANOVA F) tient
+    compte de l’inégalité des poids. Les marges d’erreurs sont plus
+    larges mais plus honnêtes.
+3.  **un plan de sondage du package `survey::` passé comme `data =`** —
+    `tabxplor` suit le plan complet : échantillon stratifié, grappes,
+    calage sur marges, etc.
+
+Plus de détails dans [Données pondérées et plans de
+sondage](https://bricenocenti.github.io/tabxplor/articles/tabxplor-weights-fr.md).
+
+## Exporter des tableaux
+
+Un tableau fini s’exporte avec ses couleurs vers Excel, HTML ou Markdown
+:
+
+``` r
+
+tabs <- tab(gss_simple, race, party3, pct = "row", color = "difference")
+tab_export(tabs) # défaut : tableau html (Viewer de RStudio, .Rmd/.qmd, etc.)
+tab_export(tabs, "xl", path = "path/table") # export Excel
+tab_export(tabs, "md", path = "path/table") # fichier markdown plat
+```
+
+Les fonctions
+[`tab_html()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md),
+[`tab_xl()`](https://bricenocenti.github.io/tabxplor/reference/tab_xl.md),
+[`tab_md()`](https://bricenocenti.github.io/tabxplor/reference/tab_md.md)
+font la même chose.
+
+**Pour obtenir un tableau dans Word et l’insérer dans un article, le
+chemin passe par Excel** : le classeur porte les *vrais* nombres,
+non-arrondis, si bien qu’on peut encore y faire des calculs et des mises
+en forme. Il suffit de copier-coller dans Word sous forme de tableau
+modifiable pour garder la mise en forme exacte. Attention : utiliser les
+applications installées, car la version sur navigateur web perd le
+formatage.
+
+`theme = "dark"` utilise le thème sombre. `theme = "auto"` conserve le
+thème clair/sombre de l’éditeur de code dans les exports HTML ou
+Markdown. Pour la console, `set_color_palette(theme = "auto")` détecte
+l’éditeur (RStudio, Positron, etc.) et choisit la palette
+correspondante.
+
+``` r
+
+tab_export(tabs, theme = "auto")
+```
+
+Comme les variables numériques ne peuvent être passées qu’en colonnes,
+certaines mises en page complexes avec des variables numériques en
+lignes nécessitent de transposer le tableau à l’export, avec
+`transpose = TRUE` :
+
+``` r
+
+tab(gss_simple, party3, c(race, tvhours), pct = "row", 
+    color = "ratio", display = "base", n = "min") |>
+  tab_html(transpose = TRUE)
+```
+
+[TABLE]
+
+Passer une liste de plusieurs tableaux dans
+[`tab_export()`](https://bricenocenti.github.io/tabxplor/reference/tab_export.md)
+les affiche les uns à la suite des autres, ou dans différentes feuilles
+Excel.
+
+**Une seule feuille de style pour tout un document.** Dans un rapport
+`.Rmd`/`.qmd`,
+[`tab_css()`](https://bricenocenti.github.io/tabxplor/reference/tab_css.md)
+écrit le CSS des couleurs une seule fois, et chaque tableau html suivant
+n’émet que des classes CSS : un unique `theme` met en forme tous les
+tableaux d’un coup.
+
+``` r
+
+options(tabxplor.tab_kable_css = FALSE)
+tab_css(theme = "auto")   # à émettre une fois, en haut du document
+```
+
+Tout reste modifiable via du CSS ordinaire (largeurs de colonnes,
+polices…) ; voir
+[`?tab_css`](https://bricenocenti.github.io/tabxplor/reference/tab_css.md)
+pour les classes de rôle (`.tx-rv`, `.tx-tot`, `.tx-num`).
+
+### Noir et blanc, pour la publication
+
+Les couleurs servent à explorer. Pour une revue, `theme = "print_ready"`
+restitue la même lecture en noir et blanc.
+
+``` r
+
+tab(gss_simple, race, party3, pct = "row", color = "difference") |>
+  tab_html(theme = "print_ready")
+```
+
+[TABLE]
+
+Une option globale permet d’utiliser cette palette typographique dans
+tous les exports :
+
+``` r
+
+options(tabxplor.theme = "print_ready")
+```
+
+## Ce qu’affiche une case : la grammaire `display =`
+
+Chaque case contient en réalité bien plus que le seul nombre qu’elle
+imprime — son effectif, son pourcentage, son écart à la référence, son
+intervalle de confiance, etc. `display =` choisit lequel est affiché.
+Rien n’est recalculé : un affichage se choisit après la construction du
+tableau, si bien qu’en changer ne change aucun chiffre.
+
+La voie la plus rapide est d’utiliser les presets suivants :
+
+| `display =` | ce que montre la case |
+|----|----|
+| `"base"` | la base seule — pourcentage, moyenne ou effectif (le défaut) |
+| `"base_ci"` | la base seule et son intervalle de confiance, `48.6 [45.1; 52.1]` |
+| `"base_moe"` | la base seule et sa marge d’erreur, `48.6 ± 3.5` |
+| `"base_diff"` | la base seule et, entre crochets, sa différence à la référence |
+| `"base_ratio"` | la base seule et la même comparaison, sous forme de rapport |
+| `"mean_sd"` | une moyenne et son écart-type (colonnes numériques) |
+| `"mean_cv"` | une moyenne et son coefficient de variation — la dispersion divisée par la moyenne de chaque catégorie, en pourcentage, ce qui la rend comparable entre plusieurs catégories (le défaut sur les colonnes numériques) |
+
+``` r
+
+tab(gss_simple, race, c(party3, tvhours), pct = "row", display = "base_moe")
+```
+
+[TABLE]
+
+Il est également possible d’écrire des **affichages personnalisés** en
+nommant des champs entre [`{}`](https://rdrr.io/r/base/Paren.html).
+`display = "{pct} ({diff})"` imprime chaque pourcentage, suivi de sa
+différence à la référence entre parenthèses ; `"{pct} (n={n})"` le fait
+suivre de l’effectif non-pondéré :
+
+``` r
+
+tab(gss_simple, race, party3, pct = "row", color = "difference", display = "{pct} ({diff})")
+```
+
+[TABLE]
+
+Un champ peut préciser son nombre de décimales, `{pct:1} ({n:0})`, qui
+l’emporte sur le `digits =` du tableau.
+
+**Sur un tableau déjà construit**,
+[`set_display()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
+fait la même chose :
+
+``` r
+
+tabs <- tab(gss_simple, race, party3, pct = "row")
+tabs |> set_display("{pct} (n={n})")
+```
+
+[TABLE]
+
+[`?tab`](https://bricenocenti.github.io/tabxplor/reference/tab.md) liste
+chaque champ qu’un gabarit [`{}`](https://rdrr.io/r/base/Paren.html)
+peut nommer ; cf. aussi [Programmer avec
+tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming-fr.md).
+
+## Infobulles au survol (tableaux html)
+
+Chaque tableau html porte, au survol de chaque case, une **infobulle**
+avec les chiffres sous-jacents : l’effectif non pondéré, l’écart à la
+référence, le rapport, l’intervalle de confiance, etc. Elles sont
+actives par défaut dans le Viewer de RStudio/Positron et dans les
+rapports .Rmd/.qmd (`options(tabxplor.tab_kable_tooltips = FALSE)` pour
+désactiver cette fonctionnalité, comme ci-dessus).
+
+``` r
+
+tab(gss_simple, race, party3, pct = "row", color = "difference")
+```
+
+[TABLE]
+
+## Quelles cases font l’intérêt du tableau ? (`color = "contrib"`)
+
+Toutes les couleurs vues jusqu’ici comparent une case à une
+**référence** choisie — la ligne Total, la première ligne.
+`color = "contrib"` pose une autre question, qui n’a besoin d’aucune
+référence : **quelles cases s’écartent de ce qu’on attendrait si les
+deux variables étaient indépendantes ?** C’est la façon naturelle de
+colorer un tableau d’effectifs bruts (un effectif n’a pas de référence).
+
+Il y a deux manières utiles de répondre, et `color_signif` choisit entre
+elles.
+
+### 1. « Quelles cases construisent *cette* association ? »
+
+``` r
+
+tab(gss_simple, race, party3, color = "contrib")
+```
+
+[TABLE]
+
+``` r
+
+# tab(gss_simple, race, party3, pct = "all", color = "contrib")
+```
+
+Chaque case est colorée par sa **contribution relative au Chi2 du
+tableau** (avec le signe de l’écart, sous-représentation ou
+sur-représentation), exprimée en multiples de la case moyenne : `×1`
+signifie « cette case porte une part moyenne », `×5` « cinq fois la
+moyenne ». Les cases fortes sont, littéralement, celles qui construisent
+les associations du tableau.
+
+Cette échelle est *relative à ce tableau*, elle dit comment
+l’association s’y répartit, pas quelle est son ampleur : c’est cette
+structure qu’utilise une **analyse des correspondances simple**.
+
+Pour qui utilise les **modèles log-linéaires** de tableaux de
+contingence (la tradition de Goodman, familière aux recherches sur la
+mobilité sociale), cette coloration en constitue le cœur descriptif : le
+Chi2 *est* le modèle log-linéaire d’indépendance, et la contribution de
+chaque case est son écart à ce modèle — un tableau `color = "contrib"`
+est donc une carte de chaleur de la structure des associations, qui se
+lit d’un coup d’œil. Cf. le package
+[logmult](https://cran.r-project.org/package=logmult).
+
+``` r
+
+tab(gss_simple, race, party3, color = "contrib") |> set_display("ctr")
+```
+
+[TABLE]
+
+### 2. « Quelles cases s’écartent nettement, sur une échelle comparable ? »
+
+Ajouter `color_signif = "guaranteed_effect"` passe au **résidu
+standardisé** : de combien d’erreurs-types chaque case s’écarte-t-elle
+de ce que prédit l’hypothèse d’indépendance ?
+
+``` r
+
+tab(gss_simple, race, party3, color = "contrib", color_signif = "guaranteed_effect") |>
+  set_display("resid")
+```
+
+[TABLE]
+
+Il se lit avec la règle qu’on connaît peut-être du logiciel SPSS :
+au-delà de **±2** une case est notable, au-delà de **±3** elle l’est
+fortement. Positif = sur-représentée, négatif = sous-représentée. À la
+différence de la part ci-dessus, ±3 signifie la même chose dans *tous*
+les tableaux : on peut donc en comparer deux — et toute case non
+significativement différente de l’hypothèse nulle reste grise.
+
+``` r
+
+tab(gss_simple, race, party3, pct = "row", color = "contrib",
+    display = "{pct} ({resid})")
+```
+
+[TABLE]
+
+Note : il s’agit du résidu standardisé ajusté de Haberman — le « résidu
+ajusté » de SPSS, qui est aussi le `chisq.test()$stdres` de R.
+
+## Un graphique pour visualiser les écarts avec leurs intervalles de confiance : `forest_plot()`
+
+[`forest_plot()`](https://bricenocenti.github.io/tabxplor/reference/forest_plot.md)
+permet de représenter graphiquement les écarts d’un tableau croisé avec
+leurs intervalles de confiance.
+
+``` r
+
+tab(tea, SPC, c(breakfast, lunch, evening, dinner), pct = "row",
+    levels = "first", na = "drop", 
+    color = "ratio", color_signif = "guaranteed_effect", ref = 1) |> 
+  forest_plot()
+```
+
+![](tabxplor-fr_files/figure-html/unnamed-chunk-49-1.png)
+
+L’axe horizontal est centré sur la catégorie de référence, ici «
+employee ». Le point de chaque catégorie montre son **écart comparé à la
+catégorie de référence**, celui qui est mesuré par `color =` (points de
+pourcentage ; ratio ou rapport de cotes avec une échelle logarithmique).
+Les lignes de la grille sont les seuils de couleur habituels.
+
+La « moustache » donne l’intervalle de confiance. Lorsque zéro
+appartient à cet intervalle, la catégorie concernée n’est pas
+significativement différente de la modalité de référence.
+
+[`forest_plot()`](https://bricenocenti.github.io/tabxplor/reference/forest_plot.md)
+trace aussi les coefficients d’un modèle de régression — voir [Tableaux
+de
+régression](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg-fr.md).
+
+## Travailler avec le résultat
+
+[`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md)
+retourne un `tibble` sur lequel les verbes `dplyr` habituels
+fonctionnent tels quels. Une classe supplémentaire `tabxplor_tab` ajoute
+certains comportements spécifiques, par exemple réordonner les lignes
+garde par défaut les lignes Total à leur place :
+
+``` r
+
+library(dplyr)
+tab(gss_simple, race, marital, pct = "row") |>
+  arrange(Married)
+```
+
+|       | marital  |           |          |         |               |     |               |
+|-------|----------|-----------|----------|---------|---------------|-----|---------------|
+| race  | Married  | Separated | Divorced | Widowed | Never married | NA  | Total         |
+|       | \<row%\> |           |          |         |               |     | \<row% (n)\>  |
+| Black | 28%      | 6%        | 16%      | 8%      | 42%           | 0%  | 100% ( 3 129) |
+| Other | 48%      | 6%        | 11%      | 4%      | 32%           | 0%  | 100% ( 1 959) |
+| White | 51%      | 3%        | 16%      | 9%      | 21%           | 0%  | 100% (16 395) |
+| Total | 47%      | 3%        | 16%      | 8%      | 25%           | 0%  | 100% (21 483) |
+
+**Titrer et annoter.** `subtext =` imprime une ou plusieurs lignes de
+légende sous un tableau (un champ, une source de données, une note,
+etc.).
+[`set_caption()`](https://bricenocenti.github.io/tabxplor/reference/set_caption.md)
+donne à un tableau un titre utilisé dans les exports :
+
+``` r
+
+tab(gss_simple, race, marital, pct = "row", subtext = c("Champ : ", "Source : GSS, 2000-2014")) |>
+  set_caption("Titre personnalisé")
+```
+
+Titre personnalisé
+
+[TABLE]
+
+## Options globales R
+
+Une poignée d’[`options()`](https://rdrr.io/r/base/options.html) fixent
+les préférences par défaut, une fois pour toute la session R — à placer
+en haut d’un script, ou dans un fichier `.Rprofile`. Les plus courantes
+:
+
+- `options(tabxplor.print = "html")` — par défaut, afficher les tableaux
+  non pas dans la console, mais en html dans le panneau Viewer de
+  RStudio ou Positron (recommandé)
+- `options(tabxplor.cleannames = TRUE)` — retirer partout les préfixes
+  de type `"1-"` des noms de modalités.
+- `options(tabxplor.parallel = 4)` — paralléliser par défaut les
+  tableaux à plusieurs variables sur plusieurs cœurs de processeur
+  (nécessite `mirai`)
+- `options(tabxplor.var_labels = TRUE)` — dans les exports, afficher
+  l’étiquette d’une variable (données `haven`/`labelled`) au lieu de son
+  nom brut.
+- `options(tabxplor.theme = "auto")` — le thème d’export
+  (`"light"`/`"dark"`/`"auto"`) ; `set_color_palette(theme = "auto")`
+  fait de même pour la console.
+- `options(tabxplor.stars = TRUE)` — afficher les étoiles de
+  significativité dans chaque tableau (comme `stars = TRUE`).
+- `options(tabxplor.conf_level = 0.9)` — le seuil de confiance des
+  intervalles et des tests (défaut `0.95`).
+- `options(tabxplor.design_effect = TRUE)` — sur des données pondérées,
+  tenir compte de l’inégalité des poids dans le calcul des intervalles
+  de confiance, tests, seuil de couleur, etc. (voir [Données pondérées
+  et plans de
+  sondage](https://bricenocenti.github.io/tabxplor/articles/tabxplor-weights-fr.md)).
+
+Les seuils de couleur et les palettes ont leurs propres fonctions,
+[`set_color_breaks()`](https://bricenocenti.github.io/tabxplor/reference/set_color_palette.md)
+et
+[`set_color_palette()`](https://bricenocenti.github.io/tabxplor/reference/set_color_palette.md).
+`?tabxplor-options` documente chaque option, et [Programmer avec
+tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming-fr.md)
+couvre les plus avancées (polices d’export, calcul parallèle…).
+
+## Pour aller plus loin
+
+- [Interpréter un modèle de
+  régression](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reading-a-regression-fr.md)
+  — lire des régressions sans perdre de vue les données, en comparant
+  les résultats des modèles aux écarts bruts observés.
+- [Tableaux de
+  régression](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg-fr.md)
+  — la référence pour les modèles de régression : chaque famille, chaque
+  argument, les vérifications du modèle, les graphiques, etc.
+- [Données pondérées et plans de
+  sondage](https://bricenocenti.github.io/tabxplor/articles/tabxplor-weights-fr.md)
+  — la pondération et les plans de sondage, pour les tableaux croisés
+  comme pour les régressions.
+- [Programmer avec
+  tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming-fr.md)
+  — les colonnes/vecteurs `tabxplor_fmt` et comment programmer avec ses
+  champs.
+- [`?tab`](https://bricenocenti.github.io/tabxplor/reference/tab.md)
+  pour chaque argument (groupés par usage, y compris les méthodes
+  d’intervalle de confiance) et `?tabxplor-options` pour les réglages
+  par défaut du package.

@@ -1,0 +1,18 @@
+pandoc: 3.8.3
+pkgdown: 2.2.1
+pkgdown_sha: ~
+articles:
+  articles/tabxplor-fr: tabxplor-fr.html
+  articles/tabxplor-programming-fr: tabxplor-programming-fr.html
+  tabxplor-programming: tabxplor-programming.html
+  articles/tabxplor-reading-a-regression-fr: tabxplor-reading-a-regression-fr.html
+  tabxplor-reading-a-regression: tabxplor-reading-a-regression.html
+  articles/tabxplor-reg-fr: tabxplor-reg-fr.html
+  tabxplor-reg: tabxplor-reg.html
+  articles/tabxplor-weights-fr: tabxplor-weights-fr.html
+  tabxplor-weights: tabxplor-weights.html
+  tabxplor: tabxplor.html
+last_built: 2026-08-29T08:39Z
+urls:
+  reference: https://bricenocenti.github.io/tabxplor/reference
+  article: https://bricenocenti.github.io/tabxplor/articles

@@ -1,0 +1,1551 @@
+# Reading a regression model without losing sight of the observed data
+
+``` r
+
+library(tabxplor)
+library(dplyr)
+
+# html tables in RStudio/Positron Viewer (recommended)
+options(tabxplor.print = "html")
+```
+
+*Une version française de ce document est disponible : [Interpréter un
+modèle de régression sans perdre de vue les
+pourcentages](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reading-a-regression-fr.html).*
+
+This article teaches one thing: how to build a regression model on
+social sciences survey data or administrative data, and how to read one,
+**without ever losing sight of the percentages you started from**.
+
+That is not a stylistic preference. A regression is often taught as a
+machine you feed variables into, and the numbers that come out —
+coefficients, odds ratios — have no obvious relation to anything you
+could see in the data. Students then learn to recite “all else equal”
+without being able to say what was held equal, or what difference it
+made. This article takes the opposite route. Every model here sits next
+to the cross-table it came from, and the point of the exercise is always
+the **comparison between the two**: what did holding the other variables
+equal actually change?
+
+**There are two guides to regression here, and this is the slow one.**
+[`vignette("tabxplor-reg")`](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.md)
+is the reference: every family, every argument, the full grid of what
+each model can report, the weighting rules, the plots. Read it when you
+need to look something up. This one walks a single analysis from a first
+cross-table to a finished sentence, and refers you there for the
+details.
+
+Everything here is also available **without writing R code**, as a
+point-and-click **Regressions** analysis in the tabxplor module for
+[jamovi](https://www.jamovi.org/).
+
+### What we are and are not doing
+
+A word on what a model of this kind is for, because it changes how you
+read every number below.
+
+We are **not** predicting. Nothing here is about guessing an
+individual’s outcome. We are **not** proving causes either: no amount of
+adjustment turns survey data or administrative data into a real
+experiment, and this article will show you two cases where “controlling
+for” a variable makes the answer *worse*.
+
+What we are doing is **untangling correlations**. Social variables come
+in bundles — income travels with education, which travels with
+occupation, which travels with age. When you find that two things go
+together, the honest first question is whether they still go together
+among people who resemble each other on the rest of the bundle. A
+regression on survey data answers that question, and only that question.
+Richard Berk put the modest version well: conventional regression
+analysis does nothing more than produce, from a data set, a collection
+of conditional means and conditional variances. The interest lies in
+comparing them.
+
+So the recurring gesture of this article is a **round trip**: from the
+observed percentage, out to a model, and back to a percentage. If you
+cannot get back, something has gone wrong.
+
+### The words, in plain language
+
+Seven words do most of the work. Each is defined by what you *do* with
+it.
+
+[TABLE]
+
+The `code` name beside each word is the argument you actually type — in
+[`tab_reg()`](https://bricenocenti.github.io/tabxplor/reference/tab_reg.md)
+and in the jamovi module alike, since the options carry the same names.
+
+Three of these deserve a warning now rather than later.
+
+**“All else equal” never means all else.** It means the variables you
+listed, measured the way your data measured them. Angrist and Pischke
+put it exactly: regression is a way to make other things equal, but
+equality is generated only for the variables included as controls —
+without them, there is no *ceteris paribus*. A table cannot tell you
+what is missing from it. The honest long form, the one worth writing out
+every time, is **“all the other chosen predictors being equal”**.
+
+**“Controlling for” over-promises.** You have not controlled anything;
+nothing in the world was held still. You have *compared people who
+happen to resemble each other*. Andrew Gelman makes the point that
+regression is about comparisons, not about how a variable responds to
+change — it is a structured way of computing average comparisons in
+data. Whenever “controlling for X” starts to sound like an experimental
+intervention on the real world, translate it back to **“comparing two
+people who differ in this, but look alike on the rest of the list”**. It
+is longer, and it is what the number actually means.
+
+**“Twice as likely” is not one quantity.** Ordinary English uses that
+phrase for two different things. It can be a **risk ratio** — “black
+arrestees were released 1.16 times less often”. Or it can be about the
+chance an event happens rather than not happening, its **odds**, in
+which case comparing two groups gives an **odds ratio** — “2.11 times
+the odds of having been released *rather than held*”. The two numbers
+are far apart, and Section 2 is about telling them apart.
+
+### The data
+
+Four data sets, each chosen because it makes one thing visible.
+
+Three of them ship with tabxplor, each named after the package it comes
+from — `car_arrests` and `car_salaries` from **carData** (John Fox,
+Sanford Weisberg and Brad Price), `questionr_hdv` from **questionr**
+(Julien Barnier, François Briatte and Joseph Larmarange), which carries
+INSEE’s *Histoire de vie* survey. With thanks to all of them;
+[`?car_arrests`](https://bricenocenti.github.io/tabxplor/reference/car_arrests.md)
+credits each in full. The fourth is in base R.
+
+``` r
+
+ucb <- as.data.frame(UCBAdmissions) |>                    # base R, no package needed
+  tidyr::uncount(Freq) |> tibble::as_tibble() |>
+  dplyr::mutate(Admit  = factor(Admit,  levels = c("Admitted", "Rejected")),
+         Gender = factor(Gender, levels = c("Male", "Female")))
+```
+
+**One habit worth acquiring immediately**: put the level you care about
+**first**. tabxplor keeps the first level of a factor as the one it
+models and the one it shows — which is why `ucb` above names
+`"Admitted"` first, and why the three shipped data sets already read
+`"Yes"`, `"White"` and `"Oui"` first. Without it every sentence in this
+article would be about people who were *not* released.
+
+The running example is `car_arrests`: 5 226 people arrested in Toronto
+for possession of a small quantity of marijuana, between 1997 and 2002,
+from data gathered for a series in the *Toronto Star*. The outcome is
+whether the person was **released with a summons** rather than held. The
+data records the arrestee’s race in a column called `colour`, whether
+they were employed, whether they were a citizen, their sex and age, and
+`checks` — the number of police databases, out of six, on which their
+name already appeared. Keep that last one in mind; half of this article
+turns on it.
+
+## 1. Start from what you can see
+
+Before any model, the table.
+
+``` r
+
+tab(car_arrests, colour, released, pct = "row", ref = "first",
+    color = "difference", color_signif = "grey_non_signif")
+```
+
+[TABLE]
+
+86 % of white arrestees were released, against 74 % of black arrestees:
+a gap of about twelve points. That is the finding. Everything that
+follows is an attempt to understand it — not to replace it.
+
+Now the other three candidate predictors, in one table:
+
+``` r
+
+tab(car_arrests, c(colour, sex, employed, citizen), released, pct = "row",
+    color = "difference", color_signif = "grey_non_signif", ref = "first")
+```
+
+[TABLE]
+
+Being employed and being a citizen both go with being released, and
+strongly. Which raises the obvious question, and it is the question a
+regression exists to answer: **black arrestees are less often employed
+and less often citizens — so is the race gap just those two gaps in
+disguise?**
+
+## 2. Turn a percentage into a comparison
+
+A percentage on its own says very little. 74 % is high or low depending
+on what you hold it against. The whole of regression is built on
+**comparisons**, so the first real step is to turn a pair of percentages
+into one number that compares them: the **deviation** of a group from
+its reference.
+
+There are three ways to measure one deviation, they are three readings
+of *the same two numbers*, and a plain cross-table is enough to compute
+all three:
+
+``` r
+
+car_arrests |>
+  tab(colour, released, pct = "row", ref = "first", stars = TRUE,
+      color = "difference", color_signif = "grey_non_signif") |>
+  mutate(difference = set_display(Yes, "difference"),
+         ratio      = set_display(Yes, "ratio"),
+         odds_ratio = set_display(Yes, "odds_ratio") )
+```
+
+[TABLE]
+
+Each of the last three columns is one measure of the deviation. From 86
+% and 74 %, you get:
+
+- a **difference** of **−12 percentage points** — subtract one from the
+  other;
+- a **ratio** of **÷1.16** — black arrestees were released 1.2 times
+  *less* often (a risk ratio);
+- an **odds ratio** of **1/2.11** — black arrestees had **2.11 times
+  lower odds** than white ones of having been released *rather than
+  held*, which is the same thing as 2.11 times *higher* odds of having
+  been held rather than released. An odds ratio is strictly symmetric
+  that way.
+
+**In
+[`tab_reg()`](https://bricenocenti.github.io/tabxplor/reference/tab_reg.md)
+this choice has a name — `measure` — and it is worth reading it in full,
+as the *measure of deviation*.** Not an abstract “scale”, and not a unit
+either: it asks **which kind of deviation you want reported** —
+subtract, divide, or divide the odds. It is the one argument you will
+regularly set, and it is the equivalent of `color =` in
+[`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md).
+
+**Odds is the bookmaker’s word.** It comes from the racetrack: saying a
+horse is *3 to 1* says its chance of winning is three times its chance
+of losing. Odds put an asymmetric situation into a single ratio — the
+win on top, the loss underneath. Here: of 100 white arrestees, 86 were
+released and 14 were not, odds of **6.1 to 1**; of 100 black arrestees,
+74 against 26, odds of **2.8 to 1**. The ratio of those two quantities
+is the *odds ratio*: $`2.8/6.1 = 0.46`$. Because it falls on the wrong
+side of 1, tabxplor prints its inverse, `1/2.11` — and the sentence
+turns over with the number: 2.11 times *fewer* odds.
+
+**They are three measures of the *same* deviation**, and they do not
+read alike at all: the odds ratio makes the gap sound roughly five times
+louder than the ratio does. That is not a distortion — one divides
+*odds*, the other divides percentages. But it is the single most common
+misreading in the social sciences, and it is worth being blunt about
+now: **an odds ratio of 2 does not mean “twice as often”**.
+
+There are two ways to state an odds ratio in English without it being
+heard as a risk ratio:
+
+- **name the opposite outcome** — “black arrestees were 2.11 times more
+  likely to be held **rather than released**”. It is the tail of that
+  sentence, and only the tail, that separates the two quantities for an
+  informed reader — while leaving an uninformed one none the wiser.
+- **use the word *odds*** — “their odds of being held were 2.11 times
+  those of white arrestees”. The word carries the distinction on its
+  own: rigorous, and not very vivid.
+
+An odds ratio is hard to say and hard to picture: an abstract quantity
+carrying a double comparison, and therefore a double reference. A risk
+ratio needs no such care — “released 1.16 times less often than white
+arrestees”, and you are done.
+
+### What generalises, and what does not
+
+The stars and the greyed-out cells answer a different question from the
+colours, and it is worth keeping the two apart.
+
+Your data is a sample. You are not interested in these 5 226 people; you
+are interested in whether what you see among them is a feature of the
+population they came from, or an accident of who happened to be arrested
+and recorded. That is all a confidence interval is: **the range of
+values for the population that would be consistent with what you
+observed.**
+
+Worth noting in passing: this is administrative data, not a
+representative sample, so the biases in how these facts came to be
+recorded weigh a great deal more than the mathematisable uncertainty due
+to the luck of the draw.
+
+``` r
+
+tab(car_arrests, colour, released, pct = "row", ref = "first", ci = "ref",
+    color = "difference", color_signif = "grey_non_signif")
+```
+
+[TABLE]
+
+A cell is **significant** when that interval excludes the **neutral
+value** — the one that would mean no deviation at all: 0 for a
+difference, 1 for a ratio or an odds ratio. The printed bracket, the
+stars, and the greying all read that same interval, so they cannot
+disagree with each other.
+
+**And then significance stops being interesting.** This is the part that
+standard teaching gets wrong for social scientists. Think of an
+experiment run by doctors or psychologists on 100 people, one arm on a
+drug and one on a placebo: there, the stars *are* the result — they are
+what shows the drug does anything at all. In the social sciences, on a
+survey with 5 000 respondents, almost every real gap will be
+significant, including gaps far too small to write a sentence about; on
+300 respondents a large and real gap may not be. Significance is a
+*permission slip*: it tells you whether you may generalise the
+observation beyond your sample. Once you have that permission, **the
+only interesting question is how big the effect is** — and, in this
+article, how much the adjustment moved it.
+
+The word itself is a trap in ordinary English, where “significant” means
+*sizeable*, or *important*. A statistically significant effect can be
+utterly minuscule.
+
+`color_signif = "grey_non_signif"` is the setting that encodes this: it
+colours cells by the size of the effect, and it greys out both the ones
+you have no right to generalise (at a 95 % confidence level) and the
+ones too small to be worth a sentence. What is left in colour is what
+you may talk about. Its counterpart
+`color_signif = "guaranteed_effect"`, useful on small samples, colours
+every significant deviation instead.
+
+## 3. Hold the other variables equal
+
+Going from the cross-table to the regression is, put plainly,
+**modelling the kind of deviation you have just chosen** — *all the
+other chosen predictors being equal*.
+
+Each kind of variable, and so each family of model, has its own base way
+of measuring that deviation. But as we will see, you can always keep the
+model that suits your outcome and still report the deviation you care
+about, through marginal effects.
+
+### Choosing a model: what kind of number is the outcome?
+
+[`tab_reg()`](https://bricenocenti.github.io/tabxplor/reference/tab_reg.md)
+needs to know what sort of quantity it is modelling, because **each
+family of model works natively on one particular measure of deviation**.
+
+| kind | what the outcome is | family | the base measure of deviation |
+|:---|:---|:---|:---|
+| categorical | a yes/no answer | `binomial` | an odds ratio (OR) |
+| — | a choice among 3+ options | `multinomial` | an odds ratio — one column per option |
+| — | a choice among ordered options | `ordinal` | one odds ratio shared by every cut of the scale |
+| numeric | a continuous quantity (money, age, …) | `gaussian` | a difference of means |
+| — | a count (hours of `x`, number of `x`) | `poisson` | a rate ratio — “1.4 times more `x` per day” |
+| — | a score counting yes/no items | `binomial` | an odds ratio |
+
+For a categorical variable — a `factor` in R’s sense — the exact model
+follows from the number of levels and whether they are ordered: binomial
+for two, multinomial for three or more, ordinal for three or more that
+are ordered. tabxplor works this out from the outcome itself.
+
+All three are “logistic” regressions: they model odds, and ratios
+between odds,
+$`\log(\text{odds}) = \log\!\left(\frac{\%_{\text{held}}}{100 - \%_{\text{held}}}\right)`$.
+That transform is also called a **logit link**, and it is what gives the
+family its name. Which means that the commonest model, applied to the
+commonest kind of variable in the social sciences, works natively in the
+hardest deviation to read.
+
+For a numeric variable there is a real choice to make: gaussian, Poisson
+or binomial?
+
+The sociologist’s way to think about it is not “which statistical
+distribution does my variable follow?” — a question about mathematics —
+nor “which test should I run?” — a question about statistics — but
+**“what kind of quantity am I counting?”** A continuous measurement, a
+proper count and a proportion are three different things, and each has
+its own natural way of saying that one group sits higher than another.
+
+Suppose that instead of `released` we wanted to model `checks` — in how
+many of six police databases the arrested person’s name already
+appeared. Which models could we choose? It is a count, but it is *also*
+a score out of six, and it could be treated as a continuous quantity.
+Each choice gives the deviation between two groups of a predictor a
+different shape:
+
+- **as a count** — all the other chosen variables being equal, black
+  arrestees appear in **1.35 times as many** databases as white
+  arrestees (a rate ratio, IRR);
+- **as a score out of six** — for **any one database**, their odds of
+  being on it rather than not are **1.55 times higher** (an odds ratio);
+- **as a continuous quantity** — they appear in **0.5 more databases**
+  on average, which is a difference of means, so a subtraction.
+
+Each reading is one model:
+
+``` r
+
+tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), family = "gaussian")
+tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), family = "poisson" )
+tab_reg(car_arrests, "checks", c("colour", "employed", "citizen"), family = "binomial", trials = 6)
+```
+
+Put the three side by side and you can see they are three ways of
+looking at the same thing:
+
+``` r
+
+car_arrests |>
+  mutate(checks_gaussian = checks, checks_poisson = checks, checks_binomial = checks) |>
+  tab_reg(c("checks_gaussian", "checks_poisson", "checks_binomial"),
+          family = c("gaussian", "poisson", "binomial"), trials = c(checks_binomial = 6),
+          predictors = c("colour", "employed", "citizen"),
+          stats = NULL, empirical = FALSE
+         )
+```
+
+Regression models: checks_gaussian, checks_poisson +1 more by colour,
+employed +1 more
+
+[TABLE]
+
+Same data, same predictors, three measures of deviation, three sentences
+to write.
+
+You could argue about which of them fits best — the linear regression
+uses a gaussian distribution, which sits badly with the fact that “on no
+database at all” is 35 % of the sample. You could argue about the
+assumptions each one makes: the binomial treats being on each of the six
+databases as six equal and independent chances. But the point to take
+away here is that **each family has a preferred quantity**, a habitual
+way of measuring the deviation between the levels of a predictor.
+
+#### What can I ask of this outcome?
+
+Rather than memorise the grid, ask:
+
+``` r
+
+reg_measures(car_arrests, "checks")
+```
+
+``` r-output
+#> # A tibble: 10 × 6
+#>    family   link       measure    effect                header      reads_as    
+#>    <chr>    <chr>      <chr>      <chr>                 <chr>       <chr>       
+#>  1 gaussian difference difference conditional           Model_diff  mean differ…
+#>  2 gaussian (any)      difference marginal|at_reference Model_mdiff marginal me…
+#>  3 gaussian (any)      ratio      marginal|at_reference Model_mRoM  marginal ra…
+#>  4 binomial odds_ratio odds_ratio conditional           Model_OR    odds ratio  
+#>  5 binomial (any)      difference marginal|at_reference Model_mRD   marginal ri…
+#>  6 binomial (any)      ratio      marginal|at_reference Model_mRR   marginal ri…
+#>  7 binomial (any)      odds_ratio marginal|at_reference Model_mOR   marginal od…
+#>  8 poisson  ratio      ratio      conditional           Model_IRR   incidence-r…
+#>  9 poisson  (any)      difference marginal|at_reference Model_mdiff marginal me…
+#> 10 poisson  (any)      ratio      marginal|at_reference Model_mIRR  marginal in…
+```
+
+Every family comes with its own default `link`, its preferred way of
+measuring a deviation. That is its *conditional* effect: choosing to
+read it means reading the model’s own coefficients directly.
+
+The output has **one block per family**, and each block has **two
+parts**. The first is the model itself: its `link`, and the measure that
+model’s own coefficients carry. The second is what can be read off the
+model’s **predictions** instead — and those rows say `link = "(any)"`,
+because a marginal effect averages fitted values and does not care which
+link produced them. Section 4 is about that second part: it is what lets
+you keep the model that fits your data and still report a deviation you
+can say out loud — turning an odds ratio, hard to interpret, into
+something plainer.
+
+So `link` is the one choice that matters, and it decides only **which
+measure comes with a coefficient**: everything else is available
+whichever model you fit. `measure` then picks a row, `effect` is the
+override knob for the two prediction forms, and `header` is the column
+name you will get.
+
+By default only each family’s **own** model is listed — the one it fits
+unless told otherwise. Every family can be fitted at other links, which
+are specialist choices asked for by name;
+`reg_measures(car_arrests, "checks", link = "all")` adds them, and marks
+the family’s own with `base_link`.
+
+Only what can be built is listed: a measure this kind of outcome does
+not have simply has no row.
+
+### The bridge: the observed column *is* the cross-table
+
+Here is the move that this whole article rests on. Here is the logistic
+model of our outcome `released` — binomial, because the variable is
+binary — and by default, as you will see, tabxplor puts the deviation
+observed in the data next to each deviation the model estimates (set
+`empirical = FALSE` to drop it):
+
+``` r
+
+model <- tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"))
+model
+```
+
+Logistic regression: released by colour, sex +3 more
+
+[TABLE]
+
+Now look at the **`Obs_OR`** column, and compare it with the odds ratios
+computed straight from the cross-table:
+
+``` r
+
+tab(car_arrests, c(colour, sex, employed, citizen), released, pct = "row", ref = "first",
+    stars = TRUE, color = "odds_ratio", color_signif = "grey_non_signif", display = "OR")
+```
+
+[TABLE]
+
+**The same numbers, the same stars.** The observed column is not an
+approximation of the cross-table or a summary of it: it *is* the
+cross-table — the odds ratio computed directly on the observed
+percentages, printed next to the model. The stars were added to say in
+so many words what the greying already encodes: a level with no star at
+all is not significantly different from its reference level, even at the
+90 % confidence level the lowest star marks. (The two ladders are not
+the same one: the stars run 90 / 95 / 99 %, while the greying is decided
+at 95 %.)
+
+That is what makes the comparison fair, and it is worth stating as a
+rule: **in tabxplor, the observed deviation is always the same quantity
+as the modelled one, computed on the same people, on the same scale,
+with the same confidence intervals.** (Here nothing is missing from the
+data, so the two populations coincide on their own; in general the
+observed column is computed on the model’s complete cases, so that they
+always do.)
+
+The main difference is that **the observed deviation holds for one
+predictor at a time**, and is read predictor by predictor, while **the
+modelled deviation concerns the whole table**, and is read *all the
+other chosen predictors being equal*.
+
+The distance between the two columns measures the model’s
+**adjustment**: the movement, small or large, that the model brings to
+the deviations already in the data. The model *adjusts* the observed
+numbers — nudging them, most of the time, sometimes shifting them hard.
+It is that pair, and not the numbers taken one at a time, that you have
+to learn to read. A cross-table always gives its results **all things
+*unequal*** : the two crossed variables sit there in a dense context,
+tied to every other variable, including the ones the survey never
+measured. A model gives its own **all the other chosen predictors being
+equal**. The two columns carry exactly that difference, and nothing
+more. Section 5 is about reading it.
+
+### Reading a row from left to right
+
+``` r
+
+model
+```
+
+Logistic regression: released by colour, sex +3 more
+
+[TABLE]
+
+Take the `colour` block of that table. It contains four numbers, and
+they are arranged in the order in which you would think them:
+
+| you read | you get | it means |
+|:---|:---|:---|
+| the count `n` | 3 938 / 1 288 | how many people each row rests on |
+| `Obs_OR`, in brackets | (86 %) / (74 %) | what you actually **counted** on the data |
+| `Obs_OR`, the estimate | `1/2.11***` | the **observed comparison** you made from it |
+| `Model_OR`, the estimate | `1/1.48***` | the same comparison, **among people alike on the rest** |
+| `Model_OR`, in brackets | (84 %) / (79 %) | what the model says the percentages would then be |
+
+The two **estimates** sit next to each other in the middle, which is
+deliberate: that is the comparison you are here for. The two
+**percentages** sit at the outer edges — observed on the far left,
+adjusted on the far right. (On a table of means those two would be
+means; tabxplor calls that outer number the **base**, whatever it
+happens to be.) A row read left to right is the modelling operation
+itself: *this is what I counted → this is the comparison gap → this is
+the gap among comparable people on the chosen predictors → this is what
+the percentages become*.
+
+And the sentence, at last:
+
+> Of the people arrested for possession in Toronto, **86 % of white
+> arrestees were released and 74 % of black arrestees** — odds about 2.1
+> times lower. Among people **alike in sex, employment, citizenship and
+> prior police record**, the gap narrows but does not close: odds about
+> **1.5 times lower**, or **84 % against 79 %** in adjusted percentages.
+
+Note what the adjusted percentages let you say that the odds ratio does
+not. `1/1.48` is an abstract number; *84 % against 79 %* is a statement
+about people: *what the percentages would be if people were really alike
+on all other chosen predictors*.
+
+**And what is the “Model fit” block sitting below every table?** It is,
+quite literally, the model’s own report card:
+
+- how many people it was fitted on (`N`);
+- how it is holding up:
+  - `Dispersion` — can you trust its stars? (Is the model’s standard
+    error comparable with the one a robust method gives, allowing for
+    unequal variances between groups?)
+  - `Influence` — is one single respondent carrying the result?
+  - `Collinearity` — are two predictors in fact measuring the same
+    thing, which distorts everything?
+- is the model with predictors significantly better than the null model
+  with none (`LR vs null`)?
+- how much of the outcome’s variability does it account for
+  (`McFadden R2`)?
+
+This article never uses it, because its question is what adjustment
+*did*, not whether the model is a good one. Both matter, and
+[`vignette("tabxplor-reg")`](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.md)
+explains every row of it.
+
+### A predictor with no levels
+
+`checks` — in how many of six police databases the person’s name already
+appears — is a number, so it has no categories to compare. Two things
+change.
+
+``` r
+
+tab_reg(car_arrests, "released", c("colour", "checks"), stats = NULL)
+```
+
+Logistic regression: released by colour, checks
+
+[TABLE]
+
+| outcome | numeric predictor | observed range | observed shape (central 95%) |
+|----|----|----|----|
+| p = %_(Yes) ; log(p/(1-p)) | checks | 61-91% (OR 6.7) | ![](data:image/svg+xml;base64,PHN2ZyBjbGFzcz0idHgtc3BhcmsiIHdpZHRoPSIxOTIuNiIgaGVpZ2h0PSI0NCIgdmlld2JveD0iMCAwIDE5Mi42IDQ0IiBhcmlhLWhpZGRlbj0idHJ1ZSI+PHBvbHlsaW5lIHBvaW50cz0iMS4zLDEuMyAxMS4zLDEuMyAyMS4zLDEuMyAzMS4zLDcuMiA0MS4zLDcuMiA1MS4zLDcuMiA2MS4zLDEzLjEgNzEuMywxMy4xIDgxLjMsMTkuMCA5MS4zLDE5LjAgMTAxLjMsMjUuMCAxMTEuMywzMC45IDEyMS4zLDMwLjkgMTMxLjMsMzYuOCAxNDEuMywzNi44IDE1MS4zLDQyLjcgMTYxLjMsNDIuNyAxNzEuMyw0Mi43IDE4MS4zLDQyLjcgMTkxLjMsNDIuNyIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMi42IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiPjwvcG9seWxpbmU+PC9zdmc+) |
+
+**First, the effect is per unit — and the unit is a choice.** One extra
+database out of six is a large step; one extra year of age is a small
+one. So tabxplor reports the effect **per two standard deviations** by
+default, and the row says both how far it steps and from where:
+`per 3.08 (2SD), at 1.64 (mean)`. In a normal, bell-shaped distribution,
+95 % of people sit within ±2 SD of the mean, which is roughly the span a
+binary predictor covers — and that is what makes a continuous row and a
+two-level row comparable at a glance. Here it reads: someone two
+standard deviations above the mean — on about 4.7 databases — has about
+3.5 times the odds of being held rather than released that someone at
+the mean (1.64) has. Except that the unit is absurd here, because
+**nobody is on 1.64 databases**. Better to anchor at `0` with `ref` and
+step by one database with `multiplier`:
+
+``` r
+
+tab_reg(car_arrests, "released", c("colour", "checks"),
+        ref = c(checks = 0), multiplier = c(checks = 1),
+        empirical = FALSE, stats = NULL)
+```
+
+Logistic regression: released by colour, checks
+
+[TABLE]
+
+| outcome | numeric predictor | observed range | observed shape (central 95%) |
+|----|----|----|----|
+| p = %_(Yes) ; log(p/(1-p)) | checks | 61-91% (OR 6.7) | ![](data:image/svg+xml;base64,PHN2ZyBjbGFzcz0idHgtc3BhcmsiIHdpZHRoPSIxOTIuNiIgaGVpZ2h0PSI0NCIgdmlld2JveD0iMCAwIDE5Mi42IDQ0IiBhcmlhLWhpZGRlbj0idHJ1ZSI+PHBvbHlsaW5lIHBvaW50cz0iMS4zLDEuMyAxMS4zLDEuMyAyMS4zLDEuMyAzMS4zLDcuMiA0MS4zLDcuMiA1MS4zLDcuMiA2MS4zLDEzLjEgNzEuMywxMy4xIDgxLjMsMTkuMCA5MS4zLDE5LjAgMTAxLjMsMjUuMCAxMTEuMywzMC45IDEyMS4zLDMwLjkgMTMxLjMsMzYuOCAxNDEuMywzNi44IDE1MS4zLDQyLjcgMTYxLjMsNDIuNyAxNzEuMyw0Mi43IDE4MS4zLDQyLjcgMTkxLjMsNDIuNyIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMi42IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiPjwvcG9seWxpbmU+PC9zdmc+) |
+
+Now it reads per single database: each extra database divides the odds
+of release by 1.50.
+
+**Second, look at the curve below the main table.** That is the outcome
+plotted against the numeric predictor in bins, with no model in it at
+all, but on the model’s own scale (here, log-odds). The **observed
+range** column gives the extremes present in the data: varying the
+number of police databases gives release rates spread from 61 % to 91 %
+— the outcome’s own scale — which is an odds ratio of 6.7 between the
+lowest and the highest bin, on the model’s scale. The curve is there so
+you can check what a regression always assumes without saying so: that
+the effect is linear all the way along. Here the curve is close to a
+line — only jagged — so the assumption holds.
+
+When one straight line is a poor summary, the most readable fix is to
+stop treating the variable as a number and cut it into categories.
+`shape` is what does it:
+
+``` r
+
+tab_reg(car_arrests, "released", c("colour", "checks"), shape = c(checks = "quartiles"), stats = NULL)
+```
+
+Logistic regression: released by colour, checks
+
+[TABLE]
+
+Now `checks` is an ordinary factor with its own percentages, effects and
+colours, and the shape is visible in the observed numbers themselves: 91
+%, 87 %, 70 %. Not much happens between zero and one or two databases;
+the collapse comes later. That is a finding, and a single slope hid it.
+
+`shape` also takes a square root or a logarithm, to straighten a curve
+that flattens out as it goes, or a quadratic term for a more complex
+shape — a hill, a valley, an acceleration.
+
+### The reference profile
+
+One row is left to explain, and it is the one students most often skip:
+**Constant**.
+
+``` r
+
+tab_reg(car_arrests, "released", c("colour", "checks"),
+        ref = c(checks = 0), multiplier = c(checks = 1), stats = NULL)
+```
+
+Logistic regression: released by colour, checks
+
+[TABLE]
+
+A regression measures everything *from* somewhere, and the Constant row
+is that somewhere: the **reference profile**, the person who has the
+reference level of every factor and the anchor value of every number,
+both of them set by `ref`. Here it is a white arrestee with no prior
+record at all, and the odds of release for such a person are 12.61 to 1,
+which is 93 % of chances of being released.
+
+`ref` is what sets it. For a factor it names the level others are
+compared with (bold in the table); for a number it names the value the
+variable is measured from. The default anchor is the **mean**, because
+zero is often nonsense — nobody is zero years old — but here, counting
+police databases, zero is both meaningful and interesting. Anchoring
+changes the Constant row and nothing else: a straight slope is the same
+wherever you start reading it from.
+
+**Two things are worth knowing.** When every predictor is a factor, the
+reference profile is a **real group of people**, and the `n` column
+counts them — so look at it. It can be tiny: in the model below, the
+baseline is a white, female, unemployed non-citizen, and the file holds
+**7 of them**. The model still works, but a baseline resting on so few
+people describes almost nobody, which is worth knowing before you quote
+it.
+
+``` r
+
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen"), empirical = FALSE, stats = NULL)
+```
+
+Logistic regression: released by colour, sex +2 more
+
+[TABLE]
+
+And as soon as a **number** is among the predictors, that count
+disappears, as in the table just above. The profile sits at one exact
+value of a continuous variable, and most of the time nobody sits exactly
+there. French sociology has known that warning in another form for a
+long time — Quetelet’s average man never existed — and it is the one
+Hanmer and Kalkan make about average-case profiles in general. It is one
+more reason the round trip of Section 4 ends by averaging over real
+people, unless inventing a typical one is a deliberate, constructed
+ideal-typical move.
+
+## 4. Come back to something you can say
+
+Here is the problem with everything above. Try saying out loud to
+somebody what an odds ratio of `1/1.48` concretely means, in one
+sentence. You cannot.
+
+An odds ratio makes for a mathematically better model, but it adds a
+layer of abstraction that can make it hard to interpret. Set against a
+risk ratio — a plain ratio between two percentages — it usually
+exaggerates.
+
+**By how much, and when?** An odds ratio does not depend on which level
+you name: `1/2.11` for “released” becomes `2.11` for “held” — the same
+number, turned over. And it does not depend on where you sit on the
+percentage scale either. That is where the real trap is, because an odds
+ratio of 2.11 is all of these at once:
+
+| from | to   | in points  | in “times as often”     | OR   |
+|:-----|:-----|:-----------|:------------------------|:-----|
+| 5 %  | 10 % | +5 points  | ×2 — twice as often     | 2.11 |
+| 50 % | 68 % | +18 points | ×1.36                   | 2.11 |
+| 74 % | 86 % | +12 points | ×1.16                   | 2.11 |
+| 90 % | 95 % | +5 points  | ×1.06 — next to nothing | 2.11 |
+
+One single number for four situations nobody would describe alike. Odds
+are **symmetric about 50 %**: they treat the event and its opposite
+outcome identically, so “5 % against 10 %” and “90 % against 95 %” come
+out the same, though the first pair is a doubling and the second is
+near-equality.
+
+Hence the reading rule: **an odds ratio means nothing until you know
+which percentage it starts from.** Two consequences are worth keeping:
+
+- **In percentage points** (a difference), one and the same odds ratio
+  is worth a great deal in the middle of the scale and almost nothing at
+  either edge: 18 points at 50 %, 5 points at 5 %, 3 points at 95 %.
+- **In “times as often”** (a ratio), it is always further from 1 than
+  the risk ratio is, and it only comes close when the event you name is
+  **rare**. Here the event named is common — 83 % of people are released
+  — so the gap is at its widest: 2.11 as an odds ratio, but “1.16 times
+  more likely to have been held”.
+
+That is exactly why the table prints the observed and the adjusted
+percentage next to the estimate: they are what puts the odds ratio back
+on the scale. But rather than compensating after the fact, you can ask
+the model for another measure directly.
+
+So the last step of the round trip is to come **back down** to a
+quantity you could put in a sentence. This costs nothing: it is the
+*same model*, fitted once, read several ways.
+
+### One model, four readings
+
+[`tab_reg()`](https://bricenocenti.github.io/tabxplor/reference/tab_reg.md)
+asks four questions, and they chain: each one follows from the one
+before in an “auto” cascade unless you say otherwise.
+
+| argument | the question it answers | in practice |
+|:---|:---|:---|
+| `family` | what kind of number is the outcome? | detected for a factor; **yours to pick** for a number (Section 3) |
+| `link` | which kind of deviation does the **model** work in? | leave it alone; [`vignette("tabxplor-reg")`](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.md) has the full grid |
+| `measure` | which kind of deviation do you want **reported**? | **this is the one you set** |
+| `effect` | where is that number taken from? | leave it alone, except to build ideal types with `"at_reference"` |
+
+And one rule ties `measure` to everything else:
+
+> **If the measure you ask for is the one the model already works in,
+> you read the model’s own coefficient. If it is not, the model works
+> your measure out from its predictions, for every person in the sample,
+> and averages them.**
+
+All you have to do, then, is set `measure` to the one that suits you.
+
+**The odds ratio** — the default, because a logistic model works in
+odds. Comparable with the published literature, hard to say aloud.
+
+``` r
+
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"), stats=NULL)
+```
+
+Logistic regression: released by colour, sex +3 more
+
+[TABLE]
+
+> All the other chosen variables being equal, black arrestees had **1.48
+> times the odds** of being held *rather than released* — which is to
+> say their odds of being released were 1.48 times lower.
+
+This is where the rule of Section 2 has to be paid for in full: the
+closing clause, or the word *odds*. Without one of them, the sentence
+announces a risk ratio of 1.48 that flatly contradicts the data.
+
+**The marginal risk ratio** — `measure = "ratio"`. Not the model’s own
+measure, so it is worked out and averaged, and the header says so:
+`Model_mRR`. This time it really is “how many times as often”:
+
+``` r
+
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+        measure = "ratio", stats=NULL)
+```
+
+Logistic regression: released by colour, sex +3 more
+
+[TABLE]
+
+> Comparing people alike in sex, employment, citizenship and record,
+> black arrestees were released **1.07 times less often** than white
+> arrestees.
+
+Count the other way round — not the chances of being released but of
+being held — and black arrestees were 1.34 times *more* likely. A ratio
+is not symmetric, which is its own problem, and it always speaks louder
+on the rare category than on the common one:
+
+``` r
+
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+        measure = "ratio", stats=NULL, outcome_level = "No")
+```
+
+Logistic regression: released by colour, sex +3 more
+
+[TABLE]
+
+**The marginal difference, in percentage points** —
+`measure = "difference"`. Usually the most useful of all, because points
+are the unit people already mostly think in.
+
+``` r
+
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+        measure = "difference", stats=NULL)
+```
+
+Logistic regression: released by colour, sex +3 more
+
+[TABLE]
+
+> Comparing people alike in sex, employment, citizenship and record,
+> black arrestees were released **5.2 percentage points less often**
+> than white arrestees.
+
+The marginal difference (the `m` in the header) is also the easiest of
+all to reconstruct by hand: subtract the bracketed adjusted percentage
+of the reference level from the bracketed adjusted percentage of the
+level you are reading.
+
+**The adjusted percentages themselves** are the far end of the round
+trip, and you do not have to ask for them: every default `display`
+already prints them in brackets beside the estimate.
+
+> Keeping the actual distribution of sex, employment, citizenship and
+> record as it is, if everyone in the file had been white, an estimated
+> **84 %** would have been released; if everyone had been black, only
+> **79 %**.
+
+That last sentence is worth dwelling on, because it is what an adjusted
+percentage *is*. It is not the percentage for some average person. It is
+the whole sample, counted twice: once as if everybody were in one group,
+once as if everybody were in the other, with everything else left as it
+actually is. That is why it can be compared with the observed 86 % and
+74 % on the same row — same people, different bookkeeping.
+
+### A marginal effect is a deviation averaged over the sample
+
+That operation has a name in statistics — a **marginal effect** — and
+there is a false friend to watch out for: in French sociology, following
+Philippe Cibois, *effet marginal* often means an effect expressed *in
+percentage points*. Originally the word means **averaged over the
+sample**, and it applies to a ratio every bit as much as to a
+difference. *Sample-averaged effect* is the plainer name, and it has the
+advantage of saying what it does.
+
+The word “marginal” comes from the **margins of a cross-table**. A
+margin is the Total row: what you get when you stop splitting people
+into groups and look at everybody at once — and the operation is
+identical. Work the effect out for each respondent, at their own
+combination of characteristics, then average, the way a Total row
+averages the rows above it. (With one difference, of course: the Total
+is observed, not adjusted, while the averaged effect comes from the
+model — each person’s predicted percentage is computed with the other
+predictors held at that person’s own values.)
+
+This is worth learning, because **it is what you will mostly be doing
+with a logistic regression**. For a yes/no factor, the binomial family
+generally fits best with a logit link; but even when the model works
+best in odds ratios, you may want to read it in risk ratios — and that
+is in fact the only way to legitimately write a sentence like “men are
+1.4 times less likely to have done `x` than women”.
+
+Since `measure` left alone gives you the model’s own coefficient
+(exponentiated when needed), *every other measure you ask for is an
+averaged effect*. So for a yes/no outcome, a logistic regression is most
+often read through **marginal differences** (`measure = "difference"`),
+for the plainest reading and the one closest to the percentages, or
+through the **marginal risk ratio** (`measure = "ratio"`) when you need
+to be able to write “1.4 times less likely”.
+
+And you never have to remember which you asked for, because the table
+says so in three places.
+
+| where to look | you are reading a coefficient | you are reading an averaged effect |
+|:---|:---|:---|
+| the column header | `Model_OR` — no marker | `Model_mRR` — the **`m`** |
+| the **Constant** row | *Reference profile* | *Population average* |
+| the footer’s `Model:` line | “odds ratio (vs the reference category)” | “…sample-averaged” |
+
+The Constant row is the quickest of the three, and it is not decoration:
+a coefficient is measured *from* a starting point, so the table shows
+you that point — one level of every predictor. An averaged effect is
+averaged over everybody, so there is no starting point to show, and the
+row gives the whole sample’s own figure instead.
+
+### Which one to report
+
+| you want to | ask for | you can then write |
+|:---|:---|:---|
+| compare with published models | the default | “odds ratio 1.48” |
+| say “x times more likely” | `measure = "ratio"` | “1.07 times less likely” |
+| say “how many points” | `measure = "difference"` | “5.2 points less often” |
+| show the percentages | the figures in brackets | “84 % against 79 %” |
+
+If you report one number, report the **percentage points**: it is the
+one your reader can check against the observed percentages sitting in
+the same table. If you report two, add the odds ratio for the
+specialists.
+
+### For whom? — `effect`, and the ideal type
+
+`measure` says *which* deviation; `effect` says **whose** — and in
+particular at which point the number is worked out. You will rarely set
+it, because the rule above already picks well: the model’s own
+coefficient when you ask for its own measure, an averaged effect when
+you ask for another. What it is for is the third possibility.
+
+| `effect`         | the number describes…                           |
+|:-----------------|:------------------------------------------------|
+| `"conditional"`  | anybody — the model assumes one answer fits all |
+| `"marginal"`     | the people you actually surveyed, averaged      |
+| `"at_reference"` | one **ideal-typical** profile, built on purpose |
+
+`effect = "at_reference"` reports the deviation not on average, but **at
+the reference profile** — the very profile the model’s Constant row is
+computed for, the reference level of every factor crossed with the
+anchor value of every number.
+
+**And that third row is the one to reach for, because “reference
+profile” undersells it.** That profile is not an average and not an
+accident: it is a **figure you construct**, one level of every
+predictor, chosen because it is worth thinking about. It is Max Weber’s
+**ideal type**: a deliberate simplification, built to think with rather
+than to describe anything empirical. `ref` is what builds it, so *the
+young male senior manager* and *the older woman in an unskilled job* are
+both one argument away, and the model will tell you what it expects of
+each. An ideal type is built, not found — so that the combination
+matches only a handful of real people is not in itself a fault, provided
+its sociological meaning has been carefully thought through.
+
+## 5. Studying what the adjustment did
+
+Reading the gap between the observed deviations and the modelled ones is
+what Jérôme Deauvieau calls translating a model’s results back into “the
+language of the cross-table”. It is becoming the norm in some
+disciplines: STROBE (*STrengthening the Reporting of OBservational
+studies in Epidemiology*) requires unadjusted estimates *and*
+confounder-adjusted estimates, so that readers can compare them and
+judge by how much, and in which direction, they moved. The social
+sciences, which generally claim to stay closer to the empirical, would
+gain a good deal from adopting the convention widely.
+
+### The five things adjustment can do
+
+Students often arrive expecting adjustment to shrink effects, and it
+very often does. But there are five outcomes, all of them met in real
+data, and a reader who knows only one of them will misread the other
+four. Each row below is a real result commented on somewhere in this
+article:
+
+| what happens | example | crude → adjusted |
+|:---|:---|:---|
+| **it holds** | age, on going to the cinema (France) | −16.8 → −17.1 points |
+| **it shrinks** | race, on release (Toronto) | −11.7 → −5.2 points |
+| **it vanishes** | sex, on release (Toronto) | −3.1 → +0.1 points |
+| **it grows** | class, on going to the cinema (France) | −21.3 → −24.9 points |
+| **it reverses** | sex, on Berkeley admissions | −14.2 → +1.9 points |
+
+Every row is in **percentage points**, and that is deliberate: Section 6
+shows what happens to this same table when you read it on the odds-ratio
+scale instead.
+
+**It holds.** Older people go to the cinema less, and holding social
+class equal changes that by three tenths of a point. Whatever explains
+the age effect, it is not class.
+
+**It shrinks.** The race gap in Toronto loses more than half its size.
+Part of what looked like a direct race effect was employment,
+citizenship and prior record — all consequences, in their own way, of
+one dimension of structural racism. But the other half, the half that
+holds, could *equally* be a more direct racialisation playing out in the
+encounter with the officers — or other factors not measured here.
+
+**It vanishes.** Women were released slightly more often than men (86 %
+against 83 %, just significant). Among comparable people, nothing at all
+— the table below is in percentage points, which is what
+`measure = "difference"` asks for.
+
+``` r
+
+tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"),
+        measure = "difference", stats = NULL)
+```
+
+Logistic regression: released by colour, sex +3 more
+
+[TABLE]
+
+The `sex` row goes from `-3.1 %*` to `+0.1 %`. Read that carefully,
+because it is the most common place to over-claim: this does not say men
+and women were treated the same. It says the small observed difference
+is what you would expect from the fact that the men and women in this
+file differ in employment, citizenship and record — so there is nothing
+left for sex to explain in this particular case.
+
+**It grows, and it reverses** — the two cases that are the least taught,
+and Section 6 has one of each.
+
+### Watching it move, one block at a time
+
+The single most useful thing you can do with a regression is to fit it
+several times, adding predictors one by one, and watch the numbers move.
+Pass a **named list** instead of a vector:
+
+``` r
+
+model <-
+tab_reg(car_arrests, "released",
+        list("colour"         = "colour",
+             "+ who they are" = c("colour", "sex", "citizen", "employed"),
+             "+ prior record" = c("colour", "sex", "citizen", "employed", "checks")),
+        measure = "difference", display = "est", stats = NULL)
+model
+```
+
+Logistic regressions (models comparison): released, ‘Yes’ (mRD)
+
+[TABLE]
+
+Read the `colour` row across: **−11.7 points → −11.7 → −7.8 → −5.2**.
+The first two are the same number, and that is the bridge of Section 3
+shown once more: a model with `colour` as its only predictor *is* the
+cross-table. Then employment and citizenship account for about a third
+of the gap; prior record accounts for another quarter; and the five
+points seen earlier survive everything in the file.
+
+This is the format to write up, if journals can find room for it. It
+shows the reader what each set of controls bought, instead of asking
+them to trust a single final number. And it demands a patient model
+build, which is what stops you keeping, at the end, only the
+specification that gave the answer you wanted.
+
+### Colouring the movement
+
+On a wide table, comparing the adjustment column by column gets tedious.
+`color = "adjustment"` colours the movement itself. The reference for
+the colours then becomes the `Obs_RD` column — the observed risk
+difference — in bold:
+
+``` r
+
+tab_reg(car_arrests, "released",
+        list("colour"         = "colour",
+             "+ who they are" = c("colour", "sex", "citizen", "employed"),
+             "+ prior record" = c("colour", "sex", "citizen", "employed", "checks")),
+        measure = "difference", color = "adjustment", color_signif = "guaranteed_effect",
+        stats = NULL)
+```
+
+Logistic regressions (models comparison): released, ‘Yes’ (mRD)
+
+[TABLE]
+
+Shades from yellow to red mean the adjustment pulled the deviation
+**closer to the neutral value** (0 = “no effect”, or 1 for a ratio), or
+even **reversed its direction** — from a negative difference to a
+positive one, or from “A is *less* likely than B” (`÷`) to “A is *more*
+likely than B” (`×`).
+
+Deepening shades of blue mean the opposite: the adjustment pushed the
+deviation **further from the neutral value**. If the observed difference
+was already below 0, the model widened the gap between the two groups in
+the same direction.
+
+With `color_signif = "guaranteed_effect"`, everything significant is
+coloured, and an adjustment that stays grey means the movement is *no
+bigger than noise*: at this sample size, the modelled deviation is not
+significantly different from the observed one.
+
+(The first threshold is a change of ×1.1, the old epidemiological
+convention that a 10 % change in an estimate is worth noticing. **Treat
+it as a reading aid, not a rule.** It entered the literature from a 1993
+simulation by Maldonado and Greenland about *selecting* confounders, and
+has been argued against as a selection rule ever since — the appropriate
+cut-off depends on the effect size, the sample size and the correlations
+involved. As a device for asking “did this move, and which way?”, it is
+fine. As a rule for deciding which variables belong in your model, it is
+not.)
+
+You can print both at once: `color = c("measure", "adjustment")` uses
+the text colour for each column’s own effect and the background colour
+for the movement away from the observed one — though the result is not
+always easy to read.
+
+## 6. What the model cannot settle
+
+Everything so far was mechanics. This section is the part that decides
+whether your analysis is any good, and none of it is a computation.
+
+### “All else equal” is a sentence about your table
+
+The adjusted number depends entirely on which variables you listed. Not
+a little — a lot:
+
+``` r
+
+tab_reg(car_arrests, "released",
+        list("without prior record" = c("colour", "employed", "citizen"),
+             "with prior record"    = c("colour", "employed", "citizen", "checks") ),
+        measure = "difference", display="est")
+```
+
+Logistic regressions (models comparison): released, ‘Yes’ (mRD)
+
+[TABLE]
+
+The same race gap is **−5.2 points** in one column and **−7.9** in the
+other. Both are “all else equal”. They differ by half again, and the
+only difference is one variable.
+
+So when you write “all else equal”, you are making a claim about a list
+you chose. The model has no opinion about what is missing from it, and
+no way to warn you. Which brings us to the question that decides
+everything.
+
+### Adjusting away the thing you are studying
+
+Should `checks` be in the model at all?
+
+The case for is obvious: someone with a long record is treated
+differently, and it would be naive to compare a first offender with a
+repeat one. The case against needs one more table. `checks` counts
+police databases — previous arrests, previous convictions, parole
+status. So ask the question the model cannot ask itself: **is prior
+record itself patterned by race?**
+
+``` r
+
+tab(car_arrests, colour, checks, pct = "row", color = "difference", ref = 1)
+```
+
+[TABLE]
+
+``` r
+
+tab_reg(car_arrests, "checks", c("colour", "sex", "employed", "citizen"),
+        family = "binomial", trials = 6)
+```
+
+Logistic regression: checks by colour, sex +2 more
+
+[TABLE]
+
+Black arrestees appear in **2.1 databases on average against 1.5**, and
+the pattern survives adjustment for sex, employment and citizenship
+(odds `1.52` per database, still highly significant). Prior record is
+not a neutral background fact. It is a record of previous encounters
+with the same police force whose behaviour is under study.
+
+If some of those earlier encounters happened for the same reasons the
+present one is being examined, then “controlling for prior record”
+removes part of the very phenomenon you are trying to measure. The five
+points that survive in the adjusted model are then not “the race effect
+purged of confounding” but **the race effect at this arrest, over and
+above everything the police already recorded about this person** — a
+narrower and more defensible claim, and a different one.
+
+This has a name — **overcontrol bias**, or conditioning on a mediator —
+and Cinelli, Forney and Pearl state the rule in one line: block the
+spurious paths between your variables, and do not disturb the causal
+ones. **A variable that lies *between* the thing you study and the
+outcome is on a causal path, and adjusting for it blocks the effect you
+were looking for**.
+
+**Nothing in the output tells you which case you are in.** The table
+looks identical either way. This is a question about sociology, not
+about statistics, and it is why this article began by saying no amount
+of adjustment turns survey data into a controlled experiment.
+
+**The same problem, in a different discipline.** These are academic
+salaries, from a data set a college collected in 2008–2009 precisely to
+monitor a pay gap. The everyday version of the same trap is the phrase
+the press reaches for every year: **“for the same job”**.
+
+``` r
+
+tab_reg(car_salaries, "salary",
+        list("sex alone"      = "sex",
+             "+ field, years" = c("sex", "discipline", "yrs.service"),
+             "+ rank"         = c("sex", "discipline", "yrs.service", "rank")),
+        family = "gaussian", empirical = FALSE)
+```
+
+Linear regressions (models comparison): salary (diff)
+
+[TABLE]
+
+The raw gap is **\$14 088** in favour of men. Adding field and seniority
+takes it to **\$8 423**; adding academic rank — assistant professor,
+associate professor, full professor — takes it to **\$4 771**, and the
+stars disappear. A careless reading would be “two thirds of the pay gap
+is explained, and the rest is not significant”. Both halves of that
+sentence are traps.
+
+**On the rank column**, ask the same question as before:
+
+``` r
+
+tab(car_salaries, sex, is_prof, pct = "row", color = "difference", ref = 1, color_signif = "grey_non_signif")
+```
+
+[TABLE]
+
+**46 % of the women are full professors, against 69 % of the men.** If
+promotion is itself unequal, then controlling for rank compares women
+with the men who were promoted at the same rate — and adjusts away
+precisely the mechanism through which a pay gap would operate. The \$4
+771 is the gap *within rank*: a real quantity, a narrower question, and
+not “the pay gap corrected”.
+
+**On the disappearing stars**, remember Section 2. There are 397 people
+here and 39 of them are women. “Not significant” means this sample can
+no longer tell a \$4 771 gap apart from zero — not that the gap is zero.
+Print the interval and see:
+
+``` r
+
+tab_reg(car_salaries, "salary", c("sex", "discipline", "yrs.service", "rank"),
+        family = "gaussian", display = "est_ci", empirical = FALSE)
+```
+
+Linear regression: salary by sex, discipline +2 more
+
+[TABLE]
+
+The gap is compatible with anything from **\$2 853 in favour of women to
+\$12 396 in favour of men**. That is not “no difference”; it is a sample
+too small to tell the difference. With ten times as many people and the
+same estimate, the very same \$4 771 would come out highly significant.
+Absence of evidence, on 39 women, is very weak evidence of absence — and
+this is exactly why `display = "est_ci"` is worth reaching for whenever
+an important star goes missing.
+
+**And there is a reversal hiding in that table**, worth a glance:
+`yrs.service` goes from **+\$10 823** crude to **−\$1 155** adjusted.
+Seniority strongly predicts salary — until you hold rank equal, at which
+point extra years are worth nothing at all. Long service pays through
+promotion, and not otherwise.
+
+### When adjustment reverses the answer
+
+The most famous table in the discipline. Berkeley graduate admissions,
+autumn 1973, the six largest departments:
+
+``` r
+
+tab(ucb, Gender, Admit, pct = "row", color = "difference", color_signif = "grey_non_signif")
+```
+
+[TABLE]
+
+**45 % of men were admitted against 30 % of women** — a gap of fourteen
+points, on 4 526 applications. Now hold the departments inside the
+university equal:
+
+``` r
+
+tab_reg(ucb, "Admit", c("Gender", "Dept"), measure = "difference")
+```
+
+Logistic regression: Admit by Gender, Dept
+
+[TABLE]
+
+**−14.2 points becomes +1.9**, and no longer significant. Not reduced —
+**reversed in sign**. And the mechanism is entirely visible in a
+cross-table, which is the point:
+
+``` r
+
+tab(ucb, Gender, Dept, pct = "row", color = "difference", ref = 1)
+```
+
+[TABLE]
+
+Read the two rows against the departments’ admission rates in the
+previous table (A 64 %, B 63 %, C 35 %, D 34 %, E 25 %, F 6 %). **31 %
+of the men applied to department A, the easiest, against 6 % of the
+women; 21 % of the women applied to E and 19 % to F, the two hardest,
+against 7 % and 14 % of the men.** Women applied to departments that
+admitted fewer people. Within departments, the differences are small and
+go both ways.
+
+Bickel, Hammel and O’Connell published this in *Science* in 1975, and it
+is the standard illustration of a composition effect — what French
+statisticians call an *effet de structure*, and what INSEE explains with
+an example everyone understands: average pay can rise while pay within
+every occupation stagnates, simply because the well-paid occupations
+grow. The reversal itself also goes by another name, **Simpson’s
+paradox**.
+
+**Resist the tidy moral.** “The bias was an illusion” is *not* what this
+table shows, and the modern literature on it is firm about that.
+Conditioning on department estimates the gap *within* departments, which
+leaves entirely untouched the question of why women applied where they
+applied, and why the departments women applied to were the ones that
+could admit fewer of their applicants. The model answered a narrower
+question, and answered it well — handing us not a verdict but a concrete
+mechanism to go and study.
+
+### When the movement is arithmetic and not confounding
+
+Now the trap that is pure mathematics, and the reason this article keeps
+insisting on percentages. It is the one already flagged above, about
+comparing odds ratios.
+
+The French *Histoire de vie* survey of 2003, an extract of which Julien
+Barnier ships with `questionr`, asked whether people go to the cinema.
+Cross it with social class:
+
+``` r
+
+tab_reg(questionr_hdv, "cinema", c("qualif", "age"))
+```
+
+Logistic regression: cinema by qualif, age
+
+[TABLE]
+
+**65 % of senior managers go to the cinema against 22 % of unskilled
+workers** — a large, thoroughly Bourdieusian class gap. And the odds
+ratio *grows* under adjustment for age, from `1/6.63` to `1/10.75`. Read
+naively, that says age was masking part of the class gap, which would be
+an interesting finding.
+
+It is not a finding. Look at the mean ages:
+
+``` r
+
+tab(questionr_hdv, qualif, c(cinema, age), pct = "row", na = "drop_all",
+    color = "difference", ref = 1)
+```
+
+[TABLE]
+
+The classes are **all the same age** — between 46 and 50 — and the
+spread of their answers is close too, a coefficient of variation between
+28 % and 37 % (the standard deviation over the mean). There is almost
+nothing for age to confound. So where did the extra gap come from?
+
+From the odds ratio itself. **An odds ratio moves as soon as you add any
+strong predictor of the outcome to the model, even one with no
+connection whatsoever to the variable you care about.** This property is
+called non-collapsibility, and it is arithmetic, not sociology. Carina
+Mood’s warning to sociologists is exactly this: because of it, you
+cannot compare odds ratios between models with different predictors —
+which is precisely what a crude and an adjusted column invite you to do.
+
+The way to check is to ask the same question with a measure of deviation
+that does not have the problem:
+
+``` r
+
+tab_reg(questionr_hdv, "cinema", c("qualif", "age"), measure = "difference")
+```
+
+Logistic regression: cinema by qualif, age
+
+[TABLE]
+
+| unskilled workers vs senior managers |    crude |  adjusted | moved by |
+|:-------------------------------------|---------:|----------:|---------:|
+| odds ratio                           | `1/6.63` | `1/10.75` | **×1.6** |
+| risk ratio                           |   `÷2.9` |    `÷3.1` |    ×1.07 |
+| difference in points                 |  `-43.2` |   `-45.2` | 2 points |
+
+On the two measures that behave, the class gap **barely moves at all** —
+the honest finding, and a much duller one: age explains essentially none
+of the cultural gap between classes. All the drama on the first line was
+the odds ratio rescaling itself.
+
+**This is why tabxplor colours the movement on an odds-ratio column but
+refuses to test it.** You have to know that, because the table does not
+say so: its legend carries no mention of the refusal. If reading the
+adjustment is the point of your table — and in this article it always is
+— work with a measure of deviation where the movement means what you
+think it means: `measure = "difference"` for points, `measure = "ratio"`
+for risk ratios. The odds ratio is for reporting alongside a literature
+that uses it.
+
+### Three ways to get this wrong
+
+**“The adjusted number is the true one.”** It is not more true; it
+answers a different question. Crude says *how much do these groups
+differ*, adjusted says *how much do they differ among people alike on my
+list*. Both are facts about the world, and the interesting object is the
+distance between them. This is why the two columns are printed side by
+side.
+
+**“Not significant means no effect.”** It means this sample cannot tell
+it apart from zero. On 39 women in the university example, that is a
+statement about the sample. Look at the confidence interval —
+`display = "est_ci"` prints it — before concluding anything from an
+absence.
+
+**“Each coloured cell is a finding.”** Every cell is tested on its own,
+with no correction for how many tests are on the page. In a table
+carrying twenty comparisons, about one will look significant by pure
+chance: a 95 % confidence level is wrong one time in twenty. Read the
+**pattern** — a whole block of rows moving the same way — and quote the
+footer’s per-variable test rather than a single cell.
+
+## Where to go next
+
+- [`vignette("tabxplor-reg")`](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.md)
+  — the reference: every family, the full grid of what each family,
+  link, measure and effect combination builds, weighted and survey data,
+  interactions, model checks, forest plots.
+- [`vignette("tabxplor")`](https://bricenocenti.github.io/tabxplor/articles/tabxplor.md)
+  — cross-tables, colours, and the confidence intervals used above.
+- [`vignette("tabxplor-weights")`](https://bricenocenti.github.io/tabxplor/articles/tabxplor-weights.md)
+  — weighted and survey data, for cross-tables and models alike.
+- `reg_measures(data, outcome)` lists what a given outcome can be asked;
+  `reg_formulas(model)` shows the formulas that were actually fitted;
+  `tab_columns(model)` says what each column estimates and how its
+  interval was built.
+- [`?tab_reg`](https://bricenocenti.github.io/tabxplor/reference/tab_reg.md)
+  documents every argument, grouped by purpose.
+
+### Where these ideas come from
+
+**On regression as comparison, not intervention:**
+
+- Richard **Berk**, *Regression Analysis: A Constructive Critique*, 2004
+  (*a regression produces conditional means and conditional variances,
+  and nothing more; the interest is in comparing them*).
+- Andrew **Gelman** et al., *Regression and Other Stories*, 2020
+  (*regression is about comparisons, not about how a variable responds
+  to intervention*).
+- **Angrist** and **Pischke**, *Mastering ’Metrics*, 2015 (*equality is
+  generated only for the variables included as controls; and a
+  coefficient is a weighted average of the very cell-by-cell comparisons
+  a cross-table displays*).
+- Kenneth **Rothman** (*stratified analysis before regression, for
+  “getting in contact with the data”*).
+- **Hanmer** and **Kalkan**, 2013 (*average over real people rather than
+  over an average-case profile*).
+
+**On reading a model back into a cross-table** — the French tradition
+this article extends:
+
+- Jérôme **Deauvieau**, “Comment traduire sous forme de probabilités les
+  résultats d’une modélisation logit ?”, *Bulletin de méthodologie
+  sociologique*, 2010 (*translating a model back into “the language of
+  the cross-table” — this article’s own thesis*).
+- Philippe **Cibois**, *Les méthodes d’analyse d’enquêtes*, ENS
+  Éditions, 2014, freely readable online (*teach “toutes choses égales
+  par ailleurs” after the cross-table, not instead of it; the racetrack
+  image for odds*).
+- Marion **Selz** and Florence **Maillochon**, *Le raisonnement
+  statistique en sociologie*, PUF, 2009 (*without a single formula: only
+  a good qualitative researcher can be a good quantitative one — the
+  case this article assumes*).
+- **INSEE**, the definition of *effet de structure* (*average pay rising
+  while no individual pay moves*).
+
+**On odds ratios and how to read them:**
+
+- Carina **Mood**, “Logistic Regression: Why We Cannot Do What We Think
+  We Can Do, and What We Can Do About It”, *European Sociological
+  Review*, 2010 (*non-collapsibility: why odds ratios cannot be compared
+  between models with different predictors*).
+- **Norton** and **Dowd**, *Health Services Research*, 2018 (*average
+  marginal effects are generally preferable for communicating results*).
+
+**On which controls help and which hurt:**
+
+- **Cinelli**, **Forney** and **Pearl**, “A Crash Course in Good and Bad
+  Controls”, 2024 (*block the spurious paths, do not disturb the causal
+  ones*).
+- **Elwert** and **Winship**, 2014 (*selection bias: conditioning on a
+  collider*).
+- **Maldonado** and **Greenland**, 1993 (*the origin of the 10 %
+  threshold — and why it is not a variable-selection rule*).
+- **Bickel**, **Hammel** and **O’Connell**, *Science*, 1975 (*the
+  Berkeley admissions, the canonical illustration of a composition
+  effect*).
+
+**And the reporting standard:**
+
+- **von Elm** et al., **STROBE**, 2007, item 16(a) (*give unadjusted
+  estimates* and *confounder-adjusted estimates, so readers can compare
+  them*).
