@@ -133,13 +133,13 @@ options:
       title: ""
       type: List
       options:
-        - title: "auto <i>(follow from the measure of deviation)</i>"
+        - title: "auto (follow from the measure of deviation)"
           name:  auto
-        - title: "conditional <i>(the model's own coefficients)</i>"
+        - title: "conditional (the model's own coefficients)"
           name:  conditional
-        - title: "marginal <i>(averaged over the sample)</i>"
+        - title: "marginal (averaged over the sample)"
           name:  marginal
-        - title: "at_reference <i>(at the reference profile)</i>"
+        - title: "at_reference (at the reference profile)"
           name:  at_reference
       default: auto
       description:
@@ -437,23 +437,23 @@ options:
       options:
         - title: "auto"
           name:  auto
-        - title: "est <i>(the estimate)</i>"
+        - title: "est (the estimate)"
           name:  est
-        - title: "ci <i>(confidence interval)</i>"
+        - title: "ci (confidence interval)"
           name:  ci
-        - title: "est_ci <i>(estimate + interval)</i>"
+        - title: "est_ci (estimate + interval)"
           name:  est_ci
-        - title: "est_coef <i>(est. + raw coeff)</i>"
+        - title: "est_coef (est. + raw coeff)"
           name:  est_coef
-        - title: "base <i>(adjusted pct/mean, alone)</i>"
+        - title: "base (adjusted pct/mean, alone)"
           name:  base
-        - title: "est_base <i>(est. + adj. pct/mean)</i>"
+        - title: "est_base (est. + adj. pct/mean)"
           name:  est_base
-        - title: "base_est <i>(adj. pct/mean + est.)</i>"
+        - title: "base_est (adj. pct/mean + est.)"
           name:  base_est
-        - title: "base_est_mdiff <i>(+ marg. diff)</i>"
+        - title: "base_est_mdiff (+ marg. diff)"
           name:  base_est_mdiff
-        - title: "base_est_mratio <i>(+ marg ratio)</i>"
+        - title: "base_est_mratio (+ marg ratio)"
           name:  base_est_mratio
       default: auto
       description:

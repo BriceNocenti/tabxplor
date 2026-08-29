@@ -1,12 +1,12 @@
 ---
-title: Tables with Color Helpers for Data Exploration
+title: User-Friendly Tables with Color Helpers for Data Exploration
 name: tabxplor
 version: 2.0.0
 jms: '1.0'
 authors:
   - Brice Nocenti
 maintainer: Brice Nocenti
-date: '2026-08-28'
+date: '2026-08-29'
 type: R
 description: >-
   Make it easy to deal with multiple cross-tables in data exploration, by
@@ -14,9 +14,9 @@ description: >-
   deviations (differences from totals, comparisons between lines or columns,
   contributions to variance, odds ratios, etc.) and significance (confidence
   intervals, stars, etc.). Create the same kind of tables for regression models,
-  with a framework to compare model effects with their observed/crude
-  counterpart systematically. All tables can be exported with formats and
-  colors  to 'Excel', html and markdown.
+  with a framework to compare model effects with their crude/observed
+  counterpart systematically. All tables can be exported with formats and colors
+  to 'Excel', html and markdown.
 analyses:
   - title: Crosstables
     name: jmvtab
@@ -25,7 +25,7 @@ analyses:
     menuTitle: Crosstables
     category: analyses
     usesNative: true
-    minApp: 1.0.8
+    minApp: 2.4.0
   - title: Regressions
     name: jmvtabreg
     ns: tabxplor
@@ -33,8 +33,8 @@ analyses:
     menuTitle: Regressions
     category: analyses
     usesNative: true
-    minApp: 1.0.8
+    minApp: 2.4.0
 usesNative: true
-minApp: 1.0.8
+minApp: 2.4.0
 
 ...
