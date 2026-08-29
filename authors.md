@@ -7,7 +7,7 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/BriceNocenti/tabxplor/blob/master/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/BriceNocenti/tabxplor/blob/v2.0.0/DESCRIPTION)
 
 Nocenti B (2026). *tabxplor: User-Friendly Tables with Color Helpers for
 Data Exploration*. R package version 2.0.0,
