@@ -73,20 +73,20 @@ options:
 
 # Percentages, colors and Chi2
     - name: pct
-      title: pct = (Percentages)
+      title: pct
       type: List
       options:
         - title: "no (counts)"
-          name:  no
+          name:  "no"
         - title: row
           name:  row
         - title: "col (column)"
           name:  col
         - title: all
           name:  all
-        - title: all_tabs
+        - title: "all_tabs (with tab_vars)"
           name:  all_tabs
-      default: no
+      default: "no"
       description:
           R: >
            The type of percentages to calculate :
@@ -98,49 +98,54 @@ options:
             }
 
     - name: color
-      title: color = (what to measure for colors)
+      title: color
       type: List
       options:
         - title: "no <i>(no colors)</i>"
-          name:  no
+          name:  "no"
         - title: "auto <i>(smart default: difference + ratio)</i>"
           name:  auto
-        - title: "diff <i>(difference from total, or reference cell)</i>"
-          name:  diff
+        - title: "difference <i>(from total, or reference cell)</i>"
+          name:  difference
         - title: "ratio <i>(relative risk, or mean ratio)</i>"
           name:  ratio
+        - title: "odds_ratio <i>(odds ratios)</i>"
+          name:  odds_ratio
         - title: "contrib <i>(contribution to variance)</i>"
           name:  contrib
-        - title: "OR <i>(odds ratios)</i>"
-          name:  OR
-      default: no
+      default: "no"
       description:
           R: >
-           Which measure to use for color helpers, as a single string.
+           Which measure to use for color helpers, as a single string. The values are the measure
+            names \code{tab()} itself takes (the short spellings \code{"diff"} / \code{"OR"} stay
+            valid aliases in R).
             \itemize{
               \item \code{"no"}: by default, no colors are printed.
               \item \code{"auto"}: a smart per-column-type default (percentage-point difference on
               the text plus a relative-risk highlight on the background for factors, mean ratio for
               numeric columns).
-              \item \code{"diff"}: color the difference of each cell from its total (or reference
-              cell). For factors this is a percentage-point difference; for numeric columns the
-              standardized (SD-scaled) mean difference.
+              \item \code{"difference"}: color the difference of each cell from its total (or
+              reference cell). For factors this is a percentage-point difference; for numeric columns
+              the standardized (SD-scaled) mean difference.
               \item \code{"ratio"}: color the relative risk (factors) or mean ratio (numeric).
+              \item \code{"odds_ratio"}: for `pct == "col"` or `pct == "row"`, color based on odds
+              ratios. To PRINT them, set \code{display} (the colour and the printed quantity are two
+              questions).
               \item \code{"contrib"}: color cells based on their contribution to variance
               (factor columns only).
-              \item \code{"OR"}: for `pct == "col"` or `pct == "row"`, color based on odds ratios.
             }
            How significance gates these colors is set separately by \code{color_signif}.
 
     - name: color_signif
-      title: color_signif = (significance policy)
+      title: color_signif
       type: List
       options:
-        - title: "ignore <i>(color every deviation)</i>"
+        - title: "ignore <i>(color deviations by observed size)</i>"
           name:  ignore
-        - title: "grey_non_signif <i>(grey out non-significant cells)</i>"
+        - title: "grey_non_signif <i>(same + uncolor non-significant)</i>"
+        #####    "guaranteed_effect <i>(only the CI-guaranteed effect)</i>"
           name:  grey_non_signif
-        - title: "guaranteed_effect <i>(only the CI-guaranteed effect)</i>"
+        - title: "guaranteed_effect <i>(color all CI-floor/small sample)</i>"
           name:  guaranteed_effect
       default: ignore
       description:
@@ -152,11 +157,11 @@ options:
               deviation is not significant (at \code{conf_level}). A confidence interval on the
               difference is computed automatically.
               \item \code{"guaranteed_effect"}: color by the guaranteed (confidence-bound) effect --
-              only cells whose interval clears the threshold show, with dimmer colors.
+              all cells whose interval clears the threshold show, with dimmer colors.
             }
 
-    - name: chi2
-      title: "Statistical test <i>(Chi-square for categorical, ANOVA F for numeric columns)</i>"
+    - name: test
+      title: "Add statistical test/effect size"
       type: Bool
       default: false
       description:
@@ -166,10 +171,10 @@ options:
            Also enables colouring cells by their contribution to variance.
 
     - name: anova
-      title: "ANOVA F"
+      title: "anova = <i>(which test for numeric variables ?)</i>"
       type: List
       options:
-        - title: "Welch <i>(unequal variances, default)</i>"
+        - title: "Welch <i>(unequal variances)</i>"
           name:  welch
         - title: "classic <i>(equal variances)</i>"
           name:  classic
@@ -179,40 +184,19 @@ options:
            Which F statistic to display for numeric column variables when the test is on:
            Welch's F (default, does not assume equal variances) or the classic pooled F.
 
-    - name: OR
-      title: OR
-      type: List
-      options:
-        - title: no
-          name:  no
-        - title: OR
-          name:  OR
-        - title: OR_pct
-          name:  OR_pct
-      default: no
-      description:
-          R: >
-           With `pct = "row"` or `pct = "col"`, calculate and print odds ratios
-            (for binary variables) or relative risks ratios (for variables with 3 levels
-            or more).
-           \itemize{
-            \item \code{"no"}: by default, no OR are calculated.
-            \item \code{"OR"}: print OR (instead of percentages).
-            \item \code{"OR_pct"}: print OR, with percentages in bracket.
-           }
 
 # Missing values and levels
     - name: na
-      title: "na = <i>(missing values)</i>"
+      title: na
       type: List
       options:
-        - title: "keep <i>(NA as a level)</i>"
+        - title: "keep <i>(NA as a normal level)</i>"
           name:  keep
         - title: "drop <i>(each col_var drops its own NA)</i>"
           name:  drop
-        - title: "drop_all <i>(drop NA in row_var and all col_vars)</i>"
+        - title: "drop_all <i>(complete cases in all col_vars)</i>"
           name:  drop_all
-        - title: "common_base <i>(single population, historical tab())</i>"
+        - title: "common_base <i>(complete cases of 1st col_var)</i>"
           name:  common_base
       default: keep
       description:
@@ -233,7 +217,7 @@ options:
     # method, so a `levels` option collides ("symbol already has a regular binding"). The UI
     # label still reads "levels"; .b.R maps `lvs` onto tab()'s `levels` argument.
     - name: lvs
-      title: "levels = <i>(which col_var levels to keep)</i>"
+      title: levels
       type: List
       options:
         - title: all
@@ -253,18 +237,12 @@ options:
               keep all levels otherwise.
               }
 
-    - name: other_if_less_than
-      title: ""
-      type: Number
-      min: 0
-      default: 0
-      description:
-          R: >
-           When set to a positive integer, levels with less count
-           than that will be merged into an "Others" level.
-
+    # NO `other_if_less_than` CONTROL, deliberately (Phase 22g-vi): the per-variable table merges
+    # levels by hand, which is both more powerful and the thing a user actually looks at -- and the
+    # two fought each other, one lumping what the other had just merged. `tab(other_if_less_than =)`
+    # is untouched in R.
     - name: cleannames
-      title: ""
+      title: "<b>cleannames = <i>(tidy level names)</i></b>"
       type: Bool
       default: true
       description:
@@ -273,38 +251,20 @@ options:
            prefix numbers like "1-", and text in parenthesis.
            Set to `FALSE` to avoid this behaviour.
 
-# other_level = "Others",
-# totcol = "last",
-# totaltab_name = "Ensemble",
-# totrow = TRUE,
-# total_names = "Total",
+# NOT offered as controls, deliberately: the four synthetic labels are one option in R since
+# Phase 20b (`options(tabxplor.total_names)`) and the module installs the translated defaults for
+# the duration of a build (jmv_tab3_build_armed); `tot` / `totcol` are always on in the panel.
 
 
 # References (points of comparison)
-
-    # - name: ref
-    #   title: "ref = <i>(ref row/col for diff and OR)</i>"
-    #   type: List
-    #   options:
-    #     - title: auto
-    #       name:  auto
-    #     - title: tot
-    #       name:  tot
-    #     - title: first
-    #       name:  first
-    #     # - title: other
-    #     #   name:  other
-    #     # - title: no # "" ?
-    #     #   name:  no
-    #   default: auto
 
     # Phase 7g-iii: per-variable reference picker, driven by the `refPickerCtrl` CustomControl in
     # .u.yaml (a Material list). One {var, ref} entry per picked variable -- keyed by row_var under
     # pct="row"/means, by col_var under pct="col" (the .b.R filters to the active axis). `ref` is a
     # String (a chosen level label, "tot" for the total, or "" for the auto default), read into a
     # named `ref` vector by jmvtab_ref_vector(). `hidden: true` -> the compiler generates no default
-    # control (the CustomControl is the sole UI; edits the option via ui.refLevels in js/jmvtab.js).
-    - name: refLevels
+    # control (the CustomControl is the sole UI; edits the option via ui.ref_levels in js/jmvtab.js).
+    - name: ref_levels
       title: "Reference levels (per variable)"
       type: Array
       hidden: true
@@ -322,9 +282,9 @@ options:
     # Un-reordered variables get no entry. Read into tab()'s internal `.levels_order` by
     # jmvtab_levels_order(); applied post-aggregate (tier-3) in jmv_cache_aggregate().
     # `hidden: true` -> the .u.yaml compiler does NOT auto-generate a default control for this option
-    # (uicompiler insertMissingControls skips hidden options); the `levelOrderCtrl` CustomControl in
-    # .u.yaml is the sole UI and edits this option via ui.levelOrder in js/jmvtab.js.
-    - name: levelOrder
+    # (uicompiler insertMissingControls skips hidden options); the `levelsCtrl` CustomControl in
+    # .u.yaml is the sole UI and edits this option via ui.levels_order in js/jmvtab.js.
+    - name: levels_order
       title: "Level order (per variable)"
       type: Array
       hidden: true
@@ -338,6 +298,48 @@ options:
                 type: Array
                 template:
                     type: String
+
+    # Phase 20g-ii: the level-MERGE tick-boxes, written by the SAME control (levelsCtrl). One entry
+    # per merged GROUP -- `var` repeats across a variable's groups, because a jamovi option template
+    # cannot nest three deep. An empty `label` is filled in R (the joined level labels), so the text
+    # box only ever shows that string as a placeholder. Folded by jmvtab_levels_collapse() into
+    # tab()'s internal `.levels_collapse`, applied PRE-aggregate in tab_prepare(): it changes counts,
+    # bases and the test, so it is a tier-1 cache miss by design (jmv_cache_aggregate names it).
+    # `hidden: true` for levels_order's reason: a CustomControl never claims its option, so without
+    # it the compiler auto-generates a second, broken default control.
+    - name: levels_collapse
+      title: "Merged levels (per variable)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: label
+                type: String
+              - name: levels
+                type: Array
+                template:
+                    type: String
+
+    # The per-NUMERIC-variable cut, driven by the same levelsCtrl control: a number has no levels to
+    # reorder or merge, so its row in that box asks the one question it does raise -- how it becomes
+    # rows. Folded by jmvtab_shape_vector() -> tab(shape =). "auto" is stored as NO entry, because
+    # `shape = "auto"` is not a value the parser accepts: it is the absence of one.
+    - name: shape
+      title: "shape (per numeric variable)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: shape
+                type: String
 
     # Phase 7g-iii: the reference picker (refPickerCtrl) replaced the visible `ref` text box; this
     # option is kept `hidden` as the expert free-text fallback / read target of jmvtab_ref_vector().
@@ -365,16 +367,6 @@ options:
               \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
             }
 
-# - name: ref2
-#   title: "ref2 = <i>(2nd ref row/col for OR)</i>"
-#   type: List
-#   options:
-#     - title: first
-#       name:  first
-#     - title: tot
-#       name:  tot
-#   default: first
-
     # Phase 7g-iii: `ref2` (the OR 2nd reference) is now driven by the refPickerCtrl ref2 section
     # (shown only when OR is active); `hidden` so the compiler generates no default text box.
     - name: ref2
@@ -384,9 +376,8 @@ options:
       hidden: true
       description:
           R: >
-           A second reference cell is needed to calculate odds ratios
-            (or relative risks ratios). The first cell of the row or column is used by default.
-            See `ref`  for the full list of possible values.
+           With `OR = OR` (odds-ratios) and a 3+ levels factor, a second reference cell 
+           is needed to calculate relative risks ratios. First cell by default.
 
     - name: comp
       title: comp
@@ -403,29 +394,34 @@ options:
 
 # Confidence intervals
     - name: ci
-      title: "ci = <i>(confidence intervals)</i>"
+      title: ci
       type: List
       options:
-        - title: auto
+        - title: "auto"
           name:  auto
-        - title: "cell <i>(ci for each cell)</i>"
+        - title: "no <i>(no confidence interval)</i>"
+          name:  "no"
+        - title: "cell <i>(each cell's own interval)</i>"
           name:  cell
-        - title: "diff <i>(ci on the difference with reference)</i>"
-          name:  diff
+        - title: "ref <i>(interval on the comparison with the reference)</i>"
+          name:  ref
       default: auto
       description:
           R: >
-           The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}.
-               \itemize{
-                \item \code{"cell"}: absolute confidence intervals of cells percentages.
-                \item \code{"diff"}: confidence intervals of the difference between a cell and the
-                relative total cell (or relative first cell when \code{ref = "first"}).
-                \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
-                \code{ci = "cell"} for frequencies ("all", "all_tabs").
-               }
-           By default, for percentages, with \code{ci = "cell"} Wilson's method is used,
-           and with \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
-           Means use classic method.
+           \strong{What the confidence interval is anchored on} -- one question, four answers. The
+            GEOMETRY of the interval is not asked here: it follows the comparison the table makes
+            (set by \code{color} / \code{display}), so a difference table gets a difference
+            interval and a ratio table a ratio one.
+            \itemize{
+             \item \code{"auto"}: build the comparison interval when something reads it
+             (\code{stars}, or a \code{color_signif} policy), and none otherwise.
+             \item \code{"no"}: no interval at all.
+             \item \code{"cell"}: each cell's own interval (a percentage / a mean with its own
+             bounds). It anchors nothing to compare, so \code{stars} and \code{color_signif} are
+             informed and switched off.
+             \item \code{"ref"}: the interval of the comparison with the reference cell -- what
+             \code{stars} and \code{color_signif} read.
+            }
 
     - name: conf_level
       title: ""
@@ -435,52 +431,51 @@ options:
       default: 0.95
       description:
           R: >
-           The confidence level, as a single numeric between 0 and 1.
-           Default to 0.95 (95%).
-
-    - name: ci_print
-      title: "options('tabxplor.ci_print' = ...)"
-      type: List
-      options:
-        - title: "ci <i>(interval display: [inf;sup])</i>"
-          name:  ci
-        - title: "moe <i>(display: pct±margin of error)</i>"
-          name:  moe
-      default: ci
-      description:
-          R: >
-           By default confidence interval are printed with the interval display.
-           Set to "moe" to use pct +- moe instead.
+           The confidence level, a single numeric between 0 and 1 --- 0.95 by default.
 
     - name: stars
-      title: "stars = <i>(significance stars)</i>"
+      title: ""
       type: Bool
-      default: true
+      default: false
       description:
           R: >
            With \code{ci = "diff"}, print significance stars (\code{*} \code{**} \code{***}) for
            the difference of each cell from its reference. Read from the same confidence interval
            that is displayed, so stars and bracket always agree.
 
-    - name: method_cell
-      title: "method_cell = <i>(cell CI method)</i>"
+    - name: design_effect
+      title: design_effect
+      type: Bool
+      default: false
+      description:
+          R: >
+           For a WEIGHTED table, make the confidence intervals, the significance stars, the colour
+           thresholds AND the p-values account for the unequal weighting (the exact flat survey-design
+           variance) instead of using the raw number of respondents. Sets
+           options(tabxplor.design_effect). Off by default; it moves every interval in the table, not
+           only the p-value.
+
+    - name: ci_method_cell
+      title: ""
       type: List
       options:
         - title: "wilson <i>(score, default)</i>"
           name:  wilson
-        - title: "wald <i>(normal approximation)</i>"
+        - title: "wald <i>(normal approx.)</i>"
           name:  wald
+        - title: "beta <i>(Clopper-Pearson exact)</i>"
+          name:  beta
       default: wilson
       description:
           R: >
            The proportion confidence-interval method for \code{ci = "cell"}: \code{"wilson"}
            (the score interval, default) or \code{"wald"} (the normal approximation).
 
-    - name: method_diff
-      title: "method_diff = <i>(difference CI method)</i>"
+    - name: ci_method_diff
+      title: ""
       type: List
       options:
-        - title: "newcombe <i>(hybrid score, default)</i>"
+        - title: "newcombe <i>(hybrid score)</i>"
           name:  newcombe
         - title: "ac <i>(Agresti-Caffo)</i>"
           name:  ac
@@ -493,11 +488,65 @@ options:
            (default) is the dual of the two-proportion score test, so the interval and the
            significance stars always agree.
 
+    - name: ci_method_mean_diff
+      title: ""
+      type: List
+      options:
+        - title: "welch <i>(unequal variances)</i>"
+          name:  welch
+        - title: "student <i>(pooled variance, 2 groups)</i>"
+          name:  student
+        - title: "ols <i>(pooled over all levels)</i>"
+          name:  ols
+      default: welch
+      description:
+          R: >
+           The confidence-interval method for the difference of numeric means
+           (means with \code{ci = "diff"}): Welch (default), Student (the two groups pooled) or
+           OLS (pooled over every level of the variable, i.e. the interval a linear model gives
+           that coefficient).
+
+    - name: ci_method_mean_ratio
+      title: ""
+      type: List
+      options:
+        - title: "robust <i>(each group's variance)</i>"
+          name:  robust
+        - title: "quasipoisson <i>(dispersion-scaled)</i>"
+          name:  quasipoisson
+        - title: "poisson <i>(naive counts)</i>"
+          name:  poisson
+      default: robust
+      description:
+          R: >
+           The confidence-interval method for a ratio of numeric means
+           (means with \code{ci = "ratio"}).
+
 
 
 # Other formatting
+    # ⚠ NOT `theme`: jamovi injects its OWN global `theme` option (the app's plot
+    # styling preference) into every analysis, which shadowed this one -- no radio
+    # ticked, a click reverted, and the render kept the app's value. Same reserved-name
+    # class as `levels` (-> `lvs`) and `check` (-> `xl_check`).
+    - name: tab_theme
+      title: theme
+      type: List
+      options:
+        - title: "light <i>(colors)</i>"
+          name:  light
+        - title: "print_ready <i>(black and white, for publication)</i>"
+          name:  print_ready
+      default: light
+      description:
+          R: >
+           How the table is painted, in the results panel and in every export.
+            \code{"light"} is the colour palette; \code{"print_ready"} says the same thing
+            typographically --- bold, italics, underlines and marks instead of blue and red ---
+            for a page that has no colour. See \code{\link{tab_css}}.
+
     - name: totaltab
-      title: "totaltab = <i>(add a total table)</i>"
+      title: totaltab
       type: List
       options:
         - title: line
@@ -505,7 +554,7 @@ options:
         - title: table
           name:  table
         - title: no
-          name:  no
+          name:  "no"
       default: line
       description:
           R: >
@@ -537,7 +586,7 @@ options:
           R: >
            By default, colnames are wrapped when larger than 12 characters.
 
-# filter
+# ==================== Display and export ====================
 
     - name: display
       title: "" # Display
@@ -545,43 +594,67 @@ options:
       options:
         - title: "auto"
           name:  auto
-        - title: "n <i>(unweighted counts)</i>"
-          name:  n
+        - title: "base <i>(pct or mean)</i>"
+          name:  base
+        - title: "base_ci <i>(base + interval)</i>"
+          name:  base_ci
+        - title: "ci <i>(interval alone)</i>"
+          name:  ci
+        - title: "diff <i>(difference to ref)</i>"
+          name:  diff
+        - title: "ratio <i>(ratio to ref)</i>"
+          name:  ratio
+        - title: "or <i>(odds ratios)</i>"
+          name:  or
+        - title: "base_diff <i>(base + diff)</i>"
+          name:  base_diff
+        - title: "base_ratio <i>(base + ratio)</i>"
+          name:  base_ratio
+        - title: "or_base <i>(OR + pct)</i>"
+          name:  or_base
+        - title: "base_or <i>(pct + OR)</i>"
+          name:  base_or
+        - title: "n <i>(counts)</i>"
+          name:  "n"
         - title: "wn <i>(weighted counts)</i>"
           name:  wn
         - title: "pct <i>(percentages)</i>"
           name:  pct
-        - title: "diff <i>(differences from total, or reference cell)</i>"
-          name:  diff
-        - title: "ctr <i>(relative contributions to variance)</i>"
-          name:  ctr
-        - title: "mean <i>(mean, for numeric variables)</i>"
+        - title: "mean <i>(numeric variables)</i>"
           name:  mean
+        - title: "mean_sd <i>(mean + sd)</i>"
+          name:  mean_sd
+        - title: "mean_cv <i>(mean + cv)</i>"
+          name:  mean_cv
+        - title: "ctr <i>(contribs to var.)</i>"
+          name:  ctr
         - title: "var <i>(variance)</i>"
           name:  var
-        - title: "ci <i>(confidence intervals)</i>"
-          name:  ci
-        - title: "pct_ci <i>(percentages with visible conf. intervals)</i>"
-          name:  pct_ci
-        - title: "mean_ci <i>(means with visible conf. intervals)</i>"
-          name:  mean_ci
-        - title: "OR <i>(odds ratios or relative risks ratios)</i>"
-          name:  OR
-        - title: "OR_pct <i>(odds ratios with visible percentages)</i>"
-          name:  OR_pct
       default: auto
       description:
           R: >
-           The information to display in the table.
+           What each cell shows. Every value here is a \code{tab(display =)} value: a bare field
+            name, a named layout such as \code{"base_ci"} (each value with its interval), or a
+            \code{\{\}} template combining fields. \code{"auto"} keeps whatever the table was
+            built with. A template naming a field the table does not carry renders empty and says
+            which argument would fill it.
 
-    - name: add_n
+    - name: "n"   # quoted: YAML 1.1 reads a bare `n` as the boolean FALSE
       title: "" #
-      type: Bool
-      default: true
+      type: List
+      options:
+        - name: range
+          title: range
+        - name: min
+          title: min
+        - name: "no"
+          title: "no"
+      default: range
       description:
           R: >
-           For `pct = "row"` or `pct = "col"`, set to `FALSE` not to add another
-           column or row with unweighted counts (`n`).
+           How many people the table is about: `"range"` prints the unweighted base beside
+           the Total cell (as `min-max` when the column variables rest on different people),
+           `"min"` the smallest base only, `"no"` no count at all.
 
     - name: add_pct
       title: "" #
@@ -597,6 +670,7 @@ options:
       title: "" # subtext
       type: String
       default: ""
+      hidden: true      # driven by the subtextCtrl CustomControl (a full-width auto-grow textarea)
       description:
           R: >
            A character vector to print rows of legend under the table.
@@ -626,7 +700,7 @@ options:
            an integer vector the same length as \code{col_vars}.
 
     - name: n_min
-      title: "n_min = <i>(hide small-base rows)</i>"
+      title: <b>n_min = <i>(hide rows/cols with small n)</i></b>
       type: Integer
       min: 0
       default: 0
@@ -653,20 +727,35 @@ options:
            The export file format: Excel (`.xlsx`), HTML (`.html`) or Markdown (`.md`).
 
     - name: exportExcel
-      title: "Export to Excel"
+      title: "Export"
       type: Action
       description:
-        R: "Press to export the table to the chosen format."
+        R: "Press to export the table to the chosen format (the button label follows the format)."
 
-    - name: path
+    - name: export_dir
       type: String
-      title: ""
-      default: "~/Documents/Table"
+      title: "Path:"
+      default: "~/Documents"
       description:
           R: >
-           Where to save the file. A full path, or a bare name (saved in your Documents folder).
-           The extension is added automatically from the chosen format. `~` expands to your home
-           folder.
+           The folder to save the exported file in. Blank or `~/Documents` auto-detects your real
+           Documents folder (a redirected `D:/Documents` or network Documents included). Type any
+           other folder to override; a leading `~` there expands to your home folder.
+
+    - name: export_filename
+      type: String
+      title: "/"
+      default: "Table"
+      description:
+          R: >
+           The bare file name, with NO extension (the chosen format adds it). Illegal characters are
+           removed automatically. Blank saves as "Table".
+
+    - name: resetPath
+      title: "Reset to defaults"
+      type: Action
+      description:
+        R: "Reset the folder and file name to their defaults (your Documents folder and \"Table\")."
 
     - name: xl_replace
       title: "" #

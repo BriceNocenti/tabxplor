@@ -3,3 +3,6 @@
 
 # Internal Claude Code setup note (not a vignette)
 claude_code_setup.md
+
+/.quarto/
+**/*.quarto_ipynb

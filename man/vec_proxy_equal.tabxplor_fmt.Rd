@@ -17,3 +17,4 @@ A double vector
 \description{
 Test equality with fmt vector
 }
+\keyword{internal}

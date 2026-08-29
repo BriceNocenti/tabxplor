@@ -1,0 +1,394 @@
+# PURPOSE: the dependency-free html engine and the stylesheet it ships with.
+# ROLE: the shipped CONTRACT for R/tab-render-html.R, R/tab-css.R -- a failure here is a user-visible change.
+#   The exhaustive sweep around it lives in dev/tests/testthat/.
+# See: CLAUDE.md section "Testing" (what belongs in which suite).
+
+# === SECTION: the html engine =====================================================================
+
+gss <- fx_gss()
+
+
+
+# --- helpers ---------------------------------------------------------------------------
+rh_strip_style <- function(h) {
+  h <- gsub("(?s)<style[^>]*>.*?</style>", "<!--css-->", as.character(h), perl = TRUE)
+  gsub("(?s)<script[^>]*>.*?</script>", "", h, perl = TRUE)
+}
+
+
+rh_tbody <- function(h) {
+  m <- regmatches(as.character(h), regexpr("(?s)<tbody>.*?</tbody>", as.character(h), perl = TRUE))
+  if (length(m) == 0) "" else m
+}
+
+
+rh_cells <- function(h) {                       # tbody cell text tokens (data, not styling)
+  t <- unlist(strsplit(gsub("<[^>]*>", "\x01", rh_tbody(h)), "\x01"))
+  t <- trimws(t); t[nzchar(t)]
+}
+
+
+rh_titles <- function(h) {                       # non-empty tooltip contents
+  ti <- unlist(regmatches(as.character(h), gregexpr('title="[^"]+"', as.character(h))))
+  sort(unique(ti[ti != 'title=""']))
+}
+
+
+
+# === SECTION: home-built html engine -- structure snapshot + self-contained ==============
+
+testthat::test_that("tab_kable html engine structure is stable", {
+  counts   <- tab(gss, marital, race)
+  row_diff <- tab(gss, marital, race, pct = "row", color = "diff")
+  bg       <- tab(gss, marital, race, pct = "row", color = c("diff", "ratio"))
+  chi2     <- suppressWarnings(tab(gss, marital, race, pct = "row", test = TRUE))
+
+  testthat::expect_snapshot(cat(rh_strip_style(tab_kable(counts))))
+  testthat::expect_snapshot(cat(rh_strip_style(tab_kable(row_diff))))
+  testthat::expect_snapshot(cat(rh_strip_style(tab_kable(bg))))
+  testthat::expect_snapshot(cat(rh_strip_style(suppressWarnings(tab_kable(chi2)))))
+})
+
+
+
+testthat::test_that("the Viewer assets are tabxplor's own, and the print mode gates them", {
+  d <- tabxplor:::tx_html_deps()
+  testthat::skip_if(is.null(d), "rmarkdown / htmltools are Suggests")
+  testthat::expect_setequal(vapply(d, `[[`, "", "name"), c("jquery", "bootstrap", "tabxplor"))
+  js <- system.file("tabxplor-1.0", "tabxplor.js", package = "tabxplor")
+  testthat::expect_true(nzchar(js) && file.size(js) > 0)   # the binding actually ships
+  # TWO BINDINGS, because there are two Bootstraps: 5 dropped the jQuery plugin API, and a page that
+  # has only that one (a pkgdown site) fell back to the browser's own second-long `title=` tooltip.
+  src <- paste(readLines(js, warn = FALSE), collapse = "\n")
+  testthat::expect_match(src, "bs.Tooltip", fixed = TRUE)          # bootstrap 5
+  testthat::expect_match(src, "$t.tooltip", fixed = TRUE)          # bootstrap 3 / 4, via jQuery
+  testthat::expect_match(src, "delay: 0", fixed = TRUE)            # stated, on both paths
+  # the pure predicate: only an interactive, themed, non-knitting print WITH the deps opens the Viewer
+  km <- tabxplor:::kable_print_mode
+  testthat::expect_identical(km("dark", FALSE, TRUE, FALSE, TRUE),  "next")
+  testthat::expect_identical(km(NULL,   TRUE,  TRUE, FALSE, TRUE),  "next")
+  testthat::expect_identical(km("dark", TRUE,  TRUE, TRUE,  TRUE),  "next")
+  testthat::expect_identical(km("dark", TRUE,  TRUE, FALSE, TRUE),  "viewer")
+  testthat::expect_identical(km("dark", TRUE,  TRUE, FALSE, FALSE), "degrade")
+})
+
+
+testthat::test_that("html engine output is self-contained (inline <style>, no external <link>)", {
+  h <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff")))
+  testthat::expect_match(h, "<table")
+  testthat::expect_match(h, "<style")
+  testthat::expect_false(grepl("<link", h))
+  testthat::expect_false(grepl("includeCSS|lightable|cosmo", h))
+})
+
+
+
+# === SECTION: Phase 13d -- theme lives in the CSS, not the markup =========================
+
+testthat::test_that("cells carry slot classes, never inline colour", {
+  h <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff"), tooltips = FALSE))
+  b <- rh_tbody(h)
+  # THE constraint of Phase 13d: an inline `style` beats every stylesheet rule short of !important, so
+  # inline colour would make theme = "auto" impossible. If this fails, dark mode is silently broken.
+  testthat::expect_false(grepl("color:#", b))
+  # Phase 14e: the class attribute now also carries ROLE classes (align / borders / widths), so the
+  # slot class is no longer first -- match it anywhere in the attribute.
+  testthat::expect_match(b, 'class="[^"]*\\b(p|m)[1-4]\\b')   # a text-coloured cell
+  testthat::expect_match(b, 'class="[^"]*\\bg[12]\\b')        # an uncoloured cell
+  testthat::expect_match(h, '<table class="tabxplor-tab" data-quarto-disable-processing="true">',
+                         fixed = TRUE)   # no theme token
+})
+
+
+
+testthat::test_that("the generated CSS is syntactically valid in every mode", {
+  # A single malformed rule makes the browser drop it -- and, inside @media, potentially the whole
+  # block -- with no error anywhere. No selector-presence test catches that, so check the shape.
+  # z11: "print_minimalistic" joins the list, and `@media print {` joins the at-rule opener stripped below.
+  for (fmt in c("html", "md")) for (th in c("light", "dark", "auto", "print_minimalistic")) {
+    css <- tab_css(theme = th, format = fmt, style_tag = FALSE)
+    lab <- paste0(th, "/", fmt)
+    testthat::expect_identical(lengths(regmatches(css, gregexpr("[{]", css))),
+                               lengths(regmatches(css, gregexpr("[}]", css))), label = lab)
+    body <- trimws(gsub("@media (print|\\(prefers-color-scheme: dark\\)) \\{|^\\}$", "",
+                        strsplit(css, "\n")[[1]]))
+    body <- body[nzchar(body)]
+    testthat::expect_true(all(grepl("^[^{}]+\\{([-a-z]+:[^;{}]+;)+\\}$", body)), label = lab)
+  }
+})
+
+
+
+testthat::test_that("css = FALSE drops the <style> but keeps the classes", {
+  tb <- tab(gss, marital, race, pct = "row", color = "diff")
+  h  <- as.character(tab_kable(tb, css = FALSE))
+  testthat::expect_false(grepl("<style", h, fixed = TRUE))
+  testthat::expect_match(rh_tbody(h), 'class="[^"]*\\b(p|m)[1-4]\\b')
+  # the once-per-document workflow: options() drives it, and tab_css() supplies the stylesheet
+  withr::local_options(list(tabxplor.kable_css = FALSE))
+  testthat::expect_false(grepl("<style", as.character(tab_kable(tb)), fixed = TRUE))
+  testthat::expect_match(tab_css(theme = "auto"), "^<style>")
+})
+
+
+
+testthat::test_that("geometry is CLASSES, not inline styles (so a user's CSS can win)", {
+  h <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff"), tooltips = FALSE))
+  b <- rh_tbody(h)
+  # An inline style beats any stylesheet rule short of !important, so ANY inline style on a cell is a
+  # thing the user cannot restyle. The engine must emit none.
+  testthat::expect_false(grepl("<td[^>]*style=", b))
+  testthat::expect_false(grepl("<th[^>]*style=", h))
+  testthat::expect_false(grepl("<tr[^>]*style=", b))
+  # ... and the roles it emits instead are all defined by the stylesheet
+  css <- tab_css(style_tag = FALSE)
+  for (k in c("tx-r", "tx-l", "tx-num", "tx-br", "tx-bl", "tx-b", "tx-pill")) {
+    testthat::expect_match(css, paste0("[.]", k, "\\b"), label = k)
+  }
+  # ... except tx-tot / tx-rv, which Phase 14j left deliberately UNSTYLED: the browser auto-sizes
+  # every column, so their old min-widths could only ever be too big. They are still emitted, as the
+  # hooks a user pins a width on (?tab_css) -- which is the whole point of roles over inline styles.
+  for (k in c("tx-tot", "tx-rv")) {
+    testthat::expect_no_match(css, paste0("[.]", k, "\\{"), label = k)
+    testthat::expect_match(b, paste0("class=\"[^\"]*", k), label = k)
+  }
+})
+
+
+
+testthat::test_that("no border SHORTHAND survives in the stylesheet (coloured cells, plain borders)", {
+  # THE regression lock for the pass-2 defect "the text color actually change the borders colors ...
+  # which is awful". `border-right:1px solid` is a shorthand: it resets border-right-color to
+  # `currentColor` = the CELL's palette hex, and every border rule out-specifies the one
+  # `td{border-color:...}` rule -- so the shorthand always won. Phase 14e moved the geometry off inline
+  # styles and recorded the bug as fixed; that removed the INLINE half only, and three docs + NEWS
+  # repeated the claim for two phases while a +20% cell kept drawing a blue border. Nothing tested it.
+  # Both halves are locked here: the CSS uses longhands only, and a real cell carries both classes.
+  for (th in c("light", "dark", "auto", "print_minimalistic")) {
+    css <- tab_css(theme = th, style_tag = FALSE)
+    testthat::expect_no_match(css, "border-(top|right|bottom|left)\\s*:", label = th)
+    # ... and the rule that must therefore win is present, for every theme in the file
+    testthat::expect_match(css, "border-color:", label = th)
+  }
+  # The markup half. It needs SEVERAL col_vars: a cell is only both bordered and coloured where a
+  # `tx-br` column separator meets a coloured value, which no single-col_var fixture ever produces --
+  # which is exactly why this survived unseen.
+  b <- rh_tbody(as.character(tab_kable(tab(gss, marital, c(race, relig), pct = "row",
+                                           color = "diff"), tooltips = FALSE)))
+  tds <- unlist(regmatches(b, gregexpr('<td class="[^"]*"', b)))
+  both <- grep("\\b(p|m)[1-4]\\b", grep("tx-br|tx-bl", tds, value = TRUE), value = TRUE)
+  testthat::expect_gt(length(both), 0)
+})
+
+
+
+testthat::test_that("a wrapped header keeps its <br>, a user's markup is still escaped", {
+  # tab_wrap_text() breaks long header names on "<br>"; escaping the whole label printed a literal
+  # "Some very long<br>race level name" (knitr::kable(escape = FALSE) never hit this).
+  d <- gss; levels(d$race)[1] <- "Some very long race level name"
+  h <- as.character(tab_kable(tab(d, marital, race, pct = "row"), tooltips = FALSE))
+  testthat::expect_match(h, "<th[^>]*>[^<]*<br>")
+  testthat::expect_false(grepl("&lt;br&gt;", h, fixed = TRUE))
+  # only the tag we inject ourselves is restored: a "<" in a user's own level name stays escaped
+  d2 <- gss; levels(d2$race)[1] <- "a <script> b"
+  h2 <- as.character(tab_kable(tab(d2, marital, race, pct = "row"),
+                               tooltips = FALSE))
+  testthat::expect_false(grepl("<script>", h2, fixed = TRUE))
+  testthat::expect_match(h2, "&lt;script&gt;", fixed = TRUE)
+})
+
+
+
+testthat::test_that("a background colour is a pill hugging the text, not a full-cell flood", {
+  # a low ratio break, so a background fires on this data whatever the defaults are
+  tb <- tab(gss, marital, race, pct = "row", color = c("diff", "ratio"),
+            color_breaks = list(pct_ratio = list(over = 1.05)))
+  h  <- as.character(tab_kable(tb, tooltips = FALSE))
+  b <- rh_tbody(h)
+  # the bg slot class rides the span; the <td> keeps the text slot (so `.p*` still cascades)
+  testthat::expect_match(b, '<span class="tx-pill [ou][1-4]">')
+  testthat::expect_false(grepl('<td class="[^"]*\\b[ou][1-4]\\b', b))
+  testthat::expect_match(tab_css(style_tag = FALSE), "[.]tx-pill[{]border-radius")
+})
+
+
+
+# === SECTION: the label column -- rowspan + vertical name (Phase 14i) ========
+
+testthat::test_that("html engine: a merged table names each row-variable once, via rowspan", {
+  h <- rh_strip_style(as.character(
+    tab_kable(tab(gss, c(race, marital), relig, pct = "row"), css = FALSE)))
+  # one cell per block, spanning it -- not one per row. Phase 18m: common_totrow defaults FALSE, so
+  # each block keeps its OWN Total row -> race spans 4 (3 data + Total), marital spans 7 (6 data + Total).
+  testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="4">race</td>')
+  testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="7">marital</td>')
+  testthat::expect_length(gregexpr(">race</td>", h, fixed = TRUE)[[1]], 1L)
+  # two label merges + the two index columns' headers over the unit row below them
+  testthat::expect_length(gregexpr("rowspan", h)[[1]], 4L)
+  # the literal "row_var" header is gone (a bug fix, not a var_names setting)
+  testthat::expect_no_match(h, ">row_var<", fixed = TRUE)
+  # a rowspan must not desync the column-wise assembly: every row still closes
+  n_tr <- lengths(regmatches(h, gregexpr("<tr", h)))
+  testthat::expect_equal(n_tr, lengths(regmatches(h, gregexpr("</tr>", h))))
+})
+
+
+
+
+# === Phase 22g-vii: the name column, the doubled span, and the publication marks ===================
+
+testthat::test_that("a name rotates only when it saves width, and a compound name wraps", {
+  names_of <- function(x) {
+    b <- sub("^.*</style>", "", as.character(tab_html(x)))
+    regmatches(b, gregexpr('<td class="[^"]*tx-lbl[^"]*"[^>]*>[^<]*(<br>[^<]*)*</td>', b))[[1]]
+  }
+  a <- car_arrests
+  t <- suppressMessages(tab_reg(a, "checks", c("colour", "employed", "citizen"),
+                                family = "gaussian", stats = FALSE))
+  nm <- names_of(t)
+  # "Constant" is a one-row block: it cannot turn, so it sets the floor and every name no longer
+  # than it stays horizontal too -- rotating them would save nothing
+  testthat::expect_false(any(grepl("tx-vname", nm[grepl(">employed<", nm, fixed = TRUE)])))
+  testthat::expect_false(any(grepl("tx-vname", nm[grepl(">Constant<", nm, fixed = TRUE)])))
+  # a name far longer than that floor is written horizontally too -- but WRAPPED, which nothing
+  # could do before (stri_wrap breaks on whitespace, and a snake_case name has none)
+  long <- dplyr::rename(a, shenaniganing_colorous_property_of_the_skin = "colour")
+  t2 <- suppressMessages(tab_reg(long, "checks",
+                                 c("shenaniganing_colorous_property_of_the_skin", "employed"),
+                                 family = "gaussian", stats = FALSE))
+  cell <- grep("shenaniganing", names_of(t2), value = TRUE)
+  testthat::expect_length(cell, 1L)
+  testthat::expect_match(cell, "<br>", fixed = TRUE)
+  lines <- gsub("<[^>]*>", "", strsplit(sub("^<td[^>]*>", "", cell), "<br>", fixed = TRUE)[[1]])
+  testthat::expect_gt(length(lines), 1L)
+  testthat::expect_true(all(nchar(lines) <= tabxplor:::TX_VNAME_MAX + 1L))
+})
+
+
+# === one line of air under a finished table ======================================================
+# A table is a block of its own: the prose after it must not touch it, in any medium. Stated once
+# (TX_TAIL_SPACE) and read by both stylesheets.
+
+testthat::test_that("a rendered table carries a trailing gap, and only the outer element does", {
+  css <- tab_css(format = "html", style_tag = FALSE)
+  expect_match(css, paste0(".tabxplor-tab{margin-bottom:", tabxplor:::TX_TAIL_SPACE, ";}"),
+               fixed = TRUE)
+  # ⚠ SPECIFICITY IS THE POINT: `.tabxplor-tab table` (0,1,1) keeps `margin:0`, so a markdown div's
+  # INNER table adds no second gap. The base rule must therefore still zero it, and our rule must
+  # come after it for the outer element.
+  expect_match(css, ".tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;", fixed = TRUE)
+  expect_lt(regexpr(".tabxplor-tab,.tabxplor-tab table{", css, fixed = TRUE),
+            regexpr(".tabxplor-tab{margin-bottom:", css, fixed = TRUE))
+})
+
+testthat::test_that("the gap sits BELOW the footer legend, not above it", {
+  t <- tab(fx_gss_fmt(), race, party3, pct = "row", color = TRUE)
+  h <- as.character(tab_html(t))
+  # the legend rides in <tfoot>, so it is INSIDE the element the margin hangs off
+  expect_match(h, "tx-foot", fixed = TRUE)
+  expect_true(grepl("</tfoot></table>", h, fixed = TRUE))
+  expect_match(trimws(h), "</table>$")
+})
+
+testthat::test_that("stacked parts are separated by the margin, not by a <br>", {
+  # a regression table stacks its shape table under the main one: two `.tabxplor-tab` elements, and
+  # the trailing gap of the first is what separates them. A <br> as well would double it.
+  d <- fx_reg_df(); d$m <- as.integer(d$marital == "Married")
+  t <- suppressMessages(tab_reg(d, "m", c("age", "race"), family = "binomial"))
+  h <- as.character(tab_html(t))
+  testthat::skip_if(lengths(regmatches(h, gregexpr("<table", h))) < 2L)
+  expect_false(grepl("</table>\n<br>", h, fixed = TRUE))
+})
+
+testthat::test_that("jamovi moves the gap onto the scrollbox", {
+  # `overflow-x:auto` makes the box a formatting context, so a table's own trailing margin would sit
+  # above the horizontal scrollbar instead of below the whole thing.
+  s <- tabxplor:::jmv_results_style()
+  expect_match(s, paste0("margin-bottom:", tabxplor:::TX_TAIL_SPACE, ";"), fixed = TRUE)
+  expect_match(s, ".tx-scrollbox > .tabxplor-tab:last-child{margin-bottom:0;}", fixed = TRUE)
+})
+
+
+# === who owns the table's title, and who owns the table =========================================
+# One caption TEXT, one class, three placements (tx_caption_host()) -- plus the one attribute that
+# stops Quarto restyling a table it did not build.
+
+# drives the two ecosystem flags tx_caption_host() reads, and puts them back
+rh_with_host <- function(code, bookdown = NULL, quarto = NULL, tbl_cap = NULL) {
+  old_opt <- options(knitr.in.progress = TRUE)
+  ok <- knitr::opts_knit$get(); oc <- knitr::opts_current$get()
+  on.exit({options(old_opt); knitr::opts_knit$restore(ok); knitr::opts_current$restore(oc)},
+          add = TRUE)
+  knitr::opts_knit$set(`bookdown.internal.label` = bookdown, `quarto.version` = quarto)
+  knitr::opts_current$set(`tbl-cap` = tbl_cap)
+  force(code)
+}
+
+testthat::test_that("the caption takes one of three shapes, decided by the host", {
+  t <- tab(gss, race, marital, pct = "row", caption = "A title")
+  plain <- rh_strip_style(tab_html(t))
+  expect_match(plain, '<div class="tabxplor-caption">A title</div><table', fixed = TRUE)
+  expect_false(grepl("<caption", plain, fixed = TRUE))
+
+  # bookdown: a real <caption>, INSIDE the table, and no sibling div
+  bd <- rh_strip_style(rh_with_host(tab_html(t), bookdown = TRUE))
+  expect_match(bd, '<caption><span class="tabxplor-caption">A title</span></caption>', fixed = TRUE)
+  expect_false(grepl('<div class="tabxplor-caption">', bd, fixed = TRUE))
+
+  # Quarto owns it only when the cell wrote one
+  q_cap <- rh_strip_style(rh_with_host(tab_html(t), quarto = "1.10", tbl_cap = "Quarto's"))
+  expect_false(grepl("tabxplor-caption", q_cap, fixed = TRUE))
+  # ⚠ a bare `label: tbl-x` numbers the table with no caption of its own: ours is still wanted
+  q_lab <- rh_strip_style(rh_with_host(tab_html(t), quarto = "1.10"))
+  expect_match(q_lab, '<div class="tabxplor-caption">A title</div>', fixed = TRUE)
+})
+
+testthat::test_that("bookdown's own scan finds the caption: its own line, no block above the label", {
+  # bookdown numbers a table only where `^\\s*<caption` matches the label's line or the one before,
+  # so a BLOCK element inside the caption (a <div>) would push the text out of that window. This is
+  # the literal predicate bookdown:::parse_fig_labels() applies.
+  t <- tab(gss, race, marital, pct = "row", caption = "(\\#tab:x) Titre")
+  bd <- rh_strip_style(rh_with_host(tab_html(t), bookdown = TRUE))
+  lines <- strsplit(bd, "\n", fixed = TRUE)[[1]]
+  i <- grep("(\\#tab:x)", lines, fixed = TRUE)
+  expect_length(i, 1L)
+  expect_true(any(grepl("^\\s*<caption", lines[c(i, i - 1L)])))
+  # the token itself is untouched: it holds no & < >, so escaping cannot reach it (pandoc turns the
+  # backslash into the `(#tab:x)` bookdown greps for).
+  expect_match(bd, "(\\#tab:x) Titre", fixed = TRUE)
+})
+
+testthat::test_that("every <table> tabxplor emits disables Quarto's own table processing", {
+  attr_ <- 'data-quarto-disable-processing="true"'
+  # the engine
+  expect_match(as.character(tab_html(tab(gss, race, marital, pct = "row"))), attr_, fixed = TRUE)
+  # the degrade path (no fmt columns at all)
+  expect_match(as.character(suppressMessages(tab_html(tibble::tibble(a = 1, b = "x")))),
+               attr_, fixed = TRUE)
+  # every one of them, not just the first
+  h <- as.character(tab_html(tab(gss, c(race, partyid), marital, pct = "row")))
+  expect_identical(lengths(regmatches(h, gregexpr("<table", h, fixed = TRUE))),
+                   lengths(regmatches(h, gregexpr(attr_, h, fixed = TRUE))))
+})
+
+testthat::test_that("the emitted string opens with a tag and closes with one (Quarto's raw fence)", {
+  # Quarto fences asis output as raw `{=html}` only when it matches these two; miss them and the
+  # markup is parsed as MARKDOWN instead. tab_kable_join() carries the WARNING.
+  t  <- tab(gss, race, marital, pct = "row", caption = "A title")
+  t2 <- tab(gss, race, marital, pct = "row")
+  cases <- list(tab_html(t), tab_html(t, css = FALSE), tab_html(t2, css = FALSE),
+                tab_html(list(t2, t2)), rh_with_host(tab_html(t), bookdown = TRUE))
+  for (h in cases) {
+    expect_match(as.character(h), "^<[[:alnum:]]+[ >]")
+    expect_match(as.character(h), "</[[:alnum:]]+>[[:space:]]*$")
+  }
+})
+
+testthat::test_that("a <caption> is pinned to the top and unpadded", {
+  # ⚠ Bootstrap puts a caption at the BOTTOM and tabxplor injects Bootstrap into every knitted
+  # document (tx_html_deps()), so the bookdown arm needs this rule to sit above its table at all.
+  css <- tab_css(format = "html", style_tag = FALSE)
+  expect_match(css, ".tabxplor-tab>caption{caption-side:top;padding:0;margin:0;}", fixed = TRUE)
+  # the width guard needs a block box to hang off, which a <span> is not by default
+  expect_match(css, ".tabxplor-caption{display:block;", fixed = TRUE)
+})

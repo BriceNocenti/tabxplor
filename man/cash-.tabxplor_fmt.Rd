@@ -17,3 +17,4 @@ The relevant field of the tabxplor_fmt.
 \description{
 $ method for class tabxplor_fmt
 }
+\keyword{internal}

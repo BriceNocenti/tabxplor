@@ -10,7 +10,8 @@ tab_prepare(
   na_drop_all,
   cleannames = NULL,
   other_if_less_than = 0,
-  other_level = "Others"
+  other_level = "Others",
+  levels_collapse = NULL
 )
 }
 \arguments{
@@ -28,17 +29,28 @@ prefix numbers like \code{"1-"}, and text in parentheses.}
 than it will be merged into an "Others" level.}
 
 \item{other_level}{The name of the "Other" level, as a character vector of length one.}
+
+\item{levels_collapse}{A named list, one element per variable, each a named list of
+character vectors: the levels to merge, named by the merged level's label (the shape
+\code{\link[forcats:fct_collapse]{forcats::fct_collapse}} takes). Applied before
+\code{other_if_less_than}. \code{NULL} merges nothing.}
 }
 \value{
 A modified data.frame.
 }
 \description{
-Prepare data for \code{\link{tab_plain}}.
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
+
+An internal step of the build, exported before the pipeline had one. Every one of its jobs is
+now an argument of \code{\link[=tab]{tab()}} — \code{na_drop_all} is \code{filter = !is.na(...)}, and \code{cleannames},
+\code{other_if_less_than} and \code{other_level} are formals of \code{\link[=tab]{tab()}} itself — so calling it by hand
+prepares data for a function that would prepare it again. It will be made internal in 2.1.0.
 }
 \examples{
-\donttest{data <- dplyr::starwars \%>\%
+\donttest{data <- dplyr::starwars |>
 tab_prepare(sex, hair_color, gender, other_if_less_than = 5,
             na_drop_all = sex)
 data
 }
 }
+\keyword{internal}

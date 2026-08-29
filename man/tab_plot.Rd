@@ -2,74 +2,27 @@
 % Please edit documentation in R/tab_classes.R
 \name{tab_plot}
 \alias{tab_plot}
-\title{Print a tabxplor table as plot}
+\title{Print a tabxplor table as plot (defunct)}
 \usage{
-tab_plot(
-  tabs,
-  theme = c("light", "dark"),
-  color_type = NULL,
-  html_24_bit = NULL,
-  color = TRUE,
-  color_legend = TRUE,
-  lang = NULL,
-  caption = NULL,
-  transpose = FALSE,
-  wrap_rows = 35,
-  wrap_cols = 14,
-  whitespace_only = TRUE
-)
+tab_plot(tabs, ...)
 }
 \arguments{
-\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_many}}.}
+\item{tabs}{A data.frame.}
 
-\item{theme}{By default, a white table with black text, Set to \code{"dark"} for a
-black table with white text.}
-
-\item{color_type}{Set to \code{"text"} to color the text, \code{"bg"} to color the
-background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
-
-\item{html_24_bit}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0: exports are always
-24-bit (the OKLCH palettes). Kept only so old calls do not error.}
-
-\item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
-
-\item{color_legend}{Print colors legend below the table ?}
-
-\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback), \code{"en"} or \code{"fr"}.}
-
-\item{caption}{The table caption.}
-
-\item{transpose}{Set to \code{TRUE} to transpose the table before export (rows become columns).}
-
-\item{wrap_rows}{By default, rownames are wrapped when larger than 30 characters.}
-
-\item{wrap_cols}{By default, colnames are wrapped when larger than 12 characters.}
-
-\item{whitespace_only}{Set to \code{FALSE} to wrap also on non whitespace characters.}
+\item{...}{Ignored.}
 }
 \value{
-A \code{\link[ggplot2]{ggplot}} object to be printed in the
-\code{RStudio} Plots pane or exported as image, using \code{\link[ggpubr]{ggtexttable}}.
+Never returns: it errors.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#defunct}{\figure{lifecycle-defunct.svg}{options: alt='[Defunct]'}}}{\strong{[Defunct]}}
 
-Superseded (1.4.0): \code{tab_plot()} renders a \pkg{tabxplor} table as a \pkg{ggpubr} image, but its
-display is limited and it is no longer actively developed. It keeps working and is retained for a
-future redesign; prefer \code{\link{tab_kable}} (HTML), \code{\link{tab_md}} (markdown) or
-\code{\link{tab_xl}} (Excel).
-}
-\examples{
-\donttest{
-# ggpubr / gtable / ggplot2 are Suggests-only and tab_plot() stops without them, so guard the
-# example: \donttest{} does NOT exempt it from R CMD check --as-cran, which CRAN also runs
-# without Suggests installed.
-if (requireNamespace("ggpubr", quietly = TRUE) &&
-    requireNamespace("gtable", quietly = TRUE) &&
-    requireNamespace("ggplot2", quietly = TRUE)) {
-  tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |>
-    tab_plot()
-}
-}
+Removed in 2.0.0. \code{tab_plot()} drew a \emph{picture of the table} as a \pkg{ggpubr} image. Use
+\code{\link[=tab_html]{tab_html()}}, \code{\link[=tab_md]{tab_md()}} or \code{\link[=tab_xl]{tab_xl()}} to export the table itself, and \code{\link[=forest_plot]{forest_plot()}} for a
+chart of the numbers -- every estimate with its confidence interval, its significance and its
+colour.
 
+It was the only part of the package needing \pkg{ggpubr}, \pkg{cowplot} and \pkg{gtable}, whose
+dependency trees every user paid for; its display never matched the other backends'.
 }
+\keyword{internal}

@@ -19,3 +19,4 @@ An integer vector
 \description{
 Convert fmt into integer
 }
+\keyword{internal}

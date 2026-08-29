@@ -1,0 +1,40 @@
+// Site-specific CSS, and only that; its JS twin is pkgdown/extra.js (the light default). The THEME
+// -- the dark chrome, the heading ladder, prose and the code colours -- comes from the txtheme
+// package (`template: package:` in _pkgdown.yml); a colour changes in txtheme/R/aaa-palette.R,
+// never here.
+//
+// pkgdown appends the template package's extra.scss BEFORE this file (pkgdown:::bs_theme_rules), so
+// this stays a clean, !important-free lever to override txtheme should the site ever need one. It
+// still loses to the dark syntax theme, which pkgdown adds afterwards: a rule aimed at that needs an
+// `html` prefix to out-specify it.
+
+// pkgdown caps every dropdown at 280px and scrolls the overflow. The Articles menu holds eleven
+// entries plus the "En francais" separator -- a scrollbar in a navigation menu, on every page. Give
+// it the room it needs and keep the cap only for a genuinely short window.
+// WARNING: `MIN` uppercase, and not `min`. libsass has a Sass `min()` of its own and dies on
+//   "Incompatible units: 'rem' and 'vh'" before the CSS function is ever reached; an uppercase name
+//   matches nothing it knows and is passed through, CSS being case-insensitive. pkgdown's own
+//   pkgdown.scss writes `MAX(100%, 20rem)` for the same reason.
+.dropdown-menu {
+  max-height: MIN(80vh, 34rem);
+}
+
+// Air between sections, proportional to the rank of the heading that opens them: a `##` starts a new
+// topic, a `#####` only a paragraph of one. pkgdown states the principle -- "use margins rather than
+// size to distinguish headings" -- but stops at 1.5rem for h2 and 1rem for h3, and gives h4 and
+// below nothing at all, so in a long vignette every level reads alike.
+// Articles only: a reference page is looked up, not read through.
+// NOTE: vertical margins COLLAPSE, so each value below IS the whole gap, never an addition to the
+//   margin of the paragraph above it.
+.template-article main {
+  h2 { margin-top: 4rem; }
+  h3 { margin-top: 2.5rem; }
+  h4 { margin-top: 1.75rem; }
+  h5 { margin-top: 1.25rem; }
+
+  // A sub-section opening its parent is not a new section: no double gap. rmarkdown wraps each
+  // level in its own `div.section`, so the child section is the parent heading's next sibling.
+  h2 + .section > h3,
+  h3 + .section > h4,
+  h4 + .section > h5 { margin-top: 1.25rem; }
+}

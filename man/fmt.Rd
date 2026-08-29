@@ -3,44 +3,13 @@
 \name{fmt}
 \alias{fmt}
 \alias{is_fmt}
-\alias{get_num}
-\alias{set_num}
-\alias{get_type}
-\alias{set_type}
-\alias{is_totrow}
-\alias{as_totrow}
-\alias{is_tottab}
-\alias{as_tottab}
-\alias{set_display}
-\alias{is_totcol}
-\alias{as_totcol}
-\alias{is_refrow}
-\alias{as_refrow}
-\alias{get_comp_all}
-\alias{set_comp_all}
-\alias{get_ref_type}
-\alias{set_diff_type}
-\alias{get_ci_type}
-\alias{set_ci_type}
-\alias{get_col_var}
-\alias{set_col_var}
-\alias{is_refcol}
-\alias{as_refcol}
-\alias{get_color}
-\alias{get_color_bg}
-\alias{get_color_signif}
-\alias{set_color}
-\alias{set_color_signif}
-\alias{get_digits}
-\alias{set_digits}
-\title{Create a vector of class formatted numbers}
+\title{Create an \code{fmt} vector, the tabxplor cell}
 \usage{
 fmt(
   n = integer(),
-  type = "n",
+  scale = "level_n",
   digits = rep(0L, length(n)),
-  display = dplyr::case_when(type == "mean" ~ "mean", type \%in\% c("row", "col", "all",
-    "all_tabs") ~ "pct", TRUE ~ "n"),
+  display = est_default_display(scale[1]),
   wn = rep(NA_real_, length(n)),
   pct = rep(NA_real_, length(n)),
   mean = rep(NA_real_, length(n)),
@@ -54,105 +23,61 @@ fmt(
   pvalue = rep(NA_real_, length(n)),
   or = rep(NA_real_, length(n)),
   tot_n = rep(NA_real_, length(n)),
-  in_totrow = rep(FALSE, length(n)),
+  n_eff = rep(NA_real_, length(n)),
+  obs = rep(NA_real_, length(n)),
+  gap_se = rep(NA_real_, length(n)),
+  row_kind = rep("data", length(n)),
   in_tottab = rep(FALSE, length(n)),
   in_refrow = rep(FALSE, length(n)),
+  in_totrow = NULL,
   comp_all = NA,
   ref = "",
-  ci_type = "",
+  pct_type = "none",
   col_var = "",
+  col_group = "",
   totcol = FALSE,
   refcol = FALSE,
   color = "",
-  color_signif = "ignore"
+  color_signif = "ignore",
+  model_family = "",
+  role = "",
+  conf_level = NA_real_,
+  degf = NA_real_,
+  basis = "n",
+  ci_method = "",
+  ...
 )
 
 is_fmt(x)
-
-get_num(x)
-
-set_num(x, value)
-
-get_type(x, ...)
-
-set_type(x, type)
-
-is_totrow(x, ...)
-
-as_totrow(x, in_totrow = TRUE)
-
-is_tottab(x, ...)
-
-as_tottab(x, in_tottab = TRUE)
-
-set_display(x, value)
-
-is_totcol(x, ...)
-
-as_totcol(x, totcol = TRUE)
-
-is_refrow(x, ...)
-
-as_refrow(x, in_refrow = TRUE)
-
-get_comp_all(x, replace_na = TRUE)
-
-set_comp_all(x, comp_all = FALSE)
-
-get_ref_type(x, ...)
-
-set_diff_type(x, ref)
-
-get_ci_type(x, ...)
-
-set_ci_type(x, ci_type)
-
-get_col_var(x, ...)
-
-set_col_var(x, col_var)
-
-is_refcol(x, ...)
-
-as_refcol(x, refcol = TRUE)
-
-get_color(x, ...)
-
-get_color_bg(x, ...)
-
-get_color_signif(x, ...)
-
-set_color(x, color)
-
-set_color_signif(x, color_signif)
-
-get_digits(x)
-
-set_digits(x, value)
 }
 \arguments{
 \item{n}{The underlying count, as an integer vector of length \code{n()}. It is used
 to calculate confidence intervals.}
 
-\item{type}{The type of the column, which defines the type of background calculation
-to be made (as a single string, since it's not a field but an attribute) :
+\item{scale}{What the column estimates, as a single string (an attribute, not a field): one key
+into the declared library of estimate scales. It says which field holds the estimate, what its
+null value is, whether the scale is additive or multiplicative, and which colour ladder it reads.
 \itemize{
-\item \code{"n"}: counts
-\item \code{"mean"}: mean column (from numeric variables)
-\item \code{"row"}: row percentages
-\item \code{"col"}: column percentages
-\item \code{"all"}: frequencies by subtable/group (i.e. by \code{tab_vars})
-\item \code{"all_tabs"}: frequencies for the whole table
+\item \code{"level_n"}: counts
+\item \code{"level_pct"}: percentages (\code{pct_type} says of what)
+\item \code{"level_mean"}: means (from numeric variables)
+\item \code{"points"}: a difference between two percentages, in percentage points
+\item \code{"mean_diff"}: a difference between two means, in the outcome's own units
+\item \code{"raw_diff"}: a regression coefficient / marginal effect in the outcome's units
+\item \code{"pct_ratio"}, \code{"mean_ratio"}: the ratio of two percentages / two means
+\item \code{"odds_ratio"}: a multiplicative effect (odds ratio, risk ratio, rate ratio)
+\item \code{"log_coef"}: a link-scale coefficient (a log-odds, a log-rate)
+\item \code{"mixed"}: what binding columns of unlike scales collapses to
 }}
 
 \item{digits}{The number of digits, as an integer, or an integer vector the length
 of \code{n}.}
 
 \item{display}{The display type : the name of the field you want to show when printing
-the vector. Among \code{"n"}, \code{"wn"}, \code{"pct"}, \code{"diff"}, \code{"ctr"},
-\code{"mean"}, \code{"var"}, \code{"ci"},
-\code{"pct_ci"} (percentages with visible confidence interval),
-\code{"mean_ci"} (means with visible confidence interval). As a single string, or a
-character vector the length of \code{n}.}
+the vector, as a single string or a character vector the length of \code{n}. Every accepted
+value is listed in \emph{Every display token} below; a named layout or a \code{\{\}} template
+combining several (e.g. \code{"\{pct\} (n=\{n\})"}) is also accepted --- see
+\link{tabxplor-display}.}
 
 \item{wn}{The underlying weighted counts, as a double vector the length of
 \code{n}. It is used in certain operations on \code{\link{fmt}}, like means.}
@@ -164,29 +89,28 @@ Calculate with \code{\link{tab_pct}}.}
 
 \item{diff}{The differences (from totals or first cells),
 as a double vector the length of \code{n}. Used to set colors for means and
-row or col percentages. Calculate with \code{\link{tab_pct}}.}
+row or col percentages. Built by \code{\link{tab}}.}
 
 \item{ratio}{The ratio to the reference (relative risk for percentages, mean ratio for
-means), as a double vector the length of \code{n}. Renamed from the former \code{rr}
-field.}
+means), as a double vector the length of \code{n}.}
 
 \item{ctr}{The contributions of cells to (sub)tables variances,
 as a double vector the length of \code{n}. Used to print colors when
 \code{color = "contrib"}. The mean contribution of each (sub)table is written on
 total rows (then, colors don't print well without total rows).
-Calculate with \code{\link{tab_chi2}}.}
+Built by \code{\link{tab}}. The cell's adjusted standardized residual is not a
+field of its own: it is recovered from \code{pvalue} and this field's sign, and readable with
+\code{display = "resid"} (see \code{\link{tab}}).}
 
 \item{var}{The cells variances, as a double vector the length of \code{n}.
-Used with \code{type = "mean"} to calculate confidence intervals.
-Calculate with \code{tab_plain}.}
+Used with \code{scale = "level_mean"} to calculate confidence intervals.}
 
 \item{ci}{The confidence interval half-width (margin of error), as a double vector the
 length of \code{n}. Kept for backward compatibility: it is stored as the symmetric
-bounds \code{ci_inf}/\code{ci_sup} and read back by \code{get_ci()}.
-Calculate with \code{tab_ci}.}
+bounds \code{ci_inf}/\code{ci_sup} and read back by \code{get_ci()}.}
 
 \item{ci_inf, ci_sup}{The lower and upper bounds of the confidence interval, as double
-vectors the length of \code{n}. Calculate with \code{tab_ci}.}
+vectors the length of \code{n}. Built by \code{\link{tab}}.}
 
 \item{pvalue}{The per-cell significance p-value, as a double vector the length of
 \code{n}.}
@@ -197,117 +121,134 @@ as a double vector the length of \code{n}.}
 \item{tot_n}{The cell's own (unweighted) percentage base, as a double vector the length
 of \code{n}.}
 
-\item{in_totrow}{\code{TRUE} when the cell is part of a total row}
+\item{n_eff}{The effective sample size used for this cell's confidence interval,
+\code{p(1-p) / Var_design(p)} (a mean: \code{s^2 / Var_design(mean)}): from
+\code{survey::svyrecvar} under a \code{survey::svydesign}, from the closed-form flat-design
+variance when the weighted basis is asked for (\code{tab(design_effect = TRUE)}), else \code{NA}
+(the CI falls back to the raw unweighted base). It records \emph{the base that was used}: a finite
+value where the design or weights corrected it, \code{NA} where nothing did, and the \strong{raw
+count} where a correction was asked for but this cell could not carry one. Populated for
+descriptive cells (a crosstab/mean cell, a \code{tab_reg} \code{Obs_*} column whose interval came
+from a closed form); a coefficient column, and any column whose interval came from a fit instead,
+carry none. A double vector the length of \code{n}. Non-displayed.}
+
+\item{obs}{The value this cell's estimate is COMPARED TO by the \code{tab_reg} colour measures
+\code{"adjustment"} / \code{"between_groups"}, on the cell's own scale: the observed (crude)
+effect beside a model effect, or -- under \code{tab_vars} with \code{color = "between_groups"} --
+the reference group's estimate. \code{NA} on cross-tables and wherever there is no counterpart
+(leaving those cells uncoloured). A double vector the length of \code{n}; displayable as
+\code{display = "\{obs\}"}.}
+
+\item{gap_se}{The standard error of the GAP between this cell's estimate and \code{obs}, on the
+estimate's own test scale. Written by \code{tab_reg} where the two estimates are independent
+(\code{tab_vars} groups), so \code{color = "between_groups"} can honour \code{color_signif};
+\code{NA} elsewhere. A double vector the length of \code{n}. Non-displayed.}
+
+\item{row_kind}{What kind of row the cell sits in --- one of \code{"data"} (an ordinary body row),
+\code{"total"}, and the synthetic display rows \code{"n"}, \code{"pct"}, \code{"pvalue"},
+\code{"gof"}, \code{"blank"}. A character vector the length of \code{n}. It supersedes the logical
+\code{in_totrow} field, kept as a soft-deprecated argument and read-only \code{$in_totrow}.}
 
 \item{in_tottab}{\code{TRUE} when the cell is part of a total table}
 
 \item{in_refrow}{\code{TRUE} when the cell is part of a reference row
 (cf. \code{ref})}
 
+\item{in_totrow}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use \code{row_kind = "total"}.}
+
 \item{comp_all}{\code{FALSE} when the comparison level is the subtable/group,
 \code{TRUE} when it is the whole table}
 
 \item{ref}{The type of difference of the vector. Cf. \code{\link{tab}}.}
 
-\item{ci_type}{The type of confidence intervals of the vector (calculate
-with \code{\link{tab_ci}}) :
-\itemize{
-\item \code{""} or \code{"no"}: no ci have been calculated
-\item \code{"cell"}: absolute confidence intervals of cells percentages.
-\item \code{"diff"}: confidence intervals of the difference between a cell and the
-relative total cell (or relative first cell when \code{ref = "first"}).
-\item \code{"auto"}: \code{"diff"} for means and row/col percentages,
-\code{"cell"} for frequencies ("all", "all_tabs").
-}}
+\item{pct_type}{For a percentage column, what the percentage is a percentage OF, and hence which
+axis its reference lies on (as a single string): \code{"row"}, \code{"col"}, \code{"all"}
+(frequencies by subtable / group, i.e. by \code{tab_vars}), \code{"all_tabs"} (frequencies for
+the whole table), or \code{"none"} (counts, means, coefficients).}
 
 \item{col_var}{The name of the \code{col_var} used to calculate the vector}
+
+\item{col_group}{The sub-population this column's block belongs to: a level of a
+\code{spread_vars} variable (\code{\link{tab_spread}}), or a \code{\link{tab_reg}}
+\code{tab_vars} group. \code{""} (the default) when the table was never spread. Together with
+\code{col_var} it identifies a column BLOCK: two blocks may show the same variable for two
+sub-populations, and exports head them on two lines.}
 
 \item{totcol}{\code{TRUE} when the vector is a total column}
 
 \item{refcol}{\code{TRUE} when the vector is a reference column}
 
-\item{color}{The type of color to print :
+\item{color}{The colour measure, as a single string --- how a cell's value is compared to colour
+it (significance is handled separately by \code{color_signif}):
 \itemize{
 \item \code{"no"}: no colors are printed.
-\item \code{"diff"}: color percentages and means based on cells differences from
-totals (or from first cells when \code{ref = "first"}).
-\item \code{"diff_ci"}: color pct and means based on cells differences from totals
-or first cells, removing coloring when the confidence interval of this difference
-is higher than the difference itself.
-\item \code{"after_ci"}: idem, but cut off the confidence interval from the
-difference first.
-\item \code{"contrib"}: color cells based on their contribution to variance
-(except mean columns, from numeric variables).
-}}
+\item \code{"diff"} (\code{"difference"}): the cell's difference from the reference (a total, or
+the first cell when \code{ref = "first"}) --- percentage points for factors, a standardized
+difference for means.
+\item \code{"ratio"}: the ratio to the reference (relative risk for percentages, mean ratio).
+\item \code{"or"} (\code{"odds_ratio"}): the odds ratio, for row/col percentages.
+\item \code{"contrib"}: the cell's contribution to the table's variance. Under
+\code{color_signif = "guaranteed_effect"} it switches to the absolute adjusted standardized
+residual --- see \code{\link{tab}}.
+\item \code{"adjustment"} / \code{"between_groups"}: the two \code{\link{tab_reg}} measures,
+which compare a cell to \emph{another column} rather than to a reference row. A hand-built
+column may carry them, provided it fills the \code{obs} field they score.
+}
+The value is \strong{validated and normalised}: every accepted spelling --- the discipline's
+acronyms included (\code{"RD"}, \code{"RR"}, \code{"IRR"}, \code{"RoM"}, \code{"OR"} and their
+lowercase twins) --- is stored as its canonical measure name, and an unknown one is an error.
+The tabxplor 1.x combined strings \code{"diff_ci"} / \code{"after_ci"} still work but are
+superseded by the \code{color} + \code{color_signif} pair; here they resolve to their
+\emph{measure} half only, so pass the significance policy through \code{color_signif}.}
 
 \item{color_signif}{How significance gates the color, as a single string
 (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"}). See \code{\link{tab}}.}
 
+\item{model_family}{For regression tables (\code{\link{tab_reg}}): the column's model family
+(\code{"binomial"}, \code{"gaussian"}, \code{"poisson"}, \code{"multinomial"}, \code{"ordinal"}),
+as a single string. Empty (\code{""}) on cross-tables. Lets a table mix several outcomes with
+different families, each column keeping its own effect wording.}
+
+\item{role}{For regression tables (\code{\link{tab_reg}}): the column's role, \code{"model"} for a
+model-estimate column or \code{"emp"} for an empirical (crude) companion column. Empty (\code{""})
+on cross-tables. Read by the colour legend to name each column's effect without matching its label.}
+
+\item{conf_level}{The confidence level this column's interval and thresholds were computed at, as
+a single number in (0, 1). \code{NA} (default) means "unknown" --- the colour engine then falls
+back to \code{options("tabxplor.conf_level")}. Stored per COLUMN, because colours are resolved per
+column at print time and cannot see the table's \code{conf_level} argument.}
+
+\item{degf}{The degrees of freedom this column's interval is referred to. On a cross-table that is
+the survey design's \code{#PSU - #strata}, which matters below ~30 primary sampling units; on a
+regression it is the fitted model's own residual df (for an \code{svyglm}, \code{degf + 1 - p}),
+so a model column and its observed companion legitimately differ. \code{NA} (default) means
+"refer to the normal quantile".}
+
+\item{basis}{How this column's interval and significance were computed --- \code{"n"} (the raw
+sample size), \code{"weights"} (the design effect of the weights), \code{"design"} (a full
+\code{survey} design), or \code{"design_partial"} (a design was given but its variance could not
+be computed). Default \code{"n"}. A per-COLUMN fact, so a table states honestly what its numbers
+carry even after a pipeline drops the table's metadata; binding columns keeps the WEAKEST basis.}
+
+\item{ci_method}{Which interval ENGINE built this column's bounds --- \code{"wilson"},
+\code{"wald"}, \code{"beta"} (a cell proportion), \code{"newcombe"}, \code{"ac"} (a difference of
+proportions), \code{"katz"} (a ratio of proportions), \code{"welch"}, \code{"student"},
+\code{"ols"} (a difference of means), \code{"robust"}, \code{"quasipoisson"}, \code{"poisson"} (a ratio of
+means), \code{"woolf"}, \code{"wald_log"}, \code{"profile"}; \code{""} (default) when the column
+carries no interval. Read back by the colour legend, so it always names the method the bounds were
+built with.}
+
+\item{...}{In \code{fmt()}, it exists only for the arguments retired in tabxplor 2.0.0:
+\code{type} is translated into \code{scale} + \code{pct_type} (see
+\code{\link{tabxplor-type}}), \code{ci_type} gets an error naming its replacement. In the
+accessor methods below, to add arguments in the future.}
+
 \item{x}{The object to test, to get a field in, or to modify.}
-
-\item{value}{The value you want to inject in some \code{fmt} vector's vctrs::field
-or attribute using a given "set" function.}
-
-\item{...}{Used in methods to add arguments in the future.}
-
-\item{replace_na}{By default, \code{\link{get_comp_all}} takes NA in comparison level
-to be a \code{FALSE} (=comparison at subtables/groups level). Set to \code{FALSE}
-to avoid this behavior.}
 }
 \value{
 A vector of class \code{tabxplor_fmt}.
 
 A logical vector.
-
-A double vector.
-
-A modified fmt vector.
-
-A character vector with the vectors type.
-
-A modified fmt vector.
-
-A logical vector with the fmt vectors totrow field.
-
-A modified fmt vector with totrow field changed.
-
-A logical vector with the fmt vectors tottab field.
-
-A modified fmt vector with tottab field changed.
-
-The entered objects, with all fmt vectors with the wanted display.
-
-A logical vector with the fmt vectors totcol attribute.
-
-A modified fmt vector with totcol attribute changed.
-
-A logical vector with the fmt vectors in_refrow field
-
-A modified fmt vector with in_refrom field changed.
-
-A modified fmt vector with comp attribute changed.
-
-A logical vector with the fmt vectors type attributes
-
-A modified fmt vector.
-
-A logical vector with the fmt vectors ci_type attributes
-
-A modified fmt vector.
-
-A logical vector with the fmt vectors col_var attributes
-
-A modified fmt vector.
-
-A logical vector with the fmt vectors is_refcol attributes
-
-A modified fmt vector.
-
-A logical vector with the fmt vectors color attributes
-
-A single character with the background color measure, or \code{NA}.
-
-A modified fmt vector.
 }
 \description{
 \code{fmt} vectors, of class \code{tabxplor_fmt}, powers \pkg{tabxplor}
@@ -316,14 +257,10 @@ As a \code{\link[vctrs:new_rcrd]{record}}, they stores all data necessary to
 calculate percentages, Chi2 metadata or confidence intervals, but also to format and
 color the table to help the user read it. You can access this data with
 \code{\link[vctrs:field]{vctrs::field}}, or change it with
-\code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 18 fields :
-\code{n}, \code{digits}, \code{display}, \code{wn}, \code{pct}, \code{mean},
-\code{diff}, \code{ratio}, \code{ctr}, \code{var}, \code{ci_inf}, \code{ci_sup},
-\code{pvalue}, \code{or}, \code{tot_n},
-\code{in_totrow},  \code{in_tottab},
-\code{in_refrow}. Other arguments are attributes, attached not to each value, but to
-the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get them
-with \code{\link[base:attr]{attr}} and modify them with
+\code{\link[vctrs:field]{vctrs:field<-}}. Its per-cell \strong{fields} are listed below.
+The other arguments are \strong{attributes}, attached not to each value but to
+the whole vector, like \code{scale}, \code{col_var}, \code{totcol} or \code{color}. You can get
+them with \code{\link[base:attr]{attr}} and modify them with
 \code{\link[base:attr]{attr<-}}. Special functions listed below are made to
 facilitate programming with with \pkg{tabxplor} formatted numbers.
 \code{taxplfmt} vectors can use all standard operations, like +, -, sum(), or c(),
@@ -333,76 +270,68 @@ using \pkg{vctrs}.
 \itemize{
 \item \code{is_fmt()}: a test function for class fmt.
 
-\item \code{get_num()}: get the currently displayed field
-
-\item \code{set_num()}: set the currently displayed field (not changing display type)
-
-\item \code{get_type()}: get types of fmt columns (at \code{fmt} level or \code{tab} level)
-
-\item \code{set_type()}: set the column type attribute of a \code{fmt} vector
-
-\item \code{is_totrow()}: test function to detect cells in total rows
-(at \code{fmt} level or \code{tab} level)
-
-\item \code{as_totrow()}: set the "in_totrow" field (belong to total row)
-
-\item \code{is_tottab()}: test function to detect cells in total tables
-(at \code{fmt} level or \code{tab} level)
-
-\item \code{as_tottab()}: set the "in_tottab" field (belong to total table)
-
-\item \code{set_display()}: set the "display" vctrs::field of a \code{fmt} vector, or of
-all of them in the whole tibble.
-
-\item \code{is_totcol()}: test function for total columns
-(at \code{fmt} level or \code{tab} level)
-
-\item \code{as_totcol()}: set the "totcol" attribute of a \code{fmt} vector
-
-\item \code{is_refrow()}: test function to detect cells in reference rows
-(at \code{fmt} level or \code{tab} level)
-
-\item \code{as_refrow()}: set the "in_refrow" field (belong to reference row)
-
-\item \code{get_comp_all()}: get comparison level of fmt columns
-
-\item \code{set_comp_all()}: set the comparison level attribute of a \code{fmt} vector
-
-\item \code{get_ref_type()}: get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
-
-\item \code{set_diff_type()}: set the differences type attribute of a \code{fmt} vector
-
-\item \code{get_ci_type()}: get confidence intervals type of fmt columns (at \code{fmt} level or \code{tab} level)
-
-\item \code{set_ci_type()}: set the confidence intervals type attribute of a \code{fmt} vector
-
-\item \code{get_col_var()}: get names of column variable of fmt columns (at \code{fmt} level or \code{tab} level)
-
-\item \code{set_col_var()}: set the "col_var" attribute of a \code{fmt} vector
-
-\item \code{is_refcol()}: test function for reference columns (at \code{fmt} level or \code{tab} level)
-
-\item \code{as_refcol()}: set the "ref_col" attribute of a \code{fmt} vector
-
-\item \code{get_color()}: get color (at \code{fmt} level or \code{tab} level)
-
-\item \code{get_color_bg()}: get the background-channel color measure (\code{NA} when there is none)
-
-\item \code{get_color_signif()}: get the significance policy (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"})
-
-\item \code{set_color()}: set the "color" attribute of a \code{fmt} vector
-
-\item \code{set_color_signif()}: set the significance policy attribute of a \code{fmt} vector
-
-\item \code{get_digits()}: get the "digits" field
-
-\item \code{set_digits()}: set the "digits" field
-
 }}
+\section{The fields of a cell}{
+
+A \code{fmt} cell carries 21 fields. Many are \code{NA} when the quantity was not requested; read one with \code{x$field} or
+\code{\link[vctrs:field]{vctrs::field()}}, and see them all with
+\code{\link[vctrs:vec_data]{vctrs::vec_data()}}:
+\itemize{
+\item \code{n} --- the unweighted count.
+\item \code{display} --- which field this cell shows (a bare name, or a \code{{}} template).
+\item \code{digits} --- how many decimals this cell prints.
+\item \code{wn} --- the weighted count.
+\item \code{pct} --- the percentage.
+\item \code{mean} --- the mean, on a numeric column variable.
+\item \code{diff} --- the difference from the reference cell (percentage points, or the outcome's own units).
+\item \code{ratio} --- the ratio to the reference cell (a relative risk, or a ratio of means).
+\item \code{ctr} --- the cell's contribution to the table's Chi-2.
+\item \code{var} --- the column's variance quantity -- which one is given by its \code{scale}.
+\item \code{ci_inf} --- the lower bound of the confidence interval.
+\item \code{ci_sup} --- the upper bound of the confidence interval.
+\item \code{pvalue} --- the cell's own significance p-value, which the stars read.
+\item \code{or} --- the odds ratio against the \code{ref2} level.
+\item \code{tot_n} --- the cell's own base --- the count its percentage is computed on.
+\item \code{n_eff} --- the effective sample size its interval was computed on (weights or a survey design).
+\item \code{obs} --- \code{tab_reg()} only: the observed (crude) effect the modelled one is compared to.
+\item \code{gap_se} --- \code{tab_reg()} only: the standard error of the gap between the estimate and \code{obs}.
+\item \code{row_kind} --- what kind of row the cell sits in --- see \code{\link[=get_row_kind]{get_row_kind()}}.
+\item \code{in_tottab} --- is the cell in a total table (logical).
+\item \code{in_refrow} --- is the cell in a reference row (logical).
+}
+}
+
+\section{Every display token}{
+
+Generated from the package's own display table, so it cannot drift from what
+\code{get_num()} reads. Each of
+\code{pct}, \code{n}, \code{wn}, \code{mean}, \code{diff}, \code{ratio}, \code{or}, \code{ctr}, \code{var}, \code{obs}, \code{pvalue} shows the field of the same
+name, described above. The rest are composed or derived by the pipeline itself, and
+the last few are not meant to be typed:
+\itemize{
+\item \code{est} --- the estimate, whatever this column estimates --- an odds ratio, a risk difference, a coefficient, a percentage. The one token that means the same thing on every table.
+\item \code{base} --- the level the estimate sits on: the percentage, the mean or the count. On a plain percentage table it is the same number as \code{est}; beside a regression effect it is the adjusted prediction.
+\item \code{ci} --- the confidence interval of whatever the column compares, as \code{[low;high]}.
+\item \code{moe} --- the margin of error --- the same interval as \code{ci}, written as the half-width \code{+/-x} around the estimate. Void where the column compares a RATIO: a ratio's interval is symmetric on the LOG scale, so it has no half-width.
+\item \code{sd} --- the standard deviation, in the variable's own unit.
+\item \code{cv} --- the coefficient of variation --- the standard deviation as a percentage of the mean.
+\item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only.
+\item \code{coef} --- the estimate on the model's LINK scale --- the coefficient a linear or log-link model fitted. The same number as \code{est} where the column is already additive, its logarithm where the column shows a ratio.
+\item \code{gap} --- how far adjustment moved the effect: the gap between the modelled estimate and its observed counterpart, on the estimate's own scale. What \code{color = "adjustment"} grades --- readable in print and Excel, not only in an html tooltip.
+\item \code{gof} --- a model-fit statistic (N, R2, AIC, BIC, dispersion).
+\item \code{gof_warn} --- a model-fit statistic past the threshold its check is read against.
+\item \code{n_range} --- the unweighted base: one count, or a \code{min-max} range over the table.
+\item \code{blank} --- nothing: a cell masked by \code{n_min}.
+\item \code{rr} --- the legacy synonym of \code{ratio}, still accepted.
+\item \code{OR} --- the acronym spelling of \code{or}, still accepted.
+}
+}
+
 \examples{
 library(dplyr)
 
-f <- fmt(n = c(7, 19, 2), type = "row", pct = c(0.25, 0.679, 0.07))
+f <- fmt(n = c(7, 19, 2), pct = c(0.25, 0.679, 0.07),
+         scale = "level_pct", pct_type = "row")
 f
 
 # To get the currently displayed field :
@@ -436,8 +365,8 @@ mutate(f, pct = c(1, 0, 0))
 # See all the attributes of a fmt vector :
 attributes(f)
 
-# To modify the "type" attribute of a fmt vector :
-set_type(f, "col")
+# To modify the "pct_type" attribute of a fmt vector (what the percentage is a percentage OF) :
+set_pct_type(f, "col")
 
 # To modify the "color" attribute of a fmt vector :
 set_color(f, "contrib")
@@ -450,11 +379,11 @@ tabs <- tab(starwars, sex, hair_color, gender, na = "drop", pct = "row",
 
 # To identify the total columns, and work with them :
 is_totcol(tabs)
-tabs \%>\% mutate(across(where(is_totcol), ~ "total column"))
+tabs |> mutate(across(where(is_totcol), ~ "total column"))
 
 # To identify the total rows, and work with them :
 is_totrow(tabs)
-tabs \%>\%
+tabs |>
   mutate(across(
     where(is_fmt),
     ~ if_else(is_totrow(.), true = "into_total_row", false = "normal_cell")
@@ -462,23 +391,24 @@ tabs \%>\%
 
 # To identify the total tables, and work with them :
 tottabs <- is_tottab(tabs)
-tabs \%>\% tibble::add_column(tottabs) \%>\%
+tabs |> tibble::add_column(tottabs) |>
   mutate(total = if_else(tottabs, "part of a total table", "normal cell"))
 
 # To access the displayed numbers, as numeric vectors :
-tabs \%>\% mutate(across(where(is_fmt), get_num))
+tabs |> mutate(across(where(is_fmt), get_num))
 
 # To access the displayed numbers, as character vectors (without colors) :
-tabs \%>\% mutate(across(where(is_fmt), format))
+tabs |> mutate(across(where(is_fmt), format))
 
 # To access the (non-displayed) differences of the cells percentages from totals :
-tabs \%>\% mutate(across(where(is_fmt), ~ vctrs::field(., "diff")))
+tabs |> mutate(across(where(is_fmt), ~ vctrs::field(., "diff")))
 
 
 # To do more complex operations, like creating a new column with standard deviation and
 # print it with 2 decimals, use `dplyr::mutate` on all the fmt columns of a table :
 
-tab_num(forcats::gss_cat, race, c(age, tvhours), marital, digits = 1L, comp = "all") |>
+tab(forcats::gss_cat, race, c(age, tvhours), marital, digits = 1L, comp = "all",
+    color = "auto") |>
   dplyr::mutate(dplyr::across( #Mutate over the whole table.
     c(age, tvhours),
     ~ dplyr::mutate(.,         #Mutate over each fmt vector's underlying data.frame.
@@ -488,4 +418,8 @@ tab_num(forcats::gss_cat, race, c(age, tvhours), marital, digits = 1L, comp = "a
       set_color("no"),
     .names = "{.col}_sd"
   ))
+}
+\seealso{
+\link{tabxplor-display} for the \code{\{\}} grammar and the named layouts \code{display}
+accepts; \link{fmt_fields} and \link{fmt_attributes} for the accessors.
 }

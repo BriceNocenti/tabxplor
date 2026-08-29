@@ -13,8 +13,8 @@
 #     (Step 1) is defined so the DEFAULTS are equivalent, hence locked modes reproduce.
 #   - The synthetic factor-"diff" case exercises cells sitting EXACTLY on breaks (0.05/0.1/0.2/
 #     0.3 and the x2 ratio) -- the tie behaviour that risk R1 (fold + findInterval, left.open)
-#     must reproduce byte-for-byte. Factor "diff" is the LOCKED tripwire Phase 5 must not move.
-# See: CLAUDE.md > 1.4.0 roadmap > Phase 5 ; dev/new_colors_UI.md §13 (Step 0).
+#     must reproduce byte-for-byte. Factor "diff" is the LOCKED tripwire: it must not move.
+# See: CLAUDE.md > tabxplor architecture (the colour system) ; dev/colors.md.
 
 # The render combinations that cover all four palettes (Phase 13a): text / background x light / dark.
 # type/theme are passed explicitly to fmt_get_color_code so the capture does not depend on the
@@ -69,23 +69,22 @@ color_golden_syn_diff_fmt <- function() {
   # resolves to a real base without erroring.
   fmt(
     n         = c(n, 200L),
-    type      = "row",
+    scale = "level_pct", pct_type = "row",
     pct       = c(pct, 0.40),
     diff      = c(diff, 0),
     mean      = c(ratio, 1),   # legacy x2 overload (current engine reads get_mean)
-    ratio     = c(ratio, 1),   # Phase-5 engine reads get_ratio for the x2
-    ci_type   = "",
+    ratio     = c(ratio, 1),   # Phase-5 engine reads get_ratio for the x2,
     ref       = "tot",
     comp_all  = FALSE,
     color     = "diff",
-    in_totrow = c(rep(FALSE, length(diff)), TRUE)
+    row_kind = c(rep("data", length(diff)), "total")
   )
 }
 
 # Named list of zero-arg thunks, each returning a CAPTURE (nested list of hex vectors). Names
 # are the fixture basenames written to _color_golden/<name>.rds.
 color_golden_cases <- function() {
-  gss <- forcats::gss_cat
+  gss <- fx_gss()
 
   list(
     # --- synthetic tie lock (LOCKED: factor "diff" must stay byte-identical) ---
@@ -97,11 +96,11 @@ color_golden_cases <- function() {
     # c_diff_ci / c_after_ci / c_ci lock the soft-deprecated combined color strings; wrap the
     # build in suppressWarnings() so the deprecation nudge stays out of the captured output.
     c_diff_ci        = function() color_golden_capture_tab(suppressWarnings(
-      tab(gss, marital, race, pct = "row", ci = "diff", color = "diff_ci"))),
+      tab(gss, marital, race, pct = "row", ci = "ref", color = "diff_ci"))),
     c_after_ci       = function() color_golden_capture_tab(suppressWarnings(
-      tab(gss, marital, race, pct = "row", ci = "diff", color = "after_ci"))),
+      tab(gss, marital, race, pct = "row", ci = "ref", color = "after_ci"))),
     c_ci             = function() color_golden_capture_tab(suppressWarnings(
-      tab(gss, marital, race, pct = "row", ci = "diff", color = "ci"))),
+      tab(gss, marital, race, pct = "row", ci = "ref", color = "ci"))),
     c_contrib        = function() color_golden_capture_tab(
       tab(gss, marital, race, pct = "row", color = "contrib")),
     # contrib + comp = "all": the whole-table mean-contribution colour. WITH tab_vars the seed lives
@@ -111,17 +110,39 @@ color_golden_cases <- function() {
       tab(gss, marital, race, tab_vars = year, pct = "row", color = "contrib", comp = "all"))),
     c_contrib_all_notab = function() color_golden_capture_tab(suppressWarnings(
       tab(gss, marital, race, pct = "row", color = "contrib", comp = "all"))),
+    # Phase 18z4: the two SIGNIFICANCE-GATED contrib readings, previously uncovered here (all three
+    # cases above use the default color_signif = "ignore", which is why they stayed byte-identical
+    # through z4). `grey_non_signif` keeps the relative-contribution scale and gates on the adjusted
+    # standardized residual; `guaranteed_effect` colours that residual itself, on the absolute
+    # `zscore` scale -- a genuinely different per-cell hex map, worth locking.
+    c_contrib_grey   = function() color_golden_capture_tab(
+      tab(gss, marital, race, pct = "row", color = "contrib", color_signif = "grey_non_signif")),
+    c_contrib_guar   = function() color_golden_capture_tab(
+      tab(gss, marital, race, pct = "row", color = "contrib", color_signif = "guaranteed_effect")),
+    # Phase 18z16-iv (W-B): the WEIGHTED gated contrib, previously UNCOVERED here -- there was no
+    # weighted colour fixture at all, which is exactly why the residual could ignore the sample design
+    # for a whole release. `tvhours` is gss_cat's own numeric column, so the case stays deterministic
+    # with no synthetic weight; the option makes the residual take the n/delta-bar base.
+    c_contrib_wt_grey = function() color_golden_capture_tab(withr::with_options(
+      list(tabxplor.design_effect = TRUE),
+      tab(gss[!is.na(gss$tvhours) & gss$tvhours > 0, ], marital, race, wt = tvhours,
+          pct = "row", color = "contrib", color_signif = "grey_non_signif"))),
     c_or             = function() color_golden_capture_tab(
-      tab(gss, marital, race, pct = "col", OR = "OR", color = "OR")),
+      tab(gss, marital, race, pct = "col", display = "{or}", ref = "first", color = "OR")),
 
-    # --- numeric / mean modes (CONSCIOUSLY REGENERATED at Step 3: diff -> Glass's delta) ---
+    # --- numeric / mean modes (CONSCIOUSLY REGENERATED at Step 3: diff -> Glass's delta;
+    #     and again at Phase 19i: the two composite-colour cases below stored `color_signif =
+    #     "ignore"` where tab() stored "grey_non_signif" for the SAME request. tab_num() handed
+    #     resolve_leaf_ci() the RAW `color_signif` argument instead of the DECODED `color_spec$signif`,
+    #     and its `if (signif_on) ... else "ignore"` then overwrote the policy the composite carried.
+    #     The two producers now agree cell for cell -- see test-arg-boundary.R.) ---
     c_mean_diff      = function() color_golden_capture_tab(
       tab_num(gss, race, c(age, tvhours), comp = "all", color = "diff", digits = 1L)),
     c_mean_diff_ci   = function() color_golden_capture_tab(suppressWarnings(
-      tab_num(gss, race, c(age, tvhours), comp = "all", ci = "cell",
+      tab_num(gss, race, c(age, tvhours), comp = "all", ci = "ref",
               color = "diff_ci", digits = 1L))),
     c_mean_after_ci  = function() color_golden_capture_tab(suppressWarnings(
-      tab_num(gss, race, c(age, tvhours), comp = "all", ci = "cell",
+      tab_num(gss, race, c(age, tvhours), comp = "all", ci = "ref",
               color = "after_ci", digits = 1L)))
   )
 }

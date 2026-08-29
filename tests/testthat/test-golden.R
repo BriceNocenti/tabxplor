@@ -1,7 +1,7 @@
 # PURPOSE: Characterization guardrail. Locks the CURRENT output of tab()/tab_num()/tab_many()
 #          across an argument matrix, so ambitious internal refactors reproduce it exactly
 #          unless a change is deliberately accepted (and the fixtures regenerated).
-# ROLE: Core retro-compatibility net for tabxplor 1.4.0.
+# ROLE: Core retro-compatibility net for tabxplor 2.0.0.
 # KEY CONSTRAINTS:
 #   - Structural fixtures live in tests/testthat/_golden/*.rds, produced by dev/make_golden.R.
 #   - Display snapshots (tab_md) live in tests/testthat/_snaps/golden.md.
@@ -10,7 +10,7 @@
 # See: helper-golden.R (the shared case matrix) and CLAUDE.md golden regeneration protocol.
 #
 # ===========================================================================================
-# TRIPWIRE LEDGER -- which 1.4.0 phase consciously regenerates which fixture, and why. On the
+# TRIPWIRE LEDGER -- which 2.0.0 phase consciously regenerates which fixture, and why. On the
 # current baseline every fixture below is GREEN; these are the DELIBERATE future changes to
 # review at regen time (not bugs). [display] = also has a tab_md snapshot in _snaps/golden.md.
 #
@@ -46,8 +46,8 @@
 #   f_ci_cell       -> DONE Phase 3a (ci half-width -> asymmetric Wilson ci_inf/ci_sup; cell CI
 #                      also drawn on the total column, per decisions §1) [display]
 #   f_ci_diff       -> DONE Phase 3a (AC -> Newcombe default interval + universal-inclusion stars) [display]
-#   f_or            -> Phase 10/tab_logit (rr->ratio done in 1a; empirical log-OR Wald pvalue + 1/OR
-#                      display deferred to the tab_logit phase, NOT 3b)
+#   f_or            -> Phase 10/regression (rr->ratio done in 1a; empirical log-OR Wald pvalue +
+#                      1/OR display deferred to the regression phase, NOT 3b)
 #   f_chi2/f_subtab -> Phase 3b (table attribute chi2 -> test; chi2 pvalue field populated)
 #   f_color_afterci -> DONE Phase 3a (after_ci reads the real CI bounds via get_ci upper arm) [struct]
 #   f_color_contrib -> Phase 5 (contrib mode reworked in the diff/ratio color overhaul)
@@ -83,6 +83,32 @@
 #                      to an in-cell `{pct} (n={n})` composite on the Total column (decision 1). All
 #                      of this is materialised byte-identically at EXPORT (proven: build+materialize
 #                      == the pre-Increment-2 built table), so tab_xl / export-parity are unchanged.
+#
+# Phase 18s (Kish n_eff -> all descriptive CIs): adds a 19th per-cell field `n_eff` (the
+#   effective sample size used for a cell's CI). This changes the vctrs RECORD SHAPE, so ALL
+#   *.rds are regenerated once + the fmt-contract snapshot; the ONLY per-cell delta is the added
+#   all-NA `n_eff` column (kish is OFF by default, so the field is NA and tab_ci coalesces to the
+#   raw base -> CI bounds byte-identical). The DISPLAY _snaps are UNTOUCHED (n_eff is non-displayed).
+# Phase 18z5 (the `adjustment` colour measure): adds a 20th per-cell field `obs` -- the value a
+#   tab_reg cell's estimate is COMPARED TO (its observed/crude counterpart, or a reference group's).
+#   Same shape of change as n_eff above: the RECORD moves, so all *.rds are regenerated once + the
+#   fmt-contract snapshot, and a script proved the only delta is the added all-NA column (a
+#   cross-table never fills `obs`). The DISPLAY _snaps are UNTOUCHED -- `obs` renders only through
+#   an explicit `display = "{obs}"` and a tooltip fragment gated on a non-NA value.
+# Phase 18z8 (the gap's significance test): adds a 21st per-cell field `gap_se` -- the standard
+#   error of the estimate-vs-`obs` gap. Same shape again: all *.rds regenerated once + the
+#   fmt-contract snapshot, with dev/verify_golden_field_delta.R (now committed, instead of rewritten
+#   each phase) proving over 1787 cells that the added all-NA column is the only delta. The DISPLAY
+#   _snaps are UNTOUCHED: `gap_se` is non-displayed (no token), and it can only be non-NA on a
+#   tab_reg split table, which no golden case builds.
+# Phase 18z13 (D3): adds a 12th per-column ATTRIBUTE `conf_level` -- the level a column's interval
+#   and its significance thresholds were computed at, so the per-column colour engine stops falling
+#   back to the global option. Not a field, so the record SHAPE is unchanged; but the attribute rides
+#   every column, so all *.rds are regenerated once + the fmt-contract snapshot.
+#   dev/verify_golden_field_delta.R (extended here to prove an ATTRIBUTE delta as well) checked over
+#   1787 cells that every field and every pre-existing attribute is bit-identical and that the new one
+#   is 0.95 everywhere -- which is exactly options("tabxplor.conf_level"), and why the DISPLAY _snaps
+#   are UNTOUCHED: resolving the stamp gives the same number the option gave.
 # ===========================================================================================
 
 cases <- golden_cases()

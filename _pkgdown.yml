@@ -1,0 +1,202 @@
+url: https://bricenocenti.github.io/tabxplor/
+
+# `light-switch` puts a Light/Dark/Auto control in the navbar, applied as bootstrap 5.3 colour modes
+# (`data-bs-theme` on <html>) -- which is one of the hooks tab_css(theme = "auto") already writes its
+# cascade against (tx_dark_hooks, R/tab-css.R), so the tables follow the reader like the page does.
+# The vignettes emit "auto" only under pkgdown; a CRAN-shipped vignette is read on a light page.
+# `package: txtheme` brings the whole dark theme -- chrome, heading ladder, prose, code colours --
+# plus the argument-name shim, from https://github.com/BriceNocenti/txtheme. A colour changes in
+# txtheme/R/aaa-palette.R, not here, and there is deliberately no `bslib:` block and no brand file.
+# ⚠ `light-switch: true` is what makes any of it apply: every txtheme rule is scoped
+#   html[data-bs-theme="dark"], and pkgdown only emits the dark cascade when the switch is on.
+template:
+  bootstrap: 5
+  light-switch: true
+  package: txtheme
+
+home:
+  links:
+  - text: Use it without code, in jamovi
+    href: https://www.jamovi.org/
+
+# One English site. The French translations of the vignettes live in Articles ("En français") --
+# no second FR site build, no language toggle. `intro` is dropped from the left side so the
+# introduction vignette appears in Articles like every other one (symmetric with the French set),
+# instead of a separate "Get started" page.
+# The `articles` menu is EXPLICIT because pkgdown special-cases the package-named vignette
+# (vignettes/tabxplor.Rmd) as the "Get started" intro and silently drops it from the auto-built
+# Articles menu -- with `intro` removed from the navbar it would appear nowhere.
+navbar:
+  structure:
+    left: [reference, articles, news]
+    right: [search, github, lightswitch]
+  components:
+    articles:
+      text: Articles
+      menu:
+      - text: "Introduction to tabxplor: crosstables with tab()"
+        href: articles/tabxplor.html
+      - text: "Regression models: how to read them without losing sight of the data"
+        href: articles/tabxplor-reading-a-regression.html
+      - text: "Regression models with tab_reg(): reference"
+        href: articles/tabxplor-reg.html
+      - text: Weighted and survey data
+        href: articles/tabxplor-weights.html
+      - text: Programming with tabxplor
+        href: articles/tabxplor-programming.html
+      - text: -------
+      - text: En français
+      - text: "Introduction à tabxplor : tableaux croisés avec tab()"
+        href: articles/tabxplor-fr.html
+      - text: "Modèles de regression : les interpréter sans perdre de vue les données"
+        href: articles/tabxplor-reading-a-regression-fr.html
+      - text: "Modèles de régression avec tab_reg() : référence"
+        href: articles/tabxplor-reg-fr.html
+      - text: Données pondérées et plans de sondage
+        href: articles/tabxplor-weights-fr.html
+      - text: Programmer avec tabxplor
+        href: articles/tabxplor-programming-fr.html
+
+# The reference is ordered by what a user reaches for first: the two producers, then the
+# point-and-click interface, then what can be done to a finished table -- reshaped, exported,
+# charted. The vocabulary pages and the programming surface come after. S3 methods and internal
+# helpers carry `@keywords internal`, so pkgdown drops them from the index entirely -- users call
+# the generics (`get_scale()`, `mutate()`, …), never the dotted methods. The last section is
+# literally titled `internal`, which is pkgdown's way of building a topic's page and keeping it out
+# of the index: the example data sets are met in the examples and the articles that use them.
+reference:
+
+- title: Main functions
+  desc: ""
+  contents:
+  - tab
+  - tab_reg
+  - tab_counts
+
+- title: Point-and-click interface (jamovi)
+  desc: >
+    The two analyses tabxplor adds to [jamovi](https://www.jamovi.org/) -- everything
+    the package does, driven by menus. Install jamovi, open the modules menu (the `+` at the
+    top-right), choose *jamovi library*, and install **tabxplor**.
+  contents:
+  - jmvtab
+  - jmvtabreg
+
+- title: Reshaping and combining
+  desc: Change the shape of a finished table; nothing is recomputed.
+  contents:
+  - tab_spread
+  - tab_compact
+  - tab_transpose
+
+- title: Export a finished table
+  desc: ""
+  contents:
+  - tab_export
+  - tab_html
+  - tab_md
+  - tab_xl
+  - tab_css
+
+- title: Charts
+  desc: (Both need **ggplot2**.)
+  contents:
+  - forest_plot
+  - reg_check_plots
+
+- title: Data-prep and text helpers
+  desc: Small utilities for preparing data or laying out a table.
+  contents:
+  - score_from_lv1
+  - shape_numeric_var
+  - tab_wrap_text
+  - tab_parallel_stop
+
+- title: Superseded entry points
+  desc: >
+    They still work and give the same numbers; `tab()` has absorbed all three, and `scale` +
+    `pct_type` have absorbed the fourth.
+  contents:
+  - tab_many
+  - tab_num
+  - tab_plain
+  - tabxplor-type
+
+- title: What a cell shows, and how it is coloured
+  desc: The vocabulary of `display =`, then of `color =`.
+  contents:
+  - tabxplor-display
+  - set_color_palette
+  - conf_level_to_z
+
+- title: What a model can be, and what it fitted
+  contents:
+  - reg_measures
+  - reg_formulas
+
+- title: Options
+  desc: Every default lives in a `tabxplor.*` option.
+  contents:
+  - tabxplor-options
+
+- title: Inspect a table
+  desc: What have I got? -- the table as a whole, then column by column.
+  contents:
+  - tab_structure
+  - tab_columns
+  - get_test
+  - is_tab
+  - tabxplor-base-coercion
+
+- title: The type system
+  desc: >
+    What a table and its cells are made of: the `tabxplor_fmt` vctrs record behind every numeric
+    cell, where a **field** varies from cell to cell and an **attribute** holds for a whole column,
+    and the attributes the table itself carries.
+  contents:
+  - fmt
+  - fmt_fields
+  - fmt_attributes
+  - fmt_attr
+  - new_tab
+  - set_caption
+  - fmt_get_color_code
+
+- title: internal
+  contents:
+  - gss_cat_data_formatting
+  - facto_tea
+  - questionr_hdv
+  - car_arrests
+  - car_salaries
+
+# An incomplete `articles:` index is a hard pkgdown error, so all nine articles are listed here.
+# The French translations (vignettes/articles/*-fr) sit in the secondary "En français" group.
+articles:
+- title: Start here
+  navbar: ~
+  desc: >
+    The introduction builds a first coloured table; *Reading a regression* walks one analysis from that
+    table to a finished sentence about a regression.
+  contents:
+  - tabxplor
+  - tabxplor-reading-a-regression
+- title: Going further
+  navbar: ~
+  desc: >
+    Look up what a regression table can be asked, what a weighted or survey file changes, and how to
+    write your own pipelines around the `fmt` cell.
+  contents:
+  - tabxplor-reg
+  - tabxplor-weights
+  - tabxplor-programming
+- title: En français
+  navbar: Français
+  desc: >
+    Les traductions françaises des articles (les pages de référence restent en anglais).
+  contents:
+  - articles/tabxplor-fr
+  - articles/tabxplor-reading-a-regression-fr
+  - articles/tabxplor-reg-fr
+  - articles/tabxplor-weights-fr
+  - articles/tabxplor-programming-fr

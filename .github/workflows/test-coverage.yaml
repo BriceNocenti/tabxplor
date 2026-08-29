@@ -1,0 +1,77 @@
+# Workflow derived from https://github.com/r-lib/actions/tree/v2/examples
+# Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
+on:
+  push:
+    branches: [main, master, dev]
+  pull_request:
+  workflow_dispatch:
+
+name: test-coverage.yaml
+
+permissions: read-all
+
+jobs:
+  test-coverage:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::covr, any::xml2
+          needs: coverage
+
+      - name: Test coverage
+        run: |
+          cov <- covr::package_coverage(
+            quiet = FALSE,
+            clean = FALSE,
+            install_path = file.path(normalizePath(Sys.getenv("RUNNER_TEMP"), winslash = "/"), "package")
+          )
+          covr::to_cobertura(cov)
+        shell: Rscript {0}
+
+      - uses: codecov/codecov-action@v4
+        with:
+          # NEVER redden CI on an upload failure. The r-lib template's expression
+          # (`github.event_name != 'pull_request' || secrets.CODECOV_TOKEN`) assumes a
+          # CODECOV_TOKEN exists, so on a push it evaluated to `true` and a failed upload failed the
+          # whole job -- which is what happened on 2026-07-27: covr itself succeeded (FAIL 0, PASS
+          # 4263) and only this step died with
+          #   "Branch `dev` is protected but no token was provided"
+          #   "Codecov: Failed to properly create commit: ... exit code 1"
+          # No CODECOV_TOKEN secret is configured on this repo, and Codecov refuses a tokenless
+          # create-commit on a protected branch. Coverage here is INFORMATIONAL by design --
+          # codecov.yml sets `informational: true` for both the project and patch status -- so a
+          # broken upload must not gate the release. `fail_ci_if_error` is the documented gate for
+          # exactly these three errors (create-commit / create-report / upload-process all route
+          # through the action's setFailure(msg, failCi)).
+          # To actually publish coverage: add the repo on codecov.io, then
+          #   gh secret set CODECOV_TOKEN --repo BriceNocenti/tabxplor
+          # No workflow change is needed afterwards -- the token input below picks it up.
+          fail_ci_if_error: false
+          file: ./cobertura.xml
+          plugin: noop
+          disable_search: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Show testthat output
+        if: always()
+        run: |
+          ## --------------------------------------------------------------------
+          find '${{ runner.temp }}/package' -name 'testthat.Rout*' -exec cat '{}' \; || true
+        shell: bash
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-test-failures
+          path: ${{ runner.temp }}/package

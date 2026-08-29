@@ -2,23 +2,33 @@
 % Please edit documentation in R/utils.R
 \name{score_from_lv1}
 \alias{score_from_lv1}
-\title{Create a score variable from factors}
+\title{Score a set of factors by counting their first level}
 \usage{
 score_from_lv1(data, name, vars_list)
 }
 \arguments{
 \item{data}{A data.frame.}
 
-\item{name}{The name of the variable to create.}
+\item{name}{The name of the score variable to create (unquoted or a string);
+an existing column of that name is replaced.}
 
-\item{vars_list}{The list of the factors to count
-(only the first level is counted, as 1) ; as a character vector.}
+\item{vars_list}{The factors to count, as a character vector. For each one
+only its \strong{first level} counts (as 1); every other level, including
+missing values, counts as 0.}
 }
 \value{
-The data.frame, with a new variable.
+\code{data} with the integer score column \code{name} added (or replaced).
 }
 \description{
-Create a score variable from factors
+Builds an integer score column counting, for each row, how many of the listed factors sit at
+their \strong{first level} (1 if so, 0 otherwise) -- the score ranges 0 to \code{length(vars_list)}. The
+natural way to sum a battery of yes/no survey items into one score, feeding the grouped-binomial
+outcome of \code{\link[=tab_reg]{tab_reg()}} (its \code{trials} argument).
+}
+\details{
+The "first level" is \code{levels(as.factor(x))[1]}. Non-factor columns are coerced with
+\code{\link[=as.factor]{as.factor()}}; missing values are folded into an explicit \code{"NA"} level first (via
+\code{\link[forcats:fct_na_value_to_level]{forcats::fct_na_value_to_level()}}), so \code{NA} never counts as the first level.
 }
 \examples{
 data <- tibble::tibble(group = factor(c("G1", "G1", "G2", "G2", "G3", "G3")),
@@ -28,4 +38,9 @@ data <- tibble::tibble(group = factor(c("G1", "G1", "G2", "G2", "G3", "G3")),
 data |>
   score_from_lv1("score", vars_list = c("a", "b", "c")) |>
   tab(group, score, digits = 1)
+}
+\seealso{
+\code{\link[=tab_reg]{tab_reg()}} and its \code{trials} argument for modelling a summed score
+as a grouped binomial; \code{vignette("tabxplor")}, section "Multiple-answer
+questions", for a worked example.
 }

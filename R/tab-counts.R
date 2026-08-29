@@ -1,23 +1,26 @@
-# PURPOSE: tab_counts() -- the "from-the-middle" constructor. Build a full tabxplor_tab (pct,
-#          diff, CI, chi2, colors, totals) from ALREADY-AGGREGATED counts instead of microdata.
-# ROLE: A public sibling of tab(). It normalises the supported input shapes (long tidy counts,
-#       wide count matrix / data.frame, a table/xtabs/matrix object, frequencies + base N) to the
-#       canonical count-aggregate and routes them through the SAME core as tab(): tab_plain()'s
-#       `.fine` pre-aggregate entry (the scan-fusion path, locked byte-for-byte by
-#       test-fuse-parity.R) + the shared finalize (tab_chi2 / tab_ci / tab_add_n_pct /
-#       tab_pvalue_lines). No math is forked.
+# PURPOSE: tab_counts() -- the "from-the-middle" constructor: a full tabxplor_tab built from
+#   ALREADY-AGGREGATED counts instead of microdata.
+# ROLE: A public sibling of tab(), and the thinnest wrapper it can be -- "tab() with the first
+#   steps already done". It normalises the supported input shapes (long tidy counts, a wide count
+#   matrix or data.frame, a table/xtabs object, frequencies + base N) into the canonical count
+#   aggregate, then routes them through the SAME core, argument boundary and colour tail as tab().
+#   No math is forked. What stays local is only what is true of THIS producer: the survey-design
+#   refusal, the microdata-only `na` refusal, and the inert mean `ci_method` slots.
 # KEY CONSTRAINTS:
-#   - Require a real unweighted `n`; weighted input carries BOTH a real unweighted count and a
-#     weighted count (weighted estimate + unweighted n -- decisions doc §14). Input whose counts
-#     are not real (fractional / weighted-only) disables CI/chi2 with a warning.
-#   - Feeding the same data as microdata vs as counts must give an IDENTICAL fmt table.
-# See: CLAUDE.md > 1.4.0 roadmap > Phase 4; dev/tabxplor_1.4.0_decisions.md §20.
-
+#   - A real UNWEIGHTED `n` is required. Weighted input carries both a real unweighted count and a
+#     weighted one (weighted estimate, unweighted base -- the package's rule everywhere). Counts
+#     that are not real (fractional, weighted-only) disable CI and chi2, with a warning.
+#   - Feeding the same data as microdata and as counts must give an IDENTICAL fmt table. This is
+#     the file's whole contract; test-fuse-parity.R locks it byte-for-byte.
+#   - It starts PAST the microdata preparation, so the tab() arguments resolved there are not
+#     offered: level selection (levels = "first"/"auto"), rare-level lumping, na = "drop_all" /
+#     "common_base", and survey designs. `cleannames` is the exception -- a pure relabel of the
+#     aggregate keys, which commutes with the count sum.
+# See: CLAUDE.md § tabxplor architecture (how a table is built).
 # === SECTION: helpers ================================================================
 
-# Hamilton (largest-remainder) rounding: round `x` to integers summing EXACTLY to `target`
-# (default round(sum(x))). Used to rebuild a row's integer counts from frequencies + base N so the
-# reconstructed counts sum exactly to N (a well-formed contingency table for chi2).
+# DESIGN: largest-remainder (Hamilton) rounding -- the parts sum EXACTLY to `target`, so counts
+#   rebuilt from frequencies + base N still form a well-formed contingency table for chi2.
 largest_remainder <- function(x, target = round(sum(x, na.rm = TRUE))) {
   x[is.na(x)] <- 0
   fl <- floor(x)
@@ -35,21 +38,14 @@ largest_remainder <- function(x, target = round(sum(x, na.rm = TRUE))) {
 
 # === SECTION: input reshaping ========================================================
 
-# tab_counts_reshape() -- turn any supported input SHAPE into a canonical long tidy data frame plus
-# the resolved character column roles. All shape detection lives here; downstream code sees only
-# long tidy counts. Args row_var/col_var/tab_vars/counts/wt_counts/cols/base are QUOSURES.
-#   - table / xtabs / matrix / array : melt via as.data.frame.table(); roles from dimnames (or the
-#     user's row_var/col_var/tab_vars overrides).
-#   - data.frame + `cols` (tidyselect of the level columns) : `input = "counts"` pivots to long
-#     counts; `input = "pct"` rebuilds counts as largest_remainder(freq x base) per row.
-#   - data.frame + `counts` (the default) : already long tidy.
+# All shape detection lives here: any supported input -> long tidy counts + the character column
+# roles. row_var/col_var/tab_vars/counts/wt_counts/cols/base arrive as QUOSURES.
 tab_counts_reshape <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
                                cols, base, col_name, input) {
 
-  # ---- a table / xtabs / matrix / array object ----
   if (inherits(data, c("table", "xtabs")) || is.matrix(data) || is.array(data)) {
-    # A bare matrix/array melts via as.data.frame.matrix (wrong) -- coerce to a table first so
-    # as.data.frame.table() gives the long [dim1, dim2, ..., .Freq] shape.
+    # WARNING: a bare matrix/array melts through as.data.frame.matrix (wrong) -- coerce to a table
+    #   first, so as.data.frame.table() gives the long [dim1, dim2, ..., .Freq] shape.
     if (!inherits(data, "table")) data <- as.table(data)
     df      <- as.data.frame(data, responseName = ".Freq", stringsAsFactors = TRUE)
     dimvars <- setdiff(names(df), ".Freq")
@@ -63,7 +59,6 @@ tab_counts_reshape <- function(data, row_var, col_var, tab_vars, counts, wt_coun
                 n_col = ".Freq", wn_col = NULL))
   }
 
-  # ---- a wide data.frame (cols = the col_var level columns) : wide counts or frequencies ----
   if (!quo_miss_na_null_empty_no(cols)) {
     if (quo_miss_na_null_empty_no(row_var))
       cli::cli_abort("With {.arg cols}, {.arg row_var} must name the row (label) column.")
@@ -78,7 +73,6 @@ tab_counts_reshape <- function(data, row_var, col_var, tab_vars, counts, wt_coun
       base_col <- rlang::as_name(base)
       long <- tidyr::pivot_longer(data, tidyselect::all_of(level_cols),
                                   names_to = col_name, values_to = ".pct")
-      # Rebuild each row's integer counts so they sum exactly to its base N (largest-remainder).
       long <- long |>
         dplyr::group_by(dplyr::across(tidyselect::all_of(c(tv, rv)))) |>
         dplyr::mutate(.n = largest_remainder(
@@ -96,11 +90,20 @@ tab_counts_reshape <- function(data, row_var, col_var, tab_vars, counts, wt_coun
                 n_col = n_col, wn_col = NULL))
   }
 
-  # ---- long tidy counts (the default shape) ----
   if (quo_miss_na_null_empty_no(counts))
     cli::cli_abort("For long counts, {.arg counts} must name the column of counts.")
   if (quo_miss_na_null_empty_no(row_var) || quo_miss_na_null_empty_no(col_var))
     cli::cli_abort("{.arg row_var} and {.arg col_var} must be provided.")
+  # ⚠ AN INTERACTION HAS NO PARENTS HERE. tab_counts() starts from aggregated counts, so the two
+  # columns a cross would combine are gone; a pair must be crossed while the microdata still exists.
+  for (q in list(row_var, col_var, tab_vars)) {
+    if (quo_miss_na_null_empty_no(q)) next
+    e <- rlang::quo_get_expr(q)
+    if (reg_cross_is_term(e) || (is.character(e) && any(reg_cross_has_op(e))))
+      cli::cli_abort(c(
+        "{.fn tab_counts} takes no interaction: it starts from counts already aggregated.",
+        "i" = "Cross the pair in {.fn tab}: {.code tab(data, rows, a*b)}."), call = NULL)
+  }
   rv     <- rlang::as_name(row_var)
   cv     <- rlang::as_name(col_var)
   tv     <- if (quo_miss_na_null_empty_no(tab_vars)) character()
@@ -111,25 +114,30 @@ tab_counts_reshape <- function(data, row_var, col_var, tab_vars, counts, wt_coun
 }
 
 
-# tab_counts_normalize() -- aggregate a long tidy data frame into the canonical count-aggregate: a
-# keyed data.table `[tab_cols..., row_col, col_col, n, (wn)]` (the exact `.fine` shape tab_plain
-# rolls up). `n` is the real UNWEIGHTED count (integer); `wn` the weighted count (double) when
-# weighted. Duplicate keys are summed. `has_real_n` is FALSE when the supplied counts are not whole
-# numbers (fractional / weighted-only) -- the boundary that disables CI/chi2.
-tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col) {
+# Aggregates long tidy counts into the canonical `.fine` aggregate tab_plain rolls up (duplicate
+# keys summed); `has_real_n = FALSE` on fractional / weighted-only counts disables CI and chi2.
+# DESIGN: `cleannames` strips the keys HERE, pre-aggregate, through the microdata path's own
+#   tab_cleannames_relabel() -- a relabel commutes with the count sum (relabel-then-sum ==
+#   tab()'s sum-then-relabel): that is why it is the one microdata-prep argument offered.
+tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col,
+                                 cleannames = FALSE) {
   keys <- c(tab_cols, row_col, col_col)
   miss <- setdiff(c(keys, n_col, wn_col), names(data))
   if (length(miss) > 0)
     cli::cli_abort("Column{?s} {.field {miss}} not found in {.arg data}.")
 
+  data <- data |> tab_apply_val_labels(keys)
+
   raw_n      <- suppressWarnings(as.numeric(data[[n_col]]))
   has_real_n <- all(is.na(raw_n) | abs(raw_n - round(raw_n)) < 1e-8)
 
   d <- data.table::as.data.table(data)
-  # Byte-identity hotspot: keys must be factors with the SAME level order a microdata table would
-  # use -- keep existing factor levels, else first-appearance order (matches tab_plain's L2399).
+  # WARNING: byte-identity hotspot -- the keys must be factors with the SAME level order a microdata
+  #   table would use: keep existing factor levels, else first-appearance order.
   for (k in keys) if (!is.factor(d[[k]]))
     data.table::set(d, j = k, value = forcats::as_factor(d[[k]]))
+
+  if (isTRUE(cleannames)) d <- data.table::as.data.table(tab_cleannames_relabel(d, keys))
 
   if (is.null(wn_col)) {
     fine <- d[, list(n = as.integer(round(sum(as.numeric(get(n_col)), na.rm = TRUE)))),
@@ -142,11 +150,8 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
     weighted <- TRUE
   }
 
-  # Match microdata tab() structurally: its aggregate (`.N` per observed key) NEVER contains a
-  # zero-count cell -- the empty cells of the cross-table are recreated by dcast(fill = 0). So drop
-  # explicit zero cells here (they are surfaced by table()/pivot_wider() for unused factor levels
-  # and empty tab_var x row_var combinations, but never by microdata). This makes the `.fine`
-  # byte-identical to the one tab_plain() would build from the underlying microdata.
+  # DESIGN: microdata's per-observed-key aggregate NEVER holds a zero cell (dcast(fill = 0) recreates
+  #   the empty ones), so dropping the zeros table()/pivot_wider() surface keeps `.fine` byte-identical.
   fine <- fine[fine$n > 0]
 
   list(fine = fine, weighted = weighted, has_real_n = has_real_n)
@@ -155,52 +160,35 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
 
 # === SECTION: public constructor =====================================================
 
-#' Cross-table from already-aggregated counts ("from the middle")
+#' Cross-tables from already-aggregated counts
 #'
 #' @description
 #' `tab_counts()` builds the same color-coded cross-table as [tab()], but from data that is
-#' **already cross-tabulated** (a table of counts) rather than from microdata (one row per
-#' individual). This is the common case when you start from a `dplyr::count()` result, a
-#' contingency table, or a published table of counts or percentages. All the usual calculations
-#' --- percentages, differences, confidence intervals, chi-squared, colors, totals --- are done on
-#' the counts, and the result is identical to the table [tab()] would build from the underlying
-#' microdata.
+#' **already cross-tabulated** --- a `dplyr::count()` result, a contingency table, or a published
+#' table of counts or percentages --- instead of microdata (one row per individual). Percentages,
+#' differences, confidence intervals, chi-squared, colors and totals are all computed from the
+#' counts, and the result is identical to the table [tab()] would build from the microdata behind
+#' them.
 #'
 #' It accepts four input shapes:
 #'
 #' * **Long tidy counts** (the default): one row per `row_var` \eqn{\times} `col_var` (\eqn{\times}
-#'   `tab_vars`) combination, with the count in `counts` (and, weighted, the weighted count in
-#'   `wt_counts`).
+#'   `tab_vars`) combination, with the count in `counts` (and the weighted count in `wt_counts`).
 #' * **A wide `data.frame`**: a label (`row_var`) column plus one column per `col_var` level ---
 #'   select those level columns with `cols` and name the column variable with `col_name`.
-#' * **A `table` / `xtabs` / `matrix` object**: melted automatically; the row/column variables are
+#' * **A `table` / `xtabs` / `matrix` object**: melted automatically, the row and column variables
 #'   read from the dimnames (or set with `row_var` / `col_var`).
-#' * **Frequencies + base N**: as the wide shape, plus `input = "pct"` and `base` (the column of
-#'   row sample sizes); the integer counts are rebuilt from the percentages and the base.
+#' * **Frequencies + base N**: the wide shape, plus `input = "pct"` and `base` (the column of row
+#'   sample sizes); the integer counts are rebuilt from the percentages and the base.
 #'
-#' For weighted data, supply the real (unweighted) count in `counts` **and** the weighted count in
-#' `wt_counts`: estimates use the weighted counts while confidence intervals and tests use the real
-#' unweighted sample size. When the counts are not real whole numbers (a base-less / weighted-only
-#' input), confidence intervals and chi-squared are disabled with a message.
+#' With weighted data, give the real (unweighted) count in `counts` **and** the weighted count in
+#' `wt_counts`: estimates use the weighted counts, while confidence intervals and tests use the
+#' real unweighted sample size. Counts that are not whole numbers (weighted-only or frequency-only
+#' input) disable confidence intervals and chi-squared, with a message.
 #'
-#' @param data A data frame of counts, or a `table` / `xtabs` / `matrix` object.
-#' @param row_var The row variable (one level per line). For a `table` object it defaults to the
-#'   first dimension.
-#' @param col_var The column variable (one column per level). For a `table` object it defaults to
-#'   the second dimension. Not used with `cols`.
-#' @param tab_vars <[`tidy-select`][tidyr::tidyr_tidy_select]> Tab variables: a subtable is made for
-#'   each combination of their levels.
-#' @param counts The column holding the **unweighted** count for each cell (long tidy shape).
-#' @param wt_counts Optional column holding the **weighted** count for each cell. Leave empty for an
-#'   unweighted table.
-#' @param cols <[`tidy-select`][tidyr::tidyr_tidy_select]> For a wide `data.frame`: the columns
-#'   holding the `col_var` levels.
-#' @param col_name Name of the (synthesised) column variable when `cols` is used.
-#' @param base For `input = "pct"`: the column holding each row's sample size N.
-#' @param input `"counts"` (default) or `"pct"` (with `cols` and `base`: the level columns hold
-#'   frequencies, and counts are rebuilt from them and `base`).
-#' @param pct,color,OR,chi2,na,ref,ref2,comp,ci,conf_level,stars,method_cell,method_diff,totaltab,totaltab_name,tot,total_names,add_n,add_pct,subtext,digits
-#'   Same meaning as in [tab()].
+#' @eval tab_args_rd("tab_counts")
+#' @param ... Every other argument of [tab()] -- `pct`, `color`, `ci`, `tot`, ... -- passed
+#'   by name. See [tab()]; a typo gets a suggestion.
 #'
 #' @return A `tabxplor_tab` (or `tabxplor_grouped_tab` when `tab_vars` are provided).
 #' @export
@@ -219,35 +207,46 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
 #' tab_counts(wide, row_var = marital, cols = c(Other, Black, White),
 #'            col_name = "race", pct = "row")
 tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
-                       cols, col_name = "variable", base, input = c("counts", "pct"),
-                       pct = "no", color = "no", OR = "no", chi2 = FALSE,
-                       na = "keep",
-                       ref = "auto", ref2 = "first", comp = "tab",
-                       ci = "no", conf_level = 0.95, stars = NULL,
-                       method_cell = "wilson", method_diff = "newcombe",
-                       totaltab = "line", totaltab_name = "Ensemble",
-                       tot = c("row", "col"), total_names = "Total",
-                       add_n = TRUE, add_pct = FALSE,
-                       subtext = "", digits = 0) {
+                       cols, col_name = "variable", base, input = c("counts", "pct"), ...) {
 
-  input <- rlang::arg_match(input)
-  vctrs::vec_assert(pct, size = 1); vctrs::vec_assert(color, size = 1)
-  vctrs::vec_assert(ref, size = 1); vctrs::vec_assert(na, size = 1)
-  # Phase 6g (S3): na = "common_base" is microdata-only -- it fixes the population from who is
-  # NA on the row_var/first col_var, which pre-aggregated counts cannot reconstruct.
-  if (identical(na, "common_base")) {
+  .d <- rlang::list2(...)
+  tab_check_dots(.d, "tab_counts")
+  list2env(tab_dots_expand(.d, "tab_counts"), environment())
+
+  # DESIGN: the ONE entry point that REFUSES a survey design instead of unwrapping it -- a design's
+  #   weights and structure are per-observation facts a count table cannot carry.
+  if (svy_is_design(data))
     cli::cli_abort(c(
-      "{.code na = \"common_base\"} is only available in {.fn tab} (from microdata).",
+      "{.fn tab_counts} works on pre-aggregated counts; a survey design carries microdata.",
+      "i" = "Pass the design to {.fn tab} instead, or give the weighted counts in {.arg wt_counts}."
+    ))
+  # DESIGN: refused BEFORE the shared argument boundary so the message can say WHY -- counts cannot
+  #   reconstruct who was missing; the shared one would only say the word is not in the vocabulary.
+  if (identical(na, "common_base") || identical(na, "drop_all")) {
+    cli::cli_abort(c(
+      "{.code na = {na}} is only available in {.fn tab} (from microdata).",
       "i" = "Pre-aggregated counts cannot reconstruct who was missing; use {.val keep} or {.val drop}."
     ))
   }
-  stopifnot(na %in% c("keep", "drop"))
-  stopifnot(all(tot %in% c("row", "col", "both", "no", "")))
-  if (tot[1] == "both") tot <- c("row", "col")
-  total_names <- vctrs::vec_recycle(total_names, 2)
+  .a <- tab_resolve_common_args(
+    "tab_counts", test = test, chi2 = chi2, color = color, color_signif = color_signif,
+    ci = ci, stars = stars, conf_level = conf_level, ci_method = ci_method,
+    cleannames = cleannames, OR = OR, display = display, ref = ref, ref2 = ref2,
+    tot = tot, na = na, pct = pct, comp = comp,
+    total_names   = .d$total_names,
+    totaltab_name = .d$totaltab_name,
+    other_level   = .d$other_level,
+    totaltab = totaltab, n_min = n_min, n = n, add_n = add_n,
+    user_env = rlang::caller_env())
+  test <- .a$test ; cleannames <- .a$cleannames ; stars <- .a$stars
+  display <- .a$display ; ref <- .a$ref ; ref2 <- .a$ref2
+  color_spec <- .a$color_spec ; total_names <- .a$total_names
+  conf_level <- .a$conf_level ; totaltab_name <- .a$totaltab_name ; base_n <- .a$base_n
+  counts_refuse_mean_methods(ci_method)
+  ci_method <- .a$ci_method
 
-  # -- resolve the input SHAPE to canonical long tidy counts, then to the aggregate (the one
-  #    validation boundary) --
+  input <- rlang::arg_match(input)
+
   resh <- tab_counts_reshape(
     data,
     row_var   = rlang::enquo(row_var),  col_var   = rlang::enquo(col_var),
@@ -255,8 +254,21 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     wt_counts = rlang::enquo(wt_counts), cols     = rlang::enquo(cols),
     base      = rlang::enquo(base),     col_name  = col_name, input = input)
 
+  # The same two rules as tab(): a spread variable IS a tab variable -- it splits the population and
+  # merely shows the split across the page -- and a total LINE cannot become a column block. Applied
+  # BEFORE the normalisation, which aggregates away every column no role claims.
+  if (is.character(spread_vars) && length(spread_vars)) {
+    resh$tab_vars <- c(resh$tab_vars, setdiff(spread_vars, resh$tab_vars))
+    if (any(totaltab == "line")) {
+      tx_inform_once("spread_totline", c("i" = paste(
+        "A total line cannot become a column block: a full total table was added.",
+        'Use {.code totaltab = "no"} for no overall column.')))
+      totaltab[totaltab == "line"] <- "table"
+    }
+  }
+
   norm       <- tab_counts_normalize(resh$data, resh$row_var, resh$col_var, resh$tab_vars,
-                                      resh$n_col, resh$wn_col)
+                                      resh$n_col, resh$wn_col, cleannames = cleannames)
   fine       <- norm$fine
   weighted   <- norm$weighted
   has_real_n <- norm$has_real_n
@@ -264,58 +276,80 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
   col_var    <- rlang::sym(resh$col_var)
   tab_vars   <- resh$tab_vars
 
-  # Base-less input: no real unweighted n -> inference is not defined; keep pct/diff/colors.
-  if (!has_real_n && (!identical(ci, "no") || !isFALSE(chi2))) {
+  # No real unweighted n -> inference is undefined; percentages, differences and colors stay.
+  if (!has_real_n && (!identical(ci, "no") || !isFALSE(test))) {
     cli::cli_warn(c(
-      "!" = "The counts are not whole numbers (weighted or frequency-only): confidence intervals and chi-square are disabled.",
+      "!" = "The counts are not whole numbers (weighted or frequency-only): confidence intervals and the test are disabled.",
       "i" = "Provide real unweighted counts in {.arg counts} (with the weighted counts in {.arg wt_counts}) to enable them."
     ))
-    ci <- "no"; chi2 <- FALSE
+    ci <- "no"; test <- FALSE
   }
 
-  # -- Phase 7d-ii / 9a: route the single (row_var x col_var) FACTOR pair through the SAME engine stages
-  #    tab() uses. tab_counts() already holds its tier-1 aggregate (`fine`), so it BYPASSES
-  #    tab_prepare_pop() (no microdata to prep) and tab_aggregate() (nothing to scan): it builds the
-  #    ctx, runs tab_setup() (arg resolution -- incl. the SAME `tot` -> totrow/totcol translation +
-  #    tot_cols_type + colour cascade tab() uses), injects `fine` as the fused factor aggregate + the
-  #    single-pair pop/level metadata, then runs the shared tab_build_tables() (the outer map +
-  #    output shape -- one row_var here -> one serial unit). This guarantees byte-identity with tab()
-  #    for every `tot`, and deletes the hand-inlined finalize copy. NOTE: contrib colouring now forces a
-  #    total row (as tab() does) -- a deliberate convergence (was skipped when totrow was driven by
-  #    `tot`). --
+  # DESIGN: already holding its aggregate, tab_counts() bypasses tab_prepare_pop()/tab_aggregate()
+  #   but runs the SAME tab_setup() + tab_build_tables(), so the table stays byte-identical to tab().
   data_skel <- as.data.frame(fine)
 
-  # tot -> (totrow, totcol), exactly as tab()'s wrapper translates it.
-  totrow <- "row" %in% tot
-  totcol <- if ("col" %in% tot) "last" else "no"
+  totrow <- .a$totrow
+  totcol <- .a$totcol
 
-  ctx <- list(
-    data = data_skel, with_filter = FALSE,
+  ctx <- new_ctx(
+    data = data_skel,   # (no `filter` here -- the ctx default NA_character_ says so)
     row_vars_quo = rlang::quo(!!row_var), col_vars_quo = rlang::quo(!!col_var),
     tab_vars_quo = if (length(tab_vars) == 0) rlang::quo(NULL)
                    else rlang::quo(c(!!!rlang::syms(tab_vars))),
     wt_quo = if (weighted) rlang::quo(wn) else rlang::quo(NULL),
     na_drop_all_quo = rlang::quo(NULL),
-    pct = pct, color = color, OR = OR, chi2 = chi2, na = na, levels = "all",
-    cleannames = FALSE, output = "single",
-    other_if_less_than = 0, other_level = "Others",
+    pct = pct, color = color_spec$legacy, color_signif = color_spec$signif,
+    color_ratio_ci = color_pct_text_is_ratio(color_spec),
+    display = display, chi2 = test,
+    na = na, levels = "all",
+    cleannames = cleannames, output = "single",
     ref = ref, ref2 = ref2, comp = comp, ci = ci, conf_level = conf_level, stars = stars,
-    method_cell = method_cell, method_diff = method_diff,
+    ci_method = ci_method,
     totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
-    total_names = total_names, add_n = add_n, add_pct = add_pct, digits = digits,
-    subtext = subtext, by_table = FALSE,
-    spread_vars = character(), names_prefix = NULL, names_sort = FALSE
+    total_names = total_names, base_n = base_n, add_pct = add_pct, common_totrow = common_totrow,
+    digits = digits, n_min = n_min, subtext = subtext, by_table = FALSE,
+    # DESIGN: pre-aggregated counts carry no per-observation Sum(w^2), so the inference basis is
+    #   "n" -- declared here rather than discovered in the leaf.
+    agg_only = TRUE,
+    spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort
   )
 
   ctx <- tab_setup(ctx)
 
-  # Set the single-pair population/level metadata (no `levels` arg -> keep all; no NA-drop beyond
-  # the `na` policy) and inject the count aggregate as the fused tier-1 (tab_plain(.fine=) adopts it).
+  # DESIGN: levels = "first"/"auto" would need `remove_levels` from the bypassed tab_prepare_pop(),
+  #   so every level is kept; the population/level metadata goes onto the settings spine instead.
+  ctx$settings$cols$lvs    <- rep("all", nrow(ctx$settings$cols))
+  ctx$settings$cols$lv1    <- FALSE
+  ctx$settings$rows$na_num <- ctx$na
+  ctx$settings$pairs$na    <- rep(ctx$na, nrow(ctx$settings$pairs))
   ctx <- ctx_update(ctx, list(
-    na_text = list(ctx$na), na_num = list(ctx$na),
-    lv1 = FALSE, remove_levels = NULL,
+    remove_levels = NULL,
     fine_num = NULL, fine_fused = fine
   ))
 
-  tab_build_tables(ctx)
+  result <- tab_build_tables(ctx)
+
+  set_caption(finalize_color_tail(result, color_spec, color_breaks, display), caption)
 }
+
+
+# `ci_method`'s two MEAN slots have nothing to act on here (a counts table has no mean column), so
+# setting one is a refusal rather than a silent no-op; the argument stays one named vector everywhere.
+#' @keywords internal
+#' @noRd
+counts_refuse_mean_methods <- function(ci_method) {
+  if (is.null(ci_method) || is.null(names(ci_method))) return(invisible(NULL))
+  hit <- intersect(c("mean_diff", "mean_ratio"), names(ci_method))
+  if (length(hit) == 0L) return(invisible(NULL))
+  cli::cli_abort(c(
+    "{.code ci_method = c({hit[[1]]} = )} has no effect in {.fn tab_counts}: a counts table has no
+     mean columns.",
+    "i" = "The slots that apply here are {.val cell} and {.val diff}."
+  ))
+}
+
+# codetools: tab_counts() binds every argument riding on `...` as a local, via
+# list2env(tab_dots_expand(.d, "tab_counts"), environment()) -- correct at run time, invisible to the
+# code walker. DERIVED from the declaration, so a new or retired argument needs no edit here.
+utils::globalVariables(tab_args_for("tab_counts"))

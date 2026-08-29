@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab_xl.R
 \name{tab_xl}
 \alias{tab_xl}
-\title{Excel output for tabxplor tables, with formatting and colors}
+\title{Write a table to an Excel workbook}
 \usage{
 tab_xl(
   tabs,
@@ -12,53 +12,61 @@ tab_xl(
   lang = NULL,
   colnames_rotation = 0,
   remove_tab_vars = TRUE,
-  colwidth = 10,
+  colwidth = "auto",
   color_legend = TRUE,
   sheets = "auto",
-  n_min = 0,
   titles,
   caption = NULL,
-  font_text = "DejaVu Sans Condensed",
-  font_num = "DejaVu Sans",
+  font_text = NULL,
+  font_num = NULL,
+  font_num_stars = NULL,
   text_size = 10,
   text_size_headers = 9,
   text_size_subtext = 9,
-  hide_near_zero = Inf,
-  theme = c("light", "dark"),
-  color_type = "text",
-  html_24_bit = NULL,
+  theme = NULL,
   color = TRUE,
   transpose = FALSE,
-  conditional_format = FALSE,
-  or_numeric = getOption("tabxplor.xl_or_numeric", FALSE),
-  print_color_legend = lifecycle::deprecated()
+  var_names = NULL,
+  wrap_rows = 35,
+  wrap_cols = 15,
+  ratio_cells = NULL,
+  check = FALSE,
+  data = NULL,
+  print_color_legend = lifecycle::deprecated(),
+  ...
 )
 }
 \arguments{
-\item{tabs}{A table made with \code{\link{tab}}, \code{\link{tab_many}} or
-\code{\link{tab_plain}}, or a list of such tables.}
+\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_reg}}, or a \code{list} of tab.
+A list of tables sharing the same \code{col_vars} (and no \code{tab_vars}) is merged into one; any
+other list --- several \code{row_vars} and/or \code{tab_vars} --- is rendered one table after
+another, each keeping its own sub-tables.}
 
-\item{path, replace, open}{The name, and possibly the path, of the Excel file to
-create (possibly without the .xlsx extension). Default path to temporary directory.
-Set global option \code{"tabxplor.export_dir"} with \code{link[base:options]{options}}
-to change default directory. By default replace is \code{TRUE} when \code{path} is provided,
-\code{FALSE} when \code{path} is not provided.
-Use \code{replace = TRUE} to overwrite existing files. Use \code{open = FALSE}
-if you don't want to automatically open the tables in Excel (or another
-software associated with .xlsx files).}
+\item{path, replace, open}{The name, and possibly the path, of the Excel file to create (the
+\code{.xlsx} extension is optional). Defaults to a temporary directory; set the global option
+\code{"tabxplor.export_dir"} with \code{\link[base]{options}} to change it. \code{replace}
+defaults to \code{TRUE} when \code{path} is given and \code{FALSE} otherwise; set it to
+\code{TRUE} to overwrite an existing file. Use \code{open = FALSE} not to open the workbook
+straight away in Excel (or whatever opens \code{.xlsx} files).}
 
 \item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
 \code{"en"} or \code{"fr"}.}
 
 \item{colnames_rotation}{Rotate the names of columns to an angle (in degrees).}
 
-\item{remove_tab_vars}{By default, \code{tab_vars} columns are removed to gain space.
+\item{remove_tab_vars}{By default, \code{tab_vars} columns are removed to gain space --- the
+sub-table's Total row names it. Ignored where several \code{row_vars} are stacked: the level
+column alone is then not a complete row index, so the column stays.
 Set to \code{FALSE} to keep them.}
 
-\item{colwidth}{The standard width for numeric columns, as a number.
-Set to \code{"auto"} to let Excel choose.}
+\item{colwidth}{Column widths. \code{"auto"} (the default) fits every column to what its cells
+actually show, so a number column is exactly as wide as its widest figure and a text column
+wraps instead of growing past a cap. Give a number instead to force that fixed width on every
+numeric column (a mean's \code{sd} sibling then takes a proportionally narrower one).
+Widths are set per \emph{sheet}, so several tables written to one sheet all fit.}
 
-\item{color_legend}{Should the color legends be printed with the subtexts ?}
+\item{color_legend}{Print the colour legend below the table (with the subtext). \code{TRUE} by default, and a
+no-op on a table that carries no colours.}
 
 \item{sheets}{The Excel sheets options :
 \itemize{
@@ -68,61 +76,103 @@ Set to \code{"auto"} to let Excel choose.}
 same sheets
 }}
 
-\item{n_min}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} The small-n greying is removed in 1.4.0. The
-argument is kept for back-compatibility but no longer does anything; use \code{tab(n_min = )}, which
-blanks or drops small-n cells at display and flows into every export.}
-
 \item{titles}{The titles of the different tables, as a character vector. When missing
 titles are given based on the names of the variables.}
 
 \item{caption}{A single caption; a shortcut that fills \code{titles} (an explicit \code{titles}
 still wins). Unified name across all exporters.}
 
-\item{font_text, font_num}{Font for text and for numbers.}
+\item{font_text, font_num, font_num_stars}{Fonts for text (labels, headers) and for numbers. The
+number font is chosen \strong{per table}: \code{font_num} (default \code{"DejaVu Sans"}) when the
+table shows no significance stars, and \code{font_num_stars} (default \code{"Cascadia Mono"}, a
+\strong{monospace} font) when it does --- monospace aligns the stars and \code{(n=...)}
+composites, which a proportional font cannot. Defaults from
+\code{options(tabxplor.xl_font_text)} / \code{options(tabxplor.xl_font_num)} /
+\code{options(tabxplor.xl_font_num_stars)}. Note that xlsx, unlike CSS, has \strong{no
+font-fallback list}: only one name is recorded, so if it is missing on the machine opening the
+workbook Excel substitutes by its own rules. Set the options to a font you know is installed.}
 
 \item{text_size, text_size_headers, text_size_subtext}{Font sizes of text elements.}
 
-\item{hide_near_zero}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Removed in 1.4.0 (a rarely used,
-slow feature): the argument is kept for back-compatibility but no longer does anything.}
-
 \item{theme}{By default (\code{"light"}) a white table with black text; set to \code{"dark"}
-for a black table with white text (the colours follow the theme).}
+for a black table with white text (the colours follow the theme).
+The black-and-white \strong{publication} palettes render a table for a page that has no colour:
+\code{"print_ready"} picks the right one per table, or name it yourself --
+\code{"print_marks"}, \code{"print_emphasis"}, \code{"print_minimalistic"} (\code{"bw"}).
+See \code{\link{tab_css}} for what each of them says.}
 
-\item{color_type}{By default, the text is colored. Set to \code{"bg"} to color
-the background instead.}
+\item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
 
-\item{html_24_bit}{Kept for a uniform exporter signature; inert for Excel (always 24-bit).}
+\item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become columns) --
+the col-percentages-with-several-row-variables use case.}
 
-\item{color}{Set to \code{FALSE} to export without colours (monochrome).}
+\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default), \code{"rows"},
+\code{"cols"} or \code{"none"}. The row-variable name is the leading column a table with several
+\code{row_vars} uses to name each block (written once per block); the column-variable names
+are the spanning row above their level columns. Level headers always keep their name.}
 
-\item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become
-columns). Useful for column percentages tables with several row variables.}
+\item{wrap_rows}{By default, rownames are wrapped when larger than 30 characters.}
 
-\item{conditional_format}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}} Reserved for a future opt-in
-to use Excel conditional formatting instead of hard cell colours. Not yet implemented: setting
-it emits a message and falls back to the (fast, exact) hard-style colouring.}
+\item{wrap_cols}{By default, colnames are wrapped when larger than 12 characters.}
 
-\item{or_numeric}{Odds ratios export as text ("1/x" reciprocal for OR < 1) by default so an OR
-below 1 reads symmetrically to an OR above 1. Set to \code{TRUE} (or the option
-\code{tabxplor.xl_or_numeric}) to keep them as real, editable numbers instead.}
+\item{ratio_cells}{What a ratio / odds-ratio cell holds in the workbook. Excel cannot compute
+inside a number format, so a cell storing \code{0.83} cannot be made to print \verb{÷1.2} the way the
+console does. \code{"fold"} (the default) stores the \strong{reading value} instead --- the fold, signed by
+its direction (\code{x} at or above the neutral, \code{-1/x} below it) --- which prints as \verb{×1.20} and
+\verb{÷1.20}, \code{2.11} and \code{1/2.11}. The cell stays a real number: it sorts and filters in the
+direction it is read, and takes the reader's own decimal separator. \code{"raw"} stores the
+untransformed ratio (printed \verb{×0.83}); \code{"text"} writes the exact display string, which reads
+perfectly but is no longer a number. Option twin: \code{tabxplor.xl_ratio_cells}.}
+
+\item{check}{Model-check plots to draw under each \code{tab_reg()} table: \code{FALSE} (the default),
+\code{"auto"}, or a vector of check keys --- the same values \code{\link{reg_check_plots}} takes,
+which is what draws them. Each grid is written as a picture below the table it belongs to.
+Needs \code{ggplot2} and \code{gridExtra}; a crosstab takes none.}
+
+\item{data}{The data frame the models were fitted on. Only needed when \code{check} is on AND the
+\code{\link{tab_reg}} call cannot be replayed from the name it was written with (a \verb{\%>\%}
+pipeline, a subset expression) --- an ordinary \code{tab_reg(gss, ...)} recovers it by itself.}
 
 \item{print_color_legend}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{color_legend}.}
+
+\item{...}{Retired arguments, accepted and ignored with a deprecation message since 2.0.0
+(\code{color_type}, \code{html_24_bit}, \code{n_min}, \code{hide_near_zero}): colour is a channel of \verb{color =},
+Excel is always 24-bit, and the other two are \code{tab()}'s business --- the small-base filter and
+the display template.
+Anything else is an error naming the argument you meant, as it already was in \code{\link[=tab]{tab()}}.}
 }
 \value{
 The table(s) with formatting and colors in an Excel file, as a side effect.
 Invisibly returns \code{tabs}.
 }
 \description{
-To modify the colors used into the Excel table, you can change the
-global options with \code{\link{set_color_style}} and \code{\link{set_color_breaks}}.
+The Excel exporter behind \code{\link{tab_export}}: \code{tab_export(x, format = "xl")}
+calls this. Colours follow the same palettes as the console and the HTML output, so a table looks
+the same wherever it is read; change them with \code{\link{set_color_style}} and
+\code{\link{set_color_breaks}}.
 }
+\section{Recovering the raw ratio in Excel}{
+
+A ratio or odds-ratio cell holds its \strong{reading value}: the fold, signed by its direction. The sign
+IS the marker --- negative means the cell reads \verb{÷} (or \verb{1/}) --- so one formula gives the raw
+ratio back, with no macro and no add-in:
+
+\preformatted{  =IF(A2<0, -1/A2, A2)     the ratio itself
+  =ABS(A2)                how many times, whichever way it goes
+}
+
+Sorting and filtering need neither: the stored value is monotone in the direction it is read, so
+"at least twice as likely" is \verb{>2} and "at least twice as unlikely" is \verb{<-2}. Use
+\code{ratio_cells = "raw"} when the untransformed ratio matters more than the reading.
+}
+
 \examples{
 \donttest{
 # openxlsx2 is Suggests-only and tab_xl() stops without it, so guard the example: \donttest{}
 # does NOT exempt it from R CMD check --as-cran, which CRAN also runs without Suggests.
 if (requireNamespace("openxlsx2", quietly = TRUE)) {
-  forcats::gss_cat \%>\%
-    tab(marital, race, pct = "row", color = "diff") \%>\%
+  forcats::gss_cat |>
+    tab(marital, race, pct = "row", color = "difference") |>
     tab_xl()
 }
 }

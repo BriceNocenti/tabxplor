@@ -3,90 +3,36 @@ name:  jmvtab
 title: Crosstables
 jrs:   '1.1'
 
+# TWO live items, and that is the whole results model: tabxplor renders ONE html table (the colour,
+# the footer and the test summary are all inside it -- see R/tab-render-html.R), so there is no
+# Table / Image element to declare. Phase 15c also removed the width-forcing `plot` Image: the
+# scroll box (tab_render_scrollbox: width:max-content; max-width; overflow-x:auto) owns the width.
 items:
 
     - name: html_table
       title: Table
       type: Html
 
-    # - name:  chi2_table
-    #   title: Chi2 Test
-    #   type:  Table
-    #   rows:  0
-    #   columns:
-    #     # - name: tab_vars
-    #     #   type: text
-    #     #   combineBelow: true
-    #     - name: row_var
-    #       title: row_var
-    #       type: text
-    #       #content: ($key)
-    #       #combineBelow: true
-    #     # - name: "chi2 stats"
-    #     #   type: text
-    #     # - name: df
-    #     #   type: integer
-    #     # - name: p
-    #     #   type: number
-    #     #   format: zto,pvalue
-
-
-    # Empty plot needed to be able to set the value of the plotting zone
-    - name: plot
-      title: ""
-      type: Image
-      width: 1080 # 2060 ?
-      height: 0
-      renderFun: .plot
-
     # Phase 7e: hidden state carrier for the multi-tier live cache. Only Image elements persist a
-    # `$state` across the engine reset, so this 0-size Image hosts the (gzip-RDS'd) store. It renders
+    # `$state` across the engine reset, so this Image hosts the (gzip-RDS'd) store. It renders
     # nothing (.plot returns TRUE); `.run()` reads/writes self$results$cache_state$state.
+    # ⚠ `visible: false` is what makes it take NO vertical space (height: 1 still reserved a slot),
+    # and it is safe for the store TWICE OVER: ResultsElement$asProtoBuf() serialises `state`
+    # independently of `visible`, and Image$asProtoBuf() reports a state-holding image that rendered
+    # no file as ANALYSIS_RENDERING -- so a VISIBLE carrier makes the client ask for a render whose
+    # round-trip can overwrite the run's own results (Phase 22g-vi, jmvtabreg.r.yaml).
+    # ⚠ `clearWith: []` IS LOAD-BEARING. jmvcore's Image$new() defaults `clearWith` to "*", and
+    # ResultsElement$fromProtoBuf() opens with
+    #     if (someChanges && identical("*", private$.clearWith)) return()
+    # -- so with the default the state is NOT restored the moment ANY option changes, which is
+    # precisely when a cache is supposed to hit. An empty vector clears with nothing; the state is
+    # this module's own and `.run()` invalidates it by SIGNATURE, never by jamovi's option diff.
     - name: cache_state
       title: ""
       type: Image
       width: 1080
-      height: 0
+      height: 1
       renderFun: .plot
-
-    # - name: freqs
-    #   title: CrossTables
-    #   type: Table
-    #  # description: a table of proportions
-    #   columns: [ ]
-    #   clearWith:
-    #     - row_vars
-    #     - col_vars
-    #     - tab_vars
-    #     - pct
-    #     - wt
-    #     - na
-
-    # - name:  ttest
-    #   title: Independent Samples T-Test
-    #   type: Table
-    #   rows:  1
-    #   columns:
-    #     - name: var
-    #       title: ''
-    #       type: text
-    #     - name: t
-    #       type: number
-    #     - name: df
-    #       type: integer
-    #     - name: p
-    #       type: number
-    #       format: zto,pvalue
-
-
-    # - name: plot
-    #   title: Table
-    #   type: Image
-    #   width:  720
-    #   height: 200
-    #   renderFun: .plot
-    #
-    # - name: plot_legend
-    #   title: ""
-    #   type: Html
+      visible: false
+      clearWith: []
 ...

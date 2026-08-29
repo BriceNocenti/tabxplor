@@ -15,3 +15,4 @@ A tabxplor_tab.
 \description{
 Transform chi2 attribute table of a tabxplor_tab into rows with pvalues.
 }
+\keyword{internal}

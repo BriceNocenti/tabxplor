@@ -1,8 +1,0 @@
-sequential DT=8 : 3.325 s
-[mirai dispatcher=TRUE ] W= 4  setup 3.50 s | batch 2.835 s | batch-speedup 1.17x
-[mirai dispatcher=FALSE] W= 4  setup 1.79 s | batch 3.080 s | batch-speedup 1.08x
-[mirai dispatcher=TRUE ] W= 8  setup 6.24 s | batch 2.730 s | batch-speedup 1.22x
-[mirai dispatcher=FALSE] W= 8  setup 3.49 s | batch 3.005 s | batch-speedup 1.11x
-[mirai dispatcher=TRUE ] W=12  setup 9.22 s | batch 2.340 s | batch-speedup 1.42x
-[mirai dispatcher=FALSE] W=12  setup 6.08 s | batch 2.755 s | batch-speedup 1.21x
-DONE

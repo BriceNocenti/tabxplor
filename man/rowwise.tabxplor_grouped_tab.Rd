@@ -19,3 +19,4 @@ An object of class \code{tabxplor_grouped_tab} and \code{rowwise_df}.
 \description{
 rowwise method for class tabxplor_grouped_tab
 }
+\keyword{internal}

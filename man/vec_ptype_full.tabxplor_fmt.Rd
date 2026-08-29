@@ -17,3 +17,4 @@ A single string with full fmt type.
 \description{
 Printed type for class fmt
 }
+\keyword{internal}

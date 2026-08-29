@@ -14,7 +14,11 @@ tab_get_wrapped_dimensions(tabs, no_tab_vars = FALSE, width_pad = 4L)
 
 \item{width_pad}{Number of characters lengths between columns.}
 }
+\value{
+A list with the row count and the max character width.
+}
 \description{
 Get the number of actual rows and the max character length of a table after
 being wrapped (count \verb{\\n} as a linebreak).
 }
+\keyword{internal}

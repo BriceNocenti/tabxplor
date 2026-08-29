@@ -1,0 +1,358 @@
+---
+title: "Programmer avec tabxplor"
+description: >
+  Programmer avec la case fmt — savoir ce qu'est un tableau, atteindre n'importe quel champ ou attribut, écrire ses propres chaînes de traitement.
+output: rmarkdown::html_vignette
+---
+
+```{r, include = FALSE}
+# Messages and warnings are off for every chunk: the teaching notes tabxplor prints (an
+# auto-detected family, an over-dispersion caveat) are explained in the prose where they
+# matter, and repeated under every table they only clutter it. Re-enable one with
+# `message = TRUE` on the chunk that needs it.
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>",
+                      message = FALSE, warning = FALSE)
+```
+
+```{r setup}
+library(tabxplor)
+library(dplyr)
+
+# Les tableaux sont rendus comme les vrais tableaux html de tabxplor (le reglage recommande au
+# quotidien) ; la feuille de style partagee est emise une fois par tab_css() ci-dessous, et les
+# infobulles restent coupees ici.
+options(tabxplor.print = "html")
+options(tabxplor.tab_kable_css = FALSE)
+options(tabxplor.tab_kable_tooltips = FALSE)
+
+# Les sorties console (vecteurs, champs...) gardent leurs couleurs de terminal, converties par
+# fansi. options(tabxplor.lang = "fr") affiche les legendes et les notes en francais.
+options(cli.num_colors = 256)
+options(tabxplor.lang = "fr")
+# Le tableau des formes qu'un predicteur continu dessine sous le pied de tableau n'est pas le
+# sujet de cette vignette.
+options(tabxplor.shape_table = "no")
+Sys.setenv(LANGUAGE = "fr")   # idem : les libelles de resume de test / ajustement passent par gettext
+set_color_palette(theme = "light")
+```
+
+```{r, echo = FALSE, results = "asis"}
+# The website carries a light/dark switch and tab_css("auto") follows it; a shipped vignette
+# is always read on a light page, so there it stays light.
+cat(tab_css(theme = if (Sys.getenv("IN_PKGDOWN") == "true") "auto" else "light"))
+```
+
+```{r, echo = FALSE, include = FALSE}
+# Colorer les sorties console (ANSI -> html, via fansi), mais rendre les resultats as-is (les
+# tableaux html, marques par knitr d'un jeton ASIS) au hook par defaut de knitr, intacts.
+# Escape the three HTML specials before fansi turns the ANSI codes into markup.
+esc_html <- function(x) gsub(">", "&gt;", gsub("<", "&lt;", gsub("&", "&amp;", x, fixed = TRUE),
+                                               fixed = TRUE), fixed = TRUE)
+default_output_hook <- knitr::knit_hooks$get("output")
+knitr::knit_hooks$set(output = function(x, options) {
+  if (grepl("KNITR_ASIS_OUTPUT_TOKEN", x, fixed = TRUE)) return(default_output_hook(x, options))
+  paste0('<pre class="r-output"><code>',
+         fansi::sgr_to_html(x = esc_html(x), warn = FALSE),
+         '</code></pre>')
+})
+# A cli message or warning is its own kind of condition, so knitr routes each through its own hook,
+# not `output`: without these two it would land in the collapsed source block, ANSI codes and all.
+for (hook in c("message", "warning")) {
+  knitr::knit_hooks$set(stats::setNames(list(function(x, options) {
+    paste0('<pre class="r-output"><code>',
+           fansi::sgr_to_html(x = esc_html(x), warn = FALSE),
+           '</code></pre>')
+  }), hook))
+}
+```
+
+Cette page s'adresse à qui veut **programmer avec** `tabxplor` — écrire ses propres fonctions, extraire les nombres sous-jacents, ou remodeler un tableau case par case. Pour seulement construire et lire des tableaux, le point de départ est [Introduction à tabxplor](tabxplor-fr.html).
+
+Chaque colonne de nombres d'un tableau `tabxplor` est un unique vecteur de classe **`tabxplor_fmt`** (« nombre formaté »). En coulisses, il s’agit d’un [record `vctrs`](https://vctrs.r-lib.org/reference/new_rcrd.html) : derrière la seule valeur visible, chaque case stocke **toutes les données nécessaires pour calculer le nombre affiché, sa mise en forme et sa couleur** — effectifs, pourcentages, différences, risques relatifs, bornes d'intervalle de confiance, rapports de cotes, etc. Comme c'est un véritable vecteur, il survit à tous les verbes `dplyr`, et il est possible de lire ou de réécrire n'importe lequel de ses champs.
+
+```{r}
+gss_simple <- gss_cat_data_formatting()
+tabs <- tab(gss_simple, race, marital, pct = "row", color = "difference")
+```
+
+## Récupérer les nombres bruts
+
+Le moyen le plus rapide de récupérer les nombres sous-jacents sous forme de vecteurs numériques ordinaires est `get_num()`, qui extrait le champ actuellement affiché :
+
+```{r}
+tabs |> mutate(across(where(is_fmt), get_num))
+```
+
+Pour obtenir plutôt les chaînes de caractères (formatées, mais sans les couleurs), utiliser `format()` :
+
+```{r, eval = FALSE}
+tabs |> mutate(across(where(is_fmt), format))
+```
+
+Un champ individuel se lit le plus simplement avec `$` sur la colonne fmt (voir « Lire et modifier les champs » ci-dessous) :
+
+```{r}
+tabs$Married$pct
+```
+
+## Les champs d'une case
+
+Une case `tabxplor_fmt` porte **21 champs** (beaucoup valent `NA` lorsque la quantité correspondante n'a pas été demandée). Les champs destinés à l'utilisateur sont :
+
+| Champ | Signification |
+|:------|:--------|
+| `n`         | effectif non pondéré (entier) |
+| `wn`        | effectif pondéré |
+| `pct`       | pourcentage |
+| `mean`      | moyenne (variables en colonne numériques) |
+| `diff`      | différence avec la case Total / de référence |
+| `ratio`     | rapport à la référence (risque relatif, ou rapport de moyennes) |
+| `ci_inf`, `ci_sup` | bornes de l'intervalle de confiance |
+| `pvalue`    | p-valeur de significativité par case (alimente les étoiles) |
+| `or`        | rapport de cotes / rapport de risques relatifs |
+| `ctr`       | contribution au Chi2 (`color = "contrib"`) |
+| `var`       | variance (colonnes numériques ; variance du Chi2 avec `pct`) |
+| `tot_n`     | la base propre à la case — l'effectif sur lequel son pourcentage est calculé |
+| `n_eff`     | taille d'échantillon effective utilisée pour l'intervalle de confiance, avec `options(tabxplor.design_effect = TRUE)` ou un plan `survey` |
+| `obs`       | `tab_reg()` seulement : l'effet observé (brut) auquel l'effet modélisé est comparé |
+| `gap_se`    | `tab_reg()` seulement : l'erreur-type de l'écart entre l'estimation et `obs` |
+| `digits`    | nombre de décimales à afficher (par case) |
+| `display`   | quel champ est affiché (par case) |
+| `row_kind`  | le type de ligne où se trouve la case : `"data"`, `"total"`, ou l'une des lignes d'affichage synthétiques `"n"` / `"pct"` / `"pvalue"` / `"gof"` / `"blank"` |
+| `in_tottab`, `in_refrow` | la case est-elle dans un tableau de total / une ligne de référence (logique) |
+
+(`row_kind` a remplacé un champ logique `in_totrow` en 2.0.0. `x$in_totrow` renvoie toujours ce logique, et `is_totrow()` / `as_totrow()` sont inchangés.)
+
+Il est possible de visualiser l'ensemble du data frame sous-jacent d'une colonne avec `vctrs::vec_data()` :
+
+```{r}
+vctrs::vec_data(tabs$Married)
+```
+
+## Lire et modifier les champs
+
+Il est possible d’accéder à un champ avec `$` (le plus commode), ou autrement avec `vctrs::field()` :
+
+```{r, eval = FALSE}
+tabs$Married$pct
+tabs |> mutate(across(where(is_fmt), ~ .$pct))
+tabs |> mutate(across(where(is_fmt), ~ vctrs::field(., "pct")))
+```
+
+Les intervalles de confiance sont stockés sous forme de leurs deux bornes, les champs `ci_inf` et `ci_sup` :
+
+```{r}
+ci_tab <- tab(gss_simple, race, marital, pct = "row", ci = "cell")
+ci_tab$Married$ci_inf
+ci_tab$Married$ci_sup
+```
+
+Pour changer le champ affiché avec `set_display()` :
+
+```{r, eval = FALSE}
+tabs |> set_display("diff")
+tabs |> mutate(across(where(is_fmt), ~ set_display(., "diff")))
+```
+
+Pour modifier un champ, la voie la plus simple est `dplyr::mutate()` **sur le vecteur fmt lui-même** — une colonne `tabxplor_fmt` se comporte comme un petit data frame de ses champs. Par exemple, pour arrondir chaque case à deux décimales :
+
+```{r, eval = FALSE}
+tabs |> mutate(across(where(is_fmt), ~ mutate(., digits = 2L)))
+```
+
+Un exemple plus complet : transformer la variance d'un tableau de moyennes en écart-type et l'ajouter comme une nouvelle colonne, non colorée, affichée à une décimale :
+
+```{r, eval = FALSE}
+tab(gss_simple, race, c(age, tvhours), digits = 1L) |>
+  mutate(across(
+    c(age, tvhours),
+    ~ mutate(., var = sqrt(var), display = "var", digits = 1L) |> set_color("no"),
+    .names = "{.col}_sd"
+  ))
+```
+
+## Affichage composite : combiner des champs
+
+`set_display()` choisit *un* champ à afficher. Pour montrer **plusieurs champs dans une même case**, il est possible de lui donner un **gabarit** `{}` plutôt qu'un simple nom de champ — le même gabarit qu’il est possible de passer à `tab(display =)` lors de la construction du tableau. Le gabarit est un texte ordinaire avec des `{champ}` :
+
+```{r}
+tabs |> set_display("{pct} ({diff})")
+```
+
+Les règles :
+
+- Les **jetons valides** sont `pct`, `n`, `wn`, `mean`, `est`, `base`, `diff`, `ratio`, `ci`, `moe`, `or`, `ctr`, `var`, `sd`, `cv`, `coef`, `resid`, `obs`, `gap` — le même ensemble que les affichages à champ unique. La plupart nomment un champ stocké ; quelques-uns sont **dérivés**, donc en lecture seule : `resid` (à partir de la pvalue et du signe de `ctr`), `sd` et `cv` à partir de `var`, `gap` à partir de `est` et `obs`.
+- Deux d'entre eux sont **relatifs à l'échelle**, ce qui permet à un même gabarit de fonctionner sur n'importe quel tableau : `{est}` est ce que la colonne estime (un pourcentage, une différence, un rapport de cotes) et `{base}` le niveau sur lequel il porte (un pourcentage, une moyenne, un effectif). `"{est} ({base})"` se lit de la même façon sur un tableau croisé et sur une régression.
+- Les mises en page courantes ont un **nom** : `"est"`, `"est_ci"`, `"est_base"`, `"base_est"`, `"base"`, `"base_ci"`, `"base_moe"`, `"mean_sd"`, `"mean_cv"`. Ce sont les mêmes noms dans `tab()`, dans `tab_reg()` et dans `set_display()`.
+- Le premier jeton **hors crochets** est le jeton *primaire* : c'est ce que renvoie `get_num()`, la valeur que garde Excel, et la seule part que peignent les couleurs. Un gabarit sans aucun jeton hors crochets n'a pas de primaire, et s'affiche entièrement comme une mention secondaire.
+- Un jeton peut porter **sa propre précision** — `"{est} ({base:1})"` —, qui l'emporte sur le `digits` de la colonne.
+- Un **nom de champ simple** est un raccourci pour son propre gabarit, donc `set_display("ci")` est exactement `set_display("{ci}")`.
+- Il s’agit simplement d’un affichage pour les sorties texte (la console, `tab_html()`, `tab_md()`) : les champs stockés restent intacts, il est possible de revenir en arrière à tout moment.
+- Le champ `{ci}` imprime déjà ses propres crochets `[…;…]` ; écrire `"{pct} {ci}"` et **non** `"{pct} [{ci}]"`, qui les doublerait.
+
+## Créer une colonne à partir d'un autre champ
+
+Comme changer l'affichage ne recalcule rien — chaque champ est déjà stocké dans la case — il est possible d’**afficher un champ dans une nouvelle colonne**. Par exemple une nouvelle colonne avec la différence par rapport à la catégorie de référence :
+
+```{r}
+tab(gss_simple, race, marital, pct = "row") |>
+  mutate(across(where(is_fmt), ~ set_display(., "diff"), .names = "{.col}_diff"))
+```
+
+`.names = "{.col}_diff"` conserve les colonnes de pourcentages originales et ajoute à côté de chacune un jumeau `<nom>_diff`. (Si une colonne `diff` ressort vide, c'est que le tableau de départ n'avait pas de case de référence : la construire avec `ref =` / `comp =`, ou avec `color = "difference"`.)
+
+La même recette place une **prédiction ajustée** à côté d'un effet de régression. Deux appels supplémentaires rendent la copie purement *descriptive* : `set_color("")` lui retire sa couleur (l'échelle appartient à l'effet, et la même échelle deux fois n'est que du bruit), et `set_pvalue(NA_real_)` lui retire ses étoiles — la p-value stockée en est la seule source, donc l'effacer est la façon directe de dire « cette copie ne teste rien » :
+
+```{r, eval = FALSE}
+tab_reg(gss_simple, "married", c("race", "rincome"), family = "binomial",
+        display = "est_base") |>
+  mutate(Model_pct = Model_OR |> set_display("{base}") |> set_color("") |>
+                       set_pvalue(NA_real_),
+         .after = Model_OR)
+```
+
+## Lignes de total, lignes et colonnes de référence
+
+Des fonctions de test logique permettent d'agir sur les parties structurelles d'un tableau : `is_totrow()` / `is_tottab()` / `is_refrow()` (au niveau de la case, vecteurs logiques : est-ce que la case appartient à une ligne Total ? À un sous-tableau "Ensemble" ? À une ligne de référence ?), et `is_totcol()` / `is_refcol()` (au niveau de la colonne : est-ce que la colonne est une colonne Total ? Est-ce qu’elle est la colonne de référence ?). Ils permettent, par exemple, d’appliquer une mise en forme différence sur la ligne Total et sur le corps du tableau :
+
+```{r, eval = FALSE}
+# moins de décimales sur la ligne Total que sur le corps du tableau :
+tab(gss_simple, race, marital, race, pct = "row") |>
+  mutate(across(
+    where(is_fmt),
+    ~ if_else(is_totrow(.), mutate(., digits = 1L), mutate(., digits = 2L))
+  ))
+```
+
+## Attributs de colonne
+
+Outre les champs de chaque case, chaque colonne `fmt` porte quelques **attributs de niveau colonne**, lus et fixés avec `get_*` / `set_*` (ou `is_*` / `as_*` pour les attributs logiques) :
+
+- `scale` — `get_scale()` / `set_scale()` : **ce que la colonne estime**. Un niveau (`"level_n"`, `"level_pct"`, `"level_mean"`), une différence (`"points"` pour des points de pourcentage, `"mean_diff"`, `"raw_diff"` pour un coefficient de régression dans l’unité de la variable à expliquer), un rapport (`"pct_ratio"`, `"mean_ratio"`, `"odds_ratio"`) ou un coefficient sur l’échelle du lien (`"log_coef"`). Il indique quel champ contient l’estimation, quelle est sa valeur nulle, et sur quelle échelle de couleurs elle se lit.
+- `pct_type` — `get_pct_type()` / `set_pct_type()` : pour un pourcentage, de quoi il est le pourcentage — `"row"`, `"col"`, `"all"`, `"all_tabs"`, ou `"none"` pour les effectifs, les moyennes et les coefficients.
+- `ci_method` — `get_ci_method()` : quelle méthode a calculé les bornes de cette colonne (`"wilson"`, `"newcombe"`, `"welch"`, `"katz"`…; `""` si la colonne ne porte pas d’intervalle).
+- `color` — `get_color()` / `set_color()` : la mesure de couleur de la colonne — `""`, `"no"`, ou l'un des noms de mesure `"difference"`, `"ratio"`, `"odds_ratio"`, `"contrib"` (plus `"adjustment"` / `"between_groups"` sur un tableau `tab_reg()`). Les acronymes de la discipline (`"diff"`, `"OR"`, `"or"`, `"RR"`, `"RD"`) restent des raccourcis permanents que l'on peut *écrire*, mais un tableau construit stocke toujours — et sa légende nomme toujours — le mot complet.
+- `col_group` — `get_col_group()` : la sous-population à laquelle appartient le bloc de la colonne, après un pivot `spread_vars` / `tab_spread()` ou une partition `tab_reg(tab_vars =)` (`""` sinon). Avec `col_var`, il identifie un *bloc* de colonnes : deux blocs peuvent montrer la même variable pour deux sous-populations, et les exports les titrent sur deux lignes.
+- `col_var` — `get_col_var()` : le nom de la variable en colonne (un tableau peut en contenir plusieurs, un nom différent ajoute une bordure verticale entre les différences variables de colonne).
+- `comp_all` — `get_comp_all()` : avec des `tab_vars`, la référence de comparaison est-elle le sous-tableau (`FALSE`) ou le tableau entier (`TRUE`) ?
+- `totcol` / `refcol` — `is_totcol()` / `is_refcol()` : est-ce une colonne de total / une colonne de référence ?
+
+## Savoir ce qu'on a en main avant d'y toucher
+
+Un code générique ne peut pas présumer de la forme du tableau qu'on lui passe. Trois accesseurs y répondent, de sorte qu'une fonction se décide sur des faits plutôt que sur une devinette tirée des noms de colonnes.
+
+`tab_structure()` dit **ce qu'est l'objet** — un tableau croisé ou un tableau de régression, fusionné ou non, groupé ou non, et quelles variables occupent chaque axe :
+
+```{r}
+t <- tab(gss_simple, race, marital, pct = "row", ci = "ref", color = "difference")
+tab_structure(t)
+```
+
+`tab_columns()` est la vue au niveau des colonnes : une ligne par colonne, avec tout ce que lisent les exportateurs et le moteur de couleurs — ce qu'elle estime, sa référence, sa méthode d'intervalle de confiance, son rôle :
+
+```{r}
+tab_columns(t) |> dplyr::select(column, scale, pct_type, ref, ci_method, totcol)
+```
+
+Enfin, `fmt_attr()` lit ou écrit **n'importe lequel de ces faits par son nom**, ce qui est le pendant programmatique de la famille `get_*` / `set_*` ci-dessus — utile quand l'attribut est lui-même une variable :
+
+```{r}
+fmt_attr(t$Married, "scale")
+fmt_attr(t$Married, "ci_method")
+```
+
+Sur un tableau de régression, `reg_measures(data, outcome)` joue le même rôle pour le modèle : il liste les combinaisons `effect` × `measure` que cette variable à expliquer accepte, et pourquoi les autres sont refusées.
+
+## Construire des cases à partir de zéro
+
+`fmt()` construit un vecteur `fmt` directement à partir de nombres — pratique pour les tests, ou pour ajouter une colonne calculée à la main. Tout ce dont les moteurs d'affichage et les repères de couleur ont besoin peut être fourni :
+
+```{r}
+fmt(n = c(10L, 20L, 30L), pct = c(0.1, 0.2, 0.7), display = "pct", digits = 0L)
+```
+
+## Tableaux à partir d'effectifs déjà agrégés
+
+Parfois, les données arrivent déjà croisées — un tableau d'effectifs issu d'un rapport, une `table()`, une matrice de fréquences. `tab_counts()` construit le même tableau `tabxplor` que `tab()`, mais à partir de ces effectifs plutôt que des observations brutes et des données individuelles.
+
+L'entrée la plus courante est un data frame d'**effectifs au format long** (une ligne par combinaison, l'effectif dans une colonne) :
+
+```{r}
+counts <- dplyr::count(gss_simple, marital, race)
+tab_counts(counts, marital, race, counts = n, pct = "row", color = TRUE)
+# identique à tab(gss_simple, marital, race, pct = "row", color = "difference")
+```
+
+L’entrée peut aussi être une `table()` / `xtabs()` / matrice, et lit un dataframe au format **large** (une colonne par modalité de la variable en colonne) via `cols =` / `col_name =` :
+
+```{r, eval = FALSE}
+tab_counts(table(gss_simple$marital, gss_simple$race), pct = "row", color = "difference")
+
+wide <- tidyr::pivot_wider(counts, names_from = race, values_from = n)
+tab_counts(wide, row_var = marital, cols = c(White, Black, Other),
+           col_name = "race", pct = "row", color = "difference")
+```
+
+La pondération fonctionne comme dans `tab()` : passer l'effectif non pondéré dans `counts` et l'effectif pondéré dans `wt_counts` — les estimations utilisent l'effectif pondéré, les intervalles de confiance et le Chi2 utilisent le N non pondéré. (`options(tabxplor.design_effect = TRUE)` a besoin des poids individuels, que des effectifs déjà agrégés ne portent plus : elle ne s'applique donc pas ici — les intervalles de confiance utilisent le N non pondéré, et la note de bas de page le dit plutôt que de revendiquer une correction absente.) Quand les seuls chiffres disponibles sont des nombres non entiers (des pourcentages × une base, ou des effectifs pondérés seulement), les intervalles de confiance et le test du Chi2 sont désactivés avec un message.
+
+## Passer un tableau groupé en colonnes
+
+Un tableau **groupé** (construit avec des `tab_vars`) empile un sous-tableau par groupe. `tab_spread()` bascule les modalités d'une variable de groupe en **colonnes côte à côte** — idéal pour comparer une même mesure entre les groupes. D'abord sélectionner la colonne de mesure voulue, puis basculer :
+
+```{r}
+tab(gss_simple, relig, marital, year, pct = "row", totaltab = "no", tot = "row") |>
+  dplyr::select(year, relig, Married) |>
+  tab_spread(year)
+```
+
+`tab(..., spread_vars = year)` fait la même chose en un seul appel. `tab_reg(..., tab_vars =)` produit un tableau groupé qui se bascule de la même façon — voir [Tableaux de régression](tabxplor-reg-fr.html).
+
+## Construire plusieurs tableaux d'un coup
+
+`tab()` accepte des **vecteurs d'arguments** pour construire plusieurs tableaux de formes différentes en un seul appel (`output_list = TRUE` les garde sous forme de liste plutôt que de les fusionner). Pour un lot entièrement piloté par les données, `purrr::pmap()` sur une petite table de spécifications est l'idiome — une ligne par tableau, une colonne par argument :
+
+```{r, eval = FALSE}
+specs <- tibble::tribble(
+  ~row_var, ~col_var,  ~pct,
+  "race",   "marital", "row",
+  "relig",  "party3",  "row",
+)
+purrr::pmap(specs, \(row_var, col_var, pct)
+            tab(gss_simple, all_of(row_var), all_of(col_var), pct = pct))
+```
+
+
+## Options avancées
+
+Au-delà des réglages les plus habituels ([Introduction à tabxplor](tabxplor-fr.html) &rarr; *Options globales R*), ces `options()` ajustent les exportateurs et la construction des tableaux.
+
+HTML / `tab_html()` :
+
+- `tabxplor.tab_kable_css` — inclure la feuille de style avec chaque tableau (`TRUE`) ; la mettre à `FALSE` dans un document à plusieurs tableaux, et appeler `tab_css()` une seule fois à la place (comme cette page).
+- `tabxplor.tab_kable_tooltips` — les infobulles au survol des cases (`TRUE`) ; la mettre à `FALSE` une fois par document pour les couper partout.
+- `tabxplor.tab_kable_num_font` — la pile de polices CSS des nombres (tout le reste relève de `tab_css()`).
+- `tabxplor.kable_popover` — des info-bulles au clic plutôt qu'au survol.
+
+Excel / `tab_export("xl")` :
+
+- `tabxplor.xl_font_text` / `tabxplor.xl_font_num` / `tabxplor.xl_font_num_stars` — les polices des étiquettes, des nombres et des nombres avec étoiles.
+- `tabxplor.xl_ratio_cells` — sous quelle forme une case multiplicative arrive dans Excel : `"fold"` (le défaut, l'écart signé comme nombre), `"raw"` (le rapport non transformé) ou `"text"` (la chaîne d'affichage exacte).
+
+Console, statistiques et chemins :
+
+- `tabxplor.console_bold` — mettre en gras les cases de référence / de total / colorées (détecté automatiquement selon l'éditeur).
+- `tabxplor.stars` — l'échelle de significativité, sous la forme d'un seul vecteur nommé : `options(tabxplor.stars = c("*" = 0.05, "**" = 0.01))`.
+- `tabxplor.export_dir` — le répertoire d'export par défaut.
+
+Performance et intégration :
+
+- `tabxplor.parallel` — construire un processus par variable en ligne sur un pool en arrière-plan (nécessite `mirai`) ; `tabxplor.parallel_min` fixe le plus petit nombre de variables en ligne qui vaille la peine d'être distribué. Le pool se libère avec `tab_parallel_stop()`.
+
+Voir `?tabxplor-options` pour la liste complète et chaque valeur par défaut.
+
+## Voir aussi
+
+- [Introduction à tabxplor](tabxplor-fr.html) — les tableaux croisés et les aides à la coloration.
+- [Tableaux de régression](tabxplor-reg-fr.html) — les tableaux de régression.
+- [Données pondérées et plans de sondage](tabxplor-weights-fr.html) — pondération et plans de sondage.
+- `?fmt` et `?tabxplor-vctrs` pour le type de case, `?tabxplor-options` pour chaque option, `?tab` pour les arguments et `?tabxplor-display` pour les jetons d'affichage.

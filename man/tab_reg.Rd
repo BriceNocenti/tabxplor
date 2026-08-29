@@ -2,252 +2,464 @@
 % Please edit documentation in R/tab_reg.R
 \name{tab_reg}
 \alias{tab_reg}
-\title{Regression table (effect measures) as a tabxplor table}
+\title{All-in-one tables for regressions, with each modelled effect beside its observed one}
 \usage{
 tab_reg(
   data,
-  dependent,
+  outcome,
   predictors = NULL,
-  family = "auto",
+  tab_vars = NULL,
   wt = NULL,
-  ids = NULL,
-  strata = NULL,
-  fpc = NULL,
-  nest = FALSE,
-  exponentiate = "nongaussian",
-  effect = c("coefficient", "ame"),
-  at = c("average", "reference"),
+  family = "auto",
+  link = "auto",
+  measure = "auto",
+  effect = "auto",
+  outcome_level = NULL,
   trials = NULL,
-  conf_level = 0.95,
-  method = c("wald", "profile"),
-  reference = NULL,
-  inverse_two_level_factors = TRUE,
-  split_var = NULL,
-  multiplicator = NULL,
-  empirical_OR = FALSE,
-  stats = NULL,
-  compare = c("none", "baseline", "sequential"),
-  baseline = NULL,
-  estimate_display = c("value", "ci", "prob", "ame"),
-  color = NULL,
+  empirical = TRUE,
+  n = NULL,
+  color = "measure",
   color_signif = NULL,
   stars = TRUE,
+  ref = NULL,
+  multiplier = "2sd",
+  shape = NULL,
+  stats = "auto",
+  conf_level = NULL,
+  na = c("drop_by_outcome", "drop_by_model", "drop_all", "keep_for_predictors"),
+  display = NULL,
+  digits = 0,
   cleannames = NULL,
-  subtext = ""
+  subtext = "",
+  caption = NULL,
+  ...
 )
 }
 \arguments{
-\item{data}{A data frame, \strong{or a prebuilt survey design} (\code{\link[survey:svydesign]{survey::svydesign()}} /
-\code{\link[survey:svrepdesign]{survey::svrepdesign()}}). When a design is passed, its weights (and clustering / stratification /
-calibration) drive the estimation and \code{wt} / \code{ids} / \code{strata} / \code{fpc} are ignored.}
+\item{data}{A data frame, \strong{or a prebuilt survey design} (\code{\link[survey:svydesign]{survey::svydesign()}}). A design's
+weights, clustering, stratification and calibration drive the estimation, and \code{wt} is ignored.}
 
-\item{dependent}{Character outcome variable name(s), \strong{or a model formula} (the escape hatch).
-With a \code{predictors} character vector, several names give one effect column per outcome; with a
-\code{predictors} list, a single name is required. A formula supplies its own model (leave
-\code{predictors} unset).}
+\item{outcome}{<\code{\link[tidyr:tidyr_tidy_select]{tidy-select}}> The outcome variable(s) --- bare
+names, quoted names, or any selection helper, exactly as in \code{\link[=tab]{tab()}} --- \strong{or a model formula}
+(the escape hatch; leave \code{predictors} unset). Several names give one effect column per outcome;
+with a \code{predictors} list, a single name is required. \code{\link[=reg_formulas]{reg_formulas()}} shows what was fitted.}
 
-\item{predictors}{Either a character vector of predictor names (one model), or a \strong{named list}
-of character vectors (one model per element, its name labelling the column). Leave \code{NULL} when
-\code{dependent} is a formula.}
+\item{predictors}{<\code{\link[tidyr:tidyr_tidy_select]{tidy-select}}> The predictors of one model --- or a
+\strong{named list}, one model per element, its name labelling the column, each element selected on
+its own (\code{list(m1 = c(race, age), m2 = starts_with("inc"))}), which is how models are compared.
+Leave \code{NULL} when \code{outcome} is a formula. A bare name is a column of \code{data} first, then an
+object, so a variable holding names works without \code{all_of()}.
 
-\item{family}{The model family. \code{"auto"} (default) detects a binary (-> \code{"binomial"}), an ordered
-3+ level (-> \code{"ordinal"}), a nominal 3+ level (-> \code{"multinomial"}), or a continuous
-(-> \code{"gaussian"}) outcome and emits a message; an integer count stays ambiguous and must be named.
-Set it explicitly with \code{"gaussian"} (linear), \code{"binomial"} (logistic), \code{"poisson"} /
-\code{"quasipoisson"} (counts), \code{"multinomial"} (nominal 3+ level), \code{"ordinal"} (ordered 3+ level).}
+\strong{\code{a*b} is an interaction}, R's own spelling, bare or quoted --- \emph{"a's effect, allowed to vary
+with b"}. Two categorical variables give one row per \strong{cell} of the pair; a continuous \code{a}
+gives its \strong{slope within each level} of \code{b}. An interaction supplies both its variables, so do
+not list them beside it, which is what makes "with and without" an ordinary model comparison.
+\code{a:b}, which drops the main effects, is refused. See
+\href{https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.html}{the regression
+vignette}.}
 
-\item{wt}{Optional. Name of a weight column (character). Switches to design-based survey estimation
-(\code{\link[survey:svyglm]{survey::svyglm()}}): the sandwich standard errors are scale-invariant, so raw population weights
-are handled correctly (no normalisation) and the point estimates match the weighted crosstabs.}
+\item{tab_vars}{<\code{\link[tidyr:tidyr_tidy_select]{tidy-select}}> Optional. One grouping variable ---
+the same argument as \code{\link[=tab]{tab()}}'s: one sub-table per group, the same model(s) fitted \strong{within each
+level}. Two readings of "does this effect hold in every subgroup?" come with it:
+\code{color = "between_groups"} colours and tests each effect against the first group's, row by row,
+and \code{stats = c(..., "group_interaction")} adds the aggregated test, once per predictor. For an
+interaction between two PREDICTORS of one model, write it in \code{predictors} as \code{a*b} instead.}
 
-\item{ids, strata, fpc}{Optional survey-design specification for the \code{wt} path (each a column name /
-character vector, or a formula such as \code{~psu} / \code{~region}). \code{ids} gives the cluster identifier(s)
-from largest to smallest stage (default no clustering); \code{strata} the stratifying variable(s);
-\code{fpc} the finite-population correction. Give correct clustering/stratification for honest
-design-based variances (a flat \code{ids = ~1} can understate them). Ignored when \code{data} is a design.}
+\item{wt}{<\code{\link[tidyr:tidyr_tidy_select]{tidy-select}}> Optional. One weight column, switching to
+design-based survey estimation (\code{\link[survey:svyglm]{survey::svyglm()}}). For clustering, stratification, a
+finite-population correction or calibration, build the design with \code{\link[survey:svydesign]{survey::svydesign()}} and
+pass it as \code{data}. See \code{vignette("tabxplor-weights")}.}
 
-\item{nest}{Logical. Passed to \code{\link[survey:svydesign]{survey::svydesign()}}: set \code{TRUE} when cluster ids are reused across
-strata. Default \code{FALSE}.}
+\item{family}{The model family, \strong{resolved per outcome} so several outcomes with different
+families can share one table. \code{"auto"} (default) detects each one and says so: a binary outcome
+gives \code{"binomial"}, an ordered 3+ level \code{"ordinal"}, a nominal 3+ level \code{"multinomial"}, any
+other numeric \code{"gaussian"} --- a genuine count is yours to name. Or set it: \code{"gaussian"}
+(linear), \code{"binomial"} (logistic), \code{"poisson"} / \code{"quasipoisson"} (counts),
+\code{"multinomial"}, \code{"ordinal"}. A \strong{scalar} applies to every outcome; a \strong{vector} aligned to
+\code{outcome}, or a \strong{named} vector keyed by outcome (e.g. \code{c(income = "poisson", satisfied = "binomial")}), sets one family per outcome. Mixed families need a character \code{predictors}.
 
-\item{exponentiate}{Whether to exponentiate coefficients into ratios. \code{"nongaussian"} (default)
-exponentiates every family except gaussian (odds ratios / incidence-rate ratios, leaving linear
-betas raw); \code{TRUE} / \code{FALSE} force it on / off for all columns. Ignored when \code{effect = "ame"}
-(marginal effects are always on the response scale).}
+It answers \strong{one} question --- what kind of number the outcome is --- and never picks a link
+behind your back: on a binary outcome \code{family = "poisson"} is refused, naming the two things it
+could have meant, \code{link = "ratio"} and \code{measure = "ratio"}.}
 
-\item{effect}{The interpretation scale, orthogonal to \code{family}. \code{"coefficient"} (default) shows the
-native per-family effect (beta / OR / IRR / cumulative-OR). \code{"ame"} shows \strong{average marginal
-effects} with the adjusted \strong{predicted probability} in parentheses (e.g. \verb{-8\%*** (16\%)}): a
-probability-scale, cross-model-comparable summary (Mood 2010) for logistic / multinomial / ordinal
-outcomes (percentage points), the expected-count change for poisson, and the coefficient itself for
-gaussian. Requires the \code{marginaleffects} package. A multinomial / ordinal outcome gets one AME
-column per outcome category.}
+\item{link}{\strong{Which measure the model estimates} --- the only argument that changes the model.
+A link \emph{is} a measure (the one a model gives you directly), so it takes \code{measure}'s own words:
+\itemize{
+\item \code{"auto"} (default) --- the family's own: logistic for a binary outcome, linear for a
+quantity, Poisson for a count.
+\item \code{"odds_ratio"} --- the logit fit (binomial, multinomial, ordinal).
+\item \code{"ratio"} --- the log link: the \strong{modified Poisson} on a binary outcome (a conditional risk
+ratio), Poisson on a count, Poisson pseudo-likelihood on a continuous one.
+\item \code{"difference"} --- the identity link; on a binary outcome the \strong{risk difference}. It can
+fail to converge, and the linear probability model then takes over, with a message.
+}
 
-\item{at}{Where the profile-conditional quantities are evaluated (needs \code{marginaleffects}).
-\code{"average"} (default) is the sample average (the AME / adjusted prediction over the data).
-\code{"reference"} evaluates at the \strong{reference profile} --- every other predictor held at its
-reference (factor first level, numeric mean): for \code{effect = "ame"} this gives the marginal effect
-\emph{at reference} (MER) with the adjusted prediction there; for a \strong{multinomial} \code{effect = "coefficient"} it gives the odds ratio of each outcome category \emph{versus the rest} at that profile
-(one column per category). It has no effect on ordinary coefficients (they are profile-independent).
-Note the reference profile can be an unusual baseline (e.g. a factor's first level = \code{"No answer"}).}
+Reach for it when you want the model's \emph{coefficient} to be that measure; to report a measure
+without changing the model, set \code{measure} instead. \code{"log"} is the one word the two arguments
+do not share: here the \strong{log link}, on \code{measure} a spelling of \code{"raw_coefficient"}.}
+
+\item{measure}{\strong{Which measure of deviation is reported} --- a deviation being how far a group
+sits from the reference, the measure which of the ways of expressing it you read. The one
+argument most readers ever set, and the one that never changes the model. \code{"auto"} (default) is
+the model's own. The full word is canonical, the discipline's acronym a synonym:
+\itemize{
+\item \code{"odds_ratio"} (\code{"OR"}) --- the odds of the outcome, times what.
+\item \code{"ratio"} (\code{"RR"}, \code{"IRR"}, \code{"RoM"}) --- how many times as likely, as frequent, as large.
+Reach for it when the outcome is \strong{common}, where an odds ratio is far from the risk ratio
+people hear in it, and because a risk ratio stays comparable across nested models.
+\item \code{"difference"} (\code{"RD"}, \code{"diff"}) --- how much more, in the outcome's own units.
+\item \code{"raw_coefficient"} (\code{"coef"}, \code{"log"}, ...) --- the model's own coefficient, un-transformed.
+}
+
+On an \strong{ordered} outcome the first three read the whole predicted distribution rather than one
+category, so they stay in one column: Somers' \code{D} and the win ratio. Where the measure IS the
+model's own it is read off the coefficients, otherwise from its predictions --- so it is
+available whichever model you fit. \code{"auto"} never lands on a \strong{predicted odds ratio}, a
+specialist quantity to be asked for by name. Call \code{\link[=reg_measures]{reg_measures()}} to see what an outcome
+offers.}
+
+\item{effect}{\strong{Where the reported number comes from}, once the model and the measure are fixed.
+\code{"auto"} (default) needs no thought: the model's own coefficients when the reported measure is
+the model's, its predictions otherwise. The other values name a reading:
+\itemize{
+\item \code{"conditional"} --- read off the coefficients ("holding the other predictors constant").
+Only where \code{measure} is the model's own; otherwise the abort names the two cures.
+\item \code{"marginal"} --- the \strong{average marginal effect}: the model's prediction for every observed
+person, averaged. Comparable across models (Mood 2010), and always available.
+\item \code{"at_reference"} --- the same at \strong{one profile}, every other predictor at its reference.
+}
+
+The contrast is a \strong{marker on the measure} in the header, so the acronym stays the one thing
+to look up: \code{Model_OR}, \code{Model_mRR}, \code{Model_refRD}. The observed companion carries the measure
+alone (\code{Obs_RR}), a univariable effect having no adjustment to be marginal over.}
+
+\item{outcome_level}{Which level of the \strong{outcome} to single out, as a named vector keyed by
+outcome name --- \code{outcome_level = c(married = "Married")}. It is the twin of \code{ref}: \strong{\code{ref}
+names the level you compare AGAINST, \code{outcome_level} the one you MODEL.}
+\itemize{
+\item \strong{binomial}: the level whose probability is estimated; it becomes the column header.
+Defaults to the outcome's \strong{first} level. A 0/1 numeric outcome may be named either way.
+\item \strong{multinomial}: the baseline category the other categories' columns are compared to.
+\item \strong{ordinal and numeric outcomes}: refused, with the reason.
+}}
 
 \item{trials}{Grouped-binomial (summed-score) outcomes only. The number of items behind the score,
 fitting \code{cbind(score, trials - score)} as a binomial. \code{NULL} (default) fits an ordinary binary
-logit; a single integer (or a vector named by dependent) sets the item count; \code{TRUE} uses each
-dependent's observed maximum score. Requires \code{family = "binomial"}.}
+logit; an integer (or a vector named by outcome) sets the item count; \code{TRUE} uses each
+outcome's observed maximum. Requires \code{family = "binomial"}.}
 
-\item{conf_level}{Confidence level for the intervals. Default \code{0.95}.}
+\item{empirical}{Show the \strong{observed, unadjusted (crude)} effect beside each modelled one ---
+the same quantity fitted with a single predictor, on exactly the same people. The distance
+between the two is what adjustment changed, read left to right; it is the feature the package
+exists for. \code{TRUE} (\strong{the default}) or \code{FALSE}; three spellings say \emph{where} it goes, and in
+every one but \code{"no"} it is stored in the \code{obs} field and read by \verb{$obs},
+\code{color = "adjustment"}, \code{\link[=forest_plot]{forest_plot()}} and the hover tooltip:
+\itemize{
+\item \code{TRUE} --- a crude \strong{column} beside the model one, except where that would double a
+table already wide (\code{tab_vars} groups, a 3+ level outcome), which take \code{"tooltip"}.
+\item \code{"column"} --- always the column, per outcome category if that is what it takes.
+\item \code{"tooltip"} --- computed, printed nowhere. The narrowest table.
+\item \code{"cell"} --- \strong{inside} the model cell, \verb{(1/1.69) 1/1.63***}. \code{display} overrides it.
+}
+The two columns are the same column twice: same estimand, same colour ladder, one legend block.
+Each cell prints the effect with the level it sits on --- the observed percentage or mean on the
+crude side, the \strong{adjusted} prediction on the model side. A \strong{continuous} predictor has no
+levels, so its crude cell is the univariable slope, which assumes linearity: check that with
+\code{shape} first.}
 
-\item{method}{How the interval and p-value are computed. \code{"wald"} (default) uses the Wald interval
-and the Wald z / t test: fast, matches standard software output, and the only option for weighted
-models. \code{"profile"} uses the profile-likelihood interval (\code{\link[stats:confint]{stats::confint()}}, needs \code{MASS}) and
-the likelihood-ratio test: more accurate near separation, unweighted binomial/poisson models only
-(else it falls back to Wald with a message; gaussian always uses the exact-t interval).}
+\item{n}{How many people the table is about. \code{NULL} (default) reads \code{options(tabxplor.n)} ---
+\code{"range"}, which adds an \code{n} column holding the \strong{unadjusted count} behind each predictor
+level, on the model's own complete cases. Where several models rest on different people it
+prints the whole range (\verb{5 139-9 862}), so an unequal base cannot pass unnoticed; \code{"min"} shows
+the smallest count only, \code{"no"} none. Continuous predictors are left blank: their count is the
+model N, the first footer row.}
 
-\item{reference}{Optional named vector \code{c(var = "baseline level")} choosing the treatment-contrast
-reference level of one or more factor predictors (the effect of every other level is measured
-against it). For a \strong{multinomial} outcome, keying the vector by the outcome name (e.g.
-\code{c(partyid = "Independent")}) also sets the baseline outcome category all the OR columns are
-compared against. This is how factor contrasts are set; other contrast codings can be applied by
-passing a formula in \code{dependent} with the terms already coded.}
+\item{color, color_signif}{Colouring of the effect cells. \code{color = "measure"} (default, \code{TRUE}
+equivalently) grades each cell on \strong{its own measure}, so the ladder follows what the column
+estimates; \code{color = FALSE} turns colouring off. \code{color_signif} is the significance policy ---
+\code{NULL} (default) is \code{"grey_non_signif"} here, where \code{\link[=tab]{tab()}} defaults to \code{"ignore"}.
 
-\item{inverse_two_level_factors}{Logical, binomial only. If \code{TRUE} (default), models the FIRST
-level of a 2-level factor dependent (e.g. \code{"1-Married"} before \code{"2-Not married"}).}
+What is left to choose is what each effect is compared \strong{to}. \code{color} is positional,
+\code{c(text, background)}, so \code{color = c("measure", "adjustment")} answers "how strong is this
+effect?" and "how much did the model change it?" in one glance:
+\itemize{
+\item \code{"adjustment"} --- how far each \strong{modelled} effect sits from its \strong{observed} (crude)
+counterpart: what adjusting for the other predictors did to it. It turns \code{empirical = TRUE}
+on. Set its thresholds with \code{\link[=set_color_breaks]{set_color_breaks()}} (\code{adj_ratio}, \code{adj_diff}, \code{adj_diff_std}).
+\item \code{"between_groups"} --- with \code{tab_vars}, how far each group's effect sits from the \strong{first}
+group's: a per-predictor reading of effect modification.
+}
 
-\item{split_var}{Optional. Name of a grouping variable (character): the regression analogue of
-\code{\link[=tab]{tab()}}'s \code{tab_vars}. The same model(s) are fitted \strong{within each level} of this variable and the
-per-group tables are stacked into one grouped table (grouped by \code{split_var}), sharing the
-variable/level stub. Use \code{\link[=tab_spread]{tab_spread()}} on \code{split_var} to pivot the groups into side-by-side
-columns for an easy across-group comparison. A level absent from a group shows empty cells.}
+The two are mutually exclusive, and each always tests its own gap: a gap whose interval covers
+zero is greyed whatever \code{color_signif} says --- so a cell can be filled while neither estimate
+carries a star, which is correct rather than odd. A conditional \strong{odds ratio} is not
+collapsible, so there the colours stay descriptive and are not tested. Read a coloured cell as
+"adjustment moved this effect", not as "this variable is a confounder". See
+\href{https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.html}{the regression
+vignette}.}
 
-\item{multiplicator}{Optional named numeric vector \code{c(var = k)} rescaling a \strong{continuous}
-predictor's effect to a k-unit change (e.g. \code{c(age = 10)} shows the odds ratio / beta per decade
-of age = OR^10 / beta*10). The confidence interval scales with it; the p-value is unchanged. Names
-must be numeric predictors; not available for multinomial / ordinal outcomes.}
+\item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are
+standard). When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still
+read the interval).}
 
-\item{empirical_OR}{Logical (binary logistic outcome only). If \code{TRUE}, adds a descriptive \strong{crude
-percentage} and \strong{crude odds ratio} column (\code{"Emp. \%"}, \code{"Emp. OR"}) beside the model odds ratio,
-for each factor predictor level -- the unadjusted "OR + PCT" companion connecting the model to the
-descriptive crosstab. Default \code{FALSE}.}
+\item{ref}{The reference every effect is measured \strong{from} --- one argument, one meaning per kind
+of predictor.
+For a \strong{factor} it is the level the others are compared against (a level name, or \code{"first"}
+(default) / \code{"last"}); for a \strong{continuous} predictor the value it is \strong{anchored} at (a number,
+or \code{"mean"} (default), \code{"median"}, \code{"min"}, \code{"max"}).
 
-\item{stats}{The goodness-of-fit statistics shown in the model-summary \strong{footer} (one block per
-model). \code{NULL} (default) uses the per-family set: linear models show N, R square, adjusted R
-square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test
-versus the null model, McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models
-also show the Pearson dispersion). Pass a character vector to pick and order the statistics
-(\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"dispersion"}, \code{"r2"}, \code{"r2_adj"},
-\code{"f_model"}, \code{"sigma"}), or \code{FALSE} / \code{"none"} to hide the footer. Weighted models show a reduced,
-survey-appropriate set (design-based Wald test, Nagelkerke pseudo-R square, AIC).}
+Anchoring a continuous predictor \strong{does not change its own effect} --- a slope is the same
+wherever you start reading it from --- but it does move the \strong{Constant} row; its own row says
+where the anchor sits, \verb{per SD/13.5 (at mean/42.4)}. The default is the mean because zero is
+usually outside the data: nobody is 0 years old.
 
-\item{compare}{Add a \strong{model-comparison} footer row (only with several models / dependents).
-\code{"none"} (default) adds nothing; \code{"baseline"} tests each model against the \code{baseline} column;
-\code{"sequential"} tests each model against the previous one. Uses a likelihood-ratio test (F for
-linear / quasi models, a design-based Wald test for weighted / survey models); when the models are
-not nested or fit on different numbers of observations it falls back to the AIC difference with a
-message.}
+\code{ref}, \code{multiplier} and \code{shape} share one grammar: a value \strong{on its own} is the default for
+every predictor it can apply to, a \strong{named} one overrides that variable ---
+\code{ref = c("median", "last", race = "Black")}.
 
-\item{baseline}{For \code{compare = "baseline"}: which column is the reference model (its label, or a
-position). Defaults to the first model.}
+For the level of the \strong{outcome}, see \code{outcome_level}: \code{ref} names the level you compare
+AGAINST, \code{outcome_level} the one you MODEL.}
 
-\item{estimate_display}{What each effect cell shows beside the estimate. \code{"value"} (default) the plain
-estimate (e.g. \code{2.34}); \code{"ci"} adds a visible confidence-interval bracket (\verb{2.34 [1.20; 4.50]}, any
-family); \code{"prob"} folds the model-adjusted predicted probability into the odds-ratio cell
-(\verb{2.34 (16\%)}); \code{"ame"} folds the average marginal effect (\verb{2.34 (+8\%)}). \code{"prob"}/\code{"ame"} need the
-\code{marginaleffects} package and apply to binomial (logistic) coefficient models only (they degrade to
-\code{"ci"} otherwise, with a message).}
+\item{multiplier}{How a \strong{continuous} predictor's effect is scaled --- the unit its row reports.
+One unit is rarely a readable amount (a one-year change in \code{age} barely moves the odds), so the
+default is \strong{two standard deviations}: roughly the span a binary predictor's own contrast
+covers, which is what makes a continuous row and a factor row comparable at a glance
+(Gelman 2008). Values: \code{"2sd"} (default), \code{"sd"}, or a number of units (\code{10} = per decade).
+Same grammar as \code{ref}: \code{multiplier = c("sd", age = 10)}.
 
-\item{color, color_signif}{How the effect measure is coloured (\code{NULL} uses the per-family default:
-\code{"OR"} magnitude for ratios, standardized \code{"diff"} for betas; significance policy
-\code{"grey_non_signif"}). See \code{\link[=tab]{tab()}}.}
+The estimate, its interval and the observed companion all scale together; the p-value does not
+move. \strong{Because the default is not 1, a continuous predictor's \verb{Model_*} cell does not equal
+\code{exp(coef(glm(...)))} unless you pass \code{multiplier = 1}.}}
 
-\item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are standard).
-When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still read the CI).}
+\item{shape}{How a \strong{continuous} predictor enters the model, when one straight line is not
+enough. The \code{Linearity} footer row and the little curve drawn in the predictor's \code{n} cell tell
+you \emph{whether} a line is enough; this argument is how you fix it without leaving the framework.
+Same grammar as \code{multiplier} and \code{ref} --- \code{shape = "quintiles"} cuts every continuous
+predictor, \code{shape = c(age = "quadratic")} only that one, and anything unnamed stays linear:
+\describe{
+\item{\code{"linear"}}{one slope (the default).}
+\item{\code{"quintiles"} / \code{"quartiles"} / an integer \code{k}}{cut into \code{k} quantile groups, so the
+predictor becomes an ordinary \strong{factor}: one estimate per group, its own observed
+companion, counts and colours per group --- the non-linearity becomes visible in the printed
+numbers. Start here; it is the most readable answer.}
+\item{\code{"sd_bands"}}{cut at the \strong{mean and one standard deviation either side} --- the
+classic low / average / high reading, whose cut points mean the same thing across
+sub-samples, where quantiles move with each one. The bands are not balanced: prefer
+quantiles when the group sizes matter.}
+\item{\code{"quadratic"}}{adds a curvature term, so the predictor takes \strong{two rows} --- the slope
+at the mean, and whether it flattens or accelerates away from it.}
+\item{\code{"log"} / \code{"sqrt"}}{fit \code{log(x)} / \code{sqrt(x)} instead of \code{x} --- diminishing returns.}
+}
+Example: \code{shape = c(age = "quadratic", income = "log")}. The observed companion is fitted with
+the same shape, so the comparison stays like with like. It is the vocabulary \code{\link[=tab]{tab()}} takes
+(\code{\link[=shape_numeric_var]{shape_numeric_var()}}) plus \code{"quadratic"}, which is a model term.}
+
+\item{stats}{The statistics shown in the model-summary \strong{footer} (one block per model).
+\code{"auto"} (default) uses the per-family set --- R square, adjusted R square, the overall F-test
+and the residual SD for a linear model, the likelihood-ratio test against the null model,
+McFadden's pseudo-R square, AIC and BIC otherwise --- plus the default \strong{model checks} (see
+below). A weighted model shows the survey-appropriate set. Pass a character vector to pick
+them: \code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"phi"}, \code{"r2"}, \code{"r2_adj"},
+\code{"f_model"}, \code{"sigma"}, \code{"global"}, \code{"interaction"}, \code{"group_interaction"}, \code{"linearity"},
+\code{"proportionality"}, \code{"dispersion"}, \code{"influence"}, \code{"collinearity"}; \code{"all"} for everything,
+or \code{NULL} / \code{FALSE} / \code{"no"} to hide the footer.
+
+\strong{Model comparison happens by default} wherever it means anything --- when \code{predictors} is a
+list of several models. Where each nests in the next, every model is tested against the
+previous one; otherwise each against the first. \code{"compare_sequential"} and \code{"compare_baseline"}
+(optionally naming the model) override that, and naming any footer statistic drops it.
+
+Three tests are asked for by name: \code{"global"}, one \strong{overall test per predictor} --- "is this
+variable associated with the outcome at all?", which a block of stars against a reference
+category cannot answer; \code{"interaction"}, whether each \strong{crossed pair} in \code{predictors} is real
+or the additive model is enough; and \code{"group_interaction"}, one aggregated
+\strong{effect-modification} test per predictor across \code{tab_vars} groups.}
+
+\item{conf_level}{Confidence level for the intervals. \code{NULL} (default) reads
+\code{options(tabxplor.conf_level)} --- 0.95. It drives every interval, the significance stars, the
+greying under \code{color_signif} and the model-versus-observed gap interval, and each column
+records the level it was built at.}
+
+\item{na}{Which rows each model is fitted on --- the grain at which missing values are dropped.
+\code{"drop_by_outcome"} (default) gives every model \strong{of one outcome} the same complete-case
+population, which is what makes the comparisons honest: the observed columns are computed on
+exactly the model's rows, and nested models get equal N. \code{"drop_by_model"} lets each model use
+its own complete cases --- more rows, at the price of comparability. \code{"drop_all"} shares one
+population across the whole call.
+
+\code{"keep_for_predictors"} drops nothing but a missing \strong{outcome}: every predictor keeps its
+missing values as an ordinary \code{NA} level, with its own row, count and effect --- often the
+fastest way to find out whether non-response is itself patterned. A number has no level to put
+them in, so a numeric predictor that has any is cut into bands.}
+
+\item{display}{What each effect cell shows --- \code{\link[=tab]{tab()}}'s display grammar, same names, same
+meaning, on every family and on the crude column as well as the model one. \code{NULL} (default)
+shows the plain estimate, or, with \code{empirical}, the estimate with the level it sits on beside
+it. The whole vocabulary --- the named layouts, the \code{{}} templates and the per-token precision
+\code{"{est:3} ({base:1})"} --- is in \link{tabxplor-display}; the ones this table uses most are
+\code{"est_ci"} (\verb{1/2.22*** [1/2.47;1/1.99]}), \code{"est_base"} (\verb{1/2.22 (32.8\%)}), \code{"est_coef"} and
+\code{"base_est_mdiff"} / \code{"base_est_mratio"}, which read the same comparison the other way. The
+\strong{Constant} row holds the quantity the column's effects operate on, so it is read in one
+step: a baseline \emph{odds} on an odds-ratio column, the level itself on an additive one.
+
+\code{display} is \strong{post-hoc}: every quantity it can name is already stored, so choosing a layout
+never triggers a computation and never changes a number --- \code{\link[=set_display]{set_display()}} on a built table
+gives the same result. It never changes the estimand, which is \code{measure}'s job alone.}
+
+\item{digits}{The number of decimals. A single integer sets every cell (\code{0}, the default, means
+"each measure's own"), and a measure finer than the level it sits on keeps its own precision.
+Name a display field to set just that one, an aside included --- \code{digits = c(ratio = 3)},
+\code{digits = c(1, or = 3)}; a template may carry its own, \code{display = "{est:3} ({base:1})"}.
+Left alone, a column reading in the outcome's own units (a mean, a mean difference) follows
+that outcome's magnitude, so a six-figure salary prints no decimals and a rate prints two;
+\verb{digits =} always raises it back.}
 
 \item{cleannames}{Logical. If \code{TRUE}, strips numeric prefixes from factor levels for display.
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
 
 \item{subtext}{Optional character. A note shown below the table.}
+
+\item{caption}{A title for the table, stored on it and carried into every export. Without one a
+regression table titles itself from the model it shows.}
+
+\item{...}{One rarely-typed argument, plus internal plumbing.
+
+\code{ci_method} --- how the interval and p-value are computed: the same argument, and the same
+named-vector grammar, as in \code{\link[=tab]{tab()}}, whose fifth slot is this producer's. \code{"wald"} (default)
+matches standard software output and is the only option for weighted models; \code{"profile"} uses
+the profile-likelihood interval and the likelihood-ratio test --- more accurate near
+separation, unweighted binomial / poisson only.
+
+Every argument removed or renamed while \code{tab_reg()} was in development is still accepted here,
+and gives an error naming its replacement rather than R's bare "unused argument". The
+dot-prefixed names are the jamovi live-cache plumbing, not user arguments.}
 }
 \value{
-A \code{tabxplor_grouped_tab} (grouped by predictor), one effect column per model / dependent.
+A \code{tabxplor_grouped_tab} (grouped by predictor), one effect column per model / outcome.
 }
 \description{
 Fits one regression model per column and returns a \code{tabxplor} table of the per-family effect
-measure -- linear \strong{beta} (gaussian), \strong{odds ratios} (binomial / logistic), \strong{incidence-rate
-ratios} (poisson), \strong{multinomial odds ratios} (one column per outcome category vs the reference,
-nominal 3+ level), \strong{cumulative odds ratios} (ordinal / proportional-odds) -- one row per predictor
-level (the reference level shown as the neutral value \code{0} or \code{1}), grouped by predictor. Each cell
-stores the estimate, its confidence interval and p-value, so the table prints with significance
-stars, greys out non-significant effects, and exports (kable / Markdown / Excel) like any \code{tabxplor}
-crosstab.
+measure --- a linear \strong{mean difference} (gaussian), \strong{odds ratios} (binomial), \strong{incidence-rate
+ratios} (poisson), one \strong{odds-ratio column per outcome category} (nominal 3+ level), a
+\strong{cumulative odds ratio} (ordinal) --- one row per predictor level, grouped by predictor, with
+the \strong{observed (crude)} effect beside each adjusted one. Each cell stores its estimate, interval
+and p-value, so the table prints with stars, greys what is not significant, and exports like any
+\code{tabxplor} crosstab.
 }
 \details{
-\code{predictors} selects the mode: a \strong{character vector} fits one model, and \code{dependent} may itself
-be a vector -> one column per dependent; a \strong{named list} of predictor sets fits one model each ->
-one column per model (predictors absent from a model are left blank), for comparing specifications.
+To \strong{learn} what such a table says, read
+\href{https://bricenocenti.github.io/tabxplor/articles/tabxplor-reading-a-regression.html}{Reading a
+regression} (\code{vignette("tabxplor-reading-a-regression")}); to \strong{look something up}, the
+\href{https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.html}{regression vignette}
+(\code{vignette("tabxplor-reg")}).
 
-\code{effect = "ame"} switches from the native coefficient to \strong{average marginal effects} with the
-adjusted \strong{predicted probability} shown in parentheses (e.g. \verb{-8\%*** (16\%)}) -- a probability-scale,
-cross-model-comparable interpretation (Mood 2010), computed with the \code{marginaleffects} package.
-\code{at = "reference"} instead evaluates at a \strong{reference profile} (other predictors held at their
-reference level / mean): the marginal effect \emph{at reference}, or -- for a multinomial
-\code{effect = "coefficient"} -- the odds ratio of each outcome category \emph{versus the rest} at that profile.
+New to regressions with tabxplor? A first model needs three arguments: \code{data}, \code{outcome} and
+\code{predictors}. The model follows the outcome's type --- a two-level factor gives logistic \strong{odds
+ratios}, a numeric a linear \strong{mean difference}, a count Poisson \strong{rate ratios}, a 3+ level
+factor multinomial or ordinal odds ratios --- so you rarely set \code{family} by hand.
 
-Unweighted models use \code{\link[stats:lm]{stats::lm()}} / \code{\link[stats:glm]{stats::glm()}}; a \code{wt} weight column switches to a survey
-design (\code{\link[survey:svyglm]{survey::svyglm()}}), which gives correct design-based standard errors rather than the
-frequency-inflated ones of \code{glm(weights=)}. \code{broom} (always) and \code{survey} (only with \code{wt}) are
-optional dependencies. \code{tab_logit()} / \code{multi_logit()} are convenience wrappers for the binomial
-family.
+\strong{The estimand is a cascade}: \code{family} -> \code{link} -> \code{measure} -> \code{effect}, where \code{"auto"} means
+\emph{follow from the left}. \code{family} says what kind of number the outcome is; \code{link} \strong{which measure
+the model estimates} (a link \emph{is} a measure, so it takes the same words); \code{measure} \strong{which one
+is reported}; \code{effect} where that number comes from. Set any one and everything to its right
+re-derives, so most tables set none of them --- and the one most people ever set is \code{measure}.
 
-A \strong{nominal} outcome with 3+ unordered levels is fit as one multinomial logit (\code{\link[nnet:multinom]{nnet::multinom()}}),
-giving \strong{one odds-ratio column per non-reference outcome category} ("\verb{<category>} vs \verb{<reference>}:
-OR"). An \strong{ordered} outcome with 3+ levels is fit as a proportional-odds cumulative logit
-(\code{\link[MASS:polr]{MASS::polr()}}), giving one cumulative-odds-ratio column; the parallel-lines assumption is tested
-with the Brant test (install the \code{brant} package) and a warning is issued if it is violated.
-(Weighted 3+ level models are planned for a later release.)
-
-A \strong{summed-score} outcome (a count of "yes" answers out of a fixed number of items) is fit as a
-grouped binomial when you pass \code{trials} (the number of items). Power users can pass a \strong{model
-formula} as \code{dependent} -- \code{tab_reg(data, y ~ x1 + poly(x2, 2) + x1:x3)} -- driving the model
-directly; simple \code{y ~ a + b} formulas behave exactly like \code{dependent = "y"}, \code{predictors = c("a", "b")}, while interactions / \code{poly()} / \code{I()} terms render as best-effort term rows.
+A \strong{coefficient} exists only where the reported measure IS the model's own. Ask for another and
+it is worked out from the model's predictions instead, averaged over the sample. So
+\code{measure = "ratio"} on a binary outcome gives a \emph{marginal} risk ratio from the logistic fit, while
+\code{link = "ratio"} fits the modified Poisson and gives its \emph{conditional} one --- two different
+quantities, and now two different arguments.
 }
+\section{Model checks}{
+
+
+Beside the fit statistics the footer carries five \strong{model checks}, each naming an assumption and
+the instrument that measured it: \strong{Linearity} and \strong{Proportionality} (p-values) say whether the
+estimate means what it claims, \strong{Dispersion} whether the intervals are wide enough,
+\strong{Influence} whether one respondent carries the result, \strong{Collinearity} why the intervals are
+wide. Four are shown by default; \code{stats = "linearity"} adds the fifth, and \code{shape} is the cure
+for what it flags. \code{\link[=reg_check_plots]{reg_check_plots()}} draws them all. What each one asks, and how to read it:
+\href{https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.html}{the regression
+vignette}.
+}
+
+\section{Out of scope}{
+
+\code{tab_reg()} covers linear, logistic, Poisson, multinomial and ordinal models, with survey designs.
+Three families of models are deliberately \strong{not} supported, and are unlikely to be: \strong{survival /
+Cox} models, \strong{mixed / multilevel} models, and pooling over \strong{multiply-imputed} datasets. Fit
+those with their own packages.
+}
+
+\section{The header acronyms}{
+
+A column header names the \strong{measure}; the \strong{contrast} is a marker on it ---
+no marker for a conditional effect, \code{m} for a marginal one, \code{ref} at the reference
+profile --- and \code{measure = "log"} wraps it (\code{Model_mRR}, \code{Model_refRD},
+\code{Model_log(OR)}). The observed companion carries the measure alone (\code{Obs_RR}).
+\itemize{
+\item \code{OR} --- odds ratio (binomial, multinomial)
+\item \code{cumOR} --- cumulative odds ratio (ordinal)
+\item \code{RR} --- risk ratio (binomial, multinomial)
+\item \code{RD} --- risk difference (binomial, multinomial)
+\item \code{IRR} --- incidence-rate ratio (poisson)
+\item \code{RoM} --- ratio of means (gaussian)
+\item \code{diff} --- mean difference (gaussian, poisson)
+\item \code{D} --- Somers' D (ordinal)
+\item \code{WR} --- win ratio (ordinal)
+}
+}
+
 \examples{
-data <- forcats::gss_cat |>
-  dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
-                                                "Married", "Not married")))
-# Every regression table needs broom; the heavier families need their own engine. Guarding each
-# keeps the examples runnable where Suggests are absent (CRAN checks such a flavour).
-if (requireNamespace("broom", quietly = TRUE)) {
-  # logistic (odds ratios):
-  print(tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
-                family = "binomial"))
-  # linear (betas):
-  print(tab_reg(data, dependent = "tvhours", predictors = c("race", "age"),
-                family = "gaussian"))
-  # formula escape-hatch (same model, terser):
-  print(tab_reg(data, married ~ race + rincome, family = "binomial"))
-}
+# The shape table a continuous predictor draws under the footer is noise in an example:
+.opt <- options(tabxplor.shape_table = "no")
+
+# Logistic: the odds of being released, adjusted, beside the observed (crude) odds ratio.
+tab_reg(car_arrests, "released", c("colour", "checks"))
 
 \donttest{
-# average marginal effects + adjusted predictions (needs the marginaleffects package):
-if (requireNamespace("broom", quietly = TRUE) &&
-    requireNamespace("marginaleffects", quietly = TRUE)) {
-  print(tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
-                family = "binomial", effect = "ame"))
-  # marginal effects at the reference profile (others at their reference level / mean):
-  print(tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
-                family = "binomial", effect = "ame", at = "reference"))
-}
-# multinomial (nominal 3+ level): one OR column per outcome category vs the reference
-if (requireNamespace("broom", quietly = TRUE) && requireNamespace("nnet", quietly = TRUE)) {
-  print(tab_reg(forcats::gss_cat, dependent = "partyid", predictors = c("race", "age"),
-                family = "multinomial", reference = c(partyid = "Independent")))
-}
-# ordinal (proportional-odds): one cumulative-OR column
-if (requireNamespace("broom", quietly = TRUE) && requireNamespace("MASS", quietly = TRUE)) {
-  income3 <- forcats::gss_cat |>
-    dplyr::mutate(income = factor(rincome, ordered = TRUE))
-  print(tab_reg(income3, dependent = "income", predictors = "race", family = "ordinal"))
-}
-}
+# Linear: a mean difference in dollars.
+tab_reg(car_salaries, "salary", c("sex", "discipline", "rank"))
 
+# A count outcome: incidence-rate ratios.
+tab_reg(car_arrests, "checks", c("colour", "employed"), family = "poisson")
+
+# `measure` reports another measure WITHOUT changing the model: a MARGINAL risk ratio,
+# averaged over the sample, still from the logistic fit.
+tab_reg(car_arrests, "released", c("colour", "checks"), measure = "ratio")
+
+# `link` changes the model: the CONDITIONAL risk ratio of a modified-Poisson fit.
+tab_reg(car_arrests, "released", c("colour", "checks"), link = "ratio")
+
+# A named list of predictor sets: one column per model, compared in the footer.
+tab_reg(car_salaries, "salary",
+        list("sex alone" = "sex",
+             "+ field"   = c("sex", "discipline"),
+             "+ rank"    = c("sex", "discipline", "rank")),
+        empirical = FALSE)
+
+# A continuous predictor cut into groups, on French survey data:
+tab_reg(questionr_hdv, "cinema", c("qualif", "age"), shape = c(age = "quartiles"))
+}
+options(.opt)
+
+}
+\references{
+Clogg, C. C., Petkova, E. & Haritou, A. (1995). Statistical Methods for Comparing Regression
+Coefficients between Models. \emph{American Journal of Sociology}, 100(5), 1261-1293 --- the
+comparison \code{color = "adjustment"} implements.
+
+Zou, G. (2004). A Modified Poisson Regression Approach to Prospective Studies with Binary Data.
+\emph{American Journal of Epidemiology}, 159(7), 702-706 --- \code{link = "ratio"}.
+
+Altman, D. G. & Bland, J. M. (2003). Interaction revisited: the difference between two estimates.
+\emph{BMJ}, 326, 219 --- the \code{color = "between_groups"} test.
+}
+\seealso{
+\code{\link[=reg_formulas]{reg_formulas()}} shows the formula each column was fitted with, and \code{\link[=reg_measures]{reg_measures()}}
+what an outcome can be modelled as.
+\code{\link[=forest_plot]{forest_plot()}} draws the finished table --- every effect with its interval, its stars
+and its colour, and (with \code{empirical = TRUE}) the observed effect beside it with the margin of
+error of the gap. \code{\link[=reg_check_plots]{reg_check_plots()}} draws the model checks. \link{tabxplor-display} says what a
+cell can show, \code{\link[=tab]{tab()}} builds cross-tables.
 }

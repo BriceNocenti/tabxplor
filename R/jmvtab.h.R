@@ -13,36 +13,41 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             pct = "no",
             color = "no",
             color_signif = "ignore",
-            chi2 = FALSE,
+            test = FALSE,
             anova = "welch",
-            OR = "no",
             na = "keep",
             lvs = "all",
-            other_if_less_than = 0,
             cleannames = TRUE,
-            refLevels = NULL,
-            levelOrder = NULL,
+            ref_levels = NULL,
+            levels_order = NULL,
+            levels_collapse = NULL,
+            shape = NULL,
             ref = "auto",
             ref2 = "first",
             comp = "tab",
             ci = "auto",
             conf_level = 0.95,
-            ci_print = "ci",
-            stars = TRUE,
-            method_cell = "wilson",
-            method_diff = "newcombe",
+            stars = FALSE,
+            design_effect = FALSE,
+            ci_method_cell = "wilson",
+            ci_method_diff = "newcombe",
+            ci_method_mean_diff = "welch",
+            ci_method_mean_ratio = "robust",
+            tab_theme = "light",
             totaltab = "line",
             wrap_rows = 35,
             wrap_cols = 15,
             display = "auto",
-            add_n = TRUE,
+            n = "range",
             add_pct = FALSE,
             subtext = "",
             digits = "0",
             n_min = 0,
             export_format = "excel",
-            exportExcel = NULL,
-            path = "~/Documents/Table",
+            exportExcel = FALSE,
+            export_dir = "~/Documents",
+            export_filename = "Table",
+            resetPath = FALSE,
             xl_replace = FALSE, ...) {
 
             super$initialize(
@@ -105,10 +110,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 options=list(
                     "no",
                     "auto",
-                    "diff",
+                    "difference",
                     "ratio",
-                    "contrib",
-                    "OR"),
+                    "odds_ratio",
+                    "contrib"),
                 default="no")
             private$..color_signif <- jmvcore::OptionList$new(
                 "color_signif",
@@ -118,9 +123,9 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "grey_non_signif",
                     "guaranteed_effect"),
                 default="ignore")
-            private$..chi2 <- jmvcore::OptionBool$new(
-                "chi2",
-                chi2,
+            private$..test <- jmvcore::OptionBool$new(
+                "test",
+                test,
                 default=FALSE)
             private$..anova <- jmvcore::OptionList$new(
                 "anova",
@@ -129,14 +134,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "welch",
                     "classic"),
                 default="welch")
-            private$..OR <- jmvcore::OptionList$new(
-                "OR",
-                OR,
-                options=list(
-                    "no",
-                    "OR",
-                    "OR_pct"),
-                default="no")
             private$..na <- jmvcore::OptionList$new(
                 "na",
                 na,
@@ -154,22 +151,17 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "first",
                     "auto"),
                 default="all")
-            private$..other_if_less_than <- jmvcore::OptionNumber$new(
-                "other_if_less_than",
-                other_if_less_than,
-                min=0,
-                default=0)
             private$..cleannames <- jmvcore::OptionBool$new(
                 "cleannames",
                 cleannames,
                 default=TRUE)
-            private$..refLevels <- jmvcore::OptionArray$new(
-                "refLevels",
-                refLevels,
+            private$..ref_levels <- jmvcore::OptionArray$new(
+                "ref_levels",
+                ref_levels,
                 hidden=TRUE,
                 default=NULL,
                 template=jmvcore::OptionGroup$new(
-                    "refLevels",
+                    "ref_levels",
                     NULL,
                     elements=list(
                         jmvcore::OptionVariable$new(
@@ -178,13 +170,13 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                         jmvcore::OptionString$new(
                             "ref",
                             NULL))))
-            private$..levelOrder <- jmvcore::OptionArray$new(
-                "levelOrder",
-                levelOrder,
+            private$..levels_order <- jmvcore::OptionArray$new(
+                "levels_order",
+                levels_order,
                 hidden=TRUE,
                 default=NULL,
                 template=jmvcore::OptionGroup$new(
-                    "levelOrder",
+                    "levels_order",
                     NULL,
                     elements=list(
                         jmvcore::OptionVariable$new(
@@ -196,6 +188,42 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                             template=jmvcore::OptionString$new(
                                 "levels",
                                 NULL)))))
+            private$..levels_collapse <- jmvcore::OptionArray$new(
+                "levels_collapse",
+                levels_collapse,
+                hidden=TRUE,
+                default=NULL,
+                template=jmvcore::OptionGroup$new(
+                    "levels_collapse",
+                    NULL,
+                    elements=list(
+                        jmvcore::OptionVariable$new(
+                            "var",
+                            NULL),
+                        jmvcore::OptionString$new(
+                            "label",
+                            NULL),
+                        jmvcore::OptionArray$new(
+                            "levels",
+                            NULL,
+                            template=jmvcore::OptionString$new(
+                                "levels",
+                                NULL)))))
+            private$..shape <- jmvcore::OptionArray$new(
+                "shape",
+                shape,
+                hidden=TRUE,
+                default=NULL,
+                template=jmvcore::OptionGroup$new(
+                    "shape",
+                    NULL,
+                    elements=list(
+                        jmvcore::OptionVariable$new(
+                            "var",
+                            NULL),
+                        jmvcore::OptionString$new(
+                            "shape",
+                            NULL))))
             private$..ref <- jmvcore::OptionString$new(
                 "ref",
                 ref,
@@ -218,8 +246,9 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 ci,
                 options=list(
                     "auto",
+                    "no",
                     "cell",
-                    "diff"),
+                    "ref"),
                 default="auto")
             private$..conf_level <- jmvcore::OptionNumber$new(
                 "conf_level",
@@ -227,32 +256,53 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 min=0,
                 max=1,
                 default=0.95)
-            private$..ci_print <- jmvcore::OptionList$new(
-                "ci_print",
-                ci_print,
-                options=list(
-                    "ci",
-                    "moe"),
-                default="ci")
             private$..stars <- jmvcore::OptionBool$new(
                 "stars",
                 stars,
-                default=TRUE)
-            private$..method_cell <- jmvcore::OptionList$new(
-                "method_cell",
-                method_cell,
+                default=FALSE)
+            private$..design_effect <- jmvcore::OptionBool$new(
+                "design_effect",
+                design_effect,
+                default=FALSE)
+            private$..ci_method_cell <- jmvcore::OptionList$new(
+                "ci_method_cell",
+                ci_method_cell,
                 options=list(
                     "wilson",
-                    "wald"),
+                    "wald",
+                    "beta"),
                 default="wilson")
-            private$..method_diff <- jmvcore::OptionList$new(
-                "method_diff",
-                method_diff,
+            private$..ci_method_diff <- jmvcore::OptionList$new(
+                "ci_method_diff",
+                ci_method_diff,
                 options=list(
                     "newcombe",
                     "ac",
                     "wald"),
                 default="newcombe")
+            private$..ci_method_mean_diff <- jmvcore::OptionList$new(
+                "ci_method_mean_diff",
+                ci_method_mean_diff,
+                options=list(
+                    "welch",
+                    "student",
+                    "ols"),
+                default="welch")
+            private$..ci_method_mean_ratio <- jmvcore::OptionList$new(
+                "ci_method_mean_ratio",
+                ci_method_mean_ratio,
+                options=list(
+                    "robust",
+                    "quasipoisson",
+                    "poisson"),
+                default="robust")
+            private$..tab_theme <- jmvcore::OptionList$new(
+                "tab_theme",
+                tab_theme,
+                options=list(
+                    "light",
+                    "print_ready"),
+                default="light")
             private$..totaltab <- jmvcore::OptionList$new(
                 "totaltab",
                 totaltab,
@@ -276,23 +326,33 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 display,
                 options=list(
                     "auto",
+                    "base",
+                    "base_ci",
+                    "ci",
+                    "diff",
+                    "ratio",
+                    "or",
+                    "base_diff",
+                    "base_ratio",
+                    "or_base",
+                    "base_or",
                     "n",
                     "wn",
                     "pct",
-                    "diff",
-                    "ctr",
                     "mean",
-                    "var",
-                    "ci",
-                    "pct_ci",
-                    "mean_ci",
-                    "OR",
-                    "OR_pct"),
+                    "mean_sd",
+                    "mean_cv",
+                    "ctr",
+                    "var"),
                 default="auto")
-            private$..add_n <- jmvcore::OptionBool$new(
-                "add_n",
-                add_n,
-                default=TRUE)
+            private$..n <- jmvcore::OptionList$new(
+                "n",
+                n,
+                options=list(
+                    "range",
+                    "min",
+                    "no"),
+                default="range")
             private$..add_pct <- jmvcore::OptionBool$new(
                 "add_pct",
                 add_pct,
@@ -300,7 +360,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..subtext <- jmvcore::OptionString$new(
                 "subtext",
                 subtext,
-                default="")
+                default="",
+                hidden=TRUE)
             private$..digits <- jmvcore::OptionList$new(
                 "digits",
                 digits,
@@ -329,10 +390,17 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..exportExcel <- jmvcore::OptionAction$new(
                 "exportExcel",
                 exportExcel)
-            private$..path <- jmvcore::OptionString$new(
-                "path",
-                path,
-                default="~/Documents/Table")
+            private$..export_dir <- jmvcore::OptionString$new(
+                "export_dir",
+                export_dir,
+                default="~/Documents")
+            private$..export_filename <- jmvcore::OptionString$new(
+                "export_filename",
+                export_filename,
+                default="Table")
+            private$..resetPath <- jmvcore::OptionAction$new(
+                "resetPath",
+                resetPath)
             private$..xl_replace <- jmvcore::OptionBool$new(
                 "xl_replace",
                 xl_replace,
@@ -345,36 +413,41 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..pct)
             self$.addOption(private$..color)
             self$.addOption(private$..color_signif)
-            self$.addOption(private$..chi2)
+            self$.addOption(private$..test)
             self$.addOption(private$..anova)
-            self$.addOption(private$..OR)
             self$.addOption(private$..na)
             self$.addOption(private$..lvs)
-            self$.addOption(private$..other_if_less_than)
             self$.addOption(private$..cleannames)
-            self$.addOption(private$..refLevels)
-            self$.addOption(private$..levelOrder)
+            self$.addOption(private$..ref_levels)
+            self$.addOption(private$..levels_order)
+            self$.addOption(private$..levels_collapse)
+            self$.addOption(private$..shape)
             self$.addOption(private$..ref)
             self$.addOption(private$..ref2)
             self$.addOption(private$..comp)
             self$.addOption(private$..ci)
             self$.addOption(private$..conf_level)
-            self$.addOption(private$..ci_print)
             self$.addOption(private$..stars)
-            self$.addOption(private$..method_cell)
-            self$.addOption(private$..method_diff)
+            self$.addOption(private$..design_effect)
+            self$.addOption(private$..ci_method_cell)
+            self$.addOption(private$..ci_method_diff)
+            self$.addOption(private$..ci_method_mean_diff)
+            self$.addOption(private$..ci_method_mean_ratio)
+            self$.addOption(private$..tab_theme)
             self$.addOption(private$..totaltab)
             self$.addOption(private$..wrap_rows)
             self$.addOption(private$..wrap_cols)
             self$.addOption(private$..display)
-            self$.addOption(private$..add_n)
+            self$.addOption(private$..n)
             self$.addOption(private$..add_pct)
             self$.addOption(private$..subtext)
             self$.addOption(private$..digits)
             self$.addOption(private$..n_min)
             self$.addOption(private$..export_format)
             self$.addOption(private$..exportExcel)
-            self$.addOption(private$..path)
+            self$.addOption(private$..export_dir)
+            self$.addOption(private$..export_filename)
+            self$.addOption(private$..resetPath)
             self$.addOption(private$..xl_replace)
         }),
     active = list(
@@ -385,36 +458,41 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         pct = function() private$..pct$value,
         color = function() private$..color$value,
         color_signif = function() private$..color_signif$value,
-        chi2 = function() private$..chi2$value,
+        test = function() private$..test$value,
         anova = function() private$..anova$value,
-        OR = function() private$..OR$value,
         na = function() private$..na$value,
         lvs = function() private$..lvs$value,
-        other_if_less_than = function() private$..other_if_less_than$value,
         cleannames = function() private$..cleannames$value,
-        refLevels = function() private$..refLevels$value,
-        levelOrder = function() private$..levelOrder$value,
+        ref_levels = function() private$..ref_levels$value,
+        levels_order = function() private$..levels_order$value,
+        levels_collapse = function() private$..levels_collapse$value,
+        shape = function() private$..shape$value,
         ref = function() private$..ref$value,
         ref2 = function() private$..ref2$value,
         comp = function() private$..comp$value,
         ci = function() private$..ci$value,
         conf_level = function() private$..conf_level$value,
-        ci_print = function() private$..ci_print$value,
         stars = function() private$..stars$value,
-        method_cell = function() private$..method_cell$value,
-        method_diff = function() private$..method_diff$value,
+        design_effect = function() private$..design_effect$value,
+        ci_method_cell = function() private$..ci_method_cell$value,
+        ci_method_diff = function() private$..ci_method_diff$value,
+        ci_method_mean_diff = function() private$..ci_method_mean_diff$value,
+        ci_method_mean_ratio = function() private$..ci_method_mean_ratio$value,
+        tab_theme = function() private$..tab_theme$value,
         totaltab = function() private$..totaltab$value,
         wrap_rows = function() private$..wrap_rows$value,
         wrap_cols = function() private$..wrap_cols$value,
         display = function() private$..display$value,
-        add_n = function() private$..add_n$value,
+        n = function() private$..n$value,
         add_pct = function() private$..add_pct$value,
         subtext = function() private$..subtext$value,
         digits = function() private$..digits$value,
         n_min = function() private$..n_min$value,
         export_format = function() private$..export_format$value,
         exportExcel = function() private$..exportExcel$value,
-        path = function() private$..path$value,
+        export_dir = function() private$..export_dir$value,
+        export_filename = function() private$..export_filename$value,
+        resetPath = function() private$..resetPath$value,
         xl_replace = function() private$..xl_replace$value),
     private = list(
         ..row_vars = NA,
@@ -424,36 +502,41 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..pct = NA,
         ..color = NA,
         ..color_signif = NA,
-        ..chi2 = NA,
+        ..test = NA,
         ..anova = NA,
-        ..OR = NA,
         ..na = NA,
         ..lvs = NA,
-        ..other_if_less_than = NA,
         ..cleannames = NA,
-        ..refLevels = NA,
-        ..levelOrder = NA,
+        ..ref_levels = NA,
+        ..levels_order = NA,
+        ..levels_collapse = NA,
+        ..shape = NA,
         ..ref = NA,
         ..ref2 = NA,
         ..comp = NA,
         ..ci = NA,
         ..conf_level = NA,
-        ..ci_print = NA,
         ..stars = NA,
-        ..method_cell = NA,
-        ..method_diff = NA,
+        ..design_effect = NA,
+        ..ci_method_cell = NA,
+        ..ci_method_diff = NA,
+        ..ci_method_mean_diff = NA,
+        ..ci_method_mean_ratio = NA,
+        ..tab_theme = NA,
         ..totaltab = NA,
         ..wrap_rows = NA,
         ..wrap_cols = NA,
         ..display = NA,
-        ..add_n = NA,
+        ..n = NA,
         ..add_pct = NA,
         ..subtext = NA,
         ..digits = NA,
         ..n_min = NA,
         ..export_format = NA,
         ..exportExcel = NA,
-        ..path = NA,
+        ..export_dir = NA,
+        ..export_filename = NA,
+        ..resetPath = NA,
         ..xl_replace = NA)
 )
 
@@ -462,7 +545,6 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     inherit = jmvcore::Group,
     active = list(
         html_table = function() private$.items[["html_table"]],
-        plot = function() private$.items[["plot"]],
         cache_state = function() private$.items[["cache_state"]]),
     private = list(),
     public=list(
@@ -477,18 +559,13 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 title="Table"))
             self$add(jmvcore::Image$new(
                 options=options,
-                name="plot",
-                title="",
-                width=1080,
-                height=0,
-                renderFun=".plot"))
-            self$add(jmvcore::Image$new(
-                options=options,
                 name="cache_state",
                 title="",
                 width=1080,
-                height=0,
-                renderFun=".plot"))}))
+                height=1,
+                renderFun=".plot",
+                visible=FALSE,
+                clearWith=list()))}))
 
 jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     "jmvtabBase",
@@ -531,39 +608,37 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   \code{tab_vars}.    \item \code{"all_tabs"}: frequencies for the whole (set
 #'   of) table(s).  }
 #' @param color Which measure to use for color helpers, as a single string.
-#'   \itemize{    \item \code{"no"}: by default, no colors are printed.    \item
+#'   The values are the measure  names \code{tab()} itself takes (the short
+#'   spellings \code{"diff"} / \code{"OR"} stay  valid aliases in R).  \itemize{
+#'   \item \code{"no"}: by default, no colors are printed.    \item
 #'   \code{"auto"}: a smart per-column-type default (percentage-point difference
 #'   on    the text plus a relative-risk highlight on the background for
-#'   factors, mean ratio for    numeric columns).    \item \code{"diff"}: color
-#'   the difference of each cell from its total (or reference    cell). For
-#'   factors this is a percentage-point difference; for numeric columns the
-#'   standardized (SD-scaled) mean difference.    \item \code{"ratio"}: color
-#'   the relative risk (factors) or mean ratio (numeric).    \item
-#'   \code{"contrib"}: color cells based on their contribution to variance
-#'   (factor columns only).    \item \code{"OR"}: for \code{pct == "col"} or
-#'   \code{pct == "row"}, color based on odds ratios.  } How significance gates
-#'   these colors is set separately by \code{color_signif}.
+#'   factors, mean ratio for    numeric columns).    \item \code{"difference"}:
+#'   color the difference of each cell from its total (or    reference cell).
+#'   For factors this is a percentage-point difference; for numeric columns
+#'   the standardized (SD-scaled) mean difference.    \item \code{"ratio"}:
+#'   color the relative risk (factors) or mean ratio (numeric).    \item
+#'   \code{"odds_ratio"}: for \code{pct == "col"} or \code{pct == "row"}, color
+#'   based on odds    ratios. To PRINT them, set \code{display} (the colour and
+#'   the printed quantity are two    questions).    \item \code{"contrib"}:
+#'   color cells based on their contribution to variance    (factor columns
+#'   only).  } How significance gates these colors is set separately by
+#'   \code{color_signif}.
 #' @param color_signif How statistical significance gates the colors, as a
 #'   single string.  \itemize{    \item \code{"ignore"}: by default, color every
 #'   deviation by its observed size.    \item \code{"grey_non_signif"}: color by
 #'   observed size, but grey out cells whose    deviation is not significant (at
 #'   \code{conf_level}). A confidence interval on the    difference is computed
 #'   automatically.    \item \code{"guaranteed_effect"}: color by the guaranteed
-#'   (confidence-bound) effect --    only cells whose interval clears the
+#'   (confidence-bound) effect --    all cells whose interval clears the
 #'   threshold show, with dimmer colors.  }
-#' @param chi2 Set to \code{TRUE} to add a test p-value row: a Chi-square test
+#' @param test Set to \code{TRUE} to add a test p-value row: a Chi-square test
 #'   for categorical column variables and an ANOVA F-test for numeric ones
 #'   (chosen automatically per column type). Also enables colouring cells by
 #'   their contribution to variance.
 #' @param anova Which F statistic to display for numeric column variables when
 #'   the test is on: Welch's F (default, does not assume equal variances) or the
 #'   classic pooled F.
-#' @param OR With \code{pct = "row"} or \code{pct = "col"}, calculate and
-#'   print odds ratios  (for binary variables) or relative risks ratios (for
-#'   variables with 3 levels  or more). \itemize{  \item \code{"no"}: by
-#'   default, no OR are calculated.  \item \code{"OR"}: print OR (instead of
-#'   percentages).  \item \code{"OR_pct"}: print OR, with percentages in
-#'   bracket. }
 #' @param na The policy to adopt with missing values. It must be a single
 #'   string.  \itemize{    \item \code{na = "keep"}: by default, prints
 #'   \code{NA}'s as explicit \code{"NA"} level.    \item \code{na = "drop"}:
@@ -580,13 +655,13 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   only keep the first level of each \code{col_vars}    \item \code{"auto"}:
 #'   keep the first level when \code{col_var} is only two levels,    keep all
 #'   levels otherwise.    }
-#' @param other_if_less_than When set to a positive integer, levels with less
-#'   count than that will be merged into an "Others" level.
 #' @param cleannames By default, clean levels names, by removing prefix
 #'   numbers like "1-", and text in parenthesis. Set to \code{FALSE} to avoid
 #'   this behaviour.
-#' @param refLevels .
-#' @param levelOrder .
+#' @param ref_levels .
+#' @param levels_order .
+#' @param levels_collapse .
+#' @param shape .
 #' @param ref The reference cell to calculate differences and ratios   (used
 #'   to print \code{colors}) :   \itemize{    \item \code{"auto"}: by default,
 #'   cell difference from the corresponding total    (rows or cols depending on
@@ -601,35 +676,52 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   (or columns). Be precise enough to match only one    column or row,
 #'   otherwise you get a warning message.    \item \code{"no"}: not use ref and
 #'   not calculate diffs to gain calculation time.  }
-#' @param ref2 A second reference cell is needed to calculate odds ratios  (or
-#'   relative risks ratios). The first cell of the row or column is used by
-#'   default.  See \code{ref}  for the full list of possible values.
+#' @param ref2 With \code{OR = OR} (odds-ratios) and a 3+ levels factor, a
+#'   second reference cell  is needed to calculate relative risks ratios. First
+#'   cell by default.
 #' @param comp The comparison level : by subtables/groups, or for the whole
 #'   table.
-#' @param ci The type of confidence intervals to calculate, passed to
-#'   \code{\link{tab_ci}}.     \itemize{      \item \code{"cell"}: absolute
-#'   confidence intervals of cells percentages.      \item \code{"diff"}:
-#'   confidence intervals of the difference between a cell and the      relative
-#'   total cell (or relative first cell when \code{ref = "first"}).      \item
-#'   \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
-#'   \code{ci = "cell"} for frequencies ("all", "all_tabs").     } By default,
-#'   for percentages, with \code{ci = "cell"} Wilson's method is used, and with
-#'   \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
-#'   Means use classic method.
-#' @param conf_level The confidence level, as a single numeric between 0 and
-#'   1. Default to 0.95 (95\%).
-#' @param ci_print By default confidence interval are printed with the
-#'   interval display. Set to "moe" to use pct +- moe instead.
+#' @param ci \strong{What the confidence interval is anchored on} -- one
+#'   question, four answers. The  GEOMETRY of the interval is not asked here: it
+#'   follows the comparison the table makes  (set by \code{color} /
+#'   \code{display}), so a difference table gets a difference  interval and a
+#'   ratio table a ratio one.  \itemize{   \item \code{"auto"}: build the
+#'   comparison interval when something reads it   (\code{stars}, or a
+#'   \code{color_signif} policy), and none otherwise.   \item \code{"no"}: no
+#'   interval at all.   \item \code{"cell"}: each cell's own interval (a
+#'   percentage / a mean with its own   bounds). It anchors nothing to compare,
+#'   so \code{stars} and \code{color_signif} are   informed and switched off.
+#'   \item \code{"ref"}: the interval of the comparison with the reference cell
+#'   -- what   \code{stars} and \code{color_signif} read.  }
+#' @param conf_level The confidence level, a single numeric between 0 and 1
+#'   --- 0.95 by default.
 #' @param stars With \code{ci = "diff"}, print significance stars (\code{*}
 #'   \code{**} \code{***}) for the difference of each cell from its reference.
 #'   Read from the same confidence interval that is displayed, so stars and
 #'   bracket always agree.
-#' @param method_cell The proportion confidence-interval method for \code{ci =
-#'   "cell"}: \code{"wilson"} (the score interval, default) or \code{"wald"}
-#'   (the normal approximation).
-#' @param method_diff The proportion confidence-interval method for \code{ci =
-#'   "diff"}. \code{"newcombe"} (default) is the dual of the two-proportion
-#'   score test, so the interval and the significance stars always agree.
+#' @param design_effect For a WEIGHTED table, make the confidence intervals,
+#'   the significance stars, the colour thresholds AND the p-values account for
+#'   the unequal weighting (the exact flat survey-design variance) instead of
+#'   using the raw number of respondents. Sets options(tabxplor.design_effect).
+#'   Off by default; it moves every interval in the table, not only the p-value.
+#' @param ci_method_cell The proportion confidence-interval method for
+#'   \code{ci = "cell"}: \code{"wilson"} (the score interval, default) or
+#'   \code{"wald"} (the normal approximation).
+#' @param ci_method_diff The proportion confidence-interval method for
+#'   \code{ci = "diff"}. \code{"newcombe"} (default) is the dual of the
+#'   two-proportion score test, so the interval and the significance stars
+#'   always agree.
+#' @param ci_method_mean_diff The confidence-interval method for the
+#'   difference of numeric means (means with \code{ci = "diff"}): Welch
+#'   (default), Student (the two groups pooled) or OLS (pooled over every level
+#'   of the variable, i.e. the interval a linear model gives that coefficient).
+#' @param ci_method_mean_ratio The confidence-interval method for a ratio of
+#'   numeric means (means with \code{ci = "ratio"}).
+#' @param tab_theme How the table is painted, in the results panel and in
+#'   every export.  \code{"light"} is the colour palette; \code{"print_ready"}
+#'   says the same thing  typographically --- bold, italics, underlines and
+#'   marks instead of blue and red ---  for a page that has no colour. See
+#'   \code{\link{tab_css}}.
 #' @param totaltab The total table, if there are subtables/groups   (i.e. when
 #'   \code{tab_vars} is provided). Vectorised over \code{row_vars}.  \itemize{
 #'   \item \code{"line"}: by default, add a general total line (necessary for
@@ -640,10 +732,16 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   characters.
 #' @param wrap_cols By default, colnames are wrapped when larger than 12
 #'   characters.
-#' @param display The information to display in the table.
-#' @param add_n For \code{pct = "row"} or \code{pct = "col"}, set to
-#'   \code{FALSE} not to add another column or row with unweighted counts
-#'   (\code{n}).
+#' @param display What each cell shows. Every value here is a
+#'   \code{tab(display =)} value: a bare field  name, a named layout such as
+#'   \code{"base_ci"} (each value with its interval), or a  \code{\{\}} template
+#'   combining fields. \code{"auto"} keeps whatever the table was  built with. A
+#'   template naming a field the table does not carry renders empty and says
+#'   which argument would fill it.
+#' @param n How many people the table is about: \code{"range"} prints the
+#'   unweighted base beside the Total cell (as \code{min-max} when the column
+#'   variables rest on different people), \code{"min"} the smallest base only,
+#'   \code{"no"} no count at all.
 #' @param add_pct Set to \code{TRUE} to add a column with the frequencies of
 #'   the row variable (for \code{pct = "row"}) or a row with the frequencies of
 #'   the column variable (for  \code{pct = "col"})
@@ -658,15 +756,21 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   row/column and the p-value line are always kept. Recomputes nothing.
 #' @param export_format The export file format: Excel (\code{.xlsx}), HTML
 #'   (\code{.html}) or Markdown (\code{.md}).
-#' @param exportExcel Press to export the table to the chosen format.
-#' @param path Where to save the file. A full path, or a bare name (saved in
-#'   your Documents folder). The extension is added automatically from the
-#'   chosen format. \code{~} expands to your home folder.
+#' @param exportExcel Press to export the table to the chosen format (the
+#'   button label follows the format).
+#' @param export_dir The folder to save the exported file in. Blank or
+#'   \code{~/Documents} auto-detects your real Documents folder (a redirected
+#'   \code{D:/Documents} or network Documents included). Type any other folder
+#'   to override; a leading \code{~} there expands to your home folder.
+#' @param export_filename The bare file name, with NO extension (the chosen
+#'   format adds it). Illegal characters are removed automatically. Blank saves
+#'   as "Table".
+#' @param resetPath Reset the folder and file name to their defaults (your
+#'   Documents folder and "Table").
 #' @param xl_replace "Set to \code{TRUE} to overwrite an existing file."
 #' @return A results object containing:
 #' \tabular{llllll}{
 #'   \code{results$html_table} \tab \tab \tab \tab \tab a html \cr
-#'   \code{results$plot} \tab \tab \tab \tab \tab an image \cr
 #'   \code{results$cache_state} \tab \tab \tab \tab \tab an image \cr
 #' }
 #'
@@ -680,36 +784,41 @@ jmvtab <- function(
     pct = "no",
     color = "no",
     color_signif = "ignore",
-    chi2 = FALSE,
+    test = FALSE,
     anova = "welch",
-    OR = "no",
     na = "keep",
     lvs = "all",
-    other_if_less_than = 0,
     cleannames = TRUE,
-    refLevels = NULL,
-    levelOrder = NULL,
+    ref_levels = NULL,
+    levels_order = NULL,
+    levels_collapse = NULL,
+    shape = NULL,
     ref = "auto",
     ref2 = "first",
     comp = "tab",
     ci = "auto",
     conf_level = 0.95,
-    ci_print = "ci",
-    stars = TRUE,
-    method_cell = "wilson",
-    method_diff = "newcombe",
+    stars = FALSE,
+    design_effect = FALSE,
+    ci_method_cell = "wilson",
+    ci_method_diff = "newcombe",
+    ci_method_mean_diff = "welch",
+    ci_method_mean_ratio = "robust",
+    tab_theme = "light",
     totaltab = "line",
     wrap_rows = 35,
     wrap_cols = 15,
     display = "auto",
-    add_n = TRUE,
+    n = "range",
     add_pct = FALSE,
     subtext = "",
     digits = "0",
     n_min = 0,
     export_format = "excel",
-    exportExcel,
-    path = "~/Documents/Table",
+    exportExcel = FALSE,
+    export_dir = "~/Documents",
+    export_filename = "Table",
+    resetPath = FALSE,
     xl_replace = FALSE) {
 
     if ( ! requireNamespace("jmvcore", quietly=TRUE))
@@ -737,36 +846,41 @@ jmvtab <- function(
         pct = pct,
         color = color,
         color_signif = color_signif,
-        chi2 = chi2,
+        test = test,
         anova = anova,
-        OR = OR,
         na = na,
         lvs = lvs,
-        other_if_less_than = other_if_less_than,
         cleannames = cleannames,
-        refLevels = refLevels,
-        levelOrder = levelOrder,
+        ref_levels = ref_levels,
+        levels_order = levels_order,
+        levels_collapse = levels_collapse,
+        shape = shape,
         ref = ref,
         ref2 = ref2,
         comp = comp,
         ci = ci,
         conf_level = conf_level,
-        ci_print = ci_print,
         stars = stars,
-        method_cell = method_cell,
-        method_diff = method_diff,
+        design_effect = design_effect,
+        ci_method_cell = ci_method_cell,
+        ci_method_diff = ci_method_diff,
+        ci_method_mean_diff = ci_method_mean_diff,
+        ci_method_mean_ratio = ci_method_mean_ratio,
+        tab_theme = tab_theme,
         totaltab = totaltab,
         wrap_rows = wrap_rows,
         wrap_cols = wrap_cols,
         display = display,
-        add_n = add_n,
+        n = n,
         add_pct = add_pct,
         subtext = subtext,
         digits = digits,
         n_min = n_min,
         export_format = export_format,
         exportExcel = exportExcel,
-        path = path,
+        export_dir = export_dir,
+        export_filename = export_filename,
+        resetPath = resetPath,
         xl_replace = xl_replace)
 
     analysis <- jmvtabClass$new(

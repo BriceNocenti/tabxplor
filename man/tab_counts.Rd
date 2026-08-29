@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab-counts.R
 \name{tab_counts}
 \alias{tab_counts}
-\title{Cross-table from already-aggregated counts ("from the middle")}
+\title{Cross-tables from already-aggregated counts}
 \usage{
 tab_counts(
   data,
@@ -15,40 +15,17 @@ tab_counts(
   col_name = "variable",
   base,
   input = c("counts", "pct"),
-  pct = "no",
-  color = "no",
-  OR = "no",
-  chi2 = FALSE,
-  na = "keep",
-  ref = "auto",
-  ref2 = "first",
-  comp = "tab",
-  ci = "no",
-  conf_level = 0.95,
-  stars = NULL,
-  method_cell = "wilson",
-  method_diff = "newcombe",
-  totaltab = "line",
-  totaltab_name = "Ensemble",
-  tot = c("row", "col"),
-  total_names = "Total",
-  add_n = TRUE,
-  add_pct = FALSE,
-  subtext = "",
-  digits = 0
+  ...
 )
 }
 \arguments{
-\item{data}{A data frame of counts, or a \code{table} / \code{xtabs} / \code{matrix} object.}
+\item{data}{A data frame.}
 
-\item{row_var}{The row variable (one level per line). For a \code{table} object it defaults to the
-first dimension.}
+\item{row_var, col_var}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Singular aliases of
+\code{row_vars}/\code{col_vars} (which now accept several variables). Kept working.}
 
-\item{col_var}{The column variable (one column per level). For a \code{table} object it defaults to
-the second dimension. Not used with \code{cols}.}
-
-\item{tab_vars}{<\code{\link[tidyr:tidyr_tidy_select]{tidy-select}}> Tab variables: a subtable is made for
-each combination of their levels.}
+\item{tab_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables: one subtable per
+combination of their levels. Leave empty for a simple cross-table.}
 
 \item{counts}{The column holding the \strong{unweighted} count for each cell (long tidy shape).}
 
@@ -65,37 +42,36 @@ holding the \code{col_var} levels.}
 \item{input}{\code{"counts"} (default) or \code{"pct"} (with \code{cols} and \code{base}: the level columns hold
 frequencies, and counts are rebuilt from them and \code{base}).}
 
-\item{pct, color, OR, chi2, na, ref, ref2, comp, ci, conf_level, stars, method_cell, method_diff, totaltab, totaltab_name, tot, total_names, add_n, add_pct, subtext, digits}{Same meaning as in \code{\link[=tab]{tab()}}.}
+\item{...}{Every other argument of \code{\link[=tab]{tab()}} -- \code{pct}, \code{color}, \code{ci}, \code{tot}, ... -- passed
+by name. See \code{\link[=tab]{tab()}}; a typo gets a suggestion.}
 }
 \value{
 A \code{tabxplor_tab} (or \code{tabxplor_grouped_tab} when \code{tab_vars} are provided).
 }
 \description{
 \code{tab_counts()} builds the same color-coded cross-table as \code{\link[=tab]{tab()}}, but from data that is
-\strong{already cross-tabulated} (a table of counts) rather than from microdata (one row per
-individual). This is the common case when you start from a \code{dplyr::count()} result, a
-contingency table, or a published table of counts or percentages. All the usual calculations
---- percentages, differences, confidence intervals, chi-squared, colors, totals --- are done on
-the counts, and the result is identical to the table \code{\link[=tab]{tab()}} would build from the underlying
-microdata.
+\strong{already cross-tabulated} --- a \code{dplyr::count()} result, a contingency table, or a published
+table of counts or percentages --- instead of microdata (one row per individual). Percentages,
+differences, confidence intervals, chi-squared, colors and totals are all computed from the
+counts, and the result is identical to the table \code{\link[=tab]{tab()}} would build from the microdata behind
+them.
 
 It accepts four input shapes:
 \itemize{
 \item \strong{Long tidy counts} (the default): one row per \code{row_var} \eqn{\times} \code{col_var} (\eqn{\times}
-\code{tab_vars}) combination, with the count in \code{counts} (and, weighted, the weighted count in
-\code{wt_counts}).
+\code{tab_vars}) combination, with the count in \code{counts} (and the weighted count in \code{wt_counts}).
 \item \strong{A wide \code{data.frame}}: a label (\code{row_var}) column plus one column per \code{col_var} level ---
 select those level columns with \code{cols} and name the column variable with \code{col_name}.
-\item \strong{A \code{table} / \code{xtabs} / \code{matrix} object}: melted automatically; the row/column variables are
+\item \strong{A \code{table} / \code{xtabs} / \code{matrix} object}: melted automatically, the row and column variables
 read from the dimnames (or set with \code{row_var} / \code{col_var}).
-\item \strong{Frequencies + base N}: as the wide shape, plus \code{input = "pct"} and \code{base} (the column of
-row sample sizes); the integer counts are rebuilt from the percentages and the base.
+\item \strong{Frequencies + base N}: the wide shape, plus \code{input = "pct"} and \code{base} (the column of row
+sample sizes); the integer counts are rebuilt from the percentages and the base.
 }
 
-For weighted data, supply the real (unweighted) count in \code{counts} \strong{and} the weighted count in
-\code{wt_counts}: estimates use the weighted counts while confidence intervals and tests use the real
-unweighted sample size. When the counts are not real whole numbers (a base-less / weighted-only
-input), confidence intervals and chi-squared are disabled with a message.
+With weighted data, give the real (unweighted) count in \code{counts} \strong{and} the weighted count in
+\code{wt_counts}: estimates use the weighted counts, while confidence intervals and tests use the
+real unweighted sample size. Counts that are not whole numbers (weighted-only or frequency-only
+input) disable confidence intervals and chi-squared, with a message.
 }
 \examples{
 # Long tidy counts (as from dplyr::count()) reproduce the microdata table :

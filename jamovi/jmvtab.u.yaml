@@ -42,6 +42,10 @@ children:
             name: wt
             maxItemCount: 1
             isTarget: true
+            # `design_effect` is a no-op without weights, and applyVarEnables() greys it -- so the
+            # weight box has to announce its own changes like the three variable boxes above.
+            events:
+              change: ./jmvtab::onChange_vars
   - type: CollapseBox
     label: <b>Percentages, colors and tests</b>
     stretchFactor: 1
@@ -97,7 +101,7 @@ children:
             stretchFactor: 3
             children:
               - type: Label
-                label: color = <i>(what to measure for colors)</i>
+                label: color = <i>(what measure of deviation the colors shows)</i>
                 fitToGrid: true
                 children:
                   - type: RadioButton
@@ -115,7 +119,7 @@ children:
                   - type: RadioButton
                     name: color_3
                     optionName: color
-                    optionPart: diff
+                    optionPart: difference
                     enable: (pct:row || pct:col)
                     events:
                       change: ./jmvtab::onChange_refopts
@@ -129,14 +133,14 @@ children:
                   - type: RadioButton
                     name: color_5
                     optionName: color
-                    optionPart: contrib
+                    optionPart: odds_ratio
+                    enable: (pct:row || pct:col)
                     events:
                       change: ./jmvtab::onChange_refopts
                   - type: RadioButton
                     name: color_6
                     optionName: color
-                    optionPart: OR
-                    enable: (pct:row || pct:col)
+                    optionPart: contrib
                     events:
                       change: ./jmvtab::onChange_refopts
           - type: LayoutBox
@@ -146,27 +150,10 @@ children:
             stretchFactor: 2
             children:
               - type: Label
-                label: OR = <i>(Odds Ratio)</i>
+                label: display = <i>(what each cell shows)</i>
                 children:
-                  - type: RadioButton
-                    name: OR_1
-                    optionName: OR
-                    optionPart: 'no'
-                    enable: (pct:row || pct:col)
-                    events:
-                      change: ./jmvtab::onChange_refopts
-                  - type: RadioButton
-                    name: OR_2
-                    optionName: OR
-                    optionPart: OR
-                    enable: (pct:row || pct:col)
-                    events:
-                      change: ./jmvtab::onChange_refopts
-                  - type: RadioButton
-                    name: OR_3
-                    optionName: OR
-                    optionPart: OR_pct
-                    enable: (pct:row || pct:col)
+                  - type: ComboBox
+                    name: display
                     events:
                       change: ./jmvtab::onChange_refopts
           - type: LayoutBox
@@ -193,21 +180,35 @@ children:
                     optionName: color_signif
                     optionPart: guaranteed_effect
                     enable: (!(color:no))
+      # Two equal columns, and EVERY control carries its own label: the bold `test = ...` title used
+      # to sit above all three, so it read as naming the ComboBox and the second tick-box too.
       - type: LayoutBox
         margin: large
-        style: inline
         children:
-          - type: Label
-            label: Statistical test <i>(Chi-square for categorical columns, ANOVA F for numeric columns)</i>
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 1
             children:
               - type: CheckBox
-                name: chi2
+                name: test
+                label: >-
+                  <b>test = <i>(Chi2 and Cramer’V for categorical; ANOVA F and eta2 for
+                  numeric)</i></b>
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 0
+              row: 1
+            stretchFactor: 1
+            children:
               - type: ComboBox
                 name: anova
-                label: ANOVA F
-                enable: (chi2)
+                enable: (test)
   - type: CollapseBox
-    label: <b>Levels and missing values</b>
+    label: <b>References (points of comparison), levels and missing values</b>
     stretchFactor: 1
     collapsed: true
     children:
@@ -268,104 +269,59 @@ children:
           - type: LayoutBox
             margin: none
             cell:
-              column: 2
-              row: 0
+              column: 0
+              row: 1
             stretchFactor: 1
             children:
-              - type: Label
-                label: other_if_less_than =
-                children:
-                  - type: TextBox
-                    name: other_if_less_than
-                    format: number
-              - type: Label
-                label: cleannames =
-                children:
-                  - type: CheckBox
-                    name: cleannames
-              - type: Label
-                label: n_min = <i>(hide rows/cols with a small base)</i>
-                children:
-                  - type: TextBox
-                    name: n_min
-                    format: number
+              - type: TextBox
+                name: n_min
+                format: number
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 1
+              row: 1
+            stretchFactor: 1
+            children:
+              - type: CheckBox
+                name: cleannames
+      # Phase 22g-iv: ONE per-variable table -- order / merge / cut a variable's levels and pick what
+      # it is compared to -- replacing the level tree and the reference picker, which listed the same
+      # variables twice, in two boxes, in two shapes. Its columns are drawn by jmvtab.js
+      # (VAR_TABLE_HOST); `comp` sits under it because it is the other half of "compared to what".
       - type: LayoutBox
+        margin: large
         cell:
           column: 0
           row: 1
         stretchFactor: 1
         children:
           - type: Label
-            label: <b>Reorder levels</b> <i>(select a level, then move it up/down)</i>
-            children:
-              - type: CustomControl
-                name: levelOrderCtrl
-                stretchFactor: 1
-                events:
-                  creating: ./jmvtab::levelOrderCtrl_creating
-                  updated: ./jmvtab::levelOrderCtrl_updated
-  - type: CollapseBox
-    label: <b>References (points of comparison)</b>
-    stretchFactor: 1
-    collapsed: true
-    children:
-      # Phase 7g-iii: the reference picker is a Material CustomControl (refPickerCtrl) -- a
-      # single-select level list per variable (Total + levels, in the reordered order), plus a
-      # ref2 section shown only when OR is active. It edits the hidden `refLevels` + `ref2`
-      # options via js/jmvtab.js. Kept in its own margin:none LayoutBox (never mix celled and
-      # cell-less children in one box -> "Cell already exists" panel hang).
+            label: "<b><i>Choose reference categories, merge and reorder levels, cut numeric variables:</i></b>"
       - type: LayoutBox
         margin: none
+        cell:
+          column: 0
+          row: 2
+        stretchFactor: 1
         children:
           - type: CustomControl
-            name: refPickerCtrl
+            name: varTableCtrl
             stretchFactor: 1
             events:
-              creating: ./jmvtab::refPickerCtrl_creating
-              updated: ./jmvtab::refPickerCtrl_updated
+              creating: ./jmvtab::varTableCtrl_creating
+              updated: ./jmvtab::varTableCtrl_updated
       - type: LayoutBox
         margin: none
+        cell:
+          column: 0
+          row: 3
+        stretchFactor: 1
         children:
-          - type: Label
-            label: comp = <i>(reference table with tab_vars)</i>
-            children:
-              - type: RadioButton
-                name: comp_1
-                optionName: comp
-                optionPart: tab
-              - type: RadioButton
-                name: comp_2
-                optionName: comp
-                optionPart: all
-      # --- Phase 7g-iii: the old free-text `ref` / `ref2` boxes are REPLACED by refPickerCtrl
-      # --- above. Kept here (commented) for rollback -- to restore, uncomment and remove
-      # --- `hidden: true` from the `ref` / `ref2` options in .a.yaml.
-      # - type: LayoutBox
-      #   margin: none
-      #   children:
-      #     - type: LayoutBox
-      #       margin: none
-      #       cell: { column: 0, row: 0 }
-      #       stretchFactor: 1
-      #       children:
-      #         - type: Label
-      #           label: ref = <i>(expert fallback&#58; tot / first / regex / n)</i>
-      #           children:
-      #             - type: TextBox
-      #               name: ref
-      #               format: string
-      #     - type: LayoutBox
-      #       margin: none
-      #       cell: { column: 0, row: 1 }
-      #       stretchFactor: 0
-      #       children:
-      #         - type: Label
-      #           label: ref2 = <i>(2nd reference col/row for OR)</i>
-      #           children:
-      #             - type: TextBox
-      #               name: ref2
-      #               format: string
-      #               enable: (OR == 'OR' || OR == 'OR_pct')
+          - type: ComboBox
+            name: comp
+            label: comp = <i>(reference table, with tab_vars)</i>
+
   - type: CollapseBox
     label: <b>Confidence intervals</b>
     stretchFactor: 1
@@ -373,112 +329,178 @@ children:
     children:
       - type: LayoutBox
         margin: none
-        cell:
-          column: 0
-          row: 0
-        stretchFactor: 1
         children:
-          - type: Label
-            label: ci = <i>(confidence intervals)</i>
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 1
             children:
-              - type: RadioButton
-                name: ci_1
-                optionName: ci
-                optionPart: auto
-                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
-              - type: RadioButton
-                name: ci_2
-                optionName: ci
-                optionPart: cell
-                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
-              - type: RadioButton
-                name: ci_3
-                optionName: ci
-                optionPart: diff
-                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 1
-          row: 0
-        stretchFactor: 1
-        children:
-          - type: Label
-            label: options('tabxplor.ci_print' = ...)
+              - type: Label
+                label: ci = <i>(confidence intervals)</i>
+                children:
+                  - type: RadioButton
+                    name: ci_1
+                    optionName: ci
+                    optionPart: auto
+                    enable: (pct:row || pct:col || pct:all || pct:all_tabs)
+                  - type: RadioButton
+                    name: ci_2
+                    optionName: ci
+                    optionPart: 'no'
+                    enable: (pct:row || pct:col || pct:all || pct:all_tabs)
+                  - type: RadioButton
+                    name: ci_3
+                    optionName: ci
+                    optionPart: cell
+                    enable: (pct:row || pct:col || pct:all || pct:all_tabs)
+                  - type: RadioButton
+                    name: ci_4
+                    optionName: ci
+                    optionPart: ref
+                    enable: (pct:row || pct:col || pct:all || pct:all_tabs)
+          # ⚠ cell (1,0) is deliberately ABSENT, not an empty box: a `.u.yaml` node with a bare
+          # `children:` is a YAML null, and the ui compiler dereferences it (`null.length`) instead
+          # of skipping it -- which made `jmvtools::prepare()` abort outright. A grid is
+          # cell-addressed, so a missing cell simply stays blank. Never write `children: []` either:
+          # the compiler splices an empty container out and rewrites this file, comments and all.
+          # conf_level | stars: TWO EQUAL COLUMNS (stretch 1 each), so the box has one grid the eye
+          # can follow rather than two controls sized by their own text.
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 0
+              row: 1
+            stretchFactor: 1
             children:
-              - type: RadioButton
-                name: ci_print_1
-                optionName: ci_print
-                optionPart: ci
-                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
-              - type: RadioButton
-                name: ci_print_2
-                optionName: ci_print
-                optionPart: moe
-                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 0
-          row: 1
-        stretchFactor: 0
-        children:
-          - type: Label
-            label: conf_level = <i>(confidence level)</i>
+              - type: Label
+                label: conf_level = <i>(confidence level)</i>
+                children:
+                  - type: TextBox
+                    name: conf_level
+                    format: number
+                    enable: (pct:row || pct:col || pct:all || pct:all_tabs)
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 1
+              row: 1
+            stretchFactor: 1
             children:
-              - type: TextBox
-                name: conf_level
-                format: number
-                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 1
-          row: 1
-        stretchFactor: 0
-        children:
-          - type: Label
-            label: stars = <i>(significance stars)</i>
+              - type: Label
+                label: stars = <i>(significance stars)</i>
+                children:
+                  - type: CheckBox
+                    name: stars
+                    enable: (ci:ref || ci:auto)
+          - type: LayoutBox
+            margin: large
+            cell:
+              column: 0
+              row: 2
+            stretchFactor: 1
             children:
               - type: CheckBox
-                name: stars
-                enable: (ci:diff || ci:auto)
+                name: design_effect
+                label: "<b>design_effect = <i>(design effect of the weights)</i></b>"
+
+      # The interval METHODS were a nested CollapseBox inside a CollapseBox -- two clicks to reach
+      # four drop-downs. They are in the parent now, behind a bold heading; the `margin: large` on
+      # this block IS the blank line above it (a spacer node would be an empty container, which the
+      # ui compiler splices out and then rewrites this file over, comments and all).
       - type: LayoutBox
-        margin: none
-        cell:
-          column: 0
-          row: 2
-        stretchFactor: 1
+        margin: large
         children:
           - type: Label
-            label: method_cell = <i>(cell CI method)</i>
-            children:
-              - type: ComboBox
-                name: method_cell
-                enable: (ci:cell || ci:auto)
+            label: <b>Confidence-interval methods (advanced)</b>
       - type: LayoutBox
         margin: none
-        cell:
-          column: 1
-          row: 2
-        stretchFactor: 1
         children:
-          - type: Label
-            label: method_diff = <i>(difference CI method)</i>
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 1
             children:
-              - type: ComboBox
-                name: method_diff
-                enable: (ci:diff || ci:auto)
+              - type: Label
+                label: ci_method = c(cell = )
+                children:
+                  - type: ComboBox
+                    name: ci_method_cell
+                    enable: (ci:cell || ci:auto)
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 1
+              row: 0
+            stretchFactor: 1
+            children:
+              - type: Label
+                label: ci_method = c(diff = )
+                children:
+                  - type: ComboBox
+                    name: ci_method_diff
+                    enable: (ci:ref || ci:auto)
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 0
+              row: 1
+            stretchFactor: 1
+            children:
+              - type: Label
+                label: ci_method = c(mean_diff = )
+                children:
+                  - type: ComboBox
+                    name: ci_method_mean_diff
+                    enable: (ci:ref || ci:auto)
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 1
+              row: 1
+            stretchFactor: 1
+            children:
+              - type: Label
+                label: ci_method = c(mean_ratio = )
+                children:
+                  - type: ComboBox
+                    name: ci_method_mean_ratio
+                    enable: (ci:ref || ci:auto)
+  # TWO EQUAL COLUMNS throughout, general to specific: the whole-table look first (`theme`), then the
+  # table's structure, then the wrapping, then the numbers.
   - type: CollapseBox
     label: <b>Other formatting</b>
     stretchFactor: 1
     collapsed: true
     children:
       - type: LayoutBox
+        margin: none
         cell:
           column: 0
           row: 0
-        stretchFactor: 0
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: "theme = <i>(display and colors theme)</i>"
+            fitToGrid: true
+            children:
+              - type: RadioButton
+                name: tab_theme_1
+                optionName: tab_theme
+                optionPart: light
+              - type: RadioButton
+                name: tab_theme_2
+                optionName: tab_theme
+                optionPart: print_ready
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 1
+        stretchFactor: 1
         children:
           - type: Label
             label: totaltab = <i>(with tab_vars, add a total table)</i>
@@ -499,59 +521,8 @@ children:
       - type: LayoutBox
         margin: none
         cell:
-          column: 0
-          row: 1
-        stretchFactor: 1
-        children:
-          - type: Label
-            label: wrap_rows = <i>(nb chars for line break)</i>
-            children:
-              - type: TextBox
-                name: wrap_rows
-                format: number
-      - type: LayoutBox
-        margin: none
-        cell:
           column: 1
           row: 1
-        stretchFactor: 1
-        children:
-          - type: Label
-            label: wrap_cols = <i>(nb chars for line break)</i>
-            children:
-              - type: TextBox
-                name: wrap_cols
-                format: number
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 0
-          row: 2
-        stretchFactor: 0
-        children:
-          - type: Label
-            label: display = <i>(which information to display in the table ?)</i>
-            children:
-              - type: ComboBox
-                name: display
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 0
-          row: 3
-        stretchFactor: 1
-        children:
-          - type: Label
-            label: add_n = <i>(see unweighted counts)</i>
-            children:
-              - type: CheckBox
-                name: add_n
-                enable: (pct:row || pct:col)
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 1
-          row: 3
         stretchFactor: 1
         children:
           - type: Label
@@ -564,7 +535,46 @@ children:
         margin: none
         cell:
           column: 0
-          row: 4
+          row: 2
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: wrap_rows = <i>(nb chars for line break)</i>
+            children:
+              - type: TextBox
+                name: wrap_rows
+                format: number
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 2
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: wrap_cols = <i>(nb chars for line break)</i>
+            children:
+              - type: TextBox
+                name: wrap_cols
+                format: number
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 3
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: n = <i>(see unweighted counts)</i>
+            children:
+              - type: ComboBox
+                name: "n"
+                enable: (pct:row || pct:col)
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 3
         stretchFactor: 1
         children:
           - type: Label
@@ -572,67 +582,104 @@ children:
             children:
               - type: ComboBox
                 name: digits
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 0
-          row: 5
-        stretchFactor: 2
-        children:
-          - type: Label
-            label: subtext = <i>(text to print below the table)</i>
-            children:
-              - type: TextBox
-                name: subtext
-                format: string
-                width: largest
   - type: LayoutBox
     margin: large
     stretchFactor: 1
     children:
-      - type: LayoutBox
-        cell:
-          column: 0
-          row: 0
-        stretchFactor: 0
-        children:
-          - type: Label
-            label: <b>Export format:</b>
-          - type: ComboBox
-            name: export_format
-            events:
-              change: ./jmvtab::export_format_changed
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 1
-          row: 0
+      # Phase h: full-width subtext box (stretchFactor on the label wrapper too, so the <textarea> fills
+      # the width to its right rather than sitting thin under a narrow label).
+      - type: Label
+        label: subtext = <i>(text to print below the table)</i>
         stretchFactor: 1
         children:
-          - type: Label
-            label: <b>Save to (path or file name):</b>
-          - type: TextBox
-            name: path
-            format: string
-            width: largest
-      - type: LayoutBox
-        cell:
-          column: 0
-          row: 1
-        stretchFactor: 0
-        children:
-          - type: ActionButton
-            name: exportExcel
-            label: Export to Excel
+          - type: CustomControl
+            name: subtextCtrl
+            stretchFactor: 1
             events:
-              change: ./jmvtab::exportExcel_changed
+              creating: ./jmvtab::subtextCtrl_creating
+              updated: ./jmvtab::subtextCtrl_updated
+  # Phase o: the rule that sets the (outside-the-collapse-hierarchy) Export block apart is drawn by
+  # js/jmvtab.js styleExportSep() (a border-top on this block) -- a former <hr> Label showed as raw text.
+  - type: LayoutBox
+    margin: large
+    stretchFactor: 1
+    children:
+      # Row 1: the Export action, the Format selector, the Replace-existing toggle.
       - type: LayoutBox
         margin: none
-        cell:
-          column: 1
-          row: 1
-        stretchFactor: 0
+        children:
+          - type: LayoutBox
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 0
+            children:
+              - type: ActionButton
+                name: exportExcel
+                label: Export
+                events:
+                  change: ./jmvtab::exportExcel_changed
+          - type: LayoutBox
+            cell:
+              column: 1
+              row: 0
+            stretchFactor: 0
+            children:
+              - type: ComboBox
+                name: export_format
+                events:
+                  change: ./jmvtab::export_format_changed
+      # Row 2: ONE full-width path line -- "Path:" <folder> " / " <filename> <.ext>.
+      #   folder : filename width = 3 : 2. This ratio only holds because js injectExportCss() collapses
+      #   the TextBoxes' ~200px max-content floor -- otherwise both cells bottom out at 200px (see the js).
+      #   The label / separator / extension cells are stretch 0, so they take only their text width.
+      - type: LayoutBox
+        margin: none
+        children:
+          - type: LayoutBox
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 0
+            children:
+              - type: TextBox
+                name: export_dir
+                format: string
+                width: largest
+          - type: LayoutBox
+            cell:
+              column: 1
+              row: 0
+            stretchFactor: 0
+            children:
+              - type: TextBox
+                name: export_filename
+                format: string
+                width: large
+          - type: LayoutBox
+            cell:
+              column: 2
+              row: 0
+            stretchFactor: 0
+            children:
+              - type: CustomControl
+                name: extCtrl
+                events:
+                  creating: ./jmvtab::extCtrl_creating
+                  updated: ./jmvtab::extCtrl_updated
+      # Row 3: a discreet, right-aligned "default path" reset, sitting under the file-name box.            
+      - type: LayoutBox
+        margin: none
         children:
           - type: CheckBox
             name: xl_replace
             label: Replace existing file
+       # Row 4: a discreet, right-aligned "default path" reset.
+      - type: LayoutBox
+        margin: none
+        children:
+          - type: ActionButton
+            name: resetPath
+            label: Reset default path
+            events:
+              change: ./jmvtab::resetPath_changed

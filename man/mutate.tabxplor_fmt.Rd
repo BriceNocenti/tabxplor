@@ -25,3 +25,4 @@ An object of class \code{tabxplor_fmt}.
 \description{
 mutate method to access vctrs::fields of tabxplor_fmt vectors
 }
+\keyword{internal}

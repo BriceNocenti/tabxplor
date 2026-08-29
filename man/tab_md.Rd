@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab_md.R
 \name{tab_md}
 \alias{tab_md}
-\title{Export a tabxplor table to a markdown table}
+\title{Render a table as Markdown}
 \usage{
 tab_md(
   tabs,
@@ -13,23 +13,24 @@ tab_md(
   color = TRUE,
   color_legend = TRUE,
   lang = NULL,
-  theme = c("light", "dark"),
-  color_type = NULL,
-  html_24_bit = NULL,
+  theme = NULL,
   caption = NULL,
   transpose = FALSE,
-  css = FALSE,
+  var_names = NULL,
+  css = TRUE,
   clipboard = FALSE,
   file = NULL,
   print = TRUE,
-  title = lifecycle::deprecated()
+  title = lifecycle::deprecated(),
+  col_var_names = lifecycle::deprecated(),
+  ...
 )
 }
 \arguments{
-\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_many}}, or a \code{list} of tab.
-A list of tables sharing the same \code{col_vars} (and no \code{tab_vars}) is merged into one; any other
-list --- several \code{row_vars} and/or \code{tab_vars} (e.g. \code{tab()} with several row variables and a
-\code{tab_vars}) --- is rendered one table after another, each keeping its own sub-tables.}
+\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_reg}}, or a \code{list} of tab.
+A list of tables sharing the same \code{col_vars} (and no \code{tab_vars}) is merged into one; any
+other list --- several \code{row_vars} and/or \code{tab_vars} --- is rendered one table after
+another, each keeping its own sub-tables.}
 
 \item{bold_references}{Bold reference/total rows with markdown \verb{**...**}.}
 
@@ -38,25 +39,27 @@ When \code{TRUE}, shows "ref:" prefix on diff reference cells, "mean:" on ctr
 totals, sigma on means.}
 
 \item{wrap_rows}{Max width for row labels before truncation. \code{NULL} (default) never truncates
-(lossless -- the column grows); set a number to cap the label width. A markdown pipe cell cannot
-hold a raw newline, so md "wrapping" means "do not truncate".}
+(lossless -- the column grows); set a number to cap the label width. A markdown pipe
+cell cannot hold a raw newline, so md "wrapping" means "do not truncate".}
 
 \item{subtext}{Print chi2/footnotes below the table.}
 
 \item{color}{When \code{TRUE} (default) and the table carries colours (e.g. built with
-\code{tab(..., color = "diff")}), each fmt cell is wrapped in a short pandoc bracketed span
-\verb{[value]\{.class\}} so the markdown renders coloured in Quarto / RMarkdown / pandoc (and the
-companion \code{\link{tab_md_css}} styles the classes). \code{FALSE} produces plain monochrome
-markdown. Uncoloured tables never get spans.}
+\code{tab(..., color = "difference")}), each fmt cell is wrapped in a short pandoc
+bracketed span \verb{[value]\{.class\}} so the markdown renders coloured in Quarto /
+RMarkdown / pandoc (and \code{\link[=tab_css]{tab_css(format = "md")}} styles the
+classes). \code{FALSE} produces plain monochrome markdown. Uncoloured tables never get
+spans.}
 
-\item{color_legend}{When \code{TRUE} (default) and the table is coloured, prepend a colour-legend prose
-line (its break-words in the same pandoc classes as the cells) above the subtext.}
+\item{color_legend}{Print the colour legend below the table (with the subtext). \code{TRUE} by default, and a
+no-op on a table that carries no colours.}
 
-\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback), \code{"en"} or \code{"fr"}.}
+\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
+\code{"en"} or \code{"fr"}.}
 
-\item{theme, color_type, html_24_bit}{Colour palette selectors (as in
-\code{\link[=tab_kable]{tab_kable()}}); they only affect the CSS emitted by \code{css = TRUE} /
-\code{\link{tab_md_css}}, since the span \emph{class names} are palette-independent.}
+\item{theme}{Colour palette selector (as in \code{\link{tab_html}}); it only affects the CSS
+emitted by \code{css = TRUE} / \code{\link{tab_css}}, since the span \emph{class names} are palette- and
+theme-independent. Accepts \code{"auto"} (follow the reader's colour scheme).}
 
 \item{caption}{Optional table caption, rendered as a pandoc caption line \verb{: caption} (captions only
 the first table of a list).}
@@ -64,31 +67,43 @@ the first table of a list).}
 \item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become columns) --
 the col-percentages-with-several-row-variables use case.}
 
-\item{css}{When \code{TRUE}, prepend an inline \verb{<style>} block (from \code{\link{tab_md_css}}) matching
-this table's breaks and palette, so the coloured markdown is self-contained. Default \code{FALSE}
-(bring the stylesheet via the document's \verb{css:} instead).}
+\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default), \code{"rows"},
+\code{"cols"} or \code{"none"}. The row-variable name is the leading column a table with several
+\code{row_vars} uses to name each block (written once per block); the column-variable names
+are the spanning row above their level columns. Level headers always keep their name.}
 
-\item{clipboard}{Copy output to clipboard via \code{clipr::write_clip()}.
-Requires the \pkg{clipr} package.}
+\item{css}{When \code{TRUE} (the default), prepend an inline \verb{<style>} block so the exported markdown is
+self-contained and renders coloured and compact on its own. Set \code{FALSE} inside an \code{.Rmd}/\code{.qmd}
+document once the host page brings the stylesheet (or call \code{\link{tab_css}} once at the top
+for the whole document) -- otherwise the \verb{<style>} block is duplicated per table. A plain
+uncoloured table renders byte-identical either way.}
+
+\item{clipboard}{Copy output to clipboard via \code{clipr::write_clip()} (requires \pkg{clipr}).}
 
 \item{file}{Path to write the markdown to a file. \code{NULL} (default) skips.}
 
-\item{print}{If \code{TRUE}, print via \code{cat()} and return invisibly. If \code{FALSE},
-return the character string.}
+\item{print}{If \code{TRUE}, print via \code{cat()} and return invisibly; if \code{FALSE}, return the string.}
 
 \item{title}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{caption}.}
+
+\item{col_var_names}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Replaced by \code{var_names}:
+\code{col_var_names = FALSE} is \code{var_names = "rows"} (or \code{"none"}).}
+
+\item{...}{Retired arguments, accepted and ignored with a deprecation message since 2.0.0
+(\code{color_type}, \code{html_24_bit}): colour is a CSS class, and exports are always 24-bit.
+Anything else is an error naming the argument you meant, as it already was in \code{\link[=tab]{tab()}}.}
 }
 \value{
 A character string (visible or invisible depending on \code{print}).
 }
 \description{
-Export a tabxplor table to a markdown table
+The Markdown exporter behind \code{\link{tab_export}}: \code{tab_export(x, format = "md")} calls this.
 }
 \examples{
 \donttest{
 tab(forcats::gss_cat, race, marital, pct = "row") |> tab_md()
-tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |> tab_md()
-tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |>
+tab(forcats::gss_cat, race, marital, pct = "row", color = "difference") |> tab_md()
+tab(forcats::gss_cat, race, marital, pct = "row", color = "difference") |>
   dplyr::mutate(dplyr::across(dplyr::where(is_fmt), ~set_display(., "diff"))) |>
   tab_md()
 }

@@ -3,15 +3,14 @@
 \name{new_tab}
 \alias{new_tab}
 \alias{new_grouped_tab}
-\title{A constructor for class tabxplor_tab}
+\title{Build a \code{tabxplor_tab} around \code{fmt} columns}
 \usage{
 new_tab(
   tabs = tibble::tibble(),
   subtext = "",
   test = new_test_tibble(),
   chi2 = NULL,
-  render_extras = NULL,
-  ci_settings = NULL,
+  meta = NULL,
   ...,
   class = character()
 )
@@ -22,34 +21,47 @@ new_grouped_tab(
   subtext = "",
   test = new_test_tibble(),
   chi2 = NULL,
-  render_extras = NULL,
-  ci_settings = NULL,
+  meta = NULL,
   ...,
   class = character()
 )
 }
 \arguments{
 \item{tabs}{A table, stored into a \code{\link[tibble]{tibble}} data.frame.
-It is generally made with \code{\link{tab}}, \code{\link{tab_many}}
+It is generally made with \code{\link{tab}}, \code{\link{tab_reg}}
 or \code{\link{tab_plain}}.}
 
 \item{subtext}{A character vector to print legend lines under the table.}
 
 \item{test}{A tidy tibble storing whole-table test results (Chi2 for factor columns,
-ANOVA F for mean columns), filled by \code{\link{tab_chi2}}. Renamed from \code{chi2}
-in tabxplor 1.4.0.}
+ANOVA F for mean columns), filled by \code{\link{tab_chi2}}.}
 
 \item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Soft-deprecated alias of \code{test}.}
 
-\item{render_extras}{Display-only intent for the \code{add_n} / \code{add_pct} extras, as
-\code{list(add_n =, add_pct =)}. Since tabxplor 1.4.0 those rows/columns are no longer baked
-into the table: they are materialised at print/export time from this attribute. \code{NULL}
-(the default) means no extras.}
-
-\item{ci_settings}{Display-only metadata for the colour legend, as
-\code{list(conf_level =, method_cell =, method_diff =)}: which confidence level and confidence
-interval methods were actually used. \code{NULL} (the default) makes the legend fall back to
-the package defaults.}
+\item{meta}{The table's metadata, as a single named list gathering (all optional, \code{NULL}
+when unset):
+\itemize{
+\item \code{render_extras} -- display-only intent for the base count and the \code{add_pct}
+companion, \code{list(n =, add_pct =)}, materialised at print/export time from this attribute
+rather than baked into the table.
+\item \code{spec} -- the table's identity, \code{list(kind =, vars =, call =)}: its \code{kind}
+(\code{"crosstab"} or \code{"regression"}); \code{vars}, what no column can carry
+(\code{list(wt =, caption =, outcomes =, var_labels =)} -- see \code{\link{set_caption}}), the rest of the
+variable model being derived from the declared index columns and from the columns' own
+\code{col_var}; and \code{call}, the producer's own recipe (a regression's model record --
+family, outcome, predictors, reference level, and the \code{fit_spec}
+\code{\link{reg_check_plots}} refits from).
+\item \code{empirical_tips} -- multinomial crude-companion tooltip data (a \code{tibble} keyed by
+column, predictor and level), set by \code{tab_reg(empirical = TRUE)}.
+\item \code{assumptions} -- one record PER OUTCOME, keyed by it, each holding the observed curve
+of every continuous predictor (weighted quantile bins of the outcome on the family's link
+scale, one block per \code{tab_vars} group), set by \code{\link{tab_reg}}: the data behind the
+sparkline -- drawn in a continuous predictor's \code{n} cell, or in the shape table below the
+footer -- and behind \code{\link{reg_check_plots}}'s linearity panel.
+\item \code{color_breaks} -- a per-table override of the colour break scales (see
+\code{\link{set_color_breaks}}), merged over the global option at render time.
+}
+\code{meta} sub-fields left \code{NULL} are dropped, so a table given nothing carries no attribute.}
 
 \item{...}{Needed to implement subclasses.}
 
@@ -63,5 +75,5 @@ A \code{tibble} of class \code{tabxplor_tab}.
 A \code{tibble} of class \code{tabxplor_grouped_tab}.
 }
 \description{
-A constructor for class tabxplor_tab
+Build a \code{tabxplor_tab} around \code{fmt} columns
 }

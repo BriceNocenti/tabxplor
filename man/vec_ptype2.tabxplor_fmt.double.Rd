@@ -19,3 +19,4 @@ A fmt vector
 \description{
 Find common ptype between fmt and double
 }
+\keyword{internal}

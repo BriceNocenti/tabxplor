@@ -4,12 +4,12 @@
 \alias{[.tabxplor_grouped_tab}
 \title{subset method for class tabxplor_grouped_tab}
 \usage{
-"x[i]  ;  x[i, j, ... , drop = TRUE]"
+\method{[}{tabxplor_grouped_tab}(x, i, j, drop = FALSE)
 }
 \arguments{
 \item{x}{A tabxplor_grouped_tab object.}
 
-\item{i, j, ...}{Indices}
+\item{i, j}{Indices}
 
 \item{drop}{For matrices and arrays. If TRUE the result is coerced to the lowest
 possible dimension (see the examples). This only works for extracting elements,
@@ -21,3 +21,4 @@ An object of class \code{tabxplor_grouped_tab}.
 \description{
 subset method for class tabxplor_grouped_tab
 }
+\keyword{internal}

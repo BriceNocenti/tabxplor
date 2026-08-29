@@ -40,3 +40,4 @@ A printed table.
 \description{
 Printing method for class tabxplor_tab
 }
+\keyword{internal}

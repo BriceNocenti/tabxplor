@@ -14,7 +14,16 @@
 ^jamovi/
 ^CLAUDE\.md$
 ^vignettes/claude_code_setup\.md$
+^vignettes/articles$
 ^air\.toml$
 ^\.vscode$
 ^\.claude$
 ^dev$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^codecov\.yml$
+^\.covrignore$
+^tests/testthat/_problems$
+^Rplots\.pdf$
+^data-raw$

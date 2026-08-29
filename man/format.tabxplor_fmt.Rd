@@ -11,9 +11,12 @@
   na = NA,
   special_formatting = FALSE,
   stars = FALSE,
+  theme = NULL,
   bold_split = FALSE,
+  pad = if (isTRUE(html)) fig_space else " ",
   syntax = c("text", "excel"),
-  .ref = NULL
+  .ref = NULL,
+  .digits = NULL
 )
 }
 \arguments{
@@ -30,18 +33,37 @@ like indicating which is the reference row or col for differences.}
 
 \item{stars}{Append significance stars after the value (opt-in; default \code{FALSE}). Stars appear
 only where a per-cell p-value was stored (diff-type CIs / regression coefficients) and are
-right-padded so numbers stay aligned. The main display (console, \code{\link[=tab_kable]{tab_kable()}}, \code{\link[=tab_md]{tab_md()}}) sets
-this \code{TRUE}; tooltip / secondary-field re-renders leave it \code{FALSE}, so stars never leak.}
+right-padded so numbers stay aligned. They \strong{support} the number rather than compete with it: in
+every theme they are drawn like an aside -- the chrome's secondary grey, never bold, italic or
+underlined -- so a run of symbols never shouts louder than the value it qualifies. The main
+display (console, \code{\link[=tab_kable]{tab_kable()}}, \code{\link[=tab_md]{tab_md()}}) sets this \code{TRUE}; tooltip / secondary-field
+re-renders leave it \code{FALSE}, so stars never leak.}
+
+\item{theme}{Which palette the cells are being rendered in. Only the black-and-white publication
+palettes use it: \code{theme = "print_marks"} writes a repeated superscript mark after each value
+instead of the significance stars, drawn exactly like them (see \code{stars}). \code{NULL} (the default)
+renders no palette annotation at all.}
 
 \item{bold_split}{Internal (default \code{FALSE}): when \code{TRUE}, attach a per-cell \code{primary_nchar}
 attribute giving the bold-prefix width of a composite \code{"{pct} (n={n})"} cell, so exporters can
 bold only the primary field in a bold row. Off by default -> the output is attribute-free.}
+
+\item{pad}{The character used to align numbers: it pads values (composite displays, significance
+stars, confidence intervals, a mean with no sd) \strong{and separates thousands}. Defaults to a plain
+space, or to a \strong{figure space} (\code{U+2007}, exactly one digit wide) when \code{html = TRUE}. Media read in
+a monospace font (the console, markdown) want the plain space; media rendered in a proportional font
+(html, Excel) need the figure space, since an ASCII space is only half a digit wide there -- and CSS
+collapses runs of them. One glyph for both jobs, so the thousands mark can never disagree with the
+padding around it.}
 
 \item{syntax}{\code{"text"} (default) returns the rendered display strings; \code{"excel"} returns the
 per-cell Excel number-format codes used by \code{\link[=tab_xl]{tab_xl()}} (the raw value is written unchanged).}
 
 \item{.ref}{Internal: precomputed reference masks \code{list(cells=, all_totals=)} (derive-once
 speed-up passed by the exporter prep); computed internally when \code{NULL}.}
+
+\item{.digits}{Internal: the precision one token was named at in a composite template
+(\code{"{base:1}"}), passed by the composite expander; overrides every declared default.}
 }
 \value{
 The fmt printed in a character vector.
@@ -49,3 +71,4 @@ The fmt printed in a character vector.
 \description{
 Print method for class tabxplor_fmt
 }
+\keyword{internal}

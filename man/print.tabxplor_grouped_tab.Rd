@@ -40,3 +40,4 @@ A printed grouped table.
 \description{
 Printing method for class tabxplor_grouped_tab
 }
+\keyword{internal}

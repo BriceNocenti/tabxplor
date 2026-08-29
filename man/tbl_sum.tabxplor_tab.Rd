@@ -17,3 +17,4 @@ A table header
 \description{
 Table headers for class tab
 }
+\keyword{internal}

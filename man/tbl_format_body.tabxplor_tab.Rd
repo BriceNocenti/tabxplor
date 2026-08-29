@@ -19,3 +19,4 @@ A character vector.
 \description{
 Table body for class tab
 }
+\keyword{internal}

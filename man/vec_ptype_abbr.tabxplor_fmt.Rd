@@ -17,3 +17,4 @@ A single string with abbreviated fmt type.
 \description{
 Abbreviated display name for class fmt in tibbles
 }
+\keyword{internal}

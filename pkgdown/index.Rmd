@@ -1,0 +1,118 @@
+---
+output:
+  github_document:
+    html_preview: false
+    # a lone image stays `![alt](src)`, not a pandoc <figure> whose alt text becomes a caption
+    md_extensions: -implicit_figures
+always_allow_html: true
+---
+
+<!-- pkgdown/index.md is generated from pkgdown/index.Rmd. Please edit that file.
+     This page IS README.Rmd in colour -- same prose, same examples, the tables rendered in the
+     real palette instead of the black-and-white one GitHub forces. Edit both, or neither. -->
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/index-",
+  out.width = "100%"
+)
+library(tabxplor)
+options(tabxplor.print = "html")
+options(tabxplor.tab_kable_css = FALSE)
+options(tabxplor.tab_kable_tooltips = FALSE)
+# Pin the language, BOTH ways -- this English page must not depend on who builds it (knitting it
+# on the maintainer's fr_FR.UTF-8 box otherwise yields French legends, captions and GOF labels).
+# Two levers are needed because they drive different strings:
+#   - options(tabxplor.lang) drives the colour legend / footer / reg caption;
+#   - the test-summary and model-fit row labels (reg_footer_spec / test_pvalue_descriptor /
+#     test_es_measure, R/tab-test-display.R) resolve through gettext on the AMBIENT locale, which
+#     only LANGUAGE reaches. Without it a model-check row heads "Linéarité", not "Linearity".
+#     (Notation is deliberately NOT translated -- "LR vs null", OR/IRR/beta stay as they are.)
+# Same discipline as set_color_palette(theme=) below and tests/testthat/setup.R.
+options(tabxplor.lang = "en")
+Sys.setenv(LANGUAGE = "en")
+set_color_palette(theme = "light")
+```
+
+# tabxplor
+
+`tabxplor` makes cross-tables and regression models readable at a glance for data exploration. It builds a table with percentages, weighted counts, confidence intervals, tests — and colors highlight the cells that stand out from the total or reference, only when the difference is statistically solid, to spot the structure of your data immediately.
+
+- **Colors encode effect size and significance**: the stronger the difference, the deeper the color; non-significant cells are greyed-out.
+- Html, Excel and markdown/Quarto exports are available.
+- It comes with a point-and-click [jamovi](https://www.jamovi.org/) graphical interface: no code needed.
+- A black-and-white `theme = "print_ready"` renders the same reading for journals.
+- **Regression models** are presented with the same visual language, next to their observed effect.
+- In R the tables **are `tibble`s you can keep working on with `dplyr`**. Cells are rich values, each one carries its count, percentage, confidence interval and reference behind the displayed number.
+- Weighted data and survey design are supported.
+
+```{r css, echo = FALSE, results = "asis"}
+# ONE stylesheet for the whole page (tab_kable_css = FALSE, above, stops each table re-inlining it).
+# "auto" follows the site's light/dark switch through the `[data-bs-theme]` hooks bootstrap sets.
+cat(tab_css(theme = "auto"))
+```
+
+## Installation
+
+``` r
+install.packages("tabxplor", dependencies = TRUE)
+```
+
+## A quick look
+
+A simple cross-table with row percentages: shades of blue mean the cell is over-represented compared to the total row, shades of yellow to red mean it is under-represented.
+
+```{r quick-look}
+gss <- gss_cat_data_formatting() # cleaned-up version of forcats::gss_cat
+
+tab(gss, race, party3, pct = "row", color = "difference")
+```
+
+Several column variables can be crossed at once for series of Yes/No survey questions. With `color_signif = "grey_non_signif"`, cells that are not significantly different from the total are greyed out, so every colored figure is a solid one. Use `wt =` for weighted or survey data. Example with [FactoMineR](http://factominer.free.fr/index_fr.html) tea data :
+
+```{r quick-look-signif}
+tea_when_vars <- c("breakfast", "tea.time", "evening", "lunch", "dinner", "always")
+tab(facto_tea, SPC, all_of(tea_when_vars), pct = "row", 
+    levels = "first", na = "drop", 
+    color = "difference", ref = "first", color_signif = "grey_non_signif")
+```
+
+The same visual language extends to regression models: `tab_reg()` detects a binary outcome and fits a logistic regression, coloring odds ratios by strength and greying the non-significant ones, with a default comparison between the modelised deviations and their crude/observed counterparts.
+
+```{r quick-look-reg, message = FALSE}
+tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"))
+```
+
+Or as a black and white table ready for publication:
+
+```{r print-ready-reg, message = FALSE}
+options(tabxplor.theme = "print_ready")
+tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"))
+```
+
+```{r include=FALSE}
+options(tabxplor.theme = "light")
+```
+
+
+## Export your tables
+
+Any table exports with its colors to Excel, html or markdown (for Word, copy-paste from Excel) :
+
+``` r
+tab(gss, marital, race, pct = "row", color = "difference") |> tab_html()
+tab(gss, marital, race, pct = "row", color = "difference") |> tab_xl()
+tab(gss, marital, race, pct = "row", color = "difference") |> tab_xl(theme = "print_ready")
+```
+
+
+
+## Learn more
+
+- [Introduction to tabxplor](articles/tabxplor.html) — the place to start (*aussi disponible [en français](articles/tabxplor-fr.html)*).
+- [Regression tables with tab_reg()](articles/tabxplor-reg.html) (*aussi disponible [en français](articles/tabxplor-reg-fr.html)*).
+- [Reading a regression without losing sight of the percentages](articles/tabxplor-reading-a-regression.html) — a single analysis walked from a first cross-table to a finished sentence (*aussi disponible [en français](articles/tabxplor-reading-a-regression-fr.html)*).
+- [Weighted and survey data](articles/tabxplor-weights.html) — the three levels of margin of error, and which one your file deserves (*aussi disponible [en français](articles/tabxplor-weights-fr.html)*).
+- [Programming with tabxplor](articles/tabxplor-programming.html) — many tables at once, custom workflows, options (*aussi disponible [en français](articles/tabxplor-programming-fr.html)*).

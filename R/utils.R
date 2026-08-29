@@ -1,24 +1,22 @@
-# PURPOSE: Package initialization (.onLoad), pipe re-export, factor/list utilities.
-# ROLE: Sets all tabxplor.* options defaults. Entry point for package configuration.
+# PURPOSE: package initialization plus the shared factor / list / string utilities.
+# ROLE: .onLoad() SEEDS the package options and the colour palette; everything else here is a small
+#   helper with no home of its own -- the base-R wrapping / padding / truncating primitives, the
+#   NAME wrapper beside them, the retired-export-argument catcher, the two message helpers
+#   (tx_inform_once() / tx_need_pkg()), and the three exported user helpers (score_from_lv1(),
+#   gss_cat_data_formatting(), and the deprecated fct_recode_helper()).
 # KEY CONSTRAINTS:
-#   - .onLoad() is the single source of truth for all option defaults.
-#   - Changing a default here affects every user on package load.
-#   - set_color_style() and set_color_breaks() are defined in tab_classes.R but called here.
-
-#' Pipe operator
-#'
-#' See \code{magrittr::\link[magrittr:pipe]{\%>\%}} for details.
-#'
-#' @name %>%
-#' @rdname pipe
-#' @keywords internal
-#' @export
-#' @importFrom magrittr %>%
-#' @usage lhs \%>\% rhs
-#' @param lhs A value or the magrittr placeholder.
-#' @param rhs A function call using the magrittr semantics.
-#' @return Pipe an object forward into a function or call expression.
-NULL
+#   - TAB_OPTIONS (R/tab-options.R) is the single source of truth for option names and defaults;
+#     .onLoad() only seeds them, through tx_seed_options().
+#   - set_color_style() and set_color_breaks() are defined in tab_classes.R but called from here.
+#   - A LEVEL LABEL IS PROSE, A VARIABLE NAME IS A COMPOUND WORD: tx_str_wrap() breaks the first on
+#     whitespace, tx_wrap_name() breaks the second at the seams a name is actually built from
+#     (`_`, `.`, `*`, camelCase). One of them was missing, so a snake_case name met no break
+#     opportunity and no width could ever hold it.
+#   - A VARIABLE LIST IS A LIST OF SYMBOLS: vars_chr(), never as.character(), which deparses a
+#     non-syntactic name back into backticks.
+#   - This file sorts second-to-last in C collation (only zzz-fact-keys.R follows), so nothing in
+#     the package may depend on it at SOURCE time.
+# See: CLAUDE.md § tabxplor architecture.
 
 # Rlang .data to bind data masking variable in dplyr
 #' @keywords internal
@@ -26,17 +24,273 @@ NULL
 NULL
 
 
+# THE variable-list -> character conversion, and the reason it needs a name of its own.
+# `row_vars` / `col_vars` / `tab_vars` travel as LISTS of symbols, and `as.character()` on a list
+# DEPARSES each element -- so a non-syntactic name comes back wrapped in backticks
+# (`as.character(rlang::syms("my age"))` is "`my age`") and every later tidyselect misses it. A bare
+# symbol is fine, which is why this went unseen: `tab(d, marital, `my age`)` aborted on a column
+# that plainly exists. rlang::as_name() reads the symbol instead of printing it.
+# ⚠ the same trap the shape subsystem already documents (shape_colname(), R/var-shape.R).
+#' @keywords internal
+#' @noRd
+vars_chr <- function(x) {
+  if (is.null(x)) return(character(0))
+  if (is.character(x)) return(unname(x))
+  if (rlang::is_symbol(x)) return(rlang::as_name(x))
+  vapply(x, function(v) if (rlang::is_symbol(v)) rlang::as_name(v) else as.character(v),
+         character(1), USE.NAMES = FALSE)
+}
 
 
+# tx_pad(): pad each element to `width`, on DISPLAY width -- not on character count, because the
+# tables are aligned by eye and a wide glyph occupies two columns. `pad` is often a figure space or
+# a non-breaking space rather than an ASCII one, so formatC() cannot do this.
+tx_pad <- function(str, width, side = c("left", "right", "both"), pad = " ") {
+  side <- match.arg(side)
+  n   <- pmax(0L, width - nchar(str, type = "width"))
+  out <- switch(side,
+    left  = paste0(strrep(pad, n), str),
+    right = paste0(str, strrep(pad, n)),
+    both  = paste0(strrep(pad, n %/% 2L), str, strrep(pad, n - n %/% 2L)))
+  out[is.na(str)] <- NA_character_
+  out
+}
+
+# tx_str_wrap(): wrap each element to `width`, lines joined by "\n". A LABEL, not prose.
+#
+# WARNING: NOT base::strwrap(), and NOT a greedy fill. strwrap formats a PARAGRAPH -- it normalises
+# whitespace runs, double-spaces after a full stop and re-flows across elements. And a greedy fill
+# (take words until the line is full) gives a visibly worse table: it leaves one long line beside a
+# nearly empty one.
+#
+# THE ALGORITHM IS MINIMUM RAGGEDNESS, by dynamic programming: over all ways of breaking the words
+# into lines, take the one minimising the sum of (cap - line width)^2 over every line BUT THE LAST.
+# Squaring is what makes two medium lines beat one full and one nearly empty. `exdent` shortens the
+# cap of every line after the first, and is written back in as leading spaces.
+# `whitespace_only` is kept for the signature's sake: a label breaks at spaces, never inside a word
+# (a compound NAME with no spaces is tx_wrap_name()'s job, in the next section).
+# ⚠ NA becomes the literal "NA": the wrapped value goes on to be a factor level or a cell label,
+# and a missing one still has to print.
+tx_str_wrap <- function(string, width = 80, exdent = 0, whitespace_only = TRUE) {
+  ind    <- strrep(" ", exdent)
+  string <- as.character(string)
+  string[is.na(string)] <- "NA"
+  vapply(string, function(x) {
+    if (!nzchar(x)) return(x)
+    w <- strsplit(x, "[[:space:]]+", perl = TRUE)[[1]]
+    w <- w[nzchar(w)]
+    if (length(w) <= 1L) return(paste0(w, collapse = ""))
+    n    <- length(w)
+    L    <- nchar(w, type = "width")
+    ends <- cumsum(L) + seq_len(n) - 1L               # width of words 1..j on one line
+    span <- function(i, j) ends[j] - (if (i > 1L) ends[i - 1L] + 1L else 0L)
+    cap1 <- width
+    cap2 <- max(1L, width - exdent)
+    # best[i] = least cost of laying out words i..n, line i being a NON-first line.
+    best <- c(rep(Inf, n), 0)
+    brk  <- integer(n)
+    for (i in n:1) for (j in i:n) {
+      len <- span(i, j)
+      if (len > cap2 && j > i) break                  # a lone over-long word still gets its line
+      cost <- (if (j == n) 0 else (cap2 - len)^2) + best[j + 1L]
+      if (cost < best[i]) { best[i] <- cost; brk[i] <- j }
+    }
+    first <- 1L; fbest <- Inf
+    for (j in 1:n) {
+      len <- span(1L, j)
+      if (len > cap1 && j > 1L) break
+      cost <- (if (j == n) 0 else (cap1 - len)^2) + best[j + 1L]
+      if (cost < fbest) { fbest <- cost; first <- j }
+    }
+    out <- character(0); i <- 1L; j <- first
+    repeat {
+      out <- c(out, paste(w[i:j], collapse = " "))
+      if (j >= n) break
+      i <- j + 1L; j <- brk[i]
+    }
+    if (length(out) > 1L) out[-1L] <- paste0(ind, out[-1L])
+    paste0(out, collapse = "\n")
+  }, character(1), USE.NAMES = FALSE)
+}
+
+
+# === SECTION: wrapping a NAME, as opposed to prose =================================================
+#
+# tx_str_wrap() above breaks on whitespace, which is right for a level LABEL ("Never married") and
+# useless for a variable NAME: `shenaniganing_colorous_property_of_the_skin` holds no whitespace, so
+# no `wrap_rows`, no column cap and no rotation could ever hold it -- the defect the export review
+# reported. A name is a COMPOUND WORD, and its parts are separated by declared characters.
+#
+# THE BREAK OPPORTUNITIES, stated once and read by every medium:
+#   after   a space (consumed at the break), `_` and `.` -- the separator stays at the end of its
+#           line, where it reads as "this continues below";
+#   before  `*` (the interaction operator: `age` / `*tvhours` says which side the operator belongs
+#           to) and a lowercase -> uppercase camelCase seam.
+# `-` and `/` are deliberately NOT opportunities: they are far more often a range ("25-34") or a date
+# than a compound-name seam, and breaking those reads as a typo.
+#' @keywords internal
+tx_name_atoms <- function(s) {
+  s <- gsub("([_. ])", "\\1\u0001", s, perl = TRUE)
+  s <- gsub("(?=[*])|(?<=[a-z0-9])(?=[A-Z])", "\u0001", s, perl = TRUE)
+  a <- strsplit(s, "\u0001", fixed = TRUE)[[1L]]
+  a[nzchar(a)]
+}
+
+# Wrap a NAME to `width`, greedily, at those opportunities. `exdent` indents every line after the
+# first, so a reader sees at a glance that it is one name and not two.
+# `hard = TRUE` also splits a run with NO opportunity inside it, so the cap is ALWAYS honoured -- what
+# a fixed-width column needs, and what prose does not.
+#' @keywords internal
+tx_wrap_name <- function(string, width = 12L, exdent = 1L, hard = TRUE, brk = "\n") {
+  width <- max(1L, as.integer(width))
+  ex    <- max(0L, as.integer(exdent))
+  avail <- max(1L, width - ex)
+  one <- function(s) {
+    if (is.na(s) || !nzchar(s) || nchar(s) <= width) return(s)
+    lines <- character(0)
+    cur   <- ""
+    push  <- function(x) lines <<- c(lines, sub(" +$", "", x))
+    for (a in tx_name_atoms(s)) {
+      r <- if (length(lines)) avail else width          # ⚠ read ONCE: `lines` grows below
+      if (nzchar(cur) && nchar(cur) + nchar(a) > r) {
+        push(cur); cur <- ""
+        r <- avail
+        a <- sub("^ +", "", a)                          # a space that became a break is consumed
+      }
+      while (hard && !nzchar(cur) && nchar(a) > r) {
+        push(substr(a, 1L, r))
+        a <- substr(a, r + 1L, nchar(a))
+        r <- avail
+      }
+      cur <- paste0(cur, a)
+    }
+    if (nzchar(cur)) push(cur)
+    if (length(lines) < 2L) return(s)
+    # DESIGN: the indent is a NO-BREAK space (U+00A0), not an ordinary one. The html path rewrites
+    # every remaining space into U+202F so the browser cannot re-break what we already wrapped; an
+    # indent written with a plain space would be caught by that blanket rule and shrink to a fifth of
+    # its width. U+00A0 renders at full width in every medium and tx_unwrap_text() already undoes it.
+    paste0(lines[[1L]], brk,
+           paste(paste0(strrep("\u00a0", ex), lines[-1L]), collapse = brk))
+  }
+  vapply(string, one, character(1), USE.NAMES = FALSE)
+}
+
+# str_trunc(): truncate to `width` with a trailing ellipsis (right side only, the sole use).
+tx_str_trunc <- function(string, width, ellipsis = "...") {
+  too_long <- !is.na(string) & nchar(string, type = "chars") > width
+  string[too_long] <- paste0(substr(string[too_long], 1L, width - nchar(ellipsis, type = "chars")), ellipsis)
+  string
+}
+
+# A retired export argument is absorbed by `...`, named here, warned about ONCE per call and never
+# forwarded. What this filter LEAVES is then refused by tab_check_dots(), so an exporter answers a
+# typo exactly as tab() does -- the two halves of one API cannot disagree about what a typo is.
+#' @keywords internal
+TX_INERT_EXPORT_ARGS <- c(
+  color_type  = "the text channel always uses the text palette; the CHANNEL is chosen by color = c(text, background)",
+  html_24_bit = "exports are always 24-bit",
+  engine      = "there is one HTML engine; restyle it with tab_css()",
+  html_font   = "the font is a CSS rule -- set it with tab_css() or your own stylesheet",
+  full_width  = "table width is a CSS rule -- set it with tab_css() or your own stylesheet",
+  position    = "placement is a CSS rule -- set it with tab_css() or your own stylesheet",
+  n_min          = "the small-base filter runs at build now: tab(n_min = )",
+  hide_near_zero = "what a cell shows is its display template -- see ?tabxplor-display"
+)
+
+# ⚠ WARNING: `user_env` has no default because no default is right -- lifecycle's own lands on this
+# function's frame, an obvious one would land on the exporter's, and for either lifecycle sees an
+# internal caller and says NOTHING AT ALL. That is how five retired arguments went a whole release
+# without ever warning. It must be `rlang::caller_env()` read in the EXPORTER'S OWN body.
+#' @keywords internal
+tx_deprecate_inert <- function(dots, fn, user_env) {
+  hit <- intersect(names(dots), names(TX_INERT_EXPORT_ARGS))
+  for (nm in hit) {
+    lifecycle::deprecate_soft(
+      "2.0.0", I(paste0(fn, "(", nm, " = )")),
+      details = c("i" = paste0("Inert since 2.0.0: ", TX_INERT_EXPORT_ARGS[[nm]], ".")),
+      user_env = user_env
+    )
+  }
+  dots[setdiff(names(dots), names(TX_INERT_EXPORT_ARGS))]
+}
+
+# AN EXPORTER'S `...` IS NOT A PASS-THROUGH: it exists to absorb the retired names, so what the
+# filter above leaves is a typo, and is refused exactly as tab()'s own boundary refuses one. The two
+# halves are ONE call because doing either without the other is what went wrong -- warning nobody
+# (no `user_env`), or swallowing a typo (no check).
+# ⚠ `user_env` has no default on purpose: every caller passes `rlang::caller_env()` from the
+# EXPORTER'S OWN BODY, which is the only frame that names the person who typed the argument. `call`
+# is the OTHER frame -- the exporter's own, so the error reads as coming from tab_html() rather than
+# from here -- and caller_env() reads it correctly because this is only ever called from that body.
+#' @keywords internal
+tx_export_dots <- function(dots, fn, user_env) {
+  tab_check_dots(tx_deprecate_inert(dots, fn, user_env = user_env), fn,
+                 call = rlang::caller_env())
+}
+
+
+# === SECTION: user messages =======================================================================
+# A message is addressed to the person writing the call: what is wrong, or what was decided for them,
+# and the argument that changes it. See CLAUDE.md § Cross-cutting invariants.
+
+# An automatic recode changes what the table IS, so it is never silent -- but it must not repeat on
+# every call of a loop either.
+# ⚠ THE ID CARRIES THE SUBJECT, not just the kind of message: `paste0("shape_auto_", var)`, never
+# "shape_auto". A fixed id would silence the note for the NEXT variable of the same session.
+#' @keywords internal
+#' @noRd
+# WARNING: the id formal is DOT-PREFIXED on purpose. It sits before `...`, so R partial-matches a
+#   named argument against it -- and a message written the cli way, `tx_inform_once("id", "i" = ...)`,
+#   had its `"i"` bullet swallowed as the id, silently dropping the line AND printing the id instead.
+#   `.id` cannot be reached by any bullet name.
+tx_inform_once <- function(.id, ..., .envir = parent.frame()) {
+  .id <- paste0("tabxplor_", .id)
+  tx_said[[.id]] <- TRUE
+  cli::cli_inform(c(...), .envir = .envir, .frequency = "once", .frequency_id = .id)
+  invisible(NULL)
+}
+
+# The ids said so far, so a session can be put back to its first-call state. Used by the tests that
+# assert on a once-per-session message, which would otherwise see it only in whichever ran first.
+tx_said <- new.env(parent = emptyenv())
+
+#' @keywords internal
+#' @noRd
+tx_reset_messages <- function() {
+  for (id in ls(tx_said)) rlang::reset_message_verbosity(id)
+  rm(list = ls(tx_said), envir = tx_said)
+  invisible(NULL)
+}
+
+# THE Suggests gate: one message for every missing package of one request, never one per package.
+# `what` is plain prose ("Excel export", "the model-check plots"): it is substituted as a VALUE, so cli markup
+# written into it would reach the user raw.
+# Deliberately the only message allowed three bullets -- it is rare, it is shown once, and it is
+# aimed at a reader for whom installing a package is the hard part.
+#' @keywords internal
+#' @noRd
+tx_need_pkg <- function(pkgs, what, severity = c("abort", "inform"), call = NULL) {
+  miss <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
+  if (length(miss) == 0L) return(invisible(TRUE))
+  code <- if (length(miss) == 1L) paste0('install.packages("', miss, '")')
+          else paste0('install.packages(c(', paste0('"', miss, '"', collapse = ", "), '))')
+  msg <- c(
+    "{what} needs the {.pkg {miss}} package{?s}.",
+    "i" = "{.code {code}}",
+    "i" = 'Everything tabxplor can use: {.code install.packages("tabxplor", dependencies = TRUE)}')
+  if (identical(match.arg(severity), "inform")) {
+    tx_inform_once(paste0("need_pkg_", paste(miss, collapse = "_")), msg,
+                   .envir = environment())
+    return(invisible(FALSE))
+  }
+  cli::cli_abort(msg, call = call)
+}
 
 #' @keywords internal
 .onLoad <- function(libname, pkgname) {
-  # options "tabxplor.color_style_type" and "tabxplor.color_style_theme" :
-
-  # HISTORY: these OMP / data.table thread caps are commented out on purpose. data.table's
-  # multithreading once triggered a CRAN thread-count flag that blocked tabxplor's acceptance,
-  # until it was shown to originate in data.table itself. Left disabled; re-enable only if
-  # CRAN flags threads again.
+  # These OMP / data.table thread caps are commented out on purpose (data.table's multithreading
+  # once triggered a CRAN thread-count flag traced to data.table itself); re-enable only if needed.
   # # CRAN OMP THREAD LIMIT
   # if (Sys.info()[['sysname']] == "Linux") {
   #  Sys.setenv("OMP_THREAD_LIMIT" = 2)
@@ -45,110 +299,58 @@ NULL
   # data.table::setDTthreads(threads = 2)
   # data.table::getDTthreads(verbose = getOption("datatable.verbose"))
 
+  set_color_palette()   # seeds tabxplor.color_style_theme (declared seed = "elsewhere")
 
-  set_color_palette()
+  tx_seed_options()
 
-  # option "tabxplor.color_breaks" : canonical Phase-13a scales (see set_color_breaks()).
-  # pct_ratio is the "only x2" rule (over side only); mean_ratio is asymmetric (4 over / 3 under);
-  # mean_diff = NULL restores the standardized (Glass's delta) default.
-  options("tabxplor.color_breaks" = default_color_scales())
-
-  options("tabxplor.print" = "console") # options("tabxplor.print" = "kable")
-
-  options("tabxplor.kable_html_font" =
-            '"DejaVu Sans", "Arial", arial, helvetica, sans-serif') # Condensed ?
-
-  options("tabxplor.output_kable" = FALSE)
-
-  options("tabxplor.cleannames" = FALSE)
-
-  options("tabxplor.export_dir" = NULL)
-
-  options("tabxplor.kable_popover" = FALSE)
-
-  options("tabxplor.ci_print" = "ci") # or "moe"
-
-  # Phase 3a significance stars (universal CI-inclusion). `stars` default (OPT-IN: FALSE, so a plain
-  # tab() stores no per-cell pvalue and shows no stars; tab_reg() sets stars = TRUE itself), and the
-  # star thresholds/labels read by get_stars(). Thresholds are nested p-value cutoffs.
-  options("tabxplor.stars"         = FALSE)
-  options("tabxplor.signif_levels" = c(0.10, 0.05, 0.01))
-  options("tabxplor.signif_labels" = c("*", "**", "***"))
-
-  # Weighted inference (§14): unweighted n by default; opt in to Kish n_eff = (Sum w)^2/Sum w^2
-  # for the numeric (mean) CIs/tests. Factor-side Kish is deferred (open item).
-  options("tabxplor.kish_neff"     = FALSE)
-
-  # Phase 3b: which one-way ANOVA F is DISPLAYED for mean columns ("welch" = robust default,
-  # matching oneway.test(var.equal=FALSE); "classic" = pooled-variance F). Both are always
-  # stored in the `test` attribute; this only picks the p-value shown in the p-value row/stars.
-  options("tabxplor.anova"         = "welch")
-
-  # Phase 6: the `tabxplor.compact` option is dropped, superseded by the `output_list`
-  # argument of tab() (default FALSE = merge; TRUE = list). tab_many()'s deprecated `compact`
-  # argument still works (mapped onto the output shape).
-
-  # options("tabxplor.pvalue_lines" = FALSE)
-
-  options("tabxplor.always_add_css_in_tab_kable" = TRUE)
-
-  # Phase 10e: tab_kable() render engine. "kableExtra" (default) or "html" (dependency-free,
-  # self-contained inline-CSS <table>; faster; used by the jamovi live display). See R/tab-render-html.R.
-  options("tabxplor.tab_kable_engine" = "kableExtra")
-
-  # Phase 8: opt-in parallel build of many tables in ONE tab() call (Suggests-only {mirai}).
-  # FALSE = off (default); TRUE = auto workers; an integer = that many daemons. `parallel_min` is
-  # the smallest row_var count worth dispatching (fewer -> serial: setup would outweigh the gain).
-  # See R/tab-parallel.R + dev/tabxplor_1.4.0_decisions.md 26.
-  options("tabxplor.parallel"     = FALSE)
-  options("tabxplor.parallel_min" = 2L)
-
-  # Phase 13b: the colour-legend language. "auto" follows the R/OS locale (English fallback); "en"/"fr"
-  # force it. Per-call `lang =` on the exporters overrides. Bind the R-tabxplor gettext catalog to the
-  # package's compiled .mo (found under system.file("po"); harmless if absent -> English msgids).
-  options("tabxplor.lang" = "auto")
+  # Bind the R-tabxplor gettext catalog to the package's compiled .mo (harmless if absent -> English).
   po <- system.file("po", package = pkgname)
   if (nzchar(po)) try(bindtextdomain("R-tabxplor", po), silent = TRUE)
 
   invisible()
 }
 
-# Phase 8: release the persistent mirai daemon pool when tabxplor is unloaded (a CRAN cleanliness
-# backstop; tab_parallel_stop() lets users do it earlier). No pool is ever warmed at load.
+# Releases the persistent mirai daemon pool as a CRAN-cleanliness backstop; no pool is ever warmed
+# at load (tab_parallel_stop() lets users release it earlier).
 #' @keywords internal
 .onUnload <- function(libpath) {
   tab_parallel_stop()
 }
 
-# getOption("tabxplor.color_breaks")
-# getOption("tabxplor.color_style_theme")
-# getOption("tabxplor.color_style_type")
-# get_color_breaks()
-# get_color_style()
 
-
-
-
-#Functions and options to work with factors and lists -------------
+# Functions and options to work with factors and lists --------------------------------------------
 
 #' A regex pattern to clean the names of factors.
 #' @keywords internal
-# @export
 cleannames_condition <- function()
   "^[^- ]+-(?![[:lower:]])|^[^- ]+(?<![[:lower:]])-| *\\(.+\\)"
 
 
-
-
-
-#' Create a score variable from factors
+#' Score a set of factors by counting their first level
+#'
+#' Builds an integer score column counting, for each row, how many of the listed factors sit at
+#' their **first level** (1 if so, 0 otherwise) -- the score ranges 0 to `length(vars_list)`. The
+#' natural way to sum a battery of yes/no survey items into one score, feeding the grouped-binomial
+#' outcome of [tab_reg()] (its `trials` argument).
 #'
 #' @param data A data.frame.
-#' @param name The name of the variable to create.
-#' @param vars_list The list of the factors to count
-#' (only the first level is counted, as 1) ; as a character vector.
+#' @param name The name of the score variable to create (unquoted or a string);
+#'   an existing column of that name is replaced.
+#' @param vars_list The factors to count, as a character vector. For each one
+#'   only its **first level** counts (as 1); every other level, including
+#'   missing values, counts as 0.
 #'
-#' @return The data.frame, with a new variable.
+#' @return `data` with the integer score column `name` added (or replaced).
+#'
+#' @details
+#'   The "first level" is `levels(as.factor(x))[1]`. Non-factor columns are coerced with
+#'   [as.factor()]; missing values are folded into an explicit `"NA"` level first (via
+#'   [forcats::fct_na_value_to_level()]), so `NA` never counts as the first level.
+#'
+#' @seealso [tab_reg()] and its `trials` argument for modelling a summed score
+#'   as a grouped binomial; `vignette("tabxplor")`, section "Multiple-answer
+#'   questions", for a worked example.
+#'
 #' @export
 #'
 #' @examples
@@ -170,7 +372,7 @@ score_from_lv1 <- function (data, name, vars_list) {
   purrr::reduce(
     vars_list,
     .init = dplyr::mutate(new_data, dplyr::across(
-      tidyselect::all_of(vars_list), ~ forcats::fct_na_value_to_level(., "NA"))),
+      tidyselect::all_of(vars_list), ~ forcats::fct_na_value_to_level(., TAB_NA_LEVEL))),
 
     .f = ~ dplyr::mutate(.x, !!name := dplyr::if_else(
       condition = !!rlang::sym(.y) == levels(as.factor(!!rlang::sym(.y)))[1],
@@ -181,130 +383,120 @@ score_from_lv1 <- function (data, name, vars_list) {
   )
 
   var_final_ <- dplyr::pull(new_data, as.character(name))
-    #dplyr::select(new_data, tidyselect::all_of(as.character(name)))
 
   data |> tibble::add_column(!!rlang::sym(name) := var_final_)
 }
 
 
-# data <- dplyr::select(forcats::gss_cat, -where(is.numeric))
-# name_in = "data"
-# name_out = "data"
-# style = "base"
-# reminder = TRUE
-# cat = TRUE
-
-
+# lifecycle::deprecate_soft()'s "silent for same-package callers" rule is fooled by a testthat run
+# (it treats the suite as a direct user call), so this asks the real question: whose code called it.
+#' @keywords internal
+#' @noRd
+tx_user_call <- function(env = parent.frame(2)) !identical(topenv(env), asNamespace("tabxplor"))
 
 
 #' fct_recode helper to recode multiple variables
 #'
+#' @description
+#' `r lifecycle::badge("deprecated")`
+#'
+#' Printed a ready-to-paste `mutate()` call recoding a set of factor columns via
+#' [forcats::fct_recode()] -- unrelated to cross-tabulation, and unused elsewhere in tabxplor.
+#' Removed in 2.1.0; copy it into your own project if you rely on it.
+#'
 #' @param data The data frame.
 #' @param .cols <\link[tidyr:tidyr_tidy_select]{tidy-select}> The variables to recode.
-#' @param name_in The name of the input data frame. Default to the expression given in `data`.
-#' @param name_out The name of the output data frame, if different from the
-#' input data frame.
-#' @param style Default is to use `dplyr::mutate()`. Set to `base` to use `data$var <-` style.
-#' @param reminder By default, a reminder of the syntax (`"new" = "old"`) is printed.
-#'  Set to `FALSE` to remove it.
-#' @param freq Set to `TRUE` to print frequency and count of each level as comment.
-#' Set to `FALSE` to avoid this behavior. By default, frequencies and counts are 
-#' only calculated when less than 6 variables are provided.
-#' @param cat By default the result is written in the console if there are less than
-#' 6 variables, written in a temporary file and opened otherwise. Set to
-#' false to get a data frame with a character variable instead.
+#' @param name_in The input data frame's name (default: the expression given as `data`).
+#' @param name_out The output data frame's name, if different from `name_in`.
+#' @param style `"mutate"` (default) writes a `dplyr::mutate()` call; `"base"` writes `data$var <-`.
+#' @param reminder Print a `"new" = "old"` syntax reminder. Default `TRUE`.
+#' @param freq Print each level's frequency and count as a comment; defaults to `TRUE` when 5 or
+#'   fewer variables are given.
+#' @param cat Print to console, or open a temporary file when there are more than 5 variables;
+#'   `FALSE` returns a data frame of the recode text instead.
 #'
-#' @return When the number of variables is less than 5, a text in console as a side effect.
-#' With more than 5 variables, a temporary R file. A `tibble` with the recode text as a
-#' character variable is returned invisibly (or as main result if `cat = TRUE`).
-#' If the `labelled` package in installed, the variable label is used as title in a comment.
+#' @return With `cat = TRUE` (default), the text printed to console (or written to a temp R file for
+#'   more than 5 variables), returned invisibly. With `cat = FALSE`, a `tibble` of the recode text is
+#'   returned instead. A column carrying a `label` attribute is used as its comment title.
+#' @keywords internal
 #' @export
 fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_out,
-                              freq = NULL, 
+                              freq = NULL,
                               style = c("mutate", "base"), reminder = TRUE, cat = TRUE) {
+  lifecycle::deprecate_soft("2.0.0", "fct_recode_helper()",
+                            details = "It writes forcats code and has nothing to do with tables.")
   no_name_in <- missing(name_in)
   if (no_name_in) {
     name_in <- deparse(substitute(data))
-    if (stringr::str_detect(name_in, "\\(")) {
-      name_in <-
-        stringr::str_extract(name_in, "[^\\(]+$") |>
-        stringr::str_remove_all("\\).*$")
-      # name_in <- "data"
+    if (grepl("\\(", name_in, perl = TRUE)) {
+      name_in <- regmatches(name_in, regexpr("[^\\(]+$", name_in, perl = TRUE))
+      name_in <- sub("\\).*$", "", name_in, perl = TRUE)
     }
   }
-  if (missing(name_out)) name_out <- name_in # if (missing(name_in)) {"data"} else {name_in}
+  if (missing(name_out)) name_out <- name_in
 
   pos_cols <- tidyselect::eval_select(rlang::enquo(.cols), data)
   data <- data[pos_cols]
 
-  with_variable_label_as_title <- requireNamespace("labelled", quietly = TRUE)
-  if (with_variable_label_as_title) {
-    var_labs <- labelled::get_variable_labels(data)
-    var_labs <- var_labs[purrr::map_lgl(var_labs, ~ !is.null(.))]
-    if (length(var_labs) == 0) with_variable_label_as_title <- FALSE
+  # Variable labels come from the `label` attribute (haven / labelled-imported data), read directly
+  # with base attr() rather than depending on the labelled package.
+  var_labs <- purrr::map(data, \(col) attr(col, "label", exact = TRUE))
+  var_labs <- var_labs[purrr::map_lgl(var_labs, ~ !is.null(.))]
+  with_variable_label_as_title <- length(var_labs) > 0
 
-    # var_labs <- purrr::imap(var_labs, ~ paste0(.y, " with a lot of text"))
-  }
 
   data <- data |> dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = as.factor))
-  
-  # By default, if not chosen by user, only calculate frequencies for less that 10 vars
+
   if (is.null(freq)) {
     freq <- ncol(data) <= 5
   }
-  
-  if (freq) { # With frequencies and counts helpers 
-    frequencies <- names(data) |> 
+
+  if (freq) { # With frequencies and counts helpers
+    frequencies <- names(data) |>
       purrr::map(
-        ~ tab_plain(data, !!rlang::sym(.x), pct = "col", na = "drop") |> 
-          filter(!is_totrow(pct)) |> 
-          rename_with(~ "lvs", .cols = 1) |> 
-          mutate(lvs = paste0("\"",
-                              #stringi::stri_escape_unicode(
-                              stringr::str_replace_all(
-                                lvs, "\"", "'"
-                                #)
-                              ),
-                              "\""), 
-                 pct = format(pct), 
-                 n   = format(n), 
-                 txt = paste0(str_pad(pct, max(str_length(pct)) ), 
-                              " ", 
-                              str_pad(n, max(str_length(n)) )
+        # `filter` is NOT imported: the bare call resolves to stats::filter(), which evaluates
+        # outside the data mask and crashes. dplyr::filter() must stay fully qualified here.
+        ~ tab_plain(data, !!rlang::sym(.x), pct = "col", na = "drop") |>
+          dplyr::filter(!is_totrow(.data$pct)) |>
+          dplyr::rename_with(~ "lvs", .cols = 1) |>
+          dplyr::mutate(lvs = paste0("\"",
+                              gsub("\"", "'", lvs, perl = TRUE),
+                              "\""),
+                 pct = format(.data$pct),
+                 n   = format(n),
+                 txt = paste0(tx_pad(pct, max(nchar(pct, type = "chars"))),
+                              " ",
+                              tx_pad(n, max(nchar(n, type = "chars")))
                  )
-          ) |> 
-          select(lvs, txt)
-      ) |> 
-      purrr::set_names(names(data)) 
-    
+          ) |>
+          dplyr::select(lvs, txt)
+      ) |>
+      purrr::set_names(names(data))
+
     recode <- frequencies |>
       purrr::map(
-        ~ paste0(stringr::str_pad(.x$lvs, max(stringr::str_length(.x$lvs)), "right"), " = ",
-                 stringr::str_pad(.x$lvs, max(stringr::str_length(.x$lvs)), "right"), 
-                 ", # ", 
+        ~ paste0(tx_pad(.x$lvs, max(nchar(.x$lvs, type = "chars")), "right"), " = ",
+                 tx_pad(.x$lvs, max(nchar(.x$lvs, type = "chars")), "right"),
+                 ", # ",
                  .x$txt
         )
       ) |>
       purrr::map(~ paste0(., collapse = "\n"))
-    
-  } else { # Without frequencies and counts helpers
+
+  } else {
     recode <- data |>
       purrr::map(~ paste0("\"",
-                          #stringi::stri_escape_unicode(
-                          stringr::str_replace_all(
-                            levels(.), "\"", "'"
-                            #)
-                          ),
+                          gsub("\"", "'", levels(.), perl = TRUE),
                           "\"")) |>
       purrr::map(
-        ~ paste0(stringr::str_pad(., max(stringr::str_length(.)), "right"), " = ",
-                 stringr::str_pad(., max(stringr::str_length(.)), "right"), collapse = ",\n")
+        ~ paste0(tx_pad(., max(nchar(., type = "chars")), "right"), " = ",
+                 tx_pad(., max(nchar(., type = "chars")), "right"), collapse = ",\n")
       )
-    
+
   }
 
- 
-  
+
+
 
 
   if (with_variable_label_as_title) {
@@ -370,476 +562,93 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
   invisible(recode)
 }
 
-
-
-#' @keywords internal
-get_user_documents <- function() {
-
-  # 1. Windows: query Known Folder via PowerShell
-  if (.Platform$OS.type == "windows") {
-    docs <- tryCatch({
-      out <- system(
-        'powershell -NoProfile -Command "[Environment]::GetFolderPath(\'MyDocuments\')"',
-        intern = TRUE
-      )
-      out1 <- out[1]
-      if (nzchar(out1) && dir.exists(out1)) out1 else stop()
-    }, error = function(e) NULL)
-    if (!is.null(docs))
-      return(normalizePath(docs, winslash = "\\", mustWork = FALSE))
-  }
-
-  # 2. macOS standard
-  if (Sys.info()[["sysname"]] == "Darwin") {
-    docs <- file.path(path.expand("~"), "Documents")
-    if (dir.exists(docs))
-      return(normalizePath(docs, mustWork = FALSE))
-  }
-
-  # 3. Linux XDG user dirs
-  xdg_conf <- Sys.getenv("XDG_CONFIG_HOME", unset = NA)
-  if (is.na(xdg_conf))
-    xdg_conf <- file.path(path.expand("~"), ".config")
-  user_dirs <- file.path(xdg_conf, "user-dirs.dirs")
-  if (file.exists(user_dirs)) {
-    lines <- readLines(user_dirs, warn = FALSE)
-    line <- grep("^XDG_DOCUMENTS_DIR=", lines, value = TRUE)
-    if (length(line)) {
-      path_raw <- sub('^XDG_DOCUMENTS_DIR="?', "",
-                      sub('"$', "", line))
-      # Expand $HOME
-      path_raw <- gsub("\\$HOME", path.expand("~"), path_raw)
-      if (dir.exists(path_raw))
-        return(normalizePath(path_raw, mustWork = FALSE))
-    }
-  }
-
-  # 4. Fallback to common defaults (only if they exist)
-  candidates <- c(
-    file.path(path.expand("~"), "Documents"),
-    file.path(path.expand("~"), "My Documents")
-  )
-  for (cnd in candidates) {
-    if (dir.exists(cnd))
-      return(normalizePath(cnd, mustWork = FALSE))
-  }
-
-  # 5. Last resort: home directory
-  normalizePath(path.expand("~"), mustWork = FALSE)
-
-
-  # # fs::path_home() gives home dir on all OS
-  # home <- fs::path_home()
-  # # Candidate Documents folder
-  # docs <- fs::path(home, "Documents")
-  # # On Windows, read from registry if localized
-  # if (fs::dir_exists(docs))
-  #   return(docs)
-  #
-  # # Try Windows registry query for the personal folder
-  # if (.Platform$OS.type == "windows") {
-  #   reg <- tryCatch({
-  #     utils::readRegistry(
-  #       key = "HCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders",
-  #       hive = "HCU"
-  #     )["Personal"]
-  #   }, error = function(e) NULL)
-  #   if (!is.null(reg) && nzchar(reg)) {
-  #     # Registry value can contain %USERPROFILE% variable
-  #     reg <- Sys.getenv("USERPROFILE", unset = reg)
-  #     reg <- normalizePath(reg, winslash = "\\", mustWork = FALSE)
-  #     return(reg)
-  #   }
-  # }
-  #
-  # # Fallback to ~/Documents (even if it doesn’t exist yet)
-  # fs::path(home, "Documents")
-
-
-  }
-
-
-
-
-#Use fct_relabel instead of pers functions ! -----------------------------------
-#' Clean factor levels.
+#' A General Social Survey extract, formatted for cross-tables
 #'
-#' @param factor A factor.
-#' @param pattern A pattern.
+#' `forcats::gss_cat` with levels merged into readable groups, and each variable's first level
+#' chosen as the reference the colors and the models compare everything else to. The data set most
+#' examples and vignettes are built on.
 #'
-#' @return A factor.
-#' @keywords internal
-# @export
-# @examples
-fct_clean <- function(factor, pattern = cleannames_condition()) {
-  forcats::fct_relabel(factor, ~ stringr::str_remove_all(.x, pattern))
+#' @return A tibble of 21483 rows: the US General Social Survey, 2000-2014.
+#' @export
+gss_cat_data_formatting <- function() {
+forcats::gss_cat |>
+dplyr::mutate(
+  married = factor(dplyr::if_else(marital == "Married",
+  "01-Married",
+  "02-Not married")
+),
+black = factor(dplyr::if_else(race == "Black",
+  "01-Black",
+  "02-Not black")
+),
+income25k = factor(dplyr::if_else(rincome == "$25000 or more",
+"01-$25000 or more",
+"02-Less than 25k")
+),
+race = forcats::fct_relevel(race, "White", "Black", "Other"),
+marital = forcats::fct_relevel(marital, "Married", "Separated", "Divorced", "Widowed", "Never married", "No answer"),
+year = as.factor(year),
+
+dplyr::across(dplyr::where(is.factor), ~ forcats::fct_recode(., "NULL" = "No answer", "NULL" = "Refused", "NULL" = "Don't know", "NULL" = "Not applicable")),
+
+rincome = forcats::fct_recode(   # "new" = "old"
+  rincome,
+  "1-Lt $10000"      = "Lt $1000"       , #  1%   286
+  "1-Lt $10000"      = "$1000 to 2999"  , #  2%   395
+  "1-Lt $10000"      = "$3000 to 3999"  , #  1%   276
+  "1-Lt $10000"      = "$4000 to 4999"  , #  1%   226
+  "1-Lt $10000"      = "$5000 to 5999"  , #  1%   227
+  "1-Lt $10000"      = "$6000 to 6999"  , #  1%   215
+  "1-Lt $10000"      = "$7000 to 7999"  , #  1%   188
+  "1-Lt $10000"      = "$8000 to 9999"  , #  2%   340
+  "2-$10000 to 14999" = "$10000 - 14999", #  5% 1 168
+  "3-$15000 to 24999" = "$15000 - 19999", #  5% 1 048
+  "3-$15000 to 24999" = "$20000 - 24999", #  6% 1 283
+  "4-$25000 or more"  = "$25000 or more"  # 34% 7 363
+) |>
+forcats::fct_relevel(sort) |>
+as.ordered(),
+
+
+party3 = forcats::fct_recode(   # "new" = "old"
+  partyid,
+  "NULL"                 = "No answer"         , #  1%   154
+  "NULL"                 = "Don't know"        , #  0%     1
+  "3-Republican"         = "Strong republican" , # 11% 2 314
+  "3-Republican"         = "Not str republican", # 14% 3 032
+  "3-Republican"         = "Ind,near rep"      , #  8% 1 791
+  "2-Independent, other" = "Independent"       , # 19% 4 119
+  "2-Independent, other" = "Other party"       , #  2%   393
+  "1-Democrat"           = "Ind,near dem"      , # 12% 2 499
+  "1-Democrat"           = "Not str democrat"  , # 17% 3 690
+  "1-Democrat"           = "Strong democrat"   , # 16% 3 490
+  ) |> forcats::fct_relevel(sort),
+
+
+relig = forcats::fct_recode(
+  relig,
+  "1-Protestant"        = "Protestant"             , # 50% 10 846
+  "2-Catholic"          = "Catholic"               , # 24%  5 124
+  "3-Other christian"   = "Christian"              , #  3%    689
+  "3-Other christian"   = "Orthodox-christian"     , #  0%     95
+  "4-Jewish"            = "Jewish"                 , #  2%    388
+  "5-Buddhist/Hinduist" = "Hinduism"               , #  0%     71
+  "5-Buddhist/Hinduist" = "Buddhism"               , #  1%    147
+  "6-Muslim"            = "Moslem/islam"           , #  0%    104
+  "7-Other"             = "Inter-nondenominational", #  1%    109
+  "7-Other"             = "Native american"        , #  0%     23
+  "7-Other"             = "Other eastern"          , #  0%     32
+  "7-Other"             = "Other"                  , #  1%    224
+  "8-None"              = "None"                   , # 16%  3 523
+  "NULL"                = "No answer"              , #  0%     93
+  "NULL"                = "Don't know"             , #  0%     15
+) |> forcats::fct_relevel(sort),
+
+)
 }
 
 
-# fct_clean <- function(factor, pattern = cleannames_condition()){
-#   if(is.data.frame(factor)) {stop("must be a vector, not a data.frame")}
-#   if (!is.factor(factor)) { factor <- factor %>%  as.factor() }
-#   levels <- factor %>%  levels() %>%
-#     magrittr::set_names(purrr::map(., ~stringr::str_remove_all(.,pattern)))
-#   return(forcats::fct_recode(factor, !!!levels))
-# }
-# glm.data %>% dplyr::mutate_if(is.factor, ~ fct_clean(.))
-# glm.data %>% dplyr::mutate_at(c(1:6,8), ~ fct_clean(., cleannames_condition()))
-
-
-#' Replace Factor Levels with NA
-#'
-#' @param factor A factor.
-#' @param patternlist A character vector of levels.
-#'
-#' @return A factor.
-#' @keywords internal
-# @export
-#
-# @examples
-# forcats::gss_cat %>%
-# dplyr::pull(race) %>%
-#   fct_to_na("Other")
-fct_to_na <- function(factor, patternlist){
-  if (!is.factor(factor)) { factor <- factor %>% as.factor() }
-  patternlist <- patternlist %>% magrittr::set_names(rep("NULL", length(.)))
-  forcats::fct_recode(factor, !!!patternlist)
-}
-
-
-#' Recode Factor Levels using one Pattern
-#' @description Recode factor levels using \code{\link[stringr]{str_replace_all}}.
-#' @param factor A factor.
-#' @param pattern A character of length 1.
-#' @param replacement A character of length 1.
-#'
-#' @return A factor
-#' @keywords internal
-# @export
-#'
-# @examples
-fct_replace <- function(factor, pattern, replacement){
-  if (is.data.frame(factor)) {stop("must be a vector, not a data.frame")}
-  if (!is.factor(factor)) { factor <- factor %>% as.factor() }
-  levels <- factor %>% levels() %>%
-    magrittr::set_names(purrr::map(., ~ stringr::str_replace_all(., pattern, replacement)))
-  return(forcats::fct_recode(factor, !!!levels))
-}
-
-
-
-#' Recode Factor Levels using Multiple Patterns
-#'
-#' @param factor A factor.
-#' @param pattern_replacement_named_vector A named character vector, with
-#' regular expressions to find in values, replacements in names.
-#'
-#' @return A factor.
-#' @keywords internal
-# @export
-#'
-# @examples
-fct_rename <- function (factor, pattern_replacement_named_vector){
-  if(is.data.frame(factor)) {stop("must be a vector, not a data.frame")}
-  if (!is.factor(factor)) { factor <- factor %>% as.factor() }
-  if (!is.null(pattern_replacement_named_vector)) {
-    factor <- purrr::reduce2(pattern_replacement_named_vector,
-                             names(pattern_replacement_named_vector),
-                             .init = factor, .f = ~ fct_replace(..1, ..2, ..3))
-  }
-  return(factor)
-}
-
-
-#' Recode Factor Levels with Detected Pattern inside
-#' @description Recode factor levels using \code{\link[stringr]{str_detect}}.
-#' @param factor A factor.
-#' @param pattern A character vector of length 1.
-#' @param replacement A character vector of length 1.
-#' @param negate A factor.
-#'
-#' @return A factor.
-#' @keywords internal
-# @export
-#'
-# @examples
-fct_detect_replace <- function(factor, pattern, replacement, negate = FALSE){
-  if (is.data.frame(factor)) {stop("must be a vector, not a data.frame")}
-  if (!is.factor(factor)) { factor <- factor %>% as.factor() }
-  if (negate == FALSE) {
-    levels <- factor %>% levels() %>%
-      magrittr::set_names(purrr::map(., ~ dplyr::if_else(stringr::str_detect(., pattern), replacement, .) ))
-  } else {
-    levels <- factor %>% levels() %>%
-      magrittr::set_names(purrr::map(., ~ dplyr::if_else(!stringr::str_detect(., pattern), replacement, .) ))
-  }
-  return(forcats::fct_recode(factor, !!!levels))
-}
-
-
-
-
-#' @keywords internal
-fct_detect_rename <- function (factor, pattern_replacement_named_vector){
-  if(is.data.frame(factor)) {stop("must be a vector, not a data.frame")}
-  if (!is.null(pattern_replacement_named_vector)) {
-    if (!is.factor(factor)) { factor <- factor %>% as.factor() }
-    levels <- factor %>% levels() %>% magrittr::set_names(., .)
-    new_levels_list <- purrr::map(levels, function(.lv) purrr::imap(pattern_replacement_named_vector,
-                                                                    ~ dplyr::if_else(stringr::str_detect(.lv, .x), .y, .lv) ) %>% purrr::flatten_chr()  )
-    new_levels <- purrr::map2(levels, new_levels_list, ~ .y[which(!.y %in% .x)] )
-    new_levels <- new_levels %>% purrr::imap(~ ifelse(length(.) == 0, .y, .x))
-    if ( any(purrr::map_lgl(new_levels, ~ length(.) >= 2 )) ) {
-      warning_levels <- new_levels[which(purrr::map_lgl(new_levels, ~ length(.) >= 2 ))]
-      warning(stringr::str_c(c(" two search patterns or more applies to the same level (only the first was kept) : ",
-                               rep("", length(warning_levels) - 1)), warning_levels))
-      new_levels %>% purrr::map(~ .[1])
-    }
-    levels <- levels %>% magrittr::set_names(new_levels)
-    factor <- factor %>% forcats::fct_recode(!!!levels) %>% forcats::fct_relevel(sort)
-
-  }
-  return(factor)
-}
-
-
-
-#' Recode Factor Levels with Multiple Patterns Detection
-#'
-#' @param factor A factor.
-#' @param pattern_replacement_named_vector A named character vector, with
-#' regular expressions to find in values, replacements in names.
-#' @param .else A character vector of length 1 to rename factor levels detected
-#' with no pattern.
-#'
-#' @return A factor.
-#' @keywords internal
-# @export
-#'
-# @examples
-fct_case_when_recode <- function (factor, pattern_replacement_named_vector,
-                                  .else = levels(factor) ){
-  if(is.data.frame(factor)) {stop("must be a vector, not a data.frame")}
-  if (!is.factor(factor)) { factor <- factor %>% as.factor() }
-  if (!is.null(pattern_replacement_named_vector)) {
-    cases_list <-
-      purrr::imap(pattern_replacement_named_vector,
-                  ~ list(!! levels(factor) %>% stringr::str_detect(.x) ~ .y)
-      ) %>% purrr::flatten() %>% append(!! TRUE ~ .else)
-
-    factor <- factor %>% `levels<-`(dplyr::case_when(!!! cases_list)) %>%
-      forcats::fct_recode(NULL = "NULL") %>% forcats::fct_relevel(sort)
-  }
-  return(factor)
-}
-
-
-
-#' Copy level of factors between dataframes
-#' @description Based on the prefix numbers, otherwise don't work.
-#' @param data_to Data with the variable with levels to change.
-#' @param data_from Data with the variable with good levels
-#' @param var The variable : must exist on both df.
-#'
-#' @return A factor.
-#' @keywords internal
-# @export
-#'
-# @examples
-fct_levels_from_vector <- function (data_to, data_from, var) {
-  var <- rlang::enquo(var)
-
-  data_to <- data_to
-  data_from <- data_from
-
-  if (!is.factor(dplyr::pull(data_from, !!var))) {
-    data_from <- data_from %>% dplyr::mutate(!!var := as.factor(!!var))
-  }
-
-  if (!all(names(data_from) %in% names(data_to))) {
-    levels_recode <- data_from %>% dplyr::pull(!!var) %>% levels()
-    detect_strings <- stringr::str_c("^", stringr::str_extract(levels_recode, "^[^-]+"))
-    levels_recode <- detect_strings %>% magrittr::set_names(levels_recode)
-
-    data_to <- data_to %>% dplyr::mutate(!!var := fct_detect_rename(!!var, levels_recode))
-  }
-  return(data_to)
-}
-
-
-
-
-#' Compare levels of factors in many df
-#'
-#' @param data Data to use.
-#' @param vars Variables to compare levels.
-#'
-#' @return A list with results.
-#' @keywords internal
-# @export
-#'
-# @examples
-compare_levels <-
-  function(data, vars = c("var1", "var2")) {
-    if ("character" %in% class(data)) {
-      db_names <- data
-      db <- data %>% purrr::map(~ eval(str2expression(.)) %>%
-                                  dplyr::select(tidyselect::any_of(vars)) ) %>%
-        magrittr::set_names(data)
-    } else if (all(purrr::map_lgl(data, ~ "data.frame" %in% class(.)))) {
-      db <- data %>% purrr::map(~ dplyr::select(., tidyselect::any_of(vars)))
-      db_names <- names(db)
-    }
-
-    non_empty_db <- db %>% purrr::map(~ ncol(.)) != 0
-    first_non_empty_db <- which(non_empty_db == TRUE)[1]
-    non_empty_non_first_db <- non_empty_db
-    non_empty_non_first_db[first_non_empty_db] <- FALSE
-
-    if(all(non_empty_db == FALSE)) {
-      stop("No variable was found.")
-    }
-
-    db_var_names <- db %>%
-      purrr::map_if(non_empty_db,
-                    ~ stringr::str_c("$", colnames(.)[1]),
-                    .else = ~ "")
-
-    class <- db %>%
-      purrr::map_if(non_empty_db, ~ stringr::str_c(" : class = ", class(dplyr::pull(., 1))),
-                    .else = ~"")
-
-    same_name <- db %>%
-      purrr::map_if(non_empty_non_first_db,
-                    ~ stringr::str_c( " ; same name = ", (names(.) %in% names(db[[first_non_empty_db]])) ),
-                    .else = ~ "")
-    same_name[first_non_empty_db] <- " ; BASIS FOR COMPARISON"
-
-    levelsdb <- db %>%
-      purrr::map_if(non_empty_db, ~ dplyr::pull(., 1) %>% as.factor(.) %>% levels,
-                    .else = NA_character_) %>%
-      magrittr::set_names(stringr::str_c(db_names, db_var_names, class, same_name))
-    #print(levelsdb)
-
-    comp_true_false <- levelsdb %>%
-      purrr::map_if(non_empty_db, ~ dplyr::if_else(. %in% levelsdb[[first_non_empty_db]],
-                                                   "Same      : \"",
-                                                   "Different : \""))
-    comp_true_false[[first_non_empty_db]] <-comp_true_false[[first_non_empty_db]] %>%
-      stringr::str_replace("^Same", "Base")
-    #%>%
-    #magrittr::set_names(stringr::str_c(names(.), " (compared to ", names(levelsdb)[first_non_empty_db], ")"))
-
-    result <- purrr::map2(comp_true_false, levelsdb,
-                          ~ stringr::str_c(.x, .y))
-    result[!non_empty_db] <- "No variable with this name"
-    return(result)
-  }
-
-
-
-# Adapt purrr::map_if function to pmap et map2
-# (when FALSE the result is the first element of .l, or the content of .else)
-
-#' A generalized map_if
-#'
-#' @param .l List of lists.
-#' @param .p Predicate.
-#' @param .f Function if TRUE.
-#' @param .else Function if FALSE.
-#' @param ... Other parameter to pass to the function.
-#'
-#' @return A list of same length.
-#' @keywords internal
-#'
-# @examples
-pmap_if <- function(.l, .p, .f, ..., .else = NULL) {
-  # Why this exists: purrr has no conditional pmap; apply .f only to elements matching .p
-  # (via the vendored probe()), leaving the rest unchanged. map2_if is the 2-arg analogue.
-  .x <- .l[[1]]
-  sel <- probe(.x, .p)
-
-  out <- purrr::list_along(.x)
-  out[sel] <- purrr::pmap(purrr::map(.l, ~ .[sel]), .f, ...) # .Call(pmap_impl, environment(), ".l", ".f", "list")
-  if (rlang::is_null(.else)) {
-    out[!sel] <- .x[!sel]
-  }
-  else {
-    out[!sel] <- purrr::pmap(purrr::map(.l, ~ .[sel]), .else, ...)
-  }
-  magrittr::set_names(out, names(.x))
-}
-
-
-#' A 2 arguments map_if
-#'
-#' @param .x,.y Lists.
-#' @param .p Predicate.
-#' @param .f Function if TRUE.
-#' @param .else Function if FALSE.
-#' @param ... Other parameter to pass to the function.
-#'
-#' @return A list of the same length.
-#' @keywords internal
-#'
-# @examples
-map2_if <- function(.x, .y, .p, .f, ..., .else = NULL) {
-  sel <- probe(.x, .p)
-
-  out <- purrr::list_along(.x)
-  out[sel] <- purrr::map2(.x[sel], .y[sel], .f, ...)
-  if (rlang::is_null(.else)) {
-    out[!sel] <- .x[!sel]
-  }
-  else {
-    out[!sel] <- purrr::map2(.x[sel], .y[sel], .else, ...)
-  }
-  magrittr::set_names(out, names(.x))
-}
-
-# Simplifier l'alias de list2 (dans purrr) :
-# ( pour data %>% list_of_maps %>% pmap(~) )
-#list2 <- rlang::list2
-
-#purrr internal functions dependencies (CRAN does'nt accept :::)
-
-# purrr:::probe
-# GNU GPL-3 Licence https://purrr.tidyverse.org/LICENSE.html
-# Thanks to Hadley Wickham and Lionel Henry
-#' @keywords internal
-probe <- function (.x, .p, ...)
-{
-  if (rlang::is_logical(.p)) {
-    stopifnot(length(.p) == length(.x))
-    .p
-  }
-  else {
-    .p <- as_predicate(.p, ..., .mapper = TRUE)
-    purrr::map_lgl(.x, .p, ...)
-  }
-}
-
-#purrr:::as_predicate
-# GNU GPL-3 Licence : https://purrr.tidyverse.org/LICENSE.html
-# Thanks to Hadley Wickham and Lionel Henry
-#' @keywords internal
-as_predicate  <- function (.fn, ..., .mapper)
-{
-  if (.mapper) {
-    .fn <- purrr::as_mapper(.fn, ...)
-  }
-  function(...) { #Simplified, no purrr:::as_predicate_friendly_type_of
-    out <- .fn(...)
-    if (!rlang::is_bool(out)) {
-      msg <- sprintf("Predicate functions must return a single `TRUE` or `FALSE`")
-    }
-    out
-  }
-}
-
-#tidyselect:::where
-# MIT + Lience : https://tidyselect.r-lib.org/LICENSE.html
-# Thanks to Hadley Wickham and Lionel Henry
+# Vendored from tidyselect:::where (MIT licence: https://tidyselect.r-lib.org/LICENSE.html).
 #' @keywords internal
 where <- function (fn)
 {
@@ -855,510 +664,90 @@ where <- function (fn)
 
 
 
-
-# path <- "~/Data/Enquêtes élections/Enquête Participation électorale 2017/Doc/Formats/formats_sas.txt"
-# name_in = "pa17"
-# name_out = "pa17"
-# open = TRUE
-# remove_at_end_of_var = "f"
-# not_if_numeric = TRUE
-# text_aposthophe = "'"
-# # path_out
-#
-# load_all()
-# tabxplor:::formats_SAS_to_R("~/Data/Enquêtes élections/Enquête Participation électorale 2017/Doc/Formats/formats_sas.txt",
-#                             name_in = "pa17", name_out = "pa17")
-
-
-#' INSEE SAS formats to R : translate code
-#'
-#' @param path The path of the file with the sas formats
-#' @param name_in The name of the unformatted database
-#' @param name_out The name of the database to be formatted, if not the same than `name_in`.
-#' @param open Should the file be opened, or just its path printed ?
-#' @param remove_at_end_of_var Set to `f` or `F` the final f in variables names in the sas file.
-#' @param not_if_numeric Should the code prevent numeric variables to get recoded ?
-#' @param text_aposthophe How do apostrophes in labels appear ?
-#' @param path_out The path, name and extension of the output file. In temporary directory
-#' if not provide.
-#'
-#' @return A file with R code.
+# === SECTION: knitr chunk options ================================================================
+# knitr is Suggests: the three chunk options tabxplor reads are only ever set DURING a render, and a
+# render is exactly when knitr is loaded. `knitr.in.progress` is knitr's own flag for that, so the
+# gate answers "am I being knitted?" and the requireNamespace() below can never be the slow path.
 #' @keywords internal
-#'
-# @examples
-formats_SAS_to_R <- function (path, name_in, name_out, open = TRUE, remove_at_end_of_var = "f",
-                              not_if_numeric = TRUE, text_aposthophe = "'", path_out)  {
-  f <- stringi::stri_read_raw(path)
-  format <- stringi::stri_enc_detect(f)
-  format <- format[[1]]$Encoding[1]
-  con <- file(path, encoding = format)
-  f <- readLines(con)
-
-  f <- f |>
-    stringr::str_remove_all("\t") |>
-    stringr::str_replace_all(text_aposthophe, stringi::stri_unescape_unicode("\\u2019")) |>
-    stringr::str_replace_all("\"", "'") |>
-    stringr::str_replace_all(";value", "value") |>
-    stringr::str_squish()
-
-  f <- f[stringr::str_detect(f, "^value|=") & !stringr::str_detect(f, "^proc")] # "^value *\\$|="
-  f[stringr::str_detect(f, "=")] <-
-    f[stringr::str_detect(f, "=")] |>
-    stringr::str_replace("^([^ =]+) ", "'\\1' ") |>
-    #stringr::str_replace("^([^ ]+) ", "'\\1' ") |>
-    stringr::str_replace("''", "'") |>
-    stringr::str_replace("' += +'", "'='") |>
-    stringr::str_replace("'([^']+)'='([^']+)'", "'\\1-\\2' = '\\1',") |>
-    stringr::str_remove(";$")
-  f_var <- stringr::str_extract(f[stringr::str_detect(f, "^value")],  "[^ ]+$")
-  if (!is.null(remove_at_end_of_var)) f_var <- stringr::str_remove(f_var, paste0(remove_at_end_of_var, "$"))
-
-  f[1:30]
-
-  if (not_if_numeric) {
-    f[stringr::str_detect(f, "^value")] <-
-      paste0("if('",
-             f_var, "' %in% names(", name_out, ") & !is.numeric(",
-             name_out, "$", f_var, ")) {\n", name_out, "$", f_var,
-             " <- forcats::fct_recode(", name_in, "$", f_var,
-             ",")
-  } else {
-    f[stringr::str_detect(f, "^value")] <-
-      paste0("if('",
-             f_var, "' %in% names(", name_out, ")) {\n", name_out,
-             "$", f_var, " <- forcats::fct_recode(as.factor(",
-             name_in, "$", f_var, "),")
-  }
-  data <- dplyr::tibble(f = f) |>  # ???
-    dplyr::mutate(group = cumsum(as.integer(stringr::str_detect(f, "^if\\(")))) |>
-    dplyr::group_by(.data$group) |>
-    dplyr::mutate(f = dplyr::if_else(dplyr::row_number() == dplyr::n(),
-                                     paste0(f, ")\n}\n"),
-                                     f
-    )
-    ) |>
-    dplyr::ungroup()
-
-  data <- data |>
-    dplyr::mutate(var = dplyr::if_else(stringr::str_detect(f, "^if\\("),
-                         true  = stringr::str_extract(f, "^if\\('[^']+'") |>
-                           stringr::str_remove("if\\(") |> stringr::str_remove_all("'"),
-                         false = NA_character_                         )
-    ) |>
-    tidyr::fill(tidyselect::all_of(c("var")))
-
-  no_path_out <- missing(path_out)
-  if (no_path_out) {
-    path_out <- file.path(tempdir(), paste0("formats_R-", name_out, ".R"))
-  }
-
-  # if (stringr::str_detect(path, "\\\\|/")) {
-  #
-  #
-  #   path_out <- stringr::str_c(stringr::str_replace_all(path, "/", "\\\\") |>
-  #                                stringr::str_remove("[^\\\\]+$"),
-  #                              "formats_R-", name_out, ".R")
-  # } else {
-  #   path_out <- stringr::str_c("formats_R-", name_out, ".R")
-  # }
-
-  writeLines(data$f, path_out, useBytes = TRUE)
-  if (open) {
-    if (requireNamespace("rstudioapi", quietly = TRUE)) {
-      rstudioapi::navigateToFile(path_out)
-    } else {
-      file.show(path_out)
-    }
-
-  } else if (no_path_out) {
-    message(path_out)
-  }
-  invisible(data)
+tx_knitr_opt <- function(name, which = c("current", "knit")) {
+  if (!isTRUE(getOption("knitr.in.progress"))) return(NULL)
+  if (!requireNamespace("knitr", quietly = TRUE)) return(NULL)
+  switch(match.arg(which),
+         current = knitr::opts_current$get(name),
+         knit    = knitr::opts_knit$get(name))
 }
 
 
+# === SECTION: HTML escaping ======================================================================
+# Vendored from htmltools::htmlEscape (htmltools 0.5.9, RStudio/Posit, GPL (>= 2), redistributed
+# here under tabxplor's GPL (>= 3) as that licence's "or later" clause permits). Thank you.
+#
+# htmltools was a one-function Import: this, plus base64enc / digest / fastmap and a compile, for a
+# vector of gsub()s. The early return is what makes it cheap on a table of numbers, where nothing
+# ever matches -- and `useBytes = TRUE` on both the test and the substitutions is what keeps it so
+# in a non-UTF-8 locale.
+#
+# WARNING: `attribute = TRUE` is not decoration. Inside an attribute value a bare quote or a raw
+# newline ENDS the attribute, so the extra four are a correctness requirement, not a nicety.
+tx_html_specials <- list("&" = "&amp;", "<" = "&lt;", ">" = "&gt;")
+tx_html_specials_attrib <- c(
+  tx_html_specials,
+  list("'" = "&#39;", "\"" = "&quot;", "\r" = "&#13;", "\n" = "&#10;")
+)
 
-# formats_SAS_to_R <- function (path, name_in, name_out, open = TRUE, remove_final_f = TRUE,
-#                               not_if_numeric = TRUE) {
-#   f <- stringi::stri_read_raw(path)
-#   format <- stringi::stri_enc_detect(f)
-#   format <- format[[1]]$Encoding[1]
-#
-#   con <- file(path, encoding = format)
-#
-#   f <- readLines(con)
-#   f <- f |> stringr::str_remove_all("\t") |> stringr::str_replace_all("'", stringi::stri_unescape_unicode("\\u2019")) |>
-#     stringr::str_replace_all("\"", "'")
-#   f <- f[stringr::str_detect(f, "value *\\$|=") & ! stringr::str_detect(f, "^proc")]
-#
-#   f[stringr::str_detect(f, "=")] <- f[stringr::str_detect(f, "=")] |> stringr::str_squish() |>
-#     stringr::str_replace("' += +'", "'='") |>
-#     stringr::str_replace("'([^']+)'='([^']+)'", "'\\1-\\2' = '\\1',")
-#
-#   f_var <-  f[stringr::str_detect(f, "value *\\$")] |> stringr::str_extract("[^ ]+$")
-#   if (remove_final_f) f_var <- f_var |> stringr::str_remove("f$")
-#
-#   if (not_if_numeric) {
-#     f[stringr::str_detect(f, "value *\\$")] <-
-#       paste0("if('", f_var, "' %in% names(", name_out,
-#              ") & !is.numeric(", name_out, "$", f_var, ")) {\n",
-#              name_out, "$", f_var, " <- forcats::fct_recode(", name_in, "$", f_var, ","
-#       )
-#   } else {
-#     f[stringr::str_detect(f, "value *\\$")] <-
-#       paste0("if('", f_var, "' %in% names(", name_out, ")) {\n",
-#              name_out, "$", f_var, " <- forcats::fct_recode(as.factor(", name_in, "$", f_var, "),"
-#       )
-#   }
-#   data <-
-#     dplyr::tibble(f = f) |>
-#     dplyr::mutate(group = stringr::str_detect(f, "^if\\(") |> as.integer() |> cumsum()) |>
-#     dplyr::group_by(.data$group) |>
-#     dplyr::mutate(f = dplyr::if_else(dplyr::row_number() == dplyr::n(), paste0(f, ")\n}\n"), f)) |>
-#     dplyr::ungroup()
-#
-#   if (stringr::str_detect(path, "\\\\|/")) {
-#     path_out <- stringr::str_c(stringr::str_replace_all(path,
-#                                                         "/", "\\\\") %>% stringr::str_remove("[^\\\\]+$"),
-#                                "formats_R-", name_out, ".R")
-#   } else {
-#     path_out <- stringr::str_c("formats_R-", name_out, ".R")
-#   }
-#
-#   writeLines(data$f, path_out, useBytes = TRUE)
-#
-#   if(open) {
-#     file.show(path_out)
-#   } else {
-#     message(path_out)
-#   }
-#
-#   invisible(path_out)
-# }
-
-
-
-#' Prepare fct_recode
-#'
-#' @param df_in The name of the unformatted database
-#' @param df_out The name of the database to be formatted.
-#' @param var The name of the variable.
-#' @param mode "text", "numbers" or "numbers_vector"
-#' @param numbers If mode = "numbers", a character vector of length 1 with numbers.
-#' @param text The character vector of length 1 with text.
-#'
-#' @return Code to be copied in console.
 #' @keywords internal
-#'
-# @examples
-prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers",
-                                                             "numbers_vector"),
-                               numbers, text){
-  text <- text
-  lines <- stringr::str_c(text, "\n") %>%
-    stringr::str_extract_all(".*\n") %>% unlist
-  lines <- lines %>% stringr::str_replace_all("\n", "") %>%
-    stringr::str_replace_all("\\t+", " ") %>%
-    stringr::str_replace_all("^ +", "") %>%
-    stringr::str_replace_all(" +$", "")
-
-  if (mode == "normal") {
-    lines <- tibble::enframe(lines, name = "number", value = "name") %>%
-      dplyr::mutate(number = as.character(.data$number))
-
-  } else if (mode == "numbers") {
-    number <- lines %>% stringr::str_match("^\\d*\\w*") %>% tibble::as_tibble()
-    name <- lines %>% stringr::str_split("^\\d*[^\\s]*", n = 2, simplify = TRUE) %>%
-      tibble::as_tibble() %>% dplyr::select("V2") %>%
-      dplyr::mutate(V2 = stringr::str_replace_all(.data$V2, "^ *", ""))
-    lines <- dplyr::bind_cols(number, name) %>%
-      dplyr::rename(number = .data$V1, name = .data$V2)
-
-  } else if (mode == "numbers_vector") {
-    numb <- numbers
-    numb <- stringr::str_c(numbers, "\n") %>%
-      stringr::str_extract_all(".*\n") %>% unlist
-    numb <- numb %>% stringr::str_replace_all("\n", "") %>%
-      stringr::str_replace_all("\\t+", " ") %>%
-      stringr::str_replace_all("^ +", "") %>%
-      stringr::str_replace_all(" +$", "")
-    numb <- tibble::enframe(numb, name = "shit", value = "number") %>%
-      dplyr::select(number)
-
-    lines <- tibble::enframe(lines, name = "number", value = "name") %>%
-      dplyr::select(name)
-
-    lines <- dplyr::bind_cols(numb, lines)
-  }
-
-  lines <- lines %>% dplyr::filter(!stringr::str_detect(.data$name,"^\\s*$")) %>%
-    dplyr::mutate(first_letter = stringr::str_to_upper(stringr::str_sub(.data$name,
-                                                                        1, 1)),
-                  other_letters = stringr::str_sub(.data$name, 2, -1) ) %>%
-    dplyr::mutate(name = stringr::str_c(.data$first_letter, .data$other_letters)) %>%
-    dplyr::select(-"first_letter", -"other_letters") %>%
-    dplyr::mutate(mod_line = stringr::str_c("\"", .data$number,"-", .data$name,"\" = \"",
-                                            .data$number,  "\",\n"))
-  first_line <-
-    tibble::tibble(number = "0",
-                   mod_line = stringr::str_c(df_out, "$", .data$var,
-                                             " <- forcats::fct_recode(", df_in, "$",
-                                             .data$var, ",\n") )
-  last_line <- tibble::tibble(number = "0", mod_line = ")")
-  res <- dplyr::bind_rows(first_line, lines, last_line) %>%
-    dplyr::select("mod_line") %>% dplyr::pull()
-  cat(res, "\n\n")
-  return(invisible(res))
+tx_html_escape <- function(text, attribute = FALSE) {
+  specials <- if (attribute) tx_html_specials_attrib else tx_html_specials
+  pattern  <- if (attribute) "[&<>'\"\r\n]" else "[&<>]"
+  text <- enc2utf8(as.character(text))
+  if (!any(grepl(pattern, text, useBytes = TRUE))) return(text)
+  for (chr in names(specials))
+    text <- gsub(chr, specials[[chr]], text, fixed = TRUE, useBytes = TRUE)
+  Encoding(text) <- "UTF-8"
+  text
 }
 
 
-
-
-
-
-
-
-
-
-# databases <- emploi_data_list[!emploi_data_names %in% c("ee1969_74", "ee2013_18")]
-# vars <- c("ANNEE", "SO", "CSE") #c("ANNEE", "SO", "EXTRI")
-
-#' Bind dataframes for tab / tab_many
-#'
-#' @param data Dataframes to be bound by rows.
-#' @param vars Selected variables.
-#'
-#' @return A tibble.
-# @export
+# Escaped characters ------------------------------------------------------------------------------
 #' @keywords internal
-# @examples
-bind_datas_for_tab <- function(data, vars) {
-  # Why this exists: before row-binding several data sources, unify each factor's levels
-  # across ALL of them (lvls_union + fct_expand + fct_relevel(sort)). Otherwise a factor
-  # missing a level in one source would drop that category from the pooled aggregation.
-  if ("character" %in% class(data)) {
-    data <- data
-    vars <- as.character(vars)
-    data <- data %>% purrr::map(~ eval(str2expression(.))) %>%
-      purrr::map(~ dplyr::select(., tidyselect::all_of(vars)))
-  } else if (all(purrr::map_lgl(data, ~ "data.frame" %in% class(.)))) {
-    data <- data %>% purrr::map(~ dplyr::select(., tidyselect::all_of(vars)))
-  } else {stop("entry is not character vector or list of data.frames")}
-  vars_factors <- #TRUE = Variable is a factor in at least one database.
-    vars[purrr::map_lgl(vars, function (.vars)
-      any(purrr::map_lgl(data, ~ "factor" %in% class(dplyr::pull(., .vars)))))]
-  data <- data %>% purrr::map(~ dplyr::mutate_at(., vars_factors, ~ as.factor(.)))
-  levels_of_all_factors <- purrr::map(vars_factors, function(.vars)
-    purrr::map(data, ~ dplyr::pull(., .vars) ) %>% forcats::lvls_union()   )
-  data <- data %>% purrr::map(function(.db)
-    purrr::reduce2(vars_factors, levels_of_all_factors,
-                   .init = .db,
-                   .f = function(.result, .vars, .levels)
-                     dplyr::mutate_at(.result, .vars, ~ forcats::fct_expand(., .levels))
-    ) ) %>%
-    dplyr::bind_rows() %>%
-    dplyr::mutate_if(is.factor, ~ forcats::fct_relevel(., sort) )
-  return(data)
-}
+unbrk      <- "\u202f" # unbreakable space
+sigma_sign <- "\u03c3" # sigma for sd
+mult_sign  <- "\u00d7" # multiply sign (ratio >= 1)
+div_sign   <- "\u00f7" # divide sign (ratio < 1, shows 1/ratio)
+# U+2007 FIGURE SPACE is exactly digit-width in tabular fonts, where an ASCII space is not (and CSS
+# collapses space runs) -- used for proportional-font exports (html/Excel) only; console and
+# markdown keep the ASCII space.
+fig_space  <- "\u2007"
 
 
-# Escaped characters ----
+# Only a STARRED table needs the monospace stack below: a proportional "*" is narrower than a digit
+# and slides a starred cell out of column alignment. `ui-monospace` is deliberately excluded -- it
+# resolves to the OS's own mono and would override the pinned target.
+tx_num_font_html_stars <-
+  '"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace'
+
+
+# --- weighted moments -----------------------------------------------------------------------------
+# The ML weighted variance (/ sum w), which is what tab()'s numeric leaf computes too, so a band cut
+# by shape_cut_bands() and a mean printed in a cell rest on the same definition. Unweighted, the SD
+# is the ordinary sample one.
 #' @keywords internal
-unbrk      <- stringi::stri_unescape_unicode("\\u202f") # unbreakable space
-sigma_sign <- stringi::stri_unescape_unicode("\\u03c3") # sigma for sd
-mult_sign  <- stringi::stri_unescape_unicode("\\u00d7") # multiply sign (ratio >= 1)
-cross      <- stringi::stri_unescape_unicode("\\u00d7")
-div_sign   <- stringi::stri_unescape_unicode("\\u00f7") # divide sign (ratio < 1, shows 1/ratio)
-
-# # Not working
-# # Css link towards https://github.com/web-fonts/dejavu-sans-condensed
-# # @export
-# css_deja_vu_sans_condensed <- function() {
-#
-#   # "@font-face {
-#   #   font-family: 'DejaVu Sans Condensed';
-#   #     url('../inst/fonts/dejavu-sans-condensed-webfont.woff') format('woff'),
-#   #     url('../inst/fonts/dejavu-sans-condensed-webfont.ttf') format('truetype'),
-#   # }" |>
-#   #   stringr::str_remove("\n")
-#
-#   #"@font-face{font-family:'DejaVu Sans Condensed';src:url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.eot);src:url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.eot?#iefix) format('embedded-opentype'),url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.woff2) format('woff2'),url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.woff) format('woff'),url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.ttf) format('truetype'),url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.svg#dejavu_sans_condensedregular) format('svg')}"
-#
-#   "@font-face {
-#    font-family: 'DejaVu Sans Condensed';
-#     src: url('https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.eot'); /* IE9 Compat Modes */
-#       src: url('https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.eot?#iefix') format('embedded-opentype'), /* IE6-IE8 */
-#       url('https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.woff2') format('woff2'), /* Super Modern Browsers */
-#       url('https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.woff') format('woff'), /* Pretty Modern Browsers */
-#       url('https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.ttf') format('truetype'), /* Safari, Android, iOS */
-#       url('https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.svg#dejavu_sans_condensedregular') format('svg'); /* Legacy iOS */
-#   }"
-#
-#   }
-
-
-
-
-
-# ggpubr functions (for tab_plot() as tableGrob ) ----
-
-# ggpubr:::is_tablegrob
-#' @keywords internal
-is_tablegrob <- function (tab) {
-  inherits(tab, "gtable") & inherits(tab, "grob")
-}
-
-# ggpubr:::is_ggtexttable
-#' @keywords internal
-is_ggtexttable <- function (tab) {
-  !is.null(attr(tab, "ggtexttableGrob"))
-}
-
-# ggpubr:::as_ggtexttable
-#' @keywords internal
-as_ggtexttable <- function (tabgrob) {
-  res <- ggpubr::as_ggplot(tabgrob)
-  attr(res, "ggtexttableGrob") <- tabgrob
-  res
-}
-
-# ggpubr:::get_tablegrob
-#' @keywords internal
-get_tablegrob <- function (tab)
-{
-  if (is_ggtexttable(tab)) {
-    tabgrob <- attr(tab, "ggtexttableGrob")
-  }
-  else if (is_tablegrob(tab)) {
-    tabgrob <- tab
-  }
-  else {
-    stop("tab should be an object from either ggpubr::ggtexttable() or gridExtra::tableGrob().")
-  }
-  tabgrob
-}
-
-# ggpubr:::tab_return_same_class_as_input
-#' @keywords internal
-tab_return_same_class_as_input <- function (tabgrob, input) {
-  if (is_ggtexttable(input)) {
-    return(as_ggtexttable(tabgrob))
-  }
-  else if (is_tablegrob(input)) {
-    return(tabgrob)
-  }
-  tabgrob
-}
-
-### https://stackoverflow.com/questions/32106333/align-grob-at-fixed-top-center-position-regardless-of-size
-justify_grob <- function(grob, hjust = "left", vjust = "top", pad = 5){
-  w <- sum(grob$widths)
-  h <- sum(grob$heights)
-  xy <- list(x = switch(hjust,
-                        center = 0.5 + grid::unit(pad, "points"),
-                        left = 0.5*w + grid::unit(pad, "points"),
-                        right = grid::unit(1,"npc") - 0.5*w - grid::unit(pad, "points")),
-             y = switch(vjust,
-                        center = 0.5 + grid::unit(pad, "points"),
-                        bottom = 0.5*h + grid::unit(pad, "points"),
-                        top = grid::unit(1,"npc") - 0.5*h - grid::unit(pad, "points") ) )
-  if (is.null(grob$vp)) {
-    grob$vp <- grid::viewport(x = xy[[1]], y = xy[[2]] )
-  } else {
-    grob$vp$x <- xy[[1]]
-    grob$vp$y <- xy[[2]]
-  }
-
-  return(grob)
-}
-
-
-
-
-# # cowplot:::as_grob.ggplot
-# as_grob.ggplot <- function (plot, device = NULL) {
-#   if (is.null(device)) {
-#     device <- null_dev_env$current
-#   }
-#   cur_dev <- grDevices::dev.cur()
-#   device(width = 6, height = 6)
-#   null_dev <- grDevices::dev.cur()
-#   on.exit({
-#     grDevices::dev.off(null_dev)
-#     if (cur_dev > 1) grDevices::dev.set(cur_dev)
-#   })
-#   ggplot2::ggplotGrob(plot)
-# }
-
-
-
-# translation functions ----
-
-#' @keywords internal
-tr_ <- function(...) {
-  enc2utf8(gettext(paste0(...), domain = "R-tabxplor"))
+wtd_mean <- function(x, w = NULL) {
+  x <- as.numeric(x)
+  ok <- is.finite(x)
+  if (!is.null(w)) { w <- as.numeric(w); ok <- ok & is.finite(w) & w > 0 }
+  if (!any(ok)) return(NA_real_)
+  if (is.null(w)) mean(x[ok]) else sum(w[ok] * x[ok]) / sum(w[ok])
 }
 
 #' @keywords internal
-po_to_dt <- function(file) {
-  po_base <- readLines(file, encoding = "UTF-8")
-  po_meta <- po_base[!dplyr::cumany(po_base == "")]
-
-  po <- tibble::tibble(base = po_base[dplyr::cumany(po_base == "")])
-
-
-  po <- po |>
-    dplyr::filter(.data$base != "") |>
-    dplyr::mutate(
-      ok = stringr::str_detect(.data$base, "#:|msgid|msgstr"),
-      ok = cumsum(as.integer(.data$ok))
-    ) |>
-    dplyr::group_by(!!rlang::sym("ok")) |>
-    dplyr::group_split() |>
-    purrr::map(
-      ~ paste0(.$base, collapse = "") |>
-        stringr::str_remove_all("\"")
-    ) |>
-    purrr::flatten_chr()
-
-  po <- tibble::tibble(text = po) |>
-    dplyr::mutate(
-      type  = stringr::str_extract(.data$text, "^[^ ]+ ") |> stringr::str_trim(),
-      group = cumsum(as.integer(.data$type == "#:")),
-      .before = 1
-    ) |>
-    dplyr::mutate(
-      text = stringr::str_remove(.data$text, "^[^ ]+ "),
-    ) |>
-    tidyr::pivot_wider(id_cols  = "group", names_from = "type", values_from = "text") |>
-    dplyr::select(-"group") |>
-    `attr<-`("meta", po_meta)
-
-  return(po)
+wtd_sd <- function(x, w = NULL) {
+  x <- as.numeric(x)
+  ok <- is.finite(x)
+  if (!is.null(w)) { w <- as.numeric(w); ok <- ok & is.finite(w) & w > 0 }
+  if (sum(ok) < 2L) return(NA_real_)
+  if (is.null(w)) return(stats::sd(x[ok]))
+  xw <- x[ok]; ww <- w[ok]
+  m  <- sum(ww * xw) / sum(ww)
+  sqrt(sum(ww * (xw - m)^2) / sum(ww))          # the ML weighted variance, as tab()'s numeric side uses
 }
-
-
-# Other functions ----
-
-
-#' @keywords internal
-# From fs:: package : thank to Gábor Csárdi
-path_sanitize <- function (filename, replacement = "") {
-    illegal <- "[/\\?<>\\:*|\":]"
-    control <- "[[:cntrl:]]"
-    reserved <- "^[.]+$"
-    windows_reserved <- "^(con|prn|aux|nul|com[0-9]|lpt[0-9])([.].*)?$"
-    windows_trailing <- "[. ]+$"
-    filename <- gsub(illegal, replacement, filename)
-    filename <- gsub(control, replacement, filename)
-    filename <- gsub(reserved, replacement, filename)
-    filename <- gsub(windows_reserved, replacement, filename, 
-        ignore.case = TRUE)
-    filename <- gsub(windows_trailing, replacement, filename)
-    filename <- substr(filename, 1, 255)
-    if (replacement == "") {
-        return(filename)
-    }
-    path_sanitize(filename, "")
-}
-

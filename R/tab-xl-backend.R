@@ -1,15 +1,22 @@
-# PURPOSE: openxlsx2 backend for tab_xl() -- thin engine wrappers + the range coalescer.
-# ROLE: Phase 10h isolates the plumbing openxlsx2 calls behind xlb_* wrappers, so tab_xl.R holds the
-#       orchestration + the per-table writer. xl_coalesce turns per-cell style targets into the fewest
-#       multi-area `dims`, so each precomposed style is applied ONCE over the largest range.
+# PURPOSE: the openxlsx2 boundary -- thin engine wrappers, plus the pure A1 geometry tab_xl() needs.
+# ROLE: every raw openxlsx2 call in the package is here, behind an xlb_* wrapper, so tab_xl.R holds
+#   orchestration only. xl_runs() / xl_coalesce() are pure base R (A1 math, no openxlsx2) and so are
+#   unit-testable alone: they turn per-cell style targets into the fewest multi-area `dims`, and each
+#   precomposed style is then applied ONCE over the largest range.
 # KEY CONSTRAINTS:
-#   - openxlsx2 is Suggests-only; the ONE requireNamespace() guard lives in tab_xl(), so these
-#     wrappers (and the create_*/set_cell_style compose in tab_xl.R xl_apply_styles) are unguarded.
-#   - Styling model (Phase 10h): the writer PRECOMPOSES each cell's full style (create_font/create_fill/
-#     create_border + create_cell_style) and applies it by id with set_cell_style -- far fewer + cheaper
-#     openxlsx2 calls than a wb_add_* per aspect (the openxlsx2 "shared styles" fast path). numFmt is
-#     the one exception, applied as a grouped wb_add_numfmt pass that MERGES onto the composed xf.
-#   - xl_runs/xl_coalesce are pure base-R (A1 math reimplemented, no openxlsx2), unit-testable alone.
+#   - openxlsx2 is Suggests-only and the ONE requireNamespace() guard lives in tab_xl(), so these
+#     wrappers are deliberately unguarded.
+#   - THE openxlsx2 TRAPS LIVE HERE, and each one silently produces a wrong workbook:
+#     * create_font() defaults `scheme = "minor"`, which means "this IS the theme's body font" --
+#       Excel then resolves the font from the WORKBOOK THEME and ignores the explicit `name`. Pass
+#       `scheme = ""` so a cell renders in the font it names.
+#     * wb_add_font(update = TRUE) is buggy over large ranges with scattered cells. Aggregate a
+#       cell's whole font descriptor and apply it with update = FALSE, which the precompose does.
+#     * a comma-joined MULTI-AREA dims is rejected by the older openxlsx2 that jamovi bundles, so
+#       xlb_dims_each() splits every dims into single ranges at the emit boundary.
+#     * a `wb$method()` chain MUTATES THE WORKBOOK IN PLACE; keeping that here is half the point of
+#       the wrappers.
+# See: CLAUDE.md section "tabxplor architecture" (exports and rendering); R/tab_xl.R (the writer).
 
 # === SECTION: A1 geometry + range coalescing (pure, testable) ========================
 
@@ -38,9 +45,8 @@ xl_one_rect <- function(r, c) {
   else paste0(xl_cell(r[1], c[1]), ":", xl_cell(r[2], c[2]))
 }
 
-# per-cell (col, row) targets sharing ONE style -> the fewest rectangles -> one multi-area dims.
-# Rows are compressed to runs per column, then columns with an identical run-set are merged into a
-# single wider rectangle block. Returns NA_character_ when there is nothing to style.
+# strategy: rows -> runs per column, then columns sharing the same run-set merge into one wider
+# rectangle -- the fewest rectangles for one multi-area dims. NA_character_ when nothing to style.
 xl_coalesce <- function(cols, rows) {
   if (!length(cols)) return(NA_character_)
   cols <- as.integer(cols); rows <- as.integer(rows)
@@ -59,11 +65,7 @@ xl_coalesce <- function(cols, rows) {
 }
 
 # === SECTION: openxlsx2 engine wrappers (unguarded; openxlsx2 loaded by tab_xl) ======
-# openxlsx2 `wbWorkbook` is an R6 object: the `wb$method()` (chain) form MUTATES IN PLACE (the
-# `wb_*()` pipe form returns a modified clone that must be reassigned). tab_xl issues hundreds of
-# style calls into one workbook, so the wrappers use the in-place `$` methods -- no reassignment.
 
-# tabxplor palette hex ("#rrggbb"/"rrggbb"/"aarrggbb") OR a named colour -> openxlsx2 colour object.
 xl_color <- function(x) {
   if (grepl("^#?[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$", x))
     openxlsx2::wb_color(hex = toupper(sub("^#", "", x)))
@@ -76,66 +78,86 @@ xlb_new_workbook <- function() openxlsx2::wb_workbook()
 xlb_base_font <- function(wb, name, size = 10)
   wb$set_base_font(font_size = size, font_name = name)
 
-# Excel forbids  \ / ? * : [ ]  in a worksheet name. openxlsx2 does not reject such a name: it
-# silently rewrites each illegal character to a space and warns ("Fixing: removing illegal
-# characters found in sheet name"). Regression tables trip this routinely -- Phase 12d names OR
-# columns "<level> vs <ref>: OR", and the colon reaches the sheet title. Applying the substitution
-# ourselves leaves openxlsx2 nothing to fix, so the warning is gone rather than merely muffled.
-# PURE (no workbook) -- unit-tested against openxlsx2's own output in test-xl-backend.R.
-#
-# DESIGN: verified identical to openxlsx2 for every illegal character EXCEPT backslash, where
-# openxlsx2 emits TWO spaces for one "\" (its own quirk); we emit one. Unreachable here -- titles
-# are built from variable names and level labels -- and one space is the correct reading.
-# WARNING: fixed = TRUE, one character at a time -- do NOT "simplify" this to a bracket-expression
-# regex. In a POSIX bracket expression a backslash is a literal, not an escape, so the obvious
-# "[\\\\/?*:\\[\\]]" silently matches nothing of what it looks like it matches.
+# Excel forbids \ / ? * : [ ] in a worksheet name; doing the substitution ourselves pre-empts
+# openxlsx2's own silent rewrite-and-warn. WARNING: fixed = TRUE, one character at a time -- a
+# bracket-expression regex treats \ as a literal, not an escape, and silently matches nothing.
 xl_clean_sheet_name <- function(x) {
   for (ch in c("\\", "/", "?", "*", ":", "[", "]")) x <- gsub(ch, " ", x, fixed = TRUE)
   x
 }
 
-# gridlines are turned off at sheet creation (replaces v1 showGridLines)
 xlb_add_sheet <- function(wb, title)
   wb$add_worksheet(sheet = title, grid_lines = FALSE)
 
-xlb_freeze <- function(wb, sheet, active_row = 3L)
-  wb$freeze_pane(sheet = sheet, first_active_row = active_row, first_col = TRUE)
+# WARNING: `first_col = TRUE` and `first_active_row` are ALTERNATIVES in openxlsx2, not a pair -- the
+# shorthand wins and silently drops the row split. Give both axes as ACTIVE cell coordinates.
+xlb_freeze <- function(wb, sheet, active_row = 3L, active_col = 2L)
+  wb$freeze_pane(sheet = sheet, first_active_row = active_row, first_active_col = active_col)
 
-# raw numbers written; na = NULL -> blank cells (not #N/A); apply_cell_style = FALSE -> no
-# openxlsx2 auto-styling (tab_xl controls every style itself).
-xlb_write_data <- function(wb, sheet, x, row, col)
-  wb$add_data(sheet = sheet, x = x, start_row = row, start_col = col,
-              col_names = TRUE, na = NULL, apply_cell_style = FALSE)
+# openxlsx2 renamed the NA arg across versions (`na.strings` -> `na_strings` -> `na`); resolve the
+# EXACT formal from the method -- a literal `na = NULL` partial-matches several formals and errors.
+xlb_na_argname <- function(wb) {
+  fmls <- tryCatch(names(formals(wb$add_data)), error = function(e) character())
+  cand <- c("na", "na_strings", "na.strings")
+  hit  <- cand[cand %in% fmls]
+  if (length(hit)) hit[[1]] else "na_strings"
+}
+
+# `list(NULL)` (single-bracket assign) keeps a NULL-VALUED element in the arg list, so the resolved
+# NA arg reaches the call as NULL (blank cells); `[[<-` with NULL would drop it entirely.
+xlb_add_data <- function(wb, ...) {
+  args <- list(..., apply_cell_style = FALSE)
+  args[xlb_na_argname(wb)] <- list(NULL)
+  do.call(wb$add_data, args)
+}
+
+# apply_cell_style = FALSE: tab_xl controls every style itself, never openxlsx2's auto-styling.
+xlb_write_data <- function(wb, sheet, x, row, col, col_names = TRUE)
+  xlb_add_data(wb, sheet = sheet, x = x, start_row = row, start_col = col, col_names = col_names)
 
 xlb_write_cell <- function(wb, sheet, dims, x)
-  wb$add_data(sheet = sheet, x = x, dims = dims,
-              col_names = FALSE, na = NULL, apply_cell_style = FALSE)
+  xlb_add_data(wb, sheet = sheet, x = x, dims = dims, col_names = FALSE)
 
-# Phase 13b: write ONE rich-text cell (openxlsx2::fmt_txt) from a run list -- each run
-# list(text, color = <hex|NA>, bold). Coloured break-words carry their palette hex + bold; the rest
-# stays plain black (the sheet subtext font). Rich text keeps the per-run colour INSIDE the string,
-# bypassing the one-font-per-cell xf model, so the colour legend is readable in Excel. `size`/`font`
-# match the surrounding subtext cell so the rich cell doesn't jump size.
+# one rich-text cell from a run list (text/color/bold/italic/underline each): colour lives INSIDE
+# the string, bypassing the one-font-per-cell xf model, so several coloured break-words share a cell.
 xlb_write_richtext <- function(wb, sheet, dims, runs, size = NULL, font = NULL) {
   rt <- NULL
   for (r in runs) {
     if (!nzchar(r$text)) next
     col   <- if (!is.na(r$color)) xl_color(r$color) else NULL
+    # underline is "" / "single" / "double", written straight into <u val=...>.
+    und   <- if (is.character(r$underline)) (if (nzchar(r$underline)) r$underline else FALSE)
+             else isTRUE(r$underline)
     piece <- openxlsx2::fmt_txt(r$text, color = col, bold = isTRUE(r$bold),
+                                italic = isTRUE(r$italic), underline = und,
                                 size = size, font = font)
     rt <- if (is.null(rt)) piece else rt + piece
   }
   if (is.null(rt)) return(invisible(wb))
-  wb$add_data(sheet = sheet, x = rt, dims = dims,
-              col_names = FALSE, na = NULL, apply_cell_style = FALSE)
+  xlb_add_data(wb, sheet = sheet, x = rt, dims = dims, col_names = FALSE)
   invisible(wb)
+}
+
+# splits a multi-area dims at the call boundary -- see header for why (older openxlsx2 rejects commas).
+xlb_dims_each <- function(dims, f) {
+  if (length(dims) != 1L || is.na(dims) || !nzchar(dims)) return(invisible(NULL))
+  for (part in strsplit(dims, ",", fixed = TRUE)[[1]]) if (nzchar(part)) f(part)
+  invisible(NULL)
 }
 
 # numFmt is applied as a grouped merging pass (it merges onto the precomposed xf, cross-aspect).
 xlb_numfmt <- function(wb, sheet, dims, code)
-  wb$add_numfmt(sheet = sheet, dims = dims, numfmt = code)
+  xlb_dims_each(dims, function(d) wb$add_numfmt(sheet = sheet, dims = d, numfmt = code))
 
-# Phase 13c-iii: merge a horizontal cell range (the col_var spanning-name header).
+# apply a precomposed style id over a (possibly multi-area) dims -- one set_cell_style per range.
+xlb_set_cell_style <- function(wb, sheet, dims, style)
+  xlb_dims_each(dims, function(d) wb$set_cell_style(sheet = sheet, dims = d, style = style))
+
+# a picture anchored at one cell, sized in inches (openxlsx2 places it over the grid, not in a cell)
+xlb_add_image <- function(wb, sheet, dims, file, width, height)
+  wb$add_image(sheet = sheet, dims = dims, file = file, width = width, height = height,
+               units = "in")
+
 xlb_merge <- function(wb, sheet, dims)
   wb$merge_cells(sheet = sheet, dims = dims)
 

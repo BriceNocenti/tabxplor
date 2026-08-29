@@ -19,3 +19,4 @@ A fmt vector
 \description{
 Vec_math method for class fmt
 }
+\keyword{internal}

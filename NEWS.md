@@ -1,453 +1,167 @@
-# tabxplor (development version)
 
-# tabxplor 1.4.0 (in development)
+# tabxplor 2.0.0
 
 ## New features
-* **Redesigned colours & breaks API.** The `color` argument now has a simple grammar: **position
-  picks the visual channel** (1st value -> text, 2nd -> background) and **names pick the column type**
-  (`pct` / `mean`). So `color = c("diff", "ratio")` colours the text by the difference and the
-  background by the ratio; `color = c(pct = "diff", mean = "ratio")` colours factors by difference and
-  numeric means by ratio; `color = list(pct = c("diff", "ratio"), mean = "ratio")` combines both.
-  `color = TRUE` is the smart per-type default. The significance policy `"color_all_signif"` is
-  renamed **`"guaranteed_effect"`**. Colour thresholds accept **signed / reciprocal literals** (a
-  one-sided vector auto-mirrors; a two-sided one is used as-is) and a `list(over =, under =)` escape
-  hatch for asymmetric scales -- e.g. `pct_ratio = list(over = 2)` is the "only x2" rule (the new
-  factor default). A new per-table `color_breaks =` argument on `tab()` overrides the global thresholds
-  for one table. New OKLCH light/dark, text/background palettes are the default (customise with the new
-  `set_color_palette()`); console output is 24-bit truecolor (falling back to an 8-bit palette only in
-  the RStudio console). `set_color_style()` (and its `custom_palette`/`html_24_bit` machinery) is
-  replaced by `set_color_palette()`; the export functions keep an inert `html_24_bit` argument.
-* **Meaningful colour legends.** The colour legend below each table is now a readable sentence -- e.g.
-  *"Shades of blue: cells >= the Total row +5; +10; +20; +30 points. ... Grey: not significantly
-  different from the Total row (Newcombe score interval, 95% confidence)."* -- with each break-word
-  shown in its own colour. It names the reference (row/column Total or the reference category), the
-  thresholds, the significance policy and the exact confidence-interval method and level actually used.
-  A **French translation** is included and selected automatically from the R/OS locale (English
-  otherwise); a new `lang` argument (`"en"` / `"fr"`) on `tab_kable()` / `tab_md()` / `tab_xl()` /
-  `tab_plot()` / `tab_export()` forces the language. Excel legends are now colour-coded (rich text),
-  `tab_md()` gained a colour legend, and regression tables (`tab_reg()`) get correct wording
-  (β with SD thresholds, IRR vs OR).
-* **Exports & display polish.** HTML, Excel and Markdown exports now show the **column-variable name**
-  in a spanning header above its level columns (contiguous same-variable columns merged into one cell),
-  and the level names drop the disambiguating `_<variable>` suffix (e.g. `Other_race` -> `Other`). A
-  multi-table result (from `tab(output_list = TRUE)`, several row variables with tab-variables, or
-  `tab_many()`) is now a **`tabxplor_tabs`** list that prints like a single table (and `list |>
-  tab_kable()` opens in the Viewer) while still behaving like a plain list. Composite displays such as
-  `"{pct} (n={n})"` are padded so the numbers line up, and only the first field stays bold in total /
-  reference rows. Ratios now print with a multiply / divide sign (`x2`, `/2`); a colour = c("diff",
-  "ratio") table's tooltip shows the ratio correctly. **Excel**: `ci = "cell"` intervals and odds
-  ratios (with the `1/x` reciprocal) export as readable text; a new `tab_xl(or_numeric = TRUE)` keeps
-  odds ratios as numbers; differences and contributions get an explicit `+`/`-` sign, ratios a leading
-  `x`; each numeric variable exports a mean column plus a separate `<var>_sd` column.
-* New `tab_reg()` --- **regression tables** as color-coded `tabxplor` tables, over one engine with a
-  `family` argument: linear coefficients (`"gaussian"`), odds ratios (`"binomial"`, logistic) or
-  incidence-rate ratios (`"poisson"`), one row per predictor level grouped by predictor. Pass a
-  character vector of `predictors` (one model; `dependent` may itself be a vector -> one column per
-  outcome), or a **named list** of predictor sets (one column per model, for comparing
-  specifications). Each cell carries its 95% confidence interval and p-value, so the table prints
-  with significance stars, greys out non-significant effects, and exports to Excel / HTML / Markdown
-  like any other table. Effect measures are exponentiated per family by default
-  (`exponentiate = "nongaussian"`); odds/rate ratios below 1 show as `1/x`; linear coefficients are
-  coloured by their standardized effect size. Survey weights (`wt =`, via `survey::svyglm`),
-  per-variable reference levels (`reference = c(var = "level")`), and Wald vs profile-likelihood
-  intervals (`method =`) are supported. `broom` and `survey` (and `MASS` for `method = "profile"`)
-  are optional dependencies. A summed-score outcome (a count of "yes" out of a fixed number of items)
-  is fit as a grouped binomial by passing `trials =` (the number of items). Power users can pass a
-  model **formula** as `dependent` (e.g. `tab_reg(data, y ~ x1 + poly(x2, 2) + x1:x3)`) instead of a
-  `predictors` vector.
-* `tab_reg()` now also handles **3+ level categorical outcomes**. A nominal (unordered) outcome is fit
-  as one multinomial logit (`family = "multinomial"`, `nnet::multinom`), giving one odds-ratio column
-  per outcome category versus the reference (`reference = c(outcome = "level")` sets the baseline
-  category). An ordered outcome is fit as a proportional-odds cumulative logit (`family = "ordinal"`,
-  `MASS::polr`), giving one cumulative-odds-ratio column; the parallel-lines assumption is tested with
-  the Brant test (install the `brant` package) and a warning is issued if it is violated. `family =
-  "auto"` now detects these from the outcome type. `nnet` and `brant` are optional dependencies.
-* `tab_reg()` gains an `effect = "ame"` mode: instead of the model coefficient, each cell shows the
-  **average marginal effect** with the adjusted **predicted probability** in parentheses (e.g.
-  `-8%*** (16%)`) --- a probability-scale, cross-model-comparable interpretation. It works for
-  logistic / multinomial / ordinal (percentage points, one column per outcome category), poisson
-  (expected-count change) and gaussian (the coefficient) outcomes, and honours survey weights. Needs
-  the `marginaleffects` package (a new optional dependency).
-* `tab_reg()` gains an `at = "reference"` option (needs `marginaleffects`): evaluate at a **reference
-  profile** (every other predictor held at its reference level / mean) instead of averaging. With
-  `effect = "ame"` this gives the marginal effect *at reference* (the column reads "MER"); with a
-  **multinomial** `effect = "coefficient"` it gives the odds ratio of each outcome category *versus the
-  rest* at that profile (one column per category).
-* `tab_logit()` and `multi_logit()` are now thin wrappers of `tab_reg()` for the binomial family,
-  keeping the curated binary-outcome interface (`tab_logit(data, dependent, predictors)` for one
-  logit per dependent; `multi_logit(data, dependent, models = list(...))` for model comparison).
-* `tab_reg()` tables now show a **model-summary footer** (below the coefficients): the number of
-  observations, a likelihood-ratio test versus the null model, McFadden's pseudo-R square and AIC/BIC
-  for logistic / poisson / multinomial / ordinal models; the R square, adjusted R square, overall
-  F-test and residual SD for linear models; and a Pearson-dispersion flag (with a warning) for poisson
-  and grouped-binomial models. The `stats =` argument picks and orders the statistics, or hides the
-  footer (`stats = FALSE`). Weighted models show a survey-appropriate reduced set.
-* `tab_reg()` / `multi_logit()` gain a `compare =` argument for **model comparison**: `"baseline"`
-  tests each model against a chosen `baseline` column, `"sequential"` against the previous model
-  (likelihood-ratio test, F for linear models; an AIC difference with a message when the models are
-  not nested or fit on different numbers of observations).
-* `tab_reg()` (and `tab_logit()` / `multi_logit()`) gain full **survey-design** support: pass a weight
-  column with `wt =` plus optional `ids =` / `strata =` / `fpc =` / `nest =` for clustered / stratified
-  designs, or pass a **prebuilt `survey::svydesign()` / `svrepdesign()` object as `data`**. Estimation
-  is design-based (`survey::svyglm`), so raw population weights need no rescaling and the point estimates
-  match the weighted crosstabs. Weighted models show a survey-appropriate footer (design-based Wald test
-  vs the null, Nagelkerke pseudo-R square, Rao-Scott AIC) and support model comparison (a design-based
-  Wald test). Survey-weighted **ordinal** (`survey::svyolr`) and **multinomial** (needs the new optional
-  `svyVGAM` package) outcomes are now supported too.
-* `tab_reg()` gains a `split_var =` argument --- the regression analogue of `tab()`'s `tab_vars`: the
-  same model is fitted **within each level** of a grouping variable and the per-group tables are stacked.
-  Use `tab_spread()` on the grouping variable to place the groups side by side for an across-group
-  comparison.
-* `tab_reg()` gains `multiplicator =` (a named vector like `c(age = 10)` showing a continuous predictor's
-  effect **per k units**, e.g. the odds ratio per decade) and `empirical_OR =` (for a binary logistic
-  outcome, adds the **crude percentage and crude odds ratio** beside the model odds ratio).
-* `tab_reg()` (and `tab_logit()` / `multi_logit()`) gain an `estimate_display =` argument controlling
-  what each effect cell shows beside the estimate: `"ci"` adds a visible confidence-interval bracket
-  (`2.34 [1.20; 4.50]`); for logistic models `"prob"` folds the adjusted predicted probability into the
-  odds-ratio cell (`2.34 (16%)`) and `"ame"` folds the average marginal effect (`2.34 (+8%)`). The
-  probability folds need the `marginaleffects` package.
-* New `or_plot()` --- a finalfit-style **odds-ratio forest plot** of a `tab_logit()` / `tab_reg()` table
-  (log-scale point-and-interval plot beside a table of the estimates), and `lm_plots()` --- a `ggplot2`
-  2x2 **diagnostic panel** (Residuals vs Fitted, Normal Q-Q, Scale-Location, Residuals vs Leverage) for a
-  fitted `lm` / `glm`. Both need `ggplot2` and `gridExtra` (optional dependencies).
-* Regression tables built with `split_var =` now also show their **per-group model-summary footer** when
-  exported (kable / Markdown / Excel), one block per group (previously only the console showed it).
-* Excel export now keeps the **in-cell test label** on p-value cells (e.g. a chi-square p-value shows as
-  `2.9% (Chi2)`), folded into the cell number format, instead of dropping the label.
-* `tab()` crosstab p-value rows now label each cell with the test it ran (e.g. `2.9% (Chi2)`,
-  `1.4% (F, Welch)`), so a table mixing categorical and numeric columns is self-documenting.
-* `tab()` odds-ratio columns (and any odds ratio) now print values below 1 as `1/x` (e.g. `1/4`
-  instead of `0.25`), so they compare symmetrically with odds ratios above 1.
-* `tab_md()` now exports **colored** markdown. A table built with colors (e.g. `tab(..., color = "diff")`)
-  renders each cell as a short pandoc bracketed span `[value]{.class}`, so it shows up colored in Quarto,
-  R Markdown and pandoc. The class names are readable and describe the color break --- `p5`/`p10`/`p20`
-  (over-represented), `m5`/... (under), `x2`/`x1_5` and `d2`/... (ratios), `sd0_2`/... (standardized mean
-  differences); the background channel uses the same names prefixed `bg`. Numbers still line up in a
-  monospace editor. `color = FALSE` gives plain monochrome markdown, and an uncolored table is unchanged.
-* New `tab_md_css()` --- generate the CSS that styles those spans, matching the exact color breaks and
-  palette of your table (with a `prefers-color-scheme: dark` block). Use `tab_md(css = TRUE)` to embed it
-  inline, or include the stylesheet in your document.
-* `tab_md()` gains a `caption` argument (rendered as a pandoc table caption) and, by default,
-  `wrap_rows = NULL` no longer truncates long row labels (pass a number to cap them).
-* `tab_kable()` gains a faster, dependency-free HTML render engine. The new `engine` argument
-  (`"kableExtra"`, the default, or `"html"`) selects it; `engine = "html"` produces a self-contained,
-  inline-CSS `<table>` that needs no external stylesheet --- about 3x faster and much lighter than the
-  kableExtra output, and used by the jamovi live display. Set a session default with
-  `options(tabxplor.tab_kable_engine = "html")`.
-* `tab_kable()` now renders a **list of non-mergeable tables** (different column variables, or tables
-  with sub-tables) one after another, instead of stopping with an error.
-* `tab_kable()` is faster overall: the hover tooltips are computed only for the fields a column actually
-  has (roughly a 30% speed-up on colored tables), and empty cells now render as blank in every context
-  (knitr, R Markdown, ...) instead of occasionally showing "NA".
-* New `tab_counts()` --- build a full color-coded cross-table from **already-aggregated counts**
-  instead of microdata. It accepts long tidy counts (e.g. a `dplyr::count()` result), a wide
-  `data.frame` of counts (with `cols` / `col_name`), a `table` / `xtabs` / `matrix` object, and
-  frequencies + base N (`input = "pct"`, `base`). All the usual calculations (percentages,
-  differences, confidence intervals, chi-squared, colors, totals) are done on the counts, and the
-  result is identical to the table `tab()` would build from the underlying microdata. For weighted
-  data, give the real unweighted count in `counts` and the weighted count in `wt_counts` (estimates
-  are weighted, inference uses the real unweighted sample size). Input whose counts are not whole
-  numbers (frequency-only / weighted-only) still shows percentages and colors, but confidence
-  intervals and chi-squared are disabled with a message.
-* New `parallel` argument in `tab()` / `tab_many()` for the "build many tables at once" workflow.
-  With several `row_vars`, `parallel = TRUE` (or an integer worker count) builds the per-`row_var`
-  tables on a persistent pool of background R processes, byte-identical to the sequential result.
-  It is off by default and opt-in (set a session default with `options(tabxplor.parallel =)`); it
-  pays off for many tables on a small-to-medium survey (roughly 10k--60k rows) and is a loss for a
-  handful of tables or multi-million-row data. It needs the suggested **mirai** package; release the
-  worker pool with the new `tab_parallel_stop()`.
-* New `tab_transpose()` --- flip a table so its rows become columns and its columns become rows. The
-  main use is the **column-percentage inversion** workflow: to color a `pct = "col"` table with
-  several row variables (which the coloring machinery cannot do directly), build it the other way
-  (swap the variables and use `pct = "row"`), then `tab_transpose()` gives the column-percentage
-  layout for export. Percentages, differences, confidence intervals and colors ride along; the total
-  row/column and reference row/column are swapped, and the whole-table test is re-keyed. It handles a
-  single table (one row variable, one column variable, at most one total row/column).
-* `tab_xl()` Excel export was rewritten on the actively-maintained **openxlsx2** engine (replacing
-  openxlsx), and now takes a single table or a list. It gains `transpose = TRUE` (transpose each table
-  before export) and an experimental `conditional_format =` (reserved; currently a no-op with a
-  message). Significance stars now show in the exported cells (folded into the Excel number format, so
-  the cell stays a real number). Colors and number styles are applied over the fewest possible cell
-  ranges. The deprecated `n_min` / `hide_near_zero` arguments are still accepted but do nothing (use
-  `tab(n_min = )`).
-* New `tab_export()` --- one entry point for every export format:
-  `tab_export(x, format = c("kable", "md", "xl", "plot"))` dispatches to `tab_kable()`, `tab_md()`,
-  `tab_xl()` or `tab_plot()` (pass a `path` to write the file). The four exporters now share the same
-  display arguments and defaults: `color` (set `FALSE` for a monochrome table), `color_legend`,
-  `transpose` (transpose the table at export) and `caption` / `theme` / `color_type` are available
-  consistently across all of them. `tab_xl()` is now **theme-aware** (`theme = "dark"`), and
-  `tab_plot()` renders a non-mergeable list as a **list of plots** (like the other exporters) instead
-  of stopping with an error.
-* New `display` argument in `tab()` for an opt-in **composite display** showing several fields per cell,
-  written as a `{}` template listing the fields to combine: `display = "{pct} (n={n})"` prints each
-  percentage with its count (e.g. `76% (n=13)`), `"{n} ({pct})"` the reverse, `"{diff} [{ci}]"` a
-  difference with its interval. Valid fields: `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`,
-  `ctr`, `var` (the first is the primary). It is a display overlay for text output (the console,
-  `tab_kable()`, `tab_md()`) -- colors, differences and the underlying fields are unchanged, and Excel
-  keeps the primary field.
-* The exporters (`tab_kable()`, `tab_md()`, `tab_plot()`, `tab_xl()`) and the print methods no longer
-  crash on a plain `data.frame` or a table with no factor / no formatted columns: they render the
-  plain table with a short message explaining that tabxplor formatting was skipped. Variable-role
-  detection for rendering is now position-independent (a factor moved after the value columns is no
-  longer mis-read).
-* `tab_md()` now renders a **list of tables one after another** when they cannot be merged --- e.g.
-  a `tab()` with several `row_vars` and a `tab_vars` (which returns a list of subtabled tables), or a
-  list of tables with different `col_vars`. Each table keeps its own `tab_vars` sub-tables. A list of
-  tables sharing the same `col_vars` (and no `tab_vars`) is still merged into one, as before. (This
-  replaces the previous "same col_vars / no tab_vars" errors for `tab_md()`.)
-* Redesigned, faster colors. The `color` argument now separates **what** is measured from **how**
-  significance is shown. `color` accepts `TRUE` (a smart per-column-type default: percentage-point
-  difference on the text + a "×2" relative-risk highlight on the background for factors, mean ratio
-  for numerics), a single measure (`"diff"`, `"ratio"`, `"contrib"`, `"or"`), or a two-channel
-  `c("diff", "ratio")` / `c(text = "diff", background = "ratio")`. A separate `color_signif`
-  argument (`"ignore"` / `"grey_non_signif"` / `"color_all_signif"`) replaces the old
-  `"diff_ci"` / `"after_ci"` modes (which still work). Numeric `color = "diff"` now colors the
-  standardized (SD-scaled) difference; the old ratio colouring is `color = "ratio"`. Color breaks
-  are set with a named list `set_color_breaks(list(pct_diff =, pct_ratio =, mean_diff =,
-  mean_ratio =, contrib =))` (the old `pct_breaks` / `mean_breaks` / `contrib_breaks` arguments are
-  soft-deprecated). The colour engine was rewritten around `findInterval`, making console printing
-  and `tab_kable()` dramatically faster on tall tables (the old per-cell resolver was O(n²)). All
-  exporters (`tab_kable()`, `tab_plot()`, `tab_xl()`) now render both colour channels at once (text
-  colour + background fill), and the colour legend was reworked to read the canonical break scales
-  directly, so numeric `diff` legends show the SD-based thresholds actually used (they previously
-  showed a ratio scale).
-* Significance stars for `ci = "diff"`. Each cell now shows `*` / `**` / `***` (p < 0.10 / 0.05 /
-  0.01, customisable via `options("tabxplor.signif_levels")` / `"tabxplor.signif_labels")`) for the
-  difference from its reference, in the console, `tab_md()` and `tab_kable()`. Significance is read
-  from the same confidence interval that is displayed, so the stars and the `[inf; sup]` bracket can
-  never disagree. Controlled by the new `stars` argument (default `TRUE`; `NULL` uses
-  `options("tabxplor.stars")`). `ci = "cell"` intervals are descriptive and carry no stars.
-* Confidence intervals are now correct **asymmetric** intervals. Percentage cell intervals use the
-  Wilson score interval and percentage-difference intervals now default to the **Newcombe** method
-  (was Agresti-Caffo); mean-difference intervals use the Welch t interval when stars are on. The
-  printed `[inf; sup]` bracket reads the real lower and upper bounds (previously a symmetric bracket
-  reconstructed from a single half-width, which mis-drew Wilson/Newcombe intervals). `ci = "cell"`
-  also draws an interval on the total column now.
-* New `method_cell` / `method_diff` arguments on `tab()` (already on `tab_many()`/`tab_ci()`):
-  `method_cell` accepts `"wilson"` (default) or `"wald"` (the normal approximation, commonly taught);
-  `method_diff` accepts `"newcombe"` (default), `"ac"` or `"wald"`.
-* New `n_min` argument on `tab()` --- hide small-base rows/columns to read a table without the noise
-  of unreliable cells. A row is dropped only when its **largest** base across the column variables is
-  below `n_min`; surviving cells whose own base is below `n_min` are blanked; under `pct = "col"` weak
-  columns are dropped. It is a pure display filter: totals, the added-`n` row/column and the p-value
-  line are always kept, and nothing (percentages, tests, intervals) is recomputed.
-* Optional Kish effective sample size for weighted numeric (mean) confidence intervals /
-  significance, via `options("tabxplor.kish_neff" = TRUE)`. Off by default (weighted estimate with
-  the unweighted count, as before).
-* **Mean (numeric) columns now get a whole-table significance test** — a one-way ANOVA, the
-  counterpart of the Chi-squared test for factor columns. Both **Welch's F** (default, robust to
-  unequal group variances) and the classic pooled F are computed; `options("tabxplor.anova")`
-  (`"welch"` / `"classic"`) chooses which p-value is shown. A p-value row now appears under mean
-  columns as it already did under factor columns.
-* **`tab()` is now the unified entry point** and accepts **several** `row_vars` and `col_vars`
-  (e.g. `tab(data, c(race, relig), marital)`). With several `row_vars` the mirror tables are
-  **merged into one** by default; the new `output_list = TRUE` returns a list of one table per
-  `row_var` instead. `tab_many()` still works and keeps its historical list return (it is now a
-  soft-deprecated alias of `tab()`).
-* **`levels`** in `tab()` (`"all"` / `"first"` / `"auto"`, per `col_var`) --- controls which levels
-  of each column variable are kept, restoring the compact "keep only the first level of each column
-  variable" summary tables. Replaces the (now soft-deprecated) `sup_cols` argument.
-* **`na` gains `"common_base"` and `"drop_all"`** in `tab()`. `"common_base"` fixes a single
-  population (observations non-missing on the `row_vars` and the *first* `col_vars`, plus
-  `tab_vars`) shared by every column, while secondary `col_vars` keep their own `NA`'s as a level
-  within it --- reproducing the historical `tab()` behaviour. `"drop_all"` drops every observation
-  missing on the `row_vars`, *any* `col_vars` or a `tab_vars` (all columns then share one base).
-  `na = "drop"` now correctly drops each column's own `NA` (so bases can differ between columns).
-  Available from microdata only.
-* **`spread_vars`** in `tab()` --- pivot a subset of `tab_vars` into columns (via
-  `tab_spread()`), with optional `names_prefix` / `names_sort`.
-* **Per-column-variable reference under `pct = "col"`.** A `ref` vector *named by column variable*
-  (e.g. `tab(data, x, c(race, relig), pct = "col", ref = c(race = "Black", relig = "None"))`) now
-  gives each column variable its own reference column, instead of a single reference shared by all.
-  A chosen level is matched by exact equality, so labels containing regular-expression characters
-  (e.g. `"$25000 or more"`) work as references.
 
-## Internal
-* Examples that need a `Suggests` package (`tab_reg()`, `tab_logit()`, `multi_logit()` → **broom**,
-  plus **marginaleffects** / **nnet** / **MASS** for the AME, multinomial and ordinal cases;
-  `tab_xl()` → **openxlsx2**; `tab_plot()` → **ggpubr**/**gtable**/**ggplot2**) are now wrapped in
-  `requireNamespace()`, so they skip instead of failing where those packages are absent. The three
-  slow `tab_reg()` examples moved into `\donttest{}` (they are still checked, just not in the timed
-  pass): `tab_reg` examples went from ~22 s to ~1.3 s.
-* Fixed a spurious deprecation warning: using the current colour API on a numeric column — e.g.
-  `tab(df, x, num_var, color = "ratio", color_signif = "grey_non_signif")` — internally builds the
-  legacy string `"diff_ci"` and used to re-check it against the deprecation gate, blaming the user for
-  a value the pipeline itself wrote. Invisible in normal use, but it surfaced in the test suite of any
-  package calling `tab()`. The genuine deprecation of `color = "diff_ci"`/`"after_ci"`/`"ci"` still
-  fires for real user calls.
-* `tab_xl()` no longer triggers openxlsx2's "removing illegal characters found in sheet name" warning:
-  sheet titles are sanitised with the same substitution openxlsx2 would apply (each of `\ / ? * : [ ]`
-  becomes a space), so the workbook is unchanged. Regression tables hit this routinely, since
-  `tab_reg()` names odds-ratio columns `"<level> vs <reference>: OR"`.
-* Silenced a tidyselect 1.1.0 deprecation ("using an external vector in selections") on the jamovi
-  cache's numeric-aggregate path, and one raised by `dplyr::rename_with()` on a grouped tabxplor table
-  (`NextMethod()` forwarded the column selection as a bare symbol).
-* `VGAM` and `pkgload` are now declared in `Suggests` (they were used but undeclared), and survey-weighted
-  multinomial models check for `VGAM` explicitly alongside `svyVGAM`.
-* The jamovi module (`jmvtab`) gained several user-facing features: a **reference-level picker** (choose the comparison level of each variable from a compact Material list, with "Total" as the visible default; it covers the row variables under row percentages and the column variables under column percentages, follows the level-reordering panel, and shows a second-reference section only when odds ratios are requested); **export to Excel, HTML or Markdown** (pick a format, the button label follows, and the file is written to a typed path defaulting to your Documents folder, with a confirmation notice); an **`n_min`** control to hide small-base rows/columns; a **Wald** option for the cell confidence interval; and a clearer **statistical-test** toggle (Chi-square for categorical columns, ANOVA F for numeric ones) with a Welch-vs-classic ANOVA choice.
-* The jamovi module (`jmvtab`) UI is now consistent with what the analysis actually computes: options that have no effect given the others are greyed out (e.g. the total-table and comparison-table choices when there are no table variables; the significance-stars and difference-CI method when cell intervals are chosen; the significance policy when colors are off; the count/percentage extras when there are no percentages), always keeping their value so it returns when they become relevant again. The number-of-digits control is now a dropdown, and the legend/path text boxes fill their row. The significance policy and the confidence interval are no longer wired to fight each other — choosing "grey non-significant" simply colors accordingly (the needed interval is computed automatically), and never silently changes the CI setting.
-* The jamovi module (`jmvtab`) now uses a live multi-tier cache: after the first table, changing an option (percentages, reference, colors, display, adding a variable) reuses the cached counts and chi-squared/ANOVA instead of recomputing everything, so results update near-instantly on normal survey data. The Jamovi HTML render also drops the per-cell hover tooltips (inert in Jamovi and roughly half the render time). The module drives the same `tab()` pipeline with the cache injected (no separate code path), so its tables stay identical to `tab()`. Beyond the counts/tests, changing only the **display or colours** (number of digits, the displayed value, the colour measure `"diff"`/`"ratio"`, or the `color_signif` significance policy) now reuses the already-built table and only re-paints it, skipping the whole cell rebuild — these toggles are effectively instant even on a big table-of-tables (e.g. a colour change on a 9-table grid dropped from ~1.1 s to ~0.04–0.19 s). Building `tab()` / `tab_num()` tables is also a little faster overall (the per-cell format assembly hoists its constant work out of the inner loop).
-* Rewrote the Chi-squared / ANOVA computation onto a fast, vectorised engine (`R/tab-agg.R`:
-  `agg_chi2()`, `agg_anova()`): every (sub)table is tested in a single grouped `data.table` pass
-  instead of a per-table `stats::chisq.test()` loop, making `tab_chi2()` about 2.5× faster (it was
-  the single biggest cost of `tab()`/`tab_many()`). Chi-squared results match `chisq.test()` exactly
-  (including the Yates correction on 2×2 tables); Welch's / classic F match `stats::oneway.test()`.
-  Also fixes `tab_chi2()` on a table that already carries `add_n` columns/rows.
-* The table-level test results moved from the `chi2` attribute to a tidy **`test`** attribute (one row
-  per sub-table × column × test, holding Chi2 and ANOVA F together). This is an internal contract:
-  `attr(x, "chi2")` is renamed, but the `get_chi2()` accessor still works (it reads the new `test`
-  attribute), and the low-level `new_tab(chi2 = )` argument still works too (both are soft-deprecated
-  aliases). Rebuild any table saved from an older version rather than relying on the raw attribute.
-* Rewrote confidence-interval computation onto a fast, vectorised, closed-form engine
-  (`R/tab-agg.R`), replacing the per-cell `DescTools` calls in `tab_ci()`. `DescTools` moved from
-  Imports to Suggests (used only for test parity). `tab_ci()` and `tab_num()` now share the engine.
-* Started the 1.4.0 aggregate-core (Phase 2). `tab_num()` now computes mean tables from **moment
-  sums** (`n`, weighted `n`, `Sigma wx`, `Sigma wx^2`) in a single grouped pass, deriving the mean
-  and variance afterwards (`R/tab-agg.R`), instead of the old per-group `weighted.var()` helper that
-  recomputed the weighted mean on every call (a double scan). The total rows and total table are
-  now roll-ups of that additive aggregate rather than two additional full-data scans. Output is
-  unchanged (variances match to floating-point tolerance). The unweighted (sample, n-1) vs weighted
-  (ML) variance definitions are preserved for now; unifying them is a later step.
-* Each percentage cell now stores its own base: the `tot_n` field holds the cell's unweighted
-  percentage base (its row / column / grand total, depending on `pct`; `NA` for count tables and
-  mean cells), and a new `get_tot_wn()` accessor (also `$tot_wn`) recovers the weighted base as
-  `wn / pct`. This makes a built table self-sufficient for computing exact statistics without
-  re-scanning it for a total column. Table output is unchanged.
-* Reshaped the internal `tabxplor_fmt` record from 15 to 18 per-cell fields (preparation for the
-  1.4.0 aggregate-core): added `ci_inf`, `ci_sup`, `pvalue`, `tot_n`; renamed the never-used `rr`
-  field to `ratio`; the confidence interval is now stored as bounds instead of a dedicated `ci`
-  field. Table output is unchanged. Retro-compatibility for user code that reads fmt fields: `$ci`
-  and `get_ci()` still return the CI half-width (recomputed from the bounds) and the `fmt(ci=)`
-  argument still works; `$rr` is renamed `$ratio`; the low-level `vctrs::field(x, "ci")` (reading or
-  setting the raw `ci` field) no longer works.
-* Added a retro-compatibility test safety net before internal refactors: a `tabxplor_fmt`
-  field/attribute contract test, a golden characterization harness for `tab()`/`tab_many()`
-  output, and format-vs-Excel export-parity tests.
-* Added an informational (never-failing) small-benchmark test that prints `tab()` pipeline
-  timings, plus a standalone 8M-row performance harness (`dev/benchmarks/run_bench.R`).
-* Experimental opt-in fast path for `tab_many()` on very large data: one shared finest-grain
-  aggregate reused across all factor tables instead of one scan per `row_var` × `col_var`. Off by
-  default (byte-identical output); enable with `options(tabxplor.fuse_min_rows = <n_rows>)`. Modest
-  gain (~1.05–1.30× at 15M rows, more at larger N / sparser data).
+* **`tab()` is the unified entry point.** It takes several `row_vars` and `col_vars`, merged into one
+  table or returned as a list with `output_list = TRUE`, and composes with `tab_vars`;
+  `col_vars = a*b` crosses two column variables. `tab_many()` is a soft-deprecated alias.
+* **`tab_reg()` — colour-coded regression tables** (linear, logistic, Poisson, multinomial, ordinal),
+  on weighted and survey data, with model comparison, marginal effects and every export format. Its
+  estimand is a cascade, `family` → `link` → `measure` → `effect`. See `vignette("tabxplor-reg")`.
+  - **Every modelled effect sits beside its observed (crude) counterpart** — the same quantity fitted
+  with one predictor instead of all of them — so what adjustment changed is read across the table.
+  `color = "adjustment"` colours that gap and tests it; `empirical = FALSE` turns it off.
+  - **Every regression table checks itself**: linearity, proportional odds, dispersion, influence and
+  collinearity, one footer row per model. `shape =` is the cure — fit a continuous predictor as
+  quantile groups, a curve, or a log / sqrt transformation.
+  - **jamovi**: a new "Regression models" analysis (`jmvtabreg`); Crosstables gains a reference-level
+  picker, level merging, export, tooltips and the new options, each named after its R argument.
+* **`tab_counts()`** builds a full colour-coded table from already-aggregated counts instead of
+  microdata. **`forest_plot()`** draws any tabxplor table as estimates with their intervals, stars and
+  own cell colours, returning a modifiable `ggplot`; **`reg_check_plots()`** draws the model checks.
+* **Weights and survey designs.** Pass a `survey::svydesign()` as `data` and strata, clusters, `fpc`
+  and calibration reach every interval, test and colour; `options(tabxplor.design_effect = TRUE)` does
+  the same, exactly, for a plain weight column. A weighted table's footer states its basis.
+* **Correct confidence intervals**, asymmetric where they should be (Wilson, Newcombe, Welch, Katz),
+  chosen with one named vector `ci_method = c(cell =, diff =, mean_diff =, mean_ratio =)`. `ci` says
+  only *where* the interval sits; significance stars are opt-in (`stars =`) and read that interval.
+* **Whole-table tests**: an effect size (Cramér's V, phi, eta²), Fisher's exact on a sparse table, a
+  one-way ANOVA for mean columns, and Haberman's adjusted residual behind `color = "contrib"`.
+* **Redesigned colour API.** Position picks the visual channel (1st value → text, 2nd → background),
+  `color = TRUE` is the smart per-column-type default, and every ladder is the same ladder written in
+  another measure, so a shade means the same deviation whichever measure a table is read on. OKLCH
+  palettes, `set_color_palette()`, `color_breaks`, a `theme = "auto"` dark mode, and black-and-white
+  publication palettes (`theme = "print_ready"`) saying it all typographically.
+* **One display grammar for both producers.** Named layouts (`"est"`, `"est_ci"`, `"est_base"`, …)
+  built on `{}` tokens — `display = "{pct} (n={n})"` — where `{est}` is whatever the column estimates
+  and `{base}` the level it sits on. It is post-hoc: `set_display()` on a finished table gives the
+  same table as asking at build time. Every cell of a percentage table now carries its odds ratio.
+* **`shape =` decides how a number enters a table**: quantile groups, bands at the mean and one
+  standard deviation either side, one level per value, or a `"log"` / `"sqrt"` transformation. A
+  numeric `row_vars` / `tab_vars` is grouped rather than exploded; a mean cell shows `49 (cv 36%)`.
+* **New `tab()` arguments**:
+  - `spread_vars` (each level of a sub-table variable becomes a block of columns, with one 
+    `Total` row and one `n` column per block)
+  - `n = c("range", "min", "no")` (how many people the table is about)
+  - `n_min`, `common_totrow` and `na = "common_base"`.
+* **`tab_export()`** is one entry point for every format, and **`tab_html()`** (the new name for
+  `tab_kable()`) renders through a new dependency-free engine, about 3× faster and restylable because
+  its geometry is CSS classes; **`tab_css()`** writes one stylesheet for a whole document. Also new:
+  `options(tabxplor.print = "html")` with hover tooltips, `caption =`, `transpose = TRUE`.
+* **Excel export moved to `openxlsx2`**: a ratio stays a real number that sorts and filters while
+  printing `1/2.11`, column widths fit their content, a secondary number becomes a column of its own,
+  and `tab_xl(check = "auto")` draws the model-check plots under a regression table.
+* **Introspection accessors.** `tab_structure()` says what a table is and what
+  can be done with it, `tab_columns()` what every numeric column estimates and how it is coloured,
+  `fmt_attr()` any one column fact by name, `reg_measures()` and `reg_formulas()` the same for models.
+* **`as.matrix()` and `as.table()` hand a table to base R** — the numbers as a plain matrix, or a
+  base `table` with named dimnames — dropping the totals and the display-time rows, because a
+  correspondence analysis or a chi-squared test run on a table's own margins is wrong:
+  `FactoMineR::CA(as.matrix(tab(gss_cat, race, marital)))`.
+* **French translations** of every legend, footer and message (`options(tabxplor.lang = "fr")`, a
+  `lang =` argument, or the locale), on a bilingual pkgdown website. **Labelled data (`haven`)**:
+  value labels become factor levels. **Parallel builds** with `options(tabxplor.parallel = TRUE)`.
+
 
 ## Changes that may affect existing code
-* **Significance stars are now opt-in (off by default).** A plain `tab()` no longer prints `*`/`**`/`***`
-  after the cells: pass `stars = TRUE` (or set `options(tabxplor.stars = TRUE)`) to get them. Regression
-  tables from `tab_reg()`/`tab_logit()`/`multi_logit()` still show stars by default (pass
-  `stars = FALSE` to turn them off). When shown, stars are **right-padded** so the numbers stay aligned
-  in a monospace font, and they no longer leak into `tab_kable()` tooltips (only the primary value is
-  starred). A table built without stars stores no per-cell `pvalue` (`$pvalue` is `NA`); the colour
-  significance policies (`color_signif`) are unaffected — they read the confidence bounds, not the stars.
-* **The unweighted-count `add_n` and the `add_pct` distribution are now display-time additions.** With
-  `add_n = TRUE` (the default), the base count no longer sits in a separate `n` column of the built
-  table: on the console, `tab_kable()` and `tab_md()` it now appears **inside the Total cell** as
-  `100% (n=1120)`; `tab_xl()` still writes a separate numeric `n` column. Likewise `add_pct` is drawn
-  only when the table is displayed/exported. The built object therefore no longer contains the `n` /
-  `col_pct` columns (nor the `pct = "col"` `n` / `row_pct` rows). Old code reading `tabs$n`,
-  `tabs[["n"]]` or `pull(tabs, "n")` still works — the column is reconstructed from the Total column
-  with a one-time deprecation message — but will stop being reconstructed in a future version; prefer
-  the displayed/exported table, or `get_n()` on the `Total` column. A global option
-  `options(tabxplor.totcol_range = "range")` (or `"min"`) makes the in-cell base show the cross-column
-  base range `[min;max]` when a table's column variables have different bases.
-* **Chi-squared / ANOVA p-values are now a display-time addition.** The table built by `tab()` keeps the
-  test results (its `test` attribute) but no longer contains the p-value *rows* themselves; they are
-  drawn when the table is displayed or exported. In the R **console** the p-values now appear as a
-  compact test line above the table (e.g. `# race: Chi2=997 (df=10) p=…`), while `tab_kable()`,
-  `tab_md()`, `tab_xl()` and jamovi still render them as p-value **rows** exactly as before. Code that
-  read the p-value rows out of the built object (they had an empty count) will no longer find them; use
-  the `test` attribute (`get_test()`), or `tab_pvalue_lines()` to materialize the rows on demand.
-* `tab(na = "drop")` with **several `col_vars`** now drops each column variable's own missing
-  values (bases can differ between columns), matching its documentation and `tab_many()`. It
-  previously dropped every observation missing on *any* column variable, giving one shared base ---
-  that behaviour is now the explicit `na = "drop_all"`. Single-`col_var` tables are unaffected.
-* For **numeric (mean) columns**, the `diff` field is now a real **difference** (`cell_mean -
-  ref_mean`); the cell/reference **ratio** (the old numeric-`diff` value) moved to the `ratio`
-  field. Code reading `$diff` on mean columns now gets a difference — use `$ratio` for the ratio.
-  Percentage-column `diff` is unchanged. Cell coloring is unchanged (`color = "diff"` on mean
-  columns still colors the ratio for now).
-* `tab_xl()` now derives its Excel number formats from `format()` (the same source of truth as the
-  console and the other exporters), instead of a separate internal routine. Practically identical for
-  the usual percentage / count / mean tables, but it **fixes two cases where the Excel display used to
-  disagree with the console**: a difference shown on a percentage column now formats as a percentage,
-  and p-value cells keep their percentage scaling. Number-of-decimals for count and odds-ratio columns
-  also follow the console exactly now.
-* **Excel export now uses `openxlsx2` instead of `openxlsx`** (a Suggests-only dependency). If you
-  export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
-## Bug corrections
-* `tab(parallel = )` now works when the package is loaded with `devtools::load_all()` (it used to fail
-  with `object 'tab_build_one' not found` for calls with two or more row variables). This only affected
-  package development, not installed versions.
-* Fixed a spurious warning (`longer object length is not a multiple of shorter object length`) on
-  tables with several row variables and several column variables whose counts do not divide (e.g. 3 × 4).
-  Output was already correct; the warning is gone.
-* **`color_signif = "color_all_signif"` on a ratio (or two-channel `color = c("diff", "ratio")`) table
-  no longer mis-colours.** The "guaranteed effect" colouring fed the difference confidence bound into
-  the ratio (multiplicative) scale, so nearly every significant cell — including over-represented ones
-  — got the strongest *under-represented* colour. It now colours the guaranteed **ratio**, so the
-  colour direction always matches the cell (over-represented → over-colour, under → under-colour).
-* `tab()` with two or more row variables AND two or more column variables no longer errors ("pct can't be recycled"); percentages are recycled correctly across the table.
-* A reference level whose label contains regular-expression characters (e.g. `"$25000 or more"`) is
-  now matched exactly, so it correctly selects its row/column (it was silently ignored before). A
-  reference vector named for a single variable (e.g. `c(race = "Black")`) no longer leaks that level
-  to the other variables. Confidence intervals for a difference now use the same reference column as
-  the difference itself.
-* Mean tables (`tab_num()`) are now dramatically faster and lighter: computing sufficient moment
-  sums in a single grouped pass (no more weighted-variance double scan) and building the totals /
-  total table as roll-ups of that aggregate (instead of two extra full-data scans) makes an 8M-row
-  mean table about 5–6× faster and use ~6× less memory unweighted, and about 8× faster and ~11×
-  less memory weighted. Output is unchanged.
-* Big weighted tables were dozens of times slower than unweighted ones: the internal
-  label-collision guard scanned whole data columns instead of just factor levels, coercing an
-  8M-row weight column to strings. Fixed — weighted `tab()` on 8M rows drops from ~30s to ~0.2s,
-  and unweighted tables (and their memory use) also improve. Output is unchanged.
-* On Linux, the `lang` argument of `tab_kable()`, `tab_md()`, `tab_xl()`, `tab_plot()` and
-  `tab_export()` silently had no effect: `lang = "fr"` returned an English colour legend. Setting the
-  `LANGUAGE` environment variable is not enough on its own, because glibc caches translated strings;
-  the cache is now flushed around the switch. (Windows and macOS were unaffected, which is why this
-  went unnoticed.) Note that gettext ignores `LANGUAGE` entirely when the locale is `C`, so `lang`
-  cannot translate under `LANG=C`.
-* The colour legend's HTML no longer depends on `kableExtra`, so `tab_kable(engine = "html")` is now
-  genuinely self-contained (as documented) and its output is stable across `kableExtra` versions.
+* **Dependencies reshuffled.** `magrittr` / `stringr` / `crayon` are dropped, so **`%>%` is no longer
+  re-exported** — use the base `|>` pipe. `kableExtra` and `DescTools` move to Suggests, Excel export
+  from `openxlsx` to `openxlsx2`, and `survey` / `nnet` / `MASS` become hard dependencies.
+* **The base count, `add_pct` and the chi-squared / ANOVA p-values are drawn at display time**, not
+  stored as columns and rows. Read them with `Total$n` and `get_test()`.
+* For **numeric (mean) columns** the `diff` field is a real **difference**, the cell/reference ratio
+  moving to `ratio`, and a cell shows a coefficient of variation instead of a standard deviation; a
+  numeric `row_vars` / `tab_vars` is grouped rather than exploded. `shape = "values_to_levels"` and
+  `display = "mean_sd"` restore the old output exactly.
+* **`tab(na = "drop")` with several `col_vars`** drops each column's own missing values (the old
+  shared base is now `na = "drop_all"`).
+* **The colour thresholds moved** for `pct_ratio`, `mean_ratio` and `mean_diff`, and the background
+  channel keeps the two ratio scales' loudest rungs only. `set_color_breaks()` restores any of them.
+* **A weighted table's whole-table test and effect size are computed on the weighted table** (only
+  those two were still unweighted), Fisher's exact is skipped under weights, and `color = "contrib"`
+  significance reads the adjusted residual on the unweighted *n*.
+* **Everything past the variable roles must be named**, `tab()` and its siblings taking `...` right
+  after their variable arguments: an unnamed extra argument is refused, a typo gets a suggestion, and
+  an abbreviation that used to partial-match silently is refused. An unknown value now aborts too.
+* **A variable with a level named `"Total"` (or `"Ensemble"`) is refused**, naming the level: those
+  are tabxplor's own total-row labels. Rename it, or move them with `options(tabxplor.total_names =)`.
+* **`fmt` column attributes**: `type` is split into `scale` (what the column estimates) and `pct_type`
+  (which kind of percentage), `ci_type` is gone, and a new `col_group` names a column block's
+  sub-population. Only code building or inspecting `fmt` vectors is affected; see
+  `vignette("tabxplor-programming")`.
+* **`tab_transpose()` is a supported reshape operation again** (it was soft-deprecated in the
+  pre-release): it is the way to get a transposed *object*, and the only way to put a mean on a row,
+  since a number given to `row_vars` is always cut into levels. Use the exporters' `transpose = TRUE`
+  when only the output matters. A transposed column now claims only what its parts agreed on, by the
+  same rule every `bind_rows()` follows.
+* **Options renamed**, the old names still read: `tabxplor.total_names` replaces the `total_names` /
+  `totaltab_name` / `other_level` arguments, and `tabxplor.stars` carries the star ladder.
+
+## Bug fixes
+
+* **`tab()` could not use a column whose name was not syntactic**: ``tab(data, x, `my var`)`` aborted
+  saying the column did not exist.
+* A factor carrying **`NA` as a real level** (`factor(..., exclude = NULL)`, common in imported data)
+  no longer crashes `print()`, `format()` or any export.
+* **`pct = "col"` and `na = "drop_all"` failed on an `ordered` row variable**, on printing or
+  exporting; and **`tab(pct = "all", ci = "cell")` errored**, weighted or not.
+* **The `lang` argument now works on Linux**, and switching language mid-session keeps the new one.
+* **`tab_spread()` lost the table's whole test summary**, and `dplyr::bind_rows()` on two grouped
+  tables lost the weight footnote, colour legend and caption.
+* **`ref` / `ref2` accept `"last"`**, and errors are clearer for an unknown named `ref`, a variable
+  used on two axes, or an all-zero weight. `tab()` accepts a `data.table` and a logical `col_var`.
+* **`dplyr::bind_rows()` on two tables with different columns crashed on printing**: the missing
+  cells come back all-`NA`, which the colour engine could not read. They now render blank everywhere.
+* **A column holding unlike quantities** — a transposed table with percentage AND mean columns, or a
+  bind of the two — **coloured a mean difference on the percentage-point ladder**, sending it to the
+  deepest shade. It now grades only the cells its ladder can read, and says so once; `color = "ratio"`
+  grades them all.
 
 ## Deprecations
-* The combined `color` strings `"diff_ci"`, `"after_ci"` and `"ci"` are soft-deprecated: use
-  `color = "diff"` with the new `color_signif` argument (`"grey_non_signif"` for `"diff_ci"`,
-  `"color_all_signif"` for `"after_ci"`/`"ci"`). They still work unchanged.
-* `get_color_breaks()` now returns the canonical named list of positive-only scales
-  (`pct_diff`, `pct_ratio`, `mean_diff`, `mean_ratio`, `contrib`) --- the same shape
-  `set_color_breaks()` accepts, so it round-trips. Pass `type = "all"` for the mirrored
-  (signed) thresholds. This changes its return shape from the previous flat vectors.
-* `tab_many()` is **soft-deprecated** in favour of `tab()` (which now takes several `row_vars` /
-  `col_vars`). It keeps working and keeps its historical list return for several `row_vars`
-  (`tab()` merges them by default; use `output_list = TRUE` for a list).
-* Singular `row_var` / `col_var` in `tab()` are **soft-deprecated** aliases of the plural
-  `row_vars` / `col_vars` (which now accept several variables). They still work.
-* `tab(sup_cols =)` is **soft-deprecated**: pass those columns in `col_vars` and set
-  `levels = "first"` (`col_vars` already accepts several variables). It still works.
-* `tab_many(totrow =)` and `tab_many(totcol =)` are **soft-deprecated**: a total row is always
-  computed and exactly one total column is shown by default; drop/move them afterwards with dplyr
-  (`dplyr::filter(!is_totrow(.))`). Old `totcol` values (`"each"`, `"no"`, names) still work.
-* The `tabxplor.compact` **option is removed**, superseded by the `output_list` argument of
-  `tab()`. `tab_many(compact =)` still works.
-* `tab_pct()`, `tab_tot()` and `tab_totaltab()` are **superseded**: percentages, differences and
-  totals are computed directly by `tab()` / `tab_plain()` / `tab_num()`. They still work on an
-  existing table.
-* `tab_plot()` is **superseded**: its ggplot rendering is limited and no longer actively developed.
-  It keeps working; prefer `tab_kable()` (HTML), `tab_md()` (markdown) or `tab_xl()` (Excel).
-* `tab_xl(n_min =)` and `tab_xl(hide_near_zero =)` are **soft-deprecated** and now inert (they no
-  longer grey out small-n / near-zero cells). For the small-n case use `tab(n_min = )`, which blanks
-  or drops small-n cells at display and flows into the Excel export. Both arguments still accept their
-  old values without error (a message is shown when a non-default value is passed).
-* `tab_md(title =)` is **soft-deprecated**, renamed to `tab_md(caption =)` (a single caption name
-  shared by every exporter). The old argument still works.
-* `tab_xl(print_color_legend =)` is **soft-deprecated**, renamed to `tab_xl(color_legend =)` (the name
-  the other exporters use). The old argument still works.
 
-## Bug corrections (Phase 6)
-* Fixed a crash in `tab_num(<tab_vars>, ci = "cell")` (and thus in `tab()` / the Jamovi module
-  with numeric columns, confidence intervals and subtables): the grand-total-only path built an
-  empty total block and failed reordering by the tab variable.
+### Soft-deprecated
+
+* Functions: `tab_many()` (a shim over `tab()`) and the step-by-step chain `tab_pct()` /
+  `tab_tot()` / `tab_totaltab()` / `tab_ci()` / `tab_chi2()`.
+* `tab()` arguments: singular `row_var` / `col_var`, `sup_cols` (use `col_vars`), `filter` (filter
+  upstream), `names_prefix` / `names_sort` (they belong to `tab_spread()`), `add_n` (use `n =`),
+  `total_names` / `totaltab_name` / `other_level` (use `options(tabxplor.total_names =)`), `OR` (use
+  `display = "{or}"` / `ref2 = "cumulative"`), `ci = "diff"` / `"ratio"` (use `ci = "ref"`), `chi2`
+  (use `test`), `method_cell` / `method_diff` (use `ci_method`), and `"diff_ci"` / `"after_ci"` /
+  `"ci"` (use `color` + `color_signif`).
+* Export arguments, accepted and ignored with a message: `color_type`, `html_24_bit`,
+  `html_font`, `full_width`, `position`, and `tab_xl(n_min =, hide_near_zero =)` — width, font and
+  placement are CSS rules now (`tab_css()`), and `n_min` is a `tab()` argument. Every other unknown
+  argument of `tab_html()` / `tab_md()` / `tab_xl()` / `tab_css()` / `forest_plot()` is an error
+  with a suggestion, as it already was on `tab()`.
+* Elsewhere: `tab_xl(print_color_legend =)` → `color_legend =`, `set_diff_type()` →
+  `set_ref_type()`, the `in_totrow` cell field → `row_kind` (`is_totrow()` and `x$in_totrow` are
+  unchanged), and `options(tabxplor.signif_levels)` / `options(tabxplor.signif_labels)`.
+* The `fmt` attribute `type`, which said both what a column estimates and which percentage it is:
+  `get_type()` / `set_type()` and `fmt(type =)` translate into `scale` + `pct_type` (see
+  `?tabxplor-type`) and are defunct in 2.1.0.
+
+### Hard-deprecated (defunct in 2.1.0)
+
+* The step-by-step chain warns on every call. What goes away is the *chaining API*, not the
+  statistics: `tab()` and `tab_num()` compute the same numbers, in one pass.
+* `tab_prepare()`, `complete_partial_totals()` and `fct_recode_helper()` will become internal or be
+  removed; `tab_prepare()`'s work is done by `tab()` itself.
+
+### Removed (now an error)
+
+* Functions: `tab_plot()` and `kable_tabxplor_style()` — use `tab_export()` and `tab_html()`.
+* **The `kableExtra` HTML engine**, with `engine =` (accepted and ignored) and the options
+  `tabxplor.tab_kable_engine`, `tabxplor.always_add_css_in_tab_kable`, `tabxplor.kable_html_font`.
+  kableExtra stays optional, and is no longer what opens a table in the Viewer: `tab_html()`
+  paints that page itself, to match the table's theme.
+* Options: `method_ratio` and its siblings, `tabxplor.ci_print` (use `display = "base_ci"` /
+  `"base_moe"`), `tabxplor.compact`, `tabxplor.color_style_type`.
+* **The `fmt` attribute `ci_type`**, with `get_ci_type()` / `set_ci_type()` and `fmt()`'s
+  `ci_type =` argument: the stored interval is always on the estimate's own `scale`.
+
 
 # tabxplor 1.3.1
 

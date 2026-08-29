@@ -62,3 +62,4 @@ Vec_arith method for fmt
 \item \code{vec_arith.numeric(tabxplor_fmt)}: vec_arith method for numeric + fmt
 
 }}
+\keyword{internal}

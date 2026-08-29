@@ -2,9 +2,14 @@
 # Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
 on:
   push:
-    branches: [main, master]
+    # `dev` is included deliberately: the release branch strips only .Rbuildignore'd paths, so the
+    # tarball built from dev is identical to the release one -- dev-green means release-green. It
+    # also catches the platform bugs that only CI can see (Windows paths, the C-locale gettext
+    # fallback), which is how a batch of them reached a release PR unnoticed.
+    branches: [main, master, dev]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
 
 name: R-CMD-check
 
@@ -29,7 +34,7 @@ jobs:
       R_KEEP_PKG_SOURCE: yes
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: r-lib/actions/setup-pandoc@v2
 

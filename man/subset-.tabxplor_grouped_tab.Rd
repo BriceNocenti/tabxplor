@@ -4,7 +4,7 @@
 \alias{[<-.tabxplor_grouped_tab}
 \title{set subset method for class tabxplor_grouped_tab}
 \usage{
-"x[i] <- value  ;   x[i, j, ...] <- value"
+\method{[}{tabxplor_grouped_tab}(x, i, j, ...) <- value
 }
 \arguments{
 \item{x}{A tabxplor_grouped_tab object.}
@@ -19,3 +19,4 @@ An object of class \code{tabxplor_grouped_tab}.
 \description{
 set subset method for class tabxplor_grouped_tab
 }
+\keyword{internal}

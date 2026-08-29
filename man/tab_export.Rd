@@ -2,45 +2,50 @@
 % Please edit documentation in R/tab-export.R
 \name{tab_export}
 \alias{tab_export}
-\title{Export a tabxplor table to Excel, HTML, Markdown, or a plot}
+\title{Export a table to html, Excel or Markdown (wrapper)}
 \usage{
 tab_export(
   x,
-  format = c("kable", "md", "xl", "plot"),
+  format = c("html", "md", "xl", "forest"),
   path = NULL,
-  theme = c("light", "dark"),
-  color_type = NULL,
-  html_24_bit = NULL,
+  theme = NULL,
   color = TRUE,
   color_legend = TRUE,
   lang = NULL,
   transpose = FALSE,
   caption = NULL,
+  var_names = NULL,
   ...
 )
 }
 \arguments{
-\item{x}{A table (or list of tables) made with \code{\link{tab}} / \code{\link{tab_many}}.}
+\item{x}{A table made with \code{\link{tab}} or \code{\link{tab_reg}}, or a \code{list} of tab.
+A list of tables sharing the same \code{col_vars} (and no \code{tab_vars}) is merged into one; any
+other list --- several \code{row_vars} and/or \code{tab_vars} --- is rendered one table after
+another, each keeping its own sub-tables.}
 
-\item{format}{One of \code{"kable"} (HTML, the default), \code{"md"} (Markdown),
-\code{"xl"} (Excel) or \code{"plot"} (a \code{ggplot}).}
+\item{format}{One of \code{"html"} (the default), \code{"md"} (Markdown), \code{"xl"} (Excel)
+or \code{"forest"} (a forest plot of the estimates, see \code{\link{forest_plot}}).}
 
 \item{path}{Optional output file. For \code{"xl"} it is the workbook path; for \code{"md"} and
-\code{"kable"} the rendered text is written to it; ignored for \code{"plot"}.}
+\code{"html"} the rendered text is written to it; ignored for \code{"forest"}.}
 
 \item{theme}{By default (\code{"light"}) a white table with black text; \code{"dark"} for the
-inverse (colours follow the theme).}
+inverse (the colours follow the theme). \code{"auto"} follows the reader's colour scheme
+(their operating system, and any dark-mode toggle of the host page); it needs a stylesheet,
+so it works for \code{format = "html"} and \code{"md"} and resolves to \code{"light"} for the
+static \code{"xl"} backend.
+The black-and-white \strong{publication} palettes render a table for a page that has no colour:
+\code{"print_ready"} picks the right one per table, or name it yourself --
+\code{"print_marks"}, \code{"print_emphasis"}, \code{"print_minimalistic"} (\code{"bw"}).
+Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}} for what each says.}
 
-\item{color_type}{By default the text is coloured; set to \code{"bg"} to colour the background.}
+\item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
 
-\item{html_24_bit}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0 (exports are always 24-bit).}
+\item{color_legend}{Print the colour legend below the table (with the subtext). \code{TRUE} by default, and a
+no-op on a table that carries no colours.}
 
-\item{color}{Set to \code{FALSE} to render without colours (monochrome).}
-
-\item{color_legend}{Print the colour legend with the subtext
-(\code{"kable"}/\code{"md"}/\code{"xl"}/\code{"plot"}).}
-
-\item{lang}{Legend language: \code{NULL} (auto from the R/OS locale, English fallback),
+\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
 \code{"en"} or \code{"fr"}.}
 
 \item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become columns) --
@@ -48,23 +53,34 @@ the col-percentages-with-several-row-variables use case.}
 
 \item{caption}{A single caption / title for the table.}
 
-\item{...}{Format-specific arguments passed to the underlying exporter.}
+\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default), \code{"rows"},
+\code{"cols"} or \code{"none"}. The row-variable name is the leading column a table with several
+\code{row_vars} uses to name each block (written once per block); the column-variable names
+are the spanning row above their level columns. Level headers always keep their name.}
+
+\item{...}{Format-specific arguments passed to the underlying exporter. Retired arguments
+(\code{color_type}, \code{html_24_bit}, \code{engine}, \code{html_font}, \code{full_width}, \code{position}, \code{n_min},
+\code{hide_near_zero}) are caught here, reported once, and not forwarded; the exporter this hands to
+refuses anything else it cannot use.}
 }
 \value{
-The value of the underlying exporter: an HTML/knitr object (\code{"kable"}), a markdown
+The value of the underlying exporter: an HTML/knitr object (\code{"html"}), a markdown
 string (\code{"md"}), \code{x} invisibly with the Excel file written (\code{"xl"}), or a
-\code{ggplot} (\code{"plot"}).
+\code{ggplot} (\code{"forest"}).
 }
 \description{
-A single entry point that dispatches to the format-specific exporters
-\code{\link{tab_kable}} (HTML), \code{\link{tab_md}} (Markdown), \code{\link{tab_xl}} (Excel) and
-\code{\link{tab_plot}} (a \code{ggplot}). The four functions share one set of display-option names
-and defaults; \code{tab_export()} forwards them and passes any format-specific argument through
-\code{...}.
+One entry point over the format-specific exporters \code{\link{tab_html}} (HTML),
+\code{\link{tab_md}} (Markdown), \code{\link{tab_xl}} (Excel) and \code{\link{forest_plot}}
+(a chart of the estimates). They share one set of display-option names and defaults;
+\code{tab_export()} forwards them and passes any format-specific argument through \code{...}.
+}
+\details{
+Each exporter is also callable on its own, which reads better in a pipe
+(\code{x |> tab_xl()}); use \code{tab_export()} when the format comes from a variable.
 }
 \examples{
 \donttest{
-tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
+tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "difference")
 tab_export(tabs, "md")
 }
 }

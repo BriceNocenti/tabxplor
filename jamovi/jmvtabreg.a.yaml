@@ -1,0 +1,630 @@
+---
+name:  jmvtabreg
+title: Regressions
+menuGroup: tabxplor
+version: '1.0.0'
+jas: '1.2'
+weightsSupport: 'full'
+
+options:
+    - name: data
+      type: Data
+      description:
+          R: >
+           A data.frame.
+
+    - name: outcome
+      title: "<b>outcome = <i>(dependent variable[s])</i></b>"
+      type: Variables
+      permitted: [numeric, factor]
+      default: NULL
+      description:
+          R: >
+           The outcome variable(s). One model is built per outcome. Set each outcome's
+           family (and, for a binomial outcome, its modelled level or number of trials) in
+           the Model table.
+
+    - name: predictors
+      title: "<b>predictors = <i>(explanatory variables)</i></b>"
+      type: Variables
+      permitted: [numeric, factor]
+      default: NULL
+      description:
+          R: >
+           The explanatory variables of the model. Factors are shown one line per
+           level (the reference level as the neutral value); numeric predictors as
+           a single line.
+
+    - name: tab_vars
+      title: "<b>tab_vars = <i>(fit within each group)</i></b>"
+      type: Variable
+      suggested:
+        - nominal
+        - ordinal
+      permitted:
+        - factor
+      default: NULL
+      description:
+          R: >
+           A grouping variable. The same model is fitted within each of its levels
+           and the tables are stacked (like tab_vars for crosstables).
+
+    - name: wt
+      title: "<b>wt = <i>(survey weights)</i></b>"
+      type: Variable
+      suggested:
+        - continuous
+      permitted:
+        - numeric
+      default: NULL
+      description:
+          R: >
+           A survey weight variable. Switches to design-based estimation (scale-invariant
+           sandwich standard errors). Leave empty for unweighted results.
+
+# ============================ Model ============================
+# Per-outcome Model table (family / link / outcome_level / trials) -> the hidden arrays below,
+# driven by the `modelTableCtrl` CustomControl (one row per outcome). `family` and `link` are the
+# table's two headed columns; the 4th cell holds whichever of outcome_level / trials applies.
+# What stays SCALAR is the right half of the cascade -- `measure` and `effect`, radios below.
+    - name: family
+      title: "family (per outcome)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: family
+                type: String
+
+    - name: link
+      title: "link (per outcome)"
+      type: Array
+      hidden: true      # driven by the Model table (modelTableCtrl), beside `family`
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: link
+                type: String
+      description:
+          R: >
+           WHICH MEASURE THE MODEL ESTIMATES -- the only argument that changes the model. A link IS
+            a measure, so it takes the same words as \code{measure}. Chosen per outcome, in the
+            Model table beside \code{family}: \code{"auto"} is the family's own (a logistic
+            regression for a binary outcome, a linear one for a quantity, a Poisson one for a
+            count), and \code{"odds_ratio"} / \code{"ratio"} / \code{"difference"} name the model
+            whose coefficient IS that measure -- on a binary outcome, the logistic fit, the modified
+            Poisson (Zou 2004) and the identity-link additive-risk one. The picker only ever offers
+            the links the chosen family can be fitted on.
+
+    - name: outcome_level
+      title: "outcome_level (per outcome)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: level
+                type: String
+
+    - name: trials
+      title: "trials (per outcome)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: "n"
+                type: String
+
+    - name: effect
+      title: ""
+      type: List
+      options:
+        - title: "auto <i>(follow from the measure of deviation)</i>"
+          name:  auto
+        - title: "conditional <i>(the model's own coefficients)</i>"
+          name:  conditional
+        - title: "marginal <i>(averaged over the sample)</i>"
+          name:  marginal
+        - title: "at_reference <i>(at the reference profile)</i>"
+          name:  at_reference
+      default: auto
+      description:
+          R: >
+           WHERE THE NUMBER COMES FROM, once the model and the reported measure are fixed.
+            \itemize{
+             \item \code{"auto"}: the coefficients when the reported measure IS the model's own,
+             the model's predictions otherwise. Nobody needs to change this.
+             \item \code{"conditional"}: read off the model's own coefficients.
+             \item \code{"marginal"}: worked out from the model's predictions for every observed
+             person, then averaged.
+             \item \code{"at_reference"}: the same, at one profile (every other predictor at its
+             reference level / mean).
+            }
+
+    - name: measure
+      title: measure
+      type: List
+      options:
+        - title: "auto <i>(the link's own measure)</i>"
+          name:  auto
+        - title: "difference <i>(RD, diff)</i>"
+          name:  difference
+        - title: "ratio <i>(RR, IRR, RoM)</i>"
+          name:  ratio
+        - title: "odds_ratio <i>(OR)</i>"
+          name:  odds_ratio
+        - title: "raw_coefficient <i>(log, etc.)</i>"
+          name:  raw_coefficient
+      default: auto
+      description:
+          R: >
+           WHICH MEASURE IS REPORTED. It never changes the model: where it is not the measure the
+            model estimates (see \code{link}), it is worked out from the model's predictions.
+            \itemize{
+             \item \code{"auto"}: the model's own measure -- follow from the left. On a prediction
+             route it steps back to the outcome's own (a percentage reads as "x times as likely"),
+             because a marginal odds ratio is a specialist quantity, asked for by name.
+             \item \code{"odds_ratio"} / \code{"ratio"} / \code{"difference"}: the named measure,
+             when the outcome's level can carry it. One it cannot says so, and lists what it does
+             offer.
+             \item \code{"raw_coefficient"}: the model's own coefficient, un-transformed --- the log
+             of the reported measure wherever that measure is multiplicative, and the additive
+             estimate itself on a model that is already additive.
+            }
+
+    # ⚠ A Bool, not the four-value List `tab_reg()` takes: TRUE is the argument's own default and
+    # R decides WHERE the crude effect goes -- a column beside the model one, or the hover where a
+    # column would double an already wide table. Naming the place is expert work, and the one case
+    # jamovi can then not express (a multinomial with `"column"`) is expert work too.
+    - name: empirical
+      title: <b>empirical = <i>(show the observed effect)</i></b>
+      type: Bool
+      default: true
+      description:
+          R: >
+           Show the crude, unadjusted, single-predictor effect beside each model effect --- the
+           bivariate association that IS the modelised quantity when there is a single predictor, so
+           the gap between the two is what adjustment changed.
+
+# ================= Model comparison (+ predictor subsets) =================
+    # ⚠ `vars` is Variable-typed so a column RENAME follows the card; `crosses` cannot be, because
+    # an `a*b` key names no column -- a String array is what lets a card state which of the DEFINED
+    # interactions it holds. Both are swept against the pool / the `crosses` option on every render.
+    - name: models
+      title: "Predictor subsets (model comparison)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: label
+                type: String
+              - name: vars
+                type: Array
+                template:
+                    type: Variable
+              - name: crosses
+                type: Array
+                template:
+                    type: String
+
+    # ⚠ `stats =` HAS NO CONTROL, deliberately (Phase 22g-iii). Since 22g-ii tab_reg()'s own default
+    # already compares several predictor subsets against each other -- sequential where they nest,
+    # against the first otherwise -- so a picker offering "none" would have named the opposite of
+    # what it did. Naming the footer statistics one by one is R work; the panel asks nothing.
+
+    - name: na
+      title: na
+      type: List
+      options:
+        - title: "drop_by_outcome <i>(one population per outcome)</i>"
+          name:  drop_by_outcome
+        - title: "drop_by_model <i>(each model on its own complete cases)</i>"
+          name:  drop_by_model
+        - title: "drop_all <i>(one population for the whole analysis)</i>"
+          name:  drop_all
+        - title: "keep_for_predictors <i>(predictors NA to real levels)</i>"
+          name:  "keep_for_predictors"
+
+
+      default: drop_by_outcome
+      description:
+          R: >
+           "drop_by_outcome" (default) fits every model OF ONE OUTCOME on the same complete
+           cases, which is what makes the observed columns comparable to the model beside them
+           and lets the likelihood-ratio comparison run; "drop_by_model" gives each model its
+           own complete cases (a model on a different population then gets no observed effect);
+           "drop_all" shares one population across every outcome as well.
+
+    # Phase h: a model comparison (>=2 models) is heavy -- refitting every model on each live edit is
+    # what froze the panel. So with several models the table computes ONLY on this button: the user
+    # picks the models, then clicks to run. Single-model use stays fully live (no button needed).
+    - name: run_compare
+      title: "Run comparison"
+      type: Action
+
+# ================= References, level merging and predictor scaling =================
+    # Phase 20g-ii: the per-predictor level-MERGE tick-boxes (merge only -- reordering is meaningless
+    # here, `ref` picks the baseline explicitly). Same shape and same folder as jmvtab's, and applied
+    # by the same tab_collapse_levels() in reg_prepare_data()'s stage G0, before family detection and
+    # the reference relevel -- so a merged level is simply a level.
+    # Phase 22g-iv: the level ORDER, written by the same control. `tab_reg()` has no `levels_order`
+    # argument -- this drives a jmvtabreg-only prep step (jmvtab_reg_build() relevels the predictor
+    # columns before the fit), which is also what makes "the baseline IS the first level" true.
+    - name: levels_order
+      title: "Level order (per predictor)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: levels
+                type: Array
+                template:
+                    type: String
+
+    - name: levels_collapse
+      title: "Merged levels (per predictor)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: label
+                type: String
+              - name: levels
+                type: Array
+                template:
+                    type: String
+
+    - name: crosses
+      title: "interactions (predictors)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var1
+                type: Variable
+              - name: var2
+                type: Variable
+
+    - name: ref_levels
+      title: "ref (per predictor)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: ref
+                type: String
+
+    - name: shape
+      title: "shape (per numeric predictor)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: shape
+                type: String
+
+    - name: multiplier
+      title: "multiplier (per numeric predictor)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: k
+                type: String
+
+# ============================ Significance ============================
+    - name: conf_level
+      title: "<b>conf_level = <i>(confidence level)</i></b>"
+      type: Number
+      min: 0.5
+      max: 0.9999999999
+      default: 0.95
+      description:
+          R: >
+           The confidence level for intervals and the significance stars.
+
+    - name: ci_method
+      title: ci_method
+      type: List
+      options:
+        - title: "wald = <i>(Wald)</i>"
+          name:  wald
+        - title: "profile = <i>(profile-likelihood ; not cached, long)</i>"
+          name:  profile
+      default: wald
+      description:
+          R: >
+           Wald intervals (also the only option for weighted models) or
+           profile-likelihood intervals (unweighted binomial / poisson only; needs MASS).
+           A profile interval is an output of the likelihood at one confidence level, so it
+           cannot be cached: every change refits the models.
+
+    - name: stars
+      title: stars
+      type: Bool
+      default: true
+      description:
+          R: >
+           Show per-cell significance stars (the colours read the confidence interval
+           either way).
+
+    - name: color
+      title: ""
+      type: List
+      options:
+        - title: "measure <i>(the chosen measure of deviation)</i>"
+          name:  measure
+        - title: "adjustment <i>(gap between model/observed)</i>"
+          name:  adjustment
+        - title: "between_groups <i>(gap between tab_vars)</i>"
+          name:  between_groups
+        - title: "no <i>(no colors)</i>"
+          name:  "no"
+      default: measure
+      description:
+          R: >
+           WHAT the effect cells are coloured by. The colour LADDER always comes from what the
+            column estimates (an odds ratio is read on the odds-ratio scale, a beta on the
+            standardized-difference one), so what is left to choose is what the estimate is compared
+            TO.
+            \itemize{
+             \item \code{"measure"}: the effect's own size (compared to no effect).
+             \item \code{"no"}: no colours.
+             \item \code{"adjustment"}: how far the ADJUSTED effect moved from the crude one --
+             needs \code{empirical}.
+             \item \code{"between_groups"}: how far each group's effect is from the first group's
+             -- needs \code{tab_vars}.
+            }
+
+    - name: color_signif
+      title: color_signif
+      type: List
+      options:
+        - title: "ignore <i>(color effect size only, ignore significance)</i>"
+          name:  ignore
+        - title: "grey_non_signif <i>(color effect size + uncolor non-significant)</i>"
+          name:  grey_non_signif
+        - title: "guaranteed_effect <i>(color all CI-floor, ideal for small sample)</i>"
+          name:  guaranteed_effect
+      default: grey_non_signif
+      description:
+          R: >
+           How significance interacts with the colours: observed size + grey out non-significant
+           cells, colour only the guaranteed (error-adjusted) effect, ignore significance.
+
+# ==================== Missing values and display ====================
+    - name: display
+      title: ""
+      type: List
+      options:
+        - title: "auto"
+          name:  auto
+        - title: "est <i>(the estimate)</i>"
+          name:  est
+        - title: "ci <i>(confidence interval)</i>"
+          name:  ci
+        - title: "est_ci <i>(estimate + interval)</i>"
+          name:  est_ci
+        - title: "est_coef <i>(est. + raw coeff)</i>"
+          name:  est_coef
+        - title: "base <i>(adjusted pct/mean, alone)</i>"
+          name:  base
+        - title: "est_base <i>(est. + adj. pct/mean)</i>"
+          name:  est_base
+        - title: "base_est <i>(adj. pct/mean + est.)</i>"
+          name:  base_est
+        - title: "base_est_mdiff <i>(+ marg. diff)</i>"
+          name:  base_est_mdiff
+        - title: "base_est_mratio <i>(+ marg ratio)</i>"
+          name:  base_est_mratio
+      default: auto
+      description:
+          R: >
+           The estimate-cell LAYOUT (never the estimand: a display may fold in another quantity of
+           the SAME fit, it can never change the fit). The same named layouts \code{tab()} offers,
+           written in the same \code{\{\}} grammar: \code{est} is whatever the column estimates
+           and \code{base} the level it sits on (an adjusted probability, an adjusted mean).
+           \code{"auto"} keeps the built-in layout.
+
+    - name: "n"   # quoted: YAML 1.1 reads a bare `n` as the boolean FALSE
+      title: ""
+      type: List
+      options:
+        - name: range
+          title: range
+        - name: min
+          title: min
+        - name: "no"
+          title: "no"
+      default: range
+      description:
+          R: >
+           The column giving the number of observations behind each predictor level:
+           `"range"` prints `min-max` when several models were fitted on different people,
+           `"min"` the smallest count only, `"no"` no column at all.
+
+    # The same 0-6 ComboBox jmvtab has, driving tab_reg(digits =). A scalar there is a FLOOR, not
+    # an assignment: each measure keeps its own precision where that is finer. The per-token form
+    # (`digits = c(ratio = 3)`) stays R-only -- one number is the question a panel can ask.
+    - name: digits
+      title: ""
+      type: List
+      options:
+        - title: "0"
+          name:  "0"
+        - title: "1"
+          name:  "1"
+        - title: "2"
+          name:  "2"
+        - title: "3"
+          name:  "3"
+        - title: "4"
+          name:  "4"
+        - title: "5"
+          name:  "5"
+        - title: "6"
+          name:  "6"
+      default: "0"
+      description:
+          R: >
+           The minimum number of digits to print, as a single integer (0-6): each measure keeps its
+            own precision where that is finer (an odds ratio reads at two decimals, a mean score at
+            one). In R, \code{tab_reg()} also names one display field at a time,
+            \code{digits = c(ratio = 3)}.
+
+    - name: cleannames
+      title: cleannames
+      type: Bool
+      default: true
+      description:
+          R: >
+           Strip numeric prefixes from factor level labels.
+
+    - name: subtext
+      title: "Note below the table"
+      type: String
+      default: ""
+      hidden: true      # driven by the subtextCtrl CustomControl (a full-width auto-grow textarea)
+      description:
+          R: >
+           A free note printed below the table.
+
+# Other formatting
+    # ⚠ NOT `theme`: jamovi injects its OWN global `theme` option (the app's plot
+    # styling preference) into every analysis, which shadowed this one -- no radio
+    # ticked, a click reverted, and the render kept the app's value. Same reserved-name
+    # class as `levels` (-> `lvs`) and `check` (-> `xl_check`).
+    - name: tab_theme
+      title: theme
+      type: List
+      options:
+        - title: "light <i>(colors)</i>"
+          name:  light
+        - title: "print_ready <i>(black and white, for publication)</i>"
+          name:  print_ready
+      default: light
+      description:
+          R: >
+           How the table is painted, in the results panel and in every export.
+            \code{"light"} is the colour palette; \code{"print_ready"} says the same thing
+            typographically --- bold, italics, underlines and marks instead of blue and red ---
+            for a page that has no colour. See \code{\link{tab_css}}.
+
+    - name: wrap_rows
+      title: ""          # the .u.yaml Label above it names the argument; a title here double-labels
+      type: Number
+      min: 0
+      default: 35
+
+    - name: wrap_cols
+      title: ""          # idem -- jmvtab sets both to "" for the same reason
+      type: Number
+      min: 0
+      default: 15
+
+# ============================ Export ============================
+    - name: export_format
+      title: Format
+      type: List
+      options:
+        - title: Excel
+          name:  excel
+        - title: HTML
+          name:  html
+        - title: Markdown
+          name:  md
+      default: excel
+
+    - name: exportExcel
+      title: "Export"
+      type: Action
+      description:
+        R: "Press to export the table to the chosen format (the button label follows the format)."
+
+    - name: export_dir
+      title: "Path:"
+      type: String
+      default: "~/Documents"
+      description:
+          R: >
+           The folder to save the exported file in. Blank or `~/Documents` auto-detects your real
+           Documents folder (a redirected `D:/Documents` or network Documents included). Type any
+           other folder to override; a leading `~` there expands to your home folder.
+
+    - name: export_filename
+      title: "/"
+      type: String
+      default: "Reg_model"
+      description:
+          R: >
+           The bare file name, with NO extension (the chosen format adds it).
+
+    - name: resetPath
+      title: "Reset to defaults"
+      type: Action
+      description:
+        R: "Reset the folder and file name to their defaults (your Documents folder and \"Regression\")."
+
+    # ⚠ NOT `check`: jmvcore::Options already defines a check() method, so an option of that name
+    # collides with it ("symbol already has a regular binding") and the analysis cannot be built at
+    # all -- the same trap that made `levels` become `lvs`. It sits beside `xl_replace` instead.
+    - name: xl_check
+      title: "assumption checks plots in Excel"
+      type: Bool
+      default: false
+      description:
+          R: >
+           Excel export only: draw the model-check plots (\code{reg_check_plots()}) under each
+           table in the workbook --- the panels that apply to the fitted family
+           (\code{tab_xl(check = "auto")}). Needs \code{ggplot2} and \code{gridExtra}; without
+           them the export says so and writes the table alone.
+
+    - name: xl_replace
+      title: ""
+      type: Bool
+      default: false
+      description:
+          R: >
+           "Set to `TRUE` to overwrite an existing file."
+...
+
+
+

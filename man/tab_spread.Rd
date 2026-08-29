@@ -2,19 +2,13 @@
 % Please edit documentation in R/tab.R
 \name{tab_spread}
 \alias{tab_spread}
-\title{Spread a tab, passing a tab variable to column}
+\title{Turn a sub-table variable into columns}
 \usage{
-tab_spread(
-  tabs,
-  spread_vars,
-  names_prefix,
-  names_sort = FALSE,
-  totname = "Total"
-)
+tab_spread(tabs, spread_vars, names_prefix, names_sort = FALSE, totname = NULL)
 }
 \arguments{
 \item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab}},
-\code{\link{tab_many}} or \code{\link{tab_plain}}.}
+\code{\link{tab_reg}} or \code{\link{tab_plain}}.}
 
 \item{spread_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}>  The tab variables
 to pass to column, with a syntax of type \code{c(var1, var2, ...)}.}
@@ -25,23 +19,29 @@ to pass to column, with a syntax of type \code{c(var1, var2, ...)}.}
 \code{spread_var}_\code{col_var_level}. Should then the column names be sorted ?
 If \code{FALSE}, the default, column names are ordered by first appearance.}
 
-\item{totname}{The new name of the total rows, as a single string.}
+\item{totname}{The name the merged total row takes, as a single string. \code{NULL} (default)
+uses the one \code{options(tabxplor.total_names)} declares.}
 }
 \value{
 A \code{tibble} of class \code{tab}, with less rows and more columns.
 }
 \description{
-Spread a tab, passing a tab variable to column
+Turns each level of a \code{tab_vars} variable into a \strong{block of columns}: fewer rows, more columns,
+and every column stores which sub-population it belongs to (\code{col_group}) beside the variable it
+shows (\code{col_var}). Every total row merges into ONE, named \code{totname} --- the remaining \code{tab_vars}
+are still index columns of their own, so the label does not repeat them. A total \emph{table}'s own
+line joins that row when no \code{tab_vars} is left to hold it, and is dropped when one is.
+\code{\link[=tab]{tab()}}'s \code{spread_vars} calls it for you, and takes care of the totals beforehand.
 }
 \examples{
-\donttest{ data <- forcats::gss_cat \%>\% dplyr::filter(year \%in\% c(2000, 2014))
+\donttest{ data <- forcats::gss_cat |> dplyr::filter(year \%in\% c(2000, 2014))
 
 tabs <-
   tab(data, relig, marital, c(year, race), pct = "row", totaltab = "no",
-      color = "diff", tot = "row", other_if_less_than = 30)
+      color = "difference", tot = "row", other_if_less_than = 30)
 
-tabs \%>\%
-  dplyr::select(year, race, relig, Married) \%>\%
+tabs |>
+  dplyr::select(year, race, relig, Married) |>
   tab_spread(race)
   }
 }
