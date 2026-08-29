@@ -89,13 +89,9 @@ options(tabxplor.theme = "print_ready")
 tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"))
 ```
 
-Logistic regression: married by race, age +1 more
-
-[TABLE]
-
-| outcome | numeric predictor | observed range | observed shape (central 95%) |
-|----|----|----|----|
-| p = %_(Married) ; log(p/(1-p)) | age | 13-57% (OR 8.7) | ![](data:image/svg+xml;base64,PHN2ZyBjbGFzcz0idHgtc3BhcmsiIHdpZHRoPSIxOTIuNiIgaGVpZ2h0PSI0NCIgdmlld2JveD0iMCAwIDE5Mi42IDQ0IiBhcmlhLWhpZGRlbj0idHJ1ZSI+PHBvbHlsaW5lIHBvaW50cz0iMS4zLDQyLjcgMTEuMywzMC45IDIxLjMsMTMuMSAzMS4zLDcuMiA0MS4zLDEuMyA1MS4zLDEuMyA2MS4zLDEuMyA3MS4zLDEuMyA4MS4zLDEuMyA5MS4zLDEuMyAxMDEuMywxLjMgMTExLjMsMS4zIDEyMS4zLDEuMyAxMzEuMywxLjMgMTQxLjMsMS4zIDE1MS4zLDEuMyAxNjEuMyw3LjIgMTcxLjMsNy4yIDE4MS4zLDEzLjEgMTkxLjMsMTMuMSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMi42IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiPjwvcG9seWxpbmU+PC9zdmc+) |
+![The same regression table in the black-and-white publication theme:
+bold, italics and underlining replace the colors, on the same ladder of
+thresholds.](reference/figures/README-4-reg-married-print-ready.webp)
 
 ## Export your tables
 
