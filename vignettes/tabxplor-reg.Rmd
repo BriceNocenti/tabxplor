@@ -4,7 +4,7 @@ description: >
   The reference for tab_reg() — the four estimand arguments, one part per kind of outcome, reading what adjustment did, and checking the model.
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Regression tables with tab_reg()}
+  %\VignetteIndexEntry{Regression models with tab_reg(): reference}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---

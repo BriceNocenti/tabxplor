@@ -4,7 +4,7 @@ description: >
   Build a first coloured cross-table, read its colours and its legend, then choose what a cell shows and how it exports.
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Introduction to tabxplor}
+  %\VignetteIndexEntry{Introduction to tabxplor: crosstables with tab()}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
